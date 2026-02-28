@@ -4,6 +4,7 @@
   "agents": {
     "sisyphus": {
       "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
       "ultrawork": {
         "model": "anthropic/claude-opus-4-6",
         "variant": "max"
@@ -12,43 +13,45 @@
 
     "hephaestus": {
       "model": "openai/gpt-5.3-codex",
-      "variant": "xhigh"
+      "variant": "medium",
+      "fallback_models": ["openai/gpt-5.2"]
     },
 
     "oracle": {
       "model": "openai/gpt-5.2",
       "variant": "high",
-      "fallback_models": ["anthropic/claude-opus-4-6"]
+      "fallback_models": ["google/antigravity-gemini-3-pro", "anthropic/claude-opus-4-6"]
     },
 
     "librarian": {
-      "model": "openai/gpt-codex-spark",
-      "fallback_models": ["anthropic/claude-haiku-4-5"]
+      "model": "google/antigravity-gemini-3-flash"
     },
 
     "explore": {
-      "model": "openai/gpt-codex-spark",
-      "fallback_models": ["anthropic/claude-haiku-4-5"]
+      "model": "anthropic/claude-haiku-4-5"
     },
 
     "multimodal-looker": {
-      "model": "openai/gpt-5.2"
+      "model": "google/antigravity-gemini-3-flash",
+      "fallback_models": ["openai/gpt-5.2"]
     },
 
     "prometheus": {
       "model": "anthropic/claude-opus-4-6",
-      "fallback_models": ["openai/gpt-5.2"]
+      "variant": "max",
+      "fallback_models": ["openai/gpt-5.2", "google/antigravity-gemini-3-pro"]
     },
 
     "metis": {
       "model": "anthropic/claude-opus-4-6",
-      "fallback_models": ["openai/gpt-5.2"]
+      "variant": "max",
+      "fallback_models": ["openai/gpt-5.2", "google/antigravity-gemini-3-pro"]
     },
 
     "momus": {
       "model": "openai/gpt-5.2",
-      "variant": "high",
-      "fallback_models": ["anthropic/claude-opus-4-6"]
+      "variant": "medium",
+      "fallback_models": ["anthropic/claude-opus-4-6", "google/antigravity-gemini-3-pro"]
     },
 
     "atlas": {
@@ -59,67 +62,67 @@
 
   "categories": {
     "visual-engineering": {
-      "model": "anthropic/claude-sonnet-4-6",
-      "fallback_models": ["openai/gpt-5.2"]
+      "model": "google/antigravity-gemini-3-pro",
+      "variant": "high",
+      "fallback_models": ["anthropic/claude-opus-4-6"]
     },
 
     "ultrabrain": {
       "model": "openai/gpt-5.3-codex",
       "variant": "xhigh",
-      "fallback_models": ["anthropic/claude-opus-4-6"]
+      "fallback_models": ["google/antigravity-gemini-3-pro", "anthropic/claude-opus-4-6"]
     },
 
     "deep": {
       "model": "openai/gpt-5.3-codex",
-      "variant": "xhigh",
-      "fallback_models": ["anthropic/claude-opus-4-6"]
+      "variant": "medium",
+      "fallback_models": ["anthropic/claude-opus-4-6", "google/antigravity-gemini-3-pro"]
     },
 
     "artistry": {
-      "model": "anthropic/claude-opus-4-6",
-      "variant": "max",
-      "fallback_models": ["openai/gpt-5.2"]
+      "model": "google/antigravity-gemini-3-pro",
+      "variant": "high",
+      "fallback_models": ["anthropic/claude-opus-4-6", "openai/gpt-5.2"]
     },
 
     "quick": {
-      "model": "openai/gpt-codex-spark",
-      "fallback_models": ["anthropic/claude-haiku-4-5"]
+      "model": "anthropic/claude-haiku-4-5",
+      "fallback_models": ["google/antigravity-gemini-3-flash"]
     },
 
     "unspecified-low": {
       "model": "anthropic/claude-sonnet-4-6",
-      "fallback_models": ["openai/gpt-5.3-codex"]
+      "fallback_models": ["openai/gpt-5.3-codex", "google/antigravity-gemini-3-flash"]
     },
 
     "unspecified-high": {
       "model": "anthropic/claude-opus-4-6",
       "variant": "max",
-      "fallback_models": ["openai/gpt-5.2"]
+      "fallback_models": ["openai/gpt-5.2", "google/antigravity-gemini-3-pro"]
     },
 
     "writing": {
-      "model": "anthropic/claude-sonnet-4-6",
-      "fallback_models": ["openai/gpt-5.2"]
+      "model": "google/antigravity-gemini-3-flash",
+      "fallback_models": ["anthropic/claude-sonnet-4-6"]
     }
   },
 
   "background_task": {
     "providerConcurrency": {
       "anthropic": 3,
-      "openai": 5
+      "openai": 5,
+      "google": 5
     },
     "modelConcurrency": {
       "anthropic/claude-opus-4-6": 2,
       "anthropic/claude-sonnet-4-6": 3,
       "openai/gpt-5.3-codex": 3,
       "openai/gpt-5.2": 4,
-      "openai/gpt-codex-spark": 8
+      "openai/gpt-codex-spark": 8,
+      "google/antigravity-gemini-3-pro": 3,
+      "google/antigravity-gemini-3-flash": 8
     }
   },
 
-  "runtime_fallback": true,
-
-  "experimental": {
-    "aggressive_truncation": true
-  }
+  "runtime_fallback": true
 }
