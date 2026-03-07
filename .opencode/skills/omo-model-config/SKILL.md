@@ -1,67 +1,63 @@
 # OmO Model Configurator (GitHub-First)
 
-Expert at oh-my-opencode model config. Updates only `model`, `variant`, `fallback_models` in agents/categories of `oh-my-opencode.json`. GitHub guidance takes priority.
+Updates only `model`, `variant`, and `fallback_models` under `agents.*` and `categories.*` in `oh-my-opencode.json`.
 
 ## Scope
 
-**Inputs**: this file, `available-models.json` (allowlist + tiers), `oh-my-opencode.json` (target).
+**Inputs**:
+- This file
+- `available-models.json` (`allowlist`, `tiers`, `required_fallback_providers`)
+- `oh-my-opencode.json` (edit target)
 
-| Constraint | Rule |
-|---|---|
-| Priority | GitHub links > local files on conflict |
-| Local files | Secondary snapshots for compatibility/availability |
-| No generation | Do not create extra local files from external content |
-| Edit target | `oh-my-opencode.json` only |
-| Editable fields | `agents.*.{model,variant,fallback_models}`, `categories.*.{model,variant,fallback_models}` |
-| Forbidden edits | All other keys (hooks, root-level fields, etc.) |
+**Core constraints**:
+- GitHub references are primary authority. On conflict: GitHub > local rules.
+- Edit only `oh-my-opencode.json`.
+- Edit only `agents.*.{model,variant,fallback_models}` and `categories.*.{model,variant,fallback_models}`.
+- Do not change any other keys.
 
-## Step 1: Read Inputs
+## Step 1: Read and Resolve
 
-1. Fetch GitHub references first (primary authority):
-   - https://github.com/code-yeongyu/oh-my-opencode/blob/dev/docs/guide/agent-model-matching.md
-   - https://github.com/code-yeongyu/oh-my-opencode/blob/dev/docs/guide/orchestration.md
-   - https://github.com/code-yeongyu/oh-my-opencode/blob/dev/src/shared/model-requirements.ts
-   - https://github.com/code-yeongyu/oh-my-openagent/blob/dev/docs/reference/features.md
-2. Read `available-models.json` — `allowlist` for availability, `tiers` for model pools.
+1. Read GitHub references first:
+   - https://github.com/code-yeongyu/oh-my-openagent/blob/dev/docs/guide/agent-model-matching.md
+   - https://github.com/code-yeongyu/oh-my-openagent/blob/dev/docs/guide/orchestration.md
+   - https://github.com/code-yeongyu/oh-my-openagent/blob/dev/src/shared/model-requirements.ts
+   - https://github.com/code-yeongyu/oh-my-openagent/blob/dev/docs/reference/features.md#agents
+   - https://github.com/code-yeongyu/oh-my-openagent/blob/dev/docs/reference/features.md#category-system
+2. Read `available-models.json`.
 3. Read `oh-my-opencode.json`.
 4. Apply user constraints from prompt.
-5. Local rules apply only when GitHub guides lack coverage.
 
-## Step 2: Local Rules
+## Step 2: Local Gates (only when not overridden by GitHub)
 
-### 2a. Availability gate
+### 2a) Availability gate
 
-- Every target/fallback model MUST ∈ `available-models.json` `allowlist`.
-- Unavailable → substitute with next valid candidate per GitHub rules.
-- Non-target fields unchanged.
+- Every primary/fallback model must be in `allowlist`.
+- If unavailable, replace with next valid candidate that satisfies GitHub guidance.
 
-### 2b. Provider diversity gate
+### 2b) Provider diversity gate
 
-Every `fallback_models` array (per agent or category) MUST include exactly one model from each provider listed in `available-models.json` `required_fallback_providers`.
+For each agent/category, required providers come from `required_fallback_providers`.
 
-1. Read `required_fallback_providers` from `available-models.json`.
-2. For each agent/category, verify its `fallback_models` contains exactly one model from each required provider.
-3. If a required provider is missing → append the highest-ranked available model from that provider (prefer same-tier, then adjacent tier).
-4. If a required provider's model is already used as the primary `model`, the provider requirement is satisfied — do not duplicate in `fallback_models`.
-5. Provider diversity is checked AFTER 2a (availability).
-6. GitHub references may mark certain models as **dangerous** or **forbidden** for specific agents. Never use a forbidden model to satisfy provider diversity — skip that provider for that agent.
+- A provider is considered covered if it appears in either the primary `model` or `fallback_models`.
+- In `fallback_models`, keep at most one model per provider (no duplicates).
+- If a required provider is uncovered, add the best-fit available model for that agent/category role from that provider, using GitHub role guidance first; if multiple candidates remain, prefer same tier, then adjacent tier.
+- If GitHub marks provider models as forbidden/dangerous for that target, skip that provider and report it.
 
-## Step 3: Apply
+## Step 3: Apply Changes
 
-1. Resolve models, variants, fallbacks from Step 1 GitHub guides.
-2. Filter through 2a availability gate.
-3. Apply 2b provider diversity gate to all agents/categories.
-4. Write only `{model,variant,fallback_models}` fields.
-5. Preserve everything else.
+1. Resolve target `model`, `variant`, `fallback_models` from GitHub guidance and user constraints.
+2. Apply availability gate.
+3. Apply provider diversity gate.
+4. Write only allowed fields; preserve everything else.
 
 ## Step 4: Validate
 
-1. JSON syntax valid.
-2. All models/fallbacks ∈ `allowlist`.
-3. No dangerous overrides.
-4. `runtime_fallback` still `true`.
-5. Non-target fields unchanged.
-6. Provider diversity: every agent/category covers all providers from `required_fallback_providers`.
+1. JSON is valid.
+2. All chosen models are in `allowlist`.
+3. No GitHub-forbidden model is selected.
+4. Non-target fields are unchanged (including existing root settings such as `runtime_fallback`).
+5. Provider coverage is satisfied, or explicitly reported when impossible due to forbidden/unavailable models.
+6. Added provider models include role-fit rationale when chosen from multiple candidates.
 
 ## Step 5: Report
 
@@ -70,4 +66,8 @@ Every `fallback_models` array (per agent or category) MUST include exactly one m
 |------|-------|---------|-----------|--------|
 ```
 
-Flag: substitutions from unavailable models · unresolved shortages · GitHub rules prioritized over local.
+Always flag:
+- Substitutions caused by availability limits
+- Missing provider coverage and why it was impossible
+- Cases where GitHub guidance overrode local assumptions
+- Role-fit reasoning when provider models were added
