@@ -8,12 +8,12 @@
       "opencode/gpt-5-nano"
     ],
     "standard": [
-      "openai/gpt-5.4",
-      "anthropic/claude-sonnet-4-6"
+      "anthropic/claude-sonnet-4-6",
+      "google/antigravity-gemini-3.1-pro"
     ],
     "heavy": [
+      "openai/gpt-5.4",
       "openai/gpt-5.3-codex",
-      "google/antigravity-gemini-3.1-pro",
       "anthropic/claude-opus-4-6"
     ]
   },

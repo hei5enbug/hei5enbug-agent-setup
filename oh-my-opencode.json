@@ -26,8 +26,8 @@
     },
 
     "librarian": {
-      "model": "google/antigravity-gemini-3-flash",
-      "fallback_models": ["opencode/minimax-m2.5-free", "openai/gpt-5.4"]
+      "model": "opencode/minimax-m2.5-free",
+      "fallback_models": ["anthropic/claude-haiku-4-5", "opencode/gpt-5-nano", "openai/gpt-5.4"]
     },
 
     "explore": {
@@ -38,7 +38,7 @@
     "multimodal-looker": {
       "model": "openai/gpt-5.4",
       "variant": "medium",
-      "fallback_models": ["google/antigravity-gemini-3-flash", "opencode/gpt-5-nano"]
+      "fallback_models": ["opencode/gpt-5-nano"]
     },
 
     "prometheus": {
@@ -50,7 +50,7 @@
     "metis": {
       "model": "anthropic/claude-opus-4-6",
       "variant": "max",
-      "fallback_models": ["openai/gpt-5.4", "google/antigravity-gemini-3.1-pro"]
+      "fallback_models": ["openai/gpt-5.4"]
     },
 
     "momus": {
@@ -73,7 +73,7 @@
     },
 
     "ultrabrain": {
-      "model": "openai/gpt-5.3-codex",
+      "model": "openai/gpt-5.4",
       "variant": "xhigh",
       "fallback_models": ["google/antigravity-gemini-3.1-pro", "anthropic/claude-opus-4-6"]
     },
@@ -101,9 +101,9 @@
     },
 
     "unspecified-high": {
-      "model": "openai/gpt-5.4",
-      "variant": "high",
-      "fallback_models": ["anthropic/claude-opus-4-6"]
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+      "fallback_models": ["openai/gpt-5.4"]
     },
 
     "writing": {

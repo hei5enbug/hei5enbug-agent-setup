@@ -1,6 +1,6 @@
 # OmO Model Configurator (GitHub-First)
 
-Updates only `model`, `variant`, and `fallback_models` under `agents.*` and `categories.*` in `oh-my-opencode.json`.
+Updates only top-level `model`, `variant`, and `fallback_models` under `agents.*` and `categories.*` in `oh-my-opencode.json`.
 
 ## Scope
 
@@ -12,7 +12,8 @@ Updates only `model`, `variant`, and `fallback_models` under `agents.*` and `cat
 **Core constraints**:
 - GitHub references are primary authority. On conflict: GitHub > local rules.
 - Edit only `oh-my-opencode.json`.
-- Edit only `agents.*.{model,variant,fallback_models}` and `categories.*.{model,variant,fallback_models}`.
+- Edit only top-level `agents.*.{model,variant,fallback_models}` and `categories.*.{model,variant,fallback_models}`.
+- Never add, remove, or modify `agents.*.ultrawork` or anything nested under it.
 - Do not change any other keys.
 
 ## Step 1: Read and Resolve
@@ -48,14 +49,14 @@ For each agent/category, required providers come from `required_fallback_provide
 1. Resolve target `model`, `variant`, `fallback_models` from GitHub guidance and user constraints.
 2. Apply availability gate.
 3. Apply provider diversity gate.
-4. Write only allowed fields; preserve everything else.
+4. Write only allowed fields; preserve everything else, including all `ultrawork` blocks unchanged.
 
 ## Step 4: Validate
 
 1. JSON is valid.
 2. All chosen models are in `allowlist`.
 3. No GitHub-forbidden model is selected.
-4. Non-target fields are unchanged (including existing root settings such as `runtime_fallback`).
+4. Non-target fields are unchanged (including existing root settings such as `runtime_fallback` and all `agents.*.ultrawork` blocks).
 5. Provider coverage is satisfied, or explicitly reported when impossible due to forbidden/unavailable models.
 6. Added provider models include role-fit rationale when chosen from multiple candidates.
 
