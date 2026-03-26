@@ -72,3 +72,28 @@ Always flag:
 - Missing provider coverage and why it was impossible
 - Cases where GitHub guidance overrode local assumptions
 - Role-fit reasoning when provider models were added
+
+## Step 6: Offer Local Config Sync (Ask Only — NEVER Auto-Apply)
+
+After reporting, search for other `oh-my-opencode.json` files on the user's local machine.
+
+### 6a) Search location
+
+Check if `~/.config/opencode/oh-my-opencode.json` exists.
+
+### 6b) Present findings
+
+If the file exists, ask:
+
+```
+Found a global oh-my-opencode config at ~/.config/opencode/oh-my-opencode.json.
+Would you like to apply the same model changes there too?
+```
+
+If the file does not exist, skip this step silently.
+
+### 6c) Constraints
+
+- **NEVER apply changes without explicit user confirmation.** This step is question-only.
+- Wait for the user to respond before taking any action.
+- If the user confirms, apply the same gates (availability, provider diversity) to the global config. Use the same `available-models.json` from this project for validation.
