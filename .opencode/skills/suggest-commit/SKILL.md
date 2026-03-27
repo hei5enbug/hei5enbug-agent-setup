@@ -1,3 +1,8 @@
+---
+name: suggest-commit
+description: Analyzes staged/unstaged changes and recent commit history, then recommends 10 commit messages that match the repository's existing style.
+---
+
 # Commit Message Suggester
 
 Analyzes staged/unstaged changes and recent commit history, then recommends 10 commit messages that match the repository's existing style.

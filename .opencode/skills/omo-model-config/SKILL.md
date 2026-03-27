@@ -1,3 +1,8 @@
+---
+name: omo-model-config
+description: Updates model, variant, and fallback_models fields in oh-my-opencode.json. Validates against the available-models.json allowlist and enforces provider diversity rules.
+---
+
 # OmO Model Configurator (GitHub-First)
 
 Updates only top-level `model`, `variant`, and `fallback_models` under `agents.*` and `categories.*` in `oh-my-opencode.json`.
