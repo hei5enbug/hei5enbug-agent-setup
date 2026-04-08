@@ -10,13 +10,13 @@ harnessのエージェントごとに求められる能力は異なります。�
 
 ## 対応ツール
 
-- [OpenCode](https://github.com/code-yeongyu/oh-my-opencode)（[Oh My OpenCode](https://github.com/code-yeongyu/oh-my-opencode) プラグイン使用）
+- [OpenCode](https://github.com/code-yeongyu/oh-my-openagent)（[Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) プラグイン使用）
 
 ## 構成
 
 ```
 hei5enbug-agent-setup/
-├── oh-my-opencode.json       # スキルが読み取り・編集する設定ファイル
+├── oh-my-openagent.json       # スキルが読み取り・編集する設定ファイル
 ├── available-models.json     # スキルがモデル変更時の検証に使用するallowlist
 └── .opencode/
     └── skills/
@@ -72,5 +72,5 @@ opencode
 
 ## 関連リンク
 
-- [Oh My OpenCode](https://github.com/code-yeongyu/oh-my-opencode) — 設定を駆動するプラグインシステム
+- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — 設定を駆動するプラグインシステム
 - [oh-my-openagent docs](https://github.com/code-yeongyu/oh-my-openagent) — 上流ドキュメントおよびモデルマッチングガイド

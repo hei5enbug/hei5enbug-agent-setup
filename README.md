@@ -10,13 +10,13 @@ Each agent in a harness requires different capabilities. This configuration opti
 
 ## Supported Tools
 
-- [OpenCode](https://github.com/code-yeongyu/oh-my-opencode) (via [Oh My OpenCode](https://github.com/code-yeongyu/oh-my-opencode) plugin)
+- [OpenCode](https://github.com/code-yeongyu/oh-my-openagent) (via [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) plugin)
 
 ## Structure
 
 ```
 hei5enbug-agent-setup/
-├── oh-my-opencode.json       # Config file read and modified by the skill
+├── oh-my-openagent.json       # Config file read and modified by the skill
 ├── available-models.json     # Allowlist used by the skill to validate model changes
 └── .opencode/
     └── skills/
@@ -72,5 +72,5 @@ The skill validates changes against the allowlist and ensures provider diversity
 
 ## Related
 
-- [Oh My OpenCode](https://github.com/code-yeongyu/oh-my-opencode) — plugin system powering the configuration
+- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — plugin system powering the configuration
 - [oh-my-openagent docs](https://github.com/code-yeongyu/oh-my-openagent) — upstream documentation and model-matching guides

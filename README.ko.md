@@ -9,13 +9,13 @@ harness의 에이전트마다 요구하는 능력이 다릅니다.
 
 ## 지원 도구
 
-- [OpenCode](https://github.com/code-yeongyu/oh-my-opencode) ([Oh My OpenCode](https://github.com/code-yeongyu/oh-my-opencode) 플러그인 사용)
+- [OpenCode](https://github.com/code-yeongyu/oh-my-openagent) ([Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) 플러그인 사용)
 
 ## 구조
 
 ```
 hei5enbug-agent-setup/
-├── oh-my-opencode.json       # 스킬이 읽고 수정하는 설정 파일
+├── oh-my-openagent.json       # 스킬이 읽고 수정하는 설정 파일
 ├── available-models.json     # 스킬이 모델 변경 시 검증에 사용하는 allowlist
 └── .opencode/
     └── skills/
@@ -71,5 +71,5 @@ opencode
 
 ## 관련 링크
 
-- [Oh My OpenCode](https://github.com/code-yeongyu/oh-my-opencode) — 설정을 구동하는 플러그인 시스템
+- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — 설정을 구동하는 플러그인 시스템
 - [oh-my-openagent docs](https://github.com/code-yeongyu/oh-my-openagent) — 업스트림 문서 및 모델 매칭 가이드
