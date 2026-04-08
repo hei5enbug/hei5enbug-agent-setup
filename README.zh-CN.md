@@ -10,13 +10,13 @@ harness 中的每个 agent 所需的能力各不相同。此配置根据 agent �
 
 ## 支持工具
 
-- [OpenCode](https://github.com/code-yeongyu/oh-my-opencode)（通过 [Oh My OpenCode](https://github.com/code-yeongyu/oh-my-opencode) 插件）
+- [OpenCode](https://github.com/code-yeongyu/oh-my-openagent)（通过 [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) 插件）
 
 ## 结构
 
 ```
 hei5enbug-agent-setup/
-├── oh-my-opencode.json       # skill 读取和修改的配置文件
+├── oh-my-openagent.json       # skill 读取和修改的配置文件
 ├── available-models.json     # skill 验证模型变更时使用的 allowlist
 └── .opencode/
     └── skills/
@@ -72,5 +72,5 @@ skill 会对照 allowlist 验证变更，并在确认供应商多样性规则后
 
 ## 相关链接
 
-- [Oh My OpenCode](https://github.com/code-yeongyu/oh-my-opencode) — 驱动此配置的插件系统
+- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — 驱动此配置的插件系统
 - [oh-my-openagent docs](https://github.com/code-yeongyu/oh-my-openagent) — 上游文档及模型匹配指南

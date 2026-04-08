@@ -1,25 +1,25 @@
 ---
 name: omo-model-config
-description: Updates model, variant, and fallback_models fields in oh-my-opencode.json, and removes agents.*.ultrawork entirely when it exists. Validates against available-models.json while treating required_fallback_providers as an explicit exception to GitHub fallback guidance when needed for provider coverage.
+description: Updates model, variant, and fallback_models fields in oh-my-openagent.json, and removes agents.*.ultrawork entirely when it exists. Validates against available-models.json while treating required_fallback_providers as an explicit exception to GitHub fallback guidance when needed for provider coverage.
 ---
 
 # OmO Model Configurator (GitHub-First)
 
-Updates only top-level `model`, `variant`, and `fallback_models` under `agents.*` and `categories.*` in `oh-my-opencode.json`, and removes `agents.*.ultrawork` entirely when it exists.
+Updates only top-level `model`, `variant`, and `fallback_models` under `agents.*` and `categories.*` in `oh-my-openagent.json`, and removes `agents.*.ultrawork` entirely when it exists.
 
 ## Scope
 
 **Inputs**:
 - This file
 - `available-models.json` (`allowlist`, `tiers`, `required_fallback_providers`)
-- `oh-my-opencode.json` (edit target)
+- `oh-my-openagent.json` (edit target)
 
 **Core constraints**:
 - GitHub references are primary authority. On conflict: GitHub > local rules.
-- Edit only `oh-my-opencode.json`.
+- Edit only `oh-my-openagent.json`.
 - Edit only top-level `agents.*.{model,variant,fallback_models}` and `categories.*.{model,variant,fallback_models}`, plus remove `agents.*.ultrawork` when an existing `ultrawork` block is present.
 - Do not change any other keys.
-- When this skill is invoked for a model-config change, treat the project-local `oh-my-opencode.json` as the default target and apply the change directly. Do **not** ask whether to update the project's `oh-my-opencode.json` first.
+- When this skill is invoked for a model-config change, treat the project-local `oh-my-openagent.json` as the default target and apply the change directly. Do **not** ask whether to update the project's `oh-my-openagent.json` first.
 
 ## Hard Boundary: GitHub Chain Is the Superset (Except Required Provider Coverage)
 
@@ -55,7 +55,7 @@ If the model/provider is not supported by the upstream references for that exact
    - https://github.com/code-yeongyu/oh-my-openagent/blob/dev/docs/reference/features.md#agents
    - https://github.com/code-yeongyu/oh-my-openagent/blob/dev/docs/reference/features.md#category-system
 2. Read `available-models.json`.
-3. Read `oh-my-opencode.json`.
+3. Read `oh-my-openagent.json`.
 4. Build a per-target upstream map for each edited item:
    - upstream primary model + variant
    - upstream fallback candidates in order
@@ -160,18 +160,18 @@ When reporting `fallback_models`, distinguish between:
 
 ## Step 6: Offer Local Config Sync (Ask Only — NEVER Auto-Apply)
 
-After reporting, search for a separate non-project `oh-my-opencode.json` on the user's local machine. Do not confuse this step with the project-local `oh-my-opencode.json` that this skill edits by default.
+After reporting, search for a separate non-project `oh-my-openagent.json` on the user's local machine. Do not confuse this step with the project-local `oh-my-openagent.json` that this skill edits by default.
 
 ### Search location
 
-Check whether a separate non-project `oh-my-opencode.json` exists.
+Check whether a separate non-project `oh-my-openagent.json` exists.
 
 ### Present findings
 
 If the file exists, ask:
 
 ```
-Found a separate oh-my-opencode config outside this project.
+Found a separate oh-my-openagent config outside this project.
 Would you like to apply the same model changes there too?
 ```
 
@@ -181,5 +181,5 @@ If the file does not exist, skip this step silently.
 
 - **NEVER apply changes to a separate non-project config without explicit user confirmation.** This step is question-only.
 - Wait for the user to respond before taking any action on that separate config.
-- Do not describe the project's own `oh-my-opencode.json` as the local-config-sync target in this step.
+- Do not describe the project's own `oh-my-openagent.json` as the local-config-sync target in this step.
 - If the user confirms, apply the same gates (availability, provider diversity) to that separate config. Use the same `available-models.json` from this project for validation.
