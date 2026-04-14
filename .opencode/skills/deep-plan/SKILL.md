@@ -24,10 +24,10 @@ These rules override all other instructions in this document.
 **Inputs:** User-provided analysis target (feature area, module, directory, or full codebase) and auto-generated plan name (derived from target; never ask the user).
 
 **Outputs:**
-- `.sisyphus/plans/{plan-slug}/MASTER.md` — master execution document (use `templates/master.md`)
-- `.sisyphus/plans/{plan-slug}/tasks/NNN-{slug}.md` — individual task documents (use `templates/task.md`)
+- `.plan/{plan-slug}/MASTER.md` — master execution document (use `templates/master.md`)
+- `.plan/{plan-slug}/tasks/NNN-{slug}.md` — individual task documents (use `templates/task.md`)
 
-The default storage path `.sisyphus/plans/` assumes the directory is git-tracked. If `.sisyphus/` is gitignored or a different orchestrator is used, adapt the path (e.g., `.opencode/plans/`, `docs/plans/`).
+Always write plan outputs under `.plan/` regardless of repository layout, gitignore state, or orchestrator choice. Do not adapt to any other directory.
 
 ## Output Language
 
@@ -46,7 +46,7 @@ Apply the Korean section header mapping from `reference/section-headers.md` to a
 1. Parse the user's request to identify the analysis target.
 2. If genuinely ambiguous (multiple interpretations with significantly different effort), ask the user. Otherwise, proceed.
 3. Auto-generate a Korean plan name and derive an English kebab-case slug (e.g., `src/auth/` → `auth-module-improvement`).
-4. Check for slug collision: if `.sisyphus/plans/{slug}/` already exists, append `-v2`, `-v3`, etc.
+4. Check for slug collision: if `.plan/{slug}/` already exists, append `-v2`, `-v3`, etc.
 
 ## Step 2: Deep Code Review
 
