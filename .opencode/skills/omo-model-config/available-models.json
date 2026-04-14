@@ -3,34 +3,32 @@
   "tiers": {
     "lightweight": [
       "google/antigravity-gemini-3-flash",
-      "anthropic/claude-haiku-4-5",
-      "opencode/minimax-m2.5-free",
       "opencode/gpt-5-nano",
+      "opencode/minimax-m2.5-free",
       "openai/gpt-5.4-mini"
     ],
     "standard": [
-      "anthropic/claude-sonnet-4-6",
-      "google/antigravity-gemini-3.1-pro"
+      "google/antigravity-gemini-3.1-pro",
+      "opencode-go/minimax-m2.7"
     ],
     "heavy": [
       "openai/gpt-5.4",
       "openai/gpt-5.3-codex",
-      "anthropic/claude-opus-4-6"
+      "opencode-go/kimi-k2.5"
     ]
   },
   "required_fallback_providers": [
     "openai"
   ],
   "allowlist": [
-    "anthropic/claude-opus-4-6",
-    "anthropic/claude-sonnet-4-6",
-    "anthropic/claude-haiku-4-5",
     "openai/gpt-5.3-codex",
     "openai/gpt-5.4-mini",
     "openai/gpt-5.4",
     "google/antigravity-gemini-3.1-pro",
     "google/antigravity-gemini-3-flash",
-    "opencode/minimax-m2.5-free",
-    "opencode/gpt-5-nano"
+    "opencode-go/kimi-k2.5",
+    "opencode-go/minimax-m2.7",
+    "opencode/gpt-5-nano",
+    "opencode/minimax-m2.5-free"
   ]
 }
