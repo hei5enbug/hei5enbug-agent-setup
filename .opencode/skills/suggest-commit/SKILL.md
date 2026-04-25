@@ -1,6 +1,6 @@
 ---
 name: suggest-commit
-description: Analyzes staged/unstaged changes and recent commit history, then recommends 10 commit messages that match the repository's existing style.
+description: Analyzes staged/unstaged changes and recent commit history, then recommends 5 commit messages that match the repository's existing style.
 ---
 
 # Commit Message Suggester
@@ -36,9 +36,9 @@ Classify the diff:
 
 Focus on the **intent** behind the changes, not a mechanical description of what lines moved.
 
-## Step 4: Suggest 10 Messages
+## Step 4: Suggest 5 Messages
 
-Present exactly 10 commit messages in a numbered table:
+Present exactly 5 commit messages in a numbered table:
 
 ```
 | # | Commit Message |
@@ -47,9 +47,9 @@ Present exactly 10 commit messages in a numbered table:
 ```
 
 Rules:
-- All 10 must follow the style detected in Step 2.
+- All 5 must follow the style detected in Step 2.
 - Vary the phrasing — different verbs, different emphasis, different granularity.
-- Order from most descriptive to most concise.
+- Order from most recommended to least recommended, so `#1` is the best overall choice.
 - Each message should be a single line (no multi-line bodies).
 - If the change spans multiple concerns, some messages may emphasize one aspect over another — this is intentional variety.
 - Do NOT include a message body or footer — subject line only.
@@ -57,5 +57,5 @@ Rules:
 ## Constraints
 
 - **Read-only.** Never stage, commit, or push. Only suggest.
-- Do not ask follow-up questions. Deliver all 10 suggestions in one response.
+- Do not ask follow-up questions. Deliver all 5 suggestions in one response.
 - If there are no changes to commit (`git diff HEAD` is empty and no untracked files), say so and stop.
