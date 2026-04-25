@@ -5,18 +5,21 @@
       "google/antigravity-gemini-3-flash",
       "openai/gpt-5.4-mini-fast",
       "openai/gpt-5.4-nano",
+      "anthropic/claude-haiku-4-5",
       "opencode/gpt-5-nano",
       "opencode/minimax-m2.5-free",
       "openai/gpt-5.4-mini"
     ],
     "standard": [
       "google/antigravity-gemini-3.1-pro",
+      "anthropic/claude-sonnet-4-6",
       "opencode-go/minimax-m2.7-highspeed",
       "opencode-go/minimax-m2.7"
     ],
     "heavy": [
       "openai/gpt-5.5",
       "openai/gpt-5.5-fast",
+      "anthropic/claude-opus-4-7",
       "opencode-go/glm-5",
       "opencode-go/kimi-k2.5"
     ]
@@ -30,6 +33,9 @@
     "openai/gpt-5.4-nano",
     "openai/gpt-5.5",
     "openai/gpt-5.5-fast",
+    "anthropic/claude-haiku-4-5",
+    "anthropic/claude-sonnet-4-6",
+    "anthropic/claude-opus-4-7",
     "google/antigravity-gemini-3.1-pro",
     "google/antigravity-gemini-3-flash",
     "opencode-go/glm-5",
