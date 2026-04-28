@@ -4,11 +4,10 @@
 
   "agents": {
     "sisyphus": {
-      "model": "anthropic/claude-opus-4-7",
-      "variant": "max",
+      "model": "opencode-go/kimi-k2.6",
       "fallback_models": [
-        "opencode-go/kimi-k2.6",
-        { "model": "openai/gpt-5.5", "variant": "medium" }
+        { "model": "openai/gpt-5.5", "variant": "medium" },
+        "opencode-go/glm-5"
       ]
     },
 
@@ -23,7 +22,6 @@
       "variant": "high",
       "fallback_models": [
         { "model": "google/antigravity-gemini-3.1-pro", "variant": "high" },
-        { "model": "anthropic/claude-opus-4-7", "variant": "max" },
         "opencode-go/glm-5"
       ]
     },
@@ -32,7 +30,6 @@
       "model": "openai/gpt-5.4-mini-fast",
       "fallback_models": [
         "opencode-go/minimax-m2.7-highspeed",
-        "anthropic/claude-haiku-4-5",
         "openai/gpt-5.4-nano"
       ]
     },
@@ -41,7 +38,6 @@
       "model": "openai/gpt-5.4-mini-fast",
       "fallback_models": [
         "opencode-go/minimax-m2.7-highspeed",
-        "anthropic/claude-haiku-4-5",
         "openai/gpt-5.4-nano"
       ]
     },
@@ -56,20 +52,18 @@
     },
 
     "prometheus": {
-      "model": "anthropic/claude-opus-4-7",
-      "variant": "max",
+      "model": "openai/gpt-5.5",
+      "variant": "high",
       "fallback_models": [
-        { "model": "openai/gpt-5.5", "variant": "high" },
         "opencode-go/glm-5",
         "google/antigravity-gemini-3.1-pro"
       ]
     },
 
     "metis": {
-      "model": "anthropic/claude-opus-4-7",
-      "variant": "max",
+      "model": "openai/gpt-5.5",
+      "variant": "high",
       "fallback_models": [
-        { "model": "openai/gpt-5.5", "variant": "high" },
         "opencode-go/glm-5"
       ]
     },
@@ -78,17 +72,16 @@
       "model": "openai/gpt-5.5",
       "variant": "xhigh",
       "fallback_models": [
-        { "model": "anthropic/claude-opus-4-7", "variant": "max" },
         { "model": "google/antigravity-gemini-3.1-pro", "variant": "high" },
         "opencode-go/glm-5"
       ]
     },
 
     "atlas": {
-      "model": "anthropic/claude-sonnet-4-6",
+      "model": "opencode-go/kimi-k2.6",
       "fallback_models": [
-        "opencode-go/kimi-k2.6",
-        { "model": "openai/gpt-5.5", "variant": "medium" }
+        { "model": "openai/gpt-5.5", "variant": "medium" },
+        "opencode-go/minimax-m2.7"
       ]
     }
   },
@@ -99,7 +92,6 @@
       "variant": "high",
       "fallback_models": [
         "opencode-go/glm-5",
-        { "model": "anthropic/claude-opus-4-7", "variant": "max" },
         { "model": "openai/gpt-5.5", "variant": "high" }
       ]
     },
@@ -109,7 +101,6 @@
       "variant": "xhigh",
       "fallback_models": [
         { "model": "google/antigravity-gemini-3.1-pro", "variant": "high" },
-        { "model": "anthropic/claude-opus-4-7", "variant": "max" },
         "opencode-go/glm-5"
       ]
     },
@@ -118,7 +109,6 @@
       "model": "openai/gpt-5.5",
       "variant": "medium",
       "fallback_models": [
-        { "model": "anthropic/claude-opus-4-7", "variant": "max" },
         { "model": "google/antigravity-gemini-3.1-pro", "variant": "high" }
       ]
     },
@@ -127,7 +117,6 @@
       "model": "google/antigravity-gemini-3.1-pro",
       "variant": "high",
       "fallback_models": [
-        { "model": "anthropic/claude-opus-4-7", "variant": "max" },
         "openai/gpt-5.5"
       ]
     },
@@ -135,7 +124,6 @@
     "quick": {
       "model": "openai/gpt-5.4-mini",
       "fallback_models": [
-        "anthropic/claude-haiku-4-5",
         "google/antigravity-gemini-3-flash",
         "opencode-go/minimax-m2.7",
         "opencode/gpt-5-nano"
@@ -143,19 +131,17 @@
     },
 
     "unspecified-low": {
-      "model": "anthropic/claude-sonnet-4-6",
+      "model": "opencode-go/kimi-k2.6",
       "fallback_models": [
         { "model": "openai/gpt-5.5", "variant": "medium" },
-        "opencode-go/kimi-k2.6",
         "google/antigravity-gemini-3-flash"
       ]
     },
 
     "unspecified-high": {
-      "model": "anthropic/claude-opus-4-7",
-      "variant": "max",
+      "model": "openai/gpt-5.5",
+      "variant": "high",
       "fallback_models": [
-        { "model": "openai/gpt-5.5", "variant": "high" },
         "opencode-go/glm-5"
       ]
     },
@@ -164,7 +150,6 @@
       "model": "google/antigravity-gemini-3-flash",
       "fallback_models": [
         "opencode-go/kimi-k2.6",
-        "anthropic/claude-sonnet-4-6",
         "openai/gpt-5.4-mini"
       ]
     }
