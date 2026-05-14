@@ -51,10 +51,10 @@ If the model/provider is not supported by the upstream references for that exact
 
 ## Step 1: Read and Resolve
 
-1. Read GitHub references first:
+1. Read GitHub references first. **`src/shared/model-requirements.ts` is the authoritative source-of-truth for fallback chains** — when prose docs conflict with the `.ts` code, the code wins:
+   - **https://github.com/code-yeongyu/oh-my-openagent/blob/dev/src/shared/model-requirements.ts** ← AUTHORITATIVE (`AGENT_MODEL_REQUIREMENTS` / `CATEGORY_MODEL_REQUIREMENTS` actual code)
    - https://github.com/code-yeongyu/oh-my-openagent/blob/dev/docs/guide/agent-model-matching.md
    - https://github.com/code-yeongyu/oh-my-openagent/blob/dev/docs/guide/orchestration.md
-   - https://github.com/code-yeongyu/oh-my-openagent/blob/dev/src/shared/model-requirements.ts
    - https://github.com/code-yeongyu/oh-my-openagent/blob/dev/docs/reference/features.md#agents
    - https://github.com/code-yeongyu/oh-my-openagent/blob/dev/docs/reference/features.md#category-system
 2. Read `available-models.json`.
@@ -64,6 +64,18 @@ If the model/provider is not supported by the upstream references for that exact
    - upstream fallback candidates in order
    - upstream-supported providers for that exact target
 5. Apply user constraints from prompt.
+
+### Reference Priority Rules
+
+These rules apply throughout Steps 2–4 whenever upstream candidate sets, near-variant resolution, or fallback ordering are evaluated.
+
+1. **`model-requirements.ts` overrides prose docs.** When `AGENT_MODEL_REQUIREMENTS` / `CATEGORY_MODEL_REQUIREMENTS` in `src/shared/model-requirements.ts` disagree with any markdown doc (`agent-model-matching.md`, `orchestration.md`, `features.md`) about fallback ordering, providers, variants, or chain composition, the `.ts` code wins. Treat prose docs as background context only. If a doc says "Sisyphus fallback is X → Y → Z" but the `.ts` chain is X → W → Y → Z, use the `.ts` chain.
+
+2. **Antigravity wrapper preference (overrides "Cross-provider near-variants are forbidden" specifically for antigravity).** When the local allowlist contains two entries that share the same base model identifier under different provider segments and one of them is `google/antigravity-*` (e.g., `anthropic/claude-sonnet-4-6` and `google/antigravity-claude-sonnet-4-6`), treat them as **wrapper-equivalent**:
+   - The `google/antigravity-*` entry takes precedence and is placed at the higher slot (primary if originally primary, or the leading fallback position otherwise).
+   - The non-antigravity sibling (if also allowlisted) is placed immediately after the antigravity entry in the same chain.
+   - This rule applies regardless of which providers upstream lists for that base model.
+   - Antigravity is not a "similar model from a different provider" — it is the same underlying model routed through Google's gateway, so it counts as a direct match against the upstream identifier rather than a substitution.
 
 ### Resolve Upstream Candidate Set
 
@@ -128,7 +140,7 @@ A model is **NOT a near-variant** when ANY of the following is true:
 
 **Resolution behavior**: when a near-variant exists in the allowlist for an upstream-specified entry, use it in place of the upstream identifier. Classify it as a **direct match (near-variant)** in reports — never as a substitution. The near-variant resolution step runs BEFORE any jump to a different upstream-listed candidate, and BEFORE any cross-family substitution.
 
-**Cross-provider near-variants are forbidden.** Superficial similarity to a model from a different provider never qualifies, regardless of role overlap.
+**Cross-provider near-variants are forbidden** — with one explicit exception: **antigravity wrappers** (see "Antigravity wrapper preference" under [Reference Priority Rules](#reference-priority-rules) in Step 1). Superficial similarity to a model from a different provider never qualifies, regardless of role overlap. Antigravity is not "superficial similarity" — it is the same underlying model accessed through Google's gateway, and is therefore treated as a wrapper-equivalent direct match, not a cross-provider substitution.
 
 ### Provider diversity gate
 
@@ -216,7 +228,8 @@ Always flag:
 When reporting `fallback_models`, distinguish between:
 - **Direct upstream matches** (exact identifier match against the upstream chain)
 - **Direct matches via near-variant** (per "Near-Variant Equivalence" — same provider, same base, differing only by speed/throughput or minor-version segment)
-- **Availability substitutions** (cross-family or cross-tier replacement when no near-variant exists)
+- **Wrapper-equivalent (antigravity)** (per "Antigravity wrapper preference" — `google/antigravity-*` entry of an upstream-listed base model; treated as a direct match, not a substitution)
+- **Availability substitutions** (cross-family or cross-tier replacement when no near-variant or wrapper-equivalent entry exists)
 - **Coverage gaps left unresolved because upstream offered no valid candidate**
 
 ## Step 6: Offer Local Config Sync (Ask Only — NEVER Auto-Apply)
