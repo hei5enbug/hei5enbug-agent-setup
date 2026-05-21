@@ -17,6 +17,7 @@ This standard prioritizes layout principles, spacing discipline, label rules, si
 2. **Same role, same visual grammar.** Identical platforms, identical edge meanings, and identical group categories must always share color, shape, and structure across every chart in a set.
 3. **Spacing must not break before meaning does.** When nodes are removed or hidden, redistribute the remaining nodes and edges before publishing.
 4. **Hidden elements leave no trace.** Removing a group border, subtitle, or node also requires recomputing the outer frame and `viewBox`.
+5. **No accidental overlap.** Two elements that are not in a containment relationship (group → contents, node → its own internal icon and labels) must not visually overlap. "Visually" includes glyph stroke and icon stroke, not just bounding box centers.
 
 These principles override every later rule when they conflict.
 
@@ -55,6 +56,16 @@ Establish a hierarchy and keep it consistent across the set:
 - Overview compact nodes preserve the same shape language at a smaller scale; the icon shrinks with them but its visual center stays intact.
 - Main label = the category the reader needs first (platform, resource type). Sub label = the identifier that distinguishes this node from siblings (path, command, tag, role detail). Use sub labels only when the main label alone is ambiguous.
 
+**Internal zones must be mutually exclusive.** Each node has predeclared rectangular zones — `icon zone`, `main-label zone`, `sub-label zone`, optional `body zone`. No zone may overlap another. A label centered with `text-anchor="middle"` at the node's horizontal center is still a violation if the label's measured width pushes its bounding box into the icon zone — in that case, choose one:
+
+- (a) switch to `text-anchor="start"` anchored at `icon-zone-right + padding`,
+- (b) widen the node, or
+- (c) shorten the label (drop sub-categorical words, abbreviate).
+
+Eyeballing the center is forbidden. Compute the label's bounding box from `font-size × glyph-count` (monospace) or measure the rendered SVG (proportional) before publishing. Same-role nodes (e.g., every processing stage in a row) must pass this check; whichever node has the longest label sets the floor.
+
+**Same-node grid coherence.** Within a single node, all text elements share the same horizontal anchor (`x`). If main, sub, and body labels use different `x` values, the node's internal grid is broken — the reader perceives misalignment even when each individual label looks centered in its own context. If two anchors are genuinely needed (e.g., a centered main label next to an icon, plus a left-aligned body block), declare each anchor as part of the node's zone definition and apply the same pair to every node of the same role. Per-text ad-hoc anchors are forbidden.
+
 ### 2.4 Edges
 
 | Style | Meaning | Visual weight |
@@ -71,6 +82,7 @@ Edge geometry rules:
 - For bottom-to-top edges, target the outer edge of the lowest label region of the destination node, not the bottom of its icon box. Top-to-bottom edges follow the same rule against the topmost label region.
 - For two-bend (Z-shaped or L-shaped) edges of the form `start → vertical → horizontal → vertical → end`, the two vertical segments must be equal in length, which means the mid-axis y is the midpoint of the start and end y values.
 - Whatever breathing gap you choose, apply it identically across the entire chart.
+- **Breathing gap is symmetric at both ends of an edge.** If the start has 3 px to its source node boundary, the end must have 3 px to its target node boundary as well. Asymmetric gaps — one end touching, the other not — signal author inattention and read as the edge being wedged into one endpoint. This applies to control edges between bands as much as to in-band pipeline edges; if the edge starts at a container's bottom edge and ends 3 px above a node's top edge, one of those endpoints is wrong.
 
 ---
 
@@ -81,6 +93,7 @@ Edge geometry rules:
 - The default form is a **single-row left-to-right linear flow**.
 - When complexity increases, rows may stack, but every row internally maintains the same column rhythm.
 - In overview charts that show several streams in parallel, every row aligns to the same x-axis columns.
+- **Cross-band column alignment.** When stacked bands contain content that maps to each other — a stage in an upper band producing an artifact named in a lower band, an orchestrator above the row of stages it controls — the related items share the same x-axis column across bands. If the mapping is m:n (column counts differ), the author must either (a) draw an explicit line or bracket connecting the related items across bands, (b) rearrange so column counts match, or (c) abandon column alignment entirely and treat the bands as independent. Half-aligned columns — where some items align across bands but others drift by a non-zero offset — are worse than no alignment, because the reader infers a relationship that breaks under inspection.
 
 ### 3.2 Spacing Rhythm
 
@@ -88,6 +101,7 @@ Edge geometry rules:
 - Edges that travel in the same direction maintain the same length rhythm wherever possible.
 - Horizontal and vertical edges may carry different rhythms, but each axis has its own consistent system.
 - After removing a node, redistribute the remaining nodes so no single edge becomes anomalously long. The only exception: a direct connection is genuinely more accurate than the removed intermediary, in which case the long edge stays — but row/column alignment, label centering, and outer-frame balance must still be preserved.
+- **Within-container content spacing is uniform.** Adjacent items inside a single container — a band, group, subgroup, or storage box — are spaced within ±5% of the mean gap of that container. An outlier gap (e.g., a single 240 px gap among items otherwise spaced at 180–190 px) reads as either a missing item or a category break; if neither is intended, redistribute. If a category break is intended, mark the wider gap with an explicit separator — a thin divider, a sub-caption, or labeled whitespace — so the reader can tell an intentional gap from a layout slip.
 
 ### 3.3 Wrapping
 
@@ -156,6 +170,7 @@ If the rendered PNG is visually unbalanced, do not chase the problem by re-tweak
 - Default position is above the edge. Move the label below the edge when something competes for attention above it (a branching line, an adjacent label). Pick one above-offset value and one below-offset value per chart set and apply them consistently.
 - For vertical edges, the label's primary axis sits at the midpoint of the edge.
 - If only one edge has a missing label, decide whether the transition is meaningful: if yes, label it; if no, do not pad neighboring labels to compensate.
+- **Edge label background plate must cover the edge line.** If an edge label sits where the edge line would pass through the glyph, place a background plate (a rectangle with `fill` set to the canvas background, sized slightly larger than the text bounding box) under the label so the edge line is occluded. If the label is offset from the edge so the edge line never crosses the glyph, the plate is unnecessary — do not add one. A plate that does not cover any edge segment is visual noise without function: the plate exists to fix a specific collision, and absence of collision means absence of plate.
 
 ### 5.3 Length and Density
 
@@ -194,6 +209,20 @@ Subgroups bracket a portion of an existing pipeline. Their style is intentionall
 
 When the subgroup title and subtitle add nothing, hide them — and either remove the subgroup visually altogether or keep only its inner nodes. Either way, recompute the layout and the outer frame afterward.
 
+### 6.4 Container and Caption Discipline
+
+**Container span matches its declared logical scope.** If a container is meant to wrap a set of items — an orchestrator band over five pipeline stages, a storage group over five artifact paths, a subgroup bracketing three nodes — its left edge equals the leftmost wrapped item's left edge and its right edge equals the rightmost wrapped item's right edge. If a uniform inset is desired instead, apply the same inset on all four sides and document it as an explicit padding constant. Mismatch between "what the container is supposed to cover" and "what its coordinates actually cover" is a visual contradiction: readers infer scope from coordinates, not from author intent.
+
+**Group caption alignment follows a single rule per chart.** Every group, band, and subgroup caption in a chart uses the same horizontal alignment rule — one of:
+
+- (a) canvas-left padding (a constant `x` for every caption),
+- (b) the caption's own container left edge, or
+- (c) the caption's first wrapped item left edge.
+
+Pick one rule per chart and apply it uniformly. Mixing two rules — some captions at canvas-left, others at container-left — reads as inconsistent layout even if each caption is "correctly" placed under one of the rules considered in isolation.
+
+**Source-code comments match actual coordinates.** When the chart is authored via code (SVG, HTML/CSS, programmatic draw.io / Figma), any inline comment documenting layout intent must match the actual coordinates and attributes. A comment that claims `spans X 230-1150` next to `x=270, width=820` is a lie — it obscures author intent and breaks reviewability. Comments are part of the chart's contract, not docstrings; when coordinates change, the comment updates in the same edit.
+
 ---
 
 ## 7. Simplification
@@ -230,24 +259,32 @@ Run every item before declaring a chart done. Each item maps back to a rule abov
 - Flow direction reads in a single pass.
 - Same-semantic-level nodes share an axis.
 - No duplicates remain.
+- No element overlaps another outside a containment relationship. Long identifier labels (≥ 8 monospace chars, or visually wide proportional labels) were measured, not eyeballed.
+- All text elements inside a single node share the same horizontal anchor, or the anchors are explicitly declared per node-role.
 
 **Spacing**
 - Same-row edge lengths are equal.
 - No segment is anomalously long without justification.
 - Removals were followed by redistribution.
+- Edge breathing gaps are symmetric at both ends.
+- Within-container spacing of homogeneous items is uniform within ±5% of the mean.
 
 **Labels**
 - Node and edge labels do not repeat the same information.
 - Edge labels are short and verb-led.
 - Identifiers render in monospace.
+- Edge label background plates (when present) actually cover the edge line they sit on; plates that cover no edge segment were removed.
 
 **Framing**
 - Outer padding is tight, not generous.
 - No empty region remains from a hidden element.
 - `viewBox` was recomputed against current content.
 - The deliverable PNG was cropped to visible content and re-padded equally on all four sides.
+- Container left/right edges match their declared logical span (or share an explicit uniform inset on all four sides).
 
 **Consistency**
 - Same role family uses the same color, icon, and typographic grammar across the set.
 - Charts in the same family share the same spacing rhythm.
 - The chosen pattern (overview / linear / simplified / wrapped) is unambiguous.
+- All group / band / subgroup captions follow a single horizontal-alignment rule.
+- Source-code comments about layout match actual coordinates.
