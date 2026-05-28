@@ -1,0 +1,42 @@
+{
+  "description": "Installation manifest for portable-opencode-setup. Source of truth for plugins, npm packages, MCPs, AAI apps, and custom skills.",
+  "plugins": [
+    { "name": "opencode-claude-auth", "purpose": "Claude model authentication" },
+    { "name": "opencode-antigravity-auth", "purpose": "Antigravity/Google gateway authentication" },
+    { "name": "@datadog/opencode-plugin", "purpose": "Datadog integration" },
+    { "name": "oh-my-openagent", "purpose": "Core orchestration plugin" },
+    { "name": "oh-my-openagent/tui", "purpose": "Terminal UI for orchestration" }
+  ],
+  "npm_packages": [
+    { "name": "@ex-machina/opencode-anthropic-auth", "purpose": "Anthropic-specific auth helpers" },
+    { "name": "@opencode-ai/plugin", "purpose": "Base OpenCode plugin utilities" },
+    { "name": "oh-my-opencode", "purpose": "OpenCode plugin manager" }
+  ],
+  "mcps": {
+    "always_on": [
+      { "name": "websearch", "role": "Web search provider" },
+      { "name": "context7", "role": "Documentation retrieval (Context7)" },
+      { "name": "grep_app", "role": "Code search across repositories" },
+      { "name": "aai-gateway", "role": "AAI tool gateway" }
+    ],
+    "registered_disabled": [
+      { "name": "azure-devops", "role": "Azure DevOps work items/repos/PRs" },
+      { "name": "atlassian-rovo", "role": "Atlassian Rovo / Jira / Confluence" },
+      { "name": "github", "role": "GitHub repo/issue/PR/file ops" },
+      { "name": "postman", "role": "Postman workspace/collection/API docs" }
+    ]
+  },
+  "aai_apps": {
+    "preset": [
+      { "name": "opencode", "type": "Preset" },
+      { "name": "codex", "type": "Preset" },
+      { "name": "claude", "type": "Preset" }
+    ],
+    "on_demand": [
+      { "name": "github-mcp", "type": "On-demand" },
+      { "name": "azure-devops-mcp", "type": "On-demand" },
+      { "name": "atlassian-rovo", "type": "On-demand" },
+      { "name": "postman-mcp", "type": "On-demand" }
+    ]
+  }
+}
