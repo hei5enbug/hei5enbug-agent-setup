@@ -1,29 +1,40 @@
 {
-  "description": "Installation manifest for portable-opencode-setup. Source of truth for plugins, npm packages, MCPs, AAI apps, and custom skills.",
+  "description": "Additive installation manifest for portable-opencode-setup. Source of truth for missing plugins, MCPs, AAI apps, and custom skills to add without overwriting existing settings.",
   "plugins": [
     { "name": "opencode-claude-auth", "purpose": "Claude model authentication" },
     { "name": "opencode-antigravity-auth", "purpose": "Antigravity/Google gateway authentication" },
     { "name": "@datadog/opencode-plugin", "purpose": "Datadog integration" },
-    { "name": "oh-my-openagent", "purpose": "Core orchestration plugin" },
-    { "name": "oh-my-openagent/tui", "purpose": "Terminal UI for orchestration" }
-  ],
-  "npm_packages": [
-    { "name": "@ex-machina/opencode-anthropic-auth", "purpose": "Anthropic-specific auth helpers" },
-    { "name": "@opencode-ai/plugin", "purpose": "Base OpenCode plugin utilities" },
-    { "name": "oh-my-opencode", "purpose": "OpenCode plugin manager" }
+    { "name": "oh-my-openagent", "purpose": "Core orchestration plugin" }
   ],
   "mcps": {
     "always_on": [
-      { "name": "websearch", "role": "Web search provider" },
-      { "name": "context7", "role": "Documentation retrieval (Context7)" },
-      { "name": "grep_app", "role": "Code search across repositories" },
-      { "name": "aai-gateway", "role": "AAI tool gateway" }
-    ],
-    "registered_disabled": [
-      { "name": "azure-devops", "role": "Azure DevOps work items/repos/PRs" },
-      { "name": "atlassian-rovo", "role": "Atlassian Rovo / Jira / Confluence" },
-      { "name": "github", "role": "GitHub repo/issue/PR/file ops" },
-      { "name": "postman", "role": "Postman workspace/collection/API docs" }
+      {
+        "name": "context7",
+        "role": "Documentation retrieval (Context7)",
+        "opencode": {
+          "type": "local",
+          "command": ["npx", "-y", "@upstash/context7-mcp"],
+          "enabled": true
+        }
+      },
+      {
+        "name": "grep_app",
+        "role": "Code search across repositories",
+        "opencode": {
+          "type": "local",
+          "command": ["npx", "-y", "@kenkaiiii/kencode-search"],
+          "enabled": true
+        }
+      },
+      {
+        "name": "aai-gateway",
+        "role": "AAI tool gateway",
+        "opencode": {
+          "type": "local",
+          "command": ["npx", "-y", "aai-gateway"],
+          "enabled": true
+        }
+      }
     ]
   },
   "aai_apps": {
