@@ -1,6 +1,6 @@
 ---
 name: omo-model-config
-description: Safely updates the model, variant, and fallback_models fields under agents.* and categories.* in oh-my-openagent.json, adds missing upstream-defined agents/categories under the same gates, and removes agents.*.ultrawork entirely when present. Treats the upstream oh-my-openagent model-requirements.ts as the authoritative candidate set and validates every model against available-models.json, treating required_providers as the one explicit exception to upstream guidance for provider coverage.
+description: Safely updates the model, variant, and fallback_models fields under agents.* and categories.* in oh-my-openagent.json, adds missing upstream-defined agents/categories under the same gates, and removes agents.*.ultrawork entirely when present. Treats the upstream oh-my-openagent agent-model-requirements.ts / category-model-requirements.ts as the authoritative candidate set and validates every model against available-models.json, treating required_providers as the one explicit exception to upstream guidance for provider coverage.
 ---
 
 # OmO Model Configurator (GitHub-First)
@@ -33,7 +33,10 @@ Edits the model routing in `oh-my-openagent.json` against an authoritative upstr
 GitHub upstream (`code-yeongyu/oh-my-openagent`, branch `dev`) is the primary authority. On any conflict: **GitHub code > GitHub prose docs > local assumptions.**
 
 **Source-of-truth for model chains (read first):**
-- `packages/model-core/src/model-requirements.ts` ← **AUTHORITATIVE.** Holds the real `AGENT_MODEL_REQUIREMENTS` / `CATEGORY_MODEL_REQUIREMENTS` object literals, the `FallbackEntry` / `ModelRequirement` types, and gate flags (`requiresAnyModel`, `requiresProvider`, `requiresModel`).
+- `packages/model-core/src/agent-model-requirements.ts` ← **AUTHORITATIVE.** Holds the real `AGENT_MODEL_REQUIREMENTS` object literal (each agent's `fallbackChain` plus gate flags `requiresAnyModel`, `requiresProvider`, `requiresModel`).
+- `packages/model-core/src/category-model-requirements.ts` ← **AUTHORITATIVE.** Holds the real `CATEGORY_MODEL_REQUIREMENTS` object literal (each category's `fallbackChain`).
+- `packages/model-core/src/model-requirement-types.ts` ← **AUTHORITATIVE.** Defines the `FallbackEntry` / `ModelRequirement` types (the `variant` field and the gate flags).
+- `packages/model-core/src/model-requirements.ts` — re-export **barrel only**; forwards `AGENT_MODEL_REQUIREMENTS`, `CATEGORY_MODEL_REQUIREMENTS`, and the types from the three modules above. Reading this file alone shows only `export` lines, **not** the chains — open the two `*-model-requirements.ts` files for the actual data.
 - `src/shared/model-requirements.ts` — re-export entry point only; forwards `AGENT_MODEL_REQUIREMENTS`, `CATEGORY_MODEL_REQUIREMENTS`, and the types from `@oh-my-opencode/model-core`.
 
 **Source-of-truth for the config FILE SHAPE (the legal serialization):**
@@ -49,7 +52,7 @@ GitHub upstream (`code-yeongyu/oh-my-openagent`, branch `dev`) is the primary au
 
 Apply these whenever upstream candidate sets, near-variant resolution, or fallback ordering are evaluated.
 
-1. **`model-requirements.ts` overrides prose docs.** If `AGENT_MODEL_REQUIREMENTS` / `CATEGORY_MODEL_REQUIREMENTS` disagree with any markdown doc about ordering, providers, variants, or chain composition, the `.ts` code wins. (Example: the prose `writing` chain has historically drifted from the code chain — trust the code.) Treat prose as background only.
+1. **The `agent-model-requirements.ts` / `category-model-requirements.ts` chain files override prose docs.** If `AGENT_MODEL_REQUIREMENTS` / `CATEGORY_MODEL_REQUIREMENTS` disagree with any markdown doc about ordering, providers, variants, or chain composition, the `.ts` code wins. (Example: the prose `writing` chain has historically drifted from the code chain — trust the code.) Treat prose as background only.
 
 2. **Antigravity wrapper preference (overrides "cross-provider near-variants are forbidden" for antigravity only).** When the allowlist contains two entries that share the same base model under different provider segments and one is `google/antigravity-*` (e.g. `anthropic/claude-sonnet-4-6` and `google/antigravity-claude-sonnet-4-6`), treat them as **wrapper-equivalent**:
    - The `google/antigravity-*` entry **always** takes the higher slot — primary if that slot was originally primary, otherwise the leading fallback position. This is top priority: when the exact same underlying model is available as an antigravity wrapper, the wrapper is used first.
@@ -117,7 +120,7 @@ The legal shape is defined by `src/config/schema/*.ts` (verified upstream). Foll
 
 ## Step 1 — Read & Resolve
 
-1. Read `packages/model-core/src/model-requirements.ts` (authoritative chains + types + gates). When prose docs conflict with it, the `.ts` wins.
+1. Read the authoritative chain files — `packages/model-core/src/agent-model-requirements.ts` (`AGENT_MODEL_REQUIREMENTS`), `packages/model-core/src/category-model-requirements.ts` (`CATEGORY_MODEL_REQUIREMENTS`), and `packages/model-core/src/model-requirement-types.ts` (types + gate flags). The `model-requirements.ts` barrel only re-exports these, so it is not enough on its own. When prose docs conflict with the chain files, the `.ts` wins.
 2. Read `available-models.json`.
 3. Read `oh-my-openagent.json`.
 4. Build a per-target upstream map for each item you will edit or add.
