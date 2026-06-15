@@ -10,15 +10,13 @@
       "opencode-go/minimax-m2.7"
     ],
     "standard": [
-      "anthropic/claude-sonnet-4-6",
-      "google/antigravity-claude-sonnet-4-6"
+      "anthropic/claude-sonnet-4-6"
     ],
     "heavy": [
-      "anthropic/claude-opus-4-7",
       "anthropic/claude-opus-4-8",
       "openai/gpt-5.5",
       "opencode-go/glm-5.1",
-      "opencode-go/kimi-k2.6"
+      "opencode-go/kimi-k2.7"
     ]
   },
   "required_providers": [
@@ -26,15 +24,13 @@
   ],
   "allowlist": [
     "anthropic/claude-sonnet-4-6",
-    "anthropic/claude-opus-4-7",
     "anthropic/claude-opus-4-8",
-    "google/antigravity-claude-sonnet-4-6",
     "openai/gpt-5.4-mini-fast",
     "openai/gpt-5.4-nano",
     "openai/gpt-5.5",
     "google/antigravity-gemini-3-flash",
     "opencode-go/glm-5.1",
-    "opencode-go/kimi-k2.6",
+    "opencode-go/kimi-k2.7",
     "opencode-go/minimax-m2.7",
     "opencode/gpt-5-nano",
     "opencode/minimax-m2.5-free"
