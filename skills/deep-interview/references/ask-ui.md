@@ -23,6 +23,11 @@ choice.
   every option `label`/`description` into the user's conversation language (see
   `language` handling in `SKILL.md`). Keep code identifiers, file paths, commands, and
   fixed status tokens in English.
+- **Make questions easy to understand.** Write the question and every option description
+  in enough detail that a high-school student can understand the choice, what changes if
+  they pick it, and the main tradeoff or risk.
+- **Order by recommendation.** Sort options from strongest recommendation to weakest, and
+  append the exact suffix ` (추천)` to the single most recommended option label.
 
 ## The unified question model
 
@@ -32,7 +37,7 @@ Every Deep Interview question maps to this single logical shape, regardless of h
 |-------|---------|------------------------------------|
 | `question` | The full question text the user reads. | Prepend the Round/Component/Targeting/Ambiguity line from `SKILL.md` Step 2b. |
 | `header` | A short label for the question. | Keep **≤ 12 characters** so it is valid in Claude Code. |
-| `options[]` | 2–4 contextually relevant choices. | Each has a `label` (short) and a `description` (the tradeoff). Order strongest-recommended first. |
+| `options[]` | 2–4 contextually relevant choices. | Each has a short `label` and a detailed `description` explaining the tradeoff in plain language. Order strongest-recommended first and append ` (추천)` to exactly one best label. |
 | custom / free-text | The user can always type their own answer. | Guaranteed by Claude ("Other") and OpenCode; for the inline fallback, add an explicit `Custom` option. |
 | multi-select | Usually single-select. | Only set multi when the question genuinely accepts several answers. |
 
@@ -53,8 +58,8 @@ inline fallback.
       "question": "Round 2 | Component: Ingestion | Targeting: Constraints | Why now: ... | Ambiguity: 58%\n\nShould the importer accept gzipped CSVs, or only plain .csv?",
       "header": "CSV input",
       "options": [
-        { "label": "Plain .csv only", "description": "Simplest. Reject compressed uploads with a 400." },
-        { "label": "Also accept .gz", "description": "Transparently decompress .csv.gz on upload." }
+        { "label": "Plain .csv only (추천)", "description": "Choose this if the first version should stay simple. Users can upload only normal .csv files, and compressed files are rejected with a clear error." },
+        { "label": "Also accept .gz", "description": "Choose this if users often have large compressed files. It adds more implementation work because uploads must be decompressed and failure cases must be handled." }
       ],
       "multiSelect": false
     }
@@ -80,8 +85,8 @@ inline fallback.
       "question": "Round 2 | Component: Ingestion | Targeting: Constraints | Why now: ... | Ambiguity: 58%\n\nShould the importer accept gzipped CSVs, or only plain .csv?",
       "header": "CSV input",
       "options": [
-        { "label": "Plain .csv only", "description": "Simplest. Reject compressed uploads with a 400." },
-        { "label": "Also accept .gz", "description": "Transparently decompress .csv.gz on upload." }
+        { "label": "Plain .csv only (추천)", "description": "Choose this if the first version should stay simple. Users can upload only normal .csv files, and compressed files are rejected with a clear error." },
+        { "label": "Also accept .gz", "description": "Choose this if users often have large compressed files. It adds more implementation work because uploads must be decompressed and failure cases must be handled." }
       ],
       "multiple": false
     }
@@ -116,11 +121,11 @@ wait for the user's next message:
 ```md
 ## Question {N}: {Topic}        <!-- or localized: ## 질문 {N}: {주제} -->
 
-{3–10 lines of substantive context: why this decision matters, what changes depending on
-the answer, the tradeoff between options, the risk of leaving it ambiguous, and why option
-A) is the recommended default.}
+{3–10 lines of substantive context written plainly enough for a high-school student: why this
+decision matters, what changes depending on the answer, the tradeoff between options, the risk of
+leaving it ambiguous, and why option A) is the recommended default.}
 
-- A) {strongest recommended option} (recommended)   <!-- or (추천) -->
+- A) {strongest recommended option} (추천)
 - B) {second option}
 - C) {third option}
 - D) 직접 입력 / Custom
@@ -130,8 +135,10 @@ A) is the recommended default.}
 ```
 
 Rules for the inline fallback:
-- Options ordered strongest-recommended first; exactly one `(recommended)`/`(추천)` marker,
-  always on `A)`.
+- Options ordered strongest-recommended first; exactly one ` (추천)` marker, always at the end of
+  the `A)` label.
+- Option descriptions must be detailed enough for a high-school student to understand what the
+  choice means, what changes if they pick it, and the main tradeoff or risk.
 - Always include `D) 직접 입력 / Custom`.
 - After emitting the block, **stop** — do not score ambiguity or continue until the user
   replies in the next turn.
@@ -154,7 +161,9 @@ Rules for the inline fallback:
 2. Exactly one question, `header` ≤ 12 chars, 2–4 options each `{label, description}`,
    single-select unless genuinely multi.
 3. Translate question/header/options to the user's language.
-4. No native tool (or `question` permission denied)? Use the inline fallback and end the
+4. Sort options by recommendation strength and append ` (추천)` to exactly one best option label.
+5. Make the question and descriptions detailed enough for a high-school student to understand.
+6. No native tool (or `question` permission denied)? Use the inline fallback and end the
    turn.
-5. Never run interview asks from a spawned subagent (Claude's `AskUserQuestion` is
+7. Never run interview asks from a spawned subagent (Claude's `AskUserQuestion` is
    main-session only) — collect subagent findings, then ask from the main session.
