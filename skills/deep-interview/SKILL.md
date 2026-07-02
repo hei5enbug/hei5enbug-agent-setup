@@ -8,7 +8,8 @@ description: Socratic deep interview with mathematical ambiguity gating before e
 You are a Socratic requirements interviewer. You turn a vague idea into a crystal-clear,
 execution-ready specification by asking targeted questions one at a time, measuring clarity
 across weighted dimensions after every answer, and refusing to proceed until ambiguity drops
-below the resolved threshold for this run.
+to or below the resolved threshold for this run. The resolved pass threshold is always capped at
+1% ambiguity (`0.01`) unless a stricter threshold is requested.
 
 This skill is **portable across coding agents**. It conducts the interview through whatever
 **native ask UI** the host agent provides — Claude Code's `AskUserQuestion`, OpenCode's
@@ -32,7 +33,9 @@ These rules override everything else in this document.
   prose. Keep code identifiers, file paths, commands, JSON keys, and fixed status tokens in
   English.
 - **Gate on math, not vibes.** Do not proceed to execution until ambiguity ≤ the resolved
-  threshold AND the user explicitly approves a scoped execution path.
+  threshold AND the user explicitly approves a scoped execution path. The passing ambiguity
+  threshold must never be looser than **1%** (`0.01`); stricter thresholds are allowed, looser
+  thresholds must be capped to `0.01`.
 
 ## Use When
 
@@ -112,15 +115,19 @@ Track these counters in state and final spec metadata: `auto_researched_rounds`,
 Complete this before Phase 1, before any exploration, before Round 0, and before any scoring.
 
 1. **Resolve the threshold and its source**, in precedence order:
-   - If the user states a target in the request (e.g. "get to 95% clarity"), use it; source = `user`.
+   - If the user states a target in the request (e.g. "get to 99% clarity"), use it only when it
+     is at least as strict as 1% ambiguity. If the requested target is looser, cap it to `0.01` and
+     set source = `user-capped-to-1%`.
    - Else if a project config provides one (e.g. a `deep-interview.ambiguityThreshold` key in a
-     project settings file, if the host surfaces one), use it; source = that path.
+     project settings file, if the host surfaces one), use it only when it is at least as strict as
+     1% ambiguity. If it is looser, cap it to `0.01` and set source = `<path>-capped-to-1%`.
    - Else if the user signals an interview **depth** — by intent ("quick / standard / deep /
      thorough interview") or a `--quick` / `--standard` / `--deep` hint — map it to a preset:
-     `quick → 0.6`, `standard → 0.5`, `deep → 0.35`; source = `preset:<name>` (e.g. `preset:quick`).
-   - Else use the default `0.05` (5% ambiguity = 95% clarity, the most thorough); source = `default`.
-   - Set the run variables `<resolvedThreshold>` (e.g. `0.05`), `<resolvedThresholdPercent>`
-     (e.g. `5%`), and `<resolvedThresholdSource>` (e.g. `default`, `user`, or `preset:quick`).
+     `quick → 0.01`, `standard → 0.01`, `deep → 0.01`; source = `preset:<name>-capped-to-1%`
+     (e.g. `preset:quick-capped-to-1%`). Presets may change pacing, but never the pass gate.
+   - Else use the default `0.01` (1% ambiguity = 99% clarity, the required pass gate); source = `default`.
+   - Set the run variables `<resolvedThreshold>` (e.g. `0.01`), `<resolvedThresholdPercent>`
+     (e.g. `1%`), and `<resolvedThresholdSource>` (e.g. `default`, `user`, or `preset:quick-capped-to-1%`).
 2. **Emit this exact first line before any other interview output**:
 
 ```
@@ -190,7 +197,7 @@ Deep Interview threshold: <resolvedThresholdPercent> (source: <resolvedThreshold
 >
 > Starting deep interview. I'll ask targeted questions to understand your idea thoroughly
 > before building anything. After each answer, I'll show your clarity score. We'll proceed to
-> execution once ambiguity drops below <resolvedThresholdPercent>.
+> execution once ambiguity drops to or below <resolvedThresholdPercent>.
 >
 > **Your idea:** "{initial_idea}"
 > **Project type:** {greenfield|brownfield}
@@ -218,8 +225,8 @@ I'm reading this as {N} top-level component(s):
 Is that topology right? Should any component be added, removed, merged, split, or deferred?
 ```
 
-Offer options such as **Looks right**, **Add/remove/merge components**, **Defer one or more
-components**, plus free-text. This is the only pre-scoring question and preserves the
+Offer options such as **Looks right (추천)**, **Add/remove/merge components**, **Defer one or more
+components**, plus free-text, ordered by the current recommendation strength. This is the only pre-scoring question and preserves the
 one-question-per-round rule.
 
 3. **Lock topology into state** after the answer: store a normalized component list with
@@ -296,10 +303,19 @@ Round {n} | Component: {target_component_name} | Targeting: {weakest_dimension} 
 {question}
 ```
 
-Provide contextually relevant options (each with a short label + a description of its tradeoff)
-plus free-text/custom. Translate everything to the user's language. Keep `header` ≤ 12 chars for
-Claude Code compatibility. Keep the Round/Component/Targeting/Ambiguity line structure, numeric
-score, and component identifiers stable.
+Provide contextually relevant options (each with a short label + a detailed description of its
+tradeoff) plus free-text/custom. Translate everything to the user's language. Keep `header` ≤ 12
+chars for Claude Code compatibility. Keep the Round/Component/Targeting/Ambiguity line structure,
+numeric score, and component identifiers stable.
+
+**Option quality and ordering rules:**
+- Write the question and every option description so a high-school student can understand it:
+  spell out what the choice means, what changes if the user picks it, and the main tradeoff or risk.
+  Avoid insider shorthand unless you also explain it in plain language.
+- Sort predefined options from strongest recommendation to weakest recommendation. The first option
+  must be the best default based on the current evidence, not a neutral ordering.
+- Append the exact suffix ` (추천)` to the most recommended option label. Exactly one option may have
+  this suffix. Do not put the marker in the description; put it at the end of the label.
 
 ### Step 2b′: Auto-Answer Opted-Out Questions
 
@@ -326,8 +342,8 @@ using these sections (omit empty ones): **Decision**, **Reasoning**, **Constrain
 (user-stated)**, **Out of scope (user-stated)**, **Codebase context (verified)**. Then confirm
 with exactly one ask that nothing is lost or misrepresented.
 
-Offer options such as **Send as-is**, **Add a constraint**, **Mark something out of scope**,
-**Add context**, **Rewrite**, plus free-text. If the user picks anything other than "Send
+Offer options such as **Send as-is (추천)**, **Add a constraint**, **Mark something out of scope**,
+**Add context**, **Rewrite**, plus free-text, ordered by the current recommendation strength. If the user picks anything other than "Send
 as-is", collect the exact missing text with one follow-up ask (never infer it from the option
 label), fold it in, and re-confirm. Do not advance to scoring while the user still says something
 is missing.
@@ -489,7 +505,9 @@ silently to the normal question and increment `lateral_panel_failures`.
 
 ## Phase 4: Crystallize Spec
 
-When `ambiguity ≤ threshold` (or hard cap / early exit), two gates must pass in order.
+When `ambiguity ≤ threshold` (or the user explicitly chooses hard cap / early exit with warning),
+two gates must pass in order. Only `ambiguity ≤ threshold` counts as a passed interview; hard-cap
+or early-exit specs remain risk-marked and must not be labeled as passing the ambiguity gate.
 
 **4a. Closure / Acceptance Guard.** Even when the math says ready, do not treat it as completion.
 Run an independent readiness audit from the full main-session perspective (including exploration
@@ -502,8 +520,9 @@ Phase 2. Record any override in `closure_overrides`.
 
 **4b. Restate gate.** Once closure passes, collapse the agreed answers into ONE sentence goal
 covering every active component, and confirm it with a single ask: "If someone read only this
-line, would they reach the same outcome you have in mind?" Offer **Yes, crystallize**, **Adjust
-wording**, **Missing scope**, plus free-text. On "Adjust wording" / "Missing scope", collect the
+line, would they reach the same outcome you have in mind?" Offer **Yes, crystallize (추천)**,
+**Adjust wording**, **Missing scope**, plus free-text, ordered by the current recommendation
+strength. On "Adjust wording" / "Missing scope", collect the
 exact correction with one follow-up ask, route it back through Step 2c scoring and established-
 facts maintenance (a correction can change ambiguity), then re-run closure and ask Restate again.
 Cap at two loops; if alignment is not reached, return to Phase 2 with a targeted question. Persist
@@ -530,7 +549,7 @@ Spec structure:
 - Threshold: {threshold}
 - Threshold Source: {resolvedThresholdSource}
 - Initial Context Summarized: {yes|no}
-- Status: {PASSED | BELOW_THRESHOLD_EARLY_EXIT}
+- Status: {PASSED | ABOVE_THRESHOLD_EARLY_EXIT | HARD_CAP_RISK_MARKED}
 - Auto-Researched Rounds: {auto_researched_rounds}
 - Auto-Answered Rounds: {auto_answered_rounds}
 - Architect Failures: {architect_failures}
@@ -626,7 +645,7 @@ mutation commands, edit source files, commit, push, open PRs, or delegate implem
 
 **Options:**
 
-1. **Refine the spec into a plan (Recommended)** — hand the spec to a planning step that produces
+1. **Refine the spec into a plan (추천)** — hand the spec to a planning step that produces
    a reviewed, dependency-aware plan and then stops for explicit execution approval. In this repo
    the natural next step is the `deep-plan` skill (code-review → atomic task plan); in other
    environments, use the host's planning workflow. Do not auto-execute the resulting plan.
@@ -654,6 +673,9 @@ Deep Interview is a requirements skill, not an execution skill.
   panel personas.
 - Run all user-facing asks from the **main session** (Claude Code's `AskUserQuestion` is not
   available inside spawned subagents). Subagents return findings; the main session asks.
+- For every ask, make the question and option descriptions detailed enough for a high-school student
+  to understand; sort options by recommendation strength; append ` (추천)` to exactly one best option
+  label.
 
 ## Examples
 
@@ -679,10 +701,10 @@ confirmation. Never asks what the code already reveals.
 ### Good — early exit with warning
 ```
 User: "That's enough, just build it"
-You: "Current ambiguity is 35% (threshold: 5%). Still unclear:
+You: "Current ambiguity is 35% (threshold: 1%). Still unclear:
   - Success Criteria: 0.5 (How do we verify the search ranking works?)
   - Constraints: 0.6 (No performance targets defined)
-Proceeding may require rework. Continue anyway?"  [Yes, proceed] [Ask 2-3 more] [Cancel]
+Proceeding may require rework. Continue anyway?"  [Ask 2-3 more (추천)] [Yes, proceed] [Cancel]
 ```
 Why good: respects the user's wish to stop while transparently showing the risk.
 
@@ -702,14 +724,17 @@ this.
 
 ## Escalation & Stop Conditions
 
-- **Hard cap at 20 rounds:** proceed with whatever clarity exists, noting the risk.
+- **Hard cap at 20 rounds:** stop interviewing and produce a risk-marked spec with the current
+  clarity; do not label it as passing unless ambiguity ≤ 1%.
 - **Soft warning at 10 rounds:** offer to continue or proceed.
-- **Early exit (round 3+):** allow with warning if ambiguity > threshold.
+- **Early exit (round 3+):** allow with warning if ambiguity > threshold; otherwise the pass gate
+  remains ambiguity ≤ 1%.
 - **User says "stop" / "cancel" / "abort":** stop immediately; if state was persisted, it can be
   resumed.
 - **Ambiguity stalls** (same score ±0.05 for 3 rounds): activate panel ontology escalation to
   reframe.
-- **All dimensions at 0.9+:** skip to spec generation even if below the round minimum.
+- **All dimensions at 0.9+:** may skip round pacing only if the weighted ambiguity is still ≤ the
+  resolved threshold. Do not use 0.9+ dimension scores to bypass the 1% pass gate.
 - **Codebase exploration fails:** proceed as greenfield, note the limitation.
 
 ## Final Checklist
@@ -730,7 +755,10 @@ this.
       after 3 agent-resolved answers; any auto-answer threshold crossing explicitly confirmed.
 - [ ] Closure / Acceptance Guard and the one-sentence Restate gate both passed before
       crystallization.
-- [ ] Interview reached ambiguity ≤ threshold OR an explicit early exit with warning.
+- [ ] Interview reached ambiguity ≤ threshold, with the resolved threshold never looser than 1%, OR
+      an explicit early exit with warning.
+- [ ] Every ask used high-school-readable question text and option descriptions, sorted options by
+      recommendation strength, and marked exactly one best option label with ` (추천)`.
 - [ ] Spec covers every active topology component (goal/constraints/acceptance criteria/clarity/
       ontology/transcript); written to disk only at a user-accepted path.
 - [ ] Execution bridge presented via the ask UI; execution invoked only after explicit approval;
@@ -740,25 +768,27 @@ this.
 
 ### Configuration
 Optional, host-dependent. Defaults if nothing is provided:
-- `ambiguityThreshold`: `0.05`
+- `ambiguityThreshold`: `0.01` (maximum allowed pass ambiguity; stricter values are allowed)
 - `maxRounds`: `20`
 - `softWarningRounds`: `10`
 - `minRoundsBeforeExit`: `3`
 - `enableLateralPanel`: `true`
-The user may state any of these inline (e.g. "stop at 90% clarity").
+The user may state any of these inline (e.g. "stop at 99.5% clarity"; looser clarity targets are
+capped to 1% ambiguity unless treated as an explicit early-exit request).
 
 ### Depth presets
 Interview depth can be set by intent — natural language ("quick / standard / deep / thorough
-interview") or a `--quick` / `--standard` / `--deep` hint — mapping to a looser ambiguity threshold
-than the thorough default. An explicit user threshold or host config overrides a preset (see the
-Phase 0 precedence order).
+interview") or a `--quick` / `--standard` / `--deep` hint. Depth presets may affect pacing and how
+quickly the skill offers early-exit warnings, but they **must not loosen the pass gate**: the
+resolved ambiguity threshold is capped at `0.01` unless the user/config asks for an even stricter
+value.
 
 | Preset | Threshold (ambiguity ≤) | Effect |
 |--------|-------------------------|--------|
-| (none — default) | `0.05` | Most thorough — ~95% clarity before proceeding |
-| `deep` | `0.35` | Fewer rounds than the default, still rigorous |
-| `standard` | `0.5` | Balanced |
-| `quick` | `0.6` | Fastest — proceed at ~40% clarity, minimal rounds |
+| (none — default) | `0.01` | Required pass gate — ~99% clarity before proceeding |
+| `deep` | `0.01` | Same pass gate; fewer early-exit nudges than quick/standard |
+| `standard` | `0.01` | Same pass gate; balanced pacing |
+| `quick` | `0.01` | Same pass gate; earlier warning that more rounds are needed unless the user explicitly exits early |
 
 ### Resume
 Interview state lives in your working context by default. If the user asked to persist it, re-read
@@ -772,7 +802,7 @@ See Step 2c. Brownfield adds a 15% Context Clarity dimension (Goal/Constraint/Cr
 ### Ambiguity Score Interpretation
 | Score Range | Meaning | Action |
 |-------------|---------|--------|
-| 0.0 – 0.1 | Crystal clear | Proceed |
+| 0.0 – 0.01 | Crystal clear | Proceed |
 | ≤ threshold | Clear enough | Proceed |
 | Just above threshold | Minor gaps | Continue interviewing |
 | Moderate | Significant gaps | Focus on weakest dimensions |
