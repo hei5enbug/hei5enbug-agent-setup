@@ -1,0 +1,38 @@
+{
+  "skill_name": "skill-creator",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I am using an agent host with filesystem access but no subagents or browser. Create a reusable release-notes skill, test it, and show me how to review the results.",
+      "expected_output": "The workflow preserves drafting, sequential skill/baseline checks, inline or static review, and explicitly notes reduced evaluation independence.",
+      "files": [],
+      "expectations": [
+        "The response does not assume a named AI product or product-specific command.",
+        "The response adapts testing and review based on available capabilities.",
+        "The response does not invent unavailable timing or token metrics."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Improve this existing skill so its core behavior works in Codex, Gemini, and a local model runner. It currently shells out to one vendor CLI and stores commands in that vendor's private directory.",
+      "expected_output": "The skill preserves its identity, snapshots the baseline, moves shared behavior into portable instructions, and isolates host integration behind a configured adapter contract.",
+      "files": [],
+      "expectations": [
+        "The original skill name and host manifests are preserved unless a rename is requested.",
+        "The vendor CLI and private directory are replaced by configuration or isolated adapters.",
+        "Portable behavior remains in SKILL.md rather than being duplicated per host."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Run description optimization on a headless CI machine. I can provide a model command that reads stdin and prints the response, but there is no display and the model flag is optional.",
+      "expected_output": "The workflow uses the portable runner contract, treats the model ID as optional, generates a non-opening or static report, and explains that routing simulation is a proxy for native host routing.",
+      "files": [],
+      "expectations": [
+        "The runner command uses stdin and stdout without assuming a shell or vendor CLI.",
+        "The instructions use --no-open or a static artifact path for the headless environment.",
+        "The result distinguishes portable routing simulation from native host integration testing."
+      ]
+    }
+  ]
+}
