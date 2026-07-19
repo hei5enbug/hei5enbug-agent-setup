@@ -19,6 +19,9 @@ Keep the workflow stable across agent products by adapting to capabilities, not 
 5. Keep outputs and schemas consistent across hosts. When a metric is unavailable, use `null` or omit an optional field; never fabricate data.
 6. Preserve host-specific manifests and metadata when modifying an installed skill. Put shared behavior in `SKILL.md` and isolate unavoidable host integration in a small adapter or clearly labeled reference.
 7. Do not infer an installation root, manifest format, or package layout from the current authoring host when the user has not selected a target. Use a task-local writable path for drafts, or ask for the destination when it materially affects the result.
+8. Keep every skill self-contained. A skill may use its own bundled resources and declared host
+   capabilities, but must not name, import, invoke, read, or depend on a sibling skill's files.
+   Duplicate a small essential rule when necessary instead of creating a cross-skill handoff.
 
 Use this capability mapping:
 
@@ -341,6 +344,7 @@ Use the host's native artifact presentation mechanism when available; otherwise 
 - Intent, triggers, outputs, and constraints are explicit.
 - Core instructions use capability-based language and avoid accidental vendor coupling.
 - Required host-specific behavior is isolated and documented.
+- The skill contains no sibling-skill names, paths, invocations, imports, or file dependencies.
 - Realistic skill-enabled and baseline tests were run, or capability limitations were disclosed.
 - Assertions and metrics are evidence-backed.
 - The user received a review surface or equivalent inline review.

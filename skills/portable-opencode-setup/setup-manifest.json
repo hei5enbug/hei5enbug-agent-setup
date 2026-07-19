@@ -1,5 +1,5 @@
 {
-  "description": "Additive installation manifest for portable-opencode-setup. Source of truth for missing plugins, MCPs, AAI apps, and custom skills to add without overwriting existing settings.",
+  "description": "Additive installation manifest for portable-opencode-setup. Source of truth for missing plugins, MCPs, and AAI apps to add without overwriting existing settings.",
   "plugins": [
     { "name": "opencode-claude-auth", "purpose": "Claude model authentication" },
     { "name": "opencode-antigravity-auth", "purpose": "Antigravity/Google gateway authentication" },
