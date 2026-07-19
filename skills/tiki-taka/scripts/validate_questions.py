@@ -15,7 +15,7 @@ CHOICE_PATTERN = re.compile(r"^\s*(\d+)\.\s+\*\*.+\*\*\s*$")
 QUESTION_HEADING = "### 질문"
 CHOICES_HEADING = "### 선택지"
 ANSWER_HEADING = "### 답변"
-EMPTY_ANSWER = '<textarea rows="8"></textarea>'
+EMPTY_ANSWER_BLOCK = ["```", "", "```"]
 
 
 def read_text(source: str) -> str:
@@ -26,6 +26,16 @@ def read_text(source: str) -> str:
 
 def nonempty(lines: list[str]) -> list[str]:
     return [line for line in lines if line.strip()]
+
+
+def trim_blank_lines(lines: list[str]) -> list[str]:
+    start = 0
+    end = len(lines)
+    while start < end and not lines[start].strip():
+        start += 1
+    while end > start and not lines[end - 1].strip():
+        end -= 1
+    return lines[start:end]
 
 
 def validate(source: str) -> list[str]:
@@ -106,10 +116,11 @@ def validate(source: str) -> list[str]:
                         f"{issue_number}번 문제의 {choice_number}번 선택지 설명이 비어 있습니다."
                     )
 
-        answer_body = nonempty(section[answer_at + 1 :])
-        if answer_body != [EMPTY_ANSWER]:
+        answer_body = trim_blank_lines(section[answer_at + 1 :])
+        if answer_body != EMPTY_ANSWER_BLOCK:
             errors.append(
-                f"{issue_number}번 문제의 답변 칸은 내용이 없는 여러 줄 입력 칸이어야 합니다."
+                f"{issue_number}번 문제의 답변 칸은 언어 이름과 내용이 없는 "
+                "여러 줄 코드 블록이어야 합니다."
             )
 
     return errors

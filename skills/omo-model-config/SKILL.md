@@ -9,8 +9,9 @@ Edits the model routing in `oh-my-openagent.json` against an authoritative upstr
 
 ## Scope
 
-**Inputs (read all three before editing):**
+**Inputs (read all before editing):**
 - This file (`SKILL.md`).
+- The live files from GitHub upstream's current `dev` branch listed under Authority & References.
 - `available-models.json` — local environment limits: `allowlist`, `tiers`, `required_providers`.
 - `oh-my-openagent.json` — the single edit target.
 
@@ -18,10 +19,12 @@ Edits the model routing in `oh-my-openagent.json` against an authoritative upstr
 - `agents.*.model`, `agents.*.variant`, `agents.*.fallback_models`.
 - `categories.*.model`, `categories.*.variant`, `categories.*.fallback_models`.
 - **ADD** a brand-new top-level key under `agents.*` or `categories.*` only when that key is defined upstream (in `AGENT_MODEL_REQUIREMENTS` / `CATEGORY_MODEL_REQUIREMENTS`) but absent locally. A new entry may contain only `model`, `variant` (when upstream specifies one), and `fallback_models`, and must pass every gate that existing entries pass.
-- **REMOVE** `agents.*.ultrawork` entirely whenever an `ultrawork` block exists on an agent.
+- **REMOVE** every `agents.*.ultrawork` block found inside the target `oh-my-openagent.json`.
 
 **Forbidden:**
 - Editing any file other than `oh-my-openagent.json`.
+- Searching for or removing `ultrawork` from any other file, or removing similarly named keys
+  outside `agents.*.ultrawork` in the target file.
 - Editing any key other than the three editable fields (e.g. never touch `runtime_fallback`, `disabled_hooks`, `disabled_providers`, `google_auth`, `$schema`, `description`, `temperature`, `tools`, `prompt`, etc.).
 - Inventing an agent/category name that upstream does not define. Adding is permitted only as a strict subset of the upstream target list.
 - Adding a provider/model that upstream never assigned to that exact target, except under the two explicit exceptions below (user request, `required_providers`).
@@ -31,6 +34,17 @@ Edits the model routing in `oh-my-openagent.json` against an authoritative upstr
 ## Authority & References
 
 GitHub upstream (`code-yeongyu/oh-my-openagent`, branch `dev`) is the primary authority. On any conflict: **GitHub code > GitHub prose docs > local assumptions.**
+
+Fetch the current `dev` files from GitHub over the internet on every run. A checked-in copy,
+cached response, previous run, generated report, or prose summary is never a fallback source for
+model recommendations. If the current `dev` files cannot be fetched, do not edit model routing or
+add targets. Report that work as deferred. The explicit `agents.*.ultrawork` cleanup may still run
+because it does not depend on model recommendations.
+
+`available-models.json`, user requests, and `required_providers` are local availability or policy
+constraints, not alternate recommendation sources. When a documented exception selects a model
+outside a target's live upstream chain, label it as a local exception in the report; never present
+it as an upstream recommendation.
 
 **Source-of-truth for model chains (read first):**
 - `packages/model-core/src/agent-model-requirements.ts` ← **AUTHORITATIVE.** Holds the real `AGENT_MODEL_REQUIREMENTS` object literal (each agent's `fallbackChain` plus gate flags `requiresAnyModel`, `requiresProvider`, `requiresModel`).
@@ -120,7 +134,7 @@ The legal shape is defined by `src/config/schema/*.ts` (verified upstream). Foll
 
 ## Step 1 — Read & Resolve
 
-1. Read the authoritative chain files — `packages/model-core/src/agent-model-requirements.ts` (`AGENT_MODEL_REQUIREMENTS`), `packages/model-core/src/category-model-requirements.ts` (`CATEGORY_MODEL_REQUIREMENTS`), and `packages/model-core/src/model-requirement-types.ts` (types + gate flags). The `model-requirements.ts` barrel only re-exports these, so it is not enough on its own. When prose docs conflict with the chain files, the `.ts` wins.
+1. Fetch and read the current `dev` versions of the authoritative chain files directly from GitHub — `packages/model-core/src/agent-model-requirements.ts` (`AGENT_MODEL_REQUIREMENTS`), `packages/model-core/src/category-model-requirements.ts` (`CATEGORY_MODEL_REQUIREMENTS`), and `packages/model-core/src/model-requirement-types.ts` (types + gate flags). The `model-requirements.ts` barrel only re-exports these, so it is not enough on its own. When prose docs conflict with the chain files, the `.ts` wins. Do not continue model work from a local or cached snapshot if this live fetch fails.
 2. Read `available-models.json`.
 3. Read `oh-my-openagent.json`.
 4. Build a per-target upstream map for each item you will edit or add.
@@ -208,7 +222,8 @@ Required providers come from `required_providers`.
 1. Resolve each edited target's `model`, `variant`, `fallback_models` from upstream + user constraints.
 2. Apply the availability gate and substitution order (Step 2), including the "no viable candidate → keep existing" rule.
 3. Apply the provider diversity gate (`required_providers`).
-4. If an edited agent has an `ultrawork` block, remove `agents.*.ultrawork` entirely.
+4. Remove every `agents.*.ultrawork` block found in the target file, including blocks on agents
+   whose model fields are otherwise unchanged. Do not remove any other key or edit another file.
 5. For each missing target queued in Step 1, construct a new top-level entry:
    a. `model` = highest-priority allowlisted upstream candidate (and `variant` if upstream specifies one).
    b. `fallback_models` = ordered subset of the remaining upstream chain after availability filtering/substitution, serialized per the Config Format Rules (object only where a variant applies).

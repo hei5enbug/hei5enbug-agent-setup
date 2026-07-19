@@ -96,7 +96,7 @@ which showed that specification quality is the primary bottleneck in AI-assisted
 
 `references/auto-research-greenfield.md`, `references/auto-answer-uncertain.md`, and
 `references/lateral-review-panel.md` are internal prompt fragments loaded on demand for the
-specific hook that needs them. They are not separate public skills. Load a fragment only for
+specific hook that needs them. They are not separate public entry points. Load a fragment only for
 its documented hook, keep inherited context read-only and prompt-budgeted, and validate every
 fragment response before using it (required sections present, shape matches, rationale cites
 available context, confidence explicit, fallbacks honored). If a subagent spawn, fragment load,
@@ -645,10 +645,12 @@ mutation commands, edit source files, commit, push, open PRs, or delegate implem
 
 **Options:**
 
-1. **Refine the spec into a plan (추천)** — hand the spec to a planning step that produces
-   a reviewed, dependency-aware plan and then stops for explicit execution approval. In this repo
-   the natural next step is the `deep-plan` skill (code-review → atomic task plan); in other
-   environments, use the host's planning workflow. Do not auto-execute the resulting plan.
+1. **Review the spec before implementation (추천)** — use the host's planning or review workflow,
+   then stop for explicit approval before implementing the spec. If the user selects a two-agent
+   adversarial review, use a host-native independent review mechanism. That selection approves the
+   review to apply agreed in-scope improvements immediately and write unresolved choices to a
+   question document. If that mechanism is unavailable, offer a single-agent review instead.
+   This review selection never approves implementation of the spec.
 2. **Proceed to implementation** — only when the spec is concrete, low-risk, and you have the
    user's explicit go-ahead. Execution is a separate, explicitly-approved step; the interview
    itself never implements.
