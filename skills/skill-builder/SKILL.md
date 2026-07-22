@@ -1,10 +1,10 @@
 ---
-name: skill-creator
+name: skill-builder
 description: Create, modify, validate, and evaluate agent skills across AI agent hosts. Use when users want to build a skill from scratch, improve an existing skill, test skill behavior against a baseline, benchmark quality and variance, package a skill, or optimize its description for reliable triggering. Apply this skill to portable SKILL.md instruction bundles as well as host-specific skill packages, while preserving the target host's required metadata and conventions.
 compatibility: Core authoring works in any agent host. Bundled scripts require Python and filesystem access; model-backed description optimization accepts any command that reads a prompt from stdin and writes a response to stdout.
 ---
 
-# Skill Creator
+# Skill Builder
 
 Create and improve skills through an iterative draft → test → review → improve loop.
 
@@ -235,7 +235,7 @@ Save host-reported timing and token data immediately in each run's `timing.json`
 Use the bundled generator rather than creating custom review HTML:
 
 ```bash
-python <skill-creator-path>/eval-viewer/generate_review.py \
+python <skill-builder-path>/eval-viewer/generate_review.py \
   <workspace>/iteration-N \
   --skill-name "my-skill" \
   --benchmark <workspace>/iteration-N/benchmark.json
@@ -304,7 +304,7 @@ python -m scripts.run_loop \
   --verbose
 ```
 
-The command may contain `{model}` in an argument; when it does, also pass `--model <model-id>`. Instead of repeating `--runner-command`, set `SKILL_CREATOR_RUNNER_COMMAND`. Use `--no-open` in a headless environment.
+The command may contain `{model}` in an argument; when it does, also pass `--model <model-id>`. Instead of repeating `--runner-command`, set `SKILL_BUILDER_RUNNER_COMMAND`. Use `--no-open` in a headless environment.
 
 The runner contract deliberately uses stdin/stdout and executes without a shell. A host-specific wrapper can therefore adapt a CLI, local model server, or API client without changing the optimizer.
 
