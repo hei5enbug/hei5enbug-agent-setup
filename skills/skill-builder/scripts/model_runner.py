@@ -12,7 +12,7 @@ import shlex
 import subprocess
 
 
-RUNNER_ENV_VAR = "SKILL_CREATOR_RUNNER_COMMAND"
+RUNNER_ENV_VAR = "SKILL_BUILDER_RUNNER_COMMAND"
 
 
 class RunnerError(RuntimeError):

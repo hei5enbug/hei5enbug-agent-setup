@@ -275,7 +275,7 @@ def main():
         default=None,
         help=(
             "Command that reads a prompt from stdin and writes the model response "
-            "to stdout; defaults to SKILL_CREATOR_RUNNER_COMMAND"
+            "to stdout; defaults to SKILL_BUILDER_RUNNER_COMMAND"
         ),
     )
     parser.add_argument("--verbose", action="store_true", help="Print progress to stderr")
