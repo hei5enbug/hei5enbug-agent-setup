@@ -1,9 +1,7 @@
----
-name: portable-opencode-setup
-description: 대상 oh-my-openagent.json의 agents.*.ultrawork만 제거하는 예외를 빼면 기존 설정을 보존하면서 커스텀 opencode/oh-my-openagent 설정의 누락된 부분만 추가합니다. 모델 추천은 인터넷의 최신 upstream dev 브랜치에서만 확인합니다. 플러그인, MCP, AAI 앱, 프로바이더 모델, 에이전트/카테고리 라우팅, 팀 모드, 백업을 포함하며 비밀 정보를 포함하지 않습니다.
----
-
 # Portable OpenCode Setup
+
+> 이 문서는 한국어 사용자가 내용을 확인하기 위한 참고 번역입니다. 에이전트가 스킬을
+> 실행할 때 읽거나 사용하는 지침이 아닙니다. 유일한 실행 지침은 `SKILL.md`입니다.
 
 기존 설정을 덮어쓰지 않고 커스텀 opencode 및 oh-my-openagent 설정의 누락된 부분만 모든 기기에 추가합니다.
 

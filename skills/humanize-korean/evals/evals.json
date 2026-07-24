@@ -1,0 +1,49 @@
+{
+  "skill_name": "humanize-korean",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "다음 보고서 문단에서 AI 티와 번역투를 없애 주세요. 장르: 리포트, 강도: 기본\n\n2026년 7월 24일 OpenAI 연구팀에 의해 공개되어진 GPT-5 실험 결과는 정확도가 37.5% 향상될 수 있다는 점을 보여준다. 연구팀은 \"이 수치는 세 차례 반복 측정한 평균이다\"라고 밝혔다. 결론적으로, 이는 매우 획기적인 변화라고 할 수 있다.",
+      "expected_output": "A natural formal Korean paragraph with the same facts and uncertainty.",
+      "expectations": [
+        "Preserves 2026년 7월 24일, OpenAI, GPT-5, and 37.5% exactly.",
+        "Preserves the direct quotation exactly.",
+        "Repairs the double passive and passive-with-agent construction.",
+        "Replaces the combined hype and canned hedge with plain wording of the same stance.",
+        "Does not turn the possibility claim into a certain claim.",
+        "Does not create files or report invented metrics."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "아래 글을 사람이 쓴 것처럼 다듬어 줘. 강도: 보수\n\n비가 그친 뒤 동네를 한 바퀴 걸었다. 골목 끝 빵집에서 막 구운 식빵 냄새가 났다. 별일 없는 저녁이었지만, 이상하게 오래 기억에 남을 것 같았다.",
+      "expected_output": "The already-natural paragraph remains unchanged or receives only a minimal correction.",
+      "expectations": [
+        "Preserves the first-person reflective tone and paragraph structure.",
+        "Does not add a metaphor, event, or explanation.",
+        "Does not rewrite merely to demonstrate activity."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "연결어만 다시 손봐 줘. 다른 표현은 그대로 둬.\n\n또한 이 기능은 처리 시간을 줄인다. 따라서 운영 비용도 낮아진다. 나아가 담당자는 반복 작업에서 벗어난다. 하지만 초기 설정에는 시간이 든다.",
+      "expected_output": "Only redundant connectives are changed while all claims and other wording stay stable.",
+      "expectations": [
+        "Limits edits to connective expressions and necessary punctuation.",
+        "Preserves all four claims and their order.",
+        "Keeps the contrast in the last sentence."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "--strict 정밀 모드로 윤문해 줘.\n\n이 계획은 비용을 줄일 수 있을 것으로 보인다. 다만 외부 수요가 유지된다는 가정에 기반한다. 수요가 10% 줄면 절감 효과도 사라질 수 있다. 그러므로 지금 즉시 전면 도입해야 한다고 단정하기는 어렵다.",
+      "expected_output": "A carefully reviewed rewrite that preserves every condition and uncertainty marker.",
+      "expectations": [
+        "Preserves the 10% figure exactly.",
+        "Preserves the external-demand assumption and both uncertainty claims.",
+        "Does not recommend immediate adoption.",
+        "Performs strict review without requiring named agents or workspace files."
+      ]
+    }
+  ]
+}

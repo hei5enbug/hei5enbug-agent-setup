@@ -7,6 +7,12 @@ description: Adds missing pieces of the custom opencode/oh-my-openagent configur
 
 Add the missing pieces of this custom opencode and oh-my-openagent configuration on any machine without overwriting the machine's existing setup.
 
+## Language contract
+
+Use this English `SKILL.md` as the only executable instruction source. `README.ko.md` is a
+non-authoritative Korean translation for human readers. Do not read or use it while executing the
+skill.
+
 ## When to Use
 
 - Setting up a new development machine.
