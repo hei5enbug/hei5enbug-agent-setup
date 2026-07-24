@@ -32,19 +32,26 @@ hei5enbug-agent-setup/
 
 각 폴더는 자신만의 `SKILL.md`와 필요한 참조 문서·스크립트를 담고 있습니다. 공유하는 최상위 설정 파일은 없으며, 모든 스킬이 독립적으로 완결되어 있습니다.
 
+## 지침 언어
+
+에이전트가 실행하는 스킬 지침은 영어로 작성합니다. 스킬 폴더의 `README.ko.md`는 한국어
+사용자가 내용을 확인하기 위한 참고 문서이며, 에이전트가 스킬을 실행할 때 읽거나 사용하지
+않습니다. 영어 실행 파일 안의 한국어는 호출 문구, 예시, 필수 출력 이름, 평가 자료처럼
+한국어 자체가 필요한 자료에만 남깁니다.
+
 ## 스킬 목록
 
 | 스킬 | 하는 일 |
 |---|---|
-| [`deep-interview`](skills/deep-interview/SKILL.md) | 답변마다 요구사항의 모호함 정도를 점수로 측정하는 소크라테스식 인터뷰를 진행하며, 그 점수가 기준값 이하로 내려가기 전에는 실행 단계로 넘어가지 않습니다. |
+| [`deep-interview`](skills/deep-interview/SKILL.md) | 답변마다 요구사항의 모호함 정도를 점수로 측정하는 소크라테스식 인터뷰를 진행하며, 그 점수가 기준값 이하로 내려가기 전에는 실행 단계로 넘어가지 않습니다. [한국어 안내](skills/deep-interview/README.ko.md) |
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | SVG, HTML/CSS, Figma, draw.io 등 어떤 도구로 만들어도 하나의 디자인 시스템처럼 보이게 하는 플로우차트 공통 디자인 기준입니다. |
-| [`humanize-korean`](skills/humanize-korean/SKILL.md) | 내용은 그대로 두고, AI가 쓴 듯한 한글 문장을 사람이 쓴 것처럼 자연스러운 한국어로 다시 씁니다. |
+| [`humanize-korean`](skills/humanize-korean/SKILL.md) | 내용은 그대로 두고, AI가 쓴 듯한 한글 문장을 사람이 쓴 것처럼 자연스러운 한국어로 다시 씁니다. [한국어 안내](skills/humanize-korean/README.ko.md) |
 | [`omo-model-config`](skills/omo-model-config/SKILL.md) | 업스트림 allowlist를 기준으로 OpenCode/oh-my-openagent의 모델 라우팅(`model`, `variant`, `fallback_models`)을 안전하게 수정합니다. |
-| [`portable-opencode-setup`](skills/portable-opencode-setup/SKILL.md) | 새 기기에 OpenCode/oh-my-openagent 설정 중 빠진 부분만 추가하며, 기존 설정은 건드리지 않습니다. |
+| [`portable-opencode-setup`](skills/portable-opencode-setup/SKILL.md) | 새 기기에 OpenCode/oh-my-openagent 설정 중 빠진 부분만 추가하며, 기존 설정은 건드리지 않습니다. [한국어 안내](skills/portable-opencode-setup/README.ko.md) |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | 초안 작성 → 테스트 → 검토 → 개선 순환을 통해 에이전트 스킬을 만들고, 검증하고, 패키징합니다. |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | 현재 diff와 최근 커밋 이력을 읽어, 이 저장소의 스타일에 맞는 커밋 메시지 5개를 제안합니다. |
-| [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | 개발 설계 문서를 새로 쓰거나 정리할 때 따르는 규칙과, 목차를 단계적으로 좁혀 가는 5단계 절차입니다. |
-| [`tiki-taka`](skills/tiki-taka/SKILL.md) | 현재 에이전트와 반대쪽 Claude/Codex 세션이 교환 횟수를 제한한 토론을 벌여 쟁점을 드러내고 수렴시킵니다. |
+| [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | 개발 설계 문서를 새로 쓰거나 정리할 때 따르는 규칙과, 목차를 단계적으로 좁혀 가는 5단계 절차입니다. [한국어 안내](skills/technical-design-writer/README.ko.md) |
+| [`tiki-taka`](skills/tiki-taka/SKILL.md) | 현재 에이전트와 반대쪽 Claude/Codex 세션이 교환 횟수를 제한한 토론을 벌여 쟁점을 드러내고 수렴시킵니다. [한국어 안내](skills/tiki-taka/README.ko.md) |
 
 ## 알려진 제약
 

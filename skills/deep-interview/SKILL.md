@@ -17,6 +17,15 @@ This skill is **portable across coding agents**. It conducts the interview throu
 when none is available. See `references/ask-ui.md` — it is mandatory reading for every
 question you ask.
 
+## Language contract
+
+Use this English `SKILL.md` and its English execution references as the only executable instruction
+sources. `README.ko.md` is a non-authoritative Korean explanation for human readers. Do not read or
+use it while executing the skill.
+
+The Korean suffix ` (추천)` is required user-interface data, not an instruction source. Preserve it
+exactly where this file or `references/ask-ui.md` requires it.
+
 ## Constraints
 
 These rules override everything else in this document.

@@ -234,7 +234,8 @@ A flow chart documents **what the reader needs to follow**, not the entire syste
 - It exists, but the reader does not need it to follow the flow.
 - Adding it stretches an edge without adding information.
 
-Removing a node is incomplete until the layout, edge length rhythm, label placement, and `viewBox` have all been re-applied per the rules in §3 and §4.
+Removing a node is incomplete until the layout, edge length rhythm, label placement, and `viewBox`
+have all been re-applied under Sections 3 and 4.
 
 ---
 
