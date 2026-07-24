@@ -102,7 +102,7 @@ Rules:
 - Vary phrasing: different verbs, emphasis, and granularity.
 - Order from most recommended to least recommended; `#1` is the best overall choice.
 - Each message must be one line only.
-- Do not include a body or footer.
+- Do not include a body or footer. Never add a `Co-Authored-By` trailer or any other trailer.
 - If the change spans multiple concerns, some messages may emphasize one concern over another.
 
 ## Constraints
@@ -110,3 +110,4 @@ Rules:
 - **Read-only.** Never stage, commit, amend, push, or edit files while using this skill.
 - Do not ask follow-up questions. Deliver all 5 suggestions in one response.
 - Minimize tool calls: one fast context command is usually enough; run targeted follow-up commands only when needed.
+- If these suggestions are later used to create a commit, keep the message to the single subject line: no body, and never a `Co-Authored-By` or other trailer.
