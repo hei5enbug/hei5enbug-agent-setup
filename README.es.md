@@ -2,75 +2,54 @@
 
 [English](./README.md) | [한국어](./README.ko.md) | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md) | **Español** | [Deutsch](./README.de.md) | [Français](./README.fr.md)
 
-Configuración de modelos y variants para un AI agent harness, asignados según el rol de cada agente.
+Una colección portátil de skills personalizados para agentes de codificación con IA, pensada para compartirse entre varios agent hosts sin reescrituras específicas de cada uno.
 
 ## Descripción general
 
-Cada agente en un harness requiere capacidades distintas. Esta configuración optimiza `model`, `variant` y cadenas de fallback por rol de agente y categoría de tarea.
+Cada skill vive en su propia carpeta dentro de `skills/` y es autocontenido: sus instrucciones, referencias y scripts viajan juntos. El mismo `SKILL.md` funciona sin modificaciones en cada host compatible.
 
-## Herramientas compatibles
+## Hosts compatibles
 
-- [OpenCode](https://github.com/code-yeongyu/oh-my-openagent) (mediante el plugin [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent))
+- Claude Code
+- Codex
+- OpenCode (mediante el plugin [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent))
 
 ## Estructura
 
 ```
 hei5enbug-agent-setup/
-├── oh-my-openagent.json       # Archivo de configuración leído y modificado por el skill
-├── available-models.json     # Allowlist utilizada por el skill para validar cambios de modelo
-└── .opencode/
-    └── skills/
-        └── omo-model-config/ # Skill personalizado para edición segura de configuración
-            └── SKILL.md
+└── skills/
+    ├── deep-interview/
+    ├── flowchart-design/
+    ├── humanize-korean/
+    ├── omo-model-config/
+    ├── portable-opencode-setup/
+    ├── skill-builder/
+    ├── suggest-commit/
+    ├── technical-design-writer/
+    └── tiki-taka/
 ```
 
-## Skills personalizados
+Cada carpeta contiene su propio `SKILL.md` junto con las referencias o scripts que necesita. No hay configuración compartida en el nivel superior: cada skill es autocontenido.
 
-### omo-model-config
+## Skills
 
-Un flujo de trabajo para editar de forma segura las asignaciones de modelo de los agentes. Aplica las siguientes reglas:
+| Skill | Qué hace |
+|---|---|
+| [`deep-interview`](skills/deep-interview/SKILL.md) | Realiza una entrevista socrática que puntúa la ambigüedad del requisito tras cada respuesta y no avanza a la ejecución hasta que baja del umbral. |
+| [`flowchart-design`](skills/flowchart-design/SKILL.md) | Un estándar de diseño compartido para que los diagramas de flujo hechos en SVG, HTML/CSS, Figma o draw.io se vean como parte de un mismo sistema de diseño. |
+| [`humanize-korean`](skills/humanize-korean/SKILL.md) | Reescribe texto en coreano con apariencia de IA para que suene natural y humano, sin cambiar su significado. |
+| [`omo-model-config`](skills/omo-model-config/SKILL.md) | Edita de forma segura el model routing de OpenCode/oh-my-openagent (`model`, `variant`, `fallback_models`) contra una allowlist upstream. |
+| [`portable-opencode-setup`](skills/portable-opencode-setup/SKILL.md) | Añade las piezas que falten de la configuración de OpenCode/oh-my-openagent en una máquina nueva, de forma solo aditiva, sin tocar los ajustes existentes. |
+| [`skill-builder`](skills/skill-builder/SKILL.md) | Crea, prueba y empaqueta skills de agente mediante un ciclo de borrador → prueba → revisión → mejora. |
+| [`suggest-commit`](skills/suggest-commit/SKILL.md) | Lee el diff actual y el historial reciente de commits, y sugiere cinco mensajes de commit acordes al estilo del repositorio. |
+| [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | Reglas y un proceso de cinco pasos que va acotando el índice para escribir o depurar documentos de diseño técnico. |
+| [`tiki-taka`](skills/tiki-taka/SKILL.md) | Ejecuta un debate con número de turnos limitado entre el agente actual y una sesión opuesta de Claude/Codex para sacar a la luz y resolver problemas. |
 
-- **Resolución GitHub-first** — la documentación upstream de [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) es la autoridad principal para el matching modelo-rol
-- **Gate de disponibilidad** — todo modelo debe estar en la allowlist de `available-models.json`
-- **Gate de diversidad de proveedores** — los proveedores requeridos deben estar cubiertos en la cadena de fallback de cada agente
-- **Edición limitada** — solo se modifican los campos `model`, `variant` y `fallback_models`; todo lo demás se preserva
+## Limitación conocida
 
-Consulta [`.opencode/skills/omo-model-config/SKILL.md`](.opencode/skills/omo-model-config/SKILL.md) para más detalles.
-
-## Uso
-
-Abre como raíz de proyecto en una herramienta de agente compatible. La configuración se carga automáticamente al iniciar la sesión.
-
-```bash
-cd hei5enbug-agent-setup
-opencode
-```
-
-### Cambiar asignaciones de modelo
-
-Invoca el skill `omo-model-config` desde la sesión del agente:
-
-```
-/omo-model-config
-```
-
-O solicítalo directamente al agente:
-
-```
-"Cambia el primary model de Oracle a claude-opus-4-6"
-"Añade gpt-5.4 al fallback de Librarian"
-```
-
-El skill valida los cambios contra la allowlist y verifica las reglas de diversidad de proveedores antes de aplicarlos.
-
-## Configuración
-
-| Clave | Valor | Descripción |
-|---|---|---|
-| `runtime_fallback` | `true` | Cambia automáticamente al siguiente modelo si el principal no está disponible |
-| `disabled_hooks` | `["no-sisyphus-gpt"]` | Permite el uso de modelos GPT en el agente Sisyphus |
+`tiki-taka` tiene fijadas las rutas del agente opuesto en `~/.claude/skills` y `~/.codex/skills`. Actualiza esas rutas antes de ejecutarlo en cualquier otro host.
 
 ## Enlaces relacionados
 
-- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — sistema de plugins que impulsa la configuración
-- [oh-my-openagent docs](https://github.com/code-yeongyu/oh-my-openagent) — documentación upstream y guías de matching de modelos
+- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — sistema de plugins que `omo-model-config` y `portable-opencode-setup` configuran

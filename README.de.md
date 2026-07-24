@@ -2,75 +2,54 @@
 
 [English](./README.md) | [한국어](./README.ko.md) | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md) | [Español](./README.es.md) | **Deutsch** | [Français](./README.fr.md)
 
-Modell- und Variant-Konfiguration für einen AI-Agent-Harness, zugewiesen passend zur Rolle jedes Agenten.
+Eine portable Sammlung benutzerdefinierter Skills für KI-Coding-Agenten, gebaut, um ohne host-spezifische Anpassungen über mehrere Agent-Hosts hinweg geteilt zu werden.
 
 ## Überblick
 
-Jeder Agent in einem Harness erfordert unterschiedliche Fähigkeiten. Diese Konfiguration optimiert `model`, `variant` und Fallback-Ketten pro Agentenrolle und Aufgabenkategorie.
+Jeder Skill liegt in einem eigenen Ordner unter `skills/` und ist in sich abgeschlossen: Anweisungen, Referenzen und Skripte gehören zusammen. Dieselbe `SKILL.md` funktioniert unverändert auf jedem unterstützten Host.
 
-## Unterstützte Tools
+## Unterstützte Hosts
 
-- [OpenCode](https://github.com/code-yeongyu/oh-my-openagent) (über das [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent)-Plugin)
+- Claude Code
+- Codex
+- OpenCode (über das [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent)-Plugin)
 
 ## Struktur
 
 ```
 hei5enbug-agent-setup/
-├── oh-my-openagent.json       # Konfigurationsdatei, die vom Skill gelesen und bearbeitet wird
-├── available-models.json     # Allowlist, die vom Skill zur Validierung von Modelländerungen verwendet wird
-└── .opencode/
-    └── skills/
-        └── omo-model-config/ # Benutzerdefinierter Skill für sichere Konfigurationsbearbeitung
-            └── SKILL.md
+└── skills/
+    ├── deep-interview/
+    ├── flowchart-design/
+    ├── humanize-korean/
+    ├── omo-model-config/
+    ├── portable-opencode-setup/
+    ├── skill-builder/
+    ├── suggest-commit/
+    ├── technical-design-writer/
+    └── tiki-taka/
 ```
 
-## Benutzerdefinierte Skills
+Jeder Ordner enthält seine eigene `SKILL.md` sowie alle benötigten Referenzen oder Skripte. Es gibt keine gemeinsam genutzte Konfiguration auf oberster Ebene — jeder Skill ist eigenständig.
 
-### omo-model-config
+## Skills
 
-Ein Workflow zur sicheren Bearbeitung von Agenten-Modellzuweisungen. Er wendet folgende Regeln an:
+| Skill | Was er tut |
+|---|---|
+| [`deep-interview`](skills/deep-interview/SKILL.md) | Führt ein sokratisches Interview, das die Mehrdeutigkeit der Anforderung nach jeder Antwort bewertet, und geht erst zur Ausführung über, wenn der Wert unter den Schwellenwert fällt. |
+| [`flowchart-design`](skills/flowchart-design/SKILL.md) | Ein gemeinsamer Design-Standard, damit Flussdiagramme aus SVG, HTML/CSS, Figma oder draw.io wie ein einheitliches Designsystem wirken. |
+| [`humanize-korean`](skills/humanize-korean/SKILL.md) | Schreibt KI-klingenden koreanischen Text so um, dass er natürlich und menschlich wirkt, ohne den Inhalt zu verändern. |
+| [`omo-model-config`](skills/omo-model-config/SKILL.md) | Bearbeitet das Model-Routing von OpenCode/oh-my-openagent (`model`, `variant`, `fallback_models`) sicher gegen eine Upstream-Allowlist. |
+| [`portable-opencode-setup`](skills/portable-opencode-setup/SKILL.md) | Fügt auf einer neuen Maschine nur die fehlenden Teile der OpenCode/oh-my-openagent-Konfiguration hinzu, ohne bestehende Einstellungen zu verändern. |
+| [`skill-builder`](skills/skill-builder/SKILL.md) | Erstellt, testet und verpackt Agenten-Skills in einem Zyklus aus Entwurf → Test → Review → Verbesserung. |
+| [`suggest-commit`](skills/suggest-commit/SKILL.md) | Liest den aktuellen Diff und die jüngste Commit-Historie und schlägt fünf Commit-Nachrichten im Stil des Repositorys vor. |
+| [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | Regeln und ein fünfstufiger Prozess, der das Inhaltsverzeichnis schrittweise eingrenzt, zum Schreiben oder Überarbeiten technischer Design-Dokumente. |
+| [`tiki-taka`](skills/tiki-taka/SKILL.md) | Führt eine auf Runden begrenzte Debatte zwischen dem aktuellen Agenten und einer gegenüberliegenden Claude/Codex-Sitzung, um Probleme aufzudecken und zu klären. |
 
-- **GitHub-first-Auflösung** — die Upstream-Dokumentation von [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) ist die primäre Autorität für das Modell-Rollen-Matching
-- **Verfügbarkeits-Gate** — jedes Modell muss in der Allowlist von `available-models.json` vorhanden sein
-- **Provider-Diversitäts-Gate** — erforderliche Provider müssen in der Fallback-Kette jedes Agenten abgedeckt sein
-- **Begrenzter Bearbeitungsumfang** — nur die Felder `model`, `variant` und `fallback_models` werden geändert; alles andere bleibt erhalten
+## Bekannte Einschränkung
 
-Details unter [`.opencode/skills/omo-model-config/SKILL.md`](.opencode/skills/omo-model-config/SKILL.md).
-
-## Verwendung
-
-Als Projektstamm in einem unterstützten Agenten-Tool öffnen. Die Konfiguration wird beim Sitzungsstart automatisch geladen.
-
-```bash
-cd hei5enbug-agent-setup
-opencode
-```
-
-### Modellzuweisungen ändern
-
-Den `omo-model-config`-Skill innerhalb der Agentensitzung aufrufen:
-
-```
-/omo-model-config
-```
-
-Oder den Agenten direkt bitten:
-
-```
-"Ändere das primary model von Oracle zu claude-opus-4-6"
-"Füge gpt-5.4 zum Fallback von Librarian hinzu"
-```
-
-Der Skill validiert Änderungen gegen die Allowlist und stellt sicher, dass die Provider-Diversitätsregeln eingehalten werden, bevor er sie anwendet.
-
-## Einstellungen
-
-| Schlüssel | Wert | Beschreibung |
-|---|---|---|
-| `runtime_fallback` | `true` | Wechselt automatisch zum nächsten Modell, wenn das primäre nicht verfügbar ist |
-| `disabled_hooks` | `["no-sisyphus-gpt"]` | Erlaubt die Verwendung von GPT-Modellen im Sisyphus-Agenten |
+`tiki-taka` legt die Pfade des gegenüberliegenden Agenten fest auf `~/.claude/skills` und `~/.codex/skills`. Diese Pfade müssen vor der Ausführung unter jedem anderen Host angepasst werden.
 
 ## Verwandte Links
 
-- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — Plugin-System, das die Konfiguration antreibt
-- [oh-my-openagent docs](https://github.com/code-yeongyu/oh-my-openagent) — Upstream-Dokumentation und Modell-Matching-Leitfäden
+- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — Plugin-System, das `omo-model-config` und `portable-opencode-setup` konfigurieren
