@@ -2,75 +2,54 @@
 
 [English](./README.md) | [한국어](./README.ko.md) | [日本語](./README.ja.md) | **简体中文** | [Español](./README.es.md) | [Deutsch](./README.de.md) | [Français](./README.fr.md)
 
-为 AI agent harness 中每个 agent 的角色分配最适合的模型和 variant 的配置。
+面向 AI 编程 agent 的自定义 skill 合集，设计为可在多个 agent host 之间直接共享，无需针对每个 host 重写。
 
 ## 概述
 
-harness 中的每个 agent 所需的能力各不相同。此配置根据 agent 角色和任务类别优化 `model`、`variant` 和回退链。
+每个 skill 都在 `skills/` 下拥有自己独立的文件夹，指令、参考资料和脚本都放在一起，自成一体。同一份 `SKILL.md` 在所有支持的 host 上都能原样运行，无需修改。
 
-## 支持工具
+## 支持的 Host
 
-- [OpenCode](https://github.com/code-yeongyu/oh-my-openagent)（通过 [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) 插件）
+- Claude Code
+- Codex
+- OpenCode（通过 [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) 插件）
 
 ## 结构
 
 ```
 hei5enbug-agent-setup/
-├── oh-my-openagent.json       # skill 读取和修改的配置文件
-├── available-models.json     # skill 验证模型变更时使用的 allowlist
-└── .opencode/
-    └── skills/
-        └── omo-model-config/ # 安全编辑配置的自定义 skill
-            └── SKILL.md
+└── skills/
+    ├── deep-interview/
+    ├── flowchart-design/
+    ├── humanize-korean/
+    ├── omo-model-config/
+    ├── portable-opencode-setup/
+    ├── skill-builder/
+    ├── suggest-commit/
+    ├── technical-design-writer/
+    └── tiki-taka/
 ```
 
-## 自定义 Skill
+每个文件夹都包含自己的 `SKILL.md` 以及所需的参考资料或脚本。没有共享的顶层配置文件——每个 skill 都是自成一体的。
 
-### omo-model-config
+## Skill 列表
 
-安全编辑 agent 模型分配的工作流。应用以下规则：
+| Skill | 作用 |
+|---|---|
+| [`deep-interview`](skills/deep-interview/SKILL.md) | 进行苏格拉底式访谈，每次回答后都为需求的模糊程度打分，只有分数降到阈值以下才会进入执行阶段。 |
+| [`flowchart-design`](skills/flowchart-design/SKILL.md) | 一套通用的流程图设计标准，无论用 SVG、HTML/CSS、Figma 还是 draw.io 制作,都能呈现为同一套设计体系。 |
+| [`humanize-korean`](skills/humanize-korean/SKILL.md) | 在不改变内容的前提下，把带有 AI 痕迹的韩语文本改写成自然、像人写的韩语。 |
+| [`omo-model-config`](skills/omo-model-config/SKILL.md) | 依据上游 allowlist，安全地修改 OpenCode/oh-my-openagent 的模型路由（`model`、`variant`、`fallback_models`）。 |
+| [`portable-opencode-setup`](skills/portable-opencode-setup/SKILL.md) | 只为新机器补齐缺失的 OpenCode/oh-my-openagent 配置，不改动已有设置。 |
+| [`skill-builder`](skills/skill-builder/SKILL.md) | 通过“起草 → 测试 → 审查 → 改进”的循环来创建、验证并打包 agent skill。 |
+| [`suggest-commit`](skills/suggest-commit/SKILL.md) | 读取当前 diff 和最近的提交历史，给出 5 条符合本仓库风格的 commit message 建议。 |
+| [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | 编写或整理开发设计文档时遵循的规则，以及逐步收窄目录的 5 步流程。 |
+| [`tiki-taka`](skills/tiki-taka/SKILL.md) | 让当前 agent 与对面的 Claude/Codex 会话进行有轮次限制的辩论，揭示并收敛争议点。 |
 
-- **GitHub 优先解析** — 上游 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) 文档是模型-角色匹配的主要依据
-- **可用性门控** — 所有模型必须存在于 `available-models.json` 的 allowlist 中
-- **供应商多样性门控** — 每个 agent 的回退链中必须包含必需的供应商
-- **编辑范围限制** — 仅修改 `model`、`variant`、`fallback_models` 字段，其余保持不变
+## 已知限制
 
-详情请参阅 [`.opencode/skills/omo-model-config/SKILL.md`](.opencode/skills/omo-model-config/SKILL.md)。
-
-## 使用方法
-
-在支持的 agent 工具中作为项目根目录打开即可。会话启动时配置会自动加载。
-
-```bash
-cd hei5enbug-agent-setup
-opencode
-```
-
-### 变更模型分配
-
-在 agent 会话中调用 `omo-model-config` skill：
-
-```
-/omo-model-config
-```
-
-或直接向 agent 提出请求：
-
-```
-"把 Oracle 的 primary model 改成 claude-opus-4-6"
-"给 Librarian 的 fallback 添加 gpt-5.4"
-```
-
-skill 会对照 allowlist 验证变更，并在确认供应商多样性规则后生效。
-
-## 设置
-
-| 键 | 值 | 说明 |
-|---|---|---|
-| `runtime_fallback` | `true` | 主模型不可用时自动回退到下一个模型 |
-| `disabled_hooks` | `["no-sisyphus-gpt"]` | 允许 Sisyphus agent 使用 GPT 模型 |
+`tiki-taka` 把对面 agent 的路径硬编码为 `~/.claude/skills` 和 `~/.codex/skills`。在其他 host 上运行前,需要先修改这些路径。
 
 ## 相关链接
 
-- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — 驱动此配置的插件系统
-- [oh-my-openagent docs](https://github.com/code-yeongyu/oh-my-openagent) — 上游文档及模型匹配指南
+- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — `omo-model-config` 和 `portable-opencode-setup` 所配置的插件系统
