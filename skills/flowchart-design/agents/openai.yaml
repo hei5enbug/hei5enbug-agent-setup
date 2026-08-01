@@ -1,0 +1,4 @@
+interface:
+  display_name: "Flowchart Design"
+  short_description: "Design and validate portable, polished flow diagrams"
+  default_prompt: "Use $flowchart-design to turn this process into an editable, accessible flowchart and verify the rendered output."
