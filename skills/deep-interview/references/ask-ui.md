@@ -9,6 +9,15 @@ Load this fragment whenever you are about to present a question, a confirmation
 (Round 0 topology, Refine gate, Closure/Restate gate), or the Phase 5 execution-bridge
 choice.
 
+## Contents
+
+- Core principle
+- Unified question model
+- Per-host routing
+- Unknown-host fallback
+- Answer handling
+- Selection checklist
+
 ## Core principle
 
 - **One question per round.** Never batch multiple questions into a single ask, even
@@ -100,23 +109,27 @@ inline fallback.
 - `question` is a first-class permission key — if it is denied, fall back to the inline
   format below.
 
-### Codex CLI → `request_user_input` (or MCP elicitation / approval)
+### Codex → Plan mode + `request_user_input`
 
-- Preferred: the experimental `request_user_input` tool — prompt the user with 1–3 short
+- Run the interview in **Plan mode**, where Codex provides the supported structured-question
+  workflow. If the current conversation is not in Plan mode, tell the user to switch with
+  `/plan` (or the equivalent Plan mode control in their Codex surface), then **end the turn**.
+  Resume the interview only after the user returns in Plan mode.
+- Do not recommend or enable `features.default_mode_request_user_input`; it is an
+  under-development feature and is not required for this skill.
+- In Plan mode, prefer the `request_user_input` tool — prompt the user with 1–3 short
   questions (use exactly **1**); options carry `label` + `description`, and each question
   carries `id` / `header` / `question` / `options`.
 - If an MCP server exposes structured elicitation (`form` / `openai/form` / `url`), that
   is also an acceptable structured primitive.
-- If neither structured primitive is available, use the **inline fallback** below. This
-  matches Codex's own default-mode guidance: when structured input is unavailable, ask in
-  plain text and **do not fake multiple-choice as normal assistant text** — present a
-  clearly delimited question block and end the turn.
+- Use the **inline fallback** only when Plan mode is unavailable, the user declines to
+  switch modes, or no structured primitive is available after the switch. Do not silently
+  fall back merely because the interview started in Codex Default mode.
 
 ### Any other / unknown host → inline fallback
 
-When no native structured ask tool is available, render exactly one question block in this
-format (same convention as the repo's `clarity-interview` skill), then **end the turn** and
-wait for the user's next message:
+When no native structured ask tool is available, render exactly one clearly delimited question
+block in this format, then **end the turn** and wait for the user's next message:
 
 ```md
 ## Question {N}: {Topic}        <!-- or localized: ## 질문 {N}: {주제} -->
@@ -156,14 +169,15 @@ Rules for the inline fallback:
 
 ## Quick selection checklist
 
-1. Is a native structured ask tool in my toolset? Use it (Claude `AskUserQuestion` /
-   OpenCode `question` / Codex `request_user_input` / MCP elicitation).
+1. Is this Codex outside Plan mode? Ask the user to switch to Plan mode and end the turn.
+   Otherwise, use the native structured ask tool (Claude `AskUserQuestion` / OpenCode
+   `question` / Codex `request_user_input` / MCP elicitation).
 2. Exactly one question, `header` ≤ 12 chars, 2–4 options each `{label, description}`,
    single-select unless genuinely multi.
 3. Translate question/header/options to the user's language.
 4. Sort options by recommendation strength and append ` (추천)` to exactly one best option label.
 5. Make the question and descriptions detailed enough for a high-school student to understand.
-6. No native tool (or `question` permission denied)? Use the inline fallback and end the
-   turn.
+6. No native tool (or `question` permission denied)? Apply the host-specific mode/setup
+   gate first. Use the inline fallback only when that gate cannot provide a structured UI.
 7. Never run interview asks from a spawned subagent (Claude's `AskUserQuestion` is
    main-session only) — collect subagent findings, then ask from the main session.
