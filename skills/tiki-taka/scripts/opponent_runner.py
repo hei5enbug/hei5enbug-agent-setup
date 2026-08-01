@@ -553,9 +553,8 @@ def invoke_opponent(
                     flush=True,
                 )
                 prompt.write_text(
-                    "The previous request was not processed because the model limit was reached.\n"
-                    "Answer the immediately preceding user request in this same session. "
-                    "Do not repeat the request.\n",
+                    "앞선 요청은 모델 한도 안내 때문에 처리되지 않았습니다.\n"
+                    "같은 세션의 바로 앞 사용자 요청에 답하세요. 요청을 되풀이하지 마세요.\n",
                     encoding="utf-8",
                 )
                 output.unlink(missing_ok=True)
