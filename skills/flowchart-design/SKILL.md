@@ -1,6 +1,6 @@
 ---
 name: flowchart-design
-description: Cross-tool design standard for static flow diagrams. Use when authoring, revising, or exporting flow charts in SVG, HTML/CSS, Figma, or draw.io — especially when several charts must read as one design system. Triggers on requests like "design a flow chart", "unify these diagrams", "fix flow chart spacing", "PNG export padding", "retighten viewBox".
+description: Design, revise, validate, and export clear static flow diagrams across SVG, HTML/CSS, Figma, FigJam, draw.io, Mermaid, and raster deliverables. Use for flowcharts, process maps, architecture flows, decision flows, diagram-system unification, spacing and routing repair, overlap removal, accessible labeling, viewBox tightening, or PNG export correction. Works across agent hosts by separating the semantic graph from tool-specific rendering and using capability-based fallbacks.
 ---
 
 # Flowchart Design Standard
@@ -8,6 +8,53 @@ description: Cross-tool design standard for static flow diagrams. Use when autho
 A shared specification for static flow charts authored across different tools (SVG, HTML/CSS, Figma, draw.io). The goal: any chart that follows this document looks like it came from the same design system as every other chart that follows it. The rules below describe **relative behavior, not absolute values** — node counts, edge geometry, and domain semantics differ from chart to chart, so concrete pixel sizes, step counts, and offsets must be decided by the author and applied **consistently within a chart set**, not copied from this document.
 
 This standard prioritizes layout principles, spacing discipline, label rules, simplification criteria, and outer-frame handling over any project-specific terminology.
+
+## 0. Portable Workflow
+
+Complete the same logical stages regardless of the host or drawing tool.
+
+### 0.1 Discover Capabilities
+
+Select the strongest available path without requiring a named product:
+
+1. **Native editable canvas** when the host can create and inspect diagram nodes and connectors.
+2. **Code-native vector** when files can be edited and rendered; prefer SVG for deterministic geometry.
+3. **Diagram DSL** when only text-to-diagram rendering is available; use it for topology, then export or refine when visual control permits.
+4. **HTML/CSS** when browser rendering is available and the diagram benefits from measured text/layout.
+5. **Text specification** when no rendering capability exists; return the semantic graph, layout contract, and renderer-ready source rather than pretending visual verification occurred.
+
+Parallelism, image inspection, and browser automation improve verification but are optional. Missing capabilities must be reported accurately and must not change the semantic graph.
+
+### 0.2 Build the Semantic Graph First
+
+Before choosing coordinates, normalize the source into:
+
+- nodes with stable IDs, concise labels, roles, and optional detail;
+- directed edges with source, target, outcome label, and edge type;
+- decision branches with distinguishable outcomes;
+- groups that express real ownership or phase boundaries;
+- explicit start/end points and external systems;
+- the intended primary reading direction.
+
+Reject or resolve orphan nodes, duplicate IDs, dangling edges, cycles presented as linear flows, and branch labels that do not distinguish outcomes. If business meaning is ambiguous, ask before encoding it visually.
+
+### 0.3 Choose a Layout Contract
+
+Choose one pattern from section 8 and state the reading direction, node ranks, group nesting, edge-routing policy, token set, label grammar, target formats, and editability requirement.
+
+Do not let automatic layout silently change semantic order. When a renderer cannot honor the contract, simplify the layout or select a more controllable representation.
+
+### 0.4 Render Incrementally
+
+Render in this order: frame and ranks, nodes, primary edges, branches, groups, labels, decoration. Re-measure after any label or node removal. Use established design-system components and variables when available; otherwise define one compact local token set.
+
+### 0.5 Validate at Three Levels
+
+1. **Semantic**: every source fact is represented once, edge directions and branch outcomes are correct, and no invented transition appears.
+2. **Geometric**: alignment, spacing, routing, containment, crop, and overlap rules pass.
+3. **Rendered**: inspect the actual final SVG, PNG, or canvas export at delivery size. Source correctness alone is insufficient.
+
+If rendered inspection is unavailable, mark the result `not visually verified` and identify the exact remaining check.
 
 ---
 
@@ -178,6 +225,15 @@ If the rendered PNG is visually unbalanced, do not chase the problem by re-tweak
 - Avoid stacking two transition meanings into one edge label.
 - The exception: when a removed intermediary genuinely makes a single edge represent two stages, a composite label is allowed — but first try relocating the label to the most semantically natural adjacent edge.
 
+### 5.4 Accessibility and Text Equivalence
+
+- Do not encode meaning by color alone; pair role color with shape, label, icon, or line style.
+- Keep text contrast readable against fills and background at final delivery size.
+- Give every decision edge an explicit outcome label unless its destination makes the result unambiguous.
+- Preserve a text equivalent: ordered node/edge data, accessible SVG title/description, or an adjacent structured summary.
+- Use stable reading order in editable canvases and DOM/SVG source where supported.
+- Do not place essential prose only inside a raster image.
+
 ---
 
 ## 6. Groups and Subgroups
@@ -234,8 +290,7 @@ A flow chart documents **what the reader needs to follow**, not the entire syste
 - It exists, but the reader does not need it to follow the flow.
 - Adding it stretches an edge without adding information.
 
-Removing a node is incomplete until the layout, edge length rhythm, label placement, and `viewBox`
-have all been re-applied under Sections 3 and 4.
+Removing a node is incomplete until the layout, edge length rhythm, label placement, and `viewBox` have all been re-applied per the rules in §3 and §4.
 
 ---
 
@@ -289,3 +344,22 @@ Run every item before declaring a chart done. Each item maps back to a rule abov
 - The chosen pattern (overview / linear / simplified / wrapped) is unambiguous.
 - All group / band / subgroup captions follow a single horizontal-alignment rule.
 - Source-code comments about layout match actual coordinates.
+
+**Semantic integrity**
+- Stable node IDs are unique and every edge resolves to two existing nodes.
+- Edge direction and decision outcomes match the source material.
+- No source fact is duplicated as separate nodes without intent.
+- Cycles, retries, and error paths are visually distinguishable from the primary flow.
+- The chart has explicit entry and terminal states, or documents why it does not.
+
+**Accessibility**
+- Color is not the only carrier of meaning.
+- Text contrast and final-size legibility were checked.
+- A text-equivalent node/edge representation or accessible description exists.
+- Reading order matches the visible flow where the format supports it.
+
+**Delivery evidence**
+- Editable source and rendered deliverable correspond to the same revision.
+- The final exported artifact, not only source markup, was inspected.
+- Unavailable visual or accessibility checks are disclosed rather than assumed.
+- Output paths and formats match the request; temporary renders are not presented as final files.
