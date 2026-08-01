@@ -10,8 +10,8 @@ Add the missing pieces of this custom opencode and oh-my-openagent configuration
 ## Language contract
 
 Use this English `SKILL.md` as the only executable instruction source. `README.ko.md` is a
-non-authoritative Korean translation for human readers. Do not read or use it while executing the
-skill.
+non-authoritative Korean translation kept synchronized with this file for human readers. Do not read
+or use it while executing the skill.
 
 ## When to Use
 
