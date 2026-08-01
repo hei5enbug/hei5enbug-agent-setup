@@ -1,0 +1,4 @@
+interface:
+  display_name: "Suggest Commit"
+  short_description: "Recommend five evidence-backed repository-style commit subjects"
+  default_prompt: "Use $suggest-commit to inspect the current commit boundary and recommend five messages matching this repository history."
