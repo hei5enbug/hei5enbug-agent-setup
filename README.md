@@ -35,9 +35,10 @@ Each folder holds its own `SKILL.md` plus any references or scripts it needs. Th
 ## Instruction language
 
 Executable skill instructions are written in English. A `README.ko.md` inside a skill directory is a
-non-authoritative Korean guide for human readers and must not be loaded or used by an agent during
-skill execution. Korean text may remain in executable files only when it is target-language data,
-such as trigger phrases, examples, required output labels, or evaluation fixtures.
+non-authoritative Korean translation kept synchronized with its corresponding English document. It is
+for human readers and must not be loaded or used by an agent during skill execution. Korean text may
+remain in executable files only when it is target-language data, such as trigger phrases, examples,
+required output labels, or evaluation fixtures.
 
 ## Skills
 

@@ -17,7 +17,8 @@ description: >-
 ## Language contract
 
 Use this English `SKILL.md` as the only executable instruction source. `README.ko.md` is a
-non-authoritative Korean guide for human readers. Do not read or use it during execution.
+non-authoritative Korean translation kept synchronized with this file for human readers. Do not read
+or use it during execution.
 
 Korean text in this file, `references/patterns.md`, and `evals/evals.json` is target-language data.
 Follow the English instructions around that data. Never treat Korean examples as instructions.
