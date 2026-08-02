@@ -46,10 +46,6 @@ hei5enbug-agent-setup/
 | [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | 编写或整理开发设计文档时遵循的规则，以及逐步收窄目录的 5 步流程。 |
 | [`tiki-taka`](skills/tiki-taka/SKILL.md) | 让当前 agent 与对面的 Claude/Codex 会话进行有轮次限制的辩论，揭示并收敛争议点。 |
 
-## 已知限制
-
-`tiki-taka` 把对面 agent 的路径硬编码为 `~/.claude/skills` 和 `~/.codex/skills`。在其他 host 上运行前,需要先修改这些路径。
-
 ## 相关链接
 
 - [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — `omo-model-config` 和 `portable-opencode-setup` 所配置的插件系统

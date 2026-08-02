@@ -53,10 +53,6 @@ hei5enbug-agent-setup/
 | [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | 개발 설계 문서를 새로 쓰거나 정리할 때 따르는 규칙과, 목차를 단계적으로 좁혀 가는 5단계 절차입니다. [한국어 안내](skills/technical-design-writer/README.ko.md) |
 | [`tiki-taka`](skills/tiki-taka/SKILL.md) | 현재 에이전트와 반대쪽 Claude/Codex 세션이 교환 횟수를 제한한 토론을 벌여 쟁점을 드러내고 수렴시킵니다. [한국어 안내](skills/tiki-taka/README.ko.md) |
 
-## 알려진 제약
-
-`tiki-taka`는 반대쪽 에이전트 경로를 `~/.claude/skills`와 `~/.codex/skills`로 고정해 두었습니다. 그 외 호스트에서 실행하려면 이 경로를 먼저 수정해야 합니다.
-
 ## 관련 링크
 
 - [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — `omo-model-config`와 `portable-opencode-setup`이 설정을 다루는 대상 플러그인 시스템

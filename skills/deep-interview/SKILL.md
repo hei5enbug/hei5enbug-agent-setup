@@ -1,14 +1,23 @@
 ---
 name: deep-interview
-description: Conduct a rigorous Socratic requirements interview before implementation, with topology discovery, evidence-backed questions, ambiguity scoring, contradiction handling, closure gates, and an execution-ready specification. Use when the user asks for a deep interview, says not to assume, has a vague or high-impact idea, wants requirements validated before work starts, or asks for an Ouroboros/Socratic discovery process. Works across agent hosts with structured-question, exploration, subagent, and plain-text fallbacks.
+description: >-
+  Conduct a rigorous Socratic requirements interview before implementation. Cover topology
+  discovery, evidence-backed questions, ambiguity scoring, contradiction handling, closure gates,
+  and an execution-ready specification. Use when the user asks for a deep interview, says not to
+  assume, has a vague or high-impact idea, wants requirements validated before work starts, or asks
+  for an Ouroboros/Socratic discovery process. Works across agent hosts with structured-question,
+  exploration, independent-worker, and plain-text fallbacks.
+compatibility: >-
+  Works in any conversational agent host. Structured questions, repository exploration, independent
+  workers, external research, and persistence are optional capabilities with in-context fallbacks.
 ---
 
 # Deep Interview
 
-Turn an uncertain idea into an execution-ready specification. Ask one high-leverage question at a time, verify discoverable facts before asking, and do not implement until the user approves the final scope.
+Turn an uncertain idea into an execution-ready specification.
+Ask one high-leverage question at a time, verify discoverable facts before asking, and do not implement until the user approves the final scope.
 
-The accompanying `README.ko.md` is a Korean translation kept synchronized with this file for human
-readers. Do not read or use it during execution.
+The accompanying `README.ko.md` is a Korean translation kept synchronized with this file for human readers. Do not read or use it during execution.
 
 Read these resources only when their stage is reached:
 
@@ -35,10 +44,8 @@ Read these resources only when their stage is reached:
 
 At startup, identify available capabilities without assuming product names:
 
-1. **Structured ask**: use the host's native single-question UI when available.
-   Before using the plain-text fallback, follow any host-specific mode or setup gate in
-   `references/ask-ui.md`. If the gate requires user action, explain it and end the turn
-   until the user resumes in the supported mode.
+1. **Structured ask**: use the host's native single-question UI when available. Before using the plain-text fallback, follow any host-specific mode or setup gate in `references/ask-ui.md`.
+   If the gate requires user action, explain it and end the turn until the user resumes in the supported mode.
 2. **Read-only exploration**: use repository search/read tools; if unavailable, ask only for facts that cannot be observed.
 3. **Independent reasoning**: use isolated read-only subagents when available; otherwise run the same persona passes sequentially in the main context.
 4. **Parallelism**: parallelize independent evidence gathering when supported; sequential execution must produce the same logical result.
@@ -109,7 +116,8 @@ Read `references/ask-ui.md`. Include:
 Round <n> | Component: <name> | Targeting: <dimension> | Why now: <reason> | Ambiguity: <score>%
 ```
 
-Offer 2-4 mutually distinct options when structured choices are useful. Put the strongest evidence-backed recommendation first, explain its tradeoff, and always allow free text. Do not force choices when an open question will produce better information.
+Offer 2-4 mutually distinct options when structured choices are useful. Put the strongest evidence-backed recommendation first, explain its tradeoff, and always allow free text.
+Do not force choices when an open question will produce better information.
 
 ### 4. Normalize the Answer
 
@@ -123,7 +131,8 @@ For a substantive free-text answer, restate only what matters under these fields
 
 Ask the user to confirm the interpretation before scoring if any meaning could have been lost. Do not add unstated requirements.
 
-If the user delegates the choice, use `references/auto-answer-uncertain.md`. Carry the result as an explicit assumption, cap confidence-derived clarity as described in the scoring reference, and require user confirmation before that assumption can cross the final threshold.
+If the user delegates the choice, use `references/auto-answer-uncertain.md`.
+Carry the result as an explicit assumption, cap confidence-derived clarity as described in the scoring reference, and require user confirmation before that assumption can cross the final threshold.
 
 ### 5. Score and Report
 
@@ -148,7 +157,8 @@ Never lower ambiguity merely because another round occurred.
 
 Run the lateral review in `references/lateral-review-panel.md` when ambiguity crosses a milestone band or before adopting an agent-supplied assumption.
 
-Use independent contexts when the host supports them. Do not leak the intended conclusion into reviewer prompts. If isolation or subagents are unavailable, perform the same researcher, contrarian, simplifier, and architecture lenses sequentially.
+Use independent contexts when the host supports them. Do not leak the intended conclusion into reviewer prompts.
+If isolation or subagents are unavailable, perform the same researcher, contrarian, simplifier, and architecture lenses sequentially.
 
 Fold only the highest-leverage validated finding into the next single question. Reviewers cannot change scope, approve assumptions, or declare completion.
 

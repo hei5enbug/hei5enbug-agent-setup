@@ -1,7 +1,15 @@
 ---
 name: skill-builder
-description: Create, modify, validate, and evaluate agent skills across AI agent hosts. Use when users want to build a skill from scratch, improve an existing skill, test skill behavior against a baseline, benchmark quality and variance, package a skill, or optimize its description for reliable triggering. Apply this skill to portable SKILL.md instruction bundles as well as host-specific skill packages, while preserving the target host's required metadata and conventions.
-compatibility: Core authoring works in any agent host. Bundled scripts require Python and filesystem access; model-backed description optimization accepts any command that reads a prompt from stdin and writes a response to stdout.
+description: >-
+  Create, modify, validate, and evaluate agent skills across AI agent hosts. Use when users want to
+  build a skill from scratch, improve an existing skill, test skill behavior against a baseline,
+  benchmark quality and variance, package a skill, or optimize its description for reliable
+  triggering. Apply this skill to portable SKILL.md instruction bundles as well as host-specific
+  skill packages, while preserving the target host's required metadata and conventions.
+compatibility: >-
+  Core authoring works in any agent host. Bundled scripts require Python and filesystem access.
+  Model-backed description optimization accepts any command that reads a prompt from stdin and
+  writes a response to stdout.
 ---
 
 # Skill Builder
@@ -12,15 +20,18 @@ Create and improve skills through an iterative draft → test → review → imp
 
 Keep the workflow stable across agent products by adapting to capabilities, not product names.
 
-1. Inspect the current host before choosing mechanics. Check for independent workers, filesystem access, subprocess execution, browser/display access, connected research tools, and artifact presentation.
+1. Inspect the current host before choosing mechanics.
+   Check for independent workers, filesystem access, subprocess execution, browser/display access, connected research tools, and artifact presentation.
 2. Preserve the core stages even when a capability is absent: capture intent, draft, test, review, improve, and package or hand off.
-3. Use neutral terms such as **agent**, **host**, **worker**, and **model runner** in portable instructions. Mention a specific product only inside an explicitly scoped adapter or when the user's target requires it.
+3. Use neutral terms such as **agent**, **host**, **worker**, and **model runner** in portable instructions.
+   Mention a specific product only inside an explicitly scoped adapter or when the user's target requires it.
 4. Do not assume hidden environment variables, private tool names, installation directories, or CLI syntax. Discover them or accept them as configuration.
 5. Keep outputs and schemas consistent across hosts. When a metric is unavailable, use `null` or omit an optional field; never fabricate data.
-6. Preserve host-specific manifests and metadata when modifying an installed skill. Put shared behavior in `SKILL.md` and isolate unavoidable host integration in a small adapter or clearly labeled reference.
-7. Do not infer an installation root, manifest format, or package layout from the current authoring host when the user has not selected a target. Use a task-local writable path for drafts, or ask for the destination when it materially affects the result.
-8. Keep every skill self-contained. A skill may use its own bundled resources and declared host
-   capabilities, but must not name, import, invoke, read, or depend on a sibling skill's files.
+6. Preserve host-specific manifests and metadata when modifying an installed skill.
+   Put shared behavior in `SKILL.md` and isolate unavoidable host integration in a small adapter or clearly labeled reference.
+7. Do not infer an installation root, manifest format, or package layout from the current authoring host when the user has not selected a target.
+   Use a task-local writable path for drafts, or ask for the destination when it materially affects the result.
+8. Keep every skill self-contained. A skill may use its own bundled resources and declared host capabilities, but must not name, import, invoke, read, or depend on a sibling skill's files.
    Duplicate a small essential rule when necessary instead of creating a cross-skill handoff.
 
 Use this capability mapping:
@@ -49,7 +60,8 @@ Figure out where the user is in this loop and continue from there. If the user w
 
 ## Communicating with the user
 
-Match the user's technical level. Terms such as “evaluation” and “benchmark” are usually fine; explain formats such as JSON and concepts such as assertions when context suggests they may be unfamiliar.
+Match the user's technical level.
+Terms such as “evaluation” and “benchmark” are usually fine; explain formats such as JSON and concepts such as assertions when context suggests they may be unfamiliar.
 
 Lead with decisions and results. Explain why a test or structural choice matters, especially when a missing host capability reduces rigor.
 
@@ -66,11 +78,13 @@ Extract answers from the conversation and existing files before asking for infor
 5. Would test cases add value? Objectively verifiable work usually benefits from tests; highly subjective work may rely more on human review.
 6. Which hosts must support the skill, and which parts truly need host-specific integration?
 
-When updating an existing skill, preserve its original directory name and `name` field unless the user explicitly requests a rename. Snapshot the original before editing so it can serve as the baseline.
+When updating an existing skill, preserve its original directory name and `name` field unless the user explicitly requests a rename.
+Snapshot the original before editing so it can serve as the baseline.
 
 ### Interview and research
 
-Ask only for gaps that materially change the implementation. Investigate available connected tools, local references, examples, and comparable skills when useful. Run independent research in parallel when the host supports it; otherwise research inline.
+Ask only for gaps that materially change the implementation. Investigate available connected tools, local references, examples, and comparable skills when useful.
+Run independent research in parallel when the host supports it; otherwise research inline.
 
 ### Write `SKILL.md`
 
@@ -122,7 +136,8 @@ Tell the agent how to select the relevant reference so it does not load every va
 
 ### Safety and lack of surprise
 
-The skill must match the user's stated intent. Do not create malware, exploit workflows, covert data access, misleading behavior, or unexpected external side effects. Make material writes and external actions visible in the instructions.
+The skill must match the user's stated intent. Do not create malware, exploit workflows, covert data access, misleading behavior, or unexpected external side effects.
+Make material writes and external actions visible in the instructions.
 
 ### Writing patterns
 
@@ -149,7 +164,8 @@ Output: feat(auth): implement JWT-based authentication
 
 ## Test cases
 
-Create 2–3 realistic prompts for the first iteration. Share them for confirmation when user judgment is needed; if the user has already authorized execution and the expected behavior is clear, proceed and report the chosen cases.
+Create 2–3 realistic prompts for the first iteration.
+Share them for confirmation when user judgment is needed; if the user has already authorized execution and the expected behavior is clear, proceed and report the chosen cases.
 
 Save cases to `evals/evals.json` when filesystem access is available:
 
@@ -177,7 +193,8 @@ Treat this as one continuous workflow. Use native host workers when available; d
 
 With filesystem access, create `<skill-name>-workspace/` beside the skill. Organize results as `iteration-N/<descriptive-eval-name>/`.
 
-For a new skill, the baseline receives no skill. For an existing skill, snapshot the original before editing and use that snapshot as the baseline. Keep the active and baseline prompts, inputs, model settings, and requested outputs identical.
+For a new skill, the baseline receives no skill. For an existing skill, snapshot the original before editing and use that snapshot as the baseline.
+Keep the active and baseline prompts, inputs, model settings, and requested outputs identical.
 
 Write `eval_metadata.json` in each eval directory:
 
@@ -207,11 +224,14 @@ Execute this task.
 
 Use `without_skill/outputs/` for a new-skill baseline or `old_skill/outputs/` for an existing-skill baseline.
 
-If independent workers are unavailable, run the same pairs sequentially. Keep the baseline instructions isolated from the revised skill as much as the host permits and record that the comparison has lower independence. If even sequential execution or persistent outputs are unavailable, perform a focused sanity check inline and ask the user to judge the examples directly.
+If independent workers are unavailable, run the same pairs sequentially.
+Keep the baseline instructions isolated from the revised skill as much as the host permits and record that the comparison has lower independence.
+If even sequential execution or persistent outputs are unavailable, perform a focused sanity check inline and ask the user to judge the examples directly.
 
 ### Step 3: Draft assertions while runs execute
 
-Create objective, descriptive assertions for machine-verifiable requirements. Avoid forcing quantitative assertions onto subjective qualities. Update both `eval_metadata.json` and `evals/evals.json`, then explain what the assertions measure.
+Create objective, descriptive assertions for machine-verifiable requirements. Avoid forcing quantitative assertions onto subjective qualities.
+Update both `eval_metadata.json` and `evals/evals.json`, then explain what the assertions measure.
 
 ### Step 4: Capture available metrics
 
@@ -219,7 +239,8 @@ Save host-reported timing and token data immediately in each run's `timing.json`
 
 ### Step 5: Grade and aggregate
 
-1. Read `agents/grader.md` and grade each run, using an independent worker when possible or grading inline otherwise. Save `grading.json`. Its expectation objects must use `text`, `passed`, and `evidence`.
+1. Read `agents/grader.md` and grade each run, using an independent worker when possible or grading inline otherwise. Save `grading.json`.
+   Its expectation objects must use `text`, `passed`, and `evidence`.
 2. Prefer a deterministic script for assertions that can be checked programmatically.
 3. Aggregate the iteration:
 
@@ -261,11 +282,14 @@ When file-based feedback is available, read `feedback.json`. Empty feedback mean
 4. Bundle scripts or references when multiple runs independently recreate the same helper logic.
 5. Keep portable behavior in the core and isolate host-specific mechanics in adapters.
 
-After revising, rerun the cases in a new iteration. Compare against the original or previous version according to the user's decision, generate a review surface with the previous iteration linked, and repeat until the user is satisfied or no meaningful improvement remains.
+After revising, rerun the cases in a new iteration.
+Compare against the original or previous version according to the user's decision.
+Generate a review surface linked to the previous iteration, then repeat until no meaningful improvement remains or the user is satisfied.
 
 ## Advanced: blind comparison
 
-For rigorous A/B comparison, read `agents/comparator.md` and `agents/analyzer.md`. Give outputs to an independent judge without revealing which configuration produced them. If no independent worker exists, skip blind comparison and disclose that limitation.
+For rigorous A/B comparison, read `agents/comparator.md` and `agents/analyzer.md`. Give outputs to an independent judge without revealing which configuration produced them.
+If no independent worker exists, skip blind comparison and disclose that limitation.
 
 ## Description optimization
 
@@ -304,13 +328,17 @@ python -m scripts.run_loop \
   --verbose
 ```
 
-The command may contain `{model}` in an argument; when it does, also pass `--model <model-id>`. Instead of repeating `--runner-command`, set `SKILL_BUILDER_RUNNER_COMMAND`. Use `--no-open` in a headless environment.
+The command may contain `{model}` in an argument; when it does, also pass `--model <model-id>`. Instead of repeating `--runner-command`, set `SKILL_BUILDER_RUNNER_COMMAND`.
+Use `--no-open` in a headless environment.
 
 The runner contract deliberately uses stdin/stdout and executes without a shell. A host-specific wrapper can therefore adapt a CLI, local model server, or API client without changing the optimizer.
 
-Trigger evaluation uses a stable routing simulation based only on the skill name, description, and query. This makes scores comparable across runners, but it is a proxy for a host's private routing implementation. When native host trigger tests are available, run them as an additional integration check rather than replacing the portable benchmark.
+Trigger evaluation uses a stable routing simulation based only on the skill name, description, and query.
+This makes scores comparable across runners, but it is a proxy for a host's private routing implementation.
+When native host trigger tests are available, run them as an additional integration check rather than replacing the portable benchmark.
 
-In every description-optimization handoff, explicitly label the reported score as a portable routing simulation and state that native trigger checks are still required before claiming equivalent behavior in a specific host.
+Label every reported description-optimization score as a portable routing simulation.
+State that native trigger checks are required before claiming equivalent behavior in a specific host.
 
 The loop uses a stratified train/test split, repeated routing decisions, and held-out score selection to reduce overfitting. Apply `best_description` from the output and report before/after scores.
 
@@ -330,7 +358,8 @@ When Python and filesystem access are available, package with:
 python -m scripts.package_skill <path-to-skill-folder> [output-directory]
 ```
 
-Use the host's native artifact presentation mechanism when available; otherwise provide the exact output path. If the installed source is read-only, copy it to a writable temporary location, preserve its original name, edit and package the copy, then return the result.
+Use the host's native artifact presentation mechanism when available; otherwise provide the exact output path.
+If the installed source is read-only, copy it to a writable temporary location, preserve its original name, edit and package the copy, then return the result.
 
 ## Reference files
 

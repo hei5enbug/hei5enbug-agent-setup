@@ -1,11 +1,24 @@
 ---
 name: flowchart-design
-description: Design, revise, validate, and export clear static flow diagrams across SVG, HTML/CSS, Figma, FigJam, draw.io, Mermaid, and raster deliverables. Use for flowcharts, process maps, architecture flows, decision flows, diagram-system unification, spacing and routing repair, overlap removal, accessible labeling, viewBox tightening, or PNG export correction. Works across agent hosts by separating the semantic graph from tool-specific rendering and using capability-based fallbacks.
+description: >-
+  Design, revise, validate, and export clear static flow diagrams across SVG, HTML/CSS, Figma,
+  FigJam, draw.io, Mermaid, and raster deliverables. Use for flowcharts, process maps, architecture
+  flows, decision flows, diagram-system unification, spacing and routing repair, overlap removal,
+  accessible labeling, viewBox tightening, or PNG export correction. Works across agent hosts by
+  separating the semantic graph from tool-specific rendering and using capability-based fallbacks.
+compatibility: >-
+  The semantic and layout workflow works in any agent host. Editable rendering, image inspection,
+  browser measurement, and export require corresponding host capabilities. A text-specification
+  fallback remains available without them.
 ---
 
 # Flowchart Design Standard
 
-A shared specification for static flow charts authored across different tools (SVG, HTML/CSS, Figma, draw.io). The goal: any chart that follows this document looks like it came from the same design system as every other chart that follows it. The rules below describe **relative behavior, not absolute values** — node counts, edge geometry, and domain semantics differ from chart to chart, so concrete pixel sizes, step counts, and offsets must be decided by the author and applied **consistently within a chart set**, not copied from this document.
+A shared specification for static flow charts authored across different tools (SVG, HTML/CSS, Figma, draw.io).
+The goal: any chart that follows this document looks like it came from the same design system as every other chart that follows it.
+The rules below describe **relative behavior, not absolute values**.
+Node counts, edge geometry, and domain semantics differ by chart, so choose concrete sizes and offsets for the current work.
+Apply them **consistently within a chart set** instead of copying values from this document.
 
 This standard prioritizes layout principles, spacing discipline, label rules, simplification criteria, and outer-frame handling over any project-specific terminology.
 
@@ -36,7 +49,8 @@ Before choosing coordinates, normalize the source into:
 - explicit start/end points and external systems;
 - the intended primary reading direction.
 
-Reject or resolve orphan nodes, duplicate IDs, dangling edges, cycles presented as linear flows, and branch labels that do not distinguish outcomes. If business meaning is ambiguous, ask before encoding it visually.
+Reject or resolve orphan nodes, duplicate IDs, dangling edges, cycles presented as linear flows, and branch labels that do not distinguish outcomes.
+If business meaning is ambiguous, ask before encoding it visually.
 
 ### 0.3 Choose a Layout Contract
 
@@ -46,7 +60,8 @@ Do not let automatic layout silently change semantic order. When a renderer cann
 
 ### 0.4 Render Incrementally
 
-Render in this order: frame and ranks, nodes, primary edges, branches, groups, labels, decoration. Re-measure after any label or node removal. Use established design-system components and variables when available; otherwise define one compact local token set.
+Render in this order: frame and ranks, nodes, primary edges, branches, groups, labels, decoration. Re-measure after any label or node removal.
+Use established design-system components and variables when available; otherwise define one compact local token set.
 
 ### 0.5 Validate at Three Levels
 
@@ -64,7 +79,8 @@ If rendered inspection is unavailable, mark the result `not visually verified` a
 2. **Same role, same visual grammar.** Identical platforms, identical edge meanings, and identical group categories must always share color, shape, and structure across every chart in a set.
 3. **Spacing must not break before meaning does.** When nodes are removed or hidden, redistribute the remaining nodes and edges before publishing.
 4. **Hidden elements leave no trace.** Removing a group border, subtitle, or node also requires recomputing the outer frame and `viewBox`.
-5. **No accidental overlap.** Two elements that are not in a containment relationship (group → contents, node → its own internal icon and labels) must not visually overlap. "Visually" includes glyph stroke and icon stroke, not just bounding box centers.
+5. **No accidental overlap.** Two elements that are not in a containment relationship (group → contents, node → its own internal icon and labels) must not visually overlap.
+   "Visually" includes glyph stroke and icon stroke, not just bounding box centers.
 
 These principles override every later rule when they conflict.
 
@@ -101,17 +117,25 @@ Establish a hierarchy and keep it consistent across the set:
 - The node boundary is the entire `<g class="node">` group: icon box, image, main label, and sub label together. It is **not** the icon rectangle alone.
 - Default node shape: rounded rectangle with a white fill and a soft border. Choose a square-ish aspect ratio that reads stably in a single-row chart.
 - Overview compact nodes preserve the same shape language at a smaller scale; the icon shrinks with them but its visual center stays intact.
-- Main label = the category the reader needs first (platform, resource type). Sub label = the identifier that distinguishes this node from siblings (path, command, tag, role detail). Use sub labels only when the main label alone is ambiguous.
+- Main label = the category the reader needs first (platform, resource type). Sub label = the identifier that distinguishes this node from siblings (path, command, tag, role detail).
+  Use sub labels only when the main label alone is ambiguous.
 
-**Internal zones must be mutually exclusive.** Each node has predeclared rectangular zones — `icon zone`, `main-label zone`, `sub-label zone`, optional `body zone`. No zone may overlap another. A label centered with `text-anchor="middle"` at the node's horizontal center is still a violation if the label's measured width pushes its bounding box into the icon zone — in that case, choose one:
+**Internal zones must be mutually exclusive.** Each node has predeclared rectangular zones — `icon zone`, `main-label zone`, `sub-label zone`, optional `body zone`. No zone may overlap another.
+A label centered with `text-anchor="middle"` at the node's horizontal center is still a violation if the label's measured width pushes its bounding box into the icon zone — in that case, choose one:
 
 - (a) switch to `text-anchor="start"` anchored at `icon-zone-right + padding`,
 - (b) widen the node, or
 - (c) shorten the label (drop sub-categorical words, abbreviate).
 
-Eyeballing the center is forbidden. Compute the label's bounding box from `font-size × glyph-count` (monospace) or measure the rendered SVG (proportional) before publishing. Same-role nodes (e.g., every processing stage in a row) must pass this check; whichever node has the longest label sets the floor.
+Eyeballing the center is forbidden. Compute the label's bounding box from `font-size × glyph-count` (monospace) or measure the rendered SVG (proportional) before publishing.
+Same-role nodes (e.g., every processing stage in a row) must pass this check; whichever node has the longest label sets the floor.
 
-**Same-node grid coherence.** Within a single node, all text elements share the same horizontal anchor (`x`). If main, sub, and body labels use different `x` values, the node's internal grid is broken — the reader perceives misalignment even when each individual label looks centered in its own context. If two anchors are genuinely needed (e.g., a centered main label next to an icon, plus a left-aligned body block), declare each anchor as part of the node's zone definition and apply the same pair to every node of the same role. Per-text ad-hoc anchors are forbidden.
+**Same-node grid coherence.** Within a single node, all text elements share the same horizontal anchor (`x`).
+If main, sub, and body labels use different `x` values, the node's internal grid is broken — the reader perceives misalignment even when each individual label looks centered in its own context.
+If two anchors are genuinely needed, declare each one in the node's zone definition.
+For example, a centered main label may sit beside an icon while a body block stays left-aligned.
+Apply the same anchor pair to every node of the same role.
+Per-text ad-hoc anchors are forbidden.
 
 ### 2.4 Edges
 
@@ -124,12 +148,19 @@ Eyeballing the center is forbidden. Compute the label's bounding box from `font-
 Edge geometry rules:
 
 - All edges carry a terminal arrowhead by default.
-- Arrowhead endpoints anchor to the **whole node group** (`<g class="node">`), not to the icon box or the icon image. An arrow that visually points at the icon alone is a mis-anchored edge — recompute it.
-- Leave a small, consistent breathing gap between the arrowhead tip and the node boundary. When using SVG marker arrowheads, place the path endpoint slightly outside the node boundary so the marker glyph does not overlap the node interior.
-- For bottom-to-top edges, target the outer edge of the lowest label region of the destination node, not the bottom of its icon box. Top-to-bottom edges follow the same rule against the topmost label region.
-- For two-bend (Z-shaped or L-shaped) edges of the form `start → vertical → horizontal → vertical → end`, the two vertical segments must be equal in length, which means the mid-axis y is the midpoint of the start and end y values.
+- Arrowhead endpoints anchor to the **whole node group** (`<g class="node">`), not to the icon box or the icon image.
+  An arrow that visually points at the icon alone is a mis-anchored edge — recompute it.
+- Leave a small, consistent breathing gap between the arrowhead tip and the node boundary.
+  When using SVG marker arrowheads, place the path endpoint slightly outside the node boundary so the marker glyph does not overlap the node interior.
+- For bottom-to-top edges, target the outer edge of the lowest label region of the destination node, not the bottom of its icon box.
+  Top-to-bottom edges follow the same rule against the topmost label region.
+- For two-bend edges, the two vertical segments must be equal in length.
+  This makes the mid-axis y the midpoint of the start and end y values.
 - Whatever breathing gap you choose, apply it identically across the entire chart.
-- **Breathing gap is symmetric at both ends of an edge.** If the start has 3 px to its source node boundary, the end must have 3 px to its target node boundary as well. Asymmetric gaps — one end touching, the other not — signal author inattention and read as the edge being wedged into one endpoint. This applies to control edges between bands as much as to in-band pipeline edges; if the edge starts at a container's bottom edge and ends 3 px above a node's top edge, one of those endpoints is wrong.
+- **Breathing gap is symmetric at both ends of an edge.** If the start has 3 px to its source node boundary, the end must have 3 px to its target node boundary as well.
+  Asymmetric gaps — one end touching, the other not — signal author inattention and read as the edge being wedged into one endpoint.
+  This applies to control edges between bands and to in-band pipeline edges.
+  An edge starting at a container boundary but ending above a node boundary has a wrong endpoint.
 
 ---
 
@@ -140,15 +171,22 @@ Edge geometry rules:
 - The default form is a **single-row left-to-right linear flow**.
 - When complexity increases, rows may stack, but every row internally maintains the same column rhythm.
 - In overview charts that show several streams in parallel, every row aligns to the same x-axis columns.
-- **Cross-band column alignment.** When stacked bands contain content that maps to each other — a stage in an upper band producing an artifact named in a lower band, an orchestrator above the row of stages it controls — the related items share the same x-axis column across bands. If the mapping is m:n (column counts differ), the author must either (a) draw an explicit line or bracket connecting the related items across bands, (b) rearrange so column counts match, or (c) abandon column alignment entirely and treat the bands as independent. Half-aligned columns — where some items align across bands but others drift by a non-zero offset — are worse than no alignment, because the reader infers a relationship that breaks under inspection.
+- **Cross-band column alignment.** Related items in stacked bands share the same x-axis column.
+  Examples include an upper stage and its lower artifact, or an orchestrator and the stages it controls.
+  For an m:n mapping, draw an explicit connector, make the column counts match, or treat the bands as independent.
+  Half-aligned columns — where some items align across bands but others drift by a non-zero offset — are worse than no alignment, because the reader infers a relationship that breaks under inspection.
 
 ### 3.2 Spacing Rhythm
 
 - Within a row, every node-to-node gap is identical, which makes every same-row edge identical in length.
 - Edges that travel in the same direction maintain the same length rhythm wherever possible.
 - Horizontal and vertical edges may carry different rhythms, but each axis has its own consistent system.
-- After removing a node, redistribute the remaining nodes so no single edge becomes anomalously long. The only exception: a direct connection is genuinely more accurate than the removed intermediary, in which case the long edge stays — but row/column alignment, label centering, and outer-frame balance must still be preserved.
-- **Within-container content spacing is uniform.** Adjacent items inside a single container — a band, group, subgroup, or storage box — are spaced within ±5% of the mean gap of that container. An outlier gap (e.g., a single 240 px gap among items otherwise spaced at 180–190 px) reads as either a missing item or a category break; if neither is intended, redistribute. If a category break is intended, mark the wider gap with an explicit separator — a thin divider, a sub-caption, or labeled whitespace — so the reader can tell an intentional gap from a layout slip.
+- After removing a node, redistribute the remaining nodes so no single edge becomes anomalously long.
+  Keep a long edge only when a direct connection is more accurate than the removed intermediary.
+  Preserve alignment, label centering, and outer-frame balance in that case.
+- **Within-container content spacing is uniform.** Adjacent items inside a single container — a band, group, subgroup, or storage box — are spaced within ±5% of the mean gap of that container.
+  An outlier gap (e.g., a single 240 px gap among items otherwise spaced at 180–190 px) reads as either a missing item or a category break; if neither is intended, redistribute.
+  If a category break is intended, mark the wider gap with an explicit separator — a thin divider, a sub-caption, or labeled whitespace — so the reader can tell an intentional gap from a layout slip.
 
 ### 3.3 Wrapping
 
@@ -159,7 +197,8 @@ When a single row is too long, apply this order:
 3. After wrapping, every row internally keeps its own equal spacing.
 4. Row-transition edges may be vertical or L-shaped, but the reading direction of each row must be unambiguous.
 
-A typical wrap: row 1 reads left-to-right, the transition edge is vertical, row 2 reads either right-to-left or left-to-right again. Pick one reading rule for the diagram and hold it for every subsequent row.
+A typical wrap: row 1 reads left-to-right, the transition edge is vertical, row 2 reads either right-to-left or left-to-right again.
+Pick one reading rule for the diagram and hold it for every subsequent row.
 
 ---
 
@@ -169,19 +208,23 @@ The completeness of a chart is decided more by its outer framing than by anythin
 
 ### 4.1 viewBox
 
-`viewBox` is recalculated against the bounding box of the **currently visible** content: nodes, edges, arrowheads, text (including descenders), icons, group borders, strokes, markers, and shadows. Coordinates left over from hidden groups, removed nodes, or earlier layouts must be excluded — never inherit a previously generous canvas.
+`viewBox` is recalculated against the bounding box of the **currently visible** content: nodes, edges, arrowheads, text (including descenders), icons, group borders, strokes, markers, and shadows.
+Coordinates left over from hidden groups, removed nodes, or earlier layouts must be excluded — never inherit a previously generous canvas.
 
 After recomputing `viewBox`, the four outer distances — first node to left edge, last node to right edge, top text to top edge, bottom text to bottom edge — should read as visually balanced.
 
 ### 4.2 PNG Export
 
-Browser viewport size, `100vh` height, and full-page screenshots are not valid final outputs. The deliverable PNG must be cropped to the rendered visible content and then re-padded with the **same value on all four sides**.
+Browser viewport size, `100vh` height, and full-page screenshots are not valid final outputs.
+The deliverable PNG must be cropped to the rendered visible content and then re-padded with the **same value on all four sides**.
 
-Visible content includes nodes, edges, arrowheads, icons, text, group containers, section titles, and separators. It excludes browser viewport whitespace, `100vh`-induced page space, CSS layout padding, traces of hidden groups or subtitles, and any leftover `viewBox` margin from a prior layout.
+Visible content includes nodes, edges, arrowheads, icons, text, group containers, section titles, and separators.
+It excludes browser viewport whitespace, `100vh`-induced page space, CSS layout padding, traces of hidden groups or subtitles, and any leftover `viewBox` margin from a prior layout.
 
 Procedure:
 
-1. Render the SVG/HTML normally. Constrain the page shell so it does not introduce empty space larger than the chart, and let the SVG height follow its `viewBox` ratio rather than being forced into the viewport.
+1. Render the SVG/HTML normally.
+   Constrain the page shell so it does not introduce empty space larger than the chart, and let the SVG height follow its `viewBox` ratio rather than being forced into the viewport.
 2. Render a second pass with the same background but with the SVG visual elements hidden. The goal is a content-free image that shares the original background — including any faint gradient.
 3. Diff the two renders to locate the actual content region. Do not crop by background color alone, since white icon fills will be misread as background, and corner-color trimming fails on gradients.
 4. Crop the deliverable to that bounding box.
@@ -197,7 +240,8 @@ Open the saved PNG and confirm, by eye:
 - No descender, arrowhead, group border, or icon shadow is clipped.
 - No empty region remains from a hidden element or a prior layout.
 
-If the rendered PNG is visually unbalanced, do not chase the problem by re-tweaking `viewBox` alone — re-crop the rendered raster against visible content and re-apply equal padding. Documentation references only the verified PNG; raw viewport captures and pre-verification renders never appear in deliverables.
+If the rendered PNG is visually unbalanced, do not chase the problem by re-tweaking `viewBox` alone — re-crop the rendered raster against visible content and re-apply equal padding.
+Documentation references only the verified PNG; raw viewport captures and pre-verification renders never appear in deliverables.
 
 ---
 
@@ -214,16 +258,21 @@ If the rendered PNG is visually unbalanced, do not chase the problem by re-tweak
 
 - Edges describe **what happens**; nodes describe **what something is**. Never duplicate that information across the two.
 - Place edge labels at the geometric center of each edge.
-- Default position is above the edge. Move the label below the edge when something competes for attention above it (a branching line, an adjacent label). Pick one above-offset value and one below-offset value per chart set and apply them consistently.
+- Default position is above the edge. Move the label below the edge when something competes for attention above it (a branching line, an adjacent label).
+  Pick one above-offset value and one below-offset value per chart set and apply them consistently.
 - For vertical edges, the label's primary axis sits at the midpoint of the edge.
 - If only one edge has a missing label, decide whether the transition is meaningful: if yes, label it; if no, do not pad neighboring labels to compensate.
-- **Edge label background plate must cover the edge line.** If an edge label sits where the edge line would pass through the glyph, place a background plate (a rectangle with `fill` set to the canvas background, sized slightly larger than the text bounding box) under the label so the edge line is occluded. If the label is offset from the edge so the edge line never crosses the glyph, the plate is unnecessary — do not add one. A plate that does not cover any edge segment is visual noise without function: the plate exists to fix a specific collision, and absence of collision means absence of plate.
+- **Edge label background plate must cover the edge line.** Add a plate only when the edge would pass through the label glyph.
+  Use a canvas-colored rectangle slightly larger than the text bounding box so it hides the line.
+  If the label is offset from the edge so the edge line never crosses the glyph, the plate is unnecessary — do not add one.
+  A plate that does not cover any edge segment is visual noise without function: the plate exists to fix a specific collision, and absence of collision means absence of plate.
 
 ### 5.3 Length and Density
 
 - Keep labels short and verb-led.
 - Avoid stacking two transition meanings into one edge label.
-- The exception: when a removed intermediary genuinely makes a single edge represent two stages, a composite label is allowed — but first try relocating the label to the most semantically natural adjacent edge.
+- A composite label is allowed when removing an intermediary makes one edge represent two stages.
+  First try moving the label to the most semantically natural adjacent edge.
 
 ### 5.4 Accessibility and Text Equivalence
 
@@ -263,11 +312,15 @@ Group containers use a softer, slightly larger rounded shape than individual nod
 
 Subgroups bracket a portion of an existing pipeline. Their style is intentionally quiet: dashed border, near-white background, and titles or subtitles only when strictly necessary.
 
-When the subgroup title and subtitle add nothing, hide them — and either remove the subgroup visually altogether or keep only its inner nodes. Either way, recompute the layout and the outer frame afterward.
+When the subgroup title and subtitle add nothing, hide them — and either remove the subgroup visually altogether or keep only its inner nodes.
+Either way, recompute the layout and the outer frame afterward.
 
 ### 6.4 Container and Caption Discipline
 
-**Container span matches its declared logical scope.** If a container is meant to wrap a set of items — an orchestrator band over five pipeline stages, a storage group over five artifact paths, a subgroup bracketing three nodes — its left edge equals the leftmost wrapped item's left edge and its right edge equals the rightmost wrapped item's right edge. If a uniform inset is desired instead, apply the same inset on all four sides and document it as an explicit padding constant. Mismatch between "what the container is supposed to cover" and "what its coordinates actually cover" is a visual contradiction: readers infer scope from coordinates, not from author intent.
+**Container span matches its declared logical scope.** A container may wrap stages, artifact paths, or nodes.
+Its left and right edges match the outer edges of the wrapped items.
+If a uniform inset is desired instead, apply the same inset on all four sides and document it as an explicit padding constant.
+Mismatch between "what the container is supposed to cover" and "what its coordinates actually cover" is a visual contradiction: readers infer scope from coordinates, not from author intent.
 
 **Group caption alignment follows a single rule per chart.** Every group, band, and subgroup caption in a chart uses the same horizontal alignment rule — one of:
 
@@ -275,9 +328,13 @@ When the subgroup title and subtitle add nothing, hide them — and either remov
 - (b) the caption's own container left edge, or
 - (c) the caption's first wrapped item left edge.
 
-Pick one rule per chart and apply it uniformly. Mixing two rules — some captions at canvas-left, others at container-left — reads as inconsistent layout even if each caption is "correctly" placed under one of the rules considered in isolation.
+Pick one rule per chart and apply it uniformly.
+Mixing two rules — some captions at canvas-left, others at container-left — reads as inconsistent layout even if each caption is "correctly" placed under one of the rules considered in isolation.
 
-**Source-code comments match actual coordinates.** When the chart is authored via code (SVG, HTML/CSS, programmatic draw.io / Figma), any inline comment documenting layout intent must match the actual coordinates and attributes. A comment that claims `spans X 230-1150` next to `x=270, width=820` is a lie — it obscures author intent and breaks reviewability. Comments are part of the chart's contract, not docstrings; when coordinates change, the comment updates in the same edit.
+**Source-code comments match actual coordinates.** Inline layout comments must match actual coordinates and attributes.
+This applies to SVG, HTML/CSS, and programmatic draw.io or Figma output.
+A comment that claims `spans X 230-1150` next to `x=270, width=820` is a lie — it obscures author intent and breaks reviewability.
+Comments are part of the chart's contract, not docstrings; when coordinates change, the comment updates in the same edit.
 
 ---
 
@@ -290,7 +347,7 @@ A flow chart documents **what the reader needs to follow**, not the entire syste
 - It exists, but the reader does not need it to follow the flow.
 - Adding it stretches an edge without adding information.
 
-Removing a node is incomplete until the layout, edge length rhythm, label placement, and `viewBox` have all been re-applied per the rules in §3 and §4.
+Removing a node is incomplete until the layout, edge length rhythm, label placement, and `viewBox` have all been re-applied using "Layout" and "Outer Frame and Export" in this file.
 
 ---
 

@@ -1,120 +1,121 @@
 ---
 name: technical-design-writer
 description: >-
-  개발 설계 문서를 새로 쓰거나 기존 설계 문서를 규칙에 맞게 개선할 때 따르는 작성 규칙과
-  절차. 용어 통일(같은 뜻엔 같은 낱말, 쉬운 한국어, 시스템 용어와 겹치는 말 교체), 섹션 범위
-  분리, 같은 기준의 비교·나열은 표로, 중복 제거와 링크 참조, 목차를 좁혀 가는 5단계 절차를
-  적용한다. 트리거 — "설계 문서 써줘", "개발 설계 문서 작성", "설계
-  문서 규칙대로 정리", "설계 문서 개선/다듬기", "설계 문서 목차부터", "design doc 작성".
-  단순 번역, 맞춤법 교정, 설계 내용과 무관한 문체 윤문은 범위 밖이다.
+  Rules and a workflow for creating a technical design document or improving an existing one.
+  Enforces consistent terminology, plain Korean, replacement of terms that conflict with system
+  vocabulary, non-overlapping section scopes, tables for comparisons, deduplication, linked
+  references, and a five-step outline-narrowing process. Use for requests such as "설계 문서 써줘",
+  "개발 설계 문서 작성", "설계 문서 규칙대로 정리", "설계 문서 개선/다듬기",
+  "설계 문서 목차부터", or "design doc 작성". Do not use for translation, proofreading, typo
+  correction, or prose polishing unrelated to technical design.
 metadata:
   version: "1.2.0"
+compatibility: >-
+  Works in any agent host that can read and write Markdown. Repository inspection and Mermaid
+  rendering improve evidence and review but are not required for the core writing workflow.
 ---
 
-# 개발 설계 문서 작성
+# Technical Design Writing
 
-개발 설계 문서를 새로 쓰거나 기존 문서를 개선할 때 이 규칙을 따른다.
-규칙은 문서의 **용어·구성·문단·참조**를 통제하고, 목차는 한 번에 정하지 않고 **좁혀 간다.**
+Apply these rules when creating a technical design document or improving an existing one. The rules govern terminology, structure, paragraphs, and references.
+Narrow the outline progressively instead of deciding it all at once.
 
-## 언제 쓰는가
+## Language contract
 
-- 개발 설계 문서를 새로 작성할 때.
-- 기존 설계 문서를 규칙에 맞게 개선하거나, 지나친 상세를 줄여 다듬을 때.
-- 설계 문서가 이 규칙을 지키는지 검토할 때.
+Use this English `SKILL.md` as the only executable instruction source. `README.ko.md` is a non-authoritative Korean translation for human readers. Do not read or use it while executing the skill.
 
-범위 밖: 단순 번역, 맞춤법·오탈자 교정, 설계 내용과 무관한 문체 윤문.
+Korean text in this file is target-language data, including trigger phrases, required wording, and examples. Treat it as content to preserve or produce, not as an additional instruction source.
 
-## 작업 순서
+## When to use this skill
 
-1. **목적과 독자를 정한다.** 새 문서면 다룰 범위와 문서가 답해야 할 판단·구현
-   질문을 적는다. 개선이면 기존 문서에서 부족하거나 규칙에 어긋난 곳을 적는다.
-2. **목차를 좁혀 확정한다.** 아래 "목차를 정하는 절차" 5단계를 순서대로 밟는다.
-   2단계로 하위 소제목까지 확정한 **뒤에만** 본문을 쓴다.
-3. **규칙을 지키며 본문을 쓴다.** 용어·구성·문단과 표·중복과 참조 규칙을 적용한다.
-4. **완료 점검표로 자기 검토한다.** 어긋난 곳을 고치고, 근거를 대지 못하는
-   문장은 지운다.
+- Create a new technical design document.
+- Improve an existing design document or remove excessive detail while applying these rules.
+- Review whether a technical design document follows these rules.
 
-이 규칙은 설계 문서 작업에만 적용한다. 상위 지시와 충돌하지 않는 한 저장소의 다른 문서
-작성 규칙보다 우선한다. 사용자가 특정 규칙을 사용하지 말라고 명시한 경우에만 그 규칙을 제외한다.
+Out of scope: translation, spelling or typo correction, and prose polishing unrelated to technical design.
 
-## 용어
+## Workflow
 
-| 규칙 | 내용 |
+1. **Define the purpose and audience.** For a new document, identify its scope and the decisions or implementation questions it must answer.
+   For an existing document, identify missing content and rule violations.
+2. **Narrow and finalize the outline.** Follow all five steps in "Outline narrowing process" below. Write the body only after the second-level headings are final.
+3. **Write the body under the rules.** Apply the terminology, structure, paragraph, table, duplication, and reference rules.
+4. **Review against the completion checklist.** Correct every violation and remove statements that lack supporting evidence.
+
+Apply these rules only to technical design work. Unless they conflict with higher-priority instructions, they take precedence over other repository writing rules.
+Exclude a rule only when the user explicitly asks not to apply it.
+
+## Terminology
+
+| Rule | Requirement |
 |---|---|
-| 한 뜻 한 낱말 | 같은 뜻에는 항상 같은 낱말을 쓴다. 원문·초안의 동의어·유의어도 대표 낱말 하나로 통일한다. |
-| 쉬운 한국어 | 쉬운 한국어로 쓴다. 영어는 아래 세 경우에만 쓴다. |
-| 겹치는 말 교체 | 기존 시스템 용어와 겹쳐 오해를 부르는 낱말은 다른 말로 바꾼다. |
+| One term per meaning | Use the same term for the same meaning. Normalize synonyms in source material or drafts to one canonical term. |
+| Plain Korean | Write in plain Korean. Use English only in the three allowed cases below. |
+| Replace conflicting terms | Replace a term when it overlaps with existing system vocabulary and could cause confusion. |
 
-영어를 허용하는 세 경우:
+English is allowed only for:
 
-- 고유명사 (예: UN/LOCODE, Azure Blob)
-- 코드에 실제로 있는 이름 (테이블명·변수명·DAG ID 등)
-- 마땅한 한국어가 없는 전문어
+- Proper nouns, such as UN/LOCODE or Azure Blob.
+- Names that exist verbatim in code, such as table names, variable names, or DAG IDs.
+- Technical terms without a suitable Korean equivalent.
 
-겹치는 말 교체 예: git branch와 혼동되는 "브랜치"는 다른 말로 바꾼다.
-(한 저장소에서 DAG의 병렬 실행 구조를 "분기"로 통일한 사례가 있다.)
+Conflict example: replace "브랜치" when it could be confused with a Git branch. One repository used "분기" consistently for a DAG's parallel execution structure.
 
-작성 순서: 한국어 문서는 먼저 영어로 초안을 쓰고, 그 초안을 한국어로 번역해 완성한다.
+When the final document is Korean, draft it in English first and then translate the completed draft into Korean.
+Preserve proper nouns, code identifiers, and technical terms that have no suitable Korean equivalent.
 
-## 구성
+## Structure
 
-- 문서마다, 또 한 문서 안 섹션마다 맡은 범위를 겹치지 않게 정한다. 한 주제는 한 곳에서만 다룬다.
-- 구현·검증·결정에 필요한 내용만 담는다. 배경 설명이나 있으면 좋은 참고 정보는 뺀다.
-- 없애도 이해나 판단이 나빠지지 않는 문장은 지운다.
-- 구획 제목은 소제목으로 만든다. 콜론으로 끝나는 문장을 제목으로 쓰지 않는다.
+- Give every document and every section a distinct, non-overlapping scope. Cover each topic in one place only.
+- Include only content needed for implementation, validation, or a decision. Remove background and optional reference material.
+- Remove any sentence whose absence would not reduce understanding or decision quality.
+- Use subheadings for subdivisions. Do not use a sentence ending in a colon as a heading.
 
-## 크기와 한도
+## Size limits
 
-| 대상 | 한도 |
+| Target | Limit |
 |---|---|
-| 한 줄 | 200자 |
-| 한 파일 | 500줄 |
-| 섹션 깊이 | 3단계 |
+| One line | 200 characters |
+| One file | 500 lines |
+| Section depth | 3 levels |
 
-한도를 넘지 않으면 파일을 나누지 않는다. 넘치면 역할별로 나눈다.
+Do not split a file that stays within the limits. When a limit is exceeded, split by responsibility.
 
-## 문단·표·다이어그램
+## Paragraphs, tables, and diagrams
 
-- 한 문단에는 하나의 핵심만 담는다.
-- 여러 항목을 같은 기준으로 비교하거나 나열하는 규칙은 산문이나 불릿이 아니라 표로 쓴다.
-- 구조, 흐름, 상태 변화, 구성 요소 사이의 관계처럼 그림이 글보다 잘 전달하는 부분에는
-  다이어그램을 적극 쓴다. 다이어그램은 Mermaid로 그린다.
-- 단순한 사실 나열이나 한 줄 설명에는 다이어그램을 더하지 않는다.
-  같은 내용을 글과 그림에 겹쳐 싣지 않는다.
-- 다이어그램을 그리기 전에 자문한다: 조건분기나 여러 구성요소 사이의 상호작용·상태
-  변화가 있는가? 화살표가 순서만 나타내고 분기가 없다면 다이어그램 대신 목록이나
-  표를 쓴다.
-- 다이어그램 내용이 바로 앞뒤 문단에 이미 문장으로 적혀 있다면 다이어그램을 지운다.
-- 원문에서 문장 끝의 줄바꿈 하나는 미리보기에서 공백으로 합쳐져 한 문단이 된다.
-  그래서 줄은 문장이 끝난 뒤에만 나누고, 문장 중간에서는 나누지 않는다.
-- 새 문단은 빈 줄 하나로 구분한다.
-- 제목, 표, 코드 블록, 목록의 앞뒤에는 빈 줄을 둔다. 앞 문단에 바로 붙이지 않는다.
-- 목록 항목이 여러 줄이면 이어지는 줄을 항목 글자가 시작하는 위치에 맞춰 들여쓴다.
-- 문단 안에서 줄을 나누고 싶으면 빈 줄로 문단을 나누거나 목록·표로 구조를 바꿀 수
-  있는지 먼저 살핀다. 강제 줄바꿈은 되도록 쓰지 않는다.
-- 그래도 문단 안 줄바꿈이 필요하면 눈에 보이지 않고 저장할 때 지워지기 쉬운 공백 두 칸
-  대신 `<br>`을 쓴다. 표 셀 안 줄바꿈도 `<br>`으로 한다.
+- Keep one central idea in each paragraph.
+- Use a table, not prose or bullets, when several items are compared or listed against the same dimensions.
+- Use a Mermaid diagram when it communicates structure, flow, state changes, or component relationships better than prose.
+- Do not add a diagram for a simple fact list or a one-line explanation. Do not duplicate the same content in prose and a diagram.
+- Before adding a diagram, check whether it shows a conditional branch, interaction among multiple components, or a state change. If arrows only show an unbranched sequence, prefer a list or table.
+- Remove a diagram when the adjacent prose already communicates the same information.
+- A single source line break is rendered as a space inside the same paragraph. Break lines only after a sentence ends, never in the middle of a sentence.
+- Separate paragraphs with one blank line.
+- Put a blank line before and after headings, tables, code blocks, and lists. Do not attach them directly to the preceding paragraph.
+- When a list item spans multiple lines, align continuation lines with the first character of the item's text.
+- Before forcing a line break inside a paragraph, check whether a new paragraph, list, or table would express the structure better. Avoid forced line breaks when possible.
+- When an inline break is still necessary, use `<br>` instead of two trailing spaces, which are invisible and easily removed. Use `<br>` inside table cells as well.
 
-표로 바꾸는 예:
+Example of when to use a table:
 
 ```markdown
-# 나쁜 예 (같은 기준의 나열을 산문으로)
+# Bad example: prose lists items against the same dimensions
 개발 환경은 로그를 남기고 캐시를 끄며, 운영 환경은 로그를 줄이고 캐시를 켠다.
 
-# 좋은 예 (표)
+# Good example: table
 | 환경 | 로그 | 캐시 |
 |---|---|---|
 | 개발 | 남김 | 끔 |
 | 운영 | 줄임 | 켬 |
 ```
 
-다이어그램으로 그리면 좋은 예:
+Example of when to use a diagram:
 
 ~~~markdown
-# 나쁜 예 (단계 사이의 흐름을 산문으로)
+# Bad example: prose describes a flow between steps
 요청이 들어오면 인증을 거치고, 통과하면 처리기로 보내고, 실패하면 오류를 돌려준다.
 
-# 좋은 예 (Mermaid 흐름도)
+# Good example: Mermaid flowchart
 ```mermaid
 flowchart LR
     A[요청] --> B{인증}
@@ -123,10 +124,10 @@ flowchart LR
 ```
 ~~~
 
-다이어그램을 걷어내는 예 (분기 없는 나열):
+Example of when to remove a diagram:
 
 ~~~markdown
-# 나쁜 예 (분기·상호작용 없는 나열을 다이어그램으로)
+# Bad example: a diagram shows only independent, unbranched items
 ```mermaid
 flowchart LR
     A[원천 A] --> AO[(원천 A 결과)]
@@ -134,53 +135,54 @@ flowchart LR
     C[원천 C] --> CO[(원천 C 결과)]
 ```
 
-# 좋은 예 (문장)
+# Good example: prose
 원천 A·B·C는 각자 독립적으로 실행되어 자신의 결과만 만든다.
 ~~~
 
-## 중복과 참조
+## Duplication and references
 
-- 코드(주석·docstring 포함)에서는 문서를 절대 참조하지 않는다.
-  문서는 코드 수정 없이 개편·삭제할 수 있어야 한다.
-- 같은 내용을 자세히 다루는 문서는 하나만 둔다. 다른 곳에서는 짧게 요약하고 그 문서로 링크한다.
-- 절을 가리키는 참조기호는 쓰지 않는다. 절 번호만 적지 말고 문서 경로와 절 제목을
-  함께 적는다 — 번호는 개편 때 자주 바뀐다.
-- 코드나 외부 원본의 열·타입 같은 상세 계약을 설계 문서에 그대로 옮겨 적을 때는, 그
-  계약의 기준(SSOT)이 여전히 원본임을 명시하고 계약을 바꿀 때 함께 고칠 파일을 안내한다.
+- Never reference documentation from code, including comments and docstrings. Documentation must be free to change or disappear without requiring code changes.
+- Keep one detailed source for each topic. Summarize it briefly elsewhere and link to that source.
+- Do not use reference symbols for sections. Do not cite a section number alone; include the document path and section title because numbering changes during restructuring.
+- A design document may copy a detailed contract such as columns or types from code or an external source.
+  State that the original remains the source of truth and identify every file that must change with the contract.
 
-## 목차를 정하는 절차
+## Outline narrowing process
 
-목차는 한 번에 확정하지 않고 아래 순서로 좁혀 간다.
+Do not finalize the outline in one pass. Narrow it in this order:
 
-1. 초안 목차를 만든다. 개선이면 기존 문서의 장 구성에서 출발하고, 새 문서면 다룰
-   범위를 장으로 나눠 1단계 목차를 만든다.
-2. 문서 자체가 이미 하는 역할(예: "한눈에 보기")과 겹치는 섹션, 여러 섹션에 흩어져
-   이미 드러나는 값의 재나열(예: "이름 규칙" 표)은 뺀다.
-3. 도구·표는 그 도구가 실제로 쓰이는 섹션 안으로 옮긴다. 별도 섹션으로 떼어 두지
-   않는다 (예: 전체 흐름도는 첫 실행 단계를 설명하는 섹션 안에 둔다).
-4. 섹션 수를 조정할 때는 항목을 빼는 대신, 성격이 같은 섹션을 합치거나(예: 품질 점검 +
-   알림 + 배포 준비) 밀도가 높은 섹션을 쪼갠다.
-5. 2단계로 각 섹션의 하위 소제목까지 전개해 확정한 뒤에만 본문을 쓴다.
+1. Draft the outline. For an existing document, start from its current chapter structure. For a new document, divide the scope into a first-level outline.
+2. Remove sections that duplicate a role the document already performs, such as "한눈에 보기". Also remove restatements of values already visible across multiple sections, such as a separate "이름 규칙" table.
+3. Place each tool or table inside the section where it is actually used. Do not isolate it as a separate section.
+   For example, put an overall flowchart in the section that explains the first execution step.
+4. Adjust the section count by merging related sections or splitting dense sections, not by dropping required topics.
+   For example, quality checks, notifications, and deployment preparation may form one section.
+5. Expand every section through second-level headings and finalize them before writing the body.
 
-## 완료 점검표
+## Completion checklist
 
-- [ ] 같은 뜻에 같은 낱말을 썼는가. 동의어를 대표 낱말로 통일했는가.
-- [ ] 영어는 고유명사·코드 이름·전문어 세 경우에만 남았는가.
-- [ ] 시스템 용어와 겹쳐 오해를 부르는 낱말을 바꿨는가.
-- [ ] 한국어 문서는 영어 초안을 먼저 쓴 뒤 한국어로 번역했는가.
-- [ ] 한 주제가 한 곳에서만 다뤄지는가. 문서·섹션 범위가 겹치지 않는가.
-- [ ] 구현·검증·결정에 필요 없는 배경·참고 문장을 뺐는가.
-- [ ] 구획 제목이 소제목인가. 콜론으로 끝나는 문장 제목이 없는가.
-- [ ] 한 줄 200자·한 파일 500줄·섹션 깊이 3단계를 넘지 않는가. 넘치면 역할별로 나눴는가.
-- [ ] 한 문단에 핵심이 하나인가.
-- [ ] 같은 기준의 비교·나열을 표로 바꿨는가.
-- [ ] 구조·흐름·관계를 설명하는 곳에 Mermaid 다이어그램을 활용하고, 단순 나열엔 넣지 않았는가.
-- [ ] 각 다이어그램에 조건분기나 구성요소 간 상호작용이 있는가. 순서만 나열한 그림은
-      목록·표로 바꿨는가. 인접 문단과 내용이 겹치는 다이어그램은 지웠는가.
-- [ ] 줄바꿈이 문장 끝에서만 일어나는가. 문단은 빈 줄로 나눴는가.
-- [ ] 제목·표·코드·목록 앞뒤에 빈 줄이 있고, 여러 줄 목록 항목의 들여쓰기가 맞는가.
-- [ ] 문단 안 줄바꿈에 공백 두 칸 대신 `<br>`을 썼는가. 불필요한 강제 줄바꿈은 없앴는가.
-- [ ] 코드가 문서를 참조하지 않는가.
-- [ ] 자세한 내용을 한 문서에 모으고, 다른 곳은 요약·링크했는가.
-- [ ] 참조기호 없이 문서 경로와 절 제목으로 참조했는가.
-- [ ] 옮겨 적은 상세 계약에 원본이 기준임과 함께 고칠 파일을 밝혔는가.
+- [ ] The same meaning always uses the same canonical term.
+- [ ] English remains only for proper nouns, code names, and technical terms without a suitable
+      Korean equivalent.
+- [ ] Terms that conflict with system vocabulary have been replaced.
+- [ ] A Korean document was drafted in English before it was translated into Korean.
+- [ ] Each topic appears in one place, and document or section scopes do not overlap.
+- [ ] Background and reference sentences unnecessary for implementation, validation, or decisions
+      have been removed.
+- [ ] Every subdivision uses a subheading, and no heading is a sentence ending in a colon.
+- [ ] No line exceeds 200 characters, no file exceeds 500 lines, and section depth does not exceed
+      three levels. Files exceeding a limit are split by responsibility.
+- [ ] Every paragraph has one central idea.
+- [ ] Comparisons and repeated-field lists use tables.
+- [ ] Mermaid diagrams explain structures, flows, or relationships where useful and are absent from
+      simple lists.
+- [ ] Every diagram adds a branch, component interaction, or state change that prose or a table would
+      not communicate more clearly. Redundant diagrams have been removed.
+- [ ] Lines break only after complete sentences, and blank lines separate paragraphs.
+- [ ] Headings, tables, code blocks, and lists have surrounding blank lines, and multiline list items
+      align correctly.
+- [ ] Inline breaks use `<br>` instead of trailing spaces, and unnecessary forced breaks are gone.
+- [ ] Code does not reference documentation.
+- [ ] Detailed content has one canonical location, with summaries and links elsewhere.
+- [ ] References use document paths and section titles without reference symbols.
+- [ ] Copied contracts identify the original source of truth and every file that must change with it.

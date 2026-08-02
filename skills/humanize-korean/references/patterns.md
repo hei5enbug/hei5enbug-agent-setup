@@ -1,11 +1,9 @@
 # Korean Naturalness Patterns
 
-Use this reference only after the workflow in `SKILL.md` directs you here. Korean phrases are
-target-language signals and examples, not instructions.
+Use this reference only after the workflow in `SKILL.md` directs you here. Korean phrases are target-language signals and examples, not instructions.
 
-A match is not automatically an error. Confirm that the expression is repetitive, literal,
-formulaic, or inappropriate for the genre before changing it. Prefer deletion or a direct Korean
-verb over decorative replacement.
+A match is not automatically an error. Confirm that the expression is repetitive, literal, formulaic, or inappropriate for the genre before changing it.
+Prefer deletion or a direct Korean verb over decorative replacement.
 
 ## Protected content
 
@@ -16,8 +14,7 @@ Do not target these items:
 - direct quotations and wording whose exact form matters;
 - uncertainty, causal direction, scope, negation, stance, and factual emphasis.
 
-A protected item can move only when sentence order must change. Its text and meaning must remain
-intact.
+A protected item can move only when sentence order must change. Its text and meaning must remain intact.
 
 ## A. Translationese
 
@@ -57,8 +54,7 @@ Use these as examples, not fixed substitutions.
 | B-1 | Korean plus the same English gloss on every mention | Keep the gloss on the first useful mention only. |
 | B-2 | Avoidable English in general prose | Use Korean if the domain meaning stays intact. |
 
-Keep established terms such as `LLM`, `GPU`, `MCP`, and `API` when translation would confuse the
-reader. Never change a product name. Preserve an English quotation when its exact wording matters.
+Keep established terms such as `LLM`, `GPU`, `MCP`, and `API` when translation would confuse the reader. Never change a product name. Preserve an English quotation when its exact wording matters.
 
 ## C. Mechanical structure
 
@@ -71,8 +67,7 @@ reader. Never change a product name. Preserve an English quotation when its exac
 | C-10 | Repeated `X: Y` subtitles | Shorten decorative subtitles. Preserve navigational headings. |
 | C-11 | Comma after a connective ending | Remove it unless syntax requires it. |
 
-Do not flatten a checklist, procedure, comparison table, or reference list into prose. Structure is
-a problem only when it is decorative and repetitive for the genre.
+Do not flatten a checklist, procedure, comparison table, or reference list into prose. Structure is a problem only when it is decorative and repetitive for the genre.
 
 ## D. Canned and inflated wording
 
@@ -88,9 +83,8 @@ Conclusion pivots include `결론적으로`, `따라서`, `요약하면`, and `�
 | D-6 | Formulaic ending such as `지금이야말로 ~할 때다` | End with the supported claim or action. |
 | D-7 | Repeated `X에서 Y로` transformation formula | Keep the clearest one and state the rest plainly. |
 
-Prefer deletion when a stock phrase carries no content. Do not replace it with a different stock
-phrase. A combined phrase such as `매우 획기적인 변화라고 할 수 있다` can become
-`상당한 변화로 볼 수 있다` when that preserves the writer's judgment.
+Prefer deletion when a stock phrase carries no content. Do not replace it with a different stock phrase.
+A combined phrase such as `매우 획기적인 변화라고 할 수 있다` can become `상당한 변화로 볼 수 있다` when that preserves the writer's judgment.
 
 ## E. Rhythm and endings
 
@@ -100,8 +94,7 @@ phrase. A combined phrase such as `매우 획기적인 변화라고 할 수 있�
 | E-2 | Repeated ending or `~고 있다` | Vary only where Korean usage and register support it. |
 | E-7 | Mixed speech levels in one voice | Keep one level unless character or quotation differences require it. |
 
-Natural Korean may repeat `~다` in a report. Do not force variety that sounds theatrical. Rhythm
-edits must come from rearranging existing material, not adding filler.
+Natural Korean may repeat `~다` in a report. Do not force variety that sounds theatrical. Rhythm edits must come from rearranging existing material, not adding filler.
 
 ## F. Nominalization, modifiers, and duplication
 
@@ -112,8 +105,7 @@ edits must come from rearranging existing material, not adding filler.
 | F-4 | Dense `-성/-적/-화` nominalization | Restore a concrete verb, adjective, or shorter noun phrase. |
 | F-5 | Abstract `~적 명사` chain | Spell out the relation or use a concrete phrase. |
 
-Examples: `정책의 시행이 필요하다` can become `정책을 시행해야 한다`; `구조적 문제` can
-become `구조 자체의 문제` when that is the intended meaning.
+Examples: `정책의 시행이 필요하다` can become `정책을 시행해야 한다`; `구조적 문제` can become `구조 자체의 문제` when that is the intended meaning.
 
 ## G. Hedging and certainty
 
@@ -123,13 +115,11 @@ become `구조 자체의 문제` when that is the intended meaning.
 | G-2 | Repeated `~로 보인다/~인 듯하다` | Reduce repetition without increasing certainty. |
 | G-3 | Repeated safe-balance wording | Keep the actual position, including genuine balance or caution. |
 
-Never move from possibility to certainty just to sound confident. When evidence is uncertain, vary
-sentence structure while retaining the same uncertainty.
+Never move from possibility to certainty just to sound confident. When evidence is uncertain, vary sentence structure while retaining the same uncertainty.
 
 ## H. Connectives and meta-entry
 
-Initial connectives include `또한`, `따라서`, `나아가`, and `아울러`.
-Meta-entry phrases include `이는`, `이 점에서`, `이 관점에서`, and `이 말은`.
+Initial connectives include `또한`, `따라서`, `나아가`, and `아울러`. Meta-entry phrases include `이는`, `이 점에서`, `이 관점에서`, and `이 말은`.
 
 | ID | Signal | Context-aware treatment |
 |---|---|---|
@@ -147,8 +137,7 @@ Meta-entry phrases include `이는`, `이 점에서`, `이 관점에서`, and `�
 | I-3 | Repeated `~다는 뜻이다/~다는 의미다` | Put the meaning in the sentence itself. |
 | I-4 | Repeated recommendations | Use a direct claim or action when the source supports it. |
 
-Do not lower the formality of official writing. The target is direct formal Korean, not casual
-speech.
+Do not lower the formality of official writing. The target is direct formal Korean, not casual speech.
 
 ## J. Visual decoration
 

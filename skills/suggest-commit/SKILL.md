@@ -1,6 +1,9 @@
 ---
 name: suggest-commit
 description: Quickly analyzes staged/unstaged changes and recent commit history, then recommends 5 commit messages that match the repository's existing style.
+compatibility: >-
+  Requires a Git worktree and read-only access to the Git CLI. Works from any agent host that can run
+  shell commands and inspect targeted file content.
 ---
 
 # Commit Message Suggester
@@ -32,10 +35,8 @@ Read more detail only if the fast context is insufficient to infer the intent. P
    ```bash
    git diff HEAD -- <file1> <file2>
    ```
-2. For many changed files where file names and stats are enough:
-   skip the full diff and infer from paths, filenames, and recent commit style.
-3. For untracked files that may matter:
-   inspect only their names first; read file contents only when the filename does not reveal the intent.
+2. For many changed files where file names and stats are enough: skip the full diff and infer from paths, filenames, and recent commit style.
+3. For untracked files that may matter: inspect only their names first; read file contents only when the filename does not reveal the intent.
 
 Avoid dumping a repository-wide `git diff HEAD` unless the changes are small and the intent cannot be determined otherwise.
 

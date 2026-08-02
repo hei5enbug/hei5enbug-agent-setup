@@ -44,9 +44,12 @@ def improve_description(
     else:
         scores_summary = f"Train: {train_score}"
 
-    prompt = f"""You are optimizing a description for an agent skill called "{skill_name}". A skill is a progressively disclosed instruction package: the host agent sees its name and description when deciding whether to load it, then reads SKILL.md and any linked resources after selection.
+    prompt = f"""You are optimizing a description for an agent skill called "{skill_name}".
+A skill is a progressively disclosed instruction package.
+The host sees its name and description before selection, then reads SKILL.md and linked resources.
 
-When a user sends a request, the host agent decides whether to invoke the skill primarily from its name and description. Your goal is to write a description that triggers for relevant requests and does not trigger for irrelevant ones across different agent hosts and model families.
+The host decides whether to invoke the skill primarily from its name and description.
+Write a description that routes relevant requests correctly across agent hosts and model families.
 
 Here's the current description:
 <current_description>
@@ -92,12 +95,16 @@ Skill content (for context on what the skill does):
 {skill_content}
 </skill_content>
 
-Based on the failures, write a new and improved description that is more likely to trigger correctly. When I say "based on the failures", it's a bit of a tricky line to walk because we don't want to overfit to the specific cases you're seeing. So what I DON'T want you to do is produce an ever-expanding list of specific queries that this skill should or shouldn't trigger for. Instead, try to generalize from the failures to broader categories of user intent and situations where this skill would be useful or not useful. The reason for this is twofold:
+Based on the failures, write a description that is more likely to trigger correctly.
+Do not overfit to the specific cases or list every query that should or should not trigger.
+Generalize from failures to broader user intents and situations where the skill is useful.
+There are two reasons:
 
 1. Avoid overfitting
 2. The list might get loooong and it's injected into ALL queries and there might be a lot of skills, so we don't want to blow too much space on any given description.
 
-Concretely, your description should not be more than about 100-200 words, even if that comes at the cost of accuracy. There is a hard limit of 1024 characters — descriptions over that will be truncated, so stay comfortably under it.
+Keep the description to about 100-200 words, even if that reduces accuracy.
+The hard limit is 1024 characters, so stay comfortably below it.
 
 Here are some tips that we've found to work well in writing these descriptions:
 - The skill should be phrased in the imperative -- "Use this skill for" rather than "this skill does"
@@ -105,7 +112,7 @@ Here are some tips that we've found to work well in writing these descriptions:
 - The description competes with other routed capabilities for the agent's attention — make it distinctive and immediately recognizable.
 - If you're getting lots of failures after repeated attempts, change things up. Try different sentence structures or wordings.
 
-I'd encourage you to be creative and mix up the style in different iterations since you'll have multiple opportunities to try different approaches and we'll just grab the highest-scoring one at the end. 
+Vary the style across iterations so the optimizer can select the highest-scoring approach.
 
 Please respond with only the new description text in <new_description> tags, nothing else."""
 
