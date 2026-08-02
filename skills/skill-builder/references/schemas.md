@@ -2,6 +2,17 @@
 
 This document defines the JSON schemas used by skill-builder.
 
+## Contents
+
+- [`evals.json`](#evalsjson)
+- [`history.json`](#historyjson)
+- [`grading.json`](#gradingjson)
+- [`metrics.json`](#metricsjson)
+- [`timing.json`](#timingjson)
+- [`benchmark.json`](#benchmarkjson)
+- [`comparison.json`](#comparisonjson)
+- [`analysis.json`](#analysisjson)
+
 ---
 
 ## evals.json
@@ -198,7 +209,8 @@ Output from the executor agent. Located at `<run-dir>/outputs/metrics.json`.
 
 Wall clock timing for a run. Located at `<run-dir>/timing.json`.
 
-**How to capture:** When an independent worker or host task reports `total_tokens` and `duration_ms`, save them immediately because many hosts do not persist notification metadata. If the host does not expose a metric, store `null` or omit the optional field; never invent a value.
+**How to capture:** When an independent worker or host task reports `total_tokens` and `duration_ms`, save them immediately because many hosts do not persist notification metadata.
+If the host does not expose a metric, store `null` or omit the optional field; never invent a value.
 
 ```json
 {
@@ -302,7 +314,9 @@ Output from Benchmark mode. Located at `benchmarks/<timestamp>/benchmark.json`.
   - `delta`: Difference strings like `"+0.50"`, `"+13.0"`, `"+1700"`
 - `notes`: Freeform observations from the analyzer
 
-**Important:** The viewer reads these field names exactly. Using `config` instead of `configuration`, or putting `pass_rate` at the top level of a run instead of nested under `result`, will cause the viewer to show empty/zero values. Always reference this schema when generating benchmark.json manually.
+**Important:** The viewer reads these field names exactly.
+Using `config` instead of `configuration`, or putting `pass_rate` at the top level of a run instead of nested under `result`, will cause the viewer to show empty/zero values.
+Always reference this schema when generating benchmark.json manually.
 
 ---
 

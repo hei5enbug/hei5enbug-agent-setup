@@ -14,8 +14,8 @@
     },
     {
       "id": 2,
-      "prompt": "Improve this existing skill so its core behavior works in Codex, Gemini, and a local model runner. It currently shells out to one vendor CLI and stores commands in that vendor's private directory.",
-      "expected_output": "The skill preserves its identity, snapshots the baseline, moves shared behavior into portable instructions, and isolates host integration behind a configured adapter contract.",
+      "prompt": "Make this skill work in Codex, Gemini, and a local model runner. It currently uses one vendor CLI and stores commands in that vendor's private directory.",
+      "expected_output": "Preserve the skill identity, snapshot the baseline, move shared behavior into portable instructions, and isolate host integration behind an adapter contract.",
       "files": [],
       "expectations": [
         "The original skill name and host manifests are preserved unless a rename is requested.",
@@ -25,8 +25,8 @@
     },
     {
       "id": 3,
-      "prompt": "Run description optimization on a headless CI machine. I can provide a model command that reads stdin and prints the response, but there is no display and the model flag is optional.",
-      "expected_output": "The workflow uses the portable runner contract, treats the model ID as optional, generates a non-opening or static report, and explains that routing simulation is a proxy for native host routing.",
+      "prompt": "Optimize a description on headless CI. I can provide a model command that reads stdin and prints the response; there is no display, and the model flag is optional.",
+      "expected_output": "Use the portable runner, keep the model ID optional, create a static or non-opening report, and identify routing simulation as a proxy for native routing.",
       "files": [],
       "expectations": [
         "The runner command uses stdin and stdout without assuming a shell or vendor CLI.",

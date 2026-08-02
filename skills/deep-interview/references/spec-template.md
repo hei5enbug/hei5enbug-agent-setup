@@ -61,4 +61,5 @@ Use this template after numeric readiness and closure audits. Omit empty optiona
 |---|---|---|---|---|
 ```
 
-Before finalizing, verify every acceptance criterion maps to an active component and every active component has at least one criterion. Keep inferred assumptions visibly distinct from user-confirmed decisions.
+Before finalizing, verify every acceptance criterion maps to an active component and every active component has at least one criterion.
+Keep inferred assumptions visibly distinct from user-confirmed decisions.

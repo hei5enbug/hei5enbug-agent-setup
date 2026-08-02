@@ -108,7 +108,7 @@ class RunnerTest(unittest.TestCase):
 
     def run_runner(
         self,
-        host: str,
+        opponent: str,
         state: Path,
         *extra: str,
         delay: float = 0,
@@ -120,8 +120,8 @@ class RunnerTest(unittest.TestCase):
         command = [
             "bash",
             str(RUNNER),
-            "--host",
-            host,
+            "--opponent",
+            opponent,
             "--state-dir",
             str(state),
             "--repo",
@@ -141,7 +141,7 @@ class RunnerTest(unittest.TestCase):
     def test_codex_foreground_response_and_usage(self) -> None:
         state = self.root / "codex-state"
         result = self.run_runner(
-            "claude",
+            "codex",
             state,
             "--max-exchanges",
             "1",
@@ -152,20 +152,20 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(result.stdout, "Codex 응답\n")
         self.assertIn("[tiki-taka]", result.stderr)
 
-        status = self.run_runner("claude", state, "--status", prompt=None)
+        status = self.run_runner("codex", state, "--status", prompt=None)
         self.assertEqual(status.returncode, 0, status.stderr)
         self.assertIn("exchanges=1/1", status.stdout)
         self.assertIn("토큰=입력 100, 캐시 80, 출력 20", status.stdout)
 
     def test_quality_effort_is_default_and_fast_is_explicit(self) -> None:
         default_config = self.run_runner(
-            "claude",
+            "codex",
             self.root / "unused-default-state",
             "--show-config",
             prompt=None,
         )
         fast_config = self.run_runner(
-            "claude",
+            "codex",
             self.root / "unused-fast-state",
             "--show-config",
             "--fast",
@@ -176,10 +176,28 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(fast_config.returncode, 0, fast_config.stderr)
         self.assertIn("effort=high", fast_config.stdout)
 
+    def test_legacy_host_flag_maps_to_opponent(self) -> None:
+        command = [
+            "bash",
+            str(RUNNER),
+            "--host",
+            "claude",
+            "--show-config",
+        ]
+        result = subprocess.run(
+            command,
+            text=True,
+            capture_output=True,
+            env=self.environment,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("opponent=codex", result.stdout)
+
     def test_claude_stream_response(self) -> None:
         state = self.root / "claude-state"
         result = self.run_runner(
-            "codex",
+            "claude",
             state,
             "--max-exchanges",
             "1",
@@ -193,7 +211,7 @@ class RunnerTest(unittest.TestCase):
     def test_second_exchange_reuses_saved_state(self) -> None:
         state = self.root / "resume-state"
         first = self.run_runner(
-            "claude",
+            "codex",
             state,
             "--max-exchanges",
             "2",
@@ -201,7 +219,7 @@ class RunnerTest(unittest.TestCase):
             "5",
         )
         second = self.run_runner(
-            "claude",
+            "codex",
             state,
             "--max-exchanges",
             "2",
@@ -211,13 +229,13 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assertEqual(second.returncode, 0, second.stderr)
 
-        status = self.run_runner("claude", state, "--status", prompt=None)
+        status = self.run_runner("codex", state, "--status", prompt=None)
         self.assertIn("exchanges=2/2", status.stdout)
 
     def test_timeout_marks_state_uncertain(self) -> None:
         state = self.root / "timeout-state"
         result = self.run_runner(
-            "claude",
+            "codex",
             state,
             "--max-exchanges",
             "1",
@@ -232,7 +250,7 @@ class RunnerTest(unittest.TestCase):
     def test_detached_job_can_be_observed_and_collected(self) -> None:
         state = self.root / "detached-state"
         launched = self.run_runner(
-            "claude",
+            "codex",
             state,
             "--max-exchanges",
             "1",
@@ -244,12 +262,12 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(launched.returncode, 0, launched.stderr)
         self.assertIn("state_dir=", launched.stdout)
 
-        status = self.run_runner("claude", state, "--status", prompt=None)
+        status = self.run_runner("codex", state, "--status", prompt=None)
         self.assertEqual(status.returncode, 0, status.stderr)
         self.assertIn("작업=", status.stdout)
 
         collected = self.run_runner(
-            "claude",
+            "codex",
             state,
             "--wait",
             prompt=None,
@@ -259,14 +277,14 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(collected.stdout, "Codex 응답\n")
         self.assertFalse((state / "worker-result.txt").exists())
 
-        finished = self.run_runner("claude", state, "--finish", prompt=None)
+        finished = self.run_runner("codex", state, "--finish", prompt=None)
         self.assertEqual(finished.returncode, 0, finished.stderr)
         self.assertFalse(state.exists())
 
     def test_durable_mode_returns_final_response(self) -> None:
         state = self.root / "durable-state"
         result = self.run_runner(
-            "codex",
+            "claude",
             state,
             "--max-exchanges",
             "1",

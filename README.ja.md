@@ -46,10 +46,6 @@ hei5enbug-agent-setup/
 | [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | 開発設計ドキュメントを新しく書く、または整理する際のルールと、目次を段階的に絞り込む5ステップの手順です。 |
 | [`tiki-taka`](skills/tiki-taka/SKILL.md) | 現在のエージェントと相手側のClaude/Codexセッションが、交換回数を制限した議論を行い、論点を洗い出し収束させます。 |
 
-## 既知の制約
-
-`tiki-taka` は相手側エージェントのパスを `~/.claude/skills` と `~/.codex/skills` に固定しています。それ以外のホストで実行する場合は、事前にこのパスを修正してください。
-
 ## 関連リンク
 
 - [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — `omo-model-config` と `portable-opencode-setup` が設定を扱う対象のプラグインシステム

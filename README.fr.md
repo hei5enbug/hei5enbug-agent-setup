@@ -46,10 +46,6 @@ Chaque dossier contient son propre `SKILL.md` ainsi que les références ou scri
 | [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | Règles et processus en cinq étapes qui restreint progressivement le plan, pour rédiger ou nettoyer des documents de conception technique. |
 | [`tiki-taka`](skills/tiki-taka/SKILL.md) | Mène un débat à nombre d'échanges limité entre l'agent actuel et une session Claude/Codex adverse afin de faire émerger puis de résoudre les points de désaccord. |
 
-## Limitation connue
-
-`tiki-taka` fixe en dur les chemins de l'agent adverse sur `~/.claude/skills` et `~/.codex/skills`. Il faut mettre à jour ces chemins avant de l'exécuter sous tout autre host.
-
 ## Liens associés
 
 - [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — système de plugins que `omo-model-config` et `portable-opencode-setup` configurent

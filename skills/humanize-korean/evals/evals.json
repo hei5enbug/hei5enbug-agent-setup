@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "다음 보고서 문단에서 AI 티와 번역투를 없애 주세요. 장르: 리포트, 강도: 기본\n\n2026년 7월 24일 OpenAI 연구팀에 의해 공개되어진 GPT-5 실험 결과는 정확도가 37.5% 향상될 수 있다는 점을 보여준다. 연구팀은 \"이 수치는 세 차례 반복 측정한 평균이다\"라고 밝혔다. 결론적으로, 이는 매우 획기적인 변화라고 할 수 있다.",
+      "prompt": "AI 티와 번역투를 없애 주세요. 리포트, 기본.\n\n2026년 7월 24일 OpenAI 연구팀에 의해 공개되어진 GPT-5 실험 결과는 정확도가 37.5% 향상될 수 있다는 점을 보여준다. 연구팀은 \"이 수치는 세 차례 반복 측정한 평균이다\"라고 밝혔다. 결론적으로, 이는 매우 획기적인 변화라고 할 수 있다.",
       "expected_output": "A natural formal Korean paragraph with the same facts and uncertainty.",
       "expectations": [
         "Preserves 2026년 7월 24일, OpenAI, GPT-5, and 37.5% exactly.",

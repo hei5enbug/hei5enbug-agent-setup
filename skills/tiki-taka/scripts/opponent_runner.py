@@ -23,7 +23,7 @@ CLAUDE_FALLBACK = "claude-opus-4-8"
 DEFAULT_EFFORT = "xhigh"
 FAST_EFFORT = "high"
 DEEP_EFFORT = DEFAULT_EFFORT
-STATE_VERSION = "tiki-taka-state-v3"
+STATE_VERSION = "tiki-taka-state-v4"
 DEFAULT_MAX_EXCHANGES = 2
 DEFAULT_TIMEOUT_SECONDS = 900
 DEFAULT_HEARTBEAT_SECONDS = 60
@@ -75,7 +75,7 @@ class StatePaths:
     def __init__(self, root: Path) -> None:
         self.root = root
         self.marker = root / ".tiki-taka-state"
-        self.host = root / "host"
+        self.opponent = root / "opponent"
         self.repo = root / "repo"
         self.maximum = root / "max-exchanges"
         self.count = root / "exchange-count"
@@ -95,7 +95,7 @@ class StatePaths:
             path.name
             for path in (
                 self.marker,
-                self.host,
+                self.opponent,
                 self.repo,
                 self.maximum,
                 self.count,
@@ -166,9 +166,9 @@ def initialize_or_load_state(
     if paths.marker.exists():
         if read_required(paths.marker, "상태 형식") != STATE_VERSION:
             raise RunnerError("알 수 없는 상태 폴더 형식입니다.")
-        stored_host = read_required(paths.host, "호스트")
-        if stored_host != args.host:
-            raise RunnerError("처음 지정한 호스트와 현재 호스트가 다릅니다.")
+        stored_opponent = read_required(paths.opponent, "상대")
+        if stored_opponent != args.opponent:
+            raise RunnerError("처음 지정한 상대와 현재 상대가 다릅니다.")
 
         stored_repo = canonical_directory(read_required(paths.repo, "작업 폴더"), "작업 폴더")
         requested_repo = canonical_directory(args.repo, "작업 폴더")
@@ -208,7 +208,7 @@ def initialize_or_load_state(
     maximum = validate_limit(requested_maximum or DEFAULT_MAX_EXCHANGES)
     count = 0
     effort = requested_effort
-    atomic_write_text(paths.host, args.host + "\n")
+    atomic_write_text(paths.opponent, args.opponent + "\n")
     atomic_write_text(paths.repo, str(repo) + "\n")
     atomic_write_text(paths.maximum, f"{maximum}\n")
     atomic_write_text(paths.count, "0\n")
@@ -484,7 +484,7 @@ def invoke_opponent(
     session_id = paths.session.read_text(encoding="utf-8").strip() if paths.session.exists() else ""
 
     try:
-        if args.host == "claude":
+        if args.opponent == "codex":
             participant = codex_participant_command(repo, output, effort, session_id)
             command = supervisor_command(
                 "codex",
@@ -553,8 +553,9 @@ def invoke_opponent(
                     flush=True,
                 )
                 prompt.write_text(
-                    "앞선 요청은 모델 한도 안내 때문에 처리되지 않았습니다.\n"
-                    "같은 세션의 바로 앞 사용자 요청에 답하세요. 요청을 되풀이하지 마세요.\n",
+                    "The previous request was not processed because the model limit was reached.\n"
+                    "Answer the immediately preceding user request in this same session. "
+                    "Do not repeat the request.\n",
                     encoding="utf-8",
                 )
                 output.unlink(missing_ok=True)
@@ -646,8 +647,8 @@ def worker_runner_command(args: argparse.Namespace, paths: StatePaths) -> list[s
         sys.executable,
         str(Path(__file__).resolve()),
         "--worker",
-        "--host",
-        args.host,
+        "--opponent",
+        args.opponent,
         "--state-dir",
         str(paths.root),
         "--repo",
@@ -715,14 +716,14 @@ def launch_detached(
 
 def show_status(args: argparse.Namespace, paths: StatePaths) -> int:
     if paths.marker.exists():
-        host = read_required(paths.host, "호스트")
+        opponent = read_required(paths.opponent, "상대")
         maximum = read_integer(paths.maximum, "교환 한도")
         count = read_integer(paths.count, "교환 수")
         model = paths.model.read_text(encoding="utf-8").strip() if paths.model.exists() else "없음"
         effort = read_required(paths.effort, "사고 강도")
         state = "불확실" if paths.uncertain.exists() else "정상"
         print(
-            f"host={host} model={model} effort={effort} "
+            f"opponent={opponent} model={model} effort={effort} "
             f"exchanges={count}/{maximum} state={state}"
         )
     elif not paths.worker_pid.exists():
@@ -773,11 +774,16 @@ def build_parser() -> argparse.ArgumentParser:
         prog="run-opponent.sh",
         description="tiki-taka 반대쪽 전용 세션 실행기",
     )
-    parser.add_argument(
+    participant = parser.add_mutually_exclusive_group(required=True)
+    participant.add_argument(
+        "--opponent",
+        choices=("claude", "codex"),
+        help="전용 세션으로 호출할 상대 CLI",
+    )
+    participant.add_argument(
         "--host",
         choices=("claude", "codex"),
-        required=True,
-        help="현재 스킬을 실행 중인 호스트",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument("--state-dir", help="이번 토론의 고유한 상태 폴더")
     parser.add_argument("--repo", default=os.getcwd(), help="검토할 작업 폴더")
@@ -843,19 +849,25 @@ def validate_args(args: argparse.Namespace) -> None:
         raise RunnerError("--state-dir가 필요합니다.")
 
 
+def normalize_opponent(args: argparse.Namespace) -> None:
+    if args.opponent is None:
+        args.opponent = "codex" if args.host == "claude" else "claude"
+
+
 def main() -> int:
     args = build_parser().parse_args()
     try:
+        normalize_opponent(args)
         validate_args(args)
         effort = FAST_EFFORT if args.fast else DEFAULT_EFFORT
         if args.show_config:
-            if args.host == "claude":
-                print(f"opponent=codex model={CODEX_MODEL} effort={effort}")
-            else:
+            if args.opponent == "claude":
                 print(
                     f"opponent=claude model={CLAUDE_MODEL} "
                     f"fallback={CLAUDE_FALLBACK} effort={effort}"
                 )
+            else:
+                print(f"opponent=codex model={CODEX_MODEL} effort={effort}")
             return 0
 
         create = args.detach or args.durable or args.worker or not (

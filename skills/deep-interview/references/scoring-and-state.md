@@ -27,7 +27,8 @@ Keep this logical state in conversation unless the user requests persistence:
 }
 ```
 
-Each active component stores `id`, `name`, `description`, `evidence`, `status`, and scores for every applicable dimension. Each round stores its question, confirmed answer, target, evidence, prior/new scores, triggers, and ontology changes.
+Each active component stores `id`, `name`, `description`, `evidence`, `status`, and scores for every applicable dimension.
+Each round stores its question, confirmed answer, target, evidence, prior/new scores, triggers, and ontology changes.
 
 ## Dimensions
 
@@ -56,11 +57,13 @@ Lower the affected component/dimension score when any trigger occurs; do not add
 - `evasive`: the answer does not resolve the targeted gap.
 - `scope_expansion`: a new outcome, component, entity, integration, or constraint appears.
 
-When triggered, record prior score, new score, affected component/dimension, evidence, and disputed facts. Overall ambiguity should rise unless other confirmed evidence genuinely offsets the loss; explain any exception.
+When triggered, record prior score, new score, affected component/dimension, evidence, and disputed facts.
+Overall ambiguity should rise unless other confirmed evidence genuinely offsets the loss; explain any exception.
 
 ## Agent-Supplied Answers
 
-An answer inferred by the agent is an assumption, not a user decision. Unless confidence is high and uncertainty negligible, cap the affected score at `0.85`. Even a high-confidence assumption must receive explicit user confirmation before it can move the run across the final threshold.
+An answer inferred by the agent is an assumption, not a user decision. Unless confidence is high and uncertainty negligible, cap the affected score at `0.85`.
+Even a high-confidence assumption must receive explicit user confirmation before it can move the run across the final threshold.
 
 ## Ontology Tracking
 
@@ -84,4 +87,5 @@ Crossing a band in either direction triggers independent review before the next 
 
 ## Progress Report
 
-Report a compact table of dimensions, score, weight, weighted value, and gap. Then state prior/new ambiguity, active/deferred coverage, any trigger, ontology changes, and the next target. Translate prose to the user's language while keeping identifiers and numeric values stable.
+Report a compact table of dimensions, score, weight, weighted value, and gap. Then state prior/new ambiguity, active/deferred coverage, any trigger, ontology changes, and the next target.
+Translate prose to the user's language while keeping identifiers and numeric values stable.

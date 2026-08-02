@@ -54,10 +54,6 @@ required output labels, or evaluation fixtures.
 | [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | Rules and a five-step narrowing process for writing or cleaning up technical design docs. [Korean guide](skills/technical-design-writer/README.ko.md). |
 | [`tiki-taka`](skills/tiki-taka/SKILL.md) | Runs a turn-limited debate between the current agent and an opposing Claude/Codex session to surface and resolve issues. [Korean guide](skills/tiki-taka/README.ko.md). |
 
-## Known Limitation
-
-`tiki-taka` hardcodes its opponent-agent paths to `~/.claude/skills` and `~/.codex/skills`. Update those paths before running it under any other host.
-
 ## Related
 
 - [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — plugin system that `omo-model-config` and `portable-opencode-setup` configure
