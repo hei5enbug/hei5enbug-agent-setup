@@ -1,0 +1,23 @@
+{
+  "skill_name": "decision-navigator",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Create a decision-navigator map for replacing billing. This repository has a GitHub remote.",
+      "expected_output": "Uses only .decision-navigator, confirms the destination, and creates current tickets.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Continue .decision-navigator/billing/map.md and decide whether Invoice and Bill mean the same concept.",
+      "expected_output": "Claims atomically and serializes the map update after human confirmation.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Continue .decision-navigator/sdk/map.md. Research the next ticket without independent workers.",
+      "expected_output": "Stores cited artifacts locally, resolves one ticket, and updates only map.md.",
+      "files": []
+    }
+  ]
+}
