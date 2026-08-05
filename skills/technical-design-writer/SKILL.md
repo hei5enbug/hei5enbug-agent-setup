@@ -41,6 +41,7 @@ Out of scope: translation, spelling or typo correction, and prose polishing unre
 2. **Narrow and finalize the outline.** Follow all five steps in "Outline narrowing process" below. Write the body only after the second-level headings are final.
 3. **Write the body under the rules.** Apply the terminology, structure, paragraph, table, duplication, and reference rules.
 4. **Review against the completion checklist.** Correct every violation and remove statements that lack supporting evidence.
+   Render every Mermaid diagram and look at the image: source that parses can still produce clipped arrows, overlapping labels, or a lopsided shape.
 
 Apply these rules only to technical design work. Unless they conflict with higher-priority instructions, they take precedence over other repository writing rules.
 Exclude a rule only when the user explicitly asks not to apply it.
@@ -52,6 +53,7 @@ Exclude a rule only when the user explicitly asks not to apply it.
 | One term per meaning | Use the same term for the same meaning. Normalize synonyms in source material or drafts to one canonical term. |
 | Plain Korean | Write in plain Korean. Use English only in the three allowed cases below. |
 | Replace conflicting terms | Replace a term when it overlaps with existing system vocabulary and could cause confusion. |
+| Name by what distinguishes | Name a thing by what sets it apart from its siblings. If the name would fit any peer in the same list, it names the category, not the thing. For components, that distinguishing fact is usually what they produce or own. |
 
 English is allowed only for:
 
@@ -89,12 +91,22 @@ Do not split a file that stays within the limits. When a limit is exceeded, spli
 - Do not add a diagram for a simple fact list or a one-line explanation. Do not duplicate the same content in prose and a diagram.
 - Before adding a diagram, check whether it shows a conditional branch, interaction among multiple components, or a state change. If arrows only show an unbranched sequence, prefer a list or table.
 - Remove a diagram when the adjacent prose already communicates the same information.
-- A single source line break is rendered as a space inside the same paragraph. Break lines only after a sentence ends, never in the middle of a sentence.
+- Decide the rendered result before breaking a line. Markdown joins single line breaks into one flowing paragraph.
+- When the break must be visible and the target format renders inline HTML, end the line with `<br>`.
+- When the break must be visible but the format does not render inline HTML, use a separate paragraph, list item, or table row instead.
+- When the break must not be visible, keep the sentences on one line. Break lines only after a sentence ends, never in the middle of a sentence.
 - Separate paragraphs with one blank line.
 - Put a blank line before and after headings, tables, code blocks, and lists. Do not attach them directly to the preceding paragraph.
 - When a list item spans multiple lines, align continuation lines with the first character of the item's text.
-- Before forcing a line break inside a paragraph, check whether a new paragraph, list, or table would express the structure better. Avoid forced line breaks when possible.
-- When an inline break is still necessary, use `<br>` instead of two trailing spaces, which are invisible and easily removed. Use `<br>` inside table cells as well.
+- Before forcing a line break inside a paragraph, check whether a new paragraph, list, or table would express the structure better.
+- Never mark a break with two trailing spaces, which are invisible and easily removed. Use `<br>` inside table cells as well.
+
+Diagram shape:
+
+- Balance the two dimensions. A diagram that runs in one direction only stays just as hard to read after rotating it; switching `LR` to `TD` is not a fix.
+- Demote pass-through elements to edge labels. Queues, topics, files, and anything that only carries data between actors belongs on the arrow. Reserve boxes for things that act.
+- Get width from the branches that already exist. Real forks and sibling outcomes create the second dimension without inventing structure.
+- An arrow crossing a subgraph boundary attaches to the boundary, not to the node, so its endpoint becomes ambiguous. Use a subgraph only for sibling nodes with few arrows crossing in, and never wrap a single node.
 
 Example of when to use a table:
 
@@ -165,6 +177,7 @@ Do not finalize the outline in one pass. Narrow it in this order:
 - [ ] English remains only for proper nouns, code names, and technical terms without a suitable
       Korean equivalent.
 - [ ] Terms that conflict with system vocabulary have been replaced.
+- [ ] No name would fit a sibling in the same list.
 - [ ] A Korean document was drafted in English before it was translated into Korean.
 - [ ] Each topic appears in one place, and document or section scopes do not overlap.
 - [ ] Background and reference sentences unnecessary for implementation, validation, or decisions
@@ -178,10 +191,13 @@ Do not finalize the outline in one pass. Narrow it in this order:
       simple lists.
 - [ ] Every diagram adds a branch, component interaction, or state change that prose or a table would
       not communicate more clearly. Redundant diagrams have been removed.
+- [ ] No diagram runs in a single direction, and pass-through elements are edge labels, not boxes.
+- [ ] Every Mermaid diagram was rendered and visually inspected.
 - [ ] Lines break only after complete sentences, and blank lines separate paragraphs.
 - [ ] Headings, tables, code blocks, and lists have surrounding blank lines, and multiline list items
       align correctly.
-- [ ] Inline breaks use `<br>` instead of trailing spaces, and unnecessary forced breaks are gone.
+- [ ] Every source line break inside a paragraph either ends with `<br>` in a format that renders it,
+      or is intended to flow together. Trailing spaces are never used to mark a break.
 - [ ] Code does not reference documentation.
 - [ ] Detailed content has one canonical location, with summaries and links elsewhere.
 - [ ] References use document paths and section titles without reference symbols.
