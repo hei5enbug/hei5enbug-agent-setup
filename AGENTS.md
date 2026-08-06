@@ -25,8 +25,3 @@
 - Write for high school students; basic development terms are allowed.
 - Explain complex concepts with visuals such as Mermaid, HTML, or PNG.
 - Avoid long lines; use line breaks and sections.
-
-## Korean documents
-
-- Draft Korean documents in English, then translate them into Korean.
-- In final Korean documents, use English only for proper nouns.
