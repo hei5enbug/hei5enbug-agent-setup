@@ -62,6 +62,18 @@ Classify the change by intent, not mechanics:
 
 When context is limited, prefer a slightly broader but accurate message over slow extra inspection.
 
+### Use Evidence-Bound Terminology
+
+Infer the likely change intent, but keep terminology and claimed effects tied to inspected evidence.
+
+- Use specific domain terms and component names only when supported by the diff, file paths, symbols, configuration, tests, or established repository usage.
+- Preserve established repository terminology, including its casing and spelling.
+- Do not replace a concrete repository identifier with an invented synonym or label.
+- Use branch names and recent commits to guide inspection or confirm established terminology, not as sole evidence of current behavior.
+- Infer the change category and likely intent, but claim a behavioral or user-visible outcome only when the inspected changes support it.
+- When several descriptions are possible, prefer the most concrete wording supported by the evidence.
+- When a term remains unclear, inspect the smallest relevant diff, symbol, test, or configuration. If the evidence is still insufficient, use a broader accurate expression.
+
 ## Step 5: Choose the Prefix Precisely
 
 If the repository uses conventional commit prefixes, choose the prefix from the change intent, not from habit or recent frequency:
@@ -100,6 +112,7 @@ Present exactly 5 commit messages in a numbered table:
 
 Rules:
 - All 5 must follow the detected repository style and the prefix-selection rules above.
+- Before presenting the suggestions, verify that every specific noun and claimed outcome is supported by the inspected repository evidence.
 - Vary phrasing: different verbs, emphasis, and granularity.
 - Order from most recommended to least recommended; `#1` is the best overall choice.
 - Each message must be one line only.
