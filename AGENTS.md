@@ -20,8 +20,15 @@
 
 # Documentation
 
-- For any documentation, not only formal design documents, follow the writing mechanics in the technical-design-writer skill.
+> Scope: content written to a file. For chat replies, see "Replies".
+
+- For any documentation file, not only formal design documents, follow the writing mechanics in the technical-design-writer skill.
 - Apply its terminology, structure, paragraph, table, diagram, and drafting-language rules regardless of the skill's trigger phrases or stated scope.
 - Write for high school students; basic development terms are allowed.
 - Explain complex concepts with visuals such as Mermaid, HTML, or PNG.
 - Avoid long lines; use line breaks and sections.
+
+# Replies
+
+- Apply only the terminology rules from technical-design-writer.
+- Never put Mermaid or other non-rendering diagram source in a reply. Use a table, a list, or inline notation for simple relationships; use ASCII art when an actual diagram (branching, spatial layout) would aid understanding.
