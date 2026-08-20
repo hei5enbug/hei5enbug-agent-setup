@@ -49,6 +49,7 @@ From `git log --oneline -20`, identify:
 - **Length**: typical subject length
 - **Scope usage**: whether `feat(scope):` parenthetical scopes are used
 - **Tone**: terse vs descriptive
+- **Identifier slots**: whether subjects carry a ticket key or issue number slot. Detect the slot to match the shape, but leave it out of the suggestions.
 
 If fewer than 3 commits exist, default to conventional commits with lowercase.
 
@@ -70,6 +71,9 @@ Infer the likely change intent, but keep terminology and claimed effects tied to
 - Preserve established repository terminology, including its casing and spelling.
 - Do not replace a concrete repository identifier with an invented synonym or label.
 - Use branch names and recent commits to guide inspection or confirm established terminology, not as sole evidence of current behavior.
+- Do not include tokens that identify an external entity unless the user supplied them in this conversation:
+  ticket keys (`[ABC-123]`), issue/PR numbers, auto-close keywords (`Fixes #12`), version numbers, dates, and person names.
+  A branch name or a pattern in recent commits is not evidence that a particular identifier applies to this change.
 - Infer the change category and likely intent, but claim a behavioral or user-visible outcome only when the inspected changes support it.
 - When several descriptions are possible, prefer the most concrete wording supported by the evidence.
 - When a term remains unclear, inspect the smallest relevant diff, symbol, test, or configuration. If the evidence is still insufficient, use a broader accurate expression.
@@ -112,12 +116,14 @@ Present exactly 5 commit messages in a numbered table:
 
 Rules:
 - All 5 must follow the detected repository style and the prefix-selection rules above.
-- Before presenting the suggestions, verify that every specific noun and claimed outcome is supported by the inspected repository evidence.
+- Before presenting the suggestions, verify that every specific noun, claimed outcome, and external identifier is supported by the inspected repository evidence or was supplied by the user.
 - Vary phrasing: different verbs, emphasis, and granularity.
 - Order from most recommended to least recommended; `#1` is the best overall choice.
 - Each message must be one line only.
 - Do not include a body or footer. Never add a `Co-Authored-By` trailer or any other trailer.
 - If the change spans multiple concerns, some messages may emphasize one concern over another.
+
+Example: in a repository whose log reads `fix: [ABC-123] correct retry backoff`, suggest `fix: correct retry backoff`. Do not copy `ABC-123` from the branch name or from neighboring commits.
 
 ## Constraints
 
