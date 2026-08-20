@@ -52,6 +52,8 @@ Exclude a rule only when the user explicitly asks not to apply it.
 |---|---|
 | One term per meaning | Use the same term for the same meaning. Normalize synonyms in source material or drafts to one canonical term. |
 | Plain Korean | Write in plain Korean. Use English only in the three allowed cases below. |
+| One reading per word | A word naming a defined operation must contain the noun that names it, so the noun alone can serve as a table header or a metric name.<br>When the noun appears only after adding a suffix, the word is spoken register.<br>Ordinary predicates are exempt. |
+| No abbreviated canonical terms | Once a term is canonical, never shorten it later in the document. |
 | Replace conflicting terms | Replace a term when it overlaps with existing system vocabulary and could cause confusion. |
 | Name by what distinguishes | Name a thing by what sets it apart from its siblings. If the name would fit any peer in the same list, it names the category, not the thing. For components, that distinguishing fact is usually what they produce or own. |
 
@@ -72,6 +74,7 @@ Preserve proper nouns, code identifiers, and technical terms that have no suitab
 - Include only content needed for implementation, validation, or a decision. Remove background and optional reference material.
 - Remove any sentence whose absence would not reduce understanding or decision quality.
 - Use subheadings for subdivisions. Do not use a sentence ending in a colon as a heading.
+- Make every heading a noun phrase. A heading carries no predicate and asks no question.
 
 ## Size limits
 
@@ -83,10 +86,24 @@ Preserve proper nouns, code identifiers, and technical terms that have no suitab
 
 Do not split a file that stays within the limits. When a limit is exceeded, split by responsibility.
 
+Measure the one-line limit per rendered line. Inside a table cell, `<br>` starts a new rendered line, so a row may exceed the limit while every cell line stays within it.
+
+## Sentence register
+
+- Agency: only an actor acts. When the subject is a number, a metric, a dataset, or a document, the predicate states a state or a change, never an intent or a physical act.
+- Countability: when a quantity can be counted from the data at hand, write the count. Use an approximate word only when the count is unavailable.
+- Reference: a demonstrative may point only within its own clause. Otherwise name the referent.
+- One claim per sentence. A sentence carrying three facts becomes three sentences or a table row.
+- Agreement: read the subject and the predicate alone. When the two do not form a sentence, rewrite.
+- When a word choice stays unclear, substitute the operation's definition for the word. When the sentence still says the same thing, the word is precise. Otherwise use the word that heads the definition.
+
 ## Paragraphs, tables, and diagrams
 
 - Keep one central idea in each paragraph.
 - Use a table, not prose or bullets, when several items are compared or listed against the same dimensions.
+- Break a table cell only when it passes two sentences or 120 characters. Then end every sentence but the last with `<br>`.
+- Start each item with `<br>· ` when a cell enumerates three or more items, since list markup does not render inside a cell.
+- A cell that would still need more than five rendered lines belongs in the section body. Leave a short phrase in the cell and link or name the section.
 - Use a Mermaid diagram when it communicates structure, flow, state changes, or component relationships better than prose.
 - Do not add a diagram for a simple fact list or a one-line explanation. Do not duplicate the same content in prose and a diagram.
 - Before adding a diagram, check whether it shows a conditional branch, interaction among multiple components, or a state change. If arrows only show an unbranched sequence, prefer a list or table.
@@ -202,3 +219,10 @@ Do not finalize the outline in one pass. Narrow it in this order:
 - [ ] Detailed content has one canonical location, with summaries and links elsewhere.
 - [ ] References use document paths and section titles without reference symbols.
 - [ ] Copied contracts identify the original source of truth and every file that must change with it.
+- [ ] Every heading is a noun phrase without a predicate or a question.
+- [ ] Every word naming a defined operation contains the noun that can stand alone as a table header or a metric name.
+- [ ] No non-actor subject performs an act, and no countable quantity is left approximate.
+- [ ] Every demonstrative that reaches outside its clause names its referent.
+- [ ] Each sentence carries one claim, and its subject governs its predicate.
+- [ ] Cells past two sentences or 120 characters break with `<br>`, and cells enumerating three or more items mark each with `<br>· `.
+- [ ] No cell needs more than five rendered lines, and no rendered line exceeds the one-line limit.
