@@ -9,7 +9,7 @@ description: >-
   "설계 문서 목차부터", or "design doc 작성". Do not use for translation, proofreading, typo
   correction, or prose polishing unrelated to technical design.
 metadata:
-  version: "1.2.0"
+  version: "1.3.0"
 compatibility: >-
   Works in any agent host that can read and write Markdown. Repository inspection and Mermaid
   rendering improve evidence and review but are not required for the core writing workflow.
@@ -40,6 +40,9 @@ Out of scope: translation, spelling or typo correction, and prose polishing unre
    For an existing document, identify missing content and rule violations.
 2. **Narrow and finalize the outline.** Follow all five steps in "Outline narrowing process" below. Write the body only after the second-level headings are final.
 3. **Write the body under the rules.** Apply the terminology, structure, paragraph, table, duplication, and reference rules.
+   **Term replacement.** Find every occurrence. Group them by position (bare noun, compound, heading, table header, code identifier).
+   Test candidates in each position against the terminology rules. After renaming a heading, update every citation and verify cited
+   section titles against actual headings; ask before renaming code identifiers derived from the document.
 4. **Review against the completion checklist.** Correct every violation and remove statements that lack supporting evidence.
    Render every Mermaid diagram and look at the image: source that parses can still produce clipped arrows, overlapping labels, or a lopsided shape.
 
@@ -54,8 +57,12 @@ Exclude a rule only when the user explicitly asks not to apply it.
 | Plain Korean | Write in plain Korean. Use English only in the three allowed cases below. |
 | One reading per word | A word naming a defined operation must contain the noun that names it, so the noun alone can serve as a table header or a metric name.<br>When the noun appears only after adding a suffix, the word is spoken register.<br>Ordinary predicates are exempt. |
 | No abbreviated canonical terms | Once a term is canonical, never shorten it later in the document. |
-| Replace conflicting terms | Replace a term when it overlaps with existing system vocabulary and could cause confusion. |
+| Replace conflicting terms | Replace a term when it overlaps with existing system vocabulary or a neighboring technical field and could cause confusion. |
 | Name by what distinguishes | Name a thing by what sets it apart from its siblings. If the name would fit any peer in the same list, it names the category, not the thing. For components, that distinguishing fact is usually what they produce or own. |
+| Literal, not figurative | Replacing the word with its definition must leave the sentence intact. `관문` → `통과 조건`, `구제` → `예외` |
+| Dictionary sense only | Use a word in its dictionary sense. No coinage, no term whose primary sense belongs to another field. `쌍거리` → `쌍의 거리`, `대사` → `대조`, `토큰` → `키워드` |
+| Qualifier needs a contrast | Keep a prefix such as 대·신·참 only when the bare form names something else in the document. `대그룹` → `그룹` when no `소그룹` exists |
+| One sense per word | A word inside a canonical term takes no second sense in the document, including idioms built on it. `코드`(UN/LOCODE) vs `결정론적 코드` → `규칙 프로그램`; `원천` vs `원천적으로` → `애초에` |
 
 English is allowed only for:
 
@@ -96,6 +103,8 @@ Measure the one-line limit per rendered line. Inside a table cell, `<br>` starts
 - One claim per sentence. A sentence carrying three facts becomes three sentences or a table row.
 - Agreement: read the subject and the predicate alone. When the two do not form a sentence, rewrite.
 - When a word choice stays unclear, substitute the operation's definition for the word. When the sentence still says the same thing, the word is precise. Otherwise use the word that heads the definition.
+- End every sentence with a full predicate; no nominal ending or passive without an actor. `…로 이루어진다` → `…로 한다`, `…만이다` → `…뿐이다`
+- A colon followed by items becomes a sentence or a table. `미결 셋: A, B` → `미결은 셋이다. A, B`
 
 ## Paragraphs, tables, and diagrams
 
@@ -172,6 +181,7 @@ flowchart LR
 
 - Never reference documentation from code, including comments and docstrings. Documentation must be free to change or disappear without requiring code changes.
 - Keep one detailed source for each topic. Summarize it briefly elsewhere and link to that source.
+- A summary keeps every word that carries a condition; compare it with the source sentence after writing. `기록이 대표로 적은 코드` ≠ `기록이 적은 코드`
 - Do not use reference symbols for sections. Do not cite a section number alone; include the document path and section title because numbering changes during restructuring.
 - A design document may copy a detailed contract such as columns or types from code or an external source.
   State that the original remains the source of truth and identify every file that must change with the contract.
@@ -195,6 +205,7 @@ Do not finalize the outline in one pass. Narrow it in this order:
       Korean equivalent.
 - [ ] Terms that conflict with system vocabulary have been replaced.
 - [ ] No name would fit a sibling in the same list.
+- [ ] No figurative, coined, borrowed, or contrast-less qualified term remains.
 - [ ] A Korean document was drafted in English before it was translated into Korean.
 - [ ] Each topic appears in one place, and document or section scopes do not overlap.
 - [ ] Background and reference sentences unnecessary for implementation, validation, or decisions
@@ -218,11 +229,13 @@ Do not finalize the outline in one pass. Narrow it in this order:
 - [ ] Code does not reference documentation.
 - [ ] Detailed content has one canonical location, with summaries and links elsewhere.
 - [ ] References use document paths and section titles without reference symbols.
+- [ ] Every cited section title matches an actual heading.
 - [ ] Copied contracts identify the original source of truth and every file that must change with it.
 - [ ] Every heading is a noun phrase without a predicate or a question.
 - [ ] Every word naming a defined operation contains the noun that can stand alone as a table header or a metric name.
 - [ ] No non-actor subject performs an act, and no countable quantity is left approximate.
 - [ ] Every demonstrative that reaches outside its clause names its referent.
 - [ ] Each sentence carries one claim, and its subject governs its predicate.
+- [ ] Every sentence ends in a full predicate, and every summary preserves its source's conditions.
 - [ ] Cells past two sentences or 120 characters break with `<br>`, and cells enumerating three or more items mark each with `<br>· `.
 - [ ] No cell needs more than five rendered lines, and no rendered line exceeds the one-line limit.
