@@ -9,7 +9,7 @@ description: >-
   "설계 문서 목차부터", or "design doc 작성". Do not use for translation, proofreading, typo
   correction, or prose polishing unrelated to technical design.
 metadata:
-  version: "1.3.0"
+  version: "1.4.0"
 compatibility: >-
   Works in any agent host that can read and write Markdown. Repository inspection and Mermaid
   rendering improve evidence and review but are not required for the core writing workflow.
@@ -43,7 +43,10 @@ Out of scope: translation, spelling or typo correction, and prose polishing unre
    **Term replacement.** Find every occurrence. Group them by position (bare noun, compound, heading, table header, code identifier).
    Test candidates in each position against the terminology rules. After renaming a heading, update every citation and verify cited
    section titles against actual headings; ask before renaming code identifiers derived from the document.
+   Write one replacement table (old term → new term, by position) before editing and apply it to every file in scope in one pass; never replace file by file.
 4. **Review against the completion checklist.** Correct every violation and remove statements that lack supporting evidence.
+   **Mechanical scan.** Extract every Korean token whose last syllable has a final `ㅁ`, plus every `-됨`, `-야 함`, and `-분`.
+   Judge each against "Label and statement register", replace it or record why it stays, and report the count.
    Render every Mermaid diagram and look at the image: source that parses can still produce clipped arrows, overlapping labels, or a lopsided shape.
 
 Apply these rules only to technical design work. Unless they conflict with higher-priority instructions, they take precedence over other repository writing rules.
@@ -55,7 +58,8 @@ Exclude a rule only when the user explicitly asks not to apply it.
 |---|---|
 | One term per meaning | Use the same term for the same meaning. Normalize synonyms in source material or drafts to one canonical term. |
 | Plain Korean | Write in plain Korean. Use English only in the three allowed cases below. |
-| One reading per word | A word naming a defined operation must contain the noun that names it, so the noun alone can serve as a table header or a metric name.<br>When the noun appears only after adding a suffix, the word is spoken register.<br>Ordinary predicates are exempt. |
+| One reading per word | A word naming an operation, state, or category must serve as a table header or a metric name without adding or removing a suffix.<br>`갈래` → `종류`, `나눔` → `분할`, `채움` → `입력`. Ordinary predicates are exempt. |
+| One meaning per verb | When a verb's replacement differs by context, the verb is polysemous; replace each occurrence with the verb naming that one meaning.<br>Prefer the domain's established technical noun over a native verb derivation. `갈리다` → 나뉜다·달라진다·구분된다; `겹침` → `중첩`, `어긋남` → `불일치` |
 | No abbreviated canonical terms | Once a term is canonical, never shorten it later in the document. |
 | Replace conflicting terms | Replace a term when it overlaps with existing system vocabulary or a neighboring technical field and could cause confusion. |
 | Name by what distinguishes | Name a thing by what sets it apart from its siblings. If the name would fit any peer in the same list, it names the category, not the thing. For components, that distinguishing fact is usually what they produce or own. |
@@ -103,13 +107,31 @@ Measure the one-line limit per rendered line. Inside a table cell, `<br>` starts
 - One claim per sentence. A sentence carrying three facts becomes three sentences or a table row.
 - Agreement: read the subject and the predicate alone. When the two do not form a sentence, rewrite.
 - When a word choice stays unclear, substitute the operation's definition for the word. When the sentence still says the same thing, the word is precise. Otherwise use the word that heads the definition.
-- End every sentence with a full predicate; no nominal ending or passive without an actor. `…로 이루어진다` → `…로 한다`, `…만이다` → `…뿐이다`
+- End every sentence with a full predicate; no passive without an actor. `…로 이루어진다` → `…로 한다`, `…만이다` → `…뿐이다`
 - A colon followed by items becomes a sentence or a table. `미결 셋: A, B` → `미결은 셋이다. A, B`
+
+## Label and statement register
+
+Every piece of Korean text sits in one of two positions, and the position decides its form.
+
+| Position | Form | Test |
+|---|---|---|
+| Label: table header, diagram node, edge label, ER comment, cell under a header naming a property or value | Dictionary noun phrase | Answers "which one" or "what state" |
+| Statement: body sentence, list item stating a rule or decision, cell under a header naming an action, rule, condition, or reason | Full predicate | Answers "what happens", "what to do", or "under what condition" |
+
+- A verb or adjective stem carrying a nominal suffix (`-ㅁ/-음`, `-기`, `-됨`, `-임`, `-야 함`) is neither form and is banned in both positions.
+  Test: the word exists in the dictionary as a noun headword. `기록`·`활성`·`분할` pass; `남김`·`끔`·`나눔` fail.
+- A suffix that compresses a clause into a noun, such as `-분`, is banned for the same reason. `통과분` → `통과 건`, `이관분` → `이관 값`
+- A label that needs a condition to hold is a statement: write the predicate or move it to the body.
+- The header decides the form of every cell below it, and a list keeps one form throughout. Never mix the two forms in one column or one list.
+- A binary state label (`있음`·`없음`·`아님`) is allowed only as a cell value under a header naming the property being judged.
+- A decision node names the property judged; its edges carry the outcomes.
 
 ## Paragraphs, tables, and diagrams
 
 - Keep one central idea in each paragraph.
-- Use a table, not prose or bullets, when several items are compared or listed against the same dimensions.
+- Use a table, not prose or bullets, when three or more items, or three or more dimensions, are compared against the same dimensions.
+  Two items across two dimensions stay one sentence. Content the Structure rules remove does not return as a table.
 - Break a table cell only when it passes two sentences or 120 characters. Then end every sentence but the last with `<br>`.
 - Start each item with `<br>· ` when a cell enumerates three or more items, since list markup does not render inside a cell.
 - A cell that would still need more than five rendered lines belongs in the section body. Leave a short phrase in the cell and link or name the section.
@@ -137,14 +159,16 @@ Diagram shape:
 Example of when to use a table:
 
 ```markdown
-# Bad example: prose lists items against the same dimensions
-개발 환경은 로그를 남기고 캐시를 끄며, 운영 환경은 로그를 줄이고 캐시를 켠다.
+# Bad example: one sentence carries nine facts across the same dimensions
+큐 소비자는 재시도를 3회까지 하고 실패한 요청을 보관 큐로 보내며, 배치 적재는 재시도 없이
+기록만 남기고, API 핸들러는 재시도를 1회 하고 실패를 호출자에게 돌려준다.
 
-# Good example: table
-| 환경 | 로그 | 캐시 |
+# Good example: table. The property column takes noun phrases, the action column takes predicates
+| 구성요소 | 재시도 | 실패 처리 |
 |---|---|---|
-| 개발 | 남김 | 끔 |
-| 운영 | 줄임 | 켬 |
+| 큐 소비자 | 3회 | 보관 큐로 보낸다 |
+| 배치 적재 | 없음 | 기록만 남긴다 |
+| API 핸들러 | 1회 | 호출자에게 돌려준다 |
 ```
 
 Example of when to use a diagram:
@@ -214,7 +238,7 @@ Do not finalize the outline in one pass. Narrow it in this order:
 - [ ] No line exceeds 200 characters, no file exceeds 500 lines, and section depth does not exceed
       three levels. Files exceeding a limit are split by responsibility.
 - [ ] Every paragraph has one central idea.
-- [ ] Comparisons and repeated-field lists use tables.
+- [ ] Comparisons of three or more items or dimensions use tables, and two-by-two comparisons stay in prose.
 - [ ] Mermaid diagrams explain structures, flows, or relationships where useful and are absent from
       simple lists.
 - [ ] Every diagram adds a branch, component interaction, or state change that prose or a table would
@@ -232,7 +256,10 @@ Do not finalize the outline in one pass. Narrow it in this order:
 - [ ] Every cited section title matches an actual heading.
 - [ ] Copied contracts identify the original source of truth and every file that must change with it.
 - [ ] Every heading is a noun phrase without a predicate or a question.
-- [ ] Every word naming a defined operation contains the noun that can stand alone as a table header or a metric name.
+- [ ] Every word naming an operation, state, or category serves as a table header without a suffix change, and no verb takes a different replacement in different sentences.
+- [ ] Every label is a dictionary noun phrase, no stem with a nominal suffix survives in any position, and each column and list keeps one form.
+- [ ] The ㅁ-final / -됨 / -야 함 / -분 scan covered every file in scope, and each hit was replaced or justified.
+- [ ] Term replacement used one replacement table applied across all files in one pass.
 - [ ] No non-actor subject performs an act, and no countable quantity is left approximate.
 - [ ] Every demonstrative that reaches outside its clause names its referent.
 - [ ] Each sentence carries one claim, and its subject governs its predicate.
