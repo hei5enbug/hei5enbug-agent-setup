@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>diagram template</title>
+<style>
+  /* Set a font stack that covers the document's language before rendering. */
+  :root {
+    --diagram-font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --ink: #334155;
+    --line: #64748b;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #ffffff; }
+  body { font-family: var(--diagram-font); }
+
+  /* Each capture target. Give it an explicit width and height. */
+  .diagram { position: relative; background: #ffffff; }
+
+  .node {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 4px 10px;
+    border-radius: 14px;
+    border-width: 2px;
+    border-style: solid;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.5;
+    box-shadow: 0 3px 10px rgba(15, 23, 42, .10);
+  }
+  .node .sub {
+    display: block;
+    margin-top: 2px;
+    font-size: 12px;
+    font-weight: 400;
+    opacity: .82;
+  }
+
+  /* Colour carries meaning. Keep the same meaning across every diagram in one document. */
+  .node.neutral { background: #f8fafc; border-color: #94a3b8; color: #334155; }
+  .node.subject { background: #eff6ff; border-color: #2563eb; color: #1e3a8a; }
+  .node.accent  { background: #1d4ed8; border-color: #1d4ed8; color: #ffffff; }
+  .node.success { background: #f0fdf4; border-color: #16a34a; color: #14532d; }
+  .node.caution { background: #fffbeb; border-color: #d97706; color: #78350f; }
+  .node.stop    { background: #fef2f2; border-color: #dc2626; color: #7f1d1d; }
+
+  .decision { position: absolute; }
+  .decision .shape {
+    position: absolute;
+    inset: 0;
+    clip-path: polygon(50% 2%, 98% 50%, 50% 98%, 2% 50%);
+    background: #fffbeb;
+    border: 2px solid #d97706;
+    box-shadow: 0 3px 10px rgba(15, 23, 42, .10);
+  }
+  .decision .txt {
+    position: absolute;
+    inset: 18%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 13.5px;
+    font-weight: 700;
+    line-height: 1.4;
+    color: #78350f;
+  }
+
+  .edge-label {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    padding: 2px 8px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    color: #475569;
+  }
+
+  svg.edges { position: absolute; left: 0; top: 0; overflow: visible; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"></path>
+    </marker>
+  </defs>
+</svg>
+
+<!-- One element per diagram. The id becomes the image file name. -->
+<div id="dia-example" class="diagram" style="width:820px;height:260px;"></div>
+
+<script>
+function node(host, x, y, width, height, variant, html) {
+  const element = document.createElement('div');
+  element.className = 'node ' + variant;
+  Object.assign(element.style, {
+    left: x + 'px', top: y + 'px', width: width + 'px', height: height + 'px',
+  });
+  element.innerHTML = html;
+  host.appendChild(element);
+}
+
+function decision(host, x, y, width, height, html) {
+  const element = document.createElement('div');
+  element.className = 'decision';
+  Object.assign(element.style, {
+    left: x + 'px', top: y + 'px', width: width + 'px', height: height + 'px',
+  });
+  element.innerHTML = '<div class="shape"></div><div class="txt">' + html + '</div>';
+  host.appendChild(element);
+}
+
+function canvas(host, width, height) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'edges');
+  svg.setAttribute('width', width);
+  svg.setAttribute('height', height);
+  host.appendChild(svg);
+  return svg;
+}
+
+function roundedPath(points, radius) {
+  if (points.length === 2) {
+    return 'M ' + points[0].x + ',' + points[0].y + ' L ' + points[1].x + ',' + points[1].y;
+  }
+  let path = 'M ' + points[0].x + ',' + points[0].y + ' ';
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const previous = points[i - 1];
+    const corner = points[i];
+    const next = points[i + 1];
+    const inLength = Math.hypot(corner.x - previous.x, corner.y - previous.y) || 1;
+    const outLength = Math.hypot(next.x - corner.x, next.y - corner.y) || 1;
+    const r = Math.max(0, Math.min(radius, inLength / 2, outLength / 2));
+    const inX = (corner.x - previous.x) / inLength;
+    const inY = (corner.y - previous.y) / inLength;
+    const outX = (next.x - corner.x) / outLength;
+    const outY = (next.y - corner.y) / outLength;
+    path += 'L ' + (corner.x - inX * r) + ',' + (corner.y - inY * r) + ' ';
+    path += 'Q ' + corner.x + ',' + corner.y + ' ';
+    path += (corner.x + outX * r) + ',' + (corner.y + outY * r) + ' ';
+  }
+  const last = points[points.length - 1];
+  return path + 'L ' + last.x + ',' + last.y;
+}
+
+function edge(svg, host, points, label) {
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', roundedPath(points, 10));
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', 'var(--line)');
+  path.setAttribute('stroke-width', '2.25');
+  path.setAttribute('marker-end', 'url(#arrow)');
+  svg.appendChild(path);
+
+  if (label) {
+    const element = document.createElement('div');
+    element.className = 'edge-label';
+    element.innerHTML = label.text;
+    element.style.left = label.x + 'px';
+    element.style.top = label.y + 'px';
+    host.appendChild(element);
+  }
+}
+
+// Replace everything below with the diagrams this document needs.
+// Place edge labels away from other labels; overlaps are only visible in the rendered image.
+(function example() {
+  const host = document.getElementById('dia-example');
+  const svg = canvas(host, 820, 260);
+
+  node(host, 20, 90, 200, 80, 'neutral', 'Source<span class="sub">where the data comes from</span>');
+  decision(host, 300, 65, 170, 130, 'Meets the<br>condition');
+  node(host, 560, 30, 200, 70, 'success', 'Accepted');
+  node(host, 560, 160, 200, 70, 'stop', 'Recorded and skipped');
+
+  edge(svg, host, [{ x: 220, y: 130 }, { x: 300, y: 130 }], null);
+  edge(svg, host, [{ x: 470, y: 130 }, { x: 515, y: 130 }, { x: 515, y: 65 }, { x: 560, y: 65 }],
+       { text: 'yes', x: 515, y: 48 });
+  edge(svg, host, [{ x: 470, y: 130 }, { x: 515, y: 130 }, { x: 515, y: 195 }, { x: 560, y: 195 }],
+       { text: 'no', x: 515, y: 212 });
+})();
+</script>
+
+</body>
+</html>

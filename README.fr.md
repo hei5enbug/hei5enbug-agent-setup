@@ -22,6 +22,7 @@ hei5enbug-agent-setup/
     ├── deep-interview/
     ├── flowchart-design/
     ├── humanize-korean/
+    ├── markdown-to-confluence/
     ├── omo-model-config/
     ├── portable-opencode-setup/
     ├── skill-builder/
@@ -39,6 +40,7 @@ Chaque dossier contient son propre `SKILL.md` ainsi que les références ou scri
 | [`deep-interview`](skills/deep-interview/SKILL.md) | Mène un entretien socratique qui note l'ambiguïté des exigences après chaque réponse et ne passe à l'exécution que lorsque ce score descend sous le seuil fixé. |
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | Un standard de design partagé pour que les diagrammes de flux réalisés en SVG, HTML/CSS, Figma ou draw.io paraissent issus d'un même système de design. |
 | [`humanize-korean`](skills/humanize-korean/SKILL.md) | Réécrit un texte coréen qui sonne « IA » pour qu'il paraisse naturel et humain, sans en changer le sens. |
+| [`markdown-to-confluence`](skills/markdown-to-confluence/SKILL.md) | Publie un document Markdown en page Confluence et garde la page correcte lors des modifications ultérieures : macro de sommaire, images en ligne, pièces jointes et diagrammes rendus en images. |
 | [`omo-model-config`](skills/omo-model-config/SKILL.md) | Modifie en toute sécurité le model routing d'OpenCode/oh-my-openagent (`model`, `variant`, `fallback_models`) en le confrontant à une allowlist upstream. |
 | [`portable-opencode-setup`](skills/portable-opencode-setup/SKILL.md) | Ajoute uniquement les éléments manquants de la configuration OpenCode/oh-my-openagent sur une nouvelle machine, sans toucher aux réglages existants. |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | Crée, teste et empaquette des skills d'agent via une boucle brouillon → test → revue → amélioration. |

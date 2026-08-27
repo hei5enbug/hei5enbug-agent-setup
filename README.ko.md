@@ -22,6 +22,7 @@ hei5enbug-agent-setup/
     ├── deep-interview/
     ├── flowchart-design/
     ├── humanize-korean/
+    ├── markdown-to-confluence/
     ├── omo-model-config/
     ├── portable-opencode-setup/
     ├── skill-builder/
@@ -46,6 +47,7 @@ hei5enbug-agent-setup/
 | [`deep-interview`](skills/deep-interview/SKILL.md) | 답변마다 요구사항의 모호함 정도를 점수로 측정하는 소크라테스식 인터뷰를 진행하며, 그 점수가 기준값 이하로 내려가기 전에는 실행 단계로 넘어가지 않습니다. [한국어 안내](skills/deep-interview/README.ko.md) |
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | SVG, HTML/CSS, Figma, draw.io 등 어떤 도구로 만들어도 하나의 디자인 시스템처럼 보이게 하는 플로우차트 공통 디자인 기준입니다. |
 | [`humanize-korean`](skills/humanize-korean/SKILL.md) | 내용은 그대로 두고, AI가 쓴 듯한 한글 문장을 사람이 쓴 것처럼 자연스러운 한국어로 다시 씁니다. [한국어 안내](skills/humanize-korean/README.ko.md) |
+| [`markdown-to-confluence`](skills/markdown-to-confluence/SKILL.md) | 마크다운 문서를 Confluence 페이지로 발행하고, 이후 수정에서도 목차 매크로·본문 이미지·첨부·이미지로 만든 다이어그램이 그대로 유지되게 합니다. |
 | [`omo-model-config`](skills/omo-model-config/SKILL.md) | 업스트림 allowlist를 기준으로 OpenCode/oh-my-openagent의 모델 라우팅(`model`, `variant`, `fallback_models`)을 안전하게 수정합니다. |
 | [`portable-opencode-setup`](skills/portable-opencode-setup/SKILL.md) | 새 기기에 OpenCode/oh-my-openagent 설정 중 빠진 부분만 추가하며, 기존 설정은 건드리지 않습니다. [한국어 안내](skills/portable-opencode-setup/README.ko.md) |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | 초안 작성 → 테스트 → 검토 → 개선 순환을 통해 에이전트 스킬을 만들고, 검증하고, 패키징합니다. |
