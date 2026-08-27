@@ -1,0 +1,38 @@
+{
+  "skill_name": "technical-design-writer",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Improve a Korean API caching design. Requirements consistently use '-야 함', and '처리됨' is a literal UI state. Preserve literal names and fix only semantic ambiguity.",
+      "expected_output": "The document becomes precise without rejecting Korean forms by suffix or changing literal interface text.",
+      "files": [],
+      "expectations": [
+        "The response preserves literal implementation and interface names.",
+        "The response does not classify a Korean expression as invalid from its suffix or final consonant.",
+        "Each revised requirement has one target, operation, and outcome without unnecessary detail."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Rewrite an infrastructure rollout design that uses pronouns, positional references, figurative operations, an unsupported safety claim, and a percentage without a measurement basis.",
+      "expected_output": "The revision resolves references, names observable operations and outcomes, and supplies or removes unsupported evidence claims.",
+      "files": [],
+      "expectations": [
+        "Every reference resolves without relying only on position, a pronoun, or a count.",
+        "Each operation identifies the affected subject and observable result.",
+        "Quantitative and qualitative claims include a reproducible basis or are removed."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Improve a data-processing design with overlapping overview sections, repeated contracts, a prose comparison of four options, and an unbranched diagram that duplicates the prose.",
+      "expected_output": "The revision narrows the outline, keeps one source per topic, uses a table for the comparison, and removes the redundant diagram.",
+      "files": [],
+      "expectations": [
+        "Each topic has one non-overlapping source section and stable references elsewhere.",
+        "The four-option comparison uses one table with consistent dimensions.",
+        "The unbranched duplicate diagram is removed rather than restyled."
+      ]
+    }
+  ]
+}

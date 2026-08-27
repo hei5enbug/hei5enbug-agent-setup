@@ -102,7 +102,7 @@ Make the description specific enough to trigger on real intent without becoming 
 ```text
 skill-name/
 ├── SKILL.md            # required: metadata and core workflow
-├── scripts/            # optional deterministic or repetitive tooling
+├── scripts/            # optional tooling with a complete input and output contract
 ├── references/         # optional documentation loaded as needed
 ├── assets/             # optional templates and output resources
 └── adapters/           # optional host-specific integration boundaries
@@ -110,6 +110,46 @@ skill-name/
 
 Keep host-specific manifests when the target requires them. Do not duplicate the core workflow across adapters.
 Do not create a product-specific manifest merely because the current agent host supports one; add it only for a requested target or preserve it when updating an existing package.
+
+### Automation boundary
+
+Treat repeatability, detectability, and verifiability as separate properties.
+Code that returns the same result for the same input may still use a surface feature that does not prove the underlying requirement.
+
+Before creating a bundled script:
+
+1. Define its supported inputs, outputs, success conditions, failure conditions, and unsupported cases.
+2. Decide whether the operation is exact mechanics, exact validation, or contextual judgment.
+3. Inspect available host capabilities and established tools before writing custom code.
+4. Compare correctness, coverage, portability, dependencies, maintenance cost, execution time, and expected repetition.
+5. Benchmark representative inputs before claiming a performance advantage. Do not infer efficiency from an implementation language.
+
+Use host search or an available file finder for file discovery, a text search tool for text or symbol search, and a structural search tool only when syntax structure matters.
+Tools such as `fd`, `rg`, and `ast-grep` are examples, not required dependencies. Discover availability instead of assuming it.
+Prefer an existing parser or schema validator for a format it supports.
+
+Choose the simplest option that satisfies the complete contract in this order:
+
+1. Host capability or established tool
+2. A simple composition of existing tools
+3. A bundled script
+4. Model or human judgment when the requirement depends on context
+
+Bundle validation logic only for an exact validation.
+An exact validator must be sound and complete within its declared scope: every failure is a real violation, and every in-scope violation fails.
+Report unsupported input explicitly instead of treating it as success.
+Do not turn a searchable feature, score, heuristic, or growing exception list into a pass/fail rule.
+Do not encode semantic, subjective, probabilistic, or context-dependent judgment in a generated validator.
+
+Bundle other scripts only for exact mechanics with a complete input and output contract.
+A mechanical orchestrator may invoke a declared nondeterministic dependency, but it must preserve that uncertainty and must not present the dependency's output as verified.
+
+An existing heuristic analyzer may still provide evidence when the task requires it.
+Label its findings as signals or review candidates, never as the sole verdict, and require model or human review of the relevant context.
+Do not generate a new heuristic checker by default.
+
+Test valid, invalid, boundary, and unsupported inputs for every bundled validator.
+Tests demonstrate examples but do not prove completeness, so explain how each part of the declared contract maps to the implementation.
 
 ### Progressive disclosure
 
@@ -142,6 +182,8 @@ Make material writes and external actions visible in the instructions.
 ### Writing patterns
 
 Use imperative instructions and explain the reasoning behind important constraints. Prefer adaptable principles over repeated all-caps mandates.
+
+A rule that constrains form must name every surface it governs, or be stated independently of surface.
 
 For exact output contracts, provide a template:
 
@@ -230,7 +272,9 @@ If even sequential execution or persistent outputs are unavailable, perform a fo
 
 ### Step 3: Draft assertions while runs execute
 
-Create objective, descriptive assertions for machine-verifiable requirements. Avoid forcing quantitative assertions onto subjective qualities.
+Create objective, descriptive assertions for machine-verifiable requirements.
+A machine assertion must define an exact predicate and scope under "Automation boundary"; otherwise grade it qualitatively.
+Avoid forcing quantitative assertions onto subjective qualities.
 Update both `eval_metadata.json` and `evals/evals.json`, then explain what the assertions measure.
 
 ### Step 4: Capture available metrics
@@ -241,7 +285,8 @@ Save host-reported timing and token data immediately in each run's `timing.json`
 
 1. Read `agents/grader.md` and grade each run, using an independent worker when possible or grading inline otherwise. Save `grading.json`.
    Its expectation objects must use `text`, `passed`, and `evidence`.
-2. Prefer a deterministic script for assertions that can be checked programmatically.
+2. Use a deterministic script only for assertions that satisfy "Automation boundary".
+   Deterministic execution alone does not make a proxy or heuristic assertion valid.
 3. Aggregate the iteration:
 
    ```bash
@@ -277,10 +322,15 @@ When file-based feedback is available, read `feedback.json`. Empty feedback mean
 ## Improving the skill
 
 1. Generalize from feedback instead of patching only the tested examples.
-2. Keep the prompt lean; remove instructions that create repeated unproductive work.
+   Write the decision procedure, not the instances: a test the agent can apply to a case the skill never saw, followed by two or three pairs marked as illustrations rather than the full set.
+2. Keep the prompt lean and remove instructions that create repeated unproductive work, but compress only where meaning survives.
+   Preserve every constraint, threshold, and scope, and make each rule unambiguous to a coding agent with no other context.
+   When a cut would cost clarity, move the detail to a reference instead of deleting it.
 3. Explain why constraints matter so capable models can adapt to novel cases.
-4. Bundle scripts or references when multiple runs independently recreate the same helper logic.
-5. Keep portable behavior in the core and isolate host-specific mechanics in adapters.
+4. When multiple runs recreate the same helper logic, first compare available host capabilities, established tools, and simple tool compositions.
+   Bundle a script only when it satisfies "Automation boundary" and provides a measurable correctness, maintenance, or performance benefit.
+5. When multiple runs repeat a contextual judgment, improve the skill's decision procedure and examples instead of converting the judgment into a script.
+6. Keep portable behavior in the core and isolate host-specific mechanics in adapters.
 
 After revising, rerun the cases in a new iteration.
 Compare against the original or previous version according to the user's decision.
@@ -372,8 +422,13 @@ If the installed source is read-only, copy it to a writable temporary location, 
 
 - Intent, triggers, outputs, and constraints are explicit.
 - Core instructions use capability-based language and avoid accidental vendor coupling.
+- Every example was graded against the skill's own rules: good examples satisfy all of them, bad examples violate the rule they illustrate.
 - Required host-specific behavior is isolated and documented.
 - The skill contains no sibling-skill names, paths, invocations, imports, or file dependencies.
+- Every bundled script has a complete input and output contract and reports unsupported inputs explicitly.
+- Every bundled validator is sound and complete within its declared scope; contextual judgments remain with the model or user.
+- Existing host capabilities and established tools were compared before custom code was added.
+- Performance claims are measured on representative inputs and are not inferred from an implementation language.
 - Realistic skill-enabled and baseline tests were run, or capability limitations were disclosed.
 - Assertions and metrics are evidence-backed.
 - The user received a review surface or equivalent inline review.
