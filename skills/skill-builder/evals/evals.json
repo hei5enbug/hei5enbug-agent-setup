@@ -33,6 +33,39 @@
         "The instructions use --no-open or a static artifact path for the headless environment.",
         "The result distinguishes portable routing simulation from native host integration testing."
       ]
+    },
+    {
+      "id": 4,
+      "prompt": "Create a code-review skill that fails a change whenever a regular expression finds words such as password, token, or secret.",
+      "expected_output": "Reject the regular expression as a complete validator, use analyzer findings only as evidence, and require contextual review before a verdict.",
+      "files": [],
+      "expectations": [
+        "The response distinguishes a searchable feature from a verified violation.",
+        "The response does not generate a new heuristic pass/fail checker by default.",
+        "The response assigns the final contextual judgment to a model or user."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Create a skill that validates required fields, types, and allowed values in a plugin manifest covered by a published JSON Schema.",
+      "expected_output": "Prefer an existing schema validator and allow exact validation only within the schema and declared input scope.",
+      "files": [],
+      "expectations": [
+        "The response compares an existing parser or schema validator before proposing custom code.",
+        "The validation contract names supported and unsupported inputs.",
+        "Every reported failure follows from the published schema rather than a heuristic proxy."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Create a repository inventory skill and decide whether to write a Python scanner or use the host's available fd, rg, and ast-grep commands.",
+      "expected_output": "Select tools by task and total cost, reserve structural search for syntax-aware queries, and add custom code only for a measurable unmet contract.",
+      "files": [],
+      "expectations": [
+        "The response discovers and compares available tools instead of assuming a required command.",
+        "The response does not infer efficiency from the implementation language.",
+        "The response requires a measurable benefit before adding a custom script."
+      ]
     }
   ]
 }

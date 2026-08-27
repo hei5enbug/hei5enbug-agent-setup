@@ -11,6 +11,7 @@ Example:
 """
 
 import fnmatch
+import os
 import sys
 import zipfile
 from pathlib import Path
@@ -18,7 +19,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from scripts.quick_validate import validate_skill
+from scripts.quick_validate import run_bundled_checks, validate_skill
 
 # Patterns to exclude when packaging skills.
 EXCLUDE_DIRS = {"__pycache__", "node_modules"}
@@ -41,6 +42,34 @@ def should_exclude(rel_path: Path) -> bool:
     if name in EXCLUDE_FILES:
         return True
     return any(fnmatch.fnmatch(name, pat) for pat in EXCLUDE_GLOBS)
+
+
+def find_installed_copies(skill_name, source_path):
+    """Locate other installed copies of this skill on the host.
+
+    Roots come from SKILL_BUILDER_SKILL_ROOTS when set, so no installation
+    layout is assumed. Otherwise agent-host skill directories are discovered
+    by shape under the home directory rather than by product name.
+    """
+    roots_env = os.environ.get("SKILL_BUILDER_SKILL_ROOTS", "").strip()
+    candidates = []
+    if roots_env:
+        for root in roots_env.split(os.pathsep):
+            if root.strip():
+                candidates.append(Path(root.strip()).expanduser() / skill_name)
+    else:
+        home = Path.home()
+        for pattern in (f".*/skills/{skill_name}", f".*/*/skills/{skill_name}"):
+            candidates.extend(home.glob(pattern))
+
+    source_md = (source_path / "SKILL.md").read_bytes()
+    copies = []
+    for candidate in sorted({c.resolve() for c in candidates}):
+        if candidate == source_path or not (candidate / "SKILL.md").is_file():
+            continue
+        stale = (candidate / "SKILL.md").read_bytes() != source_md
+        copies.append((candidate, stale))
+    return copies
 
 
 def package_skill(skill_path, output_dir=None):
@@ -80,6 +109,18 @@ def package_skill(skill_path, output_dir=None):
         return None
     print(f"✅ {message}\n")
 
+    # Run detectors bundled with the skill
+    checks_ok, results = run_bundled_checks(skill_path)
+    for name, returncode, output in results:
+        print(f"  [{'pass' if returncode == 0 else 'FAIL'}] {name}")
+        if output:
+            print(output)
+    if not checks_ok:
+        print("❌ Bundled checks failed. Resolve the findings before packaging.")
+        return None
+    if results:
+        print()
+
     # Determine output location
     skill_name = skill_path.name
     if output_dir:
@@ -105,6 +146,15 @@ def package_skill(skill_path, output_dir=None):
                 print(f"  Added: {arcname}")
 
         print(f"\n✅ Successfully packaged skill to: {skill_filename}")
+
+        copies = find_installed_copies(skill_name, skill_path)
+        if copies:
+            print("\n📍 Other installed copies of this skill:")
+            for path, stale in copies:
+                print(f"  [{'stale' if stale else 'same'}] {path}")
+            if any(stale for _, stale in copies):
+                print("  Confirm with the user before syncing the stale copies.")
+
         return skill_filename
 
     except Exception as e:

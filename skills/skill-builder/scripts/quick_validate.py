@@ -4,6 +4,7 @@ Quick validation script for skills - minimal version
 """
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -59,6 +60,31 @@ def parse_frontmatter(frontmatter_text):
         index += 1
 
     return parsed
+
+
+def run_bundled_checks(skill_path):
+    """Run every scripts/check_*.py bundled with the skill.
+
+    A detector exits non-zero when it finds a violation. Returns
+    (ok, [(script_name, returncode, output)]) and treats a missing
+    scripts/ directory as a pass.
+    """
+    skill_path = Path(skill_path)
+    detectors = sorted((skill_path / "scripts").glob("check_*.py"))
+    results = []
+    ok = True
+    for detector in detectors:
+        completed = subprocess.run(
+            [sys.executable, str(detector), str(skill_path)],
+            capture_output=True,
+            text=True,
+        )
+        output = (completed.stdout + completed.stderr).strip()
+        results.append((detector.name, completed.returncode, output))
+        if completed.returncode != 0:
+            ok = False
+    return ok, results
+
 
 def validate_skill(skill_path):
     """Basic validation of a skill"""
@@ -146,6 +172,16 @@ if __name__ == "__main__":
         print("Usage: python quick_validate.py <skill_directory>")
         sys.exit(1)
     
-    valid, message = validate_skill(sys.argv[1])
+    skill_path = sys.argv[1]
+    valid, message = validate_skill(skill_path)
     print(message)
-    sys.exit(0 if valid else 1)
+    if not valid:
+        sys.exit(1)
+
+    checks_ok, results = run_bundled_checks(skill_path)
+    for name, returncode, output in results:
+        status = "pass" if returncode == 0 else "FAIL"
+        print(f"[{status}] {name}")
+        if output:
+            print(output)
+    sys.exit(0 if checks_ok else 1)
