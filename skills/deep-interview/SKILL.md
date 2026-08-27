@@ -3,10 +3,11 @@ name: deep-interview
 description: >-
   Conduct a rigorous Socratic requirements interview before implementation. Cover topology
   discovery, evidence-backed questions, ambiguity scoring, contradiction handling, closure gates,
-  and an execution-ready specification. Use when the user asks for a deep interview, says not to
-  assume, has a vague or high-impact idea, wants requirements validated before work starts, or asks
-  for an Ouroboros/Socratic discovery process. Works across agent hosts with structured-question,
-  exploration, independent-worker, and plain-text fallbacks.
+  and an execution-ready specification. Use only when the user explicitly asks to run a deep
+  interview, by naming the skill or by invoking its command. Do not start it because a request
+  looks vague, ambitious, risky, or underspecified, and do not offer to start it unprompted. Works
+  across agent hosts with structured-question, exploration, independent-worker, and plain-text
+  fallbacks.
 compatibility: >-
   Works in any conversational agent host. Structured questions, repository exploration, independent
   workers, external research, and persistence are optional capabilities with in-context fallbacks.
@@ -28,8 +29,21 @@ Read these resources only when their stage is reached:
 - [`references/auto-answer-uncertain.md`](references/auto-answer-uncertain.md): when the user explicitly delegates a decision.
 - [`references/lateral-review-panel.md`](references/lateral-review-panel.md): at ambiguity milestones or before accepting agent-supplied assumptions.
 
+## Invocation
+
+This skill runs only on an explicit request. The user names it, or invokes its command.
+
+A vague idea, an ambitious goal, a risky change, or a thin requirement is not a trigger. Those
+conditions describe most real work, and starting a multi-round interview because a task looked
+underspecified takes the conversation somewhere the user did not ask to go.
+
+When you judge that an interview would genuinely help but the user has not asked for one, answer
+the actual request first. You may add one short sentence noting that a deep interview is
+available. Do not ask whether to start it, do not start it, and do not repeat the offer.
+
 ## Non-Negotiable Contract
 
+- Start only on an explicit request, as described under "Invocation".
 - Ask exactly one question per round.
 - Keep all user-facing questions in the main conversation. Supporting agents may return evidence but must not question the user.
 - Remain read-only during discovery. The only permitted write is a final specification or resumable state file at a user-approved path.
