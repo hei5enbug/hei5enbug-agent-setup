@@ -1,0 +1,23 @@
+{
+  "skill_name": "markdown-to-confluence",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Publish this design document to Confluence as a new page under the Engineering space. It has a heading structure, several comparison tables, and two flow diagrams written as fenced diagram source.",
+      "expected_output": "A published page whose body uses the built-in table of contents macro, keeps every table with block-wrapped cells, and shows both diagrams as attached images with width and height matching their real pixel ratio. No fenced diagram source and no local file path remains in the body. The agent states which capability fallbacks it used.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "The pictures on this Confluence page show up as attachment cards instead of appearing inside the comparison table. Fix it.",
+      "expected_output": "The body uses plain img elements inside the existing table cells, with no media-group or hand-written media-single container. The table structure is unchanged: the agent does not convert the table into a column layout to place the images. The agent reads the current body before saving.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "The diagrams on this page render as blocks of text. Make them display properly.",
+      "expected_output": "Each diagram is rendered to an image, inspected visually by the agent before upload, attached to the page, and referenced with correctly measured width and height. If no headless browser is available, the agent says so and hands the work back instead of publishing an unrendered page.",
+      "files": []
+    }
+  ]
+}

@@ -22,6 +22,7 @@ hei5enbug-agent-setup/
     ├── deep-interview/
     ├── flowchart-design/
     ├── humanize-korean/
+    ├── markdown-to-confluence/
     ├── omo-model-config/
     ├── portable-opencode-setup/
     ├── skill-builder/
@@ -47,6 +48,7 @@ required output labels, or evaluation fixtures.
 | [`deep-interview`](skills/deep-interview/SKILL.md) | Runs a Socratic interview that scores requirement ambiguity after every answer and will not move to execution until it drops below the threshold. [Korean guide](skills/deep-interview/README.ko.md). |
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | A shared design standard so flow charts built in SVG, HTML/CSS, Figma, or draw.io all read as one design system. |
 | [`humanize-korean`](skills/humanize-korean/SKILL.md) | Rewrites AI-sounding Korean text into natural, human-sounding Korean without changing its meaning. [Korean guide](skills/humanize-korean/README.ko.md). |
+| [`markdown-to-confluence`](skills/markdown-to-confluence/SKILL.md) | Publishes a Markdown document to Confluence and keeps the page correct on later edits, covering the table of contents macro, inline images, attachments, and diagrams rendered to images. |
 | [`omo-model-config`](skills/omo-model-config/SKILL.md) | Safely edits OpenCode/oh-my-openagent model routing (`model`, `variant`, `fallback_models`) against an upstream allowlist. |
 | [`portable-opencode-setup`](skills/portable-opencode-setup/SKILL.md) | Adds missing OpenCode/oh-my-openagent config pieces on a new machine, additive-only, without touching existing settings. [Korean guide](skills/portable-opencode-setup/README.ko.md). |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | Creates, tests, and packages agent skills through a draft → test → review → improve loop. |
