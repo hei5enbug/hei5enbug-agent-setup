@@ -18,7 +18,13 @@ AI 코딩 에이전트를 위한 커스텀 스킬 모음입니다. 호스트별�
 
 ```
 hei5enbug-agent-setup/
+├── .agents/plugins/marketplace.json
+├── .claude-plugin/
+│   ├── marketplace.json
+│   └── plugin.json
+├── .codex-plugin/plugin.json
 └── skills/
+    ├── decision-navigator/
     ├── deep-interview/
     ├── flowchart-design/
     ├── humanize-korean/
@@ -31,7 +37,50 @@ hei5enbug-agent-setup/
     └── tiki-taka/
 ```
 
-각 폴더는 자신만의 `SKILL.md`와 필요한 참조 문서·스크립트를 담고 있습니다. 공유하는 최상위 설정 파일은 없으며, 모든 스킬이 독립적으로 완결되어 있습니다.
+각 스킬 폴더는 자신만의 `SKILL.md`와 필요한 참조 문서·스크립트를 담고 있습니다.
+플러그인
+매니페스트는 호스트별 디렉터리에 스킬을 복사하지 않고 같은 `skills/` 디렉터리를 Codex와
+Claude Code에 패키징합니다.
+
+## 플러그인 설치
+
+GitHub 저장소에서 스킬 묶음을 한 번 설치합니다.
+
+### Codex
+
+```bash
+codex plugin marketplace add hei5enbug/hei5enbug-agent-setup --ref main
+codex plugin add hei5enbug-agent-setup@hei5enbug
+```
+
+### Claude Code
+
+```bash
+claude plugin marketplace add hei5enbug/hei5enbug-agent-setup
+claude plugin install hei5enbug-agent-setup@hei5enbug
+```
+
+## 플러그인 업데이트
+
+두 플러그인 매니페스트는 같은 의미적 버전을 사용합니다. 릴리스를 배포하기 전에
+`.codex-plugin/plugin.json`과 `.claude-plugin/plugin.json`의 버전을 함께 올립니다.
+
+릴리스 배포 후 Codex를 업데이트합니다.
+
+```bash
+codex plugin marketplace upgrade hei5enbug
+codex plugin add hei5enbug-agent-setup@hei5enbug
+```
+
+릴리스 배포 후 Claude Code를 업데이트합니다.
+
+```bash
+claude plugin marketplace update hei5enbug
+claude plugin update hei5enbug-agent-setup@hei5enbug
+```
+
+업데이트한 스킬 버전을 불러오려면 새 Codex 스레드를 시작하거나
+Claude Code를 다시 시작합니다.
 
 ## 지침 언어
 
@@ -44,6 +93,7 @@ hei5enbug-agent-setup/
 
 | 스킬 | 하는 일 |
 |---|---|
+| [`decision-navigator`](skills/decision-navigator/SKILL.md) | 여러 세션에 걸친 작업을 의사 결정 티켓으로 나누고, 구현 경로가 분명해질 때까지 티켓을 하나씩 해결합니다. |
 | [`deep-interview`](skills/deep-interview/SKILL.md) | 답변마다 요구사항의 모호함 정도를 점수로 측정하는 소크라테스식 인터뷰를 진행하며, 그 점수가 기준값 이하로 내려가기 전에는 실행 단계로 넘어가지 않습니다. [한국어 안내](skills/deep-interview/README.ko.md) |
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | SVG, HTML/CSS, Figma, draw.io 등 어떤 도구로 만들어도 하나의 디자인 시스템처럼 보이게 하는 플로우차트 공통 디자인 기준입니다. |
 | [`humanize-korean`](skills/humanize-korean/SKILL.md) | 내용은 그대로 두고, AI가 쓴 듯한 한글 문장을 사람이 쓴 것처럼 자연스러운 한국어로 다시 씁니다. [한국어 안내](skills/humanize-korean/README.ko.md) |

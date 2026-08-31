@@ -1,0 +1,19 @@
+{
+  "name": "hei5enbug-agent-setup",
+  "displayName": "Hei5enbug Agent Skills",
+  "version": "0.1.0",
+  "description": "Portable agent skills for repeatable engineering and documentation workflows.",
+  "author": {
+    "name": "hei5enbug",
+    "url": "https://github.com/hei5enbug"
+  },
+  "homepage": "https://github.com/hei5enbug/hei5enbug-agent-setup",
+  "repository": "https://github.com/hei5enbug/hei5enbug-agent-setup",
+  "keywords": [
+    "agent-skills",
+    "codex",
+    "claude-code",
+    "developer-tools"
+  ],
+  "skills": "./skills/"
+}

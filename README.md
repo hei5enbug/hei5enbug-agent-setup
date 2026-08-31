@@ -18,7 +18,13 @@ Each skill lives in its own folder under `skills/` and is self-contained: its in
 
 ```
 hei5enbug-agent-setup/
+├── .agents/plugins/marketplace.json
+├── .claude-plugin/
+│   ├── marketplace.json
+│   └── plugin.json
+├── .codex-plugin/plugin.json
 └── skills/
+    ├── decision-navigator/
     ├── deep-interview/
     ├── flowchart-design/
     ├── humanize-korean/
@@ -31,7 +37,47 @@ hei5enbug-agent-setup/
     └── tiki-taka/
 ```
 
-Each folder holds its own `SKILL.md` plus any references or scripts it needs. There is no shared top-level config — every skill is self-contained.
+Each skill folder holds its own `SKILL.md` plus any references or scripts it needs. The plugin manifests package the
+same `skills/` directory for Codex and Claude Code without copying the skills into host-specific directories.
+
+## Plugin installation
+
+Install the bundle once from the GitHub repository.
+
+### Codex
+
+```bash
+codex plugin marketplace add hei5enbug/hei5enbug-agent-setup --ref main
+codex plugin add hei5enbug-agent-setup@hei5enbug
+```
+
+### Claude Code
+
+```bash
+claude plugin marketplace add hei5enbug/hei5enbug-agent-setup
+claude plugin install hei5enbug-agent-setup@hei5enbug
+```
+
+## Plugin updates
+
+Both plugin manifests use the same semantic version. Bump the version in `.codex-plugin/plugin.json` and
+`.claude-plugin/plugin.json` before publishing a release.
+
+Update Codex after the release is available:
+
+```bash
+codex plugin marketplace upgrade hei5enbug
+codex plugin add hei5enbug-agent-setup@hei5enbug
+```
+
+Update Claude Code after the release is available:
+
+```bash
+claude plugin marketplace update hei5enbug
+claude plugin update hei5enbug-agent-setup@hei5enbug
+```
+
+Start a new Codex thread or restart Claude Code after updating so the host loads the new skill versions.
 
 ## Instruction language
 
@@ -45,6 +91,7 @@ required output labels, or evaluation fixtures.
 
 | Skill | What it does |
 |---|---|
+| [`decision-navigator`](skills/decision-navigator/SKILL.md) | Maps a multi-session effort into decision tickets and resolves them one at a time until the implementation route is clear. |
 | [`deep-interview`](skills/deep-interview/SKILL.md) | Runs a Socratic interview that scores requirement ambiguity after every answer and will not move to execution until it drops below the threshold. [Korean guide](skills/deep-interview/README.ko.md). |
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | A shared design standard so flow charts built in SVG, HTML/CSS, Figma, or draw.io all read as one design system. |
 | [`humanize-korean`](skills/humanize-korean/SKILL.md) | Rewrites AI-sounding Korean text into natural, human-sounding Korean without changing its meaning. [Korean guide](skills/humanize-korean/README.ko.md). |
