@@ -8,7 +8,7 @@ description: >-
   structure, natural Korean, effective tables and diagrams, and stable references. Do not use for
   translation, generic copyediting, user guides, release notes, or code review without design intent.
 metadata:
-  version: "2.0.1"
+  version: "2.1.0"
 compatibility: >-
   Works in any agent host that can read and write Markdown. Repository inspection and diagram
   rendering improve evidence and review but are not required for the core workflow.
@@ -60,8 +60,10 @@ repository rules, supplied templates, and established project conventions overri
    identifiers or externally visible contract names.
 8. Validate copied contracts, examples, commands, links, calculations, and diagrams with the strongest
    available method. Do not claim validation that did not run.
-9. Run the completion gate. Remove drafting notes, unsupported claims, and content that does not help
-   implementation, validation, operation, or approval.
+9. Separate unsupported content by "Unsupported content". Remove drafting notes and content that does
+   not help implementation, validation, operation, or approval.
+10. Run the completion gate. Then report outside the document what became an assumption or an open
+    question, what was removed, and where the working record file is.
 
 ## Design coverage
 
@@ -79,6 +81,27 @@ Include each applicable concern exactly once. Combine concerns when one section 
 | Operations | What capacity, observability, ownership, support, and cost requirements apply? |
 | Change | How will rollout, migration, backward compatibility, rollback, and cleanup work? |
 | Proof | What tests, measurements, acceptance criteria, and open decisions prove or block completion? |
+
+## Unsupported content
+
+An unsupported claim is material when a reader could implement, validate, operate, or approve differently
+without it. Keep every material claim and remove only the rest.
+
+| Handling | Applies to |
+|---|---|
+| Keep as an assumption | A material claim the design relies on that no available source proves yet. |
+| Keep as an open question | A material decision that is not settled yet. |
+| Remove | An evaluative phrase, a duplicated summary, a drafting note, or a superseded description. |
+
+Collect every kept item in one dedicated section, named `가정과 미해결 사항` in Korean, with the claim,
+its evidence status, and what would settle it. Keep the body free of inline labels, change markers, and
+notes about this handling; the dedicated section carries the record. This section is the single home
+for the assumptions of the Context concern and the open decisions of the Proof concern; do not repeat
+those items elsewhere.
+
+Record every removed item in a working file named `<document>.removed.md` beside the document, with its
+original heading location and the reason for removal. Create the file only when something was actually
+removed, mark it as not for commit, and never delete it without the user asking.
 
 ## Precision
 
@@ -169,4 +192,6 @@ or human judgment.
       or a clear limitation.
 - [ ] Terminology, tone, numbers, units, headings, lists, tables, diagrams, and references are consistent.
 - [ ] The target-language reference passes, and exact literals, causality, negation, modality, and scope are preserved.
-- [ ] No unnecessary content, duplicated source, unresolved placeholder, or unsupported claim remains.
+- [ ] Every material unsupported claim sits in the assumptions and open questions section, the body carries
+      no inline handling mark, and every removal is recorded in the working file and reported to the user.
+- [ ] No unnecessary content, duplicated source, unresolved placeholder, or unrecorded unsupported claim remains.
