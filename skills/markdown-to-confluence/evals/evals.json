@@ -18,6 +18,24 @@
       "prompt": "The diagrams on this page render as blocks of text. Make them display properly.",
       "expected_output": "Each diagram is rendered to an image, inspected visually by the agent before upload, attached to the page, and referenced with correctly measured width and height. If no headless browser is available, the agent says so and hands the work back instead of publishing an unrendered page.",
       "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "I widened this Confluence page. Make the tables use the new width, and size each column to suit what it holds.",
+      "expected_output": "Every table follows the page width and every cell in one column carries the same column-width ratio, including the header. Short-value columns stay narrow while wrapping columns receive the remaining width. Image columns use an explicit minimum based on image display width. The agent reviews the estimate and confirms the saved layout and widths instead of treating the calculation as visual proof.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Some paragraphs on this page run very long. Break them up, but only where a sentence ends.",
+      "expected_output": "Line breaks appear only at sentence boundaries, paragraphs that already fit remain unchanged, and the threshold comes from the actual display width. Source paragraph boundaries remain intact, table cells use one spacing style, and the agent confirms that no supported source text was lost.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "Update this Confluence page from the latest version of the Markdown file.",
+      "expected_output": "The agent reads the current page, converts the current source, compares the body against the source within the checker's declared scope, and handles unsupported Markdown manually. The agent verifies that the source did not change before saving and confirms the stored structure after saving.",
+      "files": []
     }
   ]
 }

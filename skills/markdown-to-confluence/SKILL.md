@@ -5,7 +5,9 @@ description: >-
   of contents, inline images, attachments, and diagrams rendered to images. Use when publishing a
   design document, spec, report, or plan to Confluence, when a page's images render as attachment
   cards or fail to display, when diagram source appears as raw text on the page, when a page shows
-  local file paths, or when an existing Confluence page must be updated in place.
+  local file paths, when tables need to follow the page width or size columns to their content,
+  when paragraphs or table cells need consistent spacing and line breaks, or when an existing
+  Confluence page must be updated in place.
 compatibility: >-
   Needs a Confluence write path, either a connected integration tool or direct REST access. Without
   one, the skill still produces the exact body and attachment set for manual upload. Diagram
@@ -48,6 +50,8 @@ Adapt to capabilities, never to product names.
 | Headless browser | Render diagrams with `scripts/render_diagrams.mjs` | Leave the diagram source in place and tell the user rendering is still required |
 | Image measurement | `scripts/image_size.py` | Ask the user for pixel dimensions |
 | Body validation | `scripts/validate_body.py` | Walk the checklist in `references/html-format.md` by hand |
+| Content parity | `scripts/text_parity.py` for its declared Markdown subset | Compare the source and body side by side |
+| Column width estimate | `scripts/column_widths.py` | Estimate each column from the longest line it holds |
 | Ignored staging path | `git check-ignore` | Use a temporary directory, and if upload rejects the path, ask the user for an allowed one |
 | Filesystem | Write artifacts to disk | Print the body inline in the conversation |
 
@@ -61,8 +65,10 @@ discovery, and only then ask. Never hardcode any of them into a bundled file.
 | Target page | An existing page id, or a space key plus parent for a new page |
 | Source document | The Markdown file or the text in the conversation |
 | Staging directory | A writable path inside the repository that version control ignores; confirm with `git check-ignore` |
-| Display width | Body images and table images use different widths; propose a default and confirm |
-| Document language | Drives the diagram font stack; take it from the source text |
+| Display width | Body images and table images use different widths; propose a default and confirm, and revisit both when the page width changes |
+| Table treatment | Decide whether tables use the page's full width and whether to set column widths |
+| Paragraph line breaks | Off unless the user asks for them. When on, break only at sentence ends and derive the threshold from the display width |
+| Document language | Drives the diagram font stack, column-width estimate, and sentence-boundary rules; take it from the source text |
 | Table of contents depth | Propose a default and confirm |
 
 ## Workflow
@@ -93,6 +99,9 @@ Convert structure first, then fix what does not belong on a published page.
   Confluence.
 - Wrap the content of every table cell in a block element.
 - Escape quotes and other reserved characters in text.
+- Preserve the source paragraph boundaries. Treat line breaks inside a paragraph as a separate
+  run-configuration decision.
+- Apply one spacing, layout, and width rule to every table in the document.
 
 Keep the author's wording. This step changes containers, not sentences.
 
@@ -128,14 +137,24 @@ listed in its own scope declaration and nothing else, so also read the body once
 things it cannot judge, such as wording, ordering, and whether a diagram actually explains the
 paragraph next to it.
 
+Then run `scripts/text_parity.py` over the source and body when the source uses its supported
+Markdown subset. The script reports unsupported constructs instead of treating them as a match.
+Use `--drop` for text deliberately replaced by a non-text artifact, such as a fenced diagram block
+that became an image. Investigate a mismatch before saving; the converter may have dropped text,
+or the source may have changed while the body was being built.
+
 ### 8. Save
 
 Send the complete body. Write a version message that names what changed in this save.
 
+Confirm that the source has not changed since the body was built. For a body too large to pass as
+one tool argument, compose it from complete chunks and join the chunks before the write call.
+
 ### 9. Confirm
 
-Fetch the page again, or ask the user to look at it. Report which capability fallbacks were used
-and what remains for the user to do.
+Fetch the page again, or ask the user to look at it. When the host can return stored structure,
+compare the saved counts and attributes for tables, line breaks, images, and macros with the body
+that was sent. Report which capability fallbacks were used and what remains for the user to do.
 
 ### 10. Clean up only with approval
 
@@ -155,6 +174,13 @@ is in `references/html-format.md`.
   empty attachment named after the identifier string.
 - Use the built-in table of contents macro rather than a hand-written list.
 - Do not invent a macro identifier. Omit it on a new macro, and preserve one that already exists.
+- Preserve source paragraph boundaries. Add line breaks inside a paragraph only when the user asks
+  and only where a sentence ends.
+- Derive width and line-length thresholds from the actual display width, not a fixed character
+  count.
+- Apply the selected table layout, column-width, and cell-spacing rules consistently throughout
+  the document.
+- Compare the finished body against the current source before saving.
 
 ## Safety
 
@@ -178,6 +204,8 @@ Read these when the step calls for them, not upfront.
 | Path | Contract |
 |---|---|
 | `scripts/image_size.py` | Reads PNG, JPEG, and GIF dimensions using only the standard library. Reports unsupported input as a failure rather than skipping it |
+| `scripts/column_widths.py` | Produces a deterministic column-width estimate whose integer widths sum to the requested total. Rejects impossible floors and image columns without an explicit floor |
+| `scripts/text_parity.py` | Compares text after exact normalization of its declared Markdown subset. Reports unsupported constructs instead of guessing |
 | `scripts/validate_body.py` | Validates the mechanical body rules within its declared scope. Sound and complete inside that scope, silent outside it |
 | `scripts/render_diagrams.mjs` | Captures elements from a local HTML file to images. Declares its browser dependency and fails loudly when it is missing |
 | `assets/diagram-template.html` | Starting point for hand-built diagrams. Colors and layout are defaults, not requirements |
