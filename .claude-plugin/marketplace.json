@@ -1,0 +1,14 @@
+{
+  "name": "hei5enbug",
+  "owner": {
+    "name": "hei5enbug",
+    "url": "https://github.com/hei5enbug"
+  },
+  "description": "Portable skills for AI coding agents.",
+  "plugins": [
+    {
+      "name": "hei5enbug-agent-setup",
+      "source": "./"
+    }
+  ]
+}
