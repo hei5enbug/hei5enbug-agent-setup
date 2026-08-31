@@ -9,7 +9,7 @@
       "expectations": [
         "The response preserves literal implementation and interface names.",
         "The response does not classify a Korean expression as invalid from its suffix or final consonant.",
-        "Each revised requirement has one target, operation, and outcome without unnecessary detail."
+        "Each revised requirement has one target, operation, and observable outcome without unnecessary detail."
       ]
     },
     {
@@ -32,6 +32,30 @@
         "Each topic has one non-overlapping source section and stable references elsewhere.",
         "The four-option comparison uses one table with consistent dimensions.",
         "The unbranched duplicate diagram is removed rather than restyled."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Improve a Korean event-delivery design containing English-first translationese, nominalized operations, mixed tone, repeated '해당', deliberate spacing variation, and unverified claims such as '혁신적' and '50% faster'. Keep Kafka topic names, JSON fields, numbers, negation, and retry semantics exact.",
+      "expected_output": "The revision uses direct, standard Korean while preserving every literal contract and meaning-bearing detail.",
+      "files": [],
+      "expectations": [
+        "The response preserves topic names, JSON fields, numbers, negation, modality, and retry semantics exactly.",
+        "The response uses standard Korean spacing and one tone instead of introducing variation to appear human.",
+        "Translationese and nominalized operations are replaced only when the replacement preserves meaning.",
+        "Unsupported evaluative and performance claims are removed, qualified, or given a reproducible basis."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Review only, without editing, an authentication redesign RFC that explains the happy path but omits trust boundaries, token lifetime, invalid transitions, partial failure, rollback, observability, and acceptance criteria. The RFC cites 'the section above' and says the new flow is safer.",
+      "expected_output": "The review returns prioritized, location-specific findings and concrete corrections without rewriting the RFC.",
+      "files": [],
+      "expectations": [
+        "The response remains in review mode and does not present a rewritten document as the result.",
+        "Findings cover each applicable missing design concern and explain implementation or validation impact.",
+        "The positional reference is replaced by a stable path-and-heading reference proposal.",
+        "The safety claim requires a criterion and evidence rather than being accepted at face value."
       ]
     }
   ]
