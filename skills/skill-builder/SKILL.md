@@ -33,6 +33,9 @@ Keep the workflow stable across agent products by adapting to capabilities, not 
    Use a task-local writable path for drafts, or ask for the destination when it materially affects the result.
 8. Keep every skill self-contained. A skill may use its own bundled resources and declared host capabilities, but must not name, import, invoke, read, or depend on a sibling skill's files.
    Duplicate a small essential rule when necessary instead of creating a cross-skill handoff.
+9. Target the same quality contract on every host, not identical output.
+   Judge each host against shared acceptance criteria. Wording differences that satisfy the same
+   criteria are not defects, and chasing sentence-level parity overdesigns the skill.
 
 Use this capability mapping:
 
@@ -110,6 +113,43 @@ skill-name/
 
 Keep host-specific manifests when the target requires them. Do not duplicate the core workflow across adapters.
 Do not create a product-specific manifest merely because the current agent host supports one; add it only for a requested target or preserve it when updating an existing package.
+
+### Multiple target hosts
+
+When a skill must run on more than one host, keep one canonical skill body as the single source of
+truth. Never fork a per-host copy and maintain the copies separately; forks drift apart almost
+immediately.
+
+- Keep behavior rules, quality criteria, terminology, output contracts, and review checklists in
+  the shared body.
+- Put only genuine host differences in an adapter: trigger and discovery metadata, tool names,
+  script invocation, host-required metadata, and workflows that use a host-only capability.
+- Evaluate every target host against the same eval corpus and acceptance criteria so results stay
+  comparable.
+- Attribute a failure before editing. When all hosts fail a case, fix the shared rule. When one
+  host fails, first check whether the shared rule is ambiguous and clarify it. Add an adapter rule
+  only when the clarified shared rule still fails on that host. Rerun the corpus on every host
+  after either change.
+- Do not weaken or pad shared rules to a lowest common denominator because one host follows them
+  poorly. Contain that host's gap in its adapter.
+
+### Translated mirrors
+
+A skill may carry a human-readable translation of an authoritative file, such as
+`references/ko/rubric.ko.md` beside `references/rubric.md`. This rule applies only to a skill that
+already contains such a mirror. Never add a translated mirror to a skill that has none.
+
+When a mirror exists, it is part of the same change as its source. Whenever you edit an
+authoritative file, update every mirror of that file in the same task. Do not defer the update or
+leave a mirror describing a rule the source no longer contains.
+
+A stale mirror is a defect even though no agent reads it. Readers use it to learn how the skill
+behaves, so an outdated mirror teaches a rule the skill does not follow.
+
+Each mirror must name its source and its non-authoritative status. `SKILL.md` must tell the agent
+not to read mirrors during execution. When a rule reverses, verify that the mirror states the new
+rule rather than merely adding text near the old one. When a source file is deleted or renamed,
+delete or rename its mirrors in the same task.
 
 ### Automation boundary
 
@@ -207,6 +247,9 @@ Output: feat(auth): implement JWT-based authentication
 ## Test cases
 
 Create 2–3 realistic prompts for the first iteration.
+Vary the input types the skill will actually meet rather than testing one shape repeatedly.
+As the set grows, include at least one case where the correct behavior is minimal or no change at
+all. An overaggressive skill rewrites acceptable input and fails this case.
 Share them for confirmation when user judgment is needed; if the user has already authorized execution and the expected behavior is clear, proceed and report the chosen cases.
 
 Save cases to `evals/evals.json` when filesystem access is available:
@@ -331,6 +374,8 @@ When file-based feedback is available, read `feedback.json`. Empty feedback mean
    Bundle a script only when it satisfies "Automation boundary" and provides a measurable correctness, maintenance, or performance benefit.
 5. When multiple runs repeat a contextual judgment, improve the skill's decision procedure and examples instead of converting the judgment into a script.
 6. Keep portable behavior in the core and isolate host-specific mechanics in adapters.
+   For a multi-host skill, decide where a fix belongs with the failure-attribution rule in
+   "Multiple target hosts".
 
 After revising, rerun the cases in a new iteration.
 Compare against the original or previous version according to the user's decision.
@@ -424,6 +469,10 @@ If the installed source is read-only, copy it to a writable temporary location, 
 - Core instructions use capability-based language and avoid accidental vendor coupling.
 - Every example was graded against the skill's own rules: good examples satisfy all of them, bad examples violate the rule they illustrate.
 - Required host-specific behavior is isolated and documented.
+- For a multi-host skill, every host was evaluated on the same eval corpus, and each adapter rule
+  traces to a host difference that a shared clarification could not fix.
+- Every translated mirror in the skill matches its current source, including reversed rules,
+  deletions, and renames.
 - The skill contains no sibling-skill names, paths, invocations, imports, or file dependencies.
 - Every bundled script has a complete input and output contract and reports unsupported inputs explicitly.
 - Every bundled validator is sound and complete within its declared scope; contextual judgments remain with the model or user.
