@@ -1,152 +1,172 @@
 ---
 name: technical-design-writer
 description: >-
-  Create, improve, or review technical design documents with precise terminology, complete
-  implementation rules, non-overlapping structure, plain language, effective tables and diagrams,
-  stable references, and progressive outline narrowing. Use for requests such as "설계 문서 작성",
-  "설계 문서 개선", "설계 문서 목차", or "design doc". Do not use for translation, typo
-  correction, or prose polishing unrelated to technical design.
+  Create, improve, or review implementation-ready technical design documents, architecture
+  proposals, RFCs, system designs, data designs, API designs, and design outlines. Use for requests
+  such as "설계 문서 작성", "설계 문서 개선", "설계 문서 목차", "design doc", or "RFC review".
+  Enforce evidence, complete design coverage, explicit trade-offs, precise contracts, predictable
+  structure, natural Korean, effective tables and diagrams, and stable references. Do not use for
+  translation, generic copyediting, user guides, release notes, or code review without design intent.
 metadata:
-  version: "1.5.0"
+  version: "2.0.1"
 compatibility: >-
-  Works in any agent host that can read and write Markdown. Repository inspection and Mermaid
+  Works in any agent host that can read and write Markdown. Repository inspection and diagram
   rendering improve evidence and review but are not required for the core workflow.
 ---
 
 # Technical Design Writing
 
-Create documents that let a reader implement, validate, or decide without guessing.
+Create documents that let the intended reader implement, validate, operate, or approve a design
+without guessing.
 
-## Authority and scope
+## Authority and resources
 
-Use this English `SKILL.md` as the only executable instruction source.
-`README.ko.md` is a non-authoritative Korean translation for human readers; do not read or use it while executing the skill.
-Treat Korean text in this file as target-language data, not additional instructions.
+Use this file and the references it explicitly requires as executable instructions.
+`README.ko.md` is a non-authoritative Korean mirror for human readers; do not read it during execution.
 
-Apply it only to technical design work, after higher-priority instructions, unless the user explicitly excludes a rule.
+For every Korean deliverable, read `references/korean-writing.md` before drafting or reviewing.
+
+Apply this skill only to technical design work, after higher-priority instructions. User requirements,
+repository rules, supplied templates, and established project conventions override this skill.
+
+## Modes
+
+| Mode | Required result |
+|---|---|
+| Create | Produce a complete design document from verified requirements and evidence. |
+| Improve | Preserve supported intent and contracts while repairing omissions, ambiguity, duplication, and structure. |
+| Review | Do not mutate files unless asked. Return prioritized findings with location, impact, and correction. |
 
 ## Workflow
 
-1. Define the audience, scope, required decisions, implementation questions, and validation questions.
-   For an existing document, also identify missing content, unsupported claims, and rule violations.
-2. Finalize second-level headings before writing the body. Narrow the outline in five passes:
-   1. Start from the current chapter structure or a first-level outline.
-   2. Remove sections that duplicate a role or restate information already clear elsewhere.
-   3. Put each table, diagram, and tool in the section where it is used.
-   4. Merge related sections or split dense ones without dropping required topics.
-   5. Expand every section through second-level headings and finalize them.
-3. Gather the evidence and source contracts needed to support the design.
-4. Draft under the rules below. For a Korean deliverable, complete the draft in English first, then translate it into Korean.
-5. Plan terminology changes once for the entire scope:
-   1. Find every occurrence and group positions such as standalone terms, compounds, headings, table headers, and implementation identifiers.
-   2. Test one replacement for every position and record one old-term-to-new-term mapping.
-   3. Apply the mapping across all files in one pass.
-   4. Update every affected reference and verify cited headings against actual headings.
-   5. Ask before renaming an implementation identifier derived from the document.
-6. Review every rule in this file and remove unsupported or unnecessary statements.
+1. Determine the mode, audience, reader goal, scope, required decisions, and evidence sources. For an
+   existing document, also identify unsupported claims, missing design coverage, and rule violations.
+2. Build a private coverage matrix from "Design coverage". Mark each concern applicable or inapplicable
+   with a reason. Do not add empty or irrelevant sections merely to expose the matrix.
+3. Finalize second-level headings before writing the body. Narrow the outline in five passes:
+   1. Start from the current structure or a first-level outline.
+   2. Give the document one reader goal and each section one non-overlapping responsibility.
+   3. Remove repeated summaries and put every table, diagram, and tool where it is used.
+   4. Order prerequisites before dependent decisions; merge related sections or split dense ones.
+   5. Expand through second-level headings and verify that every applicable coverage concern has one home.
+4. Gather source contracts and evidence. Prefer requirements, code, schemas, configuration, measured
+   results, and official interfaces over descriptive prose. Label unknowns and assumptions; never invent.
+5. Draft the opening first. State the selected design, reader outcome, scope, and material risks before
+   background or implementation detail.
+6. Draft the body directly in the target language. Apply "Design coverage", "Precision", "Structure",
+   and the required language reference.
+7. Plan terminology changes once for the entire scope. Record one old-to-new mapping, apply it across
+   all affected files, update references, and verify cited headings. Ask before renaming implementation
+   identifiers or externally visible contract names.
+8. Validate copied contracts, examples, commands, links, calculations, and diagrams with the strongest
+   available method. Do not claim validation that did not run.
+9. Run the completion gate. Remove drafting notes, unsupported claims, and content that does not help
+   implementation, validation, operation, or approval.
 
-## Terminology
+## Design coverage
 
-| Rule | Requirement |
+Include each applicable concern exactly once. Combine concerns when one section can cover them clearly.
+
+| Concern | Questions the document must answer |
 |---|---|
-| Canonical terms | Use one full term for each meaning and one meaning for each term. Do not shorten a canonical term or reuse any word inside it with another sense. |
-| Plain language | Use established plain wording in the target language. Keep a foreign-language term only when no suitable equivalent exists. |
-| Literal names | Preserve proper nouns and exact implementation or contract names despite grammar differences. Define abbreviations and symbols unless their source fixes them. |
-| Established sense | Use dictionary or established domain meanings. Avoid coined, figurative, system-conflicting, or neighboring-field senses. Definition substitution must preserve the statement. |
-| Precise operations | Use the verb or technical noun that names the actual operation. If one word needs different replacements by context, replace each use with its specific meaning. |
-| Distinct names | Name an item by what distinguishes it from peers, usually what it owns or produces. Keep a qualifier only when the unqualified name denotes a different item. |
+| Context | What problem, reader outcome, goals, non-goals, constraints, and assumptions define the design? |
+| Decision | What is selected, why is it selected, and which alternatives and trade-offs were rejected? |
+| Boundary | Which actors, systems, owners, dependencies, trust boundaries, and responsibilities are in scope? |
+| Contract | What inputs, outputs, schemas, invariants, compatibility rules, and data lifecycles apply? |
+| Behavior | What are the normal flow, ordering, state changes, concurrency rules, idempotency rules, and fallbacks? |
+| Failure | How are invalid input, partial failure, timeouts, retries, duplicates, and recovery handled? |
+| Safety | What authentication, authorization, privacy, integrity, abuse, and compliance controls apply? |
+| Operations | What capacity, observability, ownership, support, and cost requirements apply? |
+| Change | How will rollout, migration, backward compatibility, rollback, and cleanup work? |
+| Proof | What tests, measurements, acceptance criteria, and open decisions prove or block completion? |
 
-## Semantic precision
+## Precision
 
-Include information only when its omission permits materially different implementations, validations, decisions, or interpretations.
-For each statement, try to construct two materially different outcomes that both satisfy it.
-If this is possible, add only the information that distinguishes the outcomes.
+Include information when omitting it permits materially different implementations, validations,
+operations, decisions, or interpretations. For each rule, try to construct two materially different
+outcomes that both satisfy it. Add only the information that distinguishes them.
 
 | Check | Requirement |
 |---|---|
-| Subject identity | Name the subject at the abstraction level on which the statement operates. Do not substitute a related object, identifier, representation, or container. |
-| Reference | A reference resolves within its sentence, cell, or list introduction. Otherwise repeat the canonical term or use a stable name; position, pronoun, or count alone is insufficient. |
-| Operation | State the operation, affected subject, and observable result. Add actor, source, destination, condition, priority, or order when omission changes behavior. |
-| Rule completeness | A decision or transformation states its inputs, evaluation order or precedence, output, and fallback or exceptional result. |
-| Evidence | A quantity includes its unit and reproducible measurement basis. A qualitative claim that affects implementation, validation, or a decision names its criterion or evidence. |
-| Structured content | A table cell forms one proposition with its headers. A list item forms one proposition with its introduction. |
+| Subject | Name the actor or object at the correct abstraction level, not its identifier or representation. |
+| Operation | State the operation, affected subject, and result. Add conditions and order when they change behavior. |
+| Rule | State inputs, evaluation order or precedence, output, and fallback or exceptional result. |
+| State | Define valid states, transition triggers, guards, terminal states, and behavior for invalid transitions. |
+| Evidence | Give quantities a unit and reproducible basis. Give material qualitative claims a criterion or source. |
+| Reference | Make a reference resolve in its sentence, cell, or list introduction; otherwise repeat the stable name. |
+| Structure | Make every cell one proposition with its headers and every item one proposition with its introduction. |
 
-Give actions only to actors; use a state or change predicate for other subjects.
-Keep one claim in each sentence and one central idea in each paragraph.
-Read a sentence's subject and predicate alone; rewrite when they do not agree.
-Use an exact count when the available data permits one, and an approximation only when it does not.
-Replace a colon followed by items with a complete sentence, list introduction, or table.
+Give actions only to actors; use state or change predicates for other subjects. Keep one claim per
+sentence and one central idea per paragraph. Use exact counts when the evidence permits them. Distinguish
+requirements, current facts, assumptions, proposals, and open questions.
 
-A label identifies a subject, property, category, relationship, or state clearly and concisely.
-A statement communicates an operation, condition, decision, result, or reason without omitting meaning-changing information.
-Items with the same role use a consistent semantic structure and writing style.
-A decision node names the property being judged, and its edges name the outcomes.
+## Terminology
 
-## Structure and size
+Resolve terminology in this order:
 
-- Give every document and section one distinct scope. Cover each topic in one place.
-- Keep only content whose removal would reduce implementation, validation, understanding, or decision quality.
-- Use subheadings for subdivisions.
-- Write every heading as a noun phrase without a predicate, question, or trailing colon.
+1. Explicit user or project glossary
+2. Literal implementation, interface, schema, and contract names
+3. Official product or established domain terms
+4. Established plain wording in the target language
+5. The most common existing form only when the remaining choices are equally correct
 
-| Target | Limit |
-|---|---:|
-| Rendered line | 200 characters |
-| File | 500 lines |
-| Section depth | 3 levels |
+Use one canonical term for each meaning and one meaning for each term. Define an unfamiliar term before
+its first dependent use. Define an abbreviation once only when it improves repeated use or searchability,
+then use one form consistently. Do not replace a precise technical term with an easier but different term.
 
-Do not split a file within the limits. Split a file that exceeds a limit by responsibility.
-Inside a table cell, `<br>` starts a new rendered line.
+## Structure
 
-## Markdown and paragraphs
+- Give one page one reader goal and one section one responsibility. Split when goals differ or a fourth-level
+  heading would be required; do not split merely to shorten a file.
+- Put a concise decision summary directly under the title. Put value and outcome before history and detail.
+- Order information from prerequisites to decisions, behavior, failure handling, change, and proof.
+- Use noun-phrase headings without trailing punctuation. Keep Korean headings within 30 characters unless
+  an exact identifier or distinguishing qualifier would be lost.
+- Use at most three heading levels. Keep authored Markdown files at 500 lines or fewer. Exempt a supplied
+  template or generated contract only when splitting it would change the artifact.
+- Keep Markdown prose source lines within 120 characters. Exempt table rows, URLs, code, and exact literals.
+  Break only after a complete sentence and preserve the intended rendered paragraph.
 
-- Separate paragraphs with one blank line.
-- Put a blank line before and after headings, tables, code blocks, and lists.
-- Align a multiline list continuation with the first character of the item text.
-- Keep source lines together when Markdown should render one flowing paragraph.
-- Break a paragraph only after a complete sentence.
-- For a required visible break, use `<br>` only when the target supports inline HTML; otherwise use a paragraph, list item, or table row.
-- Never use trailing spaces to create a line break.
+## Tables and diagrams
 
-## Tables
+Use a table when three or more comparable items or dimensions share stable comparison fields. Use prose
+for a small comparison. Keep headers and cells semantically parallel; move multi-paragraph detail to the body.
 
-- Use a table when three or more items or three or more dimensions share the same comparison dimensions.
-- Keep a comparison of two items across two dimensions in prose.
-- When a cell exceeds two sentences or 120 characters, split it at sentence boundaries with `<br>`.
-- If one sentence exceeds 120 characters, rewrite it or move its detail to the section body.
-- For three or more items in one cell, start each item with `<br>· `.
-- Move content that needs more than five rendered cell lines into the section body, leaving a short reference in the cell.
-- Do not restore unnecessary content merely to fill a table.
+Use a diagram when a complex branch, state change, interaction, ownership boundary, dependency graph, or
+data relationship is clearer visually. Choose the smallest fitting form: flow or state diagram for behavior,
+sequence diagram for interactions, component diagram for boundaries, and entity relationship diagram for data.
 
-## Diagrams
+Do not duplicate adjacent prose. Use nodes for actors or states and edge labels for conditions or transferred
+data. Avoid one-node groups and ambiguous boundary-crossing arrows. Render every diagram and inspect labels,
+clipping, overlap, routing, and visual balance. If rendering is unavailable, disclose it and verify syntax only.
 
-- Use Mermaid only when a branch, state change, or interaction communicates structure or flow better than prose or a table.
-- Do not diagram a simple fact list, a one-line explanation, or an unbranched sequence.
-- Remove a diagram that duplicates adjacent content or is less clear than prose or a table.
-- Balance both dimensions with real branches or siblings; changing direction does not fix a one-dimensional shape.
-- Put pass-through elements on edges and reserve nodes for actors.
-- A boundary-crossing arrow attaches to the subgraph boundary, not its node. Use a subgraph only for siblings with few crossing arrows, and never wrap one node.
-- Render every diagram and inspect clipping, overlap, routing, labels, and visual balance.
+## Markdown and references
 
-## Duplication, references, and contracts
-
+- Separate paragraphs with one blank line. Put a blank line around headings, tables, code blocks, and lists.
+- Use ordered lists only for sequence or priority. Keep items at one level semantically and grammatically parallel.
+- Use backticks for literal identifiers, paths, commands, values, and code. Use descriptive link text.
+- Use explicit paragraphs, list items, or table rows for visible breaks. Do not use trailing spaces for line breaks.
+- Keep one detailed source for each topic. Summarize and link elsewhere without dropping source conditions.
+- Cite a document path and heading title, not a section number, position, or special reference symbol. Verify
+  every cited heading against the current source.
+- When copying a contract, name its source of truth and every artifact that must change with it.
 - Never reference documentation from code, including comments and docstrings.
-- Keep one detailed source for each topic. Summarize and link elsewhere without dropping any condition from the source.
-- Cite a document path and section title, not a section number, position, or reference symbol. Verify every cited title against the actual heading.
-- When copying a contract from code or an external source, name the source of truth and every file that must change with that contract.
 
 ## Tool boundary
 
-Use mechanical tools only for structural conditions they can decide exactly.
-Search may locate text but cannot decide semantic quality.
-Before creating custom tooling, compare available host capabilities and established tools.
-Create a validator only when every reported failure is a real violation and every supported violation fails.
-Keep semantic precision as contextual model judgment.
+Use mechanical tools only for exact conditions. Search can locate candidates but cannot decide semantic quality.
+Render diagrams and execute examples when possible. Create a validator only when every reported failure is a
+real violation and every supported violation fails. Keep contextual precision, style, and applicability as model
+or human judgment.
 
 ## Completion gate
 
-- [ ] The workflow ran in order, including outline narrowing and one-pass terminology replacement.
-- [ ] Every rule in "Terminology" and "Semantic precision" passes without adding unnecessary detail.
-- [ ] Every document part meets "Structure and size", "Markdown and paragraphs", "Tables", and "Diagrams".
-- [ ] Every source, summary, reference, and copied contract meets "Duplication, references, and contracts".
-- [ ] Every mechanical check meets "Tool boundary", and every semantic judgment was reviewed in context.
+- [ ] The workflow ran in order, and the output matches Create, Improve, or Review mode.
+- [ ] Every applicable design concern has one complete home; every omitted concern is genuinely inapplicable.
+- [ ] Requirements, facts, assumptions, proposals, and open questions are distinguishable.
+- [ ] Every rule, state transition, contract, failure path, migration step, and acceptance criterion is unambiguous.
+- [ ] Every claim, quantity, example, command, link, copied contract, and diagram has adequate evidence
+      or a clear limitation.
+- [ ] Terminology, tone, numbers, units, headings, lists, tables, diagrams, and references are consistent.
+- [ ] The target-language reference passes, and exact literals, causality, negation, modality, and scope are preserved.
+- [ ] No unnecessary content, duplicated source, unresolved placeholder, or unsupported claim remains.
