@@ -6,7 +6,9 @@ AIコーディングエージェント向けのカスタムスキル集です。
 
 ## 概要
 
-各スキルは `skills/` 配下に独立したフォルダを持ち、手順・参照資料・スクリプトが一式まとまっています。同じ `SKILL.md` が、対応するすべてのホストで変更なしに動作します。
+プラグインに含まれる各スキルは `skills/` 配下にあり、手順・参照資料・スクリプトが一式まとまっています。
+プラグインに含めないスキルは `standalone-skills/` 配下にあります。
+同じ `SKILL.md` が、対応するすべてのホストで変更なしに動作します。
 
 ## 対応ホスト
 
@@ -18,20 +20,22 @@ AIコーディングエージェント向けのカスタムスキル集です。
 
 ```
 hei5enbug-agent-setup/
+├── standalone-skills/
+│   ├── omo-model-config/
+│   └── portable-opencode-setup/
 └── skills/
     ├── deep-interview/
     ├── flowchart-design/
     ├── humanize-korean/
     ├── markdown-to-confluence/
-    ├── omo-model-config/
-    ├── portable-opencode-setup/
     ├── skill-builder/
     ├── suggest-commit/
     ├── technical-design-writer/
     └── tiki-taka/
 ```
 
-各フォルダは自身の `SKILL.md` と、必要な参照資料・スクリプトを保持しています。共有される最上位の設定ファイルはなく、すべてのスキルが単体で完結しています。
+各フォルダは自身の `SKILL.md` と、必要な参照資料・スクリプトを保持しています。
+プラグインは `skills/` のみを検出し、`standalone-skills/` は検出しません。
 
 ## スキル一覧
 
@@ -41,8 +45,6 @@ hei5enbug-agent-setup/
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | SVG、HTML/CSS、Figma、draw.io のどのツールで作っても一つのデザインシステムのように見えるようにするフローチャート共通デザイン基準です。 |
 | [`humanize-korean`](skills/humanize-korean/SKILL.md) | 内容はそのままに、AIが書いたような韓国語の文章を人が書いたように自然な韓国語へ書き直します。 |
 | [`markdown-to-confluence`](skills/markdown-to-confluence/SKILL.md) | MarkdownドキュメントをConfluenceページとして公開し、以降の編集でも目次マクロ・本文画像・添付・画像化した図が正しく保たれるようにします。 |
-| [`omo-model-config`](skills/omo-model-config/SKILL.md) | 上流のallowlistを基準に、OpenCode/oh-my-openagentのモデルルーティング（`model`、`variant`、`fallback_models`）を安全に編集します。 |
-| [`portable-opencode-setup`](skills/portable-opencode-setup/SKILL.md) | 新しいマシンにOpenCode/oh-my-openagent設定の不足分だけを追加し、既存の設定には手を加えません。 |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | 下書き → テスト → レビュー → 改善のループを通じて、エージェントスキルを作成・検証・パッケージ化します。 |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | 現在のdiffと直近のコミット履歴を読み取り、このリポジトリのスタイルに合ったコミットメッセージを5件提案します。 |
 | [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | 開発設計ドキュメントを新しく書く、または整理する際のルールと、目次を段階的に絞り込む5ステップの手順です。 |
@@ -50,4 +52,7 @@ hei5enbug-agent-setup/
 
 ## 関連リンク
 
-- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — `omo-model-config` と `portable-opencode-setup` が設定を扱う対象のプラグインシステム
+- [`omo-model-config`](standalone-skills/omo-model-config/SKILL.md) と
+  [`portable-opencode-setup`](standalone-skills/portable-opencode-setup/SKILL.md) は独立したソースとして残り、
+  プラグインのスキル一覧には含まれません。
+- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — 独立した OpenCode スキルが設定するプラグインシステム
