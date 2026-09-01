@@ -8,7 +8,7 @@ description: >-
   structure, natural Korean, effective tables and diagrams, and stable references. Do not use for
   translation, generic copyediting, user guides, release notes, or code review without design intent.
 metadata:
-  version: "2.1.0"
+  version: "2.1.1"
 compatibility: >-
   Works in any agent host that can read and write Markdown. Repository inspection and diagram
   rendering improve evidence and review but are not required for the core workflow.
@@ -57,12 +57,15 @@ repository rules, supplied templates, and established project conventions overri
    and the required language reference.
 7. Plan terminology changes once for the entire scope. Record one old-to-new mapping, apply it across
    all affected files, update references, and verify cited headings. Ask before renaming implementation
-   identifiers or externally visible contract names.
-8. Validate copied contracts, examples, commands, links, calculations, and diagrams with the strongest
+   identifiers or externally visible contract names. Keep upstream source-data names and record files that
+   code reads by name outside the rename scope.
+8. When a decision reverses an earlier one, update every document that records the earlier decision in the
+   same change, and state why its original rationale no longer holds.
+9. Validate copied contracts, examples, commands, links, calculations, and diagrams with the strongest
    available method. Do not claim validation that did not run.
-9. Separate unsupported content by "Unsupported content". Remove drafting notes and content that does
-   not help implementation, validation, operation, or approval.
-10. Run the completion gate. Then report outside the document what became an assumption or an open
+10. Separate unsupported content by "Unsupported content". Remove drafting notes and content that does
+    not help implementation, validation, operation, or approval.
+11. Run the completion gate. Then report outside the document what became an assumption or an open
     question, what was removed, and where the working record file is.
 
 ## Design coverage
@@ -125,6 +128,9 @@ requirements, current facts, assumptions, proposals, and open questions.
 
 ## Terminology
 
+Terminology decisions apply to the whole scope the change touches, not to one file. When a document belongs
+to a set that shares a subject, a term already established in that set outranks a new choice.
+
 Resolve terminology in this order:
 
 1. Explicit user or project glossary
@@ -136,6 +142,11 @@ Resolve terminology in this order:
 Use one canonical term for each meaning and one meaning for each term. Define an unfamiliar term before
 its first dependent use. Define an abbreviation once only when it improves repeated use or searchability,
 then use one form consistently. Do not replace a precise technical term with an easier but different term.
+
+Consistency requires a check, not an assertion. Before the completion gate, list the recurring concepts the
+document names, and for each one collect every surface form the document actually uses. Where two forms
+denote one concept, keep the form the resolution order selects and replace the rest. Where one form denotes
+two concepts, rename one of them.
 
 ## Structure
 
@@ -163,6 +174,11 @@ Do not duplicate adjacent prose. Use nodes for actors or states and edge labels 
 data. Avoid one-node groups and ambiguous boundary-crossing arrows. Render every diagram and inspect labels,
 clipping, overlap, routing, and visual balance. If rendering is unavailable, disclose it and verify syntax only.
 
+After summarizing a rule into a diagram or table, verify the branch count and evaluation order against the
+source rule. A summary can drop a step without producing any visible error. In an entity relationship diagram,
+verify every relationship cardinality against the referencing column's nullability. Draw an optional reference
+as zero-or-one, never as exactly-one.
+
 ## Markdown and references
 
 - Separate paragraphs with one blank line. Put a blank line around headings, tables, code blocks, and lists.
@@ -170,6 +186,7 @@ clipping, overlap, routing, and visual balance. If rendering is unavailable, dis
 - Use backticks for literal identifiers, paths, commands, values, and code. Use descriptive link text.
 - Use explicit paragraphs, list items, or table rows for visible breaks. Do not use trailing spaces for line breaks.
 - Keep one detailed source for each topic. Summarize and link elsewhere without dropping source conditions.
+- When several documents each keep a list of the same kind, cross-check the entries whenever any of them changes.
 - Cite a document path and heading title, not a section number, position, or special reference symbol. Verify
   every cited heading against the current source.
 - When copying a contract, name its source of truth and every artifact that must change with it.
@@ -194,4 +211,6 @@ or human judgment.
 - [ ] The target-language reference passes, and exact literals, causality, negation, modality, and scope are preserved.
 - [ ] Every material unsupported claim sits in the assumptions and open questions section, the body carries
       no inline handling mark, and every removal is recorded in the working file and reported to the user.
+- [ ] Every acceptance criterion and validation item relies only on rules this document states or explicitly
+      cites; no criterion presupposes an unstated rule.
 - [ ] No unnecessary content, duplicated source, unresolved placeholder, or unrecorded unsupported claim remains.
