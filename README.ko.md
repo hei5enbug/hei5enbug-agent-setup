@@ -6,7 +6,9 @@ AI 코딩 에이전트를 위한 커스텀 스킬 모음입니다. 호스트별�
 
 ## 개요
 
-각 스킬은 `skills/` 아래 자신만의 폴더를 가지며, 그 안에 지침·참조 문서·스크립트가 함께 들어 있어 독립적으로 동작합니다. 같은 `SKILL.md`가 지원하는 모든 호스트에서 수정 없이 그대로 작동합니다.
+플러그인 스킬은 `skills/` 아래 자신의 폴더에 지침·참조 문서·스크립트를 함께 둡니다.
+플러그인에 포함하지 않는 스킬은 `standalone-skills/`에 둡니다. 같은 `SKILL.md`가 지원하는
+모든 호스트에서 수정 없이 작동합니다.
 
 ## 지원 호스트
 
@@ -23,24 +25,25 @@ hei5enbug-agent-setup/
 │   ├── marketplace.json
 │   └── plugin.json
 ├── .codex-plugin/plugin.json
+├── standalone-skills/
+│   ├── omo-model-config/
+│   └── portable-opencode-setup/
 └── skills/
     ├── decision-navigator/
     ├── deep-interview/
     ├── flowchart-design/
     ├── humanize-korean/
     ├── markdown-to-confluence/
-    ├── omo-model-config/
-    ├── portable-opencode-setup/
     ├── skill-builder/
     ├── suggest-commit/
     ├── technical-design-writer/
     └── tiki-taka/
 ```
 
-각 스킬 폴더는 자신만의 `SKILL.md`와 필요한 참조 문서·스크립트를 담고 있습니다.
-플러그인
-매니페스트는 호스트별 디렉터리에 스킬을 복사하지 않고 같은 `skills/` 디렉터리를 Codex와
-Claude Code에 패키징합니다.
+각 플러그인 스킬 폴더는 자신의 `SKILL.md`와 필요한 참조 문서·스크립트를 담고 있습니다.
+플러그인 매니페스트는 호스트별 디렉터리에 스킬을 복사하지 않고 같은 `skills/` 디렉터리를
+Codex와 Claude Code에 패키징합니다. `standalone-skills/` 디렉터리는 두 플러그인의 스킬
+검색 경로에 포함되지 않습니다.
 
 ## 플러그인 설치
 
@@ -98,8 +101,6 @@ Claude Code를 다시 시작합니다.
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | SVG, HTML/CSS, Figma, draw.io 등 어떤 도구로 만들어도 하나의 디자인 시스템처럼 보이게 하는 플로우차트 공통 디자인 기준입니다. |
 | [`humanize-korean`](skills/humanize-korean/SKILL.md) | 내용은 그대로 두고, AI가 쓴 듯한 한글 문장을 사람이 쓴 것처럼 자연스러운 한국어로 다시 씁니다. [한국어 안내](skills/humanize-korean/README.ko.md) |
 | [`markdown-to-confluence`](skills/markdown-to-confluence/SKILL.md) | 마크다운 문서를 Confluence 페이지로 발행하고, 이후 수정에서도 목차 매크로·본문 이미지·첨부·이미지로 만든 다이어그램이 그대로 유지되게 합니다. |
-| [`omo-model-config`](skills/omo-model-config/SKILL.md) | 업스트림 allowlist를 기준으로 OpenCode/oh-my-openagent의 모델 라우팅(`model`, `variant`, `fallback_models`)을 안전하게 수정합니다. |
-| [`portable-opencode-setup`](skills/portable-opencode-setup/SKILL.md) | 새 기기에 OpenCode/oh-my-openagent 설정 중 빠진 부분만 추가하며, 기존 설정은 건드리지 않습니다. [한국어 안내](skills/portable-opencode-setup/README.ko.md) |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | 초안 작성 → 테스트 → 검토 → 개선 순환을 통해 에이전트 스킬을 만들고, 검증하고, 패키징합니다. |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | 현재 diff와 최근 커밋 이력을 읽어, 이 저장소의 스타일에 맞는 커밋 메시지 5개를 제안합니다. |
 | [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | 개발 설계 문서를 새로 쓰거나 정리할 때 따르는 규칙과, 목차를 단계적으로 좁혀 가는 5단계 절차입니다. [한국어 안내](skills/technical-design-writer/README.ko.md) |
@@ -107,4 +108,8 @@ Claude Code를 다시 시작합니다.
 
 ## 관련 링크
 
-- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — `omo-model-config`와 `portable-opencode-setup`이 설정을 다루는 대상 플러그인 시스템
+- [`omo-model-config`](standalone-skills/omo-model-config/SKILL.md)와
+  [`portable-opencode-setup`](standalone-skills/portable-opencode-setup/SKILL.md)은 독립 실행용 소스로
+  유지하며 플러그인 스킬 목록에는 포함하지 않습니다.
+- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — 독립 실행용 OpenCode 스킬이
+  설정하는 플러그인 시스템

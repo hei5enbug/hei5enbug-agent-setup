@@ -6,7 +6,8 @@ A portable collection of custom skills for AI coding agents, built to be shared 
 
 ## Overview
 
-Each skill lives in its own folder under `skills/` and is self-contained: its instructions, references, and scripts travel together. The same `SKILL.md` works unmodified on every supported host.
+Each plugin skill lives in its own folder under `skills/` and is self-contained. Skills kept outside the
+plugin bundle live under `standalone-skills/`. The same `SKILL.md` works unmodified on every supported host.
 
 ## Supported Hosts
 
@@ -23,22 +24,24 @@ hei5enbug-agent-setup/
 │   ├── marketplace.json
 │   └── plugin.json
 ├── .codex-plugin/plugin.json
+├── standalone-skills/
+│   ├── omo-model-config/
+│   └── portable-opencode-setup/
 └── skills/
     ├── decision-navigator/
     ├── deep-interview/
     ├── flowchart-design/
     ├── humanize-korean/
     ├── markdown-to-confluence/
-    ├── omo-model-config/
-    ├── portable-opencode-setup/
     ├── skill-builder/
     ├── suggest-commit/
     ├── technical-design-writer/
     └── tiki-taka/
 ```
 
-Each skill folder holds its own `SKILL.md` plus any references or scripts it needs. The plugin manifests package the
-same `skills/` directory for Codex and Claude Code without copying the skills into host-specific directories.
+Each plugin skill folder holds its own `SKILL.md` plus any references or scripts it needs. The plugin manifests
+package the same `skills/` directory for Codex and Claude Code without copying skills into host-specific directories.
+The `standalone-skills/` directory is not included in either plugin's skill discovery path.
 
 ## Plugin installation
 
@@ -96,8 +99,6 @@ required output labels, or evaluation fixtures.
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | A shared design standard so flow charts built in SVG, HTML/CSS, Figma, or draw.io all read as one design system. |
 | [`humanize-korean`](skills/humanize-korean/SKILL.md) | Rewrites AI-sounding Korean text into natural, human-sounding Korean without changing its meaning. [Korean guide](skills/humanize-korean/README.ko.md). |
 | [`markdown-to-confluence`](skills/markdown-to-confluence/SKILL.md) | Publishes a Markdown document to Confluence and keeps the page correct on later edits, covering the table of contents macro, inline images, attachments, and diagrams rendered to images. |
-| [`omo-model-config`](skills/omo-model-config/SKILL.md) | Safely edits OpenCode/oh-my-openagent model routing (`model`, `variant`, `fallback_models`) against an upstream allowlist. |
-| [`portable-opencode-setup`](skills/portable-opencode-setup/SKILL.md) | Adds missing OpenCode/oh-my-openagent config pieces on a new machine, additive-only, without touching existing settings. [Korean guide](skills/portable-opencode-setup/README.ko.md). |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | Creates, tests, and packages agent skills through a draft → test → review → improve loop. |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | Reads the current diff and recent commit history, then suggests five commit messages that match the repo's style. |
 | [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | Rules and a five-step narrowing process for writing or cleaning up technical design docs. [Korean guide](skills/technical-design-writer/README.ko.md). |
@@ -105,4 +106,8 @@ required output labels, or evaluation fixtures.
 
 ## Related
 
-- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — plugin system that `omo-model-config` and `portable-opencode-setup` configure
+- [`omo-model-config`](standalone-skills/omo-model-config/SKILL.md) and
+  [`portable-opencode-setup`](standalone-skills/portable-opencode-setup/SKILL.md) remain available as
+  standalone source and are not included in the plugin skill list.
+- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — plugin system configured by the
+  standalone OpenCode skills
