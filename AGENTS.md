@@ -4,7 +4,15 @@
 
 - Do all high-level reasoning in the main session: planning, architecture, trade-offs, problem definition, complex debugging, review, and key decisions. Never delegate these.
 - Search: prefer `rg` for text/symbol search and `fd` for file discovery; use `ast-grep` only when structural matching is clearly needed.
+- Content on a hosted service (Google Drive/Docs/Slides/Sheets, Atlassian, Azure DevOps, Figma, Slack, Notion): reach it through that service's MCP tools, not anonymous fetching (`WebFetch`, `curl`).
+  Anonymous fetching carries no session, so private links fail with 401. Fetch directly only for genuinely public pages, or when no MCP server covers the host.
 - Ask before destructive, irreversible, or production-impacting actions. Never expose secrets.
+- Always ask for explicit user approval before accessing, listing, retrieving, decoding, or using Azure or Kubernetes protected security values,
+  unless the next rule authorizes Azure access. Protected values include credentials, tokens, keys, certificates, kubeconfigs, Key Vault values,
+  and Kubernetes Secrets. This rule applies to CLIs, SDKs, APIs, files, environment variables, keychains, logs, and indirect retrieval methods.
+- When the user explicitly invokes a skill that requires Azure access, treat the request as approval to use the Azure protected values required by that skill.
+  Do not ask for separate Azure credential approval. This approval covers only the skill's stated execution scope.
+  Always ask before Azure access outside that scope and before any Kubernetes protected value access.
 - Never use reference symbols such as `§` in documentation, code, or comments.
 - Minimize comments. Code (including comments/docstrings) must never reference docs.
 
