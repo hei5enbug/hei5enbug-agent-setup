@@ -26,7 +26,7 @@ A protected item can move only when sentence order must change. Its text and mea
 | A-4 | Repeated `~라는 점에서` | State the reason or relation directly. |
 | A-5 | `~와 관련하여/관련된` | Prefer `~에`, `~의`, or a concrete verb. |
 | A-6 | Repeated `~에 기반하여/바탕으로` | Use `~로`, `~을 근거로`, or `~을 보고`. |
-| A-7 | Literal have, make, take, or give construction | Restore a Korean verb or adjective. |
+| A-7 | Literal have, make, take, or give construction, including physical verbs applied to data or abstract relations | Restore a Korean verb, adjective, or exact domain operation. |
 | A-8 | Double passive such as `판단되어진다` | Use one passive or active voice: `판단된다`. |
 | A-9 | Passive with `~에 의해` | Make the actor the subject when the actor is known. |
 | A-10 | Repeated `~할 수 있다` | State directly only when possibility is not part of the claim. |
@@ -44,6 +44,9 @@ Useful local repairs include:
 | `경쟁력을 가지고 있다` | `경쟁력이 있다` or `경쟁력이 강하다` |
 | `AI에 의해 생성된` | `AI가 만든` |
 | `합의가 이루어졌다` | `합의했다` or `합의에 이르렀다` |
+| `좌표를 비운다` | `좌표를 빈값으로 둔다` when the contract means an empty value |
+| `응답이 돌아간다` | `응답을 반환한다` |
+| `시설이 달린다` | `시설이 속한다` when the sentence describes membership |
 
 Use these as examples, not fixed substitutions.
 
@@ -102,10 +105,13 @@ Natural Korean may repeat `~다` in a report. Do not force variety that sounds t
 |---|---|---|
 | F-1 | Repeated `매우/정말/대단히` | Delete unsupported emphasis. Keep meaningful intensity. |
 | F-2 | Doubled synonyms such as `중요하고 핵심적인` | Keep the word that matches the intended nuance. |
-| F-4 | Dense `-성/-적/-화` nominalization | Restore a concrete verb, adjective, or shorter noun phrase. |
+| F-4 | Dense `-성/-적/-화` nominalization or a vague operation noun in a formal heading | Restore a concrete verb or adjective; in a heading, name the object and actual operation. |
 | F-5 | Abstract `~적 명사` chain | Spell out the relation or use a concrete phrase. |
+| F-6 | Bare numeral or ambiguous pseudo-set/count expression without a classifier in formal or technical prose | Determine whether it means a count or a set, then add the correct classifier or established set term without inferring a number. |
 
-Examples: `정책의 시행이 필요하다` can become `정책을 시행해야 한다`; `구조적 문제` can become `구조 자체의 문제` when that is the intended meaning.
+Examples: `정책의 시행이 필요하다` can become `정책을 시행해야 한다`; `구조적 문제` can become `구조 자체의 문제` when that is the intended meaning. In a technical heading, `기존 요청의 해석` can become `기존 API 요청 처리`, and `기존 ID의 처리 판정` can become `기존 Location ID 처리 규칙`, when those operations match the section.
+
+For F-6, `테이블은 아홉이다` can become `테이블은 9개다`. Resolve `코드 셋` from context: use `코드 3개` only when it means three codes, or an established set term when it means a collection. `응답은 둘이다` can name the returned items or become `두 값을 반환한다`. Keep natural expressions such as `둘 이상`, exact contract strings, and mathematical set terminology unchanged.
 
 ## G. Hedging and certainty
 
@@ -125,7 +131,7 @@ Initial connectives include `또한`, `따라서`, `나아가`, and `아울러`.
 |---|---|---|
 | H-1 | Frequent initial connectives | Remove those made redundant by sentence order. |
 | H-2 | Repeated `하지만/그러나` | Merge a contrast or vary it only when the relation remains clear. |
-| H-3 | Repeated meta-entry phrases | Integrate the reference or name its subject. |
+| H-3 | Repeated meta-entry phrases or vague example deixis such as `그 예다` | Integrate the reference or name the subject and relation. Keep a local deictic when its referent and role are already clear. |
 | H-4 | Repeated `즉` | Keep it only where a real restatement follows. |
 
 ## I. Formal and dependent nouns
