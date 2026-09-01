@@ -1,6 +1,6 @@
 {
   "name": "hei5enbug-agent-setup",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Portable agent skills for repeatable engineering and documentation workflows.",
   "author": {
     "name": "hei5enbug",
