@@ -4,6 +4,10 @@
 
 - Do all high-level reasoning in the main session: planning, architecture, trade-offs, problem definition, complex debugging, review, and key decisions. Never delegate these.
 - Search: prefer `rg` for text/symbol search and `fd` for file discovery; use `ast-grep` only when structural matching is clearly needed.
+- Never launch a subagent when the target is already specified — a known symbol, file path, glob, or literal string.
+  Search directly in the main session.
+- Delegate investigation only when two or more targets are independent: they share no file, and each one needs more than one file read.
+  Otherwise investigate in the main session.
 - Content on a hosted service (Google Drive/Docs/Slides/Sheets, Atlassian, Azure DevOps, Figma, Slack, Notion): reach it through that service's MCP tools, not anonymous fetching (`WebFetch`, `curl`).
   Anonymous fetching carries no session, so private links fail with 401. Fetch directly only for genuinely public pages, or when no MCP server covers the host.
 - Ask before destructive, irreversible, or production-impacting actions. Never expose secrets.
@@ -24,7 +28,7 @@
 - Require file paths, code symbols, and concrete evidence in its result.
 - Treat its result as leads, not conclusions. Verify critical claims in the main session before making plans or decisions.
 - Use other built-in multi-agent threads only after the plan is settled in the main session. Give them only clearly scoped code changes or tests.
-- Run at most 10 agents concurrently, and only when their tasks are fully independent with no shared files or build contention. Otherwise, run them sequentially.
+- Run at most 6 agents concurrently, and only when their tasks are fully independent with no shared files or build contention. Otherwise, run them sequentially.
 
 # Documentation
 

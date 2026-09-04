@@ -24,6 +24,9 @@ hei5enbug-agent-setup/
 │   ├── marketplace.json
 │   └── plugin.json
 ├── .codex-plugin/plugin.json
+├── standalone-agents/
+│   ├── scout.md
+│   └── codex-explorer.toml
 ├── standalone-skills/
 │   ├── omo-model-config/
 │   └── portable-opencode-setup/
@@ -42,6 +45,11 @@ hei5enbug-agent-setup/
 Each plugin skill folder holds its own `SKILL.md` plus any references or scripts it needs. The plugin manifests
 package the same `skills/` directory for Codex and Claude Code without copying skills into host-specific directories.
 The `standalone-skills/` directory is not included in either plugin's skill discovery path.
+
+The `standalone-agents/` directory holds subagent definitions that `CLAUDE.md` and `AGENTS.md` refer to by name.
+Copy `scout.md` into `~/.claude/agents/` by hand. Copy `codex-explorer.toml` into `~/.codex/agents/explorer.toml`;
+it overrides the built-in Codex `explorer` so its model and sandbox are fixed the same way `scout` is on Claude Code.
+They stay outside the plugin bundle so installing the plugin never adds a subagent.
 
 ## Plugin installation
 
