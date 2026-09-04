@@ -4,8 +4,9 @@ description: >-
   Provider-agnostic model-routing updates for agents.* and categories.* in oh-my-openagent.json from
   commit-pinned upstream chains and available-models.json; adds missing upstream targets, removes
   agents.*.ultrawork, preserves every unrelated setting, and offers confirmed-only sync to external
-  configs. Use for full routing refreshes or targeted model, variant, and fallback_models changes
-  across any provider or model family.
+  configs. Use for full routing refreshes, targeted model, reasoning, and fallback-chain changes
+  across any provider or model family, and migration of deprecated routing fields to the current
+  models and reasoning shape.
 compatibility: >-
   Works from any agent host with filesystem access, safe JSON editing, and access to the pinned
   upstream sources. If authoritative sources are unavailable, routing changes must be deferred as
@@ -18,11 +19,13 @@ Update model routing across all providers and model families from the current up
 
 ## Hard scope
 
-- **WRITE ONLY** `agents.*.{model,variant,fallback_models}` and `categories.*.{model,variant,fallback_models}`.
-- Add a missing agent or category only when upstream defines its exact name. A new entry may contain only `model`, optional `variant`, and optional `fallback_models`.
+- **WRITE ONLY** `agents.*.{models,model,reasoning}` and `categories.*.{models,model,reasoning}`.
+- Add a missing agent or category only when upstream defines its exact name. A new entry may contain only `models`, or `model` with optional `reasoning`.
 - Remove every `agents.*.ultrawork` block. Do not touch similarly named keys elsewhere.
-- **PRESERVE** every other key, value, order, and formatting choice, including `$schema`, `google_auth`, `disabled_*`, and `runtime_fallback`.
-- Never invent a target, field, provider, model, or variant.
+- **PRESERVE** every other key, value, order, and formatting choice, including `$schema`, `disabled_*`, `runtime_fallback`, and every host block such as `[opencode]`.
+- Never invent a target, field, provider, model, or reasoning level.
+- Never write a deprecated routing field. `variant` and `reasoningEffort` are replaced by `reasoning`; `fallback_models` is replaced by `models`.
+  When the target config still uses a deprecated field, rewrite that target to the current shape instead of preserving it.
 - Edit the project-local `oh-my-openagent.json` directly by default. Treat an external config as a target only after the user explicitly approves that exact sync.
 
 ## Required inputs and authority
@@ -46,15 +49,23 @@ Replace `dev` in the discovery links below with that full SHA, then read all req
 | Runtime matching | [provider transforms](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/provider-model-id-transform.ts) |
 | Fallback parsing | [chain parser](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/fallback-chain-from-models.ts) |
 | Fallback parsing | [resolver](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/model-resolver.ts) |
-| Fallback parsing | [known variants](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/known-variants.ts) |
-| Config shape | [fallbacks](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/src/config/schema/fallback-models.ts) |
-| Config shape | [agents](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/src/config/schema/agent-overrides.ts) |
-| Config shape | [categories](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/src/config/schema/categories.ts) |
-| Config shape | [JSON Schema](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/assets/oh-my-opencode.schema.json) |
+| Fallback parsing | [known variants](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/reasoning-level.ts) |
+| Config shape | [model reference](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-config-core/src/schema/model-ref.ts) |
+| Config shape | [reasoning vocabulary](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-config-core/src/schema/reasoning-vocabulary.ts) |
+| Config shape | [legacy field normalization](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-config-core/src/schema/fallback-models.ts) |
+| Config shape | [agents](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-config-core/src/schema/agent.ts) |
+| Config shape | [categories](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-config-core/src/schema/category.ts) |
+| Config shape | [host agent overrides](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-opencode/src/config/schema/agent-overrides.ts) |
+| Config shape | [host categories](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-opencode/src/config/schema/categories.ts) |
+| Config shape | [JSON Schema](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/assets/omo.schema.json) |
+| Field migration | [reasoning unification](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-opencode/src/config-migration/reasoning-unification.ts) |
+| Field migration | [expected output fixture](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-opencode/src/config-migration/2026-08-reasoning-unification/fixture-expected.json) |
 
 - Conditional tests: from the pinned model-core inventory, read every provider- or model-specific resolution test relevant to a candidate being considered. Ignore unrelated specialized tests.
 
-The `model-requirements.ts` barrel is not a chain source. The schema filename is `oh-my-opencode.schema.json`, not `oh-my-openagent.schema.json`. Prose docs are background only.
+The `model-requirements.ts` barrel is not a chain source.
+The canonical `$schema` target is `assets/omo.schema.json`, published by [`OMO_SCHEMA_URL`](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-opencode/src/config-migration/schema-url.ts).
+`assets/oh-my-opencode.schema.json` covers only the `[opencode]` host block, and `oh-my-openagent.schema.json` does not exist. Prose docs are background only.
 
 ### Freshness gate
 
@@ -86,7 +97,7 @@ Otherwise select only allowlisted candidates in this order:
 6. Same-tier equivalent from `tiers` under a provider supported for that target.
 
 A version-near substitution must keep the same provider, base lineage, capability class, and major version. Only a speed suffix or minor/patch version may differ.
-A specialty derivative or different size class is not version-near. Classify it as a substitution unless the runtime pipeline recognizes it directly. Preserve the selected upstream rung variant.
+A specialty derivative or different size class is not version-near. Classify it as a substitution unless the runtime pipeline recognizes it directly. Preserve the selected upstream rung reasoning level.
 
 **Never add a provider absent from the target chain** except for an explicit user request or `required_providers`.
 Every non-exact model must have a target-specific rationale from the ordered rules above; allowlist membership alone is never enough.
@@ -98,7 +109,7 @@ After resolving the upstream subset:
 - Count a provider in either the primary model or fallbacks toward `required_providers`.
 - For missing required coverage, prefer an allowlisted upstream candidate from that provider; otherwise add the closest allowlisted same-role/tier model from that provider.
   Add only the smallest coverage entry. Skip and report an upstream-forbidden provider.
-- If no viable candidate exists, leave the existing target unchanged. Do not write an arbitrary or empty fallback list.
+- If no viable candidate exists, leave the existing target unchanged. Do not write an arbitrary or empty `models` array.
 - Add an upstream-defined missing target when at least one viable candidate exists; otherwise report `addition deferred` and the models needed to unblock it.
 
 ### Antigravity local policy
@@ -108,12 +119,13 @@ Count the wrapper as the `google` path provider for diversity. This local policy
 
 ## Serialization
 
-- Always write a concrete primary `model`.
-- Write `variant` only when the selected upstream rung or user request specifies it. Preserve the rung variant when substituting its model.
-- In `fallback_models`, use a string when no variant is needed and `{ "model": "...", "variant": "..." }` only when one is needed. Mixed arrays are valid.
-- For a new target with no viable fallback, omit `fallback_models`; do not create an empty array.
-- Never add unknown settings such as `reasoningEffort`, `temperature`, or `thinking` in this skill.
-- Do not use `google_auth` as a model gate. Preserve it exactly.
+- Write the resolved chain as one ordered `models` array whose first entry is the primary model and whose remaining entries are the fallbacks.
+- Use a bare string for an entry that needs no reasoning level, and `{ "model": "...", "reasoning": "..." }` only when one is needed. Mixed arrays are valid.
+- Write `reasoning` only when the selected upstream rung or user request specifies it. Preserve the rung level when substituting its model.
+- `reasoning` accepts `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, or `auto`.
+- When a target resolves to a primary with no fallback, write either a single-entry `models` array or `model` with optional `reasoning`. Never write an empty array.
+- Never write the `provider/model:level` suffix form when a separate `reasoning` field expresses the same thing.
+- Never add unknown settings such as `temperature`, `max_tokens`, or `provider_options` in this skill.
 
 ## Apply and validate
 
@@ -124,8 +136,9 @@ Validate all of the following:
 - JSON and schema shape are valid.
 - Every selected model is in `allowlist`.
 - Every selected model is an upstream/runtime match, a documented availability substitution, an explicit allowlisted request, or a `required_providers` exception.
-- Upstream gates, provider coverage, fallback order, and one-fallback-per-provider all hold.
+- Upstream gates, provider coverage, chain order, and one-fallback-per-provider all hold.
 - No target is degraded to an arbitrary or newly empty chain.
+- No deprecated routing field (`variant`, `reasoningEffort`, `fallback_models`) remains in a written target.
 - Every added target exists upstream and contains only legal routing fields.
 - Every `agents.*.ultrawork` block is gone.
 - All non-target data and formatting remain unchanged.
@@ -136,10 +149,11 @@ Remove it when no such justification exists.
 
 ## Report
 
-| Item | Action | Model | Variant | Fallbacks | Reason |
-|------|--------|-------|---------|-----------|--------|
+| Item | Action | Primary | Reasoning | Fallbacks | Reason |
+|------|--------|---------|-----------|-----------|--------|
 
-Use only `MODIFIED`, `ADDED`, `UNCHANGED`, `SKIPPED`, `DEFERRED`, or `ULTRAWORK_REMOVED`.
+Use only `MODIFIED`, `ADDED`, `UNCHANGED`, `SKIPPED`, `DEFERRED`, `ULTRAWORK_REMOVED`, or `FIELD_MIGRATED`.
+Use `FIELD_MIGRATED` when a target kept its routing values but moved off a deprecated field.
 Flag substitutions by type, coverage exceptions or gaps, user divergence warnings, deferred targets, upstream-over-local conflicts, and every added target.
 For each addition, confirm the name exists upstream and give its full chain rationale.
 Distinguish exact, runtime fuzzy/transformed, version-near, Antigravity wrapper, general availability substitution, and provider-coverage results.

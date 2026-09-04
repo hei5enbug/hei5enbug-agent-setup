@@ -1,152 +1,140 @@
 {
-  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/oh-my-openagent.schema.json",
-  "google_auth": false,
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/omo.schema.json",
 
   "agents": {
     "sisyphus": {
-      "model": "anthropic/claude-opus-4-8",
-      "variant": "max",
-      "fallback_models": [
-        { "model": "openai/gpt-5.6-sol", "variant": "medium" }
+      "models": [
+        { "model": "anthropic/claude-opus-5", "reasoning": "max" },
+        { "model": "openai/gpt-5.6-sol", "reasoning": "medium" }
       ]
     },
 
     "hephaestus": {
-      "model": "openai/gpt-5.6-sol",
-      "variant": "medium",
-      "fallback_models": []
+      "models": [
+        { "model": "openai/gpt-5.6-sol", "reasoning": "medium" }
+      ]
     },
 
     "oracle": {
-      "model": "openai/gpt-5.6-sol",
-      "variant": "xhigh",
-      "fallback_models": [
-        { "model": "anthropic/claude-opus-4-8", "variant": "max" }
+      "models": [
+        { "model": "openai/gpt-5.6-sol", "reasoning": "xhigh" },
+        { "model": "anthropic/claude-opus-5", "reasoning": "max" }
       ]
     },
 
     "librarian": {
-      "model": "openai/gpt-5.4-mini-fast",
-      "fallback_models": [
-        "anthropic/claude-haiku-4-5",
-        "openai/gpt-5.4-nano"
+      "models": [
+        { "model": "openai/gpt-5.6-luna", "reasoning": "low" },
+        "anthropic/claude-haiku-4-5"
       ]
     },
 
     "explore": {
-      "model": "openai/gpt-5.4-mini-fast",
-      "fallback_models": [
-        "anthropic/claude-haiku-4-5",
-        "openai/gpt-5.4-nano"
+      "models": [
+        { "model": "openai/gpt-5.6-luna", "reasoning": "low" },
+        "anthropic/claude-haiku-4-5"
       ]
     },
 
     "multimodal-looker": {
       "model": "openai/gpt-5.6-sol",
-      "variant": "low",
-      "fallback_models": [
-        "openai/gpt-5.4-nano"
-      ]
+      "reasoning": "low"
     },
 
     "prometheus": {
-      "model": "anthropic/claude-opus-4-8",
-      "variant": "max",
-      "fallback_models": [
-        { "model": "openai/gpt-5.6-sol", "variant": "high" }
+      "models": [
+        { "model": "anthropic/claude-fable-5-1", "reasoning": "xhigh" },
+        "openai/gpt-5.6-sol"
       ]
     },
 
     "metis": {
-      "model": "anthropic/claude-opus-4-8",
-      "variant": "max",
-      "fallback_models": [
-        { "model": "openai/gpt-5.6-sol", "variant": "medium" }
+      "models": [
+        { "model": "anthropic/claude-opus-5", "reasoning": "high" },
+        "openai/gpt-5.6-sol"
       ]
     },
 
     "momus": {
-      "model": "openai/gpt-5.6-terra",
-      "variant": "high",
-      "fallback_models": [
-        { "model": "openai/gpt-5.6-sol", "variant": "xhigh" },
-        { "model": "anthropic/claude-opus-4-8", "variant": "max" }
+      "models": [
+        { "model": "openai/gpt-5.6-terra", "reasoning": "high" },
+        { "model": "openai/gpt-5.6-sol", "reasoning": "xhigh" },
+        { "model": "anthropic/claude-opus-5", "reasoning": "max" }
       ]
     },
 
     "atlas": {
-      "model": "openai/gpt-5.6-sol",
-      "variant": "medium"
+      "models": [
+        "anthropic/claude-sonnet-5",
+        { "model": "openai/gpt-5.6-sol", "reasoning": "medium" }
+      ]
     },
 
     "sisyphus-junior": {
-      "model": "openai/gpt-5.6-sol",
-      "variant": "medium"
+      "models": [
+        "anthropic/claude-sonnet-5",
+        { "model": "openai/gpt-5.6-sol", "reasoning": "medium" }
+      ]
     }
   },
 
   "categories": {
     "visual-engineering": {
-      "model": "anthropic/claude-opus-4-8",
-      "variant": "max",
-      "fallback_models": [
-        "openai/gpt-5.6-sol"
+      "models": [
+        { "model": "anthropic/claude-opus-5", "reasoning": "max" },
+        { "model": "openai/gpt-5.6-sol", "reasoning": "medium" }
       ]
     },
 
     "ultrabrain": {
       "model": "openai/gpt-5.6-sol",
-      "variant": "xhigh",
-      "fallback_models": [
-        { "model": "anthropic/claude-opus-4-8", "variant": "max" }
-      ]
+      "reasoning": "max"
     },
 
     "deep": {
-      "model": "openai/gpt-5.6-terra",
-      "variant": "xhigh",
-      "fallback_models": [
-        { "model": "openai/gpt-5.6-sol", "variant": "high" },
-        { "model": "anthropic/claude-opus-4-8", "variant": "max" }
-      ]
+      "model": "openai/gpt-5.6-sol",
+      "reasoning": "medium"
     },
 
     "artistry": {
-      "model": "anthropic/claude-opus-4-8",
-      "variant": "max",
-      "fallback_models": [
-        { "model": "openai/gpt-5.6-sol", "variant": "high" }
+      "models": [
+        { "model": "anthropic/claude-fable-5-1", "reasoning": "xhigh" },
+        { "model": "anthropic/claude-opus-5", "reasoning": "xhigh" },
+        "openai/gpt-5.6-sol"
       ]
     },
 
     "quick": {
-      "model": "openai/gpt-5.4-mini-fast",
-      "fallback_models": [
-        "anthropic/claude-haiku-4-5"
+      "models": [
+        { "model": "openai/gpt-5.6-luna", "reasoning": "low" },
+        { "model": "anthropic/claude-haiku-4-5", "reasoning": "off" }
       ]
     },
 
     "unspecified-low": {
-      "model": "openai/gpt-5.6-sol",
-      "variant": "medium"
+      "models": [
+        { "model": "openai/gpt-5.6-terra", "reasoning": "high" },
+        { "model": "anthropic/claude-sonnet-5", "reasoning": "low" }
+      ]
     },
 
     "unspecified-high": {
-      "model": "anthropic/claude-opus-4-8",
-      "variant": "max",
-      "fallback_models": [
-        { "model": "openai/gpt-5.6-sol", "variant": "high" }
+      "models": [
+        { "model": "anthropic/claude-opus-5", "reasoning": "xhigh" },
+        "openai/gpt-5.6-sol"
       ]
     },
 
     "writing": {
-      "model": "anthropic/claude-sonnet-5",
-      "fallback_models": [
-        "openai/gpt-5.6-terra"
+      "models": [
+        { "model": "anthropic/claude-opus-5", "reasoning": "low" },
+        "openai/gpt-5.6-sol"
       ]
     }
   },
 
-  "disabled_hooks": ["no-sisyphus-gpt"],
-  "runtime_fallback": true
+  "[opencode]": {
+    "disabled_hooks": ["no-sisyphus-gpt"],
+    "runtime_fallback": true
+  }
 }
