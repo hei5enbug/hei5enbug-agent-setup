@@ -59,6 +59,26 @@ class ColumnWidthsTest(unittest.TestCase):
         self.assertGreaterEqual(widths[0], 400)
         self.assertEqual(400, details[0]["floor"])
 
+    def test_nan_char_width_is_an_input_error(self):
+        with self.assertRaisesRegex(MODULE.InputError, "finite positive"):
+            MODULE.column_widths([["A"]], options(char_width=float("nan")))
+
+    def test_cli_rejects_nan_without_traceback(self):
+        output = StringIO()
+        arguments = ["--columns", "-", "--char-width", "nan"]
+        with patch("sys.stdin", StringIO('[["a"]]')), redirect_stdout(output):
+            status = MODULE.main(arguments)
+        self.assertEqual(2, status)
+        report = json.loads(output.getvalue())
+        self.assertFalse(report["ok"])
+        self.assertIn("--char-width", report["error"])
+
+    def test_cli_rejects_infinite_total(self):
+        output = StringIO()
+        with patch("sys.stdin", StringIO('[["a"]]')), redirect_stdout(output):
+            status = MODULE.main(["--columns", "-", "--wide-char", "inf"])
+        self.assertEqual(2, status)
+
     def test_cli_reports_impossible_floors_as_input_error(self):
         output = StringIO()
         arguments = [

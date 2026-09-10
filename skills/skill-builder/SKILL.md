@@ -31,8 +31,15 @@ Keep the workflow stable across agent products by adapting to capabilities, not 
    Put shared behavior in `SKILL.md` and isolate unavoidable host integration in a small adapter or clearly labeled reference.
 7. Do not infer an installation root, manifest format, or package layout from the current authoring host when the user has not selected a target.
    Use a task-local writable path for drafts, or ask for the destination when it materially affects the result.
-8. Keep every skill self-contained. A skill may use its own bundled resources and declared host capabilities, but must not name, import, invoke, read, or depend on a sibling skill's files.
-   Duplicate a small essential rule when necessary instead of creating a cross-skill handoff.
+8. Keep every skill self-contained by default. A skill may read a sibling skill's reference file when
+   the shared rules are long enough that a copy would drift, but must never invoke a sibling skill or
+   depend on its scripts.
+   Address the file relative to the directory holding the loaded `SKILL.md`, as
+   `../<skill-name>/references/<file>.md`. Never write an absolute path or a host installation root.
+   Declare every sibling file you read, what it supplies, and what to do when it is absent.
+   When absent, proceed without those rules and say so; a summarized copy is not a fallback.
+   Keep rules required for correctness or safety within the skill itself.
+   Copy the rule instead when the shared text is only a few lines.
 9. Target the same quality contract on every host, not identical output.
    Judge each host against shared acceptance criteria. Wording differences that satisfy the same
    criteria are not defects, and chasing sentence-level parity overdesigns the skill.
@@ -44,7 +51,7 @@ Use this capability mapping:
 | Independent workers | Run with-skill and baseline cases in parallel | Run sequentially and disclose reduced independence |
 | Filesystem | Use iteration workspaces and bundled scripts | Present prompts, outputs, grades, and feedback inline |
 | Browser/display | Open the generated review page | Generate static HTML; if files cannot be presented, review inline |
-| Model subprocess | Run description optimization with a configured runner command | Evaluate and revise descriptions inline with the same rubric |
+| Model subprocess | Use a configured runner for repeated trials when useful | Use direct prompts with the same rubric; disclose reduced isolation |
 | Timing/token metrics | Capture host-reported values immediately | Store `null` or omit optional values |
 | Artifact presentation | Present or attach the package with the host's native mechanism | Return an exact filesystem path |
 
@@ -61,12 +68,22 @@ Use this capability mapping:
 
 Figure out where the user is in this loop and continue from there. If the user wants a lightweight pass rather than formal evaluation, adapt the depth while preserving the requested outcome.
 
+Edit and check small behavior-preserving corrections directly; run relevant old/new cases for behavior changes.
+Before launching any worker or model runner, read only "Evaluation model adapters" in
+`references/execution-methods.md` and apply the current host's required model and effort.
+When an execution-method or recurring-cost comparison will run, follow
+`references/execution-methods.md`; do not load it merely to decline an unmeasured change.
+Stop when the required checks pass and no unresolved finding justifies another iteration.
+
 ## Communicating with the user
 
 Match the user's technical level.
 Terms such as “evaluation” and “benchmark” are usually fine; explain formats such as JSON and concepts such as assertions when context suggests they may be unfamiliar.
 
 Lead with decisions and results. Explain why a test or structural choice matters, especially when a missing host capability reduces rigor.
+The user's output contract overrides reporting defaults.
+When it requests only an artifact or exact format, output exactly that and omit any preface,
+explanation, citation, or status.
 
 ## Creating or updating a skill
 
@@ -80,6 +97,7 @@ Extract answers from the conversation and existing files before asking for infor
 4. What constraints, dependencies, edge cases, or safety boundaries apply?
 5. Would test cases add value? Objectively verifiable work usually benefits from tests; highly subjective work may rely more on human review.
 6. Which hosts must support the skill, and which parts truly need host-specific integration?
+7. What quality criteria, execution-time limits, and recurring token costs must the improvement preserve or reduce?
 
 When updating an existing skill, preserve its original directory name and `name` field unless the user explicitly requests a rename.
 Snapshot the original before editing so it can serve as the baseline.
@@ -153,43 +171,53 @@ delete or rename its mirrors in the same task.
 
 ### Automation boundary
 
-Treat repeatability, detectability, and verifiability as separate properties.
-Code that returns the same result for the same input may still use a surface feature that does not prove the underlying requirement.
+Choose by the operation's requirements, not by model size or a fixed tool-first order.
 
-Before creating a bundled script:
+| Operation | Default method | Boundary |
+|---|---|---|
+| Meaning, intent, ambiguity, or output quality | Model judgment from a prompt | Do not turn contextual signals into deterministic verdicts. |
+| Calculation, schema checks, or file transformation | Existing host capability or terminal tool | Prefer a supported parser or validator over custom code. |
+| Repeated model evaluation and result collection | Model plus execution script when useful | The model judges; the script schedules, records, and aggregates. |
 
-1. Define its supported inputs, outputs, success conditions, failure conditions, and unsupported cases.
-2. Decide whether the operation is exact mechanics, exact validation, or contextual judgment.
-3. Inspect available host capabilities and established tools before writing custom code.
-4. Compare correctness, coverage, portability, dependencies, maintenance cost, execution time, and expected repetition.
-5. Benchmark representative inputs before claiming a performance advantage. Do not infer efficiency from an implementation language.
+For exact mechanics, try existing tools and simple compositions before adding a bundled script.
+A new script needs an unmet input/output contract and a benefit that justifies writing, testing,
+dependencies, and maintenance.
+For a small, one-off task, direct prompt execution remains an option even when scripts are available.
 
-Use host search or an available file finder for file discovery, a text search tool for text or symbol search, and a structural search tool only when syntax structure matters.
-Tools such as `fd`, `rg`, and `ast-grep` are examples, not required dependencies. Discover availability instead of assuming it.
-Prefer an existing parser or schema validator for a format it supports.
+Deterministic execution does not prove a rule correct.
+Bundle validators only for exact predicates over declared inputs: every reported failure must be
+a real violation and every supported violation must fail.
+Report unsupported inputs explicitly.
+Keep semantic, subjective, probabilistic, and contextual judgments with the model or user.
+Existing heuristic analyzers may supply evidence, never the sole verdict; do not create new heuristic checkers.
+A script may call a model, but must preserve the uncertainty of its output.
+Test valid, invalid, boundary, and unsupported inputs for bundled validators; examples alone do not prove completeness.
 
-Choose the simplest option that satisfies the complete contract in this order:
+Read [Execution methods](references/execution-methods.md) when planning or running a paired comparison,
+adding a script, or supporting a claim with execution measurements.
+For a small unmeasured proposal, apply the recurring-cost rules below without loading the reference
+and retain the baseline until a later comparison validates the candidate.
 
-1. Host capability or established tool
-2. A simple composition of existing tools
-3. A bundled script
-4. Model or human judgment when the requirement depends on context
+### Recurring execution cost
 
-Bundle validation logic only for an exact validation.
-An exact validator must be sound and complete within its declared scope: every failure is a real violation, and every in-scope violation fails.
-Report unsupported input explicitly instead of treating it as success.
-Do not turn a searchable feature, score, heuristic, or growing exception list into a pass/fail rule.
-Do not encode semantic, subjective, probabilistic, or context-dependent judgment in a generated validator.
+Apply these rules to Skill Builder itself and every skill it creates or improves.
+On every improvement, inspect the cost of normal use: loaded instructions and references,
+repeated reads, tool output, model calls, worker startup, retries, and unnecessary steps.
+Remove avoidable work while preserving conditions, exceptions, evidence, and output quality.
+Move substantial mode-specific instructions into references with explicit read conditions.
 
-Bundle other scripts only for exact mechanics with a complete input and output contract.
-A mechanical orchestrator may invoke a declared nondeterministic dependency, but it must preserve that uncertainty and must not present the dependency's output as verified.
-
-An existing heuristic analyzer may still provide evidence when the task requires it.
-Label its findings as signals or review candidates, never as the sole verdict, and require model or human review of the relevant context.
-Do not generate a new heuristic checker by default.
-
-Test valid, invalid, boundary, and unsupported inputs for every bundled validator.
-Tests demonstrate examples but do not prove completeness, so explain how each part of the declared contract maps to the implementation.
+Write the selected method and its switching conditions into the target skill itself.
+During each normal use, load only needed resources, reuse still-valid evidence, and run applicable checks.
+Re-read when inputs or relevant state change; never skip freshness checks to save tokens.
+Do not introduce unconditional "read once" or "never reread" rules; scope reuse to unchanged inputs.
+Without execution-cost evidence, label a proposed reduction unverified and retain the baseline as the default.
+When the baseline has no correctness defect, do not rewrite it as an unmeasured wording optimization.
+Unless the user requests candidate wording, answer an unmeasured optimization briefly with the retained baseline,
+the unverified status, and the measurement needed to reconsider it; do not develop a speculative alternative.
+Do not add a dependency on Skill Builder, self-editing, or a new benchmark to each normal invocation.
+Compare changed execution behavior during improvement, then reuse the validated choice until
+requirements, inputs, tools, or model behavior materially change.
+Keep unchanged behavior when no supported improvement is available.
 
 ### Progressive disclosure
 
@@ -274,6 +302,10 @@ Read `references/schemas.md` when assertions or benchmark artifacts are needed.
 
 Treat this as one continuous workflow. Use native host workers when available; do not depend on a product-specific testing command.
 
+Every command in this file uses `<skill-builder-path>`: the absolute path of the directory that contains this loaded `SKILL.md`.
+Resolve it once, run the scripts by that absolute path, and never change the user's working directory to run them.
+The bundled scripts need Python 3.12 or later with PyYAML installed; a missing PyYAML stops with an install hint and exit code 2.
+
 ### Step 1: Prepare the workspace and baseline
 
 With filesystem access, create `<skill-name>-workspace/` beside the skill. Organize results as `iteration-N/<descriptive-eval-name>/`.
@@ -294,7 +326,8 @@ Write `eval_metadata.json` in each eval directory:
 
 ### Step 2: Launch skill-enabled and baseline runs
 
-When independent workers exist, launch every with-skill and baseline run together so timing conditions are comparable.
+Run independent pairs concurrently only within host limits and without shared files or resource contention.
+Keep model configuration and measurement conditions comparable using `references/execution-methods.md`.
 
 Skill-enabled task template:
 
@@ -324,6 +357,9 @@ Update both `eval_metadata.json` and `evals/evals.json`, then explain what the a
 
 Save host-reported timing and token data immediately in each run's `timing.json`. Follow `references/schemas.md`. If the host does not expose a value, use `null` or omit the optional field.
 
+For cost comparisons, include parent and worker calls, reads, tool execution, and retries without double counting.
+Separate recurring execution from development and grading overhead as defined in `references/execution-methods.md`.
+
 ### Step 5: Grade and aggregate
 
 1. Read `agents/grader.md` and grade each run, using an independent worker when possible or grading inline otherwise. Save `grading.json`.
@@ -333,8 +369,12 @@ Save host-reported timing and token data immediately in each run's `timing.json`
 3. Aggregate the iteration:
 
    ```bash
-   python -m scripts.aggregate_benchmark <workspace>/iteration-N --skill-name <name>
+   python <skill-builder-path>/scripts/aggregate_benchmark.py <workspace>/iteration-N --skill-name <name>
    ```
+
+   `tokens` comes only from `timing.json`; when the host reported none it stays `null` and the viewer shows N/A. Character counts are a different unit and are never substituted.
+   Runs without a readable, schema-valid `grading.json` are listed under `incomplete` and excluded
+   from every average and delta. The delta covers only the eval IDs both configurations completed.
 
 4. Put each skill-enabled configuration before its baseline counterpart.
 5. Read the relevant section of `agents/analyzer.md` and inspect non-discriminating assertions, high variance, regressions hidden by averages, and time/token tradeoffs.
@@ -360,7 +400,7 @@ Tell the user how to review outputs and where quantitative results appear. Gener
 
 ### Step 7: Read feedback
 
-When file-based feedback is available, read `feedback.json`. Empty feedback means the output was acceptable; prioritize specific complaints. Stop any temporary viewer server after review.
+When file-based feedback is available, read `feedback.json`. Check its `status` first: only when it is `complete` does an empty feedback entry mean the output was acceptable. With `in_progress` or no file, the review has not finished, so ask the user rather than treating silence as approval. Prioritize specific complaints. Stop any temporary viewer server after review.
 
 ## Improving the skill
 
@@ -377,81 +417,47 @@ When file-based feedback is available, read `feedback.json`. Empty feedback mean
    For a multi-host skill, decide where a fix belongs with the failure-attribution rule in
    "Multiple target hosts".
 
-After revising, rerun the cases in a new iteration.
+After revising behavior, rerun the affected cases in a new iteration.
 Compare against the original or previous version according to the user's decision.
-Generate a review surface linked to the previous iteration, then repeat until no meaningful improvement remains or the user is satisfied.
+Present the comparison inline for a small review, or link the review surface to the previous iteration.
+Repeat only for unresolved findings within the trial budget; report inconclusive comparisons honestly.
 
 ## Advanced: blind comparison
 
 For rigorous A/B comparison, read `agents/comparator.md` and `agents/analyzer.md`. Give outputs to an independent judge without revealing which configuration produced them.
+The comparator may return `TIE`; the analyzer accepts `A`, `B`, or `TIE` and, on a tie, analyzes both skills without inventing a winner.
 If no independent worker exists, skip blind comparison and disclose that limitation.
 
 ## Description optimization
 
-The frontmatter description is the primary routing signal in most skill hosts. Optimize it only after the skill behavior is stable.
-
-### Build a trigger eval set
-
-Create about 20 realistic queries with a balanced mix of `should_trigger: true` and `false`. Include:
-
-- varied phrasings, lengths, detail levels, and mild typos
-- uncommon but valid uses
-- close competitors where this skill should win
-- difficult near-misses that share vocabulary but need another workflow
-
-Avoid trivial positives and obviously unrelated negatives. Save the array as JSON:
-
-```json
-[
-  {"query": "a realistic user request", "should_trigger": true},
-  {"query": "a difficult near-miss", "should_trigger": false}
-]
-```
-
-Use `assets/eval_review.html` to let the user inspect and edit the set when browser or artifact presentation is available.
-
-### Configure a portable model runner
-
-The bundled optimizer does not assume a vendor CLI. Supply a command that reads the full prompt from standard input and writes only the model response to standard output:
-
-```bash
-python -m scripts.run_loop \
-  --eval-set <trigger-eval.json> \
-  --skill-path <path-to-skill> \
-  --runner-command '<your-model-command>' \
-  --max-iterations 5 \
-  --verbose
-```
-
-The command may contain `{model}` in an argument; when it does, also pass `--model <model-id>`. Instead of repeating `--runner-command`, set `SKILL_BUILDER_RUNNER_COMMAND`.
-Use `--no-open` in a headless environment.
-
-The runner contract deliberately uses stdin/stdout and executes without a shell. A host-specific wrapper can therefore adapt a CLI, local model server, or API client without changing the optimizer.
-
-Trigger evaluation uses a stable routing simulation based only on the skill name, description, and query.
-This makes scores comparable across runners, but it is a proxy for a host's private routing implementation.
-When native host trigger tests are available, run them as an additional integration check rather than replacing the portable benchmark.
-
-Label every reported description-optimization score as a portable routing simulation.
-State that native trigger checks are required before claiming equivalent behavior in a specific host.
-
-The loop uses a stratified train/test split, repeated routing decisions, and held-out score selection to reduce overfitting. Apply `best_description` from the output and report before/after scores.
-
-If no subprocess model runner is available, perform the same routing classification and revision loop inline. Keep held-out queries hidden during revision and label the result as an inline evaluation.
+After skill behavior is stable, read [Description optimization](references/description-optimization.md)
+when tuning the frontmatter description or running trigger evaluations.
+Choose direct prompts or the model runner by workload and the execution-method comparison rules.
 
 ## Package and present
 
 Validate first:
 
 ```bash
-python scripts/quick_validate.py <path-to-skill-folder>
+python <skill-builder-path>/scripts/quick_validate.py <path-to-skill-folder>
 ```
+
+Validation requires PyYAML and rejects an empty `name` or `description`. Each bundled `scripts/check_*.py` detector gets 60 seconds; one that runs longer is reported as `TIMEOUT` and fails the check.
 
 When Python and filesystem access are available, package with:
 
 ```bash
-python -m scripts.package_skill <path-to-skill-folder> [output-directory]
+python <skill-builder-path>/scripts/package_skill.py <path-to-skill-folder> [output-directory] [--check-installed]
 ```
+
+The output directory must lie outside the skill folder. The package never contains `.env` files, `.git`, earlier `.skill` files, `evals/`, `*-workspace/` directories, or symbolic links; each skipped link is reported.
+The packager builds and verifies a temporary ZIP beside the destination, then replaces the final
+`.skill` file. A failed build removes the temporary file and preserves any existing package.
+Pass `--check-installed` only when you want other installed copies of the skill compared file by file; without it the packager never reads the user's home directory.
+
+Packaging one skill excludes files in sibling skills. Ship the bundle with the sibling directory
+layout preserved, or copy the referenced rules into the skill and update its references before
+packaging it alone.
 
 Use the host's native artifact presentation mechanism when available; otherwise provide the exact output path.
 If the installed source is read-only, copy it to a writable temporary location, preserve its original name, edit and package the copy, then return the result.
@@ -462,6 +468,8 @@ If the installed source is read-only, copy it to a writable temporary location, 
 - `agents/comparator.md` — blind A/B comparison
 - `agents/analyzer.md` — benchmark and variance analysis
 - `references/schemas.md` — eval, grading, timing, and benchmark schemas
+- `references/execution-methods.md` — method selection, comparison models, trials, and recurring cost decisions
+- `references/description-optimization.md` — trigger evaluation and description optimization when requested
 
 ## Completion checklist
 
@@ -473,11 +481,19 @@ If the installed source is read-only, copy it to a writable temporary location, 
   traces to a host difference that a shared clarification could not fix.
 - Every translated mirror in the skill matches its current source, including reversed rules,
   deletions, and renames.
-- The skill contains no sibling-skill names, paths, invocations, imports, or file dependencies.
+- Every sibling reference is declared with its relative path, its purpose, and its missing-file
+  behavior; the skill invokes no sibling skill and depends on no sibling scripts.
 - Every bundled script has a complete input and output contract and reports unsupported inputs explicitly.
 - Every bundled validator is sound and complete within its declared scope; contextual judgments remain with the model or user.
 - Existing host capabilities and established tools were compared before custom code was added.
 - Performance claims are measured on representative inputs and are not inferred from an implementation language.
+- Every launched worker and model runner used the current host's required model and effort without
+  cross-host substitution; unavailable runs were marked unverified.
+- Uncertain or changed methods were compared using actual outputs or explicitly marked unverified;
+  unavailable metrics were not invented.
+- Skill Builder and the target skill were checked for recurring execution cost without weakening quality.
+- The target skill records its method and switching conditions without requiring per-use benchmarks.
+- Time/token tradeoffs follow the quality criteria and user limits; development and evaluation costs stay separate.
 - Realistic skill-enabled and baseline tests were run, or capability limitations were disclosed.
 - Assertions and metrics are evidence-backed.
 - The user received a review surface or equivalent inline review.

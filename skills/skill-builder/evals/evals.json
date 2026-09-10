@@ -66,6 +66,78 @@
         "The response does not infer efficiency from the implementation language.",
         "The response requires a measurable benefit before adding a custom script."
       ]
+    },
+    {
+      "id": 7,
+      "prompt": "Make a one-off wording correction to this mini skill: change ‘Draft summaries’ to ‘Draft concise summaries’ and ‘teh’ to ‘the’. Return the corrected text.\n\nMini skill text:\n# Summary helper\nDraft summaries from supplied notes.\nCheck teh final output for missing facts.",
+      "expected_output": "Edit the supplied text directly, verify the small diff, and report that no reusable skill or full evaluation was created or run.",
+      "files": [],
+      "expectations": [
+        "The response handles the supplied text directly without requiring a script or model subprocess.",
+        "Only the requested wording and spelling change, plus necessary formatting preservation, appears in the resulting text.",
+        "The response does not create reusable skill scaffolding or run a full evaluation, and it provides a lightweight diff or changed-content check."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Improve a repeated JSON review skill. It currently asks a model to identify records missing a top-level owner key, then explain the operational impact from each record's note. Decide whether owner detection should use the model or an existing JSON parser. Use these trial inputs: [{\"id\":\"a\",\"owner\":\"platform\",\"note\":\"critical service\"},{\"id\":\"b\",\"note\":\"critical service\"}], [{\"id\":\"c\",\"owner\":null,\"note\":\"draft\"},{\"id\":\"d\",\"note\":\"note contains owner: team\"}]. The contract is key presence, not a non-null value or the word owner in a note. Produce actual results for both owner-detection methods and a recommendation. Keep interpretation of operational impact in scope.",
+      "expected_output": "Execute prompt and existing-parser detection on both inputs, finding only b and d missing the key, keep operational judgment with the model, and select or qualify the method using output evidence and available total costs.",
+      "files": [],
+      "expectations": [
+        "The response separates deterministic file discovery from the model's contextual judgment.",
+        "Both methods are compared using the same prompt, input snapshot, quality rubric, and recorded execution settings rather than assumed implementation-language speed.",
+        "The comparison artifact includes raw outputs and available timing or token metrics, marks unavailable metrics unverified, and selects a default from measured quality and total cost.",
+        "Both methods find b and d only; an existing JSON parser is considered before any custom script."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Prepare a method comparison in Claude Code for a release-review skill that parses manifest fields and judges exceptions. The main session uses Opus. Claude Code can launch Sonnet 5 with high effort, but token telemetry is unavailable. Describe the worker, grader, and analyzer configuration and evidence record. Also state what happens if Sonnet 5 or high effort cannot be started. No actual manifest or execution trace is supplied.",
+      "expected_output": "Keep the main session on Opus, use Sonnet 5 at high effort for every Skill Builder worker and model runner, record the resolved model, and leave unavailable dependent runs unverified without substituting another model or effort.",
+      "files": [],
+      "expectations": [
+        "The response uses the existing parser for exact manifest mechanics and reserves the release-blocking judgment for the model.",
+        "The configuration keeps the Claude Code main session model unchanged and assigns Sonnet 5 at high effort to every worker, grader, analyzer, and model runner.",
+        "The resolved Sonnet model ID is recorded, and missing telemetry or an unavailable required setting is marked unverified without substitution or fabricated savings.",
+        "The response gives a reproducible future comparison plan with equal prompt, inputs, rubric, and actual tool outputs."
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Optimize a triage skill that runs thousands of times per week. Its current instructions are: ‘Read the manifest and classify entries. On a missing file, retry once and report the failure. On a credential-like finding, stop and escalate immediately. Never silently drop parse errors.’ Reduce normal execution cost while preserving quality and reasonable latency. No execution traces or token measurements are available in this request. Return revised instructions if justified and the validation status.",
+      "expected_output": "Preserve the current default when cost evidence is missing; any candidate preserves critical exceptions and conditional rereading, with bounded future validation and no per-use benchmark.",
+      "files": [],
+      "expectations": [
+        "The proposed optimization preserves retry-and-report, immediate escalation, and parse-error handling as explicit critical behavior.",
+        "The response defines a bounded baseline and representative comparison artifact instead of measuring every ordinary execution.",
+        "Token accounting includes parent, worker, and retry work, and the decision also considers latency and rubric quality.",
+        "Any claimed token savings are tied to measured runs; the normal skill lifecycle does not gain a sibling benchmark dependency.",
+        "The baseline remains the default while any proposed cost reduction is unverified.",
+        "Reuse is limited to unchanged inputs, with no unconditional read-once or never-reread rule."
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "A fixed 30-case evaluation compares the current baseline with a compact prompt variant for a review skill. The same inputs and quality rubric were used. Baseline: 29/30 correct, p95 latency 2.0 seconds, 900 output tokens per case. Compact variant: 26/30 correct, p95 latency 2.4 seconds, 500 output tokens per case; two misses were critical-exception failures. Decide which version remains the default and explain how the result should be recorded.",
+      "expected_output": "Retain the baseline as default because the compact variant is worse on quality and latency despite fewer output tokens, and record the controlled comparison and rejection rationale without claiming a net saving.",
+      "files": [],
+      "expectations": [
+        "The response keeps the baseline and identifies the compact variant's critical quality regressions and latency increase.",
+        "The decision uses the shared inputs and rubric and does not treat fewer output tokens as sufficient evidence of improvement.",
+        "The evaluation record includes the measured results and rationale, with no fabricated net savings or unverified metric."
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "Run Skill Builder in Codex. The main session uses GPT-6. Create isolated workers for old/new execution, grading, comparison, and analysis. Configure every launched worker and model runner, and state what happens if the required effort is unavailable.",
+      "expected_output": "Keep the Codex main session on GPT-6, launch every Skill Builder worker and model runner with gpt-5.6-luna at xhigh effort, never use Sonnet, and mark dependent work unverified rather than substituting a model or lowering effort.",
+      "files": [],
+      "expectations": [
+        "The main Codex session retains its selected model and responsibility for the final decision.",
+        "Every execution, grading, comparison, analysis, and other Skill Builder worker uses gpt-5.6-luna with xhigh effort.",
+        "The response never selects Sonnet in Codex and does not replace an unavailable required model or lower xhigh effort.",
+        "A run that cannot use the required Codex model and effort is recorded as unverified."
+      ]
     }
   ]
 }

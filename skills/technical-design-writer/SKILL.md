@@ -26,6 +26,11 @@ Use this file and the references it explicitly requires as executable instructio
 
 For every Korean deliverable, read `references/korean-writing.md` before drafting or reviewing.
 
+`references/korean-writing.md` reads one sibling file. Resolved from this skill's own directory,
+`../humanize-korean/references/patterns.md` supplies the translationese signal table. When that file
+is absent, apply the rest of `korean-writing.md` and report that the signal list was unavailable.
+This skill invokes no other skill and depends on no other skill's scripts.
+
 Apply this skill only to technical design work, after higher-priority instructions. User requirements,
 repository rules, supplied templates, and established project conventions override this skill.
 

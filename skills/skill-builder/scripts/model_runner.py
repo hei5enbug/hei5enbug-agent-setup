@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import os
 import shlex
+import signal
 import subprocess
+import time
 
 
 RUNNER_ENV_VAR = "SKILL_BUILDER_RUNNER_COMMAND"
+KILL_GRACE_SECONDS = 5.0
 
 
 class RunnerError(RuntimeError):
@@ -57,23 +60,72 @@ def run_model(
         rendered.append(argument)
 
     try:
-        result = subprocess.run(
+        process = subprocess.Popen(
             rendered,
-            input=prompt,
-            capture_output=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout,
+            start_new_session=True,
         )
     except FileNotFoundError as exc:
         raise RunnerError(f"Runner executable not found: {rendered[0]}") from exc
-    except subprocess.TimeoutExpired as exc:
-        raise RunnerError(f"Runner timed out after {timeout} seconds") from exc
 
-    if result.returncode != 0:
-        stderr = result.stderr.strip()
+    try:
+        stdout, stderr = process.communicate(input=prompt, timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        terminate_process_group(process)
+        raise RunnerError(f"Runner timed out after {timeout} seconds") from exc
+    except BaseException:
+        terminate_process_group(process)
+        raise
+
+    if process.returncode != 0:
+        stderr = stderr.strip()
         detail = f"\nstderr: {stderr}" if stderr else ""
         raise RunnerError(
-            f"Runner exited with status {result.returncode}: {' '.join(rendered)}{detail}"
+            f"Runner exited with status {process.returncode}: {' '.join(rendered)}{detail}"
         )
 
-    return result.stdout
+    return stdout
+
+
+def terminate_process_group(
+    process: subprocess.Popen, grace_seconds: float = KILL_GRACE_SECONDS
+) -> None:
+    """SIGTERM the runner's whole process group, then SIGKILL whatever survives.
+
+    The runner is started with ``start_new_session=True`` so its pid is the
+    group id, which lets shell wrappers and their children be reaped too.
+    macOS and Linux only.
+    """
+    _signal_group(process.pid, signal.SIGTERM)
+    deadline = time.monotonic() + grace_seconds
+    while time.monotonic() < deadline:
+        if process.poll() is not None and not _group_alive(process.pid):
+            break
+        time.sleep(0.05)
+    _signal_group(process.pid, signal.SIGKILL)
+    try:
+        process.communicate(timeout=grace_seconds)
+    except (subprocess.TimeoutExpired, ValueError, OSError):
+        pass
+
+
+def _signal_group(pgid: int, sig: signal.Signals) -> None:
+    try:
+        os.killpg(pgid, sig)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        pass
+
+
+def _group_alive(pgid: int) -> bool:
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True

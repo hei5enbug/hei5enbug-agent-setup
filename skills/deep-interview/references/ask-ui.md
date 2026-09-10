@@ -3,7 +3,7 @@
 This fragment defines how Deep Interview asks the user **every** interview question.
 It is the load-bearing contract of this skill: the interview is conducted **through the host agent's native ask UI**, never as plain prose pretending to be a multiple-choice question.
 
-Load this fragment whenever you are about to present a question, a confirmation (Round 0 topology, Refine gate, Closure/Restate gate), or the Phase 5 execution-bridge choice.
+Load this fragment whenever you are about to present a question or a confirmation: the Round 0 topology confirmation, the answer-interpretation confirmation in "Interview Loop, 4. Normalize the Answer", the goal restatement and specification approval in "Closure Gates", and the execution-bridge choice in "Closure Gates, step 5".
 
 ## Contents
 
@@ -16,7 +16,7 @@ Load this fragment whenever you are about to present a question, a confirmation 
 
 ## Core principle
 
-- **One question per round.** Never batch multiple questions into a single ask, even when the host tool technically allows 2–4 questions per call.
+- **One question per round.** Never batch multiple questions into a single ask, even when the host tool technically allows more than one question per call.
   Deep Interview scores ambiguity after each answer, so questions must arrive one at a time.
 - **Always use the host's native structured ask tool when one exists.** A clickable / selectable UI produces cleaner answers and lets the user pick a custom/free-text reply.
 - **Never fake a multiple-choice prompt as ordinary assistant text** when a native tool is available.
@@ -33,13 +33,13 @@ Every Deep Interview question maps to this single logical shape, regardless of h
 
 | Field | Meaning | Constraint (for cross-host safety) |
 |-------|---------|------------------------------------|
-| `question` | The full question text the user reads. | Prepend the Round/Component/Targeting/Ambiguity line from `SKILL.md` Step 2b. |
+| `question` | The full question text the user reads. | Prepend the Round/Component/Targeting/Ambiguity line from `SKILL.md`, "Interview Loop, 3. Form the Question". |
 | `header` | A short label for the question. | Keep **≤ 12 characters** so it is valid in Claude Code. |
-| `options[]` | 2–4 relevant choices. | Give each a short `label` and a plain-language tradeoff in `description`. Put the strongest recommendation first and mark one label with ` (추천)`. |
+| `options[]` | The relevant choices. | Stay within the option count the host tool's schema allows. Give each a short `label` and a plain-language tradeoff in `description`. Put the strongest recommendation first and mark one label with ` (추천)`. |
 | custom / free-text | The user can always type their own answer. | Guaranteed by Claude ("Other") and OpenCode; for the inline fallback, add an explicit `Custom` option. |
 | multi-select | Usually single-select. | Only set multi when the question genuinely accepts several answers. |
 
-Keep `options` to **2–4** entries: that range is valid in every host (Claude requires 2–4).
+Keep `options` within the range the host tool's schema declares. Check the schema of the tool you are about to call; the per-host notes below record the ranges known at the time of writing.
 
 ## Per-host routing
 
@@ -72,7 +72,7 @@ Detect the runtime by which ask tool is present in your available tools, then us
 - 1–4 questions per call (use exactly **1**), 2–4 `options` per question, `header` ≤ 12 chars.
 - The user is **always** offered an "Other" free-text choice automatically — do not add a manual "Custom" option.
 - **Limitation:** `AskUserQuestion` is **not available inside subagents** spawned via the Agent/Task tool. Therefore the interview loop (all asks) must run from the **main session**.
-  Read-only panels/auto-mode subagents (Phase 3, Steps 2a′/2b′) may still be spawned, but they must **return findings to the main session**, which then performs the single user-facing ask.
+  Read-only reviewers ("Independent Review") and auto-answer research (`auto-answer-uncertain.md`) may still run as subagents, but they must **return findings to the main session**, which then performs the single user-facing ask.
 
 ### OpenCode → `question`
 
@@ -143,15 +143,15 @@ Rules for the inline fallback:
 ## Answer handling (all hosts)
 
 - Read the selected option `label` and any free-text. If the user supplied custom text, prioritize it over a predefined option.
-- A custom/free-text answer that carries reasoning or constraints triggers the **Refine gate** (SKILL.md Step 2b″) before scoring.
-- If the user opts out / asks you to decide, trigger **auto-answer** (SKILL.md Step 2b′ via `auto-answer-uncertain.md`).
+- A custom/free-text answer that carries reasoning or constraints goes through "Interview Loop, 4. Normalize the Answer" in `SKILL.md`: restate it and confirm the interpretation before scoring.
+- If the user opts out / asks you to decide, follow the delegation rule in that same step, which routes to `auto-answer-uncertain.md`.
 - Never infer missing detail from an option label alone — collect the exact text with one follow-up ask.
 
 ## Quick selection checklist
 
 1. Is this Codex outside Plan mode? Ask the user to switch to Plan mode and end the turn.
    Otherwise, use the native structured ask tool (Claude `AskUserQuestion` / OpenCode `question` / Codex `request_user_input` / MCP elicitation).
-2. Exactly one question, `header` ≤ 12 chars, 2–4 options each `{label, description}`, single-select unless genuinely multi.
+2. Exactly one question, `header` ≤ 12 chars, options within the host schema's range, each `{label, description}`, single-select unless genuinely multi.
 3. Translate question/header/options to the user's language.
 4. Sort options by recommendation strength and append ` (추천)` to exactly one best option label.
 5. Make the question and descriptions detailed enough for a high-school student to understand.

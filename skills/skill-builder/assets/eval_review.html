@@ -1,9 +1,19 @@
 <!DOCTYPE html>
+<!--
+  Template contract. Replace the single token __EVAL_REVIEW_DATA__ (inside the script below) with one
+  JSON object: {"skill_name": "...", "description": "...", "evals": [{"query": "...", "should_trigger": true}]}.
+  Escape every "<" in that JSON as \u003c so a query can never close the script element. For example:
+
+      python3 -c 'import json,sys; d={"skill_name": sys.argv[1], "description": sys.argv[2],
+        "evals": json.load(open(sys.argv[3]))}; print(json.dumps(d).replace("<", "\\u003c"))' NAME DESC evals.json
+
+  The name and description are inserted as text nodes by the script; do not paste them into the markup.
+-->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Eval Set Review - __SKILL_NAME_PLACEHOLDER__</title>
+  <title>Eval Set Review</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
@@ -38,8 +48,8 @@
   </style>
 </head>
 <body>
-  <h1>Eval Set Review: <span id="skill-name">__SKILL_NAME_PLACEHOLDER__</span></h1>
-  <p class="description">Current description: <span id="skill-desc">__SKILL_DESCRIPTION_PLACEHOLDER__</span></p>
+  <h1>Eval Set Review: <span id="skill-name"></span></h1>
+  <p class="description">Current description: <span id="skill-desc"></span></p>
 
   <div class="controls">
     <button class="btn btn-add" onclick="addRow()">+ Add Query</button>
@@ -60,13 +70,19 @@
   <p class="summary" id="summary"></p>
 
   <script>
-    const EVAL_DATA = __EVAL_DATA_PLACEHOLDER__;
+    const EVAL_REVIEW = __EVAL_REVIEW_DATA__;
+    const EVAL_DATA = Array.isArray(EVAL_REVIEW.evals) ? EVAL_REVIEW.evals : [];
+
+    // Name and description are text, never markup.
+    document.getElementById('skill-name').textContent = EVAL_REVIEW.skill_name || '';
+    document.getElementById('skill-desc').textContent = EVAL_REVIEW.description || '';
+    document.title = 'Eval Set Review - ' + (EVAL_REVIEW.skill_name || '');
 
     let evalItems = [...EVAL_DATA];
 
     function render() {
       const tbody = document.getElementById('eval-body');
-      tbody.innerHTML = '';
+      tbody.replaceChildren();
 
       // Sort: should-trigger first, then should-not-trigger
       const sorted = evalItems
@@ -79,33 +95,54 @@
         if (group !== lastGroup) {
           const headerRow = document.createElement('tr');
           headerRow.className = 'section-header';
-          headerRow.innerHTML = `<td colspan="3">${item.should_trigger ? 'Should Trigger' : 'Should NOT Trigger'}</td>`;
+          const headerCell = document.createElement('td');
+          headerCell.colSpan = 3;
+          headerCell.textContent = item.should_trigger ? 'Should Trigger' : 'Should NOT Trigger';
+          headerRow.appendChild(headerCell);
           tbody.appendChild(headerRow);
           lastGroup = group;
         }
 
         const idx = item.origIdx;
         const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td><textarea class="query-input" onchange="updateQuery(${idx}, this.value)">${escapeHtml(item.query)}</textarea></td>
-          <td>
-            <label class="toggle">
-              <input type="checkbox" ${item.should_trigger ? 'checked' : ''} onchange="updateTrigger(${idx}, this.checked)">
-              <span class="slider"></span>
-            </label>
-            <span style="margin-left:8px;font-size:0.8rem;color:#b0aea5">${item.should_trigger ? 'Yes' : 'No'}</span>
-          </td>
-          <td><button class="btn-delete" onclick="deleteRow(${idx})">Delete</button></td>
-        `;
+
+        const queryCell = document.createElement('td');
+        const textarea = document.createElement('textarea');
+        textarea.className = 'query-input';
+        textarea.value = item.query;
+        textarea.addEventListener('change', () => updateQuery(idx, textarea.value));
+        queryCell.appendChild(textarea);
+        tr.appendChild(queryCell);
+
+        const toggleCell = document.createElement('td');
+        const label = document.createElement('label');
+        label.className = 'toggle';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = Boolean(item.should_trigger);
+        checkbox.addEventListener('change', () => updateTrigger(idx, checkbox.checked));
+        const slider = document.createElement('span');
+        slider.className = 'slider';
+        label.appendChild(checkbox);
+        label.appendChild(slider);
+        toggleCell.appendChild(label);
+        const state = document.createElement('span');
+        state.style.cssText = 'margin-left:8px;font-size:0.8rem;color:#b0aea5';
+        state.textContent = item.should_trigger ? 'Yes' : 'No';
+        toggleCell.appendChild(state);
+        tr.appendChild(toggleCell);
+
+        const deleteCell = document.createElement('td');
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'btn-delete';
+        deleteButton.textContent = 'Delete';
+        deleteButton.addEventListener('click', () => deleteRow(idx));
+        deleteCell.appendChild(deleteButton);
+        tr.appendChild(deleteCell);
+
         tbody.appendChild(tr);
       });
       updateSummary();
-    }
-
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
     }
 
     function updateQuery(idx, value) { evalItems[idx].query = value; updateSummary(); }

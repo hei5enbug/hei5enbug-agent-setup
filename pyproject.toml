@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hei5enbug-agent-setup"
+version = "0.2.0"
+description = "Portable agent skills for repeatable engineering and documentation workflows."
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+dependencies = [
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[tool.setuptools]
+packages = []
+
+[tool.pytest.ini_options]
+testpaths = ["skills"]
+python_files = ["test_*.py"]
+addopts = "-q -p no:cacheprovider"

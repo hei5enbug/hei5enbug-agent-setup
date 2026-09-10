@@ -51,6 +51,10 @@ class RunnerTest(unittest.TestCase):
             arguments = sys.argv[1:]
             output = arguments[arguments.index("-o") + 1]
             sys.stdin.read()
+            call_log = os.environ.get("FAKE_CALL_LOG")
+            if call_log:
+                with open(call_log, "a", encoding="utf-8") as target:
+                    target.write(f"{os.getpid()}\n")
             print(json.dumps({
                 "type": "thread.started",
                 "thread_id": "11111111-1111-4111-8111-111111111111",
@@ -85,14 +89,32 @@ class RunnerTest(unittest.TestCase):
             import time
 
             sys.stdin.read()
+            call_log = os.environ.get("FAKE_CLAUDE_CALL_LOG")
+            if call_log:
+                with open(call_log, "a", encoding="utf-8") as target:
+                    target.write(" ".join(sys.argv[1:]) + "\n")
+            quota_once = os.environ.get("FAKE_CLAUDE_QUOTA_ONCE") == "1"
+            if quota_once and "--session-id" in sys.argv:
+                print(json.dumps({
+                    "type": "system",
+                    "model": "claude-fable-5",
+                }), flush=True)
+                print(json.dumps({
+                    "type": "result",
+                    "is_error": True,
+                    "result": "reached your model limit",
+                }), flush=True)
+                print("reached your model limit", file=sys.stderr, flush=True)
+                raise SystemExit(0)
+            active_model = "claude-opus-4-8" if "--resume" in sys.argv else "claude-fable-5"
             print(json.dumps({
                 "type": "system",
-                "model": "claude-fable-5",
+                "model": active_model,
             }), flush=True)
             print(json.dumps({
                 "type": "assistant",
                 "message": {
-                    "model": "claude-fable-5",
+                    "model": active_model,
                     "content": [{"type": "tool_use", "name": "Read"}],
                 },
             }), flush=True)
@@ -100,7 +122,7 @@ class RunnerTest(unittest.TestCase):
             print(json.dumps({
                 "type": "result",
                 "is_error": False,
-                "result": "Claude 응답",
+                "result": "Claude 대체 응답" if "--resume" in sys.argv else "Claude 응답",
                 "usage": {"input_tokens": 90, "output_tokens": 15},
             }), flush=True)
             ''',
@@ -208,6 +230,29 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(result.stdout, "Claude 응답\n")
         self.assertIn("Claude", result.stderr)
 
+    def test_claude_quota_retries_with_fallback_model(self) -> None:
+        state = self.root / "claude-quota-state"
+        call_log = self.root / "claude-quota-calls.log"
+        self.environment["FAKE_CLAUDE_QUOTA_ONCE"] = "1"
+        self.environment["FAKE_CLAUDE_CALL_LOG"] = str(call_log)
+
+        result = self.run_runner(
+            "claude",
+            state,
+            "--max-exchanges",
+            "1",
+            "--timeout-seconds",
+            "5",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "Claude 대체 응답\n")
+        calls = call_log.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(calls), 2)
+        self.assertIn("--model claude-opus-4-8", calls[1])
+        self.assertIn("대체 모델", result.stderr)
+        self.assertFalse((state / "uncertain").exists())
+
     def test_second_exchange_reuses_saved_state(self) -> None:
         state = self.root / "resume-state"
         first = self.run_runner(
@@ -280,6 +325,61 @@ class RunnerTest(unittest.TestCase):
         finished = self.run_runner("codex", state, "--finish", prompt=None)
         self.assertEqual(finished.returncode, 0, finished.stderr)
         self.assertFalse(state.exists())
+
+    def test_concurrent_detach_starts_exactly_one_worker(self) -> None:
+        state = self.root / "race-state"
+        call_log = self.root / "codex-calls.log"
+        environment = self.environment.copy()
+        environment["FAKE_DELAY"] = "1"
+        environment["FAKE_CALL_LOG"] = str(call_log)
+        command = [
+            "bash",
+            str(RUNNER),
+            "--opponent",
+            "codex",
+            "--state-dir",
+            str(state),
+            "--repo",
+            str(self.repo),
+            "--max-exchanges",
+            "1",
+            "--timeout-seconds",
+            "5",
+            "--detach",
+        ]
+        launchers = [
+            subprocess.Popen(
+                command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=environment,
+            )
+            for _ in range(2)
+        ]
+        outcomes = [launcher.communicate("검토하세요.", timeout=10) for launcher in launchers]
+        codes = sorted(launcher.returncode for launcher in launchers)
+        self.assertEqual(codes, [0, 1], outcomes)
+
+        collected = self.run_runner("codex", state, "--wait", prompt=None, timeout=15)
+        self.assertEqual(collected.returncode, 0, collected.stderr)
+        self.assertEqual(collected.stdout, "Codex 응답\n")
+        self.assertEqual(len(call_log.read_text(encoding="utf-8").split()), 1)
+
+    def test_finish_does_not_delete_directory_with_known_name(self) -> None:
+        state = self.root / "finish-state"
+        result = self.run_runner("codex", state, "--max-exchanges", "1", "--timeout-seconds", "5")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        decoy = state / "worker-result.txt"
+        decoy.mkdir()
+        (decoy / "keep.txt").write_text("keep", encoding="utf-8")
+
+        finished = self.run_runner("codex", state, "--finish", prompt=None)
+        self.assertNotEqual(finished.returncode, 0)
+        self.assertIn("worker-result.txt", finished.stderr)
+        self.assertTrue((decoy / "keep.txt").exists())
+        self.assertTrue(state.exists())
 
     def test_durable_mode_returns_final_response(self) -> None:
         state = self.root / "durable-state"

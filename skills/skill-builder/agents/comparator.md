@@ -174,7 +174,7 @@ If no expectations were provided, omit the `expectation_results` field entirely.
 
 ## Field Descriptions
 
-- **winner**: "A", "B", or "TIE"
+- **winner**: "A", "B", or "TIE". The post-hoc analyzer and `schemas.md` accept all three values.
 - **reasoning**: Clear explanation of why the winner was chosen (or why it's a tie)
 - **rubric**: Structured rubric evaluation for each output
   - **content**: Scores for content criteria (correctness, completeness, accuracy)

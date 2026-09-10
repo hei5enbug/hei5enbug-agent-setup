@@ -76,7 +76,16 @@ python3 <skill-root>/scripts/local_lock.py release \
 ```
 
 The helper creates a lock directory atomically. Only one concurrent claimant
-can succeed. If a claim fails, skip that ticket and refresh the frontier.
+can succeed. After creating the lock it re-reads the ticket's `Status:`.
+If the ticket is no longer `open` or the re-read fails, the helper removes the
+new lock before reporting the failure. A ticket resolved or damaged by another
+session in the same instant is never claimed and never leaves an empty lock.
+If a claim fails, skip that ticket and refresh the frontier.
+
+`inspect` is read-only: it never creates the `claims/` directory or any lock.
+A `claim.json` that is not a JSON object with string `owner` and `resource`
+fields is reported as corrupted metadata; `release --force` still removes such
+a lock after printing a warning.
 
 Never force-release a lock merely because it looks old. Inspect its metadata
 and ask the user before using `release --force`.

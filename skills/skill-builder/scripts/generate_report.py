@@ -129,6 +129,7 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
         .score-good { background: #eef2e8; color: #788c5d; }
         .score-ok { background: #fef3c7; color: #d97706; }
         .score-bad { background: #fceaea; color: #c44; }
+        .score-na { background: #f1f0ea; color: #b0aea5; }
         .train-label { color: #b0aea5; font-size: 10px; }
         .test-label { color: #6a9bcc; font-size: 10px; font-weight: bold; }
         .best-row { background: #f5f8f2; }
@@ -164,8 +165,8 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
     <div class="summary">
         <p><strong>Original:</strong> {html.escape(data.get('original_description', 'N/A'))}</p>
         <p class="best"><strong>Best:</strong> {html.escape(data.get('best_description', 'N/A'))}</p>
-        <p><strong>Best Score:</strong> {data.get('best_score', 'N/A')} {'(test)' if best_test_score else '(train)'}</p>
-        <p><strong>Iterations:</strong> {data.get('iterations_run', 0)} | <strong>Train:</strong> {data.get('train_size', '?')} | <strong>Test:</strong> {data.get('test_size', '?')}</p>
+        <p><strong>Best Score:</strong> {data.get('best_score') or 'N/A'} {'(test)' if best_test_score else '(train)'}</p>
+        <p><strong>Iterations:</strong> {data.get('iterations_run', 0)} | <strong>Train:</strong> {data.get('train_size', '?')} | <strong>Test:</strong> {data.get('test_size') if data.get('test_size') else 'N/A'}</p>
     </div>
 """)
 
@@ -221,8 +222,8 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
         test_passed = h.get("test_passed")
         test_total = h.get("test_total")
         description = h.get("description", "")
-        train_results = h.get("train_results", h.get("results", []))
-        test_results = h.get("test_results", [])
+        train_results = h.get("train_results") or h.get("results") or []
+        test_results = h.get("test_results") or []
 
         # Create lookups for results by query
         train_by_query = {r["query"]: r for r in train_results}
@@ -245,7 +246,7 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
         train_correct, train_runs = aggregate_runs(train_results)
         test_correct, test_runs = aggregate_runs(test_results)
 
-        # Determine score classes
+        # Determine score classes; an empty set is "N/A", never a 0/0 score
         def score_class(correct: int, total: int) -> str:
             if total > 0:
                 ratio = correct / total
@@ -253,7 +254,11 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
                     return "score-good"
                 elif ratio >= 0.5:
                     return "score-ok"
-            return "score-bad"
+                return "score-bad"
+            return "score-na"
+
+        def score_text(correct: int, total: int) -> str:
+            return f"{correct}/{total}" if total > 0 else "N/A"
 
         train_class = score_class(train_correct, train_runs)
         test_class = score_class(test_correct, test_runs)
@@ -262,8 +267,8 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
 
         html_parts.append(f"""            <tr class="{row_class}">
                 <td>{iteration}</td>
-                <td><span class="score {train_class}">{train_correct}/{train_runs}</span></td>
-                <td><span class="score {test_class}">{test_correct}/{test_runs}</span></td>
+                <td><span class="score {train_class}">{score_text(train_correct, train_runs)}</span></td>
+                <td><span class="score {test_class}">{score_text(test_correct, test_runs)}</span></td>
                 <td class="description">{html.escape(description)}</td>
 """)
 

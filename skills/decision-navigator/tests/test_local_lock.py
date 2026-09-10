@@ -77,6 +77,78 @@ class LocalLockTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Ticket is not open", result.stderr)
 
+    def test_status_change_before_lock_creation_is_detected(self):
+        import importlib.util
+        import os
+        from contextlib import redirect_stdout
+        from io import StringIO
+        from unittest.mock import patch
+
+        spec = importlib.util.spec_from_file_location("local_lock", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        resource, lock = module.resolve_resource(str(self.ticket))
+        real_mkdir = os.mkdir
+
+        def race_mkdir(path, *args, **kwargs):
+            self.ticket.write_text("# First question\n\nType: grilling\nStatus: resolved\nBlocked by:\n")
+            return real_mkdir(path, *args, **kwargs)
+
+        with patch.object(module.os, "mkdir", side_effect=race_mkdir), redirect_stdout(StringIO()):
+            with self.assertRaises(SystemExit) as ctx:
+                module.claim(resource, lock, "probe")
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertFalse(lock.exists())
+
+    def test_failed_status_recheck_removes_new_lock(self):
+        import importlib.util
+        import os
+        from unittest.mock import patch
+
+        spec = importlib.util.spec_from_file_location("local_lock_recheck", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        resource, lock = module.resolve_resource(str(self.ticket))
+        real_mkdir = os.mkdir
+
+        def corrupt_after_mkdir(path, *args, **kwargs):
+            result = real_mkdir(path, *args, **kwargs)
+            self.ticket.write_text("# First question\n\nStatus was removed\n")
+            return result
+
+        with patch.object(module.os, "mkdir", side_effect=corrupt_after_mkdir):
+            with self.assertRaises(SystemExit):
+                module.claim(resource, lock, "probe")
+        self.assertFalse(lock.exists())
+
+    def test_corrupted_metadata_is_diagnosed_without_traceback(self):
+        claimed = self.run_lock("claim", self.ticket, "--owner", "session-a")
+        self.assertEqual(claimed.returncode, 0)
+        lock = self.root / "claims" / "01-first-question.lock"
+        (lock / "claim.json").write_text("[]")
+
+        released = self.run_lock("release", self.ticket, "--owner", "session-a")
+        self.assertEqual(released.returncode, 1)
+        self.assertNotIn("Traceback", released.stderr)
+        self.assertIn("Corrupted lock metadata", released.stderr)
+
+        inspected = self.run_lock("inspect", self.ticket)
+        self.assertEqual(inspected.returncode, 1)
+        self.assertNotIn("Traceback", inspected.stderr)
+
+        forced = self.run_lock("release", self.ticket, "--force")
+        self.assertEqual(forced.returncode, 0, forced.stderr)
+        self.assertIn("Warning: corrupted lock metadata", forced.stderr)
+        self.assertFalse(lock.exists())
+
+    def test_inspect_does_not_create_claims_directory(self):
+        claims = self.root / "claims"
+        self.assertFalse(claims.exists())
+        result = self.run_lock("inspect", self.ticket)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(json.loads(result.stdout)["claimed"])
+        self.assertFalse(claims.exists())
+
     def test_unsafe_lock_path_is_refused(self):
         claims = self.root / "claims"
         claims.mkdir()

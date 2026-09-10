@@ -82,7 +82,26 @@ def round_to_total(values, total):
     return rounded
 
 
+def _finite_positive(name, value):
+    if not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+        raise InputError("{} must be a finite positive number, got {!r}".format(name, value))
+
+
+def validate_numeric_options(options):
+    for name in ("total", "char_width", "wide_char", "narrow_char"):
+        _finite_positive("--" + name.replace("_", "-"), getattr(options, name))
+    for name in ("padding", "min_width"):
+        value = getattr(options, name)
+        if not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+            raise InputError(
+                "--{} must be a finite number that is not negative, got {!r}".format(
+                    name.replace("_", "-"), value
+                )
+            )
+
+
 def column_widths(columns, options):
+    validate_numeric_options(options)
     weights = []
     floors = []
     caps = []
@@ -169,12 +188,10 @@ def main(argv=None):
     options = parser.parse_args(argv)
     options.floors = dict(options.floor)
 
-    if options.total <= 0:
-        return fail("--total must be positive")
-    if options.char_width <= 0 or options.wide_char <= 0 or options.narrow_char <= 0:
-        return fail("character widths must be positive")
-    if options.padding < 0 or options.min_width < 0:
-        return fail("--padding and --min-width cannot be negative")
+    try:
+        validate_numeric_options(options)
+    except InputError as error:
+        return fail(str(error))
 
     try:
         if options.columns == "-":

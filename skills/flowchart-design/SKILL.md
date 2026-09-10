@@ -156,6 +156,9 @@ Edge geometry rules:
   Top-to-bottom edges follow the same rule against the topmost label region.
 - For two-bend edges, the two vertical segments must be equal in length.
   This makes the mid-axis y the midpoint of the start and end y values.
+  Exception: a return edge that closes a loop, a branch edge that must clear an obstacle, and a merge edge that joins
+  a shared target may use unequal segments. For those edges, overlap avoidance and label legibility come first;
+  keep the chosen offsets consistent for every edge of the same kind in the chart set.
 - Whatever breathing gap you choose, apply it identically across the entire chart.
 - **Breathing gap is symmetric at both ends of an edge.** If the start has 3 px to its source node boundary, the end must have 3 px to its target node boundary as well.
   Asymmetric gaps — one end touching, the other not — signal author inattention and read as the edge being wedged into one endpoint.
@@ -180,6 +183,7 @@ Edge geometry rules:
 
 - Within a row, every node-to-node gap is identical, which makes every same-row edge identical in length.
 - Edges that travel in the same direction maintain the same length rhythm wherever possible.
+  Return, branch, and merge edges follow the exception in "Edges": they keep a consistent offset per kind instead of matching the linear rhythm.
 - Horizontal and vertical edges may carry different rhythms, but each axis has its own consistent system.
 - After removing a node, redistribute the remaining nodes so no single edge becomes anomalously long.
   Keep a long edge only when a direct connection is more accurate than the removed intermediary.
@@ -359,8 +363,11 @@ Removing a node is incomplete until the layout, edge length rhythm, label placem
 | Linear | Short single-pass flow | The most stable default. Should read with nodes and edges alone, no group container required. |
 | Simplified Linear | Long flow distilled to its essential transitions | Keeps the linear shape; spacing and label discipline still apply. |
 | Wrapped Linear | A linear flow too long for one row that does not warrant branching | Continues as a single sequential read across stacked rows. |
+| Branch and Merge | One decision with two or more outcomes that rejoin later | Put the decision node on the main axis and give every outcome an explicit label. Route the alternative outcome on a parallel lane, above or below the main lane, and merge it back into the shared target with one edge per outcome. Branch lanes may use unequal bend segments to stay clear of the main lane. |
+| Bounded Retry | A step that repeats until it succeeds or a limit is reached | Draw the forward path on the main axis and the return edge as one loop that goes back around the retried step, never through it. Label the return edge with the retry condition and the limit, and label the exit edge with the success condition. The return edge keeps its own consistent offset instead of the same-row rhythm. |
+| Error Exit | A failure that leaves the flow instead of rejoining it | Give the failure its own terminal node off the main axis, reached by one edge from the decision or failing step. Label the edge with the failure condition and style the terminal node as an end state. Do not route an error exit back into the main lane. |
 
-Pick one pattern explicitly; mixing two without intent is a quality regression.
+Pick one pattern explicitly; mixing two without intent is a quality regression. A flow with a decision, a loop, or an error path uses one of the last three patterns, possibly inside a Linear or Overview frame; it is never redrawn as a plain linear chain to satisfy a linear rule.
 
 ---
 
@@ -398,7 +405,8 @@ Run every item before declaring a chart done. Each item maps back to a rule abov
 **Consistency**
 - Same role family uses the same color, icon, and typographic grammar across the set.
 - Charts in the same family share the same spacing rhythm.
-- The chosen pattern (overview / linear / simplified / wrapped) is unambiguous.
+- The chosen pattern (overview / linear / simplified / wrapped / branch and merge / bounded retry / error exit) is unambiguous.
+- Each checklist item was applied under the rules of the chosen pattern. A valid branching or looping graph was not flattened into a linear chain, and its return, branch, and merge edges were judged by the "Edges" exception rather than the same-row rhythm.
 - All group / band / subgroup captions follow a single horizontal-alignment rule.
 - Source-code comments about layout match actual coordinates.
 

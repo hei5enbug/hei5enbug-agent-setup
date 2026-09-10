@@ -26,7 +26,9 @@ Update model routing across all providers and model families from the current up
 - Never invent a target, field, provider, model, or reasoning level.
 - Never write a deprecated routing field. `variant` and `reasoningEffort` are replaced by `reasoning`; `fallback_models` is replaced by `models`.
   When the target config still uses a deprecated field, rewrite that target to the current shape instead of preserving it.
-- Edit the project-local `oh-my-openagent.json` directly by default. Treat an external config as a target only after the user explicitly approves that exact sync.
+  Deleting a deprecated routing field from a target being written is part of the permitted writes above, not a violation of the preserve rule.
+- The target config is the path named in the conversation. When none is named, use the `oh-my-openagent.json` at the repository root.
+  Treat an external config as a target only after the user explicitly approves that exact sync.
 
 ## Required inputs and authority
 
@@ -34,9 +36,9 @@ Read this file, `available-models.json`, and the target config before editing.
 
 Treat no provider or model family as the default. Derive every choice from the pinned upstream sources, `available-models.json`, and explicit user policy.
 
-For every run, resolve the current `dev` SHA from the [commit history](https://github.com/code-yeongyu/oh-my-openagent/commits/dev).
+For every run, resolve the current `dev` SHA once from the [commit history](https://github.com/code-yeongyu/oh-my-openagent/commits/dev).
 Use the [model-core directory](https://github.com/code-yeongyu/oh-my-openagent/tree/dev/packages/model-core/src) as the inventory.
-Replace `dev` in the discovery links below with that full SHA, then read all required files from the same commit.
+Replace `dev` in the discovery links below with that full SHA, then read every required file from that same commit. Never mix files from two commits in one run.
 
 | Source group | Required files |
 |---|---|
@@ -80,6 +82,9 @@ Treat `available-models.json` and user policy as constraints, not upstream recom
 ## Resolution policy
 
 Enumerate every upstream and local target. For each target, record the ordered `fallbackChain`, variants, providers, and `requiresModel` / `requiresAnyModel` / `requiresProvider` gates.
+An upstream `fallbackChain[].variant` is source data that carries the rung's reasoning level.
+Normalize it with the pinned reasoning vocabulary and serialize the value as target field
+`reasoning`. Never copy the source key name into the target config.
 
 Apply an explicit user request only to the named target and field:
 

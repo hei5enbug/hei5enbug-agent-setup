@@ -107,6 +107,11 @@ Output from the grader agent. Located at `<run-dir>/grading.json`.
       "evidence": "Found in transcript Step 3: 'Extracted names: John Smith, Sarah Johnson'"
     },
     {
+      "text": "The output lists both extracted names",
+      "passed": true,
+      "evidence": "Transcript Step 3 lists 'John Smith, Sarah Johnson'"
+    },
+    {
       "text": "The spreadsheet has a SUM formula in cell B10",
       "passed": false,
       "evidence": "No spreadsheet was created. The output was a text file."
@@ -169,6 +174,13 @@ Output from the grader agent. Located at `<run-dir>/grading.json`.
 - `user_notes_summary`: Issues flagged by the executor
 - `eval_feedback`: (optional) Improvement suggestions for the evals, only present when the grader identifies issues worth raising
 
+The benchmark aggregator accepts a grading result only when `expectations` contains one object per
+summary item, every object has string `text` and `evidence` plus boolean `passed`, the verdict count
+matches `summary.passed`, `passed + failed = total`, and `pass_rate` matches those counts. Missing,
+unreadable, or structurally invalid grading results appear in `incomplete` and never contribute a
+zero score to an average. When present, `timing`, `execution_metrics`, and `user_notes_summary`
+must also have the object and value types shown above.
+
 ---
 
 ## metrics.json
@@ -212,11 +224,15 @@ Wall clock timing for a run. Located at `<run-dir>/timing.json`.
 **How to capture:** When an independent worker or host task reports `total_tokens` and `duration_ms`, save them immediately because many hosts do not persist notification metadata.
 If the host does not expose a metric, store `null` or omit the optional field; never invent a value.
 
+`total_tokens` is the only source of the `tokens` metric in `benchmark.json`.
+`output_chars` from `metrics.json` is a character count, a different unit, and is never substituted for it.
+When `total_tokens` is missing, the aggregator records `tokens: null` and the viewer shows N/A.
+
 ```json
 {
   "total_tokens": 84852,
-  "duration_ms": 23332,
-  "total_duration_seconds": 23.3,
+  "duration_ms": 191000,
+  "total_duration_seconds": 191.0,
   "executor_start": "2026-01-15T10:30:00Z",
   "executor_end": "2026-01-15T10:32:45Z",
   "executor_duration_seconds": 165.0,
@@ -251,12 +267,13 @@ Output from Benchmark mode. Located at `benchmarks/<timestamp>/benchmark.json`.
       "configuration": "with_skill",
       "run_number": 1,
       "result": {
-        "pass_rate": 0.85,
+        "pass_rate": 0.86,
         "passed": 6,
         "failed": 1,
         "total": 7,
         "time_seconds": 42.5,
         "tokens": 3800,
+        "output_chars": 12450,
         "tool_calls": 18,
         "errors": 0
       },
@@ -270,6 +287,16 @@ Output from Benchmark mode. Located at `benchmarks/<timestamp>/benchmark.json`.
     }
   ],
 
+  "incomplete": [
+    {
+      "eval_id": 2,
+      "eval_name": "Invoice",
+      "configuration": "without_skill",
+      "run_number": 3,
+      "reason": "grading.json not found"
+    }
+  ],
+
   "run_summary": {
     "with_skill": {
       "pass_rate": {"mean": 0.85, "stddev": 0.05, "min": 0.80, "max": 0.90},
@@ -279,12 +306,13 @@ Output from Benchmark mode. Located at `benchmarks/<timestamp>/benchmark.json`.
     "without_skill": {
       "pass_rate": {"mean": 0.35, "stddev": 0.08, "min": 0.28, "max": 0.45},
       "time_seconds": {"mean": 32.0, "stddev": 8.0, "min": 24.0, "max": 42.0},
-      "tokens": {"mean": 2100, "stddev": 300, "min": 1800, "max": 2500}
+      "tokens": {"mean": null, "stddev": null, "min": null, "max": null}
     },
     "delta": {
       "pass_rate": "+0.50",
       "time_seconds": "+13.0",
-      "tokens": "+1700"
+      "tokens": null,
+      "shared_eval_ids": [1, 3]
     }
   },
 
@@ -308,10 +336,16 @@ Output from Benchmark mode. Located at `benchmarks/<timestamp>/benchmark.json`.
   - `eval_name`: Human-readable eval name (used as section header in the viewer)
   - `configuration`: Must be `"with_skill"` or `"without_skill"` (the viewer uses this exact string for grouping and color coding)
   - `run_number`: Integer run number (1, 2, 3...)
-  - `result`: Nested object with `pass_rate`, `passed`, `total`, `time_seconds`, `tokens`, `errors`
+  - `result`: Nested object with `pass_rate`, `passed`, `total`, `time_seconds`, `tokens`, `output_chars`, `errors`
+  - `result.tokens`: From `timing.json` `total_tokens` only; `null` when the host did not report it
+  - `result.output_chars`: Character count from `metrics.json`; a different unit from tokens
+- `incomplete[]`: Runs whose `grading.json` was missing, unreadable, or invalid. They are listed here
+  and excluded from `runs`, every average, and every delta. A configuration with no complete run
+  has `null` statistics, never zeros.
 - `run_summary`: Statistical aggregates per configuration
   - `with_skill` / `without_skill`: Each contains `pass_rate`, `time_seconds`, `tokens` objects with `mean` and `stddev` fields
-  - `delta`: Difference strings like `"+0.50"`, `"+13.0"`, `"+1700"`
+  - `delta`: Difference strings like `"+0.50"`, `"+13.0"`, `"+1700"`, computed only over `shared_eval_ids`,
+    the eval IDs both configurations completed. A metric one side never measured has a `null` delta.
 - `notes`: Freeform observations from the analyzer
 
 **Important:** The viewer reads these field names exactly.
@@ -323,6 +357,8 @@ Always reference this schema when generating benchmark.json manually.
 ## comparison.json
 
 Output from blind comparator. Located at `<grading-dir>/comparison-N.json`.
+
+`winner` is `"A"`, `"B"`, or `"TIE"`. The analyzer accepts all three values.
 
 ```json
 {
@@ -398,6 +434,10 @@ Output from blind comparator. Located at `<grading-dir>/comparison-N.json`.
 ## analysis.json
 
 Output from post-hoc analyzer. Located at `<grading-dir>/analysis.json`.
+
+`comparison_summary.winner` repeats the comparator's value: `"A"`, `"B"`, or `"TIE"`.
+For a `"TIE"`, `winner_skill` holds skill A and `loser_skill` holds skill B, and the strengths, weaknesses,
+and suggestions cover both skills.
 
 ```json
 {

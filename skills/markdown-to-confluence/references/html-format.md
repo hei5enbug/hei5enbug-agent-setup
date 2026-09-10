@@ -2,16 +2,26 @@
 
 The rules here describe how the Confluence HTML converter treats a body you send it.
 
-## Verified scope
+## Checked scope
 
-Everything marked **verified** was observed directly against a Confluence Cloud instance through
-the HTML body format, by sending a body and reading back what the converter stored.
+Everything marked **verified** was observed against a Confluence Cloud instance by sending a body
+through the Confluence REST API in its HTML body representation and reading back what the
+converter stored. The check date and the exact client used were not recorded when these notes
+were written, so treat each verified rule as an observation of unknown age: the first time one
+fails, trust the page over this document and record the date and tool of the new observation here.
 
 Everything marked **convention** worked reliably but its failure mode was not deliberately tested.
 Treat a convention as the safe default, not as a proven constraint.
 
-Behaviour on Confluence Data Center and Server was not tested at all. If a rule below fails there,
-trust the observed behaviour over this document.
+### Assumptions
+
+These statements have no recorded observation behind them. Confirm them at use time.
+
+- Confluence Data Center and Server behave like Cloud for the rules below. They were not tested.
+- Every connected Confluence tool accepts the HTML body representation used here. Tools that
+  accept only storage format or ADF need a conversion step this document does not describe.
+- The `width` and `height` convention on `img`, the block-element rule for table cells, and the
+  text escaping rule are conventions, not verified constraints.
 
 ## The body is replaced whole
 
@@ -71,7 +81,9 @@ higher-resolution image instead.
 When the page width changes, revisit every display width. A diagram sized for a narrow page wastes
 space on a wide page, while enlarging a small image makes it less legible.
 
-`scripts/image_size.py` does this calculation.
+`scripts/image_size.py` does this calculation. Write its `display_width` and `display_height` onto
+the element; its `width` and `height` are the file's real size for the ratio check. When it
+returns `clamped: true`, the requested width exceeded the file and was reduced to the file width.
 
 ### Referencing by identifier
 

@@ -1,6 +1,6 @@
 ---
 name: suggest-commit
-description: Quickly analyzes staged/unstaged changes and recent commit history, then recommends 5 commit messages that match the repository's existing style.
+description: Quickly analyzes staged and unstaged changes together, or the scope the user names, plus recent commit history, then recommends 5 commit messages that match the repository's existing style.
 compatibility: >-
   Requires a Git worktree and read-only access to the Git CLI. Works from any agent host that can run
   shell commands and inspect targeted file content.
@@ -10,21 +10,65 @@ compatibility: >-
 
 Optimize for speed: gather compact context first, avoid reading a full diff unless the compact context is not enough to infer intent, and never modify the repository.
 
+## Scope of the Change
+
+One rule decides which changes the suggestions describe:
+
+- When the user names a scope (staged only, a set of paths, a single file), analyze exactly that scope and nothing else.
+- Otherwise analyze every tracked change, staged and unstaged together, as one change set. Then look at untracked
+  files: include one when its name, or the smallest read of its content, shows it belongs to the same work; leave out
+  a file that is clearly unrelated, and never use it as evidence for a message.
+
+When the user asked for staged changes only, exclude unstaged and untracked changes entirely.
+
 ## Step 1: Fast Context Pass
 
-Run this **single read-only shell command** first:
+Run these **read-only shell commands** first. Run them one at a time, not chained with `&&`, so a repository with no
+commits still yields the status and convention output.
 
 ```bash
-git status --short && printf '\n---STAT---\n' && git diff HEAD --stat && printf '\n---NAME-STATUS---\n' && git diff HEAD --name-status && printf '\n---RECENT-COMMITS---\n' && git log --oneline -20 && printf '\n---COMMIT-CONVENTION---\n' && grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(메시지|규칙|컨벤션|형식)|^[[:space:]]*[-*]?[[:space:]]*커밋:|(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?: *\[' AGENTS.md CONTRIBUTING.md .github/CONTRIBUTING.md CLAUDE.md .gitmessage 2>/dev/null | head -10
+git status --short
+git rev-parse --verify HEAD
 ```
 
+If `git rev-parse --verify HEAD` fails, the repository has no commits yet: there is no history to learn a style from,
+and every diff below compares against the empty tree. Say so in the answer and use conventional commits with lowercase.
+
+With a `HEAD` (default scope):
+
+```bash
+git diff HEAD --stat
+git diff HEAD --name-status
+```
+
+Without a `HEAD` (default scope):
+
+```bash
+git diff --cached --stat
+git diff --cached --name-status
+git diff --stat
+git diff --name-status
+```
+
+For a user-named staged-only scope, replace `git diff HEAD` with `git diff --cached` in every command. For named paths,
+append `-- <paths>`.
+
+Then, in both cases:
+
+```bash
+git log --oneline -20
+grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(메시지|규칙|컨벤션|형식)|^[[:space:]]*[-*]?[[:space:]]*커밋:|(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?: *\[' AGENTS.md CONTRIBUTING.md .github/CONTRIBUTING.md CLAUDE.md .gitmessage 2>/dev/null | head -10
+```
+
+`git log` fails without a `HEAD`; treat that as an empty history, not as an error.
+
 Use this pass to answer:
-- Are there any staged, unstaged, or untracked changes?
+- Are there any staged, unstaged, or untracked changes inside the scope?
 - Which files changed, and what area/module do they belong to?
 - What commit-message style does the repository use?
 - Does the repository **document** a commit convention, and does that convention prescribe an identifier slot?
 
-If there are no tracked changes and no untracked files, say there are no changes to commit and stop.
+If there are no tracked changes and no related untracked files in the scope, say there are no changes to commit and stop.
 
 ## Step 2: Targeted Diff Pass Only When Needed
 
@@ -32,14 +76,14 @@ Do **not** read the full diff by default.
 
 Read more detail only if the fast context is insufficient to infer the intent. Prefer the smallest useful command:
 
-1. For a few changed files or ambiguous intent:
+1. For a few changed files or ambiguous intent (use `git diff --cached` for a staged-only scope or when there is no `HEAD`):
    ```bash
    git diff HEAD -- <file1> <file2>
    ```
 2. For many changed files where file names and stats are enough: skip the full diff and infer from paths, filenames, and recent commit style.
-3. For untracked files that may matter: inspect only their names first; read file contents only when the filename does not reveal the intent.
+3. For untracked files that may matter: inspect only their names first; read the smallest useful part of a file only when the filename does not reveal whether it belongs to the change.
 
-Avoid dumping a repository-wide `git diff HEAD` unless the changes are small and the intent cannot be determined otherwise.
+Avoid dumping a repository-wide diff unless the changes are small and the intent cannot be determined otherwise.
 
 ## Step 3: Analyze Commit Style
 
@@ -83,13 +127,14 @@ Infer the likely change intent, but keep terminology and claimed effects tied to
 - Preserve established repository terminology, including its casing and spelling.
 - Do not replace a concrete repository identifier with an invented synonym or label.
 - Use branch names and recent commits to guide inspection or confirm established terminology, not as sole evidence of current behavior.
-- Do not include tokens that identify an external entity unless the human wrote them:
-  ticket keys (shaped like `[ABC-123]`), issue/PR numbers, auto-close keywords (shaped like `Fixes #12`),
-  version numbers, dates, and person names.
-  A branch name or a pattern in recent commits is not evidence that a particular identifier applies to this change.
-  An identifier that reached this skill as ARGUMENTS counts only when the human typed those arguments themselves.
-  It does not count when you composed the arguments, since you may have copied it from the branch name, the PR
-  title, or other repository metadata. When you cannot tell who authored it, treat it as not supplied.
+- **Identifier rule (the only one in this skill).** A token that identifies an external entity — a ticket key shaped
+  like `[ABC-123]`, an issue or PR number, an auto-close keyword shaped like `Fixes #12`, a version number, a date,
+  a person's name — may appear in a suggestion in exactly two cases. First, the human supplied it: they typed it in
+  the request, or typed it as this skill's ARGUMENTS themselves. Second, the inspected change itself introduces or
+  renames that value, such as a version string in the diff or an identifier inside a renamed symbol or path.
+  Metadata around the change never qualifies: not the branch name, not the PR title, not neighboring commit
+  messages. Arguments you composed yourself do not count as human-supplied, because you may have copied them from
+  that metadata. When you cannot tell who authored a value, treat it as not supplied.
 - Infer the change category and likely intent, but claim a behavioral or user-visible outcome only when the inspected changes support it.
 - When several descriptions are possible, prefer the most concrete wording supported by the evidence.
 - When a term remains unclear, inspect the smallest relevant diff, symbol, test, or configuration. If the evidence is still insufficient, use a broader accurate expression.
@@ -133,9 +178,7 @@ Present exactly 5 commit messages in a numbered table:
 Rules:
 - All 5 must follow the detected repository style and the prefix-selection rules above.
 - Before presenting the suggestions, verify that every specific noun and claimed outcome is supported by the inspected changes.
-- External identifiers are held to a stricter test. The content of the change can justify one — a version string
-  the diff introduces, an identifier inside a renamed symbol or path. The metadata around the change never can —
-  branch name, PR title, neighboring commit messages. With neither, the identifier is valid only if the human wrote it.
+- Apply the identifier rule from Step 4 to every suggestion.
 - Vary phrasing: different verbs, emphasis, and granularity.
 - Order from most recommended to least recommended; `#1` is the best overall choice.
 - Each message must be one line only.

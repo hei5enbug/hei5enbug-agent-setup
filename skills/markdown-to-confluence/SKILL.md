@@ -31,15 +31,19 @@ and is really a contract mistake, so guessing at the markup wastes a publish cyc
 
 Adapt to capabilities, never to product names.
 
-1. Detect what this host can do before choosing mechanics. Do not assume an integration tool
-   exists, and do not name one in your reasoning or output.
+1. Detect what this host can do before choosing mechanics. Choose the Confluence tool by one rule:
+   when a higher-level instruction names the tool to use, use that tool; otherwise use one of the
+   Confluence tools connected to this host; only when none is connected fall back to direct REST
+   with user-supplied credentials, and after that to handing the files to the user.
 2. Do not assume installation paths, environment variables, or CLI syntax. Discover them, or accept
    them as configuration, or ask.
 3. Keep every stage even when a capability is missing. The final fallback is always to hand the
    finished artifacts to the user.
 4. When the host does not report a value, leave it empty. Never invent a page id, an attachment
    id, or a pixel dimension.
-5. This skill is self-contained. Do not call, read, or depend on another skill's files.
+5. This skill declares no sibling-skill file and reads none. Never call another skill or depend on
+   its scripts. If a shared rule is ever needed, declare the sibling file, its purpose, and what to
+   do when it is absent.
 
 ### Capability map
 
@@ -125,7 +129,12 @@ placeholder, and repairing it costs another publish cycle.
 ### 6. Measure and size every image
 
 Run `scripts/image_size.py` against each file with the chosen display width. Write the returned
-`width` and `height` onto the `img` element.
+`display_width` and `display_height` onto the `img` element. The returned `width` and `height` are
+the file's real pixel size; use them only to confirm the ratio, never as the element's attributes
+when a display width was requested.
+
+`clamped: true` means the requested display width was larger than the file, so the script reduced
+the display width to the file's width. Keep that reduced value, or render a larger image.
 
 An image whose stated ratio does not match its real ratio is stretched on the page. Never estimate
 these numbers.
@@ -146,6 +155,10 @@ or the source may have changed while the body was being built.
 ### 8. Save
 
 Send the complete body. Write a version message that names what changed in this save.
+
+Immediately before the save, read the page's current version number again. If it differs from the
+version read in step 2, another editor changed the page while the body was being built: do not
+save, report the two version numbers to the user, and restart from step 2 only when the user asks.
 
 Confirm that the source has not changed since the body was built. For a body too large to pass as
 one tool argument, compose it from complete chunks and join the chunks before the write call.
@@ -203,11 +216,11 @@ Read these when the step calls for them, not upfront.
 
 | Path | Contract |
 |---|---|
-| `scripts/image_size.py` | Reads PNG, JPEG, and GIF dimensions using only the standard library. Reports unsupported input as a failure rather than skipping it |
+| `scripts/image_size.py` | Reads PNG, JPEG, and GIF dimensions using only the standard library. Reports unsupported input, truncated headers, and zero dimensions as failures. Returns `display_width`, `display_height`, and `clamped` for a requested display width |
 | `scripts/column_widths.py` | Produces a deterministic column-width estimate whose integer widths sum to the requested total. Rejects impossible floors and image columns without an explicit floor |
 | `scripts/text_parity.py` | Compares text after exact normalization of its declared Markdown subset. Reports unsupported constructs instead of guessing |
 | `scripts/validate_body.py` | Validates the mechanical body rules within its declared scope. Sound and complete inside that scope, silent outside it |
-| `scripts/render_diagrams.mjs` | Captures elements from a local HTML file to images. Declares its browser dependency and fails loudly when it is missing |
+| `scripts/render_diagrams.mjs` | Captures elements from a local HTML file to images. Requires ids made of letters, digits, `-` and `_`, refuses duplicate output names before capturing, always closes the browser, and disables the browser sandbox only with `--no-sandbox` |
 | `assets/diagram-template.html` | Starting point for hand-built diagrams. Colors and layout are defaults, not requirements |
 
 Run each script with `--help` for its exact interface.

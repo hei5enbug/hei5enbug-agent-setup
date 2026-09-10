@@ -10,80 +10,85 @@ from pathlib import Path
 
 try:
     import yaml
-except ModuleNotFoundError:  # Optional: the stdlib parser below handles skill metadata.
+except ModuleNotFoundError:
     yaml = None
+
+PYYAML_INSTALL_HINT = (
+    "PyYAML is required to read SKILL.md frontmatter. Install it with: "
+    "python3 -m pip install pyyaml"
+)
+CHECK_TIMEOUT_SECONDS = 60
+# Returncode recorded when a bundled check is killed for running too long.
+CHECK_TIMEOUT_RETURNCODE = None
+
+
+class MissingDependencyError(RuntimeError):
+    """Raised when PyYAML is not installed."""
+
+
+def split_frontmatter(content):
+    """Return (frontmatter_text, body) or raise ValueError when SKILL.md has no frontmatter."""
+    if not content.startswith('---'):
+        raise ValueError("No YAML frontmatter found")
+    match = re.match(r'^---\n(.*?)\n---(?:\n|$)', content, re.DOTALL)
+    if not match:
+        raise ValueError("Invalid frontmatter format")
+    return match.group(1), content[match.end():]
 
 
 def parse_frontmatter(frontmatter_text):
-    """Parse top-level skill metadata, using PyYAML when it is available."""
-    if yaml is not None:
-        try:
-            parsed = yaml.safe_load(frontmatter_text)
-        except yaml.YAMLError as exc:
-            raise ValueError(f"Invalid YAML in frontmatter: {exc}") from exc
-        if not isinstance(parsed, dict):
-            raise ValueError("Frontmatter must be a YAML dictionary")
-        return parsed
-
-    parsed = {}
-    lines = frontmatter_text.splitlines()
-    index = 0
-    while index < len(lines):
-        line = lines[index]
-        if not line.strip() or line.lstrip().startswith("#"):
-            index += 1
-            continue
-        if line[:1].isspace():
-            index += 1
-            continue
-
-        match = re.match(r"^([A-Za-z0-9_-]+):(?:[ \t]*(.*))?$", line)
-        if not match:
-            raise ValueError(f"Invalid top-level frontmatter line: {line}")
-
-        key, raw_value = match.groups()
-        raw_value = (raw_value or "").strip()
-        if raw_value in {">", "|", ">-", "|-"}:
-            continuation = []
-            index += 1
-            while index < len(lines) and (
-                not lines[index].strip() or lines[index][:1].isspace()
-            ):
-                continuation.append(lines[index].strip())
-                index += 1
-            parsed[key] = " ".join(part for part in continuation if part)
-            continue
-
-        if raw_value.startswith(("'", '"')) and raw_value.endswith(raw_value[0]):
-            raw_value = raw_value[1:-1]
-        parsed[key] = raw_value
-        index += 1
-
+    """Parse top-level skill metadata with PyYAML."""
+    if yaml is None:
+        raise MissingDependencyError(PYYAML_INSTALL_HINT)
+    try:
+        parsed = yaml.safe_load(frontmatter_text)
+    except yaml.YAMLError as exc:
+        raise ValueError(f"Invalid YAML in frontmatter: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("Frontmatter must be a YAML dictionary")
     return parsed
 
 
-def run_bundled_checks(skill_path):
+def run_bundled_checks(skill_path, timeout_seconds=CHECK_TIMEOUT_SECONDS):
     """Run every scripts/check_*.py bundled with the skill.
 
     A detector exits non-zero when it finds a violation. Returns
     (ok, [(script_name, returncode, output)]) and treats a missing
-    scripts/ directory as a pass.
+    scripts/ directory as a pass. A detector that exceeds the timeout is
+    killed and recorded with CHECK_TIMEOUT_RETURNCODE.
     """
     skill_path = Path(skill_path)
     detectors = sorted((skill_path / "scripts").glob("check_*.py"))
     results = []
     ok = True
     for detector in detectors:
-        completed = subprocess.run(
-            [sys.executable, str(detector), str(skill_path)],
-            capture_output=True,
-            text=True,
-        )
+        try:
+            completed = subprocess.run(
+                [sys.executable, str(detector), str(skill_path)],
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired:
+            results.append((
+                detector.name,
+                CHECK_TIMEOUT_RETURNCODE,
+                f"timed out after {timeout_seconds} seconds",
+            ))
+            ok = False
+            continue
         output = (completed.stdout + completed.stderr).strip()
         results.append((detector.name, completed.returncode, output))
         if completed.returncode != 0:
             ok = False
     return ok, results
+
+
+def check_status(returncode):
+    """Human-readable status label for a bundled check result."""
+    if returncode is CHECK_TIMEOUT_RETURNCODE:
+        return "TIMEOUT"
+    return "pass" if returncode == 0 else "FAIL"
 
 
 def validate_skill(skill_path):
@@ -95,19 +100,9 @@ def validate_skill(skill_path):
     if not skill_md.exists():
         return False, "SKILL.md not found"
 
-    # Read and validate frontmatter
     content = skill_md.read_text()
-    if not content.startswith('---'):
-        return False, "No YAML frontmatter found"
-
-    # Extract frontmatter
-    match = re.match(r'^---\n(.*?)\n---', content, re.DOTALL)
-    if not match:
-        return False, "Invalid frontmatter format"
-
-    frontmatter_text = match.group(1)
-
     try:
+        frontmatter_text, _ = split_frontmatter(content)
         frontmatter = parse_frontmatter(frontmatter_text)
     except ValueError as exc:
         return False, str(exc)
@@ -134,28 +129,30 @@ def validate_skill(skill_path):
     if not isinstance(name, str):
         return False, f"Name must be a string, got {type(name).__name__}"
     name = name.strip()
-    if name:
-        # Check naming convention (kebab-case: lowercase with hyphens)
-        if not re.match(r'^[a-z0-9-]+$', name):
-            return False, f"Name '{name}' should be kebab-case (lowercase letters, digits, and hyphens only)"
-        if name.startswith('-') or name.endswith('-') or '--' in name:
-            return False, f"Name '{name}' cannot start/end with hyphen or contain consecutive hyphens"
-        # Check name length (max 64 characters per spec)
-        if len(name) > 64:
-            return False, f"Name is too long ({len(name)} characters). Maximum is 64 characters."
+    if not name:
+        return False, "Name cannot be empty"
+    # Check naming convention (kebab-case: lowercase with hyphens)
+    if not re.match(r'^[a-z0-9-]+$', name):
+        return False, f"Name '{name}' should be kebab-case (lowercase letters, digits, and hyphens only)"
+    if name.startswith('-') or name.endswith('-') or '--' in name:
+        return False, f"Name '{name}' cannot start/end with hyphen or contain consecutive hyphens"
+    # Check name length (max 64 characters per spec)
+    if len(name) > 64:
+        return False, f"Name is too long ({len(name)} characters). Maximum is 64 characters."
 
     # Extract and validate description
     description = frontmatter.get('description', '')
     if not isinstance(description, str):
         return False, f"Description must be a string, got {type(description).__name__}"
     description = description.strip()
-    if description:
-        # Check for angle brackets
-        if '<' in description or '>' in description:
-            return False, "Description cannot contain angle brackets (< or >)"
-        # Check description length (max 1024 characters per spec)
-        if len(description) > 1024:
-            return False, f"Description is too long ({len(description)} characters). Maximum is 1024 characters."
+    if not description:
+        return False, "Description cannot be empty"
+    # Check for angle brackets
+    if '<' in description or '>' in description:
+        return False, "Description cannot contain angle brackets (< or >)"
+    # Check description length (max 1024 characters per spec)
+    if len(description) > 1024:
+        return False, f"Description is too long ({len(description)} characters). Maximum is 1024 characters."
 
     # Validate compatibility field if present (optional)
     compatibility = frontmatter.get('compatibility', '')
@@ -167,21 +164,29 @@ def validate_skill(skill_path):
 
     return True, "Skill is valid!"
 
-if __name__ == "__main__":
+
+def main():
     if len(sys.argv) != 2:
         print("Usage: python quick_validate.py <skill_directory>")
         sys.exit(1)
-    
+
     skill_path = sys.argv[1]
-    valid, message = validate_skill(skill_path)
+    try:
+        valid, message = validate_skill(skill_path)
+    except MissingDependencyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(2)
     print(message)
     if not valid:
         sys.exit(1)
 
     checks_ok, results = run_bundled_checks(skill_path)
     for name, returncode, output in results:
-        status = "pass" if returncode == 0 else "FAIL"
-        print(f"[{status}] {name}")
+        print(f"[{check_status(returncode)}] {name}")
         if output:
             print(output)
     sys.exit(0 if checks_ok else 1)
+
+
+if __name__ == "__main__":
+    main()

@@ -47,6 +47,8 @@ The opponent may start a new command-line process for each exchange. Resume the 
   If both are available and no evidence distinguishes them, ask the user which opponent to use.
 - Fix a Codex opponent to `gpt-5.6-sol` with `xhigh` reasoning effort.
 - Fix a Claude opponent to `claude-fable-5` with `xhigh` reasoning effort. If that model is unavailable, use `claude-opus-4-8` with `xhigh` reasoning effort.
+  When the primary model returns a verified quota error, the runner clears that received error state
+  and resumes the same session with the fallback model exactly once.
 - Pass `--fast` to reduce the opponent's reasoning effort to `high` only when the user explicitly prioritizes speed or cost over quality.
 - Never infer or automatically use `--fast` for an ordinary request.
 - Do not start another process for the current host's CLI. A separate process may not inherit the exact model selection of the current session.
@@ -106,7 +108,8 @@ Improve efficiency by eliminating repeated reading and repeated explanations of 
 4. Use that same state directory from the first opponent call through the final call.
 5. Inspect the agent-instruction files that apply to the repository, including `AGENTS.md`, `CLAUDE.md`, or host-equivalent files when present.
    Include only the rules relevant to the actual work scope, one per line, in the fixed contract.
-6. Do not modify any file during the debate.
+6. Do not modify any repository file or user deliverable during the debate. The runner's temporary
+   state directory outside the repository is the only place anything is written.
 
 Create the state directory like this:
 
@@ -225,6 +228,9 @@ The runner increments the exchange count only after a successful call and reject
       --status
 
 If only the current call waiting on `--durable` disconnects, do not create another debate. Use `--wait` with the same state directory to resume progress output and collect the result.
+If neither an exit status nor a worker PID exists, `--wait` reports that there is no job.
+If a saved PID is non-numeric or not positive, it stops immediately and marks the state uncertain
+instead of waiting without a valid worker identity.
 
     bash "$SCRIPT" \
       --opponent "$OPPONENT" \
@@ -250,12 +256,16 @@ The current host may create one recovery session containing only this compressed
 
 Do not send the previous transcript. Use a new temporary state directory and a new conversation identifier. If recovery also fails, classify the remaining issues as unresolved and end the debate.
 
-For both normal and failed termination, run this command for every state directory used:
+After a debate ends normally, run this command for every state directory used:
 
     bash "$SCRIPT" \
       --opponent "$OPPONENT" \
       --state-dir "$STATE_DIR" \
       --finish
+
+Do not run `--finish` while a detached run is still active, or when `--wait` reported that it could not read
+the final response and left the result file in place. In those cases report the state directory path so the
+result can still be collected or recovered; clean up only after that succeeds or the user decides otherwise.
 
 This removes local state and the saved copy of the conversation identifier.
 It does not delete the session record retained by Claude or Codex, but the identifier is never reused, so later debates cannot mix with it.
@@ -263,21 +273,18 @@ It does not delete the session record retained by Claude or Codex, but the ident
 ## Deliverable writing rules
 
 Apply these rules to user-facing documents: unresolved-question files and answer-only syntheses. Preserve the unresolved-question file's required structure and line limits.
-Apply these rules only to style, terminology, tables, diagrams, duplication, and references.
+Apply these rules only to style, terminology, tables, diagrams, and Markdown formatting.
 
 | Rule | Requirement |
 |---|---|
 | One term per meaning | Use the same term for the same meaning. Normalize synonyms to one canonical term. |
 | Plain Korean | Write in plain Korean. Use English only for proper nouns, names that exist verbatim in code, and technical terms without a suitable Korean equivalent. |
 | Replace conflicting terms | Replace a term when it overlaps with existing system vocabulary and could cause confusion. |
-| One topic per location | Cover each topic once, with non-overlapping document and section scopes. |
 | Necessary content only | Include only what is needed for implementation and decisions. Remove sentences whose absence would not reduce understanding. |
 
 - Use a table rather than prose or bullets when several items are compared or listed against the same dimensions.
-- Use Mermaid diagrams when they communicate structures, flows, or relationships better than prose. Do not add them for simple lists or one-line explanations.
-- Do not use reference symbols for sections. Refer to a document path and section title, not a section number alone.
-- Keep one detailed source for each topic. Summarize it briefly elsewhere and link to that source.
-- Use subheadings for subdivisions. Do not use a sentence ending in a colon as a heading.
+- In a file deliverable, use Mermaid diagrams when they communicate structures, flows, or relationships better than prose. Do not add them for simple lists or one-line explanations.
+- In a chat answer, never emit Mermaid or other diagram source, because it does not render there. Use a table, a list, or ASCII art instead.
 - Break lines only after complete sentences, never in the middle of a sentence.
 - Put blank lines around headings, tables, code blocks, and lists. Align continuation lines of a multiline list item with its text.
 - Use `<br>` rather than two trailing spaces for an inline break, including inside table cells.
@@ -308,9 +315,10 @@ Use this mode unless the user explicitly asks otherwise.
 
 Use this mode when the user explicitly says not to edit, or asks only for the result or answer.
 
-- Do not modify or create any file, including code, documentation, or a question file.
+- Do not modify or create any repository file or user deliverable, including code, documentation, and the question file.
+  The runner's temporary state directory outside the repository is still written and cleaned up as in any debate.
 - Synthesize agreed issues, evidence, recommendations, unresolved issues, and choices directly in the answer.
-- Follow "Deliverable writing rules" and use a Mermaid diagram for structures or flows.
+- Follow "Deliverable writing rules". Show structures or flows with a table, a list, or ASCII art; do not put Mermaid source in the answer.
 
 ## Unresolved-question file
 
@@ -359,7 +367,7 @@ Apply every rule below. "Deliverable writing rules" also applies, while these ru
 
 After creating the question file, run the bundled validator from the resolved skill directory.
 
-The validator checks only mechanical constraints such as headings, order, line counts, and an empty answer code block. After it passes, reread every issue in the current host.
+The validator checks only mechanical constraints such as headings, order, line counts, and an empty answer code block. Lines inside a fenced code block are never read as headings or choices. After it passes, reread every issue in the current host.
 Verify that a middle-school student can understand it, the choices are in true recommendation order, and every choice explains benefits, risks, and suitable conditions.
 If any requirement fails, revise the file and repeat both mechanical and semantic review.
 

@@ -24,12 +24,14 @@ hei5enbug-agent-setup/
 │   ├── marketplace.json
 │   └── plugin.json
 ├── .codex-plugin/plugin.json
+├── .github/workflows/validate.yml
+├── LICENSE
+├── pyproject.toml
 ├── standalone-agents/
 │   ├── scout.md
 │   └── codex-explorer.toml
 ├── standalone-skills/
-│   ├── omo-model-config/
-│   └── portable-opencode-setup/
+│   └── omo-model-config/
 └── skills/
     ├── decision-navigator/
     ├── deep-interview/
@@ -48,7 +50,8 @@ The `standalone-skills/` directory is not included in either plugin's skill disc
 
 The `standalone-agents/` directory holds subagent definitions that `CLAUDE.md` and `AGENTS.md` refer to by name.
 Copy `scout.md` into `~/.claude/agents/` by hand. Copy `codex-explorer.toml` into `~/.codex/agents/explorer.toml`;
-it overrides the built-in Codex `explorer` so its model and sandbox are fixed the same way `scout` is on Claude Code.
+it overrides the built-in Codex `explorer` so its reasoning effort and read-only sandbox are fixed. It sets no model,
+so it inherits the host's default model, whereas `scout` pins one on Claude Code.
 They stay outside the plugin bundle so installing the plugin never adds a subagent.
 
 ## Plugin installation
@@ -71,8 +74,9 @@ claude plugin install hei5enbug-agent-setup@hei5enbug
 
 ## Plugin updates
 
-Both plugin manifests use the same semantic version. Bump the version in `.codex-plugin/plugin.json` and
-`.claude-plugin/plugin.json` before publishing a release.
+Both plugin manifests and `pyproject.toml` carry the same semantic version, currently `0.2.0`. Bump the version in
+`.codex-plugin/plugin.json`, `.claude-plugin/plugin.json`, and `pyproject.toml` together, and only after the
+development checks below pass, before publishing a release.
 
 Update Codex after the release is available:
 
@@ -89,6 +93,18 @@ claude plugin update hei5enbug-agent-setup@hei5enbug
 ```
 
 Start a new Codex thread or restart Claude Code after updating so the host loads the new skill versions.
+
+## Development checks
+
+The bundled scripts need Python 3.12 or later with PyYAML, and the Node tests need Node.js. Run the same three
+checks that `.github/workflows/validate.yml` runs on macOS and Linux:
+
+```bash
+python3 -m pip install -e ".[dev]"
+for skill in skills/*/ standalone-skills/*/; do python3 skills/skill-builder/scripts/quick_validate.py "$skill"; done
+python3 -m pytest
+node --test skills/markdown-to-confluence/tests/test_render_diagrams.mjs
+```
 
 ## Instruction language
 
@@ -108,14 +124,17 @@ required output labels, or evaluation fixtures.
 | [`humanize-korean`](skills/humanize-korean/SKILL.md) | Rewrites AI-sounding Korean text into natural, human-sounding Korean without changing its meaning. [Korean guide](skills/humanize-korean/README.ko.md). |
 | [`markdown-to-confluence`](skills/markdown-to-confluence/SKILL.md) | Publishes a Markdown document to Confluence and keeps the page correct on later edits, covering the table of contents macro, inline images, attachments, and diagrams rendered to images. |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | Creates, tests, and packages agent skills through a draft → test → review → improve loop. |
-| [`suggest-commit`](skills/suggest-commit/SKILL.md) | Reads the current diff and recent commit history, then suggests five commit messages that match the repo's style. |
+| [`suggest-commit`](skills/suggest-commit/SKILL.md) | Reads the staged and unstaged changes, or the scope you name, plus recent commit history, then suggests five commit messages that match the repo's style. |
 | [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | Rules and a five-step narrowing process for writing or cleaning up technical design docs. [Korean guide](skills/technical-design-writer/README.ko.md). |
 | [`tiki-taka`](skills/tiki-taka/SKILL.md) | Runs a turn-limited debate between the current agent and an opposing Claude/Codex session to surface and resolve issues. [Korean guide](skills/tiki-taka/README.ko.md). |
 
 ## Related
 
-- [`omo-model-config`](standalone-skills/omo-model-config/SKILL.md) and
-  [`portable-opencode-setup`](standalone-skills/portable-opencode-setup/SKILL.md) remain available as
-  standalone source and are not included in the plugin skill list.
-- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — plugin system configured by the
-  standalone OpenCode skills
+- [`omo-model-config`](standalone-skills/omo-model-config/SKILL.md) remains available as standalone
+  source and is not included in the plugin skill list.
+- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — plugin system whose model
+  routing the standalone skill updates
+
+## License
+
+This repository is licensed under the Apache License 2.0. See [`LICENSE`](./LICENSE) for the full text.
