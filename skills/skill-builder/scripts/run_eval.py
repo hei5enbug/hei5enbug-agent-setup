@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -19,6 +20,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.model_runner import RunnerError, resolve_runner_command, run_model
+from scripts.quick_validate import MissingDependencyError
 from scripts.utils import parse_skill_md
 
 
@@ -43,13 +45,106 @@ or
 """
 
 
+MAX_DESCRIPTION_LENGTH = 1024
+
+
+def validate_eval_set(eval_set: object) -> None:
+    """Reject malformed eval sets before any model is called."""
+    if not isinstance(eval_set, list) or not eval_set:
+        raise ValueError("Eval set must be a non-empty list of cases")
+    expected_by_query: dict[str, bool] = {}
+    for index, item in enumerate(eval_set):
+        if not isinstance(item, dict):
+            raise ValueError(f"Eval case {index} must be an object")
+        query = item.get("query")
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError(f"Eval case {index} needs a non-empty string 'query'")
+        should_trigger = item.get("should_trigger")
+        if not isinstance(should_trigger, bool):
+            raise ValueError(f"Eval case {index} needs a boolean 'should_trigger'")
+        if query in expected_by_query and expected_by_query[query] != should_trigger:
+            raise ValueError(
+                f"Eval case {index} contradicts an earlier case with the same query"
+            )
+        expected_by_query[query] = should_trigger
+
+
+def validate_run_settings(
+    runs_per_query: int,
+    max_iterations: int | None = None,
+    holdout: float | None = None,
+    trigger_threshold: float | None = None,
+    num_workers: int | None = None,
+    timeout: int | None = None,
+) -> None:
+    """Reject settings that cannot produce a meaningful evaluation."""
+    if (
+        isinstance(runs_per_query, bool)
+        or not isinstance(runs_per_query, int)
+        or runs_per_query < 1
+    ):
+        raise ValueError(f"runs_per_query must be at least 1, got {runs_per_query!r}")
+    if max_iterations is not None and (
+        isinstance(max_iterations, bool)
+        or not isinstance(max_iterations, int)
+        or max_iterations < 1
+    ):
+        raise ValueError(f"max_iterations must be at least 1, got {max_iterations!r}")
+    if holdout is not None and (
+        isinstance(holdout, bool)
+        or not isinstance(holdout, (int, float))
+        or not math.isfinite(holdout)
+        or not 0 <= holdout < 1
+    ):
+        raise ValueError(
+            f"holdout must be finite, at least 0, and below 1, got {holdout!r}"
+        )
+    if trigger_threshold is not None and (
+        isinstance(trigger_threshold, bool)
+        or not isinstance(trigger_threshold, (int, float))
+        or not math.isfinite(trigger_threshold)
+        or not 0 <= trigger_threshold <= 1
+    ):
+        raise ValueError(
+            "trigger_threshold must be a finite number from 0 through 1, "
+            f"got {trigger_threshold!r}"
+        )
+    for name, value in (("num_workers", num_workers), ("timeout", timeout)):
+        if value is not None and (
+            isinstance(value, bool) or not isinstance(value, int) or value < 1
+        ):
+            raise ValueError(f"{name} must be at least 1, got {value!r}")
+
+
+def validate_description(description: object) -> None:
+    """Reject description overrides that a skill host cannot accept."""
+    if not isinstance(description, str) or not description.strip():
+        raise ValueError("description must be a non-empty string")
+    if len(description) > MAX_DESCRIPTION_LENGTH:
+        raise ValueError(
+            f"description is {len(description)} characters; maximum is "
+            f"{MAX_DESCRIPTION_LENGTH}"
+        )
+
+
 def parse_trigger_response(response: str) -> bool:
-    """Parse a strict trigger decision, with JSON and bare-boolean fallbacks."""
-    match = re.search(
-        r"<trigger>\s*(true|false)\s*</trigger>", response, re.IGNORECASE
-    )
-    if match:
-        return match.group(1).lower() == "true"
+    """Parse a strict trigger decision, with JSON and bare-boolean fallbacks.
+
+    A response that contains both a true and a false tag is an error, never a
+    decision.
+    """
+    tags = {
+        value.lower()
+        for value in re.findall(
+            r"<trigger>\s*(true|false)\s*</trigger>", response, re.IGNORECASE
+        )
+    }
+    if len(tags) > 1:
+        raise RunnerError(
+            "Runner returned conflicting trigger decisions (both true and false)"
+        )
+    if tags:
+        return tags.pop() == "true"
 
     stripped = response.strip()
     if stripped.lower() in {"true", "false"}:
@@ -96,7 +191,20 @@ def run_eval(
     trigger_threshold: float = 0.5,
     model: str | None = None,
 ) -> dict:
-    """Run the full eval set and return results."""
+    """Run the full eval set and return results.
+
+    Each result carries an ``id``: the case's own ``id`` when the eval set
+    provides one, otherwise its position in ``eval_set``. Callers that split
+    and rejoin results must match on ``id``, not on the query text.
+    """
+    validate_eval_set(eval_set)
+    validate_run_settings(
+        runs_per_query,
+        trigger_threshold=trigger_threshold,
+        num_workers=num_workers,
+        timeout=timeout,
+    )
+    validate_description(description)
     query_triggers: dict[int, list[bool | None]] = {
         index: [] for index in range(len(eval_set))
     }
@@ -138,6 +246,7 @@ def run_eval(
         )
         results.append(
             {
+                "id": item.get("id", index),
                 "query": item["query"],
                 "should_trigger": should_trigger,
                 "trigger_rate": trigger_rate,
@@ -193,13 +302,33 @@ def main() -> None:
         sys.exit(1)
 
     try:
+        validate_eval_set(eval_set)
+        validate_run_settings(
+            args.runs_per_query,
+            trigger_threshold=args.trigger_threshold,
+            num_workers=args.num_workers,
+            timeout=args.timeout,
+        )
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
         runner_command = resolve_runner_command(args.runner_command)
     except RunnerError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(2)
 
-    name, original_description, _ = parse_skill_md(skill_path)
-    description = args.description or original_description
+    try:
+        name, original_description, _ = parse_skill_md(skill_path)
+        description = args.description or original_description
+        validate_description(description)
+    except MissingDependencyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(2)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
 
     if args.verbose:
         print(f"Evaluating: {description}", file=sys.stderr)

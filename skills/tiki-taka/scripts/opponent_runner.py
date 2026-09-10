@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
@@ -135,12 +136,20 @@ def prepare_state_root(value: str, create: bool) -> StatePaths:
     return StatePaths(candidate.resolve(strict=True))
 
 
+LOCK_WAIT_SECONDS = 10.0
+
+
 @contextmanager
-def state_lock(paths: StatePaths) -> Iterator[None]:
-    try:
-        paths.lock.mkdir()
-    except FileExistsError as error:
-        raise RunnerError("같은 상태 폴더를 다른 호출이 사용 중입니다.") from error
+def state_lock(paths: StatePaths, wait_seconds: float = 0.0) -> Iterator[None]:
+    deadline = time.monotonic() + wait_seconds
+    while True:
+        try:
+            paths.lock.mkdir()
+            break
+        except FileExistsError as error:
+            if time.monotonic() >= deadline:
+                raise RunnerError("같은 상태 폴더를 다른 호출이 사용 중입니다.") from error
+            time.sleep(0.05)
     try:
         yield
     finally:
@@ -357,8 +366,8 @@ def claude_result_is_error(events: Path) -> bool:
     return False
 
 
-def quota_message_found(output: Path, log: Path) -> bool:
-    for path in (output, log):
+def quota_message_found(*paths: Path) -> bool:
+    for path in paths:
         try:
             if QUOTA_PATTERN.search(path.read_text(encoding="utf-8", errors="replace")):
                 return True
@@ -376,11 +385,14 @@ def show_failure_log(log: Path) -> None:
         print(data.decode("utf-8", errors="replace"), file=sys.stderr, end="")
 
 
-def run_supervised(command: list[str], log: Path) -> None:
+def run_supervised(
+    command: list[str], log: Path, allow_failure: bool = False
+) -> int:
     result = subprocess.run(command, check=False)
-    if result.returncode != 0:
+    if result.returncode != 0 and not allow_failure:
         show_failure_log(log)
         raise RunnerError(f"반대쪽 에이전트 호출이 실패했습니다({result.returncode}).")
+    return result.returncode
 
 
 def codex_participant_command(
@@ -541,12 +553,16 @@ def invoke_opponent(
                 args,
                 participant,
             )
-            run_supervised(command, log)
+            first_return_code = run_supervised(command, log, allow_failure=True)
             active_model = extract_claude_model(events, active_model)
 
             result_is_error = claude_result_is_error(events)
-            quota_error = quota_message_found(output, log)
-            if active_model == CLAUDE_MODEL and quota_error:
+            quota_error = quota_message_found(output, log, events)
+            if (
+                active_model == CLAUDE_MODEL
+                and first_return_code != 0
+                and quota_error
+            ):
                 print(
                     "[tiki-taka] Claude 기본 모델 한도 감지 · 대체 모델로 한 번 재개",
                     file=sys.stderr,
@@ -558,6 +574,10 @@ def invoke_opponent(
                     "Do not repeat the request.\n",
                     encoding="utf-8",
                 )
+                # stream_agent marks every failed response uncertain. A verified
+                # quota response was definitely received and is safe to retry in
+                # the same session with the configured fallback model.
+                paths.uncertain.unlink(missing_ok=True)
                 output.unlink(missing_ok=True)
                 events.unlink(missing_ok=True)
                 log.unlink(missing_ok=True)
@@ -585,6 +605,12 @@ def invoke_opponent(
                 active_model = CLAUDE_FALLBACK
                 result_is_error = claude_result_is_error(events)
 
+            elif first_return_code != 0:
+                show_failure_log(log)
+                raise RunnerError(
+                    f"반대쪽 에이전트 호출이 실패했습니다({first_return_code})."
+                )
+
             if result_is_error:
                 atomic_write_text(
                     paths.uncertain,
@@ -610,9 +636,12 @@ def invoke_opponent(
 
 
 def normal_run(args: argparse.Namespace, paths: StatePaths, prompt_text: str) -> int:
-    if not args.worker:
-        ensure_no_pending_job(paths)
-    with state_lock(paths):
+    # The detached worker starts while its launcher may still hold the lock
+    # for the pid-file write, so it waits briefly instead of failing.
+    wait_seconds = LOCK_WAIT_SECONDS if args.worker else 0.0
+    with state_lock(paths, wait_seconds=wait_seconds):
+        if not args.worker:
+            ensure_no_pending_job(paths)
         repo, maximum, count, effort = initialize_or_load_state(paths, args)
         response = invoke_opponent(
             args,
@@ -685,7 +714,6 @@ def launch_detached(
     prompt_text: str,
     wait_after_launch: bool,
 ) -> int:
-    ensure_no_pending_job(paths)
     file_descriptor, prompt_name = tempfile.mkstemp(prefix="tiki-taka-prompt.")
     prompt_path = Path(prompt_name)
     try:
@@ -702,7 +730,11 @@ def launch_detached(
             "--",
             *worker_runner_command(args, paths),
         ]
-        result = subprocess.run(command, check=False)
+        # Checking for a pending job and writing the new pid file happen under
+        # the same lock, so two launchers can never both start a worker.
+        with state_lock(paths):
+            ensure_no_pending_job(paths)
+            result = subprocess.run(command, check=False)
         if result.returncode != 0:
             return result.returncode
         if wait_after_launch:
@@ -757,13 +789,21 @@ def finish_state(paths: StatePaths) -> int:
         ]
         if unexpected:
             raise RunnerError("알 수 없는 파일이 있어 상태 폴더를 지우지 않았습니다.")
+        skipped: list[str] = []
         for entry in list(paths.root.iterdir()):
             if entry == paths.lock:
                 continue
-            if entry.is_dir():
-                shutil.rmtree(entry)
-            else:
-                entry.unlink(missing_ok=True)
+            # Only plain files that this runner wrote are removed. A directory
+            # or symbolic link with a known name is not ours to delete.
+            if entry.is_symlink() or not entry.is_file():
+                skipped.append(entry.name)
+                continue
+            entry.unlink(missing_ok=True)
+        if skipped:
+            raise RunnerError(
+                "일반 파일이 아닌 항목이 있어 상태 폴더를 지우지 않았습니다: "
+                + ", ".join(sorted(skipped))
+            )
     paths.root.rmdir()
     print("토론 상태를 정리했습니다.")
     return 0

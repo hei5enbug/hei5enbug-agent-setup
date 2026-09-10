@@ -4,7 +4,8 @@
 Supported Markdown includes ATX headings, lists, block quotes, pipe tables, emphasis,
 strikethrough, inline code, inline links and images with non-nested destinations, and HTML ``br``
 elements. Fenced code, raw HTML, complex links, reference links, footnotes, and task lists are
-unsupported unless removed with ``--drop``.
+unsupported unless removed with ``--drop``. Angle brackets inside inline code are code, not raw
+HTML. A ``|`` outside a pipe table is content and must survive in the body.
 
 Exit codes: 0 equal, 1 different, 2 invalid or unsupported input.
 """
@@ -77,12 +78,40 @@ def restore(text, values):
 
 
 def reject_unsupported(text):
+    """Reject constructs this script cannot compare. Inline code must already be stashed."""
     without_breaks = BREAK_PATTERN.sub("", text)
     for label, pattern in UNSUPPORTED_PATTERNS:
         if pattern.search(without_breaks):
             raise UnsupportedInput("unsupported Markdown construct: {}".format(label))
     if re.search(r"<[^>]+>", without_breaks):
         raise UnsupportedInput("unsupported Markdown construct: raw HTML")
+
+
+def table_row_lines(text):
+    """Indices of lines that belong to a pipe table: the header above a rule line, the rule,
+    and the body rows that follow it without a blank line."""
+    lines = text.split("\n")
+    rows = set()
+    for index, line in enumerate(lines):
+        if index == 0 or "|" not in line or not TABLE_RULE_PATTERN.fullmatch(line):
+            continue
+        if "|" not in lines[index - 1]:
+            continue
+        rows.add(index - 1)
+        rows.add(index)
+        cursor = index + 1
+        while cursor < len(lines) and lines[cursor].strip() and "|" in lines[cursor]:
+            rows.add(cursor)
+            cursor += 1
+    return lines, rows
+
+
+def strip_table_pipes(text):
+    """Remove the pipes that draw a table, and only those. A pipe in prose is content."""
+    lines, rows = table_row_lines(text)
+    return "\n".join(
+        line.replace("|", " ") if index in rows else line for index, line in enumerate(lines)
+    )
 
 
 def source_text(raw, drops, drop_title):
@@ -95,11 +124,12 @@ def source_text(raw, drops, drop_title):
     if drop_title:
         text = TITLE_PATTERN.sub("", text)
 
-    reject_unsupported(text)
-
+    # Stash escapes and inline code first so their contents are never mistaken for
+    # table pipes or raw HTML.
     protected = []
     text = stash(ESCAPE_PATTERN, text, protected)
     text = stash(INLINE_CODE_PATTERN, text, protected)
+    reject_unsupported(text)
     if "`" in text:
         raise UnsupportedInput("unsupported Markdown construct: unmatched or multi-backtick code")
 
@@ -108,13 +138,13 @@ def source_text(raw, drops, drop_title):
     if re.search(r"!?\[[^\]]*\]\(", text):
         raise UnsupportedInput("unsupported Markdown construct: complex inline link")
 
+    text = strip_table_pipes(text)
     text = HEADING_PATTERN.sub("", text)
     text = BULLET_PATTERN.sub("", text)
     text = NUMBERED_PATTERN.sub("", text)
     text = QUOTE_PATTERN.sub("", text)
     text = TABLE_RULE_PATTERN.sub("", text)
     text = BREAK_PATTERN.sub(" ", text)
-    text = text.replace("|", " ")
     text = text.replace("**", "").replace("__", "").replace("~~", "")
     text = re.sub(r"(?<!\w)[*_]|[*_](?!\w)", "", text)
     text = html.unescape(text)

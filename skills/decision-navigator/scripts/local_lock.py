@@ -15,7 +15,7 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
-def resolve_resource(value: str) -> tuple[Path, Path]:
+def resolve_resource(value: str, create_claims: bool = True) -> tuple[Path, Path]:
     raw = Path(value).expanduser()
     if raw.is_symlink():
         fail("Resource must not be a symlink")
@@ -41,7 +41,8 @@ def resolve_resource(value: str) -> tuple[Path, Path]:
     claims = effort / "claims"
     if claims.is_symlink():
         fail("Claims directory must not be a symlink")
-    claims.mkdir(parents=True, exist_ok=True)
+    if create_claims:
+        claims.mkdir(parents=True, exist_ok=True)
     return resource, claims / f"{key}.lock"
 
 
@@ -54,14 +55,25 @@ def ticket_status(resource: Path) -> str | None:
     return match.group(1)
 
 
-def read_metadata(lock: Path) -> dict:
+def read_metadata(lock: Path, strict: bool = True) -> dict:
     metadata_path = lock / "claim.json"
     if not metadata_path.is_file():
         return {}
     try:
-        return json.loads(metadata_path.read_text())
+        metadata = json.loads(metadata_path.read_text())
     except (json.JSONDecodeError, OSError) as error:
         fail(f"Invalid claim metadata at {metadata_path}: {error}")
+    problem = None
+    if not isinstance(metadata, dict):
+        problem = f"expected a JSON object, got {type(metadata).__name__}"
+    elif not isinstance(metadata.get("owner"), str) or not isinstance(metadata.get("resource"), str):
+        problem = "owner and resource must be strings"
+    if problem is None:
+        return metadata
+    if strict:
+        fail(f"Corrupted lock metadata at {metadata_path}: {problem}")
+    print(f"Warning: corrupted lock metadata at {metadata_path}: {problem}", file=sys.stderr)
+    return {}
 
 
 def claim(resource: Path, lock: Path, owner: str | None) -> None:
@@ -80,17 +92,40 @@ def claim(resource: Path, lock: Path, owner: str | None) -> None:
         holder = metadata.get("owner", "unknown")
         fail(f"Resource already claimed by {holder}: {resource}")
 
-    payload = {
-        "owner": owner,
-        "resource": str(resource),
-        "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-        "hostname": socket.gethostname(),
-        "pid": os.getpid(),
-    }
     try:
+        # Another session may have changed the ticket between the first status
+        # read and the lock creation. Re-check while holding the lock.
+        status = ticket_status(resource)
+        if status is not None and status != "open":
+            fail(f"Ticket is not open: {resource} has Status: {status}")
+
+        payload = {
+            "owner": owner,
+            "resource": str(resource),
+            "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "hostname": socket.gethostname(),
+            "pid": os.getpid(),
+        }
         (lock / "claim.json").write_text(json.dumps(payload, indent=2) + "\n")
-    except OSError:
-        os.rmdir(lock)
+    except BaseException:
+        metadata_path = lock / "claim.json"
+        try:
+            metadata_path.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError as cleanup_error:
+            print(
+                f"Warning: could not remove failed claim metadata {metadata_path}: "
+                f"{cleanup_error}",
+                file=sys.stderr,
+            )
+        try:
+            lock.rmdir()
+        except OSError as cleanup_error:
+            print(
+                f"Warning: could not clean up failed claim {lock}: {cleanup_error}",
+                file=sys.stderr,
+            )
         raise
     print(json.dumps({"claimed": True, "lock": str(lock), **payload}))
 
@@ -107,7 +142,7 @@ def inspect(resource: Path, lock: Path) -> None:
 def release(resource: Path, lock: Path, owner: str | None, force: bool) -> None:
     if not lock.is_dir() or lock.is_symlink():
         fail(f"Lock not found or unsafe: {lock}")
-    metadata = read_metadata(lock)
+    metadata = read_metadata(lock, strict=not force)
     holder = metadata.get("owner")
     if not force:
         if not owner:
@@ -134,7 +169,7 @@ def main() -> None:
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
-    resource, lock = resolve_resource(args.resource)
+    resource, lock = resolve_resource(args.resource, create_claims=args.action != "inspect")
     if args.action == "claim":
         claim(resource, lock, args.owner)
     elif args.action == "inspect":

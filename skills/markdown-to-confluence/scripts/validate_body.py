@@ -7,8 +7,11 @@ violation inside the scope is reported.
     banned-media-container   a div carrying data-type media-single or media-group
     img-missing-dimension    an img element without width or without height
     bare-table-cell          text directly inside td or th, not wrapped in a child element
-    local-path               an absolute filesystem path, or a link to a Markdown file
-    missing-attachment       an attachment download reference absent from --attachments
+    local-path               an absolute filesystem path (including /tmp, Windows drives,
+                             ~/ and file:// URLs), or a link to a Markdown file; paths that
+                             are part of an http or https URL are never reported
+    missing-attachment       an attachment download reference absent from --attachments;
+                             the referenced name is URL-decoded once before comparison
 
 Outside the scope. This script does not judge wording, structure, ordering, diagram quality, or
 whether the markup expresses what the author meant. It does not verify that the document is
@@ -28,6 +31,7 @@ import posixpath
 import re
 import sys
 from html.parser import HTMLParser
+from urllib.parse import unquote
 
 VOID_ELEMENTS = {
     "area", "base", "br", "col", "embed", "hr", "img", "input",
@@ -38,9 +42,14 @@ BANNED_MEDIA_TYPES = {"media-single", "media-group"}
 
 LOCAL_PATH_PATTERNS = [
     re.compile(r"(?:/Users/|/home/)[A-Za-z0-9._-]+/"),
-    re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:\\\\?[A-Za-z0-9._-]"),
+    re.compile(r"(?:^|[\s\"'(>=])/(?:tmp|var/tmp)/[A-Za-z0-9._-]"),
+    re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:(?:\\\\?|/(?!/))[A-Za-z0-9._-]"),
     re.compile(r"(?:^|[\s\"'(>])~/[A-Za-z0-9._-]"),
+    re.compile(r"file://[^\s\"'>]+"),
 ]
+
+# A path that appears inside a web URL is part of that URL, not a local path.
+REMOTE_URL_PATTERN = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
 
 MARKDOWN_LINK_PATTERN = re.compile(r"\.md(?:#[^\"'\s]*)?$")
 
@@ -63,6 +72,7 @@ class BodyChecker(HTMLParser):
         )
 
     def _check_text_for_paths(self, text, where):
+        text = REMOTE_URL_PATTERN.sub(" ", text)
         for pattern in LOCAL_PATH_PATTERNS:
             match = pattern.search(text)
             if match:
@@ -102,7 +112,7 @@ class BodyChecker(HTMLParser):
                     )
                 match = ATTACHMENT_PATTERN.search(value)
                 if match and self.known_attachments is not None:
-                    name_only = posixpath.basename(match.group(1))
+                    name_only = unquote(posixpath.basename(match.group(1)))
                     if name_only not in self.known_attachments:
                         self._add(
                             "missing-attachment",

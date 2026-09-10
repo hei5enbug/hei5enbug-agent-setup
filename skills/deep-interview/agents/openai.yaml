@@ -1,4 +1,4 @@
 interface:
   display_name: "Deep Interview"
-  short_description: "Turn vague ideas into validated, execution-ready specifications"
+  short_description: "Turn vague ideas into validated, execution-ready specifications. Runs only when you invoke it by name; it is never offered or started on its own."
   default_prompt: "Use $deep-interview to question my idea rigorously and produce an approved execution-ready specification before implementation."

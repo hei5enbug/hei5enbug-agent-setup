@@ -38,8 +38,8 @@ conditions describe most real work, and starting a multi-round interview because
 underspecified takes the conversation somewhere the user did not ask to go.
 
 When you judge that an interview would genuinely help but the user has not asked for one, answer
-the actual request first. You may add one short sentence noting that a deep interview is
-available. Do not ask whether to start it, do not start it, and do not repeat the offer.
+the actual request and stop there. Do not mention that a deep interview is available, do not ask
+whether to start it, and do not start it. The user reaches this skill by naming it.
 
 ## Non-Negotiable Contract
 
@@ -130,7 +130,9 @@ Read `references/ask-ui.md`. Include:
 Round <n> | Component: <name> | Targeting: <dimension> | Why now: <reason> | Ambiguity: <score>%
 ```
 
-Offer 2-4 mutually distinct options when structured choices are useful. Put the strongest evidence-backed recommendation first, explain its tradeoff, and always allow free text.
+When structured choices are useful, stay within the option count declared by the host tool.
+Make the options mutually distinct. Put the strongest evidence-backed recommendation first,
+explain its tradeoff, and always allow free text.
 Do not force choices when an open question will produce better information.
 
 ### 4. Normalize the Answer

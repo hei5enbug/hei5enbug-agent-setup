@@ -15,12 +15,12 @@
     {
       "id": 2,
       "prompt": "Rewrite an infrastructure rollout design that uses pronouns, positional references, figurative operations, an unsupported safety claim, and a percentage without a measurement basis.",
-      "expected_output": "The revision resolves references, names observable operations and outcomes, and supplies or removes unsupported evidence claims.",
+      "expected_output": "The revision resolves references, names observable operations and outcomes, gives each material claim a reproducible basis or records it in the assumptions and open questions section, and removes only evaluative wording.",
       "files": [],
       "expectations": [
         "Every reference resolves without relying only on position, a pronoun, or a count.",
         "Each operation identifies the affected subject and observable result.",
-        "Quantitative and qualitative claims include a reproducible basis or are removed."
+        "Each quantitative or qualitative claim either gains a reproducible basis, is kept in the assumptions and open questions section with its evidence status, or, when it is only evaluative and not material, is removed; no material claim is silently dropped or left unlabeled in the body."
       ]
     },
     {
@@ -43,7 +43,7 @@
         "The response preserves topic names, JSON fields, numbers, negation, modality, and retry semantics exactly.",
         "The response uses standard Korean spacing and one tone instead of introducing variation to appear human.",
         "Translationese and nominalized operations are replaced only when the replacement preserves meaning.",
-        "Unsupported evaluative and performance claims are removed, qualified, or given a reproducible basis."
+        "Evaluative words such as '혁신적' are removed; the material performance claim '50% faster' is kept with a reproducible basis or moved to the assumptions and open questions section with its evidence status, and the body carries no inline labels or change markers about this handling."
       ]
     },
     {

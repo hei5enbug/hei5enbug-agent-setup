@@ -183,7 +183,7 @@ Load only what the current operation needs:
 - Read [research](references/research.md) for research tickets.
 - Read [prototype](references/prototype.md) for prototype tickets, then read its logic or UI branch.
 
-These files are parts of this skill, not separate skills. Do not look for or invoke sibling skills.
+These files are parts of this skill, not separate skills. This skill reads no sibling-skill file and invokes no sibling skill.
 
 ## Invocation
 
@@ -228,8 +228,10 @@ the next decision, not the user.
 3. Resolve it — **zoom as needed**: fetch the full body of any related or closed ticket on demand;
    read the project documents named in `## Notes`; and load the bundled reference for the ticket
    type. If in doubt, use the interviewing discipline and domain-modeling rules.
-4. Write the answer, set `Status: resolved`, release the claim, and append a named relative link and
-   one-line gist to the map's Decisions-so-far.
+4. Write the answer and set `Status: resolved`. **Keep the ticket claim**, then claim `map.md` with
+   the same owner, re-read it, append a named relative link and one-line gist to the map's
+   Decisions-so-far, save it, and release the map lock. Release the ticket claim last, exactly as
+   [the local tracker contract](references/local-tracker.md) orders the resolution transaction.
 5. Add newly surfaced tickets in a create-then-wire pass. Graduate fog that the answer has made
    specifiable, removing each graduated patch from **Not yet specified** so it lives only as its new
    ticket. If the answer reveals that a ticket sits beyond the destination, **rule it out of scope**

@@ -5,7 +5,10 @@
  * Contract
  *   Input   a local HTML file, a CSS selector, an output directory
  *   Output  one image per matched element, named from the element id, plus a JSON report
- *   Naming  element id with any leading prefix removed by --strip-prefix
+ *   Naming  element id with a leading prefix removed by --strip-prefix (only when the id
+ *           starts with that prefix). Ids may contain only letters, digits, "-" and "_".
+ *           Two elements that would produce the same file name are an error; nothing is
+ *           captured until every name is known to be safe and unique.
  *
  * Dependency
  *   Needs a browser automation module resolvable from the working directory, either
@@ -18,6 +21,7 @@
  * Usage
  *   render_diagrams.mjs --html page.html --out dir [--selector .diagram]
  *                       [--scale 2] [--browser /path/to/chrome] [--strip-prefix dia-]
+ *                       [--no-sandbox]
  *
  * Exit codes: 0 every element captured, 1 no element matched, 2 dependency or usage error.
  */
@@ -28,11 +32,15 @@ import { resolve, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { platform } from "node:process";
 
-function parseArgs(argv) {
+export const VIEWPORT = { width: 1600, height: 1200 };
+const SAFE_ID = /^[A-Za-z0-9_-]+$/;
+
+export function parseArgs(argv) {
   const options = {
     selector: ".diagram",
     scale: 2,
     stripPrefix: "",
+    noSandbox: false,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
@@ -44,12 +52,47 @@ function parseArgs(argv) {
       case "--scale": options.scale = Number(value); index += 1; break;
       case "--browser": options.browser = value; index += 1; break;
       case "--strip-prefix": options.stripPrefix = value ?? ""; index += 1; break;
+      case "--no-sandbox": options.noSandbox = true; break;
       case "--help": options.help = true; break;
       default:
         throw new Error(`unknown argument: ${flag}`);
     }
   }
   return options;
+}
+
+export function outputName(id, stripPrefix) {
+  if (stripPrefix && id.startsWith(stripPrefix)) return id.slice(stripPrefix.length);
+  return id;
+}
+
+/**
+ * Turn element ids into output names, failing before any capture when an id is unsafe
+ * for a file name or two elements would collide.
+ */
+export function planOutputs(ids, options) {
+  const names = [];
+  const seen = new Map();
+  ids.forEach((rawId, index) => {
+    const id = rawId || `diagram-${index + 1}`;
+    if (!SAFE_ID.test(id)) {
+      throw new Error(
+        `element id "${id}" is not safe for a file name; use only letters, digits, "-" and "_"`,
+      );
+    }
+    const name = outputName(id, options.stripPrefix);
+    if (!name) {
+      throw new Error(`element id "${id}" becomes empty after removing prefix "${options.stripPrefix}"`);
+    }
+    if (seen.has(name)) {
+      throw new Error(
+        `duplicate output name "${name}" from ids "${seen.get(name)}" and "${id}"; give every diagram a distinct id`,
+      );
+    }
+    seen.set(name, id);
+    names.push({ id, name, path: join(options.out, `${name}.png`) });
+  });
+  return names;
 }
 
 const BROWSER_CANDIDATES = {
@@ -107,51 +150,63 @@ function fail(code, message) {
   process.exit(code);
 }
 
-async function capturePlaywright(driver, options, url) {
-  const browser = await driver.module.chromium.launch({
-    executablePath: options.browserPath,
-    args: ["--no-sandbox"],
-  });
-  const context = await browser.newContext({ deviceScaleFactor: options.scale });
-  const page = await context.newPage();
-  await page.goto(url, { waitUntil: "networkidle" });
-  await page.evaluate(() => (document.fonts ? document.fonts.ready.then(() => true) : true));
-  const handles = await page.locator(options.selector).all();
-  const captured = [];
-  for (const handle of handles) {
-    const id = await handle.getAttribute("id");
-    const name = (id ?? `diagram-${captured.length + 1}`).replace(options.stripPrefix, "");
-    const target = join(options.out, `${name}.png`);
-    await handle.screenshot({ path: target });
-    captured.push({ name, path: target });
-  }
-  await browser.close();
-  return captured;
+function browserArgs(options) {
+  return options.noSandbox ? ["--no-sandbox"] : [];
 }
 
-async function capturePuppeteer(driver, options, url) {
+export async function capturePlaywright(driver, options, url) {
+  const browser = await driver.module.chromium.launch({
+    executablePath: options.browserPath,
+    args: browserArgs(options),
+  });
+  try {
+    const context = await browser.newContext({
+      viewport: VIEWPORT,
+      deviceScaleFactor: options.scale,
+    });
+    const page = await context.newPage();
+    await page.goto(url, { waitUntil: "networkidle" });
+    await page.evaluate(() => (document.fonts ? document.fonts.ready.then(() => true) : true));
+    const handles = await page.locator(options.selector).all();
+    const ids = [];
+    for (const handle of handles) ids.push(await handle.getAttribute("id"));
+    const plan = planOutputs(ids, options);
+    const captured = [];
+    for (let index = 0; index < handles.length; index += 1) {
+      await handles[index].screenshot({ path: plan[index].path });
+      captured.push({ name: plan[index].name, path: plan[index].path });
+    }
+    return captured;
+  } finally {
+    await browser.close();
+  }
+}
+
+export async function capturePuppeteer(driver, options, url) {
   const browser = await driver.module.launch({
     executablePath: options.browserPath,
     headless: "shell",
-    args: ["--no-sandbox"],
+    args: browserArgs(options),
   });
-  const page = await browser.newPage();
-  await page.setViewport({ width: 1600, height: 1200, deviceScaleFactor: options.scale });
-  await page.goto(url, { waitUntil: "networkidle0", timeout: 120000 });
-  await page.evaluate(() => (document.fonts ? document.fonts.ready.then(() => true) : true));
-  const ids = await page.$$eval(options.selector, (elements) =>
-    elements.map((element, index) => element.id || `diagram-${index + 1}`),
-  );
-  const handles = await page.$$(options.selector);
-  const captured = [];
-  for (let index = 0; index < handles.length; index += 1) {
-    const name = ids[index].replace(options.stripPrefix, "");
-    const target = join(options.out, `${name}.png`);
-    await handles[index].screenshot({ path: target });
-    captured.push({ name, path: target });
+  try {
+    const page = await browser.newPage();
+    await page.setViewport({ ...VIEWPORT, deviceScaleFactor: options.scale });
+    await page.goto(url, { waitUntil: "networkidle0", timeout: 120000 });
+    await page.evaluate(() => (document.fonts ? document.fonts.ready.then(() => true) : true));
+    const ids = await page.$$eval(options.selector, (elements) =>
+      elements.map((element) => element.id || ""),
+    );
+    const plan = planOutputs(ids, options);
+    const handles = await page.$$(options.selector);
+    const captured = [];
+    for (let index = 0; index < handles.length; index += 1) {
+      await handles[index].screenshot({ path: plan[index].path });
+      captured.push({ name: plan[index].name, path: plan[index].path });
+    }
+    return captured;
+  } finally {
+    await browser.close();
   }
-  await browser.close();
-  return captured;
 }
 
 async function main() {
@@ -165,7 +220,7 @@ async function main() {
   if (options.help || !options.html || !options.out) {
     process.stdout.write(
       "usage: render_diagrams.mjs --html FILE --out DIR [--selector CSS] [--scale N]\n" +
-        "                          [--browser PATH] [--strip-prefix PREFIX]\n",
+        "                          [--browser PATH] [--strip-prefix PREFIX] [--no-sandbox]\n",
     );
     process.exit(options.help ? 0 : 2);
   }
@@ -217,4 +272,8 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((error) => fail(2, error?.stack ?? String(error)));
+const invokedDirectly =
+  process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
+if (invokedDirectly) {
+  main().catch((error) => fail(2, error?.stack ?? String(error)));
+}

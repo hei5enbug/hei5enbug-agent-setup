@@ -39,7 +39,7 @@ Score from `0.0` to `1.0` with a one-sentence evidence-based rationale and a con
 - **Acceptance**: a reviewer could verify success with observable evidence.
 - **Context**: brownfield ownership, existing behavior, dependencies, and preservation requirements are understood.
 
-Score each active component independently. Use the weakest or coverage-weighted component value for each global dimension; never average away an uncovered component.
+Score each active component independently. The global value of a dimension is the minimum of that dimension across all active components. There is no weighted or averaged alternative: a single uncovered component keeps the whole dimension low, and the same inputs always give the same result.
 
 ## Formula
 

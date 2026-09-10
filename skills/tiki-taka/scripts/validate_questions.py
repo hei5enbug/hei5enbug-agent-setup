@@ -38,9 +38,30 @@ def trim_blank_lines(lines: list[str]) -> list[str]:
     return lines[start:end]
 
 
+FENCE_PATTERN = re.compile(r"^\s*(```|~~~)")
+
+
+def fenced_lines(lines: list[str]) -> set[int]:
+    """코드 울타리 안에 있는 줄 번호 집합. 울타리 줄 자체도 포함한다."""
+    inside: set[int] = set()
+    open_marker: str | None = None
+    for index, line in enumerate(lines):
+        match = FENCE_PATTERN.match(line)
+        if open_marker is None:
+            if match:
+                open_marker = match.group(1)
+                inside.add(index)
+            continue
+        inside.add(index)
+        if match and match.group(1) == open_marker:
+            open_marker = None
+    return inside
+
+
 def validate(source: str) -> list[str]:
     lines = read_text(source).splitlines()
     errors: list[str] = []
+    fenced = fenced_lines(lines)
 
     for number, line in enumerate(lines, start=1):
         if len(line) > MAX_LINE_CHARS:
@@ -48,7 +69,11 @@ def validate(source: str) -> list[str]:
                 f"{number}번째 줄이 {len(line)}자로 {MAX_LINE_CHARS}자를 넘습니다."
             )
 
-    starts = [index for index, line in enumerate(lines) if ISSUE_PATTERN.match(line)]
+    starts = [
+        index
+        for index, line in enumerate(lines)
+        if index not in fenced and ISSUE_PATTERN.match(line)
+    ]
     if not starts:
         errors.append("'## 번호. 문제 제목' 형식의 미결 문제가 없습니다.")
         return errors
@@ -56,6 +81,7 @@ def validate(source: str) -> list[str]:
     for issue_number, start in enumerate(starts, start=1):
         end = starts[issue_number] if issue_number < len(starts) else len(lines)
         section = lines[start:end]
+        section_fenced = {index - start for index in fenced if start <= index < end}
         if len(section) > MAX_ISSUE_LINES:
             errors.append(
                 f"{issue_number}번 문제가 {len(section)}줄로 "
@@ -64,7 +90,11 @@ def validate(source: str) -> list[str]:
 
         positions: dict[str, int] = {}
         for heading in (QUESTION_HEADING, CHOICES_HEADING, ANSWER_HEADING):
-            matches = [index for index, line in enumerate(section) if line == heading]
+            matches = [
+                index
+                for index, line in enumerate(section)
+                if index not in section_fenced and line == heading
+            ]
             if len(matches) != 1:
                 errors.append(
                     f"{issue_number}번 문제에는 '{heading}'이 정확히 한 번 있어야 합니다."
@@ -91,7 +121,8 @@ def validate(source: str) -> list[str]:
         choice_matches = [
             (index, match)
             for index, line in enumerate(choice_block)
-            if (match := CHOICE_PATTERN.match(line))
+            if (index + choices_at + 1) not in section_fenced
+            and (match := CHOICE_PATTERN.match(line))
         ]
         choice_starts = [index for index, _ in choice_matches]
         choice_numbers = [int(match.group(1)) for _, match in choice_matches]

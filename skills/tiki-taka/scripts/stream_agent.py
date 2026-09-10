@@ -169,23 +169,43 @@ def claude_event(event: dict) -> tuple[str | None, dict | None, str]:
     return None, None, ""
 
 
+GROUP_GRACE_SECONDS = 5.0
+
+
+def group_alive(pgid: int) -> bool:
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def signal_group(pgid: int, signum: int) -> None:
+    try:
+        os.killpg(pgid, signum)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
 def terminate_process(process: subprocess.Popen[bytes]) -> None:
-    if process.poll() is not None:
-        return
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
-    try:
-        process.wait(timeout=5)
-        return
-    except subprocess.TimeoutExpired:
-        pass
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-    process.wait()
+    """Stop the whole process group, even when the direct child already exited.
+
+    The CLI is started with ``start_new_session=True`` so its pid is the group
+    id. Grandchildren that outlive the CLI would otherwise keep running.
+    """
+    pgid = process.pid
+    if process.poll() is None or group_alive(pgid):
+        signal_group(pgid, signal.SIGTERM)
+    deadline = time.monotonic() + GROUP_GRACE_SECONDS
+    while time.monotonic() < deadline:
+        if process.poll() is not None and not group_alive(pgid):
+            return
+        time.sleep(0.05)
+    signal_group(pgid, signal.SIGKILL)
+    if process.poll() is None:
+        process.wait()
 
 
 def run_agent(args: argparse.Namespace) -> int:
@@ -208,8 +228,9 @@ def run_agent(args: argparse.Namespace) -> int:
     last_emit = 0.0
     phase = "starting"
     usage: dict | None = None
-    latest_assistant_text = ""
     final_result = ""
+    failure_seen = False
+    completion_seen = False
     signal_received: int | None = None
 
     def handle_signal(signum: int, _frame: object) -> None:
@@ -353,16 +374,19 @@ def run_agent(args: argparse.Namespace) -> int:
                     event_result = ""
                 else:
                     next_phase, event_usage, event_result = claude_event(event)
-                    if event.get("type") == "assistant":
-                        assistant_text = content_text(event.get("message"))
-                        if assistant_text:
-                            latest_assistant_text = assistant_text
+
+                # A failure event is final: no later event or exit code
+                # turns this run back into a success.
+                if next_phase == "failed":
+                    failure_seen = True
+                elif next_phase == "completed":
+                    completion_seen = True
 
                 if event_usage is not None:
                     usage = event_usage
-                if event_result:
+                if event_result and not failure_seen:
                     final_result = event_result
-                if next_phase is not None:
+                if next_phase is not None and not (failure_seen and next_phase != "failed"):
                     phase = next_phase
                 write_progress("running")
                 if phase != previous_phase:
@@ -370,27 +394,42 @@ def run_agent(args: argparse.Namespace) -> int:
 
             return_code = process.wait()
 
-        if args.provider == "claude" and return_code == 0:
-            response = final_result.strip() or latest_assistant_text.strip()
-            if response:
-                atomic_write_text(output_path, response + "\n")
-
-        if return_code != 0:
+        def fail(reason: str, code: int) -> int:
+            nonlocal phase
             phase = "failed"
-            reason = f"상대 에이전트 CLI가 종료 코드 {return_code}을 반환했습니다."
             mark_uncertain(uncertain_path, reason)
             write_progress("uncertain")
             emit(force=True)
-            return return_code
+            return code
 
-        if phase == "failed":
-            write_progress("failed")
+        if return_code != 0:
+            return fail(
+                f"상대 에이전트 CLI가 종료 코드 {return_code}을 반환했습니다.", return_code
+            )
+        if failure_seen:
+            return fail("상대 에이전트가 실패 이벤트를 보고했습니다.", 1)
+
+        if args.provider == "claude":
+            # Only the result event carries the final answer. Partial assistant
+            # text is never promoted to a response.
+            if not completion_seen or not final_result.strip():
+                return fail("Claude가 최종 result 이벤트를 보내지 않았습니다.", 1)
+            atomic_write_text(output_path, final_result.strip() + "\n")
         else:
-            completion_already_emitted = phase == "completed"
-            phase = "completed"
-            write_progress("completed")
-            if not completion_already_emitted:
-                emit(force=True)
+            if not completion_seen:
+                return fail("Codex가 turn.completed 이벤트를 보내지 않았습니다.", 1)
+            try:
+                has_response = bool(output_path.read_text(encoding="utf-8").strip())
+            except (OSError, UnicodeError):
+                has_response = False
+            if not has_response:
+                return fail("Codex가 응답 파일을 남기지 않았습니다.", 1)
+
+        completion_already_emitted = phase == "completed"
+        phase = "completed"
+        write_progress("completed")
+        if not completion_already_emitted:
+            emit(force=True)
         return 0
     except (OSError, ValueError) as error:
         phase = "failed"
@@ -402,6 +441,8 @@ def run_agent(args: argparse.Namespace) -> int:
             terminate_process(process)
         return 1
     finally:
+        if process is not None:
+            terminate_process(process)
         for signum, handler in previous_handlers.items():
             signal.signal(signum, handler)
 

@@ -259,6 +259,17 @@
       margin-top: 0.5rem;
       min-height: 1.1em;
     }
+    .feedback-status.error { color: var(--red); }
+    .retry-btn {
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.75rem;
+      padding: 0.15rem 0.5rem;
+      border: 1px solid var(--red);
+      border-radius: var(--radius);
+      background: var(--red-bg);
+      color: var(--red);
+      cursor: pointer;
+    }
 
     /* ---- Grades (collapsible) ---- */
     .grades-toggle {
@@ -652,21 +663,29 @@
     let feedbackMap = {};  // run_id -> feedback text
     let currentIndex = 0;
     let visitedRuns = new Set();
+    let saveTimeout = null;
+    let saveQueue = Promise.resolve({ ok: true });
+    let submitting = false;
 
     // ---- Init ----
+    const STATIC_MODE = location.protocol === "file:";
+
     async function init() {
-      // Load saved feedback from server — but only if this isn't a fresh
-      // iteration (indicated by previous_feedback being present). When
-      // previous feedback exists, the feedback.json on disk is stale from
-      // the prior iteration and should not pre-fill the textareas.
-      const hasPrevious = Object.keys(EMBEDDED_DATA.previous_feedback || {}).length > 0
-        || Object.keys(EMBEDDED_DATA.previous_outputs || {}).length > 0;
-      if (!hasPrevious) {
+      // Restore this workspace's own feedback.json first. Data from a previous
+      // iteration is shown separately as read-only context and never pre-fills
+      // the textarea.
+      if (!STATIC_MODE) {
         try {
           const resp = await fetch("/api/feedback");
-          const data = await resp.json();
-          if (data.reviews) {
-            for (const r of data.reviews) feedbackMap[r.run_id] = r.feedback;
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && Array.isArray(data.reviews)) {
+              for (const r of data.reviews) {
+                if (r && r.run_id && typeof r.feedback === "string" && r.feedback.trim()) {
+                  feedbackMap[r.run_id] = r.feedback;
+                }
+              }
+            }
           }
         } catch { /* first run, no feedback yet */ }
       }
@@ -676,12 +695,43 @@
 
       // Wire up feedback auto-save
       const textarea = document.getElementById("feedback");
-      let saveTimeout = null;
       textarea.addEventListener("input", () => {
         clearTimeout(saveTimeout);
-        document.getElementById("feedback-status").textContent = "";
+        setStatus("");
         saveTimeout = setTimeout(() => saveCurrentFeedback(), 800);
       });
+    }
+
+    // ---- Status line (text nodes only, never HTML strings) ----
+    function setStatus(message, retry) {
+      const status = document.getElementById("feedback-status");
+      status.textContent = message;
+      status.classList.toggle("error", Boolean(retry));
+      if (retry) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "retry-btn";
+        button.textContent = "Retry";
+        button.addEventListener("click", retry);
+        status.appendChild(document.createTextNode(" "));
+        status.appendChild(button);
+      }
+    }
+
+    async function postFeedback(payload) {
+      // Resolves to {ok: true} only for a 2xx response whose body says ok.
+      // Resolves to {ok: false, error} for any HTTP or JSON failure.
+      // Rejects only when the request itself could not be sent.
+      const resp = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      });
+      let body = null;
+      try { body = await resp.json(); } catch { body = null; }
+      if (resp.ok && body && body.ok === true) return { ok: true };
+      const error = (body && body.error) ? body.error : ("HTTP " + resp.status);
+      return { ok: false, error };
     }
 
     // ---- Navigation ----
@@ -745,7 +795,7 @@
 
       // Feedback
       document.getElementById("feedback").value = feedbackMap[run.id] || "";
-      document.getElementById("feedback-status").textContent = "";
+      setStatus("");
 
       updateNavButtons();
 
@@ -991,15 +1041,19 @@
     }
 
     // ---- Feedback (saved to server -> feedback.json) ----
-    function saveCurrentFeedback() {
+    function syncCurrentTextarea() {
       const run = EMBEDDED_DATA.runs[currentIndex];
       const text = document.getElementById("feedback").value;
-
       if (text.trim() === "") {
         delete feedbackMap[run.id];
       } else {
         feedbackMap[run.id] = text;
       }
+    }
+
+    function saveCurrentFeedback() {
+      if (submitting) return saveQueue;
+      syncCurrentTextarea();
 
       // Build reviews array from map
       const reviews = [];
@@ -1008,30 +1062,37 @@
           reviews.push({ run_id, feedback, timestamp: new Date().toISOString() });
         }
       }
+      const payload = JSON.stringify({ reviews, status: "in_progress" });
 
-      fetch("/api/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reviews, status: "in_progress" }),
-      }).then(() => {
-        document.getElementById("feedback-status").textContent = "Saved";
-      }).catch(() => {
-        // Static mode or server unavailable — no-op on auto-save,
-        // feedback will be downloaded on final submit
-        document.getElementById("feedback-status").textContent = "Will download on submit";
+      if (STATIC_MODE) {
+        setStatus("Will download on submit");
+        return Promise.resolve(false);
+      }
+
+      saveQueue = saveQueue
+        .catch(() => ({ ok: false }))
+        .then(() => postFeedback(payload));
+      return saveQueue.then((result) => {
+        if (result.ok) {
+          setStatus("Saved");
+          return true;
+        }
+        setStatus("Not saved: " + result.error, () => saveCurrentFeedback());
+        return false;
+      }).catch((err) => {
+        setStatus("Not saved: " + (err && err.message ? err.message : "server unreachable"), () => saveCurrentFeedback());
+        return false;
       });
     }
 
     // ---- Done ----
-    function showDoneDialog() {
-      // Save current textarea to feedbackMap (but don't POST yet)
-      const run = EMBEDDED_DATA.runs[currentIndex];
-      const text = document.getElementById("feedback").value;
-      if (text.trim() === "") {
-        delete feedbackMap[run.id];
-      } else {
-        feedbackMap[run.id] = text;
-      }
+    async function showDoneDialog() {
+      if (submitting) return;
+      submitting = true;
+      clearTimeout(saveTimeout);
+      saveTimeout = null;
+      await saveQueue.catch(() => ({ ok: false }));
+      syncCurrentTextarea();
 
       // POST once with status: complete — include ALL runs so the model
       // can distinguish "no feedback" (looks good) from "not reviewed"
@@ -1041,14 +1102,9 @@
         reviews.push({ run_id: r.id, feedback: feedbackMap[r.id] || "", timestamp: ts });
       }
       const payload = JSON.stringify({ reviews, status: "complete" }, null, 2);
-      fetch("/api/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: payload,
-      }).then(() => {
-        document.getElementById("done-overlay").classList.add("visible");
-      }).catch(() => {
-        // Server not available (static mode) — download as file
+
+      if (STATIC_MODE) {
+        // No server — hand the file to the user, then show the completion card.
         const blob = new Blob([payload], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -1057,13 +1113,27 @@
         a.click();
         URL.revokeObjectURL(url);
         document.getElementById("done-overlay").classList.add("visible");
-      });
+        return;
+      }
+
+      try {
+        const result = await postFeedback(payload);
+        if (result.ok) {
+          setStatus("Saved");
+          document.getElementById("done-overlay").classList.add("visible");
+        } else {
+          submitting = false;
+          setStatus("Submit failed: " + result.error, () => showDoneDialog());
+        }
+      } catch (err) {
+        submitting = false;
+        setStatus("Submit failed: " + (err && err.message ? err.message : "server unreachable"), () => showDoneDialog());
+      }
     }
 
     function closeDoneDialog() {
-      // Reset status back to in_progress
-      saveCurrentFeedback();
       document.getElementById("done-overlay").classList.remove("visible");
+      submitting = false;
     }
 
     // ---- Toast ----
@@ -1138,7 +1208,7 @@
       html += '<table class="benchmark-table">';
 
       function fmtStat(stat, pct) {
-        if (!stat) return "—";
+        if (!stat || stat.mean == null || stat.stddev == null) return "N/A";
         const suffix = pct ? "%" : "";
         const m = pct ? (stat.mean * 100).toFixed(0) : stat.mean.toFixed(1);
         const s = pct ? (stat.stddev * 100).toFixed(0) : stat.stddev.toFixed(1);
@@ -1179,8 +1249,9 @@
         html += '<td class="' + deltaClass(delta.time_seconds) + '">' + (delta.time_seconds ? delta.time_seconds + "s" : "—") + "</td></tr>";
       }
 
-      // Tokens (only show row if data exists)
-      if (a.tokens || b.tokens) {
+      // Tokens (only show row if any config measured them; null means not measured)
+      const hasTokens = (a.tokens && a.tokens.mean != null) || (b.tokens && b.tokens.mean != null);
+      if (hasTokens) {
         html += "<tr><td><strong>Tokens</strong></td>";
         html += "<td>" + fmtStat(a.tokens, false) + "</td>";
         html += "<td>" + fmtStat(b.tokens, false) + "</td>";

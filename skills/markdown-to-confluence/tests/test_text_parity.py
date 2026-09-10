@@ -33,6 +33,29 @@ class TextParityTest(unittest.TestCase):
             "<code>a_b</code>, and *literal* text.</li></ul>",
         )
 
+    def test_pipe_outside_table_is_content(self):
+        source = MODULE.source_text("a|b", [], False)
+        self.assertEqual("a|b", source)
+        self.assertNotEqual(source, MODULE.body_text("<p>ab</p>"))
+        self.assertEqual(source, MODULE.body_text("<p>a|b</p>"))
+
+    def test_escaped_pipe_survives(self):
+        self.assert_parity("a\\|b", "<p>a|b</p>")
+
+    def test_table_pipes_are_still_removed(self):
+        self.assert_parity(
+            "| Name | Value |\n|---|---|\n| a | 1 |\n\nAfter x|y.",
+            "<table><tr><th><p>Name</p></th><th><p>Value</p></th></tr>"
+            "<tr><td><p>a</p></td><td><p>1</p></td></tr></table><p>After x|y.</p>",
+        )
+
+    def test_angle_brackets_in_inline_code_are_not_raw_html(self):
+        self.assert_parity("Use `<tag>` here.", "<p>Use <code>&lt;tag&gt;</code> here.</p>")
+
+    def test_raw_html_outside_code_is_still_unsupported(self):
+        with self.assertRaisesRegex(MODULE.UnsupportedInput, "raw HTML"):
+            MODULE.source_text("Use <tag> here.", [], False)
+
     def test_difference_reports_first_divergence(self):
         source = MODULE.source_text("Alpha beta", [], False)
         body = MODULE.body_text("<p>Alpha zeta</p>")

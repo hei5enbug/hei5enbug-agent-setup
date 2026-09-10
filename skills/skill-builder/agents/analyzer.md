@@ -11,11 +11,11 @@ The goal is to extract actionable insights: what made the winner better, and how
 
 You receive these parameters in your prompt:
 
-- **winner**: "A" or "B" (from blind comparison)
-- **winner_skill_path**: Path to the skill that produced the winning output
-- **winner_transcript_path**: Path to the execution transcript for the winner
-- **loser_skill_path**: Path to the skill that produced the losing output
-- **loser_transcript_path**: Path to the execution transcript for the loser
+- **winner**: "A", "B", or "TIE" (from blind comparison)
+- **winner_skill_path**: Path to the skill that produced the winning output (skill A on a TIE)
+- **winner_transcript_path**: Path to the execution transcript for the winner (A on a TIE)
+- **loser_skill_path**: Path to the skill that produced the losing output (skill B on a TIE)
+- **loser_transcript_path**: Path to the execution transcript for the loser (B on a TIE)
 - **comparison_result_path**: Path to the blind comparator's output JSON
 - **output_path**: Where to save the analysis results
 
@@ -24,8 +24,12 @@ You receive these parameters in your prompt:
 ### Step 1: Read Comparison Result
 
 1. Read the blind comparator's output at comparison_result_path
-2. Note the winning side (A or B), the reasoning, and any scores
+2. Note the winning side (A, B, or TIE), the reasoning, and any scores
 3. Understand what the comparator valued in the winning output
+
+**On a TIE**, there is no loser. Keep the output structure below, fill `winner_skill` with skill A and
+`loser_skill` with skill B, set `comparison_summary.winner` to `"TIE"`, and describe strengths, weaknesses,
+and improvement suggestions for both skills. Do not invent a winner.
 
 ### Step 2: Read Both Skills
 

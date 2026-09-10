@@ -27,6 +27,10 @@ decision is resolved.
 Update the relevant `CONTEXT.md` as soon as a term is resolved. Keep it a glossary, not a
 specification or implementation guide. Follow [the context format](context-format.md).
 
+Tickets that would edit the same `CONTEXT.md`, or that would each allocate the next ADR number,
+must not run concurrently in the same batch: the ticket lock protects only the ticket, not these
+shared files. Run them one after another, or let one session own both.
+
 ## Capture durable decisions
 
 Offer an ADR only when all three tests pass:

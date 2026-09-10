@@ -180,9 +180,12 @@ def read_pid(path: Path) -> int | None:
     except FileNotFoundError:
         return None
     try:
-        return int(value)
-    except ValueError:
-        return None
+        pid = int(value)
+    except ValueError as error:
+        raise ValueError(f"PID 파일 값이 올바른 정수가 아닙니다: {path}") from error
+    if pid <= 0:
+        raise ValueError(f"PID 파일 값은 양수여야 합니다: {path}")
+    return pid
 
 
 def wait_for_job(args: argparse.Namespace) -> int:
@@ -193,6 +196,14 @@ def wait_for_job(args: argparse.Namespace) -> int:
     result_path = Path(args.result_file)
     offset = 0
 
+    if not pid_path.exists() and not exit_path.exists():
+        print(
+            "오류: 기다릴 분리 실행 작업이 없습니다. "
+            f"pid 파일과 종료 파일이 모두 없습니다: {pid_path}, {exit_path}",
+            file=sys.stderr,
+        )
+        return 2
+
     while True:
         offset, output = read_new_bytes(progress_path, offset)
         if output:
@@ -202,7 +213,15 @@ def wait_for_job(args: argparse.Namespace) -> int:
         if return_code is not None:
             break
 
-        pid = read_pid(pid_path)
+        try:
+            pid = read_pid(pid_path)
+        except (OSError, UnicodeError, ValueError) as error:
+            atomic_write_text(
+                uncertain_path,
+                f"분리 실행 작업의 PID 정보를 읽을 수 없습니다: {error}\n",
+            )
+            print(f"오류: {error}", file=sys.stderr)
+            return 1
         if pid is not None and not process_exists(pid):
             atomic_write_text(
                 uncertain_path,
@@ -225,14 +244,21 @@ def wait_for_job(args: argparse.Namespace) -> int:
             try:
                 response = result_path.read_text(encoding="utf-8")
             except (OSError, UnicodeError) as error:
-                print(f"오류: 최종 응답을 읽을 수 없습니다: {error}", file=sys.stderr)
-                return_code = 1
-            else:
-                if response:
-                    print(response, end="")
-                else:
-                    print("오류: 분리 실행의 최종 응답이 비어 있습니다.", file=sys.stderr)
-                    return_code = 1
+                # Keep every job file so the response can be recovered by hand.
+                print(
+                    f"오류: 최종 응답을 읽을 수 없습니다: {error}\n"
+                    f"결과 파일을 남겨 두었습니다: {result_path}",
+                    file=sys.stderr,
+                )
+                return 1
+            if not response:
+                print(
+                    "오류: 분리 실행의 최종 응답이 비어 있습니다. "
+                    f"결과 파일을 남겨 두었습니다: {result_path}",
+                    file=sys.stderr,
+                )
+                return 1
+            print(response, end="", flush=True)
 
         for path in (result_path, progress_path, exit_path, pid_path):
             try:

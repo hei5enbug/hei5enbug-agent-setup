@@ -11,7 +11,23 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.model_runner import RunnerError, resolve_runner_command, run_model
+from scripts.quick_validate import MissingDependencyError
+from scripts.run_eval import MAX_DESCRIPTION_LENGTH
 from scripts.utils import parse_skill_md
+
+
+def description_problem(description: str) -> str | None:
+    """Return why a description would fail validation, or None when it is acceptable."""
+    if not description.strip():
+        return "empty"
+    if len(description) > MAX_DESCRIPTION_LENGTH:
+        return f"{len(description)} characters, over the {MAX_DESCRIPTION_LENGTH}-character limit"
+    return None
+
+
+def extract_description(text: str) -> str:
+    match = re.search(r"<new_description>(.*?)</new_description>", text, re.DOTALL)
+    return match.group(1).strip().strip('"') if match else text.strip().strip('"')
 
 
 def improve_description(
@@ -117,9 +133,7 @@ Vary the style across iterations so the optimizer can select the highest-scoring
 Please respond with only the new description text in <new_description> tags, nothing else."""
 
     text = run_model(prompt, runner_command, model=model)
-
-    match = re.search(r"<new_description>(.*?)</new_description>", text, re.DOTALL)
-    description = match.group(1).strip().strip('"') if match else text.strip().strip('"')
+    description = extract_description(text)
 
     transcript: dict = {
         "iteration": iteration,
@@ -127,31 +141,41 @@ Please respond with only the new description text in <new_description> tags, not
         "response": text,
         "parsed_description": description,
         "char_count": len(description),
-        "over_limit": len(description) > 1024,
+        "over_limit": len(description) > MAX_DESCRIPTION_LENGTH,
     }
 
-    # If the first response exceeds the limit, make a fresh single-turn call
-    # with the oversized version included so every runner can handle it.
-    if len(description) > 1024:
-        shorten_prompt = (
+    # If the first response is unusable, make one fresh single-turn call that
+    # includes the rejected version so every runner can handle it.
+    problem = description_problem(description)
+    if problem:
+        rewrite_prompt = (
             f"{prompt}\n\n"
             f"---\n\n"
-            f"A previous attempt produced this description, which at "
-            f"{len(description)} characters is over the 1024-character hard limit:\n\n"
+            f"A previous attempt produced this description, which is unusable ({problem}):\n\n"
             f'"{description}"\n\n'
-            f"Rewrite it to be under 1024 characters while keeping the most "
-            f"important trigger words and intent coverage. Respond with only "
-            f"the new description in <new_description> tags."
+            f"Rewrite it as a non-empty description under {MAX_DESCRIPTION_LENGTH} characters "
+            f"while keeping the most important trigger words and intent coverage. "
+            f"Respond with only the new description in <new_description> tags."
         )
-        shorten_text = run_model(shorten_prompt, runner_command, model=model)
-        match = re.search(r"<new_description>(.*?)</new_description>", shorten_text, re.DOTALL)
-        shortened = match.group(1).strip().strip('"') if match else shorten_text.strip().strip('"')
+        rewrite_text = run_model(rewrite_prompt, runner_command, model=model)
+        rewritten = extract_description(rewrite_text)
 
-        transcript["rewrite_prompt"] = shorten_prompt
-        transcript["rewrite_response"] = shorten_text
-        transcript["rewrite_description"] = shortened
-        transcript["rewrite_char_count"] = len(shortened)
-        description = shortened
+        transcript["rewrite_prompt"] = rewrite_prompt
+        transcript["rewrite_response"] = rewrite_text
+        transcript["rewrite_description"] = rewritten
+        transcript["rewrite_char_count"] = len(rewritten)
+        description = rewritten
+        problem = description_problem(description)
+
+    if problem:
+        transcript["rejected"] = problem
+        if log_dir:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            (log_dir / f"improve_iter_{iteration or 'unknown'}.json").write_text(json.dumps(transcript, indent=2))
+        raise RunnerError(
+            f"Rewritten description is still unusable after one retry ({problem}); "
+            "candidate discarded"
+        )
 
     transcript["final_description"] = description
 
@@ -190,7 +214,11 @@ def main():
     if args.history:
         history = json.loads(Path(args.history).read_text())
 
-    name, _, content = parse_skill_md(skill_path)
+    try:
+        name, _, content = parse_skill_md(skill_path)
+    except MissingDependencyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(2)
     current_description = eval_results["description"]
 
     if args.verbose:

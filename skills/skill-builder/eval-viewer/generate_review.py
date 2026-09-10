@@ -18,10 +18,8 @@ import json
 import mimetypes
 import os
 import re
-import signal
-import subprocess
 import sys
-import time
+import tempfile
 import webbrowser
 from functools import partial
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -276,7 +274,9 @@ def generate_html(
     if benchmark:
         embedded["benchmark"] = benchmark
 
-    data_json = json.dumps(embedded)
+    # "<" only appears inside JSON strings, so escaping it keeps the JSON
+    # valid while preventing a "</script>" in the data from closing the tag.
+    data_json = json.dumps(embedded).replace("<", "\\u003c")
 
     return template.replace("/*__EMBEDDED_DATA__*/", f"const EMBEDDED_DATA = {data_json};")
 
@@ -285,25 +285,34 @@ def generate_html(
 # HTTP server (stdlib only, zero dependencies)
 # ---------------------------------------------------------------------------
 
-def _kill_port(port: int) -> None:
-    """Kill any process listening on the given port."""
+def write_feedback(feedback_path: Path, data: dict) -> None:
+    """Write feedback.json through a temporary file so a crash never leaves a partial file."""
+    feedback_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=feedback_path.parent, prefix=".feedback-", suffix=".tmp"
+    )
     try:
-        result = subprocess.run(
-            ["lsof", "-ti", f":{port}"],
-            capture_output=True, text=True, timeout=5,
-        )
-        for pid_str in result.stdout.strip().split("\n"):
-            if pid_str.strip():
-                try:
-                    os.kill(int(pid_str.strip()), signal.SIGTERM)
-                except (ProcessLookupError, ValueError):
-                    pass
-        if result.stdout.strip():
-            time.sleep(0.5)
-    except subprocess.TimeoutExpired:
-        pass
-    except FileNotFoundError:
-        print("Note: lsof not found, cannot check if port is in use", file=sys.stderr)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(data, indent=2) + "\n")
+        os.replace(tmp_name, feedback_path)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
+
+
+def create_server(handler, port: int) -> tuple[HTTPServer, bool]:
+    """Bind to 127.0.0.1:port, or to an OS-chosen port when it is taken.
+
+    Returns (server, fell_back). Never touches whatever process owns the port.
+    """
+    try:
+        return HTTPServer(("127.0.0.1", port), handler), False
+    except OSError:
+        return HTTPServer(("127.0.0.1", 0), handler), True
+
 
 class ReviewHandler(BaseHTTPRequestHandler):
     """Serves the review HTML and handles feedback saves.
@@ -358,26 +367,44 @@ class ReviewHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404)
 
+    def _host_allowed(self) -> bool:
+        """Only accept writes addressed to this loopback server."""
+        host = (self.headers.get("Host") or "").strip().lower()
+        port = self.server.server_address[1]
+        return host in {f"127.0.0.1:{port}", f"localhost:{port}"}
+
+    def _send_json(self, status: int, payload: bytes) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
     def do_POST(self) -> None:
-        if self.path == "/api/feedback":
-            length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(length)
-            try:
-                data = json.loads(body)
-                if not isinstance(data, dict) or "reviews" not in data:
-                    raise ValueError("Expected JSON object with 'reviews' key")
-                self.feedback_path.write_text(json.dumps(data, indent=2) + "\n")
-                resp = b'{"ok":true}'
-                self.send_response(200)
-            except (json.JSONDecodeError, OSError, ValueError) as e:
-                resp = json.dumps({"error": str(e)}).encode()
-                self.send_response(500)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(resp)))
-            self.end_headers()
-            self.wfile.write(resp)
-        else:
+        if self.path != "/api/feedback":
             self.send_error(404)
+            return
+        if not self._host_allowed():
+            self._send_json(403, json.dumps({"ok": False, "error": "Host header does not match this server"}).encode())
+            return
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            length = 0
+        body = self.rfile.read(length)
+        try:
+            data = json.loads(body)
+            if not isinstance(data, dict) or "reviews" not in data:
+                raise ValueError("Expected JSON object with 'reviews' key")
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as e:
+            self._send_json(400, json.dumps({"ok": False, "error": str(e)}).encode())
+            return
+        try:
+            write_feedback(self.feedback_path, data)
+        except OSError as e:
+            self._send_json(500, json.dumps({"ok": False, "error": str(e)}).encode())
+            return
+        self._send_json(200, b'{"ok":true}')
 
     def log_message(self, format: str, *args: object) -> None:
         # Suppress request logging to keep terminal clean
@@ -435,18 +462,13 @@ def main() -> None:
         print(f"\n  Static viewer written to: {args.static}\n")
         sys.exit(0)
 
-    # Kill any existing process on the target port
-    port = args.port
-    _kill_port(port)
     handler = partial(ReviewHandler, workspace, skill_name, feedback_path, previous, benchmark_path)
-    try:
-        server = HTTPServer(("127.0.0.1", port), handler)
-    except OSError:
-        # Port still in use after kill attempt — find a free one
-        server = HTTPServer(("127.0.0.1", 0), handler)
-        port = server.server_address[1]
+    server, fell_back = create_server(handler, args.port)
+    port = server.server_address[1]
+    if fell_back:
+        print(f"\n  Port {args.port} is in use by another process; using port {port} instead.")
 
-    url = f"http://localhost:{port}"
+    url = f"http://127.0.0.1:{port}"
     print(f"\n  Eval Viewer")
     print(f"  ─────────────────────────────────")
     print(f"  URL:       {url}")

@@ -3,7 +3,9 @@
 
 Supported formats: PNG, JPEG, GIF. Standard library only.
 
-Unsupported or unreadable input is reported as a failure, never skipped.
+Unsupported or unreadable input is reported as a failure, never skipped. Zero or negative
+dimensions and truncated headers are failures. A display width larger than the image is reduced
+to the image width and reported with ``clamped: true``; the display height keeps the real ratio.
 
 Usage:
     image_size.py IMAGE [IMAGE ...] [--display-width N]
@@ -22,18 +24,26 @@ class UnsupportedImage(Exception):
     pass
 
 
+def _positive(image_format, width, height):
+    if width <= 0 or height <= 0:
+        raise UnsupportedImage(
+            "{} dimensions must be positive, got {}x{}".format(image_format, width, height)
+        )
+    return width, height
+
+
 def _png_size(data):
     if len(data) < 24 or data[12:16] != b"IHDR":
         raise UnsupportedImage("PNG header is truncated or malformed")
     width, height = struct.unpack(">II", data[16:24])
-    return width, height
+    return _positive("PNG", width, height)
 
 
 def _gif_size(data):
     if len(data) < 10:
         raise UnsupportedImage("GIF header is truncated")
     width, height = struct.unpack("<HH", data[6:10])
-    return width, height
+    return _positive("GIF", width, height)
 
 
 def _jpeg_size(data):
@@ -61,7 +71,7 @@ def _jpeg_size(data):
             if offset + 7 > size:
                 raise UnsupportedImage("JPEG frame header is truncated")
             height, width = struct.unpack(">HH", data[offset + 3:offset + 7])
-            return width, height
+            return _positive("JPEG", width, height)
         offset += length
     raise UnsupportedImage("JPEG contains no frame header")
 
@@ -102,9 +112,11 @@ def main(argv):
             failed = True
         else:
             entry.update(status="ok", format=image_format, width=width, height=height)
-            if args.display_width and width > 0:
-                entry["display_width"] = args.display_width
-                entry["display_height"] = round(args.display_width * height / width)
+            if args.display_width:
+                display_width = min(args.display_width, width)
+                entry["display_width"] = display_width
+                entry["display_height"] = max(1, round(display_width * height / width))
+                entry["clamped"] = display_width < args.display_width
         results.append(entry)
 
     json.dump({"ok": not failed, "results": results}, sys.stdout, indent=2)

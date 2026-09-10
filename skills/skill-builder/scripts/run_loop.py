@@ -21,24 +21,44 @@ if __package__ in (None, ""):
 from scripts.generate_report import generate_html
 from scripts.improve_description import improve_description
 from scripts.model_runner import RunnerError, resolve_runner_command
-from scripts.run_eval import run_eval
+from scripts.quick_validate import MissingDependencyError
+from scripts.run_eval import (
+    run_eval,
+    validate_description,
+    validate_eval_set,
+    validate_run_settings,
+)
 from scripts.utils import parse_skill_md
 
 
+def assign_case_ids(eval_set: list[dict]) -> list[dict]:
+    """Give every case a stable ``id`` (its position in the eval set)."""
+    return [{**item, "id": index} for index, item in enumerate(eval_set)]
+
+
 def split_eval_set(eval_set: list[dict], holdout: float, seed: int = 42) -> tuple[list[dict], list[dict]]:
-    """Split eval set into train and test sets, stratified by should_trigger."""
+    """Split eval set into train and test sets, stratified by should_trigger.
+
+    Cases with an identical query string always land in the same split, so a
+    duplicated query can never be both trained on and held out.
+    """
     random.seed(seed)
 
-    # Separate by should_trigger
-    trigger = [e for e in eval_set if e["should_trigger"]]
-    no_trigger = [e for e in eval_set if not e["should_trigger"]]
+    # Group identical queries so they move together
+    groups: dict[str, list[dict]] = {}
+    for item in eval_set:
+        groups.setdefault(item["query"], []).append(item)
+
+    # Separate groups by should_trigger of their first case
+    trigger = [g for g in groups.values() if g[0]["should_trigger"]]
+    no_trigger = [g for g in groups.values() if not g[0]["should_trigger"]]
 
     # Shuffle each group
     random.shuffle(trigger)
     random.shuffle(no_trigger)
 
     # Calculate split points
-    def test_count(group: list[dict]) -> int:
+    def test_count(group: list[list[dict]]) -> int:
         if len(group) < 2:
             return 0
         return min(len(group) - 1, max(1, int(len(group) * holdout)))
@@ -46,9 +66,11 @@ def split_eval_set(eval_set: list[dict], holdout: float, seed: int = 42) -> tupl
     n_trigger_test = test_count(trigger)
     n_no_trigger_test = test_count(no_trigger)
 
-    # Split
-    test_set = trigger[:n_trigger_test] + no_trigger[:n_no_trigger_test]
-    train_set = trigger[n_trigger_test:] + no_trigger[n_no_trigger_test:]
+    def flatten(chunks: list[list[dict]]) -> list[dict]:
+        return [item for chunk in chunks for item in chunk]
+
+    test_set = flatten(trigger[:n_trigger_test]) + flatten(no_trigger[:n_no_trigger_test])
+    train_set = flatten(trigger[n_trigger_test:]) + flatten(no_trigger[n_no_trigger_test:])
 
     return train_set, test_set
 
@@ -70,8 +92,20 @@ def run_loop(
     log_dir: Path | None = None,
 ) -> dict:
     """Run the eval + improvement loop."""
+    validate_eval_set(eval_set)
+    validate_run_settings(
+        runs_per_query,
+        max_iterations=max_iterations,
+        holdout=holdout,
+        trigger_threshold=trigger_threshold,
+        num_workers=num_workers,
+        timeout=timeout,
+    )
+    eval_set = assign_case_ids(eval_set)
+
     name, original_description, content = parse_skill_md(skill_path)
     current_description = description_override or original_description
+    validate_description(current_description)
 
     # Split into train/test if holdout > 0
     if holdout > 0:
@@ -113,10 +147,16 @@ def run_loop(
             )
         eval_elapsed = time.time() - t0
 
-        # Split results back into train/test by matching queries
-        train_queries_set = {q["query"] for q in train_set}
-        train_result_list = [r for r in all_results["results"] if r["query"] in train_queries_set]
-        test_result_list = [r for r in all_results["results"] if r["query"] not in train_queries_set]
+        # Split results back into train/test by case id
+        train_ids = {q["id"] for q in train_set}
+        test_ids = {q["id"] for q in test_set}
+        train_result_list = [r for r in all_results["results"] if r["id"] in train_ids]
+        test_result_list = [r for r in all_results["results"] if r["id"] in test_ids]
+        if len(train_result_list) != len(train_set) or len(test_result_list) != len(test_set):
+            raise RunnerError(
+                f"Result count mismatch during iteration {iteration}: "
+                f"train {len(train_result_list)}/{len(train_set)}, test {len(test_result_list)}/{len(test_set)}"
+            )
 
         train_passed = sum(1 for r in train_result_list if r["pass"])
         train_total = len(train_result_list)
@@ -291,7 +331,28 @@ def main():
         print(f"Error: No SKILL.md found at {skill_path}", file=sys.stderr)
         sys.exit(1)
 
-    name, _, _ = parse_skill_md(skill_path)
+    try:
+        validate_eval_set(eval_set)
+        validate_run_settings(
+            args.runs_per_query,
+            max_iterations=args.max_iterations,
+            holdout=args.holdout,
+            trigger_threshold=args.trigger_threshold,
+            num_workers=args.num_workers,
+            timeout=args.timeout,
+        )
+        name, original_description, _ = parse_skill_md(skill_path)
+        validate_description(args.description or original_description)
+        runner_command = resolve_runner_command(args.runner_command)
+    except MissingDependencyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(2)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+    except RunnerError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(2)
 
     # Set up live report path
     if args.report != "none":
@@ -318,7 +379,6 @@ def main():
     log_dir = results_dir / "logs" if results_dir else None
 
     try:
-        runner_command = resolve_runner_command(args.runner_command)
         output = run_loop(
             eval_set=eval_set,
             skill_path=skill_path,
