@@ -34,6 +34,7 @@ hei5enbug-agent-setup/
 ├── standalone-skills/
 │   └── omo-model-config/
 └── skills/
+    ├── confluence-ops/
     ├── decision-navigator/
     ├── deep-interview/
     ├── flowchart-design/
@@ -117,6 +118,7 @@ node --test skills/markdown-to-confluence/tests/test_render_diagrams.mjs
 
 | スキル | 内容 |
 |---|---|
+| [`confluence-ops`](skills/confluence-ops/SKILL.md) | Confluence作業のハウスルール: 汎用ツールではなく `confluence-cli` を選び、認証情報をコマンドラインに出さず、コメントのマークアップとメンションを正しく扱います。 |
 | [`decision-navigator`](skills/decision-navigator/SKILL.md) | 複数セッションにわたる作業を意思決定チケットに分け、実装ルートが明確になるまでチケットを一つずつ解決します。 |
 | [`deep-interview`](skills/deep-interview/SKILL.md) | 回答ごとに要件の曖昧さをスコアで測るソクラテス式インタビューを行い、そのスコアが閾値以下になるまで実行段階に進みません。[韓国語ガイド](skills/deep-interview/README.ko.md) |
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | SVG、HTML/CSS、Figma、draw.io のどのツールで作っても一つのデザインシステムのように見えるようにするフローチャート共通デザイン基準です。 |

@@ -34,6 +34,7 @@ hei5enbug-agent-setup/
 ├── standalone-skills/
 │   └── omo-model-config/
 └── skills/
+    ├── confluence-ops/
     ├── decision-navigator/
     ├── deep-interview/
     ├── flowchart-design/
@@ -116,6 +117,7 @@ agent 执行的 skill 指令用英文编写。skill 目录中的 `README.ko.md` 
 
 | Skill | 作用 |
 |---|---|
+| [`confluence-ops`](skills/confluence-ops/SKILL.md) | Confluence 工作规则：优先使用 `confluence-cli` 而非通用工具，避免在命令行中暴露凭据，并正确处理评论标记和提及。 |
 | [`decision-navigator`](skills/decision-navigator/SKILL.md) | 把跨多个会话的工作拆成决策工单，并逐个解决，直到实现路线清晰。 |
 | [`deep-interview`](skills/deep-interview/SKILL.md) | 进行苏格拉底式访谈，每次回答后都为需求的模糊程度打分，只有分数降到阈值以下才会进入执行阶段。[韩文指南](skills/deep-interview/README.ko.md) |
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | 一套通用的流程图设计标准，无论用 SVG、HTML/CSS、Figma 还是 draw.io 制作，都能呈现为同一套设计体系。 |

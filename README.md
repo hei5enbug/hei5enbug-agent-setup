@@ -33,6 +33,7 @@ hei5enbug-agent-setup/
 ├── standalone-skills/
 │   └── omo-model-config/
 └── skills/
+    ├── confluence-ops/
     ├── decision-navigator/
     ├── deep-interview/
     ├── flowchart-design/
@@ -118,6 +119,7 @@ required output labels, or evaluation fixtures.
 
 | Skill | What it does |
 |---|---|
+| [`confluence-ops`](skills/confluence-ops/SKILL.md) | House rules for Confluence work: pick `confluence-cli` over generic tools, keep credentials out of the command line, and get comment markup and mentions right. |
 | [`decision-navigator`](skills/decision-navigator/SKILL.md) | Maps a multi-session effort into decision tickets and resolves them one at a time until the implementation route is clear. |
 | [`deep-interview`](skills/deep-interview/SKILL.md) | Runs a Socratic interview that scores requirement ambiguity after every answer and will not move to execution until it drops below the threshold. [Korean guide](skills/deep-interview/README.ko.md). |
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | A shared design standard so flow charts built in SVG, HTML/CSS, Figma, or draw.io all read as one design system. |
