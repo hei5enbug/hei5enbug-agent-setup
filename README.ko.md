@@ -2,6 +2,9 @@
 
 [English](./README.md) | **한국어** | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md) | [Español](./README.es.md) | [Deutsch](./README.de.md) | [Français](./README.fr.md)
 
+> 영어 원본: [README.md](README.md)
+> 이 문서는 사람을 위한 비권위 한국어 번역본이다. 에이전트 실행 시 읽거나 사용하지 않는다.
+
 AI 코딩 에이전트를 위한 커스텀 스킬 모음입니다. 호스트별로 다시 작성하지 않고 여러 에이전트 호스트에서 그대로 공유할 수 있도록 만들었습니다.
 
 ## 개요
@@ -26,6 +29,24 @@ hei5enbug-agent-setup/
 │   └── plugin.json
 ├── .codex-plugin/plugin.json
 ├── .github/workflows/validate.yml
+├── AGENTS.md
+├── AGENTS.ko.md
+├── CLAUDE.md
+├── CLAUDE.ko.md
+├── hooks/hooks.json
+├── instructions/
+│   ├── claude-agents.md
+│   ├── codex-agents.md
+│   ├── confluence.md
+│   ├── documentation.md
+│   ├── protected-values.md
+│   ├── services.md
+│   └── session/
+│       ├── claude-code.md
+│       ├── codex.md
+│       └── common.md
+├── scripts/session_context.py
+├── tests/
 ├── LICENSE
 ├── pyproject.toml
 ├── standalone-agents/
@@ -34,12 +55,11 @@ hei5enbug-agent-setup/
 ├── standalone-skills/
 │   └── omo-model-config/
 └── skills/
-    ├── confluence-ops/
     ├── decision-navigator/
     ├── deep-interview/
     ├── flowchart-design/
     ├── humanize-korean/
-    ├── markdown-to-confluence/
+    ├── document-to-confluence/
     ├── skill-builder/
     ├── suggest-commit/
     ├── technical-design-writer/
@@ -51,7 +71,7 @@ hei5enbug-agent-setup/
 Codex와 Claude Code에 패키징합니다. `standalone-skills/` 디렉터리는 두 플러그인의 스킬
 검색 경로에 포함되지 않습니다.
 
-`standalone-agents/` 디렉터리에는 `CLAUDE.md`와 `AGENTS.md`가 이름으로 가리키는 서브에이전트 정의가 있습니다.
+`standalone-agents/` 디렉터리에는 호스트별 에이전트 지침이 이름으로 가리키는 서브에이전트 정의가 있습니다.
 `scout.md`는 `~/.claude/agents/`에 직접 복사합니다. `codex-explorer.toml`은 `~/.codex/agents/explorer.toml`로 복사합니다.
 이 파일은 Codex 내장 `explorer`를 덮어써 사고 강도와 읽기 전용 샌드박스를 고정합니다. 모델은 지정하지 않으므로
 호스트의 기본 모델을 그대로 물려받고, Claude Code의 `scout`는 모델을 하나로 고정한다는 점이 다릅니다.
@@ -75,11 +95,52 @@ claude plugin marketplace add hei5enbug/hei5enbug-agent-setup
 claude plugin install hei5enbug-agent-setup@hei5enbug
 ```
 
+## 지침 자동 적용
+
+macOS와 Linux에서 플러그인 훅은 `instructions/session/common.md`와 현재 호스트의 지침을 합친다.
+Codex에는 `codex.md`, Claude Code에는 `claude-code.md`를 사용한다.
+호스트의 `PATH`에서 `python3`로 Python 3.12 이상을 실행할 수 있어야 한다.
+훅은 Python 표준 라이브러리만 사용한다.
+루트 `AGENTS.md`와 `CLAUDE.md`는 이 저장소 개발에만 적용하며 훅은 두 파일을 읽지 않는다.
+
+두 호스트 모두 `hooks/hooks.json`을 자동으로 찾는다.
+Codex가 제공하는 `PLUGIN_ROOT`가 설치 디렉터리를 가리키면 로더는 Codex 지침을 선택한다.
+스크립트 위치는 두 호스트가 제공하는 `CLAUDE_PLUGIN_ROOT`로 찾는다.
+사용자 전역 지침 파일이나 작업 저장소의 지침 파일은 복사하거나 덮어쓰지 않는다.
+
+| 시점 | 동작 |
+|---|---|
+| 세션 시작·재개 | `SessionStart`가 설치된 지침 파일을 전달한다. |
+| 세션 초기화·컨텍스트 압축 | `SessionStart`가 지침을 다시 전달한다. |
+| 서브에이전트 시작 | `SubagentStart`가 같은 호스트의 지침을 전달한다. |
+| 조건에 맞는 작업 시작 | 에이전트가 `instructions/`의 필수 참조를 읽는다. |
+| 플러그인 업데이트 설치 | 새 세션이 설치된 버전을 읽는다. 저장소에 푸시하는 것만으로는 반영되지 않는다. |
+
+핵심 규칙은 요청이 바뀌어도 세션 컨텍스트에 남는다.
+서비스 접근, 보호된 보안 값 접근, 에이전트 사용, 문서 작성의 세부 규칙은 관련 작업 전에만 읽는다.
+요청을 처리하던 중 관련 작업이 생겨도 먼저 참조를 읽는다.
+로더는 각 세션 지침의 조건부 링크를 설치된 플러그인 내부의 절대 경로로 바꾼다.
+세션을 시작할 때 조건부 참조 본문까지 읽지는 않는다.
+
+Codex는 현재 플러그인 훅 정의를 사용자가 검토하고 신뢰한 뒤에 실행한다.
+훅이 꺼져 있거나 조직 정책이 플러그인 훅을 금지하면 자동 적용되지 않는다.
+설치·업데이트 후 호스트의 훅 설정에서 활성화 여부를 확인하고, Codex에서는 신뢰 여부도 확인한다.
+업데이트 후에는 Claude Code를 재시작하거나 Codex에서 새 세션을 시작한다.
+훅은 호스트의 신뢰 설정을 우회하지 않으며, 실행 중인 세션의 플러그인 버전을 바꾸지 않는다.
+
+세션 지침 누락·빈 파일·잘못된 로컬 참조나 9,000 UTF-8 바이트를 넘는 컨텍스트는 표준 오류로 알린다.
+이때 지침 일부만 전달하지 않는다.
+세션 시작 훅의 오류가 호스트 실행을 반드시 중단시키지는 않으므로, 오류를 해결한 뒤 자동 적용을 사용한다.
+세션 지침 파일은 짧게 유지하고 세부 사항은 조건부 참조로 옮긴다.
+Windows 실행과 실제 모델의 지침 준수 여부는 테스트 범위에 포함하지 않는다.
+
+실행 시점과 신뢰 설정은 공식 [Codex 훅 문서](https://learn.chatgpt.com/docs/hooks)와
+[Claude Code 훅 문서](https://code.claude.com/docs/en/hooks)를 따른다.
+
 ## 플러그인 업데이트
 
-두 플러그인 매니페스트와 `pyproject.toml`은 같은 의미적 버전을 사용하며 현재 값은 `0.2.0`입니다.
-릴리스를 배포하기 전에 아래 개발 검사를 모두 통과시킨 뒤 `.codex-plugin/plugin.json`,
-`.claude-plugin/plugin.json`, `pyproject.toml`의 버전을 함께 올립니다.
+두 플러그인 매니페스트, `pyproject.toml`, `uv.lock`은 같은 의미적 버전을 사용해야 합니다.
+아래 개발 검사를 모두 통과시킨 뒤 릴리스를 배포하기 전에 함께 갱신합니다.
 
 릴리스 배포 후 Codex를 업데이트합니다.
 
@@ -95,7 +156,7 @@ claude plugin marketplace update hei5enbug
 claude plugin update hei5enbug-agent-setup@hei5enbug
 ```
 
-업데이트한 스킬 버전을 불러오려면 새 Codex 스레드를 시작하거나
+업데이트한 스킬과 지침을 불러오려면 새 Codex 스레드를 시작하거나
 Claude Code를 다시 시작합니다.
 
 ## 개발 검사
@@ -107,35 +168,39 @@ Claude Code를 다시 시작합니다.
 python3 -m pip install -e ".[dev]"
 for skill in skills/*/ standalone-skills/*/; do python3 skills/skill-builder/scripts/quick_validate.py "$skill"; done
 python3 -m pytest
-node --test skills/markdown-to-confluence/tests/test_render_diagrams.mjs
+node --test skills/document-to-confluence/tests/test_render_diagrams.mjs
 ```
 
 ## 지침 언어
 
-에이전트가 실행하는 스킬 지침은 영어로 작성합니다. 스킬 폴더의 `README.ko.md`는 대응하는
-영어 문서의 내용을 동기화해 번역한 비권위 한국어 문서입니다. 한국어 사용자를 위한 참고
-문서이며, 에이전트가 스킬을 실행할 때 읽거나 사용하지 않습니다. 영어 실행 파일 안의 한국어는
-호출 문구, 예시, 필수 출력 이름, 평가 자료처럼 한국어 자체가 필요한 자료에만 남깁니다.
+플러그인 스킬, 참조, 에이전트와 세션 지침은 영어 파일을 실행 가능한 기준 원본으로 사용합니다.
+사람이 읽는 모든 영어 Markdown 파일에는 의미가 같은 `.ko.md` 번역본을 같은 위치에 둡니다.
+번역본은 영어 원본을 연결하고 비권위 자료임을 밝히며 에이전트 실행 중 읽거나 사용하지 않습니다.
+원본과 번역본은 함께 수정, 이동 또는 삭제합니다.
+
+코드, 스키마, 테스트 자료, 생성 아티팩트와 영어가 아닌 문서는 한국어 복사본을 만들지 않습니다.
+호출 문구, 예시, 필수 출력 이름 또는 평가 자료처럼 한국어 자체가 대상 데이터일 때만 영어 실행 파일에
+한국어를 유지할 수 있습니다. 자동 검사는 번역본 존재와 실행 경로 분리를 확인하고 의미 일치는 사람이나
+모델이 별도로 검토합니다.
 
 ## 스킬 목록
 
 | 스킬 | 하는 일 |
 |---|---|
-| [`confluence-ops`](skills/confluence-ops/SKILL.md) | Confluence 작업 규칙: 범용 도구 대신 `confluence-cli`를 선택하고, 자격 증명을 명령행에 노출하지 않으며, 댓글 마크업과 멘션을 정확하게 처리합니다. |
-| [`decision-navigator`](skills/decision-navigator/SKILL.md) | 여러 세션에 걸친 작업을 의사 결정 티켓으로 나누고, 구현 경로가 분명해질 때까지 티켓을 하나씩 해결합니다. |
-| [`deep-interview`](skills/deep-interview/SKILL.md) | 답변마다 요구사항의 모호함 정도를 점수로 측정하는 소크라테스식 인터뷰를 진행하며, 그 점수가 기준값 이하로 내려가기 전에는 실행 단계로 넘어가지 않습니다. [한국어 안내](skills/deep-interview/README.ko.md) |
-| [`flowchart-design`](skills/flowchart-design/SKILL.md) | SVG, HTML/CSS, Figma, draw.io 등 어떤 도구로 만들어도 하나의 디자인 시스템처럼 보이게 하는 플로우차트 공통 디자인 기준입니다. |
-| [`humanize-korean`](skills/humanize-korean/SKILL.md) | 내용은 그대로 두고, AI가 쓴 듯한 한글 문장을 사람이 쓴 것처럼 자연스러운 한국어로 다시 씁니다. [한국어 안내](skills/humanize-korean/README.ko.md) |
-| [`markdown-to-confluence`](skills/markdown-to-confluence/SKILL.md) | 마크다운 문서를 Confluence 페이지로 발행하고, 이후 수정에서도 목차 매크로·본문 이미지·첨부·이미지로 만든 다이어그램이 그대로 유지되게 합니다. |
-| [`skill-builder`](skills/skill-builder/SKILL.md) | 초안 작성 → 테스트 → 검토 → 개선 순환을 통해 에이전트 스킬을 만들고, 검증하고, 패키징합니다. |
-| [`suggest-commit`](skills/suggest-commit/SKILL.md) | 스테이징된 변경과 스테이징되지 않은 변경을 함께, 또는 사용자가 지정한 범위를 최근 커밋 이력과 함께 읽어, 이 저장소의 스타일에 맞는 커밋 메시지 5개를 제안합니다. |
-| [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | 개발 설계 문서를 새로 쓰거나 정리할 때 따르는 규칙과, 목차를 단계적으로 좁혀 가는 5단계 절차입니다. [한국어 안내](skills/technical-design-writer/README.ko.md) |
-| [`tiki-taka`](skills/tiki-taka/SKILL.md) | 현재 에이전트와 반대쪽 Claude/Codex 세션이 교환 횟수를 제한한 토론을 벌여 쟁점을 드러내고 수렴시킵니다. [한국어 안내](skills/tiki-taka/README.ko.md) |
+| [`decision-navigator`](skills/decision-navigator/SKILL.md) | 여러 세션에 걸친 작업을 의사 결정 티켓으로 나누고, 구현 경로가 분명해질 때까지 티켓을 하나씩 해결합니다. [한국어 안내](skills/decision-navigator/SKILL.ko.md) |
+| [`deep-interview`](skills/deep-interview/SKILL.md) | 답변마다 요구사항의 모호함 정도를 점수로 측정하는 소크라테스식 인터뷰를 진행하며, 그 점수가 기준값 이하로 내려가기 전에는 실행 단계로 넘어가지 않습니다. [한국어 안내](skills/deep-interview/SKILL.ko.md) |
+| [`flowchart-design`](skills/flowchart-design/SKILL.md) | SVG, HTML/CSS, Figma, draw.io 등 어떤 도구로 만들어도 하나의 디자인 시스템처럼 보이게 하는 플로우차트 공통 디자인 기준입니다. [한국어 안내](skills/flowchart-design/SKILL.ko.md) |
+| [`humanize-korean`](skills/humanize-korean/SKILL.md) | 내용은 그대로 두고, AI가 쓴 듯한 한글 문장을 사람이 쓴 것처럼 자연스러운 한국어로 다시 씁니다. [한국어 안내](skills/humanize-korean/SKILL.ko.md) |
+| [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Markdown, HTML, PDF, DOCX, Google Docs 문서를 Confluence 페이지로 변환하고, 문서 구조와 첨부 파일을 보존하며, 이후 원본 변경도 페이지에 반영합니다. [한국어 안내](skills/document-to-confluence/SKILL.ko.md) |
+| [`skill-builder`](skills/skill-builder/SKILL.md) | 초안 작성 → 테스트 → 검토 → 개선 순환을 통해 에이전트 스킬을 만들고, 검증하고, 패키징합니다. [한국어 안내](skills/skill-builder/SKILL.ko.md) |
+| [`suggest-commit`](skills/suggest-commit/SKILL.md) | 스테이징된 변경과 스테이징되지 않은 변경을 함께, 또는 사용자가 지정한 범위를 최근 커밋 이력과 함께 읽어, 이 저장소의 스타일에 맞는 커밋 메시지 5개를 제안합니다. [한국어 안내](skills/suggest-commit/SKILL.ko.md) |
+| [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | 개발 설계 문서를 새로 쓰거나 정리할 때 따르는 규칙과, 목차를 단계적으로 좁혀 가는 5단계 절차입니다. [한국어 안내](skills/technical-design-writer/SKILL.ko.md) |
+| [`tiki-taka`](skills/tiki-taka/SKILL.md) | 현재 에이전트와 반대쪽 Claude/Codex 세션이 교환 횟수를 제한한 토론을 벌여 쟁점을 드러내고 수렴시킵니다. [한국어 안내](skills/tiki-taka/SKILL.ko.md) |
 
 ## 관련 링크
 
 - [`omo-model-config`](standalone-skills/omo-model-config/SKILL.md)은 독립 실행용 소스로 유지하며
-  플러그인 스킬 목록에는 포함하지 않습니다.
+  플러그인 스킬 목록에는 포함하지 않습니다. [한국어 안내](standalone-skills/omo-model-config/SKILL.ko.md)
 - [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — 독립 실행용 스킬이 모델 라우팅을
   갱신하는 플러그인 시스템
 

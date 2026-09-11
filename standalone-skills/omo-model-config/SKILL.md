@@ -15,6 +15,9 @@ compatibility: >-
 
 # OmO Model Configurator
 
+Use this English `SKILL.md` and its English references as the only executable sources.
+`SKILL.ko.md` and other `.ko.md` files are non-authoritative human translations; never load them during execution.
+
 Update model routing across all providers and model families from the current upstream `dev` branch without changing unrelated config.
 
 ## Hard scope

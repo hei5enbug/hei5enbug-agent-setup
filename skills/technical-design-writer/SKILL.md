@@ -22,7 +22,7 @@ without guessing.
 ## Authority and resources
 
 Use this file and the references it explicitly requires as executable instructions.
-`README.ko.md` is a non-authoritative Korean mirror for human readers; do not read it during execution.
+`SKILL.ko.md` is a non-authoritative Korean mirror for human readers; do not read it during execution.
 
 For every Korean deliverable, read `references/korean-writing.md` before drafting or reviewing.
 

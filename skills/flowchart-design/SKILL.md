@@ -14,6 +14,9 @@ compatibility: >-
 
 # Flowchart Design Standard
 
+Use this English `SKILL.md` and its English references as the only executable sources.
+`SKILL.ko.md` and other `.ko.md` files are non-authoritative human translations; never load them during execution.
+
 A shared specification for static flow charts authored across different tools (SVG, HTML/CSS, Figma, draw.io).
 The goal: any chart that follows this document looks like it came from the same design system as every other chart that follows it.
 The rules below describe **relative behavior, not absolute values**.

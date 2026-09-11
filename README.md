@@ -1,6 +1,6 @@
 # hei5enbug-agent-setup
 
-**English** | [한국어](./README.ko.md) | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md) | [Español](./README.es.md) | [Deutsch](./README.de.md) | [Français](./README.fr.md)
+**English** | [한국어](./SKILL.ko.md) | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md) | [Español](./README.es.md) | [Deutsch](./README.de.md) | [Français](./README.fr.md)
 
 A portable collection of custom skills for AI coding agents, built to be shared across multiple agent hosts without host-specific rewrites.
 
@@ -25,6 +25,24 @@ hei5enbug-agent-setup/
 │   └── plugin.json
 ├── .codex-plugin/plugin.json
 ├── .github/workflows/validate.yml
+├── AGENTS.md
+├── AGENTS.ko.md
+├── CLAUDE.md
+├── CLAUDE.ko.md
+├── hooks/hooks.json
+├── instructions/
+│   ├── claude-agents.md
+│   ├── codex-agents.md
+│   ├── confluence.md
+│   ├── documentation.md
+│   ├── protected-values.md
+│   ├── services.md
+│   └── session/
+│       ├── claude-code.md
+│       ├── codex.md
+│       └── common.md
+├── scripts/session_context.py
+├── tests/
 ├── LICENSE
 ├── pyproject.toml
 ├── standalone-agents/
@@ -33,12 +51,11 @@ hei5enbug-agent-setup/
 ├── standalone-skills/
 │   └── omo-model-config/
 └── skills/
-    ├── confluence-ops/
     ├── decision-navigator/
     ├── deep-interview/
     ├── flowchart-design/
     ├── humanize-korean/
-    ├── markdown-to-confluence/
+    ├── document-to-confluence/
     ├── skill-builder/
     ├── suggest-commit/
     ├── technical-design-writer/
@@ -49,7 +66,7 @@ Each plugin skill folder holds its own `SKILL.md` plus any references or scripts
 package the same `skills/` directory for Codex and Claude Code without copying skills into host-specific directories.
 The `standalone-skills/` directory is not included in either plugin's skill discovery path.
 
-The `standalone-agents/` directory holds subagent definitions that `CLAUDE.md` and `AGENTS.md` refer to by name.
+The `standalone-agents/` directory holds subagent definitions referenced by the host-specific agent instructions.
 Copy `scout.md` into `~/.claude/agents/` by hand. Copy `codex-explorer.toml` into `~/.codex/agents/explorer.toml`;
 it overrides the built-in Codex `explorer` so its reasoning effort and read-only sandbox are fixed. It sets no model,
 so it inherits the host's default model, whereas `scout` pins one on Claude Code.
@@ -73,11 +90,49 @@ claude plugin marketplace add hei5enbug/hei5enbug-agent-setup
 claude plugin install hei5enbug-agent-setup@hei5enbug
 ```
 
+## Automatic instructions
+
+On macOS and Linux, the plugin hooks combine `instructions/session/common.md` with either
+`instructions/session/codex.md` or `instructions/session/claude-code.md` for the current host.
+Python 3.12 or later must be available as `python3` on the host's `PATH`.
+The hook uses only the Python standard library.
+Root `AGENTS.md` and `CLAUDE.md` govern development of this repository only; the hook never reads them.
+
+Both hosts discover `hooks/hooks.json` automatically. Codex sets `PLUGIN_ROOT` to the installed plugin
+directory; the loader uses that value to select Codex rules. Both hosts provide `CLAUDE_PLUGIN_ROOT`
+for locating the script. No user or project instruction file is copied, linked, or overwritten.
+
+| When | Behavior |
+|---|---|
+| Session starts or resumes | `SessionStart` supplies the installed instruction files. |
+| Session clears or compacts | `SessionStart` supplies them again. |
+| A subagent starts | `SubagentStart` supplies the same host's instructions. |
+| A matching task begins | The agent reads the required reference under `instructions/`. |
+| A plugin update is installed | A new session reads that installed version. A repository push alone changes nothing locally. |
+
+Core rules remain in session context across requests. Service access, protected-value access, agent use,
+and documentation details load only before the matching action, even if it arises later in a request.
+The loader resolves each session file's conditional links to absolute paths inside the installed plugin.
+It does not read conditional reference bodies at startup.
+
+Codex requires review and trust of the current plugin hook definition before running it.
+Disabled hooks or enterprise policies that prohibit plugin hooks prevent automatic loading.
+After installation or update, use the host's hook controls to check that these hooks are enabled and,
+in Codex, trusted. Restart Claude Code or start a new Codex session after updating.
+The hook does not bypass host trust settings or change an already running session to a new plugin version.
+
+A missing or empty session file, an invalid local reference, or context larger than 9,000 UTF-8 bytes produces an error on
+stderr and no partial context. Session-start hook errors do not reliably block the host; resolve any
+reported loading error before relying on automatic instructions. Keep the session files short and move
+details into conditional references. Windows execution and live model adherence are not covered by the tests.
+
+See the official [Codex hooks](https://learn.chatgpt.com/docs/hooks) and
+[Claude Code hooks](https://code.claude.com/docs/en/hooks) contracts for lifecycle and trust behavior.
+
 ## Plugin updates
 
-Both plugin manifests and `pyproject.toml` carry the same semantic version, currently `0.2.0`. Bump the version in
-`.codex-plugin/plugin.json`, `.claude-plugin/plugin.json`, and `pyproject.toml` together, and only after the
-development checks below pass, before publishing a release.
+Both plugin manifests, `pyproject.toml`, and `uv.lock` must use the same semantic version.
+Update them together after the development checks below pass and before publishing a release.
 
 Update Codex after the release is available:
 
@@ -93,7 +148,7 @@ claude plugin marketplace update hei5enbug
 claude plugin update hei5enbug-agent-setup@hei5enbug
 ```
 
-Start a new Codex thread or restart Claude Code after updating so the host loads the new skill versions.
+Start a new Codex thread or restart Claude Code after updating so the host loads the new skills and instructions.
 
 ## Development checks
 
@@ -104,36 +159,39 @@ checks that `.github/workflows/validate.yml` runs on macOS and Linux:
 python3 -m pip install -e ".[dev]"
 for skill in skills/*/ standalone-skills/*/; do python3 skills/skill-builder/scripts/quick_validate.py "$skill"; done
 python3 -m pytest
-node --test skills/markdown-to-confluence/tests/test_render_diagrams.mjs
+node --test skills/document-to-confluence/tests/test_render_diagrams.mjs
 ```
 
 ## Instruction language
 
-Executable skill instructions are written in English. A `README.ko.md` inside a skill directory is a
-non-authoritative Korean translation kept synchronized with its corresponding English document. It is
-for human readers and must not be loaded or used by an agent during skill execution. Korean text may
-remain in executable files only when it is target-language data, such as trigger phrases, examples,
-required output labels, or evaluation fixtures.
+English files are the canonical executable sources for plugin skills, references, agents, and session
+instructions. Every human-readable English Markdown file has a meaning-equivalent adjacent `.ko.md` mirror.
+Each mirror links its source, is non-authoritative, and must never be loaded during agent execution.
+Update, move, and delete each source and mirror together.
+
+Code, schemas, test fixtures, generated artifacts, and non-English documents do not need Korean duplicates.
+Korean may remain in an executable English file only as target-language data, such as trigger phrases,
+examples, required output labels, or evaluation fixtures. Structural checks verify mirror coverage and
+execution-path isolation; semantic equivalence still requires human or model review.
 
 ## Skills
 
 | Skill | What it does |
 |---|---|
-| [`confluence-ops`](skills/confluence-ops/SKILL.md) | House rules for Confluence work: pick `confluence-cli` over generic tools, keep credentials out of the command line, and get comment markup and mentions right. |
-| [`decision-navigator`](skills/decision-navigator/SKILL.md) | Maps a multi-session effort into decision tickets and resolves them one at a time until the implementation route is clear. |
-| [`deep-interview`](skills/deep-interview/SKILL.md) | Runs a Socratic interview that scores requirement ambiguity after every answer and will not move to execution until it drops below the threshold. [Korean guide](skills/deep-interview/README.ko.md). |
-| [`flowchart-design`](skills/flowchart-design/SKILL.md) | A shared design standard so flow charts built in SVG, HTML/CSS, Figma, or draw.io all read as one design system. |
-| [`humanize-korean`](skills/humanize-korean/SKILL.md) | Rewrites AI-sounding Korean text into natural, human-sounding Korean without changing its meaning. [Korean guide](skills/humanize-korean/README.ko.md). |
-| [`markdown-to-confluence`](skills/markdown-to-confluence/SKILL.md) | Publishes a Markdown document to Confluence and keeps the page correct on later edits, covering the table of contents macro, inline images, attachments, and diagrams rendered to images. |
-| [`skill-builder`](skills/skill-builder/SKILL.md) | Creates, tests, and packages agent skills through a draft → test → review → improve loop. |
-| [`suggest-commit`](skills/suggest-commit/SKILL.md) | Reads the staged and unstaged changes, or the scope you name, plus recent commit history, then suggests five commit messages that match the repo's style. |
-| [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | Rules and a five-step narrowing process for writing or cleaning up technical design docs. [Korean guide](skills/technical-design-writer/README.ko.md). |
-| [`tiki-taka`](skills/tiki-taka/SKILL.md) | Runs a turn-limited debate between the current agent and an opposing Claude/Codex session to surface and resolve issues. [Korean guide](skills/tiki-taka/README.ko.md). |
+| [`decision-navigator`](skills/decision-navigator/SKILL.md) | Maps a multi-session effort into decision tickets and resolves them one at a time until the implementation route is clear. [Korean guide](skills/decision-navigator/SKILL.ko.md). |
+| [`deep-interview`](skills/deep-interview/SKILL.md) | Runs a Socratic interview that scores requirement ambiguity after every answer and will not move to execution until it drops below the threshold. [Korean guide](skills/deep-interview/SKILL.ko.md). |
+| [`flowchart-design`](skills/flowchart-design/SKILL.md) | A shared design standard so flow charts built in SVG, HTML/CSS, Figma, or draw.io all read as one design system. [Korean guide](skills/flowchart-design/SKILL.ko.md). |
+| [`humanize-korean`](skills/humanize-korean/SKILL.md) | Rewrites AI-sounding Korean text into natural, human-sounding Korean without changing its meaning. [Korean guide](skills/humanize-korean/SKILL.ko.md). |
+| [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Converts Markdown, HTML, PDF, DOCX, and Google Docs content into Confluence pages, preserves document structure and assets, and keeps pages synchronized with source revisions. [Korean guide](skills/document-to-confluence/SKILL.ko.md). |
+| [`skill-builder`](skills/skill-builder/SKILL.md) | Creates, tests, and packages agent skills through a draft → test → review → improve loop. [Korean guide](skills/skill-builder/SKILL.ko.md). |
+| [`suggest-commit`](skills/suggest-commit/SKILL.md) | Reads the staged and unstaged changes, or the scope you name, plus recent commit history, then suggests five commit messages that match the repo's style. [Korean guide](skills/suggest-commit/SKILL.ko.md). |
+| [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | Rules and a five-step narrowing process for writing or cleaning up technical design docs. [Korean guide](skills/technical-design-writer/SKILL.ko.md). |
+| [`tiki-taka`](skills/tiki-taka/SKILL.md) | Runs a turn-limited debate between the current agent and an opposing Claude/Codex session to surface and resolve issues. [Korean guide](skills/tiki-taka/SKILL.ko.md). |
 
 ## Related
 
 - [`omo-model-config`](standalone-skills/omo-model-config/SKILL.md) remains available as standalone
-  source and is not included in the plugin skill list.
+  source and is not included in the plugin skill list. [Korean guide](standalone-skills/omo-model-config/SKILL.ko.md).
 - [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — plugin system whose model
   routing the standalone skill updates
 

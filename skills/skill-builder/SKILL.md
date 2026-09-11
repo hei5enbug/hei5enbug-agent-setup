@@ -14,6 +14,9 @@ compatibility: >-
 
 # Skill Builder
 
+Use this English `SKILL.md` and its English references as the only executable sources.
+`SKILL.ko.md` and other `.ko.md` files are non-authoritative human translations; never load them during execution.
+
 Create and improve skills through an iterative draft → test → review → improve loop.
 
 ## Portability contract
@@ -153,21 +156,21 @@ immediately.
 
 ### Translated mirrors
 
-A skill may carry a human-readable translation of an authoritative file, such as
-`references/ko/rubric.ko.md` beside `references/rubric.md`. This rule applies only to a skill that
-already contains such a mirror. Never add a translated mirror to a skill that has none.
+Keep English as the canonical executable language. Give every human-readable English Markdown
+instruction or document an adjacent, meaning-equivalent Korean `.ko.md` mirror. Do not duplicate
+code, schemas, eval fixtures, generated artifacts, or documents already written in another language.
 
-When a mirror exists, it is part of the same change as its source. Whenever you edit an
-authoritative file, update every mirror of that file in the same task. Do not defer the update or
-leave a mirror describing a rule the source no longer contains.
+A mirror is part of the same change as its source. Whenever you edit an authoritative file, update
+its mirror in the same task. Do not defer the update or leave a mirror describing a rule the source
+no longer contains.
 
 A stale mirror is a defect even though no agent reads it. Readers use it to learn how the skill
 behaves, so an outdated mirror teaches a rule the skill does not follow.
 
-Each mirror must name its source and its non-authoritative status. `SKILL.md` must tell the agent
-not to read mirrors during execution. When a rule reverses, verify that the mirror states the new
-rule rather than merely adding text near the old one. When a source file is deleted or renamed,
-delete or rename its mirrors in the same task.
+Each mirror must link its source and state its non-authoritative, human-only status. `SKILL.md` must
+tell the agent not to read mirrors during execution. When a rule reverses, verify that the mirror
+states the new rule rather than merely adding text near the old one. When a source file is deleted
+or renamed, delete or rename its mirror in the same task.
 
 ### Automation boundary
 

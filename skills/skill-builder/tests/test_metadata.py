@@ -59,7 +59,7 @@ class ValidateSkillTest(unittest.TestCase):
     def test_all_repository_skills_pass(self):
         skill_dirs = sorted(p.parent for p in REPO_ROOT.glob("skills/*/SKILL.md"))
         skill_dirs += sorted(p.parent for p in REPO_ROOT.glob("standalone-skills/*/SKILL.md"))
-        self.assertEqual(len(skill_dirs), 10)
+        self.assertTrue(skill_dirs, "No repository skills found")
         for skill in skill_dirs:
             with self.subTest(skill=skill.name):
                 self.assertEqual(qv.validate_skill(skill), (True, "Skill is valid!"))

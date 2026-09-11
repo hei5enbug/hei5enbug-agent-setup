@@ -1,6 +1,6 @@
 # hei5enbug-agent-setup
 
-[English](./README.md) | [한국어](./README.ko.md) | [日本語](./README.ja.md) | **简体中文** | [Español](./README.es.md) | [Deutsch](./README.de.md) | [Français](./README.fr.md)
+[English](./README.md) | [한국어](./SKILL.ko.md) | [日本語](./README.ja.md) | **简体中文** | [Español](./README.es.md) | [Deutsch](./README.de.md) | [Français](./README.fr.md)
 
 面向 AI 编程 agent 的自定义 skill 合集，设计为可在多个 agent host 之间直接共享，无需针对每个 host 重写。
 
@@ -26,6 +26,24 @@ hei5enbug-agent-setup/
 │   └── plugin.json
 ├── .codex-plugin/plugin.json
 ├── .github/workflows/validate.yml
+├── AGENTS.md
+├── AGENTS.ko.md
+├── CLAUDE.md
+├── CLAUDE.ko.md
+├── hooks/hooks.json
+├── instructions/
+│   ├── claude-agents.md
+│   ├── codex-agents.md
+│   ├── confluence.md
+│   ├── documentation.md
+│   ├── protected-values.md
+│   ├── services.md
+│   └── session/
+│       ├── claude-code.md
+│       ├── codex.md
+│       └── common.md
+├── scripts/session_context.py
+├── tests/
 ├── LICENSE
 ├── pyproject.toml
 ├── standalone-agents/
@@ -34,12 +52,11 @@ hei5enbug-agent-setup/
 ├── standalone-skills/
 │   └── omo-model-config/
 └── skills/
-    ├── confluence-ops/
     ├── decision-navigator/
     ├── deep-interview/
     ├── flowchart-design/
     ├── humanize-korean/
-    ├── markdown-to-confluence/
+    ├── document-to-confluence/
     ├── skill-builder/
     ├── suggest-commit/
     ├── technical-design-writer/
@@ -50,7 +67,7 @@ hei5enbug-agent-setup/
 插件清单为 Codex 和 Claude Code 打包同一个 `skills/` 目录，不会把 skill 复制到 host 专用目录。
 `standalone-skills/` 目录不在任何一个插件的 skill 发现路径中。
 
-`standalone-agents/` 目录存放 `CLAUDE.md` 和 `AGENTS.md` 按名称引用的子 agent 定义。
+`standalone-agents/` 目录存放各 host 的 agent 指令所引用的子 agent 定义。
 请手动把 `scout.md` 复制到 `~/.claude/agents/`；把 `codex-explorer.toml` 复制为 `~/.codex/agents/explorer.toml`。
 它会覆盖 Codex 内置的 `explorer`，固定其推理强度和只读沙箱。它不指定模型，因此沿用 host 的默认模型，
 这与 Claude Code 上固定单一模型的 `scout` 不同。
@@ -74,10 +91,19 @@ claude plugin marketplace add hei5enbug/hei5enbug-agent-setup
 claude plugin install hei5enbug-agent-setup@hei5enbug
 ```
 
+## 自动应用指令
+
+在 macOS 和 Linux 上，钩子会把 `instructions/session/common.md` 与当前 host 的 `codex.md` 或 `claude-code.md` 合并。
+钩子在会话启动、恢复、清空、上下文压缩后以及子 agent 启动时执行。
+`instructions/` 中的详细规则只在对应操作之前读取。
+需要可通过 `python3` 执行的 Python 3.12 或更高版本，并启用钩子。
+Codex 还需要用户确认信任钩子。更新插件后请启动新会话。
+有关引用、错误和限制，请参阅[英文说明](README.md#automatic-instructions)。
+
 ## 更新插件
 
-两个插件清单和 `pyproject.toml` 使用同一个语义化版本，当前为 `0.2.0`。发布新版本前，先让下面的开发检查全部通过，
-再同时提升 `.codex-plugin/plugin.json`、`.claude-plugin/plugin.json` 和 `pyproject.toml` 中的版本号。
+两个插件清单、`pyproject.toml` 和 `uv.lock` 必须使用同一个语义化版本。
+先让下面的开发检查全部通过，再在发布新版本前一起更新它们。
 
 版本发布后更新 Codex：
 
@@ -93,7 +119,7 @@ claude plugin marketplace update hei5enbug
 claude plugin update hei5enbug-agent-setup@hei5enbug
 ```
 
-更新后请开启新的 Codex 线程或重启 Claude Code，以便 host 加载新的 skill 版本。
+更新后请开启新的 Codex 线程或重启 Claude Code，以便 host 加载新的 skill 和指令。
 
 ## 开发检查
 
@@ -104,29 +130,30 @@ claude plugin update hei5enbug-agent-setup@hei5enbug
 python3 -m pip install -e ".[dev]"
 for skill in skills/*/ standalone-skills/*/; do python3 skills/skill-builder/scripts/quick_validate.py "$skill"; done
 python3 -m pytest
-node --test skills/markdown-to-confluence/tests/test_render_diagrams.mjs
+node --test skills/document-to-confluence/tests/test_render_diagrams.mjs
 ```
 
 ## 指令语言
 
-agent 执行的 skill 指令用英文编写。skill 目录中的 `README.ko.md` 是与对应英文文档保持同步的非权威韩文翻译，
-仅供人阅读，agent 在执行 skill 时不得加载或使用它。可执行文件中只在韩文本身就是目标数据时保留韩文，
-例如触发短语、示例、必需的输出标签或评估数据。
+英文文件是 skill、参考资料、agent 和会话指令的规范可执行来源。
+每个供人阅读的英文 Markdown 文件旁都有含义相同的韩文 `.ko.md` 翻译。
+翻译不具权威性，agent 执行时不得加载。原文和译文必须一起修改、移动或删除。
+代码、架构定义、测试数据、生成文件和非英文文档不需要韩文副本。
+韩文只可作为触发短语、示例或必需输出等目标语言数据保留在可执行文件中。
 
 ## Skill 列表
 
 | Skill | 作用 |
 |---|---|
-| [`confluence-ops`](skills/confluence-ops/SKILL.md) | Confluence 工作规则：优先使用 `confluence-cli` 而非通用工具，避免在命令行中暴露凭据，并正确处理评论标记和提及。 |
 | [`decision-navigator`](skills/decision-navigator/SKILL.md) | 把跨多个会话的工作拆成决策工单，并逐个解决，直到实现路线清晰。 |
-| [`deep-interview`](skills/deep-interview/SKILL.md) | 进行苏格拉底式访谈，每次回答后都为需求的模糊程度打分，只有分数降到阈值以下才会进入执行阶段。[韩文指南](skills/deep-interview/README.ko.md) |
+| [`deep-interview`](skills/deep-interview/SKILL.md) | 进行苏格拉底式访谈，每次回答后都为需求的模糊程度打分，只有分数降到阈值以下才会进入执行阶段。[韩文指南](skills/deep-interview/SKILL.ko.md) |
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | 一套通用的流程图设计标准，无论用 SVG、HTML/CSS、Figma 还是 draw.io 制作，都能呈现为同一套设计体系。 |
-| [`humanize-korean`](skills/humanize-korean/SKILL.md) | 在不改变内容的前提下，把带有 AI 痕迹的韩语文本改写成自然、像人写的韩语。[韩文指南](skills/humanize-korean/README.ko.md) |
-| [`markdown-to-confluence`](skills/markdown-to-confluence/SKILL.md) | 将 Markdown 文档发布为 Confluence 页面，并在后续修改中保持目录宏、正文图片、附件以及渲染为图片的图表正确显示。 |
+| [`humanize-korean`](skills/humanize-korean/SKILL.md) | 在不改变内容的前提下，把带有 AI 痕迹的韩语文本改写成自然、像人写的韩语。[韩文指南](skills/humanize-korean/SKILL.ko.md) |
+| [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | 将 Markdown、HTML、PDF、DOCX 和 Google Docs 内容转换为 Confluence 页面，保留文档结构和附件，并同步后续源文件修订。 |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | 通过“起草 → 测试 → 审查 → 改进”的循环来创建、验证并打包 agent skill。 |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | 一并读取已暂存和未暂存的变更，或你指定的范围，结合最近的提交历史，给出 5 条符合本仓库风格的 commit message 建议。 |
-| [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | 编写或整理开发设计文档时遵循的规则，以及逐步收窄目录的 5 步流程。[韩文指南](skills/technical-design-writer/README.ko.md) |
-| [`tiki-taka`](skills/tiki-taka/SKILL.md) | 让当前 agent 与对面的 Claude/Codex 会话进行有轮次限制的辩论，揭示并收敛争议点。[韩文指南](skills/tiki-taka/README.ko.md) |
+| [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | 编写或整理开发设计文档时遵循的规则，以及逐步收窄目录的 5 步流程。[韩文指南](skills/technical-design-writer/SKILL.ko.md) |
+| [`tiki-taka`](skills/tiki-taka/SKILL.md) | 让当前 agent 与对面的 Claude/Codex 会话进行有轮次限制的辩论，揭示并收敛争议点。[韩文指南](skills/tiki-taka/SKILL.ko.md) |
 
 ## 相关链接
 

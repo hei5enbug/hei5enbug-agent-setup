@@ -1,97 +1,92 @@
-# 한국어 기술 설계 문장
+# Korean technical design prose
 
-한국어 설계 문서에서는 정확성, 계약 보존, 문법, 일관성, 자연스러움 순으로 판단한다.
-자연스럽게 보이려고 의미, 맞춤법, 띄어쓰기, 어조를 흔들지 않는다.
+For Korean design documents, judge accuracy, contract preservation, grammar, consistency, and naturalness
+in that order. Do not disturb meaning, spelling, spacing, or register merely to sound natural.
 
-## 작성 원칙
+## Writing principles
 
-- 영어 초안을 번역하지 말고 처음부터 한국어로 쓴다. 번역은 번역 요청일 때만 한다.
-- 사용자가 정한 문체가 없으면 설명과 규칙은 `한다`체로 쓴다.
-  절차의 직접 지시는 한 가지 명령형으로 통일한다.
-- 코드, 식별자, 경로, 명령어, UI 문자열, 고유명사, 직접 인용은 원문 그대로 보존한다.
-- 수치, 날짜, 단위, 인과관계, 부정, 가능성, 의무, 범위, 예외를 수정 전후로 대조한다.
-- 표준 맞춤법과 띄어쓰기를 따른다. 일부러 오류나 불규칙성을 넣지 않는다.
-- 코드 블록은 한국어 검토 대상에서 제외한다.
-  코드 밖 설명과 주석은 요청 범위일 때만 검토한다.
+- Draft directly in Korean rather than translating an English draft. Translate only for a translation request.
+- Unless the user specifies a style, use the formal Korean `한다` register for explanations and rules.
+  Use one consistent imperative form for direct procedural instructions.
+- Preserve code, identifiers, paths, commands, UI strings, proper nouns, and direct quotations exactly.
+- Compare facts, dates, units, causality, negation, possibility, obligation, scope, and exceptions before and after.
+- Follow standard Korean spelling and spacing. Do not introduce deliberate errors or irregularity.
+- Exclude code blocks from Korean prose review. Review prose outside code and comments only when they are in scope.
 
-## 주어와 서술어
+## Subjects and predicates
 
-- 행위자가 알려져 있고 중요하면 능동문으로 쓴다.
-  행위자가 중요하지 않거나 알 수 없을 때만 피동문을 쓴다.
-- 시스템이나 도구의 실제 동작을 설명할 때는 시스템이나 도구를 주어로 써도 된다.
-- 같은 주어는 문맥이 분명할 때 생략한다.
-  주어 전환, 대비, 책임 구분이 있으면 주어를 다시 쓴다.
-- 주어와 서술어만 읽어도 성립해야 한다.
-  추상 명사가 행동하는 문장은 실제 행위자나 상태 변화로 바꾼다.
-- 한 문장에는 한 주장을 둔다. 조건, 동작, 결과가 하나의 규칙을 이룰 때는 함께 둔다.
+- Use active voice when the actor is known and material. Use passive voice only when the actor is immaterial or unknown.
+- A system or tool may be the subject when describing what it actually does.
+- Omit a repeated subject when context is clear. Restate it when the subject changes or contrast and ownership matter.
+- A sentence must remain valid when reduced to its subject and predicate.
+  Replace an abstract noun that appears to act with the actual actor or state change.
+- Keep one claim per sentence. A condition, action, and result may stay together when they form one rule.
 
-## 용어와 어휘
+## Terminology and wording
 
-- 프로젝트 용어집, 계약 이름, 공식 제품명, 업계 표준 용어를 쉬운 말보다 우선한다.
-- 마땅한 한국어가 없거나 한국어가 더 낯설면 통용되는 외래어를 쓴다.
-  억지로 순화하지 않는다.
-- 약어는 반복 사용이나 검색에 도움이 될 때만 처음 한 번 정의한다.
-- 정확한 복수 구분이 필요하지 않으면 수량 표현과 `들`을 겹쳐 쓰지 않는다.
-- `본`, `해당`, `이것`, `그것` 대신 대상 이름을 쓰거나 문맥이 분명하면 생략한다.
-- `중요한`, `효과적인`, `혁신적인`, `강력한` 같은 평가어는 기준이나 근거가 있을 때만 쓴다.
-- `전략적 함의`처럼 `-적`과 추상 명사가 겹쳐 뜻이 흐려지면 실제 의미를 풀어 쓴다.
-- `진행`, `수행`, `실시`, `처리`가 실제 동작을 가리키지 않으면 구체적인 동사로 바꾼다.
+- Prefer the project glossary, contract names, official product names, and industry terms over simpler wording.
+- Use an established loanword when no suitable Korean term exists or the Korean form is less familiar.
+  Do not force a native-Korean replacement.
+- Define an abbreviation once only when repetition or searchability benefits.
+- Do not combine a quantity expression with `들` unless an exact plural distinction is necessary.
+- Replace `본`, `해당`, `이것`, and `그것` with the object name, or omit them when context is clear.
+- Use evaluative words such as `중요한`, `효과적인`, `혁신적인`, and `강력한` only with a criterion or evidence.
+- Expand stacked `-적` forms and abstract nouns, such as `전략적 함의`, when they obscure the actual meaning.
+- Replace vague operation nouns such as `진행`, `수행`, `실시`, and `처리` with the concrete verb.
 
-## 번역투 판정
+## Translationese assessment
 
-번역투 신호 목록은 이 스킬 폴더를 기준으로 한 `../humanize-korean/references/patterns.md`의
-`A. Translationese` 표를 읽어 적용한다. 경로는 항상 스킬 폴더에서 시작하며, 절대 경로나 호스트
-설치 위치를 쓰지 않는다. 그 파일이 없으면 아래 규칙만 적용하고 신호 목록을 참조하지 못했다고
-보고한다.
+Read the `A. Translationese` table in `../humanize-korean/references/patterns.md` and apply its signals.
+Resolve the path from this skill directory. Never use an absolute path or host installation location.
+If the file is absent, apply the remaining rules here and report that the signal list was unavailable.
 
-표현을 문자열만 보고 금지하지 않는다. 문장에서 맡은 의미를 확인하고,
-더 직접적인 표현이 같은 뜻을 보존할 때만 바꾼다.
+Do not prohibit an expression from its string alone. Check its role in the sentence and change it only when
+a more direct expression preserves the same meaning.
 
-설계 문서에서는 다음 판단이 신호 목록보다 우선한다.
+For design documents, these judgments override the signal list:
 
-- 코드, 설정, 인터페이스에 그대로 있는 계약 문자열은 번역투로 보여도 바꾸지 않는다.
-  `되어진다`가 상태 이름이면 그대로 둔다.
-- `할 수 있다`는 실제 능력, 허가, 가능성일 때만 남긴다.
-  확정된 동작과 결과는 단정형으로 쓴다.
-- `할 것이다`는 예측, 의지, 계획일 때만 남긴다.
-  현재 계약과 확정된 동작은 현재형으로 쓴다.
-- `X에 기반하여`는 근거, 입력, 도구, 토대 중 실제 관계를 구분해 쓴다.
-- `X를 위해`는 목적이 설계 판단에 필요할 때만 남기고,
-  목적이 자명하거나 동사로 직접 드러나면 줄인다.
+- Preserve a contract string that exists verbatim in code, configuration, or an interface even if it looks
+  like translationese. Keep `되어진다` when it is a state name.
+- Keep `할 수 있다` only for actual capability, permission, or possibility.
+  State confirmed behavior and results directly.
+- Keep `할 것이다` only for a prediction, intention, or plan.
+  Use present tense for current contracts and confirmed behavior.
+- Distinguish whether `X에 기반하여` denotes evidence, input, tool, or foundation.
+- Keep `X를 위해` only when the purpose matters to the design decision.
+  Reduce it when the purpose is obvious or the verb already expresses it.
 
-`결론적으로`, `정리하면`, `앞서 설명했듯이` 같은 메타 표현은 새 정보가 없으면 지운다.
-접속사는 논리 관계를 오해할 수 있을 때만 쓴다.
-사람이 쓴 것처럼 보이려고 문장 길이, 목록 길이, 어미를 일부러 바꾸지 않는다.
+Remove meta phrases such as `결론적으로`, `정리하면`, and `앞서 설명했듯이` when they add no information.
+Use a connective only when omitting it could obscure the logical relationship.
+Do not vary sentence length, list length, or endings merely to look human-written.
 
-## 문장부호와 형식
+## Punctuation and format
 
-- 연결 어미 뒤 쉼표는 긴 절의 경계를 분명히 해야 할 때만 쓴다.
-  주어와 서술어를 쉼표로 가르지 않는다.
-- 목록 도입문은 완전한 문장으로 끝낸다.
-  시간, 비율, 키와 값, 코드 문법이 아니면 콜론을 남용하지 않는다.
-- 독립된 대안을 나열할 때는 쉼표를 쓴다.
-  공통 성분을 줄이거나 한 묶음인 항목에만 가운뎃점을 쓴다.
-- 직접 인용은 큰따옴표, 인용 안의 인용은 작은따옴표, 코드와 식별자는 백틱을 쓴다.
-- 굵게는 핵심 경고나 용어에만 쓴다.
-  이모지는 사용자나 템플릿이 요구하지 않으면 쓰지 않는다.
-- 같은 수준의 목록은 부호, 문장 역할, 종결 방식을 통일한다.
+- Use a comma after a connective ending only when needed to clarify a long clause boundary.
+  Do not separate subject and predicate with a comma.
+- End a list introduction as a complete sentence. Do not overuse colons except for time, ratios, keys and values,
+  or code syntax.
+- Use commas for independent alternatives. Use a middle dot only for shared elements or one grouped expression.
+- Use double quotation marks for direct quotation, single quotation marks inside it, and backticks for code
+  and identifiers.
+- Use bold only for a critical warning or term. Do not use emoji unless the user or template requires them.
+- Keep markers, grammatical roles, and endings consistent across parallel list items.
 
-## 숫자와 시간
+## Numbers and time
 
-- 정확한 기술 수치에는 아라비아 숫자를 쓴다. 큰 수에는 세 자리마다 쉼표를 쓴다.
-- 계수 단위는 붙여 쓴다: `3개`, `5명`, `2회`.
-- SI 단위 기호는 띄어 쓴다: `10 ms`, `5 GB`, `25 °C`. 퍼센트와 각도는 `50%`, `90°`로 쓴다.
-- 프로젝트 규칙이 없으면 기술 문서의 날짜는 `YYYY-MM-DD`, 시간은 24시간제로 쓴다.
-- 독자가 여러 시간대에 있거나 해석이 달라질 수 있으면 시간대를 함께 쓴다.
+- Use Arabic numerals for exact technical quantities. Add a thousands separator every three digits.
+- Attach Korean counting units: `3개`, `5명`, `2회`.
+- Put a space before SI symbols: `10 ms`, `5 GB`, `25 °C`. Do not space percent and angle: `50%`, `90°`.
+- Unless the project says otherwise, write technical dates as `YYYY-MM-DD` and use 24-hour time.
+- Include a timezone when readers span timezones or interpretation could differ.
 
-## 최종 검토
+## Final review
 
-1. 맞춤법, 띄어쓰기, 조사, 어미, 문장부호를 검사한다.
-2. 용어, 어조, 숫자, 단위, 날짜, 목록, 강조 형식을 검사한다.
-3. 코드와 계약 문자열, 수치, 인과관계, 부정, 가능성, 의무, 범위가 보존됐는지 대조한다.
-4. 명사화, 번역투, 메타 표현, 불필요한 주어와 평가어를 문맥에 따라 줄인다.
-5. 고친 문장이 원문보다 구체적이고 짧으면서 같은 뜻인지 확인한다.
+1. Check spelling, spacing, particles, endings, and punctuation.
+2. Check terminology, register, numbers, units, dates, lists, and emphasis.
+3. Compare code and contract strings, facts, causality, negation, possibility, obligation, and scope.
+4. Reduce nominalization, translationese, meta phrases, unnecessary subjects, and unsupported evaluation in context.
+5. Confirm that each revision is more concrete and concise while preserving the same meaning.
 
-접미사나 마지막 글자만으로 표현을 틀렸다고 판단하지 않는다.
-예를 들어 UI 상태 `처리됨`은 계약 문자열일 수 있다.
-요구사항의 `해야 함`은 프로젝트 형식일 수 있다. 문맥과 역할로 판단한다.
+Do not judge an expression from a suffix or final character alone.
+For example, UI state `처리됨` may be a contract string.
+Requirement wording such as `해야 함` may be a project format. Judge it by context and role.
