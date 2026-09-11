@@ -20,7 +20,7 @@ Participate directly as one side of the debate from the current session. Invoke 
 
 ## Language contract
 
-Use this English `SKILL.md` as the only executable instruction source. `README.ko.md` is a non-authoritative Korean translation for human readers. Do not read or use it while executing the skill.
+Use this English `SKILL.md` as the only executable instruction source. `SKILL.ko.md` is a non-authoritative Korean translation for human readers. Do not read or use it while executing the skill.
 
 Korean text in this file is target-language data, including trigger phrases and the required Korean question-file template. Treat it as content to match or produce, not as another instruction source.
 

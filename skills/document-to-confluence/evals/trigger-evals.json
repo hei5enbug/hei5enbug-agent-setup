@@ -1,0 +1,82 @@
+[
+  {
+    "query": "Publish this Markdown architecture note as a Confluence page with its diagrams and tables.",
+    "should_trigger": true
+  },
+  {
+    "query": "Import pages 3-12 of this scanned PDF into Confluence and preserve the footnotes.",
+    "should_trigger": true
+  },
+  {
+    "query": "Keep our Confluence runbook synchronized with this DOCX file.",
+    "should_trigger": true
+  },
+  {
+    "query": "Move this saved HTML report into Confluence without the website navigation.",
+    "should_trigger": true
+  },
+  {
+    "query": "Copy every tab in this Google Doc into one Confluence page.",
+    "should_trigger": true
+  },
+  {
+    "query": "The images in this imported Confluence document appear as attachment cards. Repair them.",
+    "should_trigger": true
+  },
+  {
+    "query": "Re-publish the Confluence specification from the latest source document without losing page-only notes.",
+    "should_trigger": true
+  },
+  {
+    "query": "Convert this two-column PDF with tables into an accessible Confluence page.",
+    "should_trigger": true
+  },
+  {
+    "query": "Turn this HTML fragment into a Confluence page and attach its local figures.",
+    "should_trigger": true
+  },
+  {
+    "query": "Fix the merged table headers and broken diagrams on this imported Confluence page.",
+    "should_trigger": true
+  },
+  {
+    "query": "Write a Markdown design document for the new authentication flow.",
+    "should_trigger": false
+  },
+  {
+    "query": "Leave a review comment on this Confluence page and mention the author.",
+    "should_trigger": false
+  },
+  {
+    "query": "Search Confluence for pages about incident response.",
+    "should_trigger": false
+  },
+  {
+    "query": "Create an empty Confluence page under the Engineering space.",
+    "should_trigger": false
+  },
+  {
+    "query": "Move this existing Confluence page to another parent.",
+    "should_trigger": false
+  },
+  {
+    "query": "Convert this PDF into Markdown and save it locally.",
+    "should_trigger": false
+  },
+  {
+    "query": "Publish this DOCX file to Notion.",
+    "should_trigger": false
+  },
+  {
+    "query": "Review this Google Doc for unclear technical requirements.",
+    "should_trigger": false
+  },
+  {
+    "query": "Change the viewing permissions of this Confluence space.",
+    "should_trigger": false
+  },
+  {
+    "query": "Delete the resolved comments from this Confluence page.",
+    "should_trigger": false
+  }
+]

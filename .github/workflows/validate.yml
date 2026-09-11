@@ -43,7 +43,6 @@ jobs:
           set -euo pipefail
           files=$(find skills -path '*/tests/*.mjs' -type f | sort)
           if [ -n "${files}" ]; then
-            # shellcheck disable=SC2086
             node --test ${files}
           else
             echo "no .mjs tests"

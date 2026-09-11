@@ -1,0 +1,41 @@
+{
+  "skill_name": "document-to-confluence",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Publish this Markdown design document to Confluence. It contains comparison tables, repository-relative links, local images, and two Mermaid diagrams.",
+      "expected_output": "The agent selects only the Markdown source adapter, captures a stable source revision, normalizes all semantic blocks, replaces unresolved local links, renders and inspects both diagrams, uploads assets before referencing them, validates text parity within the script's supported subset, and verifies the stored page.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Import this saved HTML report into Confluence. Keep the article, figures, captions, and tables, but exclude the site navigation and cookie banner.",
+      "expected_output": "The agent parses the source without executing untrusted scripts, distinguishes document content from application chrome, preserves DOM and rendered reading order, resolves authorized assets, normalizes semantic blocks, and records the excluded navigation and cookie banner as intentional omissions.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Convert pages 4 through 18 of this scanned, two-column PDF into a Confluence page. It includes tables, equations, footnotes, and several low-quality scans.",
+      "expected_output": "The agent processes only the requested pages, establishes column reading order, runs OCR with the document language when available, retains page and region locators, checks names, numbers, formulas, tables, and footnotes against page images, and does not publish uncertain OCR as verified content.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Publish this DOCX specification to Confluence. Use the accepted text, preserve heading numbering and tables, include figures, and omit reviewer comments.",
+      "expected_output": "The agent reads DOCX styles and relationships, uses accepted visible text, excludes comments, preserves meaningful numbering, merged cells, links, figures, captions, and notes, records any unsupported embedded-object downgrade, and verifies the source revision before saving.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Copy all tabs from this Google Doc into one Confluence page and keep the people, date, and Drive-file smart chips useful to readers.",
+      "expected_output": "The agent uses an authenticated Google Drive or Docs connector, captures the file ID and revision, preserves tab order and native structure, converts smart chips to useful visible text and stable links when readers have access, handles private targets explicitly, and checks the revision again before publishing.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "The pictures on this existing Confluence page appear as attachment cards, and one table lost its merged header. Repair only those problems.",
+      "expected_output": "The agent reads the complete current body, preserves content outside the repair, uses inline images with measured dimensions, reconstructs the merged header only from available evidence, validates the body, protects against a concurrent page update, and verifies the saved rendering.",
+      "files": []
+    }
+  ]
+}

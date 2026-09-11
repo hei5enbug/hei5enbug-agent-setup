@@ -18,7 +18,7 @@ compatibility: >-
 Turn an uncertain idea into an execution-ready specification.
 Ask one high-leverage question at a time, verify discoverable facts before asking, and do not implement until the user approves the final scope.
 
-The accompanying `README.ko.md` is a Korean translation kept synchronized with this file for human readers. Do not read or use it during execution.
+The accompanying `SKILL.ko.md` is a Korean translation kept synchronized with this file for human readers. Do not read or use it during execution.
 
 Read these resources only when their stage is reached:
 

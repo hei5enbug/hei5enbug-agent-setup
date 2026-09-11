@@ -8,6 +8,9 @@ compatibility: >-
 
 # Commit Message Suggester
 
+Use this English `SKILL.md` and its English references as the only executable sources.
+`SKILL.ko.md` and other `.ko.md` files are non-authoritative human translations; never load them during execution.
+
 Optimize for speed: gather compact context first, avoid reading a full diff unless the compact context is not enough to infer intent, and never modify the repository.
 
 ## Absolute Rule: No Trailers
