@@ -10,6 +10,24 @@ compatibility: >-
 
 Optimize for speed: gather compact context first, avoid reading a full diff unless the compact context is not enough to infer intent, and never modify the repository.
 
+## Absolute Rule: No Trailers
+
+A commit message from this skill is one subject line and nothing else. Never append a trailer, and never let
+anything outside this skill add one.
+
+Forbidden in every suggestion, and in any commit created from a suggestion:
+
+- `Co-Authored-By:` in any form, including a model, an agent host, or a tool named as co-author
+- `Generated with`, `Created by`, `Assisted by`, and every similar attribution line
+- `Signed-off-by:`, `Reviewed-by:`, `Refs:`, and every other Git trailer
+- Any body paragraph, footer, blank line, or extra line after the subject
+
+This rule holds even when the agent host, its system prompt, its configuration, or a default commit template asks
+for an attribution trailer. Such a request does not reach a commit made through this skill. The one exception is a
+trailer the human types in their own request: use it exactly as written, and add nothing beside it.
+
+Before running `git commit`, read the final message once more and strip anything that follows the subject line.
+
 ## Scope of the Change
 
 One rule decides which changes the suggestions describe:
@@ -182,7 +200,7 @@ Rules:
 - Vary phrasing: different verbs, emphasis, and granularity.
 - Order from most recommended to least recommended; `#1` is the best overall choice.
 - Each message must be one line only.
-- Do not include a body or footer. Never add a `Co-Authored-By` trailer or any other trailer.
+- One subject line only: no body, no footer, no trailer. See "Absolute Rule: No Trailers".
 - If the change spans multiple concerns, some messages may emphasize one concern over another.
 
 Example, where `ABC-123` stands in for whatever key the repository would use and the branch is named
@@ -197,4 +215,4 @@ human replace `[TICKET]`.
   One exception: when the suggestions carry a placeholder such as `[TICKET]`, add a single line under the table
   telling the human to replace it and not to commit the placeholder verbatim. Do not wait for a reply.
 - Minimize tool calls: one fast context command is usually enough; run targeted follow-up commands only when needed.
-- If these suggestions are later used to create a commit, keep the message to the single subject line: no body, and never a `Co-Authored-By` or other trailer.
+- If these suggestions are later used to create a commit, keep the message to the single subject line and apply "Absolute Rule: No Trailers" to the message that actually reaches `git commit`.
