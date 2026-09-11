@@ -34,6 +34,7 @@ hei5enbug-agent-setup/
 ├── standalone-skills/
 │   └── omo-model-config/
 └── skills/
+    ├── confluence-ops/
     ├── decision-navigator/
     ├── deep-interview/
     ├── flowchart-design/
@@ -118,6 +119,7 @@ un dato del idioma objetivo, como frases de activación, ejemplos, etiquetas de 
 
 | Skill | Qué hace |
 |---|---|
+| [`confluence-ops`](skills/confluence-ops/SKILL.md) | Reglas internas para trabajar con Confluence: prioriza `confluence-cli` sobre herramientas genéricas, mantiene las credenciales fuera de la línea de comandos y logra que el marcado de comentarios y las menciones funcionen bien. |
 | [`decision-navigator`](skills/decision-navigator/SKILL.md) | Convierte un trabajo que abarca varias sesiones en tickets de decisión y los resuelve uno a uno hasta que la ruta de implementación queda clara. |
 | [`deep-interview`](skills/deep-interview/SKILL.md) | Realiza una entrevista socrática que puntúa la ambigüedad del requisito tras cada respuesta y no avanza a la ejecución hasta que baja del umbral. [Guía en coreano](skills/deep-interview/README.ko.md) |
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | Un estándar de diseño compartido para que los diagramas de flujo hechos en SVG, HTML/CSS, Figma o draw.io se vean como parte de un mismo sistema de diseño. |

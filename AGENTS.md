@@ -10,6 +10,9 @@
   Otherwise investigate in the main session.
 - Content on a hosted service (Google Drive/Docs/Slides/Sheets, Atlassian, Azure DevOps, Figma, Slack, Notion): reach it through that service's MCP tools, not anonymous fetching (`WebFetch`, `curl`).
   Anonymous fetching carries no session, so private links fail with 401. Fetch directly only for genuinely public pages, or when no MCP server covers the host.
+- Confluence is an explicit exception to the preceding hosted-service rule. Before choosing a tool for any
+  Confluence read, search, create, update, comment, attachment, or label task, load the `confluence-ops` skill
+  and follow it.
 - Ask before destructive, irreversible, or production-impacting actions. Never expose secrets.
 - Always ask for explicit user approval before accessing, listing, retrieving, decoding, or using Azure or Kubernetes protected security values,
   unless the next rule authorizes Azure access. Protected values include credentials, tokens, keys, certificates, kubeconfigs, Key Vault values,
