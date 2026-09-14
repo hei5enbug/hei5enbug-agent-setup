@@ -39,6 +39,8 @@ hei5enbug-agent-setup/
 │   ├── codex-agents.md
 │   ├── confluence.md
 │   ├── documentation.md
+│   ├── implementation-planning.md
+│   ├── independent-model-validation.md
 │   ├── protected-values.md
 │   ├── services.md
 │   └── session/
@@ -119,6 +121,10 @@ Codex가 제공하는 `PLUGIN_ROOT`가 설치 디렉터리를 가리키면 로�
 핵심 규칙은 요청이 바뀌어도 세션 컨텍스트에 남는다.
 서비스 접근, 보호된 보안 값 접근, 에이전트 사용, 문서 작성의 세부 규칙은 관련 작업 전에만 읽는다.
 요청을 처리하던 중 관련 작업이 생겨도 먼저 참조를 읽는다.
+세션 컨텍스트는 구현 계획과 설계 문서를 구분하고 두 작업의 실행 조건을 유지한다.
+`instructions/implementation-planning.md`는 구현 계획의 6단계 절차와 템플릿을 관리한다.
+`technical-design-writer`는 설계 문서와 RFC를 담당한다.
+`instructions/independent-model-validation.md`는 두 결과물에 공통으로 적용되는 독립 검증 규칙을 관리한다.
 로더는 각 세션 지침의 조건부 링크를 설치된 플러그인 내부의 절대 경로로 바꾼다.
 세션을 시작할 때 조건부 참조 본문까지 읽지는 않는다.
 
@@ -194,7 +200,7 @@ node --test skills/document-to-confluence/tests/test_render_diagrams.mjs
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Markdown, HTML, PDF, DOCX, Google Docs 문서를 Confluence 페이지로 변환하고, 문서 구조와 첨부 파일을 보존하며, 이후 원본 변경도 페이지에 반영합니다. [한국어 안내](skills/document-to-confluence/SKILL.ko.md) |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | 초안 작성 → 테스트 → 검토 → 개선 순환을 통해 에이전트 스킬을 만들고, 검증하고, 패키징합니다. [한국어 안내](skills/skill-builder/SKILL.ko.md) |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | 스테이징된 변경과 스테이징되지 않은 변경을 함께, 또는 사용자가 지정한 범위를 최근 커밋 이력과 함께 읽어, 이 저장소의 스타일에 맞는 커밋 메시지 5개를 제안합니다. [한국어 안내](skills/suggest-commit/SKILL.ko.md) |
-| [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | 개발 설계 문서를 새로 쓰거나 정리할 때 따르는 규칙과, 목차를 단계적으로 좁혀 가는 5단계 절차입니다. [한국어 안내](skills/technical-design-writer/SKILL.ko.md) |
+| [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | 구현 계획을 담당하지 않고 기술 설계 문서와 RFC를 작성하거나 검토합니다. [한국어 안내](skills/technical-design-writer/SKILL.ko.md) |
 | [`tiki-taka`](skills/tiki-taka/SKILL.md) | 현재 에이전트와 반대쪽 Claude/Codex 세션이 교환 횟수를 제한한 토론을 벌여 쟁점을 드러내고 수렴시킵니다. [한국어 안내](skills/tiki-taka/SKILL.ko.md) |
 
 ## 관련 링크

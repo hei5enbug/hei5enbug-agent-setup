@@ -27,10 +27,14 @@ in that order. Do not disturb meaning, spelling, spacing, or register merely to 
 - Prefer the project glossary, contract names, official product names, and industry terms over simpler wording.
 - Use an established loanword when no suitable Korean term exists or the Korean form is less familiar.
   Do not force a native-Korean replacement.
+- Never treat a loanword and a native-Korean alternative as a global substitution pair. Choose each form
+  from its context, audience, genre, established project usage, and natural collocation. A familiar loanword
+  may be more natural than a technically possible native-Korean replacement.
 - Define an abbreviation once only when repetition or searchability benefits.
 - Do not combine a quantity expression with `들` unless an exact plural distinction is necessary.
 - Replace `본`, `해당`, `이것`, and `그것` with the object name, or omit them when context is clear.
-- Use evaluative words such as `중요한`, `효과적인`, `혁신적인`, and `강력한` only with a criterion or evidence.
+- Use evaluative words such as `중요한`, `효과적인`, `혁신적인`, and `강력한` only with a criterion or
+  evidence.
 - Expand stacked `-적` forms and abstract nouns, such as `전략적 함의`, when they obscure the actual meaning.
 - Replace vague operation nouns such as `진행`, `수행`, `실시`, and `처리` with the concrete verb.
 
@@ -55,7 +59,8 @@ For design documents, these judgments override the signal list:
 - Keep `X를 위해` only when the purpose matters to the design decision.
   Reduce it when the purpose is obvious or the verb already expresses it.
 
-Remove meta phrases such as `결론적으로`, `정리하면`, and `앞서 설명했듯이` when they add no information.
+Remove meta phrases such as `결론적으로`, `정리하면`, and `앞서 설명했듯이` when they add no
+information.
 Use a connective only when omitting it could obscure the logical relationship.
 Do not vary sentence length, list length, or endings merely to look human-written.
 

@@ -57,6 +57,41 @@
         "The positional reference is replaced by a stable path-and-heading reference proposal.",
         "The safety claim requires a criterion and evidence rather than being accepted at face value."
       ]
+    },
+    {
+      "id": 6,
+      "prompt": "Create a design document for replacing a batch export with an event stream. Explain the target contract, failure behavior, constraints, and the trade-off against keeping the batch path. I did not ask for an implementation plan. Validate the completed draft as required.",
+      "expected_output": "The result is a minimal target-design document rather than an execution plan, and it receives exactly one read-only review from the required other model family before finalization.",
+      "files": [],
+      "expectations": [
+        "The document focuses on the selected target design and includes only current-state problems needed to justify a target decision.",
+        "The document includes material contracts, constraints, failure behavior, alternatives, and trade-offs without speculative extension points.",
+        "Execution slices and work order are omitted because the user did not request them and they are not needed to establish feasibility.",
+        "Exactly one eligible reviewer from the other model family checks the draft in read-only mode, and the final response records the actual model and effort or states why that validation could not run."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Implement the retry fix described in the issue and summarize the result. The issue briefly mentions an earlier architecture proposal, but I am not asking for a plan, design document, or RFC.",
+      "expected_output": "The technical-design-writer skill does not activate and no planning or design workflow is chained from the implementation task.",
+      "files": [],
+      "expectations": [
+        "The response treats this as a general implementation request rather than technical design work.",
+        "A passing mention of an architecture proposal does not trigger a design skill or independent design-document validation.",
+        "The response implements and summarizes the requested fix without adding a plan or RFC deliverable."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Improve a Korean design document whose editor mechanically replaced familiar loanwords and established project terms with awkward native-Korean alternatives. Keep every fact and contract intact, and choose the natural term for each context rather than applying a replacement list.",
+      "expected_output": "The document restores natural, context-appropriate terminology without treating loanword and native-Korean pairs as global substitutions.",
+      "files": [],
+      "expectations": [
+        "Terminology choices follow context, audience, genre, project usage, and natural collocation.",
+        "Familiar loanwords and established project terms remain when they are more natural or precise than a possible native-Korean alternative.",
+        "The response does not infer a global substitution table from examples or apply mechanical search-and-replace edits.",
+        "Facts, contracts, identifiers, register, and formatting remain unchanged."
+      ]
     }
   ]
 }

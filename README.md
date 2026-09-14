@@ -1,6 +1,6 @@
 # hei5enbug-agent-setup
 
-**English** | [한국어](./SKILL.ko.md) | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md) | [Español](./README.es.md) | [Deutsch](./README.de.md) | [Français](./README.fr.md)
+**English** | [한국어](./README.ko.md) | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md) | [Español](./README.es.md) | [Deutsch](./README.de.md) | [Français](./README.fr.md)
 
 A portable collection of custom skills for AI coding agents, built to be shared across multiple agent hosts without host-specific rewrites.
 
@@ -35,6 +35,8 @@ hei5enbug-agent-setup/
 │   ├── codex-agents.md
 │   ├── confluence.md
 │   ├── documentation.md
+│   ├── implementation-planning.md
+│   ├── independent-model-validation.md
 │   ├── protected-values.md
 │   ├── services.md
 │   └── session/
@@ -111,7 +113,11 @@ for locating the script. No user or project instruction file is copied, linked, 
 | A plugin update is installed | A new session reads that installed version. A repository push alone changes nothing locally. |
 
 Core rules remain in session context across requests. Service access, protected-value access, agent use,
-and documentation details load only before the matching action, even if it arises later in a request.
+documentation, and requested planning or design details load only before the matching action, even if it
+arises later in a request. The session context distinguishes implementation plans from design documents and
+keeps their trigger boundary. `instructions/implementation-planning.md` owns the six-stage implementation
+plan workflow and template. `technical-design-writer` owns design-document behavior, and
+`instructions/independent-model-validation.md` owns their shared one-pass cross-family validation contract.
 The loader resolves each session file's conditional links to absolute paths inside the installed plugin.
 It does not read conditional reference bodies at startup.
 
@@ -185,7 +191,7 @@ execution-path isolation; semantic equivalence still requires human or model rev
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Converts Markdown, HTML, PDF, DOCX, and Google Docs content into Confluence pages, preserves document structure and assets, and keeps pages synchronized with source revisions. [Korean guide](skills/document-to-confluence/SKILL.ko.md). |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | Creates, tests, and packages agent skills through a draft → test → review → improve loop. [Korean guide](skills/skill-builder/SKILL.ko.md). |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | Reads the staged and unstaged changes, or the scope you name, plus recent commit history, then suggests five commit messages that match the repo's style. [Korean guide](skills/suggest-commit/SKILL.ko.md). |
-| [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | Rules and a five-step narrowing process for writing or cleaning up technical design docs. [Korean guide](skills/technical-design-writer/SKILL.ko.md). |
+| [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | Writes or reviews technical design documents and RFCs without taking ownership of implementation planning. [Korean guide](skills/technical-design-writer/SKILL.ko.md). |
 | [`tiki-taka`](skills/tiki-taka/SKILL.md) | Runs a turn-limited debate between the current agent and an opposing Claude/Codex session to surface and resolve issues. [Korean guide](skills/tiki-taka/SKILL.ko.md). |
 
 ## Related
