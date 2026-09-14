@@ -1,12 +1,14 @@
 ---
 name: technical-design-writer
 description: >-
-  Create, improve, or review implementation-ready technical design documents, architecture
-  proposals, RFCs, system designs, data designs, API designs, and design outlines. Use for requests
-  such as "설계 문서 작성", "설계 문서 개선", "설계 문서 목차", "design doc", or "RFC review".
+  Create, improve, or review technical design documents, architecture proposals, RFCs, system
+  designs, data designs, API designs, and design outlines. Use when the user explicitly requests
+  design work or directly invokes this skill, with phrases such as "설계 문서 작성", "설계 문서 개선",
+  "설계 문서 목차", "design doc", or "RFC review".
   Enforce evidence, complete design coverage, explicit trade-offs, precise contracts, predictable
   structure, natural Korean, effective tables and diagrams, and stable references. Do not use for
-  translation, generic copyediting, user guides, release notes, or code review without design intent.
+  translation, generic copyediting, implementation planning, user guides, release notes, general
+  implementation, diagnosis, summarization, or code review without explicit design intent.
 metadata:
   version: "2.1.1"
 compatibility: >-
@@ -26,6 +28,11 @@ Use this file and the references it explicitly requires as executable instructio
 
 For every Korean deliverable, read `references/korean-writing.md` before drafting or reviewing.
 
+For Create and Improve modes, read `references/design-documents.md` before drafting. That file owns the
+target-design boundary, design-document workflow, and template. The session instructions supply the single
+canonical independent model validation rules. If either required reference is unavailable, report what is
+missing and stop the affected mode instead of reconstructing its rules.
+
 `references/korean-writing.md` reads one sibling file. Resolved from this skill's own directory,
 `../humanize-korean/references/patterns.md` supplies the translationese signal table. When that file
 is absent, apply the rest of `korean-writing.md` and report that the signal list was unavailable.
@@ -41,37 +48,6 @@ repository rules, supplied templates, and established project conventions overri
 | Create | Produce a complete design document from verified requirements and evidence. |
 | Improve | Preserve supported intent and contracts while repairing omissions, ambiguity, duplication, and structure. |
 | Review | Do not mutate files unless asked. Return prioritized findings with location, impact, and correction. |
-
-## Workflow
-
-1. Determine the mode, audience, reader goal, scope, required decisions, and evidence sources. For an
-   existing document, also identify unsupported claims, missing design coverage, and rule violations.
-2. Build a private coverage matrix from "Design coverage". Mark each concern applicable or inapplicable
-   with a reason. Do not add empty or irrelevant sections merely to expose the matrix.
-3. Finalize second-level headings before writing the body. Narrow the outline in five passes:
-   1. Start from the current structure or a first-level outline.
-   2. Give the document one reader goal and each section one non-overlapping responsibility.
-   3. Remove repeated summaries and put every table, diagram, and tool where it is used.
-   4. Order prerequisites before dependent decisions; merge related sections or split dense ones.
-   5. Expand through second-level headings and verify that every applicable coverage concern has one home.
-4. Gather source contracts and evidence. Prefer requirements, code, schemas, configuration, measured
-   results, and official interfaces over descriptive prose. Label unknowns and assumptions; never invent.
-5. Draft the opening first. State the selected design, reader outcome, scope, and material risks before
-   background or implementation detail.
-6. Draft the body directly in the target language. Apply "Design coverage", "Precision", "Structure",
-   and the required language reference.
-7. Plan terminology changes once for the entire scope. Record one old-to-new mapping, apply it across
-   all affected files, update references, and verify cited headings. Ask before renaming implementation
-   identifiers or externally visible contract names. Keep upstream source-data names and record files that
-   code reads by name outside the rename scope.
-8. When a decision reverses an earlier one, update every document that records the earlier decision in the
-   same change, and state why its original rationale no longer holds.
-9. Validate copied contracts, examples, commands, links, calculations, and diagrams with the strongest
-   available method. Do not claim validation that did not run.
-10. Separate unsupported content by "Unsupported content". Remove drafting notes and content that does
-    not help implementation, validation, operation, or approval.
-11. Run the completion gate. Then report outside the document what became an assumption or an open
-    question, what was removed, and where the working record file is.
 
 ## Design coverage
 
@@ -219,3 +195,5 @@ or human judgment.
 - [ ] Every acceptance criterion and validation item relies only on rules this document states or explicitly
       cites; no criterion presupposes an unstated rule.
 - [ ] No unnecessary content, duplicated source, unresolved placeholder, or unrecorded unsupported claim remains.
+- [ ] Create and Improve modes satisfied `references/design-documents.md` and the session-level independent
+      model validation contract.

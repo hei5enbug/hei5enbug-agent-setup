@@ -82,14 +82,25 @@ class SessionContextTest(unittest.TestCase):
     def test_references_are_absolute_and_details_stay_unloaded(self):
         context = self.context(self.run_hook("claude"))
         links = re.findall(r"\]\(<([^>]+)>\)", context)
-        self.assertEqual(len(links), 4)
+        self.assertEqual(len(links), 7)
         for link in links:
             self.assertTrue(Path(link).is_relative_to(self.root))
             self.assertTrue(Path(link).is_file())
         self.assertNotIn("## Azure skill authorization", context)
         self.assertNotIn("## Investigation", context)
         self.assertNotIn("# Documentation files", context)
+        self.assertNotIn("## 1. Intent and scope freeze", context)
+        self.assertNotIn("## Reviewer selection", context)
+        self.assertNotIn("Latest available Claude Fable", context)
         self.assertLess(len(context.encode("utf-8")), 9000)
+
+    def test_planning_routing_is_loaded_without_detailed_workflow(self):
+        context = self.context(self.run_hook("codex"))
+        self.assertIn("An implementation plan must let an executor proceed", context)
+        self.assertIn("This is an explicit exception to the preceding trigger boundary", context)
+        self.assertIn("instructions/implementation-planning.md", context)
+        self.assertIn("instructions/independent-model-validation.md", context)
+        self.assertNotIn("## 1. Intent and scope freeze", context)
 
     def test_changed_instructions_are_read_on_the_next_event(self):
         self.context(self.run_hook())
@@ -110,6 +121,20 @@ class SessionContextTest(unittest.TestCase):
 
     def test_missing_reference_reports_failure_without_partial_context(self):
         (self.root / "instructions/protected-values.md").unlink()
+        result = self.run_hook()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("instructions were not loaded", result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_missing_planning_reference_reports_failure_without_partial_context(self):
+        (self.root / "instructions/implementation-planning.md").unlink()
+        result = self.run_hook()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("instructions were not loaded", result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_missing_validation_reference_reports_failure_without_partial_context(self):
+        (self.root / "instructions/independent-model-validation.md").unlink()
         result = self.run_hook()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("instructions were not loaded", result.stderr)

@@ -27,6 +27,23 @@ If a required reference is missing, report it and pause the affected action inst
   access, read [protected-value access rules](../protected-values.md).
 - Before writing or editing any documentation file, read [documentation rules](../documentation.md).
 
+## Planning and design routing
+
+- An implementation plan must let an executor proceed without adding design decisions. A design document
+  communicates the target design and explains current problems only as needed to support it. If the requested
+  type remains unclear and the choice materially changes the result, ask the user.
+- Activate a skill for an implementation plan, design document, or RFC only when the user explicitly requests
+  that deliverable or directly invokes the skill. Do not infer it from general implementation, diagnosis, code
+  review, summarization, or a passing mention, and do not chain another skill from those tasks.
+- `document-to-confluence`, `suggest-commit`, and `technical-design-writer` remain automatic when their own
+  descriptions match the user's intent. This is an explicit exception to the preceding trigger boundary.
+- Before creating or revising an implementation plan, read
+  [implementation planning rules](../implementation-planning.md) and
+  [independent model validation](../independent-model-validation.md).
+- Before creating or revising a design document or RFC, read
+  [independent model validation](../independent-model-validation.md). The design-writing skill owns the
+  design-specific workflow and template.
+
 ## Replies
 
 - Choose terminology in this order: user or project glossary; literal implementation and contract names;
