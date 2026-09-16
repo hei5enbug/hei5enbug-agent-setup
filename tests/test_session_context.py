@@ -34,9 +34,16 @@ class SessionContextTest(unittest.TestCase):
         self.bin = self.base / "bin"
         self.bin.mkdir()
         (self.bin / "python3").symlink_to(sys.executable)
+        self.codex_home = self.base / "codex home"
+        self.explorer = self.codex_home / "agents" / "explorer.toml"
+        shutil.copytree(REPO_ROOT / "standalone-agents", self.root / "standalone-agents")
 
     def run_hook(self, host="codex", event="SessionStart", source="startup", payload=None, extra_env=None):
-        env = {"PATH": f"{self.bin}{os.pathsep}{os.defpath}", "CLAUDE_PLUGIN_ROOT": str(self.root)}
+        env = {
+            "PATH": f"{self.bin}{os.pathsep}{os.defpath}",
+            "CLAUDE_PLUGIN_ROOT": str(self.root),
+            "CODEX_HOME": str(self.codex_home),
+        }
         if host == "codex":
             env["PLUGIN_ROOT"] = str(self.root)
         env.update(extra_env or {})
@@ -166,11 +173,39 @@ class SessionContextTest(unittest.TestCase):
         self.assertIn("# Claude Code only", context)
 
     def test_hook_does_not_modify_user_or_project_files(self):
-        before = {p.relative_to(self.base): p.read_bytes() for p in self.base.rglob("*") if p.is_file()}
+        def snapshot():
+            return {
+                p.relative_to(self.base): p.read_bytes()
+                for p in self.base.rglob("*")
+                if p.is_file() and not p.is_relative_to(self.codex_home)
+            }
+
+        before = snapshot()
         self.context(self.run_hook())
         self.context(self.run_hook("claude"))
-        after = {p.relative_to(self.base): p.read_bytes() for p in self.base.rglob("*") if p.is_file()}
-        self.assertEqual(before, after)
+        self.assertEqual(before, snapshot())
+
+    def test_codex_session_provisions_the_bundled_explorer_agent(self):
+        self.assertFalse(self.explorer.exists())
+        self.context(self.run_hook("codex"))
+        self.assertEqual(
+            self.explorer.read_text(encoding="utf-8"),
+            (REPO_ROOT / "standalone-agents/codex-explorer.toml").read_text(encoding="utf-8"),
+        )
+
+    def test_provisioning_never_overwrites_an_existing_explorer_agent(self):
+        self.explorer.parent.mkdir(parents=True)
+        self.explorer.write_text('name = "explorer"\n', encoding="utf-8")
+        self.context(self.run_hook("codex"))
+        self.assertEqual(self.explorer.read_text(encoding="utf-8"), 'name = "explorer"\n')
+
+    def test_claude_session_never_provisions_a_codex_agent(self):
+        self.context(self.run_hook("claude"))
+        self.assertFalse(self.explorer.exists())
+
+    def test_unwritable_codex_home_still_delivers_context(self):
+        self.codex_home.write_text("not a directory", encoding="utf-8")
+        self.assertIn("Never expose secrets", self.context(self.run_hook("codex")))
 
     def test_all_instruction_links_resolve_in_the_bundle(self):
         paths = sorted((REPO_ROOT / "instructions").rglob("*.md"))

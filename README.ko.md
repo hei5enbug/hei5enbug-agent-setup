@@ -51,8 +51,10 @@ hei5enbug-agent-setup/
 ├── tests/
 ├── LICENSE
 ├── pyproject.toml
+├── agents/
+│   ├── ko/scout.ko.md
+│   └── scout.md
 ├── standalone-agents/
-│   ├── scout.md
 │   └── codex-explorer.toml
 ├── standalone-skills/
 │   └── omo-model-config/
@@ -73,11 +75,14 @@ hei5enbug-agent-setup/
 Codex와 Claude Code에 패키징합니다. `standalone-skills/` 디렉터리는 두 플러그인의 스킬
 검색 경로에 포함되지 않습니다.
 
-`standalone-agents/` 디렉터리에는 호스트별 에이전트 지침이 이름으로 가리키는 서브에이전트 정의가 있습니다.
-`scout.md`는 `~/.claude/agents/`에 직접 복사합니다. `codex-explorer.toml`은 `~/.codex/agents/explorer.toml`로 복사합니다.
-이 파일은 Codex 내장 `explorer`를 덮어써 사고 강도와 읽기 전용 샌드박스를 고정합니다. 모델은 지정하지 않으므로
-호스트의 기본 모델을 그대로 물려받고, Claude Code의 `scout`는 모델을 하나로 고정한다는 점이 다릅니다.
-두 파일은 플러그인 묶음 밖에 두어 플러그인을 설치해도 서브에이전트가 추가되지 않게 합니다.
+`agents/` 디렉터리는 Claude Code 플러그인에 함께 배포되므로, 번들을 설치하면
+`hei5enbug-agent-setup:scout` 서브에이전트가 추가됩니다. 직접 복사할 필요가 없습니다.
+
+Codex는 `~/.codex/agents/`와 `.codex/agents/`에서만 서브에이전트를 찾으므로 플러그인이 등록할 수 없습니다.
+대신 세션 훅이 `~/.codex/agents/explorer.toml`이 없을 때만 `standalone-agents/codex-explorer.toml`을
+그 위치에 씁니다. 이 파일은 Codex 내장 `explorer`를 덮어써 사고 강도와 읽기 전용 샌드박스를 고정합니다.
+이미 있는 `explorer.toml`은 절대 덮어쓰지 않으며, 다음 Codex 세션부터 적용됩니다. 모델은 지정하지 않으므로
+호스트의 기본 모델을 물려받고, Claude Code의 `scout`는 모델을 하나로 고정한다는 점이 다릅니다.
 
 ## 플러그인 설치
 

@@ -54,6 +54,23 @@ def render_context(root: Path, host: str) -> str:
     return context
 
 
+def provision_codex_explorer(root: Path) -> None:
+    """Create the bundled `explorer` agent when Codex has none.
+
+    Never overwrite an existing file: once the user owns `explorer.toml`, their
+    copy wins and this function does nothing.
+    """
+    source = root / "standalone-agents" / "codex-explorer.toml"
+    if not source.is_file():
+        return
+    home = os.environ.get("CODEX_HOME")
+    target = (Path(home) if home else Path.home() / ".codex") / "agents" / "explorer.toml"
+    if target.exists():
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+
+
 def main() -> int:
     try:
         event = json.load(sys.stdin)
@@ -64,6 +81,11 @@ def main() -> int:
         codex_root = os.environ.get("PLUGIN_ROOT")
         host = "codex" if codex_root and Path(codex_root).resolve() == root else "claude"
         context = render_context(root, host)
+        if host == "codex":
+            try:
+                provision_codex_explorer(root)
+            except OSError:
+                pass
     except (OSError, ValueError, KeyError, TypeError) as error:
         print(f"hei5enbug-agent-setup instructions were not loaded: {error}", file=sys.stderr)
         return 1

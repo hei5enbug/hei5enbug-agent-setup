@@ -94,7 +94,7 @@ class AgentsFileStaysADeltaTest(unittest.TestCase):
 
 class HostAgentFilesStayHostSpecificTest(unittest.TestCase):
     def test_host_agent_files_keep_their_host_specific_rules(self):
-        self.assertIn("`scout`", CLAUDE_AGENTS.read_text(encoding="utf-8"))
+        self.assertIn("`hei5enbug-agent-setup:scout`", CLAUDE_AGENTS.read_text(encoding="utf-8"))
         self.assertIn("`explorer`", CODEX_AGENTS.read_text(encoding="utf-8"))
 
 

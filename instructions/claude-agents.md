@@ -6,11 +6,11 @@ exception to the timing and agent-selection rules below.
 ## Investigation
 
 - Never use the built-in `Explore` and `Plan` subagents or the catch-all `general-purpose` and `claude` subagents.
-- Use `scout` for investigation, only while planning and only when the session delegation threshold is met.
-- Give each `scout` one question and one narrow search scope.
+- Use `hei5enbug-agent-setup:scout` for investigation, only while planning and only when the session delegation threshold is met.
+- Give each `hei5enbug-agent-setup:scout` one question and one narrow search scope.
 - Require file paths, code symbols, and concrete evidence in its results.
 - Treat results as leads. Verify critical claims in the main conversation before planning or deciding.
-- If `scout` is not installed, investigate in the main conversation.
+- The plugin bundles `hei5enbug-agent-setup:scout`; if it is unavailable, investigate in the main conversation.
 
 ## Implementation
 

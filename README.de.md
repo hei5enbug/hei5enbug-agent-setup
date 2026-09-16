@@ -46,8 +46,10 @@ hei5enbug-agent-setup/
 ├── tests/
 ├── LICENSE
 ├── pyproject.toml
+├── agents/
+│   ├── ko/scout.ko.md
+│   └── scout.md
 ├── standalone-agents/
-│   ├── scout.md
 │   └── codex-explorer.toml
 ├── standalone-skills/
 │   └── omo-model-config/
@@ -67,11 +69,15 @@ Jeder Plugin-Skill-Ordner enthält seine eigene `SKILL.md` sowie alle benötigte
 Die Plugin-Manifeste paketieren dasselbe Verzeichnis `skills/` für Codex und Claude Code, ohne Skills in host-spezifische Verzeichnisse zu kopieren.
 Das Verzeichnis `standalone-skills/` gehört zu keinem Skill-Suchpfad der beiden Plugins.
 
-Das Verzeichnis `standalone-agents/` enthält die Subagent-Definitionen, auf die die host-spezifischen Agent-Anweisungen verweisen.
-Kopiere `scout.md` von Hand nach `~/.claude/agents/`. Kopiere `codex-explorer.toml` nach `~/.codex/agents/explorer.toml`;
-sie überschreibt den eingebauten Codex-`explorer`, sodass Reasoning-Aufwand und Nur-Lese-Sandbox festgelegt sind. Sie legt kein Modell fest
-und erbt daher das Standardmodell des Hosts, während `scout` auf Claude Code eines fest vorgibt.
-Beide bleiben außerhalb des Plugin-Bundles, damit die Installation des Plugins niemals einen Subagenten hinzufügt.
+Das Verzeichnis `agents/` gehört zum Claude-Code-Plugin, sodass die Installation des Bundles den Subagenten
+`hei5enbug-agent-setup:scout` hinzufügt. Kopieren von Hand entfällt.
+
+Codex findet Subagenten nur in `~/.codex/agents/` und `.codex/agents/`, ein Plugin kann dort keinen registrieren.
+Stattdessen schreibt der Session-Hook `standalone-agents/codex-explorer.toml` nach `~/.codex/agents/explorer.toml`,
+sofern diese Datei fehlt; sie überschreibt den eingebauten Codex-`explorer`, sodass Reasoning-Aufwand und
+Nur-Lese-Sandbox festgelegt sind. Eine vorhandene `explorer.toml` wird nie überschrieben, und der Agent steht ab der
+nächsten Codex-Session bereit. Sie legt kein Modell fest und erbt das Standardmodell des Hosts, während `scout` auf
+Claude Code eines fest vorgibt.
 
 ## Plugin installieren
 
