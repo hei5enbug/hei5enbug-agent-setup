@@ -57,7 +57,7 @@ hei5enbug-agent-setup/
     ├── decision-navigator/
     ├── deep-interview/
     ├── flowchart-design/
-    ├── humanize-korean/
+    ├── docs-rewrite/
     ├── document-to-confluence/
     ├── skill-builder/
     ├── suggest-commit/
@@ -153,7 +153,7 @@ node --test skills/document-to-confluence/tests/test_render_diagrams.mjs
 | [`decision-navigator`](skills/decision-navigator/SKILL.md) | 把跨多个会话的工作拆成决策工单，并逐个解决，直到实现路线清晰。 |
 | [`deep-interview`](skills/deep-interview/SKILL.md) | 进行苏格拉底式访谈，每次回答后都为需求的模糊程度打分，只有分数降到阈值以下才会进入执行阶段。[韩文指南](skills/deep-interview/SKILL.ko.md) |
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | 一套通用的流程图设计标准，无论用 SVG、HTML/CSS、Figma 还是 draw.io 制作，都能呈现为同一套设计体系。 |
-| [`humanize-korean`](skills/humanize-korean/SKILL.md) | 在不改变内容的前提下，把带有 AI 痕迹的韩语文本改写成自然、像人写的韩语。[韩文指南](skills/humanize-korean/SKILL.ko.md) |
+| [`docs-rewrite`](skills/docs-rewrite/SKILL.md) | 在保持每条主张、数字和确定程度完全不变的前提下改写既有文本，使其读起来自然，并修复带有 AI 痕迹的韩语。[韩文指南](skills/docs-rewrite/SKILL.ko.md) |
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | 将 Markdown、HTML、PDF、DOCX 和 Google Docs 内容转换为 Confluence 页面，保留文档结构和附件，并同步后续源文件修订。 |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | 通过“起草 → 测试 → 审查 → 改进”的循环来创建、验证并打包 agent skill。 |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | 一并读取已暂存和未暂存的变更，或你指定的范围，结合最近的提交历史，给出 5 条符合本仓库风格的 commit message 建议。 |

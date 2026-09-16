@@ -57,7 +57,7 @@ hei5enbug-agent-setup/
     ├── decision-navigator/
     ├── deep-interview/
     ├── flowchart-design/
-    ├── humanize-korean/
+    ├── docs-rewrite/
     ├── document-to-confluence/
     ├── skill-builder/
     ├── suggest-commit/
@@ -156,7 +156,7 @@ anglais n'exigent pas de copie coréenne. Le coréen peut rester dans une source
 | [`decision-navigator`](skills/decision-navigator/SKILL.md) | Découpe un chantier qui s'étend sur plusieurs sessions en tickets de décision et les résout un par un jusqu'à ce que la route d'implémentation soit claire. |
 | [`deep-interview`](skills/deep-interview/SKILL.md) | Mène un entretien socratique qui note l'ambiguïté des exigences après chaque réponse et ne passe à l'exécution que lorsque ce score descend sous le seuil fixé. [Guide en coréen](skills/deep-interview/SKILL.ko.md) |
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | Un standard de design partagé pour que les diagrammes de flux réalisés en SVG, HTML/CSS, Figma ou draw.io paraissent issus d'un même système de design. |
-| [`humanize-korean`](skills/humanize-korean/SKILL.md) | Réécrit un texte coréen qui sonne « IA » pour qu'il paraisse naturel et humain, sans en changer le sens. [Guide en coréen](skills/humanize-korean/SKILL.ko.md) |
+| [`docs-rewrite`](skills/docs-rewrite/SKILL.md) | Réécrit un texte existant pour qu'il se lise naturellement en gardant identiques chaque affirmation, chiffre et degré de certitude, et corrige le coréen qui sonne « IA ». [Guide en coréen](skills/docs-rewrite/SKILL.ko.md) |
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Convertit les contenus Markdown, HTML, PDF, DOCX et Google Docs en pages Confluence, conserve la structure et les pièces jointes et synchronise les révisions ultérieures. |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | Crée, teste et empaquette des skills d'agent via une boucle brouillon → test → revue → amélioration. |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | Lit ensemble les changements indexés et non indexés, ou le périmètre que vous indiquez, avec l'historique récent des commits, puis propose cinq messages de commit conformes au style du dépôt. |

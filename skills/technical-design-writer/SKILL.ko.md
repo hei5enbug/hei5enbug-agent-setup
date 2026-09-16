@@ -22,7 +22,7 @@
 없다면 누락된 항목을 알리고 해당 작업을 중단한다. 규칙을 임의로 재구성하지 않는다.
 
 `references/korean-writing.md`는 형제 스킬 파일 하나를 읽는다. 이 스킬 폴더를 기준으로 한
-`../humanize-korean/references/patterns.md`가 번역투 신호 표를 제공한다. 그 파일이 없으면
+`../docs-rewrite/references/patterns.md`가 번역투 신호 표를 제공한다. 그 파일이 없으면
 `korean-writing.md`의 나머지 규칙만 적용하고 신호 목록을 참조하지 못했다고 보고한다.
 이 스킬은 다른 스킬을 호출하지 않고 다른 스킬의 스크립트에 의존하지 않는다.
 

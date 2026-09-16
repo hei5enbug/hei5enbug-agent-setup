@@ -57,7 +57,7 @@ hei5enbug-agent-setup/
     ├── decision-navigator/
     ├── deep-interview/
     ├── flowchart-design/
-    ├── humanize-korean/
+    ├── docs-rewrite/
     ├── document-to-confluence/
     ├── skill-builder/
     ├── suggest-commit/
@@ -155,7 +155,7 @@ Dokumente benötigen keine koreanische Kopie. Koreanisch darf in ausführbaren D
 | [`decision-navigator`](skills/decision-navigator/SKILL.md) | Zerlegt ein Vorhaben über mehrere Sitzungen in Entscheidungs-Tickets und löst sie einzeln, bis der Implementierungsweg klar ist. |
 | [`deep-interview`](skills/deep-interview/SKILL.md) | Führt ein sokratisches Interview, das die Mehrdeutigkeit der Anforderung nach jeder Antwort bewertet, und geht erst zur Ausführung über, wenn der Wert unter den Schwellenwert fällt. [Koreanische Anleitung](skills/deep-interview/SKILL.ko.md) |
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | Ein gemeinsamer Design-Standard, damit Flussdiagramme aus SVG, HTML/CSS, Figma oder draw.io wie ein einheitliches Designsystem wirken. |
-| [`humanize-korean`](skills/humanize-korean/SKILL.md) | Schreibt KI-klingenden koreanischen Text so um, dass er natürlich und menschlich wirkt, ohne den Inhalt zu verändern. [Koreanische Anleitung](skills/humanize-korean/SKILL.ko.md) |
+| [`docs-rewrite`](skills/docs-rewrite/SKILL.md) | Schreibt vorhandenen Text natürlich lesbar um, wobei jede Aussage, Zahl und Sicherheitsstufe identisch bleibt, und behebt KI-klingendes Koreanisch. [Koreanische Anleitung](skills/docs-rewrite/SKILL.ko.md) |
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Konvertiert Markdown-, HTML-, PDF-, DOCX- und Google-Docs-Inhalte in Confluence-Seiten, bewahrt Dokumentstruktur und Anhänge und synchronisiert spätere Quelländerungen. |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | Erstellt, testet und verpackt Agenten-Skills in einem Zyklus aus Entwurf → Test → Review → Verbesserung. |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | Liest gestagte und ungestagte Änderungen zusammen, oder den von dir genannten Bereich, samt jüngster Commit-Historie und schlägt fünf Commit-Nachrichten im Stil des Repositorys vor. |

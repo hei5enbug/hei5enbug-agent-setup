@@ -40,7 +40,7 @@ in that order. Do not disturb meaning, spelling, spacing, or register merely to 
 
 ## Translationese assessment
 
-Read the `A. Translationese` table in `../humanize-korean/references/patterns.md` and apply its signals.
+Read the `A. Translationese` table in `../docs-rewrite/references/patterns.md` and apply its signals.
 Resolve the path from this skill directory. Never use an absolute path or host installation location.
 If the file is absent, apply the remaining rules here and report that the signal list was unavailable.
 
