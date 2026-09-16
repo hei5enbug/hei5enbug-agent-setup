@@ -57,7 +57,7 @@ hei5enbug-agent-setup/
     ├── decision-navigator/
     ├── deep-interview/
     ├── flowchart-design/
-    ├── humanize-korean/
+    ├── docs-rewrite/
     ├── document-to-confluence/
     ├── skill-builder/
     ├── suggest-commit/
@@ -155,7 +155,7 @@ en inglés no necesitan copia coreana. El coreano puede permanecer como dato del
 | [`decision-navigator`](skills/decision-navigator/SKILL.md) | Convierte un trabajo que abarca varias sesiones en tickets de decisión y los resuelve uno a uno hasta que la ruta de implementación queda clara. |
 | [`deep-interview`](skills/deep-interview/SKILL.md) | Realiza una entrevista socrática que puntúa la ambigüedad del requisito tras cada respuesta y no avanza a la ejecución hasta que baja del umbral. [Guía en coreano](skills/deep-interview/SKILL.ko.md) |
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | Un estándar de diseño compartido para que los diagramas de flujo hechos en SVG, HTML/CSS, Figma o draw.io se vean como parte de un mismo sistema de diseño. |
-| [`humanize-korean`](skills/humanize-korean/SKILL.md) | Reescribe texto en coreano con apariencia de IA para que suene natural y humano, sin cambiar su significado. [Guía en coreano](skills/humanize-korean/SKILL.ko.md) |
+| [`docs-rewrite`](skills/docs-rewrite/SKILL.md) | Reescribe un texto existente para que se lea con naturalidad manteniendo idénticas todas sus afirmaciones, cifras y grados de certeza, y corrige el coreano con apariencia de IA. [Guía en coreano](skills/docs-rewrite/SKILL.ko.md) |
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Convierte contenido de Markdown, HTML, PDF, DOCX y Google Docs en páginas de Confluence, conserva la estructura y los adjuntos y sincroniza cambios posteriores de la fuente. |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | Crea, prueba y empaqueta skills de agente mediante un ciclo de borrador → prueba → revisión → mejora. |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | Lee juntos los cambios preparados y sin preparar, o el alcance que indiques, junto con el historial reciente de commits, y sugiere cinco mensajes de commit acordes al estilo del repositorio. |

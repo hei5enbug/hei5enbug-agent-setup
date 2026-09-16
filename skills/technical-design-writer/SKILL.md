@@ -34,7 +34,7 @@ canonical independent model validation rules. If either required reference is un
 missing and stop the affected mode instead of reconstructing its rules.
 
 `references/korean-writing.md` reads one sibling file. Resolved from this skill's own directory,
-`../humanize-korean/references/patterns.md` supplies the translationese signal table. When that file
+`../docs-rewrite/references/patterns.md` supplies the translationese signal table. When that file
 is absent, apply the rest of `korean-writing.md` and report that the signal list was unavailable.
 This skill invokes no other skill and depends on no other skill's scripts.
 

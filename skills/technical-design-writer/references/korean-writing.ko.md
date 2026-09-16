@@ -44,7 +44,7 @@
 
 ## 번역투 판정
 
-번역투 신호 목록은 이 스킬 폴더를 기준으로 한 `../humanize-korean/references/patterns.md`의
+번역투 신호 목록은 이 스킬 폴더를 기준으로 한 `../docs-rewrite/references/patterns.md`의
 `A. Translationese` 표를 읽어 적용한다. 경로는 항상 스킬 폴더에서 시작하며, 절대 경로나 호스트
 설치 위치를 쓰지 않는다. 그 파일이 없으면 아래 규칙만 적용하고 신호 목록을 참조하지 못했다고
 보고한다.
