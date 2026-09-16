@@ -18,6 +18,7 @@ You receive these parameters in your prompt:
 - **loser_transcript_path**: Path to the execution transcript for the loser (B on a TIE)
 - **comparison_result_path**: Path to the blind comparator's output JSON
 - **output_path**: Where to save the analysis results
+- **skill_builder_path**: Absolute path to the directory containing skill-builder's loaded `SKILL.md`
 
 ## Process
 
@@ -95,68 +96,12 @@ Save structured analysis to `{output_path}`.
 
 ## Output Format
 
-Write a JSON file with this structure:
+Write `analysis.json` exactly as the `analysis.json` section of
+`{skill_builder_path}/references/schemas.md` defines it. Read that section before writing the file. It also
+fixes the allowed `priority` and `category` values used below.
 
-```json
-{
-  "comparison_summary": {
-    "winner": "A",
-    "winner_skill": "path/to/winner/skill",
-    "loser_skill": "path/to/loser/skill",
-    "comparator_reasoning": "Brief summary of why comparator chose winner"
-  },
-  "winner_strengths": [
-    "Clear step-by-step instructions for handling multi-page documents",
-    "Included validation script that caught formatting errors",
-    "Explicit guidance on fallback behavior when OCR fails"
-  ],
-  "loser_weaknesses": [
-    "Vague instruction 'process the document appropriately' led to inconsistent behavior",
-    "No script for validation, agent had to improvise and made errors",
-    "No guidance on OCR failure, agent gave up instead of trying alternatives"
-  ],
-  "instruction_following": {
-    "winner": {
-      "score": 9,
-      "issues": [
-        "Minor: skipped optional logging step"
-      ]
-    },
-    "loser": {
-      "score": 6,
-      "issues": [
-        "Did not use the skill's formatting template",
-        "Invented own approach instead of following step 3",
-        "Missed the 'always validate output' instruction"
-      ]
-    }
-  },
-  "improvement_suggestions": [
-    {
-      "priority": "high",
-      "category": "instructions",
-      "suggestion": "Replace 'process the document appropriately' with explicit steps: 1) Extract text, 2) Identify sections, 3) Format per template",
-      "expected_impact": "Would eliminate ambiguity that caused inconsistent behavior"
-    },
-    {
-      "priority": "high",
-      "category": "tools",
-      "suggestion": "Add validate_output.py script similar to winner skill's validation approach",
-      "expected_impact": "Would catch formatting errors before final output"
-    },
-    {
-      "priority": "medium",
-      "category": "error_handling",
-      "suggestion": "Add fallback instructions: 'If OCR fails, try: 1) different resolution, 2) image preprocessing, 3) manual extraction'",
-      "expected_impact": "Would prevent early failure on difficult documents"
-    }
-  ],
-  "transcript_insights": {
-    "winner_execution_pattern": "Read skill -> Followed 5-step process -> Used validation script -> Fixed 2 issues -> Produced output",
-    "loser_execution_pattern": "Read skill -> Unclear on approach -> Tried 3 different methods -> No validation -> Output had errors"
-  }
-}
-```
+If `{skill_builder_path}/references/schemas.md` is unavailable, report that it is missing and return the
+analysis inline. Do not guess the structure.
 
 ## Guidelines
 
@@ -167,25 +112,6 @@ Write a JSON file with this structure:
 - **Consider causation**: Did the skill weakness actually cause the worse output, or is it incidental?
 - **Stay objective**: Analyze what happened, don't editorialize
 - **Think about generalization**: Would this improvement help on other evals too?
-
-## Categories for Suggestions
-
-Use these categories to organize improvement suggestions:
-
-| Category | Description |
-|----------|-------------|
-| `instructions` | Changes to the skill's prose instructions |
-| `tools` | Scripts, templates, or utilities to add/modify |
-| `examples` | Example inputs/outputs to include |
-| `error_handling` | Guidance for handling failures |
-| `structure` | Reorganization of skill content |
-| `references` | External docs or resources to add |
-
-## Priority Levels
-
-- **high**: Would likely change the outcome of this comparison
-- **medium**: Would improve quality but may not change win/loss
-- **low**: Nice to have, marginal improvement
 
 ---
 
@@ -253,16 +179,8 @@ Examples:
 
 ### Step 6: Write Notes
 
-Save notes to `{output_path}` as a JSON array of strings:
-
-```json
-[
-  "Assertion 'Output is a PDF file' passes 100% in both configurations - may not differentiate skill value",
-  "Eval 3 shows high variance (50% ± 40%) - run 2 had an unusual failure",
-  "Without-skill runs consistently fail on table extraction expectations",
-  "Skill adds 13s average execution time but improves pass rate by 50%"
-]
-```
+Save notes to `{output_path}` as a JSON array of strings. Write the observations from Step 5, one string per
+note.
 
 ## Guidelines
 

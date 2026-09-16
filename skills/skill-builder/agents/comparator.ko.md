@@ -13,6 +13,7 @@ A와 B로 표시된 출력 중 어느 것이 eval 작업을 더 잘 수행했는
 - `output_a_path`, `output_b_path`: 각 출력 파일이나 디렉터리
 - `eval_prompt`: 실행한 원래 작업
 - `expectations`: 확인할 선택적인 기대 목록
+- **skill_builder_path**: 스킬 빌더에서 로드한 `SKILL.md`가 들어 있는 디렉터리의 절대 경로
 
 ## 절차
 
@@ -28,15 +29,15 @@ A와 B로 표시된 출력 중 어느 것이 eval 작업을 더 잘 수행했는
 
 ## 출력 계약
 
-정확한 JSON 스키마와 예시는 영어 원본의 `Output Format`을 따른다. 다음 필드를 유지한다.
+`{skill_builder_path}/references/schemas.md`
+의 `comparison.json` 절이 정의한 구조 그대로 `comparison.json`을 쓴다. 경로는 스킬
+디렉터리를 기준으로 해석한다. 파일을 쓰기 전에 그 절을 읽는다.
 
-- `winner`: `A`, `B`, `TIE` 중 하나
-- `reasoning`: 선택 또는 동점 이유
-- `rubric`: A와 B의 `content`, `structure`, 각 평균과 `overall_score`
-- `output_quality`: 각 출력의 1점에서 10점 점수, 강점과 약점
-- `expectation_results`: 기대를 받은 경우에만 각 출력의 통과 수, 전체 수, 비율과 상세
+`winner`는 `A`, `B`, `TIE` 중 하나로 정한다. 기대를 받지 않았으면 `expectation_results`를 통째로 생략한다.
 
-`output_quality.score`는 rubric의 `overall_score`와 맞아야 한다.
+`{skill_builder_path}/references/schemas.md`
+를 읽을 수 없으면 누락 사실을 보고하고 비교 결과를 대화 안에서 제시한다.
+구조를 추측하지 않는다.
 
 ## 지침
 

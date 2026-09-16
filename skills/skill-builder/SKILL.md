@@ -307,6 +307,8 @@ Treat this as one continuous workflow. Use native host workers when available; d
 
 Every command in this file uses `<skill-builder-path>`: the absolute path of the directory that contains this loaded `SKILL.md`.
 Resolve it once, run the scripts by that absolute path, and never change the user's working directory to run them.
+Pass the resolved value as `skill_builder_path` whenever invoking `agents/grader.md`,
+`agents/comparator.md`, or the post-hoc analysis mode in `agents/analyzer.md`.
 The bundled scripts need Python 3.12 or later with PyYAML installed; a missing PyYAML stops with an install hint and exit code 2.
 
 ### Step 1: Prepare the workspace and baseline

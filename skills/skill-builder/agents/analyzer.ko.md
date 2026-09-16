@@ -17,6 +17,7 @@ blind 비교 결과를 분석해 승리 이유와 개선안을 만든다.
 - `loser_skill_path`, `loser_transcript_path`: 패자, TIE에서는 B
 - `comparison_result_path`: 비교 JSON
 - `output_path`: 분석 저장 위치
+- **skill_builder_path**: 스킬 빌더에서 로드한 `SKILL.md`가 들어 있는 디렉터리의 절대 경로
 
 ### 절차
 
@@ -33,16 +34,14 @@ blind 비교 결과를 분석해 승리 이유와 개선안을 만든다.
 
 ### 출력 계약
 
-정확한 JSON 예시는 영어 원본을 따른다. 다음을 포함한다.
+`{skill_builder_path}/references/schemas.md`
+의 `analysis.json` 절이 정의한 구조 그대로 `analysis.json`을 쓴다. 경로는 스킬
+디렉터리를 기준으로 해석한다. 파일을 쓰기 전에 그 절을 읽는다. 그 절이 `priority`와 `category`에 허용되는
+값과 그 의미도 확정한다.
 
-- `comparison_summary`: 승자, 두 스킬 경로와 비교 이유
-- `winner_strengths`, `loser_weaknesses`
-- `instruction_following`: 양쪽의 1점에서 10점 점수와 문제
-- `improvement_suggestions`: `priority`, `category`, 구체적인 `suggestion`, `expected_impact`
-- `transcript_insights`: 두 실행 패턴
-
-제안 범주는 `instructions`, `tools`, `examples`, `error_handling`, `structure`, `references`다.
-우선순위는 결과를 바꿀 가능성이 큰 `high`, 품질을 높이는 `medium`, 영향이 작은 `low`다.
+`{skill_builder_path}/references/schemas.md`
+를 읽을 수 없으면 누락 사실을 보고하고 분석을 대화 안에서 제시한다.
+구조를 추측하지 않는다.
 
 스킬과 transcript를 인용하고 모호한 조언 대신 실행 가능한 변경을 제시한다. 에이전트를 비판하기보다 스킬을
 개선하고 결과와 인과관계가 있는 약점에 집중한다. 다른 eval에도 적용될지 판단하며 객관적으로 쓴다.
@@ -61,12 +60,8 @@ blind 비교 결과를 분석해 승리 이유와 개선안을 만든다.
 
 ### 절차
 
-1. 모든 실행 결과, 적용·미적용 설정과 이미 계산된 `run_summary`를 읽는다.
-2. 각 expectation이 양쪽에서 항상 통과·실패하는지, 스킬에서만 통과·실패하는지, 변동이 큰지 확인한다.
-3. eval 유형별 난이도, 분산과 예상에 어긋나는 결과를 찾는다.
-4. `time_seconds`, `tokens`, `tool_calls`에서 실행 시간 증가, 자원 분산과 집계를 왜곡하는 이상치를 찾는다.
-5. 추측하지 않고 데이터에 근거한 구체적인 관찰을 쓴다. 집계로 보이지 않는 내용을 설명한다.
-6. `{output_path}`에 문자열 JSON 배열로 저장한다.
+`{output_path}`에 메모를 JSON 문자열 배열로 저장하세요. 5단계에서 찾은 관찰 결과를 메모마다
+문자열 하나로 작성하세요.
 
 어떤 eval, expectation 또는 실행인지 구체적으로 밝히고 집계가 숨기는 pattern을 보고한다.
 스킬 개선안, 주관적인 좋고 나쁨, 근거 없는 원인 추측과 `run_summary` 반복은 하지 않는다.
