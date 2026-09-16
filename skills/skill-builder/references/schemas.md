@@ -112,16 +112,21 @@ Output from the grader agent. Located at `<run-dir>/grading.json`.
       "evidence": "Transcript Step 3 lists 'John Smith, Sarah Johnson'"
     },
     {
+      "text": "The assistant used the skill's OCR script",
+      "passed": true,
+      "evidence": "Transcript Step 2 shows: 'Tool: Bash - python ocr_script.py image.png'"
+    },
+    {
       "text": "The spreadsheet has a SUM formula in cell B10",
       "passed": false,
       "evidence": "No spreadsheet was created. The output was a text file."
     }
   ],
   "summary": {
-    "passed": 2,
+    "passed": 3,
     "failed": 1,
-    "total": 3,
-    "pass_rate": 0.67
+    "total": 4,
+    "pass_rate": 0.75
   },
   "execution_metrics": {
     "tool_calls": {
@@ -146,6 +151,12 @@ Output from the grader agent. Located at `<run-dir>/grading.json`.
       "type": "factual",
       "verified": true,
       "evidence": "Counted 12 fields in field_info.json"
+    },
+    {
+      "claim": "All required fields were populated",
+      "type": "quality",
+      "verified": false,
+      "evidence": "Reference section was left blank despite data being available"
     }
   ],
   "user_notes_summary": {
@@ -157,22 +168,45 @@ Output from the grader agent. Located at `<run-dir>/grading.json`.
     "suggestions": [
       {
         "assertion": "The output includes the name 'John Smith'",
-        "reason": "A hallucinated document that mentions the name would also pass"
+        "reason": "A hallucinated document that mentions the name would also pass - consider checking it appears as the primary contact with matching phone and email from the input"
+      },
+      {
+        "reason": "No assertion checks whether the extracted phone numbers match the input - I observed incorrect numbers in the output that went uncaught"
       }
     ],
-    "overall": "Assertions check presence but not correctness."
+    "overall": "Assertions check presence but not correctness. Consider adding content verification."
   }
 }
 ```
 
 **Fields:**
-- `expectations[]`: Graded expectations with evidence
-- `summary`: Aggregate pass/fail counts
-- `execution_metrics`: Tool usage and output size (from executor's metrics.json)
-- `timing`: Wall clock timing (from timing.json)
-- `claims`: Extracted and verified claims from the output
-- `user_notes_summary`: Issues flagged by the executor
-- `eval_feedback`: (optional) Improvement suggestions for the evals, only present when the grader identifies issues worth raising
+
+- `expectations[]`: Graded expectations with evidence.
+  - `text`: The original expectation text.
+  - `passed`: `true` when the expectation holds. Each expectation is pass or fail, never partial.
+  - `evidence`: The exact quote or description supporting the verdict.
+- `summary`: Aggregate counts.
+  - `passed`, `failed`, `total`: Expectation counts.
+  - `pass_rate`: Fraction passed, `0.0` to `1.0`.
+- `execution_metrics`: Copied from the executor's `metrics.json` when available.
+  - `output_chars`: Character count of the output files. Never a substitute for measured tokens.
+  - `transcript_chars`: Character count of the transcript.
+- `timing`: Wall clock timing from `timing.json` when available.
+  - `executor_duration_seconds`: Time spent in the executor worker.
+  - `grader_duration_seconds`: Time spent grading.
+  - `total_duration_seconds`: Total elapsed time for the run.
+- `claims[]`: Claims extracted from the output and checked against evidence.
+  - `claim`: The statement being verified.
+  - `type`: `"factual"`, `"process"`, or `"quality"`.
+  - `verified`: Whether the claim holds.
+  - `evidence`: Supporting or contradicting evidence.
+- `user_notes_summary`: Issues the executor flagged.
+  - `uncertainties`: What the executor was unsure about.
+  - `needs_review`: Items requiring human attention.
+  - `workarounds`: Places where the skill did not work as expected.
+- `eval_feedback`: Optional. Present only when the grader identifies an eval problem worth raising.
+  - `suggestions[]`: Each carries a `reason` and optionally the `assertion` it relates to.
+  - `overall`: Brief assessment of the eval set.
 
 The benchmark aggregator accepts a grading result only when `expectations` contains one object per
 summary item, every object has string `text` and `evidence` plus boolean `passed`, the verdict count
@@ -358,8 +392,6 @@ Always reference this schema when generating benchmark.json manually.
 
 Output from blind comparator. Located at `<grading-dir>/comparison-N.json`.
 
-`winner` is `"A"`, `"B"`, or `"TIE"`. The analyzer accepts all three values.
-
 ```json
 {
   "winner": "A",
@@ -429,6 +461,24 @@ Output from blind comparator. Located at `<grading-dir>/comparison-N.json`.
 }
 ```
 
+Omit `expectation_results` entirely when no expectations were provided.
+
+**Fields:**
+
+- `winner`: `"A"`, `"B"`, or `"TIE"`. The analyzer accepts all three values.
+- `reasoning`: Why the winner was chosen, or why the result is a tie.
+- `rubric`: Rubric scores for each output.
+  - `content`: `correctness`, `completeness`, and `accuracy`, each `1` to `5`.
+  - `structure`: `organization`, `formatting`, and `usability`, each `1` to `5`.
+  - `content_score`, `structure_score`: Averages of those criteria, `1` to `5`.
+  - `overall_score`: Combined score scaled to `1` to `10`.
+- `output_quality`: Summary assessment for each output.
+  - `score`: `1` to `10`; matches that side's `rubric.overall_score`.
+  - `strengths`, `weaknesses`: Concrete positives and shortcomings.
+- `expectation_results`: Optional. Present only when expectations were provided.
+  - `passed`, `total`, `pass_rate`: Expectation counts and the fraction passed.
+  - `details[]`: Individual expectation verdicts.
+
 ---
 
 ## analysis.json
@@ -449,11 +499,13 @@ and suggestions cover both skills.
   },
   "winner_strengths": [
     "Clear step-by-step instructions for handling multi-page documents",
-    "Included validation script that caught formatting errors"
+    "Included validation script that caught formatting errors",
+    "Explicit guidance on fallback behavior when OCR fails"
   ],
   "loser_weaknesses": [
     "Vague instruction 'process the document appropriately' led to inconsistent behavior",
-    "No script for validation, agent had to improvise"
+    "No script for validation, agent had to improvise and made errors",
+    "No guidance on OCR failure, agent gave up instead of trying alternatives"
   ],
   "instruction_following": {
     "winner": {
@@ -464,7 +516,8 @@ and suggestions cover both skills.
       "score": 6,
       "issues": [
         "Did not use the skill's formatting template",
-        "Invented own approach instead of following step 3"
+        "Invented own approach instead of following step 3",
+        "Missed the 'always validate output' instruction"
       ]
     }
   },
@@ -472,8 +525,20 @@ and suggestions cover both skills.
     {
       "priority": "high",
       "category": "instructions",
-      "suggestion": "Replace 'process the document appropriately' with explicit steps",
+      "suggestion": "Replace 'process the document appropriately' with explicit steps: 1) Extract text, 2) Identify sections, 3) Format per template",
       "expected_impact": "Would eliminate ambiguity that caused inconsistent behavior"
+    },
+    {
+      "priority": "high",
+      "category": "tools",
+      "suggestion": "Add validate_output.py script similar to winner skill's validation approach",
+      "expected_impact": "Would catch formatting errors before final output"
+    },
+    {
+      "priority": "medium",
+      "category": "error_handling",
+      "suggestion": "Add fallback instructions: 'If OCR fails, try: 1) different resolution, 2) image preprocessing, 3) manual extraction'",
+      "expected_impact": "Would prevent early failure on difficult documents"
     }
   ],
   "transcript_insights": {
@@ -482,3 +547,22 @@ and suggestions cover both skills.
   }
 }
 ```
+
+`improvement_suggestions[].priority` takes one of these values:
+
+| Priority | Meaning |
+|---|---|
+| `high` | Would likely change the outcome of this comparison |
+| `medium` | Would improve quality but may not change win or loss |
+| `low` | Nice to have, marginal improvement |
+
+`improvement_suggestions[].category` takes one of these values:
+
+| Category | Meaning |
+|---|---|
+| `instructions` | Changes to the skill's prose instructions |
+| `tools` | Scripts, templates, or utilities to add or modify |
+| `examples` | Example inputs and outputs to include |
+| `error_handling` | Guidance for handling failures |
+| `structure` | Reorganization of skill content |
+| `references` | External docs or resources to add |

@@ -14,6 +14,7 @@ transcript와 출력 파일을 검토해 각 기대가 통과하는지 결정하
 - `expectations`: 평가할 문자열 목록
 - `transcript_path`: 실행 transcript Markdown 경로
 - `outputs_dir`: 실행 출력 디렉터리
+- **skill_builder_path**: 스킬 빌더에서 로드한 `SKILL.md`가 들어 있는 디렉터리의 절대 경로
 
 ## 절차
 
@@ -38,15 +39,18 @@ PASS는 transcript나 출력이 기대를 구체적으로 증명하고 피상적
 
 ## 출력 계약
 
-정확한 JSON 스키마와 예시는 영어 원본의 `Output Format`을 따른다.
+`grading.json`은
+`{skill_builder_path}/references/schemas.md`
+의 `grading.json` 섹션에 정의된 구조와
+정확히 일치하게 작성하세요. 파일을 쓰기 전에 해당 섹션을 읽으세요.
+벤치마크 집계기는 expectation 레코드와 요약 개수 및 비율을 검증합니다. 또한 지원하는 선택적 timing,
+metrics, user notes 섹션을 검증합니다.
+이 검사 중 하나라도 실패하면 해당 실행을 모든 평균과 delta에서 제외합니다.
 
-- `expectations`: 원문 `text`, boolean `passed`, 구체적인 `evidence`
-- `summary`: 통과·실패·전체 수와 0에서 1 사이 `pass_rate`
-- `execution_metrics`: 제공된 도구 호출, 단계, 오류와 문자 수. 문자 수는 토큰을 대신하지 않는다.
-- `timing`: 실행자, 평가자와 전체 경과 시간
-- `claims`: `factual`, `process`, `quality` 주장과 검증 여부 및 근거
-- `user_notes_summary`: 불확실성, 사람 검토 항목과 우회책
-- `eval_feedback`: 필요한 경우 구체적인 제안과 전체 평가
+`eval_feedback`은 제기할 만한 eval 문제를 찾았을 때만 포함한다.
+
+`{skill_builder_path}/references/schemas.md`
+를 읽을 수 없으면 누락 사실을 보고하고 대화 안에서 평가한다. 구조를 추측하지 않는다.
 
 평가는 가정이 아니라 근거에 두고 정확한 문구를 인용하며 transcript와 출력 파일을 모두 확인한다.
 모든 기대에 같은 기준을 적용하고 실패 근거가 왜 부족한지 설명한다.

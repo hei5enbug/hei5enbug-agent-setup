@@ -1,14 +1,14 @@
 # Codex planning and agents
 
 Plan in the main session's plan mode.
-Keep high-level reasoning and decisions in the main session.
 
 The reviewer invocation governed by [independent model validation](independent-model-validation.md) is an
 exception to the timing rules below.
 
 ## Investigation
 
-- Use the built-in `explorer` only for bounded, read-only investigation while planning.
+- Use the built-in `explorer` only for bounded, read-only investigation while planning, and only when the
+  session delegation threshold is met.
 - Give it one specific question and a narrow search scope.
 - Require file paths, code symbols, and concrete evidence in its result.
 - Treat results as leads. Verify critical claims in the main session before planning or deciding.

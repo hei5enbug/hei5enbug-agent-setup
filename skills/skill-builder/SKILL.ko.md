@@ -220,6 +220,8 @@ assertion이나 benchmark 아티팩트가 필요하면 `references/schemas.md`�
 
 ```bash
 python <skill-builder-path>/scripts/aggregate_benchmark.py <workspace>/iteration-N --skill-name <name>
+확인한 값을 `agents/grader.md`, `agents/comparator.md` 또는 `agents/analyzer.md`의 사후 분석 모드를
+호출할 때 `skill_builder_path`로 전달하세요.
 ```
 
 토큰은 `timing.json` 값만 사용하고 문자 수로 대신하지 않는다. 유효한 `grading.json`이 없는 실행은
