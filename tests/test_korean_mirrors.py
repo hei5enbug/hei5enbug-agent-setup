@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import unittest
 from pathlib import Path
@@ -35,6 +36,8 @@ def english_sources():
 def mirror_for(source):
     if source == REPO_ROOT / "README.md":
         return REPO_ROOT / "README.ko.md"
+    if source.parent == REPO_ROOT / "agents":
+        return source.parent / "ko" / f"{source.stem}.ko.md"
     return source.with_name(f"{source.stem}.ko.md")
 
 
@@ -49,7 +52,8 @@ class KoreanMirrorTest(unittest.TestCase):
                 text = mirror.read_text(encoding="utf-8")
                 self.assertIn("영어 원본:", text)
                 self.assertIn("비권위", text)
-                self.assertIn(f"]({source.name})", text)
+                relative = Path(os.path.relpath(source, mirror.parent)).as_posix()
+                self.assertIn(f"]({relative})", text)
 
     def test_executable_markdown_never_links_to_a_korean_mirror(self):
         for source in english_sources():

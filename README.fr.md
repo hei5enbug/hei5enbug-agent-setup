@@ -46,8 +46,10 @@ hei5enbug-agent-setup/
 ├── tests/
 ├── LICENSE
 ├── pyproject.toml
+├── agents/
+│   ├── ko/scout.ko.md
+│   └── scout.md
 ├── standalone-agents/
-│   ├── scout.md
 │   └── codex-explorer.toml
 ├── standalone-skills/
 │   └── omo-model-config/
@@ -67,11 +69,15 @@ Chaque dossier de skill du plugin contient son propre `SKILL.md` ainsi que les r
 Les manifestes du plugin empaquettent le même répertoire `skills/` pour Codex et Claude Code sans copier les skills dans des répertoires propres à chaque host.
 Le répertoire `standalone-skills/` ne fait partie du chemin de découverte des skills d'aucun des deux plugins.
 
-Le répertoire `standalone-agents/` contient les définitions de sous-agents utilisées par les instructions propres à chaque host.
-Copiez `scout.md` à la main dans `~/.claude/agents/`. Copiez `codex-explorer.toml` vers `~/.codex/agents/explorer.toml` ;
-il remplace l'`explorer` intégré de Codex afin de fixer son effort de raisonnement et son bac à sable en lecture seule. Il ne précise aucun modèle,
-il hérite donc du modèle par défaut du host, contrairement à `scout`, qui en fixe un sur Claude Code.
-Ils restent hors du paquet du plugin, si bien qu'installer le plugin n'ajoute jamais de sous-agent.
+Le répertoire `agents/` est livré avec le plugin Claude Code : installer le paquet ajoute donc le sous-agent
+`hei5enbug-agent-setup:scout`. Aucune copie manuelle n'est nécessaire.
+
+Codex ne cherche les sous-agents que dans `~/.codex/agents/` et `.codex/agents/` ; un plugin ne peut donc pas en
+enregistrer. À la place, le hook de session écrit `standalone-agents/codex-explorer.toml` vers
+`~/.codex/agents/explorer.toml` lorsque ce fichier est absent ; il remplace l'`explorer` intégré de Codex afin de
+fixer son effort de raisonnement et son bac à sable en lecture seule. Un `explorer.toml` existant n'est jamais
+écrasé, et l'agent est disponible à la session Codex suivante. Il ne précise aucun modèle et hérite du modèle par
+défaut du host, contrairement à `scout`, qui en fixe un sur Claude Code.
 
 ## Installation du plugin
 

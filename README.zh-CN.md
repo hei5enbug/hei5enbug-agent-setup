@@ -46,8 +46,10 @@ hei5enbug-agent-setup/
 ├── tests/
 ├── LICENSE
 ├── pyproject.toml
+├── agents/
+│   ├── ko/scout.ko.md
+│   └── scout.md
 ├── standalone-agents/
-│   ├── scout.md
 │   └── codex-explorer.toml
 ├── standalone-skills/
 │   └── omo-model-config/
@@ -67,11 +69,14 @@ hei5enbug-agent-setup/
 插件清单为 Codex 和 Claude Code 打包同一个 `skills/` 目录，不会把 skill 复制到 host 专用目录。
 `standalone-skills/` 目录不在任何一个插件的 skill 发现路径中。
 
-`standalone-agents/` 目录存放各 host 的 agent 指令所引用的子 agent 定义。
-请手动把 `scout.md` 复制到 `~/.claude/agents/`；把 `codex-explorer.toml` 复制为 `~/.codex/agents/explorer.toml`。
-它会覆盖 Codex 内置的 `explorer`，固定其推理强度和只读沙箱。它不指定模型，因此沿用 host 的默认模型，
+`agents/` 目录随 Claude Code 插件一起发布，因此安装插件包会添加 `hei5enbug-agent-setup:scout` 子 agent，
+无需手动复制。
+
+Codex 只在 `~/.codex/agents/` 和 `.codex/agents/` 中查找子 agent，插件无法注册。
+因此，会话钩子仅在 `~/.codex/agents/explorer.toml` 不存在时，把 `standalone-agents/codex-explorer.toml`
+写入该位置。它会覆盖 Codex 内置的 `explorer`，固定其推理强度和只读沙箱。已有的 `explorer.toml` 绝不会被覆盖，
+该 agent 从下一个 Codex 会话起可用。它不指定模型，因此沿用 host 的默认模型，
 这与 Claude Code 上固定单一模型的 `scout` 不同。
-它们放在插件包之外，所以安装插件不会新增任何子 agent。
 
 ## 安装插件
 

@@ -46,8 +46,10 @@ hei5enbug-agent-setup/
 ├── tests/
 ├── LICENSE
 ├── pyproject.toml
+├── agents/
+│   ├── ko/scout.ko.md
+│   └── scout.md
 ├── standalone-agents/
-│   ├── scout.md
 │   └── codex-explorer.toml
 ├── standalone-skills/
 │   └── omo-model-config/
@@ -67,11 +69,15 @@ hei5enbug-agent-setup/
 プラグインマニフェストは、ホストごとのディレクトリにスキルをコピーせず、同じ `skills/` ディレクトリを Codex と Claude Code 向けにパッケージ化します。
 `standalone-skills/` ディレクトリは、どちらのプラグインのスキル検出パスにも含まれません。
 
-`standalone-agents/` ディレクトリには、ホスト別のエージェント指示が参照するサブエージェント定義があります。
-`scout.md` は手動で `~/.claude/agents/` にコピーします。`codex-explorer.toml` は `~/.codex/agents/explorer.toml` にコピーします。
-このファイルは Codex 組み込みの `explorer` を上書きし、推論の強さと読み取り専用サンドボックスを固定します。モデルは指定しないため
-ホストの既定モデルをそのまま引き継ぎます。Claude Code の `scout` がモデルを一つに固定する点とは異なります。
-どちらもプラグインバンドルの外に置くので、プラグインをインストールしてもサブエージェントは追加されません。
+`agents/` ディレクトリは Claude Code プラグインに同梱されるため、バンドルをインストールすると
+`hei5enbug-agent-setup:scout` サブエージェントが追加されます。手動コピーは不要です。
+
+Codex はサブエージェントを `~/.codex/agents/` と `.codex/agents/` からのみ検出するため、プラグインでは登録できません。
+代わりにセッションフックが、`~/.codex/agents/explorer.toml` が存在しない場合にかぎり
+`standalone-agents/codex-explorer.toml` をその場所に書き込みます。このファイルは Codex 組み込みの `explorer` を
+上書きし、推論の強さと読み取り専用サンドボックスを固定します。既存の `explorer.toml` は決して上書きせず、
+次の Codex セッションから利用できます。モデルは指定しないためホストの既定モデルを引き継ぎ、
+Claude Code の `scout` がモデルを一つに固定する点とは異なります。
 
 ## プラグインのインストール
 
