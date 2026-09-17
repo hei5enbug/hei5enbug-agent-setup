@@ -55,14 +55,15 @@ them. Never use a narrow unit check to claim repository-wide or runtime behavior
 ## 5. Plan validation
 
 Apply [independent model validation](independent-model-validation.md) to the completed draft. That reference
-owns the reviewer input, model selection, review checks, execution boundary, failure handling, and result
-reporting.
+owns the user confirmation gate, the reviewer input, model selection, review checks, execution boundary,
+failure handling, and result reporting. Do not send the draft to a reviewer before that gate passes.
 
 ## 6. Plan finalization
 
-Check every reviewer finding against the frozen scope and authoritative evidence. Apply supported
-corrections in the main session. Reject unsupported scope expansion and record a material unresolved
-finding when evidence cannot settle it. Do not restore overdesign that the review removed.
+When validation ran, check every reviewer finding against the frozen scope and authoritative evidence. Apply
+supported corrections in the main session. Reject unsupported scope expansion and record a material
+unresolved finding when evidence cannot settle it. Do not restore overdesign that the review removed. When
+validation did not run, finalize from the frozen scope and authoritative evidence alone.
 
 Do not finalize while a missing decision still permits materially different implementations. Ask the user
 to resolve that decision. Otherwise, finalize the smallest plan that an executor can run without adding a

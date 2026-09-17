@@ -60,6 +60,24 @@ class PlanningContractTest(unittest.TestCase):
         self.assertIn("not a debate", validation)
         self.assertIn("do not substitute", validation)
 
+    def test_validation_runs_only_after_a_user_confirmation_gate(self):
+        validation = VALIDATION.read_text()
+        self.assertIn("## Confirmation gate", validation)
+        self.assertIn("only when the user approves it", validation)
+        self.assertIn("Ask for every deliverable", validation)
+        self.assertIn("write nothing about the skipped review inside it", validation)
+        self.assertLess(
+            validation.index("## Confirmation gate"),
+            validation.index("## Reviewer selection"),
+        )
+
+        for path in (IMPLEMENTATION, DESIGN):
+            text = path.read_text()
+            with self.subTest(path=path.relative_to(REPO_ROOT)):
+                self.assertIn("confirmation gate", text)
+                self.assertNotIn("Confirmation gate", text)
+                self.assertNotIn("only when the user approves it", text)
+
 
 if __name__ == "__main__":
     unittest.main()
