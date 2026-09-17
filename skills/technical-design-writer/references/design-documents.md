@@ -40,8 +40,9 @@ resolves the type, apply that evidence.
 5. Validate copied contracts, examples, commands, links, calculations, and diagrams with the strongest
    available method. Separate unsupported content under `SKILL.md`, remove drafting notes and unnecessary
    content, record actual removals, and run the completion gate.
-6. Apply the independent model validation reference supplied by the session instructions. It owns reviewer
-   selection, model configuration, review checks, failure handling, finalization, and result reporting.
+6. Apply the independent model validation reference supplied by the session instructions. It owns the user
+   confirmation gate, reviewer selection, model configuration, review checks, failure handling,
+   finalization, and result reporting. Do not send the document to a reviewer before that gate passes.
 
 ## Output template
 
@@ -81,4 +82,4 @@ section rather than filling it with placeholders.
 - Contracts, constraints, alternatives, and material trade-offs are complete and precise.
 - Execution order appears only when requested or needed to establish feasibility, safety, or compatibility.
 - No speculative extension, unrelated refactor, or unrequested low-level detail remains.
-- The shared independent validation contract is satisfied.
+- The shared independent validation contract is satisfied, including its gate and the user's answer.
