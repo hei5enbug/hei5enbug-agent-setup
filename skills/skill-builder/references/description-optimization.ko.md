@@ -16,7 +16,15 @@ frontmatter 설명은 대부분의 스킬 호스트에서 주요 호출 신호�
 - 이 스킬이 이겨야 할 가까운 경쟁 작업을 포함한다.
 - 같은 단어를 쓰지만 다른 절차가 필요한 어려운 비호출 사례를 포함한다.
 
-너무 쉬운 호출 사례와 명백히 무관한 비호출 사례를 피하고 JSON 배열로 저장한다.
+너무 쉬운 호출 사례와 명백히 무관한 비호출 사례를 피한다. 배열은 JSON으로 저장한다.
+
+```json
+[
+  {"query": "a realistic user request", "should_trigger": true},
+  {"query": "a difficult near-miss", "should_trigger": false}
+]
+```
+
 브라우저나 아티팩트 표시가 있으면 `assets/eval_review.html`로 검토한다. 유일한
 `__EVAL_REVIEW_DATA__` 자리에 `skill_name`, `description`, `evals`를 가진 JSON 객체를 넣고 `<`는
 script 종료를 막도록 `\u003c`로 쓴다. 정확한 명령은 파일의 header comment를 따른다.

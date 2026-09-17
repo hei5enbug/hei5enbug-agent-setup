@@ -42,18 +42,31 @@ commit으로 고정된 upstream 체인과 `available-models.json`을 사용해 `
 
 | 소스 그룹 | 필수 파일 |
 |---|---|
-| 체인 | `agent-model-requirements.ts`, `category-model-requirements.ts`, `model-requirement-types.ts` |
-| 최신성 계약 | `model-requirements-invariants.test.ts` |
-| 런타임 일치 | `model-availability.ts`, `model-resolution-pipeline.ts`, `provider-model-id-transform.ts` |
-| fallback 파싱 | `fallback-chain-from-models.ts`, `model-resolver.ts`, `reasoning-level.ts` |
-| 설정 형태 | `model-ref.ts`, `reasoning-vocabulary.ts`, `fallback-models.ts`, `agent.ts`, `categories.ts` |
-| 호스트 설정 | `agent-overrides.ts`, `categories.ts`, `assets/omo.schema.json` |
-| 필드 이전 | `reasoning-unification.ts`, 해당 이전의 `fixture-expected.json` |
+| 체인 | [agents](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/agent-model-requirements.ts) |
+| 체인 | [categories](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/category-model-requirements.ts) |
+| 체인 | [types](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/model-requirement-types.ts) |
+| 최신성 계약 | [invariants](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/model-requirements-invariants.test.ts) |
+| 런타임 일치 | [availability](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/model-availability.ts) |
+| 런타임 일치 | [pipeline](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/model-resolution-pipeline.ts) |
+| 런타임 일치 | [provider transforms](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/provider-model-id-transform.ts) |
+| fallback 파싱 | [chain parser](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/fallback-chain-from-models.ts) |
+| fallback 파싱 | [resolver](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/model-resolver.ts) |
+| fallback 파싱 | [known variants](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/model-core/src/reasoning-level.ts) |
+| 설정 형태 | [model reference](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-config-core/src/schema/model-ref.ts) |
+| 설정 형태 | [reasoning vocabulary](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-config-core/src/schema/reasoning-vocabulary.ts) |
+| 설정 형태 | [legacy field normalization](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-config-core/src/schema/fallback-models.ts) |
+| 설정 형태 | [agents](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-config-core/src/schema/agent.ts) |
+| 설정 형태 | [categories](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-config-core/src/schema/category.ts) |
+| 설정 형태 | [host agent overrides](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-opencode/src/config/schema/agent-overrides.ts) |
+| 설정 형태 | [host categories](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-opencode/src/config/schema/categories.ts) |
+| 설정 형태 | [JSON Schema](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/assets/omo.schema.json) |
+| 필드 이전 | [reasoning unification](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-opencode/src/config-migration/reasoning-unification.ts) |
+| 필드 이전 | [expected output fixture](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-opencode/src/config-migration/2026-08-reasoning-unification/fixture-expected.json) |
 
-정확한 경로는 영어 원본의 링크를 따른다. 고정된 model-core 목록에서 검토 중인 후보와 관련된 provider 또는
-모델별 resolution 테스트를 모두 읽고 관련 없는 특수 테스트는 제외한다.
+- 조건부 테스트: 고정된 model-core 목록에서 검토 중인 후보와 관련된 provider 또는 모델별 resolution
+  테스트를 모두 읽는다. 관련 없는 특수 테스트는 제외한다.
 
-`model-requirements.ts` barrel은 체인 소스가 아니다. 기준 `$schema` 대상은 `OMO_SCHEMA_URL`이 게시하는
+`model-requirements.ts` barrel은 체인 소스가 아니다. 기준 `$schema` 대상은 [`OMO_SCHEMA_URL`](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/packages/omo-opencode/src/config-migration/schema-url.ts)이 게시하는
 `assets/omo.schema.json`이다. `assets/oh-my-opencode.schema.json`은 `[opencode]` 호스트 블록만 다루며
 `oh-my-openagent.schema.json`은 없다. 설명 문서는 배경 자료일 뿐이다.
 
