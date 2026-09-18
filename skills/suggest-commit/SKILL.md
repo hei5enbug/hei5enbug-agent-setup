@@ -1,6 +1,6 @@
 ---
 name: suggest-commit
-description: Quickly analyzes staged and unstaged changes together, or the scope the user names, plus recent commit history, then recommends 5 commit messages that match the repository's existing style.
+description: Quickly analyzes staged and unstaged changes together, or the scope the user names, plus recent commit history, then recommends 5 commit messages that match the repository's existing style and always open with the type prefix.
 compatibility: >-
   Requires a Git worktree and read-only access to the Git CLI. Works from any agent host that can run
   shell commands and inspect targeted file content.
@@ -78,7 +78,7 @@ Then, in both cases:
 
 ```bash
 git log --oneline -20
-grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(메시지|규칙|컨벤션|형식)|^[[:space:]]*[-*]?[[:space:]]*커밋:|(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?: *\[' AGENTS.md CONTRIBUTING.md .github/CONTRIBUTING.md CLAUDE.md .gitmessage 2>/dev/null | head -10
+grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(메시지|규칙|컨벤션|형식)|^[[:space:]]*[-*]?[[:space:]]*커밋:|(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?: *\[|(\[[^]]+\]|#[0-9A-Za-z]+) *(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?:' AGENTS.md CONTRIBUTING.md .github/CONTRIBUTING.md CLAUDE.md .gitmessage 2>/dev/null | head -10
 ```
 
 `git log` fails without a `HEAD`; treat that as an empty history, not as an error.
@@ -116,8 +116,11 @@ From `git log --oneline -20`, identify:
 - **Scope usage**: whether `feat(scope):` parenthetical scopes are used
 - **Tone**: terse vs descriptive
 - **Identifier slots**: whether subjects carry a ticket key or issue number slot, and whether that slot is required.
+  Detect only whether the slot exists and whether it is required. Never detect where it sits: "Subject Order"
+  in Step 5 fixes the position regardless of what the log or a convention doc shows.
   Decide with the documented convention first; fall back to the log only when nothing is documented.
-  - A convention doc prescribing a slot (`---COMMIT-CONVENTION---` shows something like `type: [TICKET] subject`) → **required**.
+  - The Step 1 convention grep returned a line prescribing a slot, in either order — `type: [TICKET] subject`
+    or `[TICKET] type: subject` → **required**.
   - A convention doc that prescribes no slot → **optional**, even if many commits happen to carry one.
   - Nothing documented → **required** when nearly every one of the 20 sampled commits carries a slot, otherwise **optional**.
   Optional → leave the slot out of the suggestions.
@@ -186,6 +189,26 @@ Prefix decision rules:
 - Do not make all five suggestions share `fix:` or `feat:` unless the diff genuinely has only that intent.
 - If multiple common prefixes are plausible, vary some suggestions with those common alternatives, but keep #1 as the most accurate prefix.
 
+### Subject Order
+
+The prefix always opens the subject, whatever order the repository's own history or convention doc uses. This
+overrides style matching for **position only**. Everything else in Step 3 still follows the repository: which
+prefixes exist, casing, length, parenthetical scopes, tone, and whether the identifier slot is required.
+
+Order every suggestion as the prefix, then the identifier slot when required, then the description:
+
+- `fix: correct retry backoff` — slot optional
+- `fix: [TICKET] correct retry backoff` — bracketed key required
+- `fix: #NNN correct retry backoff` — bare issue number required
+- `fix(api): [TICKET] correct retry backoff` — the repository uses parenthetical scopes
+
+Never emit a leading identifier such as `[TICKET] fix: correct retry backoff`, even when every sampled commit
+is written that way: a subject that opens with a bracket breaks conventional-commit parsers that read the type
+from the start.
+
+When the sampled history places the identifier before the prefix, the suggestions will not match that history.
+Disclose that in the answer so the human chooses knowingly.
+
 ## Step 6: Suggest 5 Messages
 
 Present exactly 5 commit messages in a numbered table:
@@ -197,7 +220,7 @@ Present exactly 5 commit messages in a numbered table:
 ```
 
 Rules:
-- All 5 must follow the detected repository style and the prefix-selection rules above.
+- All 5 must follow the detected repository style, the prefix-selection rules, and "Subject Order" above.
 - Before presenting the suggestions, verify that every specific noun and claimed outcome is supported by the inspected changes.
 - Apply the identifier rule from Step 4 to every suggestion.
 - Vary phrasing: different verbs, emphasis, and granularity.
@@ -214,8 +237,9 @@ human replace `[TICKET]`.
 ## Constraints
 
 - **Read-only.** Never stage, commit, amend, push, or edit files while using this skill.
-- Do not ask follow-up questions. Deliver all 5 suggestions in one response.
-  One exception: when the suggestions carry a placeholder such as `[TICKET]`, add a single line under the table
-  telling the human to replace it and not to commit the placeholder verbatim. Do not wait for a reply.
+- Do not ask follow-up questions. Deliver all 5 suggestions in one response. Two notes may follow the table, each
+  one line, and neither waits for a reply: when the suggestions carry a placeholder such as `[TICKET]`, tell the
+  human to replace it and not to commit it verbatim; when "Subject Order" moved the prefix ahead of an identifier
+  the sampled history puts first, say that the suggestions intentionally depart from that history.
 - Minimize tool calls: one fast context command is usually enough; run targeted follow-up commands only when needed.
 - If these suggestions are later used to create a commit, keep the message to the single subject line and apply "Absolute Rule: No Trailers" to the message that actually reaches `git commit`.
