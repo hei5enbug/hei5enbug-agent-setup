@@ -4,7 +4,7 @@
 > 이 문서는 사람을 위한 비권위 한국어 번역본이다. 에이전트 실행 시 읽거나 사용하지 않는다.
 
 스테이징된 변경과 스테이징되지 않은 변경을 함께, 또는 사용자가 지정한 범위를 최근 커밋 기록과 함께
-빠르게 분석한 뒤 저장소의 기존 스타일에 맞는 커밋 메시지 5개를 추천한다.
+빠르게 분석한 뒤 저장소의 기존 스타일에 맞으면서 항상 접두사로 시작하는 커밋 메시지 5개를 추천한다.
 
 Git 작업 트리와 Git CLI의 읽기 전용 접근이 필요하다. 셸 명령을 실행하고 필요한 파일 콘텐츠를 확인할 수
 있는 모든 에이전트 호스트에서 작동한다.
@@ -78,7 +78,7 @@ git diff --name-status
 
 ```bash
 git log --oneline -20
-grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(메시지|규칙|컨벤션|형식)|^[[:space:]]*[-*]?[[:space:]]*커밋:|(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?: *\[' AGENTS.md CONTRIBUTING.md .github/CONTRIBUTING.md CLAUDE.md .gitmessage 2>/dev/null | head -10
+grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(메시지|규칙|컨벤션|형식)|^[[:space:]]*[-*]?[[:space:]]*커밋:|(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?: *\[|(\[[^]]+\]|#[0-9A-Za-z]+) *(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?:' AGENTS.md CONTRIBUTING.md .github/CONTRIBUTING.md CLAUDE.md .gitmessage 2>/dev/null | head -10
 ```
 
 `HEAD`가 없으면 `git log`가 실패한다. 오류가 아니라 빈 기록으로 처리한다.
@@ -121,10 +121,13 @@ grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(�
 - 어조: 간결한지 설명적인지
 - 식별자 자리: 제목에 티켓 키나 이슈 번호 자리가 있고 필수인지
 
-식별자 자리는 문서화된 규칙으로 먼저 판단하고, 문서가 없을 때만 기록을 사용한다.
+식별자 자리는 존재 여부와 필수 여부만 판단한다. 위치는 판단하지 않는다. 기록이나 규칙 문서가 무엇을
+보여주든 5단계의 "제목 순서"가 위치를 고정한다.
 
-- 규칙 문서가 자리를 명시하면 필수다. 예를 들어 `---COMMIT-CONVENTION---`에
-  `type: [TICKET] subject` 같은 형식이 있다.
+존재와 필수 여부는 문서화된 규칙으로 먼저 판단하고, 문서가 없을 때만 기록을 사용한다.
+
+- 1단계의 규칙 grep이 자리를 명시한 줄을 찾으면 필수다. `type: [TICKET] subject`든
+  `[TICKET] type: subject`든 순서와 무관하다.
 - 규칙 문서에 자리가 없으면 많은 커밋이 식별자를 사용해도 선택 사항이다.
 - 문서가 없으면 최근 20개 커밋의 거의 전부가 자리를 사용할 때 필수이며 그 밖에는 선택 사항이다.
 - 선택 사항이면 추천에서 자리를 뺀다.
@@ -195,6 +198,25 @@ grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(�
 - 변경 의도가 하나뿐이지 않으면 추천 5개를 모두 `fix:` 또는 `feat:`로 만들지 않는다.
 - 여러 일반 접두사가 가능하면 일부 추천에 대안을 사용하되 1번에는 가장 정확한 접두사를 사용한다.
 
+### 제목 순서
+
+저장소의 기록이나 규칙 문서가 어떤 순서를 쓰든 접두사가 항상 제목의 맨 앞에 온다. 이 규칙은 위치에
+한해서만 스타일 매칭을 덮어쓴다. 3단계의 나머지는 그대로 저장소를 따른다. 어떤 접두사를 쓰는지,
+대소문자, 길이, 괄호 범위, 어조, 식별자 자리의 필수 여부가 모두 여기에 해당한다.
+
+모든 추천을 접두사, 필수일 때의 식별자 자리, 설명 순으로 배열한다.
+
+- `fix: correct retry backoff` — 자리가 선택 사항일 때
+- `fix: [TICKET] correct retry backoff` — 대괄호 키가 필수일 때
+- `fix: #NNN correct retry backoff` — 단독 이슈 번호가 필수일 때
+- `fix(api): [TICKET] correct retry backoff` — 저장소가 괄호 범위를 사용할 때
+
+표본 커밋이 전부 그렇게 쓰여 있더라도 `[TICKET] fix: correct retry backoff`처럼 식별자를 앞세우지
+않는다. 대괄호로 시작하는 제목은 제목 앞에서 타입을 읽는 conventional commit 파서를 망가뜨린다.
+
+표본 기록이 식별자를 접두사보다 앞에 두는 경우 추천은 그 기록과 일치하지 않는다. 사용자가 알고
+선택하도록 답변에서 그 사실을 밝힌다.
+
 ## 6단계: 메시지 5개 추천
 
 번호가 있는 표로 정확히 5개를 제시한다.
@@ -207,7 +229,7 @@ grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(�
 
 다음 규칙을 적용한다.
 
-- 5개 모두 확인한 저장소 스타일과 접두사 규칙을 따른다.
+- 5개 모두 확인한 저장소 스타일, 접두사 규칙과 위의 "제목 순서"를 따른다.
 - 제시하기 전에 모든 구체적인 명사와 결과 주장을 변경 내용이 뒷받침하는지 확인한다.
 - 모든 추천에 4단계의 식별자 규칙을 적용한다.
 - 동사, 강조점과 구체성 수준을 달리한다.
@@ -223,8 +245,10 @@ grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(�
 ## 제약
 
 - 읽기 전용이다. 파일을 스테이징, 커밋, amend, push 또는 수정하지 않는다.
-- 추가 질문 없이 한 번의 답변으로 추천 5개를 제공한다. `[TICKET]` 같은 자리 표시자가 있으면 표 아래에
-  사용자가 바꿔야 하며 그대로 커밋하지 말라는 한 줄을 추가할 수 있다. 답변을 기다리지 않는다.
+- 추가 질문 없이 한 번의 답변으로 추천 5개를 제공한다. 표 아래에 각각 한 줄인 안내 두 개를 붙일 수
+  있으며 어느 쪽도 답변을 기다리지 않는다. `[TICKET]` 같은 자리 표시자가 있으면 사용자가 바꿔야 하며
+  그대로 커밋하지 말라고 알린다. "제목 순서"가 표본 기록이 앞세우는 식별자보다 접두사를 앞으로 옮겼으면
+  추천이 그 기록에서 의도적으로 벗어났다고 알린다.
 - 도구 호출을 최소화한다. 보통 빠른 컨텍스트 명령 한 번으로 충분하며 필요할 때만 대상 명령을 추가한다.
 - 나중에 추천으로 커밋을 만들더라도 메시지는 제목 한 줄로 유지하고 실제 `git commit`에 전달되는 메시지에도
   트레일러 금지 절대 규칙을 적용한다.
