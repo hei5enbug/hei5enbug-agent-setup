@@ -26,6 +26,7 @@ If a required reference is missing, report it and pause the affected action inst
 - Before any Azure or Kubernetes access, including local files, environment variables, logs, or indirect
   access, read [protected-value access rules](../protected-values.md).
 - Before writing or editing any documentation file, read [documentation rules](../documentation.md).
+- Before writing or editing test code, read [test rules](../testing.md).
 
 ## Planning and design routing
 
