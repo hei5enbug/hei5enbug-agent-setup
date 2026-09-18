@@ -89,13 +89,14 @@ class SessionContextTest(unittest.TestCase):
     def test_references_are_absolute_and_details_stay_unloaded(self):
         context = self.context(self.run_hook("claude"))
         links = re.findall(r"\]\(<([^>]+)>\)", context)
-        self.assertEqual(len(links), 7)
+        self.assertEqual(len(links), 8)
         for link in links:
             self.assertTrue(Path(link).is_relative_to(self.root))
             self.assertTrue(Path(link).is_file())
         self.assertNotIn("## Azure skill authorization", context)
         self.assertNotIn("## Investigation", context)
         self.assertNotIn("# Documentation files", context)
+        self.assertNotIn("# Test code", context)
         self.assertNotIn("## 1. Intent and scope freeze", context)
         self.assertNotIn("## Reviewer selection", context)
         self.assertNotIn("Latest available Claude Fable", context)
