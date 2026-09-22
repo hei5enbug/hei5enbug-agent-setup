@@ -1,0 +1,17 @@
+{
+  "skill_name": "suggest-commit",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Inspect all staged and unstaged changes and recommend five commit messages. The latest 20 commit subjects use conventional prefixes and Korean descriptions, including English API names inside otherwise Korean descriptions.",
+      "expected_output": "Exactly five one-line suggestions whose descriptions are Korean, whose type prefix opens each subject, and whose claims are supported by the changes.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Inspect all staged and unstaged changes and recommend five commit messages. The latest 20 commit subjects use conventional prefixes and English descriptions.",
+      "expected_output": "Exactly five one-line suggestions whose descriptions remain English, whose type prefix opens each subject, and whose claims are supported by the changes.",
+      "files": []
+    }
+  ]
+}

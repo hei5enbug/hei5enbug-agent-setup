@@ -102,6 +102,11 @@ Extract answers from the conversation and existing files before asking for infor
 6. Which hosts must support the skill, and which parts truly need host-specific integration?
 7. What quality criteria, execution-time limits, and recurring token costs must the improvement preserve or reduce?
 
+Before drafting, decompose umbrella quality promises such as "match the existing style", "natural", or
+"consistent" into observable dimensions. For every critical dimension, identify the evidence signal, the required
+effect on the output, and any precedence, tie-breaker, or fallback. Do not rely on a model to recover a required
+dimension that a more specific checklist omits.
+
 When updating an existing skill, preserve its original directory name and `name` field unless the user explicitly requests a rename.
 Snapshot the original before editing so it can serve as the baseline.
 
@@ -279,6 +284,14 @@ Output: feat(auth): implement JWT-based authentication
 
 Create 2–3 realistic prompts for the first iteration.
 Vary the input types the skill will actually meet rather than testing one shape repeatedly.
+When output behavior is inferred from examples, history, documentation, or other context, include a contrastive pair:
+hold the task and primary input constant, change one decisive context signal, and assert that the intended output
+dimension changes while unrelated dimensions remain stable. Trace every critical inferred dimension from "Capture
+intent" to at least one case or assertion.
+When the user reports an intermittent or model-specific defect, use the reported configuration when it matches the
+required evaluation model adapter and repeat the affected old/new pair 2–3 times within a frozen trial budget. One
+passing baseline run does not disprove the report. If the exact configuration is unavailable or conflicts with the
+required adapter, mark that validation unverified instead of substituting settings. Do not repeat unrelated cases.
 As the set grows, include at least one case where the correct behavior is minimal or no change at
 all. An overaggressive skill rewrites acceptable input and fails this case.
 Share them for confirmation when user judgment is needed; if the user has already authorized execution and the expected behavior is clear, proceed and report the chosen cases.
@@ -356,6 +369,8 @@ If even sequential execution or persistent outputs are unavailable, perform a fo
 Create objective, descriptive assertions for machine-verifiable requirements.
 A machine assertion must define an exact predicate and scope under "Automation boundary"; otherwise grade it qualitatively.
 Avoid forcing quantitative assertions onto subjective qualities.
+Give every critical dimension captured earlier an objective assertion or a qualitative expectation, and identify
+the case that exercises it. An umbrella assertion such as "matches style" does not cover unnamed dimensions.
 Update both `eval_metadata.json` and `evals/evals.json`, then explain what the assertions measure.
 
 ### Step 4: Capture available metrics
@@ -479,6 +494,10 @@ If the installed source is read-only, copy it to a writable temporary location, 
 ## Completion checklist
 
 - Intent, triggers, outputs, and constraints are explicit.
+- Umbrella quality promises are decomposed into observable dimensions with evidence signals and decision fallbacks.
+- Every critical context-inferred dimension has a contrastive case or an explicit reason that one cannot apply.
+- Reported intermittent or model-specific defects were repeated on the required matching configuration, or the
+  exact validation limitation was marked unverified; one passing run was not treated as disproof.
 - Core instructions use capability-based language and avoid accidental vendor coupling.
 - Every example was graded against the skill's own rules: good examples satisfy all of them, bad examples violate the rule they illustrate.
 - Required host-specific behavior is isolated and documented.

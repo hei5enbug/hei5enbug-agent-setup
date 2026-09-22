@@ -138,6 +138,31 @@
         "The response never selects Sonnet in Codex and does not replace an unavailable required model or lower xhigh effort.",
         "A run that cannot use the required Codex model and effort is recorded as unverified."
       ]
+    },
+    {
+      "id": 13,
+      "prompt": "Improve a commit-message skill that says to match repository style and explicitly checks prefix, casing, length, scope, and tone. A user reports that gpt-5.6-luna at xhigh intermittently writes English descriptions even when the latest 20 descriptions are Korean; some Korean descriptions contain English API names. Explain the skill change and execute an evaluation that can validate the fix without overfitting to Korean.",
+      "expected_output": "Treat subject language as an omitted style dimension, define its evidence and fallback rules, compare Korean and English histories while holding the change constant, and repeat the reported intermittent case on gpt-5.6-luna at xhigh without dismissing it after one passing baseline run.",
+      "files": [],
+      "expectations": [
+        "The response decomposes the umbrella promise to match style and identifies subject language as a missing observable dimension rather than blaming the model alone.",
+        "The proposed skill rule defines evidence, precedence, and fallback behavior while preserving API names and other repository terms.",
+        "The evaluation includes a contrastive Korean-history and English-history pair with the same primary change and checks that unrelated message dimensions stay stable.",
+        "The affected old/new pair is repeated 2–3 times with gpt-5.6-luna at xhigh, and a single passing baseline run is not treated as disproof.",
+        "The cases and assertions are saved so the regression remains part of the skill's evaluation corpus."
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "Improve a release-note skill whose only quality rule is ‘match previous releases’. Its examples vary independently in date format, heading depth, audience, and tone. There is no reported intermittent defect. Define the contract and a small first evaluation without adding unnecessary repeated runs.",
+      "expected_output": "Decompose the broad style promise into observable dimensions, define evidence and conflict resolution for each critical dimension, and use contrastive cases that vary one decisive signal at a time while keeping the initial trial budget small.",
+      "files": [],
+      "expectations": [
+        "The response does not leave ‘match previous releases’ as a single untestable quality claim.",
+        "Each critical dimension has an evidence source, expected output effect, and precedence or fallback for conflicting examples.",
+        "The evaluation changes one context signal at a time and checks that unrelated dimensions remain stable.",
+        "The response does not require repeated trials because no intermittent or model-specific defect was reported or observed."
+      ]
     }
   ]
 }
