@@ -26,3 +26,10 @@
   version and never bump the semantic version for local iterations. Use a cachebuster for local reinstalls.
   Before a release, run every development check in `README.md` and keep both plugin manifests,
   `pyproject.toml`, and `uv.lock` on the same version.
+  Choose the next semantic version from the highest-impact unreleased change:
+
+  | Component | Use when |
+  |---|---|
+  | Major | The harness architecture or core control logic changes enough to replace its operating contract. |
+  | Minor | A skill is added, removed, or merged, or its objective, requirements, or external contract changes. |
+  | Patch | Existing skills keep their objectives and requirements while performance, reliability, evaluation quality, or output quality improves. Multiple such changes still produce one patch bump. |
