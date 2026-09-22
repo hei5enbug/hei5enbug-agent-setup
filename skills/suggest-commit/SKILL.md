@@ -1,6 +1,9 @@
 ---
 name: suggest-commit
-description: Quickly analyzes staged and unstaged changes together, or the scope the user names, plus recent commit history, then recommends 5 commit messages that match the repository's existing style and always open with the type prefix.
+description: >-
+  Quickly analyzes staged and unstaged changes together, or the scope the user names, plus recent commit
+  history, then recommends 5 commit messages that match the repository's existing subject language and style
+  and always open with the type prefix.
 compatibility: >-
   Requires a Git worktree and read-only access to the Git CLI. Works from any agent host that can run
   shell commands and inspect targeted file content.
@@ -87,6 +90,7 @@ Use this pass to answer:
 - Are there any staged, unstaged, or untracked changes inside the scope?
 - Which files changed, and what area/module do they belong to?
 - What commit-message style does the repository use?
+- Which natural language do the sampled subject descriptions use?
 - Does the repository **document** a commit convention, and does that convention prescribe an identifier slot?
 
 If there are no tracked changes and no related untracked files in the scope, say there are no changes to commit and stop.
@@ -115,6 +119,7 @@ From `git log --oneline -20`, identify:
 - **Length**: typical subject length
 - **Scope usage**: whether `feat(scope):` parenthetical scopes are used
 - **Tone**: terse vs descriptive
+- **Subject language**: the natural language used by the description after the prefix, scope, and identifier slot
 - **Identifier slots**: whether subjects carry a ticket key or issue number slot, and whether that slot is required.
   Detect only whether the slot exists and whether it is required. Never detect where it sits: "Subject Order"
   in Step 5 fixes the position regardless of what the log or a convention doc shows.
@@ -126,6 +131,22 @@ From `git log --oneline -20`, identify:
   Optional → leave the slot out of the suggestions.
   Required → keep it filled with a placeholder that cannot be mistaken for a real value and that matches the
   observed shape: `[TICKET]` for a bracketed key, `#NNN` for a bare issue number. Never invent a value to fill it.
+
+Choose the subject-description language in this order:
+
+1. Use the language the human explicitly requests for the suggestions.
+2. Otherwise use the language prescribed by a documented commit convention.
+3. Otherwise use the dominant language among the sampled subject descriptions. A language is dominant when more
+   language-bearing subjects use it than any other language. Ignore prefixes, scopes, identifier slots, and
+   code-only tokens while deciding.
+4. If the sample has no dominant language or fewer than 3 language-bearing subjects, use the language of the human's
+   request. If that language cannot be determined, use English.
+
+Apply the selected language to the description portion of all 5 suggestions. Preserve repository terms, API names,
+symbols, and other identifiers exactly even when they come from another language. English technical terms inside an
+otherwise Korean description do not make that subject English. For example, a history dominated by
+`fix: 결제 API 오류 처리 보완` requires Korean descriptions such as `fix: 결제 API 재시도 조건 보완`, not an
+English rewrite.
 
 If fewer than 3 commits exist, default to conventional commits with lowercase.
 
@@ -221,6 +242,7 @@ Present exactly 5 commit messages in a numbered table:
 
 Rules:
 - All 5 must follow the detected repository style, the prefix-selection rules, and "Subject Order" above.
+- All 5 description portions must use the subject language selected in Step 3.
 - Before presenting the suggestions, verify that every specific noun and claimed outcome is supported by the inspected changes.
 - Apply the identifier rule from Step 4 to every suggestion.
 - Vary phrasing: different verbs, emphasis, and granularity.
