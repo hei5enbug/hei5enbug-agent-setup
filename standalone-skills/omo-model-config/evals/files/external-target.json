@@ -1,0 +1,9 @@
+{
+  "agents": {
+    "oracle": {
+      "models": [
+        { "model": "anthropic/claude-opus-5", "reasoning": "max" }
+      ]
+    }
+  }
+}

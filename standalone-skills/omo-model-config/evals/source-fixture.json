@@ -1,0 +1,173 @@
+{
+  "repository": "https://github.com/code-yeongyu/oh-my-openagent",
+  "source_revision": "c18ab758961b88bc07f7578ddcbcb286810a524f",
+  "mandatory_file_count": 20,
+  "conditional_test_count": 13,
+  "files": [
+    {
+      "path": "packages/model-core/src/agent-model-requirements.ts",
+      "role": "mandatory",
+      "sha256": "43cb02693c089eeb3c8d346e63522afc3573baa73a0112cd57717e1745644ca2"
+    },
+    {
+      "path": "packages/model-core/src/category-model-requirements.ts",
+      "role": "mandatory",
+      "sha256": "0460573340fd2de423680e30ca3bf135afefb656f7f16a29911a804cc441720f"
+    },
+    {
+      "path": "packages/model-core/src/model-requirement-types.ts",
+      "role": "mandatory",
+      "sha256": "48bf7a980c017b592af3c7d1eb137de67598348076682568c8edc8ff3a347f8d"
+    },
+    {
+      "path": "packages/model-core/src/model-requirements-invariants.test.ts",
+      "role": "mandatory",
+      "sha256": "e2ebd4f63f1075bdce1a54c0e46b0c8892ad4d5355fd2c4d7530babe7bf14670"
+    },
+    {
+      "path": "packages/model-core/src/model-availability.ts",
+      "role": "mandatory",
+      "sha256": "4653e0eff58129fbb0a03eafd075e314c4bf96ac34929dade4e6cc6e3fbb6adf"
+    },
+    {
+      "path": "packages/model-core/src/model-resolution-pipeline.ts",
+      "role": "mandatory",
+      "sha256": "4991f639463ff9426f2b5008abcc02ec110bb73689a636bd85c8bce46f4fd318"
+    },
+    {
+      "path": "packages/model-core/src/provider-model-id-transform.ts",
+      "role": "mandatory",
+      "sha256": "4fc093cca1bbd01086c93769383ef07e2b0658f48dab55e003fb7797b6813692"
+    },
+    {
+      "path": "packages/model-core/src/fallback-chain-from-models.ts",
+      "role": "mandatory",
+      "sha256": "fe8852382060cc40f1abf936e16531d71ca7758234eb71a783c0a1070c29b026"
+    },
+    {
+      "path": "packages/model-core/src/model-resolver.ts",
+      "role": "mandatory",
+      "sha256": "9648ca2123869e1cb7825e75412161a4311608517303a9f21849f018f14a16d9"
+    },
+    {
+      "path": "packages/model-core/src/reasoning-level.ts",
+      "role": "mandatory",
+      "sha256": "cae5c5298ac1df37d8577afbf61d8c371d90da323f1a9713b1eb1ee2e1ea4cab"
+    },
+    {
+      "path": "packages/omo-config-core/src/schema/model-ref.ts",
+      "role": "mandatory",
+      "sha256": "1c31fa7b53c7f14cc1d1b855955572565f95dce7e52ee345456f90485c375731"
+    },
+    {
+      "path": "packages/omo-config-core/src/schema/reasoning-vocabulary.ts",
+      "role": "mandatory",
+      "sha256": "c7396490784462f5a64ae81b763f3232b21f3d2318e909c4ab0840efb88ff677"
+    },
+    {
+      "path": "packages/omo-config-core/src/schema/fallback-models.ts",
+      "role": "mandatory",
+      "sha256": "f5aaa5aa59f5d0fd70809e46da95f5d932992e1483262b982677537c7be4aca9"
+    },
+    {
+      "path": "packages/omo-config-core/src/schema/agent.ts",
+      "role": "mandatory",
+      "sha256": "6d75cc53332afc88dca0fd5ef15f58fcd114dbf6f1c402277a464888ab9a16f4"
+    },
+    {
+      "path": "packages/omo-config-core/src/schema/category.ts",
+      "role": "mandatory",
+      "sha256": "1a245d1c92fb8592a6f79afef2d0be9c20ffe24786c6cb5e5d31c21a590e82fc"
+    },
+    {
+      "path": "packages/omo-opencode/src/config/schema/agent-overrides.ts",
+      "role": "mandatory",
+      "sha256": "333195d836e608e7666339e60ebe8a5fd64a6632125b14673e568cb81e3e236c"
+    },
+    {
+      "path": "packages/omo-opencode/src/config/schema/categories.ts",
+      "role": "mandatory",
+      "sha256": "3abebec698b3f833f4ba04748d7f4eb902be50f412de3c360be73bff970620ee"
+    },
+    {
+      "path": "assets/omo.schema.json",
+      "role": "mandatory",
+      "sha256": "7ea9cf8c8268ac9a9026d1afc6b996f911eb78701444240d42e0b1aa0ee50922"
+    },
+    {
+      "path": "packages/omo-opencode/src/config-migration/reasoning-unification.ts",
+      "role": "mandatory",
+      "sha256": "3c38cc41b7d0f4475880bdef31a6a0c51df1ff4cc7c0a2ecb403c6bb17f70731"
+    },
+    {
+      "path": "packages/omo-opencode/src/config-migration/2026-08-reasoning-unification/fixture-expected.json",
+      "role": "mandatory",
+      "sha256": "e20840c8f6166ba6594ee368741824a81e7ae9382278a0811f118b830cde97fa"
+    },
+    {
+      "path": "packages/model-core/src/category-routing-policy.test.ts",
+      "role": "conditional",
+      "sha256": "fd8737e544ae0e439687e29608b5f7e0c81c8d9391809714d3e2799d64e41dc5"
+    },
+    {
+      "path": "packages/model-core/src/gpt-5.6-copilot-resolution.test.ts",
+      "role": "conditional",
+      "sha256": "9ceb6ac5f31b39deb25daa135ca6c2ed09c35d14899176268c57fe6637b19b18"
+    },
+    {
+      "path": "packages/model-core/src/gpt-6-family-routing.test.ts",
+      "role": "conditional",
+      "sha256": "9887692f8e74a44b234d412d6cf87f3544cffdb0d214c000d89dc5f31aea69a9"
+    },
+    {
+      "path": "packages/model-core/src/luna-deepseek-chain-policy.test.ts",
+      "role": "conditional",
+      "sha256": "b2f3fbe0bca2cb1a7e455fa1ea295266897c20e65325bbf2b1ee37a1afe68fc5"
+    },
+    {
+      "path": "packages/model-core/src/model-availability.test.ts",
+      "role": "conditional",
+      "sha256": "6ff3582a75d76d1e5bafd69f0ddfd9350316fd68e168ff96aa3b797abdace1fb"
+    },
+    {
+      "path": "packages/model-core/src/model-capabilities-openai-fast-aliases.test.ts",
+      "role": "conditional",
+      "sha256": "864fa9536bf9530be494fea8fdf483e36e27092acb93abbdca2165b6764a1842"
+    },
+    {
+      "path": "packages/model-core/src/model-capabilities-suffixed-provider-lookup.test.ts",
+      "role": "conditional",
+      "sha256": "0cc550892a8bf365e2681004d13c31d4f06305ddb498940b6f665a613bda6667"
+    },
+    {
+      "path": "packages/model-core/src/model-resolution-pipeline.test.ts",
+      "role": "conditional",
+      "sha256": "d098c1efe91f413d60a63eb8e9077b3b252e214511187a541dc9e592361de2f3"
+    },
+    {
+      "path": "packages/model-core/src/model-resolver.test.ts",
+      "role": "conditional",
+      "sha256": "efc12ab33383d61ca72088b626f74b5f415b991d9b04b627efc62148b9333469"
+    },
+    {
+      "path": "packages/model-core/src/provider-model-id-transform.test.ts",
+      "role": "conditional",
+      "sha256": "9fae3dcc367f8077e3d4586fe82178adaeaeff868a211c4bbe7742eb50ed0a56"
+    },
+    {
+      "path": "packages/model-core/src/reasoning-level.test.ts",
+      "role": "conditional",
+      "sha256": "a2c1b0694bed8fd26cf9c105db2b3f446e8e57e8e077959f3597cb8d506f4b02"
+    },
+    {
+      "path": "packages/model-core/src/model-requirements-deprecated-routing.test.ts",
+      "role": "conditional",
+      "sha256": "f2283b72501c25d0c5845722649eab9782b8060c2ec278b56483560467f86dfd"
+    },
+    {
+      "path": "packages/omo-opencode/src/config-migration/reasoning-unification.test.ts",
+      "role": "conditional",
+      "sha256": "c60022be03eb025b39485f984c87483f0da00b3c91993e9408c84b3f2619764b"
+    }
+  ]
+}

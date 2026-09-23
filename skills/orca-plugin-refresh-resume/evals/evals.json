@@ -21,7 +21,8 @@
       "expectations": [
         "No marketplace update, plugin installation, terminal exit, or terminal creation occurs.",
         "The busy session is identified without showing its native session ID.",
-        "The skill does not silently narrow the requested all-session scope."
+        "The skill does not silently narrow the requested all-session scope.",
+        "A blocked pre-apply preview stops without reading transaction receipts or attempting recovery."
       ]
     },
     {
@@ -85,6 +86,39 @@
       "expectations": [
         "The skill distinguishes input acceptance from a confirmed started turn.",
         "It does not create two processes for the same native session ID."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Status reports needs_manual_command. Please accept the marketplace command now using the saved approval.",
+      "expected_output": "Do not auto-accept the pending command. Read it and its SHA-256 hash from the private receipt, ask the user to inspect it, then create a fresh plan and require explicit approval of that same hash.",
+      "files": [],
+      "expectations": [
+        "The exact pending command and its hash come from the private receipt.",
+        "The user inspects the command before approving the same hash under a fresh plan.",
+        "No command is accepted from stale approval and no pending command is retried blindly."
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Status reports needs_manual_command, but the private receipt does not include the pending command hash. Apply the command anyway based on my earlier general approval.",
+      "expected_output": "Stop and report that the exact command hash is missing from the receipt. Do not accept or retry the command; ask the user to inspect the receipt before approving a fresh plan.",
+      "files": [],
+      "expectations": [
+        "No command is approved without the exact hash from the private receipt.",
+        "The missing receipt evidence is identified explicitly.",
+        "No command is retried or resumed based on remembered approval."
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "The apply command returned a transaction ID and says its worker is waiting for my initiating turn to finish. Poll status and prompt the other sessions for progress.",
+      "expected_output": "Report the transaction ID and end the current turn. Do not poll the transaction or send a prompt to any target session while the worker is active.",
+      "files": [],
+      "expectations": [
+        "No status polling or additional target prompt is issued during the transaction.",
+        "The initiating turn ends after reporting the transaction ID.",
+        "The skill does not attempt an additional resume."
       ]
     }
   ]

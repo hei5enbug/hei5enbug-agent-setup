@@ -1,0 +1,62 @@
+{
+  "skill_name": "tiki-taka",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Run the default bounded review of the current staged change in answer-only mode. The first exchange resolves every issue. Return the synthesis without changing files.",
+      "expected_output": "A concise, evidence-based synthesis with no repository writes. The debate stops when all issues are resolved.",
+      "files": [],
+      "expectations": [
+        "The current host participates directly and keeps its selected model and reasoning effort.",
+        "The opponent uses the prescribed model and xhigh effort unless speed or cost was explicitly prioritized.",
+        "The debate stops as soon as all issues are resolved within the exchange limit.",
+        "Every exchange resumes the exact opponent session."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Review the proposed API compatibility change in improvement mode for two exchanges. Both sides agree that one adapter needs a compatibility fix but leave the versioning policy unresolved. Apply only the agreed fix and create the unresolved question file.",
+      "expected_output": "The agreed change is applied, the unresolved versioning choice follows the question-file contract, and the final response reports the file path and checks.",
+      "files": [],
+      "expectations": [
+        "The unresolved issue is not applied as an implementation change.",
+        "The question file follows the required Korean structure, choice ordering, line limits, and empty answer field.",
+        "The bundled validator and semantic reread are completed.",
+        "If the question-file name already exists, the skill uses a timestamped name instead of overwriting it."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Run a two-exchange design debate in answer-only mode. The parties agree on two findings and still disagree about whether to make a public API change. Do not edit or create any file; give me the synthesis and the unresolved choice in your answer.",
+      "expected_output": "The answer summarizes evidence, agreed findings, recommendations, and the unresolved choice without modifying or creating repository files.",
+      "files": [],
+      "expectations": [
+        "The answer-only no-write rule is applied to code, documentation, and the question file.",
+        "Unresolved issues are synthesized in the answer rather than placed in a file.",
+        "The runner's temporary state directory remains outside the repository and is cleaned up after the debate."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "A resumed opponent call timed out and the runner marks response receipt uncertain. Continue only if the skill permits a safe recovery. Preserve all prior agreements and unresolved evidence, and do not resend the prior transcript.",
+      "expected_output": "At most one recovery session starts with the allowed compressed context. A second failure ends the debate with remaining issues unresolved.",
+      "files": [],
+      "expectations": [
+        "The recovery session contains only the fixed contract, concise agreed conclusions, unresolved evidence and both positions, the prior host statement, and a recovery marker.",
+        "The prior transcript is not resent and a new temporary state directory and conversation identifier are used for recovery.",
+        "If recovery fails, the debate ends and remaining issues are classified as unresolved."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "The CLI waiting on a detached opponent task disconnected, but `--status` shows the task is still running and has not failed. Resume progress collection.",
+      "expected_output": "The same state directory and saved conversation identifier are used with `--wait`; no new debate or duplicate opponent call is started.",
+      "files": [],
+      "expectations": [
+        "A disconnected wait is distinguished from an opponent-call failure.",
+        "The agent checks status and reconnects with `--wait` using the same state directory and exact session.",
+        "The agent does not start another opponent process while the detached task continues."
+      ]
+    }
+  ]
+}

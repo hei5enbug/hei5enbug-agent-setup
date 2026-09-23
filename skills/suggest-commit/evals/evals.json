@@ -12,6 +12,71 @@
       "prompt": "Inspect all staged and unstaged changes and recommend five commit messages. The latest 20 commit subjects use conventional prefixes and English descriptions.",
       "expected_output": "Exactly five one-line suggestions whose descriptions remain English, whose type prefix opens each subject, and whose claims are supported by the changes.",
       "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Before reviewing the commit state, prepare the `no-change` fixture by running `python3 skills/suggest-commit/evals/prepare_fixture.py --case no-change`. Use the emitted `fixtures.no-change.cwd` directory as the repository working directory. It has one commit and a clean worktree. Tell me what to do.",
+      "expected_output": "The skill reports that there is nothing to commit and produces no message suggestions.",
+      "files": [
+        "evals/prepare_fixture.py"
+      ],
+      "expectations": [
+        "The fixture has a valid HEAD and no staged, unstaged, or untracked changes.",
+        "No commit-message suggestions are produced.",
+        "The response says there is nothing to commit."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Suggest messages for staged changes under src/auth only. Other staged files, all unstaged changes, and all untracked files are unrelated.",
+      "expected_output": "Exactly five one-line suggestions describe only staged changes under src/auth.",
+      "files": [],
+      "expectations": [
+        "The requested staged-only path scope excludes other staged paths, unstaged changes, and untracked files.",
+        "Every specific noun and behavior claim is supported by the requested scope.",
+        "All five subjects are prefix-first and contain no body or trailer."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Prepare the `unborn-mixed` fixture with `python3 skills/suggest-commit/evals/prepare_fixture.py --case unborn-mixed` and use the emitted `fixtures.unborn-mixed.cwd` directory as the repository working directory. It has no commits; `src/auth.py` has a staged initial version and an unstaged edit, `tests/test_auth.py` is related and untracked, and `notes/unrelated.txt` is unrelated and untracked. Suggest five messages.",
+      "expected_output": "The answer reports the unborn repository, includes both staged and unstaged auth changes and the related test file, excludes the unrelated note, and gives exactly five lowercase one-line conventional subjects.",
+      "files": [
+        "evals/prepare_fixture.py"
+      ],
+      "expectations": [
+        "The no-HEAD branch treats history as empty and describes the current auth behavior change without claiming unsupported outcomes.",
+        "The default scope includes the staged and unstaged changes to `src/auth.py` and the related untracked test file.",
+        "The unrelated untracked note is excluded from every suggestion.",
+        "Exactly five lowercase prefix-first subjects are returned with no bodies or trailers."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Prepare the `documented-ticket` fixture with `python3 skills/suggest-commit/evals/prepare_fixture.py --case documented-ticket` and use the emitted `fixtures.documented-ticket.cwd` directory as the repository working directory. The worktree adds HTTP 503 to `RETRYABLE_HTTP_STATUS_CODES`; its latest 20 subjects are English conventional commits with no ticket slots. `CONTRIBUTING.md` has eleven matching commit-format notes before a rule requiring `fix: [TICKET] description`. The branch is `feature/ABC-123`. Suggest five messages.",
+      "expected_output": "The five English one-line subjects use the documented `[TICKET]` placeholder, begin with a prefix, do not copy the branch ID, and describe only adding HTTP 503 to the retryable status set.",
+      "files": [
+        "evals/prepare_fixture.py"
+      ],
+      "expectations": [
+        "The Git fixture contains 20 English conventional subjects, the HTTP 503-only worktree diff, the branch ID, and no remote.",
+        "The documented ticket slot appears after eleven convention-search hits and is treated as required.",
+        "The branch ID alone is not emitted; every suggestion uses `[TICKET]` after its type prefix.",
+        "Claims identify HTTP 503 specifically and preserve the established uppercase `HTTP` spelling.",
+        "Exactly five one-line suggestions are returned with no trailers."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "The repository has two conventional commits, one with a Korean description and one with an English description; neither uses a ticket slot. There is no documented convention. The branch is `feature/ABC-123`. I explicitly want English descriptions. Suggest five messages for the current changes.",
+      "expected_output": "The five one-line subjects use English descriptions, lowercase conventional prefixes, no ticket identifier, and no trailers.",
+      "files": [],
+      "expectations": [
+        "The explicit language request wins over the tied commit sample.",
+        "With fewer than three commits, lowercase conventional prefixes are used.",
+        "The optional identifier slot is omitted and the branch value is not copied.",
+        "All five subjects are prefix-first and contain no body or trailer."
+      ]
     }
   ]
 }

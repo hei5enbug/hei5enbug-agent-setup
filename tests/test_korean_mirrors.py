@@ -25,6 +25,10 @@ EXCLUDED_DIRECTORIES = {".git", ".pytest_cache", ".decision-navigator"}
 LINK_PATTERN = re.compile(r"\]\(([^)]+)\)")
 
 
+def is_eval_fixture(path: Path) -> bool:
+    return any(parent.name == "files" and parent.parent.name == "evals" for parent in path.parents)
+
+
 def english_sources():
     return sorted(
         path
@@ -34,6 +38,7 @@ def english_sources():
         and path not in EXCLUDED_ENGLISH
         and path not in NON_ENGLISH_DOCUMENTS
         and path not in NON_ENGLISH_READMES
+        and not is_eval_fixture(path)
     )
 
 
@@ -87,6 +92,20 @@ class KoreanMirrorTest(unittest.TestCase):
         self.assertTrue(NON_ENGLISH_DOCUMENTS.isdisjoint(sources))
         self.assertTrue(NON_ENGLISH_READMES.isdisjoint(sources))
         self.assertTrue(excluded_sources.isdisjoint(sources))
+
+    def test_평가_입력에는_미러가_필요_없고_운영_안내서는_필요하다(self):
+        # Given
+        fixture = REPO_ROOT / "skills/deep-interview/evals/files/billing-service/README.md"
+        operator_guide = REPO_ROOT / "skills/deep-interview/evals/operator-guides/brownfield-ten-rounds.md"
+
+        # When
+        sources = set(english_sources())
+
+        # Then
+        self.assertTrue(fixture.is_file())
+        self.assertTrue(operator_guide.is_file())
+        self.assertNotIn(fixture, sources)
+        self.assertIn(operator_guide, sources)
 
 
 if __name__ == "__main__":

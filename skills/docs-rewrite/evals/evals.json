@@ -11,6 +11,8 @@
         "Repairs the double passive and passive-with-agent construction.",
         "Replaces the combined hype and canned hedge with plain wording of the same stance.",
         "Does not turn the possibility claim into a certain claim.",
+        "Keeps the rewritten paragraph as an un-fenced plain-text block; any required response metadata appears outside it.",
+        "Reads only the English references as instructions, including references/patterns.md for Korean patterns, and never reads a .ko.md mirror during execution.",
         "Does not create files or report invented metrics."
       ]
     },
@@ -42,6 +44,8 @@
         "Preserves the 10% figure exactly.",
         "Preserves the external-demand assumption and both uncertainty claims.",
         "Does not recommend immediate adoption.",
+        "Performs separate fidelity and naturalness passes without changing the requested tone or rewrite strength.",
+        "Retries only affected spans and stops after at most two retries, reporting any unresolved span.",
         "Performs strict review without requiring named agents or workspace files."
       ]
     },
@@ -62,6 +66,43 @@
       "prompt": "이 리뷰 코멘트 자연스럽게 바꿔줘.\n\n여기서 그 처리를 안 하면 나중에 문제가 될 수도 있을 것 같은데 지금 구조상 그게 가능한지는 잘 모르겠네요",
       "expected_output": "'그 처리'와 '그게'가 각각 무엇을 가리키는지 원문만으로 정해지지 않으므로, 임의로 해석해 확정하지 않는다. 추측 등급('될 수도 있을 것 같은데', '잘 모르겠네요')을 단정으로 올리지 않는다. 두 문장짜리 단일 사안이므로 목록이나 문단 구조를 새로 만들지 않는다. 애매한 지점을 '확인 필요'로 보고한다.",
       "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "윤문해 주세요. 요약하지 말고 모든 관측 행과 수치를 유지해 주세요. 첨부한 긴 장애 보고서의 한국어 문장을 자연스럽게 다듬어 주세요.",
+      "expected_output": "The input length automatically triggers strict review; the report retains every observation and invariant value without changing its uncertainty or incident status.",
+      "files": ["evals/files/long-support-log.ko.txt"],
+      "expectations": [
+        "The attached source exceeds 8,000 characters and triggers strict review without an explicit --strict flag.",
+        "The agent announces the automatic promotion in one short progress update before processing the long input.",
+        "The rewrite proceeds section by section while retaining whole-document context and performs separate fidelity and naturalness passes.",
+        "All source observation rows, exact identifiers, quantities, dates, conditions, uncertainty, and incident states remain represented.",
+        "Retries affect only problematic spans and stop after at most two retries; the report is not summarized or broadly rewritten."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "이전 결과의 세 문단 가운데 두 번째 문단만 다시 윤문해 주세요. 아래 전체 문서를 출력하되 첫째와 셋째 문단은 글자 단위로 그대로 두고, 둘째 문단만 고쳐 주세요.\n\n첫째 문단: 배포는 2026-09-23 14:00 KST에 시작했다.\n\n둘째 문단: 수집이 진행되어지고 있어 보이는 수치는 37.5% 정도 향상되었을 수도 있다고 보여집니다.\n\n셋째 문단: 검증은 3회 수행했고, 롤백은 하지 않았다.",
+      "expected_output": "Only the second paragraph changes; the first and third paragraphs remain character-for-character identical, with all numbers and uncertainty preserved.",
+      "files": [],
+      "expectations": [
+        "Applies the scoped follow-up rule to the latest available text in this prompt.",
+        "Edits only the second paragraph and preserves the first and third paragraphs character-for-character.",
+        "Preserves 2026-09-23 14:00 KST, 37.5%, 3회, and 14:00 as literals.",
+        "Retains the uncertain improvement claim and does not turn it into a fact.",
+        "Does not reopen unrelated spans or add claims."
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "다음 문장을 자연스럽게 윤문해 주세요. 결과 문장만 출력하고 설명, 변경 내역, 확인 필요, 인용 부호, Markdown 코드 펜스는 넣지 마세요.\n\n새 설정은 2026-09-23부터 적용되며, 기존 요청은 변경되지 않습니다.",
+      "expected_output": "A single plain-text sentence with the same date and unchanged scope, without a summary or formatting wrapper.",
+      "files": [],
+      "expectations": [
+        "Outputs only the rewritten sentence, with no 주요 변경 or 확인 필요 section.",
+        "Keeps the result as plain text without quotation marks, Markdown fences, a heading, or a bullet.",
+        "Preserves 2026-09-23 and the distinction between new settings and existing requests."
+      ]
     }
   ]
 }

@@ -1,0 +1,127 @@
+{
+  "skill_name": "flowchart-design",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Turn this process into a clear flowchart: a request enters, the service validates it, and a valid request is published. Preserve the given order and use one left-to-right row.",
+      "expected_output": "An editable linear flow with entry and terminal states, correct edge direction, concise labels, and a text equivalent.",
+      "files": [],
+      "expectations": [
+        "The graph contains request, validation, and publication in that order, with no invented transition.",
+        "The source and final rendered artifact are checked separately when rendering is available.",
+        "The response does not claim visual verification when no renderer or inspection capability is available."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Draw a branch-and-merge flow: a submitted invoice is checked; valid invoices are approved, invalid invoices are corrected, and both outcomes then enter the shared archive step.",
+      "expected_output": "A branch-and-merge graph with two distinct outcomes and an explicit shared archive target.",
+      "files": [],
+      "expectations": [
+        "The decision has distinct valid and invalid outcomes with labels.",
+        "The invalid path includes correction before the shared archive step.",
+        "The approved and corrected outcomes each have an edge to the shared archive node.",
+        "The diagram is not flattened into a linear chain."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Create a bounded retry diagram. A validator may run at most 2 times. Success continues to Publish. A failed first attempt returns to Validate, while a failed second attempt exits to Retry limit reached.",
+      "expected_output": "A retry loop with an exact limit of 2, a success exit, and a separate terminal failure exit.",
+      "files": [],
+      "expectations": [
+        "The return edge condition prevents a third validation attempt and preserves the exact limit of 2.",
+        "The success edge leads to Publish.",
+        "The second failure leads to a distinct terminal Retry limit reached node.",
+        "The retry edge routes around Validate and does not pass through another node."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Diagram this error exit: a credential check either succeeds and continues to Load account, or fails and terminates at Access denied. The failure path must not rejoin the normal flow.",
+      "expected_output": "A success path continuing to Load account and a separate terminal Access denied path.",
+      "files": [],
+      "expectations": [
+        "The success outcome leads to Load account.",
+        "The failure outcome leads to an explicit terminal Access denied node.",
+        "The failure path does not rejoin the normal path."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Make a flowchart for this note: 'If the partner rejects the payload, retry before continuing.' The note does not say how many retries are allowed or whether rejection has other outcomes.",
+      "expected_output": "The agent asks for the missing business rule before choosing a retry count or drawing the ambiguous transition.",
+      "files": [],
+      "expectations": [
+        "The agent identifies the unspecified retry bound and any ambiguity material to the graph.",
+        "The agent asks for clarification before encoding a retry count or inventing another outcome.",
+        "The agent does not draw an unlimited retry loop or silently choose a default limit."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Revise the attached SVG. Remove the deprecated Legacy Import node and its Old Delivery group; the source of truth says the flow is now Fetch manifest → Validate → Publish, with an invalid validation outcome ending at Rejected. Keep the remaining graph semantics, improve the spacing and long-label fit, and return the revised SVG.",
+      "expected_output": "The SVG is updated to the stated graph, the removed content leaves no layout trace, and the final SVG is rendered and inspected when tools permit.",
+      "files": ["evals/files/legacy-approval.svg"],
+      "expectations": [
+        "The agent recomputes the SVG viewBox before delivery against current visible content, including text, descenders, markers, strokes, and shadows.",
+        "Legacy Import and Old Delivery are absent from the final graph and its visible bounds.",
+        "The remaining Fetch manifest → Validate → Publish flow and Rejected terminal outcome match the source of truth.",
+        "The literal path tenant-configuration/control-plane/api/v2/manifest.yaml remains unchanged in the text equivalent or visible label.",
+        "The viewBox bounds current visible content, including text descenders, strokes, markers, and shadows.",
+        "The agent preserves a text equivalent and does not report unperformed visual inspection."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Edit the attached HTML diagram. Remove only the Legacy approval group container and Legacy parser node. Retain the Review node and all other current steps and edges. Keep the Korean and monospace labels. Export a PNG with tight, equal padding. The background has a subtle gradient and the nodes cast shadows. Return the editable source and verified PNG if the required rendering and inspection tools are available.",
+      "expected_output": "The HTML and PNG correspond to the same revision; the PNG is cropped against rendered visible content, equally padded, and visually inspected, or the unavailable checks are reported honestly.",
+      "files": ["evals/files/gradient-workflow.html"],
+      "expectations": [
+        "The agent follows the inline SVG viewBox and PNG export procedures before changing the inline SVG and exporting the PNG.",
+        "The content-free second render preserves the same gradient background, and the crop is derived by diffing it against the normal render rather than by background-color trimming.",
+        "The export removes only the group container and Legacy parser, retains the Review node and other current flow, includes visible shadows and text glyphs in the crop bounds, and applies the same padding on all four sides.",
+        "The long Korean label 요청자가 제출한 권한과 계정 연결 상태를 확인 and the literal approval/request/v2 remain intact in the diagram or text equivalent; the node is measured and adjusted so the Korean glyphs are not clipped.",
+        "The PNG output name has a timestamp postfix and only the verified PNG is referenced as the deliverable.",
+        "The saved PNG is opened and checked for balanced padding, clipping, and leftover whitespace; if unavailable, the response names the exact missing check."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Use the available native editable diagram canvas to create and inspect this simple flow: Start → Review → Done. Keep it editable and provide an accessible text equivalent. Do not export SVG or PNG.",
+      "expected_output": "An editable native-canvas diagram with the stated sequence and a text equivalent.",
+      "files": [],
+      "expectations": [
+        "The agent selects the available native editable canvas path.",
+        "The graph is Start → Review → Done, remains editable, and has a text equivalent.",
+        "The agent does not export SVG or PNG because the user requested only a native canvas deliverable.",
+        "The final canvas is inspected if the host supports it, with unavailable checks disclosed."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Only a diagram DSL renderer is available. Render this topology: Client → API; API branches to Success → Response or Failure → Error response. Preserve the two outcomes and their labels.",
+      "expected_output": "A DSL diagram that preserves the branch topology and outcome labels, with any unverified visual checks disclosed.",
+      "files": [],
+      "expectations": [
+        "The agent uses the available DSL renderer to represent the topology without changing it.",
+        "Success and Failure remain distinct and lead to their stated terminal responses.",
+        "The agent does not create SVG or PNG output when the user requested only the DSL-rendered topology.",
+        "Any visual inspection that the DSL tool cannot provide is marked unverified rather than assumed."
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "There is no editable canvas, renderer, browser, or image-inspection capability in this session. Specify this process as a renderer-ready flowchart: Start → Check order; if valid, Ship; if invalid, stop at Rejected. Include the semantic graph and layout contract.",
+      "expected_output": "A renderer-ready text specification with correct graph semantics and an explicit visual-verification limitation.",
+      "files": [],
+      "expectations": [
+        "The response gives stable node IDs, directed edges, outcome labels, entry and terminal states, and a reading direction.",
+        "The valid path leads to Ship and the invalid path terminates at Rejected.",
+        "The layout contract describes a suitable branch-and-error-exit pattern without inventing transitions.",
+        "The result is marked not visually verified and identifies the exact unavailable inspection.",
+        "The agent does not claim an SVG or PNG was rendered or inspected."
+      ]
+    }
+  ]
+}
