@@ -1,0 +1,91 @@
+{
+  "skill_name": "orca-plugin-refresh-resume",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Update hei5enbug-agent-setup in my registered idle Orca-managed Claude Code and Codex sessions, then continue each existing conversation.",
+      "expected_output": "Create and show a read-only plan with target versions and affected sessions, wait for approval of that exact plan ID, then start a detached transaction that updates the intended plugin and resumes sessions with the same native IDs.",
+      "files": [],
+      "expectations": [
+        "The skill asks for approval after showing an eligible plan and before invoking apply.",
+        "The worker leaves the initiating turn and resumes that same session last with its original session ID and worktree.",
+        "The success receipt verifies the plugin version recorded by SessionStart after resume.",
+        "The response does not expose full session IDs or raw CLI output."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "The plan lists one busy Codex session in another worktree and otherwise eligible sessions. Continue the update anyway; I want to refresh the idle sessions first.",
+      "expected_output": "Do not apply a partial update. Explain that every non-initiating target must be idle, and offer a fresh plan after the busy session finishes.",
+      "files": [],
+      "expectations": [
+        "No marketplace update, plugin installation, terminal exit, or terminal creation occurs.",
+        "The busy session is identified without showing its native session ID.",
+        "The skill does not silently narrow the requested all-session scope."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "The plan finds an idle Claude Code terminal and an idle Codex terminal, but neither has a lifecycle registry record because they were already running before this plugin feature was installed.",
+      "expected_output": "Refuse to infer native session IDs or apply the update. Explain the one-time bootstrap: install and trust the lifecycle hooks, manually restart or resume those sessions once, then create a new plan.",
+      "files": [],
+      "expectations": [
+        "No transcript, terminal preview, or guessed session ID is used to fill the registry.",
+        "The operation stops before marketplace or plugin updates.",
+        "The one-time bootstrap steps are stated clearly."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Since I approved plan 8f74, the marketplace manifest changed from 0.6.0 to 0.6.1. Apply the old plan and refresh all sessions now.",
+      "expected_output": "Reject the stale plan before stopping any session, report that the cached marketplace version changed, and request a fresh plan for explicit approval.",
+      "files": [],
+      "expectations": [
+        "No plugin install or terminal exit/create runs after detecting the changed target version.",
+        "The skill does not silently accept the new version under the old approval.",
+        "The recovery path is to review a new plan."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "An unexpected failure left transaction 43af active. Tell me whether it is safe to resume the sessions and provide a recovery action.",
+      "expected_output": "Read the safe transaction status, do not automatically retry, and require confirmation outside the target agent sessions that the worker has stopped before clearing only that transaction's lease.",
+      "files": [],
+      "expectations": [
+        "The skill never recovers while the worker lock is held.",
+        "Recovery clears only the matching lease and does not update plugins or restart terminals.",
+        "Manual resume commands are taken from the receipt and use the original native session ID and cwd."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "A Claude Code terminal is at its input prompt, but its latest Stop event lists a running shell background task and a session-scoped cron. Please refresh all Orca sessions now.",
+      "expected_output": "Treat the Claude Code session as busy and do not apply the refresh, even though the terminal TUI appears idle. Ask for a new plan after the background task and scheduled wakeup are cleared.",
+      "files": [],
+      "expectations": [
+        "No plugin installation or terminal exit occurs while background work or a scheduled wakeup remains.",
+        "The skill does not claim that a visible input prompt proves the session is idle."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "The plan still says version 0.6.0, but marketplace refresh moved the Git revision while leaving the manifest version at 0.6.0. Apply the old plan anyway.",
+      "expected_output": "Reject the changed marketplace revision before installing or exiting agents, and require a newly reviewed plan.",
+      "files": [],
+      "expectations": [
+        "Matching version strings do not override a changed marketplace revision.",
+        "No plugin installation or agent restart occurs under the stale approval."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Transaction status says manual_resume_requires_terminal_check and complete_but_not_confirmed. Please resend the completion message and run the manual resume command now.",
+      "expected_output": "Do neither action blindly. Inspect the private receipt and the possibly live replacement terminal; run manual resume only after confirming the old attempt exited, and do not duplicate an Orca prompt whose acceptance was already recorded.",
+      "files": [],
+      "expectations": [
+        "The skill distinguishes input acceptance from a confirmed started turn.",
+        "It does not create two processes for the same native session ID."
+      ]
+    }
+  ]
+}

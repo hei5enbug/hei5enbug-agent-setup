@@ -120,6 +120,7 @@ Codex가 제공하는 `PLUGIN_ROOT`가 설치 디렉터리를 가리키면 로�
 | 세션 시작·재개 | `SessionStart`가 설치된 지침 파일을 전달한다. |
 | 세션 초기화·컨텍스트 압축 | `SessionStart`가 지침을 다시 전달한다. |
 | 서브에이전트 시작 | `SubagentStart`가 같은 호스트의 지침을 전달한다. |
+| 사용자 입력·턴 종료·세션 종료 | Orca 업데이트용 registry가 prompt 본문 없이 세션 메타데이터를 기록한다. |
 | 조건에 맞는 작업 시작 | 에이전트가 `instructions/`의 필수 참조를 읽는다. |
 | 플러그인 업데이트 설치 | 새 세션이 설치된 버전을 읽는다. 저장소에 푸시하는 것만으로는 반영되지 않는다. |
 
@@ -138,6 +139,8 @@ Codex는 현재 플러그인 훅 정의를 사용자가 검토하고 신뢰한 �
 설치·업데이트 후 호스트의 훅 설정에서 활성화 여부를 확인하고, Codex에서는 신뢰 여부도 확인한다.
 업데이트 후에는 Claude Code를 재시작하거나 Codex에서 새 세션을 시작한다.
 훅은 호스트의 신뢰 설정을 우회하지 않으며, 실행 중인 세션의 플러그인 버전을 바꾸지 않는다.
+`orca-plugin-refresh-resume` 스킬은 한 번 초기 등록한 뒤 registry를 사용해 플러그인을 갱신하고,
+등록된 idle 세션을 재개한다.
 
 세션 지침 누락·빈 파일·잘못된 로컬 참조나 9,000 UTF-8 바이트를 넘는 컨텍스트는 표준 오류로 알린다.
 이때 지침 일부만 전달하지 않는다.
@@ -169,6 +172,21 @@ claude plugin update hei5enbug-agent-setup@hei5enbug
 
 업데이트한 스킬과 지침을 불러오려면 새 Codex 스레드를 시작하거나
 Claude Code를 다시 시작합니다.
+
+### Orca 에이전트 세션 업데이트
+
+`orca-plugin-refresh-resume`은 Orca 관리 idle 세션에서 이 플러그인을 업데이트하고 기존 native session ID로
+재개합니다. 먼저 계획을 보여주고 승인받은 뒤 marketplace와 플러그인을 업데이트합니다.
+세션이 작업 중이거나 registry에 없거나 구분되지 않으면 설치 전에 중단합니다.
+Claude Code의 백그라운드 작업과 예약된 재실행도 업데이트를 막습니다. worker는 종료 직전에 terminal 신원과
+idle 상태를 다시 확인하지만, 호스트의 훅 시간 초과 때문에 새 prompt가 절대 들어오지 않는다고 보장할 수는
+없습니다. 완료 알림이 실패하거나 확인되지 않으면 receipt를 확인하세요. 새 terminal에서 agent가 실행 중일
+가능성이 있으면 알림을 무작정 다시 보내거나 같은 세션을 다시 재개하지 마세요.
+
+최초 한 번은 수동 초기 설정이 필요합니다. 새 플러그인을 설치하고 Codex 훅을 검토·신뢰한 뒤 기존 세션을
+한 번씩 재시작하거나 재개합니다. 이전 세션은 lifecycle registry가 없어 native session ID를 식별할 수 없습니다.
+초기 설정 후에는 훅이 registry를 갱신하므로 이후 등록 세션을 자동으로 재개합니다.
+macOS와 Linux의 `hei5enbug` marketplace 사용자 범위 설치를 지원합니다.
 
 ## 개발 검사
 
@@ -204,6 +222,7 @@ node --test skills/document-to-confluence/tests/test_render_diagrams.mjs
 | [`docs-rewrite`](skills/docs-rewrite/SKILL.md) | 주장, 수치, 확신도를 그대로 둔 채 글이 자연스럽게 읽히도록 고쳐 쓰고, AI가 쓴 듯한 한국어 문체를 함께 고칩니다. [한국어 안내](skills/docs-rewrite/SKILL.ko.md) |
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Markdown, HTML, PDF, DOCX, Google Docs 문서를 Confluence 페이지로 변환하고, 문서 구조와 첨부 파일을 보존하며, 이후 원본 변경도 페이지에 반영합니다. [한국어 안내](skills/document-to-confluence/SKILL.ko.md) |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | 초안 작성 → 테스트 → 검토 → 개선 순환을 통해 에이전트 스킬을 만들고, 검증하고, 패키징합니다. [한국어 안내](skills/skill-builder/SKILL.ko.md) |
+| [`orca-plugin-refresh-resume`](skills/orca-plugin-refresh-resume/SKILL.md) | idle 상태의 Orca 관리 Claude Code와 Codex 세션에서 이 플러그인을 미리 확인하고 업데이트한 뒤 저장된 native ID로 각 세션을 재개합니다. [한국어 안내](skills/orca-plugin-refresh-resume/SKILL.ko.md) |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | 스테이징된 변경과 스테이징되지 않은 변경을 함께, 또는 사용자가 지정한 범위를 최근 커밋 이력과 함께 읽어, 이 저장소의 스타일에 맞는 커밋 메시지 5개를 제안합니다. [한국어 안내](skills/suggest-commit/SKILL.ko.md) |
 | [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | 구현 계획을 담당하지 않고 기술 설계 문서와 RFC를 작성하거나 검토합니다. [한국어 안내](skills/technical-design-writer/SKILL.ko.md) |
 | [`tiki-taka`](skills/tiki-taka/SKILL.md) | 현재 에이전트와 반대쪽 Claude/Codex 세션이 교환 횟수를 제한한 토론을 벌여 쟁점을 드러내고 수렴시킵니다. [한국어 안내](skills/tiki-taka/SKILL.ko.md) |
