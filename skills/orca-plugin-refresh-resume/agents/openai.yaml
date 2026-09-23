@@ -1,0 +1,4 @@
+interface:
+  display_name: "Orca Plugin Refresh and Resume"
+  short_description: "Preview and resume idle Orca-managed Claude Code and Codex sessions after plugin updates"
+  default_prompt: "Use $orca-plugin-refresh-resume to preview a hei5enbug-agent-setup update across my registered idle Orca sessions. Ask me to approve the plan before applying it."

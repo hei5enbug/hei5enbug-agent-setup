@@ -10,6 +10,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 EXCLUDED_ENGLISH = {
     REPO_ROOT / "skills/skill-builder/references/schemas.md",
 }
+NON_ENGLISH_DOCUMENTS = {
+    REPO_ROOT / ".plan/orca-plugin-refresh-resume/implementation-plan.md",
+}
 NON_ENGLISH_READMES = {
     REPO_ROOT / "README.de.md",
     REPO_ROOT / "README.es.md",
@@ -29,6 +32,7 @@ def english_sources():
         if EXCLUDED_DIRECTORIES.isdisjoint(path.parts)
         and not path.name.endswith(".ko.md")
         and path not in EXCLUDED_ENGLISH
+        and path not in NON_ENGLISH_DOCUMENTS
         and path not in NON_ENGLISH_READMES
     )
 
@@ -42,13 +46,20 @@ def mirror_for(source):
 
 
 class KoreanMirrorTest(unittest.TestCase):
-    def test_every_human_readable_english_markdown_has_a_korean_mirror(self):
+    def test_영어_markdown에는_의미가_같은_한국어_미러가_있다(self):
+        """사람이 읽는 영어 Markdown마다 의미가 같은 한국어 미러가 존재한다."""
+        # Given
         sources = english_sources()
         self.assertTrue(sources)
-        for source in sources:
-            mirror = mirror_for(source)
+        mirrors = [(source, mirror_for(source)) for source in sources]
+
+        # When
+        observed = [(source, mirror, mirror.is_file()) for source, mirror in mirrors]
+
+        # Then
+        for source, mirror, exists in observed:
             with self.subTest(source=source.relative_to(REPO_ROOT)):
-                self.assertTrue(mirror.is_file(), f"missing Korean mirror: {mirror}")
+                self.assertTrue(exists, f"missing Korean mirror: {mirror}")
                 text = mirror.read_text(encoding="utf-8")
                 self.assertIn("영어 원본:", text)
                 self.assertIn("비권위", text)
@@ -63,10 +74,19 @@ class KoreanMirrorTest(unittest.TestCase):
                 with self.subTest(source=source.relative_to(REPO_ROOT), target=target):
                     self.assertFalse(target.split("#", 1)[0].endswith(".ko.md"))
 
-    def test_schema_and_non_english_documents_are_not_mirror_sources(self):
+    def test_스키마와_한국어_문서는_미러_원본에서_제외한다(self):
+        """스키마와 이미 한국어로 작성된 문서는 번역 미러 원본에서 제외한다."""
+        # Given
         sources = set(english_sources())
+
+        # When
+        excluded_sources = EXCLUDED_ENGLISH | NON_ENGLISH_DOCUMENTS | NON_ENGLISH_READMES
+
+        # Then
         self.assertTrue(EXCLUDED_ENGLISH.isdisjoint(sources))
+        self.assertTrue(NON_ENGLISH_DOCUMENTS.isdisjoint(sources))
         self.assertTrue(NON_ENGLISH_READMES.isdisjoint(sources))
+        self.assertTrue(excluded_sources.isdisjoint(sources))
 
 
 if __name__ == "__main__":
