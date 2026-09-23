@@ -1,0 +1,69 @@
+{
+  "simulation": {
+    "status": "simulated",
+    "provider": "google-docs",
+    "live_connector_used": false,
+    "external_writes": false
+  },
+  "document": {
+    "id": "SIMULATED_DOC_42",
+    "title": "Incident response handover",
+    "revision": "SIMULATED_REVISION_7",
+    "modified_time": "2026-09-23T00:00:00Z"
+  },
+  "tabs": [
+    {
+      "tab_id": "TAB_OVERVIEW",
+      "title": "Overview",
+      "index": 0,
+      "blocks": [
+        { "type": "heading", "level": 1, "text": "Incident response handover" },
+        { "type": "paragraph", "text": "Escalate to the service owner after the second failed health check." },
+        {
+          "type": "link",
+          "text": "On-call dashboard",
+          "url": "https://example.test/on-call",
+          "target_access": "simulated"
+        },
+        {
+          "type": "smart_chip",
+          "chip_type": "person",
+          "visible_text": "Rae Example",
+          "resource_id": "SIMULATED_PERSON_17",
+          "url": "https://example.test/people/rae",
+          "target_access": "simulated"
+        },
+        {
+          "type": "smart_chip",
+          "chip_type": "date",
+          "visible_text": "2026-09-23",
+          "date": "2026-09-23"
+        }
+      ]
+    },
+    {
+      "tab_id": "TAB_RESPONSE_PLAN",
+      "title": "Response plan",
+      "index": 1,
+      "blocks": [
+        { "type": "heading", "level": 1, "text": "Response plan" },
+        {
+          "type": "table",
+          "rows": [
+            ["Step", "Action"],
+            ["1", "Confirm the affected region."],
+            ["2", "Switch traffic to the healthy region."]
+          ]
+        },
+        {
+          "type": "smart_chip",
+          "chip_type": "drive_file",
+          "visible_text": "Escalation matrix",
+          "resource_id": "SIMULATED_FILE_88",
+          "url": "https://example.test/files/escalation-matrix",
+          "target_access": "unknown"
+        }
+      ]
+    }
+  ]
+}

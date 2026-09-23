@@ -28,12 +28,21 @@ def skill_dirs() -> list[Path]:
 
 
 def documents(skill: Path) -> list[Path]:
-    return [p for p in sorted(skill.rglob("*.md")) if "tests" not in p.relative_to(skill).parts]
+    return [
+        p for p in sorted(skill.rglob("*.md"))
+        if not {"tests", "evals"}.intersection(p.relative_to(skill).parts)
+    ]
 
 
 class SiblingReferenceTest(unittest.TestCase):
     def test_repository_has_skills_to_check(self):
         self.assertGreaterEqual(len(skill_dirs()), 2)
+
+    def test_evaluation_inputs_are_not_runtime_instruction_documents(self):
+        skill = REPO_ROOT / "skills" / "document-to-confluence"
+        fixture = skill / "evals/files/markdown-case/repository/docs/architecture.md"
+        self.assertTrue(fixture.is_file())
+        self.assertNotIn(fixture, documents(skill))
 
     def test_every_sibling_reference_resolves_from_the_skill_root(self):
         """`../x/y.md` is always anchored at the skill directory, whatever file spells it."""

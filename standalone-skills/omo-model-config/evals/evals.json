@@ -1,0 +1,121 @@
+{
+  "skill_name": "omo-model-config",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Refresh all model routes in the project oh-my-openagent.json using the read-only source directory materialized from evals/source-fixture.json at its recorded commit. The evaluation runner has made that directory available as read-only input.",
+      "expected_output": "Resolve one pinned SHA, read all 20 mandatory files in a batch where supported, reuse the same run-local source set for every target and validation, and report the full routing update without changing unrelated config.",
+      "files": [
+        "evals/source-fixture.json",
+        "available-models.json",
+        "oh-my-openagent.json"
+      ],
+      "expectations": [
+        "The resolved source revision matches the manifest's full commit SHA.",
+        "All 20 mandatory paths are read from that same SHA; no required source is omitted.",
+        "Independent mandatory reads are batched where supported, then reused for enumeration, resolution, and validation without duplicate fetches or repeated full-corpus output.",
+        "Every upstream and local target is enumerated, and all non-target config and formatting are preserved.",
+        "The report accounts for every changed or deferred target and justifies every model absent from its exact chain.",
+        "Relevant provider- or model-specific tests are read from the same revision; unrelated specialized tests are skipped."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Using the read-only source directory materialized from evals/source-fixture.json at its recorded commit, refresh only agents.librarian in the project oh-my-openagent.json. The evaluation runner has made that directory available as read-only input.",
+      "expected_output": "Read the complete mandatory pinned source set and enumerate every target, but change only agents.librarian routing fields, apart from any required agents.*.ultrawork cleanup.",
+      "files": [
+        "evals/source-fixture.json",
+        "available-models.json",
+        "oh-my-openagent.json"
+      ],
+      "expectations": [
+        "All 20 mandatory source files are read at the single resolved SHA even though the requested edit is targeted.",
+        "The complete target list is enumerated before writing.",
+        "No other agent or category routing is changed, and unrelated config and formatting remain intact.",
+        "The same run-local source set is reused for target resolution and validation."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Migrate only agents.oracle in evals/files/legacy-target.json to the current routing shape, keeping its selected primary and fallback models. Use the source directory materialized from evals/source-fixture.json at its recorded commit. Preserve categories.deep, the [opencode] block, and every unrelated value.",
+      "expected_output": "Write agents.oracle.models with openai/gpt-5.6-sol at reasoning xhigh followed by anthropic/claude-opus-5, remove the deprecated fields from that target, and preserve the rest of the file exactly.",
+      "files": [
+        "evals/source-fixture.json",
+        "evals/files/legacy-target.json",
+        "available-models.json"
+      ],
+      "expectations": [
+        "All 20 mandatory source files are read at the single resolved SHA before the edit.",
+        "agents.oracle.model, variant, and fallback_models are converted to the ordered current models shape with reasoning preserved.",
+        "The [opencode] host block keeps its legacy fields and values unchanged because it is outside the write scope.",
+        "categories.deep and all unrelated values remain unchanged.",
+        "The reasoning-unification test and other relevant conditional tests use the same pinned revision."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Refresh the project routing from the pinned source fixture. The mandatory model-resolver.ts fetch fails at the resolved SHA, and the source provider confirms that the required file is unavailable.",
+      "expected_output": "Stop all model-routing changes and report the unavailable required source. Only agents.*.ultrawork cleanup may proceed; do not mix the remaining sources into a partial route update.",
+      "files": [
+        "evals/source-fixture.json",
+        "available-models.json",
+        "oh-my-openagent.json"
+      ],
+      "expectations": [
+        "The failure of one mandatory source defers all model-routing changes.",
+        "The response names model-resolver.ts and the pinned revision as the blocker.",
+        "No partial target update or invented replacement source is used.",
+        "Only agents.*.ultrawork cleanup may continue."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "During the first pinned read, model-availability.ts reports a different commit SHA. Re-fetch every mandatory file from the one resolved SHA; the evaluation runner then provides the complete materialized fixture from that SHA. Continue the requested full refresh.",
+      "expected_output": "Discard the mismatched read, re-fetch all 20 mandatory files at the resolved SHA, verify the full source set, then continue using only the refreshed set.",
+      "files": [
+        "evals/source-fixture.json",
+        "available-models.json",
+        "oh-my-openagent.json"
+      ],
+      "expectations": [
+        "A source from another SHA is never combined with the pinned source set.",
+        "All 20 mandatory files are re-fetched at the original resolved SHA after the mismatch.",
+        "The re-fetched run-local set is reused for resolution and validation.",
+        "The skill proceeds only after every required source verifies against the same SHA."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Use evals/files/no-viable-available-models.json as this run's available-models.json and refresh the project oh-my-openagent.json from the pinned fixture. No model in the allowlist can satisfy the targets.",
+      "expected_output": "Leave existing routing unchanged, report the targets as deferred with the missing allowlisted models needed to unblock them, and do not write empty or arbitrary model chains.",
+      "files": [
+        "evals/source-fixture.json",
+        "evals/files/no-viable-available-models.json",
+        "oh-my-openagent.json"
+      ],
+      "expectations": [
+        "No target is changed to an arbitrary or empty chain when no viable model exists.",
+        "Deferred targets and the model availability needed to unblock them are reported.",
+        "The required source set and complete target enumeration are still performed.",
+        "The skill makes no unsupported model or provider selection."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Refresh the project oh-my-openagent.json using the pinned fixture. A separate config snapshot at evals/files/external-target.json represents ~/.config/oh-my-openagent.json. I decline any changes to that external config; update the project only.",
+      "expected_output": "Apply the authorized project update, leave the external config snapshot unchanged after the user declines, and report that no external sync occurred.",
+      "files": [
+        "evals/source-fixture.json",
+        "available-models.json",
+        "oh-my-openagent.json",
+        "evals/files/external-target.json"
+      ],
+      "expectations": [
+        "The project target is distinguished from the external config.",
+        "The external file is not written after the user declines sync.",
+        "No explicit confirmation is inferred from the original project update request.",
+        "The response reports that the external config was left unchanged."
+      ]
+    }
+  ]
+}

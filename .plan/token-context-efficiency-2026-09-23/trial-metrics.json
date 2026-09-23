@@ -1,0 +1,2281 @@
+{
+  "baseline_commit": "72f66ac69cf02ac7b7f64bfba0a11adc8736ed04",
+  "date": "2026-09-23",
+  "note": "Synthetic native comparison receipts. Outputs and full prompts omitted; usage fields retain each host's native structure. Invalid setup/smoke attempts are excluded.",
+  "records": [
+    {
+      "label": "f01-claude",
+      "host": "claude",
+      "stats": {
+        "old": {
+          "median_seconds": 9.407,
+          "max_seconds": 10.09
+        },
+        "new": {
+          "median_seconds": 10.46,
+          "max_seconds": 13.971
+        }
+      },
+      "trials": [
+        {
+          "pair": 1,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 9.407,
+          "description_chars": 953,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 9.255,
+              "prompt_utf8_bytes": 17441,
+              "answer_utf8_bytes": 1044,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 6676,
+                "cache_read_input_tokens": 4353,
+                "output_tokens": 469,
+                "output_tokens_details": {
+                  "thinking_tokens": 138
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 6676,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 469,
+                    "cache_read_input_tokens": 4353,
+                    "cache_creation_input_tokens": 6676,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 6676
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 13.971,
+          "description_chars": 907,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 13.857,
+              "prompt_utf8_bytes": 17492,
+              "answer_utf8_bytes": 996,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11040,
+                "output_tokens": 643,
+                "output_tokens_details": {
+                  "thinking_tokens": 321
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 643,
+                    "cache_read_input_tokens": 11040,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 10.46,
+          "description_chars": 927,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 10.334,
+              "prompt_utf8_bytes": 17492,
+              "answer_utf8_bytes": 1034,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11040,
+                "output_tokens": 511,
+                "output_tokens_details": {
+                  "thinking_tokens": 182
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 511,
+                    "cache_read_input_tokens": 11040,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 7.253,
+          "description_chars": 834,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 7.136,
+              "prompt_utf8_bytes": 17441,
+              "answer_utf8_bytes": 925,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11029,
+                "output_tokens": 342,
+                "output_tokens_details": {
+                  "thinking_tokens": 51
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 342,
+                    "cache_read_input_tokens": 11029,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 3,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 10.09,
+          "description_chars": 951,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 9.967,
+              "prompt_utf8_bytes": 17441,
+              "answer_utf8_bytes": 1056,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11029,
+                "output_tokens": 745,
+                "output_tokens_details": {
+                  "thinking_tokens": 415
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 745,
+                    "cache_read_input_tokens": 11029,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 3,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 6.95,
+          "description_chars": 574,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 6.834,
+              "prompt_utf8_bytes": 17492,
+              "answer_utf8_bytes": 619,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11040,
+                "output_tokens": 283,
+                "output_tokens_details": {
+                  "thinking_tokens": 99
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 283,
+                    "cache_read_input_tokens": 11040,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "f01-codex",
+      "host": "codex",
+      "stats": {
+        "old": {
+          "median_seconds": 32.04,
+          "max_seconds": 43.171
+        },
+        "new": {
+          "median_seconds": 26.526,
+          "max_seconds": 32.108
+        }
+      },
+      "trials": [
+        {
+          "pair": 1,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 43.171,
+          "description_chars": 835,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 43.023,
+              "prompt_utf8_bytes": 17441,
+              "answer_utf8_bytes": 912,
+              "usage": {
+                "input_tokens": 134635,
+                "cached_input_tokens": 102912,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 1821,
+                "reasoning_output_tokens": 961
+              }
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 32.108,
+          "description_chars": 449,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 31.987,
+              "prompt_utf8_bytes": 17492,
+              "answer_utf8_bytes": 486,
+              "usage": {
+                "input_tokens": 94320,
+                "cached_input_tokens": 77824,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 1276,
+                "reasoning_output_tokens": 747
+              }
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 26.526,
+          "description_chars": 370,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 26.393,
+              "prompt_utf8_bytes": 17492,
+              "answer_utf8_bytes": 407,
+              "usage": {
+                "input_tokens": 93975,
+                "cached_input_tokens": 65536,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 910,
+                "reasoning_output_tokens": 524
+              }
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 31.777,
+          "description_chars": 797,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 31.654,
+              "prompt_utf8_bytes": 17441,
+              "answer_utf8_bytes": 832,
+              "usage": {
+                "input_tokens": 94076,
+                "cached_input_tokens": 75776,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 1125,
+                "reasoning_output_tokens": 667
+              }
+            }
+          ]
+        },
+        {
+          "pair": 3,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 32.04,
+          "description_chars": 901,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 31.906,
+              "prompt_utf8_bytes": 17441,
+              "answer_utf8_bytes": 938,
+              "usage": {
+                "input_tokens": 94244,
+                "cached_input_tokens": 68608,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 1217,
+                "reasoning_output_tokens": 723
+              }
+            }
+          ]
+        },
+        {
+          "pair": 3,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 22.146,
+          "description_chars": 365,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 22.011,
+              "prompt_utf8_bytes": 17492,
+              "answer_utf8_bytes": 404,
+              "usage": {
+                "input_tokens": 41704,
+                "cached_input_tokens": 28160,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 744,
+                "reasoning_output_tokens": 496
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "f01-b5-claude",
+      "host": "claude",
+      "stats": {
+        "old": {
+          "median_seconds": 7.098,
+          "max_seconds": 13.948
+        },
+        "new": {
+          "median_seconds": 7.392,
+          "max_seconds": 8.793
+        }
+      },
+      "trials": [
+        {
+          "pair": 1,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 7.098,
+          "description_chars": 433,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 6.968,
+              "prompt_utf8_bytes": 17441,
+              "answer_utf8_bytes": 977,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11029,
+                "output_tokens": 467,
+                "output_tokens_details": {
+                  "thinking_tokens": 33
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 467,
+                    "cache_read_input_tokens": 11029,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 8.793,
+          "description_chars": 835,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 8.669,
+              "prompt_utf8_bytes": 17416,
+              "answer_utf8_bytes": 930,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 6667,
+                "cache_read_input_tokens": 4353,
+                "output_tokens": 427,
+                "output_tokens_details": {
+                  "thinking_tokens": 115
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 6667,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 427,
+                    "cache_read_input_tokens": 4353,
+                    "cache_creation_input_tokens": 6667,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 6667
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 7.392,
+          "description_chars": 628,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 7.276,
+              "prompt_utf8_bytes": 17416,
+              "answer_utf8_bytes": 717,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11020,
+                "output_tokens": 359,
+                "output_tokens_details": {
+                  "thinking_tokens": 123
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 359,
+                    "cache_read_input_tokens": 11020,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 6.705,
+          "description_chars": 900,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 6.58,
+              "prompt_utf8_bytes": 17441,
+              "answer_utf8_bytes": 993,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11029,
+                "output_tokens": 405,
+                "output_tokens_details": {
+                  "thinking_tokens": 84
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 405,
+                    "cache_read_input_tokens": 11029,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 3,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 13.948,
+          "description_chars": 876,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 13.835,
+              "prompt_utf8_bytes": 17441,
+              "answer_utf8_bytes": 979,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11029,
+                "output_tokens": 816,
+                "output_tokens_details": {
+                  "thinking_tokens": 488
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 816,
+                    "cache_read_input_tokens": 11029,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 3,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 6.271,
+          "description_chars": 382,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 6.144,
+              "prompt_utf8_bytes": 17416,
+              "answer_utf8_bytes": 854,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11020,
+                "output_tokens": 386,
+                "output_tokens_details": {
+                  "thinking_tokens": 0
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 386,
+                    "cache_read_input_tokens": 11020,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "f01-b5-codex",
+      "host": "codex",
+      "stats": {
+        "old": {
+          "median_seconds": 21.778,
+          "max_seconds": 21.901
+        },
+        "new": {
+          "median_seconds": 10.607,
+          "max_seconds": 32.749
+        }
+      },
+      "trials": [
+        {
+          "pair": 1,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 21.901,
+          "description_chars": 857,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 21.769,
+              "prompt_utf8_bytes": 17441,
+              "answer_utf8_bytes": 894,
+              "usage": {
+                "input_tokens": 41693,
+                "cached_input_tokens": 28160,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 844,
+                "reasoning_output_tokens": 511
+              }
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 10.127,
+          "description_chars": 561,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 10.015,
+              "prompt_utf8_bytes": 17416,
+              "answer_utf8_bytes": 600,
+              "usage": {
+                "input_tokens": 19161,
+                "cached_input_tokens": 9984,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 204,
+                "reasoning_output_tokens": 79
+              }
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 32.749,
+          "description_chars": 542,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 32.638,
+              "prompt_utf8_bytes": 17416,
+              "answer_utf8_bytes": 581,
+              "usage": {
+                "input_tokens": 61657,
+                "cached_input_tokens": 47360,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 1070,
+                "reasoning_output_tokens": 658
+              }
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 12.819,
+          "description_chars": 899,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 12.698,
+              "prompt_utf8_bytes": 17441,
+              "answer_utf8_bytes": 992,
+              "usage": {
+                "input_tokens": 19170,
+                "cached_input_tokens": 18176,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 400,
+                "reasoning_output_tokens": 188
+              }
+            }
+          ]
+        },
+        {
+          "pair": 3,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 21.778,
+          "description_chars": 782,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 21.657,
+              "prompt_utf8_bytes": 17441,
+              "answer_utf8_bytes": 828,
+              "usage": {
+                "input_tokens": 41637,
+                "cached_input_tokens": 36352,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 764,
+                "reasoning_output_tokens": 473
+              }
+            }
+          ]
+        },
+        {
+          "pair": 3,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 10.607,
+          "description_chars": 486,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 10.49,
+              "prompt_utf8_bytes": 17416,
+              "answer_utf8_bytes": 523,
+              "usage": {
+                "input_tokens": 19161,
+                "cached_input_tokens": 9984,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 287,
+                "reasoning_output_tokens": 175
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "f11-claude",
+      "host": "claude",
+      "stats": {
+        "old": {
+          "median_seconds": 8.387,
+          "max_seconds": 22.867
+        },
+        "new": {
+          "median_seconds": 9.568,
+          "max_seconds": 15.001
+        }
+      },
+      "trials": [
+        {
+          "pair": 1,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 22.867,
+          "description_chars": 816,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 22.73,
+              "prompt_utf8_bytes": 17492,
+              "answer_utf8_bytes": 923,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 6687,
+                "cache_read_input_tokens": 4353,
+                "output_tokens": 1726,
+                "output_tokens_details": {
+                  "thinking_tokens": 1415
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 6687,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 1726,
+                    "cache_read_input_tokens": 4353,
+                    "cache_creation_input_tokens": 6687,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 6687
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 15.001,
+          "description_chars": 834,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 14.871,
+              "prompt_utf8_bytes": 17919,
+              "answer_utf8_bytes": 1002,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 7009,
+                "cache_read_input_tokens": 4353,
+                "output_tokens": 1109,
+                "output_tokens_details": {
+                  "thinking_tokens": 757
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 7009,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 1109,
+                    "cache_read_input_tokens": 4353,
+                    "cache_creation_input_tokens": 7009,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 7009
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 7.539,
+          "description_chars": 831,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 7.409,
+              "prompt_utf8_bytes": 17919,
+              "answer_utf8_bytes": 922,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11362,
+                "output_tokens": 571,
+                "output_tokens_details": {
+                  "thinking_tokens": 269
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 571,
+                    "cache_read_input_tokens": 11362,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 8.387,
+          "description_chars": 649,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 8.273,
+              "prompt_utf8_bytes": 17492,
+              "answer_utf8_bytes": 738,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11040,
+                "output_tokens": 422,
+                "output_tokens_details": {
+                  "thinking_tokens": 176
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 422,
+                    "cache_read_input_tokens": 11040,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 3,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 6.644,
+          "description_chars": 853,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 6.521,
+              "prompt_utf8_bytes": 17492,
+              "answer_utf8_bytes": 954,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11040,
+                "output_tokens": 402,
+                "output_tokens_details": {
+                  "thinking_tokens": 95
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 402,
+                    "cache_read_input_tokens": 11040,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 3,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 9.568,
+          "description_chars": 730,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 9.45,
+              "prompt_utf8_bytes": 17919,
+              "answer_utf8_bytes": 809,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11362,
+                "output_tokens": 502,
+                "output_tokens_details": {
+                  "thinking_tokens": 251
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 502,
+                    "cache_read_input_tokens": 11362,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "f11-codex",
+      "host": "codex",
+      "stats": {
+        "old": {
+          "median_seconds": 19.239,
+          "max_seconds": 25.142
+        },
+        "new": {
+          "median_seconds": 31.344,
+          "max_seconds": 39.208
+        }
+      },
+      "trials": [
+        {
+          "pair": 1,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 25.142,
+          "description_chars": 391,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 25.006,
+              "prompt_utf8_bytes": 17492,
+              "answer_utf8_bytes": 441,
+              "usage": {
+                "input_tokens": 41644,
+                "cached_input_tokens": 28160,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 909,
+                "reasoning_output_tokens": 687
+              }
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 31.344,
+          "description_chars": 759,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 31.236,
+              "prompt_utf8_bytes": 17919,
+              "answer_utf8_bytes": 794,
+              "usage": {
+                "input_tokens": 95060,
+                "cached_input_tokens": 76800,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 1245,
+                "reasoning_output_tokens": 782
+              }
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 39.208,
+          "description_chars": 666,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 39.102,
+              "prompt_utf8_bytes": 17919,
+              "answer_utf8_bytes": 753,
+              "usage": {
+                "input_tokens": 95228,
+                "cached_input_tokens": 61440,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 1626,
+                "reasoning_output_tokens": 1007
+              }
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 10.965,
+          "description_chars": 401,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 10.831,
+              "prompt_utf8_bytes": 17492,
+              "answer_utf8_bytes": 438,
+              "usage": {
+                "input_tokens": 19176,
+                "cached_input_tokens": 9984,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 267,
+                "reasoning_output_tokens": 173
+              }
+            }
+          ]
+        },
+        {
+          "pair": 3,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 19.239,
+          "description_chars": 445,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 19.116,
+              "prompt_utf8_bytes": 17492,
+              "answer_utf8_bytes": 490,
+              "usage": {
+                "input_tokens": 41648,
+                "cached_input_tokens": 28160,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 675,
+                "reasoning_output_tokens": 449
+              }
+            }
+          ]
+        },
+        {
+          "pair": 3,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 18.619,
+          "description_chars": 588,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 18.496,
+              "prompt_utf8_bytes": 17919,
+              "answer_utf8_bytes": 681,
+              "usage": {
+                "input_tokens": 42082,
+                "cached_input_tokens": 19968,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 689,
+                "reasoning_output_tokens": 423
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "suggest-claude",
+      "host": "claude",
+      "stats": {
+        "old": {
+          "median_seconds": 15.246,
+          "max_seconds": 15.681
+        },
+        "new": {
+          "median_seconds": 17.492,
+          "max_seconds": 17.538
+        }
+      },
+      "trials": [
+        {
+          "pair": 1,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 12.766,
+          "description_chars": null,
+          "model_calls": null,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 12.716,
+              "prompt_utf8_bytes": 17611,
+              "answer_utf8_bytes": 1316,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 6730,
+                "cache_read_input_tokens": 4353,
+                "output_tokens": 1223,
+                "output_tokens_details": {
+                  "thinking_tokens": 603
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 6730,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 1223,
+                    "cache_read_input_tokens": 4353,
+                    "cache_creation_input_tokens": 6730,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 6730
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 17.538,
+          "description_chars": null,
+          "model_calls": null,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 17.474,
+              "prompt_utf8_bytes": 12597,
+              "answer_utf8_bytes": 1449,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 4947,
+                "cache_read_input_tokens": 4353,
+                "output_tokens": 1361,
+                "output_tokens_details": {
+                  "thinking_tokens": 682
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 4947,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 1361,
+                    "cache_read_input_tokens": 4353,
+                    "cache_creation_input_tokens": 4947,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 4947
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 13.164,
+          "description_chars": null,
+          "model_calls": null,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 13.123,
+              "prompt_utf8_bytes": 12597,
+              "answer_utf8_bytes": 754,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 9300,
+                "output_tokens": 1059,
+                "output_tokens_details": {
+                  "thinking_tokens": 695
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 1059,
+                    "cache_read_input_tokens": 9300,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 15.681,
+          "description_chars": null,
+          "model_calls": null,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 15.625,
+              "prompt_utf8_bytes": 17611,
+              "answer_utf8_bytes": 973,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11083,
+                "output_tokens": 1252,
+                "output_tokens_details": {
+                  "thinking_tokens": 792
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 1252,
+                    "cache_read_input_tokens": 11083,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 3,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 15.246,
+          "description_chars": null,
+          "model_calls": null,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 15.205,
+              "prompt_utf8_bytes": 17611,
+              "answer_utf8_bytes": 980,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11083,
+                "output_tokens": 1234,
+                "output_tokens_details": {
+                  "thinking_tokens": 778
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 1234,
+                    "cache_read_input_tokens": 11083,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 3,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 17.492,
+          "description_chars": null,
+          "model_calls": null,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 17.438,
+              "prompt_utf8_bytes": 12597,
+              "answer_utf8_bytes": 1042,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 9300,
+                "output_tokens": 1393,
+                "output_tokens_details": {
+                  "thinking_tokens": 916
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 1393,
+                    "cache_read_input_tokens": 9300,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "suggest-codex",
+      "host": "codex",
+      "stats": {
+        "old": {
+          "median_seconds": 14.247,
+          "max_seconds": 16.287
+        },
+        "new": {
+          "median_seconds": 12.581,
+          "max_seconds": 18.379
+        }
+      },
+      "trials": [
+        {
+          "pair": 1,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 14.247,
+          "description_chars": null,
+          "model_calls": null,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 14.2,
+              "prompt_utf8_bytes": 17611,
+              "answer_utf8_bytes": 573,
+              "usage": {
+                "input_tokens": 19199,
+                "cached_input_tokens": 9984,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 518,
+                "reasoning_output_tokens": 363
+              }
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 12.581,
+          "description_chars": null,
+          "model_calls": null,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 12.541,
+              "prompt_utf8_bytes": 12597,
+              "answer_utf8_bytes": 529,
+              "usage": {
+                "input_tokens": 18058,
+                "cached_input_tokens": 12032,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 401,
+                "reasoning_output_tokens": 252
+              }
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 18.379,
+          "description_chars": null,
+          "model_calls": null,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 18.331,
+              "prompt_utf8_bytes": 12597,
+              "answer_utf8_bytes": 464,
+              "usage": {
+                "input_tokens": 18058,
+                "cached_input_tokens": 9984,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 656,
+                "reasoning_output_tokens": 516
+              }
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 12.676,
+          "description_chars": null,
+          "model_calls": null,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 12.627,
+              "prompt_utf8_bytes": 17611,
+              "answer_utf8_bytes": 501,
+              "usage": {
+                "input_tokens": 19199,
+                "cached_input_tokens": 9984,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 404,
+                "reasoning_output_tokens": 264
+              }
+            }
+          ]
+        },
+        {
+          "pair": 3,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 16.287,
+          "description_chars": null,
+          "model_calls": null,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 16.238,
+              "prompt_utf8_bytes": 17611,
+              "answer_utf8_bytes": 538,
+              "usage": {
+                "input_tokens": 19199,
+                "cached_input_tokens": 18176,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 623,
+                "reasoning_output_tokens": 475
+              }
+            }
+          ]
+        },
+        {
+          "pair": 3,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 10.674,
+          "description_chars": null,
+          "model_calls": null,
+          "calls": [
+            {
+              "requested_model": "gpt-5.6-luna",
+              "reported_model": null,
+              "requested_effort": "xhigh",
+              "elapsed_seconds": 10.617,
+              "prompt_utf8_bytes": 12597,
+              "answer_utf8_bytes": 403,
+              "usage": {
+                "input_tokens": 18058,
+                "cached_input_tokens": 17152,
+                "cache_write_input_tokens": 0,
+                "output_tokens": 300,
+                "reasoning_output_tokens": 168
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "f25-claude-corrected",
+      "host": "claude",
+      "stats": {
+        "old": {
+          "median_seconds": 8.396,
+          "max_seconds": 8.507
+        },
+        "new": {
+          "median_seconds": 7.739,
+          "max_seconds": 10.876
+        }
+      },
+      "trials": [
+        {
+          "pair": 1,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 8.396,
+          "description_chars": 857,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 8.25,
+              "prompt_utf8_bytes": 18019,
+              "answer_utf8_bytes": 972,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 8093,
+                "cache_read_input_tokens": 3397,
+                "output_tokens": 489,
+                "output_tokens_details": {
+                  "thinking_tokens": 158
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 8093,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 489,
+                    "cache_read_input_tokens": 3397,
+                    "cache_creation_input_tokens": 8093,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 8093
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 10.876,
+          "description_chars": 869,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 10.755,
+              "prompt_utf8_bytes": 18019,
+              "answer_utf8_bytes": 1002,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 7138,
+                "cache_read_input_tokens": 4353,
+                "output_tokens": 950,
+                "output_tokens_details": {
+                  "thinking_tokens": 610
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 7138,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 950,
+                    "cache_read_input_tokens": 4353,
+                    "cache_creation_input_tokens": 7138,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 7138
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 7.739,
+          "description_chars": 787,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 7.589,
+              "prompt_utf8_bytes": 18019,
+              "answer_utf8_bytes": 864,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11491,
+                "output_tokens": 456,
+                "output_tokens_details": {
+                  "thinking_tokens": 169
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 456,
+                    "cache_read_input_tokens": 11491,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 5.779,
+          "description_chars": 607,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 5.659,
+              "prompt_utf8_bytes": 18019,
+              "answer_utf8_bytes": 684,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11490,
+                "output_tokens": 352,
+                "output_tokens_details": {
+                  "thinking_tokens": 122
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 352,
+                    "cache_read_input_tokens": 11490,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 3,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 8.507,
+          "description_chars": 847,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 8.388,
+              "prompt_utf8_bytes": 18019,
+              "answer_utf8_bytes": 1002,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11490,
+                "output_tokens": 813,
+                "output_tokens_details": {
+                  "thinking_tokens": 468
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 813,
+                    "cache_read_input_tokens": 11490,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        },
+        {
+          "pair": 3,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 7.111,
+          "description_chars": 898,
+          "model_calls": 1,
+          "calls": [
+            {
+              "requested_model": "sonnet",
+              "reported_model": "claude-sonnet-5",
+              "requested_effort": "high",
+              "elapsed_seconds": 6.995,
+              "prompt_utf8_bytes": 18019,
+              "answer_utf8_bytes": 1013,
+              "usage": {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 11491,
+                "output_tokens": 559,
+                "output_tokens_details": {
+                  "thinking_tokens": 222
+                },
+                "server_tool_use": {
+                  "web_search_requests": 0,
+                  "web_fetch_requests": 0
+                },
+                "service_tier": "standard",
+                "cache_creation": {
+                  "ephemeral_1h_input_tokens": 0,
+                  "ephemeral_5m_input_tokens": 0
+                },
+                "inference_geo": "not_available",
+                "iterations": [
+                  {
+                    "input_tokens": 2,
+                    "output_tokens": 559,
+                    "cache_read_input_tokens": 11491,
+                    "cache_creation_input_tokens": 0,
+                    "cache_creation": {
+                      "ephemeral_5m_input_tokens": 0,
+                      "ephemeral_1h_input_tokens": 0
+                    },
+                    "type": "message"
+                  }
+                ],
+                "speed": "standard"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -76,6 +76,30 @@ class ImageSizeTest(unittest.TestCase):
         sizes = [(r["width"], r["height"]) for r in report["results"]]
         self.assertEqual([(800, 400), (30, 20), (640, 480)], sizes)
 
+    def test_batch_keeps_each_result_when_one_file_fails(self):
+        """일괄 측정은 일부 파일이 실패해도 파일별 결과를 보존한다."""
+        # given
+        first = self.write("first.png", png_bytes(320, 160))
+        failed = self.write("failed.svg", b"<svg></svg>")
+        last = self.write("last.png", png_bytes(420, 210))
+
+        # when
+        status, report = self.run_main(first, failed, last, "--display-width", "240")
+
+        # then
+        self.assertEqual(1, status)
+        self.assertFalse(report["ok"])
+        self.assertEqual(
+            [
+                {"path": str(first), "status": "ok", "format": "png", "width": 320,
+                 "height": 160, "display_width": 240, "display_height": 120, "clamped": False},
+                {"path": str(failed), "status": "failed", "error": "format is not PNG, JPEG, or GIF"},
+                {"path": str(last), "status": "ok", "format": "png", "width": 420,
+                 "height": 210, "display_width": 240, "display_height": 120, "clamped": False},
+            ],
+            report["results"],
+        )
+
     def test_display_width_is_clamped_to_source_width(self):
         path = self.write("small.png", png_bytes(200, 100))
         status, report = self.run_main(path, "--display-width", "800")

@@ -1,0 +1,10 @@
+{
+  "description": "No model is available in this evaluation case.",
+  "tiers": {
+    "lightweight": [],
+    "standard": [],
+    "heavy": []
+  },
+  "required_providers": ["openai"],
+  "allowlist": []
+}

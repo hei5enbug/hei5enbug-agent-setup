@@ -80,6 +80,19 @@ class PackageBoundaryTest(unittest.TestCase):
         self.assertIsNotNone(packaged)
         finder.assert_not_called()
 
+    def test_packaging_runs_metadata_validation_and_bundle_checks_once(self):
+        """패키징은 메타데이터와 번들 검사를 각각 한 번 수행한다."""
+        # given
+        with patch.object(package_skill, "validate_skill", wraps=package_skill.validate_skill) as validate:
+            with patch.object(package_skill, "run_bundled_checks", wraps=package_skill.run_bundled_checks) as checks:
+                # when
+                packaged, _ = quiet_package(self.skill, self.root / "dist")
+
+        # then
+        self.assertIsNotNone(packaged)
+        self.assertEqual(validate.call_count, 1)
+        self.assertEqual(checks.call_count, 1)
+
     def test_check_installed_compares_every_file(self):
         installed_root = self.root / "installed" / "skills"
         installed = installed_root / "demo"

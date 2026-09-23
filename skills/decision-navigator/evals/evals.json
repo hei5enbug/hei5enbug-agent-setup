@@ -5,19 +5,91 @@
       "id": 1,
       "prompt": "Create a decision-navigator map for replacing billing. This repository has a GitHub remote.",
       "expected_output": "Uses only .decision-navigator, confirms the destination, and creates current tickets.",
-      "files": []
+      "files": [],
+      "expectations": [
+        "Confirms the destination before defining ticket scope.",
+        "Stores only in .decision-navigator and does not access external tracker tools despite the GitHub remote.",
+        "Keeps precise blocked questions as tickets, imprecise in-scope questions in Not yet specified, and out-of-scope work separate."
+      ]
     },
     {
       "id": 2,
       "prompt": "Continue .decision-navigator/billing/map.md and decide whether Invoice and Bill mean the same concept.",
-      "expected_output": "Claims atomically and serializes the map update after human confirmation.",
-      "files": []
+      "expected_output": "Claims atomically, re-reads after claiming, asks the human, and serializes the map update after human confirmation.",
+      "files": [],
+      "expectations": [
+        "Uses the local tracker contract and claims the selected ticket before reading its body or doing work.",
+        "Re-reads the selected ticket after claim and before writing the answer.",
+        "Keeps the HITL decision with the human and does not resolve it based on an inferred answer.",
+        "Updates the ticket and map in the prescribed lock order, re-reading the map under its lock."
+      ]
     },
     {
       "id": 3,
       "prompt": "Continue .decision-navigator/sdk/map.md. Research the next ticket without independent workers.",
       "expected_output": "Stores cited artifacts locally, resolves one ticket, and updates only map.md.",
-      "files": []
+      "files": [],
+      "expectations": [
+        "Uses the research workflow sequentially and notes that independent workers are unavailable.",
+        "Stores cited research artifacts locally and links them from the ticket.",
+        "Resolves no more than one non-research ticket in the session."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Continue the 100-ticket map in the attached frontier fixture. Work in a disposable copy under .decision-navigator/retries. Select the next ticket, claim it atomically, then read only that ticket and any dependency body needed for this decision. Ask me one question and wait; do not resolve the ticket yet.",
+      "expected_output": "Scans ticket metadata in numeric order without opening long resolved answers, selects and claims First Frontier Candidate, validates its metadata and resolved blocker after claim, and asks one relevant human question.",
+      "files": [
+        "evals/files/frontier-100/"
+      ],
+      "expectations": [
+        "Uses one metadata pass over filename, title, Type, Status, Blocked by, and claim presence before opening ticket bodies.",
+        "Does not read the long answer bodies for unrelated resolved tickets.",
+        "Treats the cyclic open pair, claimed ticket, malformed or missing metadata, and missing dependency as ineligible.",
+        "Selects 92-first-frontier.md because its blocker is resolved and it is not claimed.",
+        "Claims before reading the chosen ticket body, then re-reads its metadata and blocker status.",
+        "Asks the human one decision question and leaves the ticket open until the human answers."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Using a disposable copy of the attached frontier fixture, identify which tickets are blocked or malformed. Do not claim or edit any ticket; report only the metadata evidence that excludes each candidate.",
+      "expected_output": "Uses header metadata and claim presence only to explain why the blocked cycle, malformed headers, missing dependency, and claimed ticket are not eligible.",
+      "files": [
+        "evals/files/frontier-100/"
+      ],
+      "expectations": [
+        "Does not open answer bodies to classify tickets.",
+        "Treats missing, duplicate, invalid, and unresolved metadata as unresolved evidence rather than eligibility.",
+        "Does not claim or edit a ticket when the prompt asks for read-only classification."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Two independent sessions are continuing the attached map at the same time. Both may initially select the first ticket. The first session sees a question edit immediately after its claim, and both sessions later need to add separate decisions to map.md. Coordinate using only the local tracker contract.",
+      "expected_output": "Allows only one claim per ticket, re-reads the edited ticket, and serializes map updates without losing either decision or bypassing claim ownership.",
+      "files": [
+        "evals/files/frontier-race/"
+      ],
+      "expectations": [
+        "Uses the claim helper so concurrent attempts cannot both own 01-backoff-policy.md.",
+        "Re-reads the first ticket after claiming and uses its current content rather than stale prompt text.",
+        "Holds ticket claims during resolution and serializes each map update with map.md claim and re-read.",
+        "Preserves both ticket claims if a transaction fails and reports its exact recovery point.",
+        "Does not force-release another session's lock or bypass the human gate."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Create a decision map for a customer onboarding redesign. The first fact needed is available only through a local research ticket, the onboarding flow needs a rough UI prototype for the human to react to, the account terminology needs a human decision, and a sanitized sample must be manually uploaded before its API behavior can be judged. Rebuilding the analytics warehouse is explicitly outside this destination.",
+      "expected_output": "Routes research as AFK, prototype and terminology choice as HITL, and resolves the warehouse ticket out of scope without putting it on Decisions so far.",
+      "files": [],
+      "expectations": [
+        "Uses the research, prototype, grilling, and task type distinctions only where their conditions fit.",
+        "Keeps the user in the loop for prototype and grilling decisions.",
+        "Places warehouse rebuilding in Out of scope rather than Not yet specified or Decisions so far.",
+        "Does not treat planning tickets as permission to execute the destination."
+      ]
     }
   ]
 }

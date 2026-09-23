@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Quarterly service status</title>
+</head>
+<body>
+  <nav aria-label="Site navigation">Home | Reports | Help</nav>
+  <aside class="cookie-banner">Accept cookies to continue</aside>
+  <article id="report">
+    <h1>Quarterly service status</h1>
+    <p>Availability remained above target in both regions.</p>
+    <figure>
+      <img src="assets/traffic.png" alt="Weekly request volume">
+      <figcaption>Requests increased during the final two weeks.</figcaption>
+    </figure>
+    <figure>
+      <img src="assets/latency.png" alt="Median latency by region">
+      <figcaption>Median latency stayed within the published limit.</figcaption>
+    </figure>
+    <table>
+      <thead><tr><th>Region</th><th>Availability</th><th>p95 latency</th></tr></thead>
+      <tbody>
+        <tr><td>North</td><td>99.97%</td><td>180 ms</td></tr>
+        <tr><td>South</td><td>99.95%</td><td>210 ms</td></tr>
+      </tbody>
+    </table>
+  </article>
+  <script>
+    document.querySelector("#report").textContent = "This script must not run during extraction.";
+  </script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Quarterly service report</title>
+  <style>
+    body { font-family: sans-serif; color: #172b4d; }
+    .site-nav, .cookie-banner { padding: 8px; background: #eee; }
+    .diagram { box-sizing: border-box; display: flex; align-items: center; justify-content: center;
+      gap: 12px; width: 640px; height: 180px; padding: 28px; border: 1px solid #8993a4;
+      background: #f7f8fa; }
+    .node { box-sizing: border-box; width: 150px; padding: 16px 8px; border: 1px solid #0052cc;
+      border-radius: 8px; background: white; text-align: center; }
+    .arrow { flex: none; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <nav class="site-nav">Service portal: Home | Reports | Help</nav>
+  <aside class="cookie-banner">Cookie settings are required for this website.</aside>
+  <article id="service-report">
+    <h1>Quarterly service report</h1>
+    <p>Requests increased during the quarter while median latency remained within target.</p>
+    <figure>
+      <img src="source-assets/traffic.png" alt="Request volume by week">
+      <figcaption>Request volume by week</figcaption>
+    </figure>
+    <figure>
+      <img src="source-assets/latency.png" alt="Median latency by region">
+      <figcaption>Median latency by region</figcaption>
+    </figure>
+    <table>
+      <thead><tr><th>Region</th><th>Availability</th></tr></thead>
+      <tbody>
+        <tr><td>North</td><td>99.97%</td></tr>
+        <tr><td>South</td><td>99.94%</td></tr>
+      </tbody>
+    </table>
+    <h2>Request path</h2>
+    <div class="diagram" id="dia-request-path" aria-label="Request path diagram">
+      <span class="node">Client</span><span class="arrow">→</span>
+      <span class="node">Gateway</span><span class="arrow">→</span>
+      <span class="node">Service</span>
+    </div>
+    <h2>Failure recovery</h2>
+    <div class="diagram" id="dia-recovery" aria-label="Failure recovery diagram">
+      <span class="node">Timeout</span><span class="arrow">→</span>
+      <span class="node">Retry once</span><span class="arrow">→</span>
+      <span class="node">Report result</span>
+    </div>
+  </article>
+</body>
+</html>

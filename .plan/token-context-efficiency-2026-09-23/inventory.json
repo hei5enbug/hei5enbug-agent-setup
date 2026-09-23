@@ -1,0 +1,1551 @@
+{
+  "schema_version": 1,
+  "source_commit": "72f66ac69cf02ac7b7f64bfba0a11adc8736ed04",
+  "audit_date": "2026-09-23",
+  "measurement": "UTF-8 byte size and source lines; not model token usage",
+  "scope": "All tracked files inventoried; runtime English Markdown fully reviewed; code entry/cost paths and selected tests reviewed. This is not an exhaustive correctness or security audit.",
+  "runtime_token_usage": null,
+  "runtime_latency": null,
+  "context_render_bytes_at_repository_path": {
+    "codex": 4703,
+    "claude": 4717
+  },
+  "tracked_files": 204,
+  "category_counts": {
+    "repository-and-integration": 22,
+    "human-translation": 64,
+    "runtime-instructions": 57,
+    "runtime-or-evaluation-code": 24,
+    "evaluation-fixture": 8,
+    "test": 25,
+    "artifact-resource": 4
+  },
+  "files": [
+    {
+      "path": ".agents/plugins/marketplace.json",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 361,
+      "sha256": "cf75e9cd9ebe26734a30899d087f4afbebf85efac8ed6da44462c7e3abbe0887",
+      "lines": 20
+    },
+    {
+      "path": ".claude-plugin/marketplace.json",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 261,
+      "sha256": "3d3a1d3657fc04b9353563071feb9e1dff9380afd4581d7e68a7da83c0434e0e",
+      "lines": 14
+    },
+    {
+      "path": ".claude-plugin/plugin.json",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 545,
+      "sha256": "f2d5dbbb1a200a20e48749a272ac745dfcf5866fbe6b6ed93e1f20ae54d79647",
+      "lines": 19
+    },
+    {
+      "path": ".codex-plugin/plugin.json",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 1061,
+      "sha256": "3efce4f6b44d3853330f1e070f712b8873d1694823db5332c366cd526ccfa4ec",
+      "lines": 33
+    },
+    {
+      "path": ".github/workflows/validate.yml",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 1132,
+      "sha256": "3ec0bfb7d94bc90a86c9c9a6f5940150a84bccdba23cabd63f32d80afd22f3e8",
+      "lines": 49
+    },
+    {
+      "path": ".gitignore",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 210,
+      "sha256": "70cd74bb397890624d7b359e4d022b6d4e6f27d5d547a39ef0ee7113af988793",
+      "lines": 25
+    },
+    {
+      "path": "AGENTS.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 3411
+    },
+    {
+      "path": "AGENTS.md",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 2879,
+      "sha256": "99bc19289c57b466710a64a81488777f2464b43165ad128bbf16c661b3f67cac",
+      "lines": 35
+    },
+    {
+      "path": "CLAUDE.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 285
+    },
+    {
+      "path": "CLAUDE.md",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 11,
+      "sha256": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49",
+      "lines": 1
+    },
+    {
+      "path": "LICENSE",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 11357,
+      "sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd",
+      "lines": 202
+    },
+    {
+      "path": "README.de.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 8795
+    },
+    {
+      "path": "README.es.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 8784
+    },
+    {
+      "path": "README.fr.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 9004
+    },
+    {
+      "path": "README.ja.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 9837
+    },
+    {
+      "path": "README.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 15014
+    },
+    {
+      "path": "README.md",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 13120,
+      "sha256": "4dc1481572ed257ddadf921d420fd8fe39188e93239bb7b1639924382fd6d4d5",
+      "lines": 231
+    },
+    {
+      "path": "README.zh-CN.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 7842
+    },
+    {
+      "path": "agents/ko/scout.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 1294
+    },
+    {
+      "path": "agents/scout.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 872,
+      "sha256": "e9b097205808e6d4445e9c099e91cff707dc231d83212d1be03748356366bb2b",
+      "lines": 22
+    },
+    {
+      "path": "hooks/hooks.json",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 1399,
+      "sha256": "768729c2c749f4c42ce73c2750532f7748668d60b101dc6c1c78a98f5953741a",
+      "lines": 64
+    },
+    {
+      "path": "instructions/claude-agents.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 1515
+    },
+    {
+      "path": "instructions/claude-agents.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 1199,
+      "sha256": "c412299c53564b0d21b68424f1a9b976a88a2fde2e593bc53abb9bb1340a307c",
+      "lines": 21
+    },
+    {
+      "path": "instructions/codex-agents.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 1236
+    },
+    {
+      "path": "instructions/codex-agents.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 961,
+      "sha256": "d103c6b9a68bf393e4cabf732b5976cd9a8325d1d8986e6c50ff7a108ccc60e5",
+      "lines": 22
+    },
+    {
+      "path": "instructions/confluence.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 2410
+    },
+    {
+      "path": "instructions/confluence.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 1934,
+      "sha256": "3aa99523932c662607bd160051bb4b3062644484abbc7b347a6ff2b55286acfc",
+      "lines": 42
+    },
+    {
+      "path": "instructions/documentation.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 2191
+    },
+    {
+      "path": "instructions/documentation.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 1807,
+      "sha256": "1c79e6337aaf7465f7d58d6d636bbdc67970ae18e8e6a85a6d814e6c9184c7d1",
+      "lines": 25
+    },
+    {
+      "path": "instructions/implementation-planning.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 5753
+    },
+    {
+      "path": "instructions/implementation-planning.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 5100,
+      "sha256": "7554d6fd6aa4f6346e943dd951e42f4bf18b4a953691ddf7f8fd2d7cd95b7af2",
+      "lines": 111
+    },
+    {
+      "path": "instructions/independent-model-validation.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 4234
+    },
+    {
+      "path": "instructions/independent-model-validation.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 3714,
+      "sha256": "dc70844d15e98b71b1fd439aa14de6469e0be905ca043802d5e8ad353175bf89",
+      "lines": 76
+    },
+    {
+      "path": "instructions/protected-values.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 1124
+    },
+    {
+      "path": "instructions/protected-values.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 873,
+      "sha256": "03f0b7bceeaaeb0e6cb3cdb0dc2e07483bea768a4b8e1043bee099e8e9220a9e",
+      "lines": 17
+    },
+    {
+      "path": "instructions/services.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 806
+    },
+    {
+      "path": "instructions/services.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 537,
+      "sha256": "3db67fd9adf40a6290d4302fc7b6caf31cf312b86920ef8223456c29375f30e2",
+      "lines": 11
+    },
+    {
+      "path": "instructions/session/claude-code.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 346
+    },
+    {
+      "path": "instructions/session/claude-code.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 113,
+      "sha256": "e3cdd53f455e4c1a0798a2ad9ac418a91dd2d1b0792535370170841ef4d85f33",
+      "lines": 3
+    },
+    {
+      "path": "instructions/session/codex.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 321
+    },
+    {
+      "path": "instructions/session/codex.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 100,
+      "sha256": "98282b1d7f0744768da43d693c8007de3d0b03b14dcfd27b5678ffb0da6afa75",
+      "lines": 3
+    },
+    {
+      "path": "instructions/session/common.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 4532
+    },
+    {
+      "path": "instructions/session/common.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 3808,
+      "sha256": "b6c9d2be9a3dc2c01e3867175845290bfd6f9bdf884e1f1255194b9172a935b7",
+      "lines": 55
+    },
+    {
+      "path": "instructions/testing.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 1194
+    },
+    {
+      "path": "instructions/testing.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 891,
+      "sha256": "0f41ac25261ef6b13ed61df2b29e15feb0805b8b9cb531c4a3b620a18cddf2d7",
+      "lines": 13
+    },
+    {
+      "path": "pyproject.toml",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 552,
+      "sha256": "25db1bd06d2723dbd3a661d798e61137e010e34134742adbc9241c66ee65cfb7",
+      "lines": 26
+    },
+    {
+      "path": "scripts/orca_plugin_refresh.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 83848,
+      "sha256": "4424e724a601f02f712e49aa980ba461d1b69d191dd30381e7a4339b2fb60e90",
+      "lines": 1716
+    },
+    {
+      "path": "scripts/session_context.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 3516,
+      "sha256": "23bda4fe6fd50aeaa08eb84b583b5f264af994715febeb9117f30a1080ce978e",
+      "lines": 97
+    },
+    {
+      "path": "scripts/session_lifecycle.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 14296,
+      "sha256": "3c981be7ee5381b1d4eebd449f461dac8ebcb33eaaf8938c4d0cd805dfcd7326",
+      "lines": 369
+    },
+    {
+      "path": "skills/decision-navigator/SKILL.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 14392
+    },
+    {
+      "path": "skills/decision-navigator/SKILL.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 13816,
+      "sha256": "3c09e5194f040a19258a2645a8115a28cb58245dcee77dda0c4cf4d0f4e41f24",
+      "lines": 245,
+      "description_characters": 266,
+      "description_utf8_bytes": 266
+    },
+    {
+      "path": "skills/decision-navigator/agents/openai.yaml",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 153,
+      "sha256": "8a00aa2b421f899fdf16565c56c700a4a32a8382f9c9a0d470102c4fbc5cd134",
+      "lines": 5
+    },
+    {
+      "path": "skills/decision-navigator/evals/evals.json",
+      "category": "evaluation-fixture",
+      "review_scope": "case schema and expected-outcome review",
+      "utf8_bytes": 865,
+      "sha256": "34ff9772d8ab2c7fe57a34e3a16388114bc20a60a3824cd6bf83009a42ec7ad4",
+      "lines": 23
+    },
+    {
+      "path": "skills/decision-navigator/references/adr-format.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 867
+    },
+    {
+      "path": "skills/decision-navigator/references/adr-format.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 640,
+      "sha256": "948574abc1fbb4f924dc3b080671e88dd503e8bed3d89811ab7eb9791e69db60",
+      "lines": 19
+    },
+    {
+      "path": "skills/decision-navigator/references/context-format.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 1236
+    },
+    {
+      "path": "skills/decision-navigator/references/context-format.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 929,
+      "sha256": "97c6643808458b6afbfda9e2b94bc5e3036f60e1fb46df32f8a74b3a3b7ab799",
+      "lines": 37
+    },
+    {
+      "path": "skills/decision-navigator/references/domain-modeling.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 2161
+    },
+    {
+      "path": "skills/decision-navigator/references/domain-modeling.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 1823,
+      "sha256": "24f042f4ffcdd0f87f2cb03db6618287802056861c4b5ff484008787f0206000",
+      "lines": 46
+    },
+    {
+      "path": "skills/decision-navigator/references/interviewing.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 2034
+    },
+    {
+      "path": "skills/decision-navigator/references/interviewing.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 1696,
+      "sha256": "6037c6c623cb370451eb9602324c64f25034ef1fa49fd3cc6ea52cbdef9f2a4c",
+      "lines": 44
+    },
+    {
+      "path": "skills/decision-navigator/references/local-tracker.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 4527
+    },
+    {
+      "path": "skills/decision-navigator/references/local-tracker.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 3871,
+      "sha256": "00e15850deed6d0642c0e192e00231955b1003b1a76d8211adad5d4acfbbb15f",
+      "lines": 122
+    },
+    {
+      "path": "skills/decision-navigator/references/prototype-logic.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 1324
+    },
+    {
+      "path": "skills/decision-navigator/references/prototype-logic.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 985,
+      "sha256": "aab2a6af10188718cd0046b7225dd295b3d5fa47235bc31987a14a0ff4faf078",
+      "lines": 21
+    },
+    {
+      "path": "skills/decision-navigator/references/prototype-ui.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 1526
+    },
+    {
+      "path": "skills/decision-navigator/references/prototype-ui.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 1179,
+      "sha256": "5ca63a18ae838c8dff5fdbda7b525cdca52509d27e9483c8cdc93f11dfbd74a0",
+      "lines": 24
+    },
+    {
+      "path": "skills/decision-navigator/references/prototype.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 2018
+    },
+    {
+      "path": "skills/decision-navigator/references/prototype.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 1653,
+      "sha256": "9fa5b20be9163bd34bc628dd5b3acafa391285bf93a503bd3444b376761e907e",
+      "lines": 34
+    },
+    {
+      "path": "skills/decision-navigator/references/research.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 1491
+    },
+    {
+      "path": "skills/decision-navigator/references/research.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 1270,
+      "sha256": "b138910efb82bc4e102b2304aae24adbced1daf7a6bb7525d88426bd8cd0c950",
+      "lines": 29
+    },
+    {
+      "path": "skills/decision-navigator/scripts/local_lock.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 6248,
+      "sha256": "61fbfeb84667e7ec7306de122e9268579459d528866b37a9717724a765a2741f",
+      "lines": 182
+    },
+    {
+      "path": "skills/decision-navigator/tests/test_local_lock.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 6432,
+      "sha256": "5a670ab0d91feb7e441ab3043554520f7e2ab35ff9235f99440fa4e09617fc91",
+      "lines": 162
+    },
+    {
+      "path": "skills/deep-interview/SKILL.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 13489
+    },
+    {
+      "path": "skills/deep-interview/SKILL.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 11970,
+      "sha256": "778e32386c7d4a4e5a3aa964476f58c7c7a9a28f7e62cb93cb559786a2489048",
+      "lines": 212,
+      "description_characters": 569,
+      "description_utf8_bytes": 569
+    },
+    {
+      "path": "skills/deep-interview/agents/openai.yaml",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 361,
+      "sha256": "ece9ac3cfdadbb65f9f2313d1a53e227100086859e4cbb923b73073460c183ed",
+      "lines": 4
+    },
+    {
+      "path": "skills/deep-interview/references/ask-ui.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 9412
+    },
+    {
+      "path": "skills/deep-interview/references/ask-ui.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 10159,
+      "sha256": "13bd561e1a3881c0d8d421149be872c00f1f37eb96851560d11f1e2a8bdbd1e7",
+      "lines": 159
+    },
+    {
+      "path": "skills/deep-interview/references/auto-answer-uncertain.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 2433
+    },
+    {
+      "path": "skills/deep-interview/references/auto-answer-uncertain.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 1985,
+      "sha256": "7f71d3b13a789b5a15b4d2c1f3c3283f10657d797666384b7efa5f7128bc73fc",
+      "lines": 42
+    },
+    {
+      "path": "skills/deep-interview/references/auto-research-greenfield.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 2274
+    },
+    {
+      "path": "skills/deep-interview/references/auto-research-greenfield.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 2003,
+      "sha256": "6d23324b533ad2c7c82c9b8875cac2932859b60967b24fb4f295d95e2901862a",
+      "lines": 46
+    },
+    {
+      "path": "skills/deep-interview/references/lateral-review-panel.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 4014
+    },
+    {
+      "path": "skills/deep-interview/references/lateral-review-panel.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 3774,
+      "sha256": "af14217942bb774557185c4e4ced36e5f709edd7d677de67e60b695df60d3970",
+      "lines": 61
+    },
+    {
+      "path": "skills/deep-interview/references/scoring-and-state.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 4517
+    },
+    {
+      "path": "skills/deep-interview/references/scoring-and-state.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 3969,
+      "sha256": "5adb7f31b232bb7226615a96d296f914200f6450b8d78fd06595a874a2868b8f",
+      "lines": 91
+    },
+    {
+      "path": "skills/deep-interview/references/spec-template.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 2136
+    },
+    {
+      "path": "skills/deep-interview/references/spec-template.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 1840,
+      "sha256": "4ee51fae81a01064fc9eff3cf04ccdb83e30fedb51d15a6a6e3c1440bb7649e7",
+      "lines": 65
+    },
+    {
+      "path": "skills/docs-rewrite/SKILL.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 13285
+    },
+    {
+      "path": "skills/docs-rewrite/SKILL.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 14091,
+      "sha256": "e25c7465c87bb4629c1ac4479d924ba653f00ab2bc5d0e7f613d168a20d0ae2c",
+      "lines": 272,
+      "description_characters": 788,
+      "description_utf8_bytes": 919
+    },
+    {
+      "path": "skills/docs-rewrite/evals/evals.json",
+      "category": "evaluation-fixture",
+      "review_scope": "case schema and expected-outcome review",
+      "utf8_bytes": 5482,
+      "sha256": "c60b87d4fd957c6b412d0e910328218637cc24b6574592c0af9a54a9f9f4b673",
+      "lines": 67
+    },
+    {
+      "path": "skills/docs-rewrite/references/patterns.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 12164
+    },
+    {
+      "path": "skills/docs-rewrite/references/patterns.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 11366,
+      "sha256": "c91498a991ef67718de1471e9ca5c53d8793b306895936d4f95901dde7f9fe86",
+      "lines": 176
+    },
+    {
+      "path": "skills/document-to-confluence/SKILL.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 13665
+    },
+    {
+      "path": "skills/document-to-confluence/SKILL.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 12151,
+      "sha256": "ead4eb00294dc3ab9559480e896293a03b557b5fd50f024dbf5ef3512521a095",
+      "lines": 215,
+      "description_characters": 321,
+      "description_utf8_bytes": 321
+    },
+    {
+      "path": "skills/document-to-confluence/assets/diagram-template.html",
+      "category": "artifact-resource",
+      "review_scope": "load and output boundary review",
+      "utf8_bytes": 6617,
+      "sha256": "a432418568b1a00cd4dfd64b5cdb9cd3fe4378e1ced9321b1e897ea97539ea0d",
+      "lines": 198
+    },
+    {
+      "path": "skills/document-to-confluence/evals/evals.json",
+      "category": "evaluation-fixture",
+      "review_scope": "case schema and expected-outcome review",
+      "utf8_bytes": 3289,
+      "sha256": "831fe0a9c2e6dd1dc3557676a66ea4310962697e6084daae03d680540ebfc81f",
+      "lines": 41
+    },
+    {
+      "path": "skills/document-to-confluence/evals/trigger-evals.json",
+      "category": "evaluation-fixture",
+      "review_scope": "case schema and expected-outcome review",
+      "utf8_bytes": 2416,
+      "sha256": "2f82d92da46db31d07d3946e83841d8cc14297fbe05662aa3a17bfe23af241eb",
+      "lines": 82
+    },
+    {
+      "path": "skills/document-to-confluence/references/attachments.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 3313
+    },
+    {
+      "path": "skills/document-to-confluence/references/attachments.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 2711,
+      "sha256": "30a56a7e76d745725d52f4ce75062a6709466aefddcce5570bb9c62ff630ee68",
+      "lines": 72
+    },
+    {
+      "path": "skills/document-to-confluence/references/confluence-body.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 9695
+    },
+    {
+      "path": "skills/document-to-confluence/references/confluence-body.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 9165,
+      "sha256": "a06f6ac579c437b2e7e10b560c3a4ef934b882b6fe8807806721ae165878b7ea",
+      "lines": 209
+    },
+    {
+      "path": "skills/document-to-confluence/references/diagrams.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 4350
+    },
+    {
+      "path": "skills/document-to-confluence/references/diagrams.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 3805,
+      "sha256": "4865596ebec43afcd4fdad93d9a7fd53a4b59cc8e5731c782ec649640b105dd9",
+      "lines": 81
+    },
+    {
+      "path": "skills/document-to-confluence/references/document-model.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 3649
+    },
+    {
+      "path": "skills/document-to-confluence/references/document-model.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 3288,
+      "sha256": "60bd92c6540ed1a8e108fa83e10db6673434936bade8e61016c6f4af42dd37d2",
+      "lines": 73
+    },
+    {
+      "path": "skills/document-to-confluence/references/docx.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 1961
+    },
+    {
+      "path": "skills/document-to-confluence/references/docx.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 1691,
+      "sha256": "f381ec95c2924aafd0323d476b48822f413af4cd7be15a2f95c0d8f60f3af1b3",
+      "lines": 36
+    },
+    {
+      "path": "skills/document-to-confluence/references/google-docs.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 1898
+    },
+    {
+      "path": "skills/document-to-confluence/references/google-docs.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 1598,
+      "sha256": "4e6a10d925e172c0db9c45804f01caa872f0725b656e906dee684de5db67f4f9",
+      "lines": 34
+    },
+    {
+      "path": "skills/document-to-confluence/references/html.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 2445
+    },
+    {
+      "path": "skills/document-to-confluence/references/html.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 2002,
+      "sha256": "5079cdbafc9fcbaf9f596bb137acfca8c4c7b3b9a313efde01891b03544d0852",
+      "lines": 39
+    },
+    {
+      "path": "skills/document-to-confluence/references/markdown.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 1749
+    },
+    {
+      "path": "skills/document-to-confluence/references/markdown.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 1440,
+      "sha256": "bccee3507711f7ad5b6c49b38c720bd8805b7cb76bfe6f49ac31b15e071c2bd8",
+      "lines": 31
+    },
+    {
+      "path": "skills/document-to-confluence/references/pdf.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 2483
+    },
+    {
+      "path": "skills/document-to-confluence/references/pdf.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 2144,
+      "sha256": "188b753280bfc6dfa345b757e762a4f7b48b09b875e19f4c4bc829347c62b0f0",
+      "lines": 47
+    },
+    {
+      "path": "skills/document-to-confluence/scripts/column_widths.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 8145,
+      "sha256": "5aacfd22275f3da3c8481e011f75609fe712f50e65030e892249fa78388b3c7d",
+      "lines": 233
+    },
+    {
+      "path": "skills/document-to-confluence/scripts/image_size.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 4340,
+      "sha256": "286141a1bf02d6ae61ce028431f4d642c1d1be24cb5e86d767a2b86cbf7a8bdc",
+      "lines": 128
+    },
+    {
+      "path": "skills/document-to-confluence/scripts/render_diagrams.mjs",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 9406,
+      "sha256": "2c442ceb7bdb839c65f1a0ba75bd0ec841cd18915d09704c6b874b4b57714383",
+      "lines": 279
+    },
+    {
+      "path": "skills/document-to-confluence/scripts/text_parity.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 7946,
+      "sha256": "cc87bc36add0b826528f546b05f4b027c7addb06b6f938ef4dc74ac0e38e30d9",
+      "lines": 222
+    },
+    {
+      "path": "skills/document-to-confluence/scripts/validate_body.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 7872,
+      "sha256": "53ac81f7c4253b55c1fdfaa97a9ef2fcb45c1bc818cbc3081fb32c3240aa9acc",
+      "lines": 216
+    },
+    {
+      "path": "skills/document-to-confluence/tests/test_column_widths.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 3294,
+      "sha256": "6669dcaa4edd431346a74727baa3b8923268e6817980e6c45d71acbbf45c9213",
+      "lines": 97
+    },
+    {
+      "path": "skills/document-to-confluence/tests/test_image_size.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 3930,
+      "sha256": "89e4ada563357744249811630d2fe0f6f2a4d1bd5bc8cc610d90c8b0fb2a28af",
+      "lines": 105
+    },
+    {
+      "path": "skills/document-to-confluence/tests/test_render_diagrams.mjs",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 5186,
+      "sha256": "620c93f2a58692ba29a23ccc9c1410ddc9cbfeb0c94bca04c849fa27e62d34ad",
+      "lines": 149
+    },
+    {
+      "path": "skills/document-to-confluence/tests/test_text_parity.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 3825,
+      "sha256": "45759bdfd1517548f079260324cdaa4bd0f536ae7289545abf405aa2378bddbd",
+      "lines": 101
+    },
+    {
+      "path": "skills/document-to-confluence/tests/test_validate_body.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 3666,
+      "sha256": "0c76e7e32aeaa992044903d3711e95e3032f090ace117f76fdf7eefeec19a0f1",
+      "lines": 90
+    },
+    {
+      "path": "skills/flowchart-design/SKILL.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 31653
+    },
+    {
+      "path": "skills/flowchart-design/SKILL.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 27852,
+      "sha256": "49a6609042b95c235412f38006369a1dbbb92796e0e82829beea74ec33b29275",
+      "lines": 433,
+      "description_characters": 478,
+      "description_utf8_bytes": 478
+    },
+    {
+      "path": "skills/flowchart-design/agents/openai.yaml",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 256,
+      "sha256": "83cae2a340b5c37bf11b2687997d410de9126253c688f1d1c9961a3174b7e691",
+      "lines": 4
+    },
+    {
+      "path": "skills/orca-plugin-refresh-resume/SKILL.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 8585
+    },
+    {
+      "path": "skills/orca-plugin-refresh-resume/SKILL.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 7967,
+      "sha256": "45133f0d248ead339a9ab04fd72d6e87579722e67a8f010f259c9b591be8624c",
+      "lines": 121,
+      "description_characters": 225,
+      "description_utf8_bytes": 225
+    },
+    {
+      "path": "skills/orca-plugin-refresh-resume/agents/openai.yaml",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 354,
+      "sha256": "d5439bfc3bba4e47ee003b9022356c41c0a7ac5511bfa73909516f7402cd9627",
+      "lines": 4
+    },
+    {
+      "path": "skills/orca-plugin-refresh-resume/evals/evals.json",
+      "category": "evaluation-fixture",
+      "review_scope": "case schema and expected-outcome review",
+      "utf8_bytes": 5713,
+      "sha256": "66e54f8f4d6047f36b207050212aa0ad2972316fa24bb8e2c1ce4f934a1a8bbc",
+      "lines": 91
+    },
+    {
+      "path": "skills/skill-builder/LICENSE.txt",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 11345,
+      "sha256": "bc6b3af2f331cbc7fb0da1344efb2cbe5877a31498b4d70dbc7000f3405a1362",
+      "lines": 202
+    },
+    {
+      "path": "skills/skill-builder/SKILL.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 35180
+    },
+    {
+      "path": "skills/skill-builder/SKILL.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 31229,
+      "sha256": "6d8bc9bc2e5f8002668f726ff3cfafc015f928f779b4478a0a9574d7e605ac8e",
+      "lines": 524,
+      "description_characters": 463,
+      "description_utf8_bytes": 463
+    },
+    {
+      "path": "skills/skill-builder/agents/analyzer.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 9137
+    },
+    {
+      "path": "skills/skill-builder/agents/analyzer.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 7924,
+      "sha256": "f80c60d99cf14cacebec642485437bfac7040c872a6116d16eb119b64f5e579e",
+      "lines": 197
+    },
+    {
+      "path": "skills/skill-builder/agents/comparator.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 5419
+    },
+    {
+      "path": "skills/skill-builder/agents/comparator.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 4657,
+      "sha256": "44da29e5b8c41b69a358a072a45cd4a4945c173dc0edfbaf59925707aa617f46",
+      "lines": 112
+    },
+    {
+      "path": "skills/skill-builder/agents/grader.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 6757
+    },
+    {
+      "path": "skills/skill-builder/agents/grader.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 5843,
+      "sha256": "37ee37b4062a209854f913703e9e7eea9801dd234631a8ffd32c224e4233d919",
+      "lines": 130
+    },
+    {
+      "path": "skills/skill-builder/assets/eval_review.html",
+      "category": "artifact-resource",
+      "review_scope": "load and output boundary review",
+      "utf8_bytes": 8925,
+      "sha256": "ceda0695126376c0100fac891facf2cde754c1d595a319876341cd4f21eb10c6",
+      "lines": 183
+    },
+    {
+      "path": "skills/skill-builder/eval-viewer/generate_review.py",
+      "category": "artifact-resource",
+      "review_scope": "load and output boundary review",
+      "utf8_bytes": 17349,
+      "sha256": "c7704f467392022343204b6d606e1f1c11865eeaa88905d488783136adf5b1b3",
+      "lines": 493
+    },
+    {
+      "path": "skills/skill-builder/eval-viewer/viewer.html",
+      "category": "artifact-resource",
+      "review_scope": "load and output boundary review",
+      "utf8_bytes": 47242,
+      "sha256": "a703ba1d2b4607df7f0e203a68356b7295ff94807c37b3a7726084f7ab670364",
+      "lines": 1396
+    },
+    {
+      "path": "skills/skill-builder/evals/evals.json",
+      "category": "evaluation-fixture",
+      "review_scope": "case schema and expected-outcome review",
+      "utf8_bytes": 14700,
+      "sha256": "5add0af65f93b781b5cac5a68d2f38af22aad8183f4921d7130cbfc80a9dc572",
+      "lines": 168
+    },
+    {
+      "path": "skills/skill-builder/references/description-optimization.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 4203
+    },
+    {
+      "path": "skills/skill-builder/references/description-optimization.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 4157,
+      "sha256": "0077b786f01a7bbd43c7311ad027dab6684097b5ea8a43177be4e0ad980ddaa5",
+      "lines": 81
+    },
+    {
+      "path": "skills/skill-builder/references/execution-methods.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 8152
+    },
+    {
+      "path": "skills/skill-builder/references/execution-methods.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 8726,
+      "sha256": "a1b12300a393de0c9e0a6eefae7a94a786a2b07a98c5cd42d410e859ab81f922",
+      "lines": 123
+    },
+    {
+      "path": "skills/skill-builder/references/schemas.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 18829,
+      "sha256": "277f55e1402769e162ee03b787e13938076c91b39c57a702c3e23bdfed5bb4af",
+      "lines": 568
+    },
+    {
+      "path": "skills/skill-builder/scripts/__init__.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "lines": 0
+    },
+    {
+      "path": "skills/skill-builder/scripts/aggregate_benchmark.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 23754,
+      "sha256": "56e284be99883daa8c45e411f1a62dc43b3bfe1dd07248d5f57521176bfa8935",
+      "lines": 618
+    },
+    {
+      "path": "skills/skill-builder/scripts/generate_report.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 13024,
+      "sha256": "76d44758a87def370092f0685c7eb1f745f8124aac20059d5d6679067704b8de",
+      "lines": 336
+    },
+    {
+      "path": "skills/skill-builder/scripts/improve_description.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 10625,
+      "sha256": "583db01ea478e4a6b4fc9c617ad866a094a0fe250152163d243ee277815cde9b",
+      "lines": 261
+    },
+    {
+      "path": "skills/skill-builder/scripts/model_runner.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 3996,
+      "sha256": "77c6ef2b4c19d9d95395d608c4a272e134b791da44f64c8c9339246a8d39cbe1",
+      "lines": 131
+    },
+    {
+      "path": "skills/skill-builder/scripts/package_skill.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 10126,
+      "sha256": "582b7935c59635c389d410419f51fb3e21d5c9154dcc92b6e996d0f2d099b567",
+      "lines": 285
+    },
+    {
+      "path": "skills/skill-builder/scripts/quick_validate.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 6818,
+      "sha256": "ebee241697aafa49365da0b4b3f3b0befa22997f76af05bc96a4c68aee7f162a",
+      "lines": 192
+    },
+    {
+      "path": "skills/skill-builder/scripts/run_eval.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 13234,
+      "sha256": "7107207885da7a6ef3d0547aef287187abf5be9ab15eb9264c14263402345c8d",
+      "lines": 367
+    },
+    {
+      "path": "skills/skill-builder/scripts/run_loop.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 17382,
+      "sha256": "a7206c29b2d094e11ffa64b2af39577488cf4a3a728369fc1a263811fcd12b2a",
+      "lines": 421
+    },
+    {
+      "path": "skills/skill-builder/scripts/utils.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 953,
+      "sha256": "cbeed152ea5b95a117a6ee7858abb44d7bb52b9e9585aebb5ad0da87f9d670e8",
+      "lines": 26
+    },
+    {
+      "path": "skills/skill-builder/tests/test_benchmark.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 9802,
+      "sha256": "5ef0ac49e072f9d64f57895849d8cffddcd922db8d69610fdd9596facc9ad5f4",
+      "lines": 218
+    },
+    {
+      "path": "skills/skill-builder/tests/test_evaluation.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 10178,
+      "sha256": "8f8c2473c8b591abcfc8886034019c17a651613af51ce80f61297dfb46ee8f55",
+      "lines": 234
+    },
+    {
+      "path": "skills/skill-builder/tests/test_metadata.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 7836,
+      "sha256": "cf277106fe0bc673bbd15871f1622cdfc71d996d77fe6fd0e3fcd8edea3c466b",
+      "lines": 187
+    },
+    {
+      "path": "skills/skill-builder/tests/test_model_runner.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 3273,
+      "sha256": "7148870888983309dc0746927eb91809349f189f47e57e3829d1059d91480534",
+      "lines": 84
+    },
+    {
+      "path": "skills/skill-builder/tests/test_package_skill.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 5599,
+      "sha256": "2427b2e597d3d0c3095327ae65eb5d8d887787faf6672172fc5ac0991645732e",
+      "lines": 135
+    },
+    {
+      "path": "skills/skill-builder/tests/test_schema_single_source.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 3504,
+      "sha256": "e5e1a26b1a54d29742c45be4bf5d3c2a5d45229c1ba5e91d9c6cb16d474152bc",
+      "lines": 79
+    },
+    {
+      "path": "skills/skill-builder/tests/test_sibling_references.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 3584,
+      "sha256": "43469e4f246016c9eebd365f6161c167d536d3445aa85771ae0ea2709fb25719",
+      "lines": 83
+    },
+    {
+      "path": "skills/skill-builder/tests/test_viewer.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 7056,
+      "sha256": "9d49c15badb940a2c51f0b7a39ee02eeefa854a14c392a14f2d2c242fdd8ba3c",
+      "lines": 169
+    },
+    {
+      "path": "skills/suggest-commit/SKILL.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 17374
+    },
+    {
+      "path": "skills/suggest-commit/SKILL.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 15830,
+      "sha256": "c2be035eeb0344a7c59a41b5d6c02ade3b1329bfe0bf3839660f1480a3050821",
+      "lines": 267,
+      "description_characters": 247,
+      "description_utf8_bytes": 247
+    },
+    {
+      "path": "skills/suggest-commit/agents/openai.yaml",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 298,
+      "sha256": "a200aa68301824d068c133a1e211a589430c5cd75614e11acef7ea98c4250a6f",
+      "lines": 4
+    },
+    {
+      "path": "skills/suggest-commit/evals/evals.json",
+      "category": "evaluation-fixture",
+      "review_scope": "case schema and expected-outcome review",
+      "utf8_bytes": 925,
+      "sha256": "f8ec0f8eab66bd377f4d67d5bd7d2c66403f2e9886ce58215230959fd24b7c93",
+      "lines": 17
+    },
+    {
+      "path": "skills/technical-design-writer/SKILL.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 13190
+    },
+    {
+      "path": "skills/technical-design-writer/SKILL.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 12981,
+      "sha256": "8d567db293d4ca0f7adeb87a6d1fadc3029cf5b7a7148f08af8120b5f9ebd439",
+      "lines": 199,
+      "description_characters": 694,
+      "description_utf8_bytes": 730
+    },
+    {
+      "path": "skills/technical-design-writer/evals/evals.json",
+      "category": "evaluation-fixture",
+      "review_scope": "case schema and expected-outcome review",
+      "utf8_bytes": 7599,
+      "sha256": "3f73a52ec7fbe3e54f8aec1ff29b44a5ecff4478a3b213f9629c6745060ca49c",
+      "lines": 97
+    },
+    {
+      "path": "skills/technical-design-writer/references/design-documents.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 5126
+    },
+    {
+      "path": "skills/technical-design-writer/references/design-documents.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 4669,
+      "sha256": "e9c63d0014c63a769b71a0d791ab2a478d6179955611f14429b0dc3894f0e356",
+      "lines": 85
+    },
+    {
+      "path": "skills/technical-design-writer/references/korean-writing.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 6774
+    },
+    {
+      "path": "skills/technical-design-writer/references/korean-writing.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 6233,
+      "sha256": "1bc08518c2f49fdcab98531cc1dd6a9940553b6cade918a70d799525adb091c2",
+      "lines": 97
+    },
+    {
+      "path": "skills/tiki-taka/SKILL.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 23424
+    },
+    {
+      "path": "skills/tiki-taka/SKILL.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 22846,
+      "sha256": "ef625262487f29f70d56d8243885ccb005d9a3a796eeacb57c1b0917b6461e92",
+      "lines": 377,
+      "description_characters": 728,
+      "description_utf8_bytes": 788
+    },
+    {
+      "path": "skills/tiki-taka/run-opponent.sh",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 217,
+      "sha256": "56923934fa66bc2ce9674e79b40aa0f04cf13c1fb216f4386e4b5b72d6d4ed7c",
+      "lines": 6
+    },
+    {
+      "path": "skills/tiki-taka/scripts/detached_job.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 12644,
+      "sha256": "eb30819bf9c5430e56ac5ee35bb36d37e048b49372e62b596ae9af92b2c11c51",
+      "lines": 393
+    },
+    {
+      "path": "skills/tiki-taka/scripts/opponent_runner.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 31476,
+      "sha256": "fb5cf6494deea4721fc00e070adcc7016386ee8c28ea69359f766b4a1354e369",
+      "lines": 947
+    },
+    {
+      "path": "skills/tiki-taka/scripts/stream_agent.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 16523,
+      "sha256": "5fff23a9cd65763c0061718dac8e95ff43b52361ddaa87580b3bef1b7731c5ce",
+      "lines": 483
+    },
+    {
+      "path": "skills/tiki-taka/scripts/validate_questions.py",
+      "category": "runtime-or-evaluation-code",
+      "review_scope": "entry points and cost-related paths inspected",
+      "utf8_bytes": 6245,
+      "sha256": "defaf18db6a053fd2660c4bb2067f9ce2557e2dde912189cbc3e00ec8b2f6dfb",
+      "lines": 181
+    },
+    {
+      "path": "skills/tiki-taka/tests/test_detached_job.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 4247,
+      "sha256": "1f7d6d7dc3287c03bfa747aefaff0c80cc412e42128c4e4b5e3e4c6a0e825942",
+      "lines": 112
+    },
+    {
+      "path": "skills/tiki-taka/tests/test_questions.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 3446,
+      "sha256": "dbf0e8f59de04c1031d60b98a02724c3aebfe9198dcd37fc2e7709aeb0f04a15",
+      "lines": 118
+    },
+    {
+      "path": "skills/tiki-taka/tests/test_runner.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 13760,
+      "sha256": "02956501675a9b5214b2324396564a247748b7ae4dfeecc437c9a172bfcce235",
+      "lines": 401
+    },
+    {
+      "path": "skills/tiki-taka/tests/test_stream_agent.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 7114,
+      "sha256": "3ddb3e9ed6863f51981cce161bf66b49bc6c25b1d40967efd936815f7a4f8742",
+      "lines": 191
+    },
+    {
+      "path": "standalone-agents/codex-explorer.toml",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 845,
+      "sha256": "bfde4fbbe2740152ad537d576612a34619a57a45adb56072e3f945610ef820af",
+      "lines": 11
+    },
+    {
+      "path": "standalone-skills/omo-model-config/SKILL.ko.md",
+      "category": "human-translation",
+      "review_scope": "inventory-only; not loaded as instructions",
+      "utf8_bytes": 13854
+    },
+    {
+      "path": "standalone-skills/omo-model-config/SKILL.md",
+      "category": "runtime-instructions",
+      "review_scope": "full instruction review",
+      "utf8_bytes": 13595,
+      "sha256": "70d1e8c823da8f0fd022637c0fd359252763d7872d254082b7eb7a9a75f06b9e",
+      "lines": 177,
+      "description_characters": 510,
+      "description_utf8_bytes": 510
+    },
+    {
+      "path": "standalone-skills/omo-model-config/available-models.json",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 658,
+      "sha256": "46dde01fcdb126f1092d7640b87fb7fafdd0a3e73780f29785aae55b6ab257b5",
+      "lines": 30
+    },
+    {
+      "path": "standalone-skills/omo-model-config/oh-my-openagent.json",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 3276,
+      "sha256": "495dc4be23a070f7f709956fc89e0a9c470758493ab5e07d7020b340e6221062",
+      "lines": 140
+    },
+    {
+      "path": "tests/test_instruction_duplication.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 4187,
+      "sha256": "1d03acb1f9d3c74f7a0e507a7a1d02a196650d6f0fdf1cbfd0a3aeca5f4ce268",
+      "lines": 102
+    },
+    {
+      "path": "tests/test_korean_mirrors.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 3399,
+      "sha256": "3431e23d1b7cb31357c13d8f74678c2318d26fdddf63598f14e9126b724b9191",
+      "lines": 93
+    },
+    {
+      "path": "tests/test_orca_plugin_refresh.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 44827,
+      "sha256": "68bd5acc04594ebd13c74cc839cc4c6184a2196d12919fa676239ca37103bfc3",
+      "lines": 939
+    },
+    {
+      "path": "tests/test_planning_contract.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 3630,
+      "sha256": "74e3d8f999000dad3bc9de10d5832189045213bad328584789d06d4bf4c3d1eb",
+      "lines": 83
+    },
+    {
+      "path": "tests/test_release_version.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 1402,
+      "sha256": "eee347a5da05fa0b36477a9ba8075ac6fff6f696f8c505903f9ce7e7b7d9741d",
+      "lines": 42
+    },
+    {
+      "path": "tests/test_session_context.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 10669,
+      "sha256": "ee0cb7d29aac40f4d33799228b1cbf742dab885cc187c30330a13c56a55e4b6f",
+      "lines": 226
+    },
+    {
+      "path": "tests/test_session_lifecycle.py",
+      "category": "test",
+      "review_scope": "inventory; selected contract checks inspected",
+      "utf8_bytes": 15994,
+      "sha256": "62227527a5a35b9c04ab3643624a0801ba18505ff1cec38986e88dbd78d2a306",
+      "lines": 379
+    },
+    {
+      "path": "uv.lock",
+      "category": "repository-and-integration",
+      "review_scope": "configuration and discovery-boundary review",
+      "utf8_bytes": 17486,
+      "sha256": "3293716e967083a130f894488c0eb273df61c4b296dc072b89f60cc0e54fcda7",
+      "lines": 130
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <title>Legacy approval workflow</title>
+    <style>
+      body {
+        margin: 0;
+        background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+        font-family: sans-serif;
+      }
+      main { display: inline-block; padding: 48px; }
+      svg { display: block; width: 1120px; height: 560px; }
+      .node { filter: url(#shadow); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 560"
+           role="img" aria-labelledby="title description">
+        <title id="title">Approval workflow</title>
+        <desc id="description">Receive, parse, review, approve, and publish a request.</desc>
+        <defs>
+          <linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#f8fafc" />
+            <stop offset="1" stop-color="#eef2ff" />
+          </linearGradient>
+          <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#1e293b"
+                          flood-opacity="0.18" />
+          </filter>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5"
+                  orient="auto" markerUnits="strokeWidth">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569" />
+          </marker>
+        </defs>
+        <rect width="1120" height="560" fill="url(#canvas)" />
+        <g id="legacy-approval" aria-label="Legacy approval">
+          <rect x="285" y="185" width="240" height="150" rx="28" fill="#e0e7ff"
+                stroke="#818cf8" stroke-dasharray="8 6" />
+          <text x="405" y="212" text-anchor="middle" font-size="16">Legacy approval</text>
+          <g id="obsolete-parser" class="node">
+            <rect x="320" y="230" width="170" height="85" rx="16" fill="#fff"
+                  stroke="#94a3b8" />
+            <text x="405" y="262" text-anchor="middle" font-size="18">Legacy parser</text>
+            <text x="405" y="288" text-anchor="middle" font-family="monospace"
+                  font-size="12">compat/parser-v1</text>
+          </g>
+        </g>
+        <g id="review" class="node">
+          <rect x="570" y="225" width="170" height="100" rx="16" fill="#fff"
+                stroke="#94a3b8" />
+          <text x="655" y="259" text-anchor="middle" font-size="18">승인 결정</text>
+          <text x="655" y="285" text-anchor="middle" font-size="12">요청자가 제출한 권한과 계정 연결 상태를 확인</text>
+        </g>
+        <g id="edges" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)">
+          <path d="M 240 275 H 320" />
+          <path d="M 490 272 H 570" />
+          <path d="M 740 258 C 790 225 810 220 850 220" />
+          <path d="M 740 295 C 790 330 810 365 850 365" />
+          <path d="M 990 260 H 1030" />
+        </g>
+        <g id="edge-labels" fill="#334155" font-size="15">
+          <text x="785" y="220">승인</text>
+          <text x="785" y="343">보완 요청</text>
+        </g>
+        <g id="receive" class="node">
+          <rect x="70" y="240" width="170" height="90" rx="16" fill="#fff"
+                stroke="#94a3b8" />
+          <text x="155" y="275" text-anchor="middle" font-size="18">요청 접수</text>
+          <text x="155" y="302" text-anchor="middle" font-family="monospace"
+                font-size="12">approval/request/v2</text>
+        </g>
+        <g id="publish" class="node">
+          <rect x="850" y="180" width="140" height="80" rx="16" fill="#fff"
+                stroke="#94a3b8" />
+          <text x="920" y="226" text-anchor="middle" font-size="18">배포 준비</text>
+        </g>
+        <g id="done" class="node">
+          <rect x="1030" y="220" width="80" height="80" rx="16" fill="#fff"
+                stroke="#94a3b8" />
+          <text x="1070" y="266" text-anchor="middle" font-size="18">완료</text>
+        </g>
+        <g id="revise" class="node">
+          <rect x="850" y="325" width="140" height="80" rx="16" fill="#fff"
+                stroke="#94a3b8" />
+          <text x="920" y="371" text-anchor="middle" font-size="18">요청자 보완</text>
+        </g>
+      </svg>
+    </main>
+  </body>
+</html>

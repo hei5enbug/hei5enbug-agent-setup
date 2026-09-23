@@ -3,39 +3,118 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Publish this Markdown design document to Confluence. It contains comparison tables, repository-relative links, local images, and two Mermaid diagrams.",
-      "expected_output": "The agent selects only the Markdown source adapter, captures a stable source revision, normalizes all semantic blocks, replaces unresolved local links, renders and inspects both diagrams, uploads assets before referencing them, validates text parity within the script's supported subset, and verifies the stored page.",
-      "files": []
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/markdown-case/repository/docs/architecture.md` as the complete Markdown source and the listed neighboring files as its local repository. Prepare the normalized block inventory, a proposed body, and an asset/link plan. If no suitable local Mermaid renderer is available, report that limitation and leave the diagrams unresolved. Do not claim that anything was uploaded, saved, or read back from Confluence.",
+      "expected_output": "The run selects the Markdown adapter, captures the local source revision, and normalizes the actual headings, paragraphs, comparison table, links, two images, and both Mermaid blocks in order. It resolves the local relative link targets for planning and marks local image links for published destinations without exposing repository paths. It validates only the Markdown text subset supported by the parity script and reports any unsupported constructs. It renders and inspects both diagrams only if a suitable local renderer is available; otherwise it leaves them unresolved. The result stays a simulation, with upload, save, page-version check, and stored-page readback pending.",
+      "files": [
+        "evals/files/markdown-case/repository/docs/architecture.md",
+        "evals/files/markdown-case/repository/docs/release-checklist.md",
+        "evals/files/markdown-case/repository/README.md",
+        "evals/files/markdown-case/repository/assets/traffic.png",
+        "evals/files/markdown-case/repository/assets/latency.png"
+      ],
+      "expectations": [
+        "The actual comparison table, repository-relative links, local images, and both Mermaid blocks appear in the normalized inventory.",
+        "The run uses the Markdown parity checker only within its declared supported subset and does not claim full parity from unsupported structures.",
+        "A missing local Mermaid renderer is reported as a limitation; no live page write or stored readback is claimed."
+      ]
     },
     {
       "id": 2,
-      "prompt": "Import this saved HTML report into Confluence. Keep the article, figures, captions, and tables, but exclude the site navigation and cookie banner.",
-      "expected_output": "The agent parses the source without executing untrusted scripts, distinguishes document content from application chrome, preserves DOM and rendered reading order, resolves authorized assets, normalizes semantic blocks, and records the excluded navigation and cookie banner as intentional omissions.",
-      "files": []
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/html-case/report.html` as the full saved HTML report. Keep its article, figures, captions, and table; exclude the site navigation and cookie banner. Prepare a normalized inventory, proposed body, and local asset plan. Do not execute page scripts or claim a Confluence write or readback.",
+      "expected_output": "The run selects the HTML adapter, does not execute the untrusted script, and distinguishes article content from navigation and cookie chrome. It preserves the article's heading and paragraph, both figures with alt text and captions, table headers and rows, and their reading order. It resolves the included relative image files for the local plan and records navigation and cookie banner as intentional omissions. The result is a simulation; upload, save, and stored-page readback remain pending.",
+      "files": [
+        "evals/files/html-case/report.html",
+        "evals/files/html-case/assets/traffic.png",
+        "evals/files/html-case/assets/latency.png"
+      ],
+      "expectations": [
+        "The source HTML contains a script, navigation, cookie banner, two local figures, captions, and a table; the proposed body excludes chrome without executing the script.",
+        "Both figure assets resolve to listed local files and keep their alt text and captions in source order.",
+        "No live upload, save, or stored-page readback is claimed."
+      ]
     },
     {
       "id": 3,
-      "prompt": "Convert pages 4 through 18 of this scanned, two-column PDF into a Confluence page. It includes tables, equations, footnotes, and several low-quality scans.",
-      "expected_output": "The agent processes only the requested pages, establishes column reading order, runs OCR with the document language when available, retains page and region locators, checks names, numbers, formulas, tables, and footnotes against page images, and does not publish uncertain OCR as verified content.",
-      "files": []
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/pdf-case/scanned-two-column.pdf` and process only pages 4 through 18. The PDF is an image-only scan with two-column pages, tables, equations, footnotes, and low-contrast scans. Prepare a normalized inventory and proposed body; do not claim a live Confluence write or readback.",
+      "expected_output": "The run verifies that the fixture has 18 pages and processes only pages 4 through 18. It treats the requested pages as image scans, establishes the two-column reading order, uses OCR when available, and checks page and region evidence for table values, the equation, and footnotes. The uncertain Region C value on low-contrast page 16 remains explicitly uncertain rather than being guessed. The output stays a simulation; page version checks, upload, save, and stored-page readback are pending.",
+      "files": [
+        "evals/files/pdf-case/scanned-two-column.pdf"
+      ],
+      "expectations": [
+        "Pages 1 through 3 are excluded; only the 15 scanned pages in the requested range enter the normalized inventory.",
+        "Column order, table rows, equation, and footnotes keep page or region locators.",
+        "The visibly unclear Region C value on page 16 is marked uncertain and is not published as verified text.",
+        "No live page save or stored readback is claimed."
+      ]
     },
     {
       "id": 4,
-      "prompt": "Publish this DOCX specification to Confluence. Use the accepted text, preserve heading numbering and tables, include figures, and omit reviewer comments.",
-      "expected_output": "The agent reads DOCX styles and relationships, uses accepted visible text, excludes comments, preserves meaningful numbering, merged cells, links, figures, captions, and notes, records any unsupported embedded-object downgrade, and verifies the source revision before saving.",
-      "files": []
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/docx-case/reliability-specification.docx`. Use the accepted text, preserve heading numbering and tables, include the figure, and omit reviewer comments. Prepare a normalized inventory and proposed body; do not claim a Confluence write or readback.",
+      "expected_output": "The run reads the actual DOCX styles and package relationships, keeps the visible numbered headings and accepted 99.95% target, excludes the deleted 99.90% text and reviewer comment, and preserves the merged table header, regional values, provided rollback-checklist link, embedded figure, alt text, and caption. It reports any unsupported construct instead of silently dropping it. The result is a simulation; source recheck, upload, save, and stored-page readback remain pending.",
+      "files": [
+        "evals/files/docx-case/reliability-specification.docx"
+      ],
+      "expectations": [
+        "The fixture contains numbered headings, accepted and deleted revision text, a merged table header, an embedded image, and a reviewer comment part.",
+        "The proposed body keeps 99.95% and excludes 99.90% and the reviewer-only comment.",
+        "The merged header, rollback-checklist link, figure, and caption remain represented; no live save or readback is claimed."
+      ]
     },
     {
       "id": 5,
-      "prompt": "Copy all tabs from this Google Doc into one Confluence page and keep the people, date, and Drive-file smart chips useful to readers.",
-      "expected_output": "The agent uses an authenticated Google Drive or Docs connector, captures the file ID and revision, preserves tab order and native structure, converts smart chips to useful visible text and stable links when readers have access, handles private targets explicitly, and checks the revision again before publishing.",
-      "files": []
+      "prompt": "SIMULATION ONLY — do not access Google Docs, Drive, Confluence, or any hosted service. Use `evals/files/google-docs-case/native-response.json` as a mocked native-connector response. Copy all tabs into one proposed page and keep the people, date, and Drive-file smart chips useful to readers. Do not claim that a live connector was authenticated, that a reader can access a target marked unknown, or that a page was written.",
+      "expected_output": "The run recognizes the response as simulated, captures the fixture ID and revision as mock metadata only, and preserves tabs in Overview then Response plan order. It retains the paragraph, table, links, and chip labels. It uses only the supplied simulated URLs for link plans, leaves the Drive-file target's access unknown, and makes no live connector, permission, revision, save, or stored-readback claim.",
+      "files": [
+        "evals/files/google-docs-case/native-response.json"
+      ],
+      "expectations": [
+        "The response explicitly says simulated, with no live connector used and no external writes.",
+        "The tabs remain ordered Overview, then Response plan, and the provided mock revision is labeled simulated.",
+        "People, date, and Drive-file chips retain useful visible text; unknown Drive-file access is not presented as verified.",
+        "No live connector success, reader access, Confluence write, or readback is claimed."
+      ]
     },
     {
       "id": 6,
       "prompt": "The pictures on this existing Confluence page appear as attachment cards, and one table lost its merged header. Repair only those problems.",
       "expected_output": "The agent reads the complete current body, preserves content outside the repair, uses inline images with measured dimensions, reconstructs the merged header only from available evidence, validates the body, protects against a concurrent page update, and verifies the saved rendering.",
       "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/local-update-simulation/source.html` as the full source and `evals/files/local-update-simulation/current-page.html` as the complete current page snapshot. Use `simulation.json` only as static fixture metadata, not as evidence of live versions. Exclude the source's site navigation and cookie banner as application chrome, and record those omissions. Replace only the section marked `data-source-section=\"service-report\"`. Retain the current table of contents, page-only note and table, and legacy image. Use a 240-pixel display width for both source images. Prepare a complete proposed body and an operation plan; do not claim that anything was saved. If the local diagram renderer is unavailable, report that and leave those diagrams unresolved.",
+      "expected_output": "The run uses the HTML source adapter, records the excluded navigation and cookie banner as intentional omissions, and reads the entire current-page snapshot. It always reads the full `confluence-body.md` reference before constructing the body, plus attachments and diagrams references because both source and current page contain relevant assets. It measures both source images at the shared 240-pixel display width, preserves their aspect ratios, and retains each result. If the local renderer is available and succeeds, it captures both matching diagram elements and visually inspects every rendered image. If unavailable or a capture fails, it reports that rendering is incomplete and does not claim the proposed page is ready for publication. The proposed complete body retains the existing TOC identifier, page-only note, page-only table, and legacy image. Source parity and body structure are validated. The result stays a simulation: it records the fixture's source revision and page version but leaves the live version check, upload, save, and stored-page readback pending.",
+      "files": [
+        "evals/files/local-update-simulation/simulation.json",
+        "evals/files/local-update-simulation/source.html",
+        "evals/files/local-update-simulation/current-page.html",
+        "evals/files/local-update-simulation/source-assets/traffic.png",
+        "evals/files/local-update-simulation/source-assets/latency.png",
+        "evals/files/local-update-simulation/existing-assets/legacy.png"
+      ],
+      "expectations": [
+        "The proposed update preserves every current-page construct outside the marked source section, including the existing TOC identifier and legacy attachment.",
+        "Both source images use the requested 240-pixel display width, keep their aspect ratios, and retain separate measurement results.",
+        "Every successfully rendered diagram image is inspected; incomplete or unavailable rendering remains unresolved.",
+        "The operation plan puts each required asset upload before the body's reference to that asset.",
+        "The output does not claim a live version check, upload, save, or stored-result readback."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/plain-update-simulation/source.md` as the full source and `evals/files/plain-update-simulation/current-page.html` as the complete current page snapshot. Use `simulation.json` only as static fixture metadata, not as evidence of live versions. Replace only the section marked `data-source-section=\"handover\"`. No table, image, diagram, or table of contents appears in either file, and no navigation macro was requested. Prepare a complete proposed body and an operation plan; do not claim that anything was saved.",
+      "expected_output": "The run selects the Markdown adapter, reads the document model, and reads the full `confluence-body.md` reference even though the source and current page have no images, tables, or table of contents. It does not read the attachments or diagrams references because there are no such assets. It preserves the source heading and sentence in the marked section and keeps the page-only owner note. The fixture's source revision and page version are labeled as simulated; no live check, save, or stored-page readback is claimed.",
+      "files": [
+        "evals/files/plain-update-simulation/simulation.json",
+        "evals/files/plain-update-simulation/source.md",
+        "evals/files/plain-update-simulation/current-page.html"
+      ],
+      "expectations": [
+        "The run selects the Markdown source adapter and retains the page-only note outside the marked section.",
+        "The full Confluence body reference is read even though the page has no images, tables, or table of contents.",
+        "No attachments or diagram references are read because the source and current page contain no such assets.",
+        "The output labels the version data as simulated and makes no live save or stored-readback claim."
+      ]
     }
   ]
 }

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import stat
 import subprocess
@@ -55,6 +56,10 @@ class RunnerTest(unittest.TestCase):
             if call_log:
                 with open(call_log, "a", encoding="utf-8") as target:
                     target.write(f"{os.getpid()}\n")
+            argument_log = os.environ.get("FAKE_ARGUMENT_LOG")
+            if argument_log:
+                with open(argument_log, "a", encoding="utf-8") as target:
+                    target.write(json.dumps(arguments) + "\n")
             print(json.dumps({
                 "type": "thread.started",
                 "thread_id": "11111111-1111-4111-8111-111111111111",
@@ -254,7 +259,13 @@ class RunnerTest(unittest.TestCase):
         self.assertFalse((state / "uncertain").exists())
 
     def test_second_exchange_reuses_saved_state(self) -> None:
+        """두 번째 교환은 첫 번째와 같은 대화 식별자로 재개한다."""
+        # given
         state = self.root / "resume-state"
+        argument_log = self.root / "codex-arguments.jsonl"
+        self.environment["FAKE_ARGUMENT_LOG"] = str(argument_log)
+
+        # when
         first = self.run_runner(
             "codex",
             state,
@@ -271,11 +282,52 @@ class RunnerTest(unittest.TestCase):
             "--timeout-seconds",
             "5",
         )
+
+        # then
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assertEqual(second.returncode, 0, second.stderr)
 
+        calls = [json.loads(line) for line in argument_log.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(len(calls), 2)
+        self.assertNotIn("resume", calls[0])
+        self.assertEqual(calls[1][:2], ["exec", "resume"])
+        self.assertIn("11111111-1111-4111-8111-111111111111", calls[1])
+        self.assertNotIn("--last", calls[1])
+        self.assertNotIn("--continue", calls[1])
+
         status = self.run_runner("codex", state, "--status", prompt=None)
         self.assertIn("exchanges=2/2", status.stdout)
+
+    def test_uncertain_state_blocks_prompt_replay(self) -> None:
+        """응답 수신이 불확실하면 같은 프롬프트를 자동으로 다시 보내지 않는다."""
+        # given
+        state = self.root / "uncertain-state"
+        self.run_runner(
+            "codex",
+            state,
+            "--max-exchanges",
+            "2",
+            "--timeout-seconds",
+            "5",
+        )
+        (state / "uncertain").write_text("응답 수신 여부 불확실\n", encoding="utf-8")
+        argument_log = self.root / "uncertain-codex-arguments.jsonl"
+        self.environment["FAKE_ARGUMENT_LOG"] = str(argument_log)
+
+        # when
+        result = self.run_runner(
+            "codex",
+            state,
+            "--max-exchanges",
+            "2",
+            "--timeout-seconds",
+            "5",
+        )
+
+        # then
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("응답 수신 여부가 불확실합니다", result.stderr)
+        self.assertFalse(argument_log.exists())
 
     def test_timeout_marks_state_uncertain(self) -> None:
         state = self.root / "timeout-state"
