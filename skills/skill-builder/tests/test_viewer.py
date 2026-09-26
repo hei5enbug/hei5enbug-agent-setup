@@ -34,6 +34,47 @@ def make_workspace(root: Path) -> Path:
 
 
 class GenerateHtmlTest(unittest.TestCase):
+    def test_runs_with_missing_metadata_are_sorted(self):
+        """메타데이터가 없는 결과도 다른 실행 결과와 함께 표시한다."""
+        # Given
+        with tempfile.TemporaryDirectory() as td:
+            workspace = make_workspace(Path(td))
+            (workspace / "ungraded" / "outputs").mkdir(parents=True)
+            # When
+            runs = MODULE.find_runs(workspace)
+            # Then
+            self.assertEqual([run["eval_id"] for run in runs], [1, None])
+
+    def test_repeated_runs_inherit_eval_metadata(self):
+        """반복 실행은 평가 폴더의 메타데이터를 찾는다."""
+        # Given
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            eval_dir = root / "eval-2"
+            (eval_dir / "with_skill" / "run-1" / "outputs").mkdir(parents=True)
+            (eval_dir / "eval_metadata.json").write_text(json.dumps({"eval_id": 2, "prompt": "inherited"}))
+            # When
+            runs = MODULE.find_runs(root)
+            # Then
+            self.assertEqual(runs[0]["eval_id"], 2)
+            self.assertEqual(runs[0]["prompt"], "inherited")
+
+    def test_symlinked_outputs_are_not_embedded(self):
+        """외부 파일 링크와 순환 폴더 링크는 보고서에 포함하지 않는다."""
+        # Given
+        with tempfile.TemporaryDirectory() as td:
+            workspace = make_workspace(Path(td))
+            external = Path(td) / "outside.txt"
+            external.write_text("outside sentinel")
+            outputs = workspace / "eval-1" / "with_skill" / "run-1" / "outputs"
+            (outputs / "external.txt").symlink_to(external)
+            (workspace / "cycle").symlink_to(workspace, target_is_directory=True)
+            # When
+            runs = MODULE.find_runs(workspace)
+            # Then
+            self.assertEqual(len(runs), 1)
+            self.assertNotIn("outside sentinel", json.dumps(runs))
+
     def test_closing_script_tag_in_data_cannot_break_out(self):
         runs = [{"id": "r", "prompt": SCRIPT_INJECTION, "outputs": []}]
         html = MODULE.generate_html(runs, "demo")
@@ -69,6 +110,48 @@ class PortHandlingTest(unittest.TestCase):
 
 
 class FeedbackServerTest(unittest.TestCase):
+    def test_cross_origin_feedback_is_rejected(self):
+        """외부 페이지에서 보낸 피드백 저장 요청은 거부한다."""
+        # Given
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+        self.addCleanup(conn.close)
+        # When
+        conn.request("POST", "/api/feedback", body=b'{"reviews": []}', headers={
+            "Origin": "https://outside.example", "Content-Type": "application/json",
+        })
+        response = conn.getresponse()
+        # Then
+        self.assertEqual(response.status, 403)
+        self.assertFalse(self.feedback_path.exists())
+
+    def test_wrong_host_cannot_read_feedback(self):
+        """다른 호스트 이름을 사용한 요청에 평가 결과를 반환하지 않는다."""
+        # Given
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+        self.addCleanup(conn.close)
+        # When
+        conn.request("GET", "/api/feedback", headers={"Host": "outside.example"})
+        response = conn.getresponse()
+        # Then
+        self.assertEqual(response.status, 403)
+
+    def test_negative_body_length_is_rejected_without_waiting(self):
+        """음수 본문 길이는 입력을 무한히 기다리지 않고 거부한다."""
+        # Given
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=1)
+        self.addCleanup(conn.close)
+        # When
+        conn.request("POST", "/api/feedback", headers={
+            "Content-Type": "application/json", "Content-Length": "-1",
+        })
+        try:
+            response = conn.getresponse()
+        finally:
+            conn.close()
+        # Then
+        self.assertEqual(response.status, 400)
+        self.assertFalse(self.feedback_path.exists())
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

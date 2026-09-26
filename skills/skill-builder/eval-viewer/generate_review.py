@@ -59,16 +59,16 @@ def find_runs(workspace: Path) -> list[dict]:
     """Recursively find directories that contain an outputs/ subdirectory."""
     runs: list[dict] = []
     _find_runs_recursive(workspace, workspace, runs)
-    runs.sort(key=lambda r: (r.get("eval_id", float("inf")), r["id"]))
+    runs.sort(key=lambda r: (r["eval_id"] if r["eval_id"] is not None else float("inf"), r["id"]))
     return runs
 
 
 def _find_runs_recursive(root: Path, current: Path, runs: list[dict]) -> None:
-    if not current.is_dir():
+    if current.is_symlink() or not current.is_dir():
         return
 
     outputs_dir = current / "outputs"
-    if outputs_dir.is_dir():
+    if outputs_dir.is_dir() and not outputs_dir.is_symlink():
         run = build_run(root, current)
         if run:
             runs.append(run)
@@ -86,15 +86,23 @@ def build_run(root: Path, run_dir: Path) -> dict | None:
     eval_id = None
 
     # Try eval_metadata.json
-    for candidate in [run_dir / "eval_metadata.json", run_dir.parent / "eval_metadata.json"]:
+    ancestors = [run_dir, *run_dir.parents]
+    for directory in ancestors[:ancestors.index(root) + 1]:
+        candidate = directory / "eval_metadata.json"
         if candidate.exists():
             try:
                 metadata = json.loads(candidate.read_text())
-                prompt = metadata.get("prompt", "")
-                eval_id = metadata.get("eval_id")
-            except (json.JSONDecodeError, OSError):
+                if not isinstance(metadata, dict):
+                    continue
+                candidate_prompt = metadata.get("prompt")
+                candidate_id = metadata.get("eval_id")
+                if not prompt and isinstance(candidate_prompt, str):
+                    prompt = candidate_prompt
+                if eval_id is None and isinstance(candidate_id, int) and not isinstance(candidate_id, bool):
+                    eval_id = candidate_id
+            except (ValueError, OSError):
                 pass
-            if prompt:
+            if prompt and eval_id is not None:
                 break
 
     # Fall back to transcript.md
@@ -121,7 +129,7 @@ def build_run(root: Path, run_dir: Path) -> dict | None:
     output_files: list[dict] = []
     if outputs_dir.is_dir():
         for f in sorted(outputs_dir.iterdir()):
-            if f.is_file() and f.name not in METADATA_FILES:
+            if f.is_file() and not f.is_symlink() and f.name not in METADATA_FILES:
                 output_files.append(embed_file(f))
 
     # Load grading if present
@@ -339,6 +347,9 @@ class ReviewHandler(BaseHTTPRequestHandler):
         super().__init__(*args, **kwargs)
 
     def do_GET(self) -> None:
+        if not self._host_allowed():
+            self._send_json(403, b'{"ok":false,"error":"Host header does not match this server"}')
+            return
         if self.path == "/" or self.path == "/index.html":
             # Regenerate HTML on each request (re-scans workspace for new outputs)
             runs = find_runs(self.workspace)
@@ -368,7 +379,7 @@ class ReviewHandler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def _host_allowed(self) -> bool:
-        """Only accept writes addressed to this loopback server."""
+        """Only accept requests addressed to this loopback server."""
         host = (self.headers.get("Host") or "").strip().lower()
         port = self.server.server_address[1]
         return host in {f"127.0.0.1:{port}", f"localhost:{port}"}
@@ -387,10 +398,20 @@ class ReviewHandler(BaseHTTPRequestHandler):
         if not self._host_allowed():
             self._send_json(403, json.dumps({"ok": False, "error": "Host header does not match this server"}).encode())
             return
+        origin = self.headers.get("Origin")
+        if origin is not None and origin != f"http://{self.headers.get('Host')}":
+            self._send_json(403, b'{"ok":false,"error":"Cross-origin feedback is not allowed"}')
+            return
+        if self.headers.get_content_type() != "application/json":
+            self._send_json(415, b'{"ok":false,"error":"Expected application/json"}')
+            return
         try:
             length = int(self.headers.get("Content-Length", 0))
         except ValueError:
             length = 0
+        if not 0 < length <= 1024 * 1024:
+            self._send_json(400, b'{"ok":false,"error":"Invalid feedback body length"}')
+            return
         body = self.rfile.read(length)
         try:
             data = json.loads(body)

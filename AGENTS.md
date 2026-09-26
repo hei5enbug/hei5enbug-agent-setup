@@ -14,11 +14,13 @@
   Continue only read-only investigation that does not presuppose the answer.
 - When changing skills, instructions, or hooks, consider their recurring token and context cost.
   Preserve correctness and required validation while reducing unnecessary instruction loading, repeated reads,
-  tool calls, and duplicated content.
+  tool calls, and duplicated content. Reuse loaded instructions and validation results only while their relevant
+  inputs remain unchanged. During local work, run checks affected by the change; broaden them for unresolved risks.
 - Maintain a complete, meaning-equivalent Korean `.ko.md` mirror for every human-readable English Markdown
   file. Update, move, or delete both together. Do not duplicate code, schemas, test fixtures, generated
   artifacts, or non-English documents.
-- Before changing a skill, read `skills/skill-builder/SKILL.md`. For plugin structure, manifests, or hooks,
+- Before changing a skill, read `skills/skill-builder/SKILL.md` unless its current contents are already loaded.
+  Follow its direct-edit or evaluation path as appropriate to the change. For plugin structure, manifests, or hooks,
   use `plugin-creator` when the host provides it and preserve the existing plugin contracts.
 - Keep shared behavior in one canonical source and isolate only actual host differences. A rule the session
   instructions already state belongs there alone; reference it instead of restating it.

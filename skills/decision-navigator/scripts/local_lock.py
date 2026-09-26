@@ -61,8 +61,11 @@ def read_metadata(lock: Path, strict: bool = True) -> dict:
         return {}
     try:
         metadata = json.loads(metadata_path.read_text())
-    except (json.JSONDecodeError, OSError) as error:
-        fail(f"Invalid claim metadata at {metadata_path}: {error}")
+    except (ValueError, OSError) as error:
+        if strict:
+            fail(f"Invalid claim metadata at {metadata_path}: {error}")
+        print(f"Warning: corrupted lock metadata at {metadata_path}: {error}", file=sys.stderr)
+        return {}
     problem = None
     if not isinstance(metadata, dict):
         problem = f"expected a JSON object, got {type(metadata).__name__}"

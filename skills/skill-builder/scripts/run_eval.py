@@ -120,6 +120,8 @@ def validate_description(description: object) -> None:
     """Reject description overrides that a skill host cannot accept."""
     if not isinstance(description, str) or not description.strip():
         raise ValueError("description must be a non-empty string")
+    if '<' in description or '>' in description:
+        raise ValueError("description cannot contain angle brackets (< or >)")
     if len(description) > MAX_DESCRIPTION_LENGTH:
         raise ValueError(
             f"description is {len(description)} characters; maximum is "

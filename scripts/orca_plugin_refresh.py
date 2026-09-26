@@ -83,9 +83,10 @@ def parse_time(value: object) -> datetime | None:
     if not isinstance(value, str):
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+    return parsed if parsed.tzinfo is not None else None
 
 
 def write_json(path: Path, payload: dict[str, object]) -> None:
@@ -452,7 +453,9 @@ def terminal_has_draft(handle: str) -> bool | None:
     if not isinstance(terminal, dict) or "draft" not in terminal:
         return None
     draft = terminal.get("draft")
-    return isinstance(draft, str) and bool(draft.strip())
+    if draft is None:
+        return False
+    return bool(draft.strip()) if isinstance(draft, str) else None
 
 
 def codex_home() -> Path:
@@ -662,10 +665,10 @@ def _unregistered_message(terminal: dict[str, object], problem: str) -> str:
 
 
 def _has_draft(handle: str) -> bool:
-    try:
-        return terminal_has_draft(handle) is True
-    except RefreshError:
-        return False
+    draft = terminal_has_draft(handle)
+    if draft is None:
+        raise RefreshError("session_draft_unknown", "Orca could not verify whether a target terminal has unsent input.")
+    return draft
 
 
 def create_plan(app_root: Path) -> dict[str, object]:
@@ -728,13 +731,17 @@ def create_plan(app_root: Path) -> dict[str, object]:
             tui_idle = False
         if not initiator and (state != "idle" or not tui_idle):
             blockers.append({"code": "session_busy", "message": f"A non-initiator {terminal['host']} session is busy."})
-        if not initiator and _has_draft(str(terminal["terminal_handle"])):
-            blockers.append(
-                {
-                    "code": "session_has_draft",
-                    "message": f"A {terminal['host']} terminal in {terminal['worktree_path']} has unsent input. Send or clear it, then create a new plan.",
-                }
-            )
+        if not initiator:
+            try:
+                if _has_draft(str(terminal["terminal_handle"])):
+                    blockers.append(
+                        {
+                            "code": "session_has_draft",
+                            "message": f"A {terminal['host']} terminal in {terminal['worktree_path']} has unsent input. Send or clear it, then create a new plan.",
+                        }
+                    )
+            except RefreshError as error:
+                blockers.append({"code": error.code, "message": error.message})
         plugin_version = record.get("plugin_version")
         if not isinstance(plugin_version, str):
             blockers.append({"code": "session_version_missing", "message": f"A {terminal['host']} session has no recorded plugin version."})
@@ -956,7 +963,7 @@ def _current_sessions_match_plan(
                 raise RefreshError("stale_plan", "A target session changed after the plan. Review a new plan.")
         if not is_initiator and not wait_terminal(str(terminal["terminal_handle"]), "tui-idle", 1000):
             raise RefreshError("session_busy", "A target terminal is not idle. No session was stopped.")
-        if not is_initiator and terminal_has_draft(str(terminal["terminal_handle"])) is True:
+        if (not is_initiator or not initiator_may_be_busy) and _has_draft(str(terminal["terminal_handle"])):
             raise RefreshError("session_has_draft", "A target terminal has unsent input. No session was stopped.")
         if is_initiator and not initiator_may_be_busy and state != "idle":
             raise RefreshError("session_busy", "The initiating terminal is not idle.")
@@ -1124,12 +1131,12 @@ def apply_plan(app_root: Path, plan_id: str, *, accept_command: str | None = Non
             receipt["parent_transaction_id"] = parent_transaction_id
         _append_event(receipt, "apply-approved")
         _save_receipt(app_root, receipt)
-        _set_leases(app_root, sessions, transaction_id)
-        plan["consumed_by"] = transaction_id
-        plan["plan_hash"] = _plan_hash(plan)
-        write_json(plan_path(app_root, plan_id), plan)
         argv = [sys.executable, str(Path(__file__).resolve()), "worker", "--transaction-id", transaction_id]
         try:
+            _set_leases(app_root, sessions, transaction_id)
+            plan["consumed_by"] = transaction_id
+            plan["plan_hash"] = _plan_hash(plan)
+            write_json(plan_path(app_root, plan_id), plan)
             subprocess.Popen(
                 argv,
                 cwd=app_root,
@@ -1139,13 +1146,15 @@ def apply_plan(app_root: Path, plan_id: str, *, accept_command: str | None = Non
                 close_fds=True,
                 start_new_session=True,
             )
-        except OSError as error:
+        except (OSError, ValueError, TimeoutError, RefreshError) as error:
             receipt["state"] = "failed"
             receipt["stage"] = "worker-start"
             receipt["errors"] = [{"code": "worker_start_failed", "message": "The detached update worker could not start."}]
             _append_event(receipt, "worker-start-failed")
-            _save_receipt(app_root, receipt)
-            _clear_leases(app_root, transaction_id)
+            try:
+                _save_receipt(app_root, receipt)
+            finally:
+                _clear_leases(app_root, transaction_id)
             raise RefreshError("worker_start_failed", "The detached update worker could not start.") from error
         return {
             "ok": True,
@@ -1358,6 +1367,7 @@ def _wait_session_idle(
             return terminal
         if time.monotonic() >= deadline:
             raise RefreshError("session_not_idle", "A target agent did not reach a safe idle point before the timeout.")
+        time.sleep(min(POLL_INTERVAL_SECONDS, max(0, deadline - time.monotonic())))
 
 
 def _send_exit(handle: str, host: str) -> None:
@@ -1624,7 +1634,7 @@ def _confirm_exit_target(
         raise RefreshError("stale_plan", "The planned native session changed immediately before exit.")
     if not wait_terminal(str(handle), "tui-idle", 1000):
         raise RefreshError("session_became_busy", "The target terminal became busy immediately before exit.")
-    if terminal_has_draft(str(handle)) is True:
+    if _has_draft(str(handle)):
         raise RefreshError("session_has_draft", "The target terminal has unsent input, so it was not stopped.")
 
 
@@ -1840,13 +1850,13 @@ def status_transaction(app_root: Path, transaction_id: str | None) -> dict[str, 
 def recover_transaction(app_root: Path, transaction_id: str, *, confirmed: bool) -> dict[str, object]:
     if not confirmed:
         raise RefreshError("confirmation_required", "Recover only after confirming the transaction worker has stopped.")
-    receipt = _load_receipt(app_root, transaction_id)
-    if receipt.get("state") not in ACTIVE_TRANSACTION_STATES:
-        raise RefreshError("transaction_not_active", "Only a queued or interrupted transaction can be recovered.")
-    updated_at = parse_time(receipt.get("updated_at"))
-    if updated_at is None or utc_now() - updated_at < timedelta(seconds=60):
-        raise RefreshError("worker_may_start", "Wait at least one minute after the last receipt update before recovery.")
     with file_lock(transaction_directory(app_root, transaction_id) / ".worker.lock", blocking=False):
+        receipt = _load_receipt(app_root, transaction_id)
+        if receipt.get("state") not in ACTIVE_TRANSACTION_STATES:
+            raise RefreshError("transaction_not_active", "Only a queued or interrupted transaction can be recovered.")
+        updated_at = parse_time(receipt.get("updated_at"))
+        if updated_at is None or utc_now() - updated_at < timedelta(seconds=60):
+            raise RefreshError("worker_may_start", "Wait at least one minute after the last receipt update before recovery.")
         current_terminals = terminal_inventory()
         terminal_by_handle = {str(value["terminal_handle"]): value for value in current_terminals}
         with registry_lock(app_root) as registry:

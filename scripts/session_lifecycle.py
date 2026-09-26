@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import fcntl
+from copy import deepcopy
 import json
 import os
 import re
@@ -113,9 +114,11 @@ def registry_lock(app_root: Path, timeout: float = LOCK_WAIT_SECONDS) -> Iterato
                 raise ValueError("registry schema is invalid")
         else:
             payload = fresh_registry()
+        original = deepcopy(payload)
         yield payload
         _prune_ended(payload)
-        _write_json_atomic(path, payload)
+        if payload != original or not path.exists():
+            _write_json_atomic(path, payload)
     finally:
         try:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
@@ -159,6 +162,8 @@ def _prune_ended(registry: dict[str, object]) -> None:
         try:
             parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
         except ValueError:
+            continue
+        if parsed.tzinfo is None:
             continue
         if parsed < cutoff:
             del sessions[key]
@@ -293,6 +298,14 @@ def handle_event(event: object) -> int:
             if not isinstance(stored, dict):
                 return 0
             prior = stored.get(key)
+            if (
+                isinstance(prior, dict)
+                and prior.get("terminal_handle") != incoming["terminal_handle"]
+                and event_name in {"Stop", "SessionEnd"}
+            ):
+                if host == "codex" and event_name == "Stop":
+                    _emit_payload({})
+                return 0
             record = dict(prior) if isinstance(prior, dict) else {}
             record.update(incoming)
             if isinstance(prior, dict) and prior.get("terminal_handle") != incoming["terminal_handle"]:

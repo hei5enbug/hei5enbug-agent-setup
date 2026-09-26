@@ -373,13 +373,17 @@ def aggregate_results(results: dict) -> dict:
         baseline_runs = results.get(configs[1], [])
         shared = {r["eval_id"] for r in primary_runs} & {r["eval_id"] for r in baseline_runs}
 
-        def mean_of(runs: list, metric: str) -> float | None:
-            values = [r[metric] for r in runs if r["eval_id"] in shared and r.get(metric) is not None]
+        def mean_of(runs: list, metric: str, metric_ids: set) -> float | None:
+            values = [r[metric] for r in runs if r["eval_id"] in metric_ids and r.get(metric) is not None]
             return sum(values) / len(values) if values else None
 
         def delta(metric: str, precision: int) -> str | None:
-            primary_value = mean_of(primary_runs, metric)
-            baseline_value = mean_of(baseline_runs, metric)
+            metric_ids = (
+                {r["eval_id"] for r in primary_runs if r.get(metric) is not None}
+                & {r["eval_id"] for r in baseline_runs if r.get(metric) is not None}
+            )
+            primary_value = mean_of(primary_runs, metric, metric_ids)
+            baseline_value = mean_of(baseline_runs, metric, metric_ids)
             if primary_value is None or baseline_value is None:
                 return None
             return f"{primary_value - baseline_value:+.{precision}f}"

@@ -10,6 +10,19 @@ SCRIPT = Path(__file__).parents[1] / "scripts" / "local_lock.py"
 
 
 class LocalLockTest(unittest.TestCase):
+    def test_force_release_handles_invalid_json(self):
+        """명시적인 강제 해제는 깨진 JSON 메타데이터도 처리한다."""
+        # Given
+        self.run_lock("claim", self.ticket, "--owner", "session-a")
+        lock = self.root / "claims" / "01-first-question.lock"
+        (lock / "claim.json").write_text("{broken")
+        # When
+        result = self.run_lock("release", self.ticket, "--force")
+        # Then
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(lock.exists())
+        self.assertIn("Warning", result.stderr)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name) / ".decision-navigator" / "billing"

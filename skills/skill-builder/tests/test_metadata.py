@@ -27,6 +27,28 @@ def write_skill(root: Path, frontmatter: str, name: str = "demo") -> Path:
 
 
 class ValidateSkillTest(unittest.TestCase):
+    def test_non_string_keys_are_rejected(self):
+        """문자열이 아닌 키는 검증 오류로 반환한다."""
+        # Given
+        skill = write_skill(self.root, "name: demo\ndescription: Example\n1: value\nunknown: value")
+        # When
+        valid, message = qv.validate_skill(skill)
+        # Then
+        self.assertFalse(valid)
+        self.assertIn("Unexpected key", message)
+
+    def test_falsey_compatibility_values_are_rejected(self):
+        """비어 보이는 값이라도 compatibility는 문자열이어야 한다."""
+        for value in ("false", "0", "[]", "{}", "null"):
+            with self.subTest(value=value):
+                # Given
+                skill = write_skill(self.root, f"name: demo\ndescription: Example\ncompatibility: {value}")
+                # When
+                valid, message = qv.validate_skill(skill)
+                # Then
+                self.assertFalse(valid)
+                self.assertIn("Compatibility must be a string", message)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

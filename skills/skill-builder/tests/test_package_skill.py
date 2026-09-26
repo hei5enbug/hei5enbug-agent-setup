@@ -36,6 +36,20 @@ def quiet_package(*args, **kwargs):
 
 
 class PackageBoundaryTest(unittest.TestCase):
+    def test_symlinked_entrypoint_is_not_packaged(self):
+        """제외되는 심볼릭 링크만으로 필수 스킬 파일 검증을 통과하지 않는다."""
+        # Given
+        entrypoint = self.skill / "SKILL.md"
+        external = self.root / "source.md"
+        entrypoint.rename(external)
+        entrypoint.symlink_to(external)
+        # When
+        result, message = quiet_package(self.skill, self.root / "dist")
+        # Then
+        self.assertIsNone(result)
+        self.assertIn("non-symlink", message)
+        self.assertFalse((self.root / "dist" / "demo.skill").exists())
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

@@ -150,6 +150,23 @@ class IncompleteRunTest(unittest.TestCase):
 
 
 class DeltaPairingTest(unittest.TestCase):
+    def test_metrics_from_different_cases_have_no_delta(self):
+        """서로 다른 사례에만 있는 측정값으로 비용 차이를 만들지 않는다."""
+        # Given
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            write_run(root, 1, "with_skill", 1, grading(1.0, seconds=10), {"total_tokens": 100})
+            write_run(root, 1, "without_skill", 1, grading(1.0))
+            write_run(root, 2, "with_skill", 1, grading(1.0))
+            write_run(root, 2, "without_skill", 1, grading(1.0, seconds=20), {"total_tokens": 200})
+            results = ab.load_run_results(root)
+            # When
+            summary = ab.aggregate_results(results)
+            # Then
+            self.assertIsNone(summary["delta"]["tokens"])
+            self.assertIsNone(summary["delta"]["time_seconds"])
+            self.assertEqual(summary["delta"]["pass_rate"], "+0.00")
+
     def test_delta_uses_only_shared_eval_ids(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
