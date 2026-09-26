@@ -42,6 +42,16 @@ def fake_eval(**kwargs):
 
 
 class RunEvalValidationTest(unittest.TestCase):
+    def test_description_with_tags_is_rejected(self):
+        """호스트에서 허용하지 않는 태그가 있는 설명은 평가 전에 거부한다."""
+        # Given
+        description = "Use <skill> for work"
+        # When
+        with self.assertRaises(ValueError) as caught:
+            run_eval.validate_description(description)
+        # Then
+        self.assertIn("angle brackets", str(caught.exception))
+
     def test_zero_runs_is_rejected_before_any_model_call(self):
         with patch.object(run_eval, "run_single_query") as runner:
             with self.assertRaises(ValueError):

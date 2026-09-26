@@ -68,7 +68,12 @@ def provision_codex_explorer(root: Path) -> None:
     if target.exists():
         return
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    content = source.read_text(encoding="utf-8")
+    try:
+        with target.open("x", encoding="utf-8") as stream:
+            stream.write(content)
+    except FileExistsError:
+        pass
 
 
 def main() -> int:

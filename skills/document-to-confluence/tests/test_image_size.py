@@ -1,11 +1,12 @@
 from contextlib import redirect_stdout
 import importlib.util
-from io import StringIO
+from io import BytesIO, StringIO
 import json
 from pathlib import Path
 import struct
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 SCRIPT_PATH = Path(__file__).parents[1] / "scripts" / "image_size.py"
@@ -28,6 +29,47 @@ def jpeg_bytes(width, height):
 
 
 class ImageSizeTest(unittest.TestCase):
+    def test_dimensions_do_not_read_image_payload(self):
+        """이미지 크기는 이미지 본문 전체를 읽지 않고 구한다."""
+        for header in (png_bytes(640, 480), gif_bytes(640, 480), jpeg_bytes(640, 480)):
+            with self.subTest(header=header[:6]):
+                # Given
+                reads = []
+
+                class MeasuredFile(BytesIO):
+                    def read(self, size=-1):
+                        data = super().read(size)
+                        reads.append(len(data))
+                        return data
+
+                source = MeasuredFile(header + b"x" * 1_000_000)
+                # When
+                with patch("builtins.open", return_value=source):
+                    _, dimensions = MODULE.read_size("sample")
+                # Then
+                self.assertEqual(dimensions, (640, 480))
+                self.assertLess(sum(reads), 64)
+
+    def test_jpeg_skips_metadata_segments(self):
+        """JPEG 부가정보 뒤의 프레임에서도 정확한 크기를 읽는다."""
+        # Given
+        metadata = b"\xff\xe1" + struct.pack(">H", 60002) + b"x" * 60000
+        path = self.write("metadata.jpg", b"\xff\xd8" + metadata + jpeg_bytes(640, 480)[2:])
+        # When
+        result = MODULE.read_size(path)
+        # Then
+        self.assertEqual(result, ("jpeg", (640, 480)))
+
+    def test_invalid_jpeg_frame_length_is_rejected(self):
+        """길이가 잘못된 JPEG 프레임을 정상 이미지로 받아들이지 않는다."""
+        # Given
+        path = self.write("invalid.jpg", b"\xff\xd8\xff\xc0\x00\x02\x08\x00\x10\x00\x10")
+        # When
+        with self.assertRaises(MODULE.UnsupportedImage) as caught:
+            MODULE.read_size(path)
+        # Then
+        self.assertIn("length", str(caught.exception))
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

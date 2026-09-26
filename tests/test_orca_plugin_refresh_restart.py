@@ -93,6 +93,7 @@ class OrcaTerminalProbeTest(OrcaRefreshFixture):
         responses = [
             {"result": {"terminal": {"draft": "1번으로 가"}}},
             {"result": {"terminal": {"draft": None}}},
+            {"result": {"terminal": {"draft": {"unexpected": "input"}}}},
             {"result": {"terminal": {"tail": []}}},
         ]
 
@@ -101,7 +102,7 @@ class OrcaTerminalProbeTest(OrcaRefreshFixture):
             observed = [REAL_TERMINAL_HAS_DRAFT("term-x") for _ in responses]
 
         # Then
-        self.assertEqual(observed, [True, False, None])
+        self.assertEqual(observed, [True, False, None, None])
 
 
 class AgentStopTest(OrcaRefreshFixture):

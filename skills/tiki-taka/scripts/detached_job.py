@@ -31,22 +31,9 @@ def process_exists(pid: int) -> bool:
 
 
 def terminate_group(process: subprocess.Popen[bytes]) -> None:
-    if process.poll() is not None:
-        return
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
-    try:
-        process.wait(timeout=5)
-        return
-    except subprocess.TimeoutExpired:
-        pass
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-    process.wait()
+    from stream_agent import terminate_process
+
+    terminate_process(process)
 
 
 def command_tail(values: list[str]) -> list[str]:
@@ -145,6 +132,8 @@ def worker(args: argparse.Namespace) -> int:
         )
         return_code = 1
     finally:
+        if process is not None:
+            terminate_group(process)
         try:
             prompt_path.unlink()
         except FileNotFoundError:

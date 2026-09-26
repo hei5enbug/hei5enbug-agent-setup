@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import subprocess
+import os
 import sys
 import tempfile
 import time
@@ -15,6 +16,49 @@ SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "detached_job.py"
 
 
 class DetachedJobTest(unittest.TestCase):
+    def test_exited_parent_does_not_leave_child_running(self) -> None:
+        """직접 실행한 프로세스가 종료되어도 남은 자식 프로세스를 정리한다."""
+        # Given
+        heartbeat = self.state / "heartbeat"
+        pid_file = self.state / "child-pid"
+        child_code = (
+            "import signal,time; from pathlib import Path; "
+            "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+            f"p=Path({str(heartbeat)!r}); "
+            "exec('while True:\\n p.write_text(str(time.time_ns())); time.sleep(0.02)')"
+        )
+        parent_code = (
+            "import subprocess,sys; from pathlib import Path; "
+            f"p=subprocess.Popen([sys.executable,'-c',{child_code!r}], "
+            "stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); "
+            f"Path({str(pid_file)!r}).write_text(str(p.pid))"
+        )
+        driver = (
+            "import subprocess,sys,time; from pathlib import Path; "
+            f"sys.path.insert(0,{str(SCRIPT.parent)!r}); "
+            "from detached_job import terminate_group; import stream_agent; "
+            "stream_agent.GROUP_GRACE_SECONDS=0.1; "
+            f"p=subprocess.Popen([sys.executable,'-c',{parent_code!r}],start_new_session=True); "
+            "p.wait(); "
+            f"\nfor _ in range(100):\n if Path({str(heartbeat)!r}).exists(): break\n time.sleep(0.02)\n"
+            "terminate_group(p)"
+        )
+        try:
+            # When
+            result = subprocess.run([sys.executable, "-c", driver], capture_output=True, text=True, timeout=10)
+            first = heartbeat.read_text()
+            time.sleep(0.1)
+            second = heartbeat.read_text()
+            # Then
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(first, second)
+        finally:
+            if pid_file.exists():
+                try:
+                    os.kill(int(pid_file.read_text()), 9)
+                except ProcessLookupError:
+                    pass
+
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(prefix="tiki-taka-job.")
         self.state = Path(self.temporary.name)

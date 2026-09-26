@@ -162,8 +162,8 @@ def package_skill(skill_path, output_dir=None, check_installed=False):
 
     # Validate SKILL.md exists
     skill_md = skill_path / "SKILL.md"
-    if not skill_md.exists():
-        print(f"❌ Error: SKILL.md not found in {skill_path}")
+    if not skill_md.is_file() or skill_md.is_symlink():
+        print(f"❌ Error: SKILL.md must be a regular, non-symlink file in {skill_path}")
         return None
 
     # Determine output location before doing any work

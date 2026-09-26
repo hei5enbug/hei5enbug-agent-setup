@@ -46,45 +46,50 @@ def _gif_size(data):
     return _positive("GIF", width, height)
 
 
-def _jpeg_size(data):
-    size = len(data)
-    offset = 2
+def _jpeg_size(handle):
+    handle.seek(2)
     standalone = {0x01} | set(range(0xD0, 0xD8))
     sof = set(range(0xC0, 0xD0)) - {0xC4, 0xC8, 0xCC}
-    while offset < size:
-        if data[offset] != 0xFF:
-            raise UnsupportedImage("JPEG marker structure is malformed")
-        while offset < size and data[offset] == 0xFF:
-            offset += 1
-        if offset >= size:
+    while True:
+        marker = handle.read(1)
+        if not marker:
             break
-        marker = data[offset]
-        offset += 1
+        if marker != b"\xff":
+            raise UnsupportedImage("JPEG marker structure is malformed")
+        while marker == b"\xff":
+            marker = handle.read(1)
+        if not marker or marker[0] in {0xD9, 0xDA}:
+            break
+        marker = marker[0]
         if marker in standalone:
             continue
-        if offset + 2 > size:
+        segment_length = handle.read(2)
+        if len(segment_length) != 2:
             raise UnsupportedImage("JPEG segment length is truncated")
-        (length,) = struct.unpack(">H", data[offset:offset + 2])
+        (length,) = struct.unpack(">H", segment_length)
         if length < 2:
             raise UnsupportedImage("JPEG segment length is invalid")
         if marker in sof:
-            if offset + 7 > size:
+            if length < 7:
+                raise UnsupportedImage("JPEG frame length is invalid")
+            frame = handle.read(5)
+            if len(frame) != 5:
                 raise UnsupportedImage("JPEG frame header is truncated")
-            height, width = struct.unpack(">HH", data[offset + 3:offset + 7])
+            height, width = struct.unpack(">HH", frame[1:5])
             return _positive("JPEG", width, height)
-        offset += length
+        handle.seek(length - 2, 1)
     raise UnsupportedImage("JPEG contains no frame header")
 
 
 def read_size(path):
     with open(path, "rb") as handle:
-        data = handle.read()
-    if data.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "png", _png_size(data)
-    if data.startswith(b"GIF87a") or data.startswith(b"GIF89a"):
-        return "gif", _gif_size(data)
-    if data.startswith(b"\xff\xd8"):
-        return "jpeg", _jpeg_size(data)
+        data = handle.read(24)
+        if data.startswith(b"\x89PNG\r\n\x1a\n"):
+            return "png", _png_size(data)
+        if data.startswith(b"GIF87a") or data.startswith(b"GIF89a"):
+            return "gif", _gif_size(data)
+        if data.startswith(b"\xff\xd8"):
+            return "jpeg", _jpeg_size(handle)
     raise UnsupportedImage("format is not PNG, JPEG, or GIF")
 
 
