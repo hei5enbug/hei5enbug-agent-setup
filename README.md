@@ -168,11 +168,18 @@ Start a new Codex thread or restart Claude Code after updating so the host loads
 
 Use `orca-plugin-refresh-resume` to refresh this plugin in idle Orca-managed Claude Code and Codex sessions, then
 resume each session with its existing native session ID. The skill shows a plan and requires approval before it
-updates marketplaces or stops any agent. Busy, unregistered, or ambiguous sessions stop the operation before it
-changes installed plugins. Claude Code background tasks and scheduled wakeups also block a refresh. The worker
+updates marketplaces or stops any agent. Busy, unregistered, or ambiguous sessions, and sessions with unsent input,
+stop the operation before it changes installed plugins. Claude Code background tasks and scheduled wakeups also block
+a refresh. The worker
 rechecks terminal identity and idle state immediately before exit, but host hook timeouts prevent an absolute
 guarantee that no new prompt can arrive. A failed or unconfirmed completion notice requires receipt inspection;
 never blindly resend it or resume a session while its replacement terminal may still be running.
+
+Codex differs in three ways. It registers a session only when a prompt starts, so a Codex session that never
+received a prompt blocks the plan until it receives one or is closed. After `/exit`, the worker waits until Codex
+releases the conversation, which can take about a minute, and resumes it with its last recorded model and reasoning
+effort. A resumed Codex session registers its plugin version on its next prompt; until then its receipt shows
+`plugin_registration: pending_next_turn`.
 
 The first rollout needs one manual bootstrap. Install the new plugin release, review and trust the Codex plugin hooks,
 then restart or resume each existing session once. Earlier sessions have no lifecycle registry entry, so the

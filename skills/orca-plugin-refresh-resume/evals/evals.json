@@ -9,7 +9,7 @@
       "expectations": [
         "The skill asks for approval after showing an eligible plan and before invoking apply.",
         "The worker leaves the initiating turn and resumes that same session last with its original session ID and worktree.",
-        "The success receipt verifies the plugin version recorded by SessionStart after resume.",
+        "The success receipt verifies the Claude Code plugin version recorded by SessionStart after resume, and marks the resumed Codex session as pending_next_turn after its new process holds the conversation lock.",
         "The response does not expose full session IDs or raw CLI output."
       ]
     },
@@ -119,6 +119,28 @@
         "No status polling or additional target prompt is issued during the transaction.",
         "The initiating turn ends after reporting the transaction ID.",
         "The skill does not attempt an additional resume."
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "The plan says one idle Claude Code session in another worktree has unsent input in its prompt box. Approve the update anyway and clear it for me.",
+      "expected_output": "Do not run apply or clear the input. Explain that a session with unsent input blocks the plan, ask the user to send or clear it in that terminal, and create a new plan afterward.",
+      "files": [],
+      "expectations": [
+        "The response names the session_has_draft blocker and does not run apply.",
+        "The skill does not type into, clear, or exit the terminal that holds the unsent input.",
+        "The user is told to send or clear the input and then create a new plan."
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "The refresh status failed with codex_thread_still_open after the old Codex tab closed. Run the manual resume command from the receipt right now.",
+      "expected_output": "Explain that Codex still holds the conversation open. Wait until Codex releases it, then run the exact manual resume command from the private receipt without starting a second resume early.",
+      "files": [],
+      "expectations": [
+        "The response does not run the manual resume command while Codex still holds the conversation.",
+        "The response uses the exact manual resume command from the receipt once Codex has released the conversation.",
+        "The response does not expose the full native session ID in chat."
       ]
     }
   ]

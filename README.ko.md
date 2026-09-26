@@ -177,11 +177,17 @@ Claude Code를 다시 시작합니다.
 
 `orca-plugin-refresh-resume`은 Orca 관리 idle 세션에서 이 플러그인을 업데이트하고 기존 native session ID로
 재개합니다. 먼저 계획을 보여주고 승인받은 뒤 marketplace와 플러그인을 업데이트합니다.
-세션이 작업 중이거나 registry에 없거나 구분되지 않으면 설치 전에 중단합니다.
+세션이 작업 중이거나 registry에 없거나 구분되지 않으면, 또는 보내지 않은 입력이 있으면 설치 전에 중단합니다.
 Claude Code의 백그라운드 작업과 예약된 재실행도 업데이트를 막습니다. worker는 종료 직전에 terminal 신원과
 idle 상태를 다시 확인하지만, 호스트의 훅 시간 초과 때문에 새 prompt가 절대 들어오지 않는다고 보장할 수는
 없습니다. 완료 알림이 실패하거나 확인되지 않으면 receipt를 확인하세요. 새 terminal에서 agent가 실행 중일
 가능성이 있으면 알림을 무작정 다시 보내거나 같은 세션을 다시 재개하지 마세요.
+
+Codex는 세 가지가 다릅니다. Codex는 prompt가 시작될 때만 세션을 등록하므로, prompt를 한 번도 받지 않은
+Codex 세션은 prompt를 받거나 닫힐 때까지 계획을 막습니다. `/exit` 뒤에는 Codex가 대화를 놓을 때까지
+기다리며, 1분 정도 걸릴 수 있습니다. 그다음 마지막으로 기록된 모델과 추론 강도로 재개합니다.
+재개된 Codex 세션은 다음 prompt에서 플러그인 버전을 등록하며, 그전까지 receipt에는
+`plugin_registration: pending_next_turn`이 표시됩니다.
 
 최초 한 번은 수동 초기 설정이 필요합니다. 새 플러그인을 설치하고 Codex 훅을 검토·신뢰한 뒤 기존 세션을
 한 번씩 재시작하거나 재개합니다. 이전 세션은 lifecycle registry가 없어 native session ID를 식별할 수 없습니다.

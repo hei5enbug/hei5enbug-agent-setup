@@ -21,6 +21,7 @@ from typing import Iterator, Sequence
 if __package__:
     from .session_lifecycle import (
         ACTIVE_TRANSACTION_STATES,
+        SESSION_ID_RE,
         TERMINAL_HANDLE_RE,
         data_root_from_env,
         now_utc,
@@ -34,6 +35,7 @@ if __package__:
 else:
     from session_lifecycle import (
         ACTIVE_TRANSACTION_STATES,
+        SESSION_ID_RE,
         TERMINAL_HANDLE_RE,
         data_root_from_env,
         now_utc,
@@ -56,6 +58,14 @@ PLAN_TTL = timedelta(minutes=30)
 PLAN_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
 SUPPORTED_AGENTS = {"codex": {"codex"}, "claude": {"claude", "claude-code", "claude code"}}
+CODEX_INSTALL_METADATA = ".codex-marketplace-install.json"
+CODEX_MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
+CODEX_EFFORT_RE = re.compile(r"^[a-z]{1,32}$")
+AGENT_EXIT_TIMEOUT_SECONDS = 180
+CODEX_THREAD_RELEASE_TIMEOUT_SECONDS = 300
+CODEX_SESSION_END_GRACE_SECONDS = 10
+RESUME_LOCK_TIMEOUT_SECONDS = 30
+POLL_INTERVAL_SECONDS = 1.0
 
 
 class RefreshError(Exception):
@@ -318,7 +328,7 @@ def installed_plugins(host: str) -> tuple[dict[str, object], dict[str, object]]:
     return item, {"root": str(root), "catalog_version": read_manifest_version(root, "claude"), "installed_version": base_version(item.get("version"))}
 
 
-def git_revision(root: Path) -> str | None:
+def git_revision(root: Path, *, install_metadata: str | None = None) -> str | None:
     result = run_command([executable("git"), "-C", str(root), "rev-parse", "HEAD"], timeout=5, check=False)
     if result.returncode != 0:
         return None
@@ -326,7 +336,22 @@ def git_revision(root: Path) -> str | None:
     if not re.fullmatch(r"[0-9a-fA-F]{40,64}", value):
         return None
     status = run_command([executable("git"), "-C", str(root), "status", "--porcelain", "--untracked-files=all"], timeout=5, check=False)
-    return value if status.returncode == 0 and not status.stdout.strip() else None
+    if status.returncode != 0:
+        return None
+    changes = [line for line in status.stdout.splitlines() if line.strip()]
+    if install_metadata is not None and f"?? {install_metadata}" in changes:
+        if not _install_metadata_matches(root / install_metadata, value):
+            return None
+        changes.remove(f"?? {install_metadata}")
+    return None if changes else value
+
+
+def _install_metadata_matches(path: Path, revision: str) -> bool:
+    try:
+        metadata = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(metadata, dict) and metadata.get("revision") == revision
 
 
 def supported_host(identity: object) -> str | None:
@@ -397,6 +422,106 @@ def wait_terminal(handle: str, condition: str, timeout_ms: int) -> bool:
     if isinstance(wait, dict):
         return wait.get("satisfied") is True
     return result.get("satisfied") is True
+
+
+def terminal_agent_running(handle: str, host: str) -> bool:
+    command = [*orca_command(), "terminal", "show", "--terminal", handle, "--json"]
+    result = run_command(command, timeout=15, check=False)
+    try:
+        payload = json.loads(result.stdout)
+    except (json.JSONDecodeError, TypeError) as error:
+        raise RefreshError("invalid_cli_json", "Orca returned unreadable JSON for a terminal.") from error
+    if isinstance(payload, dict) and payload.get("ok") is False:
+        error_info = payload.get("error")
+        if isinstance(error_info, dict) and error_info.get("code") == "terminal_handle_stale":
+            return False
+        raise RefreshError("orca_rejected", "Orca could not report the terminal state.")
+    if result.returncode != 0:
+        raise RefreshError("command_failed", f"orca failed with exit code {result.returncode}.")
+    terminal = unwrap_orca(payload).get("terminal")
+    if not isinstance(terminal, dict):
+        raise RefreshError("invalid_orca_response", "Orca returned an unsupported terminal shape.")
+    if terminal.get("connected") is not True or terminal.get("exitCause"):
+        return False
+    return supported_host(terminal.get("agentIdentity")) == host
+
+
+def terminal_has_draft(handle: str) -> bool | None:
+    payload = run_json([*orca_command(), "terminal", "read", "--terminal", handle, "--limit", "1", "--json"], timeout=15)
+    terminal = unwrap_orca(payload).get("terminal")
+    if not isinstance(terminal, dict) or "draft" not in terminal:
+        return None
+    draft = terminal.get("draft")
+    return isinstance(draft, str) and bool(draft.strip())
+
+
+def codex_home() -> Path:
+    configured = os.environ.get("CODEX_HOME")
+    if not configured:
+        return Path.home() / ".codex"
+    path = Path(configured).expanduser()
+    if not path.is_absolute():
+        raise RefreshError("codex_home_invalid", "CODEX_HOME must be an absolute path.")
+    return path
+
+
+def codex_thread_lock_state(session_id: str) -> str:
+    if not SESSION_ID_RE.fullmatch(session_id):
+        raise RefreshError("session_id_invalid", "The Codex session ID is invalid.")
+    path = codex_home() / "thread-writer-locks" / f"{session_id}.lock"
+    try:
+        descriptor = os.open(path, os.O_RDONLY)
+    except FileNotFoundError:
+        return "free"
+    except OSError as error:
+        raise RefreshError("codex_lock_unreadable", "The Codex conversation lock could not be inspected.") from error
+    try:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return "held"
+        except OSError as error:
+            raise RefreshError("codex_lock_unreadable", "The Codex conversation lock could not be inspected.") from error
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+        return "free"
+    finally:
+        os.close(descriptor)
+
+
+def codex_resume_settings(session_id: str) -> dict[str, str]:
+    if not SESSION_ID_RE.fullmatch(session_id):
+        return {}
+    sessions_root = codex_home() / "sessions"
+    matches = sorted(sessions_root.glob(f"*/*/*/rollout-*-{session_id}.jsonl")) if sessions_root.is_dir() else []
+    if len(matches) != 1:
+        return {}
+    model: object = None
+    effort: object = None
+    try:
+        with matches[0].open(encoding="utf-8") as rollout:
+            for line in rollout:
+                if '"turn_context"' not in line and '"thread_settings_applied"' not in line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                payload = entry.get("payload") if isinstance(entry, dict) else None
+                if not isinstance(payload, dict):
+                    continue
+                if entry.get("type") == "turn_context":
+                    model, effort = payload.get("model"), payload.get("effort")
+                elif payload.get("type") == "thread_settings_applied" and isinstance(payload.get("thread_settings"), dict):
+                    settings = payload["thread_settings"]
+                    model, effort = settings.get("model"), settings.get("reasoning_effort")
+    except OSError:
+        return {}
+    if not isinstance(model, str) or not CODEX_MODEL_RE.fullmatch(model):
+        return {}
+    result = {"resume_model": model}
+    if isinstance(effort, str) and CODEX_EFFORT_RE.fullmatch(effort):
+        result["resume_effort"] = effort
+    return result
 
 
 def registry_sessions(app_root: Path) -> dict[str, dict[str, object]]:
@@ -512,9 +637,10 @@ def _manifest_snapshots() -> dict[str, dict[str, object]]:
     for host in ("codex", "claude"):
         _, snapshot = installed_plugins(host)
         root = Path(str(snapshot["root"]))
+        metadata = CODEX_INSTALL_METADATA if host == "codex" else None
         snapshots[host] = {
             **snapshot,
-            "catalog_revision": git_revision(root),
+            "catalog_revision": git_revision(root, install_metadata=metadata),
         }
     return snapshots
 
@@ -523,6 +649,23 @@ def _plan_hash(plan: dict[str, object]) -> str:
     stable = {key: value for key, value in plan.items() if key != "plan_hash"}
     encoded = json.dumps(stable, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _unregistered_message(terminal: dict[str, object], problem: str) -> str:
+    message = f"A {terminal['host']} terminal in {terminal['worktree_path']} is not safely registered ({problem})."
+    if terminal.get("host") == "codex" and problem == "terminal has no current lifecycle registry handle":
+        message += (
+            " Codex registers a session when its first prompt starts, so a session that never received a prompt"
+            " or started before its hooks were trusted cannot be identified. Send it a prompt or close it, then create a new plan."
+        )
+    return message
+
+
+def _has_draft(handle: str) -> bool:
+    try:
+        return terminal_has_draft(handle) is True
+    except RefreshError:
+        return False
 
 
 def create_plan(app_root: Path) -> dict[str, object]:
@@ -550,12 +693,7 @@ def create_plan(app_root: Path) -> dict[str, object]:
     for terminal in sorted(terminals, key=lambda value: (str(value["worktree_id"]), str(value["host"]), str(value["terminal_handle"]))):
         key, record, problem = session_record_for_terminal(terminal, records)
         if problem or record is None or key is None:
-            blockers.append(
-                {
-                    "code": "session_unregistered",
-                    "message": f"A {terminal['host']} terminal in {terminal['worktree_path']} is not safely registered ({problem}).",
-                }
-            )
+            blockers.append({"code": "session_unregistered", "message": _unregistered_message(terminal, str(problem))})
             snapshots.append({**terminal, "session_id": None, "registry_state": None, "registered": False})
             continue
         session_id = record.get("session_id")
@@ -590,6 +728,13 @@ def create_plan(app_root: Path) -> dict[str, object]:
             tui_idle = False
         if not initiator and (state != "idle" or not tui_idle):
             blockers.append({"code": "session_busy", "message": f"A non-initiator {terminal['host']} session is busy."})
+        if not initiator and _has_draft(str(terminal["terminal_handle"])):
+            blockers.append(
+                {
+                    "code": "session_has_draft",
+                    "message": f"A {terminal['host']} terminal in {terminal['worktree_path']} has unsent input. Send or clear it, then create a new plan.",
+                }
+            )
         plugin_version = record.get("plugin_version")
         if not isinstance(plugin_version, str):
             blockers.append({"code": "session_version_missing", "message": f"A {terminal['host']} session has no recorded plugin version."})
@@ -811,6 +956,8 @@ def _current_sessions_match_plan(
                 raise RefreshError("stale_plan", "A target session changed after the plan. Review a new plan.")
         if not is_initiator and not wait_terminal(str(terminal["terminal_handle"]), "tui-idle", 1000):
             raise RefreshError("session_busy", "A target terminal is not idle. No session was stopped.")
+        if not is_initiator and terminal_has_draft(str(terminal["terminal_handle"])) is True:
+            raise RefreshError("session_has_draft", "A target terminal has unsent input. No session was stopped.")
         if is_initiator and not initiator_may_be_busy and state != "idle":
             raise RefreshError("session_busy", "The initiating terminal is not idle.")
         record_copy = dict(record)
@@ -1213,15 +1360,37 @@ def _wait_session_idle(
             raise RefreshError("session_not_idle", "A target agent did not reach a safe idle point before the timeout.")
 
 
-def _send_exit(handle: str) -> None:
+def _send_exit(handle: str, host: str) -> None:
     payload = run_json(
         [*orca_command(), "terminal", "send", "--terminal", handle, "--text", "/exit", "--enter", "--json"],
         timeout=20,
     )
     orca_send_receipt(payload)
-    if not wait_terminal(handle, "exit", 60_000):
-        if not wait_terminal(handle, "exit", 120_000):
+    deadline = time.monotonic() + AGENT_EXIT_TIMEOUT_SECONDS
+    while terminal_agent_running(handle, host):
+        if time.monotonic() >= deadline:
             raise RefreshError("exit_unconfirmed", "The agent process did not exit; the terminal was left open.")
+        time.sleep(POLL_INTERVAL_SECONDS)
+
+
+def _wait_codex_session_end(app_root: Path, session: dict[str, object]) -> None:
+    deadline = time.monotonic() + CODEX_SESSION_END_GRACE_SECONDS
+    while True:
+        _, record = _current_record_for(session, _read_current_records(app_root))
+        if record.get("state") == "ended" or time.monotonic() >= deadline:
+            return
+        time.sleep(POLL_INTERVAL_SECONDS)
+
+
+def _wait_codex_thread_released(session_id: str) -> None:
+    deadline = time.monotonic() + CODEX_THREAD_RELEASE_TIMEOUT_SECONDS
+    while codex_thread_lock_state(session_id) == "held":
+        if time.monotonic() >= deadline:
+            raise RefreshError(
+                "codex_thread_still_open",
+                "Codex kept the conversation open after exit. Wait until it closes, then run the manual resume command.",
+            )
+        time.sleep(POLL_INTERVAL_SECONDS)
 
 
 def _close_exited_terminal(handle: str) -> None:
@@ -1255,7 +1424,14 @@ def _resume_command(session: dict[str, object]) -> list[str]:
     if not isinstance(cwd, str) or not Path(cwd).is_absolute() or not isinstance(session_id, str):
         raise RefreshError("resume_context_missing", "A target session is missing its original cwd or session ID.")
     if host == "codex":
-        return [executable("codex"), "-C", cwd, "resume", session_id]
+        command = [executable("codex"), "-C", cwd, "resume", session_id]
+        model = session.get("resume_model")
+        effort = session.get("resume_effort")
+        if isinstance(model, str) and CODEX_MODEL_RE.fullmatch(model):
+            command += ["-m", model]
+            if isinstance(effort, str) and CODEX_EFFORT_RE.fullmatch(effort):
+                command += ["-c", f'model_reasoning_effort="{effort}"']
+        return command
     if host == "claude":
         return [executable("claude"), "--resume", session_id]
     raise RefreshError("host_unsupported", "A target session uses an unsupported agent host.")
@@ -1281,6 +1457,9 @@ def _update_receipt_session(receipt: dict[str, object], session: dict[str, objec
                 "new_terminal_handle",
                 "new_incarnation_id",
                 "new_plugin_version",
+                "plugin_registration",
+                "resume_model",
+                "resume_effort",
                 "resume_verified",
                 "manual_resume_command",
                 "manual_resume_requires_terminal_check",
@@ -1370,10 +1549,57 @@ def _wait_registry_resume(
                     session["new_terminal_handle"] = handle
                     session["new_incarnation_id"] = terminal.get("incarnation_id")
                     session["new_plugin_version"] = recorded_version
+                    session["plugin_registration"] = "confirmed"
                     return
                 raise RefreshError("resume_version_mismatch", "The resumed session did not load the planned plugin version.")
         time.sleep(0.1)
     raise RefreshError("resume_hook_missing", "The resumed session did not register its plugin hook. Review and trust the plugin hooks, then recover the transaction.")
+
+
+def _wait_codex_resume(
+    app_root: Path,
+    session: dict[str, object],
+    terminal: dict[str, object],
+    target_version: str,
+    transaction_id: str,
+) -> None:
+    handle = str(terminal["terminal_handle"])
+    session_id = str(session["session_id"])
+    if not wait_terminal(handle, "tui-idle", 60_000) and not wait_terminal(handle, "tui-idle", 120_000):
+        raise RefreshError("resume_not_idle", "The resumed agent did not reach an idle state.")
+    deadline = time.monotonic() + RESUME_LOCK_TIMEOUT_SECONDS
+    while not (terminal_agent_running(handle, "codex") and codex_thread_lock_state(session_id) == "held"):
+        if time.monotonic() >= deadline:
+            raise RefreshError("resume_unverified", "The resumed Codex process did not open the planned conversation.")
+        time.sleep(POLL_INTERVAL_SECONDS)
+    identity = session_key("codex", session_id)
+    with registry_lock(app_root) as registry:
+        records = registry.get("sessions")
+        record = records.get(identity) if isinstance(records, dict) else None
+        if (
+            not isinstance(record, dict)
+            or record.get("refresh_transaction_id") != transaction_id
+            or record.get("worktree_id") != session.get("worktree_id")
+        ):
+            raise RefreshError("resume_identity_changed", "The resumed session changed before its process identity was recorded.")
+        sequence = record.get("event_sequence")
+        record.update(
+            {
+                "terminal_handle": handle,
+                "tab_id": terminal.get("tab_id"),
+                "leaf_id": terminal.get("leaf_id"),
+                "incarnation_id": terminal.get("incarnation_id"),
+                "plugin_version": target_version,
+                "state": "idle",
+                "last_event": "RefreshResume",
+                "event_sequence": (sequence if isinstance(sequence, int) and sequence >= 0 else 0) + 1,
+                "updated_at": now_utc(),
+            }
+        )
+    session["new_terminal_handle"] = handle
+    session["new_incarnation_id"] = terminal.get("incarnation_id")
+    session["new_plugin_version"] = target_version
+    session["plugin_registration"] = "pending_next_turn"
 
 
 def _confirm_exit_target(
@@ -1398,6 +1624,8 @@ def _confirm_exit_target(
         raise RefreshError("stale_plan", "The planned native session changed immediately before exit.")
     if not wait_terminal(str(handle), "tui-idle", 1000):
         raise RefreshError("session_became_busy", "The target terminal became busy immediately before exit.")
+    if terminal_has_draft(str(handle)) is True:
+        raise RefreshError("session_has_draft", "The target terminal has unsent input, so it was not stopped.")
 
 
 def _record_resume_recovery(session: dict[str, object], error_code: str) -> None:
@@ -1503,12 +1731,19 @@ def _run_worker(app_root: Path, transaction_id: str) -> int:
                 )
                 _set_stage(app_root, receipt, f"stopping-{session['host']}")
                 _confirm_exit_target(app_root, session, receipt, terminal)
-                _send_exit(str(terminal["terminal_handle"]))
+                host = str(session["host"])
+                _send_exit(str(terminal["terminal_handle"]), host)
                 session["previous_terminal_handle"] = terminal["terminal_handle"]
                 _close_exited_terminal(str(terminal["terminal_handle"]))
                 session["previous_terminal_closed"] = True
+                if host == "codex":
+                    session.update(codex_resume_settings(str(session["session_id"])))
                 _update_receipt_session(receipt, session)
                 _save_receipt(app_root, receipt)
+                if host == "codex":
+                    _set_stage(app_root, receipt, "waiting-codex-release")
+                    _wait_codex_thread_released(str(session["session_id"]))
+                    _wait_codex_session_end(app_root, session)
                 _set_stage(app_root, receipt, f"resuming-{session['host']}")
                 session["resume_launch_attempted"] = True
                 _update_receipt_session(receipt, session)
@@ -1517,13 +1752,8 @@ def _run_worker(app_root: Path, transaction_id: str) -> int:
                 session["new_terminal_handle"] = new_terminal["terminal_handle"]
                 _update_receipt_session(receipt, session)
                 _save_receipt(app_root, receipt)
-                _wait_registry_resume(
-                    app_root,
-                    session,
-                    new_terminal,
-                    str(target[str(session["host"])]),
-                    transaction_id,
-                )
+                wait_resume = _wait_codex_resume if host == "codex" else _wait_registry_resume
+                wait_resume(app_root, session, new_terminal, str(target[host]), transaction_id)
                 session["resume_verified"] = True
                 _update_receipt_session(receipt, session)
                 _append_event(receipt, f"resumed-{session['host']}")
@@ -1567,6 +1797,7 @@ def _public_receipt(receipt: dict[str, object]) -> dict[str, object]:
                     "worktree": session.get("worktree_path"),
                     "initiator": session.get("initiator"),
                     "new_plugin_version": session.get("new_plugin_version"),
+                    "plugin_registration": session.get("plugin_registration"),
                     "manual_resume_available": isinstance(session.get("manual_resume_command"), str),
                     "manual_resume_requires_terminal_check": session.get("manual_resume_requires_terminal_check") is True,
                     "last_error": session.get("last_error"),
