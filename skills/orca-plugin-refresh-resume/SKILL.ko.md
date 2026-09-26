@@ -11,8 +11,9 @@
 ## 사전 조건
 
 - macOS 또는 Linux의 Orca 관리 Claude Code 또는 Codex terminal에서 실행한다.
-- Orca terminal 목록은 모든 대상 agent terminal의 프로세스 incarnation ID를 제공해야 한다.
-  이 값이 없으면 업데이트 계획 전에 중단한다. 실행 중에 재사용될 수 있는 handle만으로는 `/exit` 대상을 증명할 수 없다.
+- Orca terminal 목록은 모든 대상 agent terminal의 프로세스 incarnation ID와 절대 워크트리 경로를 제공해야 한다.
+  둘 중 하나라도 없으면 업데이트 계획 전에 중단한다. 실행 중에 재사용될 수 있는 handle만으로는 `/exit` 대상을
+  증명할 수 없고, floating agent terminal에는 세션을 재개할 워크트리가 없다.
 - 두 호스트에 `https://github.com/hei5enbug/hei5enbug-agent-setup.git`에서 설치한 사용자 범위의
   `hei5enbug-agent-setup@hei5enbug` 플러그인이 활성화되어 있어야 한다.
 - Codex 플러그인 훅은 활성화·검토·신뢰 상태여야 한다.

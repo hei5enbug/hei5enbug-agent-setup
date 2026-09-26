@@ -16,8 +16,9 @@ Codex sessions. This skill does not update other plugins or restart Orca.
 ## Preconditions
 
 - Run inside an Orca-managed Claude Code or Codex terminal on macOS or Linux.
-- Orca's terminal inventory must provide a process incarnation ID for every target agent terminal. Without it, stop
-  before planning an update; a runtime handle alone cannot prove which process will receive `/exit`.
+- Orca's terminal inventory must provide a process incarnation ID and an absolute worktree path for every target
+  agent terminal. Without them, stop before planning an update; a runtime handle alone cannot prove which process
+  will receive `/exit`, and a floating agent terminal has no worktree in which to resume.
 - Both hosts must have the enabled user-scope `hei5enbug-agent-setup@hei5enbug` plugin installed from
   `https://github.com/hei5enbug/hei5enbug-agent-setup.git`.
 - Codex plugin hooks must be enabled, reviewed, and trusted. Claude Code plugin hooks must be enabled.

@@ -652,6 +652,63 @@ class OrcaPluginRefreshTest(unittest.TestCase):
         # Then
         self.assertEqual(caught.exception.code, "terminal_incarnation_missing")
 
+    def test_워크트리_경로가_빈_floating_agent_terminal이면_대상_목록을_거부한다(self):
+        """워크트리가 없는 floating agent terminal을 스크립트 실행 위치의 워크트리로 오인하지 않는다."""
+        # Given
+        response = {"result": {"terminals": [{
+            "agentIdentity": "claude", "handle": "term-floating", "incarnationId": "incarnation-floating",
+            "worktreeId": "global-floating-terminal", "worktreePath": "", "connected": True, "writable": True,
+        }], "totalCount": 1, "truncated": False}}
+        self.inventory_patch.stop()
+
+        # When
+        with patch.object(refresh, "run_json", return_value=response):
+            with self.assertRaises(refresh.RefreshError) as caught:
+                refresh.terminal_inventory()
+
+        # Then
+        self.assertEqual(caught.exception.code, "terminal_worktree_missing")
+
+    def test_상대_경로_워크트리를_가진_agent_terminal이면_대상_목록을_거부한다(self):
+        """실행 위치에 따라 달라지는 상대 경로를 세션의 워크트리로 받아들이지 않는다."""
+        # Given
+        response = {"result": {"terminals": [{
+            "agentIdentity": "codex", "handle": "term-relative", "incarnationId": "incarnation-relative",
+            "worktreeId": "repo-relative::relative/worktree", "worktreePath": "relative/worktree",
+            "connected": True, "writable": True,
+        }], "totalCount": 1, "truncated": False}}
+        self.inventory_patch.stop()
+
+        # When
+        with patch.object(refresh, "run_json", return_value=response):
+            with self.assertRaises(refresh.RefreshError) as caught:
+                refresh.terminal_inventory()
+
+        # Then
+        self.assertEqual(caught.exception.code, "terminal_worktree_missing")
+
+    def test_agent가_없는_floating_terminal은_건너뛰고_agent_terminal을_절대_경로로_고른다(self):
+        """agent가 없는 floating shell은 대상에서 빼고 agent terminal은 절대 워크트리 경로로 선택한다."""
+        # Given
+        worktree = self.root / "worktree"
+        worktree.mkdir()
+        response = {"result": {"terminals": [
+            {"handle": "term-shell", "incarnationId": "incarnation-shell",
+             "worktreeId": "global-floating-terminal", "worktreePath": ""},
+            {"agentIdentity": "claude", "handle": "term-other", "incarnationId": "incarnation-other",
+             "worktreeId": f"repo-other::{worktree}", "worktreePath": str(worktree),
+             "connected": True, "writable": True},
+        ], "totalCount": 2, "truncated": False}}
+        self.inventory_patch.stop()
+
+        # When
+        with patch.object(refresh, "run_json", return_value=response):
+            terminals = refresh.terminal_inventory()
+
+        # Then
+        self.assertEqual([item["terminal_handle"] for item in terminals], ["term-other"])
+        self.assertEqual(terminals[0]["worktree_path"], str(worktree.resolve()))
+
     def test_설치_목록의_marketplace와_scope를_확인한다(self):
         """설치 목록과 marketplace가 예상한 플러그인 소스를 가리키는지 확인한다."""
         # Given
