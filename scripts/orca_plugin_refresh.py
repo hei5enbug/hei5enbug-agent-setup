@@ -363,15 +363,19 @@ def terminal_inventory() -> list[dict[str, object]]:
             raise RefreshError("terminal_handle_missing", "An Orca agent terminal has no usable handle.")
         if not isinstance(incarnation_id, str) or not incarnation_id:
             raise RefreshError("terminal_incarnation_missing", "An Orca agent terminal has no process incarnation ID.")
-        if not isinstance(worktree_id, str) or not isinstance(worktree_path, str):
-            raise RefreshError("terminal_worktree_missing", "An Orca agent terminal has no worktree identity.")
+        worktree = Path(worktree_path).expanduser() if isinstance(worktree_path, str) and worktree_path else None
+        if not isinstance(worktree_id, str) or not worktree_id or worktree is None or not worktree.is_absolute():
+            raise RefreshError(
+                "terminal_worktree_missing",
+                "An Orca agent terminal has no absolute worktree path; floating agent terminals cannot be refreshed.",
+            )
         selected.append(
             {
                 "host": host,
                 "terminal_handle": handle,
                 "incarnation_id": incarnation_id,
                 "worktree_id": worktree_id,
-                "worktree_path": str(Path(worktree_path).expanduser().resolve()),
+                "worktree_path": str(worktree.resolve()),
                 "tab_id": value.get("tabId"),
                 "leaf_id": value.get("leafId"),
                 "title": value.get("title"),
