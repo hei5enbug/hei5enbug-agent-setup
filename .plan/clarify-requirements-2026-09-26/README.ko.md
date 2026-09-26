@@ -17,6 +17,7 @@
 | [후보 진입점](candidate/clarify-requirements/SKILL.md) | 실행할 영어 절차. 옆의 한국어 미러는 사람이 읽는 자료다. |
 | [요구사항 대응](coverage.md) | 기존 두 계약과 합의한 통합 요구를 후보 파일·평가 사례에 연결한다. |
 | [검증 기록](verification.md) | 완료한 검사, 제한된 실제 실행 관측, 남은 전환 조건을 확인한다. |
+| [남은 작업](remaining-work.ko.md) | 열린 작업, 선행 조건, 완료 근거, 이후 교체 절차를 추적한다. |
 | [시험 기록](trial-results.json) | 소스 해시, 개별 실행, 실제 사용량, 진단 중 실패를 확인한다. |
 | [기준 버전](baseline.json) | 원래 커밋과 스킬 디렉터리를 식별한다. |
 | [후보 평가](candidate/clarify-requirements/evals/evals.json) | 기존 20개 사례를 보존하고 통합 경계 9개를 추가한다. |
