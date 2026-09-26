@@ -1,0 +1,6 @@
+interface:
+  display_name: "Clarify Requirements"
+  short_description: "Clarify requirements and decisions with evidence"
+  default_prompt: "Use $clarify-requirements to resolve unclear goals, requirements, and decisions through evidence and one question at a time."
+policy:
+  allow_implicit_invocation: false

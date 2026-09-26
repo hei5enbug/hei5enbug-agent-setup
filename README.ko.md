@@ -229,6 +229,9 @@ node --test skills/document-to-confluence/tests/test_render_diagrams.mjs
 
 ## 관련 링크
 
+- [요구사항 명확화 통합 후보](.plan/clarify-requirements-2026-09-26/README.ko.md)는 인터뷰와 결정 지도 절차를
+  평가용으로 통합한다. 필요한 실제 호스트의 품질·실행 비용 비교를 통과하기 전까지 플러그인 탐색에서 제외한다.
+
 - [`omo-model-config`](standalone-skills/omo-model-config/SKILL.md)은 독립 실행용 소스로 유지하며
   플러그인 스킬 목록에는 포함하지 않습니다. [한국어 안내](standalone-skills/omo-model-config/SKILL.ko.md)
 - [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — 독립 실행용 스킬이 모델 라우팅을

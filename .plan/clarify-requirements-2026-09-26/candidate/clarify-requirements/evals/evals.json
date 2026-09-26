@@ -1,0 +1,313 @@
+{
+  "skill_name": "clarify-requirements",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Use $clarify-requirements for a rigorous requirements interview to prepare a brownfield specification for the billing service. Inspect the attached repository first. A human test operator will answer each question in the native main-session UI; ask one question at a time and wait. The operator uses evals/operator-guides/brownfield-ten-rounds.md for responses but does not attach it to the agent input.",
+      "expected_output": "Runs a 10-round brownfield interview over invoice totals, plan eligibility, and tax lookup, with all-component scoring, evidence, contradiction and scope-expansion handling, then presents the required round-10 continue-or-stop checkpoint.",
+      "files": [
+        "evals/files/billing-service/README.md",
+        "evals/files/billing-service/src/billing.py",
+        "evals/files/billing-service/tests/billing_examples.py",
+        "evals/files/billing-service/product-notes.md",
+        "evals/files/billing-service/support-notes.md"
+      ],
+      "expectations": [
+        "Emits the ambiguity threshold and source before asking the first question.",
+        "Confirms the three-component topology in round 0 and does not score that round.",
+        "Checks the attached source files before asking about facts they reveal and cites the conflicting account-ID evidence.",
+        "Asks one decision per round and scores every active component independently across all applicable dimensions after every answer.",
+        "Does not lower ambiguity after the evasive answer; lowers the affected score for the contradiction; updates topology before scoring the coupon scope expansion.",
+        "At round 10, offers a concise continue-or-stop checkpoint and waits for the user's answer before asking another question."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Use $clarify-requirements for a rigorous requirements interview to clarify my plan for replacing our course enrollment workflow. I will answer a few questions, then say 'Stop here'. Ask through the current host's required main-session UI, one question at a time, and wait after every ask.",
+      "expected_output": "Stops when the user exits, preserves unresolved dimensions and components, marks the ambiguity gate failed or pending as required, and does not imply approval or execution.",
+      "files": [],
+      "expectations": [
+        "Asks exactly one question before waiting for each response.",
+        "On the user's early exit, preserves unresolved gaps and marks the ambiguity gate as failed.",
+        "Does not produce a risk-free final specification or begin an execution workflow."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Use $clarify-requirements for a rigorous requirements interview to specify a data-retention change. I will answer questions interactively but will not confirm any assumption you infer about retaining deleted records. Continue until the other requirements are clear.",
+      "expected_output": "Keeps the agent-inferred retention behavior labeled as an assumption, caps its affected clarity score where required, and refuses to pass closure without explicit user confirmation. Runs the separate goal and specification confirmations and execution bridge.",
+      "files": [],
+      "expectations": [
+        "Labels agent-inferred retention behavior as an assumption rather than a user decision.",
+        "Does not let an unconfirmed assumption cross the final ambiguity threshold.",
+        "Runs the goal restatement and specification approval as separate confirmations.",
+        "Asks a separate execution-bridge question and treats no option as implicit."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Use $clarify-requirements for a rigorous requirements interview to interview me about a database migration. This conversation is in Codex Default mode. Start the interview now.",
+      "expected_output": "Applies the Codex Plan-mode gate, tells the user to switch to Plan mode, and ends the turn without asking inline or structured interview questions.",
+      "files": [],
+      "expectations": [
+        "Requests the supported Plan-mode transition.",
+        "Ends the turn without asking a question or using inline fallback in Default mode."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Use $clarify-requirements for a rigorous requirements interview to resume the current interview after a context compaction. Restore the state from the current conversation or the user-approved checkpoint, then continue with its next question.",
+      "expected_output": "Reloads any scoring or UI rules unavailable after compaction, checks the current host tool schema before asking, verifies material facts and approvals against their sources, and preserves the current round and unresolved work.",
+      "files": [],
+      "expectations": [
+        "Does not trust a prior loaded marker after compaction; reloads a required reference when its rules are unavailable.",
+        "Checks the current tool schema before the next ask.",
+        "Restores and validates state, source revisions, unresolved constraints, and approvals before acting.",
+        "Does not repeat a possibly completed side effect or invent missing state."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Use $clarify-requirements for a rigorous requirements interview to evaluate a rollout plan with multiple active components. The next answer will move ambiguity upward across a milestone band; a later confirmed answer will move it downward across a band. Independent workers are unavailable. Preserve all review lenses and keep the user-facing question in the main session.",
+      "expected_output": "Runs the four independent review lenses sequentially at both milestone crossings, preserves main-session decision ownership, and folds only the highest-leverage validated finding into the next single question.",
+      "files": [],
+      "expectations": [
+        "Triggers independent review on both upward and downward milestone crossings before the next question.",
+        "When workers are unavailable, performs researcher, contrarian, simplifier, and architect lenses sequentially.",
+        "Keeps the user-facing ask in the main session and does not let reviewers change scope, approve assumptions, or declare completion."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Use $clarify-requirements for a rigorous requirements interview to specify a migration with unresolved risks. Keep answering one question at a time through round 20. Do not ask to execute the migration.",
+      "expected_output": "Stops asking at round 20 and produces a risk-marked specification that preserves unresolved gaps and keeps execution approval separate.",
+      "files": [],
+      "expectations": [
+        "Stops asking questions at round 20.",
+        "Produces a risk-marked specification with unresolved assumptions and gaps retained.",
+        "Does not imply that the user approved execution."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Use $clarify-requirements for a rigorous requirements interview on a non-Codex host with no native structured ask tool. Ask your first requirements question using the documented inline fallback and wait for my answer.",
+      "expected_output": "Uses one clearly delimited inline question with a recommended option, custom text option, and then waits without scoring or continuing.",
+      "files": [],
+      "expectations": [
+        "Uses the inline fallback only because no native structured ask tool is available.",
+        "Presents exactly one question with the required round context and recommended option marker.",
+        "Includes the custom free-text option and stops for the user response."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Use $clarify-requirements for a rigorous requirements interview on Claude Code to ask one question about importing compressed CSV files. The host has AskUserQuestion available.",
+      "expected_output": "Calls AskUserQuestion from the main session with one question, valid option bounds, a short header, free text, and waits for the answer.",
+      "files": [],
+      "expectations": [
+        "Uses AskUserQuestion in the main session.",
+        "Sends exactly one question with a header no longer than 12 characters and 2–4 options.",
+        "Relies on automatic Other free text and does not add a manual Custom option."
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Use $clarify-requirements for a rigorous requirements interview on OpenCode to ask one question about importing compressed CSV files. The host has the question tool available.",
+      "expected_output": "Calls the native question tool with one question, single-select schema, allowed options, free text, and waits for the answer.",
+      "files": [],
+      "expectations": [
+        "Uses the native question tool and the OpenCode multiple field.",
+        "Sends exactly one question with a valid header and allowed option count.",
+        "Relies on the UI free-text input and waits for the response."
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "Use $clarify-requirements for a rigorous requirements interview in Codex Plan mode to ask one question about importing compressed CSV files. The request_user_input tool is available.",
+      "expected_output": "Calls request_user_input from the main session with exactly one question, host-valid fields and options, and waits for the answer.",
+      "files": [],
+      "expectations": [
+        "Uses request_user_input only in Plan mode.",
+        "Sends exactly one question with id, header, question, options, and valid choice bounds.",
+        "Keeps the ask in the main session and waits for the user."
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "Use $clarify-requirements for a rigorous requirements interview to begin a requirements interview. In a disposable skill copy, references/ask-ui.md is unavailable. Stop when you discover that the required reference is missing.",
+      "expected_output": "Reports the missing required reference and stops before presenting a user question or using an improvised fallback.",
+      "files": [],
+      "expectations": [
+        "Identifies that the required ask-ui reference is missing.",
+        "Stops before asking the user or fabricating replacement UI rules."
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "Use $clarify-requirements for a rigorous requirements interview at an ambiguity milestone on a host with isolated independent workers. Run the four review personas, then continue with one user question from the main session.",
+      "expected_output": "Runs researcher, contrarian, simplifier, and architect in isolated read-only contexts with a concise evidence packet, then uses their findings only as an assist to the main-session question.",
+      "files": [],
+      "expectations": [
+        "Runs all four personas in isolated read-only contexts.",
+        "Does not leak the intended conclusion or unrelated round history into reviewer prompts.",
+        "Does not let reviewers change scope, approve assumptions, or ask the user directly.",
+        "Folds only the highest-leverage validated finding into one main-session question."
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "Use $clarify-requirements. Create a local decision map for replacing billing. This repository has a GitHub remote.",
+      "expected_output": "Uses only .decision-navigator, confirms the destination, and creates current tickets.",
+      "files": [],
+      "expectations": [
+        "Confirms the destination before defining ticket scope.",
+        "Stores only in .decision-navigator and does not access external tracker tools despite the GitHub remote.",
+        "Keeps precise blocked questions as tickets, imprecise in-scope questions in Not yet specified, and out-of-scope work separate."
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "Use $clarify-requirements. Continue .decision-navigator/billing/map.md and decide whether Invoice and Bill mean the same concept.",
+      "expected_output": "Claims atomically, re-reads after claiming, asks the human, and serializes the map update after human confirmation.",
+      "files": [],
+      "expectations": [
+        "Uses the local tracker contract and claims the selected ticket before reading its body or doing work.",
+        "Re-reads the selected ticket after claim and before writing the answer.",
+        "Keeps the HITL decision with the human and does not resolve it based on an inferred answer.",
+        "Updates the ticket and map in the prescribed lock order, re-reading the map under its lock."
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "Use $clarify-requirements. Continue .decision-navigator/sdk/map.md. Research the next ticket without independent workers.",
+      "expected_output": "Stores cited artifacts locally, resolves one ticket, and updates only map.md.",
+      "files": [],
+      "expectations": [
+        "Uses the research workflow sequentially and notes that independent workers are unavailable.",
+        "Stores cited research artifacts locally and links them from the ticket.",
+        "Resolves no more than one non-research ticket in the session."
+      ]
+    },
+    {
+      "id": 17,
+      "prompt": "Use $clarify-requirements. Continue the 100-ticket map in the attached frontier fixture. Work in a disposable copy under .decision-navigator/retries. Select the next ticket, claim it atomically, then read only that ticket and any dependency body needed for this decision. Ask me one question and wait; do not resolve the ticket yet.",
+      "expected_output": "Scans ticket metadata in numeric order without opening long resolved answers, selects and claims First Frontier Candidate, validates its metadata and resolved blocker after claim, and asks one relevant human question.",
+      "files": [
+        "evals/files/frontier-100/"
+      ],
+      "expectations": [
+        "Uses one metadata pass over filename, title, Type, Status, Blocked by, and claim presence before opening ticket bodies.",
+        "Does not read the long answer bodies for unrelated resolved tickets.",
+        "Treats the cyclic open pair, claimed ticket, malformed or missing metadata, and missing dependency as ineligible.",
+        "Selects 92-first-frontier.md because its blocker is resolved and it is not claimed.",
+        "Claims before reading the chosen ticket body, then re-reads its metadata and blocker status.",
+        "Asks the human one decision question and leaves the ticket open until the human answers."
+      ]
+    },
+    {
+      "id": 18,
+      "prompt": "Use $clarify-requirements. Using a disposable copy of the attached frontier fixture, identify which tickets are blocked or malformed. Do not claim or edit any ticket; report only the metadata evidence that excludes each candidate.",
+      "expected_output": "Uses header metadata and claim presence only to explain why the blocked cycle, malformed headers, missing dependency, and claimed ticket are not eligible.",
+      "files": [
+        "evals/files/frontier-100/"
+      ],
+      "expectations": [
+        "Does not open answer bodies to classify tickets.",
+        "Treats missing, duplicate, invalid, and unresolved metadata as unresolved evidence rather than eligibility.",
+        "Does not claim or edit a ticket when the prompt asks for read-only classification."
+      ]
+    },
+    {
+      "id": 19,
+      "prompt": "Use $clarify-requirements. Two independent sessions are continuing the attached map at the same time. Both may initially select the first ticket. The first session sees a question edit immediately after its claim, and both sessions later need to add separate decisions to map.md. Coordinate using only the local tracker contract.",
+      "expected_output": "Allows only one claim per ticket, re-reads the edited ticket, and serializes map updates without losing either decision or bypassing claim ownership.",
+      "files": [
+        "evals/files/frontier-race/"
+      ],
+      "expectations": [
+        "Uses the claim helper so concurrent attempts cannot both own 01-backoff-policy.md.",
+        "Re-reads the first ticket after claiming and uses its current content rather than stale prompt text.",
+        "Holds ticket claims during resolution and serializes each map update with map.md claim and re-read.",
+        "Preserves both ticket claims if a transaction fails and reports its exact recovery point.",
+        "Does not force-release another session's lock or bypass the human gate."
+      ]
+    },
+    {
+      "id": 20,
+      "prompt": "Use $clarify-requirements. Create a decision map for a customer onboarding redesign. The first fact needed is available only through a local research ticket, the onboarding flow needs a rough UI prototype for the human to react to, the account terminology needs a human decision, and a sanitized sample must be manually uploaded before its API behavior can be judged. Rebuilding the analytics warehouse is explicitly outside this destination.",
+      "expected_output": "Routes research as AFK, prototype and terminology choice as HITL, and resolves the warehouse ticket out of scope without putting it on Decisions so far.",
+      "files": [],
+      "expectations": [
+        "Uses the research, prototype, grilling, and task type distinctions only where their conditions fit.",
+        "Keeps the user in the loop for prototype and grilling decisions.",
+        "Places warehouse rebuilding in Out of scope rather than Not yet specified or Decisions so far.",
+        "Does not treat planning tickets as permission to execute the destination."
+      ]
+    },
+    {
+      "id": 21,
+      "prompt": "Clarify whether this sentence is grammatical. Do not run a requirements workflow.",
+      "expected_output": "Answers the ordinary request directly without invoking clarification, scoring, a map, or offering the skill.",
+      "files": []
+    },
+    {
+      "id": 22,
+      "prompt": "Use $clarify-requirements to confirm one API naming decision. I want a decision, not an execution-ready specification or a saved map.",
+      "expected_output": "Uses evidence and one human question; records concrete uncertainty without numeric scoring or file writes.",
+      "files": []
+    },
+    {
+      "id": 23,
+      "prompt": "Use $clarify-requirements for a rigorous requirements interview about the billing fixture. This may take several sessions, but I have not authorized saving files.",
+      "expected_output": "Applies strict scoring and UI rules while keeping state in conversation; duration alone does not authorize a map or state file.",
+      "files": [
+        "evals/files/billing-service/README.md",
+        "evals/files/billing-service/src/billing.py"
+      ]
+    },
+    {
+      "id": 24,
+      "prompt": "Use $clarify-requirements to continue the attached local map. I authorize local map records only. The ticket needs a terminology decision. Do not implement the destination.",
+      "expected_output": "Claims and re-reads one eligible ticket, asks the human, and does not equate map permission with implementation permission or apply the numeric specification gate.",
+      "files": [
+        "evals/files/frontier-race/map.md",
+        "evals/files/frontier-race/tickets/01-backoff-policy.md",
+        "evals/files/frontier-race/tickets/02-retry-window.md"
+      ]
+    },
+    {
+      "id": 25,
+      "prompt": "Use $clarify-requirements for an execution-ready specification for one named ticket in an existing map. Other decisions are unresolved. I will stop before answering the last scope question.",
+      "expected_output": "Runs strict evaluation inside the common loop for the ticket scope; stops with gaps and does not mark the ticket or the entire map complete.",
+      "files": []
+    },
+    {
+      "id": 26,
+      "prompt": "Use $clarify-requirements to read a map. Filesystem access and Python are unavailable.",
+      "expected_output": "Reports map access/atomic claims unavailable, performs no simulated writes, and offers only the conversational work possible from supplied facts.",
+      "files": []
+    },
+    {
+      "id": 27,
+      "prompt": "Use $clarify-requirements for a rigorous interview. In the disposable skill copy, references/scoring-and-state.md is missing.",
+      "expected_output": "Names the missing reference and stops scoring and dependent interview actions without inventing formulas or claiming readiness.",
+      "files": []
+    },
+    {
+      "id": 28,
+      "prompt": "Use $clarify-requirements to resume after compaction. The checkpoint says a ticket was saved, but the actual ticket is still open and a lock has an unreadable owner.",
+      "expected_output": "Reconciles actual state, preserves uncertainty, stops dependent resolution, and does not retry the save or force-release the claim.",
+      "files": []
+    },
+    {
+      "id": 29,
+      "prompt": "Use $clarify-requirements to inspect the two-ticket frontier-race fixture read-only. Report the complete frontier and the first ticket you would choose, without claims or writes.",
+      "expected_output": "Both open tickets with no blockers or locks belong to the frontier; numeric ordering selects Backoff Policy first but does not exclude Retry Window. No interview or mutation occurs.",
+      "files": [
+        "evals/files/frontier-race/map.md",
+        "evals/files/frontier-race/tickets/01-backoff-policy.md",
+        "evals/files/frontier-race/tickets/02-retry-window.md"
+      ]
+    }
+  ]
+}

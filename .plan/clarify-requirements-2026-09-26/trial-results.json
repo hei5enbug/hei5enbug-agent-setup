@@ -1,0 +1,421 @@
+{
+  "baseline_commit": "08b0ec27cfc2878bae007c319e10ab5f6903f8df",
+  "candidate_runtime_sha256": {
+    "SKILL.ko.md": "1a113e29eb9e2f0266d9476bc56261682b7ec4c0807372a30d1ef6fc09c1bd1f",
+    "SKILL.md": "9698247f81f8ae03d91110ae32f6de52cd3e3ce27d7c6c5d6f8c28cd3de6e50a",
+    "agents/openai.yaml": "08c71bc85fb7492e197bd0f8ebb5f2dadde60d4ae9422c72299676320e267994",
+    "references/adr-format.ko.md": "f7f92399ad06b7af4ccd43e2aa42bb120f6808ac1933cbfc31bdfe4f39331c27",
+    "references/adr-format.md": "948574abc1fbb4f924dc3b080671e88dd503e8bed3d89811ab7eb9791e69db60",
+    "references/ask-ui.ko.md": "3afd8ed2938b112eb6df8635191cc5630a0dc42c985ae591ee424e6d6d6223de",
+    "references/ask-ui.md": "67b5fd371833555bc3f7e8963399297ce78137e67e3203e11106803d04ec91a5",
+    "references/auto-answer-uncertain.ko.md": "6d75025f7904ce9879f5deebe00aafe081b0ed896b558deca3fc442ccbf3d507",
+    "references/auto-answer-uncertain.md": "32da64960dd20b9b8e82be465dd8b591e6e22c9c662e6516543edaad19acec00",
+    "references/auto-research-greenfield.ko.md": "dbcba26242d59cd3b92f26b777d484dc715a3aeb46a3c8f63333957978e9b6b6",
+    "references/auto-research-greenfield.md": "afe427af8ca7f676b95b412f97d4f497fd0a0685dd893895fe6c6743b5f220c8",
+    "references/context-format.ko.md": "d91485ca9455ab168f6fc012c4074fed3168f0d2b303d28c3fa558f381a362c1",
+    "references/context-format.md": "97c6643808458b6afbfda9e2b94bc5e3036f60e1fb46df32f8a74b3a3b7ab799",
+    "references/decision-map.ko.md": "f0fa93b7592e976b1feb2c9d488e4c09d7cca2b52f7fcfea5258bfb8d6ab06b0",
+    "references/decision-map.md": "08ed8d0603f2e430268200b90ae495de7ee85bef327b47bec97903c4a63e39ca",
+    "references/domain-modeling.ko.md": "799fcc3e483c55b6d9d61fd6b3408fe9394fab50a4f21990f7e4aaafc47f707a",
+    "references/domain-modeling.md": "457671b7a21d6695e26ce89855b311544eb5d82f5d66cebe81a4352fe694df22",
+    "references/lateral-review-panel.ko.md": "52eb6cf7d31d8d0695594c501519ce9b8b489368091f053f205d0d2e66258482",
+    "references/lateral-review-panel.md": "5302490d273731a92762949f730d6af9433317118fe06f36c105a1a25d1ccf04",
+    "references/local-tracker.ko.md": "fe7b8a1cb39965fb0c6cbf3435baf3da73c8dd55d587c561b0ebe820d6fd4844",
+    "references/local-tracker.md": "5f33d335c909fc11f784df7c54a20f6d5a2e012394b68cc1762abf764cf7358c",
+    "references/prototype-logic.ko.md": "d4dc84144d54479f3cf8afe684d78d6e86ad796a52d6f090dcd5ec4f0fa24ef9",
+    "references/prototype-logic.md": "aab2a6af10188718cd0046b7225dd295b3d5fa47235bc31987a14a0ff4faf078",
+    "references/prototype-ui.ko.md": "cb0b151359887e4ceb18bea675d81d177b6e76c94a7ff212da01facf7cf3594b",
+    "references/prototype-ui.md": "5ca63a18ae838c8dff5fdbda7b525cdca52509d27e9483c8cdc93f11dfbd74a0",
+    "references/prototype.ko.md": "be46a27225bb16bb5d445063351cd6224cc9b8fd534db476c8fc1112375c6c34",
+    "references/prototype.md": "9fa5b20be9163bd34bc628dd5b3acafa391285bf93a503bd3444b376761e907e",
+    "references/research.ko.md": "692fb63bb30462b006ca88de641a9314e142dd737d50cc4bf054a671c884aacf",
+    "references/research.md": "b138910efb82bc4e102b2304aae24adbced1daf7a6bb7525d88426bd8cd0c950",
+    "references/scoring-and-state.ko.md": "2ff5126842d266f689384fd3868add4465c6d177e1156f3185603e574b05aced",
+    "references/scoring-and-state.md": "5adb7f31b232bb7226615a96d296f914200f6450b8d78fd06595a874a2868b8f",
+    "references/spec-template.ko.md": "4958618d350366af7119f91d10079f523e53c8c5e9f6ae8121bce29a27551784",
+    "references/spec-template.md": "53a1f38b85eb71404341dd4a677b5a9971ca2a40e9a9dce23741ff598fa6ebb1",
+    "references/specification-gates.ko.md": "acac2f52f1cf1ca22faa978323c3da6b5fc154034c0303890cb1e4d2712592a2",
+    "references/specification-gates.md": "f7682187f2b6966937f5767109af4c80dc24883a3cb0531414ab62bf772bbbd9",
+    "scripts/local_lock.py": "61fbfeb84667e7ec7306de122e9268579459d528866b37a9717724a765a2741f"
+  },
+  "scope": "Candidate-only preparation. Read-only native Codex CLI checks; no installed-discovery or human UI coverage. Actual model ID was not echoed by the event stream.",
+  "records": [
+    {
+      "label": "diagnostic-mixed",
+      "case": "frontier",
+      "adoption_evidence": false,
+      "instruction_versions_consistent": false,
+      "runs": [
+        {
+          "pair": 1,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 58.521,
+          "requested_model": "gpt-5.6-luna",
+          "requested_effort": "xhigh",
+          "reported_model": null,
+          "usage": [
+            {
+              "input_tokens": 95365,
+              "cached_input_tokens": 77312,
+              "cache_write_input_tokens": 0,
+              "output_tokens": 2485,
+              "reasoning_output_tokens": 1544
+            }
+          ],
+          "completed_commands": 5,
+          "instruction_digest": "c895a8089f4d620568f4a2176dcab7a203c40c6d630feb8e99a2055c14710dd0",
+          "answer": "The metadata shows no blocked ticket.\n\n- Eligible frontier tickets: [Backoff Policy](<<trial>/.decision-navigator/retries/tickets/01-backoff-policy.md:3>) and [Retry Window](<<trial>/.decision-navigator/retries/tickets/02-retry-window.md:3>).\n  - Both are `Status: open`.\n  - Both have an empty `Blocked by:` field.\n  - No claim locks exist under the retries effort.\n\nIf choosing by numeric order, Backoff Policy is first. The map’s note about a prior edit does not itself create a blocker. No claims, edits, resolutions, or interviews were performed."
+        },
+        {
+          "pair": 1,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 48.417,
+          "requested_model": "gpt-5.6-luna",
+          "requested_effort": "xhigh",
+          "reported_model": null,
+          "usage": [
+            {
+              "input_tokens": 78231,
+              "cached_input_tokens": 66304,
+              "cache_write_input_tokens": 0,
+              "output_tokens": 1978,
+              "reasoning_output_tokens": 933
+            }
+          ],
+          "completed_commands": 4,
+          "instruction_digest": "174783f029cf16b1c05784a3aa0b8207f853fc4a7156d9c534ddf679c06d0115",
+          "answer": "Eligible:\n\n- [Backoff Policy](<<trial>/.decision-navigator/retries/tickets/01-backoff-policy.md:3>) — `Status: open`, empty `Blocked by:`, and no claim lock. It is the first eligible frontier ticket.\n- [Retry Window](<<trial>/.decision-navigator/retries/tickets/02-retry-window.md:3>) also satisfies the same conditions.\n\nBlocked: none.\n\nEvidence: the map’s note about ticket 01 being edited after claim is informational only; it does not create a formal blocker. No `claims/` directory or lock metadata exists."
+        },
+        {
+          "pair": 2,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 54.998,
+          "requested_model": "gpt-5.6-luna",
+          "requested_effort": "xhigh",
+          "reported_model": null,
+          "usage": [
+            {
+              "input_tokens": 113303,
+              "cached_input_tokens": 99584,
+              "cache_write_input_tokens": 0,
+              "output_tokens": 2138,
+              "reasoning_output_tokens": 1016
+            }
+          ],
+          "completed_commands": 6,
+          "instruction_digest": "be101a30198a84a63bb1ef02ded6bbbf65a5c78497cac8a1044706c9d9e97016",
+          "answer": "The metadata shows no blocked ticket.\n\n- **Frontier-eligible:** [Backoff Policy](<<trial>/.decision-navigator/retries/tickets/01-backoff-policy.md>) — `Status: open`, empty `Blocked by:`, and no claim lock.\n- **Also eligible by metadata:** [Retry Window](<<trial>/.decision-navigator/retries/tickets/02-retry-window.md>) — likewise open, unblocked, and unlocked. It is not the frontier because ticket 01 comes first numerically.\n- **Blocked:** none.\n\nThe map’s note about the first ticket being edited after claim does not itself create a current blocker; no `claims/` directory or lock is present. No files were changed."
+        },
+        {
+          "pair": 2,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 48.485,
+          "requested_model": "gpt-5.6-luna",
+          "requested_effort": "xhigh",
+          "reported_model": null,
+          "usage": [
+            {
+              "input_tokens": 130568,
+              "cached_input_tokens": 110592,
+              "cache_write_input_tokens": 0,
+              "output_tokens": 1880,
+              "reasoning_output_tokens": 756
+            }
+          ],
+          "completed_commands": 11,
+          "instruction_digest": "c895a8089f4d620568f4a2176dcab7a203c40c6d630feb8e99a2055c14710dd0",
+          "answer": "Metadata shows no blocked ticket; both are eligible/frontier tickets:\n\n- [Backoff Policy](.../.decision-navigator/retries/tickets/01-backoff-policy.md:4) — `Status: open`, empty `Blocked by:`.\n- [Retry Window](.../.decision-navigator/retries/tickets/02-retry-window.md:4) — `Status: open`, empty `Blocked by:`.\n\nNo `claims/` directory or lock entries exist under the effort, so neither is claimed. If choosing by numeric order, **Backoff Policy** is first."
+        },
+        {
+          "pair": 3,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 47.184,
+          "requested_model": "gpt-5.6-luna",
+          "requested_effort": "xhigh",
+          "reported_model": null,
+          "usage": [
+            {
+              "input_tokens": 80119,
+              "cached_input_tokens": 68352,
+              "cache_write_input_tokens": 0,
+              "output_tokens": 1904,
+              "reasoning_output_tokens": 974
+            }
+          ],
+          "completed_commands": 4,
+          "instruction_digest": "c895a8089f4d620568f4a2176dcab7a203c40c6d630feb8e99a2055c14710dd0",
+          "answer": "According to the tracker contract, both tickets are eligible; neither is metadata-blocked.\n\n- [Backoff Policy](.decision-navigator/retries/tickets/01-backoff-policy.md): eligible — `Status: open`, empty `Blocked by:`, and no claim lock. It is a `grilling` ticket, but I did not start the interview.\n- [Retry Window](.decision-navigator/retries/tickets/02-retry-window.md): eligible — `Status: open`, empty `Blocked by:`, and no claim lock.\n\nThe map has no resolved decisions, and `.decision-navigator/retries/claims/` does not exist."
+        },
+        {
+          "pair": 3,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 49.016,
+          "requested_model": "gpt-5.6-luna",
+          "requested_effort": "xhigh",
+          "reported_model": null,
+          "usage": [
+            {
+              "input_tokens": 77572,
+              "cached_input_tokens": 66304,
+              "cache_write_input_tokens": 0,
+              "output_tokens": 1956,
+              "reasoning_output_tokens": 999
+            }
+          ],
+          "completed_commands": 4,
+          "instruction_digest": "174783f029cf16b1c05784a3aa0b8207f853fc4a7156d9c534ddf679c06d0115",
+          "answer": "No ticket is blocked under the local tracker contract.\n\n- First eligible frontier: [Backoff Policy](<<trial>/.decision-navigator/retries/tickets/01-backoff-policy.md:4>) — `Status: open`, empty `Blocked by:`, and no claim lock.\n- Also eligible: [Retry Window](<<trial>/.decision-navigator/retries/tickets/02-retry-window.md:4>) — likewise open, unblocked, and unlocked.\n\nThe map note about post-claim editing does not establish a current blocker ([map.md:7](<<trial>/.decision-navigator/retries/map.md:7>)). No files were changed."
+        }
+      ]
+    },
+    {
+      "label": "corrected-frontier-pilot",
+      "case": "frontier",
+      "adoption_evidence": false,
+      "instruction_versions_consistent": true,
+      "runs": [
+        {
+          "pair": 1,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 66.503,
+          "requested_model": "gpt-5.6-luna",
+          "requested_effort": "xhigh",
+          "reported_model": null,
+          "usage": [
+            {
+              "input_tokens": 185701,
+              "cached_input_tokens": 155904,
+              "cache_write_input_tokens": 0,
+              "output_tokens": 2607,
+              "reasoning_output_tokens": 1155
+            }
+          ],
+          "completed_commands": 10,
+          "instruction_digest": "c895a8089f4d620568f4a2176dcab7a203c40c6d630feb8e99a2055c14710dd0",
+          "answer": "Current metadata shows that both tickets are eligible; none is blocked.\n\n- [Backoff Policy](<<trial>/.decision-navigator/retries/tickets/01-backoff-policy.md:4>) — `Status: open`, empty `Blocked by:`.\n- [Retry Window](<<trial>/.decision-navigator/retries/tickets/02-retry-window.md:4>) — `Status: open`, empty `Blocked by:`.\n\nThe `claims/` directory is absent, so neither ticket has a claim lock. `Backoff Policy` is first in numeric order if one must be selected next."
+        },
+        {
+          "pair": 1,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 47.371,
+          "requested_model": "gpt-5.6-luna",
+          "requested_effort": "xhigh",
+          "reported_model": null,
+          "usage": [
+            {
+              "input_tokens": 78275,
+              "cached_input_tokens": 60160,
+              "cache_write_input_tokens": 0,
+              "output_tokens": 1975,
+              "reasoning_output_tokens": 1076
+            }
+          ],
+          "completed_commands": 4,
+          "instruction_digest": "11a200632ae6d3d791ffd35e873717f3638bfa4f3674ae2bdf831b991b786e8b",
+          "answer": "Under the local tracker rules, both tickets are eligible; no ticket is blocked.\n\n- [Backoff Policy](.../tickets/01-backoff-policy.md:1): `Status: open`, no blockers, and no claims directory.\n- [Retry Window](.../tickets/02-retry-window.md:1): `Status: open`, no blockers, and no claims directory.\n\nThe map’s note about a post-claim edit does not itself make a ticket blocked. [Retry Policy Map](.../map.md:6)"
+        }
+      ],
+      "descriptive_stats": {
+        "old": {
+          "median_seconds": 66.503,
+          "max_seconds": 66.503
+        },
+        "new": {
+          "median_seconds": 47.371,
+          "max_seconds": 47.371
+        }
+      }
+    },
+    {
+      "label": "missing-scoring-pilot",
+      "case": "missing-scoring",
+      "adoption_evidence": false,
+      "instruction_versions_consistent": true,
+      "runs": [
+        {
+          "pair": 1,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 28.769,
+          "requested_model": "gpt-5.6-luna",
+          "requested_effort": "xhigh",
+          "reported_model": null,
+          "usage": [
+            {
+              "input_tokens": 26734,
+              "cached_input_tokens": 20992,
+              "cache_write_input_tokens": 0,
+              "output_tokens": 885,
+              "reasoning_output_tokens": 608
+            }
+          ],
+          "completed_commands": 1,
+          "instruction_digest": "809b4dbbab8583013dda97fd363095a7b3c52a20d87802cb75cc1e19106c68bd",
+          "answer": "Unable to start the interview: the required `references/scoring-and-state.md` resource is unavailable.\n\nPer the skill contract, I did not score, initialize state, or ask any requirements questions. Restore that reference and resume the request to continue."
+        },
+        {
+          "pair": 1,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 24.318,
+          "requested_model": "gpt-5.6-luna",
+          "requested_effort": "xhigh",
+          "reported_model": null,
+          "usage": [
+            {
+              "input_tokens": 42220,
+              "cached_input_tokens": 34048,
+              "cache_write_input_tokens": 0,
+              "output_tokens": 916,
+              "reasoning_output_tokens": 525
+            }
+          ],
+          "completed_commands": 2,
+          "instruction_digest": "bd9c2193571677fd2d172d5f405e404888faf4375e4579b931bbcea98173c70e",
+          "answer": "I can’t start the rigorous interview because the required resource is missing:\n\n`<trial>/skill/references/scoring-and-state.md`\n\nOnly `scoring-and-state.ko.md` is present, and the skill explicitly prohibits using Korean mirrors during execution. Per the missing-resource contract, I have not scored ambiguity or asked any interview questions. Restore the English reference to continue."
+        }
+      ],
+      "descriptive_stats": {
+        "old": {
+          "median_seconds": 28.769,
+          "max_seconds": 28.769
+        },
+        "new": {
+          "median_seconds": 24.318,
+          "max_seconds": 24.318
+        }
+      }
+    },
+    {
+      "label": "final-frontier",
+      "case": "frontier",
+      "adoption_evidence": false,
+      "instruction_versions_consistent": true,
+      "runs": [
+        {
+          "pair": 1,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 78.494,
+          "requested_model": "gpt-5.6-luna",
+          "requested_effort": "xhigh",
+          "reported_model": null,
+          "usage": [
+            {
+              "input_tokens": 149356,
+              "cached_input_tokens": 127744,
+              "cache_write_input_tokens": 0,
+              "output_tokens": 3022,
+              "reasoning_output_tokens": 1889
+            }
+          ],
+          "completed_commands": 8,
+          "instruction_digest": "c895a8089f4d620568f4a2176dcab7a203c40c6d630feb8e99a2055c14710dd0",
+          "answer": "- **Eligible: [Retry Window](.../tickets/02-retry-window.md:3)** — `research` (AFK), `Status: open`, no blockers.\n- **Blocked by the request constraints: [Backoff Policy](.../tickets/01-backoff-policy.md:3)** — `grilling` (HITL), which requires an interview; interviews were explicitly prohibited.\n\nFormally, both tickets are open with empty `Blocked by:` fields ([01](.../tickets/01-backoff-policy.md:4), [02](.../tickets/02-retry-window.md:4)), so neither is metadata-blocked. No claims, edits, resolutions, or interviews were performed."
+        },
+        {
+          "pair": 1,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 58.137,
+          "requested_model": "gpt-5.6-luna",
+          "requested_effort": "xhigh",
+          "reported_model": null,
+          "usage": [
+            {
+              "input_tokens": 94927,
+              "cached_input_tokens": 77312,
+              "cache_write_input_tokens": 0,
+              "output_tokens": 2317,
+              "reasoning_output_tokens": 1298
+            }
+          ],
+          "completed_commands": 6,
+          "instruction_digest": "7e16b20d08adbd24b342a58db55847f30f2bf8f8dd65f11cca5a54c8c4f45fc6",
+          "answer": "Under the [Retry Policy Map](<trial>/.decision-navigator/retries/map.md:1), both tickets are eligible:\n\n- [Backoff Policy](<trial>/.decision-navigator/retries/tickets/01-backoff-policy.md:4) — open, unblocked, no claim. It is next by numeric order.\n- [Retry Window](<trial>/.decision-navigator/retries/tickets/02-retry-window.md:4) — also open, unblocked, no claim.\n\nNo ticket is blocked. Both have empty `Blocked by:` fields, and `.decision-navigator/retries/claims/` is absent. No claims, edits, resolutions, or interview actions were performed."
+        }
+      ],
+      "descriptive_stats": {
+        "old": {
+          "median_seconds": 78.494,
+          "max_seconds": 78.494
+        },
+        "new": {
+          "median_seconds": 58.137,
+          "max_seconds": 58.137
+        }
+      },
+      "matches_final_candidate": true
+    },
+    {
+      "label": "final-missing-scoring",
+      "case": "missing-scoring",
+      "adoption_evidence": false,
+      "instruction_versions_consistent": true,
+      "runs": [
+        {
+          "pair": 1,
+          "version": "old",
+          "returncode": 0,
+          "elapsed_seconds": 20.235,
+          "requested_model": "gpt-5.6-luna",
+          "requested_effort": "xhigh",
+          "reported_model": null,
+          "usage": [
+            {
+              "input_tokens": 26714,
+              "cached_input_tokens": 19968,
+              "cache_write_input_tokens": 0,
+              "output_tokens": 708,
+              "reasoning_output_tokens": 460
+            }
+          ],
+          "completed_commands": 1,
+          "instruction_digest": "809b4dbbab8583013dda97fd363095a7b3c52a20d87802cb75cc1e19106c68bd",
+          "answer": "I read only the specified `SKILL.md` entrypoint.\n\nThe required `references/scoring-and-state.md` resource is unavailable. Since the skill requires that resource before initial scoring or any score/state update, I cannot begin the requirements interview or ask Round 0 questions without violating its contract.\n\nNo scoring, state initialization, or task-dependent file access was performed. Please restore/provide that reference to continue."
+        },
+        {
+          "pair": 1,
+          "version": "new",
+          "returncode": 0,
+          "elapsed_seconds": 29.686,
+          "requested_model": "gpt-5.6-luna",
+          "requested_effort": "xhigh",
+          "reported_model": null,
+          "usage": [
+            {
+              "input_tokens": 57558,
+              "cached_input_tokens": 48128,
+              "cache_write_input_tokens": 0,
+              "output_tokens": 1223,
+              "reasoning_output_tokens": 709
+            }
+          ],
+          "completed_commands": 3,
+          "instruction_digest": "1175eaeca2b75155fa3c7ffba0b1da149a9de96bd82a0791771d39fa8bbafbcf",
+          "answer": "I can’t start the rigorous interview yet.\n\nThe required English reference `skill/references/scoring-and-state.md` is missing; only `scoring-and-state.ko.md` exists. The skill requires that resource before scoring or asking questions and forbids inventing or substituting its rules.\n\nTherefore, I have not scored anything or asked an interview question. Please restore the missing file to continue."
+        }
+      ],
+      "descriptive_stats": {
+        "old": {
+          "median_seconds": 20.235,
+          "max_seconds": 20.235
+        },
+        "new": {
+          "median_seconds": 29.686,
+          "max_seconds": 29.686
+        }
+      },
+      "matches_final_candidate": true
+    }
+  ],
+  "answer_path_normalization": "Temporary workspace roots in answer text are replaced with <trial>. Literal ellipses produced by the model are retained as diagnostic evidence."
+}
