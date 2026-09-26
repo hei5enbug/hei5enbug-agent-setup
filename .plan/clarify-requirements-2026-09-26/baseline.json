@@ -1,0 +1,17 @@
+{
+  "commit": "08b0ec27cfc2878bae007c319e10ab5f6903f8df",
+  "skills": [
+    "deep-interview",
+    "decision-navigator"
+  ],
+  "preserved_files": {
+    "scripts/local_lock.py": {
+      "source": "skills/decision-navigator/scripts/local_lock.py",
+      "sha256": "61fbfeb84667e7ec7306de122e9268579459d528866b37a9717724a765a2741f"
+    },
+    "references/scoring-and-state.md": {
+      "source": "skills/deep-interview/references/scoring-and-state.md",
+      "sha256": "5adb7f31b232bb7226615a96d296f914200f6450b8d78fd06595a874a2868b8f"
+    }
+  }
+}

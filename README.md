@@ -221,6 +221,10 @@ execution-path isolation; semantic equivalence still requires human or model rev
 
 ## Related
 
+- [Clarify Requirements integration candidate](.plan/clarify-requirements-2026-09-26/README.md) combines
+  the interview and decision-map workflows for evaluation. It is outside plugin discovery until the
+  required native quality and execution-cost comparisons pass.
+
 - [`omo-model-config`](standalone-skills/omo-model-config/SKILL.md) remains available as standalone
   source and is not included in the plugin skill list. [Korean guide](standalone-skills/omo-model-config/SKILL.ko.md).
 - [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — plugin system whose model
