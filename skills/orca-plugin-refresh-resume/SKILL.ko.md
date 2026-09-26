@@ -21,6 +21,8 @@
 - 대상 세션에는 이 플러그인이 만든 lifecycle registry 항목이 있어야 한다.
   이전 세션에는 항목이 없다. 기능을 설치하고 훅을 검토·신뢰한 뒤 기존 세션을 한 번씩
   수동으로 재시작하거나 재개한다.
+  Codex는 prompt가 시작될 때만 항목을 만든다. 그래서 prompt를 한 번도 받지 않은 Codex 세션은
+  prompt를 받거나 닫힐 때까지 계획을 막는다.
   terminal 미리보기나 대화 기록 파일에서 native session ID를 추측하지 않는다.
 - `apply`를 실행하기 전에 현재 세션의 호스팅 서비스 접근 규칙을 따라
   마켓플레이스를 갱신한다.
@@ -44,7 +46,7 @@ python3 <plugin-root>/scripts/orca_plugin_refresh.py plan --json
 
 목표 버전, 대상 호스트와 terminal, worktree, 짧은 terminal handle, 상태와 차단 항목을 보여준다.
 채팅에 native session ID를 표시하지 않는다. 계획이 차단되면 `apply`를 실행하지 않는다.
-initiator 외 모든 세션이 idle이며 registry에 등록되어야 한다고 설명한다.
+initiator 외 모든 세션이 idle이고 registry에 등록되어 있으며 보내지 않은 입력이 없어야 한다고 설명한다.
 Claude Code의 백그라운드 작업이나 세션 범위의 예약된 재실행이 남아 있어도 idle로 보지 않는다.
 차단을 해결한 뒤 새 계획을 만들도록 안내한다.
 
@@ -71,10 +73,17 @@ lease와 Orca idle 상태를 다시 확인한다.
 
 worker는 두 마켓플레이스를 갱신하고 계획 버전과 revision을 재확인한 뒤 플러그인을 업데이트한다.
 각 세션은 원래 worktree에서 같은 native session ID로 재개한다.
-종료 직전에 Orca `tui-idle`을 확인한다.
-`/exit`를 보내고 프로세스 종료를 확인한 뒤 새 terminal을 만든다.
+종료 직전에 Orca `tui-idle`과 보내지 않은 입력을 다시 확인한다.
+`/exit`를 보낸 뒤 agent가 terminal에서 사라질 때까지 기다린다. terminal의 셸이 남아 있어도 마찬가지다.
+그다음 그 탭을 닫고 새 terminal을 만든다.
+Codex는 app-server가 종료된 대화를 1분 정도 열어 둘 수 있어서, Codex가 대화 잠금을 풀 때까지 먼저 기다린다.
+Codex는 그 대화에 마지막으로 기록된 모델과 추론 강도로 재개한다.
 세션을 강제로 종료하거나 worktree를 닫지 않는다.
-재개된 세션의 `SessionStart`가 목표 플러그인 버전을 registry에 기록해야 완료로 본다.
+
+재개된 Claude Code 세션은 `SessionStart`가 목표 플러그인 버전을 registry에 기록하면 완료로 본다.
+Codex는 다음 turn이 시작될 때만 `SessionStart`를 실행한다. 그래서 재개된 Codex 세션은 새 프로세스가
+대화 잠금을 쥐면 완료로 본다. 다음 prompt가 확인할 때까지 receipt에는
+`plugin_registration: pending_next_turn`이 표시된다.
 
 마켓플레이스 갱신으로 계획 버전 또는 revision이 바뀌면 설치나 세션 종료 전에 중단한다.
 새 계획을 요청한다.
@@ -108,6 +117,7 @@ worker가 예기치 않게 멈추면 대상 agent 세션 밖에서 worker가 종
 복구는 일치하는 lease만 해제하고 현재 terminal 상태를 기록한다.
 플러그인을 업데이트하거나 세션을 종료·재개하지 않는다.
 worker가 재개하지 못한 세션은 비공개 receipt에 기록된 수동 resume 명령을 사용한다.
+오류가 `codex_thread_still_open`이면 Codex가 대화를 닫을 때까지 기다린 뒤 그 명령을 실행한다.
 상태에 `manual_resume_requires_terminal_check`가 표시되면 새 terminal에서 agent가 여전히 실행 중인지
 확인하고, 종료를 확인한 뒤에만 명령을 실행한다. 그렇지 않으면 같은 세션을 두 프로세스가 재개할 수 있다.
 terminal 신원을 확인할 수 없는 복구 세션은 lifecycle hook이 현재 handle을 기록할 때까지 busy로 유지한다.
@@ -121,7 +131,9 @@ Orca가 입력은 수락했지만 turn 시작은 확인하지 못했을 수 있�
   `plan`은 Orca 사용자 데이터에 권한 제한 계획 파일을 쓴다.
 - `apply`는 확인된 `hei5enbug` marketplace의 이 플러그인만 업데이트한다.
   미리보기에서 확인한 Claude Code 및 Codex 세션만 재시작한다.
-- busy, 미등록, 오래된 계획, 중복 또는 구분할 수 없는 세션이 있으면 설치 전에 중단한다.
+- busy, 미등록, 오래된 계획, 중복 또는 구분할 수 없는 세션이나 보내지 않은 입력이 있는 세션이 있으면
+  설치 전에 중단한다.
+- Codex의 경우 worker는 `CODEX_HOME` 아래의 대화 잠금과 대화 기록의 모델·추론 강도 필드만 읽는다.
 - 플러그인 훅은 호스트 입력을 원자적으로 잠그지 못한다. idle 미리보기만으로 작업 중단이 없음을
   보장하거나 훅 시간 초과 중 새 prompt가 통과하지 않는다고 말하지 않는다.
 - registry에는 호스트, native session ID, Orca handle, worktree, cwd, 플러그인 버전, 상태와 시각을

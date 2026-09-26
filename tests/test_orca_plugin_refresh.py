@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import json
 import subprocess
-import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -13,129 +12,11 @@ from unittest.mock import patch
 ROOT_SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(ROOT_SCRIPTS))
 import orca_plugin_refresh as refresh
-import session_lifecycle as lifecycle
-from session_lifecycle import registry_lock, session_key
+from session_lifecycle import registry_lock
+from orca_refresh_fixture import OrcaRefreshFixture
 
 
-class OrcaPluginRefreshTest(unittest.TestCase):
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
-        self.app_root = self.root / "orca data" / "plugin-session-refresh"
-        self.codex_root = self.root / "codex-marketplace"
-        self.claude_root = self.root / "claude-marketplace"
-        self.codex_root.mkdir()
-        self.claude_root.mkdir()
-        (self.codex_root / ".codex-plugin").mkdir()
-        (self.claude_root / ".claude-plugin").mkdir()
-        (self.codex_root / ".codex-plugin" / "plugin.json").write_text(
-            json.dumps({"name": "hei5enbug-agent-setup", "version": "0.6.0"})
-        )
-        (self.claude_root / ".claude-plugin" / "plugin.json").write_text(
-            json.dumps({"name": "hei5enbug-agent-setup", "version": "0.6.0"})
-        )
-        self.codex_item = {
-            "pluginId": "hei5enbug-agent-setup@hei5enbug",
-            "name": "hei5enbug-agent-setup",
-            "marketplaceName": "hei5enbug",
-            "version": "0.5.2+codex.old",
-            "enabled": True,
-            "source": {"source": "local", "path": str(self.codex_root)},
-            "marketplaceSource": {"sourceType": "git", "source": refresh.EXPECTED_REPO_URL},
-        }
-        self.claude_item = {
-            "id": "hei5enbug-agent-setup@hei5enbug",
-            "version": "0.5.2",
-            "scope": "user",
-            "enabled": True,
-        }
-        self.versions = {
-            "codex": {
-                "root": str(self.codex_root),
-                "catalog_version": "0.6.0",
-                "installed_version": "0.5.2",
-                "catalog_revision": "a" * 40,
-            },
-            "claude": {
-                "root": str(self.claude_root),
-                "catalog_version": "0.6.0",
-                "installed_version": "0.5.2",
-                "catalog_revision": "b" * 40,
-            },
-        }
-        self.terminals = [
-            self.terminal("codex", "term-init", "repo-init::/tmp/init", "/tmp/init", "tab-init", "leaf-init"),
-            self.terminal("claude", "term-other", "repo-other::/tmp/other", "/tmp/other", "tab-other", "leaf-other"),
-        ]
-        self.env = patch.dict(os.environ, {
-            "ORCA_USER_DATA_PATH": str(self.root / "orca data"),
-            "ORCA_TERMINAL_HANDLE": "term-init",
-            "ORCA_TAB_ID": "tab-init",
-            "ORCA_PANE_KEY": "tab-init:leaf-init",
-            "ORCA_WORKTREE_ID": "repo-init::/tmp/init",
-            "PLUGIN_ROOT": str(Path(refresh.__file__).resolve().parents[1]),
-            "CLAUDE_PLUGIN_ROOT": str(Path(refresh.__file__).resolve().parents[1]),
-            "TERM_PROGRAM": "Orca",
-        })
-        self.env.start()
-        self.addCleanup(self.env.stop)
-        for session in self.terminals:
-            self.register(session)
-        self.inventory_patch = patch.object(refresh, "terminal_inventory", side_effect=lambda: [dict(item) for item in self.terminals])
-        self.inventory_patch.start()
-        self.addCleanup(self.inventory_patch.stop)
-        self.patches = [
-            patch.object(refresh, "_manifest_snapshots", side_effect=self.snapshots),
-            patch.object(refresh, "wait_terminal", side_effect=lambda handle, condition, timeout: self.wait_result(handle, condition)),
-            patch.object(refresh, "executable", side_effect=lambda name: name),
-        ]
-        for item in self.patches:
-            item.start()
-            self.addCleanup(item.stop)
-
-    @staticmethod
-    def terminal(host, handle, worktree_id, path, tab_id, leaf_id):
-        return {
-            "host": host,
-            "terminal_handle": handle,
-            "incarnation_id": f"incarnation-{handle}",
-            "worktree_id": worktree_id,
-            "worktree_path": path,
-            "tab_id": tab_id,
-            "leaf_id": leaf_id,
-            "connected": True,
-            "writable": True,
-            "orphaned": False,
-            "title": f"{host}-{leaf_id}",
-        }
-
-    def snapshots(self):
-        return {host: dict(value) for host, value in self.versions.items()}
-
-    @staticmethod
-    def wait_result(handle, condition):
-        return True
-
-    def register(self, terminal, *, state="idle", plugin_version="0.5.2", last_event="Stop"):
-        with registry_lock(self.app_root) as registry:
-            records = registry["sessions"]
-            session_id = f"session-{terminal['leaf_id']}"
-            records[session_key(terminal["host"], session_id)] = {
-                "host": terminal["host"],
-                "session_id": session_id,
-                "terminal_handle": terminal["terminal_handle"],
-                "worktree_id": terminal["worktree_id"],
-                "cwd": terminal["worktree_path"],
-                "tab_id": terminal["tab_id"],
-                "leaf_id": terminal["leaf_id"],
-                "plugin_version": plugin_version,
-                "state": state,
-                "event_sequence": 1,
-                "last_event": last_event,
-                "updated_at": "2026-09-23T00:00:00Z",
-            }
-
+class OrcaPluginRefreshTest(OrcaRefreshFixture):
     def test_계획이_두_호스트와_등록된_세션을_모두_미리보기한다(self):
         """계획 미리보기에는 두 호스트와 등록된 세션이 모두 포함된다."""
         # Given
@@ -264,105 +145,6 @@ class OrcaPluginRefreshTest(unittest.TestCase):
         # Then
         self.assertEqual(caught.exception.code, "stale_plan")
         popen.assert_not_called()
-
-    def test_worker가_두_플러그인과_모든_세션을_같은_ID로_재개한다(self):
-        """worker가 계획한 버전을 설치하고 모든 세션을 같은 native ID로 재개한다."""
-        # Given
-        plan = refresh.create_plan(self.app_root)
-        popen = patch.object(refresh.subprocess, "Popen")
-        popen.start()
-        self.addCleanup(popen.stop)
-        queued = refresh.apply_plan(self.app_root, plan["plan_id"])
-        transaction_id = queued["transaction_id"]
-        installed = {"codex": "0.5.2", "claude": "0.5.2"}
-        commands: list[list[str]] = []
-
-        def fake_run_command(argv, *, timeout=30.0, check=True):
-            command = list(argv)
-            commands.append(command)
-            if command[:3] == ["claude", "plugin", "update"]:
-                installed["claude"] = "0.6.0"
-            elif command[:3] == ["codex", "plugin", "add"]:
-                installed["codex"] = "0.6.0"
-            elif command[1:3] == ["terminal", "close"]:
-                handle = command[command.index("--terminal") + 1]
-                self.terminals[:] = [item for item in self.terminals if item["terminal_handle"] != handle]
-            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
-
-        def fake_run_json(argv, *, timeout=30.0):
-            command = list(argv)
-            if command[1:3] == ["terminal", "send"]:
-                return {"result": {"send": {"accepted": True, "prompt": {"stages": ["input_accepted", "turn_started"]}}}}
-            if command[1:3] == ["terminal", "create"]:
-                args = command[3:]
-                worktree = args[args.index("--worktree") + 1].removeprefix("id:")
-                title = args[args.index("--title") + 1]
-                session_host = "claude" if "-claude-" in title else "codex"
-                old = next(item for item in plan["sessions"] if item["host"] == session_host)
-                new_handle = f"term-new-{session_host}"
-                new_terminal = self.terminal(
-                    session_host,
-                    new_handle,
-                    worktree,
-                    old["worktree_path"],
-                    old["tab_id"],
-                    old["leaf_id"],
-                )
-                new_terminal["title"] = title
-                self.terminals.append(new_terminal)
-                hook_env = {
-                    "ORCA_TERMINAL_HANDLE": new_handle,
-                    "ORCA_WORKTREE_ID": worktree,
-                    "ORCA_TAB_ID": old["tab_id"],
-                    "ORCA_PANE_KEY": f"{old['tab_id']}:{old['leaf_id']}",
-                }
-                with patch.dict(os.environ, hook_env):
-                    if session_host == "claude":
-                        os.environ.pop("PLUGIN_ROOT", None)
-                    lifecycle.handle_event({
-                        "hook_event_name": "SessionStart", "source": "resume",
-                        "session_id": old["session_id"], "cwd": old["cwd"],
-                    })
-                return {"result": {"terminal": {"handle": new_handle}}}
-            self.fail(f"unexpected JSON CLI command: {command[:3]}")
-
-        def fake_verify(targets):
-            if installed != targets:
-                raise refresh.RefreshError("installed_version_mismatch", "fake mismatch")
-            return dict(installed)
-
-        def fake_installed():
-            return dict(installed)
-
-        with (
-            patch.object(refresh, "run_command", side_effect=fake_run_command),
-            patch.object(refresh, "run_json", side_effect=fake_run_json),
-            patch.object(refresh, "_installed_versions", side_effect=fake_installed),
-            patch.object(refresh, "_verify_installed_versions", side_effect=fake_verify),
-            patch.object(refresh, "terminal_inventory", side_effect=lambda: [dict(item) for item in self.terminals]),
-            patch.object(refresh, "wait_terminal", return_value=True),
-        ):
-            with registry_lock(self.app_root) as registry:
-                registry["sessions"]["codex:session-leaf-init"]["state"] = "idle"
-                registry["sessions"]["codex:session-leaf-init"]["last_event"] = "Stop"
-            # When
-            result = refresh._run_worker(self.app_root, transaction_id)
-
-        # Then
-        receipt = refresh._load_receipt(self.app_root, transaction_id)
-        self.assertEqual(result, 0, receipt)
-        self.assertEqual(receipt["state"], "complete")
-        self.assertEqual(installed, {"codex": "0.6.0", "claude": "0.6.0"})
-        records = refresh.registry_sessions(self.app_root)
-        for host, session_id in (("codex", "session-leaf-init"), ("claude", "session-leaf-other")):
-            record = records[f"{host}:{session_id}"]
-            self.assertEqual(refresh.base_version(record["plugin_version"]), "0.6.0")
-            self.assertEqual(record["session_id"], session_id)
-            self.assertNotIn("refresh_transaction_id", record)
-            self.assertTrue(record["terminal_handle"].startswith("term-new-"))
-        self.assertFalse(any(item["terminal_handle"] in {"term-init", "term-other"} for item in self.terminals))
-        self.assertTrue(any(command[:3] == ["claude", "plugin", "update"] for command in commands))
-        self.assertTrue(any(command[:3] == ["codex", "plugin", "add"] for command in commands))
 
     def test_worker가_시작전에_plan을_잃으면_실패_영수증과_lease_해제를_남긴다(self):
         """분리된 worker가 계획을 읽지 못해도 거래를 실패로 마무리한다."""
@@ -940,13 +722,13 @@ class OrcaPluginRefreshTest(unittest.TestCase):
         rejected = {"result": {"send": {"accepted": False}}}
 
         # When
-        with patch.object(refresh, "run_json", return_value=rejected), patch.object(refresh, "wait_terminal") as wait:
+        with patch.object(refresh, "run_json", return_value=rejected), patch.object(refresh, "terminal_agent_running") as probe:
             with self.assertRaises(refresh.RefreshError) as caught:
-                refresh._send_exit("term-other")
+                refresh._send_exit("term-other", "claude")
 
         # Then
         self.assertEqual(caught.exception.code, "input_not_accepted")
-        wait.assert_not_called()
+        probe.assert_not_called()
 
     def test_중복된_replacement_candidate도_종료_대상으로_선택하지_않는다(self):
         """tab·pane이 같은 터미널이 여럿 있어도 계획한 handle이 없으면 중단한다."""
