@@ -67,5 +67,5 @@ Sonnet/high, native human interaction, strict closure, map write concurrency/rec
 and discovery comparisons remain unverified. Human UI evaluation was deferred at the user's request.
 The missing-reference result also prevents treating these observations as a passed performance gate.
 
-Complete the comparisons described in README.md and coverage.md before promoting the candidate. A failure
+Track the comparisons and replacement through [Remaining work](remaining-work.md) before promotion. A failure
 in one critical branch cannot be offset by a better average or by fewer source bytes.

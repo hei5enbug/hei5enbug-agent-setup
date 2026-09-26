@@ -15,6 +15,7 @@ because they use a map. Existing `.decision-navigator/` data, types, statuses, a
 | [Candidate entrypoint](candidate/clarify-requirements/SKILL.md) | Executable English workflow; its adjacent Korean mirror is for human readers. |
 | [Coverage](coverage.md) | Trace both original contracts and the agreed integration requirements to candidate files and evaluation cases. |
 | [Verification record](verification.md) | Inspect completed checks, limited native observations, and remaining promotion gates. |
+| [Remaining work](remaining-work.md) | Track the open work, prerequisites, completion evidence, and eventual replacement steps. |
 | [Trial receipts](trial-results.json) | Inspect source hashes, individual runs, native usage, and diagnostic failures. |
 | [Baseline](baseline.json) | Identify the original commit and skill directories. |
 | [Candidate evals](candidate/clarify-requirements/evals/evals.json) | Preserve 20 original cases and add 9 integration boundaries. |
