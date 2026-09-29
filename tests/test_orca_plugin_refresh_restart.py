@@ -591,7 +591,10 @@ class WorkerRestartTest(OrcaRefreshFixture):
                         "ORCA_TAB_ID": old["tab_id"],
                         "ORCA_PANE_KEY": f"{old['tab_id']}:{old['leaf_id']}",
                     }
-                    with patch.dict(os.environ, hook_env):
+                    with (
+                        patch.dict(os.environ, hook_env),
+                        patch.object(lifecycle, "_plugin_version", return_value=installed["claude"]),
+                    ):
                         os.environ.pop("PLUGIN_ROOT", None)
                         lifecycle.handle_event({
                             "hook_event_name": "SessionStart", "source": "resume",

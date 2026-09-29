@@ -5,7 +5,7 @@
 
 메인 세션의 계획 모드에서 계획한다.
 
-[독립 모델 검증](independent-model-validation.ko.md)이 정한 검토자 호출은 아래 시점 규칙의 예외다.
+[독립 모델 검증](independent-model-validation.ko.md)이 정한 검토자 호출은 아래 시점 규칙과 worker 규칙의 예외다.
 
 ## 조사
 
@@ -17,7 +17,29 @@
 
 ## 구현
 
-- 위 검토자 호출을 제외하면 메인 세션에서 계획을 확정한 뒤에만 다른 내장 멀티 에이전트 스레드를 사용한다.
-- 범위가 명확한 코드 변경이나 테스트만 맡긴다.
-- 파일을 공유하지 않고 빌드 경합이 없는 작업에만 최대 6개 에이전트를 동시에 사용한다.
-  그 밖에는 순서대로 실행한다.
+구현은 [구현 실행 규칙](implementation-execution.ko.md)에 따라 조정한다. 이 섹션은 Codex worker 연동만 덧붙인다.
+
+- 구현에는 내장 `worker` 에이전트 유형만 사용하고, 생성할 때마다 확정한 모델과 `xhigh`를 명시적으로 전달한다.
+- 필수 계열은 가장 새로운 정식 GPT Luna다. [Codex 서브에이전트 문서](https://learn.chatgpt.com/docs/agent-configuration/subagents)의
+  모델 안내, [OpenAI 모델 카탈로그](https://developers.openai.com/api/docs/models), 여기서 연결한 Luna 모델 문서로
+  확정한다. 모델 ID와 `xhigh` 지원 여부는 호스트의 모델 선택기나 카탈로그와 대조한다.
+- 전체 기록 fork는 부모의 모델과 사고 강도를 물려받고 재정의를 거부한다. worker를 이 방식으로 생성하지 않는다.
+  `fork_turns`를 `"none"`이나 양의 정수로 두거나 `fork_context`를 끄고, 범위를 한정한 작업 맥락은 할당에 담는다.
+- 실행에서 처음 생성하기 전에 설정 계층의 `model`, `model_reasoning_effort`, 관련 `[agents]` 기본값 항목만 살펴본다.
+  개인 또는 프로젝트 Codex 에이전트 디렉터리에 사용자가 정의한 `worker`도 포함한다. 이런 정의는 생성 값을 재정의할
+  수 있으므로, 그래도 선택한 모델과 `xhigh`로 확정되어야 한다.
+- `~/.codex/agents/worker.toml`이나 `.codex/agents/worker.toml`을 설치하거나 덮어쓰지 않고, 전역 모델 기본값도
+  바꾸지 않는다.
+- 명시적인 생성 인수와 worker의 rollout 기록을 근거로 인정한다. 이 기록은 `CODEX_HOME`(기본값 `~/.codex`) 아래
+  sessions 디렉터리에서 찾는다. 기록의 `session_meta`에는 조정자의 `CODEX_THREAD_ID`인 부모 스레드와 worker의
+  에이전트 경로가, `turn_context`에는 실제 `model`과 `effort`가 있다. worker가 스스로 보고한 내용은 이 기록이 아니다.
+- 생성 결과에는 모델이 나오지 않으므로 각 worker는 준비 확인 전용 할당으로 시작한다. 기록 확인을 통과하면 같은
+  worker 스레드에 후속 메시지로 구현 할당을 보낸다. 이 경로는 그 후속 메시지가 설정을 유지할 때만 사용한다. 이런
+  이어 보내기를 쓸 수 없으면 두 단계 경로를 건너뛰고 아무것도 수정하지 않는다. 재개한 뒤에는 설정을 다시 확인한다.
+- 호스트 한도는 `agents.max_concurrent_threads_per_session`이다. 생성한 스레드는 세지만 메인 스레드는 세지 않는다.
+  현재 값과 남은 자리를 기준으로 하고 이 값을 바꾸지 않는다.
+- worker 도구가 없거나, 모델이나 `xhigh`를 쓸 수 없거나, 사용자 설정이 맞지 않거나, 실제 설정을 확인하지 못하면
+  영향을 받는 구현을 막는다. 막힌 기능을 정확히 보고하고 아무것도 수정하지 않는다.
+- Codex는 사용자, `AGENTS.md` 또는 스킬 지침이 요청할 때만 서브에이전트를 생성하며, 이 규칙은 훅으로 전달된다.
+  이 이유로 생성하지 않기로 했다면 worker 위임 허가를 사용자에게 한 번 요청하고, 답을 받을 때까지 아무것도 수정하지
+  않는다.

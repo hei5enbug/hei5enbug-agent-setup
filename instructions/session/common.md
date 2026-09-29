@@ -27,6 +27,8 @@ If a required reference is missing, report it and pause the affected action inst
   access, read [protected-value access rules](../protected-values.md).
 - Before writing or editing any documentation file, read [documentation rules](../documentation.md).
 - Before writing or editing test code, read [test rules](../testing.md).
+- Before the first implementation change, read [implementation execution rules](../implementation-execution.md).
+  An assigned worker reads only its "Assigned workers" section and follows its assignment.
 
 ## Planning and design routing
 
@@ -36,9 +38,10 @@ If a required reference is missing, report it and pause the affected action inst
 - Activate a skill for an implementation plan, design document, or RFC only when the user explicitly requests
   that deliverable or directly invokes the skill. Do not infer it from general implementation, diagnosis, code
   review, summarization, or a passing mention, and do not chain another skill from those tasks.
+  Task preparation under the implementation execution rules is not such a request.
 - `document-to-confluence`, `suggest-commit`, and `technical-design-writer` remain automatic when their own
   descriptions match the user's intent. This is an explicit exception to the preceding trigger boundary.
-- Before creating or revising an implementation plan, read
+- Before creating or revising an implementation plan the user requested, read
   [implementation planning rules](../implementation-planning.md) and
   [independent model validation](../independent-model-validation.md).
 - Before creating or revising a design document or RFC, read

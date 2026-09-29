@@ -35,6 +35,7 @@ hei5enbug-agent-setup/
 │   ├── codex-agents.md
 │   ├── confluence.md
 │   ├── documentation.md
+│   ├── implementation-execution.md
 │   ├── implementation-planning.md
 │   ├── independent-model-validation.md
 │   ├── protected-values.md
@@ -48,8 +49,11 @@ hei5enbug-agent-setup/
 ├── LICENSE
 ├── pyproject.toml
 ├── agents/
-│   ├── ko/scout.ko.md
-│   └── scout.md
+│   ├── ko/
+│   │   ├── scout.ko.md
+│   │   └── worker.ko.md
+│   ├── scout.md
+│   └── worker.md
 ├── standalone-agents/
 │   └── codex-explorer.toml
 ├── standalone-skills/
@@ -71,7 +75,7 @@ package the same `skills/` directory for Codex and Claude Code without copying s
 The `standalone-skills/` directory is not included in either plugin's skill discovery path.
 
 The `agents/` directory ships with the Claude Code plugin, so installing the bundle adds the
-`hei5enbug-agent-setup:scout` subagent. No manual copy is needed.
+`hei5enbug-agent-setup:scout` and `hei5enbug-agent-setup:worker` subagents. No manual copy is needed.
 
 Codex discovers subagents only in `~/.codex/agents/` and `.codex/agents/`, so a plugin cannot register one.
 Instead, the session hook writes `standalone-agents/codex-explorer.toml` to `~/.codex/agents/explorer.toml`
@@ -119,13 +123,13 @@ for locating the script. No user or project instruction file is copied, linked, 
 | A plugin update is installed | A new session reads that installed version. A repository push alone changes nothing locally. |
 
 Core rules remain in session context across requests. Service access, protected-value access, agent use,
-documentation, and requested planning or design details load only before the matching action, even if it
-arises later in a request. The session context distinguishes implementation plans from design documents and
-keeps their trigger boundary. `instructions/implementation-planning.md` owns the six-stage implementation
-plan workflow and template. `technical-design-writer` owns design-document behavior, and
-`instructions/independent-model-validation.md` owns their shared one-pass cross-family validation contract.
-The loader resolves each session file's conditional links to absolute paths inside the installed plugin.
-It does not read conditional reference bodies at startup.
+documentation, implementation execution, and requested planning or design details load only before the
+matching action, even if it arises later in a request. The session context distinguishes implementation plans
+from design documents and keeps their trigger boundary. `instructions/implementation-planning.md` owns the
+six-stage implementation plan workflow and template. `technical-design-writer` owns design-document behavior,
+and `instructions/independent-model-validation.md` owns their shared one-pass cross-family validation
+contract. The loader resolves each session file's conditional links to absolute paths inside the installed
+plugin. It does not read conditional reference bodies at startup.
 
 Codex requires review and trust of the current plugin hook definition before running it.
 Disabled hooks or enterprise policies that prohibit plugin hooks prevent automatic loading.
@@ -142,6 +146,43 @@ details into conditional references. Windows execution and live model adherence 
 
 See the official [Codex hooks](https://learn.chatgpt.com/docs/hooks) and
 [Claude Code hooks](https://code.claude.com/docs/en/hooks) contracts for lifecycle and trust behavior.
+
+## Implementation workers
+
+Workers make every implementation change. Before the first change, the main session reads
+`instructions/implementation-execution.md` and acts as the coordinator. It keeps requirements,
+investigation, planning, design, review, decisions, and the final report, and it never edits.
+It prepares an executable task assignment even when the user supplied no plan or a plan without worker
+assignments.
+
+Automatic task preparation is not a requested implementation plan.
+
+| Aspect | Automatic task preparation | Requested implementation plan |
+|---|---|---|
+| Trigger | Any implementation change | The user explicitly asks for a plan |
+| Result | Assignments in the host's task list or the conversation, with no plan directory | The requested plan deliverable |
+| Workflow | Task ID, result, paths, prerequisites, resources, checks, and model/effort per task | The six stages in `instructions/implementation-planning.md` |
+| Independent validation | Never runs | Runs only after the confirmation gate in `instructions/independent-model-validation.md` |
+
+Independent ready tasks run together, up to six workers and never beyond the host's actual limit. Six is a
+ceiling, not a target: one cohesive task uses one worker. Excess tasks wait in a queue. Dependent tasks and
+tasks that share files or other mutable resources run in order. Workers edit only their assigned paths and
+never start agents, plan, or request plan review.
+
+| Host | Worker | Model and effort | Blocked when |
+|---|---|---|---|
+| Codex | Built-in `worker`, spawned with an explicit model and effort and checked in its rollout record before any edit | Latest production GPT Luna at `xhigh`, resolved for each run | Worker tools, the model, or `xhigh` are unavailable; a user-defined `worker` resolves to other settings; the rollout record is missing or names other settings |
+| Claude Code | Bundled `hei5enbug-agent-setup:worker` from `agents/worker.md`, given the `sonnet` alias on each invocation and checked in its subagent record before any edit | Latest production Claude Sonnet at `xhigh`, resolved for each run | The plugin worker or its subagent record is missing; the record names another model or effort; a forced subagent model, an effort override, or a cap prevents `xhigh` |
+
+When a requirement is not met, the coordinator stops the affected implementation and reports the exact
+blocking capability. It never substitutes another model tier, lower effort, another host, a generic agent, or
+main-session edits. The plugin installs no Codex `worker.toml` and changes no user settings. The Codex
+`explorer` provisioning above and the Claude `scout` agent keep their existing behavior.
+
+Codex spawns sub-agents only when the user, `AGENTS.md`, or skill instructions ask for them. These rules arrive
+through a hook, so without such a request a Codex session asks once for permission to delegate to workers. To skip
+that question, add a line such as "Delegate implementation changes to worker sub-agents." to the project's or your
+global `AGENTS.md`.
 
 ## Plugin updates
 

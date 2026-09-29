@@ -16,6 +16,7 @@ COMMON = REPO_ROOT / "instructions/session/common.md"
 AGENTS = REPO_ROOT / "AGENTS.md"
 CLAUDE_AGENTS = REPO_ROOT / "instructions/claude-agents.md"
 CODEX_AGENTS = REPO_ROOT / "instructions/codex-agents.md"
+EXECUTION = REPO_ROOT / "instructions/implementation-execution.md"
 HOST_SESSION_FILES = (
     REPO_ROOT / "instructions/session/claude-code.md",
     REPO_ROOT / "instructions/session/codex.md",
@@ -45,6 +46,25 @@ COMMON_OWNED = (
         "rules](../documentation.md)."
     ),
 )
+
+# Scheduling policy the shared implementation execution reference owns outright.
+EXECUTION_OWNED = (
+    "min(6 - active implementation workers, host slots remaining, ready independent tasks)",
+    "Disjoint files alone do not prove independence.",
+    "Queue any excess task, such as a seventh,",
+    "never permits another tier, lower effort, another host, a generic agent, or main-session implementation",
+)
+LEGACY_SCHEDULING = ("Run at most 6",)
+
+
+def runtime_documents() -> list[Path]:
+    roots = (REPO_ROOT / "instructions", REPO_ROOT / "agents", REPO_ROOT / "skills")
+    return sorted(
+        path
+        for root in roots
+        for path in root.rglob("*.md")
+        if not path.name.endswith(".ko.md") and path != EXECUTION
+    )
 
 
 def normalized_text(path: Path) -> str:
@@ -96,6 +116,29 @@ class HostAgentFilesStayHostSpecificTest(unittest.TestCase):
     def test_host_agent_files_keep_their_host_specific_rules(self):
         self.assertIn("`hei5enbug-agent-setup:scout`", CLAUDE_AGENTS.read_text(encoding="utf-8"))
         self.assertIn("`explorer`", CODEX_AGENTS.read_text(encoding="utf-8"))
+
+
+class ExecutionReferenceOwnsSchedulingTest(unittest.TestCase):
+    def test_공유_실행_참조만_일정_정책을_가진다(self):
+        """worker 일정 정책은 공유 실행 참조에만 있고 다른 실행 지침은 이를 복사하지 않는다."""
+        # Given
+        execution = normalized_text(EXECUTION)
+        documents = runtime_documents()
+
+        # When
+        copies = [
+            (path.relative_to(REPO_ROOT), rule)
+            for path in documents
+            for rule in EXECUTION_OWNED + LEGACY_SCHEDULING
+            if rule in normalized_text(path)
+        ]
+
+        # Then
+        for rule in EXECUTION_OWNED:
+            self.assertIn(rule, execution)
+        self.assertIn(CLAUDE_AGENTS, documents)
+        self.assertIn(CODEX_AGENTS, documents)
+        self.assertEqual(copies, [])
 
 
 if __name__ == "__main__":
