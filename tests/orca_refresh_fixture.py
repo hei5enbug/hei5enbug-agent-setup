@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -12,6 +13,18 @@ ROOT_SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(ROOT_SCRIPTS))
 import orca_plugin_refresh as refresh
 from session_lifecycle import registry_lock, session_key
+
+
+def orca_cli_available() -> bool:
+    if os.environ.get("ORCA_CLI_COMMAND"):
+        return True
+    return shutil.which("orca-dev" if os.environ.get("ORCA_DEV_REPO_ROOT") else "orca") is not None
+
+
+requires_orca_cli = unittest.skipUnless(
+    orca_cli_available(),
+    "Orca CLI is not installed. Ask the user whether to install Orca, then rerun this test.",
+)
 
 
 class OrcaRefreshFixture(unittest.TestCase):
