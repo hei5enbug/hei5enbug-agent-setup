@@ -56,11 +56,17 @@ def render_context(root: Path, host: str) -> str:
 
 
 CODEX_AGENTS = {"scout": "codex-scout.toml", "worker": "codex-worker.toml"}
-RETIRED_CODEX_AGENTS = {"explorer": {"bfde4fbbe2740152ad537d576612a34619a57a45adb56072e3f945610ef820af"}}
+RETIRED_CODEX_AGENTS = {
+    "explorer": {"bfde4fbbe2740152ad537d576612a34619a57a45adb56072e3f945610ef820af"},
+    "worker": {"ce4488d0323832dc1563481875e7c26d693092c94865c37a4b4b89afd8274f83"},
+}
 
 
 def retire_codex_agents(agents: Path) -> None:
-    """Remove an agent file an earlier version wrote, only while it is byte-identical to that bundled file."""
+    """Remove an agent file an earlier version wrote, only while it is byte-identical to that bundled file.
+
+    A retired name that is still bundled is provisioned again from the current file.
+    """
     for name, digests in RETIRED_CODEX_AGENTS.items():
         target = agents / f"{name}.toml"
         try:
@@ -73,8 +79,8 @@ def retire_codex_agents(agents: Path) -> None:
 def provision_codex_agents(root: Path) -> None:
     """Create each bundled Codex agent that Codex does not have yet.
 
-    Never overwrite an existing file: once the user owns an agent file, their
-    copy wins and this function leaves it alone.
+    Never overwrite a file the user changed: once the user owns an agent file,
+    their copy wins and this function leaves it alone.
     """
     home = os.environ.get("CODEX_HOME")
     agents = (Path(home) if home else Path.home() / ".codex") / "agents"

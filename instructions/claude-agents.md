@@ -7,8 +7,9 @@ exception to the timing, agent-selection, and worker rules below.
 
 - Never use a built-in subagent, including `general-purpose`, `Explore`, `Plan`, `claude`, `claude-code-guide`,
   `statusline-setup`, or a fork. Always name the subagent type, because an omitted type runs `general-purpose`.
-- The plugin's agent guard hook denies every subagent type that neither a plugin nor a user or project
-  definition provides. When it denies a call, use the plugin agent that fits or work in the main conversation.
+- The plugin's agent guard hook denies an omitted type and every built-in type; every other type, including a
+  plugin agent or a definition from any user, project, CLI, or managed source, passes. When it denies a call, use
+  the plugin agent that fits or work in the main conversation.
 
 ## Investigation
 
@@ -46,6 +47,10 @@ adds only the Claude Code worker integration.
   `claude-sonnet-5-5` as the actual model and `high` as the effort, and configuration cannot lower that
   effort. Provider-internal reasoning telemetry is not required. A different recorded model, a cap below
   `high`, a contradictory override, or unknown effective precedence is insufficient.
+- Read that record from the transcripts under the Claude config directory, `CLAUDE_CONFIG_DIR` or `~/.claude`,
+  in `projects/<project>/`. The session transcript's launch result names the worker's `agentId` and
+  `resolvedModel`, and `<session-id>/subagents/agent-<agentId>.jsonl` names `model` and `effort` on each
+  assistant entry.
 - The launch result does not name the model, so start each worker with a readiness-only assignment. After its
   record passes, send the implementation assignment to the same worker. Use this path only when that
   follow-up keeps the pinned model. When that continuation is unavailable, skip the two-phase path

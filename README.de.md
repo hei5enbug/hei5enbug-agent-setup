@@ -85,15 +85,18 @@ Stattdessen kopiert der Session-Hook `standalone-agents/codex-scout.toml` und `s
 nach `~/.codex/agents/scout.toml` und `~/.codex/agents/worker.toml`, sofern die jeweilige Datei fehlt. Sie
 definieren die Agenten `scout` und `worker` mit denselben Namen wie auf Claude Code, festem Reasoning-Aufwand und
 fester Sandbox. Der Plugin-`worker` ersetzt den eingebauten Codex-`worker`, und `scout` lässt den eingebauten
-`explorer` unverändert. Eine vorhandene Datei wird nie überschrieben, und die Agenten stehen ab der nächsten
-Codex-Session bereit. Weil sich eine installierte Kopie nie ändert, legen die Dateien kein Modell fest; stattdessen
-übergeben die Codex-Anweisungen bei jedem Start das fest vorgegebene Modell. Der Hook entfernt außerdem eine von
-einer früheren Version geschriebene `explorer.toml`, aber nur, solange sie Byte für Byte der damals mitgelieferten
-Datei entspricht; eine von Ihnen bearbeitete Kopie bleibt erhalten.
+`explorer` unverändert. Eine von Ihnen bearbeitete Datei wird nie überschrieben, und die Agenten stehen ab der
+nächsten Codex-Session bereit. Weil sich eine bearbeitete Kopie nie ändert, legen die Dateien kein Modell fest;
+stattdessen übergeben die Codex-Anweisungen bei jedem Start das fest vorgegebene Modell. Der Hook entfernt außerdem
+eine von einer früheren Version geschriebene `explorer.toml` und ersetzt eine so geschriebene `worker.toml`, aber
+nur, solange die Datei Byte für Byte der von dieser Version mitgelieferten Datei entspricht; eine von Ihnen
+bearbeitete Kopie bleibt erhalten. Ist das Plugin deaktiviert, arbeitet die installierte `worker`-Rolle als
+gewöhnlicher Implementierungs-Worker, statt Änderungen zu verweigern.
 
 Ein `PreToolUse`-Hook, `scripts/agent_guard.py`, hält eingebaute Subagenten auf beiden Hosts fern. Auf Claude Code
-lehnt er einen fehlenden Subagenten-Typ und jeden Typ ab, den weder ein Plugin noch eine Benutzer- oder
-Projektdefinition bereitstellt, etwa `general-purpose`, `Explore`, `Plan` und Forks. Auf Codex lehnt er einen
+lehnt er einen fehlenden Subagenten-Typ und jeden eingebauten Typ ab: `general-purpose`, `Explore`, `Plan`,
+`claude`, `claude-code-guide`, `statusline-setup` und Forks. Plugin-Agenten und Definitionen aus Benutzer-, Projekt-,
+CLI- oder verwalteten Quellen passieren. Auf Codex lehnt er einen
 fehlenden Typ, `default`, `explorer` und jeden Typ ohne Rollendatei ab, auch den eingebauten `worker`, solange die
 Plugin-Rolle fehlt. Skills, die einen unabhängigen Nur-Lese-Worker verlangen, nutzen `scout`, und Skills, die
 Testausgaben schreiben, starten einen separaten `claude -p`- oder `codex exec`-Prozess.
@@ -122,6 +125,7 @@ Unter macOS und Linux kombinieren die Hooks `instructions/session/common.md` mit
 Sie laufen beim Sitzungsstart, beim Fortsetzen, nach dem Leeren oder Komprimieren des Kontexts und beim Start eines Subagenten.
 Details unter `instructions/` werden nur vor der passenden Aktion gelesen.
 Erforderlich sind Python 3.12 oder neuer als `python3`, aktivierte Hooks und in Codex eine Vertrauensfreigabe.
+Ein durch ein Update hinzugefügter Hook wird in Codex übersprungen, bis Sie ihn unter `/hooks` freigeben.
 Nach einem Plugin-Update ist eine neue Sitzung nötig.
 Weitere Angaben zu Referenzen, Fehlern und Grenzen stehen im
 [englischen Abschnitt](README.md#automatic-instructions).

@@ -63,6 +63,12 @@ It records a transaction lease, starts the detached worker, and returns a transa
 reporting that ID. The worker waits for the initiating turn to finish before updating plugins or restarting sessions.
 Do not poll or send another prompt to a target session during the transaction. The lifecycle hook normally blocks
 new prompts until the worker releases the lease and sends the completion notice to the resumed initiating session.
+The hook blocks a prompt only while a refresh transaction is active; a session it cannot identify or a registry it
+cannot read never blocks ordinary work outside a transaction.
+
+When the cached marketplaces match every installed plugin and session, `apply` still starts the worker but records no
+lease. That worker only refreshes the marketplaces: it reports `already_current` when nothing changed, or `stale_plan`
+when a newer release appeared, which needs a new plan and approval.
 
 The hook cannot guarantee prompt exclusion if the host times it out or does not run it. The worker checks the planned
 native session's current registry handle, process incarnation, lease, and Orca idle state again immediately before

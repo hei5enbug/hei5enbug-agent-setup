@@ -4,6 +4,5 @@ model_reasoning_effort = "xhigh"
 sandbox_mode = "workspace-write"
 developer_instructions = """
 Execute the implementation task the coordinating main session assigned to you.
-When your session instructions link the implementation execution rules, follow their "Assigned workers" section together with your assignment, and report a missing required assignment field to the coordinator instead of editing.
-When they do not, the plugin rules are inactive: complete the task as written, edit only what it requires, preserve changes made by others, start no other agent, and return the changed paths, check results, and remaining blockers.
+Follow the "Assigned workers" section of the implementation execution rules linked in your session instructions, together with your assignment. If that reference or a required assignment field is missing, report it to the coordinator and make no edit.
 """

@@ -15,7 +15,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HOOKS = json.loads((REPO_ROOT / "hooks/hooks.json").read_text())["hooks"]
 LEGACY_EXPLORER = REPO_ROOT / "tests/fixtures/legacy-codex-explorer.toml"
+LEGACY_WORKER = REPO_ROOT / "tests/fixtures/legacy-codex-worker.toml"
 RETIRED_EXPLORER_DIGESTS = {"bfde4fbbe2740152ad537d576612a34619a57a45adb56072e3f945610ef820af"}
+RETIRED_WORKER_DIGESTS = {"ce4488d0323832dc1563481875e7c26d693092c94865c37a4b4b89afd8274f83"}
 
 
 class SessionContextTest(unittest.TestCase):
@@ -265,6 +267,35 @@ class SessionContextTest(unittest.TestCase):
         explorer.write_bytes(shipped + b"# edited by the user\n")
         self.context(self.run_hook("codex"))
         self.assertEqual(explorer.read_bytes(), shipped + b"# edited by the user\n")
+
+    def test_이전_버전의_worker_역할은_수정하지_않았을_때만_현재_파일로_바꾼다(self):
+        """이전 플러그인 버전이 쓴 worker.toml은 바이트 단위로 같을 때만 현재 번들 파일로 바꾸고, 고친 파일은 그대로 둔다."""
+        # Given
+        shipped = LEGACY_WORKER.read_bytes()
+        self.assertIn(hashlib.sha256(shipped).hexdigest(), RETIRED_WORKER_DIGESTS)
+        bundled = (REPO_ROOT / "standalone-agents/codex-worker.toml").read_bytes()
+        self.assertNotEqual(shipped, bundled)
+        self.worker.parent.mkdir(parents=True)
+        self.worker.write_bytes(shipped)
+
+        # When
+        self.context(self.run_hook("codex"))
+
+        # Then
+        self.assertEqual(self.worker.read_bytes(), bundled)
+
+    def test_사용자가_고친_이전_버전_worker_역할은_남긴다(self):
+        """이전 버전 worker.toml에 사용자가 한 글자라도 더했으면 훅은 그 파일을 바꾸지 않는다."""
+        # Given
+        edited = LEGACY_WORKER.read_bytes() + b"# edited by the user\n"
+        self.worker.parent.mkdir(parents=True)
+        self.worker.write_bytes(edited)
+
+        # When
+        self.context(self.run_hook("codex"))
+
+        # Then
+        self.assertEqual(self.worker.read_bytes(), edited)
 
     def test_claude_session_never_retires_a_codex_agent(self):
         explorer = self.codex_home / "agents" / "explorer.toml"

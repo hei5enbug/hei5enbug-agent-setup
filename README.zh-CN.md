@@ -83,12 +83,14 @@ Codex 只在 `~/.codex/agents/` 和 `.codex/agents/` 中查找子 agent，插件
 因此，会话钩子仅在 `~/.codex/agents/scout.toml` 和 `~/.codex/agents/worker.toml` 各自不存在时，把
 `standalone-agents/codex-scout.toml` 和 `standalone-agents/codex-worker.toml` 复制到该位置。它们定义与 Claude Code
 同名的 `scout` 和 `worker` agent，并固定推理强度和沙箱。插件的 `worker` 取代 Codex 内置的 `worker`，而 `scout`
-不会改动内置的 `explorer`。已有文件绝不会被覆盖，这些 agent 从下一个 Codex 会话起可用。已安装的文件不会更新，
-因此它们不指定模型，而由 Codex 指令在每次启动时传入固定模型。钩子也会删除旧版本写入的 `explorer.toml`，
-但仅在它与当时发布的文件逐字节相同时才删除，因此你修改过的副本会保留。
+不会改动内置的 `explorer`。你修改过的文件绝不会被覆盖，这些 agent 从下一个 Codex 会话起可用。修改过的副本不会更新，
+因此它们不指定模型，而由 Codex 指令在每次启动时传入固定模型。钩子也会删除旧版本写入的 `explorer.toml` 并替换旧版本写入的
+`worker.toml`，但仅在文件与该版本发布的文件逐字节相同时才这样做，因此你修改过的副本会保留。禁用插件后，已安装的
+`worker` 角色不会拒绝编辑，而是作为普通实现 worker 运行。
 
 `PreToolUse` 钩子 `scripts/agent_guard.py` 在两个 host 上阻止内置子 agent。在 Claude Code 上，它拒绝省略类型的调用，
-以及既非插件也非用户或项目定义提供的所有类型，例如 `general-purpose`、`Explore`、`Plan` 和 fork。在 Codex 上，
+以及所有内置类型：`general-purpose`、`Explore`、`Plan`、`claude`、`claude-code-guide`、`statusline-setup` 和 fork。
+插件 agent 以及用户、项目、CLI 或托管设置提供的定义都会通过。在 Codex 上，
 它拒绝省略类型的调用、`default`、`explorer` 以及没有角色文件的所有类型，包括插件角色存在之前的内置 `worker`。
 需要独立只读 worker 的技能使用 `scout`，写入试运行输出的技能则运行单独的 `claude -p` 或 `codex exec` 进程。
 
@@ -116,7 +118,7 @@ claude plugin install hei5enbug-agent-setup@hei5enbug
 钩子在会话启动、恢复、清空、上下文压缩后以及子 agent 启动时执行。
 `instructions/` 中的详细规则只在对应操作之前读取。
 需要可通过 `python3` 执行的 Python 3.12 或更高版本，并启用钩子。
-Codex 还需要用户确认信任钩子。更新插件后请启动新会话。
+Codex 还需要用户确认信任钩子。更新新增的钩子在 `/hooks` 中信任之前会被跳过。更新插件后请启动新会话。
 有关引用、错误和限制，请参阅[英文说明](README.md#automatic-instructions)。
 
 ## 更新插件

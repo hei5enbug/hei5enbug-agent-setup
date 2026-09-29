@@ -148,6 +148,14 @@ def transaction_may_be_active(app_root: Path, transaction_id: str) -> bool:
     return read_transaction_state(app_root, transaction_id) not in TERMINAL_TRANSACTION_STATES
 
 
+def any_transaction_active(app_root: Path) -> bool:
+    try:
+        entries = list((app_root / "transactions").iterdir())
+    except OSError:
+        return False
+    return any(read_transaction_state(app_root, entry.name) in ACTIVE_TRANSACTION_STATES for entry in entries)
+
+
 def _prune_ended(registry: dict[str, object]) -> None:
     sessions = registry.get("sessions")
     if not isinstance(sessions, dict):
@@ -266,6 +274,17 @@ def _emit_payload(payload: dict[str, object]) -> None:
     sys.stdout.write(json.dumps(payload, separators=(",", ":")) + "\n")
 
 
+def _block_while_refreshing(app_root: Path, problem: str) -> None:
+    if not any_transaction_active(app_root):
+        return
+    _emit_payload(
+        {
+            "decision": "block",
+            "reason": f"{problem} while a plugin refresh transaction is active. Wait for its completion notice, then retry.",
+        }
+    )
+
+
 def handle_event(event: object) -> int:
     host_info = _host_and_root()
     if host_info is None:
@@ -280,17 +299,12 @@ def handle_event(event: object) -> int:
     parsed = _event_record(event, host, root)
     if parsed is None:
         if event_name == "UserPromptSubmit":
-            _emit_payload({"decision": "block", "reason": "The Orca session identity could not be verified. Retry after checking the plugin hooks."})
+            _block_while_refreshing(app_root, "The Orca session identity could not be verified")
         if host == "codex" and event_name == "Stop":
             _emit_payload({})
         return 0
     event_name, session_id, incoming = parsed
-    sessions = fresh_registry()["sessions"]
     key = session_key(host, session_id)
-    if not isinstance(sessions, dict):
-        if host == "codex" and event_name == "Stop":
-            _emit_payload({})
-        return 0
 
     try:
         with registry_lock(app_root) as registry:
@@ -304,6 +318,10 @@ def handle_event(event: object) -> int:
                 and event_name in {"Stop", "SessionEnd"}
             ):
                 if host == "codex" and event_name == "Stop":
+                    _emit_payload({})
+                return 0
+            if event_name == "Stop" and isinstance(prior, dict) and prior.get("state") == "ended":
+                if host == "codex":
                     _emit_payload({})
                 return 0
             record = dict(prior) if isinstance(prior, dict) else {}
@@ -326,7 +344,7 @@ def handle_event(event: object) -> int:
             if isinstance(lease, str) and not lease_active:
                 record.pop("refresh_transaction_id", None)
 
-            if event_name != "SessionEnd":
+            if event_name in {"SessionStart", "UserPromptSubmit"}:
                 for other_key, other in stored.items():
                     if other_key == key or not isinstance(other, dict) or other.get("state") == "ended":
                         continue
@@ -357,7 +375,7 @@ def handle_event(event: object) -> int:
     except (OSError, ValueError, TimeoutError, json.JSONDecodeError):
         sys.stderr.write("Plugin refresh session state was not recorded.\n")
         if event_name == "UserPromptSubmit":
-            _emit_payload({"decision": "block", "reason": "The Orca session registry is unavailable. Retry after checking the plugin refresh state."})
+            _block_while_refreshing(app_root, "The Orca session registry is unavailable")
         if event_name == "Stop" and host == "codex":
             _emit_payload({})
         return 0

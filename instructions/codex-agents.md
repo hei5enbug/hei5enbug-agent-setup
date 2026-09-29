@@ -9,8 +9,9 @@ exception to the timing and worker rules below.
 
 - Never use the built-in `default` or `explorer` agents. Always pass `agent_type`, because an omitted type runs
   `default`.
-- The session hook installs the plugin's `scout` and `worker` roles in `~/.codex/agents/` when they are absent
-  and never overwrites them. They become available in the next Codex session.
+- The session hook installs the plugin's `scout` and `worker` roles in `~/.codex/agents/` when they are absent,
+  replaces only an unmodified copy from an earlier plugin version, and never overwrites a file the user changed.
+  They become available in the next Codex session.
 - The plugin's agent guard hook denies an omitted type, `default`, `explorer`, and every type without a role
   file in a Codex agents directory, so it also denies the built-in `worker` until the plugin role exists.
 

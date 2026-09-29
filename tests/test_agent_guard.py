@@ -45,7 +45,7 @@ class AgentGuardTest(unittest.TestCase):
     def test_Claude_내장_에이전트와_종류를_비운_호출은_거부한다(self):
         """정의 파일이 없는 내장 이름과 general-purpose로 실행되는 빈 종류는 모두 거부한다."""
         # Given
-        built_ins = ("general-purpose", "Explore", "Plan", "claude", "claude-code-guide", "statusline-setup", "fork")
+        built_ins = ("general-purpose", "Explore", "explore", "Plan", "claude", "claude-code-guide", "statusline-setup", "fork")
 
         # When
         decisions = {name: self.decide("claude", {"subagent_type": name, "prompt": "x"}) for name in built_ins}
@@ -56,7 +56,7 @@ class AgentGuardTest(unittest.TestCase):
         self.assertEqual("deny", omitted)
 
     def test_Claude_플러그인과_사용자_정의_에이전트는_허용한다(self):
-        """플러그인 이름공간 에이전트와 사용자·프로젝트 정의 에이전트는 막지 않는다."""
+        """플러그인 이름공간 에이전트와 사용자·프로젝트 파일, CLI나 관리 설정처럼 훅이 볼 수 없는 정의도 막지 않는다."""
         # Given
         self.write(self.claude_home / "agents" / "reviewer.md", "---\nname: reviewer\ndescription: r\n---\nbody\n")
         self.write(self.project / ".claude" / "agents" / "nested" / "local.md", "---\nname: 'local-helper'\n---\n")
@@ -67,10 +67,11 @@ class AgentGuardTest(unittest.TestCase):
             self.decide("claude", {"subagent_type": "tradlinx-agent-setup:pr-review-gate-reader"}),
             self.decide("claude", {"subagent_type": "reviewer"}),
             self.decide("claude", {"subagent_type": "local-helper"}),
+            self.decide("claude", {"subagent_type": "cli-defined-reviewer"}),
         ]
 
         # Then
-        self.assertEqual([None, None, None, None], allowed)
+        self.assertEqual([None] * 5, allowed)
 
     def test_Codex_내장_에이전트와_종류를_비운_호출은_거부한다(self):
         """default로 실행되는 빈 종류, default, explorer, 역할 파일이 없는 worker는 거부한다."""
@@ -86,17 +87,18 @@ class AgentGuardTest(unittest.TestCase):
         self.assertEqual(["deny"] * 5, decisions)
 
     def test_Codex_설치된_역할_파일이_있는_에이전트는_허용한다(self):
-        """훅이 설치한 scout와 worker, 파일 이름과 다른 name을 가진 사용자 역할은 허용한다."""
+        """훅이 설치한 scout와 worker, 파일 이름과 다른 name이나 작은따옴표 name을 가진 사용자 역할은 허용한다."""
         # Given
         self.write(self.codex_home / "agents" / "scout.toml", (REPO_ROOT / "standalone-agents/codex-scout.toml").read_text())
         self.write(self.codex_home / "agents" / "worker.toml", (REPO_ROOT / "standalone-agents/codex-worker.toml").read_text())
         self.write(self.project / ".codex" / "agents" / "pr-code-reviewer.toml", 'name = "pr_code_reviewer"\n')
+        self.write(self.project / ".codex" / "agents" / "reviewer.toml", "name = 'reviewer'\ndescription = 'r'\n")
 
         # When
-        decisions = [self.decide("codex", {"agent_type": name}) for name in ("scout", "worker", "pr_code_reviewer")]
+        decisions = [self.decide("codex", {"agent_type": name}) for name in ("scout", "worker", "pr_code_reviewer", "reviewer")]
 
         # Then
-        self.assertEqual([None, None, None], decisions)
+        self.assertEqual([None] * 4, decisions)
 
     def test_Agent_호출이_아니거나_입력을_해석할_수_없으면_막지_않는다(self):
         """다른 이벤트나 tool_input이 없는 입력은 판단하지 않고 그대로 통과시킨다."""

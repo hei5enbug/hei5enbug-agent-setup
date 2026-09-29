@@ -24,7 +24,6 @@ PINS = {
     "claude-haiku": "claude-haiku-4-5",
     "gpt-luna": "gpt-6-luna",
     "gpt-sol": "gpt-6-sol",
-    "gpt-terra": "gpt-5.6-terra",
 }
 
 MODEL_ID = re.compile(

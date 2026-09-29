@@ -234,7 +234,7 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         for name in ("`general-purpose`", "`Explore`", "`Plan`", "`claude`", "`claude-code-guide`", "`statusline-setup`", "a fork"):
             self.assertIn(name, built_in)
         self.assertIn("Always name the subagent type, because an omitted type runs `general-purpose`.", built_in)
-        self.assertIn("The plugin's agent guard hook denies every subagent type", built_in)
+        self.assertIn("The plugin's agent guard hook denies an omitted type and every built-in type", built_in)
 
     def test_스킬_작업자는_scout나_별도_CLI_프로세스를_쓴다(self):
         """스킬이 요구하는 읽기 전용 작업자는 scout, 시험 출력을 쓰는 작업자는 별도 claude -p 프로세스로 실행한다."""

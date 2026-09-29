@@ -85,15 +85,17 @@ Codex discovers subagents only in `~/.codex/agents/` and `.codex/agents/`, so a 
 Instead, the session hook copies `standalone-agents/codex-scout.toml` and `standalone-agents/codex-worker.toml` to
 `~/.codex/agents/scout.toml` and `~/.codex/agents/worker.toml` when each file is absent. They define `scout` and
 `worker` agents, named as on Claude Code, with a fixed reasoning effort and sandbox. The plugin `worker` replaces the
-built-in Codex `worker`, and `scout` leaves the built-in `explorer` untouched. An existing file is never
-overwritten, and the agents become available in the next Codex session. Because an installed copy never changes,
+built-in Codex `worker`, and `scout` leaves the built-in `explorer` untouched. A file you edited is never
+overwritten, and the agents become available in the next Codex session. Because an edited copy never changes,
 the files set no model; the Codex instructions pass the pinned model on every spawn instead. The hook also
-removes an `explorer.toml` that an earlier version wrote, but only while it is byte-identical to that bundled file,
-so a copy you edited stays.
+removes an `explorer.toml` and replaces a `worker.toml` that an earlier version wrote, but only while the file is
+byte-identical to that version's bundled file, so a copy you edited stays. When the plugin is disabled, the installed
+`worker` role runs as an ordinary implementation worker instead of refusing to edit.
 
 A `PreToolUse` hook, `scripts/agent_guard.py`, keeps built-in subagents out on both hosts. On Claude Code it
-denies an omitted subagent type and every type that neither a plugin nor a user or project definition provides,
-such as `general-purpose`, `Explore`, `Plan`, and forks. On Codex it denies an omitted type, `default`, `explorer`,
+denies an omitted subagent type and every built-in type: `general-purpose`, `Explore`, `Plan`, `claude`,
+`claude-code-guide`, `statusline-setup`, and forks. Plugin agents and definitions from any user, project, CLI, or
+managed source pass. On Codex it denies an omitted type, `default`, `explorer`,
 and every type without a role file, including the built-in `worker` before the plugin role exists. Skills that ask
 for an independent read-only worker use `scout`, and skills that write trial outputs run a separate `claude -p` or
 `codex exec` process.
@@ -149,7 +151,8 @@ plugin. It does not read conditional reference bodies at startup.
 Codex requires review and trust of the current plugin hook definition before running it.
 Disabled hooks or enterprise policies that prohibit plugin hooks prevent automatic loading.
 After installation or update, use the host's hook controls to check that these hooks are enabled and,
-in Codex, trusted. Restart Claude Code or start a new Codex session after updating.
+in Codex, trusted. A hook that an update adds, such as the agent guard, stays skipped in Codex until you trust it
+in `/hooks`. Restart Claude Code or start a new Codex session after updating.
 The hook does not bypass host trust settings or change an already running session to a new plugin version.
 The `orca-plugin-refresh-resume` skill uses the registry after a one-time session bootstrap to update this plugin and
 resume registered idle sessions.
@@ -229,7 +232,11 @@ stop the operation before it changes installed plugins. Claude Code background t
 a refresh. The worker
 rechecks terminal identity and idle state immediately before exit, but host hook timeouts prevent an absolute
 guarantee that no new prompt can arrive. A failed or unconfirmed completion notice requires receipt inspection;
-never blindly resend it or resume a session while its replacement terminal may still be running.
+never blindly resend it or resume a session while its replacement terminal may still be running. The lifecycle hook
+blocks a prompt only while a refresh transaction is active; a session it cannot identify or a registry it cannot
+read never blocks ordinary work outside a transaction. When the cached marketplaces show no change, `apply` still
+starts a worker without leases; it refreshes the marketplaces and reports `already_current`, or `stale_plan` when a
+newer release appeared, which needs a new plan.
 
 Codex differs in three ways. It registers a session only when a prompt starts, so a Codex session that never
 received a prompt blocks the plan until it receives one or is closed. After `/exit`, the worker waits until Codex

@@ -85,15 +85,17 @@ En su lugar, el hook de sesión copia `standalone-agents/codex-scout.toml` y `st
 `~/.codex/agents/scout.toml` y `~/.codex/agents/worker.toml` cuando cada archivo no existe. Definen los agentes
 `scout` y `worker`, con los mismos nombres que en Claude Code, un esfuerzo de razonamiento fijo y un sandbox fijo.
 El `worker` del plugin sustituye al `worker` integrado de Codex, y `scout` no modifica el `explorer` integrado. Un
-archivo existente nunca se sobrescribe, y los agentes quedan disponibles en la siguiente sesión de Codex. Como una
-copia instalada nunca cambia, los archivos no indican ningún modelo; en su lugar, las instrucciones de Codex pasan el
-modelo fijado en cada creación. El hook también elimina un `explorer.toml` escrito
-por una versión anterior, pero solo mientras sea idéntico byte a byte al archivo que se distribuyó entonces; una
-copia que usted haya editado se conserva.
+archivo que usted haya editado nunca se sobrescribe, y los agentes quedan disponibles en la siguiente sesión de Codex.
+Como una copia editada nunca cambia, los archivos no indican ningún modelo; en su lugar, las instrucciones de Codex
+pasan el modelo fijado en cada creación. El hook también elimina un `explorer.toml` y sustituye un `worker.toml`
+escritos por una versión anterior, pero solo mientras el archivo sea idéntico byte a byte al que distribuyó esa
+versión; una copia que usted haya editado se conserva. Con el plugin desactivado, el rol `worker` instalado actúa
+como un worker de implementación normal en lugar de negarse a editar.
 
 Un hook `PreToolUse`, `scripts/agent_guard.py`, mantiene fuera los subagentes integrados en ambos hosts. En Claude
-Code rechaza un tipo de subagente omitido y todo tipo que no proporcione un plugin ni una definición de usuario o de
-proyecto, como `general-purpose`, `Explore`, `Plan` y las bifurcaciones. En Codex rechaza un tipo omitido,
+Code rechaza un tipo de subagente omitido y todo tipo integrado: `general-purpose`, `Explore`, `Plan`, `claude`,
+`claude-code-guide`, `statusline-setup` y las bifurcaciones. Los agentes de plugin y las definiciones de cualquier
+origen de usuario, proyecto, CLI o gestionado pasan. En Codex rechaza un tipo omitido,
 `default`, `explorer` y todo tipo sin archivo de rol, incluido el `worker` integrado mientras falte el rol del
 plugin. Los skills que piden un worker independiente de solo lectura usan `scout`, y los que escriben salidas de
 prueba ejecutan un proceso `claude -p` o `codex exec` aparte.
@@ -122,6 +124,7 @@ En macOS y Linux, los hooks combinan `instructions/session/common.md` con `codex
 Se ejecutan al iniciar o reanudar una sesión, al limpiar o compactar el contexto y al iniciar un subagente.
 Los detalles de `instructions/` se leen solo antes de la acción correspondiente.
 Se requiere Python 3.12 o superior como `python3`, hooks habilitados y aprobación de confianza en Codex.
+Un hook que añade una actualización queda omitido en Codex hasta que lo apruebes en `/hooks`.
 Tras actualizar el plugin, inicia una sesión nueva.
 Consulta las referencias, los errores y los límites en la
 [sección en inglés](README.md#automatic-instructions).
