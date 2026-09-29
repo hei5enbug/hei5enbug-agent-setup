@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -54,26 +55,42 @@ def render_context(root: Path, host: str) -> str:
     return context
 
 
-def provision_codex_explorer(root: Path) -> None:
-    """Create the bundled `explorer` agent when Codex has none.
+CODEX_AGENTS = {"scout": "codex-scout.toml", "worker": "codex-worker.toml"}
+RETIRED_CODEX_AGENTS = {"explorer": {"bfde4fbbe2740152ad537d576612a34619a57a45adb56072e3f945610ef820af"}}
 
-    Never overwrite an existing file: once the user owns `explorer.toml`, their
-    copy wins and this function does nothing.
+
+def retire_codex_agents(agents: Path) -> None:
+    """Remove an agent file an earlier version wrote, only while it is byte-identical to that bundled file."""
+    for name, digests in RETIRED_CODEX_AGENTS.items():
+        target = agents / f"{name}.toml"
+        try:
+            if hashlib.sha256(target.read_bytes()).hexdigest() in digests:
+                target.unlink()
+        except OSError:
+            pass
+
+
+def provision_codex_agents(root: Path) -> None:
+    """Create each bundled Codex agent that Codex does not have yet.
+
+    Never overwrite an existing file: once the user owns an agent file, their
+    copy wins and this function leaves it alone.
     """
-    source = root / "standalone-agents" / "codex-explorer.toml"
-    if not source.is_file():
-        return
     home = os.environ.get("CODEX_HOME")
-    target = (Path(home) if home else Path.home() / ".codex") / "agents" / "explorer.toml"
-    if target.exists():
-        return
-    target.parent.mkdir(parents=True, exist_ok=True)
-    content = source.read_text(encoding="utf-8")
-    try:
-        with target.open("x", encoding="utf-8") as stream:
-            stream.write(content)
-    except FileExistsError:
-        pass
+    agents = (Path(home) if home else Path.home() / ".codex") / "agents"
+    retire_codex_agents(agents)
+    for name, bundled in CODEX_AGENTS.items():
+        source = root / "standalone-agents" / bundled
+        target = agents / f"{name}.toml"
+        if not source.is_file() or target.exists():
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        content = source.read_text(encoding="utf-8")
+        try:
+            with target.open("x", encoding="utf-8") as stream:
+                stream.write(content)
+        except FileExistsError:
+            pass
 
 
 def main() -> int:
@@ -88,7 +105,7 @@ def main() -> int:
         context = render_context(root, host)
         if host == "codex":
             try:
-                provision_codex_explorer(root)
+                provision_codex_agents(root)
             except OSError:
                 pass
     except (OSError, ValueError, KeyError, TypeError) as error:

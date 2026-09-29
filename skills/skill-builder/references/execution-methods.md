@@ -49,14 +49,14 @@ worker, including implementation. Evaluation participants always use the table b
 
 | Executing host | Required model | Required effort | Boundary |
 |---|---|---|---|
-| Codex | `gpt-5.6-luna` | `xhigh` | Never launch Sonnet from Codex. |
-| Claude Code | Sonnet 5 | `high` | Never launch `gpt-5.6-luna` from Claude Code. |
+| Codex | `gpt-6-luna` | `xhigh` | Never launch `claude-sonnet-5-5` from Codex. |
+| Claude Code | `claude-sonnet-5-5` | `high` | Never launch `gpt-6-luna` from Claude Code. |
 | Other hosts | Available lightweight model | Highest supported suitable effort | Record the actual configuration. |
 
 Use the same model and settings on both sides when both methods include a model.
 For a tool-only method, record that no model performs the operation; include any model orchestration cost.
 Discover the host's model selector and effort controls; do not invent model IDs or CLI flags.
-For an alias such as Sonnet 5, record the resolved model ID and verify that it matches the required version.
+Pass the full model ID, never an alias, and verify that the recorded model matches it.
 Record the actual model and effort for every launched worker and model runner.
 If either required setting is unavailable, do not substitute another model or lower the effort.
 Mark the dependent run unverified and continue only work that does not require that worker or runner.

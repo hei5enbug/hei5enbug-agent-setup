@@ -46,8 +46,8 @@ def implementation_section() -> str:
 
 
 class ClaudeWorkerDefinitionTest(unittest.TestCase):
-    def test_worker_메타데이터는_sonnet_xhigh와_Agent_금지를_정한다(self):
-        """worker 정의는 이름, sonnet, xhigh, Agent 금지를 선언하고 우회나 자동 격리 필드를 두지 않는다."""
+    def test_worker_메타데이터는_고정_Sonnet_ID_high와_Agent_금지를_정한다(self):
+        """worker 정의는 이름, 고정된 Sonnet 전체 ID, high, Agent 금지를 선언하고 우회나 자동 격리 필드를 두지 않는다."""
         # Given
         path = WORKER
 
@@ -56,8 +56,8 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
 
         # Then
         self.assertEqual(metadata["name"], "worker")
-        self.assertEqual(metadata["model"], "sonnet")
-        self.assertEqual(metadata["effort"], "xhigh")
+        self.assertEqual(metadata["model"], "claude-sonnet-5-5")
+        self.assertEqual(metadata["effort"], "high")
         self.assertIn("Agent", [tool.strip() for tool in str(metadata["disallowedTools"]).split(",")])
         self.assertEqual(UNSUPPORTED_FIELDS & set(metadata), set())
 
@@ -89,35 +89,34 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         self.assertNotIn("min(6", normalized)
         self.assertIsNone(re.search(r"claude-sonnet-\d", body))
 
-    def test_플러그인이_worker와_한국어_미러를_기존_규칙대로_배포한다(self):
-        """Claude 플러그인은 agents 폴더에서 worker를 찾고 한국어 미러는 agents/ko에 둔다."""
+    def test_플러그인은_영어_정의만_에이전트로_등록하고_한국어_미러는_제외한다(self):
+        """기본 agents 스캔은 하위 폴더까지 등록하므로 매니페스트가 영어 정의 파일만 나열해 agents/ko 미러를 뺀다."""
         # Given
         manifest = json.loads(PLUGIN_MANIFEST.read_text(encoding="utf-8"))
 
         # When
-        agent_dirs = manifest.get("agents", "./agents/")
-        discovered = sorted(path.name for path in (REPO_ROOT / "agents").glob("*.md"))
+        listed = manifest.get("agents")
+        definitions = sorted(f"./agents/{path.name}" for path in (REPO_ROOT / "agents").glob("*.md"))
 
         # Then
-        self.assertIn(agent_dirs, ("./agents", "./agents/"))
-        self.assertEqual(discovered, ["scout.md", "worker.md"])
+        self.assertEqual(listed, ["./agents/scout.md", "./agents/worker.md"])
+        self.assertEqual(listed, definitions)
+        self.assertFalse(any("/ko/" in path for path in listed))
         mirror = WORKER_MIRROR.read_text(encoding="utf-8")
         self.assertIn("영어 원본: [worker.md](../worker.md)", mirror)
         self.assertIn("비권위", mirror)
 
 
 class ClaudeWorkerAdapterTest(unittest.TestCase):
-    def test_구현은_플러그인_worker와_호출별_sonnet_별칭을_사용한다(self):
-        """Claude 구현은 플러그인 worker만 쓰고 호출과 재개마다 sonnet 별칭을 넘기며 전체 ID는 공식 문서로 확정한다."""
+    def test_구현은_플러그인_worker와_정의에_고정된_모델을_사용한다(self):
+        """Claude 구현은 플러그인 worker만 쓰고 정의보다 우선하는 호출 단위 모델을 넘기지 않는다."""
         # Given
         expected = (
             "[implementation execution rules](implementation-execution.md)",
             "Use only `hei5enbug-agent-setup:worker` for implementation.",
-            "Pass the `sonnet` alias as the per-invocation model on every invocation and resume.",
+            "Its definition pins `claude-sonnet-5-5` and `high`.",
+            "Never pass a per-invocation model on an invocation or resume, because that overrides the definition.",
             "Never switch to another agent.",
-            "The required family is the latest production Claude Sonnet.",
-            "Resolve its full ID from the Sonnet mapping",
-            "https://code.claude.com/docs/en/model-config",
         )
 
         # When
@@ -126,7 +125,8 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         # Then
         for phrase in expected:
             self.assertIn(phrase, section)
-        self.assertIsNone(re.search(r"claude-sonnet-\d", section))
+        self.assertNotIn("alias", section)
+        self.assertNotIn("model-config", section)
 
     def test_실제_모델과_사고_강도를_낮출_수_있는_설정을_확인한다(self):
         """강제 모델, 사고 강도 재정의, 상한, 대체 경고를 확인하고 부족한 근거를 거부한다."""
@@ -134,7 +134,6 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         inputs = (
             "`CLAUDE_CODE_SUBAGENT_MODEL`",
             "`CLAUDE_CODE_SUBAGENT_MODEL_FORCE`",
-            "`ANTHROPIC_DEFAULT_SONNET_MODEL`",
             "`CLAUDE_CODE_EFFORT_LEVEL`",
             "`maxEffortLevel`",
             "substitution or fallback warning",
@@ -147,9 +146,9 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         for name in inputs:
             self.assertIn(name, section)
         self.assertIn("Never change user settings.", section)
-        self.assertIn("names the resolved full ID as the actual model and `xhigh` as the effort", section)
+        self.assertIn("names `claude-sonnet-5-5` as the actual model and `high` as the effort", section)
         self.assertIn(
-            "A different recorded model, a cap below `xhigh`, a contradictory override, or unknown effective "
+            "A different recorded model, a cap below `high`, a contradictory override, or unknown effective "
             "precedence is insufficient.",
             section,
         )
@@ -158,7 +157,7 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         """시작 결과에 모델이 없으므로 준비 확인 뒤 같은 worker에 구현을 보내고, 이어 보내기가 없으면 수정하지 않는다."""
         # Given
         readiness = "The launch result does not name the model, so start each worker with a readiness-only assignment."
-        supported = "Use this path only when that follow-up keeps the per-invocation model."
+        supported = "Use this path only when that follow-up keeps the pinned model."
         unsupported = "When that continuation is unavailable, skip the two-phase path and make no edits."
 
         # When
@@ -200,7 +199,7 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         # Given
         expected = (
             "in the environment and every settings file",
-            "Claude Code can reload settings during a session, and a forced subagent model overrides the per-invocation model.",
+            "Claude Code can reload settings during a session, and a forced subagent model overrides the definition.",
             "Recheck these inputs before every follow-up that carries implementation work.",
         )
 
@@ -212,16 +211,43 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
             self.assertIn(phrase, section)
 
     def test_scout_조사_규칙은_그대로_남는다(self):
-        """구현 규칙을 바꿔도 계획 중 scout 조사 규칙과 범용 에이전트 금지는 유지된다."""
+        """구현 규칙을 바꿔도 계획 중 scout 조사 규칙과 호출 단위 모델 금지는 유지된다."""
         # Given
         text = CLAUDE_AGENTS.read_text(encoding="utf-8")
 
         # When
-        investigation = " ".join(text.split("## Investigation", 1)[1].split("## Implementation", 1)[0].split())
+        investigation = " ".join(text.split("## Investigation", 1)[1].split("## Skill workers", 1)[0].split())
 
         # Then
         self.assertIn("Use `hei5enbug-agent-setup:scout` for investigation, only while planning", investigation)
-        self.assertIn("catch-all `general-purpose` and `claude` subagents", investigation)
+        self.assertIn("Never pass a per-invocation model, because that overrides the definition.", investigation)
+
+    def test_내장_서브에이전트는_모두_금지하고_차단_훅을_가리킨다(self):
+        """내장 서브에이전트 이름과 fork를 모두 금지하고, 종류를 비우는 호출도 막는다."""
+        # Given
+        text = CLAUDE_AGENTS.read_text(encoding="utf-8")
+
+        # When
+        built_in = " ".join(text.split("## Built-in subagents", 1)[1].split("## Investigation", 1)[0].split())
+
+        # Then
+        for name in ("`general-purpose`", "`Explore`", "`Plan`", "`claude`", "`claude-code-guide`", "`statusline-setup`", "a fork"):
+            self.assertIn(name, built_in)
+        self.assertIn("Always name the subagent type, because an omitted type runs `general-purpose`.", built_in)
+        self.assertIn("The plugin's agent guard hook denies every subagent type", built_in)
+
+    def test_스킬_작업자는_scout나_별도_CLI_프로세스를_쓴다(self):
+        """스킬이 요구하는 읽기 전용 작업자는 scout, 시험 출력을 쓰는 작업자는 별도 claude -p 프로세스로 실행한다."""
+        # Given
+        text = CLAUDE_AGENTS.read_text(encoding="utf-8")
+
+        # When
+        skill_workers = " ".join(text.split("## Skill workers", 1)[1].split("## Implementation", 1)[0].split())
+
+        # Then
+        self.assertIn("use `hei5enbug-agent-setup:scout` and give it the role's instructions and output contract", skill_workers)
+        self.assertIn("The main conversation writes any file the role produces.", skill_workers)
+        self.assertIn("run a separate `claude -p` process with the model and effort that the skill pins", skill_workers)
 
 
 if __name__ == "__main__":

@@ -42,15 +42,21 @@ hei5enbug-agent-setup/
 │       ├── claude-code.md
 │       ├── codex.md
 │       └── common.md
-├── scripts/session_context.py
+├── scripts/
+│   ├── agent_guard.py
+│   └── session_context.py
 ├── tests/
 ├── LICENSE
 ├── pyproject.toml
 ├── agents/
-│   ├── ko/scout.ko.md
-│   └── scout.md
+│   ├── ko/
+│   │   ├── scout.ko.md
+│   │   └── worker.ko.md
+│   ├── scout.md
+│   └── worker.md
 ├── standalone-agents/
-│   └── codex-explorer.toml
+│   ├── codex-scout.toml
+│   └── codex-worker.toml
 ├── standalone-skills/
 │   └── omo-model-config/
 └── skills/
@@ -69,14 +75,22 @@ hei5enbug-agent-setup/
 插件清单为 Codex 和 Claude Code 打包同一个 `skills/` 目录，不会把 skill 复制到 host 专用目录。
 `standalone-skills/` 目录不在任何一个插件的 skill 发现路径中。
 
-`agents/` 目录随 Claude Code 插件一起发布，因此安装插件包会添加 `hei5enbug-agent-setup:scout` 子 agent，
-无需手动复制。
+`agents/` 目录随 Claude Code 插件一起发布，因此安装插件包会添加 `hei5enbug-agent-setup:scout` 和
+`hei5enbug-agent-setup:worker` 子 agent，无需手动复制。清单只列出这两个英文定义，因此 `agents/ko/` 中的韩文译本
+不会注册为子 agent。
 
 Codex 只在 `~/.codex/agents/` 和 `.codex/agents/` 中查找子 agent，插件无法注册。
-因此，会话钩子仅在 `~/.codex/agents/explorer.toml` 不存在时，把 `standalone-agents/codex-explorer.toml`
-写入该位置。它会覆盖 Codex 内置的 `explorer`，固定其推理强度和只读沙箱。已有的 `explorer.toml` 绝不会被覆盖，
-该 agent 从下一个 Codex 会话起可用。它不指定模型，因此沿用 host 的默认模型，
-这与 Claude Code 上固定单一模型的 `scout` 不同。
+因此，会话钩子仅在 `~/.codex/agents/scout.toml` 和 `~/.codex/agents/worker.toml` 各自不存在时，把
+`standalone-agents/codex-scout.toml` 和 `standalone-agents/codex-worker.toml` 复制到该位置。它们定义与 Claude Code
+同名的 `scout` 和 `worker` agent，并固定推理强度和沙箱。插件的 `worker` 取代 Codex 内置的 `worker`，而 `scout`
+不会改动内置的 `explorer`。已有文件绝不会被覆盖，这些 agent 从下一个 Codex 会话起可用。已安装的文件不会更新，
+因此它们不指定模型，而由 Codex 指令在每次启动时传入固定模型。钩子也会删除旧版本写入的 `explorer.toml`，
+但仅在它与当时发布的文件逐字节相同时才删除，因此你修改过的副本会保留。
+
+`PreToolUse` 钩子 `scripts/agent_guard.py` 在两个 host 上阻止内置子 agent。在 Claude Code 上，它拒绝省略类型的调用，
+以及既非插件也非用户或项目定义提供的所有类型，例如 `general-purpose`、`Explore`、`Plan` 和 fork。在 Codex 上，
+它拒绝省略类型的调用、`default`、`explorer` 以及没有角色文件的所有类型，包括插件角色存在之前的内置 `worker`。
+需要独立只读 worker 的技能使用 `scout`，写入试运行输出的技能则运行单独的 `claude -p` 或 `codex exec` 进程。
 
 ## 安装插件
 

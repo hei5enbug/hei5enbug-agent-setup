@@ -18,9 +18,9 @@ from pathlib import Path
 from typing import Iterator
 
 
-CODEX_MODEL = "gpt-5.6-sol"
-CLAUDE_MODEL = "claude-fable-5"
-CLAUDE_FALLBACK = "claude-opus-4-8"
+CODEX_MODEL = "gpt-6-sol"
+CLAUDE_MODEL = "claude-fable-5-1"
+CLAUDE_FALLBACK = "claude-opus-5-5"
 DEFAULT_EFFORT = "xhigh"
 FAST_EFFORT = "high"
 DEEP_EFFORT = DEFAULT_EFFORT

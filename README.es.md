@@ -42,15 +42,21 @@ hei5enbug-agent-setup/
 │       ├── claude-code.md
 │       ├── codex.md
 │       └── common.md
-├── scripts/session_context.py
+├── scripts/
+│   ├── agent_guard.py
+│   └── session_context.py
 ├── tests/
 ├── LICENSE
 ├── pyproject.toml
 ├── agents/
-│   ├── ko/scout.ko.md
-│   └── scout.md
+│   ├── ko/
+│   │   ├── scout.ko.md
+│   │   └── worker.ko.md
+│   ├── scout.md
+│   └── worker.md
 ├── standalone-agents/
-│   └── codex-explorer.toml
+│   ├── codex-scout.toml
+│   └── codex-worker.toml
 ├── standalone-skills/
 │   └── omo-model-config/
 └── skills/
@@ -69,15 +75,28 @@ Cada carpeta de skill del plugin contiene su propio `SKILL.md` junto con las ref
 Los manifiestos del plugin empaquetan el mismo directorio `skills/` para Codex y Claude Code sin copiar skills a directorios específicos de cada host.
 El directorio `standalone-skills/` no forma parte de la ruta de descubrimiento de skills de ningún plugin.
 
-El directorio `agents/` se distribuye con el plugin de Claude Code, así que instalar el paquete añade el
-subagente `hei5enbug-agent-setup:scout`. No hace falta copiar nada a mano.
+El directorio `agents/` se distribuye con el plugin de Claude Code, así que instalar el paquete añade los
+subagentes `hei5enbug-agent-setup:scout` y `hei5enbug-agent-setup:worker`. No hace falta copiar nada a mano. El
+manifiesto solo enumera estas dos definiciones en inglés, así que las traducciones al coreano de `agents/ko/` no se
+registran como subagentes.
 
 Codex solo busca subagentes en `~/.codex/agents/` y `.codex/agents/`, por lo que un plugin no puede registrar uno.
-En su lugar, el hook de sesión escribe `standalone-agents/codex-explorer.toml` en `~/.codex/agents/explorer.toml`
-cuando ese archivo no existe; sustituye al `explorer` integrado de Codex para fijar su esfuerzo de razonamiento y su
-sandbox de solo lectura. Un `explorer.toml` existente nunca se sobrescribe, y el agente queda disponible en la
-siguiente sesión de Codex. No indica ningún modelo, así que hereda el predeterminado del host, a diferencia de
-`scout`, que fija uno en Claude Code.
+En su lugar, el hook de sesión copia `standalone-agents/codex-scout.toml` y `standalone-agents/codex-worker.toml` en
+`~/.codex/agents/scout.toml` y `~/.codex/agents/worker.toml` cuando cada archivo no existe. Definen los agentes
+`scout` y `worker`, con los mismos nombres que en Claude Code, un esfuerzo de razonamiento fijo y un sandbox fijo.
+El `worker` del plugin sustituye al `worker` integrado de Codex, y `scout` no modifica el `explorer` integrado. Un
+archivo existente nunca se sobrescribe, y los agentes quedan disponibles en la siguiente sesión de Codex. Como una
+copia instalada nunca cambia, los archivos no indican ningún modelo; en su lugar, las instrucciones de Codex pasan el
+modelo fijado en cada creación. El hook también elimina un `explorer.toml` escrito
+por una versión anterior, pero solo mientras sea idéntico byte a byte al archivo que se distribuyó entonces; una
+copia que usted haya editado se conserva.
+
+Un hook `PreToolUse`, `scripts/agent_guard.py`, mantiene fuera los subagentes integrados en ambos hosts. En Claude
+Code rechaza un tipo de subagente omitido y todo tipo que no proporcione un plugin ni una definición de usuario o de
+proyecto, como `general-purpose`, `Explore`, `Plan` y las bifurcaciones. En Codex rechaza un tipo omitido,
+`default`, `explorer` y todo tipo sin archivo de rol, incluido el `worker` integrado mientras falte el rol del
+plugin. Los skills que piden un worker independiente de solo lectura usan `scout`, y los que escriben salidas de
+prueba ejecutan un proceso `claude -p` o `codex exec` aparte.
 
 ## Instalación del plugin
 

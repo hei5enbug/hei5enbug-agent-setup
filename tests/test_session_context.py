@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -13,6 +14,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HOOKS = json.loads((REPO_ROOT / "hooks/hooks.json").read_text())["hooks"]
+LEGACY_EXPLORER = REPO_ROOT / "tests/fixtures/legacy-codex-explorer.toml"
+RETIRED_EXPLORER_DIGESTS = {"bfde4fbbe2740152ad537d576612a34619a57a45adb56072e3f945610ef820af"}
 
 
 class SessionContextTest(unittest.TestCase):
@@ -35,7 +38,8 @@ class SessionContextTest(unittest.TestCase):
         self.bin.mkdir()
         (self.bin / "python3").symlink_to(sys.executable)
         self.codex_home = self.base / "codex home"
-        self.explorer = self.codex_home / "agents" / "explorer.toml"
+        self.scout = self.codex_home / "agents" / "scout.toml"
+        self.worker = self.codex_home / "agents" / "worker.toml"
         shutil.copytree(REPO_ROOT / "standalone-agents", self.root / "standalone-agents")
 
     def run_hook(self, host="codex", event="SessionStart", source="startup", payload=None, extra_env=None):
@@ -229,23 +233,50 @@ class SessionContextTest(unittest.TestCase):
         self.context(self.run_hook("claude"))
         self.assertEqual(before, snapshot())
 
-    def test_codex_session_provisions_the_bundled_explorer_agent(self):
-        self.assertFalse(self.explorer.exists())
+    def test_codex_session_provisions_the_bundled_scout_and_worker_agents(self):
+        self.assertFalse(self.scout.exists())
+        self.assertFalse(self.worker.exists())
         self.context(self.run_hook("codex"))
+        for target, bundled in ((self.scout, "codex-scout.toml"), (self.worker, "codex-worker.toml")):
+            self.assertEqual(
+                target.read_text(encoding="utf-8"),
+                (REPO_ROOT / "standalone-agents" / bundled).read_text(encoding="utf-8"),
+            )
+
+    def test_provisioning_never_overwrites_an_existing_agent(self):
+        self.scout.parent.mkdir(parents=True)
+        self.worker.write_text('name = "worker"\n', encoding="utf-8")
+        self.context(self.run_hook("codex"))
+        self.assertEqual(self.worker.read_text(encoding="utf-8"), 'name = "worker"\n')
         self.assertEqual(
-            self.explorer.read_text(encoding="utf-8"),
-            (REPO_ROOT / "standalone-agents/codex-explorer.toml").read_text(encoding="utf-8"),
+            self.scout.read_text(encoding="utf-8"),
+            (REPO_ROOT / "standalone-agents/codex-scout.toml").read_text(encoding="utf-8"),
         )
 
-    def test_provisioning_never_overwrites_an_existing_explorer_agent(self):
-        self.explorer.parent.mkdir(parents=True)
-        self.explorer.write_text('name = "explorer"\n', encoding="utf-8")
+    def test_codex_session_retires_only_an_unmodified_explorer_from_an_earlier_version(self):
+        shipped = LEGACY_EXPLORER.read_bytes()
+        self.assertIn(hashlib.sha256(shipped).hexdigest(), RETIRED_EXPLORER_DIGESTS)
+        explorer = self.codex_home / "agents" / "explorer.toml"
+        explorer.parent.mkdir(parents=True)
+        explorer.write_bytes(shipped)
         self.context(self.run_hook("codex"))
-        self.assertEqual(self.explorer.read_text(encoding="utf-8"), 'name = "explorer"\n')
+        self.assertFalse(explorer.exists())
+
+        explorer.write_bytes(shipped + b"# edited by the user\n")
+        self.context(self.run_hook("codex"))
+        self.assertEqual(explorer.read_bytes(), shipped + b"# edited by the user\n")
+
+    def test_claude_session_never_retires_a_codex_agent(self):
+        explorer = self.codex_home / "agents" / "explorer.toml"
+        explorer.parent.mkdir(parents=True)
+        explorer.write_bytes(LEGACY_EXPLORER.read_bytes())
+        self.context(self.run_hook("claude"))
+        self.assertTrue(explorer.exists())
 
     def test_claude_session_never_provisions_a_codex_agent(self):
         self.context(self.run_hook("claude"))
-        self.assertFalse(self.explorer.exists())
+        self.assertFalse(self.scout.exists())
+        self.assertFalse(self.worker.exists())
 
     def test_unwritable_codex_home_still_delivers_context(self):
         self.codex_home.write_text("not a directory", encoding="utf-8")

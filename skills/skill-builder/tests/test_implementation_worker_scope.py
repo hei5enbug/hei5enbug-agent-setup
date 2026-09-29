@@ -92,8 +92,8 @@ class ImplementationWorkerScopeTest(unittest.TestCase):
         rows = table_rows(section)
 
         # Then
-        self.assertEqual(rows["Codex"][:2], ["`gpt-5.6-luna`", "`xhigh`"])
-        self.assertEqual(rows["Claude Code"][:2], ["Sonnet 5", "`high`"])
+        self.assertEqual(rows["Codex"][:2], ["`gpt-6-luna`", "`xhigh`"])
+        self.assertEqual(rows["Claude Code"][:2], ["`claude-sonnet-5-5`", "`high`"])
         self.assertIn("Other hosts", rows)
         for copied in ("GPT Luna", "Claude Sonnet", "latest production", "implementation-execution.md"):
             self.assertNotIn(copied, section)
