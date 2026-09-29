@@ -159,6 +159,9 @@ python3 -m pytest
 node --test skills/document-to-confluence/tests/test_render_diagrams.mjs
 ```
 
+Las pruebas que necesitan la CLI de Orca se omiten cuando no está instalada, así que la CI pasa sin Orca. Después de
+instalar Orca, vuelva a ejecutar `python3 -m pytest` para cubrirlas.
+
 ## Idioma de las instrucciones
 
 Los archivos en inglés son las fuentes ejecutables canónicas de skills, referencias, agentes e instrucciones de sesión.

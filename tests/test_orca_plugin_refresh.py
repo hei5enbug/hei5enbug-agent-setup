@@ -13,7 +13,7 @@ ROOT_SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(ROOT_SCRIPTS))
 import orca_plugin_refresh as refresh
 from session_lifecycle import registry_lock
-from orca_refresh_fixture import OrcaRefreshFixture
+from orca_refresh_fixture import OrcaRefreshFixture, requires_orca_cli
 
 
 class OrcaPluginRefreshTest(OrcaRefreshFixture):
@@ -402,6 +402,7 @@ class OrcaPluginRefreshTest(OrcaRefreshFixture):
         record = refresh.registry_sessions(self.app_root)["claude:session-leaf-other"]
         self.assertEqual(record["state"], "busy")
 
+    @requires_orca_cli
     def test_Orca가_잘린_terminal_목록을_주면_적용하지_않는다(self):
         # Given
         response = {"result": {"terminals": [], "totalCount": 2, "truncated": True}}
@@ -417,6 +418,7 @@ class OrcaPluginRefreshTest(OrcaRefreshFixture):
         # Then
         self.assertEqual(caught.exception.code, "terminal_list_truncated")
 
+    @requires_orca_cli
     def test_Orca가_프로세스_incarnation을_주지_않으면_대상_목록을_거부한다(self):
         """프로세스 신원을 확인할 수 없는 Orca 응답으로는 세션을 종료하지 않는다."""
         # Given
@@ -434,6 +436,7 @@ class OrcaPluginRefreshTest(OrcaRefreshFixture):
         # Then
         self.assertEqual(caught.exception.code, "terminal_incarnation_missing")
 
+    @requires_orca_cli
     def test_워크트리_경로가_빈_floating_agent_terminal이면_대상_목록을_거부한다(self):
         """워크트리가 없는 floating agent terminal을 스크립트 실행 위치의 워크트리로 오인하지 않는다."""
         # Given
@@ -451,6 +454,7 @@ class OrcaPluginRefreshTest(OrcaRefreshFixture):
         # Then
         self.assertEqual(caught.exception.code, "terminal_worktree_missing")
 
+    @requires_orca_cli
     def test_상대_경로_워크트리를_가진_agent_terminal이면_대상_목록을_거부한다(self):
         """실행 위치에 따라 달라지는 상대 경로를 세션의 워크트리로 받아들이지 않는다."""
         # Given
@@ -469,6 +473,7 @@ class OrcaPluginRefreshTest(OrcaRefreshFixture):
         # Then
         self.assertEqual(caught.exception.code, "terminal_worktree_missing")
 
+    @requires_orca_cli
     def test_agent가_없는_floating_terminal은_건너뛰고_agent_terminal을_절대_경로로_고른다(self):
         """agent가 없는 floating shell은 대상에서 빼고 agent terminal은 절대 워크트리 경로로 선택한다."""
         # Given
@@ -703,6 +708,7 @@ class OrcaPluginRefreshTest(OrcaRefreshFixture):
         self.assertIn("claude --resume session-leaf-other", session["manual_resume_command"])
         self.assertTrue(session["manual_resume_requires_terminal_check"])
 
+    @requires_orca_cli
     def test_완료_알림은_Orca의_실제_send_구조와_턴_시작을_검사한다(self):
         """입력 수락만 확인되면 완료 알림을 전달 완료로 기록하지 않는다."""
         # Given
@@ -716,6 +722,7 @@ class OrcaPluginRefreshTest(OrcaRefreshFixture):
         self.assertEqual(status, "complete_but_not_confirmed")
         self.assertIn("--wait-submit", runner.call_args.args[0])
 
+    @requires_orca_cli
     def test_Orca가_종료_입력을_거부하면_exit를_기다리지_않는다(self):
         """실제 send 영수증에서 accepted가 거짓이면 종료 성공으로 간주하지 않는다."""
         # Given

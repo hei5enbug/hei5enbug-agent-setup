@@ -12,7 +12,7 @@ ROOT_SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(ROOT_SCRIPTS))
 import orca_plugin_refresh as refresh
 import session_lifecycle as lifecycle
-from orca_refresh_fixture import OrcaRefreshFixture
+from orca_refresh_fixture import OrcaRefreshFixture, requires_orca_cli
 from session_lifecycle import registry_lock
 
 REAL_TERMINAL_HAS_DRAFT = refresh.terminal_has_draft
@@ -106,6 +106,7 @@ class OrcaTerminalProbeTest(OrcaRefreshFixture):
 
 
 class AgentStopTest(OrcaRefreshFixture):
+    @requires_orca_cli
     def test_셸에서_실행한_agent는_셸이_남아도_종료를_확인한다(self):
         """셸이 끝나기를 기다리지 않고 terminal의 agent가 사라지면 종료 대기를 마친다."""
         # Given
@@ -127,6 +128,7 @@ class AgentStopTest(OrcaRefreshFixture):
         # Then
         self.assertEqual(polls, ["term-other"] * 3)
 
+    @requires_orca_cli
     def test_agent가_끝나지_않으면_종료를_확인하지_못했다고_중단한다(self):
         """agent가 제한 시간 안에 사라지지 않으면 터미널을 닫지 않고 멈춘다."""
         # Given
@@ -540,6 +542,7 @@ class CodexMarketplaceRevisionTest(OrcaRefreshFixture):
 
 
 class WorkerRestartTest(OrcaRefreshFixture):
+    @requires_orca_cli
     def test_셸이_남는_두_host_세션을_같은_ID로_재개하고_Codex는_잠금으로_확인한다(self):
         """exit 뒤 셸이 남고 Codex 데몬이 대화를 늦게 닫아도 두 세션을 같은 ID로 재개한다."""
         # Given
