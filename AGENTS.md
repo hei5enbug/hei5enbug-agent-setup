@@ -33,10 +33,16 @@
   or a runtime lookup of the newest release.
 - When tests skip because the Orca CLI is not installed, ask the user whether to install Orca and rerun them
   before you report the checks as passing.
-- Treat the latest published version as the release baseline. Keep all unreleased work on one planned next
-  version and never bump the semantic version for local iterations. Use a cachebuster for local reinstalls.
-  Before a release, run every development check in `README.md` and keep both plugin manifests,
-  `pyproject.toml`, and `uv.lock` on the same version.
+- The release baseline is the newest `v<major>.<minor>.<patch>` tag reachable from `HEAD`. A version that
+  appears only in the manifests is the planned next version, never a baseline, even when it is already on
+  `main` or installed locally. Keep all unreleased work on that one planned version: when the manifests already
+  hold a version above the baseline, fold new changes into it and re-choose its level from the table below
+  instead of bumping again. Never bump the semantic version for local iterations.
+  Use a cachebuster for local reinstalls. Before changing any version, state the baseline tag and the planned
+  version to the user. When the user publishes a release, tag the released commit `v<version>` and push the
+  tag. Before a release, run every development check in `README.md` and keep both plugin manifests,
+  `pyproject.toml`, and `uv.lock` on the same version. `tests/test_release_version.py` rejects a version below
+  the baseline and more than one planned version since it.
   Choose the next semantic version from the highest-impact unreleased change:
 
   | Component | Use when |
