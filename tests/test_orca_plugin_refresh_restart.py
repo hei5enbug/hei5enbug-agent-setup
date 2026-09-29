@@ -654,6 +654,50 @@ class WorkerRestartTest(OrcaRefreshFixture):
         self.assertEqual(registrations, {"codex": "pending_next_turn", "claude": "confirmed"})
         self.assertEqual(codex_lock["release_polls"], -1)
 
+    def test_exit_뒤_terminal_close가_실패해도_수동_재개_명령을_남긴다(self):
+        """agent가 이미 종료된 뒤 이전 terminal을 닫지 못하면 실패 영수증에 수동 재개 명령을 기록한다."""
+        # Given
+        plan = refresh.create_plan(self.app_root)
+        with patch.object(refresh.subprocess, "Popen"):
+            queued = refresh.apply_plan(self.app_root, plan["plan_id"])
+        installed = {"codex": "0.6.0", "claude": "0.6.0"}
+        terminal_by_handle = {item["terminal_handle"]: dict(item) for item in self.terminals}
+
+        # When
+        with (
+            patch.object(refresh, "_wait_session_idle", side_effect=lambda app_root, session, *, timeout_seconds, receipt: terminal_by_handle[session["terminal_handle"]]),
+            patch.object(refresh, "_confirm_exit_target"),
+            patch.object(refresh, "_refresh_sources"),
+            patch.object(refresh, "_check_catalog_after_refresh", side_effect=lambda plan: self.snapshots()),
+            patch.object(refresh, "_installed_versions", side_effect=lambda: dict(installed)),
+            patch.object(refresh, "_verify_installed_versions", side_effect=lambda targets: dict(installed)),
+            patch.object(refresh, "_send_exit"),
+            patch.object(refresh, "_close_exited_terminal", side_effect=refresh.RefreshError("terminal_close_failed", "close failed")),
+        ):
+            result = refresh._run_worker(self.app_root, queued["transaction_id"])
+
+        # Then
+        receipt = refresh._load_receipt(self.app_root, queued["transaction_id"])
+        self.assertEqual(result, 1)
+        self.assertEqual(receipt["state"], "failed")
+        failed = next(item for item in receipt["sessions"] if item.get("last_error") == "terminal_close_failed")
+        self.assertTrue(failed["agent_exited"])
+        self.assertNotIn("previous_terminal_closed", failed)
+        self.assertIn(f"--resume {failed['session_id']}", failed["manual_resume_command"])
+        self.assertFalse(failed["manual_resume_requires_terminal_check"])
+
+    def test_agent만_종료된_세션도_수동_재개_명령을_받는다(self):
+        """이전 terminal을 닫지 못했어도 agent 종료가 확인된 세션에는 수동 재개 명령을 기록한다."""
+        # Given
+        session = {"host": "claude", "cwd": "/tmp/other", "session_id": "session-leaf-other", "agent_exited": True}
+
+        # When
+        refresh._record_resume_recovery(session, "terminal_close_failed")
+
+        # Then
+        self.assertEqual(session["manual_resume_command"], "cd -- /tmp/other && exec claude --resume session-leaf-other")
+        self.assertFalse(session["manual_resume_requires_terminal_check"])
+
     def test_Codex_대화가_계속_열려_있으면_수동_재개_명령을_남긴다(self):
         """이전 터미널을 닫은 뒤 대화 잠금이 풀리지 않으면 새 Codex 없이 수동 명령을 기록한다."""
         # Given

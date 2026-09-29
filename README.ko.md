@@ -90,14 +90,16 @@ Codex는 `~/.codex/agents/`와 `.codex/agents/`에서만 서브에이전트를 �
 대신 세션 훅이 `~/.codex/agents/scout.toml`과 `~/.codex/agents/worker.toml`이 각각 없을 때만
 `standalone-agents/codex-scout.toml`과 `standalone-agents/codex-worker.toml`을 그 위치에 복사합니다. 두 파일은
 Claude Code와 같은 이름의 `scout`, `worker` 에이전트를 정의하고 사고 강도와 샌드박스를 고정합니다. 플러그인 `worker`는
-Codex 내장 `worker`를 대신하고, `scout`는 내장 `explorer`를 건드리지 않습니다. 이미 있는 파일은 절대 덮어쓰지 않으며,
-다음 Codex 세션부터 적용됩니다. 한 번 설치한 파일은 바뀌지 않으므로 모델은 지정하지 않고, Codex 지침이 생성할 때마다
-고정 모델을 넘깁니다. 훅은 이전 버전이 만든 `explorer.toml`도 지우지만, 그때 배포한
-파일과 바이트 단위로 같을 때만 지우므로 직접 고친 파일은 남습니다.
+Codex 내장 `worker`를 대신하고, `scout`는 내장 `explorer`를 건드리지 않습니다. 직접 고친 파일은 절대 덮어쓰지 않으며,
+다음 Codex 세션부터 적용됩니다. 고친 파일은 바뀌지 않으므로 모델은 지정하지 않고, Codex 지침이 생성할 때마다
+고정 모델을 넘깁니다. 훅은 이전 버전이 만든 `explorer.toml`을 지우고 `worker.toml`을 바꾸지만, 그 버전에서 배포한
+파일과 바이트 단위로 같을 때만 그렇게 하므로 직접 고친 파일은 남습니다. 플러그인을 끄면 설치된 `worker` 역할은
+수정을 거부하지 않고 일반 구현 worker로 동작합니다.
 
 `PreToolUse` 훅인 `scripts/agent_guard.py`가 두 호스트에서 내장 서브에이전트를 막습니다. Claude Code에서는 종류를
-비운 호출과, 플러그인이나 사용자·프로젝트 정의가 제공하지 않는 모든 종류를 거부합니다. `general-purpose`, `Explore`,
-`Plan`, fork가 여기에 해당합니다. Codex에서는 종류를 비운 호출, `default`, `explorer`, 역할 파일이 없는 모든 종류를
+비운 호출과 모든 내장 종류, 즉 `general-purpose`, `Explore`, `Plan`, `claude`, `claude-code-guide`,
+`statusline-setup`, fork를 거부합니다. 플러그인 에이전트와 사용자·프로젝트·CLI·관리 설정이 제공하는 정의는
+통과합니다. Codex에서는 종류를 비운 호출, `default`, `explorer`, 역할 파일이 없는 모든 종류를
 거부하며, 플러그인 역할이 생기기 전의 내장 `worker`도 여기에 포함됩니다. 독립된 읽기 전용 작업자가 필요한 스킬은
 `scout`를 쓰고, 시험 출력을 쓰는 스킬은 별도 `claude -p`나 `codex exec` 프로세스를 실행합니다.
 
@@ -154,6 +156,7 @@ Codex가 제공하는 `PLUGIN_ROOT`가 설치 디렉터리를 가리키면 로�
 Codex는 현재 플러그인 훅 정의를 사용자가 검토하고 신뢰한 뒤에 실행한다.
 훅이 꺼져 있거나 조직 정책이 플러그인 훅을 금지하면 자동 적용되지 않는다.
 설치·업데이트 후 호스트의 훅 설정에서 활성화 여부를 확인하고, Codex에서는 신뢰 여부도 확인한다.
+에이전트 차단 훅처럼 업데이트가 새로 추가한 훅은 Codex의 `/hooks`에서 신뢰하기 전까지 건너뛴다.
 업데이트 후에는 Claude Code를 재시작하거나 Codex에서 새 세션을 시작한다.
 훅은 호스트의 신뢰 설정을 우회하지 않으며, 실행 중인 세션의 플러그인 버전을 바꾸지 않는다.
 `orca-plugin-refresh-resume` 스킬은 한 번 초기 등록한 뒤 registry를 사용해 플러그인을 갱신하고,
@@ -231,7 +234,11 @@ Claude Code를 다시 시작합니다.
 Claude Code의 백그라운드 작업과 예약된 재실행도 업데이트를 막습니다. worker는 종료 직전에 terminal 신원과
 idle 상태를 다시 확인하지만, 호스트의 훅 시간 초과 때문에 새 prompt가 절대 들어오지 않는다고 보장할 수는
 없습니다. 완료 알림이 실패하거나 확인되지 않으면 receipt를 확인하세요. 새 terminal에서 agent가 실행 중일
-가능성이 있으면 알림을 무작정 다시 보내거나 같은 세션을 다시 재개하지 마세요.
+가능성이 있으면 알림을 무작정 다시 보내거나 같은 세션을 다시 재개하지 마세요. lifecycle 훅은 refresh
+transaction이 진행 중일 때만 prompt를 차단하며, 식별할 수 없는 세션이나 읽을 수 없는 registry는 transaction 밖의
+일반 작업을 막지 않습니다. 캐시된 marketplace에 변경이 없어도 `apply`는 lease 없이 worker를 시작하고, worker는
+marketplace를 갱신해 바뀐 것이 없으면 `already_current`를, 새 릴리스가 나타났으면 새 계획이 필요한 `stale_plan`을
+보고합니다.
 
 Codex는 세 가지가 다릅니다. Codex는 prompt가 시작될 때만 세션을 등록하므로, prompt를 한 번도 받지 않은
 Codex 세션은 prompt를 받거나 닫힐 때까지 계획을 막습니다. `/exit` 뒤에는 Codex가 대화를 놓을 때까지

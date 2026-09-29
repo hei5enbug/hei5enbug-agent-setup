@@ -1119,8 +1119,7 @@ def apply_plan(app_root: Path, plan_id: str, *, accept_command: str | None = Non
             raise RefreshError("command_hash_invalid", "The marketplace command hash is invalid.")
         _current_versions_match_plan(plan, compare_revision=True)
         sessions = _current_sessions_match_plan(app_root, plan, initiator_may_be_busy=True)
-        if not plan.get("needs_plugin_update") and not plan.get("needs_session_restart"):
-            return {"ok": True, "state": "already_current", "plan_id": plan_id, "message": "Both plugins and all sessions already match the marketplace version."}
+        refresh_only = _refresh_only(plan)
         transaction_id = uuid.uuid4().hex
         transaction_dir = transaction_directory(app_root, transaction_id)
         receipt = _make_receipt(plan, transaction_id)
@@ -1133,7 +1132,8 @@ def apply_plan(app_root: Path, plan_id: str, *, accept_command: str | None = Non
         _save_receipt(app_root, receipt)
         argv = [sys.executable, str(Path(__file__).resolve()), "worker", "--transaction-id", transaction_id]
         try:
-            _set_leases(app_root, sessions, transaction_id)
+            if not refresh_only:
+                _set_leases(app_root, sessions, transaction_id)
             plan["consumed_by"] = transaction_id
             plan["plan_hash"] = _plan_hash(plan)
             write_json(plan_path(app_root, plan_id), plan)
@@ -1156,13 +1156,23 @@ def apply_plan(app_root: Path, plan_id: str, *, accept_command: str | None = Non
             finally:
                 _clear_leases(app_root, transaction_id)
             raise RefreshError("worker_start_failed", "The detached update worker could not start.") from error
-        return {
+        result = {
             "ok": True,
             "state": "queued",
             "transaction_id": transaction_id,
             "receipt": str(transaction_path(app_root, transaction_id)),
             "sessions": [safe_session_summary(item) for item in sessions],
         }
+        if refresh_only:
+            result["message"] = (
+                "The cached marketplaces match every installed plugin and session. The worker refreshes the "
+                "marketplaces without touching sessions and reports already_current, or stale_plan when a new release appeared."
+            )
+        return result
+
+
+def _refresh_only(plan: dict[str, object]) -> bool:
+    return not plan.get("needs_plugin_update") and not plan.get("needs_session_restart")
 
 
 def _load_receipt(app_root: Path, transaction_id: str) -> dict[str, object]:
@@ -1462,6 +1472,7 @@ def _update_receipt_session(receipt: dict[str, object], session: dict[str, objec
         if item.get("host") == session.get("host") and item.get("session_id") == session.get("session_id"):
             for field in (
                 "previous_terminal_handle",
+                "agent_exited",
                 "previous_terminal_closed",
                 "resume_launch_attempted",
                 "new_terminal_handle",
@@ -1640,7 +1651,7 @@ def _confirm_exit_target(
 
 def _record_resume_recovery(session: dict[str, object], error_code: str) -> None:
     session["last_error"] = error_code
-    if not session.get("previous_terminal_closed") or session.get("resume_verified"):
+    if not (session.get("agent_exited") or session.get("previous_terminal_closed")) or session.get("resume_verified"):
         return
     try:
         session["manual_resume_command"] = _manual_resume_shell_command(session)
@@ -1686,6 +1697,12 @@ def _run_worker(app_root: Path, transaction_id: str) -> int:
             receipt["worker_pid"] = os.getpid()
             _set_stage(app_root, receipt, "preflight")
             _current_versions_match_plan(plan, compare_revision=True)
+            if _refresh_only(plan):
+                _refresh_sources(app_root, receipt)
+                fresh_versions = _check_catalog_after_refresh(plan)
+                receipt["catalog_versions"] = {host: value["catalog_version"] for host, value in fresh_versions.items()}
+                _release_transaction(app_root, receipt, "already_current")
+                return 0
             current_sessions = _current_sessions_match_plan(
                 app_root,
                 plan,
@@ -1744,10 +1761,13 @@ def _run_worker(app_root: Path, transaction_id: str) -> int:
                 host = str(session["host"])
                 _send_exit(str(terminal["terminal_handle"]), host)
                 session["previous_terminal_handle"] = terminal["terminal_handle"]
-                _close_exited_terminal(str(terminal["terminal_handle"]))
-                session["previous_terminal_closed"] = True
+                session["agent_exited"] = True
                 if host == "codex":
                     session.update(codex_resume_settings(str(session["session_id"])))
+                _update_receipt_session(receipt, session)
+                _save_receipt(app_root, receipt)
+                _close_exited_terminal(str(terminal["terminal_handle"]))
+                session["previous_terminal_closed"] = True
                 _update_receipt_session(receipt, session)
                 _save_receipt(app_root, receipt)
                 if host == "codex":

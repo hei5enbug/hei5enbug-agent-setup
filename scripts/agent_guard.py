@@ -2,39 +2,31 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import sys
+import tomllib
 from pathlib import Path
 
 
+CLAUDE_BUILT_INS = {"general-purpose", "explore", "plan", "claude", "claude-code-guide", "statusline-setup", "fork"}
 CODEX_BUILT_INS = {"default", "explorer"}
-TOML_NAME = re.compile(r'^name\s*=\s*"([^"]+)"', re.MULTILINE)
-MARKDOWN_NAME = re.compile(r"^name:\s*(.+?)\s*$", re.MULTILINE)
 
 
 def toml_name(text: str) -> str | None:
-    match = TOML_NAME.search(text)
-    return match[1] if match else None
-
-
-def markdown_name(text: str) -> str | None:
-    if not text.startswith("---"):
+    try:
+        name = tomllib.loads(text).get("name")
+    except tomllib.TOMLDecodeError:
         return None
-    parts = text.split("---", 2)
-    if len(parts) < 3:
-        return None
-    match = MARKDOWN_NAME.search(parts[1])
-    return match[1].strip("\"'") if match else None
+    return name if isinstance(name, str) and name else None
 
 
-def defined_names(directories: list[Path], suffix: str, read_name) -> set[str]:
+def defined_codex_roles(directories: list[Path]) -> set[str]:
     names = set()
     for directory in directories:
         if not directory.is_dir():
             continue
-        for path in directory.rglob(f"*{suffix}"):
+        for path in directory.rglob("*.toml"):
             try:
-                name = read_name(path.read_text(encoding="utf-8"))
+                name = toml_name(path.read_text(encoding="utf-8"))
             except (OSError, UnicodeDecodeError):
                 continue
             if name:
@@ -46,23 +38,19 @@ def denial(event: dict, host: str) -> str | None:
     tool_input = event.get("tool_input")
     if not isinstance(tool_input, dict):
         return None
-    cwd = Path(event.get("cwd") or os.getcwd())
     if host == "codex":
         name = tool_input.get("agent_type") or "default"
+        cwd = Path(event.get("cwd") or os.getcwd())
         home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
-        defined = defined_names([home / "agents", cwd / ".codex" / "agents"], ".toml", toml_name)
-        allowed = defined - CODEX_BUILT_INS
+        allowed = defined_codex_roles([home / "agents", cwd / ".codex" / "agents"]) - CODEX_BUILT_INS
+        if name in allowed:
+            return None
         substitute = "`scout` or `worker`"
     else:
         name = tool_input.get("subagent_type") or "general-purpose"
-        if ":" in name:
+        if str(name).lower() not in CLAUDE_BUILT_INS:
             return None
-        home = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
-        project = Path(os.environ.get("CLAUDE_PROJECT_DIR") or cwd)
-        allowed = defined_names([home / "agents", project / ".claude" / "agents"], ".md", markdown_name)
         substitute = "`hei5enbug-agent-setup:scout` or `hei5enbug-agent-setup:worker`"
-    if name in allowed:
-        return None
     return (
         f"The built-in `{name}` agent is disabled while hei5enbug-agent-setup is installed. "
         f"Use {substitute}, another defined agent, or the main session."

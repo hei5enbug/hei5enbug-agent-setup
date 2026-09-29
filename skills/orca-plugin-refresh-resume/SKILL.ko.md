@@ -65,6 +65,12 @@ ID를 알린 뒤 현재 turn을 끝낸다. worker는 turn 종료를 기다린 �
 transaction 중에는 대상 세션에 새 prompt를 보내거나 상태를 반복 조회하지 않는다.
 lifecycle hook은 정상 실행되는 동안 worker가 lease를 해제할 때까지 새 prompt를 차단한다.
 재개된 initiator session에는 완료 알림이 전달된다.
+hook은 refresh transaction이 진행 중일 때만 prompt를 차단한다. 식별할 수 없는 세션이나 읽을 수 없는 registry는
+transaction 밖의 일반 작업을 막지 않는다.
+
+캐시된 마켓플레이스가 설치된 플러그인과 모든 세션과 같으면 `apply`는 lease 없이 worker만 시작한다. 그 worker는
+마켓플레이스만 갱신해서 바뀐 것이 없으면 `already_current`를, 새 릴리스가 나타났으면 `stale_plan`을 보고하며,
+후자는 새 계획과 승인이 필요하다.
 
 호스트가 훅 실행을 건너뛰거나 시간 초과시키면 입력 차단을 보장할 수 없다.
 worker는 종료 직전에 계획한 native session ID의 현재 registry handle, 프로세스 incarnation,

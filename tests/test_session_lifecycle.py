@@ -30,8 +30,15 @@ class SessionLifecycleHookTest(unittest.TestCase):
             "ORCA_PANE_KEY": "tab-test:leaf-test",
         }
 
-    def invoke(self, event: str, *, host: str = "claude", payload: dict[str, object] | None = None):
-        env = dict(self.env)
+    def invoke(
+        self,
+        event: str,
+        *,
+        host: str = "claude",
+        payload: dict[str, object] | None = None,
+        env: dict[str, str] | None = None,
+    ):
+        env = dict(self.env if env is None else env)
         if host == "codex":
             env["PLUGIN_ROOT"] = str(REPO_ROOT)
         input_payload = payload or {
@@ -224,6 +231,25 @@ class SessionLifecycleHookTest(unittest.TestCase):
         self.assertEqual(sessions["claude:session-test-1234"]["state"], "ended")
         self.assertEqual(sessions["claude:new-session-1234"]["state"], "idle")
 
+    def test_늦게_온_Stop은_같은_terminal의_새_세션을_끝내지_않는다(self):
+        """새 세션이 같은 터미널에 등록된 뒤 옛 세션의 늦은 Stop이 와도 새 세션이 살아 있는 소유자로 남는다."""
+        # Given
+        self.invoke("SessionStart")
+        self.invoke("SessionStart", payload={"hook_event_name": "SessionStart", "source": "clear", "session_id": "new-session-1234", "cwd": "/tmp/sample"})
+        late_stop = {
+            "hook_event_name": "Stop", "session_id": "session-test-1234", "cwd": "/tmp/sample",
+            "background_tasks": [], "session_crons": [],
+        }
+
+        # When
+        result = self.invoke("Stop", payload=late_stop)
+
+        # Then
+        self.assertEqual(result.returncode, 0)
+        sessions = self.registry()["sessions"]
+        self.assertEqual(sessions["claude:session-test-1234"]["state"], "ended")
+        self.assertEqual(sessions["claude:new-session-1234"]["state"], "idle")
+
     def test_활성_거래중에는_새_prompt를_차단한다(self):
         """활성 update transaction이 있으면 새 사용자 prompt를 차단한다."""
         # Given
@@ -299,15 +325,61 @@ class SessionLifecycleHookTest(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout)["decision"], "block")
         self.assertEqual(self.registry()["sessions"]["claude:session-test-1234"]["refresh_transaction_id"], transaction_id)
 
-    def test_registry가_손상되면_prompt를_차단한다(self):
-        """세션 registry를 읽지 못하면 새 입력을 통과시키지 않는다."""
+    def write_receipt(self, transaction_id: str, state: str) -> None:
+        receipt = self.data_root / "plugin-session-refresh" / "transactions" / transaction_id / "receipt.json"
+        receipt.parent.mkdir(parents=True, exist_ok=True)
+        receipt.write_text(json.dumps({"transaction_id": transaction_id, "state": state}))
+
+    def test_registry가_손상되고_활성_거래가_있으면_prompt를_차단한다(self):
+        """세션 registry를 읽지 못하는데 진행 중인 update transaction이 있으면 새 입력을 통과시키지 않는다."""
         # Given
         self.invoke("SessionStart")
-        registry_path = self.data_root / "plugin-session-refresh" / "registry-v1.json"
-        registry_path.write_text("not json")
+        (self.data_root / "plugin-session-refresh" / "registry-v1.json").write_text("not json")
+        self.write_receipt("d" * 32, "running")
 
         # When
         result = self.invoke("UserPromptSubmit")
+
+        # Then
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(json.loads(result.stdout)["decision"], "block")
+
+    def test_registry가_손상돼도_활성_거래가_없으면_prompt를_통과시킨다(self):
+        """세션 registry를 읽지 못해도 진행 중인 update transaction이 없으면 사용자를 막지 않는다."""
+        # Given
+        self.invoke("SessionStart")
+        (self.data_root / "plugin-session-refresh" / "registry-v1.json").write_text("not json")
+        self.write_receipt("e" * 32, "complete")
+
+        # When
+        result = self.invoke("UserPromptSubmit")
+
+        # Then
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("was not recorded", result.stderr)
+
+    def test_세션_식별_정보가_없으면_등록하지_않고_prompt를_통과시킨다(self):
+        """Orca 터미널 식별 정보가 없는 세션은 등록 대상이 아니므로 입력을 막지 않고 registry도 만들지 않는다."""
+        # Given
+        env = {key: value for key, value in self.env.items() if key not in ("ORCA_TERMINAL_HANDLE", "ORCA_WORKTREE_ID")}
+
+        # When
+        result = self.invoke("UserPromptSubmit", env=env)
+
+        # Then
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "")
+        self.assertFalse((self.data_root / "plugin-session-refresh" / "registry-v1.json").exists())
+
+    def test_세션_식별_정보가_없어도_활성_거래_중에는_prompt를_차단한다(self):
+        """식별할 수 없는 세션이라도 진행 중인 update transaction이 있으면 새 입력을 차단한다."""
+        # Given
+        self.write_receipt("f" * 32, "queued")
+        env = {key: value for key, value in self.env.items() if key != "ORCA_TERMINAL_HANDLE"}
+
+        # When
+        result = self.invoke("UserPromptSubmit", env=env)
 
         # Then
         self.assertEqual(result.returncode, 0)
