@@ -134,6 +134,10 @@ Weitere Angaben zu Referenzen, Fehlern und Grenzen stehen im
 
 Beide Plugin-Manifeste, `pyproject.toml` und `uv.lock` müssen dieselbe semantische Version verwenden.
 Aktualisiere sie gemeinsam, nachdem die Entwicklungsprüfungen bestanden sind und bevor ein Release veröffentlicht wird.
+Das neueste von `HEAD` aus erreichbare `v<version>`-Tag ist die Release-Basis. Eine Version, die nur in diesen
+Dateien steht, ist die geplante nächste Version, auch wenn sie schon auf `main` liegt; fasse also alle
+unveröffentlichten Änderungen darin zusammen, statt erneut zu erhöhen. Beim Veröffentlichen erhält der
+veröffentlichte Commit das Tag `v<version>`.
 
 Aktualisiere Codex, sobald das Release verfügbar ist:
 

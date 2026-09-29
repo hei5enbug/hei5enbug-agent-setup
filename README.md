@@ -206,6 +206,9 @@ global `AGENTS.md`.
 
 Both plugin manifests, `pyproject.toml`, and `uv.lock` must use the same semantic version.
 Update them together after the development checks below pass and before publishing a release.
+The newest `v<version>` tag reachable from `HEAD` is the release baseline. A version that appears only in these
+files is the planned next version, even when it is already on `main`, so fold every unreleased change into it
+instead of bumping again. Tag the released commit `v<version>` when you publish it.
 
 Update Codex after the release is available:
 
