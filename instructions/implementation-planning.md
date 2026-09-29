@@ -45,6 +45,10 @@ other dependency explicitly.
 Do not split a cohesive change into bookkeeping steps. A slice should produce a reviewable behavior,
 contract, migration, or verification result rather than merely open, rename, or inspect a file.
 
+Give each slice one worker owner and record the assignment fields from
+[implementation execution](implementation-execution.md) once in the plan. State the worker model and effort
+as that file's host policy, resolved at execution time, instead of pinning a model ID.
+
 ## 4. Verification planning
 
 Map every acceptance criterion and material risk to evidence. Give each execution slice the narrowest
@@ -92,8 +96,10 @@ section rather than filling it with placeholders.
 
 ## Execution slices
 
-| Slice | Result and changes | Depends on | Parallel condition | Verification |
-|---|---|---|---|---|
+Worker model and effort: <host policy from the implementation execution rules, resolved at execution time>
+
+| Slice | Result and changes | Allowed and protected paths | Depends on | Shared resources and parallel condition | Verification and completion evidence |
+|---|---|---|---|---|---|
 
 ## Integrated verification
 
@@ -106,6 +112,7 @@ section rather than filling it with placeholders.
 - Scope, non-goals, constraints, protected surfaces, and acceptance criteria are explicit where applicable.
 - Every step is executable and has proportionate completion evidence.
 - Dependencies and order are correct; parallel claims have no shared mutation or build contention.
+- Every slice has one worker owner and the shared assignment fields.
 - No speculative extension, unrelated refactor, excessive dependency, or needless slice remains.
 - The shared independent validation contract is satisfied.
 - No unresolved decision requires the executor to add design.

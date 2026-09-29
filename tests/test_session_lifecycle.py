@@ -83,7 +83,8 @@ class SessionLifecycleHookTest(unittest.TestCase):
         self.assertEqual(record["tab_id"], "tab-test")
         self.assertEqual(record["leaf_id"], "leaf-test")
         self.assertEqual(record["worktree_id"], "repo-test::/tmp/sample")
-        self.assertEqual(record["plugin_version"], "0.6.0")
+        manifest = json.loads((REPO_ROOT / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["plugin_version"], manifest["version"])
         self.assertNotIn("prompt", record)
 
     def test_사용자_입력에서_세션을_busy로_기록하고_프롬프트를_저장하지_않는다(self):

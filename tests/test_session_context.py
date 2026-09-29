@@ -86,13 +86,21 @@ class SessionContextTest(unittest.TestCase):
                 self.assertEqual("# Codex only" in context, host == "codex")
                 self.assertEqual("# Claude Code only" in context, host == "claude")
 
-    def test_references_are_absolute_and_details_stay_unloaded(self):
-        context = self.context(self.run_hook("claude"))
+    def test_참조는_절대_경로이고_세부_본문은_불러오지_않는다(self):
+        """조건부 참조 9개는 번들 안의 절대 경로로 바뀌고 실행 규칙 본문을 포함한 세부 내용은 시작 시 불러오지 않는다."""
+        # Given
+        host = "claude"
+
+        # When
+        context = self.context(self.run_hook(host))
+
+        # Then
         links = re.findall(r"\]\(<([^>]+)>\)", context)
-        self.assertEqual(len(links), 8)
+        self.assertEqual(len(links), 9)
         for link in links:
             self.assertTrue(Path(link).is_relative_to(self.root))
             self.assertTrue(Path(link).is_file())
+        self.assertIn((self.root / "instructions/implementation-execution.md").as_posix(), links)
         self.assertNotIn("## Azure skill authorization", context)
         self.assertNotIn("## Investigation", context)
         self.assertNotIn("# Documentation files", context)
@@ -100,7 +108,29 @@ class SessionContextTest(unittest.TestCase):
         self.assertNotIn("## 1. Intent and scope freeze", context)
         self.assertNotIn("## Reviewer selection", context)
         self.assertNotIn("Latest available Claude Fable", context)
+        self.assertNotIn("# Implementation execution", context)
+        self.assertNotIn("## Scheduling", context)
+        self.assertNotIn("## Assigned workers", context)
         self.assertLess(len(context.encode("utf-8")), 9000)
+
+    def test_worker도_실행_규칙_경로와_worker_섹션_안내를_받는다(self):
+        """하위 에이전트 시작 컨텍스트도 실행 규칙 링크와 할당받은 worker 섹션 안내를 담는다."""
+        # Given
+        expected = (self.root / "instructions/implementation-execution.md").as_posix()
+
+        # When
+        contexts = {
+            host: self.context(self.run_hook(host, event="SubagentStart"), "SubagentStart")
+            for host in ("codex", "claude")
+        }
+
+        # Then
+        for host, context in contexts.items():
+            with self.subTest(host=host):
+                self.assertIn(f"[implementation execution rules](<{expected}>)", context)
+                self.assertIn('reads only its "Assigned workers" section', context)
+                self.assertNotIn("## Assigned workers", context)
+                self.assertLess(len(context.encode("utf-8")), 9000)
 
     def test_planning_routing_is_loaded_without_detailed_workflow(self):
         context = self.context(self.run_hook("codex"))
@@ -137,6 +167,19 @@ class SessionContextTest(unittest.TestCase):
     def test_missing_planning_reference_reports_failure_without_partial_context(self):
         (self.root / "instructions/implementation-planning.md").unlink()
         result = self.run_hook()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("instructions were not loaded", result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_실행_규칙이_없으면_부분_컨텍스트_없이_실패한다(self):
+        """구현 실행 참조 파일이 없으면 훅은 일부 컨텍스트도 내보내지 않고 실패를 알린다."""
+        # Given
+        (self.root / "instructions/implementation-execution.md").unlink()
+
+        # When
+        result = self.run_hook()
+
+        # Then
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("instructions were not loaded", result.stderr)
         self.assertEqual(result.stdout, "")
@@ -208,14 +251,26 @@ class SessionContextTest(unittest.TestCase):
         self.codex_home.write_text("not a directory", encoding="utf-8")
         self.assertIn("Never expose secrets", self.context(self.run_hook("codex")))
 
-    def test_all_instruction_links_resolve_in_the_bundle(self):
+    def test_지침의_로컬_링크는_모두_번들_안에서_해석된다(self):
+        """지침 파일의 로컬 링크는 번들 안의 파일을 가리키고, 로더처럼 URI 스킴이 있는 외부 링크는 건너뛴다."""
+        # Given
         paths = sorted((REPO_ROOT / "instructions").rglob("*.md"))
-        for path in paths:
-            for link in re.findall(r"\]\(([^)]+)\)", path.read_text()):
-                with self.subTest(path=path, link=link):
-                    target = (path.parent / link).resolve()
-                    self.assertTrue(target.is_relative_to(REPO_ROOT))
-                    self.assertTrue(target.is_file())
+
+        # When
+        links = [
+            (path, link)
+            for path in paths
+            for link in re.findall(r"\]\(([^)]+)\)", path.read_text())
+            if not re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", link)
+        ]
+
+        # Then
+        self.assertTrue(links)
+        for path, link in links:
+            with self.subTest(path=path, link=link):
+                target = (path.parent / link).resolve()
+                self.assertTrue(target.is_relative_to(REPO_ROOT))
+                self.assertTrue(target.is_file())
 
     def test_repository_has_project_instruction_files(self):
         self.assertTrue((REPO_ROOT / "AGENTS.md").is_file())

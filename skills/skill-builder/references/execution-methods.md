@@ -29,10 +29,23 @@ When only one method can meet the contract, document why; do not claim measured 
 
 ## Evaluation model adapters
 
-These settings govern every worker and model runner that Skill Builder launches for research,
-drafting, execution, grading, comparison, analysis, or optimization.
+These settings govern every evaluation participant: each worker and model runner that Skill Builder
+launches for research, trial execution, grading, comparison, analysis, or optimization.
 They do not change the main session's model or effort.
 The main session retains responsibility for the task definition, rubric, review, and final decision.
+
+Before launch, classify each worker by its purpose and the destination of its output.
+
+| Worker purpose | Output destination | Role |
+|---|---|---|
+| Draft or revise the actual skill under development | Repository or working tree that holds the skill | Implementation |
+| Produce disposable trial artifacts for grading | Evaluation workspace | Evaluation |
+| Promote a trial artifact into the actual skill | Repository or working tree that holds the skill | Implementation |
+| Research, grade, compare, analyze, or optimize | Evaluation workspace or inline result | Evaluation |
+
+When the host session instructions include implementation execution rules, implementation workers follow
+those rules instead of the table below. Otherwise, as in standalone use, the table below governs every
+worker, including implementation. Evaluation participants always use the table below.
 
 | Executing host | Required model | Required effort | Boundary |
 |---|---|---|---|

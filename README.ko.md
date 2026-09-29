@@ -39,6 +39,7 @@ hei5enbug-agent-setup/
 │   ├── codex-agents.md
 │   ├── confluence.md
 │   ├── documentation.md
+│   ├── implementation-execution.md
 │   ├── implementation-planning.md
 │   ├── independent-model-validation.md
 │   ├── protected-values.md
@@ -52,8 +53,11 @@ hei5enbug-agent-setup/
 ├── LICENSE
 ├── pyproject.toml
 ├── agents/
-│   ├── ko/scout.ko.md
-│   └── scout.md
+│   ├── ko/
+│   │   ├── scout.ko.md
+│   │   └── worker.ko.md
+│   ├── scout.md
+│   └── worker.md
 ├── standalone-agents/
 │   └── codex-explorer.toml
 ├── standalone-skills/
@@ -76,7 +80,7 @@ Codex와 Claude Code에 패키징합니다. `standalone-skills/` 디렉터리는
 검색 경로에 포함되지 않습니다.
 
 `agents/` 디렉터리는 Claude Code 플러그인에 함께 배포되므로, 번들을 설치하면
-`hei5enbug-agent-setup:scout` 서브에이전트가 추가됩니다. 직접 복사할 필요가 없습니다.
+`hei5enbug-agent-setup:scout`와 `hei5enbug-agent-setup:worker` 서브에이전트가 추가됩니다. 직접 복사할 필요가 없습니다.
 
 Codex는 `~/.codex/agents/`와 `.codex/agents/`에서만 서브에이전트를 찾으므로 플러그인이 등록할 수 없습니다.
 대신 세션 훅이 `~/.codex/agents/explorer.toml`이 없을 때만 `standalone-agents/codex-explorer.toml`을
@@ -125,7 +129,7 @@ Codex가 제공하는 `PLUGIN_ROOT`가 설치 디렉터리를 가리키면 로�
 | 플러그인 업데이트 설치 | 새 세션이 설치된 버전을 읽는다. 저장소에 푸시하는 것만으로는 반영되지 않는다. |
 
 핵심 규칙은 요청이 바뀌어도 세션 컨텍스트에 남는다.
-서비스 접근, 보호된 보안 값 접근, 에이전트 사용, 문서 작성의 세부 규칙은 관련 작업 전에만 읽는다.
+서비스 접근, 보호된 보안 값 접근, 에이전트 사용, 문서 작성, 구현 실행의 세부 규칙은 관련 작업 전에만 읽는다.
 요청을 처리하던 중 관련 작업이 생겨도 먼저 참조를 읽는다.
 세션 컨텍스트는 구현 계획과 설계 문서를 구분하고 두 작업의 실행 조건을 유지한다.
 `instructions/implementation-planning.md`는 구현 계획의 6단계 절차와 템플릿을 관리한다.
@@ -150,6 +154,40 @@ Windows 실행과 실제 모델의 지침 준수 여부는 테스트 범위에 �
 
 실행 시점과 신뢰 설정은 공식 [Codex 훅 문서](https://learn.chatgpt.com/docs/hooks)와
 [Claude Code 훅 문서](https://code.claude.com/docs/en/hooks)를 따른다.
+
+## 구현 worker
+
+구현 변경은 모두 worker가 한다. 메인 세션은 첫 변경 전에 `instructions/implementation-execution.md`를 읽고
+조정자 역할을 맡는다. 요구사항, 조사, 계획, 설계, 검토, 결정과 최종 보고를 맡으며 직접 수정하지 않는다.
+사용자가 계획을 주지 않았거나 worker 할당이 없는 계획을 주었어도 실행할 수 있는 작업 할당을 준비한다.
+
+자동 작업 준비는 사용자가 요청한 구현 계획이 아니다.
+
+| 항목 | 자동 작업 준비 | 요청한 구현 계획 |
+|---|---|---|
+| 시작 조건 | 모든 구현 변경 | 사용자가 계획을 명시적으로 요청 |
+| 결과 | 호스트 작업 목록이나 대화에 남긴 할당. 계획 디렉터리는 만들지 않음 | 요청한 계획 결과물 |
+| 절차 | 작업마다 작업 ID, 결과, 경로, 선행 조건, 자원, 검사, 모델과 사고 강도 | `instructions/implementation-planning.md`의 6단계 |
+| 독립 검증 | 실행하지 않음 | `instructions/independent-model-validation.md`의 확인 절차를 통과한 뒤에만 실행 |
+
+준비된 독립 작업은 함께 실행하며 worker는 최대 6개이고 호스트의 실제 한도를 넘지 않는다. 6개는 목표가 아니라
+상한이므로 하나로 묶인 작업은 worker 하나가 맡는다. 넘치는 작업은 대기열에서 기다린다. 의존 작업과 파일이나 다른
+변경 가능한 자원을 공유하는 작업은 순서대로 실행한다. worker는 할당받은 경로만 수정하며 에이전트를 시작하거나
+계획을 세우거나 계획 검토를 요청하지 않는다.
+
+| 호스트 | Worker | 모델과 사고 강도 | 막히는 조건 |
+|---|---|---|---|
+| Codex | 모델과 사고 강도를 명시해 생성하고, 수정 전에 rollout 기록으로 확인하는 내장 `worker` | 실행마다 확정한 가장 새로운 정식 GPT Luna, `xhigh` | worker 도구, 모델, `xhigh`를 쓸 수 없음. 사용자 정의 `worker`가 다른 설정으로 확정됨. rollout 기록이 없거나 다른 설정을 기록함 |
+| Claude Code | 호출마다 `sonnet` 별칭을 받고, 수정 전에 서브에이전트 기록으로 확인하는 `agents/worker.md`의 `hei5enbug-agent-setup:worker` | 실행마다 확정한 가장 새로운 정식 Claude Sonnet, `xhigh` | 플러그인 worker나 서브에이전트 기록이 없음. 기록에 다른 모델이나 사고 강도가 남음. 강제 서브에이전트 모델, 사고 강도 재정의나 상한 때문에 `xhigh`를 쓸 수 없음 |
+
+조건을 충족하지 못하면 조정자는 영향을 받는 구현을 멈추고 막힌 기능을 정확히 보고한다. 다른 모델 등급, 더 낮은 사고
+강도, 다른 호스트, 범용 에이전트, 메인 세션 수정으로 대신하지 않는다. 플러그인은 Codex `worker.toml`을 설치하지 않고
+사용자 설정도 바꾸지 않는다.
+앞에서 설명한 Codex `explorer` 설치와 Claude `scout` 에이전트는 기존 동작을 유지한다.
+
+Codex는 사용자, `AGENTS.md` 또는 스킬 지침이 요청할 때만 서브에이전트를 생성한다. 이 규칙은 훅으로 전달되므로 그런
+요청이 없으면 Codex 세션은 worker 위임 허가를 한 번 묻는다. 이 질문을 건너뛰려면 프로젝트나 전역 `AGENTS.md`에
+"Delegate implementation changes to worker sub-agents." 같은 줄을 추가한다.
 
 ## 플러그인 업데이트
 
