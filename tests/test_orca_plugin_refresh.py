@@ -110,6 +110,63 @@ class OrcaPluginRefreshTest(OrcaRefreshFixture):
         self.assertEqual(records["codex:session-leaf-init"]["refresh_transaction_id"], result["transaction_id"])
         self.assertEqual(records["claude:session-leaf-other"]["refresh_transaction_id"], result["transaction_id"])
 
+    def current_everywhere(self) -> None:
+        for host in ("codex", "claude"):
+            self.versions[host]["installed_version"] = "0.6.0"
+        for terminal in self.terminals:
+            self.register(terminal, plugin_version="0.6.0")
+
+    def test_변경이_없는_계획도_worker가_marketplace를_갱신해_새_릴리스를_찾는다(self):
+        """캐시된 카탈로그가 설치 버전과 같아도 apply는 worker를 시작하고, worker는 marketplace를 갱신한 뒤 바뀐 카탈로그를 stale_plan으로 보고한다."""
+        # Given
+        self.current_everywhere()
+        plan = refresh.create_plan(self.app_root)
+        self.assertFalse(plan["needs_plugin_update"] or plan["needs_session_restart"])
+        with patch.object(refresh.subprocess, "Popen"):
+            queued = refresh.apply_plan(self.app_root, plan["plan_id"])
+        refreshed: list[list[str]] = []
+
+        def fake_run_command(argv, *, timeout=30.0, check=True):
+            refreshed.append(list(argv))
+            for host in ("codex", "claude"):
+                self.versions[host]["catalog_version"] = "0.7.0"
+            return subprocess.CompletedProcess(list(argv), 0, stdout="", stderr="")
+
+        # When
+        with patch.object(refresh, "run_command", side_effect=fake_run_command):
+            result = refresh._run_worker(self.app_root, queued["transaction_id"])
+
+        # Then
+        receipt = refresh._load_receipt(self.app_root, queued["transaction_id"])
+        self.assertEqual(queued["state"], "queued")
+        self.assertEqual(result, 1)
+        self.assertEqual(receipt["state"], "failed")
+        self.assertEqual(receipt["errors"][0]["code"], "stale_plan")
+        self.assertEqual([command[:3] for command in refreshed], [["codex", "plugin", "marketplace"], ["claude", "plugin", "marketplace"]])
+
+    def test_변경이_없는_계획은_lease_없이_marketplace만_갱신하고_already_current로_끝난다(self):
+        """변경이 없는 계획은 세션에 lease를 걸지 않고, marketplace 갱신 뒤에도 카탈로그가 같으면 already_current로 끝난다."""
+        # Given
+        self.current_everywhere()
+        plan = refresh.create_plan(self.app_root)
+        with patch.object(refresh.subprocess, "Popen"):
+            queued = refresh.apply_plan(self.app_root, plan["plan_id"])
+        leased_at_apply = [
+            record for record in refresh.registry_sessions(self.app_root).values() if "refresh_transaction_id" in record
+        ]
+
+        # When
+        with patch.object(refresh, "run_command") as commands:
+            result = refresh._run_worker(self.app_root, queued["transaction_id"])
+
+        # Then
+        receipt = refresh._load_receipt(self.app_root, queued["transaction_id"])
+        self.assertEqual(leased_at_apply, [])
+        self.assertEqual(result, 0)
+        self.assertEqual(receipt["state"], "already_current")
+        self.assertEqual(commands.call_count, 2)
+        self.assertEqual(receipt["catalog_versions"], {"codex": "0.6.0", "claude": "0.6.0"})
+
     def test_마켓플레이스_루트가_계획_뒤_바뀌면_apply를_거부한다(self):
         """마켓플레이스 루트가 계획 뒤 달라지면 외부 명령 전에 적용을 거부한다."""
         # Given

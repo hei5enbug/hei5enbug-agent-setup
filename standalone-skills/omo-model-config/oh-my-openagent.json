@@ -57,7 +57,6 @@
 
     "momus": {
       "models": [
-        { "model": "openai/gpt-5.6-terra", "reasoning": "high" },
         { "model": "openai/gpt-6-sol", "reasoning": "xhigh" },
         { "model": "anthropic/claude-opus-5-5", "reasoning": "max" }
       ]
@@ -113,7 +112,7 @@
 
     "unspecified-low": {
       "models": [
-        { "model": "openai/gpt-5.6-terra", "reasoning": "high" },
+        { "model": "openai/gpt-6-luna", "reasoning": "low" },
         { "model": "anthropic/claude-sonnet-5-5", "reasoning": "low" }
       ]
     },
