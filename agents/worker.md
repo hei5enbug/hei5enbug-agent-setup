@@ -3,8 +3,8 @@ name: worker
 description: Coordinator-assigned implementation task only. Makes the assigned change within its allowed
   paths and returns changed paths, check results, and blockers. Never use it for investigation, planning,
   review, or work without an assignment from the coordinating main session.
-model: sonnet
-effort: xhigh
+model: claude-sonnet-5-5
+effort: high
 disallowedTools: Agent
 ---
 

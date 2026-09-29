@@ -15,5 +15,9 @@
     "claude-code",
     "developer-tools"
   ],
-  "skills": "./skills/"
+  "skills": "./skills/",
+  "agents": [
+    "./agents/scout.md",
+    "./agents/worker.md"
+  ]
 }

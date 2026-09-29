@@ -33,16 +33,17 @@ class PlanningContractTest(unittest.TestCase):
 
     def test_model_selection_has_one_canonical_source(self):
         validation = VALIDATION.read_text()
-        self.assertIn("Latest available Claude Fable", validation)
-        self.assertIn("Latest available GPT Sol", validation)
+        mapping = (
+            re.compile(r"\| GPT \| `claude-fable-[\d-]+` \| `high` \|"),
+            re.compile(r"\| Claude \| `gpt-[\d.]+-sol` \| `xhigh` \|"),
+        )
+        for row in mapping:
+            self.assertRegex(validation, row)
         for path in (IMPLEMENTATION, DESIGN):
             text = path.read_text()
-            self.assertNotIn("Claude Fable", text)
-            self.assertNotIn("GPT Sol", text)
+            self.assertIsNone(re.search(r"claude-fable-|gpt-[\d.]+-sol|Claude Fable|GPT Sol", text))
 
         signatures = (
-            "Latest available Claude Fable",
-            "Latest available GPT Sol",
             "exactly one reviewer from the other model family",
             "This is one validation pass, not a debate",
         )
@@ -54,6 +55,8 @@ class PlanningContractTest(unittest.TestCase):
                     text = path.read_text()
                     for signature in signatures:
                         self.assertNotIn(signature, text)
+                    for row in mapping:
+                        self.assertIsNone(row.search(text))
 
     def test_validation_is_one_pass_and_read_only(self):
         validation = VALIDATION.read_text()
@@ -93,7 +96,7 @@ class PlanningContractTest(unittest.TestCase):
         # Then
         self.assertIn("[implementation execution](implementation-execution.md)", slicing)
         self.assertIn("one worker owner", slicing)
-        self.assertIn("instead of pinning a model ID", slicing)
+        self.assertIn("which the host's agent rules pin, instead of copying a model ID", slicing)
         self.assertIn("Allowed and protected paths", template)
         self.assertIn("Shared resources and parallel condition", template)
         self.assertIn("Worker model and effort:", template)

@@ -47,7 +47,7 @@ contract, migration, or verification result rather than merely open, rename, or 
 
 Give each slice one worker owner and record the assignment fields from
 [implementation execution](implementation-execution.md) once in the plan. State the worker model and effort
-as that file's host policy, resolved at execution time, instead of pinning a model ID.
+as that file's host policy, which the host's agent rules pin, instead of copying a model ID.
 
 ## 4. Verification planning
 
@@ -96,7 +96,7 @@ section rather than filling it with placeholders.
 
 ## Execution slices
 
-Worker model and effort: <host policy from the implementation execution rules, resolved at execution time>
+Worker model and effort: <host policy from the implementation execution rules, pinned by the host's agent rules>
 
 | Slice | Result and changes | Allowed and protected paths | Depends on | Shared resources and parallel condition | Verification and completion evidence |
 |---|---|---|---|---|---|
