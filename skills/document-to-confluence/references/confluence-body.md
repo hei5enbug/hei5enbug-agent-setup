@@ -114,6 +114,26 @@ when headings change.
 Do not invent a macro identifier. Omit it when creating the macro. When a body you read already
 carries one, send it back unchanged, because it is how the page tracks that macro instance.
 
+## Info panel
+
+**Observed.** On 2026-09-29, `confluence read --format storage` returned a rendered info panel
+stored as this storage-format macro:
+
+```xml
+<ac:structured-macro ac:name="info" ac:schema-version="1">
+  <ac:rich-text-body>
+    <p><strong>PANEL TITLE</strong></p>
+    <ul><li><p><strong>TERM</strong>: explanation</p></li></ul>
+  </ac:rich-text-body>
+</ac:structured-macro>
+```
+
+The body format that produced it was not recorded. Keep one body format per write: do not mix this
+storage-format macro with HTML body markup such as the table-of-contents element above. Before the
+first write, confirm the panel markup that the write tool accepts in the chosen format, then read
+the page back and verify that the panel renders. The macro-identifier rule for the table of
+contents applies here too.
+
 ## Tables
 
 **Convention.** Wrap the content of every `td` and `th` in a block element.
@@ -155,8 +175,8 @@ Give every cell in a column the same value, including the header.
 **Verified.** The widths behave as ratios rather than fixed pixels. The table fills its available
 width and divides that width by the stated proportions.
 
-Neither attribute is a default. Match the table layout to the page width. Omit column widths when
-the columns carry comparable content and an even division is appropriate.
+Match the table layout to the page width. Set column widths on every table unless its columns carry
+comparable content and an even division is appropriate.
 
 When widths are needed, reserve only the necessary space for columns containing short values and
 leave the remaining width to columns whose text wraps. Estimate the needed width from the longest
@@ -173,12 +193,14 @@ characters. Inline code goes in a `code` element.
 
 ### Paragraph structure
 
-Preserve the paragraphs in the source document. Add line breaks inside a paragraph only when the
-user requests them.
+Preserve the paragraphs in the source document. Never put an explicit line break inside a
+sentence. Remove such breaks from the source or the current page, but keep breaks that separate
+stacked values.
 
-When line breaks are requested, place them only at sentence boundaries. Leave a paragraph alone
-when it already fits on one line. Derive the threshold from the display width: use the page width
-for body text and the column width for a table cell.
+Break a paragraph or table cell at sentence boundaries when it holds more than one sentence and
+does not fit on one display line. Leave a single sentence and a paragraph that fits on one line
+unbroken. Derive the threshold from the display width: use the page width for body text and the
+column width for a table cell.
 
 ## Source artifacts that do not belong on the page
 
@@ -202,6 +224,8 @@ produce a usable published page.
   pixel size.
 - Every table cell wraps its content in a block element.
 - Table layout, column widths, and cell spacing follow one consistent rule.
+- Every table sets column widths unless its columns carry comparable content.
+- No explicit line break falls inside a sentence.
 - No local filesystem path or unresolved source-document link.
 - Every referenced attachment exists on the page already.
 - The body's text matches the source within the parity checker's supported scope, or a manual

@@ -78,7 +78,7 @@ choice would materially change the published result.
 |---|---|
 | Source | Exact file, URL, connected document, or prompt content and its format. |
 | Source scope | Whole document, selected pages, named sections, or chosen tabs. |
-| Target | Existing page ID, or destination space and parent for a new page. |
+| Target | Each existing page ID, or destination space and parent for a new page. |
 | Update mode | Replace from source, merge selected sections, or repair the current page. |
 | Included review data | Treatment of comments, tracked changes, annotations, speaker notes, and hidden content. |
 | Staging directory | Writable, ignored repository path or a temporary directory accepted by the upload tool. |
@@ -161,7 +161,39 @@ omissions. Inspect constructs that no tool can compare.
 
 Re-read the source when its revision marker changes. Rebuild affected blocks and repeat validation.
 
-### 8. Save with concurrency protection
+### 8. Apply the writing conventions
+
+Apply these conventions to every page this run writes. They govern placement and presentation only.
+Content comes from the source and the user's request, so never add, remove, or reassign content on your own.
+An explicit user limit, such as repairing only named problems, replacing one section, or publishing
+unchanged, restricts the conventions to the permitted scope. Report the edits they would make outside that
+scope instead of applying them.
+
+- **Change history.** On a page that describes current state, such as behavior, structure, or a procedure,
+  move time-bound records out of the descriptive sections into a final section titled in the page language,
+  such as "변경 이력" in Korean. Time-bound records include the date a state was observed or used as a
+  baseline, progress of an ongoing operation, results of a one-time test, and dated change notes. Use a date
+  column and a content column in chronological order, and keep the moved wording and facts. Add the section
+  only when such records exist. Leave records in place on a page whose purpose is to record events, such as
+  an incident report, meeting notes, or release notes.
+- **Term explanations.** Render a glossary or term-definition list from the source, and term explanations
+  the user requests, as one info panel titled in the page language, such as "용어 설명" in Korean. Place it
+  immediately before the first body section, after any opening content such as a summary or table of
+  contents. Do not create or move opening content to fit this position. Leave explanations inside body
+  prose where they are. Group entries by topic when they are many. Write requested explanations for the
+  readers the user names, and skip general development terms and terms those readers use in daily work.
+  Include a qualifying term even when a table or paragraph also describes it.
+- **Layout.** Apply the column-width and line-break rules in `references/confluence-body.md` to every table,
+  paragraph, and cell, including the panel and the change-history table.
+- **Suggestions.** In the report, list content that seems outside the page's purpose or better suited to
+  another target page, and terms the readers may not know that the page leaves unexplained. Do not apply
+  them; the user decides.
+
+Record every move and requested addition in `convention_edits`. Run `scripts/validate_body.py` again.
+Compare the edited body with the body validated in step 7 and confirm that every text difference is a
+recorded convention edit or a line-break change.
+
+### 9. Save with concurrency protection
 
 Immediately before saving, read the target page version again. If it differs from the version captured
 earlier, stop and report both versions. Do not overwrite another editor's changes.
@@ -169,13 +201,13 @@ earlier, stop and report both versions. Do not overwrite another editor's change
 Confirm that the source revision is unchanged. Send the complete body and a version message that names the
 source and the change. Compose oversized requests from complete blocks before the write.
 
-### 9. Verify the stored result
+### 10. Verify the stored result
 
 Read the saved page in rendered or stored form. Compare its title, hierarchy, text, tables, links, images,
 attachments, macros, and version with the validated body. Inspect visual layout when the host can display it.
 Report any capability fallback and any item still requiring user verification.
 
-### 10. Clean up with approval
+### 11. Clean up with approval
 
 List obsolete attachments or temporary external artifacts and explain why each can be removed.
 Delete an attachment, comment, or external artifact only after explicit user approval.
@@ -193,7 +225,8 @@ When republishing:
 
 ## Rules for every source
 
-- Preserve factual content, ordering, hierarchy, negation, uncertainty, units, and link intent.
+- Preserve factual content, hierarchy, negation, uncertainty, units, and link intent. Change ordering only
+  through recorded convention moves.
 - Preserve source structure when Confluence supports it. Record every deliberate structural downgrade.
 - Never publish OCR text, malformed tables, or ambiguous reading order as verified content.
 - Never expose local paths, credentials, hidden document data, or unsupported private links.
