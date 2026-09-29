@@ -24,6 +24,13 @@
   use `plugin-creator` when the host provides it and preserve the existing plugin contracts.
 - Keep shared behavior in one canonical source and isolate only actual host differences. A rule the session
   instructions already state belongs there alone; reference it instead of restating it.
+- Before changing this repository, resolve the newest generally available model of every family in `PINS` in
+  `tests/test_model_pins.py` once per session. Use the official
+  [Claude models overview](https://platform.claude.com/docs/en/about-claude/models/overview), the
+  [OpenAI model catalog](https://developers.openai.com/api/docs/models), and each host's model catalog, and
+  exclude previews. When a family has a newer release, update `PINS` and every reference in the same change
+  until `tests/test_model_pins.py` passes. Runtime files name models only by these full IDs; never add an alias
+  or a runtime lookup of the newest release.
 - Treat the latest published version as the release baseline. Keep all unreleased work on one planned next
   version and never bump the semantic version for local iterations. Use a cachebuster for local reinstalls.
   Before a release, run every development check in `README.md` and keep both plugin manifests,

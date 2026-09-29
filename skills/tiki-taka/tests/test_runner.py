@@ -102,7 +102,7 @@ class RunnerTest(unittest.TestCase):
             if quota_once and "--session-id" in sys.argv:
                 print(json.dumps({
                     "type": "system",
-                    "model": "claude-fable-5",
+                    "model": "claude-fable-5-1",
                 }), flush=True)
                 print(json.dumps({
                     "type": "result",
@@ -111,7 +111,7 @@ class RunnerTest(unittest.TestCase):
                 }), flush=True)
                 print("reached your model limit", file=sys.stderr, flush=True)
                 raise SystemExit(0)
-            active_model = "claude-opus-4-8" if "--resume" in sys.argv else "claude-fable-5"
+            active_model = "claude-opus-5-5" if "--resume" in sys.argv else "claude-fable-5-1"
             print(json.dumps({
                 "type": "system",
                 "model": active_model,
@@ -254,7 +254,7 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(result.stdout, "Claude 대체 응답\n")
         calls = call_log.read_text(encoding="utf-8").splitlines()
         self.assertEqual(len(calls), 2)
-        self.assertIn("--model claude-opus-4-8", calls[1])
+        self.assertIn("--model claude-opus-5-5", calls[1])
         self.assertIn("대체 모델", result.stderr)
         self.assertFalse((state / "uncertain").exists())
 

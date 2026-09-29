@@ -3,16 +3,16 @@
   "tiers": {
     "lightweight": [
       "anthropic/claude-haiku-4-5",
-      "openai/gpt-5.6-luna"
+      "openai/gpt-6-luna"
     ],
     "standard": [
-      "anthropic/claude-sonnet-5",
+      "anthropic/claude-sonnet-5-5",
       "openai/gpt-5.6-terra"
     ],
     "heavy": [
-      "anthropic/claude-opus-5",
+      "anthropic/claude-opus-5-5",
       "anthropic/claude-fable-5-1",
-      "openai/gpt-5.6-sol"
+      "openai/gpt-6-sol"
     ]
   },
   "required_providers": [
@@ -20,11 +20,11 @@
   ],
   "allowlist": [
     "anthropic/claude-haiku-4-5",
-    "anthropic/claude-sonnet-5",
-    "anthropic/claude-opus-5",
+    "anthropic/claude-sonnet-5-5",
+    "anthropic/claude-opus-5-5",
     "anthropic/claude-fable-5-1",
-    "openai/gpt-5.6-luna",
-    "openai/gpt-5.6-sol",
+    "openai/gpt-6-luna",
+    "openai/gpt-6-sol",
     "openai/gpt-5.6-terra"
   ]
 }

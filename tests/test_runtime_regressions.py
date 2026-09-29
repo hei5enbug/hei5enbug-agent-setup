@@ -61,16 +61,16 @@ class RegistryRegressionTest(unittest.TestCase):
             # Then
             self.assertIn("old", refresh.registry_sessions(root))
 
-    def test_concurrent_explorer_creation_keeps_user_file(self):
+    def test_concurrent_scout_creation_keeps_user_file(self):
         """설정 파일이 확인 직후 생성되어도 사용자 내용을 덮어쓰지 않는다."""
         # Given
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            source = root / "standalone-agents" / "codex-explorer.toml"
+            source = root / "standalone-agents" / "codex-scout.toml"
             source.parent.mkdir()
             source.write_text('name = "bundled"')
             home = root / "home"
-            target = home / "agents" / "explorer.toml"
+            target = home / "agents" / "scout.toml"
             target.parent.mkdir(parents=True)
             real_read = Path.read_text
 
@@ -81,7 +81,7 @@ class RegistryRegressionTest(unittest.TestCase):
 
             # When
             with patch.dict(context.os.environ, {"CODEX_HOME": str(home)}), patch.object(Path, "read_text", racing_read):
-                context.provision_codex_explorer(root)
+                context.provision_codex_agents(root)
             # Then
             self.assertEqual(target.read_text(), 'name = "user"')
 

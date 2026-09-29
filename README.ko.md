@@ -48,7 +48,9 @@ hei5enbug-agent-setup/
 │       ├── claude-code.md
 │       ├── codex.md
 │       └── common.md
-├── scripts/session_context.py
+├── scripts/
+│   ├── agent_guard.py
+│   └── session_context.py
 ├── tests/
 ├── LICENSE
 ├── pyproject.toml
@@ -59,7 +61,8 @@ hei5enbug-agent-setup/
 │   ├── scout.md
 │   └── worker.md
 ├── standalone-agents/
-│   └── codex-explorer.toml
+│   ├── codex-scout.toml
+│   └── codex-worker.toml
 ├── standalone-skills/
 │   └── omo-model-config/
 └── skills/
@@ -81,12 +84,22 @@ Codex와 Claude Code에 패키징합니다. `standalone-skills/` 디렉터리는
 
 `agents/` 디렉터리는 Claude Code 플러그인에 함께 배포되므로, 번들을 설치하면
 `hei5enbug-agent-setup:scout`와 `hei5enbug-agent-setup:worker` 서브에이전트가 추가됩니다. 직접 복사할 필요가 없습니다.
+매니페스트는 이 두 영어 정의만 나열하므로 `agents/ko/`의 한국어 번역본은 서브에이전트로 등록되지 않습니다.
 
 Codex는 `~/.codex/agents/`와 `.codex/agents/`에서만 서브에이전트를 찾으므로 플러그인이 등록할 수 없습니다.
-대신 세션 훅이 `~/.codex/agents/explorer.toml`이 없을 때만 `standalone-agents/codex-explorer.toml`을
-그 위치에 씁니다. 이 파일은 Codex 내장 `explorer`를 덮어써 사고 강도와 읽기 전용 샌드박스를 고정합니다.
-이미 있는 `explorer.toml`은 절대 덮어쓰지 않으며, 다음 Codex 세션부터 적용됩니다. 모델은 지정하지 않으므로
-호스트의 기본 모델을 물려받고, Claude Code의 `scout`는 모델을 하나로 고정한다는 점이 다릅니다.
+대신 세션 훅이 `~/.codex/agents/scout.toml`과 `~/.codex/agents/worker.toml`이 각각 없을 때만
+`standalone-agents/codex-scout.toml`과 `standalone-agents/codex-worker.toml`을 그 위치에 복사합니다. 두 파일은
+Claude Code와 같은 이름의 `scout`, `worker` 에이전트를 정의하고 사고 강도와 샌드박스를 고정합니다. 플러그인 `worker`는
+Codex 내장 `worker`를 대신하고, `scout`는 내장 `explorer`를 건드리지 않습니다. 이미 있는 파일은 절대 덮어쓰지 않으며,
+다음 Codex 세션부터 적용됩니다. 한 번 설치한 파일은 바뀌지 않으므로 모델은 지정하지 않고, Codex 지침이 생성할 때마다
+고정 모델을 넘깁니다. 훅은 이전 버전이 만든 `explorer.toml`도 지우지만, 그때 배포한
+파일과 바이트 단위로 같을 때만 지우므로 직접 고친 파일은 남습니다.
+
+`PreToolUse` 훅인 `scripts/agent_guard.py`가 두 호스트에서 내장 서브에이전트를 막습니다. Claude Code에서는 종류를
+비운 호출과, 플러그인이나 사용자·프로젝트 정의가 제공하지 않는 모든 종류를 거부합니다. `general-purpose`, `Explore`,
+`Plan`, fork가 여기에 해당합니다. Codex에서는 종류를 비운 호출, `default`, `explorer`, 역할 파일이 없는 모든 종류를
+거부하며, 플러그인 역할이 생기기 전의 내장 `worker`도 여기에 포함됩니다. 독립된 읽기 전용 작업자가 필요한 스킬은
+`scout`를 쓰고, 시험 출력을 쓰는 스킬은 별도 `claude -p`나 `codex exec` 프로세스를 실행합니다.
 
 ## 플러그인 설치
 
@@ -177,13 +190,12 @@ Windows 실행과 실제 모델의 지침 준수 여부는 테스트 범위에 �
 
 | 호스트 | Worker | 모델과 사고 강도 | 막히는 조건 |
 |---|---|---|---|
-| Codex | 모델과 사고 강도를 명시해 생성하고, 수정 전에 rollout 기록으로 확인하는 내장 `worker` | 실행마다 확정한 가장 새로운 정식 GPT Luna, `xhigh` | worker 도구, 모델, `xhigh`를 쓸 수 없음. 사용자 정의 `worker`가 다른 설정으로 확정됨. rollout 기록이 없거나 다른 설정을 기록함 |
-| Claude Code | 호출마다 `sonnet` 별칭을 받고, 수정 전에 서브에이전트 기록으로 확인하는 `agents/worker.md`의 `hei5enbug-agent-setup:worker` | 실행마다 확정한 가장 새로운 정식 Claude Sonnet, `xhigh` | 플러그인 worker나 서브에이전트 기록이 없음. 기록에 다른 모델이나 사고 강도가 남음. 강제 서브에이전트 모델, 사고 강도 재정의나 상한 때문에 `xhigh`를 쓸 수 없음 |
+| Codex | 세션 훅이 설치한 플러그인 `worker` 역할. 모델과 사고 강도를 명시해 생성하고, 수정 전에 rollout 기록으로 확인 | 저장소에 고정한 `gpt-6-luna`, `xhigh` | worker 도구, `worker` 역할 파일, 모델, `xhigh`를 쓸 수 없음. 역할 파일이 다른 설정으로 확정됨. rollout 기록이 없거나 다른 설정을 기록함 |
+| Claude Code | 정의에 모델이 고정되어 호출 단위 모델 없이 호출하고, 수정 전에 서브에이전트 기록으로 확인하는 `agents/worker.md`의 `hei5enbug-agent-setup:worker` | 저장소에 고정한 `claude-sonnet-5-5`, `high` | 플러그인 worker나 서브에이전트 기록이 없음. 기록에 다른 모델이나 사고 강도가 남음. 강제 서브에이전트 모델, 사고 강도 재정의나 상한 때문에 `high`를 쓸 수 없음 |
 
 조건을 충족하지 못하면 조정자는 영향을 받는 구현을 멈추고 막힌 기능을 정확히 보고한다. 다른 모델 등급, 더 낮은 사고
-강도, 다른 호스트, 범용 에이전트, 메인 세션 수정으로 대신하지 않는다. 플러그인은 Codex `worker.toml`을 설치하지 않고
-사용자 설정도 바꾸지 않는다.
-앞에서 설명한 Codex `explorer` 설치와 Claude `scout` 에이전트는 기존 동작을 유지한다.
+강도, 다른 호스트, 범용 에이전트, 메인 세션 수정으로 대신하지 않는다. 플러그인은 이미 있는 Codex `worker.toml`을
+덮어쓰지 않고 사용자 설정도 바꾸지 않는다. 앞에서 설명한 `scout` 에이전트는 계속 읽기 전용으로만 쓴다.
 
 Codex는 사용자, `AGENTS.md` 또는 스킬 지침이 요청할 때만 서브에이전트를 생성한다. 이 규칙은 훅으로 전달되므로 그런
 요청이 없으면 Codex 세션은 worker 위임 허가를 한 번 묻는다. 이 질문을 건너뛰려면 프로젝트나 전역 `AGENTS.md`에

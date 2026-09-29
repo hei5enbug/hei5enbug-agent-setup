@@ -42,15 +42,21 @@ hei5enbug-agent-setup/
 │       ├── claude-code.md
 │       ├── codex.md
 │       └── common.md
-├── scripts/session_context.py
+├── scripts/
+│   ├── agent_guard.py
+│   └── session_context.py
 ├── tests/
 ├── LICENSE
 ├── pyproject.toml
 ├── agents/
-│   ├── ko/scout.ko.md
-│   └── scout.md
+│   ├── ko/
+│   │   ├── scout.ko.md
+│   │   └── worker.ko.md
+│   ├── scout.md
+│   └── worker.md
 ├── standalone-agents/
-│   └── codex-explorer.toml
+│   ├── codex-scout.toml
+│   └── codex-worker.toml
 ├── standalone-skills/
 │   └── omo-model-config/
 └── skills/
@@ -70,14 +76,24 @@ hei5enbug-agent-setup/
 `standalone-skills/` ディレクトリは、どちらのプラグインのスキル検出パスにも含まれません。
 
 `agents/` ディレクトリは Claude Code プラグインに同梱されるため、バンドルをインストールすると
-`hei5enbug-agent-setup:scout` サブエージェントが追加されます。手動コピーは不要です。
+`hei5enbug-agent-setup:scout` と `hei5enbug-agent-setup:worker` サブエージェントが追加されます。手動コピーは不要です。
+マニフェストはこの二つの英語定義だけを列挙するため、`agents/ko/` の韓国語訳はサブエージェントとして登録されません。
 
 Codex はサブエージェントを `~/.codex/agents/` と `.codex/agents/` からのみ検出するため、プラグインでは登録できません。
-代わりにセッションフックが、`~/.codex/agents/explorer.toml` が存在しない場合にかぎり
-`standalone-agents/codex-explorer.toml` をその場所に書き込みます。このファイルは Codex 組み込みの `explorer` を
-上書きし、推論の強さと読み取り専用サンドボックスを固定します。既存の `explorer.toml` は決して上書きせず、
-次の Codex セッションから利用できます。モデルは指定しないためホストの既定モデルを引き継ぎ、
-Claude Code の `scout` がモデルを一つに固定する点とは異なります。
+代わりにセッションフックが、`~/.codex/agents/scout.toml` と `~/.codex/agents/worker.toml` がそれぞれ存在しない場合に
+かぎり、`standalone-agents/codex-scout.toml` と `standalone-agents/codex-worker.toml` をその場所にコピーします。
+これらのファイルは Claude Code と同じ名前の `scout` と `worker` エージェントを定義し、推論の強さとサンドボックスを
+固定します。プラグインの `worker` は Codex 組み込みの `worker` を置き換え、`scout` は組み込みの `explorer` に手を
+加えません。既存のファイルは決して上書きせず、次の Codex セッションから利用できます。インストール済みのファイルは
+更新されないため、モデルは指定せず、Codex の指示が起動のたびに固定モデルを渡します。フックは以前のバージョンが書き込んだ
+`explorer.toml` も削除しますが、当時配布したファイルとバイト単位で一致する場合にかぎるため、編集したファイルは
+残ります。
+
+`PreToolUse` フックの `scripts/agent_guard.py` が、両方のホストで組み込みサブエージェントを防ぎます。Claude Code では、
+種類を省略した呼び出しと、プラグインにもユーザー・プロジェクト定義にもない種類をすべて拒否します。`general-purpose`、
+`Explore`、`Plan`、フォークがこれに当たります。Codex では、種類を省略した呼び出し、`default`、`explorer`、ロール
+ファイルのない種類をすべて拒否し、プラグインのロールができる前の組み込み `worker` も拒否します。独立した読み取り専用の
+ワーカーを求めるスキルは `scout` を使い、試行出力を書くスキルは別の `claude -p` または `codex exec` プロセスを実行します。
 
 ## プラグインのインストール
 

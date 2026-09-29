@@ -44,7 +44,9 @@ hei5enbug-agent-setup/
 │       ├── claude-code.md
 │       ├── codex.md
 │       └── common.md
-├── scripts/session_context.py
+├── scripts/
+│   ├── agent_guard.py
+│   └── session_context.py
 ├── tests/
 ├── LICENSE
 ├── pyproject.toml
@@ -55,7 +57,8 @@ hei5enbug-agent-setup/
 │   ├── scout.md
 │   └── worker.md
 ├── standalone-agents/
-│   └── codex-explorer.toml
+│   ├── codex-scout.toml
+│   └── codex-worker.toml
 ├── standalone-skills/
 │   └── omo-model-config/
 └── skills/
@@ -75,13 +78,25 @@ package the same `skills/` directory for Codex and Claude Code without copying s
 The `standalone-skills/` directory is not included in either plugin's skill discovery path.
 
 The `agents/` directory ships with the Claude Code plugin, so installing the bundle adds the
-`hei5enbug-agent-setup:scout` and `hei5enbug-agent-setup:worker` subagents. No manual copy is needed.
+`hei5enbug-agent-setup:scout` and `hei5enbug-agent-setup:worker` subagents. No manual copy is needed. The manifest
+lists only these two English definitions, so the Korean mirrors in `agents/ko/` are not registered as subagents.
 
 Codex discovers subagents only in `~/.codex/agents/` and `.codex/agents/`, so a plugin cannot register one.
-Instead, the session hook writes `standalone-agents/codex-explorer.toml` to `~/.codex/agents/explorer.toml`
-when that file is absent, which overrides the built-in Codex `explorer` to fix its reasoning effort and
-read-only sandbox. An existing `explorer.toml` is never overwritten, and the agent becomes available in the
-next Codex session. It sets no model, so it inherits the host's default, whereas `scout` pins one on Claude Code.
+Instead, the session hook copies `standalone-agents/codex-scout.toml` and `standalone-agents/codex-worker.toml` to
+`~/.codex/agents/scout.toml` and `~/.codex/agents/worker.toml` when each file is absent. They define `scout` and
+`worker` agents, named as on Claude Code, with a fixed reasoning effort and sandbox. The plugin `worker` replaces the
+built-in Codex `worker`, and `scout` leaves the built-in `explorer` untouched. An existing file is never
+overwritten, and the agents become available in the next Codex session. Because an installed copy never changes,
+the files set no model; the Codex instructions pass the pinned model on every spawn instead. The hook also
+removes an `explorer.toml` that an earlier version wrote, but only while it is byte-identical to that bundled file,
+so a copy you edited stays.
+
+A `PreToolUse` hook, `scripts/agent_guard.py`, keeps built-in subagents out on both hosts. On Claude Code it
+denies an omitted subagent type and every type that neither a plugin nor a user or project definition provides,
+such as `general-purpose`, `Explore`, `Plan`, and forks. On Codex it denies an omitted type, `default`, `explorer`,
+and every type without a role file, including the built-in `worker` before the plugin role exists. Skills that ask
+for an independent read-only worker use `scout`, and skills that write trial outputs run a separate `claude -p` or
+`codex exec` process.
 
 ## Plugin installation
 
@@ -171,13 +186,13 @@ never start agents, plan, or request plan review.
 
 | Host | Worker | Model and effort | Blocked when |
 |---|---|---|---|
-| Codex | Built-in `worker`, spawned with an explicit model and effort and checked in its rollout record before any edit | Latest production GPT Luna at `xhigh`, resolved for each run | Worker tools, the model, or `xhigh` are unavailable; a user-defined `worker` resolves to other settings; the rollout record is missing or names other settings |
-| Claude Code | Bundled `hei5enbug-agent-setup:worker` from `agents/worker.md`, given the `sonnet` alias on each invocation and checked in its subagent record before any edit | Latest production Claude Sonnet at `xhigh`, resolved for each run | The plugin worker or its subagent record is missing; the record names another model or effort; a forced subagent model, an effort override, or a cap prevents `xhigh` |
+| Codex | Plugin `worker` role installed by the session hook, spawned with an explicit model and effort and checked in its rollout record before any edit | `gpt-6-luna` at `xhigh`, pinned in the repository | Worker tools, the `worker` role file, the model, or `xhigh` are unavailable; the role file resolves to other settings; the rollout record is missing or names other settings |
+| Claude Code | Bundled `hei5enbug-agent-setup:worker` from `agents/worker.md`, whose definition pins the model, invoked without a per-invocation model and checked in its subagent record before any edit | `claude-sonnet-5-5` at `high`, pinned in the repository | The plugin worker or its subagent record is missing; the record names another model or effort; a forced subagent model, an effort override, or a cap prevents `high` |
 
 When a requirement is not met, the coordinator stops the affected implementation and reports the exact
 blocking capability. It never substitutes another model tier, lower effort, another host, a generic agent, or
-main-session edits. The plugin installs no Codex `worker.toml` and changes no user settings. The Codex
-`explorer` provisioning above and the Claude `scout` agent keep their existing behavior.
+main-session edits. The plugin never overwrites an existing Codex `worker.toml` and changes no user
+settings. The `scout` agents described above stay read-only.
 
 Codex spawns sub-agents only when the user, `AGENTS.md`, or skill instructions ask for them. These rules arrive
 through a hook, so without such a request a Codex session asks once for permission to delegate to workers. To skip

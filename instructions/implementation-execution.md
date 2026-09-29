@@ -6,7 +6,7 @@ requirements, investigation, planning, design, review, decisions, and the final 
 design document the user requested also stays in the main session. Workers make every implementation edit.
 
 The session rules still own high-level reasoning, clarification, and permission decisions. The current
-host's agent rules own its worker tool, required model family, and configuration evidence. An assigned worker
+host's agent rules own its worker tool, pinned model, and configuration evidence. An assigned worker
 reads only "Assigned workers" below unless its task requires another section.
 
 ## Task preparation
@@ -83,20 +83,16 @@ main-session implementation. Report the exact blocking capability and make no af
 
 ## Model and effort
 
-At the start of each implementation run, resolve the newest production model in the family that the host's
-agent rules require. Use the official sources those rules name and cross-check the ID and supported effort
-against the host's model selector or catalog. Prefer a newer documented production release over an older
-provider alias. Unresolved disagreement between sources blocks selection. If the newest version is
-unavailable, stop instead of selecting an older one. Never pin a model ID in instructions or choose by string
-ordering.
+Use the model ID and effort that the host's agent rules pin. Never look up a newer release, follow a provider
+alias, or substitute another model at runtime; the repository updates its pins when it changes. If the pinned
+model or effort is unavailable, stop instead of selecting another one.
 
-Record the concrete model ID and `xhigh`, and reuse them for that run. A newer release does not change running
-workers; the next run resolves again.
+Record the pinned model ID and effort in each assignment, and reuse them for that run.
 
 Inspect only relevant non-secret configuration fields. A requested setting alone is not evidence of the
-effective setting. The minimum evidence is the explicit invocation, a host record naming the actual model, and
-the effective effort under the host's documented configuration precedence. A missing capability, an
-unexpected override, or unverified effective settings stops the affected implementation.
+effective setting. The minimum evidence is the explicit invocation or pinned definition, a host record naming
+the actual model, and the effective effort under the host's documented configuration precedence. A missing
+capability, an unexpected override, or unverified effective settings stops the affected implementation.
 
 When launch metadata is insufficient, use a readiness-only assignment only if the host can send a follow-up to
 the same worker while preserving or explicitly reapplying its verified settings. Verify the host record, then
@@ -104,8 +100,8 @@ send the implementation assignment. Without that continuation or reliable config
 path and make no edits. A worker's unsubstantiated self-report never replaces host evidence.
 
 Recheck after a resume, an override change, a substitution warning, or a host configuration change. A mismatch
-stops the affected worker. Reuse verified settings while their inputs remain unchanged; do not repeat model
-discovery or readiness calls before every edit.
+stops the affected worker. Reuse verified settings while their inputs remain unchanged; do not repeat readiness
+calls before every edit.
 
 ## Assigned workers
 

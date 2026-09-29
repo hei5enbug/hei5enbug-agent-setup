@@ -27,6 +27,12 @@
   변경할 때는 호스트가 `plugin-creator`를 제공하면 사용하고 기존 플러그인 계약을 보존한다.
 - 공통 동작은 하나의 기준 원본에 두고 실제 호스트 차이만 분리한다. 세션 지침이 이미 규정한 규칙은
   그곳에만 두고, 다시 쓰지 말고 참조한다.
+- 이 저장소를 변경하기 전에, 세션마다 한 번 `tests/test_model_pins.py`의 `PINS`에 있는 모든 모델 계열의 가장 새로운
+  정식 모델을 확인한다. 공식 [Claude 모델 개요](https://platform.claude.com/docs/en/about-claude/models/overview),
+  [OpenAI 모델 카탈로그](https://developers.openai.com/api/docs/models), 각 호스트의 모델 카탈로그를 사용하고 미리보기
+  모델은 제외한다. 계열에 더 새로운 릴리스가 있으면 같은 변경에서 `PINS`와 모든 참조를 갱신하고
+  `tests/test_model_pins.py`가 통과할 때까지 맞춘다. 실행 파일은 모델을 이 전체 ID로만 적는다. 별칭이나 실행 시점의
+  최신 릴리스 조회는 추가하지 않는다.
 - 최근 배포 버전을 릴리스 기준으로 사용한다. 배포되지 않은 변경 전체는 계획한 다음 버전 하나에 유지하고,
   로컬 반복 작업마다 의미 버전을 올리지 않는다. 로컬 재설치에는 cachebuster를 사용한다.
   릴리스 전에는 `README.md`의 모든 개발 검사를 실행하고 두 플러그인 매니페스트, `pyproject.toml`,
