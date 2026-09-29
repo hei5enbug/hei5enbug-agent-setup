@@ -18,6 +18,7 @@ Record these document-level values when the source provides them:
 | `assets` | Images, files, and diagram outputs referenced by blocks. |
 | `omissions` | Source content intentionally excluded with its locator and reason. |
 | `uncertainties` | Unreadable or ambiguous source regions requiring verification. |
+| `convention_edits` | Writing-convention moves and requested additions, each with its locator and reason. |
 
 Do not publish hidden properties, revision history, comments, tracked changes, or annotations unless the user
 includes them in scope.

@@ -115,6 +115,62 @@
         "No attachments or diagram references are read because the source and current page contain no such assets.",
         "The output labels the version data as simulated and makes no live save or stored-readback claim."
       ]
+    },
+    {
+      "id": 9,
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/current-state-case/source.md` as the complete Markdown source for a new page in a fixture space under a fixture parent. The readers are the operations team, who use shipping terms such as 선사, 항차, and 기항 every day. Prepare the normalized inventory, the proposed body, the convention-edit record, and an operation plan; do not claim that anything was saved or read back.",
+      "expected_output": "The run selects the Markdown adapter, validates text parity on the source-faithful body, and then applies the writing conventions. On this current-state page, the dated baseline, the network lock test result, and the deletion-batch progress move unchanged into a final 변경 이력 section with date and content columns. The run adds no info panel or term explanation because neither the source nor the user supplies one. Instead, the report suggests unexplained infrastructure terms and leaves the shipping terms out. The mid-sentence break is removed, and every table narrows its label column. Moves are recorded, and no live save or readback is claimed.",
+      "files": [
+        "evals/files/current-state-case/source.md"
+      ],
+      "expectations": [
+        "The three time-bound records appear only in a final change-history section with date and content columns, with their dates and figures unchanged.",
+        "The proposed body contains no info panel and no term explanation that the source lacks.",
+        "The report suggests explanations for unexplained terms, including network lock and rc.local, and does not suggest 선사, 항차, or 기항.",
+        "No explicit line break remains inside a sentence, and every table, including the change-history table, gives its label or date column a narrower width.",
+        "Text parity runs on the body before the conventions, and every later difference is a recorded move; no live save or readback is claimed."
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/current-state-case/source.md` as the complete Markdown source for a new page in a fixture space under a fixture parent. The readers are the operations team, who use shipping terms such as 선사, 항차, and 기항 every day. Publish the text exactly as written; do not reorganize, move, or add content. Prepare the normalized inventory, the proposed body, the convention-edit record, and an operation plan; do not claim that anything was saved or read back.",
+      "expected_output": "The run treats the request as an explicit limit on the writing conventions. The proposed body keeps the source section order and places the dated records where the source has them. It adds no info panel or change-history section and reports the convention edits it withheld. Text parity passes against the source, and no live save or readback is claimed.",
+      "files": [
+        "evals/files/current-state-case/source.md"
+      ],
+      "expectations": [
+        "The proposed body keeps every source section and time-bound sentence in source order and adds no change-history section.",
+        "The proposed body adds no glossary or info panel.",
+        "The report lists the convention edits that were withheld because of the user's limit.",
+        "No live save or readback is claimed."
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/incident-report-case/source.md` as the complete Markdown source for a new page in a fixture space under a fixture parent. The readers are the operations team, who use shipping terms such as 선사, 항차, and 기항 every day. Prepare the normalized inventory, the proposed body, the convention-edit record, and an operation plan; do not claim that anything was saved or read back.",
+      "expected_output": "The run recognizes an incident report as a page whose purpose is to record events. It keeps the timeline table and the dated prevention sentences in their source sections and adds no change-history section. It adds no info panel, applies only layout conventions such as column widths, and makes no live save or readback claim.",
+      "files": [
+        "evals/files/incident-report-case/source.md"
+      ],
+      "expectations": [
+        "The timeline table and the 2026-09-22 and 2026-09-24 sentences stay in their source sections, and no change-history section is added.",
+        "The proposed body adds no info panel or term explanation that the source lacks.",
+        "Text parity passes against the source, and no live save or readback is claimed."
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/current-state-case/source.md` as the complete Markdown source for a new page in a fixture space under a fixture parent. The readers are the operations team, who use shipping terms such as 선사, 항차, and 기항 every day. Explain, in the page, the terms that the operations team may not know. Prepare the normalized inventory, the proposed body, the convention-edit record, and an operation plan; do not claim that anything was saved or read back.",
+      "expected_output": "The run treats the request as a user-requested addition. It writes one 용어 설명 info panel immediately before the first body section, after the opening paragraph and any table of contents, without creating or moving opening content to fit. The panel explains infrastructure terms the operations team may not know, including at least network lock and rc.local, and omits the shipping terms and general development terms. The change-history move and layout conventions still apply, the panel is recorded as a requested addition, and no live save or readback is claimed.",
+      "files": [
+        "evals/files/current-state-case/source.md"
+      ],
+      "expectations": [
+        "Exactly one info panel appears after the opening paragraph and any table of contents and immediately before the first h2 section.",
+        "The panel explains terms the operations team may not know, including at least network lock and rc.local.",
+        "The panel does not explain 선사, 항차, 기항, API, 서버, or VM.",
+        "The time-bound records move to a final change-history section, and the panel is recorded as a requested addition; no live save or readback is claimed."
+      ]
     }
   ]
 }
