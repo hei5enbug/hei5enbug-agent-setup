@@ -152,6 +152,9 @@ python3 -m pytest
 node --test skills/document-to-confluence/tests/test_render_diagrams.mjs
 ```
 
+需要 Orca CLI 的测试在未安装 Orca 时会跳过，因此 CI 无需 Orca 即可通过。安装 Orca 后重新运行
+`python3 -m pytest` 即可覆盖这些测试。
+
 ## 指令语言
 
 英文文件是 skill、参考资料、agent 和会话指令的规范可执行来源。

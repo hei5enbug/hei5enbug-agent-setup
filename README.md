@@ -255,6 +255,9 @@ python3 -m pytest
 node --test skills/document-to-confluence/tests/test_render_diagrams.mjs
 ```
 
+Tests that need the Orca CLI skip when it is not installed, so CI passes without Orca. After installing Orca,
+run `python3 -m pytest` again to cover them.
+
 ## Instruction language
 
 English files are the canonical executable sources for plugin skills, references, agents, and session

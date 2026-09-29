@@ -31,6 +31,8 @@
   exclude previews. When a family has a newer release, update `PINS` and every reference in the same change
   until `tests/test_model_pins.py` passes. Runtime files name models only by these full IDs; never add an alias
   or a runtime lookup of the newest release.
+- When tests skip because the Orca CLI is not installed, ask the user whether to install Orca and rerun them
+  before you report the checks as passing.
 - Treat the latest published version as the release baseline. Keep all unreleased work on one planned next
   version and never bump the semantic version for local iterations. Use a cachebuster for local reinstalls.
   Before a release, run every development check in `README.md` and keep both plugin manifests,
