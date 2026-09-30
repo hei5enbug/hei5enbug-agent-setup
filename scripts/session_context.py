@@ -5,11 +5,18 @@ import json
 import os
 import re
 import sys
+import tempfile
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 
 LOCAL_LINK = re.compile(r"\[([^\]]+)\]\(([^\s)]+)\)")
 MAX_CONTEXT_BYTES = 9000
+DIGEST_VERSION = 1
+MARKER_SCHEMA = 1
+MARKER_RETENTION_SECONDS = 30 * 24 * 60 * 60
+TERMINAL_HANDLE = re.compile(r"^[A-Za-z0-9._:-]{1,200}$")
 SESSION_FILES = {
     "codex": "codex.md",
     "claude": "claude-code.md",
@@ -53,6 +60,81 @@ def render_context(root: Path, host: str) -> str:
     if len(context.encode("utf-8")) > MAX_CONTEXT_BYTES:
         raise ValueError("Bundled instructions exceed the context budget; move details to conditional references")
     return context
+
+
+def instructions_digest(root: Path) -> str:
+    """Hash every executable instruction file and the renderer, independent of where the plugin is installed."""
+    files = sorted(
+        path
+        for path in (root / "instructions").rglob("*.md")
+        if not path.name.endswith(".ko.md")
+    )
+    files.append(root / "scripts" / "session_context.py")
+    digest = hashlib.sha256(f"v{DIGEST_VERSION}".encode())
+    for path in files:
+        digest.update(b"\0" + path.relative_to(root).as_posix().encode() + b"\0" + path.read_bytes())
+    return digest.hexdigest()
+
+
+def marker_directory() -> Path | None:
+    value = os.environ.get("ORCA_USER_DATA_PATH")
+    if not value:
+        return None
+    base = Path(value).expanduser()
+    return base / "hei5enbug-agent-setup" / "terminals" if base.is_absolute() else None
+
+
+def interactive_session(host: str, transcript: object) -> bool:
+    """A child `claude -p` or `codex exec` inherits the terminal's Orca variables but must not claim its marker."""
+    if host == "claude":
+        return os.environ.get("CLAUDE_CODE_ENTRYPOINT", "cli") == "cli"
+    if not isinstance(transcript, str):
+        return False
+    try:
+        with open(transcript, encoding="utf-8") as stream:
+            meta = json.loads(stream.readline())
+    except (OSError, ValueError):
+        return False
+    payload = meta.get("payload") if isinstance(meta, dict) else None
+    return isinstance(payload, dict) and payload.get("source") == "cli"
+
+
+def write_terminal_marker(root: Path, host: str, event: dict) -> None:
+    """Record which instructions this Orca terminal's interactive session loaded, so a later refresh can target it."""
+    directory = marker_directory()
+    handle = os.environ.get("ORCA_TERMINAL_HANDLE")
+    if directory is None or not isinstance(handle, str) or not TERMINAL_HANDLE.fullmatch(handle):
+        return
+    if not interactive_session(host, event.get("transcript_path")):
+        return
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    source = event.get("source")
+    transcript = event.get("transcript_path")
+    payload = {
+        "schema": MARKER_SCHEMA,
+        "host": host,
+        "root": root.as_posix(),
+        "digest": instructions_digest(root),
+        "source": source if isinstance(source, str) else None,
+        "transcript_path": transcript if isinstance(transcript, str) and Path(transcript).is_absolute() else None,
+        "written_at": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+    }
+    descriptor, temporary = tempfile.mkstemp(prefix=".marker-", dir=directory)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream)
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, directory / f"{handle}.json")
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+    cutoff = time.time() - MARKER_RETENTION_SECONDS
+    for stale in directory.glob("*.json"):
+        try:
+            if stale.stat().st_mtime < cutoff:
+                stale.unlink()
+        except OSError:
+            pass
 
 
 CODEX_AGENTS = {"scout": "codex-scout.toml", "worker": "codex-worker.toml"}
@@ -113,6 +195,11 @@ def main() -> int:
             try:
                 provision_codex_agents(root)
             except OSError:
+                pass
+        if event_name == "SessionStart":
+            try:
+                write_terminal_marker(root, host, event)
+            except (OSError, ValueError):
                 pass
     except (OSError, ValueError, KeyError, TypeError) as error:
         print(f"hei5enbug-agent-setup instructions were not loaded: {error}", file=sys.stderr)

@@ -67,6 +67,7 @@ hei5enbug-agent-setup/
     ├── flowchart-design/
     ├── docs-rewrite/
     ├── document-to-confluence/
+    ├── orca-plugin-refresh/
     ├── skill-builder/
     ├── suggest-commit/
     ├── technical-design-writer/
@@ -132,10 +133,9 @@ for locating the script. No user or project instruction file is copied, linked, 
 
 | When | Behavior |
 |---|---|
-| Session starts or resumes | `SessionStart` supplies the installed instruction files. |
+| Session starts or resumes | `SessionStart` supplies the installed instruction files. In an Orca terminal it also writes a marker with the plugin directory and an instructions digest. |
 | Session clears or compacts | `SessionStart` supplies them again. |
 | A subagent starts | `SubagentStart` supplies the same host's instructions. |
-| A prompt arrives, a turn stops, or a session ends | The Orca refresh registry records session metadata without prompt text. |
 | A matching task begins | The agent reads the required reference under `instructions/`. |
 | A plugin update is installed | A new session reads that installed version. A repository push alone changes nothing locally. |
 
@@ -154,8 +154,7 @@ After installation or update, use the host's hook controls to check that these h
 in Codex, trusted. A hook that an update adds, such as the agent guard, stays skipped in Codex until you trust it
 in `/hooks`. Restart Claude Code or start a new Codex session after updating.
 The hook does not bypass host trust settings or change an already running session to a new plugin version.
-The `orca-plugin-refresh-resume` skill uses the registry after a one-time session bootstrap to update this plugin and
-resume registered idle sessions.
+The `orca-plugin-refresh` skill uses those markers to apply an update to running Orca sessions without restarting them.
 
 A missing or empty session file, an invalid local reference, or context larger than 9,000 UTF-8 bytes produces an error on
 stderr and no partial context. Session-start hook errors do not reliably block the host; resolve any
@@ -226,32 +225,24 @@ claude plugin update hei5enbug-agent-setup@hei5enbug
 
 Start a new Codex thread or restart Claude Code after updating so the host loads the new skills and instructions.
 
-### Refresh Orca agent sessions
+### Apply an update to running Orca sessions
 
-Use `orca-plugin-refresh-resume` to refresh this plugin in idle Orca-managed Claude Code and Codex sessions, then
-resume each session with its existing native session ID. The skill shows a plan and requires approval before it
-updates marketplaces or stops any agent. Busy, unregistered, or ambiguous sessions, and sessions with unsent input,
-stop the operation before it changes installed plugins. Claude Code background tasks and scheduled wakeups also block
-a refresh. The worker
-rechecks terminal identity and idle state immediately before exit, but host hook timeouts prevent an absolute
-guarantee that no new prompt can arrive. A failed or unconfirmed completion notice requires receipt inspection;
-never blindly resend it or resume a session while its replacement terminal may still be running. The lifecycle hook
-blocks a prompt only while a refresh transaction is active; a session it cannot identify or a registry it cannot
-read never blocks ordinary work outside a transaction. When the cached marketplaces show no change, `apply` still
-starts a worker without leases; it refreshes the marketplaces and reports `already_current`, or `stale_plan` when a
-newer release appeared, which needs a new plan.
+Ask for `orca-plugin-refresh` to update this plugin in both hosts and apply it to every idle Orca-managed session
+without restarting it. The skill runs only when you ask for it.
 
-Codex differs in three ways. It registers a session only when a prompt starts, so a Codex session that never
-received a prompt blocks the plan until it receives one or is closed. After `/exit`, the worker waits until Codex
-releases the conversation, which can take about a minute, and resumes it with its last recorded model and reasoning
-effort. A resumed Codex session registers its plugin version on its next prompt; until then its receipt shows
-`plugin_registration: pending_next_turn`.
+| Part | Claude Code | Codex |
+|---|---|---|
+| Skills, agents, and hooks | The skill sends `/reload-plugins` | The next turn picks up the new install automatically |
+| Session instructions | The skill sends `/compact` when they are stale | The skill sends `/compact` when they are stale; the session loads them on its next turn |
 
-The first rollout needs one manual bootstrap. Install the new plugin release, review and trust the Codex plugin hooks,
-then restart or resume each existing session once. Earlier sessions have no lifecycle registry entry, so the
-workflow cannot safely identify their native session IDs. After that bootstrap, the hooks keep the registry current
-and later plugin refreshes can resume the registered sessions automatically. This workflow supports macOS and
-Linux user-scope installations from the `hei5enbug` marketplace.
+The skill decides that instructions are stale from the session-start marker: it is missing, holds another digest,
+or points at a plugin directory that was replaced or removed. It sends a command only to an idle terminal whose
+input line is empty and confirms every result from the session transcript or the screen. For a Claude Code session,
+the skill may type and delete one character to tell a grey prompt suggestion from typed text; it never sends to a
+session with typed text. A busy session is retried until the time budget ends and is then
+reported as skipped. The session that runs the skill is handled last by a detached helper after its turn ends.
+Sessions outside Orca need `/reload-plugins` or `/compact` by hand. The skill supports macOS and Linux user-scope
+installations from the `hei5enbug` marketplace.
 
 ## Development checks
 
@@ -290,7 +281,7 @@ execution-path isolation; semantic equivalence still requires human or model rev
 | [`docs-rewrite`](skills/docs-rewrite/SKILL.md) | Rewrites existing text so it reads naturally while every claim, number, and level of certainty stays identical, and repairs AI-sounding Korean. [Korean guide](skills/docs-rewrite/SKILL.ko.md). |
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Converts Markdown, HTML, PDF, DOCX, and Google Docs content into Confluence pages, preserves document structure and assets, and keeps pages synchronized with source revisions. [Korean guide](skills/document-to-confluence/SKILL.ko.md). |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | Creates, tests, and packages agent skills through a draft → test → review → improve loop. [Korean guide](skills/skill-builder/SKILL.ko.md). |
-| [`orca-plugin-refresh-resume`](skills/orca-plugin-refresh-resume/SKILL.md) | Previews and updates this plugin in idle Orca-managed Claude Code and Codex sessions, then resumes each session with its saved native ID. [Korean guide](skills/orca-plugin-refresh-resume/SKILL.ko.md). |
+| [`orca-plugin-refresh`](skills/orca-plugin-refresh/SKILL.md) | Updates this plugin in both hosts and applies it to idle Orca-managed Claude Code and Codex sessions without restarting them. [Korean guide](skills/orca-plugin-refresh/SKILL.ko.md). |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | Reads the staged and unstaged changes, or the scope you name, plus recent commit history, then suggests five commit messages that match the repo's style. When you ask it to commit, it commits with the single best subject instead. [Korean guide](skills/suggest-commit/SKILL.ko.md). |
 | [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | Writes or reviews technical design documents and RFCs without taking ownership of implementation planning. [Korean guide](skills/technical-design-writer/SKILL.ko.md). |
 | [`tiki-taka`](skills/tiki-taka/SKILL.md) | Runs a turn-limited debate between the current agent and an opposing Claude/Codex session to surface and resolve issues. [Korean guide](skills/tiki-taka/SKILL.ko.md). |
