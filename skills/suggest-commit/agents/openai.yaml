@@ -1,4 +1,4 @@
 interface:
   display_name: "Suggest Commit"
-  short_description: "Recommend five evidence-backed repository-style commit subjects"
+  short_description: "Recommend five repository-style commit subjects, or commit with the best one"
   default_prompt: "Use $suggest-commit to inspect all staged and unstaged changes, or the scope I name, and recommend five messages matching this repository history."

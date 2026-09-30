@@ -183,7 +183,7 @@ Orca をインストールした後に `python3 -m pytest` を再実行すると
 | [`docs-rewrite`](skills/docs-rewrite/SKILL.md) | 主張・数値・確信度をそのまま保ったまま既存の文章を自然に読めるよう書き直し、AIが書いたような韓国語も直します。[韓国語ガイド](skills/docs-rewrite/SKILL.ko.md) |
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Markdown、HTML、PDF、DOCX、Google Docs を Confluence ページに変換し、文書構造と添付ファイルを保ち、以後の原本変更も同期します。 |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | 下書き → テスト → レビュー → 改善のループを通じて、エージェントスキルを作成・検証・パッケージ化します。 |
-| [`suggest-commit`](skills/suggest-commit/SKILL.md) | ステージ済みと未ステージの変更をまとめて、または指定した範囲を、直近のコミット履歴とともに読み取り、このリポジトリのスタイルに合ったコミットメッセージを5件提案します。 |
+| [`suggest-commit`](skills/suggest-commit/SKILL.md) | ステージ済みと未ステージの変更をまとめて、または指定した範囲を、直近のコミット履歴とともに読み取り、このリポジトリのスタイルに合ったコミットメッセージを5件提案します。コミットを依頼すると、最も適切な件名を1つ選んでそのままコミットします。 |
 | [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | 開発設計ドキュメントを新しく書く、または整理する際のルールと、目次を段階的に絞り込む5ステップの手順です。[韓国語ガイド](skills/technical-design-writer/SKILL.ko.md) |
 | [`tiki-taka`](skills/tiki-taka/SKILL.md) | 現在のエージェントと相手側のClaude/Codexセッションが、交換回数を制限した議論を行い、論点を洗い出し収束させます。[韓国語ガイド](skills/tiki-taka/SKILL.ko.md) |
 
