@@ -14,7 +14,7 @@ from typing import Iterable
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-FIXTURE_CASES = ("documented-ticket", "no-change", "unborn-mixed")
+FIXTURE_CASES = ("commit-ready", "commit-staged", "documented-ticket", "no-change", "unborn-mixed")
 AUTHOR_NAME = "Suggest Commit Evaluation"
 AUTHOR_EMAIL = "suggest-commit-eval@example.invalid"
 
@@ -39,6 +39,53 @@ HISTORY_SUBJECTS = (
     "fix(retry): stop after the limit",
     "test(retry): assert request count",
     "docs(api): refine error guidance",
+)
+
+CACHE_HISTORY_SUBJECTS = (
+    "feat(cache): add in-memory cache",
+    "test(cache): cover cache hits",
+    "fix(cache): return copies of stored values",
+    "docs(cache): describe cache usage",
+    "refactor(cache): extract key builder",
+)
+CACHE_BEFORE = (
+    "class Cache:\n"
+    "    def __init__(self):\n"
+    "        self._values = {}\n"
+    "\n"
+    "    def get(self, key):\n"
+    "        return self._values.get(key)\n"
+    "\n"
+    "    def set(self, key, value):\n"
+    "        self._values[key] = value\n"
+)
+CACHE_AFTER = (
+    "import time\n"
+    "\n"
+    "\n"
+    "class Cache:\n"
+    "    def __init__(self, ttl_seconds=60):\n"
+    "        self._values = {}\n"
+    "        self._ttl_seconds = ttl_seconds\n"
+    "\n"
+    "    def get(self, key):\n"
+    "        entry = self._values.get(key)\n"
+    "        if entry is None or entry[1] < time.monotonic():\n"
+    "            self._values.pop(key, None)\n"
+    "            return None\n"
+    "        return entry[0]\n"
+    "\n"
+    "    def set(self, key, value):\n"
+    "        self._values[key] = (value, time.monotonic() + self._ttl_seconds)\n"
+)
+CACHE_TEST = (
+    "from src.cache import Cache\n"
+    "\n"
+    "\n"
+    "def test_expired_entry_is_removed():\n"
+    "    cache = Cache(ttl_seconds=0)\n"
+    "    cache.set(\"key\", \"value\")\n"
+    "    assert cache.get(\"key\") is None\n"
 )
 
 
@@ -107,6 +154,31 @@ def _create_documented_ticket(repo: Path, template_dir: Path, environment: dict[
     _write(repo, "src/retry_policy.py", "RETRYABLE_HTTP_STATUS_CODES = {429, 503}\n")
 
 
+def _seed_cache_repository(repo: Path, template_dir: Path, environment: dict[str, str]) -> None:
+    _initialize_repo(repo, template_dir, environment)
+    _write(repo, "src/cache.py", CACHE_BEFORE)
+    _write(repo, "docs/usage.md", "# Cache usage\n\nCreate a `Cache` and call `get` and `set`.\n")
+    _commit(repo, "chore: seed cache evaluation", environment)
+    for number, subject in enumerate(CACHE_HISTORY_SUBJECTS, start=1):
+        _write(repo, "HISTORY.md", "".join(f"sample {index:02d}\n" for index in range(1, number + 1)))
+        _commit(repo, subject, environment)
+
+
+def _create_commit_ready(repo: Path, template_dir: Path, environment: dict[str, str]) -> None:
+    _seed_cache_repository(repo, template_dir, environment)
+    _write(repo, "src/cache.py", CACHE_AFTER)
+    _write(repo, "tests/test_cache.py", CACHE_TEST)
+    _write(repo, "notes/todo.txt", "Unrelated evaluation note.\n")
+
+
+def _create_commit_staged(repo: Path, template_dir: Path, environment: dict[str, str]) -> None:
+    _seed_cache_repository(repo, template_dir, environment)
+    _write(repo, "src/cache.py", CACHE_AFTER)
+    _git(repo, "add", "--", "src/cache.py", environment=environment)
+    _write(repo, "docs/usage.md", "# Cache usage\n\nCreate a `Cache`, then call `get` and `set`.\n\nDraft wording.\n")
+    _write(repo, "scratch.txt", "Scratch notes for the evaluation.\n")
+
+
 def _create_no_change(repo: Path, template_dir: Path, environment: dict[str, str]) -> None:
     _initialize_repo(repo, template_dir, environment)
     _write(repo, "README.md", "Clean repository for the no-change evaluation.\n")
@@ -127,6 +199,8 @@ def _create_unborn_mixed(repo: Path, template_dir: Path, environment: dict[str, 
 
 
 BUILDERS = {
+    "commit-ready": _create_commit_ready,
+    "commit-staged": _create_commit_staged,
     "documented-ticket": _create_documented_ticket,
     "no-change": _create_no_change,
     "unborn-mixed": _create_unborn_mixed,

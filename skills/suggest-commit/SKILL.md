@@ -3,10 +3,11 @@ name: suggest-commit
 description: >-
   Quickly analyzes staged and unstaged changes together, or the scope the user names, plus recent commit
   history, then recommends 5 commit messages that match the repository's existing subject language and style
-  and always open with the type prefix.
+  and always open with the type prefix. When the user asks to create a commit, it instead commits that change
+  set with the single most appropriate subject, without asking and without any trailer.
 compatibility: >-
-  Requires a Git worktree and read-only access to the Git CLI. Works from any agent host that can run
-  shell commands and inspect targeted file content.
+  Requires a Git worktree and the Git CLI: read-only access for suggestions, and permission to stage and commit
+  for commit mode. Works from any agent host that can run shell commands and inspect targeted file content.
 ---
 
 # Commit Message Suggester
@@ -14,7 +15,18 @@ compatibility: >-
 Use this English `SKILL.md` and its English references as the only executable sources.
 `SKILL.ko.md` and other `.ko.md` files are non-authoritative human translations; never load them during execution.
 
-Optimize for speed: gather compact context first, avoid reading a full diff unless the compact context is not enough to infer intent, and never modify the repository.
+Optimize for speed: gather compact context first, avoid reading a full diff unless the compact context is not enough to infer intent, and modify the repository only in commit mode.
+
+## Modes
+
+Choose the mode from the request:
+
+- **Suggestion mode** answers a request for commit-message ideas, suggestions, or options. It is read-only and ends
+  with the table in Step 6.
+- **Commit mode** answers a request to create a commit, such as "commit this" or "커밋해줘", including one that also
+  asks to push. It commits the scope with the single most appropriate subject, as "Commit Mode" describes.
+
+A request to amend, merge, revert, cherry-pick, or rewrite existing commits is neither mode.
 
 ## Absolute Rule: No Trailers
 
@@ -44,6 +56,13 @@ One rule decides which changes the suggestions describe:
   a file that is clearly unrelated, and never use it as evidence for a message.
 
 When the user asked for staged changes only, exclude unstaged and untracked changes entirely.
+
+In commit mode the commit holds exactly the analyzed scope, and the index decides the default:
+
+- A user-named scope is committed as named.
+- With no named scope and a non-empty index, the staged changes are the scope, as if the user had asked for staged
+  changes only. Staging is the human's selection, so unstaged and untracked changes stay out of the commit.
+- With no named scope and an empty index, the default scope above applies.
 
 ## Step 1: Fast Context Pass
 
@@ -232,7 +251,7 @@ Disclose that in the answer so the human chooses knowingly.
 
 ## Step 6: Suggest 5 Messages
 
-Present exactly 5 commit messages in a numbered table:
+This step belongs to suggestion mode. Present exactly 5 commit messages in a numbered table:
 
 ```markdown
 | # | Commit Message |
@@ -256,10 +275,41 @@ Example, where `ABC-123` stands in for whatever key the repository would use and
 licence to write `ABC-123`. When the slot is required, suggest `fix: [TICKET] correct retry backoff` and let the
 human replace `[TICKET]`.
 
+## Commit Mode
+
+Run Steps 1 to 5 on the commit scope, then commit instead of presenting a table. Commit mode acts without asking
+except in the stop cases of step 1.
+
+1. **Stop before any write** when one of these holds, and give the reason in one short answer:
+   - The scope has no changes: say there is nothing to commit.
+   - A merge, rebase, cherry-pick, or revert is in progress, or the scope has unresolved conflicts.
+   - Step 3 found the identifier slot required and the human supplied no value for it. Choose the subject as in
+     step 2, show it with the placeholder still in its slot, and ask for the value in one question. Never commit a
+     placeholder such as `[TICKET]`.
+2. **Choose one subject.** Keep only the candidate Step 6 would rank `#1`: the most accurate prefix and the most
+   concrete evidence-backed description, in the repository's style and the subject language from Step 3. Every
+   Step 6 rule for a single message applies to it.
+3. **Stage only the scope.** Stage nothing when the index is the scope. For the default scope, run `git add -u` and
+   then `git add -- <path>` for each included untracked file. For a named path scope, run `git add -- <paths>`.
+   Never run `git add -A`, `git add .`, or `git commit -a`. Leave out any file that looks like a secret, such as
+   `.env` files, private keys, or credential files, even inside the scope.
+4. **Commit once.** Run `git commit -m <subject>` with exactly one `-m` and the subject as one shell-quoted
+   argument. Never add `--no-verify`, `--amend`, `--allow-empty`, `--signoff`, or `--trailer`.
+5. **Respect commit hooks.** If a hook rejects the commit, report its message, leave the staged changes in place,
+   and do not retry with a bypass flag or a different message.
+6. **Verify the message.** `git log -1 --format=%B` must show the subject alone. If a hook added text, report that
+   the commit carries lines this skill did not write, and do not amend.
+7. **Report briefly.** Give the short hash and the subject, the number of committed files, every in-scope file left
+   out as secret-like, and any changes outside the scope that remain uncommitted. Show no table and no alternative
+   subjects, and ask no follow-up question.
+
+This skill never pushes. When the same request also asks to push, push after the commit is reported.
+
 ## Constraints
 
-- **Read-only.** Never stage, commit, amend, push, or edit files while using this skill.
-- Do not ask follow-up questions. Deliver all 5 suggestions in one response. Two notes may follow the table, each
+- **Suggestion mode is read-only.** It never stages, commits, amends, pushes, or edits files. Commit mode writes only
+  the index and one new commit, and it never amends, pushes, or edits files.
+- In suggestion mode, do not ask follow-up questions. Deliver all 5 suggestions in one response. Two notes may follow the table, each
   one line, and neither waits for a reply: when the suggestions carry a placeholder such as `[TICKET]`, tell the
   human to replace it and not to commit it verbatim; when "Subject Order" moved the prefix ahead of an identifier
   the sampled history puts first, say that the suggestions intentionally depart from that history.

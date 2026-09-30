@@ -83,6 +83,20 @@ class PrepareFixtureTest(unittest.TestCase):
             "remotes": remotes.stdout,
         }
 
+    def inspect_cache_fixture(self, repo: Path) -> dict[str, object]:
+        history = git(repo, "log", "--format=%s")
+        staged = git(repo, "diff", "--cached", "--name-status")
+        unstaged = git(repo, "diff", "--name-status")
+        untracked = git(repo, "ls-files", "--others", "--exclude-standard")
+        remotes = git(repo, "remote", "-v")
+        return {
+            "history": history.stdout.splitlines(),
+            "staged": staged.stdout.strip(),
+            "unstaged": unstaged.stdout.strip(),
+            "untracked": sorted(untracked.stdout.splitlines()),
+            "remotes": remotes.stdout,
+        }
+
     def test_documented_ticket_rule_follows_more_than_ten_search_hits(self) -> None:
         """티켓 규칙은 열한 개의 검색 결과 뒤에 있고 변경은 HTTP 503만 추가한다."""
         # given
@@ -141,6 +155,38 @@ class PrepareFixtureTest(unittest.TestCase):
             self.assertTrue((repo / "notes/unrelated.txt").is_file())
             self.assertEqual(evidence["remotes"], "")
 
+    def test_commit_ready_fixture_has_an_empty_index_and_one_unrelated_file(self) -> None:
+        """커밋 모드 기본 범위 픽스처는 인덱스가 비어 있고 관련 변경 두 개와 무관한 미추적 파일 하나를 가진다."""
+        # given
+        with tempfile.TemporaryDirectory(prefix="suggest-commit-eval-test.") as temporary:
+            repo = self.make_fixture("commit-ready", Path(temporary))
+
+            # when
+            evidence = self.inspect_cache_fixture(repo)
+
+            # then
+            self.assertEqual(len(evidence["history"]), 6)
+            self.assertEqual(evidence["staged"], "")
+            self.assertEqual(evidence["unstaged"], "M\tsrc/cache.py")
+            self.assertEqual(evidence["untracked"], ["notes/todo.txt", "tests/test_cache.py"])
+            self.assertEqual(evidence["remotes"], "")
+
+    def test_commit_staged_fixture_stages_only_the_cache_change(self) -> None:
+        """커밋 모드 인덱스 범위 픽스처는 캐시 변경만 스테이징하고 문서 수정과 메모 파일은 밖에 둔다."""
+        # given
+        with tempfile.TemporaryDirectory(prefix="suggest-commit-eval-test.") as temporary:
+            repo = self.make_fixture("commit-staged", Path(temporary))
+
+            # when
+            evidence = self.inspect_cache_fixture(repo)
+
+            # then
+            self.assertEqual(len(evidence["history"]), 6)
+            self.assertEqual(evidence["staged"], "M\tsrc/cache.py")
+            self.assertEqual(evidence["unstaged"], "M\tdocs/usage.md")
+            self.assertEqual(evidence["untracked"], ["scratch.txt"])
+            self.assertEqual(evidence["remotes"], "")
+
     def test_fixture_builder_rejects_the_actual_repository(self) -> None:
         """실제 저장소 안에는 평가 저장소를 만들지 않는다."""
         # given
@@ -156,7 +202,7 @@ class PrepareFixtureTest(unittest.TestCase):
         # then
         self.assertIsNotNone(error)
         self.assertIn("outside the actual repository", str(error))
-        self.assertEqual(FIXTURE_CASES, ("documented-ticket", "no-change", "unborn-mixed"))
+        self.assertEqual(FIXTURE_CASES, ("commit-ready", "commit-staged", "documented-ticket", "no-change", "unborn-mixed"))
 
     def test_cli_emits_a_usable_repository_working_directory(self) -> None:
         """준비 명령은 생성한 저장소의 실제 작업 경로를 출력한다."""

@@ -77,6 +77,47 @@
         "The optional identifier slot is omitted and the branch value is not copied.",
         "All five subjects are prefix-first and contain no body or trailer."
       ]
+    },
+    {
+      "id": 8,
+      "prompt": "Prepare the `commit-ready` fixture with `python3 skills/suggest-commit/evals/prepare_fixture.py --case commit-ready` and use the emitted `fixtures.commit-ready.cwd` directory as the repository working directory. Nothing is staged; `src/cache.py` has an unstaged edit, `tests/test_cache.py` is an untracked test for it, and `notes/todo.txt` is an unrelated untracked note. 커밋해줘.",
+      "expected_output": "Commit mode makes exactly one commit of the cache change and its test with one prefix-first English subject, then reports it briefly.",
+      "files": [
+        "evals/prepare_fixture.py"
+      ],
+      "expectations": [
+        "Exactly one new commit exists on top of the six fixture commits, and nothing is pushed.",
+        "The commit contains the `src/cache.py` edit and `tests/test_cache.py`, and `notes/todo.txt` stays untracked.",
+        "The commit message is one prefix-first line in the lowercase English conventional style of the history, with no body or trailer.",
+        "The response reports the short hash and the subject without a five-row table or a follow-up question."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Prepare the `commit-staged` fixture with `python3 skills/suggest-commit/evals/prepare_fixture.py --case commit-staged` and use the emitted `fixtures.commit-staged.cwd` directory as the repository working directory. Only `src/cache.py` is staged; `docs/usage.md` has an unstaged edit and `scratch.txt` is untracked. Commit this.",
+      "expected_output": "Commit mode treats the non-empty index as the scope and commits only the staged cache change.",
+      "files": [
+        "evals/prepare_fixture.py"
+      ],
+      "expectations": [
+        "Exactly one new commit exists, and it contains only the staged `src/cache.py` change.",
+        "`docs/usage.md` remains modified and unstaged, and `scratch.txt` remains untracked.",
+        "The subject describes only the staged change and is one prefix-first line with no body or trailer.",
+        "The response names the changes that remain uncommitted."
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Prepare the `documented-ticket` fixture with `python3 skills/suggest-commit/evals/prepare_fixture.py --case documented-ticket` and use the emitted `fixtures.documented-ticket.cwd` directory as the repository working directory. Commit the change.",
+      "expected_output": "Commit mode stops before any write and asks for the ticket value, because the documented convention requires the slot.",
+      "files": [
+        "evals/prepare_fixture.py"
+      ],
+      "expectations": [
+        "No commit is created and the index stays empty.",
+        "The response asks for the ticket value in one question.",
+        "Neither `ABC-123` from the branch name nor a `[TICKET]` placeholder reaches a commit."
+      ]
     }
   ]
 }
