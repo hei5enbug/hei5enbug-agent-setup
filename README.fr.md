@@ -135,10 +135,11 @@ Les références, erreurs et limites sont décrites dans la
 ## Mise à jour du plugin
 
 Les deux manifestes du plugin, `pyproject.toml` et `uv.lock` doivent utiliser la même version sémantique.
-Mettez-les à jour ensemble après la réussite des contrôles de développement et avant de publier une version.
-Le tag `v<version>` le plus récent accessible depuis `HEAD` est la base de release. Une version présente uniquement
-dans ces fichiers est la prochaine version planifiée, même si elle est déjà sur `main` ; regroupez-y donc tous les
-changements non publiés au lieu d'incrémenter à nouveau. À la publication, taguez le commit publié `v<version>`.
+Le tag `v<version>` le plus récent accessible depuis `HEAD` est la base de release. Le premier changement qui la suit
+fixe la prochaine version dans ces fichiers au sein du même commit. Une version présente uniquement dans ces fichiers
+est la prochaine version planifiée, même si elle est déjà sur `main` ; regroupez-y donc tous les changements non
+publiés suivants au lieu d'incrémenter à nouveau. Une release n'ajoute aucun commit : une fois les contrôles de
+développement ci-dessous réussis sur `HEAD`, taguez `HEAD` `v<version>` et poussez le tag.
 
 Mettez à jour Codex une fois la version disponible :
 
