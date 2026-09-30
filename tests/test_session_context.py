@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -333,6 +334,89 @@ class SessionContextTest(unittest.TestCase):
                 target = (path.parent / link).resolve()
                 self.assertTrue(target.is_relative_to(REPO_ROOT))
                 self.assertTrue(target.is_file())
+
+    def orca_env(self):
+        return {"ORCA_USER_DATA_PATH": str(self.base / "orca"), "ORCA_TERMINAL_HANDLE": "term_marker-1"}
+
+    def marker_path(self):
+        return self.base / "orca" / "hei5enbug-agent-setup" / "terminals" / "term_marker-1.json"
+
+    def load_context_module(self):
+        spec = importlib.util.spec_from_file_location("session_context_digest", self.root / "scripts" / "session_context.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_Orca_세션_시작은_불러온_지침의_표식을_남긴다(self):
+        """Orca 터미널의 세션 시작 훅은 호스트, 플러그인 경로, 지침 요약값, 시작 이유를 사용자 전용 파일로 남긴다."""
+        # Given
+        env = self.orca_env()
+
+        transcript = (self.base / "rollout.jsonl").as_posix()
+        Path(transcript).write_text(json.dumps({"type": "session_meta", "payload": {"source": "cli"}}) + "\n", encoding="utf-8")
+        payload = json.dumps({"hook_event_name": "SessionStart", "source": "compact", "transcript_path": transcript})
+
+        # When
+        self.context(self.run_hook("codex", payload=payload, extra_env=env))
+
+        # Then
+        marker = json.loads(self.marker_path().read_text(encoding="utf-8"))
+        self.assertEqual(("codex", self.root.as_posix(), "compact", 1), (marker["host"], marker["root"], marker["source"], marker["schema"]))
+        self.assertEqual(transcript, marker["transcript_path"])
+        self.assertEqual(self.load_context_module().instructions_digest(self.root), marker["digest"])
+        self.assertEqual(0o600, self.marker_path().stat().st_mode & 0o777)
+
+    def test_하위_CLI_세션은_터미널_표식을_덮어쓰지_않는다(self):
+        """같은 Orca 터미널에서 띄운 claude -p나 codex exec는 대화형 세션의 표식을 쓰지 않는다."""
+        # Given
+        env = self.orca_env()
+        exec_rollout = self.base / "exec.jsonl"
+        exec_rollout.write_text(json.dumps({"type": "session_meta", "payload": {"source": "exec"}}) + "\n", encoding="utf-8")
+        codex_payload = json.dumps({"hook_event_name": "SessionStart", "source": "startup", "transcript_path": exec_rollout.as_posix()})
+
+        self.context(self.run_hook("claude", extra_env={**env, "CLAUDE_CODE_ENTRYPOINT": "cli"}))
+        interactive = self.marker_path().read_bytes()
+
+        # When
+        self.context(self.run_hook("claude", source="compact", extra_env={**env, "CLAUDE_CODE_ENTRYPOINT": "sdk-cli"}))
+        self.context(self.run_hook("codex", payload=codex_payload, extra_env=env))
+
+        # Then
+        self.assertEqual(interactive, self.marker_path().read_bytes())
+
+    def test_서브에이전트_시작과_Orca_밖_세션은_표식을_남기지_않는다(self):
+        """표식은 Orca 터미널의 본 세션 시작에만 쓰고 서브에이전트나 Orca 밖 세션에서는 쓰지 않는다."""
+        # Given
+        env = self.orca_env()
+
+        # When
+        self.context(self.run_hook("claude", event="SubagentStart", extra_env=env), "SubagentStart")
+        self.context(self.run_hook("claude"))
+
+        # Then
+        self.assertFalse(self.marker_path().exists())
+
+    def test_지침_요약값은_설치_위치와_번역본에_영향받지_않는다(self):
+        """같은 지침을 다른 경로에 설치해도 요약값이 같고, 한국어 번역본만 바뀌면 그대로이며, 실행 지침이 바뀌면 달라진다."""
+        # Given
+        module = self.load_context_module()
+        other = self.base / "other install"
+        shutil.copytree(self.root, other)
+        original = module.instructions_digest(self.root)
+
+        # When
+        moved = module.instructions_digest(other)
+        mirror = other / "instructions/session/common.ko.md"
+        mirror.write_text(mirror.read_text(encoding="utf-8") + "\n번역 수정\n", encoding="utf-8")
+        after_mirror = module.instructions_digest(other)
+        rule = other / "instructions/testing.md"
+        rule.write_text(rule.read_text(encoding="utf-8") + "\nNew rule.\n", encoding="utf-8")
+        after_rule = module.instructions_digest(other)
+
+        # Then
+        self.assertEqual(original, moved)
+        self.assertEqual(original, after_mirror)
+        self.assertNotEqual(original, after_rule)
 
     def test_repository_has_project_instruction_files(self):
         self.assertTrue((REPO_ROOT / "AGENTS.md").is_file())

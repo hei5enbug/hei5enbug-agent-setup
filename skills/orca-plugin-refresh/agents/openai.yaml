@@ -1,0 +1,6 @@
+interface:
+  display_name: "Orca Plugin Refresh"
+  short_description: "Apply a hei5enbug-agent-setup update to idle Orca sessions without restarting them"
+  default_prompt: "Use $orca-plugin-refresh to update hei5enbug-agent-setup and apply it to my running Orca sessions."
+policy:
+  allow_implicit_invocation: false

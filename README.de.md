@@ -65,6 +65,7 @@ hei5enbug-agent-setup/
     ├── flowchart-design/
     ├── docs-rewrite/
     ├── document-to-confluence/
+    ├── orca-plugin-refresh/
     ├── skill-builder/
     ├── suggest-commit/
     ├── technical-design-writer/

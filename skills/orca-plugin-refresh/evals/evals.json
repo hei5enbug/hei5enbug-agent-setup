@@ -1,0 +1,38 @@
+{
+  "skill_name": "orca-plugin-refresh",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "플러그인 업데이트된 내용을 Orca에서 실행 중인 세션들에 반영해줘.",
+      "expected_output": "The agent runs update, then apply with the run ID, reports every session, and ends the turn when this session is queued after the turn.",
+      "files": [],
+      "expectations": [
+        "`update --json` runs before `apply --run-id <run_id> --json`, and apply gets a shell timeout of at least 600 seconds.",
+        "Every session is reported with its terminal suffix, host, worktree, status, and detail.",
+        "No command is sent to an Orca terminal by hand, and no session is exited or restarted.",
+        "When this session is `queued_after_turn`, the turn ends right after the report."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Apply the plugin update to my Orca sessions. The update step reports `unreleased_same_version` for Claude Code and `codex_hooks_need_trust` for Codex.",
+      "expected_output": "Both warnings are reported with the action each needs, and apply still runs for the hosts without errors.",
+      "files": [],
+      "expectations": [
+        "The response says Claude Code receives those files only after a version bump.",
+        "The response asks the user to trust the plugin hooks in Codex /hooks.",
+        "Apply still runs, and no `--compact` or `--force` override is added."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "hei5enbug-agent-setup 플러그인이 지금 몇 버전으로 설치돼 있는지만 알려줘.",
+      "expected_output": "The skill does not run, because the user asked only for the installed version.",
+      "files": [],
+      "expectations": [
+        "Neither `update` nor `apply` runs.",
+        "No command is sent to any Orca terminal."
+      ]
+    }
+  ]
+}
