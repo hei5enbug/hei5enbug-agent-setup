@@ -15,6 +15,9 @@ human references; never load or use them during execution.
 - Ask before destructive, irreversible, or production-impacting actions. Never expose secrets.
 - Minimize comments. Code, comments, and docstrings must never reference documentation.
 - Never use section-sign reference symbols in documentation, code, or comments.
+- Create every new commit, whether the user asked for it or a task requires it, through the `suggest-commit`
+  skill in its commit mode, which chooses the one subject and makes the commit. Amends, merges, reverts, and
+  cherry-picks are outside this rule.
 
 ## Conditional instructions
 
