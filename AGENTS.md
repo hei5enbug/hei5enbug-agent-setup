@@ -33,16 +33,17 @@
   or a runtime lookup of the newest release.
 - When tests skip because the Orca CLI is not installed, ask the user whether to install Orca and rerun them
   before you report the checks as passing.
-- The release baseline is the newest `v<major>.<minor>.<patch>` tag reachable from `HEAD`. A version that
-  appears only in the manifests is the planned next version, never a baseline, even when it is already on
-  `main` or installed locally. Keep all unreleased work on that one planned version: when the manifests already
-  hold a version above the baseline, fold new changes into it and re-choose its level from the table below
-  instead of bumping again. Never bump the semantic version for local iterations.
-  Use a cachebuster for local reinstalls. Before changing any version, state the baseline tag and the planned
-  version to the user. When the user publishes a release, tag the released commit `v<version>` and push the
-  tag. Before a release, run every development check in `README.md` and keep both plugin manifests,
-  `pyproject.toml`, and `uv.lock` on the same version. `tests/test_release_version.py` rejects a version below
-  the baseline and more than one planned version since it.
+- The release baseline is the newest `v<major>.<minor>.<patch>` tag reachable from `HEAD`. A version that appears only
+  in the manifests is the planned next version, never a baseline, even when it is already on `main` or installed
+  locally. Keep all unreleased work on that one planned version: the first change after the baseline sets it in the same
+  commit, and a later change folds into it and re-chooses its level from the table below within its own commit instead
+  of bumping again. Never bump the semantic version for local iterations. Use a cachebuster for local reinstalls. Before
+  changing any version, state the baseline tag and the planned version to the user. Keep both plugin manifests,
+  `pyproject.toml`, and `uv.lock` on the same version. A release is a tag only; never make a separate commit to release
+  or to change only the version. When the user publishes a release, run every development check in `README.md` on
+  `HEAD`, tag `HEAD` `v<version>`, and push the tag. `tests/test_release_version.py` rejects a version below the
+  baseline, more than one planned version since it, a change since it while the planned version still equals it, and a
+  commit since it that changes only version files.
   Choose the next semantic version from the highest-impact unreleased change:
 
   | Component | Use when |

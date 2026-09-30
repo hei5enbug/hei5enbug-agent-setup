@@ -13,6 +13,7 @@ README_VERSION = re.compile(r"`\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?`")
 RELEASE_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 MANIFEST_VERSION_ADDED = re.compile(r'^\+\s*"version":\s*"(\d+\.\d+\.\d+)"', re.MULTILINE)
 CLAUDE_MANIFEST = ".claude-plugin/plugin.json"
+VERSION_FILES = frozenset({".codex-plugin/plugin.json", CLAUDE_MANIFEST, "pyproject.toml", "uv.lock"})
 
 
 def git(*args: str) -> str | None:
@@ -40,6 +41,15 @@ def baseline_tag() -> str | None:
         return None
     tags = [tag for tag in listed.split() if RELEASE_TAG.fullmatch(tag)]
     return max(tags, key=lambda tag: version_tuple(tag[1:])) if tags else None
+
+
+def commit_files(revision_range: str) -> dict[str, set[str]]:
+    output = git("log", "--format=%x00%H", "--name-only", revision_range) or ""
+    commits = {}
+    for chunk in output.split("\0")[1:]:
+        sha, *paths = [line for line in chunk.splitlines() if line]
+        commits[sha] = set(paths)
+    return commits
 
 
 class ReleaseVersionTest(unittest.TestCase):
@@ -98,6 +108,35 @@ class ReleaseBaselineTest(unittest.TestCase):
 
         # Then
         self.assertLessEqual(introduced, {baseline, planned}, f"more than one planned version since {self.baseline}")
+
+    def test_릴리스_기준_이후_변경이_있으면_계획한_버전은_기준보다_높다(self):
+        """릴리스 기준 태그 이후 추적 파일이 바뀌었으면 매니페스트의 계획 버전은 기준 버전보다 높아야 한다."""
+        # Given
+        baseline = self.baseline[1:]
+        changed = (git("diff", "--name-only", self.baseline) or "").splitlines()
+        if not changed:
+            self.skipTest(f"nothing changed since {self.baseline}")
+
+        # When
+        planned = planned_version()
+
+        # Then
+        self.assertGreater(
+            version_tuple(planned), version_tuple(baseline), f"{planned} is not above {self.baseline} after changes"
+        )
+
+    def test_릴리스_기준_이후_버전_파일만_바꾸는_커밋은_없다(self):
+        """릴리스는 태그만 달기 때문에 릴리스 기준 태그 이후에는 버전 파일만 바꾸는 커밋이 없어야 한다."""
+        # Given
+        revision_range = f"{self.baseline}..HEAD"
+
+        # When
+        version_only = sorted(
+            sha for sha, paths in commit_files(revision_range).items() if paths and paths <= VERSION_FILES
+        )
+
+        # Then
+        self.assertEqual(version_only, [], f"commits since {self.baseline} change only version files")
 
 
 if __name__ == "__main__":
