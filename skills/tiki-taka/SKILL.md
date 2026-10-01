@@ -45,7 +45,7 @@ The opponent may start a new command-line process for each exchange. Resume the 
   If the required opposing CLI is unavailable, report the missing dependency instead of launching another copy of the current host.
 - On any other host, honor an explicit opponent choice. Otherwise choose an installed Claude or Codex CLI that differs from the current model family when this can be determined.
   If both are available and no evidence distinguishes them, ask the user which opponent to use.
-- Fix a Codex opponent to `gpt-6-sol` with `xhigh` reasoning effort.
+- Fix a Codex opponent to `gpt-6.1-sol` with `xhigh` reasoning effort.
 - Fix a Claude opponent to `claude-fable-5-1` with `xhigh` reasoning effort. If that model is unavailable, use `claude-opus-5-5` with `xhigh` reasoning effort.
   When the primary model returns a verified quota error, the runner clears that received error state
   and resumes the same session with the fallback model exactly once.
