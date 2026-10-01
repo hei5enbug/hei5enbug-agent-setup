@@ -9,7 +9,8 @@ Prefer a typed `confluence` command.
 Use `confluence api` only when no typed command can perform the required Confluence REST API v2 operation.
 
 Discover syntax with `confluence --help` or `confluence <command> --help` before a write.
-If `confluence-cli` is unavailable, report that limitation before using another connected Confluence tool.
+When `confluence-cli` is unavailable or fails, continue with the connected Atlassian Confluence tools and then the
+Confluence REST API under the access fallback in [service access rules](services.md).
 
 Use [document-to-confluence](../skills/document-to-confluence/SKILL.md) when importing, publishing,
 synchronizing, or repairing document content in a Confluence page.
