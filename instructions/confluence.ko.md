@@ -12,7 +12,8 @@ Atlassian Rovo Confluence 도구 대신 설치된 `confluence-cli`를 사용한�
 타입 지정 명령이 없을 때만 `confluence api`를 사용한다.
 
 쓰기 전에 `confluence --help` 또는 `confluence <command> --help`로 문법을 확인한다.
-`confluence-cli`를 사용할 수 없으면 다른 연결된 Confluence 도구를 사용하기 전에 제한 사항을 알린다.
+`confluence-cli`를 사용할 수 없거나 실패하면 [서비스 접근 규칙](services.ko.md)의 접근 대체 경로에 따라 연결된
+Atlassian Confluence 도구를 계속 사용하고, 그다음 Confluence REST API를 사용한다.
 
 문서 콘텐츠를 Confluence 페이지로 가져오거나 게시, 동기화 또는 복구할 때는
 [document-to-confluence](../skills/document-to-confluence/SKILL.ko.md)를 사용한다.
