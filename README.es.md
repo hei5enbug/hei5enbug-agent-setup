@@ -94,12 +94,12 @@ versión; una copia que usted haya editado se conserva. Con el plugin desactivad
 como un worker de implementación normal en lugar de negarse a editar.
 
 Un hook `PreToolUse`, `scripts/agent_guard.py`, mantiene fuera los subagentes integrados en ambos hosts. En Claude
-Code rechaza un tipo de subagente omitido y todo tipo integrado: `general-purpose`, `Explore`, `Plan`, `claude`,
-`claude-code-guide`, `statusline-setup` y las bifurcaciones. Los agentes de plugin y las definiciones de cualquier
-origen de usuario, proyecto, CLI o gestionado pasan. En Codex rechaza un tipo omitido,
-`default`, `explorer` y todo tipo sin archivo de rol, incluido el `worker` integrado mientras falte el rol del
-plugin. Los skills que piden un worker independiente de solo lectura usan `scout`, y los que escriben salidas de
-prueba ejecutan un proceso `claude -p` o `codex exec` aparte.
+Code rechaza un tipo de subagente omitido y todo tipo integrado: `general-purpose`, `Explore`, `Plan`, `claude` y las
+bifurcaciones. Los tipos integrados de propósito acotado `claude-code-guide` y `statusline-setup` pasan, igual que los
+agentes de plugin y las definiciones de cualquier origen de usuario, proyecto, CLI o gestionado. En Codex rechaza un
+tipo omitido, `default`, `explorer` y todo tipo sin archivo de rol, incluido el `worker` integrado mientras falte el
+rol del plugin. Los skills que piden un worker independiente de solo lectura usan `scout`, y los que escriben salidas
+de prueba ejecutan un proceso `claude -p` o `codex exec` aparte.
 
 ## Instalación del plugin
 

@@ -97,12 +97,12 @@ Codex 내장 `worker`를 대신하고, `scout`는 내장 `explorer`를 건드리
 파일과 바이트 단위로 같을 때만 그렇게 하므로 직접 고친 파일은 남습니다. 플러그인을 끄면 설치된 `worker` 역할은
 수정을 거부하지 않고 일반 구현 worker로 동작합니다.
 
-`PreToolUse` 훅인 `scripts/agent_guard.py`가 두 호스트에서 내장 서브에이전트를 막습니다. Claude Code에서는 종류를
-비운 호출과 모든 내장 종류, 즉 `general-purpose`, `Explore`, `Plan`, `claude`, `claude-code-guide`,
-`statusline-setup`, fork를 거부합니다. 플러그인 에이전트와 사용자·프로젝트·CLI·관리 설정이 제공하는 정의는
-통과합니다. Codex에서는 종류를 비운 호출, `default`, `explorer`, 역할 파일이 없는 모든 종류를
-거부하며, 플러그인 역할이 생기기 전의 내장 `worker`도 여기에 포함됩니다. 독립된 읽기 전용 작업자가 필요한 스킬은
-`scout`를 쓰고, 시험 출력을 쓰는 스킬은 별도 `claude -p`나 `codex exec` 프로세스를 실행합니다.
+`PreToolUse` 훅인 `scripts/agent_guard.py`가 두 호스트에서 내장 서브에이전트를 막습니다. Claude Code에서는 종류를 비운
+호출과 모든 내장 종류, 즉 `general-purpose`, `Explore`, `Plan`, `claude`, fork를 거부합니다. 목적이 좁은 내장 종류인
+`claude-code-guide`와 `statusline-setup`은 플러그인 에이전트, 사용자·프로젝트·CLI·관리 설정이 제공하는 정의와 함께 통과합니다.
+Codex에서는 종류를 비운 호출, `default`, `explorer`, 역할 파일이 없는 모든 종류를 거부하며, 플러그인 역할이 생기기 전의 내장
+`worker`도 여기에 포함됩니다. 독립된 읽기 전용 작업자가 필요한 스킬은 `scout`를 쓰고, 시험 출력을 쓰는 스킬은 별도 `claude -p`나
+`codex exec` 프로세스를 실행합니다.
 
 ## 플러그인 설치
 

@@ -23,7 +23,7 @@ PINS = {
     "claude-sonnet": "claude-sonnet-5-5",
     "claude-haiku": "claude-haiku-4-5",
     "gpt-luna": "gpt-6-luna",
-    "gpt-sol": "gpt-6-sol",
+    "gpt-sol": "gpt-6.1-sol",
 }
 
 MODEL_ID = re.compile(

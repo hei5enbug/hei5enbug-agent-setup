@@ -45,7 +45,7 @@ class AgentGuardTest(unittest.TestCase):
     def test_Claude_내장_에이전트와_종류를_비운_호출은_거부한다(self):
         """정의 파일이 없는 내장 이름과 general-purpose로 실행되는 빈 종류는 모두 거부한다."""
         # Given
-        built_ins = ("general-purpose", "Explore", "explore", "Plan", "claude", "claude-code-guide", "statusline-setup", "fork")
+        built_ins = ("general-purpose", "Explore", "explore", "Plan", "claude", "fork")
 
         # When
         decisions = {name: self.decide("claude", {"subagent_type": name, "prompt": "x"}) for name in built_ins}
@@ -54,6 +54,17 @@ class AgentGuardTest(unittest.TestCase):
         # Then
         self.assertEqual({name: "deny" for name in built_ins}, decisions)
         self.assertEqual("deny", omitted)
+
+    def test_Claude_범위가_좁은_내장_에이전트는_대소문자와_관계없이_허용한다(self):
+        """claude-code-guide와 statusline-setup은 scout나 worker와 겹치지 않으므로 이름의 대소문자와 상관없이 막지 않는다."""
+        # Given
+        names = ("claude-code-guide", "Claude-Code-Guide", "statusline-setup", "StatusLine-Setup")
+
+        # When
+        decisions = {name: self.decide("claude", {"subagent_type": name, "prompt": "x"}) for name in names}
+
+        # Then
+        self.assertEqual({name: None for name in names}, decisions)
 
     def test_Claude_플러그인과_사용자_정의_에이전트는_허용한다(self):
         """플러그인 이름공간 에이전트와 사용자·프로젝트 파일, CLI나 관리 설정처럼 훅이 볼 수 없는 정의도 막지 않는다."""

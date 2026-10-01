@@ -5,11 +5,12 @@ exception to the timing, agent-selection, and worker rules below.
 
 ## Built-in subagents
 
-- Never use a built-in subagent, including `general-purpose`, `Explore`, `Plan`, `claude`, `claude-code-guide`,
-  `statusline-setup`, or a fork. Always name the subagent type, because an omitted type runs `general-purpose`.
-- The plugin's agent guard hook denies an omitted type and every built-in type; every other type, including a
-  plugin agent or a definition from any user, project, CLI, or managed source, passes. When it denies a call, use
-  the plugin agent that fits or work in the main conversation.
+- Never use a built-in subagent, including `general-purpose`, `Explore`, `Plan`, `claude`, or a fork. The
+  exceptions are `claude-code-guide` and `statusline-setup`, which have narrow purposes that do not overlap
+  `scout` or `worker`. Always name the subagent type, because an omitted type runs `general-purpose`.
+- The plugin's agent guard hook denies an omitted type and every built-in type except those two exceptions; every
+  other type, including a plugin agent or a definition from any user, project, CLI, or managed source, passes.
+  When it denies a call, use the plugin agent that fits or work in the main conversation.
 
 ## Investigation
 

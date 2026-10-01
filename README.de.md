@@ -95,9 +95,9 @@ bearbeitete Kopie bleibt erhalten. Ist das Plugin deaktiviert, arbeitet die inst
 gewöhnlicher Implementierungs-Worker, statt Änderungen zu verweigern.
 
 Ein `PreToolUse`-Hook, `scripts/agent_guard.py`, hält eingebaute Subagenten auf beiden Hosts fern. Auf Claude Code
-lehnt er einen fehlenden Subagenten-Typ und jeden eingebauten Typ ab: `general-purpose`, `Explore`, `Plan`,
-`claude`, `claude-code-guide`, `statusline-setup` und Forks. Plugin-Agenten und Definitionen aus Benutzer-, Projekt-,
-CLI- oder verwalteten Quellen passieren. Auf Codex lehnt er einen
+lehnt er einen fehlenden Subagenten-Typ und jeden eingebauten Typ ab: `general-purpose`, `Explore`, `Plan`, `claude`
+und Forks. Die eingebauten Typen mit engem Zweck, `claude-code-guide` und `statusline-setup`, passieren ebenso wie
+Plugin-Agenten und Definitionen aus Benutzer-, Projekt-, CLI- oder verwalteten Quellen. Auf Codex lehnt er einen
 fehlenden Typ, `default`, `explorer` und jeden Typ ohne Rollendatei ab, auch den eingebauten `worker`, solange die
 Plugin-Rolle fehlt. Skills, die einen unabhängigen Nur-Lese-Worker verlangen, nutzen `scout`, und Skills, die
 Testausgaben schreiben, starten einen separaten `claude -p`- oder `codex exec`-Prozess.

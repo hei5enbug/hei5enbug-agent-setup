@@ -93,13 +93,12 @@ removes an `explorer.toml` and replaces a `worker.toml` that an earlier version 
 byte-identical to that version's bundled file, so a copy you edited stays. When the plugin is disabled, the installed
 `worker` role runs as an ordinary implementation worker instead of refusing to edit.
 
-A `PreToolUse` hook, `scripts/agent_guard.py`, keeps built-in subagents out on both hosts. On Claude Code it
-denies an omitted subagent type and every built-in type: `general-purpose`, `Explore`, `Plan`, `claude`,
-`claude-code-guide`, `statusline-setup`, and forks. Plugin agents and definitions from any user, project, CLI, or
-managed source pass. On Codex it denies an omitted type, `default`, `explorer`,
-and every type without a role file, including the built-in `worker` before the plugin role exists. Skills that ask
-for an independent read-only worker use `scout`, and skills that write trial outputs run a separate `claude -p` or
-`codex exec` process.
+A `PreToolUse` hook, `scripts/agent_guard.py`, keeps built-in subagents out on both hosts. On Claude Code it denies an
+omitted subagent type and every built-in type: `general-purpose`, `Explore`, `Plan`, `claude`, and forks. The
+narrow-purpose built-ins `claude-code-guide` and `statusline-setup` pass, as do plugin agents and definitions from any
+user, project, CLI, or managed source. On Codex it denies an omitted type, `default`, `explorer`, and every type
+without a role file, including the built-in `worker` before the plugin role exists. Skills that ask for an independent
+read-only worker use `scout`, and skills that write trial outputs run a separate `claude -p` or `codex exec` process.
 
 ## Plugin installation
 

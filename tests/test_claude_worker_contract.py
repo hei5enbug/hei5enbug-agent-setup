@@ -222,8 +222,8 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         self.assertIn("Use `hei5enbug-agent-setup:scout` for investigation, only while planning", investigation)
         self.assertIn("Never pass a per-invocation model, because that overrides the definition.", investigation)
 
-    def test_내장_서브에이전트는_모두_금지하고_차단_훅을_가리킨다(self):
-        """내장 서브에이전트 이름과 fork를 모두 금지하고, 종류를 비우는 호출도 막는다."""
+    def test_내장_서브에이전트는_예외_둘을_빼고_금지하고_차단_훅을_가리킨다(self):
+        """내장 서브에이전트 이름과 fork는 금지하되 claude-code-guide와 statusline-setup만 예외로 두고, 종류를 비우는 호출도 막는다."""
         # Given
         text = CLAUDE_AGENTS.read_text(encoding="utf-8")
 
@@ -231,10 +231,17 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         built_in = " ".join(text.split("## Built-in subagents", 1)[1].split("## Investigation", 1)[0].split())
 
         # Then
-        for name in ("`general-purpose`", "`Explore`", "`Plan`", "`claude`", "`claude-code-guide`", "`statusline-setup`", "a fork"):
-            self.assertIn(name, built_in)
+        forbidden, exceptions = built_in.split("The exceptions are", 1)
+        for name in ("`general-purpose`", "`Explore`", "`Plan`", "`claude`", "a fork"):
+            self.assertIn(name, forbidden)
+        for name in ("`claude-code-guide`", "`statusline-setup`"):
+            self.assertNotIn(name, forbidden)
+            self.assertIn(name, exceptions.split("Always name", 1)[0])
         self.assertIn("Always name the subagent type, because an omitted type runs `general-purpose`.", built_in)
-        self.assertIn("The plugin's agent guard hook denies an omitted type and every built-in type", built_in)
+        self.assertIn(
+            "The plugin's agent guard hook denies an omitted type and every built-in type except those two exceptions",
+            built_in,
+        )
 
     def test_스킬_작업자는_scout나_별도_CLI_프로세스를_쓴다(self):
         """스킬이 요구하는 읽기 전용 작업자는 scout, 시험 출력을 쓰는 작업자는 별도 claude -p 프로세스로 실행한다."""
