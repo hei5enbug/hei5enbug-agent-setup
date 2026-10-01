@@ -90,8 +90,8 @@ Codex 只在 `~/.codex/agents/` 和 `.codex/agents/` 中查找子 agent，插件
 `worker` 角色不会拒绝编辑，而是作为普通实现 worker 运行。
 
 `PreToolUse` 钩子 `scripts/agent_guard.py` 在两个 host 上阻止内置子 agent。在 Claude Code 上，它拒绝省略类型的调用，
-以及所有内置类型：`general-purpose`、`Explore`、`Plan`、`claude`、`claude-code-guide`、`statusline-setup` 和 fork。
-插件 agent 以及用户、项目、CLI 或托管设置提供的定义都会通过。在 Codex 上，
+以及所有内置类型：`general-purpose`、`Explore`、`Plan`、`claude` 和 fork。用途狭窄的内置类型 `claude-code-guide` 和
+`statusline-setup`，以及插件 agent 和用户、项目、CLI 或托管设置提供的定义都会通过。在 Codex 上，
 它拒绝省略类型的调用、`default`、`explorer` 以及没有角色文件的所有类型，包括插件角色存在之前的内置 `worker`。
 需要独立只读 worker 的技能使用 `scout`，写入试运行输出的技能则运行单独的 `claude -p` 或 `codex exec` 进程。
 

@@ -27,7 +27,7 @@ Use this model mapping:
 | Authoring model family | Review model | Reasoning effort |
 |---|---|---|
 | GPT | `claude-fable-5-1` | `high` |
-| Claude | `gpt-6-sol` | `xhigh` |
+| Claude | `gpt-6.1-sol` | `xhigh` |
 
 Use the pinned model ID exactly and record it. Do not look up a newer release, follow a provider alias, or
 substitute the authoring family, another model tier, or lower reasoning effort. The reviewer must not edit

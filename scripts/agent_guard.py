@@ -7,7 +7,7 @@ import tomllib
 from pathlib import Path
 
 
-CLAUDE_BUILT_INS = {"general-purpose", "explore", "plan", "claude", "claude-code-guide", "statusline-setup", "fork"}
+CLAUDE_BUILT_INS = {"general-purpose", "explore", "plan", "claude", "fork"}
 CODEX_BUILT_INS = {"default", "explorer"}
 
 

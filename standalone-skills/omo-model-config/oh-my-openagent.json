@@ -5,19 +5,19 @@
     "sisyphus": {
       "models": [
         { "model": "anthropic/claude-opus-5-5", "reasoning": "max" },
-        { "model": "openai/gpt-6-sol", "reasoning": "medium" }
+        { "model": "openai/gpt-6.1-sol", "reasoning": "medium" }
       ]
     },
 
     "hephaestus": {
       "models": [
-        { "model": "openai/gpt-6-sol", "reasoning": "medium" }
+        { "model": "openai/gpt-6.1-sol", "reasoning": "medium" }
       ]
     },
 
     "oracle": {
       "models": [
-        { "model": "openai/gpt-6-sol", "reasoning": "xhigh" },
+        { "model": "openai/gpt-6.1-sol", "reasoning": "xhigh" },
         { "model": "anthropic/claude-opus-5-5", "reasoning": "max" }
       ]
     },
@@ -37,27 +37,27 @@
     },
 
     "multimodal-looker": {
-      "model": "openai/gpt-6-sol",
+      "model": "openai/gpt-6.1-sol",
       "reasoning": "low"
     },
 
     "prometheus": {
       "models": [
         { "model": "anthropic/claude-fable-5-1", "reasoning": "xhigh" },
-        "openai/gpt-6-sol"
+        "openai/gpt-6.1-sol"
       ]
     },
 
     "metis": {
       "models": [
         { "model": "anthropic/claude-opus-5-5", "reasoning": "high" },
-        "openai/gpt-6-sol"
+        "openai/gpt-6.1-sol"
       ]
     },
 
     "momus": {
       "models": [
-        { "model": "openai/gpt-6-sol", "reasoning": "xhigh" },
+        { "model": "openai/gpt-6.1-sol", "reasoning": "xhigh" },
         { "model": "anthropic/claude-opus-5-5", "reasoning": "max" }
       ]
     },
@@ -65,14 +65,14 @@
     "atlas": {
       "models": [
         "anthropic/claude-sonnet-5-5",
-        { "model": "openai/gpt-6-sol", "reasoning": "medium" }
+        { "model": "openai/gpt-6.1-sol", "reasoning": "medium" }
       ]
     },
 
     "sisyphus-junior": {
       "models": [
         "anthropic/claude-sonnet-5-5",
-        { "model": "openai/gpt-6-sol", "reasoning": "medium" }
+        { "model": "openai/gpt-6.1-sol", "reasoning": "medium" }
       ]
     }
   },
@@ -81,17 +81,17 @@
     "visual-engineering": {
       "models": [
         { "model": "anthropic/claude-opus-5-5", "reasoning": "max" },
-        { "model": "openai/gpt-6-sol", "reasoning": "medium" }
+        { "model": "openai/gpt-6.1-sol", "reasoning": "medium" }
       ]
     },
 
     "ultrabrain": {
-      "model": "openai/gpt-6-sol",
+      "model": "openai/gpt-6.1-sol",
       "reasoning": "max"
     },
 
     "deep": {
-      "model": "openai/gpt-6-sol",
+      "model": "openai/gpt-6.1-sol",
       "reasoning": "medium"
     },
 
@@ -99,7 +99,7 @@
       "models": [
         { "model": "anthropic/claude-fable-5-1", "reasoning": "xhigh" },
         { "model": "anthropic/claude-opus-5-5", "reasoning": "xhigh" },
-        "openai/gpt-6-sol"
+        "openai/gpt-6.1-sol"
       ]
     },
 
@@ -120,14 +120,14 @@
     "unspecified-high": {
       "models": [
         { "model": "anthropic/claude-opus-5-5", "reasoning": "xhigh" },
-        "openai/gpt-6-sol"
+        "openai/gpt-6.1-sol"
       ]
     },
 
     "writing": {
       "models": [
         { "model": "anthropic/claude-opus-5-5", "reasoning": "low" },
-        "openai/gpt-6-sol"
+        "openai/gpt-6.1-sol"
       ]
     }
   },

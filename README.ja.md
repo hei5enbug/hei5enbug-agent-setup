@@ -92,10 +92,10 @@ Codex はサブエージェントを `~/.codex/agents/` と `.codex/agents/` か
 通常の実装ワーカーとして動作します。
 
 `PreToolUse` フックの `scripts/agent_guard.py` が、両方のホストで組み込みサブエージェントを防ぎます。Claude Code では、
-種類を省略した呼び出しと、`general-purpose`、`Explore`、`Plan`、`claude`、`claude-code-guide`、`statusline-setup`、
-フォークという組み込みの種類をすべて拒否します。プラグインのエージェントと、ユーザー・プロジェクト・CLI・管理設定が
-提供する定義は通過します。Codex では、種類を省略した呼び出し、`default`、`explorer`、ロール
-ファイルのない種類をすべて拒否し、プラグインのロールができる前の組み込み `worker` も拒否します。独立した読み取り専用の
+種類を省略した呼び出しと、`general-purpose`、`Explore`、`Plan`、`claude`、フォークという組み込みの種類をすべて
+拒否します。目的が限定された組み込みの `claude-code-guide` と `statusline-setup` は、プラグインのエージェントや、
+ユーザー・プロジェクト・CLI・管理設定が提供する定義と同様に通過します。Codex では、種類を省略した呼び出し、`default`、
+`explorer`、ロールファイルのない種類をすべて拒否し、プラグインのロールができる前の組み込み `worker` も拒否します。独立した読み取り専用の
 ワーカーを求めるスキルは `scout` を使い、試行出力を書くスキルは別の `claude -p` または `codex exec` プロセスを実行します。
 
 ## プラグインのインストール
