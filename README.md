@@ -48,6 +48,7 @@ hei5enbug-agent-setup/
 │   ├── agent_guard.py
 │   ├── datagrip_guard.py
 │   ├── language_guard.py
+│   ├── session_approval_guard.py
 │   └── session_context.py
 ├── tests/
 ├── LICENSE
@@ -135,6 +136,26 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 Without it, PostgreSQL falls back to a stricter text check that may ask more often but still never lets a write run
 without approval.
 
+### Session approvals
+
+On Claude Code only, a session approval guard, `scripts/session_approval_guard.py`, lets you approve certain
+outward-facing writes once per session. It covers creating git tags; pushing tags to a configured remote;
+`gh release create` and `gh release edit` with only the tag and the flags `--title`, `--notes`, `--target`,
+`--generate-notes`, `--notes-from-tag`, `--latest`, `--draft`, `--prerelease`, `--verify-tag`; and MCP tools whose
+names contain a write verb. After you approve one, the same kind of action runs without a prompt for the rest of that
+session. Each tool or command kind is approved separately.
+
+Destructive actions always ask: force pushes, deleting remote branches or tags, deleting a tag, `gh release delete`,
+`gh repo delete`, and MCP tools that delete, trash, or remove. `gh release upload` always asks too, because it can
+publish any local file. So does a tag push to a URL, an unlisted remote, or `--repo`, or one that mixes a branch into
+a `--tags` push, and so does a `gh release create` or `gh release edit` with attached assets, `--notes-file`, or any
+other flag. A compound command that contains anything the guard cannot verify always asks. Subagents never inherit
+approvals. Approvals expire with the session and are stored in the plugin data directory. Ordinary pushes and all
+other commands keep the normal permission flow.
+
+Do not add `permissions.ask` rules for these actions, because an ask rule prompts every time even after a session
+approval.
+
 ## Plugin installation
 
 Install the bundle once from the GitHub repository.
@@ -173,6 +194,7 @@ for locating the script. No user or project instruction file is copied, linked, 
 | A tool call finishes | `PostToolUse` adds a language reminder after a progress update in another language. |
 | A reply ends | `Stop` asks for a rewrite when the reply is not in the response language. |
 | A DataGrip query is about to run | `PreToolUse` and `PermissionRequest` run the DataGrip query guard before `execute_sql_query`. |
+| A Bash or MCP tool call runs | On Claude Code, `PreToolUse` and `PostToolUse` run the session approval guard for Bash and MCP tools. |
 | A matching task begins | The agent reads the required reference under `instructions/`. |
 | A plugin update is installed | A new session reads that installed version. A repository push alone changes nothing locally. |
 
@@ -189,8 +211,8 @@ Codex requires review and trust of the current plugin hook definition before run
 Disabled hooks or enterprise policies that prohibit plugin hooks prevent automatic loading.
 After installation or update, use the host's hook controls to check that these hooks are enabled and,
 in Codex, trusted. A hook that an update adds, such as the agent guard, the language guard, or the DataGrip query
-guard, stays skipped in Codex until you trust it in `/hooks`. Restart Claude Code or start a new Codex session
-after updating.
+guard, stays skipped in Codex until you trust it in `/hooks`. The session approval guard runs only on Claude Code,
+so this trust step does not apply to it. Restart Claude Code or start a new Codex session after updating.
 The hook does not bypass host trust settings or change an already running session to a new plugin version.
 The `orca-plugin-refresh` skill uses those markers to apply an update to running Orca sessions without restarting them.
 

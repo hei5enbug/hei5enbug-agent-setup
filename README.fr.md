@@ -46,6 +46,7 @@ hei5enbug-agent-setup/
 │   ├── agent_guard.py
 │   ├── datagrip_guard.py
 │   ├── language_guard.py
+│   ├── session_approval_guard.py
 │   └── session_context.py
 ├── tests/
 ├── LICENSE
@@ -139,6 +140,29 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 Sans lui, PostgreSQL se rabat sur une vérification textuelle plus stricte, qui peut demander plus souvent une
 approbation mais ne laisse jamais passer une écriture sans approbation.
 
+### Approbations de session
+
+Sur Claude Code uniquement, un garde d'approbations de session, `scripts/session_approval_guard.py`, permet
+d'approuver une seule fois par session certaines écritures visibles de l'extérieur. Il couvre la création de tags git,
+le push de tags vers un remote configuré, `gh release create` et `gh release edit` avec seulement le tag et les
+options `--title`, `--notes`, `--target`, `--generate-notes`, `--notes-from-tag`, `--latest`, `--draft`,
+`--prerelease`, `--verify-tag`, et les outils MCP dont le nom contient un verbe d'écriture. Après une approbation, le
+même type d'action s'exécute sans demande pour le reste de la session. Chaque type d'outil ou de commande est approuvé
+séparément.
+
+Les actions destructrices demandent toujours une approbation : les push forcés, la suppression de branches distantes
+ou de tags, la suppression d'un tag, `gh release delete`, `gh repo delete` et les outils MCP qui suppriment, mettent à
+la corbeille ou retirent. `gh release upload` demande aussi toujours une approbation, car il peut publier n'importe
+quel fichier local. Il en va de même pour un push de tag vers une URL, un remote non listé ou avec `--repo`, pour un
+push `--tags` auquel se mêle une branche, et pour un `gh release create` ou `gh release edit` avec des fichiers
+joints, `--notes-file` ou toute autre option. Une commande composée qui contient quelque chose que le garde ne peut
+pas vérifier demande aussi toujours une approbation. Les sous-agents n'héritent d'aucune approbation. Les approbations
+expirent avec la session et sont stockées dans le répertoire de données du plugin. Les push ordinaires et toutes les
+autres commandes gardent le flux de permissions normal.
+
+N'ajoutez pas de règles `permissions.ask` pour ces actions, car une règle ask demande à chaque fois, même après une
+approbation de session.
+
 ## Installation du plugin
 
 Installez le paquet une seule fois depuis le dépôt GitHub.
@@ -166,9 +190,12 @@ Les détails dans `instructions/` sont lus uniquement avant l'action corresponda
 Après chaque appel d'outil et à la fin de chaque réponse, le garde de langue s'exécute aussi via `PostToolUse` et
 `Stop`.
 Le garde de requêtes DataGrip s'exécute avant `execute_sql_query` via `PreToolUse` et `PermissionRequest`.
+Sur Claude Code, le garde d'approbations de session s'exécute pour Bash et les outils MCP via `PreToolUse` et
+`PostToolUse`.
 Python 3.12 ou plus récent doit être disponible via `python3` ; les hooks doivent être activés et approuvés dans Codex.
 Un hook ajouté par une mise à jour, comme le garde d'agents, le garde de langue ou le garde de requêtes DataGrip,
 reste ignoré dans Codex tant que vous ne l'avez pas approuvé dans `/hooks`.
+Le garde d'approbations de session ne s'exécute que sur Claude Code ; cette étape de confiance ne le concerne donc pas.
 Après une mise à jour du plugin, ouvrez une nouvelle session.
 Les références, erreurs et limites sont décrites dans la
 [section en anglais](README.md#automatic-instructions).
