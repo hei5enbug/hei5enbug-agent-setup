@@ -44,6 +44,8 @@ hei5enbug-agent-setup/
 │       └── common.md
 ├── scripts/
 │   ├── agent_guard.py
+│   ├── datagrip_guard.py
+│   ├── language_guard.py
 │   └── session_context.py
 ├── tests/
 ├── LICENSE
@@ -95,6 +97,31 @@ Codex 只在 `~/.codex/agents/` 和 `.codex/agents/` 中查找子 agent，插件
 它拒绝省略类型的调用、`default`、`explorer` 以及没有角色文件的所有类型，包括插件角色存在之前的内置 `worker`。
 需要独立只读 worker 的技能使用 `scout`，写入试运行输出的技能则运行单独的 `claude -p` 或 `codex exec` 进程。
 
+### 响应语言
+
+语言守卫 `scripts/language_guard.py` 检查每条回复和每条进度更新是否使用响应语言。Claude Code 从 `language` 设置取得语言，
+依次读取本地项目设置、项目设置和用户设置；没有该设置时不做任何强制。Codex 读取 `HEI5ENBUG_RESPONSE_LANGUAGE`，
+未设置时使用韩语。只检查有独特文字的语言：韩语、日语、中文、俄语、乌克兰语、希腊语、阿拉伯语、希伯来语、泰语和印地语。
+对英语或法语等其他语言，只有指令生效。
+
+检查会忽略代码、引用和 URL。当字母中目标文字至少占 30% 时通过，很短的文本始终通过。回复未通过时，`Stop` 钩子会要求重写，
+每个回合最多 3 次。进度更新使用其他语言时，`PostToolUse` 钩子会追加提醒。用户要求以其他语言提供的文本，请放入代码块或引用块。
+
+### DataGrip 查询守卫
+
+`PreToolUse` 钩子和 `PermissionRequest` 钩子 `scripts/datagrip_guard.py` 在 DataGrip MCP 工具 `execute_sql_query` 运行前执行。守卫从
+`projectPath` 指向的 DataGrip 项目中的 `.idea/dataSources.xml` 读取连接。名称包含 `승인` 的连接始终要求批准。PostgreSQL 和 SQL Server
+的读取无需批准即可运行，PostgreSQL 的读取在只读事务内运行。写入、守卫无法分类的查询、未知连接以及其他数据库类型始终要求批准。守卫从不拒绝调用。在 Codex 中，需要在 `/hooks` 中信任该钩子。
+
+可以选择一次性安装 `pglast` 解析器：
+
+```bash
+uv venv --python 3.12 "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-setup/sql-parser"
+uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-setup/sql-parser/bin/python" pglast==8.4
+```
+
+没有它时，PostgreSQL 会退回到更严格的文本检查。这可能更频繁地要求批准，但写入仍不会在未经批准的情况下运行。
+
 ## 安装插件
 
 从 GitHub 仓库安装一次即可。
@@ -118,8 +145,10 @@ claude plugin install hei5enbug-agent-setup@hei5enbug
 在 macOS 和 Linux 上，钩子会把 `instructions/session/common.md` 与当前 host 的 `codex.md` 或 `claude-code.md` 合并。
 钩子在会话启动、恢复、清空、上下文压缩后以及子 agent 启动时执行。
 `instructions/` 中的详细规则只在对应操作之前读取。
+工具调用结束后和回复结束时，语言守卫也会分别通过 `PostToolUse` 和 `Stop` 运行。
+DataGrip 查询守卫在 `execute_sql_query` 运行前通过 `PreToolUse` 和 `PermissionRequest` 运行。
 需要可通过 `python3` 执行的 Python 3.12 或更高版本，并启用钩子。
-Codex 还需要用户确认信任钩子。更新新增的钩子在 `/hooks` 中信任之前会被跳过。更新插件后请启动新会话。
+Codex 还需要用户确认信任钩子。agent 守卫、语言守卫和 DataGrip 查询守卫等由更新新增的钩子在 `/hooks` 中信任之前会被跳过。更新插件后请启动新会话。
 有关引用、错误和限制，请参阅[英文说明](README.md#automatic-instructions)。
 
 ## 更新插件
