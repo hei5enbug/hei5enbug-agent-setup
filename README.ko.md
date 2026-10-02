@@ -52,6 +52,7 @@ hei5enbug-agent-setup/
 │   ├── agent_guard.py
 │   ├── datagrip_guard.py
 │   ├── language_guard.py
+│   ├── session_approval_guard.py
 │   └── session_context.py
 ├── tests/
 ├── LICENSE
@@ -135,6 +136,21 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 
 파서가 없으면 PostgreSQL은 더 엄격한 텍스트 검사로 대체합니다. 이 검사는 승인을 더 자주 요청할 수 있지만, 승인 없이 쓰기가 실행되는 일은 여전히 없습니다.
 
+### 세션 승인
+
+Claude Code에서만 동작하는 세션 승인 가드 `scripts/session_approval_guard.py`는 외부로 나가는 특정 쓰기 작업을 세션마다 한 번만 승인하게 합니다. git 태그 생성, 설정된
+원격 저장소로의 태그 푸시, 태그와 플래그 `--title`, `--notes`, `--target`, `--generate-notes`, `--notes-from-tag`, `--latest`,
+`--draft`, `--prerelease`, `--verify-tag`만 쓴 `gh release create`와 `gh release edit`, 이름에 쓰기 동사가 들어간 MCP 도구가 대상입니다. 한 번
+승인하면 그 세션이 끝날 때까지 같은 종류의 작업은 확인 없이 실행됩니다. 도구나 명령 종류별로 따로 승인합니다.
+
+되돌릴 수 없는 작업은 항상 승인을 요청합니다. 강제 푸시, 원격 브랜치나 태그 삭제, 태그 삭제, `gh release delete`, `gh repo delete`, 삭제·휴지통 이동·제거를 하는 MCP
+도구가 여기에 해당합니다. `gh release upload`는 로컬 파일을 무엇이든 게시할 수 있으므로 항상 승인을 요청합니다. URL, 목록에 없는 원격 저장소, `--repo`로 보내는 태그 푸시나
+`--tags` 푸시에 브랜치가 섞인 경우, 첨부 파일·`--notes-file`·그 밖의 플래그가 붙은 `gh release create`와 `gh release edit`도 마찬가지입니다. 가드가 확인할 수
+없는 부분이 하나라도 있는 복합 명령도 항상 승인을 요청합니다. 서브에이전트는 승인을 물려받지 않습니다. 승인은 세션과 함께 만료되며 플러그인 데이터 디렉터리에 저장됩니다. 일반 푸시와 그 밖의 명령은 기존 권한
+절차를 그대로 따릅니다.
+
+이 작업들에 `permissions.ask` 규칙을 추가하지 마세요. ask 규칙은 세션 승인 뒤에도 매번 확인을 요청합니다.
+
 ## 플러그인 설치
 
 GitHub 저장소에서 스킬 묶음을 한 번 설치합니다.
@@ -174,6 +190,7 @@ Codex가 제공하는 `PLUGIN_ROOT`가 설치 디렉터리를 가리키면 로�
 | 도구 호출 종료 | 진행 상황 안내가 다른 언어로 쓰였으면 `PostToolUse`가 언어 알림을 추가한다. |
 | 답변 종료 | 답변이 응답 언어로 쓰이지 않았으면 `Stop`이 다시 쓰도록 요청한다. |
 | DataGrip 쿼리 실행 직전 | `PreToolUse`와 `PermissionRequest`가 `execute_sql_query` 실행 전에 DataGrip 쿼리 가드를 실행한다. |
+| Bash 또는 MCP 도구 호출 실행 | Claude Code에서는 `PreToolUse`와 `PostToolUse`가 Bash와 MCP 도구에 세션 승인 가드를 실행한다. |
 | 조건에 맞는 작업 시작 | 에이전트가 `instructions/`의 필수 참조를 읽는다. |
 | 플러그인 업데이트 설치 | 새 세션이 설치된 버전을 읽는다. 저장소에 푸시하는 것만으로는 반영되지 않는다. |
 
@@ -191,6 +208,7 @@ Codex는 현재 플러그인 훅 정의를 사용자가 검토하고 신뢰한 �
 훅이 꺼져 있거나 조직 정책이 플러그인 훅을 금지하면 자동 적용되지 않는다.
 설치·업데이트 후 호스트의 훅 설정에서 활성화 여부를 확인하고, Codex에서는 신뢰 여부도 확인한다.
 에이전트 차단 훅, 언어 가드, DataGrip 쿼리 가드처럼 업데이트가 새로 추가한 훅은 Codex의 `/hooks`에서 신뢰하기 전까지 건너뛴다.
+세션 승인 가드는 Claude Code에서만 동작하므로 이 신뢰 절차가 적용되지 않는다.
 업데이트 후에는 Claude Code를 재시작하거나 Codex에서 새 세션을 시작한다.
 훅은 호스트의 신뢰 설정을 우회하지 않으며, 실행 중인 세션의 플러그인 버전을 바꾸지 않는다.
 `orca-plugin-refresh` 스킬은 이 표식으로 실행 중인 Orca 세션에 업데이트를 재시작 없이 반영한다.

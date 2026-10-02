@@ -46,6 +46,7 @@ hei5enbug-agent-setup/
 │   ├── agent_guard.py
 │   ├── datagrip_guard.py
 │   ├── language_guard.py
+│   ├── session_approval_guard.py
 │   └── session_context.py
 ├── tests/
 ├── LICENSE
@@ -137,6 +138,27 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 Sin él, PostgreSQL recurre a una comprobación de texto más estricta que puede pedir aprobación con más frecuencia,
 pero nunca deja pasar una escritura sin aprobación.
 
+### Aprobaciones de sesión
+
+Solo en Claude Code, un guardián de aprobaciones de sesión, `scripts/session_approval_guard.py`, permite aprobar una
+vez por sesión ciertas escrituras con efecto externo. Cubre la creación de etiquetas git, el envío de etiquetas a un
+remoto configurado, `gh release create` y `gh release edit` solo con la etiqueta y las opciones `--title`, `--notes`,
+`--target`, `--generate-notes`, `--notes-from-tag`, `--latest`, `--draft`, `--prerelease`, `--verify-tag`, y las
+herramientas MCP cuyo nombre contiene un verbo de escritura. Tras aprobar una, el mismo tipo de acción se ejecuta sin
+preguntar durante el resto de la sesión. Cada tipo de herramienta o de comando se aprueba por separado.
+
+Las acciones destructivas siempre piden aprobación: los envíos forzados, borrar ramas remotas o etiquetas, borrar una
+etiqueta, `gh release delete`, `gh repo delete` y las herramientas MCP que borran, envían a la papelera o eliminan.
+`gh release upload` también pide siempre aprobación, porque puede publicar cualquier archivo local. Lo mismo ocurre
+con el envío de una etiqueta a una URL, a un remoto no listado o con `--repo`, o que mezcla una rama en un envío con
+`--tags`, y con un `gh release create` o `gh release edit` con archivos adjuntos, `--notes-file` o cualquier otra
+opción. Un comando compuesto con algo que el guardián no puede verificar también pide siempre aprobación. Los
+subagentes no heredan las aprobaciones. Las aprobaciones caducan con la sesión y se guardan en el directorio de datos
+del plugin. Los envíos ordinarios y los demás comandos conservan el flujo de permisos normal.
+
+No añada reglas `permissions.ask` para estas acciones, porque una regla ask pregunta cada vez, incluso después de una
+aprobación de sesión.
+
 ## Instalación del plugin
 
 Instala el paquete una vez desde el repositorio de GitHub.
@@ -164,9 +186,12 @@ Tras cada llamada a una herramienta y al terminar cada respuesta, el guardián d
 `PostToolUse` y `Stop`.
 El guardián de consultas de DataGrip se ejecuta antes de `execute_sql_query` mediante `PreToolUse` y
 `PermissionRequest`.
+En Claude Code, el guardián de aprobaciones de sesión se ejecuta para Bash y las herramientas MCP mediante `PreToolUse`
+y `PostToolUse`.
 Se requiere Python 3.12 o superior como `python3`, hooks habilitados y aprobación de confianza en Codex.
 Un hook que añade una actualización, como el guardián de agentes, el de idioma o el de consultas de DataGrip, queda
 omitido en Codex hasta que lo apruebes en `/hooks`.
+El guardián de aprobaciones de sesión solo se ejecuta en Claude Code, así que este paso de confianza no le afecta.
 Tras actualizar el plugin, inicia una sesión nueva.
 Consulta las referencias, los errores y los límites en la
 [sección en inglés](README.md#automatic-instructions).

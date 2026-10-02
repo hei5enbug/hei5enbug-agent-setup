@@ -46,6 +46,7 @@ hei5enbug-agent-setup/
 │   ├── agent_guard.py
 │   ├── datagrip_guard.py
 │   ├── language_guard.py
+│   ├── session_approval_guard.py
 │   └── session_context.py
 ├── tests/
 ├── LICENSE
@@ -130,6 +131,20 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 
 パーサーがない場合、PostgreSQL はより厳格なテキスト検査に切り替わります。承認を求める頻度が増えることがありますが、承認なしで書き込みが実行されることはありません。
 
+### セッション承認
+
+Claude Code 専用のセッション承認ガード `scripts/session_approval_guard.py` は、外部に影響する特定の書き込み操作を、セッションごとに一度だけ承認すれば済むようにします。対象は、
+git タグの作成、設定済みのリモートへのタグのプッシュ、タグとフラグ `--title`, `--notes`, `--target`, `--generate-notes`, `--notes-from-tag`,
+`--latest`, `--draft`, `--prerelease`, `--verify-tag` だけを使う `gh release create` と `gh release edit`、
+名前に書き込みを表す動詞を含む MCP ツールです。一度承認すると、そのセッションが終わるまで同じ種類の操作は確認なしで実行されます。ツールやコマンドの種類ごとに別々に承認します。
+
+元に戻せない操作は常に承認を求めます。強制プッシュ、リモートブランチやタグの削除、タグの削除、`gh release delete`、`gh repo delete`、削除・ゴミ箱への移動・除去を行う MCP ツールが該当します。
+`gh release upload` は任意のローカルファイルを公開できるため、常に承認を求めます。URL、一覧にないリモート、`--repo` へのタグのプッシュや、`--tags` のプッシュにブランチが混ざる場合、添付ファイル、
+`--notes-file`、その他のフラグが付いた `gh release create` と `gh release edit` も同様です。ガードが確認できない部分を含む複合コマンドも常に承認を求めます。
+サブエージェントは承認を引き継ぎません。承認はセッションとともに失効し、プラグインのデータディレクトリに保存されます。通常のプッシュとその他のコマンドは、従来どおりの権限フローのままです。
+
+これらの操作に `permissions.ask` ルールを追加しないでください。ask ルールは、セッション承認の後でも毎回確認を求めます。
+
 ## プラグインのインストール
 
 GitHub リポジトリからバンドルを一度インストールします。
@@ -156,8 +171,10 @@ macOS と Linux では、フックが `instructions/session/common.md` と現在
 `instructions/` の詳細は該当する操作の前だけに読み込みます。
 ツール呼び出しの完了後と返信の終了時にも、言語ガードがそれぞれ `PostToolUse` と `Stop` で実行されます。
 DataGrip クエリガードは `execute_sql_query` の実行前に `PreToolUse` と `PermissionRequest` で実行されます。
+Claude Code では、セッション承認ガードが Bash と MCP ツールに対して `PreToolUse` と `PostToolUse` で実行されます。
 `python3` で実行できる Python 3.12 以上と、フックの有効化が必要です。
 Codex ではフックを信頼する承認も必要です。エージェントガード、言語ガード、DataGrip クエリガードなど、更新で追加されたフックは `/hooks` で信頼するまでスキップされます。
+セッション承認ガードは Claude Code でのみ動作するため、この信頼手順は適用されません。
 プラグイン更新後は新しいセッションを開始してください。
 参照、エラー、制限の詳細は[英語の説明](README.md#automatic-instructions)を参照してください。
 

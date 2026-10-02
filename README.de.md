@@ -46,6 +46,7 @@ hei5enbug-agent-setup/
 │   ├── agent_guard.py
 │   ├── datagrip_guard.py
 │   ├── language_guard.py
+│   ├── session_approval_guard.py
 │   └── session_context.py
 ├── tests/
 ├── LICENSE
@@ -140,6 +141,28 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 Ohne ihn fällt PostgreSQL auf eine strengere Textprüfung zurück, die häufiger nachfragen kann, aber nie einen
 Schreibzugriff ohne Freigabe durchlässt.
 
+### Sitzungsfreigaben
+
+Nur auf Claude Code lässt ein Sitzungsfreigabe-Wächter, `scripts/session_approval_guard.py`, bestimmte nach außen
+wirkende Schreibaktionen einmal pro Sitzung freigeben. Er deckt das Erstellen von Git-Tags, das Pushen von Tags zu
+einem konfigurierten Remote, `gh release create` und `gh release edit` nur mit dem Tag und den Optionen `--title`,
+`--notes`, `--target`, `--generate-notes`, `--notes-from-tag`, `--latest`, `--draft`, `--prerelease`, `--verify-tag`
+sowie MCP-Werkzeuge ab, deren Name ein Schreibverb enthält. Nach einer Freigabe läuft dieselbe Art von Aktion für den
+Rest der Sitzung ohne Rückfrage. Jede Art von Werkzeug oder Befehl wird getrennt freigegeben.
+
+Zerstörerische Aktionen fragen immer nach: Force-Pushes, das Löschen von Remote-Branches oder Tags, das Löschen eines
+Tags, `gh release delete`, `gh repo delete` und MCP-Werkzeuge, die löschen, in den Papierkorb verschieben oder
+entfernen. `gh release upload` fragt ebenfalls immer nach, weil es jede lokale Datei veröffentlichen kann. Das gilt
+auch für einen Tag-Push zu einer URL, einem nicht aufgeführten Remote oder mit `--repo`, für einen `--tags`-Push, in
+den ein Branch eingemischt ist, und für `gh release create` oder `gh release edit` mit angehängten Dateien,
+`--notes-file` oder jeder anderen Option. Ein zusammengesetzter Befehl, der etwas enthält, das der Wächter nicht
+prüfen kann, fragt ebenfalls immer nach. Subagenten erben keine Freigaben. Freigaben verfallen mit der Sitzung und
+liegen im Datenverzeichnis des Plugins. Gewöhnliche Pushes und alle anderen Befehle behalten den normalen
+Berechtigungsablauf.
+
+Fügen Sie für diese Aktionen keine `permissions.ask`-Regeln hinzu, denn eine Ask-Regel fragt jedes Mal nach, auch nach
+einer Sitzungsfreigabe.
+
 ## Plugin installieren
 
 Installiere das Bundle einmal aus dem GitHub-Repository.
@@ -166,9 +189,12 @@ Details unter `instructions/` werden nur vor der passenden Aktion gelesen.
 Nach jedem Werkzeugaufruf und am Ende jeder Antwort läuft der Sprachwächter zusätzlich über `PostToolUse` und
 `Stop`.
 Der DataGrip-Abfragewächter läuft vor `execute_sql_query` über `PreToolUse` und `PermissionRequest`.
+Auf Claude Code läuft zusätzlich der Sitzungsfreigabe-Wächter für Bash und MCP-Werkzeuge über `PreToolUse` und
+`PostToolUse`.
 Erforderlich sind Python 3.12 oder neuer als `python3`, aktivierte Hooks und in Codex eine Vertrauensfreigabe.
 Ein durch ein Update hinzugefügter Hook, etwa der Agent-Wächter, der Sprachwächter oder der DataGrip-Abfragewächter,
 wird in Codex übersprungen, bis Sie ihn unter `/hooks` freigeben.
+Der Sitzungsfreigabe-Wächter läuft nur auf Claude Code, daher gilt dieser Vertrauensschritt nicht für ihn.
 Nach einem Plugin-Update ist eine neue Sitzung nötig.
 Weitere Angaben zu Referenzen, Fehlern und Grenzen stehen im
 [englischen Abschnitt](README.md#automatic-instructions).
