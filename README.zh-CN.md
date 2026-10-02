@@ -46,6 +46,7 @@ hei5enbug-agent-setup/
 │   ├── agent_guard.py
 │   ├── datagrip_guard.py
 │   ├── language_guard.py
+│   ├── session_approval_guard.py
 │   └── session_context.py
 ├── tests/
 ├── LICENSE
@@ -122,6 +123,20 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 
 没有它时，PostgreSQL 会退回到更严格的文本检查。这可能更频繁地要求批准，但写入仍不会在未经批准的情况下运行。
 
+### 会话批准
+
+仅限 Claude Code 的会话批准守卫 `scripts/session_approval_guard.py` 让你对某些面向外部的写入操作每个会话只批准一次。覆盖范围包括创建 git 标签、向已配置的远程推送标签、
+仅使用标签和标志 `--title`, `--notes`, `--target`, `--generate-notes`, `--notes-from-tag`, `--latest`, `--draft`,
+`--prerelease`, `--verify-tag` 的 `gh release create` 与 `gh release edit`，以及名称中包含写入动词的 MCP 工具。批准一次后，
+同一类操作在该会话的剩余时间内无需提示即可运行。每种工具或命令类型需要分别批准。
+
+不可撤销的操作始终要求批准：强制推送、删除远程分支或标签、删除标签、`gh release delete`、`gh repo delete`，以及执行删除、移入回收站或移除的 MCP 工具。
+`gh release upload` 可以发布任意本地文件，因此也始终要求批准。向 URL、未列出的远程或 `--repo` 推送标签，或在 `--tags` 推送中混入分支，以及带有附件、
+`--notes-file` 或任何其他标志的 `gh release create` 和 `gh release edit`，同样始终要求批准。包含守卫无法验证的内容的复合命令也始终要求批准。子 agent 不会继承批准。
+批准随会话失效，并保存在插件数据目录中。普通推送和其他命令继续使用常规权限流程。
+
+不要为这些操作添加 `permissions.ask` 规则，因为 ask 规则即使在会话批准之后也会每次都提示。
+
 ## 安装插件
 
 从 GitHub 仓库安装一次即可。
@@ -147,8 +162,10 @@ claude plugin install hei5enbug-agent-setup@hei5enbug
 `instructions/` 中的详细规则只在对应操作之前读取。
 工具调用结束后和回复结束时，语言守卫也会分别通过 `PostToolUse` 和 `Stop` 运行。
 DataGrip 查询守卫在 `execute_sql_query` 运行前通过 `PreToolUse` 和 `PermissionRequest` 运行。
+在 Claude Code 上，会话批准守卫针对 Bash 和 MCP 工具通过 `PreToolUse` 和 `PostToolUse` 运行。
 需要可通过 `python3` 执行的 Python 3.12 或更高版本，并启用钩子。
-Codex 还需要用户确认信任钩子。agent 守卫、语言守卫和 DataGrip 查询守卫等由更新新增的钩子在 `/hooks` 中信任之前会被跳过。更新插件后请启动新会话。
+Codex 还需要用户确认信任钩子。agent 守卫、语言守卫和 DataGrip 查询守卫等由更新新增的钩子在 `/hooks` 中信任之前会被跳过。
+会话批准守卫只在 Claude Code 上运行，因此此信任步骤不适用于它。更新插件后请启动新会话。
 有关引用、错误和限制，请参阅[英文说明](README.md#automatic-instructions)。
 
 ## 更新插件

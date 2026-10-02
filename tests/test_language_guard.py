@@ -1324,7 +1324,10 @@ class RegistrationTest(LanguageGuardCase):
         expected_command = 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/language_guard.py"'
 
         # When
-        entries = {event: HOOKS[event] for event in ("PostToolUse", "Stop")}
+        entries = {
+            event: [group for group in HOOKS[event] if "language_guard.py" in group["hooks"][0]["command"]]
+            for event in ("PostToolUse", "Stop")
+        }
 
         # Then
         for event, groups in entries.items():
