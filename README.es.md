@@ -44,6 +44,8 @@ hei5enbug-agent-setup/
 │       └── common.md
 ├── scripts/
 │   ├── agent_guard.py
+│   ├── datagrip_guard.py
+│   ├── language_guard.py
 │   └── session_context.py
 ├── tests/
 ├── LICENSE
@@ -101,6 +103,40 @@ tipo omitido, `default`, `explorer` y todo tipo sin archivo de rol, incluido el 
 rol del plugin. Los skills que piden un worker independiente de solo lectura usan `scout`, y los que escriben salidas
 de prueba ejecutan un proceso `claude -p` o `codex exec` aparte.
 
+### Idioma de respuesta
+
+Un guardián de idioma, `scripts/language_guard.py`, comprueba que cada respuesta y cada aviso de progreso estén
+escritos en el idioma de respuesta. Claude Code toma el idioma del ajuste `language`, que lee de la configuración
+local del proyecto, luego de la del proyecto y luego de la del usuario; sin ese ajuste, no se impone nada. Codex lee
+`HEI5ENBUG_RESPONSE_LANGUAGE` y usa coreano si no está definida. Solo se comprueban los idiomas con una escritura
+distintiva: coreano, japonés, chino, ruso, ucraniano, griego, árabe, hebreo, tailandés e hindi. Con cualquier otro
+idioma, como inglés o francés, solo se aplica la instrucción.
+
+La comprobación ignora el código, las citas y las URL. Un texto pasa cuando al menos el 30 % de sus letras pertenecen
+a la escritura del idioma, y un texto muy corto siempre pasa. Un hook `Stop` pide reescribir una respuesta que no
+pasa, como máximo 3 veces por turno. Un hook `PostToolUse` añade un recordatorio tras un aviso de progreso en otro
+idioma. Coloque el texto que el usuario pida en otro idioma en un bloque de código o una cita en bloque.
+
+### Guardián de consultas de DataGrip
+
+Un hook `PreToolUse` y un hook `PermissionRequest`, ambos `scripts/datagrip_guard.py`, se ejecutan antes de la
+herramienta MCP de DataGrip `execute_sql_query`. El guardián lee la conexión de `.idea/dataSources.xml` en el proyecto
+de DataGrip que indica `projectPath`. Una conexión cuyo nombre contiene `승인` siempre pide aprobación. Las lecturas de
+PostgreSQL y SQL Server se ejecutan sin aprobación, y las de PostgreSQL se ejecutan dentro de una transacción de solo
+lectura. Las escrituras, las consultas que el guardián no puede clasificar, las conexiones desconocidas y los demás
+tipos de base de datos siempre piden aprobación. El guardián nunca deniega una llamada. En Codex, apruebe el hook en
+`/hooks`.
+
+De forma opcional, instale el analizador `pglast` una vez:
+
+```bash
+uv venv --python 3.12 "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-setup/sql-parser"
+uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-setup/sql-parser/bin/python" pglast==8.4
+```
+
+Sin él, PostgreSQL recurre a una comprobación de texto más estricta que puede pedir aprobación con más frecuencia,
+pero nunca deja pasar una escritura sin aprobación.
+
 ## Instalación del plugin
 
 Instala el paquete una vez desde el repositorio de GitHub.
@@ -124,8 +160,13 @@ claude plugin install hei5enbug-agent-setup@hei5enbug
 En macOS y Linux, los hooks combinan `instructions/session/common.md` con `codex.md` o `claude-code.md` para el host actual.
 Se ejecutan al iniciar o reanudar una sesión, al limpiar o compactar el contexto y al iniciar un subagente.
 Los detalles de `instructions/` se leen solo antes de la acción correspondiente.
+Tras cada llamada a una herramienta y al terminar cada respuesta, el guardián de idioma también se ejecuta mediante
+`PostToolUse` y `Stop`.
+El guardián de consultas de DataGrip se ejecuta antes de `execute_sql_query` mediante `PreToolUse` y
+`PermissionRequest`.
 Se requiere Python 3.12 o superior como `python3`, hooks habilitados y aprobación de confianza en Codex.
-Un hook que añade una actualización queda omitido en Codex hasta que lo apruebes en `/hooks`.
+Un hook que añade una actualización, como el guardián de agentes, el de idioma o el de consultas de DataGrip, queda
+omitido en Codex hasta que lo apruebes en `/hooks`.
 Tras actualizar el plugin, inicia una sesión nueva.
 Consulta las referencias, los errores y los límites en la
 [sección en inglés](README.md#automatic-instructions).

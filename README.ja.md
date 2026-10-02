@@ -44,6 +44,8 @@ hei5enbug-agent-setup/
 │       └── common.md
 ├── scripts/
 │   ├── agent_guard.py
+│   ├── datagrip_guard.py
+│   ├── language_guard.py
 │   └── session_context.py
 ├── tests/
 ├── LICENSE
@@ -98,6 +100,36 @@ Codex はサブエージェントを `~/.codex/agents/` と `.codex/agents/` か
 `explorer`、ロールファイルのない種類をすべて拒否し、プラグインのロールができる前の組み込み `worker` も拒否します。独立した読み取り専用の
 ワーカーを求めるスキルは `scout` を使い、試行出力を書くスキルは別の `claude -p` または `codex exec` プロセスを実行します。
 
+### 応答言語
+
+言語ガードの `scripts/language_guard.py` は、すべての返信と進捗報告が応答言語で書かれているかを確認します。
+Claude Code は `language` 設定から言語を決めます。ローカルプロジェクト設定、プロジェクト設定、ユーザー設定の順に読み、
+設定がなければ何も強制しません。Codex は `HEI5ENBUG_RESPONSE_LANGUAGE` を読み、未設定なら韓国語を使います。
+固有の文字体系を持つ言語だけを検査します。韓国語、日本語、中国語、ロシア語、ウクライナ語、ギリシャ語、アラビア語、
+ヘブライ語、タイ語、ヒンディー語です。英語やフランス語など、それ以外の言語には指示だけが適用されます。
+
+検査ではコード、引用、URL を除外します。文字のうち対象の文字体系が 30% 以上なら通過し、ごく短いテキストは常に通過します。
+返信が通過しなければ `Stop` フックが書き直しを求め、1 ターンにつき最大 3 回までです。
+別の言語で書かれた進捗報告の後には、`PostToolUse` フックがリマインダーを追加します。
+ユーザーが別の言語で求めたテキストは、コードブロックまたは引用ブロックに入れてください。
+
+### DataGrip クエリガード
+
+`PreToolUse` フックと `PermissionRequest` フックの `scripts/datagrip_guard.py` は、DataGrip MCP ツール `execute_sql_query`
+の実行前に動作します。ガードは `projectPath` が指す DataGrip プロジェクトの `.idea/dataSources.xml` から接続を読み取ります。名前に `승인`
+を含む接続は常に承認を求めます。PostgreSQL と SQL Server の読み取りは承認なしで実行され、PostgreSQL
+の読み取りは読み取り専用トランザクション内で実行されます。書き込み、ガードが分類できないクエリ、不明な接続、その他のデータベース種別は常に承認を求めます。ガードが呼び出しを拒否することはありません。Codex では `/hooks`
+でこのフックを信頼してください。
+
+任意で `pglast` パーサーを一度インストールできます。
+
+```bash
+uv venv --python 3.12 "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-setup/sql-parser"
+uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-setup/sql-parser/bin/python" pglast==8.4
+```
+
+パーサーがない場合、PostgreSQL はより厳格なテキスト検査に切り替わります。承認を求める頻度が増えることがありますが、承認なしで書き込みが実行されることはありません。
+
 ## プラグインのインストール
 
 GitHub リポジトリからバンドルを一度インストールします。
@@ -122,8 +154,10 @@ macOS と Linux では、フックが `instructions/session/common.md` と現在
 `codex.md` または `claude-code.md` を組み合わせます。
 セッションの開始・再開・初期化・コンテキスト圧縮後と、サブエージェントの開始時に実行します。
 `instructions/` の詳細は該当する操作の前だけに読み込みます。
+ツール呼び出しの完了後と返信の終了時にも、言語ガードがそれぞれ `PostToolUse` と `Stop` で実行されます。
+DataGrip クエリガードは `execute_sql_query` の実行前に `PreToolUse` と `PermissionRequest` で実行されます。
 `python3` で実行できる Python 3.12 以上と、フックの有効化が必要です。
-Codex ではフックを信頼する承認も必要です。更新で追加されたフックは `/hooks` で信頼するまでスキップされます。
+Codex ではフックを信頼する承認も必要です。エージェントガード、言語ガード、DataGrip クエリガードなど、更新で追加されたフックは `/hooks` で信頼するまでスキップされます。
 プラグイン更新後は新しいセッションを開始してください。
 参照、エラー、制限の詳細は[英語の説明](README.md#automatic-instructions)を参照してください。
 

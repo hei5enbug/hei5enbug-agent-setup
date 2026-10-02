@@ -10,6 +10,9 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import language_guard  # noqa: E402
+
 
 LOCAL_LINK = re.compile(r"\[([^\]]+)\]\(([^\s)]+)\)")
 MAX_CONTEXT_BYTES = 9000
@@ -57,6 +60,8 @@ def render_context(root: Path, host: str) -> str:
         "Read conditional references only before their matching action.\n\n"
         f"{content}\n"
     )
+    if host == "codex":
+        context += f"\nResponse language: {language_guard.codex_language()}.\n"
     if len(context.encode("utf-8")) > MAX_CONTEXT_BYTES:
         raise ValueError("Bundled instructions exceed the context budget; move details to conditional references")
     return context

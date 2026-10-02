@@ -44,6 +44,8 @@ hei5enbug-agent-setup/
 │       └── common.md
 ├── scripts/
 │   ├── agent_guard.py
+│   ├── datagrip_guard.py
+│   ├── language_guard.py
 │   └── session_context.py
 ├── tests/
 ├── LICENSE
@@ -102,6 +104,42 @@ fehlenden Typ, `default`, `explorer` und jeden Typ ohne Rollendatei ab, auch den
 Plugin-Rolle fehlt. Skills, die einen unabhängigen Nur-Lese-Worker verlangen, nutzen `scout`, und Skills, die
 Testausgaben schreiben, starten einen separaten `claude -p`- oder `codex exec`-Prozess.
 
+### Antwortsprache
+
+Ein Sprachwächter, `scripts/language_guard.py`, prüft, ob jede Antwort und jede Fortschrittsmeldung in der
+Antwortsprache verfasst ist. Claude Code übernimmt die Sprache aus der Einstellung `language`, die es aus den lokalen
+Projekteinstellungen, dann den Projekteinstellungen und dann den Benutzereinstellungen liest; ohne sie wird nichts
+erzwungen. Codex liest `HEI5ENBUG_RESPONSE_LANGUAGE` und verwendet Koreanisch, wenn die Variable nicht gesetzt ist.
+Geprüft werden nur Sprachen mit eigener Schrift: Koreanisch, Japanisch, Chinesisch, Russisch, Ukrainisch, Griechisch,
+Arabisch, Hebräisch, Thai und Hindi. Bei jeder anderen Sprache, etwa Englisch oder Französisch, gilt nur die
+Anweisung.
+
+Die Prüfung ignoriert Code, Zitate und URLs. Ein Text besteht, wenn mindestens 30 % seiner Buchstaben in der
+Zielschrift stehen; sehr kurzer Text besteht immer. Ein `Stop`-Hook verlangt eine Neufassung, wenn eine Antwort
+durchfällt, höchstens 3-mal pro Turn. Ein `PostToolUse`-Hook fügt einen Hinweis hinzu, wenn eine Fortschrittsmeldung
+in einer anderen Sprache steht. Text, den der Benutzer in einer anderen Sprache anfordert, gehört in einen Codeblock
+oder ein Blockzitat.
+
+### DataGrip-Abfragewächter
+
+Ein `PreToolUse`-Hook und ein `PermissionRequest`-Hook, beide `scripts/datagrip_guard.py`, laufen vor dem
+DataGrip-MCP-Werkzeug `execute_sql_query`. Der Wächter liest die Verbindung aus `.idea/dataSources.xml` im
+DataGrip-Projekt, das `projectPath` benennt. Eine Verbindung, deren Name `승인` enthält, fragt immer nach Freigabe.
+Lesezugriffe auf PostgreSQL und SQL Server laufen ohne Freigabe, die auf PostgreSQL innerhalb einer schreibgeschützten
+Transaktion. Schreibzugriffe, Abfragen, die der Wächter nicht einordnen kann, unbekannte Verbindungen und andere
+Datenbanktypen fragen immer nach. Der Wächter lehnt nie einen Aufruf ab. In Codex müssen Sie den Hook unter `/hooks`
+freigeben.
+
+Optional installieren Sie den Parser `pglast` einmalig:
+
+```bash
+uv venv --python 3.12 "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-setup/sql-parser"
+uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-setup/sql-parser/bin/python" pglast==8.4
+```
+
+Ohne ihn fällt PostgreSQL auf eine strengere Textprüfung zurück, die häufiger nachfragen kann, aber nie einen
+Schreibzugriff ohne Freigabe durchlässt.
+
 ## Plugin installieren
 
 Installiere das Bundle einmal aus dem GitHub-Repository.
@@ -125,8 +163,12 @@ claude plugin install hei5enbug-agent-setup@hei5enbug
 Unter macOS und Linux kombinieren die Hooks `instructions/session/common.md` mit `codex.md` oder `claude-code.md` für den aktuellen Host.
 Sie laufen beim Sitzungsstart, beim Fortsetzen, nach dem Leeren oder Komprimieren des Kontexts und beim Start eines Subagenten.
 Details unter `instructions/` werden nur vor der passenden Aktion gelesen.
+Nach jedem Werkzeugaufruf und am Ende jeder Antwort läuft der Sprachwächter zusätzlich über `PostToolUse` und
+`Stop`.
+Der DataGrip-Abfragewächter läuft vor `execute_sql_query` über `PreToolUse` und `PermissionRequest`.
 Erforderlich sind Python 3.12 oder neuer als `python3`, aktivierte Hooks und in Codex eine Vertrauensfreigabe.
-Ein durch ein Update hinzugefügter Hook wird in Codex übersprungen, bis Sie ihn unter `/hooks` freigeben.
+Ein durch ein Update hinzugefügter Hook, etwa der Agent-Wächter, der Sprachwächter oder der DataGrip-Abfragewächter,
+wird in Codex übersprungen, bis Sie ihn unter `/hooks` freigeben.
 Nach einem Plugin-Update ist eine neue Sitzung nötig.
 Weitere Angaben zu Referenzen, Fehlern und Grenzen stehen im
 [englischen Abschnitt](README.md#automatic-instructions).

@@ -59,3 +59,6 @@ If a required reference is missing, report it and pause the affected action inst
   Check recurring terms for consistency without replacing a precise term with an easier but different one.
 - Never put Mermaid or other non-rendering diagram source in a reply.
   Use a table, list, or inline notation for simple relationships, and ASCII art for useful spatial diagrams.
+- Write every message to the user, including progress updates between tool calls, in the response language,
+  even when the surrounding context uses another language. Put text the user asks for in another language in a
+  code block or block quote.
