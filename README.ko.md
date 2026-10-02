@@ -50,6 +50,8 @@ hei5enbug-agent-setup/
 │       └── common.md
 ├── scripts/
 │   ├── agent_guard.py
+│   ├── datagrip_guard.py
+│   ├── language_guard.py
 │   └── session_context.py
 ├── tests/
 ├── LICENSE
@@ -104,6 +106,35 @@ Codex에서는 종류를 비운 호출, `default`, `explorer`, 역할 파일이 
 `worker`도 여기에 포함됩니다. 독립된 읽기 전용 작업자가 필요한 스킬은 `scout`를 쓰고, 시험 출력을 쓰는 스킬은 별도 `claude -p`나
 `codex exec` 프로세스를 실행합니다.
 
+### 응답 언어
+
+언어 가드인 `scripts/language_guard.py`는 모든 답변과 진행 상황 안내가 응답 언어로 작성되었는지 확인합니다.
+Claude Code는 `language` 설정에서 언어를 가져오며, 로컬 프로젝트 설정, 프로젝트 설정, 사용자 설정 순서로 읽습니다.
+설정이 없으면 아무것도 강제하지 않습니다. Codex는 `HEI5ENBUG_RESPONSE_LANGUAGE`를 읽고, 설정하지 않으면 한국어를
+사용합니다. 고유한 문자 체계가 있는 언어만 검사합니다. 한국어, 일본어, 중국어, 러시아어, 우크라이나어, 그리스어,
+아랍어, 히브리어, 태국어, 힌디어입니다. 영어나 프랑스어 같은 다른 언어에는 지침만 적용됩니다.
+
+검사는 코드, 인용, URL을 제외합니다. 글자 중 대상 문자 체계의 비율이 30% 이상이면 통과하며, 아주 짧은 글은 항상
+통과합니다. 답변이 통과하지 못하면 `Stop` 훅이 다시 쓰도록 요청하며, 한 턴에 최대 3번까지 요청합니다.
+다른 언어로 쓴 진행 상황 안내가 나오면 `PostToolUse` 훅이 알림을 추가합니다. 사용자가 다른 언어로 요청한 글은
+코드 블록이나 인용 블록에 넣습니다.
+
+### DataGrip 쿼리 가드
+
+`PreToolUse` 훅과 `PermissionRequest` 훅인 `scripts/datagrip_guard.py`는 DataGrip MCP 도구 `execute_sql_query` 실행 전에 동작합니다.
+가드는 `projectPath`가 가리키는 DataGrip 프로젝트의 `.idea/dataSources.xml`에서 연결 정보를 읽습니다. 이름에 `승인`이 들어간 연결은 항상 승인을 요청합니다.
+PostgreSQL과 SQL Server의 읽기 쿼리는 승인 없이 실행되며, PostgreSQL 읽기 쿼리는 읽기 전용 트랜잭션 안에서 실행됩니다. 쓰기 쿼리, 가드가 분류하지 못한 쿼리, 알 수 없는 연결, 그
+밖의 데이터베이스 종류는 항상 승인을 요청합니다. 가드는 호출을 거부하지 않습니다. Codex에서는 `/hooks`에서 이 훅을 신뢰해야 합니다.
+
+선택 사항으로 `pglast` 파서를 한 번 설치할 수 있습니다.
+
+```bash
+uv venv --python 3.12 "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-setup/sql-parser"
+uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-setup/sql-parser/bin/python" pglast==8.4
+```
+
+파서가 없으면 PostgreSQL은 더 엄격한 텍스트 검사로 대체합니다. 이 검사는 승인을 더 자주 요청할 수 있지만, 승인 없이 쓰기가 실행되는 일은 여전히 없습니다.
+
 ## 플러그인 설치
 
 GitHub 저장소에서 스킬 묶음을 한 번 설치합니다.
@@ -140,6 +171,9 @@ Codex가 제공하는 `PLUGIN_ROOT`가 설치 디렉터리를 가리키면 로�
 | 세션 시작·재개 | `SessionStart`가 설치된 지침 파일을 전달한다. Orca 터미널에서는 플러그인 디렉터리와 지침 요약값을 담은 표식도 남긴다. |
 | 세션 초기화·컨텍스트 압축 | `SessionStart`가 지침을 다시 전달한다. |
 | 서브에이전트 시작 | `SubagentStart`가 같은 호스트의 지침을 전달한다. |
+| 도구 호출 종료 | 진행 상황 안내가 다른 언어로 쓰였으면 `PostToolUse`가 언어 알림을 추가한다. |
+| 답변 종료 | 답변이 응답 언어로 쓰이지 않았으면 `Stop`이 다시 쓰도록 요청한다. |
+| DataGrip 쿼리 실행 직전 | `PreToolUse`와 `PermissionRequest`가 `execute_sql_query` 실행 전에 DataGrip 쿼리 가드를 실행한다. |
 | 조건에 맞는 작업 시작 | 에이전트가 `instructions/`의 필수 참조를 읽는다. |
 | 플러그인 업데이트 설치 | 새 세션이 설치된 버전을 읽는다. 저장소에 푸시하는 것만으로는 반영되지 않는다. |
 
@@ -156,7 +190,7 @@ Codex가 제공하는 `PLUGIN_ROOT`가 설치 디렉터리를 가리키면 로�
 Codex는 현재 플러그인 훅 정의를 사용자가 검토하고 신뢰한 뒤에 실행한다.
 훅이 꺼져 있거나 조직 정책이 플러그인 훅을 금지하면 자동 적용되지 않는다.
 설치·업데이트 후 호스트의 훅 설정에서 활성화 여부를 확인하고, Codex에서는 신뢰 여부도 확인한다.
-에이전트 차단 훅처럼 업데이트가 새로 추가한 훅은 Codex의 `/hooks`에서 신뢰하기 전까지 건너뛴다.
+에이전트 차단 훅, 언어 가드, DataGrip 쿼리 가드처럼 업데이트가 새로 추가한 훅은 Codex의 `/hooks`에서 신뢰하기 전까지 건너뛴다.
 업데이트 후에는 Claude Code를 재시작하거나 Codex에서 새 세션을 시작한다.
 훅은 호스트의 신뢰 설정을 우회하지 않으며, 실행 중인 세션의 플러그인 버전을 바꾸지 않는다.
 `orca-plugin-refresh` 스킬은 이 표식으로 실행 중인 Orca 세션에 업데이트를 재시작 없이 반영한다.

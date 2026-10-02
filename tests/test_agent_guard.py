@@ -124,7 +124,12 @@ class AgentGuardTest(unittest.TestCase):
     def test_두_호스트의_Agent_호출_전에_가드_훅이_실행된다(self):
         """PreToolUse 훅은 Claude의 Agent·Task와 Codex의 spawn_agent를 잡는 Agent 매처로 가드를 실행한다."""
         # When
-        entries = [(group["matcher"], hook["command"]) for group in HOOKS["PreToolUse"] for hook in group["hooks"]]
+        entries = [
+            (group["matcher"], hook["command"])
+            for group in HOOKS["PreToolUse"]
+            for hook in group["hooks"]
+            if "agent_guard.py" in hook["command"]
+        ]
 
         # Then
         self.assertEqual([("Agent|Task", 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agent_guard.py"')], entries)

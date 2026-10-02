@@ -46,6 +46,8 @@ hei5enbug-agent-setup/
 │       └── common.md
 ├── scripts/
 │   ├── agent_guard.py
+│   ├── datagrip_guard.py
+│   ├── language_guard.py
 │   └── session_context.py
 ├── tests/
 ├── LICENSE
@@ -100,6 +102,39 @@ user, project, CLI, or managed source. On Codex it denies an omitted type, `defa
 without a role file, including the built-in `worker` before the plugin role exists. Skills that ask for an independent
 read-only worker use `scout`, and skills that write trial outputs run a separate `claude -p` or `codex exec` process.
 
+### Response language
+
+A language guard, `scripts/language_guard.py`, checks that every reply and every progress update is written in the
+response language. Claude Code takes the language from the `language` setting, read from the local project settings,
+then the project settings, then the user settings; without one, nothing is enforced. Codex reads
+`HEI5ENBUG_RESPONSE_LANGUAGE` and uses Korean when it is unset. Only languages with a distinctive script are
+checked: Korean, Japanese, Chinese, Russian, Ukrainian, Greek, Arabic, Hebrew, Thai, and Hindi. For any other
+language, such as English or French, the instruction alone applies.
+
+The check ignores code, quotes, and URLs. A text passes when at least 30% of its letters are in the target script,
+and very short text always passes. A `Stop` hook asks for a rewrite when a reply fails, at most 3 times per turn.
+A `PostToolUse` hook adds a reminder after a progress update in another language. Put text the user asks for in
+another language in a code block or block quote.
+
+### DataGrip query guard
+
+A `PreToolUse` hook and a `PermissionRequest` hook, both `scripts/datagrip_guard.py`, run before the DataGrip MCP tool
+`execute_sql_query`. The guard reads the connection from `.idea/dataSources.xml` in the DataGrip project that
+`projectPath` names. A connection whose name contains `승인` always asks for approval. PostgreSQL and SQL Server reads
+run without approval, and PostgreSQL reads run inside a read-only transaction. Writes, queries the guard cannot
+classify, unknown connections, and other database types always ask. The guard never denies a call. In Codex, trust the
+hook in `/hooks`.
+
+Optionally, install the `pglast` parser once:
+
+```bash
+uv venv --python 3.12 "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-setup/sql-parser"
+uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-setup/sql-parser/bin/python" pglast==8.4
+```
+
+Without it, PostgreSQL falls back to a stricter text check that may ask more often but still never lets a write run
+without approval.
+
 ## Plugin installation
 
 Install the bundle once from the GitHub repository.
@@ -135,6 +170,9 @@ for locating the script. No user or project instruction file is copied, linked, 
 | Session starts or resumes | `SessionStart` supplies the installed instruction files. In an Orca terminal it also writes a marker with the plugin directory and an instructions digest. |
 | Session clears or compacts | `SessionStart` supplies them again. |
 | A subagent starts | `SubagentStart` supplies the same host's instructions. |
+| A tool call finishes | `PostToolUse` adds a language reminder after a progress update in another language. |
+| A reply ends | `Stop` asks for a rewrite when the reply is not in the response language. |
+| A DataGrip query is about to run | `PreToolUse` and `PermissionRequest` run the DataGrip query guard before `execute_sql_query`. |
 | A matching task begins | The agent reads the required reference under `instructions/`. |
 | A plugin update is installed | A new session reads that installed version. A repository push alone changes nothing locally. |
 
@@ -150,8 +188,9 @@ plugin. It does not read conditional reference bodies at startup.
 Codex requires review and trust of the current plugin hook definition before running it.
 Disabled hooks or enterprise policies that prohibit plugin hooks prevent automatic loading.
 After installation or update, use the host's hook controls to check that these hooks are enabled and,
-in Codex, trusted. A hook that an update adds, such as the agent guard, stays skipped in Codex until you trust it
-in `/hooks`. Restart Claude Code or start a new Codex session after updating.
+in Codex, trusted. A hook that an update adds, such as the agent guard, the language guard, or the DataGrip query
+guard, stays skipped in Codex until you trust it in `/hooks`. Restart Claude Code or start a new Codex session
+after updating.
 The hook does not bypass host trust settings or change an already running session to a new plugin version.
 The `orca-plugin-refresh` skill uses those markers to apply an update to running Orca sessions without restarting them.
 
