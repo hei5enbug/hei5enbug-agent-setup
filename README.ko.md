@@ -222,38 +222,57 @@ Windows 실행과 실제 모델의 지침 준수 여부는 테스트 범위에 �
 실행 시점과 신뢰 설정은 공식 [Codex 훅 문서](https://learn.chatgpt.com/docs/hooks)와
 [Claude Code 훅 문서](https://code.claude.com/docs/en/hooks)를 따른다.
 
-## 구현 worker
+## 상황별 위임
 
-구현 변경은 모두 worker가 한다. 메인 세션은 첫 변경 전에 `instructions/implementation-execution.md`를 읽고
-조정자 역할을 맡는다. 요구사항, 조사, 계획, 설계, 검토, 결정과 최종 보고를 맡으며 직접 수정하지 않는다.
-사용자가 계획을 주지 않았거나 worker 할당이 없는 계획을 주었어도 실행할 수 있는 작업 할당을 준비한다.
+메인 세션은 [공통 지침](instructions/session/common.md)에 따라 직접 처리할지 위임할지 판단합니다.
+작은 수정과 알려진 경로 조회는 메인이 처리합니다. 범위가 한정된 조사, 많은 근거 수집, 독립적으로 수행할 수 있는
+규모 있는 구현은 예상 이득이 조정 비용보다 클 때 작업자를 사용합니다. 의존성이 긴밀한 작업은 한 담당자가 이어서 처리합니다.
+모든 작업에서 실제 비용이 줄어든다고 보장하는 정책은 아닙니다.
 
-자동 작업 준비는 사용자가 요청한 구현 계획이 아니다.
+메인은 요구사항, 설계, 작업 경계, 수용 판단과 최종 보고를 맡습니다.
+[구현 실행 규칙](instructions/implementation-execution.md)은 담당 범위, 충돌 없는 일정, 검사와 복구를 정의합니다.
+직접 작업은 메인의 현재 모델과 사고 강도를 유지합니다. 위임할 때는 작업 범위, 필요한 맥락, 허용·보호 경로,
+선행 조건, 수용 검사와 호스트의 고정 설정만 전달합니다. 작업자는 하위 에이전트를 만들 수 없습니다.
 
-| 항목 | 자동 작업 준비 | 요청한 구현 계획 |
+| 호스트 | 구현 작업자 | 모델과 사고 강도 |
 |---|---|---|
-| 시작 조건 | 모든 구현 변경 | 사용자가 계획을 명시적으로 요청 |
-| 결과 | 호스트 작업 목록이나 대화에 남긴 할당. 계획 디렉터리는 만들지 않음 | 요청한 계획 결과물 |
-| 절차 | 작업마다 작업 ID, 결과, 경로, 선행 조건, 자원, 검사, 모델과 사고 강도 | `instructions/implementation-planning.md`의 6단계 |
-| 독립 검증 | 실행하지 않음 | `instructions/independent-model-validation.md`의 확인 절차를 통과한 뒤에만 실행 |
+| Codex | rollout 기록으로 검증한 플러그인 `worker` 역할 | `gpt-6-luna`, `xhigh` |
+| Claude Code | 서브에이전트 기록으로 검증한 `hei5enbug-agent-setup:worker` | `claude-sonnet-5-5`, `high` |
 
-준비된 독립 작업은 함께 실행하며 worker는 최대 6개이고 호스트의 실제 한도를 넘지 않는다. 6개는 목표가 아니라
-상한이므로 하나로 묶인 작업은 worker 하나가 맡는다. 넘치는 작업은 대기열에서 기다린다. 의존 작업과 파일이나 다른
-변경 가능한 자원을 공유하는 작업은 순서대로 실행한다. worker는 할당받은 경로만 수정하며 에이전트를 시작하거나
-계획을 세우거나 계획 검토를 요청하지 않는다.
+준비된 독립 작업은 호스트 한도와 공통 실행 상한 안에서 함께 수행할 수 있습니다. 역할, 모델, 사고 강도, 사용량,
+위임 권한 또는 설정 근거 때문에 위임할 수 없으면 메인이 제한을 알리고, 실행 중인 해당 작업자를 멈춘 뒤 승인된 작업을
+이어갑니다. 부분 결과, 사용자 설정, 권한과 수용 검사는 유지하고 작업자 모델을 몰래 바꾸지 않습니다.
 
-| 호스트 | Worker | 모델과 사고 강도 | 막히는 조건 |
-|---|---|---|---|
-| Codex | 세션 훅이 설치한 플러그인 `worker` 역할. 모델과 사고 강도를 명시해 생성하고, 수정 전에 rollout 기록으로 확인 | 저장소에 고정한 `gpt-6-luna`, `xhigh` | worker 도구, `worker` 역할 파일, 모델, `xhigh`를 쓸 수 없음. 역할 파일이 다른 설정으로 확정됨. rollout 기록이 없거나 다른 설정을 기록함 |
-| Claude Code | 정의에 모델이 고정되어 호출 단위 모델 없이 호출하고, 수정 전에 서브에이전트 기록으로 확인하는 `agents/worker.md`의 `hei5enbug-agent-setup:worker` | 저장소에 고정한 `claude-sonnet-5-5`, `high` | 플러그인 worker나 서브에이전트 기록이 없음. 기록에 다른 모델이나 사고 강도가 남음. 강제 서브에이전트 모델, 사고 강도 재정의나 상한 때문에 `high`를 쓸 수 없음 |
+중요한 변경과 검사를 마치면 [독립 모델 검증](instructions/independent-model-validation.md)에 따라 다른 계열 모델의
+선택적 검토를 한 번 추천합니다. 양쪽 검토자 매핑 모두 `xhigh`를 사용합니다. 해당 결과에 대한 승인이 필요하며 거절하면
+다시 묻지 않습니다. 검토자를 사용할 수 없어도 나머지 작업을 막지 않습니다. 작성자의 일상적인 점검과 검사는 계속 수행합니다.
 
-조건을 충족하지 못하면 조정자는 영향을 받는 구현을 멈추고 막힌 기능을 정확히 보고한다. 다른 모델 등급, 더 낮은 사고
-강도, 다른 호스트, 범용 에이전트, 메인 세션 수정으로 대신하지 않는다. 플러그인은 이미 있는 Codex `worker.toml`을
-덮어쓰지 않고 사용자 설정도 바꾸지 않는다. 앞에서 설명한 `scout` 에이전트는 계속 읽기 전용으로만 쓴다.
+Codex는 사용자의 직접 요청 또는 적용되는 `AGENTS.md`·스킬 지침이 있어야 서브에이전트를 사용할 수 있습니다.
+훅 지침만으로는 권한이 생기지 않으므로 승인이 없으면 메인이 직접 처리합니다. 계속 위임을 허용하려면 프로젝트나 전역
+`AGENTS.md`에 다음 문구를 직접 넣거나 추가를 명시적으로 요청하면 됩니다.
 
-Codex는 사용자, `AGENTS.md` 또는 스킬 지침이 요청할 때만 서브에이전트를 생성한다. 이 규칙은 훅으로 전달되므로 그런
-요청이 없으면 Codex 세션은 worker 위임 허가를 한 번 묻는다. 이 질문을 건너뛰려면 프로젝트나 전역 `AGENTS.md`에
-"Delegate implementation changes to worker sub-agents." 같은 줄을 추가한다.
+```text
+When hei5enbug-agent-setup is active, use subagents according to its situation-based delegation rules.
+```
+
+플러그인은 이 승인을 자동으로 추가하지 않습니다. 실제 실행에는 호스트 규칙, 훅 신뢰와 사용 가능한 도구가 계속 적용됩니다.
+[공식 Codex 서브에이전트 계약](https://learn.chatgpt.com/docs/agent-configuration/subagents)과
+[평가 결론](docs/subagent-policy-decision.ko.md)을 참고하세요.
+
+## 작업 효율
+
+[작업 효율 규칙](instructions/work-efficiency.md)은 규모 있는 구현, 반복 모델 평가, 플러그인 유지보수 또는
+반복 실행 실패 진단 전에만 불러옵니다. 요청한 결과와 필수 검사가 완료 기준입니다. 검사 근거는 관련 입력이
+바뀔 때까지 재사용하고, 선택 조사나 수행하지 않은 선택 검토 때문에 수용된 작업을 계속 열어 두지 않습니다.
+
+추가 모델 비교는 대표 사례 최대 3개, 전체 묶음 15분, 두 호스트를 합쳐 비교 실행 시작 최대 6회로 시작합니다.
+사전 확인 실행과 재시도도 이 예산에 포함하며, 재개해도 예산을 초기화하지 않습니다. 일반 구현, 단위 테스트,
+필수 빌드와 마무리 검토에는 이 상한을 적용하지 않습니다. 확대하려면 남은 질문과 명시적으로 승인된 더 큰 예산이
+있어야 합니다.
+
+영구적 실패는 조건이 바뀌어야 다시 시도하고, 일시적 실패는 같은 조건에서 한 번만 재시도합니다.
+브라우저 쓰기는 [서비스 접근 규칙](instructions/services.md#browser-ownership)에 따라 실제 공유 제어 자원마다
+한 담당자가 맡습니다. 이 지침은 에이전트 판단을 안내하며, 모든 실행의 준수나 시간·토큰 절감 효과를 입증하지는 않습니다.
 
 ## 플러그인 업데이트
 
@@ -263,14 +282,17 @@ Codex는 사용자, `AGENTS.md` 또는 스킬 지침이 요청할 때만 서브�
 이후에 배포되지 않은 변경을 모두 그 버전에 모읍니다. 릴리스에는 커밋을 추가하지 않습니다. `HEAD`에서 아래 개발
 검사를 모두 통과시킨 뒤 `HEAD`에 `v<version>` 태그를 달고 태그를 푸시합니다.
 
-릴리스 배포 후 Codex를 업데이트합니다.
+릴리스가 배포되면 영향을 받는 코딩 에이전트 세션을 끝내고 일반 터미널에서 업데이트합니다.
+로드된 플러그인 디렉터리를 교체하면 실행 중인 세션이 참조하는 훅 경로가 사라질 수 있습니다.
+
+Codex를 업데이트합니다.
 
 ```bash
 codex plugin marketplace upgrade hei5enbug
 codex plugin add hei5enbug-agent-setup@hei5enbug
 ```
 
-릴리스 배포 후 Claude Code를 업데이트합니다.
+Claude Code를 업데이트합니다.
 
 ```bash
 claude plugin marketplace update hei5enbug
@@ -282,8 +304,17 @@ Claude Code를 다시 시작합니다.
 
 ### 실행 중인 Orca 세션에 업데이트 반영
 
-`orca-plugin-refresh`를 요청하면 두 호스트에서 이 플러그인을 업데이트하고, Orca가 관리하는 모든 대기 세션에
-재시작 없이 반영합니다. 이 스킬은 요청할 때만 실행됩니다.
+`orca-plugin-refresh`를 요청하면 이미 설치된 버전을 Orca가 관리하는 대기 세션에 재시작 없이 반영합니다.
+이 스킬은 요청할 때만 실행됩니다. `apply-installed --json`은 설치 경로를 검증하고
+`apply --run-id <run_id> --json`에 넘길 실행 ID를 만듭니다. 마켓플레이스나 설치 명령은 실행하지 않습니다.
+
+캐시를 교체하는 업데이트는 별도의 오프라인 단계입니다. 기본 `update --json`은 보류하며,
+`update --offline --json`은 영향을 받는 코딩 에이전트 세션이 끝난 뒤 일반 터미널에서 실행합니다.
+활성 호스트·플러그인 환경이나 연결된 코딩 에이전트 터미널이 있으면 오프라인 확인과 모순되므로 계속 차단합니다.
+사용 가능한 인벤토리를 읽을 수 없거나, 목록이 잘리거나, 지원하지 않는 형식이어도 보류합니다.
+결과는 호스트별 상태를 보존하고 현재 설치 경로와 오프라인 복구 명령을 제공합니다. 보류된 호스트는 건드리지 않습니다.
+Orca 인벤토리는 Orca 밖 세션의 종료를 입증할 수 없습니다. 직접 업데이트하거나 다른 프로세스가 로드된 디렉터리를
+삭제하는 상황은 이 보호 범위 밖입니다. 명령과 한계는 [새로고침 절차](skills/orca-plugin-refresh/SKILL.ko.md)를 참고하세요.
 
 | 부분 | Claude Code | Codex |
 |---|---|---|
@@ -334,7 +365,7 @@ Orca CLI가 필요한 테스트는 Orca가 설치되어 있지 않으면 건너�
 | [`docs-rewrite`](skills/docs-rewrite/SKILL.md) | 주장, 수치, 확신도를 그대로 둔 채 글이 자연스럽게 읽히도록 고쳐 쓰고, AI가 쓴 듯한 한국어 문체를 함께 고칩니다. [한국어 안내](skills/docs-rewrite/SKILL.ko.md) |
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Markdown, HTML, PDF, DOCX, Google Docs 문서를 Confluence 페이지로 변환하고, 문서 구조와 첨부 파일을 보존하며, 이후 원본 변경도 페이지에 반영합니다. [한국어 안내](skills/document-to-confluence/SKILL.ko.md) |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | 초안 작성 → 테스트 → 검토 → 개선 순환을 통해 에이전트 스킬을 만들고, 검증하고, 패키징합니다. [한국어 안내](skills/skill-builder/SKILL.ko.md) |
-| [`orca-plugin-refresh`](skills/orca-plugin-refresh/SKILL.md) | 두 호스트에서 이 플러그인을 업데이트하고 Orca가 관리하는 대기 중인 Claude Code와 Codex 세션에 재시작 없이 반영합니다. [한국어 안내](skills/orca-plugin-refresh/SKILL.ko.md) |
+| [`orca-plugin-refresh`](skills/orca-plugin-refresh/SKILL.md) | 이 플러그인을 안전하게 오프라인으로 업데이트하고, 설치된 버전을 대기 중인 Orca 관리 Claude Code와 Codex 세션에 재시작 없이 반영합니다. [한국어 안내](skills/orca-plugin-refresh/SKILL.ko.md) |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | 스테이징된 변경과 스테이징되지 않은 변경을 함께, 또는 사용자가 지정한 범위를 최근 커밋 이력과 함께 읽어, 이 저장소의 스타일에 맞는 커밋 메시지 5개를 제안합니다. 커밋을 요청하면 가장 적절한 제목 하나로 바로 커밋합니다. [한국어 안내](skills/suggest-commit/SKILL.ko.md) |
 | [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | 구현 계획을 담당하지 않고 기술 설계 문서와 RFC를 작성하거나 검토합니다. [한국어 안내](skills/technical-design-writer/SKILL.ko.md) |
 | [`tiki-taka`](skills/tiki-taka/SKILL.md) | 현재 에이전트와 반대쪽 Claude/Codex 세션이 교환 횟수를 제한한 토론을 벌여 쟁점을 드러내고 수렴시킵니다. [한국어 안내](skills/tiki-taka/SKILL.ko.md) |

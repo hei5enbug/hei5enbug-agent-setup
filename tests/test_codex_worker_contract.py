@@ -21,12 +21,12 @@ def implementation_section() -> str:
 
 
 class CodexWorkerContractTest(unittest.TestCase):
-    def test_구현은_공유_실행_규칙과_내장_worker만_사용한다(self):
-        """Codex 구현은 공유 실행 규칙을 따르고 내장 worker에 모델과 xhigh를 명시적으로 넘긴다."""
+    def test_위임한_구현은_공유_실행_규칙과_플러그인_worker를_사용한다(self):
+        """Codex에서 구현을 위임할 때는 플러그인 worker에 모델과 xhigh를 명시적으로 넘긴다."""
         # Given
         expected = (
             "[implementation execution rules](implementation-execution.md)",
-            "Use only the plugin `worker` role for implementation.",
+            "When delegating implementation, use only the plugin `worker` role.",
             "pass the pinned `gpt-6-luna` and `xhigh` explicitly on every spawn",
         )
 
@@ -103,11 +103,11 @@ class CodexWorkerContractTest(unittest.TestCase):
             self.assertIn(phrase, section)
 
     def test_이어_보내기_지원_여부에_따라_준비_확인_경로가_갈린다(self):
-        """생성 결과에 모델이 없으므로 준비 확인 뒤 같은 스레드에 구현을 보내고, 이어 보내기가 없으면 수정하지 않는다."""
+        """생성 결과에 모델이 없으므로 준비 확인 뒤 같은 스레드에 구현을 보내고, 이어 보내기가 없으면 메인 대체 처리를 사용한다."""
         # Given
         readiness = "The spawn result does not name the model, so start each worker with a readiness-only assignment."
         supported = "Use this path only when that follow-up keeps its settings."
-        unsupported = "When that continuation is unavailable, skip the two-phase path and make no edits."
+        unsupported = "When that continuation is unavailable, skip the two-phase path and use the session fallback."
 
         # When
         section = implementation_section()
@@ -119,14 +119,14 @@ class CodexWorkerContractTest(unittest.TestCase):
         self.assertIn(unsupported, section)
         self.assertIn("Recheck the settings after any resume.", section)
 
-    def test_기능이_없으면_대체하지_않고_막는다(self):
-        """worker 도구, 모델, xhigh, 실제 설정 근거가 없으면 구현을 막고 정확한 원인을 보고한다."""
+    def test_기능이_없으면_위임을_멈추고_메인_대체_처리를_쓴다(self):
+        """worker 도구, 모델, xhigh, 실제 설정 근거가 없으면 위임을 멈추고 공통 대체 처리를 적용한다."""
         # Given
         blockers = (
             "Missing worker tools",
             "an unavailable model or `xhigh`",
-            "unverified effective settings block the affected implementation",
-            "Report the exact capability and make no edit.",
+            "unverified effective settings stop the affected delegation",
+            "Apply the session fallback.",
         )
 
         # When
@@ -136,12 +136,12 @@ class CodexWorkerContractTest(unittest.TestCase):
         for blocker in blockers:
             self.assertIn(blocker, section)
 
-    def test_호스트가_위임을_허용하지_않으면_한_번_묻고_수정하지_않는다(self):
-        """Codex가 명시적 요청 없이는 서브에이전트를 만들지 않으므로 거부할 때 위임 허가를 한 번 묻고 수정하지 않는다."""
+    def test_호스트_위임_승인이_없으면_작업을_막지_않고_메인에서_계속한다(self):
+        """Codex는 기존 위임 승인을 재사용하고 없으면 호스트 권한을 우회하지 않고 메인에서 계속한다."""
         # Given
         expected = (
             "Codex spawns sub-agents only when the user, `AGENTS.md`, or skill instructions ask for them",
-            "ask the user once to authorize worker delegation and make no edit until they answer.",
+            "continue in the main session under the session fallback.",
         )
 
         # When
@@ -172,7 +172,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         investigation = " ".join(text.split("## Investigation", 1)[1].split("## Skill workers", 1)[0].split())
 
         # Then
-        self.assertIn("Use the `scout` agent only for bounded, read-only investigation while planning", investigation)
+        self.assertIn("Use the `scout` agent for bounded, read-only investigation whenever the session delegation rule selects it", investigation)
         self.assertIn("Its bundled role file sets no model, so the spawn value applies.", investigation)
         self.assertIn(
             "If `scout` is unavailable, or its role file in the Codex agents directory sets another model or effort, "

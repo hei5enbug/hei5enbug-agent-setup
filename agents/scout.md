@@ -1,6 +1,6 @@
 ---
 name: scout
-description: Read-only worker for one bounded assignment, either an investigation during planning or a
+description: Read-only worker for one bounded assignment, either a bounded investigation or a
   review persona, research ticket, or grading role that a skill assigns. Returns quoted evidence and the
   result the assignment defines; it never edits files.
 tools: Read, Grep, Glob, Bash

@@ -109,11 +109,11 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
 
 class ClaudeWorkerAdapterTest(unittest.TestCase):
     def test_구현은_플러그인_worker와_정의에_고정된_모델을_사용한다(self):
-        """Claude 구현은 플러그인 worker만 쓰고 정의보다 우선하는 호출 단위 모델을 넘기지 않는다."""
+        """Claude에서 구현을 위임할 때는 플러그인 worker를 쓰고 호출 단위 모델을 넘기지 않는다."""
         # Given
         expected = (
             "[implementation execution rules](implementation-execution.md)",
-            "Use only `hei5enbug-agent-setup:worker` for implementation.",
+            "When delegating implementation, use only `hei5enbug-agent-setup:worker`.",
             "Its definition pins `claude-sonnet-5-5` and `high`.",
             "Never pass a per-invocation model on an invocation or resume, because that overrides the definition.",
             "Never switch to another agent.",
@@ -154,11 +154,11 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         )
 
     def test_이어_보내기_지원_여부에_따라_준비_확인_경로가_갈린다(self):
-        """시작 결과에 모델이 없으므로 준비 확인 뒤 같은 worker에 구현을 보내고, 이어 보내기가 없으면 수정하지 않는다."""
+        """시작 결과에 모델이 없으므로 준비 확인 뒤 같은 worker에 구현을 보내고, 이어 보내기가 없으면 메인 대체 처리를 사용한다."""
         # Given
         readiness = "The launch result does not name the model, so start each worker with a readiness-only assignment."
         supported = "Use this path only when that follow-up keeps the pinned model."
-        unsupported = "When that continuation is unavailable, skip the two-phase path and make no edits."
+        unsupported = "When that continuation is unavailable, skip the two-phase path and use the session fallback."
 
         # When
         section = implementation_section()
@@ -170,17 +170,17 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         self.assertIn(unsupported, section)
         self.assertIn("Recheck the settings after any resume.", section)
 
-    def test_worker나_서브에이전트_기록이_없으면_막는다(self):
-        """플러그인 worker나 실제 모델을 보여 주는 서브에이전트 기록이 없으면 대체 없이 구현을 막는다."""
+    def test_worker나_기록이_없으면_위임을_멈추고_메인_대체_처리를_쓴다(self):
+        """플러그인 worker나 실제 모델 기록이 없으면 위임을 멈추고 공통 대체 처리를 적용한다."""
         # Given
-        blocker = "A missing plugin worker or a missing subagent record blocks the affected implementation."
+        blocker = "A missing plugin worker or a missing subagent record stops the affected delegation."
 
         # When
         section = implementation_section()
 
         # Then
         self.assertIn(blocker, section)
-        self.assertIn("Report the exact capability and make no edit.", section)
+        self.assertIn("Apply the session fallback.", section)
 
     def test_호스트_한도는_메인_세션을_빼고_세며_바꾸지_않는다(self):
         """Claude 동시 실행 한도는 실행 중인 서브에이전트만 세고 조정자는 그 값을 바꾸지 않는다."""
@@ -210,8 +210,8 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         for phrase in expected:
             self.assertIn(phrase, section)
 
-    def test_scout_조사_규칙은_그대로_남는다(self):
-        """구현 규칙을 바꿔도 계획 중 scout 조사 규칙과 호출 단위 모델 금지는 유지된다."""
+    def test_scout는_계획과_실행_중_범위가_한정된_조사에_쓰인다(self):
+        """scout는 세션 기준에 맞는 계획·실행 중 조사에 쓰고 호출 단위 모델은 넘기지 않는다."""
         # Given
         text = CLAUDE_AGENTS.read_text(encoding="utf-8")
 
@@ -219,7 +219,7 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         investigation = " ".join(text.split("## Investigation", 1)[1].split("## Skill workers", 1)[0].split())
 
         # Then
-        self.assertIn("Use `hei5enbug-agent-setup:scout` for investigation, only while planning", investigation)
+        self.assertIn("Use `hei5enbug-agent-setup:scout` for bounded investigation whenever the session delegation rule selects it", investigation)
         self.assertIn("Never pass a per-invocation model, because that overrides the definition.", investigation)
 
     def test_내장_서브에이전트는_예외_둘을_빼고_금지하고_차단_훅을_가리킨다(self):

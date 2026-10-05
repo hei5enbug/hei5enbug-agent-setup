@@ -144,6 +144,7 @@ def write_terminal_marker(root: Path, host: str, event: dict) -> None:
 
 CODEX_AGENTS = {"scout": "codex-scout.toml", "worker": "codex-worker.toml"}
 RETIRED_CODEX_AGENTS = {
+    "scout": {"910da79ee988b53f4a94186a469c4479c7e34bf61bec8dfd27ef1ab73cc171da"},
     "explorer": {"bfde4fbbe2740152ad537d576612a34619a57a45adb56072e3f945610ef820af"},
     "worker": {"ce4488d0323832dc1563481875e7c26d693092c94865c37a4b4b89afd8274f83"},
 }

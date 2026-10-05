@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Update hei5enbug-agent-setup on both hosts and apply it to idle Orca agent sessions without restarting them."""
+"""Safely update hei5enbug-agent-setup offline and apply installed versions to idle Orca agent sessions."""
 
 from __future__ import annotations
 
@@ -30,6 +30,13 @@ HOSTS = ("claude", "codex")
 RUN_ID = re.compile(r"^[0-9a-f]{32}$")
 HANDLE = re.compile(r"^[A-Za-z0-9._:-]{1,200}$")
 RUNTIME_PATHS = ("skills", "instructions", "scripts", "hooks", "agents", "standalone-agents", ".claude-plugin", ".codex-plugin")
+REQUIRED_HOOK_TARGETS = (
+    "scripts/session_context.py",
+    "scripts/agent_guard.py",
+    "scripts/session_approval_guard.py",
+    "scripts/datagrip_guard.py",
+    "scripts/language_guard.py",
+)
 RELOAD_DONE = re.compile(r"Reloaded: \d+ plugins?")
 RELOAD_REFUSED = re.compile(r"reload changes MCP tools|/reload-plugins --force", re.IGNORECASE)
 CLAUDE_COMPACTED = re.compile(r"Compacted|Conversation compacted")
@@ -57,10 +64,11 @@ DEFAULT_APPLY_SECONDS = 240
 
 
 class RefreshError(Exception):
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, code: str, message: str, details: dict | None = None) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
+        self.details = details or {}
 
 
 def now() -> str:
@@ -191,13 +199,127 @@ def installed(host: str) -> dict:
     return {"version": version, "root": root.resolve().as_posix()}
 
 
-def snapshot(root: str) -> dict:
-    path = Path(root)
-    hooks = path / "hooks" / "hooks.json"
-    return {
-        "digest": SESSION_CONTEXT.instructions_digest(path),
-        "hooks": hashlib.sha256(hooks.read_bytes()).hexdigest() if hooks.is_file() else None,
-    }
+def validate_install(host: str, install: dict) -> dict:
+    root = Path(install["root"])
+    version = install["version"]
+    manifest_path = root / (".claude-plugin/plugin.json" if host == "claude" else ".codex-plugin/plugin.json")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RefreshError("plugin_manifest_missing", f"The installed {host} plugin manifest is unavailable or unreadable.") from error
+    if not isinstance(manifest, dict) or manifest.get("name") != PLUGIN or manifest.get("version") != version:
+        raise RefreshError("plugin_manifest_mismatch", f"The installed {host} plugin manifest does not match version {version}.")
+
+    hooks_path = root / "hooks" / "hooks.json"
+    try:
+        hooks_bytes = hooks_path.read_bytes()
+        payload = json.loads(hooks_bytes.decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RefreshError("plugin_hooks_missing", f"The installed {host} plugin hooks are unavailable or unreadable.") from error
+    events = payload.get("hooks") if isinstance(payload, dict) else None
+    if not isinstance(events, dict) or not events:
+        raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.")
+    seen_targets: set[str] = set()
+    for groups in events.values():
+        if not isinstance(groups, list):
+            raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.")
+        for group in groups:
+            entries = group.get("hooks") if isinstance(group, dict) else None
+            if not isinstance(entries, list):
+                raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.")
+            for entry in entries:
+                if not isinstance(entry, dict) or entry.get("type") != "command" or not isinstance(entry.get("command"), str):
+                    raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.")
+                try:
+                    argv = shlex.split(entry["command"])
+                except ValueError as error:
+                    raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.") from error
+                target = next((item for item in argv[1:] if item.startswith("${CLAUDE_PLUGIN_ROOT}/")), None)
+                if target is None:
+                    raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hook target is unsupported.")
+                relative_target = target.removeprefix("${CLAUDE_PLUGIN_ROOT}/")
+                seen_targets.add(relative_target)
+                target_path = root / relative_target
+                if not target_path.is_file():
+                    raise RefreshError("plugin_hook_target_missing", f"An installed {host} plugin hook target is missing.")
+    if not set(REQUIRED_HOOK_TARGETS) <= seen_targets:
+        raise RefreshError("plugin_hook_target_missing", f"The installed {host} plugin hooks omit a required target.")
+    try:
+        digest = SESSION_CONTEXT.instructions_digest(root)
+    except OSError as error:
+        raise RefreshError("plugin_digest_missing", f"The installed {host} plugin instruction digest could not be read.") from error
+    if not isinstance(digest, str) or not digest:
+        raise RefreshError("plugin_digest_missing", f"The installed {host} plugin instruction digest is missing.")
+    return {"digest": digest, "hooks": hashlib.sha256(hooks_bytes).hexdigest()}
+
+
+ACTIVE_SESSION_ENV = (
+    "ORCA_TERMINAL_HANDLE",
+    "CLAUDE_PLUGIN_ROOT",
+    "PLUGIN_ROOT",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDECODE",
+    "CODEX_THREAD_ID",
+    "CODEX_SESSION_ID",
+)
+
+
+def active_orca_terminals(orca: "Orca") -> bool:
+    active = False
+    for terminal in orca.terminals():
+        handle = terminal.get("handle")
+        identity = terminal.get("agentIdentity")
+        connected = terminal.get("connected")
+        if not isinstance(handle, str) or not HANDLE.fullmatch(handle) or not isinstance(connected, bool):
+            raise RefreshError("update_deferred_unknown_session_state", "Orca returned unsupported terminal data.")
+        if "agentIdentity" not in terminal or (identity is not None and (not isinstance(identity, str) or not identity.strip())):
+            raise RefreshError("update_deferred_unknown_session_state", "Orca returned unsupported terminal data.")
+        if not connected:
+            continue
+        if isinstance(identity, str) and identity.strip():
+            active = True
+            continue
+        directory = SESSION_CONTEXT.marker_directory()
+        marker_path = directory / f"{handle}.json" if directory is not None else None
+        if marker_path is None or not marker_path.exists():
+            continue
+        try:
+            marker = json.loads(marker_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise RefreshError("update_deferred_unknown_session_state", "An Orca session marker could not be read.") from error
+        if not isinstance(marker, dict) or marker.get("schema") != SESSION_CONTEXT.MARKER_SCHEMA or marker.get("host") not in HOSTS:
+            raise RefreshError("update_deferred_unknown_session_state", "An Orca session marker has an unsupported format.")
+        active = True
+    return active
+
+
+def assert_update_safe(offline: bool) -> None:
+    signals = [name for name in ACTIVE_SESSION_ENV if name in os.environ]
+    if signals:
+        raise RefreshError("update_deferred_active_session", "A coding-agent or Orca session environment is active.")
+    try:
+        active = active_orca_terminals(Orca())
+    except RefreshError as error:
+        if offline and error.code == "command_missing":
+            return
+        if error.code == "update_deferred_unknown_session_state":
+            raise
+        raise RefreshError("update_deferred_unknown_session_state", "Orca session inventory is unavailable.") from error
+    if active:
+        raise RefreshError("update_deferred_active_session", "A connected coding-agent session is present in Orca.")
+    if not offline:
+        raise RefreshError("update_deferred_unknown_session_state", "Use --offline only after affected coding-agent sessions have ended.")
+
+
+def recovery_command(root: str | None) -> str:
+    current = Path(__file__).resolve()
+    try:
+        relative = current.relative_to(PLUGIN_ROOT)
+    except ValueError:
+        relative = current.name
+    candidate = Path(root) / relative if root else current
+    script = candidate if candidate.is_file() else current
+    return f"python3 {shlex.quote(str(script))} update --offline --json"
 
 
 def claude_unreleased_changes() -> tuple[list[str], str | None]:
@@ -227,9 +349,15 @@ def claude_unreleased_changes() -> tuple[list[str], str | None]:
     return [line for line in diff.stdout.splitlines() if line.strip()], None
 
 
-def update_host(host: str) -> dict:
+def update_host(host: str, offline: bool = False) -> dict:
     before = installed(host)
-    before_snapshot = snapshot(before["root"])
+    before_snapshot = validate_install(host, before)
+    try:
+        assert_update_safe(offline)
+    except RefreshError as error:
+        if error.code in {"update_deferred_active_session", "update_deferred_unknown_session_state"}:
+            error.details.update(root=before["root"], recovery_command=recovery_command(before["root"]))
+        raise
     if host == "claude":
         run([executable("claude"), "plugin", "marketplace", "update", MARKETPLACE], timeout=180)
         run([executable("claude"), "plugin", "update", PLUGIN_ID], timeout=180)
@@ -237,7 +365,7 @@ def update_host(host: str) -> dict:
         run([executable("codex"), "plugin", "marketplace", "upgrade", MARKETPLACE], timeout=180)
         run([executable("codex"), "plugin", "add", PLUGIN_ID], timeout=180)
     after = installed(host)
-    after_snapshot = snapshot(after["root"])
+    after_snapshot = validate_install(host, after)
     result = {
         "before_version": before["version"],
         "after_version": after["version"],
@@ -264,12 +392,40 @@ def update_host(host: str) -> dict:
     return result
 
 
-def command_update() -> dict:
+def command_update(offline: bool = False) -> dict:
     run_id = uuid.uuid4().hex
     hosts: dict[str, dict] = {}
     for host in HOSTS:
         try:
-            hosts[host] = update_host(host)
+            hosts[host] = update_host(host, offline=offline)
+        except RefreshError as error:
+            entry = {"error": {"code": error.code, "message": error.message}}
+            for key in ("root", "recovery_command"):
+                if key in error.details:
+                    entry[key] = error.details[key]
+            hosts[host] = entry
+    state = {"run_id": run_id, "created_at": now(), "hosts": hosts, "sessions": {}}
+    save_json(run_path(run_id), state)
+    script = continuation_script(hosts)
+    return {"ok": all("error" not in value for value in hosts.values()), "run_id": run_id, "script": script, "hosts": hosts}
+
+
+def command_apply_installed() -> dict:
+    run_id = uuid.uuid4().hex
+    hosts: dict[str, dict] = {}
+    for host in HOSTS:
+        try:
+            current = installed(host)
+            current_snapshot = validate_install(host, current)
+            hosts[host] = {
+                "before_version": current["version"],
+                "after_version": current["version"],
+                "root": current["root"],
+                "previous_root": PLUGIN_ROOT.as_posix(),
+                "digest": current_snapshot["digest"],
+                "instructions_changed": False,
+                "warnings": [],
+            }
         except RefreshError as error:
             hosts[host] = {"error": {"code": error.code, "message": error.message}}
     state = {"run_id": run_id, "created_at": now(), "hosts": hosts, "sessions": {}}
@@ -316,9 +472,17 @@ class Orca:
         terminals = result.get("terminals")
         if not isinstance(terminals, list):
             raise RefreshError("orca_invalid", "Orca returned an unsupported terminal list.")
-        if result.get("truncated") is True or (isinstance(result.get("totalCount"), int) and result["totalCount"] > len(terminals)):
+        truncated = result.get("truncated")
+        total_count = result.get("totalCount")
+        if truncated is not None and not isinstance(truncated, bool):
+            raise RefreshError("orca_invalid", "Orca returned unsupported terminal-list metadata.")
+        if total_count is not None and (not isinstance(total_count, int) or isinstance(total_count, bool) or total_count < len(terminals)):
+            raise RefreshError("orca_invalid", "Orca returned unsupported terminal-list metadata.")
+        if truncated is True or (total_count is not None and total_count > len(terminals)):
             raise RefreshError("terminal_list_truncated", "Orca truncated the terminal list, so some sessions could be missed.")
-        return [item for item in terminals if isinstance(item, dict)]
+        if any(not isinstance(item, dict) for item in terminals):
+            raise RefreshError("orca_invalid", "Orca returned unsupported terminal data.")
+        return terminals
 
     def idle(self, handle: str) -> bool:
         result = run([*self.command, "terminal", "wait", "--terminal", handle, "--for", "tui-idle", "--timeout-ms", "500", "--json"], timeout=15, check=False)
@@ -893,7 +1057,10 @@ def command_status(run_id: str) -> dict:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("update").add_argument("--json", action="store_true")
+    update = commands.add_parser("update")
+    update.add_argument("--offline", action="store_true")
+    update.add_argument("--json", action="store_true")
+    commands.add_parser("apply-installed").add_argument("--json", action="store_true")
     for name in ("plan", "apply"):
         sub = commands.add_parser(name)
         sub.add_argument("--run-id", required=True)
@@ -911,7 +1078,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "self-apply":
             return command_self_apply(args.run_id)
         if args.command == "update":
-            output = command_update()
+            output = command_update(args.offline)
+        elif args.command == "apply-installed":
+            output = command_apply_installed()
         elif args.command == "plan":
             output = command_plan(args.run_id, args.compact, args.terminal)
         elif args.command == "apply":
