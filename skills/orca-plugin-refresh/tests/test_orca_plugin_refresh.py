@@ -699,11 +699,55 @@ class OrcaWaitTest(unittest.TestCase):
 
 
 class UpdateTest(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name)
+        self.env = patch.dict(
+            os.environ,
+            {"ORCA_USER_DATA_PATH": "", "XDG_STATE_HOME": self.temp.name},
+        )
+        self.env.start()
+        for name in refresh.ACTIVE_SESSION_ENV:
+            os.environ.pop(name, None)
+        self.addCleanup(self.env.stop)
+
+    def install(self, host, version, *, root=None, missing_target=None, manifest_version=None, instruction=None):
+        root = Path(root) if root else self.base / f"{host}-{version}"
+        manifest_dir = root / (".claude-plugin" if host == "claude" else ".codex-plugin")
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        (manifest_dir / "plugin.json").write_text(
+            json.dumps({"name": refresh.PLUGIN, "version": manifest_version or version}), encoding="utf-8"
+        )
+        hooks = []
+        for target in refresh.REQUIRED_HOOK_TARGETS:
+            path = root / target
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if target != missing_target:
+                path.write_text("# hook target\n", encoding="utf-8")
+            hooks.append({"type": "command", "command": f'python3 "${{CLAUDE_PLUGIN_ROOT}}/{target}"'})
+        hook_path = root / "hooks" / "hooks.json"
+        hook_path.parent.mkdir(parents=True, exist_ok=True)
+        hook_path.write_text(json.dumps({"hooks": {"SessionStart": [{"hooks": hooks}]}}), encoding="utf-8")
+        instructions = root / "instructions"
+        instructions.mkdir(parents=True, exist_ok=True)
+        (instructions / "policy.md").write_text(instruction or f"{host} {version}\n", encoding="utf-8")
+        return {"version": version, "root": root.as_posix()}
+
+    def empty_orca(self):
+        return FakeOrca([])
+
     def test_같은_버전의_미배포_변경과_Codex_훅_변경을_경고한다(self):
         """Claude가 같은 버전이라 새 파일을 받지 못하면 버전을 올리라고, Codex 훅 정의가 바뀌면 다시 신뢰하라고 경고한다."""
         # Given
-        states = {"claude": [{"version": "1.0.0", "root": "/c/1.0.0"}] * 2, "codex": [{"version": "1.0.0", "root": "/x/1.0.0"}, {"version": "1.1.0", "root": "/x/1.1.0"}]}
-        snapshots = {"/c/1.0.0": {"digest": "a", "hooks": "h"}, "/x/1.0.0": {"digest": "a", "hooks": "h1"}, "/x/1.1.0": {"digest": "b", "hooks": "h2"}}
+        claude = self.install("claude", "1.0.0")
+        codex_before = self.install("codex", "1.0.0", instruction="old\n")
+        codex_after = self.install("codex", "1.1.0", instruction="new\n")
+        hooks_path = Path(codex_after["root"]) / "hooks" / "hooks.json"
+        hooks_payload = json.loads(hooks_path.read_text(encoding="utf-8"))
+        hooks_payload["revision"] = "changed"
+        hooks_path.write_text(json.dumps(hooks_payload), encoding="utf-8")
+        states = {"claude": [claude, claude], "codex": [codex_before, codex_after]}
         commands: list[list[str]] = []
 
         def fake_installed(host):
@@ -712,39 +756,388 @@ class UpdateTest(unittest.TestCase):
         # When
         with (
             patch.object(refresh, "installed", side_effect=fake_installed),
-            patch.object(refresh, "snapshot", side_effect=lambda root: snapshots[root]),
             patch.object(refresh, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
             patch.object(refresh, "executable", side_effect=lambda name: name),
+            patch.object(refresh, "Orca", side_effect=self.empty_orca),
             patch.object(refresh, "claude_unreleased_changes", return_value=(["skills/x/SKILL.md"], None)),
         ):
-            claude = refresh.update_host("claude")
-            codex = refresh.update_host("codex")
+            claude_result = refresh.update_host("claude", offline=True)
+            codex_result = refresh.update_host("codex", offline=True)
 
         # Then
-        self.assertEqual(["unreleased_same_version"], [warning["code"] for warning in claude["warnings"]])
-        self.assertFalse(claude["instructions_changed"])
-        self.assertEqual(["codex_hooks_need_trust"], [warning["code"] for warning in codex["warnings"]])
-        self.assertTrue(codex["instructions_changed"])
+        self.assertEqual(["unreleased_same_version"], [warning["code"] for warning in claude_result["warnings"]])
+        self.assertFalse(claude_result["instructions_changed"])
+        self.assertEqual(["codex_hooks_need_trust"], [warning["code"] for warning in codex_result["warnings"]])
+        self.assertTrue(codex_result["instructions_changed"])
         self.assertEqual(["claude", "plugin", "marketplace", "update", "hei5enbug"], commands[0])
         self.assertEqual(["codex", "plugin", "add", "hei5enbug-agent-setup@hei5enbug"], commands[3])
 
     def test_미배포_변경을_확인하지_못하면_변경_없음으로_보고하지_않는다(self):
         """설치 커밋이나 마켓플레이스 비교를 확인할 수 없으면 경고 없이 넘어가지 않고 확인 불가 경고를 남긴다."""
         # Given
-        states = [{"version": "1.0.0", "root": "/c/1.0.0"}] * 2
+        current = self.install("claude", "1.0.0")
+        states = [current, current]
 
         # When
         with (
             patch.object(refresh, "installed", side_effect=lambda host: states.pop(0)),
-            patch.object(refresh, "snapshot", return_value={"digest": "a", "hooks": "h"}),
             patch.object(refresh, "run"),
             patch.object(refresh, "executable", side_effect=lambda name: name),
+            patch.object(refresh, "Orca", side_effect=self.empty_orca),
             patch.object(refresh, "claude_unreleased_changes", return_value=([], "the installed commit is not in the marketplace clone")),
         ):
-            result = refresh.update_host("claude")
+            result = refresh.update_host("claude", offline=True)
 
         # Then
         self.assertEqual(["unreleased_check_unavailable"], [warning["code"] for warning in result["warnings"]])
+
+    def test_기본_업데이트는_활성_호스트_환경에서_설치_명령을_실행하지_않고_복구_경로를_돌려준다(self):
+        """활성 호스트 환경에서 기본 업데이트는 미루고 설치 루트와 오프라인 복구 명령을 반환한다."""
+        # Given
+        current = {host: self.install(host, "1.0.0") for host in refresh.HOSTS}
+        commands = []
+        with patch.dict(os.environ, {"PLUGIN_ROOT": "/active/plugin"}), patch.object(
+            refresh, "installed", side_effect=lambda host: current[host]
+        ), patch.object(refresh, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))):
+            # When
+            result = refresh.command_update()
+
+        # Then
+        self.assertFalse(result["ok"])
+        self.assertTrue(refresh.RUN_ID.fullmatch(result["run_id"]))
+        self.assertTrue({"hosts", "run_id", "script", "ok"} <= set(result))
+        for host in refresh.HOSTS:
+            self.assertEqual("update_deferred_active_session", result["hosts"][host]["error"]["code"])
+            self.assertEqual(current[host]["root"], result["hosts"][host]["root"])
+            self.assertIn("update --offline --json", result["hosts"][host]["recovery_command"])
+        self.assertEqual([], commands)
+
+    def test_호스트_세션_marker만_있어도_업데이트_명령을_실행하지_않는다(self):
+        """Claude와 Codex의 세션 환경 변수만 설정돼도 오프라인 플래그가 업데이트를 허용하지 않는다."""
+        # Given
+        current = {host: self.install(host, "1.0.0") for host in refresh.HOSTS}
+        commands = []
+        results = []
+
+        # When
+        for marker in ("CLAUDECODE", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
+            with self.subTest(marker=marker), patch.dict(os.environ, {marker: ""}), patch.object(
+                refresh, "installed", side_effect=lambda host: current[host]
+            ), patch.object(refresh, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))):
+                results.append(refresh.command_update(offline=True))
+
+        # Then
+        self.assertEqual(
+            [{"update_deferred_active_session"}, {"update_deferred_active_session"}, {"update_deferred_active_session"}],
+            [{item["error"]["code"] for item in result["hosts"].values()} for result in results],
+        )
+        self.assertEqual([], commands)
+
+    def test_기본_직접_호출도_Orca_상태가_없으면_업데이트를_미루고_호출을_막는다(self):
+        """update_host를 직접 불러도 오프라인 표시가 없고 Orca 목록이 비어 있으면 설치 명령을 실행하지 않는다."""
+        # Given
+        current = self.install("claude", "1.0.0")
+        commands = []
+
+        # When
+        with (
+            patch.object(refresh, "installed", return_value=current),
+            patch.object(refresh, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
+            patch.object(refresh, "Orca", side_effect=self.empty_orca),
+        ):
+            with self.assertRaises(refresh.RefreshError) as deferred:
+                refresh.update_host("claude")
+
+        # Then
+        self.assertEqual("update_deferred_unknown_session_state", deferred.exception.code)
+        self.assertEqual([], commands)
+
+    def test_명시적_오프라인에서도_연결된_유휴_Codex_세션이_있으면_업데이트를_미룬다(self):
+        """Orca에 연결된 Codex 세션은 입력을 기다리는 중이어도 활성 상태로 보고 오프라인 업데이트를 거부한다."""
+        # Given
+        current = self.install("claude", "1.0.0")
+        idle_live = terminal("term_idle", "codex") | {"idle": True}
+        commands = []
+
+        # When
+        with (
+            patch.object(refresh, "installed", return_value=current),
+            patch.object(refresh, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
+            patch.object(refresh, "Orca", return_value=FakeOrca([idle_live])),
+        ):
+            with self.assertRaises(refresh.RefreshError) as deferred:
+                refresh.update_host("claude", offline=True)
+
+        # Then
+        self.assertEqual("update_deferred_active_session", deferred.exception.code)
+        self.assertEqual([], commands)
+
+    def test_연결된_Orca_터미널의_세션_표식도_활성_호출로_판정한다(self):
+        """연결된 터미널에 유효한 Claude 세션 표식이 있으면 agentIdentity가 비어 있어도 업데이트를 미룬다."""
+        # Given
+        current = self.install("claude", "1.0.0")
+        user_data = self.base / "orca-data"
+        marker_dir = user_data / refresh.PLUGIN / "terminals"
+        marker_dir.mkdir(parents=True)
+        (marker_dir / "term_marked.json").write_text(
+            json.dumps({"schema": refresh.SESSION_CONTEXT.MARKER_SCHEMA, "host": "claude"}), encoding="utf-8"
+        )
+        commands = []
+
+        # When
+        with (
+            patch.dict(os.environ, {"ORCA_USER_DATA_PATH": str(user_data)}),
+            patch.object(refresh, "installed", return_value=current),
+            patch.object(refresh, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
+            patch.object(refresh, "Orca", return_value=FakeOrca([terminal("term_marked", None)])),
+        ):
+            with self.assertRaises(refresh.RefreshError) as deferred:
+                refresh.update_host("claude", offline=True)
+
+        # Then
+        self.assertEqual("update_deferred_active_session", deferred.exception.code)
+        self.assertEqual([], commands)
+
+    def test_세션_표식의_인코딩이_깨지면_활성_세션이_없다고_판단하지_않는다(self):
+        """연결된 터미널의 표식을 읽을 수 없으면 오프라인 요청도 상태 불명으로 보류하고 설치 명령을 보내지 않는다."""
+        # Given
+        current = self.install("codex", "1.0.0")
+        user_data = self.base / "orca-data"
+        marker_dir = user_data / refresh.PLUGIN / "terminals"
+        marker_dir.mkdir(parents=True)
+        (marker_dir / "term_unreadable.json").write_bytes(b"\xff")
+
+        # When
+        with (
+            patch.dict(os.environ, {"ORCA_USER_DATA_PATH": str(user_data)}),
+            patch.object(refresh, "installed", return_value=current),
+            patch.object(refresh, "Orca", return_value=FakeOrca([terminal("term_unreadable", None)])),
+            patch.object(refresh, "run") as commands,
+        ):
+            with self.assertRaises(refresh.RefreshError) as deferred:
+                refresh.update_host("codex", offline=True)
+
+        # Then
+        self.assertEqual("update_deferred_unknown_session_state", deferred.exception.code)
+        commands.assert_not_called()
+
+    def test_Orca_목록이_실패하거나_잘리거나_지원되지_않으면_오프라인도_보류한다(self):
+        """Orca 목록 실패, 절단, 필수 필드 누락을 세션이 없다는 증거로 취급하지 않는다."""
+        # Given
+        current = self.install("codex", "1.0.0")
+        commands = []
+
+        class BrokenOrca:
+            def terminals(self):
+                raise refresh.RefreshError("terminal_list_truncated", "truncated")
+
+        class UnavailableOrca:
+            def terminals(self):
+                raise refresh.RefreshError("command_failed", "failed")
+
+        # When
+        with (
+            patch.object(refresh, "installed", return_value=current),
+            patch.object(refresh, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
+            patch.object(refresh, "Orca", return_value=BrokenOrca()),
+        ):
+            with self.assertRaises(refresh.RefreshError) as truncated:
+                refresh.update_host("codex", offline=True)
+        with (
+            patch.object(refresh, "installed", return_value=current),
+            patch.object(refresh, "Orca", return_value=UnavailableOrca()),
+        ):
+            with self.assertRaises(refresh.RefreshError) as unavailable:
+                refresh.update_host("codex", offline=True)
+        with (
+            patch.object(refresh, "installed", return_value=current),
+            patch.object(refresh, "Orca", return_value=FakeOrca([{"handle": "term_x", "agentIdentity": "codex"}])),
+        ):
+            with self.assertRaises(refresh.RefreshError) as unsupported:
+                refresh.update_host("codex", offline=True)
+
+        # Then
+        self.assertEqual("update_deferred_unknown_session_state", truncated.exception.code)
+        self.assertEqual("update_deferred_unknown_session_state", unavailable.exception.code)
+        self.assertEqual("update_deferred_unknown_session_state", unsupported.exception.code)
+        self.assertEqual([], commands)
+
+    def test_명시적_오프라인은_Orca_CLI가_없고_활성_환경도_없으면_각_호스트를_업데이트한다(self):
+        """활성 세션 표시가 없고 Orca CLI도 설치되지 않은 일반 터미널에서는 --offline 업데이트가 실행된다."""
+        # Given
+        states = {
+            "claude": [self.install("claude", "1.0.0"), self.install("claude", "1.1.0")],
+            "codex": [self.install("codex", "1.0.0"), self.install("codex", "1.1.0")],
+        }
+        commands = []
+
+        # When
+        with (
+            patch.object(refresh, "installed", side_effect=lambda host: states[host].pop(0)),
+            patch.object(refresh, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
+            patch.object(refresh, "executable", side_effect=lambda name: name),
+            patch.object(refresh, "Orca", side_effect=refresh.RefreshError("command_missing", "missing")),
+            patch.object(refresh, "claude_unreleased_changes", return_value=([], None)),
+        ):
+            result = refresh.command_update(offline=True)
+
+        # Then
+        self.assertTrue(result["ok"])
+        self.assertEqual({"claude", "codex"}, set(result["hosts"]))
+        self.assertEqual(4, len(commands))
+        self.assertEqual(["claude", "plugin", "marketplace", "update", refresh.MARKETPLACE], commands[0])
+        self.assertEqual(["codex", "plugin", "marketplace", "upgrade", refresh.MARKETPLACE], commands[2])
+        self.assertEqual(["codex", "plugin", "add", refresh.PLUGIN_ID], commands[3])
+
+    def test_업데이트_뒤_필수_훅_대상이_없으면_그_호스트는_실패로_남긴다(self):
+        """새 설치본에서 필수 훅 파일이 빠졌으면 업데이트를 성공으로 보지 않는다."""
+        # Given
+        before = self.install("codex", "1.0.0")
+        after = self.install("codex", "1.1.0", missing_target="scripts/language_guard.py")
+        states = [before, after]
+        commands = []
+
+        # When
+        with (
+            patch.object(refresh, "installed", side_effect=lambda host: states.pop(0)),
+            patch.object(refresh, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
+            patch.object(refresh, "executable", side_effect=lambda name: name),
+            patch.object(refresh, "Orca", side_effect=self.empty_orca),
+        ):
+            with self.assertRaises(refresh.RefreshError) as invalid:
+                refresh.update_host("codex", offline=True)
+
+        # Then
+        self.assertEqual("plugin_hook_target_missing", invalid.exception.code)
+        self.assertEqual(2, len(commands))
+
+    def test_업데이트_뒤_manifest_version과_지침_digest가_없으면_실패한다(self):
+        """새 설치본의 호스트 manifest 버전이 다르거나 지침 digest가 비어 있으면 성공으로 처리하지 않는다."""
+        # Given
+        before = self.install("codex", "1.0.0")
+        mismatch = self.install("codex", "1.1.0", root=self.base / "codex-1.1.0-mismatch", manifest_version="9.9.9")
+        valid_after = self.install("codex", "1.1.0", root=self.base / "codex-1.1.0-valid")
+        commands = []
+
+        # When
+        with (
+            patch.object(refresh, "installed", side_effect=[before, mismatch]),
+            patch.object(refresh, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
+            patch.object(refresh, "executable", side_effect=lambda name: name),
+            patch.object(refresh, "Orca", side_effect=self.empty_orca),
+        ):
+            with self.assertRaises(refresh.RefreshError) as manifest:
+                refresh.update_host("codex", offline=True)
+        with (
+            patch.object(refresh, "installed", side_effect=[before, valid_after]),
+            patch.object(refresh, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
+            patch.object(refresh, "executable", side_effect=lambda name: name),
+            patch.object(refresh, "Orca", side_effect=self.empty_orca),
+            patch.object(refresh.SESSION_CONTEXT, "instructions_digest", side_effect=["before", ""]),
+        ):
+            with self.assertRaises(refresh.RefreshError) as digest:
+                refresh.update_host("codex", offline=True)
+
+        # Then
+        self.assertEqual("plugin_manifest_mismatch", manifest.exception.code)
+        self.assertEqual("plugin_digest_missing", digest.exception.code)
+        self.assertEqual(4, len(commands))
+
+    def test_읽을_수_없는_설치_JSON은_해당_호스트만_실패로_남긴다(self):
+        """설치 manifest나 훅 JSON의 문자 인코딩이 깨져도 다른 호스트의 검증 결과는 보존한다."""
+        # Given
+        roots = {host: self.install(host, "1.2.3") for host in refresh.HOSTS}
+        cases = [(".codex-plugin/plugin.json", "plugin_manifest_missing"), ("hooks/hooks.json", "plugin_hooks_missing")]
+
+        for relative, expected in cases:
+            with self.subTest(path=relative):
+                path = Path(roots["codex"]["root"]) / relative
+                original = path.read_bytes()
+                path.write_bytes(b"\xff")
+                try:
+                    # When
+                    with patch.object(refresh, "installed", side_effect=lambda host: roots[host]), patch.object(refresh, "run") as commands:
+                        result = refresh.command_apply_installed()
+
+                    # Then
+                    self.assertFalse(result["ok"])
+                    self.assertTrue(result["hosts"]["claude"]["digest"])
+                    self.assertEqual(expected, result["hosts"]["codex"]["error"]["code"])
+                    commands.assert_not_called()
+                finally:
+                    path.write_bytes(original)
+
+    def test_apply_installed는_업데이트_명령_없이_기존_run_id로_적용할_상태를_저장한다(self):
+        """apply-installed는 설치본을 읽어 기존 run 상태를 저장하고 같은 run ID를 apply에 넘길 수 있다."""
+        # Given
+        state_home = self.base / "state"
+        codex_home = self.base / "codex-home"
+        roots = {
+            "claude": self.install("claude", "1.2.3"),
+            "codex": self.install(
+                "codex",
+                "1.2.3",
+                root=codex_home / "plugins" / "cache" / refresh.MARKETPLACE / refresh.PLUGIN / "1.2.3",
+            ),
+        }
+        commands = []
+
+        def read_only_run(argv, **kwargs):
+            commands.append(list(argv))
+            if argv[0] == "claude":
+                payload = [{"id": refresh.PLUGIN_ID, "enabled": True, "version": "1.2.3", "installPath": roots["claude"]["root"]}]
+            else:
+                payload = {"installed": [{"pluginId": refresh.PLUGIN_ID, "enabled": True, "version": "1.2.3"}]}
+            return refresh.subprocess.CompletedProcess(list(argv), 0, json.dumps(payload), "")
+
+        with patch.dict(
+            os.environ,
+            {"XDG_STATE_HOME": str(state_home), "CODEX_HOME": str(codex_home), "ORCA_USER_DATA_PATH": ""},
+        ), patch.object(refresh, "executable", side_effect=lambda name: name), patch.object(
+            refresh, "run", side_effect=read_only_run
+        ), patch.object(refresh, "update_host", side_effect=AssertionError("apply-installed must not update hosts")):
+            # When
+            result = refresh.command_apply_installed()
+            state = refresh.load_run(result["run_id"])
+            with patch.object(refresh, "Orca", return_value=FakeOrca([])):
+                applied = refresh.command_apply(result["run_id"], "never", [], 30, spawn=lambda run_id: None)
+
+        # Then
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["run_id"], state["run_id"])
+        self.assertEqual({"run_id", "created_at", "hosts", "sessions"}, set(state))
+        self.assertEqual({}, state["sessions"])
+        self.assertEqual({"before_version", "after_version", "root", "previous_root", "digest", "instructions_changed", "warnings"}, set(state["hosts"]["claude"]))
+        self.assertEqual("1.2.3", state["hosts"]["claude"]["after_version"])
+        self.assertEqual(result["run_id"], applied["run_id"])
+        self.assertEqual(
+            [["claude", "plugin", "list", "--json"], ["codex", "plugin", "list", "--json"]],
+            commands,
+        )
+
+    def test_한_호스트_실패는_성공한_호스트_결과를_보존하고_실패_호스트의_세션은_막는다(self):
+        """Codex 업데이트가 실패해도 Claude 결과를 보존하고 apply는 Codex 세션에 명령을 보내지 않는다."""
+        # Given
+        claude_result = {"before_version": "1.0.0", "after_version": "1.1.0", "root": "/c/1.1.0", "digest": "d"}
+        codex_failure = refresh.RefreshError(
+            "update_deferred_unknown_session_state",
+            "unknown",
+            {"root": "/x/1.0.0", "recovery_command": "python3 /x/script update --offline --json"},
+        )
+        fake = FakeOrca([terminal("term_codex", "codex")])
+
+        # When
+        with patch.object(refresh, "update_host", side_effect=[claude_result, codex_failure]):
+            result = refresh.command_update()
+        with patch.object(refresh, "Orca", return_value=fake):
+            applied = refresh.command_apply(result["run_id"], "never", [], 30, spawn=lambda run_id: None)
+
+        # Then
+        self.assertTrue(result["hosts"]["claude"].get("digest"))
+        self.assertEqual("update_deferred_unknown_session_state", result["hosts"]["codex"]["error"]["code"])
+        self.assertEqual("/x/1.0.0", result["hosts"]["codex"]["root"])
+        self.assertEqual([("blocked", "codex_update_failed")], [(entry["status"], entry["detail"]) for entry in applied["sessions"]])
+        self.assertEqual([], fake.sent)
 
 
 @unittest.skipUnless(shutil.which("orca") and os.environ.get("ORCA_TERMINAL_HANDLE"), "Run inside an Orca terminal with the Orca CLI to check the live response shapes.")

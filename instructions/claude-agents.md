@@ -14,7 +14,8 @@ exception to the timing, agent-selection, and worker rules below.
 
 ## Investigation
 
-- Use `hei5enbug-agent-setup:scout` for investigation, only while planning and only when the session delegation threshold is met.
+- Use `hei5enbug-agent-setup:scout` for bounded investigation whenever the session delegation rule selects it,
+  during planning or execution.
 - Give each `hei5enbug-agent-setup:scout` one question and one narrow search scope.
 - Require file paths, code symbols, and concrete evidence in its results.
 - Treat results as leads. Verify critical claims in the main conversation before planning or deciding.
@@ -35,7 +36,7 @@ exception to the timing, agent-selection, and worker rules below.
 Coordinate implementation under [implementation execution rules](implementation-execution.md). This section
 adds only the Claude Code worker integration.
 
-- Use only `hei5enbug-agent-setup:worker` for implementation. Its definition pins `claude-sonnet-5-5` and
+- When delegating implementation, use only `hei5enbug-agent-setup:worker`. Its definition pins `claude-sonnet-5-5` and
   `high`. Never pass a per-invocation model on an invocation or resume, because that overrides the
   definition. Never switch to another agent.
 - Before the first invocation in a run, inspect only these non-secret inputs in the environment and every
@@ -55,8 +56,7 @@ adds only the Claude Code worker integration.
 - The launch result does not name the model, so start each worker with a readiness-only assignment. After its
   record passes, send the implementation assignment to the same worker. Use this path only when that
   follow-up keeps the pinned model. When that continuation is unavailable, skip the two-phase path
-  and make no edits. Recheck the settings after any resume.
+  and use the session fallback. Recheck the settings after any resume.
 - The host limit is `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`, which counts running subagents but not the main
   session. Use its current value and open slots; never change it.
-- A missing plugin worker or a missing subagent record blocks the affected implementation. Report the exact
-  capability and make no edit.
+- A missing plugin worker or a missing subagent record stops the affected delegation. Apply the session fallback.

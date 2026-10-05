@@ -29,6 +29,18 @@ target again and confirm that the earlier attempt did not take effect, so no wri
 Report the path that succeeded and each path that failed with its reason. Report the service as unavailable only after
 every available path failed.
 
+## Browser ownership
+
+Assign one owner to the actual shared control resource: a tab when the tool reliably targets tabs, or the
+whole browser/window when control changes global focus. Separate tabs do not make mouse/keyboard input
+independent. Coordinate through existing task facilities; add no browser framework or persistent lock service.
+
+Prefer the authorized MCP/API path. When a browser is needed, identify the target tab, URL, account, and
+operation before writing, and recheck the target immediately before each write. If the tab, account, or input
+changes unexpectedly, stop writes, preserve user input, and resolve ownership once. Do not repeatedly select
+tabs or click against another session. Read an uncertain write's result before retrying.
+Keep approval and submission boundaries: preparing a form does not authorize submitting it.
+
 ## Confluence exception
 
 Before choosing a tool for any Confluence read, search, create, update, comment, attachment, or label task,

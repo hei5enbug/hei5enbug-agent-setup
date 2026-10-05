@@ -11,13 +11,33 @@ human references; never load or use them during execution.
 - Prefer `rg` for text and symbol search and `fd` for file discovery.
   Use `ast-grep` only when structural matching is clearly needed.
 - When the target is a known symbol, file path, glob, or literal string, search directly in the main session.
-  Delegate investigation only when at least two targets share no file and each needs more than one file read.
 - Ask before destructive, irreversible, or production-impacting actions. Never expose secrets.
 - Minimize comments. Code, comments, and docstrings must never reference documentation.
 - Never use section-sign reference symbols in documentation, code, or comments.
 - Create every new commit, whether the user asked for it or a task requires it, through the `suggest-commit`
   skill in its commit mode, which chooses the one subject and makes the commit. Amends, merges, reverts, and
   cherry-picks are outside this rule.
+
+## Delegation
+
+Choose an owner before substantial work, and reconsider only when scope, dependencies, or capabilities change.
+Use subagents when the expected parallelism or reduced main-session context outweighs briefing, model calls,
+and integration. This is a practical routing rule, not a measured guarantee of lower total cost.
+
+- Handle short answers, known-path lookups, small cohesive edits, and tightly dependent work in the main session.
+- Delegate bounded investigation that needs several files or produces bulky logs, returning concise findings
+  and source locations. Do not repeat the same investigation in the main session; verify only critical claims.
+- Delegate implementation when it has a clear scope and acceptance check and can run independently or keep
+  substantial intermediate detail out of the main context. Parallelize only work with independent resources.
+- Keep the smallest useful team and pass only the task's needed context. Do not spawn for greetings, status,
+  routine checks, or a token-saving claim alone. Explicit user and skill assignments still take precedence.
+- Host permission is required. If delegation, the pinned role/model/effort, or reliable settings evidence is
+  unavailable, continue authorized work in the main session and report the limitation once. Preserve all
+  permissions and checks; never change user settings or silently substitute another worker model.
+
+Independent read-only review is the exception to main-session review ownership. Before finishing a substantial
+change, recommend it once under [independent model validation](../independent-model-validation.md); do not
+invoke a reviewer without the user's approval or repeat an offer already declined for the same result.
 
 ## Conditional instructions
 
@@ -30,6 +50,9 @@ If a required reference is missing, report it and pause the affected action inst
   access, read [protected-value access rules](../protected-values.md).
 - Before writing or editing any documentation file, read [documentation rules](../documentation.md).
 - Before writing or editing test code, read [test rules](../testing.md).
+- Before substantial implementation, repeated model evaluation, plugin maintenance, or diagnosing repeated
+  execution failures, read [work efficiency rules](../work-efficiency.md). Short answers and known-file
+  lookups do not require them; assigned workers follow their bounded assignment.
 - Before the first implementation change, read [implementation execution rules](../implementation-execution.md).
   An assigned worker reads only its "Assigned workers" section and follows its assignment.
 

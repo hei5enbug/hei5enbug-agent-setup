@@ -21,5 +21,8 @@ For ordinary documentation, apply these writing mechanics directly:
   branch, state change, interaction, boundary, dependency, or data relationship becomes clearer visually.
 - Keep one detailed source for each topic. Use stable path-and-heading references and verify every link and
   cited heading.
+- Verify factual values, units, ranges, and guarantees against the source. An identifier or familiar
+  convention is not evidence of a unit. Keep unspecified details unspecified, and label proposed choices
+  separately from observed facts.
 
 Chat replies use only the terminology and reply-format rules in the common instructions.

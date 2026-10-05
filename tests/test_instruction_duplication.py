@@ -38,8 +38,7 @@ COMMON_OWNED = (
     ),
     (
         "When the target is a known symbol, file path, glob, or literal string, search directly in the main "
-        "session. Delegate investigation only when at least two targets share no file and each needs more "
-        "than one file read."
+        "session."
     ),
     (
         "Before writing or editing any documentation file, read [documentation "
@@ -52,7 +51,7 @@ EXECUTION_OWNED = (
     "min(6 - active implementation workers, host slots remaining, ready independent tasks)",
     "Disjoint files alone do not prove independence.",
     "Queue any excess task, such as a seventh,",
-    "never permits another tier, lower effort, another host, a generic agent, or main-session implementation",
+    "Fallback never bypasses a missing user decision, permission restriction, or failed acceptance check.",
 )
 LEGACY_SCHEDULING = ("Run at most 6",)
 

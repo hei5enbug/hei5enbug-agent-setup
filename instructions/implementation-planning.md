@@ -22,6 +22,9 @@ Freeze the following from the request and authoritative evidence before choosing
 - Files, interfaces, data, or behavior that must not change
 - Acceptance criteria
 
+Separate required acceptance criteria from optional follow-ups and state stop conditions under
+[work efficiency](work-efficiency.md#scope-and-completion). Do not invent a completion gate from optional work.
+
 Resolve any missing decision that permits materially different implementations. Do not widen scope to
 repair adjacent issues unless the user includes them or the requested result cannot work without them.
 
@@ -42,12 +45,17 @@ For each slice, state its result, affected surfaces, prerequisites, and completi
 parallel only when they share no files, mutable state, generated output, or build contention. Order every
 other dependency explicitly.
 
+Check each prerequisite against the outputs of earlier steps. Perform a state change before validating its
+result; separate pre-change checks from post-change checks instead of making the latter a prerequisite for
+the change. Resolve dependency cycles before finalizing the plan.
+
 Do not split a cohesive change into bookkeeping steps. A slice should produce a reviewable behavior,
 contract, migration, or verification result rather than merely open, rename, or inspect a file.
 
-Give each slice one worker owner and record the assignment fields from
+Give each slice one main or worker owner under the session delegation rule, and record the assignment fields from
 [implementation execution](implementation-execution.md) once in the plan. State the worker model and effort
-as that file's host policy, which the host's agent rules pin, instead of copying a model ID.
+for delegated slices as that file's host policy, which the host's agent rules pin, instead of copying a model ID.
+Main-owned slices retain the main session's current model and effort.
 
 ## 4. Verification planning
 
@@ -55,6 +63,8 @@ Map every acceptance criterion and material risk to evidence. Give each executio
 check that proves its result, then define integrated checks for cross-slice behavior. Include compatibility,
 failure, migration, rollback, security, or performance checks only when the frozen scope or risk requires
 them. Never use a narrow unit check to claim repository-wide or runtime behavior.
+Identify reusable evidence and its invalidation conditions under the
+[check-evidence rules](work-efficiency.md#check-evidence) instead of scheduling duplicate checks by owner.
 
 ## 5. Plan validation
 
@@ -89,6 +99,8 @@ section rather than filling it with placeholders.
 - Constraints:
 - Protected surfaces:
 - Acceptance criteria:
+- Optional follow-ups:
+- Stop conditions:
 
 ## Implementation strategy
 
@@ -112,7 +124,7 @@ Worker model and effort: <host policy from the implementation execution rules, p
 - Scope, non-goals, constraints, protected surfaces, and acceptance criteria are explicit where applicable.
 - Every step is executable and has proportionate completion evidence.
 - Dependencies and order are correct; parallel claims have no shared mutation or build contention.
-- Every slice has one worker owner and the shared assignment fields.
+- Every slice has one main or worker owner and the shared assignment fields.
 - No speculative extension, unrelated refactor, excessive dependency, or needless slice remains.
 - The shared independent validation contract is satisfied.
 - No unresolved decision requires the executor to add design.

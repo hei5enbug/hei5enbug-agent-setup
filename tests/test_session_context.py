@@ -94,7 +94,7 @@ class SessionContextTest(unittest.TestCase):
                 self.assertEqual("# Claude Code only" in context, host == "claude")
 
     def test_참조는_절대_경로이고_세부_본문은_불러오지_않는다(self):
-        """조건부 참조 9개는 번들 안의 절대 경로로 바뀌고 실행 규칙 본문을 포함한 세부 내용은 시작 시 불러오지 않는다."""
+        """작업 효율과 검토를 포함한 참조 11개는 절대 경로로 바뀌고 세부 본문은 시작 시 불러오지 않는다."""
         # Given
         host = "claude"
 
@@ -103,11 +103,12 @@ class SessionContextTest(unittest.TestCase):
 
         # Then
         links = re.findall(r"\]\(<([^>]+)>\)", context)
-        self.assertEqual(len(links), 9)
+        self.assertEqual(len(links), 11)
         for link in links:
             self.assertTrue(Path(link).is_relative_to(self.root))
             self.assertTrue(Path(link).is_file())
         self.assertIn((self.root / "instructions/implementation-execution.md").as_posix(), links)
+        self.assertIn((self.root / "instructions/work-efficiency.md").as_posix(), links)
         self.assertNotIn("## Azure skill authorization", context)
         self.assertNotIn("## Investigation", context)
         self.assertNotIn("# Documentation files", context)
@@ -118,7 +119,25 @@ class SessionContextTest(unittest.TestCase):
         self.assertNotIn("# Implementation execution", context)
         self.assertNotIn("## Scheduling", context)
         self.assertNotIn("## Assigned workers", context)
+        self.assertNotIn("## Model evaluations", context)
         self.assertLess(len(context.encode("utf-8")), 9000)
+
+    def test_작업_효율_참조가_없으면_부분_문맥을_반환하지_않는다(self):
+        """두 호스트 모두 작업 효율 참조가 누락되면 오류를 알리고 부분 시작 문맥을 반환하지 않는다."""
+        for host in ("codex", "claude"):
+            with self.subTest(host=host):
+                # Given
+                path = self.root / "instructions/work-efficiency.md"
+                if path.exists():
+                    path.unlink()
+
+                # When
+                result = self.run_hook(host)
+
+                # Then
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("work-efficiency.md", result.stderr)
 
     def test_worker도_실행_규칙_경로와_worker_섹션_안내를_받는다(self):
         """하위 에이전트 시작 컨텍스트도 실행 규칙 링크와 할당받은 worker 섹션 안내를 담는다."""
@@ -331,7 +350,7 @@ class SessionContextTest(unittest.TestCase):
         self.assertTrue(links)
         for path, link in links:
             with self.subTest(path=path, link=link):
-                target = (path.parent / link).resolve()
+                target = (path.parent / link.split("#", 1)[0]).resolve()
                 self.assertTrue(target.is_relative_to(REPO_ROOT))
                 self.assertTrue(target.is_file())
 
