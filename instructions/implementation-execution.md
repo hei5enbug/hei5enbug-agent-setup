@@ -3,7 +3,8 @@
 Implementation means changes to code, tests, configuration, scripts, skills, instructions, and documentation
 that implement an agreed change, including integration fixes. The main session is the coordinator: it keeps
 requirements, investigation, planning, design, review, decisions, and the final report. Writing a plan or
-design document the user requested also stays in the main session. Workers make every implementation edit.
+design document the user requested also stays in the main session. Choose main or worker ownership under the
+session delegation rules; main-owned implementation is allowed and uses the same acceptance checks.
 
 The session rules still own high-level reasoning, clarification, and permission decisions. The current
 host's agent rules own its worker tool, pinned model, and configuration evidence. An assigned worker
@@ -12,6 +13,8 @@ reads only "Assigned workers" below unless its task requires another section.
 ## Task preparation
 
 Before the first implementation change, have an executable task assignment for every change.
+For substantial work, apply [work efficiency](work-efficiency.md) to required results, optional follow-ups,
+stop conditions, and check-evidence reuse. Keep these fields with the existing assignment.
 
 | Starting condition | Required action |
 |---|---|
@@ -24,7 +27,7 @@ Before the first implementation change, have an executable task assignment for e
 This preparation is not a requested implementation plan. It runs no planning or design skill, no six-stage
 planning workflow, and no independent validation.
 
-Prepare the fewest tasks that give clear ownership. One cohesive task uses one worker. Six workers are an
+Prepare the fewest tasks that give clear ownership. One cohesive task uses one owner. Six workers are an
 upper bound, not a target; never split work or batch unrelated reads merely to fill slots.
 
 At any point, ask the user before assigning a change to a tracked file outside the request or the accepted plan,
@@ -40,7 +43,10 @@ Each assignment states:
 - Verification and completion evidence
 - The selected model ID and effort
 
-Every assignment also tells the worker that it is an assigned worker, that other workers may be editing the
+For main-owned work, keep these fields compact and retain the main session's current model and effort.
+Worker model checks and readiness calls apply only when delegating; do not perform them for direct work.
+
+Every worker assignment also tells the worker that it is an assigned worker, that other workers may be editing the
 workspace, and that it must preserve their changes. A repository execution plan records these fields once.
 Each worker prompt carries only its own task and the context that task requires.
 
@@ -66,9 +72,13 @@ files alone do not prove independence.
 
 ## Review and integration
 
-Review each worker's returned changes and evidence before releasing dependent work. Accept a task only when
-the host record shows the selected model and effort for every turn that edited it. The coordinator may run
-integrated checks itself, but it never edits. Route every resulting fix to a worker with explicit ownership.
+Use the [check-evidence rules](work-efficiency.md#check-evidence) when accepting worker results and choosing
+integration checks. A worker's valid result does not need a duplicate run merely because ownership changed.
+
+Review each worker's returned changes and evidence before releasing dependent work. Accept delegated work only
+when the host record shows the selected model and effort for every turn that edited it. The main session checks
+scope, correctness, regressions, and test evidence for all work, including its own. It may make integration fixes
+when it owns those paths; otherwise wait for the current worker to stop before transferring ownership.
 A check that mutates tracked files is implementation work and needs an owner. Never run a shared build while
 workers mutate its inputs or output directories.
 
@@ -78,26 +88,30 @@ On failure, hold dependent tasks and preserve completed work. A failed assigned 
 its cause lies outside the task. Diagnose and settle the correction in the main session. Resume or replace a
 worker only after the previous owner has stopped, and give the new owner the current diff and the revised task.
 
-A failed model or capability check never permits another tier, lower effort, another host, a generic agent, or
-main-session implementation. Report the exact blocking capability and make no affected edit.
+On a delegation failure, apply the session fallback rule. Stop the affected worker before taking ownership,
+inspect its partial diff, and continue the remaining authorized work in the main session. Do not accept an
+unverified worker result as complete. Keep completed checks only while their inputs remain unchanged.
+Do not repeatedly retry a known quota or capability failure; reconsider only after evidence of a change.
+Fallback never bypasses a missing user decision, permission restriction, or failed acceptance check.
 
 ## Model and effort
 
-Use the model ID and effort that the host's agent rules pin. Never look up a newer release, follow a provider
-alias, or substitute another model at runtime; the repository updates its pins when it changes. If the pinned
-model or effort is unavailable, stop instead of selecting another one.
+For delegated implementation, use the model ID and effort that the host's agent rules pin. Never look up a
+newer release, follow a provider alias, or substitute another worker model at runtime; the repository updates
+its pins when it changes. If the pinned
+model or effort is unavailable, use the session fallback instead of selecting another worker model.
 
-Record the pinned model ID and effort in each assignment, and reuse them for that run.
+Record the pinned model ID and effort in each worker assignment, and reuse them for that run.
 
 Inspect only relevant non-secret configuration fields. A requested setting alone is not evidence of the
 effective setting. The minimum evidence is the explicit invocation or pinned definition, a host record naming
 the actual model, and the effective effort under the host's documented configuration precedence. A missing
-capability, an unexpected override, or unverified effective settings stops the affected implementation.
+capability, an unexpected override, or unverified effective settings stops delegation, not authorized main work.
 
 When launch metadata is insufficient, use a readiness-only assignment only if the host can send a follow-up to
 the same worker while preserving or explicitly reapplying its verified settings. Verify the host record, then
 send the implementation assignment. Without that continuation or reliable configuration evidence, skip this
-path and make no edits. A worker's unsubstantiated self-report never replaces host evidence.
+path and use the session fallback. A worker's unsubstantiated self-report never replaces host evidence.
 
 Recheck after a resume, an override change, a substitution warning, or a host configuration change. A mismatch
 stops the affected worker. Reuse verified settings while their inputs remain unchanged; do not repeat readiness

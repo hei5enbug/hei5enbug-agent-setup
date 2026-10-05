@@ -4,13 +4,14 @@
     {
       "id": 1,
       "prompt": "플러그인 업데이트된 내용을 Orca에서 실행 중인 세션들에 반영해줘.",
-      "expected_output": "The agent runs update, then apply with the run ID, reports every session, and ends the turn when this session is queued after the turn.",
+      "expected_output": "The agent runs the default update, reports the active-session deferral with each host's root and offline recovery command, and does not automatically retry or apply deferred hosts.",
       "files": [],
       "expectations": [
-        "`update --json` runs before `apply --run-id <run_id> --json`, and apply gets a shell timeout of at least 600 seconds.",
-        "Every session is reported with its terminal suffix, host, worktree, status, and detail.",
+        "The agent invokes `update --json` without `--offline` and reports `update_deferred_active_session` or `update_deferred_unknown_session_state` for deferred hosts.",
+        "Each deferred host's current root and offline recovery command are reported.",
+        "The agent does not automatically retry with `--offline` or apply a deferred host.",
         "No command is sent to an Orca terminal by hand, and no session is exited or restarted.",
-        "When this session is `queued_after_turn`, the turn ends right after the report."
+        "The agent does not claim that Orca inventory establishes whether non-Orca sessions have ended."
       ]
     },
     {
@@ -32,6 +33,39 @@
       "expectations": [
         "Neither `update` nor `apply` runs.",
         "No command is sent to any Orca terminal."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "I closed the other coding-agent sessions. Run `update --offline` now.",
+      "expected_output": "The agent runs the explicitly requested offline update, but an active host/plugin environment still causes a safe deferral and returns the recovery command.",
+      "files": [],
+      "expectations": [
+        "The agent invokes `update --offline --json` only because the user explicitly requested offline mode.",
+        "An active host, plugin, or Orca terminal signal still defers the update.",
+        "The agent does not claim the offline flag bypassed an active session or ran an install command."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "I updated the plugin outside this skill. Apply the installed version to my Orca sessions.",
+      "expected_output": "The agent runs apply-installed to snapshot the installed roots, then applies its run ID and reports every session.",
+      "files": [],
+      "expectations": [
+        "`apply-installed --json` runs before `apply --run-id <run_id> --json`.",
+        "The agent does not run marketplace or install commands.",
+        "Apply gets a shell timeout of at least 600 seconds and reports each session's terminal suffix, host, worktree, status, and detail."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "The update returned `update_deferred_unknown_session_state` for Codex. Try again and finish the refresh.",
+      "expected_output": "The agent reports that session state could not be verified, provides the current root and offline recovery command, and does not retry automatically.",
+      "files": [],
+      "expectations": [
+        "The agent does not repeat the update without a changed session state or a new explicit instruction.",
+        "The Codex root and offline recovery command are reported.",
+        "The agent does not apply Codex sessions while that host has an update error."
       ]
     }
   ]

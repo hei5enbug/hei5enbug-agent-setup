@@ -224,42 +224,63 @@ details into conditional references. Windows execution and live model adherence 
 See the official [Codex hooks](https://learn.chatgpt.com/docs/hooks) and
 [Claude Code hooks](https://code.claude.com/docs/en/hooks) contracts for lifecycle and trust behavior.
 
-## Implementation workers
+## Situation-based delegation
 
-Workers make every implementation change. Before the first change, the main session reads
-`instructions/implementation-execution.md` and acts as the coordinator. It keeps requirements,
-investigation, planning, design, review, decisions, and the final report, and it never edits.
-It prepares an executable task assignment even when the user supplied no plan or a plan without worker
-assignments.
+The main session chooses direct work or delegation using the rules in
+[instructions/session/common.md](instructions/session/common.md). Small edits and known-path lookups stay
+in the main session. Bounded investigations, bulky evidence gathering, and substantial independent
+implementation can use workers when the expected benefit exceeds coordination overhead. Closely dependent
+work keeps one owner. This policy does not guarantee a lower bill on every task.
 
-Automatic task preparation is not a requested implementation plan.
+The main session retains requirements, design, task boundaries, acceptance, and the final report.
+[instructions/implementation-execution.md](instructions/implementation-execution.md) defines ownership,
+conflict-free scheduling, checks, and recovery. Direct work uses the main session's current model and effort.
+A delegated task carries only its scope, relevant context, allowed/protected paths, prerequisites,
+acceptance checks, and the host's pinned settings. Workers cannot start nested agents.
 
-| Aspect | Automatic task preparation | Requested implementation plan |
+| Host | Implementation worker | Model and effort |
 |---|---|---|
-| Trigger | Any implementation change | The user explicitly asks for a plan |
-| Result | Assignments in the host's task list or the conversation, with no plan directory | The requested plan deliverable |
-| Workflow | Task ID, result, paths, prerequisites, resources, checks, and model/effort per task | The six stages in `instructions/implementation-planning.md` |
-| Independent validation | Never runs | Runs only after the confirmation gate in `instructions/independent-model-validation.md` |
+| Codex | Plugin `worker` role, verified from its rollout record | `gpt-6-luna`, `xhigh` |
+| Claude Code | `hei5enbug-agent-setup:worker`, verified from its subagent record | `claude-sonnet-5-5`, `high` |
 
-Independent ready tasks run together, up to six workers and never beyond the host's actual limit. Six is a
-ceiling, not a target: one cohesive task uses one worker. Excess tasks wait in a queue. Dependent tasks and
-tasks that share files or other mutable resources run in order. Workers edit only their assigned paths and
-never start agents, plan, or request plan review.
+Independent ready tasks may run together within the host limit and the shared execution ceiling. If a role,
+model, effort, quota, permission to delegate, or settings evidence is unavailable, the main session reports
+that limitation and continues authorized work after stopping any affected worker. It preserves partial work,
+user settings, permissions, and acceptance checks. It never silently substitutes a worker model.
 
-| Host | Worker | Model and effort | Blocked when |
-|---|---|---|---|
-| Codex | Plugin `worker` role installed by the session hook, spawned with an explicit model and effort and checked in its rollout record before any edit | `gpt-6-luna` at `xhigh`, pinned in the repository | Worker tools, the `worker` role file, the model, or `xhigh` are unavailable; the role file resolves to other settings; the rollout record is missing or names other settings |
-| Claude Code | Bundled `hei5enbug-agent-setup:worker` from `agents/worker.md`, whose definition pins the model, invoked without a per-invocation model and checked in its subagent record before any edit | `claude-sonnet-5-5` at `high`, pinned in the repository | The plugin worker or its subagent record is missing; the record names another model or effort; a forced subagent model, an effort override, or a cap prevents `high` |
+After a substantial change and its checks are ready, the main session recommends one optional cross-family
+review under [independent model validation](instructions/independent-model-validation.md). Both reviewer
+mappings use `xhigh`. Approval is required for the particular result, and a decline is not asked again.
+An unavailable reviewer does not block the remaining work. Routine author inspection and tests always remain.
 
-When a requirement is not met, the coordinator stops the affected implementation and reports the exact
-blocking capability. It never substitutes another model tier, lower effort, another host, a generic agent, or
-main-session edits. The plugin never overwrites an existing Codex `worker.toml` and changes no user
-settings. The `scout` agents described above stay read-only.
+Codex requires a direct user request or applicable `AGENTS.md` or skill instructions to authorize subagents;
+hook instructions alone cannot grant it. Without authorization, the main session continues directly.
+To opt in persistently, add this to your project or global `AGENTS.md` yourself or explicitly request it:
 
-Codex spawns sub-agents only when the user, `AGENTS.md`, or skill instructions ask for them. These rules arrive
-through a hook, so without such a request a Codex session asks once for permission to delegate to workers. To skip
-that question, add a line such as "Delegate implementation changes to worker sub-agents." to the project's or your
-global `AGENTS.md`.
+```text
+When hei5enbug-agent-setup is active, use subagents according to its situation-based delegation rules.
+```
+
+The plugin does not add this authorization automatically. Hosts, hook trust, and available tools still govern
+execution. See the official [Codex subagent contract](https://learn.chatgpt.com/docs/agent-configuration/subagents)
+and the [evaluation conclusion](docs/subagent-policy-decision.md).
+
+## Work efficiency
+
+[Work-efficiency rules](instructions/work-efficiency.md) load only before substantial implementation,
+repeated model evaluation, plugin maintenance, or repeated-failure diagnosis. Required results and checks
+define completion. Valid check evidence is reused until its relevant inputs change; optional research and
+an unperformed optional review do not keep accepted work open.
+
+Additional model comparisons start with at most 3 representative cases, 15 minutes for the whole batch,
+and 6 top-level starts for paired trials across both hosts. Probes and retries share that budget, including
+after resume. These limits do not cap ordinary implementation, unit tests, required builds, or the final
+review. Expansion needs an unresolved question and an explicitly authorized larger budget.
+
+Permanent failures require changed conditions before another attempt; transient failures allow at most one
+unchanged retry. Browser writes have one owner for the actual shared control resource under
+[service access rules](instructions/services.md#browser-ownership). These instructions guide agent behavior;
+they do not establish universal adherence or measured time/token savings.
 
 ## Plugin updates
 
@@ -270,14 +291,17 @@ version, even when it is already on `main`, so fold every later unreleased chang
 A release adds no commit: after the development checks below pass on `HEAD`, tag `HEAD` `v<version>` and push the
 tag.
 
-Update Codex after the release is available:
+After the release is available, end affected coding-agent sessions and run the update from a normal terminal.
+Replacing a loaded plugin directory can leave a running session with missing hook paths.
+
+Update Codex:
 
 ```bash
 codex plugin marketplace upgrade hei5enbug
 codex plugin add hei5enbug-agent-setup@hei5enbug
 ```
 
-Update Claude Code after the release is available:
+Update Claude Code:
 
 ```bash
 claude plugin marketplace update hei5enbug
@@ -288,8 +312,17 @@ Start a new Codex thread or restart Claude Code after updating so the host loads
 
 ### Apply an update to running Orca sessions
 
-Ask for `orca-plugin-refresh` to update this plugin in both hosts and apply it to every idle Orca-managed session
-without restarting it. The skill runs only when you ask for it.
+Ask for `orca-plugin-refresh` to apply an already-installed version to idle Orca-managed sessions without
+restarting them. The skill runs only when you ask for it. `apply-installed --json` validates the installed
+roots and creates a run ID for `apply --run-id <run_id> --json`, without marketplace or install commands.
+
+Cache-replacing updates are a separate offline step. The default `update --json` defers; `update --offline --json`
+is for a normal terminal after affected coding-agent sessions have ended. Active host/plugin environment or
+connected coding-agent terminals contradict that attestation and still block the update. Unreadable, truncated,
+or unsupported available inventory also defers. The result preserves each host's status and provides its current
+root and an offline recovery command; deferred hosts remain untouched. Orca inventory cannot prove that
+non-Orca sessions have ended. Manual updates and another process deleting a loaded directory remain outside
+this protection. See the [refresh workflow](skills/orca-plugin-refresh/SKILL.md) for commands and limits.
 
 | Part | Claude Code | Codex |
 |---|---|---|
@@ -342,7 +375,7 @@ execution-path isolation; semantic equivalence still requires human or model rev
 | [`docs-rewrite`](skills/docs-rewrite/SKILL.md) | Rewrites existing text so it reads naturally while every claim, number, and level of certainty stays identical, and repairs AI-sounding Korean. [Korean guide](skills/docs-rewrite/SKILL.ko.md). |
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Converts Markdown, HTML, PDF, DOCX, and Google Docs content into Confluence pages, preserves document structure and assets, and keeps pages synchronized with source revisions. [Korean guide](skills/document-to-confluence/SKILL.ko.md). |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | Creates, tests, and packages agent skills through a draft → test → review → improve loop. [Korean guide](skills/skill-builder/SKILL.ko.md). |
-| [`orca-plugin-refresh`](skills/orca-plugin-refresh/SKILL.md) | Updates this plugin in both hosts and applies it to idle Orca-managed Claude Code and Codex sessions without restarting them. [Korean guide](skills/orca-plugin-refresh/SKILL.ko.md). |
+| [`orca-plugin-refresh`](skills/orca-plugin-refresh/SKILL.md) | Updates this plugin safely offline and applies an installed version to idle Orca-managed Claude Code and Codex sessions without restarting them. [Korean guide](skills/orca-plugin-refresh/SKILL.ko.md). |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | Reads the staged and unstaged changes, or the scope you name, plus recent commit history, then suggests five commit messages that match the repo's style. When you ask it to commit, it commits with the single best subject instead. [Korean guide](skills/suggest-commit/SKILL.ko.md). |
 | [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | Writes or reviews technical design documents and RFCs without taking ownership of implementation planning. [Korean guide](skills/technical-design-writer/SKILL.ko.md). |
 | [`tiki-taka`](skills/tiki-taka/SKILL.md) | Runs a turn-limited debate between the current agent and an opposing Claude/Codex session to surface and resolve issues. [Korean guide](skills/tiki-taka/SKILL.ko.md). |

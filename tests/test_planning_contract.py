@@ -34,7 +34,7 @@ class PlanningContractTest(unittest.TestCase):
     def test_model_selection_has_one_canonical_source(self):
         validation = VALIDATION.read_text()
         mapping = (
-            re.compile(r"\| GPT \| `claude-fable-[\d-]+` \| `high` \|"),
+            re.compile(r"\| GPT \| `claude-fable-[\d-]+` \| `xhigh` \|"),
             re.compile(r"\| Claude \| `gpt-[\d.]+-sol` \| `xhigh` \|"),
         )
         for row in mapping:
@@ -95,7 +95,7 @@ class PlanningContractTest(unittest.TestCase):
 
         # Then
         self.assertIn("[implementation execution](implementation-execution.md)", slicing)
-        self.assertIn("one worker owner", slicing)
+        self.assertIn("one main or worker owner", slicing)
         self.assertIn("which the host's agent rules pin, instead of copying a model ID", slicing)
         self.assertIn("Allowed and protected paths", template)
         self.assertIn("Shared resources and parallel condition", template)
@@ -180,8 +180,8 @@ class PlanningContractTest(unittest.TestCase):
         self.assertIn("A failed assigned check is a failure even when its cause lies outside the task.", failure)
 
 
-    def test_작업은_수정한_모든_턴의_호스트_기록을_확인한_뒤에만_승인한다(self):
-        """작업을 수정한 모든 턴의 호스트 기록이 선택한 모델과 사고 강도를 보여 줄 때만 작업을 승인한다."""
+    def test_위임한_작업은_수정한_모든_턴의_호스트_기록을_확인한_뒤에만_승인한다(self):
+        """위임한 작업은 수정한 모든 턴의 호스트 기록이 선택한 모델과 사고 강도를 보여 줄 때만 승인한다."""
         # Given
         execution = EXECUTION.read_text()
 
@@ -190,7 +190,7 @@ class PlanningContractTest(unittest.TestCase):
 
         # Then
         self.assertIn(
-            "Accept a task only when the host record shows the selected model and effort for every turn that edited it.",
+            "Accept delegated work only when the host record shows the selected model and effort for every turn that edited it.",
             review,
         )
 

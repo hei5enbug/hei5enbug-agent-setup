@@ -17,8 +17,8 @@ exception to the timing and worker rules below.
 
 ## Investigation
 
-- Use the `scout` agent only for bounded, read-only investigation while planning, and only when the session
-  delegation threshold is met.
+- Use the `scout` agent for bounded, read-only investigation whenever the session delegation rule selects it,
+  during planning or execution.
 - Pass `gpt-6-luna` and `xhigh` explicitly on every spawn. Its bundled role file sets no model, so the spawn
   value applies.
 - Give it one specific question and a narrow search scope.
@@ -41,7 +41,7 @@ exception to the timing and worker rules below.
 Coordinate implementation under [implementation execution rules](implementation-execution.md). This section
 adds only the Codex worker integration.
 
-- Use only the plugin `worker` role for implementation. Its role file sets no model, so pass the pinned
+- When delegating implementation, use only the plugin `worker` role. Its role file sets no model, so pass the pinned
   `gpt-6-luna` and `xhigh` explicitly on every spawn.
 - Full-history forks inherit the parent model and effort and reject overrides. Never spawn a worker that way;
   set `fork_turns` to `"none"` or a positive integer, or leave `fork_context` off, and put the bounded task
@@ -58,12 +58,12 @@ adds only the Codex worker integration.
 - The spawn result does not name the model, so start each worker with a readiness-only assignment. After its
   record passes, send the implementation assignment to the same worker thread with a follow-up. Use this path
   only when that follow-up keeps its settings. When that continuation is unavailable, skip the two-phase path
-  and make no edits. Recheck the settings after any resume.
+  and use the session fallback. Recheck the settings after any resume.
 - The host limit is `agents.max_concurrent_threads_per_session`, which counts spawned threads but not the main
   thread. Use its current value and open slots; never change it.
 - Missing worker tools, a missing `worker` role file, an unavailable model or `xhigh`, an incompatible user
-  configuration, or unverified effective settings block the affected implementation. Report the exact
-  capability and make no edit.
-- Codex spawns sub-agents only when the user, `AGENTS.md`, or skill instructions ask for them, and these rules
-  arrive through a hook. If you decline to spawn for that reason, ask the user once to authorize worker
-  delegation and make no edit until they answer.
+  configuration, or unverified effective settings stop the affected delegation. Apply the session fallback.
+- Codex spawns sub-agents only when the user, `AGENTS.md`, or skill instructions ask for them. These hook
+  instructions alone do not grant that authorization. Reuse existing authorization; when it is absent,
+  continue in the main session under the session fallback. Do not turn a routine task into a permission
+  interview or alter user/project instructions automatically. Explain persistent opt-in when relevant.

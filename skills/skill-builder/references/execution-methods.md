@@ -63,6 +63,10 @@ Mark the dependent run unverified and continue only work that does not require t
 
 ## Paired trials
 
+When plugin session rules apply, read [work efficiency](../../../instructions/work-efficiency.md#model-evaluations)
+before model trials; it owns the shared batch limits, preflight, continuation, and stopping rules. If that
+required reference is unavailable, stop the affected evaluation. Standalone use retains the procedure below.
+
 1. Freeze the task, quality criteria, input artifacts, output contract, and current skill snapshot.
    Include correctness, completeness, required exceptions, and any user latency or cost limits.
    Set a small trial budget before starting; use 2–3 representative cases initially, including a boundary case.
