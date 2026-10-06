@@ -144,17 +144,22 @@ Solo en Claude Code, un guardián de aprobaciones de sesión, `scripts/session_a
 vez por sesión ciertas escrituras con efecto externo. Cubre la creación de etiquetas git, el envío de etiquetas a un
 remoto configurado, `gh release create` y `gh release edit` solo con la etiqueta y las opciones `--title`, `--notes`,
 `--target`, `--generate-notes`, `--notes-from-tag`, `--latest`, `--draft`, `--prerelease`, `--verify-tag`, y las
-herramientas MCP cuyo nombre contiene un verbo de escritura. Tras aprobar una, el mismo tipo de acción se ejecuta sin
-preguntar durante el resto de la sesión. Cada tipo de herramienta o de comando se aprueba por separado.
+herramientas MCP cuyo nombre contiene un verbo de escritura. Las herramientas MCP cuyo nombre empieza por un verbo de
+lectura, como get, list, search, read, fetch, query o download, nunca quedan cubiertas y conservan el flujo de
+permisos normal. Tras aprobar una, el mismo tipo de acción se ejecuta sin preguntar durante el resto de la sesión.
+Cada tipo de herramienta o de comando se aprueba por separado.
 
 Las acciones destructivas siempre piden aprobación: los envíos forzados, borrar ramas remotas o etiquetas, borrar una
-etiqueta, `gh release delete`, `gh repo delete` y las herramientas MCP que borran, envían a la papelera o eliminan.
-`gh release upload` también pide siempre aprobación, porque puede publicar cualquier archivo local. Lo mismo ocurre
-con el envío de una etiqueta a una URL, a un remoto no listado o con `--repo`, o que mezcla una rama en un envío con
-`--tags`, y con un `gh release create` o `gh release edit` con archivos adjuntos, `--notes-file` o cualquier otra
-opción. Un comando compuesto con algo que el guardián no puede verificar también pide siempre aprobación. Los
-subagentes no heredan las aprobaciones. Las aprobaciones caducan con la sesión y se guardan en el directorio de datos
-del plugin. Los envíos ordinarios y los demás comandos conservan el flujo de permisos normal.
+etiqueta, `gh release delete`, `gh repo delete` y las herramientas MCP que borran, envían a la papelera o eliminan,
+incluso si el nombre empieza por un verbo de lectura. `gh release upload` también pide siempre aprobación, porque
+puede publicar cualquier archivo local. Lo mismo ocurre con el envío de una etiqueta a una URL, a un remoto no listado
+o con `--repo`, o que mezcla una rama en un envío con `--tags`, y con un `gh release create` o `gh release edit` con
+archivos adjuntos, `--notes-file` o cualquier otra opción. Un comando compuesto con algo que el guardián no puede
+verificar también pide siempre aprobación. Un `echo` simple con texto literal tras un comando cubierto, por ejemplo
+`git tag v1 && echo done`, no impide que se aplique la aprobación; un `echo` con una variable, una sustitución de
+comandos, un glob, una redirección o una tubería sigue pidiendo aprobación. Los subagentes no heredan las
+aprobaciones. Las aprobaciones caducan con la sesión y se guardan en el directorio de datos del plugin. Los envíos
+ordinarios y los demás comandos conservan el flujo de permisos normal.
 
 No añada reglas `permissions.ask` para estas acciones, porque una regla ask pregunta cada vez, incluso después de una
 aprobación de sesión.

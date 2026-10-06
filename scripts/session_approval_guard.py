@@ -65,6 +65,10 @@ PUSH_BENIGN_OPTIONS = {
 SINGLE_DASH_CLUSTER = re.compile(r"^-[A-Za-z0-9]+$")
 RELEASE_VALUE_FLAGS = {"--title", "-t", "--notes", "-n", "--target"}
 RELEASE_SWITCH_FLAGS = {"--generate-notes", "--notes-from-tag", "--latest", "--draft", "--prerelease", "--verify-tag"}
+READ_VERBS = {
+    "get", "list", "search", "read", "fetch", "query", "find", "lookup", "describe", "show", "view", "check",
+    "count", "browse", "download", "export", "preview", "introspect", "analyze", "explain",
+}
 DESTRUCTIVE_WORDS = {"delete", "trash", "remove", "destroy", "purge", "drop", "unshare", "revoke"}
 WRITE_WORDS = {
     "send", "post", "reply", "create", "update", "edit", "add", "write", "upsert", "transition", "schedule",
@@ -290,6 +294,8 @@ def classify_subcommand(words: list, state: dict) -> Result:
     if any(word and all(char in PUNCTUATION for char in word) for word in words):
         return set(), False, False
     head = words[0]
+    if head == "echo":
+        return set(), False, not any(unsafe(word) for word in words[1:])
     if head == "cd":
         if len(words) == 2:
             state["dir"] = join_directory(state["dir"], words[1])
@@ -323,10 +329,14 @@ def classify_bash(command, cwd) -> Result:
     return keys, destructive, known
 
 
-def tool_words(tool_part: str) -> set:
+def tool_word_list(tool_part: str) -> list:
     spaced = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", tool_part)
     spaced = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", spaced)
-    return {word for word in re.split(r"[_\-\s]+", spaced.lower()) if word}
+    return [word for word in re.split(r"[_\-\s]+", spaced.lower()) if word]
+
+
+def tool_words(tool_part: str) -> set:
+    return set(tool_word_list(tool_part))
 
 
 def classify_mcp(tool_name: str) -> Result:
@@ -335,9 +345,12 @@ def classify_mcp(tool_name: str) -> Result:
     parts = tool_name.split("__", 2)
     if len(parts) < 3:
         return set(), False, False
-    words = tool_words(parts[2])
+    ordered = tool_word_list(parts[2])
+    words = set(ordered)
     if words & DESTRUCTIVE_WORDS:
         return {f"mcp:{tool_name}"}, True, True
+    if ordered and ordered[0] in READ_VERBS:
+        return set(), False, False
     if words & WRITE_WORDS:
         return {f"mcp:{tool_name}"}, False, True
     return set(), False, False

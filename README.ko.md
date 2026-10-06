@@ -157,14 +157,16 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 
 Claude Code에서만 동작하는 세션 승인 가드 `scripts/session_approval_guard.py`는 외부로 나가는 특정 쓰기 작업을 세션마다 한 번만 승인하게 합니다. git 태그 생성, 설정된
 원격 저장소로의 태그 푸시, 태그와 플래그 `--title`, `--notes`, `--target`, `--generate-notes`, `--notes-from-tag`, `--latest`,
-`--draft`, `--prerelease`, `--verify-tag`만 쓴 `gh release create`와 `gh release edit`, 이름에 쓰기 동사가 들어간 MCP 도구가 대상입니다. 한 번
-승인하면 그 세션이 끝날 때까지 같은 종류의 작업은 확인 없이 실행됩니다. 도구나 명령 종류별로 따로 승인합니다.
+`--draft`, `--prerelease`, `--verify-tag`만 쓴 `gh release create`와 `gh release edit`, 이름에 쓰기 동사가 들어간 MCP 도구가 대상입니다. 이름이
+get, list, search, read, fetch, query, download 같은 읽기 동사로 시작하는 MCP 도구는 대상이 아니며 기존 권한 절차를 그대로 따릅니다. 한 번 승인하면 그 세션이 끝날
+때까지 같은 종류의 작업은 확인 없이 실행됩니다. 도구나 명령 종류별로 따로 승인합니다.
 
 되돌릴 수 없는 작업은 항상 승인을 요청합니다. 강제 푸시, 원격 브랜치나 태그 삭제, 태그 삭제, `gh release delete`, `gh repo delete`, 삭제·휴지통 이동·제거를 하는 MCP
-도구가 여기에 해당합니다. `gh release upload`는 로컬 파일을 무엇이든 게시할 수 있으므로 항상 승인을 요청합니다. URL, 목록에 없는 원격 저장소, `--repo`로 보내는 태그 푸시나
-`--tags` 푸시에 브랜치가 섞인 경우, 첨부 파일·`--notes-file`·그 밖의 플래그가 붙은 `gh release create`와 `gh release edit`도 마찬가지입니다. 가드가 확인할 수
-없는 부분이 하나라도 있는 복합 명령도 항상 승인을 요청합니다. 서브에이전트는 승인을 물려받지 않습니다. 승인은 세션과 함께 만료되며 플러그인 데이터 디렉터리에 저장됩니다. 일반 푸시와 그 밖의 명령은 기존 권한
-절차를 그대로 따릅니다.
+도구가 여기에 해당하며, 이름이 읽기 동사로 시작해도 마찬가지입니다. `gh release upload`는 로컬 파일을 무엇이든 게시할 수 있으므로 항상 승인을 요청합니다. URL, 목록에 없는 원격 저장소,
+`--repo`로 보내는 태그 푸시나 `--tags` 푸시에 브랜치가 섞인 경우, 첨부 파일·`--notes-file`·그 밖의 플래그가 붙은 `gh release create`와
+`gh release edit`도 마찬가지입니다. 가드가 확인할 수 없는 부분이 하나라도 있는 복합 명령도 항상 승인을 요청합니다. 대상 명령 뒤에 `git tag v1 && echo done`처럼 리터럴
+텍스트만 쓴 단순 `echo`는 승인 적용을 막지 않습니다. 변수, 명령 치환, glob, 리다이렉트, 파이프가 있는 `echo`는 여전히 승인을 요청합니다. 서브에이전트는 승인을 물려받지 않습니다. 승인은
+세션과 함께 만료되며 플러그인 데이터 디렉터리에 저장됩니다. 일반 푸시와 그 밖의 명령은 기존 권한 절차를 그대로 따릅니다.
 
 이 작업들에 `permissions.ask` 규칙을 추가하지 마세요. ask 규칙은 세션 승인 뒤에도 매번 확인을 요청합니다.
 

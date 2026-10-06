@@ -181,7 +181,37 @@ BASH_CASES = [
     ("release-expansion-in-action", "gh release $ACTION v1", REPO_WITH_V1, NONE, False, False),
     ("compound-with-unknown-command", "git tag v1 && rm -rf x", REPO_WITH_V1, TAG, False, False),
     ("compound-unknown-first", "make build && git tag v1", REPO_WITH_V1, TAG, False, False),
-    ("compound-gh-and-unknown", "gh release create v1; echo done", REPO_WITH_V1, RELEASE, False, False),
+    ("compound-gh-and-unknown", "gh release create v1; ls", REPO_WITH_V1, RELEASE, False, False),
+    ("compound-gh-and-echo", "gh release create v1; echo done", REPO_WITH_V1, RELEASE, False, True),
+    ("echo-after-tag", "git tag v1 && echo done", REPO_WITH_V1, TAG, False, True),
+    ("echo-after-push", f'git -C {shlex.quote(REPO_WITH_V1)} push origin --tags && echo "pushed"', REPO_WITH_V1, PUSH_TAG, False, True),
+    ("echo-with-flags-and-words", "git tag v1 && echo -n a b c", REPO_WITH_V1, TAG, False, True),
+    ("echo-alone", "echo hello", REPO_WITH_V1, NONE, False, True),
+    ("echo-before-tag", "echo start && git tag v1", REPO_WITH_V1, TAG, False, True),
+    ("echo-substitution", "git tag v1 && echo $(id)", REPO_WITH_V1, TAG, False, False),
+    ("echo-variable", "git tag v1 && echo $HOME", REPO_WITH_V1, TAG, False, False),
+    ("echo-braced-variable", "git tag v1 && echo ${HOME}", REPO_WITH_V1, TAG, False, False),
+    ("echo-redirect", "git tag v1 && echo hi > /tmp/x", REPO_WITH_V1, TAG, False, False),
+    ("echo-append-redirect", "git tag v1 && echo hi >> /tmp/x", REPO_WITH_V1, TAG, False, False),
+    ("echo-pipe", "git tag v1 && echo hi | sh", REPO_WITH_V1, TAG, False, False),
+    ("echo-quoted-substitution", 'echo "$(git tag -d v1)"', REPO_WITH_V1, TAG, True, False),
+    ("echo-glob", "echo *", REPO_WITH_V1, NONE, False, False),
+    ("echo-question-glob", "echo a?", REPO_WITH_V1, NONE, False, False),
+    ("echo-bracket-glob", "echo [ab]", REPO_WITH_V1, NONE, False, False),
+    ("echo-backticks-after-tag", "git tag v1 && echo `id`", REPO_WITH_V1, TAG, False, False),
+    ("echo-tilde", "git tag v1 && echo ~/x", REPO_WITH_V1, TAG, False, False),
+    ("echo-brace", "git tag v1 && echo {a,b}", REPO_WITH_V1, TAG, False, False),
+    ("echo-history-bang", "git tag v1 && echo hi!", REPO_WITH_V1, TAG, False, False),
+    ("echo-literal-backslash", "git tag v1 && echo 'a\\b'", REPO_WITH_V1, TAG, False, False),
+    ("echo-escaped-space-has-no-backslash-left", "git tag v1 && echo a\\ b", REPO_WITH_V1, TAG, False, True),
+    ("echo-escaped-dollar", "git tag v1 && echo \\$HOME", REPO_WITH_V1, TAG, False, False),
+    ("echo-destructive-tag", "git tag -d v1 && echo ok", REPO_WITH_V1, NONE, True, True),
+    ("echo-destructive-push", "git push --force origin v1 && echo ok", REPO_WITH_V1, NONE, True, True),
+    ("echo-then-destructive", "echo ok && gh release delete v1", REPO_WITH_V1, NONE, True, True),
+    ("echo-with-unknown-neighbor", "git tag v1 && echo ok && ls", REPO_WITH_V1, TAG, False, False),
+    ("echo-background", "git tag v1 && echo ok &", REPO_WITH_V1, TAG, False, True),
+    ("echo-uppercase-is-not-echo", "git tag v1 && ECHO ok", REPO_WITH_V1, TAG, False, False),
+    ("printf-is-not-harmless", "git tag v1 && printf ok", REPO_WITH_V1, TAG, False, False),
     ("command-substitution", "echo $(git tag v1)", REPO_WITH_V1, TAG, False, False),
     ("backticks", "echo `git tag v1`", REPO_WITH_V1, TAG, False, False),
     ("heredoc", "cat <<EOF\ngit tag v1\nEOF", REPO_WITH_V1, TAG, False, False),
@@ -267,6 +297,43 @@ MCP_DESTRUCTIVE = [
     "mcp__tool__unshare_file",
     "mcp__tool__revoke_token",
     "mcp__tool__delete_and_create",
+]
+MCP_READ_VERB_SILENT = [
+    "mcp__claude_ai_Atlassian__getIssueLinkTypes",
+    "mcp__claude_ai_Atlassian__getJiraIssueRemoteIssueLinks",
+    "mcp__claude_ai_Atlassian__getTransitionsForJiraIssue",
+    "mcp__claude_ai_Atlassian__getAccessibleAtlassianResources",
+    "mcp__claude_ai_Slack__slack_read_thread",
+    "mcp__claude_ai_Google_Drive__get_file_permissions",
+    "mcp__claude_ai_Google_Drive__search_files",
+    "mcp__claude_ai_Google_Drive__list_recent_files",
+    "mcp__claude_ai_Google_Drive__download_file_content",
+    "mcp__datagrip__preview_table_data",
+]
+MCP_WRITE_KEPT = [
+    "mcp__claude_ai_Atlassian__createJiraIssue",
+    "mcp__claude_ai_Atlassian__editJiraIssue",
+    "mcp__claude_ai_Atlassian__transitionJiraIssue",
+    "mcp__claude_ai_Atlassian__addCommentToJiraIssue",
+    "mcp__claude_ai_Atlassian__createIssueLink",
+    "mcp__claude_ai_Slack__slack_send_message",
+    "mcp__claude_ai_Slack__slack_schedule_message",
+    "mcp__claude_ai_Google_Drive__create_file",
+    "mcp__claude_ai_Google_Drive__update_file",
+    "mcp__claude_ai_Google_Drive__share_file",
+    "mcp__claude_ai_Google_Drive__copy_file",
+    "mcp__tool__send_message",
+    "mcp__claude_ai_Gmail__reply",
+    "mcp__claude_ai_Gmail__forward",
+    "mcp__claude_ai_Gmail__label_message",
+    "mcp__claude_ai_Gmail__create_draft",
+]
+MCP_DESTRUCTIVE_WINS = [
+    "mcp__claude_ai_Google_Drive__trash_file",
+    "mcp__claude_ai_Gmail__delete_draft",
+    "mcp__claude_ai_Gmail__trash_message",
+    "mcp__tool__get_and_delete_item",
+    "mcp__tool__getOrDeleteThing",
 ]
 MCP_READ = [
     "mcp__claude_ai_Atlassian__getJiraIssue",
@@ -506,6 +573,76 @@ class TestMcpClassification:
         # then
         assert result[0] == set()
         assert result[1] is False
+
+    @pytest.mark.parametrize("tool_name", MCP_READ_VERB_SILENT)
+    def test_tools_starting_with_a_read_verb_are_empty(self, tool_name):
+        """읽기 동사로 시작하는 MCP 도구는 키가 없는 결과를 내고 가드는 조용히 있는다."""
+        # given
+        name = tool_name
+        # when
+        result = guard.classify(name, {}, None)
+        # then
+        assert result == (set(), False, False)
+
+    @pytest.mark.parametrize("verb", sorted(guard.READ_VERBS))
+    def test_every_read_verb_overrides_write_words_when_it_comes_first(self, verb):
+        """첫 단어가 읽기 동사이면 뒤에 쓰기 단어가 있어도 키가 없는 결과를 낸다."""
+        # given
+        name = f"mcp__tool__{verb}_comment_link"
+        # when
+        result = guard.classify(name, {}, None)
+        # then
+        assert result == (set(), False, False)
+
+    @pytest.mark.parametrize("verb", sorted(guard.READ_VERBS))
+    def test_read_verb_that_is_not_first_does_not_make_a_write_silent(self, verb):
+        """읽기 동사가 첫 단어가 아니면 쓰기 단어가 있는 도구는 그대로 쓰기다."""
+        # given
+        name = f"mcp__tool__create_{verb}"
+        # when
+        result = guard.classify(name, {}, None)
+        # then
+        assert result == ({f"mcp:{name}"}, False, True)
+
+    @pytest.mark.parametrize("tool_name", MCP_WRITE_KEPT)
+    def test_listed_write_tools_stay_writes(self, tool_name):
+        """읽기 동사로 시작하지 않는 쓰기 도구는 키를 만들고 되돌릴 수 없는 작업이 아니다."""
+        # given
+        name = tool_name
+        # when
+        result = guard.classify(name, {}, None)
+        # then
+        assert result == ({f"mcp:{name}"}, False, True)
+
+    @pytest.mark.parametrize("tool_name", MCP_DESTRUCTIVE_WINS)
+    def test_destructive_word_wins_over_a_read_verb(self, tool_name):
+        """삭제 계열 단어는 읽기 동사보다 우선해 되돌릴 수 없는 작업으로 남는다."""
+        # given
+        name = tool_name
+        # when
+        result = guard.classify(name, {}, None)
+        # then
+        assert result == ({f"mcp:{name}"}, True, True)
+
+    @pytest.mark.parametrize(
+        "tool_part,ordered",
+        [
+            ("getOrDeleteThing", ["get", "or", "delete", "thing"]),
+            ("slack_read_thread", ["slack", "read", "thread"]),
+            ("merge-pull-request", ["merge", "pull", "request"]),
+            ("createJiraIssue", ["create", "jira", "issue"]),
+            ("", []),
+        ],
+    )
+    def test_tool_word_list_keeps_the_word_order(self, tool_part, ordered):
+        """단어 목록은 이름에 나온 순서를 그대로 지키고 집합과 같은 단어를 낸다."""
+        # given
+        part = tool_part
+        # when
+        result = guard.tool_word_list(part)
+        # then
+        assert result == ordered
+        assert guard.tool_words(part) == set(ordered)
 
     @pytest.mark.parametrize(
         "tool_part,words",
@@ -1039,6 +1176,131 @@ class TestMcpFlow:
         pre = run_guard(pre_event(tool_name=tool, tool_input={}, agent_id="a"), data)
         # then
         assert decision(pre[1])[0] == "ask"
+
+
+class TestReadVerbAndEchoFlow:
+    @pytest.mark.parametrize("tool", MCP_READ_VERB_SILENT)
+    def test_read_verb_tools_stay_silent_in_both_events(self, tmp_path, tool):
+        """읽기 동사로 시작하는 MCP 도구는 PreToolUse와 PostToolUse 모두 출력과 기록이 없다."""
+        # given
+        data = tmp_path / "data"
+        # when
+        pre = run_guard(pre_event(tool_name=tool, tool_input={}), data)
+        post = run_guard(post_event(tool_name=tool, tool_input={}), data)
+        # then
+        assert pre[:2] == post[:2] == (0, "")
+        assert not (data / "session_approvals.json").exists()
+
+    @pytest.mark.parametrize("tool", MCP_WRITE_KEPT)
+    def test_kept_write_tools_ask_record_then_allow(self, tmp_path, tool):
+        """쓰기 도구는 처음에 묻고, 기록한 뒤에는 같은 도구를 허용한다."""
+        # given
+        data = tmp_path / "data"
+        # when
+        first = run_guard(pre_event(tool_name=tool, tool_input={}), data)
+        run_guard(post_event(tool_name=tool, tool_input={}), data)
+        second = run_guard(pre_event(tool_name=tool, tool_input={}), data)
+        # then
+        assert decision(first[1])[0] == "ask"
+        assert decision(second[1]) == ("allow", f"Approved earlier in this session: mcp:{tool}")
+
+    @pytest.mark.parametrize("tool", MCP_DESTRUCTIVE_WINS)
+    def test_destructive_tools_with_read_verbs_always_ask(self, tmp_path, tool):
+        """읽기 동사가 든 삭제 도구도 항상 묻고 기록하지 않는다."""
+        # given
+        data = tmp_path / "data"
+        # when
+        first = run_guard(pre_event(tool_name=tool, tool_input={}), data)
+        run_guard(post_event(tool_name=tool, tool_input={}), data)
+        second = run_guard(pre_event(tool_name=tool, tool_input={}), data)
+        # then
+        assert decision(first[1]) == ("ask", DESTRUCTIVE_REASON)
+        assert decision(second[1]) == ("ask", DESTRUCTIVE_REASON)
+        assert not (data / "session_approvals.json").exists()
+
+    @pytest.mark.parametrize(
+        "command",
+        ["git tag v1 && echo done", f'git -C {shlex.quote(REPO_WITH_V1)} push origin --tags && echo "pushed"', "git tag v9 && echo a b c"],
+    )
+    def test_echo_after_recorded_keys_is_allowed(self, tmp_path, command):
+        """관련 키가 기록된 뒤에는 끝에 단순 echo가 붙은 명령도 허용된다."""
+        # given
+        data = tmp_path / "data"
+        run_guard(post_event("git tag v0"), data)
+        run_guard(post_event("git push origin --tags"), data)
+        # when
+        allowed = run_guard(pre_event(command), data)
+        # then
+        assert decision(allowed[1])[0] == "allow"
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "git tag v1 && echo $(id)",
+            "git tag v1 && echo $HOME",
+            "git tag v1 && echo hi > /tmp/x",
+            "git tag v1 && echo hi | sh",
+            "git tag v1 && echo `id`",
+            "git tag v1 && echo *",
+            "git tag v1 && echo ~/x",
+            "git tag v1 && echo ok && ls",
+        ],
+    )
+    def test_echo_with_expansion_redirect_or_pipe_still_asks_after_recorded_keys(self, tmp_path, command):
+        """echo에 치환, 변수, 리다이렉트, 파이프, 글롭이 있으면 키가 기록돼 있어도 묻는다."""
+        # given
+        data = tmp_path / "data"
+        run_guard(post_event("git tag v0"), data)
+        # when
+        asked = run_guard(pre_event(command), data)
+        # then
+        assert decision(asked[1]) == ("ask", UNVERIFIABLE_REASON)
+
+    @pytest.mark.parametrize("command", ['echo "$(git tag -d v1)"', "echo *"])
+    def test_echo_only_commands_with_expansions_do_not_get_allowed(self, tmp_path, command):
+        """echo만 있는 명령이라도 치환이 있으면 허용하지 않는다."""
+        # given
+        data = tmp_path / "data"
+        run_guard(post_event("git tag v0"), data)
+        # when
+        result = run_guard(pre_event(command), data)
+        # then
+        assert "allow" not in result[1]
+
+    @pytest.mark.parametrize("command", ["git tag -d v1 && echo ok", "git push --force origin v1 && echo ok", "echo ok && gh release delete v1"])
+    def test_destructive_command_followed_by_echo_still_asks_as_destructive(self, tmp_path, command):
+        """되돌릴 수 없는 명령 뒤에 echo가 붙어도 되돌릴 수 없는 작업으로 묻는다."""
+        # given
+        data = tmp_path / "data"
+        for recorded in ("git tag v0", "git push origin --tags", "gh release create v2 --notes x"):
+            run_guard(post_event(recorded), data)
+        # when
+        asked = run_guard(pre_event(command), data)
+        # then
+        assert decision(asked[1]) == ("ask", DESTRUCTIVE_REASON)
+
+    def test_first_time_key_followed_by_echo_still_asks(self, tmp_path):
+        """기록되지 않은 키가 든 명령은 끝에 echo가 붙어도 처음이라 묻는다."""
+        # given
+        data = tmp_path / "data"
+        # when
+        asked = run_guard(pre_event("git tag v1 && echo ok"), data)
+        # then
+        assert decision(asked[1]) == (
+            "ask",
+            "First time in this session: approving it allows git:tag for the rest of the session.",
+        )
+
+    def test_echo_alone_prints_nothing(self, tmp_path):
+        """키가 없는 echo 명령은 두 이벤트 모두 출력과 기록이 없다."""
+        # given
+        data = tmp_path / "data"
+        # when
+        pre = run_guard(pre_event("echo hello"), data)
+        post = run_guard(post_event("echo hello"), data)
+        # then
+        assert pre[:2] == post[:2] == (0, "")
+        assert not (data / "session_approvals.json").exists()
 
 
 class TestHooksRegistration:

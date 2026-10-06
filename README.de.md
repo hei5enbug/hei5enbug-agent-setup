@@ -147,18 +147,22 @@ Nur auf Claude Code lässt ein Sitzungsfreigabe-Wächter, `scripts/session_appro
 wirkende Schreibaktionen einmal pro Sitzung freigeben. Er deckt das Erstellen von Git-Tags, das Pushen von Tags zu
 einem konfigurierten Remote, `gh release create` und `gh release edit` nur mit dem Tag und den Optionen `--title`,
 `--notes`, `--target`, `--generate-notes`, `--notes-from-tag`, `--latest`, `--draft`, `--prerelease`, `--verify-tag`
-sowie MCP-Werkzeuge ab, deren Name ein Schreibverb enthält. Nach einer Freigabe läuft dieselbe Art von Aktion für den
-Rest der Sitzung ohne Rückfrage. Jede Art von Werkzeug oder Befehl wird getrennt freigegeben.
+sowie MCP-Werkzeuge ab, deren Name ein Schreibverb enthält. MCP-Werkzeuge, deren Name mit einem Leseverb wie get,
+list, search, read, fetch, query oder download beginnt, sind nie abgedeckt und behalten den normalen
+Berechtigungsablauf. Nach einer Freigabe läuft dieselbe Art von Aktion für den Rest der Sitzung ohne Rückfrage. Jede
+Art von Werkzeug oder Befehl wird getrennt freigegeben.
 
 Zerstörerische Aktionen fragen immer nach: Force-Pushes, das Löschen von Remote-Branches oder Tags, das Löschen eines
 Tags, `gh release delete`, `gh repo delete` und MCP-Werkzeuge, die löschen, in den Papierkorb verschieben oder
-entfernen. `gh release upload` fragt ebenfalls immer nach, weil es jede lokale Datei veröffentlichen kann. Das gilt
-auch für einen Tag-Push zu einer URL, einem nicht aufgeführten Remote oder mit `--repo`, für einen `--tags`-Push, in
-den ein Branch eingemischt ist, und für `gh release create` oder `gh release edit` mit angehängten Dateien,
-`--notes-file` oder jeder anderen Option. Ein zusammengesetzter Befehl, der etwas enthält, das der Wächter nicht
-prüfen kann, fragt ebenfalls immer nach. Subagenten erben keine Freigaben. Freigaben verfallen mit der Sitzung und
-liegen im Datenverzeichnis des Plugins. Gewöhnliche Pushes und alle anderen Befehle behalten den normalen
-Berechtigungsablauf.
+entfernen, auch wenn der Name mit einem Leseverb beginnt. `gh release upload` fragt ebenfalls immer nach, weil es jede
+lokale Datei veröffentlichen kann. Das gilt auch für einen Tag-Push zu einer URL, einem nicht aufgeführten Remote oder
+mit `--repo`, für einen `--tags`-Push, in den ein Branch eingemischt ist, und für `gh release create` oder
+`gh release edit` mit angehängten Dateien, `--notes-file` oder jeder anderen Option. Ein zusammengesetzter Befehl, der
+etwas enthält, das der Wächter nicht prüfen kann, fragt ebenfalls immer nach. Ein einfaches `echo` mit Klartext nach
+einem abgedeckten Befehl, etwa `git tag v1 && echo done`, hebt die Freigabe nicht auf; ein `echo` mit Variable,
+Befehlsersetzung, Glob, Umleitung oder Pipe fragt weiterhin nach. Subagenten erben keine Freigaben. Freigaben
+verfallen mit der Sitzung und liegen im Datenverzeichnis des Plugins. Gewöhnliche Pushes und alle anderen Befehle
+behalten den normalen Berechtigungsablauf.
 
 Fügen Sie für diese Aktionen keine `permissions.ask`-Regeln hinzu, denn eine Ask-Regel fragt jedes Mal nach, auch nach
 einer Sitzungsfreigabe.
