@@ -127,12 +127,13 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 
 仅限 Claude Code 的会话批准守卫 `scripts/session_approval_guard.py` 让你对某些面向外部的写入操作每个会话只批准一次。覆盖范围包括创建 git 标签、向已配置的远程推送标签、
 仅使用标签和标志 `--title`, `--notes`, `--target`, `--generate-notes`, `--notes-from-tag`, `--latest`, `--draft`,
-`--prerelease`, `--verify-tag` 的 `gh release create` 与 `gh release edit`，以及名称中包含写入动词的 MCP 工具。批准一次后，
-同一类操作在该会话的剩余时间内无需提示即可运行。每种工具或命令类型需要分别批准。
+`--prerelease`, `--verify-tag` 的 `gh release create` 与 `gh release edit`，以及名称中包含写入动词的 MCP 工具。名称以 get、list、search、read、
+fetch、query 或 download 等读取动词开头的 MCP 工具不在覆盖范围内，继续使用常规权限流程。批准一次后，同一类操作在该会话的剩余时间内无需提示即可运行。每种工具或命令类型需要分别批准。
 
-不可撤销的操作始终要求批准：强制推送、删除远程分支或标签、删除标签、`gh release delete`、`gh repo delete`，以及执行删除、移入回收站或移除的 MCP 工具。
+不可撤销的操作始终要求批准：强制推送、删除远程分支或标签、删除标签、`gh release delete`、`gh repo delete`，以及执行删除、移入回收站或移除的 MCP 工具，即使名称以读取动词开头也是如此。
 `gh release upload` 可以发布任意本地文件，因此也始终要求批准。向 URL、未列出的远程或 `--repo` 推送标签，或在 `--tags` 推送中混入分支，以及带有附件、
-`--notes-file` 或任何其他标志的 `gh release create` 和 `gh release edit`，同样始终要求批准。包含守卫无法验证的内容的复合命令也始终要求批准。子 agent 不会继承批准。
+`--notes-file` 或任何其他标志的 `gh release create` 和 `gh release edit`，同样始终要求批准。包含守卫无法验证的内容的复合命令也始终要求批准。
+在已覆盖的命令之后仅输出字面文本的普通 `echo`（例如 `git tag v1 && echo done`）不会妨碍批准生效；带有变量、命令替换、glob、重定向或管道的 `echo` 仍会要求批准。子 agent 不会继承批准。
 批准随会话失效，并保存在插件数据目录中。普通推送和其他命令继续使用常规权限流程。
 
 不要为这些操作添加 `permissions.ask` 规则，因为 ask 规则即使在会话批准之后也会每次都提示。

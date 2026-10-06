@@ -161,16 +161,19 @@ On Claude Code only, a session approval guard, `scripts/session_approval_guard.p
 outward-facing writes once per session. It covers creating git tags; pushing tags to a configured remote;
 `gh release create` and `gh release edit` with only the tag and the flags `--title`, `--notes`, `--target`,
 `--generate-notes`, `--notes-from-tag`, `--latest`, `--draft`, `--prerelease`, `--verify-tag`; and MCP tools whose
-names contain a write verb. After you approve one, the same kind of action runs without a prompt for the rest of that
-session. Each tool or command kind is approved separately.
+names contain a write verb. MCP tools whose names start with a read verb, such as get, list, search, read, fetch,
+query, or download, are never covered and keep the normal permission flow. After you approve one, the same kind of
+action runs without a prompt for the rest of that session. Each tool or command kind is approved separately.
 
 Destructive actions always ask: force pushes, deleting remote branches or tags, deleting a tag, `gh release delete`,
-`gh repo delete`, and MCP tools that delete, trash, or remove. `gh release upload` always asks too, because it can
-publish any local file. So does a tag push to a URL, an unlisted remote, or `--repo`, or one that mixes a branch into
-a `--tags` push, and so does a `gh release create` or `gh release edit` with attached assets, `--notes-file`, or any
-other flag. A compound command that contains anything the guard cannot verify always asks. Subagents never inherit
-approvals. Approvals expire with the session and are stored in the plugin data directory. Ordinary pushes and all
-other commands keep the normal permission flow.
+`gh repo delete`, and MCP tools that delete, trash, or remove, even when the name starts with a read verb.
+`gh release upload` always asks too, because it can publish any local file. So does a tag push to a URL, an unlisted
+remote, or `--repo`, or one that mixes a branch into a `--tags` push, and so does a `gh release create` or
+`gh release edit` with attached assets, `--notes-file`, or any other flag. A compound command that contains anything
+the guard cannot verify always asks. A plain `echo` with literal text after a covered command, such as
+`git tag v1 && echo done`, does not stop the approval from applying; an `echo` with a variable, command substitution,
+glob, redirect, or pipe still asks. Subagents never inherit approvals. Approvals expire with the session and are
+stored in the plugin data directory. Ordinary pushes and all other commands keep the normal permission flow.
 
 Do not add `permissions.ask` rules for these actions, because an ask rule prompts every time even after a session
 approval.

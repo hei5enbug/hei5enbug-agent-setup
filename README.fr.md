@@ -146,19 +146,23 @@ Sur Claude Code uniquement, un garde d'approbations de session, `scripts/session
 d'approuver une seule fois par session certaines écritures visibles de l'extérieur. Il couvre la création de tags git,
 le push de tags vers un remote configuré, `gh release create` et `gh release edit` avec seulement le tag et les
 options `--title`, `--notes`, `--target`, `--generate-notes`, `--notes-from-tag`, `--latest`, `--draft`,
-`--prerelease`, `--verify-tag`, et les outils MCP dont le nom contient un verbe d'écriture. Après une approbation, le
-même type d'action s'exécute sans demande pour le reste de la session. Chaque type d'outil ou de commande est approuvé
-séparément.
+`--prerelease`, `--verify-tag`, et les outils MCP dont le nom contient un verbe d'écriture. Les outils MCP dont le nom
+commence par un verbe de lecture, comme get, list, search, read, fetch, query ou download, ne sont jamais couverts et
+gardent le flux de permissions normal. Après une approbation, le même type d'action s'exécute sans demande pour le
+reste de la session. Chaque type d'outil ou de commande est approuvé séparément.
 
 Les actions destructrices demandent toujours une approbation : les push forcés, la suppression de branches distantes
 ou de tags, la suppression d'un tag, `gh release delete`, `gh repo delete` et les outils MCP qui suppriment, mettent à
-la corbeille ou retirent. `gh release upload` demande aussi toujours une approbation, car il peut publier n'importe
-quel fichier local. Il en va de même pour un push de tag vers une URL, un remote non listé ou avec `--repo`, pour un
-push `--tags` auquel se mêle une branche, et pour un `gh release create` ou `gh release edit` avec des fichiers
-joints, `--notes-file` ou toute autre option. Une commande composée qui contient quelque chose que le garde ne peut
-pas vérifier demande aussi toujours une approbation. Les sous-agents n'héritent d'aucune approbation. Les approbations
-expirent avec la session et sont stockées dans le répertoire de données du plugin. Les push ordinaires et toutes les
-autres commandes gardent le flux de permissions normal.
+la corbeille ou retirent, même si le nom commence par un verbe de lecture. `gh release upload` demande aussi toujours
+une approbation, car il peut publier n'importe quel fichier local. Il en va de même pour un push de tag vers une URL,
+un remote non listé ou avec `--repo`, pour un push `--tags` auquel se mêle une branche, et pour un `gh release create`
+ou `gh release edit` avec des fichiers joints, `--notes-file` ou toute autre option. Une commande composée qui
+contient quelque chose que le garde ne peut pas vérifier demande aussi toujours une approbation. Un simple `echo` avec
+du texte littéral après une commande couverte, par exemple `git tag v1 && echo done`, n'empêche pas l'approbation de
+s'appliquer ; un `echo` avec une variable, une substitution de commande, un glob, une redirection ou un tube demande
+toujours une approbation. Les sous-agents n'héritent d'aucune approbation. Les approbations expirent avec la session
+et sont stockées dans le répertoire de données du plugin. Les push ordinaires et toutes les autres commandes gardent
+le flux de permissions normal.
 
 N'ajoutez pas de règles `permissions.ask` pour ces actions, car une règle ask demande à chaque fois, même après une
 approbation de session.
