@@ -5,11 +5,15 @@ Plan in the main session's plan mode.
 The reviewer invocation governed by [independent model validation](independent-model-validation.md) is an
 exception to the timing and worker rules below.
 
+Before dispatching an agent or model runner, read [shared model routing](model-routing.md), following the
+instruction-reuse rules in [work efficiency](work-efficiency.md). After a main-model or profile switch or
+session resume, apply its effective-settings checks before dispatch.
+
 ## Built-in agents
 
 - Never use the built-in `default` or `explorer` agents. Always pass `agent_type`, because an omitted type runs
   `default`.
-- The session hook installs the plugin's `scout` and `worker` roles in `~/.codex/agents/` when they are absent,
+- The session hook installs the plugin's `scout`, `worker`, and `researcher` roles in `~/.codex/agents/` when absent,
   replaces only an unmodified copy from an earlier plugin version, and never overwrites a file the user changed.
   They become available in the next Codex session.
 - The plugin's agent guard hook denies an omitted type, `default`, `explorer`, and every type without a role
@@ -26,13 +30,22 @@ exception to the timing and worker rules below.
 - Treat results as leads. Verify critical claims in the main session before planning or deciding.
 - If `scout` is unavailable, or its role file in the Codex agents directory sets another model or effort,
   investigate in the main session.
+- For bounded public research, use `researcher` only when public search and fetch tools are exposed. Pass
+  `gpt-6-luna` and `xhigh` explicitly on every researcher spawn; its role file sets no model. Before relying on its result,
+  inspect the non-secret researcher role/config settings and verify the host rollout record reports
+  `gpt-6-luna` and `xhigh`. Otherwise, continue in the main session.
 
 ## Skill workers
 
 - When a skill asks for an independent read-only worker, such as a review persona, a research ticket, or a
-  grader, use `scout` with the model and effort above and give it the role's instructions and output
-  contract. The main session writes any file the role produces. Run a role that needs web access or edits in
-  the main session.
+  grader, use `scout` with the pinned settings above only when they match the role's requirements. For Skill
+  Builder evaluation, use the required participant table in its evaluation adapter; target-skill metadata does
+  not override it. When no native role matches, use a verified Skill Builder-approved runner or its
+  unavailable-capability path. Give the role its instructions and output contract. Do not change the production
+  scout settings. The main session writes any file the role produces. For bounded public research, use `researcher`
+  only when the skill's contract and any
+  evaluation settings permit its verified profile and public tools are available. Private or authenticated
+  remote access and all edits stay in the main session.
 - When a skill asks for a worker that writes trial outputs, run a separate `codex exec` process with the model
   and effort that the skill pins instead of a subagent.
 

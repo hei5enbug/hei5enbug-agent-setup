@@ -24,6 +24,11 @@ an accepted implementation open; the existing independent-review approval contra
 
 ## Check evidence
 
+For instruction reads, reuse unchanged content that is still available in the current context. Read the
+affected source again when relevant inputs change or its needed content is no longer available. A new agent,
+restart, or compaction does not prove that earlier content remains available. Preserve required startup
+loading and follow only the selected action's references; do not create a global never-reread cache.
+
 Keep a compact record of each check's scope, command, result, and relevant input/environment state. Accept
 valid worker evidence without repeating the same check. Reuse a result only while its covered source,
 dependencies, fixtures, configuration, and toolchain remain unchanged. Invalidate affected results when those

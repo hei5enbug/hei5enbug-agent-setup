@@ -13,6 +13,7 @@ from pathlib import Path
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 SKILL = SKILL_ROOT / "SKILL.md"
 EXECUTION_METHODS = SKILL_ROOT / "references/execution-methods.md"
+MODEL_ROUTING = SKILL_ROOT.parents[1] / "instructions/model-routing.md"
 
 
 def adapter_section() -> str:
@@ -108,6 +109,42 @@ class ImplementationWorkerScopeTest(unittest.TestCase):
 
         # Then
         self.assertIn(pointer, skill)
+
+    def test_Skill_Builder_평가표가_일반_scout_라우팅보다_우선한다(self):
+        """Skill Builder 평가자는 고정된 모델 표를 따르고 scout 설정 불일치는 검증 runner나 미지원 경로로 처리한다."""
+        # Given
+        section = " ".join(adapter_section().split())
+
+        # When
+        precedence = "The Skill Builder evaluation contract takes precedence over generic host skill-worker routing."
+        verified_runner = "a Skill Builder-approved runner whose actual model and effort can be verified"
+
+        # Then
+        self.assertIn("Evaluation participants always use the table below.", section)
+        self.assertIn(precedence, section)
+        self.assertIn("Run a native role only when its effective settings match the table below.", section)
+        self.assertIn(verified_runner, section)
+        self.assertIn("follow the unavailable-capability path", section)
+        self.assertIn("Do not route an evaluation participant to a lower-effort scout", section)
+        self.assertNotIn("target-skill metadata", section)
+
+    def test_승인된_비교만_격리된_평가에서_고정_설정_하나를_바꾼다(self):
+        """일반 비교는 모델과 사고 강도를 고정하고 승인된 한 설정 비교만 임시 평가 공간에서 허용한다."""
+        # Given
+        routing = " ".join(MODEL_ROUTING.read_text(encoding="utf-8").split())
+        methods = " ".join(EXECUTION_METHODS.read_text(encoding="utf-8").split())
+
+        # When
+        ordinary = "Keep the model and settings the same on both sides of an ordinary method comparison"
+        exception = "Only a specifically approved model or effort experiment may vary its one frozen candidate setting"
+
+        # Then
+        self.assertIn(ordinary, methods)
+        self.assertIn(exception, methods)
+        self.assertIn("in the disposable evaluation workspace", methods)
+        self.assertIn("It must not change production settings or promote trial output to the repository.", methods)
+        self.assertIn("Ordinary method comparisons keep model and effort fixed on both sides.", routing)
+        self.assertIn("A specifically approved model or effort comparison may vary only its one frozen candidate setting", routing)
 
 
 if __name__ == "__main__":

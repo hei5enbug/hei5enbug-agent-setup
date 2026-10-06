@@ -3,6 +3,10 @@
 The reviewer invocation governed by [independent model validation](independent-model-validation.md) is an
 exception to the timing, agent-selection, and worker rules below.
 
+Before dispatching an agent or model runner, read [shared model routing](model-routing.md), following the
+instruction-reuse rules in [work efficiency](work-efficiency.md). After a main-model or profile switch or
+session resume, apply its effective-settings checks before dispatch.
+
 ## Built-in subagents
 
 - Never use a built-in subagent, including `general-purpose`, `Explore`, `Plan`, `claude`, or a fork. The
@@ -21,13 +25,22 @@ exception to the timing, agent-selection, and worker rules below.
 - Treat results as leads. Verify critical claims in the main conversation before planning or deciding.
 - The plugin bundles `hei5enbug-agent-setup:scout`; if it is unavailable, investigate in the main conversation.
 - Its definition pins its model. Never pass a per-invocation model, because that overrides the definition.
+- For bounded public research, use `hei5enbug-agent-setup:researcher` only when public search and fetch tools
+  are available. Never pass a per-invocation model; its definition pins `claude-sonnet-5-5` and `medium`.
+  Verify that definition, effective non-secret settings, and the host subagent record before relying on its
+  result. Otherwise, continue in the main conversation.
 
 ## Skill workers
 
 - When a skill asks for an independent read-only worker, such as a review persona, a research ticket, or a
-  grader, use `hei5enbug-agent-setup:scout` and give it the role's instructions and output contract. The main
-  conversation writes any file the role produces. Run a role that needs web access or edits in the main
-  conversation.
+  grader, use `hei5enbug-agent-setup:scout` only when its effective settings match the role's requirements. For
+  Skill Builder evaluation, use the required participant table in its evaluation adapter; target-skill metadata
+  does not override it. When no native role matches, use a verified Skill Builder-approved runner or its
+  unavailable-capability path. Give the role its instructions and output contract. Do not lower the required
+  effort or change production scout settings. The main conversation writes any file the role produces. For
+  bounded public research, use `researcher` only when the
+  skill's contract and any evaluation settings permit its verified profile and public tools are available.
+  Private or authenticated remote access and all edits stay in the main conversation.
 - When a skill asks for a worker that writes trial outputs, run a separate `claude -p` process with the model
   and effort that the skill pins instead of a subagent.
 
@@ -45,6 +58,8 @@ adds only the Claude Code worker integration.
   limits, and any substitution or fallback warning. Never change user settings.
 - Claude Code can reload settings during a session, and a forced subagent model overrides the definition.
   Recheck these inputs before every follow-up that carries implementation work.
+- Selecting GPT as Claude Code's main model does not change this host, its tools, permissions, agent definitions,
+  or execution rules. Preserve the worker's pinned model and effort.
 - Accept the host's subagent record, such as `/tasks` or the subagent transcript, as evidence when it names
   `claude-sonnet-5-5` as the actual model and `high` as the effort, and configuration cannot lower that
   effort. Provider-internal reasoning telemetry is not required. A different recorded model, a cap below
