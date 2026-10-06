@@ -17,6 +17,7 @@ Claude Code `2.1.291`은 네이티브 텍스트·도구 스트림과 표시된 �
 
 [검증 기록](model-routing-validation.ko.md)에 최신 무요청 호스트 검사, 개발 검사, 반복 토큰 측정과
 남은 실환경 요구 사항을 정리했다.
+상세 어댑터 계약과 필수 실환경 관측은 [남은 GPT 연결 작업](claude-gpt-remaining.ko.md)에 있다.
 
 ## 명시적인 처리기 설정
 
