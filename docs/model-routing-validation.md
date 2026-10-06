@@ -2,6 +2,7 @@
 
 Validated on 2026-10-07. [Machine-readable receipts](model-routing-validation.json) preserve source hashes,
 actual model settings, outputs, disjoint usage totals, and the unresolved acceptance criteria.
+Follow [remaining required work](model-routing-remaining.md) for the next steps and acceptance conditions.
 
 ## Development checks
 

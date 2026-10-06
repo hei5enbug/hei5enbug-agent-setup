@@ -5,6 +5,7 @@
 
 2026-10-07에 검증했다. [기계 판독용 기록](model-routing-validation.json)에 소스 해시, 실제 모델 설정,
 출력, 중복을 제외한 사용량과 미완료 인수 기준을 보존했다.
+다음 단계와 인수 조건은 [남은 필수 작업](model-routing-remaining.ko.md)을 따른다.
 
 ## 개발 검사
 
