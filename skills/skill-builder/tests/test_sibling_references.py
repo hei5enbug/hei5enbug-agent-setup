@@ -15,7 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SKILL_ROOTS = ("skills", "standalone-skills")
 
 # `../<skill-name>/<path>` written in backticks, a Markdown link, or plain prose.
-SIBLING_PATTERN = re.compile(r"\.\./([A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+)")
+SIBLING_PATTERN = re.compile(r"(?<!\.\./)\.\./([A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]+)+)")
 # Host installation roots a portable skill must never hardcode.
 HOST_ROOT_PATTERN = re.compile(r"~/\.(claude|codex|gjc)/|~/\.config/opencode/")
 
@@ -37,6 +37,27 @@ def documents(skill: Path) -> list[Path]:
 class SiblingReferenceTest(unittest.TestCase):
     def test_repository_has_skills_to_check(self):
         self.assertGreaterEqual(len(skill_dirs()), 2)
+
+    def test_한단계_상위의_형제_참조만_찾고_저장소_문서_링크는_제외한다(self):
+        """한 단계 상위의 형제 스킬 경로는 찾고 두세 단계 상위의 저장소 문서 경로는 제외한다."""
+        # Given
+        references = "\n".join(
+            (
+                "`../docs-rewrite/references/patterns.md`",
+                "`../../instructions/work-efficiency.md`",
+                "`../../../instructions/model-routing.md`",
+            )
+        )
+        sibling = (
+            REPO_ROOT / "skills" / "technical-design-writer" / ".." / "docs-rewrite/references/patterns.md"
+        ).resolve()
+
+        # When
+        matches = [match.group(1) for match in SIBLING_PATTERN.finditer(references)]
+
+        # Then
+        self.assertEqual(matches, ["docs-rewrite/references/patterns.md"])
+        self.assertTrue(sibling.is_file())
 
     def test_evaluation_inputs_are_not_runtime_instruction_documents(self):
         skill = REPO_ROOT / "skills" / "document-to-confluence"

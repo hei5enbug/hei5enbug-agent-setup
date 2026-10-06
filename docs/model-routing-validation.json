@@ -1,0 +1,543 @@
+{
+  "date": "2026-10-07",
+  "source_baseline": "ef4df5c9827eade1002bb3e0b246a4f63e30ed5d",
+  "model_catalogs": {
+    "claude": "https://platform.claude.com/docs/en/models/overview",
+    "openai": "https://developers.openai.com/api/docs/models",
+    "codex_cli": "0.160.1",
+    "pins_unchanged": true
+  },
+  "host": {
+    "build": "2.1.291",
+    "previous_build": "2.1.288",
+    "installed_declarations_sha256": "c05419d753bc81d991ddec4b66af17a9172f498e59d28fad07a8e676635c07ce",
+    "tool_info_fields": [
+      "name",
+      "description",
+      "mcp"
+    ],
+    "tool_describe_fields": [
+      "tool",
+      "description",
+      "isDeferred",
+      "provider"
+    ],
+    "offered_input_schemas": "absent",
+    "resumed_frozen_system_snapshot": "unverified",
+    "native_route": "disabled before profile/network/inference access",
+    "probe_seconds": 1.796,
+    "no_request_smoke_tests_passed": 1,
+    "native_mod_tests_passed": 6
+  },
+  "checks": {
+    "python_collected_items": 21552,
+    "python_full_suite_exit_code": 0,
+    "orca_cli": "available; no Orca-related skips",
+    "skill_validators_passed": 11,
+    "node_tests_passed": 10,
+    "lock_check": "passed",
+    "manifest": "passed with existing root-context and translation-frontmatter warnings",
+    "post_document_contracts": {
+      "total_passed": 63,
+      "unchanged_checks_reused": 55,
+      "final_mirror_tests_passed": 8,
+      "final_mirror_subtests_passed": 175
+    },
+    "startup_bytes": {
+      "codex": 7668,
+      "claude": 7747
+    },
+    "local_links_checked": 140
+  },
+  "batch": {
+    "starts": 6,
+    "cases": 2,
+    "elapsed_through_assessment_seconds": 514.1916749477386,
+    "status": "closed",
+    "gpt_connection_provider_requests": 0,
+    "decision": "inconclusive; no optimization adopted"
+  },
+  "trial_settings": {
+    "host": "Codex CLI",
+    "model": "gpt-6-luna",
+    "effort": "xhigh",
+    "access": "existing ChatGPT subscription",
+    "sandbox": "read-only",
+    "approval_policy": "never",
+    "web_search": "disabled",
+    "authentication_changed": false,
+    "extra_billing_enabled": false
+  },
+  "frozen_case": {
+    "question": "Does the instruction-reuse paragraph reduce recurring tokens while preserving routing and resume/source-change checks across a three-turn coordinator decision workflow?",
+    "cases": 2,
+    "turns_per_side": 2,
+    "max_model_starts": 6,
+    "deadline_seconds": 900,
+    "model": "gpt-6-luna",
+    "effort": "xhigh",
+    "host": "Codex CLI 0.160.1",
+    "access": "existing ChatGPT subscription",
+    "sandbox": "read-only",
+    "methods": {
+      "baseline": "Current routing contracts with only the instruction-reuse paragraph absent from work-efficiency.",
+      "withrule": "Current routing contracts including the instruction-reuse paragraph."
+    },
+    "fixed_sources": {
+      "baseline": {
+        "role-settings.json": "04646eff0630cd43efbbeb0964a7af466d146cc738ef84ab079e208f64978132",
+        "instructions/work-efficiency.md": "9873c41a4c7c8ecadef024703cf1822e0ad17c26da159bf8fdbc47bfe275b2d7",
+        "instructions/model-routing.md": "484f2f3e60eda1a4111447380cc05f9506b32a021aab9a0e6fedabbca9a7720e",
+        "instructions/codex-agents.md": "6a34252bccad0b465f835d745d8fa54c3ddc54da92bb18eb9f0878240f3cb947"
+      },
+      "withrule": {
+        "role-settings.json": "04646eff0630cd43efbbeb0964a7af466d146cc738ef84ab079e208f64978132",
+        "instructions/work-efficiency.md": "c220c5f3c4fb7e20ba612036c10e6be9909fa89a3e554a341ac3b1fa84cc42ff",
+        "instructions/model-routing.md": "484f2f3e60eda1a4111447380cc05f9506b32a021aab9a0e6fedabbca9a7720e",
+        "instructions/codex-agents.md": "6a34252bccad0b465f835d745d8fa54c3ddc54da92bb18eb9f0878240f3cb947"
+      }
+    },
+    "coverage": "Entire Codex coordinator workflow including startup/core/catalog context, user briefs, every tool/read result and final acceptance. No workers, retries, provider helper, or repository implementation are part of this workload. Setup/grading are evaluation overhead. Native Claude and full worker integration remain outside this workload.",
+    "current_case": 2,
+    "correction": "The first pair is excluded because baseline read installed-plugin policy instead of the frozen fixture before correcting its cwd. Absolute fixture locations and strict response schemas now isolate the source inputs. Counters and deadline are unchanged.",
+    "stages": [
+      "initial ready-worker decision and evidence acceptance",
+      "resume plus changed effective settings, instruction reuse and combined acceptance"
+    ]
+  },
+  "runs": [
+    {
+      "case": 1,
+      "method": "baseline",
+      "accepted_for_comparison": false,
+      "excluded_reason": "Baseline mixed installed-plugin sources with the frozen fixture; both first starts are excluded.",
+      "session_id": "01a1137b-6107-76f2-8a5d-a5241aad565a",
+      "model_contexts": [
+        {
+          "model": "gpt-6-luna",
+          "effort": "xhigh",
+          "sandbox_policy": {
+            "type": "read-only"
+          },
+          "approval_policy": "never"
+        }
+      ],
+      "usage": {
+        "input_tokens": 174536,
+        "cached_input_tokens": 148224,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2924,
+        "reasoning_output_tokens": 2263,
+        "total_tokens": 177460
+      },
+      "nonoverlapping_provider_responses": 9,
+      "execution_seconds": 37.707555055618286,
+      "stage_seconds": [
+        37.707555055618286
+      ],
+      "outputs": [
+        {
+          "stage": 1,
+          "output": {
+            "task": "first",
+            "owner": "worker",
+            "model": "gpt-6-luna",
+            "effort": "xhigh",
+            "settings_verified": true
+          },
+          "sha256": "52af254581822085f6f704399f07e3f096d351a16d9c51007b24bf2853cb6623"
+        }
+      ],
+      "tool_commands": [
+        {
+          "stage": 1,
+          "command": "/bin/zsh -lc 'cat instructions/codex-agents.md && cat instructions/work-efficiency.md && cat role-settings.json'",
+          "exit_code": 1,
+          "output_bytes": 4764
+        },
+        {
+          "stage": 1,
+          "command": "/bin/zsh -lc \"pwd && rg --files -g 'codex-agents.md' -g 'work-efficiency.md' -g 'role-settings.json' -g '*host*' -g '*session*' .\"",
+          "exit_code": 0,
+          "output_bytes": 201
+        },
+        {
+          "stage": 1,
+          "command": "/bin/zsh -lc 'cat instructions/codex-agents.md && cat instructions/work-efficiency.md && cat role-settings.json'",
+          "exit_code": 0,
+          "output_bytes": 12195
+        },
+        {
+          "stage": 1,
+          "command": "/bin/zsh -lc 'cat instructions/model-routing.md'",
+          "exit_code": 0,
+          "output_bytes": 4789
+        },
+        {
+          "stage": 1,
+          "command": "/bin/zsh -lc 'rg --files instructions .'",
+          "exit_code": 0,
+          "output_bytes": 209
+        }
+      ]
+    },
+    {
+      "case": 1,
+      "method": "withrule",
+      "accepted_for_comparison": false,
+      "excluded_reason": "Baseline mixed installed-plugin sources with the frozen fixture; both first starts are excluded.",
+      "session_id": "01a1137c-e5c7-7ea3-829b-a13933dfe782",
+      "model_contexts": [
+        {
+          "model": "gpt-6-luna",
+          "effort": "xhigh",
+          "sandbox_policy": {
+            "type": "read-only"
+          },
+          "approval_policy": "never"
+        }
+      ],
+      "usage": {
+        "input_tokens": 124157,
+        "cached_input_tokens": 104704,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2496,
+        "reasoning_output_tokens": 2099,
+        "total_tokens": 126653
+      },
+      "nonoverlapping_provider_responses": 7,
+      "execution_seconds": 61.982540130615234,
+      "stage_seconds": [
+        61.982540130615234
+      ],
+      "outputs": [
+        {
+          "stage": 1,
+          "output": {
+            "task": "first",
+            "owner": "worker",
+            "model": "gpt-6-luna",
+            "effort": "xhigh",
+            "settings_verified": true
+          },
+          "sha256": "628802207fdbd5db87080bc0e2d3aab2a6a6900b89bc818549c559931b2268ff"
+        }
+      ],
+      "tool_commands": [
+        {
+          "stage": 1,
+          "command": "/bin/zsh -lc 'cat /Users/byoungmin/.codex/plugins/cache/hei5enbug/hei5enbug-agent-setup/2.0.0/instructions/codex-agents.md && cat /Users/byoungmin/.codex/plugins/cache/hei5enbug/hei5enbug-agent-setup/2.0.0/instructions/work-efficiency.md && cat role-settings.json'",
+          "exit_code": 1,
+          "output_bytes": 4840
+        },
+        {
+          "stage": 1,
+          "command": "/bin/zsh -lc \"pwd && rg --files -g 'work-efficiency.md' -g 'role-settings.json' -g 'independent-model-validation.md' . /Users/byoungmin/.codex/plugins/cache/hei5enbug/hei5enbug-agent-setup/2.0.0 2>/dev/null\"",
+          "exit_code": 0,
+          "output_bytes": 291
+        },
+        {
+          "stage": 1,
+          "command": "/bin/zsh -lc 'cat instructions/work-efficiency.md && cat role-settings.json'",
+          "exit_code": 0,
+          "output_bytes": 6705
+        }
+      ]
+    },
+    {
+      "case": 2,
+      "method": "baseline",
+      "accepted_for_comparison": true,
+      "excluded_reason": null,
+      "session_id": "01a1137e-9289-7402-b2c4-aae4556352c3",
+      "model_contexts": [
+        {
+          "model": "gpt-6-luna",
+          "effort": "xhigh",
+          "sandbox_policy": {
+            "type": "read-only"
+          },
+          "approval_policy": "never"
+        },
+        {
+          "model": "gpt-6-luna",
+          "effort": "xhigh",
+          "sandbox_policy": {
+            "type": "read-only"
+          },
+          "approval_policy": "never"
+        }
+      ],
+      "usage": {
+        "input_tokens": 250391,
+        "cached_input_tokens": 195328,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4040,
+        "reasoning_output_tokens": 3278,
+        "total_tokens": 254431
+      },
+      "nonoverlapping_provider_responses": 11,
+      "execution_seconds": 64.33867383003235,
+      "stage_seconds": [
+        27.07955503463745,
+        37.2591187953949
+      ],
+      "outputs": [
+        {
+          "stage": 1,
+          "output": {
+            "task": "first",
+            "owner": "worker",
+            "model": "gpt-6-luna",
+            "effort": "xhigh",
+            "settings_verified": true
+          },
+          "sha256": "628802207fdbd5db87080bc0e2d3aab2a6a6900b89bc818549c559931b2268ff"
+        },
+        {
+          "stage": 3,
+          "output": {
+            "task": "changed_settings",
+            "owner": "main",
+            "model": "gpt-6-luna",
+            "effort": "xhigh",
+            "settings_verified": false,
+            "prior_decisions_valid": false
+          },
+          "sha256": "244f78ed39cd84f6869ea061fa8eeb446766ac3c49939fbd4f82fb34958047c3"
+        }
+      ],
+      "tool_commands": [
+        {
+          "stage": 1,
+          "command": "/bin/zsh -lc \"rg --files -g 'codex-agents.md' -g 'work-efficiency.md' -g 'role-settings.json' -g '*routing*'\"",
+          "exit_code": 0,
+          "output_bytes": 110
+        },
+        {
+          "stage": 1,
+          "command": "/bin/zsh -lc 'cat instructions/codex-agents.md instructions/work-efficiency.md instructions/model-routing.md role-settings.json'",
+          "exit_code": 0,
+          "output_bytes": 16984
+        },
+        {
+          "stage": 3,
+          "command": "/bin/zsh -lc 'cat role-settings.json'",
+          "exit_code": 0,
+          "output_bytes": 213
+        }
+      ]
+    },
+    {
+      "case": 2,
+      "method": "withrule",
+      "accepted_for_comparison": true,
+      "excluded_reason": null,
+      "session_id": "01a1137f-3cb3-7953-89ff-41144e8441fb",
+      "model_contexts": [
+        {
+          "model": "gpt-6-luna",
+          "effort": "xhigh",
+          "sandbox_policy": {
+            "type": "read-only"
+          },
+          "approval_policy": "never"
+        },
+        {
+          "model": "gpt-6-luna",
+          "effort": "xhigh",
+          "sandbox_policy": {
+            "type": "read-only"
+          },
+          "approval_policy": "never"
+        }
+      ],
+      "usage": {
+        "input_tokens": 231571,
+        "cached_input_tokens": 180992,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3849,
+        "reasoning_output_tokens": 3097,
+        "total_tokens": 235420
+      },
+      "nonoverlapping_provider_responses": 11,
+      "execution_seconds": 49.14454507827759,
+      "stage_seconds": [
+        29.759933948516846,
+        19.384611129760742
+      ],
+      "outputs": [
+        {
+          "stage": 1,
+          "output": {
+            "task": "first",
+            "owner": "worker",
+            "model": "gpt-6-luna",
+            "effort": "xhigh",
+            "settings_verified": true
+          },
+          "sha256": "628802207fdbd5db87080bc0e2d3aab2a6a6900b89bc818549c559931b2268ff"
+        },
+        {
+          "stage": 3,
+          "output": {
+            "task": "changed_settings",
+            "owner": "main",
+            "model": "gpt-6-luna",
+            "effort": "xhigh",
+            "settings_verified": false,
+            "prior_decisions_valid": false
+          },
+          "sha256": "244f78ed39cd84f6869ea061fa8eeb446766ac3c49939fbd4f82fb34958047c3"
+        }
+      ],
+      "tool_commands": [
+        {
+          "stage": 1,
+          "command": "/bin/zsh -lc 'rg --files'",
+          "exit_code": 0,
+          "output_bytes": 110
+        },
+        {
+          "stage": 1,
+          "command": "/bin/zsh -lc 'cat \"instructions/codex-agents.md\"'",
+          "exit_code": 0,
+          "output_bytes": 5909
+        },
+        {
+          "stage": 1,
+          "command": "/bin/zsh -lc 'cat \"role-settings.json\"'",
+          "exit_code": 0,
+          "output_bytes": 211
+        },
+        {
+          "stage": 1,
+          "command": "/bin/zsh -lc 'cat \"instructions/work-efficiency.md\"'",
+          "exit_code": 0,
+          "output_bytes": 6494
+        },
+        {
+          "stage": 1,
+          "command": "/bin/zsh -lc 'cat \"instructions/model-routing.md\"'",
+          "exit_code": 0,
+          "output_bytes": 4789
+        },
+        {
+          "stage": 3,
+          "command": "/bin/zsh -lc 'cat role-settings.json'",
+          "exit_code": 0,
+          "output_bytes": 213
+        }
+      ]
+    }
+  ],
+  "grading": [
+    {
+      "method": "baseline",
+      "expectations": [
+        {
+          "text": "Initial worker uses pinned model and effort",
+          "passed": true,
+          "evidence": "Saved outputs, command events and actual host turn_context records."
+        },
+        {
+          "text": "Initial configuration is verified",
+          "passed": true,
+          "evidence": "Saved outputs, command events and actual host turn_context records."
+        },
+        {
+          "text": "Changed effective model causes main fallback without pin changes",
+          "passed": true,
+          "evidence": "Saved outputs, command events and actual host turn_context records."
+        },
+        {
+          "text": "Resumed turn reads current configuration",
+          "passed": true,
+          "evidence": "Saved outputs, command events and actual host turn_context records."
+        },
+        {
+          "text": "Every recorded turn retains evaluation pins and read-only permissions",
+          "passed": true,
+          "evidence": "Saved outputs, command events and actual host turn_context records."
+        }
+      ],
+      "summary": {
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "pass_rate": 1.0
+      }
+    },
+    {
+      "method": "withrule",
+      "expectations": [
+        {
+          "text": "Initial worker uses pinned model and effort",
+          "passed": true,
+          "evidence": "Saved outputs, command events and actual host turn_context records."
+        },
+        {
+          "text": "Initial configuration is verified",
+          "passed": true,
+          "evidence": "Saved outputs, command events and actual host turn_context records."
+        },
+        {
+          "text": "Changed effective model causes main fallback without pin changes",
+          "passed": true,
+          "evidence": "Saved outputs, command events and actual host turn_context records."
+        },
+        {
+          "text": "Resumed turn reads current configuration",
+          "passed": true,
+          "evidence": "Saved outputs, command events and actual host turn_context records."
+        },
+        {
+          "text": "Every recorded turn retains evaluation pins and read-only permissions",
+          "passed": true,
+          "evidence": "Saved outputs, command events and actual host turn_context records."
+        }
+      ],
+      "summary": {
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "pass_rate": 1.0
+      }
+    }
+  ],
+  "comparison": {
+    "baseline_total_tokens": 254431,
+    "candidate_total_tokens": 235420,
+    "delta_tokens": -19011,
+    "delta_percent": -7.472,
+    "baseline_execution_seconds": 64.339,
+    "candidate_execution_seconds": 49.145,
+    "coverage": "All host-reported input/output across the two-turn coordinator fixture, including core/catalog context, briefing, read results, reasoning and final routing acceptance. There are no trial workers or helper requests. Setup/grading and idle gaps between launches are evaluation overhead. Worker implementation/integration and native Claude costs are outside this workload.",
+    "counting": "Deduplicate response IDs in each host rollout; sum per-response usage once. Resume CLI usage is cumulative and must not be added to initial CLI usage. Cached input is included in input; reasoning output is included in output.",
+    "decision": "inconclusive; no optimization adopted",
+    "limitations": [
+      "Both methods already reused unchanged routing instructions on resume, so the measured difference does not establish a paragraph-driven loading reduction.",
+      "One valid pair cannot resolve execution variance or native worker integration costs.",
+      "The prior_decisions_valid field has ambiguous historical/current scope; it is not acceptance evidence."
+    ]
+  },
+  "remaining": [
+    "A9: matched recurring-token evidence for a discriminating workload",
+    "A10: supported native Claude GPT picker/backend and session profile",
+    "A11: essential live GPT compatibility evidence"
+  ],
+  "tested_source_sha256": {
+    "scripts/session_context.py": "150882437814c69af1a05b59a3945ebc675803317538e0438434691c9bf98971",
+    "scripts/claude_gpt.py": "3079a974a60211f35f481fa1b71deaa6515b51ae86ebee0b80044331b7676af5",
+    "hooks/claude-gpt/register.js": "18d8b7fb67a35ffef8e50c0404b5bddc030a60ea4c9096fc8d73d8e2bce15732",
+    "hooks/claude-gpt/protocol.js": "962c83670e9cd0919fd88d608e39bfdd902e6efd2bdb27eb7f3699098b269ae2",
+    "instructions/model-routing.md": "484f2f3e60eda1a4111447380cc05f9506b32a021aab9a0e6fedabbca9a7720e",
+    "instructions/work-efficiency.md": "c220c5f3c4fb7e20ba612036c10e6be9909fa89a3e554a341ac3b1fa84cc42ff",
+    "instructions/codex-agents.md": "6a34252bccad0b465f835d745d8fa54c3ddc54da92bb18eb9f0878240f3cb947",
+    "instructions/claude-agents.md": "ed79e42e0fe8d87941bcee93523b5fec7c8a7854b28dac7ed8dedb396f056ed5",
+    "skills/skill-builder/tests/test_sibling_references.py": "01170a9cd1b0eb6b1eb35bc4287e8f35b5f8d6aa45e72f2f381a9c5a0054cd42",
+    "tests/test_model_pins.py": "ec7b730b0235ae5d72a193d7963e11707e837cf9755de7db0375215dc8dc95e3",
+    "pyproject.toml": "1c1fd137ea7aa721f5775f4ece6b0dd0783c93e7e110abe9cccf0cecfc3ba2de",
+    "uv.lock": "5fc23100eb64eba520512e923fc43972ccc53303f209512c5c730d017c2d9872"
+  }
+}

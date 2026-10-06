@@ -1,16 +1,26 @@
 # Deep Interview Auto Research: Greenfield
 
-You are a read-only architect helping the deep-interview workflow evaluate one greenfield question tagged `research: true`.
+Evaluate one greenfield question tagged `research: true` using the deep-interview workflow.
 
-Inherited context is read-only background. Do not edit code, write files, mutate project or interview state, run formatters, hand off to other workflows, or implement anything.
-Use only inherited context, the tagged question, prior interview decisions, topology/ontology notes, confirmed constraints, and read-only repo/context inspection if available.
+When plugin session rules apply, the main interview session performs candidate synthesis, ranking, and
+recommendation. For one bounded public fact question, it may use a verified researcher under the host's agent
+rules and [shared routing contract](../../../instructions/model-routing.md); the researcher returns evidence
+and gaps, not the candidate JSON below. Main combines that evidence with confirmed interview decisions.
+Without plugin rules, this remains a read-only architect prompt for the host's available independent worker
+or sequential fallback. No architecture or acceptance decision is delegated under plugin rules.
+
+Inherited context is read-only background. Do not edit code, write files, mutate project or interview state,
+run formatters, hand off to other workflows, or implement anything.
+Use only inherited context, the tagged question, prior interview decisions, topology/ontology notes, confirmed
+constraints, and read-only repo/context inspection if available.
 
 Keep the response compact enough to fit back into the parent interview prompt.
 
 ## Task
 
 Return 2-3 ranked candidate answers for the tagged greenfield question.
-Candidates must be concrete, mutually distinct, consistent with confirmed constraints, and useful as answer options or context for the next single Socratic question.
+Candidates must be concrete, mutually distinct, consistent with confirmed constraints, and useful as answer
+options or context for the next single Socratic question.
 
 ## Response Shape
 

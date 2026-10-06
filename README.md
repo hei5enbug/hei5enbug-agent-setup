@@ -13,7 +13,8 @@ plugin bundle live under `standalone-skills/`. The same `SKILL.md` works unmodif
 
 - Claude Code
 - Codex
-- OpenCode (via the [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) plugin)
+
+OpenCode configuration remains source material only; this plugin does not install, maintain, or execute it.
 
 ## Structure
 
@@ -30,6 +31,8 @@ hei5enbug-agent-setup/
 ├── CLAUDE.md
 ├── CLAUDE.ko.md
 ├── hooks/hooks.json
+├── hooks/claude-gpt/
+├── config/claude-gpt-hooks.json
 ├── instructions/
 │   ├── claude-agents.md
 │   ├── codex-agents.md
@@ -38,6 +41,7 @@ hei5enbug-agent-setup/
 │   ├── implementation-execution.md
 │   ├── implementation-planning.md
 │   ├── independent-model-validation.md
+│   ├── model-routing.md
 │   ├── protected-values.md
 │   ├── services.md
 │   └── session/
@@ -46,6 +50,7 @@ hei5enbug-agent-setup/
 │       └── common.md
 ├── scripts/
 │   ├── agent_guard.py
+│   ├── claude_gpt.py
 │   ├── datagrip_guard.py
 │   ├── language_guard.py
 │   ├── session_approval_guard.py
@@ -55,11 +60,14 @@ hei5enbug-agent-setup/
 ├── pyproject.toml
 ├── agents/
 │   ├── ko/
+│   │   ├── researcher.ko.md
 │   │   ├── scout.ko.md
 │   │   └── worker.ko.md
+│   ├── researcher.md
 │   ├── scout.md
 │   └── worker.md
 ├── standalone-agents/
+│   ├── codex-researcher.toml
 │   ├── codex-scout.toml
 │   └── codex-worker.toml
 ├── standalone-skills/
@@ -82,13 +90,15 @@ package the same `skills/` directory for Codex and Claude Code without copying s
 The `standalone-skills/` directory is not included in either plugin's skill discovery path.
 
 The `agents/` directory ships with the Claude Code plugin, so installing the bundle adds the
-`hei5enbug-agent-setup:scout` and `hei5enbug-agent-setup:worker` subagents. No manual copy is needed. The manifest
-lists only these two English definitions, so the Korean mirrors in `agents/ko/` are not registered as subagents.
+`hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:worker`, and `hei5enbug-agent-setup:researcher` subagents.
+No manual copy is needed. The manifest lists only these three English definitions, so the Korean mirrors in
+`agents/ko/` are not registered as subagents.
 
 Codex discovers subagents only in `~/.codex/agents/` and `.codex/agents/`, so a plugin cannot register one.
-Instead, the session hook copies `standalone-agents/codex-scout.toml` and `standalone-agents/codex-worker.toml` to
-`~/.codex/agents/scout.toml` and `~/.codex/agents/worker.toml` when each file is absent. They define `scout` and
-`worker` agents, named as on Claude Code, with a fixed reasoning effort and sandbox. The plugin `worker` replaces the
+Instead, the session hook copies `standalone-agents/codex-scout.toml`, `codex-worker.toml`, and
+`codex-researcher.toml` to the matching `~/.codex/agents/<role>.toml` when each file is absent. They define
+`scout`, `worker`, and `researcher` agents, named as on Claude Code, with fixed reasoning effort and sandbox.
+The plugin `worker` replaces the
 built-in Codex `worker`, and `scout` leaves the built-in `explorer` untouched. A file you edited is never
 overwritten, and the agents become available in the next Codex session. Because an edited copy never changes,
 the files set no model; the Codex instructions pass the pinned model on every spawn instead. The hook also
@@ -101,7 +111,16 @@ omitted subagent type and every built-in type: `general-purpose`, `Explore`, `Pl
 narrow-purpose built-ins `claude-code-guide` and `statusline-setup` pass, as do plugin agents and definitions from any
 user, project, CLI, or managed source. On Codex it denies an omitted type, `default`, `explorer`, and every type
 without a role file, including the built-in `worker` before the plugin role exists. Skills that ask for an independent
-read-only worker use `scout`, and skills that write trial outputs run a separate `claude -p` or `codex exec` process.
+read-only worker use a role whose verified model, effort, and tools match the skill contract. Bounded local
+evidence uses `scout`; public evidence can use `researcher`. Skills that write trial outputs use a verified
+evaluation runner when required. See the conditional [model routing contract](instructions/model-routing.md).
+
+### GPT in Claude Code
+
+The Claude-only module preserves ordinary Claude and subagent requests. The observed Claude Code build omits
+required tool schemas, so the GPT route and launcher refuse before inference. Offline
+authentication and protocol components are implemented; live switching and resume remain incomplete.
+See [GPT setup, authentication, and compatibility](docs/claude-gpt.md). No dependency install or login runs at startup.
 
 ### Response language
 
@@ -340,7 +359,8 @@ installations from the `hei5enbug` marketplace.
 
 ## Development checks
 
-The bundled scripts need Python 3.12 or later with PyYAML, and the Node tests need Node.js. Run the same three
+The bundled scripts need Python 3.12 or later with PyYAML; GPT authentication tests also need PyJWT with
+cryptography, included in the `dev` extra. The Node tests need Node.js. Run the same three
 checks that `.github/workflows/validate.yml` runs on macOS and Linux:
 
 ```bash
@@ -382,10 +402,10 @@ execution-path isolation; semantic equivalence still requires human or model rev
 
 ## Related
 
-- [`omo-model-config`](standalone-skills/omo-model-config/SKILL.md) remains available as standalone
-  source and is not included in the plugin skill list. [Korean guide](standalone-skills/omo-model-config/SKILL.ko.md).
-- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — plugin system whose model
-  routing the standalone skill updates
+- [`omo-model-config`](standalone-skills/omo-model-config/SKILL.md) is retained as reference source outside
+  plugin discovery. OpenCode setup and execution are retired.
+  [Korean guide](standalone-skills/omo-model-config/SKILL.ko.md).
+- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — source for the OpenCode role comparison.
 
 ## License
 

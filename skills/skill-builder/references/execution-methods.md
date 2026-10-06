@@ -47,13 +47,23 @@ When the host session instructions include implementation execution rules, imple
 those rules instead of the table below. Otherwise, as in standalone use, the table below governs every
 worker, including implementation. Evaluation participants always use the table below.
 
+The Skill Builder evaluation contract takes precedence over generic host skill-worker routing. Run a native
+role only when its effective settings match the table below. If no native role matches, use a Skill Builder-approved
+runner whose actual model and effort can be verified, or follow the unavailable-capability path. Do not route
+an evaluation participant to a lower-effort scout or change a production role's settings. A runner invocation
+by itself does not verify its effective settings.
+
 | Executing host | Required model | Required effort | Boundary |
 |---|---|---|---|
 | Codex | `gpt-6-luna` | `xhigh` | Never launch `claude-sonnet-5-5` from Codex. |
 | Claude Code | `claude-sonnet-5-5` | `high` | Never launch `gpt-6-luna` from Claude Code. |
 | Other hosts | Available lightweight model | Highest supported suitable effort | Record the actual configuration. |
 
-Use the same model and settings on both sides when both methods include a model.
+Keep the model and settings the same on both sides of an ordinary method comparison when both methods include a
+model. Only a specifically approved model or effort experiment may vary its one frozen candidate setting, in
+the disposable evaluation workspace. It must not change production settings or promote trial output to the
+repository. If the required settings cannot be verified, or the runner is unavailable, mark the dependent run
+unverified and do not substitute another configuration.
 For a tool-only method, record that no model performs the operation; include any model orchestration cost.
 Discover the host's model selector and effort controls; do not invent model IDs or CLI flags.
 Pass the full model ID, never an alias, and verify that the recorded model matches it.

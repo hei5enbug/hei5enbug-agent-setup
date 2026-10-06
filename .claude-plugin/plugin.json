@@ -16,8 +16,10 @@
     "developer-tools"
   ],
   "skills": "./skills/",
+  "hooks": "./config/claude-gpt-hooks.json",
   "agents": [
     "./agents/scout.md",
-    "./agents/worker.md"
+    "./agents/worker.md",
+    "./agents/researcher.md"
   ]
 }

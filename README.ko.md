@@ -17,7 +17,8 @@ AI 코딩 에이전트를 위한 커스텀 스킬 모음입니다. 호스트별�
 
 - Claude Code
 - Codex
-- OpenCode ([Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) 플러그인 사용)
+
+OpenCode 설정은 참고 소스로만 유지합니다. 이 플러그인은 OpenCode를 설치·유지·실행하지 않습니다.
 
 ## 구조
 
@@ -34,6 +35,8 @@ hei5enbug-agent-setup/
 ├── CLAUDE.md
 ├── CLAUDE.ko.md
 ├── hooks/hooks.json
+├── hooks/claude-gpt/
+├── config/claude-gpt-hooks.json
 ├── instructions/
 │   ├── claude-agents.md
 │   ├── codex-agents.md
@@ -42,6 +45,7 @@ hei5enbug-agent-setup/
 │   ├── implementation-execution.md
 │   ├── implementation-planning.md
 │   ├── independent-model-validation.md
+│   ├── model-routing.md
 │   ├── protected-values.md
 │   ├── services.md
 │   └── session/
@@ -50,6 +54,7 @@ hei5enbug-agent-setup/
 │       └── common.md
 ├── scripts/
 │   ├── agent_guard.py
+│   ├── claude_gpt.py
 │   ├── datagrip_guard.py
 │   ├── language_guard.py
 │   ├── session_approval_guard.py
@@ -59,11 +64,14 @@ hei5enbug-agent-setup/
 ├── pyproject.toml
 ├── agents/
 │   ├── ko/
+│   │   ├── researcher.ko.md
 │   │   ├── scout.ko.md
 │   │   └── worker.ko.md
+│   ├── researcher.md
 │   ├── scout.md
 │   └── worker.md
 ├── standalone-agents/
+│   ├── codex-researcher.toml
 │   ├── codex-scout.toml
 │   └── codex-worker.toml
 ├── standalone-skills/
@@ -87,13 +95,13 @@ Codex와 Claude Code에 패키징합니다. `standalone-skills/` 디렉터리는
 검색 경로에 포함되지 않습니다.
 
 `agents/` 디렉터리는 Claude Code 플러그인에 함께 배포되므로, 번들을 설치하면
-`hei5enbug-agent-setup:scout`와 `hei5enbug-agent-setup:worker` 서브에이전트가 추가됩니다. 직접 복사할 필요가 없습니다.
-매니페스트는 이 두 영어 정의만 나열하므로 `agents/ko/`의 한국어 번역본은 서브에이전트로 등록되지 않습니다.
+`hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:worker`, `hei5enbug-agent-setup:researcher`가 추가됩니다.
+직접 복사할 필요가 없습니다. 매니페스트는 세 영어 정의만 나열하므로 `agents/ko/`의 한국어 번역본은 등록되지 않습니다.
 
 Codex는 `~/.codex/agents/`와 `.codex/agents/`에서만 서브에이전트를 찾으므로 플러그인이 등록할 수 없습니다.
-대신 세션 훅이 `~/.codex/agents/scout.toml`과 `~/.codex/agents/worker.toml`이 각각 없을 때만
-`standalone-agents/codex-scout.toml`과 `standalone-agents/codex-worker.toml`을 그 위치에 복사합니다. 두 파일은
-Claude Code와 같은 이름의 `scout`, `worker` 에이전트를 정의하고 사고 강도와 샌드박스를 고정합니다. 플러그인 `worker`는
+대신 세션 훅이 `standalone-agents/codex-scout.toml`, `codex-worker.toml`, `codex-researcher.toml`을
+각각 대응하는 `~/.codex/agents/<role>.toml`이 없을 때만 복사합니다. 세 파일은 Claude Code와 같은 이름의
+`scout`, `worker`, `researcher`를 정의하고 사고 강도와 샌드박스를 고정합니다. 플러그인 `worker`는
 Codex 내장 `worker`를 대신하고, `scout`는 내장 `explorer`를 건드리지 않습니다. 직접 고친 파일은 절대 덮어쓰지 않으며,
 다음 Codex 세션부터 적용됩니다. 고친 파일은 바뀌지 않으므로 모델은 지정하지 않고, Codex 지침이 생성할 때마다
 고정 모델을 넘깁니다. 훅은 이전 버전이 만든 `explorer.toml`을 지우고 `worker.toml`을 바꾸지만, 그 버전에서 배포한
@@ -104,8 +112,17 @@ Codex 내장 `worker`를 대신하고, `scout`는 내장 `explorer`를 건드리
 호출과 모든 내장 종류, 즉 `general-purpose`, `Explore`, `Plan`, `claude`, fork를 거부합니다. 목적이 좁은 내장 종류인
 `claude-code-guide`와 `statusline-setup`은 플러그인 에이전트, 사용자·프로젝트·CLI·관리 설정이 제공하는 정의와 함께 통과합니다.
 Codex에서는 종류를 비운 호출, `default`, `explorer`, 역할 파일이 없는 모든 종류를 거부하며, 플러그인 역할이 생기기 전의 내장
-`worker`도 여기에 포함됩니다. 독립된 읽기 전용 작업자가 필요한 스킬은 `scout`를 쓰고, 시험 출력을 쓰는 스킬은 별도 `claude -p`나
-`codex exec` 프로세스를 실행합니다.
+`worker`도 여기에 포함됩니다. 독립된 읽기 전용 작업자가 필요한 스킬은 실제 모델·사고 강도·도구가 스킬 계약과
+일치하는 역할을 사용합니다. 로컬 근거는 `scout`, 공개 근거는 `researcher`에 맡길 수 있습니다.
+시험 출력을 쓰는 스킬은 필요한 경우 검증된 평가 실행기를 사용합니다.
+조건부 [모델 라우팅 계약](instructions/model-routing.md)을 참고하세요.
+
+### Claude Code에서 GPT 사용
+
+Claude 전용 모듈은 일반 Claude 요청과 서브에이전트 요청을 그대로 전달합니다. 확인한 Claude Code 빌드는
+필수 도구 스키마를 제공하지 않아 GPT 경로와 실행기가 추론 전에 거부합니다. 인증·프로토콜 구성요소는 오프라인으로
+구현했지만 실환경 전환과 재개는 아직 완료하지 못했습니다.
+[GPT 설정·인증·호환성](docs/claude-gpt.md)을 참고하세요. 시작 시 의존성을 설치하거나 로그인하지 않습니다.
 
 ### 응답 언어
 
@@ -330,7 +347,8 @@ Orca 인벤토리는 Orca 밖 세션의 종료를 입증할 수 없습니다. �
 
 ## 개발 검사
 
-번들 스크립트는 PyYAML이 설치된 Python 3.12 이상이 필요하고, Node 테스트는 Node.js가 필요합니다.
+번들 스크립트에는 Python 3.12 이상과 PyYAML이 필요합니다. GPT 인증 테스트에는 `dev` extra에 포함된
+PyJWT와 cryptography도 필요하고, Node 테스트에는 Node.js가 필요합니다.
 `.github/workflows/validate.yml`이 macOS와 Linux에서 실행하는 세 가지 검사를 같은 명령으로 실행합니다.
 
 ```bash
@@ -372,10 +390,9 @@ Orca CLI가 필요한 테스트는 Orca가 설치되어 있지 않으면 건너�
 
 ## 관련 링크
 
-- [`omo-model-config`](standalone-skills/omo-model-config/SKILL.md)은 독립 실행용 소스로 유지하며
-  플러그인 스킬 목록에는 포함하지 않습니다. [한국어 안내](standalone-skills/omo-model-config/SKILL.ko.md)
-- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — 독립 실행용 스킬이 모델 라우팅을
-  갱신하는 플러그인 시스템
+- [`omo-model-config`](standalone-skills/omo-model-config/SKILL.md)은 플러그인 검색 대상 밖의 참고 소스로 유지합니다.
+  OpenCode 설정과 실행은 중단했습니다. [한국어 안내](standalone-skills/omo-model-config/SKILL.ko.md)
+- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — OpenCode 역할 비교의 원본 소스.
 
 ## 라이선스
 

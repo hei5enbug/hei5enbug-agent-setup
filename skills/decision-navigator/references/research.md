@@ -15,9 +15,14 @@ directory.
 
 ## Workers and fallback
 
-Use an independent worker when the host supports one. Give it only the ticket question, relevant
-context, output location, and evidence rules. Research tickets may run concurrently only when their
-files and tools do not conflict.
+When plugin session rules apply, follow the host's agent rules and
+[shared routing contract](../../../instructions/model-routing.md). Use a verified researcher for bounded public
+sources and scout for local evidence. Private or authenticated access stays with the authorized main session.
+The evidence worker returns findings; main makes decisions and writes the findings file and ticket links.
+
+Without plugin rules, use an independent read-only worker when the host supports one. Give it only the ticket
+question, relevant context, and evidence rules; main writes the persistent result. Research tickets may run
+concurrently only when their files and tools do not conflict.
 
 When workers are unavailable, run the same steps sequentially. Do not omit the research or pretend
 it ran in parallel.

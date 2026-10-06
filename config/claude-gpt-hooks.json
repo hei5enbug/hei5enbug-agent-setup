@@ -1,0 +1,3 @@
+{
+  "modules": ["../hooks/claude-gpt/register.js"]
+}

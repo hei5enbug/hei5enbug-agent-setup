@@ -97,19 +97,23 @@ class AgentGuardTest(unittest.TestCase):
         # Then
         self.assertEqual(["deny"] * 5, decisions)
 
-    def test_Codex_설치된_역할_파일이_있는_에이전트는_허용한다(self):
-        """훅이 설치한 scout와 worker, 파일 이름과 다른 name이나 작은따옴표 name을 가진 사용자 역할은 허용한다."""
+    def test_Codex_연구원을_포함한_설치_역할은_허용한다(self):
+        """researcher와 설치된 역할 파일이 있는 사용자 에이전트는 훅에서 허용한다."""
         # Given
         self.write(self.codex_home / "agents" / "scout.toml", (REPO_ROOT / "standalone-agents/codex-scout.toml").read_text())
         self.write(self.codex_home / "agents" / "worker.toml", (REPO_ROOT / "standalone-agents/codex-worker.toml").read_text())
+        self.write(self.codex_home / "agents" / "researcher.toml", (REPO_ROOT / "standalone-agents/codex-researcher.toml").read_text())
         self.write(self.project / ".codex" / "agents" / "pr-code-reviewer.toml", 'name = "pr_code_reviewer"\n')
         self.write(self.project / ".codex" / "agents" / "reviewer.toml", "name = 'reviewer'\ndescription = 'r'\n")
 
         # When
-        decisions = [self.decide("codex", {"agent_type": name}) for name in ("scout", "worker", "pr_code_reviewer", "reviewer")]
+        decisions = [
+            self.decide("codex", {"agent_type": name})
+            for name in ("scout", "worker", "researcher", "pr_code_reviewer", "reviewer")
+        ]
 
         # Then
-        self.assertEqual([None] * 4, decisions)
+        self.assertEqual([None] * 5, decisions)
 
     def test_Agent_호출이_아니거나_입력을_해석할_수_없으면_막지_않는다(self):
         """다른 이벤트나 tool_input이 없는 입력은 판단하지 않고 그대로 통과시킨다."""

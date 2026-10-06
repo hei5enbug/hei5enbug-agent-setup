@@ -43,6 +43,7 @@ class SessionContextTest(unittest.TestCase):
         self.codex_home = self.base / "codex home"
         self.scout = self.codex_home / "agents" / "scout.toml"
         self.worker = self.codex_home / "agents" / "worker.toml"
+        self.researcher = self.codex_home / "agents" / "researcher.toml"
         shutil.copytree(REPO_ROOT / "standalone-agents", self.root / "standalone-agents")
 
     def run_hook(self, host="codex", event="SessionStart", source="startup", payload=None, extra_env=None):
@@ -265,6 +266,20 @@ class SessionContextTest(unittest.TestCase):
                 (REPO_ROOT / "standalone-agents" / bundled).read_text(encoding="utf-8"),
             )
 
+    def test_Codex_세션은_누락된_연구원_역할을_설치한다(self):
+        """Codex 세션은 researcher 역할이 없을 때 번들 정의를 설치한다."""
+        # Given
+        self.researcher.parent.mkdir(parents=True)
+
+        # When
+        self.context(self.run_hook("codex"))
+
+        # Then
+        self.assertEqual(
+            self.researcher.read_text(encoding="utf-8"),
+            (REPO_ROOT / "standalone-agents/codex-researcher.toml").read_text(encoding="utf-8"),
+        )
+
     def test_provisioning_never_overwrites_an_existing_agent(self):
         self.scout.parent.mkdir(parents=True)
         self.worker.write_text('name = "worker"\n', encoding="utf-8")
@@ -274,6 +289,19 @@ class SessionContextTest(unittest.TestCase):
             self.scout.read_text(encoding="utf-8"),
             (REPO_ROOT / "standalone-agents/codex-scout.toml").read_text(encoding="utf-8"),
         )
+
+    def test_Codex_세션은_사용자가_작성한_연구원_역할을_그대로_둔다(self):
+        """Codex 세션은 사용자가 작성한 researcher 역할을 덮어쓰지 않는다."""
+        # Given
+        custom = 'name = "researcher"\ndescription = "user-owned"\n'
+        self.researcher.parent.mkdir(parents=True)
+        self.researcher.write_text(custom, encoding="utf-8")
+
+        # When
+        self.context(self.run_hook("codex"))
+
+        # Then
+        self.assertEqual(self.researcher.read_text(encoding="utf-8"), custom)
 
     def test_codex_session_retires_only_an_unmodified_explorer_from_an_earlier_version(self):
         shipped = LEGACY_EXPLORER.read_bytes()

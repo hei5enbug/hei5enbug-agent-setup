@@ -42,7 +42,8 @@ TEXT_SUFFIXES = {".md", ".json", ".toml", ".py", ".mjs", ".js", ".sh", ".yml", "
 
 def runtime_files() -> list[Path]:
     listed = subprocess.run(
-        ["git", "ls-files"], cwd=REPO_ROOT, check=True, capture_output=True, text=True
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        cwd=REPO_ROOT, check=True, capture_output=True, text=True
     ).stdout.splitlines()
     return [
         REPO_ROOT / name
@@ -117,7 +118,7 @@ class ModelPinTest(unittest.TestCase):
         models = {path.name: frontmatter(path)["model"] for path in definitions}
 
         # Then
-        self.assertEqual({"scout.md": PINS["claude-sonnet"], "worker.md": PINS["claude-sonnet"]}, models)
+        self.assertEqual({name: PINS["claude-sonnet"] for name in ("scout.md", "worker.md", "researcher.md")}, models)
 
     def test_Codex_역할_파일은_모델을_지정하지_않는다(self):
         """훅은 설치된 역할 파일을 덮어쓰지 않으므로, 고정 모델은 지침이 생성할 때마다 넘기고 역할 파일에는 두지 않는다."""
@@ -126,6 +127,10 @@ class ModelPinTest(unittest.TestCase):
         expected = {
             "codex-scout.toml": ("scout", "xhigh", f"Pass `{PINS['gpt-luna']}` and `xhigh` explicitly on every spawn."),
             "codex-worker.toml": ("worker", "xhigh", f"pass the pinned `{PINS['gpt-luna']}` and `xhigh` explicitly on every spawn."),
+            "codex-researcher.toml": (
+                "researcher", "xhigh",
+                f"Pass `{PINS['gpt-luna']}` and `xhigh` explicitly on every researcher spawn;",
+            ),
         }
 
         for bundled, (name, effort, spawn_rule) in expected.items():

@@ -13,9 +13,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+claude-gpt = [
+  "PyJWT[crypto]>=2.10",
+]
 dev = [
   "pytest>=8.0",
   "pglast==8.4",
+  "PyJWT[crypto]>=2.10",
 ]
 
 [tool.setuptools]
