@@ -29,6 +29,10 @@ decision.
 
 Use this model mapping:
 
+Select the actual authoring model family, not the execution host. GPT authoring in Claude Code follows the
+GPT row. If both families materially contribute, record their contribution and use the final authoring
+family for the one approved reviewer. Do not claim independence from every contributor or add review calls.
+
 | Authoring model family | Review model | Reasoning effort |
 |---|---|---|
 | GPT | `claude-fable-5-1` | `xhigh` |

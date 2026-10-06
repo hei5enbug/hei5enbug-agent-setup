@@ -163,6 +163,25 @@ class CodexWorkerContractTest(unittest.TestCase):
         self.assertIn(limit, section)
         self.assertIn("never change it", section)
 
+    def test_공유_라우팅은_배포_전에_읽고_기존_조사_설정을_유지한다(self):
+        """공유 라우팅을 필요할 때 읽고 공개 조사 도구와 고정 설정이 없으면 메인에서 계속한다."""
+        # Given
+        text = CODEX_AGENTS.read_text(encoding="utf-8")
+
+        # When
+        normalized = " ".join(text.split())
+        investigation = " ".join(text.split("## Investigation", 1)[1].split("## Skill workers", 1)[0].split())
+
+        # Then
+        self.assertIn("read [shared model routing](model-routing.md)", normalized)
+        self.assertIn("For bounded public research, use `researcher` only when public search and fetch tools are exposed.", investigation)
+        self.assertIn("Pass `gpt-6-luna` and `xhigh` explicitly on every researcher spawn; its role file sets no model.", investigation)
+        self.assertIn("inspect the non-secret researcher role/config settings", investigation)
+        self.assertIn("verify the host rollout record reports `gpt-6-luna` and `xhigh`", investigation)
+        self.assertIn("a verified Skill Builder-approved runner or its unavailable-capability path", normalized)
+        self.assertIn("Do not change the production scout settings.", normalized)
+        self.assertIn("Private or authenticated remote access and all edits stay in the main session.", normalized)
+
     def test_조사는_내장_explorer_대신_scout를_쓴다(self):
         """Codex 조사는 Claude와 같은 이름의 scout만 쓰고, 쓸 수 없거나 역할 파일이 고정값을 바꾸면 메인 세션에서 조사한다."""
         # Given
@@ -183,7 +202,7 @@ class CodexWorkerContractTest(unittest.TestCase):
 
 
     def test_내장_에이전트는_모두_금지하고_플러그인_역할을_설치한다(self):
-        """default와 explorer, 종류를 비운 호출을 금지하고 훅이 설치한 scout와 worker 역할만 쓴다."""
+        """내장 역할은 금지하고 훅이 설치한 세 플러그인 역할을 보존한다."""
         # Given
         text = CODEX_AGENTS.read_text(encoding="utf-8")
 
@@ -193,7 +212,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         # Then
         self.assertIn("Never use the built-in `default` or `explorer` agents.", built_in)
         self.assertIn("Always pass `agent_type`, because an omitted type runs `default`.", built_in)
-        self.assertIn("installs the plugin's `scout` and `worker` roles in `~/.codex/agents/` when they are absent", built_in)
+        self.assertIn("installs the plugin's `scout`, `worker`, and `researcher` roles in `~/.codex/agents/` when absent", built_in)
         self.assertIn("so it also denies the built-in `worker` until the plugin role exists", built_in)
 
     def test_스킬_작업자는_scout나_별도_CLI_프로세스를_쓴다(self):
@@ -205,7 +224,8 @@ class CodexWorkerContractTest(unittest.TestCase):
         skill_workers = " ".join(text.split("## Skill workers", 1)[1].split("## Implementation", 1)[0].split())
 
         # Then
-        self.assertIn("use `scout` with the model and effort above", skill_workers)
+        self.assertIn("use `scout` with the pinned settings above only when they match the role's requirements", skill_workers)
+        self.assertIn("Give the role its instructions and output contract.", skill_workers)
         self.assertIn("The main session writes any file the role produces.", skill_workers)
         self.assertIn("run a separate `codex exec` process with the model and effort that the skill pins", skill_workers)
 

@@ -99,8 +99,8 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         definitions = sorted(f"./agents/{path.name}" for path in (REPO_ROOT / "agents").glob("*.md"))
 
         # Then
-        self.assertEqual(listed, ["./agents/scout.md", "./agents/worker.md"])
-        self.assertEqual(listed, definitions)
+        self.assertEqual(listed, ["./agents/scout.md", "./agents/worker.md", "./agents/researcher.md"])
+        self.assertEqual(sorted(listed), definitions)
         self.assertFalse(any("/ko/" in path for path in listed))
         mirror = WORKER_MIRROR.read_text(encoding="utf-8")
         self.assertIn("영어 원본: [worker.md](../worker.md)", mirror)
@@ -252,9 +252,32 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         skill_workers = " ".join(text.split("## Skill workers", 1)[1].split("## Implementation", 1)[0].split())
 
         # Then
-        self.assertIn("use `hei5enbug-agent-setup:scout` and give it the role's instructions and output contract", skill_workers)
+        self.assertIn("use `hei5enbug-agent-setup:scout` only when its effective settings match the role's requirements", skill_workers)
+        self.assertIn("For Skill Builder evaluation, use the required participant table", skill_workers)
+        self.assertIn("target-skill metadata does not override it", skill_workers)
+        self.assertIn("Give the role its instructions and output contract.", skill_workers)
+        self.assertIn("use a verified Skill Builder-approved runner or its unavailable-capability path", skill_workers)
+        self.assertIn("Do not lower the required effort or change production scout settings.", skill_workers)
         self.assertIn("The main conversation writes any file the role produces.", skill_workers)
         self.assertIn("run a separate `claude -p` process with the model and effort that the skill pins", skill_workers)
+        self.assertIn("use `researcher` only when the skill's contract and any evaluation settings permit", skill_workers)
+        self.assertIn("Private or authenticated remote access and all edits stay in the main conversation.", skill_workers)
+
+    def test_공유_라우팅과_GPT_전환_후에도_Claude_Code_설정을_유지한다(self):
+        """공유 라우팅을 조건부로 읽으며 GPT로 전환해도 Claude Code의 역할 설정을 유지한다."""
+        # Given
+        text = CLAUDE_AGENTS.read_text(encoding="utf-8")
+
+        # When
+        section = implementation_section()
+        normalized = " ".join(text.split())
+
+        # Then
+        self.assertIn("read [shared model routing](model-routing.md)", normalized)
+        self.assertIn("Selecting GPT as Claude Code's main model does not change this host", section)
+        self.assertIn("`hei5enbug-agent-setup:researcher` only when public search and fetch tools are available", normalized)
+        self.assertIn("Never pass a per-invocation model; its definition pins `claude-sonnet-5-5` and `medium`.", normalized)
+        self.assertIn("Verify that definition, effective non-secret settings, and the host subagent record", normalized)
 
 
 if __name__ == "__main__":

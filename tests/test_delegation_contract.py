@@ -39,6 +39,27 @@ def test_두_호스트는_가벼운_위임_기준과_검토_연결만_항상_받
     assert "independent-model-validation.md" in rendered
 
 
+@pytest.mark.parametrize("host", ["codex", "claude"])
+def test_공유_모델_라우팅은_위임_때_읽고_시작_문맥에는_본문을_싣지_않는다(host):
+    """호스트 규칙은 위임할 때 공유 라우팅을 읽게 하고 시작 문맥은 그 본문을 미리 싣지 않는다."""
+    # Given
+    rendered = context.render_context(REPO, host)
+    host_rules = REPO / "instructions" / f"{host}-agents.md"
+    routing = REPO / "instructions/model-routing.md"
+
+    # When
+    host_text = " ".join(host_rules.read_text(encoding="utf-8").split())
+    route_text = " ".join(routing.read_text(encoding="utf-8").split())
+
+    # Then
+    assert "read [shared model routing](model-routing.md)" in host_text
+    assert "instruction-reuse rules in [work efficiency](work-efficiency.md)" in host_text
+    assert "apply its effective-settings checks before dispatch" in host_text
+    assert "The execution host remains the same" in route_text
+    assert "actual model family that authored the deliverable" in route_text
+    assert "## Keep role settings fixed" not in rendered
+
+
 @pytest.mark.parametrize("user_edited", [False, True])
 def test_구형_scout는_원본과_같을_때만_현재_역할로_교체한다(tmp_path, monkeypatch, user_edited):
     """이전 scout의 미수정 복사본은 실행 중 조사를 허용하도록 교체하고 사용자 수정본은 그대로 둔다."""
