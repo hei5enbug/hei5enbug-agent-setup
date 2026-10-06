@@ -14,6 +14,8 @@ through. No Codex loop, gateway, automatic fallback, or user-setting change repl
 
 The [validation record](model-routing-validation.md) contains the latest no-request host probe, development
 checks, recurring-token measurements, and remaining live requirements.
+The detailed adapter contract and required live observations are in
+[remaining GPT connection work](claude-gpt-remaining.md).
 
 ## Explicit helper setup
 
