@@ -1,13 +1,11 @@
 # hei5enbug-agent-setup
 
-**English** | [한국어](./README.ko.md) | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md) | [Español](./README.es.md) | [Deutsch](./README.de.md) | [Français](./README.fr.md)
-
-A portable collection of custom skills for AI coding agents, built to be shared across multiple agent hosts without host-specific rewrites.
+A personal harness for my work environment: skills, session instructions, and guard hooks for Claude Code and Codex.
 
 ## Overview
 
-Each plugin skill lives in its own folder under `skills/` and is self-contained. Skills kept outside the
-plugin bundle live under `standalone-skills/`. The same `SKILL.md` works unmodified on every supported host.
+Each plugin skill lives in its own folder under `skills/` and is self-contained. The same `SKILL.md` works
+unmodified on every supported host.
 
 ## Supported Hosts
 
@@ -50,7 +48,6 @@ hei5enbug-agent-setup/
 │       └── common.md
 ├── scripts/
 │   ├── agent_guard.py
-│   ├── claude_gpt.py
 │   ├── datagrip_guard.py
 │   ├── language_guard.py
 │   ├── session_approval_guard.py
@@ -70,8 +67,6 @@ hei5enbug-agent-setup/
 │   ├── codex-researcher.toml
 │   ├── codex-scout.toml
 │   └── codex-worker.toml
-├── standalone-skills/
-│   └── omo-model-config/
 └── skills/
     ├── decision-navigator/
     ├── deep-interview/
@@ -87,7 +82,6 @@ hei5enbug-agent-setup/
 
 Each plugin skill folder holds its own `SKILL.md` plus any references or scripts it needs. The plugin manifests
 package the same `skills/` directory for Codex and Claude Code without copying skills into host-specific directories.
-The `standalone-skills/` directory is not included in either plugin's skill discovery path.
 
 The `agents/` directory ships with the Claude Code plugin, so installing the bundle adds the
 `hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:worker`, and `hei5enbug-agent-setup:researcher` subagents.
@@ -117,10 +111,9 @@ evaluation runner when required. See the conditional [model routing contract](in
 
 ### GPT in Claude Code
 
-The Claude-only module preserves ordinary Claude and subagent requests. The observed Claude Code build omits
-required tool schemas, so the GPT route and launcher refuse before inference. Offline
-authentication and protocol components are implemented; live switching and resume remain incomplete.
-See [GPT setup, authentication, and compatibility](docs/claude-gpt.md). No dependency install or login runs at startup.
+The Claude-only module refuses requests to the pinned GPT models before any inference.
+Claude Code's mod API does not expose tool input schemas, so this route cannot work yet.
+The helper, its tests, and the design records are preserved on the `gpt-route` branch.
 
 ### Response language
 
@@ -362,13 +355,12 @@ installations from the `hei5enbug` marketplace.
 
 ## Development checks
 
-The bundled scripts need Python 3.12 or later with PyYAML; GPT authentication tests also need PyJWT with
-cryptography, included in the `dev` extra. The Node tests need Node.js. Run the same three
+The bundled scripts need Python 3.12 or later with PyYAML. The Node tests need Node.js. Run the same three
 checks that `.github/workflows/validate.yml` runs on macOS and Linux:
 
 ```bash
 python3 -m pip install -e ".[dev]"
-for skill in skills/*/ standalone-skills/*/; do python3 skills/skill-builder/scripts/quick_validate.py "$skill"; done
+for skill in skills/*/; do python3 skills/skill-builder/scripts/quick_validate.py "$skill"; done
 python3 -m pytest
 node --test skills/document-to-confluence/tests/test_render_diagrams.mjs
 ```
@@ -405,10 +397,7 @@ execution-path isolation; semantic equivalence still requires human or model rev
 
 ## Related
 
-- [`omo-model-config`](standalone-skills/omo-model-config/SKILL.md) is retained as reference source outside
-  plugin discovery. OpenCode setup and execution are retired.
-  [Korean guide](standalone-skills/omo-model-config/SKILL.ko.md).
-- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — source for the OpenCode role comparison.
+- `omo-model-config` was removed; its last version is in the [`v1.3.0` tag](https://github.com/hei5enbug/hei5enbug-agent-setup/tree/v1.3.0/standalone-skills/omo-model-config).
 
 ## License
 
