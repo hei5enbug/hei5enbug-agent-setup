@@ -13,8 +13,8 @@ session resume, apply its effective-settings checks before dispatch.
 
 - Never use the built-in `default` or `explorer` agents. Always pass `agent_type`, because an omitted type runs
   `default`.
-- The session hook installs the plugin's `scout`, `worker`, and `researcher` roles in `~/.codex/agents/` when absent,
-  replaces only an unmodified copy from an earlier plugin version, and never overwrites a file the user changed.
+- The session hook installs the plugin's `scout`, `worker`, `researcher`, and `designer` roles in `~/.codex/agents/`
+  when absent, replaces only an unmodified copy from an earlier plugin version, and never overwrites a file the user changed.
   They become available in the next Codex session.
 - The plugin's agent guard hook denies an omitted type, `default`, `explorer`, and every type without a role
   file in a Codex agents directory, so it also denies the built-in `worker` until the plugin role exists.
@@ -76,7 +76,24 @@ adds only the Codex worker integration.
   thread. Use its current value and open slots; never change it.
 - Missing worker tools, a missing `worker` role file, an unavailable model or `xhigh`, an incompatible user
   configuration, or unverified effective settings stop the affected delegation. Apply the session fallback.
-- Codex spawns sub-agents only when the user, `AGENTS.md`, or skill instructions ask for them. These hook
-  instructions alone do not grant that authorization. Reuse existing authorization; when it is absent,
-  continue in the main session under the session fallback. Do not turn a routine task into a permission
-  interview or alter user/project instructions automatically. Explain persistent opt-in when relevant.
+- Codex spawns sub-agents only when the user, `AGENTS.md`, or skill instructions ask for them. The plugin's
+  session hook keeps a marked block in `~/.codex/AGENTS.md` that grants this; it is removed when
+  `HEI5ENBUG_SUBAGENT_POLICY=off` and takes effect from the next session. When authorization is absent,
+  continue in the main session under the session fallback.
+- The hook also enables `default_mode_request_user_input`, so `request_user_input` works in Default mode from the
+  next session.
+
+## Design work
+
+For UI code, visual design, and diagram work, run a separate process from the repository root with the assignment
+on stdin:
+
+```text
+claude -p --model claude-opus-5-5 --effort xhigh --output-format json --permission-mode dontAsk --allowedTools Read Grep Glob "Edit(<allowed path>/**)" "Write(<allowed path>/**)"
+```
+
+- Request network access through the normal Codex approval flow if the sandbox blocks it.
+- Accept the result only when the JSON `modelUsage` names `claude-opus-5-5`.
+- When `claude` is missing, the process ends with an authentication, usage-limit, or model error, or that
+  evidence is missing, spawn the plugin `designer` role with `gpt-6-astra` and `xhigh` instead. Verify its
+  rollout record as for `worker`, and report the substitution.

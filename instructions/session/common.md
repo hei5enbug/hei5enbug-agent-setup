@@ -12,6 +12,7 @@ human references; never load or use them during execution.
   Use `ast-grep` only when structural matching is clearly needed.
 - When the target is a known symbol, file path, glob, or literal string, search directly in the main session.
 - Ask before destructive, irreversible, or production-impacting actions. Never expose secrets.
+- Do not add design, tests, implementation, or planning beyond the request.
 - Minimize comments. Code, comments, and docstrings must never reference documentation.
 - Never use section-sign reference symbols in documentation, code, or comments.
 - Create every new commit, whether the user asked for it or a task requires it, through the `suggest-commit`
@@ -21,16 +22,18 @@ human references; never load or use them during execution.
 ## Delegation
 
 Choose an owner before substantial work, and reconsider only when scope, dependencies, or capabilities change.
-Use subagents when the expected parallelism or reduced main-session context outweighs briefing, model calls,
-and integration. This is a practical routing rule, not a measured guarantee of lower total cost.
 
 - Handle short answers, known-path lookups, small cohesive edits, and tightly dependent work in the main session.
 - Delegate bounded investigation that needs several files or produces bulky logs, returning concise findings
   and source locations. Do not repeat the same investigation in the main session; verify only critical claims.
 - Delegate implementation when it has a clear scope and acceptance check and can run independently or keep
   substantial intermediate detail out of the main context. Parallelize only work with independent resources.
-- Keep the smallest useful team and pass only the task's needed context. Do not spawn for greetings, status,
-  routine checks, or a token-saving claim alone. Explicit user and skill assignments still take precedence.
+- Use parallel subagents proactively, without being asked, when they cut main-session context or elapsed time
+  with little or no quality loss. Pass each task only the context it needs. Do not spawn for greetings, status
+  checks, or a single small edit. Explicit user and skill assignments still take precedence.
+- Send UI code, visual design, and diagram work to the host's designer route. A text- or style-value-only edit
+  that keeps layout and component structure may go to the implementation worker. Design documents and RFCs stay
+  in the main session.
 - Host permission is required. If delegation, the pinned role/model/effort, or reliable settings evidence is
   unavailable, continue authorized work in the main session and report the limitation once. Preserve all
   permissions and checks; never change user settings or silently substitute another worker model.
@@ -38,6 +41,14 @@ and integration. This is a practical routing rule, not a measured guarantee of l
 Independent read-only review is the exception to main-session review ownership. Before finishing a substantial
 change, recommend it once under [independent model validation](../independent-model-validation.md); do not
 invoke a reviewer without the user's approval or repeat an offer already declined for the same result.
+
+## Clarification
+
+When an ambiguity or a conflict with existing logic or files would change the result, stop edits and external
+changes and read only what the question needs. Ask with the host's question tool (Claude Code `AskUserQuestion`,
+Codex `request_user_input`), or in plain text and end the turn when none exists. Use ASCII diagrams and basic
+development terms, order options by recommendation, and allow free text (`AskUserQuestion` adds Other itself).
+Continue with the answer; a skill's own ask or stop rules still apply.
 
 ## Conditional instructions
 
@@ -68,11 +79,9 @@ If a required reference is missing, report it and pause the affected action inst
 - `document-to-confluence`, `suggest-commit`, and `technical-design-writer` remain automatic when their own
   descriptions match the user's intent. This is an explicit exception to the preceding trigger boundary.
 - Before creating or revising an implementation plan the user requested, read
-  [implementation planning rules](../implementation-planning.md) and
-  [independent model validation](../independent-model-validation.md).
-- Before creating or revising a design document or RFC, read
-  [independent model validation](../independent-model-validation.md). The design-writing skill owns the
-  design-specific workflow and template.
+  [implementation planning rules](../implementation-planning.md). Before creating or revising that plan, a design
+  document, or an RFC, read [independent model validation](../independent-model-validation.md). The
+  design-writing skill owns the design-specific workflow and template.
 
 ## Replies
 

@@ -21,6 +21,7 @@ PINS = {
     "claude-fable": "claude-fable-5-1",
     "claude-opus": "claude-opus-5-5",
     "claude-sonnet": "claude-sonnet-5-5",
+    "gpt-astra": "gpt-6-astra",
     "gpt-luna": "gpt-6-luna",
     "gpt-sol": "gpt-6.1-sol",
 }
@@ -137,6 +138,10 @@ class ModelPinTest(unittest.TestCase):
             "codex-researcher.toml": (
                 "researcher", "xhigh",
                 f"Pass `{PINS['gpt-luna']}` and `xhigh` explicitly on every researcher spawn;",
+            ),
+            "codex-designer.toml": (
+                "designer", "xhigh",
+                f"spawn the plugin `designer` role with `{PINS['gpt-astra']}` and `xhigh` instead.",
             ),
         }
 

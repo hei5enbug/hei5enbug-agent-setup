@@ -96,7 +96,7 @@ class SessionContextTest(unittest.TestCase):
                 self.assertEqual("# Claude Code only" in context, host == "claude")
 
     def test_참조는_절대_경로이고_세부_본문은_불러오지_않는다(self):
-        """작업 효율과 검토를 포함한 참조 11개는 절대 경로로 바뀌고 세부 본문은 시작 시 불러오지 않는다."""
+        """작업 효율과 검토를 포함한 참조 10개는 절대 경로로 바뀌고 세부 본문은 시작 시 불러오지 않는다."""
         # Given
         host = "claude"
 
@@ -105,7 +105,7 @@ class SessionContextTest(unittest.TestCase):
 
         # Then
         links = re.findall(r"\]\(<([^>]+)>\)", context)
-        self.assertEqual(len(links), 11)
+        self.assertEqual(len(links), 10)
         for link in links:
             self.assertTrue(Path(link).is_relative_to(self.root))
             self.assertTrue(Path(link).is_file())
@@ -485,6 +485,404 @@ class SessionContextTest(unittest.TestCase):
     def test_repository_has_project_instruction_files(self):
         self.assertTrue((REPO_ROOT / "AGENTS.md").is_file())
         self.assertEqual((REPO_ROOT / "CLAUDE.md").read_text(), "@AGENTS.md\n")
+
+
+BLOCK = (
+    "<!-- hei5enbug:subagents -->\n"
+    "When hei5enbug-agent-setup is active, use subagents according to its situation-based delegation rules.\n"
+    "<!-- /hei5enbug:subagents -->\n"
+)
+FLAG = "default_mode_request_user_input"
+FAKE_CODEX = """#!/bin/sh
+printf '%s\\n' "$*" >> "$FAKE_CODEX_LOG"
+case " $FAKE_CODEX_SLOW " in *" $2 "*) sleep 6;; esac
+case " $FAKE_CODEX_FAIL " in *" $2 "*) exit 1;; esac
+if [ "$2" = "list" ]; then cat "$FAKE_CODEX_LIST"; fi
+exit 0
+"""
+
+
+class CodexAutoSettingsTest(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name).resolve()
+        self.root = self.base / "plugin"
+        self.root.mkdir()
+        for name in ("scripts", ".codex-plugin"):
+            shutil.copytree(REPO_ROOT / name, self.root / name)
+        session = self.root / "instructions" / "session"
+        session.mkdir(parents=True)
+        for name, text in (
+            ("common.md", "# Common\nNever expose secrets.\n"),
+            ("codex.md", "# Codex only\n"),
+            ("claude-code.md", "# Claude Code only\n"),
+        ):
+            (session / name).write_text(text, encoding="utf-8")
+        self.cwd = self.base / "project"
+        self.cwd.mkdir()
+        self.bin = self.base / "bin"
+        self.bin.mkdir()
+        self.codex_home = self.base / "codex home"
+        self.agents = self.codex_home / "AGENTS.md"
+        self.data = self.base / "plugin data"
+        self.state = self.data / "codex-auto-settings.json"
+        self.log = self.base / "codex.log"
+        self.listing = self.base / "features.txt"
+        self.set_flag("false")
+        fake = self.bin / "codex"
+        fake.write_text(FAKE_CODEX, encoding="utf-8")
+        fake.chmod(0o755)
+
+    def set_flag(self, value):
+        self.listing.write_text(
+            f"fast_mode                            stable             true\n{FLAG}          under development  {value}\n",
+            encoding="utf-8",
+        )
+
+    def calls(self):
+        return self.log.read_text(encoding="utf-8").splitlines() if self.log.exists() else []
+
+    def run_hook(self, host="codex", event="SessionStart", extra_env=None, with_codex=True):
+        env = {
+            "PATH": f"{self.bin}{os.pathsep}{os.defpath}" if with_codex else os.defpath,
+            "CLAUDE_PLUGIN_ROOT": str(self.root),
+            "CODEX_HOME": str(self.codex_home),
+            "PLUGIN_DATA": str(self.data),
+            "FAKE_CODEX_LOG": str(self.log),
+            "FAKE_CODEX_LIST": str(self.listing),
+        }
+        if host == "codex":
+            env["PLUGIN_ROOT"] = str(self.root)
+        env.update(extra_env or {})
+        return subprocess.run(
+            [sys.executable, str(self.root / "scripts/session_context.py")],
+            cwd=self.cwd,
+            env=env,
+            input=json.dumps({"hook_event_name": event, "source": "startup"}),
+            text=True,
+            capture_output=True,
+            timeout=20,
+        )
+
+    def assert_context_loaded(self, result):
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr, "")
+        output = json.loads(result.stdout)["hookSpecificOutput"]
+        self.assertIn("Never expose secrets", output["additionalContext"])
+
+    def saved(self):
+        return json.loads(self.state.read_text(encoding="utf-8"))
+
+    def test_Codex_세션_시작은_하위_에이전트_블록을_빈_줄_뒤에_추가한다(self):
+        """기존 AGENTS.md 내용은 그대로 두고 블록을 빈 줄 하나 뒤에 붙인다."""
+        # Given
+        self.codex_home.mkdir()
+        self.agents.write_text("# 내 규칙\n- 한국어로 답한다\n", encoding="utf-8")
+
+        # When
+        result = self.run_hook()
+
+        # Then
+        self.assert_context_loaded(result)
+        self.assertEqual(self.agents.read_text(encoding="utf-8"), "# 내 규칙\n- 한국어로 답한다\n\n" + BLOCK)
+
+    def test_AGENTS_파일과_폴더가_없으면_만들고_블록만_쓴다(self):
+        """Codex 설정 폴더가 없어도 파일을 만들어 블록만 기록한다."""
+        # Given
+        self.assertFalse(self.codex_home.exists())
+
+        # When
+        result = self.run_hook()
+
+        # Then
+        self.assert_context_loaded(result)
+        self.assertEqual(self.agents.read_text(encoding="utf-8"), BLOCK)
+
+    def test_블록이_이미_있으면_파일을_다시_쓰지_않는다(self):
+        """사용자가 블록 안팎을 손봤어도 블록이 있으면 그대로 둔다."""
+        # Given
+        self.codex_home.mkdir()
+        existing = "앞\n\n" + BLOCK.replace("use subagents", "use subagents carefully") + "\n뒤\n"
+        self.agents.write_text(existing, encoding="utf-8")
+
+        # When
+        self.run_hook()
+
+        # Then
+        self.assertEqual(self.agents.read_text(encoding="utf-8"), existing)
+
+    def test_토글을_끄면_블록과_앞의_빈_줄만_지우고_나머지를_보존한다(self):
+        """블록 앞뒤의 사용자 텍스트는 한 글자도 바뀌지 않는다."""
+        # Given
+        self.codex_home.mkdir()
+        original = "# 앞 규칙\n\n내용\n"
+        self.agents.write_text(original + "\n" + BLOCK + "\n# 뒤 규칙\n", encoding="utf-8")
+
+        # When
+        result = self.run_hook(extra_env={"HEI5ENBUG_SUBAGENT_POLICY": "off"})
+
+        # Then
+        self.assert_context_loaded(result)
+        self.assertEqual(self.agents.read_text(encoding="utf-8"), original + "\n# 뒤 규칙\n")
+
+    def test_추가했던_블록을_끄면_원래_파일로_돌아간다(self):
+        """켠 뒤 끄면 추가 전 내용과 바이트까지 같아진다."""
+        # Given
+        self.codex_home.mkdir()
+        original = "# 내 규칙\n"
+        self.agents.write_text(original, encoding="utf-8")
+        self.run_hook()
+        self.assertNotEqual(self.agents.read_text(encoding="utf-8"), original)
+
+        # When
+        self.run_hook(extra_env={"HEI5ENBUG_SUBAGENT_POLICY": "off"})
+
+        # Then
+        self.assertEqual(self.agents.read_text(encoding="utf-8"), original)
+
+    def test_토글이_꺼져_있고_AGENTS_파일이_없으면_만들지_않는다(self):
+        """끄기 요청은 파일이나 폴더를 새로 만들지 않는다."""
+        # When
+        self.run_hook(extra_env={"HEI5ENBUG_SUBAGENT_POLICY": "off"})
+
+        # Then
+        self.assertFalse(self.agents.exists())
+
+    def test_질문_플래그가_꺼져_있으면_켜고_플러그인이_켰다고_기록한다(self):
+        """features list가 false이면 enable을 한 번 실행하고 상태 파일에 기록한다."""
+        # Given
+        self.set_flag("false")
+
+        # When
+        result = self.run_hook()
+
+        # Then
+        self.assert_context_loaded(result)
+        self.assertEqual(self.calls(), ["features list", f"features enable {FLAG}"])
+        saved = self.saved()
+        self.assertTrue(saved["ask_tool_enabled_by_plugin"])
+        self.assertEqual(saved["codex_ask_tool"], {"value": True, "ok": True})
+        self.assertEqual(saved["subagent_policy"], {"value": True, "ok": True})
+        self.assertEqual(saved["version"], json.loads((REPO_ROOT / ".codex-plugin/plugin.json").read_text())["version"])
+
+    def test_질문_플래그를_사용자가_이미_켰으면_enable하지_않는다(self):
+        """이미 true이면 명령을 더 실행하지 않고 플러그인이 켰다고 기록하지 않는다."""
+        # Given
+        self.set_flag("true")
+
+        # When
+        self.run_hook()
+
+        # Then
+        self.assertEqual(self.calls(), ["features list"])
+        self.assertFalse(self.saved()["ask_tool_enabled_by_plugin"])
+        self.assertTrue(self.saved()["codex_ask_tool"]["ok"])
+
+    def test_토글을_끄면_플러그인이_켠_플래그만_끈다(self):
+        """플러그인이 켠 기록이 있으면 disable을 실행하고 기록을 지운다."""
+        # Given
+        self.run_hook()
+        self.set_flag("true")
+        self.log.unlink()
+
+        # When
+        result = self.run_hook(extra_env={"HEI5ENBUG_CODEX_ASK_TOOL": "off"})
+
+        # Then
+        self.assert_context_loaded(result)
+        self.assertEqual(self.calls(), [f"features disable {FLAG}"])
+        self.assertFalse(self.saved()["ask_tool_enabled_by_plugin"])
+        self.assertEqual(self.saved()["codex_ask_tool"], {"value": False, "ok": True})
+
+    def test_토글을_꺼도_사용자가_직접_켠_플래그는_그대로_둔다(self):
+        """플러그인이 켠 기록이 없으면 disable도 list도 실행하지 않는다."""
+        # Given
+        self.set_flag("true")
+        self.run_hook()
+        self.log.unlink()
+
+        # When
+        self.run_hook(extra_env={"HEI5ENBUG_CODEX_ASK_TOOL": "off"})
+
+        # Then
+        self.assertEqual(self.calls(), [])
+        self.assertEqual(self.saved()["codex_ask_tool"], {"value": False, "ok": True})
+
+    def test_토글을_끄고_시작하면_질문_플래그_명령을_실행하지_않는다(self):
+        """질문 토글이 꺼져 있으면 처음부터 codex 명령을 부르지 않는다."""
+        # When
+        self.run_hook(extra_env={"HEI5ENBUG_CODEX_ASK_TOOL": "false"})
+
+        # Then
+        self.assertEqual(self.calls(), [])
+
+    def test_명령이_실패하면_성공으로_기록하지_않고_다음_세션에서_다시_시도한다(self):
+        """enable이 실패한 세션은 실패로 남기고, 다음 세션에서 성공하면 그때 기록한다."""
+        # Given
+        self.set_flag("false")
+
+        # When
+        first = self.run_hook(extra_env={"FAKE_CODEX_FAIL": "enable"})
+        failed_state = self.saved()
+        second = self.run_hook()
+
+        # Then
+        self.assert_context_loaded(first)
+        self.assertEqual(failed_state["codex_ask_tool"], {"value": True, "ok": False})
+        self.assertFalse(failed_state["ask_tool_enabled_by_plugin"])
+        self.assertEqual(failed_state["subagent_policy"]["ok"], True)
+        self.assert_context_loaded(second)
+        self.assertEqual(
+            self.calls(),
+            ["features list", f"features enable {FLAG}", "features list", f"features enable {FLAG}"],
+        )
+        self.assertEqual(self.saved()["codex_ask_tool"], {"value": True, "ok": True})
+        self.assertTrue(self.saved()["ask_tool_enabled_by_plugin"])
+
+    def test_목록_명령이_실패하거나_플래그가_없으면_아무것도_하지_않는다(self):
+        """list 실패와 플래그 부재는 enable 없이 조용히 넘어가며 성공으로 기록하지 않는다."""
+        for name, extra, listing in (
+            ("실패", {"FAKE_CODEX_FAIL": "list"}, None),
+            ("플래그 없음", {}, "fast_mode  stable  true\n"),
+        ):
+            with self.subTest(name):
+                # Given
+                self.log.unlink(missing_ok=True)
+                self.state.unlink(missing_ok=True)
+                if listing is not None:
+                    self.listing.write_text(listing, encoding="utf-8")
+
+                # When
+                result = self.run_hook(extra_env=extra)
+
+                # Then
+                self.assert_context_loaded(result)
+                self.assertEqual(self.calls(), ["features list"])
+                self.assertEqual(self.saved()["codex_ask_tool"]["ok"], False)
+
+    def test_codex_실행_파일이_없어도_지침은_정상_출력된다(self):
+        """codex가 PATH에 없으면 플래그는 건드리지 않고 지침과 AGENTS 블록 처리만 끝낸다."""
+        # When
+        result = self.run_hook(with_codex=False)
+
+        # Then
+        self.assert_context_loaded(result)
+        self.assertEqual(self.agents.read_text(encoding="utf-8"), BLOCK)
+        self.assertEqual(self.saved()["codex_ask_tool"]["ok"], False)
+
+    def test_명령이_3초를_넘기면_기다리지_않고_실패로_남긴다(self):
+        """시간 초과한 codex 명령은 성공으로 기록하지 않고 지침 출력도 막지 않는다."""
+        # When
+        result = self.run_hook(extra_env={"FAKE_CODEX_SLOW": "list"})
+
+        # Then
+        self.assert_context_loaded(result)
+        self.assertEqual(self.saved()["codex_ask_tool"]["ok"], False)
+
+    def test_같은_버전과_같은_토글로_성공한_설정은_다음_세션에서_건너뛴다(self):
+        """성공한 설정은 AGENTS.md도 codex도 다시 만지지 않는다."""
+        # Given
+        self.run_hook()
+        self.agents.write_text("사용자가 블록을 지웠다\n", encoding="utf-8")
+        self.log.unlink()
+
+        # When
+        self.run_hook()
+
+        # Then
+        self.assertEqual(self.calls(), [])
+        self.assertEqual(self.agents.read_text(encoding="utf-8"), "사용자가 블록을 지웠다\n")
+
+    def test_토글_값이_바뀌면_성공한_설정도_다시_처리한다(self):
+        """같은 버전이어도 토글 값이 달라지면 해당 설정만 다시 실행한다."""
+        # Given
+        self.run_hook()
+        self.log.unlink()
+
+        # When
+        self.run_hook(extra_env={"HEI5ENBUG_SUBAGENT_POLICY": "off"})
+
+        # Then
+        self.assertEqual(self.calls(), [])
+        self.assertNotIn("hei5enbug:subagents", self.agents.read_text(encoding="utf-8"))
+        self.assertEqual(self.saved()["subagent_policy"], {"value": False, "ok": True})
+
+    def test_플러그인_버전이_바뀌면_성공한_설정도_다시_처리한다(self):
+        """버전이 달라지면 두 설정을 다시 확인하고, 플러그인이 켠 기록은 유지한다."""
+        # Given
+        self.run_hook()
+        manifest = self.root / ".codex-plugin/plugin.json"
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        data["version"] = "9.9.9"
+        manifest.write_text(json.dumps(data), encoding="utf-8")
+        self.agents.write_text("", encoding="utf-8")
+        self.set_flag("true")
+        self.log.unlink()
+
+        # When
+        self.run_hook()
+
+        # Then
+        self.assertEqual(self.agents.read_text(encoding="utf-8"), BLOCK)
+        self.assertEqual(self.calls(), ["features list"])
+        self.assertEqual(self.saved()["version"], "9.9.9")
+        self.assertTrue(self.saved()["ask_tool_enabled_by_plugin"])
+
+    def test_데이터_폴더가_없으면_캐시_없이_매번_처리한다(self):
+        """PLUGIN_DATA와 CLAUDE_PLUGIN_DATA가 모두 없으면 상태 파일을 만들지 않고 세션마다 확인한다."""
+        # Given
+        env = {"PLUGIN_DATA": ""}
+
+        # When
+        self.run_hook(extra_env=env)
+        self.run_hook(extra_env=env)
+
+        # Then
+        self.assertFalse(self.state.exists())
+        self.assertEqual(self.calls().count("features list"), 2)
+
+    def test_CLAUDE_PLUGIN_DATA를_대체_위치로_쓴다(self):
+        """PLUGIN_DATA가 없으면 CLAUDE_PLUGIN_DATA 아래에 상태를 저장한다."""
+        # Given
+        fallback = self.base / "fallback data"
+
+        # When
+        self.run_hook(extra_env={"PLUGIN_DATA": "", "CLAUDE_PLUGIN_DATA": str(fallback)})
+
+        # Then
+        self.assertTrue((fallback / "codex-auto-settings.json").is_file())
+
+    def test_Claude_호스트와_하위_에이전트_시작은_설정을_건드리지_않는다(self):
+        """Claude 호스트의 시작과 Codex의 SubagentStart는 파일도 codex 명령도 쓰지 않는다."""
+        for host, event in (("claude", "SessionStart"), ("claude", "SubagentStart"), ("codex", "SubagentStart")):
+            with self.subTest(host=host, event=event):
+                # When
+                result = self.run_hook(host, event)
+
+                # Then
+                self.assert_context_loaded(result)
+                self.assertFalse(self.agents.exists())
+                self.assertFalse(self.state.exists())
+                self.assertEqual(self.calls(), [])
+
+    def test_AGENTS_파일을_쓸_수_없어도_지침은_출력되고_다음에_다시_시도한다(self):
+        """AGENTS.md 쓰기가 막히면 실패로 기록하고 지침 출력은 그대로이며, 막힘이 풀리면 다음 세션에서 성공한다."""
+        # Given
+        self.codex_home.mkdir()
+        self.agents.mkdir()
+
+        # When
+        first = self.run_hook()
+        failed = self.saved()["subagent_policy"]
+        self.agents.rmdir()
+        self.run_hook()
+
+        # Then
+        self.assert_context_loaded(first)
+        self.assertEqual(failed, {"value": True, "ok": False})
+        self.assertEqual(self.agents.read_text(encoding="utf-8"), BLOCK)
+        self.assertEqual(self.saved()["subagent_policy"], {"value": True, "ok": True})
 
 
 if __name__ == "__main__":

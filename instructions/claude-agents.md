@@ -49,9 +49,10 @@ session resume, apply its effective-settings checks before dispatch.
 Coordinate implementation under [implementation execution rules](implementation-execution.md). This section
 adds only the Claude Code worker integration.
 
-- When delegating implementation, use only `hei5enbug-agent-setup:worker`. Its definition pins `claude-sonnet-5-5` and
-  `high`. Never pass a per-invocation model on an invocation or resume, because that overrides the
-  definition. Never switch to another agent.
+- When delegating implementation, use only `hei5enbug-agent-setup:worker`, or `hei5enbug-agent-setup:designer`
+  for UI code, visual design, and diagram work. Their definitions pin `claude-sonnet-5-5` with `high` and
+  `claude-opus-5-5` with `xhigh`. Never pass a per-invocation model on an invocation or resume, because that
+  overrides the definition. Never switch to an agent outside these two.
 - Before the first invocation in a run, inspect only these non-secret inputs in the environment and every
   settings file: the worker definition, `CLAUDE_CODE_SUBAGENT_MODEL` and `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`,
   effort overrides such as `CLAUDE_CODE_EFFORT_LEVEL`, effort caps such as `maxEffortLevel` or organization
@@ -62,16 +63,22 @@ adds only the Claude Code worker integration.
   or execution rules. Preserve the worker's pinned model and effort.
 - Accept the host's subagent record, such as `/tasks` or the subagent transcript, as evidence when it names
   `claude-sonnet-5-5` as the actual model and `high` as the effort, and configuration cannot lower that
-  effort. Provider-internal reasoning telemetry is not required. A different recorded model, a cap below
-  `high`, a contradictory override, or unknown effective precedence is insufficient.
+  effort. For `designer`, the evidence is `claude-opus-5-5` with `xhigh`. Provider-internal reasoning telemetry
+  is not required. A different recorded model, a cap below the pinned effort, a contradictory override, or
+  unknown effective precedence is insufficient.
 - Read that record from the transcripts under the Claude config directory, `CLAUDE_CONFIG_DIR` or `~/.claude`,
   in `projects/<project>/`. The session transcript's launch result names the worker's `agentId` and
   `resolvedModel`, and `<session-id>/subagents/agent-<agentId>.jsonl` names `model` and `effort` on each
   assistant entry.
-- The launch result does not name the model, so start each worker with a readiness-only assignment. After its
-  record passes, send the implementation assignment to the same worker. Use this path only when that
-  follow-up keeps the pinned model. When that continuation is unavailable, skip the two-phase path
-  and use the session fallback. Recheck the settings after any resume.
+- When the session context contains `hei5enbug-agent-setup mod: role pinning active`, the plugin mod pins each
+  role's model and effort on every request and blocks tool calls from a subagent that answered on another model.
+  Send the assignment directly, with no readiness-only call.
+- Without that line, the launch result does not name the model, so start each worker with a readiness-only
+  assignment. After its record passes, send the implementation assignment to the same worker. Use this path
+  only when that follow-up keeps the pinned model. When that continuation is unavailable, skip the two-phase
+  path and use the session fallback. Recheck the settings after any resume.
+- In both cases, keep the settings inspection before the first invocation and read the subagent record to confirm
+  the actual model and effort before accepting delegated work.
 - The host limit is `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`, which counts running subagents but not the main
   session. Use its current value and open slots; never change it.
 - A missing plugin worker or a missing subagent record stops the affected delegation. Apply the session fallback.
