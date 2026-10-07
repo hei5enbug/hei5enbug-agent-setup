@@ -26,14 +26,18 @@ Korean text in this file is target-language data, including trigger phrases and 
 
 ## Core structure
 
-~~~mermaid
-flowchart LR
-    A[Current host] --> B[Dedicated opponent session]
-    B --> A
-    A --> C[Issue ledger]
-    C --> D{Agreement or exchange limit}
-    D -->|Agreement| E[Improvements or synthesis]
-    D -->|Unresolved| F[Question file]
+~~~text
+Current host <------> Dedicated opponent session
+     |
+     v
+Issue ledger
+     |
+     v
+Agreement or exchange limit
+     |
+     +-- agreement ---> Improvements or synthesis
+     |
+     +-- unresolved --> Question file
 ~~~
 
 The opponent may start a new command-line process for each exchange. Resume the same logical session with its exact conversation identifier so that it retains context until the debate ends.
@@ -115,9 +119,21 @@ Create the state directory like this:
 
     STATE_DIR="$(mktemp -d /tmp/tiki-taka-state.XXXXXX)"
 
-Store only the conversation identifier, current exchange count, maximum exchange count, opponent model, and concise progress state there.
-Delete prompts, debate transcripts, and code copies after each call.
-Keep a detached run's final response only until `--wait` collects it or `--finish` cleans it up, and protect the state directory with restricted permissions.
+The runner keeps only these files in the state directory:
+
+- `.tiki-taka-state` (state marker), `opponent`, `repo`, `max-exchanges`, `exchange-count`, `session-id`,
+  `active-model`, and `active-effort`.
+- `uncertain`, which exists only while the state is uncertain.
+- `progress.json`, the latest progress snapshot.
+- `.lock`, the execution lock.
+- For a detached run, `worker-pid`, `worker-exit`, `worker-result.txt`, and `worker-progress.log`.
+
+Per-call temporary data (the prompt, raw model output, event stream, and participant log) is deleted after each call.
+Never store debate transcripts or code copies there.
+`progress.json` remains until `--finish`.
+A detached run's `worker-progress.log` and final response in `worker-result.txt` remain only until `--wait` collects
+them or `--finish` cleans them up.
+Protect the state directory with restricted permissions.
 
 ## Fixed contract and context isolation
 
@@ -209,9 +225,14 @@ Add `--fast` only when the user explicitly prioritizes speed or cost over qualit
 The runner applies these limits by default:
 
 - At most 900 seconds per opponent call.
-- One concise progress line whenever state changes and every 60 seconds.
+- One concise progress line when the phase changes, at most once per 60 seconds.
+  The `completed` and `failed` phases always print.
+  While the stream is idle, a heartbeat line prints once 60 seconds (`--heartbeat-seconds`) have passed since
+  the last progress line.
 - No reasoning traces, prompts, raw commands, or partial answers in progress output.
-- Deletion of progress events and raw model output after each call.
+  The one exception is a failed call: the runner prints the last 4096 bytes of the participant's stderr log to stderr.
+  For a detached run, that text reaches the current CLI through `worker-progress.log`.
+- Deletion of the per-call prompt, raw model output, event stream, and participant log after each call.
 
 Do not interrupt a call merely because it is quiet. At 900 seconds, the runner terminates it and records an uncertain state.
 When repository-wide review or inspection of a large shared foundation will reasonably need more time, increase the limit with `--timeout-seconds` before the first call.
@@ -220,7 +241,10 @@ Do not lower the limit to save tokens or time.
 The first call creates a dedicated session, and later calls resume that exact session.
 The runner increments the exchange count only after a successful call and rejects calls beyond the configured limit.
 
-`--status` reads state without acquiring the execution lock, even while an opponent call is active. It prints only the exchange count, phase, elapsed time, and available token usage.
+`--status` reads state without acquiring the execution lock, even while an opponent call is active.
+It prints a configuration line with the opponent, model, effort, exchange count out of the limit, and state.
+The state is normal or uncertain.
+For a detached job, it also prints the job state, exchange, phase, elapsed seconds, model, and available token usage.
 
     bash "$SCRIPT" \
       --opponent "$OPPONENT" \
@@ -241,7 +265,7 @@ Use `--watch` to observe progress without collecting the result. Do not repeated
 
 ## Resume failure recovery
 
-When a resumed call fails or times out and receipt of the response is uncertain, the runner marks the state as uncertain.
+When any call fails or times out, including the first call, the runner marks the state as uncertain.
 Do not automatically start a new session or resend the same prompt from that state.
 
 A disconnected waiting call while a detached task continues is not a resume failure. Check with `--status` first and reconnect with `--wait`.
