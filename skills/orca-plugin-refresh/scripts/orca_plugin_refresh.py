@@ -29,11 +29,10 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 HOSTS = ("claude", "codex")
 RUN_ID = re.compile(r"^[0-9a-f]{32}$")
 HANDLE = re.compile(r"^[A-Za-z0-9._:-]{1,200}$")
-RUNTIME_PATHS = ("skills", "instructions", "scripts", "hooks", "agents", "standalone-agents", ".claude-plugin", ".codex-plugin")
+RUNTIME_PATHS = ("skills", "instructions", "scripts", "hooks", "config", "agents", "standalone-agents", ".claude-plugin", ".codex-plugin")
 REQUIRED_HOOK_TARGETS = (
     "scripts/session_context.py",
     "scripts/agent_guard.py",
-    "scripts/session_approval_guard.py",
     "scripts/datagrip_guard.py",
     "scripts/language_guard.py",
 )
@@ -199,6 +198,30 @@ def installed(host: str) -> dict:
     return {"version": version, "root": root.resolve().as_posix()}
 
 
+def inside(root: Path, path: Path) -> bool:
+    return path.resolve().is_relative_to(root.resolve())
+
+
+def validate_claude_mod(root: Path, manifest: dict) -> None:
+    missing = RefreshError("plugin_hook_target_missing", "An installed claude plugin mod file is missing.")
+    hooks = manifest.get("hooks")
+    if not isinstance(hooks, str) or not hooks:
+        raise missing
+    config_path = root / hooks
+    if not inside(root, config_path) or not config_path.is_file():
+        raise missing
+    try:
+        modules = json.loads(config_path.read_text(encoding="utf-8")).get("modules")
+    except (OSError, UnicodeError, json.JSONDecodeError, AttributeError) as error:
+        raise missing from error
+    if not isinstance(modules, list) or not modules:
+        raise missing
+    for module in modules:
+        module_path = config_path.parent / module if isinstance(module, str) and module else None
+        if module_path is None or not inside(root, module_path) or not module_path.is_file():
+            raise missing
+
+
 def validate_install(host: str, install: dict) -> dict:
     root = Path(install["root"])
     version = install["version"]
@@ -244,6 +267,8 @@ def validate_install(host: str, install: dict) -> dict:
                     raise RefreshError("plugin_hook_target_missing", f"An installed {host} plugin hook target is missing.")
     if not set(REQUIRED_HOOK_TARGETS) <= seen_targets:
         raise RefreshError("plugin_hook_target_missing", f"The installed {host} plugin hooks omit a required target.")
+    if host == "claude":
+        validate_claude_mod(root, manifest)
     try:
         digest = SESSION_CONTEXT.instructions_digest(root)
     except OSError as error:
