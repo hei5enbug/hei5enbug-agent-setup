@@ -16,10 +16,42 @@
     "developer-tools"
   ],
   "skills": "./skills/",
-  "hooks": "./config/claude-gpt-hooks.json",
+  "hooks": "./config/claude-mod.json",
   "agents": [
     "./agents/scout.md",
     "./agents/worker.md",
     "./agents/researcher.md"
-  ]
+  ],
+  "userConfig": {
+    "agent_guard": {
+      "type": "boolean",
+      "title": "Block built-in subagents",
+      "description": "Hide the built-in general-purpose, Explore, Plan, and claude agents and deny forked subagents so work goes to the plugin's scout, worker, and researcher agents.",
+      "default": true
+    },
+    "session_approval": {
+      "type": "boolean",
+      "title": "One-time session approval",
+      "description": "Approve each covered outward write (git tags, tag pushes, gh release create or edit, and MCP write tools) once per session; destructive or unverifiable actions always ask.",
+      "default": true
+    },
+    "role_pinning": {
+      "type": "boolean",
+      "title": "Pin role models",
+      "description": "Run the scout, worker, and researcher agents on their pinned model and effort, and stop an agent that runs on any other model.",
+      "default": true
+    },
+    "language_guard": {
+      "type": "boolean",
+      "title": "Response language guard",
+      "description": "Block or remind when a reply is not written in the configured response language.",
+      "default": true
+    },
+    "datagrip_guard": {
+      "type": "boolean",
+      "title": "DataGrip query guard",
+      "description": "Run read-only DataGrip queries without approval and ask for anything that writes or cannot be classified.",
+      "default": true
+    }
+  }
 }

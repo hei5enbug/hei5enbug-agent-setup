@@ -1,0 +1,4 @@
+{
+  "description": "Claude Code mod for hei5enbug-agent-setup: built-in subagent guard, role model pinning, one-time session approval, and GPT request refusal.",
+  "modules": ["../hooks/mod/register.js"]
+}

@@ -367,6 +367,74 @@ class ResolutionTest(LanguageGuardCase):
         self.assert_silent(result)
 
 
+class ToggleTest(LanguageGuardCase):
+    def test_Claude_옵션이_꺼짐_값이면_영어_답변도_출력이_없다(self):
+        """CLAUDE_PLUGIN_OPTION_LANGUAGE_GUARD가 false, 0, off, no(대소문자 무시)이면 Stop과 PostToolUse 모두 출력이 없다."""
+        # Given
+        self.use_korean_setting()
+        transcript = self.write_transcript([
+            claude_assistant([text_block(ENGLISH), tool_use_block("tool-1")]),
+        ])
+
+        for value in ("false", "0", "off", "no", "OFF", "False"):
+            with self.subTest(value=value):
+                # When
+                stop = self.run_guard(self.stop_event(ENGLISH), CLAUDE_PLUGIN_OPTION_LANGUAGE_GUARD=value)
+                post = self.run_guard(self.post_event(transcript), CLAUDE_PLUGIN_OPTION_LANGUAGE_GUARD=value)
+
+                # Then
+                self.assert_silent(stop)
+                self.assert_silent(post)
+
+    def test_Codex_변수가_꺼짐_값이면_영어_답변도_출력이_없다(self):
+        """HEI5ENBUG_LANGUAGE_GUARD가 꺼짐 값이면 한국어 기본 강제도 하지 않는다."""
+        # Given
+        event = self.stop_event(ENGLISH)
+
+        for value in ("false", "0", "off", "no"):
+            with self.subTest(value=value):
+                # When
+                result = self.run_guard(event, host="codex", HEI5ENBUG_LANGUAGE_GUARD=value)
+
+                # Then
+                self.assert_silent(result)
+
+    def test_값이_비었거나_알_수_없으면_가드는_켜진_채로_동작한다(self):
+        """빈 문자열이나 인식할 수 없는 값은 기본값인 켜짐으로 읽는다."""
+        # Given
+        self.use_korean_setting()
+        event = self.stop_event(ENGLISH)
+        transcript = self.write_transcript([
+            claude_assistant([text_block(ENGLISH), tool_use_block("tool-1")]),
+        ])
+
+        for value in ("", "on", "true", "maybe"):
+            with self.subTest(value=value):
+                # When
+                claude = self.run_guard(event, CLAUDE_PLUGIN_OPTION_LANGUAGE_GUARD=value)
+                codex = self.run_guard(event, host="codex", HEI5ENBUG_LANGUAGE_GUARD=value)
+                post = self.run_guard(self.post_event(transcript), CLAUDE_PLUGIN_OPTION_LANGUAGE_GUARD=value)
+
+                # Then
+                self.assertEqual(self.output(claude)["decision"], "block")
+                self.assertEqual(self.output(codex)["decision"], "block")
+                self.assertEqual(self.output(post)["hookSpecificOutput"]["additionalContext"], REMINDER)
+
+    def test_호스트가_아닌_쪽의_토글은_영향을_주지_않는다(self):
+        """Codex는 Claude 옵션 변수를, Claude Code는 HEI5ENBUG 변수를 읽지 않는다."""
+        # Given
+        self.use_korean_setting()
+        event = self.stop_event(ENGLISH)
+
+        # When
+        codex = self.run_guard(event, host="codex", CLAUDE_PLUGIN_OPTION_LANGUAGE_GUARD="off")
+        claude = self.run_guard(event, HEI5ENBUG_LANGUAGE_GUARD="off")
+
+        # Then
+        self.assertEqual(self.output(codex)["decision"], "block")
+        self.assertEqual(self.output(claude)["decision"], "block")
+
+
 class ComplianceTest(unittest.TestCase):
     def compliant(self, text, language="Korean"):
         return GUARD.is_compliant(text, language)

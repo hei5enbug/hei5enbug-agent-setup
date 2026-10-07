@@ -712,13 +712,23 @@ class UpdateTest(unittest.TestCase):
             os.environ.pop(name, None)
         self.addCleanup(self.env.stop)
 
-    def install(self, host, version, *, root=None, missing_target=None, manifest_version=None, instruction=None):
+    def install(self, host, version, *, root=None, missing_target=None, manifest_version=None, instruction=None,
+                missing_config=False, missing_module=False):
         root = Path(root) if root else self.base / f"{host}-{version}"
         manifest_dir = root / (".claude-plugin" if host == "claude" else ".codex-plugin")
         manifest_dir.mkdir(parents=True, exist_ok=True)
-        (manifest_dir / "plugin.json").write_text(
-            json.dumps({"name": refresh.PLUGIN, "version": manifest_version or version}), encoding="utf-8"
-        )
+        manifest = {"name": refresh.PLUGIN, "version": manifest_version or version}
+        if host == "claude":
+            manifest["hooks"] = "./config/claude-mod.json"
+            config = root / "config" / "claude-mod.json"
+            module = root / "hooks" / "mod" / "register.js"
+            config.parent.mkdir(parents=True, exist_ok=True)
+            module.parent.mkdir(parents=True, exist_ok=True)
+            if not missing_config:
+                config.write_text(json.dumps({"modules": ["../hooks/mod/register.js"]}), encoding="utf-8")
+            if not missing_module:
+                module.write_text("export function register() {}\n", encoding="utf-8")
+        (manifest_dir / "plugin.json").write_text(json.dumps(manifest), encoding="utf-8")
         hooks = []
         for target in refresh.REQUIRED_HOOK_TARGETS:
             path = root / target
@@ -1010,6 +1020,76 @@ class UpdateTest(unittest.TestCase):
         # Then
         self.assertEqual("plugin_hook_target_missing", invalid.exception.code)
         self.assertEqual(2, len(commands))
+
+    def update_claude_with_after(self, after):
+        before = self.install("claude", "1.0.0")
+        commands = []
+        with (
+            patch.object(refresh, "installed", side_effect=[before, after]),
+            patch.object(refresh, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
+            patch.object(refresh, "executable", side_effect=lambda name: name),
+            patch.object(refresh, "Orca", side_effect=self.empty_orca),
+            patch.object(refresh, "claude_unreleased_changes", return_value=([], None)),
+        ):
+            return refresh.update_host("claude", offline=True)
+
+    def test_업데이트_뒤_Claude_Mod_설정_파일이_없으면_실패로_남긴다(self):
+        """매니페스트 hooks가 가리키는 Mod 설정 파일이 새 설치본에 없으면 성공으로 보지 않는다."""
+        # Given
+        after = self.install("claude", "1.1.0", missing_config=True)
+
+        # When
+        with self.assertRaises(refresh.RefreshError) as invalid:
+            self.update_claude_with_after(after)
+
+        # Then
+        self.assertEqual("plugin_hook_target_missing", invalid.exception.code)
+
+    def test_업데이트_뒤_Claude_Mod_모듈_파일이_없으면_실패로_남긴다(self):
+        """Mod 설정이 나열한 모듈 파일이 새 설치본에 없으면 성공으로 보지 않는다."""
+        # Given
+        after = self.install("claude", "1.1.0", missing_module=True)
+
+        # When
+        with self.assertRaises(refresh.RefreshError) as invalid:
+            self.update_claude_with_after(after)
+
+        # Then
+        self.assertEqual("plugin_hook_target_missing", invalid.exception.code)
+
+    def test_Claude_매니페스트에_hooks가_없거나_설치_밖을_가리키면_실패한다(self):
+        """hooks 값이 없거나 플러그인 루트 밖 경로이면 Mod 설정이 있어도 검증을 통과시키지 않는다."""
+        # Given
+        install = self.install("claude", "1.1.0")
+        manifest_path = Path(install["root"]) / ".claude-plugin" / "plugin.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        outside = self.base / "outside.json"
+        outside.write_text(json.dumps({"modules": ["../hooks/mod/register.js"]}), encoding="utf-8")
+
+        for hooks in (None, "../outside.json"):
+            with self.subTest(hooks=hooks):
+                changed = {key: value for key, value in manifest.items() if key != "hooks"}
+                if hooks is not None:
+                    changed["hooks"] = hooks
+                manifest_path.write_text(json.dumps(changed), encoding="utf-8")
+
+                # When
+                with self.assertRaises(refresh.RefreshError) as invalid:
+                    refresh.validate_install("claude", install)
+
+                # Then
+                self.assertEqual("plugin_hook_target_missing", invalid.exception.code)
+
+    def test_Claude_Mod_설정과_모듈이_모두_있으면_검증을_통과한다(self):
+        """매니페스트 hooks의 설정 파일과 그 모듈이 모두 설치돼 있으면 Claude 설치본 검증이 통과한다."""
+        # Given
+        install = self.install("claude", "1.1.0")
+
+        # When
+        result = refresh.validate_install("claude", install)
+
+        # Then
+        self.assertTrue(result["digest"])
 
     def test_업데이트_뒤_manifest_version과_지침_digest가_없으면_실패한다(self):
         """새 설치본의 호스트 manifest 버전이 다르거나 지침 digest가 비어 있으면 성공으로 처리하지 않는다."""
