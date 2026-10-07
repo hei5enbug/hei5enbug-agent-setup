@@ -33,6 +33,9 @@
   모델은 제외한다. 계열에 더 새로운 릴리스가 있으면 같은 변경에서 `PINS`와 모든 참조를 갱신하고
   `tests/test_model_pins.py`가 통과할 때까지 맞춘다. 실행 파일은 모델을 이 전체 ID로만 적는다. 별칭이나 실행 시점의
   최신 릴리스 조회는 추가하지 않는다.
+- 개발 기록은 `main`이 아니라 `gpt-route` 브랜치에 있다. 모델 라우팅 비교나 Claude Code 안 GPT 경로 작업을
+  다시 시작하기 전에 그 브랜치의 `docs/model-routing-remaining.md`와 `docs/claude-gpt-remaining.md`를 읽는다.
+  예를 들어 `git show origin/gpt-route:docs/model-routing-remaining.md`로 읽는다.
 - Orca CLI가 설치되어 있지 않아 테스트를 건너뛰면, 검사가 통과했다고 보고하기 전에 Orca를 설치하고 다시 실행할지
   사용자에게 묻는다.
 - `HEAD`에서 닿는 가장 새로운 `v<major>.<minor>.<patch>` 태그가 릴리스 기준이다. 매니페스트에만 있는 버전은 이미

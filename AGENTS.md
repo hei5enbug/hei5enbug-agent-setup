@@ -31,6 +31,9 @@
   exclude previews. When a family has a newer release, update `PINS` and every reference in the same change
   until `tests/test_model_pins.py` passes. Runtime files name models only by these full IDs; never add an alias
   or a runtime lookup of the newest release.
+- Development records live on the `gpt-route` branch, not on `main`. Before resuming the model-routing comparison
+  or the GPT route inside Claude Code, read `docs/model-routing-remaining.md` and `docs/claude-gpt-remaining.md`
+  there, for example with `git show origin/gpt-route:docs/model-routing-remaining.md`.
 - When tests skip because the Orca CLI is not installed, ask the user whether to install Orca and rerun them
   before you report the checks as passing.
 - The release baseline is the newest `v<major>.<minor>.<patch>` tag reachable from `HEAD`. A version that appears only
