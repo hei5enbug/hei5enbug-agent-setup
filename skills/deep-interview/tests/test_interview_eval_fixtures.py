@@ -20,7 +20,7 @@ class DeepInterviewEvalFixtureTest(unittest.TestCase):
 
         # Then
         self.assertEqual(suite["skill_name"], "deep-interview")
-        self.assertEqual(case_ids, list(range(1, 14)))
+        self.assertEqual(case_ids, list(range(1, 15)))
         self.assertEqual(len(case_ids), len(set(case_ids)))
         self.assertTrue(all(case["expected_output"] and case["expectations"] for case in cases))
         self.assertTrue(all((SKILL_ROOT / path).is_file() for path in input_paths))

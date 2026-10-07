@@ -22,7 +22,7 @@ The accompanying `SKILL.ko.md` is a Korean translation kept synchronized with th
 
 Read these resources only when their stage is reached:
 
-- [`references/ask-ui.md`](references/ask-ui.md): before every user question.
+- [`references/ask-ui.md`](references/ask-ui.md): before the first user question, and again after a context compaction or whenever its rules are no longer in context.
 - [`references/scoring-and-state.md`](references/scoring-and-state.md): before initial scoring and whenever scores or state change.
 - [`references/spec-template.md`](references/spec-template.md): when producing the final specification.
 - [`references/auto-research-greenfield.md`](references/auto-research-greenfield.md): when optional independent research can improve a greenfield question.
@@ -58,7 +58,7 @@ whether to start it, and do not start it. The user reaches this skill by naming 
 
 At startup, identify available capabilities without assuming product names:
 
-1. **Structured ask**: use the host's native single-question UI when available. Before using the plain-text fallback, follow any host-specific mode or setup gate in `references/ask-ui.md`.
+1. **Structured ask**: use the host's native single-question UI when available. Before using the plain-text fallback, follow any host-specific mode or setup gate in `references/ask-ui.md` (read it first if its rules are not in context).
    If the gate requires user action, explain it and end the turn until the user resumes in the supported mode.
 2. **Read-only exploration**: use repository search/read tools; if unavailable, ask only for facts that cannot be observed.
 3. **Independent reasoning**: use isolated read-only subagents when available; otherwise run the same persona passes sequentially in the main context.
@@ -124,7 +124,7 @@ Before asking about a potentially discoverable fact:
 
 ### 3. Form the Question
 
-Read `references/ask-ui.md`. Include:
+Read `references/ask-ui.md` if its rules are not in context. Include:
 
 ```text
 Round <n> | Component: <name> | Targeting: <dimension> | Why now: <reason> | Ambiguity: <score>%

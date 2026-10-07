@@ -3,7 +3,7 @@
 This fragment defines how Deep Interview asks the user **every** interview question.
 It is the load-bearing contract of this skill: the interview is conducted **through the host agent's native ask UI**, never as plain prose pretending to be a multiple-choice question.
 
-Load this fragment whenever you are about to present a question or a confirmation: the Round 0 topology confirmation, the answer-interpretation confirmation in "Interview Loop, 4. Normalize the Answer", the goal restatement and specification approval in "Closure Gates", and the execution-bridge choice in "Closure Gates, step 5".
+Load this fragment before the first question or confirmation, and again after a context compaction or whenever its rules are no longer in context. It governs every question and confirmation: the Round 0 topology confirmation, the answer-interpretation confirmation in "Interview Loop, 4. Normalize the Answer", the goal restatement and specification approval in "Closure Gates", and the execution-bridge choice in "Closure Gates, step 5".
 
 ## Contents
 
@@ -104,11 +104,11 @@ Detect the runtime by which ask tool is present in your available tools, then us
 
 ### Codex → Plan mode + `request_user_input`
 
-- Run the interview in **Plan mode**, where Codex provides the supported structured-question workflow.
+- When `features.default_mode_request_user_input` is enabled (the hei5enbug-agent-setup plugin enables it on Codex), use `request_user_input` in Default mode too.
+- When that feature is not enabled, run the interview in **Plan mode**, where Codex provides the supported structured-question workflow.
   If the current conversation is not in Plan mode, tell the user to switch with `/plan` (or the equivalent Plan mode control in their Codex surface), then **end the turn**.
   Resume the interview only after the user returns in Plan mode.
-- Do not recommend or enable `features.default_mode_request_user_input`; it is an under-development feature and is not required for this skill.
-- In Plan mode, prefer the `request_user_input` tool and prompt with 1–3 short questions (use exactly **1**).
+- In Plan mode, or in Default mode with the feature enabled, prefer the `request_user_input` tool and prompt with 1–3 short questions (use exactly **1**).
   Options carry `label` and `description`; each question carries `id`, `header`, `question`, and `options`.
 - If an MCP server exposes structured elicitation (`form` / `openai/form` / `url`), that is also an acceptable structured primitive.
 - Use the **inline fallback** only when Plan mode is unavailable, the user declines to switch modes, or no structured primitive is available after the switch.
@@ -149,7 +149,7 @@ Rules for the inline fallback:
 
 ## Quick selection checklist
 
-1. Is this Codex outside Plan mode? Ask the user to switch to Plan mode and end the turn.
+1. Is this Codex in Default mode with `features.default_mode_request_user_input` not enabled? Ask the user to switch to Plan mode and end the turn.
    Otherwise, use the native structured ask tool (Claude `AskUserQuestion` / OpenCode `question` / Codex `request_user_input` / MCP elicitation).
 2. Exactly one question, `header` ≤ 12 chars, options within the host schema's range, each `{label, description}`, single-select unless genuinely multi.
 3. Translate question/header/options to the user's language.
