@@ -7,7 +7,7 @@
 
 다음 자료는 해당 단계에 도달했을 때만 읽습니다.
 
-- [`references/ask-ui.md`](references/ask-ui.ko.md): 사용자에게 질문하기 전
+- [`references/ask-ui.md`](references/ask-ui.ko.md): 첫 사용자 질문 전, 그리고 문맥 압축 뒤나 규칙이 문맥에 남아 있지 않을 때 다시
 - [`references/scoring-and-state.md`](references/scoring-and-state.ko.md): 처음 점수를 매길 때와 점수나 상태가 바뀔 때
 - [`references/spec-template.md`](references/spec-template.ko.md): 최종 사양서를 만들 때
 - [`references/auto-research-greenfield.md`](references/auto-research-greenfield.ko.md): 그린필드 질문에 선택적 독립 조사가 도움이 될 때
@@ -45,7 +45,7 @@
 시작할 때 제품 이름을 미리 가정하지 말고 사용할 수 있는 기능을 확인합니다.
 
 1. **구조화된 질문**: 가능하면 호스트의 네이티브 단일 질문 UI를 사용합니다.
-   일반 텍스트 폴백 전에 `references/ask-ui.md`의 호스트별 모드나 설정 관문을 따릅니다.
+   일반 텍스트 폴백 전에 `references/ask-ui.md`의 호스트별 모드나 설정 관문을 따릅니다(규칙이 문맥에 없으면 먼저 읽습니다).
    관문에서 사용자 행동을 요구하면 설명하고 지원되는 모드로 다시 시작할 때까지 턴을 끝냅니다.
 2. **읽기 전용 탐색**: 저장소 검색·읽기 도구를 사용합니다. 사용할 수 없으면 관찰할 수 없는 사실만 묻습니다.
 3. **독립적 추론**: 가능하면 격리된 읽기 전용 서브에이전트를 사용하고, 그렇지 않으면 메인 문맥에서 같은 관점 검토를 순서대로 수행합니다.
@@ -111,7 +111,7 @@ Deep Interview threshold: <percent> (source: <source>)
 
 ### 3. 질문 작성
 
-`references/ask-ui.md`를 읽습니다. 다음 형식을 포함합니다.
+`references/ask-ui.md`의 규칙이 문맥에 없으면 읽습니다. 다음 형식을 포함합니다.
 
 ```text
 Round <n> | Component: <name> | Targeting: <dimension> | Why now: <reason> | Ambiguity: <score>%

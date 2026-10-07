@@ -46,8 +46,8 @@
     },
     {
       "id": 4,
-      "prompt": "Use $deep-interview to interview me about a database migration. This conversation is in Codex Default mode. Start the interview now.",
-      "expected_output": "Applies the Codex Plan-mode gate, tells the user to switch to Plan mode, and ends the turn without asking inline or structured interview questions.",
+      "prompt": "Use $deep-interview to interview me about a database migration. This conversation is in Codex Default mode, and features.default_mode_request_user_input is not enabled. Start the interview now.",
+      "expected_output": "Applies the Codex Plan-mode gate because the Default-mode request_user_input feature is not enabled, tells the user to switch to Plan mode, and ends the turn without asking inline or structured interview questions.",
       "files": [],
       "expectations": [
         "Requests the supported Plan-mode transition.",
@@ -152,6 +152,17 @@
         "Does not leak the intended conclusion or unrelated round history into reviewer prompts.",
         "Does not let reviewers change scope, approve assumptions, or ask the user directly.",
         "Folds only the highest-leverage validated finding into one main-session question."
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "Use $deep-interview in Codex Default mode to ask one question about importing compressed CSV files. The features.default_mode_request_user_input feature is enabled and the request_user_input tool is available.",
+      "expected_output": "Calls request_user_input from the main session in Default mode with exactly one question and host-valid fields, then waits for the answer without asking the user to switch to Plan mode.",
+      "files": [],
+      "expectations": [
+        "Uses request_user_input in Default mode without asking the user to switch to Plan mode.",
+        "Sends exactly one question with id, header, question, options, and valid choice bounds.",
+        "Keeps the ask in the main session and waits for the user."
       ]
     }
   ]

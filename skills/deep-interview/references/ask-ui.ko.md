@@ -6,7 +6,8 @@
 심층 인터뷰가 모든 질문을 사용자에게 제시하는 방식을 정의한다. 인터뷰는 일반 텍스트로 객관식 질문을
 흉내 내지 않고 호스트 에이전트의 네이티브 질문 UI로 진행한다.
 
-질문이나 확인을 제시하기 직전에 이 파일을 읽는다. Round 0 토폴로지 확인, Interview Loop의 답변 해석 확인,
+첫 질문이나 확인 전에 이 파일을 읽고, 문맥 압축 뒤나 규칙이 문맥에 남아 있지 않을 때 다시 읽는다.
+모든 질문과 확인에 적용한다. Round 0 토폴로지 확인, Interview Loop의 답변 해석 확인,
 Closure Gates의 목표 재진술과 사양 승인, 실행 연결 선택에 적용한다.
 
 ## 목차
@@ -110,10 +111,12 @@ Closure Gates의 목표 재진술과 사양 승인, 실행 연결 선택에 적�
 
 ### Codex: Plan 모드와 `request_user_input`
 
-- 지원되는 구조화 질문 절차가 있는 Plan 모드에서 인터뷰를 실행한다. 현재 대화가 Plan 모드가 아니면
-  `/plan` 또는 같은 기능으로 전환하도록 알리고 턴을 끝낸다. 전환 뒤에만 인터뷰를 재개한다.
-- 개발 중 기능인 `features.default_mode_request_user_input`을 추천하거나 켜지 않는다.
-- Plan 모드에서는 `request_user_input`을 우선하고 질문은 1개에서 3개 중 정확히 1개를 사용한다.
+- `features.default_mode_request_user_input`이 켜져 있으면(hei5enbug-agent-setup 플러그인이 Codex에서 켠다)
+  Default 모드에서도 `request_user_input`을 사용한다.
+- 이 기능이 켜져 있지 않으면 지원되는 구조화 질문 절차가 있는 Plan 모드에서 인터뷰를 실행한다.
+  현재 대화가 Plan 모드가 아니면 `/plan` 또는 같은 기능으로 전환하도록 알리고 턴을 끝낸다.
+  전환 뒤에만 인터뷰를 재개한다.
+- Plan 모드나 기능이 켜진 Default 모드에서는 `request_user_input`을 우선하고 질문은 1개에서 3개 중 정확히 1개를 사용한다.
   선택지에는 `label`, `description`, 질문에는 `id`, `header`, `question`, `options`를 둔다.
 - MCP 서버가 `form`, `openai/form`, `url` 구조화 elicitation을 제공하면 사용할 수 있다.
 - Plan 모드를 사용할 수 없거나 사용자가 전환을 거절하거나 전환 뒤에도 구조화 기능이 없을 때만
@@ -152,7 +155,7 @@ Closure Gates의 목표 재진술과 사양 승인, 실행 연결 선택에 적�
 
 ## 빠른 선택 체크리스트
 
-1. Codex가 Plan 모드 밖에 있으면 전환을 요청하고 턴을 끝낸다. 아니면 Claude `AskUserQuestion`,
+1. Codex가 Default 모드이고 `features.default_mode_request_user_input`이 켜져 있지 않으면 Plan 모드 전환을 요청하고 턴을 끝낸다. 아니면 Claude `AskUserQuestion`,
    OpenCode `question`, Codex `request_user_input` 또는 MCP elicitation을 사용한다.
 2. 질문 하나, 12자 이내 `header`, 호스트 범위 안의 선택지와 각 `label`, `description`을 사용한다.
    실제 다중 선택이 아니면 단일 선택이다.
