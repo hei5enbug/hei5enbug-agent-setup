@@ -5,7 +5,6 @@ This document defines the JSON schemas used by skill-builder.
 ## Contents
 
 - [`evals.json`](#evalsjson)
-- [`history.json`](#historyjson)
 - [`grading.json`](#gradingjson)
 - [`metrics.json`](#metricsjson)
 - [`timing.json`](#timingjson)
@@ -44,53 +43,6 @@ Defines the evals for a skill. Located at `evals/evals.json` within the skill di
 - `evals[].expected_output`: Human-readable description of success
 - `evals[].files`: Optional list of input file paths (relative to skill root)
 - `evals[].expectations`: List of verifiable statements
-
----
-
-## history.json
-
-Tracks version progression in Improve mode. Located at workspace root.
-
-```json
-{
-  "started_at": "2026-01-15T10:30:00Z",
-  "skill_name": "pdf",
-  "current_best": "v2",
-  "iterations": [
-    {
-      "version": "v0",
-      "parent": null,
-      "expectation_pass_rate": 0.65,
-      "grading_result": "baseline",
-      "is_current_best": false
-    },
-    {
-      "version": "v1",
-      "parent": "v0",
-      "expectation_pass_rate": 0.75,
-      "grading_result": "won",
-      "is_current_best": false
-    },
-    {
-      "version": "v2",
-      "parent": "v1",
-      "expectation_pass_rate": 0.85,
-      "grading_result": "won",
-      "is_current_best": true
-    }
-  ]
-}
-```
-
-**Fields:**
-- `started_at`: ISO timestamp of when improvement started
-- `skill_name`: Name of the skill being improved
-- `current_best`: Version identifier of the best performer
-- `iterations[].version`: Version identifier (v0, v1, ...)
-- `iterations[].parent`: Parent version this was derived from
-- `iterations[].expectation_pass_rate`: Pass rate from grading
-- `iterations[].grading_result`: "baseline", "won", "lost", or "tie"
-- `iterations[].is_current_best`: Whether this is the current best version
 
 ---
 
@@ -188,7 +140,10 @@ Output from the grader agent. Located at `<run-dir>/grading.json`.
 - `summary`: Aggregate counts.
   - `passed`, `failed`, `total`: Expectation counts.
   - `pass_rate`: Fraction passed, `0.0` to `1.0`.
-- `execution_metrics`: Copied from the executor's `metrics.json` when available.
+- `execution_metrics`: Copied from the executor's `metrics.json` when available. This is the only source of
+  the benchmark's `tool_calls`, `output_chars`, and `errors`.
+  - `total_tool_calls`: Sum of all tool calls; the benchmark reports it as `result.tool_calls`.
+  - `errors_encountered`: Number of errors; the benchmark reports it as `result.errors`.
   - `output_chars`: Character count of the output files. Never a substitute for measured tokens.
   - `transcript_chars`: Character count of the transcript.
 - `timing`: Wall clock timing from `timing.json` when available.
@@ -220,6 +175,9 @@ must also have the object and value types shown above.
 ## metrics.json
 
 Output from the executor agent. Located at `<run-dir>/outputs/metrics.json`.
+
+The benchmark aggregator does not read this file. The grader copies the values it needs into
+`grading.json` `execution_metrics`, and the aggregator reads them from there.
 
 ```json
 {
@@ -258,8 +216,12 @@ Wall clock timing for a run. Located at `<run-dir>/timing.json`.
 **How to capture:** When an independent worker or host task reports `total_tokens` and `duration_ms`, save them immediately because many hosts do not persist notification metadata.
 If the host does not expose a metric, store `null` or omit the optional field; never invent a value.
 
+The aggregator reads only `total_duration_seconds` and `total_tokens`. `duration_ms` is optional host data that
+the aggregator does not read. `total_duration_seconds` is used only when `grading.json` `timing` does not
+provide it.
+
 `total_tokens` is the only source of the `tokens` metric in `benchmark.json`.
-`output_chars` from `metrics.json` is a character count, a different unit, and is never substituted for it.
+`output_chars` is a character count, a different unit, and is never substituted for it.
 When `total_tokens` is missing, the aggregator records `tokens: null` and the viewer shows N/A.
 
 ```json
@@ -280,7 +242,9 @@ When `total_tokens` is missing, the aggregator records `tokens: null` and the vi
 
 ## benchmark.json
 
-Output from Benchmark mode. Located at `benchmarks/<timestamp>/benchmark.json`.
+Output of `scripts/aggregate_benchmark.py`. Written next to the aggregated directory as
+`<benchmark_dir>/benchmark.json`, for example `<workspace>/iteration-N/benchmark.json`, unless `--output` names
+another path.
 
 ```json
 {
@@ -363,21 +327,27 @@ Output from Benchmark mode. Located at `benchmarks/<timestamp>/benchmark.json`.
 - `metadata`: Information about the benchmark run
   - `skill_name`: Name of the skill
   - `timestamp`: When the benchmark was run
-  - `evals_run`: List of eval names or IDs
+  - `evals_run`: Sorted list of integer eval IDs
   - `runs_per_configuration`: Number of runs per config (e.g. 3)
 - `runs[]`: Individual run results
   - `eval_id`: Numeric eval identifier
   - `eval_name`: Human-readable eval name (used as section header in the viewer)
-  - `configuration`: Must be `"with_skill"` or `"without_skill"` (the viewer uses this exact string for grouping and color coding)
+  - `configuration`: The run's configuration directory name. The viewer recognizes `"with_skill"`,
+    `"without_skill"`, `"new_skill"`, and `"old_skill"` for grouping and color coding
   - `run_number`: Integer run number (1, 2, 3...)
-  - `result`: Nested object with `pass_rate`, `passed`, `total`, `time_seconds`, `tokens`, `output_chars`, `errors`
+  - `result`: Nested object with `pass_rate`, `passed`, `failed`, `total`, `time_seconds`, `tokens`,
+    `output_chars`, `tool_calls`, `errors`
   - `result.tokens`: From `timing.json` `total_tokens` only; `null` when the host did not report it
-  - `result.output_chars`: Character count from `metrics.json`; a different unit from tokens
-- `incomplete[]`: Runs whose `grading.json` was missing, unreadable, or invalid. They are listed here
+  - `result.tool_calls`: `execution_metrics.total_tool_calls` from `grading.json`; `null` when absent
+  - `result.output_chars`: Character count from `grading.json` `execution_metrics`; a different unit from tokens
+- `incomplete[]`: Runs whose `grading.json` was missing, unreadable, or invalid, and configuration directories
+  that have neither `run-*` subdirectories nor their own `grading.json` (reason `grading.json not found`,
+  `run_number` 1). They are listed here
   and excluded from `runs`, every average, and every delta. A configuration with no complete run
   has `null` statistics, never zeros.
 - `run_summary`: Statistical aggregates per configuration
-  - `with_skill` / `without_skill`: Each contains `pass_rate`, `time_seconds`, `tokens` objects with `mean` and `stddev` fields
+  - One entry per configuration name (for example `with_skill` / `without_skill`): Each contains `pass_rate`,
+    `time_seconds`, `tokens` objects with `mean`, `stddev`, `min`, and `max` fields
   - `delta`: Difference strings like `"+0.50"`, `"+13.0"`, `"+1700"`, computed only over `shared_eval_ids`,
     the eval IDs both configurations completed. A metric one side never measured has a `null` delta.
 - `notes`: Freeform observations from the analyzer
@@ -390,7 +360,7 @@ Always reference this schema when generating benchmark.json manually.
 
 ## comparison.json
 
-Output from blind comparator. Located at `<grading-dir>/comparison-N.json`.
+Output from blind comparator. Saved as `comparison.json` unless the caller gives another path.
 
 ```json
 {

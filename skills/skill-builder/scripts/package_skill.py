@@ -148,6 +148,9 @@ def package_skill(skill_path, output_dir=None, check_installed=False):
 
     Returns:
         Path to the created .skill file, or None if error
+
+    Raises:
+        MissingDependencyError: PyYAML is not installed
     """
     skill_path = Path(skill_path).resolve()
 
@@ -179,11 +182,7 @@ def package_skill(skill_path, output_dir=None, check_installed=False):
 
     # Run validation before packaging
     print("🔍 Validating skill...")
-    try:
-        valid, message = validate_skill(skill_path)
-    except MissingDependencyError as exc:
-        print(f"❌ Error: {exc}")
-        return None
+    valid, message = validate_skill(skill_path)
     if not valid:
         print(f"❌ Validation failed: {message}")
         print("   Please fix the validation errors before packaging.")
@@ -273,7 +272,11 @@ def main():
         print(f"   Output directory: {args.output_dir}")
     print()
 
-    result = package_skill(args.skill_path, args.output_dir, check_installed=args.check_installed)
+    try:
+        result = package_skill(args.skill_path, args.output_dir, check_installed=args.check_installed)
+    except MissingDependencyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(2)
 
     if result:
         sys.exit(0)

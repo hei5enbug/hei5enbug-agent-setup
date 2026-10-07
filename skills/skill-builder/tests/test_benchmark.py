@@ -98,6 +98,27 @@ class IncompleteRunTest(unittest.TestCase):
         self.assertIsNone(without["time_seconds"]["mean"])
         self.assertIsNone(benchmark["run_summary"]["delta"]["pass_rate"])
 
+    def test_config_dir_without_runs_or_grading_is_listed_as_incomplete(self):
+        """run 디렉터리도 grading.json도 없는 설정 디렉터리는 incomplete에 기록한다."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            write_run(root, 1, "with_skill", 1, grading(1.0))
+            (root / "eval-1" / "without_skill" / "outputs").mkdir(parents=True)
+            # Given
+            expected = {
+                "eval_id": 1,
+                "eval_name": "eval-1",
+                "configuration": "without_skill",
+                "run_number": 1,
+                "reason": "grading.json not found",
+            }
+            # When
+            benchmark = ab.generate_benchmark(root)
+        # Then
+        self.assertEqual(benchmark["incomplete"], [expected])
+        self.assertEqual(len(benchmark["runs"]), 1)
+        self.assertIsNone(benchmark["run_summary"]["without_skill"]["pass_rate"]["mean"])
+
     def test_empty_grading_is_invalid_not_a_completed_zero(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
