@@ -232,6 +232,28 @@ class DriveTest(unittest.TestCase):
         self.assertEqual(("skipped", "busy"), (by_handle["term_used"]["status"], by_handle["term_used"]["detail"]))
         self.assertEqual([], fake.sent)
 
+    def test_턴이_없던_Codex_세션이_대기_상태여도_표식이_없거나_낡았으면_명령을_보내지_않고_끝낸다(self):
+        """대기 중인 새 Codex 세션은 표식이 없거나 낡아도 compact를 보내지 않고 할 일 없음으로 끝내며, 대화가 있는 세션에는 보낸다."""
+        # Given
+        fresh = [">_ OpenAI Codex (v0.159.2)", "  model: GPT-6-Luna low", *CODEX_EMPTY[2:]]
+        used = [">_ OpenAI Codex (v0.159.2)", *CODEX_EMPTY]
+        self.write_marker("term_stale", "codex", digest="old")
+        fake = FakeOrca(
+            [terminal("term_missing", "codex"), terminal("term_stale", "codex"), terminal("term_used", "codex")],
+            screens={"term_missing": fresh, "term_stale": fresh, "term_used": used},
+            on_send=self.simulate,
+        )
+        sessions = refresh.plan_sessions(fake, self.state, "auto", [])
+
+        # When
+        refresh.drive(fake, sessions, self.state, time.time() + 5, sleep=lambda seconds: None)
+
+        # Then
+        by_handle = {entry["handle"]: entry for entry in sessions}
+        for handle in ("term_missing", "term_stale"):
+            self.assertEqual(("done", "fresh_session_loads_on_first_turn"), (by_handle[handle]["status"], by_handle[handle]["detail"]))
+        self.assertEqual([("term_used", "/compact")], fake.sent)
+
     def test_Claude_추천_문구만_있으면_보내고_실제_입력이_있으면_지키고_건너뛴다(self):
         """Orca 초안이 추천 문구뿐이면 한 글자 확인 뒤 reload를 보내고, 실제로 친 글이 있으면 그 글을 그대로 두고 건너뛴다."""
         # Given
