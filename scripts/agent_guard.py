@@ -6,8 +6,10 @@ import sys
 import tomllib
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from plugin_toggles import detect_host, enabled  # noqa: E402
 
-CLAUDE_BUILT_INS = {"general-purpose", "explore", "plan", "claude", "fork"}
+
 CODEX_BUILT_INS = {"default", "explorer"}
 
 
@@ -34,26 +36,19 @@ def defined_codex_roles(directories: list[Path]) -> set[str]:
     return names
 
 
-def denial(event: dict, host: str) -> str | None:
+def denial(event: dict) -> str | None:
     tool_input = event.get("tool_input")
     if not isinstance(tool_input, dict):
         return None
-    if host == "codex":
-        name = tool_input.get("agent_type") or "default"
-        cwd = Path(event.get("cwd") or os.getcwd())
-        home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
-        allowed = defined_codex_roles([home / "agents", cwd / ".codex" / "agents"]) - CODEX_BUILT_INS
-        if name in allowed:
-            return None
-        substitute = "`scout` or `worker`"
-    else:
-        name = tool_input.get("subagent_type") or "general-purpose"
-        if str(name).lower() not in CLAUDE_BUILT_INS:
-            return None
-        substitute = "`hei5enbug-agent-setup:scout` or `hei5enbug-agent-setup:worker`"
+    name = tool_input.get("agent_type") or "default"
+    cwd = Path(event.get("cwd") or os.getcwd())
+    home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+    allowed = defined_codex_roles([home / "agents", cwd / ".codex" / "agents"]) - CODEX_BUILT_INS
+    if name in allowed:
+        return None
     return (
         f"The built-in `{name}` agent is disabled while hei5enbug-agent-setup is installed. "
-        f"Use {substitute}, another defined agent, or the main session."
+        "Use `scout` or `worker`, another defined agent, or the main session."
     )
 
 
@@ -64,10 +59,9 @@ def main() -> int:
         return 0
     if not isinstance(event, dict) or event.get("hook_event_name") != "PreToolUse":
         return 0
-    root = Path(__file__).resolve().parents[1]
-    codex_root = os.environ.get("PLUGIN_ROOT")
-    host = "codex" if codex_root and Path(codex_root).resolve() == root else "claude"
-    reason = denial(event, host)
+    if detect_host() != "codex" or not enabled("agent_guard"):
+        return 0
+    reason = denial(event)
     if reason:
         output = {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason}
         print(json.dumps({"hookSpecificOutput": output}))

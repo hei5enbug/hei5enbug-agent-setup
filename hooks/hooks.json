@@ -34,16 +34,6 @@
         ]
       },
       {
-        "matcher": "^(Bash|mcp__.*)$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/session_approval_guard.py\"",
-            "timeout": 10
-          }
-        ]
-      },
-      {
         "matcher": "^mcp__datagrip__execute_sql_query$",
         "hooks": [
           {
@@ -73,16 +63,6 @@
             "type": "command",
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/language_guard.py\"",
             "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "^(Bash|mcp__.*)$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/session_approval_guard.py\"",
-            "timeout": 10
           }
         ]
       }

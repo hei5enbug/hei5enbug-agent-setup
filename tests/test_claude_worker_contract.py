@@ -106,6 +106,30 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         self.assertIn("영어 원본: [worker.md](../worker.md)", mirror)
         self.assertIn("비권위", mirror)
 
+    def test_매니페스트는_Mod_설정을_가리키고_토글_다섯_개를_기본_켜짐으로_선언한다(self):
+        """hooks는 Mod 설정 파일이고, 설정 파일의 모듈이 존재하며, userConfig는 영어 title과 description을 가진 boolean 다섯 개다."""
+        # Given
+        manifest = json.loads(PLUGIN_MANIFEST.read_text(encoding="utf-8"))
+
+        # When
+        config_path = REPO_ROOT / manifest["hooks"]
+        modules = json.loads(config_path.read_text(encoding="utf-8"))["modules"]
+        options = manifest["userConfig"]
+
+        # Then
+        self.assertEqual(manifest["hooks"], "./config/claude-mod.json")
+        self.assertEqual(modules, ["../hooks/mod/register.js"])
+        self.assertTrue(all((config_path.parent / module).is_file() for module in modules))
+        self.assertEqual(
+            list(options),
+            ["agent_guard", "session_approval", "role_pinning", "language_guard", "datagrip_guard"],
+        )
+        for key, option in options.items():
+            with self.subTest(key=key):
+                self.assertEqual(option["type"], "boolean")
+                self.assertIs(option["default"], True)
+                self.assertTrue(option["title"].isascii() and option["description"].isascii())
+
 
 class ClaudeWorkerAdapterTest(unittest.TestCase):
     def test_구현은_플러그인_worker와_정의에_고정된_모델을_사용한다(self):

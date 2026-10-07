@@ -24,9 +24,9 @@ class AgentGuardTest(unittest.TestCase):
         self.project = self.base / "project"
         self.project.mkdir()
 
-    def decide(self, host: str, tool_input, event_name: str = "PreToolUse") -> str | None:
+    def decide(self, host: str, tool_input, event_name: str = "PreToolUse", **extra_env: str) -> str | None:
         env = {"PATH": os.environ.get("PATH", ""), "CLAUDE_CONFIG_DIR": str(self.claude_home),
-               "CODEX_HOME": str(self.codex_home), "CLAUDE_PROJECT_DIR": str(self.project)}
+               "CODEX_HOME": str(self.codex_home), "CLAUDE_PROJECT_DIR": str(self.project), **extra_env}
         if host == "codex":
             env["PLUGIN_ROOT"] = str(REPO_ROOT)
         event = {"hook_event_name": event_name, "tool_name": "Agent", "cwd": str(self.project), "tool_input": tool_input}
@@ -42,47 +42,19 @@ class AgentGuardTest(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
 
-    def test_Claude_내장_에이전트와_종류를_비운_호출은_거부한다(self):
-        """정의 파일이 없는 내장 이름과 general-purpose로 실행되는 빈 종류는 모두 거부한다."""
+    def test_Claude에서는_어떤_에이전트_호출도_출력하지_않는다(self):
+        """Claude의 내장 에이전트 차단은 Mod가 맡으므로 훅 스크립트는 내장·플러그인·사용자 에이전트와 빈 종류 모두에 출력이 없다."""
         # Given
-        built_ins = ("general-purpose", "Explore", "explore", "Plan", "claude", "fork")
-
-        # When
-        decisions = {name: self.decide("claude", {"subagent_type": name, "prompt": "x"}) for name in built_ins}
-        omitted = self.decide("claude", {"prompt": "x"})
-
-        # Then
-        self.assertEqual({name: "deny" for name in built_ins}, decisions)
-        self.assertEqual("deny", omitted)
-
-    def test_Claude_범위가_좁은_내장_에이전트는_대소문자와_관계없이_허용한다(self):
-        """claude-code-guide와 statusline-setup은 scout나 worker와 겹치지 않으므로 이름의 대소문자와 상관없이 막지 않는다."""
-        # Given
-        names = ("claude-code-guide", "Claude-Code-Guide", "statusline-setup", "StatusLine-Setup")
+        names = ("general-purpose", "Explore", "Plan", "claude", "fork", "claude-code-guide",
+                 "hei5enbug-agent-setup:scout", "reviewer")
 
         # When
         decisions = {name: self.decide("claude", {"subagent_type": name, "prompt": "x"}) for name in names}
+        omitted = self.decide("claude", {"prompt": "x"})
 
         # Then
         self.assertEqual({name: None for name in names}, decisions)
-
-    def test_Claude_플러그인과_사용자_정의_에이전트는_허용한다(self):
-        """플러그인 이름공간 에이전트와 사용자·프로젝트 파일, CLI나 관리 설정처럼 훅이 볼 수 없는 정의도 막지 않는다."""
-        # Given
-        self.write(self.claude_home / "agents" / "reviewer.md", "---\nname: reviewer\ndescription: r\n---\nbody\n")
-        self.write(self.project / ".claude" / "agents" / "nested" / "local.md", "---\nname: 'local-helper'\n---\n")
-
-        # When
-        allowed = [
-            self.decide("claude", {"subagent_type": "hei5enbug-agent-setup:scout"}),
-            self.decide("claude", {"subagent_type": "tradlinx-agent-setup:pr-review-gate-reader"}),
-            self.decide("claude", {"subagent_type": "reviewer"}),
-            self.decide("claude", {"subagent_type": "local-helper"}),
-            self.decide("claude", {"subagent_type": "cli-defined-reviewer"}),
-        ]
-
-        # Then
-        self.assertEqual([None] * 5, allowed)
+        self.assertIsNone(omitted)
 
     def test_Codex_내장_에이전트와_종류를_비운_호출은_거부한다(self):
         """default로 실행되는 빈 종류, default, explorer, 역할 파일이 없는 worker는 거부한다."""
@@ -115,11 +87,43 @@ class AgentGuardTest(unittest.TestCase):
         # Then
         self.assertEqual([None] * 5, decisions)
 
+    def test_Codex_토글이_꺼짐_값이면_내장_에이전트도_출력하지_않는다(self):
+        """HEI5ENBUG_AGENT_GUARD가 false, 0, off, no(대소문자 무시)이면 거부 대상 호출에도 출력이 없다."""
+        # Given
+        values = ("false", "0", "off", "no", "OFF", "False")
+
+        # When
+        decisions = {value: self.decide("codex", {"agent_type": "default"}, HEI5ENBUG_AGENT_GUARD=value) for value in values}
+
+        # Then
+        self.assertEqual({value: None for value in values}, decisions)
+
+    def test_Codex_토글이_비었거나_알_수_없는_값이면_계속_거부한다(self):
+        """값이 없거나 빈 문자열이거나 인식할 수 없으면 기본값인 켜짐으로 읽는다."""
+        # When
+        decisions = [
+            self.decide("codex", {"agent_type": "default"}),
+            self.decide("codex", {"agent_type": "default"}, HEI5ENBUG_AGENT_GUARD=""),
+            self.decide("codex", {"agent_type": "default"}, HEI5ENBUG_AGENT_GUARD="on"),
+            self.decide("codex", {"agent_type": "default"}, HEI5ENBUG_AGENT_GUARD="maybe"),
+        ]
+
+        # Then
+        self.assertEqual(["deny"] * 4, decisions)
+
+    def test_Claude_옵션_환경_변수는_Codex_토글에_영향을_주지_않는다(self):
+        """Codex 호스트는 CLAUDE_PLUGIN_OPTION_AGENT_GUARD를 읽지 않는다."""
+        # When
+        decision = self.decide("codex", {"agent_type": "default"}, CLAUDE_PLUGIN_OPTION_AGENT_GUARD="false")
+
+        # Then
+        self.assertEqual("deny", decision)
+
     def test_Agent_호출이_아니거나_입력을_해석할_수_없으면_막지_않는다(self):
         """다른 이벤트나 tool_input이 없는 입력은 판단하지 않고 그대로 통과시킨다."""
         # When
-        other_event = self.decide("claude", {"subagent_type": "general-purpose"}, event_name="PostToolUse")
-        no_input = self.decide("claude", None)
+        other_event = self.decide("codex", {"agent_type": "default"}, event_name="PostToolUse")
+        no_input = self.decide("codex", None)
 
         # Then
         self.assertIsNone(other_event)

@@ -30,6 +30,9 @@ import unicodedata
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from plugin_toggles import enabled  # noqa: E402
+
 try:
     from pglast import parser as pglast_parser
 except Exception:
@@ -541,6 +544,8 @@ def reexec_with_parser() -> None:
 
 
 def main() -> int:
+    if not enabled("datagrip_guard"):
+        return 0
     reexec_with_parser()
     try:
         output = handle(json.load(sys.stdin))

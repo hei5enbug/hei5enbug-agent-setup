@@ -2159,6 +2159,52 @@ def run_without_pglast(event, state_root, *args, extra_env=None):
     return completed.returncode, completed.stdout.decode("utf-8")
 
 
+class TestToggle:
+    @pytest.mark.parametrize("value", ["false", "0", "off", "no", "OFF", "No"])
+    def test_claude_option_off_prints_nothing(self, value):
+        """Claude Code의 datagrip_guard 옵션이 꺼짐 값이면 조회 쿼리도 출력이 없다."""
+        # given
+        event = {"tool_input": make_tool_input(PG_ID, "SELECT 1")}
+        # when
+        code, stdout, _ = run_script(event, extra_env={"CLAUDE_PLUGIN_OPTION_DATAGRIP_GUARD": value})
+        # then
+        assert code == 0
+        assert stdout == ""
+
+    @pytest.mark.parametrize("mode", [CODEX_PRE_TOOL, CODEX_PERMISSION])
+    @pytest.mark.parametrize("value", ["false", "0", "off", "no"])
+    def test_codex_variable_off_prints_nothing(self, mode, value):
+        """Codex의 HEI5ENBUG_DATAGRIP_GUARD가 꺼짐 값이면 두 이벤트 모두 출력이 없다."""
+        # given
+        event = {"tool_input": make_tool_input(PG_ID, "SELECT 1")}
+        # when
+        code, stdout, _ = run_script(event, mode, extra_env={"HEI5ENBUG_DATAGRIP_GUARD": value})
+        # then
+        assert code == 0
+        assert stdout == ""
+
+    @pytest.mark.parametrize("value", [None, "", "true", "1", "on", "maybe"])
+    def test_missing_or_unrecognized_value_keeps_the_guard_on(self, value):
+        """값이 없거나 알 수 없으면 기본값인 켜짐으로 읽어 결정을 출력한다."""
+        # given
+        event = {"tool_input": make_tool_input(MSSQL_ID, "SELECT 1")}
+        # when
+        code, stdout, _ = run_script(event, extra_env={"CLAUDE_PLUGIN_OPTION_DATAGRIP_GUARD": value})
+        # then
+        assert code == 0
+        assert decision_of(json.loads(stdout)) == "allow"
+
+    def test_claude_option_does_not_switch_off_codex(self):
+        """Codex 호스트는 CLAUDE_PLUGIN_OPTION_DATAGRIP_GUARD를 읽지 않는다."""
+        # given
+        event = {"tool_input": make_tool_input(PG_ID, "SELECT 1")}
+        # when
+        code, stdout, _ = run_script(event, CODEX_PERMISSION, extra_env={"CLAUDE_PLUGIN_OPTION_DATAGRIP_GUARD": "off"})
+        # then
+        assert code == 0
+        assert json.loads(stdout)["hookSpecificOutput"]["decision"] == {"behavior": "allow"}
+
+
 class TestParserReexec:
     def test_parser_python_follows_xdg_state_home(self, monkeypatch, tmp_path):
         """파서 인터프리터 위치는 XDG_STATE_HOME 아래이고 없으면 홈의 .local/state 아래다."""

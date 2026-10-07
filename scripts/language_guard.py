@@ -8,6 +8,9 @@ import tempfile
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from plugin_toggles import enabled  # noqa: E402
+
 
 TAIL_BYTES = 4 * 1024 * 1024
 MAX_BLOCKS_PER_TURN = 3
@@ -372,6 +375,8 @@ def handle(event: object) -> dict | None:
 
 
 def main() -> int:
+    if not enabled("language_guard"):
+        return 0
     try:
         output = handle(json.load(sys.stdin))
     except Exception:
