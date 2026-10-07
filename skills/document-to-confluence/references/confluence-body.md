@@ -184,7 +184,9 @@ line. Treat CJK glyphs as wider than Latin letters and include inline-code paddi
 column an explicit minimum width equal to the image display width.
 
 `scripts/column_widths.py` produces a deterministic estimate. Review its output before publishing;
-the content-based weighting is a layout aid, not visual proof.
+the content-based weighting is a layout aid, not visual proof. The script recognizes an image column
+only by Markdown image syntax `![...](...)` in a cell, and it requires `--floor` for that column. A
+cell that holds an HTML `<img>` is not recognized, so set that column's minimum width manually.
 
 ## Text
 
@@ -217,16 +219,21 @@ produce a usable published page.
 
 ## Checklist before saving
 
-`scripts/validate_body.py` covers the mechanical half of this list.
+`scripts/validate_body.py` checks exactly these items:
 
-- No hand-written `media-single` or `media-group` container.
-- Every `img` carries `width` and `height`, and neither dimension scales the image above its source
-  pixel size.
-- Every table cell wraps its content in a block element.
+- No hand-written `div` with `data-type` `media-single` or `media-group`.
+- Every `img` has `width` and `height`. The script checks that both are present, not that they match
+  the source pixel size.
+- Every table cell wraps its content in a child element. Any element counts, not only block elements.
+- No local filesystem path in text or attributes, and no unresolved source-document link in `href`.
+- When `--attachments` is given, every attachment reference exists in that list.
+
+The remaining items need a manual check, or another script for text parity:
+
+- No dimension scales an image above its source pixel size.
 - Table layout, column widths, and cell spacing follow one consistent rule.
 - Every table sets column widths unless its columns carry comparable content.
 - No explicit line break falls inside a sentence.
-- No local filesystem path or unresolved source-document link.
 - Every referenced attachment exists on the page already.
 - The body's text matches the source within the parity checker's supported scope, or a manual
   comparison covers the unsupported constructs.
