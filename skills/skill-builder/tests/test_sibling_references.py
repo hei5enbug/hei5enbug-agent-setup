@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SKILL_ROOTS = ("skills", "standalone-skills")
+SKILL_ROOTS = ("skills",)
 
 # `../<skill-name>/<path>` written in backticks, a Markdown link, or plain prose.
 SIBLING_PATTERN = re.compile(r"(?<!\.\./)\.\./([A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]+)+)")

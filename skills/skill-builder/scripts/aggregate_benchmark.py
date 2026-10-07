@@ -228,11 +228,19 @@ def load_run_results(benchmark_dir: Path) -> dict:
             run_dirs = sorted(config_dir.glob("run-*"))
             if not run_dirs and (config_dir / "grading.json").exists():
                 run_dirs = [config_dir]
-            if not run_dirs:
-                continue
             config = config_dir.name
             if config not in results:
                 results[config] = []
+            if not run_dirs:
+                print(f"Warning: grading.json not found in {config_dir}")
+                incomplete.append({
+                    "eval_id": eval_id,
+                    "eval_name": eval_name,
+                    "configuration": config,
+                    "run_number": 1,
+                    "reason": "grading.json not found",
+                })
+                continue
 
             for direct_index, run_dir in enumerate(run_dirs, start=1):
                 if run_dir == config_dir:
