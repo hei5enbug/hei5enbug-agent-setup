@@ -232,7 +232,7 @@ Confluence 도구를 선택하거나 호출하기 전에 상위 Confluence 지�
 | `scripts/column_widths.py` | 정수 열 너비 비율을 만들고 불가능한 최소값이나 불완전한 이미지 제약을 거부한다. |
 | `scripts/text_parity.py` | 선언된 Markdown 범위의 텍스트를 비교하고 지원되지 않는 구조를 알린다. |
 | `scripts/validate_body.py` | 선언된 범위 안에서 기계적인 Confluence 본문 규칙을 검사한다. |
-| `scripts/render_diagrams.mjs` | 로컬 HTML에서 유효하고 고유한 요소 ID를 캡처하며 항상 브라우저를 닫는다. |
+| `scripts/render_diagrams.mjs` | 로컬 HTML의 요소를 유효하고 고유한 이름(`id`, 없으면 `diagram-N`)으로 캡처하며 항상 브라우저를 닫는다. |
 | `assets/diagram-template.html` | 일관된 HTML·CSS 다이어그램을 위한 시작점을 제공한다. |
 
 각 스크립트의 정확한 인터페이스는 `--help`로 확인한다.

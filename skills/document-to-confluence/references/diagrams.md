@@ -31,10 +31,13 @@ Either way, `scripts/render_diagrams.mjs` captures the result.
 
 ### Naming and browser flags
 
-- Give every diagram element an `id` made only of letters, digits, `-` and `_`. The id becomes the
-  image file name, and the script refuses any other character before capturing anything.
-- Two elements that would produce the same file name stop the run before capture. `--strip-prefix`
-  removes a prefix only when the id starts with it, so `--strip-prefix dia-` leaves `mydia-x` alone.
+- Give every diagram element an `id` to control its file name. An element without an `id` is captured
+  as `diagram-N`, where N is its 1-based position among the matched elements.
+- An `id` that is present may contain only letters, digits, `-` and `_`. It becomes the image file
+  name, and the script stops before capturing anything when an id is invalid.
+- Two elements that would produce the same file name, including a generated `diagram-N` name, stop
+  the run before capture. `--strip-prefix` removes a prefix only when the id starts with it, so
+  `--strip-prefix dia-` leaves `mydia-x` alone.
 - The browser runs with its sandbox on. Pass `--no-sandbox` only in a container or CI image where
   the sandbox cannot start, and say so in the report.
 - The browser is closed even when a capture fails, so a failed run leaves no stray process.
