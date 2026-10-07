@@ -29,8 +29,8 @@ hei5enbug-agent-setup/
 ├── CLAUDE.md
 ├── CLAUDE.ko.md
 ├── hooks/hooks.json
-├── hooks/claude-gpt/
-├── config/claude-gpt-hooks.json
+├── hooks/mod/
+├── config/claude-mod.json
 ├── instructions/
 │   ├── claude-agents.md
 │   ├── codex-agents.md
@@ -50,20 +50,23 @@ hei5enbug-agent-setup/
 │   ├── agent_guard.py
 │   ├── datagrip_guard.py
 │   ├── language_guard.py
-│   ├── session_approval_guard.py
+│   ├── plugin_toggles.py
 │   └── session_context.py
 ├── tests/
 ├── LICENSE
 ├── pyproject.toml
 ├── agents/
 │   ├── ko/
+│   │   ├── designer.ko.md
 │   │   ├── researcher.ko.md
 │   │   ├── scout.ko.md
 │   │   └── worker.ko.md
+│   ├── designer.md
 │   ├── researcher.md
 │   ├── scout.md
 │   └── worker.md
 ├── standalone-agents/
+│   ├── codex-designer.toml
 │   ├── codex-researcher.toml
 │   ├── codex-scout.toml
 │   └── codex-worker.toml
@@ -84,15 +87,15 @@ Each plugin skill folder holds its own `SKILL.md` plus any references or scripts
 package the same `skills/` directory for Codex and Claude Code without copying skills into host-specific directories.
 
 The `agents/` directory ships with the Claude Code plugin, so installing the bundle adds the
-`hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:worker`, and `hei5enbug-agent-setup:researcher` subagents.
-No manual copy is needed. The manifest lists only these three English definitions, so the Korean mirrors in
-`agents/ko/` are not registered as subagents.
+`hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:worker`, `hei5enbug-agent-setup:researcher`, and
+`hei5enbug-agent-setup:designer` subagents. No manual copy is needed. The manifest lists only these four English
+definitions, so the Korean mirrors in `agents/ko/` are not registered as subagents.
 
 Codex discovers subagents only in `~/.codex/agents/` and `.codex/agents/`, so a plugin cannot register one.
-Instead, the session hook copies `standalone-agents/codex-scout.toml`, `codex-worker.toml`, and
-`codex-researcher.toml` to the matching `~/.codex/agents/<role>.toml` when each file is absent. They define
-`scout`, `worker`, and `researcher` agents, named as on Claude Code, with fixed reasoning effort and sandbox.
-The plugin `worker` replaces the
+Instead, the session hook copies `standalone-agents/codex-scout.toml`, `codex-worker.toml`,
+`codex-researcher.toml`, and `codex-designer.toml` to the matching `~/.codex/agents/<role>.toml` when each file is
+absent. They define `scout`, `worker`, `researcher`, and `designer` agents, named as on Claude Code, with fixed
+reasoning effort and sandbox. The plugin `worker` replaces the
 built-in Codex `worker`, and `scout` leaves the built-in `explorer` untouched. A file you edited is never
 overwritten, and the agents become available in the next Codex session. Because an edited copy never changes,
 the files set no model; the Codex instructions pass the pinned model on every spawn instead. The hook also
@@ -100,18 +103,32 @@ removes an `explorer.toml` and replaces a `worker.toml` that an earlier version 
 byte-identical to that version's bundled file, so a copy you edited stays. When the plugin is disabled, the installed
 `worker` role runs as an ordinary implementation worker instead of refusing to edit.
 
-A `PreToolUse` hook, `scripts/agent_guard.py`, keeps built-in subagents out on both hosts. On Claude Code it denies an
-omitted subagent type and every built-in type: `general-purpose`, `Explore`, `Plan`, `claude`, and forks. The
+Built-in subagents stay out on both hosts. On Claude Code the mod hides the built-in `general-purpose`, `Explore`,
+`Plan`, and `claude` agents from the agent list (`agent.offer`) and denies them and every fork (`agent.spawn`). The
 narrow-purpose built-ins `claude-code-guide` and `statusline-setup` pass, as do plugin agents and definitions from any
-user, project, CLI, or managed source. On Codex it denies an omitted type, `default`, `explorer`, and every type
-without a role file, including the built-in `worker` before the plugin role exists. Skills that ask for an independent
+user, project, CLI, or managed source. On Codex the `PreToolUse` hook `scripts/agent_guard.py` keeps its existing
+behavior: it denies an omitted type, `default`, `explorer`, and every type without a role file, including the
+built-in `worker` before the plugin role exists. Skills that ask for an independent
 read-only worker use a role whose verified model, effort, and tools match the skill contract. Bounded local
 evidence uses `scout`; public evidence can use `researcher`. Skills that write trial outputs use a verified
 evaluation runner when required. See the conditional [model routing contract](instructions/model-routing.md).
 
+### Claude Code mod
+
+On Claude Code, `config/claude-mod.json` loads the mod `hooks/mod/register.js`, which holds the Claude-only guards:
+the built-in subagent block, role pinning, session approvals, and the GPT refusal. It was tested with Claude Code
+2.1.292. When the mod does not load, such as on an older Claude Code, with `disableAllHooks`, or under a managed
+policy, these guards are absent and the host's normal permission flow applies.
+
+Role pinning pins each plugin role's model and effort on every request: `scout` and `researcher` use
+`claude-sonnet-5-5` with `medium`, `worker` uses `claude-sonnet-5-5` with `high`, and `designer` uses
+`claude-opus-5-5` with `xhigh`. A subagent that answers on another model is stopped: its later requests end with a
+refusal, its tool calls are denied, and its result is replaced with a warning. The session context then carries the
+line `hei5enbug-agent-setup mod: role pinning active`, which lets the main session send assignments directly.
+
 ### GPT in Claude Code
 
-The Claude-only module refuses requests to the pinned GPT models before any inference.
+The mod refuses requests to the pinned GPT models before any inference. This refusal is always on and has no toggle.
 Claude Code's mod API does not expose tool input schemas, so this route cannot work yet.
 The helper, its tests, and the design records are preserved on the `gpt-route` branch.
 
@@ -150,26 +167,47 @@ without approval.
 
 ### Session approvals
 
-On Claude Code only, a session approval guard, `scripts/session_approval_guard.py`, lets you approve certain
-outward-facing writes once per session. It covers creating git tags; pushing tags to a configured remote;
-`gh release create` and `gh release edit` with only the tag and the flags `--title`, `--notes`, `--target`,
-`--generate-notes`, `--notes-from-tag`, `--latest`, `--draft`, `--prerelease`, `--verify-tag`; and MCP tools whose
-names contain a write verb. MCP tools whose names start with a read verb, such as get, list, search, read, fetch,
-query, or download, are never covered and keep the normal permission flow. After you approve one, the same kind of
-action runs without a prompt for the rest of that session. Each tool or command kind is approved separately.
+On Claude Code only, the mod lets you approve certain outward-facing writes once per session. For each Bash and MCP tool
+call, its `tool.check` hook classifies the action and asks the first time a covered kind runs in the session. When the
+call succeeds, its `tool.call` hook records the approved kind in the mod store (`$.store`) under the session ID, so
+later actions of the same kind in that session run without a prompt. It covers creating git tags; pushing tags to a
+configured remote; `gh release create` and `gh release edit` with only the tag and the flags `--title`, `--notes`,
+`--target`, `--generate-notes`, `--notes-from-tag`, `--latest`, `--draft`, `--prerelease`, `--verify-tag`; and MCP tools
+whose names contain a write verb. MCP tools whose names start with a read verb, such as get, list, search, read, fetch,
+query, or download, are never covered and keep the normal permission flow, as does the DataGrip query tool, which the
+DataGrip query guard handles. Each tool or command kind is approved separately.
 
 Destructive actions always ask: force pushes, deleting remote branches or tags, deleting a tag, `gh release delete`,
 `gh repo delete`, and MCP tools that delete, trash, or remove, even when the name starts with a read verb.
 `gh release upload` always asks too, because it can publish any local file. So does a tag push to a URL, an unlisted
 remote, or `--repo`, or one that mixes a branch into a `--tags` push, and so does a `gh release create` or
 `gh release edit` with attached assets, `--notes-file`, or any other flag. A compound command that contains anything
-the guard cannot verify always asks. A plain `echo` with literal text after a covered command, such as
+the mod cannot verify always asks. A plain `echo` with literal text after a covered command, such as
 `git tag v1 && echo done`, does not stop the approval from applying; an `echo` with a variable, command substitution,
-glob, redirect, or pipe still asks. Subagents never inherit approvals. Approvals expire with the session and are
-stored in the plugin data directory. Ordinary pushes and all other commands keep the normal permission flow.
+glob, redirect, or pipe still asks. Subagents never inherit approvals. Approvals belong to one session, and the mod
+drops stored entries older than 7 days. Ordinary pushes and all other commands keep the normal permission flow.
 
 Do not add `permissions.ask` rules for these actions, because an ask rule prompts every time even after a session
 approval.
+
+## Feature toggles
+
+Seven features can be turned off. All default to on. On Claude Code, set the plugin option in `/config`, or with
+`claude plugin configure`. On Codex, set the environment variable before starting the session. A value of `false`,
+`0`, `off`, or `no`, in any letter case, turns a feature off.
+
+| Feature | Claude Code `/config` key | Codex environment variable |
+|---|---|---|
+| Block built-in subagents | `agent_guard` | `HEI5ENBUG_AGENT_GUARD` |
+| One-time session approval | `session_approval` | Not applicable |
+| Pin role models | `role_pinning` | Not applicable |
+| Response language guard | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
+| DataGrip query guard | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
+| Subagent permission block in `~/.codex/AGENTS.md` | Not applicable | `HEI5ENBUG_SUBAGENT_POLICY` |
+| Question tool flag | Not applicable | `HEI5ENBUG_CODEX_ASK_TOOL` |
+
+The GPT refusal is always on. The session instructions and operating rules have no toggle; disable the plugin itself
+to turn them off.
 
 ## Plugin installation
 
@@ -209,7 +247,7 @@ for locating the script. No user or project instruction file is copied, linked, 
 | A tool call finishes | `PostToolUse` adds a language reminder after a progress update in another language. |
 | A reply ends | `Stop` asks for a rewrite when the reply is not in the response language. |
 | A DataGrip query is about to run | `PreToolUse` and `PermissionRequest` run the DataGrip query guard before `execute_sql_query`. |
-| A Bash or MCP tool call runs | On Claude Code, `PreToolUse` and `PostToolUse` run the session approval guard for Bash and MCP tools. |
+| A Bash or MCP tool call runs | On Claude Code, the mod's `tool.check` and `tool.call` hooks run the session approval for Bash and MCP tools. |
 | A matching task begins | The agent reads the required reference under `instructions/`. |
 | A plugin update is installed | A new session reads that installed version. A repository push alone changes nothing locally. |
 
@@ -225,9 +263,10 @@ plugin. It does not read conditional reference bodies at startup.
 Codex requires review and trust of the current plugin hook definition before running it.
 Disabled hooks or enterprise policies that prohibit plugin hooks prevent automatic loading.
 After installation or update, use the host's hook controls to check that these hooks are enabled and,
-in Codex, trusted. A hook that an update adds, such as the agent guard, the language guard, or the DataGrip query
-guard, stays skipped in Codex until you trust it in `/hooks`. The session approval guard runs only on Claude Code,
-so this trust step does not apply to it. Restart Claude Code or start a new Codex session after updating.
+in Codex, trusted. A hook that an update adds or changes, such as the agent guard, the language guard, or the DataGrip
+query guard, stays skipped in Codex until you trust it in `/hooks`. `hooks/hooks.json` changed in this release, so
+trust its hooks again after updating. The Claude Code mod is not a Codex hook, so this trust step does not apply to
+it. Restart Claude Code or start a new Codex session after updating.
 The hook does not bypass host trust settings or change an already running session to a new plugin version.
 The `orca-plugin-refresh` skill uses those markers to apply an update to running Orca sessions without restarting them.
 
@@ -253,10 +292,16 @@ conflict-free scheduling, checks, and recovery. Direct work uses the main sessio
 A delegated task carries only its scope, relevant context, allowed/protected paths, prerequisites,
 acceptance checks, and the host's pinned settings. Workers cannot start nested agents.
 
-| Host | Implementation worker | Model and effort |
+UI code, visual design, and diagram work goes to the host's designer route instead. A text or style-value edit that
+keeps the layout and component structure may still go to the implementation worker, and design documents and RFCs
+stay in the main session.
+
+| Host | Implementation agent | Model and effort |
 |---|---|---|
 | Codex | Plugin `worker` role, verified from its rollout record | `gpt-6-luna`, `xhigh` |
 | Claude Code | `hei5enbug-agent-setup:worker`, verified from its subagent record | `claude-sonnet-5-5`, `high` |
+| Codex, designer | `claude -p` with the pinned model; when Claude is unavailable, the plugin `designer` role | `claude-opus-5-5`, `xhigh`; fallback `gpt-6-astra`, `xhigh` |
+| Claude Code, designer | `hei5enbug-agent-setup:designer`, verified from its subagent record | `claude-opus-5-5`, `xhigh` |
 
 Independent ready tasks may run together within the host limit and the shared execution ceiling. If a role,
 model, effort, quota, permission to delegate, or settings evidence is unavailable, the main session reports
@@ -270,14 +315,24 @@ An unavailable reviewer does not block the remaining work. Routine author inspec
 
 Codex requires a direct user request or applicable `AGENTS.md` or skill instructions to authorize subagents;
 hook instructions alone cannot grant it. Without authorization, the main session continues directly.
-To opt in persistently, add this to your project or global `AGENTS.md` yourself or explicitly request it:
+
+### Codex automatic settings
+
+On Codex, the session hook manages two settings, and both take effect from the next session. It keeps this marked
+block at the end of `~/.codex/AGENTS.md`, creating the file when it is missing:
 
 ```text
+<!-- hei5enbug:subagents -->
 When hei5enbug-agent-setup is active, use subagents according to its situation-based delegation rules.
+<!-- /hei5enbug:subagents -->
 ```
 
-The plugin does not add this authorization automatically. Hosts, hook trust, and available tools still govern
-execution. See the official [Codex subagent contract](https://learn.chatgpt.com/docs/agent-configuration/subagents)
+It also enables the `default_mode_request_user_input` feature when `codex features list` shows it off, so
+`request_user_input` works in Default mode. Setting `HEI5ENBUG_SUBAGENT_POLICY=off` removes only the marked block and
+never edits anything outside it. Setting `HEI5ENBUG_CODEX_ASK_TOOL=off` disables the feature again, but only when the
+plugin enabled it; a feature you enabled yourself stays on. A failed step is retried at the next session start and
+never stops the session instructions from loading. Hosts, hook trust, and available tools still govern execution.
+See the official [Codex subagent contract](https://learn.chatgpt.com/docs/agent-configuration/subagents)
 and the [evaluation conclusion](docs/subagent-policy-decision.md).
 
 ## Work efficiency
@@ -355,14 +410,17 @@ installations from the `hei5enbug` marketplace.
 
 ## Development checks
 
-The bundled scripts need Python 3.12 or later with PyYAML. The Node tests need Node.js. Run the same three
-checks that `.github/workflows/validate.yml` runs on macOS and Linux:
+The bundled scripts need Python 3.12 or later with PyYAML. The Node tests need Node.js. The mod tests and the plugin
+validation need the Claude Code CLI, version 2.1.292 in CI. Run the checks that `.github/workflows/validate.yml`
+runs on macOS and Linux, plus the plugin validation:
 
 ```bash
 python3 -m pip install -e ".[dev]"
 for skill in skills/*/; do python3 skills/skill-builder/scripts/quick_validate.py "$skill"; done
 python3 -m pytest
 node --test skills/document-to-confluence/tests/test_render_diagrams.mjs
+claude plugin validate .
+claude plugin test .
 ```
 
 Tests that need the Orca CLI skip when it is not installed, so CI passes without Orca. After installing Orca,

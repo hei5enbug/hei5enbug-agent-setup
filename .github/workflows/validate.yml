@@ -50,3 +50,17 @@ jobs:
           else
             echo "no .mjs tests"
           fi
+
+      - name: Install Claude Code CLI
+        run: |
+          set -euo pipefail
+          curl -fsSL https://claude.ai/install.sh | bash -s 2.1.292
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Test Claude Code mod
+        env:
+          DISABLE_AUTOUPDATER: "1"
+        run: |
+          set -euo pipefail
+          claude --version
+          claude plugin test .
