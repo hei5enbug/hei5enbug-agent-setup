@@ -17,12 +17,7 @@ NON_ENGLISH_DOCUMENTS = {
     REPO_ROOT / ".plan/orca-plugin-refresh-resume/implementation-plan.md",
 }
 NON_ENGLISH_READMES = {
-    REPO_ROOT / "README.de.md",
-    REPO_ROOT / "README.es.md",
-    REPO_ROOT / "README.fr.md",
-    REPO_ROOT / "README.ja.md",
     REPO_ROOT / "README.ko.md",
-    REPO_ROOT / "README.zh-CN.md",
 }
 EXCLUDED_DIRECTORIES = {".git", ".pytest_cache", ".decision-navigator"}
 LINK_PATTERN = re.compile(r"\]\(([^)]+)\)")
