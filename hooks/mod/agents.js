@@ -6,6 +6,7 @@ const ROLE_PINS = Object.freeze({
   "hei5enbug-agent-setup:worker": { role: "worker", model: "claude-sonnet-5-5", effort: "high" },
   "hei5enbug-agent-setup:scout": { role: "scout", model: "claude-sonnet-5-5", effort: "medium" },
   "hei5enbug-agent-setup:researcher": { role: "researcher", model: "claude-sonnet-5-5", effort: "medium" },
+  "hei5enbug-agent-setup:designer": { role: "designer", model: "claude-opus-5-5", effort: "xhigh" },
 });
 
 const BUILT_IN_DENIAL =
@@ -89,7 +90,7 @@ export function registerAgentGuard(on) {
 }
 
 export function registerRolePinning(on) {
-  on("agent.spawn", { subagentType: ["hei5enbug-agent-setup:worker", "hei5enbug-agent-setup:scout", "hei5enbug-agent-setup:researcher"] }, async ($, e, next) => {
+  on("agent.spawn", { subagentType: ["hei5enbug-agent-setup:worker", "hei5enbug-agent-setup:scout", "hei5enbug-agent-setup:researcher", "hei5enbug-agent-setup:designer"] }, async ($, e, next) => {
     const pin = ROLE_PINS[e.subagentType];
     const result = await next({ ...e, model: pin.model });
     if (result.deny !== undefined || result.agentId === undefined) return result;

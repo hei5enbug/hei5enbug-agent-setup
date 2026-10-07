@@ -117,7 +117,15 @@ class ModelPinTest(unittest.TestCase):
         models = {path.name: frontmatter(path)["model"] for path in definitions}
 
         # Then
-        self.assertEqual({name: PINS["claude-sonnet"] for name in ("scout.md", "worker.md", "researcher.md")}, models)
+        self.assertEqual(
+            {
+                "scout.md": PINS["claude-sonnet"],
+                "worker.md": PINS["claude-sonnet"],
+                "researcher.md": PINS["claude-sonnet"],
+                "designer.md": PINS["claude-opus"],
+            },
+            models,
+        )
 
     def test_Codex_역할_파일은_모델을_지정하지_않는다(self):
         """훅은 설치된 역할 파일을 덮어쓰지 않으므로, 고정 모델은 지침이 생성할 때마다 넘기고 역할 파일에는 두지 않는다."""

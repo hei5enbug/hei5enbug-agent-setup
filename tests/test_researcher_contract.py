@@ -82,7 +82,7 @@ class ResearcherContractTest(unittest.TestCase):
                 self.assertIn(phrase, combined)
 
     def test_Claude_manifest는_기존_역할과_researcher를_등록한다(self):
-        """Claude manifest는 기존 두 역할을 유지하면서 researcher를 한 번 등록한다."""
+        """Claude manifest는 기존 역할과 designer를 유지하면서 researcher를 한 번만 등록한다."""
         # Given
         manifest = json.loads((REPO_ROOT / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
 
@@ -93,6 +93,7 @@ class ResearcherContractTest(unittest.TestCase):
         self.assertEqual(agents.count("./agents/researcher.md"), 1)
         self.assertIn("./agents/scout.md", agents)
         self.assertIn("./agents/worker.md", agents)
+        self.assertIn("./agents/designer.md", agents)
 
 
 if __name__ == "__main__":
