@@ -92,8 +92,13 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
    When `self_notification` in the status is not `sent`, the prompt could not be delivered; the status still
    holds the result.
 
-Pass `--compact always` or `--compact never` only when the user explicitly asks for it. Never send commands to
-Orca terminals by hand, never exit or restart a session, and never pass `--force` on your own.
+`--compact` defaults to `auto`, which compacts only stale sessions. Pass `--compact always` or `--compact never`
+only when the user explicitly asks for it. `plan` and `self-apply` are internal subcommands that the script uses
+itself; never run them by hand. Never send commands to Orca terminals by hand, never exit or restart a session,
+and never pass `--force` on your own.
+
+The script exits with `0` when every session is `done` or `queued_after_turn`, or when the update or
+`apply-installed` result is ok. It exits with `2` otherwise, and on a usage error.
 
 ## Safety and limits
 

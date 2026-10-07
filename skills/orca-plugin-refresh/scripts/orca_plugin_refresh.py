@@ -890,9 +890,11 @@ def step(orca: Orca, entry: dict, target: dict, live: dict[str, dict]) -> None:
     if reason == "probe_interrupted":
         entry.update(status="failed", detail="probe_interrupted_check_input", actions=[])
         return
-    if reason == "busy" and entry["host"] == "codex" and codex_fresh(orca.screen(entry["handle"])[0]):
-        entry.update(status="done", detail="fresh_session_loads_on_first_turn", actions=[])
-        return
+    if entry["host"] == "codex" and reason in (None, "busy"):
+        screen = lines if reason is None else orca.screen(entry["handle"])[0]
+        if codex_fresh(screen):
+            entry.update(status="done", detail="fresh_session_loads_on_first_turn", actions=[])
+            return
     if reason:
         return
     marker = read_marker(entry["handle"])
