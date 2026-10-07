@@ -11,6 +11,7 @@ Classify a delegated task by both its purpose and where its output will go.
 |---|---|
 | Main-owned work | Follow [session ownership rules](session/common.md). |
 | Implementation that edits the actual repository or skill | Follow the host's implementation execution rules and pinned implementation role. |
+| UI code, visual design, or diagrams | Use the host's designer route. A text or style-value edit that keeps layout and component structure may use the implementation worker. |
 | Bounded local evidence gathering | Use the host's scout role when delegation is authorized and worthwhile. |
 | Public, read-only research | Use the host's researcher role only when its public tools are available and its pinned settings are verified. Otherwise, continue in the main session. |
 | Skill research, trial execution, grading, comparison, analysis, or optimization | Apply the skill's evaluation contract before generic skill-worker routing. |
@@ -28,6 +29,7 @@ Use these production settings unless a separately approved comparison qualifies 
 | Local scout | `gpt-6-luna`, `xhigh` | `claude-sonnet-5-5`, `medium` |
 | Implementation worker | `gpt-6-luna`, `xhigh` | `claude-sonnet-5-5`, `high` |
 | Public researcher | `gpt-6-luna`, `xhigh` | `claude-sonnet-5-5`, `medium` |
+| Designer | `claude -p` with `claude-opus-5-5`, `xhigh`; when Claude is unavailable, the `designer` role with `gpt-6-astra`, `xhigh` | `claude-opus-5-5`, `xhigh` |
 | Skill Builder evaluation participant | `gpt-6-luna`, `xhigh` | `claude-sonnet-5-5`, `high` |
 
 Verify the role's effective model and effort from host records and relevant non-secret settings before relying
