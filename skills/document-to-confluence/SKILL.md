@@ -242,7 +242,7 @@ When republishing:
 | `scripts/column_widths.py` | Produces integer column-width ratios and rejects impossible floors or incomplete image constraints. |
 | `scripts/text_parity.py` | Compares text for its declared Markdown subset and reports unsupported constructs. |
 | `scripts/validate_body.py` | Checks mechanical Confluence body rules within its declared scope. |
-| `scripts/render_diagrams.mjs` | Captures valid, unique element IDs from local HTML and always closes the browser. |
+| `scripts/render_diagrams.mjs` | Captures elements of local HTML under valid, unique names (`id`, or `diagram-N` without one) and always closes the browser. |
 | `assets/diagram-template.html` | Provides a starting point for consistent HTML and CSS diagrams. |
 
 Run each script with `--help` for its exact interface.

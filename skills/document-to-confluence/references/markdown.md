@@ -26,6 +26,8 @@ If the HTML is intentional document content, apply `references/html.md` to that 
 
 Run `scripts/text_parity.py` only when the source stays within its declared subset.
 Use `--drop` for source text deliberately replaced by a non-text artifact, such as diagram source.
-When the script reports an unsupported construct, compare that construct manually instead of treating it as a match.
+The script stops at the first unsupported construct and reports only that one, so removing or replacing it
+can reveal the next. Compare each such construct manually instead of treating it as a match.
+`--drop-title` drops every level-1 heading (`# ...`) from the comparison, not only the first one.
 
 Confirm the source file revision immediately before saving the page.
