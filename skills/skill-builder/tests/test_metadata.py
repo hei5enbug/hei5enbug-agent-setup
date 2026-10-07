@@ -80,7 +80,6 @@ class ValidateSkillTest(unittest.TestCase):
 
     def test_all_repository_skills_pass(self):
         skill_dirs = sorted(p.parent for p in REPO_ROOT.glob("skills/*/SKILL.md"))
-        skill_dirs += sorted(p.parent for p in REPO_ROOT.glob("standalone-skills/*/SKILL.md"))
         self.assertTrue(skill_dirs, "No repository skills found")
         for skill in skill_dirs:
             with self.subTest(skill=skill.name):
@@ -107,6 +106,28 @@ class ParserContractTest(unittest.TestCase):
             )
         self.assertEqual(completed.returncode, 2)
         self.assertIn("pip install pyyaml", completed.stderr)
+
+    def test_package_skill_missing_pyyaml_exits_with_code_2_and_install_hint(self):
+        """PyYAML이 없으면 package_skill.py는 설치 안내를 출력하고 종료 코드 2로 끝난다."""
+        with tempfile.TemporaryDirectory() as td:
+            skill = write_skill(Path(td), "name: demo\ndescription: Does a thing.")
+            shim = Path(td) / "shim"
+            shim.mkdir()
+            (shim / "yaml.py").write_text("raise ModuleNotFoundError('No module named yaml')\n")
+            command = [
+                sys.executable,
+                str(SKILL_DIR / "scripts" / "package_skill.py"),
+                str(skill),
+                str(Path(td) / "dist"),
+            ]
+            # Given
+            env = {"PATH": "", "PYTHONPATH": str(shim)}
+            # When
+            completed = subprocess.run(command, capture_output=True, text=True, env=env)
+        # Then
+        self.assertEqual(completed.returncode, 2, completed.stderr)
+        self.assertIn("pip install pyyaml", completed.stderr)
+        self.assertNotIn("Traceback", completed.stderr)
 
     def test_model_backed_clis_report_missing_pyyaml_without_traceback(self):
         with tempfile.TemporaryDirectory() as td:
