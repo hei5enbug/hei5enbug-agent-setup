@@ -20,7 +20,8 @@
   "agents": [
     "./agents/scout.md",
     "./agents/worker.md",
-    "./agents/researcher.md"
+    "./agents/researcher.md",
+    "./agents/designer.md"
   ],
   "userConfig": {
     "agent_guard": {
@@ -38,7 +39,7 @@
     "role_pinning": {
       "type": "boolean",
       "title": "Pin role models",
-      "description": "Run the scout, worker, and researcher agents on their pinned model and effort, and stop an agent that runs on any other model.",
+      "description": "Run the scout, worker, researcher, and designer agents on their pinned model and effort, and stop an agent that runs on any other model.",
       "default": true
     },
     "language_guard": {

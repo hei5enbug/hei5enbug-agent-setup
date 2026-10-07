@@ -146,6 +146,7 @@ CODEX_AGENTS = {
     "scout": "codex-scout.toml",
     "worker": "codex-worker.toml",
     "researcher": "codex-researcher.toml",
+    "designer": "codex-designer.toml",
 }
 RETIRED_CODEX_AGENTS = {
     "scout": {"910da79ee988b53f4a94186a469c4479c7e34bf61bec8dfd27ef1ab73cc171da"},

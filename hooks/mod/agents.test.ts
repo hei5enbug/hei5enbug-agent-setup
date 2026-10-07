@@ -4,6 +4,7 @@ import { enabled } from "./register.js";
 const WORKER = "hei5enbug-agent-setup:worker";
 const SCOUT = "hei5enbug-agent-setup:scout";
 const RESEARCHER = "hei5enbug-agent-setup:researcher";
+const DESIGNER = "hei5enbug-agent-setup:designer";
 const PINNED = "claude-sonnet-5-5";
 const SESSION = "session-test";
 const DAY = 24 * 60 * 60 * 1000;
@@ -202,6 +203,46 @@ test("고정 역할을 시작하면 모델을 고정해 넘기고 에이전트 �
     { agentId: "agent-2", role: "scout", model: PINNED, effort: "medium", toolUseId: "toolu_1", time: NOW },
     { agentId: "agent-3", role: "researcher", model: PINNED, effort: "medium", toolUseId: "toolu_2", time: NOW },
   ]);
+});
+
+test("designer를 시작하면 Opus 모델과 xhigh를 고정하고 요청마다 같은 값으로 보낸다", async ($, on) => {
+  // given
+  const data = environment(on);
+  const received = [];
+  on("agent.spawn", (_$, e) => {
+    received.push(e.model);
+    return { model: e.model, agentId: "agent-design" };
+  });
+  const seen = [];
+  stepSink(on, seen, "claude-opus-5-5");
+
+  // when
+  const spawn = await $.agent.spawn(spawnInput(DESIGNER, { model: "haiku", tool_use_id: "toolu_design" }));
+  const first = await step($, { agentId: "agent-design", model: "claude-sonnet-5-5", effort: "low" });
+
+  // then
+  expect(spawn).toEqual({ model: "claude-opus-5-5", agentId: "agent-design" });
+  expect(received).toEqual(["claude-opus-5-5"]);
+  expect(data.roles[SESSION]).toEqual([
+    { agentId: "agent-design", role: "designer", model: "claude-opus-5-5", effort: "xhigh", toolUseId: "toolu_design", time: NOW },
+  ]);
+  expect(seen).toEqual([{ model: "claude-opus-5-5", effort: "xhigh", agentId: "agent-design" }]);
+  expect(first.result.stopReason).toBe("end_turn");
+  expect(data.roles[SESSION][0].mismatch).toBeUndefined();
+});
+
+test("designer가 고정 모델이 아닌 모델로 응답하면 고정 실패로 기록하고 이후 요청을 거절한다", async ($, on) => {
+  // given
+  const data = environment(on, { [SESSION]: [entry("agent-design", { role: "designer", model: "claude-opus-5-5", effort: "xhigh" })] });
+  stepSink(on, [], PINNED);
+
+  // when
+  await step($, { agentId: "agent-design" });
+  const second = await step($, { agentId: "agent-design", index: 1 });
+
+  // then
+  expect(data.roles[SESSION][0].mismatch).toBe(true);
+  expect(second.result.stopReason).toBe("refusal");
 });
 
 test("나란히 시작한 고정 역할의 기록은 서로 덮어쓰지 않는다", async ($, on) => {
