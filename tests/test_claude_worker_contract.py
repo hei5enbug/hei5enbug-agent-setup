@@ -99,11 +99,34 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         definitions = sorted(f"./agents/{path.name}" for path in (REPO_ROOT / "agents").glob("*.md"))
 
         # Then
-        self.assertEqual(listed, ["./agents/scout.md", "./agents/worker.md", "./agents/researcher.md"])
+        self.assertEqual(listed, ["./agents/scout.md", "./agents/worker.md", "./agents/researcher.md", "./agents/designer.md"])
         self.assertEqual(sorted(listed), definitions)
         self.assertFalse(any("/ko/" in path for path in listed))
         mirror = WORKER_MIRROR.read_text(encoding="utf-8")
         self.assertIn("영어 원본: [worker.md](../worker.md)", mirror)
+        self.assertIn("비권위", mirror)
+
+    def test_designer_메타데이터는_고정_Opus_ID_xhigh와_Agent_금지를_정한다(self):
+        """designer 정의는 이름, 고정된 Opus 전체 ID, xhigh, Agent 금지를 선언하고 worker와 같은 할당 규칙을 따른다."""
+        # Given
+        path = REPO_ROOT / "agents/designer.md"
+
+        # When
+        metadata, body = split_definition(path)
+        normalized = " ".join(body.split())
+
+        # Then
+        self.assertEqual(metadata["name"], "designer")
+        self.assertEqual(metadata["model"], "claude-opus-5-5")
+        self.assertEqual(metadata["effort"], "xhigh")
+        self.assertEqual(metadata["disallowedTools"], "Agent")
+        self.assertEqual(set(metadata) & UNSUPPORTED_FIELDS, set())
+        self.assertIn("UI code (HTML, CSS, JS, components)", normalized)
+        self.assertIn("flowcharts or diagrams", normalized)
+        self.assertIn('Follow the "Assigned workers" section of the implementation execution rules', normalized)
+        self.assertIn("report it to the coordinator and make no edit", normalized)
+        mirror = (REPO_ROOT / "agents/ko/designer.ko.md").read_text(encoding="utf-8")
+        self.assertIn("영어 원본: [designer.md](../designer.md)", mirror)
         self.assertIn("비권위", mirror)
 
     def test_매니페스트는_Mod_설정을_가리키고_토글_다섯_개를_기본_켜짐으로_선언한다(self):

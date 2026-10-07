@@ -44,6 +44,7 @@ class SessionContextTest(unittest.TestCase):
         self.scout = self.codex_home / "agents" / "scout.toml"
         self.worker = self.codex_home / "agents" / "worker.toml"
         self.researcher = self.codex_home / "agents" / "researcher.toml"
+        self.designer = self.codex_home / "agents" / "designer.toml"
         shutil.copytree(REPO_ROOT / "standalone-agents", self.root / "standalone-agents")
 
     def run_hook(self, host="codex", event="SessionStart", source="startup", payload=None, extra_env=None):
@@ -279,6 +280,22 @@ class SessionContextTest(unittest.TestCase):
             self.researcher.read_text(encoding="utf-8"),
             (REPO_ROOT / "standalone-agents/codex-researcher.toml").read_text(encoding="utf-8"),
         )
+
+    def test_Codex_세션은_누락된_designer_역할을_설치하고_사용자_파일은_그대로_둔다(self):
+        """Codex 세션은 designer 역할이 없을 때 번들 정의를 설치하고, 사용자가 작성한 파일은 덮어쓰지 않는다."""
+        # Given
+        self.assertFalse(self.designer.exists())
+
+        # When
+        self.context(self.run_hook("codex"))
+        installed = self.designer.read_text(encoding="utf-8")
+        custom = 'name = "designer"\ndescription = "user-owned"\n'
+        self.designer.write_text(custom, encoding="utf-8")
+        self.context(self.run_hook("codex"))
+
+        # Then
+        self.assertEqual(installed, (REPO_ROOT / "standalone-agents/codex-designer.toml").read_text(encoding="utf-8"))
+        self.assertEqual(self.designer.read_text(encoding="utf-8"), custom)
 
     def test_provisioning_never_overwrites_an_existing_agent(self):
         self.scout.parent.mkdir(parents=True)
