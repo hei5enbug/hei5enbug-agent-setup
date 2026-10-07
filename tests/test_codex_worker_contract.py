@@ -49,7 +49,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         self.assertIn("Pass `gpt-6-luna` and `xhigh` explicitly on every spawn.", text)
         for lookup in ("developers.openai.com", "learn.chatgpt.com", "model selector"):
             self.assertNotIn(lookup, section)
-        self.assertEqual({"gpt-6-luna"}, set(re.findall(r"gpt-[\w.-]+", text)))
+        self.assertEqual({"gpt-6-luna", "gpt-6-astra"}, set(re.findall(r"gpt-[\w.-]+", text)))
 
     def test_전체_기록_fork로는_worker를_만들지_않는다(self):
         """전체 기록 fork는 재정의를 거부하므로 범위를 한정한 맥락으로 worker를 생성한다."""
@@ -141,7 +141,10 @@ class CodexWorkerContractTest(unittest.TestCase):
         # Given
         expected = (
             "Codex spawns sub-agents only when the user, `AGENTS.md`, or skill instructions ask for them",
+            "keeps a marked block in `~/.codex/AGENTS.md` that grants this",
+            "removed when `HEI5ENBUG_SUBAGENT_POLICY=off`",
             "continue in the main session under the session fallback.",
+            "enables `default_mode_request_user_input`, so `request_user_input` works in Default mode",
         )
 
         # When
@@ -150,6 +153,29 @@ class CodexWorkerContractTest(unittest.TestCase):
         # Then
         for phrase in expected:
             self.assertIn(phrase, section)
+
+    def test_디자인_작업은_Claude_프로세스로_실행하고_없으면_designer_역할로_대체한다(self):
+        """디자인 작업은 claude -p로 실행해 modelUsage로 확인하고, 쓸 수 없거나 근거가 없으면 designer 역할로 대체해 보고한다."""
+        # Given
+        text = CODEX_AGENTS.read_text(encoding="utf-8")
+        expected = (
+            "claude -p --model claude-opus-5-5 --effort xhigh --output-format json --permission-mode dontAsk "
+            '--allowedTools Read Grep Glob "Edit(<allowed path>/**)" "Write(<allowed path>/**)"',
+            "run a separate process from the repository root with the assignment on stdin",
+            "Request network access through the normal Codex approval flow if the sandbox blocks it.",
+            "Accept the result only when the JSON `modelUsage` names `claude-opus-5-5`.",
+            "When `claude` is missing, the process ends with an authentication, usage-limit, or model error, "
+            "or that evidence is missing",
+            "spawn the plugin `designer` role with `gpt-6-astra` and `xhigh` instead.",
+            "Verify its rollout record as for `worker`, and report the substitution.",
+        )
+
+        # When
+        design = " ".join(text.split("## Design work", 1)[1].split())
+
+        # Then
+        for phrase in expected:
+            self.assertIn(phrase, design)
 
     def test_호스트_한도는_메인_스레드를_빼고_세며_바꾸지_않는다(self):
         """Codex 동시 실행 한도는 생성한 스레드만 세고 조정자는 그 값을 바꾸지 않는다."""
@@ -202,7 +228,7 @@ class CodexWorkerContractTest(unittest.TestCase):
 
 
     def test_내장_에이전트는_모두_금지하고_플러그인_역할을_설치한다(self):
-        """내장 역할은 금지하고 훅이 설치한 세 플러그인 역할을 보존한다."""
+        """내장 역할은 금지하고 훅이 설치한 네 플러그인 역할을 보존한다."""
         # Given
         text = CODEX_AGENTS.read_text(encoding="utf-8")
 
@@ -212,7 +238,10 @@ class CodexWorkerContractTest(unittest.TestCase):
         # Then
         self.assertIn("Never use the built-in `default` or `explorer` agents.", built_in)
         self.assertIn("Always pass `agent_type`, because an omitted type runs `default`.", built_in)
-        self.assertIn("installs the plugin's `scout`, `worker`, and `researcher` roles in `~/.codex/agents/` when absent", built_in)
+        self.assertIn(
+            "installs the plugin's `scout`, `worker`, `researcher`, and `designer` roles in `~/.codex/agents/` when absent",
+            built_in,
+        )
         self.assertIn("so it also denies the built-in `worker` until the plugin role exists", built_in)
 
     def test_스킬_작업자는_scout나_별도_CLI_프로세스를_쓴다(self):

@@ -160,10 +160,11 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         # Given
         expected = (
             "[implementation execution rules](implementation-execution.md)",
-            "When delegating implementation, use only `hei5enbug-agent-setup:worker`.",
-            "Its definition pins `claude-sonnet-5-5` and `high`.",
+            "When delegating implementation, use only `hei5enbug-agent-setup:worker`, or `hei5enbug-agent-setup:designer` "
+            "for UI code, visual design, and diagram work.",
+            "Their definitions pin `claude-sonnet-5-5` with `high` and `claude-opus-5-5` with `xhigh`.",
             "Never pass a per-invocation model on an invocation or resume, because that overrides the definition.",
-            "Never switch to another agent.",
+            "Never switch to an agent outside these two.",
         )
 
         # When
@@ -194,16 +195,20 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
             self.assertIn(name, section)
         self.assertIn("Never change user settings.", section)
         self.assertIn("names `claude-sonnet-5-5` as the actual model and `high` as the effort", section)
+        self.assertIn("For `designer`, the evidence is `claude-opus-5-5` with `xhigh`.", section)
         self.assertIn(
-            "A different recorded model, a cap below `high`, a contradictory override, or unknown effective "
+            "A different recorded model, a cap below the pinned effort, a contradictory override, or unknown effective "
             "precedence is insufficient.",
             section,
         )
 
     def test_이어_보내기_지원_여부에_따라_준비_확인_경로가_갈린다(self):
-        """시작 결과에 모델이 없으므로 준비 확인 뒤 같은 worker에 구현을 보내고, 이어 보내기가 없으면 메인 대체 처리를 사용한다."""
+        """고정 표시 줄이 없으면 시작 결과에 모델이 없으므로 준비 확인 뒤 같은 worker에 구현을 보내고, 이어 보내기가 없으면 메인 대체 처리를 사용한다."""
         # Given
-        readiness = "The launch result does not name the model, so start each worker with a readiness-only assignment."
+        readiness = (
+            "Without that line, the launch result does not name the model, so start each worker with a "
+            "readiness-only assignment."
+        )
         supported = "Use this path only when that follow-up keeps the pinned model."
         unsupported = "When that continuation is unavailable, skip the two-phase path and use the session fallback."
 
@@ -216,6 +221,24 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         self.assertIn(supported, section)
         self.assertIn(unsupported, section)
         self.assertIn("Recheck the settings after any resume.", section)
+
+    def test_역할_고정_표시가_있으면_준비_확인_없이_바로_할당하고_기록은_계속_확인한다(self):
+        """세션 컨텍스트에 역할 고정 표시 줄이 있으면 준비 확인 호출 없이 할당하되 설정 점검과 기록 확인은 유지한다."""
+        # Given
+        expected = (
+            "When the session context contains `hei5enbug-agent-setup mod: role pinning active`",
+            "blocks tool calls from a subagent that answered on another model",
+            "Send the assignment directly, with no readiness-only call.",
+            "In both cases, keep the settings inspection before the first invocation",
+            "read the subagent record to confirm the actual model and effort before accepting delegated work",
+        )
+
+        # When
+        section = implementation_section()
+
+        # Then
+        for phrase in expected:
+            self.assertIn(phrase, section)
 
     def test_worker나_기록이_없으면_위임을_멈추고_메인_대체_처리를_쓴다(self):
         """플러그인 worker나 실제 모델 기록이 없으면 위임을 멈추고 공통 대체 처리를 적용한다."""

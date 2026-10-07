@@ -14,6 +14,7 @@
 |---|---|
 | 메인이 맡는 작업 | [세션 소유권 규칙](session/common.ko.md)을 따른다. |
 | 실제 저장소나 스킬을 수정하는 구현 | 호스트의 구현 실행 규칙과 고정된 구현 역할을 따른다. |
+| UI 코드, 시각 디자인, 다이어그램 | 호스트의 designer 경로를 쓴다. 레이아웃과 컴포넌트 구조를 바꾸지 않는 문구·스타일 값 수정은 구현 worker를 쓸 수 있다. |
 | 범위가 한정된 로컬 근거 수집 | 위임이 허용되고 유용할 때 호스트의 scout 역할을 쓴다. |
 | 공개 자료의 읽기 전용 조사 | 공개 도구를 사용할 수 있고 고정 설정을 확인한 경우에만 호스트의 researcher 역할을 쓴다. 그렇지 않으면 메인 세션에서 계속한다. |
 | 스킬의 조사, 시험 실행, 채점, 비교, 분석, 최적화 | 일반적인 스킬 작업자 라우팅보다 해당 스킬의 평가 계약을 먼저 적용한다. |
@@ -31,6 +32,7 @@ researcher는 주장, 공개 URL이나 파일 위치, 뒷받침하는 근거, �
 | 로컬 scout | `gpt-6-luna`, `xhigh` | `claude-sonnet-5-5`, `medium` |
 | 구현 worker | `gpt-6-luna`, `xhigh` | `claude-sonnet-5-5`, `high` |
 | 공개 researcher | `gpt-6-luna`, `xhigh` | `claude-sonnet-5-5`, `medium` |
+| Designer | `claude -p`로 `claude-opus-5-5`, `xhigh`. Claude를 쓸 수 없으면 `designer` 역할로 `gpt-6-astra`, `xhigh` | `claude-opus-5-5`, `xhigh` |
 | Skill Builder 평가 참여자 | `gpt-6-luna`, `xhigh` | `claude-sonnet-5-5`, `high` |
 
 결과를 신뢰하기 전에 호스트 기록과 관련된 비밀이 아닌 설정으로 역할의 실제 모델과 사고 강도를 확인한다.
