@@ -1,17 +1,14 @@
 # hei5enbug-agent-setup
 
-[English](./README.md) | **한국어** | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md) | [Español](./README.es.md) | [Deutsch](./README.de.md) | [Français](./README.fr.md)
-
 > 영어 원본: [README.md](README.md)
 > 이 문서는 사람을 위한 비권위 한국어 번역본이다. 에이전트 실행 시 읽거나 사용하지 않는다.
 
-AI 코딩 에이전트를 위한 커스텀 스킬 모음입니다. 호스트별로 다시 작성하지 않고 여러 에이전트 호스트에서 그대로 공유할 수 있도록 만들었습니다.
+내 작업 환경을 위한 개인용 에이전트 하네스입니다. Claude Code와 Codex용 스킬, 세션 지침, 가드 훅으로 이루어져 있습니다.
 
 ## 개요
 
 플러그인 스킬은 `skills/` 아래 자신의 폴더에 지침·참조 문서·스크립트를 함께 둡니다.
-플러그인에 포함하지 않는 스킬은 `standalone-skills/`에 둡니다. 같은 `SKILL.md`가 지원하는
-모든 호스트에서 수정 없이 작동합니다.
+같은 `SKILL.md`가 지원하는 모든 호스트에서 수정 없이 작동합니다.
 
 ## 지원 호스트
 
@@ -54,7 +51,6 @@ hei5enbug-agent-setup/
 │       └── common.md
 ├── scripts/
 │   ├── agent_guard.py
-│   ├── claude_gpt.py
 │   ├── datagrip_guard.py
 │   ├── language_guard.py
 │   ├── session_approval_guard.py
@@ -74,8 +70,6 @@ hei5enbug-agent-setup/
 │   ├── codex-researcher.toml
 │   ├── codex-scout.toml
 │   └── codex-worker.toml
-├── standalone-skills/
-│   └── omo-model-config/
 └── skills/
     ├── decision-navigator/
     ├── deep-interview/
@@ -91,8 +85,7 @@ hei5enbug-agent-setup/
 
 각 플러그인 스킬 폴더는 자신의 `SKILL.md`와 필요한 참조 문서·스크립트를 담고 있습니다.
 플러그인 매니페스트는 호스트별 디렉터리에 스킬을 복사하지 않고 같은 `skills/` 디렉터리를
-Codex와 Claude Code에 패키징합니다. `standalone-skills/` 디렉터리는 두 플러그인의 스킬
-검색 경로에 포함되지 않습니다.
+Codex와 Claude Code에 패키징합니다.
 
 `agents/` 디렉터리는 Claude Code 플러그인에 함께 배포되므로, 번들을 설치하면
 `hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:worker`, `hei5enbug-agent-setup:researcher`가 추가됩니다.
@@ -119,10 +112,9 @@ Codex에서는 종류를 비운 호출, `default`, `explorer`, 역할 파일이 
 
 ### Claude Code에서 GPT 사용
 
-Claude 전용 모듈은 일반 Claude 요청과 서브에이전트 요청을 그대로 전달합니다. 확인한 Claude Code 빌드는
-필수 도구 스키마를 제공하지 않아 GPT 경로와 실행기가 추론 전에 거부합니다. 인증·프로토콜 구성요소는 오프라인으로
-구현했지만 실환경 전환과 재개는 아직 완료하지 못했습니다.
-[GPT 설정·인증·호환성](docs/claude-gpt.md)을 참고하세요. 시작 시 의존성을 설치하거나 로그인하지 않습니다.
+Claude 전용 모듈은 고정한 GPT 모델로 가는 요청을 추론 전에 거부합니다.
+Claude Code의 mod API가 도구 입력 스키마를 제공하지 않아 아직 이 경로를 쓸 수 없습니다.
+헬퍼, 테스트, 설계 기록은 `gpt-route` 브랜치에 보존되어 있습니다.
 
 ### 응답 언어
 
@@ -349,13 +341,12 @@ Orca 인벤토리는 Orca 밖 세션의 종료를 입증할 수 없습니다. �
 
 ## 개발 검사
 
-번들 스크립트에는 Python 3.12 이상과 PyYAML이 필요합니다. GPT 인증 테스트에는 `dev` extra에 포함된
-PyJWT와 cryptography도 필요하고, Node 테스트에는 Node.js가 필요합니다.
+번들 스크립트에는 Python 3.12 이상과 PyYAML이 필요하고, Node 테스트에는 Node.js가 필요합니다.
 `.github/workflows/validate.yml`이 macOS와 Linux에서 실행하는 세 가지 검사를 같은 명령으로 실행합니다.
 
 ```bash
 python3 -m pip install -e ".[dev]"
-for skill in skills/*/ standalone-skills/*/; do python3 skills/skill-builder/scripts/quick_validate.py "$skill"; done
+for skill in skills/*/; do python3 skills/skill-builder/scripts/quick_validate.py "$skill"; done
 python3 -m pytest
 node --test skills/document-to-confluence/tests/test_render_diagrams.mjs
 ```
@@ -392,9 +383,7 @@ Orca CLI가 필요한 테스트는 Orca가 설치되어 있지 않으면 건너�
 
 ## 관련 링크
 
-- [`omo-model-config`](standalone-skills/omo-model-config/SKILL.md)은 플러그인 검색 대상 밖의 참고 소스로 유지합니다.
-  OpenCode 설정과 실행은 중단했습니다. [한국어 안내](standalone-skills/omo-model-config/SKILL.ko.md)
-- [Oh My OpenAgent](https://github.com/code-yeongyu/oh-my-openagent) — OpenCode 역할 비교의 원본 소스.
+- `omo-model-config`는 제거했습니다. 마지막 버전은 [`v1.3.0` 태그](https://github.com/hei5enbug/hei5enbug-agent-setup/tree/v1.3.0/standalone-skills/omo-model-config)에 있습니다.
 
 ## 라이선스
 

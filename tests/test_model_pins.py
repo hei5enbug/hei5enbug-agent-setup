@@ -21,7 +21,6 @@ PINS = {
     "claude-fable": "claude-fable-5-1",
     "claude-opus": "claude-opus-5-5",
     "claude-sonnet": "claude-sonnet-5-5",
-    "claude-haiku": "claude-haiku-4-5",
     "gpt-luna": "gpt-6-luna",
     "gpt-sol": "gpt-6.1-sol",
 }

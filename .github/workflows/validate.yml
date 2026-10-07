@@ -33,7 +33,7 @@ jobs:
       - name: Validate every SKILL.md
         run: |
           set -euo pipefail
-          for skill in skills/*/ standalone-skills/*/; do
+          for skill in skills/*/; do
             echo "== ${skill}"
             python skills/skill-builder/scripts/quick_validate.py "${skill}"
           done
