@@ -49,7 +49,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         self.assertIn("Pass `gpt-6-luna` and `xhigh` explicitly on every spawn.", text)
         for lookup in ("developers.openai.com", "learn.chatgpt.com", "model selector"):
             self.assertNotIn(lookup, section)
-        self.assertEqual({"gpt-6-luna", "gpt-6-astra"}, set(re.findall(r"gpt-[\w.-]+", text)))
+        self.assertEqual({"gpt-6-luna", "gpt-6-astra", "gpt-6.1-sol"}, set(re.findall(r"gpt-[\w.-]+", text)))
 
     def test_전체_기록_fork로는_worker를_만들지_않는다(self):
         """전체 기록 fork는 재정의를 거부하므로 범위를 한정한 맥락으로 worker를 생성한다."""
@@ -204,9 +204,12 @@ class CodexWorkerContractTest(unittest.TestCase):
         self.assertIn("Pass `gpt-6-luna` and `xhigh` explicitly on every researcher spawn; its role file sets no model.", investigation)
         self.assertIn("inspect the non-secret researcher role/config settings", investigation)
         self.assertIn("verify the host rollout record reports `gpt-6-luna` and `xhigh`", investigation)
-        self.assertIn("a verified Skill Builder-approved runner or its unavailable-capability path", normalized)
-        self.assertIn("Do not change the production scout settings.", normalized)
-        self.assertIn("Private or authenticated remote access and all edits stay in the main session.", normalized)
+        self.assertIn(
+            "For Skill Builder, trial execution and other non-review participants use the host's upper model",
+            normalized,
+        )
+        self.assertIn("Do not route a review role through `scout`", normalized)
+        self.assertIn("Keep private or authenticated remote access in the main session.", normalized)
 
     def test_조사는_내장_explorer_대신_scout를_쓴다(self):
         """Codex 조사는 Claude와 같은 이름의 scout만 쓰고, 쓸 수 없거나 역할 파일이 고정값을 바꾸면 메인 세션에서 조사한다."""
@@ -217,7 +220,10 @@ class CodexWorkerContractTest(unittest.TestCase):
         investigation = " ".join(text.split("## Investigation", 1)[1].split("## Skill workers", 1)[0].split())
 
         # Then
-        self.assertIn("Use the `scout` agent for bounded, read-only investigation whenever the session delegation rule selects it", investigation)
+        self.assertIn(
+            "Use the `scout` agent for bounded, read-only investigation whenever the session delegation rule selects it",
+            investigation,
+        )
         self.assertIn("Its bundled role file sets no model, so the spawn value applies.", investigation)
         self.assertIn(
             "If `scout` is unavailable, or its role file in the Codex agents directory sets another model or effort, "
@@ -225,10 +231,15 @@ class CodexWorkerContractTest(unittest.TestCase):
             investigation,
         )
         self.assertIn("Treat results as leads.", investigation)
+        scout = (REPO_ROOT / "standalone-agents/codex-scout.toml").read_text(encoding="utf-8")
+        self.assertIn("one bounded local investigation", scout)
+        self.assertIn("local-evidence research ticket", scout)
+        self.assertNotIn("review persona", scout)
+        self.assertNotIn("grading role", scout)
 
 
-    def test_내장_에이전트는_모두_금지하고_플러그인_역할을_설치한다(self):
-        """내장 역할은 금지하고 훅이 설치한 네 플러그인 역할을 보존한다."""
+    def test_내장_에이전트는_모두_금지하고_여섯_플러그인_역할을_설치한다(self):
+        """내장 역할은 금지하고 훅이 설치한 여섯 플러그인 역할을 보존한다."""
         # Given
         text = CODEX_AGENTS.read_text(encoding="utf-8")
 
@@ -239,13 +250,14 @@ class CodexWorkerContractTest(unittest.TestCase):
         self.assertIn("Never use the built-in `default` or `explorer` agents.", built_in)
         self.assertIn("Always pass `agent_type`, because an omitted type runs `default`.", built_in)
         self.assertIn(
-            "installs the plugin's `scout`, `worker`, `researcher`, and `designer` roles in `~/.codex/agents/` when absent",
+            "installs the plugin's `scout`, `worker`, `researcher`, `designer`, and `reviewer` roles in "
+            "`~/.codex/agents/` when absent",
             built_in,
         )
         self.assertIn("so it also denies the built-in `worker` until the plugin role exists", built_in)
 
-    def test_스킬_작업자는_scout나_별도_CLI_프로세스를_쓴다(self):
-        """스킬이 요구하는 읽기 전용 작업자는 scout, 시험 출력을 쓰는 작업자는 별도 codex exec 프로세스로 실행한다."""
+    def test_스킬_검토는_교차_계열_Claude와_reviewer_대체를_쓴다(self):
+        """Codex 스킬 검토는 Claude를 먼저 쓰고 실패하면 reviewer로 대체한 뒤 메인 세션이 한 번 판단한다."""
         # Given
         text = CODEX_AGENTS.read_text(encoding="utf-8")
 
@@ -253,9 +265,21 @@ class CodexWorkerContractTest(unittest.TestCase):
         skill_workers = " ".join(text.split("## Skill workers", 1)[1].split("## Implementation", 1)[0].split())
 
         # Then
-        self.assertIn("use `scout` with the pinned settings above only when they match the role's requirements", skill_workers)
-        self.assertIn("Give the role its instructions and output contract.", skill_workers)
-        self.assertIn("The main session writes any file the role produces.", skill_workers)
+        self.assertIn("one skill-assigned review role", skill_workers)
+        self.assertIn("from the repository root with the assignment on stdin", skill_workers)
+        self.assertIn(
+            "claude -p --model claude-opus-5-5 --effort high --output-format json --tools Read Grep Glob "
+            "--strict-mcp-config --permission-mode dontAsk --allowedTools Read Grep Glob",
+            skill_workers,
+        )
+        self.assertIn("Accept its result only when the JSON `modelUsage` names `claude-opus-5-5`", skill_workers)
+        self.assertIn("spawn the plugin `reviewer` role with `gpt-6.1-sol` and `xhigh` passed explicitly", skill_workers)
+        self.assertIn("report the substitution once", skill_workers)
+        self.assertIn("The reviewer returns findings only.", skill_workers)
+        self.assertIn("reviews the same material once", skill_workers)
+        self.assertIn("do not run another review round", skill_workers)
+        self.assertIn("Send a local-evidence research ticket to `scout`", skill_workers)
+        self.assertIn("bounded public research to `researcher`", skill_workers)
         self.assertIn("run a separate `codex exec` process with the model and effort that the skill pins", skill_workers)
 
 

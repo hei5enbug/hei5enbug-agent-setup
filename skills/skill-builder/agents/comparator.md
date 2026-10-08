@@ -88,7 +88,7 @@ Be decisive - ties should be rare. One output is usually better, even if margina
 
 ### Step 7: Write Comparison Results
 
-Save results to a JSON file at the path specified (or `comparison.json` if not specified).
+Save results to a JSON file at the path specified (or `comparison.json` if not specified). When you run read-only, return this exact JSON in your reply instead; the coordinating session saves it.
 
 ## Output Format
 

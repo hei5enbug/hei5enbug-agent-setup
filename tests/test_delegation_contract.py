@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import subprocess
 import sys
 from pathlib import Path
 
@@ -65,7 +66,22 @@ def test_구형_scout는_원본과_같을_때만_현재_역할로_교체한다(t
     """이전 scout의 미수정 복사본은 실행 중 조사를 허용하도록 교체하고 사용자 수정본은 그대로 둔다."""
     # Given
     current = (REPO / "standalone-agents/codex-scout.toml").read_text()
-    previous = current.replace("either a bounded investigation or a", "either an investigation during planning or a")
+    previous = current.replace(
+        "Read-only worker for one bounded local investigation, including a local-evidence research ticket "
+        "that a skill assigns.",
+        "Read-only worker for one bounded assignment, either a bounded investigation or a review persona, "
+        "research ticket, or grading role that a skill assigns.",
+    )
+    previous = previous.replace(
+        "either a bounded investigation or a",
+        "either an investigation during planning or a",
+    )
+    previous = previous.replace(
+        "conclusion the quoted evidence does not support.\nReturn the result",
+        "conclusion the quoted evidence does not support.\n"
+        "For a review persona, research ticket, or grading role that a skill assigns, follow that role's instructions "
+        "and output contract. Base every finding, answer, or grade on quoted evidence.\nReturn the result",
+    )
     prior_digest = hashlib.sha256(previous.encode()).hexdigest()
     target = tmp_path / "agents/scout.toml"
     target.parent.mkdir()
@@ -78,6 +94,28 @@ def test_구형_scout는_원본과_같을_때만_현재_역할로_교체한다(t
 
     # Then
     assert prior_digest in context.RETIRED_CODEX_AGENTS["scout"]
+    assert target.read_text() == (original if user_edited else current)
+
+
+@pytest.mark.parametrize("user_edited", [False, True])
+def test_v2_1_0_scout는_원본과_같을_때만_로컬_조사_전용_역할로_교체한다(tmp_path, monkeypatch, user_edited):
+    """v2.1.0에 들어 있던 scout의 미수정 복사본은 현재 역할로 바꾸고 사용자 수정본은 그대로 둔다."""
+    # Given
+    released = subprocess.run(
+        ["git", "show", "v2.1.0:standalone-agents/codex-scout.toml"],
+        cwd=REPO, check=True, capture_output=True, text=True,
+    ).stdout
+    target = tmp_path / "agents/scout.toml"
+    target.parent.mkdir()
+    original = released + ("\n# user setting\n" if user_edited else "")
+    target.write_text(original)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+
+    # When
+    context.provision_codex_agents(REPO)
+
+    # Then
+    current = (REPO / "standalone-agents/codex-scout.toml").read_text()
     assert target.read_text() == (original if user_edited else current)
 
 
