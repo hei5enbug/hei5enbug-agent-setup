@@ -35,7 +35,8 @@ Choose an owner before substantial work, and reconsider only when scope, depende
   that keeps layout and component structure may go to the implementation worker. Design documents and RFCs stay
   in the main session.
 - Host permission is required. If delegation, the pinned role/model/effort, or reliable settings evidence is
-  unavailable, continue authorized work in the main session and report the limitation once. Preserve all
+  unavailable, use the fallback route the host rules name; without one, continue authorized work in the main
+  session. Report the limitation once. Preserve all
   permissions and checks; never change user settings or silently substitute another worker model.
 
 Independent read-only review is the exception to main-session review ownership. Before finishing a substantial

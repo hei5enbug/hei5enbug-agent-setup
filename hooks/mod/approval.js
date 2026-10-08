@@ -60,6 +60,9 @@ const CODEX_DANGEROUS_FLAGS = new Set([
 ]);
 const CODEX_DANGEROUS_SANDBOX = "danger-full-access";
 const CODEX_SANDBOX_CONFIG_KEY = /^\s*["']?sandbox/i;
+const CODEX_WORD = /\bcodex\b/i;
+const CODEX_DANGEROUS_TEXT =
+  /danger-full-access|--dangerously-bypass-approvals-and-sandbox|--dangerously-bypass-hook-trust|(?:^|\s)(?:-c|--config)(?:\s+|=)?\s*["']?sandbox/i;
 
 const LEX_WHITESPACE = " \t\r\n";
 const LEX_QUOTES = "'\"";
@@ -191,7 +194,9 @@ function splitSubcommands(tokens) {
 
 function scanOpaque(command) {
   const keys = SCAN_KEYS.filter(([needle]) => command.includes(needle)).map(([, key]) => key);
-  return outcome(keys, SCAN_DESTRUCTIVE.test(command), false);
+  const codex = CODEX_WORD.test(command);
+  const destructive = SCAN_DESTRUCTIVE.test(command) || (codex && CODEX_DANGEROUS_TEXT.test(command));
+  return outcome(keys, destructive, false, codex && !destructive);
 }
 
 function joinDirectory(base, argument) {
@@ -437,24 +442,41 @@ function codexDirectory(state, argument) {
   return resolved !== null && resolved.startsWith("/") ? resolved : null;
 }
 
-function classifyCodex(words, state) {
+async function realDirectory($, state, path) {
+  if (state.real.has(path)) return state.real.get(path);
+  let real = null;
+  try {
+    const completed = await $.process.run(["/bin/realpath", path], { timeoutMs: LOOKUP_TIMEOUT_MS });
+    const text = completed.exitCode === 0 ? (completed.stdout || "").replace(/\r?\n$/, "") : "";
+    real = text.startsWith("/") ? text : null;
+  } catch {
+    real = null;
+  }
+  state.real.set(path, real);
+  return real;
+}
+
+async function classifyCodex($, words, state) {
   const args = words.slice(1);
   if (codexSubcommand(args) !== "exec") return null;
   if (codexIsDangerous(args)) return outcome([], true, true);
+  if (args.some(unsafe)) return outcome([], false, false, true);
   const root = joinDirectory(state.root, ".");
-  const prefix = root === "/" ? "/" : `${root}/`;
   const targets = optionValues(args, null, ["--add-dir"]);
   const workdirs = optionValues(args, "C", ["--cd"]);
   const keys = new Set();
   let unverifiable = false;
   if (workdirs.length > 0) targets.push(...workdirs);
   else if (state.dir !== state.root) targets.push(state.dir);
+  const realRoot = targets.length > 0 && root !== null && root.startsWith("/") ? await realDirectory($, state, root) : null;
+  const prefix = realRoot === "/" ? "/" : `${realRoot}/`;
   for (const target of targets) {
     const resolved = codexDirectory(state, target);
-    if (resolved === null || root === null || !root.startsWith("/")) {
+    const real = resolved === null || realRoot === null ? null : await realDirectory($, state, resolved);
+    if (real === null) {
       unverifiable = true;
-    } else if (resolved !== root && !resolved.startsWith(prefix)) {
-      keys.add(`codex-dir:${resolved}`);
+    } else if (real !== realRoot && !real.startsWith(prefix)) {
+      keys.add(`codex-dir:${real}`);
     }
   }
   return outcome(keys, false, keys.size > 0 && !unverifiable, unverifiable);
@@ -479,7 +501,7 @@ async function classifySubcommand($, words, state) {
   if (words[0] === "codex") {
     const redirect = punctuated ? codexInputRedirect(words) : null;
     const reads = redirect !== null && redirect.stripped !== null;
-    const codex = classifyCodex(reads ? redirect.stripped : words, state);
+    const codex = await classifyCodex($, reads ? redirect.stripped : words, state);
     if (codex !== null) {
       if (!punctuated || reads) return codex;
       const expanded = redirect !== null;
@@ -520,7 +542,7 @@ async function classifyBash($, command) {
     return scanOpaque(command);
   }
   const root = await sessionDirectory($);
-  const state = { dir: root, root, created: new Set() };
+  const state = { dir: root, root, created: new Set(), real: new Map() };
   const keys = new Set();
   let destructive = false;
   let known = true;
@@ -653,8 +675,8 @@ export function registerApproval(on) {
   on("tool.call", { tool: TOOL_MATCHER }, async ($, e, next) => {
     const result = await next(e);
     if (e.agentId || isDeny(result) || result?.isError) return result;
-    const { keys, destructive } = await classify($, e.tool, e);
-    if (destructive || keys.size === 0) return result;
+    const { keys, destructive, mustAsk } = await classify($, e.tool, e);
+    if (destructive || mustAsk || keys.size === 0) return result;
     await recordKeys($, keys);
     return result;
   }).catch(($, e, next) => next(e));
