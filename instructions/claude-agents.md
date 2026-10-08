@@ -49,10 +49,14 @@ session resume, apply its effective-settings checks before dispatch.
 Coordinate implementation under [implementation execution rules](implementation-execution.md). This section
 adds only the Claude Code worker integration.
 
-- When delegating implementation, use only `hei5enbug-agent-setup:worker`, or `hei5enbug-agent-setup:designer`
-  for UI code, visual design, and diagram work. Their definitions pin `claude-sonnet-5-5` with `high` and
+- Delegated implementation uses the route that the session line "Implementation worker route" names: the
+  Codex worker (see "Codex worker" below) by default, or `hei5enbug-agent-setup:worker` when the line says Sonnet
+  worker. A user request for one route applies to that request only. `hei5enbug-agent-setup:designer` still takes
+  UI code, visual design, and diagram work. The worker and designer definitions pin `claude-sonnet-5-5` with `high` and
   `claude-opus-5-5` with `xhigh`. Never pass a per-invocation model on an invocation or resume, because that
-  overrides the definition. Never switch to an agent outside these two.
+  overrides the definition. Never use any other agent.
+- The bullets below apply when a plugin agent runs: the Sonnet worker, including as the Codex fallback, and the
+  designer.
 - Before the first invocation in a run, inspect only these non-secret inputs in the environment and every
   settings file: the worker definition, `CLAUDE_CODE_SUBAGENT_MODEL` and `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`,
   effort overrides such as `CLAUDE_CODE_EFFORT_LEVEL`, effort caps such as `maxEffortLevel` or organization
@@ -82,3 +86,21 @@ adds only the Claude Code worker integration.
 - The host limit is `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`, which counts running subagents but not the main
   session. Use its current value and open slots; never change it.
 - A missing plugin worker or a missing subagent record stops the affected delegation. Apply the session fallback.
+
+## Codex worker
+
+- Write the assignment to a file, then run Codex from the session folder in the background with that file on stdin:
+  `codex exec -m gpt-6-luna -c model_reasoning_effort="xhigh" -s workspace-write -C <session folder> --json -o <result file> - < <assignment file>`.
+  Never use `cd` before it or `--ephemeral`.
+- Add `--add-dir <dir>` only for a directory outside the session folder that the task must write. The plugin mod
+  asks once per session for each such directory. Never pass `danger-full-access`,
+  `--dangerously-bypass-approvals-and-sandbox`, or a `-c` override of sandbox or network settings.
+- The assignment opens by saying that Codex is an assigned worker under the "Assigned workers" rules: it starts no
+  agents, makes no commit or push, uses no network, edits only the allowed paths, and ends with the changed paths,
+  check results, and blockers. It carries the usual assignment fields.
+- Evidence: take `thread_id` from the `thread.started` JSON event. The rollout file under `CODEX_HOME` (default
+  `~/.codex`) `sessions/` whose name contains that ID must name `gpt-6-luna` and `xhigh` in its `turn_context`
+  entries. Accept nothing else.
+- Fallback: when `codex` is missing or not logged in, a run ends with an authentication, usage-limit, model, or
+  timeout error, or the evidence is missing, inspect the partial diff, then give the task to
+  `hei5enbug-agent-setup:worker` and report the substitution once.

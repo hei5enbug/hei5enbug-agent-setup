@@ -1,7 +1,7 @@
 {
   "name": "hei5enbug-agent-setup",
   "displayName": "Hei5enbug Agent Skills",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Portable agent skills for repeatable engineering and documentation workflows.",
   "author": {
     "name": "hei5enbug",
@@ -33,13 +33,19 @@
     "session_approval": {
       "type": "boolean",
       "title": "One-time session approval",
-      "description": "Approve each covered outward write (git tags, tag pushes, gh release create or edit, and MCP write tools) once per session; destructive or unverifiable actions always ask.",
+      "description": "Approve each covered outward write (git tags, tag pushes, gh release create or edit, MCP write tools, and Codex worker access to a directory outside the session folder) once per session; destructive or unverifiable actions always ask.",
       "default": true
     },
     "role_pinning": {
       "type": "boolean",
       "title": "Pin role models",
       "description": "Run the scout, worker, researcher, and designer agents on their pinned model and effort, and stop an agent that runs on any other model.",
+      "default": true
+    },
+    "codex_worker": {
+      "type": "boolean",
+      "title": "Codex implementation worker",
+      "description": "Run implementation workers through Codex on gpt-6-luna at xhigh effort; turn off to use the Sonnet worker.",
       "default": true
     },
     "language_guard": {

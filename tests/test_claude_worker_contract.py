@@ -129,8 +129,8 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         self.assertIn("영어 원본: [designer.md](../designer.md)", mirror)
         self.assertIn("비권위", mirror)
 
-    def test_매니페스트는_Mod_설정을_가리키고_토글_다섯_개를_기본_켜짐으로_선언한다(self):
-        """hooks는 Mod 설정 파일이고, 설정 파일의 모듈이 존재하며, userConfig는 영어 title과 description을 가진 boolean 다섯 개다."""
+    def test_매니페스트는_Mod_설정을_가리키고_토글_여섯_개를_기본_켜짐으로_선언한다(self):
+        """hooks는 Mod 설정 파일이고, 설정 파일의 모듈이 존재하며, userConfig는 영어 title과 description을 가진 boolean 여섯 개다."""
         # Given
         manifest = json.loads(PLUGIN_MANIFEST.read_text(encoding="utf-8"))
 
@@ -145,7 +145,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         self.assertTrue(all((config_path.parent / module).is_file() for module in modules))
         self.assertEqual(
             list(options),
-            ["agent_guard", "session_approval", "role_pinning", "language_guard", "datagrip_guard"],
+            ["agent_guard", "session_approval", "role_pinning", "codex_worker", "language_guard", "datagrip_guard"],
         )
         for key, option in options.items():
             with self.subTest(key=key):
@@ -155,16 +155,19 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
 
 
 class ClaudeWorkerAdapterTest(unittest.TestCase):
-    def test_구현은_플러그인_worker와_정의에_고정된_모델을_사용한다(self):
-        """Claude에서 구현을 위임할 때는 플러그인 worker를 쓰고 호출 단위 모델을 넘기지 않는다."""
+    def test_구현은_세션_경로_줄을_따르고_플러그인_agent에_고정_모델을_쓴다(self):
+        """Claude에서 구현 위임은 세션의 worker 경로 줄을 따르고, 플러그인 agent에는 호출 단위 모델을 넘기지 않는다."""
         # Given
         expected = (
             "[implementation execution rules](implementation-execution.md)",
-            "When delegating implementation, use only `hei5enbug-agent-setup:worker`, or `hei5enbug-agent-setup:designer` "
-            "for UI code, visual design, and diagram work.",
-            "Their definitions pin `claude-sonnet-5-5` with `high` and `claude-opus-5-5` with `xhigh`.",
+            'Delegated implementation uses the route that the session line "Implementation worker route" names: the '
+            'Codex worker (see "Codex worker" below) by default, or `hei5enbug-agent-setup:worker` when the line says '
+            "Sonnet worker.",
+            "A user request for one route applies to that request only.",
+            "`hei5enbug-agent-setup:designer` still takes UI code, visual design, and diagram work.",
+            "The worker and designer definitions pin `claude-sonnet-5-5` with `high` and `claude-opus-5-5` with `xhigh`.",
             "Never pass a per-invocation model on an invocation or resume, because that overrides the definition.",
-            "Never switch to an agent outside these two.",
+            "Never use any other agent.",
         )
 
         # When
@@ -175,6 +178,25 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
             self.assertIn(phrase, section)
         self.assertNotIn("alias", section)
         self.assertNotIn("model-config", section)
+
+    def test_Codex_worker는_luna_xhigh와_작업_폴더_쓰기로_실행하고_실패하면_Sonnet_worker로_대체한다(self):
+        """Codex worker는 gpt-6-luna와 xhigh, 작업 폴더 쓰기 샌드박스로 실행하고, 실행 기록을 확인하며, 실패하면 Sonnet worker로 대체한다."""
+        # Given
+        expected = (
+            '`codex exec -m gpt-6-luna -c model_reasoning_effort="xhigh" -s workspace-write -C <session folder> '
+            "--json -o <result file> - < <assignment file>`",
+            "Never pass `danger-full-access`, `--dangerously-bypass-approvals-and-sandbox`, or a `-c` override of "
+            "sandbox or network settings.",
+            "must name `gpt-6-luna` and `xhigh` in its `turn_context` entries.",
+            "give the task to `hei5enbug-agent-setup:worker` and report the substitution once.",
+        )
+
+        # When
+        section = implementation_section().split("## Codex worker", 1)[1]
+
+        # Then
+        for phrase in expected:
+            self.assertIn(phrase, section)
 
     def test_실제_모델과_사고_강도를_낮출_수_있는_설정을_확인한다(self):
         """강제 모델, 사고 강도 재정의, 상한, 대체 경고를 확인하고 부족한 근거를 거부한다."""

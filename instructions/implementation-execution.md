@@ -97,9 +97,10 @@ Fallback never bypasses a missing user decision, permission restriction, or fail
 ## Model and effort
 
 For delegated implementation, use the model ID and effort that the host's agent rules pin. Never look up a
-newer release, follow a provider alias, or substitute another worker model at runtime; the repository updates
-its pins when it changes. If the pinned
-model or effort is unavailable, use the session fallback instead of selecting another worker model.
+newer release, follow a provider alias, or substitute another worker model at runtime, except through a
+fallback route that the host's agent rules name; the repository updates its pins when it changes. If the pinned
+model or effort is unavailable, use that named fallback route or else the session fallback instead of selecting
+another worker model.
 
 Record the pinned model ID and effort in each worker assignment, and reuse them for that run.
 

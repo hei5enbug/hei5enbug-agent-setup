@@ -49,13 +49,25 @@ export const WRITE_WORDS = new Set([
   "rename", "link", "react", "reaction", "publish", "merge", "close", "reopen", "assign", "invite", "patch",
 ]);
 
+const CODEX_VALUE_OPTIONS = new Set([
+  "-c", "--config", "-C", "--cd", "--add-dir", "-s", "--sandbox", "-m", "--model", "-o", "--output-last-message",
+  "--output-schema", "-p", "--profile", "-i", "--image", "--color", "-a", "--ask-for-approval", "--enable",
+  "--disable", "--local-provider",
+]);
+const CODEX_DANGEROUS_FLAGS = new Set([
+  "--dangerously-bypass-approvals-and-sandbox",
+  "--dangerously-bypass-hook-trust",
+]);
+const CODEX_DANGEROUS_SANDBOX = "danger-full-access";
+const CODEX_SANDBOX_CONFIG_KEY = /^\s*["']?sandbox/i;
+
 const LEX_WHITESPACE = " \t\r\n";
 const LEX_QUOTES = "'\"";
 const LEX_ESCAPE = "\\";
 const LEX_PUNCTUATION = "();<>|&";
 
-function outcome(keys, destructive, known) {
-  return { keys: new Set(keys), destructive, known };
+function outcome(keys, destructive, known, mustAsk = false) {
+  return { keys: new Set(keys), destructive, known, mustAsk };
 }
 
 function expands(token) {
@@ -377,10 +389,104 @@ function classifyGh(words) {
   return outcome([], false, false);
 }
 
-async function classifySubcommand($, words, state) {
-  if (words.some(word => word && Array.from(word).every(char => PUNCTUATION.has(char)))) {
-    return outcome([], false, false);
+function codexSubcommand(args) {
+  let index = 0;
+  while (index < args.length) {
+    const arg = args[index];
+    index += 1;
+    if (arg.startsWith("-") && arg !== "-") {
+      if (CODEX_VALUE_OPTIONS.has(arg)) index += 1;
+    } else {
+      return arg;
+    }
   }
+  return null;
+}
+
+function optionValues(args, short, longs) {
+  const values = [];
+  let index = 0;
+  while (index < args.length) {
+    const arg = args[index];
+    index += 1;
+    if ((short !== null && arg === `-${short}`) || longs.includes(arg)) {
+      values.push(index < args.length ? args[index] : null);
+      index += 1;
+    } else if (arg.startsWith("--")) {
+      const name = longs.find(item => arg.startsWith(`${item}=`));
+      if (name !== undefined) values.push(arg.slice(name.length + 1));
+    } else if (short !== null && arg.length > 2 && arg.startsWith(`-${short}`)) {
+      const rest = arg.slice(2);
+      values.push(rest.startsWith("=") ? rest.slice(1) : rest);
+    }
+  }
+  return values;
+}
+
+function codexIsDangerous(args) {
+  if (args.some(arg => CODEX_DANGEROUS_FLAGS.has(arg))) return true;
+  if (optionValues(args, "s", ["--sandbox"]).includes(CODEX_DANGEROUS_SANDBOX)) return true;
+  return optionValues(args, "c", ["--config"]).some(
+    value => typeof value === "string" && CODEX_SANDBOX_CONFIG_KEY.test(value),
+  );
+}
+
+function codexDirectory(state, argument) {
+  if (typeof argument !== "string") return null;
+  const resolved = joinDirectory(argument.startsWith("/") ? "/" : state.dir, argument);
+  return resolved !== null && resolved.startsWith("/") ? resolved : null;
+}
+
+function classifyCodex(words, state) {
+  const args = words.slice(1);
+  if (codexSubcommand(args) !== "exec") return null;
+  if (codexIsDangerous(args)) return outcome([], true, true);
+  const root = joinDirectory(state.root, ".");
+  const prefix = root === "/" ? "/" : `${root}/`;
+  const targets = optionValues(args, null, ["--add-dir"]);
+  const workdirs = optionValues(args, "C", ["--cd"]);
+  const keys = new Set();
+  let unverifiable = false;
+  if (workdirs.length > 0) targets.push(...workdirs);
+  else if (state.dir !== state.root) targets.push(state.dir);
+  for (const target of targets) {
+    const resolved = codexDirectory(state, target);
+    if (resolved === null || root === null || !root.startsWith("/")) {
+      unverifiable = true;
+    } else if (resolved !== root && !resolved.startsWith(prefix)) {
+      keys.add(`codex-dir:${resolved}`);
+    }
+  }
+  return outcome(keys, false, keys.size > 0 && !unverifiable, unverifiable);
+}
+
+function isPunctuation(word) {
+  return Boolean(word) && Array.from(word).every(char => PUNCTUATION.has(char));
+}
+
+function codexInputRedirect(words) {
+  const marks = words.flatMap((word, index) => (isPunctuation(word) ? [index] : []));
+  if (marks.length !== 1 || words[marks[0]] !== "<") return null;
+  const at = marks[0];
+  const path = words[at + 1];
+  if (typeof path !== "string" || path === "") return null;
+  if (unsafe(path)) return { stripped: null };
+  return { stripped: [...words.slice(0, at), ...words.slice(at + 2)] };
+}
+
+async function classifySubcommand($, words, state) {
+  const punctuated = words.some(isPunctuation);
+  if (words[0] === "codex") {
+    const redirect = punctuated ? codexInputRedirect(words) : null;
+    const reads = redirect !== null && redirect.stripped !== null;
+    const codex = classifyCodex(reads ? redirect.stripped : words, state);
+    if (codex !== null) {
+      if (!punctuated || reads) return codex;
+      const expanded = redirect !== null;
+      return outcome(codex.keys, codex.destructive, false, codex.mustAsk || (expanded && !codex.destructive));
+    }
+  }
+  if (punctuated) return outcome([], false, false);
   const head = words[0];
   if (head === "echo") return outcome([], false, !words.slice(1).some(word => unsafe(word)));
   if (head === "cd") {
@@ -413,17 +519,20 @@ async function classifyBash($, command) {
   } catch {
     return scanOpaque(command);
   }
-  const state = { dir: await sessionDirectory($), created: new Set() };
+  const root = await sessionDirectory($);
+  const state = { dir: root, root, created: new Set() };
   const keys = new Set();
   let destructive = false;
   let known = true;
+  let mustAsk = false;
   for (const words of subcommands) {
     const sub = await classifySubcommand($, words, state);
     for (const key of sub.keys) keys.add(key);
     destructive = destructive || sub.destructive;
     known = known && (sub.known || sub.destructive);
+    mustAsk = mustAsk || sub.mustAsk;
   }
-  return outcome(keys, destructive, known);
+  return outcome(keys, destructive, known, mustAsk);
 }
 
 export function toolWordList(toolPart) {
@@ -523,8 +632,9 @@ export function registerApproval(on) {
   on("tool.check", { tool: TOOL_MATCHER }, async ($, e, next) => {
     const decided = await next(e);
     if (decided.decision === "deny") return decided;
-    const { keys, destructive, known } = await classify($, e.tool, e.input);
+    const { keys, destructive, known, mustAsk } = await classify($, e.tool, e.input);
     if (destructive) return { decision: "ask", reason: DESTRUCTIVE_REASON };
+    if (mustAsk) return { decision: "ask", reason: UNVERIFIABLE_REASON };
     if (keys.size === 0) return decided;
     if (!known) return { decision: "ask", reason: UNVERIFIABLE_REASON };
     const listed = [...keys].sort().join(", ");

@@ -121,10 +121,11 @@ the built-in subagent block, role pinning, session approvals, and the GPT refusa
 policy, these guards are absent and the host's normal permission flow applies.
 
 Role pinning pins each plugin role's model and effort on every request: `scout` and `researcher` use
-`claude-sonnet-5-5` with `medium`, `worker` uses `claude-sonnet-5-5` with `high`, and `designer` uses
-`claude-opus-5-5` with `xhigh`. A subagent that answers on another model is stopped: its later requests end with a
-refusal, its tool calls are denied, and its result is replaced with a warning. The session context then carries the
-line `hei5enbug-agent-setup mod: role pinning active`, which lets the main session send assignments directly.
+`claude-sonnet-5-5` with `medium`, `worker` uses `claude-sonnet-5-5` with `high` when the Sonnet worker runs, and
+`designer` uses `claude-opus-5-5` with `xhigh`. A subagent that answers on another model is stopped: its later
+requests end with a refusal, its tool calls are denied, and its result is replaced with a warning. The session context
+then carries the line `hei5enbug-agent-setup mod: role pinning active`, which lets the main session send assignments
+directly.
 
 ### GPT in Claude Code
 
@@ -173,26 +174,29 @@ call succeeds, its `tool.call` hook records the approved kind in the mod store (
 later actions of the same kind in that session run without a prompt. It covers creating git tags; pushing tags to a
 configured remote; `gh release create` and `gh release edit` with only the tag and the flags `--title`, `--notes`,
 `--target`, `--generate-notes`, `--notes-from-tag`, `--latest`, `--draft`, `--prerelease`, `--verify-tag`; and MCP tools
-whose names contain a write verb. MCP tools whose names start with a read verb, such as get, list, search, read, fetch,
-query, or download, are never covered and keep the normal permission flow, as does the DataGrip query tool, which the
-DataGrip query guard handles. Each tool or command kind is approved separately.
+whose names contain a write verb; and a Codex worker's access to a directory outside the session folder (`codex exec`
+with `--add-dir` or `-C`), approved separately for each directory. MCP tools whose names start with a read verb, such as
+get, list, search, read, fetch, query, or download, are never covered and keep the normal permission flow, as does the
+DataGrip query tool, which the DataGrip query guard handles. Each tool or command kind is approved separately.
 
 Destructive actions always ask: force pushes, deleting remote branches or tags, deleting a tag, `gh release delete`,
 `gh repo delete`, and MCP tools that delete, trash, or remove, even when the name starts with a read verb.
-`gh release upload` always asks too, because it can publish any local file. So does a tag push to a URL, an unlisted
-remote, or `--repo`, or one that mixes a branch into a `--tags` push, and so does a `gh release create` or
-`gh release edit` with attached assets, `--notes-file`, or any other flag. A compound command that contains anything
-the mod cannot verify always asks. A plain `echo` with literal text after a covered command, such as
-`git tag v1 && echo done`, does not stop the approval from applying; an `echo` with a variable, command substitution,
-glob, redirect, or pipe still asks. Subagents never inherit approvals. Approvals belong to one session, and the mod
-drops stored entries older than 7 days. Ordinary pushes and all other commands keep the normal permission flow.
+`gh release upload` always asks too, because it can publish any local file. So does `codex exec` with
+`danger-full-access`, `--dangerously-bypass-approvals-and-sandbox`, `--dangerously-bypass-hook-trust`, or a `-c`
+override of sandbox settings. So does a tag push to a URL, an unlisted remote, or `--repo`, or one that mixes a branch
+into a `--tags` push, and so does a `gh release create` or `gh release edit` with attached assets, `--notes-file`, or
+any other flag. A compound command that contains anything the mod cannot verify always asks. A plain `echo` with literal
+text after a covered command, such as `git tag v1 && echo done`, does not stop the approval from applying; an `echo`
+with a variable, command substitution, glob, redirect, or pipe still asks. Subagents never inherit approvals. Approvals
+belong to one session, and the mod drops stored entries older than 7 days. Ordinary pushes and all other commands keep
+the normal permission flow.
 
 Do not add `permissions.ask` rules for these actions, because an ask rule prompts every time even after a session
 approval.
 
 ## Feature toggles
 
-Seven features can be turned off. All default to on. On Claude Code, set the plugin option in `/config`, or with
+Eight features can be turned off. All default to on. On Claude Code, set the plugin option in `/config`, or with
 `claude plugin configure`. On Codex, set the environment variable before starting the session. A value of `false`,
 `0`, `off`, or `no`, in any letter case, turns a feature off.
 
@@ -201,6 +205,7 @@ Seven features can be turned off. All default to on. On Claude Code, set the plu
 | Block built-in subagents | `agent_guard` | `HEI5ENBUG_AGENT_GUARD` |
 | One-time session approval | `session_approval` | Not applicable |
 | Pin role models | `role_pinning` | Not applicable |
+| Codex implementation worker | `codex_worker` | Not applicable |
 | Response language guard | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip query guard | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
 | Subagent permission block in `~/.codex/AGENTS.md` | Not applicable | `HEI5ENBUG_SUBAGENT_POLICY` |
@@ -299,7 +304,7 @@ stay in the main session.
 | Host | Implementation agent | Model and effort |
 |---|---|---|
 | Codex | Plugin `worker` role, verified from its rollout record | `gpt-6-luna`, `xhigh` |
-| Claude Code | `hei5enbug-agent-setup:worker`, verified from its subagent record | `claude-sonnet-5-5`, `high` |
+| Claude Code | `codex exec`, verified from its rollout record (default); `hei5enbug-agent-setup:worker`, verified from its subagent record, when `codex_worker` is off, on request, or as fallback | `gpt-6-luna`, `xhigh` (default); `claude-sonnet-5-5`, `high` |
 | Codex, designer | `claude -p` with the pinned model; when Claude is unavailable, the plugin `designer` role | `claude-opus-5-5`, `xhigh`; fallback `gpt-6-astra`, `xhigh` |
 | Claude Code, designer | `hei5enbug-agent-setup:designer`, verified from its subagent record | `claude-opus-5-5`, `xhigh` |
 

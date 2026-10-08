@@ -30,7 +30,7 @@ researcher는 주장, 공개 URL이나 파일 위치, 뒷받침하는 근거, �
 | 역할 | Codex | Claude Code |
 |---|---|---|
 | 로컬 scout | `gpt-6-luna`, `xhigh` | `claude-sonnet-5-5`, `medium` |
-| 구현 worker | `gpt-6-luna`, `xhigh` | `claude-sonnet-5-5`, `high` |
+| 구현 worker | `gpt-6-luna`, `xhigh` | `codex exec`와 `gpt-6-luna`, `xhigh`(기본); `codex_worker`가 꺼져 있거나 요청했거나 대체할 때는 `claude-sonnet-5-5`, `high` worker |
 | 공개 researcher | `gpt-6-luna`, `xhigh` | `claude-sonnet-5-5`, `medium` |
 | Designer | `claude -p`로 `claude-opus-5-5`, `xhigh`. Claude를 쓸 수 없으면 `designer` 역할로 `gpt-6-astra`, `xhigh` | `claude-opus-5-5`, `xhigh` |
 | Skill Builder 평가 참여자 | `gpt-6-luna`, `xhigh` | `claude-sonnet-5-5`, `high` |

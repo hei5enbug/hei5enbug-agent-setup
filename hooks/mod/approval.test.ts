@@ -1667,3 +1667,586 @@ for (const event of ["tool.check", "tool.call"]) {
     expect(result).toBe(answer);
   });
 }
+
+const CODEX_BASE = `codex exec -m gpt-6-luna -c model_reasoning_effort="xhigh" -s workspace-write`;
+const CODEX_TAIL = `--json -o out.json -`;
+const OTHER_DIR = "/repos/other";
+const OTHER_KEY = `codex-dir:${OTHER_DIR}`;
+
+function codexWith(...options) {
+  return [CODEX_BASE, ...options, CODEX_TAIL].join(" ");
+}
+
+const CODEX_INSIDE_CASES = [
+  ["작업 폴더를 -C로 그대로 지정", [`-C ${REPO_WITH_V1}`]],
+  ["작업 폴더 안쪽 하위 폴더를 -C로 지정", [`-C ${REPO_WITH_V1}/sub`]],
+  ["점 하나로 작업 폴더를 지정", ["-C ."]],
+  ["하위 폴더로 갔다가 올라오는 상대 경로를 지정", ["-C sub/../other-sub"]],
+  ["끝 슬래시와 중복 슬래시가 붙은 작업 폴더 안쪽 경로를 --add-dir로 지정", [`--add-dir ${REPO_WITH_V1}//sub///`]],
+  ["--cd=로 작업 폴더 안쪽 경로를 지정", [`--cd=${REPO_WITH_V1}/sub`]],
+  ["디렉터리 옵션 없이 실행", []],
+];
+
+const CODEX_OUTSIDE_CASES = [
+  ["--add-dir 뒤에 절대 경로", [`--add-dir ${OTHER_DIR}`], OTHER_DIR],
+  ["--add-dir=로 붙인 절대 경로", [`--add-dir=${OTHER_DIR}`], OTHER_DIR],
+  ["-C 뒤에 절대 경로", [`-C ${OTHER_DIR}`], OTHER_DIR],
+  ["--cd 뒤에 절대 경로", [`--cd ${OTHER_DIR}`], OTHER_DIR],
+  ["--cd=로 붙인 절대 경로", [`--cd=${OTHER_DIR}`], OTHER_DIR],
+  ["-C에 값을 바로 붙인 절대 경로", [`-C${OTHER_DIR}`], OTHER_DIR],
+  ["상위로 올라가는 상대 경로 ../other", ["--add-dir ../other"], OTHER_DIR],
+  ["끝 슬래시와 중복 슬래시와 점이 섞인 경로", [`--add-dir ${OTHER_DIR}//./`], OTHER_DIR],
+  ["작업 폴더 안에서 나갔다가 들어오는 경로", [`--add-dir ${REPO_WITH_V1}/../other`], OTHER_DIR],
+  ["이름이 작업 폴더로 시작하지만 다른 폴더인 경로", ["--add-dir /repos/with-v1-extra"], "/repos/with-v1-extra"],
+];
+
+const CODEX_EXPANSION_OPTIONS = [
+  ["물결표로 시작하는 홈 경로", "--add-dir ~/work"],
+  ["$HOME 변수", "--add-dir $HOME"],
+  ["중괄호 변수", "--add-dir ${HOME}/work"],
+  ["따옴표로 감싼 변수", `-C "$HOME/work"`],
+  ["글롭", "--add-dir /repos/*"],
+  ["물음표 글롭", "--add-dir=/repos/ot?er"],
+  ["-C의 변수", "-C $WORK"],
+];
+
+const CODEX_DANGEROUS_OPTIONS = [
+  ["-s danger-full-access", "-s danger-full-access"],
+  ["--sandbox danger-full-access", "--sandbox danger-full-access"],
+  ["--sandbox=danger-full-access", "--sandbox=danger-full-access"],
+  ["-s에 값을 붙인 -sdanger-full-access", "-sdanger-full-access"],
+  ["--dangerously-bypass-approvals-and-sandbox", "--dangerously-bypass-approvals-and-sandbox"],
+  ["--dangerously-bypass-hook-trust", "--dangerously-bypass-hook-trust"],
+  ["-c sandbox_mode 덮어쓰기", `-c sandbox_mode="danger-full-access"`],
+  ["--config sandbox_workspace_write 덮어쓰기", "--config sandbox_workspace_write.network_access=true"],
+  ["--config=sandbox 덮어쓰기", "--config=sandbox_mode=read-only"],
+  ["-c에 값을 붙인 sandbox 덮어쓰기", "-csandbox_mode=danger-full-access"],
+];
+
+for (const [name, options] of CODEX_INSIDE_CASES) {
+  test(`Codex 작업 명령에서 ${name}하면 키가 없다`, async () => {
+    // given
+    const command = codexWith(...options);
+
+    // when
+    const result = await classifyBash(command);
+
+    // then
+    expect(result).toEqual({ keys: NONE, destructive: false, known: false });
+  });
+}
+
+for (const [name, options, directory] of CODEX_OUTSIDE_CASES) {
+  test(`Codex 작업 명령에서 ${name}를 쓰면 바깥 폴더 키 하나를 만들고 모두 이해한 것으로 본다`, async () => {
+    // given
+    const command = codexWith(...options);
+
+    // when
+    const result = await classifyBash(command);
+
+    // then
+    expect(result).toEqual({ keys: [`codex-dir:${directory}`], destructive: false, known: true });
+  });
+}
+
+test("값이 없이 끝난 --add-dir은 확인할 수 없어 승인 기록이 있어도 항상 묻는다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  await approve(hooks, env, codexWith(`--add-dir ${OTHER_DIR}`));
+
+  // when
+  const asked = await hooks.check(env, checkEvent("codex exec --add-dir"));
+
+  // then
+  expect(asked).toEqual({ decision: "ask", reason: UNVERIFIABLE_REASON });
+});
+
+test("Codex 작업 명령의 디렉터리 옵션이 여러 개이면 작업 폴더 밖 디렉터리마다 키를 만든다", async () => {
+  // given
+  const command = codexWith(`-C ${REPO_WITH_V1}`, `--add-dir ${OTHER_DIR}`, "--add-dir /repos/third", `--add-dir ${REPO_WITH_V1}/sub`);
+
+  // when
+  const result = await classifyBash(command);
+
+  // then
+  expect(result).toEqual({ keys: ["codex-dir:/repos/other", "codex-dir:/repos/third"], destructive: false, known: true });
+});
+
+test("Codex 작업 명령의 하위 명령 앞에 놓은 전역 -C도 작업 폴더 밖이면 키를 만든다", async () => {
+  // given
+  const command = `codex -C ${OTHER_DIR} -m gpt-6-luna exec --json -`;
+
+  // when
+  const result = await classifyBash(command);
+
+  // then
+  expect(result).toEqual({ keys: [OTHER_KEY], destructive: false, known: true });
+});
+
+test("작업 폴더 밖으로 cd한 뒤 디렉터리 옵션 없이 실행한 Codex 작업 명령은 그 폴더 키를 만든다", async () => {
+  // given
+  const command = `cd ${OTHER_DIR} && ${codexWith()}`;
+
+  // when
+  const result = await classifyBash(command);
+
+  // then
+  expect(result).toEqual({ keys: [OTHER_KEY], destructive: false, known: true });
+});
+
+test("작업 폴더 안 하위 폴더로 cd한 뒤 실행한 Codex 작업 명령은 키가 없다", async () => {
+  // given
+  const command = `cd sub && ${codexWith()}`;
+
+  // when
+  const result = await classifyBash(command);
+
+  // then
+  expect(result.keys).toEqual([]);
+});
+
+for (const command of [
+  "codexx exec --add-dir /repos/other -",
+  "codex login --add-dir /repos/other",
+  "codex --add-dir /repos/other",
+  "codex",
+  "codex exec",
+  "/usr/local/bin/codex exec --add-dir /repos/other -",
+  "FOO=1 codex exec --add-dir /repos/other -",
+  "ls --add-dir /repos/other",
+]) {
+  test(`Codex 작업 명령이 아닌 ${JSON.stringify(command)}은 디렉터리 옵션이 있어도 키가 없다`, async () => {
+    // given
+    const hooks = registerHooks();
+    const env = createEnv();
+
+    // when
+    const checked = await hooks.check(env, checkEvent(command));
+    const called = await hooks.call(env, callEvent(command));
+
+    // then
+    expect(checked).toBe(CORE);
+    expect(called).toBe(OK_RESULT);
+    expect(env.writes).toEqual([]);
+  });
+}
+
+for (const [name, option] of CODEX_DANGEROUS_OPTIONS) {
+  test(`Codex 작업 명령의 위험 옵션(${name})은 되돌릴 수 없는 작업으로 분류한다`, async () => {
+    // given
+    const command = codexWith(option);
+
+    // when
+    const result = await classifyBash(command);
+
+    // then
+    expect(result.destructive).toBe(true);
+    expect(result.keys).toEqual([]);
+  });
+}
+
+for (const option of [
+  "-s workspace-write",
+  "--sandbox read-only",
+  "--sandbox=workspace-write",
+  `-c model="gpt-6-luna"`,
+  "--config model_reasoning_effort=high",
+  "--skip-git-repo-check",
+]) {
+  test(`Codex 작업 명령의 안전한 옵션 ${JSON.stringify(option)}은 되돌릴 수 없는 작업으로 보지 않는다`, async () => {
+    // given
+    const command = codexWith(option);
+
+    // when
+    const result = await classifyBash(command);
+
+    // then
+    expect(result.destructive).toBe(false);
+    expect(result.keys).toEqual([]);
+  });
+}
+
+test("작업 폴더 안의 Codex 작업 명령은 확인과 호출 모두 호스트의 판단과 결과를 그대로 두고 기록하지 않는다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  const command = codexWith(`-C ${REPO_WITH_V1}`, `--add-dir ${REPO_WITH_V1}/sub`);
+
+  // when
+  const checked = await hooks.check(env, checkEvent(command));
+  const called = await hooks.call(env, callEvent(command));
+
+  // then
+  expect(checked).toBe(CORE);
+  expect(called).toBe(OK_RESULT);
+  expect(env.writes).toEqual([]);
+});
+
+test("작업 폴더 밖 --add-dir은 처음에 묻고, 성공한 호출이 기록한 뒤 같은 세션의 같은 폴더는 허용한다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  const command = codexWith(`--add-dir ${OTHER_DIR}`);
+
+  // when
+  const first = await hooks.check(env, checkEvent(command));
+  const recorded = await hooks.call(env, callEvent(command));
+  const second = await hooks.check(env, checkEvent(codexWith("--add-dir /repos/other/")));
+
+  // then
+  expect(first).toEqual({ decision: "ask", reason: firstTime(OTHER_KEY) });
+  expect(recorded).toBe(OK_RESULT);
+  expect(env.data.approvals).toEqual({ "sess-1": { time: NOW, keys: [OTHER_KEY] } });
+  expect(second).toEqual({ decision: "allow", reason: approved(OTHER_KEY) });
+});
+
+test("승인한 폴더와 다른 작업 폴더 밖 디렉터리는 다시 묻는다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  await approve(hooks, env, codexWith(`--add-dir ${OTHER_DIR}`));
+
+  // when
+  const different = await hooks.check(env, checkEvent(codexWith("--add-dir /repos/third")));
+  const both = await hooks.check(env, checkEvent(codexWith(`--add-dir ${OTHER_DIR}`, "--add-dir /repos/third")));
+
+  // then
+  expect(different).toEqual({ decision: "ask", reason: firstTime("codex-dir:/repos/third") });
+  expect(both).toEqual({ decision: "ask", reason: firstTime("codex-dir:/repos/other, codex-dir:/repos/third") });
+});
+
+test("다른 세션에서는 이미 승인한 작업 폴더 밖 디렉터리도 다시 묻는다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  await approve(hooks, env, codexWith(`--add-dir ${OTHER_DIR}`));
+  const other = createEnv({ data: env.data, sessionId: "sess-2" });
+
+  // when
+  const result = await hooks.check(other, checkEvent(codexWith(`--add-dir ${OTHER_DIR}`)));
+
+  // then
+  expect(result).toEqual({ decision: "ask", reason: firstTime(OTHER_KEY) });
+});
+
+for (const [name, options, directory] of CODEX_OUTSIDE_CASES) {
+  test(`${name}로 승인한 뒤에는 절대 경로 --add-dir로 쓴 같은 폴더도 허용한다`, async () => {
+    // given
+    const hooks = registerHooks();
+    const env = createEnv();
+    await approve(hooks, env, codexWith(...options));
+
+    // when
+    const allowed = await hooks.check(env, checkEvent(codexWith(`--add-dir ${directory}`)));
+
+    // then
+    expect(allowed).toEqual({ decision: "allow", reason: approved(`codex-dir:${directory}`) });
+  });
+}
+
+for (const [name, option] of CODEX_EXPANSION_OPTIONS) {
+  test(`Codex 디렉터리 옵션이 ${name}인 경우는 확인할 수 없어 승인 기록이 있어도 항상 묻는다`, async () => {
+    // given
+    const hooks = registerHooks();
+    const env = createEnv();
+    const command = codexWith(option);
+    await approve(hooks, env, codexWith(`--add-dir ${OTHER_DIR}`));
+    const before = JSON.parse(JSON.stringify(env.data));
+
+    // when
+    const first = await hooks.check(env, checkEvent(command));
+    await hooks.call(env, callEvent(command));
+    const second = await hooks.check(env, checkEvent(command));
+
+    // then
+    expect(first).toEqual({ decision: "ask", reason: UNVERIFIABLE_REASON });
+    expect(second).toEqual({ decision: "ask", reason: UNVERIFIABLE_REASON });
+    expect(env.data).toEqual(before);
+  });
+}
+
+test("확인할 수 없는 디렉터리가 하나라도 섞인 Codex 작업 명령은 나머지 폴더가 승인돼 있어도 묻는다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  await approve(hooks, env, codexWith(`--add-dir ${OTHER_DIR}`));
+
+  // when
+  const asked = await hooks.check(env, checkEvent(codexWith(`--add-dir ${OTHER_DIR}`, "--add-dir ~/x")));
+
+  // then
+  expect(asked).toEqual({ decision: "ask", reason: UNVERIFIABLE_REASON });
+});
+
+for (const [name, redirect] of [
+  ["출력 리다이렉트 > out.txt", "> out.txt"],
+  ["추가 리다이렉트 >> out.txt", ">> out.txt"],
+  ["표준 오류 리다이렉트 2>&1", "2>&1"],
+  ["파이프 | cat", "| cat"],
+  ["입력 리다이렉트 두 개", "< /tmp/a.md < /tmp/b.md"],
+  ["입력과 출력 리다이렉트 함께", "< /tmp/a.md > out.txt"],
+  ["프로세스 치환 <(echo x)", "<(echo x)"],
+]) {
+  test(`${name}가 붙은 Codex 작업 명령은 작업 폴더 밖 디렉터리가 승인돼 있어도 묻는다`, async () => {
+    // given
+    const hooks = registerHooks();
+    const env = createEnv();
+    await approve(hooks, env, codexWith(`--add-dir ${OTHER_DIR}`));
+
+    // when
+    const asked = await hooks.check(env, checkEvent(`${codexWith(`--add-dir ${OTHER_DIR}`)} ${redirect}`));
+
+    // then
+    expect(asked).toEqual({ decision: "ask", reason: UNVERIFIABLE_REASON });
+  });
+}
+
+test("리터럴 경로의 입력 리다이렉트 하나가 붙은 작업 폴더 밖 --add-dir는 처음에 묻고 같은 세션에서 두 번째에는 허용한다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  const command = `${codexWith(`--add-dir ${OTHER_DIR}`)} < /tmp/a.md`;
+
+  // when
+  const first = await hooks.check(env, checkEvent(command));
+  const recorded = await hooks.call(env, callEvent(command));
+  const second = await hooks.check(env, checkEvent(`${codexWith(`--add-dir ${OTHER_DIR}`)} < /tmp/b.md`));
+
+  // then
+  expect(first).toEqual({ decision: "ask", reason: firstTime(OTHER_KEY) });
+  expect(recorded).toBe(OK_RESULT);
+  expect(env.data.approvals).toEqual({ "sess-1": { time: NOW, keys: [OTHER_KEY] } });
+  expect(second).toEqual({ decision: "allow", reason: approved(OTHER_KEY) });
+});
+
+test("조율 세션이 실행하는 형태의 Codex 작업 명령은 입력 리다이렉트가 붙어도 작업 폴더 안이면 키가 없다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  const command = `codex exec -m gpt-6-luna -c model_reasoning_effort="xhigh" -s workspace-write -C ${REPO_WITH_V1} --json -o result.json - < assignment.md`;
+
+  // when
+  const checked = await hooks.check(env, checkEvent(command));
+  const called = await hooks.call(env, callEvent(command));
+
+  // then
+  expect(checked).toBe(CORE);
+  expect(called).toBe(OK_RESULT);
+  expect(env.writes).toEqual([]);
+});
+
+for (const [name, path] of [["붙여 쓴 경로", "</tmp/a.md"], ["따옴표로 감싼 공백 경로", `< "/tmp/a b.md"`]]) {
+  test(`입력 리다이렉트에 ${name}를 써도 하나뿐이면 키만 만들고 모두 이해한 것으로 본다`, async () => {
+    // given
+    const command = `${codexWith(`--add-dir ${OTHER_DIR}`)} ${path}`;
+
+    // when
+    const result = await classifyBash(command);
+
+    // then
+    expect(result).toEqual({ keys: [OTHER_KEY], destructive: false, known: true });
+  });
+}
+
+for (const [name, path] of [
+  ["$HOME 변수", "$HOME/a.md"],
+  ["물결표", "~/a.md"],
+  ["글롭", "/tmp/*.md"],
+  ["중괄호", "/tmp/{a,b}.md"],
+]) {
+  test(`입력 리다이렉트 경로가 ${name}이면 작업 폴더 밖 디렉터리가 승인돼 있어도 항상 묻는다`, async () => {
+    // given
+    const hooks = registerHooks();
+    const env = createEnv();
+    await approve(hooks, env, codexWith(`--add-dir ${OTHER_DIR}`));
+    const command = `${codexWith(`--add-dir ${OTHER_DIR}`)} < ${path}`;
+
+    // when
+    const first = await hooks.check(env, checkEvent(command));
+    await hooks.call(env, callEvent(command));
+    const second = await hooks.check(env, checkEvent(command));
+
+    // then
+    expect(first).toEqual({ decision: "ask", reason: UNVERIFIABLE_REASON });
+    expect(second).toEqual({ decision: "ask", reason: UNVERIFIABLE_REASON });
+  });
+}
+
+test("입력 리다이렉트 경로에 변수가 있으면 디렉터리 옵션이 없어도 묻는다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+
+  // when
+  const asked = await hooks.check(env, checkEvent(`${codexWith()} < $HOME/a.md`));
+
+  // then
+  expect(asked).toEqual({ decision: "ask", reason: UNVERIFIABLE_REASON });
+});
+
+test("heredoc이 붙은 Codex 작업 명령은 작업 폴더 밖 디렉터리가 승인돼 있어도 허용하지 않고 호스트의 판단에 맡긴다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  await approve(hooks, env, codexWith(`--add-dir ${OTHER_DIR}`));
+
+  // when
+  const checked = await hooks.check(env, checkEvent(`${codexWith(`--add-dir ${OTHER_DIR}`)} << EOF\nprompt\nEOF`));
+
+  // then
+  expect(checked).toBe(CORE);
+  expect(checked.decision).toBe("ask");
+});
+
+for (const [name, option] of CODEX_DANGEROUS_OPTIONS) {
+  test(`리터럴 입력 리다이렉트가 있어도 위험 옵션(${name})이 든 Codex 작업 명령은 항상 묻는다`, async () => {
+    // given
+    const hooks = registerHooks();
+    const env = createEnv();
+    const command = `${codexWith(option)} < /tmp/a.md`;
+
+    // when
+    const first = await hooks.check(env, checkEvent(command));
+    await hooks.call(env, callEvent(command));
+    const second = await hooks.check(env, checkEvent(command));
+
+    // then
+    expect(first).toEqual({ decision: "ask", reason: DESTRUCTIVE_REASON });
+    expect(second).toEqual({ decision: "ask", reason: DESTRUCTIVE_REASON });
+    expect("approvals" in env.data).toBe(false);
+  });
+}
+
+test("입력 리다이렉트가 붙어 있어도 위험한 샌드박스 옵션은 붙여 쓴 경로에서도 항상 묻는다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+
+  // when
+  const asked = await hooks.check(env, checkEvent("codex exec -s danger-full-access - <prompt.txt"));
+
+  // then
+  expect(asked).toEqual({ decision: "ask", reason: DESTRUCTIVE_REASON });
+});
+
+test("Codex 작업 명령이 아닌 명령의 입력 리다이렉트는 그대로 키가 없다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+
+  // when
+  const checked = await hooks.check(env, checkEvent("cat --add-dir /repos/other < /tmp/a.md"));
+
+  // then
+  expect(checked).toBe(CORE);
+});
+
+for (const [name, option] of CODEX_DANGEROUS_OPTIONS) {
+  test(`위험 옵션(${name})이 든 Codex 작업 명령은 승인 기록이 있어도 항상 묻고 기록하지 않는다`, async () => {
+    // given
+    const hooks = registerHooks();
+    const env = createEnv();
+    const command = codexWith(`--add-dir ${OTHER_DIR}`, option);
+    await approve(hooks, env, codexWith(`--add-dir ${OTHER_DIR}`));
+    const before = JSON.parse(JSON.stringify(env.data));
+
+    // when
+    const first = await hooks.check(env, checkEvent(command));
+    await hooks.call(env, callEvent(command));
+    const second = await hooks.check(env, checkEvent(command));
+
+    // then
+    expect(first).toEqual({ decision: "ask", reason: DESTRUCTIVE_REASON });
+    expect(second).toEqual({ decision: "ask", reason: DESTRUCTIVE_REASON });
+    expect(env.data).toEqual(before);
+  });
+
+  test(`위험 옵션(${name})만 든 Codex 작업 명령도 디렉터리 옵션 없이 항상 묻는다`, async () => {
+    // given
+    const hooks = registerHooks();
+    const env = createEnv();
+
+    // when
+    const asked = await hooks.check(env, checkEvent(codexWith(option)));
+
+    // then
+    expect(asked).toEqual({ decision: "ask", reason: DESTRUCTIVE_REASON });
+  });
+}
+
+test("하위 에이전트는 메인 세션이 승인한 작업 폴더 밖 디렉터리를 허용받지 못하고 호출도 기록하지 않는다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  await approve(hooks, env, codexWith(`--add-dir ${OTHER_DIR}`));
+  const before = JSON.parse(JSON.stringify(env.data));
+  const writesBefore = env.writes.length;
+  const command = codexWith(`--add-dir ${OTHER_DIR}`);
+  const unseen = codexWith("--add-dir /repos/third");
+
+  // when
+  const pre = await hooks.check(env, checkEvent(command, { agentId: "agent-1" }));
+  const post = await hooks.call(env, callEvent(unseen, { agentId: "agent-1" }));
+  const main = await hooks.check(env, checkEvent(command));
+
+  // then
+  expect(pre).toEqual({ decision: "ask", reason: firstTime(OTHER_KEY) });
+  expect(post).toBe(OK_RESULT);
+  expect(env.data).toEqual(before);
+  expect(env.writes.length).toBe(writesBefore);
+  expect(main).toEqual({ decision: "allow", reason: approved(OTHER_KEY) });
+});
+
+test("하위 에이전트의 Codex 작업 명령도 위험한 샌드박스 옵션이면 같은 사유로 묻는다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+
+  // when
+  const result = await hooks.check(env, checkEvent(codexWith("-s danger-full-access"), { agentId: "agent-1" }));
+
+  // then
+  expect(result).toEqual({ decision: "ask", reason: DESTRUCTIVE_REASON });
+});
+
+test("Codex 작업 명령이 오류로 끝나면 작업 폴더 밖 디렉터리를 기록하지 않는다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  const failed = { result: "boom", text: "boom", isError: true };
+
+  // when
+  await hooks.call(env, callEvent(codexWith(`--add-dir ${OTHER_DIR}`)), failed);
+  const asked = await hooks.check(env, checkEvent(codexWith(`--add-dir ${OTHER_DIR}`)));
+
+  // then
+  expect(env.writes).toEqual([]);
+  expect(asked).toEqual({ decision: "ask", reason: firstTime(OTHER_KEY) });
+});
+
+test("다른 키가 기록된 세션이라도 Codex 작업 폴더 밖 디렉터리는 그 키로 허용되지 않는다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  await approve(hooks, env, "git tag v2");
+
+  // when
+  const asked = await hooks.check(env, checkEvent(codexWith(`--add-dir ${OTHER_DIR}`)));
+
+  // then
+  expect(asked).toEqual({ decision: "ask", reason: firstTime(OTHER_KEY) });
+});
+
+test("Codex 작업 명령과 알 수 없는 명령을 이으면 승인된 디렉터리여도 묻는다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  await approve(hooks, env, codexWith(`--add-dir ${OTHER_DIR}`));
+
+  // when
+  const asked = await hooks.check(env, checkEvent(`${codexWith(`--add-dir ${OTHER_DIR}`)} && rm -rf x`));
+
+  // then
+  expect(asked).toEqual({ decision: "ask", reason: UNVERIFIABLE_REASON });
+});
