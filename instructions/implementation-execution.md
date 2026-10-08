@@ -89,7 +89,8 @@ its cause lies outside the task. Diagnose and settle the correction in the main 
 worker only after the previous owner has stopped, and give the new owner the current diff and the revised task.
 
 On a delegation failure, apply the session fallback rule. Stop the affected worker before taking ownership,
-inspect its partial diff, and continue the remaining authorized work in the main session. Do not accept an
+inspect its partial diff, and continue the remaining authorized work through the host's named fallback route, or
+in the main session when there is none. Do not accept an
 unverified worker result as complete. Keep completed checks only while their inputs remain unchanged.
 Do not repeatedly retry a known quota or capability failure; reconsider only after evidence of a change.
 Fallback never bypasses a missing user decision, permission restriction, or failed acceptance check.
