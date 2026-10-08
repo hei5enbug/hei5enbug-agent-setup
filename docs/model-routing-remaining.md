@@ -17,6 +17,8 @@ Use the [latest validation record](model-routing-validation.md) and its [usage r
 Keep the [GPT connection contract](claude-gpt-remaining.md). Claude quota recovery does not resolve missing
 host inputs. Do not replace the native route with a Codex loop, gateway, daemon, inferred schemas, or incomplete
 system context. Keep refusal before profile/network/inference access until the prerequisite is verified.
+A local-gateway route for A10 and A11 is proposed in the [gateway plan](claude-gpt-gateway-plan.md). The
+restriction above stays in force until the user approves that plan's execution.
 
 ## A9: next comparison
 
