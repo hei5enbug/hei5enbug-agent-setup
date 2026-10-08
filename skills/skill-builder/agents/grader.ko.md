@@ -94,7 +94,7 @@
 
 ### 7단계: 채점 결과 쓰기
 
-결과를 `{outputs_dir}/../grading.json`(`outputs_dir`의 형제 경로)에 저장한다.
+결과를 `{outputs_dir}/../grading.json`(`outputs_dir`의 형제 경로)에 저장한다. 읽기 전용으로 실행되면 같은 JSON을 응답으로 돌려준다. 파일은 조정 세션이 저장한다.
 
 ## 채점 기준
 

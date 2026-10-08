@@ -62,15 +62,20 @@ hei5enbug-agent-setup/
 │   ├── ko/
 │   │   ├── designer.ko.md
 │   │   ├── researcher.ko.md
+│   │   ├── reviewer.ko.md
 │   │   ├── scout.ko.md
+│   │   ├── sonnet-worker.ko.md
 │   │   └── worker.ko.md
 │   ├── designer.md
 │   ├── researcher.md
+│   ├── reviewer.md
 │   ├── scout.md
+│   ├── sonnet-worker.md
 │   └── worker.md
 ├── standalone-agents/
 │   ├── codex-designer.toml
 │   ├── codex-researcher.toml
+│   ├── codex-reviewer.toml
 │   ├── codex-scout.toml
 │   └── codex-worker.toml
 └── skills/
@@ -91,14 +96,16 @@ hei5enbug-agent-setup/
 Codex와 Claude Code에 패키징합니다.
 
 `agents/` 디렉터리는 Claude Code 플러그인에 함께 배포되므로, 번들을 설치하면
-`hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:worker`, `hei5enbug-agent-setup:researcher`,
-`hei5enbug-agent-setup:designer`가 추가됩니다.
-직접 복사할 필요가 없습니다. 매니페스트는 네 영어 정의만 나열하므로 `agents/ko/`의 한국어 번역본은 등록되지 않습니다.
+`hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:worker`, `hei5enbug-agent-setup:sonnet-worker`,
+`hei5enbug-agent-setup:researcher`, `hei5enbug-agent-setup:designer`, `hei5enbug-agent-setup:reviewer`가 추가됩니다.
+직접 복사할 필요가 없습니다. 매니페스트에는 영어 정의 여섯 개만 있으므로 `agents/ko/`의 한국어 번역본은
+서브에이전트로 등록되지 않습니다.
 
 Codex는 `~/.codex/agents/`와 `.codex/agents/`에서만 서브에이전트를 찾으므로 플러그인이 등록할 수 없습니다.
 대신 세션 훅이 `standalone-agents/codex-scout.toml`, `codex-worker.toml`, `codex-researcher.toml`,
-`codex-designer.toml`을 각각 대응하는 `~/.codex/agents/<role>.toml`이 없을 때만 복사합니다. 네 파일은 Claude Code와
-같은 이름의 `scout`, `worker`, `researcher`, `designer`를 정의하고 사고 강도와 샌드박스를 고정합니다. 플러그인 `worker`는
+`codex-designer.toml`, `codex-reviewer.toml`을 대응하는 `~/.codex/agents/<role>.toml`이 없을 때만 복사합니다.
+다섯 파일은 Claude Code에도 있는 역할을 정의하고 사고 강도와 샌드박스를 고정합니다. Codex `reviewer` 역할에는
+모델 키가 없으며, 스킬 지침은 대체 경로에서 모델과 사고 강도를 명시합니다. 플러그인 `worker`는
 Codex 내장 `worker`를 대신하고, `scout`는 내장 `explorer`를 건드리지 않습니다. 직접 고친 파일은 절대 덮어쓰지 않으며,
 다음 Codex 세션부터 적용됩니다. 고친 파일은 바뀌지 않으므로 모델은 지정하지 않고, Codex 지침이 생성할 때마다
 고정 모델을 넘깁니다. 훅은 이전 버전이 만든 `explorer.toml`을 지우고 `worker.toml`을 바꾸지만, 그 버전에서 배포한
@@ -111,8 +118,10 @@ Codex 내장 `worker`를 대신하고, `scout`는 내장 `explorer`를 건드리
 함께 통과합니다. Codex에서는 `PreToolUse` 훅인 `scripts/agent_guard.py`가 기존 동작을 그대로 유지합니다. 종류를 비운 호출,
 `default`, `explorer`, 역할 파일이 없는 모든 종류를 거부하며, 플러그인 역할이 생기기 전의 내장
 `worker`도 여기에 포함됩니다. 독립된 읽기 전용 작업자가 필요한 스킬은 실제 모델·사고 강도·도구가 스킬 계약과
-일치하는 역할을 사용합니다. 로컬 근거는 `scout`, 공개 근거는 `researcher`에 맡길 수 있습니다.
-시험 출력을 쓰는 스킬은 필요한 경우 검증된 평가 실행기를 사용합니다.
+일치하는 역할을 사용합니다. `scout`는 로컬 근거 조사 티켓을 포함해 범위가 제한된 로컬 조사 하나를 맡습니다.
+공개 자료 조사는 `researcher`에 맡길 수 있습니다. 스킬 검토 역할은 먼저 다른 모델 계열을 사용하고 CLI를 쓸 수 없으면
+`reviewer`로 대체합니다. reviewer는 결과만 반환하며 메인 세션이 같은 자료를 한 번 검토해 판단합니다. 시험 출력을 쓰는
+스킬은 필요한 경우 검증된 평가 실행기를 사용합니다.
 조건부 [모델 라우팅 계약](instructions/model-routing.md)을 참고하세요.
 
 ### Claude Code mod
@@ -122,10 +131,13 @@ Claude Code에서는 `config/claude-mod.json`이 mod `hooks/mod/register.js`를 
 오래된 Claude Code, `disableAllHooks`, 관리 정책 등으로 mod가 로드되지 않으면 이 가드들은 동작하지 않고 호스트의 기본 권한
 흐름이 적용됩니다.
 
-역할 고정은 플러그인 역할마다 모델과 사고 강도를 모든 요청에 고정합니다. `scout`와 `researcher`는 `claude-sonnet-5-5`,
-`medium`, `worker`는 Sonnet worker가 실행될 때 `claude-sonnet-5-5`, `high`, `designer`는 `claude-opus-5-5`, `xhigh`입니다. 다른 모델로 응답한
-서브에이전트는 중단됩니다. 이후 요청은 거부 응답으로 끝나고, 도구 호출은 거부되며, 결과는 경고로 바뀝니다. 이때 세션
-컨텍스트에 `hei5enbug-agent-setup mod: role pinning active` 줄이 들어가며, 메인 세션은 이를 보고 작업 지시를 바로 보냅니다.
+역할 고정은 플러그인 역할마다 모델과 사고 강도를 모든 요청에 고정합니다. Luna scout의 대체 경로인 `scout`는
+`claude-sonnet-5-5`와 `medium`, `researcher`는 `claude-haiku-5-5`와 `medium`, `worker`는 `claude-haiku-5-5`와 `high`,
+`sonnet-worker`는 `claude-sonnet-5-5`와 `high`, `designer`는 `claude-opus-5-5`와 `xhigh`, `reviewer`는
+`claude-opus-5-5`와 `high`를 씁니다.
+다른 모델로 응답한 서브에이전트는 중단됩니다. 이후 요청은 거부되고 도구 호출은 막히며 결과는 경고로 바뀝니다.
+세션 컨텍스트에 `hei5enbug-agent-setup mod: role pinning active` 줄이 들어가면 메인 세션은 준비 확인 없이
+작업 지시를 보낼 수 있습니다.
 
 ### Claude Code에서 GPT 사용
 
@@ -181,17 +193,19 @@ get, list, search, read, fetch, query, download 같은 읽기 동사로 시작�
 
 이 작업들에 `permissions.ask` 규칙을 추가하지 마세요. ask 규칙은 세션 승인 뒤에도 매번 확인을 요청합니다.
 
-## 기능 토글
+## 기능 옵션
 
-끌 수 있는 기능은 여덟 가지이며 기본값은 모두 켜짐입니다. Claude Code에서는 `/config`나 `claude plugin configure`로 플러그인 옵션을
-설정합니다. Codex에서는 세션을 시작하기 전에 환경변수를 설정합니다. 값이 `false`, `0`, `off`, `no`(대소문자 무시)이면 기능이 꺼집니다.
+끌 수 있는 boolean 기능은 일곱 가지이며 각각 기본값은 켜짐입니다. Claude Code의 구현 worker 경로는 문자열
+옵션입니다. `codex`, `haiku`, `sonnet` 중 하나를 고릅니다. 값이 비어 있거나 알 수 없으면 `codex`를 씁니다.
+플러그인 옵션은 `/config`나 `claude plugin configure`에서 설정합니다. Codex에서는 세션 시작 전에 환경변수를
+설정합니다. boolean 기능은 값이 `false`, `0`, `off`, `no`(대소문자 무시)이면 꺼집니다.
 
 | 기능 | Claude Code `/config` 키 | Codex 환경변수 |
 |---|---|---|
 | 내장 서브에이전트 차단 | `agent_guard` | `HEI5ENBUG_AGENT_GUARD` |
 | 세션 1회 승인 | `session_approval` | 해당 없음 |
 | 역할 모델 고정 | `role_pinning` | 해당 없음 |
-| Codex 구현 worker | `codex_worker` | 해당 없음 |
+| 구현 worker 경로 | `implementation_worker` (`codex`, `haiku`, 또는 `sonnet`) | 해당 없음 |
 | 응답 언어 가드 | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip 쿼리 가드 | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
 | `~/.codex/AGENTS.md`의 서브에이전트 허용 블록 | 해당 없음 | `HEI5ENBUG_SUBAGENT_POLICY` |
@@ -289,9 +303,14 @@ UI 코드, 시각 디자인, 다이어그램 작업은 대신 호스트의 desig
 | 호스트 | 구현 에이전트 | 모델과 사고 강도 |
 |---|---|---|
 | Codex | rollout 기록으로 검증한 플러그인 `worker` 역할 | `gpt-6-luna`, `xhigh` |
-| Claude Code | rollout 기록으로 검증한 `codex exec`(기본); `codex_worker`가 꺼져 있거나 요청했거나 대체할 때는 서브에이전트 기록으로 검증한 `hei5enbug-agent-setup:worker` | `gpt-6-luna`, `xhigh`(기본); `claude-sonnet-5-5`, `high` |
+| Claude Code | rollout 기록으로 검증한 `codex exec`(기본, `implementation_worker`는 `codex`); `haiku`일 때, 요청했을 때, 또는 Codex 대체 경로에서는 서브에이전트 기록으로 검증한 Haiku `hei5enbug-agent-setup:worker`; `sonnet`일 때나 요청했을 때는 `hei5enbug-agent-setup:sonnet-worker` | `gpt-6-luna`, `xhigh`(기본); `claude-haiku-5-5`, `high`; `claude-sonnet-5-5`, `high` |
 | Codex, designer | 고정 모델의 `claude -p`, Claude를 쓸 수 없으면 플러그인 `designer` 역할 | `claude-opus-5-5`, `xhigh`, 대체 시 `gpt-6-astra`, `xhigh` |
 | Claude Code, designer | 서브에이전트 기록으로 검증한 `hei5enbug-agent-setup:designer` | `claude-opus-5-5`, `xhigh` |
+| Codex, 로컬 scout | rollout 기록으로 검증한 플러그인 `scout` 역할 | `gpt-6-luna`, `xhigh` |
+| Claude Code, 로컬 scout | rollout 기록으로 검증한 읽기 전용 `codex exec`, 대체 시 서브에이전트 기록으로 검증한 `hei5enbug-agent-setup:scout` | `gpt-6-luna`, `xhigh`, 대체 시 `claude-sonnet-5-5`, `medium` |
+| Codex, 스킬 검토 | `claude -p`; 대체는 rollout 기록으로 검증한 플러그인 `reviewer` | `claude-opus-5-5`, `high`; 대체 `gpt-6.1-sol`, `xhigh` |
+| Claude Code, 스킬 검토 | `codex exec`; 대체는 서브에이전트 기록으로 검증한 `hei5enbug-agent-setup:reviewer` | `gpt-6.1-sol`, `xhigh`; 대체 `claude-opus-5-5`, `high` |
+| Skill Builder 시험 실행 및 기타 비검토 참여자 | Skill Builder 어댑터에 따른 호스트의 상위 모델 | Codex: `gpt-6.1-sol`, `xhigh`; Claude Code: `claude-opus-5-5`, `high` |
 
 준비된 독립 작업은 호스트 한도와 공통 실행 상한 안에서 함께 수행할 수 있습니다. 역할, 모델, 사고 강도, 사용량,
 위임 권한 또는 설정 근거 때문에 위임할 수 없으면 메인이 제한을 알리고, 실행 중인 해당 작업자를 멈춘 뒤 승인된 작업을

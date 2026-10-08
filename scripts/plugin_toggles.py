@@ -22,3 +22,8 @@ def enabled(key: str) -> bool:
     """Return False only when the host's toggle for `key` is set to an off value."""
     value = os.environ.get(variable_name(key, detect_host()), "")
     return value.strip().casefold() not in OFF_VALUES
+
+
+def option_value(key: str) -> str:
+    """Return the current host's string option value, normalized or empty when unset."""
+    return os.environ.get(variable_name(key, detect_host()), "").strip().lower()

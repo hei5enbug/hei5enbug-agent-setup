@@ -59,15 +59,20 @@ hei5enbug-agent-setup/
 │   ├── ko/
 │   │   ├── designer.ko.md
 │   │   ├── researcher.ko.md
+│   │   ├── reviewer.ko.md
 │   │   ├── scout.ko.md
+│   │   ├── sonnet-worker.ko.md
 │   │   └── worker.ko.md
 │   ├── designer.md
 │   ├── researcher.md
+│   ├── reviewer.md
 │   ├── scout.md
+│   ├── sonnet-worker.md
 │   └── worker.md
 ├── standalone-agents/
 │   ├── codex-designer.toml
 │   ├── codex-researcher.toml
+│   ├── codex-reviewer.toml
 │   ├── codex-scout.toml
 │   └── codex-worker.toml
 └── skills/
@@ -87,15 +92,17 @@ Each plugin skill folder holds its own `SKILL.md` plus any references or scripts
 package the same `skills/` directory for Codex and Claude Code without copying skills into host-specific directories.
 
 The `agents/` directory ships with the Claude Code plugin, so installing the bundle adds the
-`hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:worker`, `hei5enbug-agent-setup:researcher`, and
-`hei5enbug-agent-setup:designer` subagents. No manual copy is needed. The manifest lists only these four English
-definitions, so the Korean mirrors in `agents/ko/` are not registered as subagents.
+`hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:worker`, `hei5enbug-agent-setup:sonnet-worker`,
+`hei5enbug-agent-setup:researcher`, `hei5enbug-agent-setup:designer`, and
+`hei5enbug-agent-setup:reviewer` subagents. No manual copy is needed. The manifest lists only these six English
+definitions, so the Korean mirrors in `agents/ko/` are not registered.
 
 Codex discovers subagents only in `~/.codex/agents/` and `.codex/agents/`, so a plugin cannot register one.
 Instead, the session hook copies `standalone-agents/codex-scout.toml`, `codex-worker.toml`,
-`codex-researcher.toml`, and `codex-designer.toml` to the matching `~/.codex/agents/<role>.toml` when each file is
-absent. They define `scout`, `worker`, `researcher`, and `designer` agents, named as on Claude Code, with fixed
-reasoning effort and sandbox. The plugin `worker` replaces the
+`codex-researcher.toml`, `codex-designer.toml`, and `codex-reviewer.toml` to matching
+`~/.codex/agents/<role>.toml` files when absent. They define five roles that also exist on Claude Code, with fixed
+reasoning effort and sandbox. The Codex `reviewer` role has no model key; the skill instructions pass its model and
+effort explicitly when it is the fallback. The plugin `worker` replaces the
 built-in Codex `worker`, and `scout` leaves the built-in `explorer` untouched. A file you edited is never
 overwritten, and the agents become available in the next Codex session. Because an edited copy never changes,
 the files set no model; the Codex instructions pass the pinned model on every spawn instead. The hook also
@@ -109,9 +116,11 @@ narrow-purpose built-ins `claude-code-guide` and `statusline-setup` pass, as do 
 user, project, CLI, or managed source. On Codex the `PreToolUse` hook `scripts/agent_guard.py` keeps its existing
 behavior: it denies an omitted type, `default`, `explorer`, and every type without a role file, including the
 built-in `worker` before the plugin role exists. Skills that ask for an independent
-read-only worker use a role whose verified model, effort, and tools match the skill contract. Bounded local
-evidence uses `scout`; public evidence can use `researcher`. Skills that write trial outputs use a verified
-evaluation runner when required. See the conditional [model routing contract](instructions/model-routing.md).
+read-only worker use a role whose verified model, effort, and tools match the skill contract. `scout` handles one
+bounded local investigation, including local-evidence research tickets. Public research can use `researcher`. A
+skill-assigned review role uses the other model family, then the `reviewer` fallback if that CLI is unavailable. The
+reviewer returns findings only; the main session reviews once and decides. Skills that write trial outputs use a
+verified evaluation runner when required. See the conditional [model routing contract](instructions/model-routing.md).
 
 ### Claude Code mod
 
@@ -120,11 +129,12 @@ the built-in subagent block, role pinning, session approvals, and the GPT refusa
 2.1.292. When the mod does not load, such as on an older Claude Code, with `disableAllHooks`, or under a managed
 policy, these guards are absent and the host's normal permission flow applies.
 
-Role pinning pins each plugin role's model and effort on every request: `scout` and `researcher` use
-`claude-sonnet-5-5` with `medium`, `worker` uses `claude-sonnet-5-5` with `high` when the Sonnet worker runs, and
-`designer` uses `claude-opus-5-5` with `xhigh`. A subagent that answers on another model is stopped: its later
-requests end with a refusal, its tool calls are denied, and its result is replaced with a warning. The session context
-then carries the line `hei5enbug-agent-setup mod: role pinning active`, which lets the main session send assignments
+Role pinning pins each plugin role's model and effort on every request: `scout`, the fallback for the Luna scout, uses
+`claude-sonnet-5-5` with `medium`, `researcher` uses `claude-haiku-5-5` with `medium`, `worker` uses `claude-haiku-5-5`
+with `high`, `sonnet-worker` uses `claude-sonnet-5-5` with `high`, `designer` uses `claude-opus-5-5` with `xhigh`, and
+`reviewer` uses `claude-opus-5-5` with `high`. A subagent that answers on another model is stopped: its later requests
+end with a refusal, its tool calls are denied, and its result is replaced with a warning. The session context then
+carries the line `hei5enbug-agent-setup mod: role pinning active`, which lets the main session send assignments
 directly.
 
 ### GPT in Claude Code
@@ -194,18 +204,19 @@ the normal permission flow.
 Do not add `permissions.ask` rules for these actions, because an ask rule prompts every time even after a session
 approval.
 
-## Feature toggles
+## Feature options
 
-Eight features can be turned off. All default to on. On Claude Code, set the plugin option in `/config`, or with
-`claude plugin configure`. On Codex, set the environment variable before starting the session. A value of `false`,
-`0`, `off`, or `no`, in any letter case, turns a feature off.
+Seven boolean features can be turned off, and each defaults to on. The implementation worker route is a string
+option in Claude Code. Choose `codex`, `haiku`, or `sonnet`; an unset or unrecognized value uses `codex`. Set plugin
+options in `/config` or with `claude plugin configure`. On Codex, set environment variables before starting the
+session. A value of `false`, `0`, `off`, or `no`, in any letter case, turns a boolean feature off.
 
 | Feature | Claude Code `/config` key | Codex environment variable |
 |---|---|---|
 | Block built-in subagents | `agent_guard` | `HEI5ENBUG_AGENT_GUARD` |
 | One-time session approval | `session_approval` | Not applicable |
 | Pin role models | `role_pinning` | Not applicable |
-| Codex implementation worker | `codex_worker` | Not applicable |
+| Implementation worker route | `implementation_worker` (`codex`, `haiku`, or `sonnet`) | Not applicable |
 | Response language guard | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip query guard | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
 | Subagent permission block in `~/.codex/AGENTS.md` | Not applicable | `HEI5ENBUG_SUBAGENT_POLICY` |
@@ -304,9 +315,14 @@ stay in the main session.
 | Host | Implementation agent | Model and effort |
 |---|---|---|
 | Codex | Plugin `worker` role, verified from its rollout record | `gpt-6-luna`, `xhigh` |
-| Claude Code | `codex exec`, verified from its rollout record (default); `hei5enbug-agent-setup:worker`, verified from its subagent record, when `codex_worker` is off, on request, or as fallback | `gpt-6-luna`, `xhigh` (default); `claude-sonnet-5-5`, `high` |
+| Claude Code | `codex exec`, verified from its rollout record (default, `implementation_worker` is `codex`); `hei5enbug-agent-setup:worker` for Haiku on `haiku`, on request, or as the Codex fallback; `hei5enbug-agent-setup:sonnet-worker` for Sonnet on `sonnet` or on request | `gpt-6-luna`, `xhigh` (default); `claude-haiku-5-5`, `high`; `claude-sonnet-5-5`, `high` |
 | Codex, designer | `claude -p` with the pinned model; when Claude is unavailable, the plugin `designer` role | `claude-opus-5-5`, `xhigh`; fallback `gpt-6-astra`, `xhigh` |
 | Claude Code, designer | `hei5enbug-agent-setup:designer`, verified from its subagent record | `claude-opus-5-5`, `xhigh` |
+| Codex, local scout | Plugin `scout` role, verified from its rollout record | `gpt-6-luna`, `xhigh` |
+| Claude Code, local scout | Read-only `codex exec`, verified from its rollout record; fallback `hei5enbug-agent-setup:scout`, verified from its subagent record | `gpt-6-luna`, `xhigh`; fallback `claude-sonnet-5-5`, `medium` |
+| Codex, skill review | `claude -p`; fallback plugin `reviewer`, verified from its rollout record | `claude-opus-5-5`, `high`; fallback `gpt-6.1-sol`, `xhigh` |
+| Claude Code, skill review | `codex exec`; fallback `hei5enbug-agent-setup:reviewer`, verified from its subagent record | `gpt-6.1-sol`, `xhigh`; fallback `claude-opus-5-5`, `high` |
+| Skill Builder trial execution and other non-review participants | Host's upper model from the Skill Builder adapter | Codex: `gpt-6.1-sol`, `xhigh`; Claude Code: `claude-opus-5-5`, `high` |
 
 Independent ready tasks may run together within the host limit and the shared execution ceiling. If a role,
 model, effort, quota, permission to delegate, or settings evidence is unavailable, the main session reports
