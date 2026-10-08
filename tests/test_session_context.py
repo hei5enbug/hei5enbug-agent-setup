@@ -160,6 +160,43 @@ class SessionContextTest(unittest.TestCase):
                 self.assertNotIn("## Assigned workers", context)
                 self.assertLess(len(context.encode("utf-8")), 9000)
 
+    def test_Claude_세션은_기본으로_Codex_구현_경로를_알린다(self):
+        """codex_worker 옵션을 건드리지 않으면 Claude 세션 컨텍스트가 Codex 경로 한 줄을 담는다."""
+        # Given
+        host = "claude"
+
+        # When
+        context = self.context(self.run_hook(host))
+
+        # Then
+        self.assertIn("Implementation worker route: Codex (`codex_worker` on).", context)
+        self.assertNotIn("Sonnet worker (`codex_worker` off)", context)
+        self.assertLess(len(context.encode("utf-8")), 9000)
+
+    def test_codex_worker_옵션을_끄면_Sonnet_worker_경로를_알린다(self):
+        """CLAUDE_PLUGIN_OPTION_CODEX_WORKER가 false이면 Sonnet worker 경로 한 줄을 담는다."""
+        # Given
+        extra_env = {"CLAUDE_PLUGIN_OPTION_CODEX_WORKER": "false"}
+
+        # When
+        context = self.context(self.run_hook("claude", extra_env=extra_env))
+
+        # Then
+        self.assertIn("Implementation worker route: Sonnet worker (`codex_worker` off).", context)
+        self.assertNotIn("Codex (`codex_worker` on)", context)
+        self.assertLess(len(context.encode("utf-8")), 9000)
+
+    def test_Codex_호스트는_구현_경로_줄을_받지_않는다(self):
+        """Codex 세션 컨텍스트에는 Claude 전용 구현 경로 줄이 없다."""
+        # Given
+        extra_env = {"CLAUDE_PLUGIN_OPTION_CODEX_WORKER": "false"}
+
+        # When
+        context = self.context(self.run_hook("codex", extra_env=extra_env))
+
+        # Then
+        self.assertNotIn("Implementation worker route", context)
+
     def test_planning_routing_is_loaded_without_detailed_workflow(self):
         context = self.context(self.run_hook("codex"))
         self.assertIn("An implementation plan must let an executor proceed", context)
