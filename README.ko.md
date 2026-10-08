@@ -123,7 +123,7 @@ Claude Code에서는 `config/claude-mod.json`이 mod `hooks/mod/register.js`를 
 흐름이 적용됩니다.
 
 역할 고정은 플러그인 역할마다 모델과 사고 강도를 모든 요청에 고정합니다. `scout`와 `researcher`는 `claude-sonnet-5-5`,
-`medium`, `worker`는 `claude-sonnet-5-5`, `high`, `designer`는 `claude-opus-5-5`, `xhigh`입니다. 다른 모델로 응답한
+`medium`, `worker`는 Sonnet worker가 실행될 때 `claude-sonnet-5-5`, `high`, `designer`는 `claude-opus-5-5`, `xhigh`입니다. 다른 모델로 응답한
 서브에이전트는 중단됩니다. 이후 요청은 거부 응답으로 끝나고, 도구 호출은 거부되며, 결과는 경고로 바뀝니다. 이때 세션
 컨텍스트에 `hei5enbug-agent-setup mod: role pinning active` 줄이 들어가며, 메인 세션은 이를 보고 작업 지시를 바로 보냅니다.
 
@@ -168,12 +168,12 @@ Claude Code에서만 동작하는 mod가 외부로 나가는 특정 쓰기 작�
 `tool.check` 훅이 작업을 분류하고, 대상 종류가 그 세션에서 처음 실행될 때만 승인을 요청합니다. 호출이 성공하면 `tool.call` 훅이 승인된 종류를 세션 ID별로 mod 저장소(`$.store`)에
 기록하므로, 그 세션에서 같은 종류의 작업은 이후 확인 없이 실행됩니다. git 태그 생성, 설정된
 원격 저장소로의 태그 푸시, 태그와 플래그 `--title`, `--notes`, `--target`, `--generate-notes`, `--notes-from-tag`, `--latest`,
-`--draft`, `--prerelease`, `--verify-tag`만 쓴 `gh release create`와 `gh release edit`, 이름에 쓰기 동사가 들어간 MCP 도구가 대상입니다. 이름이
+`--draft`, `--prerelease`, `--verify-tag`만 쓴 `gh release create`와 `gh release edit`, 이름에 쓰기 동사가 들어간 MCP 도구, 세션 폴더 밖 디렉터리에 대한 Codex worker의 접근(`--add-dir`이나 `-C`를 쓴 `codex exec`, 디렉터리마다 따로 승인)이 대상입니다. 이름이
 get, list, search, read, fetch, query, download 같은 읽기 동사로 시작하는 MCP 도구는 대상이 아니며 기존 권한 절차를 그대로 따릅니다. DataGrip 쿼리
 도구도 DataGrip 쿼리 가드가 처리하므로 마찬가지입니다. 도구나 명령 종류별로 따로 승인합니다.
 
 되돌릴 수 없는 작업은 항상 승인을 요청합니다. 강제 푸시, 원격 브랜치나 태그 삭제, 태그 삭제, `gh release delete`, `gh repo delete`, 삭제·휴지통 이동·제거를 하는 MCP
-도구가 여기에 해당하며, 이름이 읽기 동사로 시작해도 마찬가지입니다. `gh release upload`는 로컬 파일을 무엇이든 게시할 수 있으므로 항상 승인을 요청합니다. URL, 목록에 없는 원격 저장소,
+도구가 여기에 해당하며, 이름이 읽기 동사로 시작해도 마찬가지입니다. `gh release upload`는 로컬 파일을 무엇이든 게시할 수 있으므로 항상 승인을 요청합니다. `danger-full-access`, `--dangerously-bypass-approvals-and-sandbox`, `--dangerously-bypass-hook-trust`, 샌드박스 설정을 바꾸는 `-c` 재정의를 쓴 `codex exec`도 항상 승인을 요청합니다. URL, 목록에 없는 원격 저장소,
 `--repo`로 보내는 태그 푸시나 `--tags` 푸시에 브랜치가 섞인 경우, 첨부 파일·`--notes-file`·그 밖의 플래그가 붙은 `gh release create`와
 `gh release edit`도 마찬가지입니다. mod가 확인할 수 없는 부분이 하나라도 있는 복합 명령도 항상 승인을 요청합니다. 대상 명령 뒤에 `git tag v1 && echo done`처럼 리터럴
 텍스트만 쓴 단순 `echo`는 승인 적용을 막지 않습니다. 변수, 명령 치환, glob, 리다이렉트, 파이프가 있는 `echo`는 여전히 승인을 요청합니다. 서브에이전트는 승인을 물려받지 않습니다. 승인은
@@ -183,7 +183,7 @@ get, list, search, read, fetch, query, download 같은 읽기 동사로 시작�
 
 ## 기능 토글
 
-끌 수 있는 기능은 일곱 가지이며 기본값은 모두 켜짐입니다. Claude Code에서는 `/config`나 `claude plugin configure`로 플러그인 옵션을
+끌 수 있는 기능은 여덟 가지이며 기본값은 모두 켜짐입니다. Claude Code에서는 `/config`나 `claude plugin configure`로 플러그인 옵션을
 설정합니다. Codex에서는 세션을 시작하기 전에 환경변수를 설정합니다. 값이 `false`, `0`, `off`, `no`(대소문자 무시)이면 기능이 꺼집니다.
 
 | 기능 | Claude Code `/config` 키 | Codex 환경변수 |
@@ -191,6 +191,7 @@ get, list, search, read, fetch, query, download 같은 읽기 동사로 시작�
 | 내장 서브에이전트 차단 | `agent_guard` | `HEI5ENBUG_AGENT_GUARD` |
 | 세션 1회 승인 | `session_approval` | 해당 없음 |
 | 역할 모델 고정 | `role_pinning` | 해당 없음 |
+| Codex 구현 worker | `codex_worker` | 해당 없음 |
 | 응답 언어 가드 | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip 쿼리 가드 | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
 | `~/.codex/AGENTS.md`의 서브에이전트 허용 블록 | 해당 없음 | `HEI5ENBUG_SUBAGENT_POLICY` |
@@ -288,7 +289,7 @@ UI 코드, 시각 디자인, 다이어그램 작업은 대신 호스트의 desig
 | 호스트 | 구현 에이전트 | 모델과 사고 강도 |
 |---|---|---|
 | Codex | rollout 기록으로 검증한 플러그인 `worker` 역할 | `gpt-6-luna`, `xhigh` |
-| Claude Code | 서브에이전트 기록으로 검증한 `hei5enbug-agent-setup:worker` | `claude-sonnet-5-5`, `high` |
+| Claude Code | rollout 기록으로 검증한 `codex exec`(기본); `codex_worker`가 꺼져 있거나 요청했거나 대체할 때는 서브에이전트 기록으로 검증한 `hei5enbug-agent-setup:worker` | `gpt-6-luna`, `xhigh`(기본); `claude-sonnet-5-5`, `high` |
 | Codex, designer | 고정 모델의 `claude -p`, Claude를 쓸 수 없으면 플러그인 `designer` 역할 | `claude-opus-5-5`, `xhigh`, 대체 시 `gpt-6-astra`, `xhigh` |
 | Claude Code, designer | 서브에이전트 기록으로 검증한 `hei5enbug-agent-setup:designer` | `claude-opus-5-5`, `xhigh` |
 

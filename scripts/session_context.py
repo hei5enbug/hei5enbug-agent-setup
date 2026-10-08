@@ -63,6 +63,14 @@ def render_context(root: Path, host: str) -> str:
     )
     if host == "codex":
         context += f"\nResponse language: {language_guard.codex_language()}.\n"
+    else:
+        import plugin_toggles
+
+        if plugin_toggles.enabled("codex_worker"):
+            route = "Codex (`codex_worker` on)"
+        else:
+            route = "Sonnet worker (`codex_worker` off)"
+        context += f"\nImplementation worker route: {route}.\n"
     if len(context.encode("utf-8")) > MAX_CONTEXT_BYTES:
         raise ValueError("Bundled instructions exceed the context budget; move details to conditional references")
     return context

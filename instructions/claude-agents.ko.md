@@ -47,10 +47,13 @@
 
 구현은 [구현 실행 규칙](implementation-execution.ko.md)에 따라 조정한다. 이 섹션은 Claude Code worker 연동만 덧붙인다.
 
-- 구현을 위임할 때는 `hei5enbug-agent-setup:worker`만 사용하고, UI 코드, 시각 디자인, 다이어그램 작업에는
-  `hei5enbug-agent-setup:designer`를 사용한다. 두 정의에는 각각 `claude-sonnet-5-5`와 `high`, `claude-opus-5-5`와
-  `xhigh`가 고정되어 있다. 호출 단위 모델은 정의보다 우선하므로 호출이나 재개할 때 넘기지 않는다. 이 둘 밖의
-  에이전트로 바꾸지 않는다.
+- 위임한 구현은 세션 줄 "Implementation worker route"가 가리키는 경로를 쓴다. 기본은 Codex worker(아래 "Codex worker" 참조)이고,
+  그 줄이 Sonnet worker라고 하면 `hei5enbug-agent-setup:worker`를 쓴다. 사용자가 한 경로를 요청하면 그 요청에만
+  적용한다. UI 코드, 시각 디자인, 다이어그램 작업은 여전히 `hei5enbug-agent-setup:designer`가 맡는다. worker와
+  designer 정의에는 각각 `claude-sonnet-5-5`와 `high`, `claude-opus-5-5`와 `xhigh`가 고정되어 있다. 호출 단위 모델은
+  정의보다 우선하므로 호출이나 재개할 때 넘기지 않는다. 그 밖의 에이전트는 쓰지 않는다.
+- 아래 항목은 플러그인 에이전트가 실행될 때 적용한다. Codex 대체로 실행하는 경우를 포함한 Sonnet worker와
+  designer가 해당한다.
 - 실행에서 처음 호출하기 전에 환경 변수와 모든 설정 파일에서 비밀이 아닌 다음 입력만 살펴본다. worker 정의,
   `CLAUDE_CODE_SUBAGENT_MODEL`과 `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`,
   `CLAUDE_CODE_EFFORT_LEVEL` 같은 사고 강도 재정의, `maxEffortLevel`이나 조직 한도 같은 사고 강도 상한, 대체나 폴백
@@ -78,3 +81,20 @@
 - 호스트 한도는 `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`다. 실행 중인 서브에이전트는 세지만 메인 세션은 세지 않는다.
   현재 값과 남은 자리를 기준으로 하고 이 값을 바꾸지 않는다.
 - 플러그인 worker나 서브에이전트 기록이 없으면 해당 위임을 멈추고 세션의 대체 처리 규칙을 적용한다.
+
+## Codex worker
+
+- 할당을 파일로 쓴 뒤, 세션 폴더에서 그 파일을 표준 입력으로 넘겨 Codex를 백그라운드로 실행한다.
+  `codex exec -m gpt-6-luna -c model_reasoning_effort="xhigh" -s workspace-write -C <session folder> --json -o <result file> - < <assignment file>`.
+  앞에 `cd`를 붙이거나 `--ephemeral`을 쓰지 않는다.
+- 작업이 써야 하는 세션 폴더 밖 디렉터리에만 `--add-dir <dir>`을 붙인다. 플러그인 Mod는 그런 디렉터리마다 세션당
+  한 번 묻는다. `danger-full-access`, `--dangerously-bypass-approvals-and-sandbox`, 샌드박스나 네트워크 설정을 바꾸는
+  `-c` 재정의는 넘기지 않는다.
+- 할당은 Codex가 "Assigned workers" 규칙의 할당받은 worker라고 알리며 시작한다. 에이전트를 시작하지 않고, 커밋이나
+  푸시를 하지 않고, 네트워크를 쓰지 않고, 허용된 경로만 수정하며, 변경한 경로·검사 결과·막힌 점으로 끝낸다. 할당에는
+  일반 할당 항목을 모두 담는다.
+- 근거: `thread.started` JSON 이벤트에서 `thread_id`를 가져온다. `CODEX_HOME`(기본 `~/.codex`)의 `sessions/` 아래에서 이름에 그
+  ID가 들어 있는 rollout 파일의 `turn_context` 항목이 `gpt-6-luna`와 `xhigh`를 명시해야 한다. 그 밖의 것은 인정하지
+  않는다.
+- 대체: `codex`가 없거나 로그인되어 있지 않을 때, 실행이 인증·사용량 한도·모델·시간 초과 오류로 끝날 때, 근거가 없을
+  때는 부분 diff를 살펴본 뒤 작업을 `hei5enbug-agent-setup:worker`에게 넘기고 대체했다는 사실을 한 번 보고한다.

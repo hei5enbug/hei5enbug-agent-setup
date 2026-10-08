@@ -27,7 +27,7 @@ Use these production settings unless a separately approved comparison qualifies 
 | Role | Codex | Claude Code |
 |---|---|---|
 | Local scout | `gpt-6-luna`, `xhigh` | `claude-sonnet-5-5`, `medium` |
-| Implementation worker | `gpt-6-luna`, `xhigh` | `claude-sonnet-5-5`, `high` |
+| Implementation worker | `gpt-6-luna`, `xhigh` | `codex exec` with `gpt-6-luna`, `xhigh` (default); `claude-sonnet-5-5`, `high` worker when `codex_worker` is off, on request, or as fallback |
 | Public researcher | `gpt-6-luna`, `xhigh` | `claude-sonnet-5-5`, `medium` |
 | Designer | `claude -p` with `claude-opus-5-5`, `xhigh`; when Claude is unavailable, the `designer` role with `gpt-6-astra`, `xhigh` | `claude-opus-5-5`, `xhigh` |
 | Skill Builder evaluation participant | `gpt-6-luna`, `xhigh` | `claude-sonnet-5-5`, `high` |
