@@ -3,10 +3,12 @@ const FORK_DENIAL =
   "Forking the current conversation is disabled while hei5enbug-agent-setup is installed. Use `hei5enbug-agent-setup:scout` or `hei5enbug-agent-setup:worker`, another defined agent, or the main session.";
 
 const ROLE_PINS = Object.freeze({
-  "hei5enbug-agent-setup:worker": { role: "worker", model: "claude-sonnet-5-5", effort: "high" },
+  "hei5enbug-agent-setup:worker": { role: "worker", model: "claude-haiku-5-5", effort: "high" },
+  "hei5enbug-agent-setup:sonnet-worker": { role: "worker", model: "claude-sonnet-5-5", effort: "high" },
   "hei5enbug-agent-setup:scout": { role: "scout", model: "claude-sonnet-5-5", effort: "medium" },
-  "hei5enbug-agent-setup:researcher": { role: "researcher", model: "claude-sonnet-5-5", effort: "medium" },
+  "hei5enbug-agent-setup:researcher": { role: "researcher", model: "claude-haiku-5-5", effort: "medium" },
   "hei5enbug-agent-setup:designer": { role: "designer", model: "claude-opus-5-5", effort: "xhigh" },
+  "hei5enbug-agent-setup:reviewer": { role: "reviewer", model: "claude-opus-5-5", effort: "high" },
 });
 
 const BUILT_IN_DENIAL =
@@ -90,19 +92,32 @@ export function registerAgentGuard(on) {
 }
 
 export function registerRolePinning(on) {
-  on("agent.spawn", { subagentType: ["hei5enbug-agent-setup:worker", "hei5enbug-agent-setup:scout", "hei5enbug-agent-setup:researcher", "hei5enbug-agent-setup:designer"] }, async ($, e, next) => {
-    const pin = ROLE_PINS[e.subagentType];
-    const result = await next({ ...e, model: pin.model });
-    if (result.deny !== undefined || result.agentId === undefined) return result;
-    await recordRole($, {
-      agentId: result.agentId,
-      role: pin.role,
-      model: pin.model,
-      effort: pin.effort,
-      toolUseId: e.tool_use_id,
-    });
-    return result;
-  }).catch(($, e, next) => next(e));
+  on(
+    "agent.spawn",
+    {
+      subagentType: [
+        "hei5enbug-agent-setup:worker",
+        "hei5enbug-agent-setup:sonnet-worker",
+        "hei5enbug-agent-setup:scout",
+        "hei5enbug-agent-setup:researcher",
+        "hei5enbug-agent-setup:designer",
+        "hei5enbug-agent-setup:reviewer",
+      ],
+    },
+    async ($, e, next) => {
+      const pin = ROLE_PINS[e.subagentType];
+      const result = await next({ ...e, model: pin.model });
+      if (result.deny !== undefined || result.agentId === undefined) return result;
+      await recordRole($, {
+        agentId: result.agentId,
+        role: pin.role,
+        model: pin.model,
+        effort: pin.effort,
+        toolUseId: e.tool_use_id,
+      });
+      return result;
+    },
+  ).catch(($, e, next) => next(e));
 
   on("turn.step", async function* ($, e, next) {
     if (e.agentId === undefined) return yield* next(e);

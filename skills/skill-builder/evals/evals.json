@@ -92,14 +92,15 @@
     },
     {
       "id": 9,
-      "prompt": "Prepare a method comparison in Claude Code for a release-review skill that parses manifest fields and judges exceptions. The main session uses Opus. Claude Code can launch Sonnet 5 with high effort, but token telemetry is unavailable. Describe the worker, grader, and analyzer configuration and evidence record. Also state what happens if Sonnet 5 or high effort cannot be started. No actual manifest or execution trace is supplied.",
-      "expected_output": "Keep the main session on Opus, use Sonnet 5 at high effort for every Skill Builder worker and model runner, record the resolved model, and leave unavailable dependent runs unverified without substituting another model or effort.",
+      "prompt": "Prepare a method comparison in Claude Code for a release-review skill that parses manifest fields and judges exceptions. The main session uses claude-opus-5-5. Claude Code can launch Codex on gpt-6.1-sol with xhigh, but token telemetry is unavailable. Describe the trial execution, grader, and analyzer configuration and evidence record. Also state what happens if the cross-family CLI or its reviewer fallback cannot run. No actual manifest or execution trace is supplied.",
+      "expected_output": "Keep the main session on claude-opus-5-5, use claude-opus-5-5 at high effort for trial execution and other non-review participants, and route the grader and analyzer through Codex on gpt-6.1-sol at xhigh. If that CLI is unavailable, use the reviewer fallback with claude-opus-5-5 at high effort. Record actual model evidence, mark unavailable telemetry unverified, and have the main session review once and decide.",
       "files": [],
       "expectations": [
         "The response uses the existing parser for exact manifest mechanics and reserves the release-blocking judgment for the model.",
-        "The configuration keeps the Claude Code main session model unchanged and assigns Sonnet 5 at high effort to every worker, grader, analyzer, and model runner.",
-        "The resolved Sonnet model ID is recorded, and missing telemetry or an unavailable required setting is marked unverified without substitution or fabricated savings.",
-        "The response gives a reproducible future comparison plan with equal prompt, inputs, rubric, and actual tool outputs."
+        "The Claude Code main session model stays unchanged, and trial execution and other non-review participants use claude-opus-5-5 at high effort.",
+        "The grader and analyzer use the cross-family gpt-6.1-sol route at xhigh; the reviewer fallback uses claude-opus-5-5 at high effort.",
+        "The response requires actual model evidence, marks missing telemetry or an unavailable route unverified, and does not fabricate savings.",
+        "The main session reviews the same material once and makes the final decision without another review round."
       ]
     },
     {
@@ -129,26 +130,27 @@
     },
     {
       "id": 12,
-      "prompt": "Run Skill Builder in Codex. The main session uses GPT-6. Create isolated workers for old/new execution, grading, comparison, and analysis. Configure every launched worker and model runner, and state what happens if the required effort is unavailable.",
-      "expected_output": "Keep the Codex main session on GPT-6, launch every Skill Builder worker and model runner with gpt-5.6-luna at xhigh effort, never use Sonnet, and mark dependent work unverified rather than substituting a model or lowering effort.",
+      "prompt": "Run Skill Builder in Codex while keeping the main session model unchanged. Create isolated workers for old/new trial execution, grading, comparison, and analysis. Configure every launched worker and model runner, and state what happens if the required effort or cross-family CLI is unavailable.",
+      "expected_output": "Keep trial execution and other non-review participants on gpt-6.1-sol at xhigh. Route grading, comparison, and analysis through claude -p with claude-opus-5-5 at high effort; if that route is unavailable, use the reviewer fallback on gpt-6.1-sol at xhigh. Verify actual settings, have the main session review once and decide, and mark dependent work unverified when its route cannot run.",
       "files": [],
       "expectations": [
         "The main Codex session retains its selected model and responsibility for the final decision.",
-        "Every execution, grading, comparison, analysis, and other Skill Builder worker uses gpt-5.6-luna with xhigh effort.",
-        "The response never selects Sonnet in Codex and does not replace an unavailable required model or lower xhigh effort.",
-        "A run that cannot use the required Codex model and effort is recorded as unverified."
+        "Trial execution and other non-review participants use gpt-6.1-sol with xhigh effort.",
+        "Review roles use claude-opus-5-5 with high effort through claude -p, with reviewer on gpt-6.1-sol at xhigh as the fallback.",
+        "The response does not substitute a different model or lower effort when a required route is unavailable.",
+        "The main session reviews the same material once and makes the final decision without another review round."
       ]
     },
     {
       "id": 13,
-      "prompt": "Improve a commit-message skill that says to match repository style and explicitly checks prefix, casing, length, scope, and tone. A user reports that gpt-5.6-luna at xhigh intermittently writes English descriptions even when the latest 20 descriptions are Korean; some Korean descriptions contain English API names. Explain the skill change and execute an evaluation that can validate the fix without overfitting to Korean.",
-      "expected_output": "Treat subject language as an omitted style dimension, define its evidence and fallback rules, compare Korean and English histories while holding the change constant, and repeat the reported intermittent case on gpt-5.6-luna at xhigh without dismissing it after one passing baseline run.",
+      "prompt": "Improve a commit-message skill that says to match repository style and explicitly checks prefix, casing, length, scope, and tone. A user reports that gpt-6.1-sol at xhigh intermittently writes English descriptions even when the latest 20 descriptions are Korean; some Korean descriptions contain English API names. Explain the skill change and execute an evaluation that can validate the fix without overfitting to Korean.",
+      "expected_output": "Treat subject language as an omitted style dimension, define its evidence and fallback rules, compare Korean and English histories while holding the change constant, and repeat the reported intermittent case on gpt-6.1-sol at xhigh without dismissing it after one passing baseline run.",
       "files": [],
       "expectations": [
         "The response decomposes the umbrella promise to match style and identifies subject language as a missing observable dimension rather than blaming the model alone.",
         "The proposed skill rule defines evidence, precedence, and fallback behavior while preserving API names and other repository terms.",
         "The evaluation includes a contrastive Korean-history and English-history pair with the same primary change and checks that unrelated message dimensions stay stable.",
-        "The affected old/new pair is repeated 2–3 times with gpt-5.6-luna at xhigh, and a single passing baseline run is not treated as disproof.",
+        "The affected old/new pair is repeated 2–3 times with gpt-6.1-sol at xhigh, and a single passing baseline run is not treated as disproof.",
         "The cases and assertions are saved so the regression remains part of the skill's evaluation corpus."
       ]
     },

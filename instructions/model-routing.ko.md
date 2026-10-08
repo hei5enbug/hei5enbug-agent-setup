@@ -17,7 +17,8 @@
 | UI 코드, 시각 디자인, 다이어그램 | 호스트의 designer 경로를 쓴다. 레이아웃과 컴포넌트 구조를 바꾸지 않는 문구·스타일 값 수정은 구현 worker를 쓸 수 있다. |
 | 범위가 한정된 로컬 근거 수집 | 위임이 허용되고 유용할 때 호스트의 scout 역할을 쓴다. |
 | 공개 자료의 읽기 전용 조사 | 공개 도구를 사용할 수 있고 고정 설정을 확인한 경우에만 호스트의 researcher 역할을 쓴다. 그렇지 않으면 메인 세션에서 계속한다. |
-| 스킬의 조사, 시험 실행, 채점, 비교, 분석, 최적화 | 일반적인 스킬 작업자 라우팅보다 해당 스킬의 평가 계약을 먼저 적용한다. |
+| 스킬 검토 역할(검토 페르소나, grader, comparator, analyzer) | 아래 표의 교차 계열 검토 경로를 쓴다. |
+| Skill Builder 시험 실행 및 기타 비검토 참여자 | 아래 Skill Builder 어댑터에서 호스트의 상위 모델을 쓴다. |
 | 임시 시험 결과물 | 평가 작업 공간에 둔다. 이를 승인된 구현으로 간주하지 않는다. |
 
 researcher는 주장, 공개 URL이나 파일 위치, 뒷받침하는 근거, 모순, 공백을 수집한다. 계획, 아키텍처, 승인
@@ -29,11 +30,12 @@ researcher는 주장, 공개 URL이나 파일 위치, 뒷받침하는 근거, �
 
 | 역할 | Codex | Claude Code |
 |---|---|---|
-| 로컬 scout | `gpt-6-luna`, `xhigh` | `claude-sonnet-5-5`, `medium` |
-| 구현 worker | `gpt-6-luna`, `xhigh` | `codex exec`와 `gpt-6-luna`, `xhigh`(기본); `codex_worker`가 꺼져 있거나 요청했거나 대체할 때는 `claude-sonnet-5-5`, `high` worker |
-| 공개 researcher | `gpt-6-luna`, `xhigh` | `claude-sonnet-5-5`, `medium` |
+| 로컬 scout | `gpt-6-luna`, `xhigh` | 읽기 전용 `codex exec`로 `gpt-6-luna`, `xhigh`. 대체 경로는 `scout`(`claude-sonnet-5-5`, `medium`) |
+| 구현 worker | `gpt-6-luna`, `xhigh` | `implementation_worker`가 `codex`일 때 기본은 `codex exec`와 `gpt-6-luna`, `xhigh`; `haiku`일 때, 요청했을 때, 또는 대체 경로로는 `claude-haiku-5-5`, `high` `worker`; `sonnet`일 때나 요청했을 때는 `claude-sonnet-5-5`, `high` `sonnet-worker` |
+| 공개 researcher | `gpt-6-luna`, `xhigh` | `claude-haiku-5-5`, `medium` |
 | Designer | `claude -p`로 `claude-opus-5-5`, `xhigh`. Claude를 쓸 수 없으면 `designer` 역할로 `gpt-6-astra`, `xhigh` | `claude-opus-5-5`, `xhigh` |
-| Skill Builder 평가 참여자 | `gpt-6-luna`, `xhigh` | `claude-sonnet-5-5`, `high` |
+| Skill Builder 시험 실행 및 기타 비검토 참여자 | `gpt-6.1-sol`, `xhigh` | `claude-opus-5-5`, `high` |
+| 스킬 검토 역할(검토 페르소나, grader, comparator, analyzer) | `claude -p`로 `claude-opus-5-5`, `high`; 대체는 `gpt-6.1-sol`, `xhigh` `reviewer` | `codex exec`로 `gpt-6.1-sol`, `xhigh`; 대체는 `claude-opus-5-5`, `high` `reviewer` |
 
 결과를 신뢰하기 전에 호스트 기록과 관련된 비밀이 아닌 설정으로 역할의 실제 모델과 사고 강도를 확인한다.
 요청한 값, 역할 이름, agent guard 승인만으로 실제 모델이 확인되지는 않는다. 설정이 없거나 충돌하거나
@@ -44,17 +46,17 @@ researcher는 주장, 공개 URL이나 파일 위치, 뒷받침하는 근거, �
 모델과 사고 강도로 실행되는지 확인한다. 둘 중 하나라도 충족하지 않으면 기존 서비스 접근 규칙에 따라 메인
 세션에서 계속한다.
 
-## 스킬 평가 설정 우선순위
+## 스킬 검토와 실행
 
-Skill Builder가 대상 스킬을 평가하기 위해 시작한 평가 참여자는 Skill Builder의 필수 모델 및 사고 강도 표를
-따른다. 대상 스킬의 메타데이터나 frontmatter는 평가자 계약을 덮어쓰지 않는다. 이 계약은 일반 호스트 스킬
-작업자 라우팅보다 우선한다. 실제 설정이 Skill Builder 표와 일치할 때만 기본 역할을 실행한다. `high`
-사고 강도가 필요한 평가자를 `medium` scout로 보내지 않는다. 이 불일치를 해결하려고 공유 scout의 운영 사고
-강도를 높이지 않는다.
+스킬 검토 역할은 검토 페르소나, grader, comparator, analyzer 등을 맡는 읽기 전용 판단 작업이다. 호스트의
+스킬 작업자 규칙에 따라 먼저 다른 모델 계열을 사용한다. 해당 CLI가 없거나 인증되지 않았거나 사용량 제한에
+걸리거나 지정한 모델을 시작하지 못하거나 시간 초과되거나 모델 근거가 없으면 표에 나온 같은 계열의 상위
+모델로 플러그인의 `reviewer`를 사용하고 대체 사실을 한 번 보고한다. reviewer는 지적 결과만 반환한다. 메인
+세션은 같은 자료를 한 번 직접 검토한 뒤 최종 판단한다. 추가 검토는 하지 않는다.
 
-일치하는 기본 역할이 없으면 실제 모델과 사고 강도를 확인할 수 있을 때만 Skill Builder가 승인한 평가 runner를
-쓴다. 그렇지 않으면 Skill Builder의 기능 미지원 경로를 따른다. runner 호출만으로 실제 설정이 확인된 것은
-아니다.
+Skill Builder의 시험 실행과 기타 비검토 참여자는 표에 나온 호스트의 상위 모델을 사용한다. Skill Builder가
+채점, 비교 또는 분석을 요청해도 검토 역할에는 교차 계열 경로를 적용한다. 대상 스킬의 메타데이터와 frontmatter는
+이 설정을 덮어쓰지 않는다. `scout`를 검토 역할로 쓰거나 `reviewer`에 시험 출력을 작성시키지 않는다.
 
 일반적인 실행 방식 비교에서는 양쪽의 모델과 사고 강도를 고정한다. 구체적으로 승인된 모델 또는 사고 강도
 비교에서는 임시 평가 작업 공간에서 미리 고정한 후보 설정 하나만 바꿀 수 있다. 이 비교로 운영 역할 설정을

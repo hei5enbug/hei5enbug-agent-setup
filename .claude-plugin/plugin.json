@@ -1,7 +1,7 @@
 {
   "name": "hei5enbug-agent-setup",
   "displayName": "Hei5enbug Agent Skills",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Portable agent skills for repeatable engineering and documentation workflows.",
   "author": {
     "name": "hei5enbug",
@@ -20,8 +20,10 @@
   "agents": [
     "./agents/scout.md",
     "./agents/worker.md",
+    "./agents/sonnet-worker.md",
     "./agents/researcher.md",
-    "./agents/designer.md"
+    "./agents/designer.md",
+    "./agents/reviewer.md"
   ],
   "userConfig": {
     "agent_guard": {
@@ -39,14 +41,15 @@
     "role_pinning": {
       "type": "boolean",
       "title": "Pin role models",
-      "description": "Run the scout, worker, researcher, and designer agents on their pinned model and effort, and stop an agent that runs on any other model.",
+      "description": "Run the scout, worker, sonnet-worker, researcher, designer, and reviewer agents on their pinned model and effort, and stop an agent that runs on any other model.",
       "default": true
     },
-    "codex_worker": {
-      "type": "boolean",
-      "title": "Codex implementation worker",
-      "description": "Run implementation workers through Codex on gpt-6-luna at xhigh effort; turn off to use the Sonnet worker.",
-      "default": true
+    "implementation_worker": {
+      "type": "string",
+      "title": "Implementation worker",
+      "description": "Route implementation work to codex (Codex on gpt-6-luna at xhigh), haiku (the plugin worker on claude-haiku-5-5 at high), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
+      "options": ["codex", "haiku", "sonnet"],
+      "default": "codex"
     },
     "language_guard": {
       "type": "boolean",

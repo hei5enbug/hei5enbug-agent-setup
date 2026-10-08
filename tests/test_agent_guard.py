@@ -69,14 +69,17 @@ class AgentGuardTest(unittest.TestCase):
         # Then
         self.assertEqual(["deny"] * 5, decisions)
 
-    def test_Codex_연구원을_포함한_설치_역할은_허용한다(self):
-        """researcher와 설치된 역할 파일이 있는 사용자 에이전트는 훅에서 허용한다."""
+    def test_Codex_연구원과_reviewer를_포함한_설치_역할은_허용한다(self):
+        """researcher, reviewer와 역할 파일이 있는 사용자 에이전트는 훅에서 허용한다."""
         # Given
         self.write(self.codex_home / "agents" / "scout.toml", (REPO_ROOT / "standalone-agents/codex-scout.toml").read_text())
         self.write(self.codex_home / "agents" / "worker.toml", (REPO_ROOT / "standalone-agents/codex-worker.toml").read_text())
         self.write(self.codex_home / "agents" / "researcher.toml", (REPO_ROOT / "standalone-agents/codex-researcher.toml").read_text())
+        self.write(
+            self.codex_home / "agents" / "reviewer.toml",
+            (REPO_ROOT / "standalone-agents/codex-reviewer.toml").read_text(),
+        )
         self.write(self.project / ".codex" / "agents" / "pr-code-reviewer.toml", 'name = "pr_code_reviewer"\n')
-        self.write(self.project / ".codex" / "agents" / "reviewer.toml", "name = 'reviewer'\ndescription = 'r'\n")
 
         # When
         decisions = [

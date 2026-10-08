@@ -2,10 +2,14 @@ import { expect, mock, test } from "claude-code/testing";
 import { enabled } from "./register.js";
 
 const WORKER = "hei5enbug-agent-setup:worker";
+const SONNET_WORKER = "hei5enbug-agent-setup:sonnet-worker";
 const SCOUT = "hei5enbug-agent-setup:scout";
 const RESEARCHER = "hei5enbug-agent-setup:researcher";
 const DESIGNER = "hei5enbug-agent-setup:designer";
+const REVIEWER = "hei5enbug-agent-setup:reviewer";
 const PINNED = "claude-sonnet-5-5";
+const WORKER_PINNED = "claude-haiku-5-5";
+const RESEARCHER_PINNED = "claude-haiku-5-5";
 const SESSION = "session-test";
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = 10 * DAY;
@@ -41,10 +45,10 @@ function offerInput(agent, source = "plugin") {
 }
 
 function entry(agentId, extra = {}) {
-  return { agentId, role: "worker", model: PINNED, effort: "high", toolUseId: "toolu_main", time: NOW, ...extra };
+  return { agentId, role: "worker", model: WORKER_PINNED, effort: "high", toolUseId: "toolu_main", time: NOW, ...extra };
 }
 
-function stepSink(on, seen, usageModel = PINNED) {
+function stepSink(on, seen, usageModel = WORKER_PINNED) {
   on("turn.step", async function* (_$, e) {
     seen.push({ model: e.model, effort: e.effort, agentId: e.agentId });
     yield { kind: "text", index: 0, text: "완료" };
@@ -191,17 +195,25 @@ test("고정 역할을 시작하면 모델을 고정해 넘기고 에이전트 �
 
   // when
   const results = [];
-  for (const [index, type] of [WORKER, SCOUT, RESEARCHER].entries()) {
+  for (const [index, type] of [WORKER, SONNET_WORKER, SCOUT, RESEARCHER, REVIEWER].entries()) {
     results.push(await $.agent.spawn(spawnInput(type, { model: "haiku", tool_use_id: `toolu_${index}` })));
   }
 
   // then
-  expect(received.map((item) => item.model)).toEqual([PINNED, PINNED, PINNED]);
-  expect(results.map((result) => result.agentId)).toEqual(["agent-1", "agent-2", "agent-3"]);
+  expect(received.map((item) => item.model)).toEqual([
+    WORKER_PINNED,
+    PINNED,
+    PINNED,
+    RESEARCHER_PINNED,
+    "claude-opus-5-5",
+  ]);
+  expect(results.map((result) => result.agentId)).toEqual(["agent-1", "agent-2", "agent-3", "agent-4", "agent-5"]);
   expect(data.roles[SESSION]).toEqual([
-    { agentId: "agent-1", role: "worker", model: PINNED, effort: "high", toolUseId: "toolu_0", time: NOW },
-    { agentId: "agent-2", role: "scout", model: PINNED, effort: "medium", toolUseId: "toolu_1", time: NOW },
-    { agentId: "agent-3", role: "researcher", model: PINNED, effort: "medium", toolUseId: "toolu_2", time: NOW },
+    { agentId: "agent-1", role: "worker", model: WORKER_PINNED, effort: "high", toolUseId: "toolu_0", time: NOW },
+    { agentId: "agent-2", role: "worker", model: PINNED, effort: "high", toolUseId: "toolu_1", time: NOW },
+    { agentId: "agent-3", role: "scout", model: PINNED, effort: "medium", toolUseId: "toolu_2", time: NOW },
+    { agentId: "agent-4", role: "researcher", model: RESEARCHER_PINNED, effort: "medium", toolUseId: "toolu_3", time: NOW },
+    { agentId: "agent-5", role: "reviewer", model: "claude-opus-5-5", effort: "high", toolUseId: "toolu_4", time: NOW },
   ]);
 });
 
@@ -315,7 +327,7 @@ test("role_pinning 옵션이 꺼지면 모델을 고정하지 않고 기록도 �
 
 test("기록된 에이전트의 요청은 모델과 effort를 고정값으로 바꿔 보낸다", async ($, on) => {
   // given
-  environment(on, { [SESSION]: [entry("agent-1"), entry("agent-2", { role: "scout", effort: "medium" })] });
+  environment(on, { [SESSION]: [entry("agent-1"), entry("agent-2", { role: "scout", model: PINNED, effort: "medium" })] });
   const seen = [];
   stepSink(on, seen);
 
@@ -325,7 +337,7 @@ test("기록된 에이전트의 요청은 모델과 effort를 고정값으로 �
 
   // then
   expect(seen).toEqual([
-    { model: PINNED, effort: "high", agentId: "agent-1" },
+    { model: WORKER_PINNED, effort: "high", agentId: "agent-1" },
     { model: PINNED, effort: "medium", agentId: "agent-2" },
   ]);
   expect(first.result.stopReason).toBe("end_turn");
@@ -347,7 +359,7 @@ test("메인 요청과 기록에 없는 에이전트의 요청은 그대로 보�
   expect(seen).toEqual([
     { model: "claude-opus-5-5", effort: "max", agentId: undefined },
     { model: "claude-opus-5-5", effort: "low", agentId: "agent-unknown" },
-    { model: PINNED, effort: "high", agentId: "agent-1" },
+    { model: WORKER_PINNED, effort: "high", agentId: "agent-1" },
   ]);
 });
 
@@ -355,7 +367,7 @@ test("응답 모델이 고정값과 문자열까지 같지 않으면 날짜가 �
   // given
   const data = environment(on, { [SESSION]: [entry("agent-1")] });
   const seen = [];
-  stepSink(on, seen, `${PINNED}-20260101`);
+  stepSink(on, seen, `${WORKER_PINNED}-20260101`);
 
   // when
   await step($, { agentId: "agent-1" });
@@ -371,7 +383,7 @@ test("응답 모델이 고정값과 정확히 같으면 고정 실패로 기록�
   // given
   const data = environment(on, { [SESSION]: [entry("agent-1")] });
   const seen = [];
-  stepSink(on, seen, PINNED);
+  stepSink(on, seen, WORKER_PINNED);
 
   // when
   await step($, { agentId: "agent-1" });
@@ -507,7 +519,7 @@ test("플러그인을 다시 불러와도 저장소의 고정 기록으로 고�
   const refused = await step($, { agentId: "agent-2", model: "claude-opus-5-5" });
 
   // then
-  expect(seen).toEqual([{ model: PINNED, effort: "high", agentId: "agent-1" }]);
+  expect(seen).toEqual([{ model: WORKER_PINNED, effort: "high", agentId: "agent-1" }]);
   expect(pinned.result.stopReason).toBe("end_turn");
   expect(refused.result.stopReason).toBe("refusal");
   expect(data.roles[SESSION].length).toBe(2);
@@ -548,5 +560,5 @@ test("저장소 기록이 실패해도 고정 역할의 시작은 막히지 않�
   const spawn = await $.agent.spawn(spawnInput(WORKER));
 
   // then
-  expect(spawn).toEqual({ model: PINNED, agentId: "agent-1" });
+  expect(spawn).toEqual({ model: WORKER_PINNED, agentId: "agent-1" });
 });

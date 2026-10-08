@@ -45,6 +45,7 @@ class SessionContextTest(unittest.TestCase):
         self.worker = self.codex_home / "agents" / "worker.toml"
         self.researcher = self.codex_home / "agents" / "researcher.toml"
         self.designer = self.codex_home / "agents" / "designer.toml"
+        self.reviewer = self.codex_home / "agents" / "reviewer.toml"
         shutil.copytree(REPO_ROOT / "standalone-agents", self.root / "standalone-agents")
 
     def run_hook(self, host="codex", event="SessionStart", source="startup", payload=None, extra_env=None):
@@ -160,8 +161,8 @@ class SessionContextTest(unittest.TestCase):
                 self.assertNotIn("## Assigned workers", context)
                 self.assertLess(len(context.encode("utf-8")), 9000)
 
-    def test_Claude_세션은_기본으로_Codex_구현_경로를_알린다(self):
-        """codex_worker 옵션을 건드리지 않으면 Claude 세션 컨텍스트가 Codex 경로 한 줄을 담는다."""
+    def test_Claude_세션은_기본_구현_경로로_Codex를_알린다(self):
+        """구현 worker 옵션이 비어 있으면 Claude 세션 컨텍스트가 기본 Codex 경로 한 줄을 담는다."""
         # Given
         host = "claude"
 
@@ -169,27 +170,61 @@ class SessionContextTest(unittest.TestCase):
         context = self.context(self.run_hook(host))
 
         # Then
-        self.assertIn("Implementation worker route: Codex (`codex_worker` on).", context)
-        self.assertNotIn("Sonnet worker (`codex_worker` off)", context)
+        self.assertIn("Implementation worker route: Codex (`implementation_worker`=`codex`).", context)
+        self.assertEqual(context.count("Implementation worker route:"), 1)
         self.assertLess(len(context.encode("utf-8")), 9000)
 
-    def test_codex_worker_옵션을_끄면_Sonnet_worker_경로를_알린다(self):
-        """CLAUDE_PLUGIN_OPTION_CODEX_WORKER가 false이면 Sonnet worker 경로 한 줄을 담는다."""
+    def test_haiku_옵션은_worker_경로를_알린다(self):
+        """대소문자와 앞뒤 공백을 정규화한 haiku 옵션은 worker 경로 한 줄을 담는다."""
         # Given
-        extra_env = {"CLAUDE_PLUGIN_OPTION_CODEX_WORKER": "false"}
+        extra_env = {"CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER": " HaIku "}
 
         # When
         context = self.context(self.run_hook("claude", extra_env=extra_env))
 
         # Then
-        self.assertIn("Implementation worker route: Sonnet worker (`codex_worker` off).", context)
-        self.assertNotIn("Codex (`codex_worker` on)", context)
+        self.assertIn(
+            "Implementation worker route: Haiku worker, `hei5enbug-agent-setup:worker` "
+            "(`implementation_worker`=`haiku`).",
+            context,
+        )
+        self.assertEqual(context.count("Implementation worker route:"), 1)
+        self.assertLess(len(context.encode("utf-8")), 9000)
+
+    def test_sonnet_옵션은_sonnet_worker_경로를_알린다(self):
+        """sonnet 옵션은 sonnet-worker 경로 한 줄을 담는다."""
+        # Given
+        extra_env = {"CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER": "sonnet"}
+
+        # When
+        context = self.context(self.run_hook("claude", extra_env=extra_env))
+
+        # Then
+        self.assertIn(
+            "Implementation worker route: Sonnet: `hei5enbug-agent-setup:sonnet-worker` "
+            "(`implementation_worker`=`sonnet`).",
+            context,
+        )
+        self.assertEqual(context.count("Implementation worker route:"), 1)
+        self.assertLess(len(context.encode("utf-8")), 9000)
+
+    def test_알_수_없는_옵션은_Codex_경로를_알린다(self):
+        """알 수 없는 구현 worker 옵션은 안전하게 기본 Codex 경로 한 줄을 담는다."""
+        # Given
+        extra_env = {"CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER": "unknown"}
+
+        # When
+        context = self.context(self.run_hook("claude", extra_env=extra_env))
+
+        # Then
+        self.assertIn("Implementation worker route: Codex (`implementation_worker`=`codex`).", context)
+        self.assertEqual(context.count("Implementation worker route:"), 1)
         self.assertLess(len(context.encode("utf-8")), 9000)
 
     def test_Codex_호스트는_구현_경로_줄을_받지_않는다(self):
         """Codex 세션 컨텍스트에는 Claude 전용 구현 경로 줄이 없다."""
         # Given
-        extra_env = {"CLAUDE_PLUGIN_OPTION_CODEX_WORKER": "false"}
+        extra_env = {"CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER": "sonnet"}
 
         # When
         context = self.context(self.run_hook("codex", extra_env=extra_env))
@@ -333,6 +368,22 @@ class SessionContextTest(unittest.TestCase):
         # Then
         self.assertEqual(installed, (REPO_ROOT / "standalone-agents/codex-designer.toml").read_text(encoding="utf-8"))
         self.assertEqual(self.designer.read_text(encoding="utf-8"), custom)
+
+    def test_Codex_세션은_누락된_reviewer_역할을_설치한다(self):
+        """Codex 세션은 reviewer 역할이 없을 때 모델 없는 읽기 전용 번들 정의를 설치한다."""
+        # Given
+        self.reviewer.parent.mkdir(parents=True)
+        self.assertFalse(self.reviewer.exists())
+
+        # When
+        self.context(self.run_hook("codex"))
+
+        # Then
+        role = self.reviewer.read_text(encoding="utf-8")
+        bundled = (REPO_ROOT / "standalone-agents/codex-reviewer.toml").read_text(encoding="utf-8")
+        self.assertEqual(role, bundled)
+        self.assertIn('sandbox_mode = "read-only"', role)
+        self.assertNotIn('model = ', role)
 
     def test_provisioning_never_overwrites_an_existing_agent(self):
         self.scout.parent.mkdir(parents=True)

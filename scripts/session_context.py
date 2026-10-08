@@ -66,10 +66,13 @@ def render_context(root: Path, host: str) -> str:
     else:
         import plugin_toggles
 
-        if plugin_toggles.enabled("codex_worker"):
-            route = "Codex (`codex_worker` on)"
+        option = plugin_toggles.option_value("implementation_worker")
+        if option == "haiku":
+            route = "Haiku worker, `hei5enbug-agent-setup:worker` (`implementation_worker`=`haiku`)"
+        elif option == "sonnet":
+            route = "Sonnet: `hei5enbug-agent-setup:sonnet-worker` (`implementation_worker`=`sonnet`)"
         else:
-            route = "Sonnet worker (`codex_worker` off)"
+            route = "Codex (`implementation_worker`=`codex`)"
         context += f"\nImplementation worker route: {route}.\n"
     if len(context.encode("utf-8")) > MAX_CONTEXT_BYTES:
         raise ValueError("Bundled instructions exceed the context budget; move details to conditional references")
@@ -156,9 +159,13 @@ CODEX_AGENTS = {
     "worker": "codex-worker.toml",
     "researcher": "codex-researcher.toml",
     "designer": "codex-designer.toml",
+    "reviewer": "codex-reviewer.toml",
 }
 RETIRED_CODEX_AGENTS = {
-    "scout": {"910da79ee988b53f4a94186a469c4479c7e34bf61bec8dfd27ef1ab73cc171da"},
+    "scout": {
+        "910da79ee988b53f4a94186a469c4479c7e34bf61bec8dfd27ef1ab73cc171da",
+        "e81d0cfcd3a4986204c289fb8c457bd279ba8c2d24d43679d02b1661581301e7",
+    },
     "explorer": {"bfde4fbbe2740152ad537d576612a34619a57a45adb56072e3f945610ef820af"},
     "worker": {"ce4488d0323832dc1563481875e7c26d693092c94865c37a4b4b89afd8274f83"},
 }

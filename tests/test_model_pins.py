@@ -21,6 +21,7 @@ PINS = {
     "claude-fable": "claude-fable-5-1",
     "claude-opus": "claude-opus-5-5",
     "claude-sonnet": "claude-sonnet-5-5",
+    "claude-haiku": "claude-haiku-5-5",
     "gpt-astra": "gpt-6-astra",
     "gpt-luna": "gpt-6-luna",
     "gpt-sol": "gpt-6.1-sol",
@@ -95,16 +96,22 @@ class ModelPinTest(unittest.TestCase):
 
     def test_실행_파일은_표시_이름으로_모델_버전을_지정하지_않는다(self):
         """버전은 전체 모델 ID로만 적고 Sonnet 5 같은 표시 이름 버전을 쓰지 않는다."""
+        # Given
+        files = runtime_files()
+
         # When
-        found = [where for path in runtime_files() for where, line in lines_of(path) if DISPLAY_VERSION.search(line)]
+        found = [where for path in files for where, line in lines_of(path) if DISPLAY_VERSION.search(line)]
 
         # Then
         self.assertEqual([], found)
 
     def test_실행_파일은_실행_시점의_최신_모델_조회를_요구하지_않는다(self):
         """실행 규칙은 고정 ID만 쓰고 실행할 때 최신 모델을 다시 찾지 않는다."""
+        # Given
+        files = runtime_files()
+
         # When
-        found = [where for path in runtime_files() for where, line in lines_of(path) if RUNTIME_LOOKUP.search(line)]
+        found = [where for path in files for where, line in lines_of(path) if RUNTIME_LOOKUP.search(line)]
 
         # Then
         self.assertEqual([], found)
@@ -121,9 +128,11 @@ class ModelPinTest(unittest.TestCase):
         self.assertEqual(
             {
                 "scout.md": PINS["claude-sonnet"],
-                "worker.md": PINS["claude-sonnet"],
-                "researcher.md": PINS["claude-sonnet"],
+                "worker.md": PINS["claude-haiku"],
+                "sonnet-worker.md": PINS["claude-sonnet"],
+                "researcher.md": PINS["claude-haiku"],
                 "designer.md": PINS["claude-opus"],
+                "reviewer.md": PINS["claude-opus"],
             },
             models,
         )
@@ -142,6 +151,10 @@ class ModelPinTest(unittest.TestCase):
             "codex-designer.toml": (
                 "designer", "xhigh",
                 f"spawn the plugin `designer` role with `{PINS['gpt-astra']}` and `xhigh` instead.",
+            ),
+            "codex-reviewer.toml": (
+                "reviewer", "xhigh",
+                f"spawn the plugin `reviewer` role with `{PINS['gpt-sol']}` and `xhigh` passed explicitly.",
             ),
         }
 

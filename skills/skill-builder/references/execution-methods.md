@@ -29,47 +29,51 @@ When only one method can meet the contract, document why; do not claim measured 
 
 ## Evaluation model adapters
 
-These settings govern every evaluation participant: each worker and model runner that Skill Builder
-launches for research, trial execution, grading, comparison, analysis, or optimization.
-They do not change the main session's model or effort.
-The main session retains responsibility for the task definition, rubric, review, and final decision.
+These settings govern Skill Builder's trial execution and other non-review participants, and its read-only review
+roles. They do not change the main session's model or effort. The main session owns the task definition and rubric,
+reviews the same material once, and makes the final decision.
 
 Before launch, classify each worker by its purpose and the destination of its output.
 
 | Worker purpose | Output destination | Role |
 |---|---|---|
 | Draft or revise the actual skill under development | Repository or working tree that holds the skill | Implementation |
-| Produce disposable trial artifacts for grading | Evaluation workspace | Evaluation |
+| Produce disposable trial artifacts for grading | Evaluation workspace | Trial execution |
 | Promote a trial artifact into the actual skill | Repository or working tree that holds the skill | Implementation |
-| Research, grade, compare, analyze, or optimize | Evaluation workspace or inline result | Evaluation |
+| Trial execution and other non-review work, such as research or optimization | Evaluation workspace or inline result | Non-review participant |
+| Review persona, grading, comparison, or analysis | Evaluation workspace or inline result | Read-only review |
 
-When the host session instructions include implementation execution rules, implementation workers follow
-those rules instead of the table below. Otherwise, as in standalone use, the table below governs every
-worker, including implementation. Evaluation participants always use the table below.
+When the host session instructions include implementation execution rules, implementation workers follow those rules
+instead of the table below. Otherwise, as in standalone use, the table below governs every worker, including
+implementation. Evaluation participants use the model adapter below. The Skill Builder review and participant
+contract takes precedence over generic host skill-worker routing and target-skill metadata.
 
-The Skill Builder evaluation contract takes precedence over generic host skill-worker routing. Run a native
-role only when its effective settings match the table below. If no native role matches, use a Skill Builder-approved
-runner whose actual model and effort can be verified, or follow the unavailable-capability path. Do not route
-an evaluation participant to a lower-effort scout or change a production role's settings. A runner invocation
-by itself does not verify its effective settings.
+A skill-assigned review role, such as a review persona, grader, comparator, or analyzer, is read-only judgment work.
+It returns findings only and bases every finding or grade on quoted evidence. It returns the JSON its agent file
+defines instead of writing a file, and the main session saves that JSON to the path the agent file names. Use the
+other model family first, following the host's skill-worker instructions. If that CLI is missing, unauthenticated,
+limited, fails to start the pinned model, times out, or lacks model evidence, use the `reviewer` fallback in the table
+below and report the substitution once. The main session reviews the same material once and makes the final decision.
+Do not run another review round.
 
-| Executing host | Required model | Required effort | Boundary |
+| Executing host | Trial and other non-review participants | Effort | Review route |
 |---|---|---|---|
-| Codex | `gpt-6-luna` | `xhigh` | Never launch `claude-sonnet-5-5` from Codex. |
-| Claude Code | `claude-sonnet-5-5` | `high` | Never launch `gpt-6-luna` from Claude Code. |
-| Other hosts | Available lightweight model | Highest supported suitable effort | Record the actual configuration. |
+| Codex | `gpt-6.1-sol` | `xhigh` | `claude -p` with `claude-opus-5-5`, `high`; fallback `reviewer` with `gpt-6.1-sol`, `xhigh` |
+| Claude Code | `claude-opus-5-5` | `high` | `codex exec` with `gpt-6.1-sol`, `xhigh`; fallback `reviewer` with `claude-opus-5-5`, `high` |
+| Other hosts | Available upper model | Highest suitable supported effort | Use a verified cross-family reviewer route and its documented fallback; otherwise mark review unavailable. |
 
-Keep the model and settings the same on both sides of an ordinary method comparison when both methods include a
-model. Only a specifically approved model or effort experiment may vary its one frozen candidate setting, in
-the disposable evaluation workspace. It must not change production settings or promote trial output to the
-repository. If the required settings cannot be verified, or the runner is unavailable, mark the dependent run
-unverified and do not substitute another configuration.
-For a tool-only method, record that no model performs the operation; include any model orchestration cost.
-Discover the host's model selector and effort controls; do not invent model IDs or CLI flags.
-Pass the full model ID, never an alias, and verify that the recorded model matches it.
-Record the actual model and effort for every launched worker and model runner.
-If either required setting is unavailable, do not substitute another model or lower the effort.
-Mark the dependent run unverified and continue only work that does not require that worker or runner.
+Trial execution and other non-review participants stay on the host's model family at its upper model. Review roles
+use the other family. Do not send a review role to `scout`, use `reviewer` to write trial outputs, or lower a role's
+required effort. A runner invocation alone does not verify its effective settings.
+
+For trial output writers, use the model and effort that the host adapter pins. Keep their outputs in the evaluation
+workspace. Do not promote trial output unless the main session selects it through the skill's acceptance process.
+Record the actual model and effort for every participant. If a required setting cannot be verified, mark the dependent
+run unverified and do not silently substitute another model or lower the effort.
+
+Keep model and effort fixed on both sides of an ordinary method comparison. Only a specifically approved model or
+effort experiment may vary its one frozen candidate setting, in the disposable evaluation workspace. It must not
+change production settings or promote trial output to the repository.
 
 ## Paired trials
 

@@ -14,7 +14,7 @@
 ## 내장 에이전트
 
 - 내장 `default`, `explorer` 에이전트는 사용하지 않는다. `agent_type`을 비우면 `default`가 실행되므로 항상 지정한다.
-- 세션 훅은 플러그인의 `scout`, `worker`, `researcher`, `designer` 역할이 `~/.codex/agents/`에 없을 때 설치하고,
+- 세션 훅은 플러그인의 `scout`, `worker`, `researcher`, `designer`, `reviewer` 역할이 `~/.codex/agents/`에 없을 때 설치하고,
   이전 버전의 수정하지 않은 복사본만 바꾸며, 사용자가 고친 파일은 덮어쓰지 않는다. 설치한 역할은 다음 Codex
   세션부터 쓸 수 있다.
 - 플러그인의 에이전트 차단 훅은 종류를 비운 호출, `default`, `explorer`, Codex 에이전트 디렉터리에 역할 파일이 없는
@@ -37,14 +37,22 @@
 
 ## 스킬 작업자
 
-- 스킬이 검토 페르소나, 조사 티켓, 채점처럼 독립된 읽기 전용 작업자를 요구하면 위의 고정 설정이 그 역할의 요구와
-  일치할 때만 `scout`를 사용한다. Skill Builder 평가에는 평가 어댑터의 필수 참여자 표를 사용하며, 대상 스킬의
-  메타데이터는 이를 덮어쓰지 않는다. 일치하는 기본 역할이 없으면 확인된 Skill Builder 승인 runner를 쓰거나 기능
-  미지원 경로를 따른다. 역할에 지시와 출력 계약을 전달한다. 운영 scout 설정을 바꾸지 않는다. 역할이 만드는 파일은
-  메인 세션이 쓴다. 범위가 한정된 공개 조사에는 스킬 계약과 평가 설정이 확인된 프로필을 허용하고 공개 도구를 사용할
-  수 있을 때만 `researcher`를 사용한다. 비공개·인증이 필요한 원격 접근과 모든 수정은 메인 세션에서 처리한다.
-- 스킬이 시험 출력을 쓰는 작업자를 요구하면 서브에이전트 대신 스킬이 고정한 모델과 사고 강도로 별도 `codex exec`
-  프로세스를 실행한다.
+- 스킬이 맡긴 검토 역할 하나(검토 페르소나, grader, comparator, analyzer)는 읽기 전용 판단 작업이다. 저장소
+  루트에서 할당을 표준 입력으로 전달해 다른 모델 계열 검토자를 실행한다.
+
+  ```text
+  claude -p --model claude-opus-5-5 --effort high --output-format json --tools Read Grep Glob --strict-mcp-config --permission-mode dontAsk --allowedTools Read Grep Glob
+  ```
+
+  결과는 JSON의 `modelUsage`에 `claude-opus-5-5`가 있을 때만 인정한다. `claude`가 없거나 로그인되지 않았거나,
+  인증·사용량 한도·모델·시간 초과 오류로 끝나거나 근거가 없으면 플러그인 `reviewer` 역할을 `gpt-6.1-sol`과
+  `xhigh`를 명시해 시작한다. rollout 기록에 해당 설정이 있는지 확인하고 대체 사실을 한 번 보고한다. reviewer는
+  지적 결과만 반환한다. 메인 세션은 같은 자료를 한 번 직접 검토한 뒤 최종 판단한다. 추가 검토는 하지 않는다.
+- 로컬 근거 조사 티켓은 `scout`, 공개 자료 조사는 공개 도구와 설정을 확인한 뒤 `researcher`에 맡긴다. 비공개 자료나
+  인증이 필요한 원격 접근은 메인 세션에서 처리한다.
+- Skill Builder의 시험 실행과 기타 비검토 참여자에는 평가 어댑터에서 호스트의 상위 모델을 사용한다. 검토 역할을
+  `scout`이나 시험 출력 작성자에게 맡기지 않는다.
+- 시험 출력을 쓰는 작업자는 스킬이 지정한 모델과 사고 강도로 별도의 `codex exec` 프로세스를 실행한다.
 
 ## 구현
 

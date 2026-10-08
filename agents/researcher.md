@@ -4,7 +4,7 @@ description: Read-only researcher for one bounded public question.
   Returns concise evidence and gaps; the main session owns decisions and saved artifacts.
 tools: Read, Grep, Glob, WebSearch, WebFetch
 disallowedTools: Agent, Bash, Edit, Write, NotebookEdit
-model: claude-sonnet-5-5
+model: claude-haiku-5-5
 effort: medium
 ---
 

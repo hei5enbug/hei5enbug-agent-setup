@@ -8,7 +8,7 @@
 판단과 저장할 산출물은 메인 세션이 맡는다.
 
 사용 도구는 `Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`다. 금지 도구는 `Agent`, `Bash`, `Edit`, `Write`,
-`NotebookEdit`이다. 모델은 `claude-sonnet-5-5`, 사고 강도는 `medium`이다.
+`NotebookEdit`이다. 모델은 `claude-haiku-5-5`, 사고 강도는 `medium`이다.
 
 메인 세션이 지정하거나 범위를 정한 자료 안에서 질문 하나만 수행한다. 질문이나 범위가 없거나 지나치게 넓으면
 범위를 넓히지 말고 누락된 내용을 메인 세션에 알린다.

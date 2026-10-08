@@ -46,15 +46,19 @@ class ImplementationWorkerScopeTest(unittest.TestCase):
         )
         self.assertEqual(
             rows["Produce disposable trial artifacts for grading"],
-            ["Evaluation workspace", "Evaluation"],
+            ["Evaluation workspace", "Trial execution"],
         )
         self.assertEqual(
             rows["Promote a trial artifact into the actual skill"],
             ["Repository or working tree that holds the skill", "Implementation"],
         )
         self.assertEqual(
-            rows["Research, grade, compare, analyze, or optimize"],
-            ["Evaluation workspace or inline result", "Evaluation"],
+            rows["Trial execution and other non-review work, such as research or optimization"],
+            ["Evaluation workspace or inline result", "Non-review participant"],
+        )
+        self.assertEqual(
+            rows["Review persona, grading, comparison, or analysis"],
+            ["Evaluation workspace or inline result", "Read-only review"],
         )
 
     def test_구현_규칙이_있으면_구현_작업자만_그_규칙을_따른다(self):
@@ -67,7 +71,7 @@ class ImplementationWorkerScopeTest(unittest.TestCase):
             "When the host session instructions include implementation execution rules, implementation workers "
             "follow those rules instead of the table below."
         ) in section
-        keeps_evaluation = "Evaluation participants always use the table below." in section
+        keeps_evaluation = "Evaluation participants use the model adapter below." in section
 
         # Then
         self.assertTrue(routes_implementation)
@@ -84,8 +88,8 @@ class ImplementationWorkerScopeTest(unittest.TestCase):
         # Then
         self.assertIn(standalone, section)
 
-    def test_평가_모델_표는_그대로_남고_구현_모델_표를_복사하지_않는다(self):
-        """평가 모델 표의 호스트별 모델과 사고 강도는 유지하고 구현 worker 모델 정책은 복사하지 않는다."""
+    def test_시험_및_비검토_참여자는_호스트별_상위_모델을_쓴다(self):
+        """Codex는 gpt-6.1-sol과 xhigh, Claude Code는 claude-opus-5-5와 high를 시험 및 비검토 작업에 쓴다."""
         # Given
         section = adapter_section()
 
@@ -93,11 +97,30 @@ class ImplementationWorkerScopeTest(unittest.TestCase):
         rows = table_rows(section)
 
         # Then
-        self.assertEqual(rows["Codex"][:2], ["`gpt-6-luna`", "`xhigh`"])
-        self.assertEqual(rows["Claude Code"][:2], ["`claude-sonnet-5-5`", "`high`"])
+        self.assertEqual(rows["Codex"][:2], ["`gpt-6.1-sol`", "`xhigh`"])
+        self.assertEqual(rows["Claude Code"][:2], ["`claude-opus-5-5`", "`high`"])
         self.assertIn("Other hosts", rows)
-        for copied in ("GPT Luna", "Claude Sonnet", "latest production", "implementation-execution.md"):
+        for copied in ("gpt-6-luna", "claude-sonnet-5-5", "latest production", "implementation-execution.md"):
             self.assertNotIn(copied, section)
+
+    def test_검토_역할은_교차_계열_후_같은_계열_reviewer로_대체한다(self):
+        """검토 역할은 다른 모델 계열을 먼저 쓰고 CLI에 문제가 있으면 reviewer 대체 경로와 메인 검토를 한 번 쓴다."""
+        # Given
+        section = " ".join(adapter_section().split())
+
+        # When
+        routes = table_rows(adapter_section())
+
+        # Then
+        self.assertIn("review persona, grader, comparator, or analyzer", section.lower())
+        self.assertIn("Codex", routes)
+        self.assertIn("claude -p", routes["Codex"][2])
+        self.assertIn("reviewer", routes["Codex"][2])
+        self.assertIn("codex exec", routes["Claude Code"][2])
+        self.assertIn("reviewer", routes["Claude Code"][2])
+        self.assertIn("reviews the same material once", section)
+        self.assertIn("Do not run another review round.", section)
+        self.assertIn("Do not send a review role to `scout`", section)
 
     def test_스킬_본문은_작업자_시작_전에_어댑터_섹션을_읽게_한다(self):
         """SKILL.md는 작업자와 runner를 시작하기 전에 같은 어댑터 섹션만 읽게 한다."""
@@ -110,23 +133,21 @@ class ImplementationWorkerScopeTest(unittest.TestCase):
         # Then
         self.assertIn(pointer, skill)
 
-    def test_Skill_Builder_평가표가_일반_scout_라우팅보다_우선한다(self):
-        """Skill Builder 평가자는 고정된 모델 표를 따르고 scout 설정 불일치는 검증 runner나 미지원 경로로 처리한다."""
+    def test_Skill_Builder_참여자와_검토_계약이_일반_라우팅보다_우선한다(self):
+        """Skill Builder 참여자와 검토자는 어댑터의 모델 표를 따르고 메인 세션이 최종 판단을 맡는다."""
         # Given
         section = " ".join(adapter_section().split())
 
         # When
-        precedence = "The Skill Builder evaluation contract takes precedence over generic host skill-worker routing."
-        verified_runner = "a Skill Builder-approved runner whose actual model and effort can be verified"
+        precedence = "The Skill Builder review and participant contract takes precedence over generic host skill-worker routing"
+        verified_runner = "A runner invocation alone does not verify its effective settings."
 
         # Then
-        self.assertIn("Evaluation participants always use the table below.", section)
+        self.assertIn("Evaluation participants use the model adapter below.", section)
         self.assertIn(precedence, section)
-        self.assertIn("Run a native role only when its effective settings match the table below.", section)
         self.assertIn(verified_runner, section)
-        self.assertIn("follow the unavailable-capability path", section)
-        self.assertIn("Do not route an evaluation participant to a lower-effort scout", section)
-        self.assertNotIn("target-skill metadata", section)
+        self.assertIn("target-skill metadata", section)
+        self.assertIn("Do not send a review role to `scout`", section)
 
     def test_승인된_비교만_격리된_평가에서_고정_설정_하나를_바꾼다(self):
         """일반 비교는 모델과 사고 강도를 고정하고 승인된 한 설정 비교만 임시 평가 공간에서 허용한다."""
@@ -135,7 +156,7 @@ class ImplementationWorkerScopeTest(unittest.TestCase):
         methods = " ".join(EXECUTION_METHODS.read_text(encoding="utf-8").split())
 
         # When
-        ordinary = "Keep the model and settings the same on both sides of an ordinary method comparison"
+        ordinary = "Keep model and effort fixed on both sides of an ordinary method comparison."
         exception = "Only a specifically approved model or effort experiment may vary its one frozen candidate setting"
 
         # Then

@@ -13,9 +13,9 @@ session resume, apply its effective-settings checks before dispatch.
 
 - Never use the built-in `default` or `explorer` agents. Always pass `agent_type`, because an omitted type runs
   `default`.
-- The session hook installs the plugin's `scout`, `worker`, `researcher`, and `designer` roles in `~/.codex/agents/`
-  when absent, replaces only an unmodified copy from an earlier plugin version, and never overwrites a file the user changed.
-  They become available in the next Codex session.
+- The session hook installs the plugin's `scout`, `worker`, `researcher`, `designer`, and `reviewer` roles in
+  `~/.codex/agents/` when absent. It replaces only unmodified copies from earlier plugin versions and never overwrites
+  a file the user changed. The roles become available in the next Codex session.
 - The plugin's agent guard hook denies an omitted type, `default`, `explorer`, and every type without a role
   file in a Codex agents directory, so it also denies the built-in `worker` until the plugin role exists.
 
@@ -30,24 +30,31 @@ session resume, apply its effective-settings checks before dispatch.
 - Treat results as leads. Verify critical claims in the main session before planning or deciding.
 - If `scout` is unavailable, or its role file in the Codex agents directory sets another model or effort,
   investigate in the main session.
-- For bounded public research, use `researcher` only when public search and fetch tools are exposed. Pass
-  `gpt-6-luna` and `xhigh` explicitly on every researcher spawn; its role file sets no model. Before relying on its result,
-  inspect the non-secret researcher role/config settings and verify the host rollout record reports
-  `gpt-6-luna` and `xhigh`. Otherwise, continue in the main session.
+- For bounded public research, use `researcher` only when public search and fetch tools are exposed. Pass `gpt-6-luna`
+  and `xhigh` explicitly on every researcher spawn; its role file sets no model. Before relying on its result, inspect
+  the non-secret researcher role/config settings and verify the host rollout record reports `gpt-6-luna` and `xhigh`.
+  Otherwise, continue in the main session.
 
 ## Skill workers
 
-- When a skill asks for an independent read-only worker, such as a review persona, a research ticket, or a
-  grader, use `scout` with the pinned settings above only when they match the role's requirements. For Skill
-  Builder evaluation, use the required participant table in its evaluation adapter; target-skill metadata does
-  not override it. When no native role matches, use a verified Skill Builder-approved runner or its
-  unavailable-capability path. Give the role its instructions and output contract. Do not change the production
-  scout settings. The main session writes any file the role produces. For bounded public research, use `researcher`
-  only when the skill's contract and any
-  evaluation settings permit its verified profile and public tools are available. Private or authenticated
-  remote access and all edits stay in the main session.
-- When a skill asks for a worker that writes trial outputs, run a separate `codex exec` process with the model
-  and effort that the skill pins instead of a subagent.
+- For one skill-assigned review role, including a review persona, grader, comparator, or analyzer, run this command
+  from the repository root with the assignment on stdin:
+
+  ```text
+  claude -p --model claude-opus-5-5 --effort high --output-format json --tools Read Grep Glob --strict-mcp-config --permission-mode dontAsk --allowedTools Read Grep Glob
+  ```
+
+  Accept its result only when the JSON `modelUsage` names `claude-opus-5-5`. If `claude` is missing, not logged in,
+  fails with an authentication, usage-limit, model, or timeout error, or that evidence is missing, spawn the plugin
+  `reviewer` role with `gpt-6.1-sol` and `xhigh` passed explicitly. Verify its rollout record reports those settings
+  and report the substitution once. The reviewer returns findings only. The main session reviews the same material
+  once and makes the final decision; do not run another review round.
+- Send a local-evidence research ticket to `scout` and bounded public research to `researcher` when public tools are
+  available and its settings are verified. Keep private or authenticated remote access in the main session.
+- For Skill Builder, trial execution and other non-review participants use the host's upper model from its evaluation
+  adapter. Do not route a review role through `scout` or a trial-output writer.
+- When a skill asks for a worker that writes trial outputs, run a separate `codex exec` process with the model and
+  effort that the skill pins.
 
 ## Implementation
 

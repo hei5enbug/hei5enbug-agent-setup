@@ -18,45 +18,68 @@ session resume, apply its effective-settings checks before dispatch.
 
 ## Investigation
 
-- Use `hei5enbug-agent-setup:scout` for bounded investigation whenever the session delegation rule selects it,
-  during planning or execution.
-- Give each `hei5enbug-agent-setup:scout` one question and one narrow search scope.
+- For bounded investigation that the session delegation rule selects, during planning or execution, run the Luna
+  scout from the session folder with the assignment on stdin:
+
+  ```text
+  codex exec -m gpt-6-luna -c model_reasoning_effort="xhigh" -s read-only -C <session folder> --json -o <result file> - < <assignment file>
+  ```
+
+  The assignment opens by saying Codex is a read-only scout for this session: start no agents, make no commit or
+  push, use no network, make no edits, and return the result the assignment defines. It then carries the body of
+  the plugin's `agents/scout.md` as the role instructions. Never pass `--add-dir`, run `cd` before the command, or
+  pass `--ephemeral`. Accept the result only when the rollout `turn_context` names `gpt-6-luna` and `xhigh`.
+- Give each scout one question and one narrow search scope.
 - Require file paths, code symbols, and concrete evidence in its results.
 - Treat results as leads. Verify critical claims in the main conversation before planning or deciding.
-- The plugin bundles `hei5enbug-agent-setup:scout`; if it is unavailable, investigate in the main conversation.
-- Its definition pins its model. Never pass a per-invocation model, because that overrides the definition.
+- If `codex` is missing, not logged in, fails with an authentication, usage-limit, model, or timeout error, or its
+  evidence is missing, use `hei5enbug-agent-setup:scout` and report the substitution once. Its definition pins
+  `claude-sonnet-5-5` with `medium`; never pass a per-invocation model, because that overrides the definition. If
+  neither is available, investigate in the main conversation.
 - For bounded public research, use `hei5enbug-agent-setup:researcher` only when public search and fetch tools
-  are available. Never pass a per-invocation model; its definition pins `claude-sonnet-5-5` and `medium`.
+  are available. Never pass a per-invocation model; its definition pins `claude-haiku-5-5` and `medium`.
   Verify that definition, effective non-secret settings, and the host subagent record before relying on its
   result. Otherwise, continue in the main conversation.
 
 ## Skill workers
 
-- When a skill asks for an independent read-only worker, such as a review persona, a research ticket, or a
-  grader, use `hei5enbug-agent-setup:scout` only when its effective settings match the role's requirements. For
-  Skill Builder evaluation, use the required participant table in its evaluation adapter; target-skill metadata
-  does not override it. When no native role matches, use a verified Skill Builder-approved runner or its
-  unavailable-capability path. Give the role its instructions and output contract. Do not lower the required
-  effort or change production scout settings. The main conversation writes any file the role produces. For
-  bounded public research, use `researcher` only when the
-  skill's contract and any evaluation settings permit its verified profile and public tools are available.
-  Private or authenticated remote access and all edits stay in the main conversation.
-- When a skill asks for a worker that writes trial outputs, run a separate `claude -p` process with the model
-  and effort that the skill pins instead of a subagent.
+- A skill review role is read-only judgment work, including a review persona, grader, comparator, or analyzer. Run
+  the cross-family reviewer from the session folder, with the assignment on stdin:
+
+  ```text
+  codex exec -m gpt-6.1-sol -c model_reasoning_effort="xhigh" -s read-only -C <session folder> --json -o <result file> - < <assignment file>
+  ```
+
+  The assignment opens by saying Codex is an assigned worker under the "Assigned workers" rules: start no agents,
+  make no commit or push, use no network, make no edits, and return findings only under the role's output contract.
+  Never pass `--add-dir`; the read-only sandbox already reads files outside the session folder. Do not run `cd`
+  before the command or pass `--ephemeral`. Accept the result only when the rollout `turn_context` names
+  `gpt-6.1-sol` and `xhigh`.
+- If `codex` is missing, not logged in, fails with an authentication, usage-limit, model, or timeout error, or its
+  evidence is missing, use `hei5enbug-agent-setup:reviewer`. Its definition pins `claude-opus-5-5` with `high`;
+  verify the subagent record and report the substitution once. A reviewer returns findings only. The main session
+  reviews the same material once and makes the final decision. Do not run another review round.
+- Send a local-evidence research ticket to the scout route in "Investigation" and bounded public research to
+  `researcher` when its public tools are available and its settings are verified. Do not use `scout` for a review
+  role. Keep private or authenticated remote access and all edits in the main conversation.
+- For Skill Builder, trial execution and other non-review participants use the host's upper model in its evaluation
+  adapter. When a skill asks for a worker that writes trial outputs, run a separate `claude -p` process with the
+  model and effort that the skill pins.
 
 ## Implementation
 
 Coordinate implementation under [implementation execution rules](implementation-execution.md). This section
 adds only the Claude Code worker integration.
 
-- Delegated implementation uses the route that the session line "Implementation worker route" names: the
-  Codex worker (see "Codex worker" below) by default, or `hei5enbug-agent-setup:worker` when the line says Sonnet
-  worker. A user request for one route applies to that request only. `hei5enbug-agent-setup:designer` still takes
-  UI code, visual design, and diagram work. The worker and designer definitions pin `claude-sonnet-5-5` with `high` and
-  `claude-opus-5-5` with `xhigh`. Never pass a per-invocation model on an invocation or resume, because that
-  overrides the definition. Never use any other agent.
-- The bullets below apply when a plugin agent runs: the Sonnet worker, including as the Codex fallback, and the
-  designer.
+- Delegated implementation follows the route in the session line "Implementation worker route". Use the Codex
+  worker (see "Codex worker" below) by default, `hei5enbug-agent-setup:worker` for the Haiku worker when the line
+  says `haiku`, and `hei5enbug-agent-setup:sonnet-worker` for the Sonnet worker when it says `sonnet`. A user
+  request for one route applies to that request only. `hei5enbug-agent-setup:designer` still takes UI code, visual
+  design, and diagram work. The `worker` definition pins `claude-haiku-5-5` with `high`, `sonnet-worker` pins
+  `claude-sonnet-5-5` with `high`, and `designer` pins `claude-opus-5-5` with `xhigh`. Never pass a per-invocation
+  model on an invocation or resume, because that overrides the definition. Never use any other agent.
+- The bullets below apply when a plugin agent runs: the Haiku worker, including as the Codex fallback, the Sonnet
+  worker, and the designer.
 - Before the first invocation in a run, inspect only these non-secret inputs in the environment and every
   settings file: the worker definition, `CLAUDE_CODE_SUBAGENT_MODEL` and `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`,
   effort overrides such as `CLAUDE_CODE_EFFORT_LEVEL`, effort caps such as `maxEffortLevel` or organization
@@ -64,12 +87,12 @@ adds only the Claude Code worker integration.
 - Claude Code can reload settings during a session, and a forced subagent model overrides the definition.
   Recheck these inputs before every follow-up that carries implementation work.
 - Selecting GPT as Claude Code's main model does not change this host, its tools, permissions, agent definitions,
-  or execution rules. Preserve the worker's pinned model and effort.
-- Accept the host's subagent record, such as `/tasks` or the subagent transcript, as evidence when it names
-  `claude-sonnet-5-5` as the actual model and `high` as the effort, and configuration cannot lower that
-  effort. For `designer`, the evidence is `claude-opus-5-5` with `xhigh`. Provider-internal reasoning telemetry
-  is not required. A different recorded model, a cap below the pinned effort, a contradictory override, or
-  unknown effective precedence is insufficient.
+  or execution rules. Preserve each worker definition's pinned model and effort.
+- Accept the host's subagent record, such as `/tasks` or the subagent transcript, only when it names the invoked
+  definition's pinned model and `high` as the effort: `claude-haiku-5-5` for `worker` and `claude-sonnet-5-5`
+  for `sonnet-worker`. For `designer`, the evidence is `claude-opus-5-5` with `xhigh`. Provider-internal reasoning
+  telemetry is not required. A different recorded model, a cap below the pinned effort, a contradictory override,
+  or unknown effective precedence is insufficient.
 - Read that record from the transcripts under the Claude config directory, `CLAUDE_CONFIG_DIR` or `~/.claude`,
   in `projects/<project>/`. The session transcript's launch result names the worker's `agentId` and
   `resolvedModel`, and `<session-id>/subagents/agent-<agentId>.jsonl` names `model` and `effort` on each
@@ -103,4 +126,4 @@ adds only the Claude Code worker integration.
   entries. Accept nothing else.
 - Fallback: when `codex` is missing or not logged in, a run ends with an authentication, usage-limit, model, or
   timeout error, or the evidence is missing, inspect the partial diff, then give the task to
-  `hei5enbug-agent-setup:worker` and report the substitution once.
+  `hei5enbug-agent-setup:worker` (the Haiku worker) and report the substitution once.

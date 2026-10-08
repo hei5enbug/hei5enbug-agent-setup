@@ -38,7 +38,7 @@ class ResearcherContractTest(unittest.TestCase):
         self.assertEqual(value(header, "name"), "researcher")
         self.assertEqual(allowed, {"Read", "Grep", "Glob", "WebSearch", "WebFetch"})
         self.assertTrue({"Agent", "Bash", "Edit", "Write", "NotebookEdit"}.issubset(denied))
-        self.assertEqual(value(header, "model"), "claude-sonnet-5-5")
+        self.assertEqual(value(header, "model"), "claude-haiku-5-5")
         self.assertEqual(value(header, "effort"), "medium")
 
     def test_Codex_역할은_읽기전용이고_모델_ID를_고정하지_않는다(self):
@@ -81,8 +81,8 @@ class ResearcherContractTest(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, combined)
 
-    def test_Claude_manifest는_기존_역할과_researcher를_등록한다(self):
-        """Claude manifest는 기존 역할과 designer를 유지하면서 researcher를 한 번만 등록한다."""
+    def test_Claude_manifest는_researcher와_reviewer를_등록한다(self):
+        """Claude manifest는 기존 역할을 유지하면서 researcher와 reviewer를 한 번씩 등록한다."""
         # Given
         manifest = json.loads((REPO_ROOT / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
 
@@ -91,6 +91,7 @@ class ResearcherContractTest(unittest.TestCase):
 
         # Then
         self.assertEqual(agents.count("./agents/researcher.md"), 1)
+        self.assertEqual(agents.count("./agents/reviewer.md"), 1)
         self.assertIn("./agents/scout.md", agents)
         self.assertIn("./agents/worker.md", agents)
         self.assertIn("./agents/designer.md", agents)

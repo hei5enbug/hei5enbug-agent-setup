@@ -92,7 +92,7 @@ Prioritize by impact. Focus on changes that would have changed the outcome.
 
 ### Step 8: Write Analysis Results
 
-Save structured analysis to `{output_path}`.
+Save structured analysis to `{output_path}`. When you run read-only, return this exact JSON in your reply instead; the coordinating session saves it.
 
 ## Output Format
 
@@ -179,7 +179,8 @@ Examples:
 
 ### Step 6: Write Notes
 
-Save notes to `{output_path}` as a JSON array of strings. Write the observations from Step 5, one string per
+Save notes to `{output_path}` as a JSON array of strings. When you run read-only, return this array in your reply
+instead; the coordinating session saves it. Write the observations from Step 5, one string per
 note.
 
 ## Guidelines
