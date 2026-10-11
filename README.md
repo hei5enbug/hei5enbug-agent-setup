@@ -168,6 +168,10 @@ separate picker row, but you can start it with `--model gpt-6-luna`. The Mod can
 pins do not change. If you save a GPT default, an ordinary Claude session refuses the request before any provider
 request; restore a Claude default with `/model claude-opus-5-5`.
 
+When resuming with `--resume`, keep tools used earlier in the conversation available. Removing their definitions
+with `--tools` causes `unknown_tool` before a GPT provider request. Restrict execution through Claude Code's
+permissions instead; retaining a tool definition does not grant permission to run it.
+
 The gateway retries temporary failures for at most three total provider attempts, within 60 seconds of the first
 recoverable failure. It waits 1 then 2 seconds, plus 0–0.5 seconds of jitter. Before visible text it retries the
 same request; after visible text it can continue while keeping delivered text, though the wording may differ.
