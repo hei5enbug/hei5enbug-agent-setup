@@ -141,9 +141,46 @@ Claude Code에서는 `config/claude-mod.json`이 mod `hooks/mod/register.js`를 
 
 ### Claude Code에서 GPT 사용
 
-mod는 고정한 GPT 모델로 가는 요청을 추론 전에 거부합니다. 이 거부는 항상 켜져 있으며 토글이 없습니다.
-Claude Code의 mod API가 도구 입력 스키마를 제공하지 않아 아직 이 경로를 쓸 수 없습니다.
-헬퍼, 테스트, 설계 기록은 `gpt-route` 브랜치에 보존되어 있습니다.
+메인 모델로 고정한 `gpt-6.1-sol`과 `gpt-6-luna`는 로컬 게이트웨이를 통해 사용할 수 있습니다. Claude 모델과
+서브에이전트는 기존 Claude 로그인과 역할별 모델 고정 설정을 그대로 사용합니다. GPT 인증 정보는 별도의 보호 프로필에
+저장하며 헬퍼는 Codex 인증 정보를 읽지 않습니다. 기본 브라우저에서 ChatGPT 계정에 로그인하며 GPT 요청은 사용자의
+ChatGPT 플랜 사용량에 반영됩니다. API 키 프로필은 별도로 과금되는 OpenAI API 사용량을 쓰므로 사용자가 명시적으로 선택해야 합니다.
+런처는 프로필이나 과금 방식을 자동으로 바꾸지 않습니다.
+
+아래 헬퍼 명령은 설치된 플러그인 캐시가 아닌 저장소 소스 체크아웃에서 `claude-gpt` extra를 사용해 실행하세요.
+먼저 로그인하고 활성 프로필을 확인한 다음 해당 프로필로 Claude Code를 시작합니다.
+
+```sh
+uv run --extra claude-gpt python scripts/claude_gpt.py auth subscription
+uv run --extra claude-gpt python scripts/claude_gpt.py status
+uv run --extra claude-gpt python scripts/claude_gpt.py launch --profile <profile-id> -- [Claude arguments]
+```
+
+체크아웃의 `<major>.<minor>.<patch>` 버전과 같은 `hei5enbug-agent-setup@hei5enbug`를 설치하고 활성화하세요.
+런처는 로컬 캐시버스터 접미사를 제외하고 활성 설치본의 버전을 확인합니다.
+충돌하는 Claude 인증·API 키·게이트웨이 환경 변수나 `apiKeyHelper` 설정이 있으면 실행을 거부합니다.
+
+로컬 체크아웃을 검증할 때는 Claude 인자에 `--plugin-dir /absolute/path/to/checkout`을 추가하세요. 해당 세션에서는
+이름이 같은 설치본 대신 지정한 체크아웃의 플러그인을 읽습니다. 버전이 맞는 설치본도 여전히 필요합니다.
+`plugin list`에 버전이 일치하는 항목이 있어도 세션이 실제로 어느 Mod 파일을 읽었는지까지 보장하지는 않습니다.
+
+`/model` 선택기에서 GPT 모델을 고른 뒤 `s`를 누르면 새 세션 기본값은 바뀌지 않습니다. `Enter` 또는 `/model <name>`은
+사용자 기본값을 저장합니다. 시작할 때 `--model`을 지정하면 저장된 기본값은 그대로 유지됩니다. `gpt-6-luna`는
+별도 선택기 항목이 없지만 `--model gpt-6-luna`로 시작할 수 있습니다. mod는 기본 모델을 설정할 수 없고 역할별 모델
+고정 설정도 바꾸지 않습니다. GPT를 기본값으로 저장하면 일반 Claude 세션은 요청을 공급자에 보내기 전에 거부합니다.
+`/model claude-opus-5-5`를 입력해 Claude 기본값을 복구하세요.
+
+게이트웨이는 복구 가능한 오류가 처음 발생한 뒤 60초 동안 요청 횟수를 최대 세 번으로 제한합니다. 대기 시간은 1초, 2초이며 각각
+0–0.5초의 무작위 지연이 더해집니다. 텍스트를 보내기 전에는 같은 요청을 재시도합니다. 텍스트를 보낸 뒤에는 이미 전달한
+내용을 유지하며 이어서 응답할 수 있지만 표현은 달라질 수 있습니다. 완료된 도구 호출은 다시 실행하지 않습니다.
+인증, 사용량 한도, 잘못된 입력 등 종료해야 하는 오류는 즉시 중단합니다. 사용자가 취소하면 진행 중인 요청을 닫고
+재시도도 멈춥니다. 공급자나 과금 방식은 자동으로 바꾸지 않습니다. ChatGPT 플랜 사용 한도 오류가 나면
+ChatGPT Settings > Usage를 확인하세요. 초기화 시각은 예측하지 않습니다. 원인을 알 수 없는 `429`는 사용량 한도라는
+근거가 아니므로 재시도 없이 중단합니다.
+
+Claude Code가 종료되면 런처는 로컬 게이트웨이를 중지하고 포트를 닫습니다. 설치된 플러그인 캐시나 Claude 설정은
+수정하지 않지만, `Enter` 또는 `/model <name>`으로 저장한 기본값은 남을 수 있습니다.
+중단된 응답을 그대로 이어 간다고 보장하지는 않습니다.
 
 ### 응답 언어
 
@@ -211,7 +248,8 @@ get, list, search, read, fetch, query, download 같은 읽기 동사로 시작�
 | `~/.codex/AGENTS.md`의 서브에이전트 허용 블록 | 해당 없음 | `HEI5ENBUG_SUBAGENT_POLICY` |
 | 질문 기능 플래그 | 해당 없음 | `HEI5ENBUG_CODEX_ASK_TOOL` |
 
-GPT 거부는 항상 켜져 있습니다. 세션 지침과 운영 규칙에는 토글이 없으며, 끄려면 플러그인 자체를 비활성화합니다.
+런처 환경이 일치하지 않으면 mod는 고정 GPT 요청을 공급자에 보내기 전에 거부합니다. 이 거부에는 토글이 없습니다.
+세션 지침과 운영 규칙도 토글이 없으며, 끄려면 플러그인 자체를 비활성화합니다.
 
 ## 플러그인 설치
 
