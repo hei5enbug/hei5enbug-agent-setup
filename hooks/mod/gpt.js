@@ -1,29 +1,58 @@
 const GPT_MODELS = Object.freeze(["gpt-6.1-sol", "gpt-6-luna"]);
 
 export const UNSUPPORTED_HOST_MESSAGE =
-  "GPT 요청을 처리할 수 없습니다. 호스트에 완전한 도구 입력 스키마가 없고 재개 후 고정된 시스템 프롬프트 접근도 미검증이므로 GPT 연결이 비활성화되어 있습니다. Claude Code를 업데이트해도 이 경로는 자동으로 활성화되지 않습니다.";
+  "GPT 요청을 처리할 수 없습니다. 이 플러그인 버전과 일치하는 활성 설치본을 사용하고, 소스 체크아웃에서 `uv run --extra claude-gpt python scripts/claude_gpt.py launch --profile <profile-id> -- <Claude arguments>`로 Claude Code를 시작하세요. `/model` 선택기에서 `s`를 누르면 새 세션 기본값은 바뀌지 않습니다. `Enter` 또는 `/model <name>`은 사용자 기본값을 저장합니다. 일반 Claude 세션에서 거부되면 `/model claude-opus-5-5`를 입력해 기본값을 복구하세요. Mod는 기본 모델을 설정할 수 없습니다.";
+
+const GPT_FAILURE_MESSAGE =
+  "GPT 요청을 전달하는 중 오류가 발생해 중단했습니다.";
 
 export function isPinnedGptModel(model) {
   return typeof model === "string" && GPT_MODELS.includes(model);
 }
 
+function isMainGptTurn(event) {
+  return event?.agentId === undefined && isPinnedGptModel(event?.model);
+}
+
+export async function hasMatchingGptGateway($) {
+  try {
+    const gatewayUrl = await $.env.get("HEI5ENBUG_GPT_GATEWAY_URL");
+    const anthropicBaseUrl = await $.env.get("ANTHROPIC_BASE_URL");
+    return typeof gatewayUrl === "string" && gatewayUrl.length > 0 && gatewayUrl === anthropicBaseUrl;
+  } catch {
+    return false;
+  }
+}
+
+async function* refusal(event, message) {
+  yield { kind: "text", index: 0, text: message };
+  yield { kind: "stop", stopReason: "refusal", usage: null };
+  return {
+    turnId: event.turnId,
+    index: event.index,
+    answer: message,
+    toolUses: [],
+    stopReason: "refusal",
+    usage: null,
+  };
+}
+
 export function registerGpt(on) {
   on("turn.step", { model: ["gpt-6.1-sol", "gpt-6-luna"] }, async function* ($, event, next) {
-    if (event.agentId !== undefined || !isPinnedGptModel(event.model)) {
+    if (!isMainGptTurn(event)) {
       return yield* next(event);
     }
 
-    yield { kind: "text", index: 0, text: UNSUPPORTED_HOST_MESSAGE };
-    yield { kind: "stop", stopReason: "refusal", usage: null };
-    return {
-      turnId: event.turnId,
-      index: event.index,
-      answer: UNSUPPORTED_HOST_MESSAGE,
-      toolUses: [],
-      stopReason: "refusal",
-      usage: null,
-    };
+    if (!(await hasMatchingGptGateway($))) {
+      return yield* refusal(event, UNSUPPORTED_HOST_MESSAGE);
+    }
+
+    return yield* next(event);
   }).catch(async function* ($, event, next) {
+    if (isMainGptTurn(event)) {
+      return yield* refusal(event, GPT_FAILURE_MESSAGE);
+    }
+
     return yield* next(event);
   });
 }

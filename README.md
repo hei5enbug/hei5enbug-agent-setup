@@ -139,9 +139,46 @@ directly.
 
 ### GPT in Claude Code
 
-The mod refuses requests to the pinned GPT models before any inference. This refusal is always on and has no toggle.
-Claude Code's mod API does not expose tool input schemas, so this route cannot work yet.
-The helper, its tests, and the design records are preserved on the `gpt-route` branch.
+The pinned main models `gpt-6.1-sol` and `gpt-6-luna` are available through a local gateway. Claude models and
+subagents keep using your Claude login and existing role pins. GPT credentials stay in a dedicated protected
+profile; the helper never reads Codex credentials. Browser sign-in uses your ChatGPT plan. An API-key profile uses
+separately billed OpenAI API usage and must be selected explicitly. The launcher never changes profiles or billing
+modes automatically.
+
+Run the helper from a source checkout with the `claude-gpt` extra, not from the installed plugin cache. Sign in,
+check the active profile, then launch Claude Code with that profile:
+
+```sh
+uv run --extra claude-gpt python scripts/claude_gpt.py auth subscription
+uv run --extra claude-gpt python scripts/claude_gpt.py status
+uv run --extra claude-gpt python scripts/claude_gpt.py launch --profile <profile-id> -- [Claude arguments]
+```
+
+Install and enable `hei5enbug-agent-setup@hei5enbug` at the checkout's `<major>.<minor>.<patch>` version. The launcher
+checks the enabled installation's version, ignoring a local cachebuster suffix. It refuses
+conflicting Claude authentication, API-key, or gateway environment settings and `apiKeyHelper` configuration.
+
+For local checkout verification, add `--plugin-dir /absolute/path/to/checkout` to the Claude arguments. This loads
+that plugin for the session in place of the installed copy with the same name. The matching installation is still
+required; a matching entry in `plugin list` alone does not prove which local Mod files the session loaded.
+
+In the `/model` picker, press `s` to choose a GPT model without saving it as the default for new sessions. `Enter`
+or `/model <name>` saves the user default; starting with `--model` keeps the saved default. `gpt-6-luna` has no
+separate picker row, but you can start it with `--model gpt-6-luna`. The Mod cannot set a default model, and role
+pins do not change. If you save a GPT default, an ordinary Claude session refuses the request before any provider
+request; restore a Claude default with `/model claude-opus-5-5`.
+
+The gateway retries temporary failures for at most three total provider attempts, within 60 seconds of the first
+recoverable failure. It waits 1 then 2 seconds, plus 0–0.5 seconds of jitter. Before visible text it retries the
+same request; after visible text it can continue while keeping delivered text, though the wording may differ.
+Completed tool calls are never replayed. Authentication, quota, invalid input, and other terminal errors stop.
+Cancellation closes the active request. There is no automatic provider or billing fallback. For a ChatGPT plan
+usage-limit error, check ChatGPT Settings > Usage; the helper does not predict a reset time. An unknown `429` stops
+as an unclassified error, not as proof of a quota limit.
+
+When Claude exits, the launcher stops the local gateway and releases its port. It does not edit the installed
+plugin cache or Claude settings, though a default saved with `Enter` or `/model <name>` can remain. Exact
+resumption of an interrupted response is not guaranteed.
 
 ### Response language
 
@@ -222,8 +259,9 @@ session. A value of `false`, `0`, `off`, or `no`, in any letter case, turns a bo
 | Subagent permission block in `~/.codex/AGENTS.md` | Not applicable | `HEI5ENBUG_SUBAGENT_POLICY` |
 | Question tool flag | Not applicable | `HEI5ENBUG_CODEX_ASK_TOOL` |
 
-The GPT refusal is always on. The session instructions and operating rules have no toggle; disable the plugin itself
-to turn them off.
+Without a matching launcher environment, the Mod refuses pinned GPT requests before a provider request. This refusal
+has no toggle. The session instructions and operating rules also have no toggle; disable the plugin itself to turn
+them off.
 
 ## Plugin installation
 
