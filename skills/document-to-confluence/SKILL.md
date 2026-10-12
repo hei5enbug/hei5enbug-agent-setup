@@ -238,11 +238,11 @@ When republishing:
 
 | Path | Contract |
 |---|---|
-| `scripts/image_size.py` | Reads PNG, JPEG, and GIF dimensions. Reports unsupported or truncated input and calculates a clamped display size. |
-| `scripts/column_widths.py` | Produces integer column-width ratios and rejects impossible floors or incomplete image constraints. |
-| `scripts/text_parity.py` | Compares text for its declared Markdown subset and reports unsupported constructs. |
-| `scripts/validate_body.py` | Checks mechanical Confluence body rules within its declared scope. |
-| `scripts/render_diagrams.mjs` | Captures elements of local HTML under valid, unique names (`id`, or `diagram-N` without one) and always closes the browser. |
+| `scripts/image_size.py` | Reads PNG, JPEG, and GIF dimensions. Reports unsupported or truncated input and calculates a clamped display size. Usage: `image_size.py [--display-width DISPLAY_WIDTH] images [images ...]`. |
+| `scripts/column_widths.py` | Produces integer column-width ratios and rejects impossible floors or incomplete image constraints. Usage: `column_widths.py --columns COLUMNS [--total TOTAL] [--char-width CHAR_WIDTH] [--padding PADDING] [--min-width MIN_WIDTH] [--wide-char WIDE_CHAR] [--narrow-char NARROW_CHAR] [--floor FLOOR]`. |
+| `scripts/text_parity.py` | Compares text for its declared Markdown subset and reports unsupported constructs. Usage: `text_parity.py [--drop DROP] [--drop-title] [--context CONTEXT] source body`. |
+| `scripts/validate_body.py` | Checks mechanical Confluence body rules within its declared scope. Usage: `validate_body.py [--attachments [ATTACHMENTS ...]] body`. |
+| `scripts/render_diagrams.mjs` | Captures elements of local HTML under valid, unique names (`id`, or `diagram-N` without one) and always closes the browser. Usage: `render_diagrams.mjs --html FILE --out DIR [--selector CSS] [--scale N] [--browser PATH] [--strip-prefix PREFIX] [--no-sandbox]`. |
 | `assets/diagram-template.html` | Provides a starting point for consistent HTML and CSS diagrams. |
 
-Run each script with `--help` for its exact interface.
+Run each script with its usage line above. Read `--help` only when the usage line fails.

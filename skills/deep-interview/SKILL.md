@@ -1,13 +1,10 @@
 ---
 name: deep-interview
 description: >-
-  Conduct a rigorous Socratic requirements interview before implementation. Cover topology
-  discovery, evidence-backed questions, ambiguity scoring, contradiction handling, closure gates,
-  and an execution-ready specification. Use only when the user explicitly asks to run a deep
-  interview, by naming the skill or by invoking its command. Do not start it because a request
-  looks vague, ambitious, risky, or underspecified, and do not offer to start it unprompted. Works
-  across agent hosts with structured-question, exploration, independent-worker, and plain-text
-  fallbacks.
+  Conduct a rigorous Socratic requirements interview before implementation. Use only when the user
+  explicitly asks to run a deep interview, by naming the skill or by invoking its command. Do not
+  start it because a request looks vague, ambitious, risky, or underspecified, and do not offer to
+  start it unprompted.
 compatibility: >-
   Works in any conversational agent host. Structured questions, repository exploration, independent
   workers, external research, and persistence are optional capabilities with in-context fallbacks.
@@ -27,7 +24,7 @@ Read these resources only when their stage is reached:
 - [`references/spec-template.md`](references/spec-template.md): when producing the final specification.
 - [`references/auto-research-greenfield.md`](references/auto-research-greenfield.md): when optional independent research can improve a greenfield question.
 - [`references/auto-answer-uncertain.md`](references/auto-answer-uncertain.md): when the user explicitly delegates a decision.
-- [`references/lateral-review-panel.md`](references/lateral-review-panel.md): at ambiguity milestones or before accepting agent-supplied assumptions.
+- [`references/lateral-review-panel.md`](references/lateral-review-panel.md): when ambiguity crosses a milestone band downward or before accepting agent-supplied assumptions.
 
 ## Invocation
 
@@ -61,7 +58,7 @@ At startup, identify available capabilities without assuming product names:
 1. **Structured ask**: use the host's native single-question UI when available. Before using the plain-text fallback, follow any host-specific mode or setup gate in `references/ask-ui.md` (read it first if its rules are not in context).
    If the gate requires user action, explain it and end the turn until the user resumes in the supported mode.
 2. **Read-only exploration**: use repository search/read tools; if unavailable, ask only for facts that cannot be observed.
-3. **Independent reasoning**: use isolated read-only subagents when available; otherwise run the same persona passes sequentially in the main context.
+3. **Independent reasoning**: use one isolated read-only reviewer call when available; otherwise run the same persona passes sequentially in the main context.
 4. **Parallelism**: parallelize independent evidence gathering when supported; sequential execution must produce the same logical result.
 5. **Persistence**: keep state in conversation by default. Write state only when the user requests resumability and approves the path.
 
@@ -171,9 +168,9 @@ Never lower ambiguity merely because another round occurred.
 
 ## Independent Review
 
-Run the lateral review in `references/lateral-review-panel.md` when ambiguity crosses a milestone band or before adopting an agent-supplied assumption.
+Run the lateral review in `references/lateral-review-panel.md` when ambiguity crosses a milestone band downward (toward lower ambiguity) or before adopting an agent-supplied assumption.
 
-Use independent contexts when the host supports them. Do not leak the intended conclusion into reviewer prompts.
+Use one isolated read-only reviewer call that returns all four persona findings when the host supports it. Do not leak the intended conclusion into the reviewer prompt.
 If isolation or subagents are unavailable, perform the same researcher, contrarian, simplifier, and architecture lenses sequentially.
 
 Fold only the highest-leverage validated finding into the next single question. Reviewers cannot change scope, approve assumptions, or declare completion.

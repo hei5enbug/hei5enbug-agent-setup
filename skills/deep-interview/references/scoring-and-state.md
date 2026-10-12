@@ -83,7 +83,7 @@ Use ontology instability as a reason to ask identity/relationship questions befo
 - `refined`: `0.30` through above threshold
 - `ready`: at or below threshold
 
-Crossing a band in either direction triggers independent review before the next question.
+Crossing a band downward (toward lower ambiguity) triggers independent review before the next question; crossing upward does not.
 
 ## Progress Report
 

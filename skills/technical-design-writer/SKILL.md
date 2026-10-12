@@ -4,11 +4,9 @@ description: >-
   Create, improve, or review technical design documents, architecture proposals, RFCs, system
   designs, data designs, API designs, and design outlines. Use when the user explicitly requests
   design work or directly invokes this skill, with phrases such as "설계 문서 작성", "설계 문서 개선",
-  "설계 문서 목차", "design doc", or "RFC review".
-  Enforce evidence, complete design coverage, explicit trade-offs, precise contracts, predictable
-  structure, natural Korean, effective tables and diagrams, and stable references. Do not use for
-  translation, generic copyediting, implementation planning, user guides, release notes, general
-  implementation, diagnosis, summarization, or code review without explicit design intent.
+  "설계 문서 목차", "design doc", or "RFC review". Do not use for translation, generic copyediting,
+  implementation planning, user guides, release notes, general implementation, diagnosis,
+  summarization, or code review without explicit design intent.
 metadata:
   version: "2.1.1"
 compatibility: >-

@@ -66,44 +66,27 @@ In commit mode the commit holds exactly the analyzed scope, and the index decide
 
 ## Step 1: Fast Context Pass
 
-Run these **read-only shell commands** first. Run them one at a time, not chained with `&&`, so a repository with no
-commits still yields the status and convention output.
+Run this **read-only** pass as one Bash call. The commands are joined with `;`, not `&&`, and each output has a
+labelled section, so a repository with no commits still yields the status and convention output. The `HEAD` check
+branches inside the same command.
+
+Default scope:
 
 ```bash
-git status --short
-git rev-parse --verify HEAD
+echo '## status'; git status --short; echo '## diff'; if git rev-parse --verify -q HEAD >/dev/null; then git diff HEAD --stat; git diff HEAD --name-status; else echo 'NO HEAD'; git diff --cached --stat; git diff --cached --name-status; git diff --stat; git diff --name-status; fi; echo '## log'; git log --oneline -20 2>/dev/null; echo '## convention'; grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(메시지|규칙|컨벤션|형식)|^[[:space:]]*[-*]?[[:space:]]*커밋:|(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?: *\[|(\[[^]]+\]|#[0-9A-Za-z]+) *(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?:' AGENTS.md CONTRIBUTING.md .github/CONTRIBUTING.md CLAUDE.md .gitmessage 2>/dev/null | head -10
 ```
 
-If `git rev-parse --verify HEAD` fails, the repository has no commits yet: there is no history to learn a style from,
-and every diff below compares against the empty tree. Say so in the answer and use conventional commits with lowercase.
-
-With a `HEAD` (default scope):
+User-named staged-only scope:
 
 ```bash
-git diff HEAD --stat
-git diff HEAD --name-status
+echo '## status'; git status --short; echo '## diff'; git rev-parse --verify -q HEAD >/dev/null || echo 'NO HEAD'; git diff --cached --stat; git diff --cached --name-status; echo '## log'; git log --oneline -20 2>/dev/null; echo '## convention'; grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(메시지|규칙|컨벤션|형식)|^[[:space:]]*[-*]?[[:space:]]*커밋:|(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?: *\[|(\[[^]]+\]|#[0-9A-Za-z]+) *(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?:' AGENTS.md CONTRIBUTING.md .github/CONTRIBUTING.md CLAUDE.md .gitmessage 2>/dev/null | head -10
 ```
 
-Without a `HEAD` (default scope):
+For named paths, append `-- <paths>` to every `git diff` command in the same one-command form.
 
-```bash
-git diff --cached --stat
-git diff --cached --name-status
-git diff --stat
-git diff --name-status
-```
-
-For a user-named staged-only scope, replace `git diff HEAD` with `git diff --cached` in every command. For named paths,
-append `-- <paths>`.
-
-Then, in both cases:
-
-```bash
-git log --oneline -20
-grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(메시지|규칙|컨벤션|형식)|^[[:space:]]*[-*]?[[:space:]]*커밋:|(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?: *\[|(\[[^]]+\]|#[0-9A-Za-z]+) *(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?:' AGENTS.md CONTRIBUTING.md .github/CONTRIBUTING.md CLAUDE.md .gitmessage 2>/dev/null | head -10
-```
-
-`git log` fails without a `HEAD`; treat that as an empty history, not as an error.
+A `NO HEAD` line means the repository has no commits yet: there is no history to learn a style from, and every diff
+compares against the empty tree. Say so in the answer and use conventional commits with lowercase. `git log` fails
+without a `HEAD`; the empty `## log` section is an empty history, not an error.
 
 Use this pass to answer:
 - Are there any staged, unstaged, or untracked changes inside the scope?
@@ -313,5 +296,5 @@ This skill never pushes. When the same request also asks to push, push after the
   one line, and neither waits for a reply: when the suggestions carry a placeholder such as `[TICKET]`, tell the
   human to replace it and not to commit it verbatim; when "Subject Order" moved the prefix ahead of an identifier
   the sampled history puts first, say that the suggestions intentionally depart from that history.
-- Minimize tool calls: one fast context command is usually enough; run targeted follow-up commands only when needed.
+- Minimize tool calls: run Step 1 as the single compound Bash call; run targeted follow-up commands only when needed.
 - If these suggestions are later used to create a commit, keep the message to the single subject line and apply "Absolute Rule: No Trailers" to the message that actually reaches `git commit`.

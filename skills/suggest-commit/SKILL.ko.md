@@ -62,44 +62,26 @@ amend, merge, revert, cherry-pick 또는 기존 커밋을 고쳐 쓰는 요청�
 
 ## 1단계: 빠른 컨텍스트 확인
 
-다음 읽기 전용 셸 명령을 먼저 실행한다. 커밋이 없는 저장소에서도 상태와 규칙 출력을 얻을 수 있도록
-`&&`로 연결하지 않고 하나씩 실행한다.
+다음 **읽기 전용** 확인을 Bash 한 번의 호출로 실행한다. 명령은 `&&`가 아니라 `;`로 잇고 출력마다 구획 제목을
+붙이므로, 커밋이 없는 저장소에서도 상태와 규칙 출력을 얻는다. `HEAD` 확인은 같은 명령 안에서 분기한다.
+
+기본 범위:
 
 ```bash
-git status --short
-git rev-parse --verify HEAD
+echo '## status'; git status --short; echo '## diff'; if git rev-parse --verify -q HEAD >/dev/null; then git diff HEAD --stat; git diff HEAD --name-status; else echo 'NO HEAD'; git diff --cached --stat; git diff --cached --name-status; git diff --stat; git diff --name-status; fi; echo '## log'; git log --oneline -20 2>/dev/null; echo '## convention'; grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(메시지|규칙|컨벤션|형식)|^[[:space:]]*[-*]?[[:space:]]*커밋:|(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?: *\[|(\[[^]]+\]|#[0-9A-Za-z]+) *(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?:' AGENTS.md CONTRIBUTING.md .github/CONTRIBUTING.md CLAUDE.md .gitmessage 2>/dev/null | head -10
 ```
 
-`git rev-parse --verify HEAD`가 실패하면 아직 커밋이 없는 저장소다. 학습할 기록이 없고 아래 diff는 빈 트리와
-비교한다. 답변에서 이를 알리고 소문자로 된 conventional commit 형식을 사용한다.
-
-`HEAD`가 있는 기본 범위에서는 다음 명령을 사용한다.
+사용자가 스테이징된 변경만 지정한 범위:
 
 ```bash
-git diff HEAD --stat
-git diff HEAD --name-status
+echo '## status'; git status --short; echo '## diff'; git rev-parse --verify -q HEAD >/dev/null || echo 'NO HEAD'; git diff --cached --stat; git diff --cached --name-status; echo '## log'; git log --oneline -20 2>/dev/null; echo '## convention'; grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(메시지|규칙|컨벤션|형식)|^[[:space:]]*[-*]?[[:space:]]*커밋:|(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?: *\[|(\[[^]]+\]|#[0-9A-Za-z]+) *(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?:' AGENTS.md CONTRIBUTING.md .github/CONTRIBUTING.md CLAUDE.md .gitmessage 2>/dev/null | head -10
 ```
 
-`HEAD`가 없는 기본 범위에서는 다음 명령을 사용한다.
+경로가 지정되면 같은 한 명령 형태에서 모든 `git diff` 명령에 `-- <paths>`를 덧붙인다.
 
-```bash
-git diff --cached --stat
-git diff --cached --name-status
-git diff --stat
-git diff --name-status
-```
-
-사용자가 스테이징된 변경만 지정하면 모든 명령의 `git diff HEAD`를 `git diff --cached`로 바꾼다.
-경로가 지정되면 `-- <paths>`를 덧붙인다.
-
-두 경우 모두 다음 명령을 실행한다.
-
-```bash
-git log --oneline -20
-grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(메시지|규칙|컨벤션|형식)|^[[:space:]]*[-*]?[[:space:]]*커밋:|(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?: *\[|(\[[^]]+\]|#[0-9A-Za-z]+) *(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?:' AGENTS.md CONTRIBUTING.md .github/CONTRIBUTING.md CLAUDE.md .gitmessage 2>/dev/null | head -10
-```
-
-`HEAD`가 없으면 `git log`가 실패한다. 오류가 아니라 빈 기록으로 처리한다.
+`NO HEAD` 줄은 아직 커밋이 없는 저장소라는 뜻이다. 학습할 기록이 없고 모든 diff는 빈 트리와 비교한다.
+답변에서 이를 알리고 소문자로 된 conventional commit 형식을 사용한다. `HEAD`가 없으면 `git log`가 실패한다.
+비어 있는 `## log` 구획은 오류가 아니라 빈 기록이다.
 
 이 단계에서 다음 내용을 확인한다.
 
@@ -313,6 +295,6 @@ grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(�
   있으며 어느 쪽도 답변을 기다리지 않는다. `[TICKET]` 같은 자리 표시자가 있으면 사용자가 바꿔야 하며
   그대로 커밋하지 말라고 알린다. "제목 순서"가 표본 기록이 앞세우는 식별자보다 접두사를 앞으로 옮겼으면
   추천이 그 기록에서 의도적으로 벗어났다고 알린다.
-- 도구 호출을 최소화한다. 보통 빠른 컨텍스트 명령 한 번으로 충분하며 필요할 때만 대상 명령을 추가한다.
+- 도구 호출을 최소화한다. 1단계를 복합 Bash 호출 하나로 실행하고 필요할 때만 대상 명령을 추가한다.
 - 나중에 추천으로 커밋을 만들더라도 메시지는 제목 한 줄로 유지하고 실제 `git commit`에 전달되는 메시지에도
   트레일러 금지 절대 규칙을 적용한다.
