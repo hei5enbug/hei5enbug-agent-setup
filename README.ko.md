@@ -385,8 +385,7 @@ When hei5enbug-agent-setup is active, use subagents according to its situation-b
 않습니다. `HEI5ENBUG_CODEX_ASK_TOOL=off`로 설정하면 기능을 다시 끄지만, 플러그인이 켠 경우에만 끄며 직접 켠 기능은 그대로
 둡니다. 실패한 단계는 다음 세션 시작 때 다시 시도하며, 세션 지침 로드를 막지 않습니다. 실제 실행에는 호스트 규칙, 훅 신뢰와
 사용 가능한 도구가 계속 적용됩니다.
-[공식 Codex 서브에이전트 계약](https://learn.chatgpt.com/docs/agent-configuration/subagents)과
-[평가 결론](https://github.com/hei5enbug/hei5enbug-agent-setup/blob/gpt-route/docs/subagent-policy-decision.ko.md)을 참고하세요.
+[공식 Codex 서브에이전트 계약](https://learn.chatgpt.com/docs/agent-configuration/subagents)을 참고하세요.
 
 ## 작업 효율
 

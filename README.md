@@ -398,8 +398,7 @@ It also enables the `default_mode_request_user_input` feature when `codex featur
 never edits anything outside it. Setting `HEI5ENBUG_CODEX_ASK_TOOL=off` disables the feature again, but only when the
 plugin enabled it; a feature you enabled yourself stays on. A failed step is retried at the next session start and
 never stops the session instructions from loading. Hosts, hook trust, and available tools still govern execution.
-See the official [Codex subagent contract](https://learn.chatgpt.com/docs/agent-configuration/subagents)
-and the [evaluation conclusion](https://github.com/hei5enbug/hei5enbug-agent-setup/blob/gpt-route/docs/subagent-policy-decision.md).
+See the official [Codex subagent contract](https://learn.chatgpt.com/docs/agent-configuration/subagents).
 
 ## Work efficiency
 
