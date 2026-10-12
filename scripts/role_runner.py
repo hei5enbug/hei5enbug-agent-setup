@@ -271,17 +271,19 @@ def execute(args: argparse.Namespace, root: Path, cwd: str) -> tuple[str, str, d
             raise RunnerError(EXIT_RUN, f"Claude reported an error: {str(result.get('result'))[:2000]}")
         evidence = verify_claude(result, model)
         text = result.get("result")
-        result_path.write_text(text if isinstance(text, str) else "", encoding="utf-8")
+        if not isinstance(text, str) or not text.strip():
+            raise RunnerError(EXIT_EVIDENCE, "Claude returned no answer")
+        result_path.write_text(text, encoding="utf-8")
         return "claude", model, evidence
     command = codex_command(role, model, cwd, args.result, args.add_dirs)
     try:
         stdout = run_child(role, command, prompt, cwd, args.timeout)
         evidence = verify_codex(stdout, model)
+        if not result_path.is_file() or not result_path.read_text(encoding="utf-8").strip():
+            raise RunnerError(EXIT_EVIDENCE, f"Codex wrote no answer at {result_path}")
     except RunnerError:
         discard(result_path)
         raise
-    if not result_path.is_file():
-        raise RunnerError(EXIT_EVIDENCE, f"Codex wrote no result file at {result_path}")
     return "codex", model, evidence
 
 
@@ -306,6 +308,11 @@ def validate(args: argparse.Namespace) -> None:
         raise UsageError("--timeout must be a positive number of seconds")
     if not Path(args.assignment).is_file():
         raise UsageError(f"Assignment file not found: {args.assignment}")
+    result = Path(args.result)
+    if result.resolve() == Path(args.assignment).resolve():
+        raise UsageError("--assignment and --result must name different files")
+    if result.is_dir() or not result.parent.is_dir():
+        raise UsageError(f"Result must name a file in an existing directory: {args.result}")
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -540,6 +540,60 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(3, completed.returncode)
         self.assertFalse(self.result.exists())
 
+    def test_답변이_없으면_검증된_기록만으로_성공하지_않는다(self):
+        """모델 기록이 맞아도 답변이 없거나 공백뿐이면 검증 실패로 처리한다."""
+        for arguments, message in (
+            (["scout"], ""),
+            (["scout"], " \n"),
+            (["reviewer", "--model", "claude-opus-5-5"], None),
+            (["reviewer", "--model", "claude-opus-5-5"], ""),
+            (["reviewer", "--model", "claude-opus-5-5"], " \n"),
+        ):
+            with self.subTest(arguments=arguments, message=message):
+                # Given
+                config = {"message": message}
+
+                # When
+                completed = self.run_runner(*arguments, config=config)
+
+                # Then
+                self.assertEqual(4, completed.returncode)
+                self.assertFalse(self.status(completed)["verified"])
+                self.assertFalse(self.result.exists())
+
+    def test_결과_경로가_할당_파일이면_실행하지_않고_원본을_보존한다(self):
+        """결과 경로가 할당 파일 자체나 그 심볼릭 링크이면 사용 오류로 거부한다."""
+        for alias in (False, True):
+            with self.subTest(alias=alias):
+                # Given
+                original = self.assignment.read_text()
+                result = self.assignment
+                if alias:
+                    result = self.base / "assignment-link.md"
+                    result.symlink_to(self.assignment)
+
+                # When
+                completed = self.run_runner("scout", "--result", str(result), result=False)
+
+                # Then
+                self.assertEqual(2, completed.returncode)
+                self.assertEqual(original, self.assignment.read_text())
+                self.assertFalse(self.log.exists())
+
+    def test_결과_경로가_디렉터리이면_상태_JSON으로_사용_오류를_알린다(self):
+        """결과 파일 대신 디렉터리를 지정하면 자식 실행 전에 종료 코드 2를 반환한다."""
+        # Given
+        self.result.mkdir()
+
+        # When
+        completed = self.run_runner("scout")
+
+        # Then
+        self.assertEqual(2, completed.returncode)
+        self.assertEqual(2, self.status(completed)["exit"])
+        self.assertTrue(self.result.is_dir())
+        self.assertFalse(self.log.exists())
+
     def test_사용_오류는_종료_코드_2이다(self):
         """역할 규칙을 어긴 인자와 빠진 인자는 모두 종료 코드 2이고 자식을 실행하지 않는다."""
         # Given

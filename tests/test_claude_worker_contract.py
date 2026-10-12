@@ -311,11 +311,11 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
             self.assertIn(phrase, section)
         self.assertNotIn("Use this path only when that follow-up keeps", section)
 
-    def test_역할_고정_표시가_있으면_세션당_한_번_상한만_확인하고_고정과_차단을_수락_증거로_쓴다(self):
-        """세션 컨텍스트에 역할 고정 표시 줄이 있으면 위임마다 설정 파일이나 기록을 읽지 않고 한 번의 상한 확인과 모드의 고정을 증거로 쓴다."""
+    def test_mod가_주입한_역할_고정_표시가_있으면_세션당_한_번_상한만_확인한다(self):
+        """등록된 mod의 실제 역할 고정 표시가 있으면 위임마다 설정이나 기록을 읽지 않고 고정과 차단을 수락 증거로 쓴다."""
         # Given
         expected = (
-            "When the session context has the line `Role pinning: active`",
+            "When the session context has the line `hei5enbug-agent-setup mod: role pinning active`",
             "blocks tool calls from a subagent that answered on another model",
             "Once per session, check only forced-model and effort limits",
             "A forced model or a cap below the pinned effort stops plugin-agent delegation.",

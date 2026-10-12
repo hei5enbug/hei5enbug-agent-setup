@@ -132,8 +132,6 @@ def render_context(root: Path, host: str, kind: str = "main") -> str:
                 f"\nImplementation worker route: {route}.\n"
                 f"Review model: `{review}`.\n"
             )
-            if plugin_toggles.enabled("role_pinning"):
-                context += "Role pinning: active (`role_pinning`).\n"
     if len(context.encode("utf-8")) > limit:
         raise ValueError("Bundled instructions exceed the context budget; move details to conditional references")
     return context

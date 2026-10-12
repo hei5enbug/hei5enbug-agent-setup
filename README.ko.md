@@ -138,8 +138,9 @@ Claude Code에서는 `config/claude-mod.json`이 mod `hooks/mod/register.js`를 
 `sonnet-worker`는 `claude-sonnet-5-5`와 `high`, `designer`는 `claude-opus-5-5`와 `xhigh`, `reviewer`는
 `claude-opus-5-5`와 `high`를 씁니다.
 다른 모델로 응답한 서브에이전트는 중단됩니다. 이후 요청은 거부되고 도구 호출은 막히며 결과는 경고로 바뀝니다.
-`role_pinning` 옵션이 켜져 있으면 세션 컨텍스트에 `Role pinning: active` 줄이 들어가고, 메인 세션은 준비 확인 없이
-작업 지시를 보내고 위임마다 하는 설정·서브에이전트 기록 확인도 건너뜁니다.
+역할 고정이 활성화된 경우에만 등록된 mod `prompt.context` 훅이 세션 컨텍스트에
+`hei5enbug-agent-setup mod: role pinning active` 줄을 추가합니다. 이 줄이 있으면 메인 세션은 작업 지시를 바로 보내고
+위임마다 설정과 서브에이전트 기록을 확인하지 않아도 됩니다.
 
 ### Claude Code에서 GPT 사용
 

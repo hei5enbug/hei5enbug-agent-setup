@@ -78,8 +78,9 @@ python3 <Source directory>/scripts/role_runner.py <scout|researcher|reviewer|wor
 - 호출 단위 모델은 정의보다 우선하므로 플러그인 에이전트를 호출하거나 재개할 때 넘기지 않는다. 정의에는 공유 모델
   라우팅이 정리한 모델과 사고 강도가 고정되어 있다.
 - 아래 항목은 플러그인 에이전트가 실행될 때마다 적용한다. 실행기의 대체 경로, Haiku·Sonnet worker, designer가 해당한다.
-- 세션 컨텍스트에 `Role pinning: active` 줄이 있으면 플러그인 Mod가 요청마다 각 역할의
-  모델과 사고 강도를 고정하고, 다른 모델로 응답한 서브에이전트의 도구 호출을 막는다. 세션당 한 번만 환경 변수와 모든
+- 세션 컨텍스트에 `hei5enbug-agent-setup mod: role pinning active` 줄이 있으면 등록된 플러그인 mod의
+  `prompt.context` 훅이 역할 고정 활성 상태를 확인한 것이다. mod는 요청마다 각 역할의 모델과 사고 강도를 고정하고,
+  다른 모델로 응답한 서브에이전트의 도구 호출을 막는다. 세션당 한 번만 환경 변수와 모든
   설정 파일에서 강제 모델과 사고 강도 한도(`CLAUDE_CODE_SUBAGENT_MODEL`, `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`,
   `CLAUDE_CODE_EFFORT_LEVEL` 같은 사고 강도 재정의, `maxEffortLevel`이나 조직 한도 같은 사고 강도 상한)만 확인한다.
   강제 모델이나 고정 사고 강도보다 낮은 상한이 있으면 플러그인 에이전트 위임을 멈춘다. 그렇지 않으면 할당을 바로

@@ -88,6 +88,20 @@ class ImplementationWorkerScopeTest(unittest.TestCase):
         # Then
         self.assertIn(standalone, section)
 
+    def test_단독_검토는_플러그인_실행기_없이_같은_모델을_검증한다(self):
+        """플러그인이 없는 Claude Code에서도 읽기 전용 Codex로 검토하고 실제 모델과 사고 강도를 확인한다."""
+        # Given
+        section = adapter_section()
+
+        # When
+        normalized = " ".join(section.split())
+
+        # Then
+        self.assertIn("only when the plugin session supplies its path and invocation contract", normalized)
+        self.assertIn("In standalone use, run `codex exec` with `gpt-6-astra`, `xhigh`, and a read-only sandbox", normalized)
+        self.assertIn("verify the model and effort in its rollout `turn_context`", normalized)
+        self.assertIn("The table's reviewer fallback still applies.", normalized)
+
     def test_시험_및_비검토_참여자는_호스트별_상위_모델을_쓴다(self):
         """Codex는 gpt-6.1-sol과 xhigh, Claude Code는 claude-opus-5-5와 high를 시험 및 비검토 작업에 쓴다."""
         # Given
