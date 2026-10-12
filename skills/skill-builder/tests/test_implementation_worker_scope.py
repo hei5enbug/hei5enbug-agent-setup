@@ -103,8 +103,8 @@ class ImplementationWorkerScopeTest(unittest.TestCase):
         for copied in ("gpt-6-luna", "claude-sonnet-5-5", "latest production", "implementation-execution.md"):
             self.assertNotIn(copied, section)
 
-    def test_검토_역할은_교차_계열_후_같은_계열_reviewer로_대체한다(self):
-        """검토 역할은 다른 모델 계열을 먼저 쓰고 CLI에 문제가 있으면 reviewer 대체 경로와 메인 검토를 한 번 쓴다."""
+    def test_검토_역할은_호스트_검토_경로_후_reviewer로_대체한다(self):
+        """검토 역할은 호스트의 검토 경로를 먼저 쓰고 문제가 있으면 reviewer 대체 경로와 메인 검토를 한 번 쓴다."""
         # Given
         section = " ".join(adapter_section().split())
 
@@ -116,8 +116,11 @@ class ImplementationWorkerScopeTest(unittest.TestCase):
         self.assertIn("Codex", routes)
         self.assertIn("claude -p", routes["Codex"][2])
         self.assertIn("reviewer", routes["Codex"][2])
-        self.assertIn("codex exec", routes["Claude Code"][2])
-        self.assertIn("reviewer", routes["Claude Code"][2])
+        self.assertIn("role_runner.py reviewer", routes["Claude Code"][2])
+        self.assertIn('the model in the session line "Review model" (default `gpt-6-astra`), `xhigh`', routes["Claude Code"][2])
+        self.assertIn("fallback `reviewer` with `claude-opus-5-5`, `high`", routes["Claude Code"][2])
+        self.assertNotIn("codex exec", routes["Claude Code"][2])
+        self.assertIn("host's review route in the table below first", section)
         self.assertIn("reviews the same material once", section)
         self.assertIn("Do not run another review round.", section)
         self.assertIn("Do not send a review role to `scout`", section)
