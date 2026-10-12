@@ -2334,3 +2334,54 @@ class TestParserReexec:
         assert completed.returncode == 0
         assert decision_of(json.loads(completed.stdout)) == "allow"
         assert not marker.exists()
+
+    @pytest.mark.parametrize(
+        "event",
+        [
+            {"tool_name": TOOL_NAME, "hook_event_name": "PermissionRequest"},
+            {"tool_name": TOOL_NAME, "hook_event_name": "PostToolUse"},
+            {"tool_name": "mcp__other__tool", "hook_event_name": "PreToolUse"},
+        ],
+    )
+    def test_claude_event_without_possible_output_never_reexecs(self, tmp_path, event):
+        """Claude의 PreToolUse가 아닌 이벤트와 다른 도구 이름은 출력이 날 수 없으므로 파서 파이썬을 실행하지 않는다."""
+        # given
+        marker = tmp_path / "executed"
+        interpreter = parser_state_dir(tmp_path) / "python"
+        interpreter.parent.mkdir(parents=True)
+        interpreter.write_text(f'#!/bin/sh\ntouch "{marker}"\n', encoding="utf-8")
+        interpreter.chmod(0o755)
+        stdin = json.dumps({**event, "tool_input": make_tool_input(PG_ID, PARSER_ONLY_ALLOW_SQL)}).encode("utf-8")
+        env = script_env(extra={"XDG_STATE_HOME": str(tmp_path)})
+        # when
+        completed = subprocess.run(
+            [sys.executable, "-c", NO_PGLAST_BOOTSTRAP, str(HOOK_PATH)], input=stdin, capture_output=True, env=env, timeout=60
+        )
+        # then
+        assert completed.returncode == 0
+        assert completed.stdout == b""
+        assert not marker.exists()
+
+    def test_reexec_passes_the_input_unchanged_and_forwards_stdout_and_exit_code(self, tmp_path):
+        """다시 실행할 때 읽은 입력을 바이트 그대로 넘기고 자식의 표준 출력과 종료 코드를 그대로 전달한다."""
+        # given
+        capture = tmp_path / "stdin.bin"
+        interpreter = parser_state_dir(tmp_path) / "python"
+        interpreter.parent.mkdir(parents=True)
+        interpreter.write_text(
+            f'#!/bin/sh\ncat > "{capture}"\nprintf \'{{"from":"child"}}\'\nexit 3\n', encoding="utf-8"
+        )
+        interpreter.chmod(0o755)
+        stdin = json.dumps(
+            {"tool_name": TOOL_NAME, "hook_event_name": "PreToolUse", "tool_input": make_tool_input(PG_ID, "SELECT '한글'")},
+            ensure_ascii=False,
+        ).encode("utf-8")
+        env = script_env(extra={"XDG_STATE_HOME": str(tmp_path)})
+        # when
+        completed = subprocess.run(
+            [sys.executable, "-c", NO_PGLAST_BOOTSTRAP, str(HOOK_PATH)], input=stdin, capture_output=True, env=env, timeout=60
+        )
+        # then
+        assert capture.read_bytes() == stdin
+        assert completed.stdout == b'{"from":"child"}'
+        assert completed.returncode == 3

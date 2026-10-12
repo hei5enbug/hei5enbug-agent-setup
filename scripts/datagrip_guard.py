@@ -25,6 +25,7 @@ When pglast is not importable and `$XDG_STATE_HOME/hei5enbug-agent-setup/sql-par
 import json
 import os
 import re
+import subprocess
 import sys
 import unicodedata
 import xml.etree.ElementTree as ET
@@ -533,22 +534,45 @@ def parser_python() -> Path:
     return Path(state) / "hei5enbug-agent-setup" / "sql-parser" / "bin" / "python"
 
 
-def reexec_with_parser() -> None:
+def output_possible(event) -> bool:
+    if not isinstance(event, dict) or event.get("tool_name") != TOOL_NAME:
+        return False
+    return detect_host() != "claude" or event.get("hook_event_name") == "PreToolUse"
+
+
+def run_with_parser(raw: bytes):
+    """Run this script under the parser interpreter with the already-read input; None when it cannot run."""
     interpreter = parser_python()
-    if pglast_parser is None and interpreter.exists() and not os.environ.get(REEXEC_GUARD):
-        os.environ[REEXEC_GUARD] = "1"
-        try:
-            os.execv(str(interpreter), [str(interpreter), str(Path(__file__).absolute()), *sys.argv[1:]])
-        except OSError:
-            pass
+    if pglast_parser is not None or not interpreter.exists() or os.environ.get(REEXEC_GUARD):
+        return None
+    try:
+        return subprocess.run(
+            [str(interpreter), str(Path(__file__).absolute()), *sys.argv[1:]],
+            input=raw,
+            stdout=subprocess.PIPE,
+            env={**os.environ, REEXEC_GUARD: "1"},
+        )
+    except OSError:
+        return None
 
 
 def main() -> int:
     if not enabled("datagrip_guard"):
         return 0
-    reexec_with_parser()
+    raw = sys.stdin.buffer.read()
     try:
-        output = handle(json.load(sys.stdin))
+        event = json.loads(raw)
+    except ValueError:
+        return 0
+    if not output_possible(event):
+        return 0
+    child = run_with_parser(raw)
+    if child is not None:
+        sys.stdout.buffer.write(child.stdout)
+        sys.stdout.buffer.flush()
+        return child.returncode if child.returncode >= 0 else 1
+    try:
+        output = handle(event)
     except Exception:
         output = None
     if output is not None:

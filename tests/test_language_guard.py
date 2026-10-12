@@ -1385,11 +1385,165 @@ class RobustnessTest(LanguageGuardCase):
             self.assertNotIn("permissionDecision", output)
 
 
+class TailWideningTest(LanguageGuardCase):
+    WINDOW = GUARD.INITIAL_TAIL_BYTES
+
+    def filler(self, size=WINDOW + 50_000):
+        count = size // 1000 + 1
+        return [claude_user("x" * 1000) for _ in range(count)]
+
+    def codex_filler(self, size=WINDOW + 50_000):
+        count = size // 1000 + 1
+        return [codex_item({"type": "reasoning", "summary": [], "encrypted_content": "x" * 1000}) for _ in range(count)]
+
+    def read_limits(self, function, event):
+        with mock.patch.object(GUARD, "read_window", wraps=GUARD.read_window) as spy:
+            value = function(event)
+        return value, [call.args[1] for call in spy.call_args_list]
+
+    def test_256KiB_안에서_찾으면_넓혀_읽지_않는다(self):
+        """도구 호출이 끝 256KiB 안에 있고 앞선 메시지 묶음도 창 안에 있으면 한 번만 읽는다."""
+        # Given
+        transcript = self.write_transcript(
+            self.filler() + [claude_user("go"), claude_assistant([text_block(ENGLISH)], "m1"), claude_assistant([tool_use_block("tool-1")], "m1")]
+        )
+        event = self.post_event(transcript)
+
+        # When
+        text, limits = self.read_limits(GUARD.preceding_progress_text, event)
+
+        # Then
+        self.assertEqual(text, ENGLISH)
+        self.assertEqual(limits, [GUARD.INITIAL_TAIL_BYTES])
+
+    def test_파일이_256KiB보다_작으면_찾지_못해도_넓혀_읽지_않는다(self):
+        """파일 전체가 창 안이면 tool_use_id가 없어도 다시 읽을 이유가 없다."""
+        # Given
+        transcript = self.write_transcript([claude_assistant([text_block(ENGLISH), tool_use_block("tool-1")])])
+        event = self.post_event(transcript, tool_use_id="missing")
+
+        # When
+        text, limits = self.read_limits(GUARD.preceding_progress_text, event)
+
+        # Then
+        self.assertIsNone(text)
+        self.assertEqual(limits, [GUARD.INITIAL_TAIL_BYTES])
+
+    def test_4MiB로_넓혀야_찾는_도구_호출은_넓혀_읽어_경고한다(self):
+        """도구 호출이 256KiB 밖이고 4MiB 안이면 넓혀 읽어 찾고 경고를 낸다."""
+        # Given
+        self.use_korean_setting()
+        transcript = self.write_transcript(
+            [claude_assistant([text_block(ENGLISH), tool_use_block("tool-1")], "m1")] + self.filler()
+        )
+        event = self.post_event(transcript)
+
+        # When
+        text, limits = self.read_limits(GUARD.preceding_progress_text, event)
+        result = self.run_guard(event)
+
+        # Then
+        self.assertEqual(text, ENGLISH)
+        self.assertEqual(limits, [GUARD.INITIAL_TAIL_BYTES, GUARD.TAIL_BYTES])
+        self.assertEqual(self.output(result)["hookSpecificOutput"]["additionalContext"], REMINDER)
+
+    def test_도구_호출은_창_안이고_같은_메시지의_설명이_창_밖이면_넓혀_읽어_경고가_유지된다(self):
+        """같은 메시지 ID의 설명 항목이 창 밖에 걸쳐 있으면 호출을 찾았어도 넓혀 읽어 경고를 놓치지 않는다."""
+        # Given
+        self.use_korean_setting()
+        long_english = ENGLISH + " " + "word " * (self.WINDOW // 5 + 1000)
+        transcript = self.write_transcript(
+            [claude_assistant([text_block(long_english)], "m1"), claude_assistant([tool_use_block("tool-1")], "m1")]
+        )
+        event = self.post_event(transcript)
+
+        # When
+        text, limits = self.read_limits(GUARD.preceding_progress_text, event)
+        result = self.run_guard(event)
+
+        # Then
+        self.assertEqual(text, long_english)
+        self.assertEqual(limits, [GUARD.INITIAL_TAIL_BYTES, GUARD.TAIL_BYTES])
+        self.assertEqual(self.output(result)["hookSpecificOutput"]["additionalContext"], REMINDER)
+
+    def test_Codex_형식은_호출_앞_메시지를_모으다_창_처음에_닿으면_넓혀_읽는다(self):
+        """경계를 만나기 전에 창의 처음에 닿으면 넓혀 읽고, 경계가 창 안에 있으면 한 번만 읽는다."""
+        # Given
+        self.use_korean_setting()
+        long_english = ENGLISH + " " + "word " * (self.WINDOW // 5 + 1000)
+        reaches_start = self.write_transcript(
+            [codex_message("assistant", long_english, "commentary"), codex_call("call-1")], name="reaches.jsonl"
+        )
+        bounded = self.write_transcript(
+            self.codex_filler() + [codex_message("user", "go"), codex_message("assistant", ENGLISH, "commentary"), codex_call("call-1")],
+            name="bounded.jsonl",
+        )
+
+        # When
+        wide, wide_limits = self.read_limits(GUARD.preceding_progress_text, self.post_event(reaches_start, tool_use_id="call-1"))
+        near, near_limits = self.read_limits(GUARD.preceding_progress_text, self.post_event(bounded, tool_use_id="call-1"))
+        result = self.run_guard(self.post_event(reaches_start, tool_use_id="call-1"), host="codex")
+
+        # Then
+        self.assertEqual(wide, long_english)
+        self.assertEqual(wide_limits, [GUARD.INITIAL_TAIL_BYTES, GUARD.TAIL_BYTES])
+        self.assertEqual(near, ENGLISH)
+        self.assertEqual(near_limits, [GUARD.INITIAL_TAIL_BYTES])
+        self.assertEqual(self.output(result)["hookSpecificOutput"]["additionalContext"], REMINDER)
+
+    def test_Stop은_창_안에서_assistant를_찾으면_넓혀_읽지_않는다(self):
+        """마지막 assistant 묶음이 창 안에 온전히 있으면 한 번만 읽는다."""
+        # Given
+        transcript = self.write_transcript(self.filler() + [claude_user("go"), claude_assistant([text_block(ENGLISH)], "m1")])
+        event = self.stop_event(None, transcript_path=transcript)
+
+        # When
+        text, limits = self.read_limits(GUARD.last_assistant_text, event)
+
+        # Then
+        self.assertEqual(text, ENGLISH)
+        self.assertEqual(limits, [GUARD.INITIAL_TAIL_BYTES])
+
+    def test_Stop은_창_안에_assistant가_없으면_넓혀_읽어_차단한다(self):
+        """창 안에 assistant 항목이 없으면 4MiB까지 넓혀 읽어 마지막 답을 찾는다."""
+        # Given
+        self.use_korean_setting()
+        transcript = self.write_transcript([claude_assistant([text_block(ENGLISH)], "m1")] + self.filler())
+        event = self.stop_event(None, transcript_path=transcript)
+
+        # When
+        text, limits = self.read_limits(GUARD.last_assistant_text, event)
+        result = self.run_guard(event)
+
+        # Then
+        self.assertEqual(text, ENGLISH)
+        self.assertEqual(limits, [GUARD.INITIAL_TAIL_BYTES, GUARD.TAIL_BYTES])
+        self.assertEqual(self.output(result)["decision"], "block")
+
+    def test_Stop은_마지막_assistant_묶음이_창_처음에서_시작하면_넓혀_읽는다(self):
+        """마지막 메시지 묶음의 앞부분이 창 밖에 걸쳐 있으면 넓혀 읽어 묶음 전체를 판정한다."""
+        # Given
+        self.use_korean_setting()
+        long_english = ENGLISH + " " + "word " * (self.WINDOW // 5 + 1000)
+        transcript = self.write_transcript(
+            [claude_assistant([text_block(long_english)], "m1"), claude_assistant([text_block(KOREAN)], "m1")]
+        )
+        event = self.stop_event(None, transcript_path=transcript)
+
+        # When
+        text, limits = self.read_limits(GUARD.last_assistant_text, event)
+
+        # Then
+        self.assertEqual(text, long_english + "\n" + KOREAN)
+        self.assertEqual(limits, [GUARD.INITIAL_TAIL_BYTES, GUARD.TAIL_BYTES])
+
+
 class RegistrationTest(LanguageGuardCase):
     def test_hooks_json은_PostToolUse와_Stop에_가드를_등록한다(self):
-        """PostToolUse와 Stop은 matcher 없이 language_guard.py를 timeout 5로 실행한다."""
+        """PostToolUse는 async로, Stop은 동기로 matcher 없이 language_guard.py를 timeout 5로 실행한다."""
         # Given
         expected_command = 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/language_guard.py"'
+        expected_hook = {"type": "command", "command": expected_command, "timeout": 5}
 
         # When
         entries = {
@@ -1402,7 +1556,7 @@ class RegistrationTest(LanguageGuardCase):
             with self.subTest(event=event):
                 self.assertEqual(len(groups), 1)
                 self.assertNotIn("matcher", groups[0])
-                self.assertEqual(groups[0]["hooks"], [{"type": "command", "command": expected_command, "timeout": 5}])
+                self.assertEqual(groups[0]["hooks"], [{**expected_hook, "async": True} if event == "PostToolUse" else expected_hook])
 
     def test_기존_훅_등록은_바뀌지_않는다(self):
         """SessionStart, SubagentStart, PreToolUse 항목은 그대로다."""
