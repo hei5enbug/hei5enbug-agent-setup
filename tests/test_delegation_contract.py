@@ -20,8 +20,9 @@ def test_두_호스트는_가벼운_위임_기준과_검토_연결만_항상_받
     """두 호스트의 시작 문맥은 상황별 위임·대체 처리·검토 연결을 포함하고 상세 절차는 지연 로딩한다."""
     # Given
     expected = [
-        "small cohesive edits",
-        "tightly dependent work in the main session",
+        "tightly dependent work, implementation that changes at most two files, and integration fixes in the main session",
+        "Delegate implementation that changes more than two files to the implementation worker",
+        "except the kinds the host session file assigns to the main session",
         "Delegate bounded investigation",
         "Parallelize only work with independent resources",
         "continue authorized work in the main session",

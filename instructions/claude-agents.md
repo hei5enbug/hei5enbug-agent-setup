@@ -73,16 +73,17 @@ When the fallback is unavailable too, continue in the main conversation.
 Coordinate implementation under [implementation execution rules](implementation-execution.md). This section
 adds only the Claude Code worker integration.
 
-- Delegated implementation follows the route in the session line "Implementation worker route". Use the Codex
-  worker (see "Codex worker" below) by default, `hei5enbug-agent-setup:worker` for the Haiku worker when the line
-  says `haiku`, and `hei5enbug-agent-setup:sonnet-worker` for the Sonnet worker when it says `sonnet`. A user
-  request for one route applies to that request only. `hei5enbug-agent-setup:designer` still takes UI code, visual
-  design, and diagram work. Never use any other agent.
+- Delegated implementation follows the route in the session line "Implementation worker route". Use
+  `hei5enbug-agent-setup:sonnet-worker` for the Sonnet worker by default, the Codex worker (see "Codex worker"
+  below) when the line says `codex`, and `hei5enbug-agent-setup:worker` for the Haiku worker when it says `haiku`. A
+  user request for one route applies to that request only. `hei5enbug-agent-setup:designer` still takes UI code,
+  visual design, and diagram work, except the kinds the Claude Code session file assigns to the main session. Never
+  use any other agent.
 - Never pass a per-invocation model to a plugin agent on an invocation or resume, because that overrides its
   definition, which pins the model and effort that shared model routing lists.
 - The bullets below apply whenever a plugin agent runs: a runner fallback, the Haiku or Sonnet worker, and the
   designer.
-- When the session context contains `hei5enbug-agent-setup mod: role pinning active`, the plugin mod pins each
+- When the session context has the line `Role pinning: active`, the plugin mod pins each
   role's model and effort on every request and blocks tool calls from a subagent that answered on another model.
   Once per session, check only forced-model and effort limits: `CLAUDE_CODE_SUBAGENT_MODEL`,
   `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`, effort overrides such as `CLAUDE_CODE_EFFORT_LEVEL`, and effort caps such as

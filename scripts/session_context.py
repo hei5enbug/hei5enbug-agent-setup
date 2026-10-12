@@ -103,18 +103,15 @@ def render_context(root: Path, host: str, kind: str = "main") -> str:
     session_dir = root / "instructions" / "session"
     if kind == "main":
         sources = [read_instruction(session_dir / name, root) for name in ("core.md", "common.md", host_file)]
-        rule = "Apply the common rules throughout this session."
         limit = MAX_CONTEXT_BYTES
     else:
         sources = [read_instruction(session_dir / "core.md", root)]
         if kind == "implementation":
             sources.append(assigned_workers_section(root))
-        rule = "Apply these rules throughout this session."
         limit = MAX_ROLE_CONTEXT_BYTES
     context = (
         f"hei5enbug-agent-setup instructions for {host}.\n"
-        f"Source directory: {root.as_posix()}\n"
-        f"{rule}\n\n"
+        f"Source directory: {root.as_posix()}\n\n"
         + "\n\n".join(sources)
         + "\n"
     )
@@ -127,19 +124,16 @@ def render_context(root: Path, host: str, kind: str = "main") -> str:
             import plugin_toggles
 
             option = plugin_toggles.option_value("implementation_worker")
-            if option == "haiku":
-                route = "Haiku worker, `hei5enbug-agent-setup:worker` (`implementation_worker`=`haiku`)"
-            elif option == "sonnet":
-                route = "Sonnet: `hei5enbug-agent-setup:sonnet-worker` (`implementation_worker`=`sonnet`)"
-            else:
-                route = "Codex (`implementation_worker`=`codex`)"
+            route = {"codex": "Codex (`codex`)", "haiku": "Haiku (`haiku`)"}.get(option, "Sonnet (`sonnet`)")
             review = plugin_toggles.option_value("review_model")
             if review not in REVIEW_MODELS:
                 review = DEFAULT_REVIEW_MODEL
             context += (
                 f"\nImplementation worker route: {route}.\n"
-                f"Review model: `{review}` (`review_model`), `xhigh`.\n"
+                f"Review model: `{review}`.\n"
             )
+            if plugin_toggles.enabled("role_pinning"):
+                context += "Role pinning: active (`role_pinning`).\n"
     if len(context.encode("utf-8")) > limit:
         raise ValueError("Bundled instructions exceed the context budget; move details to conditional references")
     return context

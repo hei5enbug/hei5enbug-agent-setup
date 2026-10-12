@@ -199,7 +199,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
                 "title": "Implementation worker",
                 "description": "Route implementation work to codex (Codex on gpt-6-luna at xhigh), haiku (the plugin worker on claude-haiku-5-5 at high), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
                 "options": ["codex", "haiku", "sonnet"],
-                "default": "codex",
+                "default": "sonnet",
             },
         )
         self.assertEqual(options["review_model"]["type"], "string")
@@ -222,12 +222,13 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         # Given
         expected = (
             "[implementation execution rules](implementation-execution.md)",
-            'Delegated implementation follows the route in the session line "Implementation worker route". Use the '
-            'Codex worker (see "Codex worker" below) by default, `hei5enbug-agent-setup:worker` for the Haiku worker '
-            'when the line says `haiku`, and `hei5enbug-agent-setup:sonnet-worker` for the Sonnet worker when it says '
-            '`sonnet`.',
+            'Delegated implementation follows the route in the session line "Implementation worker route". Use '
+            '`hei5enbug-agent-setup:sonnet-worker` for the Sonnet worker by default, the Codex worker (see "Codex '
+            'worker" below) when the line says `codex`, and `hei5enbug-agent-setup:worker` for the Haiku worker when '
+            'it says `haiku`.',
             "A user request for one route applies to that request only.",
-            "`hei5enbug-agent-setup:designer` still takes UI code, visual design, and diagram work.",
+            "`hei5enbug-agent-setup:designer` still takes UI code, visual design, and diagram work, except the kinds "
+            "the Claude Code session file assigns to the main session.",
             "Never use any other agent.",
             "Never pass a per-invocation model to a plugin agent on an invocation or resume, because that overrides "
             "its definition",
@@ -314,7 +315,7 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         """세션 컨텍스트에 역할 고정 표시 줄이 있으면 위임마다 설정 파일이나 기록을 읽지 않고 한 번의 상한 확인과 모드의 고정을 증거로 쓴다."""
         # Given
         expected = (
-            "When the session context contains `hei5enbug-agent-setup mod: role pinning active`",
+            "When the session context has the line `Role pinning: active`",
             "blocks tool calls from a subagent that answered on another model",
             "Once per session, check only forced-model and effort limits",
             "A forced model or a cap below the pinned effort stops plugin-agent delegation.",
