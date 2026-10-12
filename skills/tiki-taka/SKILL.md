@@ -2,13 +2,9 @@
 name: tiki-taka
 description: >-
   Runs a bounded, evidence-based debate between the current agent host and a dedicated Claude or
-  Codex opponent session. The current host participates directly and keeps its selected model and
-  reasoning effort; the opponent uses xhigh by default. Runs two exchanges by default and up to five
-  when the user explicitly requests it. Shows concise progress, supports durable execution and
-  reconnection, applies agreed improvements by default, and writes unresolved questions separately.
-  Leaves every file unchanged when the user requests a synthesis only. Never trigger automatically.
-  Use only when the user explicitly asks with phrases such as "두 에이전트로 토론시켜", "Codex와
-  토론", "반대 의견도 받아 겨뤄봐", "적대적으로 검토", or invokes /tiki-taka directly.
+  Codex opponent session. Never trigger automatically. Use only when the user explicitly asks with
+  phrases such as "두 에이전트로 토론시켜", "Codex와 토론", "반대 의견도 받아 겨뤄봐", "적대적으로
+  검토", or invokes /tiki-taka directly.
 compatibility: >-
   The core workflow runs from any agent host with shell, filesystem, and Python access. The bundled
   runner requires at least one supported opponent CLI, Claude or Codex.
