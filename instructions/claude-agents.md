@@ -83,8 +83,9 @@ adds only the Claude Code worker integration.
   definition, which pins the model and effort that shared model routing lists.
 - The bullets below apply whenever a plugin agent runs: a runner fallback, the Haiku or Sonnet worker, and the
   designer.
-- When the session context has the line `Role pinning: active`, the plugin mod pins each
-  role's model and effort on every request and blocks tool calls from a subagent that answered on another model.
+- When the session context has the line `hei5enbug-agent-setup mod: role pinning active`, the registered plugin mod's
+  `prompt.context` hook confirms role pinning is active. The mod pins each role's model and effort on every request and
+  blocks tool calls from a subagent that answered on another model.
   Once per session, check only forced-model and effort limits: `CLAUDE_CODE_SUBAGENT_MODEL`,
   `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`, effort overrides such as `CLAUDE_CODE_EFFORT_LEVEL`, and effort caps such as
   `maxEffortLevel` or organization limits, in the environment and every settings file. A forced model or a cap

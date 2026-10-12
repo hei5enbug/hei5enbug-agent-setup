@@ -432,12 +432,12 @@ class SessionContextTest(unittest.TestCase):
         self.assertIn("except the kinds the host session file assigns to the main session", claude)
         self.assertNotIn("seven nodes", codex)
 
-    def test_Claude_세션은_역할_고정이_꺼지지_않으면_활성_줄을_담는다(self):
-        """role_pinning 옵션이 기본이거나 켜져 있으면 활성 줄이 한 번 들어가고, 끈 값에는 들어가지 않는다."""
+    def test_Claude_SessionStart는_옵션으로_mod_역할_고정을_주장하지_않는다(self):
+        """role_pinning 옵션 값과 무관하게 Claude 시작 문맥은 mod 고정 활성화를 주장하지 않고 예산을 지킨다."""
         # Given
-        cases = {None: True, "": True, "true": True, "false": False, " OFF ": False, "0": False, "no": False}
+        options = (None, "", "true", "false", " OFF ", "0", "no")
 
-        for option, expected in cases.items():
+        for option in options:
             with self.subTest(option=option):
                 extra_env = {} if option is None else {"CLAUDE_PLUGIN_OPTION_ROLE_PINNING": option}
 
@@ -445,7 +445,9 @@ class SessionContextTest(unittest.TestCase):
                 context = self.context(self.run_hook("claude", extra_env=extra_env))
 
                 # Then
-                self.assertEqual(context.count("Role pinning: active (`role_pinning`)."), int(expected))
+                self.assertNotIn("hei5enbug-agent-setup mod: role pinning active", context)
+                self.assertNotIn("Role pinning: active (`role_pinning`).", context)
+                self.assertLess(len(context.encode("utf-8")), 9000)
 
     def test_Codex와_역할_컨텍스트는_역할_고정_줄을_받지_않는다(self):
         """Codex 세션과 두 호스트의 역할 컨텍스트에는 역할 고정 줄이 없다."""

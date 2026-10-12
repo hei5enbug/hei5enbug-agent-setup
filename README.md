@@ -136,8 +136,9 @@ Role pinning pins each plugin role's model and effort on every request: `scout`,
 with `high`, `sonnet-worker` uses `claude-sonnet-5-5` with `high`, `designer` uses `claude-opus-5-5` with `xhigh`, and
 `reviewer` uses `claude-opus-5-5` with `high`. A subagent that answers on another model is stopped: its later requests
 end with a refusal, its tool calls are denied, and its result is replaced with a warning. The session context then
-carries the line `Role pinning: active` when the `role_pinning` option is on, which lets the main session send assignments
-directly and skip per-delegation settings and subagent record checks.
+gets the line `hei5enbug-agent-setup mod: role pinning active` from the registered mod `prompt.context` hook only when
+role pinning is active. This line lets the main session send assignments directly and skip per-delegation settings and
+subagent record checks.
 
 ### GPT in Claude Code
 
