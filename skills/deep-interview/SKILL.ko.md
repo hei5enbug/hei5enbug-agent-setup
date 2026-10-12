@@ -12,7 +12,7 @@
 - [`references/spec-template.md`](references/spec-template.ko.md): 최종 사양서를 만들 때
 - [`references/auto-research-greenfield.md`](references/auto-research-greenfield.ko.md): 그린필드 질문에 선택적 독립 조사가 도움이 될 때
 - [`references/auto-answer-uncertain.md`](references/auto-answer-uncertain.ko.md): 사용자가 결정을 명시적으로 위임했을 때
-- [`references/lateral-review-panel.md`](references/lateral-review-panel.ko.md): 모호성이 낮아지는 방향으로 단계 구간을 넘거나 에이전트가 제시한 가정을 받아들이기 전
+- [`references/lateral-review-panel.md`](references/lateral-review-panel.ko.md): 모호성 단계가 바뀌거나 에이전트가 제시한 가정을 받아들이기 전
 
 ## 실행 조건
 
@@ -48,7 +48,7 @@
    일반 텍스트 폴백 전에 `references/ask-ui.md`의 호스트별 모드나 설정 관문을 따릅니다(규칙이 문맥에 없으면 먼저 읽습니다).
    관문에서 사용자 행동을 요구하면 설명하고 지원되는 모드로 다시 시작할 때까지 턴을 끝냅니다.
 2. **읽기 전용 탐색**: 저장소 검색·읽기 도구를 사용합니다. 사용할 수 없으면 관찰할 수 없는 사실만 묻습니다.
-3. **독립적 추론**: 가능하면 격리된 읽기 전용 검토자를 한 번 호출하고, 그렇지 않으면 메인 문맥에서 같은 관점 검토를 순서대로 수행합니다.
+3. **독립적 추론**: 가능하면 격리된 읽기 전용 서브에이전트를 사용하고, 그렇지 않으면 메인 문맥에서 같은 관점 검토를 순서대로 수행합니다.
 4. **병렬 처리**: 지원되면 독립적인 근거 수집을 병렬화합니다. 순차 실행을 하더라도 논리적 결과는 같아야 합니다.
 5. **지속성**: 기본적으로 대화 안에 상태를 보관합니다. 사용자가 재개 가능성을 요청하고 경로를 승인했을 때만 상태를 씁니다.
 
@@ -159,9 +159,9 @@ Round <n> | Component: <name> | Targeting: <dimension> | Why now: <reason> | Amb
 
 ## 독립 검토
 
-모호성이 낮아지는 방향으로 단계 구간을 넘거나 에이전트가 제시한 가정을 받아들이기 전에 `references/lateral-review-panel.md`의 측면 검토를 실행합니다.
+모호성이 단계 구간을 넘거나 에이전트가 제시한 가정을 받아들이기 전에 `references/lateral-review-panel.md`의 측면 검토를 실행합니다.
 
-호스트가 지원하면 네 관점의 결과를 모두 돌려주는 격리된 읽기 전용 검토자 호출 한 번을 사용합니다. 검토자 프롬프트에 의도한 결론을 흘리지 않습니다.
+호스트가 지원하면 독립된 문맥을 사용합니다. 검토자 프롬프트에 의도한 결론을 흘리지 않습니다.
 격리나 서브에이전트를 사용할 수 없으면 researcher, contrarian, simplifier, architecture 관점을 순서대로 수행합니다.
 
 검증된 가장 영향력이 큰 결과만 다음 단일 질문에 반영합니다. 검토자는 범위를 바꾸거나 가정을 승인하거나 완료를 선언할 수 없습니다.
