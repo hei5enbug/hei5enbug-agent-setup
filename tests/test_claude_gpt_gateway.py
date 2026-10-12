@@ -179,6 +179,58 @@ class GatewayTest(unittest.TestCase):
         handler._dispatch()
         return handler, statuses, output_headers, handler.wfile.getvalue()
 
+    def test_작업자_종료_직전_큐에_들어온_완료와_오류를_보존한다(self):
+        for opened_first in (False, True):
+            for outcome in ("completed", "quota", "empty"):
+                with self.subTest(opened_first=opened_first, outcome=outcome):
+                    # Given
+                    app = self._app(lambda: None)
+                    request = _anthropic_request(tools=[{
+                        "name": "Read", "input_schema": _schema(),
+                    }])
+                    starts = []
+                    final_record = {"type": "completed", "tool_calls": [{
+                        "id": "call_exit_race", "name": "Read", "arguments": {"file_path": "a.txt"},
+                    }], "usage": {"input_tokens": 8, "cached_input_tokens": 0, "output_tokens": 3}}
+                    quota = helper.ClaudeGptError("insufficient_quota", "safe",
+                                                  provider_code="insufficient_quota")
+
+                    def start(attempt):
+                        starts.append(attempt)
+                        if opened_first:
+                            attempt.opened.set()
+
+                        def finish_after_empty():
+                            if outcome == "completed":
+                                attempt.opened.set()
+                                attempt.items.put(("record", final_record))
+                                attempt.items.put(("success", 0))
+                            elif outcome == "quota":
+                                attempt.items.put(("error", quota))
+                            return False
+
+                        attempt.thread = SimpleNamespace(is_alive=finish_after_empty)
+
+                    # When
+                    with patch.object(gateway._Attempt, "start", start):
+                        sink = self._post(app, request)
+
+                    # Then
+                    self.assertEqual(1, len(starts))
+                    if outcome == "completed":
+                        events = sink.events()
+                        self.assertEqual("message_stop", events[-1][0])
+                        calls = [data["content_block"] for name, data in events
+                                 if name == "content_block_start"]
+                        self.assertEqual(["call_exit_race"], [call["id"] for call in calls])
+                        self.assertNotIn("error", [name for name, _data in events])
+                    else:
+                        error = (sink.events()[-1][1]["error"] if opened_first
+                                 else json.loads(bytes(sink.body))["error"])
+                        expected = "insufficient_quota" if outcome == "quota" else "internal_error"
+                        self.assertEqual(expected, error["code"])
+                        self.assertNotIn("message_stop", [name for name, _data in sink.events()])
+
     def test_시스템_도구_미디어와_tool_choice를_Responses_요청으로_변환한다(self):
         # Given
         request = _anthropic_request(
@@ -773,6 +825,69 @@ class GatewayTest(unittest.TestCase):
         self.assertEqual("Partial", retry_payload["input"][-1]["content"][0]["text"])
         self.assertEqual("message_stop", events[-1][0])
 
+    def test_SSE_최상위_오류는_일시적_제한만_재시도하고_인증과_한도_오류는_중단한다(self):
+        for code in ("rate_limit_exceeded", "insufficient_quota", "invalid_api_key", "private_error_code"):
+            with self.subTest(code=code):
+                # Given
+                first = FakeProvider(stream=_sse({
+                    "type": "error", "code": code, "message": "private diagnostic",
+                }))
+                second = FakeProvider(stream=_sse(_completion()))
+                providers = iter([first, second])
+                clock = FakeClock()
+                app = self._app(lambda: next(providers), clock=clock, wait=clock.wait, jitter=lambda: 0)
+
+                # When
+                sink = self._post(app)
+
+                # Then
+                events = sink.events()
+                self.assertEqual(1, len(first.open_calls))
+                if code == "rate_limit_exceeded":
+                    self.assertEqual(1, len(second.open_calls))
+                    self.assertEqual("message_stop", events[-1][0])
+                    self.assertAlmostEqual(1.0, sum(clock.waits))
+                else:
+                    self.assertEqual([], second.open_calls)
+                    self.assertEqual([], clock.waits)
+                    self.assertEqual("error", events[-1][0])
+                    expected = "provider_failed" if code == "private_error_code" else code
+                    self.assertEqual(expected, events[-1][1]["error"]["code"])
+                    self.assertNotIn("message_stop", [name for name, _data in events])
+                self.assertNotIn("private diagnostic", bytes(sink.body).decode())
+                self.assertNotIn('"type":"tool_use"', bytes(sink.body).decode())
+                self.assertEqual([], self.store.read_provider_state(self.profile_id))
+
+    def test_복구_60초가_지나면_열린_재시도_stream도_닫고_새_요청을_보내지_않는다(self):
+        # Given
+        clock = FakeClock()
+        closed = threading.Event()
+
+        class BlockingStream:
+            def readline(self, size=-1):
+                clock.value = 61.0
+                if not closed.wait(2):
+                    raise AssertionError("recovery deadline did not close the stream")
+                raise OSError("cancelled")
+
+            def close(self):
+                closed.set()
+
+        first = FakeProvider(status=503, body=b'{"error":{"code":"server_error"}}')
+        second = FakeProvider(stream=BlockingStream())
+        providers = iter([first, second])
+        app = self._app(lambda: next(providers), clock=clock, wait=clock.wait, jitter=lambda: 0)
+
+        # When
+        sink = self._post(app)
+
+        # Then
+        self.assertTrue(closed.is_set())
+        self.assertEqual(2, len(first.open_calls) + len(second.open_calls))
+        self.assertEqual("gateway_recovery_deadline", sink.events()[-1][1]["error"]["code"])
+        self.assertNotIn("message_stop", [name for name, _data in sink.events()])
+        self.assertEqual([], self.store.read_provider_state(self.profile_id))
+
     def test_continuation의_정상_접두문자를_잘라내지_않고_모든_delta를_전달한다(self):
         # Given
         class CutAfterDelta(io.BytesIO):
@@ -1180,6 +1295,9 @@ class GatewayTest(unittest.TestCase):
         self.assertEqual(["rate_limit_error", "rate_limit_error", "invalid_request_error", "invalid_request_error"],
                          [item[1] for item in mapped])
         self.assertNotIn("api_error", {item[1] for item in mapped})
+        self.assertIn("recovery deadline", mapped[0][2])
+        self.assertNotIn("approved request limit", mapped[0][2])
+        self.assertIn("approved request limit", mapped[1][2])
 
     def test_취소는_현재_upstream_read를_shutdown하고_추가도구나_state를_막는다(self):
         # Given

@@ -171,9 +171,12 @@ request; restore a Claude default with `/model claude-opus-5-5`.
 When resuming with `--resume`, keep tools used earlier in the conversation available. Removing their definitions
 with `--tools` causes `unknown_tool` before a GPT provider request. Restrict execution through Claude Code's
 permissions instead; retaining a tool definition does not grant permission to run it.
+Earlier tool calls must also match the available tool schemas, even if the tool returned an error. Invalid
+historical arguments stop a GPT switch or resume before a provider request.
 
 The gateway retries temporary failures for at most three total provider attempts, within 60 seconds of the first
-recoverable failure. It waits 1 then 2 seconds, plus 0–0.5 seconds of jitter. Before visible text it retries the
+recoverable failure. That deadline includes waits and active retry attempts; the initial healthy stream has no
+recovery deadline. It waits 1 then 2 seconds, plus 0–0.5 seconds of jitter. Before visible text it retries the
 same request; after visible text it can continue while keeping delivered text, though the wording may differ.
 Completed tool calls are never replayed. Authentication, quota, invalid input, and other terminal errors stop.
 Cancellation closes the active request. There is no automatic provider or billing fallback. For a ChatGPT plan

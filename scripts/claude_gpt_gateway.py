@@ -718,7 +718,12 @@ class GatewayApplication:
                     initial_result = attempt.items.get(timeout=0.05)
                 except queue.Empty:
                     if attempt.thread is not None and not attempt.thread.is_alive():
-                        initial_result = ("error", helper.ClaudeGptError("internal_error", "Gateway provider worker stopped."))
+                        try:
+                            initial_result = attempt.items.get_nowait()
+                        except queue.Empty:
+                            initial_result = ("error", helper.ClaudeGptError("internal_error", "Gateway provider worker stopped."))
+                        if attempt.opened.is_set():
+                            pending_result = initial_result
                         break
                     if stream_started and ping_due is not None and self.clock() >= ping_due:
                         try:
@@ -799,18 +804,22 @@ class GatewayApplication:
                         kind, value = attempt.items.get(timeout=timeout)
                 except queue.Empty:
                     if attempt.thread is not None and not attempt.thread.is_alive():
-                        failure = helper.ClaudeGptError("internal_error", "Gateway provider worker stopped.")
-                        break
-                    if stream_started and ping_due is not None and self.clock() >= ping_due:
                         try:
-                            self._write_event(sink, "ping", {"type": "ping"})
-                        except (BrokenPipeError, ConnectionResetError, OSError):
-                            cancel_event.set()
-                            attempt.cancel()
-                            self._log_attempt(number, "cancelled", error=_cancelled_error())
-                            return
-                        ping_due = self.clock() + self.ping_interval
-                    continue
+                            kind, value = attempt.items.get_nowait()
+                        except queue.Empty:
+                            failure = helper.ClaudeGptError("internal_error", "Gateway provider worker stopped.")
+                            break
+                    else:
+                        if stream_started and ping_due is not None and self.clock() >= ping_due:
+                            try:
+                                self._write_event(sink, "ping", {"type": "ping"})
+                            except (BrokenPipeError, ConnectionResetError, OSError):
+                                cancel_event.set()
+                                attempt.cancel()
+                                self._log_attempt(number, "cancelled", error=_cancelled_error())
+                                return
+                            ping_due = self.clock() + self.ping_interval
+                        continue
                 if kind == "record":
                     record = value
                     if not isinstance(record, dict):
@@ -1389,7 +1398,9 @@ def _map_error(error: Any) -> tuple[int, str, str, str]:
             return 403, "permission_error", "The selected account is not eligible for this GPT request.", raw_code
     if code == "gateway_retry_exhausted":
         return 429, "rate_limit_error", "Temporary GPT service failures exhausted the gateway retry limit.", code
-    if code in {"gateway_recovery_deadline", "gateway_request_budget_exhausted"}:
+    if code == "gateway_recovery_deadline":
+        return 429, "rate_limit_error", "The gateway recovery deadline was reached.", code
+    if code == "gateway_request_budget_exhausted":
         return 429, "rate_limit_error", "The gateway's approved request limit was reached.", code
     if code == "gateway_cancelled":
         return 408, "invalid_request_error", "The GPT request was cancelled.", code
