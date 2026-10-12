@@ -2621,3 +2621,180 @@ test("조율 세션이 실행하는 형태의 Codex 작업 명령은 작업 폴�
   expect(first).toEqual({ decision: "ask", reason: firstTime(keys) });
   expect(second).toEqual({ decision: "allow", reason: approved(keys) });
 });
+
+const RUNNER = "python3 /plugins/hei5enbug/scripts/role_runner.py";
+const RUNNER_FILES = "--assignment /tmp/a.md --result /tmp/r.md";
+
+function runnerWith(role, ...options) {
+  return [RUNNER, role, RUNNER_FILES, ...options].join(" ");
+}
+
+test("역할 실행기의 worker가 세션 폴더 밖 --add-dir을 쓰면 폴더 키 하나를 만들고 모두 이해한 것으로 본다", async () => {
+  // given
+  const command = runnerWith("worker", `--add-dir ${OTHER_DIR}`);
+
+  // when
+  const result = await classifyBash(command);
+
+  // then
+  expect(result).toEqual({ keys: [OTHER_KEY], destructive: false, known: true });
+});
+
+test("역할 실행기의 worker가 세션 폴더 안 --add-dir만 쓰면 키가 없다", async () => {
+  // given
+  const command = runnerWith("worker", `--add-dir ${REPO_WITH_V1}/sub`, `--add-dir=${REPO_WITH_V1}`);
+
+  // when
+  const result = await classifyBash(command);
+
+  // then
+  expect(result).toEqual({ keys: NONE, destructive: false, known: false });
+});
+
+test("python과 상대 경로의 실행기 명령도 같은 키로 분류한다", async () => {
+  // given
+  const command = `python ./scripts/role_runner.py worker ${RUNNER_FILES} --add-dir=${OTHER_DIR}`;
+
+  // when
+  const result = await classifyBash(command);
+
+  // then
+  expect(result).toEqual({ keys: [OTHER_KEY], destructive: false, known: true });
+});
+
+for (const [role, options] of [
+  ["scout", []],
+  ["researcher", []],
+  ["reviewer", []],
+  ["reviewer", ["--model claude-opus-5-5", "--timeout 600"]],
+  ["worker", []],
+]) {
+  test(`역할 실행기의 ${role} 명령(${options.join(" ") || "옵션 없음"})은 키가 없다`, async () => {
+    // given
+    const command = runnerWith(role, ...options);
+
+    // when
+    const result = await classifyBash(command);
+
+    // then
+    expect(result).toEqual({ keys: NONE, destructive: false, known: false });
+  });
+}
+
+test("역할 실행기의 worker가 세션 폴더 밖에서 실행되면 그 작업 폴더 키를 만든다", async () => {
+  // given
+  const command = `cd ${OTHER_DIR} && ${runnerWith("worker")}`;
+
+  // when
+  const result = await classifyBash(command);
+
+  // then
+  expect(result).toEqual({ keys: [OTHER_KEY], destructive: false, known: true });
+});
+
+test("역할 실행기의 worker --add-dir은 처음에 묻고 성공한 호출이 기록한 뒤 같은 세션의 같은 폴더는 허용한다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  const command = runnerWith("worker", `--add-dir ${OTHER_DIR}`);
+
+  // when
+  const first = await hooks.check(env, checkEvent(command));
+  await hooks.call(env, callEvent(command));
+  const second = await hooks.check(env, checkEvent(runnerWith("worker", "--add-dir /repos/other/", "--timeout 60")));
+
+  // then
+  expect(first).toEqual({ decision: "ask", reason: firstTime(OTHER_KEY) });
+  expect(env.data.approvals).toEqual({ "sess-1": { time: NOW, keys: [OTHER_KEY] } });
+  expect(second).toEqual({ decision: "allow", reason: approved(OTHER_KEY) });
+});
+
+test("역할 실행기에서 승인한 폴더는 Codex 작업 명령의 같은 폴더 키와 공유한다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  await approve(hooks, env, runnerWith("worker", `--add-dir ${OTHER_DIR}`));
+
+  // when
+  const allowed = await hooks.check(env, checkEvent(codexWith(`--add-dir ${OTHER_DIR}`)));
+
+  // then
+  expect(allowed).toEqual({ decision: "allow", reason: approved(OTHER_KEY) });
+});
+
+test("역할 실행기에서 승인한 폴더와 다른 --add-dir은 다시 묻는다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  await approve(hooks, env, runnerWith("worker", `--add-dir ${OTHER_DIR}`));
+
+  // when
+  const asked = await hooks.check(env, checkEvent(runnerWith("worker", "--add-dir /repos/third")));
+
+  // then
+  expect(asked).toEqual({ decision: "ask", reason: firstTime("codex-dir:/repos/third") });
+});
+
+for (const [name, command] of [
+  ["모르는 옵션", runnerWith("worker", `--add-dir ${OTHER_DIR}`, "--sandbox danger-full-access")],
+  ["모르는 옵션의 =값", runnerWith("worker", `--add-dir ${OTHER_DIR}`, "--unknown=1")],
+  ["값이 없는 옵션", runnerWith("worker", `--add-dir ${OTHER_DIR}`, "--timeout")],
+  ["알 수 없는 역할", `${RUNNER} planner ${RUNNER_FILES}`],
+  ["역할 없음", `${RUNNER} ${RUNNER_FILES}`],
+  ["덧붙은 위치 인자", runnerWith("worker", "extra")],
+  ["worker가 아닌 역할의 --add-dir", runnerWith("scout", `--add-dir ${OTHER_DIR}`)],
+  ["reviewer가 아닌 역할의 --model", runnerWith("worker", "--model gpt-6-astra")],
+  ["변수 확장", runnerWith("worker", "--add-dir $HOME")],
+  ["물결표 경로", runnerWith("worker", "--add-dir ~/work")],
+  ["글롭", runnerWith("worker", "--add-dir /repos/*")],
+  ["출력 리다이렉션", `${runnerWith("worker", `--add-dir ${OTHER_DIR}`)} > out.txt`],
+  ["입력 리다이렉션", `${runnerWith("worker", `--add-dir ${OTHER_DIR}`)} < in.txt`],
+  ["오류 리다이렉션", `${runnerWith("worker", `--add-dir ${OTHER_DIR}`)} 2>&1`],
+  ["명령 치환 안", `echo $(${runnerWith("worker", `--add-dir ${OTHER_DIR}`)})`],
+  ["heredoc", `${runnerWith("worker", `--add-dir ${OTHER_DIR}`)} << EOF\nprompt\nEOF`],
+]) {
+  test(`역할 실행기 명령의 ${name}은 확인할 수 없어 승인 기록이 있어도 매번 묻는다`, async () => {
+    // given
+    const hooks = registerHooks();
+    const env = createEnv();
+    await approve(hooks, env, runnerWith("worker", `--add-dir ${OTHER_DIR}`));
+    const before = JSON.parse(JSON.stringify(env.data));
+
+    // when
+    const asked = await hooks.check(env, checkEvent(command));
+    await hooks.call(env, callEvent(command));
+
+    // then
+    expect(asked).toEqual({ decision: "ask", reason: UNVERIFIABLE_REASON });
+    expect(env.data).toEqual(before);
+  });
+}
+
+test("승인 기록이 있는 --add-dir 명령 뒤에 다른 명령을 이어 붙여도 확인할 수 없는 부분이 있으면 묻는다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  await approve(hooks, env, runnerWith("worker", `--add-dir ${OTHER_DIR}`));
+
+  // when
+  const asked = await hooks.check(env, checkEvent(`${runnerWith("worker", `--add-dir ${OTHER_DIR}`)} && rm -rf x`));
+
+  // then
+  expect(asked).toEqual({ decision: "ask", reason: UNVERIFIABLE_REASON });
+});
+
+test("실행기가 아닌 python 명령과 다른 경로의 스크립트는 키 없이 호스트의 판단에 맡긴다", async () => {
+  // given
+  const commands = [
+    `python3 /plugins/scripts/other.py worker --add-dir ${OTHER_DIR}`,
+    `python3 -m role_runner worker --add-dir ${OTHER_DIR}`,
+    `ruby /plugins/hei5enbug/scripts/role_runner.py worker --add-dir ${OTHER_DIR}`,
+  ];
+
+  // when
+  const results = [];
+  for (const command of commands) results.push(await classifyBash(command));
+
+  // then
+  expect(results).toEqual(commands.map(() => ({ keys: NONE, destructive: false, known: false })));
+});

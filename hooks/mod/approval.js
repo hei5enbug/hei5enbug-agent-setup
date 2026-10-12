@@ -65,6 +65,12 @@ const CODEX_WORD = /\bcodex\b/i;
 const CODEX_DANGEROUS_TEXT =
   /danger-full-access|--dangerously-bypass-approvals-and-sandbox|--dangerously-bypass-hook-trust|(?:^|\s)(?:-c|--config)(?:\s+|=)?\s*["']?sandbox/i;
 
+const ROLE_RUNNER_HEADS = new Set(["python3", "python"]);
+const ROLE_RUNNER_SCRIPT = "/scripts/role_runner.py";
+const ROLE_RUNNER_TEXT = /\bpython3?\s+[^\s;&|]*\/scripts\/role_runner\.py/;
+const ROLE_RUNNER_ROLES = new Set(["scout", "researcher", "reviewer", "worker"]);
+const ROLE_RUNNER_VALUE_OPTIONS = new Set(["--assignment", "--result", "--model", "--add-dir", "--timeout"]);
+
 const LEX_WHITESPACE = " \t\r\n";
 const LEX_QUOTES = "'\"";
 const LEX_ESCAPE = "\\";
@@ -197,7 +203,7 @@ function scanOpaque(command) {
   const keys = SCAN_KEYS.filter(([needle]) => command.includes(needle)).map(([, key]) => key);
   const codex = CODEX_WORD.test(command);
   const destructive = SCAN_DESTRUCTIVE.test(command) || (codex && CODEX_DANGEROUS_TEXT.test(command));
-  return outcome(keys, destructive, false, codex && !destructive);
+  return outcome(keys, destructive, false, (codex || ROLE_RUNNER_TEXT.test(command)) && !destructive);
 }
 
 function joinDirectory(base, argument) {
@@ -457,18 +463,10 @@ async function realDirectory($, state, path) {
   return real;
 }
 
-async function classifyCodex($, words, state) {
-  const args = words.slice(1);
-  if (codexSubcommand(args) !== "exec") return null;
-  if (codexIsDangerous(args)) return outcome([], true, true);
-  if (args.some(unsafe)) return outcome([], false, false, true);
+async function outsideDirectories($, state, targets) {
   const root = joinDirectory(state.root, ".");
-  const targets = optionValues(args, null, ["--add-dir"]);
-  const workdirs = optionValues(args, "C", ["--cd"]);
   const keys = new Set();
   let unverifiable = false;
-  if (workdirs.length > 0) targets.push(...workdirs);
-  else if (state.dir !== state.root) targets.push(state.dir);
   const realRoot = targets.length > 0 && root !== null && root.startsWith("/") ? await realDirectory($, state, root) : null;
   const prefix = realRoot === "/" ? "/" : `${realRoot}/`;
   for (const target of targets) {
@@ -480,6 +478,63 @@ async function classifyCodex($, words, state) {
       keys.add(`codex-dir:${real}`);
     }
   }
+  return { keys, unverifiable };
+}
+
+async function classifyCodex($, words, state) {
+  const args = words.slice(1);
+  if (codexSubcommand(args) !== "exec") return null;
+  if (codexIsDangerous(args)) return outcome([], true, true);
+  if (args.some(unsafe)) return outcome([], false, false, true);
+  const targets = optionValues(args, null, ["--add-dir"]);
+  const workdirs = optionValues(args, "C", ["--cd"]);
+  if (workdirs.length > 0) targets.push(...workdirs);
+  else if (state.dir !== state.root) targets.push(state.dir);
+  const { keys, unverifiable } = await outsideDirectories($, state, targets);
+  return outcome(keys, false, keys.size > 0 && !unverifiable, unverifiable);
+}
+
+function isRoleRunner(words) {
+  return ROLE_RUNNER_HEADS.has(words[0]) && words.length > 1 && words[1].endsWith(ROLE_RUNNER_SCRIPT);
+}
+
+function roleRunnerOptions(role, args) {
+  const addDirs = [];
+  let index = 0;
+  while (index < args.length) {
+    const arg = args[index];
+    index += 1;
+    if (!arg.startsWith("--")) return null;
+    const equals = arg.indexOf("=");
+    const name = equals < 0 ? arg : arg.slice(0, equals);
+    if (!ROLE_RUNNER_VALUE_OPTIONS.has(name)) return null;
+    let value = equals < 0 ? undefined : arg.slice(equals + 1);
+    if (value === undefined) {
+      if (index >= args.length) return null;
+      value = args[index];
+      index += 1;
+    }
+    if (value === "" || value.startsWith("-")) return null;
+    if (name === "--add-dir") {
+      if (role !== "worker") return null;
+      addDirs.push(value);
+    } else if (name === "--model" && role !== "reviewer") {
+      return null;
+    }
+  }
+  return addDirs;
+}
+
+async function classifyRoleRunner($, words, state, punctuated) {
+  const role = words[2];
+  const args = words.slice(3);
+  if (punctuated || words.some(unsafe) || !ROLE_RUNNER_ROLES.has(role)) return outcome([], false, false, true);
+  const addDirs = roleRunnerOptions(role, args);
+  if (addDirs === null) return outcome([], false, false, true);
+  if (role !== "worker") return outcome([], false, false);
+  const targets = [...addDirs];
+  if (state.dir !== state.root) targets.push(state.dir);
+  const { keys, unverifiable } = await outsideDirectories($, state, targets);
   return outcome(keys, false, keys.size > 0 && !unverifiable, unverifiable);
 }
 
@@ -509,6 +564,7 @@ async function classifySubcommand($, words, state) {
       return outcome(codex.keys, codex.destructive, false, codex.mustAsk || (expanded && !codex.destructive));
     }
   }
+  if (isRoleRunner(words)) return classifyRoleRunner($, words, state, punctuated);
   if (punctuated) return outcome([], false, false);
   const head = words[0];
   if (head === "echo") return outcome([], false, !words.slice(1).some(word => unsafe(word)));
