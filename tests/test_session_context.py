@@ -307,7 +307,7 @@ class SessionContextTest(unittest.TestCase):
                 self.assertNotIn(current[name], retired[name])
 
     def test_참조는_절대_경로이고_세부_본문은_불러오지_않는다(self):
-        """작업 효율과 검토를 포함한 참조 10개는 절대 경로로 바뀌고 세부 본문은 시작 시 불러오지 않는다."""
+        """작업 효율과 검토를 포함한 참조 9개는 절대 경로로 바뀌고 세부 본문은 시작 시 불러오지 않는다."""
         # Given
         host = "claude"
 
@@ -316,7 +316,7 @@ class SessionContextTest(unittest.TestCase):
 
         # Then
         links = re.findall(r"\]\(<([^>]+)>\)", context)
-        self.assertEqual(len(links), 10)
+        self.assertEqual(len(links), 9)
         for link in links:
             self.assertTrue(Path(link).is_relative_to(self.root))
             self.assertTrue(Path(link).is_file())
@@ -411,6 +411,72 @@ class SessionContextTest(unittest.TestCase):
         self.assertIn("Implementation worker route: Codex (`implementation_worker`=`codex`).", context)
         self.assertEqual(context.count("Implementation worker route:"), 1)
         self.assertLess(len(context.encode("utf-8")), 9000)
+
+    def test_Claude_세션은_검토_모델_설정값_한_줄을_담는다(self):
+        """review_model 옵션이 비면 기본 gpt-6-astra, 정규화한 허용 ID면 그 값을 xhigh와 함께 한 줄로 담는다."""
+        # Given
+        cases = {
+            None: "gpt-6-astra",
+            "": "gpt-6-astra",
+            " Claude-Opus-5-5 ": "claude-opus-5-5",
+            "gpt-6.1-sol": "gpt-6.1-sol",
+        }
+
+        for option, expected in cases.items():
+            with self.subTest(option=option):
+                extra_env = {} if option is None else {"CLAUDE_PLUGIN_OPTION_REVIEW_MODEL": option}
+
+                # When
+                context = self.context(self.run_hook("claude", extra_env=extra_env))
+
+                # Then
+                self.assertIn(f"Review model: `{expected}` (`review_model`), `xhigh`.", context)
+                self.assertEqual(context.count("Review model:"), 1)
+                self.assertLess(len(context.encode("utf-8")), session_context.MAX_CONTEXT_BYTES)
+
+    def test_허용_목록에_없는_검토_모델은_기본값으로_바꾼다(self):
+        """알 수 없는 review_model 값은 기본 gpt-6-astra 한 줄로 안전하게 바뀐다."""
+        # Given
+        extra_env = {"CLAUDE_PLUGIN_OPTION_REVIEW_MODEL": "gpt-9-unknown"}
+
+        # When
+        context = self.context(self.run_hook("claude", extra_env=extra_env))
+
+        # Then
+        self.assertIn("Review model: `gpt-6-astra` (`review_model`), `xhigh`.", context)
+        self.assertNotIn("gpt-9-unknown", context)
+
+    def test_검토_모델_선택지는_모델_고정값_일곱_개와_같다(self):
+        """review_model 선택지와 기본값은 role_runner의 허용 모델과 같고 최신 고정 ID로만 이뤄진다."""
+        # Given
+        spec = importlib.util.spec_from_file_location("model_pins", REPO_ROOT / "tests/test_model_pins.py")
+        pins = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(pins)
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        import role_runner
+
+        # When
+        configured = json.loads((REPO_ROOT / ".claude-plugin/plugin.json").read_text())["userConfig"]["review_model"]
+
+        # Then
+        self.assertEqual(set(session_context.REVIEW_MODELS), set(pins.PINS.values()))
+        self.assertEqual(session_context.REVIEW_MODELS, role_runner.REVIEW_MODELS)
+        self.assertEqual(configured["options"], list(session_context.REVIEW_MODELS))
+        self.assertEqual(configured["default"], session_context.DEFAULT_REVIEW_MODEL)
+        self.assertEqual(session_context.DEFAULT_REVIEW_MODEL, role_runner.DEFAULT_REVIEW_MODEL)
+
+    def test_Codex_호스트는_검토_모델_줄을_받지_않는다(self):
+        """Codex 세션 컨텍스트에는 Claude 전용 검토 모델 줄이 없고, 서브에이전트 컨텍스트에도 없다."""
+        # Given
+        extra_env = {"CLAUDE_PLUGIN_OPTION_REVIEW_MODEL": "claude-opus-5-5"}
+
+        # When
+        codex = self.context(self.run_hook("codex", extra_env=extra_env))
+        claude_subagent = self.subagent_context("claude", "hei5enbug-agent-setup:scout")
+
+        # Then
+        self.assertNotIn("(`review_model`)", codex)
+        self.assertNotIn("Review model", claude_subagent)
 
     def test_Codex_호스트는_구현_경로_줄을_받지_않는다(self):
         """Codex 세션 컨텍스트에는 Claude 전용 구현 경로 줄이 없다."""

@@ -76,7 +76,8 @@ Use the [check-evidence rules](work-efficiency.md#check-evidence) when accepting
 integration checks. A worker's valid result does not need a duplicate run merely because ownership changed.
 
 Review each worker's returned changes and evidence before releasing dependent work. Accept delegated work only
-when the host record shows the selected model and effort for every turn that edited it. The main session checks
+when the host record, or the enforcement the host's agent rules name (such as the mod's role pinning or the role
+runner's verification), shows the selected model and effort for every turn that edited it. The main session checks
 scope, correctness, regressions, and test evidence for all work, including its own. It may make integration fixes
 when it owns those paths; otherwise wait for the current worker to stop before transferring ownership.
 A check that mutates tracked files is implementation work and needs an owner. Never run a shared build while

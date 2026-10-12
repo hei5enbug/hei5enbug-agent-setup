@@ -28,22 +28,24 @@ Choose an owner before substantial work, and reconsider only when scope, depende
   permissions and checks; never change user settings or silently substitute another worker model.
 
 Independent read-only review is the exception to main-session review ownership. Before finishing a substantial
-change, recommend it once under [independent model validation](../independent-model-validation.md); do not
-invoke a reviewer without the user's approval or repeat an offer already declined for the same result.
+change, recommend it once; do not invoke a reviewer without the user's approval or repeat a declined offer for the
+same result. For a Claude-authored result, name the reviewer in the session line "Review model" and read
+the independent model validation rules (linked below) after approval; otherwise read them before asking.
 
 ## Clarification
 
-When an ambiguity or a conflict with existing logic or files would change the result, stop edits and external
-changes and read only what the question needs. Ask with the host's question tool (Claude Code `AskUserQuestion`,
-Codex `request_user_input`), or in plain text and end the turn when none exists. Use ASCII diagrams and basic
-development terms, order options by recommendation, and allow free text (`AskUserQuestion` adds Other itself).
-Continue with the answer; a skill's own ask or stop rules still apply.
+When an ambiguity or a conflict with existing logic or files would change the result, ask as soon as it is found:
+stop edits and external changes, read only what the question needs, and explain it concisely in basic development
+terms for a reader new to the repository. Ask with the host's question tool (Claude Code `AskUserQuestion`, Codex
+`request_user_input`), or in plain text and end the turn when none exists. Use ASCII diagrams, order options by
+recommendation, and allow free text (`AskUserQuestion` adds Other itself). Continue with the answer; a skill's own
+ask or stop rules still apply.
 
 ## Conditional instructions
 
 - Before substantial implementation, repeated model evaluation, plugin maintenance, or diagnosing repeated
-  execution failures, read [work efficiency rules](../work-efficiency.md). Short answers and known-file
-  lookups do not require them; assigned workers follow their bounded assignment.
+  execution failures, read [work efficiency rules](../work-efficiency.md). Assigned workers follow their
+  bounded assignment.
 - Before the first implementation change, read [implementation execution rules](../implementation-execution.md).
 
 ## Planning and design routing

@@ -101,8 +101,8 @@ class ReviewerContractTest(unittest.TestCase):
         self.assertNotIn("review persona", combined)
         self.assertNotIn("grading role", combined)
 
-    def test_skill_review는_교차_계열과_reviewer_대체_후_메인_검토를_쓴다(self):
-        """스킬 검토는 다른 모델 계열을 먼저 쓰고 실패하면 reviewer로 대체한 뒤 메인 세션이 한 번 판단한다."""
+    def test_skill_review는_검토_모델_설정과_reviewer_대체_후_메인_검토를_쓴다(self):
+        """Claude 스킬 검토는 Review model 줄로 reviewer 역할을 실행하고 실패하면 reviewer로 대체하며, 메인 세션이 한 번 판단한다."""
         # Given
         claude = (REPO_ROOT / "instructions/claude-agents.md").read_text(encoding="utf-8")
         codex = (REPO_ROOT / "instructions/codex-agents.md").read_text(encoding="utf-8")
@@ -111,21 +111,25 @@ class ReviewerContractTest(unittest.TestCase):
         # When
         claude_review = " ".join(claude.split("## Skill workers", 1)[1].split("## Implementation", 1)[0].split())
         codex_review = " ".join(codex.split("## Skill workers", 1)[1].split("## Implementation", 1)[0].split())
+        claude_table = " ".join(claude.split("## Role runner", 1)[1].split("## Investigation", 1)[0].split())
+        routing_text = " ".join(routing.split())
 
         # Then
-        self.assertIn("-s read-only", claude_review)
-        self.assertIn("turn_context` names `gpt-6.1-sol` and `xhigh`", claude_review)
-        self.assertIn("fallback `reviewer`", routing)
-        self.assertIn("`gpt-6.1-sol`, `xhigh`", routing)
-        self.assertIn("`claude-opus-5-5`, `high`", routing)
-        self.assertIn("Skill Builder trial execution and other non-review participants", routing)
+        self.assertIn('with `--model` set to the model in the session line "Review model"', claude_review)
+        self.assertIn("| `reviewer` for a skill review role | `hei5enbug-agent-setup:reviewer` |", claude_table)
+        self.assertIn(
+            "`role_runner.py reviewer` with the `review_model` setting (default `gpt-6-astra`), `xhigh`; "
+            "fallback `reviewer` with `claude-opus-5-5`, `high`",
+            routing_text,
+        )
+        self.assertIn("fallback `reviewer` with `gpt-6.1-sol`, `xhigh`", routing_text)
+        self.assertIn("Skill Builder trial execution and other non-review participants", routing_text)
         self.assertIn("--model claude-opus-5-5 --effort high", codex_review)
         self.assertIn("JSON `modelUsage` names `claude-opus-5-5`", codex_review)
         self.assertIn("with `gpt-6.1-sol` and `xhigh` passed explicitly", codex_review)
-        self.assertIn("reviews the same material once", claude_review)
-        self.assertIn("reviews the same material once", codex_review)
-        self.assertIn("Do not run another review round.", claude_review)
-        self.assertIn("do not run another review round", codex_review)
+        self.assertIn("The reviewer returns findings only.", routing_text)
+        self.assertIn("reviews the same material once and makes the final decision", routing_text)
+        self.assertEqual(routing_text.count("Do not run another review round."), 1)
 
 
 if __name__ == "__main__":

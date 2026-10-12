@@ -149,7 +149,14 @@ def test_중요_변경의_독립_검토는_개별_승인과_실제_설정_확인
     # Then
     assert "completed implementation changes" in text
     assert "general workflow is not approval to invoke a reviewer" in text
-    assert "exactly one reviewer from the other model family" in text
+    assert "exactly one reviewer that the mapping below selects" in text
+    assert "| Claude | the `review_model` setting (default `gpt-6-astra`) | `xhigh` |" in text
+    assert "| GPT | `claude-fable-5-1` | `xhigh` |" in text
+    assert "say in the result that the review is not cross-family" in text
+    assert "A role runner exit code 3 or 4 means the same." in text
+    assert "do not substitute" in text
+    assert ".ko.md" not in text
+    assert text.index("Use this model mapping: | Authoring model family") > 0
     assert "verify the actual model and effort from host records" in text
     assert "Include necessary untracked files" in text
     assert "Do not enable extra billing or change authentication" in text

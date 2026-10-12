@@ -1,6 +1,4 @@
-# Codex planning and agents
-
-Plan in the main session's plan mode.
+# Codex agents
 
 The reviewer invocation governed by [independent model validation](independent-model-validation.md) is an
 exception to the timing and worker rules below.
@@ -46,9 +44,7 @@ session resume, apply its effective-settings checks before dispatch.
 
   Accept its result only when the JSON `modelUsage` names `claude-opus-5-5`. If `claude` is missing, not logged in,
   fails with an authentication, usage-limit, model, or timeout error, or that evidence is missing, spawn the plugin
-  `reviewer` role with `gpt-6.1-sol` and `xhigh` passed explicitly. Verify its rollout record reports those settings
-  and report the substitution once. The reviewer returns findings only. The main session reviews the same material
-  once and makes the final decision; do not run another review round.
+  `reviewer` role with `gpt-6.1-sol` and `xhigh` passed explicitly. Verify its rollout record reports those settings.
 - Send a local-evidence research ticket to `scout` and bounded public research to `researcher` when public tools are
   available and its settings are verified. Keep private or authenticated remote access in the main session.
 - For Skill Builder, trial execution and other non-review participants use the host's upper model from its evaluation
@@ -74,11 +70,9 @@ adds only the Codex worker integration.
 - Accept the explicit spawn arguments plus the worker's rollout record as evidence. Find the record in the
   sessions directory under `CODEX_HOME`, which defaults to `~/.codex`: its `session_meta` names the parent
   thread from the coordinator's `CODEX_THREAD_ID` and the worker's agent path, and its `turn_context` names
-  the actual `model` and `effort`. A worker's self-report is not this record.
-- The spawn result does not name the model, so start each worker with a readiness-only assignment. After its
-  record passes, send the implementation assignment to the same worker thread with a follow-up. Use this path
-  only when that follow-up keeps its settings. When that continuation is unavailable, skip the two-phase path
-  and use the session fallback. Recheck the settings after any resume.
+  the actual `model` and `effort`.
+- The spawn result does not name the model, so follow the readiness-only path in implementation execution and
+  send the implementation assignment to the same worker thread with a follow-up.
 - The host limit is `agents.max_concurrent_threads_per_session`, which counts spawned threads but not the main
   thread. Use its current value and open slots; never change it.
 - Missing worker tools, a missing `worker` role file, an unavailable model or `xhigh`, an incompatible user
@@ -103,4 +97,4 @@ claude -p --model claude-opus-5-5 --effort xhigh --output-format json --permissi
 - Accept the result only when the JSON `modelUsage` names `claude-opus-5-5`.
 - When `claude` is missing, the process ends with an authentication, usage-limit, or model error, or that
   evidence is missing, spawn the plugin `designer` role with `gpt-6-astra` and `xhigh` instead. Verify its
-  rollout record as for `worker`, and report the substitution.
+  rollout record as for `worker`.

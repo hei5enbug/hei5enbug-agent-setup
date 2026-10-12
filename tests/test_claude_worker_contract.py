@@ -8,10 +8,14 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 import unittest
 from pathlib import Path
 
 import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+import session_context  # noqa: E402
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -178,7 +182,15 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         self.assertTrue(all((config_path.parent / module).is_file() for module in modules))
         self.assertEqual(
             list(options),
-            ["agent_guard", "session_approval", "role_pinning", "implementation_worker", "language_guard", "datagrip_guard"],
+            [
+                "agent_guard",
+                "session_approval",
+                "role_pinning",
+                "implementation_worker",
+                "review_model",
+                "language_guard",
+                "datagrip_guard",
+            ],
         )
         self.assertEqual(
             options["implementation_worker"],
@@ -190,10 +202,13 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
                 "default": "codex",
             },
         )
+        self.assertEqual(options["review_model"]["type"], "string")
+        self.assertEqual(options["review_model"]["default"], "gpt-6-astra")
+        self.assertEqual(set(options["review_model"]["options"]), set(session_context.REVIEW_MODELS))
         self.assertIn("sonnet-worker", options["role_pinning"]["description"])
         for key, option in options.items():
             with self.subTest(key=key):
-                if key == "implementation_worker":
+                if key in {"implementation_worker", "review_model"}:
                     self.assertTrue(option["title"].isascii() and option["description"].isascii())
                     continue
                 self.assertEqual(option["type"], "boolean")
@@ -213,12 +228,11 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
             '`sonnet`.',
             "A user request for one route applies to that request only.",
             "`hei5enbug-agent-setup:designer` still takes UI code, visual design, and diagram work.",
-            "The `worker` definition pins `claude-haiku-5-5` with `high`, `sonnet-worker` pins "
-            "`claude-sonnet-5-5` with `high`, and `designer` pins `claude-opus-5-5` with `xhigh`.",
-            "The bullets below apply when a plugin agent runs: the Haiku worker, including as the Codex fallback, "
-            "the Sonnet worker, and the designer.",
-            "Never pass a per-invocation model on an invocation or resume, because that overrides the definition.",
             "Never use any other agent.",
+            "Never pass a per-invocation model to a plugin agent on an invocation or resume, because that overrides "
+            "its definition",
+            "The bullets below apply whenever a plugin agent runs: a runner fallback, the Haiku or Sonnet worker, "
+            "and the designer.",
         )
 
         # When
@@ -229,17 +243,15 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
             self.assertIn(phrase, section)
         self.assertNotIn("alias", section)
         self.assertNotIn("model-config", section)
+        self.assertIsNone(re.search(r"claude-[a-z]+-\d|gpt-\d", CLAUDE_AGENTS.read_text(encoding="utf-8")))
 
-    def test_Codex_worker는_luna_xhigh와_작업_폴더_쓰기로_실행하고_실패하면_Sonnet_worker로_대체한다(self):
-        """Codex worker는 gpt-6-luna와 xhigh, 작업 폴더 쓰기 샌드박스로 실행하고, 실행 기록을 확인하며, 실패하면 Sonnet worker로 대체한다."""
+    def test_Codex_worker는_역할_실행기로_실행하고_작업_폴더_밖_쓰기만_추가_허용한다(self):
+        """Codex worker는 role_runner worker로 실행하고, 세션 폴더 밖 디렉터리는 --add-dir로만 추가한다."""
         # Given
         expected = (
-            '`codex exec -m gpt-6-luna -c model_reasoning_effort="xhigh" -s workspace-write -C <session folder> '
-            "--json -o <result file> - < <assignment file>`",
-            "Never pass `danger-full-access`, `--dangerously-bypass-approvals-and-sandbox`, or a `-c` override of "
-            "sandbox or network settings.",
-            "must name `gpt-6-luna` and `xhigh` in its `turn_context` entries.",
-            "give the task to `hei5enbug-agent-setup:worker` (the Haiku worker) and report the substitution once.",
+            "Write the assignment, with the usual assignment fields, to a file and run the `worker` role.",
+            "Add `--add-dir <dir>` only for a directory outside the session folder that the task must write.",
+            "The plugin mod asks once per session for each such directory.",
         )
 
         # When
@@ -248,8 +260,10 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         # Then
         for phrase in expected:
             self.assertIn(phrase, section)
+        for forbidden in ("codex exec", "danger-full-access", "--ephemeral"):
+            self.assertNotIn(forbidden, section)
 
-    def test_실제_모델과_사고_강도를_낮출_수_있는_설정을_확인한다(self):
+    def test_모드_줄이_없으면_실제_모델과_사고_강도를_낮출_수_있는_설정을_확인한다(self):
         """강제 모델, 사고 강도 재정의, 상한, 대체 경고를 확인하고 부족한 근거를 거부한다."""
         # Given
         inputs = (
@@ -267,47 +281,45 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         for name in inputs:
             self.assertIn(name, section)
         self.assertIn("Never change user settings.", section)
+        self.assertIn("in the environment and every settings file", section)
         self.assertIn(
-            "names the invoked definition's pinned model and `high` as the effort: `claude-haiku-5-5` for `worker` "
-            "and `claude-sonnet-5-5` for `sonnet-worker`",
+            "only when it names the invoked definition's pinned model and effort.",
             section,
         )
-        self.assertIn("For `designer`, the evidence is `claude-opus-5-5` with `xhigh`.", section)
         self.assertIn(
             "A different recorded model, a cap below the pinned effort, a contradictory override, or unknown effective "
             "precedence is insufficient.",
             section,
         )
 
-    def test_이어_보내기_지원_여부에_따라_준비_확인_경로가_갈린다(self):
-        """고정 표시 줄이 없으면 시작 결과에 모델이 없으므로 준비 확인 뒤 같은 worker에 구현을 보내고, 이어 보내기가 없으면 메인 대체 처리를 사용한다."""
+    def test_고정_표시_줄이_없으면_준비_확인_경로를_따르고_설정을_다시_확인한다(self):
+        """고정 표시 줄이 없으면 구현 실행 규칙의 준비 확인 경로를 따르며 구현 후속 메시지마다 설정을 다시 확인한다."""
         # Given
-        readiness = (
-            "Without that line, the launch result does not name the model, so start each worker with a "
-            "readiness-only assignment."
+        expected = (
+            "Without that line, the launch result does not name the model.",
+            "follow the readiness-only path in implementation execution",
+            "Claude Code can reload settings during a session, so recheck them before every follow-up that carries "
+            "implementation work.",
         )
-        supported = "Use this path only when that follow-up keeps the pinned model."
-        unsupported = "When that continuation is unavailable, skip the two-phase path and use the session fallback."
 
         # When
         section = implementation_section()
 
         # Then
-        self.assertIn(readiness, section)
-        self.assertIn("After its record passes, send the implementation assignment to the same worker.", section)
-        self.assertIn(supported, section)
-        self.assertIn(unsupported, section)
-        self.assertIn("Recheck the settings after any resume.", section)
+        for phrase in expected:
+            self.assertIn(phrase, section)
+        self.assertNotIn("Use this path only when that follow-up keeps", section)
 
-    def test_역할_고정_표시가_있으면_준비_확인_없이_바로_할당하고_기록은_계속_확인한다(self):
-        """세션 컨텍스트에 역할 고정 표시 줄이 있으면 준비 확인 호출 없이 할당하되 설정 점검과 기록 확인은 유지한다."""
+    def test_역할_고정_표시가_있으면_세션당_한_번_상한만_확인하고_고정과_차단을_수락_증거로_쓴다(self):
+        """세션 컨텍스트에 역할 고정 표시 줄이 있으면 위임마다 설정 파일이나 기록을 읽지 않고 한 번의 상한 확인과 모드의 고정을 증거로 쓴다."""
         # Given
         expected = (
             "When the session context contains `hei5enbug-agent-setup mod: role pinning active`",
             "blocks tool calls from a subagent that answered on another model",
-            "Send the assignment directly, with no readiness-only call.",
-            "In both cases, keep the settings inspection before the first invocation",
-            "read the subagent record to confirm the actual model and effort before accepting delegated work",
+            "Once per session, check only forced-model and effort limits",
+            "A forced model or a cap below the pinned effort stops plugin-agent delegation.",
+            "The mod's pinning and blocking are the acceptance evidence, so read no settings or subagent record per "
+            "delegation.",
         )
 
         # When
@@ -341,24 +353,37 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         self.assertIn(limit, section)
         self.assertIn("never change it", section)
 
-    def test_구현_후속_메시지마다_강제_모델_설정을_다시_확인한다(self):
-        """Claude Code는 세션 중 설정을 다시 읽으므로 구현 후속 메시지마다 강제 모델 입력을 다시 확인한다."""
+    def test_역할_실행기는_종료_코드별_처리와_역할별_대체_경로를_정한다(self):
+        """역할 실행기 호출은 Source directory 줄을 쓰고 종료 코드 0, 2, 3, 4를 처리하며 역할마다 대체 경로를 정한다."""
         # Given
-        expected = (
-            "in the environment and every settings file",
-            "Claude Code can reload settings during a session, and a forced subagent model overrides the definition.",
-            "Recheck these inputs before every follow-up that carries implementation work.",
-        )
+        text = CLAUDE_AGENTS.read_text(encoding="utf-8")
 
         # When
-        section = implementation_section()
+        section = " ".join(text.split("## Role runner", 1)[1].split("## Investigation", 1)[0].split())
 
         # Then
-        for phrase in expected:
-            self.assertIn(phrase, section)
+        self.assertIn(
+            "python3 <Source directory>/scripts/role_runner.py <scout|researcher|reviewer|worker> --assignment <file> "
+            "--result <file>",
+            section,
+        )
+        self.assertIn("where `<Source directory>` is the line in the session context", section)
+        self.assertIn("Never run `cd` before it.", section)
+        self.assertIn("Add `--model <id>` only for `reviewer` and `--add-dir <dir>` only for `worker`.", section)
+        for row in (
+            "| 0 | Accept the result file. |",
+            "| 2 | Fix the call and run it again. |",
+            "| 3 or 4 | Read no result file and use the fallback below. |",
+            "| `scout` | `hei5enbug-agent-setup:scout` |",
+            "| `researcher` | `hei5enbug-agent-setup:researcher`, only when public search and fetch tools are available |",
+            "| `reviewer` for a skill review role | `hei5enbug-agent-setup:reviewer` |",
+            "| `reviewer` for independent validation | None. Report that independent validation was not performed. |",
+            "| `worker` | Inspect the partial diff, then `hei5enbug-agent-setup:worker` |",
+        ):
+            self.assertIn(row, section)
 
-    def test_조사는_읽기_전용_Luna_scout로_먼저_실행하고_Sonnet_scout로_대체한다(self):
-        """범위가 한정된 조사는 gpt-6-luna xhigh 읽기 전용 codex exec로 실행하고, 실패하면 Sonnet scout로 대체한다."""
+    def test_조사는_역할_실행기의_scout와_researcher로_먼저_실행한다(self):
+        """범위가 한정된 조사는 scout 역할, 공개 조사는 researcher 역할로 실행하고 결과는 단서로만 쓴다."""
         # Given
         text = CLAUDE_AGENTS.read_text(encoding="utf-8")
 
@@ -367,17 +392,13 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
 
         # Then
         for phrase in (
-            "run the Luna scout from the session folder with the assignment on stdin",
-            'codex exec -m gpt-6-luna -c model_reasoning_effort="xhigh" -s read-only -C <session folder> --json '
-            "-o <result file> - < <assignment file>",
-            "It then carries the body of the plugin's `agents/scout.md` as the role instructions.",
-            "Never pass `--add-dir`, run `cd` before the command, or pass `--ephemeral`.",
-            "Accept the result only when the rollout `turn_context` names `gpt-6-luna` and `xhigh`.",
-            "use `hei5enbug-agent-setup:scout` and report the substitution once.",
-            "Its definition pins `claude-sonnet-5-5` with `medium`;",
-            "never pass a per-invocation model, because that overrides the definition.",
+            "run the `scout` role. Give each scout one question and one narrow search scope.",
+            "Require file paths, code symbols, and concrete evidence in its results.",
+            "Treat results as leads.",
+            "run the `researcher` role, which uses the web search tool and no shell network.",
         ):
             self.assertIn(phrase, investigation)
+        self.assertNotIn("codex exec", investigation)
 
     def test_내장_서브에이전트는_예외_둘을_빼고_금지하고_차단_훅을_가리킨다(self):
         """내장 서브에이전트 이름과 fork는 금지하되 claude-code-guide와 statusline-setup만 예외로 두고, 종류를 비우는 호출도 막는다."""
@@ -400,8 +421,8 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
             built_in,
         )
 
-    def test_스킬_검토는_교차_계열_Codex와_reviewer_대체를_쓴다(self):
-        """Claude Code 스킬 검토는 Codex를 먼저 쓰고, 실패하면 reviewer로 대체한 뒤 메인 세션이 한 번 판단한다."""
+    def test_스킬_검토와_독립_검증은_검토_모델_줄의_reviewer를_쓴다(self):
+        """스킬 검토 역할은 Review model 줄의 모델로 reviewer 역할을 실행하고, 독립 검증은 승인 뒤 같은 역할로 실행한다."""
         # Given
         text = CLAUDE_AGENTS.read_text(encoding="utf-8")
 
@@ -411,36 +432,36 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         # Then
         self.assertIn("A skill review role is read-only judgment work", skill_workers)
         self.assertIn(
-            'codex exec -m gpt-6.1-sol -c model_reasoning_effort="xhigh" -s read-only',
+            'Run the `reviewer` role with `--model` set to the model in the session line "Review model".',
             skill_workers,
         )
-        self.assertIn("Do not run `cd` before the command or pass `--ephemeral`.", skill_workers)
-        self.assertIn("rollout `turn_context` names `gpt-6.1-sol` and `xhigh`", skill_workers)
-        self.assertIn("use `hei5enbug-agent-setup:reviewer`", skill_workers)
-        self.assertIn("report the substitution once", skill_workers)
-        self.assertIn("A reviewer returns findings only.", skill_workers)
-        self.assertIn("reviews the same material once and makes the final decision", skill_workers)
-        self.assertIn("Do not run another review round.", skill_workers)
-        self.assertIn("Send a local-evidence research ticket to the scout route in \"Investigation\"", skill_workers)
-        self.assertIn("bounded public research to `researcher`", skill_workers)
+        self.assertIn(
+            "Independent validation, after the user approves it under independent model validation, runs the "
+            "`reviewer` role with `--model` set to the reviewer that file selects.",
+            skill_workers,
+        )
+        self.assertIn("Send a local-evidence research ticket to the `scout` role", skill_workers)
+        self.assertIn("bounded public research to the `researcher` role", skill_workers)
+        self.assertIn("Do not use `scout` for a review role.", skill_workers)
         self.assertIn("trial execution and other non-review participants use the host's upper model", skill_workers)
         self.assertIn("run a separate `claude -p` process with the", skill_workers)
+        self.assertNotIn("findings only", skill_workers.lower())
+        self.assertNotIn("review round", skill_workers)
 
-    def test_공유_라우팅과_GPT_전환_후에도_Claude_Code_설정을_유지한다(self):
-        """공유 라우팅을 조건부로 읽으며 GPT로 전환해도 Claude Code의 역할 설정을 유지한다."""
+    def test_공유_라우팅을_먼저_읽고_GPT_전환_설명은_공유_라우팅에만_둔다(self):
+        """공유 라우팅과 작업 효율 규칙을 호출 전에 읽게 하고, 메인 모델 전환 설명은 공유 라우팅 한 곳에만 둔다."""
         # Given
-        text = CLAUDE_AGENTS.read_text(encoding="utf-8")
+        text = " ".join(CLAUDE_AGENTS.read_text(encoding="utf-8").split())
+        routing = " ".join((REPO_ROOT / "instructions/model-routing.md").read_text(encoding="utf-8").split())
 
         # When
-        section = implementation_section()
-        normalized = " ".join(text.split())
+        reads_routing = "read [shared model routing](model-routing.md)" in text
 
         # Then
-        self.assertIn("read [shared model routing](model-routing.md)", normalized)
-        self.assertIn("Selecting GPT as Claude Code's main model does not change this host", section)
-        self.assertIn("`hei5enbug-agent-setup:researcher` only when public search and fetch tools are available", normalized)
-        self.assertIn("Never pass a per-invocation model; its definition pins `claude-haiku-5-5` and `medium`.", normalized)
-        self.assertIn("Verify that definition, effective non-secret settings, and the host subagent record", normalized)
+        self.assertTrue(reads_routing)
+        self.assertIn("instruction-reuse rules in [work efficiency](work-efficiency.md)", text)
+        self.assertNotIn("Selecting GPT as Claude Code's main model", text)
+        self.assertIn("Selecting GPT in Claude Code keeps Claude Code's tools", routing)
 
 
 if __name__ == "__main__":

@@ -35,7 +35,7 @@ class PlanningContractTest(unittest.TestCase):
         validation = VALIDATION.read_text()
         mapping = (
             re.compile(r"\| GPT \| `claude-fable-[\d-]+` \| `xhigh` \|"),
-            re.compile(r"\| Claude \| `gpt-[\d.]+-sol` \| `xhigh` \|"),
+            re.compile(r"\| Claude \| the `review_model` setting \(default `gpt-[\d.]+-astra`\) \| `xhigh` \|"),
         )
         for row in mapping:
             self.assertRegex(validation, row)
@@ -44,7 +44,7 @@ class PlanningContractTest(unittest.TestCase):
             self.assertIsNone(re.search(r"claude-fable-|gpt-[\d.]+-sol|Claude Fable|GPT Sol", text))
 
         signatures = (
-            "exactly one reviewer from the other model family",
+            "exactly one reviewer that the mapping below selects",
             "This is one validation pass, not a debate",
         )
         for root in (REPO_ROOT / "instructions", REPO_ROOT / "skills"):
@@ -190,7 +190,9 @@ class PlanningContractTest(unittest.TestCase):
 
         # Then
         self.assertIn(
-            "Accept delegated work only when the host record shows the selected model and effort for every turn that edited it.",
+            "Accept delegated work only when the host record, or the enforcement the host's agent rules name "
+            "(such as the mod's role pinning or the role runner's verification), shows the selected model and effort "
+            "for every turn that edited it.",
             review,
         )
 
