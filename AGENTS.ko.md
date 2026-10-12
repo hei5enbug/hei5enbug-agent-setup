@@ -23,12 +23,13 @@
   두 파일을 함께 수정, 이동 또는 삭제한다. 코드, 스키마, 테스트 자료, 생성 아티팩트 또는
   영어가 아닌 문서는 복제하지 않는다.
 - 스킬을 변경하기 전에 `skills/skill-builder/SKILL.md`의 현재 내용이 이미 로드되어 있지 않으면 읽는다.
-  변경에 맞는 직접 수정 또는 평가 절차를 따른다. 플러그인 구조, 매니페스트 또는 훅을
+  직접 수정할 때는 "Portability contract", "Core loop", "Translated mirrors" 절만 읽고, 스킬을 새로 만들거나 평가
+  절차를 탈 때는 파일 전체를 읽는다. 변경에 맞는 직접 수정 또는 평가 절차를 따른다. 플러그인 구조, 매니페스트 또는 훅을
   변경할 때는 호스트가 `plugin-creator`를 제공하면 사용하고 기존 플러그인 계약을 보존한다.
 - 공통 동작은 하나의 기준 원본에 두고 실제 호스트 차이만 분리한다. 세션 지침이 이미 규정한 규칙은
   그곳에만 두고, 다시 쓰지 말고 참조한다.
-- 이 저장소를 변경하기 전에, 세션마다 한 번 `tests/test_model_pins.py`의 `PINS`에 있는 모든 모델 계열의 가장 새로운
-  정식 모델을 확인한다. 공식 [Claude 모델 개요](https://platform.claude.com/docs/en/about-claude/models/overview),
+- 이 저장소를 변경하기 전에, `tests/test_model_pins.py`의 `PINS_VERIFIED_ON`이 14일보다 오래됐으면 `PINS`에 있는
+  모든 모델 계열의 가장 새로운 정식 모델을 확인하고 `PINS_VERIFIED_ON`을 그 날짜로 바꾼다. 공식 [Claude 모델 개요](https://platform.claude.com/docs/en/about-claude/models/overview),
   [OpenAI 모델 카탈로그](https://developers.openai.com/api/docs/models), 각 호스트의 모델 카탈로그를 사용하고 미리보기
   모델은 제외한다. 계열에 더 새로운 릴리스가 있으면 같은 변경에서 `PINS`와 모든 참조를 갱신하고
   `tests/test_model_pins.py`가 통과할 때까지 맞춘다. 실행 파일은 모델을 이 전체 ID로만 적는다. 별칭이나 실행 시점의
