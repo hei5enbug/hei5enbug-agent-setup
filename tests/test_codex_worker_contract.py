@@ -112,7 +112,6 @@ class CodexWorkerContractTest(unittest.TestCase):
             "the sessions directory under `CODEX_HOME`",
             "its `session_meta` names the parent thread from the coordinator's `CODEX_THREAD_ID`",
             "its `turn_context` names the actual `model` and `effort`",
-            "A worker's self-report is not this record.",
         )
 
         # When
@@ -123,21 +122,20 @@ class CodexWorkerContractTest(unittest.TestCase):
             self.assertIn(phrase, section)
 
     def test_이어_보내기_지원_여부에_따라_준비_확인_경로가_갈린다(self):
-        """생성 결과에 모델이 없으므로 준비 확인 뒤 같은 스레드에 구현을 보내고, 이어 보내기가 없으면 메인 대체 처리를 사용한다."""
+        """생성 결과에 모델이 없으므로 구현 실행 규칙의 준비 확인 경로를 따라 같은 스레드에 구현을 보낸다."""
         # Given
-        readiness = "The spawn result does not name the model, so start each worker with a readiness-only assignment."
-        supported = "Use this path only when that follow-up keeps its settings."
-        unsupported = "When that continuation is unavailable, skip the two-phase path and use the session fallback."
+        readiness = (
+            "The spawn result does not name the model, so follow the readiness-only path in implementation execution "
+            "and send the implementation assignment to the same worker thread with a follow-up."
+        )
 
         # When
         section = implementation_section()
 
         # Then
         self.assertIn(readiness, section)
-        self.assertIn("send the implementation assignment to the same worker thread with a follow-up", section)
-        self.assertIn(supported, section)
-        self.assertIn(unsupported, section)
-        self.assertIn("Recheck the settings after any resume.", section)
+        self.assertNotIn("Use this path only when that follow-up keeps", section)
+        self.assertNotIn("self-report", section)
 
     def test_기능이_없으면_위임을_멈추고_메인_대체_처리를_쓴다(self):
         """worker 도구, 모델, xhigh, 실제 설정 근거가 없으면 위임을 멈추고 공통 대체 처리를 적용한다."""
@@ -187,7 +185,7 @@ class CodexWorkerContractTest(unittest.TestCase):
             "When `claude` is missing, the process ends with an authentication, usage-limit, or model error, "
             "or that evidence is missing",
             "spawn the plugin `designer` role with `gpt-6-astra` and `xhigh` instead.",
-            "Verify its rollout record as for `worker`, and report the substitution.",
+            "Verify its rollout record as for `worker`.",
         )
 
         # When
@@ -277,7 +275,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         self.assertIn("so it also denies the built-in `worker` until the plugin role exists", built_in)
 
     def test_스킬_검토는_교차_계열_Claude와_reviewer_대체를_쓴다(self):
-        """Codex 스킬 검토는 Claude를 먼저 쓰고 실패하면 reviewer로 대체한 뒤 메인 세션이 한 번 판단한다."""
+        """Codex 스킬 검토는 Claude를 먼저 쓰고 실패하면 reviewer로 대체하며, 결과만 반환 규칙은 공유 라우팅이 맡는다."""
         # Given
         text = CODEX_AGENTS.read_text(encoding="utf-8")
 
@@ -294,10 +292,10 @@ class CodexWorkerContractTest(unittest.TestCase):
         )
         self.assertIn("Accept its result only when the JSON `modelUsage` names `claude-opus-5-5`", skill_workers)
         self.assertIn("spawn the plugin `reviewer` role with `gpt-6.1-sol` and `xhigh` passed explicitly", skill_workers)
-        self.assertIn("report the substitution once", skill_workers)
-        self.assertIn("The reviewer returns findings only.", skill_workers)
-        self.assertIn("reviews the same material once", skill_workers)
-        self.assertIn("do not run another review round", skill_workers)
+        self.assertIn("Verify its rollout record reports those settings.", skill_workers)
+        self.assertNotIn("substitution", skill_workers)
+        self.assertNotIn("findings only", skill_workers)
+        self.assertNotIn("review round", skill_workers)
         self.assertIn("Send a local-evidence research ticket to `scout`", skill_workers)
         self.assertIn("bounded public research to `researcher`", skill_workers)
         self.assertIn("run a separate `codex exec` process with the model and effort that the skill pins", skill_workers)

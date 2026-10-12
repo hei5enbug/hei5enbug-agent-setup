@@ -68,6 +68,7 @@ class ResearcherContractTest(unittest.TestCase):
         combined = f"{claude}\n{codex}".lower()
 
         # Then
+        self.assertNotIn("verified this role's effective model", claude.lower())
         for phrase in (
             "exactly one question",
             "source scope",

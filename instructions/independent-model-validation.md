@@ -1,8 +1,7 @@
 # Independent model validation
 
 Use this English file as the single canonical source for independent validation of implementation plans,
-technical design documents, RFCs, and completed implementation changes. `independent-model-validation.ko.md`
-is a non-authoritative Korean translation for human readers; never read it during execution.
+technical design documents, RFCs, and completed implementation changes.
 
 ## Confirmation gate
 
@@ -22,24 +21,26 @@ independent validation did not run. Do not ask again for the same draft.
 
 ## Reviewer selection
 
-After the user approves the gate above, send the completed draft to exactly one reviewer from the other
-model family in a read-only session. Give the reviewer the frozen intent, relevant authoritative evidence,
+After the user approves the gate above, send the completed draft to exactly one reviewer that the mapping
+below selects, in a read-only session. Give the reviewer the frozen intent, relevant authoritative evidence,
 and the complete draft. The reviewer returns findings only; the authoring session keeps every final
 decision.
 
 Use this model mapping:
 
-Select the actual authoring model family, not the execution host. GPT authoring in Claude Code follows the
-GPT row. If both families materially contribute, record their contribution and use the final authoring
-family for the one approved reviewer. Do not claim independence from every contributor or add review calls.
-
 | Authoring model family | Review model | Reasoning effort |
 |---|---|---|
 | GPT | `claude-fable-5-1` | `xhigh` |
-| Claude | `gpt-6.1-sol` | `xhigh` |
+| Claude | the `review_model` setting (default `gpt-6-astra`) | `xhigh` |
+
+Select the actual authoring model family, not the execution host. GPT authoring in Claude Code follows the
+GPT row. If both families materially contribute, record their contribution and use the final authoring
+family for the one approved reviewer. Do not claim independence from every contributor or add review calls.
+When the configured reviewer is in the authoring family, say in the result that the review is not
+cross-family.
 
 Use the pinned model ID exactly and record it. Do not look up a newer release, follow a provider alias, or
-substitute the authoring family, another model tier, or lower reasoning effort. The reviewer must not edit
+substitute another model tier or a lower reasoning effort than the mapping selects. The reviewer must not edit
 the draft, repository, or external state.
 
 Keep the main session's model and effort unchanged. Pass the reviewer's model and effort explicitly to a
@@ -86,8 +87,9 @@ second model call. A declined gate authorizes no substitute independent review. 
 and required tests still run; never label them independent validation.
 
 If the required model, effort, read-only execution, or model runner is unavailable, do not substitute
-another configuration or present author inspection as independent review. Finish work that does not depend on
-the reviewer and report that independent validation was not performed and why.
+another configuration or present author inspection as independent review. A role runner exit code 3 or 4
+means the same. Finish work that does not depend on the reviewer and report that independent validation was
+not performed and why.
 
 ## Finalization
 

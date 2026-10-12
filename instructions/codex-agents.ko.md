@@ -1,9 +1,7 @@
-# Codex 계획 및 에이전트
+# Codex 에이전트
 
 > 영어 원본: [codex-agents.md](codex-agents.md)
 > 이 문서는 사람을 위한 비권위 한국어 번역본이다. 에이전트 실행 시 읽거나 사용하지 않는다.
-
-메인 세션의 계획 모드에서 계획한다.
 
 [독립 모델 검증](independent-model-validation.ko.md)이 정한 검토자 호출은 아래 시점 규칙과 worker 규칙의 예외다.
 
@@ -46,8 +44,7 @@
 
   결과는 JSON의 `modelUsage`에 `claude-opus-5-5`가 있을 때만 인정한다. `claude`가 없거나 로그인되지 않았거나,
   인증·사용량 한도·모델·시간 초과 오류로 끝나거나 근거가 없으면 플러그인 `reviewer` 역할을 `gpt-6.1-sol`과
-  `xhigh`를 명시해 시작한다. rollout 기록에 해당 설정이 있는지 확인하고 대체 사실을 한 번 보고한다. reviewer는
-  지적 결과만 반환한다. 메인 세션은 같은 자료를 한 번 직접 검토한 뒤 최종 판단한다. 추가 검토는 하지 않는다.
+  `xhigh`를 명시해 시작한다. rollout 기록에 해당 설정이 있는지 확인한다.
 - 로컬 근거 조사 티켓은 `scout`, 공개 자료 조사는 공개 도구와 설정을 확인한 뒤 `researcher`에 맡긴다. 비공개 자료나
   인증이 필요한 원격 접근은 메인 세션에서 처리한다.
 - Skill Builder의 시험 실행과 기타 비검토 참여자에는 평가 어댑터에서 호스트의 상위 모델을 사용한다. 검토 역할을
@@ -69,10 +66,9 @@
   바꾸지 않는다.
 - 명시적인 생성 인수와 worker의 rollout 기록을 근거로 인정한다. 이 기록은 `CODEX_HOME`(기본값 `~/.codex`) 아래
   sessions 디렉터리에서 찾는다. 기록의 `session_meta`에는 조정자의 `CODEX_THREAD_ID`인 부모 스레드와 worker의
-  에이전트 경로가, `turn_context`에는 실제 `model`과 `effort`가 있다. worker가 스스로 보고한 내용은 이 기록이 아니다.
-- 생성 결과에는 모델이 나오지 않으므로 각 worker는 준비 확인 전용 할당으로 시작한다. 기록 확인을 통과하면 같은
-  worker 스레드에 후속 메시지로 구현 할당을 보낸다. 이 경로는 그 후속 메시지가 설정을 유지할 때만 사용한다. 이런
-  이어 보내기를 쓸 수 없으면 두 단계 경로 대신 세션의 대체 처리 규칙을 적용한다. 재개한 뒤에는 설정을 다시 확인한다.
+  에이전트 경로가, `turn_context`에는 실제 `model`과 `effort`가 있다.
+- 생성 결과에는 모델이 나오지 않으므로 구현 실행 규칙의 준비 확인 경로를 따라 같은 worker 스레드에 후속 메시지로
+  구현 할당을 보낸다.
 - 호스트 한도는 `agents.max_concurrent_threads_per_session`이다. 생성한 스레드는 세지만 메인 스레드는 세지 않는다.
   현재 값과 남은 자리를 기준으로 하고 이 값을 바꾸지 않는다.
 - worker 도구가 없거나, `worker` 역할 파일이 없거나, 모델이나 `xhigh`를 쓸 수 없거나, 사용자 설정이 맞지 않거나,
@@ -94,5 +90,4 @@ claude -p --model claude-opus-5-5 --effort xhigh --output-format json --permissi
 - 샌드박스가 네트워크를 막으면 일반 Codex 승인 흐름으로 네트워크 접근을 요청한다.
 - JSON `modelUsage`에 `claude-opus-5-5`가 있을 때만 결과를 받아들인다.
 - `claude`가 없거나, 프로세스가 인증·사용량 한도·모델 오류로 끝나거나, 그 근거가 없으면 대신 플러그인 `designer`
-  역할을 `gpt-6-astra`와 `xhigh`로 생성한다. `worker`와 같은 방식으로 rollout 기록을 확인하고 대체 사실을
-  보고한다.
+  역할을 `gpt-6-astra`와 `xhigh`로 생성한다. `worker`와 같은 방식으로 rollout 기록을 확인한다.

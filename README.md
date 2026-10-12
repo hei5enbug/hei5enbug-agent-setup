@@ -45,12 +45,14 @@ hei5enbug-agent-setup/
 │   └── session/
 │       ├── claude-code.md
 │       ├── codex.md
-│       └── common.md
+│       ├── common.md
+│       └── core.md
 ├── scripts/
 │   ├── agent_guard.py
 │   ├── datagrip_guard.py
 │   ├── language_guard.py
 │   ├── plugin_toggles.py
+│   ├── role_runner.py
 │   └── session_context.py
 ├── tests/
 ├── LICENSE
@@ -118,8 +120,8 @@ behavior: it denies an omitted type, `default`, `explorer`, and every type witho
 built-in `worker` before the plugin role exists. Skills that ask for an independent
 read-only worker use a role whose verified model, effort, and tools match the skill contract. `scout` handles one
 bounded local investigation, including local-evidence research tickets. Public research can use `researcher`. A
-skill-assigned review role uses the other model family, then the `reviewer` fallback if that CLI is unavailable. The
-reviewer returns findings only; the main session reviews once and decides. Skills that write trial outputs use a
+skill-assigned review role uses the configured review model, then the `reviewer` fallback if that runner is unavailable.
+The reviewer returns findings only; the main session reviews once and decides. Skills that write trial outputs use a
 verified evaluation runner when required. See the conditional [model routing contract](instructions/model-routing.md).
 
 ### Claude Code mod
@@ -135,7 +137,7 @@ with `high`, `sonnet-worker` uses `claude-sonnet-5-5` with `high`, `designer` us
 `reviewer` uses `claude-opus-5-5` with `high`. A subagent that answers on another model is stopped: its later requests
 end with a refusal, its tool calls are denied, and its result is replaced with a warning. The session context then
 carries the line `hei5enbug-agent-setup mod: role pinning active`, which lets the main session send assignments
-directly.
+directly and skip per-delegation settings and subagent record checks.
 
 ### GPT in Claude Code
 
@@ -198,8 +200,9 @@ language, such as English or French, the instruction alone applies.
 
 The check ignores code, quotes, and URLs. A text passes when at least 30% of its letters are in the target script,
 and very short text always passes. A `Stop` hook asks for a rewrite when a reply fails, at most 3 times per turn.
-A `PostToolUse` hook adds a reminder after a progress update in another language. Put text the user asks for in
-another language in a code block or block quote.
+A `PostToolUse` hook adds a reminder after a progress update in another language. It runs asynchronously, so the
+reminder reaches the model on the next turn. Put text the user asks for in another language in a code block or block
+quote.
 
 ### DataGrip query guard
 
@@ -224,12 +227,14 @@ without approval.
 
 On Claude Code only, the mod lets you approve certain outward-facing writes once per session. For each Bash and MCP tool
 call, its `tool.check` hook classifies the action and asks the first time a covered kind runs in the session. When the
-call succeeds, its `tool.call` hook records the approved kind in the mod store (`$.store`) under the session ID, so
-later actions of the same kind in that session run without a prompt. It covers creating git tags; pushing tags to a
+call succeeds, its `tool.call` hook reuses that classification for the same tool call instead of classifying it again,
+and records the approved kind in the mod store (`$.store`) under the session ID, so later actions of the same kind in
+that session run without a prompt. It covers creating git tags; pushing tags to a
 configured remote; `gh release create` and `gh release edit` with only the tag and the flags `--title`, `--notes`,
 `--target`, `--generate-notes`, `--notes-from-tag`, `--latest`, `--draft`, `--prerelease`, `--verify-tag`; and MCP tools
 whose names contain a write verb; and a Codex worker's access to a directory outside the session folder (`codex exec`
-with `--add-dir` or `-C`), approved separately for each directory. MCP tools whose names start with a read verb, such as
+with `--add-dir` or `-C`, or `python3 <plugin>/scripts/role_runner.py worker` with `--add-dir`), approved separately for
+each directory and asked once per session. MCP tools whose names start with a read verb, such as
 get, list, search, read, fetch, query, or download, are never covered and keep the normal permission flow, as does the
 DataGrip query tool, which the DataGrip query guard handles. Each tool or command kind is approved separately.
 
@@ -239,20 +244,23 @@ Destructive actions always ask: force pushes, deleting remote branches or tags, 
 `danger-full-access`, `--dangerously-bypass-approvals-and-sandbox`, `--dangerously-bypass-hook-trust`, or a `-c`
 override of sandbox settings. So does a tag push to a URL, an unlisted remote, or `--repo`, or one that mixes a branch
 into a `--tags` push, and so does a `gh release create` or `gh release edit` with attached assets, `--notes-file`, or
-any other flag. A compound command that contains anything the mod cannot verify always asks. A plain `echo` with literal
-text after a covered command, such as `git tag v1 && echo done`, does not stop the approval from applying; an `echo`
-with a variable, command substitution, glob, redirect, or pipe still asks. Subagents never inherit approvals. Approvals
-belong to one session, and the mod drops stored entries older than 7 days. Ordinary pushes and all other commands keep
-the normal permission flow.
+any other flag. A `role_runner.py` call with an unknown option, an expansion or glob token, or a redirect counts as
+unverifiable and always asks. A compound command that contains anything the mod cannot verify always asks. A plain
+`echo` with literal text after a covered command, such as `git tag v1 && echo done`, does not stop the approval from
+applying; an `echo` with a variable, command substitution, glob, redirect, or pipe still asks. Subagents never inherit
+approvals. Approvals belong to one session, and the mod drops stored entries older than 7 days. Ordinary pushes and
+all other commands keep the normal permission flow.
 
 Do not add `permissions.ask` rules for these actions, because an ask rule prompts every time even after a session
 approval.
 
 ## Feature options
 
-Seven boolean features can be turned off, and each defaults to on. The implementation worker route is a string
-option in Claude Code. Choose `codex`, `haiku`, or `sonnet`; an unset or unrecognized value uses `codex`. Set plugin
-options in `/config` or with `claude plugin configure`. On Codex, set environment variables before starting the
+Seven boolean features can be turned off, and each defaults to on. The implementation worker route and the review
+model are string options in Claude Code. Choose `codex`, `haiku`, or `sonnet` for the route; an unset or unrecognized
+value uses `codex`. The review model runs independent validation and skill review roles at `xhigh`. Choose one of the
+seven pinned model IDs; an unset or unrecognized value uses `gpt-6-astra`. Set plugin options in `/config` or with
+`claude plugin configure`. On Codex, set environment variables before starting the
 session. A value of `false`, `0`, `off`, or `no`, in any letter case, turns a boolean feature off.
 
 | Feature | Claude Code `/config` key | Codex environment variable |
@@ -261,6 +269,7 @@ session. A value of `false`, `0`, `off`, or `no`, in any letter case, turns a bo
 | One-time session approval | `session_approval` | Not applicable |
 | Pin role models | `role_pinning` | Not applicable |
 | Implementation worker route | `implementation_worker` (`codex`, `haiku`, or `sonnet`) | Not applicable |
+| Review model | `review_model` (a pinned model ID, default `gpt-6-astra`) | Not applicable |
 | Response language guard | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip query guard | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
 | Subagent permission block in `~/.codex/AGENTS.md` | Not applicable | `HEI5ENBUG_SUBAGENT_POLICY` |
@@ -290,8 +299,9 @@ claude plugin install hei5enbug-agent-setup@hei5enbug
 
 ## Automatic instructions
 
-On macOS and Linux, the plugin hooks combine `instructions/session/common.md` with either
-`instructions/session/codex.md` or `instructions/session/claude-code.md` for the current host.
+On macOS and Linux, the plugin hooks combine `instructions/session/core.md` and `instructions/session/common.md` with
+either `instructions/session/codex.md` or `instructions/session/claude-code.md` for the current host. `core.md` holds
+the rules that apply to every agent.
 Python 3.12 or later must be available as `python3` on the host's `PATH`.
 The hook uses only the Python standard library.
 Root `AGENTS.md` and `CLAUDE.md` govern development of this repository only; the hook never reads them.
@@ -304,7 +314,8 @@ for locating the script. No user or project instruction file is copied, linked, 
 |---|---|
 | Session starts or resumes | `SessionStart` supplies the installed instruction files. In an Orca terminal it also writes a marker with the plugin directory and an instructions digest. |
 | Session clears or compacts | `SessionStart` supplies them again. |
-| A subagent starts | `SubagentStart` supplies the same host's instructions. |
+| A subagent starts | `SubagentStart` supplies a short role context: `core.md`, plus the "Assigned workers" rules for implementation agents. |
+| A role runner child session starts | It receives `core.md` only; the runner puts the role rules before the assignment. |
 | A tool call finishes | `PostToolUse` adds a language reminder after a progress update in another language. |
 | A reply ends | `Stop` asks for a rewrite when the reply is not in the response language. |
 | A DataGrip query is about to run | `PreToolUse` and `PermissionRequest` run the DataGrip query guard before `execute_sql_query`. |
@@ -331,10 +342,11 @@ it. Restart Claude Code or start a new Codex session after updating.
 The hook does not bypass host trust settings or change an already running session to a new plugin version.
 The `orca-plugin-refresh` skill uses those markers to apply an update to running Orca sessions without restarting them.
 
-A missing or empty session file, an invalid local reference, or context larger than 9,000 UTF-8 bytes produces an error on
-stderr and no partial context. Session-start hook errors do not reliably block the host; resolve any
-reported loading error before relying on automatic instructions. Keep the session files short and move
-details into conditional references. Windows execution and live model adherence are not covered by the tests.
+A missing or empty session file, an invalid local reference, main context larger than 9,000 UTF-8 bytes, or a role
+context larger than 4,000 UTF-8 bytes produces an error on stderr and no partial context. Session-start hook errors do
+not reliably block the host; resolve any reported loading error before relying on automatic instructions. Keep the
+session files short and move details into conditional references. Windows execution and live model adherence are not
+covered by the tests.
 
 See the official [Codex hooks](https://learn.chatgpt.com/docs/hooks) and
 [Claude Code hooks](https://code.claude.com/docs/en/hooks) contracts for lifecycle and trust behavior.
@@ -360,24 +372,38 @@ stay in the main session.
 | Host | Implementation agent | Model and effort |
 |---|---|---|
 | Codex | Plugin `worker` role, verified from its rollout record | `gpt-6-luna`, `xhigh` |
-| Claude Code | `codex exec`, verified from its rollout record (default, `implementation_worker` is `codex`); `hei5enbug-agent-setup:worker` for Haiku on `haiku`, on request, or as the Codex fallback; `hei5enbug-agent-setup:sonnet-worker` for Sonnet on `sonnet` or on request | `gpt-6-luna`, `xhigh` (default); `claude-haiku-5-5`, `high`; `claude-sonnet-5-5`, `high` |
+| Claude Code | `role_runner.py worker` (default, `implementation_worker` is `codex`); `hei5enbug-agent-setup:worker` for Haiku on `haiku`, on request, or as the runner fallback; `hei5enbug-agent-setup:sonnet-worker` for Sonnet on `sonnet` or on request | `gpt-6-luna`, `xhigh` (default); `claude-haiku-5-5`, `high`; `claude-sonnet-5-5`, `high` |
 | Codex, designer | `claude -p` with the pinned model; when Claude is unavailable, the plugin `designer` role | `claude-opus-5-5`, `xhigh`; fallback `gpt-6-astra`, `xhigh` |
-| Claude Code, designer | `hei5enbug-agent-setup:designer`, verified from its subagent record | `claude-opus-5-5`, `xhigh` |
+| Claude Code, designer | `hei5enbug-agent-setup:designer`, verified from its subagent record or the mod's role pinning | `claude-opus-5-5`, `xhigh` |
 | Codex, local scout | Plugin `scout` role, verified from its rollout record | `gpt-6-luna`, `xhigh` |
-| Claude Code, local scout | Read-only `codex exec`, verified from its rollout record; fallback `hei5enbug-agent-setup:scout`, verified from its subagent record | `gpt-6-luna`, `xhigh`; fallback `claude-sonnet-5-5`, `medium` |
+| Claude Code, local scout | `role_runner.py scout`; fallback `hei5enbug-agent-setup:scout` | `gpt-6-luna`, `xhigh`; fallback `claude-sonnet-5-5`, `medium` |
+| Codex, public researcher | Plugin `researcher` role, verified from its rollout record | `gpt-6-luna`, `xhigh` |
+| Claude Code, public researcher | `role_runner.py researcher`, which uses web search and no shell network; fallback `hei5enbug-agent-setup:researcher` | `gpt-6-luna`, `xhigh`; fallback `claude-haiku-5-5`, `medium` |
 | Codex, skill review | `claude -p`; fallback plugin `reviewer`, verified from its rollout record | `claude-opus-5-5`, `high`; fallback `gpt-6.1-sol`, `xhigh` |
-| Claude Code, skill review | `codex exec`; fallback `hei5enbug-agent-setup:reviewer`, verified from its subagent record | `gpt-6.1-sol`, `xhigh`; fallback `claude-opus-5-5`, `high` |
+| Claude Code, skill review | `role_runner.py reviewer` with the `review_model` setting; fallback `hei5enbug-agent-setup:reviewer` | `review_model` (default `gpt-6-astra`), `xhigh`; fallback `claude-opus-5-5`, `high` |
 | Skill Builder trial execution and other non-review participants | Host's upper model from the Skill Builder adapter | Codex: `gpt-6.1-sol`, `xhigh`; Claude Code: `claude-opus-5-5`, `high` |
+
+On Claude Code, `scripts/role_runner.py` runs the scout, researcher, reviewer, and Codex worker roles. The main session
+writes the assignment to a file and runs `python3 <plugin>/scripts/role_runner.py <role> --assignment <file> --result
+<file>` from the session folder, adding `--model <id>` for `reviewer` or `--add-dir <dir>` for `worker`. The runner puts
+the role rules before the assignment, runs the role on its pinned model, effort, and permissions (`codex exec`, or
+`claude -p` for a Claude review model), checks the host rollout or transcript record, and prints a final JSON status
+line. Exit code 0 means the result is verified, 2 a usage error to fix, 3 that the role could not run, and 4 that the
+recorded model or effort did not match, so the result is discarded. On 3 or 4 the main session uses the role's plugin
+agent fallback. Independent validation has no fallback: the main session reports that it was not performed.
 
 Independent ready tasks may run together within the host limit and the shared execution ceiling. If a role,
 model, effort, quota, permission to delegate, or settings evidence is unavailable, the main session reports
 that limitation and continues authorized work after stopping any affected worker. It preserves partial work,
 user settings, permissions, and acceptance checks. It never silently substitutes a worker model.
 
-After a substantial change and its checks are ready, the main session recommends one optional cross-family
-review under [independent model validation](instructions/independent-model-validation.md). Both reviewer
-mappings use `xhigh`. Approval is required for the particular result, and a decline is not asked again.
-An unavailable reviewer does not block the remaining work. Routine author inspection and tests always remain.
+After a substantial change and its checks are ready, the main session recommends one optional independent review
+under [independent model validation](instructions/independent-model-validation.md). On Claude Code, the `review_model`
+setting (default `gpt-6-astra`) reviews a Claude-authored result, and a GPT-authored result goes to `claude-fable-5-1`;
+Codex uses its mapping in that file. Every reviewer runs at `xhigh`. When the configured reviewer shares the author's
+model family, the result says the review is not cross-family. Approval is required for the particular result, and a
+decline is not asked again. An unavailable reviewer, or a role runner exit code 3 or 4, means independent validation
+was not performed; no other model substitutes for it. Routine author inspection and tests always remain.
 
 Codex requires a direct user request or applicable `AGENTS.md` or skill instructions to authorize subagents;
 hook instructions alone cannot grant it. Without authorization, the main session continues directly.

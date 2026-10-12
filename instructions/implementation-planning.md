@@ -1,7 +1,6 @@
 # Implementation planning
 
-Use this English file as the canonical executable source. `implementation-planning.ko.md` is a
-non-authoritative Korean translation for human readers; never read it during execution.
+Use this English file as the canonical executable source.
 
 Apply this file only when the user explicitly requests an implementation plan. An implementation plan lets
 an executor make the requested change without adding design decisions. It freezes intent and scope,

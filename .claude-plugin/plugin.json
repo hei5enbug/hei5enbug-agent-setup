@@ -51,6 +51,13 @@
       "options": ["codex", "haiku", "sonnet"],
       "default": "codex"
     },
+    "review_model": {
+      "type": "string",
+      "title": "Review model",
+      "description": "Model that runs independent validation and skill review roles at xhigh. GPT models run through codex exec and Claude models through claude -p.",
+      "options": ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "gpt-6-astra", "gpt-6-luna", "gpt-6.1-sol"],
+      "default": "gpt-6-astra"
+    },
     "language_guard": {
       "type": "boolean",
       "title": "Response language guard",

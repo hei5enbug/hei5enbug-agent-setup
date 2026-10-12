@@ -14,6 +14,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CORE = REPO_ROOT / "instructions/session/core.md"
 COMMON = REPO_ROOT / "instructions/session/common.md"
+ROUTING = REPO_ROOT / "instructions/model-routing.md"
+VALIDATION = REPO_ROOT / "instructions/independent-model-validation.md"
 AGENTS = REPO_ROOT / "AGENTS.md"
 CLAUDE_AGENTS = REPO_ROOT / "instructions/claude-agents.md"
 CODEX_AGENTS = REPO_ROOT / "instructions/codex-agents.md"
@@ -57,6 +59,20 @@ EXECUTION_OWNED = (
     "Fallback never bypasses a missing user decision, permission restriction, or failed acceptance check.",
 )
 LEGACY_SCHEDULING = ("Run at most 6",)
+
+# Each canonical sentence lives in exactly its owner files; the other instruction files refer to it.
+SENTENCE_OWNERS = (
+    ("대체 보고", "Report the limitation once.", {COMMON}),
+    ("준비 확인 조건", "use a readiness-only assignment only if the host can send a follow-up", {EXECUTION}),
+    ("준비 확인 할당", "make no edit and report readiness", {EXECUTION}),
+    ("준비 확인 이어 보내기 불가", "skip this path and use the session fallback", {EXECUTION}),
+    ("준비 확인 반복 금지", "do not repeat readiness calls", {EXECUTION}),
+    ("worker 자기 보고", "unsubstantiated self-report", {EXECUTION}),
+    ("결과만 반환", "returns findings only", {ROUTING, VALIDATION}),
+    ("재검토 금지", "Do not run another review round.", {ROUTING}),
+    ("메인 한 번 검토", "reviews the same material once", {ROUTING}),
+    ("호출별 모델 지정 금지", "Never pass a per-invocation model", {CLAUDE_AGENTS}),
+)
 
 
 def runtime_documents() -> list[Path]:
@@ -153,6 +169,41 @@ class ExecutionReferenceOwnsSchedulingTest(unittest.TestCase):
         self.assertIn(CLAUDE_AGENTS, documents)
         self.assertIn(CODEX_AGENTS, documents)
         self.assertEqual(copies, [])
+
+
+class CanonicalSentencesHaveOneOwnerTest(unittest.TestCase):
+    def test_정리한_규칙_문장은_소유_파일에만_있다(self):
+        """대체 보고, 준비 확인, 결과만 반환, 호출별 모델 지정 금지 문장은 정한 소유 파일 밖에 반복되지 않는다."""
+        # Given
+        texts = {
+            path: normalized_text(path)
+            for root in (REPO_ROOT / "instructions", REPO_ROOT / "agents")
+            for path in root.rglob("*.md")
+            if not path.name.endswith(".ko.md")
+        }
+
+        for name, sentence, owners in SENTENCE_OWNERS:
+            with self.subTest(rule=name):
+                # When
+                holders = {path for path, text in texts.items() if sentence in text}
+
+                # Then
+                self.assertEqual(holders, owners)
+
+    def test_호스트_지침은_준비_확인_절차를_복사하지_않고_구현_실행_규칙을_가리킨다(self):
+        """Claude Code와 Codex 지침은 준비 확인 경로를 실행 규칙으로 가리키며 두 단계 절차를 다시 쓰지 않는다."""
+        # Given
+        hosts = (CLAUDE_AGENTS, CODEX_AGENTS)
+
+        for path in hosts:
+            with self.subTest(path=path.relative_to(REPO_ROOT)):
+                # When
+                text = normalized_text(path)
+
+                # Then
+                self.assertIn("readiness-only path in implementation execution", text)
+                self.assertNotIn("start each worker with a readiness-only assignment", text)
+                self.assertNotIn("skip the two-phase path", text)
 
 
 if __name__ == "__main__":
