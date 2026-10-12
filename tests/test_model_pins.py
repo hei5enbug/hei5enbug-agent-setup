@@ -7,6 +7,7 @@ newest generally available release, and these checks then report every stale run
 from __future__ import annotations
 
 import re
+from datetime import date
 import subprocess
 import tomllib
 import unittest
@@ -26,6 +27,8 @@ PINS = {
     "gpt-luna": "gpt-6-luna",
     "gpt-sol": "gpt-6.1-sol",
 }
+
+PINS_VERIFIED_ON = "2026-10-12"
 
 MODEL_ID = re.compile(
     r"\b(?P<id>claude-(?P<claude>fable|opus|sonnet|haiku)-\d+(?:-\d+)*"
@@ -66,6 +69,17 @@ def frontmatter(path: Path) -> dict:
 
 
 class ModelPinTest(unittest.TestCase):
+    def test_최신_모델_확인일은_미래가_아닌_ISO_날짜다(self):
+        """마지막 최신 모델 확인일은 ISO 형식이고 오늘보다 늦지 않다."""
+        # Given
+        value = PINS_VERIFIED_ON
+
+        # When
+        verified = date.fromisoformat(value)
+
+        # Then
+        self.assertLessEqual(verified, date.today())
+
     def test_실행_파일의_모델_ID는_모두_고정값과_같다(self):
         """테스트와 평가 입력을 뺀 모든 추적 파일의 모델 ID는 계열별 고정값과 정확히 같다."""
         # Given
