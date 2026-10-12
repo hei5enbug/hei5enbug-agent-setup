@@ -12,11 +12,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import language_guard  # noqa: E402
 
 
 LOCAL_LINK = re.compile(r"\[([^\]]+)\]\(([^\s)]+)\)")
 MAX_CONTEXT_BYTES = 9000
+MAX_ROLE_CONTEXT_BYTES = 4000
+ASSIGNED_ROLE_ENV = "HEI5ENBUG_ASSIGNED_ROLE"
+ASSIGNED_WORKERS_HEADING = "## Assigned workers"
+IMPLEMENTATION_AGENTS = {
+    "claude": {
+        "hei5enbug-agent-setup:worker",
+        "hei5enbug-agent-setup:sonnet-worker",
+        "hei5enbug-agent-setup:designer",
+    },
+    "codex": {"worker", "designer"},
+}
 DIGEST_VERSION = 1
 MARKER_SCHEMA = 1
 MARKER_RETENTION_SECONDS = 30 * 24 * 60 * 60
@@ -27,11 +37,7 @@ SESSION_FILES = {
 }
 
 
-def read_instruction(path: Path, root: Path) -> str:
-    content = path.read_text(encoding="utf-8").strip()
-    if not content:
-        raise ValueError(f"{path.relative_to(root)} is empty")
-
+def absolute_links(content: str, path: Path, root: Path) -> str:
     def absolute_link(match: re.Match[str]) -> str:
         reference = match[2].removeprefix("<").removesuffix(">")
         if reference.startswith("#") or re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", reference):
@@ -44,37 +50,80 @@ def read_instruction(path: Path, root: Path) -> str:
     return LOCAL_LINK.sub(absolute_link, content)
 
 
-def render_context(root: Path, host: str) -> str:
+def read_instruction(path: Path, root: Path) -> str:
+    content = path.read_text(encoding="utf-8").strip()
+    if not content:
+        raise ValueError(f"{path.relative_to(root)} is empty")
+    return absolute_links(content, path, root)
+
+
+def assigned_workers_section(root: Path) -> str:
+    """Return the "## Assigned workers" section of the implementation execution rules, heading included."""
+    path = root / "instructions" / "implementation-execution.md"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    try:
+        start = next(index for index, line in enumerate(lines) if line.rstrip() == ASSIGNED_WORKERS_HEADING)
+    except StopIteration as error:
+        raise ValueError(f"{path.relative_to(root)} has no {ASSIGNED_WORKERS_HEADING!r} section") from error
+    end = next((index for index in range(start + 1, len(lines)) if lines[index].startswith("## ")), len(lines))
+    content = "\n".join(lines[start:end]).strip()
+    if content == ASSIGNED_WORKERS_HEADING:
+        raise ValueError(f"{path.relative_to(root)} has an empty {ASSIGNED_WORKERS_HEADING!r} section")
+    return absolute_links(content, path, root)
+
+
+def context_kind(event_name: str, host: str, event: dict, environ: dict | None = None) -> str:
+    """Choose "main", "core", or "implementation" for the receiving session."""
+    if event_name == "SessionStart":
+        return "core" if (environ if environ is not None else os.environ).get(ASSIGNED_ROLE_ENV) else "main"
+    agent_type = event.get("agent_type")
+    if host == "codex" and not agent_type:
+        return "main"
+    return "implementation" if agent_type in IMPLEMENTATION_AGENTS[host] else "core"
+
+
+def render_context(root: Path, host: str, kind: str = "main") -> str:
     try:
         host_file = SESSION_FILES[host]
     except KeyError as error:
         raise ValueError(f"Unsupported host: {host}") from error
+    if kind not in {"main", "core", "implementation"}:
+        raise ValueError(f"Unsupported context kind: {kind}")
     session_dir = root / "instructions" / "session"
-    content = "\n\n".join(
-        read_instruction(path, root)
-        for path in (session_dir / "common.md", session_dir / host_file)
-    )
+    if kind == "main":
+        sources = [read_instruction(session_dir / name, root) for name in ("core.md", "common.md", host_file)]
+        rule = "Apply the common rules throughout this session. "
+        limit = MAX_CONTEXT_BYTES
+    else:
+        sources = [read_instruction(session_dir / "core.md", root)]
+        if kind == "implementation":
+            sources.append(assigned_workers_section(root))
+        rule = "Apply these rules throughout this session. "
+        limit = MAX_ROLE_CONTEXT_BYTES
     context = (
         f"hei5enbug-agent-setup instructions for {host}.\n"
         f"Source directory: {root.as_posix()}\n"
-        "Apply the common rules throughout this session. "
-        "Read conditional references only before their matching action.\n\n"
-        f"{content}\n"
+        f"{rule}Read conditional references only before their matching action.\n\n"
+        + "\n\n".join(sources)
+        + "\n"
     )
-    if host == "codex":
-        context += f"\nResponse language: {language_guard.codex_language()}.\n"
-    else:
-        import plugin_toggles
+    if kind == "main":
+        if host == "codex":
+            import language_guard
 
-        option = plugin_toggles.option_value("implementation_worker")
-        if option == "haiku":
-            route = "Haiku worker, `hei5enbug-agent-setup:worker` (`implementation_worker`=`haiku`)"
-        elif option == "sonnet":
-            route = "Sonnet: `hei5enbug-agent-setup:sonnet-worker` (`implementation_worker`=`sonnet`)"
+            context += f"\nResponse language: {language_guard.codex_language()}.\n"
         else:
-            route = "Codex (`implementation_worker`=`codex`)"
-        context += f"\nImplementation worker route: {route}.\n"
-    if len(context.encode("utf-8")) > MAX_CONTEXT_BYTES:
+            import plugin_toggles
+
+            option = plugin_toggles.option_value("implementation_worker")
+            if option == "haiku":
+                route = "Haiku worker, `hei5enbug-agent-setup:worker` (`implementation_worker`=`haiku`)"
+            elif option == "sonnet":
+                route = "Sonnet: `hei5enbug-agent-setup:sonnet-worker` (`implementation_worker`=`sonnet`)"
+            else:
+                route = "Codex (`implementation_worker`=`codex`)"
+            context += f"\nImplementation worker route: {route}.\n"
+    if len(context.encode("utf-8")) > limit:
         raise ValueError("Bundled instructions exceed the context budget; move details to conditional references")
     return context
 
@@ -167,7 +216,11 @@ RETIRED_CODEX_AGENTS = {
         "e81d0cfcd3a4986204c289fb8c457bd279ba8c2d24d43679d02b1661581301e7",
     },
     "explorer": {"bfde4fbbe2740152ad537d576612a34619a57a45adb56072e3f945610ef820af"},
-    "worker": {"ce4488d0323832dc1563481875e7c26d693092c94865c37a4b4b89afd8274f83"},
+    "worker": {
+        "ce4488d0323832dc1563481875e7c26d693092c94865c37a4b4b89afd8274f83",
+        "249b194b8c9e0cea3ff687298e58cee99ca6c330f79e04162029a60e2ecfeff0",
+    },
+    "designer": {"c8c525a3a7fdfb5adbff1cf7474d24dfba35527eb070f4a5206c164b248d43ed"},
 }
 
 
@@ -406,7 +459,7 @@ def main() -> int:
         root = Path(__file__).resolve().parents[1]
         codex_root = os.environ.get("PLUGIN_ROOT")
         host = "codex" if codex_root and Path(codex_root).resolve() == root else "claude"
-        context = render_context(root, host)
+        context = render_context(root, host, context_kind(event_name, host, event))
         if host == "codex":
             try:
                 provision_codex_agents(root)

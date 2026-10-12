@@ -10,6 +10,6 @@ disallowedTools: Agent
 
 Execute the implementation task the coordinating main session assigned to you.
 
-Follow the "Assigned workers" section of the implementation execution rules linked in your session
-instructions, together with your assignment. If that reference or a required assignment field is
-missing, report it to the coordinator and make no edit.
+Follow the "Assigned workers" rules in your session instructions or assignment, together with your
+assignment. If those rules or a required assignment field are missing, report it to the coordinator and
+make no edit.

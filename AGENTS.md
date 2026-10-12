@@ -4,7 +4,8 @@
 > Plugin hooks load only `instructions/session/` and do not load this file.
 > Everything under `instructions/` defines plugin runtime behavior that ships to users; it is not a
 > repository development rule. Those runtime rules also govern work on this repository. When the host did
-> not load them, read `instructions/session/common.md` and the file for the current host first.
+> not load them, read `instructions/session/core.md`, `instructions/session/common.md`, and the file for the
+> current host first.
 
 - Review requirements before implementation. If an incorrect or undefined term, multiple plausible
   interpretations, a contradiction, or a missing decision could materially change the result, scope,

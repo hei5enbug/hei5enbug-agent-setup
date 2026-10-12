@@ -86,7 +86,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
 
         # Then
         normalized = " ".join(body.split())
-        self.assertIn('Follow the "Assigned workers" section of the implementation execution rules', normalized)
+        self.assertIn('Follow the "Assigned workers" rules in your session instructions or assignment', normalized)
         self.assertIn("report it to the coordinator and make no edit", normalized)
         self.assertNotIn("min(6", normalized)
         self.assertIsNone(re.search(r"claude-sonnet-\d", body))
@@ -156,7 +156,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         self.assertEqual(set(metadata) & UNSUPPORTED_FIELDS, set())
         self.assertIn("UI code (HTML, CSS, JS, components)", normalized)
         self.assertIn("flowcharts or diagrams", normalized)
-        self.assertIn('Follow the "Assigned workers" section of the implementation execution rules', normalized)
+        self.assertIn('Follow the "Assigned workers" rules in your session instructions or assignment', normalized)
         self.assertIn("report it to the coordinator and make no edit", normalized)
         mirror = (REPO_ROOT / "agents/ko/designer.ko.md").read_text(encoding="utf-8")
         self.assertIn("영어 원본: [designer.md](../designer.md)", mirror)

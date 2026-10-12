@@ -37,6 +37,26 @@ class CodexWorkerContractTest(unittest.TestCase):
         for phrase in expected:
             self.assertIn(phrase, section)
 
+    def test_Codex_worker와_designer_정의는_세션_지침이나_할당의_규칙을_따른다(self):
+        """worker와 designer 정의는 연결된 파일이 아니라 세션 지침이나 할당에 있는 Assigned workers 규칙을 따른다."""
+        # Given
+        names = ("worker", "designer")
+
+        for name in names:
+            with self.subTest(name=name):
+                # When
+                text = (REPO_ROOT / f"standalone-agents/codex-{name}.toml").read_text(encoding="utf-8")
+
+                # Then
+                self.assertIn(
+                    'When your session instructions or assignment carry the "Assigned workers" rules, follow them '
+                    "together with your assignment, and report a missing required assignment field to the "
+                    "coordinator instead of editing.",
+                    text,
+                )
+                self.assertNotIn("link the implementation execution rules", text)
+                self.assertIn("the plugin rules are inactive", text)
+
     def test_실행_중에는_모델을_다시_찾지_않고_고정값을_쓴다(self):
         """Codex 구현과 조사는 실행할 때 모델 문서나 카탈로그를 다시 찾지 않고 고정된 Luna ID를 넘긴다."""
         # Given

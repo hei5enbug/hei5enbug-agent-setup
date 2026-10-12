@@ -7,7 +7,7 @@
 > 플러그인 훅은 `instructions/session/`만 불러오며 이 파일은 불러오지 않는다.
 > `instructions/` 아래 내용은 사용자에게 배포되는 플러그인 실행 동작이며 저장소 개발 규칙이 아니다.
 > 그 실행 규칙은 이 저장소 작업에도 적용한다. 호스트가 불러오지 않았다면
-> `instructions/session/common.md`와 현재 호스트용 파일을 먼저 읽는다.
+> `instructions/session/core.md`, `instructions/session/common.md`, 현재 호스트용 파일을 먼저 읽는다.
 
 - 구현 전에 요구사항을 검토한다. 잘못되었거나 정의되지 않은 용어, 여러 가지 가능한 해석,
   모순 또는 누락된 결정 때문에 결과, 범위, 계약 또는 완료 조건이 실질적으로 달라질 수 있으면
