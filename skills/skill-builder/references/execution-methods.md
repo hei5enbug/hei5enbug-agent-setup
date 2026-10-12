@@ -48,23 +48,23 @@ instead of the table below. Otherwise, as in standalone use, the table below gov
 implementation. Evaluation participants use the model adapter below. The Skill Builder review and participant
 contract takes precedence over generic host skill-worker routing and target-skill metadata.
 
-A skill-assigned review role, such as a review persona, grader, comparator, or analyzer, is read-only judgment work.
-It returns findings only and bases every finding or grade on quoted evidence. It returns the JSON its agent file
-defines instead of writing a file, and the main session saves that JSON to the path the agent file names. Use the
-other model family first, following the host's skill-worker instructions. If that CLI is missing, unauthenticated,
+A skill-assigned review role, such as a review persona, grader, comparator, or analyzer, is read-only judgment work. It
+returns findings only and bases every finding or grade on quoted evidence. It returns the JSON its agent file defines
+instead of writing a file, and the main session saves that JSON to the path the agent file names. Use the host's review
+route in the table below first, following the host's skill-worker instructions. If it is missing, unauthenticated,
 limited, fails to start the pinned model, times out, or lacks model evidence, use the `reviewer` fallback in the table
-below and report the substitution once. The main session reviews the same material once and makes the final decision.
-Do not run another review round.
+below and report the substitution once. The main session reviews the same material once and makes the final decision. Do
+not run another review round.
 
 | Executing host | Trial and other non-review participants | Effort | Review route |
 |---|---|---|---|
 | Codex | `gpt-6.1-sol` | `xhigh` | `claude -p` with `claude-opus-5-5`, `high`; fallback `reviewer` with `gpt-6.1-sol`, `xhigh` |
-| Claude Code | `claude-opus-5-5` | `high` | `codex exec` with `gpt-6.1-sol`, `xhigh`; fallback `reviewer` with `claude-opus-5-5`, `high` |
+| Claude Code | `claude-opus-5-5` | `high` | `role_runner.py reviewer` with the model in the session line "Review model" (default `gpt-6-astra`), `xhigh`; fallback `reviewer` with `claude-opus-5-5`, `high` |
 | Other hosts | Available upper model | Highest suitable supported effort | Use a verified cross-family reviewer route and its documented fallback; otherwise mark review unavailable. |
 
-Trial execution and other non-review participants stay on the host's model family at its upper model. Review roles
-use the other family. Do not send a review role to `scout`, use `reviewer` to write trial outputs, or lower a role's
-required effort. A runner invocation alone does not verify its effective settings.
+Trial execution and other non-review participants stay on the host's model family at its upper model. Review roles use
+the review route in the table. Do not send a review role to `scout`, use `reviewer` to write trial outputs, or lower a
+role's required effort. A runner invocation alone does not verify its effective settings.
 
 For trial output writers, use the model and effort that the host adapter pins. Keep their outputs in the evaluation
 workspace. Do not promote trial output unless the main session selects it through the skill's acceptance process.

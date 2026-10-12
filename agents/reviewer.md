@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: Read-only fallback reviewer for one skill-assigned review persona, grading, comparison, or analysis
-  role when the cross-family reviewer is unavailable.
+  role when the configured review runner is unavailable.
 tools: Read, Grep, Glob, Bash
 disallowedTools: Agent, Edit, Write, NotebookEdit
 model: claude-opus-5-5

@@ -37,7 +37,7 @@ class ReviewerContractTest(unittest.TestCase):
         self.assertEqual(
             metadata["description"],
             "Read-only fallback reviewer for one skill-assigned review persona, grading, comparison, or analysis "
-            "role when the cross-family reviewer is unavailable.",
+            "role when the configured review runner is unavailable.",
         )
         self.assertEqual(allowed, {"Read", "Grep", "Glob", "Bash"})
         self.assertEqual(denied, {"Agent", "Edit", "Write", "NotebookEdit"})
