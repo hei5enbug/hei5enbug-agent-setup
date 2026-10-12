@@ -2,6 +2,7 @@ const DATAGRIP_TOOL = "mcp__datagrip__execute_sql_query";
 const STORE_KEY = "approvals";
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const LOOKUP_TIMEOUT_MS = 3000;
+const CLASSIFICATION_CACHE_LIMIT = 256;
 
 export const DESTRUCTIVE_REASON = "Always asks: this action cannot be undone.";
 export const UNVERIFIABLE_REASON = "Contains a command the session approval cannot verify.";
@@ -650,11 +651,39 @@ function isDeny(result) {
   return typeof result?.deny === "string";
 }
 
+function bashCommand(input) {
+  const isRecord = input !== null && typeof input === "object" && !Array.isArray(input);
+  return isRecord && typeof input.command === "string" ? input.command : null;
+}
+
+function createClassificationCache() {
+  const entries = new Map();
+  return {
+    store(id, tool, input, classified) {
+      if (typeof id !== "string" || !id) return;
+      entries.delete(id);
+      entries.set(id, { tool, command: bashCommand(input), classified });
+      while (entries.size > CLASSIFICATION_CACHE_LIMIT) entries.delete(entries.keys().next().value);
+    },
+    take(id, tool, input) {
+      if (typeof id !== "string" || !id) return undefined;
+      const entry = entries.get(id);
+      if (entry === undefined) return undefined;
+      entries.delete(id);
+      return entry.tool === tool && entry.command === bashCommand(input) ? entry.classified : undefined;
+    },
+  };
+}
+
 export function registerApproval(on) {
+  const cache = createClassificationCache();
+
   on("tool.check", { tool: TOOL_MATCHER }, async ($, e, next) => {
     const decided = await next(e);
     if (decided.decision === "deny") return decided;
-    const { keys, destructive, known, mustAsk } = await classify($, e.tool, e.input);
+    const classified = await classify($, e.tool, e.input);
+    cache.store(e.tool_use_id, e.tool, e.input, classified);
+    const { keys, destructive, known, mustAsk } = classified;
     if (destructive) return { decision: "ask", reason: DESTRUCTIVE_REASON };
     if (mustAsk) return { decision: "ask", reason: UNVERIFIABLE_REASON };
     if (keys.size === 0) return decided;
@@ -674,8 +703,9 @@ export function registerApproval(on) {
 
   on("tool.call", { tool: TOOL_MATCHER }, async ($, e, next) => {
     const result = await next(e);
+    const cached = cache.take(e.tool_use_id, e.tool, e);
     if (e.agentId || isDeny(result) || result?.isError) return result;
-    const { keys, destructive, mustAsk } = await classify($, e.tool, e);
+    const { keys, destructive, mustAsk } = cached ?? (await classify($, e.tool, e));
     if (destructive || mustAsk || keys.size === 0) return result;
     await recordKeys($, keys);
     return result;

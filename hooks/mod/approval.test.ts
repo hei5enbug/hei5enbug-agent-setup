@@ -1289,6 +1289,106 @@ test("키가 없는 명령은 확인과 호출 모두 호스트의 판단과 결
   expect(env.writes).toEqual([]);
 });
 
+test("같은 도구 호출의 확인과 호출은 process.run을 확인에서만 부르고 호출은 저장된 분류를 쓴다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  const command = "git push origin v1";
+  await hooks.check(env, checkEvent(command));
+  const runsAfterCheck = env.calls.length;
+
+  // when
+  await hooks.call(env, callEvent(command));
+
+  // then
+  expect(runsAfterCheck).toBeGreaterThan(0);
+  expect(env.calls).toHaveLength(runsAfterCheck);
+  expect(env.data.approvals["sess-1"].keys).toEqual(PUSH_TAG);
+});
+
+test("저장된 분류는 한 번 쓰면 지워져 같은 tool_use_id의 다음 호출은 다시 분류한다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  const command = "git push origin v1";
+  await hooks.check(env, checkEvent(command));
+  await hooks.call(env, callEvent(command));
+  const runsAfterFirstCall = env.calls.length;
+
+  // when
+  await hooks.call(env, callEvent(command));
+
+  // then
+  expect(env.calls.length).toBeGreaterThan(runsAfterFirstCall);
+});
+
+test("확인과 호출의 명령이 다르면 저장된 분류를 쓰지 않고 호출 명령을 다시 분류한다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  await hooks.check(env, checkEvent("git status"));
+  const runsAfterCheck = env.calls.length;
+
+  // when
+  await hooks.call(env, callEvent("git push origin v1"));
+
+  // then
+  expect(runsAfterCheck).toBe(0);
+  expect(env.calls.length).toBeGreaterThan(0);
+  expect(env.data.approvals["sess-1"].keys).toEqual(PUSH_TAG);
+});
+
+test("확인과 호출의 도구가 다르면 저장된 분류를 쓰지 않고 다시 분류한다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  await hooks.check(env, mcpCheckEvent("mcp__slack__slack_send_message"));
+
+  // when
+  await hooks.call(env, callEvent("git tag v2"));
+
+  // then
+  expect(env.data.approvals["sess-1"].keys).toEqual(TAG);
+});
+
+test("tool_use_id가 다른 호출은 저장된 분류를 쓰지 않고 다시 분류한다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  const command = "git push origin v1";
+  await hooks.check(env, checkEvent(command, { tool_use_id: "toolu-a" }));
+  const runsAfterCheck = env.calls.length;
+
+  // when
+  await hooks.call(env, callEvent(command, { tool_use_id: "toolu-b" }));
+
+  // then
+  expect(env.calls.length).toBeGreaterThan(runsAfterCheck);
+});
+
+test("저장된 분류는 최근 256건까지만 남기고 넘치면 오래된 것부터 지운다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  const command = "git push origin v1";
+  for (let index = 0; index < 257; index += 1) {
+    await hooks.check(env, checkEvent(command, { tool_use_id: `toolu-${index}` }));
+  }
+  const runsAfterChecks = env.calls.length;
+
+  // when
+  await hooks.call(env, callEvent(command, { tool_use_id: "toolu-256" }));
+  const runsAfterNewest = env.calls.length;
+  await hooks.call(env, callEvent(command, { tool_use_id: "toolu-1" }));
+  const runsAfterKept = env.calls.length;
+  await hooks.call(env, callEvent(command, { tool_use_id: "toolu-0" }));
+
+  // then
+  expect(runsAfterNewest).toBe(runsAfterChecks);
+  expect(runsAfterKept).toBe(runsAfterChecks);
+  expect(env.calls.length).toBeGreaterThan(runsAfterKept);
+});
+
 for (const tool of ["Read", "Edit", "Write", "Task", "WebFetch"]) {
   test(`Bash도 MCP도 아닌 도구 ${tool}는 호스트의 판단과 결과를 그대로 둔다`, async () => {
     // given
