@@ -365,7 +365,7 @@ class ClaudeGptTest(unittest.TestCase):
         self.assertEqual(claude_gpt.OAUTH_AGENT_NAME, params["agent_name_hint"])
         self.assertNotIn(claude_gpt.OAUTH_DYNAMIC_CLIENT, form["client_id"])
 
-    def test_구독_권한이_없거나_state가_틀리면_인증_코드를_교환하지_않는다(self):
+    def test_필수_scope가_없으면_프로필을_저장하지_않고_state가_틀리면_토큰을_교환하지_않는다(self):
         # Given
         host_id = "urn:uuid:12345678-1234-5678-1234-567812345678"
         redirect = "http://127.0.0.1:1455/auth/callback"
@@ -1312,6 +1312,98 @@ class ClaudeGptTest(unittest.TestCase):
         self.assertEqual(200, raised.exception.http_status)
         self.assertEqual("req_sse-1", raised.exception.request_id)
         self.assertNotIn("private diagnostic", str(raised.exception))
+
+    def test_SSE_최상위_rate_limit_exceeded를_보존하고_완료나_상태를_기록하지_않는다(self):
+        # Given
+        api = claude_gpt.create_api_key_profile(self.store, "sk-top-level-rate-limit", confirmed_usage_billing=True)
+        secret = "private rate limit diagnostic"
+        http = FakeHttp(stream=_sse(
+            {"type": "response.output_text.delta", "delta": "partial"},
+            {"type": "error", "code": "rate_limit_exceeded", "message": secret},
+        ))
+        output = io.StringIO()
+
+        # When
+        with patch.object(self.store, "merge_provider_state") as save_state:
+            with self.assertRaises(claude_gpt.ClaudeGptError) as raised:
+                claude_gpt.execute_request(self.store, http, _request(api["profile_id"]), stream_out=output)
+
+        # Then
+        self.assertEqual("rate_limit_exceeded", raised.exception.code)
+        self.assertEqual("rate_limit_exceeded", raised.exception.provider_code)
+        self.assertIn('"type":"text_delta"', output.getvalue())
+        self.assertNotIn('"type":"completed"', output.getvalue())
+        self.assertNotIn('"tool_calls"', output.getvalue())
+        self.assertNotIn(secret, str(raised.exception) + output.getvalue())
+        save_state.assert_not_called()
+
+    def test_SSE_최상위_insufficient_quota를_보존하고_완료나_상태를_기록하지_않는다(self):
+        # Given
+        api = claude_gpt.create_api_key_profile(self.store, "sk-top-level-quota", confirmed_usage_billing=True)
+        secret = "private quota diagnostic"
+        http = FakeHttp(stream=_sse(
+            {"type": "error", "code": "insufficient_quota", "message": secret},
+        ))
+        output = io.StringIO()
+
+        # When
+        with patch.object(self.store, "merge_provider_state") as save_state:
+            with self.assertRaises(claude_gpt.ClaudeGptError) as raised:
+                claude_gpt.execute_request(self.store, http, _request(api["profile_id"]), stream_out=output)
+
+        # Then
+        self.assertEqual("insufficient_quota", raised.exception.code)
+        self.assertEqual("insufficient_quota", raised.exception.provider_code)
+        self.assertNotIn('"type":"completed"', output.getvalue())
+        self.assertNotIn('"tool_calls"', output.getvalue())
+        self.assertNotIn(secret, str(raised.exception) + output.getvalue())
+        save_state.assert_not_called()
+
+    def test_SSE_최상위_invalid_api_key를_보존하고_완료나_상태를_기록하지_않는다(self):
+        # Given
+        api = claude_gpt.create_api_key_profile(self.store, "sk-top-level-invalid-key", confirmed_usage_billing=True)
+        secret = "private API key diagnostic"
+        http = FakeHttp(stream=_sse(
+            {"type": "error", "code": "invalid_api_key", "message": secret},
+        ))
+        output = io.StringIO()
+
+        # When
+        with patch.object(self.store, "merge_provider_state") as save_state:
+            with self.assertRaises(claude_gpt.ClaudeGptError) as raised:
+                claude_gpt.execute_request(self.store, http, _request(api["profile_id"]), stream_out=output)
+
+        # Then
+        self.assertEqual("invalid_api_key", raised.exception.code)
+        self.assertEqual("invalid_api_key", raised.exception.provider_code)
+        self.assertNotIn('"type":"completed"', output.getvalue())
+        self.assertNotIn('"tool_calls"', output.getvalue())
+        self.assertNotIn(secret, str(raised.exception) + output.getvalue())
+        save_state.assert_not_called()
+
+    def test_SSE_최상위_알_수_없는_코드가_중첩_코드보다_우선하고_민감_내용을_숨긴다(self):
+        # Given
+        api = claude_gpt.create_api_key_profile(self.store, "sk-top-level-private-code", confirmed_usage_billing=True)
+        secret = "private top-level diagnostic"
+        http = FakeHttp(stream=_sse(
+            {"type": "error", "code": "chatpass_v2_private_internal_code", "message": secret,
+             "error": {"code": "rate_limit_exceeded", "message": "nested retryable diagnostic"}},
+        ))
+        output = io.StringIO()
+
+        # When
+        with patch.object(self.store, "merge_provider_state") as save_state:
+            with self.assertRaises(claude_gpt.ClaudeGptError) as raised:
+                claude_gpt.execute_request(self.store, http, _request(api["profile_id"]), stream_out=output)
+
+        # Then
+        self.assertEqual("provider_failed", raised.exception.code)
+        self.assertIsNone(raised.exception.provider_code)
+        self.assertNotIn('"type":"completed"', output.getvalue())
+        self.assertNotIn('"tool_calls"', output.getvalue())
+        self.assertNotIn(secret, str(raised.exception) + output.getvalue())
+        self.assertNotIn("nested retryable diagnostic", str(raised.exception) + output.getvalue())
+        save_state.assert_not_called()
 
     def test_이전_Claude_도구_ID와_겹치는_새_Responses_호출을_거부한다(self):
         # Given

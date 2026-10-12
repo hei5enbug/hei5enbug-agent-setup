@@ -1959,6 +1959,11 @@ def stream_responses(http: HttpClient, *, payload: dict[str, Any], api_key: str,
 
 
 def _failure_code(event: Mapping[str, Any]) -> str:
+    code = event.get("code")
+    if code is not None:
+        if not isinstance(code, str):
+            return "provider_failed"
+        return code if code in SAFE_PROVIDER_ERROR_CODES else "provider_failed"
     response = event.get("response")
     error = response.get("error") if isinstance(response, dict) else event.get("error")
     code = error.get("code") if isinstance(error, dict) else None
