@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from plugin_toggles import enabled  # noqa: E402
 
 
+INITIAL_TAIL_BYTES = 256 * 1024
 TAIL_BYTES = 4 * 1024 * 1024
 MAX_BLOCKS_PER_TURN = 3
 STATE_FILE = "language_guard_state.json"
@@ -137,13 +138,13 @@ def is_compliant(text: str, language: str) -> bool:
     return total < MIN_MEASURED_CHARACTERS or target / total >= MIN_TARGET_RATIO
 
 
-def read_entries(path: object) -> list[dict]:
-    """Parse the JSONL tail of a transcript, ignoring malformed lines."""
+def read_window(path: object, limit: int) -> tuple[list[dict], bool]:
+    """Parse the last `limit` bytes of a transcript, ignoring malformed lines, and report whether the file was cut."""
     if not isinstance(path, str) or not path:
-        return []
+        return [], False
     with open(path, "rb") as stream:
         size = stream.seek(0, os.SEEK_END)
-        start = max(0, size - TAIL_BYTES)
+        start = max(0, size - limit)
         stream.seek(start)
         data = stream.read()
     lines = data.split(b"\n")
@@ -157,7 +158,18 @@ def read_entries(path: object) -> list[dict]:
             continue
         if isinstance(entry, dict):
             entries.append(entry)
-    return entries
+    return entries, start > 0
+
+
+def resolve_from_tail(path: object, resolve):
+    """Run `resolve` on a small tail first and on the full tail only when it cannot tell its answer is complete."""
+    value = None
+    for limit in (INITIAL_TAIL_BYTES, TAIL_BYTES):
+        entries, cut = read_window(path, limit)
+        value, complete = resolve(entries)
+        if complete or not cut:
+            break
+    return value
 
 
 def content_blocks(message: dict) -> list[dict]:
@@ -180,18 +192,20 @@ def is_codex_format(entries: list[dict]) -> bool:
     return any(entry.get("type") == "response_item" and isinstance(entry.get("payload"), dict) for entry in entries)
 
 
-def claude_last_assistant_text(entries: list[dict]) -> str:
+def claude_last_assistant_text(entries: list[dict]) -> tuple[str, bool]:
+    pairs = claude_messages(entries)
     assistants = [
-        message
-        for entry, message in claude_messages(entries)
+        (entry, message)
+        for entry, message in pairs
         if entry.get("type") == "assistant" and not entry.get("isSidechain") and message.get("model") != "<synthetic>"
     ]
     if not assistants:
-        return ""
-    message_id = assistants[-1].get("id")
-    group = [m for m in assistants if message_id is not None and m.get("id") == message_id] or [assistants[-1]]
-    texts = [b.get("text") for m in group for b in content_blocks(m) if b.get("type") == "text"]
-    return "\n".join(t for t in texts if isinstance(t, str))
+        return "", False
+    message_id = assistants[-1][1].get("id")
+    group = [pair for pair in assistants if message_id is not None and pair[1].get("id") == message_id] or [assistants[-1]]
+    texts = [b.get("text") for _, m in group for b in content_blocks(m) if b.get("type") == "text"]
+    complete = message_id is None or group[0][0] is not pairs[0][0]
+    return "\n".join(t for t in texts if isinstance(t, str)), complete
 
 
 def codex_message_text(payload: dict) -> str:
@@ -199,55 +213,60 @@ def codex_message_text(payload: dict) -> str:
     return "\n".join(t for t in texts if isinstance(t, str))
 
 
-def codex_last_assistant_text(entries: list[dict]) -> str:
+def codex_last_assistant_text(entries: list[dict]) -> tuple[str, bool]:
     latest = None
     for entry in reversed(entries):
         payload = entry.get("payload")
         if entry.get("type") != "response_item" or not isinstance(payload, dict) or payload.get("type") != "message":
             continue
         if payload.get("role") == "user":
-            break
+            return (codex_message_text(latest) if latest else ""), True
         if payload.get("role") != "assistant":
             continue
         if payload.get("phase") == "final_answer":
-            return codex_message_text(payload)
+            return codex_message_text(payload), True
         if latest is None:
             latest = payload
-    return codex_message_text(latest) if latest else ""
+    return (codex_message_text(latest) if latest else ""), False
 
 
 def last_assistant_text(event: dict) -> str:
     message = event.get("last_assistant_message")
     if isinstance(message, str) and message.strip():
         return message
-    entries = read_entries(event.get("transcript_path"))
-    return codex_last_assistant_text(entries) if is_codex_format(entries) else claude_last_assistant_text(entries)
+
+    def resolve(entries: list[dict]) -> tuple[str, bool]:
+        return codex_last_assistant_text(entries) if is_codex_format(entries) else claude_last_assistant_text(entries)
+
+    return resolve_from_tail(event.get("transcript_path"), resolve) or ""
 
 
-def claude_preceding_text(entries: list[dict], tool_use_id: str) -> str | None:
+def claude_preceding_text(entries: list[dict], tool_use_id: str) -> tuple[str | None, bool]:
+    pairs = claude_messages(entries)
     owner = None
-    for entry, message in claude_messages(entries):
+    for entry, message in pairs:
         if entry.get("type") == "assistant" and any(
             b.get("type") == "tool_use" and b.get("id") == tool_use_id for b in content_blocks(message)
         ):
             owner = message
             break
     if owner is None:
-        return None
+        return None, False
     message_id = owner.get("id")
     group = [
-        message
-        for entry, message in claude_messages(entries)
+        (entry, message)
+        for entry, message in pairs
         if entry.get("type") == "assistant" and (message is owner or (message_id is not None and message.get("id") == message_id))
     ]
+    complete = message_id is None or group[0][0] is not pairs[0][0]
     texts = []
-    for message in group:
+    for _, message in group:
         for block in content_blocks(message):
             if block.get("type") == "tool_use":
-                return "\n".join(texts) if block.get("id") == tool_use_id else None
+                return ("\n".join(texts) if block.get("id") == tool_use_id else None), complete
             if block.get("type") == "text" and isinstance(block.get("text"), str):
                 texts.append(block["text"])
-    return None
+    return None, complete
 
 
 def is_codex_call(payload: dict) -> bool:
@@ -260,35 +279,41 @@ def is_codex_tool_item(payload: dict) -> bool:
     return isinstance(kind, str) and (is_codex_call(payload) or kind.endswith("_call_output") or kind.endswith("_output"))
 
 
-def codex_preceding_text(entries: list[dict], tool_use_id: str) -> str | None:
+def codex_preceding_text(entries: list[dict], tool_use_id: str) -> tuple[str | None, bool]:
     payloads = [e["payload"] for e in entries if e.get("type") == "response_item" and isinstance(e.get("payload"), dict)]
     index = next(
         (i for i, p in enumerate(payloads) if is_codex_call(p) and p.get("call_id") == tool_use_id),
         None,
     )
     if index is None:
-        return None
+        return None, False
     texts = []
+    bounded = False
     for payload in reversed(payloads[:index]):
         if is_codex_tool_item(payload):
+            bounded = True
             break
         if payload.get("type") != "message":
             continue
         if payload.get("role") == "user":
+            bounded = True
             break
         if payload.get("role") == "assistant":
             texts.append(codex_message_text(payload))
-    return "\n".join(reversed(texts)) if texts else None
+    return ("\n".join(reversed(texts)) if texts else None), bounded
 
 
 def preceding_progress_text(event: dict) -> str | None:
     tool_use_id = event.get("tool_use_id")
     if not isinstance(tool_use_id, str) or not tool_use_id:
         return None
-    entries = read_entries(event.get("transcript_path"))
-    if is_codex_format(entries):
-        return codex_preceding_text(entries, tool_use_id)
-    return claude_preceding_text(entries, tool_use_id)
+
+    def resolve(entries: list[dict]) -> tuple[str | None, bool]:
+        if is_codex_format(entries):
+            return codex_preceding_text(entries, tool_use_id)
+        return claude_preceding_text(entries, tool_use_id)
+
+    return resolve_from_tail(event.get("transcript_path"), resolve)
 
 
 def data_directory() -> Path | None:
