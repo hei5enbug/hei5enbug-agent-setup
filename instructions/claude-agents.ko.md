@@ -70,14 +70,15 @@ python3 <Source directory>/scripts/role_runner.py <scout|researcher|reviewer|wor
 
 구현은 [구현 실행 규칙](implementation-execution.ko.md)에 따라 조정한다. 이 섹션은 Claude Code worker 연동만 덧붙인다.
 
-- 위임한 구현은 세션 줄 "Implementation worker route"에 지정된 경로를 따른다. 기본은 Codex worker(아래 "Codex worker" 참조),
-  `haiku`일 때는 Haiku worker인 `hei5enbug-agent-setup:worker`, `sonnet`일 때는
-  `hei5enbug-agent-setup:sonnet-worker`를 쓴다. 사용자가 한 경로를 요청하면 그 요청에만 적용한다. UI 코드,
-  시각 디자인, 다이어그램 작업은 여전히 `hei5enbug-agent-setup:designer`가 맡는다. 그 밖의 에이전트는 쓰지 않는다.
+- 위임한 구현은 세션 줄 "Implementation worker route"에 지정된 경로를 따른다. 기본은 Sonnet worker인
+  `hei5enbug-agent-setup:sonnet-worker`, 줄이 `codex`이면 Codex worker(아래 "Codex worker" 참조), `haiku`이면
+  Haiku worker인 `hei5enbug-agent-setup:worker`를 쓴다. 사용자가 한 경로를 요청하면 그 요청에만 적용한다. UI 코드,
+  시각 디자인, 다이어그램 작업은 여전히 `hei5enbug-agent-setup:designer`가 맡는다. 다만 Claude Code 세션 파일이
+  메인 세션에 맡긴 종류는 예외다. 그 밖의 에이전트는 쓰지 않는다.
 - 호출 단위 모델은 정의보다 우선하므로 플러그인 에이전트를 호출하거나 재개할 때 넘기지 않는다. 정의에는 공유 모델
   라우팅이 정리한 모델과 사고 강도가 고정되어 있다.
 - 아래 항목은 플러그인 에이전트가 실행될 때마다 적용한다. 실행기의 대체 경로, Haiku·Sonnet worker, designer가 해당한다.
-- 세션 컨텍스트에 `hei5enbug-agent-setup mod: role pinning active`가 있으면 플러그인 Mod가 요청마다 각 역할의
+- 세션 컨텍스트에 `Role pinning: active` 줄이 있으면 플러그인 Mod가 요청마다 각 역할의
   모델과 사고 강도를 고정하고, 다른 모델로 응답한 서브에이전트의 도구 호출을 막는다. 세션당 한 번만 환경 변수와 모든
   설정 파일에서 강제 모델과 사고 강도 한도(`CLAUDE_CODE_SUBAGENT_MODEL`, `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`,
   `CLAUDE_CODE_EFFORT_LEVEL` 같은 사고 강도 재정의, `maxEffortLevel`이나 조직 한도 같은 사고 강도 상한)만 확인한다.

@@ -138,7 +138,7 @@ Claude Code에서는 `config/claude-mod.json`이 mod `hooks/mod/register.js`를 
 `sonnet-worker`는 `claude-sonnet-5-5`와 `high`, `designer`는 `claude-opus-5-5`와 `xhigh`, `reviewer`는
 `claude-opus-5-5`와 `high`를 씁니다.
 다른 모델로 응답한 서브에이전트는 중단됩니다. 이후 요청은 거부되고 도구 호출은 막히며 결과는 경고로 바뀝니다.
-세션 컨텍스트에 `hei5enbug-agent-setup mod: role pinning active` 줄이 들어가면 메인 세션은 준비 확인 없이
+`role_pinning` 옵션이 켜져 있으면 세션 컨텍스트에 `Role pinning: active` 줄이 들어가고, 메인 세션은 준비 확인 없이
 작업 지시를 보내고 위임마다 하는 설정·서브에이전트 기록 확인도 건너뜁니다.
 
 ### Claude Code에서 GPT 사용
@@ -243,7 +243,7 @@ get, list, search, read, fetch, query, download 같은 읽기 동사로 시작�
 ## 기능 옵션
 
 끌 수 있는 boolean 기능은 일곱 가지이며 각각 기본값은 켜짐입니다. Claude Code의 구현 worker 경로와 검토 모델은 문자열
-옵션입니다. 경로는 `codex`, `haiku`, `sonnet` 중 하나를 고르고, 값이 비어 있거나 알 수 없으면 `codex`를 씁니다.
+옵션입니다. 경로는 `codex`, `haiku`, `sonnet` 중 하나를 고르고, 값이 비어 있거나 알 수 없으면 `sonnet`을 씁니다.
 검토 모델은 독립 검증과 스킬 검토 역할을 `xhigh`로 실행하며, 고정된 일곱 모델 ID 중 하나를 고릅니다. 값이 비어 있거나
 알 수 없으면 `gpt-6-astra`를 씁니다. 플러그인 옵션은 `/config`나 `claude plugin configure`에서 설정합니다. Codex에서는 세션 시작 전에 환경변수를
 설정합니다. boolean 기능은 값이 `false`, `0`, `off`, `no`(대소문자 무시)이면 꺼집니다.
@@ -339,8 +339,8 @@ Windows 실행과 실제 모델의 지침 준수 여부는 테스트 범위에 �
 ## 상황별 위임
 
 메인 세션은 [공통 지침](instructions/session/common.md)에 따라 직접 처리할지 위임할지 판단합니다.
-작은 수정과 알려진 경로 조회는 메인이 처리합니다. 범위가 한정된 조사, 많은 근거 수집, 독립적으로 수행할 수 있는
-규모 있는 구현은 예상 이득이 조정 비용보다 클 때 작업자를 사용합니다. 의존성이 긴밀한 작업은 한 담당자가 이어서 처리합니다.
+알려진 경로 조회, 변경 파일이 두 개 이하인 구현, 통합 수정은 메인이 처리합니다. 범위가 한정된 조사, 많은 근거 수집,
+독립적으로 수행할 수 있는 더 큰 구현은 예상 이득이 조정 비용보다 클 때 작업자를 사용합니다. 의존성이 긴밀한 작업은 한 담당자가 이어서 처리합니다.
 모든 작업에서 실제 비용이 줄어든다고 보장하는 정책은 아닙니다.
 
 메인은 요구사항, 설계, 작업 경계, 수용 판단과 최종 보고를 맡습니다.
@@ -348,13 +348,15 @@ Windows 실행과 실제 모델의 지침 준수 여부는 테스트 범위에 �
 직접 작업은 메인의 현재 모델과 사고 강도를 유지합니다. 위임할 때는 작업 범위, 필요한 맥락, 허용·보호 경로,
 선행 조건, 수용 검사와 호스트의 고정 설정만 전달합니다. 작업자는 하위 에이전트를 만들 수 없습니다.
 
-UI 코드, 시각 디자인, 다이어그램 작업은 대신 호스트의 designer 경로로 보냅니다. 레이아웃과 컴포넌트 구조를 바꾸지 않는
+UI 코드, 시각 디자인, 다이어그램 작업은 대신 호스트의 designer 경로로 보냅니다. 다만 호스트 세션 파일이 메인 세션에
+맡긴 종류는 예외입니다. Claude Code에서는 메인 세션이 문서 안의 ASCII와 Mermaid 다이어그램을 그리고, 기존 SVG
+다이어그램을 고치며, 노드 일곱 개 이하의 새 SVG나 PNG 흐름도를 만듭니다. 레이아웃과 컴포넌트 구조를 바꾸지 않는
 문구·스타일 값 수정은 구현 worker가 맡을 수 있고, 설계 문서와 RFC는 메인 세션이 맡습니다.
 
 | 호스트 | 구현 에이전트 | 모델과 사고 강도 |
 |---|---|---|
 | Codex | rollout 기록으로 검증한 플러그인 `worker` 역할 | `gpt-6-luna`, `xhigh` |
-| Claude Code | `role_runner.py worker`(기본, `implementation_worker`는 `codex`); `haiku`일 때, 요청했을 때, 또는 실행기 대체 경로에서는 Haiku `hei5enbug-agent-setup:worker`; `sonnet`일 때나 요청했을 때는 `hei5enbug-agent-setup:sonnet-worker` | `gpt-6-luna`, `xhigh`(기본); `claude-haiku-5-5`, `high`; `claude-sonnet-5-5`, `high` |
+| Claude Code | `hei5enbug-agent-setup:sonnet-worker`(기본, `implementation_worker`는 `sonnet`); `codex`일 때나 요청했을 때는 `role_runner.py worker`; `haiku`일 때, 요청했을 때, 또는 실행기 대체 경로에서는 Haiku `hei5enbug-agent-setup:worker` | `claude-sonnet-5-5`, `high`(기본); `gpt-6-luna`, `xhigh`; `claude-haiku-5-5`, `high` |
 | Codex, designer | 고정 모델의 `claude -p`, Claude를 쓸 수 없으면 플러그인 `designer` 역할 | `claude-opus-5-5`, `xhigh`, 대체 시 `gpt-6-astra`, `xhigh` |
 | Claude Code, designer | 서브에이전트 기록이나 mod의 역할 고정으로 검증한 `hei5enbug-agent-setup:designer` | `claude-opus-5-5`, `xhigh` |
 | Codex, 로컬 scout | rollout 기록으로 검증한 플러그인 `scout` 역할 | `gpt-6-luna`, `xhigh` |

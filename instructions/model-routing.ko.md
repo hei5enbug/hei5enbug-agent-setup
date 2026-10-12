@@ -14,7 +14,7 @@
 |---|---|
 | 메인이 맡는 작업 | [세션 소유권 규칙](session/common.ko.md)을 따른다. |
 | 실제 저장소나 스킬을 수정하는 구현 | 호스트의 구현 실행 규칙과 고정된 구현 역할을 따른다. |
-| UI 코드, 시각 디자인, 다이어그램 | 호스트의 designer 경로를 쓴다. 레이아웃과 컴포넌트 구조를 바꾸지 않는 문구·스타일 값 수정은 구현 worker를 쓸 수 있다. |
+| UI 코드, 시각 디자인, 다이어그램 | 호스트의 designer 경로를 쓴다. 다만 호스트 세션 파일이 메인 세션에 맡긴 종류는 예외다. 레이아웃과 컴포넌트 구조를 바꾸지 않는 문구·스타일 값 수정은 구현 worker를 쓸 수 있다. |
 | 범위가 한정된 로컬 근거 수집 | 위임이 허용되고 유용할 때 호스트의 scout 역할을 쓴다. |
 | 공개 자료의 읽기 전용 조사 | 공개 도구를 사용할 수 있고 고정 설정을 확인한 경우에만 호스트의 researcher 역할을 쓴다. 그렇지 않으면 메인 세션에서 계속한다. |
 | 스킬 검토 역할(검토 페르소나, grader, comparator, analyzer) | 아래 표의 reviewer 경로를 쓴다. |
@@ -31,7 +31,7 @@ researcher는 주장, 공개 URL이나 파일 위치, 뒷받침하는 근거, �
 | 역할 | Codex | Claude Code |
 |---|---|---|
 | 로컬 scout | `gpt-6-luna`, `xhigh` | 읽기 전용 `role_runner.py scout`로 `gpt-6-luna`, `xhigh`. 대체 경로는 `scout`(`claude-sonnet-5-5`, `medium`) |
-| 구현 worker | `gpt-6-luna`, `xhigh` | `implementation_worker`가 `codex`일 때 기본은 `role_runner.py worker`와 `gpt-6-luna`, `xhigh`; `haiku`일 때, 요청했을 때, 또는 대체 경로로는 `claude-haiku-5-5`, `high` `worker`; `sonnet`일 때나 요청했을 때는 `claude-sonnet-5-5`, `high` `sonnet-worker` |
+| 구현 worker | `gpt-6-luna`, `xhigh` | 기본(`implementation_worker`가 `sonnet`)은 `claude-sonnet-5-5`, `high` `sonnet-worker`; `codex`일 때나 요청했을 때는 `role_runner.py worker`와 `gpt-6-luna`, `xhigh`; `haiku`일 때, 요청했을 때, 또는 실행기 대체 경로로는 `claude-haiku-5-5`, `high` `worker` |
 | 공개 researcher | `gpt-6-luna`, `xhigh` | 웹 검색을 쓰는 `role_runner.py researcher`로 `gpt-6-luna`, `xhigh`. 대체 경로는 `researcher`(`claude-haiku-5-5`, `medium`) |
 | Designer | `claude -p`로 `claude-opus-5-5`, `xhigh`. Claude를 쓸 수 없으면 `designer` 역할로 `gpt-6-astra`, `xhigh` | `claude-opus-5-5`, `xhigh` |
 | Skill Builder 시험 실행 및 기타 비검토 참여자 | `gpt-6.1-sol`, `xhigh` | `claude-opus-5-5`, `high` |

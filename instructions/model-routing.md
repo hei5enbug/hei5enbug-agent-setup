@@ -11,7 +11,7 @@ Classify a delegated task by both its purpose and where its output will go.
 |---|---|
 | Main-owned work | Follow [session ownership rules](session/common.md). |
 | Implementation that edits the actual repository or skill | Follow the host's implementation execution rules and pinned implementation role. |
-| UI code, visual design, or diagrams | Use the host's designer route. A text or style-value edit that keeps layout and component structure may use the implementation worker. |
+| UI code, visual design, or diagrams | Use the host's designer route, except the kinds the host session file assigns to the main session. A text or style-value edit that keeps layout and component structure may use the implementation worker. |
 | Bounded local evidence gathering | Use the host's scout role when delegation is authorized and worthwhile. |
 | Public, read-only research | Use the host's researcher role only when its public tools are available and its pinned settings are verified. Otherwise, continue in the main session. |
 | Skill review role (review persona, grader, comparator, analyzer) | Use the reviewer route in the table below. |
@@ -28,7 +28,7 @@ Use these production settings unless a separately approved comparison qualifies 
 | Role | Codex | Claude Code |
 |---|---|---|
 | Local scout | `gpt-6-luna`, `xhigh` | `role_runner.py scout` with `gpt-6-luna`, `xhigh`, read-only; fallback `scout` with `claude-sonnet-5-5`, `medium` |
-| Implementation worker | `gpt-6-luna`, `xhigh` | `role_runner.py worker` with `gpt-6-luna`, `xhigh` (default, `implementation_worker` is `codex`); `worker` with `claude-haiku-5-5`, `high` when it is `haiku`, on request, or as fallback; `sonnet-worker` with `claude-sonnet-5-5`, `high` when it is `sonnet` or on request |
+| Implementation worker | `gpt-6-luna`, `xhigh` | `sonnet-worker` with `claude-sonnet-5-5`, `high` (default, `implementation_worker` is `sonnet`); `role_runner.py worker` with `gpt-6-luna`, `xhigh` when it is `codex` or on request; `worker` with `claude-haiku-5-5`, `high` when it is `haiku`, on request, or as the runner fallback |
 | Public researcher | `gpt-6-luna`, `xhigh` | `role_runner.py researcher` with `gpt-6-luna`, `xhigh`, web search; fallback `researcher` with `claude-haiku-5-5`, `medium` |
 | Designer | `claude -p` with `claude-opus-5-5`, `xhigh`; when Claude is unavailable, the `designer` role with `gpt-6-astra`, `xhigh` | `claude-opus-5-5`, `xhigh` |
 | Skill Builder trial execution and other non-review participants | `gpt-6.1-sol`, `xhigh` | `claude-opus-5-5`, `high` |

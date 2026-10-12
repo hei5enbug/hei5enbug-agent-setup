@@ -136,7 +136,7 @@ Role pinning pins each plugin role's model and effort on every request: `scout`,
 with `high`, `sonnet-worker` uses `claude-sonnet-5-5` with `high`, `designer` uses `claude-opus-5-5` with `xhigh`, and
 `reviewer` uses `claude-opus-5-5` with `high`. A subagent that answers on another model is stopped: its later requests
 end with a refusal, its tool calls are denied, and its result is replaced with a warning. The session context then
-carries the line `hei5enbug-agent-setup mod: role pinning active`, which lets the main session send assignments
+carries the line `Role pinning: active` when the `role_pinning` option is on, which lets the main session send assignments
 directly and skip per-delegation settings and subagent record checks.
 
 ### GPT in Claude Code
@@ -258,7 +258,7 @@ approval.
 
 Seven boolean features can be turned off, and each defaults to on. The implementation worker route and the review
 model are string options in Claude Code. Choose `codex`, `haiku`, or `sonnet` for the route; an unset or unrecognized
-value uses `codex`. The review model runs independent validation and skill review roles at `xhigh`. Choose one of the
+value uses `sonnet`. The review model runs independent validation and skill review roles at `xhigh`. Choose one of the
 seven pinned model IDs; an unset or unrecognized value uses `gpt-6-astra`. Set plugin options in `/config` or with
 `claude plugin configure`. On Codex, set environment variables before starting the
 session. A value of `false`, `0`, `off`, or `no`, in any letter case, turns a boolean feature off.
@@ -354,10 +354,10 @@ See the official [Codex hooks](https://learn.chatgpt.com/docs/hooks) and
 ## Situation-based delegation
 
 The main session chooses direct work or delegation using the rules in
-[instructions/session/common.md](instructions/session/common.md). Small edits and known-path lookups stay
-in the main session. Bounded investigations, bulky evidence gathering, and substantial independent
-implementation can use workers when the expected benefit exceeds coordination overhead. Closely dependent
-work keeps one owner. This policy does not guarantee a lower bill on every task.
+[instructions/session/common.md](instructions/session/common.md). Known-path lookups, implementation that changes at
+most two files, and integration fixes stay in the main session. Bounded investigations, bulky evidence gathering, and
+larger independent implementation use workers when the expected benefit exceeds coordination overhead. Closely
+dependent work keeps one owner. This policy does not guarantee a lower bill on every task.
 
 The main session retains requirements, design, task boundaries, acceptance, and the final report.
 [instructions/implementation-execution.md](instructions/implementation-execution.md) defines ownership,
@@ -365,14 +365,16 @@ conflict-free scheduling, checks, and recovery. Direct work uses the main sessio
 A delegated task carries only its scope, relevant context, allowed/protected paths, prerequisites,
 acceptance checks, and the host's pinned settings. Workers cannot start nested agents.
 
-UI code, visual design, and diagram work goes to the host's designer route instead. A text or style-value edit that
-keeps the layout and component structure may still go to the implementation worker, and design documents and RFCs
-stay in the main session.
+UI code, visual design, and diagram work goes to the host's designer route instead, except the kinds the host session
+file assigns to the main session. On Claude Code, the main session draws ASCII and Mermaid diagrams in documents, edits
+existing SVG diagrams, and makes new SVG or PNG flowcharts of up to seven nodes. A text or style-value edit that keeps
+the layout and component structure may still go to the implementation worker, and design documents and RFCs stay in
+the main session.
 
 | Host | Implementation agent | Model and effort |
 |---|---|---|
 | Codex | Plugin `worker` role, verified from its rollout record | `gpt-6-luna`, `xhigh` |
-| Claude Code | `role_runner.py worker` (default, `implementation_worker` is `codex`); `hei5enbug-agent-setup:worker` for Haiku on `haiku`, on request, or as the runner fallback; `hei5enbug-agent-setup:sonnet-worker` for Sonnet on `sonnet` or on request | `gpt-6-luna`, `xhigh` (default); `claude-haiku-5-5`, `high`; `claude-sonnet-5-5`, `high` |
+| Claude Code | `hei5enbug-agent-setup:sonnet-worker` (default, `implementation_worker` is `sonnet`); `role_runner.py worker` on `codex` or on request; `hei5enbug-agent-setup:worker` for Haiku on `haiku`, on request, or as the runner fallback | `claude-sonnet-5-5`, `high` (default); `gpt-6-luna`, `xhigh`; `claude-haiku-5-5`, `high` |
 | Codex, designer | `claude -p` with the pinned model; when Claude is unavailable, the plugin `designer` role | `claude-opus-5-5`, `xhigh`; fallback `gpt-6-astra`, `xhigh` |
 | Claude Code, designer | `hei5enbug-agent-setup:designer`, verified from its subagent record or the mod's role pinning | `claude-opus-5-5`, `xhigh` |
 | Codex, local scout | Plugin `scout` role, verified from its rollout record | `gpt-6-luna`, `xhigh` |

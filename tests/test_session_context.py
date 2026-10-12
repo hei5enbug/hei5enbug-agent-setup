@@ -352,8 +352,8 @@ class SessionContextTest(unittest.TestCase):
                 self.assertEqual(result.stdout, "")
                 self.assertIn("work-efficiency.md", result.stderr)
 
-    def test_Claude_세션은_기본_구현_경로로_Codex를_알린다(self):
-        """구현 worker 옵션이 비어 있으면 Claude 세션 컨텍스트가 기본 Codex 경로 한 줄을 담는다."""
+    def test_Claude_세션은_기본_구현_경로로_Sonnet을_알린다(self):
+        """구현 worker 옵션이 비어 있으면 Claude 세션 컨텍스트가 기본 Sonnet 경로 한 줄을 담는다."""
         # Given
         host = "claude"
 
@@ -361,7 +361,20 @@ class SessionContextTest(unittest.TestCase):
         context = self.context(self.run_hook(host))
 
         # Then
-        self.assertIn("Implementation worker route: Codex (`implementation_worker`=`codex`).", context)
+        self.assertIn("Implementation worker route: Sonnet (`sonnet`).", context)
+        self.assertEqual(context.count("Implementation worker route:"), 1)
+        self.assertLess(len(context.encode("utf-8")), 9000)
+
+    def test_codex_옵션은_Codex_경로를_알린다(self):
+        """codex 옵션은 Codex 경로 한 줄을 담는다."""
+        # Given
+        extra_env = {"CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER": "codex"}
+
+        # When
+        context = self.context(self.run_hook("claude", extra_env=extra_env))
+
+        # Then
+        self.assertIn("Implementation worker route: Codex (`codex`).", context)
         self.assertEqual(context.count("Implementation worker route:"), 1)
         self.assertLess(len(context.encode("utf-8")), 9000)
 
@@ -374,11 +387,7 @@ class SessionContextTest(unittest.TestCase):
         context = self.context(self.run_hook("claude", extra_env=extra_env))
 
         # Then
-        self.assertIn(
-            "Implementation worker route: Haiku worker, `hei5enbug-agent-setup:worker` "
-            "(`implementation_worker`=`haiku`).",
-            context,
-        )
+        self.assertIn("Implementation worker route: Haiku (`haiku`).", context)
         self.assertEqual(context.count("Implementation worker route:"), 1)
         self.assertLess(len(context.encode("utf-8")), 9000)
 
@@ -391,16 +400,12 @@ class SessionContextTest(unittest.TestCase):
         context = self.context(self.run_hook("claude", extra_env=extra_env))
 
         # Then
-        self.assertIn(
-            "Implementation worker route: Sonnet: `hei5enbug-agent-setup:sonnet-worker` "
-            "(`implementation_worker`=`sonnet`).",
-            context,
-        )
+        self.assertIn("Implementation worker route: Sonnet (`sonnet`).", context)
         self.assertEqual(context.count("Implementation worker route:"), 1)
         self.assertLess(len(context.encode("utf-8")), 9000)
 
-    def test_알_수_없는_옵션은_Codex_경로를_알린다(self):
-        """알 수 없는 구현 worker 옵션은 안전하게 기본 Codex 경로 한 줄을 담는다."""
+    def test_알_수_없는_옵션은_Sonnet_경로를_알린다(self):
+        """알 수 없는 구현 worker 옵션은 안전하게 기본 Sonnet 경로 한 줄을 담는다."""
         # Given
         extra_env = {"CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER": "unknown"}
 
@@ -408,12 +413,56 @@ class SessionContextTest(unittest.TestCase):
         context = self.context(self.run_hook("claude", extra_env=extra_env))
 
         # Then
-        self.assertIn("Implementation worker route: Codex (`implementation_worker`=`codex`).", context)
+        self.assertIn("Implementation worker route: Sonnet (`sonnet`).", context)
         self.assertEqual(context.count("Implementation worker route:"), 1)
         self.assertLess(len(context.encode("utf-8")), 9000)
 
+    def test_Claude_세션만_다이어그램_직접_작성_범위를_메인에_맡긴다(self):
+        """Claude 메인 컨텍스트는 문서 안 다이어그램과 노드 일곱 개 이하 흐름도를 메인이 맡는다고 하고 Codex는 그렇지 않다."""
+        # Given
+        sentence = "makes new SVG or PNG flowcharts of up to seven nodes; other UI code and visual design go to the designer"
+
+        # When
+        claude = " ".join(self.context(self.run_hook("claude")).split())
+        codex = " ".join(self.context(self.run_hook("codex")).split())
+
+        # Then
+        self.assertIn("The main session draws ASCII and Mermaid diagrams in documents, edits existing SVG diagrams", claude)
+        self.assertIn(sentence, claude)
+        self.assertIn("except the kinds the host session file assigns to the main session", claude)
+        self.assertNotIn("seven nodes", codex)
+
+    def test_Claude_세션은_역할_고정이_꺼지지_않으면_활성_줄을_담는다(self):
+        """role_pinning 옵션이 기본이거나 켜져 있으면 활성 줄이 한 번 들어가고, 끈 값에는 들어가지 않는다."""
+        # Given
+        cases = {None: True, "": True, "true": True, "false": False, " OFF ": False, "0": False, "no": False}
+
+        for option, expected in cases.items():
+            with self.subTest(option=option):
+                extra_env = {} if option is None else {"CLAUDE_PLUGIN_OPTION_ROLE_PINNING": option}
+
+                # When
+                context = self.context(self.run_hook("claude", extra_env=extra_env))
+
+                # Then
+                self.assertEqual(context.count("Role pinning: active (`role_pinning`)."), int(expected))
+
+    def test_Codex와_역할_컨텍스트는_역할_고정_줄을_받지_않는다(self):
+        """Codex 세션과 두 호스트의 역할 컨텍스트에는 역할 고정 줄이 없다."""
+        # Given
+        agents = {"claude": ("hei5enbug-agent-setup:worker", "hei5enbug-agent-setup:scout"), "codex": ("worker", "scout")}
+
+        # When
+        contexts = [self.context(self.run_hook("codex"))]
+        contexts += [self.subagent_context(host, name) for host, names in agents.items() for name in names]
+        contexts.append(self.context(self.run_hook("claude", extra_env={"HEI5ENBUG_ASSIGNED_ROLE": "worker"})))
+
+        # Then
+        for context in contexts:
+            self.assertNotIn("Role pinning", context)
+
     def test_Claude_세션은_검토_모델_설정값_한_줄을_담는다(self):
-        """review_model 옵션이 비면 기본 gpt-6-astra, 정규화한 허용 ID면 그 값을 xhigh와 함께 한 줄로 담는다."""
+        """review_model 옵션이 비면 기본 gpt-6-astra, 정규화한 허용 ID면 그 값을 한 줄로 담는다."""
         # Given
         cases = {
             None: "gpt-6-astra",
@@ -430,7 +479,7 @@ class SessionContextTest(unittest.TestCase):
                 context = self.context(self.run_hook("claude", extra_env=extra_env))
 
                 # Then
-                self.assertIn(f"Review model: `{expected}` (`review_model`), `xhigh`.", context)
+                self.assertIn(f"Review model: `{expected}`.", context)
                 self.assertEqual(context.count("Review model:"), 1)
                 self.assertLess(len(context.encode("utf-8")), session_context.MAX_CONTEXT_BYTES)
 
@@ -443,7 +492,7 @@ class SessionContextTest(unittest.TestCase):
         context = self.context(self.run_hook("claude", extra_env=extra_env))
 
         # Then
-        self.assertIn("Review model: `gpt-6-astra` (`review_model`), `xhigh`.", context)
+        self.assertIn("Review model: `gpt-6-astra`.", context)
         self.assertNotIn("gpt-9-unknown", context)
 
     def test_검토_모델_선택지는_모델_고정값_일곱_개와_같다(self):
