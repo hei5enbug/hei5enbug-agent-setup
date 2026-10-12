@@ -14,6 +14,9 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+import session_context  # noqa: E402
+
 HOOKS = json.loads((REPO_ROOT / "hooks/hooks.json").read_text())["hooks"]
 LEGACY_EXPLORER = REPO_ROOT / "tests/fixtures/legacy-codex-explorer.toml"
 LEGACY_WORKER = REPO_ROOT / "tests/fixtures/legacy-codex-worker.toml"
@@ -88,13 +91,220 @@ class SessionContextTest(unittest.TestCase):
                     self.assertNotIn("UNRELATED PROJECT SENTINEL", context)
                     self.assertNotIn("ROOT PROJECT SENTINEL", context)
 
-    def test_subagents_receive_their_host_instructions(self):
+    def subagent_context(self, host, agent_type=None):
+        event = {"hook_event_name": "SubagentStart"}
+        if agent_type is not None:
+            event["agent_type"] = agent_type
+        return self.context(self.run_hook(host, event="SubagentStart", payload=json.dumps(event)), "SubagentStart")
+
+    def test_Codex는_에이전트_종류가_없는_하위_시작에_메인_컨텍스트를_준다(self):
+        """Codex 하위 시작 이벤트에 agent_type이 없으면 메인 컨텍스트를 받고, Claude는 코어만 받는다."""
+        # Given
+        hosts = ("codex", "claude")
+
+        # When
+        contexts = {host: self.subagent_context(host) for host in hosts}
+
+        # Then
+        self.assertIn("# Common", contexts["codex"])
+        self.assertIn("# Codex only", contexts["codex"])
+        self.assertIn("Never expose secrets", contexts["claude"])
+        self.assertNotIn("# Common", contexts["claude"])
+        self.assertNotIn("# Claude Code only", contexts["claude"])
+
+    def test_구현_에이전트는_코어와_할당받은_worker_절만_받는다(self):
+        """구현 에이전트는 코어와 Assigned workers 절만 받고 공통과 호스트 지침, 실행 규칙의 나머지는 받지 않는다."""
+        # Given
+        agents = {
+            "claude": (
+                "hei5enbug-agent-setup:worker",
+                "hei5enbug-agent-setup:sonnet-worker",
+                "hei5enbug-agent-setup:designer",
+            ),
+            "codex": ("worker", "designer"),
+        }
+
+        for host, agent_types in agents.items():
+            for agent_type in agent_types:
+                with self.subTest(host=host, agent_type=agent_type):
+                    # When
+                    context = self.subagent_context(host, agent_type)
+
+                    # Then
+                    self.assertIn("Never expose secrets", context)
+                    self.assertIn("## Assigned workers", context)
+                    self.assertIn("An assigned worker executes its task directly", context)
+                    self.assertNotIn("# Common", context)
+                    self.assertNotIn("# Codex only", context)
+                    self.assertNotIn("# Claude Code only", context)
+                    self.assertNotIn("## Scheduling", context)
+                    self.assertNotIn("Response language", context)
+                    self.assertNotIn("Implementation worker route", context)
+                    self.assertLess(len(context.encode("utf-8")), session_context.MAX_ROLE_CONTEXT_BYTES)
+
+    def test_그_밖의_에이전트는_코어만_받는다(self):
+        """구현 에이전트가 아닌 에이전트와 접두사 없는 Claude 이름은 코어만 받는다."""
+        # Given
+        agents = {
+            "claude": ("hei5enbug-agent-setup:scout", "hei5enbug-agent-setup:reviewer", "worker", "general-purpose"),
+            "codex": ("scout", "researcher", "reviewer", "hei5enbug-agent-setup:worker"),
+        }
+
+        for host, agent_types in agents.items():
+            for agent_type in agent_types:
+                with self.subTest(host=host, agent_type=agent_type):
+                    # When
+                    context = self.subagent_context(host, agent_type)
+
+                    # Then
+                    self.assertIn("Never expose secrets", context)
+                    self.assertNotIn("## Assigned workers", context)
+                    self.assertNotIn("# Common", context)
+                    self.assertNotIn("Implementation worker route", context)
+                    self.assertLess(len(context.encode("utf-8")), session_context.MAX_ROLE_CONTEXT_BYTES)
+
+    def test_할당된_역할_환경_변수가_있으면_세션_시작도_코어만_받는다(self):
+        """HEI5ENBUG_ASSIGNED_ROLE이 있는 세션은 두 호스트 모두 코어만 받고, 빈 값은 메인 컨텍스트를 받는다."""
         for host in ("codex", "claude"):
             with self.subTest(host=host):
-                context = self.context(self.run_hook(host, event="SubagentStart"), "SubagentStart")
-                self.assertIn("Never expose secrets", context)
-                self.assertEqual("# Codex only" in context, host == "codex")
-                self.assertEqual("# Claude Code only" in context, host == "claude")
+                # Given
+                extra_env = {"HEI5ENBUG_ASSIGNED_ROLE": "worker"}
+
+                # When
+                role = self.context(self.run_hook(host, extra_env=extra_env))
+                main = self.context(self.run_hook(host, extra_env={"HEI5ENBUG_ASSIGNED_ROLE": ""}))
+
+                # Then
+                self.assertIn("Never expose secrets", role)
+                self.assertNotIn("# Common", role)
+                self.assertNotIn("## Assigned workers", role)
+                self.assertLess(len(role.encode("utf-8")), session_context.MAX_ROLE_CONTEXT_BYTES)
+                self.assertIn("# Common", main)
+
+    def test_할당받은_worker_절은_다음_제목_앞에서_끝난다(self):
+        """공개 함수는 제목을 포함해 다음 같은 수준 제목 앞까지만 돌려주고 파일 끝까지 가는 경우도 처리한다."""
+        # Given
+        path = self.root / "instructions/implementation-execution.md"
+
+        # When
+        section = session_context.assigned_workers_section(self.root)
+        path.write_text("# T\n\n## Before\n\nx\n\n## Assigned workers\n\n- one\n- two\n", encoding="utf-8")
+        last = session_context.assigned_workers_section(self.root)
+
+        # Then
+        self.assertTrue(section.startswith("## Assigned workers\n"))
+        self.assertNotIn("\n## ", section)
+        self.assertIn("Return the changed paths, check results, and remaining blockers.", section)
+        self.assertEqual(last, "## Assigned workers\n\n- one\n- two")
+
+    def test_할당받은_worker_절이_없으면_구현_에이전트_컨텍스트는_실패한다(self):
+        """절이 없으면 구현 에이전트 시작은 부분 컨텍스트 없이 실패하고 메인 세션은 영향받지 않는다."""
+        # Given
+        path = self.root / "instructions/implementation-execution.md"
+        path.write_text(path.read_text().replace("## Assigned workers", "## Workers"), encoding="utf-8")
+
+        # When
+        failed = self.run_hook(
+            "claude",
+            event="SubagentStart",
+            payload=json.dumps({"hook_event_name": "SubagentStart", "agent_type": "hei5enbug-agent-setup:worker"}),
+        )
+        other = self.subagent_context("claude", "hei5enbug-agent-setup:scout")
+        main = self.context(self.run_hook("claude"))
+
+        # Then
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertEqual(failed.stdout, "")
+        self.assertIn("Assigned workers", failed.stderr)
+        self.assertIn("Never expose secrets", other)
+        self.assertIn("# Common", main)
+
+    def test_역할_컨텍스트가_4000바이트를_넘으면_실패한다(self):
+        """코어가 역할 한도를 넘으면 역할 컨텍스트는 예산 오류로 끝나고 빈 출력을 낸다."""
+        # Given
+        path = self.root / "instructions/session/core.md"
+        path.write_text(path.read_text() + "\n" + "x" * 4000, encoding="utf-8")
+
+        # When
+        result = self.run_hook(
+            "claude",
+            event="SubagentStart",
+            payload=json.dumps({"hook_event_name": "SubagentStart", "agent_type": "hei5enbug-agent-setup:scout"}),
+        )
+
+        # Then
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("context budget", result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_코어_파일이_없으면_모든_컨텍스트가_실패한다(self):
+        """core.md가 없으면 메인과 역할 컨텍스트 모두 부분 출력 없이 실패한다."""
+        # Given
+        (self.root / "instructions/session/core.md").unlink()
+
+        # When
+        results = [
+            self.run_hook("claude"),
+            self.run_hook(
+                "claude",
+                event="SubagentStart",
+                payload=json.dumps({"hook_event_name": "SubagentStart", "agent_type": "hei5enbug-agent-setup:scout"}),
+            ),
+        ]
+
+        # Then
+        for result in results:
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("core.md", result.stderr)
+            self.assertEqual(result.stdout, "")
+
+    def test_코어와_공통은_옮긴_규칙을_한_곳에만_둔다(self):
+        """우선순위와 보호 규칙은 코어에만, 위임과 질문 규칙은 공통에만 있다."""
+        # Given
+        core = (REPO_ROOT / "instructions/session/core.md").read_text(encoding="utf-8")
+        common = (REPO_ROOT / "instructions/session/common.md").read_text(encoding="utf-8")
+
+        # When
+        moved = (
+            "take precedence over project instructions",
+            "Prefer `rg`",
+            "Never expose secrets",
+            "Never use section-sign",
+            "(../services.md)",
+            "(../protected-values.md)",
+            "(../documentation.md)",
+            "(../testing.md)",
+        )
+
+        # Then
+        for text in moved:
+            with self.subTest(text=text):
+                self.assertIn(text, core)
+                self.assertNotIn(text, common)
+        self.assertNotIn('An assigned worker reads only its "Assigned workers" section', common)
+        self.assertIn("## Delegation", common)
+        self.assertNotIn("## Delegation", core)
+
+    def test_교체_대상_codex_역할_해시에_이전_worker와_designer가_들어_있다(self):
+        """이전 버전 worker와 designer 파일의 해시는 교체 대상이고 현재 번들 파일은 교체 대상이 아니다."""
+        # Given
+        retired = session_context.RETIRED_CODEX_AGENTS
+        expected = {
+            "worker": "249b194b8c9e0cea3ff687298e58cee99ca6c330f79e04162029a60e2ecfeff0",
+            "designer": "c8c525a3a7fdfb5adbff1cf7474d24dfba35527eb070f4a5206c164b248d43ed",
+        }
+
+        # When
+        current = {
+            name: hashlib.sha256((REPO_ROOT / "standalone-agents" / f"codex-{name}.toml").read_bytes()).hexdigest()
+            for name in expected
+        }
+
+        # Then
+        for name, digest in expected.items():
+            with self.subTest(name=name):
+                self.assertIn(digest, retired[name])
+                self.assertNotIn(current[name], retired[name])
 
     def test_참조는_절대_경로이고_세부_본문은_불러오지_않는다(self):
         """작업 효율과 검토를 포함한 참조 10개는 절대 경로로 바뀌고 세부 본문은 시작 시 불러오지 않는다."""
@@ -141,25 +351,6 @@ class SessionContextTest(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(result.stdout, "")
                 self.assertIn("work-efficiency.md", result.stderr)
-
-    def test_worker도_실행_규칙_경로와_worker_섹션_안내를_받는다(self):
-        """하위 에이전트 시작 컨텍스트도 실행 규칙 링크와 할당받은 worker 섹션 안내를 담는다."""
-        # Given
-        expected = (self.root / "instructions/implementation-execution.md").as_posix()
-
-        # When
-        contexts = {
-            host: self.context(self.run_hook(host, event="SubagentStart"), "SubagentStart")
-            for host in ("codex", "claude")
-        }
-
-        # Then
-        for host, context in contexts.items():
-            with self.subTest(host=host):
-                self.assertIn(f"[implementation execution rules](<{expected}>)", context)
-                self.assertIn('reads only its "Assigned workers" section', context)
-                self.assertNotIn("## Assigned workers", context)
-                self.assertLess(len(context.encode("utf-8")), 9000)
 
     def test_Claude_세션은_기본_구현_경로로_Codex를_알린다(self):
         """구현 worker 옵션이 비어 있으면 Claude 세션 컨텍스트가 기본 Codex 경로 한 줄을 담는다."""
@@ -602,7 +793,8 @@ class CodexAutoSettingsTest(unittest.TestCase):
         session = self.root / "instructions" / "session"
         session.mkdir(parents=True)
         for name, text in (
-            ("common.md", "# Common\nNever expose secrets.\n"),
+            ("core.md", "# Core\nNever expose secrets.\n"),
+            ("common.md", "# Common\n"),
             ("codex.md", "# Codex only\n"),
             ("claude-code.md", "# Claude Code only\n"),
         ):

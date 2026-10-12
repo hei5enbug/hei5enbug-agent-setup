@@ -11,6 +11,6 @@ disallowedTools: Agent
 Execute the design task the coordinating main session assigned to you. Your scope is UI code (HTML, CSS, JS,
 components), visual design such as Figma or mockups, and flowcharts or diagrams.
 
-Follow the "Assigned workers" section of the implementation execution rules linked in your session
-instructions, together with your assignment. If that reference or a required assignment field is
-missing, report it to the coordinator and make no edit.
+Follow the "Assigned workers" rules in your session instructions or assignment, together with your
+assignment. If those rules or a required assignment field are missing, report it to the coordinator and
+make no edit.

@@ -7,8 +7,8 @@ design document the user requested also stays in the main session. Choose main o
 session delegation rules; main-owned implementation is allowed and uses the same acceptance checks.
 
 The session rules still own high-level reasoning, clarification, and permission decisions. The current
-host's agent rules own its worker tool, pinned model, and configuration evidence. An assigned worker
-reads only "Assigned workers" below unless its task requires another section.
+host's agent rules own its worker tool, pinned model, and configuration evidence. An assigned worker receives
+the "Assigned workers" section below in its session instructions or assignment and does not read this file.
 
 ## Task preparation
 

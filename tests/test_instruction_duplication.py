@@ -1,8 +1,8 @@
 """Regression checks for known copies across runtime and repository instruction files.
 
-`instructions/session/common.md` ships to every plugin user and loads on every session. `AGENTS.md`
-governs development of this repository only. These checks reject verbatim copies of the declared common
-rules. Semantically equivalent restatements remain a review concern.
+`instructions/session/core.md` and `instructions/session/common.md` ship to every plugin user and load
+on every main session; subagents load only the core. `AGENTS.md` governs development of this repository
+only. These checks reject verbatim copies of the declared core and common rules. Semantically equivalent restatements remain a review concern.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+CORE = REPO_ROOT / "instructions/session/core.md"
 COMMON = REPO_ROOT / "instructions/session/common.md"
 AGENTS = REPO_ROOT / "AGENTS.md"
 CLAUDE_AGENTS = REPO_ROOT / "instructions/claude-agents.md"
@@ -22,27 +23,29 @@ HOST_SESSION_FILES = (
     REPO_ROOT / "instructions/session/codex.md",
 )
 
-# Verbatim rules the always-loaded session instructions own outright.
-COMMON_OWNED = (
+# Verbatim rules every agent receives through the core session instructions.
+CORE_OWNED = (
     (
         "Use English files as executable instruction sources. Korean `.ko.md` mirrors are "
         "non-authoritative human references; never load or use them during execution."
     ),
     (
+        "Prefer `rg` for text and symbol search and `fd` for file discovery. Use `ast-grep` only when "
+        "structural matching is clearly needed."
+    ),
+    "Ask before destructive, irreversible, or production-impacting actions. Never expose secrets.",
+    "Before writing or editing any documentation file, read [documentation rules](../documentation.md).",
+)
+
+# Verbatim rules only the main session receives through the common session instructions.
+COMMON_OWNED = (
+    (
         "Keep planning, architecture, trade-offs, problem definition, complex debugging, review, and key "
         "decisions in the main session. Never delegate high-level reasoning."
     ),
     (
-        "Prefer `rg` for text and symbol search and `fd` for file discovery. Use `ast-grep` only when "
-        "structural matching is clearly needed."
-    ),
-    (
         "When the target is a known symbol, file path, glob, or literal string, search directly in the main "
         "session."
-    ),
-    (
-        "Before writing or editing any documentation file, read [documentation "
-        "rules](../documentation.md)."
     ),
 )
 
@@ -77,12 +80,24 @@ class CommonOwnsItsRulesTest(unittest.TestCase):
             with self.subTest(rule=rule):
                 self.assertIn(rule, text)
 
+    def test_core_still_states_every_owned_rule(self):
+        text = normalized_text(CORE)
+        for rule in CORE_OWNED:
+            with self.subTest(rule=rule):
+                self.assertIn(rule, text)
+
+    def test_common_does_not_repeat_core_rules(self):
+        text = normalized_text(COMMON)
+        for rule in CORE_OWNED:
+            with self.subTest(rule=rule):
+                self.assertNotIn(rule, text)
+
 
 class AgentsFileStaysADeltaTest(unittest.TestCase):
     def test_repository_and_host_deltas_do_not_repeat_verbatim_common_rules(self):
         for path in (AGENTS, CLAUDE_AGENTS, CODEX_AGENTS):
             text = normalized_text(path)
-            for rule in COMMON_OWNED:
+            for rule in COMMON_OWNED + CORE_OWNED:
                 with self.subTest(path=path.relative_to(REPO_ROOT), rule=rule):
                     self.assertNotIn(rule, text)
 
