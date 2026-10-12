@@ -426,6 +426,14 @@ When file-based feedback is available, read `feedback.json`. Check its `status` 
 
 1. Generalize from feedback instead of patching only the tested examples.
    Write the decision procedure, not the instances: a test the agent can apply to a case the skill never saw, followed by two or three pairs marked as illustrations rather than the full set.
+   Treat the case that prompted the change as evidence, not as rule text. Do not copy its entity names,
+   values, configuration, or domain facts into a rule or an illustration; take illustrations from a neutral
+   or different domain. Do not derive a threshold or limit from that case alone: state the decision test
+   instead. A number that only the prompting case suggests stays in the eval record, marked unverified, and
+   is not written into a rule or an illustration until cases outside it support it. A limit the user states
+   as policy is not derived and may be written as given.
+   Keep the prompting case as a regression check, and add at least one eval case from a different domain
+   that the revised rule must also handle.
 2. Keep the prompt lean and remove instructions that create repeated unproductive work, but compress only where meaning survives.
    Preserve every constraint, threshold, and scope, and make each rule unambiguous to a coding agent with no other context.
    When a cut would cost clarity, move the detail to a reference instead of deleting it.
@@ -500,6 +508,8 @@ If the installed source is read-only, copy it to a writable temporary location, 
   exact validation limitation was marked unverified; one passing run was not treated as disproof.
 - Core instructions use capability-based language and avoid accidental vendor coupling.
 - Every example was graded against the skill's own rules: good examples satisfy all of them, bad examples violate the rule they illustrate.
+- No rule, threshold, or illustration carries a name, value, or domain fact found only in the case that
+  prompted the change, and the eval set includes a case outside that case's domain.
 - Required host-specific behavior is isolated and documented.
 - For a multi-host skill, every host was evaluated on the same eval corpus, and each adapter rule
   traces to a host difference that a shared clarification could not fix.
