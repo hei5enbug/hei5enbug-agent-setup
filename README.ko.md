@@ -87,6 +87,7 @@ hei5enbug-agent-setup/
     ├── docs-rewrite/
     ├── document-to-confluence/
     ├── orca-plugin-refresh/
+    ├── session-retro/
     ├── skill-builder/
     ├── suggest-commit/
     ├── technical-design-writer/
@@ -523,6 +524,7 @@ Orca CLI가 필요한 테스트는 Orca가 설치되어 있지 않으면 건너�
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | SVG, HTML/CSS, Figma, draw.io 등 어떤 도구로 만들어도 하나의 디자인 시스템처럼 보이게 하는 플로우차트 공통 디자인 기준입니다. [한국어 안내](skills/flowchart-design/SKILL.ko.md) |
 | [`docs-rewrite`](skills/docs-rewrite/SKILL.md) | 주장, 수치, 확신도를 그대로 둔 채 글이 자연스럽게 읽히도록 고쳐 쓰고, AI가 쓴 듯한 한국어 문체를 함께 고칩니다. [한국어 안내](skills/docs-rewrite/SKILL.ko.md) |
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Markdown, HTML, PDF, DOCX, Google Docs 문서를 Confluence 페이지로 변환하고, 문서 구조와 첨부 파일을 보존하며, 이후 원본 변경도 페이지에 반영합니다. [한국어 안내](skills/document-to-confluence/SKILL.ko.md) |
+| [`session-retro`](skills/session-retro/SKILL.md) | 한 저장소의 하루 Claude Code·Codex 세션을 읽기 전용 scout로 검토하고, 정정·실패·반복 작업을 플러그인별 근거 있는 스킬 개선안으로 바꾸며, 남은 결정을 묻고 요청하면 계획안을 씁니다. [한국어 안내](skills/session-retro/SKILL.ko.md) |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | 초안 작성 → 테스트 → 검토 → 개선 순환을 통해 에이전트 스킬을 만들고, 검증하고, 패키징합니다. [한국어 안내](skills/skill-builder/SKILL.ko.md) |
 | [`orca-plugin-refresh`](skills/orca-plugin-refresh/SKILL.md) | 이 플러그인을 안전하게 오프라인으로 업데이트하고, 설치된 버전을 대기 중인 Orca 관리 Claude Code와 Codex 세션에 재시작 없이 반영합니다. [한국어 안내](skills/orca-plugin-refresh/SKILL.ko.md) |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | 스테이징된 변경과 스테이징되지 않은 변경을 함께, 또는 사용자가 지정한 범위를 최근 커밋 이력과 함께 읽어, 이 저장소의 스타일에 맞는 커밋 메시지 5개를 제안합니다. 커밋을 요청하면 가장 적절한 제목 하나로 바로 커밋합니다. [한국어 안내](skills/suggest-commit/SKILL.ko.md) |

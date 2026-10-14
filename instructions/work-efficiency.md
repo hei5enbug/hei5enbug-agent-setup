@@ -14,7 +14,8 @@ Group independently reviewable behavior under one owner. Do not dispatch reading
 documenting the same cohesive change to separate workers. Preserve actual prerequisite acceptance boundaries.
 Notify workers for changed requirements, dependencies, defects, or handoffs. Prefer completion events or the
 host's waiting facility to repeated status queries. Continue required user progress updates without querying
-logs or worker status merely to produce an update.
+logs or worker status merely to produce an update. When starting a background wait or monitor, tell the user in
+one line what runs (a script or a model), against what, and the expected duration.
 
 After 15 minutes without a new accepted result or actionable evidence, reassess the approach once and report
 the blocker and next bounded action. Productive implementation does not stop merely because it is long.

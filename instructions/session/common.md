@@ -39,7 +39,8 @@ On a result-changing ambiguity or conflict, stop edits and external changes, rea
 ask one concise question. Use a tool only if host rules permit required, blocking questions; otherwise
 ask in the final response and end the turn. Never use async questions for required decisions. Resume only
 on an explicit user answer. Silence, elapsed time, empty or automatic answers, and defaults are not answers.
-Follow host formatting and a skill's own ask or stop rules.
+Follow host formatting and a skill's own ask or stop rules. Offer temporary and root-cause fixes, when both
+exist, with cost and impact; the user chooses. Report a pending user action, such as a login, once.
 
 ## Conditional instructions
 

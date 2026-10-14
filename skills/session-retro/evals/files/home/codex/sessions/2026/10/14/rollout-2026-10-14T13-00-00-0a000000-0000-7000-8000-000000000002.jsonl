@@ -1,0 +1,9 @@
+{"timestamp": "2026-10-14T04:00:00Z", "type": "session_meta", "payload": {"id": "0a000000-0000-7000-8000-000000000002", "cwd": "/work/demo-app", "originator": "codex_cli_rs", "source": "cli"}}
+{"timestamp": "2026-10-14T04:00:05Z", "type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "UserMessage", "content": [{"type": "text", "text": "PR 501 리뷰해줘."}]}}}
+{"timestamp": "2026-10-14T04:03:00Z", "type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "AgentMessage", "content": [{"type": "text", "text": "PR 501을 읽고 의견 4개를 정리했습니다."}]}}}
+{"timestamp": "2026-10-14T04:04:00Z", "type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "UserMessage", "content": [{"type": "text", "text": "pr-check 규칙대로 리뷰해야지?"}]}}}
+{"timestamp": "2026-10-14T04:04:30Z", "type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "CommandExecution", "command": "python3 scripts/pr_check.py start --pr 501", "aggregated_output": "error: invalid choice: 'start' (choose from mark, report)", "exit_code": 2}}}
+{"timestamp": "2026-10-14T04:04:50Z", "type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "CommandExecution", "command": "python3 scripts/pr_check.py mark --pr 501 --phase start", "aggregated_output": "ok", "exit_code": 0}}}
+{"timestamp": "2026-10-14T04:10:00Z", "type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "AgentMessage", "content": [{"type": "text", "text": "pr-check로 다시 검토해 의견 1개만 남겼습니다."}]}}}
+{"timestamp": "2026-10-14T04:12:00Z", "type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "UserMessage", "content": [{"type": "text", "text": "DEMO-12는 남은 작업(야간 배치 결과 확인)이 있으니 완료 처리하지 마."}]}}}
+{"timestamp": "2026-10-14T04:12:30Z", "type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "AgentMessage", "content": [{"type": "text", "text": "DEMO-12 상태를 그대로 두겠습니다."}]}}}

@@ -1,0 +1,2 @@
+{"timestamp": "2026-10-14T06:00:00Z", "type": "session_meta", "payload": {"id": "0a000000-0000-7000-8000-000000000004", "cwd": "/work/demo-app", "originator": "codex_cli_rs", "source": "exec"}}
+{"timestamp": "2026-10-14T06:02:00Z", "type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "AgentMessage", "content": [{"type": "text", "text": "automated scout run finished"}]}}}
