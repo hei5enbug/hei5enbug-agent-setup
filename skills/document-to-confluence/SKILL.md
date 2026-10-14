@@ -170,19 +170,44 @@ unchanged, restricts the conventions to the permitted scope. Report the edits th
 scope instead of applying them.
 
 - **Change history.** On a page that describes current state, such as behavior, structure, or a procedure,
-  move time-bound records out of the descriptive sections into a final section titled in the page language,
-  such as "변경 이력" in Korean. Time-bound records include the date a state was observed or used as a
-  baseline, progress of an ongoing operation, results of a one-time test, and dated change notes. Use a date
-  column and a content column in chronological order, and keep the moved wording and facts. Add the section
-  only when such records exist. Leave records in place on a page whose purpose is to record events, such as
-  an incident report, meeting notes, or release notes.
+  move time-bound records that are not needed to interpret a nearby claim into a final section titled in the
+  page language, such as "변경 이력" in Korean. These include progress of an ongoing operation, superseded
+  observations, and dated change notes. Keep an as-of date, observation window, test result, or evidence
+  limitation next to the claim it qualifies or supports when moving it would change the claim's meaning or
+  apparent validity. Use a date column and a content column in chronological order, and keep the moved
+  wording and facts. Add the section only when such records exist. Leave records in place on a page whose
+  purpose is to record events, such as an incident report, meeting notes, or release notes.
 - **Term explanations.** Render a glossary or term-definition list from the source, and term explanations
   the user requests, as one info panel titled in the page language, such as "용어 설명" in Korean. Place it
   immediately before the first body section, after any opening content such as a summary or table of
   contents. Do not create or move opening content to fit this position. Leave explanations inside body
   prose where they are. Group entries by topic when they are many. Write requested explanations for the
   readers the user names, and skip general development terms and terms those readers use in daily work.
-  Include a qualifying term even when a table or paragraph also describes it.
+  Include a qualifying term even when a table or paragraph also describes it. When the opening layout puts
+  opening prose in an overview or background section, treat that section as opening content and place the
+  panel at its end.
+- **Expandable detail.** Preserve an expandable block that the source contains. Add one only when the user
+  asks to collapse or restructure detail, and only for supporting detail that the visible conclusion does not
+  need. Keep the decision, material conditions, evidence limitations, and the comparison basis visible. Give
+  the block a descriptive title in the page language and keep its content and links. Use the markup in
+  `references/confluence-body.md`. Treat the collapsed and expanded views as unverified until the saved page
+  is read back. If a block added on request then does not show its title and content, replace it with visible
+  content and report it; report a failed source block without removing its content.
+- **Opening layout.** Apply this layout by default to a page this run creates. When republishing an existing
+  page whose current body already uses it, keep it. Apply it to any other existing page only when the user
+  asks for it. When the user asks to publish unchanged or limits the edit to named parts, apply none of it,
+  including blank paragraphs, outside the permitted scope.
+  - When the body has a table of contents, put the native macro first in the body and use its bullet-free
+    style. Do not add a heading such as "목차" above it. Replace a hand-written contents list and its heading,
+    such as one carried over from a Markdown source, with the macro. Headings often carry their own numbers,
+    so list markers duplicate them. If the write format cannot store the style, keep the default and report it.
+  - When the body has a table of contents, move opening prose that precedes the first heading into a section
+    below it. Title it "개요" in Korean, or the page-language equivalent, when the prose explains the page's
+    purpose or overall behavior, and "배경" when it explains why a problem or investigation arose. Keep the
+    prose unchanged. Without a table of contents or opening prose, leave the opening as it is.
+  - Put one visible blank paragraph immediately before each top-level body heading, including the first
+    heading after the table of contents. Count any existing empty paragraph at that position as the blank
+    line, and add none inside cells, lists, panels, or lower-level sections.
 - **Layout.** Apply the column-width and line-break rules in `references/confluence-body.md` to every table,
   paragraph, and cell, including the panel and the change-history table.
 - **Suggestions.** In the report, list content that seems outside the page's purpose or better suited to

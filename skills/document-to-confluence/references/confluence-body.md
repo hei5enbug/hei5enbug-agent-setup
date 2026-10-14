@@ -20,6 +20,7 @@ These statements have no recorded observation behind them. Confirm them at use t
 - Confluence Data Center and Server behave like Cloud for the rules below. They were not tested.
 - Every connected Confluence tool accepts the HTML body representation used here. Tools that
   accept only storage format or ADF need a conversion step this document does not describe.
+  Storage-format forms observed so far appear next to the rule they belong to.
 - The `width` and `height` convention on `img`, the block-element rule for table cells, and the
   text escaping rule are conventions, not verified constraints.
 
@@ -98,6 +99,13 @@ means deleting attachments, which needs user approval.
 Referencing by download URL avoids this problem entirely, which is why the `img` form above is the
 default.
 
+### Storage-format image
+
+**Observed.** In storage format, a body that referenced an image's download URL through an external media
+node saved without error. The next version replaced it with
+`<ac:image ac:width="WIDTH"><ri:attachment ri:filename="FILENAME" /></ac:image>`, and its version message
+reported that rendering became correct. The earlier display was not inspected.
+
 ## Table of contents
 
 **Verified.** Use the built-in macro rather than a hand-written list, so the page keeps working
@@ -113,6 +121,18 @@ when headings change.
 
 Do not invent a macro identifier. Omit it when creating the macro. When a body you read already
 carries one, send it back unchanged, because it is how the page tracks that macro instance.
+
+**Observed on 2026-10-14.** Adding `"style":{"value":"none"}` to `macroParams` in the HTML body, sent through
+a connected Confluence page tool, was accepted. The stored macro carried `style=none`, and the rendered view
+marked the list style as `none`.
+
+**Observed.** In storage format, `<ac:parameter ac:name="style">none</ac:parameter>` inside the `toc` macro
+was stored and returned unchanged on read-back after REST API saves. A version message on another page
+reported that it removed list numbering that duplicated numbered headings; the display itself was not
+inspected.
+
+A heading placed above the macro is listed in the contents when its level is inside the macro's range.
+An earlier page used the `exclude` parameter to keep such a heading out of the list.
 
 ## Info panel
 
@@ -133,6 +153,29 @@ storage-format macro with HTML body markup such as the table-of-contents element
 first write, confirm the panel markup that the write tool accepts in the chosen format, then read
 the page back and verify that the panel renders. The macro-identifier rule for the table of
 contents applies here too.
+
+## Expandable block
+
+**Observed on 2026-10-14.** In the HTML body, `<details><summary>TITLE</summary>...</details>` sent through a
+connected Confluence page tool was stored as the storage-format macro below. The rendered view showed the
+title with the content collapsed.
+
+```html
+<details><summary>TITLE</summary><p>...</p></details>
+```
+
+**Observed.** This storage-format macro, with its title parameter, was stored and returned unchanged after
+saving.
+
+```xml
+<ac:structured-macro ac:name="expand" ac:schema-version="1">
+  <ac:parameter ac:name="title">TITLE</ac:parameter>
+  <ac:rich-text-body>...</ac:rich-text-body>
+</ac:structured-macro>
+```
+
+Read the page back and check both the collapsed title and the expanded content. Keep one body format per
+write.
 
 ## Tables
 
@@ -204,6 +247,18 @@ does not fit on one display line. Leave a single sentence and a paragraph that f
 unbroken. Derive the threshold from the display width: use the page width for body text and the
 column width for a table cell.
 
+### Blank paragraphs
+
+**Observed on 2026-10-14.** In the HTML body, `<p></p>` was stored as `<p />` and `<p><br></p>` as
+`<p><br /></p>`. Both remained empty paragraphs in the rendered view.
+
+**Observed.** In storage format, `<p><br /></p>` sent through the REST API kept that form on read-back, and
+the rendered body read back the same empty paragraphs. A stored version without a version message, apparently
+saved in the editor, held an empty paragraph as `<p />`.
+
+Source newlines do not create a visible blank line. When checking whether a blank line already exists,
+count every empty-paragraph form above.
+
 ## Source artifacts that do not belong on the page
 
 Remove or replace these during conversion. They may be valid in the source application but do not
@@ -212,6 +267,7 @@ produce a usable published page.
 | Source form | Why it fails | Replacement |
 |---|---|---|
 | Absolute local path | Means nothing to a reader, and leaks a directory layout | Describe the thing instead of pointing at it |
+| Absolute or relative local path to an image or diagram file, in text or a link | Readers cannot open the file | Upload the file the user supplied and embed it. When no file was supplied, describe the image instead. |
 | Relative source-document link | Does not resolve for page readers | Link the published destination or name the target in the sentence. |
 | Diagram source or unsupported embedded object | Renders as text or disappears | Use a supported macro or an accessible image. |
 | Source application control or authoring note | Is not reader content | Remove it unless the user includes review data. |
@@ -238,3 +294,6 @@ The remaining items need a manual check, or another script for text parity:
 - The body's text matches the source within the parity checker's supported scope, or a manual
   comparison covers the unsupported constructs.
 - The version message names what changed.
+- On a page with the opening layout, no heading sits above the table of contents, and each top-level heading
+  has exactly one blank paragraph before it.
+- Each expandable block has a descriptive title, and its content matches the source.

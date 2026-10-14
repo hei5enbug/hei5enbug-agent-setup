@@ -119,16 +119,18 @@
     {
       "id": 9,
       "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/current-state-case/source.md` as the complete Markdown source for a new page in a fixture space under a fixture parent. The readers are the operations team, who use shipping terms such as 선사, 항차, and 기항 every day. Prepare the normalized inventory, the proposed body, the convention-edit record, and an operation plan; do not claim that anything was saved or read back.",
-      "expected_output": "The run selects the Markdown adapter, validates text parity on the source-faithful body, and then applies the writing conventions. On this current-state page, the dated baseline, the network lock test result, and the deletion-batch progress move unchanged into a final 변경 이력 section with date and content columns. The run adds no info panel or term explanation because neither the source nor the user supplies one. Instead, the report suggests unexplained infrastructure terms and leaves the shipping terms out. The mid-sentence break is removed, and every table narrows its label column. Moves are recorded, and no live save or readback is claimed.",
+      "expected_output": "The run selects the Markdown adapter, validates text parity on the source-faithful body, and then applies the writing conventions. On this current-state page, the 2026-09-16 as-of date stays in the deployment section because it bounds the page's claims, and the network lock test result stays next to the network lock description because it supports that claim. Only the deletion-batch progress moves unchanged into a final 변경 이력 section with date and content columns. The run adds no info panel or term explanation because neither the source nor the user supplies one. Instead, the report suggests unexplained infrastructure terms and leaves the shipping terms out. The mid-sentence break is removed, and every table narrows its label column. Because this run creates the page, exactly one blank paragraph precedes each top-level heading. If the body has a table of contents, the macro is the first body element, uses the bullet-free style, has no 목차 heading above it, and the opening paragraph sits in a 개요 section below it; without a table of contents, the opening paragraph stays first. Moves and additions are recorded, and no live save or readback is claimed.",
       "files": [
         "evals/files/current-state-case/source.md"
       ],
       "expectations": [
-        "The three time-bound records appear only in a final change-history section with date and content columns, with their dates and figures unchanged.",
+        "The 2026-09-16 as-of date remains in the deployment section and the network lock test result remains next to the network lock description, with their dates and figures unchanged.",
+        "Only the deletion-batch progress appears in a final change-history section with date and content columns, with its date and figures unchanged.",
         "The proposed body contains no info panel and no term explanation that the source lacks.",
         "The report suggests explanations for unexplained terms, including network lock and rc.local, and does not suggest 선사, 항차, or 기항.",
         "No explicit line break remains inside a sentence, and every table, including the change-history table, gives its label or date column a narrower width.",
-        "Text parity runs on the body before the conventions, and every later difference is a recorded move; no live save or readback is claimed."
+        "Because this run creates the page, exactly one blank paragraph precedes each top-level heading. If the body has a table of contents, the macro is the first body element, uses the bullet-free style, has no 목차 heading above it, and the opening paragraph sits in a 개요 section below it; without a table of contents, the opening paragraph stays first.",
+        "Text parity runs on the body before the conventions, and every later difference is a recorded move or addition; no live save or readback is claimed."
       ]
     },
     {
@@ -141,6 +143,7 @@
       "expectations": [
         "The proposed body keeps every source section and time-bound sentence in source order and adds no change-history section.",
         "The proposed body adds no glossary or info panel.",
+        "The proposed body applies no opening-layout change: no blank paragraphs are added before headings, no table of contents style or position changes, and no opening prose moves.",
         "The report lists the convention edits that were withheld because of the user's limit.",
         "No live save or readback is claimed."
       ]
@@ -161,15 +164,103 @@
     {
       "id": 12,
       "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/current-state-case/source.md` as the complete Markdown source for a new page in a fixture space under a fixture parent. The readers are the operations team, who use shipping terms such as 선사, 항차, and 기항 every day. Explain, in the page, the terms that the operations team may not know. Prepare the normalized inventory, the proposed body, the convention-edit record, and an operation plan; do not claim that anything was saved or read back.",
-      "expected_output": "The run treats the request as a user-requested addition. It writes one 용어 설명 info panel immediately before the first body section, after the opening paragraph and any table of contents, without creating or moving opening content to fit. The panel explains infrastructure terms the operations team may not know, including at least network lock and rc.local, and omits the shipping terms and general development terms. The change-history move and layout conventions still apply, the panel is recorded as a requested addition, and no live save or readback is claimed.",
+      "expected_output": "The run treats the request as a user-requested addition. It writes one 용어 설명 info panel. When the opening layout created a 개요 section, the panel sits at the end of that section; otherwise it sits immediately before the first body section, after the opening paragraph and any table of contents. The run does not create or move opening content merely to fit the panel. The panel explains infrastructure terms the operations team may not know, including at least network lock and rc.local, and omits the shipping terms and general development terms. The change-history decision matches eval 9: the as-of date and the network lock test result stay in place, and only the deletion-batch progress moves. The opening layout and layout conventions still apply, the panel is recorded as a requested addition, and no live save or readback is claimed.",
       "files": [
         "evals/files/current-state-case/source.md"
       ],
       "expectations": [
-        "Exactly one info panel appears after the opening paragraph and any table of contents and immediately before the first h2 section.",
+        "Exactly one info panel appears: at the end of the 개요 section when one exists, otherwise after the opening paragraph and any table of contents and immediately before the first h2 section.",
         "The panel explains terms the operations team may not know, including at least network lock and rc.local.",
         "The panel does not explain 선사, 항차, 기항, API, 서버, or VM.",
-        "The time-bound records move to a final change-history section, and the panel is recorded as a requested addition; no live save or readback is claimed."
+        "The as-of date and the network lock test result stay in the body, only the deletion-batch progress moves to a final change-history section, and the panel is recorded as a requested addition; no live save or readback is claimed."
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/opening-layout-case/source.md` as the complete Markdown source for a new page in a fixture space under a fixture parent. Include a table of contents. Prepare the normalized inventory, the proposed body, the convention-edit record, and an operation plan; do not claim that anything was saved or read back.",
+      "expected_output": "The run creates a new page, so the opening layout applies by default. The source's hand-written 목차 heading and numbered list are replaced by the native table-of-contents macro, which is the first body element, uses the bullet-free style, and has no heading above it. The opening paragraph moves unchanged into a 개요 section below the macro because it explains the page's purpose. Exactly one blank paragraph precedes each h2, including the first one after the contents, and none precedes the h3. Every move, the replaced contents list, the added heading, and the blank paragraphs are recorded in convention_edits, and no live save or readback is claimed.",
+      "files": [
+        "evals/files/opening-layout-case/source.md"
+      ],
+      "expectations": [
+        "The hand-written 목차 heading and list are absent, and a native table-of-contents macro with the bullet-free style is the first body element with no heading above it.",
+        "The opening paragraph, both of its sentences unchanged, appears in a section titled 개요 directly below the macro.",
+        "Exactly one blank paragraph precedes each h2, including the first h2 after the contents, and no blank paragraph precedes the h3.",
+        "convention_edits records the replaced contents list, the moved paragraphs, the added heading, and the blank paragraphs; no live save or readback is claimed."
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/existing-page-case/source.md` as the full source and `evals/files/existing-page-case/current-page.html` as the complete current page snapshot of an existing page that another author created. Update the page from the source; only the paragraph in the 처리 흐름 section changed. Prepare a complete proposed body and an operation plan; do not claim that anything was saved or read back.",
+      "expected_output": "The page already exists, it does not use the opening layout, and the user did not request the layout, so the run applies no opening-layout change. The proposed body updates only the changed 처리 흐름 paragraph. The 목차 heading, the table-of-contents macro and its parameters and identifier, the opening paragraph position, and the single existing empty paragraph stay as they are, and no blank paragraph is added. The report may suggest the layout but does not apply it, and no live save or readback is claimed.",
+      "files": [
+        "evals/files/existing-page-case/source.md",
+        "evals/files/existing-page-case/current-page.html"
+      ],
+      "expectations": [
+        "Apart from the updated 처리 흐름 paragraph, the only differences from the current page snapshot are line-break or column-width layout changes; no other text, heading, macro, or blank paragraph changes.",
+        "The 목차 heading, the table-of-contents macro parameters and identifier, and the opening paragraph position are unchanged.",
+        "The proposed body has the same number of empty paragraphs as the current page.",
+        "No live save or readback is claimed."
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/existing-page-case/source.md` as the full source and `evals/files/existing-page-case/current-page.html` as the complete current page snapshot. Update the page from the source; only the paragraph in the 처리 흐름 section changed. Also apply the opening layout to this page: a table of contents without bullets, the introduction under the contents, and one blank line before each major section. Prepare a complete proposed body and an operation plan; do not claim that anything was saved or read back.",
+      "expected_output": "The user requested the layout for this existing page, so the run applies it. The table-of-contents macro moves to the first body position with the bullet-free style and keeps its identifier, and the 목차 heading above it is removed. The opening paragraph moves unchanged into a 개요 section below the macro. Each h2 boundary has exactly one blank paragraph: the existing empty paragraph before 3. 장애 대응 counts, so no second one is added there. The changed 처리 흐름 paragraph is updated. The edits are recorded, and no live save or readback is claimed.",
+      "files": [
+        "evals/files/existing-page-case/source.md",
+        "evals/files/existing-page-case/current-page.html"
+      ],
+      "expectations": [
+        "The table-of-contents macro is first, uses the bullet-free style, keeps its existing identifier, and has no 목차 heading above it.",
+        "The opening paragraph appears unchanged in a 개요 section below the macro.",
+        "Every h2, including 개요, has exactly one blank paragraph immediately before it; the boundary before 3. 장애 대응 does not have two.",
+        "The 처리 흐름 paragraph matches the source, the edits are recorded, and no live save or readback is claimed."
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/expand-case/source.html` as the complete HTML source for a new page in a fixture space under a fixture parent. In the 검증 방법 section, collapse the step-by-step procedure and the measurement table. Prepare the normalized inventory, the proposed body, the convention-edit record, and an operation plan; do not claim that anything was saved or read back.",
+      "expected_output": "The run preserves the source's details block as an expandable block titled 시험 환경. On request, it puts the procedure list and the measurement table in one or more new expandable blocks with descriptive titles. The 결과 section, its 운영 환경 미측정 limitation, and the 검증 방법 sentence that states the comparison basis (three runs each, first run excluded) stay visible outside any block. The 의견 section stays visible and remains marked as a proposal. Because nothing is saved, the run reports the collapsed and expanded views as unverified and plans to check them after saving. No live save or readback is claimed.",
+      "files": [
+        "evals/files/expand-case/source.html"
+      ],
+      "expectations": [
+        "The source details block becomes an expandable block titled 시험 환경 with its content unchanged.",
+        "The procedure list and the measurement table are inside one or more new expandable blocks with descriptive titles, with every value unchanged.",
+        "The result figures, the 운영 환경 limitation, the comparison-basis sentence, and the 의견 proposal stay visible outside any expandable block.",
+        "The report states that the collapsed and expanded views are unverified until the saved page is read back; no live save or readback is claimed."
+      ]
+    },
+    {
+      "id": 17,
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/local-image-case/source.md` as the complete Markdown source for a new page in a fixture space under a fixture parent. The file `evals/files/local-image-case/assets/flow.png` is supplied with the source. Prepare the normalized inventory, the proposed body, the convention-edit record, and an operation plan; do not claim that anything was saved or read back.",
+      "expected_output": "The run treats the sentence that points readers to assets/flow.png as a local image path for a supplied file. The operation plan uploads flow.png before the body references it, and the body embeds the image with a width and height measured by scripts/image_size.py that keep its aspect ratio. No local path remains in the body text or attributes. No live upload, save, or readback is claimed.",
+      "files": [
+        "evals/files/local-image-case/source.md",
+        "evals/files/local-image-case/assets/flow.png"
+      ],
+      "expectations": [
+        "The proposed body embeds flow.png as an image instead of a sentence telling readers to open assets/flow.png.",
+        "The image width and height come from the measured 320 by 160 file and keep a 2:1 ratio without enlarging it.",
+        "The operation plan uploads flow.png before the body references it.",
+        "No local path remains in the body text or attributes, and no live upload, save, or readback is claimed."
+      ]
+    },
+    {
+      "id": 18,
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/republish-case/source.md` as the full source and `evals/files/republish-case/current-page.html` as the complete current page snapshot. This page was created earlier from the same Markdown document; only the paragraph in the 처리 흐름 section changed in the source. Republish the page from the source. Prepare a complete proposed body and an operation plan; do not claim that anything was saved or read back.",
+      "expected_output": "The current page already uses the opening layout, so the run keeps it without a new request. The proposed body updates only the changed 처리 흐름 paragraph. The bullet-free table-of-contents macro and its identifier, the 개요 heading, and the single blank paragraph before each h2 remain. The run identifies the 개요 heading and the blank paragraphs as Confluence-only layout rather than content missing from the source, so it neither removes them nor reports them as deletions, and it adds no second blank paragraph. No live save or readback is claimed.",
+      "files": [
+        "evals/files/republish-case/source.md",
+        "evals/files/republish-case/current-page.html"
+      ],
+      "expectations": [
+        "Apart from the updated 처리 흐름 paragraph, the only differences from the current page snapshot are line-break or column-width layout changes; no other text, heading, macro, or blank paragraph changes.",
+        "The bullet-free table-of-contents macro keeps its position, style, and identifier, and the 개요 heading remains.",
+        "Each h2 keeps exactly one blank paragraph before it.",
+        "The 개요 heading and blank paragraphs are not reported as source deletions, and no live save or readback is claimed."
       ]
     }
   ]

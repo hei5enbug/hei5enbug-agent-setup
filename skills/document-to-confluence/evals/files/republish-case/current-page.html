@@ -1,0 +1,19 @@
+<div data-type="extension" data-extension-key="toc" data-extension-type="com.atlassian.confluence.macro.core" data-layout="default" data-parameters="{&quot;macroParams&quot;:{&quot;maxLevel&quot;:{&quot;value&quot;:&quot;2&quot;},&quot;minLevel&quot;:{&quot;value&quot;:&quot;2&quot;},&quot;style&quot;:{&quot;value&quot;:&quot;none&quot;}},&quot;macroMetadata&quot;:{&quot;macroId&quot;:{&quot;value&quot;:&quot;toc-macro-republish&quot;},&quot;schemaVersion&quot;:{&quot;value&quot;:&quot;1&quot;}}}"></div>
+<p></p>
+<h2>개요</h2>
+<p>이 문서는 예약 알림 서비스가 예약 변경을 감지해 고객에게 알림을 보내는 방식을 설명한다.<br>운영자는 이 문서로 알림 지연과 발송 실패 지점을 찾는다.</p>
+<p></p>
+<h2>1. 구성 요소</h2>
+<table><thead><tr><th><p>구성 요소</p></th><th><p>역할</p></th></tr></thead><tbody>
+<tr><td><p>변경 감지기</p></td><td><p>예약 시스템의 변경 이벤트를 1분마다 읽는다.</p></td></tr>
+<tr><td><p>알림 작성기</p></td><td><p>이벤트 종류와 고객 언어에 맞는 알림 문구를 만든다.</p></td></tr>
+<tr><td><p>발송기</p></td><td><p>문자와 이메일 발송 시스템에 알림을 보낸다.</p></td></tr>
+</tbody></table>
+<p></p>
+<h2>2. 처리 흐름</h2>
+<p>변경 감지기가 이벤트를 읽으면 알림 작성기가 문구를 만든다. 발송기는 그 문구를 고객이 선택한 채널로 보낸다.</p>
+<h3>재시도</h3>
+<p>발송이 실패하면 발송기는 5분 간격으로 최대 3번 다시 보낸다.</p>
+<p></p>
+<h2>3. 장애 대응</h2>
+<p>알림이 30분 넘게 오지 않으면 변경 감지기의 마지막 처리 시각부터 확인한다.</p>

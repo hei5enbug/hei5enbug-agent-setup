@@ -76,6 +76,15 @@ class FakeOrca:
         if self.on_send:
             self.on_send(self, handle, text)
 
+    def wait_idle(self, handle, timeout_ms, track=None):
+        self.waits = getattr(self, "waits", []) + [handle]
+        if handle in getattr(self, "wait_errors", set()):
+            raise refresh.RefreshError("orca_rejected", "wait failed")
+        if handle in getattr(self, "never_idle", set()):
+            return False
+        self.busy[handle] = 0
+        return True
+
 
 def terminal(handle, host):
     return {"handle": handle, "agentIdentity": host, "connected": True, "writable": True, "orphaned": False, "title": handle, "worktreePath": "/tmp/work"}
@@ -152,11 +161,14 @@ class DriveTest(unittest.TestCase):
         self.env = patch.dict(os.environ, {"ORCA_USER_DATA_PATH": self.temp.name, "XDG_STATE_HOME": self.temp.name, "ORCA_TERMINAL_HANDLE": "term_self"})
         self.env.start()
         self.addCleanup(self.env.stop)
-        for name in ("POLL_SECONDS", "DRAFT_STABLE_SECONDS"):
+        for name in ("POLL_SECONDS", "DRAFT_STABLE_SECONDS", "IDLE_CONFIRM_SECONDS"):
             patcher = patch.object(refresh, name, 0)
             patcher.start()
             self.addCleanup(patcher.stop)
         self.state = {"hosts": {"claude": {"digest": "d", "root": self.temp.name}, "codex": {"digest": "d", "root": self.temp.name}}, "sessions": {}}
+        installed = patch.object(refresh, "install_current", return_value=True)
+        self.install_current = installed.start()
+        self.addCleanup(installed.stop)
 
     def write_marker(self, handle, host, digest="d"):
         directory = refresh.SESSION_CONTEXT.marker_directory()
@@ -639,6 +651,243 @@ class ApplyTest(DriveTest):
         self.assertEqual(("done", ["reload", "compact"]), (saved["status"], saved["completed"]))
 
 
+class FollowUpTest(DriveTest):
+    def save_state(test, **extra):
+        run_id = "f" * 32
+        refresh.save_json(refresh.run_path(run_id), {**test.state, "run_id": run_id, **extra})
+        return run_id
+
+    def test_바쁜_세션은_기다리지_않고_도우미_하나에_넘긴다(self):
+        """앞단은 쉬는 세션만 바로 처리하고, 바쁜 세션은 기한을 기다리지 않고 도우미 하나에 넘기며 넘긴 내용을 저장한다."""
+        # Given
+        self.write_marker("term_codex", "codex")
+        fake = FakeOrca([terminal("term_self", "claude"), terminal("term_busy", "claude"), terminal("term_codex", "codex")],
+                        busy={"term_busy": 10**6}, screens={"term_codex": CODEX_EMPTY})
+        run_id = self.save_state()
+        spawned: list[str] = []
+
+        # When
+        with patch.object(refresh, "Orca", return_value=fake):
+            result = refresh.command_apply(run_id, "never", [], 1, spawn=lambda run: spawned.append(run) or 4242)
+
+        # Then
+        statuses = {item["terminal"]: (item["status"], item.get("detail")) for item in result["sessions"]}
+        self.assertEqual(("deferred", "busy"), statuses["…m_busy"])
+        self.assertEqual("queued_after_turn", statuses["…m_self"][0])
+        self.assertEqual([run_id], spawned)
+        self.assertTrue(result["ok"])
+        saved = refresh.load_run(run_id)
+        self.assertEqual(["term_busy"], [item["handle"] for item in saved["follow_up"]])
+        self.assertEqual({"handle": "term_self", "host": "claude"}, saved["initiator"])
+        self.assertEqual(4242, saved["helper"]["pid"])
+
+    def test_도우미는_대기_완료_콜백을_받은_뒤_보내고_한_번만_알린다(self):
+        """도우미는 바쁜 세션의 대기 완료 신호를 받은 뒤 다시 확인하고 보내며, 끝나면 시작한 세션에 결과 확인을 한 번 요청한다."""
+        # Given
+        fake = FakeOrca([terminal("term_busy", "claude"), terminal("term_self", "claude")], busy={"term_busy": 10**6}, on_send=self.simulate)
+        run_id = self.save_state(follow_up=[{"handle": "term_busy", "host": "claude", "actions": ["reload"], "detail": "busy", "deferred_at": time.time()}],
+                                 initiator={"handle": "term_self", "host": "claude"})
+
+        # When
+        with patch.object(refresh, "Orca", return_value=fake):
+            refresh.command_self_apply(run_id, sleep=lambda seconds: None)
+
+        # Then
+        self.assertEqual(["term_busy"], fake.waits)
+        self.assertEqual([("term_busy", "/reload-plugins")], fake.sent[:1])
+        notices = [text for handle, text in fake.sent if handle == "term_self"]
+        self.assertEqual(1, len(notices))
+        self.assertIn("not refreshed", notices[0])
+        status = refresh.command_status(run_id)
+        self.assertEqual("done", next(item for item in status["sessions"] if item["terminal"] == "…m_busy")["status"])
+        self.assertEqual([], status["not_refreshed"])
+        self.assertEqual("sent", status["self_notification"])
+
+    def test_기한까지_쉬지_않은_세션은_보내지_않고_미반영으로_보고한다(self):
+        """10분 기한 안에 대기 완료 신호가 없으면 명령을 보내지 않고, 결과의 미반영 목록에 이유와 함께 남긴다."""
+        # Given
+        fake = FakeOrca([terminal("term_busy", "codex"), terminal("term_self", "claude")], busy={"term_busy": 10**6})
+        fake.never_idle = {"term_busy"}
+        run_id = self.save_state(follow_up=[{"handle": "term_busy", "host": "codex", "actions": ["compact"], "detail": "busy", "deferred_at": time.time() - refresh.FOLLOW_UP_SECONDS + 0.05}],
+                                 initiator={"handle": "term_self", "host": "claude"})
+
+        # When
+        with patch.object(refresh, "Orca", return_value=fake):
+            refresh.command_self_apply(run_id, sleep=lambda seconds: time.sleep(0.02))
+
+        # Then
+        self.assertFalse([item for item in fake.sent if item[0] == "term_busy"])
+        status = refresh.command_status(run_id)
+        self.assertEqual([("skipped", "not_idle_before_deadline")], [(item["status"], item["detail"]) for item in status["not_refreshed"]])
+
+    def test_대기_콜백이_실패하면_상태_확인으로_이어서_처리한다(self):
+        """Orca 대기 호출이 오류를 내면 그 세션만 기존 상태 확인 방식으로 바꿔 기한 안에 처리한다."""
+        # Given
+        fake = FakeOrca([terminal("term_busy", "claude")], busy={"term_busy": 2}, on_send=self.simulate)
+        fake.wait_errors = {"term_busy"}
+        entries = [{"handle": "term_busy", "host": "claude", "actions": ["reload"], "status": "pending", "detail": "busy", "deadline": time.time() + 60, "deferred_at": time.time()}]
+
+        # When
+        refresh.follow_up(fake, entries, self.state, sleep=lambda seconds: None)
+
+        # Then
+        self.assertEqual("done", entries[0]["status"])
+        self.assertEqual([("term_busy", "/reload-plugins")], fake.sent)
+
+    def test_기다리는_동안_설치가_바뀌거나_이미_새_지침이면_보내지_않는다(self):
+        """보내기 직전에 설치본이 달라졌으면 건너뛰고, 넘긴 뒤 새 지침으로 다시 시작한 세션은 할 일 없음으로 끝낸다."""
+        # Given
+        fake = FakeOrca([terminal("term_a", "claude"), terminal("term_b", "codex")], screens={"term_b": CODEX_EMPTY})
+        handed = time.time() - 1
+        self.write_marker("term_b", "codex")
+        changed = [{"handle": "term_a", "host": "claude", "actions": ["reload"], "status": "pending", "detail": None, "deadline": time.time() + 60, "deferred_at": handed}]
+        restarted = [{"handle": "term_b", "host": "codex", "actions": ["compact"], "status": "pending", "detail": None, "deadline": time.time() + 60, "deferred_at": handed}]
+
+        # When
+        self.install_current.return_value = False
+        refresh.follow_up(fake, changed, self.state, sleep=lambda seconds: None)
+        self.install_current.return_value = True
+        refresh.follow_up(fake, restarted, self.state, sleep=lambda seconds: None)
+
+        # Then
+        self.assertEqual([], fake.sent)
+        self.assertEqual(("skipped", "install_changed"), (changed[0]["status"], changed[0]["detail"]))
+        self.assertEqual(("done", "already_current"), (restarted[0]["status"], restarted[0]["detail"]))
+
+    def test_도우미가_잠금을_얻기_전에_다시_적용해도_도우미를_늘리거나_작업을_지우지_않는다(self):
+        """기다리는 도우미가 살아 있으면 새 도우미를 띄우지 않고, 이미 넘긴 세션의 작업 목록은 그대로 둔다."""
+        # Given
+        fake = FakeOrca([terminal("term_busy", "claude")], busy={"term_busy": 10**6})
+        item = {"handle": "term_busy", "host": "claude", "actions": ["reload"], "detail": "busy", "deferred_at": time.time()}
+        run_id = self.save_state(sessions={"term_busy": {"status": "deferred"}}, follow_up=[item], helper={"pid": os.getpid()})
+        spawned: list[str] = []
+
+        # When
+        with patch.object(refresh, "Orca", return_value=fake):
+            result = refresh.command_apply(run_id, "never", [], 1, spawn=lambda run: spawned.append(run) or 1)
+
+        # Then
+        self.assertEqual([], spawned)
+        self.assertEqual("already_handled_in_this_run", result["sessions"][0]["detail"])
+        self.assertEqual([["reload"]], [entry["actions"] for entry in refresh.load_run(run_id)["follow_up"]])
+
+    def test_시작_세션에_할_일이_없으면_도우미가_이전_작업을_다시_보내지_않는다(self):
+        """다른 세션만 넘길 때는 저장된 시작 세션 계획을 지워, 끝난 시작 세션에 명령을 다시 보내지 않는다."""
+        # Given
+        self.write_marker("term_self", "claude")
+        fake = FakeOrca([terminal("term_self", "claude"), terminal("term_busy", "claude")], busy={"term_busy": 10**6})
+        run_id = self.save_state(**{"self": {"handle": "term_self", "host": "claude", "actions": ["reload"], "title": "t", "worktree": "/tmp/work"},
+                                    "sessions": {"term_self": {"status": "done"}}})
+
+        # When
+        with patch.object(refresh, "Orca", return_value=fake):
+            refresh.command_apply(run_id, "never", [], 1, spawn=lambda run: 7)
+
+        # Then
+        saved = refresh.load_run(run_id)
+        self.assertNotIn("self", saved)
+        self.assertEqual(["term_busy"], [item["handle"] for item in saved["follow_up"]])
+
+    def test_시작_세션도_보내기_전에_설치_변경을_확인한다(self):
+        """시작 세션도 30분을 기다리는 동안 설치본이 바뀌면 보내지 않는다."""
+        # Given
+        fake = FakeOrca([terminal("term_self", "claude")])
+        entries = [{"handle": "term_self", "host": "claude", "actions": ["reload"], "status": "pending", "initiator": True, "detail": None, "deadline": time.time() + 60, "deferred_at": time.time()}]
+        self.install_current.return_value = False
+
+        # When
+        refresh.follow_up(fake, entries, self.state, sleep=lambda seconds: None)
+
+        # Then
+        self.assertEqual([], fake.sent)
+        self.assertEqual(("skipped", "install_changed"), (entries[0]["status"], entries[0]["detail"]))
+
+    def test_설치_경로가_바뀐_Codex_세션은_digest가_같아도_최신으로_보지_않는다(self):
+        """넘긴 뒤 쓰인 표식이라도 Codex 설치 경로가 다르면 compact를 보낸다."""
+        # Given
+        directory = refresh.SESSION_CONTEXT.marker_directory()
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "term_codex.json").write_text(json.dumps({"schema": 1, "host": "codex", "root": "/old/root", "digest": "d", "written_at": refresh.now()}))
+        fake = FakeOrca([terminal("term_codex", "codex")], screens={"term_codex": CODEX_EMPTY}, on_send=self.simulate)
+        entries = [{"handle": "term_codex", "host": "codex", "actions": ["compact"], "status": "pending", "detail": None, "deadline": time.time() + 60, "deferred_at": time.time() - 5}]
+
+        # When
+        refresh.follow_up(fake, entries, self.state, sleep=lambda seconds: None)
+
+        # Then
+        self.assertEqual([("term_codex", "/compact")], fake.sent)
+        self.assertEqual("done", entries[0]["status"])
+
+    def test_재확인_중에_기한이_지나면_보내지_않는다(self):
+        """한가함 신호 뒤 재확인을 기다리는 동안 기한이 지나면 명령을 보내지 않고 기한 초과로 남긴다."""
+        # Given
+        fake = FakeOrca([terminal("term_busy", "claude")], busy={"term_busy": 10**6})
+        entries = [{"handle": "term_busy", "host": "claude", "actions": ["reload"], "status": "pending", "detail": "busy", "deadline": time.time() + 60, "deferred_at": time.time()}]
+
+        def expire(seconds):
+            if seconds == refresh.IDLE_CONFIRM_SECONDS:
+                entries[0]["deadline"] = time.time() - 1
+
+        # When
+        with patch.object(refresh, "IDLE_CONFIRM_SECONDS", 0.001):
+            refresh.follow_up(fake, entries, self.state, sleep=expire)
+
+        # Then
+        self.assertEqual([], fake.sent)
+        self.assertEqual(("skipped", "not_idle_before_deadline"), (entries[0]["status"], entries[0]["detail"]))
+
+    def test_대기_프로세스를_시작하지_못하면_상태_확인으로_넘어간다(self):
+        """대기 프로세스 생성 오류도 콜백 실패로 보고 그 세션을 기존 상태 확인 방식으로 처리한다."""
+        # Given
+        fake = FakeOrca([terminal("term_busy", "claude")], busy={"term_busy": 2}, on_send=self.simulate)
+        fake.wait_idle = lambda handle, timeout_ms, track=None: (_ for _ in ()).throw(OSError("spawn failed"))
+        entries = [{"handle": "term_busy", "host": "claude", "actions": ["reload"], "status": "pending", "detail": "busy", "deadline": time.time() + 60, "deferred_at": time.time()}]
+
+        # When
+        refresh.follow_up(fake, entries, self.state, sleep=lambda seconds: None)
+
+        # Then
+        self.assertEqual("done", entries[0]["status"])
+        self.assertEqual([("term_busy", "/reload-plugins")], fake.sent)
+
+    def test_정리_뒤에_등록된_대기_프로세스도_종료한다(self):
+        """정리가 시작된 뒤 등록되는 대기 프로세스는 바로 종료되어 도우미 종료 뒤에 남지 않는다."""
+        # Given
+        waiters = refresh.IdleWaiters(FakeOrca([]))
+        waiters.stop()
+        late = refresh.subprocess.Popen(["sleep", "30"])
+
+        # When
+        waiters.track(late)
+
+        # Then
+        self.assertIsNotNone(late.poll())
+
+    def test_도우미가_끝나면_남은_Orca_대기_프로세스를_모두_정리한다(self):
+        """정리 단계는 아직 실행 중인 대기 프로세스를 종료하고 대기 스레드가 끝난 뒤에 돌아온다."""
+        # Given
+        class SlowOrca:
+            def wait_idle(self, handle, timeout_ms, track=None):
+                process = refresh.subprocess.Popen(["sleep", "30"])
+                track(process)
+                process.wait()
+                return False
+        waiters = refresh.IdleWaiters(SlowOrca())
+        waiters.start("term_slow", time.time() + 60)
+        for _ in range(50):
+            if waiters.processes:
+                break
+            time.sleep(0.02)
+
+        # When
+        waiters.stop()
+
+        # Then
+        self.assertTrue(waiters.processes)
+        self.assertTrue(all(process.poll() is not None for process in waiters.processes))
+        self.assertFalse(waiters.waiting("term_slow"))
+
+
 class ResultCountTest(unittest.TestCase):
     def test_이전_결과가_남아_있어도_새_결과가_생길_때만_반영으로_본다(self):
         """화면에 예전 reload 결과가 있어도 보내기 전보다 결과 줄이 늘어야 반영으로 판단한다."""
@@ -718,6 +967,26 @@ class OrcaWaitTest(unittest.TestCase):
         # Then
         self.assertEqual([False, True], observed)
         self.assertEqual("orca_rejected", stale.exception.code)
+
+
+class OrcaIdleCallbackTest(unittest.TestCase):
+    def test_긴_대기는_완료와_시간_초과를_구분하고_프로세스를_넘긴다(self):
+        """Orca 대기 결과가 완료면 참, 시간 초과면 거짓이며, 정리를 위해 시작한 프로세스를 호출자에게 알린다."""
+        # Given
+        with tempfile.TemporaryDirectory() as directory:
+            script = Path(directory) / "orca"
+            script.write_text('#!/bin/sh\ncase "$4" in idle) echo \'{"ok": true, "result": {"wait": {"satisfied": true}}}\' ;; *) echo \'{"ok": false, "error": {"code": "timeout"}}\'; exit 1 ;; esac\n')
+            script.chmod(0o755)
+            with patch.dict(os.environ, {"ORCA_CLI_COMMAND": str(script)}):
+                orca = refresh.Orca()
+            tracked = []
+
+            # When
+            observed = [orca.wait_idle("idle", 1000, tracked.append), orca.wait_idle("busy", 1000, tracked.append)]
+
+        # Then
+        self.assertEqual([True, False], observed)
+        self.assertEqual(2, len(tracked))
 
 
 class UpdateTest(unittest.TestCase):

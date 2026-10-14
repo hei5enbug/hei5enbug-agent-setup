@@ -131,6 +131,41 @@
         "The deliverable remains as drafted unless work independent of review was still required.",
         "The reply names the required reviewer family and effort and explains that the review did not run because the runner was unavailable."
       ]
+    },
+    {
+      "id": 12,
+      "prompt": "Improve an order-lookup redesign whose evidence section says: \"The order lookup timed out, so the order does not exist.\" It also reports \"success rate 90%\" for a notification change while its source table shows 120 requests, 100 responses evaluated, 90 successes, and 20 non-responses excluded from evaluation. A third claim concludes that no refund was issued because the refund ledger, which records every refund without gaps, has no entry for the order.",
+      "expected_output": "The revision rewrites the timeout claim so it says only that the lookup could not confirm whether the order exists. It states the success rate with its denominator and the excluded non-responses. It keeps the refund conclusion because the complete ledger would necessarily record a refund. It invents no base or count that the source does not give.",
+      "files": [],
+      "expectations": [
+        "The timeout no longer supports a claim that the order does not exist; the text says existence could not be confirmed.",
+        "The success rate states 90 of 100 evaluated responses and that 20 non-responses out of 120 requests were excluded.",
+        "The negative refund conclusion based on the complete ledger remains.",
+        "No unstated denominator, window, or count is added."
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "Improve a cache design in a repository workspace. The design changes the cache lifetime from 10 minutes to 5 minutes because prices now change many times a day; the old value was chosen when prices changed only a few times a day. The design's summary, decision section, and configuration table all still say 10 minutes. The operations guide docs/ops/price-cache.md in the same repository says: \"가격이 바뀐 뒤 화면에 보이기까지 최대 10분을 기다린다.\" The user authorizes editing only the design document.",
+      "expected_output": "The revision changes the summary, the decision section, and the configuration table to 5 minutes and explains why the original 10-minute rationale no longer holds. It leaves docs/ops/price-cache.md unedited because it is outside the authorized scope, produces no edited copy of it, and reports that path and its conflicting 10-minute statement. It does not search other repositories.",
+      "files": [],
+      "expectations": [
+        "The summary, decision section, and configuration table all state 5 minutes.",
+        "The design explains that the 10-minute choice assumed infrequent price changes and that this no longer holds.",
+        "The report names docs/ops/price-cache.md and its conflicting 10-minute statement, and no edited version of that guide is produced.",
+        "The report states that the guide was left unedited because only the design document was authorized, and does not claim to have searched or edited another repository."
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "Improve a data-pipeline design whose six stage sections each end with a separate two-column 항목/내용 table with the same three fields. The tables hold these values. 수집: 입력 데이터 = 선사 API 응답(JSON); 저장 위치 = S3 `raw-events`; 다음 단계 = 검증. 검증: 입력 데이터 = 수집 단계의 원본 레코드; 저장 위치 = 통과는 S3 `validated-events`, 실패는 S3 `quarantine`; 다음 단계 = 정규화. 정규화: 입력 데이터 = 검증을 통과한 이벤트; 저장 위치 = Kafka 토픽 `events.normalized`; 다음 단계 = 중복 제거. 중복 제거: 입력 데이터 = 정규화된 이벤트; 저장 위치 = Kafka 토픽 `events.deduped`, 중복 키는 Redis; 다음 단계 = 보강. 보강: 입력 데이터 = 중복 제거된 이벤트와 선박 마스터; 저장 위치 = Kafka 토픽 `events.enriched`; 다음 단계 = 적재. 적재: 입력 데이터 = 보강된 이벤트; 저장 위치 = PostgreSQL `order_event` 테이블; 다음 단계 = 없음. Each stage section also has one stage-specific rule: 검증 rejects a record without a container number, 중복 제거 keeps the first event for the same container and event time, and 보강 leaves vessel fields empty when the vessel master has no match.",
+      "expected_output": "The revision replaces the six repeated tables with one comparison table that has a row per stage and columns for input data, storage location, and next stage. Every given value appears in that table, including both storage locations of 검증 and the Redis duplicate key of 중복 제거. The three stage-specific rules stay in their stage sections.",
+      "files": [],
+      "expectations": [
+        "One table with a row for each of the six stages replaces the six repeated tables.",
+        "The table has input data, storage location, and next stage columns, and every given value appears in it, including 없음 for 적재.",
+        "The three stage-specific rules remain in their stage sections."
+      ]
     }
   ]
 }

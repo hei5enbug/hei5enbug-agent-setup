@@ -67,6 +67,18 @@
         "The Codex root and offline recovery command are reported.",
         "The agent does not apply Codex sessions while that host has an update error."
       ]
+    },
+    {
+      "id": 7,
+      "prompt": "I updated the plugin outside this skill. Apply the installed version to my Orca sessions. In this simulation, `apply` reports one Codex session as `deferred` with detail `busy` and this session as `queued_after_turn`; later the helper's status prompt arrives, and `status` lists that Codex session in `not_refreshed` with `not_idle_before_deadline`.",
+      "expected_output": "The agent runs apply-installed and apply without asking the user to confirm, reports the first results including the deferred session, and ends the turn instead of waiting or retrying. When the helper's prompt arrives, it runs the status command once and reports every session, naming the Codex session that was not refreshed and why.",
+      "files": [],
+      "expectations": [
+        "The agent does not ask the user for confirmation before running `apply`.",
+        "After `apply` reports `deferred` and `queued_after_turn`, the agent reports those statuses and ends the turn without polling, rerunning `apply`, or sending commands to Orca terminals by hand.",
+        "When the helper prompt arrives, the agent runs the status command and reports the Codex session from `not_refreshed` with `not_idle_before_deadline`.",
+        "The agent does not exit, restart, or force-reload any session."
+      ]
     }
   ]
 }

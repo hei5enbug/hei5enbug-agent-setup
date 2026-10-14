@@ -64,10 +64,12 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
      Report the reason.
 3. **Apply to the sessions.** When a host update succeeded, or `apply-installed` returned that host without an
    error, run `python3 <script> apply --run-id <run_id> --json` in the foreground with a shell timeout of at
-   least 600 seconds. For 240 seconds the script waits for busy sessions and sends a command only to an idle
-   session whose input line is empty; after that it starts nothing new and keeps confirming the commands already
-   sent, for up to five more minutes. An `already_running` error means another run is still sending; wait for it,
-   then run `apply` again. A host with an update error stays blocked while successful hosts can proceed.
+   least 600 seconds. Do not ask the user to confirm this step; the script's checks decide which sessions receive
+   commands. For about 20 seconds the script sends a command only to an idle session whose input line is empty,
+   then keeps confirming the commands already sent. It hands every session that is still busy or not ready to one
+   detached helper as `deferred` instead of waiting. An `already_running` error means another run is still
+   sending; wait for it, then run `apply` again. A host with an update error stays blocked while successful hosts
+   can proceed.
 4. **Report every session.** Show the terminal suffix, host, worktree, status, completed actions, and detail:
    - `done`: every needed action is confirmed. `already_current` means nothing was needed, and
      `fresh_session_loads_on_first_turn` marks a Codex session that never ran a turn. The note
@@ -84,11 +86,17 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
      run `apply` again.
    - `blocked`: that host's plugin update failed or its installed manifest, hook targets, or instruction digest
      did not validate.
+   - `deferred`: the session was busy or not ready, so the detached helper finishes it; see step 5.
    - `queued_after_turn`: this session itself; see step 5.
-5. **Finish this session last.** When the session running this skill needs an action, `apply` hands it to a
-   detached helper and reports `queued_after_turn`. End the turn right after the report. The helper waits until
-   this session is idle, applies the actions, and then sends a prompt that asks to run
-   `python3 <script> status --run-id <run_id> --json`. When that prompt arrives, run it and report the result.
+5. **Let the helper finish.** When `apply` reports `deferred` or `queued_after_turn`, report the first results
+   and end the turn. One detached helper waits on Orca's idle callback (`orca terminal wait --for tui-idle`) for
+   every deferred session at once and for this session. When a session reports idle, the helper confirms it
+   again after three seconds, checks that the installed plugin still matches the run and that the session has
+   not already loaded the new instructions, and only then sends the remaining actions. A deferred session that
+   does not become idle within 10 minutes of the handoff stays unsent as `not_idle_before_deadline`. After every
+   session finishes, the helper sends this session one prompt that asks to run
+   `python3 <script> status --run-id <run_id> --json`, ends all of its Orca waits, and exits. When that prompt
+   arrives, run it and report every session; `not_refreshed` lists the sessions that did not receive the update.
    When `self_notification` in the status is not `sent`, the prompt could not be delivered; the status still
    holds the result.
 
@@ -97,7 +105,7 @@ only when the user explicitly asks for it. `plan` and `self-apply` are internal 
 itself; never run them by hand. Never send commands to Orca terminals by hand, never exit or restart a session,
 and never pass `--force` on your own.
 
-The script exits with `0` when every session is `done` or `queued_after_turn`, or when the update or
+The script exits with `0` when every session is `done`, `deferred`, or `queued_after_turn`, or when the update or
 `apply-installed` result is ok. It exits with `2` otherwise, and on a usage error.
 
 ## Safety and limits
@@ -124,7 +132,10 @@ The script exits with `0` when every session is `done` or `queued_after_turn`, o
   holds no prompt.
 - Each result is confirmed from transcript records appended after the send, or from a marker rewritten after it,
   and from the screen only when no transcript is available.
-- One lock covers every process that sends commands, including this session's detached helper.
+- One lock covers every process that sends commands, including the detached helper.
+- Each run starts at most one helper. It ends every Orca wait it started before it exits, and its deferred
+  sessions wait at most 10 minutes and this session at most 30 minutes.
+- When the Orca idle wait fails for a session, the helper checks that session by polling until its deadline.
 - `/compact` summarizes the conversation, so it runs only for sessions whose instructions are stale.
 - A Codex session that was compacted loads the new instructions at its next turn; the report says so.
 - Only Orca-managed terminals are reached. The offline attestation is responsible for non-Orca sessions; the
