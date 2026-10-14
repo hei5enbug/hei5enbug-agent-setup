@@ -1,0 +1,42 @@
+{
+  "skill_name": "session-retro",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "session-retro 스킬로 2026-10-14(Asia/Seoul)에 /work/demo-app 저장소에서 한 세션을 검토해줘. 세션 기록은 evals/files/home/claude와 evals/files/home/codex에, demo-plugin 원본은 evals/files/plugins/demo-plugin에 있어. demo-plugin에 반영할 스킬 개선점과 새 스킬 후보를 표로 정리해줘.",
+      "expected_output": "목록 스크립트를 --claude-dir, --codex-dir로 실행해 Claude 세션 1개와 Codex cli 세션 1개(하위 subagent 세션은 부모 아래로 묶음)를 검토하고, exec 세션은 자동 실행이라 뺐다고 밝힌다. 세션마다 읽기 전용 scout 지시(또는 작업자 경로가 없으면 같은 지시문으로 직접 읽기)를 쓰고, 여섯 항목 근거를 바탕으로 한다. demo-deploy의 '배포 명령마다 승인' 문제는 evals/files/plugins/demo-plugin/skills/demo-deploy/SKILL.md의 해당 줄(1번 규칙)을 인용하고, origin(포크) 태그 push 실패는 2번 규칙을 인용한다. 플러그인별로 기존 스킬은 스킬마다 짧은 불릿, 새 스킬은 표로 나누고 각 항목에 근거 세션 약칭을 단다. 확인하지 못한 것을 따로 적는다. 세션 기록·플러그인 원본·저장소를 고치지 않고 임시 폴더 밖에 쓰지 않는다.",
+      "files": [
+        "evals/files/home",
+        "evals/files/plugins"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "session-retro 스킬로 2026-10-14(Asia/Seoul)에 /work/demo-app 저장소에서 한 세션을 검토해줘. 세션 기록은 evals/files/home/claude와 evals/files/home/codex에, demo-plugin 원본은 evals/files/plugins/demo-plugin에 있어. 개선 표를 만들고 내가 정해야 할 게 있으면 물어봐.",
+      "expected_output": "Claude 세션의 '배포 끝나면 바로 완료로 바꿔줘'와 Codex 세션의 '남은 작업이 있으면 완료 처리하지 마'가 서로 충돌한다는 점을 찾아, 완료 전환 규칙을 사용자에게 선택지와 권장안과 함께 묻고 답을 기다린다. demo-deploy의 '마지막에 Done 전환' 규칙(3번)과의 충돌도 근거로 든다. 답을 받기 전에는 그 항목을 확정하지 않는다. 세션 임시 폴더 밖에는 아무 파일도 쓰지 않는다.",
+      "files": [
+        "evals/files/home",
+        "evals/files/plugins"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "session-retro 스킬로 2026-10-14(Asia/Seoul)에 /work/demo-app 저장소에서 한 세션을 검토해줘. 세션 기록은 evals/files/home/claude와 evals/files/home/codex에, demo-plugin 원본은 evals/files/plugins/demo-plugin에 있어. 결정은 이미 다 했어: 완료 전환은 '남은 작업이 있으면 상태 유지', 배포 명령마다 승인을 묻지 않음, pr-check는 다른 사람의 PR 리뷰 요청에도 실행. 개선안을 정리하고 evals/files/repos/demo-plugin 저장소의 .plan/에 계획안까지 만들어줘.",
+      "expected_output": "이미 정한 결정을 반영해 개선안을 정리하고 같은 질문을 다시 하지 않는다. evals/files/repos/demo-plugin/.plan/<설명적인 이름>/ 아래에 계획안 파일 하나만 만들고, 저장소의 다른 파일과 플러그인 원본, 세션 기록은 바꾸지 않는다. 계획안에는 목표, 범위, 결정(완료 전환은 남은 작업이 있으면 상태 유지), 스킬별 변경, 테스트, 검증이 있다.",
+      "files": [
+        "evals/files/home",
+        "evals/files/plugins",
+        "evals/files/repos"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "session-retro 스킬로 2026-10-14(Asia/Seoul)에 /work/demo-app 저장소에서 한 세션을 검토해줘. 세션 기록은 evals/files/home/claude와 evals/files/home/codex에, demo-plugin 원본은 evals/files/plugins/demo-plugin에 있어. 앞서 네가 개선 표를 만들고 완료 전환 충돌을 물었고, 나는 '남은 작업이 있으면 상태 유지'로 답했어. 이 답을 반영해서 개선 표를 다시 보여줘.",
+      "expected_output": "사용자의 답을 결정으로 받아들여 같은 질문을 다시 하지 않는다. demo-deploy의 '스테이징 통과 후 Done 전환' 규칙(3번)을 '남은 작업이 있으면 상태 유지, 없으면 완료 전환'으로 바꾸는 개선을 결과의 해당 스킬 불릿에 반영하고, 그 근거로 두 세션의 충돌과 사용자의 답을 단다. 나머지 개선 항목과 근거 세션 약칭은 유지한다. 세션 임시 폴더 밖에는 아무 파일도 쓰지 않는다.",
+      "files": [
+        "evals/files/home",
+        "evals/files/plugins"
+      ]
+    }
+  ]
+}

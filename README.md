@@ -84,6 +84,7 @@ hei5enbug-agent-setup/
     ├── docs-rewrite/
     ├── document-to-confluence/
     ├── orca-plugin-refresh/
+    ├── session-retro/
     ├── skill-builder/
     ├── suggest-commit/
     ├── technical-design-writer/
@@ -548,6 +549,7 @@ execution-path isolation; semantic equivalence still requires human or model rev
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | A shared design standard so flow charts built in SVG, HTML/CSS, Figma, or draw.io all read as one design system. [Korean guide](skills/flowchart-design/SKILL.ko.md). |
 | [`docs-rewrite`](skills/docs-rewrite/SKILL.md) | Rewrites existing text so it reads naturally while every claim, number, and level of certainty stays identical, and repairs AI-sounding Korean. [Korean guide](skills/docs-rewrite/SKILL.ko.md). |
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Converts Markdown, HTML, PDF, DOCX, and Google Docs content into Confluence pages, preserves document structure and assets, and keeps pages synchronized with source revisions. [Korean guide](skills/document-to-confluence/SKILL.ko.md). |
+| [`session-retro`](skills/session-retro/SKILL.md) | Reviews a day's Claude Code and Codex sessions of a repository with read-only scouts, turns corrections, failures, and repeated work into evidence-backed skill improvements per plugin, asks the open decisions, and writes plans on request. [Korean guide](skills/session-retro/SKILL.ko.md). |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | Creates, tests, and packages agent skills through a draft → test → review → improve loop. [Korean guide](skills/skill-builder/SKILL.ko.md). |
 | [`orca-plugin-refresh`](skills/orca-plugin-refresh/SKILL.md) | Updates this plugin safely offline and applies an installed version to idle Orca-managed Claude Code and Codex sessions without restarting them. [Korean guide](skills/orca-plugin-refresh/SKILL.ko.md). |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | Reads the staged and unstaged changes, or the scope you name, plus recent commit history, then suggests five commit messages that match the repo's style. When you ask it to commit, it commits with the single best subject instead. [Korean guide](skills/suggest-commit/SKILL.ko.md). |
