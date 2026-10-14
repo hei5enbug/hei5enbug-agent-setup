@@ -1784,7 +1784,7 @@ for (const event of ["tool.check", "tool.call"]) {
   });
 }
 
-const CODEX_BASE = `codex exec -m gpt-6-luna -c model_reasoning_effort="xhigh" -s workspace-write`;
+const CODEX_BASE = `codex exec -m gpt-5.6-luna -c model_reasoning_effort="xhigh" -s workspace-write`;
 const CODEX_TAIL = `--json -o out.json -`;
 const OTHER_DIR = "/repos/other";
 const OTHER_KEY = `codex-dir:${OTHER_DIR}`;
@@ -1891,7 +1891,7 @@ test("Codex 작업 명령의 디렉터리 옵션이 여러 개이면 작업 폴�
 
 test("Codex 작업 명령의 하위 명령 앞에 놓은 전역 -C도 작업 폴더 밖이면 키를 만든다", async () => {
   // given
-  const command = `codex -C ${OTHER_DIR} -m gpt-6-luna exec --json -`;
+  const command = `codex -C ${OTHER_DIR} -m gpt-5.6-luna exec --json -`;
 
   // when
   const result = await classifyBash(command);
@@ -1966,7 +1966,7 @@ for (const option of [
   "-s workspace-write",
   "--sandbox read-only",
   "--sandbox=workspace-write",
-  `-c model="gpt-6-luna"`,
+  `-c model="gpt-5.6-luna"`,
   "--config model_reasoning_effort=high",
   "--skip-git-repo-check",
 ]) {
@@ -2140,7 +2140,7 @@ test("조율 세션이 실행하는 형태의 Codex 작업 명령은 입력 리�
   // given
   const hooks = registerHooks();
   const env = createEnv();
-  const command = `codex exec -m gpt-6-luna -c model_reasoning_effort="xhigh" -s workspace-write -C ${REPO_WITH_V1} --json -o result.json - < assignment.md`;
+  const command = `codex exec -m gpt-5.6-luna -c model_reasoning_effort="xhigh" -s workspace-write -C ${REPO_WITH_V1} --json -o result.json - < assignment.md`;
 
   // when
   const checked = await hooks.check(env, checkEvent(command));
@@ -2415,7 +2415,7 @@ test("확장이 없는 리터럴 -c 값은 그대로 받아들여 승인된 작�
   await approve(hooks, env, codexWith(`--add-dir ${OTHER_DIR}`));
 
   // when
-  const allowed = await hooks.check(env, checkEvent(codexWith(`--add-dir ${OTHER_DIR}`, `-c model="gpt-6-luna"`)));
+  const allowed = await hooks.check(env, checkEvent(codexWith(`--add-dir ${OTHER_DIR}`, `-c model="gpt-5.6-luna"`)));
 
   // then
   expect(allowed).toEqual({ decision: "allow", reason: approved(OTHER_KEY) });
@@ -2608,8 +2608,8 @@ test("조율 세션이 실행하는 형태의 Codex 작업 명령은 작업 폴�
   // given
   const hooks = registerHooks();
   const env = createEnv();
-  const command = `codex exec -m gpt-6-luna -c model_reasoning_effort="xhigh" -s workspace-write -C ${OTHER_DIR} --add-dir /repos/third --json -o result.json - < assignment.md`;
-  const again = `codex exec -m gpt-6-luna -c model_reasoning_effort="xhigh" -s workspace-write -C ${OTHER_DIR} --add-dir /repos/third --json -o other-result.json - < other-assignment.md`;
+  const command = `codex exec -m gpt-5.6-luna -c model_reasoning_effort="xhigh" -s workspace-write -C ${OTHER_DIR} --add-dir /repos/third --json -o result.json - < assignment.md`;
+  const again = `codex exec -m gpt-5.6-luna -c model_reasoning_effort="xhigh" -s workspace-write -C ${OTHER_DIR} --add-dir /repos/third --json -o other-result.json - < other-assignment.md`;
   const keys = "codex-dir:/repos/other, codex-dir:/repos/third";
 
   // when

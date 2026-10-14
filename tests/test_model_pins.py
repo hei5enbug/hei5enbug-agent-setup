@@ -1,7 +1,8 @@
 """Model pin checks.
 
-Runtime files name models only by the full IDs in PINS. Repository development updates PINS to each family's
-newest generally available release, and these checks then report every stale runtime reference.
+Runtime files name models only by the full IDs in PINS. Repository development refreshes unpinned families
+to the newest generally available release. Explicit user selections keep their chosen release; these checks
+report every mismatched runtime reference.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ PINS = {
     "claude-sonnet": "claude-sonnet-5-5",
     "claude-haiku": "claude-haiku-5-5",
     "gpt-astra": "gpt-6-astra",
-    "gpt-luna": "gpt-6-luna",
+    "gpt-luna": "gpt-5.6-luna",  # Explicit user pin; excluded from automatic newest-release refresh.
     "gpt-sol": "gpt-6.1-sol",
 }
 

@@ -28,8 +28,83 @@
   변경할 때는 호스트가 `plugin-creator`를 제공하면 사용하고 기존 플러그인 계약을 보존한다.
 - 공통 동작은 하나의 기준 원본에 두고 실제 호스트 차이만 분리한다. 세션 지침이 이미 규정한 규칙은
   그곳에만 두고, 다시 쓰지 말고 참조한다.
+- 저장소 구현에는 별도의 Claude Code 할당 작업자 프로세스를 기본으로 사용한다. 나머지 경로는
+  `.codex/agents/`의 Codex 프로젝트 역할을 사용한다.
+
+  | 역할 | 기본 이름 | 모델 / 추론 강도 | fallback 이름 | 모델 / 추론 강도 |
+  |---|---|---|---|---|
+  | 범위가 정해진 구현 및 디버깅 | `haiku_worker` | `claude-haiku-5-5` / `xhigh` | `worker` | `gpt-6.1-sol` / `high` |
+  | 범위가 정해진 로컬 읽기 전용 근거 조사 | `scout` | `gpt-5.6-luna` / `xhigh` | `haiku_scout` | `claude-haiku-5-5` / `xhigh` |
+  | 승인된 내용을 반영하는 기계적인 문서 편집 | `writer` | `gpt-5.6-luna` / `xhigh` | `haiku_writer` | `claude-haiku-5-5` / `xhigh` |
+  | 완료된 코드 변경을 한 번 읽기 전용으로 추가 검토 | `code_reviewer` | `gpt-6.1-sol` / `high` | `sonnet_code_reviewer` | `claude-sonnet-5-5` / `high` |
+
+  `haiku_*`와 `sonnet_code_reviewer`는 별도 Claude Code CLI 프로세스에 붙이는 과제 이름이며,
+  등록된 `--agent` 이름이 아니다. `worker`, `scout`, `writer`, `code_reviewer`는 Codex 프로젝트 역할이다.
+  각 역할에는 Claude에서 GPT로, GPT에서 Claude로 전환하는 다른 모델 계열의 fallback 하나만 둔다.
+  기본 실행 파일, 인증, 할당량, 역할, 요청한 설정 또는
+  신뢰할 수 있는 설정 근거를 사용할 수 없을 때만 지정된 fallback을 사전 승인된 경로로 사용한다. 전환 이유와
+  선택한 경로를 알린다. 기본 작업자가 이미 시작됐다면 먼저 중지하고 부분 결과를 확인한 뒤, 확인된 미완료
+  작업만 같은 범위, 권한, 검사와 함께 넘긴다. 과제마다 표에 지정된 fallback 하나를 최대 한 번 시도한다.
+  그것도 사용할 수 없으면 메인 세션에서 진행한다. 기본 경로와 같은 인증, 할당량 또는 기능 문제에 막힌 것이
+  확인된 fallback은 시도하지 않는다. fallback으로 사용자 결정 누락을 해결하거나 권한 제한이나
+  실패한 완료 검사를 우회하지 않는다.
+
+  이 저장소의 라우팅은 이 역할에 대한 플러그인의 모델 및 추론 강도 경로를 덮어쓰고,
+  기계적인 문서 작업을 `writer`에, 범위가 정해진 추가 코드 검토를 `code_reviewer`에 배정한다.
+  플러그인의 나머지 작업 소유권, 권한, 검증 규칙은
+  계속 적용한다. 호스트가 지원하면 표에 나온 모델과 추론 강도를 명시적으로 요청하고, 역할 결과를
+  사용하기 전에 기본 역할과 fallback 역할 모두 실제 호스트 실행 기록에서 모델과 추론 강도를 확인한다.
+  기본 역할에 고정된 모델을 덮어써 fallback을 호출하지 말고, 지정된 경로를 해당 호스트에서 실행한다.
+  Codex 프로젝트 역할은 새 Codex 세션부터 적용된다.
+
+  Claude fallback에는 대응하는 기본 Codex 역할의 `developer_instructions`와 범위가 정해진 과제를
+  stdin으로 전달한다. 각 역할의 범위는 이 원본 하나에서 유지한다. `claude -p`에 표의 전체 모델 ID와
+  추론 강도, `--output-format json --permission-mode dontAsk --strict-mcp-config`를 지정한다.
+  `haiku_scout`과 `sonnet_code_reviewer`에는 `--tools Read Grep Glob --allowedTools Read Grep Glob`를 추가한다.
+  `haiku_writer`에는 `--tools Read Grep Glob Edit Write --allowedTools Read Grep Glob`와 함께 배정된 각
+  Markdown 파일과 미러에 대한 `Edit(<allowed path>)`, `Write(<allowed path>)`를 추가한다. 배정된 검사는
+  메인 세션이 실행한다. 이 fallback에는 셸, 네트워크, 위임 도구를 제공하지 않는다.
+  JSON `modelUsage`가 요청한 모델을 나타내고 기존 실제 설정 검사에서 추론 강도를 확인했을 때만 결과를
+  사용한다. CLI로 재개할 때 모델, 추론 강도, 도구 제한, 과제 범위를 다시 적용한다. 이 선택은 복구 정책이며
+  fallback의 품질이나 비용 우위를 측정해 입증한 주장이 아니다.
+
+  선택한 구현 경로의 대안을 명시적으로 비교할 때는 완전히 해결한 과제 수를 먼저 보고,
+  완료율이 비슷하면 성공 건당 비용과 추가로 얻는
+  코드 품질을 비교한다. 실패한 시도의 비용도 포함한다. 품질과 비용을 임의의 비율로 합치거나
+  보고서의 측정 한계를 무시하지 않는다.
+  쉬운 작업은 범위가 정해진 로컬 읽기 전용 근거 조사에 `scout`을, 코디네이터가 승인한 기계적인
+  Markdown 및 미러 편집에 `writer`를 사용한다. `gpt-5.6-luna`/`xhigh` 고정값은 사용자가 명시적으로
+  선택한 값이며, 이전 로컬 비교가 이 경로의 품질을 입증하는 것은 아니다. 메인 세션은 구현을
+  배정하기 전에 원인, 수정 가능한 경로, 변경 요구사항, 실행 가능한 완료 검사를 정한다.
+
+  할당 작업자 규칙과 과제를 stdin으로 전달하고 `claude -p --model claude-haiku-5-5 --effort xhigh --output-format json`을 사용한다.
+  과제의 도구 권한과 허용 경로를 유지한다. 플러그인 에이전트의
+  정의를 덮어쓰거나 Anthropic 모델을 Codex 역할에 넣지 않는다. CLI로 재개할 때 모델과 추론 강도를
+  다시 지정하고, 작업 결과를 사용하기 전에 기존 준비 확인과 실제 호스트 기록 검사를 따른다. Codex
+  `worker`는 지정된 fallback이며 명시적으로 선택한 구현 대안으로도 사용할 수 있다. 작업자는 범위를
+  넓히는 대신 새 원인이나 누락된 결정을 메인 세션에 보고한다.
+
+  코드 동작 변경과 배정된 검사가 끝나면, 해당 결과물의 마지막 추가 검토가 승인된 경우
+  `code_reviewer`를 한 번 사용한다. 최종 diff, 요구사항, 검사 근거를 전달한다. 문서나 메타데이터만
+  바뀐 경우에는 생략한다. 메인 세션이 지적 사항을 검증하고 완료 여부를 결정하며, 두 번째 검토는
+  시작하지 않는다. 이 보조 경로는 독립 검증을 대체하거나 그 검토 모델 설정과 승인 절차를 바꾸지
+  않는다. 이 역할의 리뷰 정확도는 Frontier v4에서 측정하지 않았다.
+
+  Frontier v4는 모델과 추론 강도별로 23개의 까다로운 동작 재현 과제를 한 번씩 수행한다. 쉬움/보통/어려움
+  등급을 정의하지 않으며 문서 작업도 평가하지 않는다. 위 라우팅은 이 저장소의 정책이며 벤치마크
+  결과나 일반적인 모델 우위 주장에 근거한 구분이 아니다.
+
+  사용자는 범위가 정해진 구현에 Haiku xhigh를, 마지막 추가 검토에 Sol high를 선택했다. 이는 역할
+  선호이며 Haiku가 Frontier v4의 완료율이나 비용 효율에서 앞선다거나 구현 점수가 리뷰 정확도를
+  입증한다는 주장이 아니다. 보고서마다 하네스 버전과 비용 기준이 다르므로 비용은
+  구독 요금이 아닌 API/목록 가격 추정치다. [Haiku 비교](https://vulcanbench.com/benchmarks/swe-v4-haiku55-vs-frontier.html),
+  [Luna 비교](https://vulcanbench.com/benchmarks/swe-v4-gpt55-luna-v35.html),
+  [VulcanBench 방법론](https://vulcanbench.com/methodology.html)을 참조한다. 문제 정의, 복잡한 근본 원인
+  분석, 계획, 설계와 RFC, 승인 결정은 메인 세션에서 처리한다. `researcher`, `designer`, `reviewer` 역할은
+  기존 호스트 경로를 그대로 사용한다.
 - 이 저장소를 변경하기 전에, `tests/test_model_pins.py`의 `PINS_VERIFIED_ON`이 14일보다 오래됐으면 `PINS`에 있는
-  모든 모델 계열의 가장 새로운 정식 모델을 확인하고 `PINS_VERIFIED_ON`을 그 날짜로 바꾼다. 공식 [Claude 모델 개요](https://platform.claude.com/docs/en/about-claude/models/overview),
+  GPT Luna를 제외한 모든 모델 계열의 가장 새로운 정식 모델을 확인하고 `PINS_VERIFIED_ON`을 그 날짜로
+  바꾼다. GPT Luna는 사용자가 명시적으로 선택을 바꿀 때까지 `gpt-5.6-luna` / `xhigh`를 유지한다. 공식 [Claude 모델 개요](https://platform.claude.com/docs/en/about-claude/models/overview),
   [OpenAI 모델 카탈로그](https://developers.openai.com/api/docs/models), 각 호스트의 모델 카탈로그를 사용하고 미리보기
   모델은 제외한다. 계열에 더 새로운 릴리스가 있으면 같은 변경에서 `PINS`와 모든 참조를 갱신하고
   `tests/test_model_pins.py`가 통과할 때까지 맞춘다. 실행 파일은 모델을 이 전체 ID로만 적는다. 별칭이나 실행 시점의

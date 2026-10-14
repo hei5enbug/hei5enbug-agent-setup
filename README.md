@@ -142,11 +142,15 @@ subagent record checks.
 
 ### GPT in Claude Code
 
-The pinned main models `gpt-6.1-sol` and `gpt-6-luna` are available through a local gateway. Claude models and
+The pinned main models `gpt-6.1-sol` and `gpt-5.6-luna` are available through a local gateway. Claude models and
 subagents keep using your Claude login and existing role pins. GPT credentials stay in a dedicated protected
 profile; the helper never reads Codex credentials. Browser sign-in uses your ChatGPT plan. An API-key profile uses
 separately billed OpenAI API usage and must be selected explicitly. The launcher never changes profiles or billing
 modes automatically.
+
+GPT Luna is fixed to `gpt-5.6-luna` and `xhigh` by user policy. The mod rejects other Luna releases;
+the gateway pins Luna requests to `xhigh`, and the direct helper rejects another effort. Automatic model
+refresh preserves this selection. Apply the same pin to new assignments and resumed sessions.
 
 Run the helper from a source checkout with the `claude-gpt` extra, not from the installed plugin cache. Sign in,
 check the active profile, then launch Claude Code with that profile:
@@ -166,8 +170,8 @@ that plugin for the session in place of the installed copy with the same name. T
 required; a matching entry in `plugin list` alone does not prove which local Mod files the session loaded.
 
 In the `/model` picker, press `s` to choose a GPT model without saving it as the default for new sessions. `Enter`
-or `/model <name>` saves the user default; starting with `--model` keeps the saved default. `gpt-6-luna` has no
-separate picker row, but you can start it with `--model gpt-6-luna`. The Mod cannot set a default model, and role
+or `/model <name>` saves the user default; starting with `--model` keeps the saved default. `gpt-5.6-luna` has no
+separate picker row, but you can start it with `--model gpt-5.6-luna`. The Mod cannot set a default model, and role
 pins do not change. If you save a GPT default, an ordinary Claude session refuses the request before any provider
 request; restore a Claude default with `/model claude-opus-5-5`.
 
@@ -374,14 +378,14 @@ the main session.
 
 | Host | Implementation agent | Model and effort |
 |---|---|---|
-| Codex | Plugin `worker` role, verified from its rollout record | `gpt-6-luna`, `xhigh` |
-| Claude Code | `hei5enbug-agent-setup:sonnet-worker` (default, `implementation_worker` is `sonnet`); `role_runner.py worker` on `codex` or on request; `hei5enbug-agent-setup:worker` for Haiku on `haiku`, on request, or as the runner fallback | `claude-sonnet-5-5`, `high` (default); `gpt-6-luna`, `xhigh`; `claude-haiku-5-5`, `high` |
+| Codex | Plugin `worker` role, verified from its rollout record | `gpt-5.6-luna`, `xhigh` |
+| Claude Code | `hei5enbug-agent-setup:sonnet-worker` (default, `implementation_worker` is `sonnet`); `role_runner.py worker` on `codex` or on request; `hei5enbug-agent-setup:worker` for Haiku on `haiku`, on request, or as the runner fallback | `claude-sonnet-5-5`, `high` (default); `gpt-5.6-luna`, `xhigh`; `claude-haiku-5-5`, `high` |
 | Codex, designer | `claude -p` with the pinned model; when Claude is unavailable, the plugin `designer` role | `claude-opus-5-5`, `xhigh`; fallback `gpt-6-astra`, `xhigh` |
 | Claude Code, designer | `hei5enbug-agent-setup:designer`, verified from its subagent record or the mod's role pinning | `claude-opus-5-5`, `xhigh` |
-| Codex, local scout | Plugin `scout` role, verified from its rollout record | `gpt-6-luna`, `xhigh` |
-| Claude Code, local scout | `role_runner.py scout`; fallback `hei5enbug-agent-setup:scout` | `gpt-6-luna`, `xhigh`; fallback `claude-sonnet-5-5`, `medium` |
-| Codex, public researcher | Plugin `researcher` role, verified from its rollout record | `gpt-6-luna`, `xhigh` |
-| Claude Code, public researcher | `role_runner.py researcher`, which uses web search and no shell network; fallback `hei5enbug-agent-setup:researcher` | `gpt-6-luna`, `xhigh`; fallback `claude-haiku-5-5`, `medium` |
+| Codex, local scout | Plugin `scout` role, verified from its rollout record | `gpt-5.6-luna`, `xhigh` |
+| Claude Code, local scout | `role_runner.py scout`; fallback `hei5enbug-agent-setup:scout` | `gpt-5.6-luna`, `xhigh`; fallback `claude-sonnet-5-5`, `medium` |
+| Codex, public researcher | Plugin `researcher` role, verified from its rollout record | `gpt-5.6-luna`, `xhigh` |
+| Claude Code, public researcher | `role_runner.py researcher`, which uses web search and no shell network; fallback `hei5enbug-agent-setup:researcher` | `gpt-5.6-luna`, `xhigh`; fallback `claude-haiku-5-5`, `medium` |
 | Codex, skill review | `claude -p`; fallback plugin `reviewer`, verified from its rollout record | `claude-opus-5-5`, `high`; fallback `gpt-6.1-sol`, `xhigh` |
 | Claude Code, skill review | `role_runner.py reviewer` with the `review_model` setting; fallback `hei5enbug-agent-setup:reviewer` | `review_model` (default `gpt-6-astra`), `xhigh`; fallback `claude-opus-5-5`, `high` |
 | Skill Builder trial execution and other non-review participants | Host's upper model from the Skill Builder adapter | Codex: `gpt-6.1-sol`, `xhigh`; Claude Code: `claude-opus-5-5`, `high` |
@@ -423,7 +427,10 @@ When hei5enbug-agent-setup is active, use subagents according to its situation-b
 ```
 
 It also enables the `default_mode_request_user_input` feature when `codex features list` shows it off, so
-`request_user_input` works in Default mode. Setting `HEI5ENBUG_SUBAGENT_POLICY=off` removes only the marked block and
+`request_user_input` is available in Default mode. This does not enforce blocking or disable client-side
+automatic resolution. Required decisions follow the [clarification rule](instructions/session/common.md#clarification);
+after an interrupted connection, use [connection recovery](instructions/connection-recovery.md).
+Setting `HEI5ENBUG_SUBAGENT_POLICY=off` removes only the marked block and
 never edits anything outside it. Setting `HEI5ENBUG_CODEX_ASK_TOOL=off` disables the feature again, but only when the
 plugin enabled it; a feature you enabled yourself stays on. A failed step is retried at the next session start and
 never stops the session instructions from loading. Hosts, hook trust, and available tools still govern execution.

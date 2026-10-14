@@ -41,6 +41,13 @@ def denial(event: dict) -> str | None:
     tool_input = event.get("tool_input")
     if not isinstance(tool_input, dict):
         return None
+    model = tool_input.get("model")
+    if isinstance(model, str) and model.startswith("gpt-") and model.endswith("-luna"):
+        if model != "gpt-5.6-luna":
+            return "GPT Luna assignments must use `gpt-5.6-luna` with `xhigh`."
+        effort = tool_input.get("reasoning_effort")
+        if effort is not None and effort != "xhigh":
+            return "GPT Luna assignments must use `gpt-5.6-luna` with `xhigh`."
     name = tool_input.get("agent_type") or "default"
     cwd = Path(event.get("cwd") or os.getcwd())
     home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")

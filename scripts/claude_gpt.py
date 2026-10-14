@@ -32,7 +32,7 @@ from typing import Any, BinaryIO, Callable, Iterator, Mapping
 
 
 PROTOCOL_VERSION = 1
-PINNED_MODELS = frozenset({"gpt-6.1-sol", "gpt-6-luna"})
+PINNED_MODELS = frozenset({"gpt-6.1-sol", "gpt-5.6-luna"})
 SUPPORTED_EFFORTS = frozenset({"low", "medium", "high", "xhigh", "max"})
 REQUIRED_SUBSCRIPTION_SCOPE = "chatgpt.tokens.use.direct"
 OAUTH_ISSUER = "https://auth.openai.com"
@@ -760,6 +760,8 @@ def validate_protocol_request(value: Any) -> dict[str, Any]:
     effort = value["effort"]
     if effort is not None and (not isinstance(effort, str) or effort not in SUPPORTED_EFFORTS):
         raise ClaudeGptError("unsupported_effort", "선택한 GPT 모델이 지원하지 않는 추론 강도입니다.")
+    if value["model"] == "gpt-5.6-luna" and effort != "xhigh":
+        raise ClaudeGptError("unsupported_effort", "GPT Luna는 xhigh로만 실행할 수 있습니다.")
     if not isinstance(value["profile_id"], str) or not PROFILE_ID_RE.fullmatch(value["profile_id"]):
         raise ClaudeGptError("invalid_profile", "프로필 참조가 잘못되었습니다.")
     if not isinstance(value["system"], str) or len(value["system"]) > 2_000_000:

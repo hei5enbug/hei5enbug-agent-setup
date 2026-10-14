@@ -101,6 +101,22 @@ class AgentGuardTest(unittest.TestCase):
         # Then
         self.assertEqual({value: None for value in values}, decisions)
 
+    def test_Luna는_사용자가_고정한_버전과_xhigh만_명시할_수_있다(self):
+        """정의된 scout도 다른 Luna 버전이나 high를 지정하면 거부하고 고정 모델의 xhigh만 허용한다."""
+        # Given
+        self.write(self.codex_home / "agents" / "scout.toml", 'name = "scout"\n')
+        inputs = [
+            {"agent_type": "scout", "model": "gpt-6-luna", "reasoning_effort": "xhigh"},
+            {"agent_type": "scout", "model": "gpt-5.6-luna", "reasoning_effort": "high"},
+            {"agent_type": "scout", "model": "gpt-5.6-luna", "reasoning_effort": "xhigh"},
+        ]
+
+        # When
+        decisions = [self.decide("codex", value) for value in inputs]
+
+        # Then
+        self.assertEqual(["deny", "deny", None], decisions)
+
     def test_Codex_토글이_비었거나_알_수_없는_값이면_계속_거부한다(self):
         """값이 없거나 빈 문자열이거나 인식할 수 없으면 기본값인 켜짐으로 읽는다."""
         # When

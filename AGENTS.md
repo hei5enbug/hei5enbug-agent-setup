@@ -27,8 +27,86 @@
   it and preserve the existing plugin contracts.
 - Keep shared behavior in one canonical source and isolate only actual host differences. A rule the session
   instructions already state belongs there alone; reference it instead of restating it.
+- For repository implementation, use a separate Claude Code assigned-worker process by default. Codex
+  project roles in `.codex/agents/` cover the other routes:
+
+  | Role | Primary name | Model / effort | Fallback name | Model / effort |
+  |---|---|---|---|---|
+  | Bounded implementation and debugging | `haiku_worker` | `claude-haiku-5-5` / `xhigh` | `worker` | `gpt-6.1-sol` / `high` |
+  | Bounded local, read-only evidence | `scout` | `gpt-5.6-luna` / `xhigh` | `haiku_scout` | `claude-haiku-5-5` / `xhigh` |
+  | Mechanical documentation edits with approved content | `writer` | `gpt-5.6-luna` / `xhigh` | `haiku_writer` | `claude-haiku-5-5` / `xhigh` |
+  | One read-only auxiliary review of a completed code change | `code_reviewer` | `gpt-6.1-sol` / `high` | `sonnet_code_reviewer` | `claude-sonnet-5-5` / `high` |
+
+  The `haiku_*` and `sonnet_code_reviewer` names are assignment labels for separate Claude Code CLI
+  processes, not registered `--agent` names. `worker`, `scout`, `writer`, and `code_reviewer` are Codex
+  project roles. Each role has exactly one fallback in the other model family: Claude to GPT or GPT to
+  Claude. A named fallback is preauthorized only when
+  the primary executable, authentication, quota, role, requested settings, or reliable settings evidence
+  is unavailable. Announce the reason and selected route. Stop any started primary, inspect its partial
+  work, and transfer only verified unfinished work with the same scope, permissions, and checks. Try the
+  one listed fallback at most once per assignment; if it is also unavailable, continue in the main session.
+  Skip a fallback that shares a confirmed authentication, quota, or capability blocker with the primary.
+  A fallback never resolves a missing user decision or bypasses a permission or failed acceptance check.
+
+  This repository routing overrides the plugin's model and effort routes for these roles and assigns
+  mechanical documentation work to `writer` and bounded auxiliary code review to `code_reviewer`.
+  All other plugin ownership, permission, and verification rules still apply. Request the listed model
+  and effort explicitly when the host supports it, and verify
+  the actual host rollout before relying on either a primary or fallback role. Do not override a pinned
+  primary role's model to invoke its fallback; use the named route on its own host. The Codex project
+  roles take effect in a fresh Codex session.
+
+  For a Claude fallback, pass the corresponding primary Codex role's `developer_instructions` and the
+  bounded assignment on stdin. This preserves one source for each role's scope. Run `claude -p` with
+  the table's full model ID and effort, `--output-format json --permission-mode dontAsk --strict-mcp-config`.
+  For `haiku_scout` and `sonnet_code_reviewer`, add `--tools Read Grep Glob --allowedTools Read Grep Glob`.
+  For `haiku_writer`, add `--tools Read Grep Glob Edit Write --allowedTools Read Grep Glob` plus
+  `Edit(<allowed path>)` and `Write(<allowed path>)` for each assigned Markdown file and mirror. The main
+  session runs its assigned checks. Never expose shell, network, or delegation tools to these fallbacks.
+  Accept output only when JSON `modelUsage` names the requested model and the existing effective-settings
+  checks confirm the effort. Reapply model, effort, tool limits, and assignment scope on a CLI resume.
+  These are recovery choices, not measured claims of fallback quality or cost superiority.
+
+  When comparing explicitly requested alternatives to the selected implementation route, prioritize
+  fully solved tasks, then compare cost per solved task against the
+  additional Code quality when completion is comparable. Include failed attempts in the cost; do not
+  collapse quality and cost into an arbitrary ratio or ignore the reports' measurement limits.
+  Route easy work to `scout` for bounded, local, read-only evidence and to `writer` for coordinator-approved
+  mechanical Markdown and mirror edits. The `gpt-5.6-luna`/`xhigh` pin follows the user's explicit
+  selection; earlier local comparisons do not establish this route's quality. The main session defines the cause,
+  allowed edit paths, change requirements, and runnable acceptance checks before assigning implementation.
+
+  Use `claude -p --model claude-haiku-5-5 --effort xhigh --output-format json` with the assigned-worker rules
+  and task on stdin, preserving the task's tool permissions and allowed paths. Do not override a plugin
+  agent definition or put an Anthropic model in a Codex role. Reapply model and effort on a CLI resume;
+  follow the existing readiness and actual host-record checks before relying on its work. The Codex
+  `worker` is the named fallback and remains available as an explicitly selected implementation
+  alternative. The worker reports new causes or missing decisions to the main session instead of
+  widening scope.
+
+  After behavioral code changes and their assigned checks, use `code_reviewer` once when final auxiliary
+  review is authorized for the deliverable. Give it the final diff, requirements, and check evidence. Skip
+  documentation-only or metadata-only changes. The main session verifies findings and decides acceptance;
+  do not start a second review round. This supplemental route does not replace independent validation or
+  change its reviewer settings and approval gate. Its review accuracy was not measured by Frontier v4.
+
+  Frontier v4 covers 23 challenging behavioral-reconstruction tasks with one attempt per model and effort.
+  It defines no easy/normal/hard labels and evaluates no documentation; the routing above is this
+  repository's policy, not a benchmark result or a claim of general model superiority.
+
+  The user selected Haiku xhigh for bounded implementation and Sol high for the final auxiliary review.
+  This is a role preference, not a claim that Haiku wins completion or cost efficiency on Frontier v4,
+  or that implementation scores establish review accuracy. The reports use different harness versions
+  and cost bases, so costs are API/list-price estimates rather than subscription bills. See the
+  [Haiku comparison](https://vulcanbench.com/benchmarks/swe-v4-haiku55-vs-frontier.html),
+  [Luna comparison](https://vulcanbench.com/benchmarks/swe-v4-gpt55-luna-v35.html), and
+  [VulcanBench methodology](https://vulcanbench.com/methodology.html). Keep problem definition, complex
+  root-cause reasoning, plans, designs and RFCs, and acceptance decisions in the main session. The
+  `researcher`, `designer`, and `reviewer` roles keep their existing host routes.
 - Before changing this repository, when `PINS_VERIFIED_ON` in `tests/test_model_pins.py` is more than 14 days old,
-  resolve the newest generally available model of every family in `PINS`, then set `PINS_VERIFIED_ON` to that date.
+  resolve the newest generally available model of every family in `PINS`, except GPT Luna, then set
+  `PINS_VERIFIED_ON` to that date. GPT Luna stays at the user-selected `gpt-5.6-luna` / `xhigh` until the user
+  explicitly changes that selection.
   Use the official [Claude models overview](https://platform.claude.com/docs/en/about-claude/models/overview), the
   [OpenAI model catalog](https://developers.openai.com/api/docs/models), and each host's model catalog, and
   exclude previews. When a family has a newer release, update `PINS` and every reference in the same change

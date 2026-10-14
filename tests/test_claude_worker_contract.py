@@ -197,7 +197,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
             {
                 "type": "string",
                 "title": "Implementation worker",
-                "description": "Route implementation work to codex (Codex on gpt-6-luna at xhigh), haiku (the plugin worker on claude-haiku-5-5 at high), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
+                "description": "Route implementation work to codex (Codex on gpt-5.6-luna at xhigh), haiku (the plugin worker on claude-haiku-5-5 at high), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
                 "options": ["codex", "haiku", "sonnet"],
                 "default": "sonnet",
             },

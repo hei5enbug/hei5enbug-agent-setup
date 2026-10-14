@@ -23,13 +23,18 @@ does not make planning, architecture, or acceptance decisions. Existing service-
 
 ## Keep role settings fixed
 
+GPT Luna is explicitly pinned to `gpt-5.6-luna` and `xhigh`. Never select another Luna release or effort,
+including through a saved default or resume. If the host cannot verify these settings, stop that delegation
+and use the named cross-family fallback or the main session. Automatic newest-release refresh excludes this
+user-selected pin.
+
 Use these production settings unless a separately approved comparison qualifies for a scoped change:
 
 | Role | Codex | Claude Code |
 |---|---|---|
-| Local scout | `gpt-6-luna`, `xhigh` | `role_runner.py scout` with `gpt-6-luna`, `xhigh`, read-only; fallback `scout` with `claude-sonnet-5-5`, `medium` |
-| Implementation worker | `gpt-6-luna`, `xhigh` | `sonnet-worker` with `claude-sonnet-5-5`, `high` (default, `implementation_worker` is `sonnet`); `role_runner.py worker` with `gpt-6-luna`, `xhigh` when it is `codex` or on request; `worker` with `claude-haiku-5-5`, `high` when it is `haiku`, on request, or as the runner fallback |
-| Public researcher | `gpt-6-luna`, `xhigh` | `role_runner.py researcher` with `gpt-6-luna`, `xhigh`, web search; fallback `researcher` with `claude-haiku-5-5`, `medium` |
+| Local scout | `gpt-5.6-luna`, `xhigh` | `role_runner.py scout` with `gpt-5.6-luna`, `xhigh`, read-only; fallback `scout` with `claude-sonnet-5-5`, `medium` |
+| Implementation worker | `gpt-5.6-luna`, `xhigh` | `sonnet-worker` with `claude-sonnet-5-5`, `high` (default, `implementation_worker` is `sonnet`); `role_runner.py worker` with `gpt-5.6-luna`, `xhigh` when it is `codex` or on request; `worker` with `claude-haiku-5-5`, `high` when it is `haiku`, on request, or as the runner fallback |
+| Public researcher | `gpt-5.6-luna`, `xhigh` | `role_runner.py researcher` with `gpt-5.6-luna`, `xhigh`, web search; fallback `researcher` with `claude-haiku-5-5`, `medium` |
 | Designer | `claude -p` with `claude-opus-5-5`, `xhigh`; when Claude is unavailable, the `designer` role with `gpt-6-astra`, `xhigh` | `claude-opus-5-5`, `xhigh` |
 | Skill Builder trial execution and other non-review participants | `gpt-6.1-sol`, `xhigh` | `claude-opus-5-5`, `high` |
 | Skill review role (review persona, grader, comparator, analyzer) | `claude -p` with `claude-opus-5-5`, `high`; fallback `reviewer` with `gpt-6.1-sol`, `xhigh` | `role_runner.py reviewer` with the `review_model` setting (default `gpt-6-astra`), `xhigh`; fallback `reviewer` with `claude-opus-5-5`, `high` |

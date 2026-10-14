@@ -1,7 +1,7 @@
 import { expect, test } from "claude-code/testing";
 import { registerGpt } from "./gpt.js";
 
-const GPT_MODELS = ["gpt-6.1-sol", "gpt-6-luna"];
+const GPT_MODELS = ["gpt-6.1-sol", "gpt-5.6-luna"];
 const LAUNCHER_COMMAND =
   "uv run --extra claude-gpt python scripts/claude_gpt.py launch --profile <profile-id> -- <Claude arguments>";
 
@@ -138,7 +138,7 @@ test("모든 기능 옵션을 꺼도 런처 URL이 없으면 메인 GPT 요청�
 }, async ($, on) => {
   // given
   on("env.get", () => ({ value: undefined }));
-  const stream = $.turn.step({ turnId: "turn-off", index: 0, model: "gpt-6-luna", messageCount: 1 });
+  const stream = $.turn.step({ turnId: "turn-off", index: 0, model: "gpt-5.6-luna", messageCount: 1 });
   const chunks = [];
 
   // when
@@ -174,11 +174,11 @@ test("호스트 환경 API가 같은 런처 URL을 반환하면 메인 GPT 요�
   expect(result.chunks[0]?.text).toEqual("완료");
 });
 
-test("Claude 요청과 하위 에이전트 요청은 환경과 관계없이 다음 핸들러로 전달한다", async () => {
+test("Claude 요청은 그대로 전달하고 하위 Luna 요청은 xhigh로 전달한다", async () => {
   // given
   const events = [
     { turnId: "claude-turn", index: 0, model: "claude-sonnet-5-5" },
-    { turnId: "agent-turn", index: 0, model: "gpt-6-luna", agentId: "agent-test" },
+    { turnId: "agent-turn", index: 0, model: "gpt-5.6-luna", agentId: "agent-test" },
   ];
   const results = [];
 
@@ -186,8 +186,65 @@ test("Claude 요청과 하위 에이전트 요청은 환경과 관계없이 다�
   for (const event of events) results.push(await invoke({}, event));
 
   // then
-  expect(results.map((run) => run.calls)).toEqual([[events[0]], [events[1]]]);
+  expect(results.map((run) => run.calls)).toEqual([[events[0]], [{ ...events[1], effort: "xhigh" }]]);
   expect(results.map((run) => run.result.stopReason)).toEqual(["end_turn", "end_turn"]);
+});
+
+test("다른 Luna 버전은 메인과 하위 에이전트에서 모두 실행 전에 거부한다", async () => {
+  // given
+  const events = ["gpt-6-luna", "gpt-5.5-luna"].flatMap((model) => [
+    { turnId: "main-luna", index: 0, model },
+    { turnId: "agent-luna", index: 0, model, agentId: "agent-test" },
+  ]);
+
+  // when
+  const results = await Promise.all(events.map((event) => invoke({}, event)));
+
+  // then
+  for (const run of results) {
+    expect(run.calls).toEqual([]);
+    expect(run.result.stopReason).toEqual("refusal");
+    expect(run.chunks[0]?.text).toContain("gpt-5.6-luna");
+  }
+});
+
+test("실제 Mod 필터에서도 이전 Luna 요청을 다음 핸들러로 전달하지 않는다", async ($, on) => {
+  // given
+  const forwarded = [];
+  on("turn.step", async function* (_$, event) {
+    forwarded.push(event);
+    yield { kind: "text", index: 0, text: "실행됨" };
+    yield { kind: "stop", stopReason: "end_turn", usage: null };
+    return { turnId: event.turnId, index: event.index, answer: "실행됨", toolUses: [], stopReason: "end_turn", usage: null };
+  });
+
+  // when
+  const run = await collect($.turn.step({ turnId: "old-luna-filter", index: 0, model: "gpt-6-luna", messageCount: 1 }));
+
+  // then
+  expect(forwarded).toEqual([]);
+  expect(run.result.stopReason).toEqual("refusal");
+  expect(run.chunks[0]?.text).toContain("gpt-5.6-luna");
+});
+
+test("Luna의 요청 추론 강도가 없거나 달라도 xhigh로 한 번 전달한다", async () => {
+  // given
+  const context = gatewayContext({
+    HEI5ENBUG_GPT_GATEWAY_URL: "http://127.0.0.1/gpt",
+    ANTHROPIC_BASE_URL: "http://127.0.0.1/gpt",
+  });
+  const events = [undefined, "low", "medium", "high", "xhigh", "max"].map((effort) => ({
+    turnId: "pinned-luna", index: 0, model: "gpt-5.6-luna", effort,
+  }));
+
+  // when
+  const results = await Promise.all(events.map((event) => invoke(context, event)));
+
+  // then
+  for (let index = 0; index < events.length; index++) {
+    expect(results[index].calls).toEqual([{ ...events[index], effort: "xhigh" }]);
+    expect(results[index].result.stopReason).toEqual("end_turn");
+  }
 });
 
 test("게이트웨이가 실패한 메인 GPT 요청은 다시 전달하지 않는다", async () => {

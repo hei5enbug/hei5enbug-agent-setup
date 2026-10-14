@@ -34,7 +34,7 @@ REVIEW_MODELS = (
     "claude-sonnet-5-5",
     "claude-haiku-5-5",
     "gpt-6-astra",
-    "gpt-6-luna",
+    "gpt-5.6-luna",
     "gpt-6.1-sol",
 )
 DEFAULT_REVIEW_MODEL = "gpt-6-astra"

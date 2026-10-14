@@ -144,11 +144,15 @@ Claude Code에서는 `config/claude-mod.json`이 mod `hooks/mod/register.js`를 
 
 ### Claude Code에서 GPT 사용
 
-메인 모델로 고정한 `gpt-6.1-sol`과 `gpt-6-luna`는 로컬 게이트웨이를 통해 사용할 수 있습니다. Claude 모델과
+메인 모델로 고정한 `gpt-6.1-sol`과 `gpt-5.6-luna`는 로컬 게이트웨이를 통해 사용할 수 있습니다. Claude 모델과
 서브에이전트는 기존 Claude 로그인과 역할별 모델 고정 설정을 그대로 사용합니다. GPT 인증 정보는 별도의 보호 프로필에
 저장하며 헬퍼는 Codex 인증 정보를 읽지 않습니다. 기본 브라우저에서 ChatGPT 계정에 로그인하며 GPT 요청은 사용자의
 ChatGPT 플랜 사용량에 반영됩니다. API 키 프로필은 별도로 과금되는 OpenAI API 사용량을 쓰므로 사용자가 명시적으로 선택해야 합니다.
 런처는 프로필이나 과금 방식을 자동으로 바꾸지 않습니다.
+
+GPT Luna는 사용자 정책에 따라 `gpt-5.6-luna`와 `xhigh`로 고정합니다. Mod는 다른 Luna 버전을 거부하고,
+게이트웨이는 Luna 요청을 `xhigh`로 고정하며 직접 호출하는 헬퍼는 다른 추론 강도를 거부합니다.
+자동 모델 갱신에서도 이 선택을 유지합니다. 새 과제와 재개하는 세션에도 같은 고정값을 적용합니다.
 
 아래 헬퍼 명령은 설치된 플러그인 캐시가 아닌 저장소 소스 체크아웃에서 `claude-gpt` extra를 사용해 실행하세요.
 먼저 로그인하고 활성 프로필을 확인한 다음 해당 프로필로 Claude Code를 시작합니다.
@@ -168,8 +172,8 @@ uv run --extra claude-gpt python scripts/claude_gpt.py launch --profile <profile
 `plugin list`에 버전이 일치하는 항목이 있어도 세션이 실제로 어느 Mod 파일을 읽었는지까지 보장하지는 않습니다.
 
 `/model` 선택기에서 GPT 모델을 고른 뒤 `s`를 누르면 새 세션 기본값은 바뀌지 않습니다. `Enter` 또는 `/model <name>`은
-사용자 기본값을 저장합니다. 시작할 때 `--model`을 지정하면 저장된 기본값은 그대로 유지됩니다. `gpt-6-luna`는
-별도 선택기 항목이 없지만 `--model gpt-6-luna`로 시작할 수 있습니다. mod는 기본 모델을 설정할 수 없고 역할별 모델
+사용자 기본값을 저장합니다. 시작할 때 `--model`을 지정하면 저장된 기본값은 그대로 유지됩니다. `gpt-5.6-luna`는
+별도 선택기 항목이 없지만 `--model gpt-5.6-luna`로 시작할 수 있습니다. mod는 기본 모델을 설정할 수 없고 역할별 모델
 고정 설정도 바꾸지 않습니다. GPT를 기본값으로 저장하면 일반 Claude 세션은 요청을 공급자에 보내기 전에 거부합니다.
 `/model claude-opus-5-5`를 입력해 Claude 기본값을 복구하세요.
 
@@ -356,14 +360,14 @@ UI 코드, 시각 디자인, 다이어그램 작업은 대신 호스트의 desig
 
 | 호스트 | 구현 에이전트 | 모델과 사고 강도 |
 |---|---|---|
-| Codex | rollout 기록으로 검증한 플러그인 `worker` 역할 | `gpt-6-luna`, `xhigh` |
-| Claude Code | `hei5enbug-agent-setup:sonnet-worker`(기본, `implementation_worker`는 `sonnet`); `codex`일 때나 요청했을 때는 `role_runner.py worker`; `haiku`일 때, 요청했을 때, 또는 실행기 대체 경로에서는 Haiku `hei5enbug-agent-setup:worker` | `claude-sonnet-5-5`, `high`(기본); `gpt-6-luna`, `xhigh`; `claude-haiku-5-5`, `high` |
+| Codex | rollout 기록으로 검증한 플러그인 `worker` 역할 | `gpt-5.6-luna`, `xhigh` |
+| Claude Code | `hei5enbug-agent-setup:sonnet-worker`(기본, `implementation_worker`는 `sonnet`); `codex`일 때나 요청했을 때는 `role_runner.py worker`; `haiku`일 때, 요청했을 때, 또는 실행기 대체 경로에서는 Haiku `hei5enbug-agent-setup:worker` | `claude-sonnet-5-5`, `high`(기본); `gpt-5.6-luna`, `xhigh`; `claude-haiku-5-5`, `high` |
 | Codex, designer | 고정 모델의 `claude -p`, Claude를 쓸 수 없으면 플러그인 `designer` 역할 | `claude-opus-5-5`, `xhigh`, 대체 시 `gpt-6-astra`, `xhigh` |
 | Claude Code, designer | 서브에이전트 기록이나 mod의 역할 고정으로 검증한 `hei5enbug-agent-setup:designer` | `claude-opus-5-5`, `xhigh` |
-| Codex, 로컬 scout | rollout 기록으로 검증한 플러그인 `scout` 역할 | `gpt-6-luna`, `xhigh` |
-| Claude Code, 로컬 scout | `role_runner.py scout`, 대체 시 `hei5enbug-agent-setup:scout` |
-| Codex, 공개 researcher | rollout 기록으로 검증한 플러그인 `researcher` 역할 | `gpt-6-luna`, `xhigh` |
-| Claude Code, 공개 researcher | 웹 검색만 쓰고 셸 네트워크는 쓰지 않는 `role_runner.py researcher`, 대체 시 `hei5enbug-agent-setup:researcher` | `gpt-6-luna`, `xhigh`, 대체 시 `claude-haiku-5-5`, `medium` | `gpt-6-luna`, `xhigh`, 대체 시 `claude-sonnet-5-5`, `medium` |
+| Codex, 로컬 scout | rollout 기록으로 검증한 플러그인 `scout` 역할 | `gpt-5.6-luna`, `xhigh` |
+| Claude Code, 로컬 scout | `role_runner.py scout`, 대체 시 `hei5enbug-agent-setup:scout` | `gpt-5.6-luna`, `xhigh`, 대체 시 `claude-sonnet-5-5`, `medium` |
+| Codex, 공개 researcher | rollout 기록으로 검증한 플러그인 `researcher` 역할 | `gpt-5.6-luna`, `xhigh` |
+| Claude Code, 공개 researcher | 웹 검색만 쓰고 셸 네트워크는 쓰지 않는 `role_runner.py researcher`, 대체 시 `hei5enbug-agent-setup:researcher` | `gpt-5.6-luna`, `xhigh`, 대체 시 `claude-haiku-5-5`, `medium` |
 | Codex, 스킬 검토 | `claude -p`; 대체는 rollout 기록으로 검증한 플러그인 `reviewer` | `claude-opus-5-5`, `high`; 대체 `gpt-6.1-sol`, `xhigh` |
 | Claude Code, 스킬 검토 | `review_model` 설정을 쓰는 `role_runner.py reviewer`; 대체는 `hei5enbug-agent-setup:reviewer` | `review_model`(기본 `gpt-6-astra`), `xhigh`; 대체 `claude-opus-5-5`, `high` |
 | Skill Builder 시험 실행 및 기타 비검토 참여자 | Skill Builder 어댑터에 따른 호스트의 상위 모델 | Codex: `gpt-6.1-sol`, `xhigh`; Claude Code: `claude-opus-5-5`, `high` |
@@ -402,7 +406,10 @@ When hei5enbug-agent-setup is active, use subagents according to its situation-b
 ```
 
 또한 `codex features list`에서 `default_mode_request_user_input` 기능이 꺼져 있으면 켜므로, Default 모드에서도
-`request_user_input`을 쓸 수 있습니다. `HEI5ENBUG_SUBAGENT_POLICY=off`로 설정하면 표시 블록만 지우고 블록 밖은 절대 고치지
+`request_user_input`을 쓸 수 있습니다. blocking을 강제하거나 클라이언트의 자동 응답 처리를 끄는 기능은 아닙니다.
+필수 결정에는 [확인 질문 규칙](instructions/session/common.ko.md#확인-질문)을 따르고, 연결이 중단되면
+[연결 복구](instructions/connection-recovery.ko.md)를 적용합니다.
+`HEI5ENBUG_SUBAGENT_POLICY=off`로 설정하면 표시 블록만 지우고 블록 밖은 절대 고치지
 않습니다. `HEI5ENBUG_CODEX_ASK_TOOL=off`로 설정하면 기능을 다시 끄지만, 플러그인이 켠 경우에만 끄며 직접 켠 기능은 그대로
 둡니다. 실패한 단계는 다음 세션 시작 때 다시 시도하며, 세션 지침 로드를 막지 않습니다. 실제 실행에는 호스트 규칙, 훅 신뢰와
 사용 가능한 도구가 계속 적용됩니다.

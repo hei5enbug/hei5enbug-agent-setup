@@ -18,14 +18,14 @@ ASSIGNED_ROLE_ENV = "HEI5ENBUG_ASSIGNED_ROLE"
 EFFORT = "xhigh"
 DEFAULT_TIMEOUT = 2700
 DEFAULT_REVIEW_MODEL = "gpt-6-astra"
-ROLE_MODEL = "gpt-6-luna"
+ROLE_MODEL = "gpt-5.6-luna"
 REVIEW_MODELS = (
     "claude-fable-5-1",
     "claude-opus-5-5",
     "claude-sonnet-5-5",
     "claude-haiku-5-5",
     "gpt-6-astra",
-    "gpt-6-luna",
+    "gpt-5.6-luna",
     "gpt-6.1-sol",
 )
 ROLE_SENTENCES = {

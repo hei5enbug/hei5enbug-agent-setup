@@ -114,7 +114,7 @@ class ImplementationWorkerScopeTest(unittest.TestCase):
         self.assertEqual(rows["Codex"][:2], ["`gpt-6.1-sol`", "`xhigh`"])
         self.assertEqual(rows["Claude Code"][:2], ["`claude-opus-5-5`", "`high`"])
         self.assertIn("Other hosts", rows)
-        for copied in ("gpt-6-luna", "claude-sonnet-5-5", "latest production", "implementation-execution.md"):
+        for copied in ("gpt-5.6-luna", "claude-sonnet-5-5", "latest production", "implementation-execution.md"):
             self.assertNotIn(copied, section)
 
     def test_검토_역할은_호스트_검토_경로_후_reviewer로_대체한다(self):
