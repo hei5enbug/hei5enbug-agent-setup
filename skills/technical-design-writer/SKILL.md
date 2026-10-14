@@ -105,6 +105,11 @@ Give actions only to actors; use state or change predicates for other subjects. 
 sentence and one central idea per paragraph. Use exact counts when the evidence permits them. Distinguish
 requirements, current facts, assumptions, proposals, and open questions.
 
+Do not present a proxy, a reconstructed result, or a simulation as direct observation of the claimed event.
+Keep conflicting observations with their source and time until evidence explains the difference.
+For a material numerical comparison, also state the observation window, counting unit, and aggregation when
+they affect interpretation and are known, and do not attribute a difference to the proposed change alone.
+
 ## Terminology
 
 Terminology decisions apply to the whole scope the change touches, not to one file. When a document belongs
@@ -144,6 +149,7 @@ two concepts, rename one of them.
 
 Use a table when three or more comparable items or dimensions share stable comparison fields. Use prose
 for a small comparison. Keep headers and cells semantically parallel; move multi-paragraph detail to the body.
+When you combine repeated tables into one, keep every shared field as a column and every value in the combined table.
 
 Use a diagram when a complex branch, state change, interaction, ownership boundary, dependency graph, or
 data relationship is clearer visually. Choose the smallest fitting form: flow or state diagram for behavior,

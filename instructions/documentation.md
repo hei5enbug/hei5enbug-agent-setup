@@ -6,6 +6,20 @@ design, data design, API design, or design outline, or directly invokes that ski
 modes load the design-document workflow and the shared independent model validation rules. Do not load or
 invoke the skill for ordinary documentation.
 
+Apply these content rules to every documentation file, including technical design documents and Markdown or
+HTML that will later be published elsewhere:
+
+- Name what the evidence actually observes, records, approximates, or calculates. An absent record proves
+  only that no record was found unless the source would necessarily record that event.
+- For a rate or proportion, state its denominator and any material exclusion or deduplication when known.
+  Do not compare results as one metric when their population or outcome definition changed without saying so.
+- In a document that describes current state, put dated progress, superseded observations, and dated change
+  notes in a final change-history section unless a nearby claim needs them for its meaning or validity. Apply
+  this to a new document or the part being written, not as an unrequested restructuring of existing text.
+- When correcting a material claim, reconcile the statements that depend on it within the authorized scope,
+  and report conflicts outside that scope without editing them.
+- Embed an image or diagram that the reader needs instead of telling the reader to open a file path.
+
 For ordinary documentation, apply these writing mechanics directly:
 
 - Write for high school students; basic development terms are allowed. Use concrete subjects and verbs,

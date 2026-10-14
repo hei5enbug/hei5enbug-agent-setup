@@ -34,9 +34,12 @@ resolves the type, apply that evidence.
    boundaries, behavior, contracts, failure handling, constraints, alternatives, and trade-offs in the target
    language. Apply the precision, structure, table, diagram, and language rules in `SKILL.md`.
 4. Plan terminology changes for the entire affected scope. Update references and cited headings together.
-   Ask before renaming implementation identifiers or externally visible contract names. When a decision
-   reverses an earlier one, update every document that records the earlier decision and explain why its
-   original rationale no longer holds.
+   Ask before renaming implementation identifiers or externally visible contract names. When a material fact,
+   decision, definition, or contract changes, check the statements that depend on it in the edited document,
+   including unchanged summaries, tables, examples, diagrams, captions, and acceptance criteria, and in the
+   documents of the same repository or workspace that record it. Update them within the authorized scope and
+   report the rest without editing them. Search other repositories or workspaces only when the task requires
+   it. When a decision reverses an earlier one, explain why its original rationale no longer holds.
 5. Validate copied contracts, examples, commands, links, calculations, and diagrams with the strongest
    available method. Separate unsupported content under `SKILL.md`, remove drafting notes and unnecessary
    content, record actual removals, and run the completion gate.

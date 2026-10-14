@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
 from contextlib import contextmanager
@@ -59,7 +60,10 @@ RELOAD_TIMEOUT = 45.0
 COMPACT_TIMEOUT = 300.0
 SELF_WAIT_SECONDS = 30 * 60
 NOTIFY_SECONDS = 120
-DEFAULT_APPLY_SECONDS = 240
+DEFAULT_APPLY_SECONDS = 20
+FOLLOW_UP_SECONDS = 10 * 60
+IDLE_CONFIRM_SECONDS = 3.0
+INSTALL_CHECK_SECONDS = 30.0
 
 
 class RefreshError(Exception):
@@ -509,10 +513,11 @@ class Orca:
             raise RefreshError("orca_invalid", "Orca returned unsupported terminal data.")
         return terminals
 
-    def idle(self, handle: str) -> bool:
-        result = run([*self.command, "terminal", "wait", "--terminal", handle, "--for", "tui-idle", "--timeout-ms", "500", "--json"], timeout=15, check=False)
+    @staticmethod
+    def wait_result(stdout: str) -> bool:
+        """Read an idle wait: True when satisfied, False when it timed out, an error for anything else."""
         try:
-            payload = json.loads(result.stdout)
+            payload = json.loads(stdout)
         except json.JSONDecodeError as error:
             raise RefreshError("invalid_json", "Orca returned unreadable JSON for a wait.") from error
         if isinstance(payload, dict) and payload.get("ok") is False:
@@ -522,6 +527,27 @@ class Orca:
             raise RefreshError("orca_rejected", "Orca could not report whether the terminal is idle.")
         wait = payload.get("result", {}).get("wait") if isinstance(payload, dict) else None
         return isinstance(wait, dict) and wait.get("satisfied") is True
+
+    def idle(self, handle: str) -> bool:
+        result = run([*self.command, "terminal", "wait", "--terminal", handle, "--for", "tui-idle", "--timeout-ms", "500", "--json"], timeout=15, check=False)
+        return self.wait_result(result.stdout)
+
+    def wait_idle(self, handle: str, timeout_ms: float, track: Callable[[subprocess.Popen], None] | None = None) -> bool:
+        """Block until Orca reports the agent idle, which acts as the completion callback; False when the wait times out."""
+        argv = [*self.command, "terminal", "wait", "--terminal", handle, "--for", "tui-idle", "--timeout-ms", str(max(1, int(timeout_ms))), "--json"]
+        try:
+            process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        except OSError as error:
+            raise RefreshError("orca_wait_failed", "Orca could not start an idle wait.") from error
+        if track:
+            track(process)
+        try:
+            stdout, _ = process.communicate(timeout=timeout_ms / 1000 + 30)
+        except subprocess.TimeoutExpired as error:
+            process.kill()
+            process.communicate()
+            raise RefreshError("orca_wait_hung", "Orca did not finish an idle wait.") from error
+        return self.wait_result(stdout)
 
     def screen(self, handle: str) -> tuple[list[str], object]:
         terminal = self.call("terminal", "read", "--terminal", handle, "--screen").get("terminal")
@@ -916,13 +942,16 @@ def step(orca: Orca, entry: dict, target: dict, live: dict[str, dict]) -> None:
     entry["status"] = "sent"
 
 
-def drive(orca: Orca, sessions: list[dict], state: dict, deadline: float, sleep: Callable[[float], None] = time.sleep) -> None:
-    """Send commands until `deadline`, then stop starting new ones and keep verifying the ones already sent."""
+def drive(orca: Orca, sessions: list[dict], state: dict, deadline: float, sleep: Callable[[float], None] = time.sleep, expire: str = "skipped") -> None:
+    """Send commands until `deadline`, then stop starting new ones and keep verifying the ones already sent.
+
+    A session still pending at the deadline takes the `expire` status: `skipped`, or `deferred` for the helper.
+    """
     while True:
         if time.time() >= deadline:
             for entry in sessions:
                 if entry["status"] == "pending":
-                    entry.update(status="skipped", detail=entry.get("detail") or "deadline_reached")
+                    entry.update(status=expire, detail=entry.get("detail") or "deadline_reached")
         active = [entry for entry in sessions if entry["status"] in {"pending", "sent"}]
         if not active:
             return
@@ -935,13 +964,160 @@ def drive(orca: Orca, sessions: list[dict], state: dict, deadline: float, sleep:
                 entry["detail"] = "terminal_list_unavailable"
                 continue
             if entry["status"] == "pending" and time.time() >= deadline:
-                entry.update(status="skipped", detail=entry.get("detail") or "deadline_reached")
+                entry.update(status=expire, detail=entry.get("detail") or "deadline_reached")
                 continue
             try:
                 step(orca, entry, state["hosts"][entry["host"]], live)
             except RefreshError as error:
                 entry.update(status="failed", detail=error.code, actions=[])
         sleep(POLL_SECONDS)
+
+
+class IdleWaiters:
+    """One background Orca idle wait per busy session; the helper acts when a wait reports the session idle."""
+
+    def __init__(self, orca: Orca) -> None:
+        self.orca = orca
+        self.lock = threading.Lock()
+        self.results: dict[str, bool] = {}
+        self.threads: dict[str, threading.Thread] = {}
+        self.failed: set[str] = set()
+        self.processes: list[subprocess.Popen] = []
+        self.stopping = False
+
+    def track(self, process: subprocess.Popen) -> None:
+        with self.lock:
+            self.processes.append(process)
+            stopping = self.stopping
+        if stopping:
+            self.end(process)
+
+    @staticmethod
+    def end(process: subprocess.Popen) -> None:
+        if process.poll() is None:
+            process.kill()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+
+    def start(self, handle: str, deadline: float) -> None:
+        if self.stopping or self.waiting(handle):
+            return
+
+        def wait() -> None:
+            try:
+                idle = self.orca.wait_idle(handle, max(1.0, deadline - time.time()) * 1000, self.track)
+            except (RefreshError, OSError):
+                with self.lock:
+                    self.failed.add(handle)
+                return
+            with self.lock:
+                self.results[handle] = idle
+
+        with self.lock:
+            self.results.pop(handle, None)
+        thread = threading.Thread(target=wait, daemon=True)
+        self.threads[handle] = thread
+        thread.start()
+
+    def waiting(self, handle: str) -> bool:
+        thread = self.threads.get(handle)
+        return bool(thread and thread.is_alive())
+
+    def take(self, handle: str) -> bool | None:
+        with self.lock:
+            return self.results.pop(handle, None)
+
+    def stop(self) -> None:
+        """Kill every Orca wait, including one registered while stopping, so the helper leaves no child process behind."""
+        with self.lock:
+            self.stopping = True
+            processes = list(self.processes)
+        for process in processes:
+            self.end(process)
+        for thread in list(self.threads.values()):
+            thread.join(timeout=5)
+
+
+def install_current(host: str, target: dict, cache: dict[str, tuple[float, bool]]) -> bool:
+    """True while the installed plugin still matches the run's target; rechecked at most every INSTALL_CHECK_SECONDS."""
+    checked = cache.get(host)
+    if checked and time.time() - checked[0] < INSTALL_CHECK_SECONDS:
+        return checked[1]
+    try:
+        current = installed(host)
+        snapshot = validate_install(host, current)
+        same = current["root"] == target.get("root") and snapshot["digest"] == target.get("digest")
+    except RefreshError:
+        same = False
+    cache[host] = (time.time(), same)
+    return same
+
+
+def still_needed(entry: dict, state: dict, cache: dict[str, tuple[float, bool]]) -> None:
+    """Before a deferred send, stop on a changed install and drop actions the session no longer needs."""
+    host = entry["host"]
+    target = state["hosts"][host]
+    if not install_current(host, target, cache):
+        entry.update(status="skipped", detail="install_changed", actions=[])
+        return
+    marker = read_marker(entry["handle"])
+    written = parse_time((marker or {}).get("written_at")) or 0.0
+    if marker and written >= entry.get("deferred_at", float("inf")) and compact_reason(host, marker, target, "auto") is None:
+        entry.update(status="done", detail="already_current", actions=[])
+        return
+    if "compact" in entry["actions"] and compact_reason(host, marker, target, state.get("compact_mode", "auto")) is None:
+        entry["actions"].remove("compact")
+    if not entry["actions"]:
+        entry.update(status="done", detail="already_current")
+
+
+def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[float], None] = time.sleep, waiters: IdleWaiters | None = None) -> None:
+    """Apply deferred sessions when Orca reports them idle, each before its own deadline, then end every wait."""
+    waiters = waiters or IdleWaiters(orca)
+    cache: dict[str, tuple[float, bool]] = {}
+    try:
+        while True:
+            active = [entry for entry in entries if entry["status"] in {"pending", "sent"}]
+            if not active:
+                return
+            try:
+                live = {item.get("handle"): item for item in orca.terminals()}
+            except RefreshError:
+                live = None
+            for entry in active:
+                if entry["status"] == "pending":
+                    if time.time() >= entry["deadline"]:
+                        busy = entry.get("detail") in (None, "busy", "waiting_for_idle", "deadline_reached")
+                        entry.update(status="skipped", detail="not_idle_before_deadline" if busy else entry["detail"], actions=[])
+                        continue
+                    if live is None:
+                        entry["detail"] = "terminal_list_unavailable"
+                        continue
+                    handle = entry["handle"]
+                    if handle not in waiters.failed and entry.get("detail") in ("busy", "waiting_for_idle", "deadline_reached"):
+                        idle = waiters.take(handle)
+                        if idle is None:
+                            waiters.start(handle, entry["deadline"])
+                            entry["detail"] = "waiting_for_idle"
+                            continue
+                        if not idle:
+                            continue
+                        sleep(IDLE_CONFIRM_SECONDS)
+                    still_needed(entry, state, cache)
+                    if entry["status"] != "pending":
+                        continue
+                    if time.time() >= entry["deadline"]:
+                        entry.update(status="skipped", detail="not_idle_before_deadline", actions=[])
+                        continue
+                try:
+                    step(orca, entry, state["hosts"][entry["host"]], live)
+                except RefreshError as error:
+                    entry.update(status="failed", detail=error.code, actions=[])
+            sleep(POLL_SECONDS)
+    finally:
+        waiters.stop()
 
 
 def public(entry: dict) -> dict:
@@ -991,6 +1167,10 @@ def handled(state: dict, handle: str) -> str | None:
         own = state.get("self") or {}
         if own.get("handle") == handle and (alive(own.get("helper_pid")) or state.get("self_finished_at")):
             return status
+    if status == "deferred":
+        helper = state.get("helper") or {}
+        if any(item.get("handle") == handle for item in state.get("follow_up", [])) and (alive(helper.get("pid")) or state.get("helper_finished_at")):
+            return status
     return None
 
 
@@ -1002,29 +1182,55 @@ def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spa
         for entry in sessions:
             previous = handled(state, entry["handle"])
             if previous:
-                entry.update(status=previous, detail="already_handled_in_this_run", actions=[])
-        others = [entry for entry in sessions if not entry["initiator"]]
-        drive(orca, others, state, time.time() + seconds)
+                entry.update(status=previous, detail="already_handled_in_this_run", actions=[], handled=True)
+        others = [entry for entry in sessions if not entry["initiator"] and not entry.get("handled")]
+        drive(orca, others, state, time.time() + seconds, expire="deferred")
         own = next((entry for entry in sessions if entry["initiator"] and entry["status"] == "pending"), None)
-        if own:
-            try:
-                pid = spawn(run_id)
-            except OSError:
-                own.update(status="failed", detail="helper_start_failed", actions=[])
+        deferred = [entry for entry in others if entry["status"] == "deferred"]
+        helper = state.get("helper") or {}
+        helper_waiting = alive(helper.get("pid")) and not state.get("helper_finished_at")
+        initiator = next((entry for entry in sessions if entry["initiator"]), None)
+        state["initiator"] = {"handle": initiator["handle"], "host": initiator["host"]} if initiator else None
+        state["compact_mode"] = mode
+        if own or deferred:
+            handed = time.time()
+            items = [
+                {key: entry.get(key) for key in ("handle", "host", "actions", "title", "worktree", "compact_reason", "detail")} | {"deferred_at": handed}
+                for entry in deferred
+            ]
+            handed_off = True
+            if helper_waiting:
+                pid = helper["pid"]
+                state["follow_up"] = [*state.get("follow_up", []), *items]
             else:
+                try:
+                    pid = spawn(run_id)
+                except OSError:
+                    handed_off = False
+                    if own:
+                        own.update(status="failed", detail="helper_start_failed", actions=[])
+                    for entry in deferred:
+                        entry.update(status="skipped", detail="helper_start_failed", actions=[])
+                else:
+                    state["helper"] = {"pid": pid, "started_at": now()}
+                    state.pop("helper_finished_at", None)
+                    state["follow_up"] = items
+                    if not own:
+                        state.pop("self", None)
+            if handed_off and own:
                 own.update(status="queued_after_turn", detail="waits_for_this_turn_to_end")
                 state["self"] = {key: own[key] for key in ("handle", "host", "actions", "title", "worktree")}
-                state["self"].update(compact_reason=own.get("compact_reason"), helper_pid=pid, helper_started_at=now())
+                state["self"].update(compact_reason=own.get("compact_reason"), helper_pid=pid, helper_started_at=now(), deferred_at=handed)
                 state.pop("self_finished_at", None)
         state["sessions"] = {**state.get("sessions", {}), **{entry["handle"]: public(entry) for entry in sessions}}
         state["applied_at"] = now()
         save_json(run_path(run_id), state)
     summary = {status: sum(1 for entry in sessions if entry["status"] == status) for status in {entry["status"] for entry in sessions}}
-    return {"ok": all(entry["status"] in {"done", "queued_after_turn"} for entry in sessions), "run_id": run_id, "summary": summary, "sessions": [public(entry) for entry in sessions]}
+    return {"ok": all(entry["status"] in {"done", "queued_after_turn", "deferred"} for entry in sessions), "run_id": run_id, "summary": summary, "sessions": [public(entry) for entry in sessions]}
 
 
 def notify(orca: Orca, entry: dict, run_id: str, sleep: Callable[[float], None]) -> str:
-    message = f"Plugin refresh run {run_id} finished for this session. Run `{status_command(run_id)}` and report the result."
+    message = f"Plugin refresh run {run_id} finished. Run `{status_command(run_id)}` and report every session, including any that were not refreshed."
     notice = {"handle": entry["handle"], "host": entry["host"]}
     deadline = time.time() + NOTIFY_SECONDS
     reason: str | None = "not_attempted"
@@ -1043,21 +1249,41 @@ def notify(orca: Orca, entry: dict, run_id: str, sleep: Callable[[float], None])
     return f"not_sent:{reason}"
 
 
-def command_self_apply(run_id: str, sleep: Callable[[float], None] = time.sleep) -> int:
+def command_self_apply(run_id: str, sleep: Callable[[float], None] = time.sleep, waiters: IdleWaiters | None = None) -> int:
+    """The one detached helper: finish deferred sessions and this session, then send one result notice and exit."""
     with exclusive("sessions", wait_seconds=SELF_WAIT_SECONDS):
         state = load_run(run_id)
         own = state.get("self")
-        if not isinstance(own, dict):
+        follow = [item for item in state.get("follow_up", []) if isinstance(item, dict)]
+        if not isinstance(own, dict) and not follow:
             return 0
-        entry = {**own, "actions": list(own["actions"]), "status": "pending", "initiator": True, "detail": None}
+        start = time.time()
+        entries = [
+            {**item, "actions": list(item["actions"]), "status": "pending", "initiator": False,
+             "detail": item.get("detail") or "busy", "deadline": item.get("deferred_at", start) + FOLLOW_UP_SECONDS}
+            for item in follow
+        ]
+        own_entry = None
+        if isinstance(own, dict):
+            own_entry = {**own, "actions": list(own["actions"]), "status": "pending", "initiator": True, "detail": None, "deadline": start + SELF_WAIT_SECONDS}
+            entries.append(own_entry)
         orca = Orca()
-        drive(orca, [entry], state, time.time() + SELF_WAIT_SECONDS, sleep=sleep)
+        follow_up(orca, entries, state, sleep=sleep, waiters=waiters)
         state = load_run(run_id)
-        state["sessions"][entry["handle"]] = public(entry)
-        state["self_finished_at"] = now()
+        for entry in entries:
+            state["sessions"][entry["handle"]] = public(entry)
+        finished = now()
+        state["helper_finished_at"] = finished
+        if own_entry:
+            state["self_finished_at"] = finished
         state["self_notification"] = "pending"
         save_json(run_path(run_id), state)
-        notification = notify(orca, entry, run_id, sleep) if entry["status"] in {"done", "failed"} else "not_sent:session_skipped"
+        if own_entry:
+            notification = notify(orca, own_entry, run_id, sleep) if own_entry["status"] in {"done", "failed"} else "not_sent:session_skipped"
+        elif isinstance(state.get("initiator"), dict):
+            notification = notify(orca, dict(state["initiator"]), run_id, sleep)
+        else:
+            notification = "not_sent:no_orca_initiator"
         state = load_run(run_id)
         state["self_notification"] = notification
         save_json(run_path(run_id), state)
@@ -1076,6 +1302,8 @@ def command_status(run_id: str) -> dict:
         "run_id": run_id,
         "hosts": state.get("hosts"),
         "sessions": list(state.get("sessions", {}).values()),
+        "not_refreshed": [item for item in state.get("sessions", {}).values() if item.get("status") in {"skipped", "failed", "blocked"}],
+        "helper_finished_at": state.get("helper_finished_at"),
         "self_finished_at": state.get("self_finished_at"),
         "self_notification": state.get("self_notification"),
     }
@@ -1111,7 +1339,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "plan":
             output = command_plan(args.run_id, args.compact, args.terminal)
         elif args.command == "apply":
-            output = command_apply(args.run_id, args.compact, args.terminal, max(30, args.timeout_seconds))
+            output = command_apply(args.run_id, args.compact, args.terminal, max(5, args.timeout_seconds))
         else:
             output = command_status(args.run_id)
     except RefreshError as error:
