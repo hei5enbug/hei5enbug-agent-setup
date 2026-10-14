@@ -1248,6 +1248,8 @@ def translate_messages_request(body: Mapping[str, Any], profile_id: str) -> dict
 
     output_config = body.get("output_config")
     effort = output_config.get("effort") if isinstance(output_config, dict) else None
+    if body["model"] == "gpt-5.6-luna":
+        effort = "xhigh"
     request: dict[str, Any] = {
         "protocol_version": helper.PROTOCOL_VERSION,
         "request_id": uuid.uuid4().hex,

@@ -21,16 +21,16 @@ session resume, apply its effective-settings checks before dispatch.
 
 - Use the `scout` agent for bounded, read-only investigation whenever the session delegation rule selects it,
   during planning or execution.
-- Pass `gpt-6-luna` and `xhigh` explicitly on every spawn. Its bundled role file sets no model, so the spawn
+- Pass `gpt-5.6-luna` and `xhigh` explicitly on every spawn. Its bundled role file sets no model, so the spawn
   value applies.
 - Give it one specific question and a narrow search scope.
 - Require file paths, code symbols, and concrete evidence in its result.
 - Treat results as leads. Verify critical claims in the main session before planning or deciding.
 - If `scout` is unavailable, or its role file in the Codex agents directory sets another model or effort,
   investigate in the main session.
-- For bounded public research, use `researcher` only when public search and fetch tools are exposed. Pass `gpt-6-luna`
+- For bounded public research, use `researcher` only when public search and fetch tools are exposed. Pass `gpt-5.6-luna`
   and `xhigh` explicitly on every researcher spawn; its role file sets no model. Before relying on its result, inspect
-  the non-secret researcher role/config settings and verify the host rollout record reports `gpt-6-luna` and `xhigh`.
+  the non-secret researcher role/config settings and verify the host rollout record reports `gpt-5.6-luna` and `xhigh`.
   Otherwise, continue in the main session.
 
 ## Skill workers
@@ -58,13 +58,13 @@ Coordinate implementation under [implementation execution rules](implementation-
 adds only the Codex worker integration.
 
 - When delegating implementation, use only the plugin `worker` role. Its role file sets no model, so pass the pinned
-  `gpt-6-luna` and `xhigh` explicitly on every spawn.
+  `gpt-5.6-luna` and `xhigh` explicitly on every spawn.
 - Full-history forks inherit the parent model and effort and reject overrides. Never spawn a worker that way;
   set `fork_turns` to `"none"` or a positive integer, or leave `fork_context` off, and put the bounded task
   context in the assignment.
 - Before the first spawn in a run, inspect only the `model`, `model_reasoning_effort`, and relevant `[agents]`
   default fields of the configuration layers, including the `worker` role file in the personal or project Codex
-  agents directory. That file may override spawn values; it must still resolve to `gpt-6-luna` and `xhigh`.
+  agents directory. That file may override spawn values; it must still resolve to `gpt-5.6-luna` and `xhigh`.
 - Never overwrite an existing `~/.codex/agents/worker.toml` or `.codex/agents/worker.toml`, and never change
   global model defaults.
 - Accept the explicit spawn arguments plus the worker's rollout record as evidence. Find the record in the

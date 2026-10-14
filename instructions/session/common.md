@@ -35,11 +35,11 @@ the independent model validation rules below after approval; otherwise read them
 
 ## Clarification
 
-When an ambiguity or a conflict with existing logic or files would change the result, ask as soon as it is found:
-stop edits and external changes, read only what the question needs, and explain it concisely in basic development
-terms for a newcomer. Ask with the host's question tool (Claude Code `AskUserQuestion`, Codex
-`request_user_input`), or in plain text and end the turn when none exists. Use ASCII diagrams, order options by
-recommendation, and allow free text. Continue with the answer; a skill's own ask or stop rules still apply.
+On a result-changing ambiguity or conflict, stop edits and external changes, read only what is needed, and
+ask one concise question. Use a tool only if host rules permit required, blocking questions; otherwise
+ask in the final response and end the turn. Never use async questions for required decisions. Resume only
+on an explicit user answer. Silence, elapsed time, empty or automatic answers, and defaults are not answers.
+Follow host formatting and a skill's own ask or stop rules.
 
 ## Conditional instructions
 

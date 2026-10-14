@@ -29,7 +29,7 @@ def _schema() -> dict:
 
 def _anthropic_request(**overrides) -> dict:
     request = {
-        "model": "gpt-6-luna", "max_tokens": 512,
+        "model": "gpt-5.6-luna", "max_tokens": 512,
         "system": "System instruction.",
         "messages": [{"role": "user", "content": "Please answer."}],
     }
@@ -44,7 +44,7 @@ def _sse(*events: dict) -> bytes:
     )
 
 
-def _completion(output=None, *, text: str | None = None, model="gpt-6-luna", status="completed") -> dict:
+def _completion(output=None, *, text: str | None = None, model="gpt-5.6-luna", status="completed") -> dict:
     items = output if output is not None else []
     if text is not None and output is None:
         items = [{"id": "msg-provider", "type": "message", "role": "assistant",
@@ -153,6 +153,21 @@ class GatewayTest(unittest.TestCase):
             self.profile_id, "test-secret", store=self.store,
             openai_http_factory=provider_factory, logger=kwargs.pop("logger", FakeLog()), **kwargs,
         )
+
+    def test_Luna의_누락되거나_다른_추론_강도를_xhigh로_고정한다(self):
+        """게이트웨이는 Luna 요청의 기존 추론 강도와 관계없이 xhigh로 공급자 요청을 만든다."""
+        # Given
+        requests = [_anthropic_request(output_config={"effort": effort})
+                    for effort in (None, "low", "medium", "high", "xhigh", "max")]
+        requests.append(_anthropic_request())
+
+        # When
+        payloads = [helper.build_responses_payload(gateway.translate_messages_request(request, self.profile_id),
+                                                   subscription=False)[0] for request in requests]
+
+        # Then
+        self.assertEqual(["gpt-5.6-luna"] * 7, [payload["model"] for payload in payloads])
+        self.assertEqual([{"effort": "xhigh"}] * 7, [payload["reasoning"] for payload in payloads])
 
     def _post(self, app, request=None, *, sink=None, target="/test-secret/v1/messages", cancel_event=None):
         sink = sink or CaptureSink()
@@ -288,7 +303,7 @@ class GatewayTest(unittest.TestCase):
 
     def test_effort이_없으면_helper가_reasoning을_요청하지_않는다(self):
         # Given
-        request = _anthropic_request()
+        request = _anthropic_request(model="gpt-6.1-sol")
 
         # When
         translated = gateway.translate_messages_request(request, self.profile_id)

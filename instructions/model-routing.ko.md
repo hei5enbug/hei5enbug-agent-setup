@@ -26,13 +26,18 @@ researcher는 주장, 공개 URL이나 파일 위치, 뒷받침하는 근거, �
 
 ## 역할 설정 유지
 
+GPT Luna는 `gpt-5.6-luna`와 `xhigh`로 명시적으로 고정한다. 저장된 기본값이나 재개를 포함해 다른 Luna
+버전이나 추론 강도를 선택하지 않는다. 호스트에서 이 설정을 확인할 수 없으면 해당 위임을 중지하고
+지정된 다른 모델 계열의 fallback이나 메인 세션을 사용한다. 최신 릴리스 자동 갱신에서도 이 사용자
+지정 고정값을 제외한다.
+
 별도로 승인된 비교 결과가 한정된 범위의 변경을 정당화하지 않는 한 다음 운영 설정을 사용한다.
 
 | 역할 | Codex | Claude Code |
 |---|---|---|
-| 로컬 scout | `gpt-6-luna`, `xhigh` | 읽기 전용 `role_runner.py scout`로 `gpt-6-luna`, `xhigh`. 대체 경로는 `scout`(`claude-sonnet-5-5`, `medium`) |
-| 구현 worker | `gpt-6-luna`, `xhigh` | 기본(`implementation_worker`가 `sonnet`)은 `claude-sonnet-5-5`, `high` `sonnet-worker`; `codex`일 때나 요청했을 때는 `role_runner.py worker`와 `gpt-6-luna`, `xhigh`; `haiku`일 때, 요청했을 때, 또는 실행기 대체 경로로는 `claude-haiku-5-5`, `high` `worker` |
-| 공개 researcher | `gpt-6-luna`, `xhigh` | 웹 검색을 쓰는 `role_runner.py researcher`로 `gpt-6-luna`, `xhigh`. 대체 경로는 `researcher`(`claude-haiku-5-5`, `medium`) |
+| 로컬 scout | `gpt-5.6-luna`, `xhigh` | 읽기 전용 `role_runner.py scout`로 `gpt-5.6-luna`, `xhigh`. 대체 경로는 `scout`(`claude-sonnet-5-5`, `medium`) |
+| 구현 worker | `gpt-5.6-luna`, `xhigh` | 기본(`implementation_worker`가 `sonnet`)은 `claude-sonnet-5-5`, `high` `sonnet-worker`; `codex`일 때나 요청했을 때는 `role_runner.py worker`와 `gpt-5.6-luna`, `xhigh`; `haiku`일 때, 요청했을 때, 또는 실행기 대체 경로로는 `claude-haiku-5-5`, `high` `worker` |
+| 공개 researcher | `gpt-5.6-luna`, `xhigh` | 웹 검색을 쓰는 `role_runner.py researcher`로 `gpt-5.6-luna`, `xhigh`. 대체 경로는 `researcher`(`claude-haiku-5-5`, `medium`) |
 | Designer | `claude -p`로 `claude-opus-5-5`, `xhigh`. Claude를 쓸 수 없으면 `designer` 역할로 `gpt-6-astra`, `xhigh` | `claude-opus-5-5`, `xhigh` |
 | Skill Builder 시험 실행 및 기타 비검토 참여자 | `gpt-6.1-sol`, `xhigh` | `claude-opus-5-5`, `high` |
 | 스킬 검토 역할(검토 페르소나, grader, comparator, analyzer) | `claude -p`로 `claude-opus-5-5`, `high`; 대체는 `gpt-6.1-sol`, `xhigh` `reviewer` | `role_runner.py reviewer`로 `review_model` 설정값(기본 `gpt-6-astra`), `xhigh`; 대체는 `claude-opus-5-5`, `high` `reviewer` |

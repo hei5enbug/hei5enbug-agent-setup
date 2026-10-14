@@ -50,8 +50,8 @@ def _request(profile_id: str, *, history: list[dict] | None = None, tools: list[
         "session_id": session_id,
         "turn_id": "turn-test",
         "step_id": step_id,
-        "model": "gpt-6-luna",
-        "effort": "high",
+        "model": "gpt-5.6-luna",
+        "effort": "xhigh",
         "profile_id": profile_id,
         "system": "System policy.",
         "developer": ["Developer policy."],
@@ -197,6 +197,7 @@ class ClaudeGptTest(unittest.TestCase):
             "anyOf": [{"properties": {"file_path": {"pattern": "^[a-z]"}}}],
         }
         request = _request(profile_id, tools=[{"name": "Read", "description": "Read.", "input_schema": schema}])
+        request["model"] = "gpt-6.1-sol"
         request["effort"] = None
         request["tool_choice"] = {"type": "function", "name": "Read"}
 
@@ -211,6 +212,42 @@ class ClaudeGptTest(unittest.TestCase):
         self.assertNotIn("reasoning", payload)
         self.assertEqual(request["tool_choice"], payload["tool_choice"])
         self.assertEqual(schema, payload["tools"][0]["tools"][0]["parameters"])
+
+    def test_Luna는_고정_모델과_xhigh를_Responses_요청에_전달한다(self):
+        """허용된 Luna 요청에는 사용자 지정 모델과 xhigh가 그대로 전달된다."""
+        # Given
+        request = _request("p_" + "e" * 32)
+
+        # When
+        payload, _ = claude_gpt.build_responses_payload(request, subscription=False)
+
+        # Then
+        self.assertEqual("gpt-5.6-luna", payload["model"])
+        self.assertEqual({"effort": "xhigh"}, payload["reasoning"])
+
+    def test_다른_Luna_버전과_추론_강도는_인증과_공급자_접근_전에_거부한다(self):
+        """다른 Luna 버전이나 xhigh 이외의 추론 강도는 프로필과 네트워크를 읽기 전에 거부된다."""
+        # Given
+        requests = []
+        for model, effort in [("gpt-6-luna", "xhigh"), *[("gpt-5.6-luna", e) for e in (None, "low", "medium", "high", "max")]]:
+            request = _request("p_" + "e" * 32)
+            request.update(model=model, effort=effort)
+            requests.append(request)
+        http = FakeHttp()
+        errors = []
+
+        # When
+        for request in requests:
+            try:
+                claude_gpt.execute_request(self.store, http, request)
+            except claude_gpt.ClaudeGptError as error:
+                errors.append(error.code)
+
+        # Then
+        self.assertEqual(["unsupported_model", *["unsupported_effort"] * 5], errors)
+        self.assertEqual([], http.json_calls)
+        self.assertEqual([], http.open_calls)
+        self.assertFalse(self.store.root.exists())
 
     def test_스키마가_이해하지_않는_키워드는_위임하고_기본값과_boolean_스키마를_적용한다(self):
         # Given
@@ -481,7 +518,7 @@ class ClaudeGptTest(unittest.TestCase):
         first_http = FakeHttp(stream=_sse(
             {"type": "response.output_text.delta", "delta": "도구를 호출합니다."},
             {"type": "response.completed", "response": {
-                "id": "resp-one", "status": "completed", "model": "gpt-6-luna",
+                "id": "resp-one", "status": "completed", "model": "gpt-5.6-luna",
                 "output": [
                     {"id": "rs-one", "type": "reasoning", "summary": [{"type": "summary_text", "text": "provider-only"}]},
                     {"type": "function_call", "call_id": "call-one", "namespace": "claude", "name": "Read",
@@ -535,7 +572,7 @@ class ClaudeGptTest(unittest.TestCase):
             {"type": "response.output_text.delta", "delta": "완료했습니다."},
             {
             "type": "response.completed", "response": {
-                "id": "resp-two", "status": "completed", "model": "gpt-6-luna",
+                "id": "resp-two", "status": "completed", "model": "gpt-5.6-luna",
                 "output": [{"id": "msg-two", "type": "message", "content": [{"type": "output_text", "text": "완료했습니다."}]}],
                 "usage": {"input_tokens": 27, "input_tokens_details": {"cached_tokens": 0},
                           "output_tokens": 5, "output_tokens_details": {"reasoning_tokens": 1}},
@@ -565,7 +602,7 @@ class ClaudeGptTest(unittest.TestCase):
         api = claude_gpt.create_api_key_profile(self.store, "sk-test-failure", confirmed_usage_billing=True)
         bad_response = {
             "type": "response.completed", "response": {
-                "id": "resp-bad", "status": "completed", "model": "gpt-6-luna",
+                "id": "resp-bad", "status": "completed", "model": "gpt-5.6-luna",
                 "output": [{"type": "function_call", "call_id": "call-unknown", "namespace": "claude",
                             "name": "Bash", "arguments": "{\"command\":\"true\"}"}],
                 "usage": {"input_tokens": 1, "input_tokens_details": {"cached_tokens": 0},
@@ -589,7 +626,7 @@ class ClaudeGptTest(unittest.TestCase):
     def test_스트림_불일치_오류는_민감_본문_없이_완료_usage와_진단_숫자를_보존한다(self):
         # Given
         response = {"type": "response.completed", "response": {
-            "id": "resp-diagnostic-mismatch", "status": "completed", "model": "gpt-6-luna",
+            "id": "resp-diagnostic-mismatch", "status": "completed", "model": "gpt-5.6-luna",
             "reasoning": {"effort": "high"},
             "output": [{"id": "msg-diagnostic", "type": "message", "content": [
                 {"type": "output_text", "text": "abY"},
@@ -619,7 +656,7 @@ class ClaudeGptTest(unittest.TestCase):
         # When
         with self.assertRaises(claude_gpt.ClaudeGptError) as raised:
             claude_gpt.stream_responses(
-                http, payload={}, api_key="sk-offline-only", expected_model="gpt-6-luna",
+                http, payload={}, api_key="sk-offline-only", expected_model="gpt-5.6-luna",
                 requested_effort="high", tool_schemas={"Read": _schema()}, prior_call_ids=set(),
                 stream_out=output,
             )
@@ -628,7 +665,7 @@ class ClaudeGptTest(unittest.TestCase):
         # Then
         self.assertEqual("stream_mismatch", raised.exception.code)
         self.assertEqual({
-            "model": "gpt-6-luna",
+            "model": "gpt-5.6-luna",
             "usage": {"input_tokens": 7, "cached_input_tokens": 2,
                       "output_tokens": 4, "reasoning_tokens": 1},
             "provider_reported_effort": "high",
@@ -677,7 +714,7 @@ class ClaudeGptTest(unittest.TestCase):
             "status": "completed", "content": [{"type": "output_text", "text": "안녕하세요"}],
         }
         response = {"type": "response.completed", "response": {
-            "id": "resp-sparse-text", "status": "completed", "model": "gpt-6-luna",
+            "id": "resp-sparse-text", "status": "completed", "model": "gpt-5.6-luna",
             "output": [], "usage": {"input_tokens": 1, "output_tokens": 2},
         }}
         http = FakeHttp(stream=_sse(
@@ -692,7 +729,7 @@ class ClaudeGptTest(unittest.TestCase):
 
         # When
         result = claude_gpt.stream_responses(
-            http, payload={}, api_key="sk-offline-only", expected_model="gpt-6-luna",
+            http, payload={}, api_key="sk-offline-only", expected_model="gpt-5.6-luna",
             requested_effort=None, tool_schemas={"Read": _schema()}, prior_call_ids=set(), stream_out=output,
         )
 
@@ -712,7 +749,7 @@ class ClaudeGptTest(unittest.TestCase):
             "arguments": '{"file_path":"x.txt"}',
         }
         response = {"type": "response.completed", "response": {
-            "id": "resp-sparse-tool", "status": "completed", "model": "gpt-6-luna",
+            "id": "resp-sparse-tool", "status": "completed", "model": "gpt-5.6-luna",
             "output": [], "usage": {"input_tokens": 1, "output_tokens": 0},
         }}
         encoded = _sse(
@@ -737,7 +774,7 @@ class ClaudeGptTest(unittest.TestCase):
 
         # When
         result = claude_gpt.stream_responses(
-            http, payload={}, api_key="sk-offline-only", expected_model="gpt-6-luna",
+            http, payload={}, api_key="sk-offline-only", expected_model="gpt-5.6-luna",
             requested_effort=None, tool_schemas={"Read": _schema()}, prior_call_ids=set(),
             store_state=save_at_eof, stream_out=output,
         )
@@ -764,7 +801,7 @@ class ClaudeGptTest(unittest.TestCase):
                     "item": {"id": item_id, "type": item_type, **fields}}
 
         completion = {"type": "response.completed", "response": {
-            "id": "resp-invalid-sparse", "status": "completed", "model": "gpt-6-luna",
+            "id": "resp-invalid-sparse", "status": "completed", "model": "gpt-5.6-luna",
             "output": [], "usage": {"input_tokens": 1, "output_tokens": 0},
         }}
         cases = [
@@ -801,7 +838,7 @@ class ClaudeGptTest(unittest.TestCase):
                 # When
                 with self.assertRaises(claude_gpt.ClaudeGptError) as raised:
                     claude_gpt.stream_responses(
-                        http, payload={}, api_key="sk-offline-only", expected_model="gpt-6-luna",
+                        http, payload={}, api_key="sk-offline-only", expected_model="gpt-5.6-luna",
                         requested_effort=None, tool_schemas={"Read": _schema()}, prior_call_ids=set(),
                         store_state=saved.append, stream_out=output,
                     )
@@ -824,7 +861,7 @@ class ClaudeGptTest(unittest.TestCase):
              "item": {"id": function_call["id"], "type": "function_call"}},
             {"type": "response.output_item.done", "output_index": 0, "item": function_call},
             {"type": "response.completed", "response": {
-                "id": "resp-full-item", "status": "completed", "model": "gpt-6-luna",
+                "id": "resp-full-item", "status": "completed", "model": "gpt-5.6-luna",
                 "output": [function_call], "usage": {"input_tokens": 1, "output_tokens": 0},
             }},
         ))
@@ -833,7 +870,7 @@ class ClaudeGptTest(unittest.TestCase):
 
         # When
         result = claude_gpt.stream_responses(
-            http, payload={}, api_key="sk-offline-only", expected_model="gpt-6-luna",
+            http, payload={}, api_key="sk-offline-only", expected_model="gpt-5.6-luna",
             requested_effort=None, tool_schemas={"Read": _schema()}, prior_call_ids=set(),
             store_state=saved.append, stream_out=output,
         )
@@ -859,7 +896,7 @@ class ClaudeGptTest(unittest.TestCase):
                      "item": {"id": function_call["id"], "type": "function_call"}},
                     {"type": "response.output_item.done", "output_index": 0, "item": function_call},
                     {"type": "response.completed", "response": {
-                        "id": "resp-full-item", "status": "completed", "model": "gpt-6-luna",
+                        "id": "resp-full-item", "status": "completed", "model": "gpt-5.6-luna",
                         "output": [{**function_call, **conflict}],
                         "usage": {"input_tokens": 1, "output_tokens": 0},
                     }},
@@ -870,7 +907,7 @@ class ClaudeGptTest(unittest.TestCase):
                 # When
                 with self.assertRaises(claude_gpt.ClaudeGptError) as raised:
                     claude_gpt.stream_responses(
-                        http, payload={}, api_key="sk-offline-only", expected_model="gpt-6-luna",
+                        http, payload={}, api_key="sk-offline-only", expected_model="gpt-5.6-luna",
                         requested_effort=None, tool_schemas={"Read": _schema()}, prior_call_ids=set(),
                         store_state=saved.append, stream_out=output,
                     )
@@ -888,7 +925,7 @@ class ClaudeGptTest(unittest.TestCase):
             "arguments": '{"file_path":"x.txt"}',
         }
         response = {"type": "response.completed", "response": {
-            "id": "resp-sparse-terminal", "status": "completed", "model": "gpt-6-luna",
+            "id": "resp-sparse-terminal", "status": "completed", "model": "gpt-5.6-luna",
             "output": [], "usage": {"input_tokens": 5, "output_tokens": 1},
         }}
         encoded = _sse(
@@ -911,7 +948,7 @@ class ClaudeGptTest(unittest.TestCase):
         # When
         with self.assertRaises(claude_gpt.ClaudeGptError) as raised:
             claude_gpt.stream_responses(
-                http, payload={}, api_key="sk-offline-only", expected_model="gpt-6-luna",
+                http, payload={}, api_key="sk-offline-only", expected_model="gpt-5.6-luna",
                 requested_effort=None, tool_schemas={"Read": _schema()}, prior_call_ids=set(),
                 store_state=saved.append, stream_out=output,
             )
@@ -932,8 +969,8 @@ class ClaudeGptTest(unittest.TestCase):
         error = claude_gpt.ClaudeGptError(
             "invalid_completion", "safe message",
             provider_usage={
-                "model": "gpt-6-luna",
-                "usage": {"model": "gpt-6-luna", "input_tokens": 3,
+                "model": "gpt-5.6-luna",
+                "usage": {"model": "gpt-5.6-luna", "input_tokens": 3,
                           "cached_input_tokens": 0, "output_tokens": 1, "reasoning_tokens": 0,
                           "credential": secret},
                 "provider_reported_effort": "high", "credential": secret,
@@ -975,11 +1012,11 @@ class ClaudeGptTest(unittest.TestCase):
             "output_tokens": 2, "output_tokens_details": {"reasoning_tokens": 1},
         }
         cases = [
-            ({"model": "gpt-6-luna", "usage": valid_usage,
+            ({"model": "gpt-5.6-luna", "usage": valid_usage,
               "error": {"code": "server_error", "message": "private failure diagnostic"}}, True),
             ({"model": "gpt-6.1-sol", "usage": valid_usage,
               "error": {"code": "server_error"}}, False),
-            ({"model": "gpt-6-luna", "usage": {"input_tokens": "private-diagnostic", "output_tokens": 2},
+            ({"model": "gpt-5.6-luna", "usage": {"input_tokens": "private-diagnostic", "output_tokens": 2},
               "error": {"code": "server_error"}}, False),
         ]
 
@@ -991,7 +1028,7 @@ class ClaudeGptTest(unittest.TestCase):
             with self.subTest(index=index):
                 with self.assertRaises(claude_gpt.ClaudeGptError) as raised:
                     claude_gpt.stream_responses(
-                        http, payload={}, api_key="sk-offline-only", expected_model="gpt-6-luna",
+                        http, payload={}, api_key="sk-offline-only", expected_model="gpt-5.6-luna",
                         requested_effort=None, tool_schemas={"Read": _schema()}, prior_call_ids=set(),
                         stream_out=io.StringIO(),
                     )
@@ -1000,7 +1037,7 @@ class ClaudeGptTest(unittest.TestCase):
         # Then
         for record, expected_usage in records:
             if expected_usage:
-                self.assertEqual("gpt-6-luna", record["provider_usage"]["model"])
+                self.assertEqual("gpt-5.6-luna", record["provider_usage"]["model"])
                 self.assertEqual({"input_tokens": 3, "cached_input_tokens": 1,
                                   "output_tokens": 2, "reasoning_tokens": 1},
                                  record["provider_usage"]["usage"])
@@ -1011,7 +1048,7 @@ class ClaudeGptTest(unittest.TestCase):
     def test_response_completed_뒤의_transport_실패는_완료와_상태를_내보내지_않는다(self):
         # Given
         response = {"type": "response.completed", "response": {
-            "id": "resp-broken-eof", "status": "completed", "model": "gpt-6-luna",
+            "id": "resp-broken-eof", "status": "completed", "model": "gpt-5.6-luna",
             "output": [{"type": "function_call", "call_id": "call-broken-eof", "namespace": "claude",
                         "name": "Read", "arguments": '{"file_path":"a.txt"}'}],
             "usage": {"input_tokens": 1, "output_tokens": 0},
@@ -1030,7 +1067,7 @@ class ClaudeGptTest(unittest.TestCase):
         # When
         with self.assertRaises(claude_gpt.ClaudeGptError) as raised:
             claude_gpt.stream_responses(
-                http, payload={}, api_key="sk-offline-only", expected_model="gpt-6-luna", requested_effort="high",
+                http, payload={}, api_key="sk-offline-only", expected_model="gpt-5.6-luna", requested_effort="high",
                 tool_schemas={"Read": _schema()}, prior_call_ids=set(), store_state=saved.append,
                 stream_out=output,
             )
@@ -1042,7 +1079,7 @@ class ClaudeGptTest(unittest.TestCase):
         self.assertEqual("", output.getvalue())
         self.assertNotIn("private transport detail", str(raised.exception))
         record = claude_gpt.protocol_error(raised.exception)
-        self.assertEqual("gpt-6-luna", record["provider_usage"]["model"])
+        self.assertEqual("gpt-5.6-luna", record["provider_usage"]["model"])
         self.assertEqual({"input_tokens": 1, "cached_input_tokens": 0,
                           "output_tokens": 0, "reasoning_tokens": 0},
                          record["provider_usage"]["usage"])
@@ -1054,7 +1091,7 @@ class ClaudeGptTest(unittest.TestCase):
             with self.subTest(completed=completed):
                 # Given
                 completion = {"type": "response.completed", "response": {
-                    "id": "resp-chunk-cut", "status": "completed", "model": "gpt-6-luna",
+                    "id": "resp-chunk-cut", "status": "completed", "model": "gpt-5.6-luna",
                     "output": [{"type": "function_call", "call_id": "call-chunk-cut", "namespace": "claude",
                                 "name": "Read", "arguments": '{"file_path":"a.txt"}'}],
                     "usage": {"input_tokens": 1, "output_tokens": 0},
@@ -1073,7 +1110,7 @@ class ClaudeGptTest(unittest.TestCase):
                 # When
                 with self.assertRaises(claude_gpt.ClaudeGptError) as raised:
                     claude_gpt.stream_responses(
-                        provider, payload={}, api_key="sk-offline-only", expected_model="gpt-6-luna",
+                        provider, payload={}, api_key="sk-offline-only", expected_model="gpt-5.6-luna",
                         requested_effort=None, tool_schemas={"Read": _schema()}, prior_call_ids=set(),
                         store_state=saved.append, stream_out=output,
                     )
@@ -1104,7 +1141,7 @@ class ClaudeGptTest(unittest.TestCase):
     def test_response_completed_뒤의_추가_event는_완료와_상태를_내보내지_않는다(self):
         # Given
         response = {"type": "response.completed", "response": {
-            "id": "resp-extra-event", "status": "completed", "model": "gpt-6-luna",
+            "id": "resp-extra-event", "status": "completed", "model": "gpt-5.6-luna",
             "output": [], "usage": {"input_tokens": 1, "output_tokens": 0},
         }}
         http = FakeHttp(stream=_sse(response, {"type": "response.output_text.delta", "delta": "late"}))
@@ -1114,7 +1151,7 @@ class ClaudeGptTest(unittest.TestCase):
         # When
         with self.assertRaises(claude_gpt.ClaudeGptError) as raised:
             claude_gpt.stream_responses(
-                http, payload={}, api_key="sk-offline-only", expected_model="gpt-6-luna", requested_effort=None,
+                http, payload={}, api_key="sk-offline-only", expected_model="gpt-5.6-luna", requested_effort=None,
                 tool_schemas={"Read": _schema()}, prior_call_ids=set(), store_state=saved.append,
                 stream_out=output,
             )
@@ -1138,7 +1175,7 @@ class ClaudeGptTest(unittest.TestCase):
         # When
         with self.assertRaises(claude_gpt.ClaudeGptError) as raised:
             claude_gpt.stream_responses(
-                http, payload={}, api_key="sk-offline-only", expected_model="gpt-6-luna", requested_effort=None,
+                http, payload={}, api_key="sk-offline-only", expected_model="gpt-5.6-luna", requested_effort=None,
                 tool_schemas={"Read": _schema()}, prior_call_ids=set(), store_state=saved.append,
                 stream_out=output,
             )
@@ -1416,7 +1453,7 @@ class ClaudeGptTest(unittest.TestCase):
                                               "content": "contents"}]},
         ]
         response = {"type": "response.completed", "response": {
-            "id": "resp-collision", "status": "completed", "model": "gpt-6-luna",
+            "id": "resp-collision", "status": "completed", "model": "gpt-5.6-luna",
             "output": [{"type": "function_call", "call_id": "call-previous", "namespace": "claude",
                         "name": "Read", "arguments": "{\"file_path\":\"b.txt\"}"}],
             "usage": {"input_tokens": 4, "output_tokens": 2},
@@ -1438,7 +1475,7 @@ class ClaudeGptTest(unittest.TestCase):
         # Given
         api = claude_gpt.create_api_key_profile(self.store, "sk-malformed-id", confirmed_usage_billing=True)
         response = {"type": "response.completed", "response": {
-            "id": "resp-malformed", "status": "completed", "model": "gpt-6-luna",
+            "id": "resp-malformed", "status": "completed", "model": "gpt-5.6-luna",
             "output": [{"type": "function_call", "call_id": "../outside", "namespace": "claude",
                         "name": "Read", "arguments": "{\"file_path\":\"a.txt\"}"}],
             "usage": {"input_tokens": 4, "output_tokens": 2},
@@ -1458,7 +1495,7 @@ class ClaudeGptTest(unittest.TestCase):
         # Given
         api = claude_gpt.create_api_key_profile(self.store, "sk-effort-mismatch", confirmed_usage_billing=True)
         response = {"type": "response.completed", "response": {
-            "id": "resp-effort", "status": "completed", "model": "gpt-6-luna",
+            "id": "resp-effort", "status": "completed", "model": "gpt-5.6-luna",
             "reasoning": {"effort": "low"},
             "output": [{"type": "function_call", "call_id": "call-effort", "namespace": "claude",
                         "name": "Read", "arguments": "{\"file_path\":\"a.txt\"}"}],
@@ -1516,7 +1553,7 @@ class ClaudeGptTest(unittest.TestCase):
                                               "content": "contents"}]},
         ]
         response = {"type": "response.completed", "response": {
-            "id": "resp-stale-state", "status": "completed", "model": "gpt-6-luna",
+            "id": "resp-stale-state", "status": "completed", "model": "gpt-5.6-luna",
             "output": [], "usage": {"input_tokens": 1, "output_tokens": 0},
         }}
         http = FakeHttp(stream=_sse(response))
@@ -1549,7 +1586,7 @@ class ClaudeGptTest(unittest.TestCase):
         with self.store.locked():
             self.store.merge_provider_state(api["profile_id"], [unrelated])
         response = {"type": "response.completed", "response": {
-            "id": "resp-unrelated-cache", "status": "completed", "model": "gpt-6-luna",
+            "id": "resp-unrelated-cache", "status": "completed", "model": "gpt-5.6-luna",
             "output": [], "usage": {"input_tokens": 1, "output_tokens": 0},
         }}
         http = FakeHttp(stream=_sse(response))

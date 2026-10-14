@@ -27,7 +27,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         expected = (
             "[implementation execution rules](implementation-execution.md)",
             "When delegating implementation, use only the plugin `worker` role.",
-            "pass the pinned `gpt-6-luna` and `xhigh` explicitly on every spawn",
+            "pass the pinned `gpt-5.6-luna` and `xhigh` explicitly on every spawn",
         )
 
         # When
@@ -66,10 +66,10 @@ class CodexWorkerContractTest(unittest.TestCase):
         section = implementation_section()
 
         # Then
-        self.assertIn("Pass `gpt-6-luna` and `xhigh` explicitly on every spawn.", text)
+        self.assertIn("Pass `gpt-5.6-luna` and `xhigh` explicitly on every spawn.", text)
         for lookup in ("developers.openai.com", "learn.chatgpt.com", "model selector"):
             self.assertNotIn(lookup, section)
-        self.assertEqual({"gpt-6-luna", "gpt-6-astra", "gpt-6.1-sol"}, set(re.findall(r"gpt-[\w.-]+", text)))
+        self.assertEqual({"gpt-5.6-luna", "gpt-6-astra", "gpt-6.1-sol"}, set(re.findall(r"gpt-[\w.-]+", text)))
 
     def test_전체_기록_fork로는_worker를_만들지_않는다(self):
         """전체 기록 fork는 재정의를 거부하므로 범위를 한정한 맥락으로 worker를 생성한다."""
@@ -95,7 +95,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         # Then
         self.assertIn("inspect only the `model`, `model_reasoning_effort`, and relevant `[agents]`", section)
         self.assertIn("including the `worker` role file in the personal or project Codex agents directory", section)
-        self.assertIn("it must still resolve to `gpt-6-luna` and `xhigh`", section)
+        self.assertIn("it must still resolve to `gpt-5.6-luna` and `xhigh`", section)
         self.assertIn("a missing `worker` role file", section)
         self.assertIn("an incompatible user configuration", section)
         for path in protected:
@@ -219,9 +219,9 @@ class CodexWorkerContractTest(unittest.TestCase):
         # Then
         self.assertIn("read [shared model routing](model-routing.md)", normalized)
         self.assertIn("For bounded public research, use `researcher` only when public search and fetch tools are exposed.", investigation)
-        self.assertIn("Pass `gpt-6-luna` and `xhigh` explicitly on every researcher spawn; its role file sets no model.", investigation)
+        self.assertIn("Pass `gpt-5.6-luna` and `xhigh` explicitly on every researcher spawn; its role file sets no model.", investigation)
         self.assertIn("inspect the non-secret researcher role/config settings", investigation)
-        self.assertIn("verify the host rollout record reports `gpt-6-luna` and `xhigh`", investigation)
+        self.assertIn("verify the host rollout record reports `gpt-5.6-luna` and `xhigh`", investigation)
         self.assertIn(
             "For Skill Builder, trial execution and other non-review participants use the host's upper model",
             normalized,

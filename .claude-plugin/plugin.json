@@ -1,7 +1,7 @@
 {
   "name": "hei5enbug-agent-setup",
   "displayName": "Hei5enbug Agent Skills",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Portable agent skills for repeatable engineering and documentation workflows.",
   "author": {
     "name": "hei5enbug",
@@ -47,7 +47,7 @@
     "implementation_worker": {
       "type": "string",
       "title": "Implementation worker",
-      "description": "Route implementation work to codex (Codex on gpt-6-luna at xhigh), haiku (the plugin worker on claude-haiku-5-5 at high), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
+      "description": "Route implementation work to codex (Codex on gpt-5.6-luna at xhigh), haiku (the plugin worker on claude-haiku-5-5 at high), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
       "options": ["codex", "haiku", "sonnet"],
       "default": "sonnet"
     },
@@ -55,7 +55,7 @@
       "type": "string",
       "title": "Review model",
       "description": "Model that runs independent validation and skill review roles at xhigh. GPT models run through codex exec and Claude models through claude -p.",
-      "options": ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "gpt-6-astra", "gpt-6-luna", "gpt-6.1-sol"],
+      "options": ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "gpt-6-astra", "gpt-5.6-luna", "gpt-6.1-sol"],
       "default": "gpt-6-astra"
     },
     "language_guard": {

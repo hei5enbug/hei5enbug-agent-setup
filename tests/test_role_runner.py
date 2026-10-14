@@ -48,7 +48,7 @@ if name == "codex":
         home = Path(os.environ["CODEX_HOME"]) / "sessions" / "2026" / "10" / "12"
         home.mkdir(parents=True, exist_ok=True)
         lines = [json.dumps({{"type": "session_meta", "payload": {{"id": "x"}}}})]
-        for turn in config.get("turns", [{{"model": "gpt-6-luna", "effort": "xhigh"}}]):
+        for turn in config.get("turns", [{{"model": "gpt-5.6-luna", "effort": "xhigh"}}]):
             lines.append(json.dumps({{"type": "turn_context", "payload": turn}}))
         (home / "rollout-2026-10-12T00-00-00-{thread}.jsonl").write_text("\\n".join(lines) + "\\n")
 else:
@@ -113,7 +113,7 @@ class RoleRunnerTest(unittest.TestCase):
     def status(self, completed):
         return json.loads(completed.stdout.strip().splitlines()[-1])
 
-    def codex_argv(self, *, search=False, sandbox="read-only", model="gpt-6-luna", add_dirs=()):
+    def codex_argv(self, *, search=False, sandbox="read-only", model="gpt-5.6-luna", add_dirs=()):
         argv = ["--search"] if search else []
         argv += ["exec", "-m", model, "-c", 'model_reasoning_effort="xhigh"', "-s", sandbox, "-C", str(self.workspace)]
         for directory in add_dirs:
@@ -134,7 +134,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual("codex answer", self.result.read_text())
         status = self.status(completed)
         self.assertEqual(
-            {"role": "scout", "runner": "codex", "model": "gpt-6-luna", "effort": "xhigh", "verified": True, "exit": 0},
+            {"role": "scout", "runner": "codex", "model": "gpt-5.6-luna", "effort": "xhigh", "verified": True, "exit": 0},
             {key: status[key] for key in ("role", "runner", "model", "effort", "verified", "exit")},
         )
         self.assertEqual(1, status["evidence"]["turns"])
@@ -376,7 +376,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_rollout의_effort가_다르면_종료_코드_4이다(self):
         """turn_context effort가 xhigh가 아니면 종료 코드 4를 반환한다."""
         # Given
-        config = {"turns": [{"model": "gpt-6-luna", "effort": "high"}]}
+        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "high"}]}
 
         # When
         completed = self.run_runner("scout", config=config)
@@ -388,8 +388,8 @@ class RoleRunnerTest(unittest.TestCase):
     def test_turn_context_하나라도_다르면_종료_코드_4이다(self):
         """여러 turn_context 중 하나만 달라도 종료 코드 4를 반환한다."""
         # Given
-        good = {"model": "gpt-6-luna", "effort": "xhigh"}
-        config = {"turns": [good, good, {"model": "gpt-6-luna"}]}
+        good = {"model": "gpt-5.6-luna", "effort": "xhigh"}
+        config = {"turns": [good, good, {"model": "gpt-5.6-luna"}]}
 
         # When
         completed = self.run_runner("scout", config=config)
@@ -400,7 +400,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_모든_turn_context가_맞으면_여러_개여도_통과한다(self):
         """turn_context가 여러 개여도 모두 기대값이면 검증된다."""
         # Given
-        good = {"model": "gpt-6-luna", "effort": "xhigh"}
+        good = {"model": "gpt-5.6-luna", "effort": "xhigh"}
         config = {"turns": [good, good, good]}
 
         # When
@@ -452,7 +452,7 @@ class RoleRunnerTest(unittest.TestCase):
         other = self.codex_home / "sessions" / "2026" / "10" / "12"
         other.mkdir(parents=True)
         (other / "rollout-2026-10-12T00-00-00-other-thread.jsonl").write_text(
-            json.dumps({"type": "turn_context", "payload": {"model": "gpt-6-luna", "effort": "xhigh"}}) + "\n"
+            json.dumps({"type": "turn_context", "payload": {"model": "gpt-5.6-luna", "effort": "xhigh"}}) + "\n"
         )
         config = {"no_rollout": True}
 
@@ -599,8 +599,8 @@ class RoleRunnerTest(unittest.TestCase):
         # Given
         cases = [
             dict(arguments=["planner"]),
-            dict(arguments=["scout", "--model", "gpt-6-luna"]),
-            dict(arguments=["worker", "--model", "gpt-6-luna"]),
+            dict(arguments=["scout", "--model", "gpt-5.6-luna"]),
+            dict(arguments=["worker", "--model", "gpt-5.6-luna"]),
             dict(arguments=["reviewer", "--add-dir", str(self.base)]),
             dict(arguments=["scout", "--add-dir", str(self.base)]),
             dict(arguments=["reviewer", "--model", "gpt-5.4"]),
