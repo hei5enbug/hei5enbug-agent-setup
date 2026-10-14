@@ -27,12 +27,12 @@
     {
       "id": 3,
       "prompt": "Improve a data-processing design with overlapping overview sections, repeated contracts, a prose comparison of four options, and an unbranched diagram that duplicates the prose.",
-      "expected_output": "The revision narrows the outline, keeps one source per topic, uses a table for the comparison, and removes the redundant diagram.",
+      "expected_output": "The revision narrows the outline, keeps one source per topic, uses a table for the comparison, and either removes the redundant diagram or replaces it with one that shows the branches and end states the source rules define.",
       "files": [],
       "expectations": [
         "Each topic has one non-overlapping source section and stable references elsewhere.",
         "The four-option comparison uses one table with consistent dimensions.",
-        "The unbranched duplicate diagram is removed rather than restyled."
+        "The unbranched duplicate diagram is neither kept nor merely restyled. It is removed, or it is replaced by a diagram whose branches and end states match the source rules while the adjacent prose does not restate it."
       ]
     },
     {
