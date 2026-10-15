@@ -69,8 +69,8 @@ def read_instruction(path: Path, root: Path) -> str:
 
 
 def assigned_workers_section(root: Path) -> str:
-    """Return the "## Assigned workers" section of the implementation execution rules, heading included."""
-    path = root / "instructions" / "implementation-execution.md"
+    """Return the "## Assigned workers" section of the implementation delegation rules, heading included."""
+    path = root / "instructions" / "implementation-delegation.md"
     lines = path.read_text(encoding="utf-8").splitlines()
     try:
         start = next(index for index, line in enumerate(lines) if line.rstrip() == ASSIGNED_WORKERS_HEADING)

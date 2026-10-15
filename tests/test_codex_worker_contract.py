@@ -21,11 +21,11 @@ def implementation_section() -> str:
 
 
 class CodexWorkerContractTest(unittest.TestCase):
-    def test_위임한_구현은_공유_실행_규칙과_플러그인_worker를_사용한다(self):
+    def test_위임한_구현은_공유_위임_규칙과_플러그인_worker를_사용한다(self):
         """Codex에서 구현을 위임할 때는 플러그인 worker에 모델과 xhigh를 명시적으로 넘긴다."""
         # Given
         expected = (
-            "[implementation execution rules](implementation-execution.md)",
+            "[implementation delegation rules](implementation-delegation.md)",
             "When delegating implementation, use only the plugin `worker` role.",
             "pass the pinned `gpt-5.6-luna` and `xhigh` explicitly on every spawn",
         )
@@ -122,10 +122,10 @@ class CodexWorkerContractTest(unittest.TestCase):
             self.assertIn(phrase, section)
 
     def test_이어_보내기_지원_여부에_따라_준비_확인_경로가_갈린다(self):
-        """생성 결과에 모델이 없으므로 구현 실행 규칙의 준비 확인 경로를 따라 같은 스레드에 구현을 보낸다."""
+        """생성 결과에 모델이 없으므로 구현 위임 규칙의 준비 확인 경로를 따라 같은 스레드에 구현을 보낸다."""
         # Given
         readiness = (
-            "The spawn result does not name the model, so follow the readiness-only path in implementation execution "
+            "The spawn result does not name the model, so follow the readiness-only path in implementation delegation "
             "and send the implementation assignment to the same worker thread with a follow-up."
         )
 
@@ -217,7 +217,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         investigation = " ".join(text.split("## Investigation", 1)[1].split("## Skill workers", 1)[0].split())
 
         # Then
-        self.assertIn("read [shared model routing](model-routing.md)", normalized)
+        self.assertIn("Read [shared model routing](model-routing.md) before dispatching", normalized)
         self.assertIn("For bounded public research, use `researcher` only when public search and fetch tools are exposed.", investigation)
         self.assertIn("Pass `gpt-5.6-luna` and `xhigh` explicitly on every researcher spawn; its role file sets no model.", investigation)
         self.assertIn("inspect the non-secret researcher role/config settings", investigation)

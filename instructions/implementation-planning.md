@@ -52,7 +52,8 @@ Do not split a cohesive change into bookkeeping steps. A slice should produce a 
 contract, migration, or verification result rather than merely open, rename, or inspect a file.
 
 Give each slice one main or worker owner under the session delegation rule, and record the assignment fields from
-[implementation execution](implementation-execution.md) once in the plan. State the worker model and effort
+[implementation execution](implementation-execution.md) and, for delegated slices,
+[implementation delegation](implementation-delegation.md) once in the plan. State the worker model and effort
 for delegated slices as that file's host policy, which the host's agent rules pin, instead of copying a model ID.
 Main-owned slices retain the main session's current model and effort.
 

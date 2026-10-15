@@ -18,6 +18,7 @@ human references; never load or use them during execution.
 Read the linked instructions before the matching action, including when the need arises later in a request.
 Do not load unrelated references. Resolve relative links from the file containing them.
 If a required reference is missing, report it and pause the affected action instead of guessing its rules.
+Reuse an unchanged instruction file still in context; reread it only after it changes or leaves the context.
 
 - Before accessing a hosted service, read [service access rules](../services.md).
 - Before any Azure or Kubernetes access, including local files, environment variables, logs, or indirect

@@ -19,7 +19,7 @@ VALIDATION = REPO_ROOT / "instructions/independent-model-validation.md"
 AGENTS = REPO_ROOT / "AGENTS.md"
 CLAUDE_AGENTS = REPO_ROOT / "instructions/claude-agents.md"
 CODEX_AGENTS = REPO_ROOT / "instructions/codex-agents.md"
-EXECUTION = REPO_ROOT / "instructions/implementation-execution.md"
+DELEGATION = REPO_ROOT / "instructions/implementation-delegation.md"
 HOST_SESSION_FILES = (
     REPO_ROOT / "instructions/session/claude-code.md",
     REPO_ROOT / "instructions/session/codex.md",
@@ -51,7 +51,7 @@ COMMON_OWNED = (
     ),
 )
 
-# Scheduling policy the shared implementation execution reference owns outright.
+# Scheduling policy the shared implementation delegation reference owns outright.
 EXECUTION_OWNED = (
     "min(6 - active implementation workers, host slots remaining, ready independent tasks)",
     "Disjoint files alone do not prove independence.",
@@ -63,11 +63,11 @@ LEGACY_SCHEDULING = ("Run at most 6",)
 # Each canonical sentence lives in exactly its owner files; the other instruction files refer to it.
 SENTENCE_OWNERS = (
     ("대체 보고", "Report the limitation once.", {COMMON}),
-    ("준비 확인 조건", "use a readiness-only assignment only if the host can send a follow-up", {EXECUTION}),
-    ("준비 확인 할당", "make no edit and report readiness", {EXECUTION}),
-    ("준비 확인 이어 보내기 불가", "skip this path and use the session fallback", {EXECUTION}),
-    ("준비 확인 반복 금지", "do not repeat readiness calls", {EXECUTION}),
-    ("worker 자기 보고", "unsubstantiated self-report", {EXECUTION}),
+    ("준비 확인 조건", "use a readiness-only assignment only if the host can send a follow-up", {DELEGATION}),
+    ("준비 확인 할당", "make no edit and report readiness", {DELEGATION}),
+    ("준비 확인 이어 보내기 불가", "skip this path and use the session fallback", {DELEGATION}),
+    ("준비 확인 반복 금지", "do not repeat readiness calls", {DELEGATION}),
+    ("worker 자기 보고", "unsubstantiated self-report", {DELEGATION}),
     ("결과만 반환", "returns findings only", {ROUTING, VALIDATION}),
     ("재검토 금지", "Do not run another review round.", {ROUTING}),
     ("메인 한 번 검토", "reviews the same material once", {ROUTING}),
@@ -81,7 +81,7 @@ def runtime_documents() -> list[Path]:
         path
         for root in roots
         for path in root.rglob("*.md")
-        if not path.name.endswith(".ko.md") and path != EXECUTION
+        if not path.name.endswith(".ko.md") and path != DELEGATION
     )
 
 
@@ -148,11 +148,11 @@ class HostAgentFilesStayHostSpecificTest(unittest.TestCase):
         self.assertIn("Use the `scout` agent", CODEX_AGENTS.read_text(encoding="utf-8"))
 
 
-class ExecutionReferenceOwnsSchedulingTest(unittest.TestCase):
-    def test_공유_실행_참조만_일정_정책을_가진다(self):
-        """worker 일정 정책은 공유 실행 참조에만 있고 다른 실행 지침은 이를 복사하지 않는다."""
+class DelegationReferenceOwnsSchedulingTest(unittest.TestCase):
+    def test_공유_위임_참조만_일정_정책을_가진다(self):
+        """worker 일정 정책은 공유 위임 참조에만 있고 다른 실행 지침은 이를 복사하지 않는다."""
         # Given
-        execution = normalized_text(EXECUTION)
+        delegation = normalized_text(DELEGATION)
         documents = runtime_documents()
 
         # When
@@ -165,7 +165,7 @@ class ExecutionReferenceOwnsSchedulingTest(unittest.TestCase):
 
         # Then
         for rule in EXECUTION_OWNED:
-            self.assertIn(rule, execution)
+            self.assertIn(rule, delegation)
         self.assertIn(CLAUDE_AGENTS, documents)
         self.assertIn(CODEX_AGENTS, documents)
         self.assertEqual(copies, [])
@@ -190,8 +190,8 @@ class CanonicalSentencesHaveOneOwnerTest(unittest.TestCase):
                 # Then
                 self.assertEqual(holders, owners)
 
-    def test_호스트_지침은_준비_확인_절차를_복사하지_않고_구현_실행_규칙을_가리킨다(self):
-        """Claude Code와 Codex 지침은 준비 확인 경로를 실행 규칙으로 가리키며 두 단계 절차를 다시 쓰지 않는다."""
+    def test_호스트_지침은_준비_확인_절차를_복사하지_않고_구현_위임_규칙을_가리킨다(self):
+        """Claude Code와 Codex 지침은 준비 확인 경로를 위임 규칙으로 가리키며 두 단계 절차를 다시 쓰지 않는다."""
         # Given
         hosts = (CLAUDE_AGENTS, CODEX_AGENTS)
 
@@ -201,7 +201,7 @@ class CanonicalSentencesHaveOneOwnerTest(unittest.TestCase):
                 text = normalized_text(path)
 
                 # Then
-                self.assertIn("readiness-only path in implementation execution", text)
+                self.assertIn("readiness-only path in implementation delegation", text)
                 self.assertNotIn("start each worker with a readiness-only assignment", text)
                 self.assertNotIn("skip the two-phase path", text)
 

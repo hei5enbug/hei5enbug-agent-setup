@@ -8,30 +8,25 @@
 
 ## Delegation
 
-Choose an owner before substantial work, and reconsider only when scope, dependencies, or capabilities change.
+Choose an owner before substantial work.
 
 - Handle short answers, known-path lookups, tightly dependent work, implementation that changes at most two files,
   and integration fixes in the main session.
-- Delegate bounded investigation that needs several files or produces bulky logs, returning concise findings
-  and source locations. Do not repeat the same investigation in the main session; verify only critical claims.
+- Delegate bounded investigation that needs several files or produces bulky logs, and do not repeat it yourself.
 - Delegate implementation that changes more than two files to the implementation worker when it has a clear scope
-  and acceptance check and can run independently or keep substantial intermediate detail out of the main context.
-  Parallelize only work with independent resources.
+  and acceptance check.
 - Use parallel subagents proactively, unasked, when they cut main-session context or elapsed time with little or no
-  quality loss. Pass each task only the context it needs. Do not spawn for greetings, status checks, or a single
-  small edit. Explicit user and skill assignments still take precedence.
+  quality loss, but not for greetings, status checks, or a single small edit. Parallelize only work with independent
+  resources. Explicit user and skill assignments take precedence.
 - Send UI code, visual design, and diagram work to the host's designer route, except the kinds the host session
-  file assigns to the main session. A text- or style-value-only edit that keeps layout and component structure may
-  go to the implementation worker. Design documents and RFCs stay in the main session.
-- Host permission is required. If delegation, the pinned role/model/effort, or reliable settings evidence is
-  unavailable, use the fallback route the host rules name; without one, continue authorized work in the main
-  session. Report the limitation once. Preserve all permissions and checks; never change user settings or
-  silently substitute another worker model.
+  file assigns to the main session.
+- If delegation is unavailable, use the fallback route the host rules name; without one, continue authorized work
+  in the main session. Report the limitation once.
 
-Independent read-only review is the exception to main-session review ownership. Before finishing a substantial
-change, recommend it once; do not invoke a reviewer without the user's approval or repeat a declined offer for the
-same result. For a Claude-authored result, name the reviewer in the session line "Review model" and read
-the independent model validation rules below after approval; otherwise read them before asking.
+Independent read-only review is the exception to main-session review. Before finishing a substantial change,
+recommend it once, and do not invoke a reviewer without the user's approval. For a Claude-authored result, name
+the reviewer in the session line "Review model" and read
+[independent model validation](../independent-model-validation.md) after approval; otherwise read it before asking.
 
 ## Clarification
 
@@ -44,14 +39,14 @@ exist, with cost and impact; the user chooses. Report a pending user action, suc
 
 ## Conditional instructions
 
-- Before substantial implementation, repeated model evaluation, plugin maintenance, or diagnosing repeated
-  execution failures, read [work efficiency](../work-efficiency.md).
+- Before substantial implementation, read [work efficiency](../work-efficiency.md).
+- Before repeated model evaluation, read [model evaluation rules](../model-evaluation.md).
+- Before retrying a failed command, diagnosing repeated execution failures, or plugin maintenance, read
+  [failure and maintenance rules](../failure-and-maintenance.md).
 - Before the first implementation change, read [implementation execution rules](../implementation-execution.md).
 
 ## Planning and design routing
 
-- An implementation plan must let an executor proceed without adding design decisions. A design document
-  communicates the target design and explains current problems only as needed to support it.
 - Activate a skill for an implementation plan, design document, or RFC only when the user explicitly requests
   that deliverable or directly invokes the skill. Do not infer it from general implementation, diagnosis, code
   review, summarization, or a passing mention, and do not chain another skill from those tasks.
@@ -59,9 +54,7 @@ exist, with cost and impact; the user chooses. Report a pending user action, suc
 - `document-to-confluence`, `suggest-commit`, and `technical-design-writer` remain automatic when their own
   descriptions match the user's intent. This is an explicit exception to the preceding trigger boundary.
 - Before creating or revising an implementation plan the user requested, read
-  [implementation planning](../implementation-planning.md). Before creating or revising that plan, a design
-  document, or an RFC, read [independent model validation](../independent-model-validation.md). The
-  design-writing skill owns the design-specific workflow and template.
+  [implementation planning](../implementation-planning.md).
 
 ## Replies
 

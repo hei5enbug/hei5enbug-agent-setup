@@ -22,7 +22,7 @@ unfinished work. Do not repeat completed edits, commits, pushes, releases, or ex
 restart the shared daemon, close other sessions, or switch credentials, providers, or network settings as
 an unapproved recovery shortcut.
 
-Follow the [retry limits](work-efficiency.md#failure-and-maintenance): a transient failure permits at most
+Follow the [retry limits](failure-and-maintenance.md): a transient failure permits at most
 one unchanged retry, and only after state inspection establishes that the action is safe. Another failure
 requires diagnosis or changed conditions. Record only relevant non-secret diagnostics, such as the CLI
 version, time, error category, and privately retained request ID; a request ID is not a local diagnosis.

@@ -81,7 +81,7 @@ change production settings or promote trial output to the repository.
 
 ## Paired trials
 
-When plugin session rules apply, read [work efficiency](../../../instructions/work-efficiency.md#model-evaluations)
+When plugin session rules apply, read [model evaluation rules](../../../instructions/model-evaluation.md)
 before model trials; it owns the shared batch limits, preflight, continuation, and stopping rules. If that
 required reference is unavailable, stop the affected evaluation. Standalone use retains the procedure below.
 

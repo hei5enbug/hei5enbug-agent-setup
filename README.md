@@ -36,9 +36,12 @@ hei5enbug-agent-setup/
 │   ├── codex-agents.md
 │   ├── confluence.md
 │   ├── documentation.md
+│   ├── failure-and-maintenance.md
+│   ├── implementation-delegation.md
 │   ├── implementation-execution.md
 │   ├── implementation-planning.md
 │   ├── independent-model-validation.md
+│   ├── model-evaluation.md
 │   ├── model-routing.md
 │   ├── protected-values.md
 │   ├── services.md
@@ -366,8 +369,11 @@ larger independent implementation use workers when the expected benefit exceeds 
 dependent work keeps one owner. This policy does not guarantee a lower bill on every task.
 
 The main session retains requirements, design, task boundaries, acceptance, and the final report.
-[instructions/implementation-execution.md](instructions/implementation-execution.md) defines ownership,
-conflict-free scheduling, checks, and recovery. Direct work uses the main session's current model and effort.
+[instructions/implementation-execution.md](instructions/implementation-execution.md) defines task preparation,
+assignment fields, and acceptance for all implementation, including main-owned work.
+[instructions/implementation-delegation.md](instructions/implementation-delegation.md) defines worker ownership,
+conflict-free scheduling, recovery, and assigned-worker rules; read it before delegating implementation.
+Direct work uses the main session's current model and effort.
 A delegated task carries only its scope, relevant context, allowed/protected paths, prerequisites,
 acceptance checks, and the host's pinned settings. Workers cannot start nested agents.
 
@@ -439,10 +445,11 @@ See the official [Codex subagent contract](https://learn.chatgpt.com/docs/agent-
 
 ## Work efficiency
 
-[Work-efficiency rules](instructions/work-efficiency.md) load only before substantial implementation,
-repeated model evaluation, plugin maintenance, or repeated-failure diagnosis. Required results and checks
-define completion. Valid check evidence is reused until its relevant inputs change; optional research and
-an unperformed optional review do not keep accepted work open.
+[Work-efficiency rules](instructions/work-efficiency.md) load only before substantial implementation.
+[Model evaluation rules](instructions/model-evaluation.md) load only before repeated model evaluation, and
+[failure and maintenance rules](instructions/failure-and-maintenance.md) load only before plugin maintenance or
+repeated-failure diagnosis. Required results and checks define completion. Valid check evidence is reused until
+its relevant inputs change; optional research and an unperformed optional review do not keep accepted work open.
 
 Additional model comparisons start with at most 3 representative cases, 15 minutes for the whole batch,
 and 6 top-level starts for paired trials across both hosts. Probes and retries share that budget, including

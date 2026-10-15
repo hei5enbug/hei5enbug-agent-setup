@@ -5,9 +5,9 @@
 
 [독립 모델 검증](independent-model-validation.ko.md)이 정한 검토자 호출은 아래 시점, 에이전트 선택, worker 규칙의 예외다.
 
-에이전트나 모델 runner를 호출하기 전에 [공유 모델 라우팅](model-routing.ko.md)을 읽으며
-[작업 효율](work-efficiency.ko.md)의 지침 재사용 규칙을 따른다. 메인 모델·프로필 변경이나 세션 재개 후에는
-호출 전에 해당 계약의 실제 설정 검사를 적용한다.
+[공유 모델 라우팅](model-routing.ko.md)은 스킬 검토 역할이나 Skill Builder 참여자를 호출하거나, 독립 검토자를
+선정하거나, 메인 모델·프로필 변경이나 세션 재개 후 처음 호출할 때 읽는다. 마지막 경우에는 먼저 실제 설정 검사를
+적용한다. 그 밖의 호출에는 이 파일만 필요하다.
 
 ## 내장 서브에이전트
 
@@ -68,7 +68,7 @@ python3 <Source directory>/scripts/role_runner.py <scout|researcher|reviewer|wor
 
 ## 구현
 
-구현은 [구현 실행 규칙](implementation-execution.ko.md)에 따라 조정한다. 이 섹션은 Claude Code worker 연동만 덧붙인다.
+위임한 구현은 [구현 위임 규칙](implementation-delegation.ko.md)에 따라 조정한다. 이 섹션은 Claude Code worker 연동만 덧붙인다.
 
 - 위임한 구현은 세션 줄 "Implementation worker route"에 지정된 경로를 따른다. 기본은 Sonnet worker인
   `hei5enbug-agent-setup:sonnet-worker`, 줄이 `codex`이면 Codex worker(아래 "Codex worker" 참조), `haiku`이면
@@ -86,7 +86,7 @@ python3 <Source directory>/scripts/role_runner.py <scout|researcher|reviewer|wor
   강제 모델이나 고정 사고 강도보다 낮은 상한이 있으면 플러그인 에이전트 위임을 멈춘다. 그렇지 않으면 할당을 바로
   보낸다. Mod의 고정과 차단이 수락 근거이므로 위임마다 설정이나 서브에이전트 기록을 읽지 않는다.
 - 그 줄이 없으면 시작 결과에 모델이 나오지 않는다. 실행에서 처음 호출하기 전에 위의 비밀이 아닌 입력과 에이전트 정의,
-  대체나 폴백 경고만 살펴보고, 구현 실행 규칙의 준비 확인 경로를 따른다. Claude Code는 세션 도중에 설정을 다시 읽을
+  대체나 폴백 경고만 살펴보고, 구현 위임 규칙의 준비 확인 경로를 따른다. Claude Code는 세션 도중에 설정을 다시 읽을
   수 있으므로 구현 작업을 담은 후속 메시지를 보낼 때마다 다시 확인한다.
 - `/tasks`나 서브에이전트 transcript 같은 호스트 기록은 호출한 정의의 고정 모델과 사고 강도를 기록할 때만
   인정한다. 제공자 내부의 추론 원격 측정은 필요하지 않다. 기록된 모델이 다르거나, 고정된 사고 강도보다 낮은 상한,

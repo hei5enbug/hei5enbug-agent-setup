@@ -3,9 +3,9 @@
 The reviewer invocation governed by [independent model validation](independent-model-validation.md) is an
 exception to the timing, agent-selection, and worker rules below.
 
-Before dispatching an agent or model runner, read [shared model routing](model-routing.md), following the
-instruction-reuse rules in [work efficiency](work-efficiency.md). After a main-model or profile switch or
-session resume, apply its effective-settings checks before dispatch.
+Read [shared model routing](model-routing.md) before dispatching a skill review role or Skill Builder participant,
+selecting an independent reviewer, or dispatching for the first time after a main-model or profile switch or session
+resume; in the last case, apply its effective-settings checks first. Other dispatches need only this file.
 
 ## Built-in subagents
 
@@ -70,8 +70,8 @@ When the fallback is unavailable too, continue in the main conversation.
 
 ## Implementation
 
-Coordinate implementation under [implementation execution rules](implementation-execution.md). This section
-adds only the Claude Code worker integration.
+Coordinate delegated implementation under [implementation delegation rules](implementation-delegation.md).
+This section adds only the Claude Code worker integration.
 
 - Delegated implementation follows the route in the session line "Implementation worker route". Use
   `hei5enbug-agent-setup:sonnet-worker` for the Sonnet worker by default, the Codex worker (see "Codex worker"
@@ -93,7 +93,7 @@ adds only the Claude Code worker integration.
   and blocking are the acceptance evidence, so read no settings or subagent record per delegation.
 - Without that line, the launch result does not name the model. Before the first invocation in a run, inspect only
   the non-secret inputs above plus the agent definition and any substitution or fallback warning, and follow the
-  readiness-only path in implementation execution. Claude Code can reload settings during a session, so recheck
+  readiness-only path in implementation delegation. Claude Code can reload settings during a session, so recheck
   them before every follow-up that carries implementation work.
 - Accept the host's subagent record, such as `/tasks` or the subagent transcript, only when it names the invoked
   definition's pinned model and effort. Provider-internal reasoning telemetry is not required. A different recorded

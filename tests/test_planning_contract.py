@@ -9,6 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 IMPLEMENTATION = REPO_ROOT / "instructions/implementation-planning.md"
 VALIDATION = REPO_ROOT / "instructions/independent-model-validation.md"
 EXECUTION = REPO_ROOT / "instructions/implementation-execution.md"
+DELEGATION = REPO_ROOT / "instructions/implementation-delegation.md"
 COMMON = REPO_ROOT / "instructions/session/common.md"
 DESIGN = REPO_ROOT / "skills/technical-design-writer/references/design-documents.md"
 DESIGN_SKILL = REPO_ROOT / "skills/technical-design-writer/SKILL.md"
@@ -95,6 +96,7 @@ class PlanningContractTest(unittest.TestCase):
 
         # Then
         self.assertIn("[implementation execution](implementation-execution.md)", slicing)
+        self.assertIn("[implementation delegation](implementation-delegation.md)", slicing)
         self.assertIn("one main or worker owner", slicing)
         self.assertIn("which the host's agent rules pin, instead of copying a model ID", slicing)
         self.assertIn("Allowed and protected paths", template)
@@ -136,10 +138,10 @@ class PlanningContractTest(unittest.TestCase):
     def test_할당받은_worker는_계획_검토_하위_에이전트를_시작하지_않는다(self):
         """할당받은 worker 섹션은 재귀 계획, 하위 에이전트, 계획 검토를 금지하고 반환 항목을 정한다."""
         # Given
-        execution = EXECUTION.read_text()
+        delegation = DELEGATION.read_text()
 
         # When
-        worker_section = " ".join(execution.split("## Assigned workers", 1)[1].split())
+        worker_section = " ".join(delegation.split("## Assigned workers", 1)[1].split())
 
         # Then
         self.assertIn("never acts as a coordinator", worker_section)
@@ -148,17 +150,17 @@ class PlanningContractTest(unittest.TestCase):
         self.assertIn("start another agent", worker_section)
         self.assertIn("preserve changes made by other workers", worker_section)
         self.assertIn("Return the changed paths, check results, and remaining blockers.", worker_section)
-        self.assertEqual(execution.count("## Assigned workers"), 1)
-        self.assertTrue(execution.rstrip().endswith("remaining blockers."))
+        self.assertEqual(delegation.count("## Assigned workers"), 1)
+        self.assertTrue(delegation.rstrip().endswith("remaining blockers."))
 
 
     def test_의존_작업은_선행_작업_승인_뒤에만_따로_할당한다(self):
         """작업과 그 선행 작업은 한 할당에 넣지 않고, 파일만 공유하는 작업만 한 worker에 순서대로 맡길 수 있다."""
         # Given
-        execution = EXECUTION.read_text()
+        delegation = DELEGATION.read_text()
 
         # When
-        scheduling = " ".join(execution.split("## Scheduling", 1)[1].split("\n## ", 1)[0].split())
+        scheduling = " ".join(delegation.split("## Scheduling", 1)[1].split("\n## ", 1)[0].split())
 
         # Then
         self.assertIn("A task becomes ready only after its prerequisites pass the coordinator's acceptance check", scheduling)
@@ -170,23 +172,25 @@ class PlanningContractTest(unittest.TestCase):
     def test_할당된_검사_실패는_원인과_무관하게_실패로_보고_의존_작업을_보류한다(self):
         """할당된 검사가 실패하면 원인이 작업 밖에 있어도 실패로 보고 의존 작업을 보류한다."""
         # Given
+        delegation = DELEGATION.read_text()
         execution = EXECUTION.read_text()
 
         # When
-        failure = " ".join(execution.split("## Failure and recovery", 1)[1].split("\n## ", 1)[0].split())
+        failure = " ".join(delegation.split("## Failure and recovery", 1)[1].split("\n## ", 1)[0].split())
+        acceptance = " ".join(execution.split("## Acceptance", 1)[1].split("\n## ", 1)[0].split())
 
         # Then
         self.assertIn("hold dependent tasks and preserve completed work", failure)
-        self.assertIn("A failed assigned check is a failure even when its cause lies outside the task.", failure)
+        self.assertIn("A failed assigned check is a failure even when the cause lies outside the task.", acceptance)
 
 
     def test_위임한_작업은_수정한_모든_턴의_호스트_기록을_확인한_뒤에만_승인한다(self):
         """위임한 작업은 수정한 모든 턴의 호스트 기록이 선택한 모델과 사고 강도를 보여 줄 때만 승인한다."""
         # Given
-        execution = EXECUTION.read_text()
+        delegation = DELEGATION.read_text()
 
         # When
-        review = " ".join(execution.split("## Review and integration", 1)[1].split("\n## ", 1)[0].split())
+        review = " ".join(delegation.split("## Review and integration", 1)[1].split("\n## ", 1)[0].split())
 
         # Then
         self.assertIn(
@@ -222,7 +226,7 @@ class PlanningContractTest(unittest.TestCase):
 
         # Then
         self.assertEqual(len(rows), 1)
-        self.assertIn('Follow "Assigned workers" below.', rows[0])
+        self.assertIn('Follow "Assigned workers" in implementation delegation.', rows[0])
         self.assertIn("never start another planning workflow", rows[0])
 
 

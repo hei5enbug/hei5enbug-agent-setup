@@ -11,7 +11,7 @@ Classify a delegated task by both its purpose and where its output will go.
 |---|---|
 | Main-owned work | Follow [session ownership rules](session/common.md). |
 | Implementation that edits the actual repository or skill | Follow the host's implementation execution rules and pinned implementation role. |
-| UI code, visual design, or diagrams | Use the host's designer route, except the kinds the host session file assigns to the main session. A text or style-value edit that keeps layout and component structure may use the implementation worker. |
+| UI code, visual design, or diagrams | Use the host's designer route, except the kinds the host session file assigns to the main session. |
 | Bounded local evidence gathering | Use the host's scout role when delegation is authorized and worthwhile. |
 | Public, read-only research | Use the host's researcher role only when its public tools are available and its pinned settings are verified. Otherwise, continue in the main session. |
 | Skill review role (review persona, grader, comparator, analyzer) | Use the reviewer route in the table below. |
