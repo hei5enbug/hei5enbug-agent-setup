@@ -39,9 +39,12 @@ hei5enbug-agent-setup/
 │   ├── codex-agents.md
 │   ├── confluence.md
 │   ├── documentation.md
+│   ├── failure-and-maintenance.md
+│   ├── implementation-delegation.md
 │   ├── implementation-execution.md
 │   ├── implementation-planning.md
 │   ├── independent-model-validation.md
+│   ├── model-evaluation.md
 │   ├── model-routing.md
 │   ├── protected-values.md
 │   ├── services.md
@@ -344,15 +347,17 @@ Windows 실행과 실제 모델의 지침 준수 여부는 테스트 범위에 �
 
 ## 상황별 위임
 
-메인 세션은 [공통 지침](instructions/session/common.md)에 따라 직접 처리할지 위임할지 판단합니다.
+메인 세션은 [공통 지침](instructions/session/common.ko.md)에 따라 직접 처리할지 위임할지 판단합니다.
 알려진 경로 조회, 변경 파일이 두 개 이하인 구현, 통합 수정은 메인이 처리합니다. 범위가 한정된 조사, 많은 근거 수집,
 독립적으로 수행할 수 있는 더 큰 구현은 예상 이득이 조정 비용보다 클 때 작업자를 사용합니다. 의존성이 긴밀한 작업은 한 담당자가 이어서 처리합니다.
 모든 작업에서 실제 비용이 줄어든다고 보장하는 정책은 아닙니다.
 
 메인은 요구사항, 설계, 작업 경계, 수용 판단과 최종 보고를 맡습니다.
-[구현 실행 규칙](instructions/implementation-execution.md)은 담당 범위, 충돌 없는 일정, 검사와 복구를 정의합니다.
-직접 작업은 메인의 현재 모델과 사고 강도를 유지합니다. 위임할 때는 작업 범위, 필요한 맥락, 허용·보호 경로,
-선행 조건, 수용 검사와 호스트의 고정 설정만 전달합니다. 작업자는 하위 에이전트를 만들 수 없습니다.
+[구현 실행 규칙](instructions/implementation-execution.ko.md)은 메인 담당 작업을 포함한 모든 구현의 작업 준비,
+할당 항목과 수용을 정의합니다. [구현 위임 규칙](instructions/implementation-delegation.ko.md)은 작업자 소유권,
+충돌 없는 일정, 복구와 할당받은 worker 규칙을 정의하며, 구현을 위임하기 전에 읽습니다. 직접 작업은 메인의 현재
+모델과 사고 강도를 유지합니다. 위임할 때는 작업 범위, 필요한 맥락, 허용·보호 경로, 선행 조건, 수용 검사와 호스트의
+고정 설정만 전달합니다. 작업자는 하위 에이전트를 만들 수 없습니다.
 
 UI 코드, 시각 디자인, 다이어그램 작업은 대신 호스트의 designer 경로로 보냅니다. 다만 호스트 세션 파일이 메인 세션에
 맡긴 종류는 예외입니다. Claude Code에서는 메인 세션이 문서 안의 ASCII와 Mermaid 다이어그램을 그리고, 기존 SVG
@@ -418,9 +423,10 @@ When hei5enbug-agent-setup is active, use subagents according to its situation-b
 
 ## 작업 효율
 
-[작업 효율 규칙](instructions/work-efficiency.md)은 규모 있는 구현, 반복 모델 평가, 플러그인 유지보수 또는
-반복 실행 실패 진단 전에만 불러옵니다. 요청한 결과와 필수 검사가 완료 기준입니다. 검사 근거는 관련 입력이
-바뀔 때까지 재사용하고, 선택 조사나 수행하지 않은 선택 검토 때문에 수용된 작업을 계속 열어 두지 않습니다.
+[작업 효율 규칙](instructions/work-efficiency.ko.md)은 규모 있는 구현 전에만 불러옵니다. [모델 평가 규칙](instructions/model-evaluation.ko.md)은
+반복 모델 평가 전에, [실패 및 유지보수 규칙](instructions/failure-and-maintenance.ko.md)은 플러그인 유지보수나 반복 실행
+실패 진단 전에 불러옵니다. 요청한 결과와 필수 검사가 완료 기준입니다. 검사 근거는 관련 입력이 바뀔 때까지 재사용하고,
+선택 조사나 수행하지 않은 선택 검토 때문에 수용된 작업을 계속 열어 두지 않습니다.
 
 추가 모델 비교는 대표 사례 최대 3개, 전체 묶음 15분, 두 호스트를 합쳐 비교 실행 시작 최대 6회로 시작합니다.
 사전 확인 실행과 재시도도 이 예산에 포함하며, 재개해도 예산을 초기화하지 않습니다. 일반 구현, 단위 테스트,

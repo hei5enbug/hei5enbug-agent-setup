@@ -221,7 +221,7 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         """Claude에서 구현 위임은 세션의 worker 경로 줄을 따르고, 플러그인 agent에는 호출 단위 모델을 넘기지 않는다."""
         # Given
         expected = (
-            "[implementation execution rules](implementation-execution.md)",
+            "[implementation delegation rules](implementation-delegation.md)",
             'Delegated implementation follows the route in the session line "Implementation worker route". Use '
             '`hei5enbug-agent-setup:sonnet-worker` for the Sonnet worker by default, the Codex worker (see "Codex '
             'worker" below) when the line says `codex`, and `hei5enbug-agent-setup:worker` for the Haiku worker when '
@@ -294,11 +294,11 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         )
 
     def test_고정_표시_줄이_없으면_준비_확인_경로를_따르고_설정을_다시_확인한다(self):
-        """고정 표시 줄이 없으면 구현 실행 규칙의 준비 확인 경로를 따르며 구현 후속 메시지마다 설정을 다시 확인한다."""
+        """고정 표시 줄이 없으면 구현 위임 규칙의 준비 확인 경로를 따르며 구현 후속 메시지마다 설정을 다시 확인한다."""
         # Given
         expected = (
             "Without that line, the launch result does not name the model.",
-            "follow the readiness-only path in implementation execution",
+            "follow the readiness-only path in implementation delegation",
             "Claude Code can reload settings during a session, so recheck them before every follow-up that carries "
             "implementation work.",
         )
@@ -450,17 +450,17 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         self.assertNotIn("review round", skill_workers)
 
     def test_공유_라우팅을_먼저_읽고_GPT_전환_설명은_공유_라우팅에만_둔다(self):
-        """공유 라우팅과 작업 효율 규칙을 호출 전에 읽게 하고, 메인 모델 전환 설명은 공유 라우팅 한 곳에만 둔다."""
+        """공유 라우팅을 필요한 호출 전에 읽게 하고, 메인 모델 전환 설명은 공유 라우팅 한 곳에만 둔다."""
         # Given
         text = " ".join(CLAUDE_AGENTS.read_text(encoding="utf-8").split())
         routing = " ".join((REPO_ROOT / "instructions/model-routing.md").read_text(encoding="utf-8").split())
 
         # When
-        reads_routing = "read [shared model routing](model-routing.md)" in text
+        reads_routing = "Read [shared model routing](model-routing.md) before dispatching" in text
 
         # Then
         self.assertTrue(reads_routing)
-        self.assertIn("instruction-reuse rules in [work efficiency](work-efficiency.md)", text)
+        self.assertIn("Other dispatches need only this file.", text)
         self.assertNotIn("Selecting GPT as Claude Code's main model", text)
         self.assertIn("Selecting GPT in Claude Code keeps Claude Code's tools", routing)
 

@@ -54,9 +54,9 @@ def test_공유_모델_라우팅은_위임_때_읽고_시작_문맥에는_본문
     route_text = " ".join(routing.read_text(encoding="utf-8").split())
 
     # Then
-    assert "read [shared model routing](model-routing.md)" in host_text
-    assert "instruction-reuse rules in [work efficiency](work-efficiency.md)" in host_text
-    assert "apply its effective-settings checks before dispatch" in host_text
+    assert "Read [shared model routing](model-routing.md) before dispatching a skill review role" in host_text
+    assert "Other dispatches need only this file." in host_text
+    assert "in the last case, apply its effective-settings checks first" in host_text
     assert "The execution host remains the same" in route_text
     assert "actual model family that authored the deliverable" in route_text
     assert "## Keep role settings fixed" not in rendered
@@ -123,10 +123,10 @@ def test_v2_1_0_scout는_원본과_같을_때만_로컬_조사_전용_역할로_
 def test_메인_대체_처리는_부분_작업과_권한_검증을_보존한다():
     """메인 대체 처리는 작업자 종료와 부분 변경 확인을 요구하며 권한이나 실패 검사를 우회하지 않는다."""
     # Given
-    path = REPO / "instructions/implementation-execution.md"
+    paths = (REPO / "instructions/implementation-execution.md", REPO / "instructions/implementation-delegation.md")
 
     # When
-    text = " ".join(path.read_text().split())
+    text = " ".join(" ".join(path.read_text().split()) for path in paths)
 
     # Then
     assert "main-owned implementation is allowed" in text

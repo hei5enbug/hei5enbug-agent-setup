@@ -184,7 +184,7 @@ class SessionContextTest(unittest.TestCase):
     def test_할당받은_worker_절은_다음_제목_앞에서_끝난다(self):
         """공개 함수는 제목을 포함해 다음 같은 수준 제목 앞까지만 돌려주고 파일 끝까지 가는 경우도 처리한다."""
         # Given
-        path = self.root / "instructions/implementation-execution.md"
+        path = self.root / "instructions/implementation-delegation.md"
 
         # When
         section = session_context.assigned_workers_section(self.root)
@@ -200,7 +200,7 @@ class SessionContextTest(unittest.TestCase):
     def test_할당받은_worker_절이_없으면_구현_에이전트_컨텍스트는_실패한다(self):
         """절이 없으면 구현 에이전트 시작은 부분 컨텍스트 없이 실패하고 메인 세션은 영향받지 않는다."""
         # Given
-        path = self.root / "instructions/implementation-execution.md"
+        path = self.root / "instructions/implementation-delegation.md"
         path.write_text(path.read_text().replace("## Assigned workers", "## Workers"), encoding="utf-8")
 
         # When
@@ -307,7 +307,7 @@ class SessionContextTest(unittest.TestCase):
                 self.assertNotIn(current[name], retired[name])
 
     def test_참조는_절대_경로이고_세부_본문은_불러오지_않는다(self):
-        """작업 효율과 검토를 포함한 참조 9개는 절대 경로로 바뀌고 세부 본문은 시작 시 불러오지 않는다."""
+        """작업 효율과 검토를 포함한 참조 11개는 절대 경로로 바뀌고 세부 본문은 시작 시 불러오지 않는다."""
         # Given
         host = "claude"
 
@@ -316,7 +316,7 @@ class SessionContextTest(unittest.TestCase):
 
         # Then
         links = re.findall(r"\]\(<([^>]+)>\)", context)
-        self.assertEqual(len(links), 9)
+        self.assertEqual(len(links), 11)
         for link in links:
             self.assertTrue(Path(link).is_relative_to(self.root))
             self.assertTrue(Path(link).is_file())
@@ -540,13 +540,21 @@ class SessionContextTest(unittest.TestCase):
         # Then
         self.assertNotIn("Implementation worker route", context)
 
-    def test_planning_routing_is_loaded_without_detailed_workflow(self):
+    def test_계획_라우팅은_트리거만_싣고_계획_정의와_절차는_참조에_둔다(self):
+        """세션 문맥에는 계획 트리거와 참조 링크만 있고, 계획 정의와 단계 절차는 구현 계획 참조에만 있다."""
+        # Given
+        planning = " ".join((REPO_ROOT / "instructions/implementation-planning.md").read_text(encoding="utf-8").split())
+
+        # When
         context = self.context(self.run_hook("codex"))
-        self.assertIn("An implementation plan must let an executor proceed", context)
+
+        # Then
         self.assertIn("This is an explicit exception to the preceding trigger boundary", context)
         self.assertIn("instructions/implementation-planning.md", context)
         self.assertIn("instructions/independent-model-validation.md", context)
+        self.assertNotIn("An implementation plan must let an executor proceed", context)
         self.assertNotIn("## 1. Intent and scope freeze", context)
+        self.assertIn("lets an executor make the requested change without adding design decisions", planning)
 
     def test_changed_instructions_are_read_on_the_next_event(self):
         self.context(self.run_hook())
@@ -598,6 +606,51 @@ class SessionContextTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("instructions were not loaded", result.stderr)
         self.assertEqual(result.stdout, "")
+
+    def test_모델_평가_참조가_없으면_부분_컨텍스트_없이_실패한다(self):
+        """모델 평가 참조 파일이 없으면 훅은 일부 컨텍스트도 내보내지 않고 실패를 알린다."""
+        # Given
+        (self.root / "instructions/model-evaluation.md").unlink()
+
+        # When
+        result = self.run_hook()
+
+        # Then
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("instructions were not loaded", result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_실패와_유지보수_참조가_없으면_부분_컨텍스트_없이_실패한다(self):
+        """실패와 유지보수 참조 파일이 없으면 훅은 일부 컨텍스트도 내보내지 않고 실패를 알린다."""
+        # Given
+        (self.root / "instructions/failure-and-maintenance.md").unlink()
+
+        # When
+        result = self.run_hook()
+
+        # Then
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("instructions were not loaded", result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_위임_참조가_없으면_구현_에이전트_컨텍스트는_실패하고_메인은_영향받지_않는다(self):
+        """구현 위임 참조 파일이 없으면 구현 에이전트 시작은 부분 컨텍스트 없이 실패하고 메인 세션은 영향받지 않는다."""
+        # Given
+        (self.root / "instructions/implementation-delegation.md").unlink()
+
+        # When
+        failed = self.run_hook(
+            "claude",
+            event="SubagentStart",
+            payload=json.dumps({"hook_event_name": "SubagentStart", "agent_type": "hei5enbug-agent-setup:worker"}),
+        )
+        main = self.context(self.run_hook("claude"))
+
+        # Then
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertEqual(failed.stdout, "")
+        self.assertIn("implementation-delegation.md", failed.stderr)
+        self.assertIn("# Common", main)
 
     def test_invalid_event_reports_failure(self):
         for payload in ("not json", "null", "[]", "{}", '{"hook_event_name":"Stop"}'):

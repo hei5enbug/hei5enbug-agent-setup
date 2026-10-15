@@ -3,9 +3,9 @@
 The reviewer invocation governed by [independent model validation](independent-model-validation.md) is an
 exception to the timing and worker rules below.
 
-Before dispatching an agent or model runner, read [shared model routing](model-routing.md), following the
-instruction-reuse rules in [work efficiency](work-efficiency.md). After a main-model or profile switch or
-session resume, apply its effective-settings checks before dispatch.
+Read [shared model routing](model-routing.md) before dispatching a skill review role or Skill Builder participant,
+selecting an independent reviewer, or dispatching for the first time after a main-model or profile switch or session
+resume; in the last case, apply its effective-settings checks first. Other dispatches need only this file.
 
 ## Built-in agents
 
@@ -23,6 +23,7 @@ session resume, apply its effective-settings checks before dispatch.
   during planning or execution.
 - Pass `gpt-5.6-luna` and `xhigh` explicitly on every spawn. Its bundled role file sets no model, so the spawn
   value applies.
+- Before relying on its result, verify that its rollout record reports `gpt-5.6-luna` and `xhigh`, as for `worker`.
 - Give it one specific question and a narrow search scope.
 - Require file paths, code symbols, and concrete evidence in its result.
 - Treat results as leads. Verify critical claims in the main session before planning or deciding.
@@ -54,8 +55,8 @@ session resume, apply its effective-settings checks before dispatch.
 
 ## Implementation
 
-Coordinate implementation under [implementation execution rules](implementation-execution.md). This section
-adds only the Codex worker integration.
+Coordinate delegated implementation under [implementation delegation rules](implementation-delegation.md).
+This section adds only the Codex worker integration.
 
 - When delegating implementation, use only the plugin `worker` role. Its role file sets no model, so pass the pinned
   `gpt-5.6-luna` and `xhigh` explicitly on every spawn.
@@ -71,7 +72,7 @@ adds only the Codex worker integration.
   sessions directory under `CODEX_HOME`, which defaults to `~/.codex`: its `session_meta` names the parent
   thread from the coordinator's `CODEX_THREAD_ID` and the worker's agent path, and its `turn_context` names
   the actual `model` and `effort`.
-- The spawn result does not name the model, so follow the readiness-only path in implementation execution and
+- The spawn result does not name the model, so follow the readiness-only path in implementation delegation and
   send the implementation assignment to the same worker thread with a follow-up.
 - The host limit is `agents.max_concurrent_threads_per_session`, which counts spawned threads but not the main
   thread. Use its current value and open slots; never change it.
