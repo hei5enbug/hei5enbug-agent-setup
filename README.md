@@ -303,7 +303,17 @@ the DataGrip SQL classifiers: reads run freely, destructive statements always as
 and other SQL uses `mcp:session`. Execution name words (`repl`, `exec`, `execute`, `eval`, `run`, `code`, `script`,
 `command`) are writes unless their input contains a destructive word, which always asks. For other names, a write
 word takes precedence; names with only read verbs are reads, and names with no known verb are writes. One
-`mcp:session` approval covers every non-destructive MCP write for that session, including DataGrip writes.
+`mcp:session` approval covers every non-destructive MCP write for that session, including DataGrip and tabularis writes.
+
+For `mcp__tabularis__run_query`, `connection_id` resolves an ID or name from tabularis' `connections.json`.
+The config directory is `~/Library/Application Support/tabularis` on macOS, `$XDG_CONFIG_HOME/tabularis` or
+`~/.config/tabularis` on Linux, and `%APPDATA%\tabularis` on Windows. `HEI5ENBUG_TABULARIS_DIR` overrides it for tests.
+The guard extracts only `id`, `name`, and `params.driver`; it never prints other connection fields or passwords.
+`postgresql` uses the PostgreSQL classifiers; `sqlserver` and `sqlserver-entra` use the SQL Server classifiers.
+Reads run without approval; non-destructive writes use `mcp:session`. A name containing `승인`, another driver, an
+unknown connection, or an unreadable file always asks. So do raw `delete`, `drop`, or `truncate` words and statements
+led by `DO`, `EXEC`, `EXECUTE`, or `CALL`. These queries use `sql:always:tabularis:<id>:<digest>` keys. Other tabularis
+tools keep the name rules.
 
 `curl` without a request method other than GET/HEAD and without `-d`, `--data*`, `-F`, `--form`, `-T`,
 `--upload-file`, or `--json` is a read. Otherwise it is a write keyed by `curl:<METHOD>@<scheme://host>`; destructive methods such as DELETE always ask.
@@ -337,9 +347,17 @@ The user types `승인 <CODE>` or `approve <CODE>` in chat. A `UserPromptSubmit`
 immediately retries the exact call and continues the task without asking again. Both hosts add the approved
 descriptions and that retry instruction to `UserPromptSubmit` context. A code covers every key of the denied call: its
 always keys as one-time approvals and its write keys as
-session approvals. A one-time approval is consumed by the call that uses it, so a second call that starts before the
-first one finishes is denied with a new code. `PermissionRequest` allows only the call that holds the approval in
-flight, and `PostToolUse` releases it. The agent cannot approve anything itself. A Bash command that names the
+session approvals. If a Codex one-time approval is in flight without `PostToolUse`, the next attempt for the same key
+may reuse it once without a new code. The approval moves to that retry; another interruption needs a new approval
+request. `PermissionRequest` allows only the call holding the approval, and `PostToolUse` releases it.
+
+Each session counts issued approval requests per key until a call completes. Claude asks and Codex code responses
+count, including repeating a pending code. After three requests without `PostToolUse`, a fourth request is denied:
+“This call was approved but did not complete three times; stop retrying and report to the user.” An approval already
+given is honored, including a retry approved by the third code. `PostToolUse` resets the count for the completed
+call's keys. Already approved session keys do not use another key's request budget.
+
+The agent cannot approve anything itself. A Bash command that names the
 approval or heartbeat state directory, or that runs `approval_guard.py`, `datagrip_guard.py`, or `approval_state.py` as
 a program,
 with `-m`, or through Python code that imports it, is denied on both hosts. Plain reads of those files, such as `cat`

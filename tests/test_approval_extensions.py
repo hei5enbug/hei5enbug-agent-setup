@@ -239,6 +239,7 @@ def test_protected_file_reads_warn_and_always_ask(state, fake_bin, path, tool):
     first = guard.handle(event, "codex")
     context = approve(first)
     once = guard.handle(event, "codex")
+    guard.handle({**event, "hook_event_name": "PostToolUse"}, "codex")
     again = guard.handle(event, "codex")
     claude = guard.handle(event, "claude")
     # then

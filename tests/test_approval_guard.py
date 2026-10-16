@@ -770,7 +770,7 @@ def test_claude는_항상_묻는_명령을_매번_묻고_기록하지_않는다(
     # then
     assert decision_of(output) == "ask"
     assert reason_of(output).endswith("This action asks every time.")
-    assert not (state / "xdg" / "hei5enbug-agent-setup" / "approvals" / "claude-s1.json").exists()
+    assert state_mod._load("claude", "s1")["approved"] == []
 
 
 def test_claude_후_처리는_읽기와_pass를_기록하지_않는다(state, fake_bin):
@@ -883,7 +883,8 @@ def test_codex는_항상_묻는_명령을_once_코드로_거부하고_승인_뒤
     assert decision_of(second) == "deny"
 
 
-def test_codex의_once_키는_사전_검사에서_소비되어_권한_요청은_허용하고_두_번째_호출은_거부한다(state, fake_bin):
+def test_codex의_once_키는_미완료_호출에서_한_번_재사용하고_그다음은_거부한다(state, fake_bin):
+    """사전 검사에서 소비한 일회 승인은 완료 전 한 번 재사용하고 다음 호출에는 새 승인을 요구한다."""
     # given
     command = "kubectl delete x --context dev -n web"
     code = code_of(guard.handle(bash_event(command, cwd=state), "codex"))
@@ -892,10 +893,12 @@ def test_codex의_once_키는_사전_검사에서_소비되어_권한_요청은_
     pre = guard.handle(bash_event(command, cwd=state), "codex")
     permission = guard.handle(bash_event(command, "PermissionRequest", cwd=state), "codex")
     pre_again = guard.handle(bash_event(command, cwd=state), "codex")
+    after_retry = guard.handle(bash_event(command, cwd=state), "codex")
     # then
     assert pre is None
     assert permission["hookSpecificOutput"]["decision"] == {"behavior": "allow"}
-    assert decision_of(pre_again) == "deny"
+    assert pre_again is None
+    assert decision_of(after_retry) == "deny"
 
 
 def test_codex는_secret을_거부하고_코드를_만들지_않는다(state, fake_bin):
@@ -1085,7 +1088,8 @@ def test_승인_문장은_세션_승인_또는_한_번_키로_옮기고_코드�
     assert state_mod.approve_text("codex", "s1", f"승인 {write_code}") == []
 
 
-def test_한_번_키는_한_번만_소비된다(state):
+def test_한_번_키는_중단된_호출에서_한_번_재사용된다(state):
+    """일회 키는 처음 소비한 호출이 미완료이면 한 번만 추가로 재사용된다."""
     # given
     keys = ["kubectl:delete@a"]
     code = state_mod.request_code("codex", "s1", keys, [])
@@ -1093,8 +1097,9 @@ def test_한_번_키는_한_번만_소비된다(state):
     # when
     first = state_mod.take_once("codex", "s1", keys, [], "toolu-1")
     second = state_mod.take_once("codex", "s1", keys, [], "toolu-2")
+    third = state_mod.take_once("codex", "s1", keys, [], "toolu-3")
     # then
-    assert (first, second) == (True, False)
+    assert (first, second, third) == (True, True, False)
 
 
 def test_여러_키를_한_코드로_승인하면_모두_기록되고_하나만_소비하면_실패한다(state):
@@ -1381,18 +1386,21 @@ def test_plugin_manifest는_approval_guard_토글을_기본_켜짐으로_선언�
 
 # --- independent review findings -------------------------------------------------------------------------------------
 
-def test_codex_once_키는_병렬_호출에서_한_번만_통과하고_두_번째는_새_코드로_거부된다(state, fake_bin):
+def test_codex_once_키는_이전_미완료_호출에서_다음_호출로_한_번_옮긴다(state, fake_bin):
+    """미완료 일회 승인을 다음 호출에 넘기면 이전 호출은 그 승인을 더 이상 사용할 수 없다."""
     # given
     command = "kubectl delete x --context dev -n web"
     code = code_of(guard.handle(bash_event(command, cwd=state, tool_use_id="toolu-1"), "codex"))
     guard.handle({"hook_event_name": "UserPromptSubmit", "session_id": "s1", "prompt": f"승인 {code}"}, "codex")
+    action = classify(command, state)
     # when
     first = guard.handle(bash_event(command, cwd=state, tool_use_id="toolu-1"), "codex")
     second = guard.handle(bash_event(command, cwd=state, tool_use_id="toolu-2"), "codex")
     # then
     assert first is None
-    assert decision_of(second) == "deny"
-    assert CODE_PATTERN.search(reason_of(second))
+    assert second is None
+    assert not state_mod.permission_allowed("codex", "s1", action, "toolu-1")
+    assert state_mod.permission_allowed("codex", "s1", action, "toolu-2")
 
 
 def test_codex_permission_request는_진행_중인_키만_허용하고_같은_호출의_post가_지운다(state, fake_bin):

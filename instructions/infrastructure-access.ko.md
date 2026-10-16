@@ -10,6 +10,9 @@
   `-o name`을 붙인다.
 - 로그는 `--tail`과 `--since`로 제한한다. `-f`로 따라가지 않는다.
 - 작업에 필요하지 않다면 운영 환경에서 클러스터 전체나 모든 네임스페이스를 대상으로 조회하지 않는다.
+- DB 쿼리는 `list_connections`에 대상이 있으면 작은 `limit`을 둔 tabularis MCP `run_query`를 먼저 쓴다.
+  없으면 DataGrip MCP, 그것도 없으면 `secret_exec.py`를 거친 CLI를 쓴다.
+- 이름에 `승인`이 들어간 연결은 조회를 포함한 모든 쿼리 전에 사용자 승인을 받는다.
 - SQL은 필요한 컬럼만 선택하고, 인덱스가 있는 `WHERE`로 거르고, `LIMIT`을 붙인다.
 - 비용을 모르는 쿼리는 먼저 `EXPLAIN`을 실행한다. `EXPLAIN ANALYZE`는 실행하지 않는다.
 - 큰 테이블은 `COUNT(*)` 대신 테이블 추정치를 사용한다.

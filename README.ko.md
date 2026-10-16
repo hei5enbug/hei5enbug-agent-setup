@@ -293,7 +293,17 @@ MCP 도구 이름은 `_`, `-`, camelCase 경계에서 나뉩니다. 이름의 �
 파괴적 문장은 매번 승인 후 실행하고, 나머지 SQL은 `mcp:session`을 사용합니다. 실행 이름 단어(`repl`, `exec`,
 `execute`, `eval`, `run`, `code`, `script`, `command`)는 쓰기이며, 입력에 파괴적 단어가 있으면 매번 묻습니다.
 그 밖의 이름은 쓰기 단어가 우선합니다. 읽기 동사만 있으면 읽기, 아는 동사가 없으면 쓰기입니다. `mcp:session` 승인
-하나로 DataGrip 쓰기를 포함한 해당 세션의 모든 비파괴적 MCP 쓰기가 허용됩니다.
+하나로 DataGrip과 tabularis 쓰기를 포함한 해당 세션의 모든 비파괴적 MCP 쓰기가 허용됩니다.
+
+`mcp__tabularis__run_query`의 `connection_id`는 tabularis의 `connections.json`에서 ID나 이름으로 찾습니다.
+설정 폴더는 macOS의 `~/Library/Application Support/tabularis`, Linux의 `$XDG_CONFIG_HOME/tabularis` 또는
+`~/.config/tabularis`, Windows의 `%APPDATA%\tabularis`입니다. 테스트에서는 `HEI5ENBUG_TABULARIS_DIR`로 바꿉니다.
+가드는 `id`, `name`, `params.driver`만 추출하며 다른 연결 필드나 비밀번호는 출력하지 않습니다.
+`postgresql`에는 PostgreSQL 분류기를, `sqlserver`·`sqlserver-entra`에는 SQL Server 분류기를 적용합니다.
+읽기는 승인 없이 실행하고, 비파괴적인 쓰기는 `mcp:session`을 사용합니다. 이름에 `승인`이 있거나 다른 드라이버,
+알 수 없는 연결, 읽을 수 없는 파일이면 항상 묻습니다. 원문의 `delete`·`drop`·`truncate` 단어와
+`DO`·`EXEC`·`EXECUTE`·`CALL`로 시작하는 문장도 같습니다. 이 쿼리는 `sql:always:tabularis:<id>:<digest>` 키를 씁니다.
+다른 tabularis 도구는 기존 이름 규칙을 따릅니다.
 
 `curl`은 GET/HEAD 이외의 요청 메서드와 `-d`, `--data*`, `-F`, `--form`, `-T`, `--upload-file`, `--json`이 없으면
 읽기입니다. 나머지는 `curl:<METHOD>@<scheme://host>` 키를 쓰는 쓰기이며, DELETE 같은 파괴적 메서드는 매번 묻습니다. argv의 `-u`·`--user` 또는
@@ -326,8 +336,17 @@ After the user replies with the code, retry this exact call immediately and cont
 사용자가 채팅에 `승인 <CODE>` 또는 `approve <CODE>`를 입력하면 `UserPromptSubmit` 훅이 코드를 기록합니다. 에이전트는 같은 호출을 즉시 재시도하고 다시 묻지 않은 채 작업을
 계속합니다. 양쪽 호스트 모두
 `UserPromptSubmit` 컨텍스트에 승인한 설명과 이 재시도 지침을 제공합니다. 코드는 거부된 호출의 모든
-키를 덮습니다. 항상 키는 한 번짜리 승인으로, 쓰기 키는 세션 승인으로 덮습니다. 한 번짜리 승인은 그것을 쓰는 호출이 소비하므로, 첫 호출이 끝나기 전에 시작한 두 번째 호출은 새 코드와 함께
-거부됩니다. `PermissionRequest`는 승인을 진행 중으로 든 호출만 허용하고, `PostToolUse`가 그 승인을 풉니다. 에이전트는 스스로 승인할 수 없습니다. 승인 또는 heartbeat 상태
+키를 덮습니다. 항상 키는 한 번짜리 승인으로, 쓰기 키는 세션 승인으로 덮습니다. Codex의 일회 승인이 진행 중이고
+`PostToolUse`가 없으면 같은 키의 다음 시도는 코드 없이 한 번 재사용할 수 있습니다. 승인은 그 재시도로 옮겨 가며,
+그 호출도 중단되면 새 승인을 요청해야 합니다. `PermissionRequest`는 승인을 가진 호출만 허용하고 `PostToolUse`가 정리합니다.
+
+각 세션은 호출이 완료될 때까지 발급한 승인 요청을 키별로 셉니다. Claude의 확인 요청과 Codex의 코드 응답이 대상이며,
+같은 대기 코드를 다시 보여 주는 것도 포함합니다. `PostToolUse` 없이 요청 세 번에 도달하면 네 번째 요청을 거부합니다.
+안내 문구는 “This call was approved but did not complete three times; stop retrying and report to the user.”입니다.
+이미 받은 승인은 세 번째 코드로 승인한 재시도까지 실행합니다. `PostToolUse`는 완료된 호출의 키별 횟수를 초기화합니다.
+이미 세션 승인된 키는 다른 키의 요청 한도를 쓰지 않습니다.
+
+에이전트는 스스로 승인할 수 없습니다. 승인 또는 heartbeat 상태
 디렉터리를
 가리키는 Bash 명령이나, `approval_guard.py`, `datagrip_guard.py`, `approval_state.py`를 프로그램으로, `-m`으로, 또는 이를 가져오는
 Python 코드로 실행하는 Bash 명령은 두 호스트 모두에서 거부됩니다. `cat`이나 `rg`로 그 파일을 읽기만 하는 명령은 거부되지 않습니다. 위에서 검증한 `request` 명령만 실행 예외입니다.
