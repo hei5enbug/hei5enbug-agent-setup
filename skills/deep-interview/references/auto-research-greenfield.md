@@ -3,8 +3,8 @@
 Evaluate one greenfield question tagged `research: true` using the deep-interview workflow.
 
 When plugin session rules apply, the main interview session performs candidate synthesis, ranking, and
-recommendation. For one bounded public fact question, it may use a verified researcher under the host's agent
-rules and [shared routing contract](../../../instructions/model-routing.md); the researcher returns evidence
+recommendation. For one bounded public fact question, it may use the `investigation` capability under the host's agent
+rules and [shared routing contract](../../../instructions/model-routing.md); that route returns evidence
 and gaps, not the candidate JSON below. Main combines that evidence with confirmed interview decisions.
 Without plugin rules, this remains a read-only architect prompt for the host's available independent worker
 or sequential fallback. No architecture or acceptance decision is delegated under plugin rules.

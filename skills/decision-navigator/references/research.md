@@ -16,7 +16,7 @@ directory.
 ## Workers and fallback
 
 When plugin session rules apply, follow the host's agent rules and
-[shared routing contract](../../../instructions/model-routing.md). Use a verified researcher for bounded public
+[shared routing contract](../../../instructions/model-routing.md). Use the `investigation` capability for bounded public
 sources and scout for local evidence. Private or authenticated access stays with the authorized main session.
 The evidence worker returns findings; main makes decisions and writes the findings file and ticket links.
 

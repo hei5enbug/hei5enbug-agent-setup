@@ -1,7 +1,7 @@
 {
   "name": "hei5enbug-agent-setup",
   "displayName": "Hei5enbug Agent Skills",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Portable agent skills for repeatable engineering and documentation workflows.",
   "author": {
     "name": "hei5enbug",
@@ -21,7 +21,6 @@
     "./agents/scout.md",
     "./agents/worker.md",
     "./agents/sonnet-worker.md",
-    "./agents/researcher.md",
     "./agents/designer.md",
     "./agents/reviewer.md"
   ],
@@ -29,19 +28,19 @@
     "agent_guard": {
       "type": "boolean",
       "title": "Block built-in subagents",
-      "description": "Hide the built-in general-purpose, Explore, Plan, and claude agents and deny forked subagents so work goes to the plugin's scout, worker, and researcher agents.",
+      "description": "Hide the built-in general-purpose, Explore, Plan, and claude agents and deny forked subagents so work goes to the plugin's scout and worker agents.",
       "default": true
     },
     "session_approval": {
       "type": "boolean",
       "title": "One-time session approval",
-      "description": "Approve each covered outward write (git tags, tag pushes, gh release create or edit, MCP write tools, and Codex worker access to a directory outside the session folder) once per session; destructive or unverifiable actions always ask.",
+      "description": "Approve each covered outward write (git tags, tag pushes, gh release create or edit, and Codex worker access to a directory outside the session folder) once per session; destructive or unverifiable actions always ask.",
       "default": true
     },
     "role_pinning": {
       "type": "boolean",
       "title": "Pin role models",
-      "description": "Run the scout, worker, sonnet-worker, researcher, designer, and reviewer agents on their pinned model and effort, and stop an agent that runs on any other model.",
+      "description": "Run the scout, worker, sonnet-worker, designer, and reviewer agents on their pinned model and effort, and stop an agent that runs on any other model.",
       "default": true
     },
     "implementation_worker": {
@@ -67,7 +66,13 @@
     "datagrip_guard": {
       "type": "boolean",
       "title": "DataGrip query guard",
-      "description": "Run read-only DataGrip queries without approval and ask for anything that writes or cannot be classified.",
+      "description": "Run DataGrip reads without approval with a 60-second PostgreSQL limit; share session approval for non-destructive MCP writes, and ask every time for marked sources or destructive queries.",
+      "default": true
+    },
+    "approval_guard": {
+      "type": "boolean",
+      "title": "Approval guard",
+      "description": "Run covered CLI, script, database, and MCP reads without approval; approve non-destructive writes once per session per key, including pre-approval bundles; share mcp:session for MCP writes; ask every time for destructive, sensitive, or unclassified calls; deny secret-printing commands and approval-state edits.",
       "default": true
     }
   }

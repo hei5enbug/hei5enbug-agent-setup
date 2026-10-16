@@ -21,6 +21,8 @@ HOOKS = json.loads((REPO_ROOT / "hooks/hooks.json").read_text())["hooks"]
 LEGACY_EXPLORER = REPO_ROOT / "tests/fixtures/legacy-codex-explorer.toml"
 LEGACY_WORKER = REPO_ROOT / "tests/fixtures/legacy-codex-worker.toml"
 RETIRED_EXPLORER_DIGESTS = {"bfde4fbbe2740152ad537d576612a34619a57a45adb56072e3f945610ef820af"}
+LEGACY_RESEARCHER = REPO_ROOT / "tests/fixtures/legacy-codex-researcher.toml"
+RETIRED_RESEARCHER_DIGESTS = {"940a7daace75165d8eceeece93a3c4960c42d187754738a744244059d5a0e5c1"}
 RETIRED_WORKER_DIGESTS = {"ce4488d0323832dc1563481875e7c26d693092c94865c37a4b4b89afd8274f83"}
 
 
@@ -35,7 +37,7 @@ class SessionContextTest(unittest.TestCase):
             shutil.copy2(REPO_ROOT / name, self.root / name)
             path = self.root / name
             path.write_text(path.read_text() + "\nROOT PROJECT SENTINEL\n")
-        for name in ("scripts", "instructions"):
+        for name in ("scripts", "instructions", "config"):
             shutil.copytree(REPO_ROOT / name, self.root / name)
         self.cwd = self.base / "unrelated project"
         self.cwd.mkdir()
@@ -147,7 +149,7 @@ class SessionContextTest(unittest.TestCase):
         # Given
         agents = {
             "claude": ("hei5enbug-agent-setup:scout", "hei5enbug-agent-setup:reviewer", "worker", "general-purpose"),
-            "codex": ("scout", "researcher", "reviewer", "hei5enbug-agent-setup:worker"),
+            "codex": ("scout", "reviewer", "hei5enbug-agent-setup:worker"),
         }
 
         for host, agent_types in agents.items():
@@ -272,6 +274,7 @@ class SessionContextTest(unittest.TestCase):
             "Never use section-sign",
             "(../services.md)",
             "(../protected-values.md)",
+            "(../infrastructure-access.md)",
             "(../documentation.md)",
             "(../testing.md)",
         )
@@ -316,7 +319,7 @@ class SessionContextTest(unittest.TestCase):
 
         # Then
         links = re.findall(r"\]\(<([^>]+)>\)", context)
-        self.assertEqual(len(links), 11)
+        self.assertEqual(len(links), 12)
         for link in links:
             self.assertTrue(Path(link).is_relative_to(self.root))
             self.assertTrue(Path(link).is_file())
@@ -580,6 +583,25 @@ class SessionContextTest(unittest.TestCase):
         self.assertIn("instructions were not loaded", result.stderr)
         self.assertEqual(result.stdout, "")
 
+    def test_인프라_접근_규칙은_조건부_참조로만_연결하고_본문은_컨텍스트에_넣지_않는다(self):
+        """코어는 인프라 접근 규칙 파일로 연결만 하고, 그 파일이 없으면 부분 컨텍스트 없이 실패한다."""
+        # Given
+        guide = (self.root / "instructions/infrastructure-access.md").read_text(encoding="utf-8")
+
+        # When
+        loaded = self.context(self.run_hook())
+        (self.root / "instructions/infrastructure-access.md").unlink()
+        missing = self.run_hook()
+
+        # Then
+        self.assertIn("infrastructure-access.md", loaded)
+        self.assertIn("protected-values.md", loaded)
+        self.assertNotIn("EXPLAIN ANALYZE", loaded)
+        self.assertIn("Never run `EXPLAIN ANALYZE`", guide)
+        self.assertLessEqual(len(guide.splitlines()), 25)
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertEqual(missing.stdout, "")
+
     def test_missing_planning_reference_reports_failure_without_partial_context(self):
         (self.root / "instructions/implementation-planning.md").unlink()
         result = self.run_hook()
@@ -700,19 +722,28 @@ class SessionContextTest(unittest.TestCase):
                 (REPO_ROOT / "standalone-agents" / bundled).read_text(encoding="utf-8"),
             )
 
-    def test_Codex_세션은_누락된_연구원_역할을_설치한다(self):
-        """Codex 세션은 researcher 역할이 없을 때 번들 정의를 설치한다."""
+    def test_codex_session_retires_only_an_unmodified_researcher_from_an_earlier_version(self):
+        """이전 버전이 쓴 researcher.toml은 바이트 단위로 같을 때만 제거하고, 고친 파일은 그대로 둔다."""
         # Given
+        shipped = LEGACY_RESEARCHER.read_bytes()
+        self.assertIn(hashlib.sha256(shipped).hexdigest(), RETIRED_RESEARCHER_DIGESTS)
         self.researcher.parent.mkdir(parents=True)
+        self.researcher.write_bytes(shipped)
 
         # When
         self.context(self.run_hook("codex"))
 
         # Then
-        self.assertEqual(
-            self.researcher.read_text(encoding="utf-8"),
-            (REPO_ROOT / "standalone-agents/codex-researcher.toml").read_text(encoding="utf-8"),
-        )
+        self.assertFalse(self.researcher.exists())
+
+        # Given
+        self.researcher.write_bytes(shipped + b"# edited by the user\n")
+
+        # When
+        self.context(self.run_hook("codex"))
+
+        # Then
+        self.assertEqual(self.researcher.read_bytes(), shipped + b"# edited by the user\n")
 
     def test_Codex_세션은_누락된_designer_역할을_설치하고_사용자_파일은_그대로_둔다(self):
         """Codex 세션은 designer 역할이 없을 때 번들 정의를 설치하고, 사용자가 작성한 파일은 덮어쓰지 않는다."""
@@ -757,7 +788,7 @@ class SessionContextTest(unittest.TestCase):
         )
 
     def test_Codex_세션은_사용자가_작성한_연구원_역할을_그대로_둔다(self):
-        """Codex 세션은 사용자가 작성한 researcher 역할을 덮어쓰지 않는다."""
+        """Codex 세션은 사용자가 작성한 researcher 역할을 덮어쓰지도 지우지도 않는다."""
         # Given
         custom = 'name = "researcher"\ndescription = "user-owned"\n'
         self.researcher.parent.mkdir(parents=True)
@@ -958,7 +989,7 @@ class CodexAutoSettingsTest(unittest.TestCase):
         self.base = Path(self.temp.name).resolve()
         self.root = self.base / "plugin"
         self.root.mkdir()
-        for name in ("scripts", ".codex-plugin"):
+        for name in ("scripts", ".codex-plugin", "config"):
             shutil.copytree(REPO_ROOT / name, self.root / name)
         session = self.root / "instructions" / "session"
         session.mkdir(parents=True)

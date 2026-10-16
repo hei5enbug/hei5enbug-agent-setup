@@ -38,6 +38,12 @@ When you judge that an interview would genuinely help but the user has not asked
 the actual request and stop there. Do not mention that a deep interview is available, do not ask
 whether to start it, and do not start it. The user reaches this skill by naming it.
 
+## Execution placement
+
+Run research steps through the session's `investigation` capability, and run the four review lenses (researcher,
+contrarian, simplifier, architecture) through its `review` capability; the main session keeps every interview,
+question, and decision step.
+
 ## Non-Negotiable Contract
 
 - Start only on an explicit request, as described under "Invocation".

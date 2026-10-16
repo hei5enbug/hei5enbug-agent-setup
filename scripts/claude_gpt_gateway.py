@@ -1248,7 +1248,7 @@ def translate_messages_request(body: Mapping[str, Any], profile_id: str) -> dict
 
     output_config = body.get("output_config")
     effort = output_config.get("effort") if isinstance(output_config, dict) else None
-    if body["model"] == "gpt-5.6-luna":
+    if body["model"] == "gpt-5.6-luna" and effort not in helper.LUNA_EFFORTS:
         effort = "xhigh"
     request: dict[str, Any] = {
         "protocol_version": helper.PROTOCOL_VERSION,

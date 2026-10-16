@@ -81,7 +81,7 @@ class ReviewerContractTest(unittest.TestCase):
 
         # Then
         self.assertEqual(agents.count("./agents/reviewer.md"), 1)
-        self.assertEqual(len(agents), 6)
+        self.assertEqual(len(agents), 5)
         self.assertIn("reviewer", manifest["userConfig"]["role_pinning"]["description"])
         self.assertIn("영어 원본: [reviewer.md](../reviewer.md)", mirror)
         self.assertIn("비권위", mirror)
@@ -124,8 +124,9 @@ class ReviewerContractTest(unittest.TestCase):
         )
         self.assertIn("fallback `reviewer` with `gpt-6.1-sol`, `xhigh`", routing_text)
         self.assertIn("Skill Builder trial execution and other non-review participants", routing_text)
-        self.assertIn("--model claude-opus-5-5 --effort high", codex_review)
-        self.assertIn("JSON `modelUsage` names `claude-opus-5-5`", codex_review)
+        self.assertIn("role_runner.py review --host codex --instructions <role file>", codex_review)
+        self.assertNotIn("modelUsage", codex_review)
+        self.assertIn("On runner exit 3 or 4, spawn the plugin `reviewer` role", codex_review)
         self.assertIn("with `gpt-6.1-sol` and `xhigh` passed explicitly", codex_review)
         self.assertIn("The reviewer returns findings only.", routing_text)
         self.assertIn("reviews the same material once and makes the final decision", routing_text)

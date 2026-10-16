@@ -61,7 +61,8 @@
   the table's full model ID and effort, `--output-format json --permission-mode dontAsk --strict-mcp-config`.
   For `haiku_scout` and `sonnet_code_reviewer`, add `--tools Read Grep Glob --allowedTools Read Grep Glob`.
   For `haiku_writer`, add `--tools Read Grep Glob Edit Write --allowedTools Read Grep Glob` plus
-  `Edit(<allowed path>)` and `Write(<allowed path>)` for each assigned Markdown file and mirror. The main
+  `Edit(//<absolute allowed path>)` for each assigned Markdown file and mirror; an Edit rule also covers Write,
+  and `//` marks an absolute path. The main
   session runs its assigned checks. Never expose shell, network, or delegation tools to these fallbacks.
   Accept output only when JSON `modelUsage` names the requested model and the existing effective-settings
   checks confirm the effort. Reapply model, effort, tool limits, and assignment scope on a CLI resume.
@@ -102,16 +103,16 @@
   [Luna comparison](https://vulcanbench.com/benchmarks/swe-v4-gpt55-luna-v35.html), and
   [VulcanBench methodology](https://vulcanbench.com/methodology.html). Keep problem definition, complex
   root-cause reasoning, plans, designs and RFCs, and acceptance decisions in the main session. The
-  `researcher`, `designer`, and `reviewer` roles keep their existing host routes.
+  `designer` and `reviewer` roles keep their existing host routes.
 - Before changing this repository, when `PINS_VERIFIED_ON` in `tests/test_model_pins.py` is more than 14 days old,
-  resolve the newest generally available model of every family in `PINS`, except GPT Luna, then set
-  `PINS_VERIFIED_ON` to that date. GPT Luna stays at the user-selected `gpt-5.6-luna` / `xhigh` until the user
-  explicitly changes that selection.
+  resolve the newest generally available model of every family in `pins` in `config/model-registry.json`, except
+  GPT Luna, then set `PINS_VERIFIED_ON` to that date. GPT Luna stays at the user-selected `gpt-5.6-luna` / `xhigh`
+  until the user explicitly changes that selection.
   Use the official [Claude models overview](https://platform.claude.com/docs/en/about-claude/models/overview), the
   [OpenAI model catalog](https://developers.openai.com/api/docs/models), and each host's model catalog, and
-  exclude previews. When a family has a newer release, update `PINS` and every reference in the same change
-  until `tests/test_model_pins.py` passes. Runtime files name models only by these full IDs; never add an alias
-  or a runtime lookup of the newest release.
+  exclude previews. When a family has a newer release, update `pins` in `config/model-registry.json` and every
+  reference in the same change until `tests/test_model_pins.py` passes. Runtime files name models only by these
+  full IDs; never add an alias or a runtime lookup of the newest release.
 - When tests skip because the Orca CLI is not installed, ask the user whether to install Orca and rerun them
   before you report the checks as passing.
 - The release baseline is the newest `v<major>.<minor>.<patch>` tag reachable from `HEAD`. A version that appears only

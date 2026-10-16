@@ -243,3 +243,8 @@ the next decision, not the user.
 
 The user may run unblocked tickets in parallel, so expect other sessions to edit local map files
 concurrently. Re-read a ticket after claiming it and before recording its resolution.
+
+## Execution placement
+
+Run the research work of research tickets through the session's `investigation` capability; the main session
+keeps every interview, ticket claim and resolution, and decision step.

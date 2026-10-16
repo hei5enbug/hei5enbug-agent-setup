@@ -1,13 +1,10 @@
 import { expect, test } from "claude-code/testing";
 import {
   DESTRUCTIVE_REASON,
-  READ_VERBS,
   UNVERIFIABLE_REASON,
   classify,
   lex,
   registerApproval,
-  toolWordList,
-  toolWords,
 } from "./approval.js";
 
 const REPO_WITH_V1 = "/repos/with-v1";
@@ -23,6 +20,25 @@ const PUSH_TAG = ["git:push-tag"];
 const TAG_PUSH = ["git:push-tag", "git:tag"];
 const RELEASE = ["gh:release"];
 const NONE = [];
+const PLUGIN = "/plugin";
+const MISSING_PLUGIN = "/missing-plugin";
+const REGISTRY_TEXT = JSON.stringify({
+  pins: {},
+  claude_agents: {
+    "hei5enbug-agent-setup:scout": { role: "scout", model: "claude-sonnet-5-5", effort: "medium", access: "read" },
+    "hei5enbug-agent-setup:sonnet-worker": { role: "worker", model: "claude-sonnet-5-5", effort: "high", access: "write" },
+  },
+  codex_agents: {
+    scout: { model: "gpt-5.6-luna", effort: "xhigh", access: "read" },
+    worker: { model: "gpt-5.6-luna", effort: "xhigh", access: "write" },
+  },
+  effort_rules: {},
+  gpt_gateway_models: [],
+  capabilities: Object.fromEntries(
+    ["investigation", "implementation", "design", "language", "review"]
+      .map(name => [name, {}]),
+  ),
+});
 
 const NOW = Date.UTC(2026, 9, 7, 12, 0, 0);
 const DAY = 24 * 60 * 60 * 1000;
@@ -218,109 +234,6 @@ const SEPARATOR_CASES = [
   ["blank-lines", "\n\n"],
 ];
 
-const MCP_WRITE = [
-  "mcp__claude_ai_Slack__slack_send_message",
-  "mcp__claude_ai_Slack__slack_send_message_draft",
-  "mcp__claude_ai_Slack__slack_schedule_message",
-  "mcp__claude_ai_Gmail__reply",
-  "mcp__claude_ai_Gmail__create_draft",
-  "mcp__claude_ai_Gmail__label_message",
-  "mcp__claude_ai_Gmail__apply_sensitive_message_label",
-  "mcp__claude_ai_Gmail__forward",
-  "mcp__claude_ai_Gmail__mark_message_spam",
-  "mcp__claude_ai_Gmail__unmark_thread_spam",
-  "mcp__claude_ai_Atlassian__createJiraIssue",
-  "mcp__claude_ai_Atlassian__editJiraIssue",
-  "mcp__claude_ai_Atlassian__transitionJiraIssue",
-  "mcp__claude_ai_Atlassian__addCommentToJiraIssue",
-  "mcp__claude_ai_Atlassian__updateConfluencePage",
-  "mcp__claude_ai_Google_Drive__create_file",
-  "mcp__claude_ai_Google_Drive__share_file",
-  "mcp__claude_ai_Google_Drive__copy_file",
-  "mcp__azure-devops__wit_work_item_comment_write",
-  "mcp__azure-devops__repo_create_branch",
-  "mcp__azure-devops__wiki_upsert_page",
-  "mcp__tool__merge-pull-request",
-  "mcp__tool__rename_item",
-  "mcp__tool__assign_user",
-  "mcp__tool__invite_member",
-  "mcp__tool__react_to_message",
-  "mcp__tool__publishPage",
-  "mcp__tool__patch_resource",
-  "mcp__tool__closeIssue",
-  "mcp__tool__reopenIssue",
-  "mcp__tool__linkIssues",
-];
-const MCP_DESTRUCTIVE = [
-  "mcp__claude_ai_Gmail__trash_message",
-  "mcp__claude_ai_Gmail__delete_draft",
-  "mcp__claude_ai_Google_Drive__trash_file",
-  "mcp__claude_ai_Claude_Docs__delete",
-  "mcp__tool__removeMember",
-  "mcp__tool__destroy_everything",
-  "mcp__tool__purge_cache",
-  "mcp__tool__drop_table",
-  "mcp__tool__unshare_file",
-  "mcp__tool__revoke_token",
-  "mcp__tool__delete_and_create",
-];
-const MCP_READ_VERB_SILENT = [
-  "mcp__claude_ai_Atlassian__getIssueLinkTypes",
-  "mcp__claude_ai_Atlassian__getJiraIssueRemoteIssueLinks",
-  "mcp__claude_ai_Atlassian__getTransitionsForJiraIssue",
-  "mcp__claude_ai_Atlassian__getAccessibleAtlassianResources",
-  "mcp__claude_ai_Slack__slack_read_thread",
-  "mcp__claude_ai_Google_Drive__get_file_permissions",
-  "mcp__claude_ai_Google_Drive__search_files",
-  "mcp__claude_ai_Google_Drive__list_recent_files",
-  "mcp__claude_ai_Google_Drive__download_file_content",
-  "mcp__datagrip__preview_table_data",
-];
-const MCP_WRITE_KEPT = [
-  "mcp__claude_ai_Atlassian__createJiraIssue",
-  "mcp__claude_ai_Atlassian__editJiraIssue",
-  "mcp__claude_ai_Atlassian__transitionJiraIssue",
-  "mcp__claude_ai_Atlassian__addCommentToJiraIssue",
-  "mcp__claude_ai_Atlassian__createIssueLink",
-  "mcp__claude_ai_Slack__slack_send_message",
-  "mcp__claude_ai_Slack__slack_schedule_message",
-  "mcp__claude_ai_Google_Drive__create_file",
-  "mcp__claude_ai_Google_Drive__update_file",
-  "mcp__claude_ai_Google_Drive__share_file",
-  "mcp__claude_ai_Google_Drive__copy_file",
-  "mcp__tool__send_message",
-  "mcp__claude_ai_Gmail__reply",
-  "mcp__claude_ai_Gmail__forward",
-  "mcp__claude_ai_Gmail__label_message",
-  "mcp__claude_ai_Gmail__create_draft",
-];
-const MCP_DESTRUCTIVE_WINS = [
-  "mcp__claude_ai_Google_Drive__trash_file",
-  "mcp__claude_ai_Gmail__delete_draft",
-  "mcp__claude_ai_Gmail__trash_message",
-  "mcp__tool__get_and_delete_item",
-  "mcp__tool__getOrDeleteThing",
-];
-const MCP_READ = [
-  "mcp__claude_ai_Atlassian__getJiraIssue",
-  "mcp__claude_ai_Atlassian__searchJiraIssuesUsingJql",
-  "mcp__claude_ai_Atlassian__getVisibleJiraProjects",
-  "mcp__claude_ai_Slack__slack_read_channel",
-  "mcp__claude_ai_Slack__slack_search_public",
-  "mcp__claude_ai_Gmail__list_labels",
-  "mcp__claude_ai_Gmail__get_thread",
-  "mcp__claude_ai_Gmail__search_threads",
-  "mcp__claude_ai_Google_Drive__read_file_content",
-  "mcp__azure-devops__repo_pull_request",
-  "mcp__tool__fetch_page",
-  "mcp__tool__query_rows",
-  "mcp__tool__getJiraIssueRemoteIssueLinks",
-  "mcp__datagrip__execute_sql_query",
-  "mcp__datagrip__list_database_connections",
-  "mcp__broken",
-  "mcp__only__",
-];
-
 const LEX_CASES = [
   ["git tag v1", ["git", "tag", "v1"]],
   ["git tag -a v2 -m \"a b\\\"c\"", ["git", "tag", "-a", "v2", "-m", "a b\"c"]],
@@ -421,6 +334,13 @@ function createEnv(options = {}) {
     writes: [],
   };
   env.$ = {
+    plugin: { root: options.registryFails ? MISSING_PLUGIN : PLUGIN },
+    fs: {
+      read: async path => {
+        if (path.startsWith(MISSING_PLUGIN)) throw new Error("registry missing");
+        return REGISTRY_TEXT;
+      },
+    },
     session: {
       cwd: async () => {
         if (env.cwd instanceof Error) throw env.cwd;
@@ -502,14 +422,6 @@ function checkEvent(command, extra = {}) {
 
 function callEvent(command, extra = {}) {
   return { tool: "Bash", command, tool_use_id: "toolu-1", ...extra };
-}
-
-function mcpCheckEvent(tool, extra = {}) {
-  return { tool, input: {}, tool_use_id: "toolu-1", ...extra };
-}
-
-function mcpCallEvent(tool, extra = {}) {
-  return { tool, tool_use_id: "toolu-1", ...extra };
 }
 
 async function approve(hooks, env, ...commands) {
@@ -688,152 +600,6 @@ test("원격을 생략한 태그 푸시는 git을 실행하지 않고 모두 이
   // then
   expect(result).toEqual({ keys: PUSH_TAG, destructive: false, known: true });
 });
-
-for (const name of MCP_WRITE) {
-  test(`쓰기 동작 MCP 도구 ${name}는 도구 전체 이름으로 키를 만들고 모두 이해한 것으로 본다`, async () => {
-    // given
-    const env = createEnv();
-
-    // when
-    const result = summary(await classify(env.$, name, {}));
-
-    // then
-    expect(result).toEqual({ keys: [`mcp:${name}`], destructive: false, known: true });
-  });
-}
-
-for (const name of MCP_DESTRUCTIVE) {
-  test(`삭제 계열 단어가 든 MCP 도구 ${name}는 되돌릴 수 없는 작업이다`, async () => {
-    // given
-    const env = createEnv();
-
-    // when
-    const result = await classify(env.$, name, {});
-
-    // then
-    expect(result.destructive).toBe(true);
-    expect(result.known).toBe(true);
-  });
-}
-
-for (const name of MCP_READ) {
-  test(`조회 계열이거나 DataGrip 쿼리 도구이거나 이름이 모자란 MCP 도구 ${name}는 키가 없다`, async () => {
-    // given
-    const env = createEnv();
-
-    // when
-    const result = await classify(env.$, name, {});
-
-    // then
-    expect(result.keys.size).toBe(0);
-    expect(result.destructive).toBe(false);
-  });
-}
-
-for (const name of MCP_READ_VERB_SILENT) {
-  test(`읽기 동사로 시작하는 MCP 도구 ${name}는 키가 없는 결과를 낸다`, async () => {
-    // given
-    const env = createEnv();
-
-    // when
-    const result = summary(await classify(env.$, name, {}));
-
-    // then
-    expect(result).toEqual({ keys: [], destructive: false, known: false });
-  });
-}
-
-for (const verb of [...READ_VERBS].sort()) {
-  test(`첫 단어가 읽기 동사 ${verb}이면 뒤에 쓰기 단어가 있어도 키가 없는 결과를 낸다`, async () => {
-    // given
-    const env = createEnv();
-    const name = `mcp__tool__${verb}_comment_link`;
-
-    // when
-    const result = summary(await classify(env.$, name, {}));
-
-    // then
-    expect(result).toEqual({ keys: [], destructive: false, known: false });
-  });
-
-  test(`읽기 동사 ${verb}가 첫 단어가 아니면 쓰기 단어가 있는 도구는 그대로 쓰기다`, async () => {
-    // given
-    const env = createEnv();
-    const name = `mcp__tool__create_${verb}`;
-
-    // when
-    const result = summary(await classify(env.$, name, {}));
-
-    // then
-    expect(result).toEqual({ keys: [`mcp:${name}`], destructive: false, known: true });
-  });
-}
-
-for (const name of MCP_WRITE_KEPT) {
-  test(`읽기 동사로 시작하지 않는 쓰기 도구 ${name}는 키를 만들고 되돌릴 수 없는 작업이 아니다`, async () => {
-    // given
-    const env = createEnv();
-
-    // when
-    const result = summary(await classify(env.$, name, {}));
-
-    // then
-    expect(result).toEqual({ keys: [`mcp:${name}`], destructive: false, known: true });
-  });
-}
-
-for (const name of MCP_DESTRUCTIVE_WINS) {
-  test(`삭제 계열 단어는 읽기 동사보다 우선해 ${name}를 되돌릴 수 없는 작업으로 남긴다`, async () => {
-    // given
-    const env = createEnv();
-
-    // when
-    const result = summary(await classify(env.$, name, {}));
-
-    // then
-    expect(result).toEqual({ keys: [`mcp:${name}`], destructive: true, known: true });
-  });
-}
-
-for (const [toolPart, ordered] of [
-  ["getOrDeleteThing", ["get", "or", "delete", "thing"]],
-  ["slack_read_thread", ["slack", "read", "thread"]],
-  ["merge-pull-request", ["merge", "pull", "request"]],
-  ["createJiraIssue", ["create", "jira", "issue"]],
-  ["", []],
-]) {
-  test(`단어 목록은 "${toolPart}"에서 나온 순서를 그대로 지키고 집합과 같은 단어를 낸다`, () => {
-    // given
-    const part = toolPart;
-
-    // when
-    const result = toolWordList(part);
-
-    // then
-    expect(result).toEqual(ordered);
-    expect([...toolWords(part)].sort()).toEqual([...new Set(ordered)].sort());
-  });
-}
-
-for (const [toolPart, words] of [
-  ["createJiraIssue", ["create", "jira", "issue"]],
-  ["slack_send_message", ["slack", "send", "message"]],
-  ["wit_work_item_comment_write", ["wit", "work", "item", "comment", "write"]],
-  ["merge-pull-request", ["merge", "pull", "request"]],
-  ["getJiraIssueRemoteIssueLinks", ["get", "jira", "issue", "remote", "links"]],
-  ["HTTPRequest", ["http", "request"]],
-]) {
-  test(`도구 이름 "${toolPart}"는 밑줄, 하이픈, camelCase 경계에서 소문자 단어로 나뉜다`, () => {
-    // given
-    const part = toolPart;
-
-    // when
-    const result = [...toolWords(part)].sort();
-
-    // then
-    expect(result).toEqual([...words].sort());
-  });
-}
 
 for (const tool of ["Read", "Edit", "Write", "WebFetch", "Task", undefined, 5]) {
   test(`Bash도 MCP도 아닌 도구 ${String(tool)}는 키가 없다`, async () => {
@@ -1342,7 +1108,7 @@ test("확인과 호출의 도구가 다르면 저장된 분류를 쓰지 않고 
   // given
   const hooks = registerHooks();
   const env = createEnv();
-  await hooks.check(env, mcpCheckEvent("mcp__slack__slack_send_message"));
+  await hooks.check(env, { tool: "Read", input: {}, tool_use_id: "toolu-1" });
 
   // when
   await hooks.call(env, callEvent("git tag v2"));
@@ -1511,131 +1277,6 @@ test("오류 없이 끝난 호출도 되돌릴 수 없는 작업이면 기록하
   expect(env.writes).toEqual([]);
 });
 
-test("MCP 쓰기 도구는 도구마다 세션에서 한 번 묻고, 기록한 뒤에는 같은 도구를 허용한다", async () => {
-  // given
-  const hooks = registerHooks();
-  const env = createEnv();
-  const tool = "mcp__claude_ai_Slack__slack_send_message";
-  const other = "mcp__claude_ai_Atlassian__createJiraIssue";
-  const otherSession = createEnv({ data: env.data, sessionId: "sess-2" });
-
-  // when
-  const first = await hooks.check(env, mcpCheckEvent(tool, { input: { channel: "c" } }));
-  await hooks.call(env, mcpCallEvent(tool, { channel: "c" }));
-  const second = await hooks.check(env, mcpCheckEvent(tool, { input: { channel: "d" } }));
-  const differentTool = await hooks.check(env, mcpCheckEvent(other));
-  const differentSession = await hooks.check(otherSession, mcpCheckEvent(tool));
-
-  // then
-  expect(first).toEqual({ decision: "ask", reason: firstTime(`mcp:${tool}`) });
-  expect(second).toEqual({ decision: "allow", reason: approved(`mcp:${tool}`) });
-  expect(differentTool.decision).toBe("ask");
-  expect(differentSession.decision).toBe("ask");
-});
-
-test("MCP 삭제 도구는 항상 묻고 기록하지 않는다", async () => {
-  // given
-  const hooks = registerHooks();
-  const env = createEnv();
-  const tool = "mcp__claude_ai_Google_Drive__trash_file";
-
-  // when
-  const first = await hooks.check(env, mcpCheckEvent(tool));
-  await hooks.call(env, mcpCallEvent(tool));
-  const second = await hooks.check(env, mcpCheckEvent(tool));
-
-  // then
-  expect(first).toEqual({ decision: "ask", reason: DESTRUCTIVE_REASON });
-  expect(second).toEqual({ decision: "ask", reason: DESTRUCTIVE_REASON });
-  expect("approvals" in env.data).toBe(false);
-});
-
-for (const tool of MCP_READ) {
-  test(`조회 도구와 DataGrip 쿼리 도구 ${tool}는 호스트의 판단과 결과를 그대로 두고 기록하지 않는다`, async () => {
-    // given
-    const hooks = registerHooks();
-    const env = createEnv();
-
-    // when
-    const checked = await hooks.check(env, mcpCheckEvent(tool));
-    const called = await hooks.call(env, mcpCallEvent(tool));
-
-    // then
-    expect(checked).toBe(CORE);
-    expect(called).toBe(OK_RESULT);
-    expect(env.writes).toEqual([]);
-  });
-}
-
-test("하위 에이전트의 MCP 쓰기는 허용도 기록도 하지 않는다", async () => {
-  // given
-  const hooks = registerHooks();
-  const env = createEnv();
-  const tool = "mcp__claude_ai_Slack__slack_send_message";
-  await hooks.call(env, mcpCallEvent(tool));
-  const writesBefore = env.writes.length;
-
-  // when
-  const pre = await hooks.check(env, mcpCheckEvent(tool, { agentId: "a" }));
-  await hooks.call(env, mcpCallEvent(tool, { agentId: "a" }));
-
-  // then
-  expect(pre).toEqual({ decision: "ask", reason: firstTime(`mcp:${tool}`) });
-  expect(env.writes.length).toBe(writesBefore);
-});
-
-for (const tool of MCP_READ_VERB_SILENT) {
-  test(`읽기 동사로 시작하는 MCP 도구 ${tool}는 확인과 호출 모두 그대로 두고 기록하지 않는다`, async () => {
-    // given
-    const hooks = registerHooks();
-    const env = createEnv();
-
-    // when
-    const checked = await hooks.check(env, mcpCheckEvent(tool));
-    const called = await hooks.call(env, mcpCallEvent(tool));
-
-    // then
-    expect(checked).toBe(CORE);
-    expect(called).toBe(OK_RESULT);
-    expect(env.writes).toEqual([]);
-  });
-}
-
-for (const tool of MCP_WRITE_KEPT) {
-  test(`쓰기 도구 ${tool}는 처음에 묻고, 기록한 뒤에는 같은 도구를 허용한다`, async () => {
-    // given
-    const hooks = registerHooks();
-    const env = createEnv();
-
-    // when
-    const first = await hooks.check(env, mcpCheckEvent(tool));
-    await hooks.call(env, mcpCallEvent(tool));
-    const second = await hooks.check(env, mcpCheckEvent(tool));
-
-    // then
-    expect(first.decision).toBe("ask");
-    expect(second).toEqual({ decision: "allow", reason: approved(`mcp:${tool}`) });
-  });
-}
-
-for (const tool of MCP_DESTRUCTIVE_WINS) {
-  test(`읽기 동사가 든 삭제 도구 ${tool}도 항상 묻고 기록하지 않는다`, async () => {
-    // given
-    const hooks = registerHooks();
-    const env = createEnv();
-
-    // when
-    const first = await hooks.check(env, mcpCheckEvent(tool));
-    await hooks.call(env, mcpCallEvent(tool));
-    const second = await hooks.check(env, mcpCheckEvent(tool));
-
-    // then
-    expect(first).toEqual({ decision: "ask", reason: DESTRUCTIVE_REASON });
-    expect(second).toEqual({ decision: "ask", reason: DESTRUCTIVE_REASON });
-    expect("approvals" in env.data).toBe(false);
-  });
-}
-
 for (const command of [
   "git tag v1 && echo done",
   `git -C ${quote(REPO_WITH_V1)} push origin --tags && echo "pushed"`,
@@ -1740,7 +1381,7 @@ test("키가 없는 echo 명령은 확인과 호출 모두 그대로 두고 기�
   expect(env.writes).toEqual([]);
 });
 
-test("확인과 호출 hook 두 개만 Bash와 MCP 도구에 걸어 등록한다", () => {
+test("확인과 호출 hook 두 개만 Bash 도구에 걸어 등록한다", () => {
   // given
   const hooks = registerHooks();
 
@@ -1754,7 +1395,7 @@ test("확인과 호출 hook 두 개만 Bash와 MCP 도구에 걸어 등록한다
   expect(hooks.entries.every(entry => typeof entry.catcher === "function")).toBe(true);
 });
 
-test("matcher는 Bash와 mcp__로 시작하는 도구만 고른다", () => {
+test("matcher는 Bash 도구만 고른다", () => {
   // given
   const hooks = registerHooks();
   const names = ["Bash", "mcp__a__b", "mcp__", "Read", "BashOutput", "xmcp__a__b", "Task"];
@@ -1763,7 +1404,7 @@ test("matcher는 Bash와 mcp__로 시작하는 도구만 고른다", () => {
   const matches = hooks.entries.map(entry => names.map(name => entry.matcher.tool.test(name)));
 
   // then
-  for (const row of matches) expect(row).toEqual([true, true, true, false, false, false, false]);
+  for (const row of matches) expect(row).toEqual([true, false, false, false, false, false, false]);
 });
 
 for (const event of ["tool.check", "tool.call"]) {
@@ -2797,4 +2438,159 @@ test("실행기가 아닌 python 명령과 다른 경로의 스크립트는 키 
 
   // then
   expect(results).toEqual(commands.map(() => ({ keys: NONE, destructive: false, known: false })));
+});
+
+test("agent 실행기의 쓰기 에이전트는 세션 폴더 밖 --add-dir에 폴더 키 하나를 만든다", async () => {
+  // given
+  const command = runnerWith("agent", "--name hei5enbug-agent-setup:sonnet-worker", "--fallback", `--add-dir ${OTHER_DIR}`);
+
+  // when
+  const result = await classifyBash(command);
+
+  // then
+  expect(result).toEqual({ keys: [OTHER_KEY], destructive: false, known: true });
+});
+
+test("agent 실행기의 읽기 에이전트는 --add-dir이 없으면 키가 없고 --mcp도 키를 만들지 않는다", async () => {
+  // given
+  const command = runnerWith("agent", "--host codex", "--name scout", "--fallback", "--mcp");
+
+  // when
+  const result = await classifyBash(command);
+
+  // then
+  expect(result).toEqual({ keys: NONE, destructive: false, known: false });
+});
+
+test("agent 실행기에서 승인한 폴더는 같은 폴더를 쓰는 다른 agent 호출을 묻지 않고 허용한다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv();
+  await approve(hooks, env, runnerWith("agent", "--name hei5enbug-agent-setup:sonnet-worker", "--fallback", `--add-dir ${OTHER_DIR}`));
+
+  // when
+  const allowed = await hooks.check(env, checkEvent(runnerWith("agent", "--host codex", "--name worker", "--fallback", "--mcp", `--add-dir ${OTHER_DIR}`)));
+
+  // then
+  expect(allowed).toEqual({ decision: "allow", reason: approved(OTHER_KEY) });
+});
+
+for (const [name, command] of [
+  ["레지스트리에 없는 agent 이름", runnerWith("agent", "--name hei5enbug-agent-setup:nobody", "--fallback", `--add-dir ${OTHER_DIR}`)],
+  ["이름이 없는 agent", runnerWith("agent", "--fallback", `--add-dir ${OTHER_DIR}`)],
+  ["--fallback이 없는 agent", runnerWith("agent", "--name hei5enbug-agent-setup:sonnet-worker", `--add-dir ${OTHER_DIR}`)],
+  ["agent의 --model", runnerWith("agent", "--name hei5enbug-agent-setup:sonnet-worker", "--fallback", "--model claude-opus-5-5", `--add-dir ${OTHER_DIR}`)],
+  ["agent의 --instructions", runnerWith("agent", "--name hei5enbug-agent-setup:sonnet-worker", "--fallback", "--instructions /tmp/i.md", `--add-dir ${OTHER_DIR}`)],
+  ["역할에 붙은 --name", runnerWith("worker", "--name hei5enbug-agent-setup:worker", `--add-dir ${OTHER_DIR}`)],
+  ["역할에 붙은 --fallback", runnerWith("scout", "--fallback")],
+  ["역할에 붙은 --mcp", runnerWith("scout", "--mcp")],
+]) {
+  test(`agent 실행기 명령 (${name})은 확인할 수 없어 묻는다`, async () => {
+    // given
+    const hooks = registerHooks();
+    const env = createEnv();
+
+    // when
+    const asked = await hooks.check(env, checkEvent(command));
+
+    // then
+    expect(asked).toEqual({ decision: "ask", reason: UNVERIFIABLE_REASON });
+  });
+}
+
+test("registry를 읽지 못하면 agent 명령은 이름을 확인할 수 없어 묻는다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv({ registryFails: true });
+
+  // when
+  const asked = await hooks.check(env, checkEvent(runnerWith("agent", "--name hei5enbug-agent-setup:sonnet-worker", "--fallback", `--add-dir ${OTHER_DIR}`)));
+
+  // then
+  expect(asked).toEqual({ decision: "ask", reason: UNVERIFIABLE_REASON });
+});
+
+test("capability 실행기 명령은 --add-dir이 없으면 키가 없다", async () => {
+  // given
+  const command = runnerWith("review", "--host codex", "--instructions /tmp/i.md");
+
+  // when
+  const result = await classifyBash(command);
+
+  // then
+  expect(result).toEqual({ keys: NONE, destructive: false, known: false });
+});
+
+test("쓰기 capability 실행기의 세션 폴더 밖 --add-dir은 worker와 같은 폴더 키를 만든다", async () => {
+  // given
+  const command = runnerWith("design", "--host codex", "--instructions /tmp/i.md", `--add-dir ${OTHER_DIR}`);
+
+  // when
+  const result = await classifyBash(command);
+
+  // then
+  expect(result).toEqual({ keys: [OTHER_KEY], destructive: false, known: true });
+});
+
+for (const [name, command] of [
+  ["--fallback 플래그는", runnerWith("language", "--fallback", "--instructions /tmp/i.md")],
+  ["--host 값", runnerWith("review", "--host claude", "--instructions /tmp/i.md")],
+  ["--resume 값", runnerWith("review", "--host codex", "--instructions /tmp/i.md", "--resume 1111")],
+  ["역할의 --host 값", runnerWith("scout", "--host claude")],
+]) {
+  test(`역할 실행기 명령의 ${name}은 키 없이 알려진 옵션으로 분류된다`, async () => {
+    // given
+    const expected = { keys: NONE, destructive: false, known: false };
+
+    // when
+    const result = await classifyBash(command);
+
+    // then
+    expect(result).toEqual(expected);
+  });
+}
+
+for (const [name, command] of [
+  ["역할에 --fallback", runnerWith("scout", "--fallback")],
+  ["역할에 --instructions", runnerWith("scout", "--instructions /tmp/i.md")],
+  ["capability의 --fallback=값", runnerWith("review", "--instructions /tmp/i.md", "--fallback=yes")],
+  ["capability의 --model", runnerWith("review", "--instructions /tmp/i.md", "--model claude-opus-5-5")],
+  ["값 없는 --instructions", runnerWith("review", "--instructions")],
+  ["알 수 없는 capability", runnerWith("not-a-capability", "--instructions /tmp/i.md")],
+]) {
+  test(`역할 실행기 명령의 ${name}은 확인할 수 없어 묻는다`, async () => {
+    // given
+    const hooks = registerHooks();
+    const env = createEnv();
+
+    // when
+    const asked = await hooks.check(env, checkEvent(command));
+
+    // then
+    expect(asked).toEqual({ decision: "ask", reason: UNVERIFIABLE_REASON });
+  });
+}
+
+test("registry를 읽지 못하면 capability 명령은 알 수 없어 묻는다", async () => {
+  // given
+  const hooks = registerHooks();
+  const env = createEnv({ registryFails: true });
+
+  // when
+  const asked = await hooks.check(env, checkEvent(runnerWith("review", "--instructions /tmp/i.md")));
+
+  // then
+  expect(asked).toEqual({ decision: "ask", reason: UNVERIFIABLE_REASON });
+});
+
+test("registry를 읽지 못해도 역할 실행기 명령은 역할 목록으로 분류한다", async () => {
+  // given
+  const command = runnerWith("scout");
+  const options = { registryFails: true };
+
+  // when
+  const result = await classifyBash(command, options);
+
+  // then
+  expect(result).toEqual({ keys: NONE, destructive: false, known: false });
 });

@@ -1,19 +1,13 @@
+import { claudeRolePins } from "./registry.js";
+
 const HIDDEN_AGENTS = /^(general-purpose|explore|plan|claude)$/i;
 const FORK_DENIAL =
   "Forking the current conversation is disabled while hei5enbug-agent-setup is installed. Use `hei5enbug-agent-setup:scout` or `hei5enbug-agent-setup:worker`, another defined agent, or the main session.";
 
-const ROLE_PINS = Object.freeze({
-  "hei5enbug-agent-setup:worker": { role: "worker", model: "claude-haiku-5-5", effort: "high" },
-  "hei5enbug-agent-setup:sonnet-worker": { role: "worker", model: "claude-sonnet-5-5", effort: "high" },
-  "hei5enbug-agent-setup:scout": { role: "scout", model: "claude-sonnet-5-5", effort: "medium" },
-  "hei5enbug-agent-setup:researcher": { role: "researcher", model: "claude-haiku-5-5", effort: "medium" },
-  "hei5enbug-agent-setup:designer": { role: "designer", model: "claude-opus-5-5", effort: "xhigh" },
-  "hei5enbug-agent-setup:reviewer": { role: "reviewer", model: "claude-opus-5-5", effort: "high" },
-});
-
 const BUILT_IN_DENIAL =
   "The built-in agent is disabled while hei5enbug-agent-setup is installed. Use `hei5enbug-agent-setup:scout` or `hei5enbug-agent-setup:worker`, another defined agent, or the main session.";
 
+const PLUGIN_AGENT = /^[^:]+:/;
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const STORE_KEY = "roles";
 const CONTEXT_BLOCK = { name: "hei5enbugAgentSetupMod", text: "hei5enbug-agent-setup mod: role pinning active" };
@@ -22,7 +16,7 @@ const REFUSAL_TEXT =
 const TOOL_DENIAL =
   "This subagent ran on a model other than its pinned model, so hei5enbug-agent-setup denies its tool calls.";
 const RESULT_WARNING =
-  "Warning: this subagent ran on an unexpected model instead of its pinned model. Do not accept its result; redo the work through another allowed path.";
+  "Warning: this subagent ran on a model other than its pinned model. Do not accept its result; redo the work through another allowed path.";
 
 let storeQueue = Promise.resolve();
 
@@ -83,6 +77,37 @@ function replacedAgentResult(result) {
   };
 }
 
+function unpinnedDenial(name, reason) {
+  return `hei5enbug-agent-setup could not verify the model pin for ${name} (${reason}), so it did not start the agent. Use another defined agent or the main session.`;
+}
+
+function prefixReason(table, name) {
+  if (table.installsUnusable !== undefined && PLUGIN_AGENT.test(name) && !table.registryNames.has(name)) {
+    return table.installsUnusable;
+  }
+  return table.prefixes.find((item) => name.startsWith(item.prefix))?.reason;
+}
+
+function pinnedOrCovered(table, name) {
+  return table.pins.has(name) || table.denials.has(name) || prefixReason(table, name) !== undefined;
+}
+
+function fallbackDenial(root, name, access) {
+  const writes = access === "write" ? " --add-dir <dir> for each directory it may write" : "";
+  const mcp = access === "write" ? " Add --mcp only when the assignment needs MCP tools or network." : "";
+  return (
+    `${name} failed model verification, so hei5enbug-agent-setup denied this spawn once. Run its fallback through the role runner: ` +
+    `python3 ${root}/scripts/role_runner.py agent --name ${name} --fallback --assignment <file> --result <file>${writes}.${mcp}`
+  );
+}
+
+async function consumeRetryNotice($, name) {
+  const last = (await sessionEntries($)).filter((entry) => entry.agent === name).at(-1);
+  if (last?.mismatch !== true || last.retryNoticeIssued === true) return false;
+  await updateRoles($, (entries) => entries.map((entry) => (entry.agentId === last.agentId ? { ...entry, retryNoticeIssued: true } : entry)));
+  return true;
+}
+
 export function registerAgentGuard(on) {
   on("agent.offer", { agent: HIDDEN_AGENTS }, () => ({ isOffered: false })).catch(($, e, next) => next(e));
 
@@ -91,37 +116,50 @@ export function registerAgentGuard(on) {
   on("agent.spawn", { subagentType: HIDDEN_AGENTS }, () => ({ deny: BUILT_IN_DENIAL })).catch(($, e, next) => next(e));
 }
 
+async function pinSpawn($, e, next, unrecorded) {
+  const table = await claudeRolePins($);
+  const reason = table.denials.get(e.subagentType) ?? prefixReason(table, e.subagentType);
+  if (reason !== undefined) return { deny: unpinnedDenial(e.subagentType, reason) };
+  const declared = table.pins.get(e.subagentType);
+  if (declared === undefined) return next(e);
+  if (await consumeRetryNotice($, e.subagentType)) {
+    return { deny: fallbackDenial($.plugin.root, e.subagentType, declared.access) };
+  }
+  const result = await next({ ...e, model: declared.primary.model });
+  if (result.deny !== undefined || result.agentId === undefined) return result;
+  try {
+    await recordRole($, {
+      agentId: result.agentId,
+      agent: e.subagentType,
+      role: declared.role,
+      model: declared.primary.model,
+      effort: declared.primary.effort,
+      toolUseId: e.tool_use_id,
+    });
+  } catch {
+    unrecorded.add(result.agentId);
+  }
+  return result;
+}
+
 export function registerRolePinning(on) {
-  on(
-    "agent.spawn",
-    {
-      subagentType: [
-        "hei5enbug-agent-setup:worker",
-        "hei5enbug-agent-setup:sonnet-worker",
-        "hei5enbug-agent-setup:scout",
-        "hei5enbug-agent-setup:researcher",
-        "hei5enbug-agent-setup:designer",
-        "hei5enbug-agent-setup:reviewer",
-      ],
-    },
-    async ($, e, next) => {
-      const pin = ROLE_PINS[e.subagentType];
-      const result = await next({ ...e, model: pin.model });
-      if (result.deny !== undefined || result.agentId === undefined) return result;
-      await recordRole($, {
-        agentId: result.agentId,
-        role: pin.role,
-        model: pin.model,
-        effort: pin.effort,
-        toolUseId: e.tool_use_id,
-      });
-      return result;
-    },
-  ).catch(($, e, next) => next(e));
+  const unrecorded = new Set();
+
+  on("agent.spawn", async ($, e, next) => {
+    if (typeof e.subagentType !== "string") return next(e);
+    try {
+      return await pinSpawn($, e, next, unrecorded);
+    } catch (error) {
+      if (pinnedOrCovered(await claudeRolePins($), e.subagentType)) {
+        return { deny: unpinnedDenial(e.subagentType, "the role pin check failed") };
+      }
+      throw error;
+    }
+  }).catch(($, e, next) => next(e));
 
   on("turn.step", async function* ($, e, next) {
     if (e.agentId === undefined) return yield* next(e);
-    const entry = await findByAgent($, e.agentId);
+    const entry = unrecorded.has(e.agentId) ? { mismatch: true } : await findByAgent($, e.agentId);
     if (entry === undefined) return yield* next(e);
     if (entry.mismatch === true) {
       yield { kind: "text", index: 0, text: REFUSAL_TEXT };
@@ -129,8 +167,12 @@ export function registerRolePinning(on) {
       return { turnId: e.turnId, index: e.index, answer: REFUSAL_TEXT, toolUses: [], stopReason: "refusal", usage: null };
     }
     const response = yield* next({ ...e, model: entry.model, effort: entry.effort });
-    if (response.usage !== null && response.usage.model !== entry.model) {
-      await markMismatch($, e.agentId);
+    if (response.usage?.model !== entry.model) {
+      try {
+        await markMismatch($, e.agentId);
+      } catch {
+        unrecorded.add(e.agentId);
+      }
     }
     return response;
   }).catch(async function* ($, e, next) {
@@ -146,7 +188,19 @@ export function registerRolePinning(on) {
     const result = await next(e);
     if (result.deny !== undefined) return result;
     const entry = await findByToolUse($, e.tool_use_id);
-    return entry?.mismatch === true ? replacedAgentResult(result) : result;
+    if (result.isError === true) {
+      if (entry !== undefined) await markMismatch($, entry.agentId);
+      return result;
+    }
+    if (entry?.mismatch !== true) return result;
+    return replacedAgentResult(result);
+  }).catch(($, e, next) => next(e));
+
+  on("turn.complete", async ($, e, next) => {
+    if (e.agentId !== undefined && e.reason === "error" && (await findByAgent($, e.agentId)) !== undefined) {
+      await markMismatch($, e.agentId);
+    }
+    return next(e);
   }).catch(($, e, next) => next(e));
 
   on("prompt.context", async ($, e, next) => {

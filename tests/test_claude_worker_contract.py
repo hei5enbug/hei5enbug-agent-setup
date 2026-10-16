@@ -126,7 +126,6 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
                 "./agents/scout.md",
                 "./agents/worker.md",
                 "./agents/sonnet-worker.md",
-                "./agents/researcher.md",
                 "./agents/designer.md",
                 "./agents/reviewer.md",
             ],
@@ -159,7 +158,11 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         self.assertEqual(metadata["disallowedTools"], "Agent")
         self.assertEqual(set(metadata) & UNSUPPORTED_FIELDS, set())
         self.assertIn("UI code (HTML, CSS, JS, components)", normalized)
-        self.assertIn("flowcharts or diagrams", normalized)
+        self.assertIn("flowcharts, diagrams, or images", normalized)
+        self.assertIn("the `design` capability:", normalized)
+        self.assertIn("technical design document drafting assigned to you", normalized)
+        self.assertIn("including writing the document file in the allowed path", normalized)
+        self.assertIn("technical design document", metadata["description"])
         self.assertIn('Follow the "Assigned workers" rules in your session instructions or assignment', normalized)
         self.assertIn("report it to the coordinator and make no edit", normalized)
         mirror = (REPO_ROOT / "agents/ko/designer.ko.md").read_text(encoding="utf-8")
@@ -190,6 +193,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
                 "review_model",
                 "language_guard",
                 "datagrip_guard",
+                "approval_guard",
             ],
         )
         self.assertEqual(
@@ -370,21 +374,24 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         )
         self.assertIn("where `<Source directory>` is the line in the session context", section)
         self.assertIn("Never run `cd` before it.", section)
-        self.assertIn("Add `--model <id>` only for `reviewer` and `--add-dir <dir>` only for `worker`.", section)
+        self.assertIn(
+            "Add `--model <id>` only for `reviewer` and `--add-dir <dir>` only for `worker`, a writing capability, or a `write` agent.",
+            section,
+        )
         for row in (
             "| 0 | Accept the result file. |",
             "| 2 | Fix the call and run it again. |",
             "| 3 or 4 | Read no result file and use the fallback below. |",
             "| `scout` | `hei5enbug-agent-setup:scout` |",
-            "| `researcher` | `hei5enbug-agent-setup:researcher`, only when public search and fetch tools are available |",
+            "| `researcher` | `hei5enbug-agent-setup:scout`, only when public search and fetch tools are available |",
             "| `reviewer` for a skill review role | `hei5enbug-agent-setup:reviewer` |",
             "| `reviewer` for independent validation | None. Report that independent validation was not performed. |",
             "| `worker` | Inspect the partial diff, then `hei5enbug-agent-setup:worker` |",
         ):
             self.assertIn(row, section)
 
-    def test_조사는_역할_실행기의_scout와_researcher로_먼저_실행한다(self):
-        """범위가 한정된 조사는 scout 역할, 공개 조사는 researcher 역할로 실행하고 결과는 단서로만 쓴다."""
+    def test_조사는_scout_역할과_investigation_기능_경로로_실행한다(self):
+        """범위가 한정된 조사는 scout 역할, 공개 조사는 investigation 기능 경로로 실행하고 결과는 단서로만 쓴다."""
         # Given
         text = CLAUDE_AGENTS.read_text(encoding="utf-8")
 
@@ -396,7 +403,8 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
             "run the `scout` role. Give each scout one question and one narrow search scope.",
             "Require file paths, code symbols, and concrete evidence in its results.",
             "Treat results as leads.",
-            "run the `researcher` role, which uses the web search tool and no shell network.",
+            "use the `investigation` capability's route in the capability table.",
+            "Its Claude fallback is the `scout` agent, which has web search and fetch tools.",
         ):
             self.assertIn(phrase, investigation)
         self.assertNotIn("codex exec", investigation)
@@ -441,8 +449,7 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
             "`reviewer` role with `--model` set to the reviewer that file selects.",
             skill_workers,
         )
-        self.assertIn("Send a local-evidence research ticket to the `scout` role", skill_workers)
-        self.assertIn("bounded public research to the `researcher` role", skill_workers)
+        self.assertIn("Send a local-evidence research ticket or bounded public research through the `investigation` capability.", skill_workers)
         self.assertIn("Do not use `scout` for a review role.", skill_workers)
         self.assertIn("trial execution and other non-review participants use the host's upper model", skill_workers)
         self.assertIn("run a separate `claude -p` process with the", skill_workers)
@@ -463,6 +470,30 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         self.assertIn("Other dispatches need only this file.", text)
         self.assertNotIn("Selecting GPT as Claude Code's main model", text)
         self.assertIn("Selecting GPT in Claude Code keeps Claude Code's tools", routing)
+
+    def test_대체는_다른_계열이고_호스트_밖이면_역할_실행기로_가며_옛_대체_고정은_남기지_않는다(self):
+        """Claude Code 대체 절은 좁힌 대체 규칙과 agent 모드 명령을 알리고, 같은 계열 대체 핀과 빈 대체 거부 문구를 남기지 않는다."""
+        # Given
+        narrowed = (
+            "Every fallback is the other model family; a fallback that needs the other host's model runs through the role "
+            "runner, and one the current host can run in-host uses the named agent."
+        )
+        text = " ".join(CLAUDE_AGENTS.read_text(encoding="utf-8").split())
+        routing = " ".join((REPO_ROOT / "instructions/model-routing.md").read_text(encoding="utf-8").split())
+        readme = " ".join((REPO_ROOT / "README.md").read_text(encoding="utf-8").split())
+
+        # When
+        fallback = text.split("## Fallback", 1)[1].split("## Investigation", 1)[0]
+
+        # Then
+        self.assertIn(narrowed, fallback)
+        self.assertIn(narrowed, routing)
+        self.assertIn(narrowed, readme)
+        self.assertIn("`role_runner.py agent --name <name> --fallback`", fallback)
+        self.assertIn("On runner exit 3 or 4, continue in the main conversation.", fallback)
+        self.assertIn("is denied once, naming the runner fallback command", text)
+        self.assertNotIn("fallback pin", text)
+        self.assertNotIn("is denied when there is none", text)
 
 
 if __name__ == "__main__":
