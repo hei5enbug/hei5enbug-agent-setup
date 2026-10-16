@@ -28,16 +28,10 @@ IMPLEMENTATION_AGENTS = {
     },
     "codex": {"worker", "designer"},
 }
-REVIEW_MODELS = (
-    "claude-fable-5-1",
-    "claude-opus-5-5",
-    "claude-sonnet-5-5",
-    "claude-haiku-5-5",
-    "gpt-6-astra",
-    "gpt-5.6-luna",
-    "gpt-6.1-sol",
-)
-DEFAULT_REVIEW_MODEL = "gpt-6-astra"
+REGISTRY_PATH = Path(__file__).resolve().parents[1] / "config" / "model-registry.json"
+REGISTRY = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+REVIEW_MODELS = tuple(REGISTRY["runner"]["review_models"])
+DEFAULT_REVIEW_MODEL = REGISTRY["runner"]["default_review_model"]
 DIGEST_VERSION = 1
 MARKER_SCHEMA = 1
 MARKER_RETENTION_SECONDS = 30 * 24 * 60 * 60
@@ -215,7 +209,6 @@ def write_terminal_marker(root: Path, host: str, event: dict) -> None:
 CODEX_AGENTS = {
     "scout": "codex-scout.toml",
     "worker": "codex-worker.toml",
-    "researcher": "codex-researcher.toml",
     "designer": "codex-designer.toml",
     "reviewer": "codex-reviewer.toml",
 }
@@ -230,6 +223,7 @@ RETIRED_CODEX_AGENTS = {
         "249b194b8c9e0cea3ff687298e58cee99ca6c330f79e04162029a60e2ecfeff0",
     },
     "designer": {"c8c525a3a7fdfb5adbff1cf7474d24dfba35527eb070f4a5206c164b248d43ed"},
+    "researcher": {"940a7daace75165d8eceeece93a3c4960c42d187754738a744244059d5a0e5c1"},
 }
 
 

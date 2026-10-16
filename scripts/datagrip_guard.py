@@ -5,7 +5,10 @@ The data source is resolved from `<projectPath>/.idea/dataSources.xml` by matchi
 `data-source` element. A name containing `승인` always asks. The `driver-ref` selects the database: `postgresql`, or a
 value starting with `sqlserver` or `azure`. Any other driver, an unreadable file, or an unknown uuid asks.
 
-Only queries that are certainly reads run without approval; everything else asks.
+Only queries that are certainly reads run without approval. With the `approval_guard` toggle on, a PostgreSQL or SQL
+Server write on a data source without `승인` in its name uses the shared mcp:session approval key,
+and Codex denies it with a one-time code. A statement that mentions delete, drop, or truncate, and everything
+else that is not a read, asks every time.
   - PostgreSQL with pglast: every statement must be SELECT, VALUES, TABLE, SHOW, or EXPLAIN of a SELECT without
     ANALYZE, and the parse tree must hold no INSERT, UPDATE, DELETE, MERGE, INTO, locking clause, or risky function
     call. Reads run in a read-only transaction through a prepended `SET LOCAL transaction_read_only = on;`.
@@ -13,7 +16,7 @@ Only queries that are certainly reads run without approval; everything else asks
   - SQL Server: every statement starts with SELECT or WITH and holds no write, execute, or side-effect keyword.
     Session variable statements (DECLARE @v, SET @v =, INSERT [INTO] @v) count as reads under the same condition.
   - Control characters, invisible format characters, JDBC escapes, unterminated literals, and parse errors ask.
-The guard never denies and always exits 0.
+Codex denies only unapproved writes and always-asking queries, through approval_state; the guard always exits 0.
 
 Claude Code PreToolUse prints a permission decision; PermissionRequest prints nothing. Codex PreToolUse prints an
 allow with the read-only prefix for PostgreSQL reads, and PermissionRequest prints an allow for any read. Anything
@@ -22,6 +25,7 @@ undecided prints nothing, which leaves the host's own approval flow in charge.
 When pglast is not importable and `$XDG_STATE_HOME/hei5enbug-agent-setup/sql-parser/bin/python` exists (default
 `~/.local/state`), the script re-executes itself once with that interpreter.
 """
+import hashlib
 import json
 import os
 import re
@@ -34,6 +38,8 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from plugin_toggles import enabled  # noqa: E402
+import approval_state  # noqa: E402
+from approval_state import Outcome  # noqa: E402
 
 try:
     from pglast import parser as pglast_parser
@@ -51,9 +57,11 @@ ASK_REASON = "This query writes or cannot be classified as a read. Review the SQ
 PG_ALLOW_REASON = "Classified as a PostgreSQL read; it runs in a read-only transaction."
 MSSQL_ALLOW_REASON = "Classified as a SQL Server read; it runs without approval."
 
-READ_ONLY_PRELUDE = "SET LOCAL transaction_read_only = on;\n"
+READ_ONLY_PRELUDE = "SET LOCAL transaction_read_only = on;\nSET LOCAL statement_timeout = '60s';\n"
 PLACEHOLDER = " __lit__ "
 
+RAW_DESTRUCTIVE = re.compile(r"\b(?:delete|drop|truncate)\b", re.IGNORECASE)
+RISKY_LEADERS = frozenset({"do", "exec", "execute", "call"})
 PRELUDE = re.compile(r"^set\s+local\s+(statement_timeout|lock_timeout|transaction_read_only)\s*(=|to)\s*'?([^';\s]+)'?$", re.I)
 QUERY_START = re.compile(r"^(select|with|explain|show|table|values)\b", re.I)
 KEYWORD_START = r"(?<![^\W\d])(?<![@#])"
@@ -421,13 +429,101 @@ def connection_kind(tool_input: dict) -> str:
     return "unsupported"
 
 
-def decide_postgres(tool_input: dict, sql: str) -> dict:
+def approval_on() -> bool:
+    return enabled("approval_guard")
+
+
+def _leads_with_risky(sql: str, postgres: bool) -> bool:
     try:
-        read_only = postgres_read_state(sql)
+        statements = split_statements(sql, postgres)
     except ValueError:
-        read_only = None
-    if read_only is None:
+        return False
+    return any(
+        (match := re.match(r"([A-Za-z]+)\b", statement)) is not None and match.group(1).lower() in RISKY_LEADERS
+        for statement in statements
+    )
+
+
+def is_read(sql: str, postgres: bool) -> bool:
+    """A read is a read only when the raw text names no delete, drop, or truncate and no statement is led by DO, EXEC, CALL."""
+    if RAW_DESTRUCTIVE.search(sql):
+        return False
+    try:
+        read = postgres_read_state(sql) is not None if postgres else is_mssql_read(sql)
+    except ValueError:
+        return False
+    return read and not _leads_with_risky(sql, postgres)
+
+
+def query_facts(sql: str, postgres: bool):
+    """Return (leading keywords, destructive); keywords is None when the text cannot be parsed.
+
+    The text is destructive when the raw SQL, literals and comments included, names delete, drop, or truncate, or when a
+    statement is led by DO, EXEC, EXECUTE, or CALL.
+    """
+    try:
+        if postgres and pglast_parser is not None:
+            pglast_parser.parse_sql_json(sql)
+        statements = split_statements(sql, postgres)
+    except Exception:
+        return None, False
+    if not statements:
+        return None, False
+    keywords = set()
+    for statement in statements:
+        match = re.match(r"([A-Za-z]+)\b", statement)
+        if match is None:
+            return None, False
+        keywords.add(match.group(1).lower())
+    destructive = RAW_DESTRUCTIVE.search(sql) is not None or bool(keywords & RISKY_LEADERS)
+    return keywords, destructive
+
+
+def always_outcome(tool_input, sql) -> Outcome:
+    text = sql if isinstance(sql, str) else json.dumps(tool_input, sort_keys=True, default=str)
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+    source = find_data_source(tool_input) if isinstance(tool_input, dict) else None
+    name = (source.get("name") if source is not None else None) or "an unidentified data source"
+    connection = tool_input.get("connectionId") if isinstance(tool_input, dict) else None
+    connection = connection if isinstance(connection, str) and connection else "unknown"
+    return Outcome("always", [f"sql:always:{connection}:{digest}"], [f"DataGrip query on {name}"])
+
+
+def classify_query(tool_input) -> Outcome:
+    """Classify a DataGrip query as read, write (asks once per session), or always (asks every time)."""
+    sql = tool_input.get("queryText") if isinstance(tool_input, dict) else None
+    kind = connection_kind(tool_input) if isinstance(tool_input, dict) else "unknown"
+    if kind in ("always", "unknown", "unsupported") or not isinstance(sql, str):
+        return always_outcome(tool_input, sql)
+    postgres = kind == "postgres"
+    if is_read(sql, postgres):
+        return Outcome("read", [], [])
+    keywords, destructive = query_facts(sql, postgres)
+    if keywords is None or destructive:
+        return always_outcome(tool_input, sql)
+    name = find_data_source(tool_input).get("name") or "an unnamed data source"
+    listed = ", ".join(sorted(keywords))
+    return Outcome(
+        "write",
+        ["mcp:session"],
+        [f"DataGrip write ({listed}) on {name}"],
+    )
+
+
+def unapproved_write(tool_input, session_id, tool_use_id=None) -> dict:
+    """Claude decision for a query that is not a read: an approved write runs without the prelude, anything else asks."""
+    if not approval_on():
         return result("ask", ASK_REASON)
+    outcome = classify_query(tool_input)
+    if outcome.kind == "write" or approval_state.parent_session():
+        return approval_state.pre_decision("claude", session_id, outcome, tool_use_id)
+    return result("ask", ASK_REASON)
+
+
+def decide_postgres(tool_input: dict, sql: str, session_id=None, tool_use_id=None) -> dict:
+    if not is_read(sql, True):
+        return unapproved_write(tool_input, session_id, tool_use_id)
+    read_only = postgres_read_state(sql)
     if read_only:
         return result("allow", PG_ALLOW_REASON)
     updated = dict(tool_input)
@@ -435,19 +531,19 @@ def decide_postgres(tool_input: dict, sql: str) -> dict:
     return result("allow", PG_ALLOW_REASON, updated)
 
 
-def decide_mssql(sql: str) -> dict:
-    try:
-        is_read = is_mssql_read(sql)
-    except ValueError:
-        is_read = False
-    return result("allow", MSSQL_ALLOW_REASON) if is_read else result("ask", ASK_REASON)
+def decide_mssql(sql: str, tool_input=None, session_id=None, tool_use_id=None) -> dict:
+    if is_read(sql, False):
+        return result("allow", MSSQL_ALLOW_REASON)
+    return unapproved_write(tool_input, session_id, tool_use_id) if tool_input is not None else result("ask", ASK_REASON)
 
 
-def decide(tool_input) -> dict:
+def decide(tool_input, session_id=None, tool_use_id=None) -> dict:
     if not isinstance(tool_input, dict):
         return result("ask", ASK_REASON)
     kind = connection_kind(tool_input)
     if kind == "always":
+        if approval_on() and approval_state.parent_session():
+            return approval_state.pre_decision("claude", session_id, classify_query(tool_input), tool_use_id)
         return result("ask", ALWAYS_ASK_REASON)
     if kind == "unknown":
         return result("ask", UNKNOWN_REASON)
@@ -456,7 +552,9 @@ def decide(tool_input) -> dict:
     sql = tool_input.get("queryText")
     if not isinstance(sql, str):
         return result("ask", ASK_REASON)
-    return decide_postgres(tool_input, sql) if kind == "postgres" else decide_mssql(sql)
+    if kind == "postgres":
+        return decide_postgres(tool_input, sql, session_id, tool_use_id)
+    return decide_mssql(sql, tool_input, session_id, tool_use_id)
 
 
 def classify_read(tool_input):
@@ -466,21 +564,29 @@ def classify_read(tool_input):
     if not isinstance(sql, str):
         return None
     kind = connection_kind(tool_input)
-    try:
-        if kind == "postgres":
-            read_only = postgres_read_state(sql)
-            return None if read_only is None else (sql, True, read_only)
-        if kind == "mssql":
-            return (sql, False, True) if is_mssql_read(sql) else None
-    except ValueError:
-        return None
+    if kind == "postgres":
+        if not is_read(sql, True):
+            return None
+        return (sql, True, postgres_read_state(sql))
+    if kind == "mssql":
+        return (sql, False, True) if is_read(sql, False) else None
     return None
 
 
-def codex_pre_tool_use(tool_input):
+def codex_unapproved(tool_input, session_id, tool_use_id=None):
+    """Codex decision for a query that is not a read: an approved write proceeds, an always query needs a one-time code."""
+    if not approval_on():
+        return None
+    outcome = classify_query(tool_input)
+    if outcome.kind in ("write", "always"):
+        return approval_state.pre_decision("codex", session_id, outcome, tool_use_id)
+    return None
+
+
+def codex_pre_tool_use(tool_input, session_id=None, tool_use_id=None):
     classified = classify_read(tool_input)
     if classified is None:
-        return None
+        return codex_unapproved(tool_input, session_id, tool_use_id)
     sql, postgres, read_only = classified
     if not postgres or read_only:
         return None
@@ -493,8 +599,11 @@ def codex_pre_tool_use(tool_input):
     }}
 
 
-def codex_permission_request(tool_input):
-    if classify_read(tool_input) is None:
+def codex_permission_request(tool_input, session_id=None, tool_use_id=None):
+    allowed = classify_read(tool_input) is not None
+    if not allowed and approval_on():
+        allowed = approval_state.permission_allowed("codex", session_id, classify_query(tool_input), tool_use_id)
+    if not allowed:
         return None
     return {"hookSpecificOutput": {
         "hookEventName": "PermissionRequest",
@@ -509,24 +618,33 @@ def detect_host() -> str:
 
 
 def handle(event):
+    if isinstance(event, dict):
+        approval_state.heartbeat(detect_host(), event.get("session_id"), event.get("hook_event_name"))
     if not isinstance(event, dict) or event.get("tool_name") != TOOL_NAME:
         return None
     name = event.get("hook_event_name")
     tool_input = event.get("tool_input")
+    session_id = event.get("session_id")
+    tool_use_id = event.get("tool_use_id")
     if detect_host() == "claude":
         if name != "PreToolUse":
             return None
         try:
-            return decide(tool_input)
+            return decide(tool_input, session_id, tool_use_id)
         except Exception:
-            return result("ask", ASK_REASON)
+            return approval_state.pre_decision("claude", session_id, Outcome(
+                "always", ["sql:always:guard-failure"], ["The approval guard failed to check this call"],
+            ), tool_use_id)
     try:
         if name == "PreToolUse":
-            return codex_pre_tool_use(tool_input)
+            return codex_pre_tool_use(tool_input, session_id, tool_use_id)
         if name == "PermissionRequest":
-            return codex_permission_request(tool_input)
+            return codex_permission_request(tool_input, session_id, tool_use_id)
     except Exception:
-        return None
+        if name == "PreToolUse":
+            return approval_state.pre_decision("codex", session_id, Outcome(
+                "always", ["sql:always:guard-failure"], ["The approval guard failed to check this call"],
+            ), tool_use_id)
     return None
 
 
@@ -558,12 +676,14 @@ def run_with_parser(raw: bytes):
 
 
 def main() -> int:
-    if not enabled("datagrip_guard"):
-        return 0
     raw = sys.stdin.buffer.read()
     try:
         event = json.loads(raw)
     except ValueError:
+        return 0
+    if isinstance(event, dict):
+        approval_state.heartbeat(detect_host(), event.get("session_id"), event.get("hook_event_name"))
+    if not enabled("datagrip_guard"):
         return 0
     if not output_possible(event):
         return 0

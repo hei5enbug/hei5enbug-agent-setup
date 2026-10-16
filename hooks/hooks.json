@@ -34,6 +34,16 @@
         ]
       },
       {
+        "matcher": "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/approval_guard.py\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
         "matcher": "^mcp__datagrip__execute_sql_query$",
         "hooks": [
           {
@@ -45,6 +55,16 @@
       }
     ],
     "PermissionRequest": [
+      {
+        "matcher": "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/approval_guard.py\"",
+            "timeout": 10
+          }
+        ]
+      },
       {
         "matcher": "^mcp__datagrip__execute_sql_query$",
         "hooks": [
@@ -64,6 +84,27 @@
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/language_guard.py\"",
             "timeout": 5,
             "async": true
+          }
+        ]
+      },
+      {
+        "matcher": "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/approval_guard.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/approval_guard.py\"",
+            "timeout": 5
           }
         ]
       }

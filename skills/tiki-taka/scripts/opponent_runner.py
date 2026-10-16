@@ -18,19 +18,18 @@ from pathlib import Path
 from typing import Iterator
 
 
-CODEX_MODEL = "gpt-6.1-sol"
-CLAUDE_MODEL = "claude-fable-5-1"
-CLAUDE_FALLBACK = "claude-opus-5-5"
-DEFAULT_EFFORT = "xhigh"
-FAST_EFFORT = "high"
+PLUGIN_ROOT = Path(__file__).resolve().parents[3]
+OPPONENTS = json.loads((PLUGIN_ROOT / "config" / "model-registry.json").read_text(encoding="utf-8"))["opponents"]
+CODEX_MODEL = OPPONENTS["codex"]["model"]
+CLAUDE_MODEL = OPPONENTS["claude"]["model"]
+DEFAULT_EFFORT = OPPONENTS["effort"]
+FAST_EFFORT = OPPONENTS["fast_effort"]
 DEEP_EFFORT = DEFAULT_EFFORT
 STATE_VERSION = "tiki-taka-state-v4"
 DEFAULT_MAX_EXCHANGES = 2
 DEFAULT_TIMEOUT_SECONDS = 900
 DEFAULT_HEARTBEAT_SECONDS = 60
-QUOTA_PATTERN = re.compile(
-    r"reached your .*limit|limit[.].*/model to switch", re.IGNORECASE
-)
+SYNTHETIC_MODEL = "<synthetic>"
 
 
 class RunnerError(RuntimeError):
@@ -327,7 +326,86 @@ def extract_codex_session(events: Path) -> str:
     raise RunnerError("Codex 대화 식별자를 읽지 못했습니다.")
 
 
-def extract_claude_model(events: Path, fallback: str) -> str:
+def codex_rollout_problem(session_id: str, effort: str) -> str | None:
+    home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex").expanduser()
+    sessions = home / "sessions"
+    rollouts = sorted(sessions.glob(f"**/rollout-*{session_id}.jsonl")) if sessions.is_dir() else []
+    if not rollouts:
+        return f"Codex 대화 {session_id}의 rollout 기록을 찾을 수 없어 모델과 사고 강도를 확인하지 못했습니다."
+    rollout = rollouts[-1]
+    try:
+        lines = rollout.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError as error:
+        return f"Codex rollout 기록을 읽을 수 없습니다: {error}"
+    turns = []
+    for line in lines:
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(entry, dict) and entry.get("type") == "turn_context":
+            payload = entry.get("payload")
+            turns.append(payload if isinstance(payload, dict) else {})
+    if not turns:
+        return f"Codex rollout 기록에 turn_context가 없습니다: {rollout}"
+    for turn in turns:
+        if turn.get("model") != CODEX_MODEL or turn.get("effort") != effort:
+            return (
+                f"Codex 기록의 모델과 사고 강도는 {turn.get('model')!r}, {turn.get('effort')!r}이며 "
+                f"고정 값 {CODEX_MODEL!r}, {effort!r}과 다릅니다."
+            )
+    return None
+
+
+def claude_home() -> Path:
+    return Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude").expanduser()
+
+
+def claude_transcript_problem(session_id: str, effort: str) -> str | None:
+    projects = claude_home() / "projects"
+    transcripts = sorted(projects.glob(f"*/{session_id}.jsonl")) if projects.is_dir() else []
+    if not transcripts:
+        return f"Claude 대화 {session_id}의 기록을 찾을 수 없어 사고 강도를 확인하지 못했습니다."
+    transcript = transcripts[-1]
+    try:
+        lines = transcript.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError as error:
+        return f"Claude 대화 기록을 읽을 수 없습니다: {error}"
+    assistants = []
+    for line in lines:
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(entry, dict) and entry.get("type") == "assistant":
+            assistants.append(entry)
+    if not assistants:
+        return f"Claude 기록에 assistant 항목이 없습니다: {transcript}"
+    verified = []
+    for entry in assistants:
+        message = entry.get("message")
+        if isinstance(message, dict) and message.get("model") == SYNTHETIC_MODEL:
+            continue
+        verified.append(entry)
+    if not verified:
+        return f"Claude 기록에 실제 모델이 응답한 assistant 항목이 없습니다: {transcript}"
+    for entry in verified:
+        message = entry.get("message")
+        model = message.get("model") if isinstance(message, dict) else None
+        if model != CLAUDE_MODEL:
+            return (
+                f"Claude 기록의 모델은 {model!r}이며 "
+                f"고정 값 {CLAUDE_MODEL!r}과 다릅니다."
+            )
+        if entry.get("effort") != effort:
+            return (
+                f"Claude 기록의 사고 강도는 {entry.get('effort')!r}이며 "
+                f"고정 값 {effort!r}과 다릅니다."
+            )
+    return None
+
+
+def extract_claude_model(events: Path) -> str | None:
     try:
         with events.open(encoding="utf-8") as source:
             for line in source:
@@ -340,11 +418,11 @@ def extract_claude_model(events: Path, fallback: str) -> str:
                 model = event.get("model")
                 if model is None and isinstance(event.get("message"), dict):
                     model = event["message"].get("model")
-                if model in (CLAUDE_MODEL, CLAUDE_FALLBACK):
+                if model == CLAUDE_MODEL:
                     return str(model)
     except OSError:
         pass
-    return fallback
+    return None
 
 
 def claude_result_is_error(events: Path) -> bool:
@@ -363,16 +441,6 @@ def claude_result_is_error(events: Path) -> bool:
                     return True
     except OSError:
         return False
-    return False
-
-
-def quota_message_found(*paths: Path) -> bool:
-    for path in paths:
-        try:
-            if QUOTA_PATTERN.search(path.read_text(encoding="utf-8", errors="replace")):
-                return True
-        except OSError:
-            continue
     return False
 
 
@@ -395,11 +463,48 @@ def run_supervised(
     return result.returncode
 
 
+MCP_SERVER_NAME = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def codex_mcp_off(repo: Path, timeout_seconds: int) -> list[str]:
+    """Codex가 설정한 MCP 서버마다 끄는 -c 설정을 만든다. 목록을 읽지 못하면 MCP를 켠 채 실행하지 않는다."""
+    try:
+        completed = subprocess.run(
+            ["codex", "mcp", "list", "--json"],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise RunnerError(f"Codex MCP 서버 목록을 읽지 못해 서버를 끌 수 없습니다: {error}") from error
+    if completed.returncode != 0:
+        detail = (completed.stderr or "").strip()[-500:]
+        raise RunnerError(
+            f"Codex MCP 서버 목록을 읽지 못해 서버를 끌 수 없습니다({completed.returncode}): {detail}"
+        )
+    try:
+        servers = json.loads(completed.stdout)
+    except json.JSONDecodeError as error:
+        raise RunnerError("Codex MCP 서버 목록이 JSON이 아니어서 서버를 끌 수 없습니다.") from error
+    if not isinstance(servers, list):
+        raise RunnerError("Codex MCP 서버 목록이 목록 형식이 아니어서 서버를 끌 수 없습니다.")
+    flags: list[str] = []
+    for server in servers:
+        name = server.get("name") if isinstance(server, dict) else None
+        if not isinstance(name, str) or not MCP_SERVER_NAME.fullmatch(name):
+            raise RunnerError(f"Codex MCP 서버 이름 {name!r}을 안전하게 끌 수 없습니다.")
+        flags.extend(["-c", f"mcp_servers.{name}.enabled=false"])
+    return flags
+
+
 def codex_participant_command(
     repo: Path,
     output: Path,
     effort: str,
     session_id: str,
+    mcp_off: list[str],
 ) -> list[str]:
     if not session_id:
         return [
@@ -413,6 +518,7 @@ def codex_participant_command(
             "read-only",
             "-C",
             str(repo),
+            *mcp_off,
             "--json",
             "-o",
             str(output),
@@ -428,6 +534,7 @@ def codex_participant_command(
         f"model_reasoning_effort={effort}",
         "-c",
         'sandbox_mode="read-only"',
+        *mcp_off,
         "--json",
         "-o",
         str(output),
@@ -444,20 +551,9 @@ def claude_participant_command(
 ) -> list[str]:
     command = ["claude", "-p"]
     if first_call:
-        command.extend(
-            [
-                "--session-id",
-                session_id,
-                "--model",
-                CLAUDE_MODEL,
-                "--fallback-model",
-                CLAUDE_FALLBACK,
-            ]
-        )
+        command.extend(["--session-id", session_id, "--model", CLAUDE_MODEL])
     else:
         command.extend(["--resume", session_id, "--model", active_model])
-        if active_model == CLAUDE_MODEL:
-            command.extend(["--fallback-model", CLAUDE_FALLBACK])
     command.extend(
         [
             "--effort",
@@ -467,6 +563,7 @@ def claude_participant_command(
             "--output-format",
             "stream-json",
             "--verbose",
+            "--strict-mcp-config",
         ]
     )
     return command
@@ -497,7 +594,8 @@ def invoke_opponent(
 
     try:
         if args.opponent == "codex":
-            participant = codex_participant_command(repo, output, effort, session_id)
+            mcp_off = codex_mcp_off(repo, args.timeout_seconds)
+            participant = codex_participant_command(repo, output, effort, session_id, mcp_off)
             command = supervisor_command(
                 "codex",
                 repo,
@@ -522,6 +620,10 @@ def invoke_opponent(
                         "Codex 대화 식별자를 확인할 수 없습니다.\n",
                     )
                     raise
+            problem = codex_rollout_problem(session_id, effort)
+            if problem is not None:
+                atomic_write_text(paths.uncertain, problem + "\n")
+                raise RunnerError(problem)
             active_model = CODEX_MODEL
         else:
             first_call = not session_id
@@ -530,7 +632,7 @@ def invoke_opponent(
                 active_model = CLAUDE_MODEL
             else:
                 active_model = read_required(paths.model, "상대 모델")
-                if active_model not in (CLAUDE_MODEL, CLAUDE_FALLBACK):
+                if active_model != CLAUDE_MODEL:
                     raise RunnerError("저장된 Claude 모델이 허용된 값과 다릅니다.")
 
             participant = claude_participant_command(
@@ -554,58 +656,10 @@ def invoke_opponent(
                 participant,
             )
             first_return_code = run_supervised(command, log, allow_failure=True)
-            active_model = extract_claude_model(events, active_model)
+            active_model = extract_claude_model(events)
 
             result_is_error = claude_result_is_error(events)
-            quota_error = quota_message_found(output, log, events)
-            if (
-                active_model == CLAUDE_MODEL
-                and first_return_code != 0
-                and quota_error
-            ):
-                print(
-                    "[tiki-taka] Claude 기본 모델 한도 감지 · 대체 모델로 한 번 재개",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                prompt.write_text(
-                    "The previous request was not processed because the model limit was reached.\n"
-                    "Answer the immediately preceding user request in this same session. "
-                    "Do not repeat the request.\n",
-                    encoding="utf-8",
-                )
-                # stream_agent marks every failed response uncertain. A verified
-                # quota response was definitely received and is safe to retry in
-                # the same session with the configured fallback model.
-                paths.uncertain.unlink(missing_ok=True)
-                output.unlink(missing_ok=True)
-                events.unlink(missing_ok=True)
-                log.unlink(missing_ok=True)
-                participant = claude_participant_command(
-                    effort,
-                    session_id,
-                    CLAUDE_FALLBACK,
-                    False,
-                )
-                command = supervisor_command(
-                    "claude",
-                    repo,
-                    prompt,
-                    output,
-                    events,
-                    log,
-                    paths,
-                    count + 1,
-                    maximum,
-                    CLAUDE_FALLBACK,
-                    args,
-                    participant,
-                )
-                run_supervised(command, log)
-                active_model = CLAUDE_FALLBACK
-                result_is_error = claude_result_is_error(events)
-
-            elif first_return_code != 0:
+            if first_return_code != 0:
                 show_failure_log(log)
                 raise RunnerError(
                     f"반대쪽 에이전트 호출이 실패했습니다({first_return_code})."
@@ -617,6 +671,17 @@ def invoke_opponent(
                     "Claude가 오류 결과를 반환했습니다.\n",
                 )
                 raise RunnerError("Claude가 오류 결과를 반환했습니다.")
+
+            if active_model is None:
+                atomic_write_text(
+                    paths.uncertain,
+                    "Claude 응답에 모델 증거가 없습니다.\n",
+                )
+                raise RunnerError("Claude 응답에 모델 증거가 없어 모델을 확인하지 못했습니다.")
+            problem = claude_transcript_problem(session_id, effort)
+            if problem is not None:
+                atomic_write_text(paths.uncertain, problem + "\n")
+                raise RunnerError(problem)
 
         try:
             response = output.read_text(encoding="utf-8")
@@ -903,8 +968,7 @@ def main() -> int:
         if args.show_config:
             if args.opponent == "claude":
                 print(
-                    f"opponent=claude model={CLAUDE_MODEL} "
-                    f"fallback={CLAUDE_FALLBACK} effort={effort}"
+                    f"opponent=claude model={CLAUDE_MODEL} effort={effort}"
                 )
             else:
                 print(f"opponent=codex model={CODEX_MODEL} effort={effort}")

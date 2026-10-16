@@ -19,6 +19,23 @@ compatibility: >-
 Create documents that let the intended reader implement, validate, operate, or approve a design
 without guessing.
 
+## Execution placement
+
+Run each worker phase through the session's capability route; the main session keeps the phases marked
+main, asks the user, and accepts the result.
+
+| Phase | Owner |
+|---|---|
+| Mode, scope, evidence, and terminology intake, including any clarifying question | main |
+| Contract and repository evidence gathering | `investigation` |
+| Drafting or revising design content, from the frozen intent, evidence, and required references | `design` |
+| Diagrams | `design` |
+| Wording pass, meaning-preserving; Korean output follows the Korean writing reference | `language` |
+| Independent review gate and final acceptance | main |
+
+The wording pass changes no design content, so the model family of the `design` worker is the authoring family for
+reviewer selection.
+
 ## Authority and resources
 
 Use this file and the references it explicitly requires as executable instructions.

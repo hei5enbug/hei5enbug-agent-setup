@@ -154,20 +154,32 @@ class GatewayTest(unittest.TestCase):
             openai_http_factory=provider_factory, logger=kwargs.pop("logger", FakeLog()), **kwargs,
         )
 
-    def test_Luna의_누락되거나_다른_추론_강도를_xhigh로_고정한다(self):
-        """게이트웨이는 Luna 요청의 기존 추론 강도와 관계없이 xhigh로 공급자 요청을 만든다."""
+    def test_Luna의_허용된_추론_강도는_유지하고_누락되거나_다른_값은_xhigh로_고정한다(self):
+        """게이트웨이는 Luna 요청의 high와 xhigh를 그대로 두고, 누락되거나 허용되지 않은 값은 xhigh로 바꾼다."""
         # Given
         requests = [_anthropic_request(output_config={"effort": effort})
-                    for effort in (None, "low", "medium", "high", "xhigh", "max")]
+                    for effort in (None, "low", "high", "xhigh", "max")]
         requests.append(_anthropic_request())
+        expected_efforts = ["xhigh", "xhigh", "high", "xhigh", "xhigh", "xhigh"]
 
         # When
         payloads = [helper.build_responses_payload(gateway.translate_messages_request(request, self.profile_id),
                                                    subscription=False)[0] for request in requests]
 
         # Then
-        self.assertEqual(["gpt-5.6-luna"] * 7, [payload["model"] for payload in payloads])
-        self.assertEqual([{"effort": "xhigh"}] * 7, [payload["reasoning"] for payload in payloads])
+        self.assertEqual(["gpt-5.6-luna"] * 6, [payload["model"] for payload in payloads])
+        self.assertEqual([{"effort": effort} for effort in expected_efforts], [payload["reasoning"] for payload in payloads])
+
+    def test_Luna의_medium_추론_강도는_게이트웨이에서_xhigh로_바꾼다(self):
+        """Luna 허용 목록에 없는 medium 추론 강도는 게이트웨이가 xhigh로 바꾼 뒤 헬퍼 요청을 만든다."""
+        # Given
+        request = _anthropic_request(output_config={"effort": "medium"})
+
+        # When
+        translated = gateway.translate_messages_request(request, self.profile_id)
+
+        # Then
+        self.assertEqual("xhigh", translated["effort"])
 
     def _post(self, app, request=None, *, sink=None, target="/test-secret/v1/messages", cancel_event=None):
         sink = sink or CaptureSink()

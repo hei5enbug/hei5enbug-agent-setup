@@ -1,7 +1,8 @@
 # Common
 
-- Keep planning, architecture, trade-offs, problem definition, complex debugging, review, and key decisions
-  in the main session. Never delegate high-level reasoning.
+- Keep problem definition, planning decisions, trade-offs, complex debugging, and acceptance in the main session.
+  A skill may delegate drafting, including a design document, to the capability worker it names; the main session
+  approves the decisions and accepts the result.
 - When the target is a known symbol, file path, glob, or literal string, search directly in the main session.
 - Create every new commit, whether the user asked for it or a task requires it, through the `suggest-commit`
   skill in its commit mode. Amends, merges, reverts, and cherry-picks are outside this rule.

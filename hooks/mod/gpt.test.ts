@@ -2,6 +2,17 @@ import { expect, test } from "claude-code/testing";
 import { registerGpt } from "./gpt.js";
 
 const GPT_MODELS = ["gpt-6.1-sol", "gpt-5.6-luna"];
+const REGISTRY = JSON.stringify({
+  pins: { "gpt-luna": "gpt-5.6-luna", "gpt-sol": "gpt-6.1-sol" },
+  claude_agents: {},
+  effort_rules: { "gpt-5.6-luna": ["high", "xhigh"] },
+  gpt_gateway_models: ["gpt-6.1-sol", "gpt-5.6-luna"],
+});
+const REGISTRY_CONTEXT = { plugin: { root: "/plugin" }, fs: { read: async () => REGISTRY } };
+
+function registryFiles(on) {
+  on("fs.read", () => ({ value: REGISTRY }));
+}
 const LAUNCHER_COMMAND =
   "uv run --extra claude-gpt python scripts/claude_gpt.py launch --profile <profile-id> -- <Claude arguments>";
 
@@ -36,6 +47,7 @@ function gatewayContext(values) {
 
 async function invoke(context, event, { fail = false } = {}) {
   const { handler, errorHandler } = registeredGpt();
+  const $ = { ...REGISTRY_CONTEXT, ...context };
   const calls = [];
   const next = (forwardedEvent) => {
     calls.push(forwardedEvent);
@@ -56,9 +68,9 @@ async function invoke(context, event, { fail = false } = {}) {
   };
 
   try {
-    return { ...(await collect(handler(context, event, next))), calls };
+    return { ...(await collect(handler($, event, next))), calls };
   } catch {
-    return { ...(await collect(errorHandler(context, event, next))), calls };
+    return { ...(await collect(errorHandler($, event, next))), calls };
   }
 }
 
@@ -137,6 +149,7 @@ test("모든 기능 옵션을 꺼도 런처 URL이 없으면 메인 GPT 요청�
   options: { agent_guard: false, session_approval: false, role_pinning: false, language_guard: false, datagrip_guard: false },
 }, async ($, on) => {
   // given
+  registryFiles(on);
   on("env.get", () => ({ value: undefined }));
   const stream = $.turn.step({ turnId: "turn-off", index: 0, model: "gpt-5.6-luna", messageCount: 1 });
   const chunks = [];
@@ -151,6 +164,7 @@ test("모든 기능 옵션을 꺼도 런처 URL이 없으면 메인 GPT 요청�
 
 test("호스트 환경 API가 같은 런처 URL을 반환하면 메인 GPT 요청을 한 번 전달한다", async ($, on) => {
   // given
+  registryFiles(on);
   const names = [];
   const forwarded = [];
   on("env.get", (_$, event) => {
@@ -210,6 +224,7 @@ test("다른 Luna 버전은 메인과 하위 에이전트에서 모두 실행 �
 
 test("실제 Mod 필터에서도 이전 Luna 요청을 다음 핸들러로 전달하지 않는다", async ($, on) => {
   // given
+  registryFiles(on);
   const forwarded = [];
   on("turn.step", async function* (_$, event) {
     forwarded.push(event);
@@ -227,7 +242,7 @@ test("실제 Mod 필터에서도 이전 Luna 요청을 다음 핸들러로 전�
   expect(run.chunks[0]?.text).toContain("gpt-5.6-luna");
 });
 
-test("Luna의 요청 추론 강도가 없거나 달라도 xhigh로 한 번 전달한다", async () => {
+test("Luna의 요청 추론 강도가 high나 xhigh면 그대로 두고 없거나 다르면 xhigh로 한 번 전달한다", async () => {
   // given
   const context = gatewayContext({
     HEI5ENBUG_GPT_GATEWAY_URL: "http://127.0.0.1/gpt",
@@ -242,7 +257,8 @@ test("Luna의 요청 추론 강도가 없거나 달라도 xhigh로 한 번 전�
 
   // then
   for (let index = 0; index < events.length; index++) {
-    expect(results[index].calls).toEqual([{ ...events[index], effort: "xhigh" }]);
+    const effort = ["high", "xhigh"].includes(events[index].effort) ? events[index].effort : "xhigh";
+    expect(results[index].calls).toEqual([{ ...events[index], effort }]);
     expect(results[index].result.stopReason).toEqual("end_turn");
   }
 });
@@ -260,6 +276,23 @@ test("게이트웨이가 실패한 메인 GPT 요청은 다시 전달하지 않�
 
   // then
   expect(run.calls).toEqual([event]);
+  expect(run.result.stopReason).toEqual("refusal");
+  expect(run.chunks[0]?.text).toContain("GPT 요청을 전달하는 중 오류가 발생해 중단했습니다");
+});
+
+test("레지스트리를 읽지 못하면 GPT 요청을 전달하지 않고 중단한다", async () => {
+  // given
+  const context = {
+    plugin: { root: "/missing" },
+    fs: { read: async () => { throw new Error("registry missing"); } },
+  };
+  const event = { turnId: "no-registry", index: 0, model: "gpt-6.1-sol" };
+
+  // when
+  const run = await invoke(context, event);
+
+  // then
+  expect(run.calls).toEqual([]);
   expect(run.result.stopReason).toEqual("refusal");
   expect(run.chunks[0]?.text).toContain("GPT 요청을 전달하는 중 오류가 발생해 중단했습니다");
 });

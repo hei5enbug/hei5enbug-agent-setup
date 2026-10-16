@@ -31,6 +31,7 @@ hei5enbug-agent-setup/
 ├── hooks/hooks.json
 ├── hooks/mod/
 ├── config/claude-mod.json
+├── config/model-registry.json
 ├── instructions/
 │   ├── claude-agents.md
 │   ├── codex-agents.md
@@ -52,31 +53,31 @@ hei5enbug-agent-setup/
 │       └── core.md
 ├── scripts/
 │   ├── agent_guard.py
+│   ├── approval_guard.py
+│   ├── approval_state.py
 │   ├── datagrip_guard.py
 │   ├── language_guard.py
 │   ├── plugin_toggles.py
 │   ├── role_runner.py
-│   └── session_context.py
+│   ├── session_context.py
+│   └── verify_spawn.py
 ├── tests/
 ├── LICENSE
 ├── pyproject.toml
 ├── agents/
 │   ├── ko/
 │   │   ├── designer.ko.md
-│   │   ├── researcher.ko.md
 │   │   ├── reviewer.ko.md
 │   │   ├── scout.ko.md
 │   │   ├── sonnet-worker.ko.md
 │   │   └── worker.ko.md
 │   ├── designer.md
-│   ├── researcher.md
 │   ├── reviewer.md
 │   ├── scout.md
 │   ├── sonnet-worker.md
 │   └── worker.md
 ├── standalone-agents/
 │   ├── codex-designer.toml
-│   ├── codex-researcher.toml
 │   ├── codex-reviewer.toml
 │   ├── codex-scout.toml
 │   └── codex-worker.toml
@@ -99,20 +100,19 @@ package the same `skills/` directory for Codex and Claude Code without copying s
 
 The `agents/` directory ships with the Claude Code plugin, so installing the bundle adds the
 `hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:worker`, `hei5enbug-agent-setup:sonnet-worker`,
-`hei5enbug-agent-setup:researcher`, `hei5enbug-agent-setup:designer`, and
-`hei5enbug-agent-setup:reviewer` subagents. No manual copy is needed. The manifest lists only these six English
-definitions, so the Korean mirrors in `agents/ko/` are not registered.
+`hei5enbug-agent-setup:designer`, and `hei5enbug-agent-setup:reviewer` subagents. No manual copy is needed. The manifest
+lists only these five English definitions, so the Korean mirrors in `agents/ko/` are not registered.
 
 Codex discovers subagents only in `~/.codex/agents/` and `.codex/agents/`, so a plugin cannot register one.
 Instead, the session hook copies `standalone-agents/codex-scout.toml`, `codex-worker.toml`,
-`codex-researcher.toml`, `codex-designer.toml`, and `codex-reviewer.toml` to matching
-`~/.codex/agents/<role>.toml` files when absent. They define five roles that also exist on Claude Code, with fixed
+`codex-designer.toml`, and `codex-reviewer.toml` to matching `~/.codex/agents/<role>.toml` files when absent. They
+define four roles that also exist on Claude Code, with fixed
 reasoning effort and sandbox. The Codex `reviewer` role has no model key; the skill instructions pass its model and
 effort explicitly when it is the fallback. The plugin `worker` replaces the
 built-in Codex `worker`, and `scout` leaves the built-in `explorer` untouched. A file you edited is never
 overwritten, and the agents become available in the next Codex session. Because an edited copy never changes,
 the files set no model; the Codex instructions pass the pinned model on every spawn instead. The hook also
-removes an `explorer.toml` and replaces a `worker.toml` that an earlier version wrote, but only while the file is
+removes an `explorer.toml` and a `researcher.toml`, and replaces a `worker.toml`, that an earlier version wrote, but only while the file is
 byte-identical to that version's bundled file, so a copy you edited stays. When the plugin is disabled, the installed
 `worker` role runs as an ordinary implementation worker instead of refusing to edit.
 
@@ -123,7 +123,7 @@ user, project, CLI, or managed source. On Codex the `PreToolUse` hook `scripts/a
 behavior: it denies an omitted type, `default`, `explorer`, and every type without a role file, including the
 built-in `worker` before the plugin role exists. Skills that ask for an independent
 read-only worker use a role whose verified model, effort, and tools match the skill contract. `scout` handles one
-bounded local investigation, including local-evidence research tickets. Public research can use `researcher`. A
+bounded local investigation, including local-evidence research tickets, and one bounded public research question with web search and fetch tools. A
 skill-assigned review role uses the configured review model, then the `reviewer` fallback if that runner is unavailable.
 The reviewer returns findings only; the main session reviews once and decides. Skills that write trial outputs use a
 verified evaluation runner when required. See the conditional [model routing contract](instructions/model-routing.md).
@@ -135,10 +135,9 @@ the built-in subagent block, role pinning, session approvals, and the GPT refusa
 2.1.292. When the mod does not load, such as on an older Claude Code, with `disableAllHooks`, or under a managed
 policy, these guards are absent and the host's normal permission flow applies.
 
-Role pinning pins each plugin role's model and effort on every request: `scout`, the fallback for the Luna scout, uses
-`claude-sonnet-5-5` with `medium`, `researcher` uses `claude-haiku-5-5` with `medium`, `worker` uses `claude-haiku-5-5`
-with `high`, `sonnet-worker` uses `claude-sonnet-5-5` with `high`, `designer` uses `claude-opus-5-5` with `xhigh`, and
-`reviewer` uses `claude-opus-5-5` with `high`. A subagent that answers on another model is stopped: its later requests
+Role pinning pins each plugin role's model and effort on every request: `scout` uses `claude-sonnet-5-5` with `medium`,
+`worker` uses `claude-haiku-5-5` with `high`, `sonnet-worker` uses `claude-sonnet-5-5` with `high`, `designer` uses
+`claude-opus-5-5` with `xhigh`, and `reviewer` uses `claude-opus-5-5` with `high`. A subagent that answers on another model is stopped: its later requests
 end with a refusal, its tool calls are denied, and its result is replaced with a warning. The session context then
 gets the line `hei5enbug-agent-setup mod: role pinning active` from the registered mod `prompt.context` hook only when
 role pinning is active. This line lets the main session send assignments directly and skip per-delegation settings and
@@ -152,9 +151,10 @@ profile; the helper never reads Codex credentials. Browser sign-in uses your Cha
 separately billed OpenAI API usage and must be selected explicitly. The launcher never changes profiles or billing
 modes automatically.
 
-GPT Luna is fixed to `gpt-5.6-luna` and `xhigh` by user policy. The mod rejects other Luna releases;
-the gateway pins Luna requests to `xhigh`, and the direct helper rejects another effort. Automatic model
-refresh preserves this selection. Apply the same pin to new assignments and resumed sessions.
+GPT Luna is fixed to `gpt-5.6-luna` with `high` or `xhigh` by user policy. The mod and the gateway enforce the
+registry's effort rule: each keeps `high` or `xhigh` and changes any other effort to `xhigh`. The mod also rejects
+other Luna releases, and the direct helper rejects any effort outside that rule. hei5enbug roles use `xhigh`.
+Automatic model refresh preserves this selection. Apply the same pin to new assignments and resumed sessions.
 
 Run the helper from a source checkout with the `claude-gpt` extra, not from the installed plugin cache. Sign in,
 check the active profile, then launch Claude Code with that profile:
@@ -218,8 +218,13 @@ quote.
 A `PreToolUse` hook and a `PermissionRequest` hook, both `scripts/datagrip_guard.py`, run before the DataGrip MCP tool
 `execute_sql_query`. The guard reads the connection from `.idea/dataSources.xml` in the DataGrip project that
 `projectPath` names. A connection whose name contains `승인` always asks for approval. PostgreSQL and SQL Server reads
-run without approval, and PostgreSQL reads run inside a read-only transaction. Writes, queries the guard cannot
-classify, unknown connections, and other database types always ask. The guard never denies a call. In Codex, trust the
+run without approval, and PostgreSQL reads run inside a read-only transaction with
+`SET LOCAL statement_timeout = '60s';`. With `approval_guard` on, non-destructive PostgreSQL and SQL Server writes
+share the single `mcp:session` approval with all other MCP writes. Text that names `delete`, `drop`, or `truncate`
+anywhere, literals and comments included, a statement led by `DO`,
+`EXEC`, `EXECUTE`, or `CALL`, a connection whose name contains `승인`, an unknown connection, another
+database type, and text the guard cannot parse always ask. On Codex, a call that needs approval is denied with a code
+instead; see [Approval guard](#approval-guard). With the toggle off, every write asks as before. In Codex, trust the
 hook in `/hooks`.
 
 Optionally, install the `pglast` parser once:
@@ -232,6 +237,142 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 Without it, PostgreSQL falls back to a stricter text check that may ask more often but still never lets a write run
 without approval.
 
+### Approval guard
+
+A `PreToolUse` hook runs `scripts/approval_guard.py` before Bash, MCP, Claude file tools (`Read`, `Edit`, `Write`,
+`MultiEdit`, `NotebookEdit`), and Codex `apply_patch` calls. It also handles `PermissionRequest`, `PostToolUse`, and
+`UserPromptSubmit`. Reads run without approval on both hosts. Calls have these outcomes:
+
+- **Read** runs without approval.
+- **Write** asks once per session for its key, such as `kubectl:apply@(default) dev/web`. Later calls with the same key
+  run without asking.
+- **Always** asks every time for destructive or forced actions, existing sensitive CLI reads, and unclassified calls.
+- **Sensitive** warns that a call may expose a protected value, recommends `secret_exec.py`, and asks every time.
+- **Request** asks for a bundle of non-destructive write keys before the actual calls.
+- **Secret** is denied on both hosts because the command would print a secret value.
+- **Pass** is a call the guard does not cover, so the host's own permission flow decides.
+
+| CLI | Read | Secret (denied) | Always (asks every time) | Key target |
+|---|---|---|---|---|
+| `kubectl`, `oc` | `get`, `describe`, `logs`, `diff`, any call with `--dry-run=client` or `--dry-run=server` | `get secret` with an output format that prints values, `get --raw` on a `secrets` path, `config view --raw`, `create token` | `delete`, `drain`, `--force`, `--prune` | kubeconfig, then context / namespace |
+| `helm` | `list`, `status`, `get notes`, `repo list` | none | `uninstall`, `get all`, `get manifest`, `get values` | kubeconfig, then context / namespace |
+| `az` | `list`, `show`, `exists`, `query`, `version` | `keyvault secret show` and `download`, `list-keys`, `account get-access-token` | `delete`, `purge` | subscription / resource group |
+| `terraform`, `tofu` | `plan`, `show`, `validate`, `state list`, `fmt -check`, `output` without `-json` or `-raw` | none | `destroy`, `apply -destroy`, `state rm`, `output -json`, `output -raw`, `state show` | directory : workspace |
+| `aws` | `describe-*`, `list-*`, `get-*` other than secret reads, `s3 ls` | `secretsmanager get-secret-value` and `batch-get-secret-value`, `ssm get-parameter*` with `--with-decryption`, `kms decrypt` | `delete-*`, `terminate-*`, `s3 rm`, `s3 sync --delete` | profile / region |
+| `gcloud`, `gsutil` | the first verb in the command path is `list`, `describe`, `get-*`, `ls`, or `cat` | `secrets versions access`, `auth print-access-token` | `delete`, `gsutil rm`, `gsutil rb` | project |
+| `docker`, `podman` | `ps`, `images`, `logs`, `<object> ls` | none | `rm`, `rmi`, `prune`, `compose down -v` | context |
+| `psql`, `sqlcmd` | a query that is a read; `psql` reads run with `default_transaction_read_only=on` and `statement_timeout=60000` | none | files, stdin, interactive use, text that names `delete`, `drop`, or `truncate`, and statements led by `DO`, `EXEC`, `EXECUTE`, or `CALL` | host / database |
+| `curl` | GET/HEAD without data, form, upload, or JSON flags | none; credentials in argv are sensitive | destructive methods such as DELETE | method / scheme and host |
+| `kustomize` | every call | none | none | none |
+| `mysql`, `mongosh`, `redis-cli` | none | none | every call | none |
+
+A write key is `<cli>:<subcommand>@<target>`, where the subcommand is the words before the first flag. For `kubectl`,
+`oc`, and `helm`, the target is the kubeconfig (`--kubeconfig`, then `KUBECONFIG`, else `(default)`) followed by the
+context and namespace; a context that is not given is read through the same kubeconfig. Any other parseable subcommand
+is a write, so `kubectl apply` and `helm upgrade` ask once per session. A covered command inside an indirectly run
+region (`$(...)`, backticks, `eval`, `xargs`, or `sh -c` with any flag cluster that contains `c`) is always. When such
+a region itself prints a secret, the whole command is denied. A heredoc on a covered command is always. A `command -v`
+lookup runs nothing and is not classified.
+
+A compound command is judged as a whole. A secret segment denies it. When any segment is always, the call asks, and
+its approval covers the always keys (once) and the write keys (session). Otherwise a write asks for its keys, unless a
+segment is not verified or the output goes to a file, in which case the whole command always asks. A covered read
+stays a read only when every other segment is a filter such as `grep`, `head`, or `jq`, and output redirections go
+only to `/dev/null` or `2>&1`. Wrappers such as `sudo`, `env`, `nice`, and `time` are skipped, with their options,
+before the executable is read. Targets for write and always calls come from flags or the environment. When neither is
+set, `kubectl config current-context` and `az account show` run for those calls only, with a 3-second limit.
+
+A `psql` read is rewritten to run in a subshell with `PGOPTIONS` extended by
+`-c default_transaction_read_only=on -c statement_timeout=60000`, so the server refuses writes even when the guard's
+read check misses
+a function call, and the option never reaches later commands.
+
+The guard reads shell files invoked by `bash`, `sh`, `zsh`, `./`, `source`, or `.`, Python `.py` files, Node `.js` and
+`.mjs` files, Makefile recipes for the selected/default target and one level of prerequisites, and the script text in
+`package.json` for `npm`, `pnpm`, or `yarn run <name>`. Files resolve from the event's `cwd` and are limited to 256 KiB.
+Shell lines and Makefile recipes use the CLI classifier. Python/Node strings starting with a covered CLI and literal
+argv lists are classified too. Reads need no approval; writes combine their keys; destructive, forced, and secret
+calls keep their normal rules. Unreadable or larger files are unclassified. A script naming a covered CLI or importing
+`boto3`, `azure`, `kubernetes`, `psycopg`, `psycopg2`, `pymysql`, `sqlalchemy`, `pymongo`, `redis`, or `google.cloud`
+without a classifiable call asks every time. Its `script:<sha256>` key includes its path, argv, content, and the values
+of `KUBECONFIG`, `AWS_PROFILE`, `CLOUDSDK_CORE_PROJECT`, and `DOCKER_CONTEXT`. A script with none of these passes.
+
+MCP tool names split at `_`, `-`, and camelCase. Destructive name words always ask. String fields `sql`,
+`statement`, and `queryText`, and a `query` field whose text starts like a SQL statement (a search phrase does not), use
+the DataGrip SQL classifiers: reads run freely, destructive statements always ask,
+and other SQL uses `mcp:session`. Execution name words (`repl`, `exec`, `execute`, `eval`, `run`, `code`, `script`,
+`command`) are writes unless their input contains a destructive word, which always asks. For other names, a write
+word takes precedence; names with only read verbs are reads, and names with no known verb are writes. One
+`mcp:session` approval covers every non-destructive MCP write for that session, including DataGrip writes.
+
+`curl` without a request method other than GET/HEAD and without `-d`, `--data*`, `-F`, `--form`, `-T`,
+`--upload-file`, or `--json` is a read. Otherwise it is a write keyed by `curl:<METHOD>@<scheme://host>`; destructive methods such as DELETE always ask.
+`-u`/`--user` or an `Authorization` header in argv makes it sensitive.
+
+Claude `Read` and Bash reads (`cat`, `less`, `head`, `tail`, `grep`, `rg`) of `~/.kube/config`, any `KUBECONFIG` path,
+`~/.aws/credentials`, `~/.aws/config`, `~/.azure/**`, `~/.config/gcloud/**`, `~/.pgpass`, `~/.docker/config.json`,
+`~/.netrc`, or `.env*` files are sensitive. So are `printenv`, `env` without a command, `kubectl exec ... env|printenv`,
+`docker inspect`, and `docker exec ... env`. Claude asks with “This may expose a protected value; prefer
+secret_exec.py ...”; Codex denies with a one-time code. These approvals never become session approvals.
+
+Prepare a bundle before running writes:
+
+```bash
+python3 <plugin root>/scripts/approval_guard.py request --key 'kubectl:apply@(default) dev/web' --key mcp:session --why 'Deploy the requested change and update the issue'
+```
+
+Claude asks showing every key and the reason, then records the keys in `PostToolUse`. Codex denies with one code for
+the bundle and records it only when the user types `승인 <CODE>`. The command prints the keys and exits 0; it never
+writes approval state itself. Keys must be `<cli>:<kind>@<target>` or `mcp:session`. Destructive or forced kinds,
+sensitive reads, unclassified calls, `sql:always:*`, and destructive `mcp:<tool>` keys cannot be pre-approved.
+
+On Codex, a call that needs approval is denied with a code:
+
+```text
+Approval required: kubectl apply on (default) dev/web. Ask the user to reply `승인 K7M2QX`; do not retry until they do.
+After the user replies with the code, retry this exact call immediately and continue the task without asking again.
+```
+
+The user types `승인 <CODE>` or `approve <CODE>` in chat. A `UserPromptSubmit` hook records the code, and the agent
+immediately retries the exact call and continues the task without asking again. Both hosts add the approved
+descriptions and that retry instruction to `UserPromptSubmit` context. A code covers every key of the denied call: its
+always keys as one-time approvals and its write keys as
+session approvals. A one-time approval is consumed by the call that uses it, so a second call that starts before the
+first one finishes is denied with a new code. `PermissionRequest` allows only the call that holds the approval in
+flight, and `PostToolUse` releases it. The agent cannot approve anything itself. A Bash command that names the
+approval or heartbeat state directory, or that runs `approval_guard.py`, `datagrip_guard.py`, or `approval_state.py` as
+a program,
+with `-m`, or through Python code that imports it, is denied on both hosts. Plain reads of those files, such as `cat`
+or `rg`, are not. The validated `request` command above is the only execution exception. File edits inside either
+state directory, including paths named in an `apply_patch` patch, are denied on both hosts.
+
+Commands that need a secret value use the secret helper: `python3 <plugin root>/scripts/secret_exec.py --secret
+DB_PASSWORD=k8s:<context>/<namespace>/<secret>/<key> -- <command>`. The sources are `k8s:`, `keyvault:<vault>/<name>`,
+`aws:<secret id>[#<json key>]`, and `gcp:<project>/<name>[/<version>]`. `--file VAR=<source>` passes the path of a
+temporary file instead of the value. The value reaches the command only through environment variables or temporary
+files, and the helper masks it in the command's output. When a fetch fails, the helper prints only the source and the
+fetch command's exit code, never the fetch's stderr. Each fetch has a 30-second timeout; a timeout exits 2 and
+names the source with `timed out`.
+
+A role runner child with `HEI5ENBUG_PARENT_SESSION=<host>:<session_id>` also reads the parent's approved keys without
+changing its state. Malformed values are ignored. Children cannot record codes from `UserPromptSubmit` or run
+`request`; an unapproved write is denied with instructions to request approval in the main session and retry.
+
+Every event carrying a valid session ID touches `$XDG_STATE_HOME/hei5enbug-agent-setup/heartbeats/<host>-<session_id>`
+and its `.<EventName>` file before the toggle check, on a best-effort basis. `PreToolUse` also writes the SHA-256 of
+the current `hooks/hooks.json` as one line in `heartbeats/confirmed-<host>`. When this hash is missing or differs,
+`UserPromptSubmit` adds a warning once per session and records that it was shown in the session state. The warning
+explains that the guard has not been seen checking a tool call since its hooks changed, asks Codex users to trust
+the plugin hooks in `/hooks`, and states that writes may run without approval until then. A classifier exception
+asks every time with “The approval guard failed to check this call”. Turning the guard off still prints nothing.
+
+The approval guard is a guardrail, not a security boundary: an agent with full shell access could bypass it. Calls the
+guard does not cover follow the host's own permission flow. Approval state lives under `$XDG_STATE_HOME/hei5enbug-
+agent-setup/approvals/` (default `~/.local/state`), one file per host and session, and files older than 7 days are
+deleted when another approval is written. Set `approval_guard` to `false`, or `HEI5ENBUG_APPROVAL_GUARD=false` on
+Codex, to turn the guard off. In Codex, trust the hooks in `/hooks`.
+
+
 ### Session approvals
 
 On Claude Code only, the mod lets you approve certain outward-facing writes once per session. For each Bash and MCP tool
@@ -241,14 +382,14 @@ and records the approved kind in the mod store (`$.store`) under the session ID,
 that session run without a prompt. It covers creating git tags; pushing tags to a
 configured remote; `gh release create` and `gh release edit` with only the tag and the flags `--title`, `--notes`,
 `--target`, `--generate-notes`, `--notes-from-tag`, `--latest`, `--draft`, `--prerelease`, `--verify-tag`; and MCP tools
-whose names contain a write verb; and a Codex worker's access to a directory outside the session folder (`codex exec`
-with `--add-dir` or `-C`, or `python3 <plugin>/scripts/role_runner.py worker` with `--add-dir`), approved separately for
-each directory and asked once per session. MCP tools whose names start with a read verb, such as
-get, list, search, read, fetch, query, or download, are never covered and keep the normal permission flow, as does the
-DataGrip query tool, which the DataGrip query guard handles. Each tool or command kind is approved separately.
+and a Codex worker's access to a directory outside the session folder (`codex exec`
+with `--add-dir` or `-C`, or `python3 <plugin>/scripts/role_runner.py worker` or a writing capability with `--add-dir`),
+approved separately for each directory and asked once per session. MCP tools are covered by the [Approval
+guard](#approval-guard) on both hosts, and the DataGrip query tool by the DataGrip query guard. Each tool or command
+kind is approved separately.
 
 Destructive actions always ask: force pushes, deleting remote branches or tags, deleting a tag, `gh release delete`,
-`gh repo delete`, and MCP tools that delete, trash, or remove, even when the name starts with a read verb.
+`gh repo delete`. Destructive MCP tools always ask through the [Approval guard](#approval-guard).
 `gh release upload` always asks too, because it can publish any local file. So does `codex exec` with
 `danger-full-access`, `--dangerously-bypass-approvals-and-sandbox`, `--dangerously-bypass-hook-trust`, or a `-c`
 override of sandbox settings. So does a tag push to a URL, an unlisted remote, or `--repo`, or one that mixes a branch
@@ -256,12 +397,15 @@ into a `--tags` push, and so does a `gh release create` or `gh release edit` wit
 any other flag. A `role_runner.py` call with an unknown option, an expansion or glob token, or a redirect counts as
 unverifiable and always asks. A compound command that contains anything the mod cannot verify always asks. A plain
 `echo` with literal text after a covered command, such as `git tag v1 && echo done`, does not stop the approval from
-applying; an `echo` with a variable, command substitution, glob, redirect, or pipe still asks. Subagents never inherit
-approvals. Approvals belong to one session, and the mod drops stored entries older than 7 days. Ordinary pushes and
+applying; an `echo` with a variable, command substitution, glob, redirect, or pipe still asks. The mod store is local to
+each session. The approval guard can read parent approvals when the role runner supplies
+`HEI5ENBUG_PARENT_SESSION`; see [Approval guard](#approval-guard). Approvals belong to one session, and the mod drops
+stored entries older than 7 days. Ordinary pushes and
 all other commands keep the normal permission flow.
 
 Do not add `permissions.ask` rules for these actions, because an ask rule prompts every time even after a session
 approval.
+
 
 ## Feature options
 
@@ -281,6 +425,7 @@ session. A value of `false`, `0`, `off`, or `no`, in any letter case, turns a bo
 | Review model | `review_model` (a pinned model ID, default `gpt-6-astra`) | Not applicable |
 | Response language guard | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip query guard | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
+| Approval guard | `approval_guard` | `HEI5ENBUG_APPROVAL_GUARD` |
 | Subagent permission block in `~/.codex/AGENTS.md` | Not applicable | `HEI5ENBUG_SUBAGENT_POLICY` |
 | Question tool flag | Not applicable | `HEI5ENBUG_CODEX_ASK_TOOL` |
 
@@ -328,7 +473,7 @@ for locating the script. No user or project instruction file is copied, linked, 
 | A tool call finishes | `PostToolUse` adds a language reminder after a progress update in another language. |
 | A reply ends | `Stop` asks for a rewrite when the reply is not in the response language. |
 | A DataGrip query is about to run | `PreToolUse` and `PermissionRequest` run the DataGrip query guard before `execute_sql_query`. |
-| A Bash or MCP tool call runs | On Claude Code, the mod's `tool.check` and `tool.call` hooks run the session approval for Bash and MCP tools. |
+| A Bash, MCP, or covered file tool call runs | `PreToolUse` runs the approval guard, including file-state protection and sensitive reads. `PermissionRequest` (Codex) and `PostToolUse` read or record approvals. `UserPromptSubmit` records a user code and supplies immediate-retry context on both hosts. On Claude Code, the mod's `tool.check` and `tool.call` hooks run the session approval for Bash tools. |
 | A matching task begins | The agent reads the required reference under `instructions/`. |
 | A plugin update is installed | A new session reads that installed version. A repository push alone changes nothing locally. |
 
@@ -383,28 +528,48 @@ existing SVG diagrams, and makes new SVG or PNG flowcharts of up to seven nodes.
 the layout and component structure may still go to the implementation worker, and design documents and RFCs stay in
 the main session.
 
+`config/model-registry.json` is the single source of model pins and capability pins; the scripts and the mod read it.
+Each capability's per-host entries are listed in the [capability pins](instructions/model-routing.md#capability-pins)
+section of the model routing contract. The five capabilities are `investigation`, `implementation`, `design`,
+`language`, and `review`. Every fallback is the other model family; a fallback that needs the other host's model runs through the role runner, and one the current host can run in-host uses the named agent.
+
 | Host | Implementation agent | Model and effort |
 |---|---|---|
 | Codex | Plugin `worker` role, verified from its rollout record | `gpt-5.6-luna`, `xhigh` |
-| Claude Code | `hei5enbug-agent-setup:sonnet-worker` (default, `implementation_worker` is `sonnet`); `role_runner.py worker` on `codex` or on request; `hei5enbug-agent-setup:worker` for Haiku on `haiku`, on request, or as the runner fallback | `claude-sonnet-5-5`, `high` (default); `gpt-5.6-luna`, `xhigh`; `claude-haiku-5-5`, `high` |
-| Codex, designer | `claude -p` with the pinned model; when Claude is unavailable, the plugin `designer` role | `claude-opus-5-5`, `xhigh`; fallback `gpt-6-astra`, `xhigh` |
-| Claude Code, designer | `hei5enbug-agent-setup:designer`, verified from its subagent record or the mod's role pinning | `claude-opus-5-5`, `xhigh` |
+| Claude Code | `hei5enbug-agent-setup:sonnet-worker` (default, `implementation_worker` is `sonnet`); `role_runner.py worker` on `codex` or on request; `hei5enbug-agent-setup:worker` for Haiku on `haiku` or on request, with fallback `role_runner.py worker` | `claude-sonnet-5-5`, `high` (default); `gpt-5.6-luna`, `xhigh`; `claude-haiku-5-5`, `high`; fallback `gpt-5.6-luna`, `xhigh` |
+| Codex, designer | Plugin `designer` role with the pinned model, verified from its rollout record; fallback `role_runner.py agent --name designer --fallback` | `gpt-6-astra`, `xhigh`; fallback `claude-opus-5-5`, `xhigh` |
+| Claude Code, designer | `hei5enbug-agent-setup:designer`, verified from its subagent record or the mod's role pinning; fallback `role_runner.py design` | `claude-opus-5-5`, `xhigh`; fallback `gpt-6-astra`, `xhigh` |
 | Codex, local scout | Plugin `scout` role, verified from its rollout record | `gpt-5.6-luna`, `xhigh` |
 | Claude Code, local scout | `role_runner.py scout`; fallback `hei5enbug-agent-setup:scout` | `gpt-5.6-luna`, `xhigh`; fallback `claude-sonnet-5-5`, `medium` |
-| Codex, public researcher | Plugin `researcher` role, verified from its rollout record | `gpt-5.6-luna`, `xhigh` |
-| Claude Code, public researcher | `role_runner.py researcher`, which uses web search and no shell network; fallback `hei5enbug-agent-setup:researcher` | `gpt-5.6-luna`, `xhigh`; fallback `claude-haiku-5-5`, `medium` |
-| Codex, skill review | `claude -p`; fallback plugin `reviewer`, verified from its rollout record | `claude-opus-5-5`, `high`; fallback `gpt-6.1-sol`, `xhigh` |
+| Codex, public researcher | `role_runner.py researcher`, which uses web search and no shell network, verified from its session record | `gpt-5.6-luna`, `xhigh` |
+| Claude Code, public researcher | `role_runner.py researcher`, which uses web search and no shell network; fallback `hei5enbug-agent-setup:scout`, which has web search and fetch tools | `gpt-5.6-luna`, `xhigh`; fallback `claude-sonnet-5-5`, `medium` |
+| Codex, skill review | `role_runner.py review`; fallback plugin `reviewer`, verified from its rollout record | `claude-opus-5-5`, `high`; fallback `gpt-6.1-sol`, `xhigh` |
 | Claude Code, skill review | `role_runner.py reviewer` with the `review_model` setting; fallback `hei5enbug-agent-setup:reviewer` | `review_model` (default `gpt-6-astra`), `xhigh`; fallback `claude-opus-5-5`, `high` |
 | Skill Builder trial execution and other non-review participants | Host's upper model from the Skill Builder adapter | Codex: `gpt-6.1-sol`, `xhigh`; Claude Code: `claude-opus-5-5`, `high` |
 
-On Claude Code, `scripts/role_runner.py` runs the scout, researcher, reviewer, and Codex worker roles. The main session
-writes the assignment to a file and runs `python3 <plugin>/scripts/role_runner.py <role> --assignment <file> --result
-<file>` from the session folder, adding `--model <id>` for `reviewer` or `--add-dir <dir>` for `worker`. The runner puts
-the role rules before the assignment, runs the role on its pinned model, effort, and permissions (`codex exec`, or
-`claude -p` for a Claude review model), checks the host rollout or transcript record, and prints a final JSON status
-line. Exit code 0 means the result is verified, 2 a usage error to fix, 3 that the role could not run, and 4 that the
-recorded model or effort did not match, so the result is discarded. On 3 or 4 the main session uses the role's plugin
-agent fallback. Independent validation has no fallback: the main session reports that it was not performed.
+On Claude Code, `scripts/role_runner.py` runs the scout, researcher, reviewer, and Codex worker roles, and it runs a
+registry capability, such as a Claude model capability, when `--instructions <file>` supplies its role definition. Its
+agent mode runs a plugin agent's cross-family fallback, named by `--name <name>`. The main session writes the assignment
+to a file and runs `python3 <plugin>/scripts/role_runner.py <role-or-capability>` or `python3 <plugin>/scripts/role_runner.py
+agent --name <name> --fallback`, both with `--assignment <file> --result <file>`, from the session folder. It adds
+`--model <id>` for `reviewer`, `--add-dir <dir>` for `worker`, a writing capability, or a `write` agent, `--mcp` for a
+capability or agent that needs MCP tools or network, `--host claude|codex` to pick a capability's host entry, `--fallback`
+for its fallback entry, and `--resume <session_id>` to continue a run from the `evidence.session` in its status line. The runner
+puts the role rules before the assignment, runs the role on its pinned model, effort, and permissions (`codex exec`, or
+`claude -p` for a Claude model), checks the host rollout or transcript record, and prints a final JSON status line.
+Without `--mcp`, a Codex child gets `-c mcp_servers.<name>.enabled=false` for every server `codex mcp list --json` names,
+and a Claude child keeps `--strict-mcp-config`. Each child receives `HEI5ENBUG_PARENT_SESSION` so it can use the main
+session's approvals. Before sending the assignment to Codex, the runner sends “Run the shell command `true` exactly
+once, then reply with OK only.” and requires `heartbeats/codex-<thread_id>.PreToolUse`. This confirms that the guard
+received a tool event; a plain, `UserPromptSubmit`, or `SessionStart` heartbeat does not satisfy that check. Claude
+children require `heartbeats/claude-<session_id>.UserPromptSubmit` or the existing plain heartbeat, since Claude does
+not gate plugin hooks by trust. A missing required heartbeat exits 4.
+Exit code 0 means the result is verified, 2 a usage error to fix, 3 that the role could not run, and 4 that the
+required hook evidence was missing or the recorded model, effort, or sandbox did not match, so the result is
+discarded. On 3 or 4 the main session uses the
+role's plugin agent fallback. Independent validation has no fallback: the main session reports that it was not
+performed. A capability entry whose `via` is `agent` is not run by the runner, which exits 2, so the main session uses
+the agent route for it.
 
 Independent ready tasks may run together within the host limit and the shared execution ceiling. If a role,
 model, effort, quota, permission to delegate, or settings evidence is unavailable, the main session reports

@@ -21,6 +21,18 @@ compatibility: >-
 
 Change how text reads. Never change what it says.
 
+## Execution placement
+
+Run each worker phase through the session's capability route; the main session keeps the phases marked
+main, asks the user, and accepts the result.
+
+| Phase | Owner |
+|---|---|
+| Workflow 1–3: genre, claims, protected strings, and ambiguity check, including any question | main |
+| Workflow 4–6: rewrite, fidelity self-check, and naturalness check | `language` |
+| Strict review | main |
+| Workflow 7: report, and approval before any repository file write | main |
+
 ## Authority and scope
 
 Use this English `SKILL.md` as the only executable instruction source. `SKILL.ko.md` is a

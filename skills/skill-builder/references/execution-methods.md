@@ -68,7 +68,9 @@ model and effort in its rollout `turn_context` before accepting the result. The 
 
 Trial execution and other non-review participants stay on the host's model family at its upper model. Review roles use
 the review route in the table. Do not send a review role to `scout`, use `reviewer` to write trial outputs, or lower a
-role's required effort. A runner invocation alone does not verify its effective settings.
+role's required effort. A runner invocation alone does not verify its effective settings. Accept each trial or
+participant run only after its host record shows the pinned model and effort (Claude JSON `modelUsage` and
+transcript `effort`; Codex rollout `turn_context`), and treat a run without that evidence as unverified.
 
 For trial output writers, use the model and effort that the host adapter pins. Keep their outputs in the evaluation
 workspace. Do not promote trial output unless the main session selects it through the skill's acceptance process.

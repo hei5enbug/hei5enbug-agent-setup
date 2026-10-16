@@ -34,6 +34,7 @@ hei5enbug-agent-setup/
 ├── hooks/hooks.json
 ├── hooks/mod/
 ├── config/claude-mod.json
+├── config/model-registry.json
 ├── instructions/
 │   ├── claude-agents.md
 │   ├── codex-agents.md
@@ -55,31 +56,31 @@ hei5enbug-agent-setup/
 │       └── core.md
 ├── scripts/
 │   ├── agent_guard.py
+│   ├── approval_guard.py
+│   ├── approval_state.py
 │   ├── datagrip_guard.py
 │   ├── language_guard.py
 │   ├── plugin_toggles.py
 │   ├── role_runner.py
-│   └── session_context.py
+│   ├── session_context.py
+│   └── verify_spawn.py
 ├── tests/
 ├── LICENSE
 ├── pyproject.toml
 ├── agents/
 │   ├── ko/
 │   │   ├── designer.ko.md
-│   │   ├── researcher.ko.md
 │   │   ├── reviewer.ko.md
 │   │   ├── scout.ko.md
 │   │   ├── sonnet-worker.ko.md
 │   │   └── worker.ko.md
 │   ├── designer.md
-│   ├── researcher.md
 │   ├── reviewer.md
 │   ├── scout.md
 │   ├── sonnet-worker.md
 │   └── worker.md
 ├── standalone-agents/
 │   ├── codex-designer.toml
-│   ├── codex-researcher.toml
 │   ├── codex-reviewer.toml
 │   ├── codex-scout.toml
 │   └── codex-worker.toml
@@ -103,18 +104,18 @@ Codex와 Claude Code에 패키징합니다.
 
 `agents/` 디렉터리는 Claude Code 플러그인에 함께 배포되므로, 번들을 설치하면
 `hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:worker`, `hei5enbug-agent-setup:sonnet-worker`,
-`hei5enbug-agent-setup:researcher`, `hei5enbug-agent-setup:designer`, `hei5enbug-agent-setup:reviewer`가 추가됩니다.
-직접 복사할 필요가 없습니다. 매니페스트에는 영어 정의 여섯 개만 있으므로 `agents/ko/`의 한국어 번역본은
+`hei5enbug-agent-setup:designer`, `hei5enbug-agent-setup:reviewer`가 추가됩니다.
+직접 복사할 필요가 없습니다. 매니페스트에는 영어 정의 다섯 개만 있으므로 `agents/ko/`의 한국어 번역본은
 서브에이전트로 등록되지 않습니다.
 
 Codex는 `~/.codex/agents/`와 `.codex/agents/`에서만 서브에이전트를 찾으므로 플러그인이 등록할 수 없습니다.
-대신 세션 훅이 `standalone-agents/codex-scout.toml`, `codex-worker.toml`, `codex-researcher.toml`,
-`codex-designer.toml`, `codex-reviewer.toml`을 대응하는 `~/.codex/agents/<role>.toml`이 없을 때만 복사합니다.
-다섯 파일은 Claude Code에도 있는 역할을 정의하고 사고 강도와 샌드박스를 고정합니다. Codex `reviewer` 역할에는
+대신 세션 훅이 `standalone-agents/codex-scout.toml`, `codex-worker.toml`, `codex-designer.toml`,
+`codex-reviewer.toml`을 대응하는 `~/.codex/agents/<role>.toml`이 없을 때만 복사합니다.
+네 파일은 Claude Code에도 있는 역할을 정의하고 사고 강도와 샌드박스를 고정합니다. Codex `reviewer` 역할에는
 모델 키가 없으며, 스킬 지침은 대체 경로에서 모델과 사고 강도를 명시합니다. 플러그인 `worker`는
 Codex 내장 `worker`를 대신하고, `scout`는 내장 `explorer`를 건드리지 않습니다. 직접 고친 파일은 절대 덮어쓰지 않으며,
 다음 Codex 세션부터 적용됩니다. 고친 파일은 바뀌지 않으므로 모델은 지정하지 않고, Codex 지침이 생성할 때마다
-고정 모델을 넘깁니다. 훅은 이전 버전이 만든 `explorer.toml`을 지우고 `worker.toml`을 바꾸지만, 그 버전에서 배포한
+고정 모델을 넘깁니다. 훅은 이전 버전이 만든 `explorer.toml`과 `researcher.toml`을 지우고 `worker.toml`을 바꾸지만, 그 버전에서 배포한
 파일과 바이트 단위로 같을 때만 그렇게 하므로 직접 고친 파일은 남습니다. 플러그인을 끄면 설치된 `worker` 역할은
 수정을 거부하지 않고 일반 구현 worker로 동작합니다.
 
@@ -124,8 +125,7 @@ Codex 내장 `worker`를 대신하고, `scout`는 내장 `explorer`를 건드리
 함께 통과합니다. Codex에서는 `PreToolUse` 훅인 `scripts/agent_guard.py`가 기존 동작을 그대로 유지합니다. 종류를 비운 호출,
 `default`, `explorer`, 역할 파일이 없는 모든 종류를 거부하며, 플러그인 역할이 생기기 전의 내장
 `worker`도 여기에 포함됩니다. 독립된 읽기 전용 작업자가 필요한 스킬은 실제 모델·사고 강도·도구가 스킬 계약과
-일치하는 역할을 사용합니다. `scout`는 로컬 근거 조사 티켓을 포함해 범위가 제한된 로컬 조사 하나를 맡습니다.
-공개 자료 조사는 `researcher`에 맡길 수 있습니다. 스킬 검토 역할은 먼저 설정한 검토 모델을 사용하고 그 실행기를 쓸 수 없으면
+일치하는 역할을 사용합니다. `scout`는 로컬 근거 조사 티켓을 포함해 범위가 제한된 로컬 조사 하나를 맡고, 웹 검색과 가져오기 도구로 범위가 정해진 공개 조사 질문 하나도 맡습니다. 스킬 검토 역할은 먼저 설정한 검토 모델을 사용하고 그 실행기를 쓸 수 없으면
 `reviewer`로 대체합니다. reviewer는 결과만 반환하며 메인 세션이 같은 자료를 한 번 검토해 판단합니다. 시험 출력을 쓰는
 스킬은 필요한 경우 검증된 평가 실행기를 사용합니다.
 조건부 [모델 라우팅 계약](instructions/model-routing.md)을 참고하세요.
@@ -137,10 +137,9 @@ Claude Code에서는 `config/claude-mod.json`이 mod `hooks/mod/register.js`를 
 오래된 Claude Code, `disableAllHooks`, 관리 정책 등으로 mod가 로드되지 않으면 이 가드들은 동작하지 않고 호스트의 기본 권한
 흐름이 적용됩니다.
 
-역할 고정은 플러그인 역할마다 모델과 사고 강도를 모든 요청에 고정합니다. Luna scout의 대체 경로인 `scout`는
-`claude-sonnet-5-5`와 `medium`, `researcher`는 `claude-haiku-5-5`와 `medium`, `worker`는 `claude-haiku-5-5`와 `high`,
-`sonnet-worker`는 `claude-sonnet-5-5`와 `high`, `designer`는 `claude-opus-5-5`와 `xhigh`, `reviewer`는
-`claude-opus-5-5`와 `high`를 씁니다.
+역할 고정은 플러그인 역할마다 모델과 사고 강도를 모든 요청에 고정합니다. `scout`는 `claude-sonnet-5-5`와 `medium`,
+`worker`는 `claude-haiku-5-5`와 `high`, `sonnet-worker`는 `claude-sonnet-5-5`와 `high`, `designer`는
+`claude-opus-5-5`와 `xhigh`, `reviewer`는 `claude-opus-5-5`와 `high`를 씁니다.
 다른 모델로 응답한 서브에이전트는 중단됩니다. 이후 요청은 거부되고 도구 호출은 막히며 결과는 경고로 바뀝니다.
 역할 고정이 활성화된 경우에만 등록된 mod `prompt.context` 훅이 세션 컨텍스트에
 `hei5enbug-agent-setup mod: role pinning active` 줄을 추가합니다. 이 줄이 있으면 메인 세션은 작업 지시를 바로 보내고
@@ -154,8 +153,9 @@ Claude Code에서는 `config/claude-mod.json`이 mod `hooks/mod/register.js`를 
 ChatGPT 플랜 사용량에 반영됩니다. API 키 프로필은 별도로 과금되는 OpenAI API 사용량을 쓰므로 사용자가 명시적으로 선택해야 합니다.
 런처는 프로필이나 과금 방식을 자동으로 바꾸지 않습니다.
 
-GPT Luna는 사용자 정책에 따라 `gpt-5.6-luna`와 `xhigh`로 고정합니다. Mod는 다른 Luna 버전을 거부하고,
-게이트웨이는 Luna 요청을 `xhigh`로 고정하며 직접 호출하는 헬퍼는 다른 추론 강도를 거부합니다.
+GPT Luna는 사용자 정책에 따라 `gpt-5.6-luna`와 `high` 또는 `xhigh`로 고정합니다. Mod와 게이트웨이는 레지스트리의
+추론 강도 규칙을 강제합니다. 두 곳 모두 `high`와 `xhigh`는 그대로 두고 다른 추론 강도는 `xhigh`로 바꿉니다.
+Mod는 다른 Luna 버전도 거부하며, 직접 호출하는 헬퍼는 이 규칙 밖의 추론 강도를 거부합니다. hei5enbug 역할은 `xhigh`를 씁니다.
 자동 모델 갱신에서도 이 선택을 유지합니다. 새 과제와 재개하는 세션에도 같은 고정값을 적용합니다.
 
 아래 헬퍼 명령은 설치된 플러그인 캐시가 아닌 저장소 소스 체크아웃에서 `claude-gpt` extra를 사용해 실행하세요.
@@ -218,8 +218,12 @@ Claude Code는 `language` 설정에서 언어를 가져오며, 로컬 프로젝�
 
 `PreToolUse` 훅과 `PermissionRequest` 훅인 `scripts/datagrip_guard.py`는 DataGrip MCP 도구 `execute_sql_query` 실행 전에 동작합니다.
 가드는 `projectPath`가 가리키는 DataGrip 프로젝트의 `.idea/dataSources.xml`에서 연결 정보를 읽습니다. 이름에 `승인`이 들어간 연결은 항상 승인을 요청합니다.
-PostgreSQL과 SQL Server의 읽기 쿼리는 승인 없이 실행되며, PostgreSQL 읽기 쿼리는 읽기 전용 트랜잭션 안에서 실행됩니다. 쓰기 쿼리, 가드가 분류하지 못한 쿼리, 알 수 없는 연결, 그
-밖의 데이터베이스 종류는 항상 승인을 요청합니다. 가드는 호출을 거부하지 않습니다. Codex에서는 `/hooks`에서 이 훅을 신뢰해야 합니다.
+PostgreSQL과 SQL Server의 읽기 쿼리는 승인 없이 실행됩니다. PostgreSQL 읽기는 읽기 전용 트랜잭션에서
+`SET LOCAL statement_timeout = '60s';`와 함께 실행됩니다. `approval_guard`를 켜면 비파괴적인 PostgreSQL·SQL Server
+쓰기는 다른 모든 MCP 쓰기와 `mcp:session` 승인 하나를 공유합니다. 원문에 `delete`, `drop`, `truncate`가 이름으로 든 텍스트(리터럴과 주석 포함)나
+`DO`, `EXEC`, `EXECUTE`, `CALL`로 시작하는 문장, 이름에 `승인`이 들어간 연결, 알 수 없는 연결, 그 밖의 데이터베이스 종류, 가드가 해석하지 못한 텍스트는 항상 승인을 요청합니다.
+Codex에서는 승인이 필요한 호출을 대신 코드와 함께
+거부합니다([승인 가드](#승인-가드)를 참고하세요). 토글을 끄면 모든 쓰기가 이전처럼 승인을 요청합니다. Codex에서는 `/hooks`에서 이 훅을 신뢰해야 합니다.
 
 선택 사항으로 `pglast` 파서를 한 번 설치할 수 있습니다.
 
@@ -230,24 +234,156 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 
 파서가 없으면 PostgreSQL은 더 엄격한 텍스트 검사로 대체합니다. 이 검사는 승인을 더 자주 요청할 수 있지만, 승인 없이 쓰기가 실행되는 일은 여전히 없습니다.
 
+### 승인 가드
+
+`PreToolUse` 훅은 Bash, MCP, Claude 파일 도구(`Read`, `Edit`, `Write`, `MultiEdit`, `NotebookEdit`),
+Codex `apply_patch` 호출 전에 `scripts/approval_guard.py`를 실행합니다. 같은 스크립트가 `PermissionRequest`,
+`PostToolUse`, `UserPromptSubmit`도 처리합니다. 양쪽 호스트에서 읽기는 승인 없이 실행됩니다. 호출은 다음 결과로 분류됩니다.
+
+- **읽기**는 승인 없이 실행됩니다.
+- **쓰기**는 키(예: `kubectl:apply@(default) dev/web`)마다 세션당 한 번 승인을 요청합니다. 같은 키의 나중 호출은 묻지 않고 실행됩니다.
+- **항상**은 파괴·강제 작업, 기존의 민감 CLI 읽기, 분류할 수 없는 호출에 매번 승인을 요청합니다.
+- **민감**은 보호 값이 노출될 수 있다고 경고하고 `secret_exec.py`를 권하며 매번 승인을 요청합니다.
+- **요청**은 실제 호출 전에 비파괴적인 쓰기 키 묶음의 승인을 요청합니다.
+- **비밀**은 명령이 비밀 값을 출력하므로 두 호스트 모두에서 거부됩니다.
+- **통과**는 가드가 다루지 않는 호출이므로 호스트의 기존 권한 절차가 결정합니다.
+
+| CLI | 읽기 | 비밀 (거부) | 항상 (매번 승인) | 키 대상 |
+|---|---|---|---|---|
+| `kubectl`, `oc` | `get`, `describe`, `logs`, `diff`, `--dry-run=client` 또는 `--dry-run=server`가 붙은 모든 호출 | 값을 출력하는 출력 형식이 붙은 `get secret`, `secrets` 경로의 `get --raw`, `config view --raw`, `create token` | `delete`, `drain`, `--force`, `--prune` | kubeconfig, 그다음 컨텍스트 / 네임스페이스 |
+| `helm` | `list`, `status`, `get notes`, `repo list` | 없음 | `uninstall`, `get all`, `get manifest`, `get values` | kubeconfig, 그다음 컨텍스트 / 네임스페이스 |
+| `az` | `list`, `show`, `exists`, `query`, `version` | `keyvault secret show`와 `download`, `list-keys`, `account get-access-token` | `delete`, `purge` | 구독 / 리소스 그룹 |
+| `terraform`, `tofu` | `plan`, `show`, `validate`, `state list`, `fmt -check`, `-json`·`-raw` 없는 `output` | 없음 | `destroy`, `apply -destroy`, `state rm`, `output -json`, `output -raw`, `state show` | 디렉터리 : 워크스페이스 |
+| `aws` | `describe-*`, `list-*`, 비밀 조회가 아닌 `get-*`, `s3 ls` | `secretsmanager get-secret-value`와 `batch-get-secret-value`, `--with-decryption`이 붙은 `ssm get-parameter*`, `kms decrypt` | `delete-*`, `terminate-*`, `s3 rm`, `s3 sync --delete` | 프로파일 / 리전 |
+| `gcloud`, `gsutil` | 명령 경로에서 처음 나오는 동사가 `list`, `describe`, `get-*`, `ls`, `cat` | `secrets versions access`, `auth print-access-token` | `delete`, `gsutil rm`, `gsutil rb` | 프로젝트 |
+| `docker`, `podman` | `ps`, `images`, `logs`, `<object> ls` | 없음 | `rm`, `rmi`, `prune`, `compose down -v` | 컨텍스트 |
+| `psql`, `sqlcmd` | 읽기인 쿼리. `psql` 읽기는 `default_transaction_read_only=on`과 `statement_timeout=60000`으로 실행됩니다. | 없음 | 파일, 표준 입력, 대화형 사용, `delete`·`drop`·`truncate`가 이름으로 든 텍스트, `DO`·`EXEC`·`EXECUTE`·`CALL`로 시작하는 문장 | 호스트 / 데이터베이스 |
+| `curl` | 데이터·폼·업로드·JSON 플래그가 없는 GET/HEAD | 없음. argv의 자격 증명은 민감 | DELETE 같은 파괴적 메서드 | 메서드 / 스킴과 호스트 |
+| `kustomize` | 모든 호출 | 없음 | 없음 | 없음 |
+| `mysql`, `mongosh`, `redis-cli` | 없음 | 없음 | 모든 호출 | 없음 |
+
+쓰기 키는 `<cli>:<subcommand>@<target>`입니다. subcommand는 첫 번째 플래그 앞의 단어들입니다. `kubectl`, `oc`, `helm`의 대상은
+kubeconfig(`--kubeconfig`, 그다음 `KUBECONFIG`, 없으면 `(default)`)와 컨텍스트 및 네임스페이스입니다. 컨텍스트를 주지 않으면 같은 kubeconfig로
+현재 컨텍스트를 읽습니다. 그 밖에 분석할 수 있는 하위 명령은 모두 쓰기이므로 `kubectl apply`와 `helm upgrade`는 세션당 한 번 묻습니다. 커버되는 명령이 간접 실행
+영역(`$(...)`, 백틱, `eval`, `xargs`, 또는 `c`가 든 플래그 묶음을 쓴 `sh -c`) 안에 있으면 항상 승인을 요청합니다. 그 영역이 비밀을 출력하면 명령 전체를
+거부합니다. 커버되는 명령에 heredoc이 붙어도 항상 승인을 요청합니다. `command -v` 조회는 아무것도 실행하지 않으므로 분류하지 않습니다.
+
+복합 명령은 전체로 판단합니다. 비밀 세그먼트가 있으면 거부합니다. 항상 세그먼트가 하나라도 있으면 승인을 요청하며, 그 승인은 항상 키(한 번)와 쓰기 키(세션)를 함께 덮습니다. 그 밖에 쓰기는
+키마다 승인을 요청하지만, 검증되지 않은 세그먼트가 있거나 출력이 파일로 가면 명령 전체가 항상 승인을 요청합니다. 커버되는 읽기는 나머지 세그먼트가 `grep`, `head`, `jq` 같은
+필터이고 출력 리다이렉션이 `/dev/null` 또는 `2>&1`로만 가는 경우에만 읽기로 남습니다. `sudo`, `env`, `nice`, `time` 같은 래퍼는 옵션과 함께 건너뛰고 나서
+실행 파일을 읽습니다. 쓰기와 항상 호출의 대상은 플래그나 환경 변수에서 가져옵니다. 둘 다 없으면 그 호출에 대해서만 `kubectl config current-context`와 `az
+account show`를 3초 제한으로 실행합니다.
+
+`psql` 읽기는 `PGOPTIONS`에 `-c default_transaction_read_only=on -c statement_timeout=60000`을 더한
+서브셸에서 실행하도록 다시 써서, 가드의 읽기 검사가 함수 호출을 놓치더라도 서버가 쓰기를 거부하게 하고 이 옵션이 뒤따르는 명령에 남지 않게 합니다.
+
+가드는 `bash`, `sh`, `zsh`, `./`, `source`, `.`로 실행하는 셸 파일, Python `.py` 파일, Node `.js`·`.mjs` 파일,
+선택한 또는 기본 타깃과 한 단계 선행 타깃의 Makefile 레시피, `npm`·`pnpm`·`yarn run <name>`이 가리키는
+`package.json` 스크립트 텍스트를 읽습니다. 파일 경로는 이벤트의 `cwd` 기준이며 크기 제한은 256 KiB입니다.
+셸의 각 줄과 Makefile 레시피에는 CLI 분류기를 적용합니다. Python·Node에서는 대상 CLI로 시작하는 문자열과
+리터럴 argv 목록도 분류합니다. 읽기는 승인 없이 실행하고, 쓰기는 키를 합칩니다. 파괴·강제·비밀 호출은 기존 규칙을
+따릅니다. 읽을 수 없거나 더 큰 파일은 분류 불가로 처리합니다. 대상 CLI를 언급하거나 `boto3`, `azure`,
+`kubernetes`, `psycopg`, `psycopg2`, `pymysql`, `sqlalchemy`, `pymongo`, `redis`, `google.cloud`를 가져오지만
+호출을 분류하지 못한 스크립트는 매번 묻습니다. `script:<sha256>` 키에는 경로, argv, 내용과 `KUBECONFIG`,
+`AWS_PROFILE`, `CLOUDSDK_CORE_PROJECT`, `DOCKER_CONTEXT` 값이 포함됩니다. 이들 중 아무것도 없는 스크립트는 통과합니다.
+
+MCP 도구 이름은 `_`, `-`, camelCase 경계에서 나뉩니다. 이름의 파괴적 단어는 항상 승인을 요청합니다.
+문자열 필드 `sql`, `statement`, `queryText`와, SQL 문장처럼 시작하는 `query` 필드(검색어는 제외)에는 DataGrip SQL
+분류기를 적용합니다. 읽기는 승인 없이,
+파괴적 문장은 매번 승인 후 실행하고, 나머지 SQL은 `mcp:session`을 사용합니다. 실행 이름 단어(`repl`, `exec`,
+`execute`, `eval`, `run`, `code`, `script`, `command`)는 쓰기이며, 입력에 파괴적 단어가 있으면 매번 묻습니다.
+그 밖의 이름은 쓰기 단어가 우선합니다. 읽기 동사만 있으면 읽기, 아는 동사가 없으면 쓰기입니다. `mcp:session` 승인
+하나로 DataGrip 쓰기를 포함한 해당 세션의 모든 비파괴적 MCP 쓰기가 허용됩니다.
+
+`curl`은 GET/HEAD 이외의 요청 메서드와 `-d`, `--data*`, `-F`, `--form`, `-T`, `--upload-file`, `--json`이 없으면
+읽기입니다. 나머지는 `curl:<METHOD>@<scheme://host>` 키를 쓰는 쓰기이며, DELETE 같은 파괴적 메서드는 매번 묻습니다. argv의 `-u`·`--user` 또는
+`Authorization` 헤더는 민감 호출로 분류합니다.
+
+Claude `Read`와 Bash 읽기(`cat`, `less`, `head`, `tail`, `grep`, `rg`)가 `~/.kube/config`, 모든 `KUBECONFIG` 경로,
+`~/.aws/credentials`, `~/.aws/config`, `~/.azure/**`, `~/.config/gcloud/**`, `~/.pgpass`, `~/.docker/config.json`,
+`~/.netrc`, `.env*` 파일을 읽으면 민감 호출입니다. `printenv`, 명령 없는 `env`, `kubectl exec ... env|printenv`,
+`docker inspect`, `docker exec ... env`도 같습니다. Claude는 “This may expose a protected value; prefer
+secret_exec.py ...” 경고와 함께 묻고, Codex는 일회용 코드와 함께 거부합니다. 이 승인은 세션 승인이 되지 않습니다.
+
+쓰기 전에 묶음 승인을 요청할 수 있습니다.
+
+```bash
+python3 <plugin root>/scripts/approval_guard.py request --key 'kubectl:apply@(default) dev/web' --key mcp:session --why 'Deploy the requested change and update the issue'
+```
+
+Claude는 모든 키와 이유를 보여 주며 묻고 `PostToolUse`에서 키를 기록합니다. Codex는 묶음 코드 하나와 함께 거부하고,
+사용자가 `승인 <CODE>`를 입력한 뒤에만 기록합니다. 명령은 키를 출력하고 0으로 종료하며 승인 상태를 직접 쓰지 않습니다.
+키는 `<cli>:<kind>@<target>` 또는 `mcp:session`이어야 합니다. 파괴·강제 종류, 민감 읽기, 분류 불가 호출,
+`sql:always:*`, 파괴적인 `mcp:<tool>` 키는 사전 승인할 수 없습니다.
+
+Codex에서는 승인이 필요한 호출을 코드와 함께 거부합니다:
+
+```text
+Approval required: kubectl apply on (default) dev/web. Ask the user to reply `승인 K7M2QX`; do not retry until they do.
+After the user replies with the code, retry this exact call immediately and continue the task without asking again.
+```
+
+사용자가 채팅에 `승인 <CODE>` 또는 `approve <CODE>`를 입력하면 `UserPromptSubmit` 훅이 코드를 기록합니다. 에이전트는 같은 호출을 즉시 재시도하고 다시 묻지 않은 채 작업을
+계속합니다. 양쪽 호스트 모두
+`UserPromptSubmit` 컨텍스트에 승인한 설명과 이 재시도 지침을 제공합니다. 코드는 거부된 호출의 모든
+키를 덮습니다. 항상 키는 한 번짜리 승인으로, 쓰기 키는 세션 승인으로 덮습니다. 한 번짜리 승인은 그것을 쓰는 호출이 소비하므로, 첫 호출이 끝나기 전에 시작한 두 번째 호출은 새 코드와 함께
+거부됩니다. `PermissionRequest`는 승인을 진행 중으로 든 호출만 허용하고, `PostToolUse`가 그 승인을 풉니다. 에이전트는 스스로 승인할 수 없습니다. 승인 또는 heartbeat 상태
+디렉터리를
+가리키는 Bash 명령이나, `approval_guard.py`, `datagrip_guard.py`, `approval_state.py`를 프로그램으로, `-m`으로, 또는 이를 가져오는
+Python 코드로 실행하는 Bash 명령은 두 호스트 모두에서 거부됩니다. `cat`이나 `rg`로 그 파일을 읽기만 하는 명령은 거부되지 않습니다. 위에서 검증한 `request` 명령만 실행 예외입니다.
+두 상태 디렉터리 안의 파일 편집은 `apply_patch` 패치가 가리키는 경로를 포함해 양쪽 호스트 모두 거부합니다.
+
+비밀 값이 필요한 명령은 비밀 도우미를 사용합니다: `python3 <plugin root>/scripts/secret_exec.py --secret
+DB_PASSWORD=k8s:<context>/<namespace>/<secret>/<key> -- <command>`. 소스는 `k8s:`, `keyvault:<vault>/<name>`,
+`aws:<secret id>[#<json key>]`, `gcp:<project>/<name>[/<version>]`입니다. `--file VAR=<source>`는 값 대신 임시 파일의 경로를
+넘깁니다. 값은 환경 변수나 임시 파일을 통해서만 명령에 전달되며, 도우미가 명령 출력에서 값을 가립니다. 조회가 실패하면 도우미는 소스와 조회 명령의 종료 코드만 알리고, 조회 명령의
+stderr는 출력하지 않습니다. 각 조회의 제한 시간은 30초입니다. 시간이 지나면 소스와 `timed out`을 알리고 2로 종료합니다.
+
+역할 실행기의 자식에 `HEI5ENBUG_PARENT_SESSION=<host>:<session_id>`가 있으면 부모의 승인 키도 읽으며 상태는 바꾸지
+않습니다. 잘못된 값은 무시합니다. 자식은 `UserPromptSubmit`에서 코드를 기록하거나 `request`를 실행할 수 없습니다.
+승인되지 않은 쓰기는 주 세션에서 승인을 요청한 다음 다시 시도하라는 안내와 함께 거부합니다.
+
+유효한 세션 ID가 있는 모든 이벤트는 토글 검사 전에 가능한 경우
+`$XDG_STATE_HOME/hei5enbug-agent-setup/heartbeats/<host>-<session_id>`와 `.<EventName>` 파일을 만들거나 갱신합니다.
+`PreToolUse`는 현재 `hooks/hooks.json`의 SHA-256도 `heartbeats/confirmed-<host>`에 한 줄로 기록합니다.
+해시가 없거나 다르면 `UserPromptSubmit`이 세션당 한 번 경고를 추가하고 세션 상태에 표시 여부를 저장합니다.
+경고는 훅 변경 뒤 가드의 도구 검사가 아직 관찰되지 않았다고 설명합니다. Codex 사용자에게 `/hooks`에서 플러그인 훅을
+신뢰하도록 안내하고, 그전에는 쓰기가 승인 없이 실행될 수 있다고 알립니다.
+분류기 예외는 “The approval guard failed to check this call” 이유로 매번 승인을 요청합니다.
+가드를 끄면 여전히 아무것도 출력하지 않습니다.
+
+승인 가드는 보안 경계가 아니라 안전장치입니다. 셸 전체 권한을 가진 에이전트는 우회할 수 있습니다. 가드가 다루지 않는 호출은 호스트의 기존 권한 절차를 따릅니다. 승인 상태는
+`$XDG_STATE_HOME/hei5enbug-agent-setup/approvals/`(기본값 `~/.local/state`) 아래에 호스트와 세션마다 한 파일씩 저장되며, 다른 승인을 쓸 때
+7일이 지난 파일은 지워집니다. 가드를 끄려면 `approval_guard`를 `false`로 두거나, Codex에서는 `HEI5ENBUG_APPROVAL_GUARD=false`를 설정하세요.
+Codex에서는 `/hooks`에서 훅을 신뢰해야 합니다.
+
+
 ### 세션 승인
 
 Claude Code에서만 동작하는 mod가 외부로 나가는 특정 쓰기 작업을 세션마다 한 번만 승인하게 합니다. Bash와 MCP 도구를 호출할 때마다
-`tool.check` 훅이 작업을 분류하고, 대상 종류가 그 세션에서 처음 실행될 때만 승인을 요청합니다. 호출이 성공하면 `tool.call` 훅이 같은 도구 호출에 대해 그 분류를 다시 계산하지 않고 재사용하며, 승인된 종류를 세션 ID별로 mod 저장소(`$.store`)에
+`tool.check` 훅이 작업을 분류하고, 대상 종류가 그 세션에서 처음 실행될 때만 승인을 요청합니다. 호출이 성공하면 `tool.call` 훅이 같은 도구 호출에 대해 그 분류를 다시 계산하지 않고
+재사용하며, 승인된 종류를 세션 ID별로 mod 저장소(`$.store`)에
 기록하므로, 그 세션에서 같은 종류의 작업은 이후 확인 없이 실행됩니다. git 태그 생성, 설정된
 원격 저장소로의 태그 푸시, 태그와 플래그 `--title`, `--notes`, `--target`, `--generate-notes`, `--notes-from-tag`, `--latest`,
-`--draft`, `--prerelease`, `--verify-tag`만 쓴 `gh release create`와 `gh release edit`, 이름에 쓰기 동사가 들어간 MCP 도구, 세션 폴더 밖 디렉터리에 대한 Codex worker의 접근(`--add-dir`이나 `-C`를 쓴 `codex exec`, 또는 `--add-dir`을 쓴 `python3 <plugin>/scripts/role_runner.py worker`, 디렉터리마다 따로 승인하고 세션당 한 번 묻습니다)이 대상입니다. 이름이
-get, list, search, read, fetch, query, download 같은 읽기 동사로 시작하는 MCP 도구는 대상이 아니며 기존 권한 절차를 그대로 따릅니다. DataGrip 쿼리
-도구도 DataGrip 쿼리 가드가 처리하므로 마찬가지입니다. 도구나 명령 종류별로 따로 승인합니다.
+`--draft`, `--prerelease`, `--verify-tag`만 쓴 `gh release create`와 `gh release edit`, 세션 폴더 밖 디렉터리에 대한 Codex worker의
+접근(`--add-dir`이나 `-C`를 쓴 `codex exec`, 또는 `--add-dir`을 쓴 `python3 <plugin>/scripts/role_runner.py worker`나 쓰기
+기능(capability), 디렉터리마다 따로 승인하고 세션당 한 번 묻습니다)이 대상입니다. MCP 도구는 양쪽 호스트에서 [승인 가드](#승인-가드)가 처리하고, DataGrip 쿼리 도구는 DataGrip 쿼리
+가드가 처리합니다. 도구나 명령 종류별로 따로 승인합니다.
 
-되돌릴 수 없는 작업은 항상 승인을 요청합니다. 강제 푸시, 원격 브랜치나 태그 삭제, 태그 삭제, `gh release delete`, `gh repo delete`, 삭제·휴지통 이동·제거를 하는 MCP
-도구가 여기에 해당하며, 이름이 읽기 동사로 시작해도 마찬가지입니다. `gh release upload`는 로컬 파일을 무엇이든 게시할 수 있으므로 항상 승인을 요청합니다. `danger-full-access`, `--dangerously-bypass-approvals-and-sandbox`, `--dangerously-bypass-hook-trust`, 샌드박스 설정을 바꾸는 `-c` 재정의를 쓴 `codex exec`도 항상 승인을 요청합니다. URL, 목록에 없는 원격 저장소,
+되돌릴 수 없는 작업은 항상 승인을 요청합니다. 강제 푸시, 원격 브랜치나 태그 삭제, 태그 삭제, `gh release delete`, `gh repo delete`가 여기에 해당합니다. 파괴적인 MCP 도구는
+[승인 가드](#승인-가드)를 통해 항상 승인을 요청합니다. `gh release upload`는 로컬 파일을 무엇이든 게시할 수 있으므로 항상 승인을 요청합니다. `danger-full-access`,
+`--dangerously-bypass-approvals-and-sandbox`, `--dangerously-bypass-hook-trust`, 샌드박스 설정을 바꾸는 `-c` 재정의를 쓴 `codex exec`도
+항상 승인을 요청합니다. URL, 목록에 없는 원격 저장소,
 `--repo`로 보내는 태그 푸시나 `--tags` 푸시에 브랜치가 섞인 경우, 첨부 파일·`--notes-file`·그 밖의 플래그가 붙은 `gh release create`와
-`gh release edit`도 마찬가지입니다. 모르는 옵션, 확장·glob 토큰, 리다이렉트가 있는 `role_runner.py` 호출은 확인할 수 없는 명령으로 보고 항상 승인을 요청합니다. mod가 확인할 수 없는 부분이 하나라도 있는 복합 명령도 항상 승인을 요청합니다. 대상 명령 뒤에 `git tag v1 && echo done`처럼 리터럴
-텍스트만 쓴 단순 `echo`는 승인 적용을 막지 않습니다. 변수, 명령 치환, glob, 리다이렉트, 파이프가 있는 `echo`는 여전히 승인을 요청합니다. 서브에이전트는 승인을 물려받지 않습니다. 승인은
+`gh release edit`도 마찬가지입니다. 모르는 옵션, 확장·glob 토큰, 리다이렉트가 있는 `role_runner.py` 호출은 확인할 수 없는 명령으로 보고 항상 승인을 요청합니다. mod가 확인할 수
+없는 부분이 하나라도 있는 복합 명령도 항상 승인을 요청합니다. 대상 명령 뒤에 `git tag v1 && echo done`처럼 리터럴
+텍스트만 쓴 단순 `echo`는 승인 적용을 막지 않습니다. 변수, 명령 치환, glob, 리다이렉트, 파이프가 있는 `echo`는 여전히 승인을 요청합니다. mod 저장소는 각 세션에 속합니다. 역할 실행기가
+`HEI5ENBUG_PARENT_SESSION`을 전달하면 승인 가드는 부모 승인을
+읽을 수 있습니다([승인 가드](#승인-가드) 참고). 승인은
 한 세션에만 속하며, mod는 7일이 지난 저장 항목을 지웁니다. 일반 푸시와 그 밖의 명령은 기존 권한 절차를 그대로 따릅니다.
 
 이 작업들에 `permissions.ask` 규칙을 추가하지 마세요. ask 규칙은 세션 승인 뒤에도 매번 확인을 요청합니다.
+
 
 ## 기능 옵션
 
@@ -266,6 +402,7 @@ get, list, search, read, fetch, query, download 같은 읽기 동사로 시작�
 | 검토 모델 | `review_model` (고정 모델 ID, 기본 `gpt-6-astra`) | 해당 없음 |
 | 응답 언어 가드 | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip 쿼리 가드 | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
+| 승인 가드 | `approval_guard` | `HEI5ENBUG_APPROVAL_GUARD` |
 | `~/.codex/AGENTS.md`의 서브에이전트 허용 블록 | 해당 없음 | `HEI5ENBUG_SUBAGENT_POLICY` |
 | 질문 기능 플래그 | 해당 없음 | `HEI5ENBUG_CODEX_ASK_TOOL` |
 
@@ -312,7 +449,7 @@ Codex가 제공하는 `PLUGIN_ROOT`가 설치 디렉터리를 가리키면 로�
 | 도구 호출 종료 | 진행 상황 안내가 다른 언어로 쓰였으면 `PostToolUse`가 언어 알림을 추가한다. |
 | 답변 종료 | 답변이 응답 언어로 쓰이지 않았으면 `Stop`이 다시 쓰도록 요청한다. |
 | DataGrip 쿼리 실행 직전 | `PreToolUse`와 `PermissionRequest`가 `execute_sql_query` 실행 전에 DataGrip 쿼리 가드를 실행한다. |
-| Bash 또는 MCP 도구 호출 실행 | Claude Code에서는 mod의 `tool.check`와 `tool.call` 훅이 Bash와 MCP 도구에 세션 승인을 적용한다. |
+| Bash, MCP 또는 대상 파일 도구 호출 실행 | `PreToolUse`가 상태 파일 보호와 민감 읽기 검사를 포함한 승인 가드를 실행한다. Codex의 `PermissionRequest`와 `PostToolUse`는 승인을 읽거나 기록한다. 양쪽 호스트의 `UserPromptSubmit`은 사용자 코드를 기록하고 즉시 재시도 컨텍스트를 제공한다. Claude Code에서는 mod의 `tool.check`와 `tool.call` 훅이 Bash 도구에 세션 승인을 적용한다. |
 | 조건에 맞는 작업 시작 | 에이전트가 `instructions/`의 필수 참조를 읽는다. |
 | 플러그인 업데이트 설치 | 새 세션이 설치된 버전을 읽는다. 저장소에 푸시하는 것만으로는 반영되지 않는다. |
 
@@ -364,27 +501,44 @@ UI 코드, 시각 디자인, 다이어그램 작업은 대신 호스트의 desig
 다이어그램을 고치며, 노드 일곱 개 이하의 새 SVG나 PNG 흐름도를 만듭니다. 레이아웃과 컴포넌트 구조를 바꾸지 않는
 문구·스타일 값 수정은 구현 worker가 맡을 수 있고, 설계 문서와 RFC는 메인 세션이 맡습니다.
 
+다섯 기능은 `investigation`, `implementation`, `design`, `language`, `review`입니다. 모든 대체 항목은 다른 모델 계열입니다. 다른 호스트의 모델이 필요한 대체 항목은 역할 실행기를 거치고, 현재 호스트에서 바로 실행할 수 있는 대체 항목은 이름이 붙은 에이전트를 씁니다.
+`config/model-registry.json`은 모델 고정값과 역량 고정값의 단일 출처이며, 스크립트와 mod가 이 파일을 읽습니다.
+기능별 호스트 항목은 [모델 라우팅 계약](instructions/model-routing.md#capability-pins)의 역량 고정값 절에 있습니다.
+
 | 호스트 | 구현 에이전트 | 모델과 사고 강도 |
 |---|---|---|
 | Codex | rollout 기록으로 검증한 플러그인 `worker` 역할 | `gpt-5.6-luna`, `xhigh` |
-| Claude Code | `hei5enbug-agent-setup:sonnet-worker`(기본, `implementation_worker`는 `sonnet`); `codex`일 때나 요청했을 때는 `role_runner.py worker`; `haiku`일 때, 요청했을 때, 또는 실행기 대체 경로에서는 Haiku `hei5enbug-agent-setup:worker` | `claude-sonnet-5-5`, `high`(기본); `gpt-5.6-luna`, `xhigh`; `claude-haiku-5-5`, `high` |
-| Codex, designer | 고정 모델의 `claude -p`, Claude를 쓸 수 없으면 플러그인 `designer` 역할 | `claude-opus-5-5`, `xhigh`, 대체 시 `gpt-6-astra`, `xhigh` |
-| Claude Code, designer | 서브에이전트 기록이나 mod의 역할 고정으로 검증한 `hei5enbug-agent-setup:designer` | `claude-opus-5-5`, `xhigh` |
+| Claude Code | `hei5enbug-agent-setup:sonnet-worker`(기본, `implementation_worker`는 `sonnet`); `codex`일 때나 요청했을 때는 `role_runner.py worker`; `haiku`일 때나 요청했을 때는 Haiku `hei5enbug-agent-setup:worker`이며 대체 경로는 `role_runner.py worker` | `claude-sonnet-5-5`, `high`(기본); `gpt-5.6-luna`, `xhigh`; `claude-haiku-5-5`, `high`; 대체 `gpt-5.6-luna`, `xhigh` |
+| Codex, designer | rollout 기록으로 검증한 플러그인 `designer` 역할, 대체는 `role_runner.py agent --name designer --fallback` | `gpt-6-astra`, `xhigh`, 대체 `claude-opus-5-5`, `xhigh` |
+| Claude Code, designer | 서브에이전트 기록이나 mod의 역할 고정으로 검증한 `hei5enbug-agent-setup:designer`, 대체는 `role_runner.py design` | `claude-opus-5-5`, `xhigh`, 대체 `gpt-6-astra`, `xhigh` |
 | Codex, 로컬 scout | rollout 기록으로 검증한 플러그인 `scout` 역할 | `gpt-5.6-luna`, `xhigh` |
 | Claude Code, 로컬 scout | `role_runner.py scout`, 대체 시 `hei5enbug-agent-setup:scout` | `gpt-5.6-luna`, `xhigh`, 대체 시 `claude-sonnet-5-5`, `medium` |
-| Codex, 공개 researcher | rollout 기록으로 검증한 플러그인 `researcher` 역할 | `gpt-5.6-luna`, `xhigh` |
-| Claude Code, 공개 researcher | 웹 검색만 쓰고 셸 네트워크는 쓰지 않는 `role_runner.py researcher`, 대체 시 `hei5enbug-agent-setup:researcher` | `gpt-5.6-luna`, `xhigh`, 대체 시 `claude-haiku-5-5`, `medium` |
-| Codex, 스킬 검토 | `claude -p`; 대체는 rollout 기록으로 검증한 플러그인 `reviewer` | `claude-opus-5-5`, `high`; 대체 `gpt-6.1-sol`, `xhigh` |
+| Codex, 공개 researcher | 웹 검색만 쓰고 셸 네트워크는 쓰지 않는 `role_runner.py researcher`, 세션 기록으로 검증 | `gpt-5.6-luna`, `xhigh` |
+| Claude Code, 공개 researcher | 웹 검색만 쓰고 셸 네트워크는 쓰지 않는 `role_runner.py researcher`, 대체 시 웹 검색과 가져오기 도구를 가진 `hei5enbug-agent-setup:scout` | `gpt-5.6-luna`, `xhigh`, 대체 시 `claude-sonnet-5-5`, `medium` |
+| Codex, 스킬 검토 | `role_runner.py review`; 대체는 rollout 기록으로 검증한 플러그인 `reviewer` | `claude-opus-5-5`, `high`; 대체 `gpt-6.1-sol`, `xhigh` |
 | Claude Code, 스킬 검토 | `review_model` 설정을 쓰는 `role_runner.py reviewer`; 대체는 `hei5enbug-agent-setup:reviewer` | `review_model`(기본 `gpt-6-astra`), `xhigh`; 대체 `claude-opus-5-5`, `high` |
 | Skill Builder 시험 실행 및 기타 비검토 참여자 | Skill Builder 어댑터에 따른 호스트의 상위 모델 | Codex: `gpt-6.1-sol`, `xhigh`; Claude Code: `claude-opus-5-5`, `high` |
 
-Claude Code에서는 `scripts/role_runner.py`가 scout, researcher, reviewer, Codex worker 역할을 실행합니다. 메인 세션은 할당을
-파일로 쓰고 세션 폴더에서 `python3 <plugin>/scripts/role_runner.py <role> --assignment <file> --result <file>`을 실행하며,
-`reviewer`에는 `--model <id>`, `worker`에는 `--add-dir <dir>`을 더할 수 있습니다. 실행기는 역할 규칙을 할당 앞에 붙이고, 역할을
-고정된 모델·사고 강도·권한으로 실행하며(`codex exec`, Claude 검토 모델은 `claude -p`), 호스트의 rollout 또는 transcript 기록을
-확인한 뒤 마지막 줄에 JSON 상태를 출력합니다. 종료 코드 0은 결과가 검증되었다는 뜻이고, 2는 고쳐야 할 사용 오류, 3은 역할을
-실행하지 못했다는 뜻, 4는 기록된 모델이나 사고 강도가 달라 결과를 폐기했다는 뜻입니다. 3이나 4이면 메인 세션이 해당 역할의
-플러그인 에이전트 대체 경로를 씁니다. 독립 검증에는 대체 경로가 없으며, 수행하지 못했다고 보고합니다.
+Claude Code에서는 `scripts/role_runner.py`가 scout, researcher, reviewer, Codex worker 역할을 실행하고, `--instructions <file>`이
+역할 정의를 주면 레지스트리의 기능(capability), 예를 들어 Claude 모델 기능도 실행합니다. 에이전트 모드는 `--name <name>`으로 받은
+플러그인 에이전트의 다른 모델 계열 대체 항목을 실행합니다. 메인 세션은 할당을 파일로 쓰고 세션 폴더에서
+`python3 <plugin>/scripts/role_runner.py <role-or-capability>` 또는 `python3 <plugin>/scripts/role_runner.py agent --name <name> --fallback`을
+`--assignment <file> --result <file>`과 함께 실행합니다. `reviewer`에는 `--model <id>`, `worker`, 쓰기 기능, 쓰기 접근 에이전트에는
+`--add-dir <dir>`, MCP 도구나 네트워크가 필요한 기능이나 에이전트에는 `--mcp`, 기능의 호스트 항목을 고르려면 `--host claude|codex`,
+대체 항목에는 `--fallback`, 실행을 이어 가려면 상태 줄의 `evidence.session`으로 `--resume <session_id>`를 더할 수 있습니다.
+실행기는 역할 규칙을 할당 앞에 붙이고, 고정된 모델·사고 강도·권한으로 실행하며(`codex exec`, Claude 검토 모델은 `claude -p`),
+호스트의 rollout 또는 transcript 기록을 확인한 뒤 마지막 줄에 JSON 상태를 출력합니다. `--mcp`가 없으면 Codex 자식에는
+`codex mcp list --json`이 보여 주는 서버마다 `-c mcp_servers.<name>.enabled=false`를 넘기고, Claude 자식은
+`--strict-mcp-config`를 유지합니다. 자식마다 `HEI5ENBUG_PARENT_SESSION`을 넘겨 메인 세션의 승인을 쓰게 합니다. Codex에 할당을
+보내기 전에 “Run the shell command `true` exactly once, then reply with OK only.”를 먼저 보내고
+`heartbeats/codex-<thread_id>.PreToolUse`를 요구합니다. 가드가 도구 이벤트를 받았다는 증거이며, 일반 파일이나
+`UserPromptSubmit`·`SessionStart` 하트비트만으로는 이 검사를 통과하지 못합니다. Claude는 플러그인 훅에 신뢰 절차를 적용하지
+않으므로 자식의 `heartbeats/claude-<session_id>.UserPromptSubmit` 또는 기존 일반 하트비트를 요구합니다.
+필수 하트비트가 없으면 종료 코드 4입니다. 종료 코드 0은 결과가 검증되었다는
+뜻이고, 2는 고쳐야 할 사용 오류, 3은 역할을 실행하지 못했다는 뜻, 4는 필수 훅 증거가 없거나 기록된 모델, 사고 강도, 샌드박스가 달라 결과를
+폐기했다는 뜻입니다. 3이나 4이면 메인 세션이 해당 역할의 플러그인 에이전트 대체 경로를 씁니다. 독립 검증에는 대체 경로가
+없으며, 수행하지 못했다고 보고합니다. `via`가 `agent`인 기능 항목은 실행기가 실행하지 않고 종료 코드 2로 끝나므로, 메인
+세션이 그 항목에는 에이전트 경로를 씁니다.
 
 준비된 독립 작업은 호스트 한도와 공통 실행 상한 안에서 함께 수행할 수 있습니다. 역할, 모델, 사고 강도, 사용량,
 위임 권한 또는 설정 근거 때문에 위임할 수 없으면 메인이 제한을 알리고, 실행 중인 해당 작업자를 멈춘 뒤 승인된 작업을

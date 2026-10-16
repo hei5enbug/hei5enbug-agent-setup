@@ -24,6 +24,21 @@ This skill separates source extraction from Confluence publishing. Select one so
 the source into the common document model, and then run one publishing workflow. Never skip normalization
 by copying source markup directly into Confluence.
 
+## Execution placement
+
+Run each worker phase through the session's capability route; the main session keeps the phases marked
+main, asks the user, and accepts the result.
+
+| Phase | Owner |
+|---|---|
+| Source, target, update mode, and policy confirmation (Run configuration and Workflow 1) | main |
+| Source and page-version reads, structure extraction, and normalization (Workflow 2–4) | `implementation` |
+| Diagram rendering (Workflow 6) | `design` |
+| Attachment upload and references (Workflow 6) | `implementation` |
+| Body build, fidelity validation, and writing conventions (Workflow 5, 7, 8) | `implementation` |
+| Version-protected save and read-back (Workflow 9–10) | `implementation` |
+| Cleanup approval and final acceptance (Workflow 11) | main |
+
 ## Authority and resources
 
 Higher-level Confluence instructions govern tool selection, credentials, comments, and destructive actions.

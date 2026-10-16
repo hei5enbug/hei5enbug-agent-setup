@@ -22,6 +22,19 @@ Use this English `SKILL.md` and its English references as the only executable so
 Find what went wrong or was repeated in a day's agent sessions, and turn it into evidence-backed skill
 improvements. The evidence comes from the session records; the improvements are decided in the main session.
 
+## Execution placement
+
+Run each worker phase through the session's capability route; the main session keeps the phases marked
+main, asks the user, and accepts the result.
+
+| Phase | Owner |
+|---|---|
+| 1. Fix the target | main |
+| 2. List the sessions | `investigation` |
+| 3. Gather evidence | `investigation` |
+| 4. Verify against the sources | main |
+| 5–7. Improvement table, decision questions, and any requested plan | main |
+
 ## Boundaries
 
 - Never change a session record, the user's repository, or an installed plugin.
@@ -62,14 +75,14 @@ Choose the sessions to review:
 
 ### 3. Gather evidence
 
-Give each chosen session or group to one read-only scout through the host's scout route, with the assignment
-in `references/scout-assignment.md`. When the host has no worker route, read the records in the main session
-with the same assignment. A scout returns evidence only, in six sections: the user's requests; corrections,
-complaints, and repeated instructions; failures and retries; skill use; repeated manual work; and what it
-could not confirm. It never proposes an improvement.
+Give each chosen session or group to one read-only worker through the session's `investigation` capability,
+with the assignment in `references/scout-assignment.md`. When that capability route is unavailable, read the
+records in the main session with the same assignment. The worker returns evidence only, in six sections: the
+user's requests; corrections, complaints, and repeated instructions; failures and retries; skill use; repeated
+manual work; and what it could not confirm. It never proposes an improvement.
 
-Check that each scout ran on the model and effort its route pins before you accept its result. When a scout
-fails, use the route's named fallback once and report the substitution.
+Check that each worker ran on the model and effort the `investigation` entry pins before you accept its result.
+When a worker fails, use that capability's fallback once and report the substitution.
 
 ### 4. Verify against the sources
 

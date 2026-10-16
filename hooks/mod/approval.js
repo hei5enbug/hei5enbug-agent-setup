@@ -1,4 +1,5 @@
-const DATAGRIP_TOOL = "mcp__datagrip__execute_sql_query";
+import { modelRegistry } from "./registry.js";
+
 const STORE_KEY = "approvals";
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const LOOKUP_TIMEOUT_MS = 3000;
@@ -7,7 +8,7 @@ const CLASSIFICATION_CACHE_LIMIT = 256;
 export const DESTRUCTIVE_REASON = "Always asks: this action cannot be undone.";
 export const UNVERIFIABLE_REASON = "Contains a command the session approval cannot verify.";
 
-const TOOL_MATCHER = /^(Bash|mcp__.*)$/;
+const TOOL_MATCHER = /^Bash$/;
 const SEPARATORS = new Set(["&&", "||", ";", "|", "|&", "&"]);
 const PUNCTUATION = new Set("();<>|&");
 const OPAQUE_COMMAND =
@@ -37,19 +38,6 @@ const RELEASE_VALUE_FLAGS = new Set(["--title", "-t", "--notes", "-n", "--target
 const RELEASE_SWITCH_FLAGS = new Set([
   "--generate-notes", "--notes-from-tag", "--latest", "--draft", "--prerelease", "--verify-tag",
 ]);
-export const READ_VERBS = new Set([
-  "get", "list", "search", "read", "fetch", "query", "find", "lookup", "describe", "show", "view", "check",
-  "count", "browse", "download", "export", "preview", "introspect", "analyze", "explain",
-]);
-export const DESTRUCTIVE_WORDS = new Set([
-  "delete", "trash", "remove", "destroy", "purge", "drop", "unshare", "revoke",
-]);
-export const WRITE_WORDS = new Set([
-  "send", "post", "reply", "create", "update", "edit", "add", "write", "upsert", "transition", "schedule",
-  "share", "copy", "move", "upload", "comment", "label", "unlabel", "mark", "unmark", "forward", "apply", "set",
-  "rename", "link", "react", "reaction", "publish", "merge", "close", "reopen", "assign", "invite", "patch",
-]);
-
 const CODEX_VALUE_OPTIONS = new Set([
   "-c", "--config", "-C", "--cd", "--add-dir", "-s", "--sandbox", "-m", "--model", "-o", "--output-last-message",
   "--output-schema", "-p", "--profile", "-i", "--image", "--color", "-a", "--ask-for-approval", "--enable",
@@ -69,7 +57,11 @@ const ROLE_RUNNER_HEADS = new Set(["python3", "python"]);
 const ROLE_RUNNER_SCRIPT = "/scripts/role_runner.py";
 const ROLE_RUNNER_TEXT = /\bpython3?\s+[^\s;&|]*\/scripts\/role_runner\.py/;
 const ROLE_RUNNER_ROLES = new Set(["scout", "researcher", "reviewer", "worker"]);
-const ROLE_RUNNER_VALUE_OPTIONS = new Set(["--assignment", "--result", "--model", "--add-dir", "--timeout"]);
+const ROLE_RUNNER_AGENT = "agent";
+const ROLE_RUNNER_VALUE_OPTIONS = new Set([
+  "--assignment", "--result", "--model", "--add-dir", "--timeout", "--host", "--instructions", "--resume", "--name",
+]);
+const ROLE_RUNNER_FLAG_OPTIONS = new Set(["--fallback", "--mcp"]);
 
 const LEX_WHITESPACE = " \t\r\n";
 const LEX_QUOTES = "'\"";
@@ -498,16 +490,23 @@ function isRoleRunner(words) {
   return ROLE_RUNNER_HEADS.has(words[0]) && words.length > 1 && words[1].endsWith(ROLE_RUNNER_SCRIPT);
 }
 
-function roleRunnerOptions(role, args) {
+function roleRunnerOptions(target, kind, args) {
   const addDirs = [];
+  let name = null;
+  let fallback = false;
   let index = 0;
   while (index < args.length) {
     const arg = args[index];
     index += 1;
     if (!arg.startsWith("--")) return null;
     const equals = arg.indexOf("=");
-    const name = equals < 0 ? arg : arg.slice(0, equals);
-    if (!ROLE_RUNNER_VALUE_OPTIONS.has(name)) return null;
+    const option = equals < 0 ? arg : arg.slice(0, equals);
+    if (ROLE_RUNNER_FLAG_OPTIONS.has(option)) {
+      if (equals >= 0 || kind === "role") return null;
+      if (option === "--fallback") fallback = true;
+      continue;
+    }
+    if (!ROLE_RUNNER_VALUE_OPTIONS.has(option)) return null;
     let value = equals < 0 ? undefined : arg.slice(equals + 1);
     if (value === undefined) {
       if (index >= args.length) return null;
@@ -515,24 +514,53 @@ function roleRunnerOptions(role, args) {
       index += 1;
     }
     if (value === "" || value.startsWith("-")) return null;
-    if (name === "--add-dir") {
-      if (role !== "worker") return null;
+    if (option === "--add-dir") {
+      if (kind === "role" && target !== "worker") return null;
       addDirs.push(value);
-    } else if (name === "--model" && role !== "reviewer") {
+    } else if (option === "--name") {
+      if (kind !== "agent") return null;
+      name = value;
+    } else if (option === "--model" && target !== "reviewer") {
+      return null;
+    } else if (option === "--instructions" && kind !== "capability") {
       return null;
     }
   }
-  return addDirs;
+  return { addDirs, name, fallback };
+}
+
+async function runnerTargetKind($, target) {
+  if (ROLE_RUNNER_ROLES.has(target)) return "role";
+  if (target === ROLE_RUNNER_AGENT) return "agent";
+  try {
+    const names = Object.keys((await modelRegistry($)).capabilities);
+    return names.includes(target) ? "capability" : null;
+  } catch {
+    return null;
+  }
+}
+
+async function knownAgent($, name) {
+  try {
+    const registry = await modelRegistry($);
+    const names = [...Object.keys(registry.claude_agents), ...Object.keys(registry.codex_agents ?? {})];
+    return names.includes(name);
+  } catch {
+    return false;
+  }
 }
 
 async function classifyRoleRunner($, words, state, punctuated) {
-  const role = words[2];
+  const target = words[2];
   const args = words.slice(3);
-  if (punctuated || words.some(unsafe) || !ROLE_RUNNER_ROLES.has(role)) return outcome([], false, false, true);
-  const addDirs = roleRunnerOptions(role, args);
-  if (addDirs === null) return outcome([], false, false, true);
-  if (role !== "worker") return outcome([], false, false);
-  const targets = [...addDirs];
+  if (punctuated || words.some(unsafe)) return outcome([], false, false, true);
+  const kind = await runnerTargetKind($, target);
+  if (kind === null) return outcome([], false, false, true);
+  const options = roleRunnerOptions(target, kind, args);
+  if (options === null) return outcome([], false, false, true);
+  if (kind === "agent" && (!options.fallback || !(await knownAgent($, options.name)))) return outcome([], false, false, true);
+  if (kind === "role" && target !== "worker") return outcome([], false, false);
+  const targets = [...options.addDirs];
   if (state.dir !== state.root) targets.push(state.dir);
   const { keys, unverifiable } = await outsideDirectories($, state, targets);
   return outcome(keys, false, keys.size > 0 && !unverifiable, unverifiable);
@@ -614,45 +642,11 @@ async function classifyBash($, command) {
   return outcome(keys, destructive, known, mustAsk);
 }
 
-export function toolWordList(toolPart) {
-  const spaced = toolPart
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2");
-  return spaced
-    .toLowerCase()
-    .split(/[_\-\s]+/)
-    .filter(Boolean);
-}
-
-export function toolWords(toolPart) {
-  return new Set(toolWordList(toolPart));
-}
-
-function mcpToolPart(toolName) {
-  const first = toolName.indexOf("__");
-  if (first < 0) return null;
-  const second = toolName.indexOf("__", first + 2);
-  if (second < 0) return null;
-  return toolName.slice(second + 2);
-}
-
-function classifyMcp(toolName) {
-  if (toolName === DATAGRIP_TOOL) return outcome([], false, false);
-  const toolPart = mcpToolPart(toolName);
-  if (toolPart === null) return outcome([], false, false);
-  const ordered = toolWordList(toolPart);
-  if (ordered.some(word => DESTRUCTIVE_WORDS.has(word))) return outcome([`mcp:${toolName}`], true, true);
-  if (ordered.length > 0 && READ_VERBS.has(ordered[0])) return outcome([], false, false);
-  if (ordered.some(word => WRITE_WORDS.has(word))) return outcome([`mcp:${toolName}`], false, true);
-  return outcome([], false, false);
-}
-
 export async function classify($, tool, input) {
   if (tool === "Bash") {
     const isRecord = input !== null && typeof input === "object" && !Array.isArray(input);
     return classifyBash($, isRecord ? input.command : undefined);
   }
-  if (typeof tool === "string" && tool.startsWith("mcp__")) return classifyMcp(tool);
   return outcome([], false, false);
 }
 

@@ -21,7 +21,8 @@ If a required reference is missing, report it and pause the affected action inst
 Reuse an unchanged instruction file still in context; reread it only after it changes or leaves the context.
 
 - Before accessing a hosted service, read [service access rules](../services.md).
-- Before any Azure or Kubernetes access, including local files, environment variables, logs, or indirect
-  access, read [protected-value access rules](../protected-values.md).
+- Before any infrastructure, cloud, Kubernetes, or database access, read
+  [infrastructure access](../infrastructure-access.md). For protected values, including local files,
+  environment variables, logs, or indirect access, also read [protected-value access rules](../protected-values.md).
 - Before writing or editing any documentation file, read [documentation rules](../documentation.md).
 - Before writing or editing test code, read [test rules](../testing.md).

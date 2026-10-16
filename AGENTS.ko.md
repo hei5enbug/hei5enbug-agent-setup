@@ -62,7 +62,8 @@
   추론 강도, `--output-format json --permission-mode dontAsk --strict-mcp-config`를 지정한다.
   `haiku_scout`과 `sonnet_code_reviewer`에는 `--tools Read Grep Glob --allowedTools Read Grep Glob`를 추가한다.
   `haiku_writer`에는 `--tools Read Grep Glob Edit Write --allowedTools Read Grep Glob`와 함께 배정된 각
-  Markdown 파일과 미러에 대한 `Edit(<allowed path>)`, `Write(<allowed path>)`를 추가한다. 배정된 검사는
+  Markdown 파일과 미러에 대한 `Edit(//<absolute allowed path>)`를 추가한다. Edit 규칙은 Write에도 적용되고,
+  `//`는 절대 경로를 뜻한다. 배정된 검사는
   메인 세션이 실행한다. 이 fallback에는 셸, 네트워크, 위임 도구를 제공하지 않는다.
   JSON `modelUsage`가 요청한 모델을 나타내고 기존 실제 설정 검사에서 추론 강도를 확인했을 때만 결과를
   사용한다. CLI로 재개할 때 모델, 추론 강도, 도구 제한, 과제 범위를 다시 적용한다. 이 선택은 복구 정책이며
@@ -100,14 +101,15 @@
   구독 요금이 아닌 API/목록 가격 추정치다. [Haiku 비교](https://vulcanbench.com/benchmarks/swe-v4-haiku55-vs-frontier.html),
   [Luna 비교](https://vulcanbench.com/benchmarks/swe-v4-gpt55-luna-v35.html),
   [VulcanBench 방법론](https://vulcanbench.com/methodology.html)을 참조한다. 문제 정의, 복잡한 근본 원인
-  분석, 계획, 설계와 RFC, 승인 결정은 메인 세션에서 처리한다. `researcher`, `designer`, `reviewer` 역할은
+  분석, 계획, 설계와 RFC, 승인 결정은 메인 세션에서 처리한다. `designer`, `reviewer` 역할은
   기존 호스트 경로를 그대로 사용한다.
-- 이 저장소를 변경하기 전에, `tests/test_model_pins.py`의 `PINS_VERIFIED_ON`이 14일보다 오래됐으면 `PINS`에 있는
-  GPT Luna를 제외한 모든 모델 계열의 가장 새로운 정식 모델을 확인하고 `PINS_VERIFIED_ON`을 그 날짜로
-  바꾼다. GPT Luna는 사용자가 명시적으로 선택을 바꿀 때까지 `gpt-5.6-luna` / `xhigh`를 유지한다. 공식 [Claude 모델 개요](https://platform.claude.com/docs/en/about-claude/models/overview),
+- 이 저장소를 변경하기 전에, `tests/test_model_pins.py`의 `PINS_VERIFIED_ON`이 14일보다 오래됐으면
+  `config/model-registry.json`의 `pins`에 있는 GPT Luna를 제외한 모든 모델 계열의 가장 새로운 정식 모델을
+  확인하고 `PINS_VERIFIED_ON`을 그 날짜로 바꾼다. GPT Luna는 사용자가 명시적으로 선택을 바꿀 때까지
+  `gpt-5.6-luna` / `xhigh`를 유지한다. 공식 [Claude 모델 개요](https://platform.claude.com/docs/en/about-claude/models/overview),
   [OpenAI 모델 카탈로그](https://developers.openai.com/api/docs/models), 각 호스트의 모델 카탈로그를 사용하고 미리보기
-  모델은 제외한다. 계열에 더 새로운 릴리스가 있으면 같은 변경에서 `PINS`와 모든 참조를 갱신하고
-  `tests/test_model_pins.py`가 통과할 때까지 맞춘다. 실행 파일은 모델을 이 전체 ID로만 적는다. 별칭이나 실행 시점의
+  모델은 제외한다. 계열에 더 새로운 릴리스가 있으면 같은 변경에서 `config/model-registry.json`의 `pins`와 모든 참조를
+  갱신하고 `tests/test_model_pins.py`가 통과할 때까지 맞춘다. 실행 파일은 모델을 이 전체 ID로만 적는다. 별칭이나 실행 시점의
   최신 릴리스 조회는 추가하지 않는다.
 - Orca CLI가 설치되어 있지 않아 테스트를 건너뛰면, 검사가 통과했다고 보고하기 전에 Orca를 설치하고 다시 실행할지
   사용자에게 묻는다.

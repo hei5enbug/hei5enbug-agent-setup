@@ -27,7 +27,25 @@ python3 <Source directory>/scripts/role_runner.py <scout|researcher|reviewer|wor
 ```
 
 It runs the role on its pinned model, effort, and permissions, verifies the host record, and ends with one JSON
-line. Never run `cd` before it. Add `--model <id>` only for `reviewer` and `--add-dir <dir>` only for `worker`.
+line. Never run `cd` before it. Add `--model <id>` only for `reviewer` and `--add-dir <dir>` only for `worker`, a
+writing capability, or a `write` agent.
+
+Agent mode runs a plugin agent's cross-family fallback, and takes the agent's registry name, or a role an installed
+plugin declares, in place of a role:
+
+```text
+python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback --assignment <file> --result <file>
+```
+
+Add `--add-dir <dir>` for each directory a `write` agent may edit, and `--mcp` only when the assignment needs MCP tools
+or network.
+
+The same command also takes a capability name from the registry in place of a role. `--instructions <file>` then
+supplies the role definition. The runner runs the entry that [the capability table](model-routing.md) selects for
+`--host claude|codex`. Without `--host`, the default is `codex` when `CODEX_THREAD_ID` is set and `claude` otherwise.
+`--fallback` selects the fallback entry. When that entry is not `via: runner`, the runner exits 2, so use the agent
+route or the main session instead. `--resume <session_id>` continues a Claude or Codex run from the `evidence.session`
+in its status line, with the same model, effort, and sandbox settings.
 
 | Exit | Action |
 |---|---|
@@ -38,12 +56,31 @@ line. Never run `cd` before it. Add `--model <id>` only for `reviewer` and `--ad
 | Role | Fallback after exit 3 or 4 |
 |---|---|
 | `scout` | `hei5enbug-agent-setup:scout` |
-| `researcher` | `hei5enbug-agent-setup:researcher`, only when public search and fetch tools are available |
+| `researcher` | `hei5enbug-agent-setup:scout`, only when public search and fetch tools are available |
 | `reviewer` for a skill review role | `hei5enbug-agent-setup:reviewer` |
 | `reviewer` for independent validation | None. Report that independent validation was not performed. |
 | `worker` | Inspect the partial diff, then `hei5enbug-agent-setup:worker` |
 
 When the fallback is unavailable too, continue in the main conversation.
+
+## Run a capability
+
+Look up the capability's entry for `claude` in the [capability table](model-routing.md#capability-pins). The five
+capabilities are `investigation`, `implementation`, `design`, `language`, and `review`. The fallback rules in the
+Fallback section below apply.
+
+- `via: runner`: run the capability through the role runner above, with `--instructions <file>`.
+- `via: agent`: spawn the agent named in the entry's `agent` field. The entry's `pin` names the agent pin it uses.
+  After a failed run, the next spawn of that agent is denied once, and the denial names the runner fallback command.
+- If that route fails, use the capability's fallback entry once, then continue in the main conversation.
+
+## Fallback
+
+Every fallback is the other model family; a fallback that needs the other host's model runs through the role runner, and
+one the current host can run in-host uses the named agent. A plugin agent's cross-family fallback runs
+`role_runner.py agent --name <name> --fallback`, and a capability fallback with `via: runner` runs
+`role_runner.py <capability> --fallback`. Pass `--mcp` only when the assignment needs MCP tools or network. On runner
+exit 3 or 4, continue in the main conversation.
 
 ## Investigation
 
@@ -51,8 +88,8 @@ When the fallback is unavailable too, continue in the main conversation.
   `scout` role. Give each scout one question and one narrow search scope.
 - Require file paths, code symbols, and concrete evidence in its results.
 - Treat results as leads. Verify critical claims in the main conversation before planning or deciding.
-- For bounded public research, run the `researcher` role, which uses the web search tool and no shell network.
-  Otherwise, continue in the main conversation.
+- For bounded public research, use the `investigation` capability's route in the capability table. Its Claude
+  fallback is the `scout` agent, which has web search and fetch tools. Otherwise, continue in the main conversation.
 
 ## Skill workers
 
@@ -61,9 +98,10 @@ When the fallback is unavailable too, continue in the main conversation.
 - Independent validation, after the user approves it under independent model validation, runs the `reviewer` role
   with `--model` set to the reviewer that file selects. For a Claude-authored result, that is the "Review model"
   line.
-- Send a local-evidence research ticket to the `scout` role and bounded public research to the `researcher` role.
-  Do not use `scout` for a review role. Keep private or authenticated remote access and all edits in the main
-  conversation.
+- Send a local-evidence research ticket or bounded public research through the `investigation` capability.
+  Do not use `scout` for a review role. Private or authenticated remote access, including external tool work such as
+  issue trackers and pull request services, goes to the `implementation` capability, and edits go to the capability
+  worker a skill names; otherwise keep them in the main conversation.
 - For Skill Builder, trial execution and other non-review participants use the host's upper model in its evaluation
   adapter. When a skill asks for a worker that writes trial outputs, run a separate `claude -p` process with the
   model and effort that the skill pins.
@@ -84,8 +122,13 @@ This section adds only the Claude Code worker integration.
 - The bullets below apply whenever a plugin agent runs: a runner fallback, the Haiku or Sonnet worker, and the
   designer.
 - When the session context has the line `hei5enbug-agent-setup mod: role pinning active`, the registered plugin mod's
-  `prompt.context` hook confirms role pinning is active. The mod pins each role's model and effort on every request and
-  blocks tool calls from a subagent that answered on another model.
+  `prompt.context` hook confirms role pinning is active. The mod pins each role's model and effort on every subagent
+  request, from the registry and from installed plugins' declared `model-roles.json` files. It fails a run whose
+  response came from another model or carried no model evidence: the run's later turns are refused, and the mod blocks
+  tool calls from a subagent that answered on another model. A failed run's result is replaced by a warning, and the
+  next spawn of that role is denied once, naming the runner fallback command, before later spawns use the primary pin
+  again. A run whose Agent call returns an error,
+  or whose final turn ends in an error, is marked failed the same way, but its error result is kept.
   Once per session, check only forced-model and effort limits: `CLAUDE_CODE_SUBAGENT_MODEL`,
   `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`, effort overrides such as `CLAUDE_CODE_EFFORT_LEVEL`, and effort caps such as
   `maxEffortLevel` or organization limits, in the environment and every settings file. A forced model or a cap
@@ -95,13 +138,11 @@ This section adds only the Claude Code worker integration.
   the non-secret inputs above plus the agent definition and any substitution or fallback warning, and follow the
   readiness-only path in implementation delegation. Claude Code can reload settings during a session, so recheck
   them before every follow-up that carries implementation work.
-- Accept the host's subagent record, such as `/tasks` or the subagent transcript, only when it names the invoked
-  definition's pinned model and effort. Provider-internal reasoning telemetry is not required. A different recorded
-  model, a cap below the pinned effort, a contradictory override, or unknown effective precedence is insufficient.
-- Read that record from the transcripts under the Claude config directory, `CLAUDE_CONFIG_DIR` or `~/.claude`,
-  in `projects/<project>/`. The session transcript's launch result names the worker's `agentId` and
-  `resolvedModel`, and `<session-id>/subagents/agent-<agentId>.jsonl` names `model` and `effort` on each
-  assistant entry.
+- Without the mod line, accept the host's subagent record only when it names the invoked definition's pinned model
+  and effort. Read it from `projects/<project>/<session-id>/subagents/agent-<agentId>.jsonl` under the Claude config
+  directory, `CLAUDE_CONFIG_DIR` or `~/.claude`, where each assistant entry's `model` and `effort` must match.
+  Provider-internal reasoning telemetry is not required. A different recorded model, a cap below the pinned effort,
+  a contradictory override, or unknown effective precedence is insufficient.
 - The host limit is `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`, which counts running subagents but not the main
   session. Use its current value and open slots; never change it.
 - A missing plugin worker or a missing subagent record stops the affected delegation. Apply the session fallback.

@@ -213,23 +213,23 @@ class ClaudeGptTest(unittest.TestCase):
         self.assertEqual(request["tool_choice"], payload["tool_choice"])
         self.assertEqual(schema, payload["tools"][0]["tools"][0]["parameters"])
 
-    def test_Luna는_고정_모델과_xhigh를_Responses_요청에_전달한다(self):
-        """허용된 Luna 요청에는 사용자 지정 모델과 xhigh가 그대로 전달된다."""
+    def test_Luna는_고정_모델과_high_또는_xhigh를_Responses_요청에_그대로_전달한다(self):
+        """허용된 Luna 요청에는 사용자 지정 모델과 high 또는 xhigh 추론 강도가 그대로 전달된다."""
         # Given
-        request = _request("p_" + "e" * 32)
+        requests = [{**_request("p_" + "e" * 32), "effort": effort} for effort in ("high", "xhigh")]
 
         # When
-        payload, _ = claude_gpt.build_responses_payload(request, subscription=False)
+        payloads = [claude_gpt.build_responses_payload(request, subscription=False)[0] for request in requests]
 
         # Then
-        self.assertEqual("gpt-5.6-luna", payload["model"])
-        self.assertEqual({"effort": "xhigh"}, payload["reasoning"])
+        self.assertEqual(["gpt-5.6-luna", "gpt-5.6-luna"], [payload["model"] for payload in payloads])
+        self.assertEqual([{"effort": "high"}, {"effort": "xhigh"}], [payload["reasoning"] for payload in payloads])
 
     def test_다른_Luna_버전과_추론_강도는_인증과_공급자_접근_전에_거부한다(self):
-        """다른 Luna 버전이나 xhigh 이외의 추론 강도는 프로필과 네트워크를 읽기 전에 거부된다."""
+        """다른 Luna 버전이나 high와 xhigh 이외의 추론 강도는 프로필과 네트워크를 읽기 전에 거부된다."""
         # Given
         requests = []
-        for model, effort in [("gpt-6-luna", "xhigh"), *[("gpt-5.6-luna", e) for e in (None, "low", "medium", "high", "max")]]:
+        for model, effort in [("gpt-6-luna", "xhigh"), *[("gpt-5.6-luna", e) for e in (None, "low", "max")]]:
             request = _request("p_" + "e" * 32)
             request.update(model=model, effort=effort)
             requests.append(request)
@@ -244,7 +244,23 @@ class ClaudeGptTest(unittest.TestCase):
                 errors.append(error.code)
 
         # Then
-        self.assertEqual(["unsupported_model", *["unsupported_effort"] * 5], errors)
+        self.assertEqual(["unsupported_model", *["unsupported_effort"] * 3], errors)
+        self.assertEqual([], http.json_calls)
+        self.assertEqual([], http.open_calls)
+
+    def test_Luna의_medium_추론_강도는_인증과_공급자_접근_전에_거부한다(self):
+        """Luna 허용 목록에 없는 medium 추론 강도는 프로필과 네트워크를 읽기 전에 거부된다."""
+        # Given
+        request = _request("p_" + "e" * 32)
+        request.update(effort="medium")
+        http = FakeHttp()
+
+        # When
+        with self.assertRaises(claude_gpt.ClaudeGptError) as raised:
+            claude_gpt.execute_request(self.store, http, request)
+
+        # Then
+        self.assertEqual("unsupported_effort", raised.exception.code)
         self.assertEqual([], http.json_calls)
         self.assertEqual([], http.open_calls)
         self.assertFalse(self.store.root.exists())

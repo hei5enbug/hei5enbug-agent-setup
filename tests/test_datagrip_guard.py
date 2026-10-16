@@ -140,6 +140,8 @@ PG_CALLABLE_STATEMENT_KEYWORDS = [
     "refresh", "reindex", "cluster", "read_only", "session_authorization",
 ]
 PG_RESERVED_STATEMENT_KEYWORDS = [k for k in PG_STATEMENT_KEYWORDS if k not in PG_CALLABLE_STATEMENT_KEYWORDS]
+# The raw text that names these words is never a read, even as a function name or a quoted identifier.
+RAW_DESTRUCTIVE_KEYWORDS = ("delete", "drop", "truncate")
 PG_FUNCTION_KEYWORDS = [
     "set_config", "nextval", "setval", "dblink", "dblink_exec", "lo_import", "lo_export", "lo_unlink",
     "pg_terminate_backend", "pg_cancel_backend", "pg_reload_conf", "pg_advisory_lock",
@@ -199,14 +201,7 @@ MSSQL_ALLOW = [
     ("for-json", "SELECT id, name FROM dbo.T FOR JSON PATH"),
     ("union", "SELECT a FROM dbo.A UNION ALL SELECT a FROM dbo.B UNION SELECT 1"),
     ("window", "SELECT id, ROW_NUMBER() OVER (PARTITION BY g ORDER BY id) AS rn, SUM(v) OVER (ORDER BY id) FROM dbo.T"),
-    ("keywords-in-strings", "SELECT 'DELETE FROM t; DROP TABLE x' AS s, N'INSERT INTO t EXEC sp_who' AS u"),
-    ("string-doubled-quote", "SELECT 'it''s; DELETE FROM t'"),
-    ("line-comment", "SELECT 1 -- DROP TABLE t; DELETE FROM t\n"),
-    ("line-comment-crlf", "SELECT 1 -- DROP TABLE t\r\n"),
-    ("block-comment-nested", "SELECT /* a /* DROP TABLE t */ DELETE */ 1"),
     ("block-comment-with-dashes", "SELECT /* -- */ 1"),
-    ("bracket-identifiers", "SELECT [delete], [insert into], [a]]b] FROM dbo.[update]"),
-    ("quoted-identifiers", 'SELECT "drop", "exec" FROM dbo."set"'),
     ("bracket-identifiers-new-keywords", "SELECT [add], [send], [load], [enable] FROM dbo.T"),
     ("identifier-containing-keyword", "SELECT updated_at, inserted_by, deleted, created_on, set_by, go_live, output_col FROM dbo.T"),
     ("variable-named-like-keyword", "DECLARE @set int = 1; SELECT @set"),
@@ -319,6 +314,13 @@ MSSQL_ASK = [
     ("openxml", "SELECT * FROM OPENXML(@h, '/r')"),
     ("update-after-line-comment", "SELECT 1 -- c\nUPDATE dbo.T SET a = 1"),
     ("update-after-block-comment", "SELECT 1 /* c */ UPDATE dbo.T SET a = 1"),
+    ("keywords-in-strings", "SELECT 'DELETE FROM t; DROP TABLE x' AS s, N'INSERT INTO t EXEC sp_who' AS u"),
+    ("string-doubled-quote", "SELECT 'it''s; DELETE FROM t'"),
+    ("line-comment", "SELECT 1 -- DROP TABLE t; DELETE FROM t\n"),
+    ("line-comment-crlf", "SELECT 1 -- DROP TABLE t\r\n"),
+    ("block-comment-nested", "SELECT /* a /* DROP TABLE t */ DELETE */ 1"),
+    ("bracket-identifiers", "SELECT [delete], [insert into], [a]]b] FROM dbo.[update]"),
+    ("quoted-identifiers", 'SELECT "drop", "exec" FROM dbo."set"'),
 ]
 
 PG_ALLOW = [
@@ -333,11 +335,9 @@ PG_ALLOW = [
     ("explain", "EXPLAIN SELECT * FROM t"),
     ("explain-format", "EXPLAIN (FORMAT JSON) SELECT * FROM t"),
     ("explain-costs", "EXPLAIN (COSTS OFF, VERBOSE) SELECT 1"),
-    ("e-string-escaped-quote", "SELECT E'it\\'s DELETE'"),
     ("e-string-escaped-backslash", "SELECT E'a\\\\'"),
     ("e-string-lowercase", "select e'x\\n'"),
     ("e-string-concatenated", "SELECT 'a' || E'\\n' || 'b'"),
-    ("dollar-quote-empty-tag", "SELECT $$ DELETE FROM t; DROP TABLE x $$"),
     ("dollar-quote-tag", "SELECT $fn$ INSERT ; ' \" $fn$"),
     ("dollar-quote-nested-tags", "SELECT $a$ $b$ UPDATE $b$ $a$"),
     ("quoted-identifiers", 'SELECT "Name", "my col" FROM "Schema"."Table"'),
@@ -350,9 +350,6 @@ PG_ALLOW = [
     ("public-table", "SELECT * FROM public.t"),
     ("public-function", "SELECT public.myfn(1)"),
     ("information-schema", "SELECT * FROM information_schema.tables"),
-    ("line-comment", "SELECT 1 -- DELETE\n"),
-    ("block-comment-nested", "SELECT /* a /* DROP */ b */ 1"),
-    ("keywords-in-strings", "SELECT 'DELETE; DROP', 'it''s'"),
     ("in-list", "SELECT a FROM t WHERE b IN (1, 2) ORDER BY a LIMIT 10 OFFSET 5"),
     ("filter-aggregate", "SELECT count(*) FILTER (WHERE a > 1) FROM t"),
     ("generate-series", "SELECT * FROM generate_series(1, 3)"),
@@ -377,6 +374,8 @@ PG_ALLOW = [
 ]
 
 PG_ASK = [
+    # An alias named like a statement keyword is still raw text that names delete, so it asks on both paths.
+    ("alias-named-like-keyword", "SELECT 1 AS insert, 2 AS delete"),
     ("quoted-pg-terminate-backend", 'SELECT "pg_terminate_backend"(1)'),
     ("quoted-set-config", "SELECT \"set_config\"('x', 'y', false)"),
     ("quoted-dblink-exec", "SELECT \"dblink_exec\"('c', 'DELETE FROM t')"),
@@ -486,6 +485,11 @@ PG_ASK = [
     ("plain-string-backslash-first-of-two", "SELECT 'a\\b', '한글'"),
     ("read-only-one", "SET LOCAL transaction_read_only = 1; SELECT 1"),
     ("reserved-word-column-do", "SELECT do FROM t"),
+    ("e-string-escaped-quote", "SELECT E'it\\'s DELETE'"),
+    ("dollar-quote-empty-tag", "SELECT $$ DELETE FROM t; DROP TABLE x $$"),
+    ("line-comment", "SELECT 1 -- DELETE\n"),
+    ("block-comment-nested", "SELECT /* a /* DROP */ b */ 1"),
+    ("keywords-in-strings", "SELECT 'DELETE; DROP', 'it''s'"),
 ]
 
 INVISIBLE_CHARS = ["​", "‌", "‍", "⁠", "﻿", "­"]
@@ -540,7 +544,6 @@ PG_ASK_REGEX_ONLY = [
     ("full-width-pg-sleep", "SELECT ｐｇ＿ｓｌｅｅｐ(1)", "a full-width name is an unknown user function, not pg_sleep"),
     ("column-names-like-keywords", "SELECT update, comment, set_id, https_url FROM t", "update, comment, set_id and https_url are ordinary column names"),
     ("quoted-reserved-word-and-pg-sleep-columns", 'SELECT "do", "into", "pg_sleep" FROM t', "quoted names are columns and a quoted pg_sleep without parentheses is no call"),
-    ("alias-named-like-keyword", "SELECT 1 AS insert, 2 AS delete", "an alias named like a statement keyword is only a label"),
     ("table-named-like-keyword", 'SELECT * FROM comment c JOIN "update" u ON true', "tables named like statement keywords are only relations"),
     ("read-only-prelude-quoted-on", "SET LOCAL transaction_read_only = 'on'; SELECT 1", "the quoted value on really turns read-only on"),
 ]
@@ -621,6 +624,8 @@ def script_env(host="claude", extra=None):
         "PATH": os.defpath,
         "HOME": str(STATE_HOME),
         "XDG_STATE_HOME": str(STATE_HOME / "xdg"),
+        "CLAUDE_PLUGIN_OPTION_APPROVAL_GUARD": "false",
+        "HEI5ENBUG_APPROVAL_GUARD": "false",
     }
     if host == "codex":
         env["PLUGIN_ROOT"] = str(REPO_ROOT)
@@ -667,6 +672,13 @@ def apply_path(monkeypatch, path):
         assert hook.pglast_parser is not None, "install the dev extra so that pglast is available"
 
 
+@pytest.fixture(autouse=True)
+def approval_guard_off(monkeypatch):
+    """These cases pin the DataGrip contract without the approval guard; write approvals are tested in test_approval_guard.py."""
+    monkeypatch.setenv("CLAUDE_PLUGIN_OPTION_APPROVAL_GUARD", "false")
+    monkeypatch.setenv("HEI5ENBUG_APPROVAL_GUARD", "false")
+
+
 @pytest.fixture(params=PG_PATHS)
 def pg_path(request, monkeypatch):
     apply_path(monkeypatch, request.param)
@@ -707,6 +719,23 @@ def control_char_cases():
     for name, sql in LONE_CR_CASES:
         cases.append(pytest.param(sql, id=name))
     return cases
+
+
+# SELECT statements that name delete, drop, or truncate were reads before the raw-text rule; they still prefix the
+# read-followed-by-write combinations, which must ask.
+RAW_DESTRUCTIVE_TEXT = re.compile(r"\b(?:delete|drop|truncate)\b", re.IGNORECASE)
+
+
+def select_bases(allow, ask):
+    raw_selects = [
+        (name, sql) for name, sql in ask
+        if isinstance(sql, str) and sql.lstrip().upper().startswith("SELECT") and RAW_DESTRUCTIVE_TEXT.search(sql)
+    ]
+    return [*allow, *raw_selects]
+
+
+MSSQL_READ_BASES = select_bases(MSSQL_ALLOW, MSSQL_ASK)
+PG_READ_BASES = select_bases(PG_ALLOW, PG_ASK)
 
 
 def combo_cases(bases, separators, writes):
@@ -858,7 +887,7 @@ class TestMssqlAsk:
 
     @pytest.mark.parametrize(
         "sql",
-        combo_cases(MSSQL_ALLOW, MSSQL_COMBO_SEPARATORS, MSSQL_WRITES),
+        combo_cases(MSSQL_READ_BASES, MSSQL_COMBO_SEPARATORS, MSSQL_WRITES),
     )
     def test_mssql_read_followed_by_write_asks(self, sql):
         """MSSQL 조회 뒤에 어떤 구분자로든 쓰기가 이어지면 ask한다."""
@@ -1010,7 +1039,7 @@ class TestPostgresAsk:
 
     @pytest.mark.parametrize(
         "sql",
-        combo_cases(PG_ALLOW, PG_COMBO_SEPARATORS, PG_WRITES),
+        combo_cases(PG_READ_BASES, PG_COMBO_SEPARATORS, PG_WRITES),
     )
     def test_postgres_read_followed_by_write_asks(self, sql):
         """PostgreSQL 조회 뒤에 두 번째 문장으로 쓰기가 이어지면 두 경로 모두 ask한다."""
@@ -1111,7 +1140,7 @@ class TestPostgresParser:
         # then
         assert decision_of(output) == "ask"
 
-    @pytest.mark.parametrize("keyword", PG_CALLABLE_STATEMENT_KEYWORDS)
+    @pytest.mark.parametrize("keyword", [k for k in PG_CALLABLE_STATEMENT_KEYWORDS if k not in RAW_DESTRUCTIVE_KEYWORDS])
     def test_statement_keyword_named_function_is_an_ordinary_call(self, keyword):
         """문장 키워드와 같은 이름의 함수 호출은 일반 함수 호출이라 읽기 전용 접두를 붙여 allow한다."""
         # given
@@ -1122,7 +1151,17 @@ class TestPostgresParser:
         assert decision_of(output) == "allow"
         assert output["hookSpecificOutput"]["updatedInput"]["queryText"] == hook.READ_ONLY_PRELUDE + sql
 
-    @pytest.mark.parametrize("keyword", [k for k in PG_STATEMENT_KEYWORDS if " " not in k])
+    @pytest.mark.parametrize("keyword", RAW_DESTRUCTIVE_KEYWORDS)
+    def test_destructive_keyword_named_function_asks(self, keyword):
+        """delete, drop, truncate라는 이름이 원문에 있으면 함수 호출이어도 읽기가 아니라 ask한다."""
+        # given
+        sql = f"SELECT {keyword}(1)"
+        # when
+        output = decide(PG_ID, sql)
+        # then
+        assert decision_of(output) == "ask"
+
+    @pytest.mark.parametrize("keyword", [k for k in PG_STATEMENT_KEYWORDS if " " not in k and k not in RAW_DESTRUCTIVE_KEYWORDS])
     def test_quoted_statement_keyword_is_an_ordinary_identifier(self, keyword):
         """큰따옴표로 감싼 문장 키워드는 일반 식별자라 allow한다."""
         # given
@@ -1131,6 +1170,16 @@ class TestPostgresParser:
         output = decide(PG_ID, sql)
         # then
         assert decision_of(output) == "allow"
+
+    @pytest.mark.parametrize("keyword", RAW_DESTRUCTIVE_KEYWORDS)
+    def test_quoted_destructive_keyword_still_asks(self, keyword):
+        """큰따옴표로 감싸도 delete, drop, truncate가 원문에 있으면 읽기가 아니라 ask한다."""
+        # given
+        sql = f'SELECT "{keyword}" FROM t'
+        # when
+        output = decide(PG_ID, sql)
+        # then
+        assert decision_of(output) == "ask"
 
     def test_pglast_exception_does_not_fall_back_to_regex(self, monkeypatch):
         """파서가 예외를 내면 정규식으로 되돌리지 않고 ask한다."""

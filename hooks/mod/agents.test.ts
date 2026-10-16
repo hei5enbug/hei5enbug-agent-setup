@@ -1,21 +1,55 @@
 import { expect, mock, test } from "claude-code/testing";
 import { enabled } from "./register.js";
+import { resetClaudeRolePins } from "./registry.js";
 
 const WORKER = "hei5enbug-agent-setup:worker";
 const SONNET_WORKER = "hei5enbug-agent-setup:sonnet-worker";
 const SCOUT = "hei5enbug-agent-setup:scout";
-const RESEARCHER = "hei5enbug-agent-setup:researcher";
 const DESIGNER = "hei5enbug-agent-setup:designer";
 const REVIEWER = "hei5enbug-agent-setup:reviewer";
+const EXAMPLE_SCOUT = "example-plugin:scout";
+const EXAMPLE_LINTER = "example-plugin:linter";
 const PINNED = "claude-sonnet-5-5";
 const WORKER_PINNED = "claude-haiku-5-5";
-const RESEARCHER_PINNED = "claude-haiku-5-5";
 const SESSION = "session-test";
+const CONFIG = "/config";
+const EXAMPLE_PATH = "/plugins/example-plugin";
+const AGENT_ID = "abc123";
+const ENV = { CLAUDE_CONFIG_DIR: CONFIG, HOME: "/home/test" };
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = 10 * DAY;
+const REGISTRY = JSON.stringify({
+  pins: { "claude-sonnet": PINNED, "claude-haiku": WORKER_PINNED, "claude-opus": "claude-opus-5-5", "gpt-luna": "gpt-5.6-luna" },
+  efforts: ["low", "medium", "high", "xhigh", "max"],
+  claude_agents: {
+    "hei5enbug-agent-setup:worker": { role: "worker", model: WORKER_PINNED, effort: "high", access: "write" },
+    "hei5enbug-agent-setup:sonnet-worker": { role: "worker", model: PINNED, effort: "high", access: "write" },
+    "hei5enbug-agent-setup:scout": { role: "scout", model: PINNED, effort: "medium", access: "read", fallback: { model: WORKER_PINNED, effort: "medium" } },
+    "hei5enbug-agent-setup:designer": { role: "designer", model: "claude-opus-5-5", effort: "xhigh", access: "write" },
+    "hei5enbug-agent-setup:reviewer": { role: "reviewer", model: "claude-opus-5-5", effort: "high", access: "read" },
+  },
+  effort_rules: { "gpt-5.6-luna": ["high", "xhigh"] },
+  gpt_gateway_models: ["gpt-6.1-sol", "gpt-5.6-luna"],
+});
+const EXAMPLE_ROLES = {
+  version: 1,
+  agents: {
+    "example-plugin:scout": { model: PINNED, effort: "medium", fallback: { model: WORKER_PINNED, effort: "medium" } },
+    "example-plugin:linter": { model: PINNED, effort: "high" },
+  },
+};
 
-function environment(on, roles = undefined) {
+function environment(on, roles = undefined, world = {}) {
   const data = roles === undefined ? {} : { roles };
+  const files = world.files ?? {};
+  const unreadable = world.unreadable ?? [];
+  on("fs.read", (_$, e) => {
+    if (e.path.endsWith("config/model-registry.json")) return { value: REGISTRY };
+    if (e.path in files) return { value: files[e.path] };
+    throw new Error(`no such file: ${e.path}`);
+  });
+  on("fs.exists", (_$, e) => ({ value: e.path in files || unreadable.includes(e.path) }));
+  on("env.get", (_$, e) => ({ value: ENV[e.name] }));
   on("store.get", (_$, e) => ({ value: data[e.key] }));
   on("store.set", (_$, e) => {
     data[e.key] = JSON.parse(JSON.stringify(e.value));
@@ -23,7 +57,21 @@ function environment(on, roles = undefined) {
   });
   on("session.id", () => ({ value: SESSION }));
   mock.clock(on, { now: NOW });
+  resetClaudeRolePins();
   return data;
+}
+
+function pluginsWorld(installs) {
+  const plugins = {};
+  const files = {};
+  for (const { key, installPath, roles } of installs) {
+    plugins[key] = [{ scope: "user", installPath }];
+    if (roles !== undefined) {
+      files[`${installPath}/.claude-plugin/model-roles.json`] = typeof roles === "string" ? roles : JSON.stringify(roles);
+    }
+  }
+  files[`${CONFIG}/plugins/installed_plugins.json`] = JSON.stringify({ version: 2, plugins });
+  return { files };
 }
 
 function spawnInput(subagentType, extra = {}) {
@@ -72,7 +120,7 @@ test("내장 에이전트 네 종류는 제안 목록에서 숨기고 나머지�
   // given
   on("agent.offer", () => ({ isOffered: true }));
   const hidden = ["general-purpose", "Explore", "Plan", "claude", "explore", "PLAN"];
-  const offered = ["claude-code-guide", "statusline-setup", SCOUT, "example-plugin:review-reader", "reviewer"];
+  const offered = ["claude-code-guide", "statusline-setup", SCOUT, "example-plugin:reader", "reviewer"];
 
   // when
   const hiddenResults = [];
@@ -195,7 +243,7 @@ test("고정 역할을 시작하면 모델을 고정해 넘기고 에이전트 �
 
   // when
   const results = [];
-  for (const [index, type] of [WORKER, SONNET_WORKER, SCOUT, RESEARCHER, REVIEWER].entries()) {
+  for (const [index, type] of [WORKER, SONNET_WORKER, SCOUT, DESIGNER, REVIEWER].entries()) {
     results.push(await $.agent.spawn(spawnInput(type, { model: "haiku", tool_use_id: `toolu_${index}` })));
   }
 
@@ -204,16 +252,16 @@ test("고정 역할을 시작하면 모델을 고정해 넘기고 에이전트 �
     WORKER_PINNED,
     PINNED,
     PINNED,
-    RESEARCHER_PINNED,
+    "claude-opus-5-5",
     "claude-opus-5-5",
   ]);
   expect(results.map((result) => result.agentId)).toEqual(["agent-1", "agent-2", "agent-3", "agent-4", "agent-5"]);
   expect(data.roles[SESSION]).toEqual([
-    { agentId: "agent-1", role: "worker", model: WORKER_PINNED, effort: "high", toolUseId: "toolu_0", time: NOW },
-    { agentId: "agent-2", role: "worker", model: PINNED, effort: "high", toolUseId: "toolu_1", time: NOW },
-    { agentId: "agent-3", role: "scout", model: PINNED, effort: "medium", toolUseId: "toolu_2", time: NOW },
-    { agentId: "agent-4", role: "researcher", model: RESEARCHER_PINNED, effort: "medium", toolUseId: "toolu_3", time: NOW },
-    { agentId: "agent-5", role: "reviewer", model: "claude-opus-5-5", effort: "high", toolUseId: "toolu_4", time: NOW },
+    { agentId: "agent-1", agent: WORKER, role: "worker", model: WORKER_PINNED, effort: "high", toolUseId: "toolu_0", time: NOW },
+    { agentId: "agent-2", agent: SONNET_WORKER, role: "worker", model: PINNED, effort: "high", toolUseId: "toolu_1", time: NOW },
+    { agentId: "agent-3", agent: SCOUT, role: "scout", model: PINNED, effort: "medium", toolUseId: "toolu_2", time: NOW },
+    { agentId: "agent-4", agent: DESIGNER, role: "designer", model: "claude-opus-5-5", effort: "xhigh", toolUseId: "toolu_3", time: NOW },
+    { agentId: "agent-5", agent: REVIEWER, role: "reviewer", model: "claude-opus-5-5", effort: "high", toolUseId: "toolu_4", time: NOW },
   ]);
 });
 
@@ -236,7 +284,7 @@ test("designer를 시작하면 Opus 모델과 xhigh를 고정하고 요청마다
   expect(spawn).toEqual({ model: "claude-opus-5-5", agentId: "agent-design" });
   expect(received).toEqual(["claude-opus-5-5"]);
   expect(data.roles[SESSION]).toEqual([
-    { agentId: "agent-design", role: "designer", model: "claude-opus-5-5", effort: "xhigh", toolUseId: "toolu_design", time: NOW },
+    { agentId: "agent-design", agent: DESIGNER, role: "designer", model: "claude-opus-5-5", effort: "xhigh", toolUseId: "toolu_design", time: NOW },
   ]);
   expect(seen).toEqual([{ model: "claude-opus-5-5", effort: "xhigh", agentId: "agent-design" }]);
   expect(first.result.stopReason).toBe("end_turn");
@@ -264,7 +312,7 @@ test("나란히 시작한 고정 역할의 기록은 서로 덮어쓰지 않는�
   on("agent.spawn", (_$, e) => ({ model: e.model, agentId: `agent-${++count}` }));
 
   // when
-  await Promise.all([WORKER, SCOUT, WORKER, RESEARCHER].map((type, index) => $.agent.spawn(spawnInput(type, { tool_use_id: `toolu_${index}` }))));
+  await Promise.all([WORKER, SCOUT, WORKER, DESIGNER].map((type, index) => $.agent.spawn(spawnInput(type, { tool_use_id: `toolu_${index}` }))));
 
   // then
   expect(data.roles[SESSION].map((item) => item.toolUseId).sort()).toEqual(["toolu_0", "toolu_1", "toolu_2", "toolu_3"]);
@@ -288,6 +336,243 @@ test("고정하지 않는 에이전트와 거부된 시작은 모델도 기록�
   expect(custom.agentId).toBe("agent-x");
   expect(denied.deny).toBe("거부");
   expect(data.roles).toBeUndefined();
+});
+
+test("선언된 역할은 설치된 플러그인의 model-roles.json에서 읽어 고정하고 기록에 고정 경로를 남긴다", async ($, on) => {
+  // given
+  const data = environment(on, undefined, pluginsWorld([{ key: "example-plugin@market", installPath: EXAMPLE_PATH, roles: EXAMPLE_ROLES }]));
+  const received = [];
+  on("agent.spawn", (_$, e) => {
+    received.push(e.model);
+    return { model: e.model, agentId: "agent-example" };
+  });
+
+  // when
+  const spawn = await $.agent.spawn(spawnInput(EXAMPLE_SCOUT, { model: "haiku", tool_use_id: "toolu_example" }));
+
+  // then
+  expect(received).toEqual([PINNED]);
+  expect(spawn).toEqual({ model: PINNED, agentId: "agent-example" });
+  expect(data.roles[SESSION]).toEqual([
+    { agentId: "agent-example", agent: EXAMPLE_SCOUT, role: "scout", model: PINNED, effort: "medium", toolUseId: "toolu_example", time: NOW },
+  ]);
+});
+
+test("어느 플러그인도 선언하지 않은 에이전트는 모델을 바꾸지 않고 시작한다", async ($, on) => {
+  // given
+  environment(on, undefined, pluginsWorld([{ key: "example-plugin@market", installPath: EXAMPLE_PATH, roles: EXAMPLE_ROLES }]));
+  const received = [];
+  on("agent.spawn", (_$, e) => {
+    received.push(e.model);
+    return { model: e.model ?? "inherited", agentId: "agent-free" };
+  });
+
+  // when
+  const spawn = await $.agent.spawn(spawnInput("other-plugin:scout", { model: "haiku" }));
+
+  // then
+  expect(received).toEqual(["haiku"]);
+  expect(spawn.agentId).toBe("agent-free");
+});
+
+test("유효하지 않은 역할 파일은 그 파일이 이름 붙인 모든 에이전트를 거부하고 읽을 수 없는 파일은 플러그인의 모든 에이전트를 거부한다", async ($, on) => {
+  // given
+  const broken = {
+    version: 1,
+    agents: {
+      "broken-plugin:worker": { model: "claude-haiku-4-5", effort: "high" },
+      "broken-plugin:scout": { model: PINNED, effort: "medium" },
+    },
+  };
+  environment(on, undefined, pluginsWorld([
+    { key: "broken-plugin@market", installPath: "/plugins/broken-plugin", roles: broken },
+    { key: "unreadable@market", installPath: "/plugins/unreadable", roles: "{not json" },
+  ]));
+  const received = [];
+  on("agent.spawn", (_$, e) => {
+    received.push(e.subagentType);
+    return { model: e.model, agentId: "agent-x" };
+  });
+
+  // when
+  const worker = await $.agent.spawn(spawnInput("broken-plugin:worker"));
+  const scout = await $.agent.spawn(spawnInput("broken-plugin:scout"));
+  const unreadable = await $.agent.spawn(spawnInput("unreadable:worker"));
+
+  // then
+  expect(worker.deny).toContain("claude-haiku-4-5 is not a pinned model");
+  expect(scout.deny).toContain("broken-plugin:worker");
+  expect(unreadable.deny).toContain("not valid JSON");
+  expect(received).toEqual([]);
+});
+
+test("유효하지 않은 두 번째 설치의 선언은 첫 번째 설치가 고정한 같은 이름도 거부한다", async ($, on) => {
+  // given
+  const invalid = { version: 1, agents: { "example-plugin:scout": { model: "claude-haiku-4-5", effort: "medium" } } };
+  environment(on, undefined, pluginsWorld([
+    { key: "example-plugin@market", installPath: EXAMPLE_PATH, roles: EXAMPLE_ROLES },
+    { key: "example-plugin@beta", installPath: "/plugins/example-plugin-beta", roles: invalid },
+  ]));
+  on("agent.spawn", (_$, e) => ({ model: e.model, agentId: "agent-dup" }));
+
+  // when
+  const spawn = await $.agent.spawn(spawnInput(EXAMPLE_SCOUT));
+
+  // then
+  expect(spawn.agentId).toBeUndefined();
+  expect(spawn.deny).toContain("claude-haiku-4-5 is not a pinned model");
+});
+
+test("플러그인이 선언한 파일은 레지스트리에 있는 역할의 고정값을 바꾸지 못한다", async ($, on) => {
+  // given
+  const override = { version: 1, agents: { "hei5enbug-agent-setup:worker": { model: PINNED, effort: "high" } } };
+  environment(on, undefined, pluginsWorld([{ key: "hei5enbug-agent-setup@hei5enbug", installPath: "/plugins/own", roles: override }]));
+  const received = [];
+  on("agent.spawn", (_$, e) => {
+    received.push(e.model);
+    return { model: e.model, agentId: "agent-worker" };
+  });
+
+  // when
+  await $.agent.spawn(spawnInput(WORKER));
+
+  // then
+  expect(received).toEqual([WORKER_PINNED]);
+});
+
+test("고정 실패 뒤의 다음 시작은 한 번 거부하고 러너 대체 명령을 알리며, 그다음 시작은 기본 고정을 쓴다", async ($, on) => {
+  // given
+  const data = environment(on, undefined, pluginsWorld([{ key: "example-plugin@market", installPath: EXAMPLE_PATH, roles: EXAMPLE_ROLES }]));
+  const received = [];
+  on("agent.spawn", (_$, e) => {
+    received.push(e.model);
+    return { model: e.model, agentId: `agent-${received.length}` };
+  });
+  stepSink(on, [], "claude-opus-5-5");
+
+  // when
+  const first = await $.agent.spawn(spawnInput(EXAMPLE_SCOUT, { tool_use_id: "toolu_1" }));
+  await step($, { agentId: "agent-1" });
+  const second = await $.agent.spawn(spawnInput(EXAMPLE_SCOUT, { tool_use_id: "toolu_2" }));
+  const third = await $.agent.spawn(spawnInput(EXAMPLE_SCOUT, { tool_use_id: "toolu_3" }));
+
+  // then
+  expect(received).toEqual([PINNED, PINNED]);
+  expect(first.agentId).toBe("agent-1");
+  expect(second.agentId).toBeUndefined();
+  expect(second.deny).toContain("role_runner.py agent --name example-plugin:scout --fallback");
+  expect(third.agentId).toBe("agent-2");
+  expect(data.roles[SESSION].map((item) => [item.agentId, item.mismatch, item.retryNoticeIssued])).toEqual([
+    ["agent-1", true, true],
+    ["agent-2", undefined, undefined],
+  ]);
+});
+
+test("고정 실패한 실행은 대체 안내 뒤에도 mismatch가 남아 그 실행의 도구 호출을 계속 거부한다", async ($, on) => {
+  // given
+  environment(on, undefined, pluginsWorld([{ key: "example-plugin@market", installPath: EXAMPLE_PATH, roles: EXAMPLE_ROLES }]));
+  let spawned = 0;
+  on("agent.spawn", (_$, e) => {
+    spawned += 1;
+    return { model: e.model, agentId: `agent-${spawned}` };
+  });
+  on("tool.call", () => ({ result: { stdout: "ok", stderr: "" }, text: "ok" }));
+  stepSink(on, [], "claude-opus-5-5");
+  await $.agent.spawn(spawnInput(EXAMPLE_SCOUT, { tool_use_id: "toolu_1" }));
+  await step($, { agentId: "agent-1" });
+  const denied = await $.agent.spawn(spawnInput(EXAMPLE_SCOUT, { tool_use_id: "toolu_2" }));
+
+  // when
+  const call = await $.tool.call({ tool: "Bash", command: "echo hi", agentId: "agent-1" });
+  const restarted = await $.agent.spawn(spawnInput(EXAMPLE_SCOUT, { tool_use_id: "toolu_3" }));
+  const again = await $.tool.call({ tool: "Bash", command: "echo hi", agentId: "agent-1" });
+
+  // then
+  expect(denied.deny).toContain("role_runner.py agent --name example-plugin:scout --fallback");
+  expect(typeof call.deny).toBe("string");
+  expect(restarted.agentId).toBe("agent-2");
+  expect(typeof again.deny).toBe("string");
+});
+
+test("선언된 역할의 대체 안내는 access를 따른다: 쓰기 역할은 --add-dir을 덧붙이고 access가 없는 역할은 읽기로 본다", async ($, on) => {
+  // given
+  const roles = {
+    version: 1,
+    agents: {
+      "example-plugin:editor": { model: PINNED, effort: "high", access: "write" },
+      "example-plugin:scout": { model: PINNED, effort: "medium" },
+    },
+  };
+  environment(on, undefined, pluginsWorld([{ key: "example-plugin@market", installPath: EXAMPLE_PATH, roles }]));
+  let spawned = 0;
+  on("agent.spawn", (_$, e) => {
+    spawned += 1;
+    return { model: e.model, agentId: `agent-${spawned}` };
+  });
+  stepSink(on, [], "claude-opus-5-5");
+  await $.agent.spawn(spawnInput("example-plugin:editor", { tool_use_id: "toolu_editor" }));
+  await step($, { agentId: "agent-1" });
+  await $.agent.spawn(spawnInput(EXAMPLE_SCOUT, { tool_use_id: "toolu_reader" }));
+  await step($, { agentId: "agent-2" });
+
+  // when
+  const editor = await $.agent.spawn(spawnInput("example-plugin:editor", { tool_use_id: "toolu_editor_2" }));
+  const reader = await $.agent.spawn(spawnInput("example-plugin:scout", { tool_use_id: "toolu_reader_2" }));
+
+  // then
+  expect(editor.deny).toContain("--name example-plugin:editor --fallback");
+  expect(editor.deny).toContain("--add-dir <dir>");
+  expect(reader.deny).toContain("--name example-plugin:scout --fallback");
+  expect(reader.deny).not.toContain("--add-dir");
+});
+
+test("대체 고정이 없는 역할도 첫 고정 실패 뒤의 시작을 한 번 거부하고 다음 시작은 기본 고정을 쓴다", async ($, on) => {
+  // given
+  environment(on, undefined, pluginsWorld([{ key: "example-plugin@market", installPath: EXAMPLE_PATH, roles: EXAMPLE_ROLES }]));
+  const received = [];
+  on("agent.spawn", (_$, e) => {
+    received.push(e.model);
+    return { model: e.model, agentId: `agent-linter-${received.length}` };
+  });
+  stepSink(on, [], "claude-opus-5-5");
+
+  // when
+  await $.agent.spawn(spawnInput(EXAMPLE_LINTER, { tool_use_id: "toolu_linter" }));
+  await step($, { agentId: "agent-linter-1" });
+  const second = await $.agent.spawn(spawnInput(EXAMPLE_LINTER, { tool_use_id: "toolu_linter_2" }));
+  const third = await $.agent.spawn(spawnInput(EXAMPLE_LINTER, { tool_use_id: "toolu_linter_3" }));
+
+  // then
+  expect(second.agentId).toBeUndefined();
+  expect(second.deny).toContain("role_runner.py agent --name example-plugin:linter --fallback");
+  expect(third.agentId).toBe("agent-linter-2");
+  expect(received).toEqual([PINNED, PINNED]);
+});
+
+test("쓰기 접근 에이전트의 대체 안내는 --add-dir과 --mcp 지침을 덧붙이고 읽기 접근 에이전트의 안내에는 덧붙이지 않는다", async ($, on) => {
+  // given
+  environment(on);
+  let spawned = 0;
+  on("agent.spawn", (_$, e) => {
+    spawned += 1;
+    return { model: e.model, agentId: `agent-${spawned}` };
+  });
+  stepSink(on, [], "claude-opus-5-5");
+  await $.agent.spawn(spawnInput(SONNET_WORKER, { tool_use_id: "toolu_writer" }));
+  await step($, { agentId: "agent-1" });
+  await $.agent.spawn(spawnInput(SCOUT, { tool_use_id: "toolu_reader" }));
+  await step($, { agentId: "agent-2" });
+
+  // when
+  const writer = await $.agent.spawn(spawnInput(SONNET_WORKER, { tool_use_id: "toolu_writer_2" }));
+  const reader = await $.agent.spawn(spawnInput(SCOUT, { tool_use_id: "toolu_reader_2" }));
+
+  // then
+  expect(writer.deny).toContain(`--name ${SONNET_WORKER} --fallback`);
+  expect(writer.deny).toContain("--add-dir <dir>");
+  expect(writer.deny).toContain("--mcp");
+  expect(reader.deny).toContain(`--name ${SCOUT} --fallback`);
+  expect(reader.deny).not.toContain("--mcp");
 });
 
 test("기록은 7일이 지난 항목만 정리하고 다른 세션의 최근 기록은 남긴다", async ($, on) => {
@@ -394,7 +679,7 @@ test("응답 모델이 고정값과 정확히 같으면 고정 실패로 기록�
   expect(data.roles[SESSION][0].mismatch).toBeUndefined();
 });
 
-test("응답에 사용량이 없으면 고정 실패로 기록하지 않는다", async ($, on) => {
+test("응답에 사용량이 없으면 고정 실패로 기록한다", async ($, on) => {
   // given
   const data = environment(on, { [SESSION]: [entry("agent-1")] });
   stepSink(on, [], null);
@@ -403,7 +688,7 @@ test("응답에 사용량이 없으면 고정 실패로 기록하지 않는다",
   await step($, { agentId: "agent-1" });
 
   // then
-  expect(data.roles[SESSION][0].mismatch).toBeUndefined();
+  expect(data.roles[SESSION][0].mismatch).toBe(true);
 });
 
 test("응답 모델이 고정값과 다르면 그 에이전트를 고정 실패로 기록한다", async ($, on) => {
@@ -456,7 +741,7 @@ test("고정 실패한 에이전트의 도구 호출은 모두 거부하고 정�
   expect(main.text).toBe("ok");
 });
 
-test("고정 실패한 에이전트를 시작한 Agent 호출의 결과는 불일치 경고로 바뀐다", async ($, on) => {
+test("고정 실패한 에이전트를 시작한 Agent 호출의 결과는 다른 모델 경고로 바뀐다", async ($, on) => {
   // given
   let toolUseId = "";
   on("store.get", () => ({ value: { [SESSION]: [entry("agent-1", { mismatch: true, toolUseId })] } }));
@@ -482,29 +767,28 @@ test("고정 실패한 에이전트를 시작한 Agent 호출의 결과는 불�
 
   // then
   expect(replaced.result.content).toHaveLength(1);
-  expect(replaced.result.content[0].text).toContain("unexpected model");
+  expect(replaced.result.content[0].text).toContain("ran on a model other than its pinned model");
   expect(replaced.result.content[0].text).toContain("Do not accept");
   expect(replaced.result.agentId).toBe("agent-1");
-  expect(replaced.context[0]).toContain("unexpected model");
+  expect(replaced.context[0]).toContain("ran on a model other than its pinned model");
 });
 
-test("고정 실패하지 않은 에이전트의 Agent 호출 결과와 다른 도구 결과는 그대로 둔다", async ($, on) => {
+test("턴이 아직 없는 백그라운드 시작의 Agent 호출 결과는 실패로 기록하지 않고 전사본을 읽지 않은 채 그대로 둔다", async ($, on) => {
   // given
-  let toolUseId = "";
-  on("store.get", () => ({ value: { [SESSION]: [entry("agent-1", { toolUseId })] } }));
-  on("session.id", () => ({ value: SESSION }));
-  const original = { status: "completed", agentId: "agent-1", content: [{ type: "text", text: "정상 결과" }], totalToolUseCount: 0, totalDurationMs: 1, totalTokens: 1, prompt: "작업" };
+  const data = environment(on, {});
+  const original = { status: "async_launched", agentId: AGENT_ID, content: [{ type: "text", text: "백그라운드 시작" }], prompt: "작업" };
   on("tool.call", (_$, e) => {
-    toolUseId = e.tool_use_id;
-    return { result: e.tool === "Agent" ? original : { stdout: "ok", stderr: "" }, text: "정상 결과" };
+    if (e.tool === "Agent") data.roles[SESSION] = [entry(AGENT_ID, { agent: SCOUT, role: "scout", model: PINNED, effort: "medium", toolUseId: e.tool_use_id })];
+    return { result: e.tool === "Agent" ? original : { stdout: "ok", stderr: "" }, text: "백그라운드 시작" };
   });
 
   // when
-  const agent = await $.tool.call({ tool: "Agent", prompt: "작업", description: "작업", subagent_type: WORKER });
+  const agent = await $.tool.call({ tool: "Agent", prompt: "작업", description: "작업", subagent_type: SCOUT, run_in_background: true });
   const other = await $.tool.call({ tool: "Bash", command: "echo hi" });
 
   // then
-  expect(agent.result.content[0].text).toBe("정상 결과");
+  expect(agent.result).toEqual(original);
+  expect(data.roles[SESSION][0].mismatch).toBeUndefined();
   expect(other.result).toEqual({ stdout: "ok", stderr: "" });
 });
 
@@ -549,16 +833,167 @@ test("role_pinning 옵션이 꺼지면 프롬프트 컨텍스트를 바꾸지 �
   expect(context.blocks).toEqual([{ name: "currentDate", text: "2026-10-07" }]);
 });
 
-test("저장소 기록이 실패해도 고정 역할의 시작은 막히지 않고 호스트의 결과를 그대로 받는다", async ($, on) => {
+test("저장소 기록을 읽지 못하면 고정 역할의 시작을 거부하고 호스트의 결과를 넘기지 않는다", async ($, on) => {
   // given
+  on("fs.read", () => ({ value: REGISTRY }));
+  on("env.get", (_$, e) => ({ value: ENV[e.name] }));
   on("store.get", () => { throw new Error("저장소 오류"); });
   on("session.id", () => ({ value: SESSION }));
   mock.clock(on, { now: NOW });
+  resetClaudeRolePins();
   on("agent.spawn", (_$, e) => ({ model: e.model, agentId: "agent-1" }));
 
   // when
   const spawn = await $.agent.spawn(spawnInput(WORKER));
 
   // then
-  expect(spawn).toEqual({ model: WORKER_PINNED, agentId: "agent-1" });
+  expect(spawn.agentId).toBeUndefined();
+  expect(spawn.deny).toContain("the role pin check failed");
+});
+
+test("고정 역할의 기록을 쓰지 못하면 시작은 넘기되 그 서브에이전트의 모든 턴을 거절한다", async ($, on) => {
+  // given
+  on("fs.read", () => ({ value: REGISTRY }));
+  on("env.get", (_$, e) => ({ value: ENV[e.name] }));
+  on("store.get", () => ({ value: {} }));
+  on("store.set", () => { throw new Error("저장소 쓰기 오류"); });
+  on("session.id", () => ({ value: SESSION }));
+  mock.clock(on, { now: NOW });
+  resetClaudeRolePins();
+  on("agent.spawn", (_$, e) => ({ model: e.model, agentId: "agent-1" }));
+  const seen = [];
+  stepSink(on, seen, WORKER_PINNED);
+
+  // when
+  const spawn = await $.agent.spawn(spawnInput(WORKER));
+  const turn = await step($, { agentId: "agent-1" });
+
+  // then
+  expect(spawn.agentId).toBe("agent-1");
+  expect(seen).toEqual([]);
+  expect(turn.result.stopReason).toBe("refusal");
+});
+
+test("설치 목록을 읽을 수 없으면 플러그인 접두사의 에이전트를 거부하고 레지스트리 역할과 접두사 없는 에이전트는 그대로 시작한다", async ($, on) => {
+  // given
+  environment(on, undefined, { files: { [`${CONFIG}/plugins/installed_plugins.json`]: "{not json" } });
+  const received = [];
+  on("agent.spawn", (_$, e) => {
+    received.push(e.subagentType);
+    return { model: e.model ?? "inherited", agentId: `agent-${received.length}` };
+  });
+
+  // when
+  const linter = await $.agent.spawn(spawnInput(EXAMPLE_LINTER));
+  const worker = await $.agent.spawn(spawnInput(WORKER));
+  const plain = await $.agent.spawn(spawnInput("reviewer"));
+
+  // then
+  expect(linter.deny).toContain("its installed plugins file cannot be parsed");
+  expect(worker.model).toBe(WORKER_PINNED);
+  expect(plain.agentId).toBe("agent-2");
+  expect(received).toEqual([WORKER, "reviewer"]);
+});
+
+test("설치된 플러그인의 역할 파일이 있는데 읽을 수 없으면 그 플러그인의 에이전트를 거부하고 다른 역할은 고정한다", async ($, on) => {
+  // given
+  environment(on, undefined, {
+    ...pluginsWorld([{ key: "unreadable@market", installPath: "/plugins/unreadable" }]),
+    unreadable: ["/plugins/unreadable/.claude-plugin/model-roles.json"],
+  });
+  const received = [];
+  on("agent.spawn", (_$, e) => {
+    received.push(e.subagentType);
+    return { model: e.model, agentId: "agent-x" };
+  });
+
+  // when
+  const denied = await $.agent.spawn(spawnInput("unreadable:worker"));
+  const pinned = await $.agent.spawn(spawnInput(WORKER));
+
+  // then
+  expect(denied.deny).toContain("its model roles file cannot be read");
+  expect(pinned.model).toBe(WORKER_PINNED);
+  expect(received).toEqual([WORKER]);
+});
+
+test("턴 기록에 실패한 서브에이전트의 남은 턴은 모델을 부르지 않고 거절한다", async ($, on) => {
+  // given
+  on("store.get", () => ({ value: { [SESSION]: [entry("agent-1")] } }));
+  on("store.set", () => { throw new Error("저장소 쓰기 오류"); });
+  on("session.id", () => ({ value: SESSION }));
+  mock.clock(on, { now: NOW });
+  const seen = [];
+  stepSink(on, seen, "claude-opus-5-5");
+
+  // when
+  const first = await step($, { agentId: "agent-1" });
+  const second = await step($, { agentId: "agent-1", index: 1 });
+
+  // then
+  expect(seen).toEqual([{ model: WORKER_PINNED, effort: "high", agentId: "agent-1" }]);
+  expect(first.result.stopReason).toBe("end_turn");
+  expect(second.result.stopReason).toBe("refusal");
+  expect(second.chunks[0].text).toContain("must not be accepted");
+});
+
+test("응답 사용량에 모델 이름이 없어도 고정 실패로 기록한다", async ($, on) => {
+  // given
+  const data = environment(on, { [SESSION]: [entry("agent-1")] });
+  const usage = { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+  on("turn.step", async function* (_$, e) {
+    yield { kind: "stop", stopReason: "end_turn", usage };
+    return { turnId: e.turnId, index: e.index, answer: "완료", toolUses: [], stopReason: "end_turn", usage };
+  });
+
+  // when
+  await step($, { agentId: "agent-1" });
+
+  // then
+  expect(data.roles[SESSION][0].mismatch).toBe(true);
+});
+
+test("Agent 호출이 오류로 끝나면 그 고정 실행을 실패로 기록해 다음 시작은 러너 대체 안내로 한 번 거부하고 오류 결과는 그대로 둔다", async ($, on) => {
+  // given
+  const data = environment(on, { [SESSION]: [entry("agent-1", { agent: SCOUT, role: "scout", model: PINNED, effort: "medium" })] });
+  on("tool.call", (_$, e) => {
+    data.roles[SESSION][0].toolUseId = e.tool_use_id;
+    return { isError: true, result: "실패", text: "작업 실패" };
+  });
+  const received = [];
+  on("agent.spawn", (_$, e) => {
+    received.push(e.model);
+    return { model: e.model, agentId: "agent-2" };
+  });
+
+  // when
+  const failed = await $.tool.call({ tool: "Agent", prompt: "작업", description: "작업", subagent_type: SCOUT });
+  const denied = await $.agent.spawn(spawnInput(SCOUT, { tool_use_id: "toolu_next" }));
+  const failureAfterDenial = data.roles[SESSION][0].mismatch;
+  const noticeAfterDenial = data.roles[SESSION][0].retryNoticeIssued;
+  const restarted = await $.agent.spawn(spawnInput(SCOUT, { tool_use_id: "toolu_after" }));
+
+  // then
+  expect(failed.isError).toBe(true);
+  expect(failed.text).toBe("작업 실패");
+  expect(denied.deny).toContain(`--name ${SCOUT} --fallback`);
+  expect(failureAfterDenial).toBe(true);
+  expect(noticeAfterDenial).toBe(true);
+  expect(received).toEqual([PINNED]);
+  expect(restarted.agentId).toBe("agent-2");
+});
+
+test("서브에이전트의 마지막 턴이 오류로 끝나면 그 실행을 고정 실패로 기록하고 정상 종료는 기록하지 않는다", async ($, on) => {
+  // given
+  const data = environment(on, { [SESSION]: [entry("agent-1", { agent: SCOUT }), entry("agent-2", { agent: SCOUT })] });
+  on("turn.complete", () => ({ text: "" }));
+  const finished = { answer: "", durationMs: 1, isAborted: false, turnId: "turn-1" };
+
+  // when
+  await $.turn.complete({ ...finished, agentId: "agent-1", reason: "error" });
+  await $.turn.complete({ ...finished, agentId: "agent-2", reason: "answer" });
+
+  // then
+  expect(data.roles[SESSION].find((item) => item.agentId === "agent-1").mismatch).toBe(true);
+  expect(data.roles[SESSION].find((item) => item.agentId === "agent-2").mismatch).toBeUndefined();
 });

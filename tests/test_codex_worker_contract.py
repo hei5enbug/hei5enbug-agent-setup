@@ -57,6 +57,20 @@ class CodexWorkerContractTest(unittest.TestCase):
                 self.assertNotIn("link the implementation execution rules", text)
                 self.assertIn("the plugin rules are inactive", text)
 
+    def test_Codex_designer_정의는_design_기능의_기술_설계_문서와_허용_경로_문서_쓰기를_포함한다(self):
+        """designer TOML의 설명과 지침은 design 기능의 기술 설계 문서 초안 작성과 허용 경로의 문서 파일 쓰기를 포함한다."""
+        # Given
+        text = (REPO_ROOT / "standalone-agents/codex-designer.toml").read_text(encoding="utf-8")
+        description = next(line for line in text.splitlines() if line.startswith("description = "))
+        instructions = " ".join(text.split("developer_instructions", 1)[1].split())
+
+        # When
+        covers = ("technical design document" in description, "the `design` capability" in instructions)
+
+        # Then
+        self.assertEqual((True, True), covers)
+        self.assertIn("including writing the document file in the allowed path", instructions)
+
     def test_실행_중에는_모델을_다시_찾지_않고_고정값을_쓴다(self):
         """Codex 구현과 조사는 실행할 때 모델 문서나 카탈로그를 다시 찾지 않고 고정된 Luna ID를 넘긴다."""
         # Given
@@ -104,15 +118,13 @@ class CodexWorkerContractTest(unittest.TestCase):
         self.assertNotIn("Never install", section)
         self.assertIn("never change global model defaults", section)
 
-    def test_worker_rollout_기록을_실제_설정의_근거로_쓴다(self):
-        """생성 인수와 부모 스레드로 찾은 worker rollout의 turn_context만 실제 모델과 사고 강도의 근거로 인정한다."""
+    def test_worker_결과는_생성된_역할_검증을_통과한_뒤에만_인정한다(self):
+        """worker 결과는 verify_spawn 검증을 통과한 뒤에만 쓰고, 검증 규칙은 한 곳에서 종료 코드별로 정한다."""
         # Given
         expected = (
-            "Accept the explicit spawn arguments plus the worker's rollout record as evidence.",
-            "the sessions directory under `CODEX_HOME`",
-            "its `session_meta` names the parent thread from the coordinator's `CODEX_THREAD_ID`",
-            "its `turn_context` names the actual `model` and `effort`",
+            "Accept the worker's result only after the spawned role verification section below passes.",
         )
+        verification = " ".join(CODEX_AGENTS.read_text(encoding="utf-8").split("## Spawned role verification", 1)[1].split())
 
         # When
         section = implementation_section()
@@ -120,6 +132,14 @@ class CodexWorkerContractTest(unittest.TestCase):
         # Then
         for phrase in expected:
             self.assertIn(phrase, section)
+        self.assertNotIn("sessions directory", section)
+        self.assertIn("python3 <Source directory>/scripts/verify_spawn.py --parent \"$CODEX_THREAD_ID\"", verification)
+        self.assertIn("--agent-path /root/<task_name>", verification)
+        self.assertIn("--sandbox <sandbox_mode>", verification)
+        self.assertIn("Exit 0 verifies the rollout.", verification)
+        self.assertIn("Exit 4 means the rollout is missing or names another model, effort, or sandbox.", verification)
+        self.assertIn("Do not respawn it with another pair, because the agent guard denies a fallback pair in Codex.", verification)
+        self.assertIn("or continue in the main session", verification)
 
     def test_이어_보내기_지원_여부에_따라_준비_확인_경로가_갈린다(self):
         """생성 결과에 모델이 없으므로 구현 위임 규칙의 준비 확인 경로를 따라 같은 스레드에 구현을 보낸다."""
@@ -172,28 +192,28 @@ class CodexWorkerContractTest(unittest.TestCase):
         for phrase in expected:
             self.assertIn(phrase, section)
 
-    def test_디자인_작업은_Claude_프로세스로_실행하고_없으면_designer_역할로_대체한다(self):
-        """디자인 작업은 claude -p로 실행해 modelUsage로 확인하고, 쓸 수 없거나 근거가 없으면 designer 역할로 대체해 보고한다."""
+    def test_디자인_작업은_designer_역할을_먼저_쓰고_실패하면_실행기_대체를_한_번_쓴다(self):
+        """디자인 작업은 designer 역할로 먼저 실행하고, 실패하면 역할 실행기의 designer 대체 항목을 한 번 쓴다."""
         # Given
         text = CODEX_AGENTS.read_text(encoding="utf-8")
         expected = (
-            "claude -p --model claude-opus-5-5 --effort xhigh --output-format json --permission-mode dontAsk "
-            '--allowedTools Read Grep Glob "Edit(<allowed path>/**)" "Write(<allowed path>/**)"',
-            "run a separate process from the repository root with the assignment on stdin",
+            "The primary is the plugin `designer` role with `gpt-6-astra` and `xhigh` passed explicitly on the spawn;",
+            "verify it under the spawned role verification section below.",
+            "run the fallback once through the role runner from the repository root:",
+            "python3 <Source directory>/scripts/role_runner.py agent --name designer --fallback --host codex "
+            "--add-dir <allowed path> --assignment <file> --result <file>",
             "Request network access through the normal Codex approval flow if the sandbox blocks it.",
-            "Accept the result only when the JSON `modelUsage` names `claude-opus-5-5`.",
-            "When `claude` is missing, the process ends with an authentication, usage-limit, or model error, "
-            "or that evidence is missing",
-            "spawn the plugin `designer` role with `gpt-6-astra` and `xhigh` instead.",
-            "Verify its rollout record as for `worker`.",
+            "On runner exit 3 or 4, continue in the main session.",
         )
 
         # When
-        design = " ".join(text.split("## Design work", 1)[1].split())
+        design = " ".join(text.split("## Design work", 1)[1].split("## Spawned role verification", 1)[0].split())
 
         # Then
         for phrase in expected:
             self.assertIn(phrase, design)
+        self.assertNotIn("claude -p", design)
+        self.assertNotIn("modelUsage", design)
 
     def test_호스트_한도는_메인_스레드를_빼고_세며_바꾸지_않는다(self):
         """Codex 동시 실행 한도는 생성한 스레드만 세고 조정자는 그 값을 바꾸지 않는다."""
@@ -218,16 +238,21 @@ class CodexWorkerContractTest(unittest.TestCase):
 
         # Then
         self.assertIn("Read [shared model routing](model-routing.md) before dispatching", normalized)
-        self.assertIn("For bounded public research, use `researcher` only when public search and fetch tools are exposed.", investigation)
-        self.assertIn("Pass `gpt-5.6-luna` and `xhigh` explicitly on every researcher spawn; its role file sets no model.", investigation)
-        self.assertIn("inspect the non-secret researcher role/config settings", investigation)
-        self.assertIn("verify the host rollout record reports `gpt-5.6-luna` and `xhigh`", investigation)
+        self.assertIn("For bounded public research, run the `researcher` role of the role runner when web search is available:", investigation)
+        self.assertIn("It uses `gpt-5.6-luna` and `xhigh` through web search and verifies them from the session record.", investigation)
+        self.assertIn("verify it under the spawned role verification section below", investigation)
+        self.assertNotIn("rollout record", investigation)
         self.assertIn(
             "For Skill Builder, trial execution and other non-review participants use the host's upper model",
             normalized,
         )
         self.assertIn("Do not route a review role through `scout`", normalized)
-        self.assertIn("Keep private or authenticated remote access in the main session.", normalized)
+        self.assertIn(
+            "Private or authenticated remote access, including external tool work such as issue trackers and pull request "
+            "services, goes to the `implementation` capability, and edits go to the capability worker a skill names; "
+            "otherwise keep them in the main session.",
+            normalized,
+        )
 
     def test_조사는_내장_explorer_대신_scout를_쓴다(self):
         """Codex 조사는 Claude와 같은 이름의 scout만 쓰고, 쓸 수 없거나 역할 파일이 고정값을 바꾸면 메인 세션에서 조사한다."""
@@ -256,7 +281,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         self.assertNotIn("grading role", scout)
 
 
-    def test_내장_에이전트는_모두_금지하고_여섯_플러그인_역할을_설치한다(self):
+    def test_내장_에이전트는_모두_금지하고_네_플러그인_역할을_설치한다(self):
         """내장 역할은 금지하고 훅이 설치한 여섯 플러그인 역할을 보존한다."""
         # Given
         text = CODEX_AGENTS.read_text(encoding="utf-8")
@@ -268,7 +293,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         self.assertIn("Never use the built-in `default` or `explorer` agents.", built_in)
         self.assertIn("Always pass `agent_type`, because an omitted type runs `default`.", built_in)
         self.assertIn(
-            "installs the plugin's `scout`, `worker`, `researcher`, `designer`, and `reviewer` roles in "
+            "installs the plugin's `scout`, `worker`, `designer`, and `reviewer` roles in "
             "`~/.codex/agents/` when absent",
             built_in,
         )
@@ -284,21 +309,42 @@ class CodexWorkerContractTest(unittest.TestCase):
 
         # Then
         self.assertIn("one skill-assigned review role", skill_workers)
-        self.assertIn("from the repository root with the assignment on stdin", skill_workers)
+        self.assertIn("run the capability runner from the repository root with its role file and the assignment file", skill_workers)
         self.assertIn(
-            "claude -p --model claude-opus-5-5 --effort high --output-format json --tools Read Grep Glob "
-            "--strict-mcp-config --permission-mode dontAsk --allowedTools Read Grep Glob",
+            "python3 <Source directory>/scripts/role_runner.py review --host codex --instructions <role file> "
+            "--assignment <file> --result <file>",
             skill_workers,
         )
-        self.assertIn("Accept its result only when the JSON `modelUsage` names `claude-opus-5-5`", skill_workers)
-        self.assertIn("spawn the plugin `reviewer` role with `gpt-6.1-sol` and `xhigh` passed explicitly", skill_workers)
-        self.assertIn("Verify its rollout record reports those settings.", skill_workers)
+        self.assertIn("Accept the result file only on exit 0; the runner verifies the model from the host record.", skill_workers)
+        self.assertIn("On runner exit 3 or 4, spawn the plugin `reviewer` role with `gpt-6.1-sol` and `xhigh` passed explicitly", skill_workers)
+        self.assertIn("Verify it under the spawned role verification section below.", skill_workers)
+        self.assertNotIn("claude -p", skill_workers)
+        self.assertNotIn("modelUsage", skill_workers)
         self.assertNotIn("substitution", skill_workers)
         self.assertNotIn("findings only", skill_workers)
         self.assertNotIn("review round", skill_workers)
         self.assertIn("Send a local-evidence research ticket to `scout`", skill_workers)
-        self.assertIn("bounded public research to `researcher`", skill_workers)
+        self.assertIn("bounded public research to the `researcher` runner role", skill_workers)
         self.assertIn("run a separate `codex exec` process with the model and effort that the skill pins", skill_workers)
+
+
+    def test_Codex_대체는_역할_실행기_agent_모드로_가고_대체_쌍은_다시_띄우지_않는다(self):
+        """Codex 대체 절은 agent 모드와 기능 실행기 명령을 알리고, 종료 코드 4에서 같은 역할을 다른 쌍으로 다시 띄우라는 옛 문구를 남기지 않는다."""
+        # Given
+        text = " ".join(CODEX_AGENTS.read_text(encoding="utf-8").split())
+
+        # When
+        fallback = text.split("## Fallback", 1)[1]
+
+        # Then
+        self.assertIn("`python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback`", fallback)
+        self.assertIn(
+            "`via: runner` runs `python3 <Source directory>/scripts/role_runner.py <capability> --host codex --fallback`",
+            fallback,
+        )
+        self.assertIn("On runner exit 3 or 4, continue in the main session.", fallback)
+        self.assertNotIn("declared fallback pair", text)
+        self.assertNotIn("Respawn the role once", text)
 
 
 if __name__ == "__main__":

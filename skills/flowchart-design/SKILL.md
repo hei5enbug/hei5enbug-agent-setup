@@ -25,6 +25,20 @@ Apply them **consistently within a chart set** instead of copying values from th
 
 This standard prioritizes layout principles, spacing discipline, label rules, simplification criteria, and outer-frame handling over any project-specific terminology.
 
+## Execution placement
+
+Run each worker phase through the session's capability route; the main session keeps the phases marked
+main, asks the user, and accepts the result.
+
+| Phase | Owner |
+|---|---|
+| 0.1 Discover Capabilities | main |
+| 0.2 Semantic questions when business meaning is ambiguous | main |
+| 0.2 Build the Semantic Graph First, 0.3 Choose a Layout Contract, 0.4 Render Incrementally | `design` |
+| 0.5 Geometric and rendered validation; 4. Outer Frame and Export | `design` |
+| 0.5 Semantic validation | main |
+| 9. Final Checklist and acceptance | main |
+
 ## 0. Portable Workflow
 
 Complete the same logical stages regardless of the host or drawing tool.

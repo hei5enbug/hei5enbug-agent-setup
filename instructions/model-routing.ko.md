@@ -14,21 +14,22 @@
 |---|---|
 | 메인이 맡는 작업 | [세션 소유권 규칙](session/common.ko.md)을 따른다. |
 | 실제 저장소나 스킬을 수정하는 구현 | 호스트의 구현 실행 규칙과 고정된 구현 역할을 따른다. |
-| UI 코드, 시각 디자인, 다이어그램 | 호스트의 designer 경로를 쓴다. 다만 호스트 세션 파일이 메인 세션에 맡긴 종류는 예외다. |
+| UI 코드, 시각 디자인, 다이어그램이나 이미지, 기술 설계 문서 초안 작성 | `design` 기능을 쓴다. 다만 호스트 세션 파일이 메인 세션에 맡긴 종류는 예외다. |
+| 실제 저장소나 스킬을 수정하는 구현, 또는 이슈 트래커와 풀 리퀘스트 서비스 같은 외부 도구 작업 | `implementation` 기능을 쓴다. |
 | 범위가 한정된 로컬 근거 수집 | 위임이 허용되고 유용할 때 호스트의 scout 역할을 쓴다. |
-| 공개 자료의 읽기 전용 조사 | 공개 도구를 사용할 수 있고 고정 설정을 확인한 경우에만 호스트의 researcher 역할을 쓴다. 그렇지 않으면 메인 세션에서 계속한다. |
+| 공개 자료의 읽기 전용 조사 | 공개 도구를 사용할 수 있고 고정 설정을 확인한 경우에만 `investigation` 기능을 쓴다. 그렇지 않으면 메인 세션에서 계속한다. |
 | 스킬 검토 역할(검토 페르소나, grader, comparator, analyzer) | 아래 표의 reviewer 경로를 쓴다. |
 | Skill Builder 시험 실행 및 기타 비검토 참여자 | 아래 Skill Builder 어댑터에서 호스트의 상위 모델을 쓴다. |
 | 임시 시험 결과물 | 평가 작업 공간에 둔다. 이를 승인된 구현으로 간주하지 않는다. |
 
-researcher는 주장, 공개 URL이나 파일 위치, 뒷받침하는 근거, 모순, 공백을 수집한다. 계획, 아키텍처, 승인
+공개 조사는 주장, 공개 URL이나 파일 위치, 뒷받침하는 근거, 모순, 공백을 수집한다. 계획, 아키텍처, 승인
 결정은 내리지 않는다. 기존 서비스 접근 규칙을 계속 적용한다.
 
 ## 역할 설정 유지
 
-GPT Luna는 `gpt-5.6-luna`와 `xhigh`로 명시적으로 고정한다. 저장된 기본값이나 재개를 포함해 다른 Luna
-버전이나 추론 강도를 선택하지 않는다. 호스트에서 이 설정을 확인할 수 없으면 해당 위임을 중지하고
-지정된 다른 모델 계열의 fallback이나 메인 세션을 사용한다. 최신 릴리스 자동 갱신에서도 이 사용자
+GPT Luna는 `gpt-5.6-luna`와 `high` 또는 `xhigh`로만 명시적으로 고정한다. 저장된 기본값이나 재개를 포함해 다른 Luna
+버전이나 추론 강도를 선택하지 않는다. hei5enbug 역할은 `xhigh`를 유지한다. 호스트에서 이 설정을 확인할 수 없으면
+해당 위임을 중지하고 지정된 다른 모델 계열의 fallback이나 메인 세션을 사용한다. 최신 릴리스 자동 갱신에서도 이 사용자
 지정 고정값을 제외한다.
 
 별도로 승인된 비교 결과가 한정된 범위의 변경을 정당화하지 않는 한 다음 운영 설정을 사용한다.
@@ -36,11 +37,11 @@ GPT Luna는 `gpt-5.6-luna`와 `xhigh`로 명시적으로 고정한다. 저장된
 | 역할 | Codex | Claude Code |
 |---|---|---|
 | 로컬 scout | `gpt-5.6-luna`, `xhigh` | 읽기 전용 `role_runner.py scout`로 `gpt-5.6-luna`, `xhigh`. 대체 경로는 `scout`(`claude-sonnet-5-5`, `medium`) |
-| 구현 worker | `gpt-5.6-luna`, `xhigh` | 기본(`implementation_worker`가 `sonnet`)은 `claude-sonnet-5-5`, `high` `sonnet-worker`; `codex`일 때나 요청했을 때는 `role_runner.py worker`와 `gpt-5.6-luna`, `xhigh`; `haiku`일 때, 요청했을 때, 또는 실행기 대체 경로로는 `claude-haiku-5-5`, `high` `worker` |
-| 공개 researcher | `gpt-5.6-luna`, `xhigh` | 웹 검색을 쓰는 `role_runner.py researcher`로 `gpt-5.6-luna`, `xhigh`. 대체 경로는 `researcher`(`claude-haiku-5-5`, `medium`) |
-| Designer | `claude -p`로 `claude-opus-5-5`, `xhigh`. Claude를 쓸 수 없으면 `designer` 역할로 `gpt-6-astra`, `xhigh` | `claude-opus-5-5`, `xhigh` |
+| 구현 worker | `gpt-5.6-luna`, `xhigh` | 기본(`implementation_worker`가 `sonnet`)은 `claude-sonnet-5-5`, `high` `sonnet-worker`; `codex`일 때나 요청했을 때는 `role_runner.py worker`와 `gpt-5.6-luna`, `xhigh`; `haiku`일 때나 요청했을 때는 `claude-haiku-5-5`, `high` `worker`이며 대체 경로는 `role_runner.py worker`와 `gpt-5.6-luna`, `xhigh`다 |
+| 공개 researcher | 웹 검색을 쓰는 `role_runner.py researcher`로 `gpt-5.6-luna`, `xhigh` | 웹 검색을 쓰는 `role_runner.py researcher`로 `gpt-5.6-luna`, `xhigh`. 대체 경로는 웹 검색과 가져오기 도구를 가진 `scout`(`claude-sonnet-5-5`, `medium`) |
+| Designer(`design` 기능) | `designer` 역할로 `gpt-6-astra`, `xhigh`. 대체 경로는 `role_runner.py agent --name designer --fallback`으로 `claude-opus-5-5`, `xhigh` | `designer` 에이전트로 `claude-opus-5-5`, `xhigh`. 대체 경로는 `role_runner.py design`으로 `gpt-6-astra`, `xhigh` |
 | Skill Builder 시험 실행 및 기타 비검토 참여자 | `gpt-6.1-sol`, `xhigh` | `claude-opus-5-5`, `high` |
-| 스킬 검토 역할(검토 페르소나, grader, comparator, analyzer) | `claude -p`로 `claude-opus-5-5`, `high`; 대체는 `gpt-6.1-sol`, `xhigh` `reviewer` | `role_runner.py reviewer`로 `review_model` 설정값(기본 `gpt-6-astra`), `xhigh`; 대체는 `claude-opus-5-5`, `high` `reviewer` |
+| 스킬 검토 역할(검토 페르소나, grader, comparator, analyzer) | `role_runner.py review`로 `claude-opus-5-5`, `high`; 대체는 `gpt-6.1-sol`, `xhigh` `reviewer` | `role_runner.py reviewer`로 `review_model` 설정값(기본 `gpt-6-astra`), `xhigh`; 대체는 `claude-opus-5-5`, `high` `reviewer` |
 
 결과를 신뢰하기 전에 호스트 기록과 관련된 비밀이 아닌 설정으로 역할의 실제 모델과 사고 강도를 확인하거나, 호스트
 에이전트 규칙이 정한 강제 장치(Mod의 역할 고정, 역할 실행기의 검증)에 의존한다. 요청한 값, 역할 이름, agent guard
@@ -82,3 +83,26 @@ Skill Builder의 시험 실행과 기타 비검토 참여자는 표에 나온 �
 승인 및 모델 선택 규칙을 따른다. 두 계열이 모두 실질적으로 기여했으면 그 기여를 기록한다. 최종 작성자의
 모델 계열이 승인된 검토자 한 명을 결정한다. 모든 기여자에 대한 독립성을 주장하거나 검토 호출을 추가하지
 않는다.
+
+## 기능별 고정값
+
+이 고정값의 원본은 `config/model-registry.json`이며, 아래 표는 그 `capabilities` 항목과 같아야 한다.
+
+| 기능 | Claude Code 기본 | Claude Code 대체 | Codex 기본 | Codex 대체 |
+|---|---|---|---|---|
+다섯 기능은 `investigation`(로컬과 공개 조사), `implementation`(저장소 수정과 외부 도구 작업), `design`(UI 코드,
+시각 디자인, 다이어그램이나 이미지, 기술 설계 문서 초안 작성), `language`(텍스트 초안 작성과 다듬기), `review`(독립 검토)다.
+모든 대체 항목은 다른 모델 계열이다. 다른 호스트의 모델이 필요한 대체 항목은 역할 실행기를 거치고, 현재 호스트에서 바로 실행할 수 있는 대체 항목은 이름이 붙은 에이전트를 쓴다. 실행기의 동작은 [Claude Code 에이전트](claude-agents.ko.md#역할-실행기)에 있다.
+
+| 기능 | Claude Code 기본 | Claude Code 대체 | Codex 기본 | Codex 대체 |
+|---|---|---|---|---|
+| investigation | `gpt-5.6-luna` / `xhigh` (runner) | `claude-sonnet-5-5` / `medium` (`scout`) | `gpt-5.6-luna` / `xhigh` (`scout`) | `claude-sonnet-5-5` / `medium` (runner) |
+| implementation | `claude-sonnet-5-5` / `high` (`sonnet-worker`) | `gpt-5.6-luna` / `xhigh` (runner) | `gpt-5.6-luna` / `xhigh` (`worker`) | `claude-sonnet-5-5` / `high` (runner) |
+| design | `claude-opus-5-5` / `xhigh` (`designer`) | `gpt-6-astra` / `xhigh` (runner) | `gpt-6-astra` / `xhigh` (`designer`) | `claude-opus-5-5` / `xhigh` (runner) |
+| language | `gpt-6.1-sol` / `high` (runner) | `claude-opus-5-5` / `high` (runner) | `gpt-6.1-sol` / `high` (runner) | `claude-opus-5-5` / `high` (runner) |
+| review | `gpt-6-astra` / `xhigh` (runner) | `claude-opus-5-5` / `high` (`reviewer`) | `claude-opus-5-5` / `high` (runner) | `gpt-6.1-sol` / `xhigh` (`reviewer`) |
+
+Claude Code의 `review` 기본 항목은 기본 모델 대신 `review_model` 설정을 쓴다. 이 기본 항목이 Claude 모델로 정해지면
+Claude Code의 `review` 대체 항목은 `reviewer` 항목 대신 역할 실행기로 `gpt-6-astra` / `xhigh`를 실행한다. `(runner)`로
+표시한 항목은 역할 실행기로 실행하고, 에이전트 이름으로 표시한 항목은 그 플러그인 에이전트를 고정된 모델과 사고 강도로
+실행한다.
