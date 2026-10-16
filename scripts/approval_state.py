@@ -24,6 +24,8 @@ KEY_SEPARATOR = "\x1f"
 CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ23456789"
 CODE_LENGTH = 6
 RETENTION_SECONDS = 7 * 24 * 60 * 60
+MAX_REQUESTS = 3
+STOP_REASON = "This call was approved but did not complete three times; stop retrying and report to the user."
 SESSION_ID = re.compile(r"[A-Za-z0-9._-]{1,128}")
 APPROVAL_TEXT = re.compile(r"(?:승인|approve)\s+([A-Z2-9]{6})", re.IGNORECASE)
 UNKNOWN_SESSION = "the session is unknown, so the approval cannot be recorded"
@@ -117,7 +119,8 @@ def permission_allow() -> dict:
 
 
 def _empty() -> dict:
-    return {"approved": [], "once": [], "pending": {}, "inflight": [], "hooks_warning_shown": False}
+    return {"approved": [], "once": [], "pending": {}, "inflight": [], "hooks_warning_shown": False,
+            "request_counts": {}}
 
 
 def _read(path: Path) -> dict:
@@ -138,9 +141,15 @@ def _read(path: Path) -> dict:
         entry for entry in data.get("inflight", [])
         if isinstance(entry, dict) and isinstance(entry.get("key"), str)
     ]
+    counts = data.get("request_counts", {})
+    counts = {
+        key: value for key, value in counts.items()
+        if isinstance(key, str) and type(value) is int and value >= 0
+    } if isinstance(counts, dict) else {}
     return {
         "approved": sorted(set(approved)), "once": sorted(set(once)), "pending": pending, "inflight": inflight,
         "hooks_warning_shown": data.get("hooks_warning_shown") is True,
+        "request_counts": counts,
     }
 
 
@@ -217,19 +226,50 @@ def record_approved(host: str, session: str, keys) -> None:
     _mutate(host, session, change)
 
 
-def request_code(host: str, session: str, once_keys, session_keys, descriptions=()) -> str:
-    """Return the pending code for these keys, creating one when needed. Once keys and session keys are approved apart."""
-    once = sorted(set(once_keys))
-    approved = sorted(set(session_keys))
-    key = KEY_SEPARATOR.join(sorted(set(once) | set(approved)))
+def _recoverable(data, keys):
+    return {entry["key"]: entry for entry in data["inflight"]
+            if entry["key"] in keys and not entry.get("retried", False)}
+
+
+def _count_request(data, keys):
+    keys = set(keys)
+    counts = data["request_counts"]
+    if any(counts.get(key, 0) >= MAX_REQUESTS for key in keys):
+        return False
+    for key in keys:
+        counts[key] = counts.get(key, 0) + 1
+    return True
+
+
+def request_ask(host, session, once_keys, session_keys):
+    if session_key(session) is None:
+        return True
 
     def change(data):
+        needed = [key for key in session_keys if key not in data["approved"]]
+        return _count_request(data, [*once_keys, *needed])
+    return bool(_mutate(host, session, change))
+
+
+def request_code(host: str, session: str, once_keys, session_keys, descriptions=()) -> str | None:
+    """Issue a counted request for missing approvals, or None when no new request can be issued."""
+    once = sorted(set(once_keys))
+    approved = sorted(set(session_keys))
+
+    def change(data):
+        recoverable = _recoverable(data, once)
+        needed_once = [key for key in once if key not in data["once"] and key not in recoverable]
+        needed_session = [key for key in approved if key not in data["approved"] and key not in data["once"]]
+        needed = [*needed_once, *needed_session]
+        if not needed or not _count_request(data, needed):
+            return None
         for code, entry in data["pending"].items():
-            if entry.get("once_keys") == once and entry.get("session_keys") == approved:
+            if entry.get("once_keys") == needed_once and entry.get("session_keys") == needed_session:
                 return code
         code = _new_code(data)
         data["pending"][code] = {
-            "key": key, "once_keys": once, "session_keys": approved, "descriptions": list(descriptions),
+            "key": KEY_SEPARATOR.join(sorted(set(needed))), "once_keys": needed_once,
+            "session_keys": needed_session, "descriptions": list(descriptions),
         }
         return code
     return _mutate(host, session, change)
@@ -285,32 +325,22 @@ def take_once(host: str, session: str, once_keys, session_keys, tool_use_id=None
     inherited = approved_keys(host, session)
 
     def change(data):
-        if not all(key in data["once"] for key in once_keys):
+        recoverable = _recoverable(data, once_keys)
+        if not all(key in data["once"] or key in recoverable for key in once_keys):
             return False
         if not all(key in inherited or key in data["once"] for key in session_keys):
             return False
         extra = [key for key in session_keys if key not in data["approved"] and key in data["once"]]
         consumed = list(dict.fromkeys([*once_keys, *extra]))
+        entries = [{"key": key, "id": tool_id, "retried": key not in data["once"]} for key in consumed]
         data["once"] = [key for key in data["once"] if key not in consumed]
-        data["inflight"] = [*data["inflight"], *({"key": key, "id": tool_id} for key in consumed)]
+        data["inflight"] = [entry for entry in data["inflight"] if entry["key"] not in consumed] + entries
         return True
     return bool(_mutate(host, session, change))
 
 
 def _in_flight_keys(data: dict, tool_id) -> set:
     return {entry["key"] for entry in data["inflight"] if tool_id is None or entry.get("id") in (None, tool_id)}
-
-
-def _clear_in_flight(host: str, session: str, keys, tool_use_id) -> None:
-    tool_id = _tool_id(tool_use_id)
-
-    def change(data):
-        for key in keys:
-            for index, entry in enumerate(data["inflight"]):
-                if entry["key"] == key and (tool_id is None or entry.get("id") in (None, tool_id)):
-                    del data["inflight"][index]
-                    break
-    _mutate(host, session, change)
 
 
 def pre_decision(host: str, session_id, outcome: Outcome, tool_use_id=None):
@@ -323,10 +353,12 @@ def pre_decision(host: str, session_id, outcome: Outcome, tool_use_id=None):
             return pre_output("deny", PARENT_REASON)
         return pre_output("allow", f"Approved in the main session: {description}") if host == "claude" else None
     if host == "claude":
+        if not once_keys and session is not None and is_approved(host, session, session_keys):
+            return pre_output("allow", f"Approved earlier in this session: {description}")
+        if not request_ask(host, session, once_keys, session_keys):
+            return pre_output("deny", STOP_REASON)
         if once_keys:
             return pre_output("ask", f"{description}. This action asks every time.")
-        if session is not None and is_approved(host, session, session_keys):
-            return pre_output("allow", f"Approved earlier in this session: {description}")
         return pre_output(
             "ask",
             f"{description}. Approving lets the same command and target run without asking for the rest of this session.",
@@ -336,6 +368,10 @@ def pre_decision(host: str, session_id, outcome: Outcome, tool_use_id=None):
     if take_once(host, session, once_keys, session_keys, tool_use_id):
         return None
     code = request_code(host, session, once_keys, session_keys, outcome.descriptions)
+    if code is None:
+        if take_once(host, session, once_keys, session_keys, tool_use_id):
+            return None
+        return pre_output("deny", STOP_REASON)
     return pre_output("deny", (
         f"Approval required: {description}. Ask the user to reply `승인 {code}`; do not retry until they do. "
         + RETRY_INSTRUCTION
@@ -362,10 +398,23 @@ def after_call(host: str, session_id, outcome: Outcome, tool_use_id=None) -> Non
     if session is None or parent_session():
         return
     once_keys, session_keys = split_outcome(outcome)
-    if host == "claude" and session_keys:
-        record_approved(host, session, session_keys)
-    elif host == "codex" and (once_keys or session_keys):
-        _clear_in_flight(host, session, [*once_keys, *session_keys], tool_use_id)
+    keys = [*once_keys, *session_keys]
+    if not keys:
+        return
+    tool_id = _tool_id(tool_use_id)
+
+    def change(data):
+        for key in keys:
+            data["request_counts"].pop(key, None)
+        if host == "claude":
+            data["approved"] = sorted(set(data["approved"]) | set(session_keys))
+        elif host == "codex":
+            for key in keys:
+                for index, entry in enumerate(data["inflight"]):
+                    if entry["key"] == key and (tool_id is None or entry.get("id") in (None, tool_id)):
+                        del data["inflight"][index]
+                        break
+    _mutate(host, session, change)
 
 
 def approve_prompt(host, session, prompt):

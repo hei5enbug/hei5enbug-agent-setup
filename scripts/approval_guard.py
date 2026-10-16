@@ -28,6 +28,7 @@ import datagrip_guard  # noqa: E402
 from approval_state import Outcome  # noqa: E402
 
 DATAGRIP_TOOL = datagrip_guard.TOOL_NAME
+TABULARIS_TOOL = "mcp__tabularis__run_query"
 EVENTS = ("PreToolUse", "PermissionRequest", "PostToolUse")
 MAX_DEPTH = 4
 LOOKUP_TIMEOUT_SECONDS = 3
@@ -1049,7 +1050,66 @@ def _input_strings(value, sql_only=False):
                 yield from _input_strings(item, sql_only)
 
 
+def tabularis_connection(identifier):
+    override = os.environ.get("HEI5ENBUG_TABULARIS_DIR")
+    if override:
+        directory = Path(override).expanduser()
+    elif sys.platform == "darwin":
+        directory = Path.home() / "Library" / "Application Support" / "tabularis"
+    elif sys.platform == "win32":
+        appdata = os.environ.get("APPDATA")
+        if not appdata:
+            return None
+        directory = Path(appdata) / "tabularis"
+    else:
+        directory = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "tabularis"
+    try:
+        entries = json.loads((directory / "connections.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if isinstance(entries, dict):
+        entries = entries.get("connections")
+    if not isinstance(identifier, str) or not isinstance(entries, list):
+        return None
+    connections = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        connection_id, name, params = entry.get("id"), entry.get("name"), entry.get("params")
+        driver = params.get("driver") if isinstance(params, dict) else None
+        if isinstance(connection_id, str) and connection_id and isinstance(name, str):
+            connections.append((connection_id, name, driver if isinstance(driver, str) else None))
+    matches = [connection for connection in connections if connection[0] == identifier]
+    if not matches:
+        matches = [connection for connection in connections if connection[1] == identifier]
+    return matches[0] if len(matches) == 1 else None
+
+
+def classify_tabularis(tool_input):
+    arguments = tool_input if isinstance(tool_input, dict) else {}
+    identifier, sql = arguments.get("connection_id"), arguments.get("query")
+    connection = tabularis_connection(identifier)
+    connection_id = connection[0] if connection else identifier if isinstance(identifier, str) else "unknown"
+    name = connection[1] if connection else "an unidentified connection"
+    text = sql if isinstance(sql, str) else ""
+    always = Outcome("always", [f"sql:always:tabularis:{connection_id}:{_digest(text)}"],
+                     [f"tabularis query on {name}"])
+    if not connection or "승인" in name or connection[2] not in ("postgresql", "sqlserver", "sqlserver-entra"):
+        return always
+    if not isinstance(sql, str):
+        return always
+    postgres = connection[2] == "postgresql"
+    if datagrip_guard.is_read(sql, postgres):
+        return _read()
+    keywords, destructive = datagrip_guard.query_facts(sql, postgres)
+    if keywords is None or destructive:
+        return always
+    return Outcome("write", ["mcp:session"], [f"tabularis write on {name}"])
+
+
 def classify_mcp(tool, tool_input=None):
+    if tool == TABULARIS_TOOL:
+        return classify_tabularis(tool_input)
     part = mcp_tool_part(tool)
     words = tool_words(part) if part else []
     if not words:
@@ -1145,6 +1205,10 @@ def handle(event, host):
         if name == "PostToolUse":
             approval_state.after_call(
                 host, session, datagrip_guard.classify_query(event.get("tool_input")), tool_use_id)
+        elif name == "PreToolUse" and host == "claude" and enabled("datagrip_guard"):
+            outcome = _classify_safely(lambda: datagrip_guard.classify_query(event.get("tool_input")), tool)
+            if outcome.kind == "always":
+                return approval_state.pre_decision(host, session, outcome, tool_use_id)
         return None
     tool_input = event.get("tool_input")
     if tool == "Bash":
