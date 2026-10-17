@@ -26,7 +26,8 @@ def test_두_호스트는_가벼운_위임_기준과_검토_연결만_항상_받
         "Delegate bounded investigation",
         "Parallelize only work with independent resources",
         "continue authorized work in the main session",
-        "do not invoke a reviewer without the user's approval",
+        "otherwise needs the user's approval",
+        "the review runs without asking when its reviewer runs on Codex and Codex weekly usage is at most 70 percent",
     ]
 
     # When

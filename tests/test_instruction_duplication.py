@@ -35,7 +35,10 @@ CORE_OWNED = (
         "Prefer `rg` for text and symbol search and `fd` for file discovery. Use `ast-grep` only when "
         "structural matching is clearly needed."
     ),
-    "Ask before destructive, irreversible, or production-impacting actions. Never expose secrets.",
+    (
+        "Ask before destructive, irreversible, or production-impacting actions every time, and before any other "
+        "write once per session. Name the write in one line. Never expose secrets."
+    ),
     "Before writing or editing any documentation file, read [documentation rules](../documentation.md).",
 )
 

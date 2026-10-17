@@ -96,7 +96,6 @@ WRITE_COMMANDS = [
 ]
 
 ALWAYS_COMMANDS = [
-    "kubectl get pods -l app=$(cat f)",
     "echo $(kubectl delete ns x)",
     "kubectl delete pod x --context dev -n web",
     "kubectl apply -f a.yaml --force --context dev -n web",
@@ -140,7 +139,6 @@ ALWAYS_COMMANDS = [
     "echo $(kubectl delete ns x)",
     "kubectl get pods | xargs kubectl delete",
     "bash -c 'kubectl delete x'",
-    "kubectl get pods `date`",
     "eval kubectl delete x",
     "kubectl apply -f - <<EOF\nkind: x\nEOF",
 ]
@@ -769,7 +767,7 @@ def test_claude는_항상_묻는_명령을_매번_묻고_기록하지_않는다(
     output = guard.handle(bash_event(command, cwd=state), "claude")
     # then
     assert decision_of(output) == "ask"
-    assert reason_of(output).endswith("This action asks every time.")
+    assert reason_of(output) == "Asks every time: kubectl delete x on (default) dev/web."
     assert state_mod._load("claude", "s1")["approved"] == []
 
 
@@ -1449,7 +1447,7 @@ def test_복합_명령의_항상_키와_쓰기_키는_하나의_코드로_함께
     assert outcome.keys == ["kubectl:delete x@(default) dev/web"]
     assert outcome.writes == ["kubectl:apply@(default) prod/web"]
     assert decision_of(denied) == "deny"
-    assert set(approved) == {"kubectl:delete x@(default) dev/web", "kubectl:apply@(default) prod/web"}
+    assert set(approved) == {"kubectl:delete x@(default) dev/web", state_mod.WRITE_KEY}
     assert allowed is None
 
 

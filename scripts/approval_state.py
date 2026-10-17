@@ -20,6 +20,7 @@ from pathlib import Path
 # need a once approval and writes need session approval. exe names a psql read so the caller can enforce read-only mode.
 Outcome = namedtuple("Outcome", "kind keys descriptions exe writes", defaults=(None, ()))
 
+WRITE_KEY = "write:session"
 KEY_SEPARATOR = "\x1f"
 CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ23456789"
 CODE_LENGTH = 6
@@ -309,9 +310,9 @@ def describe(outcome: Outcome) -> str:
 def split_outcome(outcome: Outcome):
     """Return (once keys, session keys) that a call needs before it may proceed."""
     if outcome.kind in ("always", "sensitive"):
-        return list(outcome.keys), list(outcome.writes)
+        return list(outcome.keys), [WRITE_KEY] if outcome.writes else []
     if outcome.kind in ("write", "request"):
-        return [], list(outcome.keys)
+        return [], [WRITE_KEY]
     return [], []
 
 
@@ -353,15 +354,16 @@ def pre_decision(host: str, session_id, outcome: Outcome, tool_use_id=None):
             return pre_output("deny", PARENT_REASON)
         return pre_output("allow", f"Approved in the main session: {description}") if host == "claude" else None
     if host == "claude":
-        if not once_keys and session is not None and is_approved(host, session, session_keys):
+        if outcome.kind not in ("always", "sensitive") and session is not None and is_approved(host, session, session_keys):
             return pre_output("allow", f"Approved earlier in this session: {description}")
         if not request_ask(host, session, once_keys, session_keys):
             return pre_output("deny", STOP_REASON)
-        if once_keys:
-            return pre_output("ask", f"{description}. This action asks every time.")
+        if outcome.kind in ("always", "sensitive"):
+            scope = " It also approves non-destructive writes for the rest of this session." if session_keys else ""
+            return pre_output("ask", f"Asks every time: {description}." + scope)
         return pre_output(
             "ask",
-            f"{description}. Approving lets the same command and target run without asking for the rest of this session.",
+            f"Write: {description}. Approve once; non-destructive writes then run without asking for the rest of this session.",
         )
     if session is None:
         return pre_output("deny", f"Approval required: {description}. {UNKNOWN_SESSION}; ask the user before retrying.")
@@ -373,7 +375,9 @@ def pre_decision(host: str, session_id, outcome: Outcome, tool_use_id=None):
             return None
         return pre_output("deny", STOP_REASON)
     return pre_output("deny", (
-        f"Approval required: {description}. Ask the user to reply `승인 {code}`; do not retry until they do. "
+        f"Approval required: {description}. "
+        + ("Approving also allows non-destructive writes for the rest of this session. " if session_keys else "")
+        + f"Ask the user to reply `승인 {code}`; do not retry until they do. "
         + RETRY_INSTRUCTION
     ))
 

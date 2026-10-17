@@ -28,19 +28,19 @@ def request_command(*keys):
 
 @pytest.mark.parametrize("host", ["claude", "codex"])
 def test_request_bundle_records_every_key_only_after_user_approval(state, fake_bin, host):
-    """사전 승인 묶음은 사용자 승인 뒤에만 모든 키를 세션에 기록한다."""
+    """사전 승인 묶음은 사용자 승인 뒤에만 공통 쓰기 키를 세션에 기록한다."""
     # given
     keys = ["kubectl:apply@(default) dev/web", "mcp:session"]
     event = bash_event(request_command(*keys))
     outcome = guard.classify_text(event["tool_input"]["command"], str(state))
     # when
     first = guard.handle(event, host)
-    before = state_mod.is_approved(host, "s1", keys)
+    before = state_mod.is_approved(host, "s1", [state_mod.WRITE_KEY])
     if host == "claude":
         context = guard.handle({**event, "hook_event_name": "PostToolUse"}, host)
     else:
         context = approve(first)
-    after = state_mod.is_approved(host, "s1", keys)
+    after = state_mod.is_approved(host, "s1", [state_mod.WRITE_KEY])
     retry = guard.handle(event, host)
     # then
     assert decision(first) == ("ask" if host == "claude" else "deny")
@@ -48,7 +48,9 @@ def test_request_bundle_records_every_key_only_after_user_approval(state, fake_b
     assert "issue update" in first["hookSpecificOutput"]["permissionDecisionReason"]
     assert not before
     assert outcome.kind == "request"
+    assert outcome.keys == sorted(keys)
     assert after
+    assert state_mod._load(host, "s1")["approved"] == [state_mod.WRITE_KEY]
     assert decision(retry) == ("allow" if host == "claude" else None)
     if host == "codex":
         assert "mcp:session" in context["hookSpecificOutput"]["additionalContext"]
@@ -191,12 +193,16 @@ def test_script_writes_merge_keys_and_reuse_them_once_per_session(state, fake_bi
     # then
     assert decision(first) == "deny"
     assert second is None
-    assert keys == ["kubectl:apply@(default) dev/(default)"]
+    assert keys == [state_mod.WRITE_KEY]
 
 
 @pytest.mark.parametrize(("path", "content", "command"), [
     ("guard.sh", "python3 /plugin/scripts/approval_state.py\n", "bash guard.sh"),
     ("guard.py", "import approval_state\n", "python3 guard.py"),
+    ("guard.py", 'import subprocess\nsubprocess.run(["python3", "/p/scripts/approval_guard.py"])\n', "python3 guard.py"),
+    ("guard.py", 'import subprocess\nGUARD = "/p/scripts/approval_guard.py"\ncmd = ["python3", GUARD]\n'
+                 "subprocess.run(cmd)\n", "python3 guard.py"),
+    ("guard.py", 'import os\nos.system("python3 /p/scripts/datagrip_guard.py < event.json")\n', "python3 guard.py"),
 ])
 def test_scripts_cannot_bypass_the_self_approval_guard(state, fake_bin, path, content, command):
     """스크립트에 숨긴 승인 가드 실행도 자기 승인 거부를 우회하지 못한다."""
@@ -206,6 +212,139 @@ def test_scripts_cannot_bypass_the_self_approval_guard(state, fake_bin, path, co
     output = guard.handle(bash_event(command, cwd=state), "claude")
     # then
     assert decision(output) == "deny"
+
+
+def test_a_script_that_only_lists_guard_files_as_data_is_not_self_approval(state, fake_bin):
+    """가드 파일 이름을 점검 목록 같은 데이터로만 담고 다른 명령을 실행하는 스크립트는 자기 승인으로 막지 않는다."""
+    # given
+    (state / "refresh.py").write_text(
+        'import subprocess\nREQUIRED = ("scripts/datagrip_guard.py", "scripts/approval_guard.py")\n'
+        'missing = [p for p in REQUIRED if p]\nsubprocess.run(["git", "status"])\n'
+    )
+    # when
+    output = guard.handle(bash_event("python3 refresh.py status", cwd=state), "claude")
+    # then
+    assert output is None or decision(output) != "deny"
+
+
+def test_the_plugin_refresh_script_status_is_not_self_approval():
+    """플러그인 자신의 orca_plugin_refresh.py 실행은 자기 승인으로 분류되지 않는다."""
+    # given
+    script = GUARD_PATH.parents[1] / "skills" / "orca-plugin-refresh" / "scripts" / "orca_plugin_refresh.py"
+    # when
+    outcome = guard.classify_text(f"python3 {script} status --run-id {'0' * 32} --json", str(GUARD_PATH.parents[1]))
+    # then
+    assert outcome.kind != "forbidden"
+
+
+@pytest.mark.parametrize(("command", "kind"), [
+    ("kubectl get pods -l app=$(cat f)", "pass"),
+    ("kubectl get pods `date`", "pass"),
+    ('echo "`kubectl get pods`"', "read"),
+    ('R=`kubectl apply -f a --context dev`; echo "$R"', "write"),
+    ('echo "$(echo "$(kubectl get pods)")"', "read"),
+    ('echo "$(kubectl get pods --field-selector \'name=)\')"', "read"),
+    ('echo "`kubectl get secret s -o json`"', "secret"),
+    ('echo "$(echo "$(kubectl get secret s -o json)")"', "secret"),
+    ('echo "`kubectl $VERB pods`"', "always"),
+    ('R=$(kubectl apply -f a --context dev); rm -rf local', "always"),
+    ('echo "$(kubectl apply -f a --context dev)" > output', "always"),
+    ("echo '$(kubectl delete pod x)'", "pass"),
+    ('echo "$(kubectl get pods)" "$(kubectl delete pod x --context dev)"', "always"),
+    ("eval kubectl get pods", "always"),
+    ("xargs kubectl get pods", "always"),
+    ("bash -c 'kubectl get pods'", "always"),
+    ("az rest --method=GeT --url https://example.test", "write"),
+    ("az rest -mDeLeTe --url https://example.test", "always"),
+    ("az rest --url https://example.test", "write"),
+    ("az rest --method HEAD --url https://example.test", "write"),
+])
+def test_substitutions_merge_classifications_and_preserve_opaque_regions(state, fake_bin, command, kind):
+    """치환은 내부 호출의 분류를 합치고 다른 간접 실행의 보수적인 분류는 유지한다."""
+    # given
+    cwd = str(state)
+    # when
+    outcome = guard.classify_text(command, cwd)
+    # then
+    assert outcome.kind == kind
+
+
+@pytest.mark.parametrize(("command", "kind"), [
+    ('S={directory} && bash $S/run.sh', "read"),
+    ('S={directory}; cd ${{S}} && bash run.sh', "read"),
+    ('S={directory}; W=$S; cd $W && bash run.sh', "read"),
+    ('S={directory} bash $S/run.sh', "always"),
+    ('S={directory}; R=$(bash $S/run.sh); echo $R', "read"),
+    ('cd tools && cd nested && bash run.sh', "always"),
+    ('cd $UNASSIGNED; bash tools/nested/run.sh', "read"),
+    ('cd missing-directory; bash tools/nested/run.sh', "read"),
+])
+def test_assignments_and_cd_resolve_script_paths_in_sequence(state, fake_bin, command, kind):
+    """앞선 대입과 디렉터리 변경을 순서대로 반영해 스크립트 경로를 찾는다."""
+    # given
+    directory = state / "tools" / "nested"
+    directory.mkdir(parents=True)
+    (directory / "run.sh").write_text("kubectl get pods\n")
+    command = command.format(directory=directory)
+    # when
+    outcome = guard.classify_text(command, str(state))
+    # then
+    assert outcome.kind == kind
+
+
+def test_script_path_does_not_expand_an_unassigned_environment_variable(state, fake_bin, monkeypatch):
+    """현재 명령에서 대입하지 않은 환경 변수로는 스크립트 경로를 확정하지 않는다."""
+    # given
+    (state / "run.sh").write_text("echo hello\n")
+    monkeypatch.setenv("UNASSIGNED", str(state))
+    # when
+    outcome = guard.classify_text("bash $UNASSIGNED/run.sh", str(state))
+    # then
+    assert outcome.kind == "always"
+
+
+@pytest.mark.parametrize(("command", "kind"), [
+    ("cat <<'EOF'\nbash 'unterminated\n$(kubectl delete pod x)\nEOF\n", "pass"),
+    ("cat <<-EOF\n\tkubectl delete pod x\n\tEOF\nkubectl get pods\n", "pass"),
+    ("cat <<A <<'B'\nsource missing.sh\nA\nkubectl delete pod x\nB\n", "pass"),
+    ("env FOO=bar bash <<EOF\nkubectl delete pod x\nEOF\n", "always"),
+    ("python3 <<EOF\nkubectl delete pod x\nEOF\n", "always"),
+    ("kubectl apply -f - <<EOF\necho hi\nEOF\n", "always"),
+    ("cat <<EOF\necho hello\nEOF\nkubectl delete pod x\n", "always"),
+])
+def test_heredoc_data_is_ignored_only_for_non_executing_receivers(state, fake_bin, command, kind):
+    """데이터 수신 명령의 히어도큐먼트만 건너뛰고 실행 수신 명령과 뒤따르는 명령은 검사한다."""
+    # given
+    cwd = str(state)
+    # when
+    outcome = guard.classify_text(command, cwd)
+    # then
+    assert outcome.kind == kind
+
+
+def test_shell_script_heredoc_data_does_not_trigger_approval(state, fake_bin):
+    """셸 스크립트 안에서도 데이터 히어도큐먼트에 적힌 명령은 실행으로 분류하지 않는다."""
+    # given
+    (state / "run.sh").write_text("cat <<'EOF'\nbash missing.sh\nkubectl delete pod x\nEOF\n")
+    # when
+    outcome = guard.classify_text("bash run.sh", str(state))
+    # then
+    assert outcome.kind == "pass"
+
+
+@pytest.mark.parametrize("command", [
+    "echo $(python3 /plugin/scripts/approval_state.py)",
+    "echo `python3 /plugin/scripts/approval_state.py`",
+])
+def test_substitutions_preserve_self_approval_denials(state, fake_bin, command):
+    """명령 치환 안의 승인 상태 실행도 기존 자기 승인 거부를 유지한다."""
+    # given
+    event = bash_event(command, cwd=state)
+    # when
+    output = guard.handle(event, "claude")
+    # then
+    assert decision(output) == "deny"
+    assert "Approvals come only from the user" in output["hookSpecificOutput"]["permissionDecisionReason"]
 
 
 @pytest.mark.parametrize("tool", ["Edit", "Write", "MultiEdit", "NotebookEdit", "apply_patch"])
@@ -278,7 +417,7 @@ def test_children_reuse_parent_approved_keys_without_writing_parent_state(state,
     """자식 세션은 부모 승인 키를 읽어서 쓰되 부모 상태를 변경하지 않는다."""
     # given
     command = "kubectl apply -f a --context dev"
-    keys = guard.classify_text(command, str(state)).keys
+    _, keys = state_mod.split_outcome(guard.classify_text(command, str(state)))
     state_mod.record_approved("codex", "main", keys)
     parent = state_mod._path("codex", "main")
     before = parent.read_bytes()
@@ -443,9 +582,9 @@ def test_mcp_sql_and_execution_inputs_override_name_only_reads(tool, arguments, 
 
 
 def test_datagrip_non_destructive_writes_share_the_mcp_session_key(state, project):
-    """DataGrip의 일반 쓰기는 DB와 문장 종류가 달라도 MCP 세션 승인을 공유한다."""
+    """DataGrip의 일반 쓰기는 DB와 문장 종류가 달라도 세션 쓰기 승인을 공유한다."""
     # given
-    state_mod.record_approved("claude", "s1", ["mcp:session"])
+    state_mod.record_approved("claude", "s1", [state_mod.WRITE_KEY])
     inputs = [query_event(project, source, sql)["tool_input"] for source, sql in (
         (PG_ID, "insert into t values (1)"), (MSSQL_ID, "update t set a=1"),
     )]
@@ -498,3 +637,79 @@ def test_curl_classifies_method_origin_and_credential_exposure(state, command, k
     assert outcome.kind == kind
     if keys is not None:
         assert outcome.keys == keys
+
+
+@pytest.mark.parametrize(("kind", "writes", "once_keys", "session_keys"), [
+    ("write", [], [], ["write:session"]),
+    ("request", [], [], ["write:session"]),
+    ("always", [], ["original-key"], []),
+    ("sensitive", [], ["original-key"], []),
+    ("always", ["write-a", "write-b"], ["original-key"], ["write:session"]),
+    ("sensitive", ["write-a", "write-b"], ["original-key"], ["write:session"]),
+    ("read", [], [], []),
+    ("pass", [], [], []),
+    ("secret", [], [], []),
+    ("forbidden", [], [], []),
+])
+def test_session_approval_mapping_preserves_classification_keys(kind, writes, once_keys, session_keys):
+    """세션 승인 키를 하나로 바꿔도 원래 분류 키와 쓰기 키는 보존한다."""
+    # given
+    action = state_mod.Outcome(kind, ["original-key"], ["Requested action"], writes=writes)
+    # when
+    split = state_mod.split_outcome(action)
+    # then
+    assert split == (once_keys, session_keys)
+    assert action.keys == ["original-key"]
+    assert action.writes == writes
+
+
+@pytest.mark.parametrize("kind", ["write", "request", "always", "sensitive"])
+def test_claude_approval_prompt_uses_the_exact_short_wording(state, kind):
+    """Claude 승인 질문은 쓰기 종류에 맞는 짧은 문구를 사용한다."""
+    # given
+    action = state_mod.Outcome(kind, ["original-key"], ["Requested action"])
+    expected = (
+        "Asks every time: Requested action." if kind in ("always", "sensitive") else
+        "Write: Requested action. Approve once; non-destructive writes then run without asking for the rest of this session."
+    )
+    # when
+    output = state_mod.pre_decision("claude", "s1", action)
+    # then
+    assert decision(output) == "ask"
+    assert output["hookSpecificOutput"]["permissionDecisionReason"] == expected
+
+
+@pytest.mark.parametrize("kind", ["always", "sensitive"])
+def test_codex_mixed_calls_keep_only_the_shared_write_approval_after_completion(state, kind):
+    """Codex 복합 호출이 완료돼도 위험 부분은 새 승인을 요구하고 일반 쓰기 승인만 유지한다."""
+    # given
+    action = state_mod.Outcome(kind, ["once-key"], ["Requested action"], writes=["write-a", "write-b"])
+    denied = state_mod.pre_decision("codex", "s1", action, "first")
+    approve(denied)
+    state_mod.pre_decision("codex", "s1", action, "first")
+    state_mod.after_call("codex", "s1", action, "first")
+    # when
+    output = state_mod.pre_decision("codex", "s1", action, "second")
+    # then
+    assert decision(output) == "deny"
+    assert state_mod._load("codex", "s1")["approved"] == [state_mod.WRITE_KEY]
+    assert state_mod._load("codex", "s1")["once"] == []
+    assert state_mod._load("codex", "s1")["inflight"] == []
+    assert list(state_mod._load("codex", "s1")["pending"].values())[0]["once_keys"] == ["once-key"]
+    assert list(state_mod._load("codex", "s1")["pending"].values())[0]["session_keys"] == []
+
+
+@pytest.mark.parametrize(("arguments", "description"), [
+    ({"title": "t"}, "MCP write: mcp__provider__update_record"),
+    ({"query": "UPDATE t SET a=1"}, "MCP SQL write via mcp__provider__update_record"),
+])
+def test_mcp_write_descriptions_name_the_tool(arguments, description):
+    """MCP 일반 쓰기와 SQL 쓰기의 설명에는 도구 이름이 들어간다."""
+    # given
+    tool = "mcp__provider__update_record"
+    # when
+    action = guard.classify_mcp(tool, arguments)
+    # then
+    assert action.kind == "write"
+    assert action.keys == ["mcp:session"]
+    assert action.descriptions == [description]

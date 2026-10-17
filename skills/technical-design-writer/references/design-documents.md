@@ -25,6 +25,9 @@ resolves the type, apply that evidence.
 1. Freeze the design goal, scope, non-goals, constraints, protected contracts, audience, acceptance
    criteria, and evidence sources. For an existing document, identify unsupported claims, missing design
    coverage, and rule violations.
+   When the readers work outside the implementing team, also freeze the scope they need: the main flow, final
+   decisions, the contracts they depend on, and the risks they must know. Keep implementation detail in
+   documents for implementers.
 2. Build a private coverage matrix from `SKILL.md`. Mark each concern applicable or inapplicable with a
    reason. Finalize second-level headings before drafting: give the document one reader goal, give each
    section one responsibility, remove repeated summaries, order prerequisites before dependent decisions,
@@ -37,9 +40,11 @@ resolves the type, apply that evidence.
    Ask before renaming implementation identifiers or externally visible contract names. When a material fact,
    decision, definition, or contract changes, check the statements that depend on it in the edited document,
    including unchanged summaries, tables, examples, diagrams, captions, and acceptance criteria, and in the
-   documents of the same repository or workspace that record it. Update them within the authorized scope and
-   report the rest without editing them. Search other repositories or workspaces only when the task requires
-   it. When a decision reverses an earlier one, explain why its original rationale no longer holds.
+   documents of the same repository or workspace that record it. The check also covers documents derived from
+   the same design and known to the task, such as a shared summary, its published page, and replies posted
+   about the design. Update them within the authorized scope and report the rest without editing them. Search
+   other repositories or workspaces only when the task requires it. When a decision reverses an earlier one,
+   explain why its original rationale no longer holds.
 5. Validate copied contracts, examples, commands, links, calculations, and diagrams with the strongest
    available method. Separate unsupported content under `SKILL.md`, remove drafting notes and unnecessary
    content, record actual removals, and run the completion gate.

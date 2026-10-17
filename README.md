@@ -220,7 +220,7 @@ A `PreToolUse` hook and a `PermissionRequest` hook, both `scripts/datagrip_guard
 `projectPath` names. A connection whose name contains `승인` always asks for approval. PostgreSQL and SQL Server reads
 run without approval, and PostgreSQL reads run inside a read-only transaction with
 `SET LOCAL statement_timeout = '60s';`. With `approval_guard` on, non-destructive PostgreSQL and SQL Server writes
-share the single `mcp:session` approval with all other MCP writes. Text that names `delete`, `drop`, or `truncate`
+share the session write approval (`write:session`) with all other writes. Text that names `delete`, `drop`, or `truncate`
 anywhere, literals and comments included, a statement led by `DO`,
 `EXEC`, `EXECUTE`, or `CALL`, a connection whose name contains `승인`, an unknown connection, another
 database type, and text the guard cannot parse always ask. On Codex, a call that needs approval is denied with a code
@@ -244,9 +244,12 @@ A `PreToolUse` hook runs `scripts/approval_guard.py` before Bash, MCP, Claude fi
 `UserPromptSubmit`. Reads run without approval on both hosts. Calls have these outcomes:
 
 - **Read** runs without approval.
-- **Write** asks once per session for its key, such as `kubectl:apply@(default) dev/web`. Later calls with the same key
-  run without asking.
+- **Write** asks once per session. One approval, the key `write:session`, covers every non-destructive write, whatever
+  its command or target, including MCP, DataGrip, and tabularis writes. The prompt names the write, for example
+  `Write: kubectl apply on (default) dev/web.`
 - **Always** asks every time for destructive or forced actions, existing sensitive CLI reads, and unclassified calls.
+  Its prompt starts with `Asks every time:`. When the call also carries write keys, approving it grants the session
+  write approval too, and the prompt says so; a Codex denial for any call with session keys says it as well.
 - **Sensitive** warns that a call may expose a protected value, recommends `secret_exec.py`, and asks every time.
 - **Request** asks for a bundle of non-destructive write keys before the actual calls.
 - **Secret** is denied on both hosts because the command would print a secret value.
@@ -256,7 +259,7 @@ A `PreToolUse` hook runs `scripts/approval_guard.py` before Bash, MCP, Claude fi
 |---|---|---|---|---|
 | `kubectl`, `oc` | `get`, `describe`, `logs`, `diff`, any call with `--dry-run=client` or `--dry-run=server` | `get secret` with an output format that prints values, `get --raw` on a `secrets` path, `config view --raw`, `create token` | `delete`, `drain`, `--force`, `--prune` | kubeconfig, then context / namespace |
 | `helm` | `list`, `status`, `get notes`, `repo list` | none | `uninstall`, `get all`, `get manifest`, `get values` | kubeconfig, then context / namespace |
-| `az` | `list`, `show`, `exists`, `query`, `version` | `keyvault secret show` and `download`, `list-keys`, `account get-access-token` | `delete`, `purge` | subscription / resource group |
+| `az` | `list`, `show`, `exists`, `query`, `query-*`, `version`, `rest` GET on `https://management.azure.com` | `keyvault secret show` and `download`, `list-keys`, `account get-access-token`, `rest` GET on a Key Vault `/secrets` or `/keys` URL | `delete`, `purge`, `rest` DELETE | subscription / resource group |
 | `terraform`, `tofu` | `plan`, `show`, `validate`, `state list`, `fmt -check`, `output` without `-json` or `-raw` | none | `destroy`, `apply -destroy`, `state rm`, `output -json`, `output -raw`, `state show` | directory : workspace |
 | `aws` | `describe-*`, `list-*`, `get-*` other than secret reads, `s3 ls` | `secretsmanager get-secret-value` and `batch-get-secret-value`, `ssm get-parameter*` with `--with-decryption`, `kms decrypt` | `delete-*`, `terminate-*`, `s3 rm`, `s3 sync --delete` | profile / region |
 | `gcloud`, `gsutil` | the first verb in the command path is `list`, `describe`, `get-*`, `ls`, or `cat` | `secrets versions access`, `auth print-access-token` | `delete`, `gsutil rm`, `gsutil rb` | project |
@@ -266,13 +269,23 @@ A `PreToolUse` hook runs `scripts/approval_guard.py` before Bash, MCP, Claude fi
 | `kustomize` | every call | none | none | none |
 | `mysql`, `mongosh`, `redis-cli` | none | none | every call | none |
 
-A write key is `<cli>:<subcommand>@<target>`, where the subcommand is the words before the first flag. For `kubectl`,
+A write is described by `<cli>:<subcommand>@<target>`, where the subcommand is the words before the first flag. The
+prompt shows it as `<cli> <subcommand> on <target>`, and one `write:session` approval covers every such write. For `kubectl`,
 `oc`, and `helm`, the target is the kubeconfig (`--kubeconfig`, then `KUBECONFIG`, else `(default)`) followed by the
 context and namespace; a context that is not given is read through the same kubeconfig. Any other parseable subcommand
-is a write, so `kubectl apply` and `helm upgrade` ask once per session. A covered command inside an indirectly run
-region (`$(...)`, backticks, `eval`, `xargs`, or `sh -c` with any flag cluster that contains `c`) is always. When such
-a region itself prints a secret, the whole command is denied. A heredoc on a covered command is always. A `command -v`
-lookup runs nothing and is not classified.
+is a write, so `kubectl apply` and `helm upgrade` ask only until the first write is approved for the session. The body
+of a `$(...)` or backtick substitution is classified like a command of its own and merged into the call. A substitution
+whose command verb is an unexpanded variable stays always. A covered command inside an `eval`, `xargs`, or `sh -c` with
+any flag cluster that contains `c` is always. When a region itself prints a secret, the whole command is denied. A
+heredoc on a covered command is always. A heredoc body is data, and is not scanned, only when its command is `cat`,
+`tee`, `head`, `tail`, `wc`, `sort`, `uniq`, `cut`, `tr`, `base64`, `xxd`, `od`, `grep`, `egrep`, `fgrep`, `rg`, `jq`,
+`column`, `fold`, `fmt`, `nl`, `tac`, `rev`, `cmp`, `diff`, `git`, or `gh`, its output is not piped onward, and every
+file it writes ends in a data suffix (`.md`, `.markdown`, `.txt`, `.json`, `.jsonl`, `.yaml`, `.yml`, `.toml`, `.csv`,
+`.tsv`, `.html`, `.htm`, `.xml`, `.patch`, `.diff`, `.log`, `.rst`, `.ini`, `.cfg`, `.conf`) or is `/dev/null`,
+`/dev/stdout`, or `/dev/stderr`. Any other receiver or target keeps the body scanned. Only the substitutions that an
+unquoted delimiter lets the shell run are still classified. A segment whose program word comes from a substitution or
+an unexpanded variable and that names a covered CLI is always. A `command -v` lookup runs nothing and is not
+classified.
 
 A compound command is judged as a whole. A secret segment denies it. When any segment is always, the call asks, and
 its approval covers the always keys (once) and the write keys (session). Otherwise a write asks for its keys, unless a
@@ -290,6 +303,10 @@ a function call, and the option never reaches later commands.
 The guard reads shell files invoked by `bash`, `sh`, `zsh`, `./`, `source`, or `.`, Python `.py` files, Node `.js` and
 `.mjs` files, Makefile recipes for the selected/default target and one level of prerequisites, and the script text in
 `package.json` for `npm`, `pnpm`, or `yarn run <name>`. Files resolve from the event's `cwd` and are limited to 256 KiB.
+A `cd <dir>` moves that base for the later segments only when it runs unconditionally in the current shell: outside
+parentheses, after nothing or `;`, and before nothing, `;`, or `&&`. `$NAME` or `${NAME}` that an earlier standalone
+assignment set is expanded in the path; a prefix assignment (`NAME=value cmd`) never expands its own command's
+arguments. An unassigned variable leaves the script unreadable, so it is always.
 Shell lines and Makefile recipes use the CLI classifier. Python/Node strings starting with a covered CLI and literal
 argv lists are classified too. Reads need no approval; writes combine their keys; destructive, forced, and secret
 calls keep their normal rules. Unreadable or larger files are unclassified. A script naming a covered CLI or importing
@@ -300,17 +317,17 @@ of `KUBECONFIG`, `AWS_PROFILE`, `CLOUDSDK_CORE_PROJECT`, and `DOCKER_CONTEXT`. A
 MCP tool names split at `_`, `-`, and camelCase. Destructive name words always ask. String fields `sql`,
 `statement`, and `queryText`, and a `query` field whose text starts like a SQL statement (a search phrase does not), use
 the DataGrip SQL classifiers: reads run freely, destructive statements always ask,
-and other SQL uses `mcp:session`. Execution name words (`repl`, `exec`, `execute`, `eval`, `run`, `code`, `script`,
+and other SQL is a session write. Execution name words (`repl`, `exec`, `execute`, `eval`, `run`, `code`, `script`,
 `command`) are writes unless their input contains a destructive word, which always asks. For other names, a write
-word takes precedence; names with only read verbs are reads, and names with no known verb are writes. One
-`mcp:session` approval covers every non-destructive MCP write for that session, including DataGrip and tabularis writes.
+word takes precedence; names with only read verbs are reads, and names with no known verb are writes. The
+session write approval covers every non-destructive MCP write for that session, including DataGrip and tabularis writes.
 
 For `mcp__tabularis__run_query`, `connection_id` resolves an ID or name from tabularis' `connections.json`.
 The config directory is `~/Library/Application Support/tabularis` on macOS, `$XDG_CONFIG_HOME/tabularis` or
 `~/.config/tabularis` on Linux, and `%APPDATA%\tabularis` on Windows. `HEI5ENBUG_TABULARIS_DIR` overrides it for tests.
 The guard extracts only `id`, `name`, and `params.driver`; it never prints other connection fields or passwords.
 `postgresql` uses the PostgreSQL classifiers; `sqlserver` and `sqlserver-entra` use the SQL Server classifiers.
-Reads run without approval; non-destructive writes use `mcp:session`. A name containing `승인`, another driver, an
+Reads run without approval; non-destructive writes are session writes. A name containing `승인`, another driver, an
 unknown connection, or an unreadable file always asks. So do raw `delete`, `drop`, or `truncate` words and statements
 led by `DO`, `EXEC`, `EXECUTE`, or `CALL`. These queries use `sql:always:tabularis:<id>:<digest>` keys. Other tabularis
 tools keep the name rules.
@@ -328,12 +345,13 @@ secret_exec.py ...”; Codex denies with a one-time code. These approvals never 
 Prepare a bundle before running writes:
 
 ```bash
-python3 <plugin root>/scripts/approval_guard.py request --key 'kubectl:apply@(default) dev/web' --key mcp:session --why 'Deploy the requested change and update the issue'
+python3 <plugin root>/scripts/approval_guard.py request --key write:session --why 'Deploy the requested change and update the issue'
 ```
 
 Claude asks showing every key and the reason, then records the keys in `PostToolUse`. Codex denies with one code for
 the bundle and records it only when the user types `승인 <CODE>`. The command prints the keys and exits 0; it never
-writes approval state itself. Keys must be `<cli>:<kind>@<target>` or `mcp:session`. Destructive or forced kinds,
+writes approval state itself. The key is `write:session`; the older `<cli>:<kind>@<target>` and `mcp:session` forms are still accepted and approve
+the same session write approval. Destructive or forced kinds,
 sensitive reads, unclassified calls, `sql:always:*`, and destructive `mcp:<tool>` keys cannot be pre-approved.
 
 On Codex, a call that needs approval is denied with a code:
@@ -394,17 +412,17 @@ Codex, to turn the guard off. In Codex, trust the hooks in `/hooks`.
 ### Session approvals
 
 On Claude Code only, the mod lets you approve certain outward-facing writes once per session. For each Bash and MCP tool
-call, its `tool.check` hook classifies the action and asks the first time a covered kind runs in the session. When the
+call, its `tool.check` hook classifies the action and asks the first time a covered kind runs in the session. The prompt reads `Write: <what>. Approve once; git tag/push,
+gh release, and extra-directory writes then run without asking for the rest of this session.` When the
 call succeeds, its `tool.call` hook reuses that classification for the same tool call instead of classifying it again,
-and records the approved kind in the mod store (`$.store`) under the session ID, so later actions of the same kind in
-that session run without a prompt. It covers creating git tags; pushing tags to a
+and records one key, `write:session`, in the mod store (`$.store`) under the session ID, so every later covered action
+in that session runs without a prompt. It covers creating git tags; pushing tags to a
 configured remote; `gh release create` and `gh release edit` with only the tag and the flags `--title`, `--notes`,
 `--target`, `--generate-notes`, `--notes-from-tag`, `--latest`, `--draft`, `--prerelease`, `--verify-tag`; and MCP tools
 and a Codex worker's access to a directory outside the session folder (`codex exec`
-with `--add-dir` or `-C`, or `python3 <plugin>/scripts/role_runner.py worker` or a writing capability with `--add-dir`),
-approved separately for each directory and asked once per session. MCP tools are covered by the [Approval
-guard](#approval-guard) on both hosts, and the DataGrip query tool by the DataGrip query guard. Each tool or command
-kind is approved separately.
+with `--add-dir` or `-C`, or `python3 <plugin>/scripts/role_runner.py worker` or a writing capability with `--add-dir`).
+MCP tools are covered by the [Approval guard](#approval-guard) on both hosts, and the DataGrip query tool by the
+DataGrip query guard. The mod and the guard keep separate session approvals, so one session can ask once in each.
 
 Destructive actions always ask: force pushes, deleting remote branches or tags, deleting a tag, `gh release delete`,
 `gh repo delete`. Destructive MCP tools always ask through the [Approval guard](#approval-guard).
@@ -428,8 +446,8 @@ approval.
 ## Feature options
 
 Seven boolean features can be turned off, and each defaults to on. The implementation worker route and the review
-model are string options in Claude Code. Choose `codex`, `haiku`, or `sonnet` for the route; an unset or unrecognized
-value uses `sonnet`. The review model runs independent validation and skill review roles at `xhigh`. Choose one of the
+model are string options in Claude Code. Choose `auto`, `codex`, `haiku`, `sol`, or `sonnet` for the route; an unset
+or unrecognized value uses `auto`, where the main session picks the worker per assignment. The review model runs independent validation and skill review roles at `xhigh`. Choose one of the
 seven pinned model IDs; an unset or unrecognized value uses `gpt-6-astra`. Set plugin options in `/config` or with
 `claude plugin configure`. On Codex, set environment variables before starting the
 session. A value of `false`, `0`, `off`, or `no`, in any letter case, turns a boolean feature off.
@@ -439,7 +457,7 @@ session. A value of `false`, `0`, `off`, or `no`, in any letter case, turns a bo
 | Block built-in subagents | `agent_guard` | `HEI5ENBUG_AGENT_GUARD` |
 | One-time session approval | `session_approval` | Not applicable |
 | Pin role models | `role_pinning` | Not applicable |
-| Implementation worker route | `implementation_worker` (`codex`, `haiku`, or `sonnet`) | Not applicable |
+| Implementation worker route | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, or `sonnet`) | Not applicable |
 | Review model | `review_model` (a pinned model ID, default `gpt-6-astra`) | Not applicable |
 | Response language guard | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip query guard | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
@@ -554,7 +572,7 @@ section of the model routing contract. The five capabilities are `investigation`
 | Host | Implementation agent | Model and effort |
 |---|---|---|
 | Codex | Plugin `worker` role, verified from its rollout record | `gpt-5.6-luna`, `xhigh` |
-| Claude Code | `hei5enbug-agent-setup:sonnet-worker` (default, `implementation_worker` is `sonnet`); `role_runner.py worker` on `codex` or on request; `hei5enbug-agent-setup:worker` for Haiku on `haiku` or on request, with fallback `role_runner.py worker` | `claude-sonnet-5-5`, `high` (default); `gpt-5.6-luna`, `xhigh`; `claude-haiku-5-5`, `high`; fallback `gpt-5.6-luna`, `xhigh` |
+| Claude Code | With `implementation_worker` `auto` (default), the main session picks per assignment: `hei5enbug-agent-setup:worker` for easy work; `role_runner.py implementation --fallback` for normal or hard work; `hei5enbug-agent-setup:sonnet-worker` instead of Sol when Codex weekly usage is above 70 percent or Sol is unavailable. A fixed setting forces `sonnet`, `sol`, `codex` (`role_runner.py worker`), or `haiku` (fallback `role_runner.py worker`) | `claude-haiku-5-5`, `high` (easy); `gpt-6.1-sol`, `high` (normal or hard); `claude-sonnet-5-5`, `high`; `gpt-5.6-luna`, `xhigh` (`codex`) |
 | Codex, designer | Plugin `designer` role with the pinned model, verified from its rollout record; fallback `role_runner.py agent --name designer --fallback` | `gpt-6-astra`, `xhigh`; fallback `claude-opus-5-5`, `xhigh` |
 | Claude Code, designer | `hei5enbug-agent-setup:designer`, verified from its subagent record or the mod's role pinning; fallback `role_runner.py design` | `claude-opus-5-5`, `xhigh`; fallback `gpt-6-astra`, `xhigh` |
 | Codex, local scout | Plugin `scout` role, verified from its rollout record | `gpt-5.6-luna`, `xhigh` |
@@ -594,12 +612,13 @@ model, effort, quota, permission to delegate, or settings evidence is unavailabl
 that limitation and continues authorized work after stopping any affected worker. It preserves partial work,
 user settings, permissions, and acceptance checks. It never silently substitutes a worker model.
 
-After a substantial change and its checks are ready, the main session recommends one optional independent review
-under [independent model validation](instructions/independent-model-validation.md). On Claude Code, the `review_model`
+After a substantial change and its checks are ready, the main session runs one independent review under
+[independent model validation](instructions/independent-model-validation.md), without asking while the Codex weekly
+usage that `scripts/codex_usage.py` reads is at most 70 percent. On Claude Code, the `review_model`
 setting (default `gpt-6-astra`) reviews a Claude-authored result, and a GPT-authored result goes to `claude-fable-5-1`;
 Codex uses its mapping in that file. Every reviewer runs at `xhigh`. When the configured reviewer shares the author's
-model family, the result says the review is not cross-family. Approval is required for the particular result, and a
-decline is not asked again. An unavailable reviewer, or a role runner exit code 3 or 4, means independent validation
+model family, the result says the review is not cross-family. When the usage is above 70 percent or unknown, or the
+reviewer runs on Claude, approval is required for the particular result, and a decline is not asked again. An unavailable reviewer, or a role runner exit code 3 or 4, means independent validation
 was not performed; no other model substitutes for it. Routine author inspection and tests always remain.
 
 Codex requires a direct user request or applicable `AGENTS.md` or skill instructions to authorize subagents;
@@ -738,7 +757,7 @@ execution-path isolation; semantic equivalence still requires human or model rev
 | [`deep-interview`](skills/deep-interview/SKILL.md) | Runs a Socratic interview that scores requirement ambiguity after every answer and will not move to execution until it drops below the threshold. [Korean guide](skills/deep-interview/SKILL.ko.md). |
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | A shared design standard so flow charts built in SVG, HTML/CSS, Figma, or draw.io all read as one design system. [Korean guide](skills/flowchart-design/SKILL.ko.md). |
 | [`docs-rewrite`](skills/docs-rewrite/SKILL.md) | Rewrites existing text so it reads naturally while every claim, number, and level of certainty stays identical, and repairs AI-sounding Korean. [Korean guide](skills/docs-rewrite/SKILL.ko.md). |
-| [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Converts Markdown, HTML, PDF, DOCX, and Google Docs content into Confluence pages, preserves document structure and assets, and keeps pages synchronized with source revisions. [Korean guide](skills/document-to-confluence/SKILL.ko.md). |
+| [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Converts Markdown, HTML, PDF, DOCX, and Google Docs content into Confluence pages, preserves document structure and assets, and keeps pages synchronized with source revisions without losing web edits or inline comments. [Korean guide](skills/document-to-confluence/SKILL.ko.md). |
 | [`session-retro`](skills/session-retro/SKILL.md) | Reviews a day's Claude Code and Codex sessions of a repository with read-only scouts, turns corrections, failures, and repeated work into evidence-backed skill improvements per plugin, asks the open decisions, and writes plans on request. [Korean guide](skills/session-retro/SKILL.ko.md). |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | Creates, tests, and packages agent skills through a draft → test → review → improve loop. [Korean guide](skills/skill-builder/SKILL.ko.md). |
 | [`orca-plugin-refresh`](skills/orca-plugin-refresh/SKILL.md) | Updates this plugin safely offline and applies an installed version to idle Orca-managed Claude Code and Codex sessions without restarting them. [Korean guide](skills/orca-plugin-refresh/SKILL.ko.md). |

@@ -262,6 +262,86 @@
         "Each h2 keeps exactly one blank paragraph before it.",
         "The 개요 heading and blank paragraphs are not reported as source deletions, and no live save or readback is claimed."
       ]
+    },
+    {
+      "id": 19,
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Republish `evals/files/web-edit-case/source.md` to its existing page. `evals/files/web-edit-case/last-published.html` is the baseline you kept at the last publish, and `evals/files/web-edit-case/current-page.html` is the page now. Prepare the updated source, a complete proposed body, and an operation plan; do not claim that anything was saved.",
+      "expected_output": "The run compares the current page with the baseline and finds that a web edit deleted the 재무팀 sentence, which the source still contains. It ports that deletion into the source, so the updated source and the proposed body do not restore the sentence. It applies the source's new 처리 흐름 sentence. The report lists the ported edit, the plan keeps the saved body as the next baseline, and no save is claimed.",
+      "files": [
+        "evals/files/web-edit-case/source.md",
+        "evals/files/web-edit-case/last-published.html",
+        "evals/files/web-edit-case/current-page.html"
+      ],
+      "expectations": [
+        "Neither the updated source nor the proposed body contains \"내보낸 파일은 재무팀이 아침에 확인한다.\"",
+        "The proposed body contains \"실패하면 같은 키로 다시 내보낸다.\"",
+        "The report lists the deleted sentence as a ported web edit.",
+        "The plan keeps the saved body, which has no kept web edit, as the next baseline.",
+        "No save or readback is claimed."
+      ]
+    },
+    {
+      "id": 20,
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Republish `evals/files/web-edit-case/source.md` to its existing page. `evals/files/web-edit-case/last-published.html` is the baseline you kept at the last publish, and `evals/files/web-edit-case/conflict-page.html` is the page now. Prepare what you would do; do not claim that anything was saved.",
+      "expected_output": "The run finds that the web edit and the source both changed the 처리 흐름 paragraph differently. It stops before saving and asks the user which version to keep, showing both texts. It does not propose a body that silently overwrites the web edit.",
+      "files": [
+        "evals/files/web-edit-case/source.md",
+        "evals/files/web-edit-case/last-published.html",
+        "evals/files/web-edit-case/conflict-page.html"
+      ],
+      "expectations": [
+        "The run asks the user which 처리 흐름 text to keep and shows both texts.",
+        "No proposed save overwrites \"내보내기는 원장을 주 단위로 읽는다.\" without the user's answer."
+      ]
+    },
+    {
+      "id": 21,
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Republish `evals/files/comment-marker-case/source.md` to the page whose current body is `evals/files/comment-marker-case/current-page.html`. Its inline comments are listed in `evals/files/comment-marker-case/comments.json`. The page has no web edits since your last publish. Prepare a complete proposed body and an operation plan; do not claim that anything was saved.",
+      "expected_output": "The proposed body carries all three marker references, including the resolved comment. `ref-a` wraps the unchanged sentence. Because the source rewrote the `ref-b` sentence with the same meaning, `ref-b` wraps the new sentence and the report names the move. The source also rewrote the `ref-c` sentence, so `ref-c` wraps the new inline code text and the text piece after it with the same reference, and the report names that move. The plan verifies after saving that every reference is in the stored body and that no comment shows as deleted content.",
+      "files": [
+        "evals/files/comment-marker-case/source.md",
+        "evals/files/comment-marker-case/current-page.html",
+        "evals/files/comment-marker-case/comments.json"
+      ],
+      "expectations": [
+        "The proposed body contains the references ref-a, ref-b, and ref-c, and ref-a still wraps \"알림은 푸시로 보낸다.\"",
+        "ref-b wraps \"실패한 발송은 다섯 번까지 다시 보낸다.\", and the report names this move.",
+        "Because the source rewrote the ref-c sentence as \"`retry_key`를 같은 값으로 쓴다\", ref-c wraps the inline code text and the text piece after it with the same reference, and the report names this move.",
+        "The plan checks after saving that every reference is in the stored body and that no comment appears as deleted content.",
+        "No save or readback is claimed."
+      ]
+    },
+    {
+      "id": 22,
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Republish `evals/files/web-edit-case/source.md` to its existing page. The current page is identical to `evals/files/web-edit-case/last-published.html`, the baseline you kept at the last publish. Prepare a complete proposed body and an operation plan; do not claim that anything was saved.",
+      "expected_output": "The comparison finds no web edit, so the run ports nothing, reports no ported edit, and proposes the body built from the source. The 재무팀 sentence stays because the source contains it and no web edit removed it. No save is claimed.",
+      "files": [
+        "evals/files/web-edit-case/source.md",
+        "evals/files/web-edit-case/last-published.html"
+      ],
+      "expectations": [
+        "The report says that no web edit was found and lists no ported edit.",
+        "The proposed body follows the source and contains \"내보낸 파일은 재무팀이 아침에 확인한다.\"",
+        "No save or readback is claimed."
+      ]
+    },
+    {
+      "id": 23,
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Republish a Google Doc to its existing page. You can read the Google Doc but not edit it, and its exported text is `evals/files/web-edit-case/source.md`. `evals/files/web-edit-case/last-published.html` is the baseline you kept at the last publish, and `evals/files/web-edit-case/current-page.html` is the page now. Prepare a complete proposed body, the version message, and an operation plan that includes what you keep for the next republish; do not claim that anything was saved.",
+      "expected_output": "The run compares the current page with the baseline and finds that a web edit deleted the 재무팀 sentence. Because the Google Doc cannot be edited, it keeps the deletion in the proposed body, counts it as an intentional difference in the fidelity check, leaves the source unchanged, and reports that the source still contains the sentence. The version message names the kept web edit. The next baseline is the saved body without the kept edit, so it still contains the 재무팀 sentence and the next republish finds the deletion again. It applies the source's new 처리 흐름 sentence, and no save is claimed.",
+      "files": [
+        "evals/files/web-edit-case/source.md",
+        "evals/files/web-edit-case/last-published.html",
+        "evals/files/web-edit-case/current-page.html"
+      ],
+      "expectations": [
+        "The proposed body does not contain \"내보낸 파일은 재무팀이 아침에 확인한다.\"",
+        "The proposed body contains \"실패하면 같은 키로 다시 내보낸다.\"",
+        "Neither the Google Doc nor `source.md` is edited, no step of the plan edits them, and the report says that the source still contains the deleted sentence.",
+        "The version message names the kept web edit.",
+        "The baseline kept for the next republish contains \"내보낸 파일은 재무팀이 아침에 확인한다.\", so the next comparison finds the deletion again.",
+        "No save or readback is claimed."
+      ]
     }
   ]
 }

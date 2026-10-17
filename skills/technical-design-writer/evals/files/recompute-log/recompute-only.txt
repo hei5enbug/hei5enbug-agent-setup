@@ -1,0 +1,8 @@
+run: research-recompute
+host: local workstation
+input rows: 77,000,000
+stage  name                     minutes
+01     recompute-read-ledger    9.0
+02     recompute-balances       10.0
+03     recompute-write          5.0
+total (stages 01-03): 24.0 minutes

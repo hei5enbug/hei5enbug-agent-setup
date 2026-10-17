@@ -5,24 +5,31 @@ technical design documents, RFCs, and completed implementation changes.
 
 ## Confirmation gate
 
-Independent validation runs only when the user approves it for the current deliverable. For a requested plan,
-design, or RFC, offer review after the draft is complete. For implementation, recommend it once after the
-change and its checks are ready when behavior, public contracts, security, concurrency, migrations, or several
-components materially change. Skip routine small edits unless the user requests review.
+For a requested plan, design, or RFC, review once the draft is complete. For implementation, review once after
+the change and its checks are ready when behavior, public contracts, security, concurrency, migrations, or
+several components materially change. Skip routine small edits unless the user requests review.
 
-Ask for every deliverable that lacks existing approval: name the reviewer model and reasoning effort below
-in one short question and wait for the answer. Reuse explicit approval for this result; agreement to the
-general workflow is not approval to invoke a reviewer. Finish all work independent of that answer first.
-If the required reviewer is already known to be unavailable, report the limitation and finish without a call.
+When the reviewer below runs on Codex, the review runs without a question while the Codex weekly usage is at
+most 70 percent. Read that usage with `python3 <Source directory>/scripts/codex_usage.py`, where
+`<Source directory>` is the line in the session context. Its `weekly_used_percent` is a number, or `null` when
+the usage is unknown.
+
+Otherwise, with usage above 70 percent or unknown, or with a reviewer that runs on Claude, independent validation
+runs only when the user approves it for the current deliverable. Ask for every deliverable that lacks existing
+approval: name the reviewer model and reasoning effort below in one short question and wait for the answer.
+Reuse explicit approval for this result; agreement to the general workflow is not approval to invoke a
+reviewer. Finish all work independent of that answer first. If the required reviewer is already known to be
+unavailable, report the limitation and finish without a call.
 
 When the user declines, or the session cannot obtain an answer, skip the review and finish. Keep the
 deliverable exactly as drafted, write nothing about the skipped review inside it, and say in the reply that
-independent validation did not run. Do not ask again for the same draft.
+independent validation did not run. Do not ask again for the same draft, and do not run an automatic review of a
+draft the user declined.
 
 ## Reviewer selection
 
-After the user approves the gate above, send the completed draft to exactly one reviewer that the mapping
-below selects, in a read-only session. Give the reviewer the frozen intent, relevant authoritative evidence,
+Once the gate above passes, by the usage rule or by the user's approval, send the completed draft to
+exactly one reviewer that the mapping below selects, in a read-only session. Give the reviewer the frozen intent, relevant authoritative evidence,
 and the complete draft. The reviewer returns findings only; the authoring session keeps every final
 decision.
 
@@ -35,7 +42,7 @@ Use this model mapping:
 
 Select the actual authoring model family, not the execution host. GPT authoring in Claude Code follows the
 GPT row. If both families materially contribute, record their contribution and use the final authoring
-family for the one approved reviewer. Do not claim independence from every contributor or add review calls.
+family for the one reviewer. Do not claim independence from every contributor or add review calls.
 When the configured reviewer is in the authoring family, say in the result that the review is not
 cross-family.
 

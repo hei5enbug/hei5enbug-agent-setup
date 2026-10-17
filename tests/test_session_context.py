@@ -355,16 +355,31 @@ class SessionContextTest(unittest.TestCase):
                 self.assertEqual(result.stdout, "")
                 self.assertIn("work-efficiency.md", result.stderr)
 
-    def test_Claude_세션은_기본_구현_경로로_Sonnet을_알린다(self):
-        """구현 worker 옵션이 비어 있으면 Claude 세션 컨텍스트가 기본 Sonnet 경로 한 줄을 담는다."""
+    def test_Claude_세션은_기본_구현_경로로_Auto를_알린다(self):
+        """구현 worker 옵션이 없거나 비어 있으면 Claude 세션 컨텍스트가 기본 Auto 경로 한 줄을 담는다."""
         # Given
-        host = "claude"
+        options = ({}, {"CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER": ""})
+
+        for extra_env in options:
+            with self.subTest(extra_env=extra_env):
+                # When
+                context = self.context(self.run_hook("claude", extra_env=extra_env))
+
+                # Then
+                self.assertIn("Implementation worker route: Auto (`auto`).", context)
+                self.assertEqual(context.count("Implementation worker route:"), 1)
+                self.assertLess(len(context.encode("utf-8")), 9000)
+
+    def test_auto_옵션은_Auto_경로를_알린다(self):
+        """대소문자와 앞뒤 공백을 정규화한 auto 옵션은 Auto 경로 한 줄을 담는다."""
+        # Given
+        extra_env = {"CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER": " AUTO "}
 
         # When
-        context = self.context(self.run_hook(host))
+        context = self.context(self.run_hook("claude", extra_env=extra_env))
 
         # Then
-        self.assertIn("Implementation worker route: Sonnet (`sonnet`).", context)
+        self.assertIn("Implementation worker route: Auto (`auto`).", context)
         self.assertEqual(context.count("Implementation worker route:"), 1)
         self.assertLess(len(context.encode("utf-8")), 9000)
 
@@ -395,9 +410,9 @@ class SessionContextTest(unittest.TestCase):
         self.assertLess(len(context.encode("utf-8")), 9000)
 
     def test_sonnet_옵션은_sonnet_worker_경로를_알린다(self):
-        """sonnet 옵션은 sonnet-worker 경로 한 줄을 담는다."""
+        """대소문자와 앞뒤 공백을 정규화한 sonnet 옵션은 sonnet-worker 경로 한 줄을 담는다."""
         # Given
-        extra_env = {"CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER": "sonnet"}
+        extra_env = {"CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER": " SoNnEt "}
 
         # When
         context = self.context(self.run_hook("claude", extra_env=extra_env))
@@ -407,8 +422,21 @@ class SessionContextTest(unittest.TestCase):
         self.assertEqual(context.count("Implementation worker route:"), 1)
         self.assertLess(len(context.encode("utf-8")), 9000)
 
-    def test_알_수_없는_옵션은_Sonnet_경로를_알린다(self):
-        """알 수 없는 구현 worker 옵션은 안전하게 기본 Sonnet 경로 한 줄을 담는다."""
+    def test_sol_옵션은_Sol_경로를_알린다(self):
+        """대소문자와 앞뒤 공백을 정규화한 sol 옵션은 Sol 경로 한 줄을 담는다."""
+        # Given
+        extra_env = {"CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER": " SoL "}
+
+        # When
+        context = self.context(self.run_hook("claude", extra_env=extra_env))
+
+        # Then
+        self.assertIn("Implementation worker route: Sol (`sol`).", context)
+        self.assertEqual(context.count("Implementation worker route:"), 1)
+        self.assertLess(len(context.encode("utf-8")), 9000)
+
+    def test_알_수_없는_옵션은_Auto_경로를_알린다(self):
+        """알 수 없는 구현 worker 옵션은 기본 Auto 경로 한 줄을 담는다."""
         # Given
         extra_env = {"CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER": "unknown"}
 
@@ -416,7 +444,7 @@ class SessionContextTest(unittest.TestCase):
         context = self.context(self.run_hook("claude", extra_env=extra_env))
 
         # Then
-        self.assertIn("Implementation worker route: Sonnet (`sonnet`).", context)
+        self.assertIn("Implementation worker route: Auto (`auto`).", context)
         self.assertEqual(context.count("Implementation worker route:"), 1)
         self.assertLess(len(context.encode("utf-8")), 9000)
 

@@ -77,7 +77,7 @@ READ_REASON = "Read-only call; it runs without approval."
 
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 COVERED_WORD = re.compile(r"(?<![\w-])(?:" + "|".join(sorted(COVERED, key=len, reverse=True)) + r")(?![\w-])")
-OPAQUE_CONSTRUCT = re.compile(r"\$\(|`|\b(?:eval|xargs)\b|\b(?:sh|bash|zsh)\b[^;&|\n]*?\s-[A-Za-z]*c[A-Za-z]*\b")
+OPAQUE_CONSTRUCT = re.compile(r"\b(?:eval|xargs)\b|\b(?:sh|bash|zsh)\b[^;&|\n]*?\s-[A-Za-z]*c[A-Za-z]*\b")
 SHELL_C_FLAG = re.compile(r"-[A-Za-z]*c[A-Za-z]*")
 GUARD_SCRIPTS = frozenset({"approval_guard.py", "approval_state.py", "datagrip_guard.py"})
 GUARD_MODULES = frozenset({"approval_guard", "approval_state", "datagrip_guard"})
@@ -129,6 +129,66 @@ def _operator_at(text, index):
     return None
 
 
+def _substitution_end(text, start):
+    if text[start] == "`":
+        index = start + 1
+        while index < len(text):
+            if text[index] == "\\":
+                index += 2
+            elif text[index] == "`":
+                return index + 1
+            else:
+                index += 1
+        raise ParseError("unterminated backtick substitution")
+    index, nesting, quote = start + 2, 1, None
+    while index < len(text):
+        char = text[index]
+        if char == "\\" and quote != "'":
+            index += 2
+            continue
+        if quote == "'":
+            if char == "'":
+                quote = None
+        elif text.startswith("$(", index) or char == "`":
+            index = _substitution_end(text, index)
+            continue
+        elif char in ("'", '"'):
+            if quote == char:
+                quote = None
+            elif quote is None:
+                quote = char
+        elif quote is None:
+            nesting += {"(": 1, ")": -1}.get(char, 0)
+            if nesting == 0:
+                return index + 1
+        index += 1
+    raise ParseError("unterminated command substitution")
+
+
+def _substitution_spans(text):
+    index, quote = 0, None
+    while index < len(text):
+        char = text[index]
+        if char == "\\" and quote != "'":
+            index += 2
+            continue
+        if quote == "'":
+            if char == "'":
+                quote = None
+        elif text.startswith("$(", index) or char == "`":
+            end = _substitution_end(text, index)
+            offset = 2 if char == "$" else 1
+            yield index, end, text[index + offset:end - 1]
+            index = end
+            continue
+        elif char in ("'", '"'):
+            if quote == char:
+                quote = None
+            elif quote is None:
+                quote = char
+        index += 1
+
+
 def _lex(text):
     """Return (kind, value, start, end) tokens: words are unquoted text, ops are shell operators."""
     tokens = []
@@ -157,7 +217,11 @@ def _lex(text):
         value = []
         while index < len(text) and text[index] not in " \t\r\n" and not _operator_at(text, index):
             char = text[index]
-            if char == "\\":
+            if text.startswith("$(", index) or char == "`":
+                end = _substitution_end(text, index)
+                value.append(text[index:end])
+                index = end
+            elif char == "\\":
                 if text.startswith("\n", index + 1):
                     index += 2
                     continue
@@ -179,6 +243,11 @@ def _lex(text):
                 while True:
                     if index >= len(text):
                         raise ParseError("unterminated double quote")
+                    if text.startswith("$(", index) or text[index] == "`":
+                        end = _substitution_end(text, index)
+                        value.append(text[index:end])
+                        index = end
+                        continue
                     if text[index] == '"':
                         index += 1
                         break
@@ -201,6 +270,7 @@ def _lex(text):
 
 def tokenize(text):
     """Split a command at separators into segments with their words and redirections."""
+    text = _heredoc_data(text)
     groups = [[]]
     for token in _lex(text):
         if token[0] == "op" and token[1] in SEPARATOR_OPERATORS:
@@ -389,7 +459,7 @@ def _helm_rules(kind, args, env, cwd):
 
 
 AZ_READ_WORDS = frozenset({"list", "show", "exists", "query"})
-AZ_READ_PREFIXES = ("get-", "list-", "show-", "check-")
+AZ_READ_PREFIXES = ("get-", "list-", "show-", "check-", "query-")
 AZ_READ_PATHS = (("find",), ("version",), ("account", "show"), ("account", "list"))
 AZ_SECRET_PATHS = (
     ("keyvault", "secret", "show"), ("keyvault", "secret", "download"), ("keyvault", "key", "download"),
@@ -404,6 +474,19 @@ def _az_rules(kind, args, env, cwd):
         any(word in AZ_READ_WORDS or word.startswith(AZ_READ_PREFIXES) for word in kind)
         or _matches(kind, AZ_READ_PATHS) or _has_flag(args, "--version")
     )
+    method = (option_value(args, "-m", ("--method",)) or "").upper()
+    rest = kind[:1] == ["rest"]
+    if rest:
+        url = option_value(args, "-u", ("--url", "--uri")) or ""
+        lowered = url.lower()
+        parsed = urlsplit(lowered)
+        vault_secret = ((parsed.hostname or "").endswith(".vault.azure.net")
+                        and re.search(r"/(?:secrets|keys)(?:/|$)", parsed.path))
+        secret = secret or (method == "GET" and bool(vault_secret))
+        read = (method == "GET" and lowered.startswith("https://management.azure.com")
+                and "$" not in url and "`" not in url
+                and not any(word in lowered for word in (
+                    "secret", "listkeys", "list-keys", "connectionstring", "listcredentials")))
 
     def target():
         subscription = option_value(args, longs=("--subscription",)) or _lookup(
@@ -411,7 +494,7 @@ def _az_rules(kind, args, env, cwd):
         group = option_value(args, "-g", ("--resource-group",)) or "(default)"
         return f"{subscription}/{group}"
 
-    return Rules(secret=secret, read=read, target=target)
+    return Rules(secret=secret, always=rest and method == "DELETE", read=read, target=target)
 
 
 TF_READS = (
@@ -557,15 +640,17 @@ def classify_cli(cli, args, env, cwd, command):
             or (cli in ("kubectl", "oc", "docker", "podman") and "exec" in kind
                 and any(os.path.basename(arg) in ("env", "printenv") for arg in args))):
         return _sensitive(command)
+    rules = CLI_RULES[cli](kind, args, env, cwd) if cli in CLI_RULES else Rules()
+    if rules.secret:
+        return Outcome("secret", [], [])
+    if kind and (re.search(r"\$(?:[A-Za-z_]|\{)", kind[0]) or "$(" in kind[0] or "`" in kind[0]):
+        return _unclassified(cli, command)
     if cli == "kustomize":
         return _read()
     if cli in ("psql", "sqlcmd"):
         return _classify_sql(cli, args, env, cwd, command)
     if cli not in CLI_RULES:
         return _unclassified(cli, command)
-    rules = CLI_RULES[cli](kind, args, env, cwd)
-    if rules.secret:
-        return Outcome("secret", [], [])
     if rules.dry_run:
         return _read()
     if rules.always or _destructive(kind):
@@ -791,7 +876,19 @@ def _code_commands(content, python):
             or re.match(r"/[^\s]+/(?:" + "|".join(COVERED) + r")(?:\s|$)", command.lstrip())]
 
 
-def _classify_script(words, cwd, depth, env):
+def _expand_path_variables(value, variables):
+    return re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)",
+                  lambda match: variables.get(match[1] or match[2], match[0]), value)
+
+
+def _script_path(path, cwd, variables):
+    expanded = _expand_path_variables(path, variables)
+    if "$" in expanded or "`" in expanded:
+        return None
+    return (Path(cwd) / os.path.expanduser(expanded)).resolve()
+
+
+def _classify_script(words, cwd, depth, env, variables=None):
     cli = os.path.basename(words[0])
     args = words[1:]
     path = None
@@ -813,7 +910,9 @@ def _classify_script(words, cwd, depth, env):
         path, mode = "package.json", "package"
     if path is None:
         return None
-    resolved = _resolved(path, cwd)
+    resolved = _script_path(path, cwd, variables or {})
+    if resolved is None:
+        return _script_unknown(path, words, env, "unresolved path")
     if depth >= MAX_DEPTH:
         return _script_unknown(resolved, words, env, "recursion limit")
     try:
@@ -828,7 +927,7 @@ def _classify_script(words, cwd, depth, env):
         elif mode in ("python", "node"):
             commands = _code_commands(content, mode == "python")
         else:
-            commands = [line for line in content.replace("\\\n", "").splitlines()
+            commands = [line for line in _heredoc_data(content).replace("\\\n", "").splitlines()
                         if line.strip() and not line.lstrip().startswith("#")]
     except (OSError, ValueError, SyntaxError, KeyError, TypeError):
         return _script_unknown(resolved, words, env, locals().get("content", "unreadable"))
@@ -840,12 +939,14 @@ def _classify_script(words, cwd, depth, env):
     if covered:
         return _aggregate(covered, [])
     inspected = "\n".join(commands) if mode in ("make", "package") else content
+    if mode == "shell":
+        inspected = _heredoc_data(inspected)
     if COVERED_WORD.search(inspected) or SDK_IMPORT.search(inspected):
         return _script_unknown(resolved, words, env, content)
     return Outcome("pass", [], [])
 
 
-def _classify_argv(words, heredoc, cwd, depth, command, inherited_env=None):
+def _classify_argv(words, heredoc, cwd, depth, command, inherited_env=None, variables=None):
     helper = _helper_args(words)
     if helper is not None:
         return _classify_helper(helper, cwd, depth, command, inherited_env)
@@ -855,19 +956,28 @@ def _classify_argv(words, heredoc, cwd, depth, command, inherited_env=None):
             return _sensitive(command)
         return Outcome("pass", [], [])
     cli = os.path.basename(stripped[0])
+    assignments = {key: _expand_path_variables(value, variables or {}) for key, value in assignments.items()}
     env = {**(os.environ if inherited_env is None else inherited_env), **assignments}
     if cli == "printenv":
         return _sensitive(command)
     if cli in FILE_READS and any(_protected_path(arg, cwd, env) for arg in stripped[1:] if not arg.startswith("-")):
         return _sensitive(command)
-    script = _classify_script(stripped, cwd, depth, env)
+    script = _classify_script(stripped, cwd, depth, env, variables)
     if script is not None:
         return script
+    if heredoc and (cli in COVERED or COVERED_WORD.search(command)):
+        return _unclassified(cli, command)
     if cli not in COVERED:
         return Outcome("pass", [], [], cli)
-    if heredoc:
-        return _unclassified(cli, command)
-    return classify_cli(cli, stripped[1:], env, cwd, command)
+    args = stripped[1:]
+    if cli == "az" and subcommand_words(args)[:1] == ["rest"]:
+        args = list(args)
+        for index, arg in enumerate(args):
+            if index and args[index - 1] in ("--url", "--uri", "-u"):
+                args[index] = _expand_path_variables(arg, variables or {})
+            elif arg.startswith(("--url=", "--uri=", "-u")):
+                args[index] = _expand_path_variables(arg, variables or {})
+    return classify_cli(cli, args, env, cwd, command)
 
 
 def _merge(kind, verdicts, extra_writes=()):
@@ -926,23 +1036,118 @@ def _blank(text, spans):
     return "".join(chars)
 
 
-def _substitution_regions(text):
-    """Yield the bodies of `$(...)` and backtick substitutions."""
-    for match in re.finditer(r"\$\(|`", text):
-        start = match.end()
-        if match.group(0) == "$(":
-            depth, end = 1, start
-            while end < len(text) and depth:
-                depth += {"(": 1, ")": -1}.get(text[end], 0)
-                end += 1
-            yield text[start:end - 1] if depth == 0 else text[start:]
+def _expansion_regions(text, start, end):
+    """Spans of the `$(...)` and backtick substitutions that the shell runs inside an unquoted heredoc body."""
+    regions = []
+    index = start
+    while index < end:
+        char = text[index]
+        if char == "\\":
+            index += 2
+        elif char == "`" or text.startswith("$(", index):
+            try:
+                close = _substitution_end(text[:end], index)
+            except ParseError:
+                close = end
+            regions.append((index, close))
+            index = close
         else:
-            end = text.find("`", start)
-            yield text[start:] if end < 0 else text[start:end]
+            index += 1
+    return regions
+
+
+def _heredoc_gaps(text, start, end, quoted):
+    """The parts of a data heredoc body to blank: all of it when quoted, else all but the substitutions it runs."""
+    if quoted:
+        return [(start, end)]
+    gaps, position = [], start
+    for left, right in _expansion_regions(text, start, end):
+        if left > position:
+            gaps.append((position, left))
+        position = right
+    if position < end:
+        gaps.append((position, end))
+    return gaps
+
+
+def _heredoc_data(text):
+    if "<<" not in text:
+        return text
+    lines = text.splitlines(keepends=True)
+    spans = []
+    index, offset = 0, 0
+    receivers = frozenset((
+        "cat tee head tail wc sort uniq cut tr base64 xxd od grep egrep fgrep rg jq column fold fmt nl tac rev "
+        "cmp diff git gh"
+    ).split())
+    data_suffixes = frozenset((
+        ".md .markdown .txt .json .jsonl .yaml .yml .toml .csv .tsv .html .htm .xml .patch .diff .log .rst "
+        ".ini .cfg .conf"
+    ).split())
+    while index < len(lines):
+        line = lines[index]
+        try:
+            tokens = _lex(line)
+        except ParseError:
+            offset += len(line)
+            index += 1
+            continue
+        groups = [[]]
+        piped = set()
+        for token in tokens:
+            if token[0] == "op" and token[1] in SEPARATOR_OPERATORS:
+                if token[1] in ("|", "|&"):
+                    piped.add(len(groups) - 1)
+                groups.append([])
+            else:
+                groups[-1].append(token)
+        documents = []
+        for group_index, group in enumerate(groups):
+            words, redirects, outputs = [], [], []
+            cursor = 0
+            while cursor < len(group):
+                kind, value, start, end = group[cursor]
+                if kind == "op" and cursor + 1 < len(group):
+                    target = group[cursor + 1][1]
+                    if value == "<<":
+                        strip_tabs = line[end:end + 1] == "-"
+                        raw_delimiter = line[group[cursor + 1][2]:group[cursor + 1][3]]
+                        quoted = any(char in raw_delimiter for char in "'\"\\")
+                        redirects.append((target[1:] if strip_tabs else target, strip_tabs,
+                                          quoted, (offset + start, offset + group[cursor + 1][3])))
+                    elif value in (">", ">>", ">|", "&>"):
+                        outputs.append(target)
+                    cursor += 2
+                else:
+                    words.append(value)
+                    cursor += 1
+            program, _ = strip_prefix(words)
+            receiver = os.path.basename(program[0]) if program else ""
+            if receiver == "tee":
+                outputs.extend(word for word in program[1:] if not word.startswith("-"))
+            data = (group_index not in piped and receiver in receivers
+                    and all(target in ("/dev/null", "/dev/stdout", "/dev/stderr")
+                            or Path(target).suffix.lower() in data_suffixes for target in outputs))
+            documents.extend((delimiter, tabs, quoted, data, span) for delimiter, tabs, quoted, span in redirects)
+        offset += len(line)
+        index += 1
+        for delimiter, tabs, quoted, data, header_span in documents:
+            start = offset
+            while index < len(lines):
+                body_line = lines[index]
+                offset += len(body_line)
+                index += 1
+                candidate = body_line.rstrip("\r\n")
+                if (candidate.lstrip("\t") if tabs else candidate) == delimiter:
+                    break
+            if data:
+                spans.append(header_span)
+                spans.extend(_heredoc_gaps(text, start, offset, quoted))
+    return _blank(text, spans)
 
 
 def _indirect_regions(text, segments):
-    """Return the text a shell runs indirectly: sh -c scripts, eval and xargs bodies, and substitutions."""
+    """Return sh -c scripts and eval and xargs bodies."""
     regions = []
     for segment in segments:
         if _helper_args(segment.words) is not None:
@@ -957,14 +1162,22 @@ def _indirect_regions(text, segments):
                 regions.append(script)
         elif name in ("eval", "xargs"):
             regions.append(" ".join(words[1:]))
-    regions.extend(_substitution_regions(text))
     return regions
 
 
 
 
 
-def classify_text(text, cwd, depth=0, env=None):
+def _cd_changes_directory(segment, operators):
+    """Track only an unconditional `cd` in the current shell."""
+    before = max((op for op in operators if op[3] <= segment.start), key=lambda op: op[3], default=None)
+    after = min((op for op in operators if op[2] >= segment.end), key=lambda op: op[2], default=None)
+    depth = sum({"(": 1, ")": -1}.get(op[1], 0) for op in operators if op[3] <= segment.start)
+    return (depth == 0 and (before is None or before[1] == ";")
+            and (after is None or after[1] in ("&&", ";")))
+
+
+def classify_text(text, cwd, depth=0, env=None, variables=None):
     """Classify a shell command string; the secret helper's own inner command is classified separately."""
     if depth > MAX_DEPTH:
         return _unclassified("bash", text if isinstance(text, str) else "")
@@ -974,34 +1187,64 @@ def classify_text(text, cwd, depth=0, env=None):
         request = _request_outcome(text, cwd)
         if request is not None:
             return request
+    text = _heredoc_data(text)
     try:
         segments = tokenize(text)
+        operators = [token for token in _lex(text) if token[0] == "op"]
     except ParseError:
         match = COVERED_WORD.search(text)
         return _unclassified(match.group(0), text) if match else Outcome("pass", [], [])
     spans = [(segment.start, segment.end) for segment in segments if _helper_args(segment.words) is not None]
     checked = _blank(text, spans)
-    indirect = []
-    for region in _indirect_regions(checked, segments):
-        verdict = classify_text(region, cwd, depth + 1, env)
-        if verdict.kind == "secret":
-            return Outcome("secret", [], [])
-        if verdict.kind in ("sensitive", "forbidden"):
-            indirect.append(verdict)
-            continue
-        match = COVERED_WORD.search(region)
-        if match:
-            return _unclassified(match.group(0), text)
+    verdicts = []
+    variables = dict(variables or {})
+    substitution_names = set()
+    current_env = dict(os.environ if env is None else env)
     for segment in segments:
-        program, _ = strip_prefix(segment.words)
+        program, assignments = strip_prefix(segment.words)
+        region = checked[segment.start:segment.end]
+        substitutions = list(_substitution_spans(region))
+        for _, _, body in substitutions:
+            verdicts.append(classify_text(body, cwd, depth + 1, current_env, variables))
+        for body in _indirect_regions(region, [segment]):
+            verdict = classify_text(body, cwd, depth + 1, current_env)
+            if verdict.kind in ("secret", "sensitive", "forbidden"):
+                verdicts.append(verdict)
+            else:
+                match = COVERED_WORD.search(body)
+                if match:
+                    verdicts.append(_unclassified(match.group(0), text))
         name = os.path.basename(program[0]) if program else ""
-        # The tokenizer splits `$(` at its parenthesis, so look one character past the segment.
-        if name in COVERED and OPAQUE_CONSTRUCT.search(checked[segment.start:segment.end + 1]):
-            return _unclassified(name, text)
-    verdicts = [*indirect, *(_classify_argv(segment.words, segment.heredoc, cwd, depth, text, env) for segment in segments)]
-    for segment in segments:
-        if any(operator == "<" and _protected_path(target, cwd, env) for _, operator, target in segment.redirects):
+        if any(operator == "<" and _protected_path(target, cwd, current_env)
+               for _, operator, target in segment.redirects):
             verdicts.append(_sensitive(text))
+        if name == "cd" and len(program) == 2:
+            if _cd_changes_directory(segment, operators):
+                directory = _script_path(program[1], cwd, variables)
+                if directory is not None and directory.is_dir():
+                    cwd = str(directory)
+            continue
+        if not program and assignments:
+            if all(ASSIGNMENT.match(word) for word in segment.words):
+                for key, value in assignments.items():
+                    variables[key] = _expand_path_variables(value, variables)
+                    current_env[key] = variables[key]
+                    if "$(" in value or "`" in value:
+                        substitution_names.add(key)
+                    else:
+                        substitution_names.discard(key)
+            continue
+        dynamic_program = program and re.search(r"\$\(|`|\$\{|\$[A-Za-z_]", program[0])
+        verdict = (_unclassified(name, text) if (
+                       name in COVERED and OPAQUE_CONSTRUCT.search(region)
+                       or dynamic_program and COVERED_WORD.search(region))
+                   else _classify_argv(segment.words, segment.heredoc, cwd, depth, text, current_env, variables))
+        output = name in ("echo", "printf") and (substitutions or any(
+            re.search(r"\$(?:" + re.escape(key) + r"\b|\{" + re.escape(key) + r"\})", region)
+            for key in substitution_names
+        ))
+        if verdict.kind != "pass" or not output:
+            verdicts.append(verdict)
     return _aggregate(verdicts, segments)
 
 
@@ -1123,7 +1366,7 @@ def classify_mcp(tool, tool_input=None):
             return Outcome("always", [f"mcp:{tool}:{_digest(json.dumps(sql))}"], [f"destructive SQL in MCP tool {tool}"])
         if all(datagrip_guard.is_read(text, True) or datagrip_guard.is_read(text, False) for text in sql):
             return _read()
-        return Outcome("write", ["mcp:session"], ["MCP SQL write"])
+        return Outcome("write", ["mcp:session"], [f"MCP SQL write via {tool}"])
     if set(words) & EXEC_WORDS:
         text_words = set(re.findall(r"[a-z]+", " ".join(_input_strings(tool_input)).lower()))
         if text_words & (CLI_DESTRUCTIVE_WORDS | MCP_DESTRUCTIVE_WORDS):
@@ -1132,7 +1375,7 @@ def classify_mcp(tool, tool_input=None):
         return Outcome("write", ["mcp:session"], [f"MCP execution tool {tool}"])
     if not any(word in MCP_WRITE_WORDS for word in words) and any(word in MCP_READ_VERBS for word in words):
         return _read()
-    return Outcome("write", ["mcp:session"], ["MCP write (one approval covers this session's MCP writes)"])
+    return Outcome("write", ["mcp:session"], [f"MCP write: {tool}"])
 
 
 def _cwd(event):
@@ -1250,7 +1493,7 @@ def classify_file_tool(tool, tool_input, cwd):
 
 
 def _valid_request_key(key):
-    if key == "mcp:session":
+    if key in ("mcp:session", approval_state.WRITE_KEY):
         return True
     match = re.fullmatch(r"([a-z0-9-]+):([^@\n]+)@([^\n]+)", key)
     if not match:
@@ -1311,10 +1554,42 @@ def _request_outcome(command, cwd):
         return Outcome("forbidden", [], [str(error)])
 
 
+def _names_guard(node, tainted):
+    """True when an expression holds a guard module or script name directly or through a name assigned one."""
+    for child in ast.walk(node):
+        if isinstance(child, ast.Constant) and isinstance(child.value, str) and any(m in child.value for m in GUARD_MODULES):
+            return True
+        if isinstance(child, ast.Name) and child.id in tainted:
+            return True
+    return False
+
+
 def _code_runs_guard(code):
+    """True when Python code imports a guard module or passes a guard name to a process or exec call.
+
+    A guard path that only appears as data, such as a list of files to check, does not count. Code that cannot be
+    parsed falls back to the conservative text check.
+    """
     if GUARD_CODE.search(code):
         return True
-    return any(module in code for module in GUARD_MODULES) and PYTHON_EXEC.search(code) is not None
+    if not any(module in code for module in GUARD_MODULES) or PYTHON_EXEC.search(code) is None:
+        return False
+    try:
+        tree = ast.parse(code)
+    except (SyntaxError, ValueError):
+        return True
+    tainted = set()
+    for _ in range(3):
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)) and node.value is not None \
+                    and _names_guard(node.value, tainted):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                tainted.update(t.id for target in targets for t in ast.walk(target) if isinstance(t, ast.Name))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and PYTHON_EXEC.search(ast.unparse(node.func)):
+            if any(_names_guard(arg, tainted) for arg in [*node.args, *(k.value for k in node.keywords)]):
+                return True
+    return False
 
 
 def _python_runs_guard(args):
@@ -1373,6 +1648,9 @@ def _runs_guard(text, depth=0):
             continue
         words, _ = strip_prefix(segment.words)
         if words and _argv_runs_guard(words, depth):
+            return True
+        if any(_runs_guard(body, depth + 1)
+               for _, _, body in _substitution_spans(text[segment.start:segment.end])):
             return True
     return False
 

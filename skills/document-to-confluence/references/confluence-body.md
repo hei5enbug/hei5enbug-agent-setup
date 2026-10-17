@@ -177,6 +177,32 @@ saving.
 Read the page back and check both the collapsed title and the expanded content. Keep one body format per
 write.
 
+## Inline comment markers
+
+**Observed on 2026-10-16 in storage format.** An inline comment is anchored by an `ac:inline-comment-marker`
+element around the selected text in the page body:
+
+```xml
+<ac:inline-comment-marker ac:ref="MARKER_REF">selected text</ac:inline-comment-marker>
+```
+
+A save whose body lacks a comment's marker leaves the comment without an anchor, and the page shows it as
+deleted content. A body rebuilt from the source has no markers until you put them back.
+
+When you write in another body format, confirm before the first write that it preserves the marker;
+otherwise write the body in storage format.
+
+Before every republish:
+
+1. List the page's inline comments, open and resolved, with each marker reference and original selection.
+2. Wrap each original selection in the rebuilt body with its marker.
+3. When the selection no longer exists, wrap the new text that carries the same meaning and report the move.
+   When no text carries that meaning, ask the user before saving.
+4. When a selection spans inline formatting such as code, wrap each text piece with the same reference. Nest
+   markers when selections overlap.
+5. After saving, confirm that every listed reference is in the stored body and that each comment still reports
+   its anchor. When a browser is available, check the rendered page for a deleted-content notice.
+
 ## Tables
 
 **Convention.** Wrap the content of every `td` and `th` in a block element.

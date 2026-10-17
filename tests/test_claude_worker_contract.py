@@ -201,9 +201,9 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
             {
                 "type": "string",
                 "title": "Implementation worker",
-                "description": "Route implementation work to codex (Codex on gpt-5.6-luna at xhigh), haiku (the plugin worker on claude-haiku-5-5 at high), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
-                "options": ["codex", "haiku", "sonnet"],
-                "default": "sonnet",
+                "description": "Route implementation work: auto (the main session picks per task: haiku for easy work, sol for normal or hard work, sonnet when Codex usage is high), codex (Codex on gpt-5.6-luna at xhigh), haiku (the plugin worker on claude-haiku-5-5 at high), sol (gpt-6.1-sol at high through the role runner), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
+                "options": ["auto", "codex", "haiku", "sol", "sonnet"],
+                "default": "auto",
             },
         )
         self.assertEqual(options["review_model"]["type"], "string")
@@ -227,9 +227,13 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         expected = (
             "[implementation delegation rules](implementation-delegation.md)",
             'Delegated implementation follows the route in the session line "Implementation worker route". Use '
-            '`hei5enbug-agent-setup:sonnet-worker` for the Sonnet worker by default, the Codex worker (see "Codex '
-            'worker" below) when the line says `codex`, and `hei5enbug-agent-setup:worker` for the Haiku worker when '
-            'it says `haiku`.',
+            '`hei5enbug-agent-setup:sonnet-worker` for the Sonnet worker when the line says `sonnet`, the Codex '
+            'worker (see "Codex worker" below) when it says `codex`, `hei5enbug-agent-setup:worker` for the Haiku '
+            'worker when it says `haiku`, and the Sol worker (see "Sol worker" below) when it says `sol`.',
+            "When it says `auto`, choose per assignment: Haiku for easy work",
+            "Sol for normal or hard work",
+            "Sonnet instead of Sol when the Codex weekly usage is above 70 percent or Sol is unavailable.",
+            "When a Claude route stops on a usage limit, use Sol.",
             "A user request for one route applies to that request only.",
             "`hei5enbug-agent-setup:designer` still takes UI code, visual design, and diagram work, except the kinds "
             "the Claude Code session file assigns to the main session.",
@@ -256,7 +260,7 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         expected = (
             "Write the assignment, with the usual assignment fields, to a file and run the `worker` role.",
             "Add `--add-dir <dir>` only for a directory outside the session folder that the task must write.",
-            "The plugin mod asks once per session for each such directory.",
+            "The plugin mod asks once per session.",
         )
 
         # When
@@ -445,7 +449,7 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
             skill_workers,
         )
         self.assertIn(
-            "Independent validation, after the user approves it under independent model validation, runs the "
+            "Independent validation, once its confirmation gate passes under independent model validation, runs the "
             "`reviewer` role with `--model` set to the reviewer that file selects.",
             skill_workers,
         )

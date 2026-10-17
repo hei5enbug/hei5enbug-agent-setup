@@ -28,7 +28,7 @@
     "implementation": {
       "claude": {
         "primary": {"model": "claude-sonnet-5-5", "effort": "high", "via": "agent", "agent": "hei5enbug-agent-setup:sonnet-worker", "pin": "primary"},
-        "fallback": {"model": "gpt-5.6-luna", "effort": "xhigh", "via": "runner"}
+        "fallback": {"model": "gpt-6.1-sol", "effort": "high", "via": "runner"}
       },
       "codex": {
         "primary": {"model": "gpt-5.6-luna", "effort": "xhigh", "via": "agent", "agent": "worker", "pin": "primary"},

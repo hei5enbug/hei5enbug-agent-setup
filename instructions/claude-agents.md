@@ -95,7 +95,7 @@ exit 3 or 4, continue in the main conversation.
 
 - A skill review role is read-only judgment work, including a review persona, grader, comparator, or analyzer. Run
   the `reviewer` role with `--model` set to the model in the session line "Review model".
-- Independent validation, after the user approves it under independent model validation, runs the `reviewer` role
+- Independent validation, once its confirmation gate passes under independent model validation, runs the `reviewer` role
   with `--model` set to the reviewer that file selects. For a Claude-authored result, that is the "Review model"
   line.
 - Send a local-evidence research ticket or bounded public research through the `investigation` capability.
@@ -112,9 +112,15 @@ Coordinate delegated implementation under [implementation delegation rules](impl
 This section adds only the Claude Code worker integration.
 
 - Delegated implementation follows the route in the session line "Implementation worker route". Use
-  `hei5enbug-agent-setup:sonnet-worker` for the Sonnet worker by default, the Codex worker (see "Codex worker"
-  below) when the line says `codex`, and `hei5enbug-agent-setup:worker` for the Haiku worker when it says `haiku`. A
-  user request for one route applies to that request only. `hei5enbug-agent-setup:designer` still takes UI code,
+  `hei5enbug-agent-setup:sonnet-worker` for the Sonnet worker when the line says `sonnet`, the Codex worker (see
+  "Codex worker" below) when it says `codex`, `hei5enbug-agent-setup:worker` for the Haiku worker when it says
+  `haiku`, and the Sol worker (see "Sol worker" below) when it says `sol`. When it says `auto`, choose per
+  assignment: Haiku for easy work (one cohesive change with a stated edit and checks that cover it fully), Sol for
+  normal or hard work (a behavioral change, several files, parsing, security, or concurrency), and Sonnet instead
+  of Sol when the Codex weekly usage is above 70 percent or Sol is unavailable. Read that usage as
+  [independent model validation](independent-model-validation.md) does. When a Claude route stops on a usage
+  limit, use Sol. A user request for one route applies to that request only.
+  `hei5enbug-agent-setup:designer` still takes UI code,
   visual design, and diagram work, except the kinds the Claude Code session file assigns to the main session. Never
   use any other agent.
 - Never pass a per-invocation model to a plugin agent on an invocation or resume, because that overrides its
@@ -148,8 +154,18 @@ This section adds only the Claude Code worker integration.
 - A missing plugin worker or a missing subagent record stops the affected delegation. Apply the session fallback.
   Never change user settings.
 
+## Sol worker
+
+- Write the assignment, with the usual assignment fields, to a file and run
+  `python3 <Source directory>/scripts/role_runner.py implementation --fallback --instructions
+  <Source directory>/agents/worker.md --assignment <file> --result <file>` from the folder that holds the allowed
+  paths. It runs the model that the capability table in shared model routing lists as the Claude Code fallback,
+  with write access to that folder.
+- Add `--add-dir <dir>` only for a directory outside that folder that the task must write. The plugin mod asks once
+  per session.
+
 ## Codex worker
 
 - Write the assignment, with the usual assignment fields, to a file and run the `worker` role.
 - Add `--add-dir <dir>` only for a directory outside the session folder that the task must write. The plugin mod
-  asks once per session for each such directory.
+  asks once per session.

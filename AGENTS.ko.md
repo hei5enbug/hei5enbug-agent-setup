@@ -33,10 +33,10 @@
 
   | 역할 | 기본 이름 | 모델 / 추론 강도 | fallback 이름 | 모델 / 추론 강도 |
   |---|---|---|---|---|
-  | 범위가 정해진 구현 및 디버깅 | `haiku_worker` | `claude-haiku-5-5` / `xhigh` | `worker` | `gpt-6.1-sol` / `high` |
+  | 범위가 정해진 구현 및 디버깅(쉬운 작업) | `haiku_worker` | `claude-haiku-5-5` / `xhigh` | `worker` | `gpt-6.1-sol` / `high` |
   | 범위가 정해진 로컬 읽기 전용 근거 조사 | `scout` | `gpt-5.6-luna` / `xhigh` | `haiku_scout` | `claude-haiku-5-5` / `xhigh` |
-  | 승인된 내용을 반영하는 기계적인 문서 편집 | `writer` | `gpt-5.6-luna` / `xhigh` | `haiku_writer` | `claude-haiku-5-5` / `xhigh` |
-  | 완료된 코드 변경을 한 번 읽기 전용으로 추가 검토 | `code_reviewer` | `gpt-6.1-sol` / `high` | `sonnet_code_reviewer` | `claude-sonnet-5-5` / `high` |
+  | 승인된 내용을 반영하는 기계적인 문서 편집 | `writer` | `gpt-6.1-sol` / `high` | `haiku_writer` | `claude-haiku-5-5` / `xhigh` |
+  | 완료된 범위 한정 변경을 한 번 읽기 전용으로 최종 검토 | `code_reviewer` | `gpt-6.1-sol` / `high` | `sonnet_code_reviewer` | `claude-sonnet-5-5` / `high` |
 
   `haiku_*`와 `sonnet_code_reviewer`는 별도 Claude Code CLI 프로세스에 붙이는 과제 이름이며,
   등록된 `--agent` 이름이 아니다. `worker`, `scout`, `writer`, `code_reviewer`는 Codex 프로젝트 역할이다.
@@ -50,7 +50,7 @@
   실패한 완료 검사를 우회하지 않는다.
 
   이 저장소의 라우팅은 이 역할에 대한 플러그인의 모델 및 추론 강도 경로를 덮어쓰고,
-  기계적인 문서 작업을 `writer`에, 범위가 정해진 추가 코드 검토를 `code_reviewer`에 배정한다.
+  기계적인 문서 작업을 `writer`에, 범위가 정해진 최종 검토를 `code_reviewer`에 배정한다.
   플러그인의 나머지 작업 소유권, 권한, 검증 규칙은
   계속 적용한다. 호스트가 지원하면 표에 나온 모델과 추론 강도를 명시적으로 요청하고, 역할 결과를
   사용하기 전에 기본 역할과 fallback 역할 모두 실제 호스트 실행 기록에서 모델과 추론 강도를 확인한다.
@@ -74,28 +74,55 @@
   코드 품질을 비교한다. 실패한 시도의 비용도 포함한다. 품질과 비용을 임의의 비율로 합치거나
   보고서의 측정 한계를 무시하지 않는다.
   쉬운 작업은 범위가 정해진 로컬 읽기 전용 근거 조사에 `scout`을, 코디네이터가 승인한 기계적인
-  Markdown 및 미러 편집에 `writer`를 사용한다. `gpt-5.6-luna`/`xhigh` 고정값은 사용자가 명시적으로
-  선택한 값이며, 이전 로컬 비교가 이 경로의 품질을 입증하는 것은 아니다. 메인 세션은 구현을
+  Markdown 및 미러 편집에 `writer`를 사용한다. `scout`의 `gpt-5.6-luna`/`xhigh` 고정값은 사용자가 명시적으로
+  선택한 값이며, 이전 로컬 비교가 그 품질을 입증하는 것은 아니다. `writer`는 2026-10-17 미러 편집 과제 세 개를
+  블라인드로 비교한 뒤 `gpt-6.1-sol`/`high`로 바꿨다. Sol은 기대 항목 18개 중 17개를 통과하고 고칠 곳이 한 곳이며
+  토큰도 적었고, Luna는 9개를 통과하고 고칠 곳이 19곳이었다. Claude Code에서는 `writer`를 역할 정의를
+  `--instructions`로 넘긴 `role_runner.py language`로 실행한다. 메인 세션은 구현을
   배정하기 전에 원인, 수정 가능한 경로, 변경 요구사항, 실행 가능한 완료 검사를 정한다.
 
-  할당 작업자 규칙과 과제를 stdin으로 전달하고 `claude -p --model claude-haiku-5-5 --effort xhigh --output-format json`을 사용한다.
-  과제의 도구 권한과 허용 경로를 유지한다. 플러그인 에이전트의
-  정의를 덮어쓰거나 Anthropic 모델을 Codex 역할에 넣지 않는다. CLI로 재개할 때 모델과 추론 강도를
-  다시 지정하고, 작업 결과를 사용하기 전에 기존 준비 확인과 실제 호스트 기록 검사를 따른다. Codex
-  `worker`는 지정된 fallback이며 명시적으로 선택한 구현 대안으로도 사용할 수 있다. 작업자는 범위를
-  넓히는 대신 새 원인이나 누락된 결정을 메인 세션에 보고한다.
+  메인 세션은 난이도와 사용량에 따라 구현 작업자를 고른다.
 
-  코드 동작 변경과 배정된 검사가 끝나면, 해당 결과물의 마지막 추가 검토가 승인된 경우
-  `code_reviewer`를 한 번 사용한다. 최종 diff, 요구사항, 검사 근거를 전달한다. 문서나 메타데이터만
-  바뀐 경우에는 생략한다. 메인 세션이 지적 사항을 검증하고 완료 여부를 결정하며, 두 번째 검토는
-  시작하지 않는다. 이 보조 경로는 독립 검증을 대체하거나 그 검토 모델 설정과 승인 절차를 바꾸지
-  않는다. 이 역할의 리뷰 정확도는 Frontier v4에서 측정하지 않았다.
+  | 작업 | 작업자 |
+  |---|---|
+  | 쉬움: 편집 내용이 정해져 있고 검사가 모두 확인하는 응집된 변경 하나 | `haiku_worker`: 할당 작업자 규칙과 과제를 stdin으로 전달하고 `claude -p --model claude-haiku-5-5 --effort xhigh --output-format json`을 사용하며 과제의 도구 권한과 허용 경로를 유지한다 |
+  | 보통 또는 어려움: 동작 변경, 여러 파일, 파싱, 보안, 동시성 | `worker`(`gpt-6.1-sol` / `high`): Claude Code에서는 허용 경로가 든 폴더에서 `role_runner.py implementation --fallback --instructions <worker 역할 정의>`를 실행하고, Codex에서는 `worker` 역할을 쓴다 |
+  | Codex 주간 사용량이 70%를 넘거나(최종 검토와 같은 방식으로 읽는다) Sol을 쓸 수 없음 | `sonnet_worker`: `claude -p --model claude-sonnet-5-5 --effort high --output-format json`, 권한은 `haiku_worker`와 같다 |
+  | Claude 사용 한도에 걸림 | 난이도와 관계없이 Sol 경로 |
+
+  2026-10-17에 실제 승인 가드 과제 세 개(분류, 세션 상태, 모드)를 Sonnet `high`와 Sol `high`로 한 번씩
+  돌렸다. 여섯 실행 모두 코디네이터의 검사를 통과했다. 블라인드 검토에서 고칠 곳은 Sol이 모두 5곳,
+  Sonnet이 10곳이었고, Sol은 Sonnet의 출력 토큰 30~54%를 쓰고 더 빨리 끝났다. 이어서 쉬운 작업 두 개를
+  Haiku, Sonnet, Sol `high`로 한 번씩 돌렸다. 설정 편집은 어느 모델도 고칠 곳이 없었고 Haiku의 API 비용은
+  Sonnet의 약 9분의 1이었다($0.018 대 $0.159). 파일·파싱 경계 처리가 있는 사용량 기록 읽기 스크립트는 고칠 곳이
+  Sol 1곳, Haiku 4곳, Sonnet 6곳이었다. 모델과 과제마다 한 번씩만 돌린 근거는 얇고 Sol의 비용은 금액으로
+  재지 못했다. 플러그인의 `implementation_worker` `auto` 경로가 같은 규칙을 런타임에 적용한다.
+
+  플러그인 에이전트의 정의를 덮어쓰거나 Anthropic 모델을 Codex 역할에 넣지 않는다. CLI로 재개할 때
+  모델과 추론 강도를 다시 지정하고, 작업자의 결과를 사용하기 전에 기존 준비 확인과 실제 호스트 기록
+  검사를 따른다. 작업자는 범위를 넓히는 대신 새 원인이나 누락된 결정을 메인 세션에 보고한다.
+
+  구현 변경이 배정된 검사를 통과하면, 변경 크기에 맞춰 최종 diff를 한 번 읽기 전용으로 최종 검토한다.
+
+  | 변경 | 최종 검토 |
+  |---|---|
+  | 사소함: 오타, 문구, 버전, 메타데이터 수정, 번역, 또는 검사가 모두 확인하는 기계적 수정 | 없음 |
+  | 범위 한정: 완료 검사가 분명한 구성 요소 하나이고, 공개 계약, 보안, 동시성, 훅, 가드 변경이 없음 | `code_reviewer`. Claude Code에서는 `role_runner.py reviewer --model gpt-6.1-sol`이며, runner가 고정한 `xhigh`로 실행된다 |
+  | 복잡함: 여러 구성 요소, 공개 계약, 보안, 동시성, 훅이나 가드, 또는 `gpt-6.1-sol`로 작성한 작업 | `role_runner.py reviewer --model gpt-6-astra`, `xhigh` |
+
+  Codex 주간 사용량이 70% 이하이면 묻지 않고 실행한다. 사용량은 `~/.codex/sessions` 아래 가장 최근
+  `token_count` 이벤트에서 `window_minutes`가 10080인 사용 한도 창의 `used_percent`로 읽는다. 70%를
+  넘거나 값을 읽을 수 없으면 검토 전에 한 번 묻는다. 검토자에게 최종 diff, 요구사항, 검사 근거를
+  전달한다. Astra 검토자를 사용할 수 없으면 `code_reviewer` 경로를 대신 쓴다. 메인 세션이 지적 사항을
+  검증하고 완료 여부를 결정하며, 두 번째 검토는 시작하지 않는다. 같은 최종 diff에 대해 승인된 독립
+  검증이 있으면 이 검토를 대신한다. 이 경로는 독립 검증의 검토 모델 설정과 승인 절차를 바꾸지 않는다.
+  이 검토의 정확도는 Frontier v4에서 측정하지 않았다.
 
   Frontier v4는 모델과 추론 강도별로 23개의 까다로운 동작 재현 과제를 한 번씩 수행한다. 쉬움/보통/어려움
   등급을 정의하지 않으며 문서 작업도 평가하지 않는다. 위 라우팅은 이 저장소의 정책이며 벤치마크
   결과나 일반적인 모델 우위 주장에 근거한 구분이 아니다.
 
-  사용자는 범위가 정해진 구현에 Haiku xhigh를, 마지막 추가 검토에 Sol high를 선택했다. 이는 역할
+  사용자는 범위가 정해진 구현에 Haiku xhigh를, 범위 한정 최종 검토에 Sol high를 선택했다. 이는 역할
   선호이며 Haiku가 Frontier v4의 완료율이나 비용 효율에서 앞선다거나 구현 점수가 리뷰 정확도를
   입증한다는 주장이 아니다. 보고서마다 하네스 버전과 비용 기준이 다르므로 비용은
   구독 요금이 아닌 API/목록 가격 추정치다. [Haiku 비교](https://vulcanbench.com/benchmarks/swe-v4-haiku55-vs-frontier.html),

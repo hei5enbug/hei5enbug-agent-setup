@@ -287,12 +287,12 @@ const LEX_CASES = [
   ["a\\'b", ["a'b"]],
 ];
 
-function firstTime(keys) {
-  return `First time in this session: approving it allows ${keys} for the rest of the session.`;
+function firstTime(label) {
+  return `Write: ${label}. Approve once; git tag/push, gh release, and extra-directory writes then run without asking for the rest of this session.`;
 }
 
-function approved(keys) {
-  return `Approved earlier in this session: ${keys}`;
+function approved(label) {
+  return `Approved earlier in this session: ${label}`;
 }
 
 function gitRunner(argv) {
@@ -644,10 +644,10 @@ test("처음 확인은 묻고, 성공한 호출이 키를 기록한 뒤 두 번�
   const second = await hooks.check(env, checkEvent("git tag v3"));
 
   // then
-  expect(first).toEqual({ decision: "ask", reason: firstTime("git:tag") });
+  expect(first).toEqual({ decision: "ask", reason: firstTime("git tag") });
   expect(recorded).toBe(OK_RESULT);
-  expect(env.data.approvals).toEqual({ "sess-1": { time: NOW, keys: ["git:tag"] } });
-  expect(second).toEqual({ decision: "allow", reason: approved("git:tag") });
+  expect(env.data.approvals).toEqual({ "sess-1": { time: NOW, keys: ["write:session"] } });
+  expect(second).toEqual({ decision: "allow", reason: approved("git tag") });
 });
 
 test("다른 세션에서는 같은 종류의 작업도 다시 묻는다", async () => {
@@ -666,7 +666,7 @@ test("다른 세션에서는 같은 종류의 작업도 다시 묻는다", async
   expect(sameResult.decision).toBe("allow");
 });
 
-test("기록된 키와 다른 종류의 작업은 묻는다", async () => {
+test("세션 승인이 기록되면 다른 종류의 쓰기도 허용한다", async () => {
   // given
   const hooks = registerHooks();
   const env = createEnv();
@@ -677,11 +677,11 @@ test("기록된 키와 다른 종류의 작업은 묻는다", async () => {
   const push = await hooks.check(env, checkEvent("git push origin v1"));
 
   // then
-  expect(release.decision).toBe("ask");
-  expect(push.decision).toBe("ask");
+  expect(release).toEqual({ decision: "allow", reason: approved("gh release") });
+  expect(push).toEqual({ decision: "allow", reason: approved("git push of a tag") });
 });
 
-test("여러 키가 든 명령은 모든 키가 기록돼야 허용된다", async () => {
+test("여러 키가 든 명령도 세션 승인 하나로 허용된다", async () => {
   // given
   const hooks = registerHooks();
   const env = createEnv();
@@ -694,9 +694,9 @@ test("여러 키가 든 명령은 모든 키가 기록돼야 허용된다", asyn
   const complete = await hooks.check(env, checkEvent(command));
 
   // then
-  expect(partial.decision).toBe("ask");
-  expect(env.data.approvals["sess-1"].keys).toEqual(["git:push-tag", "git:tag"]);
-  expect(complete).toEqual({ decision: "allow", reason: approved("git:push-tag, git:tag") });
+  expect(partial).toEqual({ decision: "allow", reason: approved("git push of a tag + git tag") });
+  expect(env.data.approvals["sess-1"].keys).toEqual(["write:session"]);
+  expect(complete).toEqual({ decision: "allow", reason: approved("git push of a tag + git tag") });
 });
 
 for (const command of [
@@ -718,7 +718,7 @@ for (const command of [
 
     // then
     expect(asked).toEqual({ decision: "ask", reason: DESTRUCTIVE_REASON });
-    expect(env.data.approvals["sess-1"].keys).toEqual(["gh:release", "git:push-tag", "git:tag"]);
+    expect(env.data.approvals["sess-1"].keys).toEqual(["write:session"]);
   });
 }
 
@@ -810,11 +810,11 @@ for (const command of [
     const allowed = await hooks.check(env, checkEvent(command));
 
     // then
-    expect(allowed).toEqual({ decision: "allow", reason: approved("git:push-tag") });
+    expect(allowed).toEqual({ decision: "allow", reason: approved("git push of a tag") });
   });
 }
 
-test("저장소로 cd한 뒤 태그를 만들고 푸시하는 명령은 두 키가 기록된 뒤 허용된다", async () => {
+test("저장소로 cd한 뒤 태그를 만들고 푸시하는 명령은 세션 승인 뒤 허용된다", async () => {
   // given
   const hooks = registerHooks();
   const env = createEnv();
@@ -825,7 +825,7 @@ test("저장소로 cd한 뒤 태그를 만들고 푸시하는 명령은 두 키�
   const allowed = await hooks.check(env, checkEvent(command));
 
   // then
-  expect(allowed).toEqual({ decision: "allow", reason: approved("git:push-tag, git:tag") });
+  expect(allowed).toEqual({ decision: "allow", reason: approved("git push of a tag + git tag") });
 });
 
 for (const command of [
@@ -869,7 +869,7 @@ for (const command of [
     const allowed = await hooks.check(env, checkEvent(command));
 
     // then
-    expect(allowed).toEqual({ decision: "allow", reason: approved("gh:release") });
+    expect(allowed).toEqual({ decision: "allow", reason: approved("gh release") });
   });
 }
 
@@ -886,7 +886,7 @@ test("하위 에이전트의 확인은 기록된 키가 있어도 허용하지 �
   const post = await hooks.call(env, callEvent("gh release create v1", { agentId: "agent-1" }));
 
   // then
-  expect(pre).toEqual({ decision: "ask", reason: firstTime("git:tag") });
+  expect(pre).toEqual({ decision: "ask", reason: firstTime("git tag") });
   expect(post).toBe(OK_RESULT);
   expect(env.data.approvals).toEqual(before);
   expect(env.writes.length).toBe(writesBefore);
@@ -916,7 +916,7 @@ test("저장소를 읽을 수 없으면 허용도 기록도 없이 계속 묻는
   const second = await hooks.check(env, checkEvent(command));
 
   // then
-  expect(first).toEqual({ decision: "ask", reason: firstTime("git:tag") });
+  expect(first).toEqual({ decision: "ask", reason: firstTime("git tag") });
   expect(recorded).toBe(OK_RESULT);
   expect(second.decision).toBe("ask");
   expect(env.writes).toEqual([]);
@@ -969,8 +969,8 @@ test("7일이 지난 세션은 쓸 때 지우고 허용 판단에도 쓰지 않�
   const hooks = registerHooks();
   const data = {
     approvals: {
-      old: { time: NOW - 8 * DAY, keys: ["git:tag"] },
-      recent: { time: NOW - 6 * DAY, keys: ["gh:release"] },
+      old: { time: NOW - 8 * DAY, keys: ["write:session"] },
+      recent: { time: NOW - 6 * DAY, keys: ["write:session"] },
       broken: { time: "x", keys: "y" },
       list: [1],
     },
@@ -985,10 +985,10 @@ test("7일이 지난 세션은 쓸 때 지우고 허용 판단에도 쓰지 않�
   // then
   expect(stale.decision).toBe("ask");
   expect(Object.keys(data.approvals).sort()).toEqual(["new", "recent"]);
-  expect(data.approvals.recent.keys).toEqual(["gh:release"]);
+  expect(data.approvals.recent.keys).toEqual(["write:session"]);
 });
 
-test("기록할 때마다 세션 시간을 갱신하고 기존 키와 합친다", async () => {
+test("기록할 때마다 세션 시간을 갱신하고 기존 키를 세션 승인 키로 바꾼다", async () => {
   // given
   const hooks = registerHooks();
   const data = { approvals: { "sess-1": { time: NOW - 3 * DAY, keys: ["gh:release"] } } };
@@ -998,7 +998,7 @@ test("기록할 때마다 세션 시간을 갱신하고 기존 키와 합친다"
   await hooks.call(env, callEvent("git tag v2"));
 
   // then
-  expect(env.data.approvals["sess-1"]).toEqual({ time: NOW, keys: ["gh:release", "git:tag"] });
+  expect(env.data.approvals["sess-1"]).toEqual({ time: NOW, keys: ["write:session"] });
 });
 
 for (const [label, value] of [
@@ -1018,7 +1018,7 @@ for (const [label, value] of [
 
     // then
     expect(asked.decision).toBe("ask");
-    expect(env.data.approvals).toEqual({ "sess-1": { time: NOW, keys: ["git:tag"] } });
+    expect(env.data.approvals).toEqual({ "sess-1": { time: NOW, keys: ["write:session"] } });
   });
 }
 
@@ -1069,7 +1069,7 @@ test("같은 도구 호출의 확인과 호출은 process.run을 확인에서만
   // then
   expect(runsAfterCheck).toBeGreaterThan(0);
   expect(env.calls).toHaveLength(runsAfterCheck);
-  expect(env.data.approvals["sess-1"].keys).toEqual(PUSH_TAG);
+  expect(env.data.approvals["sess-1"].keys).toEqual(["write:session"]);
 });
 
 test("저장된 분류는 한 번 쓰면 지워져 같은 tool_use_id의 다음 호출은 다시 분류한다", async () => {
@@ -1101,7 +1101,7 @@ test("확인과 호출의 명령이 다르면 저장된 분류를 쓰지 않고 
   // then
   expect(runsAfterCheck).toBe(0);
   expect(env.calls.length).toBeGreaterThan(0);
-  expect(env.data.approvals["sess-1"].keys).toEqual(PUSH_TAG);
+  expect(env.data.approvals["sess-1"].keys).toEqual(["write:session"]);
 });
 
 test("확인과 호출의 도구가 다르면 저장된 분류를 쓰지 않고 다시 분류한다", async () => {
@@ -1114,7 +1114,7 @@ test("확인과 호출의 도구가 다르면 저장된 분류를 쓰지 않고 
   await hooks.call(env, callEvent("git tag v2"));
 
   // then
-  expect(env.data.approvals["sess-1"].keys).toEqual(TAG);
+  expect(env.data.approvals["sess-1"].keys).toEqual(["write:session"]);
 });
 
 test("tool_use_id가 다른 호출은 저장된 분류를 쓰지 않고 다시 분류한다", async () => {
@@ -1363,7 +1363,7 @@ test("기록되지 않은 키가 든 명령은 끝에 echo가 붙어도 처음�
   const asked = await hooks.check(env, checkEvent("git tag v1 && echo ok"));
 
   // then
-  expect(asked).toEqual({ decision: "ask", reason: firstTime("git:tag") });
+  expect(asked).toEqual({ decision: "ask", reason: firstTime("git tag") });
 });
 
 test("키가 없는 echo 명령은 확인과 호출 모두 그대로 두고 기록하지 않는다", async () => {
@@ -1652,13 +1652,13 @@ test("작업 폴더 밖 --add-dir은 처음에 묻고, 성공한 호출이 기�
   const second = await hooks.check(env, checkEvent(codexWith("--add-dir /repos/other/")));
 
   // then
-  expect(first).toEqual({ decision: "ask", reason: firstTime(OTHER_KEY) });
+  expect(first).toEqual({ decision: "ask", reason: firstTime(`codex write in ${OTHER_DIR}`) });
   expect(recorded).toBe(OK_RESULT);
-  expect(env.data.approvals).toEqual({ "sess-1": { time: NOW, keys: [OTHER_KEY] } });
-  expect(second).toEqual({ decision: "allow", reason: approved(OTHER_KEY) });
+  expect(env.data.approvals).toEqual({ "sess-1": { time: NOW, keys: ["write:session"] } });
+  expect(second).toEqual({ decision: "allow", reason: approved(`codex write in ${OTHER_DIR}`) });
 });
 
-test("승인한 폴더와 다른 작업 폴더 밖 디렉터리는 다시 묻는다", async () => {
+test("세션 승인 뒤에는 다른 작업 폴더 밖 디렉터리도 허용한다", async () => {
   // given
   const hooks = registerHooks();
   const env = createEnv();
@@ -1669,8 +1669,8 @@ test("승인한 폴더와 다른 작업 폴더 밖 디렉터리는 다시 묻는
   const both = await hooks.check(env, checkEvent(codexWith(`--add-dir ${OTHER_DIR}`, "--add-dir /repos/third")));
 
   // then
-  expect(different).toEqual({ decision: "ask", reason: firstTime("codex-dir:/repos/third") });
-  expect(both).toEqual({ decision: "ask", reason: firstTime("codex-dir:/repos/other, codex-dir:/repos/third") });
+  expect(different).toEqual({ decision: "allow", reason: approved("codex write in /repos/third") });
+  expect(both).toEqual({ decision: "allow", reason: approved("codex write in /repos/other + codex write in /repos/third") });
 });
 
 test("다른 세션에서는 이미 승인한 작업 폴더 밖 디렉터리도 다시 묻는다", async () => {
@@ -1684,7 +1684,7 @@ test("다른 세션에서는 이미 승인한 작업 폴더 밖 디렉터리도 
   const result = await hooks.check(other, checkEvent(codexWith(`--add-dir ${OTHER_DIR}`)));
 
   // then
-  expect(result).toEqual({ decision: "ask", reason: firstTime(OTHER_KEY) });
+  expect(result).toEqual({ decision: "ask", reason: firstTime(`codex write in ${OTHER_DIR}`) });
 });
 
 for (const [name, options, directory] of CODEX_OUTSIDE_CASES) {
@@ -1698,7 +1698,7 @@ for (const [name, options, directory] of CODEX_OUTSIDE_CASES) {
     const allowed = await hooks.check(env, checkEvent(codexWith(`--add-dir ${directory}`)));
 
     // then
-    expect(allowed).toEqual({ decision: "allow", reason: approved(`codex-dir:${directory}`) });
+    expect(allowed).toEqual({ decision: "allow", reason: approved(`codex write in ${directory}`) });
   });
 }
 
@@ -1771,10 +1771,10 @@ test("리터럴 경로의 입력 리다이렉트 하나가 붙은 작업 폴더 
   const second = await hooks.check(env, checkEvent(`${codexWith(`--add-dir ${OTHER_DIR}`)} < /tmp/b.md`));
 
   // then
-  expect(first).toEqual({ decision: "ask", reason: firstTime(OTHER_KEY) });
+  expect(first).toEqual({ decision: "ask", reason: firstTime(`codex write in ${OTHER_DIR}`) });
   expect(recorded).toBe(OK_RESULT);
-  expect(env.data.approvals).toEqual({ "sess-1": { time: NOW, keys: [OTHER_KEY] } });
-  expect(second).toEqual({ decision: "allow", reason: approved(OTHER_KEY) });
+  expect(env.data.approvals).toEqual({ "sess-1": { time: NOW, keys: ["write:session"] } });
+  expect(second).toEqual({ decision: "allow", reason: approved(`codex write in ${OTHER_DIR}`) });
 });
 
 test("조율 세션이 실행하는 형태의 Codex 작업 명령은 입력 리다이렉트가 붙어도 작업 폴더 안이면 키가 없다", async () => {
@@ -1947,11 +1947,11 @@ test("하위 에이전트는 메인 세션이 승인한 작업 폴더 밖 디렉
   const main = await hooks.check(env, checkEvent(command));
 
   // then
-  expect(pre).toEqual({ decision: "ask", reason: firstTime(OTHER_KEY) });
+  expect(pre).toEqual({ decision: "ask", reason: firstTime(`codex write in ${OTHER_DIR}`) });
   expect(post).toBe(OK_RESULT);
   expect(env.data).toEqual(before);
   expect(env.writes.length).toBe(writesBefore);
-  expect(main).toEqual({ decision: "allow", reason: approved(OTHER_KEY) });
+  expect(main).toEqual({ decision: "allow", reason: approved(`codex write in ${OTHER_DIR}`) });
 });
 
 test("하위 에이전트의 Codex 작업 명령도 위험한 샌드박스 옵션이면 같은 사유로 묻는다", async () => {
@@ -1978,20 +1978,20 @@ test("Codex 작업 명령이 오류로 끝나면 작업 폴더 밖 디렉터리�
 
   // then
   expect(env.writes).toEqual([]);
-  expect(asked).toEqual({ decision: "ask", reason: firstTime(OTHER_KEY) });
+  expect(asked).toEqual({ decision: "ask", reason: firstTime(`codex write in ${OTHER_DIR}`) });
 });
 
-test("다른 키가 기록된 세션이라도 Codex 작업 폴더 밖 디렉터리는 그 키로 허용되지 않는다", async () => {
+test("태그 생성으로 승인한 세션에서는 Codex 작업 폴더 밖 디렉터리도 허용한다", async () => {
   // given
   const hooks = registerHooks();
   const env = createEnv();
   await approve(hooks, env, "git tag v2");
 
   // when
-  const asked = await hooks.check(env, checkEvent(codexWith(`--add-dir ${OTHER_DIR}`)));
+  const allowed = await hooks.check(env, checkEvent(codexWith(`--add-dir ${OTHER_DIR}`)));
 
   // then
-  expect(asked).toEqual({ decision: "ask", reason: firstTime(OTHER_KEY) });
+  expect(allowed).toEqual({ decision: "allow", reason: approved(`codex write in ${OTHER_DIR}`) });
 });
 
 test("Codex 작업 명령과 알 수 없는 명령을 이으면 승인된 디렉터리여도 묻는다", async () => {
@@ -2059,7 +2059,7 @@ test("확장이 없는 리터럴 -c 값은 그대로 받아들여 승인된 작�
   const allowed = await hooks.check(env, checkEvent(codexWith(`--add-dir ${OTHER_DIR}`, `-c model="gpt-5.6-luna"`)));
 
   // then
-  expect(allowed).toEqual({ decision: "allow", reason: approved(OTHER_KEY) });
+  expect(allowed).toEqual({ decision: "allow", reason: approved(`codex write in ${OTHER_DIR}`) });
 });
 
 for (const [name, option] of CODEX_DANGEROUS_OPTIONS) {
@@ -2145,10 +2145,10 @@ test("작업 폴더 안 심볼릭 링크가 밖을 가리키면 실제 경로의
 
   // then
   expect(classified).toEqual({ keys: [`codex-dir:${OTHER_DIR}/sub`], destructive: false, known: true });
-  expect(asked).toEqual({ decision: "ask", reason: firstTime(`codex-dir:${OTHER_DIR}/sub`) });
+  expect(asked).toEqual({ decision: "ask", reason: firstTime(`codex write in ${OTHER_DIR}/sub`) });
 });
 
-test("승인한 뒤 링크 대상이 바뀌면 같은 명령이라도 새 실제 경로로 다시 묻는다", async () => {
+test("세션 승인 뒤 링크 대상이 바뀌어도 확인된 새 실제 경로를 허용한다", async () => {
   // given
   const hooks = registerHooks();
   const command = codexWith(`--add-dir ${REPO_WITH_V1}/link`);
@@ -2161,9 +2161,9 @@ test("승인한 뒤 링크 대상이 바뀌면 같은 명령이라도 새 실제
   const changedTarget = await hooks.check(retargeted, checkEvent(command));
 
   // then
-  expect(first.data.approvals["sess-1"].keys).toEqual([OTHER_KEY]);
-  expect(sameTarget).toEqual({ decision: "allow", reason: approved(OTHER_KEY) });
-  expect(changedTarget).toEqual({ decision: "ask", reason: firstTime("codex-dir:/repos/third") });
+  expect(first.data.approvals["sess-1"].keys).toEqual(["write:session"]);
+  expect(sameTarget).toEqual({ decision: "allow", reason: approved(`codex write in ${OTHER_DIR}`) });
+  expect(changedTarget).toEqual({ decision: "allow", reason: approved("codex write in /repos/third") });
 });
 
 test("작업 폴더 밖 링크가 작업 폴더 안을 가리키면 안쪽으로 보고 키를 만들지 않는다", async () => {
@@ -2251,7 +2251,7 @@ test("조율 세션이 실행하는 형태의 Codex 작업 명령은 작업 폴�
   const env = createEnv();
   const command = `codex exec -m gpt-5.6-luna -c model_reasoning_effort="xhigh" -s workspace-write -C ${OTHER_DIR} --add-dir /repos/third --json -o result.json - < assignment.md`;
   const again = `codex exec -m gpt-5.6-luna -c model_reasoning_effort="xhigh" -s workspace-write -C ${OTHER_DIR} --add-dir /repos/third --json -o other-result.json - < other-assignment.md`;
-  const keys = "codex-dir:/repos/other, codex-dir:/repos/third";
+  const label = "codex write in /repos/other + codex write in /repos/third";
 
   // when
   const first = await hooks.check(env, checkEvent(command));
@@ -2259,8 +2259,8 @@ test("조율 세션이 실행하는 형태의 Codex 작업 명령은 작업 폴�
   const second = await hooks.check(env, checkEvent(again));
 
   // then
-  expect(first).toEqual({ decision: "ask", reason: firstTime(keys) });
-  expect(second).toEqual({ decision: "allow", reason: approved(keys) });
+  expect(first).toEqual({ decision: "ask", reason: firstTime(label) });
+  expect(second).toEqual({ decision: "allow", reason: approved(label) });
 });
 
 const RUNNER = "python3 /plugins/hei5enbug/scripts/role_runner.py";
@@ -2345,12 +2345,12 @@ test("역할 실행기의 worker --add-dir은 처음에 묻고 성공한 호출�
   const second = await hooks.check(env, checkEvent(runnerWith("worker", "--add-dir /repos/other/", "--timeout 60")));
 
   // then
-  expect(first).toEqual({ decision: "ask", reason: firstTime(OTHER_KEY) });
-  expect(env.data.approvals).toEqual({ "sess-1": { time: NOW, keys: [OTHER_KEY] } });
-  expect(second).toEqual({ decision: "allow", reason: approved(OTHER_KEY) });
+  expect(first).toEqual({ decision: "ask", reason: firstTime(`codex write in ${OTHER_DIR}`) });
+  expect(env.data.approvals).toEqual({ "sess-1": { time: NOW, keys: ["write:session"] } });
+  expect(second).toEqual({ decision: "allow", reason: approved(`codex write in ${OTHER_DIR}`) });
 });
 
-test("역할 실행기에서 승인한 폴더는 Codex 작업 명령의 같은 폴더 키와 공유한다", async () => {
+test("역할 실행기에서 얻은 세션 승인은 Codex 작업 명령에도 적용된다", async () => {
   // given
   const hooks = registerHooks();
   const env = createEnv();
@@ -2360,20 +2360,20 @@ test("역할 실행기에서 승인한 폴더는 Codex 작업 명령의 같은 �
   const allowed = await hooks.check(env, checkEvent(codexWith(`--add-dir ${OTHER_DIR}`)));
 
   // then
-  expect(allowed).toEqual({ decision: "allow", reason: approved(OTHER_KEY) });
+  expect(allowed).toEqual({ decision: "allow", reason: approved(`codex write in ${OTHER_DIR}`) });
 });
 
-test("역할 실행기에서 승인한 폴더와 다른 --add-dir은 다시 묻는다", async () => {
+test("역할 실행기에서 세션 승인 뒤 다른 --add-dir도 허용한다", async () => {
   // given
   const hooks = registerHooks();
   const env = createEnv();
   await approve(hooks, env, runnerWith("worker", `--add-dir ${OTHER_DIR}`));
 
   // when
-  const asked = await hooks.check(env, checkEvent(runnerWith("worker", "--add-dir /repos/third")));
+  const allowed = await hooks.check(env, checkEvent(runnerWith("worker", "--add-dir /repos/third")));
 
   // then
-  expect(asked).toEqual({ decision: "ask", reason: firstTime("codex-dir:/repos/third") });
+  expect(allowed).toEqual({ decision: "allow", reason: approved("codex write in /repos/third") });
 });
 
 for (const [name, command] of [
@@ -2472,7 +2472,7 @@ test("agent 실행기에서 승인한 폴더는 같은 폴더를 쓰는 다른 a
   const allowed = await hooks.check(env, checkEvent(runnerWith("agent", "--host codex", "--name worker", "--fallback", "--mcp", `--add-dir ${OTHER_DIR}`)));
 
   // then
-  expect(allowed).toEqual({ decision: "allow", reason: approved(OTHER_KEY) });
+  expect(allowed).toEqual({ decision: "allow", reason: approved(`codex write in ${OTHER_DIR}`) });
 });
 
 for (const [name, command] of [

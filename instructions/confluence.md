@@ -37,6 +37,15 @@ After creating or updating a comment, read it again with `body-format=view`.
 Verify that each mention renders as a user link and that block structure remains intact.
 The submitted request is not evidence of the stored rendering because Confluence rewrites markup.
 
+## Comment replies
+
+- When an answer changes the document, change the document first, then say in the reply what changed.
+- Post a reply under the comment it answers, never as a new top-level comment.
+- To correct your own reply, edit it instead of adding another. When the correction fixes a factual error,
+  keep one sentence that names what was wrong.
+- State numbers in a reply as [documentation rules](documentation.md) require for documents.
+- After posting, confirm that each reply sits under the comment it answers.
+
 ## Removal
 
 Ask for explicit approval before deleting or resolving a comment and before deleting an attachment.

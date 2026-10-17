@@ -8,7 +8,7 @@ description: >-
   implementation planning, user guides, release notes, general implementation, diagnosis,
   summarization, or code review without explicit design intent.
 metadata:
-  version: "2.1.1"
+  version: "2.1.2"
 compatibility: >-
   Works in any agent host that can read and write Markdown. Repository inspection and diagram
   rendering improve evidence and review but are not required for the core workflow.
@@ -175,6 +175,9 @@ sequence diagram for interactions, component diagram for boundaries, and entity 
 Do not duplicate adjacent prose. Use nodes for actors or states and edge labels for conditions or transferred
 data. Avoid one-node groups and ambiguous boundary-crossing arrows. Render every diagram and inspect labels,
 clipping, overlap, routing, and visual balance. If rendering is unavailable, disclose it and verify syntax only.
+
+In a diagram for reviewers of a change, mark the elements that the design adds or changes, and explain the
+marking once.
 
 After summarizing a rule into a diagram or table, verify the branch count and evaluation order against the
 source rule. A summary can drop a step without producing any visible error. In an entity relationship diagram,

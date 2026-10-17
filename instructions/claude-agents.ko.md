@@ -94,7 +94,7 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
 
 - 스킬이 맡긴 검토 역할(검토 페르소나, grader, comparator, analyzer)은 읽기 전용 판단 작업이다. 세션 줄 "Review model"의
   모델을 `--model`로 지정해 `reviewer` 역할을 실행한다.
-- 독립 검증은 사용자가 독립 모델 검증에 따라 승인한 뒤, 그 파일이 고른 검토자를 `--model`로 지정해 `reviewer` 역할로
+- 독립 검증은 독립 모델 검증에 따른 확인 게이트를 통과한 뒤, 그 파일이 고른 검토자를 `--model`로 지정해 `reviewer` 역할로
   실행한다. Claude가 작성한 결과라면 "Review model" 줄의 모델이다.
 - 로컬 근거 조사 티켓과 공개 자료 조사는 `investigation` 기능으로 맡긴다. 검토 역할에는 `scout`를 사용하지
   않는다. 비공개·인증 원격 접근과 이슈 트래커, 풀 리퀘스트 서비스 같은 외부 도구 작업은 `implementation` 기능으로,
@@ -106,10 +106,14 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
 
 위임한 구현은 [구현 위임 규칙](implementation-delegation.ko.md)에 따라 조정한다. 이 섹션은 Claude Code worker 연동만 덧붙인다.
 
-- 위임한 구현은 세션 줄 "Implementation worker route"에 지정된 경로를 따른다. 기본은 Sonnet worker인
-  `hei5enbug-agent-setup:sonnet-worker`, 줄이 `codex`이면 Codex worker(아래 "Codex worker" 참조), `haiku`이면
-  Haiku worker인 `hei5enbug-agent-setup:worker`를 쓴다. 사용자가 한 경로를 요청하면 그 요청에만 적용한다. UI 코드,
-  시각 디자인, 다이어그램 작업은 여전히 `hei5enbug-agent-setup:designer`가 맡는다. 다만 Claude Code 세션 파일이
+- 위임한 구현은 세션 줄 "Implementation worker route"에 지정된 경로를 따른다. 줄이 `sonnet`이면 Sonnet worker인
+  `hei5enbug-agent-setup:sonnet-worker`, `codex`이면 Codex worker(아래 "Codex worker" 참조), `haiku`이면
+  Haiku worker인 `hei5enbug-agent-setup:worker`, `sol`이면 Sol worker(아래 "Sol worker" 참조)를 쓴다.
+  `auto`이면 할당마다 고른다. 쉬운 작업(수정 내용이 명시되고 검사로 전체를 확인할 수 있는 하나의 일관된 변경)은 Haiku,
+  보통이거나 어려운 작업(동작 변경, 여러 파일, 파싱, 보안 또는 동시성)은 Sol을 쓴다. Codex 주간 사용률이 70퍼센트를
+  넘거나 Sol을 사용할 수 없으면 Sol 대신 Sonnet을 쓴다. 사용률은 [독립 모델 검증](independent-model-validation.ko.md)과
+  같은 방식으로 읽는다. Claude 경로가 사용량 한도로 중단되면 Sol을 쓴다. 사용자가 한 경로를 요청하면 그 요청에만 적용한다.
+  UI 코드, 시각 디자인, 다이어그램 작업은 여전히 `hei5enbug-agent-setup:designer`가 맡는다. 다만 Claude Code 세션 파일이
   메인 세션에 맡긴 종류는 예외다. 그 밖의 에이전트는 쓰지 않는다.
 - 호출 단위 모델은 정의보다 우선하므로 플러그인 에이전트를 호출하거나 재개할 때 넘기지 않는다. 정의에는 공유 모델
   라우팅이 정리한 모델과 사고 강도가 고정되어 있다.
@@ -137,8 +141,15 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
 - 플러그인 worker나 서브에이전트 기록이 없으면 해당 위임을 멈추고 세션의 대체 처리 규칙을 적용한다.
   사용자 설정은 바꾸지 않는다.
 
+## Sol worker
+
+- 일반 할당 항목을 담은 할당을 파일로 쓰고, 허용된 경로가 있는 폴더에서
+  `python3 <Source directory>/scripts/role_runner.py implementation --fallback --instructions
+  <Source directory>/agents/worker.md --assignment <file> --result <file>`을 실행한다. 공유 모델 라우팅의 기능별 표가
+  Claude Code 대체 항목으로 지정한 모델을 실행하며, 해당 폴더에 쓰기 권한을 부여한다.
+- 작업이 써야 하는 해당 폴더 밖 디렉터리에만 `--add-dir <dir>`을 붙인다. 플러그인 Mod는 세션당 한 번 묻는다.
+
 ## Codex worker
 
 - 일반 할당 항목을 담은 할당을 파일로 쓰고 `worker` 역할을 실행한다.
-- 작업이 써야 하는 세션 폴더 밖 디렉터리에만 `--add-dir <dir>`을 붙인다. 플러그인 Mod는 그런 디렉터리마다 세션당
-  한 번 묻는다.
+- 작업이 써야 하는 세션 폴더 밖 디렉터리에만 `--add-dir <dir>`을 붙인다. 플러그인 Mod는 세션당 한 번 묻는다.

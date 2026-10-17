@@ -1,7 +1,7 @@
 name = "writer"
 description = "Coordinator-assigned mechanical documentation editor using approved content. Returns changed paths, checks, and blockers."
-model = "gpt-5.6-luna"
-model_reasoning_effort = "xhigh"
+model = "gpt-6.1-sol"
+model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 developer_instructions = """
 Make only the mechanical documentation edits assigned by the coordinating main session, using content it

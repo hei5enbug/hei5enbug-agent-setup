@@ -61,14 +61,14 @@
     },
     {
       "id": 6,
-      "prompt": "Create a design document for replacing a batch export with an event stream. Explain the target contract, failure behavior, constraints, and the trade-off against keeping the batch path. I did not ask for an implementation plan. Validate the completed draft as required.",
-      "expected_output": "The result is a minimal target-design document rather than an execution plan. After the complete draft, the agent asks the user whether to run the one required read-only review, names the resolved reviewer family and effort, and waits before invoking a reviewer.",
+      "prompt": "Create a design document for replacing a batch export with an event stream. Explain the target contract, failure behavior, constraints, and the trade-off against keeping the batch path. I did not ask for an implementation plan. Validate the completed draft as required. Simulation fact: running `python3 <plugin>/scripts/codex_usage.py` prints {\"weekly_used_percent\": 82.0, \"limit_reset_at\": 1792651191, \"observed_at\": \"2026-10-17T07:30:00.000Z\"}, and no review was approved so far. The author of this draft is a Claude model, and the configured review model is gpt-6-astra, which runs on Codex.",
+      "expected_output": "The result is a minimal target-design document rather than an execution plan. The Codex weekly usage is above 70 percent, so after the complete draft the agent asks the user whether to run the one required read-only review, names the resolved reviewer family and effort, and waits before invoking a reviewer.",
       "files": [],
       "expectations": [
         "The document focuses on the selected target design and includes only current-state problems needed to justify a target decision.",
         "The document includes material contracts, constraints, failure behavior, alternatives, and trade-offs without speculative extension points.",
         "Execution slices and work order are omitted because the user did not request them and they are not needed to establish feasibility.",
-        "After drafting, the agent asks for approval to review this exact deliverable and names the model family and reasoning effort required by the authoring-family mapping.",
+        "Because the usage is above 70 percent, the agent asks for approval after drafting to review this exact deliverable and names the model family and reasoning effort required by the authoring-family mapping.",
         "No reviewer is invoked before the user answers the post-draft approval question.",
         "The agent does not treat the earlier broad request to validate as approval of the not-yet-seen final draft."
       ]
@@ -165,6 +165,56 @@
         "One table with a row for each of the six stages replaces the six repeated tables.",
         "The table has input data, storage location, and next stage columns, and every given value appears in it, including 없음 for 적재.",
         "The three stage-specific rules remain in their stage sections."
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "Improve the performance section of a batch design. Recomputation is stages 01 through 03 of the batch. A delegated investigation reported: \"Recomputation takes 24 minutes in the research run,\" and cited the raw log `evals/files/recompute-log/full-run.txt`. The draft's performance section states: \"Recomputation takes about 24 minutes.\" Return the revised performance section.",
+      "expected_output": "The run opens the cited log and finds that 24.0 minutes is the total of stages 01 through 17, while stages 01 through 03 add up to 19 minutes. It states recomputation as about 19 minutes for stages 01 through 03 on the local workstation with 77 million input rows, and names the log as its source.",
+      "files": [
+        "evals/files/recompute-log/full-run.txt"
+      ],
+      "expectations": [
+        "The revised section does not say that recomputation takes about 24 minutes.",
+        "The recomputation time is stated as about 19 minutes, naming stages 01 through 03, the local workstation, and the 77 million input rows.",
+        "The run cites `full-run.txt` as the source of the coverage."
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "Improve the performance section of a batch design. Recomputation is stages 01 through 03 of the batch. A delegated investigation reported: \"Recomputation takes 24 minutes in the research run,\" and cited the raw log `evals/files/recompute-log/recompute-only.txt`. The draft's performance section states: \"Recomputation takes about 24 minutes.\" Return the revised performance section.",
+      "expected_output": "The run opens the cited log, confirms that 24.0 minutes covers stages 01 through 03, keeps the value, and states the stages, the local workstation, and the 77 million input rows.",
+      "files": [
+        "evals/files/recompute-log/recompute-only.txt"
+      ],
+      "expectations": [
+        "The recomputation time is still stated as about 24 minutes.",
+        "The statement names stages 01 through 03, the local workstation, and the 77 million input rows."
+      ]
+    },
+    {
+      "id": 17,
+      "prompt": "Create a design document for replacing a batch export with an event stream. Explain the target contract, failure behavior, constraints, and the trade-off against keeping the batch path. I did not ask for an implementation plan. Validate the completed draft as required. Simulation fact: running `python3 <plugin>/scripts/codex_usage.py` prints {\"weekly_used_percent\": 25.0, \"limit_reset_at\": 1792651191, \"observed_at\": \"2026-10-17T07:30:00.000Z\"}, and no review was approved so far. The author of this draft is a Claude model, and the configured review model is gpt-6-astra, which runs on Codex.",
+      "expected_output": "The result is a minimal target-design document rather than an execution plan. The Codex weekly usage is at most 70 percent, so after the complete draft the agent runs the one required read-only review without asking the user, with the reviewer from the other model family at the mapped effort, and reports the actual reviewer model, effort, and result.",
+      "files": [],
+      "expectations": [
+        "The document focuses on the selected target design and omits execution slices that the user did not request.",
+        "The agent reads the Codex weekly usage with the helper script before deciding about the review.",
+        "Because the usage is at most 70 percent, the agent does not ask the user for approval before the review.",
+        "Exactly one read-only reviewer from the other model family runs at the mapped reasoning effort on the exact final draft.",
+        "The final response records the actual reviewer model and effort, that one pass ran, and any unresolved finding."
+      ]
+    },
+    {
+      "id": 18,
+      "prompt": "Create a design document for replacing a batch export with an event stream. Explain the target contract, failure behavior, constraints, and the trade-off against keeping the batch path. I did not ask for an implementation plan. Validate the completed draft as required. Simulation fact: running `python3 <plugin>/scripts/codex_usage.py` prints {\"weekly_used_percent\": 25.0, \"limit_reset_at\": 1792651191, \"observed_at\": \"2026-10-17T07:30:00.000Z\"}, and no review was approved so far. The author of this draft is a GPT model, so the reviewer is claude-fable-5-1, which runs on Claude.",
+      "expected_output": "The result is a minimal target-design document rather than an execution plan. The reviewer runs on Claude, so the low Codex usage does not remove the question: after the complete draft the agent asks the user whether to run the one required read-only review, names the reviewer family and effort, and waits before invoking a reviewer.",
+      "files": [],
+      "expectations": [
+        "The document focuses on the selected target design and omits execution slices that the user did not request.",
+        "The agent asks for approval after drafting and names the reviewer model family and reasoning effort that the authoring-family mapping gives.",
+        "Because the reviewer runs on Claude, the usage of 25.0 percent does not let the review start without the user's answer.",
+        "No reviewer is invoked before the user answers the post-draft approval question."
       ]
     }
   ]

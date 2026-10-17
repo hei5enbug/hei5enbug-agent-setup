@@ -123,6 +123,22 @@ Read the source with the selected format adapter. Record the strongest revision 
 For an existing page, read the complete current body and version. A save replaces the body, so preserve
 content outside the requested change and preserve existing macro identifiers.
 
+Before extracting the source, find web edits. Compare that body with the baseline: the body built from the source
+at the last publish, without kept web edits. Without that baseline, use the body of the last version this workflow
+saved, found by its version message, when the tool can read it and the message names no kept web edit. Compare
+text, link targets, image and attachment references, and block structure; ignore markup the editor adds without
+changing content. Each difference is a web edit. Keep every web edit:
+
+- When the source is a local Markdown or HTML file you may edit, port the edit into the source and record the new
+  source revision.
+- Otherwise, apply the edit when building the body in step 5, count it as an intentional difference in step 7,
+  and report that the source lacks it.
+
+Stop and ask the user which to keep when a web edit and the requested change alter the same block differently, or
+a difference cannot be classified. Without a baseline, when the part of the page you will replace differs in content
+from the source beyond what the request describes, show the user those differences and ask before continuing. Report
+every web edit you kept.
+
 ### 3. Extract source structure
 
 Use the selected source reference. Capture semantic content before presentation details:
@@ -182,7 +198,8 @@ Apply these conventions to every page this run writes. They govern placement and
 Content comes from the source and the user's request, so never add, remove, or reassign content on your own.
 An explicit user limit, such as repairing only named problems, replacing one section, or publishing
 unchanged, restricts the conventions to the permitted scope. Report the edits they would make outside that
-scope instead of applying them.
+scope instead of applying them. A web edit kept or ported in step 2 limits them the same way: do not apply a
+convention that would undo it, and report that convention edit instead.
 
 - **Change history.** On a page that describes current state, such as behavior, structure, or a procedure,
   move time-bound records that are not needed to interpret a nearby claim into a final section titled in the
@@ -235,16 +252,20 @@ recorded convention edit or a line-break change.
 
 ### 9. Save with concurrency protection
 
-Immediately before saving, read the target page version again. If it differs from the version captured
-earlier, stop and report both versions. Do not overwrite another editor's changes.
+Immediately before saving, read the target page version again. If it differs from the version captured in
+step 2, return to step 2 and repeat the web-edit comparison with the new page body. When this run already ported
+a web edit into the source, stop and report both versions instead. Do not overwrite another editor's changes.
 
 Confirm that the source revision is unchanged. Send the complete body and a version message that names the
-source and the change. Compose oversized requests from complete blocks before the write.
+source, the change, and any kept web edit. Compose oversized requests from complete blocks before the write.
+After the save, keep the saved body without kept web edits in the staging directory, named by page ID and the
+new version, as the next baseline.
 
 ### 10. Verify the stored result
 
 Read the saved page in rendered or stored form. Compare its title, hierarchy, text, tables, links, images,
 attachments, macros, and version with the validated body. Inspect visual layout when the host can display it.
+Confirm that every inline comment marker listed before the save is in the stored body.
 Report any capability fallback and any item still requiring user verification.
 
 ### 11. Clean up with approval
@@ -262,6 +283,7 @@ When republishing:
 3. Apply the requested update mode without silently deleting Confluence-only content.
 4. Preserve stable attachment names and macro identifiers when their semantic content remains.
 5. Re-run extraction when the source format or exporter changes because block boundaries may change.
+6. Re-anchor inline comments as "Inline comment markers" in `references/confluence-body.md` describes.
 
 ## Rules for every source
 

@@ -1,0 +1,5 @@
+[
+  {"id": "101", "status": "open", "markerRef": "ref-a", "originalSelection": "알림은 푸시로 보낸다."},
+  {"id": "102", "status": "resolved", "markerRef": "ref-b", "originalSelection": "실패한 발송은 다섯 번까지 재전송한다."},
+  {"id": "103", "status": "open", "markerRef": "ref-c", "originalSelection": "같은 retry_key를 쓴다"}
+]

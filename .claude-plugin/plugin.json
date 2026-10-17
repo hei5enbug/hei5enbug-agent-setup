@@ -1,7 +1,7 @@
 {
   "name": "hei5enbug-agent-setup",
   "displayName": "Hei5enbug Agent Skills",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "description": "Portable agent skills for repeatable engineering and documentation workflows.",
   "author": {
     "name": "hei5enbug",
@@ -46,9 +46,9 @@
     "implementation_worker": {
       "type": "string",
       "title": "Implementation worker",
-      "description": "Route implementation work to codex (Codex on gpt-5.6-luna at xhigh), haiku (the plugin worker on claude-haiku-5-5 at high), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
-      "options": ["codex", "haiku", "sonnet"],
-      "default": "sonnet"
+      "description": "Route implementation work: auto (the main session picks per task: haiku for easy work, sol for normal or hard work, sonnet when Codex usage is high), codex (Codex on gpt-5.6-luna at xhigh), haiku (the plugin worker on claude-haiku-5-5 at high), sol (gpt-6.1-sol at high through the role runner), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
+      "options": ["auto", "codex", "haiku", "sol", "sonnet"],
+      "default": "auto"
     },
     "review_model": {
       "type": "string",

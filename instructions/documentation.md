@@ -13,6 +13,9 @@ HTML that will later be published elsewhere:
   only that no record was found unless the source would necessarily record that event.
 - For a rate or proportion, state its denominator and any material exclusion or deduplication when known.
   Do not compare results as one metric when their population or outcome definition changed without saying so.
+- When a number from delegated work, notes, or an earlier draft has not been checked against its raw source,
+  confirm there what it covers, such as the stage, period, environment, and data size, and state that coverage
+  with the number. Reuse a check already made against that source.
 - In a document that describes current state, put dated progress, superseded observations, and dated change
   notes in a final change-history section unless a nearby claim needs them for its meaning or validity. Apply
   this to a new document or the part being written, not as an unrequested restructuring of existing text.

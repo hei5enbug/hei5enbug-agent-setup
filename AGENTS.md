@@ -32,10 +32,10 @@
 
   | Role | Primary name | Model / effort | Fallback name | Model / effort |
   |---|---|---|---|---|
-  | Bounded implementation and debugging | `haiku_worker` | `claude-haiku-5-5` / `xhigh` | `worker` | `gpt-6.1-sol` / `high` |
+  | Bounded implementation and debugging, easy work | `haiku_worker` | `claude-haiku-5-5` / `xhigh` | `worker` | `gpt-6.1-sol` / `high` |
   | Bounded local, read-only evidence | `scout` | `gpt-5.6-luna` / `xhigh` | `haiku_scout` | `claude-haiku-5-5` / `xhigh` |
-  | Mechanical documentation edits with approved content | `writer` | `gpt-5.6-luna` / `xhigh` | `haiku_writer` | `claude-haiku-5-5` / `xhigh` |
-  | One read-only auxiliary review of a completed code change | `code_reviewer` | `gpt-6.1-sol` / `high` | `sonnet_code_reviewer` | `claude-sonnet-5-5` / `high` |
+  | Mechanical documentation edits with approved content | `writer` | `gpt-6.1-sol` / `high` | `haiku_writer` | `claude-haiku-5-5` / `xhigh` |
+  | One read-only final review of a completed bounded change | `code_reviewer` | `gpt-6.1-sol` / `high` | `sonnet_code_reviewer` | `claude-sonnet-5-5` / `high` |
 
   The `haiku_*` and `sonnet_code_reviewer` names are assignment labels for separate Claude Code CLI
   processes, not registered `--agent` names. `worker`, `scout`, `writer`, and `code_reviewer` are Codex
@@ -49,7 +49,7 @@
   A fallback never resolves a missing user decision or bypasses a permission or failed acceptance check.
 
   This repository routing overrides the plugin's model and effort routes for these roles and assigns
-  mechanical documentation work to `writer` and bounded auxiliary code review to `code_reviewer`.
+  mechanical documentation work to `writer` and bounded final review to `code_reviewer`.
   All other plugin ownership, permission, and verification rules still apply. Request the listed model
   and effort explicitly when the host supports it, and verify
   the actual host rollout before relying on either a primary or fallback role. Do not override a pinned
@@ -73,29 +73,59 @@
   additional Code quality when completion is comparable. Include failed attempts in the cost; do not
   collapse quality and cost into an arbitrary ratio or ignore the reports' measurement limits.
   Route easy work to `scout` for bounded, local, read-only evidence and to `writer` for coordinator-approved
-  mechanical Markdown and mirror edits. The `gpt-5.6-luna`/`xhigh` pin follows the user's explicit
-  selection; earlier local comparisons do not establish this route's quality. The main session defines the cause,
+  mechanical Markdown and mirror edits. The `scout` pin `gpt-5.6-luna`/`xhigh` follows the user's explicit
+  selection; earlier local comparisons do not establish its quality. `writer` moved to `gpt-6.1-sol`/`high` after a
+  2026-10-17 blind comparison of three mirror-edit assignments: Sol passed 17 of 18 expectations with one needed
+  fix and fewer tokens, and Luna passed 9 of 18 with 19 fixes. In Claude Code, run `writer` as
+  `role_runner.py language` with its role definition as `--instructions`. The main session defines the cause,
   allowed edit paths, change requirements, and runnable acceptance checks before assigning implementation.
 
-  Use `claude -p --model claude-haiku-5-5 --effort xhigh --output-format json` with the assigned-worker rules
-  and task on stdin, preserving the task's tool permissions and allowed paths. Do not override a plugin
-  agent definition or put an Anthropic model in a Codex role. Reapply model and effort on a CLI resume;
-  follow the existing readiness and actual host-record checks before relying on its work. The Codex
-  `worker` is the named fallback and remains available as an explicitly selected implementation
-  alternative. The worker reports new causes or missing decisions to the main session instead of
-  widening scope.
+  The main session chooses the implementation worker by difficulty and usage:
 
-  After behavioral code changes and their assigned checks, use `code_reviewer` once when final auxiliary
-  review is authorized for the deliverable. Give it the final diff, requirements, and check evidence. Skip
-  documentation-only or metadata-only changes. The main session verifies findings and decides acceptance;
-  do not start a second review round. This supplemental route does not replace independent validation or
-  change its reviewer settings and approval gate. Its review accuracy was not measured by Frontier v4.
+  | Work | Worker |
+  |---|---|
+  | Easy: one cohesive change with a stated edit and checks that cover it fully | `haiku_worker`: `claude -p --model claude-haiku-5-5 --effort xhigh --output-format json` with the assigned-worker rules and task on stdin, preserving the task's tool permissions and allowed paths |
+  | Normal or hard: a behavioral change, several files, parsing, security, or concurrency | `worker` (`gpt-6.1-sol` / `high`): in Claude Code, `role_runner.py implementation --fallback --instructions <worker role definition>` run from the folder that holds the allowed paths; in Codex, the `worker` role |
+  | Codex weekly usage above 70 percent (read as for the final review) or Sol unavailable | `sonnet_worker`: `claude -p --model claude-sonnet-5-5 --effort high --output-format json`, same permissions as `haiku_worker` |
+  | Claude usage limit reached | The Sol route, whatever the difficulty |
+
+  On 2026-10-17, three real approval-guard tasks (classification, session state, a mod) ran once each on Sonnet
+  `high` and Sol `high`. All six passed the coordinator's tests. A blind review needed 5 fixes in total for Sol and
+  10 for Sonnet, and Sol used 30 to 54 percent of Sonnet's output tokens and finished faster. Two easy tasks then
+  ran once each on Haiku, Sonnet, and Sol at `high`. A settings edit needed no fix on any model, and Haiku cost about
+  a ninth of Sonnet's API price ($0.018 against $0.159). A script that reads usage records, with file and parsing edge
+  cases, needed 1 fix from Sol, 4 from Haiku, and 6 from Sonnet. One run per model and task is thin evidence, and
+  Sol's price was not measured in dollars. The plugin's `implementation_worker` `auto` route applies the same rule at
+  runtime.
+
+  Do not override a plugin agent definition or put an Anthropic model in a Codex role. Reapply model and
+  effort on a CLI resume; follow the existing readiness and actual host-record checks before relying on a
+  worker's result. A worker reports new causes or missing decisions to the main session instead of widening
+  scope.
+
+  After an implementation change passes its assigned checks, run one read-only final review of the final
+  diff, sized to the change:
+
+  | Change | Final review |
+  |---|---|
+  | Trivial: a typo, wording, version, or metadata edit, a translation, or a mechanical edit its checks fully cover | None |
+  | Bounded: one component with clear acceptance checks and no public contract, security, concurrency, hook, or guard change | `code_reviewer`; in Claude Code, `role_runner.py reviewer --model gpt-6.1-sol`, which runs at the runner's fixed `xhigh` |
+  | Complex: several components, a public contract, security, concurrency, a hook or guard, or work drafted on `gpt-6.1-sol` | `role_runner.py reviewer --model gpt-6-astra` at `xhigh` |
+
+  Run it without asking while the Codex weekly usage is at most 70 percent. Read that usage as `used_percent`
+  of the rate-limit window whose `window_minutes` is 10080, in the newest `token_count` event under
+  `~/.codex/sessions`. Above 70 percent, or without a reading, ask once before the review. Give the reviewer
+  the final diff, requirements, and check evidence. When the Astra reviewer is unavailable, use the
+  `code_reviewer` route instead. The main session verifies findings and decides acceptance; do not start a
+  second review round. An approved independent validation of the same final diff replaces this review. This
+  route does not change independent validation's reviewer settings or approval gate. Its review accuracy was
+  not measured by Frontier v4.
 
   Frontier v4 covers 23 challenging behavioral-reconstruction tasks with one attempt per model and effort.
   It defines no easy/normal/hard labels and evaluates no documentation; the routing above is this
   repository's policy, not a benchmark result or a claim of general model superiority.
 
-  The user selected Haiku xhigh for bounded implementation and Sol high for the final auxiliary review.
+  The user selected Haiku xhigh for bounded implementation and Sol high for bounded final reviews.
   This is a role preference, not a claim that Haiku wins completion or cost efficiency on Frontier v4,
   or that implementation scores establish review accuracy. The reports use different harness versions
   and cost bases, so costs are API/list-price estimates rather than subscription bills. See the

@@ -1,6 +1,7 @@
 import { modelRegistry } from "./registry.js";
 
 const STORE_KEY = "approvals";
+const SESSION_KEY = "write:session";
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const LOOKUP_TIMEOUT_MS = 3000;
 const CLASSIFICATION_CACHE_LIMIT = 256;
@@ -685,16 +686,22 @@ async function approvedKeys($) {
   }
 }
 
-async function recordKeys($, keys) {
+async function recordKeys($) {
   const id = await sessionId($);
   if (id === null) return;
   const now = await $.clock.now();
   const entries = storedEntries(await $.store.get(STORE_KEY), now);
-  const found = entries.find(([key]) => key === id);
-  const existing = found === undefined ? [] : found[1].keys.filter(key => typeof key === "string");
   const kept = entries.filter(([key]) => key !== id);
-  kept.push([id, { time: now, keys: [...new Set([...existing, ...keys])].sort() }]);
+  kept.push([id, { time: now, keys: [SESSION_KEY] }]);
   await $.store.set(STORE_KEY, Object.fromEntries(kept));
+}
+
+function writeLabel(key) {
+  if (key === "git:tag") return "git tag";
+  if (key === "git:push-tag") return "git push of a tag";
+  if (key === "gh:release") return "gh release";
+  if (key.startsWith("codex-dir:")) return `codex write in ${key.slice("codex-dir:".length)}`;
+  return key;
 }
 
 function isDeny(result) {
@@ -738,16 +745,16 @@ export function registerApproval(on) {
     if (mustAsk) return { decision: "ask", reason: UNVERIFIABLE_REASON };
     if (keys.size === 0) return decided;
     if (!known) return { decision: "ask", reason: UNVERIFIABLE_REASON };
-    const listed = [...keys].sort().join(", ");
+    const listed = [...keys].sort().map(writeLabel).join(" + ");
     if (!e.agentId) {
       const approved = await approvedKeys($);
-      if ([...keys].every(key => approved.has(key))) {
+      if (approved.has(SESSION_KEY)) {
         return { decision: "allow", reason: `Approved earlier in this session: ${listed}` };
       }
     }
     return {
       decision: "ask",
-      reason: `First time in this session: approving it allows ${listed} for the rest of the session.`,
+      reason: `Write: ${listed}. Approve once; git tag/push, gh release, and extra-directory writes then run without asking for the rest of this session.`,
     };
   }).catch(($, e, next) => next(e));
 
@@ -755,9 +762,9 @@ export function registerApproval(on) {
     const result = await next(e);
     const cached = cache.take(e.tool_use_id, e.tool, e);
     if (e.agentId || isDeny(result) || result?.isError) return result;
-    const { keys, destructive, mustAsk } = cached ?? (await classify($, e.tool, e));
-    if (destructive || mustAsk || keys.size === 0) return result;
-    await recordKeys($, keys);
+    const { keys, destructive, known, mustAsk } = cached ?? (await classify($, e.tool, e));
+    if (destructive || mustAsk || !known || keys.size === 0) return result;
+    await recordKeys($);
     return result;
   }).catch(($, e, next) => next(e));
 }

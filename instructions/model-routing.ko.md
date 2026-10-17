@@ -37,7 +37,7 @@ GPT Luna는 `gpt-5.6-luna`와 `high` 또는 `xhigh`로만 명시적으로 고정
 | 역할 | Codex | Claude Code |
 |---|---|---|
 | 로컬 scout | `gpt-5.6-luna`, `xhigh` | 읽기 전용 `role_runner.py scout`로 `gpt-5.6-luna`, `xhigh`. 대체 경로는 `scout`(`claude-sonnet-5-5`, `medium`) |
-| 구현 worker | `gpt-5.6-luna`, `xhigh` | 기본(`implementation_worker`가 `sonnet`)은 `claude-sonnet-5-5`, `high` `sonnet-worker`; `codex`일 때나 요청했을 때는 `role_runner.py worker`와 `gpt-5.6-luna`, `xhigh`; `haiku`일 때나 요청했을 때는 `claude-haiku-5-5`, `high` `worker`이며 대체 경로는 `role_runner.py worker`와 `gpt-5.6-luna`, `xhigh`다 |
+| 구현 worker | `gpt-5.6-luna`, `xhigh` | `implementation_worker`가 `auto`(기본값)이면 메인 세션이 할당마다 고른다. 쉬운 작업은 `claude-haiku-5-5`, `high` `worker`; 보통이거나 어려운 작업은 `role_runner.py implementation --fallback`과 `gpt-6.1-sol`, `high`; Codex 주간 사용률이 70퍼센트를 넘거나 Sol을 사용할 수 없으면 Sol 대신 `claude-sonnet-5-5`, `high` `sonnet-worker`를 쓴다. 고정 설정은 한 경로를 강제한다: `sonnet`, `sol`, `codex`(`role_runner.py worker`와 `gpt-5.6-luna`, `xhigh`), `haiku`(대체 경로는 `role_runner.py worker`와 `gpt-5.6-luna`, `xhigh`) |
 | 공개 researcher | 웹 검색을 쓰는 `role_runner.py researcher`로 `gpt-5.6-luna`, `xhigh` | 웹 검색을 쓰는 `role_runner.py researcher`로 `gpt-5.6-luna`, `xhigh`. 대체 경로는 웹 검색과 가져오기 도구를 가진 `scout`(`claude-sonnet-5-5`, `medium`) |
 | Designer(`design` 기능) | `designer` 역할로 `gpt-6-astra`, `xhigh`. 대체 경로는 `role_runner.py agent --name designer --fallback`으로 `claude-opus-5-5`, `xhigh` | `designer` 에이전트로 `claude-opus-5-5`, `xhigh`. 대체 경로는 `role_runner.py design`으로 `gpt-6-astra`, `xhigh` |
 | Skill Builder 시험 실행 및 기타 비검토 참여자 | `gpt-6.1-sol`, `xhigh` | `claude-opus-5-5`, `high` |
@@ -97,7 +97,7 @@ Skill Builder의 시험 실행과 기타 비검토 참여자는 표에 나온 �
 | 기능 | Claude Code 기본 | Claude Code 대체 | Codex 기본 | Codex 대체 |
 |---|---|---|---|---|
 | investigation | `gpt-5.6-luna` / `xhigh` (runner) | `claude-sonnet-5-5` / `medium` (`scout`) | `gpt-5.6-luna` / `xhigh` (`scout`) | `claude-sonnet-5-5` / `medium` (runner) |
-| implementation | `claude-sonnet-5-5` / `high` (`sonnet-worker`) | `gpt-5.6-luna` / `xhigh` (runner) | `gpt-5.6-luna` / `xhigh` (`worker`) | `claude-sonnet-5-5` / `high` (runner) |
+| implementation | `claude-sonnet-5-5` / `high` (`sonnet-worker`) | `gpt-6.1-sol` / `high` (runner) | `gpt-5.6-luna` / `xhigh` (`worker`) | `claude-sonnet-5-5` / `high` (runner) |
 | design | `claude-opus-5-5` / `xhigh` (`designer`) | `gpt-6-astra` / `xhigh` (runner) | `gpt-6-astra` / `xhigh` (`designer`) | `claude-opus-5-5` / `xhigh` (runner) |
 | language | `gpt-6.1-sol` / `high` (runner) | `claude-opus-5-5` / `high` (runner) | `gpt-6.1-sol` / `high` (runner) | `claude-opus-5-5` / `high` (runner) |
 | review | `gpt-6-astra` / `xhigh` (runner) | `claude-opus-5-5` / `high` (`reviewer`) | `claude-opus-5-5` / `high` (runner) | `gpt-6.1-sol` / `xhigh` (`reviewer`) |

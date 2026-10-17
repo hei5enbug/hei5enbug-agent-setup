@@ -53,7 +53,7 @@ def test_fourth_uncompleted_approval_request_is_denied_without_a_new_ask_or_code
     assert all(decision(value) == ("ask" if host == "claude" else "deny") for value in previous)
     assert decision(output) == "deny"
     assert reason(output) == STOP_REASON
-    assert count(host=host) == 3
+    assert count(state_mod.WRITE_KEY if kind in ("write", "request") else "key-a", host) == 3
     assert state_mod._load(host, "s1")["pending"] == pending
 
 
@@ -68,7 +68,7 @@ def test_third_issued_code_is_honored_after_the_user_approves_it(state, kind):
     output = state_mod.pre_decision("codex", "s1", action, "approved-third")
     # then
     assert output is None
-    assert count() == 3
+    assert count(state_mod.WRITE_KEY if kind in ("write", "request") else "key-a") == 3
 
 
 @pytest.mark.parametrize("host", ["claude", "codex"])
@@ -120,18 +120,18 @@ def test_request_budgets_are_separate_for_each_host_session_and_key(state, host,
 
 @pytest.mark.parametrize("host", ["claude", "codex"])
 def test_already_approved_session_keys_do_not_spend_or_block_a_compound_request(state, host):
-    """이미 승인된 세션 키는 다른 키를 요청할 때 횟수를 늘리거나 요청을 막지 않는다."""
+    """이미 승인된 세션 쓰기 키는 일회 승인을 요청할 때 횟수를 늘리거나 요청을 막지 않는다."""
     # given
     for _ in range(3):
         state_mod.pre_decision(host, "s1", outcome("write"))
-    state_mod.record_approved(host, "s1", ["key-a"])
-    action = outcome("write", ("key-a", "key-b"))
+    state_mod.record_approved(host, "s1", [state_mod.WRITE_KEY])
+    action = state_mod.Outcome("always", ["key-b"], ["Requested action"], writes=["key-a"])
     # when
     output = state_mod.pre_decision(host, "s1", action)
     # then
     assert decision(output) == ("ask" if host == "claude" else "deny")
     assert reason(output) != STOP_REASON
-    assert count(host=host) == 3
+    assert count(state_mod.WRITE_KEY, host) == 3
     assert count("key-b", host) == 1
 
 
@@ -282,4 +282,4 @@ def test_datagrip_claude_writes_are_not_counted_twice(state, project):
     # when
     datagrip_guard.handle(event)
     # then
-    assert count("mcp:session", "claude") == 1
+    assert count(state_mod.WRITE_KEY, "claude") == 1

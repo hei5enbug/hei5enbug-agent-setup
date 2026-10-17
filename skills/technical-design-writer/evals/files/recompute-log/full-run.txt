@@ -1,0 +1,22 @@
+run: research-recompute
+host: local workstation
+input rows: 77,000,000
+stage  name                     minutes
+01     recompute-read-ledger    7.0
+02     recompute-balances       8.0
+03     recompute-write          4.0
+04     validate-totals          1.0
+05     build-index              0.5
+06     export-summary           0.4
+07     export-region-files      0.3
+08     checksum-files           0.4
+09     upload-files             0.3
+10     notify-finance           0.3
+11     archive-inputs           0.4
+12     compact-tables           0.3
+13     refresh-views            0.3
+14     update-catalog           0.2
+15     rotate-logs              0.3
+16     release-locks            0.2
+17     cleanup                  0.1
+total (stages 01-17): 24.0 minutes

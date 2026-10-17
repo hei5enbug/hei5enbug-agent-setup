@@ -132,9 +132,9 @@ def test_other_tabularis_tools_keep_the_read_name_rules(connections, tool):
 
 @pytest.mark.parametrize("host", ["claude", "codex"])
 def test_tabularis_marked_reads_ignore_mcp_session_approval(connections, host):
-    """tabularis의 승인 표시 연결은 MCP 세션 승인이 있어도 읽기마다 승인을 요구한다."""
+    """tabularis의 승인 표시 연결은 세션 쓰기 승인이 있어도 읽기마다 승인을 요구한다."""
     # given
-    state_mod.record_approved(host, "s1", ["mcp:session"])
+    state_mod.record_approved(host, "s1", [state_mod.WRITE_KEY])
     event = {"hook_event_name": "PreToolUse", "session_id": "s1", "tool_name": TOOL,
              "tool_input": {"connection_id": "marked", "query": "SELECT 1", "limit": 5}}
     # when
@@ -145,14 +145,14 @@ def test_tabularis_marked_reads_ignore_mcp_session_approval(connections, host):
 
 
 def test_tabularis_success_uses_the_shared_approval_post_handler(connections):
-    """tabularis 쓰기가 완료되면 기존 MCP 세션 승인 처리로 기록한다."""
+    """tabularis 쓰기가 완료되면 공통 세션 쓰기 승인으로 기록한다."""
     # given
     event = {"hook_event_name": "PostToolUse", "session_id": "s1", "tool_name": TOOL,
              "tool_input": {"connection_id": "pg", "query": "UPDATE t SET a=1"}}
     # when
     guard.handle(event, "claude")
     # then
-    assert state_mod.is_approved("claude", "s1", ["mcp:session"])
+    assert state_mod._load("claude", "s1")["approved"] == [state_mod.WRITE_KEY]
 
 
 def test_database_tool_priority_fits_the_existing_instruction_budget():

@@ -161,7 +161,7 @@ wheels = [
 
 [[package]]
 name = "hei5enbug-agent-setup"
-version = "2.5.0"
+version = "2.6.0"
 source = { editable = "." }
 dependencies = [
     { name = "pyyaml" },

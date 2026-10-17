@@ -34,7 +34,7 @@ Use these production settings unless a separately approved comparison qualifies 
 | Role | Codex | Claude Code |
 |---|---|---|
 | Local scout | `gpt-5.6-luna`, `xhigh` | `role_runner.py scout` with `gpt-5.6-luna`, `xhigh`, read-only; fallback `scout` with `claude-sonnet-5-5`, `medium` |
-| Implementation worker | `gpt-5.6-luna`, `xhigh` | `sonnet-worker` with `claude-sonnet-5-5`, `high` (default, `implementation_worker` is `sonnet`); `role_runner.py worker` with `gpt-5.6-luna`, `xhigh` when it is `codex` or on request; `worker` with `claude-haiku-5-5`, `high` when it is `haiku` or on request, whose fallback is `role_runner.py worker` with `gpt-5.6-luna`, `xhigh` |
+| Implementation worker | `gpt-5.6-luna`, `xhigh` | With `implementation_worker` set to `auto` (default), the main session picks per assignment: `worker` with `claude-haiku-5-5`, `high` for easy work; `role_runner.py implementation --fallback` with `gpt-6.1-sol`, `high` for normal or hard work; `sonnet-worker` with `claude-sonnet-5-5`, `high` instead of Sol when Codex weekly usage is above 70 percent or Sol is unavailable. A fixed setting forces one route: `sonnet`, `sol`, `codex` (`role_runner.py worker` with `gpt-5.6-luna`, `xhigh`), or `haiku` (fallback `role_runner.py worker` with `gpt-5.6-luna`, `xhigh`) |
 | Public researcher | `role_runner.py researcher` with `gpt-5.6-luna`, `xhigh`, web search | `role_runner.py researcher` with `gpt-5.6-luna`, `xhigh`, web search; fallback `scout` with `claude-sonnet-5-5`, `medium`, which has web search and fetch tools |
 | Designer (`design` capability) | `designer` role with `gpt-6-astra`, `xhigh`; fallback `role_runner.py agent --name designer --fallback` with `claude-opus-5-5`, `xhigh` | `designer` agent with `claude-opus-5-5`, `xhigh`; fallback `role_runner.py design` with `gpt-6-astra`, `xhigh` |
 | Skill Builder trial execution and other non-review participants | `gpt-6.1-sol`, `xhigh` | `claude-opus-5-5`, `high` |
@@ -96,7 +96,7 @@ The runner's mechanics are in [Claude Code agents](claude-agents.md#role-runner)
 | Capability | Claude Code primary | Claude Code fallback | Codex primary | Codex fallback |
 |---|---|---|---|---|
 | investigation | `gpt-5.6-luna` / `xhigh` (runner) | `claude-sonnet-5-5` / `medium` (`scout`) | `gpt-5.6-luna` / `xhigh` (`scout`) | `claude-sonnet-5-5` / `medium` (runner) |
-| implementation | `claude-sonnet-5-5` / `high` (`sonnet-worker`) | `gpt-5.6-luna` / `xhigh` (runner) | `gpt-5.6-luna` / `xhigh` (`worker`) | `claude-sonnet-5-5` / `high` (runner) |
+| implementation | `claude-sonnet-5-5` / `high` (`sonnet-worker`) | `gpt-6.1-sol` / `high` (runner) | `gpt-5.6-luna` / `xhigh` (`worker`) | `claude-sonnet-5-5` / `high` (runner) |
 | design | `claude-opus-5-5` / `xhigh` (`designer`) | `gpt-6-astra` / `xhigh` (runner) | `gpt-6-astra` / `xhigh` (`designer`) | `claude-opus-5-5` / `xhigh` (runner) |
 | language | `gpt-6.1-sol` / `high` (runner) | `claude-opus-5-5` / `high` (runner) | `gpt-6.1-sol` / `high` (runner) | `claude-opus-5-5` / `high` (runner) |
 | review | `gpt-6-astra` / `xhigh` (runner) | `claude-opus-5-5` / `high` (`reviewer`) | `claude-opus-5-5` / `high` (runner) | `gpt-6.1-sol` / `xhigh` (`reviewer`) |

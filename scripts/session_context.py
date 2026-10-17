@@ -118,7 +118,13 @@ def render_context(root: Path, host: str, kind: str = "main") -> str:
             import plugin_toggles
 
             option = plugin_toggles.option_value("implementation_worker")
-            route = {"codex": "Codex (`codex`)", "haiku": "Haiku (`haiku`)"}.get(option, "Sonnet (`sonnet`)")
+            route = {
+                "auto": "Auto (`auto`)",
+                "codex": "Codex (`codex`)",
+                "haiku": "Haiku (`haiku`)",
+                "sol": "Sol (`sol`)",
+                "sonnet": "Sonnet (`sonnet`)",
+            }.get(option, "Auto (`auto`)")
             review = plugin_toggles.option_value("review_model")
             if review not in REVIEW_MODELS:
                 review = DEFAULT_REVIEW_MODEL
