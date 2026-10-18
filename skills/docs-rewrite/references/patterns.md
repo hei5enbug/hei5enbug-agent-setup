@@ -20,7 +20,7 @@ A protected item can move only when sentence order must change. Its text and mea
 
 | ID | Signal | Context-aware treatment |
 |---|---|---|
-| A-1 | `~에 대해(서)` | Attach the object marker directly when natural. |
+| A-1 | Repeated `~에 대해(서)` in one paragraph | Attach the object marker directly when natural. |
 | A-2 | Repeated `~를 통해/통하여` | Use `~로`, `~해서`, or a direct verb according to meaning. |
 | A-3 | `~에 있어(서)` | Prefer `~에서`, `~을 볼 때`, or a direct clause. |
 | A-4 | Repeated `~라는 점에서` | State the reason or relation directly. |
@@ -65,10 +65,10 @@ Keep established terms such as `LLM`, `GPU`, `MCP`, and `API` when translation w
 |---|---|---|
 | C-5 | Emoji in a formal column or report | Remove it. Keep useful emoji in casual product or social copy. |
 | C-7 | Formulaic `먼저·반면·결국` sequence | Keep only transitions that clarify a real relation. |
-| C-8 | Repeated parallel questions | Keep one useful question and state the rest directly. |
+| C-8 | Repeated parallel questions or `A가 아니라 B` contrasts | Vary clause structure locally; preserve each question, both sides of the contrast, negation, and emphasis. Keep effective isolated uses. |
 | C-9 | Decorative `(1)·(2)·(3)` indexing | Integrate it into prose. Keep functional procedures numbered. |
 | C-10 | Repeated `X: Y` subtitles | Shorten decorative subtitles. Preserve navigational headings. |
-| C-11 | Comma after a connective ending | Remove it unless syntax requires it. |
+| C-11 | Comma after a connective ending | Remove it unless syntax requires it. Do not introduce unnecessary connective-ending commas. |
 
 Do not flatten a checklist, procedure, comparison table, or reference list into prose. Structure is a problem only when it is decorative and repetitive for the genre.
 
@@ -85,6 +85,8 @@ Conclusion pivots include `결론적으로`, `따라서`, `요약하면`, and `�
 | D-5 | Personified abstraction such as `시대가 부른다` | Use the real actor when known. |
 | D-6 | Formulaic ending such as `지금이야말로 ~할 때다` | End with the supported claim or action. |
 | D-7 | Repeated `X에서 Y로` transformation formula | Keep the clearest one and state the rest plainly. |
+| D-8 | Repeated `필요한/중요한 것은 X다`, `문제는/핵심은 X다` | Use direct syntax, e.g. `X가 필요하다`, only when focus, evaluation, and emphasis stay intact. |
+| D-10 | Repeated `~하는 이유다` endings | State the same causal link in forward order; keep its direction and certainty, and add no cause. |
 
 Prefer deletion when a stock phrase carries no content. Do not replace it with a different stock phrase.
 A combined phrase such as `매우 획기적인 변화라고 할 수 있다` can become `상당한 변화로 볼 수 있다` when that preserves the writer's judgment.
@@ -141,7 +143,7 @@ Initial connectives include `또한`, `따라서`, `나아가`, and `아울러`.
 | I-1 | Repeated `~인 것이다/~한 것이다` | Use a direct ending when emphasis is not needed. |
 | I-2 | `X은 ~라는 점에 있다` | State the point directly. |
 | I-3 | Repeated `~다는 뜻이다/~다는 의미다` | Put the meaning in the sentence itself. |
-| I-4 | Repeated recommendations | Use a direct claim or action when the source supports it. |
+| I-4 | Repeated recommendation endings across paragraphs | Move the intact recommendation earlier within its paragraph when coherence permits; otherwise keep it. Never convert it to a factual claim. |
 
 Do not lower the formality of official writing. The target is direct formal Korean, not casual speech.
 
