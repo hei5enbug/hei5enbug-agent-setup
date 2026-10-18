@@ -17,7 +17,7 @@ NON_ENGLISH_DOCUMENTS = {
     REPO_ROOT / ".plan/orca-plugin-refresh-resume/implementation-plan.md",
 }
 NON_ENGLISH_READMES = {
-    REPO_ROOT / "README.ko.md",
+    REPO_ROOT / "docs/ko/README.ko.md",
 }
 EXCLUDED_DIRECTORIES = {".git", ".pytest_cache", ".decision-navigator"}
 LINK_PATTERN = re.compile(r"\]\(([^)]+)\)")
@@ -54,11 +54,8 @@ def english_sources(root=REPO_ROOT):
 
 
 def mirror_for(source):
-    if source == REPO_ROOT / "README.md":
-        return REPO_ROOT / "README.ko.md"
-    if source.parent == REPO_ROOT / "agents":
-        return source.parent / "ko" / f"{source.stem}.ko.md"
-    return source.with_name(f"{source.stem}.ko.md")
+    relative = source.relative_to(REPO_ROOT)
+    return REPO_ROOT / "docs/ko" / relative.with_suffix(".ko.md")
 
 
 class KoreanMirrorTest(unittest.TestCase):
@@ -81,6 +78,18 @@ class KoreanMirrorTest(unittest.TestCase):
                 self.assertIn("비권위", text)
                 relative = Path(os.path.relpath(source, mirror.parent)).as_posix()
                 self.assertIn(f"]({relative})", text)
+
+    def test_실행_폴더에는_한국어_미러가_없다(self):
+        """skills, agents, instructions 아래에는 git이 무시하는 파일을 포함해 한국어 미러가 하나도 없다."""
+        # Given
+        executable_folders = [REPO_ROOT / name for name in ("skills", "agents", "instructions")]
+
+        # When
+        misplaced = [path for folder in executable_folders for path in folder.rglob("*.ko.md")]
+
+        # Then
+        self.assertTrue(all(folder.is_dir() for folder in executable_folders))
+        self.assertEqual(misplaced, [])
 
     def test_executable_markdown_never_links_to_a_korean_mirror(self):
         for source in english_sources():

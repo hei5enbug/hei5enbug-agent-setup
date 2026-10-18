@@ -15,7 +15,6 @@ compatibility: >-
 # Skill Builder
 
 Use this English `SKILL.md` and its English references as the only executable sources.
-`SKILL.ko.md` and other `.ko.md` files are non-authoritative human translations; never load them during execution.
 
 Create and improve skills through an iterative draft → test → review → improve loop.
 
@@ -162,7 +161,9 @@ immediately.
 ### Translated mirrors
 
 Keep English as the canonical executable language. Give every human-readable English Markdown
-instruction or document an adjacent, meaning-equivalent Korean `.ko.md` mirror. Do not duplicate
+instruction or document a meaning-equivalent Korean `.ko.md` mirror. Keep each mirror where the
+repository's documented convention puts it, such as a `docs/ko/` tree that mirrors the source paths;
+without a convention, keep it adjacent to the source. Do not duplicate
 code, schemas, eval fixtures, generated artifacts, or documents already written in another language.
 
 A mirror is part of the same change as its source. Whenever you edit an authoritative file, update
@@ -172,8 +173,9 @@ no longer contains.
 A stale mirror is a defect even though no agent reads it. Readers use it to learn how the skill
 behaves, so an outdated mirror teaches a rule the skill does not follow.
 
-Each mirror must link its source and state its non-authoritative, human-only status. `SKILL.md` must
-tell the agent not to read mirrors during execution. When a rule reverses, verify that the mirror
+Each mirror must link its source and state its non-authoritative, human-only status. Only when a
+mirror sits inside a skill folder must that skill's `SKILL.md` tell the agent not to read it during
+execution. When a rule reverses, verify that the mirror
 states the new rule rather than merely adding text near the old one. When a source file is deleted
 or renamed, delete or rename its mirror in the same task.
 

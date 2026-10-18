@@ -10,7 +10,6 @@ compatibility: >-
 ---
 
 Use this English `SKILL.md` and its English references as the only executable sources.
-`SKILL.ko.md` and other `.ko.md` files are non-authoritative human translations; never load them during execution.
 
 A loose idea has arrived — too big for one agent session, and wrapped in fog: the way from here to
 the **destination** isn't visible yet. Decision navigation is about finding that way, not charging

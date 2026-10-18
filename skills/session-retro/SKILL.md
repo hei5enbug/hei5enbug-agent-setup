@@ -16,8 +16,7 @@ compatibility: >-
 
 # Session Retrospective
 
-Use this English `SKILL.md` and its English references as the only executable sources. `SKILL.ko.md` and other
-`.ko.md` files are non-authoritative human translations; never read them during execution.
+Use this English `SKILL.md` and its English references as the only executable sources.
 
 Find what went wrong or was repeated in a day's agent sessions, and turn it into evidence-backed skill
 improvements. The evidence comes from the session records; the improvements are decided in the main session.

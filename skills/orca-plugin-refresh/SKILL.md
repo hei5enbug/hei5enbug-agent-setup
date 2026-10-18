@@ -14,8 +14,7 @@ compatibility: >-
 
 # Orca Plugin Refresh
 
-Use this English `SKILL.md` as the only executable source. `SKILL.ko.md` is a non-authoritative human
-translation; never load it during execution.
+Use this English `SKILL.md` as the only executable source.
 
 This skill updates `hei5enbug-agent-setup` only after affected coding-agent sessions have ended. It can also
 apply a version that the user has already installed to running Orca sessions without ending them. It never

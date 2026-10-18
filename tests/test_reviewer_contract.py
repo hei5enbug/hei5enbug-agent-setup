@@ -74,7 +74,7 @@ class ReviewerContractTest(unittest.TestCase):
         """Claude manifest는 영어 reviewer 정의를 한 번 등록하고 한국어 미러는 비권위로 표시한다."""
         # Given
         manifest = json.loads((REPO_ROOT / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
-        mirror = (REPO_ROOT / "agents/ko/reviewer.ko.md").read_text(encoding="utf-8")
+        mirror = (REPO_ROOT / "docs/ko/agents/reviewer.ko.md").read_text(encoding="utf-8")
 
         # When
         agents = manifest["agents"]
@@ -83,7 +83,7 @@ class ReviewerContractTest(unittest.TestCase):
         self.assertEqual(agents.count("./agents/reviewer.md"), 1)
         self.assertEqual(len(agents), 5)
         self.assertIn("reviewer", manifest["userConfig"]["role_pinning"]["description"])
-        self.assertIn("영어 원본: [reviewer.md](../reviewer.md)", mirror)
+        self.assertIn("영어 원본: [reviewer.md](../../../agents/reviewer.md)", mirror)
         self.assertIn("비권위", mirror)
 
     def test_scout는_로컬_조사만_맡는다(self):

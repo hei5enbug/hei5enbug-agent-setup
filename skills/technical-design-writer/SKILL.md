@@ -39,8 +39,6 @@ reviewer selection.
 ## Authority and resources
 
 Use this file and the references it explicitly requires as executable instructions.
-`SKILL.ko.md` is a non-authoritative Korean mirror for human readers; do not read it during execution.
-
 For every Korean deliverable, read `references/korean-writing.md` before drafting or reviewing.
 
 For Create and Improve modes, read `references/design-documents.md` before drafting. That file owns the

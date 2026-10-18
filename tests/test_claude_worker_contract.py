@@ -20,9 +20,9 @@ import session_context  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKER = REPO_ROOT / "agents/worker.md"
-WORKER_MIRROR = REPO_ROOT / "agents/ko/worker.ko.md"
+WORKER_MIRROR = REPO_ROOT / "docs/ko/agents/worker.ko.md"
 SONNET_WORKER = REPO_ROOT / "agents/sonnet-worker.md"
-SONNET_WORKER_MIRROR = REPO_ROOT / "agents/ko/sonnet-worker.ko.md"
+SONNET_WORKER_MIRROR = REPO_ROOT / "docs/ko/agents/sonnet-worker.ko.md"
 CLAUDE_AGENTS = REPO_ROOT / "instructions/claude-agents.md"
 PLUGIN_MANIFEST = REPO_ROOT / ".claude-plugin/plugin.json"
 UNSUPPORTED_FIELDS = {
@@ -133,13 +133,13 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         self.assertEqual(sorted(listed), definitions)
         self.assertFalse(any("/ko/" in path for path in listed))
         mirror = WORKER_MIRROR.read_text(encoding="utf-8")
-        self.assertIn("영어 원본: [worker.md](../worker.md)", mirror)
+        self.assertIn("영어 원본: [worker.md](../../../agents/worker.md)", mirror)
         self.assertIn("비권위", mirror)
         sonnet_mirror = SONNET_WORKER_MIRROR.read_text(encoding="utf-8")
-        self.assertIn("영어 원본: [sonnet-worker.md](../sonnet-worker.md)", sonnet_mirror)
+        self.assertIn("영어 원본: [sonnet-worker.md](../../../agents/sonnet-worker.md)", sonnet_mirror)
         self.assertIn("비권위", sonnet_mirror)
-        reviewer_mirror = (REPO_ROOT / "agents/ko/reviewer.ko.md").read_text(encoding="utf-8")
-        self.assertIn("영어 원본: [reviewer.md](../reviewer.md)", reviewer_mirror)
+        reviewer_mirror = (REPO_ROOT / "docs/ko/agents/reviewer.ko.md").read_text(encoding="utf-8")
+        self.assertIn("영어 원본: [reviewer.md](../../../agents/reviewer.md)", reviewer_mirror)
         self.assertIn("비권위", reviewer_mirror)
 
     def test_designer_메타데이터는_고정_Opus_ID_xhigh와_Agent_금지를_정한다(self):
@@ -165,8 +165,8 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         self.assertIn("technical design document", metadata["description"])
         self.assertIn('Follow the "Assigned workers" rules in your session instructions or assignment', normalized)
         self.assertIn("report it to the coordinator and make no edit", normalized)
-        mirror = (REPO_ROOT / "agents/ko/designer.ko.md").read_text(encoding="utf-8")
-        self.assertIn("영어 원본: [designer.md](../designer.md)", mirror)
+        mirror = (REPO_ROOT / "docs/ko/agents/designer.ko.md").read_text(encoding="utf-8")
+        self.assertIn("영어 원본: [designer.md](../../../agents/designer.md)", mirror)
         self.assertIn("비권위", mirror)
 
     def test_매니페스트는_Mod_설정과_기본_구현_worker_옵션을_선언한다(self):

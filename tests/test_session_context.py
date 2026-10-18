@@ -38,7 +38,7 @@ class SessionContextTest(unittest.TestCase):
             shutil.copy2(REPO_ROOT / name, self.root / name)
             path = self.root / name
             path.write_text(path.read_text() + "\nROOT PROJECT SENTINEL\n")
-        for name in ("scripts", "instructions", "config"):
+        for name in ("scripts", "instructions", "config", "docs/ko/instructions"):
             shutil.copytree(REPO_ROOT / name, self.root / name)
         self.cwd = self.base / "unrelated project"
         self.cwd.mkdir()
@@ -749,7 +749,7 @@ class SessionContextTest(unittest.TestCase):
         self.assertEqual(before, self.context(self.run_hook(source="compact")))
 
     def test_korean_mirrors_are_not_loaded(self):
-        path = self.root / "instructions/session/common.ko.md"
+        path = self.root / "docs/ko/instructions/session/common.ko.md"
         path.write_text(path.read_text() + "\nKOREAN MIRROR SENTINEL\n")
         self.assertNotIn("KOREAN MIRROR SENTINEL", self.context(self.run_hook()))
 
@@ -1127,7 +1127,7 @@ class SessionContextTest(unittest.TestCase):
 
         # When
         moved = module.instructions_digest(other)
-        mirror = other / "instructions/session/common.ko.md"
+        mirror = other / "docs/ko/instructions/session/common.ko.md"
         mirror.write_text(mirror.read_text(encoding="utf-8") + "\n번역 수정\n", encoding="utf-8")
         after_mirror = module.instructions_digest(other)
         rule = other / "instructions/testing.md"

@@ -25,9 +25,15 @@ hei5enbug-agent-setup/
 ├── .codex-plugin/plugin.json
 ├── .github/workflows/validate.yml
 ├── AGENTS.md
-├── AGENTS.ko.md
 ├── CLAUDE.md
-├── CLAUDE.ko.md
+├── docs/
+│   └── ko/
+│       ├── AGENTS.ko.md
+│       ├── CLAUDE.ko.md
+│       ├── README.ko.md
+│       ├── agents/
+│       ├── instructions/
+│       └── skills/
 ├── hooks/hooks.json
 ├── hooks/mod/
 ├── config/claude-mod.json
@@ -65,12 +71,6 @@ hei5enbug-agent-setup/
 ├── LICENSE
 ├── pyproject.toml
 ├── agents/
-│   ├── ko/
-│   │   ├── designer.ko.md
-│   │   ├── reviewer.ko.md
-│   │   ├── scout.ko.md
-│   │   ├── sonnet-worker.ko.md
-│   │   └── worker.ko.md
 │   ├── designer.md
 │   ├── reviewer.md
 │   ├── scout.md
@@ -101,7 +101,7 @@ package the same `skills/` directory for Codex and Claude Code without copying s
 The `agents/` directory ships with the Claude Code plugin, so installing the bundle adds the
 `hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:worker`, `hei5enbug-agent-setup:sonnet-worker`,
 `hei5enbug-agent-setup:designer`, and `hei5enbug-agent-setup:reviewer` subagents. No manual copy is needed. The manifest
-lists only these five English definitions, so the Korean mirrors in `agents/ko/` are not registered.
+lists only these five English definitions, so the Korean mirrors in `docs/ko/` are not registered.
 
 Codex discovers subagents only in `~/.codex/agents/` and `.codex/agents/`, so a plugin cannot register one.
 Instead, the session hook copies `standalone-agents/codex-scout.toml`, `codex-worker.toml`,
@@ -761,7 +761,8 @@ run `python3 -m pytest` again to cover them.
 ## Instruction language
 
 English files are the canonical executable sources for plugin skills, references, agents, and session
-instructions. Every human-readable English Markdown file has a meaning-equivalent adjacent `.ko.md` mirror.
+instructions. Every human-readable English Markdown file has a meaning-equivalent `.ko.md` mirror under
+`docs/ko/`, following its source path relative to the repository root.
 Each mirror links its source, is non-authoritative, and must never be loaded during agent execution.
 Update, move, and delete each source and mirror together.
 
@@ -774,17 +775,17 @@ execution-path isolation; semantic equivalence still requires human or model rev
 
 | Skill | What it does |
 |---|---|
-| [`decision-navigator`](skills/decision-navigator/SKILL.md) | Maps a multi-session effort into decision tickets and resolves them one at a time until the implementation route is clear. [Korean guide](skills/decision-navigator/SKILL.ko.md). |
-| [`deep-interview`](skills/deep-interview/SKILL.md) | Runs a Socratic interview that scores requirement ambiguity after every answer and will not move to execution until it drops below the threshold. [Korean guide](skills/deep-interview/SKILL.ko.md). |
-| [`flowchart-design`](skills/flowchart-design/SKILL.md) | A shared design standard so flow charts built in SVG, HTML/CSS, Figma, or draw.io all read as one design system. [Korean guide](skills/flowchart-design/SKILL.ko.md). |
-| [`docs-rewrite`](skills/docs-rewrite/SKILL.md) | Rewrites existing text so it reads naturally while every claim, number, and level of certainty stays identical, and repairs AI-sounding Korean. [Korean guide](skills/docs-rewrite/SKILL.ko.md). |
-| [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Converts Markdown, HTML, PDF, DOCX, and Google Docs content into Confluence pages, preserves document structure and assets, and keeps pages synchronized with source revisions without losing web edits or inline comments. [Korean guide](skills/document-to-confluence/SKILL.ko.md). |
-| [`session-retro`](skills/session-retro/SKILL.md) | Reviews a day's Claude Code and Codex sessions of a repository with read-only scouts, turns corrections, failures, and repeated work into evidence-backed skill improvements per plugin, asks the open decisions, and writes plans on request. [Korean guide](skills/session-retro/SKILL.ko.md). |
-| [`skill-builder`](skills/skill-builder/SKILL.md) | Creates, tests, and packages agent skills through a draft → test → review → improve loop. [Korean guide](skills/skill-builder/SKILL.ko.md). |
-| [`orca-plugin-refresh`](skills/orca-plugin-refresh/SKILL.md) | Updates this plugin safely offline and applies an installed version to idle Orca-managed Claude Code and Codex sessions without restarting them. [Korean guide](skills/orca-plugin-refresh/SKILL.ko.md). |
-| [`suggest-commit`](skills/suggest-commit/SKILL.md) | Reads the staged and unstaged changes, or the scope you name, plus recent commit history, then suggests five commit messages that match the repo's style. When you ask it to commit, it commits with the single best subject instead. [Korean guide](skills/suggest-commit/SKILL.ko.md). |
-| [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | Writes or reviews technical design documents and RFCs without taking ownership of implementation planning. [Korean guide](skills/technical-design-writer/SKILL.ko.md). |
-| [`tiki-taka`](skills/tiki-taka/SKILL.md) | Runs a turn-limited debate between the current agent and an opposing Claude/Codex session to surface and resolve issues. [Korean guide](skills/tiki-taka/SKILL.ko.md). |
+| [`decision-navigator`](skills/decision-navigator/SKILL.md) | Maps a multi-session effort into decision tickets and resolves them one at a time until the implementation route is clear. [Korean guide](docs/ko/skills/decision-navigator/SKILL.ko.md). |
+| [`deep-interview`](skills/deep-interview/SKILL.md) | Runs a Socratic interview that scores requirement ambiguity after every answer and will not move to execution until it drops below the threshold. [Korean guide](docs/ko/skills/deep-interview/SKILL.ko.md). |
+| [`flowchart-design`](skills/flowchart-design/SKILL.md) | A shared design standard so flow charts built in SVG, HTML/CSS, Figma, or draw.io all read as one design system. [Korean guide](docs/ko/skills/flowchart-design/SKILL.ko.md). |
+| [`docs-rewrite`](skills/docs-rewrite/SKILL.md) | Rewrites existing text so it reads naturally while every claim, number, and level of certainty stays identical, and repairs AI-sounding Korean. [Korean guide](docs/ko/skills/docs-rewrite/SKILL.ko.md). |
+| [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Converts Markdown, HTML, PDF, DOCX, and Google Docs content into Confluence pages, preserves document structure and assets, and keeps pages synchronized with source revisions without losing web edits or inline comments. [Korean guide](docs/ko/skills/document-to-confluence/SKILL.ko.md). |
+| [`session-retro`](skills/session-retro/SKILL.md) | Reviews a day's Claude Code and Codex sessions of a repository with read-only scouts, turns corrections, failures, and repeated work into evidence-backed skill improvements per plugin, asks the open decisions, and writes plans on request. [Korean guide](docs/ko/skills/session-retro/SKILL.ko.md). |
+| [`skill-builder`](skills/skill-builder/SKILL.md) | Creates, tests, and packages agent skills through a draft → test → review → improve loop. [Korean guide](docs/ko/skills/skill-builder/SKILL.ko.md). |
+| [`orca-plugin-refresh`](skills/orca-plugin-refresh/SKILL.md) | Updates this plugin safely offline and applies an installed version to idle Orca-managed Claude Code and Codex sessions without restarting them. [Korean guide](docs/ko/skills/orca-plugin-refresh/SKILL.ko.md). |
+| [`suggest-commit`](skills/suggest-commit/SKILL.md) | Reads the staged and unstaged changes, or the scope you name, plus recent commit history, then suggests five commit messages that match the repo's style. When you ask it to commit, it commits with the single best subject instead. [Korean guide](docs/ko/skills/suggest-commit/SKILL.ko.md). |
+| [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | Writes or reviews technical design documents and RFCs without taking ownership of implementation planning. [Korean guide](docs/ko/skills/technical-design-writer/SKILL.ko.md). |
+| [`tiki-taka`](skills/tiki-taka/SKILL.md) | Runs a turn-limited debate between the current agent and an opposing Claude/Codex session to surface and resolve issues. [Korean guide](docs/ko/skills/tiki-taka/SKILL.ko.md). |
 
 ## Related
 

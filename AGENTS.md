@@ -17,9 +17,13 @@
   Preserve correctness and required validation while reducing unnecessary instruction loading, repeated reads,
   tool calls, and duplicated content. Reuse loaded instructions and validation results only while their relevant
   inputs remain unchanged. During local work, run checks affected by the change; broaden them for unresolved risks.
-- Maintain a complete, meaning-equivalent Korean `.ko.md` mirror for every human-readable English Markdown
-  file. Update, move, or delete both together. Do not duplicate code, schemas, test fixtures, generated
-  artifacts, or non-English documents.
+- Maintain a complete, meaning-equivalent Korean mirror for every human-readable English Markdown file at
+  `docs/ko/<repository-relative source path with the final .md replaced by .ko.md>`. Update, move, or delete
+  each source and its mirror together. Start each mirror with its title, then a quoted block linking the English
+  source with a relative path and stating that the mirror is non-authoritative and never read during execution.
+  Keep every `.ko.md` file out of `skills/`, `agents/`, and `instructions/`, and never link to a `.ko.md` file from
+  a file under those folders. Only a root reader document such as `README.md` may link Korean mirrors.
+  Do not duplicate code, schemas, test fixtures, generated artifacts, or non-English documents.
 - Before changing a skill, read `skills/skill-builder/SKILL.md` unless its current contents are already loaded.
   For a direct edit, read only its "Portability contract", "Core loop", and "Translated mirrors" sections; read the
   whole file to create a skill or to take its evaluation path. Follow its direct-edit or evaluation path as

@@ -15,8 +15,6 @@ compatibility: >-
 Turn an uncertain idea into an execution-ready specification.
 Ask one high-leverage question at a time, verify discoverable facts before asking, and do not implement until the user approves the final scope.
 
-The accompanying `SKILL.ko.md` is a Korean translation kept synchronized with this file for human readers. Do not read or use it during execution.
-
 Read these resources only when their stage is reached:
 
 - [`references/ask-ui.md`](references/ask-ui.md): before the first user question, and again after a context compaction or whenever its rules are no longer in context.
