@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -80,6 +81,154 @@ class SessionContextTest(unittest.TestCase):
         output = json.loads(result.stdout)["hookSpecificOutput"]
         self.assertEqual(output["hookEventName"], event)
         return output["additionalContext"]
+
+    def use_short_root(self):
+        """Run the hook from a short plugin path, as an installed plugin does, so notices fit the context budget."""
+        short = Path(tempfile.mkdtemp(prefix="h5", dir="/tmp")).resolve()
+        self.addCleanup(shutil.rmtree, short, True)
+        root = short / "p"
+        shutil.copytree(self.root, root)
+        self.root = root
+
+    def write_json(self, path, value):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(value), encoding="utf-8")
+
+    def test_Claude_세션_시작은_호스트_settings의_dontAsk를_알린다(self):
+        """Claude 호스트 설정의 dontAsk가 있으면 승인 요청이 자동 거부된다는 한 줄을 알린다."""
+        # Given
+        self.use_short_root()
+        home = self.base / "temporary home"
+        config = self.base / "alternate Claude config"
+        self.write_json(home / ".claude/settings.json", {
+            "permissions": {"defaultMode": "dontAsk", "ignored": "do not print"},
+            "ignored": "do not print",
+        })
+        self.write_json(config / "settings.json", {"permissions": {"defaultMode": "dontAsk"}})
+
+        # When
+        contexts = [
+            self.context(self.run_hook("claude", extra_env={"HOME": str(home)})),
+            self.context(self.run_hook("claude", extra_env={"HOME": str(home), "CLAUDE_CONFIG_DIR": str(config)})),
+        ]
+
+        # Then
+        for context in contexts:
+            self.assertIn("Notice: Claude Code defaultMode dontAsk denies every approval the guard asks for.", context)
+            self.assertNotIn("do not print", context)
+
+    def test_Claude_세션_시작은_Bash와_mcp_ask_규칙을_최대_세_개까지_알린다(self):
+        """Claude 프로젝트 설정의 Bash와 mcp ask 규칙은 최대 세 개의 이름만 알린다."""
+        # Given
+        self.use_short_root()
+        self.write_json(self.cwd / ".claude/settings.json", {
+            "permissions": {
+                "ask": [
+                    "Bash(git diff:*)",
+                    "mcp__server__tool",
+                    "Bash(ls:*)",
+                    "mcp__fourth__tool",
+                    "Read(*)",
+                ],
+                "ignored": "do not print",
+            },
+        })
+        self.write_json(self.cwd / ".claude/settings.local.json", {"permissions": {"ask": ["Bash(tail:*)"]}})
+
+        # When
+        with mock.patch.dict(os.environ, {"HOME": str(self.base / "temporary home")}, clear=False):
+            named_notice = session_context.session_start_notices("claude", self.cwd)[0]
+        context = self.context(self.run_hook("claude", extra_env={"HOME": str(self.base / "temporary home")}))
+
+        # Then
+        self.assertIn(session_context.CLAUDE_ASK_NOTICE_PREFIX, context)
+        self.assertIn("Bash(git diff:*)", named_notice)
+        self.assertIn("mcp__server__tool", named_notice)
+        self.assertIn("Bash(ls:*)", named_notice)
+        self.assertNotIn("mcp__fourth__tool", named_notice)
+        self.assertNotIn("mcp__fourth__tool", context)
+        self.assertNotIn("do not print", context)
+
+    def test_Claude_defaultMode는_로컬_프로젝트_사용자_순서로_우선한다(self):
+        """Claude는 실제 적용되는 defaultMode만 경고하고 모든 설정 파일의 ask 규칙은 합친다."""
+        for modes, expected in [
+            (("dontAsk", "default", None), False),
+            (("dontAsk", None, "default"), False),
+            (("default", "dontAsk", "acceptEdits"), False),
+            (("default", "dontAsk", None), True),
+            (("default", "acceptEdits", "dontAsk"), True),
+            (("dontAsk", None, None), True),
+        ]:
+            with self.subTest(modes=modes):
+                # given
+                config = self.base / "precedence config"
+                paths = (config / "settings.json", self.cwd / ".claude/settings.json",
+                         self.cwd / ".claude/settings.local.json")
+                for index, (path, mode) in enumerate(zip(paths, modes)):
+                    permissions = {"ask": [f"Bash(rule{index}:*)"]}
+                    if mode is not None:
+                        permissions["defaultMode"] = mode
+                    self.write_json(path, {"permissions": permissions})
+                # when
+                with mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": str(config)}, clear=False):
+                    notices = session_context.session_start_notices("claude", self.cwd)
+                # then
+                self.assertEqual(any("defaultMode dontAsk" in notice for notice in notices), expected)
+                self.assertTrue(all(f"Bash(rule{index}:*)" in "\n".join(notices) for index in range(3)))
+
+    def test_두_호스트의_세션_시작은_Codex_plugin_hooks가_true가_아니면_알린다(self):
+        """Codex 설정의 plugin_hooks가 true가 아니면 Claude와 Codex 세션 모두 approval guard가 Codex에서 실행되지 않는다고 알린다."""
+        # Given
+        self.use_short_root()
+        codex_home = self.base / "temporary Codex home"
+        (codex_home / "config.toml").parent.mkdir(parents=True, exist_ok=True)
+        (codex_home / "config.toml").write_text(
+            '[features]\nplugin_hooks = false\nignored = "do not print"\n', encoding="utf-8",
+        )
+
+        # When
+        contexts = [
+            self.context(self.run_hook(host, extra_env={"CODEX_HOME": str(codex_home), "HOME": str(self.base / "home")}))
+            for host in ("codex", "claude")
+        ]
+
+        # Then
+        for context in contexts:
+            self.assertIn("Notice: Codex runs no approval guard until [features] plugin_hooks = true.", context)
+            self.assertNotIn("do not print", context)
+
+    def test_한도를_넘는_notice는_줄이거나_빼고_세션_지침은_그대로_둔다(self):
+        """notice가 context 한도를 넘으면 ask 규칙 목록을 줄이고, 그래도 넘는 notice는 빼되 세션 지침은 실패시키지 않는다."""
+        # Given
+        context = "x" * 90 + "\n"
+        ask_notice = session_context.CLAUDE_ASK_NOTICE_PREFIX + ": Bash(git diff:*), mcp__server__tool."
+        other_notice = "Notice: " + "y" * 200
+        limit = len(context.encode("utf-8")) + len(session_context.CLAUDE_ASK_NOTICE_PREFIX) + 2
+
+        # When
+        result = session_context.append_session_notices(context, [ask_notice, other_notice], limit)
+
+        # Then
+        self.assertEqual(result, context + session_context.CLAUDE_ASK_NOTICE_PREFIX + ".\n")
+
+    def test_문제가_없으면_세션_시작_notice를_추가하지_않는다(self):
+        """정상 설정이면 두 호스트 모두 세션 시작 notice를 추가하지 않는다."""
+        # Given
+        home = self.base / "normal home"
+        self.write_json(home / ".claude/settings.json", {
+            "permissions": {"defaultMode": "acceptEdits", "ask": ["Read(*)"]},
+        })
+        codex_home = self.base / "normal Codex home"
+        (codex_home / "config.toml").parent.mkdir(parents=True, exist_ok=True)
+        (codex_home / "config.toml").write_text("[features]\nplugin_hooks = true\n", encoding="utf-8")
+
+        # When
+        claude = self.context(self.run_hook("claude", extra_env={"HOME": str(home)}))
+        codex = self.context(self.run_hook("codex", extra_env={"CODEX_HOME": str(codex_home)}))
+
+        # Then
+        for context in (claude, codex):
+            self.assertNotIn("Notice:", context)
 
     def test_both_hosts_receive_core_rules_for_all_session_sources(self):
         for host in ("codex", "claude"):

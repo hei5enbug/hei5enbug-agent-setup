@@ -36,8 +36,8 @@ CORE_OWNED = (
         "structural matching is clearly needed."
     ),
     (
-        "Ask before destructive, irreversible, or production-impacting actions every time, and before any other "
-        "write once per session. Name the write in one line. Never expose secrets."
+        "Ask every time before irreversible actions and once per session before other outward writes, production "
+        "changes included, unless the approval guard asks. Name the write in one line. Never expose secrets."
     ),
     "Before writing or editing any documentation file, read [documentation rules](../documentation.md).",
 )

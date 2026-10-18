@@ -131,7 +131,8 @@ verified evaluation runner when required. See the conditional [model routing con
 ### Claude Code mod
 
 On Claude Code, `config/claude-mod.json` loads the mod `hooks/mod/register.js`, which holds the Claude-only guards:
-the built-in subagent block, role pinning, session approvals, and the GPT refusal. It was tested with Claude Code
+the built-in subagent block, role pinning, and the GPT refusal. The [Approval guard](#approval-guard) holds approvals
+on both hosts. The mod was tested with Claude Code
 2.1.292. When the mod does not load, such as on an older Claude Code, with `disableAllHooks`, or under a managed
 policy, these guards are absent and the host's normal permission flow applies.
 
@@ -217,13 +218,14 @@ quote.
 
 A `PreToolUse` hook and a `PermissionRequest` hook, both `scripts/datagrip_guard.py`, run before the DataGrip MCP tool
 `execute_sql_query`. The guard reads the connection from `.idea/dataSources.xml` in the DataGrip project that
-`projectPath` names. A connection whose name contains `승인` always asks for approval. PostgreSQL and SQL Server reads
+`projectPath` names. PostgreSQL and SQL Server reads on unmarked, recognized connections
 run without approval, and PostgreSQL reads run inside a read-only transaction with
 `SET LOCAL statement_timeout = '60s';`. With `approval_guard` on, non-destructive PostgreSQL and SQL Server writes
-share the session write approval (`write:session`) with all other writes. Text that names `delete`, `drop`, or `truncate`
-anywhere, literals and comments included, a statement led by `DO`,
-`EXEC`, `EXECUTE`, or `CALL`, a connection whose name contains `승인`, an unknown connection, another
-database type, and text the guard cannot parse always ask. On Codex, a call that needs approval is denied with a code
+share the session write approval (`write:session`) with all other writes. Queries on connections whose name contains
+`승인`, unknown connections, other database types, and text the guard cannot parse use that approval too.
+Text that names `delete`, `drop`, or `truncate` anywhere, literals and comments included, and statements the SQL
+classifier treats as destructive, including those led by `DO`, `EXEC`, `EXECUTE`, or `CALL`, ask every time.
+On Codex, a call that needs approval is denied with a code
 instead; see [Approval guard](#approval-guard). With the toggle off, every write asks as before. In Codex, trust the
 hook in `/hooks`.
 
@@ -240,14 +242,16 @@ without approval.
 ### Approval guard
 
 A `PreToolUse` hook runs `scripts/approval_guard.py` before Bash, MCP, Claude file tools (`Read`, `Edit`, `Write`,
-`MultiEdit`, `NotebookEdit`), and Codex `apply_patch` calls. It also handles `PermissionRequest`, `PostToolUse`, and
-`UserPromptSubmit`. Reads run without approval on both hosts. Calls have these outcomes:
+`MultiEdit`, `NotebookEdit`), and Codex `apply_patch` calls. It also handles `PermissionRequest`, `PostToolUse`,
+`PostToolUseFailure`, and `UserPromptSubmit`. Reads run without approval on both hosts. Calls have these outcomes:
 
 - **Read** runs without approval.
-- **Write** asks once per session. One approval, the key `write:session`, covers every non-destructive write, whatever
-  its command or target, including MCP, DataGrip, and tabularis writes. The prompt names the write, for example
+- **Write** asks once, then runs for 12 hours in that session. One approval, the key `write:session`, covers every
+  write, whatever its command or target, including production changes, git pushes, MCP, DataGrip, and tabularis
+  writes. Unclassifiable calls are writes unless their text contains a destructive action. The prompt names the write:
   `Write: kubectl apply on (default) dev/web.`
-- **Always** asks every time for destructive or forced actions, existing sensitive CLI reads, and unclassified calls.
+- **Always** asks every time for irreversible actions, including destructive or forced actions and package publishing,
+  and for existing sensitive CLI reads. A classifier failure also asks every time.
   Its prompt starts with `Asks every time:`. When the call also carries write keys, approving it grants the session
   write approval too, and the prompt says so; a Codex denial for any call with session keys says it as well.
 - **Sensitive** warns that a call may expose a protected value, recommends `secret_exec.py`, and asks every time.
@@ -259,15 +263,36 @@ A `PreToolUse` hook runs `scripts/approval_guard.py` before Bash, MCP, Claude fi
 |---|---|---|---|---|
 | `kubectl`, `oc` | `get`, `describe`, `logs`, `diff`, any call with `--dry-run=client` or `--dry-run=server` | `get secret` with an output format that prints values, `get --raw` on a `secrets` path, `config view --raw`, `create token` | `delete`, `drain`, `--force`, `--prune` | kubeconfig, then context / namespace |
 | `helm` | `list`, `status`, `get notes`, `repo list` | none | `uninstall`, `get all`, `get manifest`, `get values` | kubeconfig, then context / namespace |
-| `az` | `list`, `show`, `exists`, `query`, `query-*`, `version`, `rest` GET on `https://management.azure.com` | `keyvault secret show` and `download`, `list-keys`, `account get-access-token`, `rest` GET on a Key Vault `/secrets` or `/keys` URL | `delete`, `purge`, `rest` DELETE | subscription / resource group |
+| `az` | `list`, `show`, `exists`, `query`, `query-*`, `version`; `rest` GET without `--resource` on `https://management.azure.com` or an unresolved variable URL | `keyvault secret show` and `download`, `list-keys`, `account get-access-token`, `rest` GET on a Key Vault `/secrets` or `/keys` URL | `delete`, `purge`, `rest` DELETE | subscription / resource group |
 | `terraform`, `tofu` | `plan`, `show`, `validate`, `state list`, `fmt -check`, `output` without `-json` or `-raw` | none | `destroy`, `apply -destroy`, `state rm`, `output -json`, `output -raw`, `state show` | directory : workspace |
 | `aws` | `describe-*`, `list-*`, `get-*` other than secret reads, `s3 ls` | `secretsmanager get-secret-value` and `batch-get-secret-value`, `ssm get-parameter*` with `--with-decryption`, `kms decrypt` | `delete-*`, `terminate-*`, `s3 rm`, `s3 sync --delete` | profile / region |
 | `gcloud`, `gsutil` | the first verb in the command path is `list`, `describe`, `get-*`, `ls`, or `cat` | `secrets versions access`, `auth print-access-token` | `delete`, `gsutil rm`, `gsutil rb` | project |
 | `docker`, `podman` | `ps`, `images`, `logs`, `<object> ls` | none | `rm`, `rmi`, `prune`, `compose down -v` | context |
-| `psql`, `sqlcmd` | a query that is a read; `psql` reads run with `default_transaction_read_only=on` and `statement_timeout=60000` | none | files, stdin, interactive use, text that names `delete`, `drop`, or `truncate`, and statements led by `DO`, `EXEC`, `EXECUTE`, or `CALL` | host / database |
+| `psql`, `sqlcmd` | a query that is a read; covered `psql` reads run with `default_transaction_read_only=on` and `statement_timeout=60000` | none | destructive SQL, including text that names `delete`, `drop`, or `truncate`, and statements led by `DO`, `EXEC`, `EXECUTE`, or `CALL` | host / database |
 | `curl` | GET/HEAD without data, form, upload, or JSON flags | none; credentials in argv are sensitive | destructive methods such as DELETE | method / scheme and host |
 | `kustomize` | every call | none | none | none |
-| `mysql`, `mongosh`, `redis-cli` | none | none | every call | none |
+| `mysql`, `mongosh`, `redis-cli` | none; explicit local hosts pass | none | unclassified text containing a destructive action | none |
+| `git` | `status`, `show`, `log`, `diff`, `ls-remote`, `describe`, `rev-parse`, tag listing and verification | none | force, delete, mirror, or prune pushes; forced or deleted tags; `reset --hard`; forced `clean` without a dry run; forced checkout or checkout of `.`; restore of `.` or `:/` except index-only restore; `stash drop` and `stash clear` | command |
+| `gh` | read verbs such as `view`, `list`, `ls`, `status`, `checks`, `diff`, `search`, `watch`, `browse`; `auth status`, `config get`/`list`, version/help, `api` GET and inline GraphQL queries | `auth token` | `delete` in any area, `api` DELETE | command |
+
+Other covered non-destructive CLI operations use the session write approval. Files, stdin, and interactive use of
+remote SQL clients are unclassified writes unless destructive text makes them always ask. Explicit local hosts
+(`localhost`, `127.0.0.1`, `::1`, or a socket path) pass for `psql`, `mysql`, `redis-cli`, and `mongosh`.
+`gh api` data flags and `--input` imply a write unless an explicit GET overrides them. An inline GraphQL field is a
+read only when, after removing `#` comments and leading whitespace, it starts with `query` or `{` and contains no
+`mutation` word. Mutations and query files are writes. Unknown `gh` actions are writes; `gh pr checkout` and
+`gh repo clone` pass to the host. Git tag creation and pushes, and `gh` writes such as release creation, editing,
+and uploads, use the same approval on both hosts.
+
+Package publishing (`npm`, `pnpm`, `yarn`, `uv`, `poetry`, `cargo`, `twine upload`, and `gem push`) asks every time,
+including when options precede the publishing subcommand.
+Recursive `rm` asks every time for protected or external paths, including the session folder, its ancestors, the home
+folder, `/`, `.git` and its contents, and unresolved targets. Removal within the session folder or temporary/cache
+roots otherwise passes. Commands inside `kubectl`/`oc`/`docker`/`podman` `exec` also use the normal classifier:
+destructive commands ask every time and secret output is denied; other `exec` calls are writes.
+Any `codex` invocation with sandbox bypass flags or `danger-full-access`, including a configuration override,
+asks every time. Worker access outside the session folder through `codex exec` (or `e`) with `--add-dir` or
+`-C`/`--cd` before or after the subcommand, or through `role_runner.py --add-dir`, is a write.
 
 A write is described by `<cli>:<subcommand>@<target>`, where the subcommand is the words before the first flag. The
 prompt shows it as `<cli> <subcommand> on <target>`, and one `write:session` approval covers every such write. For `kubectl`,
@@ -275,21 +300,22 @@ prompt shows it as `<cli> <subcommand> on <target>`, and one `write:session` app
 context and namespace; a context that is not given is read through the same kubeconfig. Any other parseable subcommand
 is a write, so `kubectl apply` and `helm upgrade` ask only until the first write is approved for the session. The body
 of a `$(...)` or backtick substitution is classified like a command of its own and merged into the call. A substitution
-whose command verb is an unexpanded variable stays always. A covered command inside an `eval`, `xargs`, or `sh -c` with
-any flag cluster that contains `c` is always. When a region itself prints a secret, the whole command is denied. A
-heredoc on a covered command is always. A heredoc body is data, and is not scanned, only when its command is `cat`,
-`tee`, `head`, `tail`, `wc`, `sort`, `uniq`, `cut`, `tr`, `base64`, `xxd`, `od`, `grep`, `egrep`, `fgrep`, `rg`, `jq`,
+whose command verb is an unexpanded variable is an unclassified write unless it contains a destructive action.
+Commands inside `eval`, `xargs`, or `sh -c` with any flag cluster that contains `c` are classified too.
+When a region itself prints a secret, the whole command is denied. A heredoc on a covered command is an unclassified
+write unless it contains a destructive action. A heredoc body is data and is not scanned when its command is `cat`,
+`tee`, `echo`, `printf`, `head`, `tail`, `wc`, `sort`, `uniq`, `cut`, `tr`, `base64`, `xxd`, `od`, `grep`, `egrep`,
+`fgrep`, `rg`, `jq`,
 `column`, `fold`, `fmt`, `nl`, `tac`, `rev`, `cmp`, `diff`, `git`, or `gh`, its output is not piped onward, and every
-file it writes ends in a data suffix (`.md`, `.markdown`, `.txt`, `.json`, `.jsonl`, `.yaml`, `.yml`, `.toml`, `.csv`,
-`.tsv`, `.html`, `.htm`, `.xml`, `.patch`, `.diff`, `.log`, `.rst`, `.ini`, `.cfg`, `.conf`) or is `/dev/null`,
-`/dev/stdout`, or `/dev/stderr`. Any other receiver or target keeps the body scanned. Only the substitutions that an
+file it writes is not later run by `bash`, `sh`, `zsh`, or `source` in the same command text. File suffixes do not
+change that rule. Other receivers keep the body scanned. Only the substitutions that an
 unquoted delimiter lets the shell run are still classified. A segment whose program word comes from a substitution or
-an unexpanded variable and that names a covered CLI is always. A `command -v` lookup runs nothing and is not
+an unexpanded variable and that names a covered CLI is unclassified. A `command -v` lookup runs nothing and is not
 classified.
 
 A compound command is judged as a whole. A secret segment denies it. When any segment is always, the call asks, and
-its approval covers the always keys (once) and the write keys (session). Otherwise a write asks for its keys, unless a
-segment is not verified or the output goes to a file, in which case the whole command always asks. A covered read
+its approval covers the always keys (once) and the write keys (session). Otherwise any write makes the whole command
+a write, even with an unverified segment or file output. A covered read
 stays a read only when every other segment is a filter such as `grep`, `head`, or `jq`, and output redirections go
 only to `/dev/null` or `2>&1`. Wrappers such as `sudo`, `env`, `nice`, and `time` are skipped, with their options,
 before the executable is read. Targets for write and always calls come from flags or the environment. When neither is
@@ -300,26 +326,34 @@ A `psql` read is rewritten to run in a subshell with `PGOPTIONS` extended by
 read check misses
 a function call, and the option never reaches later commands.
 
-The guard reads shell files invoked by `bash`, `sh`, `zsh`, `./`, `source`, or `.`, Python `.py` files, Node `.js` and
-`.mjs` files, Makefile recipes for the selected/default target and one level of prerequisites, and the script text in
+The guard reads shell files invoked by `bash`, `sh`, `zsh`, `./`, `source`, or `.`, Python files,
+Makefile recipes for the selected/default target and one level of prerequisites, and the script text in
 `package.json` for `npm`, `pnpm`, or `yarn run <name>`. Files resolve from the event's `cwd` and are limited to 256 KiB.
 A `cd <dir>` moves that base for the later segments only when it runs unconditionally in the current shell: outside
 parentheses, after nothing or `;`, and before nothing, `;`, or `&&`. `$NAME` or `${NAME}` that an earlier standalone
 assignment set is expanded in the path; a prefix assignment (`NAME=value cmd`) never expands its own command's
-arguments. An unassigned variable leaves the script unreadable, so it is always.
-Shell lines and Makefile recipes use the CLI classifier. Python/Node strings starting with a covered CLI and literal
-argv lists are classified too. Reads need no approval; writes combine their keys; destructive, forced, and secret
-calls keep their normal rules. Unreadable or larger files are unclassified. A script naming a covered CLI or importing
+arguments. An unassigned variable leaves the script unreadable, so it is unclassified.
+Shell lines and Makefile recipes use the CLI classifier. Python inline code, heredocs, stdin files, and script files
+are writes when they run a process or import a cloud/database SDK. Literal process commands, including keyword
+arguments, are classified. Destructive process commands, SDK call names, or destructive text in Python that runs a
+process or imports an SDK ask every time. Other Python passes, even when its strings name CLI
+commands; an explicit `--execute` still makes it a write. Node and other non-shell, non-Python executables pass.
+Reads need no approval; writes combine their keys; destructive, forced, and secret calls keep their normal rules.
+Unreadable or larger script files are unclassified. An inspected shell script naming a covered CLI or importing
 `boto3`, `azure`, `kubernetes`, `psycopg`, `psycopg2`, `pymysql`, `sqlalchemy`, `pymongo`, `redis`, or `google.cloud`
-without a classifiable call asks every time. Its `script:<sha256>` key includes its path, argv, content, and the values
+without a classifiable call is unclassified too. These calls are writes unless their text contains a destructive
+action. A script's `script:<sha256>` key includes its path, argv, content, and the values
 of `KUBECONFIG`, `AWS_PROFILE`, `CLOUDSDK_CORE_PROJECT`, and `DOCKER_CONTEXT`. A script with none of these passes.
 
 MCP tool names split at `_`, `-`, and camelCase. Destructive name words always ask. String fields `sql`,
 `statement`, and `queryText`, and a `query` field whose text starts like a SQL statement (a search phrase does not), use
 the DataGrip SQL classifiers: reads run freely, destructive statements always ask,
 and other SQL is a session write. Execution name words (`repl`, `exec`, `execute`, `eval`, `run`, `code`, `script`,
-`command`) are writes unless their input contains a destructive word, which always asks. For other names, a write
-word takes precedence; names with only read verbs are reads, and names with no known verb are writes. The
+`command`) are writes unless their input contains a destructive word, which always asks. An explicit
+`action` input overrides ordinary name verbs: a destructive action always asks, and SQL fields take precedence over
+other actions. Without SQL, a read action is a read and a write action is a write. Without that input, a name
+starting with a read verb is a read even if a later word names a write;
+otherwise a write word takes precedence over read words. Names with no known verb are writes. The
 session write approval covers every non-destructive MCP write for that session, including DataGrip and tabularis writes.
 
 For `mcp__tabularis__run_query`, `connection_id` resolves an ID or name from tabularis' `connections.json`.
@@ -328,8 +362,10 @@ The config directory is `~/Library/Application Support/tabularis` on macOS, `$XD
 The guard extracts only `id`, `name`, and `params.driver`; it never prints other connection fields or passwords.
 `postgresql` uses the PostgreSQL classifiers; `sqlserver` and `sqlserver-entra` use the SQL Server classifiers.
 Reads run without approval; non-destructive writes are session writes. A name containing `승인`, another driver, an
-unknown connection, or an unreadable file always asks. So do raw `delete`, `drop`, or `truncate` words and statements
-led by `DO`, `EXEC`, `EXECUTE`, or `CALL`. These queries use `sql:always:tabularis:<id>:<digest>` keys. Other tabularis
+unknown connection, an unreadable file, or unparseable query text uses the session write approval.
+Raw `delete`, `drop`, or `truncate` words and statements the SQL classifier treats as destructive, including those
+led by `DO`, `EXEC`, `EXECUTE`, or `CALL`, ask every time. Those queries use
+`sql:always:tabularis:<id>:<digest>` keys. Other tabularis
 tools keep the name rules.
 
 `curl` without a request method other than GET/HEAD and without `-d`, `--data*`, `-F`, `--form`, `-T`,
@@ -338,9 +374,12 @@ tools keep the name rules.
 
 Claude `Read` and Bash reads (`cat`, `less`, `head`, `tail`, `grep`, `rg`) of `~/.kube/config`, any `KUBECONFIG` path,
 `~/.aws/credentials`, `~/.aws/config`, `~/.azure/**`, `~/.config/gcloud/**`, `~/.pgpass`, `~/.docker/config.json`,
-`~/.netrc`, or `.env*` files are sensitive. So are `printenv`, `env` without a command, `kubectl exec ... env|printenv`,
+`~/.netrc`, or `.env*` files are sensitive. So are unfiltered `printenv`, `env` without a command,
+`kubectl exec ... env|printenv`,
 `docker inspect`, and `docker exec ... env`. Claude asks with “This may expose a protected value; prefer
 secret_exec.py ...”; Codex denies with a one-time code. These approvals never become session approvals.
+`printenv` with only non-secret variable names is a read. Supported `grep`/`rg` filters on `env` or `printenv` are
+reads when no matched name is secret; count-only output is also a read. Filters that cannot be checked stay sensitive.
 
 Prepare a bundle before running writes:
 
@@ -348,32 +387,41 @@ Prepare a bundle before running writes:
 python3 <plugin root>/scripts/approval_guard.py request --key write:session --why 'Deploy the requested change and update the issue'
 ```
 
-Claude asks showing every key and the reason, then records the keys in `PostToolUse`. Codex denies with one code for
-the bundle and records it only when the user types `승인 <CODE>`. The command prints the keys and exits 0; it never
+Claude asks showing every key and the reason, then records the session keys only when that asked call reaches
+`PostToolUse` or `PostToolUseFailure`. A failed approved write still grants the session approval. A call allowed by
+an existing approval cannot renew it after expiry. Codex denies with one code for
+the bundle and records it when the user types `승인 <CODE>`, or `승인` alone if only one request is pending.
+The command prints the keys and exits 0; it never
 writes approval state itself. The key is `write:session`; the older `<cli>:<kind>@<target>` and `mcp:session` forms are still accepted and approve
 the same session write approval. Destructive or forced kinds,
-sensitive reads, unclassified calls, `sql:always:*`, and destructive `mcp:<tool>` keys cannot be pre-approved.
+sensitive reads, `sql:always:*`, and destructive `mcp:<tool>` keys cannot be pre-approved. Explicit `unclassified`
+request-key forms are rejected too; the session write approval still covers non-destructive unclassified calls.
 
 On Codex, a call that needs approval is denied with a code:
 
 ```text
-Approval required: kubectl apply on (default) dev/web. Ask the user to reply `승인 K7M2QX`; do not retry until they do.
+Approval required: kubectl apply on (default) dev/web. Approving also allows writes for 12 hours in this session.
+Ask the user to reply `승인 K7M2QX`; do not retry until they do.
+Replying `승인` alone also works when this is the only pending request.
 After the user replies with the code, retry this exact call immediately and continue the task without asking again.
 ```
 
-The user types `승인 <CODE>` or `approve <CODE>` in chat. A `UserPromptSubmit` hook records the code, and the agent
+The user types `승인 <CODE>` or `approve <CODE>` in chat. `승인` or `approve` alone works only when exactly one request
+is pending. A `UserPromptSubmit` hook records the approval, and the agent
 immediately retries the exact call and continues the task without asking again. Both hosts add the approved
 descriptions and that retry instruction to `UserPromptSubmit` context. A code covers every key of the denied call: its
 always keys as one-time approvals and its write keys as
-session approvals. If a Codex one-time approval is in flight without `PostToolUse`, the next attempt for the same key
+session approvals. A session write approval expires 12 hours after it is granted; using it does not extend its
+lifetime. The next write after expiry asks again and starts a new 12-hour period when approved.
+If a Codex one-time approval is in flight without `PostToolUse` or `PostToolUseFailure`, the next attempt for the same key
 may reuse it once without a new code. The approval moves to that retry; another interruption needs a new approval
-request. `PermissionRequest` allows only the call holding the approval, and `PostToolUse` releases it.
+request. `PermissionRequest` allows only the call holding the approval, and `PostToolUse` or `PostToolUseFailure` releases it.
 
 Each session counts issued approval requests per key until a call completes. Claude asks and Codex code responses
-count, including repeating a pending code. After three requests without `PostToolUse`, a fourth request is denied:
+count, including repeating a pending code. After three requests without `PostToolUse` or `PostToolUseFailure`, a fourth request is denied:
 “This call was approved but did not complete three times; stop retrying and report to the user.” An approval already
-given is honored, including a retry approved by the third code. `PostToolUse` resets the count for the completed
-call's keys. Already approved session keys do not use another key's request budget.
+given is honored, including a retry approved by the third code. `PostToolUse` or `PostToolUseFailure` resets the count
+for the finished call's keys. Already approved session keys do not use another key's request budget.
 
 The agent cannot approve anything itself. A Bash command that names the
 approval or heartbeat state directory, or that runs `approval_guard.py`, `datagrip_guard.py`, or `approval_state.py` as
@@ -393,6 +441,12 @@ names the source with `timed out`.
 A role runner child with `HEI5ENBUG_PARENT_SESSION=<host>:<session_id>` also reads the parent's approved keys without
 changing its state. Malformed values are ignored. Children cannot record codes from `UserPromptSubmit` or run
 `request`; an unapproved write is denied with instructions to request approval in the main session and retry.
+Parent approval expiry applies to children too. Every irreversible action in a child is denied for approval in the
+main session. Claude children that may edit receive `Bash` in both `--tools` and `--allowedTools`; their guard still
+denies unapproved writes and irreversible actions.
+
+Do not add Claude `permissions.ask` rules for covered writes: they prompt every time even after a session approval.
+Claude `defaultMode: dontAsk` denies approvals the guard asks for.
 
 Every event carrying a valid session ID touches `$XDG_STATE_HOME/hei5enbug-agent-setup/heartbeats/<host>-<session_id>`
 and its `.<EventName>` file before the toggle check, on a best-effort basis. `PreToolUse` also writes the SHA-256 of
@@ -409,43 +463,9 @@ deleted when another approval is written. Set `approval_guard` to `false`, or `H
 Codex, to turn the guard off. In Codex, trust the hooks in `/hooks`.
 
 
-### Session approvals
-
-On Claude Code only, the mod lets you approve certain outward-facing writes once per session. For each Bash and MCP tool
-call, its `tool.check` hook classifies the action and asks the first time a covered kind runs in the session. The prompt reads `Write: <what>. Approve once; git tag/push,
-gh release, and extra-directory writes then run without asking for the rest of this session.` When the
-call succeeds, its `tool.call` hook reuses that classification for the same tool call instead of classifying it again,
-and records one key, `write:session`, in the mod store (`$.store`) under the session ID, so every later covered action
-in that session runs without a prompt. It covers creating git tags; pushing tags to a
-configured remote; `gh release create` and `gh release edit` with only the tag and the flags `--title`, `--notes`,
-`--target`, `--generate-notes`, `--notes-from-tag`, `--latest`, `--draft`, `--prerelease`, `--verify-tag`; and MCP tools
-and a Codex worker's access to a directory outside the session folder (`codex exec`
-with `--add-dir` or `-C`, or `python3 <plugin>/scripts/role_runner.py worker` or a writing capability with `--add-dir`).
-MCP tools are covered by the [Approval guard](#approval-guard) on both hosts, and the DataGrip query tool by the
-DataGrip query guard. The mod and the guard keep separate session approvals, so one session can ask once in each.
-
-Destructive actions always ask: force pushes, deleting remote branches or tags, deleting a tag, `gh release delete`,
-`gh repo delete`. Destructive MCP tools always ask through the [Approval guard](#approval-guard).
-`gh release upload` always asks too, because it can publish any local file. So does `codex exec` with
-`danger-full-access`, `--dangerously-bypass-approvals-and-sandbox`, `--dangerously-bypass-hook-trust`, or a `-c`
-override of sandbox settings. So does a tag push to a URL, an unlisted remote, or `--repo`, or one that mixes a branch
-into a `--tags` push, and so does a `gh release create` or `gh release edit` with attached assets, `--notes-file`, or
-any other flag. A `role_runner.py` call with an unknown option, an expansion or glob token, or a redirect counts as
-unverifiable and always asks. A compound command that contains anything the mod cannot verify always asks. A plain
-`echo` with literal text after a covered command, such as `git tag v1 && echo done`, does not stop the approval from
-applying; an `echo` with a variable, command substitution, glob, redirect, or pipe still asks. The mod store is local to
-each session. The approval guard can read parent approvals when the role runner supplies
-`HEI5ENBUG_PARENT_SESSION`; see [Approval guard](#approval-guard). Approvals belong to one session, and the mod drops
-stored entries older than 7 days. Ordinary pushes and
-all other commands keep the normal permission flow.
-
-Do not add `permissions.ask` rules for these actions, because an ask rule prompts every time even after a session
-approval.
-
-
 ## Feature options
 
-Seven boolean features can be turned off, and each defaults to on. The implementation worker route and the review
+Six boolean features can be turned off, and each defaults to on. The implementation worker route and the review
 model are string options in Claude Code. Choose `auto`, `codex`, `haiku`, `sol`, or `sonnet` for the route; an unset
 or unrecognized value uses `auto`, where the main session picks the worker per assignment. The review model runs independent validation and skill review roles at `xhigh`. Choose one of the
 seven pinned model IDs; an unset or unrecognized value uses `gpt-6-astra`. Set plugin options in `/config` or with
@@ -455,7 +475,6 @@ session. A value of `false`, `0`, `off`, or `no`, in any letter case, turns a bo
 | Feature | Claude Code `/config` key | Codex environment variable |
 |---|---|---|
 | Block built-in subagents | `agent_guard` | `HEI5ENBUG_AGENT_GUARD` |
-| One-time session approval | `session_approval` | Not applicable |
 | Pin role models | `role_pinning` | Not applicable |
 | Implementation worker route | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, or `sonnet`) | Not applicable |
 | Review model | `review_model` (a pinned model ID, default `gpt-6-astra`) | Not applicable |
@@ -502,14 +521,14 @@ for locating the script. No user or project instruction file is copied, linked, 
 
 | When | Behavior |
 |---|---|
-| Session starts or resumes | `SessionStart` supplies the installed instruction files. In an Orca terminal it also writes a marker with the plugin directory and an instructions digest. |
+| Session starts or resumes | `SessionStart` supplies the installed instruction files and adds one-line prerequisite notices when needed: Claude `defaultMode` is `dontAsk`, Claude `permissions.ask` matches Bash or MCP tools (up to three rules named), or an existing Codex config lacks `[features] plugin_hooks = true` (checked on both hosts). Notices must fit the context limit. In an Orca terminal it also writes a marker with the plugin directory and an instructions digest. |
 | Session clears or compacts | `SessionStart` supplies them again. |
 | A subagent starts | `SubagentStart` supplies a short role context: `core.md`, plus the "Assigned workers" rules for implementation agents. |
 | A role runner child session starts | It receives `core.md` only; the runner puts the role rules before the assignment. |
 | A tool call finishes | `PostToolUse` adds a language reminder after a progress update in another language. |
 | A reply ends | `Stop` asks for a rewrite when the reply is not in the response language. |
 | A DataGrip query is about to run | `PreToolUse` and `PermissionRequest` run the DataGrip query guard before `execute_sql_query`. |
-| A Bash, MCP, or covered file tool call runs | `PreToolUse` runs the approval guard, including file-state protection and sensitive reads. `PermissionRequest` (Codex) and `PostToolUse` read or record approvals. `UserPromptSubmit` records a user code and supplies immediate-retry context on both hosts. On Claude Code, the mod's `tool.check` and `tool.call` hooks run the session approval for Bash tools. |
+| A Bash, MCP, or covered file tool call runs | `PreToolUse` runs the approval guard, including file-state protection and sensitive reads. `PermissionRequest` (Codex), `PostToolUse`, and `PostToolUseFailure` read or record approvals. `UserPromptSubmit` records user approval and supplies immediate-retry context on both hosts. |
 | A matching task begins | The agent reads the required reference under `instructions/`. |
 | A plugin update is installed | A new session reads that installed version. A repository push alone changes nothing locally. |
 
@@ -594,7 +613,9 @@ for its fallback entry, and `--resume <session_id>` to continue a run from the `
 puts the role rules before the assignment, runs the role on its pinned model, effort, and permissions (`codex exec`, or
 `claude -p` for a Claude model), checks the host rollout or transcript record, and prints a final JSON status line.
 Without `--mcp`, a Codex child gets `-c mcp_servers.<name>.enabled=false` for every server `codex mcp list --json` names,
-and a Claude child keeps `--strict-mcp-config`. Each child receives `HEI5ENBUG_PARENT_SESSION` so it can use the main
+and a Claude child keeps `--strict-mcp-config`. A Claude child that may edit also receives `Bash` in `--tools` and
+`--allowedTools`; the guard denies writes the main session has not approved and every irreversible action.
+Each child receives `HEI5ENBUG_PARENT_SESSION` so it can use the main
 session's approvals. Before sending the assignment to Codex, the runner sends “Run the shell command `true` exactly
 once, then reply with OK only.” and requires `heartbeats/codex-<thread_id>.PreToolUse`. This confirms that the guard
 received a tool event; a plain, `UserPromptSubmit`, or `SessionStart` heartbeat does not satisfy that check. Claude

@@ -31,12 +31,6 @@
       "description": "Hide the built-in general-purpose, Explore, Plan, and claude agents and deny forked subagents so work goes to the plugin's scout and worker agents.",
       "default": true
     },
-    "session_approval": {
-      "type": "boolean",
-      "title": "One-time session approval",
-      "description": "Approve each covered outward write (git tags, tag pushes, gh release create or edit, and Codex worker access to a directory outside the session folder) once per session; destructive or unverifiable actions always ask.",
-      "default": true
-    },
     "role_pinning": {
       "type": "boolean",
       "title": "Pin role models",
@@ -66,13 +60,13 @@
     "datagrip_guard": {
       "type": "boolean",
       "title": "DataGrip query guard",
-      "description": "Run DataGrip reads without approval with a 60-second PostgreSQL limit; share session approval for non-destructive MCP writes, and ask every time for marked sources or destructive queries.",
+      "description": "Run DataGrip reads without approval with a 60-second PostgreSQL limit; use the session write approval for writes and for every query on a data source marked as needing approval; ask every time for destructive queries.",
       "default": true
     },
     "approval_guard": {
       "type": "boolean",
       "title": "Approval guard",
-      "description": "Run covered CLI, script, database, and MCP reads without approval; approve non-destructive writes once per session per key, including pre-approval bundles; share mcp:session for MCP writes; ask every time for destructive, sensitive, or unclassified calls; deny secret-printing commands and approval-state edits.",
+      "description": "Run covered CLI, script, database, and MCP reads without approval; ask once per session for writes, including production changes and git pushes, then allow writes for 12 hours; ask every time only for irreversible actions such as deletes, DROP or TRUNCATE, force pushes, discarding uncommitted work, and package publishing; deny secret-printing commands and approval-state edits.",
       "default": true
     }
   }

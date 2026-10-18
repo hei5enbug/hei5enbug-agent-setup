@@ -212,7 +212,7 @@ class RoleRunnerTest(unittest.TestCase):
         """A capability run on Claude: the read set and the read-only shell, plus edits in approved directories when it writes."""
         tools = ["Read", "Grep", "Glob", "Bash", *(["Edit", "Write"] if writing else [])]
         rules = [f"Edit(/{directory}/**)" for directory in add_dirs]
-        allowed = ["Read", "Grep", "Glob", *SHELL_RULES, *(rules if writing else [])]
+        allowed = ["Read", "Grep", "Glob", *SHELL_RULES, *(rules if writing else []), *(["Bash"] if writing else [])]
         argv = ["-p"]
         if resume is not None:
             argv += ["--resume", resume]
@@ -230,8 +230,10 @@ class RoleRunnerTest(unittest.TestCase):
         allowed = ["Read", "Grep", "Glob", *SHELL_RULES, *web]
         if writing:
             allowed += [f"Edit(/{d}/**)" for d in add_dirs]
+        if writing or mcp:
+            allowed += ["Bash"]
         if mcp:
-            allowed += ["Bash", "mcp__*"]
+            allowed += ["mcp__*"]
         argv = ["-p", "--model", model, "--effort", effort, "--output-format", "json", "--tools", *tools]
         if not mcp:
             argv.append("--strict-mcp-config")
@@ -1529,8 +1531,8 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(4, completed.returncode)
         self.assertFalse(self.result.exists())
 
-    def test_Claude_쓰기_실행은_bare_Bash_없이_읽기_셸_목록만_Bash를_허용한다(self):
-        """Claude 경로의 쓰기 실행은 dontAsk로 읽기 셸 목록과 승인된 디렉터리의 절대 경로 Edit 규칙만 허용하고, bare Bash와 Write 경로 규칙은 주지 않는다."""
+    def test_Claude_쓰기_실행은_bare_Bash와_승인된_편집_규칙을_허용한다(self):
+        """Claude 경로의 쓰기 실행은 dontAsk로 읽기 셸 목록, bare Bash, 승인된 디렉터리의 절대 경로 Edit 규칙을 허용한다."""
         # Given
         directory = str(self.base / "approved")
         self.write(self.codex_home / "agents" / "worker.toml", 'name = "worker"\ndeveloper_instructions = """\nCODEX WORKER BODY\n"""\n')
@@ -1547,7 +1549,7 @@ class RoleRunnerTest(unittest.TestCase):
                 # Then
                 self.assertEqual(0, completed.returncode, completed.stderr)
                 rules = allowed_rules(self.logged()["argv"])
-                self.assertNotIn("Bash", rules)
+                self.assertIn("Bash", rules)
                 self.assertTrue(set(SHELL_RULES) <= set(rules))
                 self.assertIn(f"Edit(/{directory}/**)", rules)
                 self.assertFalse([rule for rule in rules if rule.startswith("Write(")])
@@ -2054,8 +2056,8 @@ class RoleRunnerTest(unittest.TestCase):
         argv = self.logged()["argv"]
         self.assertEqual(
             ["-p", "--model", "claude-haiku-5-5", "--effort", "xhigh", "--output-format", "json",
-               "--tools", "Read", "Grep", "Glob", "Edit", "Write", "--strict-mcp-config",
-               "--permission-mode", "dontAsk", "--allowedTools", "Read", "Grep", "Glob",
+               "--tools", "Read", "Grep", "Glob", "Bash", "Edit", "Write", "--strict-mcp-config",
+               "--permission-mode", "dontAsk", "--allowedTools", "Read", "Grep", "Glob", "Bash",
                *[f"Edit(/{item.resolve().as_posix()}/**)" for item in directories],
                "--add-dir", str(directories[0]), "--add-dir", str(directories[1])],
             argv,

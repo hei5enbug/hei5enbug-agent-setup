@@ -84,7 +84,7 @@
 
   | Work | Worker |
   |---|---|
-  | Easy: one cohesive change with a stated edit and checks that cover it fully | `haiku_worker`: `claude -p --model claude-haiku-5-5 --effort xhigh --output-format json` with the assigned-worker rules and task on stdin, preserving the task's tool permissions and allowed paths |
+  | Easy: one cohesive change with a stated edit and checks that cover it fully | `haiku_worker`: `claude -p --model claude-haiku-5-5 --effort xhigh --output-format json` with the assigned-worker rules and task on stdin, preserving the task's tool permissions and allowed paths, plus `Bash` with `HEI5ENBUG_PARENT_SESSION=claude:$CLAUDE_CODE_SESSION_ID` so the approval guard, not `dontAsk`, gates its shell commands |
   | Normal or hard: a behavioral change, several files, parsing, security, or concurrency | `worker` (`gpt-6.1-sol` / `high`): in Claude Code, `role_runner.py implementation --fallback --instructions <worker role definition>` run from the folder that holds the allowed paths; in Codex, the `worker` role |
   | Codex weekly usage above 70 percent (read as for the final review) or Sol unavailable | `sonnet_worker`: `claude -p --model claude-sonnet-5-5 --effort high --output-format json`, same permissions as `haiku_worker` |
   | Claude usage limit reached | The Sol route, whatever the difficulty |

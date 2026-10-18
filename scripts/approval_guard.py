@@ -9,6 +9,7 @@ The guard always exits 0; covered calls fail closed when their classification fa
 """
 import argparse
 import ast
+import fnmatch
 import hashlib
 import json
 import os
@@ -29,14 +30,15 @@ from approval_state import Outcome  # noqa: E402
 
 DATAGRIP_TOOL = datagrip_guard.TOOL_NAME
 TABULARIS_TOOL = "mcp__tabularis__run_query"
-EVENTS = ("PreToolUse", "PermissionRequest", "PostToolUse")
+POST_EVENTS = ("PostToolUse", "PostToolUseFailure")
+EVENTS = ("PreToolUse", "PermissionRequest", *POST_EVENTS)
 MAX_DEPTH = 4
 LOOKUP_TIMEOUT_SECONDS = 3
 COVERED = frozenset({
     "kubectl", "oc", "helm", "kustomize", "az", "terraform", "tofu", "aws", "gcloud", "gsutil",
-    "docker", "podman", "psql", "sqlcmd", "mysql", "mongosh", "redis-cli", "curl",
+    "docker", "podman", "psql", "sqlcmd", "mysql", "mongosh", "redis-cli", "curl", "git", "gh",
 })
-PYTHON = frozenset({"python", "python3"})
+PYTHON = re.compile(r"python(?:\d+(?:\.\d+)*)?")
 SHELLS = frozenset({"sh", "bash", "zsh"})
 FILTERS = frozenset({"grep", "egrep", "fgrep", "rg", "head", "tail", "wc", "sort", "uniq", "jq", "cut", "tr", "column"})
 WRAPPER_VALUE_OPTIONS = {
@@ -57,7 +59,7 @@ GLOBAL_VALUE_OPTIONS = frozenset({
 })
 MCP_READ_VERBS = frozenset({
     "get", "list", "search", "read", "fetch", "query", "find", "lookup", "describe", "show", "view", "check",
-    "count", "browse", "download", "export", "preview", "introspect", "analyze", "explain",
+    "count", "browse", "download", "export", "preview", "introspect", "analyze", "explain", "info", "whoami",
 })
 MCP_WRITE_WORDS = frozenset({
     "send", "post", "reply", "create", "update", "edit", "add", "write", "upsert", "transition", "schedule",
@@ -105,6 +107,7 @@ FAILURE_REASON = "The approval guard failed to check this call"
 FILE_TOOLS = frozenset({"Read", "Edit", "Write", "MultiEdit", "NotebookEdit", "apply_patch"})
 FILE_READS = frozenset({"cat", "less", "more", "head", "tail", "grep", "egrep", "fgrep", "rg"})
 EXEC_WORDS = frozenset({"repl", "exec", "execute", "eval", "run", "code", "script", "command"})
+SECRET_NAME = re.compile(r"KEY|TOKEN|SECRET|PASS|PWD|CRED|AUTH|COOKIE|PRIVATE|CERT|SAS|CONN|SIGNATURE|OTP", re.I)
 
 
 def read_only_command(command):
@@ -317,7 +320,16 @@ def _read():
 
 
 def _unclassified(cli, command):
-    return Outcome("always", [f"{cli}:unclassified:{_digest(command)}"], [f"{cli} call that cannot be classified"])
+    kind = "always" if _destructive_text(command) else "write"
+    return Outcome(kind, [f"{cli}:unclassified:{_digest(command)}"], [f"{cli} call that cannot be classified"])
+
+
+def _destructive_text(text):
+    text = _heredoc_data(text)
+    names = "|".join(re.escape(name) for name in COVERED - {"git", "gh"})
+    destructive = "|".join(CLI_DESTRUCTIVE_WORDS)
+    return bool(re.search(r"\b(?:" + names + r")\b[^\n;&|]*\b(?:" + destructive + r")\b", text, re.I)
+                or re.search(r"\b(?:delete\s+from|drop\s+(?:table|database|schema)|truncate\s+table)\b", text, re.I))
 
 
 def _call(kind_name, cli, kind, target_fn, command):
@@ -483,8 +495,8 @@ def _az_rules(kind, args, env, cwd):
         vault_secret = ((parsed.hostname or "").endswith(".vault.azure.net")
                         and re.search(r"/(?:secrets|keys)(?:/|$)", parsed.path))
         secret = secret or (method == "GET" and bool(vault_secret))
-        read = (method == "GET" and lowered.startswith("https://management.azure.com")
-                and "$" not in url and "`" not in url
+        read = (method == "GET" and (lowered.startswith("https://management.azure.com/") or url.startswith("$"))
+                and not _has_flag(args, "--resource")
                 and not any(word in lowered for word in (
                     "secret", "listkeys", "list-keys", "connectionstring", "listcredentials")))
 
@@ -632,7 +644,9 @@ def _classify_sql(cli, args, env, cwd, command):
     return Outcome(kind_name, [f"{cli}:{label}@{target}"], [f"{cli} {label} on {target}"])
 
 
-def classify_cli(cli, args, env, cwd, command):
+def classify_cli(cli, args, env, cwd, command, depth=0):
+    if cli in ("git", "gh"):
+        return _git_gh(cli, args, command)
     if cli == "curl":
         return _classify_curl(args, command)
     kind = subcommand_words(args)
@@ -643,10 +657,29 @@ def classify_cli(cli, args, env, cwd, command):
     rules = CLI_RULES[cli](kind, args, env, cwd) if cli in CLI_RULES else Rules()
     if rules.secret:
         return Outcome("secret", [], [])
+    if cli in ("kubectl", "oc", "docker", "podman") and kind[:1] == ["exec"]:
+        if "--" in args:
+            inner_args = args[args.index("--") + 1:]
+        else:
+            index = args.index("exec") + 1
+            value_options = GLOBAL_VALUE_OPTIONS | {"-c", "--container", "-u", "--user", "-w", "--workdir",
+                                                    "-e", "--env", "--env-file", "--detach-keys"}
+            while index < len(args) and args[index].startswith("-"):
+                index += 2 if args[index] in value_options else 1
+            inner_args = args[index + 1:]
+        inner = shlex.join(inner_args)
+        verdict = classify_text(inner, cwd, depth + 1, env)
+        if verdict.kind in ("secret", "always"):
+            return verdict
+        if (re.search(r"(?:^|[\s;&|('\"`])(?:rm|rmdir|shred|mkfs(?:\.\w+)?|truncate)(?=\s|$)", inner)
+                or re.search(r"\bdd\b[^;&|]*\bof=", inner) or _destructive_text(inner)):
+            return _call("always", cli, kind, rules.target, command)
     if kind and (re.search(r"\$(?:[A-Za-z_]|\{)", kind[0]) or "$(" in kind[0] or "`" in kind[0]):
         return _unclassified(cli, command)
     if cli == "kustomize":
         return _read()
+    if cli in ("psql", "mysql", "redis-cli", "mongosh") and _local_database(cli, args, env):
+        return Outcome("pass", [], [])
     if cli in ("psql", "sqlcmd"):
         return _classify_sql(cli, args, env, cwd, command)
     if cli not in CLI_RULES:
@@ -709,7 +742,7 @@ def _shell_c(args):
 def _helper_args(words):
     """Return the arguments after a `python3 .../secret_exec.py` invocation, or None for any other command."""
     stripped, _ = strip_prefix(words)
-    if len(stripped) > 1 and os.path.basename(stripped[0]) in PYTHON and os.path.basename(stripped[1]) == "secret_exec.py":
+    if len(stripped) > 1 and PYTHON.fullmatch(os.path.basename(stripped[0])) and os.path.basename(stripped[1]) == "secret_exec.py":
         return stripped[2:]
     return None
 
@@ -806,7 +839,7 @@ def _script_unknown(path, args, env, content):
     identity = json.dumps([str(path), args, {key: env.get(key, "") for key in (
         "KUBECONFIG", "AWS_PROFILE", "CLOUDSDK_CORE_PROJECT", "DOCKER_CONTEXT",
     )}, content], ensure_ascii=False)
-    return Outcome("always", ["script:" + hashlib.sha256(identity.encode()).hexdigest()],
+    return Outcome("always" if _destructive_text(content) else "write", ["script:" + hashlib.sha256(identity.encode()).hexdigest()],
                    [f"Script {path} contains a covered CLI or SDK call that cannot be classified"])
 
 
@@ -888,6 +921,220 @@ def _script_path(path, cwd, variables):
     return (Path(cwd) / os.path.expanduser(expanded)).resolve()
 
 
+def _local_database(cli, args, env):
+    host = option_value(args, "-h", ("--host",)) or (env.get("PGHOST") if cli == "psql" else None)
+    if cli == "redis-cli":
+        url = option_value(args, "-u", ("--uri",))
+        host = urlsplit(url).hostname if url else host
+    if cli in ("psql", "mongosh", "mysql"):
+        for arg in args:
+            if "://" in arg:
+                host = urlsplit(arg).hostname
+            elif cli == "psql":
+                match = re.search(r"(?:^|\s)host=([^\s]+)", arg)
+                if match:
+                    host = match[1]
+    if cli == "mysql":
+        host = option_value(args, "-S", ("--socket",)) or host
+    return isinstance(host, str) and (host.lower() in ("localhost", "127.0.0.1", "::1") or host.startswith("/"))
+
+
+def _git_gh(cli, args, command):
+    if cli == "gh" and any(arg in ("--help", "--version") for arg in args):
+        return _read()
+    global_values = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"} if cli == "git" else {"-R", "--repo", "--hostname"}
+    index = 0
+    while index < len(args) and args[index].startswith("-"):
+        index += 2 if args[index] in global_values else 1
+    args = args[index:]
+    words = subcommand_words(args)
+    if not words:
+        return Outcome("pass", [], [])
+    verb = words[0]
+    destructive = False
+    write = False
+    short = [arg for arg in args if arg.startswith("-") and not arg.startswith("--")]
+    if cli == "git":
+        if verb == "push":
+            write = True
+            destructive = (_has_flag(args, "--force", "--force-with-lease", "--force-if-includes", "--delete", "--mirror", "--prune")
+                           or any(set(arg[1:]) & {"f", "d"} for arg in short)
+                           or any(arg.startswith(("+", ":")) for arg in args))
+        elif verb == "tag":
+            operands = []
+            index = 1
+            while index < len(args):
+                if args[index] in ("-m", "--message", "-F", "--file", "-u", "--local-user"):
+                    index += 2
+                    continue
+                if not args[index].startswith("-"):
+                    operands.append(args[index])
+                index += 1
+            destructive = _has_flag(args, "--delete", "--force") or any(set(arg[1:]) & {"d", "f"} for arg in short)
+            listing = _has_flag(args, "-l", "--list", "-v", "--verify", "--format", "--contains", "--no-contains",
+                                "--points-at", "--merged", "--no-merged", "--column", "--sort")
+            listing = listing or any(arg.startswith("-n") and not arg.startswith("--") for arg in args)
+            write = destructive or (bool(operands) and not listing
+                                    and not any("l" in arg[1:] or "v" in arg[1:] for arg in short))
+        elif verb == "reset":
+            destructive = _has_flag(args, "--hard")
+        elif verb == "clean":
+            destructive = (_has_flag(args, "--force") or any("f" in arg[1:] for arg in short)) and not (
+                _has_flag(args, "--dry-run") or any("n" in arg[1:] for arg in short))
+        elif verb == "checkout":
+            destructive = _has_flag(args, "--force") or any("f" in arg[1:] for arg in short) or "." in args
+        elif verb == "restore":
+            destructive = any(arg in (".", ":/") for arg in args) and not (
+                _has_flag(args, "--staged", "-S") and not _has_flag(args, "--worktree", "-W"))
+        elif verb == "stash":
+            destructive = words[1:2] in (["drop"], ["clear"])
+    else:
+        if words[:2] == ["auth", "token"]:
+            return Outcome("secret", [], [])
+        if verb == "api":
+            data = any(arg in ("-f", "-F", "--field", "--raw-field", "--input")
+                       or arg.startswith(("-f", "-F", "--field=", "--raw-field=", "--input=")) for arg in args)
+            explicit = option_value(args, "-X", ("--method",))
+            method = (explicit or ("POST" if data else "GET")).upper()
+            if not explicit and words[1:2] == ["graphql"]:
+                fields = option_values(args, "-f", ("--raw-field",)) + option_values(args, "-F", ("--field",))
+                queries = [value.split("=", 1)[1] for value in fields if value and value.startswith("query=")]
+                queries = [re.sub(r"#[^\n]*", "", query).lstrip() for query in queries]
+                if queries and all(re.match(r"(?:query\b|\{)", query) and not re.search(r"\bmutation\b", query)
+                                   for query in queries):
+                    method = "GET"
+            destructive, write = method == "DELETE", method != "GET"
+        elif len(words) > 1:
+            destructive = words[1] == "delete"
+        if verb != "api":
+            if words[:2] in (["pr", "checkout"], ["repo", "clone"]):
+                return Outcome("pass", [], [])
+            reads = {"view", "list", "ls", "status", "checks", "diff", "search", "watch", "browse"}
+            read = (verb in {"status", "version", "search", "--version", "--help"}
+                    or len(words) > 1 and words[1] in reads
+                    or words[:2] in (["config", "get"], ["config", "list"]))
+            write = not read
+    if destructive or write:
+        return Outcome("always" if destructive else "write", [f"{cli}:{_digest(command)}"], [f"{cli} {' '.join(words[:2])}"])
+    read_verbs = {"status", "show", "log", "diff", "ls-remote", "describe", "rev-parse"}
+    gh_read = cli == "gh"
+    if gh_read or cli == "git" and (verb in read_verbs or verb == "tag"):
+        return _read()
+    return Outcome("pass", [], [])
+
+
+def _execution_policy(cli, args, cwd, env, variables, command):
+    session = Path(env.get("_APPROVAL_SESSION_DIR", env.get("CLAUDE_PROJECT_DIR") or cwd)).resolve()
+    target = lambda kind, label: Outcome(kind, [f"{cli}:{_digest(command)}"], [label])
+    positional = [arg for arg in args if not arg.startswith("-")]
+    if (cli in ("npm", "pnpm", "yarn", "uv", "poetry", "cargo") and "publish" in positional
+            or cli == "twine" and "upload" in positional or cli == "gem" and "push" in positional):
+        return target("always", f"{cli} package publishing")
+    codex_options = {"-c", "--config", "-C", "--cd", "--add-dir", "-s", "--sandbox", "-m", "--model", "-p",
+                     "--profile", "-i", "--image", "-a", "--ask-for-approval", "--enable", "--disable",
+                     "--local-provider", "-o", "--output-last-message", "--output-schema"}
+    index = 0
+    while index < len(args) and args[index].startswith("-"):
+        index += 2 if args[index] in codex_options else 1
+    worker = cli == "codex" and args[index:index + 1] in (["exec"], ["e"])
+    runner = PYTHON.fullmatch(cli) and any(arg == "scripts/role_runner.py" or arg.endswith("/scripts/role_runner.py") for arg in args)
+    if cli == "codex":
+        settings = option_values(args, "-c", ("--config",))
+        if (_has_flag(args, "--dangerously-bypass-approvals-and-sandbox", "--dangerously-bypass-hook-trust")
+                or "danger-full-access" in option_values(args, "-s", ("--sandbox",))
+                or any(value and re.search(r"sandbox[^=]*=.*danger-full-access", value) for value in settings)):
+            return target("always", "Codex access without sandbox protection")
+    if worker or runner:
+        directories = option_values(args, longs=("--add-dir",))
+        if worker:
+            directories += option_values(args, "-C", ("--cd",))
+        for directory in directories:
+            resolved = _script_path(directory or "$UNKNOWN", cwd, {**env, **variables})
+            if resolved is None or not resolved.is_relative_to(session):
+                return target("write", "Worker access outside the session folder")
+        if runner:
+            return Outcome("pass", [], [])
+    if cli == "rm":
+        flags = [arg for arg in args if arg.startswith("-")]
+        recursive = "--recursive" in flags or any(not arg.startswith("--") and set(arg[1:]) & {"r", "R"} for arg in flags)
+        if not recursive:
+            return Outcome("pass", [], [])
+        roots = [Path(path).resolve() for path in ("/tmp", "/private/tmp", "/var/folders", "/private/var/folders",
+                                                 env.get("TMPDIR") or "/tmp", str(Path.home() / ".cache"))]
+        for operand in (arg for arg in args if not arg.startswith("-")):
+            expanded = _expand_path_variables(operand, {**env, **variables})
+            if "$" in expanded or "`" in expanded:
+                return target("always", "Recursive removal with an unresolved target")
+            head, tail = os.path.split(expanded)
+            if re.search(r"[*?\[]", tail) and not re.search(r"[*?\[]", head) and re.search(r"[^*?.\[\]]", tail):
+                if fnmatch.fnmatch(".git", tail):
+                    return target("always", "Recursive removal of a protected or external path")
+                path = (Path(cwd) / os.path.expanduser(head or ".")).resolve() / "_"
+            else:
+                fixed = re.split(r"[*?\[]", expanded, maxsplit=1)[0]
+                if fixed != expanded and not fixed.endswith("/"):
+                    fixed = str(Path(fixed).parent)
+                path = (Path(cwd) / os.path.expanduser(fixed or ".")).resolve()
+            temporary = any(path.is_relative_to(root) for root in roots)
+            if (path == Path("/") or path == Path.home() or path == session or path in session.parents
+                    or ".git" in path.parts or not (path.is_relative_to(session) or temporary)):
+                return target("always", "Recursive removal of a protected or external path")
+        return Outcome("pass", [], [])
+    return None
+
+
+def _python_policy(content, cwd, depth, env):
+    if _code_runs_guard(content):
+        return Outcome("forbidden", [], [SELF_APPROVAL_REASON])
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return _unclassified("python", content) if PYTHON_EXEC.search(content) or SDK_IMPORT.search(content) else Outcome("pass", [], [])
+    imports = "\n".join(ast.unparse(node) for node in ast.walk(tree) if isinstance(node, (ast.Import, ast.ImportFrom)))
+    aliases = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for name in node.names:
+                aliases[name.asname or name.name.split(".")[0]] = name.name
+        elif isinstance(node, ast.ImportFrom):
+            for name in node.names:
+                aliases[name.asname or name.name] = (node.module or "") + "." + name.name
+    calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
+    processes = []
+    for node in calls:
+        function = ast.unparse(node.func)
+        root, separator, rest = function.partition(".")
+        function = aliases.get(root, root) + (separator + rest if separator else "")
+        if PYTHON_EXEC.search(function):
+            processes.append(node)
+    sdk = bool(SDK_IMPORT.search(imports))
+    if not processes and not sdk:
+        return Outcome("pass", [], [])
+    values = {node.targets[0].id: node.value for node in ast.walk(tree) if isinstance(node, ast.Assign)
+              and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)}
+    commands = []
+    for call in processes:
+        arguments = [*call.args, *(keyword.value for keyword in call.keywords
+                                  if keyword.arg in ("args", "cmd", "command"))]
+        for arg in arguments:
+            if isinstance(arg, ast.Name):
+                arg = values.get(arg.id, arg)
+            try:
+                value = ast.literal_eval(arg)
+            except (ValueError, TypeError):
+                continue
+            if isinstance(value, (list, tuple)) and all(isinstance(item, str) for item in value):
+                commands.append(shlex.join(value))
+            elif isinstance(value, str):
+                commands.append(value)
+    verdicts = [classify_text(command, cwd, depth + 1, env) for command in commands]
+    if any(verdict.kind in ("secret", "forbidden", "sensitive", "always") for verdict in verdicts):
+        return _aggregate(verdicts, [])
+    destructive = (_destructive_text(content) or sdk and any(
+        re.search(r"delete|purge|drop|truncate|destroy", ast.unparse(call.func), re.I) for call in calls))
+    return Outcome("always" if destructive else "write", ["python:" + _digest(content)], ["Python process or SDK execution"])
+
+
 def _classify_script(words, cwd, depth, env, variables=None):
     cli = os.path.basename(words[0])
     args = words[1:]
@@ -897,13 +1144,13 @@ def _classify_script(words, cwd, depth, env, variables=None):
         path = _first_operand(args)
     elif cli in ("source", "."):
         path = args[0] if args else None
-    elif words[0].startswith("./"):
+    elif words[0].startswith(("./", "/")) and cli not in COVERED and not PYTHON.fullmatch(cli):
         path = words[0]
-        mode = "python" if path.endswith(".py") else "node" if path.endswith((".js", ".mjs")) else "shell"
-    elif cli in PYTHON and args and args[0].endswith(".py"):
-        path, mode = args[0], "python"
+        mode = "python" if path.endswith(".py") else "executable"
+    elif PYTHON.fullmatch(cli) and args and not any(arg in ("-c", "-m") or arg.startswith(("-c", "-m")) for arg in args):
+        path, mode = _first_operand(args), "python"
     elif cli == "node" and args and args[0].endswith((".js", ".mjs")):
-        path, mode = args[0], "node"
+        return Outcome("pass", [], [])
     elif cli == "make":
         path, mode = "Makefile", "make"
     elif cli in ("npm", "pnpm", "yarn") and len(args) >= 2 and args[0] == "run":
@@ -917,6 +1164,19 @@ def _classify_script(words, cwd, depth, env, variables=None):
         return _script_unknown(resolved, words, env, "recursion limit")
     try:
         content = _script_content(resolved)
+        if mode == "executable":
+            header = content.splitlines()[0] if content else ""
+            if re.match(r"#!.*\bpython[\d.]*\b", header):
+                mode = "python"
+            elif re.match(r"#!.*\b(?:sh|bash|zsh)\b", header) or resolved.suffix in (".sh", ".bash", ".zsh"):
+                mode = "shell"
+            else:
+                return Outcome("pass", [], [])
+        if mode == "python":
+            verdict = _python_policy(content, cwd, depth, env)
+            if verdict.kind in ("write", "always"):
+                verdict = verdict._replace(keys=_script_unknown(resolved, words, env, content).keys)
+            return verdict
         if mode == "make":
             commands = _make_recipes(content, _first_operand(args))
         elif mode == "package":
@@ -929,7 +1189,11 @@ def _classify_script(words, cwd, depth, env, variables=None):
         else:
             commands = [line for line in _heredoc_data(content).replace("\\\n", "").splitlines()
                         if line.strip() and not line.lstrip().startswith("#")]
+    except UnicodeError:
+        return Outcome("pass", [], []) if mode == "executable" else _script_unknown(resolved, words, env, "unreadable")
     except (OSError, ValueError, SyntaxError, KeyError, TypeError):
+        if mode == "executable":
+            return Outcome("pass", [], [])
         return _script_unknown(resolved, words, env, locals().get("content", "unreadable"))
     if ((mode == "python" and _code_runs_guard(content))
             or any(_self_approval(command) for command in commands)):
@@ -958,13 +1222,32 @@ def _classify_argv(words, heredoc, cwd, depth, command, inherited_env=None, vari
     cli = os.path.basename(stripped[0])
     assignments = {key: _expand_path_variables(value, variables or {}) for key, value in assignments.items()}
     env = {**(os.environ if inherited_env is None else inherited_env), **assignments}
+    if inherited_env is not None and "_APPROVAL_SESSION_DIR" in inherited_env:
+        env["_APPROVAL_SESSION_DIR"] = inherited_env["_APPROVAL_SESSION_DIR"]
     if cli == "printenv":
+        names = stripped[1:]
+        if names and all(not name.startswith("-") and not SECRET_NAME.search(name) for name in names):
+            return _read()
         return _sensitive(command)
+    policy = _execution_policy(cli, stripped[1:], cwd, env, variables or {}, command)
+    if policy is not None:
+        return policy
+    if PYTHON.fullmatch(cli):
+        code = option_value(stripped[1:], "-c")
+        if code is not None:
+            verdict = _python_policy(code, cwd, depth, env)
+            if verdict.kind != "pass" or "--execute" not in stripped[1:]:
+                return verdict
+            return Outcome("write", ["python:execute"], ["Python execution with --execute"])
     if cli in FILE_READS and any(_protected_path(arg, cwd, env) for arg in stripped[1:] if not arg.startswith("-")):
         return _sensitive(command)
     script = _classify_script(stripped, cwd, depth, env, variables)
     if script is not None:
+        if PYTHON.fullmatch(cli) and "--execute" in stripped[1:] and script.kind == "pass":
+            return Outcome("write", ["python:execute"], ["Python execution with --execute"])
         return script
+    if PYTHON.fullmatch(cli) and "--execute" in stripped[1:]:
+        return Outcome("write", ["python:execute"], ["Python execution with --execute"])
     if heredoc and (cli in COVERED or COVERED_WORD.search(command)):
         return _unclassified(cli, command)
     if cli not in COVERED:
@@ -977,7 +1260,7 @@ def _classify_argv(words, heredoc, cwd, depth, command, inherited_env=None, vari
                 args[index] = _expand_path_variables(arg, variables or {})
             elif arg.startswith(("--url=", "--uri=", "-u")):
                 args[index] = _expand_path_variables(arg, variables or {})
-    return classify_cli(cli, args, env, cwd, command)
+    return classify_cli(cli, args, env, cwd, command, depth)
 
 
 def _merge(kind, verdicts, extra_writes=()):
@@ -1013,11 +1296,7 @@ def _aggregate(verdicts, segments):
     if always:
         return _merge("always", always, writes)
     if writes:
-        # An approved write must not carry unverified commands or file output along with it.
-        verified = all(verdict.kind != "pass" or verdict.exe in FILTERS for verdict in verdicts)
-        if verified and _redirects_allowed(segments):
-            return _merge("write", writes)
-        return _merge("always", writes)
+        return _merge("write", writes)
     reads = any(verdict.kind == "read" for verdict in verdicts)
     filters_only = all(
         verdict.kind == "read" or (verdict.kind == "pass" and verdict.exe in FILTERS) for verdict in verdicts
@@ -1077,12 +1356,8 @@ def _heredoc_data(text):
     spans = []
     index, offset = 0, 0
     receivers = frozenset((
-        "cat tee head tail wc sort uniq cut tr base64 xxd od grep egrep fgrep rg jq column fold fmt nl tac rev "
+        "cat tee echo printf head tail wc sort uniq cut tr base64 xxd od grep egrep fgrep rg jq column fold fmt nl tac rev "
         "cmp diff git gh"
-    ).split())
-    data_suffixes = frozenset((
-        ".md .markdown .txt .json .jsonl .yaml .yml .toml .csv .tsv .html .htm .xml .patch .diff .log .rst "
-        ".ini .cfg .conf"
     ).split())
     while index < len(lines):
         line = lines[index]
@@ -1125,13 +1400,11 @@ def _heredoc_data(text):
             receiver = os.path.basename(program[0]) if program else ""
             if receiver == "tee":
                 outputs.extend(word for word in program[1:] if not word.startswith("-"))
-            data = (group_index not in piped and receiver in receivers
-                    and all(target in ("/dev/null", "/dev/stdout", "/dev/stderr")
-                            or Path(target).suffix.lower() in data_suffixes for target in outputs))
-            documents.extend((delimiter, tabs, quoted, data, span) for delimiter, tabs, quoted, span in redirects)
+            data = group_index not in piped and receiver in receivers
+            documents.extend((delimiter, tabs, quoted, data, span, tuple(outputs)) for delimiter, tabs, quoted, span in redirects)
         offset += len(line)
         index += 1
-        for delimiter, tabs, quoted, data, header_span in documents:
+        for delimiter, tabs, quoted, data, header_span, outputs in documents:
             start = offset
             while index < len(lines):
                 body_line = lines[index]
@@ -1141,6 +1414,11 @@ def _heredoc_data(text):
                 if (candidate.lstrip("\t") if tabs else candidate) == delimiter:
                     break
             if data:
+                for target in outputs:
+                    if re.search(r"\b(?:bash|sh|zsh|source)\s+" + re.escape(target) + r"(?:\s|$)", text[offset:]):
+                        data = False
+                if not data:
+                    continue
                 spans.append(header_span)
                 spans.extend(_heredoc_gaps(text, start, offset, quoted))
     return _blank(text, spans)
@@ -1177,6 +1455,114 @@ def _cd_changes_directory(segment, operators):
             and (after is None or after[1] in ("&&", ";")))
 
 
+def _python_documents(text, cwd, depth, env):
+    verdicts, spans = [], []
+    pattern = re.compile(r"(?m)^([^\n]*?)<<[ \t]*(['\"]?)([A-Za-z_][\w]*)\2[^\n]*\n")
+    for match in pattern.finditer(text):
+        if any(start <= match.start() < stop for start, stop in spans):
+            continue
+        try:
+            segments = tokenize(match[0])
+            heredoc = match.end(1) - match.start()
+            segment = next(item for item in segments if item.start <= heredoc < item.end)
+            words, _ = strip_prefix(segment.words)
+        except (ParseError, StopIteration):
+            continue
+        if not words or not PYTHON.fullmatch(os.path.basename(words[0])) or "-c" in words:
+            continue
+        end = re.search(r"(?m)^" + re.escape(match[3]) + r"[ \t]*\r?$", text[match.end():])
+        if end is None:
+            continue
+        body_end = match.end() + end.start()
+        verdict = _python_policy(text[match.end():body_end], cwd, depth, env)
+        if verdict.kind == "pass" and "--execute" in words:
+            verdict = Outcome("write", ["python:execute"], ["Python execution with --execute"])
+        verdicts.append(verdict)
+        tokens = _lex(match[0])
+        following = next((token for token in tokens if token[0] == "op" and token[2] >= segment.end), None)
+        receiver = next((item for item in segments if item.start > segment.end), None)
+        receiver_words, _ = strip_prefix(receiver.words) if receiver else ([], {})
+        if (following and following[1] in ("|", "|&") and receiver_words
+                and os.path.basename(receiver_words[0]) in SHELLS and _shell_c(receiver_words[1:]) is None):
+            verdicts.append(_unclassified("python pipe to shell", text[match.start():body_end]))
+        if not match[2]:
+            for start, stop in _expansion_regions(text, match.end(), body_end):
+                for _, _, body in _substitution_spans(text[start:stop]):
+                    verdicts.append(classify_text(body, cwd, depth + 1, env))
+        spans.append((match.start() + segment.start, match.end(3) + len(match[2])))
+        spans.append((match.end(), match.end() + end.end()))
+    return _blank(text, spans), verdicts
+
+
+def _environment_filter(text):
+    try:
+        segments = tokenize(text)
+        operators = [token[1] for token in _lex(text) if token[0] == "op"]
+    except ParseError:
+        return None
+    if not segments or any(op != "|" for op in operators) or any(segment.redirects for segment in segments):
+        return None
+    if any("$" in word or "`" in word for segment in segments for word in segment.words):
+        return None
+    first = segments[0].words
+    if not first or first[0] not in ("env", "printenv") or len(first) != 1:
+        return None
+    if len(segments) < 2:
+        return None
+    rest = [segment.words for segment in segments[1:]]
+    if any(not words or words[0] not in ("grep", "rg", "head", "sort", "wc") for words in rest):
+        return None
+    numeric_options = {"-n", "--lines", "-c", "--bytes", "-k", "--key", "--parallel", "--batch-size", "-S", "--buffer-size"}
+    for words in rest:
+        if words[0] in ("head", "sort", "wc"):
+            for index, word in enumerate(words[1:], 1):
+                if not word.startswith("-") and not (word.isdigit() and words[index - 1] in numeric_options):
+                    return None
+    if any(words[0] == "wc" and "-l" in words for words in rest):
+        return _read()
+    words = rest[0]
+    if words[0] not in ("grep", "rg"):
+        return None
+    args = words[1:]
+    if any(arg in ("-c", "--count") or re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*", arg) for arg in args):
+        return _read()
+    flags, patterns = [], []
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg in ("-e", "--regexp") and index + 1 < len(args):
+            patterns.append(args[index + 1])
+            index += 2
+        elif arg.startswith("-"):
+            if arg not in ("--ignore-case", "--fixed-strings", "--invert-match", "--extended-regexp") and not re.fullmatch(r"-[EiFv]+", arg):
+                return _sensitive(text)
+            flags.append(arg)
+            index += 1
+        else:
+            patterns.append(arg)
+            index += 1
+    if len(patterns) != 1:
+        return _sensitive(text)
+    pattern = patterns[0]
+    if any("F" in flag or flag == "--fixed-strings" for flag in flags):
+        pattern = re.escape(pattern)
+    elif words[0] == "grep" and not any("E" in flag or flag == "--extended-regexp" for flag in flags):
+        if "\\" in pattern:
+            return _sensitive(text)
+        pattern = re.sub(r"[()+?{}|]", lambda match: "\\" + match[0], pattern)
+    if len(pattern) > 256 or re.search(r"\\[1-9]|\(\?|\)[+*{?]", pattern) or pattern.count("*") + pattern.count("+") > 1:
+        return _sensitive(text)
+    try:
+        regex = re.compile(pattern, re.I if any("i" in flag or flag == "--ignore-case" for flag in flags) else 0)
+    except re.error:
+        return _sensitive(text)
+    invert = any("v" in flag or flag == "--invert-match" for flag in flags)
+    for name, value in os.environ.items():
+        if bool(regex.search(name + "=" + value)) != invert and SECRET_NAME.search(name):
+            return _sensitive(text)
+    return _read()
+
+
 def classify_text(text, cwd, depth=0, env=None, variables=None):
     """Classify a shell command string; the secret helper's own inner command is classified separately."""
     if depth > MAX_DEPTH:
@@ -1187,7 +1573,14 @@ def classify_text(text, cwd, depth=0, env=None, variables=None):
         request = _request_outcome(text, cwd)
         if request is not None:
             return request
+    environment = dict(os.environ if env is None else env)
+    if depth == 0 or "_APPROVAL_SESSION_DIR" not in environment:
+        environment["_APPROVAL_SESSION_DIR"] = environment.get("CLAUDE_PROJECT_DIR") or cwd
+    filtered = _environment_filter(text)
+    if filtered is not None:
+        return filtered
     text = _heredoc_data(text)
+    text, python_verdicts = _python_documents(text, cwd, depth, environment)
     try:
         segments = tokenize(text)
         operators = [token for token in _lex(text) if token[0] == "op"]
@@ -1196,10 +1589,10 @@ def classify_text(text, cwd, depth=0, env=None, variables=None):
         return _unclassified(match.group(0), text) if match else Outcome("pass", [], [])
     spans = [(segment.start, segment.end) for segment in segments if _helper_args(segment.words) is not None]
     checked = _blank(text, spans)
-    verdicts = []
+    verdicts = list(python_verdicts)
     variables = dict(variables or {})
     substitution_names = set()
-    current_env = dict(os.environ if env is None else env)
+    current_env = environment
     for segment in segments:
         program, assignments = strip_prefix(segment.words)
         region = checked[segment.start:segment.end]
@@ -1208,13 +1601,30 @@ def classify_text(text, cwd, depth=0, env=None, variables=None):
             verdicts.append(classify_text(body, cwd, depth + 1, current_env, variables))
         for body in _indirect_regions(region, [segment]):
             verdict = classify_text(body, cwd, depth + 1, current_env)
-            if verdict.kind in ("secret", "sensitive", "forbidden"):
+            if verdict.kind in ("secret", "sensitive", "forbidden", "always"):
                 verdicts.append(verdict)
             else:
                 match = COVERED_WORD.search(body)
                 if match:
-                    verdicts.append(_unclassified(match.group(0), text))
+                    indirect, _ = strip_prefix(segment.words)
+                    shell = indirect and os.path.basename(indirect[0]) in SHELLS
+                    pure_python = False
+                    if verdict.kind == "pass":
+                        try:
+                            inner = [strip_prefix(item.words)[0] for item in tokenize(body)]
+                            pure_python = bool(inner) and all(words and PYTHON.fullmatch(os.path.basename(words[0])) for words in inner)
+                        except ParseError:
+                            pass
+                    verdicts.append(verdict if pure_python or verdict.kind == "read" and shell else _unclassified(match.group(0), body))
         name = os.path.basename(program[0]) if program else ""
+        if PYTHON.fullmatch(name) and "-c" not in program and "-m" not in program:
+            for _, operator, target in segment.redirects:
+                if operator == "<" and not _protected_path(target, cwd, current_env):
+                    path = _script_path(target, cwd, variables)
+                    try:
+                        verdicts.append(_python_policy(_script_content(path), cwd, depth, current_env))
+                    except (OSError, ValueError, AttributeError):
+                        verdicts.append(_script_unknown(target, program, current_env, "unreadable stdin"))
         if any(operator == "<" and _protected_path(target, cwd, current_env)
                for _, operator, target in segment.redirects):
             verdicts.append(_sensitive(text))
@@ -1228,16 +1638,15 @@ def classify_text(text, cwd, depth=0, env=None, variables=None):
             if all(ASSIGNMENT.match(word) for word in segment.words):
                 for key, value in assignments.items():
                     variables[key] = _expand_path_variables(value, variables)
-                    current_env[key] = variables[key]
+                    if key != "_APPROVAL_SESSION_DIR":
+                        current_env[key] = variables[key]
                     if "$(" in value or "`" in value:
                         substitution_names.add(key)
                     else:
                         substitution_names.discard(key)
             continue
         dynamic_program = program and re.search(r"\$\(|`|\$\{|\$[A-Za-z_]", program[0])
-        verdict = (_unclassified(name, text) if (
-                       name in COVERED and OPAQUE_CONSTRUCT.search(region)
-                       or dynamic_program and COVERED_WORD.search(region))
+        verdict = (_unclassified(name, text) if dynamic_program and COVERED_WORD.search(region)
                    else _classify_argv(segment.words, segment.heredoc, cwd, depth, text, current_env, variables))
         output = name in ("echo", "printf") and (substitutions or any(
             re.search(r"\$(?:" + re.escape(key) + r"\b|\{" + re.escape(key) + r"\})", region)
@@ -1337,15 +1746,18 @@ def classify_tabularis(tool_input):
     text = sql if isinstance(sql, str) else ""
     always = Outcome("always", [f"sql:always:tabularis:{connection_id}:{_digest(text)}"],
                      [f"tabularis query on {name}"])
+    write = Outcome("write", ["mcp:session"], [f"tabularis query on {name}"])
+    if datagrip_guard.RAW_DESTRUCTIVE.search(text) or any(datagrip_guard.query_facts(text, pg)[1] for pg in (True, False)):
+        return always
     if not connection or "승인" in name or connection[2] not in ("postgresql", "sqlserver", "sqlserver-entra"):
-        return always
+        return write
     if not isinstance(sql, str):
-        return always
+        return write
     postgres = connection[2] == "postgresql"
     if datagrip_guard.is_read(sql, postgres):
         return _read()
     keywords, destructive = datagrip_guard.query_facts(sql, postgres)
-    if keywords is None or destructive:
+    if destructive:
         return always
     return Outcome("write", ["mcp:session"], [f"tabularis write on {name}"])
 
@@ -1355,10 +1767,12 @@ def classify_mcp(tool, tool_input=None):
         return classify_tabularis(tool_input)
     part = mcp_tool_part(tool)
     words = tool_words(part) if part else []
-    if not words:
-        return Outcome("always", [f"mcp:{tool}"], [f"MCP tool {tool}"])
     if any(word in MCP_DESTRUCTIVE_WORDS for word in words):
         return Outcome("always", [f"mcp:{tool}"], [f"destructive MCP tool {tool}"])
+    action = tool_input.get("action") if isinstance(tool_input, dict) else None
+    action_words = tool_words(action) if isinstance(action, str) else []
+    if set(action_words) & MCP_DESTRUCTIVE_WORDS:
+        return Outcome("always", [f"mcp:{tool}"], [f"destructive MCP action via {tool}"])
     sql = list(_input_strings(tool_input, sql_only=True))
     if sql:
         if any(datagrip_guard.RAW_DESTRUCTIVE.search(text) or any(
@@ -1372,7 +1786,16 @@ def classify_mcp(tool, tool_input=None):
         if text_words & (CLI_DESTRUCTIVE_WORDS | MCP_DESTRUCTIVE_WORDS):
             return Outcome("always", [f"mcp:{tool}:{_digest(json.dumps(tool_input, sort_keys=True))}"],
                            [f"destructive input in MCP tool {tool}"])
+    if set(action_words) & (MCP_WRITE_WORDS | EXEC_WORDS):
+        return Outcome("write", ["mcp:session"], [f"MCP write action via {tool}"])
+    if set(action_words) & MCP_READ_VERBS:
+        return _read()
+    if set(words) & EXEC_WORDS:
         return Outcome("write", ["mcp:session"], [f"MCP execution tool {tool}"])
+    if not words:
+        return Outcome("write", [f"mcp:{tool}"], [f"MCP tool {tool}"])
+    if words[0] in MCP_READ_VERBS:
+        return _read()
     if not any(word in MCP_WRITE_WORDS for word in words) and any(word in MCP_READ_VERBS for word in words):
         return _read()
     return Outcome("write", ["mcp:session"], [f"MCP write: {tool}"])
@@ -1420,7 +1843,7 @@ def _decide(name, host, session, outcome, tool_use_id=None, tool_input=None):
         if outcome.kind == "read" or approval_state.permission_allowed(host, session, outcome, tool_use_id):
             return approval_state.permission_allow()
         return None
-    if name == "PostToolUse":
+    if name in POST_EVENTS:
         approval_state.after_call(host, session, outcome, tool_use_id)
     return None
 
@@ -1445,7 +1868,7 @@ def handle(event, host):
     if name not in EVENTS or not isinstance(tool, str):
         return None
     if tool == DATAGRIP_TOOL:
-        if name == "PostToolUse":
+        if name in POST_EVENTS:
             approval_state.after_call(
                 host, session, datagrip_guard.classify_query(event.get("tool_input")), tool_use_id)
         elif name == "PreToolUse" and host == "claude" and enabled("datagrip_guard"):
@@ -1545,7 +1968,7 @@ def _request_outcome(command, cwd):
         if len(segments) != 1 or segments[0].redirects:
             return None
         words, assignments = strip_prefix(segments[0].words)
-        if assignments or len(words) < 3 or os.path.basename(words[0]) not in PYTHON:
+        if assignments or len(words) < 3 or not PYTHON.fullmatch(os.path.basename(words[0])):
             return None
         if _resolved(words[1], cwd) != Path(__file__).resolve() or words[2] != "request":
             return None
@@ -1619,7 +2042,7 @@ def _argv_runs_guard(words, depth):
     name = os.path.basename(words[0])
     if name in GUARD_SCRIPTS:
         return True
-    if name in PYTHON:
+    if PYTHON.fullmatch(name):
         return _python_runs_guard(words[1:])
     if name in SHELLS:
         script = _shell_c(words[1:])

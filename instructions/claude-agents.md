@@ -161,8 +161,8 @@ This section adds only the Claude Code worker integration.
   <Source directory>/agents/worker.md --assignment <file> --result <file>` from the folder that holds the allowed
   paths. It runs the model that the capability table in shared model routing lists as the Claude Code fallback,
   with write access to that folder.
-- Add `--add-dir <dir>` only for a directory outside that folder that the task must write. The plugin mod asks once
-  per session.
+- Add `--add-dir <dir>` only for a directory outside that folder that the task must write. The approval guard asks
+  for the session write approval once.
 
 ## Codex worker
 

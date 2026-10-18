@@ -493,16 +493,18 @@ def classify_query(tool_input) -> Outcome:
     """Classify a DataGrip query as read, write (asks once per session), or always (asks every time)."""
     sql = tool_input.get("queryText") if isinstance(tool_input, dict) else None
     kind = connection_kind(tool_input) if isinstance(tool_input, dict) else "unknown"
-    if kind in ("always", "unknown", "unsupported") or not isinstance(sql, str):
+    if isinstance(sql, str) and (RAW_DESTRUCTIVE.search(sql) or any(query_facts(sql, pg)[1] for pg in (True, False))):
         return always_outcome(tool_input, sql)
+    if kind in ("always", "unknown", "unsupported") or not isinstance(sql, str):
+        return Outcome("write", ["mcp:session"], ["DataGrip query requiring approval"])
     postgres = kind == "postgres"
     if is_read(sql, postgres):
         return Outcome("read", [], [])
     keywords, destructive = query_facts(sql, postgres)
-    if keywords is None or destructive:
+    if destructive:
         return always_outcome(tool_input, sql)
     name = find_data_source(tool_input).get("name") or "an unnamed data source"
-    listed = ", ".join(sorted(keywords))
+    listed = ", ".join(sorted(keywords)) if keywords else "unclassified"
     return Outcome(
         "write",
         ["mcp:session"],
@@ -540,6 +542,10 @@ def decide_mssql(sql: str, tool_input=None, session_id=None, tool_use_id=None) -
 def decide(tool_input, session_id=None, tool_use_id=None) -> dict:
     if not isinstance(tool_input, dict):
         return result("ask", ASK_REASON)
+    if approval_on():
+        outcome = classify_query(tool_input)
+        if outcome.kind != "read":
+            return approval_state.pre_decision("claude", session_id, outcome, tool_use_id)
     kind = connection_kind(tool_input)
     if kind == "always":
         if approval_on() and approval_state.parent_session():

@@ -197,7 +197,8 @@ PASS_COMMANDS = [
 def state(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg"))
     for name in ("CLAUDE_PLUGIN_OPTION_APPROVAL_GUARD", "HEI5ENBUG_APPROVAL_GUARD", "PLUGIN_ROOT", "AWS_PROFILE", "AWS_REGION",
-                 "CLOUDSDK_CORE_PROJECT", "DOCKER_CONTEXT", "DOCKER_HOST", "TF_WORKSPACE", "KUBECONFIG", "MARK"):
+                 "CLOUDSDK_CORE_PROJECT", "DOCKER_CONTEXT", "DOCKER_HOST", "TF_WORKSPACE", "KUBECONFIG", "MARK",
+                 "HEI5ENBUG_PARENT_SESSION", "CLAUDE_PROJECT_DIR"):
         monkeypatch.delenv(name, raising=False)
     return tmp_path
 
@@ -280,9 +281,12 @@ def test_쓰기_명령은_cli와_종류와_대상으로_키를_만든다(state, 
 
 
 @pytest.mark.parametrize("command", ALWAYS_COMMANDS)
-def test_파괴적이거나_분류할_수_없는_명령은_항상_묻는_always로_분류된다(state, fake_bin, command):
+def test_파괴적_명령은_매번_묻고_미분류_호출은_세션_쓰기로_분류한다(state, fake_bin, command):
     # given
-    expected = "always"
+    expected = "write" if command in {
+        "kubectl --context dev", "mysql -e 'select 1'", "mongosh --eval 'db.x.find()'", "redis-cli get x",
+        "psql", "psql -f x.sql -c 'select 1'", "kubectl apply -f - <<EOF\nkind: x\nEOF",
+    } else "always"
     # when
     outcome = classify(command, state)
     # then
@@ -301,9 +305,9 @@ def test_값을_출력하는_명령은_secret으로_거부된다(state, fake_bin
 
 
 @pytest.mark.parametrize("command", PASS_COMMANDS)
-def test_커버되지_않거나_필터로_이어지지_않은_명령은_pass로_분류된다(state, fake_bin, command):
+def test_미대상_명령은_통과하고_태그_생성은_쓰기로_분류한다(state, fake_bin, command):
     # given
-    expected = "pass"
+    expected = "write" if command == "git tag v1" else "pass"
     # when
     outcome = classify(command, state)
     # then
@@ -407,13 +411,13 @@ def test_래퍼와_그_옵션과_값은_벗기고_실행_파일로_분류한다(
     "kubectl apply -f a --context dev -n web > out.txt",
     "kubectl apply -f a --context dev -n web | sh",
 ])
-def test_승인_가능한_쓰기에_검증되지_않은_명령이나_파일_출력이_섞이면_항상_묻는다(state, fake_bin, command):
+def test_쓰기와_다른_명령이나_파일_출력이_섞여도_쓰기_승인을_사용한다(state, fake_bin, command):
     # given
     expected_keys = ["kubectl:apply@(default) dev/web"]
     # when
     outcome = classify(command, state)
     # then
-    assert outcome.kind == "always"
+    assert outcome.kind == "write"
     assert outcome.keys == expected_keys
 
 
@@ -427,15 +431,17 @@ def test_쓰기에_필터가_이어지면_쓰기로_남는다(state, fake_bin):
     assert outcome.keys == ["kubectl:apply@(default) dev/web"]
 
 
-def test_승인된_쓰기에_알_수_없는_명령이_붙으면_claude는_허용하지_않고_묻는다(state, fake_bin):
+def test_승인된_쓰기에_로컬_삭제가_붙어도_claude는_허용한다(state, fake_bin):
+    """승인한 쓰기에 안전한 로컬 삭제가 붙어도 Claude는 세션 승인으로 허용한다."""
     # given
     command = "kubectl apply -f a --context dev -n web && rm -rf x"
+    guard.handle(bash_event(command, cwd=state), "claude")
     guard.handle(bash_event(command, "PostToolUse", cwd=state), "claude")
     guard.handle(bash_event("kubectl apply -f a --context dev -n web", "PostToolUse", cwd=state), "claude")
     # when
     output = guard.handle(bash_event(command, cwd=state), "claude")
     # then
-    assert decision_of(output) == "ask"
+    assert decision_of(output) == "allow"
 
 
 def test_하위_셸_안의_커버된_명령은_셸_텍스트를_따로_분류한다(state, fake_bin):
@@ -448,13 +454,13 @@ def test_하위_셸_안의_커버된_명령은_셸_텍스트를_따로_분류한
     assert outcome.keys == ["kubectl:delete x@(default) dev/web"]
 
 
-def test_secret_helper에_구분자가_없으면_분류할_수_없어_항상_묻는다(state, fake_bin):
+def test_secret_helper에_구분자가_없으면_세션_쓰기로_분류한다(state, fake_bin):
     # given
     command = "python3 /plugins/hei5enbug/scripts/secret_exec.py --secret DB=k8s:dev/web/db/password"
     # when
     outcome = classify(command, state)
     # then
-    assert outcome.kind == "always"
+    assert outcome.kind == "write"
     assert outcome.keys == [f"secret_exec:unclassified:{guard._digest(command)}"]
 
 
@@ -467,13 +473,13 @@ def test_커버된_명령이_없는_heredoc은_그대로_pass다(state, fake_bin
     assert outcome.kind == "pass"
 
 
-def test_닫히지_않은_따옴표가_커버된_명령을_숨기면_항상_묻는다(state, fake_bin):
+def test_닫히지_않은_따옴표가_대상_명령을_숨기면_세션_쓰기로_분류한다(state, fake_bin):
     # given
     command = "kubectl get pods 'x"
     # when
     outcome = classify(command, state)
     # then
-    assert outcome.kind == "always"
+    assert outcome.kind == "write"
     assert outcome.keys[0].startswith("kubectl:unclassified:")
 
 
@@ -589,11 +595,11 @@ def test_kubectl_leading_옵션_뒤의_하위_명령도_분류한다(state, fake
 @pytest.mark.parametrize(("command", "kind"), [
     ("psql -c \"select 1\"", "read"),
     ("psql -c \"select 1\" -c \"insert into t values (1)\"", "write"),
-    ("psql -c \"select 1\" -f x.sql", "always"),
+    ("psql -c \"select 1\" -f x.sql", "write"),
     ("psql -c \"insert into t values (1)\" -c \"delete from t\"", "always"),
-    ("psql -c \"select 'unterminated\"", "always"),
+    ("psql -c \"select 'unterminated\"", "write"),
     ("psql --command \"select 1\"", "read"),
-    ("sqlcmd -Q \"SELECT 1\" -i x.sql", "always"),
+    ("sqlcmd -Q \"SELECT 1\" -i x.sql", "write"),
     ("sqlcmd -Q \"SELECT 1\"", "read"),
     ("sqlcmd -Q \"UPDATE t SET a=1\"", "write"),
     ("sqlcmd -Q \"DROP TABLE t\"", "always"),
@@ -645,11 +651,11 @@ def test_쓰기_단어가_있거나_동사가_없는_mcp_도구는_한_세션_�
     ("mcp__claude_ai_Slack__slack_search_public", "read"),
     ("mcp__claude_ai_Atlassian__searchJiraIssuesUsingJql", "read"),
     ("mcp__claude_ai_Atlassian__getConfluencePage", "read"),
-    ("mcp__tool__get_and_update_item", "write"),
+    ("mcp__tool__get_and_update_item", "read"),
     ("mcp__claude_ai_Atlassian__getTransitionsForJiraIssue", "read"),
     ("mcp__tool__update_get_status", "write"),
 ])
-def test_쓰기_단어_없이_읽기_동사만_있는_mcp_도구만_읽기다(tool, expected):
+def test_mcp_도구는_첫_읽기_동사를_우선하고_쓰기_동작은_쓰기로_분류한다(tool, expected):
     # given
     kind = expected
     # when
@@ -675,13 +681,13 @@ def test_삭제_계열_mcp_도구는_도구_이름으로_항상_묻는다(tool):
 
 
 @pytest.mark.parametrize("tool", ["mcp__broken", "mcp__only__"])
-def test_이름이_모자란_mcp_도구는_분류할_수_없어_항상_묻는다(tool):
+def test_이름이_모자란_mcp_도구는_세션_쓰기로_분류한다(tool):
     # given
     expected = f"mcp:{tool}"
     # when
     outcome = guard.classify_mcp(tool)
     # then
-    assert outcome.kind == "always"
+    assert outcome.kind == "write"
     assert outcome.keys == [expected]
 
 
@@ -735,12 +741,14 @@ def test_claude는_쓰기를_처음_묻고_이유에_대상과_세션_안내를_
     # then
     assert decision_of(output) == "ask"
     assert "kubectl apply on (default) dev/web" in reason_of(output)
-    assert "rest of this session" in reason_of(output)
+    assert "12 hours in this session" in reason_of(output)
 
 
 def test_claude는_후_처리로_기록한_쓰기_키를_같은_세션에서_허용한다(state, fake_bin):
+    """Claude는 질문한 쓰기를 후처리로 기록한 뒤 같은 세션에서 허용한다."""
     # given
     command = "kubectl apply -f a --context dev -n web"
+    guard.handle(bash_event(command, cwd=state), "claude")
     guard.handle(bash_event(command, "PostToolUse", cwd=state), "claude")
     # when
     output = guard.handle(bash_event(command, cwd=state), "claude")
@@ -750,8 +758,10 @@ def test_claude는_후_처리로_기록한_쓰기_키를_같은_세션에서_허
 
 
 def test_claude의_쓰기_기록은_다른_세션에는_옮겨가지_않는다(state, fake_bin):
+    """Claude에서 승인한 쓰기의 기록은 다른 세션으로 옮겨가지 않는다."""
     # given
     command = "kubectl apply -f a --context dev -n web"
+    guard.handle(bash_event(command, session="s1", cwd=state), "claude")
     guard.handle(bash_event(command, "PostToolUse", session="s1", cwd=state), "claude")
     # when
     output = guard.handle(bash_event(command, session="s2", cwd=state), "claude")
@@ -771,24 +781,26 @@ def test_claude는_항상_묻는_명령을_매번_묻고_기록하지_않는다(
     assert state_mod._load("claude", "s1")["approved"] == []
 
 
-def test_claude_후_처리는_읽기와_pass를_기록하지_않는다(state, fake_bin):
+def test_claude_후_처리는_태그_생성을_쓰기_승인으로_기록한다(state, fake_bin):
+    """Claude 후처리는 질문한 태그 생성을 세션 쓰기 승인으로 기록한다."""
     # given
-    commands = ["kubectl get pods", "git tag v1"]
+    event = bash_event("git tag v1", cwd=state)
+    guard.handle(event, "claude")
     # when
-    for command in commands:
-        guard.handle(bash_event(command, "PostToolUse", cwd=state), "claude")
+    guard.handle({**event, "hook_event_name": "PostToolUse"}, "claude")
     # then
-    assert not (state / "xdg" / "hei5enbug-agent-setup" / "approvals" / "claude-s1.json").exists()
+    assert state_mod._load("claude", "s1")["approved"] == [state_mod.WRITE_KEY]
 
 
-def test_claude는_pass와_권한_요청에_출력하지_않는다(state, fake_bin):
+def test_claude는_태그_생성의_승인을_묻고_권한_요청에는_출력하지_않는다(state, fake_bin):
     # given
     pass_event = bash_event("git tag v1", cwd=state)
     permission = bash_event("kubectl apply -f a --context dev -n web", "PermissionRequest", cwd=state)
     # when
     results = [guard.handle(pass_event, "claude"), guard.handle(permission, "claude")]
     # then
-    assert results == [None, None]
+    assert decision_of(results[0]) == "ask"
+    assert results[1] is None
 
 
 def test_세션_아이디가_없으면_claude도_쓰기를_묻고_상태를_남기지_않는다(state, fake_bin):
@@ -1237,23 +1249,23 @@ def test_datagrip_쓰기는_키승인_대상으로_묻는다(state, project, con
     "SELECT 'unterminated",
     "",
 ])
-def test_datagrip_파괴_문장과_해석_불가_텍스트는_항상_묻는다(state, project, sql):
+def test_datagrip_파괴_문장은_매번_묻고_해석_불가_텍스트는_세션_쓰기로_분류한다(state, project, sql):
     # given
     event = query_event(project, PG_ID, sql)
     # when
     outcome = datagrip_guard.classify_query(event["tool_input"])
     # then
-    assert outcome.kind == "always"
-    assert outcome.keys[0].startswith("sql:always:")
+    assert outcome.kind == ("write" if sql in ("", "SELECT 'unterminated") else "always")
+    assert outcome.keys[0].startswith("mcp:" if outcome.kind == "write" else "sql:always:")
 
 
-def test_datagrip_승인_데이터_소스의_모든_쿼리는_항상_묻는다(state, project):
+def test_datagrip_승인_데이터_소스의_조회도_세션_쓰기로_분류한다(state, project):
     # given
     event = query_event(project, APPROVAL_ID, "SELECT 1")
     # when
     outcome = datagrip_guard.classify_query(event["tool_input"])
     # then
-    assert outcome.kind == "always"
+    assert outcome.kind == "write"
 
 
 def test_datagrip_claude는_쓰기를_처음_묻고_승인_뒤_프롤로그_없이_허용한다(state, project, monkeypatch):

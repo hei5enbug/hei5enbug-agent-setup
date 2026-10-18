@@ -146,7 +146,7 @@ test("환경 API가 없거나 사용할 수 없으면 두 고정 GPT 모델을 �
 });
 
 test("모든 기능 옵션을 꺼도 런처 URL이 없으면 메인 GPT 요청을 거부한다", {
-  options: { agent_guard: false, session_approval: false, role_pinning: false, language_guard: false, datagrip_guard: false },
+  options: { agent_guard: false, role_pinning: false, language_guard: false, datagrip_guard: false },
 }, async ($, on) => {
   // given
   registryFiles(on);

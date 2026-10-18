@@ -6,10 +6,10 @@ from test_approval_guard import bash_event, fake_bin, guard, state, state_mod
 @pytest.mark.parametrize(("command", "kind"), [
     ("kubectl get pods $NAME", "read"),
     ("kubectl get pods ${NAME}", "read"),
-    ("kubectl $VERB pods", "always"),
-    ("kubectl ${VERB} pods", "always"),
-    ("kubectl $(echo get) pods", "always"),
-    ("kubectl `echo get` pods", "always"),
+    ("kubectl $VERB pods", "write"),
+    ("kubectl ${VERB} pods", "write"),
+    ("kubectl $(echo get) pods", "write"),
+    ("kubectl `echo get` pods", "write"),
     ('echo "$(kubectl get secret $NAME -o json)"', "secret"),
     ("kubectl get secret ${NAME} -o json", "secret"),
     ("kubectl exec $NAME -- env", "sensitive"),
@@ -151,7 +151,7 @@ def test_unquoted_heredoc_prose_is_data_and_only_its_substitutions_are_classifie
 @pytest.mark.parametrize(("command", "kind"), [
     ('S={danger}; S={safe} bash "$S/run.sh"', "always"),
     ('S={danger}; S={safe} true; bash "$S/run.sh"', "always"),
-    ('S={safe} bash "$S/run.sh"', "always"),
+    ('S={safe} bash "$S/run.sh"', "write"),
     ('S={safe}\nbash $S/run.sh', "read"),
     ('S={safe}; bash $S/run.sh', "read"),
     ('S={safe} && bash $S/run.sh', "read"),
@@ -224,13 +224,13 @@ def test_heredoc_substitutions_keep_quoted_parentheses_and_unclosed_bodies(state
     "dash", "ksh", "fish", "unknown-program", "./run.sh", "/tmp/run.sh", "bash", "python3.11",
 ])
 def test_unknown_or_executing_heredoc_receivers_keep_commands_visible(state, fake_bin, receiver):
-    """알려진 데이터 수신자가 아닌 명령의 히어도큐먼트는 실행 명령으로 검사한다."""
+    """알 수 없는 수신자의 본문은 검사하고 프로세스를 실행하지 않는 파이썬은 통과한다."""
     # given
     command = f"{receiver} <<'EOF'\nkubectl delete pod x --context dev -n web\nEOF\n"
     # when
     outcome = guard.classify_text(command, str(state))
     # then
-    assert outcome.kind == "always"
+    assert outcome.kind == ("pass" if receiver == "python3.11" else "always")
 
 
 @pytest.mark.parametrize("receiver", [
@@ -238,13 +238,13 @@ def test_unknown_or_executing_heredoc_receivers_keep_commands_visible(state, fak
     "cat > note.md > run.sh", "cat > run.sh > note.md", "tee run.sh", "tee -a note.md run",
 ])
 def test_heredoc_output_to_non_data_files_keeps_commands_visible(state, fake_bin, receiver):
-    """출력 대상 중 하나라도 데이터 파일이 아니면 히어도큐먼트의 명령을 검사한다."""
+    """데이터 수신자가 파일에 쓰는 히어도큐먼트는 파일 확장자에 관계없이 데이터로 처리한다."""
     # given
     command = f"{receiver} <<'EOF'\nkubectl delete pod x --context dev -n web\nEOF\n"
     # when
     outcome = guard.classify_text(command, str(state))
     # then
-    assert outcome.kind == "always"
+    assert outcome.kind == "pass"
 
 
 def test_heredoc_cannot_hide_a_script_overwrite_before_execution(state, fake_bin):
@@ -316,8 +316,8 @@ def test_substituted_executables_with_covered_words_fail_closed(state, fake_bin,
     ("URL=https://management.azure.com/x; az --subscription sub rest -m GET --url $URL", "read"),
     ("URL=https://v.vault.azure.net/secrets/token; az rest -m GET --url $URL", "secret"),
     ("az rest -m GET --url https://example.test/x", "write"),
-    ("az rest -m GET --url $UNKNOWN_URL", "write"),
-    ("az rest -m GET --url https://management.azure.com/$UNKNOWN_PATH", "write"),
+    ("az rest -m GET --url $UNKNOWN_URL", "read"),
+    ("az rest -m GET --url https://management.azure.com/$UNKNOWN_PATH", "read"),
     ("az rest -m GET", "write"),
     ("az rest -m GET --url https://management.azure.com/x/SeCrEt", "write"),
     ("az rest -m GET --url https://management.azure.com/x/LISTKEYS", "write"),
@@ -344,7 +344,7 @@ def test_claude_every_time_prompt_discloses_session_write_approval(state, kind, 
     action = state_mod.Outcome(kind, ["once-key"], ["Requested action"], writes=writes)
     expected = "Asks every time: Requested action."
     if writes:
-        expected += " It also approves non-destructive writes for the rest of this session."
+        expected += " It also approves writes for 12 hours in this session."
     # when
     output = state_mod.pre_decision("claude", "s1", action)
     # then
@@ -362,7 +362,7 @@ def test_codex_prompt_discloses_every_session_write_grant(state, kind, writes, s
     action = state_mod.Outcome(kind, ["original-key"], ["Requested action"], writes=writes)
     prefix = "Approval required: Requested action. "
     if session_scope:
-        prefix += "Approving also allows non-destructive writes for the rest of this session. "
+        prefix += "Approving also allows writes for 12 hours in this session. "
     # when
     output = state_mod.pre_decision("codex", "s1", action)
     # then

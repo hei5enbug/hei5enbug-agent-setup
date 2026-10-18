@@ -77,8 +77,13 @@ def test_covered_명령이_없는_치환은_통과다(home):
     assert classify('echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)"', home).kind == "pass"
 
 
-def test_변수로_채운_치환은_분류할_수_없어_항상_묻는다(home):
-    assert classify("X=$(kubectl $VERB pods); echo $X", home).kind == "always"
+def test_변수로_채운_치환은_세션_쓰기로_분류한다(home):
+    # given
+    command = "X=$(kubectl $VERB pods); echo $X"
+    # when
+    outcome = classify(command, home)
+    # then
+    assert outcome.kind == "write"
 
 
 def _script(tmp_path, name, body):
@@ -96,12 +101,15 @@ def test_cd_뒤의_상대_스크립트는_그_디렉터리에서_읽는다(home,
     assert outcome.kind == "pass"
 
 
-def test_cd_뒤의_파이썬_스크립트도_그_디렉터리에서_읽는다(home, tmp_path):
+def test_cd_뒤의_파이썬_프로세스_실행은_세션_쓰기로_분류한다(home, tmp_path):
+    # given
     _script(home, "tool.py", 'import subprocess\nsubprocess.run(["kubectl", "get", "pods"])\n')
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
+    # when
     outcome = classify(f"cd {home / 'tools'} && python3 tool.py", elsewhere)
-    assert outcome.kind == "read"
+    # then
+    assert outcome.kind == "write"
 
 
 def test_같은_명령의_변수_대입으로_스크립트_경로를_푼다(home, tmp_path):
@@ -121,11 +129,14 @@ def test_중괄호_변수도_푼다(home, tmp_path):
 
 
 def test_명령_앞에_붙인_대입은_그_명령의_인자를_풀지_않는다(home, tmp_path):
+    # given
     _script(home, "run.sh", "kubectl get pods\n")
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
+    # when
     outcome = classify(f"W={home / 'tools'} bash ${{W}}/run.sh", elsewhere)
-    assert outcome.kind == "always"
+    # then
+    assert outcome.kind == "write"
 
 
 def test_변수로_푼_스크립트의_쓰기는_쓰기로_본다(home, tmp_path):
@@ -136,12 +147,22 @@ def test_변수로_푼_스크립트의_쓰기는_쓰기로_본다(home, tmp_path
     assert outcome.kind == "write"
 
 
-def test_풀_수_없는_변수의_스크립트는_항상_묻는다(home):
-    assert classify("bash $UNSET_DIR/run.sh", home).kind == "always"
+def test_풀_수_없는_변수의_스크립트는_세션_쓰기로_분류한다(home):
+    # given
+    command = "bash $UNSET_DIR/run.sh"
+    # when
+    outcome = classify(command, home)
+    # then
+    assert outcome.kind == "write"
 
 
-def test_없는_스크립트는_항상_묻는다(home):
-    assert classify(f"bash {home}/missing.sh", home).kind == "always"
+def test_없는_스크립트는_세션_쓰기로_분류한다(home):
+    # given
+    command = f"bash {home}/missing.sh"
+    # when
+    outcome = classify(command, home)
+    # then
+    assert outcome.kind == "write"
 
 
 def test_cd가_없으면_이벤트_cwd가_기준이다(home):

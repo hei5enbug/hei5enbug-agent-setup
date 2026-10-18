@@ -147,7 +147,7 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
   `python3 <Source directory>/scripts/role_runner.py implementation --fallback --instructions
   <Source directory>/agents/worker.md --assignment <file> --result <file>`을 실행한다. 공유 모델 라우팅의 기능별 표가
   Claude Code 대체 항목으로 지정한 모델을 실행하며, 해당 폴더에 쓰기 권한을 부여한다.
-- 작업이 써야 하는 해당 폴더 밖 디렉터리에만 `--add-dir <dir>`을 붙인다. 플러그인 Mod는 세션당 한 번 묻는다.
+- 작업이 써야 하는 해당 폴더 밖 디렉터리에만 `--add-dir <dir>`을 붙인다. 승인 가드는 세션 쓰기 승인을 한 번 묻는다.
 
 ## Codex worker
 

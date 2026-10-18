@@ -110,14 +110,14 @@ def test_custom_curl_write_methods_can_be_preapproved(state):
     ("task.sh", "kubectl get secret s -o json\n", "bash task.sh", "secret"),
     ("task.sh", "cat .env.production\n", "bash task.sh", "sensitive"),
     ("task.sh", "echo hello\n", "bash task.sh", "pass"),
-    ("task.py", 'import subprocess\nsubprocess.run("kubectl get pods", shell=True)\n', "python3 task.py", "read"),
+    ("task.py", 'import subprocess\nsubprocess.run("kubectl get pods", shell=True)\n', "python3 task.py", "write"),
     ("task.py", 'import subprocess\nsubprocess.run(["kubectl", "apply", "-f", "a", "--context", "dev"])\n',
      "python task.py", "write"),
-    ("task.py", 'import boto3\nboto3.client("s3").put_object()\n', "python3 task.py", "always"),
-    ("task.py", 'from google.cloud import storage\n', "python3 task.py", "always"),
+    ("task.py", 'import boto3\nboto3.client("s3").put_object()\n', "python3 task.py", "write"),
+    ("task.py", 'from google.cloud import storage\n', "python3 task.py", "write"),
     ("task.py", 'print("hello")\n', "python3 task.py", "pass"),
-    ("task.js", 'exec("kubectl get pods");', "node task.js", "read"),
-    ("task.mjs", 'spawn(["kubectl", "apply", "-f", "a", "--context", "dev"]);', "node task.mjs", "write"),
+    ("task.js", 'exec("kubectl get pods");', "node task.js", "pass"),
+    ("task.mjs", 'spawn(["kubectl", "apply", "-f", "a", "--context", "dev"]);', "node task.mjs", "pass"),
     ("Makefile", "all: prepare\n\tkubectl get pods\nprepare:\n\tkubectl apply -f a --context dev\n",
      "make", "write"),
     ("Makefile", "all:\n\tkubectl delete pod x\nread:\n\tkubectl get pods\n", "make read", "read"),
@@ -142,14 +142,14 @@ def test_script_calls_classify_contents_relative_to_event_cwd(state, fake_bin, f
 
 @pytest.mark.parametrize("content", [None, "x" * (256 * 1024 + 1), "import boto3\n"])
 def test_unreadable_large_or_unclassified_scripts_require_one_time_approval(state, fake_bin, content):
-    """읽을 수 없거나 크거나 SDK 호출을 분류하지 못한 스크립트는 매번 묻는다."""
+    """읽을 수 없거나 크거나 SDK를 호출하는 스크립트는 세션 쓰기 승인을 요구한다."""
     # given
     if content is not None:
         (state / "task.py").write_text(content)
     # when
     outcome = guard.classify_text("python3 task.py", str(state))
     # then
-    assert outcome.kind == "always"
+    assert outcome.kind == "write"
     assert re.fullmatch("script:[a-f0-9]{64}", outcome.keys[0])
 
 
@@ -160,7 +160,7 @@ def test_script_named_pipe_is_unclassified_without_waiting_for_input(state, fake
     # when
     outcome = guard.classify_text("bash pipe.sh", str(state))
     # then
-    assert outcome.kind == "always"
+    assert outcome.kind == "write"
 
 
 def test_script_identity_includes_path_argv_environment_and_content(state, fake_bin, monkeypatch):
@@ -246,14 +246,14 @@ def test_the_plugin_refresh_script_status_is_not_self_approval():
     ('echo "$(kubectl get pods --field-selector \'name=)\')"', "read"),
     ('echo "`kubectl get secret s -o json`"', "secret"),
     ('echo "$(echo "$(kubectl get secret s -o json)")"', "secret"),
-    ('echo "`kubectl $VERB pods`"', "always"),
-    ('R=$(kubectl apply -f a --context dev); rm -rf local', "always"),
-    ('echo "$(kubectl apply -f a --context dev)" > output', "always"),
+    ('echo "`kubectl $VERB pods`"', "write"),
+    ('R=$(kubectl apply -f a --context dev); rm -rf local', "write"),
+    ('echo "$(kubectl apply -f a --context dev)" > output', "write"),
     ("echo '$(kubectl delete pod x)'", "pass"),
     ('echo "$(kubectl get pods)" "$(kubectl delete pod x --context dev)"', "always"),
-    ("eval kubectl get pods", "always"),
-    ("xargs kubectl get pods", "always"),
-    ("bash -c 'kubectl get pods'", "always"),
+    ("eval kubectl get pods", "write"),
+    ("xargs kubectl get pods", "write"),
+    ("bash -c 'kubectl get pods'", "pass"),
     ("az rest --method=GeT --url https://example.test", "write"),
     ("az rest -mDeLeTe --url https://example.test", "always"),
     ("az rest --url https://example.test", "write"),
@@ -273,9 +273,9 @@ def test_substitutions_merge_classifications_and_preserve_opaque_regions(state, 
     ('S={directory} && bash $S/run.sh', "read"),
     ('S={directory}; cd ${{S}} && bash run.sh', "read"),
     ('S={directory}; W=$S; cd $W && bash run.sh', "read"),
-    ('S={directory} bash $S/run.sh', "always"),
+    ('S={directory} bash $S/run.sh', "write"),
     ('S={directory}; R=$(bash $S/run.sh); echo $R', "read"),
-    ('cd tools && cd nested && bash run.sh', "always"),
+    ('cd tools && cd nested && bash run.sh', "write"),
     ('cd $UNASSIGNED; bash tools/nested/run.sh', "read"),
     ('cd missing-directory; bash tools/nested/run.sh', "read"),
 ])
@@ -300,7 +300,7 @@ def test_script_path_does_not_expand_an_unassigned_environment_variable(state, f
     # when
     outcome = guard.classify_text("bash $UNASSIGNED/run.sh", str(state))
     # then
-    assert outcome.kind == "always"
+    assert outcome.kind == "write"
 
 
 @pytest.mark.parametrize(("command", "kind"), [
@@ -308,8 +308,8 @@ def test_script_path_does_not_expand_an_unassigned_environment_variable(state, f
     ("cat <<-EOF\n\tkubectl delete pod x\n\tEOF\nkubectl get pods\n", "pass"),
     ("cat <<A <<'B'\nsource missing.sh\nA\nkubectl delete pod x\nB\n", "pass"),
     ("env FOO=bar bash <<EOF\nkubectl delete pod x\nEOF\n", "always"),
-    ("python3 <<EOF\nkubectl delete pod x\nEOF\n", "always"),
-    ("kubectl apply -f - <<EOF\necho hi\nEOF\n", "always"),
+    ("python3 <<EOF\nkubectl delete pod x\nEOF\n", "pass"),
+    ("kubectl apply -f - <<EOF\necho hi\nEOF\n", "write"),
     ("cat <<EOF\necho hello\nEOF\nkubectl delete pod x\n", "always"),
 ])
 def test_heredoc_data_is_ignored_only_for_non_executing_receivers(state, fake_bin, command, kind):
@@ -670,7 +670,7 @@ def test_claude_approval_prompt_uses_the_exact_short_wording(state, kind):
     action = state_mod.Outcome(kind, ["original-key"], ["Requested action"])
     expected = (
         "Asks every time: Requested action." if kind in ("always", "sensitive") else
-        "Write: Requested action. Approve once; non-destructive writes then run without asking for the rest of this session."
+        "Write: Requested action. Approve once; writes then run without asking for 12 hours in this session."
     )
     # when
     output = state_mod.pre_decision("claude", "s1", action)

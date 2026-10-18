@@ -64,11 +64,15 @@ def grant_write(session="s1"):
 
 
 def test_처음_쓰기는_무슨_쓰기인지_짧게_묻는다(home):
-    output = guard.handle(bash(APPLY), "claude")
-    assert decision(output) == "ask"
+    # given
+    event = bash(APPLY)
+    # when
+    output = guard.handle(event, "claude")
     text = reason(output)
+    # then
+    assert decision(output) == "ask"
     assert text.startswith("Write: kubectl apply on (default) dev/web.")
-    assert "Approve once" in text and "rest of this session" in text
+    assert "Approve once" in text and "12 hours in this session" in text
     assert len(text) <= 240
 
 
@@ -134,11 +138,14 @@ def test_삭제가_섞인_복합_명령을_승인하면_쓰기_부분은_세션_
 
 
 @pytest.mark.parametrize("command", ["printenv", "bash /nonexistent/run.sh"])
-def test_민감하거나_분류할_수_없는_호출은_승인_뒤에도_매번_묻는다(home, command):
+def test_민감한_호출은_매번_묻고_미분류_쓰기는_세션_승인을_사용한다(home, command):
+    # given
     grant_write()
+    # when
     output = guard.handle(bash(command), "claude")
-    assert decision(output) == "ask"
-    assert "every time" in reason(output)
+    # then
+    assert decision(output) == ("ask" if command == "printenv" else "allow")
+    assert ("every time" in reason(output)) == (command == "printenv")
 
 
 def test_요청_명령은_하나의_세션_쓰기_키를_받는다(home):

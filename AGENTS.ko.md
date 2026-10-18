@@ -85,7 +85,7 @@
 
   | 작업 | 작업자 |
   |---|---|
-  | 쉬움: 편집 내용이 정해져 있고 검사가 모두 확인하는 응집된 변경 하나 | `haiku_worker`: 할당 작업자 규칙과 과제를 stdin으로 전달하고 `claude -p --model claude-haiku-5-5 --effort xhigh --output-format json`을 사용하며 과제의 도구 권한과 허용 경로를 유지한다 |
+  | 쉬움: 편집 내용이 정해져 있고 검사가 모두 확인하는 응집된 변경 하나 | `haiku_worker`: 할당 작업자 규칙과 과제를 stdin으로 전달하고 `claude -p --model claude-haiku-5-5 --effort xhigh --output-format json`을 사용하며 과제의 도구 권한과 허용 경로를 유지한다. 여기에 `Bash`와 `HEI5ENBUG_PARENT_SESSION=claude:$CLAUDE_CODE_SESSION_ID`를 추가해 `dontAsk`가 아니라 승인 가드가 셸 명령의 실행 여부를 결정하게 한다 |
   | 보통 또는 어려움: 동작 변경, 여러 파일, 파싱, 보안, 동시성 | `worker`(`gpt-6.1-sol` / `high`): Claude Code에서는 허용 경로가 든 폴더에서 `role_runner.py implementation --fallback --instructions <worker 역할 정의>`를 실행하고, Codex에서는 `worker` 역할을 쓴다 |
   | Codex 주간 사용량이 70%를 넘거나(최종 검토와 같은 방식으로 읽는다) Sol을 쓸 수 없음 | `sonnet_worker`: `claude -p --model claude-sonnet-5-5 --effort high --output-format json`, 권한은 `haiku_worker`와 같다 |
   | Claude 사용 한도에 걸림 | 난이도와 관계없이 Sol 경로 |

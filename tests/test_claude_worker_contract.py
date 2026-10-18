@@ -187,7 +187,6 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
             list(options),
             [
                 "agent_guard",
-                "session_approval",
                 "role_pinning",
                 "implementation_worker",
                 "review_model",
@@ -210,6 +209,14 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         self.assertEqual(options["review_model"]["default"], "gpt-6-astra")
         self.assertEqual(set(options["review_model"]["options"]), set(session_context.REVIEW_MODELS))
         self.assertIn("sonnet-worker", options["role_pinning"]["description"])
+        self.assertEqual(
+            options["approval_guard"]["description"],
+            "Run covered CLI, script, database, and MCP reads without approval; ask once per session for writes, including production changes and git pushes, then allow writes for 12 hours; ask every time only for irreversible actions such as deletes, DROP or TRUNCATE, force pushes, discarding uncommitted work, and package publishing; deny secret-printing commands and approval-state edits.",
+        )
+        self.assertEqual(
+            options["datagrip_guard"]["description"],
+            "Run DataGrip reads without approval with a 60-second PostgreSQL limit; use the session write approval for writes and for every query on a data source marked as needing approval; ask every time for destructive queries.",
+        )
         for key, option in options.items():
             with self.subTest(key=key):
                 if key in {"implementation_worker", "review_model"}:

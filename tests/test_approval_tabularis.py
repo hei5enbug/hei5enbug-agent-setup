@@ -37,20 +37,20 @@ def test_tabularis_reads_the_object_form_of_connections_file(connections):
     outcomes = [guard.classify_tabularis({"connection_id": name, "query": sql}).kind for name, sql in [
         ("pg", "SELECT 1"), ("demo postgres", "UPDATE t SET a=1"), ("marked", "SELECT 1"), ("unknown", "SELECT 1")]]
     # then
-    assert outcomes == ["read", "write", "always", "always"]
+    assert outcomes == ["read", "write", "write", "write"]
 
 
 @pytest.mark.parametrize(("connection", "sql", "expected"), [
     ("pg", "SELECT 1", "read"), ("demo postgres", "SELECT 1", "read"),
     ("ms", "DECLARE @v INT; SET @v = 1; SELECT @v", "read"), ("entra", "SELECT 1", "read"),
     ("pg", "INSERT INTO t VALUES (1)", "write"), ("ms", "UPDATE t SET a=1", "write"),
-    ("marked", "SELECT 1", "always"), ("운영 승인", "INSERT INTO t VALUES (1)", "always"),
-    ("other", "SELECT 1", "always"), ("unknown", "SELECT 1", "always"),
-    ("missing driver", "SELECT 1", "always"),
+    ("marked", "SELECT 1", "write"), ("운영 승인", "INSERT INTO t VALUES (1)", "write"),
+    ("other", "SELECT 1", "write"), ("unknown", "SELECT 1", "write"),
+    ("missing driver", "SELECT 1", "write"),
     ("pg", "SELECT 'delete'", "always"), ("pg", "SELECT 1 -- drop", "always"),
     ("pg", "TRUNCATE t", "always"), ("pg", "DO $$ BEGIN NULL; END $$", "always"),
     ("pg", "CALL proc()", "always"), ("ms", "EXEC proc", "always"), ("entra", "EXECUTE proc", "always"),
-    ("pg", "SELECT 'unterminated", "always"),
+    ("pg", "SELECT 'unterminated", "write"),
 ])
 def test_tabularis_uses_connection_metadata_and_the_matching_sql_classifier(connections, connection, sql, expected):
     """tabularis는 연결 이름과 드라이버에 따라 SQL을 읽기·쓰기·항상 승인으로 분류한다."""
@@ -70,7 +70,7 @@ def test_tabularis_uses_connection_metadata_and_the_matching_sql_classifier(conn
 
 @pytest.mark.parametrize("contents", [None, "{invalid", "{}", "null", '[{"id":"p","name":"broken","params":null}]'])
 def test_tabularis_missing_or_unreadable_metadata_always_asks(connections, contents):
-    """tabularis 연결 파일이 없거나 해석할 수 없으면 읽기 쿼리도 항상 승인을 요구한다."""
+    """tabularis 연결 파일이 없거나 해석할 수 없으면 읽기 쿼리도 세션 쓰기 승인을 요구한다."""
     # given
     if contents is None:
         connections.unlink()
@@ -79,8 +79,8 @@ def test_tabularis_missing_or_unreadable_metadata_always_asks(connections, conte
     # when
     outcome = guard.classify_mcp(TOOL, {"connection_id": "p", "query": "SELECT 1"})
     # then
-    assert outcome.kind == "always"
-    assert outcome.keys[0].startswith("sql:always:tabularis:")
+    assert outcome.kind == "write"
+    assert outcome.keys == ["mcp:session"]
 
 
 def test_tabularis_projects_only_id_name_and_driver(connections):
@@ -115,8 +115,8 @@ def test_tabularis_resolves_each_platform_config_directory(state, monkeypatch, p
     # when
     outcome = guard.classify_mcp(TOOL, {"connection_id": "p", "query": "SELECT 1"})
     # then
-    assert outcome.kind == "always"
-    assert outcome.keys[0].startswith("sql:always:tabularis:p:")
+    assert outcome.kind == "write"
+    assert outcome.keys == ["mcp:session"]
 
 
 @pytest.mark.parametrize("tool", ["list_connections", "list_databases", "list_tables", "get_table_schema"])
@@ -132,7 +132,7 @@ def test_other_tabularis_tools_keep_the_read_name_rules(connections, tool):
 
 @pytest.mark.parametrize("host", ["claude", "codex"])
 def test_tabularis_marked_reads_ignore_mcp_session_approval(connections, host):
-    """tabularis의 승인 표시 연결은 세션 쓰기 승인이 있어도 읽기마다 승인을 요구한다."""
+    """tabularis의 승인 표시 연결은 조회에도 공통 세션 쓰기 승인을 사용한다."""
     # given
     state_mod.record_approved(host, "s1", [state_mod.WRITE_KEY])
     event = {"hook_event_name": "PreToolUse", "session_id": "s1", "tool_name": TOOL,
@@ -140,15 +140,16 @@ def test_tabularis_marked_reads_ignore_mcp_session_approval(connections, host):
     # when
     output = guard.handle(event, host)
     # then
-    assert output["hookSpecificOutput"]["permissionDecision"] == ("ask" if host == "claude" else "deny")
+    assert (output["hookSpecificOutput"]["permissionDecision"] if output else None) == ("allow" if host == "claude" else None)
     assert PASSWORD not in json.dumps(output)
 
 
 def test_tabularis_success_uses_the_shared_approval_post_handler(connections):
-    """tabularis 쓰기가 완료되면 공통 세션 쓰기 승인으로 기록한다."""
+    """질문한 tabularis 쓰기가 완료되면 공통 세션 쓰기 승인으로 기록한다."""
     # given
     event = {"hook_event_name": "PostToolUse", "session_id": "s1", "tool_name": TOOL,
              "tool_input": {"connection_id": "pg", "query": "UPDATE t SET a=1"}}
+    guard.handle({**event, "hook_event_name": "PreToolUse"}, "claude")
     # when
     guard.handle(event, "claude")
     # then

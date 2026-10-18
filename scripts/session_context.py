@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -40,6 +41,7 @@ SESSION_FILES = {
     "codex": "codex.md",
     "claude": "claude-code.md",
 }
+CLAUDE_ASK_NOTICE_PREFIX = "Notice: these Claude Code ask rules override the guard's allow"
 
 
 def absolute_links(content: str, path: Path, root: Path) -> str:
@@ -85,6 +87,79 @@ def context_kind(event_name: str, host: str, event: dict, environ: dict | None =
     if host == "codex" and not agent_type:
         return "main"
     return "implementation" if agent_type in IMPLEMENTATION_AGENTS[host] else "core"
+
+
+def _claude_settings_paths(project: Path) -> tuple[Path, ...]:
+    config = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude").expanduser()
+    return (
+        config / "settings.json",
+        project / ".claude" / "settings.json",
+        project / ".claude" / "settings.local.json",
+    )
+
+
+def _claude_permissions(path: Path) -> dict:
+    try:
+        settings = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    permissions = settings.get("permissions") if isinstance(settings, dict) else None
+    return permissions if isinstance(permissions, dict) else {}
+
+
+def _claude_ask_rules(permissions: dict) -> list[str]:
+    ask = permissions.get("ask")
+    if not isinstance(ask, list):
+        return []
+    rules = []
+    for rule in ask:
+        if not isinstance(rule, str) or "\n" in rule or "\r" in rule:
+            continue
+        if rule == "Bash" or rule.startswith("Bash(") or rule.startswith("mcp__"):
+            rules.append(rule)
+    return rules
+
+
+def _codex_plugin_hooks_disabled() -> bool:
+    path = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex") / "config.toml"
+    if not path.is_file():
+        return False
+    try:
+        config = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return False
+    features = config.get("features") if isinstance(config, dict) else None
+    return not isinstance(features, dict) or features.get("plugin_hooks") is not True
+
+
+def session_start_notices(host: str, project: Path | None = None) -> list[str]:
+    """Return notices for prerequisite settings that would prevent the approval guard from working."""
+    notices = []
+    if host == "claude":
+        permissions = [_claude_permissions(path) for path in _claude_settings_paths(project or Path.cwd())]
+        mode = next((item["defaultMode"] for item in reversed(permissions) if "defaultMode" in item), None)
+        if mode == "dontAsk":
+            notices.append("Notice: Claude Code defaultMode dontAsk denies every approval the guard asks for.")
+        rules = [rule for item in permissions for rule in _claude_ask_rules(item)][:3]
+        if rules:
+            notices.append(CLAUDE_ASK_NOTICE_PREFIX + ": " + ", ".join(rules) + ".")
+    if _codex_plugin_hooks_disabled():
+        notices.append("Notice: Codex runs no approval guard until [features] plugin_hooks = true.")
+    return notices
+
+
+def append_session_notices(context: str, notices: list[str], limit: int) -> str:
+    """Append each notice that fits the context limit, shortening the ask-rule notice before dropping it."""
+    for notice in notices:
+        options = [notice]
+        if notice.startswith(CLAUDE_ASK_NOTICE_PREFIX + ":"):
+            options.append(CLAUDE_ASK_NOTICE_PREFIX + ".")
+        for text in options:
+            candidate = context + text + "\n"
+            if len(candidate.encode("utf-8")) <= limit:
+                context = candidate
+                break
+    return context
 
 
 def render_context(root: Path, host: str, kind: str = "main") -> str:
@@ -468,7 +543,13 @@ def main() -> int:
         root = Path(__file__).resolve().parents[1]
         codex_root = os.environ.get("PLUGIN_ROOT")
         host = "codex" if codex_root and Path(codex_root).resolve() == root else "claude"
-        context = render_context(root, host, context_kind(event_name, host, event))
+        kind = context_kind(event_name, host, event)
+        context = render_context(root, host, kind)
+        if event_name == "SessionStart":
+            limit = MAX_CONTEXT_BYTES if kind == "main" else MAX_ROLE_CONTEXT_BYTES
+            cwd = event.get("cwd")
+            project = Path(cwd) if isinstance(cwd, str) and cwd else None
+            context = append_session_notices(context, session_start_notices(host, project), limit)
         if host == "codex":
             try:
                 provision_codex_agents(root)

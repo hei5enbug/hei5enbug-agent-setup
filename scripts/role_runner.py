@@ -269,8 +269,10 @@ def claude_rules(run: Run) -> list[str]:
     rules = ["Read", "Grep", "Glob", *READ_SHELL_RULES, *run.web_tools]
     if run.writing:
         rules += edit_rules(run.add_dirs)
+    if run.writing or run.mcp:
+        rules += ["Bash"]
     if run.mcp:
-        rules += ["Bash", MCP_TOOL_RULE]
+        rules += [MCP_TOOL_RULE]
     return rules
 
 
@@ -292,7 +294,7 @@ def claude_command(run: Run) -> list[str]:
         tools = claude_tools(allowed)
         mode = "dontAsk"
     else:
-        allowed = ["Read", "Grep", "Glob", *(edit_rules(run.add_dirs) if run.writing else [])]
+        allowed = ["Read", "Grep", "Glob", *(["Bash"] if run.writing else []), *(edit_rules(run.add_dirs) if run.writing else [])]
         tools = claude_tools(allowed)
         mode = "dontAsk"
     command = ["claude", "-p"]
