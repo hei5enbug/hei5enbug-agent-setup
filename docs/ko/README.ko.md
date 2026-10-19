@@ -372,6 +372,10 @@ Claude는 “This may expose a protected value; prefer secret_exec.py ...” 경
 Codex는 일회용 코드와 함께 거부합니다. 이 승인은 세션 승인이 되지 않습니다.
 비밀이 아닌 변수 이름만 지정한 `printenv`는 읽기입니다. `env`나 `printenv`에 지원되는 `grep`·`rg` 필터를 적용하고,
 일치한 이름 중 비밀 이름이 없으면 읽기입니다. 개수만 출력하는 경우도 읽기이며, 확인할 수 없는 필터는 계속 민감 호출입니다.
+지원되는 필터는 명령 목록 안에서도 같은 분류를 유지하며, 가드는 다른 요소의 결과와 기존 규칙대로 합칩니다.
+다만 `export`, 변수 대입, `source`, `eval`처럼 목록이 먼저 환경을 바꿀 수 있으면 이 규칙을 적용하지 않습니다.
+`python3 <plugin root>/skills/orca-plugin-refresh/scripts/orca_plugin_refresh.py status ...`는 해석된 스크립트가
+이 가드의 플러그인 루트에 속하고 앞에 인터프리터 옵션이 없으면 읽기입니다.
 
 쓰기 전에 묶음 승인을 요청할 수 있습니다.
 
@@ -414,10 +418,13 @@ Codex의 일회 승인이 진행 중이고 `PostToolUse`나 `PostToolUseFailure`
 이미 받은 승인은 세 번째 코드로 승인한 재시도까지 실행합니다. `PostToolUse`나 `PostToolUseFailure`는 끝난 호출의 키별 횟수를 초기화합니다.
 이미 세션 승인된 키는 다른 키의 요청 한도를 쓰지 않습니다.
 
-에이전트는 스스로 승인할 수 없습니다. 승인 또는 heartbeat 상태
-디렉터리를
-가리키는 Bash 명령이나, `approval_guard.py`, `datagrip_guard.py`, `approval_state.py`를 프로그램으로, `-m`으로, 또는 이를 가져오는
-Python 코드로 실행하는 Bash 명령은 두 호스트 모두에서 거부됩니다. `cat`이나 `rg`로 그 파일을 읽기만 하는 명령은 거부되지 않습니다. 위에서 검증한 `request` 명령만 실행 예외입니다.
+에이전트는 스스로 승인할 수 없습니다. `approval_guard.py`, `datagrip_guard.py`, `approval_state.py`를 프로그램으로,
+`-m`으로, 또는 이를 가져오는 Python 코드로 실행하는 Bash 명령은 두 호스트 모두에서 거부됩니다.
+승인 또는 heartbeat 상태 디렉터리를 가리키는 명령은 모든 단순 명령이 허용된 읽기 명령일 때만 예외입니다.
+허용 목록은 `ls`, `cat`, `head`, `tail`, `grep`, `wc`, `stat`, `file`, `find`, `echo`입니다. `find`는 `-type`, `-name`,
+`-maxdepth`, `-print` 같은 읽기 옵션만 쓸 수 있고 글롭 문자를 쓸 수 없습니다. 명령에는 중괄호, 치환, 변수 대입 접두사,
+`/dev/null` 이외의 출력 리다이렉션이 없어야 합니다.
+`cat`이나 `rg`로 가드 파일을 읽기만 하는 명령은 거부되지 않습니다. 위에서 검증한 `request` 명령만 실행 예외입니다.
 두 상태 디렉터리 안의 파일 편집은 `apply_patch` 패치가 가리키는 경로를 포함해 양쪽 호스트 모두 거부합니다.
 
 비밀 값이 필요한 명령은 비밀 도우미를 사용합니다: `python3 <plugin root>/scripts/secret_exec.py --secret

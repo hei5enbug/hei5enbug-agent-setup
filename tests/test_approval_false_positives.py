@@ -190,3 +190,136 @@ def test_tee로_파일에_쓰는_heredoc_본문도_데이터다(home):
 def test_bash에_먹이는_heredoc은_본문을_실행으로_본다(home):
     command = "bash <<'EOF'\nkubectl delete pod x --context dev -n web\nEOF\n"
     assert classify(command, home).kind != "pass"
+
+
+@pytest.mark.parametrize("separator", [";", "&&", "||", "\n"])
+@pytest.mark.parametrize(("before", "pipeline", "after"), [
+    ("cat /x/a.md | head -120; echo", 'env | grep -E "CLAUDE_CODE_(SUBAGENT|EFFORT|MAX_CONC)"',
+     'grep -h -E "maxEffortLevel" ~/.claude/settings.json 2>/dev/null'),
+    ("echo before", "env | grep CLAUDE_CODE_X", "echo ok"),
+    ("echo before", "printenv | rg CLAUDE_CODE_X | head -10", "echo ok"),
+])
+def test_filtered_environment_in_lists_keeps_standalone_aggregation(home, separator, before, pipeline, after):
+    """명령 목록의 환경 변수 필터는 각 요소를 단독 분류해 합친 결과를 유지한다."""
+    # given
+    command = f"{before} {separator} {pipeline} {separator} {after}"
+    parts = [classify(part, home) for part in (before, pipeline, after)]
+    expected = guard._aggregate(parts, guard.tokenize(command))
+    # when
+    outcome = classify(command, home)
+    # then
+    assert outcome == expected
+    assert outcome.kind != "sensitive"
+
+
+@pytest.mark.parametrize("pipeline", ["env", "env | grep CLAUDE_CODE_X", "env | grep -P CLAUDE_CODE_X"])
+def test_unfiltered_or_secret_environment_in_lists_stays_sensitive(home, monkeypatch, pipeline):
+    """필터가 없거나 비밀 이름과 일치하거나 확인할 수 없는 환경 변수 조회는 목록에서도 민감 호출이다."""
+    # given
+    monkeypatch.setenv("CLAUDE_CODE_X_TOKEN", "test-placeholder")
+    command = f"echo a; {pipeline}"
+    # when
+    outcome = classify(command, home)
+    # then
+    assert outcome.kind == "sensitive"
+
+
+def test_sensitive_environment_filter_in_a_list_keeps_its_standalone_keys(home, monkeypatch):
+    """목록 안에서 비밀 이름과 일치한 환경 변수 필터는 단독 실행과 같은 민감 분류 키를 유지한다."""
+    # given
+    monkeypatch.setenv("CLAUDE_CODE_X_TOKEN", "test-placeholder")
+    pipeline = "env | grep CLAUDE_CODE_X"
+    expected = classify(pipeline, home)
+    command = f"echo before; {pipeline} ; echo after"
+    # when
+    outcome = classify(command, home)
+    # then
+    assert outcome.kind == expected.kind == "sensitive"
+    assert outcome.keys == expected.keys
+
+
+def test_filtered_environment_does_not_hide_a_write_in_the_list(home):
+    """환경 변수 필터를 포함한 명령 목록에서도 다른 요소의 쓰기 종류와 키가 유지된다."""
+    # given
+    write = "curl -X POST https://example.com/api"
+    expected = classify(write, home)
+    command = f"env | grep CLAUDE_CODE_X; {write}"
+    # when
+    outcome = classify(command, home)
+    # then
+    assert outcome.kind == expected.kind == "write"
+    assert outcome.keys == expected.keys
+
+
+@pytest.mark.parametrize("script_path", ["absolute", "relative", "symlink"])
+def test_plugin_refresh_status_at_the_guard_root_is_a_read(home, script_path):
+    """가드 플러그인 경로로 해석되는 새로고침 스크립트의 status는 읽기다."""
+    # given
+    script = REPO_ROOT / "skills/orca-plugin-refresh/scripts/orca_plugin_refresh.py"
+    cwd = REPO_ROOT
+    if script_path == "relative":
+        script = script.relative_to(REPO_ROOT)
+    elif script_path == "symlink":
+        link = home / "refresh.py"
+        link.symlink_to(script)
+        script = link
+    command = f"python3 {script} status --run-id {'0' * 32} --json"
+    # when
+    outcome = classify(command, cwd)
+    # then
+    assert outcome.kind == "read"
+
+
+@pytest.mark.parametrize(("options", "subcommand"), [
+    ("", "apply"), ("", "plan"), ("", "update"), ("", "apply-installed"), ("", "self-apply"),
+    ("-B ", "status"), ("-I ", "status"), ("-- ", "status"),
+])
+def test_other_plugin_refresh_invocations_keep_the_existing_verdict(home, options, subcommand):
+    """status 이외의 하위 명령이나 인터프리터 옵션이 있는 호출은 기존 쓰기 분류를 유지한다."""
+    # given
+    script = REPO_ROOT / "skills/orca-plugin-refresh/scripts/orca_plugin_refresh.py"
+    command = f"python3 {options}{script} {subcommand} --run-id {'0' * 32} --json"
+    # when
+    outcome = classify(command, home)
+    # then
+    assert outcome.kind == "write"
+
+
+def test_same_named_refresh_script_outside_the_guard_root_keeps_its_verdict(home):
+    """플러그인 밖에 있는 동명의 스크립트는 status라도 기존 쓰기 분류를 유지한다."""
+    # given
+    original = REPO_ROOT / "skills/orca-plugin-refresh/scripts/orca_plugin_refresh.py"
+    script = home / "orca_plugin_refresh.py"
+    script.write_text(original.read_text())
+    # when
+    outcome = classify(f"python3 {script} status --run-id {'0' * 32} --json", home)
+    # then
+    assert outcome.kind == "write"
+
+
+def test_plugin_refresh_status_does_not_hide_another_write(home):
+    """플러그인 status와 쓰기를 함께 실행하면 쓰기의 종류와 키가 유지된다."""
+    # given
+    script = REPO_ROOT / "skills/orca-plugin-refresh/scripts/orca_plugin_refresh.py"
+    write = "curl -X POST https://example.com/api"
+    expected = classify(write, home)
+    command = f"python3 {script} status --run-id {'0' * 32} --json; {write}"
+    # when
+    outcome = classify(command, home)
+    # then
+    assert outcome.kind == expected.kind == "write"
+    assert outcome.keys == expected.keys
+
+
+@pytest.mark.parametrize("before", [
+    'export REVIEW_NEW_TOKEN="$AWS_SECRET_ACCESS_KEY"', "REVIEW_NEW_TOKEN=x", "source ./env.sh", ". ./env.sh",
+    "set -a", "eval true", "declare -x REVIEW_NEW_TOKEN=x", "f() { true; }",
+])
+def test_environment_filter_after_an_environment_change_stays_sensitive(home, before):
+    """앞선 목록 요소가 환경을 바꿀 수 있으면 뒤의 환경 변수 필터를 읽기로 단축하지 않는다."""
+    # given
+    command = f"{before}; env | grep '^REVIEW_NEW_TOKEN='"
+    # when
+    outcome = classify(command, home)
+    # then
+    assert outcome.kind == "sensitive"

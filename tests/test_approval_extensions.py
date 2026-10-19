@@ -237,6 +237,76 @@ def test_the_plugin_refresh_script_status_is_not_self_approval():
     assert outcome.kind != "forbidden"
 
 
+@pytest.mark.parametrize("directory", ["approvals", "heartbeats"])
+@pytest.mark.parametrize("command", [
+    "ls {path}", "cat {path}/f", "head {path}/f", "tail {path}/f", "grep x {path}/f",
+    "wc {path}/f", "stat {path}", "file {path}/f", "find {path} -type f", "echo {path}",
+    "cat < {path}/f", "ls {path} 2>/dev/null", "cat {path}/f >/dev/null",
+    "ls {path} | head; echo ok && stat {path} || cat {path}/f\nfind {path} -type f",
+])
+def test_read_only_state_commands_are_not_self_approval(state, fake_bin, directory, command):
+    """승인과 heartbeat 상태 경로를 허용 목록의 명령으로 읽기만 하면 자기 승인으로 거부하지 않는다."""
+    # given
+    approvals = state_mod.state_dir()
+    path = approvals if directory == "approvals" else approvals.parent / "heartbeats"
+    event = bash_event(command.format(path=shlex.quote(str(path))), cwd=state)
+    # when
+    output = guard.handle(event, "claude")
+    # then
+    assert decision(output) != "deny"
+
+
+@pytest.mark.parametrize("directory", ["approvals", "heartbeats"])
+@pytest.mark.parametrize("command", [
+    "echo x > {path}/f", "touch {path}/f", "rm {path}/f", "cp a {path}/f", "mv a {path}/f",
+    "sed -i s/a/b/ {path}/f", "tee {path}/f", "python3 -c \"open('{path}/f', 'w').write('x')\"",
+    "find {path} -delete", "cat {path}/f > /tmp/x", "cat {path}/f 2>&1", "MARK=x ls {path}",
+    "MARK=/bin/ls ls {path}",
+    "echo $(ls {path})", "echo `ls {path}`", "cat <(ls {path})", "cat {path}/f >(/bin/cat)",
+    'cat "{path}/$FILE"', "ls {path}; touch f", 'cat "{path}/f',
+    "python3 /plugin/scripts/approval_state.py {path}", "rg --pre ./run x {path}", "rg --pre=./run x {path}",
+    "rg x {path}", "rg --hostname-bin=./run --hyperlink-format=file://{{host}}{{path}} x {path}",
+    "find {path} -{{delete,print}}", "find {path} -de*", "find {path} *", "find {path} -size -1k",
+])
+def test_state_writes_and_unconfirmed_reads_stay_self_approval(state, fake_bin, directory, command):
+    """상태 경로의 쓰기와 읽기 전용임을 확인할 수 없는 명령은 자기 승인 사유로 거부한다."""
+    # given
+    approvals = state_mod.state_dir()
+    path = approvals if directory == "approvals" else approvals.parent / "heartbeats"
+    event = bash_event(command.format(path=path), cwd=state)
+    # when
+    output = guard.handle(event, "claude")
+    # then
+    assert decision(output) == "deny"
+    assert output["hookSpecificOutput"]["permissionDecisionReason"] == guard.SELF_APPROVAL_REASON
+
+
+@pytest.mark.parametrize("action", ["-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls"])
+def test_find_actions_on_state_paths_stay_self_approval(state, fake_bin, action):
+    """상태 경로에서 실행이나 파일 쓰기 동작을 지정한 find는 자기 승인 사유로 거부한다."""
+    # given
+    command = f"find {shlex.quote(str(state_mod.state_dir()))} {action} output"
+    # when
+    output = guard.handle(bash_event(command, cwd=state), "claude")
+    # then
+    assert decision(output) == "deny"
+    assert output["hookSpecificOutput"]["permissionDecisionReason"] == guard.SELF_APPROVAL_REASON
+
+
+@pytest.mark.parametrize(("command", "denied"), [("ls {path}", False), ("touch {path}/f", True),
+                                                  ("python3 /plugin/scripts/approval_state.py", True)])
+def test_shell_script_state_commands_keep_self_approval_protection(state, fake_bin, command, denied):
+    """셸 스크립트 안에서도 상태 읽기는 허용하고 상태 쓰기와 가드 실행은 거부한다."""
+    # given
+    (state / "state.sh").write_text(command.format(path=state_mod.state_dir()) + "\n")
+    # when
+    output = guard.handle(bash_event("bash state.sh", cwd=state), "claude")
+    # then
+    assert (decision(output) == "deny") == denied
+    if denied:
+        assert output["hookSpecificOutput"]["permissionDecisionReason"] == guard.SELF_APPROVAL_REASON
+
+
 @pytest.mark.parametrize(("command", "kind"), [
     ("kubectl get pods -l app=$(cat f)", "pass"),
     ("kubectl get pods `date`", "pass"),

@@ -78,6 +78,15 @@ SELF_APPROVAL_REASON = (
 READ_REASON = "Read-only call; it runs without approval."
 
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
+ENVIRONMENT_CHANGERS = frozenset({
+    "export", "declare", "typeset", "readonly", "local", "set", "unset", "source", ".", "eval", "exec", "alias",
+    "function",
+})
+STATE_READS = frozenset({"ls", "cat", "head", "tail", "grep", "wc", "stat", "file", "find", "echo"})
+FIND_READ_OPTIONS = frozenset({
+    "-type", "-name", "-iname", "-path", "-ipath", "-maxdepth", "-mindepth", "-newer", "-mtime", "-mmin", "-size",
+    "-empty", "-print", "-print0", "-ls", "-not", "!", "-a", "-and", "-o", "-or", "-L", "-H", "-P",
+})
 COVERED_WORD = re.compile(r"(?<![\w-])(?:" + "|".join(sorted(COVERED, key=len, reverse=True)) + r")(?![\w-])")
 OPAQUE_CONSTRUCT = re.compile(r"\b(?:eval|xargs)\b|\b(?:sh|bash|zsh)\b[^;&|\n]*?\s-[A-Za-z]*c[A-Za-z]*\b")
 SHELL_C_FLAG = re.compile(r"-[A-Za-z]*c[A-Za-z]*")
@@ -1160,6 +1169,10 @@ def _classify_script(words, cwd, depth, env, variables=None):
     resolved = _script_path(path, cwd, variables or {})
     if resolved is None:
         return _script_unknown(path, words, env, "unresolved path")
+    refresh = Path(__file__).resolve().parents[1] / "skills/orca-plugin-refresh/scripts/orca_plugin_refresh.py"
+    if (PYTHON.fullmatch(cli) and len(args) >= 2 and args[0] == path and args[1] == "status"
+            and resolved == refresh):
+        return _read()
     if depth >= MAX_DEPTH:
         return _script_unknown(resolved, words, env, "recursion limit")
     try:
@@ -1587,6 +1600,21 @@ def classify_text(text, cwd, depth=0, env=None, variables=None):
     except ParseError:
         match = COVERED_WORD.search(text)
         return _unclassified(match.group(0), text) if match else Outcome("pass", [], [])
+    filtered_segments = {}
+    start = 0
+    boundaries = [(token[2], token[3]) for token in operators if token[1] in (";", "&&", "||")]
+    changes_environment = "()" in text or any(
+        segment.words and (ASSIGNMENT.match(segment.words[0]) or os.path.basename(segment.words[0]) in ENVIRONMENT_CHANGERS)
+        for segment in segments
+    )
+    if boundaries and not changes_environment:
+        for end, following in [*boundaries, (len(text), len(text))]:
+            filtered = _environment_filter(text[start:end].strip())
+            if filtered is not None:
+                members = [segment for segment in segments if start <= segment.start < end]
+                for index, segment in enumerate(members):
+                    filtered_segments[segment.start] = filtered if index == 0 else None
+            start = following
     spans = [(segment.start, segment.end) for segment in segments if _helper_args(segment.words) is not None]
     checked = _blank(text, spans)
     verdicts = list(python_verdicts)
@@ -1594,6 +1622,11 @@ def classify_text(text, cwd, depth=0, env=None, variables=None):
     substitution_names = set()
     current_env = environment
     for segment in segments:
+        if segment.start in filtered_segments:
+            filtered = filtered_segments[segment.start]
+            if filtered is not None:
+                verdicts.append(filtered)
+            continue
         program, assignments = strip_prefix(segment.words)
         region = checked[segment.start:segment.end]
         substitutions = list(_substitution_spans(region))
@@ -2079,11 +2112,30 @@ def _runs_guard(text, depth=0):
 
 
 def _self_approval(command):
+    if _runs_guard(command):
+        return True
     if (str(approval_state.state_dir()) in command or "hei5enbug-agent-setup/approvals" in command
             or str(approval_state.state_dir().parent / "heartbeats") in command
             or "hei5enbug-agent-setup/heartbeats" in command):
-        return True
-    return _runs_guard(command)
+        if re.search(r"[$`{}]|[<>]\(", command):
+            return True
+        try:
+            segments = tokenize(command)
+        except ParseError:
+            return True
+        if not segments:
+            return True
+        for segment in segments:
+            if (not segment.words or ASSIGNMENT.match(segment.words[0])
+                    or os.path.basename(segment.words[0]) not in STATE_READS):
+                return True
+            if os.path.basename(segment.words[0]) == "find" and any(
+                    re.search(r"[*?\[]", word) or word.startswith("-") and word not in FIND_READ_OPTIONS
+                    for word in segment.words[1:]):
+                return True
+            if any(">" in operator and target != "/dev/null" for _, operator, target in segment.redirects):
+                return True
+    return False
 
 
 def main() -> int:

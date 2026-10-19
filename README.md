@@ -380,6 +380,10 @@ Claude `Read` and Bash reads (`cat`, `less`, `head`, `tail`, `grep`, `rg`) of `~
 secret_exec.py ...”; Codex denies with a one-time code. These approvals never become session approvals.
 `printenv` with only non-secret variable names is a read. Supported `grep`/`rg` filters on `env` or `printenv` are
 reads when no matched name is secret; count-only output is also a read. Filters that cannot be checked stay sensitive.
+A supported filter keeps its verdict inside a command list, and the guard aggregates it with the other elements as
+usual, unless the list can change the environment first, such as with `export`, an assignment, `source`, or `eval`.
+`python3 <plugin root>/skills/orca-plugin-refresh/scripts/orca_plugin_refresh.py status ...` is a read when the
+resolved script belongs to this guard's plugin root and no interpreter options precede it.
 
 Prepare a bundle before running writes:
 
@@ -423,12 +427,15 @@ count, including repeating a pending code. After three requests without `PostToo
 given is honored, including a retry approved by the third code. `PostToolUse` or `PostToolUseFailure` resets the count
 for the finished call's keys. Already approved session keys do not use another key's request budget.
 
-The agent cannot approve anything itself. A Bash command that names the
-approval or heartbeat state directory, or that runs `approval_guard.py`, `datagrip_guard.py`, or `approval_state.py` as
-a program,
-with `-m`, or through Python code that imports it, is denied on both hosts. Plain reads of those files, such as `cat`
-or `rg`, are not. The validated `request` command above is the only execution exception. File edits inside either
-state directory, including paths named in an `apply_patch` patch, are denied on both hosts.
+The agent cannot approve anything itself. A Bash command that runs `approval_guard.py`, `datagrip_guard.py`, or
+`approval_state.py` as a program, with `-m`, or through Python code that imports it, is denied on both hosts.
+Commands naming the approval or heartbeat state directory are denied unless every simple command is an allowed read:
+`ls`, `cat`, `head`, `tail`, `grep`, `wc`, `stat`, `file`, `find`, or `echo`. `find` may use only read options such
+as `-type`, `-name`, `-maxdepth`, or `-print`, and no glob characters. The command must have no braces,
+substitutions, assignment prefixes, or output redirection except to `/dev/null`.
+Plain reads of guard files, such as `cat` or `rg`, are not denied. The validated `request` command above is the only
+execution exception. File edits inside either state directory, including paths named in an `apply_patch` patch,
+are denied on both hosts.
 
 Commands that need a secret value use the secret helper: `python3 <plugin root>/scripts/secret_exec.py --secret
 DB_PASSWORD=k8s:<context>/<namespace>/<secret>/<key> -- <command>`. The sources are `k8s:`, `keyvault:<vault>/<name>`,

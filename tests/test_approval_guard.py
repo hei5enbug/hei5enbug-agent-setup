@@ -957,7 +957,6 @@ def test_codex_후_처리는_승인된_쓰기_키를_건드리지_않는다(stat
 # --- self-approval guard and toggle -----------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("command", [
-    "cat ~/.local/state/hei5enbug-agent-setup/approvals/codex-s1.json",
     "python3 -c 'import approval_state'",
     "python3 -c 'from approval_state import approve_text'",
     "python3 -c '__import__(\"approval_state\")'",
@@ -980,6 +979,7 @@ def test_승인_상태를_건드리는_bash_명령은_두_호스트_모두_거�
 
 
 @pytest.mark.parametrize("command", [
+    "cat ~/.local/state/hei5enbug-agent-setup/approvals/codex-s1.json",
     "ls approvals",
     "echo '{}' > /tmp/x/approvals/claude-s1.json; echo hei5enbug-agent-setup",
     "rg approval_state scripts/",
