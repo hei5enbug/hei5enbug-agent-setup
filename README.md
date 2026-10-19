@@ -25,11 +25,9 @@ hei5enbug-agent-setup/
 ├── .codex-plugin/plugin.json
 ├── .github/workflows/validate.yml
 ├── AGENTS.md
-├── CLAUDE.md
 ├── docs/
 │   └── ko/
 │       ├── AGENTS.ko.md
-│       ├── CLAUDE.ko.md
 │       ├── README.ko.md
 │       ├── agents/
 │       ├── instructions/
@@ -542,7 +540,7 @@ either `instructions/session/codex.md` or `instructions/session/claude-code.md` 
 the rules that apply to every agent.
 Python 3.12 or later must be available as `python3` on the host's `PATH`.
 The hook uses only the Python standard library.
-Root `AGENTS.md` and `CLAUDE.md` govern development of this repository only; the hook never reads them.
+Root `AGENTS.md` governs development of this repository only; the hook never reads it.
 
 Both hosts discover `hooks/hooks.json` automatically. Codex sets `PLUGIN_ROOT` to the installed plugin
 directory; the loader uses that value to select Codex rules. Both hosts provide `CLAUDE_PLUGIN_ROOT`

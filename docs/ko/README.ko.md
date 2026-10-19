@@ -28,11 +28,9 @@ hei5enbug-agent-setup/
 ├── .codex-plugin/plugin.json
 ├── .github/workflows/validate.yml
 ├── AGENTS.md
-├── CLAUDE.md
 ├── docs/
 │   └── ko/
 │       ├── AGENTS.ko.md
-│       ├── CLAUDE.ko.md
 │       ├── README.ko.md
 │       ├── agents/
 │       ├── instructions/
@@ -524,7 +522,7 @@ macOS와 Linux에서 플러그인 훅은 `instructions/session/core.md`, `instru
 합친다. Codex에는 `codex.md`, Claude Code에는 `claude-code.md`를 사용한다. `core.md`는 모든 에이전트에 적용되는 규칙을 담는다.
 호스트의 `PATH`에서 `python3`로 Python 3.12 이상을 실행할 수 있어야 한다.
 훅은 Python 표준 라이브러리만 사용한다.
-루트 `AGENTS.md`와 `CLAUDE.md`는 이 저장소 개발에만 적용하며 훅은 두 파일을 읽지 않는다.
+루트 `AGENTS.md`는 이 저장소 개발에만 적용하며 훅은 이 파일을 읽지 않는다.
 
 두 호스트 모두 `hooks/hooks.json`을 자동으로 찾는다.
 Codex가 제공하는 `PLUGIN_ROOT`가 설치 디렉터리를 가리키면 로더는 Codex 지침을 선택한다.

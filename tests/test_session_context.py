@@ -34,10 +34,9 @@ class SessionContextTest(unittest.TestCase):
         self.base = Path(self.temp.name).resolve()
         self.root = self.base / "plugin space (한글) $literal"
         self.root.mkdir()
-        for name in ("AGENTS.md", "CLAUDE.md"):
-            shutil.copy2(REPO_ROOT / name, self.root / name)
-            path = self.root / name
-            path.write_text(path.read_text() + "\nROOT PROJECT SENTINEL\n")
+        agents = self.root / "AGENTS.md"
+        shutil.copy2(REPO_ROOT / "AGENTS.md", agents)
+        agents.write_text(agents.read_text() + "\nROOT PROJECT SENTINEL\n")
         for name in ("scripts", "instructions", "config", "docs/ko/instructions"):
             shutil.copytree(REPO_ROOT / name, self.root / name)
         self.cwd = self.base / "unrelated project"
@@ -1139,9 +1138,17 @@ class SessionContextTest(unittest.TestCase):
         self.assertEqual(original, after_mirror)
         self.assertNotEqual(original, after_rule)
 
-    def test_repository_has_project_instruction_files(self):
-        self.assertTrue((REPO_ROOT / "AGENTS.md").is_file())
-        self.assertEqual((REPO_ROOT / "CLAUDE.md").read_text(), "@AGENTS.md\n")
+    def test_repository_has_agents_md_without_claude_md(self):
+        """저장소 루트에는 AGENTS.md만 있고, Claude Code가 AGENTS.md를 직접 읽도록 CLAUDE.md는 없다."""
+        # Given
+        root = REPO_ROOT
+
+        # When
+        names = {path.name for path in root.iterdir()}
+
+        # Then
+        self.assertIn("AGENTS.md", names)
+        self.assertNotIn("CLAUDE.md", names)
 
 
 BLOCK = (

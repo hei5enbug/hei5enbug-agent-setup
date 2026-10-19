@@ -13,6 +13,10 @@
   When code, schemas, a glossary, or an existing agreement leaves only one interpretation, apply it and state
   the basis. Until a decision only the user can make is resolved, do not edit files or change external state.
   Continue only read-only investigation that does not presuppose the answer.
+- Before changing hooks, agents, skills, settings, or plugin structure, check the current official Claude Code and
+  Codex documentation pages for the area you change, including features such as mods, hook events, settings, and
+  agent options. Prefer a supported feature that covers the need over custom code, and state which features you
+  checked and why you chose the approach.
 - When changing skills, instructions, or hooks, consider their recurring token and context cost.
   Preserve correctness and required validation while reducing unnecessary instruction loading, repeated reads,
   tool calls, and duplicated content. Reuse loaded instructions and validation results only while their relevant
