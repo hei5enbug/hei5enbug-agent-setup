@@ -439,8 +439,8 @@ def test_file_tools_cannot_edit_guard_state(state, tool, directory, host):
     "~/.config/gcloud/credentials.db", "~/.pgpass", "~/.docker/config.json", "~/.netrc", ".env", ".env.local",
 ])
 @pytest.mark.parametrize("tool", ["Read", "Bash"])
-def test_protected_file_reads_warn_and_always_ask(state, fake_bin, path, tool):
-    """보호 파일을 읽으면 비밀 전달 도우미를 권하고 매번 승인을 받는다."""
+def test_protected_file_reads_warn_and_ask_once_per_session(state, fake_bin, path, tool):
+    """보호 파일을 읽으면 비밀 전달 도우미를 권하고 처음 한 번 승인을 받은 뒤 같은 읽기는 세션 동안 다시 묻지 않는다."""
     # given
     tool_input = {"file_path": path} if tool == "Read" else {"command": "cat " + path}
     event = {"hook_event_name": "PreToolUse", "session_id": "s1", "tool_name": tool, "tool_input": tool_input}
@@ -452,8 +452,9 @@ def test_protected_file_reads_warn_and_always_ask(state, fake_bin, path, tool):
     again = guard.handle(event, "codex")
     claude = guard.handle(event, "claude")
     # then
-    assert decision(first) == decision(again) == "deny"
+    assert decision(first) == "deny"
     assert decision(once) is None
+    assert decision(again) is None
     assert decision(claude) == "ask"
     assert "This may expose a protected value; prefer secret_exec.py" in first["hookSpecificOutput"]["permissionDecisionReason"]
     assert "protected value" in context["hookSpecificOutput"]["additionalContext"]
@@ -733,15 +734,19 @@ def test_session_approval_mapping_preserves_classification_keys(kind, writes, on
     assert action.writes == writes
 
 
-@pytest.mark.parametrize("kind", ["write", "request", "always", "sensitive"])
-def test_claude_approval_prompt_uses_the_exact_short_wording(state, kind):
-    """Claude 승인 질문은 쓰기 종류에 맞는 짧은 문구를 사용한다."""
+@pytest.mark.parametrize(("kind", "every_time", "expected"), [
+    ("write", False, "Write: Requested action. Approve once; writes then run without asking for the rest of this session."),
+    ("request", False, "Write: Requested action. Approve once; writes then run without asking for the rest of this session."),
+    ("always", False, "Requested action. Approve once; the same action then runs without asking for the rest of this session."),
+    ("sensitive", False,
+     "Requested action. Approve once; the same action then runs without asking for the rest of this session."),
+    ("always", True, "Asks every time: Requested action."),
+    ("sensitive", True, "Asks every time: Requested action."),
+])
+def test_claude_approval_prompt_uses_the_exact_short_wording(state, kind, every_time, expected):
+    """Claude 승인 질문은 쓰기 종류와 매번 묻는 작업인지에 맞는 짧은 문구를 사용한다."""
     # given
-    action = state_mod.Outcome(kind, ["original-key"], ["Requested action"])
-    expected = (
-        "Asks every time: Requested action." if kind in ("always", "sensitive") else
-        "Write: Requested action. Approve once; writes then run without asking for 12 hours in this session."
-    )
+    action = state_mod.Outcome(kind, ["original-key"], ["Requested action"], every_time=every_time)
     # when
     output = state_mod.pre_decision("claude", "s1", action)
     # then
@@ -750,10 +755,10 @@ def test_claude_approval_prompt_uses_the_exact_short_wording(state, kind):
 
 
 @pytest.mark.parametrize("kind", ["always", "sensitive"])
-def test_codex_mixed_calls_keep_only_the_shared_write_approval_after_completion(state, kind):
-    """Codex 복합 호출이 완료돼도 위험 부분은 새 승인을 요구하고 일반 쓰기 승인만 유지한다."""
+def test_codex_mixed_every_time_calls_keep_only_the_shared_write_approval_after_completion(state, kind):
+    """Codex의 매번 묻는 복합 호출이 완료돼도 위험 부분은 새 승인을 요구하고 일반 쓰기 승인만 유지한다."""
     # given
-    action = state_mod.Outcome(kind, ["once-key"], ["Requested action"], writes=["write-a", "write-b"])
+    action = state_mod.Outcome(kind, ["once-key"], ["Requested action"], writes=["write-a", "write-b"], every_time=True)
     denied = state_mod.pre_decision("codex", "s1", action, "first")
     approve(denied)
     state_mod.pre_decision("codex", "s1", action, "first")

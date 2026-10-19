@@ -116,30 +116,27 @@ def test_marked_datagrip_read_uses_session_approval(state, project, fake_bin, ho
 
 @pytest.mark.parametrize("host", ["claude", "codex"])
 @pytest.mark.parametrize("child", [False, True])
-def test_approval_expires_without_sliding(state, fake_bin, monkeypatch, host, child):
-    """쓰기와 자식 세션의 승인 상속은 최초 승인으로부터 정확히 열두 시간 뒤 만료된다."""
+def test_approval_lasts_for_the_rest_of_the_session(state, fake_bin, monkeypatch, host, child):
+    """쓰기 승인과 자식 세션의 승인 상속은 열두 시간이 지나도 세션이 끝날 때까지 유지된다."""
     # given
     clock = [100000.0]
     monkeypatch.setattr(state_mod.time, "time", lambda: clock[0])
     grant(host, "parent")
     event = bash_event("gh pr create", session="parent")
-    clock[0] += state_mod.APPROVAL_SECONDS - 1
+    clock[0] += 12 * 60 * 60 + 1
     guard.handle({**event, "hook_event_name": "PostToolUse"}, host)
     if child:
         monkeypatch.setenv("HEI5ENBUG_PARENT_SESSION", host + ":parent")
         event["session_id"] = "child"
-    before = guard.handle(event, host)
-    clock[0] += 1
     # when
-    after = guard.handle(event, host)
+    output = guard.handle(event, host)
     # then
-    assert decision_of(before) == ("allow" if host == "claude" else None)
-    assert decision_of(after) == ("deny" if child or host == "codex" else "ask")
+    assert decision_of(output) == ("allow" if host == "claude" else None)
 
 
 @pytest.mark.parametrize("host", ["claude", "codex"])
-def test_legacy_approval_is_expired(state, fake_bin, host):
-    """승인 시각이 없는 예전 승인 기록은 만료된 것으로 처리한다."""
+def test_legacy_approval_without_a_time_is_still_approved(state, fake_bin, host):
+    """승인 시각이 없는 예전 승인 기록도 세션 승인으로 인정한다."""
     # given
     directory = state_mod.state_dir()
     directory.mkdir(parents=True)
@@ -147,7 +144,7 @@ def test_legacy_approval_is_expired(state, fake_bin, host):
     # when
     output = guard.handle(bash_event("gh pr create"), host)
     # then
-    assert decision_of(output) == ("ask" if host == "claude" else "deny")
+    assert decision_of(output) == ("allow" if host == "claude" else None)
 
 
 @pytest.mark.parametrize("count", [0, 1, 2])
@@ -288,20 +285,19 @@ def test_internal_failure_stays_always(state):
 
 
 @pytest.mark.parametrize("host", ["claude", "codex"])
-def test_expired_approval_can_be_renewed(state, fake_bin, monkeypatch, host):
-    """만료 뒤 다시 승인하면 새로운 열두 시간의 유효 기간이 시작된다."""
+def test_session_approval_keeps_its_first_grant_after_days(state, fake_bin, monkeypatch, host):
+    """세션 승인은 며칠이 지나도 유지되고 다시 승인해도 최초 승인 시각을 바꾸지 않는다."""
     # given
     clock = [100000.0]
     monkeypatch.setattr(state_mod.time, "time", lambda: clock[0])
     grant(host)
-    clock[0] += state_mod.APPROVAL_SECONDS
+    clock[0] += 3 * 24 * 60 * 60
     grant(host)
-    clock[0] += state_mod.APPROVAL_SECONDS - 1
     # when
     output = guard.handle(bash_event("gh pr create"), host)
     # then
     assert decision_of(output) == ("allow" if host == "claude" else None)
-    assert state_mod._load(host, "s1")["approved_at"][state_mod.WRITE_KEY] == 143200.0
+    assert state_mod._load(host, "s1")["approved_at"][state_mod.WRITE_KEY] == 100000.0
 
 
 @pytest.mark.parametrize("host", ["claude", "codex"])
@@ -576,19 +572,22 @@ def test_hooks_register_the_failure_event_like_post_tool_use():
 
 
 @pytest.mark.parametrize("post", ["PostToolUse", "PostToolUseFailure"])
-def test_unasked_inflight_write_cannot_renew_expired_approval(state, fake_bin, monkeypatch, post):
-    """기존 승인으로 시작한 쓰기가 만료 뒤 끝나도 세션 승인을 갱신하지 않는다."""
+def test_unasked_inflight_write_does_not_regrant_the_approval(state, fake_bin, monkeypatch, post):
+    """기존 승인으로 시작한 쓰기가 끝나도 승인을 새로 기록하지 않고 최초 승인 시각을 유지한다."""
     # given
     clock = [100000.0]
     monkeypatch.setattr(state_mod.time, "time", lambda: clock[0])
     grant("claude")
     event = bash_event("gh pr create", cwd=state, tool_use_id="allowed")
     guard.handle(event, "claude")
-    clock[0] += state_mod.APPROVAL_SECONDS
+    clock[0] += 60
     # when
     guard.handle({**event, "hook_event_name": post}, "claude")
     # then
-    assert state_mod.WRITE_KEY not in state_mod._load("claude", "s1")["approved"]
+    data = state_mod._load("claude", "s1")
+    assert data["approved"] == [state_mod.WRITE_KEY]
+    assert data["approved_at"][state_mod.WRITE_KEY] == 100000.0
+    assert data["asked"] == []
 
 
 @pytest.mark.parametrize("post", ["PostToolUse", "PostToolUseFailure"])
@@ -603,7 +602,7 @@ def test_claude_grants_only_the_recorded_asked_call_once(state, fake_bin, monkey
     before = state_mod._load("claude", "s1")
     guard.handle({**event, "hook_event_name": post}, "claude")
     granted = state_mod._load("claude", "s1")
-    clock[0] += state_mod.APPROVAL_SECONDS
+    clock[0] += 60
     # when
     guard.handle({**event, "hook_event_name": post}, "claude")
     # then
@@ -611,7 +610,7 @@ def test_claude_grants_only_the_recorded_asked_call_once(state, fake_bin, monkey
     assert granted["approved_at"][state_mod.WRITE_KEY] == 100000.0
     assert granted["asked"] == []
     assert granted["request_counts"] == {}
-    assert state_mod._load("claude", "s1")["approved"] == []
+    assert state_mod._load("claude", "s1")["approved_at"] == {state_mod.WRITE_KEY: 100000.0}
 
 
 @pytest.mark.parametrize("header,expected", [

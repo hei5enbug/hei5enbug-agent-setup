@@ -741,7 +741,7 @@ def test_claude는_쓰기를_처음_묻고_이유에_대상과_세션_안내를_
     # then
     assert decision_of(output) == "ask"
     assert "kubectl apply on (default) dev/web" in reason_of(output)
-    assert "12 hours in this session" in reason_of(output)
+    assert "for the rest of this session" in reason_of(output)
 
 
 def test_claude는_후_처리로_기록한_쓰기_키를_같은_세션에서_허용한다(state, fake_bin):

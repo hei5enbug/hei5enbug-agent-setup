@@ -8,8 +8,9 @@ human references; never load or use them during execution.
 
 - Prefer `rg` for text and symbol search and `fd` for file discovery.
   Use `ast-grep` only when structural matching is clearly needed.
-- Ask every time before irreversible actions and once per session before other outward writes, production
-  changes included, unless the approval guard asks. Name the write in one line. Never expose secrets.
+- Unless the approval guard decides, ask every time before irreversible actions and once per session before
+  other outward writes, production changes included. Never reconfirm a write the user asked for. Name the
+  write in one line. Never expose secrets.
 - Do not add design, tests, implementation, or planning beyond the request.
 - Minimize comments. Code, comments, and docstrings must never reference documentation.
 - Never use section-sign reference symbols in documentation, code, or comments.

@@ -82,6 +82,15 @@ ENVIRONMENT_CHANGERS = frozenset({
     "export", "declare", "typeset", "readonly", "local", "set", "unset", "source", ".", "eval", "exec", "alias",
     "function",
 })
+# The actions that ask every time, even after an approval earlier in the session. Each one, repeated with the same
+# approval, can destroy something created since: destructive git pushes, discarding uncommitted work, recursive removal
+# of a protected or external path, destructive database statements, remote infrastructure deletion (REMOTE_INFRA_CLIS
+# and destructive gh calls), Codex runs without sandbox protection, and guard classification failures, including
+# unclassifiable calls whose text names a destructive action. Classifiers set
+# Outcome.every_time for these; every other approved always or sensitive call is reused for the rest of the session.
+REMOTE_INFRA_CLIS = frozenset({"kubectl", "oc", "helm", "az", "terraform", "tofu", "aws", "gcloud", "gsutil"})
+EVERY_TIME_GIT_VERBS = frozenset({"push", "reset", "clean", "checkout", "restore", "stash"})
+ENV_TEMPLATE_SUFFIXES = (".example", ".sample", ".template", ".dist")
 STATE_READS = frozenset({"ls", "cat", "head", "tail", "grep", "wc", "stat", "file", "find", "echo"})
 FIND_READ_OPTIONS = frozenset({
     "-type", "-name", "-iname", "-path", "-ipath", "-maxdepth", "-mindepth", "-newer", "-mtime", "-mmin", "-size",
@@ -330,7 +339,8 @@ def _read():
 
 def _unclassified(cli, command):
     kind = "always" if _destructive_text(command) else "write"
-    return Outcome(kind, [f"{cli}:unclassified:{_digest(command)}"], [f"{cli} call that cannot be classified"])
+    return Outcome(kind, [f"{cli}:unclassified:{_digest(command)}"], [f"{cli} call that cannot be classified"],
+                   every_time=kind == "always")
 
 
 def _destructive_text(text):
@@ -341,12 +351,12 @@ def _destructive_text(text):
                 or re.search(r"\b(?:delete\s+from|drop\s+(?:table|database|schema)|truncate\s+table)\b", text, re.I))
 
 
-def _call(kind_name, cli, kind, target_fn, command):
+def _call(kind_name, cli, kind, target_fn, command, every_time=False):
     if not kind:
         return _unclassified(cli, command)
     target = target_fn()
     label = " ".join(kind)
-    return Outcome(kind_name, [f"{cli}:{label}@{target}"], [f"{cli} {label} on {target}"])
+    return Outcome(kind_name, [f"{cli}:{label}@{target}"], [f"{cli} {label} on {target}"], every_time=every_time)
 
 
 def subcommand_words(args):
@@ -650,7 +660,8 @@ def _classify_sql(cli, args, env, cwd, command):
     label = "+".join(sorted(set().union(*(keywords for keywords, _ in facts))))
     target = f"{host}/{database}"
     kind_name = "always" if any(destructive for _, destructive in facts) else "write"
-    return Outcome(kind_name, [f"{cli}:{label}@{target}"], [f"{cli} {label} on {target}"])
+    return Outcome(kind_name, [f"{cli}:{label}@{target}"], [f"{cli} {label} on {target}"],
+                   every_time=kind_name == "always")
 
 
 def classify_cli(cli, args, env, cwd, command, depth=0):
@@ -678,11 +689,13 @@ def classify_cli(cli, args, env, cwd, command, depth=0):
             inner_args = args[index + 1:]
         inner = shlex.join(inner_args)
         verdict = classify_text(inner, cwd, depth + 1, env)
-        if verdict.kind in ("secret", "always"):
+        if verdict.kind == "secret":
             return verdict
+        if verdict.kind == "always":
+            return verdict._replace(every_time=verdict.every_time or cli in REMOTE_INFRA_CLIS)
         if (re.search(r"(?:^|[\s;&|('\"`])(?:rm|rmdir|shred|mkfs(?:\.\w+)?|truncate)(?=\s|$)", inner)
                 or re.search(r"\bdd\b[^;&|]*\bof=", inner) or _destructive_text(inner)):
-            return _call("always", cli, kind, rules.target, command)
+            return _call("always", cli, kind, rules.target, command, cli in REMOTE_INFRA_CLIS)
     if kind and (re.search(r"\$(?:[A-Za-z_]|\{)", kind[0]) or "$(" in kind[0] or "`" in kind[0]):
         return _unclassified(cli, command)
     if cli == "kustomize":
@@ -696,7 +709,8 @@ def classify_cli(cli, args, env, cwd, command, depth=0):
     if rules.dry_run:
         return _read()
     if rules.always or _destructive(kind):
-        return _call("always", cli, kind, rules.target, command)
+        every_time = cli in REMOTE_INFRA_CLIS and (cli != "helm" or _destructive(kind))
+        return _call("always", cli, kind, rules.target, command, every_time)
     if rules.read:
         return _read()
     return _call("write", cli, kind, rules.target, command)
@@ -793,7 +807,7 @@ def _protected_path(path, cwd, env=None):
         ".kube/config", ".aws/credentials", ".aws/config", ".pgpass", ".docker/config.json", ".netrc",
     )]
     protected.extend(_resolved(item, cwd) for item in env.get("KUBECONFIG", "").split(os.pathsep) if item)
-    if candidate.name.startswith(".env") or candidate in protected:
+    if candidate.name.startswith(".env") and not candidate.name.endswith(ENV_TEMPLATE_SUFFIXES) or candidate in protected:
         return True
     return any(candidate == directory or directory in candidate.parents for directory in (
         home / ".azure", home / ".config/gcloud",
@@ -1024,7 +1038,9 @@ def _git_gh(cli, args, command):
                     or words[:2] in (["config", "get"], ["config", "list"]))
             write = not read
     if destructive or write:
-        return Outcome("always" if destructive else "write", [f"{cli}:{_digest(command)}"], [f"{cli} {' '.join(words[:2])}"])
+        every_time = destructive and (cli == "gh" or verb in EVERY_TIME_GIT_VERBS)
+        return Outcome("always" if destructive else "write", [f"{cli}:{_digest(command)}"], [f"{cli} {' '.join(words[:2])}"],
+                       every_time=every_time)
     read_verbs = {"status", "show", "log", "diff", "ls-remote", "describe", "rev-parse"}
     gh_read = cli == "gh"
     if gh_read or cli == "git" and (verb in read_verbs or verb == "tag"):
@@ -1034,7 +1050,8 @@ def _git_gh(cli, args, command):
 
 def _execution_policy(cli, args, cwd, env, variables, command):
     session = Path(env.get("_APPROVAL_SESSION_DIR", env.get("CLAUDE_PROJECT_DIR") or cwd)).resolve()
-    target = lambda kind, label: Outcome(kind, [f"{cli}:{_digest(command)}"], [label])
+    target = lambda kind, label, every_time=False: Outcome(kind, [f"{cli}:{_digest(command)}"], [label],
+                                                            every_time=every_time)
     positional = [arg for arg in args if not arg.startswith("-")]
     if (cli in ("npm", "pnpm", "yarn", "uv", "poetry", "cargo") and "publish" in positional
             or cli == "twine" and "upload" in positional or cli == "gem" and "push" in positional):
@@ -1052,7 +1069,7 @@ def _execution_policy(cli, args, cwd, env, variables, command):
         if (_has_flag(args, "--dangerously-bypass-approvals-and-sandbox", "--dangerously-bypass-hook-trust")
                 or "danger-full-access" in option_values(args, "-s", ("--sandbox",))
                 or any(value and re.search(r"sandbox[^=]*=.*danger-full-access", value) for value in settings)):
-            return target("always", "Codex access without sandbox protection")
+            return target("always", "Codex access without sandbox protection", True)
     if worker or runner:
         directories = option_values(args, longs=("--add-dir",))
         if worker:
@@ -1073,11 +1090,11 @@ def _execution_policy(cli, args, cwd, env, variables, command):
         for operand in (arg for arg in args if not arg.startswith("-")):
             expanded = _expand_path_variables(operand, {**env, **variables})
             if "$" in expanded or "`" in expanded:
-                return target("always", "Recursive removal with an unresolved target")
+                return target("always", "Recursive removal with an unresolved target", True)
             head, tail = os.path.split(expanded)
             if re.search(r"[*?\[]", tail) and not re.search(r"[*?\[]", head) and re.search(r"[^*?.\[\]]", tail):
                 if fnmatch.fnmatch(".git", tail):
-                    return target("always", "Recursive removal of a protected or external path")
+                    return target("always", "Recursive removal of a protected or external path", True)
                 path = (Path(cwd) / os.path.expanduser(head or ".")).resolve() / "_"
             else:
                 fixed = re.split(r"[*?\[]", expanded, maxsplit=1)[0]
@@ -1087,7 +1104,7 @@ def _execution_policy(cli, args, cwd, env, variables, command):
             temporary = any(path.is_relative_to(root) for root in roots)
             if (path == Path("/") or path == Path.home() or path == session or path in session.parents
                     or ".git" in path.parts or not (path.is_relative_to(session) or temporary)):
-                return target("always", "Recursive removal of a protected or external path")
+                return target("always", "Recursive removal of a protected or external path", True)
         return Outcome("pass", [], [])
     return None
 
@@ -1278,11 +1295,13 @@ def _classify_argv(words, heredoc, cwd, depth, command, inherited_env=None, vari
 
 def _merge(kind, verdicts, extra_writes=()):
     keys = sorted({key for verdict in verdicts for key in verdict.keys})
-    writes = sorted({key for verdict in extra_writes for key in verdict.keys})
+    writes = sorted({key for verdict in extra_writes for key in verdict.keys}
+                    | {key for verdict in verdicts for key in verdict.writes})
     descriptions = list(dict.fromkeys(
         text for verdict in [*verdicts, *extra_writes] for text in verdict.descriptions
     ))
-    return Outcome(kind, keys, descriptions, None, writes)
+    every_time = any(verdict.every_time for verdict in [*verdicts, *extra_writes])
+    return Outcome(kind, keys, descriptions, None, writes, every_time)
 
 
 def _redirects_allowed(segments):
@@ -1778,7 +1797,7 @@ def classify_tabularis(tool_input):
     name = connection[1] if connection else "an unidentified connection"
     text = sql if isinstance(sql, str) else ""
     always = Outcome("always", [f"sql:always:tabularis:{connection_id}:{_digest(text)}"],
-                     [f"tabularis query on {name}"])
+                     [f"tabularis query on {name}"], every_time=True)
     write = Outcome("write", ["mcp:session"], [f"tabularis query on {name}"])
     if datagrip_guard.RAW_DESTRUCTIVE.search(text) or any(datagrip_guard.query_facts(text, pg)[1] for pg in (True, False)):
         return always
@@ -1800,17 +1819,18 @@ def classify_mcp(tool, tool_input=None):
         return classify_tabularis(tool_input)
     part = mcp_tool_part(tool)
     words = tool_words(part) if part else []
+    sql = list(_input_strings(tool_input, sql_only=True))
+    if any(datagrip_guard.RAW_DESTRUCTIVE.search(text) or any(
+            datagrip_guard.query_facts(text, postgres)[1] for postgres in (True, False)) for text in sql):
+        return Outcome("always", [f"mcp:{tool}:{_digest(json.dumps(sql))}"], [f"destructive SQL in MCP tool {tool}"],
+                       every_time=True)
     if any(word in MCP_DESTRUCTIVE_WORDS for word in words):
         return Outcome("always", [f"mcp:{tool}"], [f"destructive MCP tool {tool}"])
     action = tool_input.get("action") if isinstance(tool_input, dict) else None
     action_words = tool_words(action) if isinstance(action, str) else []
     if set(action_words) & MCP_DESTRUCTIVE_WORDS:
         return Outcome("always", [f"mcp:{tool}"], [f"destructive MCP action via {tool}"])
-    sql = list(_input_strings(tool_input, sql_only=True))
     if sql:
-        if any(datagrip_guard.RAW_DESTRUCTIVE.search(text) or any(
-                datagrip_guard.query_facts(text, postgres)[1] for postgres in (True, False)) for text in sql):
-            return Outcome("always", [f"mcp:{tool}:{_digest(json.dumps(sql))}"], [f"destructive SQL in MCP tool {tool}"])
         if all(datagrip_guard.is_read(text, True) or datagrip_guard.is_read(text, False) for text in sql):
             return _read()
         return Outcome("write", ["mcp:session"], [f"MCP SQL write via {tool}"])
@@ -1931,7 +1951,7 @@ def _classify_safely(classifier, identity):
     try:
         return classifier()
     except Exception:
-        return Outcome("always", ["guard:unclassified:" + _digest(identity)], [FAILURE_REASON])
+        return Outcome("always", ["guard:unclassified:" + _digest(identity)], [FAILURE_REASON], every_time=True)
 
 
 def classify_file_tool(tool, tool_input, cwd):
@@ -2160,7 +2180,8 @@ def main() -> int:
     except Exception:
         if not isinstance(locals().get("event"), dict) or event.get("hook_event_name") != "PreToolUse":
             return 0
-        outcome = Outcome("always", ["guard:unclassified:" + _digest(json.dumps(event, sort_keys=True))], [FAILURE_REASON])
+        outcome = Outcome("always", ["guard:unclassified:" + _digest(json.dumps(event, sort_keys=True))], [FAILURE_REASON],
+                          every_time=True)
         output = approval_state.pre_decision(host, event.get("session_id"), outcome, event.get("tool_use_id"))
     if output is not None:
         print(json.dumps(output, ensure_ascii=False))

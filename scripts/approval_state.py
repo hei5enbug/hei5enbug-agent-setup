@@ -1,8 +1,8 @@
 """Session approval state and the host decisions built on it, shared by the approval guard and the DataGrip guard.
 
 State lives in `$XDG_STATE_HOME/hei5enbug-agent-setup/approvals/<host>-<session_id>.json` (default `~/.local/state`).
-Each file holds `approved` keys with non-sliding 12-hour grant times, `once` keys that one call may consume, and `pending`
-codes. On Codex the user approves a pending code by typing `승인 <CODE>` (or `approve <CODE>`) in chat. A hook event
+Each file holds `approved` keys that last for the rest of the session, `once` keys that one call may consume, and
+`pending` codes. On Codex the user approves a pending code by typing `승인 <CODE>` (or `approve <CODE>`) in chat. A hook event
 without a usable session id has no memory: writes ask on Claude and are denied on Codex, and no code is stored.
 """
 import fcntl
@@ -16,16 +16,16 @@ from collections import namedtuple
 from contextlib import contextmanager
 from pathlib import Path
 
-# Write/request keys are session approvals. Always/sensitive keys
-# need a once approval and writes need session approval. exe names a psql read so the caller can enforce read-only mode.
-Outcome = namedtuple("Outcome", "kind keys descriptions exe writes", defaults=(None, ()))
+# Write/request keys are session approvals. An approved always/sensitive call becomes a session approval too, unless
+# every_time marks it as one of the actions that ask every time. exe names a psql read so the caller can enforce
+# read-only mode.
+Outcome = namedtuple("Outcome", "kind keys descriptions exe writes every_time", defaults=(None, (), False))
 
 WRITE_KEY = "write:session"
 KEY_SEPARATOR = "\x1f"
 CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ23456789"
 CODE_LENGTH = 6
 RETENTION_SECONDS = 7 * 24 * 60 * 60
-APPROVAL_SECONDS = 12 * 60 * 60
 MAX_REQUESTS = 3
 STOP_REASON = "This call was approved but did not complete three times; stop retrying and report to the user."
 SESSION_ID = re.compile(r"[A-Za-z0-9._-]{1,128}")
@@ -135,9 +135,6 @@ def _read(path: Path) -> dict:
     approved = [key for key in data.get("approved", []) if isinstance(key, str)]
     times = data.get("approved_at", {})
     times = times if isinstance(times, dict) else {}
-    now = time.time()
-    approved = [key for key in approved if type(times.get(key)) in (int, float)
-                and 0 <= now - times[key] < APPROVAL_SECONDS]
     once = [key for key in data.get("once", []) if isinstance(key, str)]
     pending = data.get("pending", {})
     pending = {
@@ -158,7 +155,7 @@ def _read(path: Path) -> dict:
              and all(isinstance(key, str) for key in entry["keys"])]
     return {
         "approved": sorted(set(approved)), "once": sorted(set(once)), "pending": pending, "inflight": inflight,
-        "approved_at": {key: times[key] for key in approved},
+        "approved_at": {key: times[key] for key in approved if type(times.get(key)) in (int, float)},
         "hooks_warning_shown": data.get("hooks_warning_shown") is True,
         "request_counts": counts,
         "asked": asked,
@@ -260,23 +257,24 @@ def _count_request(data, keys):
     return True
 
 
-def request_ask(host, session, once_keys, session_keys, tool_use_id=None):
+def request_ask(host, session, once_keys, session_keys, tool_use_id=None, grant_keys=None):
     if session_key(session) is None:
         return True
+    grant_keys = list(session_keys) if grant_keys is None else list(grant_keys)
 
     def change(data):
         needed = [key for key in session_keys if key not in data["approved"]]
         if not _count_request(data, [*once_keys, *needed]):
             return False
-        if session_keys:
-            entry = {"id": _tool_id(tool_use_id), "keys": list(session_keys)}
+        if grant_keys:
+            entry = {"id": _tool_id(tool_use_id), "keys": grant_keys}
             if entry not in data["asked"]:
                 data["asked"].append(entry)
         return True
     return bool(_mutate(host, session, change))
 
 
-def request_code(host: str, session: str, once_keys, session_keys, descriptions=()) -> str | None:
+def request_code(host: str, session: str, once_keys, session_keys, descriptions=(), reusable=False) -> str | None:
     """Issue a counted request for missing approvals, or None when no new request can be issued."""
     once = sorted(set(once_keys))
     approved = sorted(set(session_keys))
@@ -289,12 +287,13 @@ def request_code(host: str, session: str, once_keys, session_keys, descriptions=
         if not needed or not _count_request(data, needed):
             return None
         for code, entry in data["pending"].items():
-            if entry.get("once_keys") == needed_once and entry.get("session_keys") == needed_session:
+            if (entry.get("once_keys") == needed_once and entry.get("session_keys") == needed_session
+                    and entry.get("reusable", False) == reusable):
                 return code
         code = _new_code(data)
         data["pending"][code] = {
             "key": KEY_SEPARATOR.join(sorted(set(needed))), "once_keys": needed_once,
-            "session_keys": needed_session, "descriptions": list(descriptions),
+            "session_keys": needed_session, "descriptions": list(descriptions), "reusable": reusable,
         }
         return code
     return _mutate(host, session, change)
@@ -322,7 +321,10 @@ def approve_text(host: str, session, text) -> list:
             if once_keys is None or session_keys is None:
                 keys = entry["key"].split(KEY_SEPARATOR)
                 once_keys, session_keys = (keys, []) if entry.get("once") else ([], keys)
-            data["once"] = sorted(set(data["once"]) | set(once_keys))
+            if entry.get("reusable") is True:
+                _grant(data, once_keys)
+            else:
+                data["once"] = sorted(set(data["once"]) | set(once_keys))
             _grant(data, session_keys)
             approved_keys.extend([*once_keys, *session_keys])
         return approved_keys
@@ -331,6 +333,11 @@ def approve_text(host: str, session, text) -> list:
 
 def describe(outcome: Outcome) -> str:
     return "; ".join(outcome.descriptions)
+
+
+def reusable(outcome: Outcome) -> bool:
+    """Whether an approved always/sensitive call becomes a session approval instead of asking every time."""
+    return outcome.kind in ("always", "sensitive") and not outcome.every_time
 
 
 def split_outcome(outcome: Outcome):
@@ -379,30 +386,42 @@ def pre_decision(host: str, session_id, outcome: Outcome, tool_use_id=None):
         if outcome.kind == "request" or once_keys or not is_approved(host, session, session_keys):
             return pre_output("deny", PARENT_REASON)
         return pre_output("allow", f"Approved in the main session: {description}") if host == "claude" else None
+    repeat = reusable(outcome)
+    every_time = outcome.kind in ("always", "sensitive") and not repeat
     if host == "claude":
-        if outcome.kind not in ("always", "sensitive") and session is not None and is_approved(host, session, session_keys):
+        if not every_time and session is not None and is_approved(host, session, [*once_keys, *session_keys]):
             return pre_output("allow", f"Approved earlier in this session: {description}")
-        if not request_ask(host, session, once_keys, session_keys, tool_use_id):
+        grant = [*session_keys, *once_keys] if repeat else session_keys
+        if not request_ask(host, session, once_keys, session_keys, tool_use_id, grant):
             return pre_output("deny", STOP_REASON)
-        if outcome.kind in ("always", "sensitive"):
-            scope = " It also approves writes for 12 hours in this session." if session_keys else ""
+        scope = " It also approves writes for the rest of this session." if session_keys else ""
+        if every_time:
             return pre_output("ask", f"Asks every time: {description}." + scope)
+        if repeat:
+            return pre_output(
+                "ask",
+                f"{description}. Approve once; the same action then runs without asking for the rest of this session."
+                + scope,
+            )
         return pre_output(
             "ask",
-            f"Write: {description}. Approve once; writes then run without asking for 12 hours in this session.",
+            f"Write: {description}. Approve once; writes then run without asking for the rest of this session.",
         )
     if session is None:
         return pre_output("deny", f"Approval required: {description}. {UNKNOWN_SESSION}; ask the user before retrying.")
+    if repeat and is_approved(host, session, [*once_keys, *session_keys]):
+        return None
     if take_once(host, session, once_keys, session_keys, tool_use_id):
         return None
-    code = request_code(host, session, once_keys, session_keys, outcome.descriptions)
+    code = request_code(host, session, once_keys, session_keys, outcome.descriptions, repeat)
     if code is None:
         if take_once(host, session, once_keys, session_keys, tool_use_id):
             return None
         return pre_output("deny", STOP_REASON)
     return pre_output("deny", (
         f"Approval required: {description}. "
-        + ("Approving also allows writes for 12 hours in this session. " if session_keys else "")
+        + ("Approving also lets this same action run without asking for the rest of this session. " if repeat else "")
+        + ("Approving also allows writes for the rest of this session. " if session_keys else "")
         + f"Ask the user to reply `승인 {code}`; do not retry until they do. "
         + "Replying `승인` alone also works when this is the only pending request. "
         + RETRY_INSTRUCTION
@@ -418,7 +437,8 @@ def permission_allowed(host: str, session_id, outcome: Outcome, tool_use_id=None
     data = _load(host, session)
     approved = approved_keys(host, session)
     flying = _in_flight_keys(data, _tool_id(tool_use_id))
-    return all(key in flying for key in once_keys) and all(
+    repeat = reusable(outcome)
+    return all(key in flying or repeat and key in approved for key in once_keys) and all(
         key in approved or key in flying for key in session_keys
     )
 
@@ -433,13 +453,14 @@ def after_call(host: str, session_id, outcome: Outcome, tool_use_id=None) -> Non
     if not keys:
         return
     tool_id = _tool_id(tool_use_id)
+    grant = [*session_keys, *once_keys] if reusable(outcome) else session_keys
 
     def change(data):
         for key in keys:
             data["request_counts"].pop(key, None)
         if host == "claude":
             asked = next((entry for entry in data["asked"] if entry.get("id") == tool_id
-                          and entry["keys"] == session_keys), None)
+                          and entry["keys"] == grant), None)
             if asked is not None:
                 _grant(data, asked["keys"])
                 data["asked"].remove(asked)

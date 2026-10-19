@@ -23,8 +23,8 @@ def code(output):
     return re.search(r"승인 ([A-Z2-9]{6})", reason(output))[1]
 
 
-def outcome(kind="always", keys=("key-a",)):
-    return state_mod.Outcome(kind, list(keys), ["Requested action"])
+def outcome(kind="always", keys=("key-a",), every_time=True):
+    return state_mod.Outcome(kind, list(keys), ["Requested action"], every_time=every_time and kind in ("always", "sensitive"))
 
 
 def count(key="key-a", host="codex", session="s1"):

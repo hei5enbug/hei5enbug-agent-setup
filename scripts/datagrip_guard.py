@@ -486,7 +486,7 @@ def always_outcome(tool_input, sql) -> Outcome:
     name = (source.get("name") if source is not None else None) or "an unidentified data source"
     connection = tool_input.get("connectionId") if isinstance(tool_input, dict) else None
     connection = connection if isinstance(connection, str) and connection else "unknown"
-    return Outcome("always", [f"sql:always:{connection}:{digest}"], [f"DataGrip query on {name}"])
+    return Outcome("always", [f"sql:always:{connection}:{digest}"], [f"DataGrip query on {name}"], every_time=True)
 
 
 def classify_query(tool_input) -> Outcome:
@@ -639,7 +639,7 @@ def handle(event):
             return decide(tool_input, session_id, tool_use_id)
         except Exception:
             return approval_state.pre_decision("claude", session_id, Outcome(
-                "always", ["sql:always:guard-failure"], ["The approval guard failed to check this call"],
+                "always", ["sql:always:guard-failure"], ["The approval guard failed to check this call"], every_time=True,
             ), tool_use_id)
     try:
         if name == "PreToolUse":
@@ -649,7 +649,7 @@ def handle(event):
     except Exception:
         if name == "PreToolUse":
             return approval_state.pre_decision("codex", session_id, Outcome(
-                "always", ["sql:always:guard-failure"], ["The approval guard failed to check this call"],
+                "always", ["sql:always:guard-failure"], ["The approval guard failed to check this call"], every_time=True,
             ), tool_use_id)
     return None
 

@@ -211,7 +211,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         self.assertIn("sonnet-worker", options["role_pinning"]["description"])
         self.assertEqual(
             options["approval_guard"]["description"],
-            "Run covered CLI, script, database, and MCP reads without approval; ask once per session for writes, including production changes and git pushes, then allow writes for 12 hours; ask every time only for irreversible actions such as deletes, DROP or TRUNCATE, force pushes, discarding uncommitted work, and package publishing; deny secret-printing commands and approval-state edits.",
+            "Run covered CLI, script, database, and MCP reads without approval; ask once per session for writes, including production changes and git pushes, and reuse that approval for the rest of the session; reuse any other approved action for the session too, except force pushes, discarding uncommitted work, recursive deletion outside the session or temporary folders, destructive database statements, and remote infrastructure deletion, which ask every time; deny secret-printing commands and approval-state edits.",
         )
         self.assertEqual(
             options["datagrip_guard"]["description"],
