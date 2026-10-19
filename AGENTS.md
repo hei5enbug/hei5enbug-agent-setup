@@ -35,6 +35,10 @@
   it and preserve the existing plugin contracts.
 - Keep shared behavior in one canonical source and isolate only actual host differences. A rule the session
   instructions already state belongs there alone; reference it instead of restating it.
+- This repository is public. Before creating an issue, search the existing ones. In its issues, pull requests,
+  comments, and commit messages, write no local absolute path, using a repository-relative path or a placeholder
+  such as `<plugin-root>` instead, and no secret, account identifier, security-sensitive detail, or name of a
+  private plugin, organization, or its infrastructure. Write in English and follow the existing issue conventions.
 - For repository implementation, use a separate Claude Code assigned-worker process by default. Codex
   project roles in `.codex/agents/` cover the other routes:
 

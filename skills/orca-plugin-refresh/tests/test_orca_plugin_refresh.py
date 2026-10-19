@@ -1004,7 +1004,7 @@ class UpdateTest(unittest.TestCase):
         self.addCleanup(self.env.stop)
 
     def install(self, host, version, *, root=None, missing_target=None, manifest_version=None, instruction=None,
-                missing_config=False, missing_module=False):
+                missing_config=False, missing_module=False, direct_hooks=False):
         root = Path(root) if root else self.base / f"{host}-{version}"
         manifest_dir = root / (".claude-plugin" if host == "claude" else ".codex-plugin")
         manifest_dir.mkdir(parents=True, exist_ok=True)
@@ -1021,12 +1021,19 @@ class UpdateTest(unittest.TestCase):
                 module.write_text("export function register() {}\n", encoding="utf-8")
         (manifest_dir / "plugin.json").write_text(json.dumps(manifest), encoding="utf-8")
         hooks = []
+        launcher = root / refresh.HOOK_LAUNCHER
+        launcher.parent.mkdir(parents=True, exist_ok=True)
+        launcher.write_text("#!/bin/sh\n", encoding="utf-8")
         for target in refresh.REQUIRED_HOOK_TARGETS:
             path = root / target
             path.parent.mkdir(parents=True, exist_ok=True)
             if target != missing_target:
                 path.write_text("# hook target\n", encoding="utf-8")
-            hooks.append({"type": "command", "command": f'python3 "${{CLAUDE_PLUGIN_ROOT}}/{target}"'})
+            if direct_hooks:
+                command = f'python3 "${{CLAUDE_PLUGIN_ROOT}}/{target}"'
+            else:
+                command = f'sh "${{CLAUDE_PLUGIN_ROOT}}/{refresh.HOOK_LAUNCHER}" {Path(target).name}'
+            hooks.append({"type": "command", "command": command})
         hook_path = root / "hooks" / "hooks.json"
         hook_path.parent.mkdir(parents=True, exist_ok=True)
         hook_path.write_text(json.dumps({"hooks": {"SessionStart": [{"hooks": hooks}]}}), encoding="utf-8")
@@ -1381,6 +1388,62 @@ class UpdateTest(unittest.TestCase):
 
         # Then
         self.assertTrue(result["digest"])
+
+    def test_예전처럼_스크립트를_직접_실행하는_훅도_검증을_통과한다(self):
+        """실행기 이전 설치본처럼 훅이 Python 스크립트를 직접 실행해도 필요한 대상이 모두 있으면 통과한다."""
+        # Given
+        install = self.install("codex", "1.1.0", direct_hooks=True)
+
+        # When
+        result = refresh.validate_install("codex", install)
+
+        # Then
+        self.assertTrue(result["digest"])
+
+    def test_실행기_뒤_스크립트가_없으면_대상_누락으로_실패한다(self):
+        """실행기 형태의 훅이 가리키는 scripts/<이름>.py가 없으면 필수 대상이 빠진 것으로 본다."""
+        # Given
+        install = self.install("codex", "1.1.0", missing_target="scripts/agent_guard.py")
+
+        # When
+        with self.assertRaises(refresh.RefreshError) as invalid:
+            refresh.validate_install("codex", install)
+
+        # Then
+        self.assertEqual("plugin_hook_target_missing", invalid.exception.code)
+
+    def test_실행기_뒤_인자가_없거나_스크립트_이름이_아니면_지원하지_않는_훅이다(self):
+        """실행기 다음 인자가 없거나 경로·옵션·.py가 아닌 이름이면 훅 대상을 확인할 수 없어 실패한다."""
+        # Given
+        install = self.install("claude", "1.1.0")
+        hooks_path = Path(install["root"]) / "hooks" / "hooks.json"
+        launcher = f'sh "${{CLAUDE_PLUGIN_ROOT}}/{refresh.HOOK_LAUNCHER}"'
+
+        for suffix in ("", " ../x.py", " -m", " .hidden.py", " session_context.sh"):
+            with self.subTest(suffix=suffix):
+                hooks_path.write_text(json.dumps({"hooks": {"SessionStart": [{"hooks": [
+                    {"type": "command", "command": launcher + suffix}]}]}}), encoding="utf-8")
+
+                # When
+                with self.assertRaises(refresh.RefreshError) as invalid:
+                    refresh.validate_install("claude", install)
+
+                # Then
+                self.assertEqual("plugin_hooks_invalid", invalid.exception.code)
+
+    def test_저장소의_실제_훅_정의는_두_호스트에서_설치_검증을_통과한다(self):
+        """저장소의 hooks/hooks.json과 매니페스트를 그대로 설치본으로 볼 때 Claude Code와 Codex 검증이 모두 통과한다."""
+        # Given
+        root = SCRIPT.parents[3]
+        versions = {host: json.loads((root / folder / "plugin.json").read_text(encoding="utf-8"))["version"]
+                    for host, folder in (("claude", ".claude-plugin"), ("codex", ".codex-plugin"))}
+
+        # When
+        results = {host: refresh.validate_install(host, {"root": root.as_posix(), "version": version})
+                   for host, version in versions.items()}
+
+        # Then
+        self.assertTrue(all(result["digest"] for result in results.values()))
 
     def test_업데이트_뒤_manifest_version과_지침_digest가_없으면_실패한다(self):
         """새 설치본의 호스트 manifest 버전이 다르거나 지침 digest가 비어 있으면 성공으로 처리하지 않는다."""

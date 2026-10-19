@@ -37,6 +37,8 @@ REQUIRED_HOOK_TARGETS = (
     "scripts/datagrip_guard.py",
     "scripts/language_guard.py",
 )
+HOOK_LAUNCHER = "scripts/hook_python.sh"
+LAUNCHED_SCRIPT = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*\.py")
 RELOAD_DONE = re.compile(r"Reloaded: \d+ plugins?")
 RELOAD_REFUSED = re.compile(r"reload changes MCP tools|/reload-plugins --force", re.IGNORECASE)
 CLAUDE_COMPACTED = re.compile(r"Compacted|Conversation compacted")
@@ -261,14 +263,20 @@ def validate_install(host: str, install: dict) -> dict:
                     argv = shlex.split(entry["command"])
                 except ValueError as error:
                     raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.") from error
-                target = next((item for item in argv[1:] if item.startswith("${CLAUDE_PLUGIN_ROOT}/")), None)
-                if target is None:
+                index = next((index for index, item in enumerate(argv) if index and item.startswith("${CLAUDE_PLUGIN_ROOT}/")), None)
+                if index is None:
                     raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hook target is unsupported.")
-                relative_target = target.removeprefix("${CLAUDE_PLUGIN_ROOT}/")
-                seen_targets.add(relative_target)
-                target_path = root / relative_target
-                if not target_path.is_file():
-                    raise RefreshError("plugin_hook_target_missing", f"An installed {host} plugin hook target is missing.")
+                relative_target = argv[index].removeprefix("${CLAUDE_PLUGIN_ROOT}/")
+                targets = [relative_target]
+                if relative_target == HOOK_LAUNCHER:
+                    script = argv[index + 1] if index + 1 < len(argv) else ""
+                    if not LAUNCHED_SCRIPT.fullmatch(script):
+                        raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hook target is unsupported.")
+                    targets.append(f"scripts/{script}")
+                for target in targets:
+                    if not (root / target).is_file():
+                        raise RefreshError("plugin_hook_target_missing", f"An installed {host} plugin hook target is missing.")
+                seen_targets.add(targets[-1])
     if not set(REQUIRED_HOOK_TARGETS) <= seen_targets:
         raise RefreshError("plugin_hook_target_missing", f"The installed {host} plugin hooks omit a required target.")
     if host == "claude":
