@@ -71,9 +71,7 @@ tested workload.
 
 ## Keep host and model identity separate
 
-The execution host remains the same when the main model changes. Selecting GPT in Claude Code keeps Claude
-Code's tools, permissions, agent definitions, and execution rules active. It does not turn Claude Code into
-Codex or change a Claude worker's pinned settings.
+The execution host remains the same when the main model changes.
 
 Before dispatching after a main-model or profile switch, and after session resume, revalidate the effective
 role settings and relevant tool availability. Preserve each role's pinned model and effort. Never rewrite a

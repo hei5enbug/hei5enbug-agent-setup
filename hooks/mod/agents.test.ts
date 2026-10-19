@@ -29,7 +29,6 @@ const REGISTRY = JSON.stringify({
     "hei5enbug-agent-setup:reviewer": { role: "reviewer", model: "claude-opus-5-5", effort: "high", access: "read" },
   },
   effort_rules: { "gpt-5.6-luna": ["high", "xhigh"] },
-  gpt_gateway_models: ["gpt-6.1-sol", "gpt-5.6-luna"],
 });
 const EXAMPLE_ROLES = {
   version: 1,

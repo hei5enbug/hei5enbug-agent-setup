@@ -480,7 +480,6 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         self.assertTrue(reads_routing)
         self.assertIn("Other dispatches need only this file.", text)
         self.assertNotIn("Selecting GPT as Claude Code's main model", text)
-        self.assertIn("Selecting GPT in Claude Code keeps Claude Code's tools", routing)
 
     def test_대체는_다른_계열이고_호스트_밖이면_역할_실행기로_가며_옛_대체_고정은_남기지_않는다(self):
         """Claude Code 대체 절은 좁힌 대체 규칙과 agent 모드 명령을 알리고, 같은 계열 대체 핀과 빈 대체 거부 문구를 남기지 않는다."""

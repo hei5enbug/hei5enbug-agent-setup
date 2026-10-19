@@ -142,61 +142,6 @@ gets the line `hei5enbug-agent-setup mod: role pinning active` from the register
 role pinning is active. This line lets the main session send assignments directly and skip per-delegation settings and
 subagent record checks.
 
-### GPT in Claude Code
-
-The pinned main models `gpt-6.1-sol` and `gpt-5.6-luna` are available through a local gateway. Claude models and
-subagents keep using your Claude login and existing role pins. GPT credentials stay in a dedicated protected
-profile; the helper never reads Codex credentials. Browser sign-in uses your ChatGPT plan. An API-key profile uses
-separately billed OpenAI API usage and must be selected explicitly. The launcher never changes profiles or billing
-modes automatically.
-
-GPT Luna is fixed to `gpt-5.6-luna` with `high` or `xhigh` by user policy. The mod and the gateway enforce the
-registry's effort rule: each keeps `high` or `xhigh` and changes any other effort to `xhigh`. The mod also rejects
-other Luna releases, and the direct helper rejects any effort outside that rule. hei5enbug roles use `xhigh`.
-Automatic model refresh preserves this selection. Apply the same pin to new assignments and resumed sessions.
-
-Run the helper from a source checkout with the `claude-gpt` extra, not from the installed plugin cache. Sign in,
-check the active profile, then launch Claude Code with that profile:
-
-```sh
-uv run --extra claude-gpt python scripts/claude_gpt.py auth subscription
-uv run --extra claude-gpt python scripts/claude_gpt.py status
-uv run --extra claude-gpt python scripts/claude_gpt.py launch --profile <profile-id> -- [Claude arguments]
-```
-
-Install and enable `hei5enbug-agent-setup@hei5enbug` at the checkout's `<major>.<minor>.<patch>` version. The launcher
-checks the enabled installation's version, ignoring a local cachebuster suffix. It refuses
-conflicting Claude authentication, API-key, or gateway environment settings and `apiKeyHelper` configuration.
-
-For local checkout verification, add `--plugin-dir /absolute/path/to/checkout` to the Claude arguments. This loads
-that plugin for the session in place of the installed copy with the same name. The matching installation is still
-required; a matching entry in `plugin list` alone does not prove which local Mod files the session loaded.
-
-In the `/model` picker, press `s` to choose a GPT model without saving it as the default for new sessions. `Enter`
-or `/model <name>` saves the user default; starting with `--model` keeps the saved default. `gpt-5.6-luna` has no
-separate picker row, but you can start it with `--model gpt-5.6-luna`. The Mod cannot set a default model, and role
-pins do not change. If you save a GPT default, an ordinary Claude session refuses the request before any provider
-request; restore a Claude default with `/model claude-opus-5-5`.
-
-When resuming with `--resume`, keep tools used earlier in the conversation available. Removing their definitions
-with `--tools` causes `unknown_tool` before a GPT provider request. Restrict execution through Claude Code's
-permissions instead; retaining a tool definition does not grant permission to run it.
-Earlier tool calls must also match the available tool schemas, even if the tool returned an error. Invalid
-historical arguments stop a GPT switch or resume before a provider request.
-
-The gateway retries temporary failures for at most three total provider attempts, within 60 seconds of the first
-recoverable failure. That deadline includes waits and active retry attempts; the initial healthy stream has no
-recovery deadline. It waits 1 then 2 seconds, plus 0–0.5 seconds of jitter. Before visible text it retries the
-same request; after visible text it can continue while keeping delivered text, though the wording may differ.
-Completed tool calls are never replayed. Authentication, quota, invalid input, and other terminal errors stop.
-Cancellation closes the active request. There is no automatic provider or billing fallback. For a ChatGPT plan
-usage-limit error, check ChatGPT Settings > Usage; the helper does not predict a reset time. An unknown `429` stops
-as an unclassified error, not as proof of a quota limit.
-
-When Claude exits, the launcher stops the local gateway and releases its port. It does not edit the installed
-plugin cache or Claude settings, though a default saved with `Enter` or `/model <name>` can remain. Exact
-resumption of an interrupted response is not guaranteed.
-
 ### Response language
 
 A language guard, `scripts/language_guard.py`, checks that every reply and every progress update is written in the

@@ -25,10 +25,9 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from plugin_toggles import detect_host, enabled  # noqa: E402
 import approval_state  # noqa: E402
-import datagrip_guard  # noqa: E402
 from approval_state import Outcome  # noqa: E402
 
-DATAGRIP_TOOL = datagrip_guard.TOOL_NAME
+DATAGRIP_TOOL = "mcp__datagrip__execute_sql_query"
 TABULARIS_TOOL = "mcp__tabularis__run_query"
 POST_EVENTS = ("PostToolUse", "PostToolUseFailure")
 EVENTS = ("PreToolUse", "PermissionRequest", *POST_EVENTS)
@@ -126,6 +125,11 @@ FILE_TOOLS = frozenset({"Read", "Edit", "Write", "MultiEdit", "NotebookEdit", "a
 FILE_READS = frozenset({"cat", "less", "more", "head", "tail", "grep", "egrep", "fgrep", "rg"})
 EXEC_WORDS = frozenset({"repl", "exec", "execute", "eval", "run", "code", "script", "command"})
 SECRET_NAME = re.compile(r"KEY|TOKEN|SECRET|PASS|PWD|CRED|AUTH|COOKIE|PRIVATE|CERT|SAS|CONN|SIGNATURE|OTP", re.I)
+
+
+def _datagrip():
+    import datagrip_guard
+    return datagrip_guard
 
 
 def read_only_command(command):
@@ -652,9 +656,10 @@ def _classify_sql(cli, args, env, cwd, command):
         database = option_value(args, "-d") or "(default)"
     if not commands or files or any(value is None for value in commands):
         return _unclassified(cli, command)
-    if all(datagrip_guard.is_read(value, postgres) for value in commands):
+    datagrip = _datagrip()
+    if all(datagrip.is_read(value, postgres) for value in commands):
         return Outcome("read", [], [], "psql" if postgres else None)
-    facts = [datagrip_guard.query_facts(value, postgres) for value in commands]
+    facts = [datagrip.query_facts(value, postgres) for value in commands]
     if any(keywords is None for keywords, _ in facts):
         return _unclassified(cli, command)
     label = "+".join(sorted(set().union(*(keywords for keywords, _ in facts))))
@@ -1799,16 +1804,17 @@ def classify_tabularis(tool_input):
     always = Outcome("always", [f"sql:always:tabularis:{connection_id}:{_digest(text)}"],
                      [f"tabularis query on {name}"], every_time=True)
     write = Outcome("write", ["mcp:session"], [f"tabularis query on {name}"])
-    if datagrip_guard.RAW_DESTRUCTIVE.search(text) or any(datagrip_guard.query_facts(text, pg)[1] for pg in (True, False)):
+    datagrip = _datagrip()
+    if datagrip.RAW_DESTRUCTIVE.search(text) or any(datagrip.query_facts(text, pg)[1] for pg in (True, False)):
         return always
     if not connection or "승인" in name or connection[2] not in ("postgresql", "sqlserver", "sqlserver-entra"):
         return write
     if not isinstance(sql, str):
         return write
     postgres = connection[2] == "postgresql"
-    if datagrip_guard.is_read(sql, postgres):
+    if datagrip.is_read(sql, postgres):
         return _read()
-    keywords, destructive = datagrip_guard.query_facts(sql, postgres)
+    keywords, destructive = datagrip.query_facts(sql, postgres)
     if destructive:
         return always
     return Outcome("write", ["mcp:session"], [f"tabularis write on {name}"])
@@ -1820,8 +1826,9 @@ def classify_mcp(tool, tool_input=None):
     part = mcp_tool_part(tool)
     words = tool_words(part) if part else []
     sql = list(_input_strings(tool_input, sql_only=True))
-    if any(datagrip_guard.RAW_DESTRUCTIVE.search(text) or any(
-            datagrip_guard.query_facts(text, postgres)[1] for postgres in (True, False)) for text in sql):
+    datagrip = _datagrip() if sql else None
+    if any(datagrip.RAW_DESTRUCTIVE.search(text) or any(
+            datagrip.query_facts(text, postgres)[1] for postgres in (True, False)) for text in sql):
         return Outcome("always", [f"mcp:{tool}:{_digest(json.dumps(sql))}"], [f"destructive SQL in MCP tool {tool}"],
                        every_time=True)
     if any(word in MCP_DESTRUCTIVE_WORDS for word in words):
@@ -1831,7 +1838,7 @@ def classify_mcp(tool, tool_input=None):
     if set(action_words) & MCP_DESTRUCTIVE_WORDS:
         return Outcome("always", [f"mcp:{tool}"], [f"destructive MCP action via {tool}"])
     if sql:
-        if all(datagrip_guard.is_read(text, True) or datagrip_guard.is_read(text, False) for text in sql):
+        if all(datagrip.is_read(text, True) or datagrip.is_read(text, False) for text in sql):
             return _read()
         return Outcome("write", ["mcp:session"], [f"MCP SQL write via {tool}"])
     if set(words) & EXEC_WORDS:
@@ -1923,9 +1930,9 @@ def handle(event, host):
     if tool == DATAGRIP_TOOL:
         if name in POST_EVENTS:
             approval_state.after_call(
-                host, session, datagrip_guard.classify_query(event.get("tool_input")), tool_use_id)
+                host, session, _datagrip().classify_query(event.get("tool_input")), tool_use_id)
         elif name == "PreToolUse" and host == "claude" and enabled("datagrip_guard"):
-            outcome = _classify_safely(lambda: datagrip_guard.classify_query(event.get("tool_input")), tool)
+            outcome = _classify_safely(lambda: _datagrip().classify_query(event.get("tool_input")), tool)
             if outcome.kind == "always":
                 return approval_state.pre_decision(host, session, outcome, tool_use_id)
         return None

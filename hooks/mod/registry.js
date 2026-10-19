@@ -1,4 +1,4 @@
-const REQUIRED_SECTIONS = ["pins", "claude_agents", "effort_rules", "gpt_gateway_models"];
+const REQUIRED_SECTIONS = ["pins", "claude_agents", "effort_rules"];
 const PLUGIN_PREFIX = "hei5enbug-agent-setup:";
 const PLUGINS_FILE = "plugins/installed_plugins.json";
 const ROLES_FILE = ".claude-plugin/model-roles.json";

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hei5enbug-agent-setup"
-version = "2.6.1"
+version = "2.7.0"
 description = "Portable agent skills for repeatable engineering and documentation workflows."
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
@@ -13,11 +13,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-claude-gpt = [
-  "PyJWT[crypto]>=2.10",
-]
 dev = [
-  "PyJWT[crypto]>=2.10",
   "pytest>=8.0",
   "pglast==8.4",
 ]

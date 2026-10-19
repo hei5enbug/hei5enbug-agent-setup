@@ -1041,6 +1041,29 @@ def test_스크립트는_잘못된_입력에서도_출력_없이_0으로_끝난�
     assert completed.stdout == b""
 
 
+def test_스크립트는_sql이_아닌_명령에서_datagrip_guard와_pglast를_불러오지_않는다(state):
+    # given
+    stdin = json.dumps(bash_event("git status", cwd=state)).encode("utf-8")
+    env = {"PATH": os.defpath, "HOME": str(state), "XDG_STATE_HOME": str(state / "xdg")}
+    # when
+    completed = subprocess.run(
+        [sys.executable, "-X", "importtime", str(GUARD_PATH)], input=stdin, capture_output=True, env=env, timeout=60)
+    # then
+    assert completed.returncode == 0
+    imported = completed.stderr.decode("utf-8", "replace")
+    assert "datagrip_guard" not in imported
+    assert "pglast" not in imported
+
+
+def test_datagrip_도구_이름은_datagrip_guard의_도구_이름과_같다():
+    # given
+    expected = datagrip_guard.TOOL_NAME
+    # when
+    actual = guard.DATAGRIP_TOOL
+    # then
+    assert actual == expected
+
+
 def test_스크립트는_codex_host에서_승인_코드를_출력한다(state, fake_bin):
     # given
     stdin = json.dumps(bash_event("kubectl apply -f a --context dev -n web", cwd=state))
