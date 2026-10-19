@@ -17,7 +17,7 @@ def decision(output):
 
 
 def approve(output, host="codex", session="s1"):
-    code = re.search(r"승인 ([A-Z2-9]{6})", output["hookSpecificOutput"]["permissionDecisionReason"])[1]
+    code = re.search(r"(?:승인|approve) ([A-Z2-9]{6})", output["hookSpecificOutput"]["permissionDecisionReason"])[1]
     return guard.handle({"hook_event_name": "UserPromptSubmit", "session_id": session, "prompt": "승인 " + code}, host)
 
 
@@ -44,8 +44,8 @@ def test_request_bundle_records_every_key_only_after_user_approval(state, fake_b
     retry = guard.handle(event, host)
     # then
     assert decision(first) == ("ask" if host == "claude" else "deny")
-    assert all(key in first["hookSpecificOutput"]["permissionDecisionReason"] for key in keys)
-    assert "issue update" in first["hookSpecificOutput"]["permissionDecisionReason"]
+    assert all(key not in first["hookSpecificOutput"]["permissionDecisionReason"] for key in keys)
+    assert "Apply the requested deployment" in first["hookSpecificOutput"]["permissionDecisionReason"]
     assert not before
     assert outcome.kind == "request"
     assert outcome.keys == sorted(keys)
@@ -278,7 +278,7 @@ def test_state_writes_and_unconfirmed_reads_stay_self_approval(state, fake_bin, 
     output = guard.handle(event, "claude")
     # then
     assert decision(output) == "deny"
-    assert output["hookSpecificOutput"]["permissionDecisionReason"] == guard.SELF_APPROVAL_REASON
+    assert output["hookSpecificOutput"]["permissionDecisionReason"].startswith(guard.SELF_APPROVAL_REASON)
 
 
 @pytest.mark.parametrize("action", ["-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls"])
@@ -456,8 +456,8 @@ def test_protected_file_reads_warn_and_ask_once_per_session(state, fake_bin, pat
     assert decision(once) is None
     assert decision(again) is None
     assert decision(claude) == "ask"
-    assert "This may expose a protected value; prefer secret_exec.py" in first["hookSpecificOutput"]["permissionDecisionReason"]
-    assert "protected value" in context["hookSpecificOutput"]["additionalContext"]
+    assert path in first["hookSpecificOutput"]["permissionDecisionReason"]
+    assert path in context["hookSpecificOutput"]["additionalContext"]
 
 
 @pytest.mark.parametrize("command", ["less .env", "head .env", "tail .env", "grep TOKEN .env", "rg TOKEN .env", "cat < .env",
@@ -714,9 +714,9 @@ def test_curl_classifies_method_origin_and_credential_exposure(state, command, k
     ("write", [], [], ["write:session"]),
     ("request", [], [], ["write:session"]),
     ("always", [], ["original-key"], []),
-    ("sensitive", [], ["original-key"], []),
+    ("sensitive", [], ["original-key"], ["sensitive:session"]),
     ("always", ["write-a", "write-b"], ["original-key"], ["write:session"]),
-    ("sensitive", ["write-a", "write-b"], ["original-key"], ["write:session"]),
+    ("sensitive", ["write-a", "write-b"], ["original-key"], ["sensitive:session", "write:session"]),
     ("read", [], [], []),
     ("pass", [], [], []),
     ("secret", [], [], []),
@@ -734,19 +734,19 @@ def test_session_approval_mapping_preserves_classification_keys(kind, writes, on
     assert action.writes == writes
 
 
-@pytest.mark.parametrize(("kind", "every_time", "expected"), [
-    ("write", False, "Write: Requested action. Approve once; writes then run without asking for the rest of this session."),
-    ("request", False, "Write: Requested action. Approve once; writes then run without asking for the rest of this session."),
-    ("always", False, "Requested action. Approve once; the same action then runs without asking for the rest of this session."),
-    ("sensitive", False,
-     "Requested action. Approve once; the same action then runs without asking for the rest of this session."),
-    ("always", True, "Asks every time: Requested action."),
-    ("sensitive", True, "Asks every time: Requested action."),
+@pytest.mark.parametrize(("kind", "keys", "expected"), [
+    ("write", ["original-key"],
+     "Write: Requested action. Approve once; later writes in this session will not ask."),
+    ("request", ["original-key"],
+     "Write: Requested action. Approve once; later writes in this session will not ask."),
+    ("always", ["original-key"], "Asks every time: Requested action."),
+    ("sensitive", ["sensitive:session"],
+     "Sensitive read: Requested action (may show a value). Later ones in this session won't ask."),
 ])
-def test_claude_approval_prompt_uses_the_exact_short_wording(state, kind, every_time, expected):
-    """Claude 승인 질문은 쓰기 종류와 매번 묻는 작업인지에 맞는 짧은 문구를 사용한다."""
+def test_claude_approval_prompt_uses_the_exact_short_wording(state, kind, keys, expected):
+    """Claude 승인 질문은 쓰기, 매번 묻는 작업, 민감 조회에 맞는 짧은 문구를 사용한다."""
     # given
-    action = state_mod.Outcome(kind, ["original-key"], ["Requested action"], every_time=every_time)
+    action = state_mod.Outcome(kind, keys, ["Requested action"], every_time=kind == "always")
     # when
     output = state_mod.pre_decision("claude", "s1", action)
     # then
@@ -754,11 +754,10 @@ def test_claude_approval_prompt_uses_the_exact_short_wording(state, kind, every_
     assert output["hookSpecificOutput"]["permissionDecisionReason"] == expected
 
 
-@pytest.mark.parametrize("kind", ["always", "sensitive"])
-def test_codex_mixed_every_time_calls_keep_only_the_shared_write_approval_after_completion(state, kind):
+def test_codex_mixed_every_time_calls_keep_only_the_shared_write_approval_after_completion(state):
     """Codex의 매번 묻는 복합 호출이 완료돼도 위험 부분은 새 승인을 요구하고 일반 쓰기 승인만 유지한다."""
     # given
-    action = state_mod.Outcome(kind, ["once-key"], ["Requested action"], writes=["write-a", "write-b"], every_time=True)
+    action = state_mod.Outcome("always", ["once-key"], ["Requested action"], writes=["write-a", "write-b"], every_time=True)
     denied = state_mod.pre_decision("codex", "s1", action, "first")
     approve(denied)
     state_mod.pre_decision("codex", "s1", action, "first")

@@ -22,7 +22,7 @@ def approve_and_finish(event, host):
     """Approve the call the way the user would on each host, then let it complete."""
     first = guard.handle(event, host)
     if host == "codex":
-        code = re.search(r"승인 ([A-Z2-9]{6})", reason(first))[1]
+        code = re.search(r"(?:승인|approve) ([A-Z2-9]{6})", reason(first))[1]
         guard.handle({"hook_event_name": "UserPromptSubmit", "session_id": "s1", "prompt": "승인 " + code}, host)
         guard.handle(event, host)
     guard.handle({**event, "hook_event_name": "PostToolUse"}, host)
@@ -38,31 +38,27 @@ def passed(output, host):
 
 
 @pytest.mark.parametrize("host", ["claude", "codex"])
-@pytest.mark.parametrize("command", ["docker rm -f c1", "printenv"])
-def test_approved_reusable_call_runs_again_without_asking(state, fake_bin, host, command):
-    """매번 묻는 목록에 없는 위험 호출이나 민감한 읽기는 한 번 승인하면 같은 호출을 세션 동안 다시 묻지 않는다."""
+def test_an_approved_sensitive_read_covers_every_sensitive_read_of_the_session(state, fake_bin, host):
+    """민감 조회는 한 번 승인하면 다른 민감 조회도 세션 동안 다시 묻지 않는다."""
     # given
-    first = approve_and_finish(bash_event(command, cwd=state, tool_use_id="first"), host)
+    first = approve_and_finish(bash_event("printenv", cwd=state, tool_use_id="first"), host)
     # when
-    again = guard.handle(bash_event(command, cwd=state, tool_use_id="second"), host)
+    other = guard.handle(bash_event("cat .env", cwd=state, tool_use_id="second"), host)
     # then
     assert asked(first, host)
-    assert passed(again, host)
-    assert "Asks every time" not in reason(first)
+    assert passed(other, host)
     if host == "claude":
-        assert reason(again).startswith("Approved earlier in this session:")
+        assert reason(other).startswith("Approved earlier in this session:")
 
 
 @pytest.mark.parametrize("host", ["claude", "codex"])
-def test_reuse_is_limited_to_the_approved_key(state, fake_bin, host):
-    """재사용은 승인한 키에만 적용되어 다른 Docker 컨텍스트의 삭제는 다시 묻는다."""
+def test_a_sensitive_approval_does_not_cover_writes(state, fake_bin, host):
+    """민감 조회 승인은 쓰기 승인을 만들지 않으므로 이어지는 쓰기는 따로 묻는다."""
     # given
-    approve_and_finish(bash_event("docker rm -f c1", cwd=state, tool_use_id="first"), host)
-    other = "docker --context other rm -f c1"
+    approve_and_finish(bash_event("printenv", cwd=state, tool_use_id="first"), host)
     # when
-    output = guard.handle(bash_event(other, cwd=state, tool_use_id="second"), host)
+    output = guard.handle(bash_event("kubectl apply -f a.yaml -n web --context dev", cwd=state, tool_use_id="second"), host)
     # then
-    assert guard.classify_text(other, str(state)).keys != guard.classify_text("docker rm -f c1", str(state)).keys
     assert asked(output, host)
 
 
@@ -94,18 +90,18 @@ def test_every_time_actions_are_marked_at_classification(state, fake_bin, comman
 
 
 @pytest.mark.parametrize("command", [
-    "docker rm -f c1", "git tag -d v1", "npm publish", "helm get values web --kube-context dev",
+    "docker rm -f c1", "docker rmi img", "docker system prune", "docker compose down -v", "npm publish",
     "curl -X DELETE https://example.com/item/1",
 ])
-def test_other_always_actions_are_reusable(state, fake_bin, command):
-    """매번 묻는 목록 밖의 위험 작업과 민감한 읽기는 재사용할 수 있는 작업으로 분류된다."""
+def test_formerly_reusable_destructive_actions_ask_every_time(state, fake_bin, command):
+    """예전에 키별 1회로 재사용하던 삭제와 배포 작업은 매번 묻는 작업으로 분류된다."""
     # given
     cwd = str(state)
     # when
     outcome = guard.classify_text(command, cwd)
     # then
-    assert outcome.kind in ("always", "sensitive")
-    assert outcome.every_time is False
+    assert outcome.kind == "always"
+    assert outcome.every_time is True
 
 
 @pytest.mark.parametrize("host", ["claude", "codex"])
@@ -140,7 +136,7 @@ def test_destructive_sql_through_mcp_asks_every_time(state, fake_bin, host):
 
 @pytest.mark.parametrize("host", ["claude", "codex"])
 def test_a_list_action_inside_a_compound_keeps_the_whole_call_every_time(state, fake_bin, host):
-    """재사용 가능한 작업과 매번 묻는 작업을 이어 붙이면 호출 전체가 매번 묻는 작업이 된다."""
+    """한 번 승인한 삭제와 매번 묻는 작업을 이어 붙이면 호출 전체가 매번 묻는 작업이 된다."""
     # given
     approve_and_finish(bash_event("docker rm -f c1", cwd=state, tool_use_id="first"), host)
     command = "docker rm -f c1; git push --force origin main"
@@ -180,7 +176,7 @@ def test_real_environment_files_stay_protected(state, fake_bin, name):
 
 @pytest.mark.parametrize("host", ["claude", "codex"])
 def test_a_reused_approval_does_not_cover_a_nested_write(state, fake_bin, host):
-    """중첩 셸 안의 쓰기 키도 합쳐지므로 재사용한 위험 작업 승인만으로 쓰기를 함께 실행하지 않는다."""
+    """중첩 셸 안의 쓰기 키도 합쳐지므로 삭제 승인만으로 쓰기를 함께 실행하지 않는다."""
     # given
     approve_and_finish(bash_event("docker rm -f c1", cwd=state, tool_use_id="first"), host)
     command = "bash -c 'docker rm -f c1; gh issue create --title t --body b'"

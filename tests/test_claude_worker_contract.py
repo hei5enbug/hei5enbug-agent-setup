@@ -197,6 +197,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
                 "language_guard",
                 "datagrip_guard",
                 "approval_guard",
+                "host_settings",
                 "python",
             ],
         )
@@ -216,7 +217,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         self.assertIn("sonnet-worker", options["role_pinning"]["description"])
         self.assertEqual(
             options["approval_guard"]["description"],
-            "Run covered CLI, script, database, and MCP reads without approval; ask once per session for writes, including production changes and git pushes, and reuse that approval for the rest of the session; reuse any other approved action for the session too, except force pushes, discarding uncommitted work, recursive deletion outside the session or temporary folders, destructive database statements, and remote infrastructure deletion, which ask every time; deny secret-printing commands and approval-state edits.",
+            "Run covered CLI, script, database, and MCP reads without approval; ask once per session for all writes, including production changes and git pushes, and once per session for sensitive reads such as .env files; ask every time for force pushes, discarding uncommitted work, recursive deletion outside the session or temporary folders, destructive database statements, remote infrastructure deletion, package publishing, and docker or curl deletion; deny secret-printing commands and approval-state edits.",
         )
         self.assertEqual(
             options["datagrip_guard"]["description"],
@@ -224,7 +225,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         )
         for key, option in options.items():
             with self.subTest(key=key):
-                if key in {"implementation_worker", "worker_model", "worker_effort", "codex_worker_model", "codex_worker_effort", "review_model", "python"}:
+                if key in {"implementation_worker", "worker_model", "worker_effort", "codex_worker_model", "codex_worker_effort", "review_model", "host_settings", "python"}:
                     self.assertTrue(option["title"].isascii() and option["description"].isascii())
                     continue
                 self.assertEqual(option["type"], "boolean")

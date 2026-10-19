@@ -336,20 +336,22 @@ def test_az_rest_reads_require_a_known_arm_url_and_vault_secret_gets_are_denied(
     assert outcome.kind == kind
 
 
-@pytest.mark.parametrize("every_time", [True, False])
-@pytest.mark.parametrize("kind", ["always", "sensitive"])
-@pytest.mark.parametrize("writes", [[], ["write-a"]])
-def test_claude_prompt_discloses_reuse_and_session_write_approval(state, kind, writes, every_time):
-    """Claude 승인 질문은 매번 묻는지 세션 동안 재사용되는지와 세션 쓰기 승인 부여 여부를 명시한다."""
+@pytest.mark.parametrize(("kind", "keys", "writes", "expected"), [
+    ("always", ["once-key"], [], "Asks every time: Requested action."),
+    ("always", ["once-key"], ["write-a"],
+     "Asks every time: Requested action. Also approves writes for this session."),
+    ("sensitive", [state_mod.SENSITIVE_KEY], [],
+     "Sensitive read: Requested action (may show a value). Later ones in this session won't ask."),
+    ("sensitive", [state_mod.SENSITIVE_KEY], ["write-a"],
+     "Sensitive read: Requested action (may show a value). Later ones in this session won't ask. "
+     "Also approves writes for this session."),
+    ("sensitive", [state_mod.SENSITIVE_KEY, "once-key"], [],
+     "Asks every time: Requested action. Also approves sensitive reads for this session."),
+])
+def test_claude_prompt_discloses_the_tier_and_the_session_grants(state, kind, keys, writes, expected):
+    """Claude 승인 질문은 매번 묻는 작업인지 세션 승인인지와 함께 부여되는 세션 승인을 명시한다."""
     # given
-    action = state_mod.Outcome(kind, ["once-key"], ["Requested action"], writes=writes, every_time=every_time)
-    if every_time:
-        expected = "Asks every time: Requested action."
-    else:
-        expected = ("Requested action. Approve once; the same action then runs without asking for the rest of this "
-                    "session.")
-    if writes:
-        expected += " It also approves writes for the rest of this session."
+    action = state_mod.Outcome(kind, keys, ["Requested action"], writes=writes, every_time=kind == "always")
     # when
     output = state_mod.pre_decision("claude", "s1", action)
     # then
@@ -357,23 +359,21 @@ def test_claude_prompt_discloses_reuse_and_session_write_approval(state, kind, w
     assert output["hookSpecificOutput"]["permissionDecisionReason"] == expected
 
 
-@pytest.mark.parametrize("every_time", [True, False])
-@pytest.mark.parametrize(("kind", "writes", "session_scope"), [
-    ("write", [], True), ("request", [], True), ("always", ["write-a"], True),
-    ("sensitive", ["write-a"], True), ("always", [], False), ("sensitive", [], False),
+@pytest.mark.parametrize(("kind", "keys", "writes", "grants"), [
+    ("write", ["original-key"], [], "later writes"), ("request", ["original-key"], [], "later writes"),
+    ("always", ["original-key"], ["write-a"], "later writes"), ("always", ["original-key"], [], ""),
+    ("sensitive", [state_mod.SENSITIVE_KEY], [], "later sensitive reads"),
+    ("sensitive", [state_mod.SENSITIVE_KEY], ["write-a"], "later writes (and sensitive reads)"),
 ])
-def test_codex_prompt_discloses_every_session_grant(state, kind, writes, session_scope, every_time):
-    """Codex 승인 코드 안내는 같은 작업의 세션 재사용과 세션 쓰기 승인을 부여할 때 그 범위를 명시한다."""
+def test_codex_prompt_discloses_every_session_grant(state, kind, keys, writes, grants):
+    """Codex 승인 코드 안내는 세션 쓰기와 세션 민감 조회 승인을 부여할 때 그 범위를 첫 줄에 명시한다."""
     # given
-    action = state_mod.Outcome(kind, ["original-key"], ["Requested action"], writes=writes, every_time=every_time)
-    prefix = "Approval required: Requested action. "
-    if kind in ("always", "sensitive") and not every_time:
-        prefix += "Approving also lets this same action run without asking for the rest of this session. "
-    if session_scope:
-        prefix += "Approving also allows writes for the rest of this session. "
+    action = state_mod.Outcome(kind, keys, ["Requested action"], writes=writes, every_time=kind == "always")
+    disclosure = f"Approving also covers {grants} in this session. " if grants else ""
+    prefix = "Approval required: Requested action. " + disclosure
     # when
     output = state_mod.pre_decision("codex", "s1", action)
     # then
     assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
-    assert output["hookSpecificOutput"]["permissionDecisionReason"].startswith(prefix + "Ask the user to reply `승인 ")
+    assert output["hookSpecificOutput"]["permissionDecisionReason"].startswith(prefix + "Ask the user to reply `approve ")
     assert output["hookSpecificOutput"]["permissionDecisionReason"].endswith(state_mod.RETRY_INSTRUCTION)

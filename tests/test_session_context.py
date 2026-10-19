@@ -231,6 +231,195 @@ class SessionContextTest(unittest.TestCase):
         for context in (claude, codex):
             self.assertNotIn("Notice:", context)
 
+    def install_fake_codex(self):
+        """Put a fake codex CLI first on PATH that lists plugin_hooks and flips it to true on enable."""
+        script = self.bin / "codex"
+        script.write_text(
+            f"#!{sys.executable}\n"
+            "import os, sys\n"
+            "from pathlib import Path\n"
+            "if sys.argv[1:3] == ['features', 'list']:\n"
+            "    print('plugin_hooks  stable  false')\n"
+            "elif sys.argv[1:3] == ['features', 'enable']:\n"
+            "    config = Path(os.environ['CODEX_HOME']) / 'config.toml'\n"
+            "    config.write_text(config.read_text().replace('plugin_hooks = false', 'plugin_hooks = true'))\n",
+            encoding="utf-8",
+        )
+        script.chmod(0o755)
+
+    def disabled_hooks_home(self, name="settings Codex home"):
+        codex_home = self.base / name
+        config = codex_home / "config.toml"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text("[features]\nplugin_hooks = false\nother = 1\n", encoding="utf-8")
+        return codex_home, config
+
+    def test_Codex_세션_시작은_apply_옵션이면_허용_목록_설정을_고치고_한_줄로_알린다(self):
+        """기본값 apply에서는 plugin_hooks를 백업 후 켜고 변경 알림 한 줄만 남기며, 옵션이 없거나 알 수 없는 값이어도 같다."""
+        for option in (None, "apply", "unknown value"):
+            with self.subTest(option=option):
+                # given
+                self.use_short_root()
+                self.install_fake_codex()
+                codex_home, config = self.disabled_hooks_home(f"apply Codex home {option}")
+                original = config.read_text(encoding="utf-8")
+                extra = {"CODEX_HOME": str(codex_home)}
+                if option is not None:
+                    extra["HEI5ENBUG_HOST_SETTINGS"] = option
+
+                # when
+                context = self.context(self.run_hook("codex", extra_env=extra))
+
+                # then
+                self.assertIn(
+                    "Notice: hei5enbug changed host settings: plugin_hooks, rules/hei5enbug.rules; "
+                    "backups saved next to each file.", context,
+                )
+                self.assertNotIn("Codex runs no approval guard", context)
+                self.assertIn("plugin_hooks = true", config.read_text(encoding="utf-8"))
+                backups = list(codex_home.glob("config.toml.bak-hei5enbug-*"))
+                self.assertEqual([path.read_text(encoding="utf-8") for path in backups], [original])
+
+    def test_Codex_세션_시작은_report_옵션이면_설정을_바꾸지_않고_보고만_한다(self):
+        """report 옵션에서는 설정과 백업이 그대로이고 plugin_hooks 문제가 알림으로 남는다."""
+        # given
+        self.use_short_root()
+        self.install_fake_codex()
+        codex_home, config = self.disabled_hooks_home()
+        before = config.read_text(encoding="utf-8")
+
+        # when
+        context = self.context(self.run_hook(
+            "codex", extra_env={"CODEX_HOME": str(codex_home), "HEI5ENBUG_HOST_SETTINGS": "report"},
+        ))
+
+        # then
+        self.assertIn("Notice: Codex runs no approval guard until [features] plugin_hooks = true.", context)
+        self.assertNotIn("changed host settings", context)
+        self.assertEqual(config.read_text(encoding="utf-8"), before)
+        self.assertEqual(list(codex_home.glob("config.toml.bak-*")), [])
+
+    def test_Claude_세션_시작은_apply_옵션이어도_Codex_설정을_바꾸지_않는다(self):
+        """Claude 호스트에서는 apply 옵션이어도 아무 파일도 고치지 않고 문제만 알린다."""
+        # given
+        self.use_short_root()
+        self.install_fake_codex()
+        codex_home, config = self.disabled_hooks_home()
+        before = config.read_text(encoding="utf-8")
+
+        # when
+        context = self.context(self.run_hook(
+            "claude", extra_env={"CODEX_HOME": str(codex_home), "CLAUDE_PLUGIN_OPTION_HOST_SETTINGS": "apply"},
+        ))
+
+        # then
+        self.assertIn("Codex runs no approval guard until [features] plugin_hooks = true.", context)
+        self.assertNotIn("changed host settings", context)
+        self.assertEqual(config.read_text(encoding="utf-8"), before)
+        self.assertEqual(list(codex_home.glob("config.toml.bak-*")), [])
+
+    def test_하위_에이전트_시작은_호스트_설정을_점검하거나_고치지_않는다(self):
+        """SubagentStart 컨텍스트에는 설정 notice가 없고 설정 파일도 바뀌지 않는다."""
+        # given
+        self.use_short_root()
+        self.install_fake_codex()
+        codex_home, config = self.disabled_hooks_home()
+        before = config.read_text(encoding="utf-8")
+
+        # when
+        context = self.context(
+            self.run_hook(
+                "codex", event="SubagentStart",
+                payload=json.dumps({"hook_event_name": "SubagentStart", "agent_type": "worker"}),
+                extra_env={"CODEX_HOME": str(codex_home)},
+            ),
+            "SubagentStart",
+        )
+
+        # then
+        self.assertNotIn("Notice:", context)
+        self.assertEqual(config.read_text(encoding="utf-8"), before)
+
+    def test_네이티브_승인이_켜지면_세션_시작은_규칙_파일과_MCP_모드도_고치고_함께_알린다(self):
+        """기능 플래그가 켜진 경우 규칙 파일과 MCP 모드 변경이 같은 한 줄 알림에 모인다."""
+        # given
+        import host_settings
+
+        self.install_fake_codex()
+        codex_home = self.base / "native Codex home"
+        config = codex_home / "config.toml"
+        config.parent.mkdir(parents=True)
+        config.write_text("[features]\nplugin_hooks = true\n[mcp_servers.datagrip]\ncommand = 'x'\n", encoding="utf-8")
+        environment = {
+            "CODEX_HOME": str(codex_home),
+            "PLUGIN_ROOT": str(REPO_ROOT),
+            "PATH": f"{self.bin}{os.pathsep}{os.defpath}",
+        }
+
+        # when
+        with mock.patch.dict(os.environ, environment), mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", True):
+            notices = session_context.session_start_notices("codex", self.cwd)
+
+        # then
+        self.assertEqual(
+            [notice for notice in notices if "changed host settings" in notice],
+            ["Notice: hei5enbug changed host settings: rules/hei5enbug.rules, mcp datagrip; backups saved next to each file."],
+        )
+        self.assertIn('default_tools_approval_mode = "prompt"', config.read_text(encoding="utf-8"))
+        self.assertTrue((codex_home / "rules" / "hei5enbug.rules").is_file())
+
+    def test_세션_시작_notice는_문제_줄을_세_개로_줄이고_나머지는_개수로_알리며_한도를_지킨다(self):
+        """문제가 여덟 개여도 세 줄과 and N more 줄만 남기고 전체 컨텍스트는 9,000바이트 이내다."""
+        # given
+        self.use_short_root()
+        codex_home, _ = self.disabled_hooks_home()
+        rules = codex_home / "rules" / "default.rules"
+        rules.parent.mkdir(parents=True)
+        rules.write_text(
+            "".join(f'prefix_rule(pattern=["kubectl", "get", "{"x" * 60}{index}"], decision="prompt")\n' for index in range(5))
+            + 'prefix_rule(pattern=["helm", "list"], decision="forbidden")\n',
+            encoding="utf-8",
+        )
+
+        # when
+        context = self.context(self.run_hook(
+            "codex", extra_env={"CODEX_HOME": str(codex_home), "HEI5ENBUG_HOST_SETTINGS": "report"},
+        ))
+
+        # then
+        self.assertEqual(context.count("\nNotice: "), 4)
+        self.assertIn("Notice: and 5 more; run host_settings.py check", context)
+        self.assertEqual(context.count("blocks or asks for reads the guard allows"), 1)
+        self.assertLessEqual(len(context.encode("utf-8")), session_context.MAX_CONTEXT_BYTES)
+
+    def test_호스트_설정_점검이_실패해도_세션_시작은_한_줄만_남기고_계속된다(self):
+        """host_settings가 예외를 내면 stderr 한 줄만 남기고 지침은 그대로 출력한다."""
+        # given
+        self.use_short_root()
+        (self.root / "scripts" / "host_settings.py").write_text("raise RuntimeError('broken check')\n", encoding="utf-8")
+
+        # when
+        result = self.run_hook("codex")
+
+        # then
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(result.stderr.strip().splitlines()), 1)
+        self.assertIn("broken check", result.stderr)
+        output = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("Never expose secrets", output)
+        self.assertNotIn("Notice:", output)
+
+    def test_ask_규칙_notice_접두는_host_settings_메시지와_같다(self):
+        """한도 처리용 접두 상수는 host_settings가 내는 ask 규칙 메시지와 같은 문구다."""
+        # given
+        import host_settings
+
+        # when
+        prefix = session_context.CLAUDE_ASK_NOTICE_PREFIX
+
+        # then
+        self.assertEqual(prefix, "Notice: " + host_settings.ASK_RULES_MESSAGE)
+
     def test_both_hosts_receive_core_rules_for_all_session_sources(self):
         for host in ("codex", "claude"):
             for source in ("startup", "resume", "clear", "compact", "fork"):
@@ -1186,7 +1375,10 @@ class SessionContextTest(unittest.TestCase):
 
     def test_unwritable_codex_home_still_delivers_context(self):
         self.codex_home.write_text("not a directory", encoding="utf-8")
-        self.assertIn("Never expose secrets", self.context(self.run_hook("codex")))
+        result = self.run_hook("codex")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertLessEqual(len(result.stderr.splitlines()), 1)
+        self.assertIn("Never expose secrets", json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"])
 
     def test_지침의_로컬_링크는_모두_번들_안에서_해석된다(self):
         """지침 파일의 로컬 링크는 번들 안의 파일을 가리키고, 로더처럼 URI 스킴이 있는 외부 링크는 건너뛴다."""

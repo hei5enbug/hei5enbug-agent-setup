@@ -17,6 +17,8 @@ else that is not a read, asks every time.
     Session variable statements (DECLARE @v, SET @v =, INSERT [INTO] @v) count as reads under the same condition.
   - Control characters, invisible format characters, JDBC escapes, unterminated literals, and parse errors ask.
 Codex denies only unapproved writes and always-asking queries, through approval_state; the guard always exits 0.
+While Codex's native approval window can ask (the approval guard's native_ready), it leaves a write to the
+window instead and remembers the session approval it grants; an always-asking query keeps the one-time code.
 
 Claude Code PreToolUse prints a permission decision; PermissionRequest prints nothing. Codex PreToolUse prints an
 allow with the read-only prefix for PostgreSQL reads, and PermissionRequest prints an allow for any read. Anything
@@ -579,20 +581,34 @@ def classify_read(tool_input):
     return None
 
 
-def codex_unapproved(tool_input, session_id, tool_use_id=None):
-    """Codex decision for a query that is not a read: an approved write proceeds, an always query needs a one-time code."""
+def _native_ready(event):
+    """Whether Codex's native approval window asks for this call (the approval guard decides, see native_ready)."""
+    if event is None:
+        return False
+    import approval_guard
+    return approval_guard.native_ready(event)
+
+
+def codex_unapproved(tool_input, session_id, tool_use_id=None, event=None):
+    """Codex decision for a query that is not a read: an approved write proceeds, an always query needs a one-time code.
+
+    When the native window can ask, a write is left to it and no code is issued; an always query keeps the code flow.
+    """
     if not approval_on():
         return None
     outcome = classify_query(tool_input)
     if outcome.kind in ("write", "always"):
+        if (outcome.kind == "write" and approval_state.session_key(session_id) is not None
+                and _native_ready(event)):
+            return None
         return approval_state.pre_decision("codex", session_id, outcome, tool_use_id)
     return None
 
 
-def codex_pre_tool_use(tool_input, session_id=None, tool_use_id=None):
+def codex_pre_tool_use(tool_input, session_id=None, tool_use_id=None, event=None):
     classified = classify_read(tool_input)
     if classified is None:
-        return codex_unapproved(tool_input, session_id, tool_use_id)
+        return codex_unapproved(tool_input, session_id, tool_use_id, event)
     sql, postgres, read_only = classified
     if not postgres or read_only:
         return None
@@ -605,16 +621,18 @@ def codex_pre_tool_use(tool_input, session_id=None, tool_use_id=None):
     }}
 
 
-def codex_permission_request(tool_input, session_id=None, tool_use_id=None):
-    allowed = classify_read(tool_input) is not None
-    if not allowed and approval_on():
-        allowed = approval_state.permission_allowed("codex", session_id, classify_query(tool_input), tool_use_id)
-    if not allowed:
-        return None
-    return {"hookSpecificOutput": {
-        "hookEventName": "PermissionRequest",
-        "decision": {"behavior": "allow"},
-    }}
+def codex_permission_request(tool_input, session_id=None, tool_use_id=None, event=None):
+    """Allow reads and approved queries; otherwise leave the native window to ask and remember what it grants."""
+    if classify_read(tool_input) is None:
+        if not approval_on():
+            return None
+        outcome = classify_query(tool_input)
+        if event is not None and outcome.kind == "write" and _native_ready(event):
+            import approval_guard
+            return approval_guard.codex_permission(session_id, outcome, tool_use_id, tool_input, TOOL_NAME, event)
+        if not approval_state.permission_allowed("codex", session_id, outcome, tool_use_id):
+            return None
+    return approval_state.permission_allow()
 
 
 def detect_host() -> str:
@@ -643,9 +661,9 @@ def handle(event):
             ), tool_use_id)
     try:
         if name == "PreToolUse":
-            return codex_pre_tool_use(tool_input, session_id, tool_use_id)
+            return codex_pre_tool_use(tool_input, session_id, tool_use_id, event)
         if name == "PermissionRequest":
-            return codex_permission_request(tool_input, session_id, tool_use_id)
+            return codex_permission_request(tool_input, session_id, tool_use_id, event)
     except Exception:
         if name == "PreToolUse":
             return approval_state.pre_decision("codex", session_id, Outcome(

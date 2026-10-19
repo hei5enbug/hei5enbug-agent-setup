@@ -94,8 +94,15 @@
     "approval_guard": {
       "type": "boolean",
       "title": "Approval guard",
-      "description": "Run covered CLI, script, database, and MCP reads without approval; ask once per session for writes, including production changes and git pushes, and reuse that approval for the rest of the session; reuse any other approved action for the session too, except force pushes, discarding uncommitted work, recursive deletion outside the session or temporary folders, destructive database statements, and remote infrastructure deletion, which ask every time; deny secret-printing commands and approval-state edits.",
+      "description": "Run covered CLI, script, database, and MCP reads without approval; ask once per session for all writes, including production changes and git pushes, and once per session for sensitive reads such as .env files; ask every time for force pushes, discarding uncommitted work, recursive deletion outside the session or temporary folders, destructive database statements, remote infrastructure deletion, package publishing, and docker or curl deletion; deny secret-printing commands and approval-state edits.",
       "default": true
+    },
+    "host_settings": {
+      "type": "string",
+      "title": "Host settings",
+      "description": "apply: at session start, back up and fix the allowlisted host settings that cause extra approval prompts; report: only report them.",
+      "options": ["apply", "report"],
+      "default": "apply"
     },
     "python": {
       "type": "string",

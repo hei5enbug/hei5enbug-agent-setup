@@ -32,6 +32,11 @@ def option_value(key: str) -> str:
     return os.environ.get(variable_name(key, detect_host()), "").strip().lower()
 
 
+def host_settings_mode() -> str:
+    """Return "report" only when the host_settings option says so; any other value, or none, means "apply"."""
+    return "report" if option_value("host_settings") == "report" else "apply"
+
+
 def worker_option_keys(host: str) -> tuple[str, str]:
     return ("codex_worker_model", "codex_worker_effort") if host == "codex" else ("worker_model", "worker_effort")
 

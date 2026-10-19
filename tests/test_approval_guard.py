@@ -20,7 +20,7 @@ import datagrip_guard  # noqa: E402
 PG_ID = "11111111-1111-4111-8111-111111111111"
 MSSQL_ID = "22222222-2222-4222-8222-222222222222"
 APPROVAL_ID = "33333333-3333-4333-8333-333333333333"
-CODE_PATTERN = re.compile(r"승인 ([A-Z2-9]{6})")
+CODE_PATTERN = re.compile(r"(?:승인|approve) ([A-Z2-9]{6})")
 SECRET_HELPER = "python3 /plugins/hei5enbug/scripts/secret_exec.py --secret DB=k8s:dev/web/db/password -- "
 TOOL_BASH = "Bash"
 
@@ -103,14 +103,9 @@ ALWAYS_COMMANDS = [
     "kubectl drain node1 --context dev",
     "kubectl --context dev",
     "helm uninstall rel -n web",
-    "helm get values rel",
-    "helm get all rel",
-    "helm get manifest rel",
     "terraform destroy",
     "terraform apply -destroy",
     "terraform state rm x",
-    "terraform state show x",
-    "terraform output -json",
     "terraform force-unlock 123",
     "aws s3 rm s3://b",
     "aws s3 sync . s3://b --delete",
@@ -198,8 +193,11 @@ def state(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg"))
     for name in ("CLAUDE_PLUGIN_OPTION_APPROVAL_GUARD", "HEI5ENBUG_APPROVAL_GUARD", "PLUGIN_ROOT", "AWS_PROFILE", "AWS_REGION",
                  "CLOUDSDK_CORE_PROJECT", "DOCKER_CONTEXT", "DOCKER_HOST", "TF_WORKSPACE", "KUBECONFIG", "MARK",
-                 "HEI5ENBUG_PARENT_SESSION", "CLAUDE_PROJECT_DIR"):
+                 "HEI5ENBUG_PARENT_SESSION", "CLAUDE_PROJECT_DIR", "HEI5ENBUG_LANGUAGE"):
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude-config"))
+    monkeypatch.setenv("HEI5ENBUG_RESPONSE_LANGUAGE", "English")
+    state_mod.prompt_language.cache_clear()
     return tmp_path
 
 
@@ -741,7 +739,7 @@ def test_claude는_쓰기를_처음_묻고_이유에_대상과_세션_안내를_
     # then
     assert decision_of(output) == "ask"
     assert "kubectl apply on (default) dev/web" in reason_of(output)
-    assert "for the rest of this session" in reason_of(output)
+    assert "later writes in this session will not ask" in reason_of(output)
 
 
 def test_claude는_후_처리로_기록한_쓰기_키를_같은_세션에서_허용한다(state, fake_bin):
@@ -836,7 +834,7 @@ def test_codex는_쓰기를_승인_코드와_함께_거부하고_같은_키는_�
     second = guard.handle(event, "codex")
     # then
     assert decision_of(first) == "deny"
-    assert "Ask the user to reply `승인" in reason_of(first)
+    assert "Ask the user to reply `approve" in reason_of(first)
     assert code_of(first) == code_of(second)
     assert len(code_of(first)) == 6
 
@@ -1300,7 +1298,7 @@ def test_datagrip_claude는_쓰기를_처음_묻고_승인_뒤_프롤로그_없�
     second = datagrip_guard.handle(event)
     # then
     assert first["hookSpecificOutput"]["permissionDecision"] == "ask"
-    assert "DataGrip write (insert) on demo-postgres" in first["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "DataGrip write (insert)" in first["hookSpecificOutput"]["permissionDecisionReason"]
     assert second["hookSpecificOutput"]["permissionDecision"] == "allow"
     assert "updatedInput" not in second["hookSpecificOutput"]
 

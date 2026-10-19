@@ -7,7 +7,8 @@ from test_approval_guard import PG_ID, bash_event, datagrip_guard, fake_bin, gua
 
 
 STOP_REASON = (
-    "This call was approved but did not complete three times; stop retrying and report to the user."
+    "This approval was requested three times without the call completing (declines included); "
+    "stop retrying and tell the user."
 )
 
 
@@ -20,7 +21,7 @@ def reason(output):
 
 
 def code(output):
-    return re.search(r"승인 ([A-Z2-9]{6})", reason(output))[1]
+    return re.search(r"(?:승인|approve) ([A-Z2-9]{6})", reason(output))[1]
 
 
 def outcome(kind="always", keys=("key-a",), every_time=True):
@@ -145,7 +146,7 @@ def test_granted_once_keys_are_honored_when_another_key_needs_approval(state):
     # when
     output = state_mod.pre_decision("codex", "s1", compound)
     # then
-    assert "승인 " in reason(output)
+    assert "approve " in reason(output)
     assert count() == 3
     assert count("key-b") == 1
     assert state_mod._load("codex", "s1")["pending"][code(output)]["once_keys"] == ["key-b"]
@@ -256,7 +257,7 @@ def test_concurrent_requests_cannot_issue_more_than_three_codes(state):
         outputs = list(executor.map(attempt, range(4)))
     # then
     assert sum(reason(value) == STOP_REASON for value in outputs) == 1
-    assert sum("승인 " in reason(value) for value in outputs) == 3
+    assert sum("approve " in reason(value) for value in outputs) == 3
     assert count() == 3
 
 

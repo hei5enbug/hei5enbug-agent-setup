@@ -8,7 +8,6 @@ import subprocess
 import sys
 import tempfile
 import time
-import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -89,62 +88,41 @@ def context_kind(event_name: str, host: str, event: dict, environ: dict | None =
     return "implementation" if agent_type in IMPLEMENTATION_AGENTS[host] else "core"
 
 
-def _claude_settings_paths(project: Path) -> tuple[Path, ...]:
-    config = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude").expanduser()
-    return (
-        config / "settings.json",
-        project / ".claude" / "settings.json",
-        project / ".claude" / "settings.local.json",
-    )
+MAX_PROBLEM_NOTICES = 3
 
 
-def _claude_permissions(path: Path) -> dict:
-    try:
-        settings = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    permissions = settings.get("permissions") if isinstance(settings, dict) else None
-    return permissions if isinstance(permissions, dict) else {}
-
-
-def _claude_ask_rules(permissions: dict) -> list[str]:
-    ask = permissions.get("ask")
-    if not isinstance(ask, list):
-        return []
-    rules = []
-    for rule in ask:
-        if not isinstance(rule, str) or "\n" in rule or "\r" in rule:
-            continue
-        if rule == "Bash" or rule.startswith("Bash(") or rule.startswith("mcp__"):
-            rules.append(rule)
-    return rules
-
-
-def _codex_plugin_hooks_disabled() -> bool:
-    path = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex") / "config.toml"
-    if not path.is_file():
-        return False
-    try:
-        config = tomllib.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
-        return False
-    features = config.get("features") if isinstance(config, dict) else None
-    return not isinstance(features, dict) or features.get("plugin_hooks") is not True
+def _host_settings_error(error: Exception) -> None:
+    print(f"hei5enbug-agent-setup host settings were not checked: {error}", file=sys.stderr)
 
 
 def session_start_notices(host: str, project: Path | None = None) -> list[str]:
-    """Return notices for prerequisite settings that would prevent the approval guard from working."""
+    """Return notices from the host settings: what `apply` changed on Codex, then at most three remaining problems."""
     notices = []
-    if host == "claude":
-        permissions = [_claude_permissions(path) for path in _claude_settings_paths(project or Path.cwd())]
-        mode = next((item["defaultMode"] for item in reversed(permissions) if "defaultMode" in item), None)
-        if mode == "dontAsk":
-            notices.append("Notice: Claude Code defaultMode dontAsk denies every approval the guard asks for.")
-        rules = [rule for item in permissions for rule in _claude_ask_rules(item)][:3]
-        if rules:
-            notices.append(CLAUDE_ASK_NOTICE_PREFIX + ": " + ", ".join(rules) + ".")
-    if _codex_plugin_hooks_disabled():
-        notices.append("Notice: Codex runs no approval guard until [features] plugin_hooks = true.")
+    try:
+        import host_settings
+        import plugin_toggles
+
+        if host == "codex" and plugin_toggles.host_settings_mode() == "apply":
+            try:
+                changes = host_settings.apply(host).changes
+            except Exception as error:
+                _host_settings_error(error)
+            else:
+                if changes:
+                    labels = ", ".join(change.label for change in changes)
+                    notices.append(
+                        f"Notice: hei5enbug changed host settings: {labels}; backups saved next to each file."
+                    )
+        try:
+            lines = [f"Notice: {problem.text}" for problem in host_settings.check(host, project=project)]
+        except Exception as error:
+            _host_settings_error(error)
+            lines = []
+        notices.extend(lines[:MAX_PROBLEM_NOTICES])
+        if len(lines) > MAX_PROBLEM_NOTICES:
+            notices.append(f"Notice: and {len(lines) - MAX_PROBLEM_NOTICES} more; run host_settings.py check")
+    except Exception as error:
+        _host_settings_error(error)
     return notices
 
 

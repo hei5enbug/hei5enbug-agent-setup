@@ -19,13 +19,17 @@ OTHER_WRITES = [
     "az vm start -n vm1 -g rg1",
 ]
 JIRA_TOOL = "mcp__claude_ai_Atlassian__createJiraIssue"
-CODE = re.compile(r"승인 ([A-Z2-9]{6})")
+CODE = re.compile(r"(?:승인|approve) ([A-Z2-9]{6})")
 
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg"))
-    for name in ("HEI5ENBUG_PARENT_SESSION", "KUBECONFIG", "AWS_PROFILE", "CLOUDSDK_CORE_PROJECT", "DOCKER_CONTEXT"):
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude-config"))
+    monkeypatch.setenv("HEI5ENBUG_RESPONSE_LANGUAGE", "English")
+    state_mod.prompt_language.cache_clear()
+    for name in ("HEI5ENBUG_PARENT_SESSION", "KUBECONFIG", "AWS_PROFILE", "CLOUDSDK_CORE_PROJECT", "DOCKER_CONTEXT",
+                 "HEI5ENBUG_LANGUAGE"):
         monkeypatch.delenv(name, raising=False)
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -72,7 +76,7 @@ def test_처음_쓰기는_무슨_쓰기인지_짧게_묻는다(home):
     # then
     assert decision(output) == "ask"
     assert text.startswith("Write: kubectl apply on (default) dev/web.")
-    assert "Approve once" in text and "for the rest of this session" in text
+    assert "Approve once" in text and "later writes in this session will not ask" in text
     assert len(text) <= 240
 
 
@@ -97,7 +101,7 @@ def test_mcp_쓰기_승인도_cli_쓰기를_허용한다(home):
 def test_mcp_쓰기_질문도_도구_이름을_말한다(home):
     output = guard.handle(mcp(JIRA_TOOL), "claude")
     assert decision(output) == "ask"
-    assert JIRA_TOOL in reason(output)
+    assert reason(output).startswith("Write: MCP write: mcp__")
     assert "Approve once" in reason(output)
 
 
@@ -146,7 +150,7 @@ def test_민감한_호출은_따로_묻고_미분류_쓰기는_세션_승인을_
     output = guard.handle(bash(command), "claude")
     # then
     assert decision(output) == ("ask" if command == "printenv" else "allow")
-    assert ("protected value" in reason(output)) == (command == "printenv")
+    assert ("Sensitive read" in reason(output)) == (command == "printenv")
 
 
 def test_요청_명령은_하나의_세션_쓰기_키를_받는다(home):

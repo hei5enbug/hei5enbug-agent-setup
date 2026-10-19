@@ -1,5 +1,7 @@
 import json
+import re
 import shlex
+import sys
 from pathlib import Path
 
 import pytest
@@ -24,7 +26,8 @@ WRITES = [
     "git push origin main", "git tag v1", "gh pr create", "gh issue comment 1 --body x",
     "gh workflow run ci", "gh api repos/demo/x -f name=x", "gh api /x --input body.json",
     "git -C . push origin main", "git tag -a v1 -m release", "python3 -c 'print(1)' --execute",
-    "python3 --execute - <<'PY'\nprint(1)\nPY",
+    "python3 --execute - <<'PY'\nprint(1)\nPY", "git tag --force v1", "git tag --delete v1", "git tag -d v1",
+    "git tag -f v1",
 ]
 ALWAYS = [
     "kubectl delete pod x", "terraform destroy", "helm uninstall web", "eval kubectl delete pod x",
@@ -32,10 +35,10 @@ ALWAYS = [
     "python3 -c 'import boto3; boto3.client(\"s3\").delete_bucket(Bucket=\"x\")'",
     "git push --force", "git push --force-with-lease=main:abc", "git push --force-if-includes",
     "git push --delete origin main", "git push --mirror", "git push --prune", "git push -fd origin main",
-    "git -C . push --force", "git tag --force v1", "git tag --delete v1", "git clean --force",
+    "git -C . push --force", "git clean --force",
     "git push origin +main", "git push origin :main", "git reset --hard", "git clean -df",
     "git checkout -f main", "git checkout --force main", "git checkout -- .", "git checkout .",
-    "git restore .", "git restore :/", "git stash drop", "git stash clear", "git tag -d v1", "git tag -f v1",
+    "git restore .", "git restore :/", "git stash drop", "git stash clear",
     "gh repo delete x", "gh api /x -X DELETE", "npm publish", "pnpm publish", "yarn publish",
     "yarn npm publish", "uv publish", "poetry publish", "twine upload dist/*", "cargo publish", "gem push x.gem",
     "codex exec --dangerously-bypass-approvals-and-sandbox x", "codex exec --dangerously-bypass-hook-trust x",
@@ -830,3 +833,107 @@ def test_recursive_removal_protects_git_contents_after_resolution(state, operand
     outcome = guard.classify_text(command, str(state))
     # then
     assert outcome.kind == "always"
+
+
+GUARD_PATH = Path(__file__).resolve().parents[1] / "scripts" / "approval_guard.py"
+
+
+def request_command(*keys):
+    return shlex.join(["python3", str(GUARD_PATH), "request", *(arg for key in keys for arg in ("--key", key)),
+                       "--why", "Read the deployment secret file"])
+
+
+def approve_with_code(output, host, session="s1"):
+    code = re.search(r"(?:승인|approve) ([A-Z2-9]{6})", output["hookSpecificOutput"]["permissionDecisionReason"])[1]
+    return guard.handle({"hook_event_name": "UserPromptSubmit", "session_id": session, "prompt": "승인 " + code}, host)
+
+
+@pytest.mark.parametrize("host", ["claude", "codex"])
+def test_sensitive_session_요청은_한_번만_묻고_호출이_끝나면_민감_조회_세션_승인을_준다(state, fake_bin, host):
+    """sensitive:session 사전 승인은 한 번만 묻고, 요청 호출이 끝나면 민감 조회 세션 승인만 부여한다."""
+    # given
+    event = bash_event(request_command("sensitive:session"))
+    # when
+    first = guard.handle(event, host)
+    if host == "claude":
+        guard.handle({**event, "hook_event_name": "PostToolUse"}, host)
+    else:
+        approve_with_code(first, host)
+    read = guard.handle(bash_event("cat .env", cwd=str(state)), host)
+    # then
+    assert decision_of(first) == ("ask" if host == "claude" else "deny")
+    assert state_mod.is_approved(host, "s1", [state_mod.SENSITIVE_KEY])
+    assert not state_mod.is_approved(host, "s1", [state_mod.WRITE_KEY])
+    assert decision_of(read) == ("allow" if host == "claude" else None)
+
+
+@pytest.mark.parametrize("host", ["claude", "codex"])
+def test_두_키를_함께_요청하면_쓰기와_민감_조회_세션_승인을_모두_준다(state, fake_bin, host):
+    """write:session과 sensitive:session을 함께 요청한 호출이 끝나면 두 세션 승인이 모두 기록된다."""
+    # given
+    event = bash_event(request_command("write:session", "sensitive:session"))
+    # when
+    first = guard.handle(event, host)
+    if host == "claude":
+        guard.handle({**event, "hook_event_name": "PostToolUse"}, host)
+    else:
+        approve_with_code(first, host)
+    # then
+    assert decision_of(first) == ("ask" if host == "claude" else "deny")
+    assert state_mod.is_approved(host, "s1", [state_mod.WRITE_KEY, state_mod.SENSITIVE_KEY])
+
+
+@pytest.mark.parametrize("host", ["claude", "codex"])
+@pytest.mark.parametrize("key", ["sensitive:0a1b2c3d", "sensitive:session@prod", "guard:unclassified:0a1b2c3d",
+                                 "unclassified", "sensitive"])
+def test_요청은_다이제스트형_민감_키와_허용되지_않은_키를_거부하고_기록하지_않는다(state, fake_bin, key, host):
+    """sensitive:<digest>처럼 세션 키가 아닌 키는 사전 승인 요청으로 받지 않는다."""
+    # given
+    event = bash_event(request_command(key))
+    # when
+    output = guard.handle(event, host)
+    guard.handle({**event, "hook_event_name": "PostToolUse"}, host)
+    # then
+    assert decision_of(output) == "deny"
+    assert not state_mod.is_approved(host, "s1", [key])
+    assert not state_mod.is_approved(host, "s1", [state_mod.SENSITIVE_KEY])
+
+
+@pytest.mark.parametrize("host", ["claude", "codex"])
+def test_부모가_민감_조회_세션을_승인하면_자식의_cat_env가_이어서_실행된다(state, fake_bin, monkeypatch, host):
+    """부모가 승인한 sensitive:session은 자식 세션의 민감 조회 cat .env를 허용한다."""
+    # given
+    monkeypatch.setenv("HEI5ENBUG_PARENT_SESSION", host + ":parent")
+    state_mod.record_approved(host, "parent", [state_mod.SENSITIVE_KEY])
+    event = bash_event("cat .env", session="child", cwd=str(state))
+    # when
+    output = guard.handle(event, host)
+    # then
+    assert guard.classify_text("cat .env", str(state)).kind == "sensitive"
+    assert decision_of(output) == ("allow" if host == "claude" else None)
+
+
+@pytest.mark.parametrize("host", ["claude", "codex"])
+def test_부모가_모든_세션_키를_승인해도_자식의_git_push_force는_부모_세션_사유로_거부된다(state, fake_bin, monkeypatch, host):
+    """매번 묻는 git push --force는 부모의 세션 승인과 무관하게 자식에서 부모 세션 사유로 거부된다."""
+    # given
+    monkeypatch.setenv("HEI5ENBUG_PARENT_SESSION", host + ":parent")
+    state_mod.record_approved(host, "parent", [state_mod.WRITE_KEY, state_mod.SENSITIVE_KEY])
+    event = bash_event("git push --force origin main", session="child", cwd=str(state))
+    # when
+    output = guard.handle(event, host)
+    # then
+    assert decision_of(output) == "deny"
+    assert output["hookSpecificOutput"]["permissionDecisionReason"] == state_mod.PARENT_REASON
+
+
+def test_자식의_request는_종료_코드_2로_거부되고_키를_기록하지_않는다(state, monkeypatch):
+    """자식 세션은 request 명령으로 사전 승인 키를 기록할 수 없고 종료 코드 2로 끝난다."""
+    # given
+    monkeypatch.setenv("HEI5ENBUG_PARENT_SESSION", "claude:parent")
+    monkeypatch.setattr(sys, "argv", ["approval_guard.py", "request", "--key", "sensitive:session", "--why", "Read env"])
+    # when
+    code = guard.main()
+    # then
+    assert code == 2
+    assert not state_mod.is_approved("claude", "parent", [state_mod.SENSITIVE_KEY])
