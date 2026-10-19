@@ -1542,7 +1542,7 @@ class RegistrationTest(LanguageGuardCase):
     def test_hooks_json은_PostToolUse와_Stop에_가드를_등록한다(self):
         """PostToolUse는 async로, Stop은 동기로 matcher 없이 language_guard.py를 timeout 5로 실행한다."""
         # Given
-        expected_command = 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/language_guard.py"'
+        expected_command = 'sh "${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh" language_guard.py'
         expected_hook = {"type": "command", "command": expected_command, "timeout": 5}
 
         # When
@@ -1561,11 +1561,11 @@ class RegistrationTest(LanguageGuardCase):
     def test_기존_훅_등록은_바뀌지_않는다(self):
         """SessionStart, SubagentStart, PreToolUse 항목은 그대로다."""
         # Given
-        session = [{"hooks": [{"type": "command", "command": 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/session_context.py"', "timeout": 10}]}]
+        session = [{"hooks": [{"type": "command", "command": 'sh "${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh" session_context.py', "timeout": 10}]}]
         guard = [
             {
                 "matcher": "Agent|Task",
-                "hooks": [{"type": "command", "command": 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agent_guard.py"', "timeout": 5}],
+                "hooks": [{"type": "command", "command": 'sh "${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh" agent_guard.py', "timeout": 5}],
             }
         ]
 

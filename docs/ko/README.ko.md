@@ -63,6 +63,7 @@ hei5enbug-agent-setup/
 │   ├── approval_guard.py
 │   ├── approval_state.py
 │   ├── datagrip_guard.py
+│   ├── hook_python.sh
 │   ├── language_guard.py
 │   ├── plugin_toggles.py
 │   ├── role_runner.py
@@ -420,8 +421,8 @@ Codex에서는 `/hooks`에서 훅을 신뢰해야 합니다.
 
 ## 기능 옵션
 
-끌 수 있는 boolean 기능은 여섯 가지이며 각각 기본값은 켜짐입니다. Claude Code의 구현 worker 경로와 검토 모델은 문자열
-옵션입니다. 경로는 `auto`, `codex`, `haiku`, `sol`, `sonnet` 중 하나를 고르고, 값이 비어 있거나 알 수 없으면 `auto`를 씁니다.
+끌 수 있는 boolean 기능은 여섯 가지이며 각각 기본값은 켜짐입니다. Claude Code의 구현 worker 경로, 검토 모델, 훅 Python 인터프리터는
+문자열 옵션입니다. 경로는 `auto`, `codex`, `haiku`, `sol`, `sonnet` 중 하나를 고르고, 값이 비어 있거나 알 수 없으면 `auto`를 씁니다.
 `auto`에서는 메인 세션이 작업마다 worker를 고릅니다.
 검토 모델은 독립 검증과 스킬 검토 역할을 `xhigh`로 실행하며, 고정된 일곱 모델 ID 중 하나를 고릅니다. 값이 비어 있거나
 알 수 없으면 `gpt-6-astra`를 씁니다. 플러그인 옵션은 `/config`나 `claude plugin configure`에서 설정합니다. Codex에서는 세션 시작 전에 환경변수를
@@ -436,8 +437,15 @@ Codex에서는 `/hooks`에서 훅을 신뢰해야 합니다.
 | 응답 언어 가드 | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip 쿼리 가드 | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
 | 승인 가드 | `approval_guard` | `HEI5ENBUG_APPROVAL_GUARD` |
+| 훅 Python 인터프리터 | `python` (절대 경로, 기본값 빈 문자열) | `HEI5ENBUG_PYTHON` |
 | `~/.codex/AGENTS.md`의 서브에이전트 허용 블록 | 해당 없음 | `HEI5ENBUG_SUBAGENT_POLICY` |
 | 질문 기능 플래그 | 해당 없음 | `HEI5ENBUG_CODEX_ASK_TOOL` |
+
+훅 Python 인터프리터는 Python 3.12 이상 인터프리터의 절대 경로입니다. SQL 가드의 파서를 쓰려면 그 인터프리터에 `pglast`를 설치합니다.
+모든 훅은 `scripts/hook_python.sh`를 거쳐 시작하며, 이 런처가 해당 인터프리터로 스크립트를 실행합니다. Claude Code의 `python` 옵션을 먼저 보고
+그다음 `HEI5ENBUG_PYTHON`을 보며, `/`로 시작하고 실제로 존재하는 실행 파일을 가리키는 경로만 인정합니다. 값이 비어 있거나
+상대 경로이거나 없는 경로이거나 유효하지 않으면 `PATH`의 `python3`로 돌아가므로, 옵션을 설정하지 않으면 이전과 똑같이 동작합니다. 경로를 지정하면 pyenv shim 같은 버전 관리자 shim을
+거치지 않습니다. 측정한 한 대의 기기에서 shim은 훅 프로세스마다 약 150ms를 더했고, 프로젝트마다 다른 Python을 고를 수도 있습니다.
 
 런처 환경이 일치하지 않으면 mod는 고정 GPT 요청을 공급자에 보내기 전에 거부합니다. 이 거부에는 토글이 없습니다.
 세션 지침과 운영 규칙도 토글이 없으며, 끄려면 플러그인 자체를 비활성화합니다.
@@ -464,7 +472,7 @@ claude plugin install hei5enbug-agent-setup@hei5enbug
 
 macOS와 Linux에서 플러그인 훅은 `instructions/session/core.md`, `instructions/session/common.md`와 현재 호스트의 지침을
 합친다. Codex에는 `codex.md`, Claude Code에는 `claude-code.md`를 사용한다. `core.md`는 모든 에이전트에 적용되는 규칙을 담는다.
-호스트의 `PATH`에서 `python3`로 Python 3.12 이상을 실행할 수 있어야 한다.
+호스트의 `PATH`에서 `python3`로, 또는 훅 Python 인터프리터 옵션이 가리키는 인터프리터("기능 옵션" 참고)로 Python 3.12 이상을 실행할 수 있어야 한다.
 훅은 Python 표준 라이브러리만 사용한다.
 루트 `AGENTS.md`는 이 저장소 개발에만 적용하며 훅은 이 파일을 읽지 않는다.
 
@@ -500,7 +508,8 @@ Codex는 현재 플러그인 훅 정의를 사용자가 검토하고 신뢰한 �
 훅이 꺼져 있거나 조직 정책이 플러그인 훅을 금지하면 자동 적용되지 않는다.
 설치·업데이트 후 호스트의 훅 설정에서 활성화 여부를 확인하고, Codex에서는 신뢰 여부도 확인한다.
 에이전트 차단 훅, 언어 가드, DataGrip 쿼리 가드처럼 업데이트가 새로 추가하거나 바꾼 훅은 Codex의 `/hooks`에서 신뢰하기 전까지 건너뛴다.
-이번 릴리스에서 `hooks/hooks.json`이 바뀌었으므로 업데이트 후 그 훅을 다시 신뢰해야 한다.
+이번 릴리스에서 모든 훅 명령이 `scripts/hook_python.sh`를 거쳐 시작하도록 `hooks/hooks.json`이 바뀌었으므로,
+Codex 사용자는 업데이트 후 바뀐 훅을 `/hooks`에서 한 번 다시 신뢰해야 한다.
 Claude Code mod는 Codex 훅이 아니므로 이 신뢰 절차가 적용되지 않는다.
 업데이트 후에는 Claude Code를 재시작하거나 Codex에서 새 세션을 시작한다.
 훅은 호스트의 신뢰 설정을 우회하지 않으며, 실행 중인 세션의 플러그인 버전을 바꾸지 않는다.

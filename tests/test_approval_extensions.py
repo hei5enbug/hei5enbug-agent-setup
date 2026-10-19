@@ -788,3 +788,112 @@ def test_mcp_write_descriptions_name_the_tool(arguments, description):
     assert action.kind == "write"
     assert action.keys == ["mcp:session"]
     assert action.descriptions == [description]
+
+
+LAUNCHER_RUNS = [
+    "sh scripts/hook_python.sh approval_guard.py",
+    "./hook_python.sh approval_guard.py",
+    "bash -c 'sh /plugin/scripts/hook_python.sh approval_state.py'",
+    "echo '{}' | sh /plugin/scripts/hook_python.sh approval_guard.py",
+    "cat event.json | sh /plugin/scripts/hook_python.sh datagrip_guard.py",
+    'sh "$CLAUDE_PLUGIN_ROOT/scripts/hook_python.sh" approval_guard.py',
+    "HEI5ENBUG_PYTHON=/usr/bin/python3 sh /plugin/scripts/hook_python.sh approval_guard.py",
+    "sh /plugin/scripts/hook_python.sh approval_guard.py < event.json",
+    "echo $(sh /plugin/scripts/hook_python.sh approval_state.py)",
+]
+
+
+@pytest.mark.parametrize("command", LAUNCHER_RUNS)
+def test_hook_python_launcher_runs_are_self_approval_like_a_direct_guard_run(state, fake_bin, command):
+    """훅 런처로 가드 스크립트를 실행하는 명령은 가드를 직접 실행하는 것과 같이 자기 승인으로 거부한다."""
+    # given
+    event = bash_event(command, cwd=state)
+    # when
+    output = guard.handle(event, "claude")
+    # then
+    assert guard._runs_guard(command)
+    assert decision(output) == "deny"
+    assert output["hookSpecificOutput"]["permissionDecisionReason"] == guard.SELF_APPROVAL_REASON
+
+
+def test_a_shell_script_that_runs_the_hook_launcher_is_self_approval(state, fake_bin):
+    """셸 스크립트 안에서 훅 런처를 실행해도 자기 승인으로 거부한다."""
+    # given
+    (state / "run.sh").write_text("sh /plugin/scripts/hook_python.sh approval_guard.py\n")
+    # when
+    output = guard.handle(bash_event("bash run.sh", cwd=state), "claude")
+    # then
+    assert decision(output) == "deny"
+
+
+@pytest.mark.parametrize("command", [
+    "cat /plugin/scripts/hook_python.sh",
+    "ls -l /plugin/scripts/hook_python.sh",
+    "rg python3 /plugin/scripts/hook_python.sh",
+])
+def test_reading_or_checking_the_hook_launcher_file_is_not_self_approval(state, fake_bin, command):
+    """훅 런처 파일을 읽거나 문법만 확인하는 명령은 가드를 실행하지 않으므로 자기 승인으로 막지 않는다."""
+    # given
+    event = bash_event(command, cwd=state)
+    # when
+    self_approval = guard._self_approval(event["tool_input"]["command"])
+    # then
+    assert self_approval is False
+
+
+SOURCED_OR_EXEC_LAUNCHER_RUNS = [
+    "exec python3 /plugin/scripts/approval_guard.py < e.json",
+    "exec /plugin/scripts/approval_guard.py",
+    "exec sh /plugin/scripts/hook_python.sh approval_guard.py < e.json",
+    "exec -a foo sh /plugin/scripts/hook_python.sh approval_guard.py",
+    ". /plugin/scripts/hook_python.sh approval_guard.py",
+    "source /plugin/scripts/hook_python.sh approval_guard.py",
+    "bash -c '. ./hook_python.sh approval_guard.py' hook_python.sh < e.json",
+    "cd /plugin/scripts && . ./hook_python.sh approval_guard.py",
+]
+
+
+@pytest.mark.parametrize("command", SOURCED_OR_EXEC_LAUNCHER_RUNS)
+def test_exec_and_source_runs_of_a_guard_script_are_self_approval(state, fake_bin, command):
+    """exec, 점(.), source로 가드 스크립트나 훅 런처를 실행하는 명령도 자기 승인으로 거부한다."""
+    # given
+    event = bash_event(command, cwd=state)
+    # when
+    output = guard.handle(event, "claude")
+    # then
+    assert guard._self_approval(command)
+    assert decision(output) == "deny"
+    assert output["hookSpecificOutput"]["permissionDecisionReason"] == guard.SELF_APPROVAL_REASON
+
+
+@pytest.mark.parametrize("command", [
+    "git push --force origin main", "kubectl delete ns x", "git push --force",
+])
+@pytest.mark.parametrize("prefix", ["exec ", "exec -a foo ", "exec -c "])
+def test_exec_prefix_does_not_change_the_classification_of_the_command(state, fake_bin, prefix, command):
+    """exec를 앞에 붙여도 명령의 분류와 매번 승인 여부는 exec 없이 실행할 때와 같다."""
+    # given
+    plain = guard.classify_text(command, str(state))
+    # when
+    wrapped = guard.classify_text(prefix + command, str(state))
+    # then
+    assert plain.kind == "always" and plain.every_time
+    assert (wrapped.kind, wrapped.every_time) == (plain.kind, plain.every_time)
+
+
+@pytest.mark.parametrize(("command", "kind"), [
+    ("exec 3>/tmp/x", "pass"),
+    ("exec ls", "pass"),
+    ("exec", "pass"),
+    (". ./venv/bin/activate", "write"),
+    ("source ./venv/bin/activate", "write"),
+])
+def test_exec_with_only_redirections_and_sourcing_other_files_keep_their_classification(state, fake_bin, command, kind):
+    """리다이렉션만 있는 exec, exec ls, 가드가 아닌 파일을 source하는 명령은 기존 분류를 유지한다."""
+    # given
+    text = command
+    # when
+    outcome = guard.classify_text(text, str(state))
+    # then
+    assert outcome.kind == kind
+    assert guard._self_approval(text) is False

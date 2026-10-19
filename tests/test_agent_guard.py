@@ -390,7 +390,7 @@ class AgentGuardTest(unittest.TestCase):
         ]
 
         # Then
-        self.assertEqual([("Agent|Task", 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agent_guard.py"')], entries)
+        self.assertEqual([("Agent|Task", 'sh "${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh" agent_guard.py')], entries)
 
 
 if __name__ == "__main__":

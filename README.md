@@ -60,6 +60,7 @@ hei5enbug-agent-setup/
 │   ├── approval_guard.py
 │   ├── approval_state.py
 │   ├── datagrip_guard.py
+│   ├── hook_python.sh
 │   ├── language_guard.py
 │   ├── plugin_toggles.py
 │   ├── role_runner.py
@@ -437,9 +438,10 @@ Codex, to turn the guard off. In Codex, trust the hooks in `/hooks`.
 
 ## Feature options
 
-Six boolean features can be turned off, and each defaults to on. The implementation worker route and the review
-model are string options in Claude Code. Choose `auto`, `codex`, `haiku`, `sol`, or `sonnet` for the route; an unset
-or unrecognized value uses `auto`, where the main session picks the worker per assignment. The review model runs independent validation and skill review roles at `xhigh`. Choose one of the
+Six boolean features can be turned off, and each defaults to on. The implementation worker route, the review
+model, and the hook Python interpreter are string options in Claude Code. Choose `auto`, `codex`, `haiku`, `sol`,
+or `sonnet` for the route; an unset or unrecognized value uses `auto`, where the main session picks the worker per
+assignment. The review model runs independent validation and skill review roles at `xhigh`. Choose one of the
 seven pinned model IDs; an unset or unrecognized value uses `gpt-6-astra`. Set plugin options in `/config` or with
 `claude plugin configure`. On Codex, set environment variables before starting the
 session. A value of `false`, `0`, `off`, or `no`, in any letter case, turns a boolean feature off.
@@ -453,8 +455,17 @@ session. A value of `false`, `0`, `off`, or `no`, in any letter case, turns a bo
 | Response language guard | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip query guard | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
 | Approval guard | `approval_guard` | `HEI5ENBUG_APPROVAL_GUARD` |
+| Hook Python interpreter | `python` (an absolute path, default empty) | `HEI5ENBUG_PYTHON` |
 | Subagent permission block in `~/.codex/AGENTS.md` | Not applicable | `HEI5ENBUG_SUBAGENT_POLICY` |
 | Question tool flag | Not applicable | `HEI5ENBUG_CODEX_ASK_TOOL` |
+
+The hook Python interpreter is the absolute path of a Python 3.12 or later interpreter. Install `pglast` into it
+to run the SQL guard's parser. Every hook starts through `scripts/hook_python.sh`, which runs its script with this
+interpreter. It uses the Claude Code `python` option first and then `HEI5ENBUG_PYTHON`, and only a path that starts
+with `/` and names an existing executable file counts. An empty, relative, missing, or invalid value falls back to
+`python3` on the `PATH`, so an unset option behaves as before. Setting the path skips a version-manager shim, such
+as a pyenv shim, which adds about 150 ms to each hook process on one measured machine and can select a different
+Python per project.
 
 Without a matching launcher environment, the Mod refuses pinned GPT requests before a provider request. This refusal
 has no toggle. The session instructions and operating rules also have no toggle; disable the plugin itself to turn
@@ -483,8 +494,8 @@ claude plugin install hei5enbug-agent-setup@hei5enbug
 On macOS and Linux, the plugin hooks combine `instructions/session/core.md` and `instructions/session/common.md` with
 either `instructions/session/codex.md` or `instructions/session/claude-code.md` for the current host. `core.md` holds
 the rules that apply to every agent.
-Python 3.12 or later must be available as `python3` on the host's `PATH`.
-The hook uses only the Python standard library.
+Python 3.12 or later must be available as `python3` on the host's `PATH`, or as the interpreter that the hook Python
+interpreter option names (see "Feature options"). The hook uses only the Python standard library.
 Root `AGENTS.md` governs development of this repository only; the hook never reads it.
 
 Both hosts discover `hooks/hooks.json` automatically. Codex sets `PLUGIN_ROOT` to the installed plugin
@@ -517,8 +528,9 @@ Codex requires review and trust of the current plugin hook definition before run
 Disabled hooks or enterprise policies that prohibit plugin hooks prevent automatic loading.
 After installation or update, use the host's hook controls to check that these hooks are enabled and,
 in Codex, trusted. A hook that an update adds or changes, such as the agent guard, the language guard, or the DataGrip
-query guard, stays skipped in Codex until you trust it in `/hooks`. `hooks/hooks.json` changed in this release, so
-trust its hooks again after updating. The Claude Code mod is not a Codex hook, so this trust step does not apply to
+query guard, stays skipped in Codex until you trust it in `/hooks`. `hooks/hooks.json` changed in this release,
+because every hook command now starts through `scripts/hook_python.sh`. Codex users must trust the changed hooks once
+in `/hooks` after updating. The Claude Code mod is not a Codex hook, so this trust step does not apply to
 it. Restart Claude Code or start a new Codex session after updating.
 The hook does not bypass host trust settings or change an already running session to a new plugin version.
 The `orca-plugin-refresh` skill uses those markers to apply an update to running Orca sessions without restarting them.

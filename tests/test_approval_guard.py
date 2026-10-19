@@ -1392,7 +1392,7 @@ def test_datagrip_키의_키워드는_정렬되고_중복이_없다():
 def test_hooks_json은_승인_가드를_bash와_mcp_호출의_각_이벤트에_등록한다():
     # given
     hooks = json.loads((REPO_ROOT / "hooks" / "hooks.json").read_text(encoding="utf-8"))["hooks"]
-    command = 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/approval_guard.py"'
+    command = 'sh "${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh" approval_guard.py'
     expected_matcher = "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$"
     # when
     entries = {

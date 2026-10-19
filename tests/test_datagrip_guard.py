@@ -2130,7 +2130,7 @@ class TestHooksRegistration:
         expected = {
             "matcher": "^mcp__datagrip__execute_sql_query$",
             "hooks": [
-                {"type": "command", "command": 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/datagrip_guard.py"', "timeout": 10}
+                {"type": "command", "command": 'sh "${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh" datagrip_guard.py', "timeout": 10}
             ],
         }
         # when
@@ -2153,7 +2153,7 @@ class TestHooksRegistration:
         expected = {
             "matcher": "Agent|Task",
             "hooks": [
-                {"type": "command", "command": 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/agent_guard.py"', "timeout": 5}
+                {"type": "command", "command": 'sh "${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh" agent_guard.py', "timeout": 5}
             ],
         }
         # when

@@ -68,6 +68,12 @@
       "title": "Approval guard",
       "description": "Run covered CLI, script, database, and MCP reads without approval; ask once per session for writes, including production changes and git pushes, and reuse that approval for the rest of the session; reuse any other approved action for the session too, except force pushes, discarding uncommitted work, recursive deletion outside the session or temporary folders, destructive database statements, and remote infrastructure deletion, which ask every time; deny secret-printing commands and approval-state edits.",
       "default": true
+    },
+    "python": {
+      "type": "string",
+      "title": "Hook Python interpreter",
+      "description": "Absolute path of a Python 3.12+ interpreter, with pglast for the SQL guard, that the plugin hooks use instead of python3; an empty or invalid value falls back to python3.",
+      "default": ""
     }
   }
 }

@@ -39,6 +39,7 @@ COVERED = frozenset({
 })
 PYTHON = re.compile(r"python(?:\d+(?:\.\d+)*)?")
 SHELLS = frozenset({"sh", "bash", "zsh"})
+SOURCE_COMMANDS = frozenset({".", "source"})
 FILTERS = frozenset({"grep", "egrep", "fgrep", "rg", "head", "tail", "wc", "sort", "uniq", "jq", "cut", "tr", "column"})
 WRAPPER_VALUE_OPTIONS = {
     "sudo": frozenset({"-u", "-g", "-C", "-h", "-p", "-r", "-t", "-U", "-D", "-T"}),
@@ -47,6 +48,7 @@ WRAPPER_VALUE_OPTIONS = {
     "time": frozenset({"-f", "-o"}),
     "nice": frozenset({"-n"}),
     "nohup": frozenset(),
+    "exec": frozenset({"-a"}),
 }
 SHELL_KEYWORDS = frozenset({"!", "{", "}", "if", "then", "else", "elif", "do", "done", "while", "until", "fi"})
 CLI_DESTRUCTIVE_WORDS = frozenset(
@@ -98,7 +100,7 @@ FIND_READ_OPTIONS = frozenset({
 COVERED_WORD = re.compile(r"(?<![\w-])(?:" + "|".join(sorted(COVERED, key=len, reverse=True)) + r")(?![\w-])")
 OPAQUE_CONSTRUCT = re.compile(r"\b(?:eval|xargs)\b|\b(?:sh|bash|zsh)\b[^;&|\n]*?\s-[A-Za-z]*c[A-Za-z]*\b")
 SHELL_C_FLAG = re.compile(r"-[A-Za-z]*c[A-Za-z]*")
-GUARD_SCRIPTS = frozenset({"approval_guard.py", "approval_state.py", "datagrip_guard.py"})
+GUARD_SCRIPTS = frozenset({"approval_guard.py", "approval_state.py", "datagrip_guard.py", "hook_python.sh"})
 GUARD_MODULES = frozenset({"approval_guard", "approval_state", "datagrip_guard"})
 GUARD_CODE = re.compile(
     r"\bimport\s+[\w.,\s]*?\b(?:approval_guard|approval_state|datagrip_guard)\b"
@@ -2108,6 +2110,9 @@ def _argv_runs_guard(words, depth):
         script = _shell_c(words[1:])
         if script is not None:
             return _runs_guard(script, depth + 1)
+        operand = _first_operand(words[1:])
+        return operand is not None and os.path.basename(operand) in GUARD_SCRIPTS
+    if name in SOURCE_COMMANDS:
         operand = _first_operand(words[1:])
         return operand is not None and os.path.basename(operand) in GUARD_SCRIPTS
     return False
