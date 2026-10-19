@@ -189,6 +189,10 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
                 "agent_guard",
                 "role_pinning",
                 "implementation_worker",
+                "worker_model",
+                "worker_effort",
+                "codex_worker_model",
+                "codex_worker_effort",
                 "review_model",
                 "language_guard",
                 "datagrip_guard",
@@ -201,7 +205,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
             {
                 "type": "string",
                 "title": "Implementation worker",
-                "description": "Route implementation work: auto (the main session picks per task: haiku for easy work, sol for normal or hard work, sonnet when Codex usage is high), codex (Codex on gpt-5.6-luna at xhigh), haiku (the plugin worker on claude-haiku-5-5 at high), sol (gpt-6.1-sol at high through the role runner), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
+                "description": "Route implementation work: auto (the main session picks per task: haiku for easy work, sol for normal or hard work, sonnet when Codex usage is high), codex (Codex on gpt-5.6-luna at xhigh), haiku (the plugin worker on its Worker model and Worker effort, claude-haiku-5-5 at high by default), sol (gpt-6.1-sol at high through the role runner), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
                 "options": ["auto", "codex", "haiku", "sol", "sonnet"],
                 "default": "auto",
             },
@@ -220,7 +224,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         )
         for key, option in options.items():
             with self.subTest(key=key):
-                if key in {"implementation_worker", "review_model", "python"}:
+                if key in {"implementation_worker", "worker_model", "worker_effort", "codex_worker_model", "codex_worker_effort", "review_model", "python"}:
                     self.assertTrue(option["title"].isascii() and option["description"].isascii())
                     continue
                 self.assertEqual(option["type"], "boolean")
@@ -236,9 +240,11 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
             "[implementation delegation rules](implementation-delegation.md)",
             'Delegated implementation follows the route in the session line "Implementation worker route". Use '
             '`hei5enbug-agent-setup:sonnet-worker` for the Sonnet worker when the line says `sonnet`, the Codex '
-            'worker (see "Codex worker" below) when it says `codex`, `hei5enbug-agent-setup:worker` for the Haiku '
-            'worker when it says `haiku`, and the Sol worker (see "Sol worker" below) when it says `sol`.',
-            "When it says `auto`, choose per assignment: Haiku for easy work",
+            'worker (see "Codex worker" below) when it says `codex`, `hei5enbug-agent-setup:worker` when it says '
+            '`haiku`, and the Sol worker (see "Sol worker" below) when it says `sol`.',
+            'The `worker` agent runs on the model and effort in the session line "Worker agent model" (Haiku at '
+            '`high` by default).',
+            "When it says `auto`, choose per assignment: the `worker` agent for easy work",
             "Sol for normal or hard work",
             "Sonnet instead of Sol when the Codex weekly usage is above 70 percent or Sol is unavailable.",
             "When a Claude route stops on a usage limit, use Sol.",
@@ -248,7 +254,7 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
             "Never use any other agent.",
             "Never pass a per-invocation model to a plugin agent on an invocation or resume, because that overrides "
             "its definition",
-            "The bullets below apply whenever a plugin agent runs: a runner fallback, the Haiku or Sonnet worker, "
+            "The bullets below apply whenever a plugin agent runs: a runner fallback, the `worker` or Sonnet worker, "
             "and the designer.",
         )
 

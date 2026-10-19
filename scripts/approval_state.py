@@ -101,6 +101,31 @@ def state_dir() -> Path:
     return Path(state) / "hei5enbug-agent-setup" / "approvals"
 
 
+def worker_record_path(host: str, session: str) -> Path:
+    return state_dir().parent / "worker-settings" / f"{host}-{session}.json"
+
+
+def record_worker_pair(host: str, session, model: str, effort: str) -> None:
+    """Fix the worker model and effort announced at session start; older records are pruned like approval state."""
+    if session_key(session) is None:
+        return
+    path = worker_record_path(host, session)
+    with _locked(path.parent):
+        _write(path, {"model": model, "effort": effort})
+        _cleanup(path.parent, path)
+
+
+def recorded_worker_pair(host: str, session) -> tuple[str, str] | None:
+    if session_key(session) is None:
+        return None
+    try:
+        data = json.loads(worker_record_path(host, session).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    model, effort = (data.get(key) for key in ("model", "effort")) if isinstance(data, dict) else (None, None)
+    return (model, effort) if isinstance(model, str) and isinstance(effort, str) else None
+
+
 def session_key(value):
     """Return the session id when it is a usable string, otherwise None (the hook has no memory then)."""
     if isinstance(value, str) and SESSION_ID.fullmatch(value):

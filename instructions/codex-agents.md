@@ -60,14 +60,14 @@ resume; in the last case, apply its effective-settings checks first. Other dispa
 Coordinate delegated implementation under [implementation delegation rules](implementation-delegation.md).
 This section adds only the Codex worker integration.
 
-- When delegating implementation, use only the plugin `worker` role. Its role file sets no model, so pass the pinned
-  `gpt-5.6-luna` and `xhigh` explicitly on every spawn.
+- When delegating implementation, use only the plugin `worker` role. Its role file sets no model, so pass the model and
+  effort from the session line "Codex worker model" explicitly on every spawn.
 - Full-history forks inherit the parent model and effort and reject overrides. Never spawn a worker that way;
   set `fork_turns` to `"none"` or a positive integer, or leave `fork_context` off, and put the bounded task
   context in the assignment.
 - Before the first spawn in a run, inspect only the `model`, `model_reasoning_effort`, and relevant `[agents]`
   default fields of the configuration layers, including the `worker` role file in the personal or project Codex
-  agents directory. That file may override spawn values; it must still resolve to `gpt-5.6-luna` and `xhigh`.
+  agents directory. That file may override spawn values; it must still resolve to that model and effort.
 - Never overwrite an existing `~/.codex/agents/worker.toml` or `.codex/agents/worker.toml`, and never change
   global model defaults.
 - Accept the worker's result only after the spawned role verification section below passes.
@@ -75,7 +75,7 @@ This section adds only the Codex worker integration.
   send the implementation assignment to the same worker thread with a follow-up.
 - The host limit is `agents.max_concurrent_threads_per_session`, which counts spawned threads but not the main
   thread. Use its current value and open slots; never change it.
-- Missing worker tools, a missing `worker` role file, an unavailable model or `xhigh`, an incompatible user
+- Missing worker tools, a missing `worker` role file, an unavailable model or effort, an incompatible user
   configuration, or unverified effective settings stop the affected delegation. Apply the session fallback.
 - Codex spawns sub-agents only when the user, `AGENTS.md`, or skill instructions ask for them. The plugin's
   session hook keeps a marked block in `~/.codex/AGENTS.md` that grants this; it is removed when
@@ -122,7 +122,8 @@ Fallback section below apply.
 
 - `via: runner`: run the capability runner described below.
 - `via: agent`: spawn the agent named in the entry's `agent` field, passing the entry's `model` and `effort`
-  explicitly. Then verify it under Spawned role verification above.
+  explicitly. For the `implementation` capability's `worker`, pass the model and effort from the session line
+  "Codex worker model" instead. Then verify it under Spawned role verification above.
 - If that route fails, use the capability's fallback entry once, then continue in the main session.
 
 ## Capability runner

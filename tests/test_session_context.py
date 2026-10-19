@@ -25,6 +25,7 @@ RETIRED_EXPLORER_DIGESTS = {"bfde4fbbe2740152ad537d576612a34619a57a45adb56072e3f
 LEGACY_RESEARCHER = REPO_ROOT / "tests/fixtures/legacy-codex-researcher.toml"
 RETIRED_RESEARCHER_DIGESTS = {"940a7daace75165d8eceeece93a3c4960c42d187754738a744244059d5a0e5c1"}
 RETIRED_WORKER_DIGESTS = {"ce4488d0323832dc1563481875e7c26d693092c94865c37a4b4b89afd8274f83"}
+PINNED_EFFORT_WORKER_DIGEST = "89d72db180d2d0a16707804125af045ac5bb81baa2d751bad078747258b84d49"
 
 
 class SessionContextTest(unittest.TestCase):
@@ -32,12 +33,12 @@ class SessionContextTest(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name).resolve()
-        self.root = self.base / "plugin space (한글) $literal"
+        self.root = self.base / "plugin space (한글) $x"
         self.root.mkdir()
         agents = self.root / "AGENTS.md"
         shutil.copy2(REPO_ROOT / "AGENTS.md", agents)
         agents.write_text(agents.read_text() + "\nROOT PROJECT SENTINEL\n")
-        for name in ("scripts", "instructions", "config", "docs/ko/instructions"):
+        for name in ("scripts", "instructions", "config", ".claude-plugin", "docs/ko/instructions"):
             shutil.copytree(REPO_ROOT / name, self.root / name)
         self.cwd = self.base / "unrelated project"
         self.cwd.mkdir()
@@ -58,6 +59,7 @@ class SessionContextTest(unittest.TestCase):
             "PATH": f"{self.bin}{os.pathsep}{os.defpath}",
             "CLAUDE_PLUGIN_ROOT": str(self.root),
             "CODEX_HOME": str(self.codex_home),
+            "XDG_STATE_HOME": str(self.base / "state"),
         }
         if host == "codex":
             env["PLUGIN_ROOT"] = str(self.root)
@@ -1018,6 +1020,158 @@ class SessionContextTest(unittest.TestCase):
         # Then
         self.assertEqual(self.worker.read_bytes(), edited)
 
+    def pinned_effort_worker(self) -> bytes:
+        bundled = (REPO_ROOT / "standalone-agents/codex-worker.toml").read_text(encoding="utf-8")
+        line = 'model_reasoning_effort = "xhigh"\n'
+        head, tail = bundled.split("\n", 2)[:2], bundled.split("\n", 2)[2]
+        return ("\n".join(head) + "\n" + line + tail).encode("utf-8")
+
+    def test_effort를_고정하던_worker_역할은_수정하지_않았을_때만_바꾸고_고친_파일은_남긴다(self):
+        """spawn 값을 덮어쓰던 effort 줄이 있는 worker.toml은 바이트가 같을 때만 현재 파일로 바꾸고, 고친 파일은 그대로 둔다."""
+        # Given
+        shipped = self.pinned_effort_worker()
+        self.assertEqual(PINNED_EFFORT_WORKER_DIGEST, hashlib.sha256(shipped).hexdigest())
+        bundled = (REPO_ROOT / "standalone-agents/codex-worker.toml").read_bytes()
+        self.assertNotIn(b"model_reasoning_effort", bundled)
+        edited = shipped + b"# edited by the user\n"
+        self.worker.parent.mkdir(parents=True)
+        self.worker.write_bytes(shipped)
+
+        # When
+        self.context(self.run_hook("codex"))
+        replaced = self.worker.read_bytes()
+        self.worker.write_bytes(edited)
+        self.context(self.run_hook("codex"))
+
+        # Then
+        self.assertEqual(bundled, replaced)
+        self.assertEqual(edited, self.worker.read_bytes())
+
+    def test_Claude_세션은_worker_모델과_effort_옵션을_알린다(self):
+        """Claude 세션 컨텍스트는 구현 경로 줄 다음에 옵션으로 고른 worker 모델과 effort 줄을 담는다."""
+        # Given
+        extra_env = {
+            "CLAUDE_PLUGIN_OPTION_WORKER_MODEL": "claude-sonnet-5-5",
+            "CLAUDE_PLUGIN_OPTION_WORKER_EFFORT": "xhigh",
+        }
+
+        # When
+        context = self.context(self.run_hook("claude", extra_env=extra_env))
+
+        # Then
+        self.assertIn(
+            "Implementation worker route: Auto (`auto`).\nWorker agent model: `claude-sonnet-5-5` at `xhigh`.\n", context
+        )
+        self.assertLess(len(context.encode("utf-8")), 9000)
+
+    def test_Claude_세션은_옵션이_없으면_기본_worker_모델을_알리고_잘못된_값은_알림으로_적는다(self):
+        """옵션이 없으면 매니페스트 기본값을 알리고, 목록에 없는 모델은 기본값으로 되돌려 괄호 알림에 값을 적는다."""
+        # Given
+        self.use_short_root()
+        invalid = {"CLAUDE_PLUGIN_OPTION_WORKER_MODEL": "claude-unknown-9"}
+
+        # When
+        default = self.context(self.run_hook("claude"))
+        ignored = self.context(self.run_hook("claude", extra_env=invalid))
+
+        # Then
+        self.assertIn("Worker agent model: `claude-haiku-5-5` at `high`.\n", default)
+        self.assertIn("Worker agent model: `claude-haiku-5-5` at `high`. (Ignored worker_model 'claude-unknown-9'", ignored)
+        self.assertLess(len(ignored.encode("utf-8")), 9000)
+
+    def test_Claude_세션은_역할_고정이_꺼져_있으면_설정값_대신_기본_모델과_알림을_알린다(self):
+        """role_pinning이 꺼지면 설정한 opus와 xhigh는 적용되지 않으므로 기본 쌍과 역할 고정 알림을 적고, 켜져 있으면 설정한 쌍을 적는다."""
+        # Given
+        self.use_short_root()
+        configured = {
+            "CLAUDE_PLUGIN_OPTION_WORKER_MODEL": "claude-opus-5-5",
+            "CLAUDE_PLUGIN_OPTION_WORKER_EFFORT": "xhigh",
+        }
+
+        # When
+        off = self.context(self.run_hook("claude", extra_env={**configured, "CLAUDE_PLUGIN_OPTION_ROLE_PINNING": "false"}))
+        on = self.context(self.run_hook("claude", extra_env={**configured, "CLAUDE_PLUGIN_OPTION_ROLE_PINNING": "true"}))
+
+        # Then
+        self.assertIn(
+            "Worker agent model: `claude-haiku-5-5` at `high`. "
+            "(role pinning is off, so the worker runs on its definition's model)\n",
+            off,
+        )
+        self.assertIn("Worker agent model: `claude-opus-5-5` at `xhigh`.\n", on)
+
+    def test_알림이_컨텍스트_한도를_넘기게_하면_알림만_빼고_세션_지침은_그대로_불러온다(self):
+        """긴 설치 경로에서 알림 때문에 한도를 넘으면 알림 괄호만 생략하고 지침 로드는 실패하지 않는다."""
+        # Given
+        extra_env = {"CLAUDE_PLUGIN_OPTION_WORKER_MODEL": "x" * 40}
+
+        # When
+        context = self.context(self.run_hook("claude", extra_env=extra_env))
+
+        # Then
+        self.assertIn("Worker agent model: `claude-haiku-5-5` at `high`.\n", context)
+        self.assertLessEqual(len(context.encode("utf-8")), 9000)
+
+    def test_Codex_세션은_저장된_옵션의_Codex_worker_모델을_알린다(self):
+        """Codex 세션 컨텍스트는 Claude 사용자 설정에 저장된 Codex worker 값을 담고, 환경 변수가 있으면 그 값이 이긴다."""
+        # Given
+        config = self.base / "claude config"
+        self.write_json(config / "settings.json", {"pluginConfigs": {"hei5enbug-agent-setup@hei5enbug": {"options": {
+            "codex_worker_model": "gpt-6.1-sol", "codex_worker_effort": "high"}}}})
+        env = {"CLAUDE_CONFIG_DIR": str(config)}
+
+        # When
+        saved = self.context(self.run_hook("codex", extra_env=env))
+        overridden = self.context(self.run_hook("codex", extra_env={**env, "HEI5ENBUG_CODEX_WORKER_EFFORT": "xhigh"}))
+
+        # Then
+        self.assertIn("Codex worker model: `gpt-6.1-sol` at `high`.\n", saved)
+        self.assertIn("Codex worker model: `gpt-6.1-sol` at `xhigh`.\n", overridden)
+        self.assertNotIn("Worker agent model", saved)
+        self.assertLess(len(saved.encode("utf-8")), 9000)
+
+    def test_Codex_세션_시작은_알린_worker_쌍을_그_세션_기록으로_남긴다(self):
+        """세션 id가 있으면 알린 gpt-6.1-sol과 high를 상태 폴더의 worker-settings 기록에 남기고 Claude 설정 파일은 쓰지 않는다."""
+        # Given
+        config = self.base / "claude config"
+        self.write_json(config / "settings.json", {"pluginConfigs": {"hei5enbug-agent-setup@hei5enbug": {"options": {
+            "codex_worker_model": "gpt-6.1-sol", "codex_worker_effort": "high"}}}})
+        before = (config / "settings.json").read_bytes()
+        payload = json.dumps({"hook_event_name": "SessionStart", "source": "startup", "session_id": "session-one"})
+
+        # When
+        result = self.run_hook("codex", payload=payload, extra_env={"CLAUDE_CONFIG_DIR": str(config)})
+
+        # Then
+        record = self.base / "state" / "hei5enbug-agent-setup" / "worker-settings" / "codex-session-one.json"
+        self.assertIn("Codex worker model: `gpt-6.1-sol` at `high`.\n", self.context(result))
+        self.assertEqual({"model": "gpt-6.1-sol", "effort": "high"}, json.loads(record.read_text(encoding="utf-8")))
+        self.assertEqual(before, (config / "settings.json").read_bytes())
+
+    def test_Codex_세션_시작은_상태_폴더에_쓸_수_없어도_컨텍스트를_정상_출력한다(self):
+        """XDG_STATE_HOME이 일반 파일을 가리켜 기록이 실패해도 SessionStart는 성공하고 worker 모델을 알린다."""
+        # Given
+        blocked = self.base / "blocked"
+        blocked.write_text("file", encoding="utf-8")
+        payload = json.dumps({"hook_event_name": "SessionStart", "source": "startup", "session_id": "session-one"})
+
+        # When
+        result = self.run_hook("codex", payload=payload, extra_env={"XDG_STATE_HOME": str(blocked)})
+
+        # Then
+        self.assertIn("Codex worker model: `gpt-5.6-luna` at `xhigh`.\n", self.context(result))
+
+    def test_Codex_세션은_설정이_없으면_기본_Codex_worker_모델을_알린다(self):
+        """저장된 설정이 없으면 매니페스트 기본값 gpt-5.6-luna와 xhigh를 알리고 알림은 붙지 않는다."""
+        # Given
+        env = {"CLAUDE_CONFIG_DIR": str(self.base / "empty claude config")}
+
+        # When
+        context = self.context(self.run_hook("codex", extra_env=env))
+
+        # Then
+        self.assertIn("Codex worker model: `gpt-5.6-luna` at `xhigh`.\n", context)
+
     def test_claude_session_never_retires_a_codex_agent(self):
         explorer = self.codex_home / "agents" / "explorer.toml"
         explorer.parent.mkdir(parents=True)
@@ -1173,7 +1327,7 @@ class CodexAutoSettingsTest(unittest.TestCase):
         self.base = Path(self.temp.name).resolve()
         self.root = self.base / "plugin"
         self.root.mkdir()
-        for name in ("scripts", ".codex-plugin", "config"):
+        for name in ("scripts", ".codex-plugin", ".claude-plugin", "config"):
             shutil.copytree(REPO_ROOT / name, self.root / name)
         session = self.root / "instructions" / "session"
         session.mkdir(parents=True)

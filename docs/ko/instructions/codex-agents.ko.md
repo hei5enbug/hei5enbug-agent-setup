@@ -55,13 +55,13 @@
 
 위임한 구현은 [구현 위임 규칙](implementation-delegation.ko.md)에 따라 조정한다. 이 섹션은 Codex worker 연동만 덧붙인다.
 
-- 구현을 위임할 때는 플러그인 `worker` 역할만 사용한다. 역할 파일은 모델을 지정하지 않으므로 생성할 때마다 고정된
-  `gpt-5.6-luna`와 `xhigh`를 명시적으로 전달한다.
+- 구현을 위임할 때는 플러그인 `worker` 역할만 사용한다. 역할 파일은 모델을 지정하지 않으므로 생성할 때마다 세션 줄
+  "Codex worker model"의 모델과 사고 강도를 명시적으로 전달한다.
 - 전체 기록 fork는 부모의 모델과 사고 강도를 물려받고 재정의를 거부한다. worker를 이 방식으로 생성하지 않는다.
   `fork_turns`를 `"none"`이나 양의 정수로 두거나 `fork_context`를 끄고, 범위를 한정한 작업 맥락은 할당에 담는다.
 - 실행에서 처음 생성하기 전에 설정 계층의 `model`, `model_reasoning_effort`, 관련 `[agents]` 기본값 항목만 살펴본다.
   개인 또는 프로젝트 Codex 에이전트 디렉터리의 `worker` 역할 파일도 포함한다. 이 파일은 생성 값을 재정의할 수
-  있으므로, 그래도 `gpt-5.6-luna`와 `xhigh`로 확정되어야 한다.
+  있으므로, 그래도 그 모델과 사고 강도로 확정되어야 한다.
 - 이미 있는 `~/.codex/agents/worker.toml`이나 `.codex/agents/worker.toml`은 덮어쓰지 않고, 전역 모델 기본값도
   바꾸지 않는다.
 - worker의 결과는 아래 '생성된 역할 검증' 절을 통과한 뒤에만 인정한다.
@@ -69,7 +69,7 @@
   구현 할당을 보낸다.
 - 호스트 한도는 `agents.max_concurrent_threads_per_session`이다. 생성한 스레드는 세지만 메인 스레드는 세지 않는다.
   현재 값과 남은 자리를 기준으로 하고 이 값을 바꾸지 않는다.
-- worker 도구가 없거나, `worker` 역할 파일이 없거나, 모델이나 `xhigh`를 쓸 수 없거나, 사용자 설정이 맞지 않거나,
+- worker 도구가 없거나, `worker` 역할 파일이 없거나, 모델이나 사고 강도를 쓸 수 없거나, 사용자 설정이 맞지 않거나,
   실제 설정을 확인하지 못하면 해당 위임을 멈추고 세션의 대체 처리 규칙을 적용한다.
 - Codex는 사용자, `AGENTS.md` 또는 스킬 지침이 요청할 때만 서브에이전트를 생성한다. 플러그인의 세션 훅이
   `~/.codex/AGENTS.md`에 표시된 블록을 유지하며 그 블록이 이 권한을 부여한다. `HEI5ENBUG_SUBAGENT_POLICY=off`이면
@@ -113,7 +113,8 @@ python3 <Source directory>/scripts/verify_spawn.py --parent "$CODEX_THREAD_ID" -
 [기능별 고정값 표](model-routing.ko.md#기능별-고정값)에서 Codex 쪽 해당 기능 항목을 찾는다.
 
 - `via: runner`: 아래 기능 실행기를 실행한다.
-- `via: agent`: 항목의 `agent` 필드에 적힌 에이전트를 항목의 `model`과 `effort`를 명시해 띄운다. 그다음
+- `via: agent`: 항목의 `agent` 필드에 적힌 에이전트를 항목의 `model`과 `effort`를 명시해 띄운다. `implementation`
+  기능의 `worker`는 항목 대신 세션 줄 "Codex worker model"의 모델과 effort를 전달한다. 그다음
   위의 생성된 역할 검증 절에 따라 검증한다.
 - 그 경로가 실패하면 기능의 대체 항목을 한 번 쓰고, 그래도 안 되면 메인 세션에서 계속한다.
 

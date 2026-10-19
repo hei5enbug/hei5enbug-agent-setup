@@ -114,7 +114,8 @@ Codex는 `~/.codex/agents/`와 `.codex/agents/`에서만 서브에이전트를 �
 모델 키가 없으며, 스킬 지침은 대체 경로에서 모델과 사고 강도를 명시합니다. 플러그인 `worker`는
 Codex 내장 `worker`를 대신하고, `scout`는 내장 `explorer`를 건드리지 않습니다. 직접 고친 파일은 절대 덮어쓰지 않으며,
 다음 Codex 세션부터 적용됩니다. 고친 파일은 바뀌지 않으므로 모델은 지정하지 않고, Codex 지침이 생성할 때마다
-고정 모델을 넘깁니다. 훅은 이전 버전이 만든 `explorer.toml`과 `researcher.toml`을 지우고 `worker.toml`을 바꾸지만, 그 버전에서 배포한
+고정 모델을 넘깁니다. `worker` 역할 파일은 사고 강도도 지정하지 않으므로 생성할 때 `codex_worker_model`과
+`codex_worker_effort` 설정을 넘깁니다. 다른 쌍을 고정한 채 고친 역할 파일이 우선하며, 에이전트 가드는 맞지 않는 생성을 거부합니다. 훅은 이전 버전이 만든 `explorer.toml`과 `researcher.toml`을 지우고 `worker.toml`을 바꾸지만, 그 버전에서 배포한
 파일과 바이트 단위로 같을 때만 그렇게 하므로 직접 고친 파일은 남습니다. 플러그인을 끄면 설치된 `worker` 역할은
 수정을 거부하지 않고 일반 구현 worker로 동작합니다.
 
@@ -138,7 +139,7 @@ mod는 Claude Code 2.1.292에서 시험했습니다.
 흐름이 적용됩니다.
 
 역할 고정은 플러그인 역할마다 모델과 사고 강도를 모든 요청에 고정합니다. `scout`는 `claude-sonnet-5-5`와 `medium`,
-`worker`는 `claude-haiku-5-5`와 `high`, `sonnet-worker`는 `claude-sonnet-5-5`와 `high`, `designer`는
+`worker`는 `worker_model`과 `worker_effort`(기본 `claude-haiku-5-5`와 `high`), `sonnet-worker`는 `claude-sonnet-5-5`와 `high`, `designer`는
 `claude-opus-5-5`와 `xhigh`, `reviewer`는 `claude-opus-5-5`와 `high`를 씁니다.
 다른 모델로 응답한 서브에이전트는 중단됩니다. 이후 요청은 거부되고 도구 호출은 막히며 결과는 경고로 바뀝니다.
 역할 고정이 활성화된 경우에만 등록된 mod `prompt.context` 훅이 세션 컨텍스트에
@@ -421,18 +422,26 @@ Codex에서는 `/hooks`에서 훅을 신뢰해야 합니다.
 
 ## 기능 옵션
 
-끌 수 있는 boolean 기능은 여섯 가지이며 각각 기본값은 켜짐입니다. Claude Code의 구현 worker 경로, 검토 모델, 훅 Python 인터프리터는
+끌 수 있는 boolean 기능은 여섯 가지이며 각각 기본값은 켜짐입니다. Claude Code의 구현 worker 경로, worker 모델과 사고 강도, 검토 모델, 훅 Python 인터프리터는
 문자열 옵션입니다. 경로는 `auto`, `codex`, `haiku`, `sol`, `sonnet` 중 하나를 고르고, 값이 비어 있거나 알 수 없으면 `auto`를 씁니다.
 `auto`에서는 메인 세션이 작업마다 worker를 고릅니다.
 검토 모델은 독립 검증과 스킬 검토 역할을 `xhigh`로 실행하며, 고정된 일곱 모델 ID 중 하나를 고릅니다. 값이 비어 있거나
 알 수 없으면 `gpt-6-astra`를 씁니다. 플러그인 옵션은 `/config`나 `claude plugin configure`에서 설정합니다. Codex에서는 세션 시작 전에 환경변수를
 설정합니다. boolean 기능은 값이 `false`, `0`, `off`, `no`(대소문자 무시)이면 꺼집니다.
 
+Claude Code `worker` 에이전트는 `worker_model`과 `worker_effort`로 실행됩니다. mod가 이 값으로 worker를 생성하며, 잘못된 값이면 레지스트리 고정값을
+씁니다. 세션 컨텍스트는 이 값을 `Worker agent model: <model> at <effort>.` 줄로 알립니다. Codex에는 플러그인 설정 화면이 없으므로 세션 훅이
+Claude Code가 저장한 설정(`~/.claude/settings.json`의 `pluginConfigs`, 또는 `CLAUDE_CONFIG_DIR` 아래)에서 `codex_worker_model`과
+`codex_worker_effort`를 읽기 전용으로 읽습니다. 환경변수가 이 값을 덮어쓰고, 잘못된 값이면 한 줄 안내와 함께 기본값을 씁니다. 세션 컨텍스트는
+`Codex worker model: <model> at <effort>.` 줄로 알립니다. 값은 다음 Codex 세션부터 적용되며, 플러그인은 Codex 설정이나 Claude 설정을 절대 쓰지 않습니다.
+
 | 기능 | Claude Code `/config` 키 | Codex 환경변수 |
 |---|---|---|
 | 내장 서브에이전트 차단 | `agent_guard` | `HEI5ENBUG_AGENT_GUARD` |
 | 역할 모델 고정 | `role_pinning` | 해당 없음 |
 | 구현 worker 경로 | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, 또는 `sonnet`) | 해당 없음 |
+| Claude Code worker 모델과 사고 강도 | `worker_model` (기본 `claude-haiku-5-5`), `worker_effort` (기본 `high`) | 해당 없음 |
+| Codex worker 모델과 사고 강도 | `codex_worker_model` (`gpt-5.6-luna` 또는 `gpt-6.1-sol`, 기본 `gpt-5.6-luna`), `codex_worker_effort` (`high` 또는 `xhigh`, 기본 `xhigh`) | `HEI5ENBUG_CODEX_WORKER_MODEL`, `HEI5ENBUG_CODEX_WORKER_EFFORT` |
 | 검토 모델 | `review_model` (고정 모델 ID, 기본 `gpt-6-astra`) | 해당 없음 |
 | 응답 언어 가드 | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip 쿼리 가드 | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
@@ -549,8 +558,8 @@ UI 코드, 시각 디자인, 다이어그램 작업은 대신 호스트의 desig
 
 | 호스트 | 구현 에이전트 | 모델과 사고 강도 |
 |---|---|---|
-| Codex | rollout 기록으로 검증한 플러그인 `worker` 역할 | `gpt-5.6-luna`, `xhigh` |
-| Claude Code | `implementation_worker`가 `auto`(기본)이면 메인 세션이 작업마다 고릅니다. 쉬운 작업은 `hei5enbug-agent-setup:worker`, 보통·어려운 작업은 `role_runner.py implementation --fallback`, Codex 주간 사용량이 70%를 넘거나 Sol을 쓸 수 없으면 Sol 대신 `hei5enbug-agent-setup:sonnet-worker`입니다. 고정 설정은 `sonnet`, `sol`, `codex`(`role_runner.py worker`), `haiku`(대체 경로는 `role_runner.py worker`)를 강제합니다 | `claude-haiku-5-5`, `high`(쉬움); `gpt-6.1-sol`, `high`(보통·어려움); `claude-sonnet-5-5`, `high`; `gpt-5.6-luna`, `xhigh`(`codex`) |
+| Codex | rollout 기록으로 검증한 플러그인 `worker` 역할 | `codex_worker_model`, `codex_worker_effort`(기본 `gpt-5.6-luna`, `xhigh`) |
+| Claude Code | `implementation_worker`가 `auto`(기본)이면 메인 세션이 작업마다 고릅니다. 쉬운 작업은 `hei5enbug-agent-setup:worker`, 보통·어려운 작업은 `role_runner.py implementation --fallback`, Codex 주간 사용량이 70%를 넘거나 Sol을 쓸 수 없으면 Sol 대신 `hei5enbug-agent-setup:sonnet-worker`입니다. 고정 설정은 `sonnet`, `sol`, `codex`(`role_runner.py worker`), `haiku`(대체 경로는 `role_runner.py worker`)를 강제합니다 | `worker_model`, `worker_effort`(기본 `claude-haiku-5-5`, `high`)(쉬움); `gpt-6.1-sol`, `high`(보통·어려움); `claude-sonnet-5-5`, `high`; `gpt-5.6-luna`, `xhigh`(`codex`) |
 | Codex, designer | rollout 기록으로 검증한 플러그인 `designer` 역할, 대체는 `role_runner.py agent --name designer --fallback` | `gpt-6-astra`, `xhigh`, 대체 `claude-opus-5-5`, `xhigh` |
 | Claude Code, designer | 서브에이전트 기록이나 mod의 역할 고정으로 검증한 `hei5enbug-agent-setup:designer`, 대체는 `role_runner.py design` | `claude-opus-5-5`, `xhigh`, 대체 `gpt-6-astra`, `xhigh` |
 | Codex, 로컬 scout | rollout 기록으로 검증한 플러그인 `scout` 역할 | `gpt-5.6-luna`, `xhigh` |

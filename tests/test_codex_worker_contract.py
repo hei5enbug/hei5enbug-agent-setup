@@ -27,7 +27,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         expected = (
             "[implementation delegation rules](implementation-delegation.md)",
             "When delegating implementation, use only the plugin `worker` role.",
-            "pass the pinned `gpt-5.6-luna` and `xhigh` explicitly on every spawn",
+            "pass the model and effort from the session line \"Codex worker model\" explicitly on every spawn",
         )
 
         # When
@@ -109,7 +109,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         # Then
         self.assertIn("inspect only the `model`, `model_reasoning_effort`, and relevant `[agents]`", section)
         self.assertIn("including the `worker` role file in the personal or project Codex agents directory", section)
-        self.assertIn("it must still resolve to `gpt-5.6-luna` and `xhigh`", section)
+        self.assertIn("it must still resolve to that model and effort", section)
         self.assertIn("a missing `worker` role file", section)
         self.assertIn("an incompatible user configuration", section)
         for path in protected:
@@ -162,7 +162,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         # Given
         blockers = (
             "Missing worker tools",
-            "an unavailable model or `xhigh`",
+            "an unavailable model or effort",
             "unverified effective settings stop the affected delegation",
             "Apply the session fallback.",
         )

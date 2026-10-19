@@ -1,5 +1,6 @@
-import { claudeRolePins } from "./registry.js";
+import { claudeRolePins, configuredWorkerPin } from "./registry.js";
 
+const WORKER_AGENT = "hei5enbug-agent-setup:worker";
 const HIDDEN_AGENTS = /^(general-purpose|explore|plan|claude)$/i;
 const FORK_DENIAL =
   "Forking the current conversation is disabled while hei5enbug-agent-setup is installed. Use `hei5enbug-agent-setup:scout` or `hei5enbug-agent-setup:worker`, another defined agent, or the main session.";
@@ -116,12 +117,14 @@ export function registerAgentGuard(on) {
   on("agent.spawn", { subagentType: HIDDEN_AGENTS }, () => ({ deny: BUILT_IN_DENIAL })).catch(($, e, next) => next(e));
 }
 
-async function pinSpawn($, e, next, unrecorded) {
+async function pinSpawn($, e, next, unrecorded, options) {
   const table = await claudeRolePins($);
   const reason = table.denials.get(e.subagentType) ?? prefixReason(table, e.subagentType);
   if (reason !== undefined) return { deny: unpinnedDenial(e.subagentType, reason) };
-  const declared = table.pins.get(e.subagentType);
-  if (declared === undefined) return next(e);
+  const pinned = table.pins.get(e.subagentType);
+  if (pinned === undefined) return next(e);
+  const configured = e.subagentType === WORKER_AGENT ? await configuredWorkerPin($, options) : undefined;
+  const declared = configured === undefined ? pinned : { ...pinned, primary: configured };
   if (await consumeRetryNotice($, e.subagentType)) {
     return { deny: fallbackDenial($.plugin.root, e.subagentType, declared.access) };
   }
@@ -142,13 +145,13 @@ async function pinSpawn($, e, next, unrecorded) {
   return result;
 }
 
-export function registerRolePinning(on) {
+export function registerRolePinning(on, options) {
   const unrecorded = new Set();
 
   on("agent.spawn", async ($, e, next) => {
     if (typeof e.subagentType !== "string") return next(e);
     try {
-      return await pinSpawn($, e, next, unrecorded);
+      return await pinSpawn($, e, next, unrecorded, options);
     } catch (error) {
       if (pinnedOrCovered(await claudeRolePins($), e.subagentType)) {
         return { deny: unpinnedDenial(e.subagentType, "the role pin check failed") };

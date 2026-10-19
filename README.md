@@ -110,7 +110,9 @@ reasoning effort and sandbox. The Codex `reviewer` role has no model key; the sk
 effort explicitly when it is the fallback. The plugin `worker` replaces the
 built-in Codex `worker`, and `scout` leaves the built-in `explorer` untouched. A file you edited is never
 overwritten, and the agents become available in the next Codex session. Because an edited copy never changes,
-the files set no model; the Codex instructions pass the pinned model on every spawn instead. The hook also
+the files set no model; the Codex instructions pass the pinned model on every spawn instead, and the `worker` role
+file sets no effort either, so the spawn passes the `codex_worker_model` and `codex_worker_effort` settings. A role
+file you edited that pins another pair still wins, and the agent guard denies a mismatching spawn. The hook also
 removes an `explorer.toml` and a `researcher.toml`, and replaces a `worker.toml`, that an earlier version wrote, but only while the file is
 byte-identical to that version's bundled file, so a copy you edited stays. When the plugin is disabled, the installed
 `worker` role runs as an ordinary implementation worker instead of refusing to edit.
@@ -136,7 +138,7 @@ on both hosts. The mod was tested with Claude Code
 policy, these guards are absent and the host's normal permission flow applies.
 
 Role pinning pins each plugin role's model and effort on every request: `scout` uses `claude-sonnet-5-5` with `medium`,
-`worker` uses `claude-haiku-5-5` with `high`, `sonnet-worker` uses `claude-sonnet-5-5` with `high`, `designer` uses
+`worker` uses `worker_model` with `worker_effort` (default `claude-haiku-5-5` with `high`), `sonnet-worker` uses `claude-sonnet-5-5` with `high`, `designer` uses
 `claude-opus-5-5` with `xhigh`, and `reviewer` uses `claude-opus-5-5` with `high`. A subagent that answers on another model is stopped: its later requests
 end with a refusal, its tool calls are denied, and its result is replaced with a warning. The session context then
 gets the line `hei5enbug-agent-setup mod: role pinning active` from the registered mod `prompt.context` hook only when
@@ -438,19 +440,29 @@ Codex, to turn the guard off. In Codex, trust the hooks in `/hooks`.
 
 ## Feature options
 
-Six boolean features can be turned off, and each defaults to on. The implementation worker route, the review
-model, and the hook Python interpreter are string options in Claude Code. Choose `auto`, `codex`, `haiku`, `sol`,
+Six boolean features can be turned off, and each defaults to on. The implementation worker route, the worker
+models and efforts, the review model, and the hook Python interpreter are string options in Claude Code. Choose `auto`, `codex`, `haiku`, `sol`,
 or `sonnet` for the route; an unset or unrecognized value uses `auto`, where the main session picks the worker per
 assignment. The review model runs independent validation and skill review roles at `xhigh`. Choose one of the
 seven pinned model IDs; an unset or unrecognized value uses `gpt-6-astra`. Set plugin options in `/config` or with
 `claude plugin configure`. On Codex, set environment variables before starting the
 session. A value of `false`, `0`, `off`, or `no`, in any letter case, turns a boolean feature off.
 
+The Claude Code `worker` agent runs on `worker_model` and `worker_effort`; the mod spawns it on them, and an invalid
+value keeps the registry pin. The session context reports them as `Worker agent model: <model> at <effort>.`
+Codex has no plugin settings UI, so its session hook reads `codex_worker_model` and `codex_worker_effort` read-only
+from Claude Code's saved settings (`pluginConfigs` in `~/.claude/settings.json`, or under `CLAUDE_CONFIG_DIR`). The
+environment variables override them, and an invalid value falls back to the defaults with a one-line notice. The
+session context reports them as `Codex worker model: <model> at <effort>.` They apply from the next Codex session,
+and the plugin never writes Codex or Claude settings.
+
 | Feature | Claude Code `/config` key | Codex environment variable |
 |---|---|---|
 | Block built-in subagents | `agent_guard` | `HEI5ENBUG_AGENT_GUARD` |
 | Pin role models | `role_pinning` | Not applicable |
 | Implementation worker route | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, or `sonnet`) | Not applicable |
+| Claude Code worker model and effort | `worker_model` (default `claude-haiku-5-5`) and `worker_effort` (default `high`) | Not applicable |
+| Codex worker model and effort | `codex_worker_model` (`gpt-5.6-luna` or `gpt-6.1-sol`, default `gpt-5.6-luna`) and `codex_worker_effort` (`high` or `xhigh`, default `xhigh`) | `HEI5ENBUG_CODEX_WORKER_MODEL` and `HEI5ENBUG_CODEX_WORKER_EFFORT` |
 | Review model | `review_model` (a pinned model ID, default `gpt-6-astra`) | Not applicable |
 | Response language guard | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip query guard | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
@@ -574,8 +586,8 @@ section of the model routing contract. The five capabilities are `investigation`
 
 | Host | Implementation agent | Model and effort |
 |---|---|---|
-| Codex | Plugin `worker` role, verified from its rollout record | `gpt-5.6-luna`, `xhigh` |
-| Claude Code | With `implementation_worker` `auto` (default), the main session picks per assignment: `hei5enbug-agent-setup:worker` for easy work; `role_runner.py implementation --fallback` for normal or hard work; `hei5enbug-agent-setup:sonnet-worker` instead of Sol when Codex weekly usage is above 70 percent or Sol is unavailable. A fixed setting forces `sonnet`, `sol`, `codex` (`role_runner.py worker`), or `haiku` (fallback `role_runner.py worker`) | `claude-haiku-5-5`, `high` (easy); `gpt-6.1-sol`, `high` (normal or hard); `claude-sonnet-5-5`, `high`; `gpt-5.6-luna`, `xhigh` (`codex`) |
+| Codex | Plugin `worker` role, verified from its rollout record | `codex_worker_model` and `codex_worker_effort` (default `gpt-5.6-luna`, `xhigh`) |
+| Claude Code | With `implementation_worker` `auto` (default), the main session picks per assignment: `hei5enbug-agent-setup:worker` for easy work; `role_runner.py implementation --fallback` for normal or hard work; `hei5enbug-agent-setup:sonnet-worker` instead of Sol when Codex weekly usage is above 70 percent or Sol is unavailable. A fixed setting forces `sonnet`, `sol`, `codex` (`role_runner.py worker`), or `haiku` (fallback `role_runner.py worker`) | `worker_model` and `worker_effort` (default `claude-haiku-5-5`, `high`) (easy); `gpt-6.1-sol`, `high` (normal or hard); `claude-sonnet-5-5`, `high`; `gpt-5.6-luna`, `xhigh` (`codex`) |
 | Codex, designer | Plugin `designer` role with the pinned model, verified from its rollout record; fallback `role_runner.py agent --name designer --fallback` | `gpt-6-astra`, `xhigh`; fallback `claude-opus-5-5`, `xhigh` |
 | Claude Code, designer | `hei5enbug-agent-setup:designer`, verified from its subagent record or the mod's role pinning; fallback `role_runner.py design` | `claude-opus-5-5`, `xhigh`; fallback `gpt-6-astra`, `xhigh` |
 | Codex, local scout | Plugin `scout` role, verified from its rollout record | `gpt-5.6-luna`, `xhigh` |

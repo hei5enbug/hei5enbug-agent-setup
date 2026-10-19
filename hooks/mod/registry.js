@@ -2,7 +2,9 @@ const REQUIRED_SECTIONS = ["pins", "claude_agents", "effort_rules"];
 const PLUGIN_PREFIX = "hei5enbug-agent-setup:";
 const PLUGINS_FILE = "plugins/installed_plugins.json";
 const ROLES_FILE = ".claude-plugin/model-roles.json";
+const MANIFEST_FILE = ".claude-plugin/plugin.json";
 const loaded = new Map();
+const manifests = new Map();
 let pinTable;
 
 function parseRegistry(text) {
@@ -29,6 +31,35 @@ export async function modelRegistry($) {
 
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+async function readManifest($, path) {
+  return JSON.parse(await $.fs.read(path));
+}
+
+async function pluginManifest($) {
+  const path = `${$.plugin.root}/${MANIFEST_FILE}`;
+  if (!manifests.has(path)) {
+    const pending = readManifest($, path);
+    manifests.set(path, pending);
+    pending.catch(() => manifests.delete(path));
+  }
+  return manifests.get(path);
+}
+
+export async function configuredWorkerPin($, options) {
+  const model = options?.worker_model;
+  const effort = options?.worker_effort;
+  if (typeof model !== "string" || typeof effort !== "string") return undefined;
+  try {
+    const { userConfig } = await pluginManifest($);
+    if (!userConfig.worker_model.options.includes(model) || !userConfig.worker_effort.options.includes(effort)) return undefined;
+    const allowed = (await modelRegistry($)).effort_rules?.[model];
+    if (Array.isArray(allowed) && !allowed.includes(effort)) return undefined;
+    return { model, effort };
+  } catch {
+    return undefined;
+  }
 }
 
 export async function claudeConfigDir($) {
@@ -160,4 +191,5 @@ export async function claudeRolePins($) {
 
 export function resetClaudeRolePins() {
   pinTable = undefined;
+  manifests.clear();
 }

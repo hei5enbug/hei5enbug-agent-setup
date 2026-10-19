@@ -40,9 +40,37 @@
     "implementation_worker": {
       "type": "string",
       "title": "Implementation worker",
-      "description": "Route implementation work: auto (the main session picks per task: haiku for easy work, sol for normal or hard work, sonnet when Codex usage is high), codex (Codex on gpt-5.6-luna at xhigh), haiku (the plugin worker on claude-haiku-5-5 at high), sol (gpt-6.1-sol at high through the role runner), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
+      "description": "Route implementation work: auto (the main session picks per task: haiku for easy work, sol for normal or hard work, sonnet when Codex usage is high), codex (Codex on gpt-5.6-luna at xhigh), haiku (the plugin worker on its Worker model and Worker effort, claude-haiku-5-5 at high by default), sol (gpt-6.1-sol at high through the role runner), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
       "options": ["auto", "codex", "haiku", "sol", "sonnet"],
       "default": "auto"
+    },
+    "worker_model": {
+      "type": "string",
+      "title": "Worker model",
+      "description": "Model of the plugin worker agent in Claude Code. Takes effect after /reload-plugins or in a new session.",
+      "options": ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
+      "default": "claude-haiku-5-5"
+    },
+    "worker_effort": {
+      "type": "string",
+      "title": "Worker effort",
+      "description": "Reasoning effort of the plugin worker agent in Claude Code. Takes effect after /reload-plugins or in a new session.",
+      "options": ["low", "medium", "high", "xhigh", "max"],
+      "default": "high"
+    },
+    "codex_worker_model": {
+      "type": "string",
+      "title": "Codex worker model",
+      "description": "Model of the plugin worker role in Codex. Codex reads it at session start, so it takes effect from the next Codex session. HEI5ENBUG_CODEX_WORKER_MODEL overrides it.",
+      "options": ["gpt-5.6-luna", "gpt-6.1-sol"],
+      "default": "gpt-5.6-luna"
+    },
+    "codex_worker_effort": {
+      "type": "string",
+      "title": "Codex worker effort",
+      "description": "Reasoning effort of the plugin worker role in Codex, from the next Codex session. HEI5ENBUG_CODEX_WORKER_EFFORT overrides it.",
+      "options": ["high", "xhigh"],
+      "default": "xhigh"
     },
     "review_model": {
       "type": "string",

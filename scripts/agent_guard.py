@@ -9,7 +9,8 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from plugin_toggles import detect_host, enabled  # noqa: E402
+from approval_state import recorded_worker_pair  # noqa: E402
+from plugin_toggles import detect_host, enabled, valid_worker_pair, worker_setting  # noqa: E402
 
 
 CODEX_BUILT_INS = {"default", "explorer"}
@@ -153,8 +154,18 @@ def declared_codex_roles(home: Path) -> tuple[dict[str, list[dict]], dict[str, s
     return pins, problems, unusable
 
 
-def pinned_pairs(name: str, home: Path) -> tuple[list[dict] | None, str | None]:
-    """Return the only pair a Codex role may be spawned with: its primary pair, since a fallback is cross-family."""
+def pinned_pairs(name: str, home: Path, session=None) -> tuple[list[dict] | None, str | None]:
+    """Return the only pair a Codex role may be spawned with: its primary pair, since a fallback is cross-family.
+
+    The worker pair is the one recorded at this session's start when it is still valid, else the live setting.
+    """
+    if name == "worker":
+        recorded = recorded_worker_pair("codex", session)
+        if recorded is not None and valid_worker_pair("codex", *recorded):
+            model, effort = recorded
+        else:
+            model, effort, _ = worker_setting("codex")
+        return [{**REGISTRY["codex_agents"][name], "model": model, "effort": effort}], None
     if name in REGISTRY["codex_agents"]:
         return [REGISTRY["codex_agents"][name]], None
     pins, problems, _ = declared_codex_roles(home)
@@ -177,8 +188,8 @@ def role_file_denial(name: str, requested: tuple, directories: list[Path]) -> st
     return None
 
 
-def pin_denial(name: str, tool_input: dict, home: Path, directories: list[Path]) -> str | None:
-    pairs, problem = pinned_pairs(name, home)
+def pin_denial(name: str, tool_input: dict, home: Path, directories: list[Path], session=None) -> str | None:
+    pairs, problem = pinned_pairs(name, home, session)
     if problem is not None:
         return (
             f"The model roles declared for `{name}` are invalid ({problem}), so hei5enbug-agent-setup did not start it. "
@@ -225,7 +236,7 @@ def denial(event: dict) -> str | None:
     directories = [home / "agents", cwd / ".codex" / "agents"]
     allowed = defined_codex_roles(directories) - CODEX_BUILT_INS
     if name in allowed:
-        return pin_denial(name, tool_input, home, directories)
+        return pin_denial(name, tool_input, home, directories, event.get("session_id"))
     return (
         f"The built-in `{name}` agent is disabled while hei5enbug-agent-setup is installed. "
         "Use `scout` or `worker`, another defined agent, or the main session."

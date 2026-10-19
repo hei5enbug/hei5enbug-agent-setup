@@ -113,19 +113,21 @@ This section adds only the Claude Code worker integration.
 
 - Delegated implementation follows the route in the session line "Implementation worker route". Use
   `hei5enbug-agent-setup:sonnet-worker` for the Sonnet worker when the line says `sonnet`, the Codex worker (see
-  "Codex worker" below) when it says `codex`, `hei5enbug-agent-setup:worker` for the Haiku worker when it says
-  `haiku`, and the Sol worker (see "Sol worker" below) when it says `sol`. When it says `auto`, choose per
-  assignment: Haiku for easy work (one cohesive change with a stated edit and checks that cover it fully), Sol for
-  normal or hard work (a behavioral change, several files, parsing, security, or concurrency), and Sonnet instead
-  of Sol when the Codex weekly usage is above 70 percent or Sol is unavailable. Read that usage as
+  "Codex worker" below) when it says `codex`, `hei5enbug-agent-setup:worker` when it says `haiku`, and the Sol
+  worker (see "Sol worker" below) when it says `sol`. When it says `auto`, choose per assignment: the `worker`
+  agent for easy work (one cohesive change with a stated edit and checks that cover it fully), Sol for normal or
+  hard work (a behavioral change, several files, parsing, security, or concurrency), and Sonnet instead of Sol when
+  the Codex weekly usage is above 70 percent or Sol is unavailable. Read that usage as
   [independent model validation](independent-model-validation.md) does. When a Claude route stops on a usage
   limit, use Sol. A user request for one route applies to that request only.
   `hei5enbug-agent-setup:designer` still takes UI code,
   visual design, and diagram work, except the kinds the Claude Code session file assigns to the main session. Never
   use any other agent.
+- The `worker` agent runs on the model and effort in the session line "Worker agent model" (Haiku at `high` by
+  default).
 - Never pass a per-invocation model to a plugin agent on an invocation or resume, because that overrides its
   definition, which pins the model and effort that shared model routing lists.
-- The bullets below apply whenever a plugin agent runs: a runner fallback, the Haiku or Sonnet worker, and the
+- The bullets below apply whenever a plugin agent runs: a runner fallback, the `worker` or Sonnet worker, and the
   designer.
 - When the session context has the line `hei5enbug-agent-setup mod: role pinning active`, the registered plugin mod's
   `prompt.context` hook confirms role pinning is active. The mod pins each role's model and effort on every subagent

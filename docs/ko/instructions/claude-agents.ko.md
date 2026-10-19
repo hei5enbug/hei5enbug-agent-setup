@@ -108,16 +108,17 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
 
 - 위임한 구현은 세션 줄 "Implementation worker route"에 지정된 경로를 따른다. 줄이 `sonnet`이면 Sonnet worker인
   `hei5enbug-agent-setup:sonnet-worker`, `codex`이면 Codex worker(아래 "Codex worker" 참조), `haiku`이면
-  Haiku worker인 `hei5enbug-agent-setup:worker`, `sol`이면 Sol worker(아래 "Sol worker" 참조)를 쓴다.
-  `auto`이면 할당마다 고른다. 쉬운 작업(수정 내용이 명시되고 검사로 전체를 확인할 수 있는 하나의 일관된 변경)은 Haiku,
+  `hei5enbug-agent-setup:worker`, `sol`이면 Sol worker(아래 "Sol worker" 참조)를 쓴다.
+  `auto`이면 할당마다 고른다. 쉬운 작업(수정 내용이 명시되고 검사로 전체를 확인할 수 있는 하나의 일관된 변경)은 `worker` 에이전트,
   보통이거나 어려운 작업(동작 변경, 여러 파일, 파싱, 보안 또는 동시성)은 Sol을 쓴다. Codex 주간 사용률이 70퍼센트를
   넘거나 Sol을 사용할 수 없으면 Sol 대신 Sonnet을 쓴다. 사용률은 [독립 모델 검증](independent-model-validation.ko.md)과
   같은 방식으로 읽는다. Claude 경로가 사용량 한도로 중단되면 Sol을 쓴다. 사용자가 한 경로를 요청하면 그 요청에만 적용한다.
   UI 코드, 시각 디자인, 다이어그램 작업은 여전히 `hei5enbug-agent-setup:designer`가 맡는다. 다만 Claude Code 세션 파일이
   메인 세션에 맡긴 종류는 예외다. 그 밖의 에이전트는 쓰지 않는다.
+- `worker` 에이전트는 세션 줄 "Worker agent model"에 적힌 모델과 사고 강도로 실행한다(기본값은 Haiku, `high`).
 - 호출 단위 모델은 정의보다 우선하므로 플러그인 에이전트를 호출하거나 재개할 때 넘기지 않는다. 정의에는 공유 모델
   라우팅이 정리한 모델과 사고 강도가 고정되어 있다.
-- 아래 항목은 플러그인 에이전트가 실행될 때마다 적용한다. 실행기의 대체 경로, Haiku·Sonnet worker, designer가 해당한다.
+- 아래 항목은 플러그인 에이전트가 실행될 때마다 적용한다. 실행기의 대체 경로, `worker`와 Sonnet worker, designer가 해당한다.
 - 세션 컨텍스트에 `hei5enbug-agent-setup mod: role pinning active` 줄이 있으면 등록된 플러그인 mod의
   `prompt.context` 훅이 역할 고정 활성 상태를 확인한 것이다. mod는 서브에이전트 요청마다 레지스트리와 설치된 플러그인이 선언한
   `model-roles.json`에서 각 역할의 모델과 사고 강도를 고정한다. 다른 모델이 응답했거나 모델 증거가 없는 실행은 실패로 처리되어

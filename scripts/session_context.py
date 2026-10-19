@@ -185,13 +185,16 @@ def render_context(root: Path, host: str, kind: str = "main") -> str:
         + "\n"
     )
     if kind == "main":
+        import plugin_toggles
+
+        model, effort, notice = plugin_toggles.worker_setting(host)
+        suffix = f" ({notice})" if notice else ""
+        worker = f"`{model}` at `{effort}`.{suffix}"
         if host == "codex":
             import language_guard
 
-            context += f"\nResponse language: {language_guard.codex_language()}.\n"
+            context += f"\nCodex worker model: {worker}\nResponse language: {language_guard.codex_language()}.\n"
         else:
-            import plugin_toggles
-
             option = plugin_toggles.option_value("implementation_worker")
             route = {
                 "auto": "Auto (`auto`)",
@@ -205,8 +208,11 @@ def render_context(root: Path, host: str, kind: str = "main") -> str:
                 review = DEFAULT_REVIEW_MODEL
             context += (
                 f"\nImplementation worker route: {route}.\n"
+                f"Worker agent model: {worker}\n"
                 f"Review model: `{review}`.\n"
             )
+        if suffix and len(context.encode("utf-8")) > limit:
+            context = context.replace(suffix, "", 1)
     if len(context.encode("utf-8")) > limit:
         raise ValueError("Bundled instructions exceed the context budget; move details to conditional references")
     return context
@@ -302,6 +308,7 @@ RETIRED_CODEX_AGENTS = {
     "worker": {
         "ce4488d0323832dc1563481875e7c26d693092c94865c37a4b4b89afd8274f83",
         "249b194b8c9e0cea3ff687298e58cee99ca6c330f79e04162029a60e2ecfeff0",
+        "89d72db180d2d0a16707804125af045ac5bb81baa2d751bad078747258b84d49",
     },
     "designer": {"c8c525a3a7fdfb5adbff1cf7474d24dfba35527eb070f4a5206c164b248d43ed"},
     "researcher": {"940a7daace75165d8eceeece93a3c4960c42d187754738a744244059d5a0e5c1"},
@@ -534,6 +541,15 @@ def apply_codex_auto_settings(root: Path) -> None:
         pass
 
 
+def record_codex_worker(session) -> None:
+    """Fix this Codex session's worker pair to the one announced in its context."""
+    import approval_state
+    import plugin_toggles
+
+    model, effort, _ = plugin_toggles.worker_setting("codex")
+    approval_state.record_worker_pair("codex", session, model, effort)
+
+
 def main() -> int:
     try:
         event = json.load(sys.stdin)
@@ -565,6 +581,11 @@ def main() -> int:
                     apply_codex_auto_settings(root)
                 except Exception:
                     pass
+                if kind == "main":
+                    try:
+                        record_codex_worker(event.get("session_id"))
+                    except Exception:
+                        pass
     except (OSError, ValueError, KeyError, TypeError) as error:
         print(f"hei5enbug-agent-setup instructions were not loaded: {error}", file=sys.stderr)
         return 1

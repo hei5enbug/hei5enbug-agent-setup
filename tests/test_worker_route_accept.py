@@ -14,7 +14,8 @@ VARIABLE = "CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER"
 DESCRIPTION = (
     "Route implementation work: auto (the main session picks per task: haiku for easy work, sol for normal or hard "
     "work, sonnet when Codex usage is high), codex (Codex on gpt-5.6-luna at xhigh), haiku (the plugin worker on "
-    "claude-haiku-5-5 at high), sol (gpt-6.1-sol at high through the role runner), or sonnet (the plugin "
+    "its Worker model and Worker effort, claude-haiku-5-5 at high by default), sol (gpt-6.1-sol at high through the "
+    "role runner), or sonnet (the plugin "
     "sonnet-worker on claude-sonnet-5-5 at high)."
 )
 

@@ -23,6 +23,8 @@ class AgentGuardTest(unittest.TestCase):
         self.codex_home = self.base / "codex"
         self.project = self.base / "project"
         self.project.mkdir()
+        self.state = self.base / "state"
+        self.session_id = None
 
     def decide(self, host: str, tool_input, event_name: str = "PreToolUse", **extra_env: str) -> str | None:
         output = self.output(host, tool_input, event_name, **extra_env)
@@ -30,10 +32,13 @@ class AgentGuardTest(unittest.TestCase):
 
     def output(self, host: str, tool_input, event_name: str = "PreToolUse", **extra_env: str) -> dict | None:
         env = {"PATH": os.environ.get("PATH", ""), "CLAUDE_CONFIG_DIR": str(self.claude_home),
-               "CODEX_HOME": str(self.codex_home), "CLAUDE_PROJECT_DIR": str(self.project), **extra_env}
+               "CODEX_HOME": str(self.codex_home), "CLAUDE_PROJECT_DIR": str(self.project),
+               "XDG_STATE_HOME": str(self.state), **extra_env}
         if host == "codex":
             env["PLUGIN_ROOT"] = str(REPO_ROOT)
         event = {"hook_event_name": event_name, "tool_name": "Agent", "cwd": str(self.project), "tool_input": tool_input}
+        if self.session_id:
+            event["session_id"] = self.session_id
         result = subprocess.run([sys.executable, str(GUARD)], input=json.dumps(event), env=env,
                                 capture_output=True, text=True, check=True)
         if not result.stdout.strip():
@@ -233,6 +238,130 @@ class AgentGuardTest(unittest.TestCase):
         # Then
         self.assertIsNone(registry_pair)
         self.assertEqual("deny", declared_pair)
+
+    def save_worker_options(self, options: dict) -> None:
+        self.write(
+            self.claude_home / "settings.json",
+            json.dumps({"pluginConfigs": {"hei5enbug-agent-setup@hei5enbug": {"options": options}}}),
+        )
+
+    def test_Codex_worker는_사용자가_저장한_모델과_effort만_허용하고_이전_쌍은_거부한다(self):
+        """Claude 설정에 저장된 gpt-6.1-sol과 high로 worker를 띄우면 허용하고, 기본 gpt-5.6-luna와 xhigh는 거부한다."""
+        # Given
+        self.write(self.codex_home / "agents" / "worker.toml", (REPO_ROOT / "standalone-agents/codex-worker.toml").read_text())
+        self.save_worker_options({"codex_worker_model": "gpt-6.1-sol", "codex_worker_effort": "high"})
+
+        # When
+        configured = self.decide("codex", {"agent_type": "worker", "model": "gpt-6.1-sol", "reasoning_effort": "high"})
+        previous = self.decide("codex", {"agent_type": "worker", "model": "gpt-5.6-luna", "reasoning_effort": "xhigh"})
+
+        # Then
+        self.assertIsNone(configured)
+        self.assertEqual("deny", previous)
+
+    def start_codex_session(self, session_id: str, **extra_env: str) -> None:
+        env = {"PATH": os.environ.get("PATH", ""), "CLAUDE_CONFIG_DIR": str(self.claude_home),
+               "CODEX_HOME": str(self.codex_home), "XDG_STATE_HOME": str(self.state),
+               "PLUGIN_ROOT": str(REPO_ROOT), **extra_env}
+        event = {"hook_event_name": "SessionStart", "source": "startup", "cwd": str(self.project), "session_id": session_id}
+        subprocess.run([sys.executable, str(REPO_ROOT / "scripts/session_context.py")], input=json.dumps(event),
+                       env=env, capture_output=True, text=True, check=True)
+        self.session_id = session_id
+
+    def test_Codex_worker는_세션_시작_뒤_저장값이_바뀌어도_시작_때_알린_쌍만_허용한다(self):
+        """luna와 xhigh로 시작한 세션에서 저장값을 gpt-6.1-sol과 high로 바꿔도 그 세션은 luna와 xhigh를 허용하고 sol과 high를 거부한다."""
+        # Given
+        self.write(self.codex_home / "agents" / "worker.toml", (REPO_ROOT / "standalone-agents/codex-worker.toml").read_text())
+        self.start_codex_session("session-one")
+        self.save_worker_options({"codex_worker_model": "gpt-6.1-sol", "codex_worker_effort": "high"})
+
+        # When
+        announced = self.decide("codex", {"agent_type": "worker", "model": "gpt-5.6-luna", "reasoning_effort": "xhigh"})
+        changed = self.decide("codex", {"agent_type": "worker", "model": "gpt-6.1-sol", "reasoning_effort": "high"})
+
+        # Then
+        self.assertIsNone(announced)
+        self.assertEqual("deny", changed)
+
+    def test_Codex_worker는_세션_기록이_없으면_현재_저장값을_따른다(self):
+        """이 세션 id의 기록이 없으면 저장된 gpt-6.1-sol과 high를 허용하고 기본 쌍은 거부한다."""
+        # Given
+        self.write(self.codex_home / "agents" / "worker.toml", (REPO_ROOT / "standalone-agents/codex-worker.toml").read_text())
+        self.start_codex_session("session-one")
+        self.save_worker_options({"codex_worker_model": "gpt-6.1-sol", "codex_worker_effort": "high"})
+        self.session_id = "session-two"
+
+        # When
+        live = self.decide("codex", {"agent_type": "worker", "model": "gpt-6.1-sol", "reasoning_effort": "high"})
+        previous = self.decide("codex", {"agent_type": "worker", "model": "gpt-5.6-luna", "reasoning_effort": "xhigh"})
+
+        # Then
+        self.assertIsNone(live)
+        self.assertEqual("deny", previous)
+
+    def test_Codex_worker는_세션_기록이_깨졌거나_허용되지_않는_쌍이면_현재_저장값을_따른다(self):
+        """JSON이 깨진 기록과 목록에 없는 모델의 기록은 무시하고 저장된 gpt-6.1-sol과 high를 허용한다."""
+        # Given
+        self.write(self.codex_home / "agents" / "worker.toml", (REPO_ROOT / "standalone-agents/codex-worker.toml").read_text())
+        self.save_worker_options({"codex_worker_model": "gpt-6.1-sol", "codex_worker_effort": "high"})
+        records = self.state / "hei5enbug-agent-setup" / "worker-settings"
+        self.write(records / "codex-corrupt.json", "{not json")
+        self.write(records / "codex-unlisted.json", json.dumps({"model": "gpt-4.1-mini", "effort": "high"}))
+        request = {"agent_type": "worker", "model": "gpt-6.1-sol", "reasoning_effort": "high"}
+
+        # When
+        decisions = []
+        for session_id in ("corrupt", "unlisted"):
+            self.session_id = session_id
+            decisions.append(self.decide("codex", request))
+
+        # Then
+        self.assertEqual([None, None], decisions)
+
+    def test_Codex_worker는_환경_변수가_저장된_값보다_우선한다(self):
+        """HEI5ENBUG_CODEX_WORKER_EFFORT가 저장된 effort를 덮으면 그 쌍을 허용하고 저장된 쌍은 거부한다."""
+        # Given
+        self.write(self.codex_home / "agents" / "worker.toml", 'name = "worker"\n')
+        self.save_worker_options({"codex_worker_model": "gpt-6.1-sol", "codex_worker_effort": "high"})
+        env = {"HEI5ENBUG_CODEX_WORKER_EFFORT": "xhigh"}
+
+        # When
+        override = self.decide("codex", {"agent_type": "worker", "model": "gpt-6.1-sol", "reasoning_effort": "xhigh"}, **env)
+        saved = self.decide("codex", {"agent_type": "worker", "model": "gpt-6.1-sol", "reasoning_effort": "high"}, **env)
+
+        # Then
+        self.assertIsNone(override)
+        self.assertEqual("deny", saved)
+
+    def test_Codex_worker는_저장값이_잘못되면_기본_쌍만_허용한다(self):
+        """저장된 모델이 목록에 없으면 기본 gpt-5.6-luna와 xhigh로 되돌려 허용하고 저장된 값은 거부한다."""
+        # Given
+        self.write(self.codex_home / "agents" / "worker.toml", 'name = "worker"\n')
+        self.save_worker_options({"codex_worker_model": "gpt-4.1-mini", "codex_worker_effort": "high"})
+
+        # When
+        default = self.decide("codex", {"agent_type": "worker", "model": "gpt-5.6-luna", "reasoning_effort": "xhigh"})
+        saved = self.decide("codex", {"agent_type": "worker", "model": "gpt-4.1-mini", "reasoning_effort": "high"})
+
+        # Then
+        self.assertIsNone(default)
+        self.assertEqual("deny", saved)
+
+    def test_Codex_worker_역할_파일이_다른_쌍을_고정하면_저장된_쌍도_기존_메시지로_거부한다(self):
+        """사용자가 고친 worker.toml이 다른 쌍을 고정하면 저장된 쌍으로 spawn해도 역할 파일 메시지로 거부한다."""
+        # Given
+        self.write(
+            self.codex_home / "agents" / "worker.toml",
+            'name = "worker"\nmodel = "gpt-5.6-luna"\nmodel_reasoning_effort = "xhigh"\n',
+        )
+        self.save_worker_options({"codex_worker_model": "gpt-6.1-sol", "codex_worker_effort": "high"})
+
+        # When
+        output = self.output("codex", {"agent_type": "worker", "model": "gpt-6.1-sol", "reasoning_effort": "high"})
+
+        # Then
+        self.assertEqual("deny", output["permissionDecision"])
+        self.assertIn("pins `worker` to 'gpt-5.6-luna' with 'xhigh'", output["permissionDecisionReason"])
 
     def test_Codex_읽을_수_없거나_JSON이_깨진_역할_파일이_있으면_선언되지_않은_역할도_거부하고_그_파일을_이유에_적는다(self):
         """파일이 깨지면 어떤 역할이 고정되어야 하는지 알 수 없으므로, 정의만 있는 역할도 거부하고 깨진 파일 경로를 이유에 적는다."""

@@ -101,11 +101,14 @@ def model_family(model: str) -> str:
     return "claude" if model.startswith("claude-") else "gpt"
 
 
-def capability_cell(entry: dict) -> str:
+def capability_cell(entry: dict, configurable: bool = False) -> str:
     suffix = " (runner)" if entry["via"] == "runner" else ""
     if entry["via"] == "agent":
         suffix = f" (`{entry['agent'].split(':')[-1]}`)"
-    return f"`{entry['model']}` / `{entry['effort']}`{suffix}"
+    pair = f"`{entry['model']}` / `{entry['effort']}`"
+    if configurable:
+        return f"Codex worker model setting, default {pair}{suffix}"
+    return f"{pair}{suffix}"
 
 
 def expected_capability_rows() -> list[list[str]]:
@@ -115,7 +118,7 @@ def expected_capability_rows() -> list[list[str]]:
             name,
             capability_cell(hosts["claude"]["primary"]),
             capability_cell(hosts["claude"]["fallback"]),
-            capability_cell(hosts["codex"]["primary"]),
+            capability_cell(hosts["codex"]["primary"], configurable=name == "implementation"),
             capability_cell(hosts["codex"]["fallback"]),
         ]
         for name, hosts in REGISTRY["capabilities"].items()
@@ -221,7 +224,10 @@ class ModelPinTest(unittest.TestCase):
         rules = " ".join((REPO_ROOT / "instructions/codex-agents.md").read_text(encoding="utf-8").split())
         expected = {
             "codex-scout.toml": ("scout", "xhigh", f"Pass `{PINS['gpt-luna']}` and `xhigh` explicitly on every spawn."),
-            "codex-worker.toml": ("worker", "xhigh", f"pass the pinned `{PINS['gpt-luna']}` and `xhigh` explicitly on every spawn."),
+            "codex-worker.toml": (
+                "worker", None,
+                'pass the model and effort from the session line "Codex worker model" explicitly on every spawn.',
+            ),
             "codex-designer.toml": (
                 "designer", "xhigh",
                 f"the plugin `designer` role with `{PINS['gpt-astra']}` and `xhigh` passed explicitly",
@@ -240,7 +246,7 @@ class ModelPinTest(unittest.TestCase):
                 # Then
                 self.assertEqual(name, definition["name"])
                 self.assertNotIn("model", definition)
-                self.assertEqual(effort, definition["model_reasoning_effort"])
+                self.assertEqual(effort, definition.get("model_reasoning_effort"))
                 self.assertIn(spawn_rule, rules)
 
     def test_레지스트리의_모델_ID는_모두_pins_값이다(self):
@@ -385,6 +391,33 @@ class ModelPinTest(unittest.TestCase):
 
         # Then
         self.assertEqual(["runner"] * len(fallbacks), vias)
+
+    def test_worker_옵션_목록은_레지스트리_고정값과_effort만_담고_기본_쌍은_규칙을_지킨다(self):
+        """매니페스트의 worker 옵션 네 개는 레지스트리 고정 모델과 effort만 나열하고, 각 호스트의 기본 쌍은 effort_rules가 허용한다."""
+        # Given
+        options = json.loads((REPO_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["userConfig"]
+        efforts = set(REGISTRY["efforts"])
+        models = set(PINS.values())
+        pairs = {"claude": ("worker_model", "worker_effort"), "codex": ("codex_worker_model", "codex_worker_effort")}
+
+        # When
+        outside = {
+            key: [value for value in options[key]["options"] if value not in (models if key.endswith("model") else efforts)]
+            for key in (name for pair in pairs.values() for name in pair)
+        }
+        defaults = {host: (options[model]["default"], options[effort]["default"]) for host, (model, effort) in pairs.items()}
+
+        # Then
+        self.assertEqual({key: [] for key in outside}, outside)
+        for host, (model, effort) in defaults.items():
+            with self.subTest(host=host):
+                self.assertIn(model, options[pairs[host][0]]["options"])
+                self.assertIn(effort, options[pairs[host][1]]["options"])
+                self.assertIn(effort, REGISTRY["effort_rules"].get(model, efforts))
+        for model in options["codex_worker_model"]["options"]:
+            for effort in options["codex_worker_effort"]["options"]:
+                with self.subTest(model=model, effort=effort):
+                    self.assertIn(effort, REGISTRY["effort_rules"].get(model, efforts))
 
     def test_토론_상대는_대체_항목이_없다(self):
         """tiki-taka 상대 항목은 fallback이 없어서 상대가 실패하면 토론이 멈춘다."""

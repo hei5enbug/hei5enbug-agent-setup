@@ -12,6 +12,6 @@ export function enabled(value) {
 export function register(on, options) {
   const settings = options ?? {};
   if (enabled(settings.agent_guard)) registerAgentGuard(on);
-  if (enabled(settings.role_pinning)) registerRolePinning(on);
+  if (enabled(settings.role_pinning)) registerRolePinning(on, settings);
   registerGpt(on);
 }
