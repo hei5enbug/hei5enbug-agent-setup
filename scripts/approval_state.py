@@ -42,7 +42,7 @@ PROMPTS = {
         "grant_writes": "승인하면 이 세션의 쓰기도 더 묻지 않습니다. ",
         "grant_sensitive": "승인하면 이 세션의 민감 조회도 더 묻지 않습니다. ",
         "grant_both": "승인하면 이 세션의 쓰기(와 민감 조회)도 더 묻지 않습니다. ",
-        "stop": "같은 승인 요청이 3번 완료되지 않았습니다(거절 포함). 다시 시도하지 말고 사용자에게 알리세요.",
+        "stop": "사용자의 마지막 메시지 이후 승인 요청이 3번 완료되지 않았습니다(거절 포함). 다시 시도하지 말고 사용자에게 알리세요.",
     },
     "English": {
         "write": "Write: {desc}. Approve once; later writes in this session will not ask.",
@@ -55,7 +55,7 @@ PROMPTS = {
         "grant_writes": "Approving also covers later writes in this session. ",
         "grant_sensitive": "Approving also covers later sensitive reads in this session. ",
         "grant_both": "Approving also covers later writes (and sensitive reads) in this session. ",
-        "stop": "This approval was requested three times without the call completing (declines included); "
+        "stop": "This approval was requested three times since the user's last message without the call completing (declines included); "
                 "stop retrying and tell the user.",
     },
 }
@@ -338,6 +338,15 @@ def _count_request(data, keys):
     for key in keys:
         counts[key] = counts.get(key, 0) + 1
     return True
+
+
+def reset_request_counts(host, session):
+    if parent_session() or session_key(session) is None:
+        return
+
+    def change(data):
+        data["request_counts"].clear()
+    _mutate(host, session, change)
 
 
 def request_ask(host, session, once_keys, session_keys, tool_use_id=None, grant_keys=None):

@@ -70,6 +70,10 @@ if name == "codex" and sys.argv[1:3] == ["mcp", "list"]:
         sys.exit(config["mcp_exit"])
     print(config.get("mcp_list", json.dumps([{{"name": "aside", "enabled": True}}, {{"name": "datadog", "enabled": True}}])))
     sys.exit(0)
+for needle, code in config.get("exit_when", {{}}).items():
+    if needle in stdin:
+        sys.stderr.write("fake failure")
+        sys.exit(code)
 if config.get("sleep"):
     time.sleep(config["sleep"])
 if config.get("exit"):
@@ -79,7 +83,7 @@ if name == "codex":
     argv = sys.argv[1:]
     sandbox = argv[argv.index("-s") + 1] if "-s" in argv else next(
         (item.split("=", 1)[1].strip('"') for item in argv if item.startswith("sandbox_mode=")), None)
-    if "-o" in argv:
+    if "-o" in argv and not any(needle in stdin for needle in config.get("no_answer_when", [])):
         Path(argv[argv.index("-o") + 1]).write_text(config.get("message", "codex answer"))
     if not config.get("no_thread"):
         print(json.dumps({{"type": "thread.started", "thread_id": config.get("thread", "{thread}")}}))
@@ -89,7 +93,7 @@ if name == "codex":
         home = Path(os.environ["CODEX_HOME"]) / "sessions" / "2026" / "10" / "12"
         home.mkdir(parents=True, exist_ok=True)
         lines = [json.dumps({{"type": "session_meta", "payload": {{"id": "x"}}}})]
-        for turn in config.get("turns", [{{"model": "gpt-5.6-luna", "effort": "xhigh"}}]):
+        for turn in config.get("turns", [{{"model": "gpt-5.6-luna", "effort": "high"}}]):
             turn = dict(turn)
             turn.setdefault("sandbox_policy", {{"type": sandbox}})
             lines.append(json.dumps({{"type": "turn_context", "payload": turn}}))
@@ -105,7 +109,7 @@ else:
         home = Path(os.environ["CLAUDE_CONFIG_DIR"]) / "projects" / "-some-project"
         home.mkdir(parents=True, exist_ok=True)
         lines = []
-        for entry in config.get("entries", [{{"model": model, "effort": "xhigh"}}]):
+        for entry in config.get("entries", [{{"model": model, "effort": "high"}}]):
             record = {{"type": "assistant", "message": {{"model": entry.get("model")}}}}
             if "effort" in entry:
                 record["effort"] = entry["effort"]
@@ -180,17 +184,18 @@ class RoleRunnerTest(unittest.TestCase):
     def status(self, completed):
         return json.loads(completed.stdout.strip().splitlines()[-1])
 
-    def codex_argv(self, *, search=False, sandbox="read-only", model="gpt-5.6-luna", effort="xhigh", add_dirs=(), mcp_off=True, output=None):
+    def codex_argv(self, *, search=False, sandbox="read-only", model="gpt-5.6-luna", effort="high", add_dirs=(), mcp_off=True, output=None):
         """The assignment run of a Codex child: the scoped exec resume of the preflight thread."""
         return self.codex_resume_argv(
             search=search, sandbox=sandbox, model=model, effort=effort, roots=add_dirs, mcp_off=mcp_off, output=output,
         )
 
-    def codex_start_argv(self, *, search=False, sandbox="read-only", model="gpt-5.6-luna", effort="xhigh", add_dirs=(), mcp_off=True, output=None):
+    def codex_start_argv(self, *, search=False, sandbox="read-only", model="gpt-5.6-luna", effort="high", add_dirs=(), mcp_off=True, output=None):
         """The first exec of a Codex child, which the hook preflight sends before the assignment."""
         argv = ["--search"] if search else []
         argv += ["exec", "-m", model, "-c", f'model_reasoning_effort="{effort}"', "-s", sandbox, "-C", str(self.workspace)]
         argv += self.mcp_off_flags(mcp_off)
+        argv += self.skills_off_flags(sandbox)
         for directory in add_dirs:
             argv += ["--add-dir", directory]
         return argv + ["--json", "-o", str(output or self.result), "-"]
@@ -200,15 +205,20 @@ class RoleRunnerTest(unittest.TestCase):
         names = ("aside", "datadog") if names is True else (names or ())
         return [item for name in names for item in ("-c", f"mcp_servers.{name}.enabled=false")]
 
-    def codex_resume_argv(self, *, search=False, sandbox="read-only", model="gpt-5.6-luna", effort="xhigh", roots=(), mcp_off=True, output=None, thread=THREAD):
+    def skills_off_flags(self, sandbox):
+        """The override that drops the host skill catalog, which only a read-only Codex run sends."""
+        return ["-c", "skills.max_context_tokens=1"] if sandbox == "read-only" else []
+
+    def codex_resume_argv(self, *, search=False, sandbox="read-only", model="gpt-5.6-luna", effort="high", roots=(), mcp_off=True, output=None, thread=THREAD):
         argv = ["--search"] if search else []
         argv += ["exec", "resume", thread, "-m", model, "-c", f'model_reasoning_effort="{effort}"', "-c", f'sandbox_mode="{sandbox}"']
         argv += self.mcp_off_flags(mcp_off)
+        argv += self.skills_off_flags(sandbox)
         if roots:
             argv += ["-c", f"sandbox_workspace_write.writable_roots={json.dumps([str(Path(root).resolve()) for root in roots])}"]
         return argv + ["--json", "-o", str(output or self.result), "-"]
 
-    def claude_argv(self, *, model="claude-opus-5-5", effort="xhigh", writing=False, resume=None, add_dirs=()):
+    def claude_argv(self, *, model="claude-opus-5-5", effort="high", writing=False, resume=None, add_dirs=()):
         """A capability run on Claude: the read set and the read-only shell, plus edits in approved directories when it writes."""
         tools = ["Read", "Grep", "Glob", "Bash", *(["Edit", "Write"] if writing else [])]
         rules = [f"Edit(/{directory}/**)" for directory in add_dirs]
@@ -216,10 +226,9 @@ class RoleRunnerTest(unittest.TestCase):
         argv = ["-p"]
         if resume is not None:
             argv += ["--resume", resume]
-        argv += [
-            "--model", model, "--effort", effort, "--output-format", "json", "--tools", *tools,
-            "--strict-mcp-config", "--permission-mode", "dontAsk", "--allowedTools", *allowed,
-        ]
+        argv += ["--model", model, "--effort", effort, "--output-format", "json"]
+        argv += [] if writing else ["--disable-slash-commands"]
+        argv += ["--tools", *tools, "--strict-mcp-config", "--permission-mode", "dontAsk", "--allowedTools", *allowed]
         for directory in add_dirs:
             argv += ["--add-dir", directory]
         return argv
@@ -234,7 +243,9 @@ class RoleRunnerTest(unittest.TestCase):
             allowed += ["Bash"]
         if mcp:
             allowed += ["mcp__*"]
-        argv = ["-p", "--model", model, "--effort", effort, "--output-format", "json", "--tools", *tools]
+        argv = ["-p", "--model", model, "--effort", effort, "--output-format", "json"]
+        argv += [] if writing else ["--disable-slash-commands"]
+        argv += ["--tools", *tools]
         if not mcp:
             argv.append("--strict-mcp-config")
         argv += ["--permission-mode", "dontAsk", "--allowedTools", *allowed]
@@ -272,7 +283,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual("codex answer", self.result.read_text())
         status = self.status(completed)
         self.assertEqual(
-            {"role": "scout", "runner": "codex", "model": "gpt-5.6-luna", "effort": "xhigh", "verified": True, "exit": 0},
+            {"role": "scout", "runner": "codex", "model": "gpt-5.6-luna", "effort": "high", "verified": True, "exit": 0},
             {key: status[key] for key in ("role", "runner", "model", "effort", "verified", "exit")},
         )
         self.assertEqual(1, status["evidence"]["turns"])
@@ -308,7 +319,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_reviewer는_기본_모델로_gpt_6_astra를_쓴다(self):
         """reviewer에 --model이 없으면 gpt-6-astra로 codex exec를 실행한다."""
         # Given
-        config = {"turns": [{"model": "gpt-6-astra", "effort": "xhigh"}]}
+        config = {"turns": [{"model": "gpt-6-astra", "effort": "high"}]}
 
         # When
         completed = self.run_runner("reviewer", config=config)
@@ -321,7 +332,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_reviewer는_GPT_모델을_지정하면_scout와_같은_방식으로_실행된다(self):
         """reviewer에 GPT 모델 ID를 주면 그 모델로 읽기 전용 codex exec를 실행한다."""
         # Given
-        config = {"turns": [{"model": "gpt-6.1-sol", "effort": "xhigh"}]}
+        config = {"turns": [{"model": "gpt-6.1-sol", "effort": "high"}]}
 
         # When
         completed = self.run_runner("reviewer", "--model", "gpt-6.1-sol", config=config)
@@ -344,7 +355,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual("claude", logged["name"])
         self.assertEqual(
             [
-                "-p", "--model", "claude-opus-5-5", "--effort", "xhigh", "--output-format", "json",
+                "-p", "--model", "claude-opus-5-5", "--effort", "high", "--output-format", "json", "--disable-slash-commands",
                 "--tools", "Read", "Grep", "Glob", "--strict-mcp-config", "--permission-mode", "dontAsk",
                 "--allowedTools", "Read", "Grep", "Glob",
             ],
@@ -362,7 +373,7 @@ class RoleRunnerTest(unittest.TestCase):
             (["scout"], None),
             (["researcher"], None),
             (["worker", "--add-dir", str(self.base)], None),
-            (["reviewer"], {"turns": [{"model": "gpt-6-astra", "effort": "xhigh"}]}),
+            (["reviewer"], {"turns": [{"model": "gpt-6-astra", "effort": "high"}]}),
             (["reviewer", "--model", "claude-opus-5-5"], None),
         ]
 
@@ -381,7 +392,10 @@ class RoleRunnerTest(unittest.TestCase):
             self.assertNotIn("danger-full-access", text)
             self.assertNotIn("-s", argv)
             configs = [argv[index + 1] for index, item in enumerate(argv) if item in ("-c", "--config")]
-            allowed = ("model_reasoning_effort=", "sandbox_mode=", "mcp_servers.", "sandbox_workspace_write.writable_roots=")
+            allowed = (
+                "model_reasoning_effort=", "sandbox_mode=", "mcp_servers.", "sandbox_workspace_write.writable_roots=",
+                "skills.max_context_tokens=",
+            )
             self.assertTrue(all(item.startswith(allowed) for item in configs), configs)
             self.assertTrue(all("workspace-write" in item or "read-only" in item for item in configs if item.startswith("sandbox_mode=")))
 
@@ -503,7 +517,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_rollout의_모델이_다르면_종료_코드_4이고_결과를_폐기한다(self):
         """turn_context 모델이 기대와 다르면 종료 코드 4를 반환하고 결과 파일을 남기지 않는다."""
         # Given
-        config = {"turns": [{"model": "gpt-6-astra", "effort": "xhigh"}]}
+        config = {"turns": [{"model": "gpt-6-astra", "effort": "high"}]}
 
         # When
         completed = self.run_runner("scout", config=config)
@@ -515,9 +529,9 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual((False, 4), (status["verified"], status["exit"]))
 
     def test_rollout의_effort가_다르면_종료_코드_4이다(self):
-        """turn_context effort가 xhigh가 아니면 종료 코드 4를 반환한다."""
+        """turn_context effort가 high가 아니면 종료 코드 4를 반환한다."""
         # Given
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "high"}]}
+        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "xhigh"}]}
 
         # When
         completed = self.run_runner("scout", config=config)
@@ -529,7 +543,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_turn_context_하나라도_다르면_종료_코드_4이다(self):
         """여러 turn_context 중 하나만 달라도 종료 코드 4를 반환한다."""
         # Given
-        good = {"model": "gpt-5.6-luna", "effort": "xhigh"}
+        good = {"model": "gpt-5.6-luna", "effort": "high"}
         config = {"turns": [good, good, {"model": "gpt-5.6-luna"}]}
 
         # When
@@ -541,7 +555,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_모든_turn_context가_맞으면_여러_개여도_통과한다(self):
         """turn_context가 여러 개여도 모두 기대값이면 검증된다."""
         # Given
-        good = {"model": "gpt-5.6-luna", "effort": "xhigh"}
+        good = {"model": "gpt-5.6-luna", "effort": "high"}
         config = {"turns": [good, good, good]}
 
         # When
@@ -593,7 +607,7 @@ class RoleRunnerTest(unittest.TestCase):
         other = self.codex_home / "sessions" / "2026" / "10" / "12"
         other.mkdir(parents=True)
         (other / "rollout-2026-10-12T00-00-00-other-thread.jsonl").write_text(
-            json.dumps({"type": "turn_context", "payload": {"model": "gpt-5.6-luna", "effort": "xhigh"}}) + "\n"
+            json.dumps({"type": "turn_context", "payload": {"model": "gpt-5.6-luna", "effort": "high"}}) + "\n"
         )
         config = {"no_rollout": True}
 
@@ -606,7 +620,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_turn_context의_sandbox가_요청과_다르면_종료_코드_4이고_결과를_폐기한다(self):
         """scout은 read-only로 실행하므로 turn_context가 workspace-write이면 종료 코드 4이고 결과를 남기지 않는다."""
         # Given
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "xhigh", "sandbox_policy": {"type": "workspace-write"}}]}
+        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "high", "sandbox_policy": {"type": "workspace-write"}}]}
 
         # When
         completed = self.run_runner("scout", config=config)
@@ -618,8 +632,8 @@ class RoleRunnerTest(unittest.TestCase):
     def test_turn_context에_sandbox_정보가_없으면_종료_코드_4이다(self):
         """sandbox_policy가 null이거나 type이 없으면 요청한 sandbox를 확인할 수 없어 종료 코드 4이다."""
         cases = [
-            {"model": "gpt-5.6-luna", "effort": "xhigh", "sandbox_policy": None},
-            {"model": "gpt-5.6-luna", "effort": "xhigh", "sandbox_policy": {}},
+            {"model": "gpt-5.6-luna", "effort": "high", "sandbox_policy": None},
+            {"model": "gpt-5.6-luna", "effort": "high", "sandbox_policy": {}},
         ]
         for turn in cases:
             with self.subTest(turn=turn):
@@ -636,7 +650,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_쓰기_역할의_turn_context는_workspace_write이면_통과한다(self):
         """worker는 workspace-write로 실행하므로 그 sandbox를 가진 turn_context는 검증을 통과한다."""
         # Given
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "xhigh", "sandbox_policy": {"type": "workspace-write"}}]}
+        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "high", "sandbox_policy": {"type": "workspace-write"}}]}
 
         # When
         completed = self.run_runner("worker", config=config)
@@ -687,7 +701,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_codex_resume에서도_turn_context의_sandbox가_다르면_종료_코드_4이다(self):
         """resume한 실행의 turn_context sandbox가 요청과 다르면 종료 코드 4이고 결과를 남기지 않는다."""
         # Given
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "xhigh", "sandbox_policy": {"type": "workspace-write"}}]}
+        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "high", "sandbox_policy": {"type": "workspace-write"}}]}
         self.beat("codex", THREAD)
 
         # When
@@ -723,8 +737,8 @@ class RoleRunnerTest(unittest.TestCase):
     def test_Claude_transcript의_모델이_다르면_종료_코드_4이다(self):
         """assistant 항목 하나라도 모델이 다르면 종료 코드 4이다."""
         # Given
-        good = {"model": "claude-opus-5-5", "effort": "xhigh"}
-        config = {"entries": [good, {"model": "claude-haiku-5-5", "effort": "xhigh"}]}
+        good = {"model": "claude-opus-5-5", "effort": "high"}
+        config = {"entries": [good, {"model": "claude-haiku-5-5", "effort": "high"}]}
 
         # When
         completed = self.run_runner("reviewer", "--model", "claude-opus-5-5", config=config)
@@ -734,9 +748,9 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertFalse(self.result.exists())
 
     def test_Claude_transcript의_effort가_다르거나_없으면_종료_코드_4이다(self):
-        """assistant 항목의 effort가 xhigh가 아니거나 없으면 종료 코드 4이다."""
+        """assistant 항목의 effort가 high가 아니거나 없으면 종료 코드 4이다."""
         # Given
-        wrong = {"entries": [{"model": "claude-opus-5-5", "effort": "high"}]}
+        wrong = {"entries": [{"model": "claude-opus-5-5", "effort": "xhigh"}]}
         missing = {"entries": [{"model": "claude-opus-5-5"}]}
 
         # When
@@ -942,7 +956,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual((None, False), (status["capability"], status["fallback"]))
 
     def test_capability는_host에_맞는_entry를_고르고_읽기_전용_codex_인자로_실행한다(self):
-        """investigation을 Claude 호스트에서 실행하면 Luna xhigh를 읽기 전용 codex exec로 실행한다."""
+        """investigation을 Claude 호스트에서 실행하면 Luna high를 읽기 전용 codex exec로 실행한다."""
         # Given
         arguments = ["investigation", "--host", "claude", "--instructions", str(self.instructions)]
 
@@ -954,7 +968,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(self.codex_argv(), self.logged()["argv"])
         status = self.status(completed)
         self.assertEqual(
-            ("investigation", None, False, "codex", "gpt-5.6-luna", "xhigh", True),
+            ("investigation", None, False, "codex", "gpt-5.6-luna", "high", True),
             (
                 status["capability"], status["role"], status["fallback"], status["runner"], status["model"],
                 status["effort"], status["verified"],
@@ -994,7 +1008,7 @@ class RoleRunnerTest(unittest.TestCase):
         )
 
     def test_쓰기_capability의_claude_실행은_승인된_add_dir의_편집_규칙과_dontAsk를_쓴다(self):
-        """design을 Codex 호스트의 fallback으로 실행하면 Opus xhigh를 dontAsk로 실행하고 편집 허용은 승인된 디렉터리 규칙만 쓴다."""
+        """design을 Codex 호스트의 fallback으로 실행하면 Opus high를 dontAsk로 실행하고 편집 허용은 승인된 디렉터리 규칙만 쓴다."""
         # Given
         directory = str(self.base / "approved")
         arguments = ["design", "--host", "codex", "--fallback", "--add-dir", directory, "--instructions", str(self.instructions)]
@@ -1047,9 +1061,9 @@ class RoleRunnerTest(unittest.TestCase):
                 self.assertEqual(expected, self.logged()["argv"])
 
     def test_fallback은_capability의_fallback_entry를_고른다(self):
-        """design의 Claude 호스트 fallback은 Astra xhigh를 workspace-write codex exec로 실행하고 fallback을 true로 보고한다."""
+        """design의 Claude 호스트 fallback은 Astra high를 workspace-write codex exec로 실행하고 fallback을 true로 보고한다."""
         # Given
-        config = {"turns": [{"model": "gpt-6-astra", "effort": "xhigh"}]}
+        config = {"turns": [{"model": "gpt-6-astra", "effort": "high"}]}
         arguments = ["design", "--host", "claude", "--fallback", "--instructions", str(self.instructions)]
 
         # When
@@ -1097,7 +1111,7 @@ class RoleRunnerTest(unittest.TestCase):
         """Claude 호스트의 scout 에이전트 대체는 frontmatter를 뺀 정의 본문과 Assigned workers 절을 담고, 웹 도구를 나열해 --search를 붙인다."""
         # Given
         arguments = ["agent", "--name", "hei5enbug-agent-setup:scout", "--fallback"]
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "xhigh"}]}
+        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "high"}]}
 
         # When
         completed = self.run_runner(*arguments, config=config)
@@ -1113,7 +1127,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertTrue(prompt.endswith("## Assignment\n\nFind the answer.\nSECOND LINE\n"))
         status = self.status(completed)
         self.assertEqual(
-            ("hei5enbug-agent-setup:scout", True, "codex", "gpt-5.6-luna", "xhigh"),
+            ("hei5enbug-agent-setup:scout", True, "codex", "gpt-5.6-luna", "high"),
             (status["agent"], status["fallback"], status["runner"], status["model"], status["effort"]),
         )
 
@@ -1122,7 +1136,7 @@ class RoleRunnerTest(unittest.TestCase):
         # Given
         directory = str(self.base / "approved")
         arguments = ["agent", "--name", "hei5enbug-agent-setup:sonnet-worker", "--fallback", "--add-dir", directory]
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "xhigh"}]}
+        config = {"turns": [{"model": "gpt-6.1-sol", "effort": "high"}]}
 
         # When
         completed = self.run_runner(*arguments, config=config)
@@ -1130,7 +1144,7 @@ class RoleRunnerTest(unittest.TestCase):
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertEqual(
-            self.codex_argv(sandbox="workspace-write", add_dirs=[directory]), self.logged()["argv"],
+            self.codex_argv(model="gpt-6.1-sol", sandbox="workspace-write", add_dirs=[directory]), self.logged()["argv"],
         )
 
     def test_agent의_쓰기_에이전트는_add_dir이_없으면_자식을_띄우지_않고_종료_코드_2이다(self):
@@ -1185,7 +1199,7 @@ class RoleRunnerTest(unittest.TestCase):
         # Given
         directory = str(self.base / "approved")
         arguments = ["agent", "--name", "hei5enbug-agent-setup:sonnet-worker", "--fallback", "--add-dir", directory, "--mcp"]
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "xhigh"}]}
+        config = {"turns": [{"model": "gpt-6.1-sol", "effort": "high"}]}
 
         # When
         completed = self.run_runner(*arguments, config=config)
@@ -1193,7 +1207,7 @@ class RoleRunnerTest(unittest.TestCase):
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
         expected = [
-            "exec", "resume", THREAD, "-m", "gpt-5.6-luna", "-c", 'model_reasoning_effort="xhigh"',
+            "exec", "resume", THREAD, "-m", "gpt-6.1-sol", "-c", 'model_reasoning_effort="high"',
             "-c", 'sandbox_mode="workspace-write"', "-c", "sandbox_workspace_write.network_access=true",
             "-c", f"sandbox_workspace_write.writable_roots={json.dumps([directory])}",
             "--json", "-o", str(self.result), "-",
@@ -1221,7 +1235,7 @@ class RoleRunnerTest(unittest.TestCase):
         """scout 에이전트를 --resume으로 이어도 exec resume에 mcp_servers 끄기 설정과 --search를 유지한다."""
         # Given
         arguments = ["agent", "--name", "hei5enbug-agent-setup:scout", "--fallback", "--resume", THREAD]
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "xhigh"}]}
+        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "high"}]}
         self.beat("codex", THREAD)
 
         # When
@@ -1237,11 +1251,11 @@ class RoleRunnerTest(unittest.TestCase):
         self.use_declared_claude_plugin({
             "example-plugin:scout": {
                 "model": "claude-sonnet-5-5", "effort": "medium",
-                "fallback": {"model": "gpt-5.6-luna", "effort": "xhigh"},
+                "fallback": {"model": "gpt-5.6-luna", "effort": "high"},
             },
         })
         arguments = ["agent", "--name", "example-plugin:scout", "--fallback"]
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "xhigh"}]}
+        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "high"}]}
 
         # When
         completed = self.run_runner(*arguments, config=config)
@@ -1380,7 +1394,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(0, claude_completed.returncode, claude_completed.stderr)
         self.assertEqual(
             [
-                "-p", "--model", "claude-opus-5-5", "--effort", "xhigh", "--output-format", "json",
+                "-p", "--model", "claude-opus-5-5", "--effort", "high", "--output-format", "json",
                 "--tools", "Read", "Grep", "Glob", "Bash", "Edit", "Write",
                 "--permission-mode", "dontAsk", "--allowedTools", "Read", "Grep", "Glob", *SHELL_RULES,
                 f"Edit(/{directory}/**)", "Bash", "mcp__*",
@@ -1439,8 +1453,8 @@ class RoleRunnerTest(unittest.TestCase):
         """review의 Claude primary는 환경 변수가 review_models의 값이면 그 모델로, 아니면 entry 모델로 실행한다."""
         cases = [
             ({"HEI5ENBUG_REVIEW_MODEL": "claude-haiku-5-5"}, {"model": "claude-haiku-5-5"}, self.claude_argv(model="claude-haiku-5-5")),
-            ({"HEI5ENBUG_REVIEW_MODEL": "gpt-5.4"}, {"turns": [{"model": "gpt-6-astra", "effort": "xhigh"}]}, self.codex_argv(model="gpt-6-astra")),
-            ({}, {"turns": [{"model": "gpt-6-astra", "effort": "xhigh"}]}, self.codex_argv(model="gpt-6-astra")),
+            ({"HEI5ENBUG_REVIEW_MODEL": "gpt-5.4"}, {"turns": [{"model": "gpt-6-astra", "effort": "high"}]}, self.codex_argv(model="gpt-6-astra")),
+            ({}, {"turns": [{"model": "gpt-6-astra", "effort": "high"}]}, self.codex_argv(model="gpt-6-astra")),
         ]
         for extra_env, config, expected in cases:
             with self.subTest(extra_env=extra_env):
@@ -1464,7 +1478,7 @@ class RoleRunnerTest(unittest.TestCase):
             with self.subTest(extra_env=extra_env):
                 # Given
                 arguments = ["review", "--instructions", str(self.instructions)]
-                config = config or {"turns": [{"model": "gpt-6-astra", "effort": "xhigh"}]}
+                config = config or {"turns": [{"model": "gpt-6-astra", "effort": "high"}]}
 
                 # When
                 completed = self.run_runner(*arguments, config=config, extra_env=extra_env)
@@ -1615,21 +1629,21 @@ class RoleRunnerTest(unittest.TestCase):
                 self.assertIn(expected, prompt)
                 self.assertNotIn(other, prompt)
 
-    def test_review의_Claude_primary가_Claude이면_대체는_gpt_astra_xhigh_실행기다(self):
-        """review의 Claude primary가 HEI5ENBUG_REVIEW_MODEL로 Claude 모델이 되면 대체는 레지스트리의 Claude 에이전트 대신 gpt-6-astra xhigh 실행기다."""
+    def test_review의_Claude_primary가_Claude이면_대체는_gpt_astra_high_실행기다(self):
+        """review의 Claude primary가 HEI5ENBUG_REVIEW_MODEL로 Claude 모델이 되면 대체는 레지스트리의 Claude 에이전트 대신 gpt-6-astra high 실행기다."""
         # Given
         arguments = ["review", "--host", "claude", "--fallback", "--instructions", str(self.instructions)]
-        config = {"turns": [{"model": "gpt-6-astra", "effort": "xhigh"}]}
+        config = {"turns": [{"model": "gpt-6-astra", "effort": "high"}]}
 
         # When
         completed = self.run_runner(*arguments, config=config, extra_env={"HEI5ENBUG_REVIEW_MODEL": "claude-opus-5-5"})
 
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
-        self.assertEqual(self.codex_argv(model="gpt-6-astra", effort="xhigh"), self.logged()["argv"])
+        self.assertEqual(self.codex_argv(model="gpt-6-astra", effort="high"), self.logged()["argv"])
         status = self.status(completed)
         self.assertEqual(
-            (True, "codex", "gpt-6-astra", "xhigh"),
+            (True, "codex", "gpt-6-astra", "high"),
             (status["fallback"], status["runner"], status["model"], status["effort"]),
         )
 
@@ -1964,7 +1978,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_Claude_transcript의_synthetic_항목은_건너뛰고_나머지만_검증한다(self):
         """모델이 <synthetic>인 assistant 항목은 건너뛰고, 남은 항목이 하나 이상이며 모두 모델과 effort가 맞으면 통과한다."""
         # Given
-        config = {"entries": [{"model": "claude-opus-5-5", "effort": "xhigh"}, {"model": "<synthetic>"}]}
+        config = {"entries": [{"model": "claude-opus-5-5", "effort": "high"}, {"model": "<synthetic>"}]}
 
         # When
         completed = self.run_runner("reviewer", "--model", "claude-opus-5-5", config=config)
@@ -1979,8 +1993,8 @@ class RoleRunnerTest(unittest.TestCase):
         synthetic = {"model": "<synthetic>"}
         cases = [
             {"entries": [synthetic]},
-            {"entries": [synthetic, {"model": "claude-haiku-5-5", "effort": "xhigh"}]},
-            {"entries": [synthetic, {"model": "claude-opus-5-5", "effort": "high"}]},
+            {"entries": [synthetic, {"model": "claude-haiku-5-5", "effort": "high"}]},
+            {"entries": [synthetic, {"model": "claude-opus-5-5", "effort": "xhigh"}]},
         ]
 
         # When
@@ -2026,6 +2040,304 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertEqual("claude answer", self.result.read_text())
 
+    def pair_args(self, *names):
+        """Write one assignment and result path per name, with the assignment text ASSIGN_<name>, and return their arguments."""
+        arguments = []
+        for name in names:
+            assignment = self.base / f"assignment-{name}.md"
+            assignment.write_text(f"ASSIGN_{name}\nDetails for {name}.\n")
+            arguments += ["--assignment", str(assignment), "--result", str(self.base / f"result-{name}.md")]
+        return arguments
+
+    def status_lines(self, completed):
+        return [json.loads(line) for line in completed.stdout.strip().splitlines()]
+
+    def test_effort를_생략하면_자식_명령과_상태_줄은_범위의_하한을_쓴다(self):
+        """--effort가 없으면 scout는 레지스트리 실행기 항목의 하한 high를 자식 명령과 상태 줄에 쓴다."""
+        # Given
+        arguments = ["scout"]
+
+        # When
+        completed = self.run_runner(*arguments)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(self.codex_argv(effort="high"), self.logged()["argv"])
+        self.assertEqual("high", self.status(completed)["effort"])
+
+    def test_effort_xhigh는_범위_안이면_Codex_자식_명령과_상태_줄에_그대로_쓰인다(self):
+        """scout에 --effort xhigh를 주면 codex exec이 xhigh로 실행되고 상태 줄이 xhigh와 검증 성공을 보고한다."""
+        # Given
+        arguments = ["scout", "--effort", "xhigh"]
+        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "xhigh"}]}
+
+        # When
+        completed = self.run_runner(*arguments, config=config)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(self.codex_argv(effort="xhigh"), self.logged()["argv"])
+        status = self.status(completed)
+        self.assertEqual(("xhigh", True), (status["effort"], status["verified"]))
+
+    def test_effort_xhigh는_Claude_capability_자식_명령에도_넘어간다(self):
+        """review의 Codex 호스트 기본 항목은 Claude 실행기이고, --effort xhigh는 claude -p의 --effort로 넘어간다."""
+        # Given
+        arguments = ["review", "--host", "codex", "--instructions", str(self.instructions), "--effort", "xhigh"]
+        config = {"entries": [{"model": "claude-opus-5-5", "effort": "xhigh"}]}
+
+        # When
+        completed = self.run_runner(*arguments, config=config)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(self.claude_argv(effort="xhigh"), self.logged()["argv"])
+
+    def test_agent_모드의_effort는_대체_항목의_범위_안에서_고른다(self):
+        """agent 모드는 대체 항목의 범위를 쓰므로 scout의 Luna 대체에 --effort xhigh를 넘길 수 있다."""
+        # Given
+        arguments = ["agent", "--name", "hei5enbug-agent-setup:scout", "--fallback", "--effort", "xhigh"]
+        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "xhigh"}]}
+
+        # When
+        completed = self.run_runner(*arguments, config=config)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(self.codex_argv(search=True, effort="xhigh"), self.logged()["argv"])
+
+    def test_범위_밖_effort는_자식을_띄우기_전에_종료_코드_2이고_허용_수준을_이유에_적는다(self):
+        """범위 위(max), 범위 아래(medium), 모르는 값, 범위가 없는 항목의 다른 값은 모두 종료 코드 2이고 허용 수준을 알려준다."""
+        # Given
+        instructions = ["--instructions", str(self.instructions)]
+        cases = [
+            (["scout", "--effort", "max"], "high or xhigh"),
+            (["scout", "--effort", "medium"], "high or xhigh"),
+            (["scout", "--effort", "turbo"], "high or xhigh"),
+            (["investigation", "--host", "codex", "--fallback", "--effort", "high", *instructions], "use medium"),
+        ]
+        for arguments, allowed in cases:
+            with self.subTest(arguments=arguments):
+                # When
+                completed = self.run_runner(*arguments)
+
+                # Then
+                self.assertEqual(2, completed.returncode, completed.stderr)
+                self.assertIn(allowed, completed.stderr)
+                self.assertFalse(self.log.exists())
+
+    def test_max_effort가_없는_항목은_자기_effort를_명시해도_통과한다(self):
+        """investigation의 Codex 호스트 대체는 범위가 없는 medium 항목이므로 --effort medium만 통과한다."""
+        # Given
+        arguments = ["investigation", "--host", "codex", "--fallback", "--effort", "medium", "--instructions", str(self.instructions)]
+        config = {"model": "claude-sonnet-5-5", "entries": [{"model": "claude-sonnet-5-5", "effort": "medium"}]}
+
+        # When
+        completed = self.run_runner(*arguments, config=config)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(self.claude_argv(model="claude-sonnet-5-5", effort="medium"), self.logged()["argv"])
+
+    def test_허용_수준은_효과_규칙과의_교집합이다(self):
+        """모델의 효과 규칙이 high만 허용하면 xhigh까지 열린 항목이어도 --effort xhigh는 UsageError이고 high만 안내한다."""
+        # Given
+        argv = [
+            "reviewer", "--model", "claude-opus-5-5", "--effort", "xhigh",
+            "--assignment", str(self.assignment), "--result", str(self.result),
+        ]
+        parsed = role_runner.build_parser().parse_args(argv)
+
+        # When
+        with mock.patch.dict(role_runner.REGISTRY["effort_rules"], {"claude-opus-5-5": ["high"]}):
+            with self.assertRaises(role_runner.UsageError) as caught:
+                role_runner.plan(parsed)
+
+        # Then
+        self.assertIn("use high", str(caught.exception))
+
+    def test_읽기_전용_두_쌍은_자식을_동시에_시작하고_상태_줄_둘을_찍는다(self):
+        """scout에 쌍 둘을 주면 두 자식의 hook 점검이 모두 시작된 뒤에 첫 assignment가 실행되고, 상태 줄 둘과 결과 파일 둘이 남는다."""
+        # Given
+        pairs = self.pair_args("A", "B")
+
+        # When
+        completed = self.run_runner("scout", *pairs, assignment=False, result=False, config={"sleep": 0.5})
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        executions = self.executions()
+        resumes = [index for index, call in enumerate(executions) if "resume" in call["argv"]]
+        starts = [index for index, call in enumerate(executions) if "resume" not in call["argv"]]
+        self.assertEqual(2, len(starts))
+        self.assertLess(max(starts), min(resumes))
+        self.assertEqual({True}, {line["verified"] for line in self.status_lines(completed)})
+        self.assertEqual(2, len(self.status_lines(completed)))
+        self.assertEqual(["codex answer"] * 2, [(self.base / f"result-{name}.md").read_text() for name in "AB"])
+        prompts = [call["stdin"] for call in executions if "resume" in call["argv"]]
+        self.assertEqual({"A", "B"}, {name for name in "AB" if any(f"ASSIGN_{name}" in prompt for prompt in prompts)})
+
+    def test_배치의_종료_코드는_쌍_가운데_가장_큰_값이고_상태_줄은_입력_순서다(self):
+        """첫 쌍이 실행 오류(3), 둘째 쌍이 답변 없음(4)이면 종료 코드는 4이고 상태 줄은 입력 순서로 3, 4이다."""
+        # Given
+        pairs = self.pair_args("A", "B")
+        config = {"exit_when": {"ASSIGN_A": 1}, "no_answer_when": ["ASSIGN_B"]}
+
+        # When
+        completed = self.run_runner("scout", *pairs, assignment=False, result=False, config=config)
+
+        # Then
+        self.assertEqual(4, completed.returncode, completed.stderr)
+        self.assertEqual([3, 4], [line["exit"] for line in self.status_lines(completed)])
+        self.assertEqual([False, False], [line["verified"] for line in self.status_lines(completed)])
+
+    def run_in_process(self, argv, failing_result):
+        """Run the runner in this process with the fake CLIs, and make discarding the result named failing_result raise OSError."""
+        environment = {
+            "PATH": str(self.bin), "HOME": str(self.base), "CODEX_HOME": str(self.codex_home),
+            "CLAUDE_CONFIG_DIR": str(self.claude_home), "XDG_STATE_HOME": str(self.state_home),
+            "FAKE_LOG": str(self.log), "FAKE_CONFIG": json.dumps({}),
+        }
+        original = role_runner.discard
+
+        def discard(path):
+            if Path(path).name == failing_result:
+                raise PermissionError("result is locked")
+            original(path)
+
+        output, errors = io.StringIO(), io.StringIO()
+        with mock.patch.dict(os.environ, environment, clear=True), mock.patch.object(role_runner, "discard", discard):
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+                code = role_runner.main(argv)
+        lines = [json.loads(line) for line in output.getvalue().strip().splitlines()]
+        return code, lines, errors.getvalue()
+
+    def test_한_쌍의_결과_파일_처리에서_OSError가_나도_배치는_나머지_쌍의_상태_줄을_찍고_종료_코드_3이다(self):
+        """한 쌍의 결과 파일을 지우다 OSError가 나면 그 쌍만 종료 코드 3 상태 줄과 stderr 오류가 되고 다른 쌍은 검증 성공으로 끝난다."""
+        # Given
+        argv = ["scout", *self.pair_args("A", "B")]
+
+        # When
+        code, lines, errors = self.run_in_process(argv, "result-B.md")
+
+        # Then
+        self.assertEqual(3, code)
+        self.assertEqual([0, 3], [line["exit"] for line in lines])
+        self.assertEqual([True, False], [line["verified"] for line in lines])
+        self.assertIn("result is locked", errors)
+        self.assertEqual("codex answer", (self.base / "result-A.md").read_text())
+
+    def test_한_쌍만_줄_때도_결과_파일_OSError는_종료_코드_3_상태_줄이다(self):
+        """쌍이 하나여도 결과 파일 처리 OSError는 예외로 새지 않고 종료 코드 3 상태 줄과 stderr 오류가 된다."""
+        # Given
+        argv = ["scout", *self.pair_args("A")]
+
+        # When
+        code, lines, errors = self.run_in_process(argv, "result-A.md")
+
+        # Then
+        self.assertEqual(3, code)
+        self.assertEqual([(3, False)], [(line["exit"], line["verified"]) for line in lines])
+        self.assertIn("result is locked", errors)
+
+    def test_읽기_전용_Claude_reviewer도_쌍_여럿을_받는다(self):
+        """reviewer를 Claude 모델로 실행할 때도 쌍 둘이 각각 claude 자식 하나씩으로 실행되고 종료 코드 0이다."""
+        # Given
+        pairs = self.pair_args("A", "B")
+
+        # When
+        completed = self.run_runner("reviewer", "--model", "claude-opus-5-5", *pairs, assignment=False, result=False)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(["claude", "claude"], [call["name"] for call in self.calls()])
+        self.assertEqual(2, len(self.status_lines(completed)))
+
+    def test_쓰기_대상과_잘못된_쌍은_자식을_띄우기_전에_종료_코드_2이다(self):
+        """쓰기 대상, 개수 불일치, 일곱 쌍, 결과 중복, 결과와 같은 assignment, 쌍 둘과 --resume은 자식 없이 종료 코드 2이다."""
+        # Given
+        approved = str(self.base / "approved")
+        instructions = ["--instructions", str(self.instructions)]
+        two = self.pair_args("A", "B")
+        shared = str(self.base / "result-shared.md")
+        duplicate = [two[0], two[1], two[2], two[1]]
+        crossed = [two[0], two[1], two[2], two[0]]
+        cases = {
+            "worker": (["worker", "--add-dir", approved, *two], "read-only"),
+            "writing capability": (["implementation", "--host", "codex", "--add-dir", approved, *instructions, *two], "read-only"),
+            "writing agent": (["agent", "--name", "hei5enbug-agent-setup:worker", "--fallback", "--add-dir", approved, *two], "read-only"),
+            "unequal counts": (["scout", "--assignment", two[1], "--assignment", two[5], "--result", two[3]], "equal numbers"),
+            "seven pairs": (["scout", *self.pair_args(*"ABCDEFG")], "At most 6"),
+            "duplicate result": (["scout", *duplicate], "different file"),
+            "assignment equals result": (["scout", "--assignment", two[1], "--result", two[3], "--assignment", two[3], "--result", shared], "different files"),
+            "resume": (["scout", "--resume", THREAD, *two], "--resume"),
+        }
+        for label, (arguments, reason) in cases.items():
+            with self.subTest(case=label):
+                # When
+                completed = self.run_runner(*arguments, assignment=False, result=False)
+
+                # Then
+                self.assertEqual(2, completed.returncode, completed.stderr)
+                self.assertIn(reason, completed.stderr)
+                self.assertFalse(self.log.exists())
+
+    def test_읽기_전용_Codex_명령은_모든_exec와_resume에_스킬_목록_끄기를_넘긴다(self):
+        """scout의 hook 점검 exec와 assignment exec resume는 -c skills.max_context_tokens=1을 넘기고 MCP 목록 조회는 넘기지 않는다."""
+        # Given
+        arguments = ["scout"]
+
+        # When
+        completed = self.run_runner(*arguments)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        executions = self.executions()
+        self.assertEqual(2, len(executions))
+        for call in executions:
+            argv = call["argv"]
+            self.assertEqual("-c", argv[argv.index("skills.max_context_tokens=1") - 1])
+        listing = self.calls()[0]["argv"]
+        self.assertNotIn("skills.max_context_tokens=1", listing)
+
+    def test_쓰기_Codex_명령은_스킬_목록_끄기를_넘기지_않는다(self):
+        """worker는 쓰기 실행이므로 hook 점검 exec와 assignment exec resume 어디에도 skills.max_context_tokens를 넘기지 않는다."""
+        # Given
+        arguments = ["worker", "--add-dir", str(self.base)]
+
+        # When
+        completed = self.run_runner(*arguments)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        for call in self.executions():
+            self.assertNotIn("skills.max_context_tokens=1", call["argv"])
+
+    def test_읽기_전용_Claude_명령은_슬래시_명령_끄기를_넘긴다(self):
+        """읽기 전용 reviewer의 claude -p 명령은 --disable-slash-commands를 넘긴다."""
+        # Given
+        arguments = ["reviewer", "--model", "claude-opus-5-5"]
+
+        # When
+        completed = self.run_runner(*arguments)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertIn("--disable-slash-commands", self.logged()["argv"])
+
+    def test_쓰기_Claude_명령은_슬래시_명령_끄기를_넘기지_않는다(self):
+        """쓰기 worker의 claude -p 명령은 --disable-slash-commands를 넘기지 않는다."""
+        # Given
+        directory = self.base / "one"
+        directory.mkdir()
+
+        # When
+        code, _ = self.run_claude_worker(["worker", "--add-dir", str(directory)])
+
+        # Then
+        self.assertEqual(0, code)
+        self.assertNotIn("--disable-slash-commands", self.logged()["argv"])
+
     def run_claude_worker(self, arguments, config=None):
         """Run the name-only worker role on the Claude path by pinning the role model to Claude, in this process."""
         argv = [*arguments, "--assignment", str(self.assignment), "--result", str(self.result)]
@@ -2055,7 +2367,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(0, code)
         argv = self.logged()["argv"]
         self.assertEqual(
-            ["-p", "--model", "claude-haiku-5-5", "--effort", "xhigh", "--output-format", "json",
+            ["-p", "--model", "claude-haiku-5-5", "--effort", "high", "--output-format", "json",
                "--tools", "Read", "Grep", "Glob", "Bash", "Edit", "Write", "--strict-mcp-config",
                "--permission-mode", "dontAsk", "--allowedTools", "Read", "Grep", "Glob", "Bash",
                *[f"Edit(/{item.resolve().as_posix()}/**)" for item in directories],

@@ -166,6 +166,56 @@ class LanguageGuardCase(unittest.TestCase):
         return event
 
 
+class DelegatedSessionTest(LanguageGuardCase):
+    def test_위임_환경_변수가_있으면_두_호스트의_최종_답변과_진행_안내를_검사하지_않는다(self):
+        """위임 역할이나 부모 세션이 있으면 Stop과 PostToolUse 모두 출력하지 않는다."""
+        for host in ("claude", "codex"):
+            for variable in ("HEI5ENBUG_ASSIGNED_ROLE", "HEI5ENBUG_PARENT_SESSION"):
+                for event_name in ("Stop", "PostToolUse"):
+                    with self.subTest(host=host, variable=variable, event=event_name):
+                        # Given
+                        self.use_korean_setting()
+                        transcript = self.write_transcript([
+                            claude_user("작업해 줘"),
+                            claude_assistant([text_block(ENGLISH), tool_use_block("tool-1")]),
+                        ])
+                        event = self.stop_event() if event_name == "Stop" else self.post_event(transcript)
+
+                        # When
+                        result = self.run_guard(event, host, **{variable: "delegated"})
+
+                        # Then
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertEqual(result.stdout, b"")
+                        self.assertEqual(result.stderr, b"")
+
+    def test_위임_환경_변수가_없거나_비어_있으면_영어_답변과_진행_안내를_막는다(self):
+        """위임 표시가 없거나 빈 값이면 기존 언어 검사와 차단 출력을 유지한다."""
+        for host in ("claude", "codex"):
+            for extra in ({}, {"HEI5ENBUG_ASSIGNED_ROLE": "", "HEI5ENBUG_PARENT_SESSION": ""}):
+                for event_name in ("Stop", "PostToolUse"):
+                    with self.subTest(host=host, extra=extra, event=event_name):
+                        # Given
+                        self.use_korean_setting()
+                        transcript = self.write_transcript([
+                            claude_user("작업해 줘"),
+                            claude_assistant([text_block(ENGLISH), tool_use_block("tool-1")]),
+                        ])
+                        event = self.stop_event() if event_name == "Stop" else self.post_event(transcript)
+                        expected = (
+                            {"decision": "block", "reason": STOP_REASON} if event_name == "Stop" else
+                            {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": REMINDER}}
+                        )
+
+                        # When
+                        result = self.run_guard(event, host, **extra)
+
+                        # Then
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertEqual(result.stderr, b"")
+                        self.assertEqual(json.loads(result.stdout), expected)
+
+
 class ResolutionTest(LanguageGuardCase):
     def test_언어_값은_영어_이름과_코드와_고유_이름으로_같은_언어가_된다(self):
         """영어 이름, ISO 코드, 고유 이름, 지역 코드가 붙은 값, 대소문자 차이는 모두 같은 언어로 해석된다."""

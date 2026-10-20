@@ -24,22 +24,25 @@ does not make planning, architecture, or acceptance decisions. Existing service-
 
 ## Keep role settings fixed
 
-GPT Luna is explicitly pinned to `gpt-5.6-luna` with `high` or `xhigh` only. Never select another Luna release
-or effort, including through a saved default or resume. hei5enbug roles keep `xhigh`, except the two worker
-roles below. The worker settings are the user's explicit choice among the allowed values, never a runtime
-substitution. If the host cannot verify these settings, stop that delegation and use the named cross-family
-fallback or the main session. Automatic newest-release refresh excludes this user-selected pin.
+GPT Luna is explicitly pinned to `gpt-5.6-luna` with `high` or `xhigh` only; never select another Luna release.
+An entry with `max_effort` starts at its `effort`, the lower bound. Raise it to `max_effort`, with the runner's
+`--effort` or a Codex spawn's effort, only when the assignment spans several components or touches a public
+contract, security, concurrency, parsing, or a hook or guard, or when a result at the lower effort was rejected.
+Entries without `max_effort`, including Claude Code plugin agents, keep their pinned effort. The worker settings
+are the user's explicit choice among the allowed values, never a runtime substitution. If the host cannot verify
+these settings, stop that delegation and use the named cross-family fallback or the main session. Automatic
+newest-release refresh excludes this user-selected pin.
 
 Use these production settings unless a separately approved comparison qualifies for a scoped change:
 
 | Role | Codex | Claude Code |
 |---|---|---|
-| Local scout | `gpt-5.6-luna`, `xhigh` | `role_runner.py scout` with `gpt-5.6-luna`, `xhigh`, read-only; fallback `scout` with `claude-sonnet-5-5`, `medium` |
-| Implementation worker | The `codex_worker_model` and `codex_worker_effort` settings (`gpt-5.6-luna` or `gpt-6.1-sol`; `high` or `xhigh`; default `gpt-5.6-luna`, `xhigh`) | With `implementation_worker` set to `auto` (default), the main session picks per assignment: `worker` with the `worker_model` and `worker_effort` settings (default `claude-haiku-5-5`, `high`) for easy work; `role_runner.py implementation --fallback` with `gpt-6.1-sol`, `high` for normal or hard work; `sonnet-worker` with `claude-sonnet-5-5`, `high` instead of Sol when Codex weekly usage is above 70 percent or Sol is unavailable. A fixed setting forces one route: `sonnet`, `sol`, `codex` (`role_runner.py worker` with `gpt-5.6-luna`, `xhigh`), or `haiku` (fallback `role_runner.py worker` with `gpt-5.6-luna`, `xhigh`) |
-| Public researcher | `role_runner.py researcher` with `gpt-5.6-luna`, `xhigh`, web search | `role_runner.py researcher` with `gpt-5.6-luna`, `xhigh`, web search; fallback `scout` with `claude-sonnet-5-5`, `medium`, which has web search and fetch tools |
-| Designer (`design` capability) | `designer` role with `gpt-6-astra`, `xhigh`; fallback `role_runner.py agent --name designer --fallback` with `claude-opus-5-5`, `xhigh` | `designer` agent with `claude-opus-5-5`, `xhigh`; fallback `role_runner.py design` with `gpt-6-astra`, `xhigh` |
+| Local scout | `gpt-5.6-luna`, `high` (up to `xhigh`) | `role_runner.py scout` with `gpt-5.6-luna`, `high` (up to `xhigh`), read-only; fallback `scout` with `claude-sonnet-5-5`, `medium` |
+| Implementation worker | `role_runner.py implementation --host codex` with `claude-sonnet-5-5`, `high` (up to `xhigh`); fallback the `worker` role with the `codex_worker_model` and `codex_worker_effort` settings (`gpt-5.6-luna` or `gpt-6.1-sol`; `high` or `xhigh`; default `gpt-5.6-luna`, `high`) | With `implementation_worker` set to `auto` (default), the main session picks per assignment: `worker` with the `worker_model` and `worker_effort` settings (default `claude-haiku-5-5`, `high`) for easy work and `sonnet-worker` with `claude-sonnet-5-5`, `high` for normal or hard work; `role_runner.py implementation --fallback` with `gpt-6.1-sol`, `high` when a Claude route fails or stops on a usage limit. A fixed setting forces one route: `sonnet`, `sol`, `codex` (`role_runner.py worker` with `gpt-5.6-luna`), or `haiku` (fallback `role_runner.py agent --name hei5enbug-agent-setup:worker --fallback` with `gpt-6.1-sol`) |
+| Public researcher | `role_runner.py researcher` with `gpt-5.6-luna`, `high` (up to `xhigh`), web search | `role_runner.py researcher` with `gpt-5.6-luna`, `high` (up to `xhigh`), web search; fallback `scout` with `claude-sonnet-5-5`, `medium`, which has web search and fetch tools |
+| Designer (`design` capability) | `designer` role with `gpt-6-astra`, `high` (up to `xhigh`); fallback `role_runner.py agent --name designer --fallback` with `claude-opus-5-5`, `high` (up to `xhigh`) | `designer` agent with `claude-opus-5-5`, `xhigh`; fallback `role_runner.py design` with `gpt-6-astra`, `high` (up to `xhigh`) |
 | Skill Builder trial execution and other non-review participants | `gpt-6.1-sol`, `xhigh` | `claude-opus-5-5`, `high` |
-| Skill review role (review persona, grader, comparator, analyzer) | `role_runner.py review` with `claude-opus-5-5`, `high`; fallback `reviewer` with `gpt-6.1-sol`, `xhigh` | `role_runner.py reviewer` with the `review_model` setting (default `gpt-6-astra`), `xhigh`; fallback `reviewer` with `claude-opus-5-5`, `high` |
+| Skill review role (review persona, grader, comparator, analyzer) | `role_runner.py review` with `claude-opus-5-5`, `high` (up to `xhigh`); fallback `reviewer` with `gpt-6.1-sol`, `high` (up to `xhigh`) | `role_runner.py reviewer` with the `review_model` setting (default `gpt-6-astra`), `high` (up to `xhigh`); fallback `reviewer` with `claude-opus-5-5`, `high` |
 
 Verify the role's effective model and effort from host records and relevant non-secret settings before relying
 on its result, or rely on the enforcement the host's agent rules name, such as the mod's role pinning or the role
@@ -94,13 +97,13 @@ The runner's mechanics are in [Claude Code agents](claude-agents.md#role-runner)
 
 | Capability | Claude Code primary | Claude Code fallback | Codex primary | Codex fallback |
 |---|---|---|---|---|
-| investigation | `gpt-5.6-luna` / `xhigh` (runner) | `claude-sonnet-5-5` / `medium` (`scout`) | `gpt-5.6-luna` / `xhigh` (`scout`) | `claude-sonnet-5-5` / `medium` (runner) |
-| implementation | `claude-sonnet-5-5` / `high` (`sonnet-worker`) | `gpt-6.1-sol` / `high` (runner) | Codex worker model setting, default `gpt-5.6-luna` / `xhigh` (`worker`) | `claude-sonnet-5-5` / `high` (runner) |
-| design | `claude-opus-5-5` / `xhigh` (`designer`) | `gpt-6-astra` / `xhigh` (runner) | `gpt-6-astra` / `xhigh` (`designer`) | `claude-opus-5-5` / `xhigh` (runner) |
-| language | `gpt-6.1-sol` / `high` (runner) | `claude-opus-5-5` / `high` (runner) | `gpt-6.1-sol` / `high` (runner) | `claude-opus-5-5` / `high` (runner) |
-| review | `gpt-6-astra` / `xhigh` (runner) | `claude-opus-5-5` / `high` (`reviewer`) | `claude-opus-5-5` / `high` (runner) | `gpt-6.1-sol` / `xhigh` (`reviewer`) |
+| investigation | `gpt-5.6-luna` / `high` (up to `xhigh`) (runner) | `claude-sonnet-5-5` / `medium` (`scout`) | `gpt-5.6-luna` / `high` (up to `xhigh`) (`scout`) | `claude-sonnet-5-5` / `medium` (runner) |
+| implementation | `claude-sonnet-5-5` / `high` (`sonnet-worker`) | `gpt-6.1-sol` / `high` (up to `xhigh`) (runner) | `claude-sonnet-5-5` / `high` (up to `xhigh`) (runner) | Codex worker model setting, registry pair `gpt-5.6-luna` / `high` (up to `xhigh`) (`worker`) |
+| design | `claude-opus-5-5` / `xhigh` (`designer`) | `gpt-6-astra` / `high` (up to `xhigh`) (runner) | `gpt-6-astra` / `high` (up to `xhigh`) (`designer`) | `claude-opus-5-5` / `high` (up to `xhigh`) (runner) |
+| language | `gpt-6.1-sol` / `high` (up to `xhigh`) (runner) | `claude-opus-5-5` / `high` (up to `xhigh`) (runner) | `gpt-6.1-sol` / `high` (up to `xhigh`) (runner) | `claude-opus-5-5` / `high` (up to `xhigh`) (runner) |
+| review | `gpt-6-astra` / `high` (up to `xhigh`) (runner) | `claude-opus-5-5` / `high` (`reviewer`) | `claude-opus-5-5` / `high` (up to `xhigh`) (runner) | `gpt-6.1-sol` / `high` (up to `xhigh`) (`reviewer`) |
 
 The Claude Code `review` primary uses the `review_model` setting in place of its default model. When that primary
-resolves to a Claude model, the Claude Code `review` fallback is `gpt-6-astra` / `xhigh` through the role runner
-instead of the `reviewer` entry. An entry marked `(runner)` runs through the role runner, and an entry marked with an
-agent name runs that plugin agent on its pinned model and effort.
+resolves to a Claude model, the Claude Code `review` fallback is `gpt-6-astra` / `high` (up to `xhigh`) through the
+role runner instead of the `reviewer` entry. An entry marked `(runner)` runs through the role runner, and an entry
+marked with an agent name runs that plugin agent on its pinned model and effort.

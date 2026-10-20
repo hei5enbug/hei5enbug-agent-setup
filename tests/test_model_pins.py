@@ -97,6 +97,16 @@ def registry_entries():
     yield "runner", REGISTRY["runner"]["role_model"], REGISTRY["runner"]["effort"]
 
 
+def nested_entries(value, path):
+    """Yield every dict that names a model, with its dotted path, including a fallback inside an agent entry."""
+    if isinstance(value, dict):
+        if "model" in value and "effort" in value:
+            yield path, value
+        for key, item in value.items():
+            if isinstance(item, dict):
+                yield from nested_entries(item, f"{path}.{key}")
+
+
 def model_family(model: str) -> str:
     return "claude" if model.startswith("claude-") else "gpt"
 
@@ -106,8 +116,10 @@ def capability_cell(entry: dict, configurable: bool = False) -> str:
     if entry["via"] == "agent":
         suffix = f" (`{entry['agent'].split(':')[-1]}`)"
     pair = f"`{entry['model']}` / `{entry['effort']}`"
+    if "max_effort" in entry:
+        pair += f" (up to `{entry['max_effort']}`)"
     if configurable:
-        return f"Codex worker model setting, default {pair}{suffix}"
+        return f"Codex worker model setting, registry pair {pair}{suffix}"
     return f"{pair}{suffix}"
 
 
@@ -118,8 +130,8 @@ def expected_capability_rows() -> list[list[str]]:
             name,
             capability_cell(hosts["claude"]["primary"]),
             capability_cell(hosts["claude"]["fallback"]),
-            capability_cell(hosts["codex"]["primary"], configurable=name == "implementation"),
-            capability_cell(hosts["codex"]["fallback"]),
+            capability_cell(hosts["codex"]["primary"]),
+            capability_cell(hosts["codex"]["fallback"], configurable=name == "implementation"),
         ]
         for name, hosts in REGISTRY["capabilities"].items()
     ]
@@ -218,23 +230,29 @@ class ModelPinTest(unittest.TestCase):
             models,
         )
 
-    def test_Codex_역할_파일은_모델을_지정하지_않는다(self):
-        """훅은 설치된 역할 파일을 덮어쓰지 않으므로, 고정 모델은 지침이 생성할 때마다 넘기고 역할 파일에는 두지 않는다."""
+    def test_Codex_역할_파일은_모델과_effort를_지정하지_않는다(self):
+        """훅은 설치된 역할 파일을 덮어쓰지 않으므로, 고정 모델과 effort는 지침이 생성할 때마다 넘기고 역할 파일에는 두지 않는다."""
         # Given
         rules = " ".join((REPO_ROOT / "instructions/codex-agents.md").read_text(encoding="utf-8").split())
         expected = {
-            "codex-scout.toml": ("scout", "xhigh", f"Pass `{PINS['gpt-luna']}` and `xhigh` explicitly on every spawn."),
+            "codex-scout.toml": (
+                "scout", None,
+                f"Pass `{PINS['gpt-luna']}` and `high` explicitly on every spawn, or `xhigh` under the effort rule in "
+                "[shared model routing](model-routing.md#keep-role-settings-fixed).",
+            ),
             "codex-worker.toml": (
                 "worker", None,
                 'pass the model and effort from the session line "Codex worker model" explicitly on every spawn.',
             ),
             "codex-designer.toml": (
-                "designer", "xhigh",
-                f"the plugin `designer` role with `{PINS['gpt-astra']}` and `xhigh` passed explicitly",
+                "designer", None,
+                f"the plugin `designer` role with `{PINS['gpt-astra']}` and `high` passed explicitly on the spawn, or `xhigh` "
+                "under the effort rule in [shared model routing](model-routing.md#keep-role-settings-fixed)",
             ),
             "codex-reviewer.toml": (
-                "reviewer", "xhigh",
-                f"spawn the plugin `reviewer` role with `{PINS['gpt-sol']}` and `xhigh` passed explicitly.",
+                "reviewer", None,
+                f"spawn the plugin `reviewer` role with `{PINS['gpt-sol']}` and `high` passed explicitly, or `xhigh` under "
+                "the effort rule in [shared model routing](model-routing.md#keep-role-settings-fixed).",
             ),
         }
 
@@ -317,6 +335,78 @@ class ModelPinTest(unittest.TestCase):
 
         # Then
         self.assertEqual(expected_capability_rows(), rows)
+
+    def test_Codex_구현_기본은_Sonnet_실행기이고_대체는_worker_에이전트다(self):
+        """Codex의 implementation 기본 항목은 claude-sonnet-5-5 실행기이고 대체는 gpt-5.6-luna worker 에이전트이며 둘은 서로 다른 계열이다."""
+        # Given
+        slots = REGISTRY["capabilities"]["implementation"]["codex"]
+
+        # When
+        primary, fallback = slots["primary"], slots["fallback"]
+
+        # Then
+        self.assertEqual(
+            {"model": PINS["claude-sonnet"], "effort": "high", "max_effort": "xhigh", "via": "runner"}, primary,
+        )
+        self.assertEqual((PINS["gpt-luna"], "agent", "worker", "primary"), (
+            fallback["model"], fallback["via"], fallback["agent"], fallback["pin"],
+        ))
+        self.assertNotEqual(model_family(primary["model"]), model_family(fallback["model"]))
+
+    def test_사고_강도_범위는_지정_항목에만_있고_하한은_high이며_상한은_xhigh이다(self):
+        """실행기, Codex 에이전트, Codex 쪽 agent 항목, 모든 대체 항목은 high에서 xhigh까지 범위를 갖고, Claude 플러그인 에이전트와 Claude 쪽 agent 항목은 범위가 없다."""
+        # Given
+        ranged, fixed = [], []
+        for capability, hosts in REGISTRY["capabilities"].items():
+            for host, slots in hosts.items():
+                for slot, entry in slots.items():
+                    covered = entry["via"] == "runner" or (host == "codex" and entry["via"] == "agent")
+                    (ranged if covered else fixed).append((f"capabilities.{capability}.{host}.{slot}", entry))
+        for name, entry in REGISTRY["claude_agents"].items():
+            fixed.append((f"claude_agents.{name}", {k: v for k, v in entry.items() if k != "fallback"}))
+            ranged.append((f"claude_agents.{name}.fallback", entry["fallback"]))
+        for name, entry in REGISTRY["codex_agents"].items():
+            ranged.append((f"codex_agents.{name}", {k: v for k, v in entry.items() if k != "fallback"}))
+            ranged.append((f"codex_agents.{name}.fallback", entry["fallback"]))
+        runner = REGISTRY["runner"]
+        ranged.append(("runner", {"effort": runner["effort"], "max_effort": runner.get("max_effort")}))
+        ranged.append(("runner.review_cross_family_fallback", runner["review_cross_family_fallback"]))
+
+        # When
+        wrong = [
+            where for where, entry in ranged
+            if (entry["effort"], entry.get("max_effort")) not in {("high", "xhigh"), ("low", None), ("medium", None)}
+        ]
+        ranged_fixed = [where for where, entry in fixed if "max_effort" in entry]
+
+        # Then
+        self.assertEqual([], wrong)
+        self.assertEqual([], ranged_fixed)
+
+    def test_max_effort는_efforts_안에서_effort_이상이고_효과_규칙이_허용한다(self):
+        """max_effort는 알려진 사고 강도이며 같은 항목의 effort보다 낮지 않고 모델의 효과 규칙이 허용한다."""
+        # Given
+        efforts = REGISTRY["efforts"]
+        rules = REGISTRY["effort_rules"]
+        entries = [
+            (where, entry)
+            for section in ("capabilities", "claude_agents", "codex_agents")
+            for where, entry in nested_entries(REGISTRY[section], section)
+        ]
+
+        # When
+        problems = []
+        for where, entry in entries:
+            top = entry.get("max_effort")
+            if top is None:
+                continue
+            if top not in efforts or efforts.index(top) < efforts.index(entry["effort"]):
+                problems.append(f"{where}: {top}")
+            elif entry["model"] in rules and top not in rules[entry["model"]]:
+                problems.append(f"{where}: {top} is not allowed for {entry['model']}")
+
+        # Then
+        self.assertEqual([], problems)
 
     def test_agent로_실행하는_기능_항목은_가리킨_pin의_모델과_effort와_같다(self):
         """via가 agent인 기능 항목은 같은 호스트의 에이전트를 가리키고, pin이 고른 모델과 effort가 항목과 같다."""

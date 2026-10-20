@@ -255,7 +255,7 @@ def test_git_push_설명은_원격_이름을_괄호에_넣는다(state):
 
 @pytest.mark.parametrize("language", ["Korean", "English"])
 def test_승인_요청이_세_번_끝나지_않으면_중단_문구를_낸다(state, language):
-    """같은 승인 요청이 세 번 끝나지 않으면 네 번째는 거절 문구로 다시 시도하지 말라고 알린다."""
+    """마지막 사용자 메시지 이후 요청이 세 번 끝나지 않으면 네 번째는 거절 문구로 중단을 알린다."""
     # given
     set_claude_language(state, "한국어" if language == "Korean" else None)
     action = state_mod.Outcome("write", [], ["kubectl apply on dev"])
@@ -265,8 +265,8 @@ def test_승인_요청이_세_번_끝나지_않으면_중단_문구를_낸다(st
     output = state_mod.pre_decision("claude", "s1", action, "t3")
     # then
     expected = {
-        "Korean": "같은 승인 요청이 3번 완료되지 않았습니다(거절 포함). 다시 시도하지 말고 사용자에게 알리세요.",
-        "English": "This approval was requested three times without the call completing (declines included); "
+        "Korean": "사용자의 마지막 메시지 이후 승인 요청이 3번 완료되지 않았습니다(거절 포함). 다시 시도하지 말고 사용자에게 알리세요.",
+        "English": "This approval was requested three times since the user's last message without the call completing (declines included); "
                    "stop retrying and tell the user.",
     }
     assert output["hookSpecificOutput"]["permissionDecision"] == "deny"

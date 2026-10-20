@@ -27,22 +27,24 @@
 
 ## 역할 설정 유지
 
-GPT Luna는 `gpt-5.6-luna`와 `high` 또는 `xhigh`로만 명시적으로 고정한다. 저장된 기본값이나 재개를 포함해 다른 Luna
-버전이나 추론 강도를 선택하지 않는다. hei5enbug 역할은 아래 두 worker 역할을 제외하고 `xhigh`를 유지한다. worker 설정은 허용된 값 중에서 사용자가 명시적으로
-선택한 값이며, 실행 중에 바꿔 쓰는 대체가 아니다. 호스트에서 이 설정을 확인할 수 없으면
-해당 위임을 중지하고 지정된 다른 모델 계열의 fallback이나 메인 세션을 사용한다. 최신 릴리스 자동 갱신에서도 이 사용자
-지정 고정값을 제외한다.
+GPT Luna는 `gpt-5.6-luna`와 `high` 또는 `xhigh`로만 명시적으로 고정하며, 다른 Luna 버전을 선택하지 않는다.
+`max_effort`가 있는 항목은 하한인 `effort`에서 시작한다. 할당이 여러 컴포넌트에 걸치거나 공개 계약, 보안, 동시성, 파싱,
+훅이나 가드에 영향을 주거나 낮은 사고 강도의 결과가 거부된 경우에만 실행기의 `--effort`나 Codex 생성 시 사고 강도로
+`max_effort`까지 높인다. Claude Code 플러그인 에이전트를 포함해 `max_effort`가 없는 항목은 고정된 사고 강도를 유지한다.
+worker 설정은 허용된 값 중에서 사용자가 명시적으로 선택한 값이며, 실행 중에 바꿔 쓰는 대체가 아니다. 호스트에서 이 설정을
+확인할 수 없으면 해당 위임을 중지하고 지정된 다른 모델 계열의 fallback이나 메인 세션을 사용한다. 최신 릴리스 자동 갱신에서도
+이 사용자 지정 고정값을 제외한다.
 
 별도로 승인된 비교 결과가 한정된 범위의 변경을 정당화하지 않는 한 다음 운영 설정을 사용한다.
 
 | 역할 | Codex | Claude Code |
 |---|---|---|
-| 로컬 scout | `gpt-5.6-luna`, `xhigh` | 읽기 전용 `role_runner.py scout`로 `gpt-5.6-luna`, `xhigh`. 대체 경로는 `scout`(`claude-sonnet-5-5`, `medium`) |
-| 구현 worker | `codex_worker_model`·`codex_worker_effort` 설정(`gpt-5.6-luna` 또는 `gpt-6.1-sol`, `high` 또는 `xhigh`, 기본값 `gpt-5.6-luna`, `xhigh`) | `implementation_worker`가 `auto`(기본값)이면 메인 세션이 할당마다 고른다. 쉬운 작업은 `worker_model`·`worker_effort` 설정(기본값 `claude-haiku-5-5`, `high`)의 `worker`; 보통이거나 어려운 작업은 `role_runner.py implementation --fallback`과 `gpt-6.1-sol`, `high`; Codex 주간 사용률이 70퍼센트를 넘거나 Sol을 사용할 수 없으면 Sol 대신 `claude-sonnet-5-5`, `high` `sonnet-worker`를 쓴다. 고정 설정은 한 경로를 강제한다: `sonnet`, `sol`, `codex`(`role_runner.py worker`와 `gpt-5.6-luna`, `xhigh`), `haiku`(대체 경로는 `role_runner.py worker`와 `gpt-5.6-luna`, `xhigh`) |
-| 공개 researcher | 웹 검색을 쓰는 `role_runner.py researcher`로 `gpt-5.6-luna`, `xhigh` | 웹 검색을 쓰는 `role_runner.py researcher`로 `gpt-5.6-luna`, `xhigh`. 대체 경로는 웹 검색과 가져오기 도구를 가진 `scout`(`claude-sonnet-5-5`, `medium`) |
-| Designer(`design` 기능) | `designer` 역할로 `gpt-6-astra`, `xhigh`. 대체 경로는 `role_runner.py agent --name designer --fallback`으로 `claude-opus-5-5`, `xhigh` | `designer` 에이전트로 `claude-opus-5-5`, `xhigh`. 대체 경로는 `role_runner.py design`으로 `gpt-6-astra`, `xhigh` |
+| 로컬 scout | `gpt-5.6-luna`, `high`(최대 `xhigh`) | 읽기 전용 `role_runner.py scout`로 `gpt-5.6-luna`, `high`(최대 `xhigh`). 대체 경로는 `scout`(`claude-sonnet-5-5`, `medium`) |
+| 구현 worker | `role_runner.py implementation --host codex`로 `claude-sonnet-5-5`, `high`(최대 `xhigh`); 대체는 `codex_worker_model`·`codex_worker_effort` 설정(`gpt-5.6-luna` 또는 `gpt-6.1-sol`, `high` 또는 `xhigh`, 기본값 `gpt-5.6-luna`, `high`)의 `worker` 역할 | `implementation_worker`가 `auto`(기본값)이면 메인 세션이 할당마다 고른다. 쉬운 작업은 `worker_model`·`worker_effort` 설정(기본값 `claude-haiku-5-5`, `high`)의 `worker`, 보통이거나 어려운 작업은 `claude-sonnet-5-5`, `high`의 `sonnet-worker`를 쓴다. Claude 경로가 실패하거나 사용량 한도로 중단되면 `role_runner.py implementation --fallback`과 `gpt-6.1-sol`, `high`를 쓴다. 고정 설정은 한 경로를 강제한다: `sonnet`, `sol`, `codex`(`role_runner.py worker`와 `gpt-5.6-luna`), `haiku`(대체 경로는 `role_runner.py agent --name hei5enbug-agent-setup:worker --fallback`과 `gpt-6.1-sol`) |
+| 공개 researcher | 웹 검색을 쓰는 `role_runner.py researcher`로 `gpt-5.6-luna`, `high`(최대 `xhigh`) | 웹 검색을 쓰는 `role_runner.py researcher`로 `gpt-5.6-luna`, `high`(최대 `xhigh`). 대체 경로는 웹 검색과 가져오기 도구를 가진 `scout`(`claude-sonnet-5-5`, `medium`) |
+| Designer(`design` 기능) | `designer` 역할로 `gpt-6-astra`, `high`(최대 `xhigh`). 대체 경로는 `role_runner.py agent --name designer --fallback`으로 `claude-opus-5-5`, `high`(최대 `xhigh`) | `designer` 에이전트로 `claude-opus-5-5`, `xhigh`. 대체 경로는 `role_runner.py design`으로 `gpt-6-astra`, `high`(최대 `xhigh`) |
 | Skill Builder 시험 실행 및 기타 비검토 참여자 | `gpt-6.1-sol`, `xhigh` | `claude-opus-5-5`, `high` |
-| 스킬 검토 역할(검토 페르소나, grader, comparator, analyzer) | `role_runner.py review`로 `claude-opus-5-5`, `high`; 대체는 `gpt-6.1-sol`, `xhigh` `reviewer` | `role_runner.py reviewer`로 `review_model` 설정값(기본 `gpt-6-astra`), `xhigh`; 대체는 `claude-opus-5-5`, `high` `reviewer` |
+| 스킬 검토 역할(검토 페르소나, grader, comparator, analyzer) | `role_runner.py review`로 `claude-opus-5-5`, `high`(최대 `xhigh`); 대체는 `gpt-6.1-sol`, `high`(최대 `xhigh`)의 `reviewer` | `role_runner.py reviewer`로 `review_model` 설정값(기본 `gpt-6-astra`), `high`(최대 `xhigh`); 대체는 `claude-opus-5-5`, `high`의 `reviewer` |
 
 결과를 신뢰하기 전에 호스트 기록과 관련된 비밀이 아닌 설정으로 역할의 실제 모델과 사고 강도를 확인하거나, 호스트
 에이전트 규칙이 정한 강제 장치(Mod의 역할 고정, 역할 실행기의 검증)에 의존한다. 요청한 값, 역할 이름, agent guard
@@ -95,13 +97,13 @@ Skill Builder의 시험 실행과 기타 비검토 참여자는 표에 나온 �
 
 | 기능 | Claude Code 기본 | Claude Code 대체 | Codex 기본 | Codex 대체 |
 |---|---|---|---|---|
-| investigation | `gpt-5.6-luna` / `xhigh` (runner) | `claude-sonnet-5-5` / `medium` (`scout`) | `gpt-5.6-luna` / `xhigh` (`scout`) | `claude-sonnet-5-5` / `medium` (runner) |
-| implementation | `claude-sonnet-5-5` / `high` (`sonnet-worker`) | `gpt-6.1-sol` / `high` (runner) | Codex worker model 설정, 기본값 `gpt-5.6-luna` / `xhigh` (`worker`) | `claude-sonnet-5-5` / `high` (runner) |
-| design | `claude-opus-5-5` / `xhigh` (`designer`) | `gpt-6-astra` / `xhigh` (runner) | `gpt-6-astra` / `xhigh` (`designer`) | `claude-opus-5-5` / `xhigh` (runner) |
-| language | `gpt-6.1-sol` / `high` (runner) | `claude-opus-5-5` / `high` (runner) | `gpt-6.1-sol` / `high` (runner) | `claude-opus-5-5` / `high` (runner) |
-| review | `gpt-6-astra` / `xhigh` (runner) | `claude-opus-5-5` / `high` (`reviewer`) | `claude-opus-5-5` / `high` (runner) | `gpt-6.1-sol` / `xhigh` (`reviewer`) |
+| investigation | `gpt-5.6-luna` / `high`(최대 `xhigh`) (runner) | `claude-sonnet-5-5` / `medium` (`scout`) | `gpt-5.6-luna` / `high`(최대 `xhigh`) (`scout`) | `claude-sonnet-5-5` / `medium` (runner) |
+| implementation | `claude-sonnet-5-5` / `high` (`sonnet-worker`) | `gpt-6.1-sol` / `high`(최대 `xhigh`) (runner) | `claude-sonnet-5-5` / `high`(최대 `xhigh`) (runner) | Codex worker model 설정, 레지스트리 쌍 `gpt-5.6-luna` / `high`(최대 `xhigh`) (`worker`) |
+| design | `claude-opus-5-5` / `xhigh` (`designer`) | `gpt-6-astra` / `high`(최대 `xhigh`) (runner) | `gpt-6-astra` / `high`(최대 `xhigh`) (`designer`) | `claude-opus-5-5` / `high`(최대 `xhigh`) (runner) |
+| language | `gpt-6.1-sol` / `high`(최대 `xhigh`) (runner) | `claude-opus-5-5` / `high`(최대 `xhigh`) (runner) | `gpt-6.1-sol` / `high`(최대 `xhigh`) (runner) | `claude-opus-5-5` / `high`(최대 `xhigh`) (runner) |
+| review | `gpt-6-astra` / `high`(최대 `xhigh`) (runner) | `claude-opus-5-5` / `high` (`reviewer`) | `claude-opus-5-5` / `high`(최대 `xhigh`) (runner) | `gpt-6.1-sol` / `high`(최대 `xhigh`) (`reviewer`) |
 
 Claude Code의 `review` 기본 항목은 기본 모델 대신 `review_model` 설정을 쓴다. 이 기본 항목이 Claude 모델로 정해지면
-Claude Code의 `review` 대체 항목은 `reviewer` 항목 대신 역할 실행기로 `gpt-6-astra` / `xhigh`를 실행한다. `(runner)`로
+Claude Code의 `review` 대체 항목은 `reviewer` 항목 대신 역할 실행기로 `gpt-6-astra` / `high`(최대 `xhigh`)를 실행한다. `(runner)`로
 표시한 항목은 역할 실행기로 실행하고, 에이전트 이름으로 표시한 항목은 그 플러그인 에이전트를 고정된 모델과 사고 강도로
 실행한다.

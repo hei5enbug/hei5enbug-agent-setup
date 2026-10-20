@@ -154,8 +154,17 @@ def declared_codex_roles(home: Path) -> tuple[dict[str, list[dict]], dict[str, s
     return pins, problems, unusable
 
 
+def allowed_efforts(entry: dict) -> list[str]:
+    """Return the efforts from the entry's effort up to its max_effort in registry order, limited by the model's effort rule."""
+    levels = REGISTRY["efforts"]
+    lowest = levels.index(entry["effort"])
+    highest = max(lowest, levels.index(entry.get("max_effort") or entry["effort"]))
+    rule = EFFORT_RULES.get(entry["model"])
+    return [level for level in levels[lowest : highest + 1] if rule is None or level in rule]
+
+
 def pinned_pairs(name: str, home: Path, session=None) -> tuple[list[dict] | None, str | None]:
-    """Return the only pair a Codex role may be spawned with: its primary pair, since a fallback is cross-family.
+    """Return the pairs a Codex role may be spawned with: its primary model at each allowed effort, since a fallback is cross-family.
 
     The worker pair is the one recorded at this session's start when it is still valid, else the live setting.
     """
@@ -165,9 +174,11 @@ def pinned_pairs(name: str, home: Path, session=None) -> tuple[list[dict] | None
             model, effort = recorded
         else:
             model, effort, _ = worker_setting("codex")
-        return [{**REGISTRY["codex_agents"][name], "model": model, "effort": effort}], None
+        entry = {**REGISTRY["codex_agents"][name], "model": model, "effort": effort}
+        return [{**entry, "effort": level} for level in allowed_efforts(entry)], None
     if name in REGISTRY["codex_agents"]:
-        return [REGISTRY["codex_agents"][name]], None
+        entry = REGISTRY["codex_agents"][name]
+        return [{**entry, "effort": effort} for effort in allowed_efforts(entry)], None
     pins, problems, _ = declared_codex_roles(home)
     if name in problems:
         return None, problems[name]

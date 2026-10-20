@@ -207,7 +207,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
             {
                 "type": "string",
                 "title": "Implementation worker",
-                "description": "Route implementation work: auto (the main session picks per task: haiku for easy work, sol for normal or hard work, sonnet when Codex usage is high), codex (Codex on gpt-5.6-luna at xhigh), haiku (the plugin worker on its Worker model and Worker effort, claude-haiku-5-5 at high by default), sol (gpt-6.1-sol at high through the role runner), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
+                "description": "Route implementation work: auto (the main session picks per task: haiku for easy work, sonnet for normal or hard work, and sol only when a Claude route fails or stops on a usage limit), codex (Codex on gpt-5.6-luna at high), haiku (the plugin worker on its Worker model and Worker effort, claude-haiku-5-5 at high by default), sol (gpt-6.1-sol at high through the role runner), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
                 "options": ["auto", "codex", "haiku", "sol", "sonnet"],
                 "default": "auto",
             },
@@ -247,9 +247,8 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
             'The `worker` agent runs on the model and effort in the session line "Worker agent model" (Haiku at '
             '`high` by default).',
             "When it says `auto`, choose per assignment: the `worker` agent for easy work",
-            "Sol for normal or hard work",
-            "Sonnet instead of Sol when the Codex weekly usage is above 70 percent or Sol is unavailable.",
-            "When a Claude route stops on a usage limit, use Sol.",
+            "and the Sonnet worker for normal or hard work",
+            "When a Claude route fails or stops on a usage limit, use the Sol worker.",
             "A user request for one route applies to that request only.",
             "`hei5enbug-agent-setup:designer` still takes UI code, visual design, and diagram work, except the kinds "
             "the Claude Code session file assigns to the main session.",

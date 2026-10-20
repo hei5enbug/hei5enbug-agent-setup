@@ -37,14 +37,14 @@ Use this model mapping:
 
 | Authoring model family | Review model | Reasoning effort |
 |---|---|---|
-| GPT | `claude-fable-5-1` | `xhigh` |
-| Claude | the `review_model` setting (default `gpt-6-astra`) | `xhigh` |
+| GPT | `claude-fable-5-1` | `high`, or `xhigh` for several components, a public contract, security, concurrency, or a hook or guard |
+| Claude | the `review_model` setting (default `gpt-6-astra`) | `high`, or `xhigh` for several components, a public contract, security, concurrency, or a hook or guard |
 
-Select the actual authoring model family, not the execution host. GPT authoring in Claude Code follows the
-GPT row. If both families materially contribute, record their contribution and use the final authoring
-family for the one reviewer. Do not claim independence from every contributor or add review calls.
-When the configured reviewer is in the authoring family, say in the result that the review is not
-cross-family.
+Select the actual authoring model family, not the execution host. Code that a delegated worker wrote belongs to
+that worker's model family. GPT authoring in Claude Code follows the GPT row. If both families materially
+contribute, record their contribution and use the final authoring family for the one reviewer. Do not claim
+independence from every contributor or add review calls. When the configured reviewer is in the authoring family,
+say in the result that the review is not cross-family.
 
 Use the pinned model ID exactly and record it. Do not look up a newer release, follow a provider alias, or
 substitute another model tier or a lower reasoning effort than the mapping selects. The reviewer must not edit

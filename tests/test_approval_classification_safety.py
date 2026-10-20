@@ -1,6 +1,149 @@
+import shlex
+
 import pytest
 
 from test_approval_guard import bash_event, fake_bin, guard, state, state_mod
+
+
+@pytest.mark.parametrize("command", [
+    "kubectl get secret -A --field-selector metadata.name=x "
+    "-o 'custom-columns=NS:.metadata.namespace,NAME:.metadata.name,TYPE:.type'",
+    r'''kubectl get secret -A --field-selector metadata.name=x -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name} type={.type}{"\n"}{end}' ''',
+])
+def test_secret_metadata_inventory_commands_are_reads(state, fake_bin, command):
+    """Secret의 네임스페이스와 이름과 타입만 출력하는 목록 명령은 승인 없이 조회한다."""
+    # given
+    cwd = str(state)
+    # when
+    outcome = guard.classify_text(command, cwd)
+    # then
+    assert outcome.kind == "read"
+
+
+@pytest.mark.parametrize("option", ["-o ", "--output ", "-o=", "--output=", "-o"])
+@pytest.mark.parametrize("output", ["jsonpath={.metadata.name}", "custom-columns=NAME:.metadata.name"])
+def test_secret_metadata_outputs_accept_existing_option_spellings(state, fake_bin, option, output):
+    """메타데이터 전용 출력은 기존의 모든 짧은 옵션과 긴 옵션 표기에서 조회로 분류한다."""
+    # given
+    command = "kubectl get secret x " + option + shlex.quote(output)
+    # when
+    outcome = guard.classify_text(command, str(state))
+    # then
+    assert outcome.kind == "read"
+
+
+@pytest.mark.parametrize("field", [
+    ".metadata.name", ".metadata.namespace", ".metadata.uid", ".metadata.labels", ".metadata.labels.app",
+    ".metadata.labels.app_name-1", ".metadata.creationTimestamp", ".metadata.deletionTimestamp",
+    ".metadata.resourceVersion", ".metadata.generation", ".metadata.generateName", ".metadata.finalizers",
+    ".metadata.finalizers[*]", ".metadata.ownerReferences",
+    ".metadata.ownerReferences[*]", ".metadata.ownerReferences.uid",
+    ".metadata.ownerReferences[*].apiVersion", ".type", ".kind", ".apiVersion", ".immutable",
+    ".items[*].metadata.name", "$.metadata.name",
+    "$.items[*].metadata.ownerReferences[*].kind", "$.items[*].metadata.finalizers[*]",
+])
+@pytest.mark.parametrize("format_name", ["jsonpath", "custom-columns"])
+def test_secret_output_allowlist_accepts_metadata_paths(state, fake_bin, field, format_name):
+    """허용된 메타데이터 경로와 루트 및 전체 목록 표기는 두 출력 형식에서 조회로 분류한다."""
+    # given
+    template = "{" + field + "}" if format_name == "jsonpath" else "VALUE:" + field
+    command = "kubectl get secrets -o " + shlex.quote(format_name + "=" + template)
+    # when
+    outcome = guard.classify_text(command, str(state))
+    # then
+    assert outcome.kind == "read"
+
+
+@pytest.mark.parametrize("template", [
+    r'{range .items[*]}{.metadata.name}{"\n"}{end}',
+    r'{range $.items[*]}{.metadata.name}{"\t"}{end}',
+    r'{range .items}{.metadata.name}{end}',
+    r'{range .items[*]}{range .metadata.ownerReferences[*]}{.name}{"\n"}{end}{end}',
+    r'{range .items[*]}{range .metadata.ownerReferences}{.uid}{end}{end}',
+    r'{range .metadata.ownerReferences[*]}{.kind}{end}',
+    r'{range .metadata.finalizers[*]}{"finalizer"}{end}',
+    r'{range .items[*]}{$.metadata.name}{end}',
+    r'''{.metadata.name}{'\n'}{"\t"}literal {.type}''',
+    r'{"{.data}"}',
+    "metadata only",
+])
+def test_metadata_jsonpath_accepts_ranges_and_literals(state, fake_bin, template):
+    """메타데이터 범위 안의 상대 경로와 인용 문자열 및 일반 텍스트는 조회로 분류한다."""
+    # given
+    command = "kubectl get secrets -o " + shlex.quote("jsonpath=" + template)
+    # when
+    outcome = guard.classify_text(command, str(state))
+    # then
+    assert outcome.kind == "read"
+
+
+@pytest.mark.parametrize("field", [
+    ".data", ".data.password", ".stringData", ".metadata", ".metadata.annotations",
+    r".metadata.annotations.kubectl\.kubernetes\.io/last-applied-configuration", ".metadata.managedFields",
+    ".", "@", "$", "..metadata.name", ".items[*]..name", ".items[?(@.type)].metadata.name",
+    ".items[0:2].metadata.name", ".items[-1].metadata.name", ".items[0,1].metadata.name",
+    ".items[12].metadata.namespace", ".metadata.finalizers[0]", ".metadata.ownerReferences[12].name",
+    ".metadata.labels[*]", ".metadata.labels.app.name", ".metadata.labels.app/key",
+    ".metadata.finalizers[0:2]", ".metadata.ownerReferences[-1].name", ".metadata.name[*]",
+    ".metadata.ownerReferences[*]..name", ".metadata.ownerReferences[?(@.name)].uid",
+    "metadata.name", ".metadata.name,.data", ".metadata['name']", ".Metadata.name",
+    "$.items[*].metadata.annotations", "$.data", "",
+])
+@pytest.mark.parametrize("format_name", ["jsonpath", "custom-columns"])
+def test_secret_output_rejects_sensitive_and_unrecognized_paths(state, fake_bin, field, format_name):
+    """비밀 값, 전체 메타데이터, 주석, 범위 오류로 객체를 출력할 수 있는 숫자 인덱스, 해석할 수 없는 경로는 계속 비밀 출력으로 거부한다."""
+    # given
+    template = "{" + field + "}" if format_name == "jsonpath" else "VALUE:" + field
+    command = "kubectl get secrets -o " + shlex.quote(format_name + "=" + template)
+    # when
+    outcome = guard.classify_text(command, str(state))
+    # then
+    assert outcome.kind == "secret"
+
+
+@pytest.mark.parametrize("output", [
+    "jsonpath", "jsonpath=", "jsonpath-file=metadata.txt", "custom-columns-file=metadata.txt",
+    "go-template={.metadata.name}", "go-template-file=metadata.txt", "template={.metadata.name}",
+    "template-file=metadata.txt", "json", "yaml", "jsonpath={.metadata.name}{.data}",
+    "jsonpath={range .items[*]}{.metadata.annotations}{end}",
+    "jsonpath={range .items[*]}{.data}{end}", "jsonpath={range .items[*]}{.}{end}",
+    "jsonpath={range .items[*]}{@}{end}", "jsonpath={range .items[*]}{$}{end}",
+    "jsonpath={range .items[*]}{} {end}", "jsonpath={range .data}{.metadata.name}{end}",
+    "jsonpath={range .metadata}{.name}{end}", "jsonpath={range .items[*]}{.metadata.name}",
+    "jsonpath={end}{.metadata.name}", "jsonpath={.metadata.name", "jsonpath={.metadata.name}}",
+    "jsonpath={{.metadata.name}}", 'jsonpath={"unterminated}', "jsonpath={unknown .metadata.name}",
+    "custom-columns=NAME:.metadata.name,VALUE:.data", "custom-columns=NAME:.metadata.name,",
+    "custom-columns=NAME", "custom-columns=:.metadata.name", "custom-columns=NAME:.metadata.name:extra",
+])
+def test_secret_output_rejects_other_formats_and_malformed_templates(state, fake_bin, output):
+    """파일 기반 출력과 원문 출력 및 알 수 없거나 불완전한 템플릿은 비밀 출력으로 유지한다."""
+    # given
+    command = "kubectl get secrets -o " + shlex.quote(output)
+    # when
+    outcome = guard.classify_text(command, str(state))
+    # then
+    assert outcome.kind == "secret"
+
+
+@pytest.mark.parametrize("command", [
+    "kubectl get secret -o jsonpath --template='{.metadata.name}'",
+    "kubectl get secret --output=jsonpath --template='{.metadata.name}'",
+    "kubectl get secret -o jsonpath='{.metadata.name}' --template='{.data}'",
+    "kubectl get secret -o jsonpath='{.metadata.name}' --template '{.data}'",
+    "kubectl get secret -o jsonpath='{.metadata.name}' --allow-missing-template-keys=false",
+    "kubectl get secret -o custom-columns=NAME:.metadata.name --allow-missing-template-keys false",
+    "kubectl get --raw /api/v1/namespaces/x/secrets -o jsonpath='{.metadata.name}'",
+    "kubectl config view --raw -o jsonpath='{.metadata.name}'",
+    "kubectl create token sa -o jsonpath='{.metadata.name}'",
+])
+def test_other_secret_reads_cannot_use_metadata_output_to_bypass_denial(state, fake_bin, command):
+    """별도 템플릿과 원시 Secret 조회 및 원시 설정과 토큰 생성은 계속 비밀 출력으로 거부한다."""
+    # given
+    cwd = str(state)
+    # when
+    outcome = guard.classify_text(command, cwd)
+    # then
+    assert outcome.kind == "secret"
 
 
 @pytest.mark.parametrize(("command", "kind"), [

@@ -7,7 +7,7 @@ from test_approval_guard import PG_ID, bash_event, datagrip_guard, fake_bin, gua
 
 
 STOP_REASON = (
-    "This approval was requested three times without the call completing (declines included); "
+    "This approval was requested three times since the user's last message without the call completing (declines included); "
     "stop retrying and tell the user."
 )
 
@@ -56,6 +56,96 @@ def test_fourth_uncompleted_approval_request_is_denied_without_a_new_ask_or_code
     assert reason(output) == STOP_REASON
     assert count(state_mod.WRITE_KEY if kind in ("write", "request") else "key-a", host) == 3
     assert state_mod._load(host, "s1")["pending"] == pending
+
+
+@pytest.mark.parametrize("host", ["claude", "codex"])
+def test_new_user_prompt_allows_another_write_approval_request(state, host):
+    """미완료 쓰기 요청이 세 번 쌓여도 새 사용자 메시지 뒤에는 다시 승인을 요청하고, Codex는 대기 중인 코드를 다시 안내한다."""
+    # given
+    action = outcome("write")
+    for _ in range(3):
+        state_mod.pre_decision(host, "s1", action)
+    pending = dict(state_mod._load(host, "s1")["pending"])
+    guard.handle({"hook_event_name": "UserPromptSubmit", "session_id": "s1", "prompt": "Push the change"}, host)
+    # when
+    output = state_mod.pre_decision(host, "s1", action)
+    # then
+    assert decision(output) == ("ask" if host == "claude" else "deny")
+    assert reason(output) != STOP_REASON
+    assert count(state_mod.WRITE_KEY, host) == 1
+    if host == "codex":
+        assert code(output) in pending
+
+
+@pytest.mark.parametrize("host", ["claude", "codex"])
+def test_prompt_reset_preserves_every_other_approval_field_and_session(state, host):
+    """새 사용자 메시지는 해당 호스트와 세션의 요청 횟수만 비우고 다른 승인 상태를 보존한다."""
+    # given
+    data = {
+        **state_mod._empty(),
+        "approved": [state_mod.SENSITIVE_KEY],
+        "approved_at": {state_mod.SENSITIVE_KEY: 123},
+        "once": ["once-key"],
+        "pending": {"ABCDEF": {"key": "pending-key"}},
+        "inflight": [{"key": "inflight-key", "id": "t1"}],
+        "hooks_warning_shown": True,
+        "request_counts": {state_mod.WRITE_KEY: 3, "pending-key": 2},
+        "asked": [{"id": "t2", "keys": [state_mod.WRITE_KEY]}],
+    }
+    for other_host, session in (("claude", "s1"), ("codex", "s1"), (host, "s2")):
+        state_mod._mutate(other_host, session, lambda stored: stored.update(data))
+    other_host = "codex" if host == "claude" else "claude"
+    # when
+    guard.handle({"hook_event_name": "UserPromptSubmit", "session_id": "s1", "prompt": "Continue"}, host)
+    # then
+    assert state_mod._load(host, "s1") == {**data, "request_counts": {}}
+    assert state_mod._load(host, "s2") == data
+    assert state_mod._load(other_host, "s1") == data
+
+
+@pytest.mark.parametrize("host", ["claude", "codex"])
+def test_child_prompt_preserves_child_and_parent_request_counts(state, monkeypatch, host):
+    """자식 세션의 메시지는 자식과 부모의 미완료 승인 요청 횟수를 초기화하지 않는다."""
+    # given
+    guard.handle({"hook_event_name": "UserPromptSubmit", "session_id": "s1", "prompt": "Continue"}, host)
+    for _ in range(3):
+        state_mod.pre_decision(host, "s1", outcome("write"))
+        state_mod.pre_decision("codex", "parent", outcome("write"))
+    child = state_mod._load(host, "s1")
+    parent = state_mod._load("codex", "parent")
+    monkeypatch.setenv("HEI5ENBUG_PARENT_SESSION", "codex:parent")
+    # when
+    guard.handle({"hook_event_name": "UserPromptSubmit", "session_id": "s1", "prompt": "Continue"}, host)
+    # then
+    assert state_mod._load(host, "s1") == child
+    assert state_mod._load("codex", "parent") == parent
+
+
+@pytest.mark.parametrize("session", [None, "", "../invalid", 123])
+def test_reset_without_a_usable_session_does_not_mutate_state(state, monkeypatch, session):
+    """사용할 수 없는 세션 ID로는 요청 횟수나 승인 상태를 변경하지 않는다."""
+    # given
+    mutations = []
+    monkeypatch.setattr(state_mod, "_mutate", lambda *args: mutations.append(args))
+    # when
+    state_mod.reset_request_counts("codex", session)
+    # then
+    assert mutations == []
+
+
+@pytest.mark.parametrize("host", ["claude", "codex"])
+def test_approval_prompt_keeps_pending_codes_and_approves_after_reset(state, host):
+    """승인 메시지는 요청 횟수를 비운 뒤 기존 대기 코드를 정상 승인한다."""
+    # given
+    for _ in range(3):
+        issued = state_mod.request_code(host, "s1", [], [state_mod.WRITE_KEY], descriptions=["Push the change"])
+    # when
+    output = guard.handle({"hook_event_name": "UserPromptSubmit", "session_id": "s1", "prompt": "approve " + issued}, host)
+    # then
+    assert count(state_mod.WRITE_KEY, host) == 0
+    assert state_mod.is_approved(host, "s1", [state_mod.WRITE_KEY])
+    assert "Approved: Push the change." in output["hookSpecificOutput"]["additionalContext"]
+    assert state_mod.RETRY_INSTRUCTION in output["hookSpecificOutput"]["additionalContext"]
 
 
 @pytest.mark.parametrize("kind", ["always", "sensitive", "write", "request"])

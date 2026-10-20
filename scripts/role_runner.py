@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -25,6 +26,10 @@ PARENT_SESSION_ENV = "HEI5ENBUG_PARENT_SESSION"
 REGISTRY_PATH = Path(__file__).resolve().parents[1] / "config" / "model-registry.json"
 REGISTRY = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
 ROLE_EFFORT = REGISTRY["runner"]["effort"]
+ROLE_ENTRY = {"effort": ROLE_EFFORT, "max_effort": REGISTRY["runner"].get("max_effort")}
+MAX_BATCH = 6
+CODEX_SKILLS_OFF = ("-c", "skills.max_context_tokens=1")
+CLAUDE_SKILLS_OFF = "--disable-slash-commands"
 DEFAULT_TIMEOUT = 2700
 DEFAULT_REVIEW_MODEL = REGISTRY["runner"]["default_review_model"]
 ROLE_MODEL = REGISTRY["runner"]["role_model"]
@@ -121,9 +126,10 @@ class Run:
 def build_parser() -> argparse.ArgumentParser:
     parser = Parser(prog="role_runner.py", add_help=False)
     parser.add_argument("role")
-    parser.add_argument("--assignment", required=True)
-    parser.add_argument("--result", required=True)
+    parser.add_argument("--assignment", required=True, action="append")
+    parser.add_argument("--result", required=True, action="append")
     parser.add_argument("--model")
+    parser.add_argument("--effort")
     parser.add_argument("--add-dir", action="append", default=[], dest="add_dirs")
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
     parser.add_argument("--host", choices=HOSTS)
@@ -239,7 +245,7 @@ def codex_command(run: Run, cwd: str, result: str, mcp_off: list[str]) -> list[s
     if run.role == "researcher" or run.web_tools:
         command.append("--search")
     sandbox = sandbox_for(run)
-    scoped = scoped_codex_config(run, mcp_off)
+    scoped = scoped_codex_config(run, mcp_off) + ([] if run.writing else list(CODEX_SKILLS_OFF))
     if run.resume is not None:
         command += [
             "exec", "resume", run.resume, "-m", run.model,
@@ -300,7 +306,10 @@ def claude_command(run: Run) -> list[str]:
     command = ["claude", "-p"]
     if run.resume is not None:
         command += ["--resume", run.resume]
-    command += ["--model", run.model, "--effort", run.effort, "--output-format", "json", "--tools", *tools]
+    command += ["--model", run.model, "--effort", run.effort, "--output-format", "json"]
+    if not run.writing:
+        command += [CLAUDE_SKILLS_OFF]
+    command += ["--tools", *tools]
     if not run.mcp:
         command += ["--strict-mcp-config"]
     command += ["--permission-mode", mode, "--allowedTools", *allowed]
@@ -696,6 +705,25 @@ def declared_agent(name: str, host: str) -> tuple[dict, Path | None, str]:
     return entry, None, codex_body(name, registry=False)
 
 
+def allowed_efforts(entry: dict, model: str) -> list[str]:
+    """Return the levels from the entry's effort up to its max_effort in registry order, limited by the model's effort rule."""
+    levels = REGISTRY["efforts"]
+    lowest = entry["effort"]
+    highest = entry.get("max_effort") or lowest
+    rule = REGISTRY["effort_rules"].get(model)
+    return [level for level in levels[levels.index(lowest) : levels.index(highest) + 1] if rule is None or level in rule]
+
+
+def chosen_effort(requested: str | None, entry: dict, model: str) -> str:
+    """Return the requested effort when the entry's range allows it, else the entry's own effort; refuse a level outside it."""
+    if requested is None:
+        return entry["effort"]
+    allowed = allowed_efforts(entry, model)
+    if requested not in allowed:
+        raise UsageError(f"--effort {requested} is not allowed for {model}: use {' or '.join(allowed)}")
+    return requested
+
+
 def agent_run(args: argparse.Namespace, host: str) -> Run:
     """Resolve an agent on its host: its declaration, instructions, access, and cross-family fallback."""
     name = args.name
@@ -721,7 +749,8 @@ def agent_run(args: argparse.Namespace, host: str) -> Run:
         raise UsageError(f"{name} writes, so it needs --add-dir for each directory it may write")
     return Run(
         target=AGENT_TARGET, role=None, capability=None, fallback=True, runner=runner_for(fallback["model"]),
-        model=fallback["model"], effort=fallback["effort"], writing=access == "write", add_dirs=tuple(args.add_dirs),
+        model=fallback["model"], effort=chosen_effort(args.effort, fallback, fallback["model"]), writing=access == "write",
+        add_dirs=tuple(args.add_dirs),
         resume=args.resume, instructions=None, agent=name, body=body, web_tools=web_tools_in(definition), mcp=args.mcp,
     )
 
@@ -762,13 +791,31 @@ def validate(args: argparse.Namespace) -> None:
         raise UsageError(f"Instructions file not found: {args.instructions}")
     if args.resume is not None and not args.resume:
         raise UsageError("--resume must name a session id")
-    if not Path(args.assignment).is_file():
-        raise UsageError(f"Assignment file not found: {args.assignment}")
-    result = Path(args.result)
-    if result.resolve() == Path(args.assignment).resolve():
+    validate_pairs(args)
+
+
+def validate_pairs(args: argparse.Namespace) -> None:
+    """Check every assignment and result pair before any child starts."""
+    assignments, results = args.assignment, args.result
+    if len(assignments) != len(results):
+        raise UsageError("--assignment and --result must come in equal numbers")
+    if len(assignments) > MAX_BATCH:
+        raise UsageError(f"At most {MAX_BATCH} assignment and result pairs are allowed in one call")
+    if len(assignments) > 1 and args.resume is not None:
+        raise UsageError("--resume is allowed only with one assignment and result pair")
+    resolved_results = [Path(result).resolve() for result in results]
+    if len(set(resolved_results)) != len(resolved_results):
+        raise UsageError("Every --result must name a different file")
+    resolved_assignments = {Path(assignment).resolve() for assignment in assignments}
+    if resolved_assignments & set(resolved_results):
         raise UsageError("--assignment and --result must name different files")
-    if result.is_dir() or not result.parent.is_dir():
-        raise UsageError(f"Result must name a file in an existing directory: {args.result}")
+    for assignment in assignments:
+        if not Path(assignment).is_file():
+            raise UsageError(f"Assignment file not found: {assignment}")
+    for result in results:
+        path = Path(result)
+        if path.is_dir() or not path.parent.is_dir():
+            raise UsageError(f"Result must name a file in an existing directory: {result}")
 
 
 def capability_model(target: str, host: str) -> str:
@@ -794,8 +841,8 @@ def resolve(args: argparse.Namespace) -> Run:
         model = args.model or (DEFAULT_REVIEW_MODEL if target == "reviewer" else ROLE_MODEL)
         return Run(
             target=target, role=target, capability=None, fallback=False, runner=runner_for(model), model=model,
-            effort=ROLE_EFFORT, writing=target == "worker", add_dirs=tuple(args.add_dirs), resume=args.resume,
-            instructions=None,
+            effort=chosen_effort(args.effort, ROLE_ENTRY, model), writing=target == "worker", add_dirs=tuple(args.add_dirs),
+            resume=args.resume, instructions=None,
         )
     host = args.host or default_host()
     primary = capability_model(target, host)
@@ -810,8 +857,8 @@ def resolve(args: argparse.Namespace) -> Run:
         raise UsageError(f"The fallback {model} of {target} must be the other model family from its primary {primary}")
     return Run(
         target=target, role=None, capability=target, fallback=args.fallback, runner=runner_for(model), model=model,
-        effort=entry["effort"], writing=target in WRITING_CAPABILITIES, add_dirs=tuple(args.add_dirs),
-        resume=args.resume, instructions=Path(args.instructions), mcp=args.mcp,
+        effort=chosen_effort(args.effort, entry, model), writing=target in WRITING_CAPABILITIES,
+        add_dirs=tuple(args.add_dirs), resume=args.resume, instructions=Path(args.instructions), mcp=args.mcp,
     )
 
 
@@ -821,7 +868,22 @@ def plan(args: argparse.Namespace) -> Run:
     if run.writing and run.runner == "claude" and not run.add_dirs and run.agent is None:
         label = f"capability {run.capability}" if run.capability else f"role {run.role}"
         raise UsageError(f"The Claude path of the writing {label} needs --add-dir for each directory it may edit")
+    if run.writing and len(args.assignment) > 1:
+        raise UsageError("Several assignment and result pairs are allowed only for a read-only target")
     return run
+
+
+def run_pair(args: argparse.Namespace, run: Run, root: Path, cwd: str, assignment: str, result: str) -> tuple[int, str, str | None]:
+    """Run one assignment and result pair as a single run would, and return its exit code, status line, and error text."""
+    pair = argparse.Namespace(**{**vars(args), "assignment": assignment, "result": result})
+    try:
+        evidence = execute(pair, run, root, cwd)
+    except RunnerError as error:
+        return error.code, status(run, False, error.evidence, error.code), str(error)
+    except OSError as error:
+        message = f"Cannot handle the result file: {error}"
+        return EXIT_RUN, status(run, False, {"error": message}, EXIT_RUN), message
+    return EXIT_OK, status(run, True, evidence, EXIT_OK), None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -833,14 +895,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"role_runner: {error}", file=sys.stderr)
         print(status(None, False, {"error": str(error)}, EXIT_USAGE))
         return EXIT_USAGE
-    try:
-        evidence = execute(args, run, root, os.getcwd())
-    except RunnerError as error:
-        print(f"role_runner: {error}", file=sys.stderr)
-        print(status(run, False, error.evidence, error.code))
-        return error.code
-    print(status(run, True, evidence, EXIT_OK))
-    return EXIT_OK
+    cwd = os.getcwd()
+    pairs = list(zip(args.assignment, args.result))
+    if len(pairs) == 1:
+        outcomes = [run_pair(args, run, root, cwd, *pairs[0])]
+    else:
+        with ThreadPoolExecutor(max_workers=len(pairs)) as pool:
+            outcomes = list(pool.map(lambda pair: run_pair(args, run, root, cwd, *pair), pairs))
+    for _, line, error in outcomes:
+        if error is not None:
+            print(f"role_runner: {error}", file=sys.stderr)
+        print(line)
+    return max(code for code, _, _ in outcomes)
 
 
 if __name__ == "__main__":

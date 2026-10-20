@@ -21,8 +21,9 @@
 ## 조사
 
 - 세션의 위임 규칙이 선택한 범위가 한정된 읽기 전용 조사에는 계획 중이든 실행 중이든 `scout` 에이전트를 사용한다.
-- 생성할 때마다 `gpt-5.6-luna`와 `xhigh`를 명시적으로 전달한다. 함께 배포하는 역할 파일은 모델을 지정하지 않으므로
-  생성할 때 넘긴 값이 적용된다.
+- 생성할 때마다 `gpt-5.6-luna`와 `high`를 명시적으로 전달하며,
+  [공유 모델 라우팅](model-routing.ko.md#역할-설정-유지)의 사고 강도 규칙에 따라 `xhigh`를 전달한다.
+  함께 배포하는 역할 파일은 모델을 지정하지 않으므로 생성할 때 넘긴 값이 적용된다.
 - 결과를 신뢰하기 전에 아래 '생성된 역할 검증' 절을 거친다.
 - 구체적인 질문 하나와 좁은 검색 범위를 지정한다.
 - 결과에 파일 경로, 코드 심볼과 구체적인 근거를 요구한다.
@@ -31,7 +32,7 @@
   세션에서 조사한다.
 - 범위가 한정된 공개 조사는 웹 검색을 쓸 수 있을 때만 역할 실행기의 `researcher` 역할을 실행한다:
   `python3 <Source directory>/scripts/role_runner.py researcher --assignment <file> --result <file>`. 이 역할은
-  웹 검색으로 `gpt-5.6-luna`와 `xhigh`를 쓰며 세션 기록으로 두 값을 검증한다. 조건을 충족하지 못하면 메인 세션에서 계속한다.
+  웹 검색으로 `gpt-5.6-luna`를 `high`로 실행하며 세션 기록으로 검증한다. 조건을 충족하지 못하면 메인 세션에서 계속한다.
 
 ## 스킬 작업자
 
@@ -43,7 +44,9 @@
   ```
 
   결과 파일은 종료 코드 0일 때만 인정하며, 실행기가 호스트 기록으로 모델을 검증한다. 종료 코드 3 또는 4이면 플러그인
-  `reviewer` 역할을 `gpt-6.1-sol`과 `xhigh`를 명시해 시작한다. 아래 '생성된 역할 검증' 절을 거친다.
+  `reviewer` 역할을 `gpt-6.1-sol`과 `high`를 명시해 시작하며,
+  [공유 모델 라우팅](model-routing.ko.md#역할-설정-유지)의 사고 강도 규칙에 따라 `xhigh`를 전달한다.
+  아래 '생성된 역할 검증' 절을 거친다.
 - 로컬 근거 조사 티켓은 `scout`, 공개 자료 조사는 웹 검색을 쓸 수 있고 설정을 확인한 뒤 `researcher` 실행기 역할에
   맡긴다. 비공개 자료나 인증이 필요한 원격 접근, 이슈 트래커와 풀 리퀘스트 서비스 같은 외부 도구 작업은
   `implementation` 기능으로, 수정은 스킬이 지정한 기능 작업자로 보낸다. 그 밖에는 메인 세션에서 처리한다.
@@ -55,8 +58,11 @@
 
 위임한 구현은 [구현 위임 규칙](implementation-delegation.ko.md)에 따라 조정한다. 이 섹션은 Codex worker 연동만 덧붙인다.
 
-- 구현을 위임할 때는 플러그인 `worker` 역할만 사용한다. 역할 파일은 모델을 지정하지 않으므로 생성할 때마다 세션 줄
-  "Codex worker model"의 모델과 사고 강도를 명시적으로 전달한다.
+- 구현은 `claude-sonnet-5-5`를 실행하는 `implementation` 기능 실행기에 위임한다:
+  `python3 <Source directory>/scripts/role_runner.py implementation --host codex --instructions <Source directory>/agents/worker.md --add-dir <dir> --assignment <file> --result <file>`.
+  허용 경로가 있는 폴더에서 실행한다. 종료 코드 3 또는 4로 끝나면 부분 diff를 살펴본 뒤 플러그인 `worker` 역할을
+  대체 경로로 쓴다. 역할 파일은 모델을 지정하지 않으므로 생성할 때마다 세션 줄 "Codex worker model"의 모델과 사고 강도를
+  명시적으로 전달한다.
 - 전체 기록 fork는 부모의 모델과 사고 강도를 물려받고 재정의를 거부한다. worker를 이 방식으로 생성하지 않는다.
   `fork_turns`를 `"none"`이나 양의 정수로 두거나 `fork_context`를 끄고, 범위를 한정한 작업 맥락은 할당에 담는다.
 - 실행에서 처음 생성하기 전에 설정 계층의 `model`, `model_reasoning_effort`, 관련 `[agents]` 기본값 항목만 살펴본다.
@@ -80,8 +86,9 @@
 ## 디자인 작업
 
 `design` 기능(UI 코드, 시각 디자인, 다이어그램이나 이미지, 기술 설계 문서 초안 작성)은 capability 표의 `codex` 항목을
-따른다. 기본 경로는 플러그인 `designer` 역할을 `gpt-6-astra`와 `xhigh`를 명시해 생성하는 것이다. 아래 '생성된 역할
-검증' 절을 거친다. 그 경로가 실패하면 대체 항목을 한 번 쓴다. 저장소 루트에서 역할 실행기로 실행한다.
+따른다. 기본 경로는 플러그인 `designer` 역할을 `gpt-6-astra`와 `high`를 명시해 생성하는 것이며,
+[공유 모델 라우팅](model-routing.ko.md#역할-설정-유지)의 사고 강도 규칙에 따라 `xhigh`를 전달한다.
+아래 '생성된 역할 검증' 절을 거친다. 그 경로가 실패하면 대체 항목을 한 번 쓴다. 저장소 루트에서 역할 실행기로 실행한다.
 
 ```text
 python3 <Source directory>/scripts/role_runner.py agent --name designer --fallback --host codex --add-dir <allowed path> --assignment <file> --result <file>
@@ -128,8 +135,8 @@ python3 <Source directory>/scripts/role_runner.py <capability> --host codex --in
 
 실행기는 `--host codex`에 대해 [기능별 고정값 표](model-routing.ko.md)가 고르는 항목을 실행하고, `--fallback`은
 대체 항목을 고른다. 고른 항목이 `via: runner`가 아니면 실행기는 종료 코드 2를 반환하므로 에이전트 경로나 메인 세션에서
-계속한다. `--resume <session_id>`는 상태 줄의 `evidence.session`으로 Codex 또는 Claude 실행을 이어 간다. 상태 줄과
-종료 코드는 [Claude Code 에이전트](claude-agents.ko.md#역할-실행기)와 같다.
+계속한다. `--resume <session_id>`는 상태 줄의 `evidence.session`으로 Codex 또는 Claude 실행을 이어 간다. 상태 줄,
+종료 코드, `--effort`, 읽기 전용 할당 일괄 실행은 [Claude Code 에이전트](claude-agents.ko.md#역할-실행기)와 같다.
 
 ## 대체
 

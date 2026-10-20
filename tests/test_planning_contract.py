@@ -35,8 +35,8 @@ class PlanningContractTest(unittest.TestCase):
     def test_model_selection_has_one_canonical_source(self):
         validation = VALIDATION.read_text()
         mapping = (
-            re.compile(r"\| GPT \| `claude-fable-[\d-]+` \| `xhigh` \|"),
-            re.compile(r"\| Claude \| the `review_model` setting \(default `gpt-[\d.]+-astra`\) \| `xhigh` \|"),
+            re.compile(r"\| GPT \| `claude-fable-[\d-]+` \| `high`, or `xhigh` for [^|]+ \|"),
+            re.compile(r"\| Claude \| the `review_model` setting \(default `gpt-[\d.]+-astra`\) \| `high`, or `xhigh` for [^|]+ \|"),
         )
         for row in mapping:
             self.assertRegex(validation, row)

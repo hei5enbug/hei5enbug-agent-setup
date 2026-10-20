@@ -21,8 +21,9 @@ resume; in the last case, apply its effective-settings checks first. Other dispa
 
 - Use the `scout` agent for bounded, read-only investigation whenever the session delegation rule selects it,
   during planning or execution.
-- Pass `gpt-5.6-luna` and `xhigh` explicitly on every spawn. Its bundled role file sets no model, so the spawn
-  value applies.
+- Pass `gpt-5.6-luna` and `high` explicitly on every spawn, or `xhigh` under the effort rule in
+  [shared model routing](model-routing.md#keep-role-settings-fixed). Its bundled role file sets no model, so the
+  spawn value applies.
 - Before relying on its result, verify it under the spawned role verification section below.
 - Give it one specific question and a narrow search scope.
 - Require file paths, code symbols, and concrete evidence in its result.
@@ -31,7 +32,7 @@ resume; in the last case, apply its effective-settings checks first. Other dispa
   investigate in the main session.
 - For bounded public research, run the `researcher` role of the role runner when web search is available:
   `python3 <Source directory>/scripts/role_runner.py researcher --assignment <file> --result <file>`. It uses
-  `gpt-5.6-luna` and `xhigh` through web search and verifies them from the session record. Otherwise, continue in the
+  `gpt-5.6-luna` at `high` through web search and verifies it from the session record. Otherwise, continue in the
   main session.
 
 ## Skill workers
@@ -44,8 +45,9 @@ resume; in the last case, apply its effective-settings checks first. Other dispa
   ```
 
   Accept the result file only on exit 0; the runner verifies the model from the host record. On runner exit 3 or 4,
-  spawn the plugin `reviewer` role with `gpt-6.1-sol` and `xhigh` passed explicitly. Verify it under the spawned role
-  verification section below.
+  spawn the plugin `reviewer` role with `gpt-6.1-sol` and `high` passed explicitly, or `xhigh` under the effort rule
+  in [shared model routing](model-routing.md#keep-role-settings-fixed). Verify it under the spawned role verification
+  section below.
 - Send a local-evidence research ticket to `scout` and bounded public research to the `researcher` runner role when
   web search is available and its settings are verified. Private or authenticated remote access, including external
   tool work such as issue trackers and pull request services, goes to the `implementation` capability, and edits go to
@@ -60,8 +62,11 @@ resume; in the last case, apply its effective-settings checks first. Other dispa
 Coordinate delegated implementation under [implementation delegation rules](implementation-delegation.md).
 This section adds only the Codex worker integration.
 
-- When delegating implementation, use only the plugin `worker` role. Its role file sets no model, so pass the model and
-  effort from the session line "Codex worker model" explicitly on every spawn.
+- Delegate implementation to the `implementation` capability runner, which runs `claude-sonnet-5-5`:
+  `python3 <Source directory>/scripts/role_runner.py implementation --host codex --instructions <Source directory>/agents/worker.md --add-dir <dir> --assignment <file> --result <file>`,
+  run from the folder that holds the allowed paths. When it exits 3 or 4, inspect the partial diff and use the plugin
+  `worker` role as the fallback. Its role file sets no model, so pass the model and effort from the session line
+  "Codex worker model" explicitly on every spawn.
 - Full-history forks inherit the parent model and effort and reject overrides. Never spawn a worker that way;
   set `fork_turns` to `"none"` or a positive integer, or leave `fork_context` off, and put the bounded task
   context in the assignment.
@@ -88,8 +93,9 @@ This section adds only the Codex worker integration.
 
 For the `design` capability (UI code, visual design, diagrams or images, and technical design document drafting), use
 its `codex` entry in the [capability table](model-routing.md#capability-pins). The primary is the plugin `designer` role
-with `gpt-6-astra` and `xhigh` passed explicitly on the spawn; verify it under the spawned role verification section
-below. When that route fails, run the fallback once through the role runner from the repository root:
+with `gpt-6-astra` and `high` passed explicitly on the spawn, or `xhigh` under the effort rule in
+[shared model routing](model-routing.md#keep-role-settings-fixed); verify it under the spawned role verification
+section below. When that route fails, run the fallback once through the role runner from the repository root:
 
 ```text
 python3 <Source directory>/scripts/role_runner.py agent --name designer --fallback --host codex --add-dir <allowed path> --assignment <file> --result <file>
@@ -137,7 +143,8 @@ python3 <Source directory>/scripts/role_runner.py <capability> --host codex --in
 The runner runs the entry that [the capability table](model-routing.md) selects for `--host codex`, and `--fallback`
 selects the fallback entry. When that entry is not `via: runner`, the runner exits 2, so use the agent route or the
 main session instead. `--resume <session_id>` continues a Codex or Claude run from the `evidence.session` in its status
-line. The status line and exit codes match [Claude Code agents](claude-agents.md#role-runner).
+line. The status line, exit codes, `--effort`, and batched read-only assignments match
+[Claude Code agents](claude-agents.md#role-runner).
 
 ## Fallback
 

@@ -12,7 +12,8 @@ instead of the designer.
 
 Every worker assignment also tells the worker that it is an assigned worker, that other workers may be editing the
 workspace, and that it must preserve their changes. A repository execution plan records these fields once.
-Each worker prompt carries only its own task and the context that task requires.
+Each worker prompt carries only its own task and the context that task requires. Point to files and line ranges
+instead of pasting their content.
 
 ## Scheduling
 

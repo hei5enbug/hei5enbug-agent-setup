@@ -98,9 +98,8 @@
   | 작업 | 작업자 |
   |---|---|
   | 쉬움: 편집 내용이 정해져 있고 검사가 모두 확인하는 응집된 변경 하나 | `haiku_worker`: 할당 작업자 규칙과 과제를 stdin으로 전달하고 `claude -p --model claude-haiku-5-5 --effort xhigh --output-format json`을 사용하며 과제의 도구 권한과 허용 경로를 유지한다. 여기에 `Bash`와 `HEI5ENBUG_PARENT_SESSION=claude:$CLAUDE_CODE_SESSION_ID`를 추가해 `dontAsk`가 아니라 승인 가드가 셸 명령의 실행 여부를 결정하게 한다 |
-  | 보통 또는 어려움: 동작 변경, 여러 파일, 파싱, 보안, 동시성 | `worker`(`gpt-6.1-sol` / `high`): Claude Code에서는 허용 경로가 든 폴더에서 `role_runner.py implementation --fallback --instructions <worker 역할 정의>`를 실행하고, Codex에서는 `worker` 역할을 쓴다 |
-  | Codex 주간 사용량이 70%를 넘거나(최종 검토와 같은 방식으로 읽는다) Sol을 쓸 수 없음 | `sonnet_worker`: `claude -p --model claude-sonnet-5-5 --effort high --output-format json`, 권한은 `haiku_worker`와 같다 |
-  | Claude 사용 한도에 걸림 | 난이도와 관계없이 Sol 경로 |
+  | 보통 또는 어려움: 동작 변경, 여러 파일, 파싱, 보안, 동시성 | `sonnet_worker`: `claude -p --model claude-sonnet-5-5 --effort high --output-format json`, 권한은 `haiku_worker`와 같다 |
+  | Claude 사용 한도에 걸리거나 Claude worker를 사용할 수 없음 | `worker`(`gpt-6.1-sol` / `high`): Claude Code에서는 허용 경로가 든 폴더에서 `role_runner.py implementation --fallback --instructions <worker 역할 정의>`를 실행하고, Codex에서는 `worker` 역할을 쓴다 |
 
   2026-10-17에 실제 승인 가드 과제 세 개(분류, 세션 상태, 모드)를 Sonnet `high`와 Sol `high`로 한 번씩
   돌렸다. 여섯 실행 모두 코디네이터의 검사를 통과했다. 블라인드 검토에서 고칠 곳은 Sol이 모두 5곳,
@@ -109,6 +108,8 @@
   Sonnet의 약 9분의 1이었다($0.018 대 $0.159). 파일·파싱 경계 처리가 있는 사용량 기록 읽기 스크립트는 고칠 곳이
   Sol 1곳, Haiku 4곳, Sonnet 6곳이었다. 모델과 과제마다 한 번씩만 돌린 근거는 얇고 Sol의 비용은 금액으로
   재지 못했다. 플러그인의 `implementation_worker` `auto` 경로가 같은 규칙을 런타임에 적용한다.
+  2026-10-20에 사용자는 구현은 Claude에, 조사와 최종 검토는 GPT에 유지하도록 보통·어려운 작업을 Sonnet으로 옮겼으며,
+  Sol은 대체 경로가 되었다.
 
   플러그인 에이전트의 정의를 덮어쓰거나 Anthropic 모델을 Codex 역할에 넣지 않는다. CLI로 재개할 때
   모델과 추론 강도를 다시 지정하고, 작업자의 결과를 사용하기 전에 기존 준비 확인과 실제 호스트 기록
@@ -119,8 +120,8 @@
   | 변경 | 최종 검토 |
   |---|---|
   | 사소함: 오타, 문구, 버전, 메타데이터 수정, 번역, 또는 검사가 모두 확인하는 기계적 수정 | 없음 |
-  | 범위 한정: 완료 검사가 분명한 구성 요소 하나이고, 공개 계약, 보안, 동시성, 훅, 가드 변경이 없음 | `code_reviewer`. Claude Code에서는 `role_runner.py reviewer --model gpt-6.1-sol`이며, runner가 고정한 `xhigh`로 실행된다 |
-  | 복잡함: 여러 구성 요소, 공개 계약, 보안, 동시성, 훅이나 가드, 또는 `gpt-6.1-sol`로 작성한 작업 | `role_runner.py reviewer --model gpt-6-astra`, `xhigh` |
+  | 범위 한정: 완료 검사가 분명한 구성 요소 하나이고, 공개 계약, 보안, 동시성, 훅, 가드 변경이 없음 | `code_reviewer`. Claude Code에서는 `role_runner.py reviewer --model gpt-6.1-sol`이며, runner 기본값인 `high`로 실행된다 |
+  | 복잡함: 여러 구성 요소, 공개 계약, 보안, 동시성, 훅이나 가드, 또는 `gpt-6.1-sol`로 작성한 작업 | `role_runner.py reviewer --model gpt-6-astra --effort xhigh` |
 
   Codex 주간 사용량이 70% 이하이면 묻지 않고 실행한다. 사용량은 `~/.codex/sessions` 아래 가장 최근
   `token_count` 이벤트에서 `window_minutes`가 10080인 사용 한도 창의 `used_percent`로 읽는다. 70%를
@@ -145,7 +146,8 @@
 - 이 저장소를 변경하기 전에, `tests/test_model_pins.py`의 `PINS_VERIFIED_ON`이 14일보다 오래됐으면
   `config/model-registry.json`의 `pins`에 있는 GPT Luna를 제외한 모든 모델 계열의 가장 새로운 정식 모델을
   확인하고 `PINS_VERIFIED_ON`을 그 날짜로 바꾼다. GPT Luna는 사용자가 명시적으로 선택을 바꿀 때까지
-  `gpt-5.6-luna` / `xhigh`를 유지한다. 공식 [Claude 모델 개요](https://platform.claude.com/docs/en/about-claude/models/overview),
+  사용자가 고른 `gpt-5.6-luna`를 유지하며, 기본 사고 강도는 `high`이고 사고 강도 규칙에 따라 `xhigh`를 쓴다
+  (사용자 선택일 2026-10-20). 공식 [Claude 모델 개요](https://platform.claude.com/docs/en/about-claude/models/overview),
   [OpenAI 모델 카탈로그](https://developers.openai.com/api/docs/models), 각 호스트의 모델 카탈로그를 사용하고 미리보기
   모델은 제외한다. 계열에 더 새로운 릴리스가 있으면 같은 변경에서 `config/model-registry.json`의 `pins`와 모든 참조를
   갱신하고 `tests/test_model_pins.py`가 통과할 때까지 맞춘다. 실행 파일은 모델을 이 전체 ID로만 적는다. 별칭이나 실행 시점의

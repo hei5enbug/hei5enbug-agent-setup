@@ -22,11 +22,14 @@ def implementation_section() -> str:
 
 class CodexWorkerContractTest(unittest.TestCase):
     def test_위임한_구현은_공유_위임_규칙과_플러그인_worker를_사용한다(self):
-        """Codex에서 구현을 위임할 때는 플러그인 worker에 모델과 xhigh를 명시적으로 넘긴다."""
+        """Codex에서 구현을 위임할 때는 Sonnet 실행기를 먼저 쓰고, 실행기가 실패하면 플러그인 worker에 모델과 effort를 명시적으로 넘긴다."""
         # Given
         expected = (
             "[implementation delegation rules](implementation-delegation.md)",
-            "When delegating implementation, use only the plugin `worker` role.",
+            "Delegate implementation to the `implementation` capability runner, which runs `claude-sonnet-5-5`:",
+            "implementation --host codex --instructions <Source directory>/agents/worker.md --add-dir <dir> "
+            "--assignment <file> --result <file>",
+            "When it exits 3 or 4, inspect the partial diff and use the plugin `worker` role as the fallback.",
             "pass the model and effort from the session line \"Codex worker model\" explicitly on every spawn",
         )
 
@@ -80,7 +83,11 @@ class CodexWorkerContractTest(unittest.TestCase):
         section = implementation_section()
 
         # Then
-        self.assertIn("Pass `gpt-5.6-luna` and `xhigh` explicitly on every spawn.", text)
+        self.assertIn(
+            "Pass `gpt-5.6-luna` and `high` explicitly on every spawn, or `xhigh` under the effort rule in "
+            "[shared model routing](model-routing.md#keep-role-settings-fixed).",
+            " ".join(text.split()),
+        )
         for lookup in ("developers.openai.com", "learn.chatgpt.com", "model selector"):
             self.assertNotIn(lookup, section)
         self.assertEqual({"gpt-5.6-luna", "gpt-6-astra", "gpt-6.1-sol"}, set(re.findall(r"gpt-[\w.-]+", text)))
@@ -197,7 +204,8 @@ class CodexWorkerContractTest(unittest.TestCase):
         # Given
         text = CODEX_AGENTS.read_text(encoding="utf-8")
         expected = (
-            "The primary is the plugin `designer` role with `gpt-6-astra` and `xhigh` passed explicitly on the spawn;",
+            "The primary is the plugin `designer` role with `gpt-6-astra` and `high` passed explicitly on the spawn, or "
+            "`xhigh` under the effort rule in [shared model routing](model-routing.md#keep-role-settings-fixed);",
             "verify it under the spawned role verification section below.",
             "run the fallback once through the role runner from the repository root:",
             "python3 <Source directory>/scripts/role_runner.py agent --name designer --fallback --host codex "
@@ -239,7 +247,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         # Then
         self.assertIn("Read [shared model routing](model-routing.md) before dispatching", normalized)
         self.assertIn("For bounded public research, run the `researcher` role of the role runner when web search is available:", investigation)
-        self.assertIn("It uses `gpt-5.6-luna` and `xhigh` through web search and verifies them from the session record.", investigation)
+        self.assertIn("It uses `gpt-5.6-luna` at `high` through web search and verifies it from the session record.", investigation)
         self.assertIn("verify it under the spawned role verification section below", investigation)
         self.assertNotIn("rollout record", investigation)
         self.assertIn(
@@ -316,7 +324,11 @@ class CodexWorkerContractTest(unittest.TestCase):
             skill_workers,
         )
         self.assertIn("Accept the result file only on exit 0; the runner verifies the model from the host record.", skill_workers)
-        self.assertIn("On runner exit 3 or 4, spawn the plugin `reviewer` role with `gpt-6.1-sol` and `xhigh` passed explicitly", skill_workers)
+        self.assertIn(
+            "On runner exit 3 or 4, spawn the plugin `reviewer` role with `gpt-6.1-sol` and `high` passed explicitly, "
+            "or `xhigh` under the effort rule in [shared model routing](model-routing.md#keep-role-settings-fixed)",
+            skill_workers,
+        )
         self.assertIn("Verify it under the spawned role verification section below.", skill_workers)
         self.assertNotIn("claude -p", skill_workers)
         self.assertNotIn("modelUsage", skill_workers)

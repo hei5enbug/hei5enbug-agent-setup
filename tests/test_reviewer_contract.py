@@ -52,7 +52,7 @@ class ReviewerContractTest(unittest.TestCase):
             self.assertIn(phrase, normalized_body)
 
     def test_Codex_reviewer는_모델을_지정하지_않고_읽기전용_sandbox를_쓴다(self):
-        """Codex reviewer 역할은 xhigh와 read-only sandbox를 쓰고 모델 키를 두지 않는다."""
+        """Codex reviewer 역할은 read-only sandbox를 쓰고 모델과 effort 키를 두지 않는다."""
         # Given
         role = tomllib.loads(CODEX_ROLE.read_text(encoding="utf-8"))
 
@@ -62,7 +62,7 @@ class ReviewerContractTest(unittest.TestCase):
         # Then
         self.assertEqual(role["name"], "reviewer")
         self.assertIn("Returns its quoted review result", role["description"])
-        self.assertEqual(role["model_reasoning_effort"], "xhigh")
+        self.assertNotIn("model_reasoning_effort", role)
         self.assertEqual(role["sandbox_mode"], "read-only")
         self.assertNotIn("model", role)
         self.assertIn("Base every finding or grade on quoted evidence.", instructions)
@@ -118,16 +118,16 @@ class ReviewerContractTest(unittest.TestCase):
         self.assertIn('with `--model` set to the model in the session line "Review model"', claude_review)
         self.assertIn("| `reviewer` for a skill review role | `hei5enbug-agent-setup:reviewer` |", claude_table)
         self.assertIn(
-            "`role_runner.py reviewer` with the `review_model` setting (default `gpt-6-astra`), `xhigh`; "
+            "`role_runner.py reviewer` with the `review_model` setting (default `gpt-6-astra`), `high` (up to `xhigh`); "
             "fallback `reviewer` with `claude-opus-5-5`, `high`",
             routing_text,
         )
-        self.assertIn("fallback `reviewer` with `gpt-6.1-sol`, `xhigh`", routing_text)
+        self.assertIn("fallback `reviewer` with `gpt-6.1-sol`, `high` (up to `xhigh`)", routing_text)
         self.assertIn("Skill Builder trial execution and other non-review participants", routing_text)
         self.assertIn("role_runner.py review --host codex --instructions <role file>", codex_review)
         self.assertNotIn("modelUsage", codex_review)
         self.assertIn("On runner exit 3 or 4, spawn the plugin `reviewer` role", codex_review)
-        self.assertIn("with `gpt-6.1-sol` and `xhigh` passed explicitly", codex_review)
+        self.assertIn("with `gpt-6.1-sol` and `high` passed explicitly, or `xhigh` under the effort rule", codex_review)
         self.assertIn("The reviewer returns findings only.", routing_text)
         self.assertIn("reviews the same material once and makes the final decision", routing_text)
         self.assertEqual(routing_text.count("Do not run another review round."), 1)

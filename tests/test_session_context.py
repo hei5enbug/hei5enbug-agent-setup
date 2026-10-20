@@ -1348,10 +1348,10 @@ class SessionContextTest(unittest.TestCase):
         result = self.run_hook("codex", payload=payload, extra_env={"XDG_STATE_HOME": str(blocked)})
 
         # Then
-        self.assertIn("Codex worker model: `gpt-5.6-luna` at `xhigh`.\n", self.context(result))
+        self.assertIn("Codex worker model: `gpt-5.6-luna` at `high`.\n", self.context(result))
 
     def test_Codex_세션은_설정이_없으면_기본_Codex_worker_모델을_알린다(self):
-        """저장된 설정이 없으면 매니페스트 기본값 gpt-5.6-luna와 xhigh를 알리고 알림은 붙지 않는다."""
+        """저장된 설정이 없으면 매니페스트 기본값 gpt-5.6-luna와 high를 알리고 알림은 붙지 않는다."""
         # Given
         env = {"CLAUDE_CONFIG_DIR": str(self.base / "empty claude config")}
 
@@ -1359,7 +1359,7 @@ class SessionContextTest(unittest.TestCase):
         context = self.context(self.run_hook("codex", extra_env=env))
 
         # Then
-        self.assertIn("Codex worker model: `gpt-5.6-luna` at `xhigh`.\n", context)
+        self.assertIn("Codex worker model: `gpt-5.6-luna` at `high`.\n", context)
 
     def test_claude_session_never_retires_a_codex_agent(self):
         explorer = self.codex_home / "agents" / "explorer.toml"

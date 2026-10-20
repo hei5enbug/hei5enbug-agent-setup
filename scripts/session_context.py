@@ -36,6 +36,7 @@ DIGEST_VERSION = 1
 MARKER_SCHEMA = 1
 MARKER_RETENTION_SECONDS = 30 * 24 * 60 * 60
 TERMINAL_HANDLE = re.compile(r"^[A-Za-z0-9._:-]{1,200}$")
+SESSION_TOKEN = re.compile(r"[A-Za-z0-9._-]{1,200}")
 SESSION_FILES = {
     "codex": "codex.md",
     "claude": "claude-code.md",
@@ -140,6 +141,31 @@ def append_session_notices(context: str, notices: list[str], limit: int) -> str:
     return context
 
 
+def render_claude_settings(worker: str | None = None) -> str:
+    import plugin_toggles
+
+    if worker is None:
+        model, effort, notice = plugin_toggles.worker_setting("claude")
+        suffix = f" ({notice})" if notice else ""
+        worker = f"`{model}` at `{effort}`.{suffix}"
+    option = plugin_toggles.option_value("implementation_worker")
+    route = {
+        "auto": "Auto (`auto`)",
+        "codex": "Codex (`codex`)",
+        "haiku": "Haiku (`haiku`)",
+        "sol": "Sol (`sol`)",
+        "sonnet": "Sonnet (`sonnet`)",
+    }.get(option, "Auto (`auto`)")
+    review = plugin_toggles.option_value("review_model")
+    if review not in REVIEW_MODELS:
+        review = DEFAULT_REVIEW_MODEL
+    return (
+        f"Implementation worker route: {route}.\n"
+        f"Worker agent model: {worker}\n"
+        f"Review model: `{review}`.\n"
+    )
+
+
 def render_context(root: Path, host: str, kind: str = "main") -> str:
     try:
         host_file = SESSION_FILES[host]
@@ -173,22 +199,7 @@ def render_context(root: Path, host: str, kind: str = "main") -> str:
 
             context += f"\nCodex worker model: {worker}\nResponse language: {language_guard.codex_language()}.\n"
         else:
-            option = plugin_toggles.option_value("implementation_worker")
-            route = {
-                "auto": "Auto (`auto`)",
-                "codex": "Codex (`codex`)",
-                "haiku": "Haiku (`haiku`)",
-                "sol": "Sol (`sol`)",
-                "sonnet": "Sonnet (`sonnet`)",
-            }.get(option, "Auto (`auto`)")
-            review = plugin_toggles.option_value("review_model")
-            if review not in REVIEW_MODELS:
-                review = DEFAULT_REVIEW_MODEL
-            context += (
-                f"\nImplementation worker route: {route}.\n"
-                f"Worker agent model: {worker}\n"
-                f"Review model: `{review}`.\n"
-            )
+            context += "\n" + render_claude_settings(worker)
         if suffix and len(context.encode("utf-8")) > limit:
             context = context.replace(suffix, "", 1)
     if len(context.encode("utf-8")) > limit:
@@ -281,6 +292,7 @@ RETIRED_CODEX_AGENTS = {
     "scout": {
         "910da79ee988b53f4a94186a469c4479c7e34bf61bec8dfd27ef1ab73cc171da",
         "e81d0cfcd3a4986204c289fb8c457bd279ba8c2d24d43679d02b1661581301e7",
+        "49e5f7dab3d3b9384b49250e8622fd57cf65b600d7eb1b3b5b1732554ef1b5c7",
     },
     "explorer": {"bfde4fbbe2740152ad537d576612a34619a57a45adb56072e3f945610ef820af"},
     "worker": {
@@ -288,7 +300,11 @@ RETIRED_CODEX_AGENTS = {
         "249b194b8c9e0cea3ff687298e58cee99ca6c330f79e04162029a60e2ecfeff0",
         "89d72db180d2d0a16707804125af045ac5bb81baa2d751bad078747258b84d49",
     },
-    "designer": {"c8c525a3a7fdfb5adbff1cf7474d24dfba35527eb070f4a5206c164b248d43ed"},
+    "designer": {
+        "c8c525a3a7fdfb5adbff1cf7474d24dfba35527eb070f4a5206c164b248d43ed",
+        "be8b8dc3f856bd8fdab5e15f17b464deab2e50819d3a7d060cccbc2847b7610a",
+    },
+    "reviewer": {"5d2bd7dd2786e5824cfed218fb2a3ff0ae966d193a0495782cbe70defafc9cca"},
     "researcher": {"940a7daace75165d8eceeece93a3c4960c42d187754738a744244059d5a0e5c1"},
 }
 
@@ -528,10 +544,67 @@ def record_codex_worker(session) -> None:
     approval_state.record_worker_pair("codex", session, model, effort)
 
 
+def session_settings_path(event: dict) -> Path | None:
+    data = os.environ.get("CLAUDE_PLUGIN_DATA")
+    session = event.get("session_id")
+    if not data or not isinstance(session, str) or not SESSION_TOKEN.fullmatch(session):
+        return None
+    return Path(data) / "session-settings" / f"{session}.txt"
+
+
+def write_session_settings(path: Path, block: str) -> None:
+    atomic_write_bytes(path, block.encode("utf-8"))
+    cutoff = time.time() - MARKER_RETENTION_SECONDS
+    for stale in path.parent.glob("*.txt"):
+        try:
+            if stale.stat().st_mtime < cutoff:
+                stale.unlink()
+        except OSError:
+            pass
+
+
+def prompt_settings_notice(event: dict) -> None:
+    try:
+        import plugin_toggles
+
+        if (
+            plugin_toggles.detect_host() != "claude"
+            or os.environ.get(ASSIGNED_ROLE_ENV)
+            or os.environ.get("HEI5ENBUG_PARENT_SESSION")
+            or event.get("agent_id")
+        ):
+            return
+        path = session_settings_path(event)
+        if path is None:
+            return
+        block = render_claude_settings()
+        try:
+            previous = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            previous = None
+        if previous == block:
+            path.touch()
+            return
+        write_session_settings(path, block)
+        if previous is not None:
+            print(json.dumps({"hookSpecificOutput": {
+                "hookEventName": "UserPromptSubmit",
+                "additionalContext": (
+                    "hei5enbug-agent-setup settings changed during this session. "
+                    "These lines replace the earlier ones:\n" + block
+                ),
+            }}))
+    except Exception:
+        pass
+
+
 def main() -> int:
     try:
         event = json.load(sys.stdin)
         event_name = event["hook_event_name"]
+        if event_name == "UserPromptSubmit":
+            prompt_settings_notice(event)
+            return 0
         if event_name not in {"SessionStart", "SubagentStart"}:
             raise ValueError("Unsupported hook event")
         root = Path(__file__).resolve().parents[1]
@@ -550,6 +623,13 @@ def main() -> int:
             except OSError:
                 pass
         if event_name == "SessionStart":
+            if host == "claude" and kind == "main":
+                try:
+                    path = session_settings_path(event)
+                    if path is not None:
+                        write_session_settings(path, render_claude_settings())
+                except Exception:
+                    pass
             try:
                 write_terminal_marker(root, host, event)
             except (OSError, ValueError):

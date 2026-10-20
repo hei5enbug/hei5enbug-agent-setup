@@ -13,7 +13,8 @@ Choose an owner before substantial work.
 
 - Handle short answers, known-path lookups, tightly dependent work, implementation that changes at most two files,
   and integration fixes in the main session.
-- Delegate bounded investigation that needs several files or produces bulky logs, and do not repeat it yourself.
+- Delegate investigation of more than three files or a long log as independent questions run together; do not
+  repeat it yourself.
 - Delegate implementation that changes more than two files to the implementation worker when it has a clear scope
   and acceptance check.
 - Use parallel subagents proactively, unasked, when they cut main-session context or elapsed time with little or no

@@ -391,6 +391,8 @@ HANDLERS = {"Stop": handle_stop, "PostToolUse": handle_post_tool_use}
 
 
 def handle(event: object) -> dict | None:
+    if os.environ.get("HEI5ENBUG_ASSIGNED_ROLE") or os.environ.get("HEI5ENBUG_PARENT_SESSION"):
+        return None
     if not isinstance(event, dict) or event.get("agent_id"):
         return None
     handler = HANDLERS.get(event.get("hook_event_name"))

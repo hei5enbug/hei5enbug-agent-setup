@@ -461,12 +461,65 @@ def _secret_resource(args):
 
 
 OUTPUT_SECRET_FORMATS = ("jsonpath", "go-template", "template", "custom-columns")
+KUBE_LIST_INDEX = r"\[\*\]"
+KUBE_METADATA_PATH = re.compile(
+    r"(?:\.items" + KUBE_LIST_INDEX + r")?(?:"
+    r"\.metadata\.(?:name|namespace|uid|creationTimestamp|deletionTimestamp|resourceVersion|generation|generateName)"
+    r"|\.metadata\.labels(?:\.[A-Za-z0-9_-]+)?"
+    r"|\.metadata\.finalizers(?:" + KUBE_LIST_INDEX + r")?"
+    r"|\.metadata\.ownerReferences(?:" + KUBE_LIST_INDEX + r")?(?:\.[A-Za-z0-9_-]+)*"
+    r"|\.(?:type|kind|apiVersion|immutable))"
+)
+KUBE_RANGE_PATH = re.compile(
+    r"\.items(?:" + KUBE_LIST_INDEX + r")?"
+    r"|(?:\.items" + KUBE_LIST_INDEX + r")?\.metadata\.(?:finalizers|ownerReferences)(?:" + KUBE_LIST_INDEX + r")?"
+)
+KUBE_QUOTED_LITERAL = r'"(?:\\.|[^"\\])*"' + r"|'(?:\\.|[^'\\])*'"
+KUBE_JSONPATH_EXPRESSION = re.compile(r"\{((?:" + KUBE_QUOTED_LITERAL + r"|[^{}'\"])*?)\}")
 KUBECTL_READS = (
     ("get",), ("describe",), ("logs",), ("top",), ("explain",), ("api-resources",), ("api-versions",),
     ("version",), ("cluster-info",), ("events",), ("diff",), ("auth", "can-i"), ("auth", "whoami"),
     ("config", "view"), ("config", "get-contexts"), ("config", "current-context"), ("config", "get-clusters"),
     ("rollout", "status"), ("rollout", "history"),
 )
+
+
+def _metadata_path(path, context=""):
+    if not path.startswith((".", "$")):
+        return ""
+    return path[1:] if path.startswith("$") else context + path
+
+
+def _metadata_output(output):
+    name, separator, template = output.partition("=")
+    if not separator or not template:
+        return False
+    if name.lower() == "custom-columns":
+        columns = [column.partition(":") for column in template.split(",")]
+        return all(header.strip() and colon and KUBE_METADATA_PATH.fullmatch(_metadata_path(path.strip()))
+                   for header, colon, path in columns)
+    if name.lower() != "jsonpath":
+        return False
+    contexts = [""]
+    offset = 0
+    for match in KUBE_JSONPATH_EXPRESSION.finditer(template):
+        if "{" in template[offset:match.start()] or "}" in template[offset:match.start()]:
+            return False
+        expression = match[1].strip()
+        if expression.startswith("range "):
+            path = _metadata_path(expression[6:].strip(), contexts[-1])
+            if not KUBE_RANGE_PATH.fullmatch(path):
+                return False
+            contexts.append(path if path.endswith("]") else path + "[*]")
+        elif expression == "end":
+            if len(contexts) == 1:
+                return False
+            contexts.pop()
+        elif not re.fullmatch(KUBE_QUOTED_LITERAL, expression) and not KUBE_METADATA_PATH.fullmatch(
+                _metadata_path(expression, contexts[-1])):
+            return False
+        offset = match.end()
+    return len(contexts) == 1 and "{" not in template[offset:] and "}" not in template[offset:]
 
 
 def _kube_target(args, env, cwd, explicit_context):
@@ -486,6 +539,10 @@ def _kubectl_rules(kind, args, env, cwd):
         output = option_value(args, "-o", ("--output",)) or ""
         output_name = output.split("=", 1)[0].lower()
         output_secret = output_name in ("json", "yaml") or output_name.startswith(OUTPUT_SECRET_FORMATS)
+        if (output_secret and option_value(args, longs=("--template",)) is None
+                and not any(arg.startswith("--allow-missing-template-keys") for arg in args)
+                and _metadata_output(output)):
+            output_secret = False
         secret = secret or (raw is not None and "secrets" in raw) or (_secret_resource(args) and output_secret)
     dry_run = _has_flag(args, "--dry-run=client", "--dry-run=server") or option_value(
         args, longs=("--dry-run",)) in ("client", "server")
@@ -2507,6 +2564,7 @@ def handle(event, host):
     tool = event.get("tool_name")
     tool_use_id = event.get("tool_use_id")
     if name == "UserPromptSubmit":
+        approval_state.reset_request_counts(host, session)
         output = approval_state.approve_prompt(host, session, event.get("prompt"))
         warning = approval_state.hooks_warning(host, session)
         if warning:

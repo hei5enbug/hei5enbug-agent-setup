@@ -23,7 +23,7 @@ def test_두_호스트는_가벼운_위임_기준과_검토_연결만_항상_받
         "tightly dependent work, implementation that changes at most two files, and integration fixes in the main session",
         "Delegate implementation that changes more than two files to the implementation worker",
         "except the kinds the host session file assigns to the main session",
-        "Delegate bounded investigation",
+        "Delegate investigation of more than three files or a long log as independent questions run together",
         "Parallelize only work with independent resources",
         "continue authorized work in the main session",
         "otherwise needs the user's approval",
@@ -68,7 +68,8 @@ def test_구형_scout는_원본과_같을_때만_현재_역할로_교체한다(t
     """이전 scout의 미수정 복사본은 실행 중 조사를 허용하도록 교체하고 사용자 수정본은 그대로 둔다."""
     # Given
     current = (REPO / "standalone-agents/codex-scout.toml").read_text()
-    previous = current.replace(
+    previous = current.replace("sandbox_mode", 'model_reasoning_effort = "xhigh"\nsandbox_mode', 1)
+    previous = previous.replace(
         "Read-only worker for one bounded local investigation, including a local-evidence research ticket "
         "that a skill assigns.",
         "Read-only worker for one bounded assignment, either a bounded investigation or a review persona, "
@@ -96,6 +97,36 @@ def test_구형_scout는_원본과_같을_때만_현재_역할로_교체한다(t
 
     # Then
     assert prior_digest in context.RETIRED_CODEX_AGENTS["scout"]
+    assert target.read_text() == (original if user_edited else current)
+
+
+HEAD_ROLE_DIGESTS = {
+    "scout": "49e5f7dab3d3b9384b49250e8622fd57cf65b600d7eb1b3b5b1732554ef1b5c7",
+    "designer": "be8b8dc3f856bd8fdab5e15f17b464deab2e50819d3a7d060cccbc2847b7610a",
+    "reviewer": "5d2bd7dd2786e5824cfed218fb2a3ff0ae966d193a0495782cbe70defafc9cca",
+}
+
+
+@pytest.mark.parametrize("user_edited", [False, True])
+@pytest.mark.parametrize("name", sorted(HEAD_ROLE_DIGESTS))
+def test_effort를_고정하던_역할_파일은_원본과_같을_때만_effort_없는_현재_파일로_교체한다(tmp_path, monkeypatch, name, user_edited):
+    """effort 줄이 있던 scout, designer, reviewer의 미수정 복사본은 effort 없는 현재 파일로 바꾸고 사용자 수정본은 그대로 둔다."""
+    # Given
+    current = (REPO / f"standalone-agents/codex-{name}.toml").read_text()
+    previous = current.replace("sandbox_mode", 'model_reasoning_effort = "xhigh"\nsandbox_mode', 1)
+    target = tmp_path / f"agents/{name}.toml"
+    target.parent.mkdir()
+    original = previous + ("\n# user setting\n" if user_edited else "")
+    target.write_text(original)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+
+    # When
+    context.provision_codex_agents(REPO)
+
+    # Then
+    assert hashlib.sha256(previous.encode()).hexdigest() == HEAD_ROLE_DIGESTS[name]
+    assert HEAD_ROLE_DIGESTS[name] in context.RETIRED_CODEX_AGENTS[name]
+    assert "model_reasoning_effort" not in current
     assert target.read_text() == (original if user_edited else current)
 
 
@@ -152,8 +183,10 @@ def test_중요_변경의_독립_검토는_개별_승인과_실제_설정_확인
     assert "completed implementation changes" in text
     assert "general workflow is not approval to invoke a reviewer" in text
     assert "exactly one reviewer that the mapping below selects" in text
-    assert "| Claude | the `review_model` setting (default `gpt-6-astra`) | `xhigh` |" in text
-    assert "| GPT | `claude-fable-5-1` | `xhigh` |" in text
+    effort = "`high`, or `xhigh` for several components, a public contract, security, concurrency, or a hook or guard"
+    assert f"| Claude | the `review_model` setting (default `gpt-6-astra`) | {effort} |" in text
+    assert f"| GPT | `claude-fable-5-1` | {effort} |" in text
+    assert "Code that a delegated worker wrote belongs to that worker's model family." in text
     assert "say in the result that the review is not cross-family" in text
     assert "A role runner exit code 3 or 4 means the same." in text
     assert "do not substitute" in text

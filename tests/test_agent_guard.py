@@ -90,10 +90,10 @@ class AgentGuardTest(unittest.TestCase):
         )
         self.write(self.project / ".codex" / "agents" / "pr-code-reviewer.toml", 'name = "pr_code_reviewer"\n')
         pinned = {
-            "scout": ("gpt-5.6-luna", "xhigh"),
-            "worker": ("gpt-5.6-luna", "xhigh"),
-            "designer": ("gpt-6-astra", "xhigh"),
-            "reviewer": ("gpt-6.1-sol", "xhigh"),
+            "scout": ("gpt-5.6-luna", "high"),
+            "worker": ("gpt-5.6-luna", "high"),
+            "designer": ("gpt-6-astra", "high"),
+            "reviewer": ("gpt-6.1-sol", "high"),
         }
 
         # When
@@ -137,14 +137,14 @@ class AgentGuardTest(unittest.TestCase):
         self.assertEqual(["deny", "deny", None, None], decisions)
 
     def test_Codex_고정된_역할은_레지스트리의_모델과_effort_쌍만_허용하고_나머지는_거부한다(self):
-        """scout은 기본 쌍 gpt-5.6-luna와 xhigh만 허용하고, 레지스트리의 대체 쌍 claude-sonnet-5-5와 medium을 포함해 모델이나 effort를 빼거나 다른 쌍이면 거부하며, 거부 이유에 러너 대체 명령을 적는다."""
+        """scout은 기본 쌍 gpt-5.6-luna와 high만 허용하고, 레지스트리의 대체 쌍 claude-sonnet-5-5와 medium을 포함해 모델이나 effort를 빼거나 다른 쌍이면 거부하며, 거부 이유에 러너 대체 명령을 적는다."""
         # Given
         self.write(self.codex_home / "agents" / "scout.toml", 'name = "scout"\n')
         inputs = [
             {"agent_type": "scout"},
             {"agent_type": "scout", "model": "gpt-5.6-luna"},
+            {"agent_type": "scout", "model": "gpt-5.6-luna", "reasoning_effort": "medium"},
             {"agent_type": "scout", "model": "gpt-5.6-luna", "reasoning_effort": "high"},
-            {"agent_type": "scout", "model": "gpt-5.6-luna", "reasoning_effort": "xhigh"},
             {"agent_type": "scout", "model": "claude-sonnet-5-5", "reasoning_effort": "medium"},
             {"agent_type": "scout", "model": "gpt-6.1-sol", "reasoning_effort": "xhigh"},
         ]
@@ -154,6 +154,42 @@ class AgentGuardTest(unittest.TestCase):
 
         # Then
         self.assertEqual(["deny", "deny", "deny", None, "deny", "deny"], decisions)
+
+    def test_Codex_scout_designer_reviewer는_high와_xhigh를_허용하고_그_밖의_effort는_거부한다(self):
+        """레지스트리의 범위가 있는 세 역할은 자기 모델의 high와 xhigh 스폰을 허용하고 medium과 max는 거부한다."""
+        # Given
+        roles = {"scout": "gpt-5.6-luna", "designer": "gpt-6-astra", "reviewer": "gpt-6.1-sol"}
+        for name in roles:
+            self.write(self.codex_home / "agents" / f"{name}.toml", f'name = "{name}"\n')
+        efforts = ["high", "xhigh", "medium", "max"]
+
+        # When
+        decisions = {
+            name: [self.decide("codex", {"agent_type": name, "model": model, "reasoning_effort": effort}) for effort in efforts]
+            for name, model in roles.items()
+        }
+
+        # Then
+        self.assertEqual({name: [None, None, "deny", "deny"] for name in roles}, decisions)
+
+    def test_Codex_worker는_설정한_effort부터_xhigh까지만_허용한다(self):
+        """high 설정은 high와 xhigh를 허용하고, xhigh 설정은 xhigh만 허용하며, 그 밖의 effort는 거부한다."""
+        # Given
+        self.write(self.codex_home / "agents" / "worker.toml", 'name = "worker"\n')
+        efforts = ["medium", "high", "xhigh", "max"]
+
+        # When
+        decisions = {}
+        for configured in ("high", "xhigh"):
+            self.save_worker_options({"codex_worker_model": "gpt-5.6-luna", "codex_worker_effort": configured})
+            decisions[configured] = [
+                self.decide("codex", {"agent_type": "worker", "model": "gpt-5.6-luna", "reasoning_effort": effort})
+                for effort in efforts
+            ]
+
+        # Then
+        self.assertEqual(["deny", None, None, "deny"], decisions["high"])
+        self.assertEqual(["deny", "deny", None, "deny"], decisions["xhigh"])
 
     def test_Codex_선언된_역할_파일의_고정_쌍만_허용한다(self):
         """플러그인 캐시의 model-roles.json에 선언된 역할은 선언된 모델과 effort만 허용한다."""
@@ -223,7 +259,7 @@ class AgentGuardTest(unittest.TestCase):
         self.assertEqual("deny", custom)
 
     def test_Codex_레지스트리에_등록된_역할은_선언_파일이_고정값을_바꾸지_못한다(self):
-        """worker는 레지스트리의 gpt-5.6-luna와 xhigh만 허용하고, 플러그인 선언이 다른 쌍을 주더라도 무시한다."""
+        """worker는 레지스트리의 gpt-5.6-luna와 high만 허용하고, 플러그인 선언이 다른 쌍을 주더라도 무시한다."""
         # Given
         self.write(self.codex_home / "agents" / "worker.toml", 'name = "worker"\n')
         self.write(
@@ -232,7 +268,7 @@ class AgentGuardTest(unittest.TestCase):
         )
 
         # When
-        registry_pair = self.decide("codex", {"agent_type": "worker", "model": "gpt-5.6-luna", "reasoning_effort": "xhigh"})
+        registry_pair = self.decide("codex", {"agent_type": "worker", "model": "gpt-5.6-luna", "reasoning_effort": "high"})
         declared_pair = self.decide("codex", {"agent_type": "worker", "model": "gpt-6.1-sol", "reasoning_effort": "high"})
 
         # Then
@@ -246,14 +282,14 @@ class AgentGuardTest(unittest.TestCase):
         )
 
     def test_Codex_worker는_사용자가_저장한_모델과_effort만_허용하고_이전_쌍은_거부한다(self):
-        """Claude 설정에 저장된 gpt-6.1-sol과 high로 worker를 띄우면 허용하고, 기본 gpt-5.6-luna와 xhigh는 거부한다."""
+        """Claude 설정에 저장된 gpt-6.1-sol과 high로 worker를 띄우면 허용하고, 기본 gpt-5.6-luna와 high는 거부한다."""
         # Given
         self.write(self.codex_home / "agents" / "worker.toml", (REPO_ROOT / "standalone-agents/codex-worker.toml").read_text())
         self.save_worker_options({"codex_worker_model": "gpt-6.1-sol", "codex_worker_effort": "high"})
 
         # When
         configured = self.decide("codex", {"agent_type": "worker", "model": "gpt-6.1-sol", "reasoning_effort": "high"})
-        previous = self.decide("codex", {"agent_type": "worker", "model": "gpt-5.6-luna", "reasoning_effort": "xhigh"})
+        previous = self.decide("codex", {"agent_type": "worker", "model": "gpt-5.6-luna", "reasoning_effort": "high"})
 
         # Then
         self.assertIsNone(configured)
@@ -269,14 +305,14 @@ class AgentGuardTest(unittest.TestCase):
         self.session_id = session_id
 
     def test_Codex_worker는_세션_시작_뒤_저장값이_바뀌어도_시작_때_알린_쌍만_허용한다(self):
-        """luna와 xhigh로 시작한 세션에서 저장값을 gpt-6.1-sol과 high로 바꿔도 그 세션은 luna와 xhigh를 허용하고 sol과 high를 거부한다."""
+        """luna와 high로 시작한 세션에서 저장값을 gpt-6.1-sol과 high로 바꿔도 그 세션은 luna와 high를 허용하고 sol과 high를 거부한다."""
         # Given
         self.write(self.codex_home / "agents" / "worker.toml", (REPO_ROOT / "standalone-agents/codex-worker.toml").read_text())
         self.start_codex_session("session-one")
         self.save_worker_options({"codex_worker_model": "gpt-6.1-sol", "codex_worker_effort": "high"})
 
         # When
-        announced = self.decide("codex", {"agent_type": "worker", "model": "gpt-5.6-luna", "reasoning_effort": "xhigh"})
+        announced = self.decide("codex", {"agent_type": "worker", "model": "gpt-5.6-luna", "reasoning_effort": "high"})
         changed = self.decide("codex", {"agent_type": "worker", "model": "gpt-6.1-sol", "reasoning_effort": "high"})
 
         # Then
@@ -293,7 +329,7 @@ class AgentGuardTest(unittest.TestCase):
 
         # When
         live = self.decide("codex", {"agent_type": "worker", "model": "gpt-6.1-sol", "reasoning_effort": "high"})
-        previous = self.decide("codex", {"agent_type": "worker", "model": "gpt-5.6-luna", "reasoning_effort": "xhigh"})
+        previous = self.decide("codex", {"agent_type": "worker", "model": "gpt-5.6-luna", "reasoning_effort": "high"})
 
         # Then
         self.assertIsNone(live)
@@ -334,13 +370,13 @@ class AgentGuardTest(unittest.TestCase):
         self.assertEqual("deny", saved)
 
     def test_Codex_worker는_저장값이_잘못되면_기본_쌍만_허용한다(self):
-        """저장된 모델이 목록에 없으면 기본 gpt-5.6-luna와 xhigh로 되돌려 허용하고 저장된 값은 거부한다."""
+        """저장된 모델이 목록에 없으면 기본 gpt-5.6-luna와 high로 되돌려 허용하고 저장된 값은 거부한다."""
         # Given
         self.write(self.codex_home / "agents" / "worker.toml", 'name = "worker"\n')
         self.save_worker_options({"codex_worker_model": "gpt-4.1-mini", "codex_worker_effort": "high"})
 
         # When
-        default = self.decide("codex", {"agent_type": "worker", "model": "gpt-5.6-luna", "reasoning_effort": "xhigh"})
+        default = self.decide("codex", {"agent_type": "worker", "model": "gpt-5.6-luna", "reasoning_effort": "high"})
         saved = self.decide("codex", {"agent_type": "worker", "model": "gpt-4.1-mini", "reasoning_effort": "high"})
 
         # Then
@@ -407,7 +443,7 @@ class AgentGuardTest(unittest.TestCase):
 
         # When
         declared = self.output("codex", {"agent_type": "example_scout", "model": "gpt-6.1-sol", "reasoning_effort": "xhigh"})
-        registry = self.decide("codex", {"agent_type": "scout", "model": "gpt-5.6-luna", "reasoning_effort": "xhigh"})
+        registry = self.decide("codex", {"agent_type": "scout", "model": "gpt-5.6-luna", "reasoning_effort": "high"})
         missing = self.output("codex", {"agent_type": "scout"})
 
         # Then
@@ -421,12 +457,12 @@ class AgentGuardTest(unittest.TestCase):
         """역할 파일이 model이나 model_reasoning_effort를 설정하면 설정된 값이 요청과 같아야 하고, 한쪽만 설정하면 그 값만 확인한다."""
         # Given
         role = self.codex_home / "agents" / "scout.toml"
-        request = {"agent_type": "scout", "model": "gpt-5.6-luna", "reasoning_effort": "xhigh"}
+        request = {"agent_type": "scout", "model": "gpt-5.6-luna", "reasoning_effort": "high"}
         cases = [
             ('name = "scout"\nmodel = "gpt-6.1-sol"\n', "deny"),
-            ('name = "scout"\nmodel_reasoning_effort = "high"\n', "deny"),
-            ('name = "scout"\nmodel_reasoning_effort = "xhigh"\n', None),
-            ('name = "scout"\nmodel = "gpt-5.6-luna"\nmodel_reasoning_effort = "xhigh"\n', None),
+            ('name = "scout"\nmodel_reasoning_effort = "xhigh"\n', "deny"),
+            ('name = "scout"\nmodel_reasoning_effort = "high"\n', None),
+            ('name = "scout"\nmodel = "gpt-5.6-luna"\nmodel_reasoning_effort = "high"\n', None),
         ]
         for text, expected in cases:
             with self.subTest(text=text):

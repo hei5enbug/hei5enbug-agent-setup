@@ -28,7 +28,10 @@ python3 <Source directory>/scripts/role_runner.py <scout|researcher|reviewer|wor
 
 It runs the role on its pinned model, effort, and permissions, verifies the host record, and ends with one JSON
 line. Never run `cd` before it. Add `--model <id>` only for `reviewer` and `--add-dir <dir>` only for `worker`, a
-writing capability, or a `write` agent.
+writing capability, or a `write` agent. Add `--effort xhigh` only under the effort rule in
+[shared model routing](model-routing.md#keep-role-settings-fixed). For several read-only assignments of one target,
+repeat `--assignment` and `--result` in one call; the runner runs up to six in parallel and prints one status line
+each.
 
 Agent mode runs a plugin agent's cross-family fallback, and takes the agent's registry name, or a role an installed
 plugin declares, in place of a role:
@@ -115,11 +118,10 @@ This section adds only the Claude Code worker integration.
   `hei5enbug-agent-setup:sonnet-worker` for the Sonnet worker when the line says `sonnet`, the Codex worker (see
   "Codex worker" below) when it says `codex`, `hei5enbug-agent-setup:worker` when it says `haiku`, and the Sol
   worker (see "Sol worker" below) when it says `sol`. When it says `auto`, choose per assignment: the `worker`
-  agent for easy work (one cohesive change with a stated edit and checks that cover it fully), Sol for normal or
-  hard work (a behavioral change, several files, parsing, security, or concurrency), and Sonnet instead of Sol when
-  the Codex weekly usage is above 70 percent or Sol is unavailable. Read that usage as
-  [independent model validation](independent-model-validation.md) does. When a Claude route stops on a usage
-  limit, use Sol. A user request for one route applies to that request only.
+  agent for easy work (one cohesive change with a stated edit and checks that cover it fully) and the Sonnet worker
+  for normal or hard work (a behavioral change, several files, parsing, security, or concurrency). When a Claude
+  route fails or stops on a usage limit, use the Sol worker. A user request for one route applies to that request
+  only.
   `hei5enbug-agent-setup:designer` still takes UI code,
   visual design, and diagram work, except the kinds the Claude Code session file assigns to the main session. Never
   use any other agent.

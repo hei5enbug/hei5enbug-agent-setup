@@ -107,15 +107,16 @@ lists only these five English definitions, so the Korean mirrors in `docs/ko/` a
 Codex discovers subagents only in `~/.codex/agents/` and `.codex/agents/`, so a plugin cannot register one.
 Instead, the session hook copies `standalone-agents/codex-scout.toml`, `codex-worker.toml`,
 `codex-designer.toml`, and `codex-reviewer.toml` to matching `~/.codex/agents/<role>.toml` files when absent. They
-define four roles that also exist on Claude Code, with fixed
-reasoning effort and sandbox. The Codex `reviewer` role has no model key; the skill instructions pass its model and
+define four roles that also exist on Claude Code, with a fixed sandbox; no role file sets a reasoning effort, so each
+spawn passes one. The Codex `reviewer` role has no model key; the skill instructions pass its model and
 effort explicitly when it is the fallback. The plugin `worker` replaces the
 built-in Codex `worker`, and `scout` leaves the built-in `explorer` untouched. A file you edited is never
 overwritten, and the agents become available in the next Codex session. Because an edited copy never changes,
 the files set no model; the Codex instructions pass the pinned model on every spawn instead, and the `worker` role
 file sets no effort either, so the spawn passes the `codex_worker_model` and `codex_worker_effort` settings. A role
 file you edited that pins another pair still wins, and the agent guard denies a mismatching spawn. The hook also
-removes an `explorer.toml` and a `researcher.toml`, and replaces a `worker.toml`, that an earlier version wrote, but only while the file is
+removes an `explorer.toml` and a `researcher.toml`, and replaces a `worker.toml`, `scout.toml`, `designer.toml`, or
+`reviewer.toml`, that an earlier version wrote, but only while the file is
 byte-identical to that version's bundled file, so a copy you edited stays. When the plugin is disabled, the installed
 `worker` role runs as an ordinary implementation worker instead of refusing to edit.
 
@@ -158,6 +159,8 @@ language, such as English or French, the instruction alone applies.
 
 The check ignores code, quotes, and URLs. A text passes when at least 30% of its letters are in the target script,
 and very short text always passes. A `Stop` hook asks for a rewrite when a reply fails, at most 3 times per turn.
+Delegated child sessions are not checked: a session with `HEI5ENBUG_ASSIGNED_ROLE` or `HEI5ENBUG_PARENT_SESSION`
+set, such as a role runner child, returns its answer to the coordinating session, which replies to the user.
 A `PostToolUse` hook adds a reminder after a progress update in another language. It runs asynchronously, so the
 reminder reaches the model on the next turn. Put text the user asks for in another language in a code block or block
 quote.
@@ -244,7 +247,7 @@ writes for this session." A request shows its `--why` text as the description.
 
 | CLI | Read | Secret (denied) | Sensitive (session) | Every time | Target in the prompt |
 |---|---|---|---|---|---|
-| `kubectl`, `oc` | `get`, `describe`, `logs`, `diff`, `config view`, `config get-contexts`, `config current-context`, any call with `--dry-run=client` or `--dry-run=server` | `get secret` with an output format that prints values, `get --raw` on a `secrets` path, `config view --raw`, `create token` | `exec ... env` or `printenv` | `delete`, `drain`, `--force` or `--prune` before a `--`, destructive commands inside `exec` | kubeconfig, then context / namespace |
+| `kubectl`, `oc` | `get`, `describe`, `logs`, `diff`, `config view`, `config get-contexts`, `config current-context`, any call with `--dry-run=client` or `--dry-run=server` | `get secret` with an output format that prints values (a `jsonpath` or `custom-columns` template that reads only names, namespaces, UIDs, labels, owner references, finalizers, timestamps, resource versions, `type`, `kind`, `apiVersion`, or `immutable` is a read; `annotations` stay secret because they can hold the last applied manifest), `get --raw` on a `secrets` path, `config view --raw`, `create token` | `exec ... env` or `printenv` | `delete`, `drain`, `--force` or `--prune` before a `--`, destructive commands inside `exec` | kubeconfig, then context / namespace |
 | `helm` | `list`, `status`, `get notes`, `repo list` | none | `get all`, `get manifest`, `get values` | `uninstall` | kubeconfig, then context / namespace |
 | `az` | `list`, `show`, `exists`, `query`, `query-*`, `version`; `rest` GET without `--resource` on `https://management.azure.com` or an unresolved variable URL | `keyvault secret show` and `download`, `list-keys`, `account get-access-token`, `rest` GET on a Key Vault `/secrets` or `/keys` URL | none | `delete`, `purge`, `rest` DELETE | subscription / resource group |
 | `terraform`, `tofu` | `plan`, `show`, `validate`, `state list`, `fmt -check`, `output` without `-json` or `-raw` | none | `state show`, `state pull`, `output -json`, `output -raw` | `destroy`, `apply -destroy`, `state rm` | directory : workspace |
@@ -480,12 +483,14 @@ same key may reuse it once without a new code. The approval moves to that retry;
 approval request. `PermissionRequest` allows only the call holding the approval, and `PostToolUse` or
 `PostToolUseFailure` releases it.
 
-Each session counts issued approval requests per key until a call completes. Claude asks, Codex native windows, and
-Codex code responses count, including repeating a pending code. After three requests without `PostToolUse` or
-`PostToolUseFailure`, a fourth request is denied. In English the message is: “This approval was requested three times
-without the call completing (declines included); stop retrying and tell the user.” An approval already
-given is honored, including a retry approved by the third code. `PostToolUse` or `PostToolUseFailure` resets the count
-for the finished call's keys. Already approved session keys do not use another key's request budget.
+Each session counts issued approval requests per key until a call completes or the user sends a new prompt. Claude
+asks, Codex native windows, and Codex code responses count, including repeating a pending code. After three
+requests without `PostToolUse` or `PostToolUseFailure` since the user's last prompt, a fourth request is denied. In
+English the message is: “This approval was requested three times since the user's last message without the call
+completing (declines included); stop retrying and tell the user.” An approval already given is honored, including a
+retry approved by the third code. `PostToolUse` or `PostToolUseFailure` resets the count for the finished call's
+keys, and `UserPromptSubmit` resets every count, so a write the user asks for after a stop is asked again. Already
+approved session keys do not use another key's request budget.
 
 The agent cannot approve anything itself. A Bash command that runs `approval_guard.py`, `datagrip_guard.py`, or
 `approval_state.py` as a program, with `-m`, or through Python code that imports it, is denied on both hosts.
@@ -589,7 +594,8 @@ with this one (`refresh_plugins`) are string options in Claude Code. Choose `aut
 or `sonnet` for the route; an unset or unrecognized value uses `auto`, where the main session picks the worker per
 assignment. Choose `apply` or `report` for the host settings mode; an unset or unrecognized value uses `apply`. It
 decides whether `SessionStart` may change allowlisted Codex settings; see [Host settings](#host-settings). The review
-model runs independent validation and skill review roles at `xhigh`. Choose one of the
+model runs independent validation and skill review roles at `high`, or at `xhigh` under the effort rule in
+[model routing](instructions/model-routing.md#keep-role-settings-fixed). Choose one of the
 seven pinned model IDs; an unset or unrecognized value uses `gpt-6-astra`. Set plugin options in `/config` or with
 `claude plugin configure`. On Codex, set environment variables before starting the
 session. A value of `false`, `0`, `off`, or `no`, in any letter case, turns a boolean feature off.
@@ -609,7 +615,7 @@ write Codex settings.
 | Pin role models | `role_pinning` | Not applicable |
 | Implementation worker route | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, or `sonnet`) | Not applicable |
 | Claude Code worker model and effort | `worker_model` (default `claude-haiku-5-5`) and `worker_effort` (default `high`) | Not applicable |
-| Codex worker model and effort | `codex_worker_model` (`gpt-5.6-luna` or `gpt-6.1-sol`, default `gpt-5.6-luna`) and `codex_worker_effort` (`high` or `xhigh`, default `xhigh`) | `HEI5ENBUG_CODEX_WORKER_MODEL` and `HEI5ENBUG_CODEX_WORKER_EFFORT` |
+| Codex worker model and effort | `codex_worker_model` (`gpt-5.6-luna` or `gpt-6.1-sol`, default `gpt-5.6-luna`) and `codex_worker_effort` (`high` or `xhigh`, default `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL` and `HEI5ENBUG_CODEX_WORKER_EFFORT` |
 | Review model | `review_model` (a pinned model ID, default `gpt-6-astra`) | Not applicable |
 | Response language guard | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip query guard | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
@@ -671,8 +677,9 @@ for locating the script. No user or project instruction file is copied, linked, 
 | A role runner child session starts | It receives `core.md` only; the runner puts the role rules before the assignment. |
 | A tool call finishes | `PostToolUse` adds a language reminder after a progress update in another language. |
 | A reply ends | `Stop` asks for a rewrite when the reply is not in the response language. |
+| A user submits a prompt on Claude Code | `UserPromptSubmit` compares the main session's "Implementation worker route", "Worker agent model", and "Review model" lines with the ones recorded at session start, and supplies the new lines once when a `/config` change altered them. |
 | A DataGrip query is about to run | `PreToolUse` and `PermissionRequest` run the DataGrip query guard before `execute_sql_query`. |
-| A Bash, MCP, or covered file tool call runs | `PreToolUse` runs the approval guard, including file-state protection and sensitive reads. `PermissionRequest` absorbs host prompts on Claude Code and skips Codex's native window once approved; `PostToolUse` and `PostToolUseFailure` record approvals. `UserPromptSubmit` records user approval and supplies immediate-retry context on both hosts. |
+| A Bash, MCP, or covered file tool call runs | `PreToolUse` runs the approval guard, including file-state protection and sensitive reads. `PermissionRequest` absorbs host prompts on Claude Code and skips Codex's native window once approved; `PostToolUse` and `PostToolUseFailure` record approvals. `UserPromptSubmit` resets the approval request counts, records user approval, and supplies immediate-retry context on both hosts. |
 | A matching task begins | The agent reads the required reference under `instructions/`. |
 | A plugin update is installed | A new session reads that installed version. A repository push alone changes nothing locally. |
 
@@ -735,16 +742,16 @@ section of the model routing contract. The five capabilities are `investigation`
 
 | Host | Implementation agent | Model and effort |
 |---|---|---|
-| Codex | Plugin `worker` role, verified from its rollout record | `codex_worker_model` and `codex_worker_effort` (default `gpt-5.6-luna`, `xhigh`) |
-| Claude Code | With `implementation_worker` `auto` (default), the main session picks per assignment: `hei5enbug-agent-setup:worker` for easy work; `role_runner.py implementation --fallback` for normal or hard work; `hei5enbug-agent-setup:sonnet-worker` instead of Sol when Codex weekly usage is above 70 percent or Sol is unavailable. A fixed setting forces `sonnet`, `sol`, `codex` (`role_runner.py worker`), or `haiku` (fallback `role_runner.py worker`) | `worker_model` and `worker_effort` (default `claude-haiku-5-5`, `high`) (easy); `gpt-6.1-sol`, `high` (normal or hard); `claude-sonnet-5-5`, `high`; `gpt-5.6-luna`, `xhigh` (`codex`) |
-| Codex, designer | Plugin `designer` role with the pinned model, verified from its rollout record; fallback `role_runner.py agent --name designer --fallback` | `gpt-6-astra`, `xhigh`; fallback `claude-opus-5-5`, `xhigh` |
-| Claude Code, designer | `hei5enbug-agent-setup:designer`, verified from its subagent record or the mod's role pinning; fallback `role_runner.py design` | `claude-opus-5-5`, `xhigh`; fallback `gpt-6-astra`, `xhigh` |
-| Codex, local scout | Plugin `scout` role, verified from its rollout record | `gpt-5.6-luna`, `xhigh` |
-| Claude Code, local scout | `role_runner.py scout`; fallback `hei5enbug-agent-setup:scout` | `gpt-5.6-luna`, `xhigh`; fallback `claude-sonnet-5-5`, `medium` |
-| Codex, public researcher | `role_runner.py researcher`, which uses web search and no shell network, verified from its session record | `gpt-5.6-luna`, `xhigh` |
-| Claude Code, public researcher | `role_runner.py researcher`, which uses web search and no shell network; fallback `hei5enbug-agent-setup:scout`, which has web search and fetch tools | `gpt-5.6-luna`, `xhigh`; fallback `claude-sonnet-5-5`, `medium` |
-| Codex, skill review | `role_runner.py review`; fallback plugin `reviewer`, verified from its rollout record | `claude-opus-5-5`, `high`; fallback `gpt-6.1-sol`, `xhigh` |
-| Claude Code, skill review | `role_runner.py reviewer` with the `review_model` setting; fallback `hei5enbug-agent-setup:reviewer` | `review_model` (default `gpt-6-astra`), `xhigh`; fallback `claude-opus-5-5`, `high` |
+| Codex | `role_runner.py implementation --host codex`, which runs Claude; fallback plugin `worker` role, verified from its rollout record | `claude-sonnet-5-5`, `high` (up to `xhigh`); fallback `codex_worker_model` and `codex_worker_effort` (default `gpt-5.6-luna`, `high`) |
+| Claude Code | With `implementation_worker` `auto` (default), the main session picks per assignment: `hei5enbug-agent-setup:worker` for easy work and `hei5enbug-agent-setup:sonnet-worker` for normal or hard work; `role_runner.py implementation --fallback` when a Claude route fails or stops on a usage limit. A fixed setting forces `sonnet`, `sol`, `codex` (`role_runner.py worker`), or `haiku` (fallback `role_runner.py agent --name hei5enbug-agent-setup:worker --fallback`) | `worker_model` and `worker_effort` (default `claude-haiku-5-5`, `high`) (easy); `claude-sonnet-5-5`, `high` (normal or hard); `gpt-6.1-sol`, `high` (up to `xhigh`) (fallback); `gpt-5.6-luna`, `high` (up to `xhigh`) (`codex`) |
+| Codex, designer | Plugin `designer` role with the pinned model, verified from its rollout record; fallback `role_runner.py agent --name designer --fallback` | `gpt-6-astra`, `high` (up to `xhigh`); fallback `claude-opus-5-5`, `high` (up to `xhigh`) |
+| Claude Code, designer | `hei5enbug-agent-setup:designer`, verified from its subagent record or the mod's role pinning; fallback `role_runner.py design` | `claude-opus-5-5`, `xhigh`; fallback `gpt-6-astra`, `high` (up to `xhigh`) |
+| Codex, local scout | Plugin `scout` role, verified from its rollout record | `gpt-5.6-luna`, `high` (up to `xhigh`) |
+| Claude Code, local scout | `role_runner.py scout`; fallback `hei5enbug-agent-setup:scout` | `gpt-5.6-luna`, `high` (up to `xhigh`); fallback `claude-sonnet-5-5`, `medium` |
+| Codex, public researcher | `role_runner.py researcher`, which uses web search and no shell network, verified from its session record | `gpt-5.6-luna`, `high` (up to `xhigh`) |
+| Claude Code, public researcher | `role_runner.py researcher`, which uses web search and no shell network; fallback `hei5enbug-agent-setup:scout`, which has web search and fetch tools | `gpt-5.6-luna`, `high` (up to `xhigh`); fallback `claude-sonnet-5-5`, `medium` |
+| Codex, skill review | `role_runner.py review`; fallback plugin `reviewer`, verified from its rollout record | `claude-opus-5-5`, `high` (up to `xhigh`); fallback `gpt-6.1-sol`, `high` (up to `xhigh`) |
+| Claude Code, skill review | `role_runner.py reviewer` with the `review_model` setting; fallback `hei5enbug-agent-setup:reviewer` | `review_model` (default `gpt-6-astra`), `high` (up to `xhigh`); fallback `claude-opus-5-5`, `high` |
 | Skill Builder trial execution and other non-review participants | Host's upper model from the Skill Builder adapter | Codex: `gpt-6.1-sol`, `xhigh`; Claude Code: `claude-opus-5-5`, `high` |
 
 On Claude Code, `scripts/role_runner.py` runs the scout, researcher, reviewer, and Codex worker roles, and it runs a
@@ -754,7 +761,11 @@ to a file and runs `python3 <plugin>/scripts/role_runner.py <role-or-capability>
 agent --name <name> --fallback`, both with `--assignment <file> --result <file>`, from the session folder. It adds
 `--model <id>` for `reviewer`, `--add-dir <dir>` for `worker`, a writing capability, or a `write` agent, `--mcp` for a
 capability or agent that needs MCP tools or network, `--host claude|codex` to pick a capability's host entry, `--fallback`
-for its fallback entry, and `--resume <session_id>` to continue a run from the `evidence.session` in its status line. The runner
+for its fallback entry, and `--resume <session_id>` to continue a run from the `evidence.session` in its status line.
+`--effort <level>` raises a run within its entry's range, whose lower bound is the default. Repeating `--assignment`
+and `--result` runs up to six read-only assignments of one target in parallel, with one status line each, and the
+runner exits with the highest of their exit codes. A read-only child runs without the host's skill catalog: Codex
+gets `-c skills.max_context_tokens=1`, and Claude gets `--disable-slash-commands`. The runner
 puts the role rules before the assignment, runs the role on its pinned model, effort, and permissions (`codex exec`, or
 `claude -p` for a Claude model), checks the host rollout or transcript record, and prints a final JSON status line.
 Without `--mcp`, a Codex child gets `-c mcp_servers.<name>.enabled=false` for every server `codex mcp list --json` names,
@@ -782,7 +793,8 @@ After a substantial change and its checks are ready, the main session runs one i
 [independent model validation](instructions/independent-model-validation.md), without asking while the Codex weekly
 usage that `scripts/codex_usage.py` reads is at most 70 percent. On Claude Code, the `review_model`
 setting (default `gpt-6-astra`) reviews a Claude-authored result, and a GPT-authored result goes to `claude-fable-5-1`;
-Codex uses its mapping in that file. Every reviewer runs at `xhigh`. When the configured reviewer shares the author's
+Codex uses its mapping in that file. Every reviewer runs at `high`, or at `xhigh` for several components, a
+public contract, security, concurrency, or a hook or guard. When the configured reviewer shares the author's
 model family, the result says the review is not cross-family. When the usage is above 70 percent or unknown, or the
 reviewer runs on Claude, approval is required for the particular result, and a decline is not asked again. An unavailable reviewer, or a role runner exit code 3 or 4, means independent validation
 was not performed; no other model substitutes for it. Routine author inspection and tests always remain.

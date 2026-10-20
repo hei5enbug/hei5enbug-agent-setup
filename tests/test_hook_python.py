@@ -24,6 +24,7 @@ EXPECTED_HOOKS = [
     ("PostToolUse", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),
     ("PostToolUseFailure", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),
     ("UserPromptSubmit", None, "approval_guard.py", 5, False),
+    ("UserPromptSubmit", None, "session_context.py", 5, False),
     ("Stop", None, "language_guard.py", 5, False),
 ]
 
