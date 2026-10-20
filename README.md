@@ -584,8 +584,8 @@ Any other value means `apply`. Claude Code reads the option from `/config`; Code
 ## Feature options
 
 Six boolean features can be turned off, and each defaults to on. The implementation worker route, the worker
-models and efforts, the review model, the host settings mode, and the hook Python interpreter are string options in
-Claude Code. Choose `auto`, `codex`, `haiku`, `sol`,
+models and efforts, the review model, the host settings mode, the hook Python interpreter, and the plugins refreshed
+with this one (`refresh_plugins`) are string options in Claude Code. Choose `auto`, `codex`, `haiku`, `sol`,
 or `sonnet` for the route; an unset or unrecognized value uses `auto`, where the main session picks the worker per
 assignment. Choose `apply` or `report` for the host settings mode; an unset or unrecognized value uses `apply`. It
 decides whether `SessionStart` may change allowlisted Codex settings; see [Host settings](#host-settings). The review
@@ -616,6 +616,7 @@ write Codex settings.
 | Approval guard | `approval_guard` | `HEI5ENBUG_APPROVAL_GUARD` |
 | Host settings mode | `host_settings` (`apply` or `report`, default `apply`) | `HEI5ENBUG_HOST_SETTINGS` |
 | Hook Python interpreter | `python` (an absolute path, default empty) | `HEI5ENBUG_PYTHON` |
+| Plugins refreshed with this one | `refresh_plugins` (comma-separated `plugin@marketplace` IDs, default empty) | `HEI5ENBUG_REFRESH_PLUGINS` |
 | Subagent permission block in `~/.codex/AGENTS.md` | Not applicable | `HEI5ENBUG_SUBAGENT_POLICY` |
 | Question tool flag | Not applicable | `HEI5ENBUG_CODEX_ASK_TOOL` |
 
@@ -858,17 +859,24 @@ Start a new Codex thread or restart Claude Code after updating so the host loads
 
 ### Apply an update to running Orca sessions
 
-Ask for `orca-plugin-refresh` to apply an already-installed version to idle Orca-managed sessions without
-restarting them. The skill runs only when you ask for it. `apply-installed --json` validates the installed
-roots and creates a run ID for `apply --run-id <run_id> --json`, without marketplace or install commands.
+Ask for `orca-plugin-refresh` after a release to update this plugin, and any other plugins you name, and apply the
+installed versions to idle Orca-managed sessions without restarting them. The skill runs only when you ask for it.
+`update --json` installs the new version in Claude Code and Codex. Add `--also <plugin@marketplace>` for each other
+plugin; without it, the `HEI5ENBUG_REFRESH_PLUGINS` environment variable (comma-separated IDs) and then the saved
+`refresh_plugins` option name them, and the first non-empty source wins. Each companion is updated and validated
+per host and reported as `updated`, `current`, `not_installed`, `local_source`, `deferred`, or `error`. A plugin
+that loads from a local folder is never installed, so uncommitted code is not deployed. A companion error never
+blocks this plugin or the session apply. `apply-installed --json` validates the installed roots and companions
+without marketplace or install commands. Both create a run ID for `apply --run-id <run_id> --json`.
 
-Cache-replacing updates are a separate offline step. The default `update --json` defers; `update --offline --json`
-is for a normal terminal after affected coding-agent sessions have ended. Active host/plugin environment or
-connected coding-agent terminals contradict that attestation and still block the update. Unreadable, truncated,
-or unsupported available inventory also defers. The result preserves each host's status and provides its current
-root and an offline recovery command; deferred hosts remain untouched. Orca inventory cannot prove that
-non-Orca sessions have ended. Manual updates and another process deleting a loaded directory remain outside
-this protection. See the [refresh workflow](skills/orca-plugin-refresh/SKILL.md) for commands and limits.
+Each host has its own install gate. Claude Code always installs, because an update adds the new version beside the
+old one and running sessions keep their loaded directory until `/reload-plugins`. A Codex update deletes the old
+install, so it waits until no Codex turn is running: it defers when the command itself runs inside a Codex turn,
+when a Codex session file from the last 30 minutes does not end in a finished turn, or when those files cannot be
+read. A deferred Codex host stays untouched, its companions are reported as `deferred`, and the result gives its
+current root and a `recovery_command` to run after the Codex turn ends. Busy sessions are retried for up to one
+hour. Manual updates and another process deleting a loaded directory remain outside this protection. See the
+[refresh workflow](skills/orca-plugin-refresh/SKILL.md) for commands and limits.
 
 | Part | Claude Code | Codex |
 |---|---|---|
@@ -879,7 +887,7 @@ The skill decides that instructions are stale from the session-start marker: it 
 or points at a plugin directory that was replaced or removed. It sends a command only to an idle terminal whose
 input line is empty and confirms every result from the session transcript or the screen. For a Claude Code session,
 the skill may type and delete one character to tell a grey prompt suggestion from typed text; it never sends to a
-session with typed text. A busy session is retried until the time budget ends and is then
+session with typed text. A busy session is retried for up to one hour and is then
 reported as skipped. The session that runs the skill is handled last by a detached helper after its turn ends.
 Sessions outside Orca need `/reload-plugins` or `/compact` by hand. The skill supports macOS and Linux user-scope
 installations from the `hei5enbug` marketplace.
@@ -926,7 +934,7 @@ execution-path isolation; semantic equivalence still requires human or model rev
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Converts Markdown, HTML, PDF, DOCX, and Google Docs content into Confluence pages, preserves document structure and assets, and keeps pages synchronized with source revisions without losing web edits or inline comments. [Korean guide](docs/ko/skills/document-to-confluence/SKILL.ko.md). |
 | [`session-retro`](skills/session-retro/SKILL.md) | Reviews a day's Claude Code and Codex sessions of a repository with read-only scouts, turns corrections, failures, and repeated work into evidence-backed skill improvements per plugin, asks the open decisions, and writes plans on request. [Korean guide](docs/ko/skills/session-retro/SKILL.ko.md). |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | Creates, tests, and packages agent skills through a draft → test → review → improve loop. [Korean guide](docs/ko/skills/skill-builder/SKILL.ko.md). |
-| [`orca-plugin-refresh`](skills/orca-plugin-refresh/SKILL.md) | Updates this plugin safely offline and applies an installed version to idle Orca-managed Claude Code and Codex sessions without restarting them. [Korean guide](docs/ko/skills/orca-plugin-refresh/SKILL.ko.md). |
+| [`orca-plugin-refresh`](skills/orca-plugin-refresh/SKILL.md) | Updates this plugin and other plugins you name in Claude Code and Codex, with a per-host install gate, and applies the installed versions to idle Orca-managed sessions without restarting them. [Korean guide](docs/ko/skills/orca-plugin-refresh/SKILL.ko.md). |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | Reads the staged and unstaged changes, or the scope you name, plus recent commit history, then suggests five commit messages that match the repo's style. When you ask it to commit, it commits with the single best subject instead. [Korean guide](docs/ko/skills/suggest-commit/SKILL.ko.md). |
 | [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | Writes or reviews technical design documents and RFCs without taking ownership of implementation planning. [Korean guide](docs/ko/skills/technical-design-writer/SKILL.ko.md). |
 | [`tiki-taka`](skills/tiki-taka/SKILL.md) | Runs a turn-limited debate between the current agent and an opposing Claude/Codex session to surface and resolve issues. [Korean guide](docs/ko/skills/tiki-taka/SKILL.ko.md). |

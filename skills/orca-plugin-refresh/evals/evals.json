@@ -4,14 +4,13 @@
     {
       "id": 1,
       "prompt": "플러그인 업데이트된 내용을 Orca에서 실행 중인 세션들에 반영해줘.",
-      "expected_output": "The agent runs the default update, reports the active-session deferral with each host's root and offline recovery command, and does not automatically retry or apply deferred hosts.",
+      "expected_output": "The agent runs the update, reports each host's version change and warnings, then applies the run to the Orca sessions without asking for confirmation.",
       "files": [],
       "expectations": [
-        "The agent invokes `update --json` without `--offline` and reports `update_deferred_active_session` or `update_deferred_unknown_session_state` for deferred hosts.",
-        "Each deferred host's current root and offline recovery command are reported.",
-        "The agent does not automatically retry with `--offline` or apply a deferred host.",
-        "No command is sent to an Orca terminal by hand, and no session is exited or restarted.",
-        "The agent does not claim that Orca inventory establishes whether non-Orca sessions have ended."
+        "The agent invokes `update --json` and does not pass `--offline`, which the script no longer accepts.",
+        "Each host's version change and every warning are reported.",
+        "When a host updated successfully, `apply --run-id <run_id> --json` runs without asking the user to confirm.",
+        "No command is sent to an Orca terminal by hand, and no session is exited or restarted."
       ]
     },
     {
@@ -37,13 +36,15 @@
     },
     {
       "id": 4,
-      "prompt": "I closed the other coding-agent sessions. Run `update --offline` now.",
-      "expected_output": "The agent runs the explicitly requested offline update, but an active host/plugin environment still causes a safe deferral and returns the recovery command.",
+      "prompt": "릴리스 끝났어. example-plugin@example-market도 같이 갱신하고 내 Orca 세션에 반영해줘.",
+      "expected_output": "The agent passes the named plugin as a companion, reports every companion status and warning per host, and applies the run to the sessions.",
       "files": [],
       "expectations": [
-        "The agent invokes `update --offline --json` only because the user explicitly requested offline mode.",
-        "An active host, plugin, or Orca terminal signal still defers the update.",
-        "The agent does not claim the offline flag bypassed an active session or ran an install command."
+        "The agent runs `update --also example-plugin@example-market --json` with the plugin ID exactly as the user gave it.",
+        "Every entry in `hosts.<host>.plugins` is reported with its status and versions, including any warning or error.",
+        "A `local_source` status is explained as a plugin that loads from a local folder and was not installed.",
+        "A companion `error` does not stop `apply`; `apply --run-id <run_id> --json` still runs.",
+        "The agent does not invent a plugin ID the user did not name."
       ]
     },
     {
@@ -59,13 +60,14 @@
     },
     {
       "id": 6,
-      "prompt": "The update returned `update_deferred_unknown_session_state` for Codex. Try again and finish the refresh.",
-      "expected_output": "The agent reports that session state could not be verified, provides the current root and offline recovery command, and does not retry automatically.",
+      "prompt": "The update returned `codex_turn_in_progress` for Codex, and its companion plugins as `deferred`. Try again and finish the refresh.",
+      "expected_output": "The agent reports the deferred Codex host with its root and recovery command, tells the user to run the update again after the Codex turn ends, does not retry on its own, and applies only the host that updated.",
       "files": [],
       "expectations": [
-        "The agent does not repeat the update without a changed session state or a new explicit instruction.",
-        "The Codex root and offline recovery command are reported.",
-        "The agent does not apply Codex sessions while that host has an update error."
+        "The agent does not repeat the update on its own while the Codex turn is still running.",
+        "The Codex root, the deferral code, and the `update --json` recovery command are reported.",
+        "The agent tells the user to run the update again after the Codex turn ends.",
+        "The Codex sessions are not applied while that host has an update error; the Claude Code host can proceed."
       ]
     },
     {
@@ -78,6 +80,17 @@
         "After `apply` reports `deferred` and `queued_after_turn`, the agent reports those statuses and ends the turn without polling, rerunning `apply`, or sending commands to Orca terminals by hand.",
         "When the helper prompt arrives, the agent runs the status command and reports the Codex session from `not_refreshed` with `not_idle_before_deadline`.",
         "The agent does not exit, restart, or force-reload any session."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Run the plugin refresh with `--also` for the IDs I listed. In this simulation, the script answers `plugin_id_invalid` with entry 2.",
+      "expected_output": "The agent reports that the second plugin ID is invalid, runs nothing else, and asks the user for the corrected ID.",
+      "files": [],
+      "expectations": [
+        "The agent reports `plugin_id_invalid` and that the second entry is the problem.",
+        "The agent does not guess a corrected ID, edit the entry, or retry on its own.",
+        "No `apply` runs, because the update produced no run."
       ]
     }
   ]

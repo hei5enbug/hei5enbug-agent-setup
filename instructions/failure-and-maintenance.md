@@ -12,7 +12,8 @@ Recover the exact verified version or use the host's supported fresh-session pat
 When a host-generated Stop loop is outside agent control, report the external recovery step; neither a missing
 script nor an instruction can guarantee that the host's loop ends.
 
-Do not start a cache-replacing plugin update inside an active coding-agent session. An idle prompt still
-holds a live session. Use the updater's explicit offline boundary after affected sessions have ended, or
-apply an already-installed version. Preserve installed files and guard behavior when an update is deferred.
-This does not control manual updates or another process deleting a loaded directory.
+Do not start a cache-replacing Codex plugin update while a Codex turn is running. The refresh updater's Codex
+install gate defers it; rerun the update after the turn ends, or apply an already-installed version. Claude Code
+adds the new version beside the old one, so it can update at any time. Preserve installed files and guard
+behavior when an update is deferred. This does not control manual updates or another process deleting a loaded
+directory.

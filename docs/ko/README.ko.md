@@ -544,8 +544,8 @@ Claude Code는 이 옵션을 `/config`에서 읽고, Codex는 `HEI5ENBUG_HOST_SE
 
 ## 기능 옵션
 
-끌 수 있는 boolean 기능은 여섯 가지이며 각각 기본값은 켜짐입니다. Claude Code의 구현 worker 경로, worker 모델과 사고 강도, 검토 모델, 호스트 설정 모드, 훅 Python 인터프리터는
-문자열 옵션입니다. 경로는 `auto`, `codex`, `haiku`, `sol`, `sonnet` 중 하나를 고르고, 값이 비어 있거나 알 수 없으면 `auto`를 씁니다.
+끌 수 있는 boolean 기능은 여섯 가지이며 각각 기본값은 켜짐입니다. Claude Code의 구현 worker 경로, worker 모델과 사고 강도, 검토 모델, 호스트 설정 모드, 훅 Python 인터프리터, 이 플러그인과 함께
+새로고침할 플러그인(`refresh_plugins`)은 문자열 옵션입니다. 경로는 `auto`, `codex`, `haiku`, `sol`, `sonnet` 중 하나를 고르고, 값이 비어 있거나 알 수 없으면 `auto`를 씁니다.
 `auto`에서는 메인 세션이 작업마다 worker를 고릅니다. 호스트 설정 모드는 `apply`와 `report` 중 하나를 고르고, 값이 비어 있거나
 알 수 없으면 `apply`를 씁니다. 이 모드는 `SessionStart`가 허용 목록의 Codex 설정을 바꿔도 되는지 정합니다.
 [호스트 설정](#호스트-설정)을 참고하세요.
@@ -573,6 +573,7 @@ Codex 설정이나 Claude 설정을 쓰지 않습니다. Codex 설정을 쓰는 
 | 승인 가드 | `approval_guard` | `HEI5ENBUG_APPROVAL_GUARD` |
 | 호스트 설정 모드 | `host_settings` (`apply` 또는 `report`, 기본 `apply`) | `HEI5ENBUG_HOST_SETTINGS` |
 | 훅 Python 인터프리터 | `python` (절대 경로, 기본값 빈 문자열) | `HEI5ENBUG_PYTHON` |
+| 이 플러그인과 함께 새로고침할 플러그인 | `refresh_plugins` (쉼표로 구분한 `plugin@marketplace` ID, 기본값 빈 문자열) | `HEI5ENBUG_REFRESH_PLUGINS` |
 | `~/.codex/AGENTS.md`의 서브에이전트 허용 블록 | 해당 없음 | `HEI5ENBUG_SUBAGENT_POLICY` |
 | 질문 기능 플래그 | 해당 없음 | `HEI5ENBUG_CODEX_ASK_TOOL` |
 
@@ -800,17 +801,23 @@ Claude Code를 다시 시작합니다.
 
 ### 실행 중인 Orca 세션에 업데이트 반영
 
-`orca-plugin-refresh`를 요청하면 이미 설치된 버전을 Orca가 관리하는 대기 세션에 재시작 없이 반영합니다.
-이 스킬은 요청할 때만 실행됩니다. `apply-installed --json`은 설치 경로를 검증하고
-`apply --run-id <run_id> --json`에 넘길 실행 ID를 만듭니다. 마켓플레이스나 설치 명령은 실행하지 않습니다.
+릴리스가 끝난 뒤 `orca-plugin-refresh`를 요청하면 이 플러그인과 지정한 다른 플러그인을 업데이트하고, 설치된 버전을
+Orca가 관리하는 대기 세션에 재시작 없이 반영합니다. 이 스킬은 요청할 때만 실행됩니다. `update --json`은 Claude Code와
+Codex에 새 버전을 설치합니다. 다른 플러그인은 `--also <plugin@marketplace>`를 하나씩 붙여 지정합니다. 이 플래그가 없으면
+`HEI5ENBUG_REFRESH_PLUGINS` 환경 변수(쉼표로 구분한 ID)를, 그것도 없으면 저장된 `refresh_plugins` 옵션을 쓰며, 비어 있지
+않은 첫 출처가 이깁니다. 함께 새로고침할 플러그인은 호스트마다 업데이트하고 검증해 `updated`, `current`, `not_installed`,
+`local_source`, `deferred`, `error` 중 하나로 보고합니다. 로컬 폴더에서 로드되는 플러그인은 설치하지 않으므로 커밋하지 않은
+코드가 배포되지 않습니다. 함께 새로고침할 플러그인의 오류는 이 플러그인이나 세션 적용을 막지 않습니다.
+`apply-installed --json`은 마켓플레이스나 설치 명령 없이 설치 경로와 함께 새로고침할 플러그인을 검증합니다. 두 명령 모두
+`apply --run-id <run_id> --json`에 넘길 실행 ID를 만듭니다.
 
-캐시를 교체하는 업데이트는 별도의 오프라인 단계입니다. 기본 `update --json`은 보류하며,
-`update --offline --json`은 영향을 받는 코딩 에이전트 세션이 끝난 뒤 일반 터미널에서 실행합니다.
-활성 호스트·플러그인 환경이나 연결된 코딩 에이전트 터미널이 있으면 오프라인 확인과 모순되므로 계속 차단합니다.
-사용 가능한 인벤토리를 읽을 수 없거나, 목록이 잘리거나, 지원하지 않는 형식이어도 보류합니다.
-결과는 호스트별 상태를 보존하고 현재 설치 경로와 오프라인 복구 명령을 제공합니다. 보류된 호스트는 건드리지 않습니다.
-Orca 인벤토리는 Orca 밖 세션의 종료를 입증할 수 없습니다. 직접 업데이트하거나 다른 프로세스가 로드된 디렉터리를
-삭제하는 상황은 이 보호 범위 밖입니다. 명령과 한계는 [새로고침 절차](skills/orca-plugin-refresh/SKILL.ko.md)를 참고하세요.
+호스트마다 설치 게이트가 따로 있습니다. Claude Code는 업데이트가 옛 버전 옆에 새 버전을 추가하고 실행 중인 세션이
+`/reload-plugins` 전까지 불러온 디렉터리를 유지하므로 항상 설치합니다. Codex 업데이트는 옛 설치본을 삭제하므로 진행 중인
+Codex 턴이 없을 때까지 기다립니다. 명령 자체가 Codex 턴 안에서 실행되거나, 최근 30분 안의 Codex 세션 파일이 끝난 턴으로
+끝나지 않거나, 그 파일을 읽을 수 없으면 보류합니다. 보류된 Codex 호스트는 건드리지 않고, 그 호스트의 함께 새로고침할
+플러그인은 `deferred`로 보고하며, 결과는 현재 설치 경로와 Codex 턴이 끝난 뒤 실행할 `recovery_command`를 제공합니다.
+바쁜 세션은 최대 한 시간까지 다시 시도합니다. 직접 업데이트하거나 다른 프로세스가 로드된 디렉터리를 삭제하는 상황은 이
+보호 범위 밖입니다. 명령과 한계는 [새로고침 절차](skills/orca-plugin-refresh/SKILL.ko.md)를 참고하세요.
 
 | 부분 | Claude Code | Codex |
 |---|---|---|
@@ -820,7 +827,7 @@ Orca 인벤토리는 Orca 밖 세션의 종료를 입증할 수 없습니다. �
 스킬은 세션 시작 표식으로 지침이 오래됐는지 판단합니다. 표식이 없거나, 요약값이 다르거나, 교체되거나 지워진
 플러그인 디렉터리를 가리키면 오래된 것으로 봅니다. 명령은 대기 상태이면서 입력 줄이 빈 터미널에만 보내고, 결과를
 세션 대화 기록이나 화면으로 모두 확인합니다. Claude Code 세션에서는 흐린 추천 문구와 직접 친 글을 구별하려고 한
-글자를 입력했다가 지울 수 있으며, 직접 친 글이 있는 세션에는 명령을 보내지 않습니다. 작업 중인 세션은 시간 예산이 끝날 때까지 다시 시도하고, 그래도 안 되면 건너뛴 것으로 보고합니다.
+글자를 입력했다가 지울 수 있으며, 직접 친 글이 있는 세션에는 명령을 보내지 않습니다. 작업 중인 세션은 최대 한 시간까지 다시 시도하고, 그래도 안 되면 건너뛴 것으로 보고합니다.
 스킬을 실행한 세션은 턴이 끝난 뒤 분리된 도우미가 마지막에 처리합니다. Orca 밖 세션은 `/reload-plugins`나
 `/compact`를 직접 실행해야 합니다. macOS와 Linux의 `hei5enbug` 마켓플레이스 사용자 범위 설치를 지원합니다.
 
@@ -866,7 +873,7 @@ Orca CLI가 필요한 테스트는 Orca가 설치되어 있지 않으면 건너�
 | [`document-to-confluence`](../../skills/document-to-confluence/SKILL.md) | Markdown, HTML, PDF, DOCX, Google Docs 문서를 Confluence 페이지로 변환하고, 문서 구조와 첨부 파일을 보존하며, 이후 원본 변경도 웹 편집과 인라인 댓글을 잃지 않고 페이지에 반영합니다. [한국어 안내](skills/document-to-confluence/SKILL.ko.md) |
 | [`session-retro`](../../skills/session-retro/SKILL.md) | 한 저장소의 하루 Claude Code·Codex 세션을 읽기 전용 scout로 검토하고, 정정·실패·반복 작업을 플러그인별 근거 있는 스킬 개선안으로 바꾸며, 남은 결정을 묻고 요청하면 계획안을 씁니다. [한국어 안내](skills/session-retro/SKILL.ko.md) |
 | [`skill-builder`](../../skills/skill-builder/SKILL.md) | 초안 작성 → 테스트 → 검토 → 개선 순환을 통해 에이전트 스킬을 만들고, 검증하고, 패키징합니다. [한국어 안내](skills/skill-builder/SKILL.ko.md) |
-| [`orca-plugin-refresh`](../../skills/orca-plugin-refresh/SKILL.md) | 이 플러그인을 안전하게 오프라인으로 업데이트하고, 설치된 버전을 대기 중인 Orca 관리 Claude Code와 Codex 세션에 재시작 없이 반영합니다. [한국어 안내](skills/orca-plugin-refresh/SKILL.ko.md) |
+| [`orca-plugin-refresh`](../../skills/orca-plugin-refresh/SKILL.md) | 이 플러그인과 지정한 다른 플러그인을 호스트별 설치 게이트를 거쳐 Claude Code와 Codex에 업데이트하고, 설치된 버전을 대기 중인 Orca 관리 세션에 재시작 없이 반영합니다. [한국어 안내](skills/orca-plugin-refresh/SKILL.ko.md) |
 | [`suggest-commit`](../../skills/suggest-commit/SKILL.md) | 스테이징된 변경과 스테이징되지 않은 변경을 함께, 또는 사용자가 지정한 범위를 최근 커밋 이력과 함께 읽어, 이 저장소의 스타일에 맞는 커밋 메시지 5개를 제안합니다. 커밋을 요청하면 가장 적절한 제목 하나로 바로 커밋합니다. [한국어 안내](skills/suggest-commit/SKILL.ko.md) |
 | [`technical-design-writer`](../../skills/technical-design-writer/SKILL.md) | 구현 계획을 담당하지 않고 기술 설계 문서와 RFC를 작성하거나 검토합니다. [한국어 안내](skills/technical-design-writer/SKILL.ko.md) |
 | [`tiki-taka`](../../skills/tiki-taka/SKILL.md) | 현재 에이전트와 반대쪽 Claude/Codex 세션이 교환 횟수를 제한한 토론을 벌여 쟁점을 드러내고 수렴시킵니다. [한국어 안내](skills/tiki-taka/SKILL.ko.md) |

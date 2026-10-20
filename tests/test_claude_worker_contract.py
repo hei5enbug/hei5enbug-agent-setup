@@ -199,6 +199,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
                 "approval_guard",
                 "host_settings",
                 "python",
+                "refresh_plugins",
             ],
         )
         self.assertEqual(
@@ -225,7 +226,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         )
         for key, option in options.items():
             with self.subTest(key=key):
-                if key in {"implementation_worker", "worker_model", "worker_effort", "codex_worker_model", "codex_worker_effort", "review_model", "host_settings", "python"}:
+                if key in {"implementation_worker", "worker_model", "worker_effort", "codex_worker_model", "codex_worker_effort", "review_model", "host_settings", "python", "refresh_plugins"}:
                     self.assertTrue(option["title"].isascii() and option["description"].isascii())
                     continue
                 self.assertEqual(option["type"], "boolean")

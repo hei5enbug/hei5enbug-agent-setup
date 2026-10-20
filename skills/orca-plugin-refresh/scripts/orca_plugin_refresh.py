@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Safely update hei5enbug-agent-setup offline and apply installed versions to idle Orca agent sessions."""
+"""Update hei5enbug-agent-setup and companion plugins, then apply installed versions to idle Orca agent sessions."""
 
 from __future__ import annotations
 
@@ -39,6 +39,15 @@ REQUIRED_HOOK_TARGETS = (
 )
 HOOK_LAUNCHER = "scripts/hook_python.sh"
 LAUNCHED_SCRIPT = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*\.py")
+HOOK_ROOT = "${CLAUDE_PLUGIN_ROOT}/"
+COMPANION_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}@[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+COMPANION_LIMIT = 10
+COMPANION_ENV = "HEI5ENBUG_REFRESH_PLUGINS"
+CODEX_TURN_ENV = ("CODEX_THREAD_ID", "CODEX_SESSION_ID")
+CODEX_IDLE_EVENTS = {"task_complete", "turn_aborted"}
+ROLLOUT_RECENT_SECONDS = 30 * 60
+ROLLOUT_TAIL_BYTES = 64 * 1024
+HOOKS_TRUST_WARNING = {"code": "codex_hooks_need_trust", "message": "hooks.json changed; review and trust the plugin hooks in Codex /hooks, or they are skipped."}
 RELOAD_DONE = re.compile(r"Reloaded: \d+ plugins?")
 RELOAD_REFUSED = re.compile(r"reload changes MCP tools|/reload-plugins --force", re.IGNORECASE)
 CLAUDE_COMPACTED = re.compile(r"Compacted|Conversation compacted")
@@ -60,10 +69,10 @@ CODEX_FOOTER = re.compile(r"^\s{2}\S.* · ")
 POLL_SECONDS = 2.0
 RELOAD_TIMEOUT = 45.0
 COMPACT_TIMEOUT = 300.0
-SELF_WAIT_SECONDS = 30 * 60
+SELF_WAIT_SECONDS = 60 * 60
 NOTIFY_SECONDS = 120
 DEFAULT_APPLY_SECONDS = 20
-FOLLOW_UP_SECONDS = 10 * 60
+FOLLOW_UP_SECONDS = 60 * 60
 IDLE_CONFIRM_SECONDS = 3.0
 INSTALL_CHECK_SECONDS = 30.0
 
@@ -89,17 +98,17 @@ def parse_time(value: object) -> float | None:
         return None
 
 
-def load_session_context():
-    path = PLUGIN_ROOT / "scripts" / "session_context.py"
-    spec = importlib.util.spec_from_file_location("hei5enbug_session_context", path)
+def load_plugin_script(name: str):
+    path = PLUGIN_ROOT / "scripts" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(f"hei5enbug_{name}", path)
     if spec is None or spec.loader is None or not path.is_file():
-        raise RefreshError("plugin_incomplete", "The plugin's session_context.py is missing.")
+        raise RefreshError("plugin_incomplete", f"The plugin's {name}.py is missing.")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-SESSION_CONTEXT = load_session_context()
+SESSION_CONTEXT = load_plugin_script("session_context")
 
 
 def executable(name: str) -> str:
@@ -196,12 +205,11 @@ def installed(host: str) -> dict:
         matches = [item for item in items if isinstance(item, dict) and item.get("pluginId") == PLUGIN_ID] if isinstance(items, list) else []
         if len(matches) != 1 or matches[0].get("enabled") is not True:
             raise RefreshError("codex_plugin_missing", "The Codex plugin is not installed and enabled exactly once.")
-        home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
-        root = home / "plugins" / "cache" / MARKETPLACE / PLUGIN / str(matches[0].get("version"))
+        root = codex_home() / "plugins" / "cache" / MARKETPLACE / PLUGIN / str(matches[0].get("version"))
     version = matches[0].get("version")
     if not isinstance(version, str) or not root.is_absolute() or not root.is_dir():
         raise RefreshError(f"{host}_root_missing", f"The installed {host} plugin directory is unavailable.")
-    return {"version": version, "root": root.resolve().as_posix()}
+    return {"version": version, "root": root.resolve().as_posix(), "item": matches[0]}
 
 
 def inside(root: Path, path: Path) -> bool:
@@ -228,25 +236,35 @@ def validate_claude_mod(root: Path, manifest: dict) -> None:
             raise missing
 
 
-def validate_install(host: str, install: dict) -> dict:
-    root = Path(install["root"])
-    version = install["version"]
+def read_manifest(host: str, root: Path, plugin: str, version: str) -> dict:
     manifest_path = root / (".claude-plugin/plugin.json" if host == "claude" else ".codex-plugin/plugin.json")
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise RefreshError("plugin_manifest_missing", f"The installed {host} plugin manifest is unavailable or unreadable.") from error
-    if not isinstance(manifest, dict) or manifest.get("name") != PLUGIN or manifest.get("version") != version:
+    if not isinstance(manifest, dict) or manifest.get("name") != plugin or manifest.get("version") != version:
         raise RefreshError("plugin_manifest_mismatch", f"The installed {host} plugin manifest does not match version {version}.")
+    return manifest
 
+
+def check_hooks(host: str, root: Path, strict: bool) -> tuple[bytes | None, set[str]]:
+    """Read hooks/hooks.json and require every plugin-root hook target to exist.
+
+    Strict mode is this plugin's contract: the file must exist and every hook must be a recognizable command.
+    Otherwise a missing file is allowed and hooks without a plugin-root target are skipped.
+    """
     hooks_path = root / "hooks" / "hooks.json"
     try:
         hooks_bytes = hooks_path.read_bytes()
         payload = json.loads(hooks_bytes.decode("utf-8"))
+    except FileNotFoundError as error:
+        if strict:
+            raise RefreshError("plugin_hooks_missing", f"The installed {host} plugin hooks are unavailable or unreadable.") from error
+        return None, set()
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise RefreshError("plugin_hooks_missing", f"The installed {host} plugin hooks are unavailable or unreadable.") from error
     events = payload.get("hooks") if isinstance(payload, dict) else None
-    if not isinstance(events, dict) or not events:
+    if not isinstance(events, dict) or (strict and not events):
         raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.")
     seen_targets: set[str] = set()
     for groups in events.values():
@@ -257,26 +275,40 @@ def validate_install(host: str, install: dict) -> dict:
             if not isinstance(entries, list):
                 raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.")
             for entry in entries:
-                if not isinstance(entry, dict) or entry.get("type") != "command" or not isinstance(entry.get("command"), str):
+                if not isinstance(entry, dict) or (entry.get("type") == "command" and not isinstance(entry.get("command"), str)):
                     raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.")
+                if entry.get("type") != "command":
+                    if strict:
+                        raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.")
+                    continue
                 try:
                     argv = shlex.split(entry["command"])
                 except ValueError as error:
-                    raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.") from error
-                index = next((index for index, item in enumerate(argv) if index and item.startswith("${CLAUDE_PLUGIN_ROOT}/")), None)
-                if index is None:
+                    if strict:
+                        raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.") from error
+                    continue
+                hits = [index for index, item in enumerate(argv) if item.startswith(HOOK_ROOT)]
+                if strict and not any(hits):
                     raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hook target is unsupported.")
-                relative_target = argv[index].removeprefix("${CLAUDE_PLUGIN_ROOT}/")
-                targets = [relative_target]
-                if relative_target == HOOK_LAUNCHER:
-                    script = argv[index + 1] if index + 1 < len(argv) else ""
-                    if not LAUNCHED_SCRIPT.fullmatch(script):
-                        raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hook target is unsupported.")
-                    targets.append(f"scripts/{script}")
-                for target in targets:
-                    if not (root / target).is_file():
-                        raise RefreshError("plugin_hook_target_missing", f"An installed {host} plugin hook target is missing.")
-                seen_targets.add(targets[-1])
+                for index in hits:
+                    relative_target = argv[index].removeprefix(HOOK_ROOT)
+                    targets = [relative_target]
+                    if relative_target == HOOK_LAUNCHER:
+                        script = argv[index + 1] if index + 1 < len(argv) else ""
+                        if not LAUNCHED_SCRIPT.fullmatch(script):
+                            raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hook target is unsupported.")
+                        targets.append(f"scripts/{script}")
+                    for target in targets:
+                        if not (root / target).is_file():
+                            raise RefreshError("plugin_hook_target_missing", f"An installed {host} plugin hook target is missing.")
+                    seen_targets.add(targets[-1])
+    return hooks_bytes, seen_targets
+
+
+def validate_install(host: str, install: dict) -> dict:
+    root = Path(install["root"])
+    manifest = read_manifest(host, root, PLUGIN, install["version"])
+    hooks_bytes, seen_targets = check_hooks(host, root, strict=True)
     if not set(REQUIRED_HOOK_TARGETS) <= seen_targets:
         raise RefreshError("plugin_hook_target_missing", f"The installed {host} plugin hooks omit a required target.")
     if host == "claude":
@@ -290,65 +322,70 @@ def validate_install(host: str, install: dict) -> dict:
     return {"digest": digest, "hooks": hashlib.sha256(hooks_bytes).hexdigest()}
 
 
-ACTIVE_SESSION_ENV = (
-    "ORCA_TERMINAL_HANDLE",
-    "CLAUDE_PLUGIN_ROOT",
-    "PLUGIN_ROOT",
-    "CLAUDE_CODE_ENTRYPOINT",
-    "CLAUDECODE",
-    "CODEX_THREAD_ID",
-    "CODEX_SESSION_ID",
-)
+def codex_home() -> Path:
+    return Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
 
 
-def active_orca_terminals(orca: "Orca") -> bool:
-    active = False
-    for terminal in orca.terminals():
-        handle = terminal.get("handle")
-        identity = terminal.get("agentIdentity")
-        connected = terminal.get("connected")
-        if not isinstance(handle, str) or not HANDLE.fullmatch(handle) or not isinstance(connected, bool):
-            raise RefreshError("update_deferred_unknown_session_state", "Orca returned unsupported terminal data.")
-        if "agentIdentity" not in terminal or (identity is not None and (not isinstance(identity, str) or not identity.strip())):
-            raise RefreshError("update_deferred_unknown_session_state", "Orca returned unsupported terminal data.")
-        if not connected:
-            continue
-        if isinstance(identity, str) and identity.strip():
-            active = True
-            continue
-        directory = SESSION_CONTEXT.marker_directory()
-        marker_path = directory / f"{handle}.json" if directory is not None else None
-        if marker_path is None or not marker_path.exists():
-            continue
-        try:
-            marker = json.loads(marker_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as error:
-            raise RefreshError("update_deferred_unknown_session_state", "An Orca session marker could not be read.") from error
-        if not isinstance(marker, dict) or marker.get("schema") != SESSION_CONTEXT.MARKER_SCHEMA or marker.get("host") not in HOSTS:
-            raise RefreshError("update_deferred_unknown_session_state", "An Orca session marker has an unsupported format.")
-        active = True
-    return active
-
-
-def assert_update_safe(offline: bool) -> None:
-    signals = [name for name in ACTIVE_SESSION_ENV if name in os.environ]
-    if signals:
-        raise RefreshError("update_deferred_active_session", "A coding-agent or Orca session environment is active.")
+def rollout_idle(path: Path) -> bool:
+    """True only when the last complete line of a Codex rollout file records the end of a turn."""
+    with path.open("rb") as stream:
+        size = stream.seek(0, os.SEEK_END)
+        start = max(0, size - ROLLOUT_TAIL_BYTES)
+        stream.seek(start)
+        data = stream.read()
+    if not data.endswith(b"\n"):
+        return False
+    lines = data.split(b"\n")
+    if start:
+        lines = lines[1:]
+    lines = [line for line in lines if line.strip()]
+    if not lines:
+        return False
     try:
-        active = active_orca_terminals(Orca())
-    except RefreshError as error:
-        if offline and error.code == "command_missing":
-            return
-        if error.code == "update_deferred_unknown_session_state":
-            raise
-        raise RefreshError("update_deferred_unknown_session_state", "Orca session inventory is unavailable.") from error
-    if active:
-        raise RefreshError("update_deferred_active_session", "A connected coding-agent session is present in Orca.")
-    if not offline:
-        raise RefreshError("update_deferred_unknown_session_state", "Use --offline only after affected coding-agent sessions have ended.")
+        record = json.loads(lines[-1].decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    if not isinstance(record, dict):
+        return False
+    payload = record.get("payload")
+    return record.get("type") == "event_msg" and isinstance(payload, dict) and payload.get("type") in CODEX_IDLE_EVENTS
 
 
-def recovery_command(root: str | None) -> str:
+def install_gate(host: str) -> RefreshError | None:
+    """Why an install on `host` must wait, or None. A Codex update deletes the old install, so no Codex turn may run."""
+    if host != "codex":
+        return None
+    if any(name in os.environ for name in CODEX_TURN_ENV):
+        return RefreshError("update_deferred_active_session", "This command runs inside a Codex turn.")
+    unknown = RefreshError("update_deferred_unknown_session_state", "The Codex session state could not be read.")
+    sessions = codex_home() / "sessions"
+    errors: list[OSError] = []
+    recent: list[Path] = []
+    try:
+        if not sessions.exists():
+            return None
+        for folder, _, names in os.walk(sessions, onerror=errors.append):
+            for name in names:
+                if not (name.startswith("rollout-") and name.endswith(".jsonl")):
+                    continue
+                path = Path(folder) / name
+                try:
+                    modified = path.stat().st_mtime
+                except FileNotFoundError:
+                    continue
+                if time.time() - modified <= ROLLOUT_RECENT_SECONDS:
+                    recent.append(path)
+        if errors:
+            return unknown
+        for path in recent:
+            if not rollout_idle(path):
+                return RefreshError("codex_turn_in_progress", "A recent Codex session has a turn in progress.")
+    except Exception:
+        return unknown
+    return None
+
+
+def recovery_command(root: str | None, companions: Sequence[str] = ()) -> str:
     current = Path(__file__).resolve()
     try:
         relative = current.relative_to(PLUGIN_ROOT)
@@ -356,7 +393,8 @@ def recovery_command(root: str | None) -> str:
         relative = current.name
     candidate = Path(root) / relative if root else current
     script = candidate if candidate.is_file() else current
-    return f"python3 {shlex.quote(str(script))} update --offline --json"
+    also = "".join(f" --also {shlex.quote(plugin_id)}" for plugin_id in companions)
+    return f"python3 {shlex.quote(str(script))} update{also} --json"
 
 
 def claude_unreleased_changes() -> tuple[list[str], str | None]:
@@ -386,21 +424,79 @@ def claude_unreleased_changes() -> tuple[list[str], str | None]:
     return [line for line in diff.stdout.splitlines() if line.strip()], None
 
 
-def update_host(host: str, offline: bool = False) -> dict:
+def run_install(host: str, plugin_id: str, context: dict) -> RefreshError | None:
+    """Refresh the plugin's marketplace at most once per run, then update the plugin.
+
+    The host gate is checked again right before each install command. A gate that fails is returned instead of
+    raised and stays in `context`, so no further install runs on that host in this run.
+    """
+    marketplaces = context.setdefault("marketplaces_updated", {})
+
+    def blocked() -> RefreshError | None:
+        if not context.get("blocked"):
+            context["blocked"] = install_gate(host)
+        return context["blocked"]
+
+    marketplace = plugin_id.partition("@")[2]
+    cli = executable(host)
+    if marketplace in marketplaces:
+        if marketplaces[marketplace]:
+            raise marketplaces[marketplace]
+    else:
+        if blocked():
+            return context["blocked"]
+        marketplaces[marketplace] = None
+        try:
+            run([cli, "plugin", "marketplace", "update" if host == "claude" else "upgrade", marketplace], timeout=180)
+        except RefreshError as error:
+            marketplaces[marketplace] = error
+            raise
+    if blocked():
+        return context["blocked"]
+    run([cli, "plugin", "update" if host == "claude" else "add", plugin_id], timeout=180)
+    return None
+
+
+def local_source(host: str, plugin_id: str, item: object, context: dict) -> dict | None:
+    """{version, note?} when the plugin loads from a local source, which is never installed; None otherwise."""
+    name, _, marketplace = plugin_id.partition("@")
+    if not isinstance(item, dict):
+        return None
+    if host == "claude":
+        entry = claude_marketplace(context, marketplace)
+        if entry and entry.get("source") in ("directory", "file"):
+            return {"version": folder_version(entry, name), "note": "loads_from_folder_on_reload"}
+        return None
+    source = item.get("marketplaceSource")
+    if (source.get("sourceType") if isinstance(source, dict) else None) != "git":
+        return {"version": item.get("version") if isinstance(item.get("version"), str) else None}
+    return None
+
+
+def update_host(host: str, context: dict | None = None) -> dict:
+    context = {} if context is None else context
     before = installed(host)
     before_snapshot = validate_install(host, before)
-    try:
-        assert_update_safe(offline)
-    except RefreshError as error:
-        if error.code in {"update_deferred_active_session", "update_deferred_unknown_session_state"}:
-            error.details.update(root=before["root"], recovery_command=recovery_command(before["root"]))
-        raise
-    if host == "claude":
-        run([executable("claude"), "plugin", "marketplace", "update", MARKETPLACE], timeout=180)
-        run([executable("claude"), "plugin", "update", PLUGIN_ID], timeout=180)
-    else:
-        run([executable("codex"), "plugin", "marketplace", "upgrade", MARKETPLACE], timeout=180)
-        run([executable("codex"), "plugin", "add", PLUGIN_ID], timeout=180)
+    local = local_source(host, PLUGIN_ID, before.get("item"), context)
+    if local:
+        version = local["version"] or before["version"]
+        result = {
+            "before_version": version,
+            "after_version": version,
+            "root": before["root"],
+            "previous_root": before["root"],
+            "digest": before_snapshot["digest"],
+            "instructions_changed": False,
+            "warnings": [],
+            "local_source": True,
+        }
+        if local.get("note"):
+            result["note"] = local["note"]
+        return result
+    blocked = run_install(host, PLUGIN_ID, context)
+    if blocked:
+        blocked.details.update(root=before["root"], recovery_command=recovery_command(before["root"], context.get("ids", ())))
+        raise blocked
     after = installed(host)
     after_snapshot = validate_install(host, after)
     result = {
@@ -423,31 +519,172 @@ def update_host(host: str, offline: bool = False) -> dict:
                 {"code": "unreleased_same_version", "message": "Claude Code keeps the installed copy because the version did not change; bump the version to release these files.", "files": pending[:20]}
             )
     if host == "codex" and before_snapshot["hooks"] != after_snapshot["hooks"]:
-        result["warnings"].append(
-            {"code": "codex_hooks_need_trust", "message": "hooks.json changed; review and trust the plugin hooks in Codex /hooks, or they are skipped."}
-        )
+        result["warnings"].append(dict(HOOKS_TRUST_WARNING))
     return result
 
 
-def command_update(offline: bool = False) -> dict:
+def companion_entries(value: object) -> list:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [part for part in re.split(r"[,\s]+", value) if part]
+    return list(value) if isinstance(value, list) else [value]
+
+
+def companion_ids(also: Sequence[str]) -> tuple[list[str], dict]:
+    """The companion plugin IDs: --also, else the environment variable, else the saved Claude option."""
+    extra: dict = {}
+    entries = list(also) or companion_entries(os.environ.get(COMPANION_ENV))
+    if not entries:
+        saved, problem = load_plugin_script("plugin_toggles").saved_options(("refresh_plugins",))
+        if problem:
+            extra["notice"] = f"Ignored the saved refresh_plugins option: {problem}."
+        entries = companion_entries(saved.get("refresh_plugins"))
+    ids: list[str] = []
+    for index, entry in enumerate(entries, 1):
+        if not isinstance(entry, str) or not COMPANION_ID.fullmatch(entry):
+            raise RefreshError("plugin_id_invalid", "A refresh plugin entry is not a valid plugin@marketplace ID.", {"entry": index})
+        if entry != PLUGIN_ID and entry not in ids:
+            ids.append(entry)
+    if len(ids) > COMPANION_LIMIT:
+        extra["companions_dropped"] = len(ids) - COMPANION_LIMIT
+    return ids[:COMPANION_LIMIT], extra
+
+
+def claude_marketplace(context: dict, marketplace: str) -> dict | None:
+    if "marketplaces" not in context:
+        payload = run_json([executable("claude"), "plugin", "marketplace", "list", "--json"])
+        context["marketplaces"] = [item for item in payload if isinstance(item, dict)] if isinstance(payload, list) else []
+    entries = [item for item in context["marketplaces"] if item.get("name") == marketplace]
+    return entries[0] if len(entries) == 1 else None
+
+
+def folder_version(entry: dict, name: str) -> str | None:
+    """The version of a plugin that loads from a local marketplace folder, or None when any lookup step fails."""
+    location = entry.get("installLocation")
+    if not isinstance(location, str) or not location:
+        return None
+    base = Path(location)
+    try:
+        catalog = json.loads((base / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+        source = next(item["source"] for item in catalog["plugins"] if isinstance(item, dict) and item.get("name") == name)
+        if not isinstance(source, str):
+            return None
+        folder = base / source
+        if not inside(base, folder):
+            return None
+        version = json.loads((folder / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["version"]
+    except (OSError, UnicodeError, ValueError, KeyError, TypeError, StopIteration):
+        return None
+    return version if isinstance(version, str) and version else None
+
+
+def describe_plugin(host: str, plugin_id: str, context: dict) -> dict | None:
+    """The plugin's listing on `host` as {version, root, local, note?}, or None unless it is installed and enabled exactly once."""
+    name, _, marketplace = plugin_id.partition("@")
+    payload = run_json([executable(host), "plugin", "list", "--json"])
+    if host == "claude":
+        items = [item for item in payload if isinstance(item, dict) and item.get("id") == plugin_id] if isinstance(payload, list) else []
+    else:
+        listed = payload.get("installed") if isinstance(payload, dict) else None
+        items = [item for item in listed if isinstance(item, dict) and item.get("pluginId") == plugin_id] if isinstance(listed, list) else []
+    if len(items) != 1 or items[0].get("enabled") is not True:
+        return None
+    item = items[0]
+    local = local_source(host, plugin_id, item, context)
+    if local:
+        return {"root": None, "local": True, **local}
+    if host == "claude":
+        root = Path(str(item.get("installPath") or ""))
+    else:
+        root = codex_home() / "plugins" / "cache" / marketplace / name / str(item.get("version"))
+    version = item.get("version")
+    if not isinstance(version, str) or not version or not root.is_absolute() or not root.is_dir():
+        raise RefreshError(f"{host}_root_missing", f"The installed {host} plugin directory is unavailable.")
+    return {"version": version, "root": root.resolve(), "local": False}
+
+
+def hooks_digest(root: Path) -> str | None:
+    try:
+        return hashlib.sha256((root / "hooks" / "hooks.json").read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def validate_companion(host: str, plugin_id: str, found: dict) -> str | None:
+    """Check the installed manifest and every plugin-root hook target; return the hooks file digest, None without one."""
+    root = found["root"]
+    read_manifest(host, root, plugin_id.partition("@")[0], found["version"])
+    hooks_bytes, _ = check_hooks(host, root, strict=False)
+    return hashlib.sha256(hooks_bytes).hexdigest() if hooks_bytes is not None else None
+
+
+def refresh_companion(host: str, plugin_id: str, update: bool, context: dict) -> dict:
+    result = {"plugin": plugin_id, "status": "error", "before_version": None, "after_version": None, "warnings": []}
+    try:
+        found = describe_plugin(host, plugin_id, context)
+        if found is None:
+            result["status"] = "not_installed"
+            return result
+        result["before_version"] = result["after_version"] = found["version"]
+        if found["local"]:
+            result["status"] = "local_source"
+            if found.get("note"):
+                result["note"] = found["note"]
+            return result
+        before_hooks = hooks_digest(found["root"])
+        if update:
+            blocked = run_install(host, plugin_id, context)
+            if blocked:
+                result.update(status="deferred", code=blocked.code, message=blocked.message)
+                return result
+            found = describe_plugin(host, plugin_id, context)
+            if found is None or found["local"]:
+                raise RefreshError(f"{host}_plugin_missing", f"The {host} plugin is not installed and enabled exactly once after the update.")
+            result["after_version"] = found["version"]
+        after_hooks = validate_companion(host, plugin_id, found)
+        result["status"] = "updated" if result["after_version"] != result["before_version"] else "current"
+        if update and host == "codex" and before_hooks != after_hooks:
+            result["warnings"].append(dict(HOOKS_TRUST_WARNING))
+    except RefreshError as error:
+        result.update(status="error", code=error.code, message=error.message)
+    except (OSError, ValueError):
+        result.update(status="error", code="plugin_check_failed", message=f"A {host} plugin file could not be checked.")
+    return result
+
+
+def host_failure(error: RefreshError) -> dict:
+    entry = {"error": {"code": error.code, "message": error.message}}
+    for key in ("root", "recovery_command"):
+        if key in error.details:
+            entry[key] = error.details[key]
+    return entry
+
+
+def refresh_report(run_id: str, hosts: dict[str, dict], extra: dict) -> dict:
+    save_json(run_path(run_id), {"run_id": run_id, "created_at": now(), "hosts": hosts, "sessions": {}})
+    failed = any("error" in value or any(item["status"] == "error" for item in value["plugins"]) for value in hosts.values())
+    return {"ok": not failed, "run_id": run_id, "script": continuation_script(hosts), "hosts": hosts, **extra}
+
+
+def command_update(also: Sequence[str] = ()) -> dict:
+    ids, extra = companion_ids(also)
     run_id = uuid.uuid4().hex
     hosts: dict[str, dict] = {}
     for host in HOSTS:
+        context: dict = {"ids": ids}
         try:
-            hosts[host] = update_host(host, offline=offline)
+            hosts[host] = update_host(host, context)
         except RefreshError as error:
-            entry = {"error": {"code": error.code, "message": error.message}}
-            for key in ("root", "recovery_command"):
-                if key in error.details:
-                    entry[key] = error.details[key]
-            hosts[host] = entry
-    state = {"run_id": run_id, "created_at": now(), "hosts": hosts, "sessions": {}}
-    save_json(run_path(run_id), state)
-    script = continuation_script(hosts)
-    return {"ok": all("error" not in value for value in hosts.values()), "run_id": run_id, "script": script, "hosts": hosts}
+            hosts[host] = host_failure(error)
+        except (OSError, ValueError):
+            hosts[host] = host_failure(RefreshError("plugin_check_failed", f"A {host} plugin file could not be checked."))
+        hosts[host]["plugins"] = [refresh_companion(host, plugin_id, True, context) for plugin_id in ids]
+    return refresh_report(run_id, hosts, extra)
 
 
-def command_apply_installed() -> dict:
+def command_apply_installed(also: Sequence[str] = ()) -> dict:
+    ids, extra = companion_ids(also)
     run_id = uuid.uuid4().hex
     hosts: dict[str, dict] = {}
     for host in HOSTS:
@@ -464,11 +701,12 @@ def command_apply_installed() -> dict:
                 "warnings": [],
             }
         except RefreshError as error:
-            hosts[host] = {"error": {"code": error.code, "message": error.message}}
-    state = {"run_id": run_id, "created_at": now(), "hosts": hosts, "sessions": {}}
-    save_json(run_path(run_id), state)
-    script = continuation_script(hosts)
-    return {"ok": all("error" not in value for value in hosts.values()), "run_id": run_id, "script": script, "hosts": hosts}
+            hosts[host] = host_failure(error)
+        except (OSError, ValueError):
+            hosts[host] = host_failure(RefreshError("plugin_check_failed", f"A {host} plugin file could not be checked."))
+        context: dict = {}
+        hosts[host]["plugins"] = [refresh_companion(host, plugin_id, False, context) for plugin_id in ids]
+    return refresh_report(run_id, hosts, extra)
 
 
 def continuation_script(hosts: dict[str, dict]) -> str:
@@ -1320,10 +1558,10 @@ def command_status(run_id: str) -> dict:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    update = commands.add_parser("update")
-    update.add_argument("--offline", action="store_true")
-    update.add_argument("--json", action="store_true")
-    commands.add_parser("apply-installed").add_argument("--json", action="store_true")
+    for name in ("update", "apply-installed"):
+        sub = commands.add_parser(name)
+        sub.add_argument("--also", action="append", default=[], metavar="PLUGIN@MARKETPLACE")
+        sub.add_argument("--json", action="store_true")
     for name in ("plan", "apply"):
         sub = commands.add_parser(name)
         sub.add_argument("--run-id", required=True)
@@ -1341,9 +1579,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "self-apply":
             return command_self_apply(args.run_id)
         if args.command == "update":
-            output = command_update(args.offline)
+            output = command_update(args.also)
         elif args.command == "apply-installed":
-            output = command_apply_installed()
+            output = command_apply_installed(args.also)
         elif args.command == "plan":
             output = command_plan(args.run_id, args.compact, args.terminal)
         elif args.command == "apply":
@@ -1352,6 +1590,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             output = command_status(args.run_id)
     except RefreshError as error:
         output = {"ok": False, "error": {"code": error.code, "message": error.message}}
+        if "entry" in error.details:
+            output = {"ok": False, "status": "error", "code": error.code, "entry": error.details["entry"], "error": output["error"]}
     print(json.dumps(output, ensure_ascii=False, indent=1))
     return 0 if output.get("ok") else 2
 
