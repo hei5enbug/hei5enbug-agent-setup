@@ -34,7 +34,7 @@ class LocalPathTest(unittest.TestCase):
         self.assertEqual([], rules("<p>See https://example.org/Users/alice/tmp/x</p>"))
 
     def test_http_url_is_not_local(self):
-        self.assertEqual([], rules('<img width="1" height="1" src="http://cdn.example/home/img.png">'))
+        self.assertEqual([], rules('<img width="1" height="1" src="http://cdn.example/home/alice/img.png">'))
 
     def test_file_url_is_local(self):
         self.assertEqual(["local-path"], rules('<a href="file:///Volumes/data/x.png">x</a>'))
