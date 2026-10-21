@@ -26,8 +26,8 @@ def test_두_호스트는_가벼운_위임_기준과_검토_연결만_항상_받
         "Delegate investigation of more than three files or a long log as independent questions run together",
         "Parallelize only work with independent resources",
         "continue authorized work in the main session",
-        "otherwise needs the user's approval",
-        "the review runs without asking when its reviewer runs on Codex and Codex weekly usage is at most 70 percent",
+        "Independent read-only review is the exception to main-session review",
+        'For a Claude-authored result, the reviewer is the session line "Review model"',
     ]
 
     # When
@@ -39,7 +39,7 @@ def test_두_호스트는_가벼운_위임_기준과_검토_연결만_항상_받
     assert len(rendered.encode()) <= context.MAX_CONTEXT_BYTES
     assert "## Scheduling" not in rendered
     assert "## Reviewer selection" not in rendered
-    assert "independent-model-validation.md" in rendered
+    assert "($I/independent-model-validation.md)" in rendered
 
 
 @pytest.mark.parametrize("host", ["codex", "claude"])

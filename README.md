@@ -40,6 +40,7 @@ hei5enbug-agent-setup/
 │   ├── claude-agents.md
 │   ├── codex-agents.md
 │   ├── confluence.md
+│   ├── cross-repository.md
 │   ├── documentation.md
 │   ├── failure-and-maintenance.md
 │   ├── implementation-delegation.md
@@ -588,7 +589,7 @@ Any other value means `apply`. Claude Code reads the option from `/config`; Code
 
 ## Feature options
 
-Six boolean features can be turned off, and each defaults to on. The implementation worker route, the worker
+Seven boolean features can be turned off, and each defaults to on. The implementation worker route, the worker
 models and efforts, the review model, the host settings mode, the hook Python interpreter, and the plugins refreshed
 with this one (`refresh_plugins`) are string options in Claude Code. Choose `auto`, `codex`, `haiku`, `sol`,
 or `sonnet` for the route; an unset or unrecognized value uses `auto`, where the main session picks the worker per
@@ -620,6 +621,7 @@ write Codex settings.
 | Response language guard | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip query guard | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
 | Approval guard | `approval_guard` | `HEI5ENBUG_APPROVAL_GUARD` |
+| Orca worktrees for other repositories | `orca_worktree` | `HEI5ENBUG_ORCA_WORKTREE` |
 | Host settings mode | `host_settings` (`apply` or `report`, default `apply`) | `HEI5ENBUG_HOST_SETTINGS` |
 | Hook Python interpreter | `python` (an absolute path, default empty) | `HEI5ENBUG_PYTHON` |
 | Plugins refreshed with this one | `refresh_plugins` (comma-separated `plugin@marketplace` IDs, default empty) | `HEI5ENBUG_REFRESH_PLUGINS` |
@@ -635,8 +637,8 @@ as a pyenv shim, which adds about 150 ms to each hook process on one measured ma
 Python per project.
 
 Without a matching launcher environment, the Mod refuses pinned GPT requests before a provider request. This refusal
-has no toggle. The session instructions and operating rules also have no toggle; disable the plugin itself to turn
-them off.
+has no toggle. The session instructions and operating rules also have no toggle, except the `orca_worktree` line,
+which loads the cross-repository rules; disable the plugin itself to turn them off.
 
 ## Plugin installation
 
@@ -689,8 +691,10 @@ matching action, even if it arises later in a request. The session context disti
 from design documents and keeps their trigger boundary. `instructions/implementation-planning.md` owns the
 six-stage implementation plan workflow and template. `technical-design-writer` owns design-document behavior,
 and `instructions/independent-model-validation.md` owns their shared one-pass cross-family validation
-contract. The loader resolves each session file's conditional links to absolute paths inside the installed
-plugin. It does not read conditional reference bodies at startup.
+contract. The context header defines `$I` as the installed plugin's `instructions` folder, and the loader writes
+each session file's conditional link to a file there as `$I/<path>`, so the context does not grow with the install
+path. A link to another file inside the plugin keeps an absolute path. The loader does not read conditional
+reference bodies at startup.
 
 Codex requires review and trust of the current plugin hook definition before running it.
 Disabled hooks or enterprise policies that prohibit plugin hooks prevent automatic loading.

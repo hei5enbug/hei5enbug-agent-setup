@@ -197,6 +197,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
                 "language_guard",
                 "datagrip_guard",
                 "approval_guard",
+                "orca_worktree",
                 "host_settings",
                 "python",
                 "refresh_plugins",

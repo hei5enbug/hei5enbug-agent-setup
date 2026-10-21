@@ -43,6 +43,7 @@ hei5enbug-agent-setup/
 │   ├── claude-agents.md
 │   ├── codex-agents.md
 │   ├── confluence.md
+│   ├── cross-repository.md
 │   ├── documentation.md
 │   ├── failure-and-maintenance.md
 │   ├── implementation-delegation.md
@@ -550,7 +551,8 @@ Claude Code는 이 옵션을 `/config`에서 읽고, Codex는 `HEI5ENBUG_HOST_SE
 
 ## 기능 옵션
 
-끌 수 있는 boolean 기능은 여섯 가지이며 각각 기본값은 켜짐입니다. Claude Code의 구현 worker 경로, worker 모델과 사고 강도, 검토 모델, 호스트 설정 모드, 훅 Python 인터프리터, 이 플러그인과 함께
+끌 수 있는 boolean 기능은 일곱 가지이며 각각 기본값은 켜짐입니다. Claude Code의 구현 worker 경로, worker 모델과 사고 강도,
+검토 모델, 호스트 설정 모드, 훅 Python 인터프리터, 이 플러그인과 함께
 새로고침할 플러그인(`refresh_plugins`)은 문자열 옵션입니다. 경로는 `auto`, `codex`, `haiku`, `sol`, `sonnet` 중 하나를 고르고, 값이 비어 있거나 알 수 없으면 `auto`를 씁니다.
 `auto`에서는 메인 세션이 작업마다 worker를 고릅니다. 호스트 설정 모드는 `apply`와 `report` 중 하나를 고르고, 값이 비어 있거나
 알 수 없으면 `apply`를 씁니다. 이 모드는 `SessionStart`가 허용 목록의 Codex 설정을 바꿔도 되는지 정합니다.
@@ -579,6 +581,7 @@ Codex 설정이나 Claude 설정을 쓰지 않습니다. Codex 설정을 쓰는 
 | 응답 언어 가드 | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip 쿼리 가드 | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
 | 승인 가드 | `approval_guard` | `HEI5ENBUG_APPROVAL_GUARD` |
+| 다른 저장소에 Orca 워크트리 사용 | `orca_worktree` | `HEI5ENBUG_ORCA_WORKTREE` |
 | 호스트 설정 모드 | `host_settings` (`apply` 또는 `report`, 기본 `apply`) | `HEI5ENBUG_HOST_SETTINGS` |
 | 훅 Python 인터프리터 | `python` (절대 경로, 기본값 빈 문자열) | `HEI5ENBUG_PYTHON` |
 | 이 플러그인과 함께 새로고침할 플러그인 | `refresh_plugins` (쉼표로 구분한 `plugin@marketplace` ID, 기본값 빈 문자열) | `HEI5ENBUG_REFRESH_PLUGINS` |
@@ -592,7 +595,8 @@ Codex 설정이나 Claude 설정을 쓰지 않습니다. Codex 설정을 쓰는 
 거치지 않습니다. 측정한 한 대의 기기에서 shim은 훅 프로세스마다 약 150ms를 더했고, 프로젝트마다 다른 Python을 고를 수도 있습니다.
 
 런처 환경이 일치하지 않으면 mod는 고정 GPT 요청을 공급자에 보내기 전에 거부합니다. 이 거부에는 토글이 없습니다.
-세션 지침과 운영 규칙도 토글이 없으며, 끄려면 플러그인 자체를 비활성화합니다.
+세션 지침과 운영 규칙도 저장소 간 작업 규칙을 불러오는 `orca_worktree` 줄을 제외하면 토글이 없으며,
+끄려면 플러그인 자체를 비활성화합니다.
 
 ## 플러그인 설치
 
@@ -646,7 +650,9 @@ Codex가 제공하는 `PLUGIN_ROOT`가 설치 디렉터리를 가리키면 로�
 `instructions/implementation-planning.md`는 구현 계획의 6단계 절차와 템플릿을 관리한다.
 `technical-design-writer`는 설계 문서와 RFC를 담당한다.
 `instructions/independent-model-validation.md`는 두 결과물에 공통으로 적용되는 독립 검증 규칙을 관리한다.
-로더는 각 세션 지침의 조건부 링크를 설치된 플러그인 내부의 절대 경로로 바꾼다.
+컨텍스트 헤더는 `$I`를 설치된 플러그인의 `instructions` 폴더로 정의한다. 로더는 각 세션 지침에서 이 폴더 안의 파일을
+가리키는 조건부 링크를 `$I/<path>`로 쓰므로 설치 경로가 길어져도 컨텍스트가 늘어나지 않는다.
+플러그인 안의 다른 파일을 가리키는 링크는 절대 경로를 유지한다.
 세션을 시작할 때 조건부 참조 본문까지 읽지는 않는다.
 
 Codex는 현재 플러그인 훅 정의를 사용자가 검토하고 신뢰한 뒤에 실행한다.

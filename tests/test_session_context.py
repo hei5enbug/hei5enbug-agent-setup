@@ -225,6 +225,7 @@ class SessionContextTest(unittest.TestCase):
 
         # When
         claude = self.context(self.run_hook("claude", extra_env={"HOME": str(home)}))
+        self.context(self.run_hook("codex", extra_env={"CODEX_HOME": str(codex_home)}))
         codex = self.context(self.run_hook("codex", extra_env={"CODEX_HOME": str(codex_home)}))
 
         # Then
@@ -648,8 +649,58 @@ class SessionContextTest(unittest.TestCase):
                 self.assertIn(digest, retired[name])
                 self.assertNotIn(current[name], retired[name])
 
-    def test_참조는_절대_경로이고_세부_본문은_불러오지_않는다(self):
-        """작업 효율과 검토를 포함한 참조 11개는 절대 경로로 바뀌고 세부 본문은 시작 시 불러오지 않는다."""
+    def test_헤더가_정의한_I_접두사_링크는_모두_instructions의_실제_파일을_가리킨다(self):
+        """두 호스트의 메인 컨텍스트 헤더는 $I를 instructions 폴더로 정의하고 모든 $I/ 링크가 그 안의 파일을 가리킨다."""
+        for host in ("claude", "codex"):
+            with self.subTest(host=host):
+                # Given
+                instructions = self.root / "instructions"
+
+                # When
+                context = self.context(self.run_hook(host))
+
+                # Then
+                self.assertIn(
+                    f"Instructions (`$I`): {instructions.as_posix()}. Every `$I/` link below names a file in that directory.\n",
+                    context,
+                )
+                links = re.findall(r"\]\(\$I/([^)\s]+)\)", context)
+                self.assertGreaterEqual(len(links), 11)
+                for link in links:
+                    self.assertTrue((instructions / link).is_file(), link)
+                self.assertIn("implementation-execution.md", links)
+                self.assertIn("work-efficiency.md", links)
+                self.assertNotIn("](<", context)
+
+    def test_메인_컨텍스트_크기는_루트_경로_길이에_좌우되지_않는다(self):
+        """짧은 루트와 약 100자 루트의 메인 컨텍스트는 헤더의 경로 길이만 다르고 둘 다 8000바이트 아래다."""
+        # Given
+        parent = Path(tempfile.mkdtemp(prefix="h5", dir="/tmp")).resolve()
+        short = parent / "p"
+        long = parent / ("d" * 80) / "p"
+        for root in (short, long):
+            shutil.copytree(REPO_ROOT / "instructions", root / "instructions")
+        self.addCleanup(shutil.rmtree, parent, True)
+        environment = {
+            "CLAUDE_CONFIG_DIR": str(self.base / "claude config"),
+            "CODEX_HOME": str(self.codex_home),
+        }
+        for host in ("claude", "codex"):
+            with self.subTest(host=host), mock.patch.dict(os.environ, environment):
+                os.environ.pop("PLUGIN_ROOT", None)
+
+                # When
+                rendered = {root: session_context.render_context(root, host) for root in (short, long)}
+
+                # Then
+                for root, context in rendered.items():
+                    self.assertLess(len(context.encode("utf-8")), 8000)
+                    self.assertEqual(context.count(root.as_posix()), 2)
+                normalized = [context.replace(root.as_posix(), "<root>") for root, context in rendered.items()]
+                self.assertEqual(normalized[0], normalized[1])
+
+    def test_세부_본문은_시작_시_불러오지_않는다(self):
+        """작업 효율과 검토를 포함한 참조의 세부 본문은 시작 시 불러오지 않는다."""
         # Given
         host = "claude"
 
@@ -657,13 +708,6 @@ class SessionContextTest(unittest.TestCase):
         context = self.context(self.run_hook(host))
 
         # Then
-        links = re.findall(r"\]\(<([^>]+)>\)", context)
-        self.assertEqual(len(links), 12)
-        for link in links:
-            self.assertTrue(Path(link).is_relative_to(self.root))
-            self.assertTrue(Path(link).is_file())
-        self.assertIn((self.root / "instructions/implementation-execution.md").as_posix(), links)
-        self.assertIn((self.root / "instructions/work-efficiency.md").as_posix(), links)
         self.assertNotIn("## Azure skill authorization", context)
         self.assertNotIn("## Investigation", context)
         self.assertNotIn("# Documentation files", context)
@@ -819,6 +863,31 @@ class SessionContextTest(unittest.TestCase):
                 self.assertNotIn("Role pinning: active (`role_pinning`).", context)
                 self.assertLess(len(context.encode("utf-8")), 9000)
 
+    def test_orca_worktree_토글은_다른_저장소_작업_참조_줄만_제어한다(self):
+        """orca_worktree가 꺼지면 두 호스트 모두 다른 저장소 작업 참조 줄만 빠지고, 기본값과 켜짐에서는 남는다."""
+        # Given
+        reference = "cross-repository.md"
+        cases = (
+            ("claude", "CLAUDE_PLUGIN_OPTION_ORCA_WORKTREE"),
+            ("codex", "HEI5ENBUG_ORCA_WORKTREE"),
+        )
+        for host, variable in cases:
+            with self.subTest(host=host):
+                # When
+                default = self.context(self.run_hook(host))
+                enabled = self.context(self.run_hook(host, extra_env={variable: "true"}))
+                disabled = self.context(self.run_hook(host, extra_env={variable: " OFF "}))
+
+                # Then
+                self.assertIn(reference, default)
+                self.assertIn(reference, enabled)
+                self.assertNotIn(reference, disabled)
+                self.assertIn("Before the first implementation change, read", disabled)
+                self.assertEqual(
+                    [line for line in default.splitlines() if reference not in line and not line.startswith("Notice:")],
+                    [line for line in disabled.splitlines() if not line.startswith("Notice:")],
+                )
+
     def test_Codex와_역할_컨텍스트는_역할_고정_줄을_받지_않는다(self):
         """Codex 세션과 두 호스트의 역할 컨텍스트에는 역할 고정 줄이 없다."""
         # Given
@@ -920,8 +989,8 @@ class SessionContextTest(unittest.TestCase):
 
         # Then
         self.assertIn("This is an explicit exception to the preceding trigger boundary", context)
-        self.assertIn("instructions/implementation-planning.md", context)
-        self.assertIn("instructions/independent-model-validation.md", context)
+        self.assertIn("($I/implementation-planning.md)", context)
+        self.assertIn("($I/independent-model-validation.md)", context)
         self.assertNotIn("An implementation plan must let an executor proceed", context)
         self.assertNotIn("## 1. Intent and scope freeze", context)
         self.assertIn("lets an executor make the requested change without adding design decisions", planning)
@@ -933,10 +1002,11 @@ class SessionContextTest(unittest.TestCase):
         self.assertIn("UPDATED INSTRUCTION SENTINEL", self.context(self.run_hook(source="compact")))
 
     def test_changed_project_instructions_do_not_change_hook_context(self):
-        before = self.context(self.run_hook())
+        report = {"HEI5ENBUG_HOST_SETTINGS": "report"}
+        before = self.context(self.run_hook(extra_env=report))
         path = self.root / "AGENTS.md"
         path.write_text(path.read_text() + "\nPROJECT CHANGE SENTINEL\n")
-        self.assertEqual(before, self.context(self.run_hook(source="compact")))
+        self.assertEqual(before, self.context(self.run_hook(source="compact", extra_env=report)))
 
     def test_korean_mirrors_are_not_loaded(self):
         path = self.root / "docs/ko/instructions/session/common.ko.md"
@@ -1290,16 +1360,25 @@ class SessionContextTest(unittest.TestCase):
         self.assertIn("Worker agent model: `claude-opus-5-5` at `xhigh`.\n", on)
 
     def test_알림이_컨텍스트_한도를_넘기게_하면_알림만_빼고_세션_지침은_그대로_불러온다(self):
-        """긴 설치 경로에서 알림 때문에 한도를 넘으면 알림 괄호만 생략하고 지침 로드는 실패하지 않는다."""
+        """알림 때문에 한도를 넘으면 알림 괄호만 생략하고 지침 로드는 실패하지 않는다."""
         # Given
-        extra_env = {"CLAUDE_PLUGIN_OPTION_WORKER_MODEL": "x" * 40}
+        environment = {
+            "CLAUDE_PLUGIN_OPTION_WORKER_MODEL": "x" * 40,
+            "CLAUDE_CONFIG_DIR": str(self.base / "claude config"),
+        }
+        with mock.patch.dict(os.environ, environment):
+            os.environ.pop("PLUGIN_ROOT", None)
+            full = session_context.render_context(self.root, "claude")
+            limit = len(full.encode("utf-8")) - 1
 
-        # When
-        context = self.context(self.run_hook("claude", extra_env=extra_env))
+            # When
+            with mock.patch.object(session_context, "MAX_CONTEXT_BYTES", limit):
+                context = session_context.render_context(self.root, "claude")
 
         # Then
+        self.assertIn("(Ignored worker_model", full)
         self.assertIn("Worker agent model: `claude-haiku-5-5` at `high`.\n", context)
-        self.assertLessEqual(len(context.encode("utf-8")), 9000)
+        self.assertLessEqual(len(context.encode("utf-8")), limit)
 
     def test_Codex_세션은_저장된_옵션의_Codex_worker_모델을_알린다(self):
         """Codex 세션 컨텍스트는 Claude 사용자 설정에 저장된 Codex worker 값을 담고, 환경 변수가 있으면 그 값이 이긴다."""

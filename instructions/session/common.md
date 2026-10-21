@@ -26,9 +26,8 @@ Choose an owner before substantial work.
   in the main session. Report the limitation once.
 
 Independent read-only review is the exception to main-session review. Before finishing a substantial change,
-read [independent model validation](../independent-model-validation.md): the review runs without asking when its
-reviewer runs on Codex and Codex weekly usage is at most 70 percent, and otherwise needs the user's approval. For a Claude-authored result,
-the reviewer is the session line "Review model".
+read [independent model validation](../independent-model-validation.md). For a Claude-authored result, the reviewer
+is the session line "Review model".
 
 ## Clarification
 
@@ -47,6 +46,7 @@ when both exist, with cost and impact; the user chooses. Report a pending user a
 - Before retrying a failed command, diagnosing repeated execution failures, or plugin maintenance, read
   [failure and maintenance rules](../failure-and-maintenance.md).
 - Before the first implementation change, read [implementation execution rules](../implementation-execution.md).
+- Before changing files in another Git repository, read [cross-repository work](../cross-repository.md).
 
 ## Planning and design routing
 

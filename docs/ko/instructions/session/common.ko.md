@@ -26,8 +26,7 @@
   계속한다. 제한 사항은 한 번 알린다.
 
 독립적인 읽기 전용 검토는 메인 세션 검토의 예외다. 중요한 변경을 마치기 전에
-[독립 모델 검증](../independent-model-validation.ko.md)을 읽는다. 검토자가 Codex에서 실행되고 Codex 주간 사용률이
-70퍼센트 이하이면 묻지 않고 검토하며, 그 밖에는 사용자의 승인이 필요하다. Claude가 작성한 결과라면 검토자는 세션 줄
+[독립 모델 검증](../independent-model-validation.ko.md)을 읽는다. Claude가 작성한 결과라면 검토자는 세션 줄
 "Review model"의 검토자다.
 
 ## 확인 질문
@@ -47,6 +46,7 @@
 - 실패한 명령을 다시 시도하거나, 반복 실행 실패를 진단하거나, 플러그인을 관리하기 전에
   [실패 및 유지보수 규칙](../failure-and-maintenance.ko.md)을 읽는다.
 - 첫 구현 변경 전에 [구현 실행 규칙](../implementation-execution.ko.md)을 읽는다.
+- 다른 Git 저장소의 파일을 변경하기 전에 [다른 저장소 작업](../cross-repository.ko.md)을 읽는다.
 
 ## 계획과 설계 작업
 

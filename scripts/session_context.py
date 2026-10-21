@@ -20,6 +20,8 @@ MAX_CONTEXT_BYTES = 9000
 MAX_ROLE_CONTEXT_BYTES = 4000
 ASSIGNED_ROLE_ENV = "HEI5ENBUG_ASSIGNED_ROLE"
 ASSIGNED_WORKERS_HEADING = "## Assigned workers"
+CROSS_REPOSITORY_REFERENCE = "cross-repository.md"
+INSTRUCTIONS_VARIABLE = "$I"
 IMPLEMENTATION_AGENTS = {
     "claude": {
         "hei5enbug-agent-setup:worker",
@@ -44,24 +46,28 @@ SESSION_FILES = {
 CLAUDE_ASK_NOTICE_PREFIX = "Notice: these Claude Code ask rules override the guard's allow"
 
 
-def absolute_links(content: str, path: Path, root: Path) -> str:
-    def absolute_link(match: re.Match[str]) -> str:
+def render_links(content: str, path: Path, root: Path) -> str:
+    instructions = root / "instructions"
+
+    def render_link(match: re.Match[str]) -> str:
         reference = match[2].removeprefix("<").removesuffix(">")
         if reference.startswith("#") or re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", reference):
             return match[0]
         target = (path.parent / reference).resolve()
         if not target.is_relative_to(root) or not target.is_file():
             raise ValueError(f"Unavailable bundled reference: {path.relative_to(root)} -> {reference}")
+        if target.is_relative_to(instructions):
+            return f"[{match[1]}]({INSTRUCTIONS_VARIABLE}/{target.relative_to(instructions).as_posix()})"
         return f"[{match[1]}](<{target.as_posix()}>)"
 
-    return LOCAL_LINK.sub(absolute_link, content)
+    return LOCAL_LINK.sub(render_link, content)
 
 
 def read_instruction(path: Path, root: Path) -> str:
     content = path.read_text(encoding="utf-8").strip()
     if not content:
         raise ValueError(f"{path.relative_to(root)} is empty")
-    return absolute_links(content, path, root)
+    return render_links(content, path, root)
 
 
 def assigned_workers_section(root: Path) -> str:
@@ -76,7 +82,7 @@ def assigned_workers_section(root: Path) -> str:
     content = "\n".join(lines[start:end]).strip()
     if content == ASSIGNED_WORKERS_HEADING:
         raise ValueError(f"{path.relative_to(root)} has an empty {ASSIGNED_WORKERS_HEADING!r} section")
-    return absolute_links(content, path, root)
+    return render_links(content, path, root)
 
 
 def context_kind(event_name: str, host: str, event: dict, environ: dict | None = None) -> str:
@@ -177,6 +183,12 @@ def render_context(root: Path, host: str, kind: str = "main") -> str:
     if kind == "main":
         sources = [read_instruction(session_dir / name, root) for name in ("core.md", "common.md", host_file)]
         limit = MAX_CONTEXT_BYTES
+        import plugin_toggles
+
+        if not plugin_toggles.enabled("orca_worktree"):
+            sources[1] = "\n".join(
+                line for line in sources[1].split("\n") if CROSS_REPOSITORY_REFERENCE not in line
+            )
     else:
         sources = [read_instruction(session_dir / "core.md", root)]
         if kind == "implementation":
@@ -184,13 +196,13 @@ def render_context(root: Path, host: str, kind: str = "main") -> str:
         limit = MAX_ROLE_CONTEXT_BYTES
     context = (
         f"hei5enbug-agent-setup instructions for {host}.\n"
-        f"Source directory: {root.as_posix()}\n\n"
+        f"Source directory: {root.as_posix()}\n"
+        f"Instructions (`{INSTRUCTIONS_VARIABLE}`): {(root / 'instructions').as_posix()}. "
+        f"Every `{INSTRUCTIONS_VARIABLE}/` link below names a file in that directory.\n\n"
         + "\n\n".join(sources)
         + "\n"
     )
     if kind == "main":
-        import plugin_toggles
-
         model, effort, notice = plugin_toggles.worker_setting(host)
         suffix = f" ({notice})" if notice else ""
         worker = f"`{model}` at `{effort}`.{suffix}"

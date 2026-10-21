@@ -1,7 +1,7 @@
 {
   "name": "hei5enbug-agent-setup",
   "displayName": "Hei5enbug Agent Skills",
-  "version": "2.8.0",
+  "version": "2.9.0",
   "description": "Portable agent skills for repeatable engineering and documentation workflows.",
   "author": {
     "name": "hei5enbug",
@@ -95,6 +95,12 @@
       "type": "boolean",
       "title": "Approval guard",
       "description": "Run covered CLI, script, database, and MCP reads without approval; ask once per session for all writes, including production changes and git pushes, and once per session for sensitive reads such as .env files; ask every time for force pushes, discarding uncommitted work, recursive deletion outside the session or temporary folders, destructive database statements, remote infrastructure deletion, package publishing, and docker or curl deletion; deny secret-printing commands and approval-state edits.",
+      "default": true
+    },
+    "orca_worktree": {
+      "type": "boolean",
+      "title": "Orca worktrees for other repositories",
+      "description": "Before changing another Git repository, hand the change to a new Orca worktree of that repository with its own agent session instead of editing an existing checkout.",
       "default": true
     },
     "host_settings": {
