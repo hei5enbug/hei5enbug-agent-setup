@@ -47,9 +47,9 @@
   | Bounded implementation and debugging, easy work | `haiku_worker` | `claude-haiku-5-5` / `xhigh` | `worker` | `gpt-6.1-sol` / `high` |
   | Bounded local, read-only evidence | `scout` | `gpt-5.6-luna` / `xhigh` | `haiku_scout` | `claude-haiku-5-5` / `xhigh` |
   | Mechanical documentation edits with approved content | `writer` | `gpt-6.1-sol` / `high` | `haiku_writer` | `claude-haiku-5-5` / `xhigh` |
-  | One read-only final review of a completed bounded change | `code_reviewer` | `gpt-6.1-sol` / `high` | `sonnet_code_reviewer` | `claude-sonnet-5-5` / `high` |
+  | One read-only final review of a completed bounded change | `code_reviewer` | `gpt-6.1-sol` / `high` | `opus_code_reviewer` | `claude-opus-5-5` / `high` |
 
-  The `haiku_*` and `sonnet_code_reviewer` names are assignment labels for separate Claude Code CLI
+  The `haiku_*` and `opus_code_reviewer` names are assignment labels for separate Claude Code CLI
   processes, not registered `--agent` names. `worker`, `scout`, `writer`, and `code_reviewer` are Codex
   project roles. Each role has exactly one fallback in the other model family: Claude to GPT or GPT to
   Claude. A named fallback is preauthorized only when
@@ -71,7 +71,7 @@
   For a Claude fallback, pass the corresponding primary Codex role's `developer_instructions` and the
   bounded assignment on stdin. This preserves one source for each role's scope. Run `claude -p` with
   the table's full model ID and effort, `--output-format json --permission-mode dontAsk --strict-mcp-config`.
-  For `haiku_scout` and `sonnet_code_reviewer`, add `--tools Read Grep Glob --allowedTools Read Grep Glob`.
+  For `haiku_scout` and `opus_code_reviewer`, add `--tools Read Grep Glob --allowedTools Read Grep Glob`.
   For `haiku_writer`, add `--tools Read Grep Glob Edit Write --allowedTools Read Grep Glob` plus
   `Edit(//<absolute allowed path>)` for each assigned Markdown file and mirror; an Edit rule also covers Write,
   and `//` marks an absolute path. The main

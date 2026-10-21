@@ -213,23 +213,73 @@ tiers, or is denied or passed:
   self-approval rules below).
 - **Pass** is a call the guard does not cover, so the host's own permission flow decides.
 
-The every-time list holds the actions that can destroy something new each time they repeat, so one approval never
-covers the next run:
+The every-time list holds the actions that affect remote or production systems or destroy local data that cannot be
+recovered, so one approval never covers the next run. Local actions that are disposable or recoverable are not on it;
+the local-scope rules below describe them.
 
-1. Destructive `git push`: force, force-with-lease, delete, mirror, or prune pushes, and `+` or `:` refspecs.
-2. Discarding uncommitted work: `git reset --hard`, forced `git clean` without a dry run, forced checkout or checkout
-   of `.`, restore of `.` or `:/` on the worktree, and `git stash drop` or `git stash clear`.
+1. Destructive `git push`: force, force-with-lease, delete, mirror, or prune pushes, and `+` or `:` refspecs, except
+   the lease-protected feature-branch push described in the local-scope rules.
+2. Discarding uncommitted work: forced `git clean` without a dry run, `git stash drop` or `git stash clear`, and
+   `git reset --hard`, forced checkout or checkout of `.`, or restore of `.` or `:/` on the worktree whenever the
+   repository has an uncommitted change to a tracked file or its state cannot be read.
 3. Recursive removal of a protected or external path, or with an unresolved target.
 4. Destructive database statements through `psql`, `sqlcmd`, DataGrip, tabularis, or an MCP SQL field.
 5. Remote infrastructure deletion: the destructive verbs of `kubectl`, `oc`, `helm`, `az`, `terraform`, `tofu`, `aws`,
    `gcloud`, and `gsutil`, such as `delete`, `drain`, `uninstall`, `destroy`, `purge`, and `terminate`; `--force` and
    `--prune` before a `--`; destructive commands inside `kubectl` or `oc` `exec`; and destructive `gh` calls.
 6. Package publishing: `npm`, `pnpm`, `yarn`, `uv`, `poetry`, `cargo` `publish`, `twine upload`, and `gem push`.
-7. Removal in `docker` and `podman`: `rm`, `rmi`, `prune`, `compose down -v`, and destructive commands inside `exec`;
-   `curl` with a destructive method such as DELETE; and MCP tools or actions whose name has a delete word.
+7. Removal in `docker` and `podman` against a remote engine: `rm`, `rmi`, `prune`, `compose down -v`, and destructive
+   commands inside `exec`; `curl` with a destructive method such as DELETE; and MCP tools or actions whose name has a
+   delete word.
 8. Codex runs without sandbox protection.
 9. Calls the guard failed to classify, and unclassifiable calls whose text names a destructive action, including a
    script or the code input of an execution tool.
+
+Local-scope rules keep disposable or recoverable local work off the every-time list:
+
+- **Temporary roots** are `/tmp`, `/private/tmp`, `/var/folders`, `/private/var/folders`, `$TMPDIR`, `~/.cache`, and
+  Claude Code job folders `~/.claude/jobs/<id>/tmp`. Recursive removal inside a temporary root passes. Redirections
+  (`>`, `>>`, heredocs), `mkdir`, `touch`, `tee`, and the destination of `cp` or `mv` pass when every destination is
+  inside a temporary root, resolved through symlinks; their sources may be anywhere, but `cp` or `mv` into an existing
+  folder is judged by `<folder>/<source name>`, so a symlink there that leaves the roots, or a source name that
+  cannot be known (a glob or variable), disqualifies it. When the whole command is made of such writes and a few
+  harmless commands such as `cat`, `echo`, `ls`, and `cd`, Claude Code's own permission prompt is answered with allow
+  without any session approval. A destination that is not provably inside a temporary root, such as `./README.md`,
+  keeps its normal flow. Scripts that write there are still writes.
+- **Local container engine**: `docker` and `podman` removal and pruning (`rm`, `rmi`, `container`, `image`, `volume`,
+  `network` `rm` or `prune`, `system prune`, `compose down` with or without `-v`) and `exec` commands that remove files
+  are session writes when the engine is local. An engine is remote when a `--host`, `-H`, `--remote`, `-r`, `--url`,
+  `--connection`, or `--identity` option comes before the subcommand (in any spelling, such as `-Htcp://h` or
+  `--remote=true`), when `CONTAINER_HOST` or `CONTAINER_CONNECTION` is set, or when `DOCKER_HOST` is anything but a
+  `unix://` socket, a path, or a bare `localhost`, `127.0.0.1`, or `::1` host. A named Docker context (`--context` or
+  `-c`, else `DOCKER_CONTEXT`, else `currentContext` in the Docker config from `--config`, `DOCKER_CONFIG`, or
+  `~/.docker/config.json`) is local only when `<config dir>/contexts/meta/<sha256 of the name>/meta.json` has an
+  `Endpoints.docker.Host` starting with `unix://` or `npipe://`, so Docker Desktop's `desktop-linux` counts as local. A
+  missing, unreadable, or malformed meta file, no host, or another scheme such as `tcp://` or `ssh://` is remote. The
+  `default` context is local. For podman, a `containers.conf` (`CONTAINERS_CONF`, the user and system files and their
+  `.d` folders) that sets `active_service` or `remote = true`, or a saved system connection default, is remote, and so
+  is an unreadable one. Remote engines keep asking every time. A function,
+  variable, `eval`, or `sh -c` text whose only destructive words are local `docker` or `podman` removal is a session
+  write too.
+- **Lease-protected push**: `git push` is a session write, not every time, when its only force-like flags are
+  `--force-with-lease` (bare, `=<ref>`, or `=<ref>:<expect>`) and `--force-if-includes`, the remote is named explicitly
+  and is not `upstream` (a URL, a path, or a remote git cannot read keeps every time), and every destination branch is
+  explicit and not `main`, `master`, `develop`, `trunk`, or the remote's HEAD branch when
+  `git symbolic-ref refs/remotes/<remote>/HEAD` can be read. The destination comes from `src:dst`, `dst`, or the lease
+  ref; `HEAD`, `@`, an empty or implicit destination, a glob, or a `refs/` name other than `refs/heads/` keeps every
+  time. `--force`, `-f`, `--delete`, `-d`, `--mirror`, `--prune`, `--all`, `--tags`, a `+` or `:dst` refspec, an unknown
+  option, a global option other than `-C`, a redirecting `GIT_*` variable, and `exec` inside a container also keep every
+  time. Example: `git push --force-with-lease origin feature/ABC-1` is a session write while
+  `git push --force-with-lease origin main` asks every time.
+- **Clean tracked tree**: `git reset --hard`, `git checkout -f`, `git checkout .`, and `git restore .` are session
+  writes when `git status --porcelain --untracked-files=no` in the repository (`-C` is followed) prints nothing within
+  3 seconds. These keep them every time: an error or timeout; any global option except `-C` and the harmless
+  `--no-pager`, `-P`, `--no-optional-locks`, `--paginate`, and `-p` (so `-c`, `--config-env`, `--git-dir`,
+  `--work-tree`, `--namespace`, and `--bare` all count); and any `GIT_*` variable except `GIT_EDITOR`,
+  `GIT_SEQUENCE_EDITOR`, `GIT_PAGER`, `GIT_TERMINAL_PROMPT`, `GIT_ASKPASS`, `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_TRACE*`,
+  `GIT_PROGRESS_DELAY`, `GIT_FLUSH`, and `GIT_MERGE_AUTOEDIT`. So does a command
+  inside `kubectl`/`oc`/`docker`/`podman` `exec`, and so does any earlier segment in the same command that is not a
+  plain read without file output (`printf x >> a; git reset --hard` asks every time).
 
 A call that needs approval shows one line in the response language, at most 100 characters. Claude Code takes the
 language from the `language` setting and uses English without one. Codex uses `HEI5ENBUG_LANGUAGE`, else the response
@@ -254,12 +304,12 @@ writes for this session." A request shows its `--why` text as the description.
 | `terraform`, `tofu` | `plan`, `show`, `validate`, `state list`, `fmt -check`, `output` without `-json` or `-raw` | none | `state show`, `state pull`, `output -json`, `output -raw` | `destroy`, `apply -destroy`, `state rm` | directory : workspace |
 | `aws` | `describe-*`, `list-*`, `get-*` other than secret reads, `s3 ls` | `secretsmanager get-secret-value` and `batch-get-secret-value`, `ssm get-parameter*` with `--with-decryption`, `kms decrypt` | none | `delete-*`, `terminate-*`, `s3 rm`, `s3 sync --delete` | profile / region |
 | `gcloud`, `gsutil` | the first verb in the command path is `list`, `describe`, `get-*`, `ls`, or `cat` | `secrets versions access`, `auth print-access-token` | none | `delete`, `gsutil rm`, `gsutil rb` | project |
-| `docker`, `podman` | `ps`, `images`, `logs`, `<object> ls` | none | `inspect`, `exec ... env` or `printenv` | `rm`, `rmi`, `prune`, `compose down -v`, destructive commands inside `exec` | context |
+| `docker`, `podman` | `ps`, `images`, `logs`, `<object> ls` | none | `inspect`, `exec ... env` or `printenv` | against a remote engine: `rm`, `rmi`, `prune`, `compose down -v`, destructive commands inside `exec` (local engine: session write) | context |
 | `psql`, `sqlcmd` | a query that is a read; covered `psql` reads run with `default_transaction_read_only=on` and `statement_timeout=60000` | none | none | destructive SQL, including text that names `delete`, `drop`, or `truncate`, and statements led by `DO`, `EXEC`, `EXECUTE`, or `CALL` | host / database |
 | `curl` | GET/HEAD without data, form, upload, or JSON flags | none | credentials in argv (`-u`, `--user`, an `Authorization` header) | destructive methods such as DELETE | method / scheme and host |
 | `kustomize` | every call | none | none | none | none |
 | `mysql`, `mongosh`, `redis-cli` | none; explicit local hosts pass | none | none | unclassified text containing a destructive action | none |
-| `git` | `status`, `show`, `log`, `diff`, `ls-remote`, `describe`, `rev-parse`, tag listing and verification | none | none | force, delete, mirror, or prune pushes; `reset --hard`; forced `clean` without a dry run; forced checkout or checkout of `.`; restore of `.` or `:/` except index-only restore; `stash drop` and `stash clear` | command |
+| `git` | `status`, `show`, `log`, `diff`, `ls-remote`, `ls-tree`, `ls-files`, `cat-file`, `rev-list`, `show-ref`, `for-each-ref`, `merge-base`, `blame`, `shortlog`, `diff-tree`, `describe`, `rev-parse`, tag listing and verification | none | none | force, delete, mirror, or prune pushes (a lease-protected push to a feature branch is a session write); forced `clean` without a dry run; `stash drop` and `stash clear`; `reset --hard`, forced checkout or checkout of `.`, and restore of `.` or `:/` except index-only restore, unless the tracked tree is clean (then a session write) | command |
 | `gh` | read verbs such as `view`, `list`, `ls`, `status`, `checks`, `diff`, `search`, `watch`, `browse`; `auth status`, `config get`/`list`, version/help, `api` GET and inline GraphQL queries | `auth token` | none | `delete` in any area, `api` DELETE | command |
 
 Other covered non-destructive CLI operations use the session write approval. That includes a local
@@ -276,12 +326,13 @@ and uploads, use the same approval on both hosts.
 Package publishing (`npm`, `pnpm`, `yarn`, `uv`, `poetry`, `cargo`, `twine upload`, and `gem push`) asks every time,
 including when options precede the publishing subcommand.
 Recursive `rm` asks every time for protected or external paths, including the session folder, its ancestors, the home
-folder, `/`, `.git` and its contents, and unresolved targets. Removal within the session folder or temporary/cache
-roots otherwise passes. A target that is exactly a `$(mktemp -d ...)` or backtick substitution, or starts with
-`${TMPDIR:-<default>}`, is first resolved to a temporary root (`TMPDIR` when set, else the default) and then checked
-like any other path, so those checks still block the home folder, the session folder, and `.git`. Commands inside
-`kubectl`/`oc`/`docker`/`podman` `exec` also use the normal classifier: destructive commands ask every time, secret
-output is denied, and other `exec` calls are writes.
+folder, `/`, `.git` and its contents, and unresolved targets. Removal within the session folder or a temporary root
+(see the local-scope rules) otherwise passes. A target that is exactly a `$(mktemp -d ...)` or backtick substitution,
+or starts with `${TMPDIR:-<default>}`, is first resolved to a temporary root (`TMPDIR` when set, else the default) and
+then checked like any other path, so those checks still block the home folder, the session folder, and `.git`.
+Commands inside `kubectl`/`oc`/`docker`/`podman` `exec` also use the normal classifier: destructive commands ask every
+time (file removal inside a local `docker` or `podman` container is a session write), secret output is denied, and
+other `exec` calls are writes.
 Any `codex` invocation with sandbox bypass flags or `danger-full-access`, including a configuration override,
 asks every time. Worker access outside the session folder through `codex exec` (or `e`) with `--add-dir` or
 `-C`/`--cd` before or after the subcommand, or through `role_runner.py --add-dir`, is a write.
@@ -322,15 +373,35 @@ a function call, and the option never reaches later commands.
 The guard reads shell files invoked by `bash`, `sh`, `zsh`, `./`, `source`, or `.`, Python files,
 Makefile recipes for the selected/default target and one level of prerequisites, and the script text in
 `package.json` for `npm`, `pnpm`, or `yarn run <name>`. Files resolve from the event's `cwd` and are limited to 256 KiB.
+Plain `NAME=value` statements earlier in the same command text, separated by `;`, `&&`, or newlines, are substituted
+into later simple commands, including the body of a `for ... do ... done` loop, with sh word splitting for unquoted
+expansions. This holds only when the value is one static word with no command substitution (a `$(mktemp -d ...)`
+resolves like a removal target), and the assignment is unconditional: not `export`, not inside parentheses, a block, a
+function, a brace group, a pipe, or the background, and not after `||` or `&&` unless the left side is only assignments.
+An assignment inside such a context makes the name unknown afterwards. `read`, `export`, `for NAME in`, and similar
+commands drop the substitution.
+`xargs` followed by a simple command is classified as that command with its input as one unknown operand and the
+segment's own assignments (`DOCKER_HOST=ssh://h xargs docker rm` asks every time). A read, or a file reader such as
+`cat` or `grep`, becomes a sensitive read because the unknown operand could name a protected file, and `xargs rm -rf`
+asks every time; a shell, `eval`, a nested `xargs`, an unknown option, or a
+placeholder in the command name keeps the old opaque handling.
 A `cd <dir>` moves that base for the later segments only when it runs unconditionally in the current shell: outside
 parentheses, after nothing or `;`, and before nothing, `;`, or `&&`. `$NAME` or `${NAME}` that an earlier standalone
 assignment set is expanded in the path; a prefix assignment (`NAME=value cmd`) never expands its own command's
 arguments. An unassigned variable leaves the script unreadable, so it is unclassified.
-Shell lines and Makefile recipes use the CLI classifier. Python inline code, heredocs, stdin files, and script files
+Shell lines and Makefile recipes use the CLI classifier. A Python script file or `python3 -` heredoc whose syntax tree
+is provably read-only is a read: it imports only listed standard modules, calls no process, network, environment,
+dynamic-execution, or file-mutating function (including `replace`, `remove`, `touch`, and `mkdir` names), opens files
+only in a literal read mode (every name bound to an `open` function is checked, so `from io import open as f` gets no
+exemption), and names no credential-like path or word. Anything the check cannot decide keeps the old result, and a
+protected file passed as an argument, or as the value of an option (`--file=.env`), does too. Inline code is
+classified, never the heredoc, whichever way `-c` is spelled (`-c code`, `-ccode`, `-Ic code`). Python inline code,
+heredocs, stdin files, and script files
 are writes when they run a process or import a cloud/database SDK. Literal process commands, including keyword
 arguments, are classified. Destructive process commands, SDK call names, or destructive text in Python that runs a
 process or imports an SDK ask every time. Other Python passes, even when its strings name CLI
-commands; an explicit `--execute` still makes it a write. Node and other non-shell, non-Python executables pass.
+commands (`python3 -c` code never becomes a read); an explicit `--execute` still makes it a write. Node and other
+non-shell, non-Python executables pass.
 Reads need no approval; writes need the session write approval; destructive, forced, and secret calls keep their normal
 rules. Unreadable or larger script files are unclassified. An inspected shell script naming a covered CLI or importing
 `boto3`, `azure`, `kubernetes`, `psycopg`, `psycopg2`, `pymysql`, `sqlalchemy`, `pymongo`, `redis`, or `google.cloud`

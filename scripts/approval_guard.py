@@ -42,7 +42,11 @@ COVERED = frozenset({
 PYTHON = re.compile(r"python(?:\d+(?:\.\d+)*)?")
 SHELLS = frozenset({"sh", "bash", "zsh"})
 SOURCE_COMMANDS = frozenset({".", "source"})
-FILTERS = frozenset({"grep", "egrep", "fgrep", "rg", "head", "tail", "wc", "sort", "uniq", "jq", "cut", "tr", "column"})
+FILTERS = frozenset({"grep", "egrep", "fgrep", "rg", "head", "tail", "wc", "sort", "uniq", "jq", "cut", "tr", "column",
+                     "awk"})
+AWK_PRINT = re.compile(
+    r"(?:NR\s*(?:==|!=|>=|<=|>|<)\s*\d+\s*)?\{\s*print(?:\s+(?:\$\d+|\$NF)(?:\s*,\s*(?:\$\d+|\$NF))*)?\s*\}"
+)
 WRAPPER_VALUE_OPTIONS = {
     "sudo": frozenset({"-u", "-g", "-C", "-h", "-p", "-r", "-t", "-U", "-D", "-T"}),
     "env": frozenset({"-u", "-C", "-S"}),
@@ -86,11 +90,16 @@ ENVIRONMENT_CHANGERS = frozenset({
     "function",
 })
 # Calls fall into three tiers. A write asks once per session (WRITE_KEY) and a sensitive read asks once per session
-# (SENSITIVE_KEY). The actions that ask every time are the always outcomes, which all set Outcome.every_time:
-# destructive git, gh, and database statements, recursive removal of a protected or external path, remote
-# infrastructure deletion, docker or podman removal, package publishing, destructive curl methods and MCP tools,
-# Codex runs without sandbox protection, unclassifiable calls whose text names a destructive action, and guard
-# classification failures. Everything else is a read, a pass, a write, or a denial.
+# (SENSITIVE_KEY). The actions that ask every time are the always outcomes, which all set Outcome.every_time: calls that
+# affect remote or production systems or destroy local data that cannot be recovered. They are destructive git push
+# (except a lease-protected push to a feature branch, which is a session write),
+# git clean and stash drop, git reset --hard and forced checkout or restore over uncommitted tracked changes, recursive
+# removal of a protected or external path, destructive gh and database statements, remote infrastructure deletion,
+# docker or podman removal against a remote engine, package publishing, destructive curl methods and MCP tools, Codex
+# runs without sandbox protection, unclassifiable calls whose text names a destructive action, and guard classification
+# failures. Disposable or recoverable local actions do not ask every time: docker removal on the local engine and a hard
+# reset on a clean tracked tree are session writes, and removal or writes inside a temporary root pass. Everything else
+# is a read, a pass, a write, or a denial.
 ENV_TEMPLATE_SUFFIXES = (".example", ".sample", ".template", ".dist")
 STATE_READS = frozenset({"ls", "cat", "head", "tail", "grep", "wc", "stat", "file", "find", "echo"})
 FIND_READ_OPTIONS = frozenset({
@@ -152,7 +161,7 @@ SEPARATOR_OPERATORS = ("&&", "||", "|&", ";;", ";", "|", "&", "(", ")")
 REDIRECT_OPERATORS = ("&>>", "&>", ">>", ">&", ">|", "<<<", "<<", "<&", "<>", ">", "<")
 OPERATORS = tuple(sorted(SEPARATOR_OPERATORS + REDIRECT_OPERATORS, key=len, reverse=True))
 
-Segment = namedtuple("Segment", "words redirects heredoc start end")
+Segment = namedtuple("Segment", "words redirects heredoc start end raw", defaults=((),))
 Rules = namedtuple("Rules", "secret dry_run always read target sensitive write",
                    defaults=(False, False, False, False, None, False, False))
 
@@ -321,6 +330,7 @@ def tokenize(text):
         if not group:
             continue
         words = []
+        raw = []
         redirects = []
         heredoc = False
         index = 0
@@ -329,6 +339,7 @@ def tokenize(text):
             kind, value, start, end = group[index]
             if kind == "word":
                 words.append(value)
+                raw.append(text[start:end])
                 plain_before = True
                 index += 1
                 continue
@@ -336,6 +347,7 @@ def tokenize(text):
             previous = group[index - 1] if index > 0 else None
             if plain_before and previous[3] == start and previous[1].isdigit():
                 fd = words.pop()
+                raw.pop()
             if index + 1 >= len(group) or group[index + 1][0] != "word":
                 raise ParseError("redirection without a target")
             redirects.append((fd, value, group[index + 1][1]))
@@ -343,7 +355,7 @@ def tokenize(text):
             plain_before = False
             index += 2
         if words or redirects:
-            segments.append(Segment(words, redirects, heredoc, group[0][2], group[-1][3]))
+            segments.append(Segment(words, redirects, heredoc, group[0][2], group[-1][3], raw))
     return segments
 
 
@@ -360,7 +372,7 @@ def _one_line(text, limit=60):
 
 
 def _unclassified(cli, command):
-    kind = "always" if _destructive_text(command) else "write"
+    kind = "always" if _destructive_text(command) and not _local_docker_only(command) else "write"
     return Outcome(kind, [f"{cli}:unclassified:{_digest(command)}"], ["Unclassified command: " + _one_line(command)],
                    every_time=kind == "always")
 
@@ -370,6 +382,23 @@ def _destructive_text(text):
     names = "|".join(re.escape(name) for name in COVERED - {"git", "gh"})
     destructive = "|".join(CLI_DESTRUCTIVE_WORDS)
     return bool(re.search(r"\b(?:" + names + r")\b[^\n;&|]*\b(?:" + destructive + r")\b", text, re.I)
+                or re.search(r"\b(?:delete\s+from|drop\s+(?:table|database|schema)|truncate\s+table)\b", text, re.I))
+
+
+LOCAL_DOCKER_REMOTE = re.compile(
+    r"\b(?:DOCKER_HOST|DOCKER_CONTEXT|CONTAINER_HOST|CONTAINER_CONNECTION)=|--(?:context|host|url|connection|remote)\b"
+    r"|(?<![\w-])-[Hc]\b|(?:tcp|ssh)://"
+)
+
+
+def _local_docker_only(text):
+    """Whether every destructive word in a text that names a destructive action comes from docker or podman removal that
+    names no remote engine."""
+    text = _heredoc_data(text)
+    others = "|".join(re.escape(name) for name in COVERED - {"git", "gh", "docker", "podman"})
+    destructive = "|".join(CLI_DESTRUCTIVE_WORDS)
+    return not (LOCAL_DOCKER_REMOTE.search(text)
+                or re.search(r"\b(?:" + others + r")\b[^\n;&|]*\b(?:" + destructive + r")\b", text, re.I)
                 or re.search(r"\b(?:delete\s+from|drop\s+(?:table|database|schema)|truncate\s+table)\b", text, re.I))
 
 
@@ -701,13 +730,14 @@ DOCKER_OBJECTS = frozenset({
 DOCKER_READS = (("context", "show"), ("compose", "ps"), ("compose", "logs"), ("compose", "config"))
 
 
-def _docker_rules(kind, args, env, cwd):
+def _docker_rules(kind, args, env, cwd, engine="docker"):
     read = (
         (bool(kind) and kind[0] in DOCKER_READ_FIRST)
         or (len(kind) >= 2 and kind[0] in DOCKER_OBJECTS and kind[1] in ("ls", "inspect"))
         or _matches(kind, DOCKER_READS)
     )
-    always = kind[:2] == ["compose", "down"] and (_has_flag(args, "-v") or _has_flag(args, "--volumes"))
+    always = (kind[:2] == ["compose", "down"] and (_has_flag(args, "-v") or _has_flag(args, "--volumes"))
+              and not _local_engine(args, env, engine))
 
     def target():
         return (option_value(args, longs=("--context",)) or env.get("DOCKER_CONTEXT")
@@ -719,7 +749,8 @@ def _docker_rules(kind, args, env, cwd):
 CLI_RULES = {
     "kubectl": _kubectl_rules, "oc": _kubectl_rules, "helm": _helm_rules, "az": _az_rules,
     "terraform": _terraform_rules, "tofu": _terraform_rules, "aws": _aws_rules, "gcloud": _gcloud_rules,
-    "gsutil": _gsutil_rules, "docker": _docker_rules, "podman": _docker_rules,
+    "gsutil": _gsutil_rules, "docker": _docker_rules,
+    "podman": functools.partial(_docker_rules, engine="podman"),
 }
 
 
@@ -752,7 +783,7 @@ def _classify_sql(cli, args, env, cwd, command):
 
 def classify_cli(cli, args, env, cwd, command, depth=0):
     if cli in ("git", "gh"):
-        return _git_gh(cli, args, command)
+        return _git_gh(cli, args, command, cwd, env)
     if cli == "curl":
         return _classify_curl(args, command)
     kind = subcommand_words(args)
@@ -763,6 +794,7 @@ def classify_cli(cli, args, env, cwd, command, depth=0):
     rules = CLI_RULES[cli](kind, args, env, cwd) if cli in CLI_RULES else Rules()
     if rules.secret:
         return Outcome("secret", [], [])
+    local = cli in ("docker", "podman") and _local_engine(args, env, cli)
     if cli in ("kubectl", "oc", "docker", "podman") and kind[:1] == ["exec"]:
         if "--" in args:
             inner_args = args[args.index("--") + 1:]
@@ -774,14 +806,18 @@ def classify_cli(cli, args, env, cwd, command, depth=0):
                 index += 2 if args[index] in value_options else 1
             inner_args = args[index + 1:]
         inner = shlex.join(inner_args)
-        verdict = classify_text(inner, cwd, depth + 1, env)
+        verdict = classify_text(inner, cwd, depth + 1, {**env, FILES_MAY_CHANGE: "1", IN_EXEC: "1"})
         if verdict.kind == "secret":
             return verdict
+        remote_action = _destructive_text(inner) or DESTRUCTIVE_COMMAND.search(inner)
         if verdict.kind == "always":
+            removal = bool(verdict.descriptions) and all(text.startswith("Recursive removal") for text in verdict.descriptions)
+            if local and removal and not remote_action:
+                return _call("write", cli, kind, rules.target, command)
             return verdict._replace(every_time=True)
         if (re.search(r"(?:^|[\s;&|('\"`])(?:rm|rmdir|shred|mkfs(?:\.\w+)?|truncate)(?=\s|$)", inner)
                 or re.search(r"\bdd\b[^;&|]*\bof=", inner) or _destructive_text(inner)):
-            return _call("always", cli, kind, rules.target, command)
+            return _call("write" if local and not remote_action else "always", cli, kind, rules.target, command)
     if kind and (re.search(r"\$(?:[A-Za-z_]|\{)", kind[0]) or "$(" in kind[0] or "`" in kind[0]):
         return _unclassified(cli, command)
     if cli == "kustomize":
@@ -799,7 +835,7 @@ def classify_cli(cli, args, env, cwd, command, depth=0):
     if rules.write and not rules.read:
         return _call("write", cli, kind, rules.target, command)
     if rules.always or _destructive(kind):
-        return _call("always", cli, kind, rules.target, command)
+        return _call("write" if local and not rules.always else "always", cli, kind, rules.target, command)
     if rules.read:
         return _read()
     return _call("write", cli, kind, rules.target, command)
@@ -1086,6 +1122,515 @@ def _local_database(cli, args, env):
     return isinstance(host, str) and (host.lower() in ("localhost", "127.0.0.1", "::1") or host.startswith("/"))
 
 
+TEMPORARY_ROOTS = ("/tmp", "/private/tmp", "/var/folders", "/private/var/folders")
+TEMP_WRITE_EXE = "temp-write"
+VARIABLE_REFERENCE = re.compile(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
+BLOCK_OPENERS = frozenset({"if", "while", "until", "for", "case", "select", "{"})
+BLOCK_CLOSERS = frozenset({"fi", "done", "esac", "}"})
+FILES_MAY_CHANGE = "_APPROVAL_FILES_MAY_CHANGE"
+IN_EXEC = "_APPROVAL_IN_EXEC"
+OPERAND_READERS = FILE_READS | FILTERS | frozenset({
+    "sed", "file", "stat", "ls", "find", "base64", "xxd", "od", "strings", "diff", "cmp", "tar", "zip", "unzip",
+})
+VARIABLE_WRITERS = frozenset({"read", "mapfile", "readarray", "getopts", "let"})
+XARGS_FLAGS = frozenset({
+    "-0", "-r", "-t", "-x", "-p", "-o", "--null", "--no-run-if-empty", "--verbose", "--exit", "--interactive",
+    "--open-tty",
+})
+XARGS_VALUE_OPTIONS = frozenset({"-n", "-L", "-P", "-s", "-d", "-E", "-a", "-I", "-J"})
+XARGS_ATTACHED_OPTIONS = ("-n", "-L", "-P", "-s", "-d", "-E", "-a", "-l", "-e")
+XARGS_LONG_VALUES = ("--max-args", "--max-procs", "--delimiter", "--max-lines", "--arg-file", "--eof", "--max-chars")
+XARGS_ARGUMENT = "$XARGS_ARGUMENT"
+TEMP_HARMLESS = frozenset({"cat", "echo", "printf", "ls", "head", "tail", "wc", "pwd", "true", "false", "wait", "sleep",
+                           "cd", "for"})
+COPY_FLAGS = re.compile(r"-[RrapfinvLPHTux]+")
+COPY_LONG_FLAGS = frozenset({"--recursive", "--archive", "--force", "--verbose", "--no-clobber", "--update"})
+
+
+def _python_inline_code(args):
+    """The code of a Python `-c` option in any spelling (`-c code`, `-ccode`, `-Ic code`), "" when it has no code, or
+    None when the interpreter arguments name a module, a script, or no inline code before the first operand."""
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg == "--" or arg == "-" or not arg.startswith("-"):
+            return None
+        if arg.startswith("--"):
+            index += 2 if arg == "--check-hash-based-pycs" else 1
+            continue
+        for position, letter in enumerate(arg[1:], 1):
+            if letter == "c":
+                return arg[position + 1:] or (args[index + 1] if index + 1 < len(args) else "")
+            if letter == "m":
+                return None
+            if letter in "WX":
+                index += 1 if len(arg) > position + 1 else 2
+                break
+        else:
+            index += 1
+    return None
+
+
+def _protected_argument(arg, cwd, env):
+    """Whether an argument, or the value attached to its option (`--file=.env`, `-f.env`), names a protected file."""
+    values = [arg] if not arg.startswith("-") else [arg.partition("=")[2]] if "=" in arg else []
+    if arg.startswith("-") and not arg.startswith("--") and len(arg) > 2:
+        values.append(arg[2:].lstrip("="))
+    return any(value and _protected_path(value, cwd, env) for value in values)
+
+
+def _temp_roots(env):
+    return [Path(path).resolve() for path in (*TEMPORARY_ROOTS, env.get("TMPDIR") or "/tmp", str(Path.home() / ".cache"))]
+
+
+def _job_tmp(path):
+    """Whether a resolved path lies inside a Claude Code job temp folder, `~/.claude/jobs/<id>/tmp`."""
+    try:
+        parts = path.relative_to((Path.home() / ".claude" / "jobs").resolve()).parts
+    except ValueError:
+        return False
+    return len(parts) >= 2 and parts[1] == "tmp"
+
+
+def _temporary(path, env):
+    return any(path.is_relative_to(root) for root in _temp_roots(env)) or _job_tmp(path)
+
+
+def _temp_path(path, cwd, env):
+    """Whether a destination word, with no unresolved expansion, resolves into a temporary root."""
+    if not path or "$" in path or "`" in path or re.search(r"[*?\[{]", path):
+        return False
+    return _temporary((Path(cwd) / os.path.expanduser(path)).resolve(), env)
+
+
+def _static_value(value, statics, environment):
+    """The fixed text of an assigned value: a `mktemp -d` substitution resolves like `rm` targets, anything that still
+    expands or runs a command has none."""
+    resolved = _mktemp_directory(value, environment)
+    if resolved is not None:
+        return resolved
+    expanded = _expand_path_variables(value, statics)
+    return None if "$" in expanded or "`" in expanded else expanded
+
+
+def _expand_raw_word(raw, statics, split=True):
+    """Expand `$NAME` and `${NAME}` that statics define in one raw word, splitting unquoted values at white space as
+    sh does. Returns the resulting words, or None when nothing was expanded."""
+    fields, current, changed, index, quote = [], None, False, 0, None
+
+    def add(text):
+        nonlocal current
+        current = (current or "") + text
+
+    def close():
+        nonlocal current
+        if current is not None:
+            fields.append(current)
+            current = None
+
+    while index < len(raw):
+        char = raw[index]
+        if quote == "'":
+            if char == "'":
+                quote = None
+            else:
+                add(char)
+            index += 1
+        elif raw.startswith("$(", index) or char == "`":
+            end = _substitution_end(raw, index)
+            add(raw[index:end])
+            index = end
+        elif char == "\\" and quote is None and raw.startswith("\n", index + 1):
+            index += 2
+        elif char == "\\" and index + 1 < len(raw):
+            add(raw[index + 1])
+            index += 2
+        elif char == "'" and quote is None:
+            add("")
+            quote = "'"
+            index += 1
+        elif char == '"':
+            add("")
+            quote = None if quote == '"' else '"'
+            index += 1
+        elif char == "$":
+            match = VARIABLE_REFERENCE.match(raw, index)
+            name = (match[1] or match[2]) if match else None
+            value = statics.get(name) if name else None
+            if value is None or (quote is None and split and not value.strip()):
+                add(char)
+                index += 1
+                continue
+            changed = True
+            index = match.end()
+            if quote == '"' or not split:
+                add(value)
+                continue
+            if value[0].isspace():
+                close()
+            for position, part in enumerate(value.split()):
+                if position:
+                    close()
+                add(part)
+            if value[-1].isspace():
+                close()
+        else:
+            add(char)
+            index += 1
+    close()
+    return fields if changed else None
+
+
+def _expand_segment_words(segment, statics):
+    """The segment's words with the fixed variables expanded; leading assignment words are never split."""
+    if not statics or len(segment.raw) != len(segment.words):
+        return segment.words
+    words, assigning = [], True
+    for word, raw in zip(segment.words, segment.raw):
+        assignment = assigning and ASSIGNMENT.match(word) is not None
+        assigning = assignment or (assigning and word in SHELL_KEYWORDS)
+        try:
+            expanded = _expand_raw_word(raw, statics, split=not assignment)
+        except ParseError:
+            expanded = None
+        words.extend([word] if expanded is None else expanded)
+    return words
+
+
+def _unconditional_assignment(segment, operators, after_assignment):
+    """Whether a standalone assignment always runs in the current shell: it follows nothing, `;`, or another assignment
+    joined by `&&`, and it is not sent to the background or a pipe."""
+    before = max((op for op in operators if op[3] <= segment.start), key=lambda op: op[3], default=None)
+    after = min((op for op in operators if op[2] >= segment.end), key=lambda op: op[2], default=None)
+    return ((before is None or before[1] == ";" or (before[1] == "&&" and after_assignment))
+            and (after is None or after[1] in (";", "&&")))
+
+
+def _xargs_argv(args):
+    """The simple command an `xargs` call runs, with its input as one unresolved operand, or None when the call has an
+    option, a shell, `eval`, a nested `xargs`, or a replacement in the command name that makes it opaque."""
+    replacement, index = None, 0
+    while index < len(args):
+        arg = args[index]
+        if arg == "--":
+            index += 1
+            break
+        if not arg.startswith("-"):
+            break
+        name = arg.split("=", 1)[0]
+        if arg in XARGS_FLAGS:
+            index += 1
+        elif arg in ("-I", "-J") and index + 1 < len(args):
+            replacement, index = args[index + 1], index + 2
+        elif arg in XARGS_VALUE_OPTIONS and index + 1 < len(args):
+            index += 2
+        elif arg.startswith(("-I", "-J")) and len(arg) > 2:
+            replacement, index = arg[2:], index + 1
+        elif arg in ("-i", "--replace"):
+            replacement, index = "{}", index + 1
+        elif arg.startswith("--replace="):
+            replacement, index = arg.partition("=")[2], index + 1
+        elif arg.startswith("-i") and not arg.startswith("--"):
+            replacement, index = arg[2:], index + 1
+        elif name in XARGS_LONG_VALUES and ("=" in arg or name in ("--eof", "--max-lines")):
+            index += 1
+        elif name in XARGS_LONG_VALUES and index + 1 < len(args):
+            index += 2
+        elif arg.startswith(XARGS_ATTACHED_OPTIONS) and not arg.startswith("--") and len(arg) > 2:
+            index += 1
+        else:
+            return None
+    template = list(args[index:])
+    stripped, _ = strip_prefix(template)
+    if not stripped or replacement == "":
+        return None
+    name = os.path.basename(stripped[0])
+    if name in SHELLS or name in ("eval", "xargs", "exec") or name.startswith("$"):
+        return None
+    if replacement:
+        if replacement in stripped[0]:
+            return None
+        return [word.replace(replacement, XARGS_ARGUMENT) for word in template]
+    return [*template, XARGS_ARGUMENT]
+
+
+def _temp_segment(words, redirects, cwd, env):
+    """The number of writes a simple command makes when every destination is inside a temporary root, else None.
+    Only a few commands that cannot run anything else are judged."""
+    command = list(words)
+    while command and command[0] in SHELL_KEYWORDS:
+        command.pop(0)
+    writes = 0
+    for _, operator, target in redirects:
+        if ">" not in operator or target == "/dev/null" or (operator == ">&" and target in ("1", "2")):
+            continue
+        if not _temp_path(target, cwd, env):
+            return None
+        writes += 1
+    if not command:
+        return writes
+    name, args = os.path.basename(command[0]), command[1:]
+    if command[0] != name and os.path.dirname(command[0]) not in ("/bin", "/usr/bin"):
+        return None
+    if name in TEMP_HARMLESS:
+        return writes
+    operands, destinations, index = [], None, 0
+    clusters = {"mkdir": "pv", "touch": "acm", "tee": "aip"}.get(name)
+    longs = {"mkdir": ("--parents", "--verbose"), "touch": ("--no-create",), "tee": ("--append",)}.get(name, ())
+    while index < len(args):
+        arg = args[index]
+        if arg == "--":
+            operands.extend(args[index + 1:])
+            break
+        if name in ("cp", "mv") and arg in ("-t", "--target-directory") and index + 1 < len(args):
+            destinations, index = [args[index + 1]], index + 2
+        elif name in ("cp", "mv") and arg.startswith("--target-directory="):
+            destinations, index = [arg.partition("=")[2]], index + 1
+        elif name == "mkdir" and arg == "-m" and index + 1 < len(args):
+            index += 2
+        elif ((name in ("cp", "mv") and (COPY_FLAGS.fullmatch(arg) or arg in COPY_LONG_FLAGS))
+              or (clusters and re.fullmatch(r"-[" + clusters + r"]+", arg)) or arg in longs):
+            index += 1
+        elif arg.startswith("-") and arg != "-":
+            return None
+        else:
+            operands.append(arg)
+            index += 1
+    sources = operands
+    if name in ("cp", "mv"):
+        if destinations is None:
+            if len(operands) < 2:
+                return None
+            destinations, sources = operands[-1:], operands[:-1]
+    elif name in ("mkdir", "touch", "tee"):
+        destinations = operands
+        if name != "tee" and not operands:
+            return None
+    else:
+        return None
+    if not all(_temp_path(path, cwd, env) for path in destinations):
+        return None
+    if name in ("cp", "mv"):
+        for destination in destinations:
+            folder = Path(cwd) / os.path.expanduser(destination)
+            if not folder.is_dir():
+                continue
+            for source in sources:
+                if not source or re.search(r"[$`*?\[{]", source):
+                    return None
+                if not _temporary((folder / os.path.basename(source.rstrip("/"))).resolve(), env):
+                    return None
+    return writes + len(destinations)
+
+
+LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")
+ENGINE_REMOTE_LONG = frozenset({"--host", "--remote", "--url", "--connection", "--identity"})
+ENGINE_REMOTE_SHORT = ("-c", "-H", "-r")
+ENGINE_VALUE_OPTIONS = GLOBAL_VALUE_OPTIONS | frozenset({
+    "-c", "-l", "--log-level", "--config", "--tlscacert", "--tlscert", "--tlskey", "--identity", "--url", "--connection",
+})
+PODMAN_SYSTEM_CONFIGS = ("/etc/containers/containers.conf", "/usr/share/containers/containers.conf")
+PODMAN_REMOTE_SETTING = re.compile(r"^\s*(?:active_service\s*=\s*[\"'][^\"'\n]+[\"']|remote\s*=\s*true\b)", re.M | re.I)
+
+
+def _config_text(path):
+    """The text of a config file, None when it does not exist; any other failure is raised as OSError or ValueError."""
+    try:
+        return Path(path).read_text(encoding="utf-8")
+    except (FileNotFoundError, NotADirectoryError):
+        return None
+
+
+def _docker_context_local(name, config_dir):
+    """Whether a named Docker context points at a local socket, from its metadata file in the Docker config folder; a
+    missing, unreadable, or malformed file, a missing host, or any other scheme counts as remote."""
+    if name == "default":
+        return True
+    try:
+        digest = hashlib.sha256(name.encode("utf-8")).hexdigest()
+        text = _config_text(Path(config_dir) / "contexts" / "meta" / digest / "meta.json")
+        host = json.loads(text)["Endpoints"]["docker"]["Host"] if text is not None else None
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    return isinstance(host, str) and host.startswith(("unix://", "npipe://"))
+
+
+def _docker_context_name(config_dir, env):
+    """The context the config selects, "default" when none, None when the config cannot be read."""
+    try:
+        text = _config_text(Path(config_dir) / "config.json")
+        data = json.loads(text) if text is not None else {}
+    except (OSError, ValueError):
+        return None
+    current = data.get("currentContext", "") if isinstance(data, dict) else None
+    return (current or "default") if isinstance(current, str) else None
+
+
+def _podman_remote_default(env):
+    """Whether containers.conf or the saved system connection makes podman talk to a remote service by default; an
+    unreadable file counts as remote."""
+    config_home = Path(env.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "containers"
+    files = [env["CONTAINERS_CONF"]] if env.get("CONTAINERS_CONF") else []
+    files += [str(config_home / "containers.conf"), *PODMAN_SYSTEM_CONFIGS]
+    try:
+        for file in list(files):
+            folder = Path(file + ".d")
+            if folder.is_dir():
+                files += sorted(str(item) for item in folder.glob("*.conf"))
+        for file in files:
+            text = _config_text(file)
+            if text is not None and PODMAN_REMOTE_SETTING.search(text):
+                return True
+        saved = _config_text(config_home / "podman-connections.json")
+        if saved is not None:
+            connection = json.loads(saved).get("Connection")
+            return not isinstance(connection, dict) or bool(connection.get("Default"))
+    except (OSError, ValueError, AttributeError):
+        return True
+    return False
+
+
+def _local_engine(args, env, engine="docker"):
+    """Whether a docker or podman call talks to the engine on this machine: no remote option before the subcommand, no
+    context or host variable or saved configuration that names a remote. A named Docker context is local when its
+    metadata names a unix socket."""
+    index, config_dir, context = 0, None, None
+    while index < len(args) and args[index].startswith("-"):
+        arg = args[index]
+        if engine == "docker" and arg == "--context" and index + 1 < len(args):
+            context = args[index + 1]
+        elif engine == "docker" and arg.startswith("--context="):
+            context = arg.partition("=")[2]
+        elif engine == "docker" and arg == "-c" and index + 1 < len(args):
+            context = args[index + 1]
+        elif engine == "docker" and arg.startswith("-c") and not arg.startswith("--") and len(arg) > 2:
+            context = arg[2:].lstrip("=")
+        elif arg.split("=", 1)[0] in ENGINE_REMOTE_LONG or (not arg.startswith("--") and arg[:2] in ENGINE_REMOTE_SHORT):
+            return False
+        elif arg == "--config" and index + 1 < len(args):
+            config_dir = args[index + 1]
+        elif arg.startswith("--config="):
+            config_dir = arg.partition("=")[2]
+        index += 2 if arg in ENGINE_VALUE_OPTIONS else 1
+    if env.get("CONTAINER_HOST") or env.get("CONTAINER_CONNECTION"):
+        return False
+    host = (env.get("DOCKER_HOST") or "").strip()
+    if host and not host.startswith(("/", "unix://")) and not (
+            "://" not in host and (_split_url("//" + host).hostname or "").lower() in LOCAL_HOSTS):
+        return False
+    if engine == "podman":
+        return (env.get("DOCKER_CONTEXT") or "default") == "default" and not _podman_remote_default(env)
+    config_dir = config_dir or env.get("DOCKER_CONFIG") or str(Path.home() / ".docker")
+    name = context or env.get("DOCKER_CONTEXT") or _docker_context_name(config_dir, env)
+    return name is not None and _docker_context_local(name, config_dir)
+
+
+GIT_HARMLESS_ENV = frozenset({
+    "GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "GIT_PAGER", "GIT_TERMINAL_PROMPT", "GIT_ASKPASS", "GIT_SSH", "GIT_SSH_COMMAND",
+    "GIT_PROGRESS_DELAY", "GIT_FLUSH", "GIT_MERGE_AUTOEDIT",
+})
+GIT_HARMLESS_OPTIONS = frozenset({"--no-pager", "-P", "--no-optional-locks", "--paginate", "-p"})
+
+
+def _git_directory(global_args, cwd, env):
+    """The folder a git call acts on, or None when a global option other than `-C` and a few pager flags, or a variable
+    that can redirect the repository, index, worktree, or object store, could send it elsewhere."""
+    directory, index = Path(cwd), 0
+    while index < len(global_args) and global_args[index].startswith("-"):
+        if global_args[index] == "-C" and index + 1 < len(global_args):
+            directory = directory / os.path.expanduser(global_args[index + 1])
+            index += 2
+        elif global_args[index] in GIT_HARMLESS_OPTIONS:
+            index += 1
+        else:
+            return None
+    if any(name.startswith("GIT_") and name not in GIT_HARMLESS_ENV and not name.startswith("GIT_TRACE") for name in env):
+        return None
+    return directory
+
+
+def _git_lookup(directory, env, *args):
+    """The stdout of a quick read-only git query, or None when it fails or times out."""
+    try:
+        completed = subprocess.run(
+            ["git", "-c", "core.fsmonitor=false", "--no-optional-locks", "-C", str(directory), *args],
+            capture_output=True, text=True, timeout=LOOKUP_TIMEOUT_SECONDS, env=env, stdin=subprocess.DEVNULL,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    return completed.stdout if completed.returncode == 0 else None
+
+
+def _clean_tracked_tree(args, cwd, env):
+    """Whether the repository a git call acts on has no uncommitted change to a tracked file. Any failure, a timeout, an
+    option or variable that could redirect the target, an earlier command that may change files, or output means no."""
+    directory = _git_directory(args, cwd, env)
+    if directory is None or FILES_MAY_CHANGE in env:
+        return False
+    status = _git_lookup(directory, env, "status", "--porcelain", "--untracked-files=no")
+    return status is not None and not status.strip()
+
+
+DEFAULT_BRANCHES = frozenset({"main", "master", "develop", "trunk"})
+PUSH_PLAIN_FLAGS = frozenset({
+    "-u", "--set-upstream", "-n", "--dry-run", "-v", "--verbose", "-q", "--quiet", "--no-verify", "--verify", "--progress",
+    "--no-progress", "--atomic", "--force-if-includes",
+})
+REMOTE_NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._-]*")
+
+
+def _push_branch(name):
+    """The branch a push destination or lease names, or None for HEAD, an implicit or glob name, or another ref kind."""
+    name = name[len("refs/heads/"):] if name.startswith("refs/heads/") else name
+    if not name or name in ("HEAD", "@") or name.startswith(("refs/", "-", "+", ":")) or re.search(r"[*?\[\s]", name):
+        return None
+    return name
+
+
+def _lease_push_allowed(global_args, args, cwd, env):
+    """Whether a `git push` forces only through `--force-with-lease` or `--force-if-includes`, to an explicit remote other
+    than `upstream`, onto explicit branches that are not default branches (`main`, `master`, `develop`, `trunk`, or the
+    remote's HEAD branch when it can be read)."""
+    if IN_EXEC in env:
+        return False
+    directory = _git_directory(global_args, cwd, env)
+    if directory is None:
+        return False
+    operands, leases, index = [], [], 1
+    while index < len(args):
+        arg = args[index]
+        if arg == "--force-with-lease" or arg.startswith("--force-with-lease="):
+            leases.append(arg.partition("=")[2])
+        elif arg in PUSH_PLAIN_FLAGS or re.fullmatch(r"-[uvnq]+", arg):
+            pass
+        elif arg.startswith("-"):
+            return False
+        else:
+            operands.append(arg)
+        index += 1
+    if len(operands) < 2 or not REMOTE_NAME.fullmatch(operands[0]) or operands[0] == "upstream":
+        return False
+    remote, branches = operands[0], []
+    for refspec in operands[1:]:
+        destination = refspec.partition(":")[2] if ":" in refspec else refspec
+        branch = None if refspec.startswith(("+", ":")) else _push_branch(destination)
+        if branch is None:
+            return False
+        branches.append(branch)
+    for lease in leases:
+        if lease:
+            branch = _push_branch(lease.partition(":")[0])
+            if branch is None:
+                return False
+            branches.append(branch)
+    if _git_lookup(directory, env, "remote", "get-url", remote) is None:
+        return False
+    head = _git_lookup(directory, env, "symbolic-ref", "--short", f"refs/remotes/{remote}/HEAD")
+    defaults = DEFAULT_BRANCHES | ({head.strip().partition("/")[2]} if head and "/" in head else set())
+    return not any(branch in defaults for branch in branches)
+
+
 GIT_PUSH_FLAGS = frozenset({"--force", "--force-with-lease", "--force-if-includes", "--delete", "--mirror", "--prune"})
 
 
@@ -1107,14 +1652,14 @@ def _git_gh_label(cli, words, args):
     return f"git {words[0]}" + (f" ({' '.join(words[1:])})" if len(words) > 1 else "")
 
 
-def _git_gh(cli, args, command):
+def _git_gh(cli, args, command, cwd=None, env=None):
     if cli == "gh" and any(arg in ("--help", "--version") for arg in args):
         return _read()
     global_values = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"} if cli == "git" else {"-R", "--repo", "--hostname"}
     index = 0
     while index < len(args) and args[index].startswith("-"):
         index += 2 if args[index] in global_values else 1
-    args = args[index:]
+    global_args, args = args[:index], args[index:]
     words = subcommand_words(args)
     if not words:
         return Outcome("pass", [], [])
@@ -1128,6 +1673,9 @@ def _git_gh(cli, args, command):
             destructive = (_has_flag(args, "--force", "--force-with-lease", "--force-if-includes", "--delete", "--mirror", "--prune")
                            or any(set(arg[1:]) & {"f", "d"} for arg in short)
                            or any(arg.startswith(("+", ":")) for arg in args))
+            if destructive and _lease_push_allowed(global_args, args, cwd or os.getcwd(),
+                                                   dict(os.environ if env is None else env)):
+                destructive = False
         elif verb == "tag":
             operands = []
             index = 1
@@ -1156,6 +1704,9 @@ def _git_gh(cli, args, command):
                 _has_flag(args, "--staged", "-S") and not _has_flag(args, "--worktree", "-W"))
         elif verb == "stash":
             destructive = words[1:2] in (["drop"], ["clear"])
+        if destructive and verb in ("reset", "checkout", "restore") and _clean_tracked_tree(
+                global_args, cwd or os.getcwd(), dict(os.environ if env is None else env)):
+            destructive, write = False, True
     else:
         if words[:2] == ["auth", "token"]:
             return Outcome("secret", [], [])
@@ -1185,7 +1736,10 @@ def _git_gh(cli, args, command):
     if destructive or write:
         return Outcome("always" if destructive else "write", [f"{cli}:{_digest(command)}"], [_git_gh_label(cli, words, args)],
                        every_time=destructive)
-    read_verbs = {"status", "show", "log", "diff", "ls-remote", "describe", "rev-parse"}
+    read_verbs = {
+        "status", "show", "log", "diff", "ls-remote", "describe", "rev-parse", "ls-tree", "ls-files", "cat-file",
+        "rev-list", "show-ref", "for-each-ref", "merge-base", "blame", "shortlog", "diff-tree",
+    }
     gh_read = cli == "gh"
     if gh_read or cli == "git" and (verb in read_verbs or verb == "tag"):
         return _read()
@@ -1263,11 +1817,11 @@ def _execution_policy(cli, args, cwd, env, variables, command):
         recursive = "--recursive" in flags or any(not arg.startswith("--") and set(arg[1:]) & {"r", "R"} for arg in flags)
         if not recursive:
             return Outcome("pass", [], [])
-        roots = [Path(path).resolve() for path in ("/tmp", "/private/tmp", "/var/folders", "/private/var/folders",
-                                                 env.get("TMPDIR") or "/tmp", str(Path.home() / ".cache"))]
         values = {**env, **variables}
         for operand in (arg for arg in args if not arg.startswith("-")):
-            expanded = _mktemp_directory(operand, values) or _expand_path_variables(_tmpdir_default(operand, values), values)
+            expanded = (_mktemp_directory(operand, values)
+                        or _mktemp_directory(_expand_path_variables(operand, values), values)
+                        or _expand_path_variables(_tmpdir_default(operand, values), values))
             if "$" in expanded or "`" in expanded:
                 return target("always", "Recursive removal with an unresolved target", True)
             head, tail = os.path.split(expanded)
@@ -1280,7 +1834,7 @@ def _execution_policy(cli, args, cwd, env, variables, command):
                 if fixed != expanded and not fixed.endswith("/"):
                     fixed = str(Path(fixed).parent)
                 path = (Path(cwd) / os.path.expanduser(fixed or ".")).resolve()
-            temporary = any(path.is_relative_to(root) for root in roots)
+            temporary = _temporary(path, env)
             if (path == Path("/") or path == Path.home() or path == session or path in session.parents
                     or ".git" in path.parts or not (path.is_relative_to(session) or temporary)):
                 return target("always", "Recursive removal of a protected or external path", True)
@@ -1288,7 +1842,123 @@ def _execution_policy(cli, args, cwd, env, variables, command):
     return None
 
 
-def _python_policy(content, cwd, depth, env):
+READONLY_MODULES = frozenset({
+    "sys", "os", "os.path", "re", "json", "csv", "argparse", "collections", "collections.abc", "itertools", "functools",
+    "math", "statistics", "datetime", "time", "pathlib", "typing", "dataclasses", "textwrap", "string", "glob", "fnmatch",
+    "hashlib", "base64", "enum", "decimal", "fractions", "heapq", "bisect", "copy", "pprint", "io", "difflib",
+    "unicodedata", "uuid", "random", "platform", "shlex", "urllib.parse", "html", "zoneinfo",
+    "calendar", "numbers", "abc", "contextlib", "struct", "binascii", "ipaddress", "tomllib", "configparser", "ast",
+    "stat", "errno", "__future__", "shutil",
+})
+READONLY_SHUTIL = frozenset({"which", "get_terminal_size", "disk_usage"})
+READONLY_BLOCKED = frozenset({
+    "write_text", "write_bytes", "touch", "mkdir", "makedirs", "unlink", "remove", "rmdir", "removedirs", "rename",
+    "renames", "replace", "symlink_to", "hardlink_to", "symlink", "link", "chmod", "lchmod", "chown", "lchown",
+    "truncate", "ftruncate", "system", "popen", "kill", "killpg", "fork", "forkpty", "fdopen", "utime", "mkfifo",
+    "mknod", "writev", "pwrite", "sendfile", "startfile", "setxattr", "removexattr", "environ", "environb", "getenv",
+    "putenv", "unsetenv", "modules", "FileIO", "FileType", "importlib", "chroot", "setuid", "setgid", "seteuid",
+    "setegid", "setreuid", "setregid", "setgroups", "setsid", "setpgid", "setpgrp", "unshare", "dup", "dup2", "fchmod",
+    "fchown", "lockf", "posix_fallocate", "chflags", "lchflags",
+})
+READONLY_BUILTINS = frozenset({
+    "eval", "exec", "compile", "__import__", "breakpoint", "setattr", "delattr", "globals", "locals", "vars", "help",
+})
+READONLY_PROCESS = re.compile(r"(?:exec|spawn)[lv]p?e?|posix_spawnp?")
+READONLY_DUNDERS = frozenset({
+    "__name__", "__file__", "__doc__", "__init__", "__str__", "__repr__", "__len__", "__iter__", "__next__", "__enter__",
+    "__exit__", "__eq__", "__lt__", "__hash__", "__getitem__", "__contains__", "__call__", "__post_init__",
+})
+READONLY_SECRET_TEXT = re.compile(
+    r"(?:^|[/\\])\.env(?:\.|$)|\.aws|\.kube|\.azure|\.ssh|\.gnupg|\.netrc|\.pgpass|\.docker|gcloud|credential|secret"
+    r"|token|passw|id_rsa|\.npmrc|\.pypirc",
+    re.I,
+)
+
+
+def _read_mode_open(node, bound):
+    """Whether an `open` call is provably a read: a literal read mode, or none."""
+    if any(keyword.arg is None for keyword in node.keywords) or any(isinstance(arg, ast.Starred) for arg in node.args):
+        return False
+    keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+    if "opener" in keywords:
+        return False
+    func = node.func
+    owner = bound.get(func.value.id) if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) else None
+    if owner == "os":
+        return False
+    builtin = isinstance(func, ast.Name) or owner == "io"
+    if not builtin and len(node.args) > 1:
+        return False
+    mode = keywords.get("mode")
+    if mode is None:
+        index = 1 if builtin else 0
+        mode = node.args[index] if len(node.args) > index else None
+        if mode is not None and not builtin and not (isinstance(mode, ast.Constant) and isinstance(mode.value, str)):
+            return False
+    return mode is None or (isinstance(mode, ast.Constant) and mode.value in ("r", "rb", "rt"))
+
+
+def _read_only_python(tree):
+    """A conservative, exact test for Python code that cannot change anything: only listed standard modules, no process,
+    network, environment, dynamic execution, or file mutation, and every `open` in a literal read mode. Anything that the
+    test cannot decide is not read-only."""
+    parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
+    bound = {}
+    openers = {"open"}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name not in READONLY_MODULES:
+                    return False
+                bound[alias.asname or alias.name.split(".")[0]] = alias.name if alias.asname else alias.name.split(".")[0]
+        elif isinstance(node, ast.ImportFrom):
+            if node.level or not node.module:
+                return False
+            for alias in node.names:
+                full = f"{node.module}.{alias.name}"
+                if alias.name == "*" or alias.name in READONLY_BLOCKED | READONLY_BUILTINS or not (
+                        node.module in READONLY_MODULES or full in READONLY_MODULES):
+                    return False
+                if node.module == "shutil" and alias.name not in READONLY_SHUTIL or node.module == "os" and alias.name == "open":
+                    return False
+                bound[alias.asname or alias.name] = full
+                if alias.name == "open":
+                    openers.add(alias.asname or alias.name)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and READONLY_SECRET_TEXT.search(node.value):
+            return False
+        if isinstance(node, ast.Attribute):
+            if (node.attr in READONLY_BLOCKED or READONLY_PROCESS.fullmatch(node.attr)
+                    or node.attr.startswith("__") and node.attr not in READONLY_DUNDERS):
+                return False
+            if node.attr == "open" and not (isinstance(parents.get(node), ast.Call) and parents[node].func is node):
+                return False
+            if isinstance(node.value, ast.Name) and bound.get(node.value.id) == "shutil" and node.attr not in READONLY_SHUTIL:
+                return False
+        elif isinstance(node, ast.Name):
+            if node.id in READONLY_BUILTINS or node.id.startswith("__") and node.id not in READONLY_DUNDERS:
+                return False
+            if bound.get(node.id) == "shutil" and not (
+                    isinstance(parents.get(node), ast.Attribute) and parents[node].attr in READONLY_SHUTIL):
+                return False
+            if node.id in openers and not (isinstance(parents.get(node), ast.Call) and parents[node].func is node):
+                return False
+        elif isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Name) and func.id == "getattr":
+                name = node.args[1] if len(node.args) > 1 else None
+                if not (isinstance(name, ast.Constant) and isinstance(name.value, str) and name.value != "open"
+                        and name.value not in READONLY_BLOCKED and not name.value.startswith("__")):
+                    return False
+            if (isinstance(func, ast.Name) and func.id in openers) or (isinstance(func, ast.Attribute) and func.attr == "open"):
+                if not _read_mode_open(node, bound):
+                    return False
+        elif isinstance(node, (ast.AsyncFunctionDef, ast.AsyncFor, ast.AsyncWith, ast.Await)):
+            return False
+    return True
+
+
+def _python_policy(content, cwd, depth, env, readonly=False):
     if _code_runs_guard(content):
         return Outcome("forbidden", [], [SELF_APPROVAL_REASON])
     try:
@@ -1314,7 +1984,7 @@ def _python_policy(content, cwd, depth, env):
             processes.append(node)
     sdk = bool(SDK_IMPORT.search(imports))
     if not processes and not sdk:
-        return Outcome("pass", [], [])
+        return _read() if readonly and _read_only_python(tree) else Outcome("pass", [], [])
     values = {node.targets[0].id: node.value for node in ast.walk(tree) if isinstance(node, ast.Assign)
               and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)}
     commands = []
@@ -1391,7 +2061,8 @@ def _classify_script(words, cwd, depth, env, variables=None):
             else:
                 return Outcome("pass", [], [])
         if mode == "python":
-            verdict = _python_policy(content, cwd, depth, env)
+            readonly = not any(_protected_argument(arg, cwd, env) for arg in args)
+            verdict = _python_policy(content, cwd, depth, env, readonly)
             if verdict.kind in ("write", "always"):
                 verdict = verdict._replace(keys=_script_unknown(resolved, words, env, content).keys)
             return verdict
@@ -1451,7 +2122,9 @@ def _classify_argv(words, heredoc, cwd, depth, command, inherited_env=None, vari
     if policy is not None:
         return policy
     if PYTHON.fullmatch(cli):
-        code = option_value(stripped[1:], "-c")
+        code = _python_inline_code(stripped[1:])
+        if code is None:
+            code = option_value(stripped[1:], "-c")
         if code is not None:
             verdict = _python_policy(code, cwd, depth, env)
             if verdict.kind != "pass" or "--execute" not in stripped[1:]:
@@ -1461,7 +2134,7 @@ def _classify_argv(words, heredoc, cwd, depth, command, inherited_env=None, vari
         return _sensitive(command)
     script = _classify_script(stripped, cwd, depth, env, variables)
     if script is not None:
-        if PYTHON.fullmatch(cli) and "--execute" in stripped[1:] and script.kind == "pass":
+        if PYTHON.fullmatch(cli) and "--execute" in stripped[1:] and script.kind in ("pass", "read"):
             return Outcome("write", ["python:execute"], ["Python execution with --execute"])
         return script
     if PYTHON.fullmatch(cli) and "--execute" in stripped[1:]:
@@ -1469,7 +2142,7 @@ def _classify_argv(words, heredoc, cwd, depth, command, inherited_env=None, vari
     if heredoc and (cli in COVERED or COVERED_WORD.search(command)):
         return _unclassified(cli, command)
     if cli not in COVERED:
-        return Outcome("pass", [], [], cli)
+        return Outcome("pass", [], [], None if cli == "awk" and not _awk_filter(stripped[1:]) else cli)
     args = stripped[1:]
     if cli == "az" and subcommand_words(args)[:1] == ["rest"]:
         args = list(args)
@@ -1658,7 +2331,7 @@ def _indirect_regions(text, segments):
             script = _shell_c(words[1:])
             if script:
                 regions.append(script)
-        elif name in ("eval", "xargs"):
+        elif name == "eval" or name == "xargs" and _xargs_argv(words[1:]) is None:
             regions.append(" ".join(words[1:]))
     return regions
 
@@ -1688,14 +2361,17 @@ def _python_documents(text, cwd, depth, env):
             words, _ = strip_prefix(segment.words)
         except (ParseError, StopIteration):
             continue
-        if not words or not PYTHON.fullmatch(os.path.basename(words[0])) or "-c" in words:
+        if (not words or not PYTHON.fullmatch(os.path.basename(words[0])) or "-c" in words
+                or _python_inline_code(words[1:]) is not None):
             continue
         end = re.search(r"(?m)^" + re.escape(match[3]) + r"[ \t]*\r?$", text[match.end():])
         if end is None:
             continue
         body_end = match.end() + end.start()
-        verdict = _python_policy(text[match.end():body_end], cwd, depth, env)
-        if verdict.kind == "pass" and "--execute" in words:
+        stdin_code = (all(arg.startswith("-") for arg in words[1:]) and "--execute" not in words
+                      and not any(_protected_argument(arg, cwd, env) for arg in words[1:]))
+        verdict = _python_policy(text[match.end():body_end], cwd, depth, env, stdin_code)
+        if verdict.kind in ("pass", "read") and "--execute" in words:
             verdict = Outcome("write", ["python:execute"], ["Python execution with --execute"])
         verdicts.append(verdict)
         tokens = _lex(match[0])
@@ -1821,6 +2497,20 @@ def _grep_names(words):
 def _plain_grep(words):
     parts = _grep_parts(words[1:], r"--ignore-case|--fixed-strings|--invert-match|--extended-regexp|--count|-[EiFvc]+")
     return parts is not None and len(parts[1]) == 1
+
+
+def _awk_filter(args):
+    """A standard-input awk call that only prints fields, so it can end a read pipeline like `cut`."""
+    rest, index = [], 0
+    while index < len(args):
+        if args[index] == "-F" and index + 1 < len(args):
+            index += 2
+        elif args[index].startswith("-F") and len(args[index]) > 2:
+            index += 1
+        else:
+            rest.append(args[index])
+            index += 1
+    return len(rest) == 1 and AWK_PRINT.fullmatch(rest[0].strip()) is not None
 
 
 def _name_only_stage(words):
@@ -1983,7 +2673,7 @@ def _unrecognized_wrapper(text):
                    every_time=True)
 
 
-def classify_text(text, cwd, depth=0, env=None, variables=None):
+def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None):
     """Classify a shell command string; the secret helper's own inner command is classified separately."""
     if depth > MAX_DEPTH:
         return _unclassified("bash", text if isinstance(text, str) else "")
@@ -2032,6 +2722,13 @@ def classify_text(text, cwd, depth=0, env=None, variables=None):
     checked = _blank(text, spans)
     verdicts = list(python_verdicts)
     variables = dict(variables or {})
+    statics = dict(statics or {})
+    recording = not any(operator[1] in ("(", ")") for operator in operators) and not any(
+        segment.words and segment.words[0] == "function" for segment in segments)
+    block_depth = 0
+    after_assignment = False
+    judged, temp_writes = not python_verdicts, 0
+    files_stable = all(verdict.kind == "read" for verdict in python_verdicts)
     substitution_names = set()
     current_env = environment
     for segment in segments:
@@ -2039,14 +2736,24 @@ def classify_text(text, cwd, depth=0, env=None, variables=None):
             filtered = filtered_segments[segment.start]
             if filtered is not None:
                 verdicts.append(filtered)
+            files_stable = files_stable and filtered is not None and filtered.kind == "read"
+            judged = False
             continue
+        segment = segment._replace(
+            words=_expand_segment_words(segment, statics),
+            redirects=[(fd, operator, _expand_path_variables(target, statics) if "<<" not in operator else target)
+                       for fd, operator, target in segment.redirects],
+        )
         program, assignments = strip_prefix(segment.words)
         region = checked[segment.start:segment.end]
         substitutions = list(_substitution_spans(region))
+        scoped_env = current_env if files_stable else {**current_env, FILES_MAY_CHANGE: "1"}
         for _, _, body in substitutions:
-            verdicts.append(classify_text(body, cwd, depth + 1, current_env, variables))
+            verdicts.append(classify_text(body, cwd, depth + 1, scoped_env, variables, statics))
+            files_stable = files_stable and verdicts[-1].kind == "read"
+        scoped_env = current_env if files_stable else {**current_env, FILES_MAY_CHANGE: "1"}
         for body in _indirect_regions(region, [segment]):
-            verdict = classify_text(body, cwd, depth + 1, current_env)
+            verdict = classify_text(body, cwd, depth + 1, {**scoped_env, **assignments})
             if verdict.kind in ("secret", "sensitive", "forbidden", "always"):
                 verdicts.append(verdict)
             else:
@@ -2063,7 +2770,8 @@ def classify_text(text, cwd, depth=0, env=None, variables=None):
                             pass
                     verdicts.append(verdict if pure_python or verdict.kind == "read" and shell else _unclassified(match.group(0), body))
         name = os.path.basename(program[0]) if program else ""
-        if PYTHON.fullmatch(name) and "-c" not in program and "-m" not in program:
+        if (PYTHON.fullmatch(name) and "-c" not in program and "-m" not in program
+                and _python_inline_code(program[1:]) is None):
             for _, operator, target in segment.redirects:
                 if operator == "<" and not _protected_path(target, cwd, current_env):
                     path = _script_path(target, cwd, variables)
@@ -2074,6 +2782,15 @@ def classify_text(text, cwd, depth=0, env=None, variables=None):
         if any(operator == "<" and _protected_path(target, cwd, current_env)
                for _, operator, target in segment.redirects):
             verdicts.append(_sensitive(text))
+        first = segment.words[0] if segment.words else ""
+        was_assignment, after_assignment = after_assignment, False
+        block_depth = (block_depth + 1 if first in BLOCK_OPENERS
+                       else max(0, block_depth - 1) if first in BLOCK_CLOSERS else block_depth)
+        if (name in ENVIRONMENT_CHANGERS or name in VARIABLE_WRITERS or name == "printf" and "-v" in program
+                or ":=" in region or "((" in region):
+            statics.clear()
+        elif name in ("for", "select") and len(program) > 1:
+            statics.pop(program[1], None)
         if name == "cd" and len(program) == 2:
             if _cd_changes_directory(segment, operators):
                 directory = _script_path(program[1], cwd, variables)
@@ -2081,7 +2798,10 @@ def classify_text(text, cwd, depth=0, env=None, variables=None):
                     cwd = str(directory)
             continue
         if not program and assignments:
-            if all(ASSIGNMENT.match(word) for word in segment.words):
+            standalone = all(ASSIGNMENT.match(word) for word in segment.words)
+            fixed = (standalone and recording and block_depth == 0
+                     and _unconditional_assignment(segment, operators, was_assignment))
+            if standalone:
                 for key, value in assignments.items():
                     variables[key] = _expand_path_variables(value, variables)
                     if key != "_APPROVAL_SESSION_DIR":
@@ -2090,17 +2810,40 @@ def classify_text(text, cwd, depth=0, env=None, variables=None):
                         substitution_names.add(key)
                     else:
                         substitution_names.discard(key)
+            for key, value in assignments.items():
+                fixed_value = _static_value(value, statics, {**current_env, **variables}) if fixed else None
+                if fixed_value is None:
+                    statics.pop(key, None)
+                else:
+                    statics[key] = fixed_value
+            after_assignment = bool(fixed)
+            judged = judged and standalone and not segment.redirects and all(
+                "$(" not in value and "`" not in value or MKTEMP_OPERAND.fullmatch(value) for value in assignments.values())
             continue
         dynamic_program = program and re.search(r"\$\(|`|\$\{|\$[A-Za-z_]", program[0])
+        argv = _xargs_argv(program[1:]) if name == "xargs" else None
+        if argv:
+            argv = [*segment.words[:len(segment.words) - len(program)], *argv]
         verdict = (_unclassified(name, text) if dynamic_program and COVERED_WORD.search(region)
-                   else _classify_argv(segment.words, segment.heredoc, cwd, depth, text, current_env, variables))
+                   else _classify_argv(argv or segment.words, segment.heredoc and not argv, cwd, depth, text, scoped_env,
+                                       variables))
+        if argv and (verdict.kind == "read" or verdict.kind == "pass" and os.path.basename(
+                (strip_prefix(argv)[0] or [""])[0]) in OPERAND_READERS):
+            verdict = _sensitive(text)
+        files_stable = files_stable and verdict.kind == "read" and _redirects_allowed([segment])
         output = name in ("echo", "printf") and (substitutions or any(
             re.search(r"\$(?:" + re.escape(key) + r"\b|\{" + re.escape(key) + r"\})", region)
             for key in substitution_names
         ))
         if verdict.kind != "pass" or not output:
             verdicts.append(verdict)
-    return _aggregate(verdicts, segments)
+        writes = None if substitutions or argv else _temp_segment(segment.words, segment.redirects, cwd, current_env)
+        judged = judged and writes is not None
+        temp_writes += writes or 0
+    outcome = _aggregate(verdicts, segments)
+    if outcome.kind == "pass" and outcome.exe is None and judged and temp_writes:
+        return Outcome("pass", [], [], TEMP_WRITE_EXE)
+    return outcome
 
 
 def mcp_tool_part(tool):
@@ -2411,6 +3154,8 @@ def _claude_permission(session, outcome, tool_input, tool_name, cwd):
         if tool_name == "Read" and _plugin_file(tool_input, cwd):
             return approval_state.permission_allow()
         command = tool_input.get("command") if isinstance(tool_input, dict) else None
+        if tool_name == "Bash" and outcome.exe == TEMP_WRITE_EXE:
+            return approval_state.permission_allow()
         if tool_name == "Bash" and isinstance(command, str) and _plain_command(command) and approval_state.is_approved(
                 "claude", session, [approval_state.WRITE_KEY]):
             return approval_state.permission_allow()

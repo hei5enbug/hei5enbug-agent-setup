@@ -90,7 +90,8 @@ def test_every_time_actions_are_marked_at_classification(state, fake_bin, comman
 
 
 @pytest.mark.parametrize("command", [
-    "docker rm -f c1", "docker rmi img", "docker system prune", "docker compose down -v", "npm publish",
+    "docker --context prod rm -f c1", "docker --context prod rmi img", "docker --context prod system prune",
+    "docker --context prod compose down -v", "npm publish",
     "curl -X DELETE https://example.com/item/1",
 ])
 def test_formerly_reusable_destructive_actions_ask_every_time(state, fake_bin, command):
@@ -138,8 +139,8 @@ def test_destructive_sql_through_mcp_asks_every_time(state, fake_bin, host):
 def test_a_list_action_inside_a_compound_keeps_the_whole_call_every_time(state, fake_bin, host):
     """한 번 승인한 삭제와 매번 묻는 작업을 이어 붙이면 호출 전체가 매번 묻는 작업이 된다."""
     # given
-    approve_and_finish(bash_event("docker rm -f c1", cwd=state, tool_use_id="first"), host)
-    command = "docker rm -f c1; git push --force origin main"
+    approve_and_finish(bash_event("docker --context prod rm -f c1", cwd=state, tool_use_id="first"), host)
+    command = "docker --context prod rm -f c1; git push --force origin main"
     # when
     output = guard.handle(bash_event(command, cwd=state, tool_use_id="second"), host)
     # then
@@ -178,8 +179,8 @@ def test_real_environment_files_stay_protected(state, fake_bin, name):
 def test_a_reused_approval_does_not_cover_a_nested_write(state, fake_bin, host):
     """중첩 셸 안의 쓰기 키도 합쳐지므로 삭제 승인만으로 쓰기를 함께 실행하지 않는다."""
     # given
-    approve_and_finish(bash_event("docker rm -f c1", cwd=state, tool_use_id="first"), host)
-    command = "bash -c 'docker rm -f c1; gh issue create --title t --body b'"
+    approve_and_finish(bash_event("docker --context prod rm -f c1", cwd=state, tool_use_id="first"), host)
+    command = "bash -c 'docker --context prod rm -f c1; gh issue create --title t --body b'"
     # when
     output = guard.handle(bash_event(command, cwd=state, tool_use_id="second"), host)
     # then
@@ -222,7 +223,7 @@ def test_fallback_and_remote_exec_paths_keep_the_every_time_mark(state, fake_bin
 def test_remote_exec_is_not_allowed_by_a_local_docker_approval(state, fake_bin, host):
     """로컬 Docker 삭제를 승인했어도 원격 exec 안의 같은 삭제는 다시 묻는다."""
     # given
-    approve_and_finish(bash_event("docker rm -f c1", cwd=state, tool_use_id="first"), host)
+    approve_and_finish(bash_event("docker --context prod rm -f c1", cwd=state, tool_use_id="first"), host)
     # when
     output = guard.handle(bash_event("kubectl exec pod -- docker rm -f c1", cwd=state, tool_use_id="second"), host)
     # then

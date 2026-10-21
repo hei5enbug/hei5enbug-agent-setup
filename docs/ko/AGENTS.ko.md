@@ -48,9 +48,9 @@
   | 범위가 정해진 구현 및 디버깅(쉬운 작업) | `haiku_worker` | `claude-haiku-5-5` / `xhigh` | `worker` | `gpt-6.1-sol` / `high` |
   | 범위가 정해진 로컬 읽기 전용 근거 조사 | `scout` | `gpt-5.6-luna` / `xhigh` | `haiku_scout` | `claude-haiku-5-5` / `xhigh` |
   | 승인된 내용을 반영하는 기계적인 문서 편집 | `writer` | `gpt-6.1-sol` / `high` | `haiku_writer` | `claude-haiku-5-5` / `xhigh` |
-  | 완료된 범위 한정 변경을 한 번 읽기 전용으로 최종 검토 | `code_reviewer` | `gpt-6.1-sol` / `high` | `sonnet_code_reviewer` | `claude-sonnet-5-5` / `high` |
+  | 완료된 범위 한정 변경을 한 번 읽기 전용으로 최종 검토 | `code_reviewer` | `gpt-6.1-sol` / `high` | `opus_code_reviewer` | `claude-opus-5-5` / `high` |
 
-  `haiku_*`와 `sonnet_code_reviewer`는 별도 Claude Code CLI 프로세스에 붙이는 과제 이름이며,
+  `haiku_*`와 `opus_code_reviewer`는 별도 Claude Code CLI 프로세스에 붙이는 과제 이름이며,
   등록된 `--agent` 이름이 아니다. `worker`, `scout`, `writer`, `code_reviewer`는 Codex 프로젝트 역할이다.
   각 역할에는 Claude에서 GPT로, GPT에서 Claude로 전환하는 다른 모델 계열의 fallback 하나만 둔다.
   기본 실행 파일, 인증, 할당량, 역할, 요청한 설정 또는
@@ -72,7 +72,7 @@
   Claude fallback에는 대응하는 기본 Codex 역할의 `developer_instructions`와 범위가 정해진 과제를
   stdin으로 전달한다. 각 역할의 범위는 이 원본 하나에서 유지한다. `claude -p`에 표의 전체 모델 ID와
   추론 강도, `--output-format json --permission-mode dontAsk --strict-mcp-config`를 지정한다.
-  `haiku_scout`과 `sonnet_code_reviewer`에는 `--tools Read Grep Glob --allowedTools Read Grep Glob`를 추가한다.
+  `haiku_scout`과 `opus_code_reviewer`에는 `--tools Read Grep Glob --allowedTools Read Grep Glob`를 추가한다.
   `haiku_writer`에는 `--tools Read Grep Glob Edit Write --allowedTools Read Grep Glob`와 함께 배정된 각
   Markdown 파일과 미러에 대한 `Edit(//<absolute allowed path>)`를 추가한다. Edit 규칙은 Write에도 적용되고,
   `//`는 절대 경로를 뜻한다. 배정된 검사는

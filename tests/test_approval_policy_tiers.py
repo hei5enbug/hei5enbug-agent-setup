@@ -73,8 +73,10 @@ EVERY_TIME_COMMANDS = [
     "npm publish", "pnpm publish", "yarn publish", "uv publish", "poetry publish", "cargo publish",
     "twine upload dist/*", "gem push x.gem",
     # docker와 podman의 삭제
-    "docker rm c1", "docker rmi img", "docker system prune", "docker volume rm v", "docker compose down -v",
-    "podman rm c1", "podman system prune", "docker exec c1 rm -rf /data", "podman exec c1 rm -rf /data",
+    "docker --context prod rm c1", "docker --context prod rmi img", "docker --host ssh://prod system prune",
+    "docker --context prod volume rm v", "docker --context prod compose down -v",
+    "podman --connection prod rm c1", "podman --connection prod system prune",
+    "docker --context prod exec c1 rm -rf /data", "podman --connection prod exec c1 rm -rf /data",
     # curl의 파괴적 메서드
     "curl -X DELETE https://example.com/item/1",
     # 샌드박스 없는 Codex 실행
@@ -430,7 +432,7 @@ def test_코드_입력이_파괴적이지_않으면_실행형_mcp는_세션_쓰�
     {"code": "import os\nos.system('git push --force origin main')"},
     {"language": "bash", "code": "kubectl delete pod x --context dev -n web"},
     {"language": "sh", "code": "git push --force"},
-    {"code": "docker rm c1"},
+    {"code": "docker --context prod rm c1"},
     {"language": "python", "code": "import boto3\nboto3.client('s3').delete_bucket(Bucket='x')"},
 ])
 def test_코드_입력에_매번_묻는_호출이_있으면_실행형_mcp도_매번_묻는다(state, fake_bin, tool_input):
@@ -981,7 +983,7 @@ def test_부모가_승인하지_않은_세션_키가_하나라도_있으면_자�
 
 @pytest.mark.parametrize("host", ["claude", "codex"])
 @pytest.mark.parametrize("command", ["git push --force origin main", "kubectl delete pod x --context dev -n web",
-                                     "docker rm c1", "npm publish"])
+                                     "docker --context prod rm c1", "npm publish"])
 def test_매번_묻는_호출은_부모가_모든_세션_키를_승인해도_자식에서_거부된다(child, fake_bin, host, command):
     """매번 묻는 호출은 부모의 세션 승인으로 열리지 않고 자식에서 계속 거부되어 메인 세션이 직접 실행한다."""
     # given

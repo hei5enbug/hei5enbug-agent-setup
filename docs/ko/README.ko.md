@@ -210,22 +210,76 @@ Codex `apply_patch` 호출 전에 `scripts/approval_guard.py`를 실행합니다
 - **금지**는 두 호스트 모두에서 거부됩니다. 가드 스크립트를 실행하거나 승인 상태를 편집하는 경우입니다(아래 자기 승인 규칙 참고).
 - **통과**는 가드가 다루지 않는 호출이므로 호스트의 기존 권한 절차가 결정합니다.
 
-매번 묻는 목록에는 반복할 때마다 그사이 새로 생긴 것까지 지울 수 있는 작업을 둡니다. 그래서 한 번 승인해도 다음
-실행에는 다시 묻습니다.
+매번 묻는 목록에는 원격·운영 시스템에 영향을 주거나 복구할 수 없는 로컬 데이터를 지우는 작업을 둡니다.
+그래서 한 번 승인해도 다음 실행에는 다시 묻습니다. 버려도 되거나 복구할 수 있는 로컬 작업은 이 목록에서 제외합니다.
+아래 로컬 범위 규칙에서 이를 설명합니다.
 
-1. 파괴적 `git push`: 강제·force-with-lease·삭제·mirror·prune push와 `+`·`:` refspec
-2. 커밋하지 않은 작업 버리기: `git reset --hard`, dry run 없는 강제 `git clean`, 강제 checkout이나 `.` checkout,
-   작업 트리의 `.`·`:/` restore, `git stash drop`·`git stash clear`
+1. 파괴적 `git push`: 강제·force-with-lease·삭제·mirror·prune push와 `+`·`:` refspec.
+   단 로컬 범위 규칙에서 설명하는 lease로 보호된 기능 브랜치 푸시는 제외합니다.
+2. 커밋하지 않은 작업 버리기: dry run 없는 강제 `git clean`, `git stash drop`·`git stash clear`.
+   추적 파일에 커밋하지 않은 변경이 있거나 저장소 상태를 읽을 수 없을 때의 `git reset --hard`,
+   강제 checkout이나 `.` checkout, 작업 트리의 `.`·`:/` restore도 포함합니다.
 3. 보호 경로나 외부 경로, 풀 수 없는 대상의 재귀 삭제
 4. `psql`, `sqlcmd`, DataGrip, tabularis, MCP SQL 필드로 보내는 파괴적 데이터베이스 문장
 5. 원격 인프라 삭제: `kubectl`, `oc`, `helm`, `az`, `terraform`, `tofu`, `aws`, `gcloud`, `gsutil`의 파괴적 동사
    (`delete`, `drain`, `uninstall`, `destroy`, `purge`, `terminate` 등), `--` 앞의 `--force`와 `--prune`,
    `kubectl`·`oc` `exec` 안의 파괴적 명령, 파괴적 `gh` 호출
 6. 패키지 게시: `npm`, `pnpm`, `yarn`, `uv`, `poetry`, `cargo`의 `publish`, `twine upload`, `gem push`
-7. `docker`·`podman`의 삭제: `rm`, `rmi`, `prune`, `compose down -v`, `exec` 안의 파괴적 명령. DELETE 같은 파괴적 메서드를 쓴
-   `curl`. 이름에 삭제 단어가 든 MCP 도구와 action
+7. 원격 엔진을 대상으로 한 `docker`·`podman`의 삭제: `rm`, `rmi`, `prune`, `compose down -v`, `exec` 안의 파괴적 명령.
+   DELETE 같은 파괴적 메서드를 쓴 `curl`. 이름에 삭제 단어가 든 MCP 도구와 action
 8. 샌드박스 보호 없는 Codex 실행
 9. 가드가 분류하지 못한 호출과 텍스트에 파괴적 작업이 있는 분류 불가 호출(스크립트와 실행형 도구의 코드 입력 포함)
+
+로컬 범위 규칙은 버려도 되거나 복구할 수 있는 로컬 작업을 매번 묻는 목록에서 제외합니다.
+
+- **임시 루트**는 `/tmp`, `/private/tmp`, `/var/folders`, `/private/var/folders`, `$TMPDIR`, `~/.cache`,
+  Claude Code 작업 폴더 `~/.claude/jobs/<id>/tmp`입니다. 임시 루트 안의 재귀 삭제는 통과합니다.
+  리다이렉션(`>`, `>>`, heredoc), `mkdir`, `touch`, `tee`, `cp`·`mv`의 목적지는 심볼릭 링크를 푼 뒤
+  모든 목적지가 임시 루트 안에 있으면 통과합니다. 원본은 어디에 있어도 됩니다. 다만 기존 폴더로 `cp`·`mv`할 때는
+  `<folder>/<source name>`으로 판단하므로 그 위치의 심볼릭 링크가 루트 밖으로 나가거나 원본 이름을 알 수 없으면
+  (glob이나 변수) 이 규칙을 적용하지 않습니다. 명령 전체가 이런 쓰기와 `cat`, `echo`, `ls`, `cd` 같은
+  무해한 명령 몇 개로만 이루어지면 세션 승인 없이 Claude Code 자체 권한 프롬프트에 허용으로 응답합니다.
+  `./README.md`처럼 임시 루트 안임을 증명할 수 없는 목적지는 기존 절차를 따릅니다.
+  그곳에 쓰는 스크립트는 여전히 쓰기입니다.
+- **로컬 컨테이너 엔진**: 엔진이 로컬이면 `docker`·`podman`의 삭제·정리(`rm`, `rmi`,
+  `container`, `image`, `volume`, `network`의 `rm`·`prune`, `system prune`, `-v` 유무와 관계없는
+  `compose down`)와 파일을 지우는 `exec` 명령은 세션 쓰기입니다. 하위 명령 앞에 `--host`, `-H`,
+  `--remote`, `-r`, `--url`, `--connection`, `--identity` 옵션이 있으면 엔진은 원격입니다.
+  `-Htcp://h`, `--remote=true` 같은 모든 표기를 포함합니다. `CONTAINER_HOST`나 `CONTAINER_CONNECTION`이
+  설정되어 있거나, `DOCKER_HOST`가 `unix://` 소켓, 경로, 단독 호스트 `localhost`, `127.0.0.1`, `::1`
+  이외의 값일 때도 원격입니다. 이름이 있는 Docker 컨텍스트는 `--context`·`-c`, 그다음 `DOCKER_CONTEXT`,
+  그다음 Docker 설정의 `currentContext`에서 가져옵니다. 설정은 `--config`, `DOCKER_CONFIG`,
+  `~/.docker/config.json` 순서로 찾습니다. 이 컨텍스트는
+  `<config dir>/contexts/meta/<sha256 of the name>/meta.json`의 `Endpoints.docker.Host`가
+  `unix://`나 `npipe://`로 시작할 때만 로컬이므로 Docker Desktop의 `desktop-linux`는 로컬입니다.
+  메타 파일이 없거나 읽을 수 없거나 형식이 잘못된 경우, 호스트가 없는 경우, `tcp://`·`ssh://` 같은 다른 스킴이면
+  원격입니다. `default` 컨텍스트는 로컬입니다. podman은 `containers.conf`(`CONTAINERS_CONF`,
+  사용자·시스템 파일과 각각의 `.d` 폴더)에 `active_service`나 `remote = true`가 설정되어 있거나,
+  저장된 시스템 연결 기본값이 있으면 원격이며, 해당 설정을 읽을 수 없을 때도 원격입니다.
+  원격 엔진에는 계속 매번 묻습니다. 함수, 변수, `eval`, `sh -c` 텍스트의 파괴적 단어가 로컬
+  `docker`·`podman` 삭제만 가리키는 경우도 세션 쓰기입니다.
+- **lease로 보호된 푸시**: 다음 조건을 모두 충족하는 `git push`는 매번 묻지 않고 세션 쓰기로 처리합니다.
+  강제 관련 플래그는 `--force-with-lease`(단독, `=<ref>`, `=<ref>:<expect>`)와 `--force-if-includes`만 있어야 합니다.
+  원격 이름을 명시해야 하며 `upstream`은 제외합니다. URL, 경로, git이 읽을 수 없는 원격에는 계속 매번 묻습니다.
+  모든 대상 브랜치를 명시해야 하며 `main`, `master`, `develop`, `trunk`는 제외합니다.
+  `git symbolic-ref refs/remotes/<remote>/HEAD`를 읽을 수 있으면 해당 원격의 HEAD 브랜치도 제외합니다.
+  대상은 `src:dst`, `dst` 또는 lease ref에서 가져옵니다. `HEAD`, `@`, 비어 있거나 암묵적인 대상, glob,
+  `refs/heads/` 이외의 `refs/` 이름에는 계속 매번 묻습니다. `--force`, `-f`, `--delete`, `-d`, `--mirror`,
+  `--prune`, `--all`, `--tags`, `+`·`:dst` refspec, 알 수 없는 옵션, `-C` 이외의 전역 옵션,
+  대상을 바꾸는 `GIT_*` 변수, 컨테이너 안의 `exec`도 계속 매번 묻습니다.
+  예를 들어 `git push --force-with-lease origin feature/ABC-1`은 세션 쓰기이고,
+  `git push --force-with-lease origin main`은 매번 묻습니다.
+- **변경 없는 추적 트리**: 저장소에서 `git status --porcelain --untracked-files=no`가 3초 안에
+  아무것도 출력하지 않으면 `git reset --hard`, `git checkout -f`, `git checkout .`, `git restore .`은
+  세션 쓰기입니다. `-C`가 지정한 경로도 따릅니다. 다음 경우에는 계속 매번 묻습니다. 오류나 시간 초과가 발생한 경우,
+  `-C`와 무해한 `--no-pager`, `-P`, `--no-optional-locks`, `--paginate`, `-p` 이외의 전역 옵션이 있는 경우
+  (`-c`, `--config-env`, `--git-dir`, `--work-tree`, `--namespace`, `--bare` 모두 해당),
+  또는 다음 예외 이외의 `GIT_*` 변수가 있는 경우입니다. 예외는 `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`,
+  `GIT_PAGER`, `GIT_TERMINAL_PROMPT`, `GIT_ASKPASS`, `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_TRACE*`,
+  `GIT_PROGRESS_DELAY`, `GIT_FLUSH`, `GIT_MERGE_AUTOEDIT`입니다.
+  `kubectl`·`oc`·`docker`·`podman`의 `exec` 안의 명령에도 매번 묻습니다.
+  같은 명령의 앞선 세그먼트 중 파일 출력 없는 단순 읽기가 아닌 것이 있어도 매번 묻습니다.
+  예를 들어 `printf x >> a; git reset --hard`는 매번 묻습니다.
 
 승인이 필요한 호출은 응답 언어로 한 줄, 100자 이내로 보입니다. Claude Code는 `language` 설정에서 언어를 가져오며, 설정이
 없으면 영어입니다. Codex는 `HEI5ENBUG_LANGUAGE`를 쓰고, 없으면 응답 언어 가드의 `HEI5ENBUG_RESPONSE_LANGUAGE`를 쓰며 그
@@ -249,12 +303,12 @@ Codex `apply_patch` 호출 전에 `scripts/approval_guard.py`를 실행합니다
 | `terraform`, `tofu` | `plan`, `show`, `validate`, `state list`, `fmt -check`, `-json`·`-raw` 없는 `output` | 없음 | `state show`, `state pull`, `output -json`, `output -raw` | `destroy`, `apply -destroy`, `state rm` | 디렉터리 : 워크스페이스 |
 | `aws` | `describe-*`, `list-*`, 비밀 조회가 아닌 `get-*`, `s3 ls` | `secretsmanager get-secret-value`와 `batch-get-secret-value`, `--with-decryption`이 붙은 `ssm get-parameter*`, `kms decrypt` | 없음 | `delete-*`, `terminate-*`, `s3 rm`, `s3 sync --delete` | 프로파일 / 리전 |
 | `gcloud`, `gsutil` | 명령 경로에서 처음 나오는 동사가 `list`, `describe`, `get-*`, `ls`, `cat` | `secrets versions access`, `auth print-access-token` | 없음 | `delete`, `gsutil rm`, `gsutil rb` | 프로젝트 |
-| `docker`, `podman` | `ps`, `images`, `logs`, `<object> ls` | 없음 | `inspect`, `exec ... env` 또는 `printenv` | `rm`, `rmi`, `prune`, `compose down -v`, `exec` 안의 파괴적 명령 | 컨텍스트 |
+| `docker`, `podman` | `ps`, `images`, `logs`, `<object> ls` | 없음 | `inspect`, `exec ... env` 또는 `printenv` | 원격 엔진 대상: `rm`, `rmi`, `prune`, `compose down -v`, `exec` 안의 파괴적 명령(로컬 엔진: 세션 쓰기) | 컨텍스트 |
 | `psql`, `sqlcmd` | 읽기인 쿼리. 가드가 다루는 `psql` 읽기는 `default_transaction_read_only=on`과 `statement_timeout=60000`으로 실행됩니다. | 없음 | 없음 | `delete`·`drop`·`truncate`가 이름으로 든 텍스트와 `DO`·`EXEC`·`EXECUTE`·`CALL`로 시작하는 문장 등을 포함한 파괴적 SQL | 호스트 / 데이터베이스 |
 | `curl` | 데이터·폼·업로드·JSON 플래그가 없는 GET/HEAD | 없음 | argv의 자격 증명(`-u`, `--user`, `Authorization` 헤더) | DELETE 같은 파괴적 메서드 | 메서드 / 스킴과 호스트 |
 | `kustomize` | 모든 호출 | 없음 | 없음 | 없음 | 없음 |
 | `mysql`, `mongosh`, `redis-cli` | 없음. 명시적인 로컬 호스트는 통과 | 없음 | 없음 | 파괴적 작업이 든 분류 불가 텍스트 | 없음 |
-| `git` | `status`, `show`, `log`, `diff`, `ls-remote`, `describe`, `rev-parse`, 태그 목록과 검증 | 없음 | 없음 | 강제·삭제·미러·prune 푸시, `reset --hard`, dry run 없는 강제 `clean`, 강제 checkout이나 `.` checkout, 인덱스만 복원하는 경우를 제외한 `.`·`:/` restore, `stash drop`·`stash clear` | 명령 |
+| `git` | `status`, `show`, `log`, `diff`, `ls-remote`, `ls-tree`, `ls-files`, `cat-file`, `rev-list`, `show-ref`, `for-each-ref`, `merge-base`, `blame`, `shortlog`, `diff-tree`, `describe`, `rev-parse`, 태그 목록과 검증 | 없음 | 없음 | 강제·삭제·미러·prune 푸시(lease로 보호된 기능 브랜치 푸시는 세션 쓰기), dry run 없는 강제 `clean`, `stash drop`·`stash clear`. 추적 트리에 변경이 없을 때(이때는 세션 쓰기)를 제외한 `reset --hard`, 강제 checkout이나 `.` checkout, 인덱스만 복원하는 경우를 제외한 `.`·`:/` restore | 명령 |
 | `gh` | `view`, `list`, `ls`, `status`, `checks`, `diff`, `search`, `watch`, `browse` 같은 읽기 동사, `auth status`, `config get`/`list`, 버전·도움말, `api` GET과 인라인 GraphQL query | `auth token` | 없음 | 모든 영역의 `delete`, `api` DELETE | 명령 |
 
 그 밖에 가드가 다루는 비파괴적 CLI 작업은 세션 쓰기 승인을 사용합니다. 로컬 `kubectl`·`oc` `config` 변경(`use-context`,
@@ -269,11 +323,12 @@ mutation과 쿼리 파일은 쓰기입니다. 알려지지 않은 `gh` 동작도
 패키지 게시(`npm`, `pnpm`, `yarn`, `uv`, `poetry`, `cargo`, `twine upload`, `gem push`)는
 게시 하위 명령 앞에 옵션이 있어도 매번 묻습니다.
 재귀 `rm`은 세션 폴더와 그 상위 폴더, 홈 폴더, `/`, `.git`과 그 내용, 풀 수 없는 대상 등
-보호 경로나 외부 경로에 대해 매번 묻습니다. 그 밖에 세션 폴더나 임시·캐시 루트 안에서의 삭제는 통과합니다.
-대상이 정확히 `$(mktemp -d ...)` 또는 백틱 치환이거나 `${TMPDIR:-<기본값>}`으로 시작하면, 먼저 임시 루트(`TMPDIR`가
+보호 경로나 외부 경로에 대해 매번 묻습니다. 그 밖에 세션 폴더나 임시 루트(로컬 범위 규칙 참고) 안에서의 삭제는 통과합니다.
+대상이 정확히 `$(mktemp -d ...)` 또는 백틱 치환이거나 `${TMPDIR:-<default>}`로 시작하면, 먼저 임시 루트(`TMPDIR`가
 있으면 그 값, 없으면 기본값)로 풀고 다른 경로와 똑같이 검사합니다. 그래서 홈 폴더, 세션 폴더, `.git` 차단은 그대로 적용됩니다.
 `kubectl`·`oc`·`docker`·`podman`의 `exec` 안의 명령에도 일반 분류기를 적용합니다.
-파괴적 명령은 매번 묻고, 비밀 출력은 차단하며, 나머지 `exec` 호출은 쓰기입니다.
+파괴적 명령은 매번 묻되, 로컬 `docker`·`podman` 컨테이너 안의 파일 삭제는 세션 쓰기입니다.
+비밀 출력은 차단하며, 나머지 `exec` 호출은 쓰기입니다.
 샌드박스 우회 플래그나 설정 재정의를 포함해 `danger-full-access`를 쓰는 모든 `codex` 호출은 매번 묻습니다.
 `codex exec` 또는 `e`에서 하위 명령 앞뒤의 `--add-dir`·`-C`·`--cd`, 또는 `role_runner.py --add-dir`로
 worker가 세션 폴더 밖에 접근하면 쓰기입니다.
@@ -308,14 +363,32 @@ worker가 세션 폴더 밖에 접근하면 쓰기입니다.
 가드는 `bash`, `sh`, `zsh`, `./`, `source`, `.`로 실행하는 셸 파일과 Python 파일,
 선택한 또는 기본 타깃과 한 단계 선행 타깃의 Makefile 레시피, `npm`·`pnpm`·`yarn run <name>`이 가리키는
 `package.json` 스크립트 텍스트를 읽습니다. 파일 경로는 이벤트의 `cwd` 기준이며 크기 제한은 256 KiB입니다.
+같은 명령 텍스트 앞부분에서 `;`, `&&`, 줄바꿈으로 구분한 일반 `NAME=value` 문은 뒤의 단순 명령에 치환됩니다.
+`for ... do ... done` 루프 본문도 포함하며, 따옴표 없는 확장에는 sh 단어 분할을 적용합니다.
+값이 명령 치환 없는 정적 단어 하나이고(`$(mktemp -d ...)`는 삭제 대상처럼 풉니다), 조건 없는 대입일 때만 적용합니다.
+즉 `export`가 아니고 괄호, 블록, 함수, 중괄호 그룹, 파이프, 백그라운드 안에 없어야 하며,
+왼쪽이 대입만으로 이루어진 경우를 제외하면 `||`·`&&` 뒤에도 없어야 합니다.
+이런 문맥 안의 대입은 그 뒤에서 해당 이름을 알 수 없는 상태로 만듭니다.
+`read`, `export`, `for NAME in` 같은 명령은 치환을 해제합니다.
+단순 명령이 뒤따르는 `xargs`는 입력을 알 수 없는 피연산자 하나로 보고 해당 세그먼트의 대입을 적용해 그 명령으로 분류합니다.
+`DOCKER_HOST=ssh://h xargs docker rm`은 매번 묻습니다. 읽기나 `cat`·`grep` 같은 파일 읽기 명령은
+알 수 없는 피연산자가 보호 파일을 가리킬 수 있으므로 민감 읽기가 되며, `xargs rm -rf`는 매번 묻습니다.
+셸, `eval`, 중첩된 `xargs`, 알 수 없는 옵션, 명령 이름의 자리표시자는 기존의 불투명 처리를 유지합니다.
 `cd <dir>`는 현재 셸에서 조건 없이 실행될 때만, 즉 괄호 밖에서 앞에 아무것도 없거나 `;`가 있고
 뒤에 아무것도 없거나 `;` 또는 `&&`가 있을 때만 뒤따르는 세그먼트의 기준 경로를 옮깁니다.
 앞선 독립 대입이 정한 `$NAME`, `${NAME}`은 경로에서 확장하지만, 접두 대입(`NAME=value cmd`)은 자기 명령의 인자를
 확장하지 않습니다. 대입하지 않은 변수는 스크립트를 읽을 수 없게 하므로 분류 불가입니다.
-셸의 각 줄과 Makefile 레시피에는 CLI 분류기를 적용합니다. Python 인라인 코드, heredoc, 표준 입력 파일, 스크립트 파일은
+셸의 각 줄과 Makefile 레시피에는 CLI 분류기를 적용합니다. Python 스크립트 파일이나 `python3 -` heredoc의 구문 트리가
+읽기 전용임을 증명할 수 있으면 읽기입니다. 목록에 있는 표준 모듈만 가져오고, 프로세스·네트워크·환경·동적 실행이나
+파일 변경 함수(`replace`, `remove`, `touch`, `mkdir` 이름 포함)를 호출하지 않아야 합니다.
+파일은 리터럴 읽기 모드로만 열고, 자격 증명으로 보이는 경로나 단어를 언급하지 않아야 합니다.
+`open` 함수에 연결된 모든 이름을 검사하므로 `from io import open as f`도 예외가 아닙니다.
+검사가 판단하지 못하는 경우는 기존 결과를 유지합니다. 보호 파일을 인자나 옵션 값(`--file=.env`)으로 전달할 때도 그렇습니다.
+`-c` 표기가 `-c code`, `-ccode`, `-Ic code` 중 무엇이든 heredoc이 아닌 인라인 코드를 분류합니다.
+Python 인라인 코드, heredoc, 표준 입력 파일, 스크립트 파일은
 프로세스를 실행하거나 클라우드·데이터베이스 SDK를 가져오면 쓰기입니다. 키워드 인자를 포함한 리터럴 프로세스 명령은 분류합니다.
 파괴적 프로세스 명령, 파괴적 SDK 호출 이름, 프로세스를 실행하거나 SDK를 가져온 Python 안의 파괴적 텍스트는 매번 묻습니다.
-나머지 Python은 문자열에 CLI 명령이 있어도 통과하지만,
+나머지 Python은 문자열에 CLI 명령이 있어도 통과하지만(`python3 -c` 코드는 읽기가 되지 않습니다),
 명시적인 `--execute`가 있으면 쓰기입니다. Node와 그 밖의 셸·Python이 아닌 실행 파일은 통과합니다.
 읽기는 승인 없이 실행하고 쓰기는 세션 쓰기 승인이 필요합니다. 파괴·강제·비밀 호출은 기존 규칙을 따릅니다.
 읽을 수 없거나 더 큰 스크립트 파일은 분류 불가입니다. 검사한 셸 스크립트가 대상 CLI를 언급하거나

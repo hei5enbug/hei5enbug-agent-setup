@@ -277,7 +277,7 @@ def test_경로가_없는_편집은_결정을_내지_않는다(project):
 
 def test_승인_전_가드_비대상_bash는_결정을_내지_않고_항목을_남기지_않는다(project):
     # given
-    request = bash(project, "mkdir -p build")
+    request = bash(project, "npm install")
     # when
     output = guard.handle(request, "claude")
     # then
@@ -417,7 +417,7 @@ def test_부모가_승인하지_않으면_하위_에이전트는_허용도_항�
     monkeypatch.setenv("HEI5ENBUG_PARENT_SESSION", "claude:parent")
     # when
     edit_output = guard.handle(edit(project, project / "a.py", session="child"), "claude")
-    bash_output = guard.handle(bash(project, "mkdir -p build", session="child"), "claude")
+    bash_output = guard.handle(bash(project, "npm install", session="child"), "claude")
     # then
     assert edit_output is None
     assert bash_output is None

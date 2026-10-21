@@ -129,6 +129,8 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
   방식으로 실패로 기록하되, 그 오류 결과는 그대로 둔다. 세션당 한 번만 환경 변수와 모든
   설정 파일에서 강제 모델과 사고 강도 한도(`CLAUDE_CODE_SUBAGENT_MODEL`, `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`,
   `CLAUDE_CODE_EFFORT_LEVEL` 같은 사고 강도 재정의, `maxEffortLevel`이나 조직 한도 같은 사고 강도 상한)만 확인한다.
+  환경 변수는 `printenv <name>...`로 이름을 지정해 읽는다. `env`나 패턴 검색은 승인 가드가 민감한 읽기로 판단해
+  확인을 요청하므로 사용하지 않는다.
   강제 모델이나 고정 사고 강도보다 낮은 상한이 있으면 플러그인 에이전트 위임을 멈춘다. 그렇지 않으면 할당을 바로
   보낸다. Mod의 고정과 차단이 수락 근거이므로 위임마다 설정이나 서브에이전트 기록을 읽지 않는다.
 - 그 줄이 없으면 시작 결과에 모델이 나오지 않는다. 실행에서 처음 호출하기 전에 위의 비밀이 아닌 입력과 에이전트 정의,

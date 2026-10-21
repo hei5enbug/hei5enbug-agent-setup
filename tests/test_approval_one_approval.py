@@ -19,7 +19,7 @@ def decision_of(output):
 
 WRITES = [
     "kubectl apply -f a --context dev", "kubectl $VERB pods", "eval kubectl get pods",
-    "echo x | xargs kubectl get", "kubectl exec pod -- ls", "kubectl port-forward pod 8080:80",
+    "echo x | xargs sh -c 'kubectl get'", "kubectl exec pod -- ls", "kubectl port-forward pod 8080:80",
     "kubectl cp a pod:/a", "kubectl attach pod", "kubectl debug pod", "kubectl run web --image=web",
     "python3 -c 'import subprocess; subprocess.run([\"echo\", \"hello\"])'",
     "python3 -c 'import boto3; boto3.client(\"s3\").list_buckets()'", "python3 tool.py --execute",
@@ -202,6 +202,7 @@ def test_python_execution_is_classified_by_behavior(state, fake_bin, body, expec
     path.write_text(body)
     command = {"inline": "python3 -c " + shlex.quote(body), "heredoc": "python3 - <<'PY'\n" + body + "\nPY",
                "script": "python3 " + str(path)}[mode]
+    expected = "read" if expected == "pass" and mode != "inline" and "import" not in body else expected
     # when
     outcome = guard.classify_text(command, str(state))
     # then
@@ -484,7 +485,7 @@ def test_recursive_glob_removal_judges_the_parent_folder(state, command, expecte
 @pytest.mark.parametrize("command,expected", [
     ("kubectl exec pod -- rm -rf /data", "always"),
     ("kubectl exec pod -- sh -c 'psql -c \"DROP TABLE t\"'", "always"),
-    ("docker exec web rm -rf /srv", "always"),
+    ("docker --context prod exec web rm -rf /srv", "always"),
     ("kubectl exec pod -- curl -s localhost", "write"),
 ])
 def test_exec_with_destructive_inner_command_always_asks(state, fake_bin, command, expected):
@@ -619,7 +620,7 @@ def test_claude_grants_only_the_recorded_asked_call_once(state, fake_bin, monkey
 @pytest.mark.parametrize("header,expected", [
     ("python3 - <<'PY' && git push --force", "always"),
     ("gh repo archive owner/repo --yes; python3 - <<'PY'", "write"),
-    ("cd x && python3 - <<'PY'", "pass"),
+    ("cd x && python3 - <<'PY'", "read"),
     ("cd x && python3 - <<'PY' && git push --force", "always"),
 ])
 def test_python_heredoc_keeps_other_header_segments(state, header, expected):

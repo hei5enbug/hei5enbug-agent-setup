@@ -141,8 +141,9 @@ This section adds only the Claude Code worker integration.
   or whose final turn ends in an error, is marked failed the same way, but its error result is kept.
   Once per session, check only forced-model and effort limits: `CLAUDE_CODE_SUBAGENT_MODEL`,
   `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`, effort overrides such as `CLAUDE_CODE_EFFORT_LEVEL`, and effort caps such as
-  `maxEffortLevel` or organization limits, in the environment and every settings file. A forced model or a cap
-  below the pinned effort stops plugin-agent delegation. Otherwise send each assignment directly. The mod's pinning
+  `maxEffortLevel` or organization limits, in the environment and every settings file. Read the environment
+  variables by name with `printenv <name>...`, never with `env` or a pattern search, which the approval guard asks
+  about as a sensitive read. A forced model or a cap below the pinned effort stops plugin-agent delegation. Otherwise send each assignment directly. The mod's pinning
   and blocking are the acceptance evidence, so read no settings or subagent record per delegation.
 - Without that line, the launch result does not name the model. Before the first invocation in a run, inspect only
   the non-secret inputs above plus the agent definition and any substitution or fallback warning, and follow the
