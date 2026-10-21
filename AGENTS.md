@@ -35,10 +35,9 @@
   it and preserve the existing plugin contracts.
 - Keep shared behavior in one canonical source and isolate only actual host differences. A rule the session
   instructions already state belongs there alone; reference it instead of restating it.
-- This repository is public. Before creating an issue, search the existing ones. In its issues, pull requests,
-  comments, and commit messages, write no local absolute path, using a repository-relative path or a placeholder
-  such as `<plugin-root>` instead, and no secret, account identifier, security-sensitive detail, or name of a
-  private plugin, organization, or its infrastructure. Write in English and follow the existing issue conventions.
+- Before creating an issue, search the existing ones. Write issues, pull requests, comments, and commit messages in
+  English and follow the existing issue conventions. "Public boundary" at the end of this file governs what any file,
+  commit, or message may contain.
 - For repository implementation, use a separate Claude Code assigned-worker process by default. Codex
   project roles in `.codex/agents/` cover the other routes:
 
@@ -176,3 +175,26 @@
   | Major | The harness architecture or core control logic changes enough to replace its operating contract. |
   | Minor | A skill is added, removed, or merged, or its objective, requirements, or external contract changes. |
   | Patch | Existing skills keep their objectives and requirements while performance, reliability, evaluation quality, or output quality improves. Multiple such changes still produce one patch bump. |
+
+## Public boundary (protected)
+
+This repository, every commit in its history, and every tag, branch, issue, pull request, review, and comment on it
+are public. None of them may contain:
+
+- a local absolute path from a real machine, or a real user name, host name, or home folder;
+- a secret, credential, token, private key, account identifier, internal URL, or other security-sensitive detail;
+- content specific to a private organization or to a plugin that is not public: its names, products, services,
+  repositories, infrastructure, schemas, ticket keys, people, or channels.
+
+Write examples, fixtures, and evaluation data with clearly fictional values only, such as `example.com`,
+`/home/test`, `/tmp/work`, `<plugin-root>`, `ABC-123`, and `demo` schemas. Keep this repository generic: it never
+names or describes a plugin that depends on it.
+
+Before every commit, run `python3 -m pytest tests/test_public_boundary.py` and inspect the staged diff and the
+message for these values; fix every finding before committing. When such a value is found in published history,
+stop and report it to the owner, and rewrite history only with the owner's explicit approval.
+
+Change, weaken, move, or remove this section only when the owner explicitly asks for that change in the current
+conversation and names this section. Make that change alone in its own commit, with no other change, and update the
+section hash in `tests/test_public_boundary.py` in the same commit. A request for any other work never authorizes it.
+Keep this section last in this file.
