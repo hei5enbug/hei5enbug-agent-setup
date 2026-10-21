@@ -99,12 +99,14 @@ class InputStateTest(unittest.TestCase):
         placeholder = CLAUDE_EMPTY[:3] + ['❯ Try "edit <filepath> to..."'] + CLAUDE_EMPTY[4:]
         typed = CLAUDE_EMPTY[:3] + ["❯ 반쯤 쓴 질문"] + CLAUDE_EMPTY[4:]
         multiline = CLAUDE_EMPTY[:3] + ["❯ ", "  둘째 줄"] + CLAUDE_EMPTY[4:]
+        titled = CLAUDE_EMPTY[:2] + ["─" * 40 + " demo 세션 ─"] + CLAUDE_EMPTY[3:]
+        titled_draft = CLAUDE_EMPTY[:3] + ["❯ ", "  " + "─" * 8 + " demo ─"] + CLAUDE_EMPTY[4:]
 
         # When
-        states = [refresh.input_state("claude", lines) for lines in (CLAUDE_EMPTY, placeholder, typed, multiline, ["no composer"])]
+        states = [refresh.input_state("claude", lines) for lines in (CLAUDE_EMPTY, placeholder, typed, multiline, titled, titled_draft, ["no composer"])]
 
         # Then
-        self.assertEqual(["empty", "empty", "text", "text", "unknown"], states)
+        self.assertEqual(["empty", "empty", "text", "text", "empty", "text", "unknown"], states)
 
     def test_Codex_입력창은_맨_아래_작성줄만_판단한다(self):
         """이전 대화의 › 줄은 무시하고 상태 줄 바로 위의 작성줄만 보며, 시작 중이거나 모양이 다르면 알 수 없음으로 본다."""

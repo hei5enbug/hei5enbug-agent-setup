@@ -65,6 +65,7 @@ DRAFT_STABLE_SECONDS = 5.0
 TRANSCRIPT_TAIL_BYTES = 512 * 1024
 BACKSPACE = "\x7f"
 SEPARATOR = re.compile(r"^\s*─{8,}\s*$")
+TITLED_SEPARATOR = re.compile(r"^─{8,} \S.* ─+\s*$")
 CODEX_FOOTER = re.compile(r"^\s{2}\S.* · ")
 POLL_SECONDS = 2.0
 RELOAD_TIMEOUT = 45.0
@@ -825,13 +826,18 @@ def agent_host(terminal: dict) -> str | None:
     return "codex" if identity == "codex" else None
 
 
+def opening_rule(line: str) -> bool:
+    """Claude Code may print the session name at the end of the composer's top rule."""
+    return bool(SEPARATOR.match(line) or TITLED_SEPARATOR.match(line))
+
+
 def input_state(host: str, lines: Sequence[str]) -> str:
     """Return `empty`, `text`, or `unknown` for the composer line of an agent TUI screen."""
     if host == "claude":
         for index in range(len(lines) - 1, 0, -1):
             if not SEPARATOR.match(lines[index]):
                 continue
-            opening = next((row for row in range(index - 1, -1, -1) if SEPARATOR.match(lines[row])), None)
+            opening = next((row for row in range(index - 1, -1, -1) if opening_rule(lines[row])), None)
             if opening is None or index - opening < 2:
                 continue
             body = [line.strip() for line in lines[opening + 1:index]]
@@ -1073,7 +1079,7 @@ def claude_has_prompts(path: object) -> bool:
 
 def last_item_is(lines: Sequence[str], echo: str, result: re.Pattern) -> bool:
     """True when the newest conversation item above the Claude Code composer is `echo` followed by `result`."""
-    separators = [index for index, line in enumerate(lines) if SEPARATOR.match(line)]
+    separators = [index for index, line in enumerate(lines) if opening_rule(line)]
     if len(separators) < 2:
         return False
     above = lines[: separators[-2]]
