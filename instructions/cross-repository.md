@@ -1,7 +1,8 @@
 # Cross-repository work
 
 Read this before changing files in a Git repository other than the working repository, the one that holds the
-session's working directory. Reading another repository needs none of it.
+session's working directory, and before messaging another agent session. Reading another repository needs none
+of it.
 
 Make the change in a worktree of the target repository on this task's branch, never in a checkout on another branch,
 such as a main clone on the default branch, which may hold other work. The target's session owns the change, so its
@@ -46,11 +47,20 @@ Use the Orca CLI when `orca status --json` reports a reachable runtime. For a fl
 5. Use the handle that `orca terminal create` returned. After `orca worktree create`, find the agent terminal with
    `orca terminal list --worktree id:<worktree id> --json`. Run
    `orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json`, and send only when
-   `wait.satisfied` is true. Wait once more with a longer timeout, and if it is still false, report the handoff as not
-   started.
+   `wait.satisfied` is true and "Messaging another session" allows it. Wait once more with a longer timeout, and if it
+   is still false, report the handoff as not started.
 6. Send the brief with `orca terminal send --terminal <handle> --text "<brief>" --enter --json`. The brief states the
    goal, the evidence found so far with file paths, the branch and base, and the acceptance checks. The handoff is
    done when the send reports `accepted: true`; do not wait for the work to finish.
+
+## Messaging another session
+
+- `tui-idle` means only that no turn is running. Before each send, read the target with
+  `orca terminal read --terminal <handle> --screen`, and send only when no approval prompt or question is open and the
+  input line is empty. When the target waits on the user, report that instead of waiting; never answer its prompt.
+- Text on the input line can be the host's grey suggestion. Send `--text x`: when the line then shows only `x`, delete
+  it with `--text $'\x7f'` and send. Otherwise delete the `x`, send nothing, and tell the user their text is there.
+- Judge a reply by its last message and status line, never by its task list, which can stay stale.
 
 ## Without Orca
 

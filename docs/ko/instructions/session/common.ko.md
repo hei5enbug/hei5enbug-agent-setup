@@ -46,7 +46,7 @@
 - 실패한 명령을 다시 시도하거나, 반복 실행 실패를 진단하거나, 플러그인을 관리하기 전에
   [실패 및 유지보수 규칙](../failure-and-maintenance.ko.md)을 읽는다.
 - 첫 구현 변경 전에 [구현 실행 규칙](../implementation-execution.ko.md)을 읽는다.
-- 다른 Git 저장소의 파일을 변경하기 전에 [다른 저장소 작업](../cross-repository.ko.md)을 읽는다.
+- 다른 저장소를 변경하거나 다른 세션에 메시지를 보내기 전에 [다른 저장소 작업](../cross-repository.ko.md)을 읽는다.
 
 ## 계획과 설계 작업
 
