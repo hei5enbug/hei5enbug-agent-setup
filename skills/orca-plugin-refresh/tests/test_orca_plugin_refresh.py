@@ -891,6 +891,108 @@ class FollowUpTest(DriveTest):
         self.assertEqual("done", entries[0]["status"])
         self.assertEqual([("term_busy", "/reload-plugins")], fake.sent)
 
+    def test_대기_중인_세션의_터미널이_닫히면_대기를_끝내고_바로_건너뛴다(self):
+        """Orca 대기가 막힌 채여도 터미널 목록에서 사라진 세션은 곧바로 terminal_gone으로 건너뛰고 그 대기 프로세스를 종료한다."""
+        # Given
+        processes = []
+
+        class BlockedOrca(FakeOrca):
+            def wait_idle(self, handle, timeout_ms, track=None):
+                process = refresh.subprocess.Popen(["sleep", "30"])
+                processes.append(process)
+                track(process)
+                process.wait()
+                return False
+
+        fake = BlockedOrca([terminal("term_busy", "claude")], busy={"term_busy": 10**6})
+        entries = [{"handle": "term_busy", "host": "claude", "actions": ["reload"], "status": "pending", "detail": "busy", "deadline": time.time() + 3600, "deferred_at": time.time()}]
+
+        def close_terminal(seconds):
+            for _ in range(100):
+                if processes:
+                    break
+                time.sleep(0.02)
+            fake.list = []
+
+        # When
+        started = time.time()
+        refresh.follow_up(fake, entries, self.state, sleep=close_terminal)
+
+        # Then
+        self.assertLess(time.time() - started, 10)
+        self.assertEqual(("skipped", "terminal_gone", []), (entries[0]["status"], entries[0]["detail"], entries[0]["actions"]))
+        self.assertEqual(1, len(processes))
+        self.assertIsNotNone(processes[0].poll())
+        self.assertEqual([], fake.sent)
+
+    def test_터미널_목록을_잠시_못_읽어도_세션을_사라진_것으로_보지_않는다(self):
+        """목록 조회가 일시적으로 실패한 동안은 대기 중인 세션을 건너뛰지 않고, 다시 읽히면 이어서 처리한다."""
+        # Given
+        fake = FakeOrca([terminal("term_busy", "claude")], busy={"term_busy": 2}, on_send=self.simulate)
+        real = fake.terminals
+        calls = []
+
+        def flaky():
+            calls.append(1)
+            if len(calls) in (2, 3):
+                raise refresh.RefreshError("orca_rejected", "list failed")
+            return real()
+
+        fake.terminals = flaky
+        entries = [{"handle": "term_busy", "host": "claude", "actions": ["reload"], "status": "pending", "detail": "busy", "deadline": time.time() + 60, "deferred_at": time.time()}]
+        seen = []
+
+        # When
+        refresh.follow_up(fake, entries, self.state, sleep=lambda seconds: seen.append((entries[0]["status"], entries[0]["detail"])))
+
+        # Then
+        self.assertIn(("pending", "terminal_list_unavailable"), seen)
+        self.assertNotIn("terminal_gone", [detail for _, detail in seen])
+        self.assertEqual("done", entries[0]["status"])
+        self.assertEqual([("term_busy", "/reload-plugins")], fake.sent)
+
+    def test_끝난_세션은_도우미가_끝나기_전에_실행_상태에_반영한다(self):
+        """다른 세션이 아직 기다리는 동안에도 먼저 끝난 세션은 저장된 실행 상태에서 done으로 보이고, 기다리는 세션은 deferred로 남는다."""
+        # Given
+        fake = FakeOrca([terminal("term_a", "claude"), terminal("term_b", "codex")], busy={"term_a": 10**6, "term_b": 10**6}, on_send=self.simulate)
+        fake.never_idle = {"term_b"}
+        handed = time.time() - refresh.FOLLOW_UP_SECONDS + 0.4
+        run_id = self.save_state(sessions={"term_a": {"status": "deferred"}, "term_b": {"status": "deferred"}},
+                                 follow_up=[{"handle": "term_a", "host": "claude", "actions": ["reload"], "detail": "busy", "deferred_at": time.time()},
+                                            {"handle": "term_b", "host": "codex", "actions": ["compact"], "detail": "busy", "deferred_at": handed}])
+        snapshots = []
+
+        def watch(seconds):
+            snapshots.append({handle: item["status"] for handle, item in refresh.load_run(run_id)["sessions"].items()})
+            time.sleep(0.02)
+
+        # When
+        with patch.object(refresh, "Orca", return_value=fake):
+            refresh.command_self_apply(run_id, sleep=watch)
+
+        # Then
+        self.assertIn({"term_a": "done", "term_b": "deferred"}, snapshots)
+        final = {item["terminal"]: item["status"] for item in refresh.command_status(run_id)["sessions"]}
+        self.assertEqual({"…term_a": "done", "…term_b": "skipped"}, final)
+
+    def test_취소한_뒤_등록된_대기_프로세스도_종료한다(self):
+        """세션의 대기를 취소하면 그 뒤에 등록되는 같은 세션의 프로세스도 바로 종료되고 다른 세션의 대기는 그대로 둔다."""
+        # Given
+        waiters = refresh.IdleWaiters(FakeOrca([]))
+        other = refresh.subprocess.Popen(["sleep", "30"])
+        late = refresh.subprocess.Popen(["sleep", "30"])
+        self.addCleanup(other.kill)
+        self.addCleanup(late.kill)
+        waiters.track(other, "term_other")
+
+        # When
+        waiters.cancel("term_gone")
+        waiters.track(late, "term_gone")
+
+        # Then
+        self.assertIsNotNone(late.poll())
+        self.assertIsNone(other.poll())
+
     def test_정리_뒤에_등록된_대기_프로세스도_종료한다(self):
         """정리가 시작된 뒤 등록되는 대기 프로세스는 바로 종료되어 도우미 종료 뒤에 남지 않는다."""
         # Given

@@ -109,6 +109,8 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
    not already loaded the new instructions, and only then sends the remaining actions. A session deferred for
    another reason, such as an unreadable input line, is checked again on every poll. A deferred session that is
    not ready within one hour of the handoff stays unsent, as `not_idle_before_deadline` or with its last reason.
+   A session whose terminal closes is skipped at once as `terminal_gone`, and its wait ends. The status shows each
+   session's final result as soon as it is reached, so `status` reports progress while the helper runs.
    After every session finishes, the helper sends this session one prompt that asks to run
    `python3 <script> status --run-id <run_id> --json`, ends all of its Orca waits, and exits. When that prompt
    arrives, run it and report every session, with the companion statuses from `hosts`; `not_refreshed` lists the

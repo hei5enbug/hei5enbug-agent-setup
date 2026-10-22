@@ -68,6 +68,7 @@ SEPARATOR = re.compile(r"^\s*─{8,}\s*$")
 TITLED_SEPARATOR = re.compile(r"^─{8,} \S.* ─+\s*$")
 CODEX_FOOTER = re.compile(r"^\s{2}\S.* · ")
 POLL_SECONDS = 2.0
+FINAL_STATUSES = frozenset({"done", "skipped", "failed"})
 RELOAD_TIMEOUT = 45.0
 COMPACT_TIMEOUT = 300.0
 SELF_WAIT_SECONDS = 60 * 60
@@ -967,11 +968,17 @@ def claude_draft_state(orca: Orca, handle: str, draft: str, sleep: Callable[[flo
     return "empty" if probed == PROBE_KEY else "text"
 
 
+def terminal_gone(entry: dict, live: dict[str, dict]) -> bool:
+    """True when the session's terminal left Orca's list or no longer runs the entry's agent host."""
+    terminal = live.get(entry["handle"])
+    return terminal is None or agent_host(terminal) != entry["host"]
+
+
 def ready(orca: Orca, entry: dict, live: dict[str, dict]) -> tuple[str | None, list[str]]:
     """Return (None, screen) when a command can be sent safely, otherwise the reason to wait."""
-    terminal = live.get(entry["handle"])
-    if terminal is None or agent_host(terminal) != entry["host"]:
+    if terminal_gone(entry, live):
         return "terminal_gone", []
+    terminal = live[entry["handle"]]
     if terminal.get("connected") is not True or terminal.get("writable") is not True or terminal.get("orphaned") is True:
         return "terminal_unavailable", []
     if not orca.idle(entry["handle"]):
@@ -1235,13 +1242,26 @@ class IdleWaiters:
         self.threads: dict[str, threading.Thread] = {}
         self.failed: set[str] = set()
         self.processes: list[subprocess.Popen] = []
+        self.by_handle: dict[str, list[subprocess.Popen]] = {}
+        self.cancelled: set[str] = set()
         self.stopping = False
 
-    def track(self, process: subprocess.Popen) -> None:
+    def track(self, process: subprocess.Popen, handle: str | None = None) -> None:
         with self.lock:
             self.processes.append(process)
-            stopping = self.stopping
+            if handle is not None:
+                self.by_handle.setdefault(handle, []).append(process)
+            stopping = self.stopping or handle in self.cancelled
         if stopping:
+            self.end(process)
+
+    def cancel(self, handle: str) -> None:
+        """End one session's idle wait, including a process that registers after this call."""
+        with self.lock:
+            self.cancelled.add(handle)
+            self.results.pop(handle, None)
+            processes = list(self.by_handle.get(handle, []))
+        for process in processes:
             self.end(process)
 
     @staticmethod
@@ -1259,7 +1279,7 @@ class IdleWaiters:
 
         def wait() -> None:
             try:
-                idle = self.orca.wait_idle(handle, max(1.0, deadline - time.time()) * 1000, self.track)
+                idle = self.orca.wait_idle(handle, max(1.0, deadline - time.time()) * 1000, lambda process: self.track(process, handle))
             except (RefreshError, OSError):
                 with self.lock:
                     self.failed.add(handle)
@@ -1325,10 +1345,22 @@ def still_needed(entry: dict, state: dict, cache: dict[str, tuple[float, bool]])
         entry.update(status="done", detail="already_current")
 
 
-def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[float], None] = time.sleep, waiters: IdleWaiters | None = None) -> None:
-    """Apply deferred sessions when Orca reports them idle, each before its own deadline, then end every wait."""
+def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[float], None] = time.sleep, waiters: IdleWaiters | None = None,
+              progress: Callable[[list[dict]], None] | None = None) -> None:
+    """Apply deferred sessions when Orca reports them idle, each before its own deadline, then end every wait.
+
+    `progress` receives the entries that reached a final status since its last call.
+    """
     waiters = waiters or IdleWaiters(orca)
     cache: dict[str, tuple[float, bool]] = {}
+    reported: set[str] = set()
+
+    def report() -> None:
+        finished = [entry for entry in entries if entry["status"] in FINAL_STATUSES and entry["handle"] not in reported]
+        if finished and progress:
+            reported.update(entry["handle"] for entry in finished)
+            progress(finished)
+
     try:
         while True:
             active = [entry for entry in entries if entry["status"] in {"pending", "sent"}]
@@ -1339,7 +1371,12 @@ def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[flo
             except RefreshError:
                 live = None
             for entry in active:
+                report()
                 if entry["status"] == "pending":
+                    if live is not None and terminal_gone(entry, live):
+                        waiters.cancel(entry["handle"])
+                        entry.update(status="skipped", detail="terminal_gone", actions=[])
+                        continue
                     if time.time() >= entry["deadline"]:
                         busy = entry.get("detail") in (None, "busy", "waiting_for_idle", "deadline_reached")
                         entry.update(status="skipped", detail="not_idle_before_deadline" if busy else entry["detail"], actions=[])
@@ -1367,6 +1404,7 @@ def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[flo
                     step(orca, entry, state["hosts"][entry["host"]], live)
                 except RefreshError as error:
                     entry.update(status="failed", detail=error.code, actions=[])
+            report()
             sleep(POLL_SECONDS)
     finally:
         waiters.stop()
@@ -1520,7 +1558,19 @@ def command_self_apply(run_id: str, sleep: Callable[[float], None] = time.sleep,
             own_entry = {**own, "actions": list(own["actions"]), "status": "pending", "initiator": True, "detail": None, "deadline": start + SELF_WAIT_SECONDS}
             entries.append(own_entry)
         orca = Orca()
-        follow_up(orca, entries, state, sleep=sleep, waiters=waiters)
+
+        def record(finished: list[dict]) -> None:
+            try:
+                saved = load_run(run_id)
+                views = {entry["handle"]: public(entry) for entry in finished}
+                sessions = saved.setdefault("sessions", {})
+                if any(sessions.get(handle) != view for handle, view in views.items()):
+                    sessions.update(views)
+                    save_json(run_path(run_id), saved)
+            except (RefreshError, OSError):
+                pass
+
+        follow_up(orca, entries, state, sleep=sleep, waiters=waiters, progress=record)
         state = load_run(run_id)
         for entry in entries:
             state["sessions"][entry["handle"]] = public(entry)
