@@ -169,8 +169,9 @@
   in the manifests is the planned next version, never a baseline, even when it is already on `main` or installed
   locally. Keep all unreleased work on that one planned version: the first change after the baseline sets it in the same
   commit, and a later change folds into it and re-chooses its level from the table below within its own commit instead
-  of bumping again. Never bump the semantic version for local iterations. Use a cachebuster for local reinstalls. Before
-  changing any version, state the baseline tag and the planned version to the user. Keep both plugin manifests,
+  of bumping again. Never bump the semantic version for local iterations. Install only a tagged release: when the user asks to install
+  unreleased work, tag it first, so the next change starts the next planned version and no reinstall needs a
+  cachebuster. Before changing any version, state the baseline tag and the planned version to the user. Keep both plugin manifests,
   `pyproject.toml`, and `uv.lock` on the same version. A release is a tag only; never make a separate commit to release
   or to change only the version. When the user publishes a release, run every development check in `README.md` on
   `HEAD`, tag `HEAD` `v<version>`, and push the tag. `tests/test_release_version.py` rejects a version below the

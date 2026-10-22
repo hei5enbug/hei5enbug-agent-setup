@@ -138,7 +138,7 @@ class AgentsFileStaysADeltaTest(unittest.TestCase):
             "Maintain a complete, meaning-equivalent Korean",
             "Do not duplicate code, schemas, test fixtures",
             "skills/skill-builder/SKILL.md",
-            "Use a cachebuster for local reinstalls",
+            "Install only a tagged release",
         ):
             with self.subTest(rule=rule):
                 self.assertIn(rule, text)
