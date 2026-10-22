@@ -17,7 +17,9 @@
   Codex documentation pages for the area you change, including features such as mods, hook events, settings, and
   agent options. Prefer a supported feature that covers the need over custom code, and state which features you
   checked and why you chose the approach.
-- When changing skills, instructions, or hooks, consider their recurring token and context cost.
+- Every change to this repository must improve, or at least preserve, both the recurring token and context cost
+  of normal use and the quality of its output. Never trade one for the other without measured evidence and the
+  owner's decision.
   Preserve correctness and required validation while reducing unnecessary instruction loading, repeated reads,
   tool calls, and duplicated content. Reuse loaded instructions and validation results only while their relevant
   inputs remain unchanged. During local work, run checks affected by the change; broaden them for unresolved risks.
