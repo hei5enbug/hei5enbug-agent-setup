@@ -19,11 +19,14 @@ from pathlib import Path
 
 # Two keys last for the rest of the session: WRITE_KEY for writes and SENSITIVE_KEY for reads that may expose a protected
 # value. Every other key of an always outcome asks every time. exe names a psql read so the caller can enforce
-# read-only mode.
-Outcome = namedtuple("Outcome", "kind keys descriptions exe writes every_time", defaults=(None, (), False))
+# read-only mode. critical marks discarding local work, production database deletion, and production infrastructure
+# deletion: with the `session` approval scope only those keep asking every time.
+Outcome = namedtuple("Outcome", "kind keys descriptions exe writes every_time critical",
+                     defaults=(None, (), False, False))
 
 WRITE_KEY = "write:session"
 SENSITIVE_KEY = "sensitive:session"
+ALL_KEY = "session:all"
 SESSION_KEYS = frozenset({WRITE_KEY, SENSITIVE_KEY})
 KEY_SEPARATOR = "\x1f"
 CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ23456789"
@@ -36,18 +39,22 @@ PROMPTS = {
         "write": "쓰기 승인: {desc}. 한 번 승인하면 이 세션의 쓰기는 더 묻지 않습니다.",
         "every_time": "매번 승인: {desc}.",
         "sensitive": "민감 조회 승인: {desc} (값이 노출될 수 있음). 한 번 승인하면 이 세션의 민감 조회는 더 묻지 않습니다.",
+        "session_all": "세션 승인: {desc}. 한 번 승인하면 이 세션의 나머지 작업은 더 묻지 않습니다(작업 버리기·운영 DB 삭제·운영 인프라 삭제 제외).",
         "write_scope": " 쓰기도 세션 동안 승인됩니다.",
         "sensitive_scope": " 민감 조회도 세션 동안 승인됩니다.",
         "codex": "승인 필요: {desc}. {grant}사용자에게 `승인 {code}` 입력을 요청하세요(대기 요청이 하나면 `승인`만).",
         "grant_writes": "승인하면 이 세션의 쓰기도 더 묻지 않습니다. ",
         "grant_sensitive": "승인하면 이 세션의 민감 조회도 더 묻지 않습니다. ",
         "grant_both": "승인하면 이 세션의 쓰기(와 민감 조회)도 더 묻지 않습니다. ",
+        "grant_all": "승인하면 이 세션의 나머지 작업도 더 묻지 않습니다(작업 버리기·운영 DB 삭제·운영 인프라 삭제 제외). ",
         "stop": "사용자의 마지막 메시지 이후 승인 요청이 3번 완료되지 않았습니다(거절 포함). 다시 시도하지 말고 사용자에게 알리세요.",
     },
     "English": {
         "write": "Write: {desc}. Approve once; later writes in this session will not ask.",
         "every_time": "Asks every time: {desc}.",
         "sensitive": "Sensitive read: {desc} (may show a value). Later ones in this session won't ask.",
+        "session_all": "Session approval: {desc}. Approve once; the rest of this session will not ask, except discarding "
+                       "work, production database deletion, and production infrastructure deletion.",
         "write_scope": " Also approves writes for this session.",
         "sensitive_scope": " Also approves sensitive reads for this session.",
         "codex": "Approval required: {desc}. {grant}Ask the user to reply `approve {code}` "
@@ -55,6 +62,8 @@ PROMPTS = {
         "grant_writes": "Approving also covers later writes in this session. ",
         "grant_sensitive": "Approving also covers later sensitive reads in this session. ",
         "grant_both": "Approving also covers later writes (and sensitive reads) in this session. ",
+        "grant_all": "Approving also covers the rest of this session, except discarding work, production database "
+                     "deletion, and production infrastructure deletion. ",
         "stop": "This approval was requested three times since the user's last message without the call completing (declines included); "
                 "stop retrying and tell the user.",
     },
@@ -102,6 +111,43 @@ def parent_session():
     value = os.environ.get("HEI5ENBUG_PARENT_SESSION", "")
     host, separator, session = value.partition(":")
     return (host, session) if separator and host in ("claude", "codex") and session_key(session) else None
+
+
+def session_scope() -> bool:
+    """Whether the `session` approval scope is on: one approval covers the rest of the session except critical calls."""
+    import plugin_toggles
+    return plugin_toggles.option_value("approval_scope") == "session"
+
+
+def scope_grants(outcome: Outcome) -> bool:
+    """Whether approving this outcome also grants the session-wide key."""
+    return session_scope() and not outcome.critical
+
+
+def scope_keys(outcome: Outcome, session_keys) -> list:
+    """The session keys that approving this outcome grants: none for a critical call in the `session` scope, which covers
+    only that call."""
+    if not session_scope():
+        return list(session_keys)
+    return [] if outcome.critical else [*session_keys, ALL_KEY]
+
+
+def scope_held(host, session) -> bool:
+    """Whether the session-wide key is held. A child holds its parent's key whatever its own host's option says, because
+    holding the key shows the parent ran in the `session` scope."""
+    return (session_scope() or parent_session() is not None) and ALL_KEY in approved_keys(host, session)
+
+
+def all_granted(host, session, outcome: Outcome) -> bool:
+    """Whether the session-wide key covers this outcome, so it needs no approval of its own."""
+    return (not outcome.critical and outcome.kind in ("write", "always", "sensitive", "request")
+            and scope_held(host, session))
+
+
+def request_exhausted(host, session, keys) -> bool:
+    """Whether any key has used up its approval requests since the user's last message."""
+    counts = _load(host, session)["request_counts"]
+    return any(counts.get(key, 0) >= MAX_REQUESTS for key in keys)
 
 
 def hooks_hash():
@@ -410,7 +456,7 @@ def request_ask(host, session, once_keys, session_keys, tool_use_id=None, grant_
     return bool(_mutate(host, session, change))
 
 
-def request_code(host: str, session: str, once_keys, session_keys, descriptions=()) -> str | None:
+def request_code(host: str, session: str, once_keys, session_keys, descriptions=(), critical=False) -> str | None:
     """Issue a counted request for missing approvals, or None when no new request can be issued."""
     once = sorted(set(once_keys))
     approved = sorted(set(session_keys))
@@ -423,12 +469,14 @@ def request_code(host: str, session: str, once_keys, session_keys, descriptions=
         if not needed or not _count_request(data, needed):
             return None
         for code, entry in data["pending"].items():
-            if entry.get("once_keys") == needed_once and entry.get("session_keys") == needed_session:
+            if (entry.get("once_keys") == needed_once and entry.get("session_keys") == needed_session
+                    and entry.get("critical", False) == critical):
                 return code
         code = _new_code(data)
         data["pending"][code] = {
             "key": KEY_SEPARATOR.join(sorted(set(needed))), "once_keys": needed_once,
             "session_keys": needed_session, "descriptions": [redact(item) for item in descriptions],
+            "critical": critical,
         }
         return code
     return _mutate(host, session, change)
@@ -444,6 +492,8 @@ def approve_text(host: str, session, text) -> list:
     if not codes and not plain:
         return []
 
+    scope = session_scope()
+
     def change(data):
         approved_keys = []
         selected = list(data["pending"]) if plain and len(data["pending"]) == 1 else codes
@@ -456,8 +506,12 @@ def approve_text(host: str, session, text) -> list:
             if once_keys is None or session_keys is None:
                 keys = entry["key"].split(KEY_SEPARATOR)
                 once_keys, session_keys = (keys, []) if entry.get("once") else ([], keys)
+            if scope and entry.get("critical", False):
+                once_keys, session_keys = [*once_keys, *session_keys], []
             data["once"] = sorted(set(data["once"]) | set(once_keys))
             _grant(data, session_keys)
+            if scope and not entry.get("critical", False):
+                _grant(data, [ALL_KEY])
             approved_keys.extend([*once_keys, *session_keys])
         return approved_keys
     return _mutate(host, session, change) or []
@@ -573,20 +627,31 @@ def pre_decision(host: str, session_id, outcome: Outcome, tool_use_id=None):
     description = describe(outcome)
     once_keys, session_keys = split_outcome(outcome)
     if parent_session():
+        if outcome.kind != "request" and all_granted(host, session, outcome):
+            return pre_output("allow", f"Approved in the main session: {description}") if host == "claude" else None
         if outcome.kind == "request" or once_keys or not is_approved(host, session, session_keys):
             return pre_output("deny", PARENT_REASON)
         return pre_output("allow", f"Approved in the main session: {description}") if host == "claude" else None
     prompts = PROMPTS[prompt_language(host)]
+    grants_all = scope_grants(outcome)
+    grants = scope_keys(outcome, session_keys)
+    if all_granted(host, session, outcome):
+        held = approved_keys(host, session)
+        if request_exhausted(host, session, [*once_keys, *(key for key in session_keys if key not in held)]):
+            return pre_output("deny", stop_reason(host))
+        return pre_output("allow", f"Approved earlier in this session: {description}") if host == "claude" else None
     if host == "claude":
         if not once_keys and session is not None and is_approved(host, session, session_keys):
             return pre_output("allow", f"Approved earlier in this session: {description}")
-        if not request_ask(host, session, once_keys, session_keys, tool_use_id, session_keys):
+        if not request_ask(host, session, once_keys, session_keys, tool_use_id, grants):
             return pre_output("deny", stop_reason(host))
         compound = outcome.kind != "request" and len(outcome.descriptions) > 1
         text = [redact(item) for item in outcome.descriptions] if compound else description
+        if grants_all:
+            return pre_output("ask", _prompt_line(prompts["session_all"], text, "", compound))
         if once_keys:
-            scope = (prompts["write_scope"] if WRITE_KEY in session_keys else "") + (
-                prompts["sensitive_scope"] if SENSITIVE_KEY in session_keys else "")
+            scope = (prompts["write_scope"] if WRITE_KEY in grants else "") + (
+                prompts["sensitive_scope"] if SENSITIVE_KEY in grants else "")
             return pre_output("ask", _prompt_line(prompts["every_time"], text, scope, compound))
         if SENSITIVE_KEY in session_keys:
             scope = prompts["write_scope"] if WRITE_KEY in session_keys else ""
@@ -596,12 +661,13 @@ def pre_decision(host: str, session_id, outcome: Outcome, tool_use_id=None):
         return pre_output("deny", f"Approval required: {description}. {UNKNOWN_SESSION}; ask the user before retrying.")
     if take_once(host, session, once_keys, session_keys, tool_use_id):
         return None
-    code = request_code(host, session, once_keys, session_keys, outcome.descriptions)
+    code = request_code(host, session, once_keys, session_keys, outcome.descriptions, outcome.critical)
     if code is None:
         if take_once(host, session, once_keys, session_keys, tool_use_id):
             return None
         return pre_output("deny", stop_reason(host))
-    line = prompts["codex"].format(desc=_clean(description), grant=_grant_text(prompts, session_keys), code=code)
+    grant = prompts["grant_all"] if grants_all else _grant_text(prompts, grants)
+    line = prompts["codex"].format(desc=_clean(description), grant=grant, code=code)
     return pre_output("deny", line + "\n" + RETRY_INSTRUCTION)
 
 
@@ -611,6 +677,8 @@ def permission_allowed(host: str, session_id, outcome: Outcome, tool_use_id=None
     once_keys, session_keys = split_outcome(outcome)
     if session is None or not (once_keys or session_keys):
         return False
+    if all_granted(host, session, outcome):
+        return True
     data = _load(host, session)
     approved = approved_keys(host, session)
     flying = _in_flight_keys(data, _tool_id(tool_use_id))

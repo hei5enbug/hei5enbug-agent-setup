@@ -636,6 +636,13 @@ Claude의 `defaultMode: dontAsk`는 가드가 요청하는 승인을 거부합�
 `approval_guard`를 `false`로 두거나, Codex에서는 `HEI5ENBUG_APPROVAL_GUARD=false`를 설정하세요.
 Codex에서는 `/hooks`에서 훅을 신뢰해야 합니다.
 
+`approval_scope` 옵션은 가드가 얼마나 자주 묻는지 정합니다. 기본값 `tiered`는 위 설명대로 동작합니다.
+`session`은 세션당 한 번 묻습니다. 어떤 종류든 첫 승인이 그 세션의 이후 호출을 모두 덮습니다. 다만 세 가지는 계속
+매번 묻고, 그 승인은 해당 호출에만 적용됩니다. 커밋하지 않은 작업 버리기(`git reset --hard`, `git clean`, 작업 트리
+변경을 버리는 `git checkout`이나 `git restore`, `git worktree remove --force`), 운영 DB 연결의 삭제 문장, 운영
+context의 `kubectl delete` 같은 운영 인프라 삭제입니다. 연결이나 context 이름에 운영 단어가 있거나 개발 단어가 없으면
+운영으로 보므로, 알 수 없는 이름은 운영으로 남습니다. 거부되는 호출은 두 범위 모두에서 계속 거부됩니다.
+
 ### 호스트 설정
 
 일부 호스트 설정은 승인 프롬프트를 늘리거나 가드가 실행되지 못하게 합니다. `scripts/host_settings.py`는 이를 점검하고,
@@ -707,6 +714,7 @@ Codex 설정이나 Claude 설정을 쓰지 않습니다. Codex 설정을 쓰는 
 | 응답 언어 가드 | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip 쿼리 가드 | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
 | 승인 가드 | `approval_guard` | `HEI5ENBUG_APPROVAL_GUARD` |
+| 승인 범위 | `approval_scope`(`tiered` 또는 `session`, 기본값 `tiered`) | `HEI5ENBUG_APPROVAL_SCOPE` |
 | 다른 저장소에 Orca 워크트리 사용 | `orca_worktree` | `HEI5ENBUG_ORCA_WORKTREE` |
 | 호스트 설정 모드 | `host_settings` (`apply` 또는 `report`, 기본 `apply`) | `HEI5ENBUG_HOST_SETTINGS` |
 | 훅 Python 인터프리터 | `python` (절대 경로, 기본값 빈 문자열) | `HEI5ENBUG_PYTHON` |

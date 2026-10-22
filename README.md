@@ -682,6 +682,15 @@ ends, and a session file that has been idle for 7 days is deleted when another a
 `approval_guard` to `false`, or `HEI5ENBUG_APPROVAL_GUARD=false` on Codex, to turn the guard off. In Codex, trust the
 hooks in `/hooks`.
 
+The `approval_scope` option chooses how often the guard asks. `tiered`, the default, works as described above.
+`session` asks once per session: the first approval of any kind covers every later call in that session, except three
+kinds that still ask every time and whose approval covers only that call. They are discarding uncommitted work
+(`git reset --hard`, `git clean`, a `git checkout` or `git restore` that drops working-tree changes, and
+`git worktree remove --force`), deleting statements on a production database connection, and production
+infrastructure deletion such as `kubectl delete` on a production context. A connection or context counts as
+production when its name has a production word or no development word, so an unknown name stays production. Denied
+calls stay denied in both scopes.
+
 ### Host settings
 
 Some host settings add approval prompts or stop the guard from running. `scripts/host_settings.py` checks them and, on
@@ -758,6 +767,7 @@ write Codex settings.
 | Response language guard | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip query guard | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
 | Approval guard | `approval_guard` | `HEI5ENBUG_APPROVAL_GUARD` |
+| Approval scope | `approval_scope` (`tiered` or `session`, default `tiered`) | `HEI5ENBUG_APPROVAL_SCOPE` |
 | Orca worktrees for other repositories | `orca_worktree` | `HEI5ENBUG_ORCA_WORKTREE` |
 | Host settings mode | `host_settings` (`apply` or `report`, default `apply`) | `HEI5ENBUG_HOST_SETTINGS` |
 | Hook Python interpreter | `python` (an absolute path, default empty) | `HEI5ENBUG_PYTHON` |

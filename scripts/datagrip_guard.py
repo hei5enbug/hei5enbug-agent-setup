@@ -702,7 +702,8 @@ def always_outcome(tool_input, sql) -> Outcome:
     name = (source.get("name") if source is not None else None) or "an unidentified data source"
     connection = tool_input.get("connectionId") if isinstance(tool_input, dict) else None
     connection = connection if isinstance(connection, str) and connection else "unknown"
-    return Outcome("always", [f"sql:always:{connection}:{digest}"], [f"DataGrip query on {name}"], every_time=True)
+    return Outcome("always", [f"sql:always:{connection}:{digest}"], [f"DataGrip query on {name}"], every_time=True,
+                   critical=db_read_policy.is_production(source.get("name") if source is not None else None))
 
 
 def classify_query(tool_input) -> Outcome:
@@ -714,6 +715,8 @@ def classify_query(tool_input) -> Outcome:
     if isinstance(sql, str) and asks_every_time(sql, {"postgres": True, "mssql": False}.get(kind), name):
         return always_outcome(tool_input, sql)
     if kind in ("unknown", "unsupported") or not isinstance(sql, str):
+        if approval_state.session_scope():
+            return always_outcome(tool_input, sql)._replace(critical=True)
         return Outcome("write", ["mcp:session"], ["DataGrip query requiring approval"])
     postgres = kind == "postgres"
     if is_read(sql, postgres):
@@ -722,6 +725,8 @@ def classify_query(tool_input) -> Outcome:
     if destructive:
         return always_outcome(tool_input, sql)
     listed = ", ".join(sorted(keywords)) if keywords else "unclassified"
+    if not keywords and approval_state.session_scope():
+        return always_outcome(tool_input, sql)._replace(critical=True)
     return Outcome(
         "write",
         ["mcp:session"],
@@ -914,6 +919,7 @@ def handle(event):
         except Exception:
             return approval_state.pre_decision("claude", session_id, Outcome(
                 "always", ["sql:always:guard-failure"], ["The approval guard failed to check this call"], every_time=True,
+                critical=True,
             ), tool_use_id)
     try:
         if name == "PreToolUse":
@@ -924,6 +930,7 @@ def handle(event):
         if name == "PreToolUse":
             return approval_state.pre_decision("codex", session_id, Outcome(
                 "always", ["sql:always:guard-failure"], ["The approval guard failed to check this call"], every_time=True,
+                critical=True,
             ), tool_use_id)
     return None
 

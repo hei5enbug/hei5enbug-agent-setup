@@ -164,8 +164,8 @@ REDIRECT_OPERATORS = ("&>>", "&>", ">>", ">&", ">|", "<<<", "<<", "<&", "<>", ">
 OPERATORS = tuple(sorted(SEPARATOR_OPERATORS + REDIRECT_OPERATORS, key=len, reverse=True))
 
 Segment = namedtuple("Segment", "words redirects heredoc start end raw", defaults=((),))
-Rules = namedtuple("Rules", "secret dry_run always read target sensitive write",
-                   defaults=(False, False, False, False, None, False, False))
+Rules = namedtuple("Rules", "secret dry_run always read target sensitive write critical",
+                   defaults=(False, False, False, False, None, False, False, None))
 
 
 class ParseError(ValueError):
@@ -373,10 +373,16 @@ def _one_line(text, limit=60):
     return " ".join(approval_state.redact(text).split())[:limit]
 
 
+def _unknown_kind(destructive):
+    """What a call the guard cannot classify needs: an approval every time when it looks destructive or the `session`
+    approval scope is on, else a session write approval."""
+    return "always" if destructive or approval_state.session_scope() else "write"
+
+
 def _unclassified(cli, command):
-    kind = "always" if _destructive_text(command) and not _local_docker_only(command) else "write"
+    kind = _unknown_kind(_destructive_text(command) and not _local_docker_only(command))
     return Outcome(kind, [f"{cli}:unclassified:{_digest(command)}"], ["Unclassified command: " + _one_line(command)],
-                   every_time=kind == "always")
+                   every_time=kind == "always", critical=True)
 
 
 def _destructive_text(text):
@@ -404,13 +410,13 @@ def _local_docker_only(text):
                 or re.search(r"\b(?:delete\s+from|drop\s+(?:table|database|schema)|truncate\s+table)\b", text, re.I))
 
 
-def _call(kind_name, cli, kind, target_fn, command):
+def _call(kind_name, cli, kind, target_fn, command, critical=None):
     if not kind:
         return _unclassified(cli, command)
     target = target_fn()
     label = " ".join(kind)
     return Outcome(kind_name, [f"{cli}:{label}@{target}"], [f"{cli} {label} on {target}"],
-                   every_time=kind_name == "always")
+                   every_time=kind_name == "always", critical=kind_name == "always" and bool(critical and critical()))
 
 
 def subcommand_words(args):
@@ -553,12 +559,21 @@ def _metadata_output(output):
     return len(contexts) == 1 and "{" not in template[offset:] and "}" not in template[offset:]
 
 
-def _kube_target(args, env, cwd, explicit_context):
-    kubeconfig = option_value(args, longs=("--kubeconfig",)) or env.get("KUBECONFIG") or "(default)"
+def _kube_context(args, env, cwd, explicit_context):
     argv = ["kubectl"]
     if option_value(args, longs=("--kubeconfig",)):
         argv += ["--kubeconfig", option_value(args, longs=("--kubeconfig",))]
-    context = explicit_context or _lookup([*argv, "config", "current-context"], env, cwd) or "(current)"
+    return explicit_context or _lookup([*argv, "config", "current-context"], env, cwd) or "(current)"
+
+
+def _production_name(name):
+    """Whether a target name cannot be shown to be non-production; `/` separates the parts of a target."""
+    return db_read_policy.is_production(name.replace("/", " "))
+
+
+def _kube_target(args, env, cwd, explicit_context, context=None):
+    kubeconfig = option_value(args, longs=("--kubeconfig",)) or env.get("KUBECONFIG") or "(default)"
+    context = context or _kube_context(args, env, cwd, explicit_context)
     namespace = option_value(args, "-n", ("--namespace",)) or "(default)"
     return f"{kubeconfig} {context}/{namespace}"
 
@@ -580,11 +595,15 @@ def _kubectl_rules(kind, args, env, cwd):
     own_args = args[:args.index("--")] if "--" in args else args
     forced = any(arg in ("--force", "--prune") or arg.startswith(("--force=", "--prune=")) for arg in own_args)
 
+    @functools.cache
+    def context():
+        return _kube_context(args, env, cwd, option_value(args, longs=("--context",)))
+
     def target():
-        return _kube_target(args, env, cwd, option_value(args, longs=("--context",)))
+        return _kube_target(args, env, cwd, None, context())
 
     return Rules(secret=secret, dry_run=dry_run, always=forced, read=_matches(kind, KUBECTL_READS), target=target,
-                 write=kind[:1] == ["config"])
+                 write=kind[:1] == ["config"], critical=lambda: _destructive(kind) and _production_name(context()))
 
 
 HELM_READS = (
@@ -596,12 +615,17 @@ HELM_SENSITIVE = (("get", "all"), ("get", "manifest"), ("get", "values"))
 
 
 def _helm_rules(kind, args, env, cwd):
+    @functools.cache
+    def context():
+        return _kube_context(args, env, cwd, option_value(args, longs=("--kube-context",)) or env.get("HELM_KUBECONTEXT"))
+
     def target():
-        return _kube_target(args, env, cwd, option_value(args, longs=("--kube-context",)))
+        return _kube_target(args, env, cwd, None, context())
 
     sensitive = _matches(kind, HELM_SENSITIVE)
     return Rules(always=sensitive, read=_matches(kind, HELM_READS), target=target, sensitive=sensitive,
-                 write=kind[:2] in (["repo", "remove"], ["repo", "rm"]))
+                 write=kind[:2] in (["repo", "remove"], ["repo", "rm"]),
+                 critical=lambda: _destructive(kind) and _production_name(context()))
 
 
 AZ_READ_WORDS = frozenset({"list", "show", "exists", "query"})
@@ -634,13 +658,16 @@ def _az_rules(kind, args, env, cwd):
                 and not any(word in lowered for word in (
                     "secret", "listkeys", "list-keys", "connectionstring", "listcredentials")))
 
+    @functools.cache
     def target():
         subscription = option_value(args, longs=("--subscription",)) or _lookup(
             ["az", "account", "show", "--query", "id", "-o", "tsv"], env, cwd) or "(current)"
         group = option_value(args, "-g", ("--resource-group",)) or "(default)"
         return f"{subscription}/{group}"
 
-    return Rules(secret=secret, always=rest and method == "DELETE", read=read, target=target)
+    always = rest and method == "DELETE"
+    return Rules(secret=secret, always=always, read=read, target=target,
+                 critical=lambda: (always or _destructive(kind)) and _production_name(target()))
 
 
 TF_READS = (
@@ -670,7 +697,8 @@ def _terraform_rules(kind, args, env, cwd):
         workspace = env.get("TF_WORKSPACE") or _read_workspace(directory) or "default"
         return f"{directory}:{workspace}"
 
-    return Rules(always=always, read=read, target=target, sensitive=sensitive)
+    destroys = kind[:1] == ["destroy"] or (kind[:1] == ["apply"] and _has_flag(args, "-destroy"))
+    return Rules(always=always, read=read, target=target, sensitive=sensitive, critical=lambda: destroys)
 
 
 AWS_SECRET = (
@@ -693,7 +721,9 @@ def _aws_rules(kind, args, env, cwd):
         region = option_value(args, longs=("--region",)) or env.get("AWS_REGION") or "(default)"
         return f"{profile}/{region}"
 
-    return Rules(secret=secret, always=kind[:2] == ["s3", "sync"] and _has_flag(args, "--delete"), read=read, target=target)
+    always = kind[:2] == ["s3", "sync"] and _has_flag(args, "--delete")
+    return Rules(secret=secret, always=always, read=read, target=target,
+                 critical=lambda: (always or _destructive(kind)) and _production_name(target()))
 
 
 GCLOUD_SECRET = (
@@ -718,11 +748,13 @@ def _gcloud_verb_read(kind):
 
 def _gcloud_rules(kind, args, env, cwd):
     secret = any(_contains(kind, sequence) for sequence in GCLOUD_SECRET)
-    return Rules(secret=secret, read=_gcloud_verb_read(kind), target=lambda: _project_target(args, env))
+    return Rules(secret=secret, read=_gcloud_verb_read(kind), target=lambda: _project_target(args, env),
+                 critical=lambda: _destructive(kind) and _production_name(_project_target(args, env)))
 
 
 def _gsutil_rules(kind, args, env, cwd):
-    return Rules(read=_gcloud_verb_read(kind), target=lambda: _project_target(args, env))
+    return Rules(read=_gcloud_verb_read(kind), target=lambda: _project_target(args, env),
+                 critical=lambda: _destructive(kind) and _production_name(_project_target(args, env)))
 
 
 DOCKER_READ_FIRST = frozenset({"ps", "images", "inspect", "logs", "version", "info"})
@@ -761,13 +793,16 @@ def _classify_sql(cli, args, env, cwd, command):
     if postgres:
         commands = option_values(args, "-c", ("--command",))
         files = option_values(args, "-f", ("--file",))
-        host = option_value(args, "-h", ("--host",)) or "(default)"
-        database = option_value(args, "-d", ("--dbname",)) or "(default)"
+        known = option_value(args, "-h", ("--host",)) or env.get("PGHOST")
+        database = option_value(args, "-d", ("--dbname",)) or env.get("PGDATABASE") or "(default)"
+        service = env.get("PGSERVICE") or ""
     else:
         commands = option_values(args, "-Q") + option_values(args, "-q")
         files = option_values(args, "-i")
-        host = option_value(args, "-S") or "(default)"
+        known = option_value(args, "-S")
         database = option_value(args, "-d") or "(default)"
+        service = ""
+    host = known or "(default)"
     if not commands or files or any(value is None for value in commands):
         return _unclassified(cli, command)
     datagrip = _datagrip()
@@ -780,7 +815,8 @@ def _classify_sql(cli, args, env, cwd, command):
     target = f"{host}/{database}"
     kind_name = "always" if any(destructive for _, destructive in facts) else "write"
     return Outcome(kind_name, [f"{cli}:{label}@{target}"], [f"{cli} {label} on {target}"],
-                   every_time=kind_name == "always")
+                   every_time=kind_name == "always",
+                   critical=kind_name == "always" and (not known or _production_name(f"{target} {service}")))
 
 
 def classify_cli(cli, args, env, cwd, command, depth=0):
@@ -837,7 +873,8 @@ def classify_cli(cli, args, env, cwd, command, depth=0):
     if rules.write and not rules.read:
         return _call("write", cli, kind, rules.target, command)
     if rules.always or _destructive(kind):
-        return _call("write" if local and not rules.always else "always", cli, kind, rules.target, command)
+        return _call("write" if local and not rules.always else "always", cli, kind, rules.target, command,
+                     rules.critical)
     if rules.read:
         return _read()
     return _call("write", cli, kind, rules.target, command)
@@ -1023,9 +1060,10 @@ def _script_unknown(path, args, env, content):
     identity = json.dumps([str(path), args, {key: env.get(key, "") for key in (
         "KUBECONFIG", "AWS_PROFILE", "CLOUDSDK_CORE_PROJECT", "DOCKER_CONTEXT",
     )}, content], ensure_ascii=False)
-    destructive = _destructive_text(content)
-    return Outcome("always" if destructive else "write", ["script:" + hashlib.sha256(identity.encode()).hexdigest()],
-                   [f"Script {path} contains a covered CLI or SDK call that cannot be classified"], every_time=destructive)
+    kind = _unknown_kind(_destructive_text(content))
+    return Outcome(kind, ["script:" + hashlib.sha256(identity.encode()).hexdigest()],
+                   [f"Script {path} contains a covered CLI or SDK call that cannot be classified"],
+                   every_time=kind == "always", critical=True)
 
 
 def _script_content(path):
@@ -1654,6 +1692,24 @@ def _git_gh_label(cli, words, args):
     return f"git {words[0]}" + (f" ({' '.join(words[1:])})" if len(words) > 1 else "")
 
 
+GIT_DISCARD_VERBS = frozenset({"reset", "clean", "checkout", "restore", "stash", "worktree"})
+
+
+def _git_discards(words, args, short):
+    """Whether a git call throws away working-tree changes that the base classification leaves unasked: a checkout
+    with a `--` path, a restore of the working tree, or a forced worktree removal."""
+    verb = words[0]
+    if verb == "checkout":
+        return _has_flag(args, "--pathspec-from-file") or ("--" in args and args.index("--") + 1 < len(args))
+    if verb == "restore":
+        staged_only = _has_flag(args, "--staged", "-S") and not _has_flag(args, "--worktree", "-W")
+        return not staged_only and (_has_flag(args, "--pathspec-from-file")
+                                    or any(not arg.startswith("-") for arg in args[1:]))
+    if verb == "worktree":
+        return words[1:2] == ["remove"] and (_has_flag(args, "--force") or any("f" in arg[1:] for arg in short))
+    return False
+
+
 def _git_gh(cli, args, command, cwd=None, env=None):
     if cli == "gh" and any(arg in ("--help", "--version") for arg in args):
         return _read()
@@ -1668,6 +1724,7 @@ def _git_gh(cli, args, command, cwd=None, env=None):
     verb = words[0]
     destructive = False
     write = False
+    critical = False
     short = [arg for arg in args if arg.startswith("-") and not arg.startswith("--")]
     if cli == "git":
         if verb == "push":
@@ -1706,9 +1763,12 @@ def _git_gh(cli, args, command, cwd=None, env=None):
                 _has_flag(args, "--staged", "-S") and not _has_flag(args, "--worktree", "-W"))
         elif verb == "stash":
             destructive = words[1:2] in (["drop"], ["clear"])
+        discard = not destructive and approval_state.session_scope() and _git_discards(words, args, short)
+        destructive = destructive or discard
         if destructive and verb in ("reset", "checkout", "restore") and _clean_tracked_tree(
                 global_args, cwd or os.getcwd(), dict(os.environ if env is None else env)):
-            destructive, write = False, True
+            destructive, write = False, write or not discard
+        critical = destructive and verb in GIT_DISCARD_VERBS
     else:
         if words[:2] == ["auth", "token"]:
             return Outcome("secret", [], [])
@@ -1737,7 +1797,7 @@ def _git_gh(cli, args, command, cwd=None, env=None):
             write = not read
     if destructive or write:
         return Outcome("always" if destructive else "write", [f"{cli}:{_digest(command)}"], [_git_gh_label(cli, words, args)],
-                       every_time=destructive)
+                       every_time=destructive, critical=critical)
     read_verbs = {
         "status", "show", "log", "diff", "ls-remote", "describe", "rev-parse", "ls-tree", "ls-files", "cat-file",
         "rev-list", "show-ref", "for-each-ref", "merge-base", "blame", "shortlog", "diff-tree",
@@ -2641,7 +2701,8 @@ def _merge(kind, verdicts, extra_writes=()):
         text for verdict in [*verdicts, *extra_writes] for text in verdict.descriptions
     ))
     every_time = any(verdict.every_time for verdict in [*verdicts, *extra_writes])
-    return Outcome(kind, keys, descriptions, None, writes, every_time)
+    critical = any(verdict.critical for verdict in [*verdicts, *extra_writes])
+    return Outcome(kind, keys, descriptions, None, writes, every_time, critical)
 
 
 def _redirects_allowed(segments):
@@ -3149,7 +3210,7 @@ def _wrapper_outcome(text, cwd, depth, env, variables):
 
 def _unrecognized_wrapper(text):
     return Outcome("always", ["wrapper:unrecognized:" + _digest(text)], ["Unrecognized approval wrapper call"],
-                   every_time=True)
+                   every_time=True, critical=True)
 
 
 def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, choices=None):
@@ -3416,7 +3477,8 @@ def classify_tabularis(tool_input, host=None, session=None):
     name = connection[1] if connection else "an unidentified connection"
     text = sql if isinstance(sql, str) else ""
     always = Outcome("always", [f"sql:always:tabularis:{connection_id}:{_digest(text)}"],
-                     [f"tabularis query on {name}"], every_time=True)
+                     [f"tabularis query on {name}"], every_time=True,
+                     critical=db_read_policy.is_production(name if connection else None))
     write = Outcome("write", ["mcp:session"], [f"tabularis query on {name}"])
     datagrip = _datagrip()
     driver = connection[2] if connection else None
@@ -3424,13 +3486,15 @@ def classify_tabularis(tool_input, host=None, session=None):
     if datagrip.asks_every_time(text, postgres, name if connection else None):
         return always
     if not connection or postgres is None or not isinstance(sql, str):
-        return write
+        return always._replace(critical=True) if approval_state.session_scope() else write
     if datagrip.is_read(sql, postgres):
         return db_read_policy.read_outcome(host or detect_host(), session, "tabularis", connection_id, name, postgres,
                                            sql, datagrip.read_shape(sql) if postgres else None)
     keywords, destructive = datagrip.query_facts(sql, postgres, name)
     if destructive:
         return always
+    if not keywords and approval_state.session_scope():
+        return always._replace(critical=True)
     return Outcome("write", ["mcp:session"], [f"tabularis write on {name}"])
 
 
@@ -3509,7 +3573,7 @@ def classify_mcp(tool, tool_input=None, cwd=None, host=None, session=None):
     datagrip = _datagrip() if sql else None
     if any(datagrip.is_destructive(text) for text in sql):
         return Outcome("always", [f"mcp:{tool}:{_digest(json.dumps(sql))}"], [f"destructive SQL in MCP tool {tool}"],
-                       every_time=True)
+                       every_time=True, critical=True)
     if any(word in MCP_DESTRUCTIVE_WORDS for word in words):
         return Outcome("always", [f"mcp:{tool}"], [f"destructive MCP tool {tool}"], every_time=True)
     action = tool_input.get("action") if isinstance(tool_input, dict) else None
@@ -3614,6 +3678,11 @@ def _editable_path(path, cwd, roots):
     return any(candidate.is_relative_to(root) for root in roots)
 
 
+def _session_covered(session, host="claude"):
+    """Whether the session-wide key of the `session` approval scope is held."""
+    return approval_state.scope_held(host, session)
+
+
 def _edit_permission(session, tool_input, tool_name, cwd):
     paths = [tool_input.get(key) for key in ("file_path", "notebook_path")] if isinstance(tool_input, dict) else []
     paths = [path for path in paths if path is not None]
@@ -3622,11 +3691,12 @@ def _edit_permission(session, tool_input, tool_name, cwd):
     roots = _edit_roots(os.environ.get("CLAUDE_PROJECT_DIR") or cwd)
     if not all(_editable_path(path, cwd, roots) for path in paths):
         return None
-    if approval_state.is_approved("claude", session, [approval_state.WRITE_KEY]):
+    if _session_covered(session) or approval_state.is_approved("claude", session, [approval_state.WRITE_KEY]):
         return approval_state.permission_allow()
     if not approval_state.parent_session():
         digest = approval_state.permission_digest(tool_name, tool_input)
-        if not approval_state.request_ask("claude", session, [], [approval_state.WRITE_KEY], "pr:" + digest):
+        grants = [approval_state.WRITE_KEY, *([approval_state.ALL_KEY] if approval_state.session_scope() else [])]
+        if not approval_state.request_ask("claude", session, [], [approval_state.WRITE_KEY], "pr:" + digest, grants):
             return approval_state.permission_deny(approval_state.stop_reason("claude"))
     return None
 
@@ -3655,10 +3725,12 @@ def _claude_permission(session, outcome, tool_input, tool_name, cwd):
         command = tool_input.get("command") if isinstance(tool_input, dict) else None
         if tool_name == "Bash" and outcome.exe == TEMP_WRITE_EXE:
             return approval_state.permission_allow()
-        if tool_name == "Bash" and isinstance(command, str) and _plain_command(command) and approval_state.is_approved(
-                "claude", session, [approval_state.WRITE_KEY]):
+        if tool_name == "Bash" and isinstance(command, str) and _plain_command(command) and (
+                _session_covered(session) or approval_state.is_approved("claude", session, [approval_state.WRITE_KEY])):
             return approval_state.permission_allow()
         return None
+    if approval_state.all_granted("claude", session, outcome):
+        return approval_state.permission_allow()
     once_keys, session_keys = approval_state.split_outcome(outcome)
     if outcome.kind == "read" or outcome.every_time or once_keys or not session_keys:
         return None
@@ -3748,7 +3820,8 @@ def _native_pre(session, outcome, tool_input, wrapped):
     once_keys, session_keys = approval_state.split_outcome(outcome)
     if wrapped or not isinstance(tool_input, dict) or not isinstance(tool_input.get("command"), str):
         return None
-    if not once_keys and approval_state.is_approved("codex", session, session_keys):
+    if approval_state.all_granted("codex", session, outcome) or (
+            not once_keys and approval_state.is_approved("codex", session, session_keys)):
         return None
     return {"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
@@ -3769,7 +3842,8 @@ def codex_permission(session, outcome, tool_use_id, tool_input, tool_name, event
             or not native_ready(event)):
         return None
     request_id = "pr:" + approval_state.permission_digest(tool_name, tool_input)
-    if not approval_state.request_ask("codex", session, once_keys, session_keys, request_id, session_keys):
+    grants = approval_state.scope_keys(outcome, session_keys)
+    if not approval_state.request_ask("codex", session, once_keys, session_keys, request_id, grants):
         return approval_state.permission_deny(approval_state.stop_reason("codex"))
     return None
 
@@ -3979,7 +4053,8 @@ def _classify_safely(classifier, identity):
         return classifier()
     except Exception as error:
         _report_error(error)
-        return Outcome("always", ["guard:unclassified:" + _digest(identity)], [FAILURE_REASON], every_time=True)
+        return Outcome("always", ["guard:unclassified:" + _digest(identity)], [FAILURE_REASON], every_time=True,
+                       critical=True)
 
 
 def classify_file_tool(tool, tool_input, cwd):
@@ -4248,7 +4323,7 @@ def main() -> int:
         if event.get("hook_event_name") != "PreToolUse":
             return 0
         outcome = Outcome("always", ["guard:unclassified:" + _digest(json.dumps(event, sort_keys=True))], [FAILURE_REASON],
-                          every_time=True)
+                          every_time=True, critical=True)
         output = approval_state.pre_decision(host, event.get("session_id"), outcome, event.get("tool_use_id"))
     if output is not None:
         print(json.dumps(output, ensure_ascii=False))

@@ -45,11 +45,12 @@ BRACKETS = re.compile(r"[.\[\](){}]")
 
 def is_production(name) -> bool:
     """A connection is non-production only when its name has a development word or marker and no production word or
-    marker; unknown names are production."""
+    marker; unknown names are production. A word with trailing digits also counts as the word without them."""
     if not isinstance(name, str) or not name.strip():
         return True
     from approval_guard import tool_words
     words = set(tool_words(BRACKETS.sub(" ", name)))
+    words |= {stripped for word in words if (stripped := word.rstrip("0123456789"))}
     if PRODUCTION_WORDS & words or any(marker in name for marker in PRODUCTION_MARKERS):
         return True
     return not (NONPRODUCTION_WORDS & words or any(marker in name for marker in NONPRODUCTION_MARKERS))
