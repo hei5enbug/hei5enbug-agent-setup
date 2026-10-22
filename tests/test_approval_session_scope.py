@@ -1,5 +1,7 @@
 """Acceptance checks: the opt-in `session` approval scope asks once per session except for three critical kinds."""
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -560,3 +562,242 @@ def test_다른_질문이_세션_승인을_주어도_한도가_찬_호출은_다
     assert asked == ["ask"] * 3
     assert decision(stopped) == "deny"
     assert decision(after_prompt) == "allow"
+
+
+def run_git(root, *args):
+    env = {name: value for name, value in os.environ.items() if not name.startswith("GIT_")}
+    subprocess.run(["git", "-c", "user.name=demo", "-c", "user.email=demo@example.com", "-c", "commit.gpgsign=false",
+                    "-C", str(root), *args], check=True, capture_output=True, env=env)
+
+
+def make_repo(root):
+    (root / "src").mkdir(parents=True)
+    (root / "docs").mkdir()
+    (root / "build").mkdir()
+    (root / "src" / "app.py").write_text("print(1)\n", encoding="utf-8")
+    (root / "src" / "clean.py").write_text("print(2)\n", encoding="utf-8")
+    (root / "docs" / "guide.md").write_text("guide\n", encoding="utf-8")
+    (root / ".gitignore").write_text("build/\n", encoding="utf-8")
+    run_git(root, "init", "-q", "-b", "main")
+    run_git(root, "add", ".")
+    run_git(root, "commit", "-q", "-m", "init")
+    (root / "build" / "out.o").write_text("object\n", encoding="utf-8")
+    return root
+
+
+@pytest.fixture
+def repo(session_scope):
+    return make_repo(session_scope / "repo")
+
+
+@pytest.fixture
+def dirty(repo):
+    (repo / "src" / "app.py").write_text("print(3)\n", encoding="utf-8")
+    (repo / "docs" / "notes.txt").write_text("notes\n", encoding="utf-8")
+    return repo
+
+
+def classify_in(command, folder):
+    return guard.classify_text(command, str(folder))
+
+
+def assert_every_time_critical(outcome):
+    assert outcome.kind == "always" and outcome.critical and outcome.every_time
+    assert guard.DISCARD_LABEL in outcome.descriptions
+
+
+@pytest.mark.parametrize("command", [
+    "rm src/app.py",
+    "rm -f src/app.py",
+    "rm -rf src",
+    "rm -r src/",
+    "rm -rf docs",
+    "rm docs/notes.txt",
+    "rm -rf docs/notes.txt",
+    "rm src/*.py",
+    "rm -rf .",
+])
+def test_session_범위에서_수정된_추적_파일과_추적되지_않은_파일의_삭제는_매번_묻는다(dirty, command):
+    # given
+    completed(bash(FIRST, cwd=dirty))
+    event = bash(command, cwd=dirty)
+    # when
+    outcome = classify_in(command, dirty)
+    results = [decision(guard.handle(event, "claude")) for _ in range(2)]
+    # then
+    assert_every_time_critical(outcome)
+    assert results == ["ask", "ask"]
+    assert state_mod.ALL_KEY in approved()
+
+
+def test_session_범위에서_다른_git_루트의_변경된_작업_삭제도_매번_묻는다(repo, dirty, session_scope):
+    # given
+    other = make_repo(session_scope / "other")
+    (other / "src" / "app.py").write_text("print(9)\n", encoding="utf-8")
+    run_git(repo, "stash", "-q")
+    clean_cwd = repo
+    completed(bash(FIRST, cwd=clean_cwd))
+    command = f"rm -rf {other / 'src'}"
+    # when
+    outcome = classify_in(command, clean_cwd)
+    results = [decision(guard.handle(bash(command, cwd=clean_cwd), "claude")) for _ in range(2)]
+    # then
+    assert_every_time_critical(outcome)
+    assert results == ["ask", "ask"]
+
+
+def test_session_범위에서_스테이지된_변경이_있는_파일의_삭제도_매번_묻는다(repo):
+    # given
+    (repo / "src" / "app.py").write_text("print(4)\n", encoding="utf-8")
+    run_git(repo, "add", "src/app.py")
+    # when
+    outcome = classify_in("rm src/app.py", repo)
+    # then
+    assert_every_time_critical(outcome)
+
+
+@pytest.mark.parametrize("command", [
+    "rm src/clean.py",
+    "rm -f src/clean.py",
+    "rm -rf build",
+    "rm build/out.o",
+    "rm -rf build/out.o",
+])
+def test_session_범위에서_깨끗한_추적_파일과_무시된_빌드_산출물의_삭제는_크리티컬이_아니다(repo, command):
+    # given
+    completed(bash(FIRST, cwd=repo))
+    # when
+    outcome = classify_in(command, repo)
+    # then
+    assert not outcome.critical and not outcome.every_time
+    assert decision(guard.handle(bash(command, cwd=repo), "claude")) in (None, "allow")
+
+
+def test_session_범위에서_다른_파일이_변경돼_있어도_삭제_대상이_깨끗하면_크리티컬이_아니다(dirty):
+    assert not classify_in("rm src/clean.py", dirty).critical
+    assert not classify_in("rm -rf build", dirty).critical
+
+
+def test_session_범위에서_작업_트리_밖_경로의_삭제는_그대로다(session_scope):
+    # given
+    outside = session_scope / "plain"
+    outside.mkdir()
+    (outside / "a.txt").write_text("a\n", encoding="utf-8")
+    # when
+    outcome = classify_in("rm -rf plain", session_scope)
+    # then
+    assert not outcome.critical
+
+
+def test_session_범위에서_git_상태를_알_수_없으면_삭제는_매번_묻는다(repo, monkeypatch):
+    # given
+    monkeypatch.setattr(guard, "_git_probe", lambda *args: None)
+    # when
+    outcomes = [classify_in(command, repo) for command in ("rm src/clean.py", "rm -rf build")]
+    # then
+    for outcome in outcomes:
+        assert_every_time_critical(outcome)
+
+
+def test_session_범위에서_git_조회가_시간_초과되면_삭제는_매번_묻는다(repo, monkeypatch):
+    # given
+    def slow(*args, **kwargs):
+        raise subprocess.TimeoutExpired("git", 3)
+    monkeypatch.setattr(guard.subprocess, "run", slow)
+    # when
+    outcome = classify_in("rm src/clean.py", repo)
+    # then
+    assert_every_time_critical(outcome)
+
+
+def test_session_범위에서_이전_명령이_파일을_바꿀_수_있으면_무시된_파일만_크리티컬이_아니다(repo):
+    # given
+    first = classify_in("touch marker && rm src/clean.py", repo)
+    second = classify_in("touch marker && rm build/out.o", repo)
+    # then
+    assert_every_time_critical(first)
+    assert not second.critical
+
+
+def test_session_범위에서_git_밖_폴더_아래_저장소의_변경된_작업_삭제는_매번_묻는다(session_scope, monkeypatch):
+    # given
+    workspace = session_scope / "workspace"
+    inner = make_repo(workspace / "inner")
+    (inner / "src" / "app.py").write_text("print(5)\n", encoding="utf-8")
+    monkeypatch.setattr(guard, "_temporary", lambda path, env: False)
+    # when
+    dirty_outcome = classify_in("rm -rf workspace", session_scope)
+    run_git(inner, "checkout", "-q", "--", "src/app.py")
+    clean_outcome = classify_in("rm -rf workspace", session_scope)
+    # then
+    assert_every_time_critical(dirty_outcome)
+    assert not clean_outcome.critical
+
+
+@pytest.mark.parametrize("command", [
+    "find . -name '*.py' -delete",
+    "find src -name app.py -delete",
+    "find . -name app.py -exec rm {} \\;",
+    "find docs -type f -delete",
+    "find . -name app.py -fprint out.txt -delete",
+])
+def test_session_범위에서_find_삭제도_변경된_작업이_걸리면_매번_묻는다(dirty, command):
+    assert_every_time_critical(classify_in(command, dirty))
+
+
+@pytest.mark.parametrize("command", [
+    "find . -name '*.pyc' -delete",
+    "find build -name '*.o' -delete",
+    "find src -name clean.py -delete",
+    "find . -name app.py",
+])
+def test_session_범위에서_find는_지워지는_파일이_깨끗하거나_삭제가_없으면_크리티컬이_아니다(dirty, command):
+    assert not classify_in(command, dirty).critical
+
+
+@pytest.mark.parametrize("command", ["git rm -f src/app.py", "git rm -rf src", "git rm --force docs/guide.md src/app.py"])
+def test_session_범위에서_강제_git_rm은_수정된_추적_파일이면_매번_묻는다(dirty, command):
+    outcome = classify_in(command, dirty)
+    assert outcome.kind == "always" and outcome.critical and outcome.every_time
+
+
+@pytest.mark.parametrize("command", [
+    "git rm --cached src/app.py",
+    "git rm -f --cached src/app.py",
+    "git rm src/app.py",
+    "git rm -f src/clean.py",
+    "git rm -fn src/app.py",
+])
+def test_session_범위에서_캐시만_지우거나_깨끗한_git_rm은_크리티컬이_아니다(dirty, command):
+    assert not classify_in(command, dirty).critical
+
+
+def test_session_범위의_삭제_검사는_같은_명령_안에서_저장소마다_한_번만_상태를_읽는다(dirty, monkeypatch):
+    # given
+    calls = []
+    original = guard._git_probe
+    monkeypatch.setattr(guard, "_git_probe", lambda directory, env, *args: calls.append(args) or original(directory, env, *args))
+    # when
+    outcome = classify_in("rm src/app.py; rm src/app.py", dirty)
+    # then
+    assert outcome.critical
+    assert sum("status" in args for args in calls) == 1
+
+
+@pytest.mark.parametrize("command", [
+    "rm src/app.py",
+    "rm -rf src",
+    "rm -rf docs",
+    "find . -name app.py -delete",
+    "git rm -f src/app.py",
+])
+def test_tiered_범위의_삭제_분류는_바뀌지_않고_git을_읽지_않는다(home, monkeypatch, command):
+    # given
+    repo_root = make_repo(home / "repo")
+    (repo_root / "src" / "app.py").write_text("print(3)\n", encoding="utf-8")
+    (repo_root / "docs" / "notes.txt").write_text("notes\n", encoding="utf-8")
+    monkeypatch.setattr(guard, "_git_probe", lambda *args: pytest.fail("tiered scope must not probe git"))
+    # when
+    outcome = classify_in(command, repo_root)
+    # then
+    assert outcome.kind == "pass" and not outcome.critical and not outcome.every_time

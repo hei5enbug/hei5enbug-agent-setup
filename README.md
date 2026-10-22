@@ -704,7 +704,8 @@ The `approval_scope` option chooses how often the guard asks. `tiered`, the defa
 `session` asks once per session: the first approval of any kind covers every later call in that session, except three
 kinds that still ask every time and whose approval covers only that call. They are discarding uncommitted work
 (`git reset --hard`, `git clean`, a `git checkout` or `git restore` that drops working-tree changes, and
-`git worktree remove --force`), deleting statements on a production database connection, and production
+`git worktree remove --force`, and removing files that hold uncommitted changes or untracked files that are not
+ignored), deleting statements on a production database connection, and production
 infrastructure deletion such as `kubectl delete` on a production context. A connection or context counts as
 production when its name has a production word or no development word, so an unknown name stays production. Denied
 calls stay denied in both scopes.

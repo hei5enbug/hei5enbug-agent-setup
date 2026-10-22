@@ -12,6 +12,7 @@ import argparse
 import ast
 import fnmatch
 import functools
+import glob
 import hashlib
 import json
 import os
@@ -1692,7 +1693,7 @@ def _git_gh_label(cli, words, args):
     return f"git {words[0]}" + (f" ({' '.join(words[1:])})" if len(words) > 1 else "")
 
 
-GIT_DISCARD_VERBS = frozenset({"reset", "clean", "checkout", "restore", "stash", "worktree"})
+GIT_DISCARD_VERBS = frozenset({"reset", "clean", "checkout", "restore", "stash", "worktree", "rm"})
 
 
 def _git_discards(words, args, short):
@@ -1763,7 +1764,10 @@ def _git_gh(cli, args, command, cwd=None, env=None):
                 _has_flag(args, "--staged", "-S") and not _has_flag(args, "--worktree", "-W"))
         elif verb == "stash":
             destructive = words[1:2] in (["drop"], ["clear"])
-        discard = not destructive and approval_state.session_scope() and _git_discards(words, args, short)
+        discard = not destructive and approval_state.session_scope() and (
+            _git_discards(words, args, short)
+            or verb == "rm" and _git_rm_discards(global_args, args, cwd or os.getcwd(),
+                                                 dict(os.environ if env is None else env)))
         destructive = destructive or discard
         if destructive and verb in ("reset", "checkout", "restore") and _clean_tracked_tree(
                 global_args, cwd or os.getcwd(), dict(os.environ if env is None else env)):
@@ -2285,6 +2289,205 @@ def _removal_scope(targets, cwd, env):
     return list(dict.fromkeys(labels))
 
 
+DISCARD_LABEL = "Removal that discards uncommitted work"
+DISCARD_MAX_TARGETS = 3000
+DISCARD_CHUNK = 200
+DISCARD_SCAN_LIMIT = 5000
+FIND_REMOVERS = frozenset({"rm", "unlink", "shred"})
+FIND_EXECS = frozenset({"-exec", "-execdir", "-ok", "-okdir"})
+FIND_WRITERS = frozenset({"-fprint", "-fprint0", "-fprintf", "-fls"})
+_DISCARD_CACHE = {}
+
+
+def _git_probe(directory, env, *args):
+    """The finished read-only git query, or None when it cannot run or times out."""
+    try:
+        return subprocess.run(
+            ["git", "-c", "core.fsmonitor=false", "--no-optional-locks", "-C", str(directory), *args],
+            capture_output=True, text=True, timeout=LOOKUP_TIMEOUT_SECONDS, env=env, stdin=subprocess.DEVNULL,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+
+
+def _nested_roots(directory):
+    """The Git work trees found under a folder that lies outside any work tree, or None when the scan is incomplete."""
+    roots, seen, failed = [], 0, []
+    for current, names, files in os.walk(directory, onerror=failed.append):
+        seen += len(names) + len(files)
+        if seen > DISCARD_SCAN_LIMIT or failed:
+            return None
+        if ".git" in names or ".git" in files:
+            roots.append(Path(current))
+            names[:] = []
+    return roots
+
+
+def _ignored_untracked(root, path, env):
+    """Whether a path holds no tracked file and Git ignores it."""
+    listed = _git_lookup(root, env, "--literal-pathspecs", "ls-files", "--", str(path))
+    return (listed is not None and not listed.strip()
+            and _git_lookup(root, env, "check-ignore", "-q", "--", str(path)) is not None)
+
+
+def _discards_work(paths, env, untracked=True):
+    """Whether removing these paths could discard uncommitted work: a path that is, or holds, a tracked file with a staged
+    or unstaged change or (with `untracked`) an untracked file that Git does not ignore, in any work tree. A state Git
+    cannot report counts as discarding. After an earlier command that may change files, only an ignored untracked path
+    is safe inside a work tree."""
+    git_env = {name: value for name, value in env.items() if not name.startswith("GIT_")}
+    git_env["LC_ALL"] = "C"
+    strict = FILES_MAY_CHANGE in env or IN_EXEC in env
+    groups = {}
+    for path in paths:
+        if ".git" in path.parts or not (path.exists() or os.path.islink(path)):
+            continue
+        found = _git_probe(path if path.is_dir() else path.parent, git_env, "rev-parse", "--show-toplevel")
+        if found is None:
+            return True
+        if found.returncode != 0:
+            if "not a git repository" not in found.stderr:
+                return True
+            if path.is_dir() and not _temporary(path, env):
+                nested = _nested_roots(path)
+                if nested is None:
+                    return True
+                for root in nested:
+                    groups.setdefault(root.resolve(), []).append(root.resolve())
+            continue
+        groups.setdefault(Path(found.stdout.strip()).resolve(), []).append(path)
+    for root, members in groups.items():
+        members = sorted(dict.fromkeys(members))
+        for start in range(0, len(members), DISCARD_CHUNK):
+            chunk = tuple(str(member) for member in members[start:start + DISCARD_CHUNK])
+            key = (str(root), chunk, untracked)
+            if key not in _DISCARD_CACHE:
+                done = _git_probe(root, git_env, "--literal-pathspecs", "status", "--porcelain",
+                                  "--untracked-files=all" if untracked else "--untracked-files=no", "--ignored=no",
+                                  "--ignore-submodules=none", "--", *chunk)
+                _DISCARD_CACHE[key] = done is None or done.returncode != 0 or bool(done.stdout.strip())
+            if _DISCARD_CACHE[key]:
+                return True
+        if strict and not all(_ignored_untracked(root, member, git_env) for member in members):
+            return True
+    return False
+
+
+def _removal_path(text):
+    """The path a removal deletes, with its folder resolved and a symbolic link kept as the link itself, or None for a
+    link or the filesystem root."""
+    text = os.path.abspath(text)
+    if text == os.path.dirname(text) or os.path.islink(text):
+        return None
+    return Path(os.path.realpath(os.path.dirname(text))) / os.path.basename(text)
+
+
+def _operand_paths(text, cwd):
+    """The paths a resolved `rm` or `git rm` operand names, expanding a glob to its matches."""
+    link = os.path.join(cwd, os.path.expanduser(text))
+    if re.search(r"[*?\[]", link):
+        matches = sorted(glob.glob(link))
+        if len(matches) > DISCARD_MAX_TARGETS:
+            fixed = re.split(r"[*?\[]", link, maxsplit=1)[0]
+            matches = [fixed if fixed.endswith("/") else os.path.dirname(fixed)]
+    else:
+        matches = [link]
+    return [path for path in map(_removal_path, matches) if path is not None]
+
+
+def _rm_discards(args, cwd, env, variables, choices, raw_args):
+    """Whether an `rm` call removes uncommitted work among the operands it resolves."""
+    values = {**env, **variables}
+    targets = []
+    for position, operand in enumerate(args):
+        if operand.startswith("-"):
+            continue
+        texts = _operand_texts(operand, values, choices)
+        if texts is None:
+            continue
+        raw = raw_args[position] if raw_args is not None and position < len(raw_args) else operand
+        if _unquoted_reference(raw) and _mktemp_directory(operand, values) is None:
+            texts = [field for text in texts for field in text.split()]
+        for text in texts:
+            if text:
+                targets += _operand_paths(text, cwd)
+    return _discards_work(targets, env)
+
+
+def _find_discards(args, cwd, env):
+    """Whether a `find` call with `-delete` or `-exec rm` removes uncommitted work. The call runs again with a listing
+    action in place of the removal, and an expression that cannot be listed safely counts as discarding."""
+    words = list(args)
+    removing = "-delete" in words or any(
+        word in FIND_EXECS and index + 1 < len(words) and os.path.basename(words[index + 1]) in FIND_REMOVERS
+        for index, word in enumerate(words))
+    if not removing:
+        return False
+    index = 0
+    while index < len(words) and words[index] in ("-H", "-L", "-P"):
+        index += 1
+    leading, start = words[:index], index
+    while index < len(words) and not words[index].startswith("-") and words[index] not in ("(", ")", "!", ","):
+        index += 1
+    starts = words[start:index] or ["."]
+    expression, listing, cursor = words[index:], [], 0
+    while cursor < len(expression):
+        word = expression[cursor]
+        if word in FIND_WRITERS:
+            return True
+        if word == "-delete":
+            listing.append("-print0")
+        elif word in FIND_EXECS:
+            end = next((offset for offset in range(cursor + 1, len(expression)) if expression[offset] in (";", "+")), None)
+            if end is None or end == cursor + 1 or os.path.basename(expression[cursor + 1]) not in FIND_REMOVERS:
+                return True
+            listing.append("-print0")
+            cursor = end
+        else:
+            listing.append(word)
+        cursor += 1
+    if "-delete" in words:
+        listing.insert(0, "-depth")
+    try:
+        done = subprocess.run(["find", *leading, *starts, *listing], capture_output=True, timeout=LOOKUP_TIMEOUT_SECONDS,
+                              cwd=cwd, env=env, stdin=subprocess.DEVNULL, check=False)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return True
+    names = [name for name in done.stdout.decode("utf-8", "surrogateescape").split("\0") if name]
+    if len(names) > DISCARD_MAX_TARGETS:
+        return True
+    targets = []
+    for name in names:
+        full = os.path.join(cwd, name)
+        path = None if os.path.isdir(full) else _removal_path(full)
+        if path is not None:
+            targets.append(path)
+    return _discards_work(targets, env)
+
+
+def _git_rm_discards(global_args, args, cwd, env):
+    """Whether a forced `git rm` that deletes the files removes tracked files with uncommitted changes."""
+    short = "".join(arg[1:] for arg in args if arg.startswith("-") and not arg.startswith("--"))
+    if not (_has_flag(args, "--force") or "f" in short):
+        return False
+    if _has_flag(args, "--cached", "--dry-run") or "n" in short:
+        return False
+    directory = _git_directory(global_args, cwd, env)
+    if directory is None or _has_flag(args, "--pathspec-from-file"):
+        return True
+    operands, literal = [], False
+    for arg in args[1:]:
+        if literal or not arg.startswith("-"):
+            operands.append(arg)
+        elif arg == "--":
+            literal = True
+    targets = []
+    for text in operands:
+        targets += _operand_paths(text, str(directory))
+    return _discards_work(targets, env, untracked=False)
+
+
 def _execution_policy(cli, args, cwd, env, variables, command, choices=None, raw_args=None):
     session = Path(env.get("_APPROVAL_SESSION_DIR", env.get("CLAUDE_PROJECT_DIR") or cwd)).resolve()
     target = lambda kind, label, every_time=False: Outcome(kind, [f"{cli}:{_digest(command)}"], [label],
@@ -2317,6 +2520,9 @@ def _execution_policy(cli, args, cwd, env, variables, command, choices=None, raw
                 return target("write", "Worker access outside the session folder")
         if runner:
             return Outcome("pass", [], [])
+    if (cli == "rm" and approval_state.session_scope() and _rm_discards(args, cwd, env, variables, choices, raw_args)
+            or cli == "find" and approval_state.session_scope() and _find_discards(args, cwd, env)):
+        return Outcome("always", [f"{cli}:{_digest(command)}"], [DISCARD_LABEL], every_time=True, critical=True)
     if cli == "rm":
         flags = [arg for arg in args if arg.startswith("-")]
         recursive = "--recursive" in flags or any(not arg.startswith("--") and set(arg[1:]) & {"r", "R"} for arg in flags)
@@ -3219,6 +3425,8 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
         return _unclassified("bash", text if isinstance(text, str) else "")
     if not isinstance(text, str) or not text.strip():
         return Outcome("pass", [], [])
+    if depth == 0:
+        _DISCARD_CACHE.clear()
     script = unwrap_wrapper(text)
     if script is not None:
         return classify_text(script, cwd, depth + 1, env, variables)

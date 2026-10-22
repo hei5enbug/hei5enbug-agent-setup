@@ -654,7 +654,7 @@ Codex에서는 `/hooks`에서 훅을 신뢰해야 합니다.
 `approval_scope` 옵션은 가드가 얼마나 자주 묻는지 정합니다. 기본값 `tiered`는 위 설명대로 동작합니다.
 `session`은 세션당 한 번 묻습니다. 어떤 종류든 첫 승인이 그 세션의 이후 호출을 모두 덮습니다. 다만 세 가지는 계속
 매번 묻고, 그 승인은 해당 호출에만 적용됩니다. 커밋하지 않은 작업 버리기(`git reset --hard`, `git clean`, 작업 트리
-변경을 버리는 `git checkout`이나 `git restore`, `git worktree remove --force`), 운영 DB 연결의 삭제 문장, 운영
+변경을 버리는 `git checkout`이나 `git restore`, `git worktree remove --force`, 커밋하지 않은 변경이나 무시되지 않은 새 파일이 있는 파일 삭제), 운영 DB 연결의 삭제 문장, 운영
 context의 `kubectl delete` 같은 운영 인프라 삭제입니다. 연결이나 context 이름에 운영 단어가 있거나 개발 단어가 없으면
 운영으로 보므로, 알 수 없는 이름은 운영으로 남습니다. 거부되는 호출은 두 범위 모두에서 계속 거부됩니다.
 
