@@ -149,6 +149,16 @@ gets the line `hei5enbug-agent-setup mod: role pinning active` from the register
 role pinning is active. This line lets the main session send assignments directly and skip per-delegation settings and
 subagent record checks.
 
+The mod also draws two views; neither adds anything to the model's context. With `risk_highlight` on, each tool call
+row in the transcript gets a colored label from the approval guard's own decision for that call: red for an
+irreversible or every-time call and yellow for a write. Before the permission prompt, a red call also shows what it
+would change when that can be read safely within a few seconds, such as the files and lines `git reset --hard` would
+discard, the files `git clean` would delete, or the resources `kubectl delete` would remove. The decision stays in the
+permission prompt. With `work_board` on, `/work-board` opens a pane with each subagent's status, elapsed time, and
+edited files, marks a file red when two of them edit it, and shows context use, the prompt-cache hit rate, the Claude
+5-hour and weekly use with a pace forecast, and the Codex weekly use. While a subagent runs or a conflict exists, a
+one-line summary appears above the prompt.
+
 ### Response language
 
 A language guard, `scripts/language_guard.py`, checks that every reply and every progress update is written in the
@@ -760,6 +770,8 @@ write Codex settings.
 |---|---|---|
 | Block built-in subagents | `agent_guard` | `HEI5ENBUG_AGENT_GUARD` |
 | Pin role models | `role_pinning` | Not applicable |
+| Risk labels on tool calls | `risk_highlight` | Not applicable |
+| Work board for subagents | `work_board` | Not applicable |
 | Implementation worker route | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, or `sonnet`) | Not applicable |
 | Claude Code worker model and effort | `worker_model` (default `claude-haiku-5-5`) and `worker_effort` (default `high`) | Not applicable |
 | Codex worker model and effort | `codex_worker_model` (`gpt-5.6-luna` or `gpt-6.1-sol`, default `gpt-5.6-luna`) and `codex_worker_effort` (`high` or `xhigh`, default `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL` and `HEI5ENBUG_CODEX_WORKER_EFFORT` |

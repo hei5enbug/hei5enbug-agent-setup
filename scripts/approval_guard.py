@@ -3901,6 +3901,7 @@ def handle(event, host):
             approval_state.after_call(host, session, outcome, tool_use_id, tool, event.get("tool_input"))
         elif name == "PreToolUse" and host == "claude" and enabled("datagrip_guard"):
             outcome = _classify_safely(lambda: _datagrip().classify_query(event.get("tool_input")), tool)
+            _record_risk(host, session, tool_use_id, tool, outcome)
             if outcome.kind == "always":
                 return approval_state.pre_decision(host, session, outcome, tool_use_id)
         return None
@@ -3927,8 +3928,23 @@ def handle(event, host):
         outcome = _classify_safely(lambda: classify_file_tool(tool, tool_input, _cwd(event)), tool)
     else:
         return None
+    if name == "PreToolUse":
+        _record_risk(host, session, tool_use_id, tool, outcome)
     return _decide(name, host, session, outcome, tool_use_id, tool_input, tool, _cwd(event), event,
                    wrapped is not None)
+
+
+def _record_risk(host, session, tool_use_id, tool, outcome):
+    """Record the call's kind for the Claude Code mod's transcript marker; a file edit is the session write it asks for.
+    A failure here never changes the decision."""
+    try:
+        if host != "claude":
+            return
+        if isinstance(tool, str) and tool in EDIT_TOOLS and outcome.kind == "pass":
+            outcome = outcome._replace(kind="write")
+        approval_state.record_risk(host, session, tool_use_id, outcome)
+    except Exception:
+        return
 
 
 LIMITS_READS = frozenset({"ls", "cat", "head", "tail", "grep", "wc", "stat", "file", "jq"})
@@ -4324,6 +4340,7 @@ def main() -> int:
             return 0
         outcome = Outcome("always", ["guard:unclassified:" + _digest(json.dumps(event, sort_keys=True))], [FAILURE_REASON],
                           every_time=True, critical=True)
+        _record_risk(host, event.get("session_id"), event.get("tool_use_id"), event.get("tool_name"), outcome)
         output = approval_state.pre_decision(host, event.get("session_id"), outcome, event.get("tool_use_id"))
     if output is not None:
         print(json.dumps(output, ensure_ascii=False))

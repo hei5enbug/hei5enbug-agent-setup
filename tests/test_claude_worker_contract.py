@@ -188,6 +188,8 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
             [
                 "agent_guard",
                 "role_pinning",
+                "risk_highlight",
+                "work_board",
                 "implementation_worker",
                 "worker_model",
                 "worker_effort",

@@ -269,6 +269,39 @@ def recorded_plan(host: str, session, tool: str, connection: str, digest: str):
     return max(matches, key=lambda entry: entry["at"], default=None)
 
 
+RISK_LIMIT = 200
+RISK_KINDS = frozenset({"write", "request", "always"})
+
+
+def risk_path(host: str, session: str) -> Path:
+    return state_dir() / "risk" / f"{host}-{session}.json"
+
+
+def record_risk(host: str, session, tool_use_id, outcome: Outcome) -> None:
+    """Record a write, request, every-time, or critical call's kind by tool_use_id for the Claude Code mod's transcript
+    marker, keeping the newest entries. The record never reaches the model, and any failure only drops the marker:
+    unreadable or malformed data counts as empty, and no error reaches the caller."""
+    try:
+        if session_key(session) is None or not isinstance(tool_use_id, str) or not tool_use_id:
+            return
+        if outcome.kind not in RISK_KINDS and not outcome.critical:
+            return
+        path = risk_path(host, session)
+        with _locked(path.parent):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                data = {}
+            calls = data.get("calls") if isinstance(data, dict) else None
+            kept = [call for call in calls if isinstance(call, dict) and call.get("id") != tool_use_id] \
+                if isinstance(calls, list) else []
+            kept.append({"id": tool_use_id, "kind": outcome.kind, "critical": bool(outcome.critical)})
+            _write(path, {"calls": kept[-RISK_LIMIT:]})
+            _cleanup(path.parent, path)
+    except Exception:
+        return
+
+
 def session_key(value):
     """Return the session id when it is a usable string, otherwise None (the hook has no memory then)."""
     if isinstance(value, str) and SESSION_ID.fullmatch(value):

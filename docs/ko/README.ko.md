@@ -152,6 +152,15 @@ mod는 Claude Code 2.1.292에서 시험했습니다.
 `hei5enbug-agent-setup mod: role pinning active` 줄을 추가합니다. 이 줄이 있으면 메인 세션은 작업 지시를 바로 보내고
 위임마다 설정과 서브에이전트 기록을 확인하지 않아도 됩니다.
 
+mod는 화면 표시 두 가지도 그리며, 둘 다 모델 컨텍스트에는 아무것도 넣지 않습니다. `risk_highlight`를 켜면 대화 기록의 도구
+호출 줄마다 승인 가드가 그 호출에 내린 판정에 따라 색 라벨이 붙습니다. 되돌릴 수 없거나 매번 묻는 호출은 빨강, 쓰기는
+노랑입니다. 빨간 호출은 몇 초 안에 안전하게 읽을 수 있으면 권한 확인 전에 무엇이 바뀌는지도 보여 줍니다. 예를 들어
+`git reset --hard`가 버릴 파일과 줄 수, `git clean`이 지울 파일, `kubectl delete`가 지울 리소스입니다. 결정은 권한 확인
+창에서 그대로 합니다. `work_board`를 켜면 `/work-board`가 패널을 열어 서브에이전트마다 상태, 경과 시간, 수정한 파일을
+보여 주고, 두 에이전트가 같은 파일을 고치면 그 파일을 빨강으로 표시합니다. 컨텍스트 사용량, 프롬프트 캐시 적중률,
+Claude 5시간·주간 사용량과 소진 예측, Codex 주간 사용량도 보여 줍니다. 서브에이전트가 실행 중이거나 충돌이 있으면 입력창
+위에 한 줄 요약이 나타납니다.
+
 ### 응답 언어
 
 언어 가드인 `scripts/language_guard.py`는 모든 답변과 진행 상황 안내가 응답 언어로 작성되었는지 확인합니다.
@@ -707,6 +716,8 @@ Codex 설정이나 Claude 설정을 쓰지 않습니다. Codex 설정을 쓰는 
 |---|---|---|
 | 내장 서브에이전트 차단 | `agent_guard` | `HEI5ENBUG_AGENT_GUARD` |
 | 역할 모델 고정 | `role_pinning` | 해당 없음 |
+| 도구 호출 위험 라벨 | `risk_highlight` | 해당 없음 |
+| 서브에이전트 작업 현황판 | `work_board` | 해당 없음 |
 | 구현 worker 경로 | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, 또는 `sonnet`) | 해당 없음 |
 | Claude Code worker 모델과 사고 강도 | `worker_model` (기본 `claude-haiku-5-5`), `worker_effort` (기본 `high`) | 해당 없음 |
 | Codex worker 모델과 사고 강도 | `codex_worker_model` (`gpt-5.6-luna` 또는 `gpt-6.1-sol`, 기본 `gpt-5.6-luna`), `codex_worker_effort` (`high` 또는 `xhigh`, 기본 `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL`, `HEI5ENBUG_CODEX_WORKER_EFFORT` |

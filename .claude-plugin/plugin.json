@@ -17,6 +17,7 @@
   ],
   "skills": "./skills/",
   "hooks": "./config/claude-mod.json",
+  "types": "./hooks/mod/types.d.ts",
   "agents": [
     "./agents/scout.md",
     "./agents/worker.md",
@@ -35,6 +36,18 @@
       "type": "boolean",
       "title": "Pin role models",
       "description": "Run the scout, worker, sonnet-worker, designer, and reviewer agents on their pinned model and effort, and stop an agent that runs on any other model.",
+      "default": true
+    },
+    "risk_highlight": {
+      "type": "boolean",
+      "title": "Risk labels on tool calls",
+      "description": "Label tool-call rows in the transcript from the approval guard's classification: red for calls it asks about every time or treats as critical, with a read-only preview of what they would discard or delete, and yellow for writes. Reads get no label, and nothing is added to the model's context.",
+      "default": true
+    },
+    "work_board": {
+      "type": "boolean",
+      "title": "Work board",
+      "description": "Add the /work-board pane that lists subagents with their status, elapsed time, and edited files, marks files two active owners edit, and shows context, Claude and Codex usage, limit pace, and the prompt-cache hit rate; while subagents run or files conflict, show a one-line summary above the prompt.",
       "default": true
     },
     "implementation_worker": {
