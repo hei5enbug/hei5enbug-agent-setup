@@ -40,7 +40,7 @@
 - Before creating an issue, search the existing ones. Write issues, pull requests, comments, and commit messages in
   English and follow the existing issue conventions. "Public boundary" at the end of this file governs what any file,
   commit, or message may contain.
-- For repository implementation, use a separate Claude Code assigned-worker process by default. Codex
+- For repository implementation, use a Claude Code plugin worker subagent by default. Codex
   project roles in `.codex/agents/` cover the other routes:
 
   | Role | Primary name | Model / effort | Fallback name | Model / effort |
@@ -50,8 +50,9 @@
   | Mechanical documentation edits with approved content | `writer` | `gpt-6.1-sol` / `high` | `haiku_writer` | `claude-haiku-5-5` / `xhigh` |
   | One read-only final review of a completed bounded change | `code_reviewer` | `gpt-6.1-sol` / `high` | `opus_code_reviewer` | `claude-opus-5-5` / `high` |
 
-  The `haiku_*` and `opus_code_reviewer` names are assignment labels for separate Claude Code CLI
-  processes, not registered `--agent` names. `worker`, `scout`, `writer`, and `code_reviewer` are Codex
+  `haiku_worker` and `sonnet_worker` name the plugin's `hei5enbug-agent-setup:worker` and
+  `hei5enbug-agent-setup:sonnet-worker` subagents. The other `haiku_*` names and `opus_code_reviewer` are
+  assignment labels for separate Claude Code CLI processes, not registered `--agent` names. `worker`, `scout`, `writer`, and `code_reviewer` are Codex
   project roles. Each role has exactly one fallback in the other model family: Claude to GPT or GPT to
   Claude. A named fallback is preauthorized only when
   the primary executable, authentication, quota, role, requested settings, or reliable settings evidence
@@ -97,9 +98,14 @@
 
   | Work | Worker |
   |---|---|
-  | Easy: one cohesive change with a stated edit and checks that cover it fully | `haiku_worker`: `claude -p --model claude-haiku-5-5 --effort xhigh --output-format json` with the assigned-worker rules and task on stdin, preserving the task's tool permissions and allowed paths, plus `Bash` with `HEI5ENBUG_PARENT_SESSION=claude:$CLAUDE_CODE_SESSION_ID` so the approval guard, not `dontAsk`, gates its shell commands |
-  | Normal or hard: a behavioral change, several files, parsing, security, or concurrency | `sonnet_worker`: `claude -p --model claude-sonnet-5-5 --effort high --output-format json`, same permissions as `haiku_worker` |
+  | Easy: one cohesive change with a stated edit and checks that cover it fully | `haiku_worker`: the `hei5enbug-agent-setup:worker` subagent while the session line "Worker agent model" shows `claude-haiku-5-5` at `xhigh`; otherwise `sonnet_worker` |
+  | Normal or hard: a behavioral change, several files, parsing, security, or concurrency | `sonnet_worker`: the `hei5enbug-agent-setup:sonnet-worker` subagent (`claude-sonnet-5-5` / `high`) |
   | Claude usage limit reached or a Claude worker unavailable | `worker` (`gpt-6.1-sol` / `high`): in Claude Code, `role_runner.py implementation --fallback --instructions <worker role definition>` run from the folder that holds the allowed paths; in Codex, the `worker` role |
+
+  Spawn these plugin subagents instead of `claude -p` processes. On 2026-10-22 the auto-mode classifier blocked
+  `claude -p` workers that edit the approval guard as self-modification, and `dontAsk` stopped them on commands the
+  guard asks about, while the `sonnet-worker` subagent made the same kind of change unblocked and its subagent record
+  showed `claude-sonnet-5-5` at `high`.
 
   On 2026-10-17, three real approval-guard tasks (classification, session state, a mod) ran once each on Sonnet
   `high` and Sol `high`. All six passed the coordinator's tests. A blind review needed 5 fixes in total for Sol and

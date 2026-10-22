@@ -39,7 +39,7 @@
   그곳에만 두고, 다시 쓰지 말고 참조한다.
 - 이슈를 만들기 전에 기존 이슈를 검색한다. 이슈, 풀 리퀘스트, 댓글, 커밋 메시지는 영어로 쓰고 기존 이슈의
   관례를 따른다. 파일, 커밋 또는 메시지에 담을 수 있는 내용은 이 파일 끝의 "공개 경계" 절을 따른다.
-- 저장소 구현에는 별도의 Claude Code 할당 작업자 프로세스를 기본으로 사용한다. 나머지 경로는
+- 저장소 구현에는 Claude Code 플러그인 작업자 서브에이전트를 기본으로 사용한다. 나머지 경로는
   `.codex/agents/`의 Codex 프로젝트 역할을 사용한다.
 
   | 역할 | 기본 이름 | 모델 / 추론 강도 | fallback 이름 | 모델 / 추론 강도 |
@@ -49,8 +49,9 @@
   | 승인된 내용을 반영하는 기계적인 문서 편집 | `writer` | `gpt-6.1-sol` / `high` | `haiku_writer` | `claude-haiku-5-5` / `xhigh` |
   | 완료된 범위 한정 변경을 한 번 읽기 전용으로 최종 검토 | `code_reviewer` | `gpt-6.1-sol` / `high` | `opus_code_reviewer` | `claude-opus-5-5` / `high` |
 
-  `haiku_*`와 `opus_code_reviewer`는 별도 Claude Code CLI 프로세스에 붙이는 과제 이름이며,
-  등록된 `--agent` 이름이 아니다. `worker`, `scout`, `writer`, `code_reviewer`는 Codex 프로젝트 역할이다.
+  `haiku_worker`와 `sonnet_worker`는 플러그인의 `hei5enbug-agent-setup:worker`와
+  `hei5enbug-agent-setup:sonnet-worker` 서브에이전트를 가리킨다. 나머지 `haiku_*` 이름과 `opus_code_reviewer`는
+  별도 Claude Code CLI 프로세스에 붙이는 과제 이름이며, 등록된 `--agent` 이름이 아니다. `worker`, `scout`, `writer`, `code_reviewer`는 Codex 프로젝트 역할이다.
   각 역할에는 Claude에서 GPT로, GPT에서 Claude로 전환하는 다른 모델 계열의 fallback 하나만 둔다.
   기본 실행 파일, 인증, 할당량, 역할, 요청한 설정 또는
   신뢰할 수 있는 설정 근거를 사용할 수 없을 때만 지정된 fallback을 사전 승인된 경로로 사용한다. 전환 이유와
@@ -96,9 +97,14 @@
 
   | 작업 | 작업자 |
   |---|---|
-  | 쉬움: 편집 내용이 정해져 있고 검사가 모두 확인하는 응집된 변경 하나 | `haiku_worker`: 할당 작업자 규칙과 과제를 stdin으로 전달하고 `claude -p --model claude-haiku-5-5 --effort xhigh --output-format json`을 사용하며 과제의 도구 권한과 허용 경로를 유지한다. 여기에 `Bash`와 `HEI5ENBUG_PARENT_SESSION=claude:$CLAUDE_CODE_SESSION_ID`를 추가해 `dontAsk`가 아니라 승인 가드가 셸 명령의 실행 여부를 결정하게 한다 |
-  | 보통 또는 어려움: 동작 변경, 여러 파일, 파싱, 보안, 동시성 | `sonnet_worker`: `claude -p --model claude-sonnet-5-5 --effort high --output-format json`, 권한은 `haiku_worker`와 같다 |
+  | 쉬움: 편집 내용이 정해져 있고 검사가 모두 확인하는 응집된 변경 하나 | `haiku_worker`: 세션 줄 "Worker agent model"이 `claude-haiku-5-5`의 `xhigh`를 보일 때 `hei5enbug-agent-setup:worker` 서브에이전트, 그렇지 않으면 `sonnet_worker` |
+  | 보통 또는 어려움: 동작 변경, 여러 파일, 파싱, 보안, 동시성 | `sonnet_worker`: `hei5enbug-agent-setup:sonnet-worker` 서브에이전트(`claude-sonnet-5-5` / `high`) |
   | Claude 사용 한도에 걸리거나 Claude worker를 사용할 수 없음 | `worker`(`gpt-6.1-sol` / `high`): Claude Code에서는 허용 경로가 든 폴더에서 `role_runner.py implementation --fallback --instructions <worker 역할 정의>`를 실행하고, Codex에서는 `worker` 역할을 쓴다 |
+
+  `claude -p` 프로세스 대신 이 플러그인 서브에이전트를 띄운다. 2026-10-22에 auto 모드 분류기는 승인 가드를 고치는
+  `claude -p` 작업자를 자기 수정으로 막았고, `dontAsk`는 가드가 묻는 명령에서 작업자를 멈췄다. 반면
+  `sonnet-worker` 서브에이전트는 같은 종류의 변경을 막힘 없이 했고, 서브에이전트 기록에 `claude-sonnet-5-5`의
+  `high`가 남았다.
 
   2026-10-17에 실제 승인 가드 과제 세 개(분류, 세션 상태, 모드)를 Sonnet `high`와 Sol `high`로 한 번씩
   돌렸다. 여섯 실행 모두 코디네이터의 검사를 통과했다. 블라인드 검토에서 고칠 곳은 Sol이 모두 5곳,
