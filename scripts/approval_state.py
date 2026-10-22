@@ -83,13 +83,44 @@ REDACTIONS = (
 )
 
 
+SECRET_PATTERNS_PATH = Path(__file__).resolve().parents[1] / "config" / "secret-patterns.json"
+
+
+@functools.lru_cache(maxsize=1)
+def shared_patterns() -> tuple:
+    """The token formats of `config/secret-patterns.json` as (name, regex, partial, placeholder) tuples, or an empty
+    tuple when the file is missing or invalid."""
+    try:
+        data = json.loads(SECRET_PATTERNS_PATH.read_text(encoding="utf-8"))
+        placeholder = re.compile(data["placeholder"]) if isinstance(data.get("placeholder"), str) else None
+        return tuple(
+            (entry["name"], re.compile(entry["pattern"], re.I if "i" in entry.get("flags", "") else 0),
+             entry.get("partial") is True, placeholder if entry.get("placeholder") is True else None)
+            for entry in data["patterns"]
+        )
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, re.error):
+        return ()
+
+
+def redact_tokens(text: str) -> str:
+    """Mask the shared high-confidence token formats as [REDACTED:kind]."""
+    for name, pattern, partial, placeholder in shared_patterns():
+        def mask(found, name=name, partial=partial, placeholder=placeholder):
+            secret = found.group(2) if partial else found.group(0)
+            if placeholder is not None and placeholder.search(secret):
+                return found.group(0)
+            return f"{found.group(1)}[REDACTED:{name}]{found.group(3)}" if partial else f"[REDACTED:{name}]"
+        text = pattern.sub(mask, text)
+    return text
+
+
 def redact(text: str) -> str:
     """Mask credentials in a description: -u and --user values, Authorization, Cookie, and X-Api-Key header values,
-    URL userinfo, and key=value or --key value pairs whose key names a secret."""
+    URL userinfo, key=value or --key value pairs whose key names a secret, and the shared high-confidence token formats."""
     text = text[:REDACT_LIMIT]
     for pattern, replacement in REDACTIONS:
         text = pattern.sub(replacement, text)
-    return text
+    return redact_tokens(text)
 SESSION_ID = re.compile(r"[A-Za-z0-9._-]{1,128}")
 APPROVAL_TEXT = re.compile(r"(?:승인|approve)\s+([A-Z2-9]{6})", re.IGNORECASE)
 UNKNOWN_SESSION = "the session is unknown, so the approval cannot be recorded"

@@ -50,6 +50,12 @@
       "description": "Add the /work-board pane that lists subagents with their status, elapsed time, and edited files, marks files two active owners edit, and shows context, Claude and Codex usage, limit pace, and the prompt-cache hit rate; while subagents run or files conflict, show a one-line summary above the prompt.",
       "default": true
     },
+    "secret_redaction": {
+      "type": "boolean",
+      "title": "Secret redaction",
+      "description": "Mask high-confidence secrets, such as cloud and API tokens, private keys, JWTs, and URL passwords, as [REDACTED:kind] in Bash, Read, Grep, and MCP results before Claude reads them, and deny edits whose new text contains a [REDACTED: placeholder. Variable names alone never trigger masking.",
+      "default": true
+    },
     "implementation_worker": {
       "type": "string",
       "title": "Implementation worker",

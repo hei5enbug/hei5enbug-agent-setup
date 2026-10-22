@@ -1,6 +1,7 @@
 import { registerAgentGuard, registerRolePinning } from "./agents.js";
 import { registerWorkBoard } from "./board.js";
 import { registerGpt } from "./gpt.js";
+import { registerSecretRedaction } from "./redact.js";
 import { registerRiskHighlight } from "./risk.js";
 
 const OFF_VALUES = new Set(["false", "0", "off", "no"]);
@@ -18,4 +19,5 @@ export function register(on, options) {
   registerGpt(on);
   if (enabled(settings.risk_highlight)) registerRiskHighlight(on);
   if (enabled(settings.work_board)) registerWorkBoard(on);
+  if (enabled(settings.secret_redaction)) registerSecretRedaction(on);
 }

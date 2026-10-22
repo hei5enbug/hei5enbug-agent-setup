@@ -159,6 +159,13 @@ edited files, marks a file red when two of them edit it, and shows context use, 
 5-hour and weekly use with a pace forecast, and the Codex weekly use. While a subagent runs or a conflict exists, a
 one-line summary appears above the prompt.
 
+With `secret_redaction` on, the mod masks well-known secret formats in Bash, Read, Grep, and MCP results before
+Claude reads them, such as cloud and service API keys, private key blocks, JWTs, and passwords in URLs, and leaves
+variable names and placeholders alone. Each match becomes `[REDACTED:<kind>]`. An edit or write whose new text
+contains that marker is denied, so a masked file is never written back over the real value. `config/secret-patterns.json`
+holds the formats, which the approval guard also uses when it shows a command, and only the first 4 MB of a result is
+scanned.
+
 ### Response language
 
 A language guard, `scripts/language_guard.py`, checks that every reply and every progress update is written in the
@@ -772,6 +779,7 @@ write Codex settings.
 | Pin role models | `role_pinning` | Not applicable |
 | Risk labels on tool calls | `risk_highlight` | Not applicable |
 | Work board for subagents | `work_board` | Not applicable |
+| Secret redaction in tool results | `secret_redaction` | Not applicable |
 | Implementation worker route | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, or `sonnet`) | Not applicable |
 | Claude Code worker model and effort | `worker_model` (default `claude-haiku-5-5`) and `worker_effort` (default `high`) | Not applicable |
 | Codex worker model and effort | `codex_worker_model` (`gpt-5.6-luna` or `gpt-6.1-sol`, default `gpt-5.6-luna`) and `codex_worker_effort` (`high` or `xhigh`, default `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL` and `HEI5ENBUG_CODEX_WORKER_EFFORT` |

@@ -190,6 +190,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
                 "role_pinning",
                 "risk_highlight",
                 "work_board",
+                "secret_redaction",
                 "implementation_worker",
                 "worker_model",
                 "worker_effort",

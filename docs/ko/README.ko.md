@@ -161,6 +161,12 @@ mod는 화면 표시 두 가지도 그리며, 둘 다 모델 컨텍스트에는 
 Claude 5시간·주간 사용량과 소진 예측, Codex 주간 사용량도 보여 줍니다. 서브에이전트가 실행 중이거나 충돌이 있으면 입력창
 위에 한 줄 요약이 나타납니다.
 
+`secret_redaction`을 켜면 mod가 Bash, Read, Grep, MCP 결과에서 잘 알려진 비밀값 형식을 Claude가 읽기 전에 가립니다.
+클라우드·서비스 API 키, 개인 키 블록, JWT, URL 안의 비밀번호 등이며, 변수 이름과 자리 표시용 값은 그대로 둡니다. 찾은 값은
+`[REDACTED:<종류>]`로 바뀝니다. 새 내용에 이 표시가 들어간 편집이나 쓰기는 거부하므로, 가려진 파일을 실제 값 위에 다시 쓰는
+일이 없습니다. 형식 목록은 `config/secret-patterns.json`에 있고 승인 가드가 명령을 보여 줄 때도 같은 목록을 씁니다. 결과는
+앞 4MB까지만 검사합니다.
+
 ### 응답 언어
 
 언어 가드인 `scripts/language_guard.py`는 모든 답변과 진행 상황 안내가 응답 언어로 작성되었는지 확인합니다.
@@ -718,6 +724,7 @@ Codex 설정이나 Claude 설정을 쓰지 않습니다. Codex 설정을 쓰는 
 | 역할 모델 고정 | `role_pinning` | 해당 없음 |
 | 도구 호출 위험 라벨 | `risk_highlight` | 해당 없음 |
 | 서브에이전트 작업 현황판 | `work_board` | 해당 없음 |
+| 도구 결과 비밀값 가리기 | `secret_redaction` | 해당 없음 |
 | 구현 worker 경로 | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, 또는 `sonnet`) | 해당 없음 |
 | Claude Code worker 모델과 사고 강도 | `worker_model` (기본 `claude-haiku-5-5`), `worker_effort` (기본 `high`) | 해당 없음 |
 | Codex worker 모델과 사고 강도 | `codex_worker_model` (`gpt-5.6-luna` 또는 `gpt-6.1-sol`, 기본 `gpt-5.6-luna`), `codex_worker_effort` (`high` 또는 `xhigh`, 기본 `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL`, `HEI5ENBUG_CODEX_WORKER_EFFORT` |
