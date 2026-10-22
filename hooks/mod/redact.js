@@ -1,11 +1,14 @@
 const RESULT_TOOLS = /^(Bash|Read|Grep|mcp__.+)$/;
 const WRITE_TOOLS = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
 const SCAN_LIMIT = 4 * 1024 * 1024;
-const MAX_DEPTH = 8;
-const SKIPPED_KEYS = new Set(["base64", "type", "mimeType", "mediaType", "filePath", "rawOutputPath", "backgroundOutputPath", "outputDir"]);
+const MAX_NODES = 1_000_000;
+const BINARY_TYPE = /^(?:(?:image|audio|video)(?:\/|$)|application\/(?:pdf|octet-stream)|pdf$)/i;
+const BASE64_BLOB = /^[A-Za-z0-9+/=\r\n]{64,}$/;
 const PLACEHOLDER_MARK = "[REDACTED:";
 const DENY_REASON =
   "This text contains a [REDACTED:...] placeholder, which marks a secret that was masked when it was read. Writing it would replace the real value. Edit around the masked span without rewriting it.";
+const CONTEXT_DENY_REASON =
+  "The result is withheld because text a hook attached to it holds a secret that cannot be masked. Run the call again after removing that source, or read the value another way.";
 let compiled;
 
 function isRecord(value) {
@@ -45,30 +48,72 @@ export function maskText(text, patterns, budget = { left: SCAN_LIMIT }) {
   return count === 0 ? { text, count } : { text: masked + text.slice(head.length), count };
 }
 
-export function maskValue(value, patterns, budget = { left: SCAN_LIMIT }, depth = 0) {
+function isContainer(value) {
+  if (value === null || typeof value !== "object") return false;
+  if (Array.isArray(value)) return true;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function isBinary(object) {
+  return [object.type, object.mimeType, object.mediaType].some((kind) => typeof kind === "string" && BINARY_TYPE.test(kind));
+}
+
+function define(target, key, value) {
+  Object.defineProperty(target, key, { value, enumerable: true, writable: true, configurable: true });
+}
+
+function emptyLike(value) {
+  return Array.isArray(value) ? [] : Object.create(Object.getPrototypeOf(value));
+}
+
+export function maskValue(value, patterns, budget = { left: SCAN_LIMIT }) {
   if (typeof value === "string") return maskText(value, patterns, budget);
-  if (depth >= MAX_DEPTH || value === null || typeof value !== "object") return { text: value, count: 0 };
-  const array = Array.isArray(value);
-  if (!array && !isRecord(value)) return { text: value, count: 0 };
+  if (!isContainer(value)) return { text: value, count: 0 };
   let count = 0;
-  const copy = array ? [] : {};
-  for (const [key, item] of Object.entries(value)) {
-    const inner = !array && SKIPPED_KEYS.has(key) ? { text: item, count: 0 } : maskValue(item, patterns, budget, depth + 1);
-    copy[key] = inner.text;
-    count += inner.count;
+  let nodes = 0;
+  const root = emptyLike(value);
+  const path = new Set([value]);
+  const stack = [{ source: value, copy: root, entries: Object.entries(value), at: 0, binary: isBinary(value) }];
+  while (stack.length > 0) {
+    const frame = stack[stack.length - 1];
+    if (frame.at >= frame.entries.length) {
+      path.delete(frame.source);
+      stack.pop();
+      continue;
+    }
+    const [key, item] = frame.entries[frame.at];
+    frame.at += 1;
+    if (typeof item === "string") {
+      const inner = frame.binary && BASE64_BLOB.test(item) ? { text: item, count: 0 } : maskText(item, patterns, budget);
+      define(frame.copy, key, inner.text);
+      count += inner.count;
+    } else if (isContainer(item) && !path.has(item) && nodes < MAX_NODES) {
+      nodes += 1;
+      const copy = emptyLike(item);
+      define(frame.copy, key, copy);
+      path.add(item);
+      stack.push({ source: item, copy, entries: Object.entries(item), at: 0, binary: frame.binary || isBinary(item) });
+    } else {
+      define(frame.copy, key, item);
+    }
   }
-  return count === 0 ? { text: value, count } : { text: copy, count };
+  return count === 0 ? { text: value, count } : { text: root, count };
 }
 
 export function maskedAnswer(answer, patterns) {
   if (answer.deny !== undefined) return { answer, count: 0 };
   const budget = { left: SCAN_LIMIT };
+  const failed = answer.isError === true;
+  const context = Array.isArray(answer.context) ? answer.context.reduce((total, entry) => total + maskText(entry, patterns, budget).count, 0) : 0;
+  if (context > 0) return { answer: { deny: CONTEXT_DENY_REASON }, count: context, withheld: true };
+  const text = failed ? maskText(answer.text, patterns, budget) : { text: undefined, count: 0 };
   const result = maskValue(answer.result, patterns, budget);
-  const text = answer.isError === true ? maskText(answer.text, patterns, budget) : { text: undefined, count: 0 };
+  const derived = failed ? 0 : maskText(answer.text, patterns, budget).count;
   const count = result.count + text.count;
-  if (count === 0) return { answer, count };
+  if (count + derived === 0) return { answer, count: 0 };
   const { ref: _ref, text: _text, isReadOnly: _readOnly, ...rest } = answer;
-  return { answer: { ...rest, result: result.text, ...(answer.isError === true ? { text: text.text } : {}) }, count };
+  return { answer: { ...rest, result: result.text, ...(failed ? { text: text.text } : {}) }, count: count || derived };
 }
 
 export function carriesPlaceholder(e) {
@@ -100,8 +145,11 @@ export function registerSecretRedaction(on) {
   on("tool.call", { tool: RESULT_TOOLS }, async ($, e, next) => {
     const answer = await next(e);
     try {
-      const { answer: masked, count } = maskedAnswer(answer, await patternsOf($));
-      if (count > 0) $.ui.log(`${$.plugin.name}: masked ${count} secret ${count === 1 ? "value" : "values"} in the ${e.tool} result`);
+      const { answer: masked, count, withheld } = maskedAnswer(answer, await patternsOf($));
+      if (count > 0) {
+        const noun = count === 1 ? "value" : "values";
+        $.ui.log(`${$.plugin.name}: ${withheld ? `withheld the ${e.tool} result, hook context held ${count} secret ${noun}` : `masked ${count} secret ${noun} in the ${e.tool} result`}`);
+      }
       return masked;
     } catch {
       return answer;

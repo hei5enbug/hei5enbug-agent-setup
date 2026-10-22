@@ -71,6 +71,27 @@ POSITIVE = {
     ),
 }
 
+header = "-----BEGIN ENCRYPTED PRIVATE" + " KEY-----"
+footer = "-----END ENCRYPTED PRIVATE" + " KEY-----"
+EXTRA_POSITIVE = [
+    (
+        lambda: f"{header}\n{fake(30, BASE64, 5)}\n{fake(30, BASE64, 6)}\n{footer}",
+        lambda: "[REDACTED:private-key]",
+    ),
+    (
+        lambda: f"postgres://demo:p%40ss%23{fake(10)}%21@db.example.com/app",
+        lambda: "postgres://demo:[REDACTED:url-password]@db.example.com/app",
+    ),
+    (
+        lambda: f"{pem('OPENSSH PRIVATE KEY')}\n{pem('PRIVATE KEY')}",
+        lambda: "[REDACTED:private-key]\n[REDACTED:private-key]",
+    ),
+    (
+        lambda: f"{header}\nProc-Type: 4,ENCRYPTED\n\n{fake(64, BASE64, 4)}\n{footer}",
+        lambda: "[REDACTED:private-key]",
+    ),
+]
+
 NEAR_MISSES = [
     "AKIA" + "A1B2C3D4E5F6G7H",
     "id " + "AKIA" + "Q" * 16,
@@ -107,6 +128,12 @@ NEAR_MISSES = [
     "http://localhost:8080/path@x",
     "-----BEGIN PUBLIC KEY-----\nabc\n-----END PUBLIC KEY-----",
     "-----BEGIN RSA PRIVATE" + " KEY----- without an end line",
+    "-----BEGIN PRIVATE" + " KEY-----\n<your-private-key>\n-----END PRIVATE" + " KEY-----",
+    "-----BEGIN RSA PRIVATE" + " KEY-----\nMIIEpAIBAAKCAQEA...\n-----END RSA PRIVATE" + " KEY-----",
+    "-----BEGIN PRIVATE" + " KEY-----\npaste your private key content here from the secrets manager\n-----END PRIVATE" + " KEY-----",
+    "postgres://demo:%DB_PASSWORD%@db.example.com/app",
+    "postgres://demo:%(db_password)s@db.example.com/app",
+    "postgres://demo:[password]@db.example.com/app",
     "commit 3f786850e387550fdab836ed7e6dc881de23001b",
     "id 123e4567-e89b-12d3-a456-426614174000",
     "sha256:" + "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
@@ -139,6 +166,13 @@ def test_every_pattern_compiles_and_has_a_positive_case(patterns):
 @pytest.mark.parametrize("name", sorted(POSITIVE))
 def test_pattern_masks_a_runtime_built_token_and_keeps_its_context(name):
     build, expected = POSITIVE[name]
+
+    assert state_mod.redact_tokens(build()) == expected()
+
+
+@pytest.mark.parametrize("index", range(len(EXTRA_POSITIVE)))
+def test_extra_positive_cases_mask(index):
+    build, expected = EXTRA_POSITIVE[index]
 
     assert state_mod.redact_tokens(build()) == expected()
 
@@ -199,7 +233,10 @@ def test_javascript_mod_masks_the_same_tokens_with_the_same_file(tmp_path):
     (tmp_path / "input.json").write_text(
         json.dumps({
             "patterns": PATTERNS_PATH.read_text(encoding="utf-8"),
-            "positive": {name: build() for name, (build, _) in POSITIVE.items()},
+            "positive": {
+                **{name: build() for name, (build, _) in POSITIVE.items()},
+                **{f"extra-{index}": build() for index, (build, _) in enumerate(EXTRA_POSITIVE)},
+            },
             "near": NEAR_MISSES,
         }),
         encoding="utf-8",
@@ -213,5 +250,8 @@ def test_javascript_mod_masks_the_same_tokens_with_the_same_file(tmp_path):
 
     assert done.returncode == 0, done.stderr
     output = json.loads(done.stdout)
-    assert output["positive"] == {name: expected() for name, (_, expected) in POSITIVE.items()}
+    assert output["positive"] == {
+        **{name: expected() for name, (_, expected) in POSITIVE.items()},
+        **{f"extra-{index}": expected() for index, (_, expected) in enumerate(EXTRA_POSITIVE)},
+    }
     assert output["near"] == NEAR_MISSES

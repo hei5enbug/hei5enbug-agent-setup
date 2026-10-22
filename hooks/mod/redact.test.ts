@@ -1,11 +1,12 @@
 import { expect, test } from "claude-code/testing";
-import { carriesPlaceholder, compilePatterns, maskText, resetSecretPatterns } from "./redact.js";
+import { carriesPlaceholder, compilePatterns, maskText, maskValue, resetSecretPatterns } from "./redact.js";
 
 const PATTERNS_FILE = "config/secret-patterns.json";
 const ALNUM = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const PATTERNS = JSON.stringify({
   placeholder: "(.)\\1{9}",
   patterns: [
+    { name: "aws-access-key-id", pattern: "\\b(?:AKIA|ASIA)[0-9A-Z]{16}\\b", placeholder: true },
     { name: "github-token", pattern: "\\bgh[pousr]_[A-Za-z0-9]{36,}", placeholder: true },
     {
       name: "bearer-token",
@@ -23,6 +24,8 @@ function fake(length: number, seed = 1) {
 
 const TOKEN = `ghp_${fake(36)}`;
 const MASK = "[REDACTED:github-token]";
+const KEY_ID = `AKIA${fake(16, 2).toUpperCase()}`;
+const BLOB = `${fake(40, 3)}/${KEY_ID}/${fake(40, 4)}`;
 
 function world(on, options: { patterns?: string | null; answer?: (e: any) => any } = {}) {
   const logs: string[] = [];
@@ -83,11 +86,11 @@ test("도구에 넘기는 인자는 건드리지 않는다", async ($, on) => {
   expect(seen[0].command).toBe(command);
 });
 
-test("Read 텍스트 결과는 file.content만 가리고 경로와 줄 수는 그대로 둔다", async ($, on) => {
+test("Read 텍스트 결과는 file.content의 토큰만 가리고 경로와 줄 수는 그대로 둔다", async ($, on) => {
   // given
   world(on, {
     answer: () => ({
-      result: { type: "text", file: { filePath: `/work/${TOKEN}.txt`, content: `a=${TOKEN}\nb=2`, numLines: 2, startLine: 1, totalLines: 2 } },
+      result: { type: "text", file: { filePath: "/work/a.txt", content: `a=${TOKEN}\nb=2`, numLines: 2, startLine: 1, totalLines: 2 } },
     }),
   });
 
@@ -97,29 +100,52 @@ test("Read 텍스트 결과는 file.content만 가리고 경로와 줄 수는 �
   // then
   expect(answer.result).toEqual({
     type: "text",
-    file: { filePath: `/work/${TOKEN}.txt`, content: `a=${MASK}\nb=2`, numLines: 2, startLine: 1, totalLines: 2 },
+    file: { filePath: "/work/a.txt", content: `a=${MASK}\nb=2`, numLines: 2, startLine: 1, totalLines: 2 },
   });
 });
 
-test("Read 이미지 결과는 base64에 토큰 모양이 있어도 그대로 둔다", async ($, on) => {
+test("이미지와 PDF의 base64 덩어리는 같은 객체의 type이나 mime이 알려 줄 때만 건너뛴다", async ($, on) => {
   // given
-  const result = { type: "image", file: { base64: `${TOKEN}`, type: "image/png", originalSize: 40 } };
-  const { logs } = world(on, { answer: () => ({ ref: 3, result, text: "image" }) });
+  const image = { type: "image", file: { base64: BLOB, type: "image/png", originalSize: 40 } };
+  const pdf = { type: "pdf", file: { filePath: "/work/a.pdf", base64: BLOB, originalSize: 40 } };
+  const block = { content: [{ type: "image", data: BLOB, mimeType: "image/png" }] };
+  const { logs } = world(on, { answer: (e) => ({ ref: 3, result: e.tool === "Read" ? (e.file_path.endsWith("png") ? image : pdf) : block, text: "binary" }) });
 
   // when
-  const answer = await $.tool.call({ tool: "Read", file_path: "/work/a.png" });
+  const png = await $.tool.call({ tool: "Read", file_path: "/work/a.png" });
+  const doc = await $.tool.call({ tool: "Read", file_path: "/work/a.pdf" });
+  const mcp = await $.tool.call({ tool: "mcp__demo__shot" });
 
   // then
-  expect(answer.result).toEqual(result);
-  expect(answer.ref).toBe(3);
+  expect(png.result).toEqual(image);
+  expect(doc.result).toEqual(pdf);
+  expect(mcp.result).toEqual(block);
+  expect(png.ref).toBe(3);
   expect(logs).toEqual([]);
 });
 
-test("MCP 결과는 content 블록의 text만 가리고 블록 모양과 isError를 그대로 둔다", async ($, on) => {
+test("키 이름이 base64나 data여도 type과 mime이 이진을 가리키지 않으면 가린다", async ($, on) => {
+  // given
+  world(on, {
+    answer: () => ({ result: { content: [{ type: "text", data: BLOB, base64: `${BLOB}` }], file: { base64: BLOB, filePath: `/x/${TOKEN}` } } }),
+  });
+
+  // when
+  const answer = await $.tool.call({ tool: "mcp__demo__fetch" });
+
+  // then
+  const masked = answer.result.content[0];
+  expect(masked.data).toContain("[REDACTED:aws-access-key-id]");
+  expect(masked.base64).toContain("[REDACTED:aws-access-key-id]");
+  expect(answer.result.file.base64).toContain("[REDACTED:aws-access-key-id]");
+  expect(answer.result.file.filePath).toBe(`/x/${MASK}`);
+});
+
+test("MCP 결과는 키 이름과 상관없이 모든 문자열을 가리고 블록 모양과 isError를 그대로 둔다", async ($, on) => {
   // given
   world(on, {
     answer: () => ({
-      result: { content: [{ type: "text", text: `key ${TOKEN}` }, { type: "image", data: "AAAA", mimeType: "image/png" }], isError: false, structuredContent: { note: `n ${TOKEN}`, count: 2 } },
+      result: { content: [{ type: "text", text: `key ${TOKEN}` }, { type: "image", data: "AAAA", mimeType: "image/png" }], isError: false, structuredContent: { note: `n ${TOKEN}`, count: 2, filePath: `https://example.com/${TOKEN}`, type: `t ${TOKEN}` } },
     }),
   });
 
@@ -130,7 +156,7 @@ test("MCP 결과는 content 블록의 text만 가리고 블록 모양과 isError
   expect(answer.result).toEqual({
     content: [{ type: "text", text: `key ${MASK}` }, { type: "image", data: "AAAA", mimeType: "image/png" }],
     isError: false,
-    structuredContent: { note: `n ${MASK}`, count: 2 },
+    structuredContent: { note: `n ${MASK}`, count: 2, filePath: `https://example.com/${MASK}`, type: `t ${MASK}` },
   });
 });
 
@@ -271,4 +297,87 @@ test("secret_redaction 옵션이 꺼지면 결과를 가리지도 쓰기를 막�
   expect(read.result.stdout).toBe(TOKEN);
   expect(write.deny).toBeUndefined();
   expect(logs).toEqual([]);
+});
+
+test("훅이 붙인 context에 토큰이 있으면 고쳐 쓸 수 없으므로 결과를 보류한다", async ($, on) => {
+  // given
+  const { logs } = world(on, { answer: () => ({ ref: 5, result: { stdout: "clean", stderr: "" }, text: "clean", context: [`note ${TOKEN}`, "fine"] }) });
+
+  // when
+  const answer = await $.tool.call({ tool: "Bash", command: "echo clean" });
+
+  // then
+  expect(answer.deny).toContain("withheld");
+  expect(answer.deny).not.toContain(TOKEN);
+  expect(answer.result).toBeUndefined();
+  expect(logs).toHaveLength(1);
+  expect(logs[0]).toContain("withheld the Bash result");
+  expect(logs[0]).not.toContain(TOKEN);
+});
+
+test("오류 결과의 context에 토큰이 있어도 보류하고 깨끗한 context는 그대로 둔다", async ($, on) => {
+  // given
+  world(on, { answer: (e) => ({ isError: true, ref: 5, result: "boom", text: "boom", context: [e.command === "dirty" ? `why ${TOKEN}` : "why not"] }) });
+
+  // when
+  const dirty = await $.tool.call({ tool: "Bash", command: "dirty" });
+  const clean = await $.tool.call({ tool: "Bash", command: "clean" });
+
+  // then
+  expect(dirty.deny).toContain("withheld");
+  expect(clean.context).toEqual(["why not"]);
+  expect(clean.ref).toBe(5);
+});
+
+test("중첩이 깊은 결과도 끝까지 훑고 깊이 때문에 건너뛰지 않는다", () => {
+  // given
+  const patterns = compilePatterns(PATTERNS);
+  let value: any = { leaf: `deep ${TOKEN}` };
+  for (let level = 0; level < 3000; level += 1) value = level % 2 === 0 ? { next: value } : [value];
+
+  // when
+  const { text, count } = maskValue(value, patterns);
+
+  // then
+  let cursor = text;
+  while (cursor.next !== undefined || Array.isArray(cursor)) cursor = Array.isArray(cursor) ? cursor[0] : cursor.next;
+  expect(count).toBe(1);
+  expect(cursor).toEqual({ leaf: `deep ${MASK}` });
+  expect(value.next === undefined && Array.isArray(value)).toBe(true);
+});
+
+test("순환 참조는 무한히 돌지 않고 같은 객체를 두 번 가리키면 두 곳 모두 가린다", () => {
+  // given
+  const patterns = compilePatterns(PATTERNS);
+  const shared = { note: TOKEN };
+  const loop: any = { name: TOKEN };
+  loop.self = loop;
+
+  // when
+  const twice = maskValue({ a: shared, b: shared }, patterns);
+  const cyclic = maskValue(loop, patterns);
+
+  // then
+  expect(twice.text).toEqual({ a: { note: MASK }, b: { note: MASK } });
+  expect(twice.count).toBe(2);
+  expect(cyclic.text.name).toBe(MASK);
+  expect(cyclic.text.self).toBe(loop);
+});
+
+test("소유한 __proto__ 키를 포함해 모든 키를 같은 모양으로 복사하고 프로토타입은 오염시키지 않는다", async ($, on) => {
+  // given
+  const result = JSON.parse(`{"__proto__": {"polluted": "${TOKEN}"}, "list": [{"__proto__": "${TOKEN}"}], "kept": 1}`);
+  world(on, { answer: () => ({ result }) });
+
+  // when
+  const answer = await $.tool.call({ tool: "mcp__demo__fetch" });
+
+  // then
+  const copy = answer.result;
+  expect(Object.keys(copy)).toEqual(["__proto__", "list", "kept"]);
+  expect(Object.getOwnPropertyDescriptor(copy, "__proto__")?.value).toEqual({ polluted: MASK });
+  expect(Object.getOwnPropertyDescriptor(copy.list[0], "__proto__")?.value).toBe(MASK);
+  expect(Object.getPrototypeOf(copy)).toBe(Object.prototype);
+  expect(({} as any).polluted).toBeUndefined();
+  expect(copy.kept).toBe(1);
 });
