@@ -1,5 +1,5 @@
 import { expect, test } from "claude-code/testing";
-import { carriesPlaceholder, compilePatterns, maskText, maskValue, resetSecretPatterns } from "./redact.js";
+import { carriesIssuedPlaceholder, compilePatterns, createIssuer, markerIds, maskText, maskValue, resetSecretPatterns } from "./redact.js";
 
 const PATTERNS_FILE = "config/secret-patterns.json";
 const ALNUM = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -26,6 +26,12 @@ const TOKEN = `ghp_${fake(36)}`;
 const MASK = "[REDACTED:github-token]";
 const KEY_ID = `AKIA${fake(16, 2).toUpperCase()}`;
 const BLOB = `${fake(40, 3)}/${KEY_ID}/${fake(40, 4)}`;
+
+const ID = /:[0-9a-f]{6}\]/g;
+
+function plain<T>(value: T): T {
+  return typeof value === "string" ? (value.replace(ID, "]") as T) : JSON.parse(JSON.stringify(value).replace(ID, "]"));
+}
 
 function world(on, options: { patterns?: string | null; answer?: (e: any) => any } = {}) {
   const logs: string[] = [];
@@ -61,7 +67,7 @@ test("Bash 결과는 stdout과 stderr의 토큰만 종류가 보이게 가리고
   const answer = await $.tool.call({ tool: "Bash", command: "cat .env" });
 
   // then
-  expect(answer.result).toEqual({
+  expect(plain(answer.result)).toEqual({
     stdout: `token ${MASK} end\nAuthorization: Bearer [REDACTED:bearer-token]`,
     stderr: `warn ${MASK}`,
     interrupted: false,
@@ -98,7 +104,7 @@ test("Read 텍스트 결과는 file.content의 토큰만 가리고 경로와 줄
   const answer = await $.tool.call({ tool: "Read", file_path: "/work/a.txt" });
 
   // then
-  expect(answer.result).toEqual({
+  expect(plain(answer.result)).toEqual({
     type: "text",
     file: { filePath: "/work/a.txt", content: `a=${MASK}\nb=2`, numLines: 2, startLine: 1, totalLines: 2 },
   });
@@ -134,11 +140,11 @@ test("키 이름이 base64나 data여도 type과 mime이 이진을 가리키지 
   const answer = await $.tool.call({ tool: "mcp__demo__fetch" });
 
   // then
-  const masked = answer.result.content[0];
+  const masked = plain(answer.result.content[0]);
   expect(masked.data).toContain("[REDACTED:aws-access-key-id]");
   expect(masked.base64).toContain("[REDACTED:aws-access-key-id]");
-  expect(answer.result.file.base64).toContain("[REDACTED:aws-access-key-id]");
-  expect(answer.result.file.filePath).toBe(`/x/${MASK}`);
+  expect(plain(answer.result.file.base64)).toContain("[REDACTED:aws-access-key-id]");
+  expect(plain(answer.result.file.filePath)).toBe(`/x/${MASK}`);
 });
 
 test("MCP 결과는 키 이름과 상관없이 모든 문자열을 가리고 블록 모양과 isError를 그대로 둔다", async ($, on) => {
@@ -153,7 +159,7 @@ test("MCP 결과는 키 이름과 상관없이 모든 문자열을 가리고 블
   const answer = await $.tool.call({ tool: "mcp__demo__fetch", id: "1" });
 
   // then
-  expect(answer.result).toEqual({
+  expect(plain(answer.result)).toEqual({
     content: [{ type: "text", text: `key ${MASK}` }, { type: "image", data: "AAAA", mimeType: "image/png" }],
     isError: false,
     structuredContent: { note: `n ${MASK}`, count: 2, filePath: `https://example.com/${MASK}`, type: `t ${MASK}` },
@@ -171,8 +177,8 @@ test("문자열 결과와 Grep 결과도 같은 모양으로 가린다", async (
   const text = await $.tool.call({ tool: "mcp__demo__echo" });
 
   // then
-  expect(grep.result).toEqual({ mode: "content", content: `src/a.ts:1:${MASK}`, numLines: 1 });
-  expect(text.result).toBe(`plain ${MASK}`);
+  expect(plain(grep.result)).toEqual({ mode: "content", content: `src/a.ts:1:${MASK}`, numLines: 1 });
+  expect(plain(text.result)).toBe(`plain ${MASK}`);
 });
 
 test("오류 결과는 text와 result를 모두 가리고 호스트 기록을 가리키는 ref는 버린다", async ($, on) => {
@@ -184,8 +190,8 @@ test("오류 결과는 text와 result를 모두 가리고 호스트 기록을 �
 
   // then
   expect(answer.isError).toBe(true);
-  expect(answer.result).toBe(`Exit code 1\n${MASK}`);
-  expect(answer.text).toBe(`Exit code 1\n${MASK}`);
+  expect(plain(answer.result)).toBe(`Exit code 1\n${MASK}`);
+  expect(plain(answer.text)).toBe(`Exit code 1\n${MASK}`);
   expect(answer.ref).toBeUndefined();
 });
 
@@ -228,7 +234,7 @@ test("4MB 뒤의 토큰은 훑지 않고 그 앞의 토큰은 가린다", async 
   const answer = await $.tool.call({ tool: "Bash", command: "cat big.log" });
 
   // then
-  expect(answer.result.stdout.startsWith(`${MASK}\n`)).toBe(true);
+  expect(plain(answer.result.stdout).startsWith(`${MASK}\n`)).toBe(true);
   expect(answer.result.stdout.endsWith(TOKEN)).toBe(true);
   expect(answer.result.stderr).toBe(TOKEN);
 });
@@ -248,14 +254,56 @@ test("마스킹 도우미는 자리표시자와 한 글자 반복 값을 가리�
   expect(spent.count).toBe(0);
 });
 
-test("가려진 자리표시자가 새 내용에 들어 있으면 Edit, Write, MultiEdit, NotebookEdit을 거부하고 도구는 실행하지 않는다", async ($, on) => {
+async function issue($, token = TOKEN, command = "cat .env") {
+  const answer = await $.tool.call({ tool: "Bash", command: `${command} ${token.slice(-4)}` });
+  const found = answer.result.stdout.match(/\[REDACTED:[a-z-]+:[0-9a-f]{6}\]/);
+  return found[0] as string;
+}
+
+const secretOut = (token: string) => (e: any) => (e.tool === "Bash" ? { ref: 7, result: { stdout: `v=${token}`, stderr: "" }, text: "" } : undefined);
+
+test("마스킹한 값마다 세션이 발급한 id가 붙고 같은 값은 같은 id를 다시 쓰고 다른 값은 다른 id를 받는다", async ($, on) => {
   // given
-  const { seen } = world(on);
+  const other = `ghp_${fake(36, 5)}`;
+  const outputs = [TOKEN, TOKEN, other];
+  world(on, { answer: () => ({ result: { stdout: `v=${outputs.shift()}`, stderr: "" } }) });
+
+  // when
+  const first = await issue($);
+  const again = await issue($);
+  const second = await issue($, other);
+
+  // then
+  expect(first).toMatch(/^\[REDACTED:github-token:[0-9a-f]{6}\]$/);
+  expect(again).toBe(first);
+  expect(second).not.toBe(first);
+});
+
+test("한 결과 안의 서로 다른 값은 서로 다른 id를 받고 같은 값은 같은 id를 받는다", async ($, on) => {
+  // given
+  const other = `ghp_${fake(36, 6)}`;
+  world(on, { answer: () => ({ result: { stdout: `${TOKEN} ${other} ${TOKEN}`, stderr: "" } }) });
+
+  // when
+  const answer = await $.tool.call({ tool: "Bash", command: "cat .env" });
+
+  // then
+  const [one, two, three] = answer.result.stdout.split(" ");
+  expect(one).toBe(three);
+  expect(two).not.toBe(one);
+  expect(markerIds({ content: answer.result.stdout })).toHaveLength(3);
+});
+
+test("발급한 id가 붙은 자리표시자를 쓰는 Edit, Write, MultiEdit, NotebookEdit은 거부하고 도구는 실행하지 않는다", async ($, on) => {
+  // given
+  const { seen } = world(on, { answer: secretOut(TOKEN) });
+  const marker = await issue($);
+  seen.length = 0;
   const calls = [
-    { tool: "Edit", file_path: "/work/a.env", old_string: "a", new_string: `KEY=${MASK}` },
-    { tool: "Write", file_path: "/work/a.env", content: `KEY=[REDACTED:aws-access-key-id]` },
-    { tool: "MultiEdit", file_path: "/work/a.env", edits: [{ old_string: "a", new_string: "b" }, { old_string: "c", new_string: "[REDACTED:jwt]" }] },
-    { tool: "NotebookEdit", notebook_path: "/work/a.ipynb", new_source: `x = "${MASK}"` },
+    { tool: "Edit", file_path: "/work/a.env", old_string: "a", new_string: `KEY=${marker}` },
+    { tool: "Write", file_path: "/work/a.env", content: `KEY=${marker}` },
+    { tool: "MultiEdit", file_path: "/work/a.env", edits: [{ old_string: "a", new_string: "b" }, { old_string: "c", new_string: `x ${marker}` }] },
+    { tool: "NotebookEdit", notebook_path: "/work/a.ipynb", new_source: `x = "${marker}"` },
   ];
 
   // when
@@ -270,19 +318,78 @@ test("가려진 자리표시자가 새 내용에 들어 있으면 Edit, Write, M
   expect(seen).toEqual([]);
 });
 
-test("자리표시자가 없는 쓰기와 이전 내용에만 있는 자리표시자는 막지 않는다", async ($, on) => {
+test("id가 없거나 이 세션이 발급하지 않은 자리표시자는 문서와 테스트 픽스처 쓰기를 막지 않는다", async ($, on) => {
   // given
-  const { seen } = world(on);
+  const { seen } = world(on, { answer: secretOut(TOKEN) });
+  await issue($);
+  seen.length = 0;
+  const readme = "Each match becomes `[REDACTED:<kind>]` and `[REDACTED:<kind>:<id>]`.";
+  const fixture = `expect(mask(token)).toBe("[REDACTED:github-token]")`;
+  const calls = [
+    { tool: "Edit", file_path: "/work/README.md", old_string: "a", new_string: readme },
+    { tool: "Write", file_path: "/work/docs/redaction.md", content: "t=[REDACTED:jwt] and [REDACTED:aws-access-key-id]" },
+    { tool: "Write", file_path: "/work/a.test.ts", content: fixture },
+    { tool: "Write", file_path: "/work/b.md", content: "[REDACTED:jwt:ffffff] [REDACTED:jwt:abc] [REDACTED:jwt:7F3A9C]" },
+    { tool: "MultiEdit", file_path: "/work/c.md", edits: [{ old_string: "a", new_string: "[REDACTED:jwt]" }] },
+    { tool: "NotebookEdit", notebook_path: "/work/a.ipynb", new_source: `x = "${MASK}"` },
+  ];
 
   // when
-  const edit = await $.tool.call({ tool: "Edit", file_path: "/work/a.md", old_string: MASK, new_string: "removed" });
+  const answers = [];
+  for (const call of calls) answers.push(await $.tool.call(call));
+
+  // then
+  for (const answer of answers) expect(answer.deny).toBeUndefined();
+  expect(seen).toHaveLength(calls.length);
+});
+
+test("자리표시자가 없는 쓰기와 이전 내용에만 있는 자리표시자는 막지 않는다", async ($, on) => {
+  // given
+  const { seen } = world(on, { answer: secretOut(TOKEN) });
+  const marker = await issue($);
+  seen.length = 0;
+
+  // when
+  const edit = await $.tool.call({ tool: "Edit", file_path: "/work/a.md", old_string: marker, new_string: "removed" });
   const write = await $.tool.call({ tool: "Write", file_path: "/work/a.md", content: "plain [REDACTED] text" });
 
   // then
   expect(edit.deny).toBeUndefined();
   expect(write.deny).toBeUndefined();
   expect(seen).toHaveLength(2);
-  expect(carriesPlaceholder({ new_string: "a", edits: [null, {}] })).toBe(false);
+  expect(markerIds({ new_string: "a", edits: [null, {}] })).toEqual([]);
+  expect(carriesIssuedPlaceholder({ content: "[REDACTED:jwt:abcdef]" }, { abcdef: "x" })).toBe(true);
+  expect(carriesIssuedPlaceholder({ content: "[REDACTED:jwt:abcdef]" }, {})).toBe(false);
+});
+
+test("모듈을 다시 불러와도 세션 state의 id가 남아 발급한 자리표시자를 계속 막고 같은 값은 같은 id를 쓴다", async ($, on) => {
+  // given
+  world(on, { answer: secretOut(TOKEN) });
+  const marker = await issue($);
+
+  // when
+  resetSecretPatterns();
+  const reread = await issue($);
+  const write = await $.tool.call({ tool: "Write", file_path: "/work/a.env", content: `KEY=${marker}` });
+
+  // then
+  expect(reread).toBe(marker);
+  expect(write.deny).toContain("[REDACTED:");
+});
+
+test("발급기는 알려진 id를 다시 쓰고 새 id만 fresh에 담으며 충돌하지 않는다", () => {
+  // given
+  const issuer = createIssuer({ aaaaaa: "print-a" });
+
+  // when
+  const ids = Array.from({ length: 300 }, (_, index) => issuer.issue("demo", `value-${index}`));
+
+  // then
+  expect(new Set(ids).size).toBe(300);
+  expect(Object.keys(issuer.fresh)).toHaveLength(300);
+  expect(Object.keys(issuer.fresh)).not.toContain("aaaaaa");
+  expect(ids.every((id) => /^[0-9a-f]{6}$/.test(id))).toBe(true);
+  expect(issuer.issue("demo", "value-7")).toBe(ids[7]);
 });
 
 test("secret_redaction 옵션이 꺼지면 결과를 가리지도 쓰기를 막지도 않는다", { options: { secret_redaction: false } }, async ($, on) => {
@@ -342,7 +449,7 @@ test("중첩이 깊은 결과도 끝까지 훑고 깊이 때문에 건너뛰지 
   let cursor = text;
   while (cursor.next !== undefined || Array.isArray(cursor)) cursor = Array.isArray(cursor) ? cursor[0] : cursor.next;
   expect(count).toBe(1);
-  expect(cursor).toEqual({ leaf: `deep ${MASK}` });
+  expect(plain(cursor)).toEqual({ leaf: `deep ${MASK}` });
   expect(value.next === undefined && Array.isArray(value)).toBe(true);
 });
 
@@ -375,8 +482,8 @@ test("소유한 __proto__ 키를 포함해 모든 키를 같은 모양으로 복
   // then
   const copy = answer.result;
   expect(Object.keys(copy)).toEqual(["__proto__", "list", "kept"]);
-  expect(Object.getOwnPropertyDescriptor(copy, "__proto__")?.value).toEqual({ polluted: MASK });
-  expect(Object.getOwnPropertyDescriptor(copy.list[0], "__proto__")?.value).toBe(MASK);
+  expect(plain(Object.getOwnPropertyDescriptor(copy, "__proto__")?.value)).toEqual({ polluted: MASK });
+  expect(plain(Object.getOwnPropertyDescriptor(copy.list[0], "__proto__")?.value)).toBe(MASK);
   expect(Object.getPrototypeOf(copy)).toBe(Object.prototype);
   expect(({} as any).polluted).toBeUndefined();
   expect(copy.kept).toBe(1);

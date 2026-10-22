@@ -161,8 +161,9 @@ one-line summary appears above the prompt.
 
 With `secret_redaction` on, the mod masks well-known secret formats in Bash, Read, Grep, and MCP results before
 Claude reads them, such as cloud and service API keys, private key blocks, JWTs, and passwords in URLs, and leaves
-variable names and placeholders alone. Each match becomes `[REDACTED:<kind>]`. An edit or write whose new text
-contains that marker is denied, so a masked file is never written back over the real value. `config/secret-patterns.json`
+variable names and placeholders alone. Each match becomes `[REDACTED:<kind>:<id>]`, where the id is issued in that
+session. An edit or write whose new text contains an issued marker is denied, so a masked file is never written back
+over the real value, while text that merely mentions such a marker, as documentation and tests do, is allowed. `config/secret-patterns.json`
 holds the formats, which the approval guard also uses when it shows a command, and only the first 4 MB of a result is
 scanned.
 
