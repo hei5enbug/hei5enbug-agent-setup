@@ -165,7 +165,7 @@ class DriveTest(unittest.TestCase):
         self.env = patch.dict(os.environ, {"ORCA_USER_DATA_PATH": self.temp.name, "XDG_STATE_HOME": self.temp.name, "ORCA_TERMINAL_HANDLE": "term_self"})
         self.env.start()
         self.addCleanup(self.env.stop)
-        for name in ("POLL_SECONDS", "DRAFT_STABLE_SECONDS", "IDLE_CONFIRM_SECONDS"):
+        for name in ("POLL_SECONDS", "DRAFT_STABLE_SECONDS", "IDLE_CONFIRM_SECONDS", "PROBE_RECHECK_SECONDS"):
             patcher = patch.object(refresh, name, 0)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -426,6 +426,93 @@ class ReviewRegressionTest(DriveTest):
         self.assertEqual(("failed", "probe_interrupted_check_input"), (sessions[0]["status"], sessions[0]["detail"]))
         self.assertNotIn(("term_claude", refresh.BACKSPACE), fake.keystrokes)
         self.assertEqual("쓰던 글xU", fake.draft("term_claude"))
+        self.assertEqual([], fake.sent)
+
+    def test_확인_중_추천_문구가_잠시_바뀌어도_입력이_깨끗하면_다시_확인해_보낸다(self):
+        """확인용 글자가 남지 않고 초안이 비었거나 원래대로면 실패로 두지 않고 안정된 뒤 다시 확인해 보낸다."""
+        # Given
+        fake = FakeOrca([terminal("term_claude", "claude")], ghosts={"term_claude": "추천 문구"}, on_send=self.simulate)
+        replaced = []
+
+        def replace_suggestion(fake, handle, text):
+            if text == refresh.PROBE_KEY and not replaced:
+                replaced.append(text)
+                fake.typed[handle] = ""
+                fake.ghosts.pop(handle)
+        fake.on_keys = replace_suggestion
+        sessions = refresh.plan_sessions(fake, self.state, "never", [])
+        restore = lambda seconds: fake.ghosts.setdefault("term_claude", "추천 문구")
+
+        # When
+        refresh.drive(fake, sessions, self.state, time.time() + 5, sleep=restore)
+
+        # Then
+        self.assertEqual(["/reload-plugins"], [text for _, text in fake.sent])
+        self.assertEqual(1, sessions[0]["probe_retries"])
+        self.assertEqual([refresh.PROBE_KEY, refresh.PROBE_KEY, refresh.BACKSPACE], [text for _, text in fake.keystrokes])
+        self.assertEqual("done", sessions[0]["status"])
+
+    def test_확인_뒤_초안에_다른_글이_섞이면_정리하지_않고_실패로_알린다(self):
+        """확인 뒤 초안이 원래 값도 빈 값도 아니면 확인용 글자가 섞였을 수 있어 키를 더 보내지 않고 실패로 남긴다."""
+        # Given
+        fake = FakeOrca([terminal("term_claude", "claude")], typed={"term_claude": "쓰던 글"})
+
+        def mix(fake, handle, text):
+            fake.typed[handle] = "다른 글x"
+        fake.on_keys = mix
+        sessions = refresh.plan_sessions(fake, self.state, "never", [])
+
+        # When
+        refresh.drive(fake, sessions, self.state, time.time() + 0.5, sleep=lambda seconds: None)
+
+        # Then
+        self.assertEqual(("failed", "probe_interrupted_check_input"), (sessions[0]["status"], sessions[0]["detail"]))
+        self.assertEqual([("term_claude", refresh.PROBE_KEY)], fake.keystrokes)
+        self.assertEqual("다른 글x", fake.draft("term_claude"))
+        self.assertEqual([], fake.sent)
+
+    def test_확인이_깨끗하게_끊기는_일이_한도를_넘으면_실패로_알린다(self):
+        """깨끗한 중단으로 다시 확인하는 횟수에는 한도가 있어 넘으면 입력줄을 확인하라는 실패로 남긴다."""
+        # Given
+        fake = FakeOrca([terminal("term_claude", "claude")], ghosts={"term_claude": "추천 문구"})
+
+        def replace_suggestion(fake, handle, text):
+            if text == refresh.PROBE_KEY:
+                fake.typed[handle] = ""
+                fake.ghosts.pop(handle, None)
+        fake.on_keys = replace_suggestion
+        sessions = refresh.plan_sessions(fake, self.state, "never", [])
+        restore = lambda seconds: fake.ghosts.setdefault("term_claude", "추천 문구")
+
+        # When
+        refresh.drive(fake, sessions, self.state, time.time() + 5, sleep=restore)
+
+        # Then
+        self.assertEqual(("failed", "probe_interrupted_check_input"), (sessions[0]["status"], sessions[0]["detail"]))
+        self.assertEqual(refresh.PROBE_RETRIES, sessions[0]["probe_retries"])
+        self.assertEqual([refresh.PROBE_KEY] * (refresh.PROBE_RETRIES + 1), [text for _, text in fake.keystrokes])
+        self.assertEqual([], fake.sent)
+
+    def test_넘겨받은_세션도_앞서_쓴_재확인_횟수를_이어서_센다(self):
+        """도우미에 넘어온 세션은 앞단에서 쓴 재확인 횟수를 이어받아, 한도를 다 쓴 뒤의 중단은 바로 실패로 남긴다."""
+        # Given
+        fake = FakeOrca([terminal("term_claude", "claude")], ghosts={"term_claude": "추천 문구"})
+
+        def replace_suggestion(fake, handle, text):
+            if text == refresh.PROBE_KEY:
+                fake.typed[handle] = ""
+                fake.ghosts.pop(handle, None)
+        fake.on_keys = replace_suggestion
+        sessions = refresh.plan_sessions(fake, self.state, "never", [])
+        sessions[0]["probe_retries"] = refresh.PROBE_RETRIES
+        restore = lambda seconds: fake.ghosts.setdefault("term_claude", "추천 문구")
+
+        # When
+        refresh.drive(fake, sessions, self.state, time.time() + 5, sleep=restore)
+
+        # Then
+        self.assertEqual(("failed", "probe_interrupted_check_input"), (sessions[0]["status"], sessions[0]["detail"]))
+        self.assertEqual([refresh.PROBE_KEY], [text for _, text in fake.keystrokes])
         self.assertEqual([], fake.sent)
 
     def test_보내기_직전에_입력이_바뀌면_보내지_않는다(self):

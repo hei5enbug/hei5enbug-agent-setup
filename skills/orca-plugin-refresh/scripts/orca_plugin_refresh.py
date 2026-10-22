@@ -62,6 +62,8 @@ CODEX_PLACEHOLDERS = {"Ask Codex to do anything", "Ask a follow-up question"}
 CODEX_STARTING = "Waiting for startup"
 PROBE_KEY = "x"
 DRAFT_STABLE_SECONDS = 5.0
+PROBE_RETRIES = 3
+PROBE_RECHECK_SECONDS = 3.0
 TRANSCRIPT_TAIL_BYTES = 512 * 1024
 BACKSPACE = "\x7f"
 SEPARATOR = re.compile(r"^\s*─{8,}\s*$")
@@ -974,6 +976,15 @@ def terminal_gone(entry: dict, live: dict[str, dict]) -> bool:
     return terminal is None or agent_host(terminal) != entry["host"]
 
 
+def probe_left_input_clean(orca: Orca, handle: str, draft: str) -> bool:
+    """True when the draft is back to its pre-probe value or empty, so no probe character of ours remains."""
+    try:
+        after = settle(lambda: orca.draft(handle), lambda value: value == draft or not (isinstance(value, str) and value.strip()), time.sleep, PROBE_RECHECK_SECONDS)
+    except RefreshError:
+        return False
+    return after == draft or not (isinstance(after, str) and after.strip())
+
+
 def ready(orca: Orca, entry: dict, live: dict[str, dict]) -> tuple[str | None, list[str]]:
     """Return (None, screen) when a command can be sent safely, otherwise the reason to wait."""
     if terminal_gone(entry, live):
@@ -998,6 +1009,11 @@ def ready(orca: Orca, entry: dict, live: dict[str, dict]) -> tuple[str | None, l
         return "input_settling", lines
     verdict = claude_draft_state(orca, entry["handle"], draft)
     if verdict == "interrupted":
+        retries = entry.get("probe_retries") or 0
+        if retries < PROBE_RETRIES and probe_left_input_clean(orca, entry["handle"], draft):
+            entry["probe_retries"] = retries + 1
+            entry.pop("draft_seen", None)
+            return "input_settling", lines
         return "probe_interrupted", lines
     if verdict == "text":
         entry["typed_draft"] = draft
@@ -1485,7 +1501,7 @@ def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spa
         if own or deferred:
             handed = time.time()
             items = [
-                {key: entry.get(key) for key in ("handle", "host", "actions", "title", "worktree", "compact_reason", "detail")} | {"deferred_at": handed}
+                {key: entry.get(key) for key in ("handle", "host", "actions", "title", "worktree", "compact_reason", "detail", "probe_retries")} | {"deferred_at": handed}
                 for entry in deferred
             ]
             handed_off = True

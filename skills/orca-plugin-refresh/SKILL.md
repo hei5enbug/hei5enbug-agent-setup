@@ -94,8 +94,8 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
    - `failed`: an action was sent but not confirmed, or Claude Code refused it. A reload refusal that asks for
      `--force` means a plugin's MCP tools changed; do not force it without the user's approval.
      `compact_needs_more_messages` means the conversation is too short to compact; its instructions refresh at
-     its next compaction or restart. `probe_interrupted_check_input` means the user typed while the script
-     checked the input line; tell the user to check that session's input line for a stray `x`, because the script
+     its next compaction or restart. `probe_interrupted_check_input` means the input line changed while the
+     script checked it and did not return to its earlier state, or such checks kept being interrupted; tell the user to check that session's input line for a stray `x`, because the script
      never deletes input it did not type. `helper_start_failed` means this session's follow-up could not start;
      run `apply` again.
    - `blocked`: that host's plugin update failed or its installed manifest, hook targets, or instruction digest
@@ -142,8 +142,9 @@ result is not ok when this plugin has a host error or any companion has the stat
 - Orca hides the Claude Code input line from the screen and reports it as a draft, which also carries Claude
   Code's grey prompt suggestion. When a draft stays unchanged for five seconds, the script types one character
   and deletes it only when the draft shows exactly that character: a suggestion is replaced and typed text is
-  extended, and both come back unchanged. A session with typed text is skipped, never sent to. The script checks
-  the draft again just before each send.
+  extended, and both come back unchanged. A session with typed text is skipped, never sent to. When a check is interrupted but the draft then
+  returns to its earlier state or empties, no character of the script's remains, so it checks again later, up to
+  three more times. The script checks the draft again just before each send.
 - `/clear` runs only after Claude Code refuses to compact and the transcript, read again right before the send,
   holds no prompt.
 - Each result is confirmed from transcript records appended after the send, or from a marker rewritten after it,
