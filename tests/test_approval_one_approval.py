@@ -92,7 +92,7 @@ def test_irreversible_calls_still_ask(state, fake_bin, host, command):
 @pytest.mark.parametrize("host", ["claude", "codex"])
 @pytest.mark.parametrize("tool,arguments", [
     ("mcp__demo__createItem", {}), ("mcp__demo__unknownThing", {}),
-    ("mcp__tabularis__run_query", {"connection_id": "marked", "query": "SELECT 1"}),
+    ("mcp__tabularis__run_query", {"connection_id": "marked", "query": "INSERT INTO t VALUES (1)"}),
 ])
 def test_mcp_writes_share_approval(connections, fake_bin, host, tool, arguments):
     """MCP 쓰기와 승인 표시 연결의 조회도 공통 세션 승인을 사용한다."""
@@ -106,11 +106,11 @@ def test_mcp_writes_share_approval(connections, fake_bin, host, tool, arguments)
 
 
 @pytest.mark.parametrize("host", ["claude", "codex"])
-def test_marked_datagrip_read_uses_session_approval(state, project, fake_bin, host):
-    """DataGrip 승인 표시 연결의 조회는 세션 승인 뒤 실행한다."""
+def test_marked_datagrip_write_uses_session_approval(state, project, fake_bin, host):
+    """DataGrip 승인 표시 연결의 쓰기는 세션 승인 뒤 실행한다."""
     # given
     grant(host)
-    event = query_event(project, APPROVAL_ID, "SELECT 1")
+    event = query_event(project, APPROVAL_ID, "INSERT INTO t VALUES (1)")
     # when
     output = datagrip_guard.handle(event) if host == "claude" else datagrip_guard.codex_pre_tool_use(event["tool_input"], "s1")
     # then

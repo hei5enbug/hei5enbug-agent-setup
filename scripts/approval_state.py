@@ -179,6 +179,50 @@ def recorded_worker_pair(host: str, session) -> tuple[str, str] | None:
     return (model, effort) if isinstance(model, str) and isinstance(effort, str) else None
 
 
+PLAN_TTL_SECONDS = 30 * 60
+
+
+def plan_path(host: str, session: str) -> Path:
+    return state_dir() / "db-plans" / f"{host}-{session}.json"
+
+
+def _plan_entries(path: Path) -> list:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    entries = data.get("plans") if isinstance(data, dict) else None
+    now = time.time()
+    return [
+        entry for entry in entries or []
+        if isinstance(entry, dict) and all(isinstance(entry.get(key), str) for key in ("tool", "connection", "digest"))
+        and type(entry.get("at")) in (int, float) and 0 <= now - entry["at"] <= PLAN_TTL_SECONDS
+    ]
+
+
+def store_plan(host: str, session, tool: str, connection: str, digest: str, cost, rows) -> None:
+    """Record a database read plan estimate for one session; entries older than the plan lifetime are dropped."""
+    if session_key(session) is None:
+        return
+    path = plan_path(host, session)
+    with _locked(path.parent):
+        kept = [entry for entry in _plan_entries(path)
+                if (entry["tool"], entry["connection"], entry["digest"]) != (tool, connection, digest)]
+        kept.append({"tool": tool, "connection": connection, "digest": digest, "cost": cost, "rows": rows,
+                     "at": time.time()})
+        _write(path, {"plans": kept})
+        _cleanup(path.parent, path)
+
+
+def recorded_plan(host: str, session, tool: str, connection: str, digest: str):
+    """The newest unexpired plan record for the session, tool, connection, and read digest, or None."""
+    if session_key(session) is None:
+        return None
+    matches = [entry for entry in _plan_entries(plan_path(host, session))
+               if (entry["tool"], entry["connection"], entry["digest"]) == (tool, connection, digest)]
+    return max(matches, key=lambda entry: entry["at"], default=None)
+
+
 def session_key(value):
     """Return the session id when it is a usable string, otherwise None (the hook has no memory then)."""
     if isinstance(value, str) and SESSION_ID.fullmatch(value):

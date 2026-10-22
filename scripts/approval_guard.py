@@ -5,6 +5,7 @@ Reads run without approval, writes and sensitive reads ask once per session, and
 Requests bundle session keys, secrets and forbidden state edits are denied, and pass leaves the host in charge.
 Every verb and CLI table lives in this module. DataGrip queries are classified
 by datagrip_guard, which makes its own PreToolUse decision; this entry point records and consumes their approvals.
+Production database reads (tabularis and DataGrip) follow db_read_policy, and this entry point records plan estimates.
 The guard always exits 0; covered calls fail closed when their classification fails.
 """
 import argparse
@@ -26,6 +27,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from plugin_toggles import detect_host, enabled  # noqa: E402
 import approval_state  # noqa: E402
+import db_read_policy  # noqa: E402
 from approval_state import Outcome  # noqa: E402
 
 DATAGRIP_TOOL = "mcp__datagrip__execute_sql_query"
@@ -109,12 +111,12 @@ FIND_READ_OPTIONS = frozenset({
 COVERED_WORD = re.compile(r"(?<![\w-])(?:" + "|".join(sorted(COVERED, key=len, reverse=True)) + r")(?![\w-])")
 OPAQUE_CONSTRUCT = re.compile(r"\b(?:eval|xargs)\b|\b(?:sh|bash|zsh)\b[^;&|\n]*?\s-[A-Za-z]*c[A-Za-z]*\b")
 SHELL_C_FLAG = re.compile(r"-[A-Za-z]*c[A-Za-z]*")
-GUARD_SCRIPTS = frozenset({"approval_guard.py", "approval_state.py", "datagrip_guard.py", "hook_python.sh"})
-GUARD_MODULES = frozenset({"approval_guard", "approval_state", "datagrip_guard"})
+GUARD_SCRIPTS = frozenset({"approval_guard.py", "approval_state.py", "datagrip_guard.py", "db_read_policy.py", "hook_python.sh"})
+GUARD_MODULES = frozenset({"approval_guard", "approval_state", "datagrip_guard", "db_read_policy"})
 GUARD_CODE = re.compile(
-    r"\bimport\s+[\w.,\s]*?\b(?:approval_guard|approval_state|datagrip_guard)\b"
-    r"|\bfrom\s+(?:[\w.]+\.)?(?:approval_guard|approval_state|datagrip_guard)\b"
-    r"|(?:__import__|import_module)\(\s*['\"](?:[\w.]+\.)?(?:approval_guard|approval_state|datagrip_guard)['\"]"
+    r"\bimport\s+[\w.,\s]*?\b(?:approval_guard|approval_state|datagrip_guard|db_read_policy)\b"
+    r"|\bfrom\s+(?:[\w.]+\.)?(?:approval_guard|approval_state|datagrip_guard|db_read_policy)\b"
+    r"|(?:__import__|import_module)\(\s*['\"](?:[\w.]+\.)?(?:approval_guard|approval_state|datagrip_guard|db_read_policy)['\"]"
 )
 PYTHON_EXEC = re.compile(r"subprocess|os\.system|os\.exec|os\.spawn|os\.popen|runpy|\bexec\s*\(|Popen")
 GCLOUD_READ_VERBS = frozenset({"list", "describe", "ls", "cat"})
@@ -1780,7 +1782,450 @@ def _tmpdir_default(operand, values):
     return (values.get("TMPDIR") or match[1]) + operand[match.end():] if match else operand
 
 
-def _execution_policy(cli, args, cwd, env, variables, command):
+VALUE_REFERENCE = re.compile(
+    r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*|\d)(?::-([^${}`\s]*))?\}|([A-Za-z_][A-Za-z0-9_]*|\d))")
+SCRIPT_ZERO = r'"?\$(?:0|\{0\}|\{BASH_SOURCE\[0\]\})"?'
+SCRIPT_DIRNAME = rf"\$\(\s*dirname\s+{SCRIPT_ZERO}\s*\)"
+SCRIPT_FOLDER = re.compile(
+    rf'\$\(\s*cd\s+"?{SCRIPT_DIRNAME}"?\s*&&\s*pwd\s*\)|{SCRIPT_DIRNAME}|\$\{{(?:0|BASH_SOURCE\[0\])%/\*\}}')
+SCRIPT_FOLDER_KEY = "@dir"
+POSITIONAL_WRITERS = frozenset({"set", "shift", "eval", "source", ".", "exec"})
+VALUE_LIMIT = 32
+FLOW_ENVIRONMENT = frozenset({"HOME", "TMPDIR"})
+FLOW_LEADS = frozenset({"then", "else", "do", "{", "!"})
+FLOW_LOOPS = frozenset({"for", "select", "while", "until"})
+FILE_INERT = frozenset({"[", "[[", "test", ":", "true", "false"})
+FLOW_CLOSERS = {"then": "if", "else": "if", "elif": "if", "fi": "if", "do": "loop", "done": "loop", "esac": "case",
+                "}": "brace"}
+PIPE_OPERATORS = ("|", "|&")
+GIT_PLAIN_CONFIG = ("-c", "status.showUntrackedFiles=all", "-c", "core.excludesFile=/dev/null",
+                    "-c", "status.ignoreSubmodules=none", "-c", "core.untrackedCache=false")
+REMOVAL_TRACKED = "Recursive removal of tracked files"
+REMOVAL_IGNORED = "Recursive removal of ignored files"
+
+
+def _expand_references(text, lookup):
+    """Every value `text` can take when each `$NAME`, `${NAME}`, or `${NAME:-default}` takes any value that
+    `lookup(name, default)` returns. None when a command runs, a reference stays unresolved, or the combinations exceed
+    the limit."""
+    if "`" in text or "$(" in text:
+        return None
+    results, position = [""], 0
+    for match in VALUE_REFERENCE.finditer(text):
+        options = lookup(match[1] or match[3], match[2])
+        if options is None:
+            return None
+        literal = text[position:match.start()]
+        results = [done + literal + option for done in results for option in options]
+        if len(results) > VALUE_LIMIT:
+            return None
+        position = match.end()
+    results = [done + text[position:] for done in results]
+    return None if any("$" in done for done in results) else tuple(dict.fromkeys(results))
+
+
+def _merge_values(states, missing=None):
+    """The variable table after paths that end in `states` rejoin: a name keeps the union of its values only when every
+    path assigns it, and is unresolved (None) otherwise. With `missing`, a path that never assigned a name contributes
+    `missing(name)` instead, the value of a variable that is unset there."""
+    merged = {}
+    for name in {name for state in states for name in state}:
+        values = [state[name] if name in state else missing(name) if missing else False for state in states]
+        if any(value is None or value is False for value in values):
+            merged[name] = None
+            continue
+        union = tuple(dict.fromkeys(item for value in values for item in value))
+        merged[name] = union if len(union) <= VALUE_LIMIT else None
+    return merged
+
+
+def _option_only_set(args):
+    """Whether the arguments of `set` only switch shell options and write no variable or positional parameter."""
+    index = 0
+    while index < len(args):
+        if args[index] in ("-o", "+o"):
+            index += 2
+        elif re.fullmatch(r"[-+][A-Za-z]+", args[index]):
+            index += 1
+        else:
+            return False
+    return True
+
+
+def _wide_effect(words, raw):
+    """The names a command may write through something other than a plain assignment, or None when it writes none."""
+    program, _ = strip_prefix(words)
+    name = os.path.basename(program[0]) if program else ""
+    if name == "set" and _option_only_set(program[1:]):
+        return None
+    if not (name in ENVIRONMENT_CHANGERS or name in VARIABLE_WRITERS or name in POSITIONAL_WRITERS
+            or name == "printf" and "-v" in program or ":=" in raw or "((" in raw):
+        return None
+    names = ({word.partition("=")[0] for word in program[1:] if not word.startswith("-")}
+             | {word.partition("=")[0] for word in words if ASSIGNMENT.match(word)})
+    return names | set("123456789") if name in POSITIONAL_WRITERS else names
+
+
+def _positional(name):
+    return name.isdigit() or name == SCRIPT_FOLDER_KEY
+
+
+def _loop_effects(segments, index):
+    """The names the body of the loop that segment `index` opens may write, and whether anything in it may write any
+    name."""
+    names, wide, depth, closed = set(), False, 0, False
+    for segment in segments[index + 1:]:
+        words = list(segment.words)
+        while words and (words[0] in FLOW_LEADS or words[0] in ("if", "elif")):
+            words.pop(0)
+        if words[:1] == ["done"]:
+            if not depth:
+                closed = True
+                break
+            depth -= 1
+        elif words[:1] and words[0] in FLOW_LOOPS:
+            depth += 1
+            if words[0] in ("for", "select") and len(words) > 1:
+                names.add(words[1])
+            words.pop(0)
+        assigned = [word for word in words if ASSIGNMENT.match(word)]
+        if words and len(assigned) == len(words):
+            names.update(word.partition("=")[0] for word in assigned)
+            continue
+        effect = _wide_effect(words, " ".join(segment.raw)) if words else None
+        if effect is not None:
+            wide = True
+            names.update(effect)
+    return names, wide or not closed
+
+
+class _ValueFlow:
+    """The values each variable can hold while a command text runs, followed through `if`, `case`, loops, brace groups,
+    and subshells. `state` maps a name to a tuple of every value it can hold at the current point, or to None when it
+    is unresolved; a name assigned on only some paths is unresolved. An assignment that runs only when an earlier
+    command of a `&&` or `||` list succeeds or fails is conditional: the rest of that list sees the new value, and what
+    follows the list sees it together with the value from before the list, which is the empty string for a variable
+    that is unset. When the structure cannot be followed, `enabled` turns False and callers fall back to the plain
+    variable table."""
+
+    def __init__(self, inherited=None):
+        self.state = dict(inherited or {})
+        self.frames = []
+        self.enabled = True
+        self.environment = {}
+        self.pending = {}
+        self.may_skip = False
+        self.or_seen = False
+
+    def choices(self):
+        return self.state if self.enabled else None
+
+    def outside_loop_header(self):
+        """Whether the segment just visited is known not to be in a loop header, which runs again after the body."""
+        return self.enabled and not (self.frames and self.frames[-1]["kind"] == "loop"
+                                     and self.frames[-1]["phase"] == "cond")
+
+    def _fail(self):
+        self.enabled = False
+
+    def _poison(self, names=(), everything=False):
+        top = self.frames[-1] if self.frames else None
+        tables = [self.state]
+        if top is not None and top.get("phase") == "cond":
+            tables += [top["entry"], *top["branches"]]
+        for table in tables:
+            for name in [*(name for name in table if not _positional(name)), *names] if everything else names:
+                table[name] = None
+
+    def _lookup(self, name, default, environment):
+        if name in self.state:
+            values = self.state[name]
+        elif name in FLOW_ENVIRONMENT and environment.get(name):
+            values = (environment[name],)
+        elif name == "TMPDIR" and default is not None:
+            return (default,)
+        else:
+            return None
+        return values if values is None or default is None else tuple(value or default for value in values)
+
+    def _expand(self, text, environment):
+        folder = self.state.get(SCRIPT_FOLDER_KEY)
+        if folder:
+            text = SCRIPT_FOLDER.sub(lambda _: folder[0], text)
+        resolved = _mktemp_directory(text, environment)
+        if resolved is not None:
+            return (resolved,)
+        values = _expand_references(text, lambda name, default: self._lookup(name, default, environment))
+        return None if values is None or any(re.search(r"\s", value) for value in values) else values
+
+    def _restore(self, saved):
+        """Go back to `saved` after a group whose assignments do not last; a name only that group assigned stays
+        unresolved instead of falling back to the process environment."""
+        for name in self.state:
+            saved.setdefault(name, None)
+        self.state = saved
+
+    def _unset(self, name):
+        """The value a name has where no assignment ran: the environment's, else the empty string."""
+        return (self.environment.get(name, ""),)
+
+    def _resolve_pending(self):
+        """End a `&&` or `||` list: each name a conditional assignment set now also keeps its value from before."""
+        for name, before in self.pending.items():
+            self.state[name] = _merge_values([{name: before}, {name: self.state.get(name)}])[name]
+        self.pending = {}
+
+    def _push(self, kind, before, **fields):
+        guard = before if before in PIPE_OPERATORS or before == "||" or before == "&&" and self.may_skip else None
+        self.frames.append({"kind": kind, "outer": dict(self.state), "guard": guard, "branches": [],
+                            "entry": dict(self.state), **fields})
+        self.may_skip = self.or_seen = False
+
+    def _pop(self, after):
+        """Close the top frame; a group that runs only after `&&` or `||` may not have run, and one run in a pipe or in
+        the background leaves no assignment behind."""
+        frame = self.frames.pop()
+        if frame["guard"] in PIPE_OPERATORS or after in (*PIPE_OPERATORS, "&"):
+            self._restore(frame["outer"])
+        elif frame["guard"] in ("&&", "||"):
+            self.state = _merge_values([frame["outer"], self.state], self._unset)
+        self.may_skip = True
+
+    def visit(self, segments, index, operators, environment):
+        """Apply one segment, with the operators between it and the segment before it, to the variable table."""
+        if not self.enabled:
+            return
+        self.environment = environment
+        segment = segments[index]
+        start = segments[index - 1].end if index else 0
+        before, previous = None, None
+        for token in (op for op in operators if start <= op[2] and op[3] <= segment.start):
+            symbol = token[1]
+            top = self.frames[-1] if self.frames else None
+            in_pattern = top is not None and top["kind"] == "case" and top["phase"] == "pattern"
+            if symbol == "(":
+                if (previous is not None and previous[1] == "(" and previous[3] == token[2]
+                        or before is None and index and not in_pattern):
+                    return self._fail()
+                if not in_pattern:
+                    self._push("sub", before)
+            elif symbol == ")":
+                self._resolve_pending()
+                if in_pattern:
+                    top["phase"] = "body"
+                    self.state = dict(top["entry"])
+                elif top is not None and top["kind"] == "sub":
+                    self.frames.pop()
+                    self._restore(top["entry"])
+                    self.may_skip = True
+                else:
+                    return self._fail()
+            elif symbol == ";;":
+                self._resolve_pending()
+                self.may_skip = self.or_seen = False
+                if top is None or top["kind"] != "case" or top["phase"] != "body":
+                    return self._fail()
+                top["branches"].append(self.state)
+                top["phase"] = "pattern"
+            else:
+                if symbol in (";", "&"):
+                    self._resolve_pending()
+                    self.may_skip = self.or_seen = False
+                elif symbol == "||" or symbol == "&&" and self.or_seen:
+                    self._resolve_pending()
+                    self.or_seen = self.or_seen or symbol == "||"
+                before = symbol
+            previous = token
+        after = min((op for op in operators if op[2] >= segment.end), key=lambda op: op[2], default=None)
+        self._statement(list(segment.words), segments, index, before, after[1] if after else None,
+                        " ".join(segment.raw), environment)
+
+    def _statement(self, words, segments, index, before, after, raw, environment):
+        top = self.frames[-1] if self.frames else None
+        if top is not None and top["kind"] == "case" and top["phase"] == "pattern" and words[:1] != ["esac"]:
+            top["default"] = top["default"] or "*" in words
+            return
+        while words:
+            word, top = words[0], (self.frames[-1] if self.frames else None)
+            kind = top["kind"] if top is not None else None
+            if word == "function" or word in FLOW_CLOSERS and kind != FLOW_CLOSERS[word]:
+                return self._fail()
+            if word == "{":
+                self._push("brace", before)
+            elif word == "if":
+                self._push("if", before, has_else=False, phase="cond")
+            elif word in ("then", "do"):
+                top["phase"] = "body"
+            elif word in ("else", "elif"):
+                top["branches"].append(self.state)
+                self.state = dict(top["entry"])
+                top["has_else"] = top["has_else"] or word == "else"
+                top["phase"] = "body" if word == "else" else "cond"
+            elif word == "fi":
+                self.state = _merge_values([*top["branches"], self.state, *([] if top["has_else"] else [top["entry"]])])
+                return self._pop(after)
+            elif word == "}":
+                return self._pop(after)
+            elif word == "case":
+                patterns = words[words.index("in") + 1:] if "in" in words else []
+                self._push("case", before, phase="pattern", default="*" in patterns)
+                return
+            elif word == "esac":
+                arms = [*top["branches"], *([self.state] if top["phase"] == "body" else [])]
+                self.state = _merge_values(arms if top["default"] else [*arms, top["entry"]])
+                return self._pop(after)
+            elif word in FLOW_LOOPS:
+                variable = words[1] if word in ("for", "select") and len(words) > 1 else None
+                values = None
+                if variable is not None and len(words) > 3 and words[2] == "in":
+                    values = self._loop_values(words[3:], environment)
+                names, wide = _loop_effects(segments, index)
+                self._poison(names, everything=wide)
+                self._push("loop", before, phase="cond", variable=variable)
+                if variable is not None:
+                    self.state[variable] = values
+                if word in ("while", "until"):
+                    words.pop(0)
+                    continue
+                return
+            elif word == "done":
+                self.state = _merge_values([top["entry"], self.state])
+                if top["variable"] is not None:
+                    self.state[top["variable"]] = None
+                return self._pop(after)
+            elif word != "!":
+                break
+            words.pop(0)
+        self._effect(words, before, after, raw, environment)
+
+    def _loop_values(self, items, environment):
+        values = []
+        for item in items:
+            expanded = self._expand(item, environment)
+            if expanded is None:
+                return None
+            values.extend(expanded)
+        return tuple(dict.fromkeys(values)) if len(values) <= VALUE_LIMIT else None
+
+    def _effect(self, words, before, after, raw, environment):
+        if not words:
+            return
+        condition = bool(self.frames) and self.frames[-1].get("phase") == "cond"
+        assigned = [word for word in words if ASSIGNMENT.match(word)]
+        if len(assigned) != len(words):
+            self.may_skip = True
+            effect = _wide_effect(words, raw)
+            if effect is not None:
+                self._poison(effect, everything=True)
+            return
+        detached = before in PIPE_OPERATORS or after in (*PIPE_OPERATORS, "&")
+        guarded = before == "||" or before == "&&" and self.may_skip
+        for word in words:
+            name, _, value = word.partition("=")
+            values = self._expand(value, environment)
+            if condition or detached:
+                self._poison({name})
+            elif guarded:
+                if name not in self.pending:
+                    self.pending[name] = self.state[name] if name in self.state else self._unset(name)
+                self.state[name] = values
+            else:
+                self.state[name] = values
+        self.may_skip = self.may_skip or before == "||"
+
+
+def _value_lookup(choices, values):
+    """The `lookup` that resolves a reference against the flow table first and the plain values second."""
+    choices = choices or {}
+
+    def lookup(name, default):
+        if name in choices:
+            found = choices[name]
+        elif values.get(name) is not None:
+            found = (values[name],)
+        elif name == "TMPDIR" and default is not None:
+            return (default,)
+        else:
+            return None
+        return found if found is None or default is None else tuple(value or default for value in found)
+
+    return lookup
+
+
+def _script_seed(resolved, positional, lookup):
+    """The flow table a script starts with: its own path and folder, and the values of `$1` to `$9` from the call's
+    literal arguments, each unresolved when its argument is."""
+    seed = {"0": (str(resolved),), SCRIPT_FOLDER_KEY: (str(resolved.parent),)}
+    for number in range(1, 10):
+        seed[str(number)] = _expand_references(positional[number - 1], lookup) if number <= len(positional) else ("",)
+    return seed
+
+
+def _operand_texts(operand, values, choices):
+    """Every text a recursive `rm` operand can take, or None when it still expands or runs a command. Without a flow
+    table the operand resolves against `values` alone."""
+    if choices is None:
+        expanded = (_mktemp_directory(operand, values)
+                    or _mktemp_directory(_expand_path_variables(operand, values), values)
+                    or _expand_path_variables(_tmpdir_default(operand, values), values))
+        return None if "$" in expanded or "`" in expanded else [expanded]
+    resolved = _mktemp_directory(operand, values)
+    if resolved is not None:
+        return [resolved]
+    texts = _expand_references(operand, _value_lookup(choices, values))
+    return None if texts is None else list(texts)
+
+
+def _unquoted_reference(raw):
+    """Whether a raw shell word expands a variable or a command outside quotes, which splits its value at white
+    space."""
+    quote, index = None, 0
+    while index < len(raw):
+        char = raw[index]
+        if char == "\\" and quote != "'":
+            index += 2
+            continue
+        if char in "'\"" and quote in (None, char):
+            quote = None if quote else char
+        elif quote is None and (char == "`" or char == "$" and VALUE_REFERENCE.match(raw, index)):
+            return True
+        elif quote is None and char == "$" and raw.startswith("$(", index):
+            return True
+        index += 1
+    return False
+
+
+def _removal_scope(targets, cwd, env):
+    """The descriptions that make removing `targets` recoverable, or None. Each target is a (path, link) pair that must
+    lie inside the work tree that holds `cwd`, never be its root, a symbolic link, or reach `.git`, and be either
+    tracked with no staged, unstaged, or untracked change under it, or untracked and ignored."""
+    directory = _git_directory([], cwd, env)
+    top = _git_lookup(directory, env, "rev-parse", "--show-toplevel") if directory is not None else None
+    if top is None or not top.strip():
+        return None
+    root = Path(top.strip()).resolve()
+    labels = []
+    for path, link in targets:
+        if (os.path.islink(link) or path == root or not path.is_relative_to(root)
+                or ".git" in path.relative_to(root).parts or not path.exists()):
+            return None
+        listed = _git_lookup(root, env, "--literal-pathspecs", "ls-files", "-v", "--", str(path))
+        if listed is None or any(line[:1] != "H" for line in listed.splitlines()):
+            return None
+        if listed.strip():
+            status = _git_lookup(root, env, *GIT_PLAIN_CONFIG, "--literal-pathspecs", "status", "--porcelain",
+                                 "--untracked-files=all", "--ignore-submodules=none", "--", str(path))
+            if status is None or status.strip():
+                return None
+            labels.append(REMOVAL_TRACKED)
+        elif _git_lookup(root, env, *GIT_PLAIN_CONFIG, "check-ignore", "-q", "--", str(path)) is not None:
+            labels.append(REMOVAL_IGNORED)
+        else:
+            return None
+    return list(dict.fromkeys(labels))
+
+
+def _execution_policy(cli, args, cwd, env, variables, command, choices=None, raw_args=None):
     session = Path(env.get("_APPROVAL_SESSION_DIR", env.get("CLAUDE_PROJECT_DIR") or cwd)).resolve()
     target = lambda kind, label, every_time=False: Outcome(kind, [f"{cli}:{_digest(command)}"], [label],
                                                             every_time=every_time)
@@ -1818,26 +2263,45 @@ def _execution_policy(cli, args, cwd, env, variables, command):
         if not recursive:
             return Outcome("pass", [], [])
         values = {**env, **variables}
-        for operand in (arg for arg in args if not arg.startswith("-")):
-            expanded = (_mktemp_directory(operand, values)
-                        or _mktemp_directory(_expand_path_variables(operand, values), values)
-                        or _expand_path_variables(_tmpdir_default(operand, values), values))
-            if "$" in expanded or "`" in expanded:
+        outside = []
+        for position, operand in enumerate(args):
+            if operand.startswith("-"):
+                continue
+            texts = _operand_texts(operand, values, choices)
+            if texts is None:
                 return target("always", "Recursive removal with an unresolved target", True)
-            head, tail = os.path.split(expanded)
-            if re.search(r"[*?\[]", tail) and not re.search(r"[*?\[]", head) and re.search(r"[^*?.\[\]]", tail):
-                if fnmatch.fnmatch(".git", tail):
+            raw = raw_args[position] if raw_args is not None and position < len(raw_args) else operand
+            if _unquoted_reference(raw) and _mktemp_directory(operand, values) is None:
+                if "IFS" in (choices or {}) or "IFS" in variables or re.search(r"\s", operand):
+                    return target("always", "Recursive removal with an unresolved target", True)
+                texts = [field for text in texts for field in text.split()]
+            for expanded in texts:
+                if not expanded:
+                    continue
+                head, tail = os.path.split(expanded)
+                if re.search(r"[*?\[]", tail) and not re.search(r"[*?\[]", head) and re.search(r"[^*?.\[\]]", tail):
+                    if fnmatch.fnmatch(".git", tail):
+                        return target("always", "Recursive removal of a protected or external path", True)
+                    link = Path(cwd) / os.path.expanduser(head or ".")
+                    path = link.resolve() / "_"
+                    covering = path.parent
+                else:
+                    fixed = re.split(r"[*?\[]", expanded, maxsplit=1)[0]
+                    if fixed != expanded and not fixed.endswith("/"):
+                        fixed = str(Path(fixed).parent)
+                    link = Path(cwd) / os.path.expanduser(fixed or ".")
+                    path = covering = link.resolve()
+                temporary = _temporary(path, env)
+                if (path == Path("/") or path == Path.home() or path == session or path in session.parents
+                        or ".git" in path.parts):
                     return target("always", "Recursive removal of a protected or external path", True)
-                path = (Path(cwd) / os.path.expanduser(head or ".")).resolve() / "_"
-            else:
-                fixed = re.split(r"[*?\[]", expanded, maxsplit=1)[0]
-                if fixed != expanded and not fixed.endswith("/"):
-                    fixed = str(Path(fixed).parent)
-                path = (Path(cwd) / os.path.expanduser(fixed or ".")).resolve()
-            temporary = _temporary(path, env)
-            if (path == Path("/") or path == Path.home() or path == session or path in session.parents
-                    or ".git" in path.parts or not (path.is_relative_to(session) or temporary)):
+                if not (path.is_relative_to(session) or temporary):
+                    outside.append((covering, link))
+        if outside:
+            labels = None if IN_EXEC in env or FILES_MAY_CHANGE in env else _removal_scope(outside, cwd, env)
+            if labels is None:
                 return target("always", "Recursive removal of a protected or external path", True)
+            return Outcome("write", [f"{cli}:{_digest(command)}"], labels)
         return Outcome("pass", [], [])
     return None
 
@@ -2011,7 +2475,7 @@ def _python_policy(content, cwd, depth, env, readonly=False):
                    every_time=bool(destructive))
 
 
-def _classify_script(words, cwd, depth, env, variables=None):
+def _classify_script(words, cwd, depth, env, variables=None, choices=None):
     cli = os.path.basename(words[0])
     args = words[1:]
     path = None
@@ -2087,7 +2551,20 @@ def _classify_script(words, cwd, depth, env, variables=None):
     if ((mode == "python" and _code_runs_guard(content))
             or any(_self_approval(command) for command in commands)):
         return Outcome("forbidden", [], [SELF_APPROVAL_REASON])
-    verdicts = [classify_text(command, cwd, depth + 1, env) for command in commands]
+    verdicts = None
+    if mode == "shell":
+        text = "\n".join(commands)
+        positional = args if path == words[0] else args[args.index(path) + 1:]
+        invoked = Path(os.path.abspath(
+            Path(cwd) / os.path.expanduser(_expand_path_variables(path, variables or {}))))
+        seed = _script_seed(invoked, positional, _value_lookup(choices, {**env, **(variables or {})}))
+        try:
+            tokenize(text)
+            verdicts = [classify_text(text, cwd, depth + 1, env, None, None, seed)]
+        except ParseError:
+            pass
+    if verdicts is None:
+        verdicts = [classify_text(command, cwd, depth + 1, env) for command in commands]
     covered = [verdict for verdict in verdicts if verdict.kind != "pass"]
     if covered:
         return _aggregate(covered, [])
@@ -2099,7 +2576,8 @@ def _classify_script(words, cwd, depth, env, variables=None):
     return Outcome("pass", [], [])
 
 
-def _classify_argv(words, heredoc, cwd, depth, command, inherited_env=None, variables=None):
+def _classify_argv(words, heredoc, cwd, depth, command, inherited_env=None, variables=None, choices=None,
+                   raw=None):
     helper = _helper_args(words)
     if helper is not None:
         return _classify_helper(helper, cwd, depth, command, inherited_env)
@@ -2118,7 +2596,8 @@ def _classify_argv(words, heredoc, cwd, depth, command, inherited_env=None, vari
         if names and all(not name.startswith("-") and not SECRET_NAME.search(name) for name in names):
             return _read()
         return _sensitive(command)
-    policy = _execution_policy(cli, stripped[1:], cwd, env, variables or {}, command)
+    raw_args = raw[len(words) - len(stripped) + 1:] if raw is not None and len(raw) == len(words) else None
+    policy = _execution_policy(cli, stripped[1:], cwd, env, variables or {}, command, choices, raw_args)
     if policy is not None:
         return policy
     if PYTHON.fullmatch(cli):
@@ -2132,7 +2611,7 @@ def _classify_argv(words, heredoc, cwd, depth, command, inherited_env=None, vari
             return Outcome("write", ["python:execute"], ["Python execution with --execute"])
     if cli in FILE_READS and any(_protected_path(arg, cwd, env) for arg in stripped[1:] if not arg.startswith("-")):
         return _sensitive(command)
-    script = _classify_script(stripped, cwd, depth, env, variables)
+    script = _classify_script(stripped, cwd, depth, env, variables, choices)
     if script is not None:
         if PYTHON.fullmatch(cli) and "--execute" in stripped[1:] and script.kind in ("pass", "read"):
             return Outcome("write", ["python:execute"], ["Python execution with --execute"])
@@ -2673,7 +3152,7 @@ def _unrecognized_wrapper(text):
                    every_time=True)
 
 
-def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None):
+def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, choices=None):
     """Classify a shell command string; the secret helper's own inner command is classified separately."""
     if depth > MAX_DEPTH:
         return _unclassified("bash", text if isinstance(text, str) else "")
@@ -2731,7 +3210,9 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None):
     files_stable = all(verdict.kind == "read" for verdict in python_verdicts)
     substitution_names = set()
     current_env = environment
-    for segment in segments:
+    flow = _ValueFlow(choices)
+    for index, segment in enumerate(segments):
+        flow.visit(segments, index, operators, current_env)
         if segment.start in filtered_segments:
             filtered = filtered_segments[segment.start]
             if filtered is not None:
@@ -2749,7 +3230,7 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None):
         substitutions = list(_substitution_spans(region))
         scoped_env = current_env if files_stable else {**current_env, FILES_MAY_CHANGE: "1"}
         for _, _, body in substitutions:
-            verdicts.append(classify_text(body, cwd, depth + 1, scoped_env, variables, statics))
+            verdicts.append(classify_text(body, cwd, depth + 1, scoped_env, variables, statics, flow.choices()))
             files_stable = files_stable and verdicts[-1].kind == "read"
         scoped_env = current_env if files_stable else {**current_env, FILES_MAY_CHANGE: "1"}
         for body in _indirect_regions(region, [segment]):
@@ -2826,11 +3307,12 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None):
             argv = [*segment.words[:len(segment.words) - len(program)], *argv]
         verdict = (_unclassified(name, text) if dynamic_program and COVERED_WORD.search(region)
                    else _classify_argv(argv or segment.words, segment.heredoc and not argv, cwd, depth, text, scoped_env,
-                                       variables))
+                                       variables, flow.choices(), None if argv else segment.raw))
         if argv and (verdict.kind == "read" or verdict.kind == "pass" and os.path.basename(
                 (strip_prefix(argv)[0] or [""])[0]) in OPERAND_READERS):
             verdict = _sensitive(text)
-        files_stable = files_stable and verdict.kind == "read" and _redirects_allowed([segment])
+        inert = verdict.kind == "pass" and (not name or name in FILE_INERT) and flow.outside_loop_header()
+        files_stable = files_stable and (verdict.kind == "read" or inert) and _redirects_allowed([segment])
         output = name in ("echo", "printf") and (substitutions or any(
             re.search(r"\$(?:" + re.escape(key) + r"\b|\{" + re.escape(key) + r"\})", region)
             for key in substitution_names
@@ -2926,7 +3408,7 @@ def tabularis_connection(identifier):
     return matches[0] if len(matches) == 1 else None
 
 
-def classify_tabularis(tool_input):
+def classify_tabularis(tool_input, host=None, session=None):
     arguments = tool_input if isinstance(tool_input, dict) else {}
     identifier, sql = arguments.get("connection_id"), arguments.get("query")
     connection = tabularis_connection(identifier)
@@ -2937,16 +3419,16 @@ def classify_tabularis(tool_input):
                      [f"tabularis query on {name}"], every_time=True)
     write = Outcome("write", ["mcp:session"], [f"tabularis query on {name}"])
     datagrip = _datagrip()
-    if datagrip.RAW_DESTRUCTIVE.search(text) or any(datagrip.query_facts(text, pg)[1] for pg in (True, False)):
+    driver = connection[2] if connection else None
+    postgres = {"postgresql": True, "sqlserver": False, "sqlserver-entra": False}.get(driver)
+    if datagrip.asks_every_time(text, postgres, name if connection else None):
         return always
-    if not connection or "승인" in name or connection[2] not in ("postgresql", "sqlserver", "sqlserver-entra"):
+    if not connection or postgres is None or not isinstance(sql, str):
         return write
-    if not isinstance(sql, str):
-        return write
-    postgres = connection[2] == "postgresql"
     if datagrip.is_read(sql, postgres):
-        return _read()
-    keywords, destructive = datagrip.query_facts(sql, postgres)
+        return db_read_policy.read_outcome(host or detect_host(), session, "tabularis", connection_id, name, postgres,
+                                           sql, datagrip.read_shape(sql) if postgres else None)
+    keywords, destructive = datagrip.query_facts(sql, postgres, name)
     if destructive:
         return always
     return Outcome("write", ["mcp:session"], [f"tabularis write on {name}"])
@@ -3018,15 +3500,14 @@ def _classify_executable(tool, tool_input, cwd):
     return Outcome("write", ["mcp:session"], [f"MCP execution tool {tool}"])
 
 
-def classify_mcp(tool, tool_input=None, cwd=None):
+def classify_mcp(tool, tool_input=None, cwd=None, host=None, session=None):
     if tool == TABULARIS_TOOL:
-        return classify_tabularis(tool_input)
+        return classify_tabularis(tool_input, host, session)
     part = mcp_tool_part(tool)
     words = tool_words(part) if part else []
     sql = list(_input_strings(tool_input, sql_only=True))
     datagrip = _datagrip() if sql else None
-    if any(datagrip.RAW_DESTRUCTIVE.search(text) or any(
-            datagrip.query_facts(text, postgres)[1] for postgres in (True, False)) for text in sql):
+    if any(datagrip.is_destructive(text) for text in sql):
         return Outcome("always", [f"mcp:{tool}:{_digest(json.dumps(sql))}"], [f"destructive SQL in MCP tool {tool}"],
                        every_time=True)
     if any(word in MCP_DESTRUCTIVE_WORDS for word in words):
@@ -3070,8 +3551,26 @@ def _deny_secret():
     return approval_state.pre_output("deny", SECRET_REASON.format(root=root))
 
 
+def _enforced_read(outcome, tool_input):
+    """The tabularis input of a production read with its result limit and SQL Server safeguards, or None."""
+    if outcome.exe not in (db_read_policy.ENFORCE_POSTGRES, db_read_policy.ENFORCE_SQLSERVER) \
+            or not isinstance(tool_input, dict) or not isinstance(tool_input.get("query"), str):
+        return None
+    connection = tabularis_connection(tool_input.get("connection_id")) or (None, None)
+    return db_read_policy.enforce("tabularis", tool_input, outcome.exe, connection[:2],
+                                  _datagrip().session_settings(tool_input["query"]))
+
+
 def _read_decision(host, outcome, tool_input):
     """A psql read runs with the server enforcing read-only mode; when that cannot be applied, it runs as before."""
+    enforced = _enforced_read(outcome, tool_input)
+    if enforced is not None:
+        return {"hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "allow",
+            "permissionDecisionReason": READ_REASON,
+            "updatedInput": enforced,
+        }}
     if outcome.exe == "psql" and isinstance(tool_input, dict) and isinstance(tool_input.get("command"), str):
         updated = {**tool_input, "command": read_only_command(tool_input["command"])}
         return {"hookSpecificOutput": {
@@ -3320,6 +3819,8 @@ def handle(event, host):
         return output
     if name not in EVENTS or not isinstance(tool, str):
         return None
+    if name == "PostToolUse" and tool in (DATAGRIP_TOOL, TABULARIS_TOOL):
+        _capture_plan(host, session, tool, event)
     if tool == DATAGRIP_TOOL:
         if name in POST_EVENTS:
             outcome = _classify_safely(lambda: _datagrip().classify_query(event.get("tool_input")), tool)
@@ -3343,14 +3844,130 @@ def handle(event, host):
         if reason:
             return approval_state.pre_output("deny", reason)
         outcome = outcome or _classify_safely(lambda: classify_text(command, _cwd(event)), command)
+        limits = _limits_command_outcome(command, _cwd(event))
+        if limits is not None and outcome.kind not in ("forbidden", "secret"):
+            outcome = _merge("always", [outcome, limits]) if outcome.kind == "always" else limits
     elif tool.startswith("mcp__"):
-        outcome = _classify_safely(lambda: classify_mcp(tool, tool_input, _cwd(event)), tool)
+        outcome = _classify_safely(lambda: classify_mcp(tool, tool_input, _cwd(event), host, session), tool)
     elif tool in FILE_TOOLS:
         outcome = _classify_safely(lambda: classify_file_tool(tool, tool_input, _cwd(event)), tool)
     else:
         return None
     return _decide(name, host, session, outcome, tool_use_id, tool_input, tool, _cwd(event), event,
                    wrapped is not None)
+
+
+LIMITS_READS = frozenset({"ls", "cat", "head", "tail", "grep", "wc", "stat", "file", "jq"})
+
+
+LIMITS_WRITERS = frozenset({"tee", "mv", "cp", "install", "ln", "truncate", "rm", "rmdir", "unlink", "shred"})
+LIMITS_REMOVERS = frozenset({"rm", "rmdir", "mv", "unlink", "shred"})
+QUOTE_MARKS = re.compile(r"[\"'\\]")
+DYNAMIC_MARKS = ("$", "`", "<(", ">(")
+
+
+def _limits_write_form(segment, words):
+    """Whether a simple command writes: an output redirection, or a writing program."""
+    program, _ = strip_prefix(words)
+    name = os.path.basename(program[0]) if program else ""
+    return (any(">" in operator and target != "/dev/null" for _, operator, target in segment.redirects)
+            or name in LIMITS_WRITERS or name == "dd" and any(word.startswith("of=") for word in program[1:])
+            or name == "sed" and any(re.fullmatch(r"-[A-Za-z]*i[A-Za-z]*|--in-place(?:=.*)?", word)
+                                     for word in program[1:]))
+
+
+def _limits_command_outcome(command, cwd=None):
+    """An every-time outcome for a command that touches the database read limits file or its folder, unless it only
+    reads. Words and redirection targets are compared after quote and escape removal, simple joins through fixed
+    variables are followed, and a write whose path cannot be resolved counts when the folder is the working folder."""
+    path = db_read_policy.limits_path()
+    folder = path.parent
+    ask = Outcome("always", [f"db-limits:{_digest(command)}"], ["Change to the database read limits file"],
+                  every_time=True)
+
+    def mentions(text):
+        text = QUOTE_MARKS.sub("", text)
+        expanded = os.path.expandvars(text).replace("~/", f"{Path.home()}/")
+        return any(name in value for value in (text, expanded) for name in (path.name, str(folder)))
+
+    try:
+        segments = tokenize(command)
+    except ParseError:
+        return ask if mentions(command) else None
+    home = folder.resolve()
+
+    def within(candidate):
+        return candidate == home or home in candidate.parents
+
+    statics, directory = {}, Path(cwd or os.getcwd()).resolve()
+    named = dynamic = writes = False
+    inside = within(directory)
+    for segment in segments:
+        words = _expand_segment_words(segment, statics)
+        if all(ASSIGNMENT.match(word) for word in words):
+            for word in words:
+                key, _, value = word.partition("=")
+                fixed = _static_value(os.path.expandvars(value), statics, os.environ)
+                if fixed is None:
+                    statics.pop(key, None)
+                else:
+                    statics[key] = fixed
+            continue
+        targets = [_expand_path_variables(target, statics) for _, operator, target in segment.redirects
+                   if "<<" not in operator]
+        program, _ = strip_prefix(words)
+        name = os.path.basename(program[0]) if program else ""
+        for text in (*words, *targets):
+            plain = QUOTE_MARKS.sub("", os.path.expandvars(text))
+            dynamic = dynamic or any(mark in plain for mark in DYNAMIC_MARKS)
+            named = named or mentions(text)
+            for candidate in {plain, plain.partition("=")[2]} - {""}:
+                if any(mark in candidate for mark in DYNAMIC_MARKS) or candidate.startswith("-") or " " in candidate:
+                    continue
+                try:
+                    resolved = (directory / os.path.expanduser(candidate)).resolve()
+                except (OSError, RuntimeError, ValueError):
+                    continue
+                if within(resolved):
+                    named = inside = True
+                elif name in LIMITS_REMOVERS and resolved != Path("/") and home.is_relative_to(resolved):
+                    named = True
+        writes = writes or _limits_write_form(segment, words)
+        if name == "cd" and len(program) == 2 and not any(mark in program[1] for mark in DYNAMIC_MARKS):
+            try:
+                directory = (directory / os.path.expanduser(QUOTE_MARKS.sub("", program[1]))).resolve()
+            except (OSError, RuntimeError, ValueError):
+                continue
+            inside = inside or within(directory)
+    if named:
+        plain_read = not any(mark in command for mark in ("$(", "`", "<(", ">(")) and all(
+            segment.words and os.path.basename(segment.words[0]) in LIMITS_READS and not any(
+                ">" in operator and target != "/dev/null" for _, operator, target in segment.redirects)
+            for segment in segments if not all(ASSIGNMENT.match(word) for word in segment.words))
+        return None if plain_read else ask
+    return ask if dynamic and writes and inside else None
+
+
+def _capture_plan(host, session, tool, event):
+    """After a successful PostgreSQL plan statement on a production connection, record its estimate for the session."""
+    try:
+        tool_input = event.get("tool_input")
+        datagrip = _datagrip()
+        if tool == DATAGRIP_TOOL:
+            target = datagrip.database_target(tool_input)
+        else:
+            connection = tabularis_connection(tool_input.get("connection_id")) if isinstance(tool_input, dict) else None
+            sql = tool_input.get("query") if isinstance(tool_input, dict) else None
+            target = (connection[0], connection[1], connection[2] == "postgresql", sql) \
+                if connection and isinstance(sql, str) else None
+        if target is None or not target[2] or not db_read_policy.is_production(target[1]):
+            return
+        kind, read = datagrip.read_shape(target[3])
+        if kind == "plan":
+            db_read_policy.record_plan(host, session, "datagrip" if tool == DATAGRIP_TOOL else "tabularis", target[0],
+                                       read, event.get("tool_response"))
+    except Exception as error:
+        _report_error(error)
 
 
 def _report_error(error):
@@ -3374,6 +3991,9 @@ def classify_file_tool(tool, tool_input, cwd):
         paths = [tool_input[key] for key in ("file_path", "notebook_path") if isinstance(tool_input.get(key), str)]
     if tool != "Read" and any(_state_path(path, cwd) for path in paths):
         return Outcome("forbidden", [], [SELF_APPROVAL_REASON])
+    if tool != "Read" and any(_resolved(path, cwd) == db_read_policy.limits_path().resolve() for path in paths):
+        return Outcome("always", [f"db-limits:{_digest(' '.join(paths))}"], ["Change to the database read limits file"],
+                       every_time=True)
     if tool == "Read" and any(_protected_path(path, cwd) for path in paths):
         return _sensitive(" ".join(paths))
     return Outcome("pass", [], [])

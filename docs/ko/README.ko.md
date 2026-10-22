@@ -171,12 +171,22 @@ Claude Code는 `language` 설정에서 언어를 가져오며, 로컬 프로젝�
 
 `PreToolUse` 훅과 `PermissionRequest` 훅인 `scripts/datagrip_guard.py`는 DataGrip MCP 도구 `execute_sql_query` 실행 전에 동작합니다.
 가드는 `projectPath`가 가리키는 DataGrip 프로젝트의 `.idea/dataSources.xml`에서 연결 정보를 읽습니다.
-승인 표시가 없고 확인된 연결에서는 PostgreSQL과 SQL Server의 읽기 쿼리를 승인 없이 실행합니다. PostgreSQL 읽기는 읽기 전용 트랜잭션에서
-`SET LOCAL statement_timeout = '60s';`와 함께 실행됩니다. `approval_guard`를 켜면 비파괴적인 PostgreSQL·SQL Server
-쓰기는 다른 모든 쓰기와 세션 쓰기 승인(`write:session`)을 공유합니다. 이름에 `승인`이 들어간 연결의 쿼리, 알 수 없는 연결,
-그 밖의 데이터베이스 종류, 가드가 해석하지 못한 텍스트도 같은 승인을 사용합니다.
-원문에 `delete`, `drop`, `truncate`가 이름으로 든 텍스트(리터럴과 주석 포함)와 SQL 분류기가 파괴적으로 판단한 문장은 매번 승인을 요청합니다.
-`DO`, `EXEC`, `EXECUTE`, `CALL`로 시작하는 문장도 여기에 포함됩니다.
+운영이 아니고 확인된 연결에서는 PostgreSQL과 SQL Server의 읽기 쿼리를 승인 없이 실행합니다. PostgreSQL 읽기는 읽기 전용 트랜잭션에서
+`SET LOCAL statement_timeout = '60s';`와 함께 실행됩니다. 운영 연결에서는 PostgreSQL 읽기 전에 기록된 계획이 필요하고, SQL Server 읽기에는
+잠금 안전장치가 붙습니다([승인 가드](#승인-가드)의 운영 읽기 규칙 참고). `approval_guard`를 켜면 비파괴적인 PostgreSQL·SQL Server
+쓰기는 다른 모든 쓰기와 세션 쓰기 승인(`write:session`)을 공유합니다. 알 수 없는 연결, 그 밖의 데이터베이스 종류,
+가드가 해석하지 못한 텍스트도 같은 승인을 사용합니다. 연결 이름의 `승인`은 그 자체로는 아무 효과가 없습니다.
+코드에 `delete`, `drop`, `truncate`가 이름으로 든 문장과 SQL 분류기가 파괴적으로 판단한 문장은 매번 승인을 요청합니다.
+`DO`, `EXEC`, `EXECUTE`, `CALL`로 시작하는 문장도 여기에 포함됩니다. 여기서 코드는 문자열 리터럴, 주석, 따옴표나 대괄호로 묶은
+식별자를 뺀 나머지 텍스트이므로, 그 안에서만 `delete`를 언급하는 `SELECT`는 읽기로 남습니다. 운영이 아닌 PostgreSQL
+연결("운영 데이터베이스 읽기" 참고)에서 `pglast` 파서가 텍스트를 확인하면, 자기 문장에 `WHERE`가 있는 `DELETE`와, 본문이
+PL/pgSQL로 파싱되고 `DROP`, `TRUNCATE`, `EXECUTE`, `ALTER`, `GRANT`, `REVOKE`, `CALL`, 중첩 `DO`, `WHERE` 없는 `DELETE`,
+위험 함수 호출(따옴표로 감싼 이름도 검사하며, 여기서는 `set_config`와 `pg_sleep`는 허용)이 없는 `DO` 블록이 대신 세션
+쓰기입니다. 세미콜론 없이 문장을 이어 쓸 수 있는 SQL Server와 파서가 확인하지 못한 텍스트는 계속 매번 묻습니다.
+SQL Server 읽기에는 `SET NOCOUNT`,
+`LOCK_TIMEOUT`, `DEADLOCK_PRIORITY`, `TRANSACTION ISOLATION LEVEL READ UNCOMMITTED|READ COMMITTED|SNAPSHOT`, `ARITHABORT`,
+`ANSI_NULLS`, `ANSI_WARNINGS`, `ANSI_PADDING`, `QUOTED_IDENTIFIER`, `CONCAT_NULL_YIELDS_NULL`, `XACT_ABORT`, `STATISTICS IO|TIME`,
+`SHOWPLAN_XML|ALL|TEXT` 문장도 함께 쓸 수 있습니다.
 Codex에서는 쓰기가 준비된 상태면 Codex의 네이티브 승인 창을 열고, 그렇지 않으면 코드와 함께 거부합니다.
 매번 묻는 쿼리는 항상 코드와 함께 거부합니다([승인 가드](#승인-가드)를 참고하세요). 토글을 끄면 모든 쓰기가 이전처럼 승인을 요청합니다. Codex에서는 `/hooks`에서 이 훅을 신뢰해야 합니다.
 
@@ -219,7 +229,7 @@ Codex `apply_patch` 호출 전에 `scripts/approval_guard.py`를 실행합니다
 2. 커밋하지 않은 작업 버리기: dry run 없는 강제 `git clean`, `git stash drop`·`git stash clear`.
    추적 파일에 커밋하지 않은 변경이 있거나 저장소 상태를 읽을 수 없을 때의 `git reset --hard`,
    강제 checkout이나 `.` checkout, 작업 트리의 `.`·`:/` restore도 포함합니다.
-3. 보호 경로나 외부 경로, 풀 수 없는 대상의 재귀 삭제
+3. 보호 경로나 외부 경로, 풀 수 없는 대상의 재귀 삭제. 단 로컬 범위 규칙에서 설명하는 복구 가능한 작업 트리 삭제는 제외합니다.
 4. `psql`, `sqlcmd`, DataGrip, tabularis, MCP SQL 필드로 보내는 파괴적 데이터베이스 문장
 5. 원격 인프라 삭제: `kubectl`, `oc`, `helm`, `az`, `terraform`, `tofu`, `aws`, `gcloud`, `gsutil`의 파괴적 동사
    (`delete`, `drain`, `uninstall`, `destroy`, `purge`, `terminate` 등), `--` 앞의 `--force`와 `--prune`,
@@ -241,6 +251,14 @@ Codex `apply_patch` 호출 전에 `scripts/approval_guard.py`를 실행합니다
   무해한 명령 몇 개로만 이루어지면 세션 승인 없이 Claude Code 자체 권한 프롬프트에 허용으로 응답합니다.
   `./README.md`처럼 임시 루트 안임을 증명할 수 없는 목적지는 기존 절차를 따릅니다.
   그곳에 쓰는 스크립트는 여전히 쓰기입니다.
+- **복구 가능한 작업 트리 삭제**: 모든 대상이 명령이 실행되는 폴더가 속한 Git 작업 트리 안에 있고, Git이 각 대상을
+  변경 사항(staged, unstaged, untracked)이 없는 추적 대상이거나 추적되지 않고 무시된(`git check-ignore`) 대상으로
+  보고하면 재귀 `rm`은 세션 쓰기이며 "Recursive removal of tracked files" 또는 "Recursive removal of ignored files"로
+  표시합니다. Git은 추적되지 않은 파일 보고와 무시 설정을 명령줄에서 강제한 채 실행하므로 저장소 설정으로 파일을 숨길 수
+  없습니다. 작업 트리 루트, `.git`, 심볼릭 링크, 존재하지 않는 경로, `assume-unchanged`나 `skip-worktree` 항목,
+  Git이 무시하지 않는 추적되지 않은 파일,
+  같은 텍스트 앞쪽에서 파일을 바꿀 수 있는 명령(반복문 머리는 포함하고 단순한 `[ ... ]` 검사는 제외), 저장소를 바꿀 수 있는
+  Git 변수, Git 실패나 시간 초과는 계속 매번 묻습니다.
 - **로컬 컨테이너 엔진**: 엔진이 로컬이면 `docker`·`podman`의 삭제·정리(`rm`, `rmi`,
   `container`, `image`, `volume`, `network`의 `rm`·`prune`, `system prune`, `-v` 유무와 관계없는
   `compose down`)와 파일을 지우는 `exec` 명령은 세션 쓰기입니다. 하위 명령 앞에 `--host`, `-H`,
@@ -326,6 +344,19 @@ mutation과 쿼리 파일은 쓰기입니다. 알려지지 않은 `gh` 동작도
 보호 경로나 외부 경로에 대해 매번 묻습니다. 그 밖에 세션 폴더나 임시 루트(로컬 범위 규칙 참고) 안에서의 삭제는 통과합니다.
 대상이 정확히 `$(mktemp -d ...)` 또는 백틱 치환이거나 `${TMPDIR:-<default>}`로 시작하면, 먼저 임시 루트(`TMPDIR`가
 있으면 그 값, 없으면 기본값)로 풀고 다른 경로와 똑같이 검사합니다. 그래서 홈 폴더, 세션 폴더, `.git` 차단은 그대로 적용됩니다.
+같은 명령 텍스트에서 앞서 대입한 변수는 값이 정적 단어 하나(리터럴, `~`, `$HOME`, `$TMPDIR`, `${TMPDIR:-<default>}`,
+또는 이미 푼 다른 변수)이면 풉니다. 텍스트의 모든 경로가 거치는 `if`, `case`, `{ }`, `( )` 본문 안의 대입과
+`for` 반복문의 단어도 포함합니다. 삭제는 가능한 모든 값에 대해 검사하고 가장 엄격한 결과를 따릅니다.
+`&&`나 `||` 목록에서 앞선 명령이 성공하거나 실패할 때만 실행되는 대입은 조건부입니다. 그 목록에서 뒤따르는 명령은 앞의 연결이
+모두 `&&`일 때만 새 값만 보고, `||` 뒤와 목록 뒤(`;`, 줄바꿈, `&` 다음)에서는 새 값과 이전 값을 함께 봅니다. 환경이 제공하지
+않는 변수의 이전 값은 빈 문자열입니다. 따옴표 없는 참조는 공백에서 나뉘므로 값의 각 단어를 따로 대상으로 검사합니다.
+따옴표 없이 빈 값으로 풀리는 대상은 뺍니다. 따옴표를 친 빈 대상은 아무것도 지우지 않습니다. 다만 빈 값 때문에 `$D/y`가
+`/y`가 되는 것처럼 대상이 세션 폴더와 임시 루트 밖의 경로로 바뀌면 계속 묻습니다. 뒤따르는 `cd`는 상대 대상의 기준만 바꿉니다.
+명령 치환, 백틱, `read`, 산술, 알 수 없는 변수, `set --`, `shift`, 일부 경로에서만 대입한 값은 풀지 못한 채 매번 묻습니다.
+가드가 명령이 실행하는 셸 스크립트를 읽을 때는 스크립트를 하나의 텍스트로 판단하므로 한 줄에서 대입한 변수를 다음 줄에서 풉니다.
+그 스크립트의 `$0`, 폴더 관용구 `$(dirname "$0")`, `$(cd "$(dirname "$0")" && pwd)`, `${BASH_SOURCE[0]%/*}`,
+`$1`부터 `$9`는 각각 스크립트 경로, 스크립트 폴더, 호출의 리터럴 인자로 풀며, 인자가 반복문 변수이면 가능한 모든 값으로 풉니다.
+스크립트 경로는 명령이 쓴 경로를 셸처럼 심볼릭 링크를 풀지 않고 절대 경로로만 만든 것입니다.
 `kubectl`·`oc`·`docker`·`podman`의 `exec` 안의 명령에도 일반 분류기를 적용합니다.
 파괴적 명령은 매번 묻되, 로컬 `docker`·`podman` 컨테이너 안의 파일 삭제는 세션 쓰기입니다.
 비밀 출력은 차단하며, 나머지 `exec` 호출은 쓰기입니다.
@@ -416,12 +447,34 @@ SQL이 없으면 읽기 동작은 읽기, 쓰기 동작은 쓰기입니다.
 `~/.config/tabularis`, Windows의 `%APPDATA%\tabularis`입니다. 테스트에서는 `HEI5ENBUG_TABULARIS_DIR`로 바꿉니다.
 가드는 `id`, `name`, `params.driver`만 추출하며 다른 연결 필드나 비밀번호는 출력하지 않습니다.
 `postgresql`에는 PostgreSQL 분류기를, `sqlserver`·`sqlserver-entra`에는 SQL Server 분류기를 적용합니다.
-읽기는 승인 없이 실행하고, 비파괴적인 쓰기는 세션 쓰기입니다. 이름에 `승인`이 있거나 다른 드라이버,
+운영이 아닌 연결의 읽기는 승인 없이 실행하고, 비파괴적인 쓰기는 세션 쓰기입니다. 다른 드라이버,
 알 수 없는 연결, 읽을 수 없는 파일, 해석할 수 없는 쿼리 텍스트는 세션 쓰기 승인을 사용합니다.
-원문의 `delete`·`drop`·`truncate` 단어와 SQL 분류기가 파괴적으로 판단한 문장은 매번 묻습니다.
-`DO`·`EXEC`·`EXECUTE`·`CALL`로 시작하는 문장도 여기에 포함됩니다.
+코드의 `delete`·`drop`·`truncate`(리터럴, 주석, 따옴표 식별자 안은 제외)와 SQL 분류기가 파괴적으로 판단한 문장은 매번 묻습니다.
+`DO`·`EXEC`·`EXECUTE`·`CALL`로 시작하는 문장도 여기에 포함됩니다. 다만 위에서 말한 운영이 아닌 PostgreSQL 연결의 대상 지정
+`DELETE`와 안전한 `DO`는 세션 쓰기입니다.
 이런 쿼리는 `sql:always:tabularis:<id>:<digest>` 키를 씁니다.
 다른 tabularis 도구는 기존 이름 규칙을 따릅니다.
+
+**운영 데이터베이스 읽기.** `run_query`와 DataGrip `execute_sql_query`에서 연결 이름을 대소문자 경계, 공백, `_`, `-`, `.`, 괄호로 나눈 단어에
+`dev`, `develop`, `development`, `test`, `testing`, `qa`, `stg`, `stage`, `staging`, `sandbox`, `local`, `demo` 중 하나가 있거나
+이름에 `개발`, `테스트`, `스테이징`, `검증`, `로컬`이 들어 있고, `prod`, `production`, `prd`, `live` 단어와 `운영`이 없으면
+운영이 아닙니다. 그 밖의 모든 연결은 운영이며, 알 수 없는 연결과 `승인`이 든 이름도 포함합니다.
+- `ANALYZE`가 없는 PostgreSQL `EXPLAIN [(옵션)] <읽기>`는 어떤 연결에서도 읽기입니다. 운영 연결에서 성공하면 `PostToolUse` 훅이
+  추정 비용과 행 수(JSON `Plan`의 `Total Cost`와 `Plan Rows`, 또는 텍스트 계획 첫 줄)를 호스트·세션·도구·연결·정확한 읽기 텍스트(앞뒤
+  공백과 끝의 세미콜론만 뺀 것)별로 30분 동안 상태 파일에 기록합니다. 오류나 해석할 수 없는 결과는 기록하지 않습니다.
+- 두 한도 이하인 기록이 있는 PostgreSQL 운영 읽기는 실행합니다. 기록이 없으면 먼저 실행할 `EXPLAIN (FORMAT JSON) <읽기>` 형식을 알려 주며
+  거부하고, 한도를 넘거나 기록을 해석할 수 없으면 매번 묻습니다.
+- SQL Server 운영 읽기는 계획 없이(두 도구 모두 SQL Server 예상 계획을 돌려줄 수 없습니다) 실행하며, `SET LOCK_TIMEOUT 5000;`과
+  `SET DEADLOCK_PRIORITY LOW;` 접두가 항상 맨 앞에 붙습니다. 읽기가 `LOCK_TIMEOUT`을 0부터 한도 밖의 값으로 정하거나
+  `DEADLOCK_PRIORITY`를 `LOW`나 -5 이하 정수가 아닌 값으로 정하면 매번 묻습니다. tabularis `limit`은 요청값(기본 100)과 최대 결과 행 수 중
+  작은 값이 됩니다.
+- 한도 기본값은 `postgres_max_cost` 10000, `max_estimated_rows` 100000, `max_result_rows` 1000, `sqlserver_lock_timeout_ms` 5000입니다.
+  `$XDG_CONFIG_HOME/hei5enbug-agent-setup/db-read-limits.json`(기본 `~/.config`)에
+  `{"default": {...}, "connections": {"<연결 이름 또는 id>": {...}}}`를 둘 수 있고, 연결 항목은 키별로 default를 덮어씁니다.
+  알 수 없는 키, 0 이하이거나 숫자가 아닌 값, 잘못된 파일은 무시합니다. 편집 도구나 셸로 이 파일이나 그 폴더를 바꾸면, 따옴표나
+  이스케이프로 이름을 나눠도 매번 묻습니다. 그 폴더 안에서 대상을 풀 수 없는 쓰기도 묻습니다. 다른 곳에서 풀 수 없는 값으로 조립한
+  경로는 잡지 못합니다.
+- `approval_guard`를 끄면 아무것도 기록하지 않으므로 읽기를 막지 않습니다.
 
 `curl`은 GET/HEAD 이외의 요청 메서드와 `-d`, `--data*`, `-F`, `--form`, `-T`, `--upload-file`, `--json`이 없으면
 읽기입니다. 나머지는 `curl <METHOD> on <scheme://host>`로 보이는 쓰기이며, DELETE 같은 파괴적 메서드는 매번 묻습니다.

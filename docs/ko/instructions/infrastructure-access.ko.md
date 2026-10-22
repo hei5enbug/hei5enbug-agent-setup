@@ -12,9 +12,12 @@
 - 작업에 필요하지 않다면 운영 환경에서 클러스터 전체나 모든 네임스페이스를 대상으로 조회하지 않는다.
 - DB 쿼리는 `list_connections`에 대상이 있으면 작은 `limit`을 둔 tabularis MCP `run_query`를 먼저 쓴다.
   없으면 DataGrip MCP, 그것도 없으면 `secret_exec.py`를 거친 CLI를 쓴다.
-- 이름에 `승인`이 들어간 연결은 조회를 포함한 첫 쿼리 전에 세션 쓰기 승인을 받는다.
+- 운영 연결(이름에 `prod`나 `운영`이 있거나, dev, test, QA, staging, sandbox, local 표지가 없는 연결)에서 PostgreSQL을
+  읽기 전에 같은 읽기 텍스트로
+  `EXPLAIN (FORMAT JSON)`을 먼저 실행하고(ANALYZE는 쓰지 않는다), 그다음 그 텍스트를 그대로 실행한다.
+  SQL Server 운영 읽기에는 계획 검사가 없으므로 범위를 좁게 유지한다.
 - SQL은 필요한 컬럼만 선택하고, 인덱스가 있는 `WHERE`로 거르고, `LIMIT`을 붙인다.
-- 비용을 모르는 쿼리는 먼저 `EXPLAIN`을 실행한다. `EXPLAIN ANALYZE`는 실행하지 않는다.
+- 그 밖에 비용을 모르는 쿼리도 먼저 `EXPLAIN`을 실행한다. `EXPLAIN ANALYZE`는 실행하지 않는다.
 - 큰 테이블은 `COUNT(*)` 대신 테이블 추정치를 사용한다.
 - 반복문보다 한 번의 묶음 호출을 선호하고, 이미 얻은 결과는 재사용한다.
 - MCP와 클라우드 API 읽기는 작은 페이지로 나누어 가져온다.

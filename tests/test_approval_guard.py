@@ -592,6 +592,8 @@ def test_kubectl_leading_옵션_뒤의_하위_명령도_분류한다(state, fake
 
 @pytest.mark.parametrize(("command", "kind"), [
     ("psql -c \"select 1\"", "read"),
+    ("psql -c \"select 'delete'\"", "read"),
+    ("psql -c \"select 1 -- drop\"", "read"),
     ("psql -c \"select 1\" -c \"insert into t values (1)\"", "write"),
     ("psql -c \"select 1\" -f x.sql", "write"),
     ("psql -c \"insert into t values (1)\" -c \"delete from t\"", "always"),
@@ -1280,9 +1282,9 @@ def test_datagrip_파괴_문장은_매번_묻고_해석_불가_텍스트는_세�
     assert outcome.keys[0].startswith("mcp:" if outcome.kind == "write" else "sql:always:")
 
 
-def test_datagrip_승인_데이터_소스의_조회도_세션_쓰기로_분류한다(state, project):
+def test_datagrip_승인_데이터_소스의_쓰기는_세션_쓰기로_분류한다(state, project):
     # given
-    event = query_event(project, APPROVAL_ID, "SELECT 1")
+    event = query_event(project, APPROVAL_ID, "INSERT INTO t VALUES (1)")
     # when
     outcome = datagrip_guard.classify_query(event["tool_input"])
     # then
@@ -1574,8 +1576,6 @@ def test_psql_읽기를_다시_쓸_수_없으면_이전처럼_허용만_한다(s
 
 
 @pytest.mark.parametrize("command", [
-    "psql -c \"select 'delete'\"",
-    "psql -c \"select 1 -- drop\"",
     "psql -c \"DO $$ BEGIN DELETE FROM t; END; $$\"",
     "sqlcmd -Q \"EXEC(N'DELETE FROM dbo.t')\"",
 ])
@@ -1697,14 +1697,17 @@ def test_승인_가드_파일을_읽기만_하는_명령은_거부하지_않는�
     assert output is None
 
 
-@pytest.mark.parametrize("sql", [
-    "DO $$ BEGIN PERFORM 1; END $$",
-    "SELECT 1; CALL public.refresh_all()",
+@pytest.mark.parametrize(("connection_id", "sql", "kind"), [
+    (APPROVAL_ID, "DO $$ BEGIN PERFORM 1; END $$", "always"),
+    (PG_ID, "DO $$ BEGIN PERFORM 1; END $$", "write"),
+    (PG_ID, "SELECT 1; CALL public.refresh_all()", "always"),
+    (APPROVAL_ID, "SELECT 1; CALL public.refresh_all()", "always"),
 ])
-def test_datagrip_do_나_call로_시작하는_문장은_항상_묻는다(state, project, sql):
+def test_datagrip_do_나_call로_시작하는_문장은_운영에서_항상_묻고_안전한_do만_개발에서_낮춘다(
+        state, project, connection_id, sql, kind):
     # given
-    tool_input = query_event(project, PG_ID, sql)["tool_input"]
+    tool_input = query_event(project, connection_id, sql)["tool_input"]
     # when
     outcome = datagrip_guard.classify_query(tool_input)
     # then
-    assert outcome.kind == "always"
+    assert outcome.kind == kind

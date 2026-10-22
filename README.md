@@ -170,13 +170,25 @@ quote.
 
 A `PreToolUse` hook and a `PermissionRequest` hook, both `scripts/datagrip_guard.py`, run before the DataGrip MCP tool
 `execute_sql_query`. The guard reads the connection from `.idea/dataSources.xml` in the DataGrip project that
-`projectPath` names. PostgreSQL and SQL Server reads on unmarked, recognized connections
+`projectPath` names. PostgreSQL and SQL Server reads on non-production, recognized connections
 run without approval, and PostgreSQL reads run inside a read-only transaction with
-`SET LOCAL statement_timeout = '60s';`. With `approval_guard` on, non-destructive PostgreSQL and SQL Server writes
-share the session write approval (`write:session`) with all other writes. Queries on connections whose name contains
-`승인`, unknown connections, other database types, and text the guard cannot parse use that approval too.
-Text that names `delete`, `drop`, or `truncate` anywhere, literals and comments included, and statements the SQL
-classifier treats as destructive, including those led by `DO`, `EXEC`, `EXECUTE`, or `CALL`, ask every time.
+`SET LOCAL statement_timeout = '60s';`. A production connection needs a recorded plan before a PostgreSQL read and gets
+lock safeguards on a SQL Server read; see the production read rules under [Approval guard](#approval-guard). With
+`approval_guard` on, non-destructive PostgreSQL and SQL Server writes share the session write approval
+(`write:session`) with all other writes. Unknown connections, other database types, and text the guard cannot parse
+use that approval too; a `승인` in a connection name has no effect of its own.
+A statement whose code names `delete`, `drop`, or `truncate`, and statements the SQL classifier treats as destructive,
+including those led by `DO`, `EXEC`, `EXECUTE`, or `CALL`, ask every time. The code is the text left after string
+literals, comments, and quoted or bracketed identifiers are removed, so a `SELECT` that only mentions `delete` in one of
+them stays a read. On a non-production PostgreSQL connection (see "Production database reads"), when the `pglast`
+parser confirms the text, a `DELETE` whose own statement has a `WHERE`, and a `DO` block whose body parses as
+PL/pgSQL and has no `DROP`, `TRUNCATE`, `EXECUTE`, `ALTER`, `GRANT`, `REVOKE`, `CALL`, nested `DO`, `DELETE`
+without `WHERE`, or risky function call (`set_config` and `pg_sleep` are allowed there, quoted names included in the
+check), are session writes instead. SQL Server, which allows statements without semicolons, and text the parser
+cannot confirm keep asking every time. SQL Server reads may also carry `SET NOCOUNT`, `LOCK_TIMEOUT`, `DEADLOCK_PRIORITY`, `TRANSACTION
+ISOLATION LEVEL READ UNCOMMITTED|READ COMMITTED|SNAPSHOT`, `ARITHABORT`, `ANSI_NULLS`, `ANSI_WARNINGS`, `ANSI_PADDING`,
+`QUOTED_IDENTIFIER`, `CONCAT_NULL_YIELDS_NULL`, `XACT_ABORT`, `STATISTICS IO|TIME`, and `SHOWPLAN_XML|ALL|TEXT`
+statements.
 On Codex, a write opens Codex's native approval window when it is ready, and is denied with a code otherwise;
 an every-time query is always denied with a code; see [Approval guard](#approval-guard). With the toggle off, every
 write asks as before. In Codex, trust the hook in `/hooks`.
@@ -222,7 +234,8 @@ the local-scope rules below describe them.
 2. Discarding uncommitted work: forced `git clean` without a dry run, `git stash drop` or `git stash clear`, and
    `git reset --hard`, forced checkout or checkout of `.`, or restore of `.` or `:/` on the worktree whenever the
    repository has an uncommitted change to a tracked file or its state cannot be read.
-3. Recursive removal of a protected or external path, or with an unresolved target.
+3. Recursive removal of a protected or external path, or with an unresolved target, except the recoverable work-tree
+   removal described in the local-scope rules.
 4. Destructive database statements through `psql`, `sqlcmd`, DataGrip, tabularis, or an MCP SQL field.
 5. Remote infrastructure deletion: the destructive verbs of `kubectl`, `oc`, `helm`, `az`, `terraform`, `tofu`, `aws`,
    `gcloud`, and `gsutil`, such as `delete`, `drain`, `uninstall`, `destroy`, `purge`, and `terminate`; `--force` and
@@ -246,6 +259,15 @@ Local-scope rules keep disposable or recoverable local work off the every-time l
   harmless commands such as `cat`, `echo`, `ls`, and `cd`, Claude Code's own permission prompt is answered with allow
   without any session approval. A destination that is not provably inside a temporary root, such as `./README.md`,
   keeps its normal flow. Scripts that write there are still writes.
+- **Recoverable work-tree removal**: a recursive `rm` is a session write, described as "Recursive removal of tracked
+  files" or "Recursive removal of ignored files", when every target lies inside the Git work tree that holds the
+  command's folder and Git reports each as tracked with no staged, unstaged, or untracked change under it, or as
+  untracked and ignored (`git check-ignore`). Git runs with untracked-file reporting and ignore settings forced on the
+  command line, so repository configuration cannot hide a file. The work-tree root, `.git`, a symbolic link, a path that
+  does not exist, an `assume-unchanged` or `skip-worktree` entry,
+  untracked files that Git does not ignore, a command earlier in the same text that may change files (a loop header
+  counts, a plain `[ ... ]` test does not), a Git variable that could redirect the repository, and any Git failure or
+  timeout keep asking every time.
 - **Local container engine**: `docker` and `podman` removal and pruning (`rm`, `rmi`, `container`, `image`, `volume`,
   `network` `rm` or `prune`, `system prune`, `compose down` with or without `-v`) and `exec` commands that remove files
   are session writes when the engine is local. An engine is remote when a `--host`, `-H`, `--remote`, `-r`, `--url`,
@@ -330,6 +352,24 @@ folder, `/`, `.git` and its contents, and unresolved targets. Removal within the
 (see the local-scope rules) otherwise passes. A target that is exactly a `$(mktemp -d ...)` or backtick substitution,
 or starts with `${TMPDIR:-<default>}`, is first resolved to a temporary root (`TMPDIR` when set, else the default) and
 then checked like any other path, so those checks still block the home folder, the session folder, and `.git`.
+A variable assigned earlier in the same command text resolves when its value is one static word (a literal, `~`,
+`$HOME`, `$TMPDIR`, `${TMPDIR:-<default>}`, or another resolved variable), including assignments inside `if`, `case`,
+`{ }`, and `( )` bodies that every path through the text reaches, and the words of a `for` loop. The removal is checked
+against every possible value and the strictest result wins. An assignment that runs only when an earlier command in a
+`&&` or `||` list succeeds or fails is conditional: a later command in that list sees only the new value when every
+link before it is `&&`, and after any `||`, like everything after the list (`;`, a newline, or `&`), it sees the new
+value together with the value from before, which is the empty string for a variable the environment does not provide.
+An unquoted reference splits on whitespace, so each word of its value is checked as a separate target.
+An unquoted operand that expands to nothing is dropped
+and a quoted empty operand removes nothing, but an empty value that turns the target into a path outside the session
+folder and the temporary roots, such as `$D/y` becoming `/y`, still asks. A later `cd` changes only relative
+targets. Command substitution,
+backticks, `read`, arithmetic, unknown variables, `set --`, `shift`, and values assigned on only some paths stay
+unresolved and ask every time. When the guard reads a shell script that a command runs, it judges the script as one
+text, so a variable assigned on one line resolves on the next. In that script `$0`, the folder idioms
+`$(dirname "$0")`, `$(cd "$(dirname "$0")" && pwd)`, `${BASH_SOURCE[0]%/*}`, and `$1` to `$9` resolve to the script's
+path, its folder, and the call's literal arguments, with each possible value when an argument is a loop variable.
+The script path is the one the command used, made absolute without resolving symbolic links, as the shell sees it.
 Commands inside `kubectl`/`oc`/`docker`/`podman` `exec` also use the normal classifier: destructive commands ask every
 time (file removal inside a local `docker` or `podman` container is a session write), secret output is denied, and
 other `exec` calls are writes.
@@ -429,12 +469,38 @@ The config directory is `~/Library/Application Support/tabularis` on macOS, `$XD
 `~/.config/tabularis` on Linux, and `%APPDATA%\tabularis` on Windows. `HEI5ENBUG_TABULARIS_DIR` overrides it for tests.
 The guard extracts only `id`, `name`, and `params.driver`; it never prints other connection fields or passwords.
 `postgresql` uses the PostgreSQL classifiers; `sqlserver` and `sqlserver-entra` use the SQL Server classifiers.
-Reads run without approval; non-destructive writes are session writes. A name containing `승인`, another driver, an
-unknown connection, an unreadable file, or unparseable query text uses the session write approval.
-Raw `delete`, `drop`, or `truncate` words and statements the SQL classifier treats as destructive, including those
-led by `DO`, `EXEC`, `EXECUTE`, or `CALL`, ask every time. Those queries use
-`sql:always:tabularis:<id>:<digest>` keys. Other tabularis
-tools keep the name rules.
+Reads on non-production connections run without approval; non-destructive writes are session writes. Another driver,
+an unknown connection, an unreadable file, or unparseable query text uses the session write approval.
+`delete`, `drop`, or `truncate` in the code (not in literals, comments, or quoted identifiers) and statements the SQL
+classifier treats as destructive, including those led by `DO`, `EXEC`, `EXECUTE`, or `CALL`, ask every time, except
+the targeted `DELETE` and safe `DO` on non-production PostgreSQL connections described above, which are session
+writes. Those
+queries use `sql:always:tabularis:<id>:<digest>` keys. Other tabularis tools keep the name rules.
+
+**Production database reads.** For `run_query` and DataGrip `execute_sql_query`, a connection is non-production when
+its name, split at case changes, spaces, `_`, `-`, `.`, and brackets, has a word `dev`, `develop`, `development`,
+`test`, `testing`, `qa`, `stg`, `stage`, `staging`, `sandbox`, `local`, or `demo`, or contains `개발`, `테스트`,
+`스테이징`, `검증`, or `로컬`, and has no word `prod`, `production`, `prd`, or `live` and no `운영`. Every other
+connection is production, including unknown ones and names with `승인`.
+- A PostgreSQL `EXPLAIN [(options)] <read>` without `ANALYZE` is a read on any connection. After one succeeds on a
+  production connection, the `PostToolUse` hook records the estimated cost and rows (JSON `Plan` `Total Cost` and
+  `Plan Rows`, or the first text plan line) per host, session, tool, connection, and exact read text (only leading and
+  trailing whitespace and trailing semicolons removed) in a state file for 30 minutes. Errors and unparseable results
+  record nothing.
+- A PostgreSQL production read with such a record at or under both limits runs; without one, it is denied with the
+  exact `EXPLAIN (FORMAT JSON) <read>` to run first; over a limit, or with an unparseable record, it asks every time.
+- A SQL Server production read runs without a plan (neither tool can return an estimated plan there) with the prefix
+  `SET LOCK_TIMEOUT 5000;` and `SET DEADLOCK_PRIORITY LOW;` always placed first. A read that sets `LOCK_TIMEOUT` outside
+  0 to the limit, or `DEADLOCK_PRIORITY` to anything but `LOW` or an integer of -5 or lower, asks every time. tabularis
+  `limit` becomes the smaller of the request (default 100) and the maximum result rows.
+- Limits default to `postgres_max_cost` 10000, `max_estimated_rows` 100000, `max_result_rows` 1000, and
+  `sqlserver_lock_timeout_ms` 5000. `$XDG_CONFIG_HOME/hei5enbug-agent-setup/db-read-limits.json` (default `~/.config`)
+  may hold `{"default": {...}, "connections": {"<connection name or id>": {...}}}`; a connection entry overrides the
+  default per key, and unknown keys, non-positive or non-numeric values, and an invalid file are ignored. Changing that
+  file or its folder through an edit tool or a shell command asks every time, also with quoted or escaped names and,
+  from inside that folder, for a write whose target the guard cannot resolve. A path assembled from an unresolvable
+  value elsewhere is not detected.
+- With `approval_guard` off nothing is recorded, so reads are not gated.
 
 `curl` without a request method other than GET/HEAD and without `-d`, `--data*`, `-F`, `--form`, `-T`,
 `--upload-file`, or `--json` is a read. Otherwise it is a write shown as `curl <METHOD> on <scheme://host>`; destructive

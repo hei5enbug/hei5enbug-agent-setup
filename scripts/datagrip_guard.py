@@ -2,19 +2,22 @@
 """Approval guard for the DataGrip `execute_sql_query` tool, shared by Claude Code and Codex.
 
 The data source is resolved from `<projectPath>/.idea/dataSources.xml` by matching `connectionId` to the `uuid` of a
-`data-source` element. A name containing `승인` always asks. The `driver-ref` selects the database: `postgresql`, or a
-value starting with `sqlserver` or `azure`. Any other driver, an unreadable file, or an unknown uuid asks.
+`data-source` element. The `driver-ref` selects the database: `postgresql`, or a value starting with `sqlserver` or
+`azure`. Any other driver, an unreadable file, or an unknown uuid asks. With the `approval_guard` toggle on, a read on
+a production data source (see db_read_policy) needs a recorded plan for PostgreSQL and gets lock and result safeguards
+for SQL Server.
 
 Only queries that are certainly reads run without approval. With the `approval_guard` toggle on, a PostgreSQL or SQL
-Server write on a data source without `승인` in its name uses the shared mcp:session approval key,
-and Codex denies it with a one-time code. A statement that mentions delete, drop, or truncate, and everything
-else that is not a read, asks every time.
+Server write uses the shared mcp:session approval key, and Codex denies it with a one-time code. A statement whose
+code (literals, comments, and quoted identifiers removed) names delete, drop, or truncate, and everything else that is
+not a read, asks every time.
   - PostgreSQL with pglast: every statement must be SELECT, VALUES, TABLE, SHOW, or EXPLAIN of a SELECT without
     ANALYZE, and the parse tree must hold no INSERT, UPDATE, DELETE, MERGE, INTO, locking clause, or risky function
     call. Reads run in a read-only transaction through a prepended `SET LOCAL transaction_read_only = on;`.
   - PostgreSQL without pglast: a regex classifier over text with strings, quoted identifiers, and comments removed.
   - SQL Server: every statement starts with SELECT or WITH and holds no write, execute, or side-effect keyword.
-    Session variable statements (DECLARE @v, SET @v =, INSERT [INTO] @v) count as reads under the same condition.
+    Session variable statements (DECLARE @v, SET @v =, INSERT [INTO] @v) and the listed session SET statements count
+    as reads under the same condition.
   - Control characters, invisible format characters, JDBC escapes, unterminated literals, and parse errors ask.
 Codex denies only unapproved writes and always-asking queries, through approval_state; the guard always exits 0.
 While Codex's native approval window can ask (the approval guard's native_ready), it leaves a write to the
@@ -41,6 +44,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from plugin_toggles import enabled  # noqa: E402
 import approval_state  # noqa: E402
+import db_read_policy  # noqa: E402
 from approval_state import Outcome  # noqa: E402
 
 try:
@@ -49,10 +53,8 @@ except Exception:
     pglast_parser = None
 
 TOOL_NAME = "mcp__datagrip__execute_sql_query"
-APPROVAL_MARK = "승인"
 REEXEC_GUARD = "HEI5ENBUG_SQL_PARSER_REEXEC"
 
-ALWAYS_ASK_REASON = "This data source is marked as requiring approval, so every query needs your approval."
 UNKNOWN_REASON = "The DataGrip data source could not be identified from the project settings. Review the SQL and approve it."
 UNSUPPORTED_REASON = "Only PostgreSQL and SQL Server data sources are checked automatically. Review the SQL and approve it."
 ASK_REASON = "This query writes or cannot be classified as a read. Review the SQL and approve it."
@@ -64,6 +66,14 @@ PLACEHOLDER = " __lit__ "
 
 RAW_DESTRUCTIVE = re.compile(r"\b(?:delete|drop|truncate)\b", re.IGNORECASE)
 RISKY_LEADERS = frozenset({"do", "exec", "execute", "call"})
+DELETE_WORD = re.compile(r"\bdelete\b", re.IGNORECASE)
+OTHER_DESTRUCTIVE = re.compile(r"\b(?:drop|truncate)\b", re.IGNORECASE)
+DO_STATEMENT = re.compile(r"do(?: language plpgsql)? __lit__(?: language plpgsql)?", re.IGNORECASE)
+DO_BODY_FORBIDDEN = re.compile(r"\b(?:drop|truncate|execute|exec|alter|grant|revoke|call)\b", re.IGNORECASE)
+DO_STATEMENT_START = re.compile(r"(?:^|;|\b(?:begin|then|else|loop))\s*do\b", re.IGNORECASE)
+DO_ALLOWED_CALLS = re.compile(r"set_config|pg_sleep\w*", re.IGNORECASE)
+PLPGSQL_WRAPPER = "CREATE FUNCTION pg_temp.f() RETURNS void LANGUAGE plpgsql AS "
+CALLED_NAME = re.compile(r"(?<![^\W\d])(\w+)\s*\(")
 PRELUDE = re.compile(r"^set\s+local\s+(statement_timeout|lock_timeout|transaction_read_only)\s*(=|to)\s*'?([^';\s]+)'?$", re.I)
 QUERY_START = re.compile(r"^(select|with|explain|show|table|values)\b", re.I)
 KEYWORD_START = r"(?<![^\W\d])(?<![@#])"
@@ -107,6 +117,19 @@ PG_RISKY_FUNCTIONS = re.compile(
 PG_PRELUDE_SETTINGS = {"statement_timeout", "lock_timeout", "transaction_read_only"}
 PG_WRITE_NODES = {"InsertStmt", "UpdateStmt", "DeleteStmt", "MergeStmt", "IntoClause", "LockingClause"}
 MSSQL_START = re.compile(r"^(select|with)\b", re.I)
+MSSQL_SESSION_SET = re.compile(
+    r"set\s+(?:nocount\s+(?:on|off)"
+    r"|lock_timeout\s+-?\d+"
+    r"|deadlock_priority\s+(?:low|normal|-?\d+)"
+    r"|transaction\s+isolation\s+level\s+(?:read\s+uncommitted|read\s+committed|snapshot)"
+    r"|(?:arithabort|ansi_nulls|ansi_warnings|ansi_padding|quoted_identifier|concat_null_yields_null|xact_abort)"
+    r"\s+(?:on|off)"
+    r"|statistics\s+(?:io|time)\s+(?:on|off)"
+    r"|showplan_(?:xml|all|text)\s+(?:on|off))",
+    re.I,
+)
+MSSQL_BOUND_SETTING = re.compile(r"^set\s+(lock_timeout|deadlock_priority)\b", re.I)
+PLAN_STATEMENT = re.compile(r"^explain\s*(?:\([^()]*\))?\s*(?P<read>\S.*)$", re.I | re.S)
 MSSQL_LOCAL = re.compile(
     r"^(declare\s+@\w+|set\s+@\w+\s*[-+*/%&|^]?=|insert\s+(into\s+)?@\w+(?=\s*(\(|select\b|with\b|values\b)))",
     re.I,
@@ -169,7 +192,8 @@ def is_unicode_escape_prefix(sql: str, quote_index: int) -> bool:
     )
 
 
-def sanitize(sql: str, postgres: bool) -> str:
+def _sanitized_pieces(sql: str, postgres: bool, blank_identifiers: bool = False) -> list:
+    """The sanitized text as (kept code, original source) pairs."""
     if UNCERTAIN_CHARS.search(sql) or any(unicodedata.category(ch) == "Cf" for ch in sql):
         raise ValueError("uncertain character")
     out = []
@@ -183,21 +207,22 @@ def sanitize(sql: str, postgres: bool) -> str:
             end = skip_quoted(sql, index, "'", escaped)
             if postgres and not escaped and "\\" in sql[index:end]:
                 raise ValueError("backslash in plain string")
+            out.append((PLACEHOLDER, sql[index:end]))
             index = end
-            out.append(PLACEHOLDER)
         elif ch == '"':
             if postgres and is_unicode_escape_prefix(sql, index):
                 raise ValueError("unicode escape identifier")
             end = skip_quoted(sql, index, '"')
-            if postgres:
+            if postgres and not blank_identifiers:
                 content = sql[index + 1:end - 1].replace('""', '"')
-                out.append(" " + re.sub(r"\W", " ", content) + " ")
+                out.append((" " + re.sub(r"\W", " ", content) + " ", sql[index:end]))
             else:
-                out.append(PLACEHOLDER)
+                out.append((PLACEHOLDER, sql[index:end]))
             index = end
         elif ch == "[" and not postgres:
-            index = skip_quoted(sql, index, "]")
-            out.append(PLACEHOLDER)
+            end = skip_quoted(sql, index, "]")
+            out.append((PLACEHOLDER, sql[index:end]))
+            index = end
         elif ch == "$" and postgres:
             if (index > 0 and is_ident_char(sql[index - 1])) or not DOLLAR_TAG.match(sql, index):
                 raise ValueError("stray dollar sign")
@@ -205,25 +230,51 @@ def sanitize(sql: str, postgres: bool) -> str:
             end = sql.find(tag, index + len(tag))
             if end < 0:
                 raise ValueError("unterminated dollar quote")
-            index = end + len(tag)
-            out.append(PLACEHOLDER)
+            end += len(tag)
+            out.append((PLACEHOLDER, sql[index:end]))
+            index = end
         elif sql.startswith("--", index):
             end = sql.find("\n", index)
-            index = len(sql) if end < 0 else end
-            out.append(" ")
+            end = len(sql) if end < 0 else end
+            out.append((" ", sql[index:end]))
+            index = end
         elif sql.startswith("/*", index):
-            index = skip_block_comment(sql, index)
-            out.append(" ")
+            end = skip_block_comment(sql, index)
+            out.append((" ", sql[index:end]))
+            index = end
         elif ch in "{}":
             raise ValueError("jdbc escape syntax")
         else:
-            out.append(ch)
+            out.append((ch, ch))
             index += 1
-    return "".join(out)
+    return out
 
 
-def split_statements(sql: str, postgres: bool) -> list:
-    return [s.strip() for s in sanitize(sql, postgres).split(";") if s.strip()]
+def sanitize(sql: str, postgres: bool, blank_identifiers: bool = False) -> str:
+    """Remove literals, comments, and bracketed identifiers; PostgreSQL keeps the contents of a quoted identifier
+    unless `blank_identifiers` is set."""
+    return "".join(code for code, _ in _sanitized_pieces(sql, postgres, blank_identifiers))
+
+
+def _statement_parts(sql: str, postgres: bool) -> list:
+    """(code, original source, literals) for each statement, with quoted identifiers blanked."""
+    parts, code, source, literals = [], [], [], []
+    for text, original in _sanitized_pieces(sql, postgres, True) + [(";", "")]:
+        if text != ";":
+            code.append(text)
+            source.append(original)
+            if text == PLACEHOLDER:
+                literals.append(original)
+            continue
+        joined = "".join(code).strip()
+        if joined:
+            parts.append((joined, "".join(source), literals))
+        code, source, literals = [], [], []
+    return parts
+
+
+def split_statements(sql: str, postgres: bool, blank_identifiers: bool = False) -> list:
+    return [s.strip() for s in sanitize(sql, postgres, blank_identifiers).split(";") if s.strip()]
 
 
 def fold(text: str) -> str:
@@ -377,7 +428,9 @@ def postgres_read_state(sql: str):
 
 
 def is_mssql_read_statement(statement: str) -> bool:
-    local = MSSQL_LOCAL.match(statement)
+    if MSSQL_SESSION_SET.fullmatch(fold(statement)):
+        return True
+    local =MSSQL_LOCAL.match(statement)
     if local:
         return not MSSQL_RISKY.search(fold(statement[local.end():]))
     return bool(MSSQL_START.match(statement)) and not MSSQL_RISKY.search(fold(statement))
@@ -417,12 +470,10 @@ def find_data_source(tool_input: dict):
 
 
 def connection_kind(tool_input: dict) -> str:
-    """Return always, unknown, unsupported, postgres, or mssql for the data source named by the tool input."""
+    """Return unknown, unsupported, postgres, or mssql for the data source named by the tool input."""
     source = find_data_source(tool_input)
     if source is None:
         return "unknown"
-    if APPROVAL_MARK in (source.get("name") or ""):
-        return "always"
     driver = (source.findtext("driver-ref") or "").strip().lower()
     if driver == "postgresql":
         return "postgres"
@@ -431,13 +482,38 @@ def connection_kind(tool_input: dict) -> str:
     return "unsupported"
 
 
+def database_target(tool_input):
+    """(connection id, name, postgres, sql) for a call on a PostgreSQL or SQL Server data source, else None."""
+    kind = connection_kind(tool_input) if isinstance(tool_input, dict) else "unknown"
+    sql = tool_input.get("queryText") if isinstance(tool_input, dict) else None
+    if kind not in ("postgres", "mssql") or not isinstance(sql, str):
+        return None
+    return tool_input["connectionId"], find_data_source(tool_input).get("name"), kind == "postgres", sql
+
+
 def approval_on() -> bool:
     return enabled("approval_guard")
 
 
-def _leads_with_risky(sql: str, postgres: bool) -> bool:
+def is_destructive(sql: str, postgres=None) -> bool:
+    """Whether the SQL code names delete, drop, or truncate, or a statement is led by DO, EXEC, EXECUTE, or CALL.
+
+    The check runs on the code left after `sanitize` blanks literals, comments, and quoted or bracketed identifiers in
+    both dialects; text that cannot be sanitized keeps the raw check. A `postgres` of None checks both dialects.
+    """
+    for dialect in (True, False) if postgres is None else (postgres,):
+        try:
+            code = sanitize(sql, dialect, True)
+        except ValueError:
+            code = sql
+        if RAW_DESTRUCTIVE.search(code) or _leads_with_risky(sql, dialect, True):
+            return True
+    return False
+
+
+def _leads_with_risky(sql: str, postgres: bool, blank_identifiers: bool = False) -> bool:
     try:
-        statements = split_statements(sql, postgres)
+        statements = split_statements(sql, postgres, blank_identifiers)
     except ValueError:
         return False
     return any(
@@ -446,22 +522,161 @@ def _leads_with_risky(sql: str, postgres: bool) -> bool:
     )
 
 
-def is_read(sql: str, postgres: bool) -> bool:
-    """A read is a read only when the raw text names no delete, drop, or truncate and no statement is led by DO, EXEC, CALL."""
-    if RAW_DESTRUCTIVE.search(sql):
-        return False
+def _delete_has_where(code: str, end: int) -> bool:
+    depth = 0
+    for token in re.finditer(r"[()]|\bwhere\b", code[end:], re.IGNORECASE):
+        if token.group() == "(":
+            depth += 1
+        elif token.group() == ")":
+            depth -= 1
+            if depth < 0:
+                return False
+        elif depth == 0:
+            return True
+    return False
+
+
+def _deletes_targeted(code: str) -> bool:
+    """Whether every DELETE in one statement's code stands outside any parentheses and is followed by a WHERE of its own
+    outside any parentheses."""
+    return all(
+        code.count("(", 0, match.start()) == code.count(")", 0, match.start()) and _delete_has_where(code, match.end())
+        for match in DELETE_WORD.finditer(code)
+    )
+
+
+def _parser_confirms_deletes(source: str, count: int) -> bool:
+    """The statement parses with pglast and holds exactly `count` DELETE statements, each with a WHERE clause."""
     try:
-        read = postgres_read_state(sql) is not None if postgres else is_mssql_read(sql)
+        nodes = [value for key, value in iter_nodes(json.loads(pglast_parser.parse_sql_json(source))) if key == "DeleteStmt"]
+    except Exception:
+        return False
+    return len(nodes) == count and all(node.get("whereClause") for node in nodes)
+
+
+def _safe_do_body(body: str) -> bool:
+    """Whether a PL/pgSQL body is parseable and holds no drop, truncate, dynamic SQL, alter, grant, revoke, call, nested
+    DO, DELETE without its own WHERE, or risky function call. Keywords are checked with quoted identifiers blanked,
+    function names with their quoted contents kept."""
+    try:
+        parts = _statement_parts(body, True)
+        named = fold(sanitize(body, True))
     except ValueError:
         return False
-    return read and not _leads_with_risky(sql, postgres)
+    code = fold(";".join(part[0] for part in parts))
+    if not parts or DO_BODY_FORBIDDEN.search(code) or DO_STATEMENT_START.search(code):
+        return False
+    if not all(_deletes_targeted(part[0]) for part in parts):
+        return False
+    if any(PG_RISKY_FUNCTIONS.fullmatch(name) and not DO_ALLOWED_CALLS.fullmatch(name) for name in CALLED_NAME.findall(named)):
+        return False
+    return all(name.lower() in PG_SAFE_FUNCTIONS or DO_ALLOWED_CALLS.fullmatch(name) for name in PG_FUNCTION_CALL.findall(named))
 
 
-def query_facts(sql: str, postgres: bool):
+def _is_plpgsql(literal: str) -> bool:
+    """Whether pglast's PL/pgSQL parser accepts the quoted DO body, kept exactly as written, as a function body."""
+    try:
+        pglast_parser.parse_plpgsql_json(PLPGSQL_WRAPPER + literal)
+    except Exception:
+        return False
+    return True
+
+
+def _safe_do(code: str, literals: list) -> bool:
+    if len(literals) != 1 or not DO_STATEMENT.fullmatch(" ".join(code.split())):
+        return False
+    literal = literals[0]
+    if pglast_parser is None or not _is_plpgsql(literal):
+        return False
+    if literal.startswith("$"):
+        tag = DOLLAR_TAG.match(literal).group(0)
+        return _safe_do_body(literal[len(tag):-len(tag)])
+    if literal.startswith("'"):
+        return _safe_do_body(literal[1:-1].replace("''", "'"))
+    return False
+
+
+def targeted_writes_only(sql: str, postgres: bool) -> bool:
+    """Whether the only destructive parts of the SQL are DELETE statements with a top-level WHERE and PostgreSQL DO
+    blocks whose body is safe; every other destructive statement, and any text that cannot be parsed, is False. Only
+    PostgreSQL text classified with pglast can qualify."""
+    if not postgres or pglast_parser is None:
+        return False
+    try:
+        parts = _statement_parts(sql, postgres)
+        pglast_parser.parse_sql_json(sql)
+    except Exception:
+        return False
+    if not parts:
+        return False
+    for code, source, literals in parts:
+        leader = re.match(r"([A-Za-z]+)\b", code)
+        word = leader.group(1).lower() if leader else ""
+        if word == "do":
+            if not _safe_do(code, literals):
+                return False
+        elif word in RISKY_LEADERS or OTHER_DESTRUCTIVE.search(code):
+            return False
+        else:
+            count = len(DELETE_WORD.findall(code))
+            if count and not (_deletes_targeted(code) and _parser_confirms_deletes(source, count)):
+                return False
+    return True
+
+
+def asks_every_time(sql: str, postgres, name) -> bool:
+    """Whether destructive SQL on the connection called `name` asks every time. A connection that is not production
+    waives a DELETE with a top-level WHERE and a PostgreSQL DO block with a safe body; `postgres` None never waives."""
+    if not is_destructive(sql, postgres):
+        return False
+    return postgres is None or db_read_policy.is_production(name) or not targeted_writes_only(sql, postgres)
+
+
+def is_read(sql: str, postgres: bool) -> bool:
+    """A read is a read only when its code names no delete, drop, or truncate and no statement is led by DO, EXEC, CALL."""
+    if is_destructive(sql, postgres):
+        return False
+    try:
+        return postgres_read_state(sql) is not None if postgres else is_mssql_read(sql)
+    except ValueError:
+        return False
+
+
+def strip_prelude(sql: str) -> str:
+    return sql[len(READ_ONLY_PRELUDE):] if sql.startswith(READ_ONLY_PRELUDE) else sql
+
+
+def read_shape(sql: str):
+    """Classify a PostgreSQL read for the plan gate: ("plan", read) for a single EXPLAIN without ANALYZE, ("read", sql)
+    for any other single read, ("many", None) for several statements, and (None, None) for text that cannot be split."""
+    sql = strip_prelude(sql).strip()
+    try:
+        count = len(split_statements(sql, True))
+    except ValueError:
+        return None, None
+    if count != 1:
+        return "many", None
+    match = PLAN_STATEMENT.match(sql)
+    if match and is_read(sql, True):
+        return "plan", match.group("read")
+    return "read", sql
+
+
+def session_settings(sql: str) -> set:
+    """The names of the SQL Server LOCK_TIMEOUT and DEADLOCK_PRIORITY settings that the text already sets."""
+    try:
+        statements = split_statements(sql, False)
+    except ValueError:
+        return set()
+    return {match.group(1).lower() for statement in statements if (match := MSSQL_BOUND_SETTING.match(statement))}
+
+
+def query_facts(sql: str, postgres: bool, name=None):
     """Return (leading keywords, destructive); keywords is None when the text cannot be parsed.
 
-    The text is destructive when the raw SQL, literals and comments included, names delete, drop, or truncate, or when a
-    statement is led by DO, EXEC, EXECUTE, or CALL.
+    The text is destructive when its code, with literals, comments, and quoted identifiers removed, names delete, drop,
+    or truncate, or when a statement is led by DO, EXEC, EXECUTE, or CALL. With a connection `name`, a connection that
+    is not production waives what `asks_every_time` waives.
     """
     try:
         if postgres and pglast_parser is not None:
@@ -477,8 +692,7 @@ def query_facts(sql: str, postgres: bool):
         if match is None:
             return None, False
         keywords.add(match.group(1).lower())
-    destructive = RAW_DESTRUCTIVE.search(sql) is not None or bool(keywords & RISKY_LEADERS)
-    return keywords, destructive
+    return keywords, asks_every_time(sql, postgres, name) if name is not None else is_destructive(sql, postgres)
 
 
 def always_outcome(tool_input, sql) -> Outcome:
@@ -495,22 +709,23 @@ def classify_query(tool_input) -> Outcome:
     """Classify a DataGrip query as read, write (asks once per session), or always (asks every time)."""
     sql = tool_input.get("queryText") if isinstance(tool_input, dict) else None
     kind = connection_kind(tool_input) if isinstance(tool_input, dict) else "unknown"
-    if isinstance(sql, str) and (RAW_DESTRUCTIVE.search(sql) or any(query_facts(sql, pg)[1] for pg in (True, False))):
+    source = find_data_source(tool_input) if isinstance(tool_input, dict) else None
+    name = source.get("name") if source is not None else None
+    if isinstance(sql, str) and asks_every_time(sql, {"postgres": True, "mssql": False}.get(kind), name):
         return always_outcome(tool_input, sql)
-    if kind in ("always", "unknown", "unsupported") or not isinstance(sql, str):
+    if kind in ("unknown", "unsupported") or not isinstance(sql, str):
         return Outcome("write", ["mcp:session"], ["DataGrip query requiring approval"])
     postgres = kind == "postgres"
     if is_read(sql, postgres):
         return Outcome("read", [], [])
-    keywords, destructive = query_facts(sql, postgres)
+    keywords, destructive = query_facts(sql, postgres, name)
     if destructive:
         return always_outcome(tool_input, sql)
-    name = find_data_source(tool_input).get("name") or "an unnamed data source"
     listed = ", ".join(sorted(keywords)) if keywords else "unclassified"
     return Outcome(
         "write",
         ["mcp:session"],
-        [f"DataGrip write ({listed}) on {name}"],
+        [f"DataGrip write ({listed}) on {name or 'an unnamed data source'}"],
     )
 
 
@@ -524,9 +739,39 @@ def unapproved_write(tool_input, session_id, tool_use_id=None) -> dict:
     return result("ask", ASK_REASON)
 
 
+def read_policy(host: str, tool_input: dict, sql: str, postgres: bool, session_id) -> Outcome:
+    """Outcome of an accepted read under the production database policy; a plain read when the approval guard is off."""
+    if not approval_on():
+        return Outcome("read", [], [])
+    source = find_data_source(tool_input)
+    return db_read_policy.read_outcome(
+        host, session_id, "datagrip", tool_input.get("connectionId"), source.get("name") if source is not None else None,
+        postgres, sql, read_shape(sql) if postgres else None,
+    )
+
+
+def policy_response(host: str, outcome: Outcome, session_id, tool_use_id):
+    """The hook output for a read that the production policy denies or asks about, otherwise None."""
+    if outcome.kind == "forbidden":
+        return result("deny", outcome.descriptions[0])
+    if outcome.kind == "always":
+        return approval_state.pre_decision(host, session_id, outcome, tool_use_id)
+    return None
+
+
+def enforced_input(tool_input: dict, sql: str, outcome: Outcome) -> dict:
+    source = find_data_source(tool_input)
+    names = (tool_input.get("connectionId"), source.get("name") if source is not None else None)
+    return db_read_policy.enforce("datagrip", tool_input, outcome.exe, names, session_settings(sql))
+
+
 def decide_postgres(tool_input: dict, sql: str, session_id=None, tool_use_id=None) -> dict:
     if not is_read(sql, True):
         return unapproved_write(tool_input, session_id, tool_use_id)
+    outcome = read_policy("claude", tool_input, sql, True, session_id)
+    blocked = policy_response("claude", outcome, session_id, tool_use_id)
+    if blocked is not None:
+        return blocked
     read_only = postgres_read_state(sql)
     if read_only:
         return result("allow", PG_ALLOW_REASON)
@@ -537,6 +782,12 @@ def decide_postgres(tool_input: dict, sql: str, session_id=None, tool_use_id=Non
 
 def decide_mssql(sql: str, tool_input=None, session_id=None, tool_use_id=None) -> dict:
     if is_read(sql, False):
+        outcome = read_policy("claude", tool_input, sql, False, session_id) if tool_input is not None else None
+        blocked = policy_response("claude", outcome, session_id, tool_use_id) if outcome is not None else None
+        if blocked is not None:
+            return blocked
+        if outcome is not None and outcome.exe:
+            return result("allow", MSSQL_ALLOW_REASON, enforced_input(tool_input, sql, outcome))
         return result("allow", MSSQL_ALLOW_REASON)
     return unapproved_write(tool_input, session_id, tool_use_id) if tool_input is not None else result("ask", ASK_REASON)
 
@@ -549,10 +800,6 @@ def decide(tool_input, session_id=None, tool_use_id=None) -> dict:
         if outcome.kind != "read":
             return approval_state.pre_decision("claude", session_id, outcome, tool_use_id)
     kind = connection_kind(tool_input)
-    if kind == "always":
-        if approval_on() and approval_state.parent_session():
-            return approval_state.pre_decision("claude", session_id, classify_query(tool_input), tool_use_id)
-        return result("ask", ALWAYS_ASK_REASON)
     if kind == "unknown":
         return result("ask", UNKNOWN_REASON)
     if kind == "unsupported":
@@ -610,10 +857,19 @@ def codex_pre_tool_use(tool_input, session_id=None, tool_use_id=None, event=None
     if classified is None:
         return codex_unapproved(tool_input, session_id, tool_use_id, event)
     sql, postgres, read_only = classified
-    if not postgres or read_only:
+    outcome = read_policy("codex", tool_input, sql, postgres, session_id)
+    blocked = policy_response("codex", outcome, session_id, tool_use_id)
+    if blocked is not None:
+        return blocked
+    if not postgres:
+        if not outcome.exe:
+            return None
+        updated = enforced_input(tool_input, sql, outcome)
+    elif read_only:
         return None
-    updated = dict(tool_input)
-    updated["queryText"] = READ_ONLY_PRELUDE + sql
+    else:
+        updated = dict(tool_input)
+        updated["queryText"] = READ_ONLY_PRELUDE + sql
     return {"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
         "permissionDecision": "allow",

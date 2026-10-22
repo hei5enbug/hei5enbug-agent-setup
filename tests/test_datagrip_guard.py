@@ -218,6 +218,15 @@ MSSQL_ALLOW = [
     ("unicode-identifiers", "SELECT 한글컬럼 FROM dbo.T WHERE 이름 = N'가나다'"),
     ("global-variables", "SELECT @@ROWCOUNT, @@VERSION"),
     ("hex-and-numbers", "SELECT 0x1F, 1.5E3, 12"),
+    ("set-nocount", "SET NOCOUNT ON; SELECT 1"),
+    ("set-isolation", "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; SELECT 1"),
+    ("keywords-in-strings", "SELECT 'DELETE FROM t; DROP TABLE x' AS s, N'INSERT INTO t EXEC sp_who' AS u"),
+    ("string-doubled-quote", "SELECT 'it''s; DELETE FROM t'"),
+    ("line-comment", "SELECT 1 -- DROP TABLE t; DELETE FROM t\n"),
+    ("line-comment-crlf", "SELECT 1 -- DROP TABLE t\r\n"),
+    ("block-comment-nested", "SELECT /* a /* DROP TABLE t */ DELETE */ 1"),
+    ("bracket-identifiers", "SELECT [delete], [insert into], [a]]b] FROM dbo.[update]"),
+    ("quoted-identifiers", 'SELECT "drop", "exec" FROM dbo."set"'),
     ("nolock-hint-only", "SELECT * FROM t WITH (NOLOCK)"),
     ("log-function", "SELECT LOG(10)"),
     ("log-alias", "SELECT 1 AS log"),
@@ -247,8 +256,6 @@ MSSQL_ASK = [
     ("go", "GO"),
     ("go-between-selects", "SELECT 1\nGO\nSELECT 2"),
     ("use", "USE master"),
-    ("set-nocount", "SET NOCOUNT ON"),
-    ("set-isolation", "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; SELECT 1"),
     ("begin-tran", "BEGIN TRAN"),
     ("begin-transaction", "BEGIN TRANSACTION; SELECT 1"),
     ("commit", "COMMIT"),
@@ -314,13 +321,6 @@ MSSQL_ASK = [
     ("openxml", "SELECT * FROM OPENXML(@h, '/r')"),
     ("update-after-line-comment", "SELECT 1 -- c\nUPDATE dbo.T SET a = 1"),
     ("update-after-block-comment", "SELECT 1 /* c */ UPDATE dbo.T SET a = 1"),
-    ("keywords-in-strings", "SELECT 'DELETE FROM t; DROP TABLE x' AS s, N'INSERT INTO t EXEC sp_who' AS u"),
-    ("string-doubled-quote", "SELECT 'it''s; DELETE FROM t'"),
-    ("line-comment", "SELECT 1 -- DROP TABLE t; DELETE FROM t\n"),
-    ("line-comment-crlf", "SELECT 1 -- DROP TABLE t\r\n"),
-    ("block-comment-nested", "SELECT /* a /* DROP TABLE t */ DELETE */ 1"),
-    ("bracket-identifiers", "SELECT [delete], [insert into], [a]]b] FROM dbo.[update]"),
-    ("quoted-identifiers", 'SELECT "drop", "exec" FROM dbo."set"'),
 ]
 
 PG_ALLOW = [
@@ -335,6 +335,11 @@ PG_ALLOW = [
     ("explain", "EXPLAIN SELECT * FROM t"),
     ("explain-format", "EXPLAIN (FORMAT JSON) SELECT * FROM t"),
     ("explain-costs", "EXPLAIN (COSTS OFF, VERBOSE) SELECT 1"),
+    ("e-string-escaped-quote", "SELECT E'it\\'s DELETE'"),
+    ("dollar-quote-empty-tag", "SELECT $$ DELETE FROM t; DROP TABLE x $$"),
+    ("line-comment", "SELECT 1 -- DELETE\n"),
+    ("block-comment-nested", "SELECT /* a /* DROP */ b */ 1"),
+    ("keywords-in-strings", "SELECT 'DELETE; DROP', 'it''s'"),
     ("e-string-escaped-backslash", "SELECT E'a\\\\'"),
     ("e-string-lowercase", "select e'x\\n'"),
     ("e-string-concatenated", "SELECT 'a' || E'\\n' || 'b'"),
@@ -374,7 +379,7 @@ PG_ALLOW = [
 ]
 
 PG_ASK = [
-    # An alias named like a statement keyword is still raw text that names delete, so it asks on both paths.
+    # An alias named like a statement keyword is still code that names delete, so it asks on both paths.
     ("alias-named-like-keyword", "SELECT 1 AS insert, 2 AS delete"),
     ("quoted-pg-terminate-backend", 'SELECT "pg_terminate_backend"(1)'),
     ("quoted-set-config", "SELECT \"set_config\"('x', 'y', false)"),
@@ -485,11 +490,6 @@ PG_ASK = [
     ("plain-string-backslash-first-of-two", "SELECT 'a\\b', '한글'"),
     ("read-only-one", "SET LOCAL transaction_read_only = 1; SELECT 1"),
     ("reserved-word-column-do", "SELECT do FROM t"),
-    ("e-string-escaped-quote", "SELECT E'it\\'s DELETE'"),
-    ("dollar-quote-empty-tag", "SELECT $$ DELETE FROM t; DROP TABLE x $$"),
-    ("line-comment", "SELECT 1 -- DELETE\n"),
-    ("block-comment-nested", "SELECT /* a /* DROP */ b */ 1"),
-    ("keywords-in-strings", "SELECT 'DELETE; DROP', 'it''s'"),
 ]
 
 INVISIBLE_CHARS = ["​", "‌", "‍", "⁠", "﻿", "­"]
@@ -567,7 +567,7 @@ MSSQL_WRITES = [
     ("select-into", "SELECT 1 a INTO dbo.T2"),
     ("create", "CREATE TABLE dbo.T2 (a int)"),
     ("waitfor", "WAITFOR DELAY '00:00:01'"),
-    ("set", "SET NOCOUNT ON"),
+    ("set", "SET IDENTITY_INSERT dbo.T ON"),
     ("use", "USE master"),
     ("bulk", "BULK INSERT dbo.T FROM 'f'"),
     ("xp", "xp_cmdshell 'dir'"),
@@ -721,8 +721,8 @@ def control_char_cases():
     return cases
 
 
-# SELECT statements that name delete, drop, or truncate were reads before the raw-text rule; they still prefix the
-# read-followed-by-write combinations, which must ask.
+# SELECT statements whose code names delete, drop, or truncate also prefix the read-followed-by-write combinations,
+# which must ask.
 RAW_DESTRUCTIVE_TEXT = re.compile(r"\b(?:delete|drop|truncate)\b", re.IGNORECASE)
 
 
@@ -1172,10 +1172,20 @@ class TestPostgresParser:
         assert decision_of(output) == "allow"
 
     @pytest.mark.parametrize("keyword", RAW_DESTRUCTIVE_KEYWORDS)
-    def test_quoted_destructive_keyword_still_asks(self, keyword):
-        """큰따옴표로 감싸도 delete, drop, truncate가 원문에 있으면 읽기가 아니라 ask한다."""
+    def test_quoted_destructive_keyword_is_only_an_identifier(self, keyword):
+        """큰따옴표로 감싼 delete, drop, truncate는 식별자일 뿐이라 파괴적이 아니고 읽기로 allow한다."""
         # given
         sql = f'SELECT "{keyword}" FROM t'
+        # when
+        output = decide(PG_ID, sql)
+        # then
+        assert decision_of(output) == "allow"
+
+    @pytest.mark.parametrize("keyword", RAW_DESTRUCTIVE_KEYWORDS)
+    def test_bare_destructive_keyword_after_a_quoted_identifier_still_asks(self, keyword):
+        """따옴표 식별자 뒤의 코드에 delete, drop, truncate가 그대로 있으면 ask한다."""
+        # given
+        sql = f'SELECT "x" FROM t; {keyword} FROM t'
         # when
         output = decide(PG_ID, sql)
         # then
@@ -1408,26 +1418,24 @@ class TestKeywordBoundary:
 
 class TestConnectionRules:
     @pytest.mark.parametrize("connection_id", APPROVAL_IDS)
-    def test_approval_named_source_asks_for_pure_select(self, connection_id):
-        """이름에 승인이 든 데이터 소스는 DB 종류와 관계없이 단순 SELECT도 ask하고 전용 사유를 쓴다."""
+    def test_approval_named_source_no_longer_forces_asking_for_reads(self, connection_id):
+        """이름에 승인이 들어 있어도 개발 표지가 있는 데이터 소스의 단순 SELECT는 allow한다."""
         # given
         sql = "SELECT 1"
         # when
         output = decide(connection_id, sql)
         # then
-        assert decision_of(output) == "ask"
-        assert reason_of(output) == hook.ALWAYS_ASK_REASON
+        assert decision_of(output) == "allow"
 
     @pytest.mark.parametrize("connection_id", APPROVAL_IDS)
-    def test_approval_named_source_asks_even_for_non_string_query(self, connection_id):
-        """승인 소스는 queryText가 없거나 문자열이 아니어도 승인 사유로 ask한다."""
+    def test_approval_named_source_asks_for_non_string_query(self, connection_id):
+        """승인 이름의 데이터 소스도 queryText가 문자열이 아니면 ask한다."""
         # given
         tool_input = {"projectPath": str(PROJECT), "connectionId": connection_id, "queryText": 5}
         # when
         output = hook.decide(tool_input)
         # then
         assert decision_of(output) == "ask"
-        assert reason_of(output) == hook.ALWAYS_ASK_REASON
 
     def test_unknown_uuid_asks(self):
         """dataSources.xml에 없는 uuid는 ask하고 미등록 연결 사유를 쓴다."""
@@ -1676,8 +1684,6 @@ class TestOutputContract:
     @pytest.mark.parametrize(
         "connection_id,payload",
         [
-            (PG_APPROVAL_ID, make_payload(PG_APPROVAL_ID, "SELECT 1")),
-            (MSSQL_APPROVAL_ID, make_payload(MSSQL_APPROVAL_ID, "SELECT 1")),
             (MYSQL_ID, make_payload(MYSQL_ID, "SELECT 1")),
             (UNKNOWN_ID, make_payload(UNKNOWN_ID, "SELECT 1")),
             (None, {"tool_input": {"projectPath": str(PROJECT), "queryText": "SELECT 1"}}),
@@ -1864,9 +1870,9 @@ class TestEndToEnd:
             (MSSQL_ID, "SELECT 1INSERT dbo.T VALUES (1)", "ask", False),
             (MSSQL_ID, "SELECT 1\rDELETE FROM dbo.T", "ask", False),
             (AZURE_ID, "SELECT 1", "allow", False),
-            (PG_APPROVAL_ID, "SELECT 1", "ask", False),
-            (MSSQL_APPROVAL_ID, "SELECT 1", "ask", False),
-            (AZURE_APPROVAL_ID, "SELECT 1", "ask", False),
+            (PG_APPROVAL_ID, "SELECT 1", "allow", True),
+            (MSSQL_APPROVAL_ID, "SELECT 1", "allow", False),
+            (AZURE_APPROVAL_ID, "SELECT 1", "allow", False),
             (MYSQL_ID, "SELECT 1", "ask", False),
             (UNKNOWN_ID, "SELECT 1", "ask", False),
         ],
@@ -1928,8 +1934,8 @@ class TestEndToEnd:
             (MSSQL_ID, MSSQL_CORPUS_QUERY, True),
             (MSSQL_ID, "SELECT 1INSERT dbo.T VALUES (1)", False),
             (AZURE_ID, "SELECT 1", True),
-            (PG_APPROVAL_ID, "SELECT 1", False),
-            (MSSQL_APPROVAL_ID, "SELECT 1", False),
+            (PG_APPROVAL_ID, "SELECT 1", True),
+            (MSSQL_APPROVAL_ID, "SELECT 1", True),
             (MYSQL_ID, "SELECT 1", False),
             (UNKNOWN_ID, "SELECT 1", False),
         ],
@@ -1963,7 +1969,7 @@ class TestEndToEnd:
             (MSSQL_ID, MSSQL_CORPUS_QUERY, False),
             (MSSQL_ID, "DELETE FROM dbo.T", False),
             (AZURE_ID, "SELECT 1", False),
-            (PG_APPROVAL_ID, "SELECT 1", False),
+            (PG_APPROVAL_ID, "SELECT 1", True),
             (MSSQL_APPROVAL_ID, "SELECT 1", False),
             (MYSQL_ID, "SELECT 1", False),
             (UNKNOWN_ID, "SELECT 1", False),
@@ -2097,9 +2103,9 @@ class TestEventAndHostDispatch:
         assert code == 0
         assert decision_of(json.loads(stdout)) == "ask"
 
-    @pytest.mark.parametrize("connection_id", APPROVAL_IDS + [MYSQL_ID, UNKNOWN_ID])
-    def test_codex_never_allows_approval_or_unsupported_sources(self, connection_id):
-        """승인 소스, 지원하지 않는 소스, 모르는 소스는 Codex 두 이벤트 모두 출력이 없다."""
+    @pytest.mark.parametrize("connection_id", [MYSQL_ID, UNKNOWN_ID])
+    def test_codex_never_allows_unsupported_or_unknown_sources(self, connection_id):
+        """지원하지 않는 소스와 모르는 소스는 Codex 두 이벤트 모두 출력이 없다."""
         # given
         event = {"tool_input": make_tool_input(connection_id, "SELECT 1")}
         # when
@@ -2434,3 +2440,299 @@ class TestParserReexec:
         assert capture.read_bytes() == stdin
         assert completed.stdout == b'{"from":"child"}'
         assert completed.returncode == 3
+
+
+DEV_NAME = "demo-dev-pg"
+PROD_NAME = "AcmeProdPG"
+SAFE_DO_BODY = "BEGIN UPDATE demo_items SET n = 1 WHERE id = 1; INSERT INTO demo_items (id) VALUES (2); COMMIT; END"
+
+TARGETED_DELETES = [
+    ("delete-where", "DELETE FROM demo_items WHERE id = 1"),
+    ("delete-using-where", "DELETE FROM demo_items m USING demo_backup b WHERE m.id = b.id"),
+    ("delete-where-subquery", "DELETE FROM demo_items WHERE id IN (SELECT id FROM demo_backup WHERE n > 1)"),
+    ("delete-where-returning", "DELETE FROM demo_items WHERE id = 1 RETURNING id"),
+    ("delete-where-string", "DELETE FROM demo_items WHERE note = 'x -- y'"),
+    ("cte-then-delete-where", "WITH s AS (SELECT id FROM demo_backup) DELETE FROM demo_items USING s WHERE demo_items.id = s.id"),
+    ("comment-before", "/* cleanup */ DELETE FROM demo_items WHERE id = 1"),
+    ("lowercase", "delete from demo_items where id = 1"),
+    ("two-targeted", "DELETE FROM demo_items WHERE id = 1; DELETE FROM demo_backup WHERE id = 2"),
+    ("with-other-writes", "UPDATE demo_items SET n = 1 WHERE id = 1; DELETE FROM demo_backup WHERE id = 2"),
+]
+UNTARGETED_DELETES = [
+    ("no-where", "DELETE FROM demo_items"),
+    ("where-in-line-comment", "DELETE FROM demo_items -- WHERE id = 1"),
+    ("where-in-block-comment", "DELETE FROM demo_items /* WHERE id = 1 */"),
+    ("where-in-string", "DELETE FROM demo_items RETURNING 'WHERE id = 1'"),
+    ("where-in-using-subquery", "DELETE FROM demo_items USING (SELECT id FROM demo_backup WHERE n > 1) s"),
+    ("where-in-cte-only", "WITH s AS (SELECT id FROM demo_backup WHERE n > 1) DELETE FROM demo_items USING s"),
+    ("delete-inside-cte", "WITH d AS (DELETE FROM demo_items WHERE id = 1 RETURNING id) SELECT * FROM d"),
+    ("second-without-where", "DELETE FROM demo_items WHERE id = 1; DELETE FROM demo_backup"),
+    ("merge-delete", "MERGE INTO demo_items t USING demo_backup b ON t.id = b.id WHEN MATCHED THEN DELETE"),
+    ("delete-then-drop", "DELETE FROM demo_items WHERE id = 1; DROP TABLE demo_backup"),
+    ("delete-then-truncate", "DELETE FROM demo_items WHERE id = 1; TRUNCATE demo_backup"),
+    ("delete-then-call", "DELETE FROM demo_items WHERE id = 1; CALL demo_proc()"),
+    ("drop", "DROP TABLE demo_items"),
+    ("truncate", "TRUNCATE demo_items"),
+    ("call", "CALL demo_proc()"),
+    ("exec", "EXEC demo_proc"),
+    ("execute", "EXECUTE demo_proc"),
+]
+SAFE_DOS = [
+    ("plain", "DO $$ " + SAFE_DO_BODY + " $$"),
+    ("tagged", "DO $body$ " + SAFE_DO_BODY + " $body$"),
+    ("language-before", "DO LANGUAGE plpgsql $$ " + SAFE_DO_BODY + " $$"),
+    ("language-after", "DO $$ " + SAFE_DO_BODY + " $$ LANGUAGE plpgsql"),
+    ("single-quoted", "DO 'BEGIN UPDATE demo_items SET n = 1 WHERE id = 1; END'"),
+    ("single-quoted-with-doubled-quote", "DO 'BEGIN UPDATE demo_items SET note = ''x'' WHERE id = 1; END'"),
+    ("lowercase", "do $$ begin update demo_items set n = 1; end $$"),
+    ("trailing-semicolon", "DO $$ " + SAFE_DO_BODY + " $$;"),
+    ("targeted-delete", "DO $$ BEGIN IF true THEN DELETE FROM demo_items WHERE id = 1; END IF; END $$"),
+    ("perform-and-loop", "DO $$ DECLARE i int := 0; BEGIN LOOP PERFORM pg_sleep(0.05); EXIT WHEN i > 3; END LOOP; END $$"),
+    ("set-config", "DO $$ BEGIN PERFORM set_config('lock_timeout', '1s', false); UPDATE demo_items SET n = 1; END $$"),
+    ("on-conflict-do", "DO $$ BEGIN INSERT INTO demo_items (id) VALUES (1) ON CONFLICT DO NOTHING; END $$"),
+    ("keywords-in-text", "DO $$ BEGIN RAISE NOTICE 'DROP TABLE x'; -- TRUNCATE y\n NULL; END $$"),
+    ("safe-function-call", "DO $$ BEGIN PERFORM pg_size_pretty(1); END $$"),
+    ("two-safe-dos", "DO $$ BEGIN NULL; END $$; DO $$ BEGIN NULL; END $$"),
+    ("safe-do-with-targeted-delete", "DO $$ BEGIN NULL; END $$; DELETE FROM demo_items WHERE id = 1"),
+]
+UNSAFE_DOS = [
+    ("drop", "DO $$ BEGIN DROP TABLE demo_items; END $$"),
+    ("truncate", "DO $$ BEGIN TRUNCATE demo_items; END $$"),
+    ("delete-without-where", "DO $$ BEGIN DELETE FROM demo_items; END $$"),
+    ("delete-where-only-in-subquery", "DO $$ BEGIN DELETE FROM demo_items USING (SELECT 1 FROM demo_backup WHERE n > 1) s; END $$"),
+    ("delete-in-cte", "DO $$ BEGIN WITH d AS (DELETE FROM demo_items WHERE id = 1 RETURNING id) SELECT 1; END $$"),
+    ("execute", "DO $$ BEGIN EXECUTE 'UPDATE demo_items SET n = 1'; END $$"),
+    ("alter", "DO $$ BEGIN ALTER TABLE demo_items ADD COLUMN n int; END $$"),
+    ("grant", "DO $$ BEGIN GRANT SELECT ON demo_items TO demo_role; END $$"),
+    ("revoke", "DO $$ BEGIN REVOKE SELECT ON demo_items FROM demo_role; END $$"),
+    ("call", "DO $$ BEGIN CALL demo_proc(); END $$"),
+    ("nested-do", "DO $$ BEGIN DO 'BEGIN NULL; END'; END $$"),
+    ("dblink", "DO $$ BEGIN PERFORM dblink_exec('demo', 'UPDATE demo_items SET n = 1'); END $$"),
+    ("qualified-dblink", "DO $$ BEGIN PERFORM public.dblink_exec('demo', 'x'); END $$"),
+    ("terminate-backend", "DO $$ BEGIN PERFORM pg_terminate_backend(1); END $$"),
+    ("advisory-lock", "DO $$ BEGIN PERFORM pg_advisory_lock(1); END $$"),
+    ("nextval", "DO $$ BEGIN PERFORM nextval('demo_seq'); END $$"),
+    ("setval", "DO $$ BEGIN PERFORM setval('demo_seq', 1); END $$"),
+    ("large-object", "DO $$ BEGIN PERFORM lo_unlink(1); END $$"),
+    ("timescale-job", "DO $$ BEGIN PERFORM delete_job(1); END $$"),
+    ("other-language", "DO LANGUAGE plpython3u $$ plpy.execute('x') $$"),
+    ("quoted-language", "DO LANGUAGE 'plpgsql' $$ BEGIN NULL; END $$"),
+    ("escape-string", "DO E'BEGIN NULL; END'"),
+    ("no-body", "DO"),
+    ("unparseable-body", "DO $$ BEGIN PERFORM $1; END $$"),
+    ("unterminated-string-in-body", "DO $$ BEGIN RAISE NOTICE 'x; END $$"),
+    ("empty-body", "DO $$ $$"),
+    ("safe-do-then-drop", "DO $$ BEGIN NULL; END $$; DROP TABLE demo_items"),
+    ("safe-do-then-delete-without-where", "DO $$ BEGIN NULL; END $$; DELETE FROM demo_items"),
+    ("safe-do-then-call", "DO $$ BEGIN NULL; END $$; CALL demo_proc()"),
+    ("safe-do-then-unsafe-do", "DO $$ BEGIN NULL; END $$; DO $$ BEGIN DROP TABLE demo_items; END $$"),
+]
+
+
+class TestTargetedWritesOnNonProductionConnections:
+    @pytest.mark.parametrize("sql", params(TARGETED_DELETES + SAFE_DOS))
+    def test_targeted_delete_and_safe_do_are_waived_on_a_development_connection(self, sql, pg_parser):
+        """개발 연결에서는 pglast로 분류한 WHERE가 있는 DELETE와 안전한 DO 블록을 매번 묻지 않는다."""
+        # given
+        name = DEV_NAME
+        # when
+        every_time = hook.asks_every_time(sql, True, name)
+        # then
+        assert every_time is False
+
+    @pytest.mark.parametrize("sql", params(TARGETED_DELETES + SAFE_DOS))
+    def test_postgres_text_classified_without_pglast_is_never_waived(self, sql, pg_regex):
+        """pglast 없이 분류하는 PostgreSQL 텍스트는 개발 연결에서도 매번 묻는다."""
+        # given
+        name = DEV_NAME
+        # when
+        every_time = hook.asks_every_time(sql, True, name)
+        # then
+        assert every_time is True
+
+    @pytest.mark.parametrize("sql", params(UNTARGETED_DELETES + UNSAFE_DOS))
+    def test_other_destructive_sql_still_asks_every_time_on_a_development_connection(self, sql, pg_path):
+        """개발 연결에서도 WHERE 없는 DELETE, DROP, TRUNCATE, CALL, 안전하지 않은 DO, 해석할 수 없는 SQL은 매번 묻는다."""
+        # given
+        name = DEV_NAME
+        # when
+        every_time = hook.asks_every_time(sql, True, name)
+        # then
+        assert every_time is True
+
+    @pytest.mark.parametrize("sql", params(TARGETED_DELETES + SAFE_DOS + UNTARGETED_DELETES + UNSAFE_DOS))
+    @pytest.mark.parametrize("name", [PROD_NAME, "Acme 운영 승인 DB", None])
+    def test_production_and_unlabeled_connections_keep_asking_every_time(self, sql, name, pg_path):
+        """운영이거나 환경을 알 수 없는 연결은 같은 SQL이라도 기존대로 매번 묻는다."""
+        # given
+        postgres = True
+        # when
+        every_time = hook.asks_every_time(sql, postgres, name)
+        # then
+        assert every_time is True
+
+    @pytest.mark.parametrize("sql", params([
+        ("delete-where", "DELETE FROM demo_items WHERE id = 1"),
+        ("delete-top-where", "DELETE TOP (10) FROM demo_items WHERE id = 1"),
+        ("delete-join-where", "DELETE t FROM demo_items t JOIN demo_backup b ON t.id = b.id WHERE b.n = 1"),
+        ("delete-where-subquery", "DELETE FROM demo_items WHERE id IN (SELECT id FROM demo_backup WHERE n > 1)"),
+        ("bracket-identifier", "DELETE FROM [demo items] WHERE [where] = 1"),
+        ("no-semicolon-borrows-next-where", "DELETE FROM demo_items\nDELETE FROM demo_backup WHERE id = 1"),
+        ("no-where", "DELETE FROM demo_items"),
+        ("where-in-subquery", "DELETE t FROM demo_items t JOIN (SELECT id FROM demo_backup WHERE n = 1) b ON t.id = b.id"),
+        ("where-in-bracket-identifier", "DELETE FROM demo_items -- WHERE id = 1"),
+        ("exec", "EXEC demo_proc"),
+        ("execute", "EXECUTE demo_proc"),
+        ("delete-then-exec", "DELETE FROM demo_items WHERE id = 1; EXEC demo_proc"),
+        ("drop", "DROP TABLE demo_items"),
+        ("truncate", "TRUNCATE TABLE demo_items"),
+        ("do-block", "DO $$ BEGIN NULL; END $$"),
+        ("merge-delete", "MERGE demo_items AS t USING demo_backup AS s ON t.id = s.id WHEN MATCHED THEN DELETE"),
+        ("unterminated-string", "DELETE FROM demo_items WHERE note = 'x"),
+    ]))
+    def test_sql_server_destructive_sql_still_asks_every_time_on_a_development_connection(self, sql):
+        """SQL Server는 개발 연결에서도 DELETE를 포함해 파괴적 문장을 모두 매번 묻는다."""
+        # given
+        postgres = False
+        # when
+        every_time = hook.asks_every_time(sql, postgres, DEV_NAME)
+        # then
+        assert every_time is True
+
+    def test_unknown_dialect_never_waives(self):
+        """방언을 알 수 없으면 개발 연결이어도 면제하지 않는다."""
+        # given
+        sql = "DELETE FROM demo_items WHERE id = 1"
+        # when
+        every_time = hook.asks_every_time(sql, None, DEV_NAME)
+        # then
+        assert every_time is True
+
+    @pytest.mark.parametrize("sql", ["SELECT 1", "UPDATE demo_items SET n = 1", "SELECT 'DELETE FROM demo_items'"])
+    def test_sql_without_destructive_code_is_never_every_time(self, sql):
+        """파괴적 코드가 없는 SQL은 연결과 관계없이 매번 묻지 않는다."""
+        # given
+        names = [DEV_NAME, PROD_NAME, None]
+        # when
+        found = [hook.asks_every_time(sql, True, name) for name in names]
+        # then
+        assert found == [False, False, False]
+
+
+class TestClassifyQueryOnNonProductionDataGripConnections:
+    @pytest.fixture(autouse=True)
+    def guard_on(self, monkeypatch):
+        monkeypatch.delenv("CLAUDE_PLUGIN_OPTION_APPROVAL_GUARD", raising=False)
+        monkeypatch.delenv("HEI5ENBUG_APPROVAL_GUARD", raising=False)
+
+    @pytest.mark.parametrize(("connection_id", "sql"), [
+        (PG_ID, "DELETE FROM demo_items WHERE id = 1"),
+        (PG_ID, "DO $$ " + SAFE_DO_BODY + " $$"),
+    ])
+    def test_targeted_delete_and_safe_do_become_the_session_write(self, connection_id, sql, pg_parser):
+        """개발 데이터 소스의 WHERE 있는 DELETE와 안전한 DO는 일반 INSERT와 같은 세션 쓰기가 된다."""
+        # given
+        tool_input = make_tool_input(connection_id, sql)
+        plain = hook.classify_query(make_tool_input(connection_id, "INSERT INTO demo_items (id) VALUES (1)"))
+        # when
+        outcome = hook.classify_query(tool_input)
+        # then
+        assert (outcome.kind, outcome.keys, outcome.every_time) == (plain.kind, plain.keys, plain.every_time)
+        assert outcome.kind == "write"
+
+    @pytest.mark.parametrize(("connection_id", "sql"), [
+        (PG_ID, "DELETE FROM demo_items"),
+        (PG_ID, "DROP TABLE demo_items"),
+        (PG_ID, "TRUNCATE demo_items"),
+        (PG_ID, "CALL demo_proc()"),
+        (PG_ID, "DO $$ BEGIN DROP TABLE demo_items; END $$"),
+        (PG_ID, "DELETE FROM demo_items WHERE id = 1; DROP TABLE demo_backup"),
+        (MSSQL_ID, "DELETE FROM demo_items"),
+        (MSSQL_ID, "DELETE FROM demo_items WHERE id = 1"),
+        (AZURE_ID, "DELETE t FROM demo_items t JOIN demo_backup b ON t.id = b.id WHERE b.n = 1"),
+        (MSSQL_ID, "EXEC demo_proc"),
+        (MSSQL_ID, "DELETE FROM demo_items WHERE id = 1; EXEC demo_proc"),
+        (AZURE_ID, "EXECUTE demo_proc"),
+        (MYSQL_ID, "DELETE FROM demo_items WHERE id = 1"),
+        (UNKNOWN_ID, "DELETE FROM demo_items WHERE id = 1"),
+    ])
+    def test_everything_else_keeps_asking_every_time(self, connection_id, sql, pg_path):
+        """개발 데이터 소스에서도 그 밖의 파괴적 문장과 알 수 없는 연결의 DELETE는 매번 묻는다."""
+        # given
+        tool_input = make_tool_input(connection_id, sql)
+        # when
+        outcome = hook.classify_query(tool_input)
+        # then
+        assert (outcome.kind, outcome.every_time) == ("always", True)
+
+    @pytest.mark.parametrize("sql", ["DELETE FROM demo_items WHERE id = 1", "DO $$ " + SAFE_DO_BODY + " $$"])
+    def test_production_data_source_keeps_asking_every_time(self, sql, tmp_path, pg_path):
+        """운영 데이터 소스는 같은 SQL을 매번 묻는다."""
+        # given
+        (tmp_path / ".idea").mkdir()
+        (tmp_path / ".idea" / "dataSources.xml").write_text(
+            f'<project><component><data-source name="{PROD_NAME}" uuid="{PG_ID}"><driver-ref>postgresql</driver-ref>'
+            "</data-source></component></project>", encoding="utf-8")
+        tool_input = {"projectPath": str(tmp_path), "connectionId": PG_ID, "queryText": sql}
+        # when
+        outcome = hook.classify_query(tool_input)
+        # then
+        assert (outcome.kind, outcome.every_time) == ("always", True)
+
+
+class TestUnparseableTargetedSql:
+    @pytest.mark.parametrize("sql", params([
+        ("syntax-error", "DELETE FROM demo_items WHERE"),
+        ("unterminated-string", "DELETE FROM demo_items WHERE note = 'x"),
+        ("unbalanced-parenthesis", "DELETE FROM demo_items WHERE id = 1 )"),
+    ]))
+    def test_text_the_parser_rejects_is_never_waived_on_a_development_connection(self, sql, pg_parser):
+        """파서가 거부하는 SQL은 개발 연결에서도 면제하지 않고 매번 묻는다."""
+        # given
+        postgres = True
+        # when
+        every_time = hook.asks_every_time(sql, postgres, DEV_NAME)
+        # then
+        assert every_time is True
+
+
+class TestReviewedDefects:
+    def test_sql_server_delete_never_borrows_the_where_of_the_next_statement(self):
+        """세미콜론 없이 이어진 SQL Server DELETE는 다음 문장의 WHERE를 빌리지 않고 매번 묻는다."""
+        # given
+        sql = "DELETE FROM demo_items\nDELETE FROM demo_backup WHERE id = 1"
+        # when
+        every_time = hook.asks_every_time(sql, False, DEV_NAME)
+        # then
+        assert every_time is True
+
+    @pytest.mark.parametrize("sql", params([
+        ("quoted", 'DO $$ BEGIN PERFORM "pg_terminate_backend"(pg_backend_pid()); END $$;'),
+        ("qualified", "DO $$ BEGIN PERFORM pg_catalog.pg_terminate_backend(1); END $$"),
+        ("quoted-qualified", 'DO $$ BEGIN PERFORM "pg_catalog"."pg_terminate_backend"(1); END $$'),
+        ("quoted-dblink", "DO $$ BEGIN PERFORM \"dblink\"('demo', 'x'); END $$"),
+        ("quoted-mixed-case", 'DO $$ BEGIN PERFORM "DBLINK_EXEC"(\'demo\', \'x\'); END $$'),
+        ("quoted-advisory", 'DO $$ BEGIN PERFORM "pg_advisory_lock"(1); END $$'),
+    ]))
+    def test_quoted_and_qualified_risky_calls_inside_a_do_body_keep_every_time(self, sql, pg_parser):
+        """DO 본문의 따옴표·스키마 한정 위험 함수 호출은 매번 묻는다."""
+        # given
+        postgres = True
+        # when
+        every_time = hook.asks_every_time(sql, postgres, DEV_NAME)
+        # then
+        assert every_time is True
+
+    @pytest.mark.parametrize("sql", params([
+        ("missing-end-if", "DO $$ BEGIN IF true THEN NULL; END $$;"),
+        ("missing-end", "DO $$ BEGIN NULL; $$"),
+        ("not-a-block", "DO $$ NULL $$"),
+    ]))
+    def test_do_body_that_is_not_valid_plpgsql_keeps_every_time(self, sql, pg_parser):
+        """PL/pgSQL로 해석되지 않는 DO 본문은 매번 묻는다."""
+        # given
+        postgres = True
+        # when
+        every_time = hook.asks_every_time(sql, postgres, DEV_NAME)
+        # then
+        assert every_time is True
