@@ -834,18 +834,33 @@ def opening_rule(line: str) -> bool:
     return bool(SEPARATOR.match(line) or TITLED_SEPARATOR.match(line))
 
 
+def composer_bounds(lines: Sequence[str]) -> tuple[int, int] | None:
+    """Find the composer, keeping indented draft rules inside its body."""
+    for closing in range(len(lines) - 1, 0, -1):
+        if not SEPARATOR.match(lines[closing]):
+            continue
+        bounds = None
+        for opening in range(closing - 1, -1, -1):
+            if not opening_rule(lines[opening]):
+                continue
+            if closing - opening >= 2 and lines[opening + 1].strip().startswith("❯"):
+                bounds = opening, closing
+                # Prefer the enclosing composer over indented rules in its draft.
+                if not lines[opening][:1].isspace():
+                    break
+            elif bounds is not None and not lines[opening][:1].isspace():
+                break
+        return bounds
+    return None
+
+
 def input_state(host: str, lines: Sequence[str]) -> str:
     """Return `empty`, `text`, or `unknown` for the composer line of an agent TUI screen."""
     if host == "claude":
-        for index in range(len(lines) - 1, 0, -1):
-            if not SEPARATOR.match(lines[index]):
-                continue
-            opening = next((row for row in range(index - 1, -1, -1) if opening_rule(lines[row])), None)
-            if opening is None or index - opening < 2:
-                continue
-            body = [line.strip() for line in lines[opening + 1:index]]
-            if not body[0].startswith("❯"):
-                continue
+        bounds = composer_bounds(lines)
+        if bounds is not None:
+            opening, closing = bounds
+            body = [line.strip() for line in lines[opening + 1:closing]]
             content = "\n".join([body[0][1:].strip(), *body[1:]]).strip()
             return "empty" if not content or CLAUDE_PLACEHOLDER.match(content) else "text"
         return "unknown"
@@ -1102,10 +1117,10 @@ def claude_has_prompts(path: object) -> bool:
 
 def last_item_is(lines: Sequence[str], echo: str, result: re.Pattern) -> bool:
     """True when the newest conversation item above the Claude Code composer is `echo` followed by `result`."""
-    separators = [index for index, line in enumerate(lines) if opening_rule(line)]
-    if len(separators) < 2:
+    bounds = composer_bounds(lines)
+    if bounds is None:
         return False
-    above = lines[: separators[-2]]
+    above = lines[:bounds[0]]
     echoes = [index for index, line in enumerate(above) if line.strip().startswith("❯")]
     return bool(echoes) and above[echoes[-1]].strip() == f"❯ {echo}" and any(result.search(line) for line in above[echoes[-1] + 1:])
 

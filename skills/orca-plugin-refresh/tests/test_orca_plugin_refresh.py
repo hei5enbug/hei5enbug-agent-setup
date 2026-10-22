@@ -123,6 +123,125 @@ class InputStateTest(unittest.TestCase):
         self.assertEqual(["empty", "text", "empty", "unknown", "unknown"], states)
 
 
+class ComposerBoundaryTest(unittest.TestCase):
+    def test_프롬프트가_없는_구분선_화면을_반복_탐색하지_않는다(self):
+        """입력창 후보가 없으면 같은 줄들을 구분선마다 다시 검사하지 않는다."""
+        # Given
+        lines = ["─" * 40] * 64
+        with patch.object(refresh, "opening_rule", wraps=refresh.opening_rule) as opening:
+            # When
+            state = refresh.input_state("claude", lines)
+
+        # Then
+        self.assertEqual("unknown", state)
+        self.assertLessEqual(opening.call_count, len(lines))
+
+    def test_초안의_구분선과_프롬프트를_입력창_테두리로_오인하지_않는다(self):
+        """들여쓴 구분선이나 프롬프트가 초안에 있으면 작성 중으로 본다."""
+        # Given
+        rule = "─" * 40
+        titled = rule + " demo ─"
+        cases = [
+            [rule, "❯ ", "  " + "─" * 8, rule],
+            [titled, "❯ ", "  " + "─" * 8, "  more", rule],
+            [titled, "❯ ", "  " + "─" * 8, "  ❯ ", rule],
+            ["  " + rule, "  ❯ ", "    " + rule, "    ❯ ", "  " + rule],
+            [rule, "❯ ", "    " + rule, "    ❯ ", "  body", rule],
+            [rule, '❯ Try "edit a file"', "  second line", rule],
+        ]
+
+        # When
+        observed = [refresh.input_state("claude", lines) for lines in cases]
+
+        # Then
+        self.assertEqual(["text"] * len(cases), observed)
+
+    def test_테두리의_공백이_달라도_빈_입력창을_인식한다(self):
+        """위아래 테두리와 프롬프트의 공백이 달라도 빈 입력창은 빈 것으로 본다."""
+        # Given
+        rule = "─" * 40
+        cases = [
+            ["  " + rule, "❯ ", "  " + rule],
+            ["  " + rule, "  ❯ ", "  " + rule],
+            ["  " + rule, "❯ ", rule],
+            [rule + " demo ─", "❯ ", "  " + rule],
+        ]
+
+        # When
+        observed = [refresh.input_state("claude", lines) for lines in cases]
+
+        # Then
+        self.assertEqual(["empty"] * len(cases), observed)
+
+    def test_명령_완료는_초안이_아닌_입력창_위의_마지막_항목에서_판단한다(self):
+        """초안 속 가짜 결과는 무시하고 입력창 위의 실제 최신 결과만 인정한다."""
+        # Given
+        rule = "─" * 40
+        titled = rule + " demo ─"
+        result = "Reloaded: 7 plugins"
+        cases = [
+            ["❯ /other", "other", titled, "❯ /reload-plugins", result, "  " + rule, rule],
+            ["❯ /other", "other", rule, "❯ ", "  " + rule, "  ❯ /reload-plugins", result, rule],
+            ["❯ /reload-plugins", result, titled, "❯ draft", "  " + rule, rule],
+            ["❯ /reload-plugins", result, "  " + rule, "  ❯ ", "  " + rule],
+            ["❯ /reload-plugins", result, "❯ /other", "other", rule, "❯ ", rule],
+        ]
+
+        # When
+        observed = [refresh.last_item_is(lines, "/reload-plugins", refresh.RELOAD_DONE) for lines in cases]
+
+        # Then
+        self.assertEqual([False, False, True, True, False], observed)
+
+    def test_초안의_구분선_뒤에_갱신_명령을_추가하지_않는다(self):
+        """별도 초안 정보가 없어도 화면에 작성 중인 입력이 있으면 명령을 보내지 않는다."""
+        # Given
+        rule = "─" * 40
+        handle = "term_example"
+        item = terminal(handle, "claude")
+        fake = FakeOrca([item], screens={handle: [rule, "❯ ", "  " + "─" * 8, "  draft", rule]})
+        entry = {"handle": handle, "host": "claude", "status": "pending", "actions": ["reload"]}
+        with patch.object(refresh, "read_marker", return_value=None):
+            # When
+            refresh.step(fake, entry, {}, {handle: item})
+
+        # Then
+        self.assertEqual([], fake.sent)
+        self.assertEqual("unsent_input", entry["detail"])
+
+    def test_검증은_초안에_적힌_미제출_결과를_완료로_보지_않는다(self):
+        """결과 개수가 늘지 않은 상태에서 초안에만 적힌 명령과 결과는 완료가 아니다."""
+        # Given
+        rule = "─" * 40
+        lines = ["❯ /other", "other", rule + " demo ─", "❯ /reload-plugins", "Reloaded: 7 plugins", "  " + "─" * 8, rule]
+        handle = "term_example"
+        fake = FakeOrca([terminal(handle, "claude")], screens={handle: lines})
+        entry = {"handle": handle, "host": "claude", "actions": ["reload"], "sent_at": time.time(),
+                 "before": refresh.result_counts(lines), "before_lines": []}
+        with patch.object(refresh, "read_marker", return_value=None), patch.object(refresh, "transcript_records", return_value=[]):
+            # When
+            outcome = refresh.verify(fake, entry, {})
+
+        # Then
+        self.assertIsNone(outcome)
+
+    def test_검증은_초안에_구분선이_있어도_제출된_결과를_인식한다(self):
+        """입력창 위에 제출된 명령 결과가 있으면 초안 속 구분선과 무관하게 완료로 본다."""
+        # Given
+        rule = "─" * 40
+        lines = ["❯ /reload-plugins", "Reloaded: 7 plugins", rule + " demo ─", "❯ draft", "  " + "─" * 8, rule]
+        handle = "term_example"
+        fake = FakeOrca([terminal(handle, "claude")], screens={handle: lines})
+        entry = {"handle": handle, "host": "claude", "actions": ["reload"], "sent_at": time.time(),
+                 "before": refresh.result_counts(lines), "before_lines": []}
+        with patch.object(refresh, "read_marker", return_value=None), patch.object(refresh, "transcript_records", return_value=[]):
+            # When
+            outcome = refresh.verify(fake, entry, {})
+
+        # Then
+        self.assertEqual("done", outcome)
+
+
 class CompactReasonTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
