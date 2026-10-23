@@ -11,7 +11,13 @@ const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 const TICK_MS = 5 * SECOND;
 const CODEX_TTL_MS = 5 * MINUTE;
-const WINDOWS = { five_hour: { name: "Claude 5h", ms: 5 * HOUR }, seven_day: { name: "Claude weekly", ms: 7 * DAY } };
+const WINDOWS = {
+  five_hour: { name: "Claude 5h", short: "5h", ms: 5 * HOUR },
+  seven_day: { name: "Claude weekly", short: "wk", ms: 7 * DAY },
+};
+const PANE_COLUMNS = 40;
+const SEPARATOR = " · ";
+const KEEP_ORDER = ["conflict", "parallel", "ctx", "5h", "wk", "Codex", "cache"];
 
 const edits = atom({ plugin: "hei5enbug-agent-setup", key: "boardEdits" }, {});
 const agentTimes = atom({ plugin: "hei5enbug-agent-setup", key: "boardAgents" }, {});
@@ -21,6 +27,7 @@ const usageFigures = atom({ plugin: "hei5enbug-agent-setup", key: "boardUsage" }
 const codexUsage = atom({ plugin: "hei5enbug-agent-setup", key: "boardCodex" }, { at: null, percent: null });
 const ticks = atom({ plugin: "hei5enbug-agent-setup", key: "boardTick" }, 0);
 const mainActive = atom({ plugin: "hei5enbug-agent-setup", key: "boardMainActive" }, false);
+const usageStale = atom({ plugin: "hei5enbug-agent-setup", key: "boardUsageStale" }, true);
 
 let ticker;
 let codexPending = false;
@@ -124,7 +131,10 @@ async function recordEdit($, owner, rawPath) {
 
 async function seedUsage($) {
   const usage = await $.session.usage().catch(() => undefined);
-  if (usage !== undefined) await update($, usageFigures, () => figures(usage));
+  if (usage === undefined) return false;
+  await update($, usageFigures, () => figures(usage));
+  await update($, usageStale, () => false);
+  return true;
 }
 
 async function markTurn($, agentId, ended) {
@@ -189,6 +199,38 @@ function usageRows(Text, usage, cache, codex, now) {
   return [...(head.length > 0 ? [Text({ children: [head.join(" · ")] })] : []), ...limits];
 }
 
+function compactParts(usage, cache, codex, running, conflicted, now) {
+  const parts = [];
+  if (typeof usage?.contextPercent === "number") parts.push({ id: "ctx", text: `ctx ${usage.contextPercent}%` });
+  const rate = hitRate(cache);
+  if (rate !== undefined) parts.push({ id: "cache", text: `cache ${rate}%` });
+  for (const limit of usage?.rateLimits ?? []) {
+    const window = WINDOWS[limit.kind];
+    if (window === undefined || typeof limit.percentUsed !== "number") continue;
+    const text = `${window.short} ${limit.percentUsed}%`;
+    parts.push(forecast(limit, now)?.isOnTrack === false ? { id: window.short, text, color: "warning" } : { id: window.short, text });
+  }
+  if (typeof codex.percent === "number") parts.push({ id: "Codex", text: `Codex ${Math.round(codex.percent)}%` });
+  if (running > 0) parts.push({ id: "parallel", text: `parallel ${running}` });
+  if (conflicted > 0) parts.push({ id: "conflict", text: `conflict ${conflicted}`, color: "error" });
+  return parts;
+}
+
+function lineWidth(parts) {
+  return parts.reduce((total, part) => total + part.text.length, 0) + SEPARATOR.length * Math.max(0, parts.length - 1);
+}
+
+export function fitParts(parts, columns) {
+  if (typeof columns !== "number" || !Number.isFinite(columns)) return parts;
+  const kept = [...parts];
+  const rank = (part) => KEEP_ORDER.indexOf(part.id);
+  while (kept.length > 1 && lineWidth(kept) > columns) {
+    const lowest = kept.reduce((worst, part) => (rank(part) > rank(worst) ? part : worst));
+    kept.splice(kept.indexOf(lowest), 1);
+  }
+  return kept;
+}
+
 function agentRow(Box, Text, agent, times, now) {
   const { startedAt = null, endedAt = null } = times[agent.id] ?? {};
   const end = isActive(agent, times) ? now : endedAt ?? now;
@@ -206,21 +248,24 @@ function agentRow(Box, Text, agent, times, now) {
 export function registerWorkBoard(on) {
   on("session.start", async ($, e, next) => {
     await $.command.register({ name: "work-board", description: "Show subagents, the files they edit, edit conflicts, and usage in a pane", immediate: true });
+    await seedUsage($).catch(() => undefined);
     return next(e);
   }).catch(($, e, next) => next(e));
 
   on("command.run", { command: "work-board" }, async ($) => {
-    await $.ui.open({ id: PANE, title: "Work board" });
+    await $.ui.open({ id: PANE, title: "Work board", columns: PANE_COLUMNS });
     ticker ??= $.clock.every(TICK_MS, () => void tick($));
     await seedUsage($);
     await refreshCodex($);
     return {};
   });
 
-  on("classic.SessionStart", { source: ["clear", "resume", "fork"] }, async ($, e, next) => {
-    await seedUsage($);
+  on("session.end", { reason: ["clear", "resume"] }, async ($, e, next) => {
+    await update($, cacheTotals, () => ({ read: 0, creation: 0, input: 0 }));
+    await update($, usageFigures, () => null);
+    await update($, usageStale, () => true);
     return next(e);
-  });
+  }).catch(($, e, next) => next(e));
 
   on("tool.call", { tool: EDIT_TOOLS }, async ($, e, next) => {
     const result = await next(e);
@@ -232,6 +277,7 @@ export function registerWorkBoard(on) {
   on("turn.start", async ($, e, next) => {
     if (e.agentId !== undefined) await markTurn($, e.agentId, false);
     else {
+      if (await read($, usageStale)) await seedUsage($).catch(() => undefined);
       if (Object.hasOwn(await read($, edits), MAIN)) await update($, edits, ({ [MAIN]: _, ...rest }) => rest);
       await update($, mainActive, () => true);
     }
@@ -240,7 +286,10 @@ export function registerWorkBoard(on) {
 
   on("turn.complete", { turnId: /./ }, async ($, e, next) => {
     if (e.agentId !== undefined) await markTurn($, e.agentId, true);
-    else await update($, mainActive, () => false);
+    else {
+      await update($, mainActive, () => false);
+      void refreshCodex($).catch(() => undefined);
+    }
     if (e.agentId === undefined && e.usage) {
       await update($, cacheTotals, (totals) => ({
         read: totals.read + tokens(e.usage.cache_read_input_tokens),
@@ -258,15 +307,17 @@ export function registerWorkBoard(on) {
 
   on("ui.render", { component: "AbovePrompt" }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e);
-    const view = await ownership($);
+    const [view, cache, usage, codex, now] = await Promise.all([ownership($), read($, cacheTotals), read($, usageFigures), read($, codexUsage), $.clock.now()]);
     const running = view.agents.filter((agent) => isActive(agent, view.times)).length;
-    const conflicted = conflicts(view).size;
-    if (running === 0 && conflicted === 0) return next(e);
+    const parts = fitParts(compactParts(usage, cache, codex, running, conflicts(view).size, now), e.props.bodyColumns);
+    if (parts.length === 0) return next(e);
     const { Box, Text } = $.ui.resolve(e);
-    const parts = [Text({ children: [`parallel ${running}`] })];
-    if (conflicted > 0) parts.push(Text({ color: "error", children: [` · conflict ${conflicted}`] }));
     const theirs = await next(e);
-    const line = Box({ flexDirection: "row", children: parts });
+    const line = Box({
+      flexDirection: "row",
+      children: parts.map((part, index) =>
+        Text({ wrap: "truncate-end", ...(part.color === undefined ? {} : { color: part.color }), children: [index === 0 ? part.text : `${SEPARATOR}${part.text}`] })),
+    });
     return Box({ flexDirection: "column", children: theirs ? [line, theirs] : [line] });
   });
 

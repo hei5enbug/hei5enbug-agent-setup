@@ -31,6 +31,7 @@ function boardWorld(on, world = {}) {
   const toasts = [];
   const registered = [];
   const runs = [];
+  const opens = [];
   const state = { agents: world.agents ?? [], panes: [{ id: "work-board", title: "Work board", isShown: true, isFocused: false, isPlaced: true }], lists: 0 };
   const clock = mock.clock(on, { now: NOW });
   on("agent.list", () => {
@@ -46,10 +47,14 @@ function boardWorld(on, world = {}) {
     toasts.push(e.text);
     return { value: undefined };
   });
-  on("ui.open", () => ({ value: { isPlaced: true } }));
+  on("ui.open", (_$, e) => {
+    opens.push(e);
+    return { value: { isPlaced: true } };
+  });
   on("ui.panes", () => ({ value: state.panes }));
   on("session.measure", (_$, e) => ({ changed: e.changed }));
   on("classic.SessionStart", () => ({}));
+  on("session.end", (_$, e) => ({ sessionId: e.sessionId ?? "session-test" }));
   on("command.register", (_$, e) => {
     registered.push(e.name);
     return { value: undefined };
@@ -64,7 +69,7 @@ function boardWorld(on, world = {}) {
   on("command.run", () => ({ text: "engine command" }));
   on("tool.call", () => ({ result: { type: "update", filePath: "", content: "" }, text: "ok" }));
   on("ui.render", () => ({ type: "Text", props: {}, children: ["engine band"] }));
-  return { toasts, registered, runs, state, clock };
+  return { toasts, registered, runs, opens, state, clock };
 }
 
 function turnEnd(turnId, agentId = undefined, usage = null) {
@@ -302,17 +307,217 @@ test("5초 갱신은 창이 열려 있고 활성 하위 에이전트가 있을 �
   expect(state.lists).toBe(listsAfterClose);
 });
 
-test("/clear 뒤에는 초기화된 상태에 Claude 한도와 예측을 다시 채운다", async ($, on) => {
+test("/clear와 /resume 뒤에는 캐시 적중률과 사용량을 비우고 다음 메인 턴 시작에 한도와 예측을 다시 채운다", async ($, on) => {
   // given
-  const usage = { startedAt: NOW, context: { window: 200000 }, rateLimits: [{ kind: "five_hour", percentUsed: 10, resetsAt: iso(NOW + 4 * HOUR) }] };
-  boardWorld(on, { usage });
+  const before = { startedAt: NOW, context: { window: 200000, tokens: 24000, percent: 12 }, rateLimits: [{ kind: "five_hour", percentUsed: 40, resetsAt: iso(NOW + 4 * HOUR) }] };
+  const after = { startedAt: NOW, context: { window: 200000, tokens: 2000, percent: 1 }, rateLimits: [{ kind: "five_hour", percentUsed: 10, resetsAt: iso(NOW + 4 * HOUR) }] };
+  const world = { usage: before as any };
+  boardWorld(on, world);
+  await $.session.start({ cwd: CWD, surface: "terminal", isInteractive: true });
+  await $.turn.complete(turnEnd("main-1", undefined, usageOf(80, 10, 10)));
+  const seeded = await texts($, PANE);
 
   // when
-  await $.classic.SessionStart({ source: "clear" });
+  world.usage = after;
+  await $.session.end({ reason: "clear" });
+  const cleared = await texts($, PANE);
+  await $.turn.start({ turnId: "sub-1", text: "", agentId: "a1" });
+  const afterSubagent = await texts($, PANE);
+  await $.turn.start({ turnId: "main-2", text: "next" });
+  const reseeded = await texts($, PANE);
+  world.usage = before;
+  await $.session.end({ reason: "resume" });
+  await $.turn.start({ turnId: "main-3", text: "next" });
+  const resumed = await texts($, PANE);
+
+  // then
+  expect(seeded[0].text).toBe("context 12% · cache hit 80%");
+  expect(cleared[0].text).toBe("No subagents in this session.");
+  expect(afterSubagent[0].text).toBe("No subagents in this session.");
+  expect(reseeded[0].text).toBe("context 1%");
+  expect(reseeded[1].text).toBe("Claude 5h 10% · on track");
+  expect(resumed[0].text).toBe("context 12%");
+});
+
+test("session.end가 다른 사유로 오면 사용량을 비우지 않고 session.start가 처음 사용량을 채운다", async ($, on) => {
+  // given
+  const usage = { startedAt: NOW, context: { window: 200000, tokens: 24000, percent: 12 }, rateLimits: [] };
+  boardWorld(on, { usage });
+  await $.session.start({ cwd: CWD, surface: "terminal", isInteractive: true });
+
+  // when
+  await $.session.end({ reason: "logout" });
   const pane = await texts($, PANE);
 
   // then
-  expect(pane[0].text).toBe("Claude 5h 10% · on track");
+  expect(pane[0].text).toBe("context 12%");
+});
+
+test("사용량을 읽지 못해도 시작과 메인 턴 시작은 실패하지 않고 읽을 수 있게 되면 다음 메인 턴 시작에 채운다", async ($, on) => {
+  // given
+  const world = { usage: undefined as any };
+  boardWorld(on, world);
+  await $.session.start({ cwd: CWD, surface: "terminal", isInteractive: true });
+  await $.turn.start({ turnId: "main-1", text: "go" });
+  const missing = await texts($, PANE);
+
+  // when
+  world.usage = { startedAt: NOW, context: { window: 200000, tokens: 24000, percent: 12 }, rateLimits: [] };
+  await $.turn.start({ turnId: "main-2", text: "go" });
+  const found = await texts($, PANE);
+
+  // then
+  expect(missing[0].text).toBe("No subagents in this session.");
+  expect(found[0].text).toBe("context 12%");
+});
+
+test("classic.SessionStart 훅은 등록하지 않아 /clear 뒤에도 엔진 이벤트만 지나간다", async ($, on) => {
+  // given
+  const usage = { startedAt: NOW, context: { window: 200000, tokens: 24000, percent: 12 }, rateLimits: [] };
+  boardWorld(on, { usage });
+
+  // when
+  const answer = await $.classic.SessionStart({ source: "clear" });
+  const pane = await texts($, PANE);
+
+  // then
+  expect(answer).toEqual({});
+  expect(pane[0].text).toBe("No subagents in this session.");
+});
+
+test("/work-board는 창 너비를 40칸으로 요청하고 다른 크기 옵션은 넘기지 않는다", async ($, on) => {
+  // given
+  const { opens } = boardWorld(on);
+
+  // when
+  await $.command.run({ command: "work-board", args: "" });
+
+  // then
+  expect(opens).toEqual([{ id: "work-board", title: "Work board", columns: 40 }]);
+});
+
+test("띠는 평소에도 컨텍스트, 캐시, Claude 5시간과 주간, Codex 사용률을 한 줄로 보이고 예측이 막히는 한도만 경고 색으로 칠한다", async ($, on) => {
+  // given
+  const usage = {
+    startedAt: NOW,
+    context: { window: 200000, tokens: 24000, percent: 34 },
+    rateLimits: [
+      { kind: "five_hour", percentUsed: 10, resetsAt: iso(NOW + 4 * HOUR) },
+      { kind: "seven_day", percentUsed: 80, resetsAt: iso(NOW + 3.5 * DAY) },
+      { kind: "spend_limit", percentUsed: 50, resetsAt: iso(NOW + HOUR) },
+    ],
+  };
+  const { clock } = boardWorld(on, { usage, codex: '{"weekly_used_percent": 51.2}' });
+  await $.session.start({ cwd: CWD, surface: "terminal", isInteractive: true });
+  await $.turn.complete(turnEnd("main-1", undefined, usageOf(920, 40, 40)));
+  await clock.settle();
+
+  // when
+  const band = await texts($, BAND);
+
+  // then
+  expect(band.map((item) => [item.text, item.props.color])).toEqual([
+    ["ctx 34%", undefined],
+    [" · cache 92%", undefined],
+    [" · 5h 10%", undefined],
+    [" · wk 80%", "warning"],
+    [" · Codex 51%", undefined],
+    ["engine band", undefined],
+  ]);
+  expect(band.slice(0, 5).map((item) => item.text).join("").length).toBeLessThan(60);
+});
+
+test("띠는 알려진 값만 줄이고 parallel과 conflict는 0이 아닐 때만 덧붙이며 서베이 중에는 건드리지 않는다", async ($, on) => {
+  // given
+  const usage = { startedAt: NOW, context: { window: 200000, tokens: 1, percent: 5 }, rateLimits: [] };
+  boardWorld(on, { usage, agents: [agent("a1"), agent("a2")] });
+  await $.session.start({ cwd: CWD, surface: "terminal", isInteractive: true });
+  await $.tool.call({ tool: "Edit", file_path: `${CWD}/src/app.ts`, old_string: "a", new_string: "b", agentId: "a1" });
+  await $.tool.call({ tool: "Edit", file_path: `${CWD}/src/app.ts`, old_string: "b", new_string: "c", agentId: "a2" });
+
+  // when
+  const band = await texts($, BAND);
+  const survey = await texts($, { ...BAND, props: { ...BAND.props, hasSurvey: true } });
+
+  // then
+  expect(band.map((item) => [item.text, item.props.color])).toEqual([
+    ["ctx 5%", undefined],
+    [" · parallel 2", undefined],
+    [" · conflict 1", "error"],
+    ["engine band", undefined],
+  ]);
+  expect(survey.map((item) => item.text)).toEqual(["engine band"]);
+});
+
+test("띠는 bodyColumns에 맞춰 우선순위가 낮은 항목부터 덜어내고 conflict와 parallel을 남기며 넓으면 모두 보인다", async ($, on) => {
+  // given
+  const usage = {
+    startedAt: NOW,
+    context: { window: 200000, tokens: 24000, percent: 34 },
+    rateLimits: [
+      { kind: "five_hour", percentUsed: 10, resetsAt: iso(NOW + 4 * HOUR) },
+      { kind: "seven_day", percentUsed: 80, resetsAt: iso(NOW + 3.5 * DAY) },
+    ],
+  };
+  const { clock } = boardWorld(on, { usage, codex: '{"weekly_used_percent": 51.2}', agents: [agent("a1"), agent("a2")] });
+  await $.session.start({ cwd: CWD, surface: "terminal", isInteractive: true });
+  await $.turn.complete(turnEnd("main-1", undefined, usageOf(920, 40, 40)));
+  await clock.settle();
+  await $.tool.call({ tool: "Edit", file_path: `${CWD}/src/app.ts`, old_string: "a", new_string: "b", agentId: "a1" });
+  await $.tool.call({ tool: "Edit", file_path: `${CWD}/src/app.ts`, old_string: "b", new_string: "c", agentId: "a2" });
+  const at = async (bodyColumns) => {
+    const found = await texts($, { ...BAND, props: { ...BAND.props, bodyColumns } });
+    return found.filter((item) => item.text !== "engine band");
+  };
+
+  // when
+  const narrow = await at(30);
+  const medium = await at(40);
+  const wide = await at(80);
+
+  // then
+  const width = (items) => items.map((item) => item.text).join("").length;
+  expect(narrow.map((item) => item.text)).toEqual(["parallel 2", " · conflict 1"]);
+  expect(width(narrow)).toBeLessThanOrEqual(30);
+  expect(medium.map((item) => item.text)).toEqual(["ctx 34%", " · parallel 2", " · conflict 1"]);
+  expect(width(medium)).toBeLessThanOrEqual(40);
+  expect(wide.map((item) => item.text)).toEqual(["ctx 34%", " · cache 92%", " · 5h 10%", " · wk 80%", " · Codex 51%", " · parallel 2", " · conflict 1"]);
+  expect(narrow.every((item) => item.props.wrap === "truncate-end")).toBe(true);
+});
+
+test("표시할 값이 없으면 띠는 다른 Mod의 출력만 남긴다", async ($, on) => {
+  // given
+  boardWorld(on);
+
+  // when
+  const band = await texts($, BAND);
+
+  // then
+  expect(band.map((item) => item.text)).toEqual(["engine band"]);
+});
+
+test("메인 턴이 끝나면 Codex 사용률을 기다리지 않고 새로 읽되 하위 에이전트의 턴과 5분 안의 턴은 다시 읽지 않는다", async ($, on) => {
+  // given
+  const { runs, clock } = boardWorld(on, { codex: '{"weekly_used_percent": 30}' });
+
+  // when
+  await $.turn.complete(turnEnd("sub-1", "a1"));
+  await clock.settle();
+  const afterSubagent = runs.length;
+  await $.turn.complete(turnEnd("main-1"));
+  await clock.settle();
+  const afterMain = runs.length;
+  await $.turn.complete(turnEnd("main-2"));
+  await clock.settle();
+  const withinTtl = runs.length;
+  await clock.advance(5 * 60 * 1000);
+  await $.turn.complete(turnEnd("main-3"));
+  await clock.settle();
+  const band = await texts($, BAND);
+
+  // then
+  expect([afterSubagent, afterMain, withinTtl, runs.length]).toEqual([0, 1, 1, 2]);
+  expect(band.map((item) => item.text)).toEqual(["Codex 30%", "engine band"]);
 });
 
 test("work_board 옵션이 꺼지면 명령을 등록하지 않고 하위 에이전트가 돌아도 띠를 그리지 않는다", { options: { work_board: false } }, async ($, on) => {

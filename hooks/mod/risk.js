@@ -1,5 +1,6 @@
 import { atom, memberOf, read, update } from "claude-code";
 import { impactOf } from "./impact.js";
+import { responseLanguage } from "./language.js";
 
 const GUARD_TOOLS = /^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$/;
 const LABELS = {
@@ -8,7 +9,6 @@ const LABELS = {
 };
 const COLORS = { critical: "error", always: "error", write: "warning" };
 const SEVERITY = ["critical", "always", "write"];
-const KOREAN = new Set(["korean", "ko", "한국어"]);
 const riskMarks = atom({ plugin: "hei5enbug-agent-setup", key: "riskMarks" }, null);
 
 let language;
@@ -31,16 +31,6 @@ async function guardRecord($, toolUseId) {
     return Array.isArray(data?.calls) ? data.calls.find((call) => isRecord(call) && call.id === toolUseId) : undefined;
   } catch {
     return undefined;
-  }
-}
-
-async function responseLanguage($) {
-  try {
-    const value = (await $.settings.read()).language;
-    const text = typeof value === "string" ? value.trim().toLowerCase() : "";
-    return KOREAN.has(text) || KOREAN.has(text.split(/[-_]/)[0]) ? "Korean" : "English";
-  } catch {
-    return "English";
   }
 }
 

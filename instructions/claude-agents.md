@@ -132,7 +132,7 @@ This section adds only the Claude Code worker integration.
 - The bullets below apply whenever a plugin agent runs: a runner fallback, the `worker` or Sonnet worker, and the
   designer.
 - When the session context has the line `hei5enbug-agent-setup mod: role pinning active`, the registered plugin mod's
-  `prompt.context` hook confirms role pinning is active. The mod pins each role's model and effort on every subagent
+  `prompt.submit` hook, which adds it to the first prompt of each conversation, confirms role pinning is active. The mod pins each role's model and effort on every subagent
   request, from the registry and from installed plugins' declared `model-roles.json` files. It fails a run whose
   response came from another model or carried no model evidence: the run's later turns are refused, and the mod blocks
   tool calls from a subagent that answered on another model. A failed run's result is replaced by a warning, and the

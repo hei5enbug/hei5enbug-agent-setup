@@ -215,7 +215,9 @@ def test_redact_survives_a_missing_or_invalid_patterns_file(tmp_path, monkeypatc
 
 NODE_RUNNER = """
 import { readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 const [, , source, work] = process.argv;
+writeFileSync(`${work}/language.js`, readFileSync(join(dirname(source), "language.js"), "utf8"));
 writeFileSync(`${work}/redact.mjs`, readFileSync(source, "utf8"));
 const { compilePatterns, maskText } = await import(`${work}/redact.mjs`);
 const input = JSON.parse(readFileSync(`${work}/input.json`, "utf8"));

@@ -17,6 +17,8 @@ declare module "claude-code" {
       boardCodex: BoardCodex;
       boardTick: number;
       boardMainActive: boolean;
+      boardUsageStale: boolean;
+      roleMarkerSession: string | null;
       redactIds: Record<string, string>;
     };
   }

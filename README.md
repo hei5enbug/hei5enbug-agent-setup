@@ -144,26 +144,30 @@ policy, these guards are absent and the host's normal permission flow applies.
 Role pinning pins each plugin role's model and effort on every request: `scout` uses `claude-sonnet-5-5` with `medium`,
 `worker` uses `worker_model` with `worker_effort` (default `claude-haiku-5-5` with `high`), `sonnet-worker` uses `claude-sonnet-5-5` with `high`, `designer` uses
 `claude-opus-5-5` with `xhigh`, and `reviewer` uses `claude-opus-5-5` with `high`. A subagent that answers on another model is stopped: its later requests
-end with a refusal, its tool calls are denied, and its result is replaced with a warning. The session context then
-gets the line `hei5enbug-agent-setup mod: role pinning active` from the registered mod `prompt.context` hook only when
-role pinning is active. This line lets the main session send assignments directly and skip per-delegation settings and
-subagent record checks.
+end with a refusal, its tool calls are denied, and its result is replaced with a warning. Only when role pinning is
+active, the registered mod `prompt.submit` hook adds the line `hei5enbug-agent-setup mod: role pinning active` as
+context to the first main-session prompt of each conversation, again after `/clear` or `/resume`. This line lets the
+main session send assignments directly and skip per-delegation settings and subagent record checks. The mod uses no
+`prompt.context` or `classic.*` hook, because Claude Code's built-in guard `cc-plugin-sec-default`, which loads with
+managed settings or a Team or Enterprise login, skips those hooks in every mod a user installs.
 
 The mod also draws two views; neither adds anything to the model's context. With `risk_highlight` on, each tool call
 row in the transcript gets a colored label from the approval guard's own decision for that call: red for an
 irreversible or every-time call and yellow for a write. Before the permission prompt, a red call also shows what it
 would change when that can be read safely within a few seconds, such as the files and lines `git reset --hard` would
 discard, the files `git clean` would delete, or the resources `kubectl delete` would remove. The decision stays in the
-permission prompt. With `work_board` on, `/work-board` opens a pane with each subagent's status, elapsed time, and
-edited files, marks a file red when two of them edit it, and shows context use, the prompt-cache hit rate, the Claude
-5-hour and weekly use with a pace forecast, and the Codex weekly use. While a subagent runs or a conflict exists, a
-one-line summary appears above the prompt.
+permission prompt. With `work_board` on, a one-line summary above the prompt shows context use, the prompt-cache hit
+rate, the Claude 5-hour and weekly use, and the Codex weekly use, with a limit colored when it would run out before it
+resets, plus the running subagents and edit conflicts when there are any. `/work-board` opens a pane, 40 columns wide
+unless you resized it, with each subagent's status, elapsed time, and edited files, marks a file red when two of them
+edit it, and shows the full usage rows with a pace forecast.
 
 With `secret_redaction` on, the mod masks well-known secret formats in Bash, Read, Grep, and MCP results before
 Claude reads them, such as cloud and service API keys, private key blocks, JWTs, and passwords in URLs, and leaves
 variable names and placeholders alone. Each match becomes `[REDACTED:<kind>:<id>]`, where the id is issued in that
-session. An edit or write whose new text contains an issued marker is denied, so a masked file is never written back
-over the real value, while text that merely mentions such a marker, as documentation and tests do, is allowed. `config/secret-patterns.json`
+session. An edit or write whose new text contains an issued marker is denied, for a new file and an existing one,
+because it would save the marker instead of the secret; the denial follows the response language. Text that merely
+mentions such a marker, as documentation and tests do, is allowed. `config/secret-patterns.json`
 holds the formats, which the approval guard also uses when it shows a command, and only the first 4 MB of a result is
 scanned.
 

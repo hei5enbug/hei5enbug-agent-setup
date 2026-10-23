@@ -33,10 +33,11 @@ function plain<T>(value: T): T {
   return typeof value === "string" ? (value.replace(ID, "]") as T) : JSON.parse(JSON.stringify(value).replace(ID, "]"));
 }
 
-function world(on, options: { patterns?: string | null; answer?: (e: any) => any } = {}) {
+function world(on, options: { patterns?: string | null; answer?: (e: any) => any; language?: string } = {}) {
   const logs: string[] = [];
   const seen: any[] = [];
   resetSecretPatterns();
+  if (options.language !== undefined) on("settings.read", () => ({ value: { language: options.language } }));
   on("fs.read", (_$, e) => {
     if (e.path.endsWith(PATTERNS_FILE) && options.patterns !== null) return { value: options.patterns ?? PATTERNS };
     throw new Error(`no such file: ${e.path}`);
@@ -313,9 +314,60 @@ test("발급한 id가 붙은 자리표시자를 쓰는 Edit, Write, MultiEdit, N
   // then
   for (const answer of answers) {
     expect(answer.deny).toContain("[REDACTED:");
-    expect(answer.deny).toContain("Edit around the masked span");
+    expect(answer.deny).toContain("Leave the masked span out of what you write");
+    expect(answer.deny).toContain("Writing it would save the marker, not the secret");
   }
   expect(seen).toEqual([]);
+});
+
+test("새 파일 쓰기와 기존 파일 편집의 거부 문구는 같고 기존 값을 덮어쓴다고 말하지 않는다", async ($, on) => {
+  // given
+  const { seen } = world(on, { answer: secretOut(TOKEN) });
+  const marker = await issue($);
+  seen.length = 0;
+
+  // when
+  const created = await $.tool.call({ tool: "Write", file_path: "/work/new.env", content: `KEY=${marker}` });
+  const edited = await $.tool.call({ tool: "Edit", file_path: "/work/existing.env", old_string: "KEY=old", new_string: `KEY=${marker}` });
+
+  // then
+  expect(created.deny).toBe(edited.deny);
+  expect(created.deny).toMatch(/^Blocked: /);
+  expect(created.deny).not.toMatch(/replace|overwrite/i);
+  expect(seen).toEqual([]);
+});
+
+test("응답 언어 설정이 한국어면 자리표시자 쓰기 거부와 훅 context 보류 문구를 한국어로 쓴다", async ($, on) => {
+  // given
+  const { seen } = world(on, {
+    language: "ko-KR",
+    answer: (e) => (e.tool === "Bash" && e.command.startsWith("ctx") ? { ref: 5, result: { stdout: "clean", stderr: "" }, text: "clean", context: [`note ${TOKEN}`] } : secretOut(TOKEN)(e)),
+  });
+  const marker = await issue($);
+  seen.length = 0;
+
+  // when
+  const created = await $.tool.call({ tool: "Write", file_path: "/work/new.env", content: `KEY=${marker}` });
+  const edited = await $.tool.call({ tool: "Edit", file_path: "/work/existing.env", old_string: "KEY=old", new_string: `KEY=${marker}` });
+  const withheld = await $.tool.call({ tool: "Bash", command: "ctx" });
+
+  // then
+  expect(created.deny).toBe("차단됨: 이 텍스트에 가린 비밀 값의 [REDACTED:...] 표시가 있습니다. 그대로 쓰면 실제 값 대신 표시가 저장됩니다. 가린 부분은 쓰는 내용에서 빼세요.");
+  expect(edited.deny).toBe(created.deny);
+  expect(withheld.deny).toContain("보류했습니다");
+  expect(withheld.deny).not.toContain(TOKEN);
+});
+
+test("응답 언어 설정이 영어이거나 읽을 수 없으면 영어 문구를 쓴다", async ($, on) => {
+  // given
+  world(on, { language: "English", answer: secretOut(TOKEN) });
+  const marker = await issue($);
+
+  // when
+  const write = await $.tool.call({ tool: "Write", file_path: "/work/new.env", content: marker });
+
+  // then
+  expect(write.deny).toMatch(/^Blocked: /);
 });
 
 test("id가 없거나 이 세션이 발급하지 않은 자리표시자는 문서와 테스트 픽스처 쓰기를 막지 않는다", async ($, on) => {

@@ -1,3 +1,4 @@
+import { atom, read, update } from "claude-code";
 import { claudeRolePins, configuredWorkerPin } from "./registry.js";
 
 const WORKER_AGENT = "hei5enbug-agent-setup:worker";
@@ -11,7 +12,8 @@ const BUILT_IN_DENIAL =
 const PLUGIN_AGENT = /^[^:]+:/;
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const STORE_KEY = "roles";
-const CONTEXT_BLOCK = { name: "hei5enbugAgentSetupMod", text: "hei5enbug-agent-setup mod: role pinning active" };
+const MARKER = "hei5enbug-agent-setup mod: role pinning active";
+const markerSession = atom({ plugin: "hei5enbug-agent-setup", key: "roleMarkerSession" }, null);
 const REFUSAL_TEXT =
   "This subagent ran on a model other than its pinned model, so hei5enbug-agent-setup stopped it. Its result must not be accepted.";
 const TOOL_DENIAL =
@@ -206,8 +208,17 @@ export function registerRolePinning(on, options) {
     return next(e);
   }).catch(($, e, next) => next(e));
 
-  on("prompt.context", async ($, e, next) => {
-    const context = await next(e);
-    return { ...context, blocks: [...context.blocks, CONTEXT_BLOCK] };
-  });
+  on("session.end", { reason: ["clear", "resume"] }, async ($, e, next) => {
+    await update($, markerSession, () => null);
+    return next(e);
+  }).catch(($, e, next) => next(e));
+
+  on("prompt.submit", async ($, e, next) => {
+    if (e.agentId !== undefined) return next(e);
+    const sessionId = await $.session.id();
+    if ((await read($, markerSession)) === sessionId) return next(e);
+    const result = await next({ ...e, context: [...(e.context ?? []), MARKER] });
+    if (result?.drop === undefined) await update($, markerSession, () => sessionId);
+    return result;
+  }).catch(($, e, next) => next(e));
 }

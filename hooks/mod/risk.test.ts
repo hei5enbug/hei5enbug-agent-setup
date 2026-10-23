@@ -1,4 +1,5 @@
 import { expect, test } from "claude-code/testing";
+import { responseLanguage } from "./language.js";
 import { riskLevel } from "./risk.js";
 
 const PLUGIN = "hei5enbug-agent-setup";
@@ -139,6 +140,23 @@ test("응답 언어 설정이 한국어면 표시 문구를 한국어로 쓴다"
 
   // then
   expect(drawn.map(({ badge }) => badge?.text)).toEqual(["[쓰기]", "[매번 확인]", "[되돌릴 수 없음]"]);
+});
+
+test("응답 언어는 한국어를 뜻하는 설정값만 한국어로 읽고 그 밖의 값과 읽기 실패는 영어로 읽는다", async () => {
+  // given
+  const settings = (read) => ({ settings: { read } });
+  const values = ["Korean", " ko ", "ko-KR", "ko_KR", "한국어", "english", "en-US", "", undefined, 3];
+
+  // when
+  const languages = [];
+  for (const language of values) languages.push(await responseLanguage(settings(async () => ({ language }))));
+  const failed = await responseLanguage(settings(async () => {
+    throw new Error("no settings");
+  }));
+
+  // then
+  expect(languages).toEqual(["Korean", "Korean", "Korean", "Korean", "Korean", "English", "English", "English", "English", "English"]);
+  expect(failed).toBe("English");
 });
 
 test("접힌 ToolGroup은 표시된 호출 중 가장 위험한 표시를 붙이고 펼친 그룹은 각 행에 맡긴다", async ($, on) => {

@@ -64,7 +64,7 @@ function environment(on, roles = undefined, world = {}) {
     data[e.key] = JSON.parse(JSON.stringify(e.value));
     return { value: undefined };
   });
-  on("session.id", () => ({ value: SESSION }));
+  on("session.id", () => ({ value: world.sessionId?.() ?? SESSION }));
   mock.clock(on, { now: NOW });
   resetClaudeRolePins();
   return data;
@@ -818,21 +818,19 @@ test("플러그인을 다시 불러와도 저장소의 고정 기록으로 고�
   expect(data.roles[SESSION].length).toBe(2);
 });
 
-test("프롬프트 컨텍스트에 역할 고정 안내 한 줄을 덧붙이고 기존 블록을 유지한다", async ($, on) => {
+const MARKER = "hei5enbug-agent-setup mod: role pinning active";
+
+function submitSink(on, seen) {
+  on("prompt.submit", (_$, e) => {
+    seen.push(e);
+    return { text: e.text };
+  });
+  on("session.end", (_$, e) => ({ sessionId: e.sessionId ?? SESSION }));
+}
+
+test("프롬프트 컨텍스트 훅은 등록하지 않아 엔진의 컨텍스트 블록을 그대로 둔다", async ($, on) => {
   // given
-  on("prompt.context", (_$, e) => ({ blocks: e.blocks }));
-
-  // when
-  const context = await $.prompt.context({ blocks: [{ name: "currentDate", text: "2026-10-07" }] });
-
-  // then
-  expect(context.blocks[0]).toEqual({ name: "currentDate", text: "2026-10-07" });
-  expect(context.blocks.filter((block) => block.text.includes("hei5enbug-agent-setup mod: role pinning active"))).toHaveLength(1);
-  expect(context.blocks).toHaveLength(2);
-});
-
-test("role_pinning 옵션이 꺼지면 프롬프트 컨텍스트를 바꾸지 않는다", { options: { role_pinning: false } }, async ($, on) => {
-  // given
+  environment(on);
   on("prompt.context", (_$, e) => ({ blocks: e.blocks }));
 
   // when
@@ -840,6 +838,113 @@ test("role_pinning 옵션이 꺼지면 프롬프트 컨텍스트를 바꾸지 �
 
   // then
   expect(context.blocks).toEqual([{ name: "currentDate", text: "2026-10-07" }]);
+});
+
+test("역할 고정 안내는 첫 메인 프롬프트의 추가 컨텍스트에 한 번만 붙고 기존 컨텍스트와 본문을 유지한다", async ($, on) => {
+  // given
+  environment(on);
+  const seen = [];
+  submitSink(on, seen);
+
+  // when
+  await $.prompt.submit({ text: "first", context: ["earlier hook"] });
+  await $.prompt.submit({ text: "second" });
+  await $.prompt.submit({ text: "third" });
+
+  // then
+  expect(seen.map((e) => e.text)).toEqual(["first", "second", "third"]);
+  expect(seen[0].context).toEqual(["earlier hook", MARKER]);
+  expect(seen[1].context).toBeUndefined();
+  expect(seen[2].context).toBeUndefined();
+});
+
+test("역할 고정 안내는 /clear와 /resume 뒤 첫 프롬프트에 다시 붙고 그 밖의 종료 사유에는 붙지 않는다", async ($, on) => {
+  // given
+  environment(on);
+  const seen = [];
+  submitSink(on, seen);
+  await $.prompt.submit({ text: "p1" });
+
+  // when
+  await $.session.end({ reason: "clear" });
+  await $.prompt.submit({ text: "p2" });
+  await $.prompt.submit({ text: "p3" });
+  await $.session.end({ reason: "resume" });
+  await $.prompt.submit({ text: "p4" });
+  await $.session.end({ reason: "other" });
+  await $.prompt.submit({ text: "p5" });
+
+  // then
+  expect(seen.map((e) => e.context ?? [])).toEqual([[MARKER], [MARKER], [], [MARKER], []]);
+});
+
+test("새 세션은 이전 세션이 안내를 붙였어도 첫 프롬프트에 다시 붙인다", async ($, on) => {
+  // given
+  const ids = ["session-one", "session-two"];
+  environment(on, undefined, { sessionId: () => ids[0] });
+  const seen = [];
+  submitSink(on, seen);
+  await $.prompt.submit({ text: "p1" });
+
+  // when
+  ids.shift();
+  await $.prompt.submit({ text: "p2" });
+
+  // then
+  expect(seen.map((e) => e.context ?? [])).toEqual([[MARKER], [MARKER]]);
+});
+
+test("뒤쪽 훅이 프롬프트를 버리면 안내를 기록하지 않아 다음에 받아들여진 프롬프트에 한 번만 붙는다", async ($, on) => {
+  // given
+  environment(on);
+  const seen = [];
+  let drops = 1;
+  on("prompt.submit", (_$, e) => {
+    seen.push(e);
+    if (drops > 0) {
+      drops -= 1;
+      return { drop: "later hook refused" };
+    }
+    return { text: e.text };
+  });
+
+  // when
+  const dropped = await $.prompt.submit({ text: "first" });
+  await $.prompt.submit({ text: "second" });
+  await $.prompt.submit({ text: "third" });
+
+  // then
+  expect(dropped.drop).toBe("later hook refused");
+  expect(seen.map((e) => e.context ?? [])).toEqual([[MARKER], [MARKER], []]);
+});
+
+test("하위 에이전트의 프롬프트에는 안내를 붙이지 않고 메인 프롬프트의 몫도 쓰지 않는다", async ($, on) => {
+  // given
+  environment(on);
+  const seen = [];
+  submitSink(on, seen);
+
+  // when
+  await $.prompt.submit({ text: "sub", agentId: AGENT_ID });
+  await $.prompt.submit({ text: "main" });
+
+  // then
+  expect(seen[0].context).toBeUndefined();
+  expect(seen[1].context).toEqual([MARKER]);
+});
+
+test("role_pinning 옵션이 꺼지면 프롬프트에 안내를 붙이지 않는다", { options: { role_pinning: false } }, async ($, on) => {
+  // given
+  const seen = [];
+  submitSink(on, seen);
+
+  // when
+  await $.prompt.submit({ text: "first" });
+  await $.session.end({ reason: "clear" });
+  await $.prompt.submit({ text: "second" });
+
+  // then
+  expect(seen.map((e) => e.context)).toEqual([undefined, undefined]);
 });
 
 test("저장소 기록을 읽지 못하면 고정 역할의 시작을 거부하고 호스트의 결과를 넘기지 않는다", async ($, on) => {

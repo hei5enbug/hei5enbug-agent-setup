@@ -121,8 +121,8 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
 - 호출 단위 모델은 정의보다 우선하므로 플러그인 에이전트를 호출하거나 재개할 때 넘기지 않는다. 정의에는 공유 모델
   라우팅이 정리한 모델과 사고 강도가 고정되어 있다.
 - 아래 항목은 플러그인 에이전트가 실행될 때마다 적용한다. 실행기의 대체 경로, `worker`와 Sonnet worker, designer가 해당한다.
-- 세션 컨텍스트에 `hei5enbug-agent-setup mod: role pinning active` 줄이 있으면 등록된 플러그인 mod의
-  `prompt.context` 훅이 역할 고정 활성 상태를 확인한 것이다. mod는 서브에이전트 요청마다 레지스트리와 설치된 플러그인이 선언한
+- 세션 컨텍스트에 `hei5enbug-agent-setup mod: role pinning active` 줄이 있으면 대화마다 첫 프롬프트에 이 줄을 붙이는
+  등록된 플러그인 mod의 `prompt.submit` 훅이 역할 고정 활성 상태를 확인한 것이다. mod는 서브에이전트 요청마다 레지스트리와 설치된 플러그인이 선언한
   `model-roles.json`에서 각 역할의 모델과 사고 강도를 고정한다. 다른 모델이 응답했거나 모델 증거가 없는 실행은 실패로 처리되어
   그 뒤의 턴이 거절되고, mod는 다른 모델로 응답한 서브에이전트의 도구 호출을 막는다. 실패한 실행의 결과는 경고로 바뀌고, 그 역할의
   다음 시작은 한 번 거부되며 거부 이유에 역할 실행기의 대체 명령이 적힌다. 그 뒤의 시작은 다시 기본 고정을 쓴다. Agent 호출이 오류를 반환했거나 마지막 턴이 오류로 끝난 실행도 같은

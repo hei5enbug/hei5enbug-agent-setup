@@ -1,3 +1,5 @@
+import { responseLanguage } from "./language.js";
+
 const RESULT_TOOLS = /^(Bash|Read|Grep|mcp__.+)$/;
 const WRITE_TOOLS = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
 const SCAN_LIMIT = 4 * 1024 * 1024;
@@ -6,10 +8,18 @@ const BINARY_TYPE = /^(?:(?:image|audio|video)(?:\/|$)|application\/(?:pdf|octet
 const BASE64_BLOB = /^[A-Za-z0-9+/=\r\n]{64,}$/;
 const PLACEHOLDER_MARK = "[REDACTED:";
 const ISSUED_MARKER = /\[REDACTED:[^\]\s:]+:([0-9a-f]{6})\]/g;
-const DENY_REASON =
-  "This text contains a [REDACTED:...] placeholder, which marks a secret that was masked when it was read. Writing it would replace the real value. Edit around the masked span without rewriting it.";
-const CONTEXT_DENY_REASON =
-  "The result is withheld because text a hook attached to it holds a secret that cannot be masked. Run the call again after removing that source, or read the value another way.";
+const DENY_REASON = {
+  English:
+    "Blocked: this text contains a [REDACTED:...] marker for a masked secret. Writing it would save the marker, not the secret. Leave the masked span out of what you write.",
+  Korean:
+    "차단됨: 이 텍스트에 가린 비밀 값의 [REDACTED:...] 표시가 있습니다. 그대로 쓰면 실제 값 대신 표시가 저장됩니다. 가린 부분은 쓰는 내용에서 빼세요.",
+};
+const CONTEXT_DENY_REASON = {
+  English:
+    "The result is withheld because text a hook attached to it holds a secret that cannot be masked. Run the call again after removing that source, or read the value another way.",
+  Korean:
+    "훅이 결과에 붙인 텍스트에 가릴 수 없는 비밀 값이 있어 결과를 보류했습니다. 그 출처를 없앤 뒤 호출을 다시 실행하거나 다른 방법으로 값을 읽으세요.",
+};
 const ISSUED = { plugin: "hei5enbug-agent-setup", key: "redactIds" };
 let compiled;
 
@@ -147,7 +157,7 @@ export function maskedAnswer(answer, patterns, issuer = null) {
   const budget = { left: SCAN_LIMIT };
   const failed = answer.isError === true;
   const context = Array.isArray(answer.context) ? answer.context.reduce((total, entry) => total + maskText(entry, patterns, budget).count, 0) : 0;
-  if (context > 0) return { answer: { deny: CONTEXT_DENY_REASON }, count: context, withheld: true };
+  if (context > 0) return { answer: { deny: CONTEXT_DENY_REASON.English }, count: context, withheld: true };
   const text = failed ? maskText(answer.text, patterns, budget, issuer) : { text: undefined, count: 0 };
   const result = maskValue(answer.result, patterns, budget, issuer);
   const derived = failed ? 0 : maskText(answer.text, patterns, budget).count;
@@ -207,14 +217,15 @@ export function resetSecretPatterns() {
 export function registerSecretRedaction(on) {
   on("tool.call", { tool: WRITE_TOOLS }, async ($, e, next) => {
     if (markerIds(e).length === 0) return next(e);
-    return carriesIssuedPlaceholder(e, await knownIds($)) ? { deny: DENY_REASON } : next(e);
+    return carriesIssuedPlaceholder(e, await knownIds($)) ? { deny: DENY_REASON[await responseLanguage($)] } : next(e);
   }).catch(($, e, next) => next(e));
 
   on("tool.call", { tool: RESULT_TOOLS }, async ($, e, next) => {
     const answer = await next(e);
     try {
       const issuer = createIssuer(await knownIds($));
-      const { answer: masked, count, withheld } = maskedAnswer(answer, await patternsOf($), issuer);
+      const { answer: result, count, withheld } = maskedAnswer(answer, await patternsOf($), issuer);
+      const masked = withheld ? { deny: CONTEXT_DENY_REASON[await responseLanguage($)] } : result;
       if (Object.keys(issuer.fresh).length > 0) {
         try {
           await recordIds($, issuer.fresh);
