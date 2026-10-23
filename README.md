@@ -153,9 +153,10 @@ managed settings or a Team or Enterprise login, skips those hooks in every mod a
 
 The mod also draws two views; neither adds anything to the model's context. With `risk_highlight` on, each tool call
 row in the transcript gets a colored label from the approval guard's own decision for that call: red for an
-irreversible or every-time call and yellow for a write. Before the permission prompt, a red call also shows what it
-would change when that can be read safely within a few seconds, such as the files and lines `git reset --hard` would
-discard, the files `git clean` would delete, or the resources `kubectl delete` would remove. The decision stays in the
+irreversible or every-time call and yellow for a write. When it can be read safely within a few seconds, a red call's
+label also shows what the call would change, such as the files and lines `git reset --hard` would discard, the files
+`git clean` would delete, or the resources `kubectl delete` would remove. That preview appears only on the expanded
+tool row (Ctrl+O); the collapsed row in the normal transcript shows the label alone. The decision stays in the
 permission prompt. With `work_board` on, a one-line summary above the prompt shows context use, the prompt-cache hit
 rate, the Claude 5-hour and weekly use, and the Codex weekly use, with a limit colored when it would run out before it
 resets, plus the running subagents and edit conflicts when there are any. `/work-board` opens a pane, 40 columns wide
