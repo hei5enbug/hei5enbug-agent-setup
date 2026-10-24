@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>diagram render plan</title>
+<style>
+  .diagram { width: 900px; height: 700px; background: #fff; }
+</style>
+</head>
+<body>
+<div id="notification-flow" class="diagram"></div>
+<script src="https://cdn.jsdelivr.net/npm/pele@latest/dist/pele.global.js"></script>
+<script>
+  const source = "flowchart TD\n  A[요청 수신] --> B{인증 확인}";
+  document.getElementById("notification-flow").innerHTML = pele.render(source).svg;
+</script>
+</body>
+</html>

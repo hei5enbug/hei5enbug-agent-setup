@@ -9,7 +9,8 @@ compatibility: >-
   Needs a readable source and a Confluence write path. Source extraction can use connected services,
   local converters, document parsers, PDF text extraction, or OCR. Without a required capability,
   produce the normalized content, body, and attachment plan that the user can publish manually.
-  Diagram rendering needs a headless browser. Image measurement uses the Python standard library.
+  Diagram rendering needs a headless browser, and Mermaid source renders through Pele at an exact version.
+  Image measurement uses the Python standard library.
 ---
 
 # Document to Confluence
@@ -73,7 +74,7 @@ source content to another service without user authorization.
 | DOCX extraction | Structure-aware document converter or parser | Export through an available office application, then inspect the result. |
 | PDF extraction | Text and layout extractor; OCR for image-only pages | Transcribe uncertain regions and mark them for user verification. |
 | HTML extraction | DOM parser without executing untrusted scripts | Use visible static content and report content that requires rendering. |
-| Diagram rendering | `scripts/render_diagrams.mjs` | Keep the source artifact and report that rendering remains. |
+| Diagram rendering | `scripts/render_diagrams.mjs`; Mermaid source through Pele per `references/diagrams.md` | Keep the source artifact and report that rendering remains. |
 | Image measurement | `scripts/image_size.py` | Ask for verified pixel dimensions. |
 | Body validation | `scripts/validate_body.py` | Apply the checklist in `references/confluence-body.md`. |
 | Markdown text parity | `scripts/text_parity.py` for its supported subset | Compare source and normalized blocks manually. |

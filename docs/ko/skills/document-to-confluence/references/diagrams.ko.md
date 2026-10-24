@@ -19,15 +19,66 @@
 
 ## 이미지 렌더링
 
-두 방식 모두 첨부 이미지로 끝난다.
+세 방식 모두 첨부 이미지로 끝난다.
 
-**다이어그램 언어 렌더러.** 다이어그램 원본이 이미 있고 기본 모양으로 충분할 때 가장 빠르다.
+**Mermaid 원본: Pele.** 다이어그램이 Mermaid 원본으로 있거나 문서용 새 다이어그램을 Mermaid로 작성하고,
+Chromium 기반 브라우저를 쓸 수 있을 때의 기본값이다. 아래 "Pele로 Mermaid 렌더링"을 본다.
+
+**다른 다이어그램 언어.** 그 언어의 렌더러를 쓸 수 있고 기본 모양으로 충분하면 사용한다.
 
 **직접 만든 HTML·CSS.** `assets/diagram-template.html`에서 시작한다. 작성은 느리지만 간격, 레이블 위치와
 색상을 제어하고 문서의 모든 다이어그램을 일관되게 만들 수 있다. 기본 렌더링이 답답하거나 레이블이 겹치거나
 여러 다이어그램이 한 묶음처럼 보여야 할 때 사용한다.
 
-두 방식 모두 `scripts/render_diagrams.mjs`로 결과를 캡처한다.
+어느 방식이든 `scripts/render_diagrams.mjs`로 결과를 캡처한다.
+
+### Pele로 Mermaid 렌더링
+
+Pele는 `render_diagrams.mjs`가 캡처하는 페이지 안에서 Mermaid 원본을 SVG로 렌더링한다.
+
+- **정확한 버전.** 사용자가 다른 정확한 버전을 지정하지 않으면 이 스킬에서 검증한 `pele@1.8.0`을 쓴다.
+  `pele@1`이나 `^1.8.0` 같은 버전 범위, `latest` 같은 dist-tag, 버전이 없는 CDN 경로로 로드하는 계획은
+  거부하고 정확한 버전으로 고정한다. 스테이징 디렉터리에 `npm install --save-exact pele@1.8.0`으로 설치해
+  `node_modules/pele/dist/pele.global.js`를 로드하거나
+  `https://cdn.jsdelivr.net/npm/pele@1.8.0/dist/pele.global.js`를 쓴다. 사용한 버전을 보고한다.
+- **브라우저 API.** 서버 측 `render()`가 아니라 `pele.mount(element, source)`로 렌더링해 페이지가 로드한
+  글꼴로 텍스트 너비를 측정하게 한다. `--pele-font`에 문서 언어를 포함하는 글꼴 목록을 지정한다.
+- **원본 유지.** Mermaid 원본을 이미지 옆에 둔다. 원본 문서에 두거나, 페이지가 이미지만 보여 주면
+  첨부 파일로 둔다.
+- **대체 경로.** Pele가 원본을 파싱하지 못하거나 이미지가 "결과 확인"을 통과하지 못하면 직접 만든
+  HTML·CSS를 쓰거나 다이어그램을 미해결로 보고한다. 보고서에 실패 원인을 밝힌다.
+- **브라우저 없음.** 원본을 그대로 두고 렌더링이 남았다고 알린다.
+
+여백 없는 이미지를 만든 페이지 패턴:
+
+```html
+<style>
+  :root { --pele-font: "Apple SD Gothic Neo", "Noto Sans CJK KR", "Malgun Gothic", sans-serif; }
+  .diagram { display: inline-block; padding: 16px; background: #fff; }
+  .diagram svg { display: block; }
+</style>
+<div><div id="request-routing" class="diagram"></div></div>
+<script src="node_modules/pele/dist/pele.global.js"></script>
+<script>
+  const sources = { "request-routing": "flowchart LR\n  Client --> Gateway" };
+  for (const el of document.querySelectorAll(".diagram")) {
+    const mounted = pele.mount(el, sources[el.id]);
+    if (mounted.error) el.setAttribute("data-failed", mounted.error.message);
+  }
+</script>
+```
+
+`--selector ".diagram:not([data-failed])"`로 캡처한다.
+
+- 캡처 요소는 `inline-block`이므로 너비가 SVG와 패딩으로 정해진다. `width: 900px` 같은 고정 너비는 SVG
+  오른쪽에 빈 공간을 남겼다. `svg { display: block }`은 인라인 SVG 아래의 몇 픽셀짜리 줄 간격을 없앤다.
+- 크기를 확인한다. 이미지 너비는 (SVG 너비 + 2 × 패딩) × 배율과 같아야 한다. SVG 너비는 `width` 속성에서
+  읽고 이미지는 `scripts/image_size.py`로 측정한다.
+- 캡처 viewport보다 넓은 다이어그램은 페이지가 축소하며 텍스트도 작아진다. SVG의 렌더링 너비가 `width`
+  속성보다 작으면 방향을 바꾸거나 다이어그램을 나눈다.
+- Pele가 파싱하지 못하는 원본은 예외를 던지지 않는다. `mount()`는 요소를 붉은 메시지 텍스트로 채우고
+  `mounted.error`(`code`, `line`, `message`)를 설정하며, 캡처는 성공해 그 텍스트만 담은 이미지를 만든다.
+  캡처가 아니라 `mounted.error`를 확인하고 그런 이미지를 첨부하지 않는다.
 
 ### 이름과 브라우저 플래그
 
@@ -49,7 +100,7 @@
 | 글꼴 목록 | 문서 언어의 글리프를 포함하는 글꼴을 고른다. 빠진 글리프는 경고 없이 빈 상자나 대체 모양이 된다. |
 | 기기 배율 | 페이지가 이미지를 줄여도 텍스트가 선명하도록 1보다 크게 캡처한다. 2나 3이 적절하다. |
 | 요소 캡처 | 주변 여백이 없도록 viewport가 아니라 다이어그램 요소를 캡처한다. |
-| 명시적 요소 크기 | 캡처 컨테이너에 확정된 너비와 높이를 준다. 콘텐츠 기준 크기는 예측하지 못하게 줄거나 늘 수 있다. |
+| 명시적 요소 크기 | 직접 만든 다이어그램에는 확정된 너비와 높이를 준다. 콘텐츠 기준 크기는 예측하지 못하게 줄거나 늘 수 있다. Pele 다이어그램은 예외로, 고정 너비는 빈 여백을 더하므로 "Pele로 Mermaid 렌더링"에 설명한 대로 SVG 기준으로 요소 크기를 정한다. |
 
 ## 결과 확인
 

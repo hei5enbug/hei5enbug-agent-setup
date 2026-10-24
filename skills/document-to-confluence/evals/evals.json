@@ -3,8 +3,8 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/markdown-case/repository/docs/architecture.md` as the complete Markdown source and the listed neighboring files as its local repository. Prepare the normalized block inventory, a proposed body, and an asset/link plan. If no suitable local Mermaid renderer is available, report that limitation and leave the diagrams unresolved. Do not claim that anything was uploaded, saved, or read back from Confluence.",
-      "expected_output": "The run selects the Markdown adapter, captures the local source revision, and normalizes the actual headings, paragraphs, comparison table, links, two images, and both Mermaid blocks in order. It resolves the local relative link targets for planning and marks local image links for published destinations without exposing repository paths. It validates only the Markdown text subset supported by the parity script and reports any unsupported constructs. It renders and inspects both diagrams only if a suitable local renderer is available; otherwise it leaves them unresolved. The result stays a simulation, with upload, save, page-version check, and stored-page readback pending.",
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/markdown-case/repository/docs/architecture.md` as the complete Markdown source and the listed neighboring files as its local repository. A Chromium-based browser, `puppeteer-core`, and network access to the npm registry are available. Prepare the normalized block inventory, a proposed body, and an asset/link plan, and render both Mermaid blocks. If no Chromium-based browser is available, report that limitation and leave the diagrams unresolved. Do not claim that anything was uploaded, saved, or read back from Confluence.",
+      "expected_output": "The run selects the Markdown adapter, captures the local source revision, and normalizes the actual headings, paragraphs, comparison table, links, two images, and both Mermaid blocks in order. It resolves the local relative link targets for planning and marks local image links for published destinations without exposing repository paths. It validates only the Markdown text subset supported by the parity script and reports any unsupported constructs. It renders both Mermaid blocks through Pele at an exact version with `mount()`, captures them with `scripts/render_diagrams.mjs`, inspects both images, keeps the Mermaid source next to the images, and reports the Pele version. Without a Chromium-based browser it would leave the diagrams unresolved and report that rendering remains. The result stays a simulation, with upload, save, page-version check, and stored-page readback pending.",
       "files": [
         "evals/files/markdown-case/repository/docs/architecture.md",
         "evals/files/markdown-case/repository/docs/release-checklist.md",
@@ -15,7 +15,9 @@
       "expectations": [
         "The actual comparison table, repository-relative links, local images, and both Mermaid blocks appear in the normalized inventory.",
         "The run uses the Markdown parity checker only within its declared supported subset and does not claim full parity from unsupported structures.",
-        "A missing local Mermaid renderer is reported as a limitation; no live page write or stored readback is claimed."
+        "Both Mermaid blocks are rendered through Pele at an exact version, such as `pele@1.8.0`, with no version range or dist-tag, and the report names the version used.",
+        "Both rendered images are opened and inspected, and the Mermaid source stays in the source document or as an attachment next to the images.",
+        "No live page write or stored readback is claimed."
       ]
     },
     {
@@ -341,6 +343,24 @@
         "The version message names the kept web edit.",
         "The baseline kept for the next republish contains \"내보낸 파일은 재무팀이 아침에 확인한다.\", so the next comparison finds the deletion again.",
         "No save or readback is claimed."
+      ]
+    },
+    {
+      "id": 24,
+      "prompt": "SIMULATION ONLY — do not access or modify a hosted service. Use `evals/files/pele-case/source.md` as the Markdown source and `evals/files/pele-case/render-plan.html` as the proposed diagram render plan. A Chromium-based browser, `puppeteer-core`, and network access to the npm registry are available. Review the plan, fix it, render both Mermaid blocks, and report. Do not claim that anything was uploaded, saved, or read back from Confluence.",
+      "expected_output": "The run rejects the plan's `pele@latest` CDN path and pins an exact version such as `pele@1.8.0`, through a staging-directory install with `--save-exact` or a CDN URL naming that version, and would reject `pele@1` the same way. It replaces `pele.render()` with `pele.mount()` and sets a font stack that covers Korean through `--pele-font`. It removes the fixed 900px by 700px container and sizes the captured element from the SVG, so the image width equals the SVG width plus twice the padding, times the scale. The first block renders with Korean subgraph titles and labels and no clipped or missing glyphs, and the run inspects the image. The second block fails to parse; the run detects it through `mounted.error` rather than an exception, does not attach the resulting error image, falls back to hand-built HTML and CSS or reports the diagram as unresolved, and names the parse failure with its line. It reports the Pele version, keeps the Mermaid source next to the image, and claims no upload, save, or readback.",
+      "files": [
+        "evals/files/pele-case/source.md",
+        "evals/files/pele-case/render-plan.html"
+      ],
+      "expectations": [
+        "The plan's `pele@latest` is rejected, and the corrected plan loads an exact version with no range, dist-tag, or unversioned CDN path.",
+        "Rendering uses `mount()`, not `render()`, with a font stack that covers Korean.",
+        "The captured element has no fixed width or height container; the image has no empty margin beyond the padding, and its width matches the SVG width plus padding times the scale.",
+        "The Korean image is opened and inspected, and the report states that its glyphs are not clipped or missing, or names the defect found.",
+        "The unparseable block is detected without an exception, its error image is not attached, the run falls back to an existing route or reports the diagram as unresolved, and the report names the parse failure.",
+        "The report names the Pele version used, and the Mermaid source stays next to the images.",
+        "No live page write or stored readback is claimed."
       ]
     }
   ]

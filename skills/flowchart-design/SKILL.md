@@ -52,6 +52,24 @@ Select the strongest available path without requiring a named product:
 4. **HTML/CSS** when browser rendering is available and the diagram benefits from measured text/layout.
 5. **Text specification** when no rendering capability exists; return the semantic graph, layout contract, and renderer-ready source rather than pretending visual verification occurred.
 
+Diagram DSL route for Mermaid source, when a Chromium-based browser can capture an image:
+
+- Render with Pele, the default Mermaid renderer, inside the HTML page that the browser captures.
+- Load an exact version only: `pele@1.8.0`, verified for this skill, unless the user names another exact version.
+  Install it with `npm install --save-exact pele@1.8.0`, or use a CDN URL that names the exact version. Reject a range
+  such as `pele@1`, a dist-tag such as `latest`, or an unversioned CDN path, and pin the version instead.
+  Report the version used.
+- Call `pele.mount(element, source)` in the page, not the server-side `render()`, so text is measured with the
+  page's loaded fonts. Set `--pele-font` to a font stack that covers the diagram language.
+- Size the captured element from the SVG: `display: inline-block` with padding, and `svg { display: block }`.
+  A fixed-width container leaves empty margin beside the SVG. Check that the image width equals
+  (SVG width + 2 × padding) × scale.
+- `mount()` does not throw on a parse failure. It shows the message as text and sets `mounted.error`, so check that
+  property and never keep the resulting image.
+- Keep the Mermaid source next to the image.
+- When Pele cannot parse the source or the image fails inspection, fall back to another route in this list or
+  return the source and report the failure. Without a browser, return the source and report that rendering remains.
+
 Parallelism, image inspection, and browser automation improve verification but are optional. Missing capabilities must be reported accurately and must not change the semantic graph.
 
 ### 0.2 Build the Semantic Graph First
