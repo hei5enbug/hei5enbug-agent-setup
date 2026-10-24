@@ -1,0 +1,5 @@
+interface:
+  display_name: "Mistake Enforcer"
+  short_description: "Turn repeated agent mistakes into proven checks"
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,29 @@
+{
+  "skill_name": "mistake-enforcer",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Run `sh evals/files/make_demo_repo.sh /tmp/work/demo-repo` from the skill folder, then turn the mistakes that keep repeating in /tmp/work/demo-repo into enforced checks. My corrections from recent sessions are in /tmp/work/demo-notes/corrections.md.",
+      "expected_output": "Two classes: the channel list and routing table kept in sync by hand, proposed as a single source or a test that was proven to fail on an exported past commit, and commit subjects without a reason, proposed as an instruction with the reason no check works. The YAML tab correction stays a watch item. Nothing in the repository changes before the user accepts.",
+      "files": ["evals/files/make_demo_repo.sh"],
+      "expectations": [
+        "The channel and route class cites both pairs of commits, the sms and the push additions, as its evidence.",
+        "The channel and route proposal is a structural single source or a test whose error names the missing route, and the report shows it failing on the tree of the `feat: add sms channel` or `feat: add push channel` commit exported with `git archive`, and passing on the current tree.",
+        "The commit-subject class cites both sessions and is proposed as an instruction, with a stated reason why no structure, schema, or test can decide it.",
+        "The YAML tab correction appears only as a watch item with no proposal.",
+        "The repository's files, index, branches, and worktrees are unchanged, and the report ends by asking which proposals to apply."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Run `sh evals/files/make_demo_repo.sh /tmp/work/demo-repo --single` from the skill folder, then turn the mistakes that keep repeating in /tmp/work/demo-repo into enforced checks. My corrections from recent sessions are in /tmp/work/demo-notes/corrections.md.",
+      "expected_output": "No mistake happened twice, so the report proposes no check and no instruction, lists the single missing route and the YAML tab correction as watch items, and changes nothing.",
+      "files": ["evals/files/make_demo_repo.sh"],
+      "expectations": [
+        "The report proposes no check, structure change, or instruction.",
+        "The missing sms route and the YAML tab correction are listed as single-instance watch items.",
+        "The repository's files, index, branches, and worktrees are unchanged."
+      ]
+    }
+  ]
+}

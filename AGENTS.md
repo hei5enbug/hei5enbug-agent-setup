@@ -37,6 +37,9 @@
   it and preserve the existing plugin contracts.
 - Keep shared behavior in one canonical source and isolate only actual host differences. A rule the session
   instructions already state belongs there alone; reference it instead of restating it.
+- [Rule enforcement](docs/rule-enforcement.md) pairs each written rule with the check that enforces it. When a user
+  correction repeats a written rule that no check enforces, raise it a level in the same change as that file
+  describes and update its row. Remove a written rule once its check makes the mistake impossible.
 - Before creating an issue, search the existing ones. Write issues, pull requests, comments, and commit messages in
   English and follow the existing issue conventions. "Public boundary" at the end of this file governs what any file,
   commit, or message may contain.
