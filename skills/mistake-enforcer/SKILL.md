@@ -49,7 +49,7 @@ directory), the period (default the last 30 days), and the sources. Gather from 
 A class is one wrong action with one correct alternative, such as "edits a generated file instead of its
 source". Merge instances that describe the same wrong action in different words. A class counts once it has at
 least two independent instances: two sessions, commits, or review comments. Keep a single instance as a watch
-item and do not propose a fix for it.
+item that records only the instance and its evidence, with no proposed or sketched fix.
 
 For each class, record every instance with its evidence (commit hash, comment link, or quoted correction with its
 session), the written rule it breaks if one exists, and whether a check already enforces that rule.
@@ -62,6 +62,10 @@ Choose the highest level that works, in this order:
 2. Type or schema: make the wrong state unrepresentable.
 3. Lint or test: add a check whose error message names the correct alternative.
 4. Instruction: only for a judgment call that no check can decide.
+
+A lint or test works only when it decides the rule itself for any instance, including one worded unlike the
+observed ones. A check that matches the observed instances' wording, such as a list of the words they used, is a
+proxy: keep that class at the instruction level and do not propose the proxy.
 
 For every class, state the chosen level and, for each higher level, the concrete reason it does not work. An
 instruction proposal names the judgment it leaves to the agent. When a check makes a written rule's mistake

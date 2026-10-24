@@ -12,8 +12,9 @@ decision. Treat an RFC as a design document unless the user explicitly requests 
 
 Do not turn a design document into an implementation plan. Include execution slices or work order only when
 the user requests them or when order is necessary to establish feasibility, migration safety, or
-compatibility. Do not add unrequested implementation detail, speculative extension points, or unrelated
-refactors.
+compatibility. For a necessary order, state only the ordering constraint and its reason, such as which side
+deploys first, not a step list of the work. Do not add unrequested implementation detail, speculative extension
+points, or unrelated refactors.
 
 When implementation plan and design document interpretations both remain plausible and the choice would
 materially change content, structure, scope, or acceptance criteria, explain the alternatives and ask the
@@ -101,7 +102,8 @@ section rather than filling it with placeholders.
 - Every section contributes to the target design or a decision needed to approve it.
 - Current-state discussion is limited to evidence that motivates a target decision.
 - Contracts, constraints, alternatives, and material trade-offs are complete and precise.
-- Execution order appears only when requested or needed to establish feasibility, safety, or compatibility.
+- Execution order appears only when requested or needed to establish feasibility, safety, or compatibility,
+  and a necessary order appears only as its constraint and reason.
 - No speculative extension, unrelated refactor, or unrequested low-level detail remains.
 - Every structural red flag is fixed or recorded with its reason, and a hard-to-reverse boundary has two
   structurally different candidates.
