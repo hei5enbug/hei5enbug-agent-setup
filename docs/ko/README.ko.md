@@ -93,6 +93,7 @@ hei5enbug-agent-setup/
     ├── flowchart-design/
     ├── docs-rewrite/
     ├── document-to-confluence/
+    ├── local-data-cleanup/
     ├── mistake-enforcer/
     ├── orca-plugin-refresh/
     ├── session-retro/
@@ -1053,6 +1054,7 @@ Orca CLI가 필요한 테스트는 Orca가 설치되어 있지 않으면 건너�
 | [`flowchart-design`](../../skills/flowchart-design/SKILL.md) | SVG, HTML/CSS, Figma, draw.io 등 어떤 도구로 만들어도 하나의 디자인 시스템처럼 보이게 하는 플로우차트 공통 디자인 기준입니다. [한국어 안내](skills/flowchart-design/SKILL.ko.md) |
 | [`docs-rewrite`](../../skills/docs-rewrite/SKILL.md) | 주장, 수치, 확신도를 그대로 둔 채 글이 자연스럽게 읽히도록 고쳐 쓰고, AI가 쓴 듯한 한국어 문체를 함께 고칩니다. [한국어 안내](skills/docs-rewrite/SKILL.ko.md) |
 | [`document-to-confluence`](../../skills/document-to-confluence/SKILL.md) | Markdown, HTML, PDF, DOCX, Google Docs 문서를 Confluence 페이지로 변환하고, 문서 구조와 첨부 파일을 보존하며, 이후 원본 변경도 웹 편집과 인라인 댓글을 잃지 않고 페이지에 반영합니다. [한국어 안내](skills/document-to-confluence/SKILL.ko.md) |
+| [`local-data-cleanup`](../../skills/local-data-cleanup/SKILL.md) | Claude Code와 Codex의 로컬 데이터를 읽기 전용으로 조사하고, 후보마다 고정된 안전 규칙과 다른 호스트의 독립 판정을 확인해 크기순으로 보고하며, 사용자가 고른 항목만 삭제합니다. [한국어 안내](skills/local-data-cleanup/SKILL.ko.md) |
 | [`mistake-enforcer`](../../skills/mistake-enforcer/SKILL.md) | 커밋, 되돌린 커밋, 리뷰 댓글, 사용자 교정에서 에이전트가 저장소에서 되풀이하는 실수를 유형별로 묶고, 효과가 있는 가장 높은 집행 수준을 고르며, 제안한 검사가 실제 과거 사례에서 실패하는지 증명합니다. 요청할 때만 실행됩니다. [한국어 안내](skills/mistake-enforcer/SKILL.ko.md) |
 | [`session-retro`](../../skills/session-retro/SKILL.md) | 한 저장소의 하루 Claude Code·Codex 세션을 읽기 전용 scout로 검토하고, 정정·실패·반복 작업을 플러그인별 근거 있는 스킬 개선안으로 바꾸며, 남은 결정을 묻고 요청하면 계획안을 씁니다. [한국어 안내](skills/session-retro/SKILL.ko.md) |
 | [`skill-builder`](../../skills/skill-builder/SKILL.md) | 초안 작성 → 테스트 → 검토 → 개선 순환을 통해 에이전트 스킬을 만들고, 검증하고, 패키징합니다. [한국어 안내](skills/skill-builder/SKILL.ko.md) |

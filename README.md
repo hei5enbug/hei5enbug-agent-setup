@@ -90,6 +90,7 @@ hei5enbug-agent-setup/
     ├── flowchart-design/
     ├── docs-rewrite/
     ├── document-to-confluence/
+    ├── local-data-cleanup/
     ├── mistake-enforcer/
     ├── orca-plugin-refresh/
     ├── session-retro/
@@ -1127,6 +1128,7 @@ execution-path isolation; semantic equivalence still requires human or model rev
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | A shared design standard so flow charts built in SVG, HTML/CSS, Figma, or draw.io all read as one design system. [Korean guide](docs/ko/skills/flowchart-design/SKILL.ko.md). |
 | [`docs-rewrite`](skills/docs-rewrite/SKILL.md) | Rewrites existing text so it reads naturally while every claim, number, and level of certainty stays identical, and repairs AI-sounding Korean. [Korean guide](docs/ko/skills/docs-rewrite/SKILL.ko.md). |
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Converts Markdown, HTML, PDF, DOCX, and Google Docs content into Confluence pages, preserves document structure and assets, and keeps pages synchronized with source revisions without losing web edits or inline comments. [Korean guide](docs/ko/skills/document-to-confluence/SKILL.ko.md). |
+| [`local-data-cleanup`](skills/local-data-cleanup/SKILL.md) | Surveys Claude Code and Codex local data read-only, checks every candidate against fixed safety rules and an independent verdict from the other host, reports it by size, and deletes only the items you select. [Korean guide](docs/ko/skills/local-data-cleanup/SKILL.ko.md). |
 | [`mistake-enforcer`](skills/mistake-enforcer/SKILL.md) | Groups mistakes that agents repeat in a repository into classes from commits, reverts, review comments, and corrections, picks the highest enforcement level that works, and proves each proposed check fails on a real past instance. Runs only when you ask for it. [Korean guide](docs/ko/skills/mistake-enforcer/SKILL.ko.md). |
 | [`session-retro`](skills/session-retro/SKILL.md) | Reviews a day's Claude Code and Codex sessions of a repository with read-only scouts, turns corrections, failures, and repeated work into evidence-backed skill improvements per plugin, asks the open decisions, and writes plans on request. [Korean guide](docs/ko/skills/session-retro/SKILL.ko.md). |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | Creates, tests, and packages agent skills through a draft → test → review → improve loop. [Korean guide](docs/ko/skills/skill-builder/SKILL.ko.md). |

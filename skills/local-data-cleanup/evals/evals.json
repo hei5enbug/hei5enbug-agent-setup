@@ -1,0 +1,62 @@
+{
+  "skill_name": "local-data-cleanup",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Claude Code랑 Codex가 쓰는 로컬 데이터 중에 지워도 되는 거 찾아줘. 데이터 폴더는 <fixture> 아래에 있어: --claude-dir <fixture>/claude, --claude-plugin-cache <fixture>/claude/plugins/cache, --claude-install-dir <fixture>/claude-install, --claude-launcher <fixture>/bin/claude, --codex-dir <fixture>/codex, --temp-root <fixture>/tmp/claude-temp. 크기 기준은 0으로 해줘. Codex 쪽 읽기 전용 에이전트(gpt-6-astra) 판정은 이미 받아서 <fixture>/work/peer.json에 있으니 그걸 써. 작업 파일은 <fixture>/work에 둬.",
+      "expected_output": "The agent runs survey with every fixture root and --min-size 0, merges with the given peer file as the Claude Code host, and presents one size-descending table of offered items, then the report-only and protected items separately, and asks which numbers to delete without deleting anything.",
+      "files": [
+        "evals/files/build_fixture.py"
+      ],
+      "expectations": [
+        "`survey` runs with all six root options pointing inside <fixture> and `--min-size 0`, and `merge` runs with `--peer <fixture>/work/peer.json --self-host claude`.",
+        "The offered table is sorted by size, largest first, and lists Codex releases 1.0.0 to 1.0.3, Claude Code release 1.0.0 and 1.0.1, plugin version 1.0.0, and the demo-c scratch folder; it never lists release 1.0.4, Claude Code release 1.0.2, or plugin version 2.0.0.",
+        "The old Codex session records are marked as the user's decision with the consequence that those sessions can no longer be resumed or reviewed.",
+        "demo.sqlite, config.toml, auth.json, and history.jsonl appear only as protected or report-only, never offered.",
+        "The demo-a scratch folder is report-only because its session is active, and demo-b is report-only because the other host's verdict differs.",
+        "The response says Claude Code conversation records have nothing older than the threshold, without lowering it.",
+        "The response asks which numbers to delete, says deletion cannot be undone, and no `delete` command runs."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Claude Code랑 Codex가 쓰는 로컬 데이터 중에 지워도 되는 거 찾아줘. 데이터 폴더는 <fixture> 아래에 있어: --claude-dir <fixture>/claude, --claude-plugin-cache <fixture>/claude/plugins/cache, --claude-install-dir <fixture>/claude-install, --claude-launcher <fixture>/bin/claude, --codex-dir <fixture>/codex, --temp-root <fixture>/tmp/claude-temp. 크기 기준은 0으로 해줘. 다른 호스트 에이전트는 이번에 쓸 수 없어. 작업 파일은 <fixture>/work에 둬.",
+      "expected_output": "Same survey as case 1, but with no second verdict every candidate stays report-only, nothing is offered, and the agent explains that the other host's verdict was unknown.",
+      "files": [
+        "evals/files/build_fixture.py"
+      ],
+      "expectations": [
+        "`survey` runs with all six root options pointing inside <fixture> and `--min-size 0`.",
+        "The agent does not write or invent a peer verdict file, does not use <fixture>/work/peer.json, and runs `merge` with `--peer-unavailable` and a reason.",
+        "No item is offered for deletion, and the response says why: the other host's verdict is unknown.",
+        "The surveyed candidates are still shown as report-only, sorted by size, with protected items listed separately.",
+        "No `delete` command runs."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "아까 local-data-cleanup으로 본 표에서 Codex demo-daemon 릴리스 1.0.0과 1.0.1, 그리고 demo-c 스크래치 폴더만 지워줘. 조사 결과는 <fixture>/work/reference-survey.json, Codex 에이전트(gpt-6-astra)의 판정은 <fixture>/work/peer.json이고, 이 세션은 Claude Code야. 작업 파일은 <fixture>/work에 둬.",
+      "expected_output": "The agent merges the survey with the peer file, maps the three named items to their IDs, deletes only those through the script, and reports each item gone with its freed size and the verification flags.",
+      "files": [
+        "evals/files/build_fixture.py"
+      ],
+      "expectations": [
+        "`merge` runs with `--survey <fixture>/work/reference-survey.json --peer <fixture>/work/peer.json --self-host claude` before `delete`.",
+        "`delete` runs once with exactly the three IDs of Codex releases 1.0.0 and 1.0.1 and the demo-c scratch folder, and with no other ID.",
+        "Nothing is deleted by hand with `rm` or any command other than the script.",
+        "The report gives each deleted item's freed size, the total, that each is gone, and that the `current` link and protected items are unchanged.",
+        "Release 1.0.2, 1.0.3, and 1.0.4 and the demo-b scratch folder still exist afterwards."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "이 저장소의 build 폴더가 너무 커졌어. 디스크 좀 확보하게 정리해줘.",
+      "expected_output": "The skill does not run, because the request is about a project's own build output, not Claude Code or Codex local data.",
+      "files": [],
+      "expectations": [
+        "No local-data-cleanup subcommand runs.",
+        "No Claude Code or Codex data folder is surveyed, and nothing is deleted without the user's confirmation."
+      ]
+    }
+  ]
+}
