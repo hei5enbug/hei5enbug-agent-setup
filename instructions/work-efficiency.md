@@ -23,7 +23,8 @@ remaining limits separately. Optional follow-ups and an unperformed optional ind
 an accepted implementation open; the existing independent-review approval contract still applies.
 
 Before a planned pause, a handoff, or an expected compaction of this work, or when continuing from a resume note,
-read [pause and resume](pause-and-resume.md).
+read [pause and resume](pause-and-resume.md). When the requested work is complete and this session created files
+outside tracked project content, read [session cleanup](session-cleanup.md) before the final report.
 
 ## Check evidence
 

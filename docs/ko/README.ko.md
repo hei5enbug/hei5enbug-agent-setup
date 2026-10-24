@@ -940,8 +940,9 @@ When hei5enbug-agent-setup is active, use subagents according to its situation-b
 반복 모델 평가 전에, [실패 및 유지보수 규칙](instructions/failure-and-maintenance.ko.md)은 플러그인 유지보수나 반복 실행
 실패 진단 전에 불러옵니다. 요청한 결과와 필수 검사가 완료 기준입니다. 검사 근거는 관련 입력이 바뀔 때까지 재사용하고,
 선택 조사나 수행하지 않은 선택 검토 때문에 수용된 작업을 계속 열어 두지 않습니다.
-작업 효율 규칙은 멈춤, 인계, 예상되는 압축에 쓰는 [재개 메모 규칙](instructions/pause-and-resume.ko.md)을 연결합니다.
-규모 있는 구현을 하지 않는 세션은 이 규칙을 불러오지 않으므로 재개 메모를 받지 않습니다.
+작업 효율 규칙은 멈춤, 인계, 예상되는 압축에 쓰는 [재개 메모 규칙](instructions/pause-and-resume.ko.md)과 끝난 세션이 만든
+파일에 대한 [정리 제안](instructions/session-cleanup.ko.md)을 연결합니다. 규모 있는 구현을 하지 않는 세션은 이 규칙을
+불러오지 않으므로 재개 메모도 정리 제안도 받지 않습니다.
 
 추가 모델 비교는 대표 사례 최대 3개, 전체 묶음 15분, 두 호스트를 합쳐 비교 실행 시작 최대 6회로 시작합니다.
 사전 확인 실행과 재시도도 이 예산에 포함하며, 재개해도 예산을 초기화하지 않습니다. 일반 구현, 단위 테스트,

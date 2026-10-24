@@ -1011,7 +1011,8 @@ See the official [Codex subagent contract](https://learn.chatgpt.com/docs/agent-
 repeated-failure diagnosis. Required results and checks define completion. Valid check evidence is reused until
 its relevant inputs change; optional research and an unperformed optional review do not keep accepted work open.
 The work-efficiency rules link the [resume-note rules](instructions/pause-and-resume.md) for a pause, handoff, or
-expected compaction. A session that does no substantial implementation never loads them, so it gets no note.
+expected compaction, and the [cleanup offer](instructions/session-cleanup.md) for files a finished session created.
+A session that does no substantial implementation never loads them, so it gets neither the note nor the offer.
 
 Additional model comparisons start with at most 3 representative cases, 15 minutes for the whole batch,
 and 6 top-level starts for paired trials across both hosts. Probes and retries share that budget, including
