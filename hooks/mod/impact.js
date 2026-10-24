@@ -13,10 +13,44 @@ const SQL_IDENTIFIERS = /"[^"]*"|\x60[^\x60]*\x60|\[[^\]]*\]/g;
 const KUBECTL_VALUES = new Set(["-n", "--namespace", "--context", "-l", "--selector", "--field-selector"]);
 const KUBECTL_FLAGS = new Set(["-A", "--all-namespaces"]);
 const KUBECTL_DROPPED = /^--(?:all|force|now|wait|ignore-not-found|cascade)(?:=\S*)?$|^--(?:grace-period|timeout)=\S+$/;
+const PHRASES = {
+  English: {
+    unchanged: "nothing to discard",
+    discards: (files, added, removed) => `discards ${count(files, "file")} (+${added}/-${removed})`,
+    removes: (paths, names) => `removes ${count(paths, "path")}: ${names}`,
+    unremoved: "nothing to remove",
+    undeleted: "nothing to delete",
+    deletes: (files, amount) => `deletes ${count(files, "file")} (${amount})`,
+    deletesMany: (amount) => `deletes ${FILE_CAP}+ files (${amount})`,
+    resources: (total, names) => `deletes ${total}: ${names}`,
+    unmatched: "matches nothing",
+    drops: (kind, names) => `drops ${kind} ${names}`,
+    truncates: (names) => `truncates ${names}`,
+    deletesFrom: (name, hasWhere) => `deletes from ${name}${hasWhere ? "" : " without WHERE"}`,
+  },
+  Korean: {
+    unchanged: "버릴 변경 없음",
+    discards: (files, added, removed) => `파일 ${files}개 변경 버림 (+${added}/-${removed})`,
+    removes: (paths, names) => `경로 ${paths}개 삭제: ${names}`,
+    unremoved: "지울 대상 없음",
+    undeleted: "지울 대상 없음",
+    deletes: (files, amount) => `파일 ${files}개 삭제 (${amount})`,
+    deletesMany: (amount) => `파일 ${FILE_CAP}개 이상 삭제 (${amount})`,
+    resources: (total, names) => `${total}개 삭제: ${names}`,
+    unmatched: "일치하는 리소스 없음",
+    drops: (kind, names) => `${kind} ${names} 삭제`,
+    truncates: (names) => `${names} 비움`,
+    deletesFrom: (name, hasWhere) => `${name} 행 삭제${hasWhere ? "" : " (WHERE 없음)"}`,
+  },
+};
 
 function count(value, noun) {
   const number = Number(value);
   return `${number} ${noun}${number === 1 ? "" : "s"}`;
+}
+
+function phrasesOf(language) {
+  return Object.hasOwn(PHRASES, language) ? PHRASES[language] : PHRASES.English;
 }
 
 function listed(names) {
@@ -79,13 +113,13 @@ async function numstat($, args, cwd) {
   return changes;
 }
 
-async function diffImpact($, { ref, paths, staged }, cwd) {
+async function diffImpact($, { ref, paths, staged }, cwd, say) {
   const args = [...(ref === undefined ? [] : [ref]), ...(paths.length > 0 ? ["--", ...paths] : [])];
   const [tree, index] = await Promise.all([numstat($, args, cwd), staged ? numstat($, ["--cached", ...args], cwd) : new Map()]);
   const changes = new Map([...index, ...tree]);
-  if (changes.size === 0) return "nothing to discard";
+  if (changes.size === 0) return say.unchanged;
   const [added, removed] = [...changes.values()].reduce(([a, r], [plus, minus]) => [a + plus, r + minus], [0, 0]);
-  return `discards ${count(changes.size, "file")} (+${added}/-${removed})`;
+  return say.discards(changes.size, added, removed);
 }
 
 function resetScope(rest) {
@@ -115,7 +149,7 @@ function restoreScope(rest) {
   return paths.length > 0 ? { ref, paths, staged: false } : undefined;
 }
 
-async function cleanImpact($, rest, cwd) {
+async function cleanImpact($, rest, cwd, say) {
   const flags = [];
   const paths = [];
   let force = 0;
@@ -137,10 +171,10 @@ async function cleanImpact($, rest, cwd) {
   const result = await run($, argv, cwd);
   if (result.exitCode !== 0) return undefined;
   const names = result.stdout.split("\n").flatMap((line) => /^Would remove (.+)$/.exec(line)?.slice(1) ?? []);
-  return names.length > 0 ? `removes ${count(names.length, "path")}: ${listed(names)}` : "nothing to remove";
+  return names.length > 0 ? say.removes(names.length, listed(names)) : say.unremoved;
 }
 
-async function gitImpact($, args, cwd) {
+async function gitImpact($, args, cwd, say) {
   let index = 0;
   let directory = cwd;
   while (args[index] === "-C" && index + 1 < args.length) {
@@ -148,12 +182,12 @@ async function gitImpact($, args, cwd) {
     index += 2;
   }
   const [verb, ...rest] = args.slice(index);
-  if (verb === "clean") return cleanImpact($, rest, directory);
+  if (verb === "clean") return cleanImpact($, rest, directory, say);
   const scope = verb === "reset" ? resetScope(rest) : verb === "checkout" ? checkoutScope(rest) : verb === "restore" ? restoreScope(rest) : undefined;
-  return scope === undefined ? undefined : diffImpact($, scope, directory);
+  return scope === undefined ? undefined : diffImpact($, scope, directory, say);
 }
 
-async function rmImpact($, args, cwd) {
+async function rmImpact($, args, cwd, say) {
   let recursive = false;
   let isPath = false;
   const paths = [];
@@ -170,7 +204,7 @@ async function rmImpact($, args, cwd) {
     const target = await expandHome($, path);
     if (await $.fs.exists(await resolved($, target, cwd))) existing.push(target);
   }
-  if (existing.length === 0) return "nothing to delete";
+  if (existing.length === 0) return say.undeleted;
   const [found, sized] = await Promise.all([
     run($, ["sh", "-c", `find "$@" -type f 2>/dev/null | head -n ${FILE_CAP + 1} | wc -l`, "sh", ...existing], cwd),
     run($, ["du", "-sk", ...existing], cwd),
@@ -180,10 +214,10 @@ async function rmImpact($, args, cwd) {
   if (sized.exitCode !== 0 || sized.stderr.trim() !== "" || sizes.length !== existing.length) return undefined;
   if (found.exitCode !== 0 || !Number.isFinite(files)) return undefined;
   const kb = sizes.reduce((sum, line) => sum + (Number.parseInt(line, 10) || 0), 0);
-  return `deletes ${files > FILE_CAP ? `${FILE_CAP}+ files` : count(files, "file")} (${size(kb)})`;
+  return files > FILE_CAP ? say.deletesMany(size(kb)) : say.deletes(files, size(kb));
 }
 
-async function kubectlImpact($, args, cwd) {
+async function kubectlImpact($, args, cwd, say) {
   const kept = [];
   const positional = [];
   for (let index = 0; index < args.length; index += 1) {
@@ -203,10 +237,10 @@ async function kubectlImpact($, args, cwd) {
   const result = await run($, ["kubectl", "get", ...targets, ...kept, "-o", "name"], cwd);
   if (result.exitCode !== 0) return undefined;
   const names = result.stdout.split("\n").map((line) => line.trim()).filter(Boolean);
-  return names.length > 0 ? `deletes ${names.length}: ${listed(names)}` : "matches nothing";
+  return names.length > 0 ? say.resources(names.length, listed(names)) : say.unmatched;
 }
 
-async function shellImpact($, command) {
+async function shellImpact($, command, say) {
   if (SHELL_UNSAFE.test(command)) return undefined;
   const segments = command.split(/&&|;/).map((segment) => words(segment.trim()));
   if (segments.some((segment) => segment === undefined || segment.length === 0)) return undefined;
@@ -216,31 +250,32 @@ async function shellImpact($, command) {
     if (segment[0] !== "cd" || segment.length !== 2 || segment[1] === "-") return undefined;
     cwd = await resolved($, segment[1], cwd);
   }
-  if (program === "git") return gitImpact($, args, cwd);
-  if (program === "rm") return rmImpact($, args, cwd);
-  if (program === "kubectl") return kubectlImpact($, args, cwd);
+  if (program === "git") return gitImpact($, args, cwd, say);
+  if (program === "rm") return rmImpact($, args, cwd, say);
+  if (program === "kubectl") return kubectlImpact($, args, cwd, say);
   return undefined;
 }
 
-export function sqlImpact(text) {
+export function sqlImpact(text, language = "English") {
+  const say = phrasesOf(language);
   const found = [];
   for (const statement of text.replace(SQL_NOISE, (match) => (match.startsWith("'") ? "''" : " ")).split(";")) {
     const drop = DROP.exec(statement);
     const truncate = TRUNCATE.exec(statement);
     const remove = DELETE.exec(statement);
-    if (drop !== null) found.push(`drops ${drop[1].toLowerCase().replace(/\s+/g, " ")} ${drop[2]}`);
-    else if (truncate !== null) found.push(`truncates ${truncate[1]}`);
+    if (drop !== null) found.push(say.drops(drop[1].toLowerCase().replace(/\s+/g, " "), drop[2]));
+    else if (truncate !== null) found.push(say.truncates(truncate[1]));
     else if (remove !== null) {
       const rest = statement.slice(remove.index + remove[0].length).replace(SQL_IDENTIFIERS, " ");
-      found.push(`deletes from ${remove[1]}${/\bwhere\b/i.test(rest) ? "" : " without WHERE"}`);
+      found.push(say.deletesFrom(remove[1], /\bwhere\b/i.test(rest)));
     }
   }
   return found.length > 0 ? found.join("; ") : undefined;
 }
 
-function bashSql(command) {
-  const found = (words(command) ?? []).map((word) => sqlImpact(word)).filter(Boolean);
-  return found.length > 0 ? found.join("; ") : sqlImpact(command);
+function bashSql(command, language) {
+  const found = (words(command) ?? []).map((word) => sqlImpact(word, language)).filter(Boolean);
+  return found.length > 0 ? found.join("; ") : sqlImpact(command, language);
 }
 
 function strings(value, depth = 0) {
@@ -249,12 +284,12 @@ function strings(value, depth = 0) {
   return Object.values(value).flatMap((item) => strings(item, depth + 1));
 }
 
-export async function impactOf($, tool, input) {
+export async function impactOf($, tool, input, language = "English") {
   try {
     if (tool === "Bash" && typeof input?.command === "string") {
-      return (await shellImpact($, input.command)) ?? bashSql(input.command);
+      return (await shellImpact($, input.command, phrasesOf(language))) ?? bashSql(input.command, language);
     }
-    return tool.startsWith("mcp__") ? sqlImpact(strings(input).join(";\n")) : undefined;
+    return tool.startsWith("mcp__") ? sqlImpact(strings(input).join(";\n"), language) : undefined;
   } catch {
     return undefined;
   }

@@ -231,16 +231,21 @@ export function fitParts(parts, columns) {
   return kept;
 }
 
+function truncating(Text) {
+  return (props) => Text({ wrap: "truncate-end", ...props });
+}
+
 function agentRow(Box, Text, agent, times, now) {
   const { startedAt = null, endedAt = null } = times[agent.id] ?? {};
   const end = isActive(agent, times) ? now : endedAt ?? now;
+  const cell = (flexShrink, props) => Box({ flexShrink, children: [Text(props)] });
   return Box({
     flexDirection: "row",
     columnGap: 1,
     children: [
-      Text({ children: [`${agent.type} · ${agent.description}`] }),
-      Text({ color: STATUS_COLORS[agent.status] ?? "text", children: [agent.status] }),
-      ...(startedAt === null ? [] : [Text({ dimColor: true, children: [clockText(end - startedAt)] })]),
+      cell(1, { children: [`${agent.type} · ${agent.description}`] }),
+      cell(0, { color: STATUS_COLORS[agent.status] ?? "text", children: [agent.status] }),
+      ...(startedAt === null ? [] : [cell(0, { dimColor: true, children: [clockText(end - startedAt)] })]),
     ],
   });
 }
@@ -322,7 +327,8 @@ export function registerWorkBoard(on) {
   });
 
   on("ui.render", { component: "Pane", requestId: PANE }, async ($, e) => {
-    const { Box, Text } = $.ui.resolve(e);
+    const { Box, Text: plain } = $.ui.resolve(e);
+    const Text = truncating(plain);
     const [view, cache, usage, codex, , now, cwd] = await Promise.all([
       ownership($),
       read($, cacheTotals),

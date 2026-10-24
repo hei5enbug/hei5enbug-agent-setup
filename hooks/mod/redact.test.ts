@@ -76,9 +76,7 @@ test("Bash 결과는 stdout과 stderr의 토큰만 종류가 보이게 가리고
   });
   expect(answer.ref).toBeUndefined();
   expect(answer.text).toBeUndefined();
-  expect(logs).toHaveLength(1);
-  expect(logs[0]).toContain("masked 3 secret values");
-  expect(logs[0]).not.toContain(TOKEN);
+  expect(logs).toEqual(["masked 3 secret values in the Bash result"]);
 });
 
 test("도구에 넘기는 인자는 건드리지 않는다", async ($, on) => {
@@ -469,9 +467,7 @@ test("훅이 붙인 context에 토큰이 있으면 고쳐 쓸 수 없으므로 �
   expect(answer.deny).toContain("withheld");
   expect(answer.deny).not.toContain(TOKEN);
   expect(answer.result).toBeUndefined();
-  expect(logs).toHaveLength(1);
-  expect(logs[0]).toContain("withheld the Bash result");
-  expect(logs[0]).not.toContain(TOKEN);
+  expect(logs).toEqual(["withheld the Bash result, hook context held 1 secret value"]);
 });
 
 test("오류 결과의 context에 토큰이 있어도 보류하고 깨끗한 context는 그대로 둔다", async ($, on) => {

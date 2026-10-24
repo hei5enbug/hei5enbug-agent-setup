@@ -266,6 +266,49 @@ test("WHERE는 주석, 문자열 리터럴, 따옴표 식별자 안에 있으면
   ]);
 });
 
+test("언어로 Korean을 넘기면 모든 영향 문구를 한국어로 쓰고 개수, 크기, 이름, 목록과 문장 구분은 그대로 둔다", async () => {
+  // given
+  const outputs = {
+    git: (argv) => (argv[1] === "clean" ? "Would remove a.log\nWould remove b/\n" : argv.includes("src") ? "" : "5\t2\ta.txt\n"),
+    sh: () => "12\n",
+    du: () => "2048\tbuild\n",
+    kubectl: (argv) => (argv.includes("web-9") ? "" : "pod/web-1\n"),
+  };
+  const filled = host((argv) => ({ stdout: outputs[argv[0]](argv) }), (path) => path !== "/work/gone");
+  const capped = host((argv) => ({ stdout: argv[0] === "du" ? "5242880\t/home/test/cache\n" : "10001\n" }));
+  const empty = host(() => ({ stdout: "" }));
+  const calls = [
+    [filled.$, "Bash", { command: "git reset --hard" }],
+    [filled.$, "Bash", { command: "git restore src" }],
+    [filled.$, "Bash", { command: "git clean -fd" }],
+    [empty.$, "Bash", { command: "git clean -fd" }],
+    [filled.$, "Bash", { command: "rm -rf build" }],
+    [capped.$, "Bash", { command: "rm -r ~/cache" }],
+    [filled.$, "Bash", { command: "rm -rf gone" }],
+    [filled.$, "Bash", { command: "kubectl delete pod web-1" }],
+    [filled.$, "Bash", { command: "kubectl delete pod web-9" }],
+    [empty.$, "mcp__demo__run_query", { query: "DROP MATERIALIZED VIEW IF EXISTS v; TRUNCATE logs; DELETE FROM orders; DELETE FROM users WHERE id = 1" }],
+  ] as const;
+
+  // when
+  const texts = [];
+  for (const [$, tool, input] of calls) texts.push(await impactOf($, tool, input, "Korean"));
+
+  // then
+  expect(texts).toEqual([
+    "파일 1개 변경 버림 (+5/-2)",
+    "버릴 변경 없음",
+    "경로 2개 삭제: a.log, b/",
+    "지울 대상 없음",
+    "파일 12개 삭제 (2.0 MB)",
+    "파일 10000개 이상 삭제 (5.0 GB)",
+    "지울 대상 없음",
+    "1개 삭제: pod/web-1",
+    "일치하는 리소스 없음",
+    "materialized view v 삭제; logs 비움; orders 행 삭제 (WHERE 없음); users 행 삭제",
+  ]);
+});
+
 test("Bash와 MCP가 아닌 도구는 입력에 SQL이 있어도 영향을 계산하지 않는다", async () => {
   // given
   const { $, runs } = host();

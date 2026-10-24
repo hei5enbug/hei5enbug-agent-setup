@@ -269,6 +269,33 @@ test("/work-board는 창을 열고 에이전트 상태와 경과 시간, Claude 
   ]);
 });
 
+test("창의 모든 줄은 단어 중간에서 꺾지 않고 끝을 자르며 에이전트 행은 설명만 줄이고 상태와 경과 시간은 줄이지 않는다", async ($, on) => {
+  // given
+  const usage = { startedAt: NOW, context: { window: 200000, tokens: 24000, percent: 12 }, rateLimits: [{ kind: "seven_day", percentUsed: 80, resetsAt: iso(NOW + 3.5 * DAY) }] };
+  const { state } = boardWorld(on, { usage, agents: [{ ...agent("a1"), description: "a long task description that cannot fit in a narrow pane" }, agent("a2")] });
+  await $.session.start({ cwd: CWD, surface: "terminal", isInteractive: true });
+  await $.turn.start({ turnId: "sub-1", text: "", agentId: "a1" });
+  await $.tool.call({ tool: "Edit", file_path: `${CWD}/src/app.ts`, old_string: "a", new_string: "b", agentId: "a1" });
+  await $.tool.call({ tool: "Edit", file_path: `${CWD}/src/app.ts`, old_string: "b", new_string: "c", agentId: "a2" });
+  await $.tool.call({ tool: "Write", file_path: `${CWD}/src/only-a1.ts`, content: "x", agentId: "a1" });
+  const narrow = { ...PANE, props: { ...PANE.props, bodyColumns: 40 } };
+  const shrinkOf = (boxes, text) => boxes.find((box) => box.children.length === 1 && box.children[0]?.type === "Text" && box.children[0].children.join("") === text)?.props.flexShrink;
+
+  // when
+  const ui = await $.ui.mount({ ...narrow, surface: "terminal" });
+  const [pane, boxes] = [await ui.findAll({ type: "Text" }), await ui.findAll({ type: "Box" })];
+  await ui.unmount();
+  state.agents = [];
+  const empty = await texts($, narrow);
+
+  // then
+  expect(pane.map((item) => item.text)).toEqual(expect.arrayContaining(["Claude weekly 80% · runs out in ~21h, before reset", "  src/app.ts (conflict)", "  src/only-a1.ts", "0s"]));
+  expect([...pane, ...empty].filter((item) => item.props.wrap !== "truncate-end").map((item) => item.text)).toEqual([]);
+  expect(empty.map((item) => item.text)).toEqual(["context 12%", "Claude weekly 80% · runs out in ~21h, before reset", " ", "No subagents in this session."]);
+  expect(shrinkOf(boxes, "hei5enbug-agent-setup:worker · a long task description that cannot fit in a narrow pane")).toBe(1);
+  expect([shrinkOf(boxes, "running"), shrinkOf(boxes, "0s")]).toEqual([0, 0]);
+});
+
 test("열린 창은 다시 마운트하지 않아도 상태가 바뀌면 새 편집 파일을 그린다", async ($, on) => {
   // given
   boardWorld(on, { agents: [agent("a1")] });

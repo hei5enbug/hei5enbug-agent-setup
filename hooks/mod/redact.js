@@ -233,7 +233,7 @@ export function registerSecretRedaction(on) {
       }
       if (count > 0) {
         const noun = count === 1 ? "value" : "values";
-        $.ui.log(`${$.plugin.name}: ${withheld ? `withheld the ${e.tool} result, hook context held ${count} secret ${noun}` : `masked ${count} secret ${noun} in the ${e.tool} result`}`);
+        $.ui.log(withheld ? `withheld the ${e.tool} result, hook context held ${count} secret ${noun}` : `masked ${count} secret ${noun} in the ${e.tool} result`);
       }
       return masked;
     } catch {

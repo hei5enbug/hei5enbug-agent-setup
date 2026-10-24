@@ -39,15 +39,18 @@ async function capture($, e) {
   if ((await read($, mark)) !== null) return;
   const level = riskLevel(await guardRecord($, e.tool_use_id));
   if (level === undefined) return;
-  const impact = level === "write" ? undefined : await impactOf($, e.tool, e.input);
   language ??= await responseLanguage($);
+  const impact = level === "write" ? undefined : await impactOf($, e.tool, e.input, language);
   await update($, mark, () => ({ level, label: LABELS[language][level], impact: impact ?? null }));
 }
 
 function badge($, e, theirs, mark) {
   const { Box, Text } = $.ui.resolve(e);
-  const text = mark.impact === null ? mark.label : `${mark.label} · ${mark.impact}`;
-  return Box({ flexDirection: "row", columnGap: 1, children: [theirs, Text({ color: COLORS[mark.level], children: [`[${text}]`] })] });
+  const color = COLORS[mark.level];
+  const label = Box({ flexShrink: 0, children: [Text({ color, wrap: "truncate-end", children: [`[${mark.label}]`] })] });
+  const head = Box({ flexDirection: "row", columnGap: 1, children: [theirs, label] });
+  const impact = mark.impact === null ? [] : [Text({ color, wrap: "truncate-end", children: [`  ${mark.impact}`] })];
+  return Box({ flexDirection: "column", children: [head, ...impact] });
 }
 
 export function registerRiskHighlight(on) {
@@ -67,6 +70,6 @@ export function registerRiskHighlight(on) {
     const ids = e.props.calls.map((call) => call.tool_use_id).filter((id) => typeof id === "string");
     const found = (await Promise.all(ids.map((id) => read($, memberOf(riskMarks, { requestId: id }))))).filter(Boolean);
     const mark = SEVERITY.map((level) => found.find((item) => item.level === level)).find(Boolean);
-    return mark === undefined ? next(e) : badge($, e, await next(e), { ...mark, impact: null });
+    return mark === undefined ? next(e) : badge($, e, await next(e), mark);
   });
 }
