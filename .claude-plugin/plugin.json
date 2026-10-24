@@ -126,7 +126,7 @@
     "orca_worktree": {
       "type": "boolean",
       "title": "Orca worktrees for other repositories",
-      "description": "Before changing another Git repository, hand the change to a new Orca worktree of that repository with its own agent session instead of editing an existing checkout.",
+      "description": "Before changing another Git repository, hand the change to a new Orca worktree of that repository with its own agent session instead of editing an existing checkout, and start new Orca agent sessions under the repository's existing Orca workspace.",
       "default": true
     },
     "host_settings": {

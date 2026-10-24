@@ -47,7 +47,7 @@ when both exist, with cost and impact; the user chooses. Report a pending user a
 - Before retrying a failed command, diagnosing repeated execution failures, or plugin maintenance, read
   [failure and maintenance rules](../failure-and-maintenance.md).
 - Before the first implementation change, read [implementation execution rules](../implementation-execution.md).
-- Before editing another repository or messaging another session, read [cross-repository work](../cross-repository.md).
+- Before editing another repository or starting or messaging an Orca session, read [cross-repository work](../cross-repository.md).
 
 ## Planning and design routing
 

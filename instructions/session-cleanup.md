@@ -16,8 +16,8 @@ Offer once, at the end of the work, only when all of these hold; otherwise ask n
 
 Offer only an item this session created and can show it created: its own scratch or temporary folder, or a file or
 folder whose creation appears in this session's commands or tool calls. Never offer another session's files, user
-files, tracked project files, shared host caches, configuration, or history. Never include a worktree or its branch
-unless the user asks for it.
+files, tracked project files, shared host caches, configuration, or history. Never include a worktree or its branch;
+[cross-repository work](cross-repository.md) covers removing those.
 
 ## Asking
 

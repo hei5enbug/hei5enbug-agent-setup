@@ -3,8 +3,8 @@
 > 영어 원본: [cross-repository.md](../../../instructions/cross-repository.md)
 > 이 문서는 사람을 위한 비권위 한국어 번역본이다. 에이전트 실행 시 읽거나 사용하지 않는다.
 
-현재 세션의 작업 디렉터리가 속한 작업 저장소가 아닌 다른 Git 저장소의 파일을 변경하기 전과, 다른 에이전트
-세션에 메시지를 보내기 전에 이 문서를 읽는다.
+현재 세션의 작업 디렉터리가 속한 작업 저장소가 아닌 다른 Git 저장소의 파일을 변경하기 전, Orca에서 에이전트
+세션을 시작하기 전, 다른 에이전트 세션에 메시지를 보내기 전에 이 문서를 읽는다.
 다른 저장소를 읽기만 할 때는 이 절차가 필요 없다.
 
 대상 저장소에서 이 작업의 브랜치를 사용하는 worktree에서 변경한다. 기본 브랜치의 주 클론처럼 다른 브랜치를
@@ -15,6 +15,19 @@
 
 `orca status --json`이 접근 가능한 런타임을 보고하면 Orca CLI를 사용한다. 이 파일에 없는 플래그가 필요하면
 `orca skills get orca-cli`를 한 번 실행한다.
+
+### 세션 위치
+
+이 저장소든 다른 저장소든, 새 에이전트 세션은 모두 Orca가 해당 저장소의 workspace로 이미 나열한 곳 아래에서
+시작한다. 그런 workspace가 있으면 독립적인 최상위 worktree를 만들지 않는다. 저장소의 workspace는
+`orca worktree list --repo id:<repoId> --json`에서 경로가 해당 저장소의 클론인 항목이다.
+현재 Orca worktree가 그 저장소에 속하면 이를 부모로 삼고, 아니면 해당 workspace를 부모로 삼는다.
+
+- 작업 저장소에서 파일을 수정하지 않는 세션은 현재 worktree의 새 터미널에서 실행하거나, Orca orchestration의
+  `worker-start --worktree current`로 실행한다.
+- 파일을 수정하는 세션은 아래 2~6단계나 Orca orchestration의
+  `worker-start --worktree new-child --base-branch <base>`로 하위 worktree를 만든다. `new-top-level`은 사용하지 않는다.
+- Orca가 해당 저장소의 workspace를 나열하지 않을 때만 `--no-parent`를 전달한다.
 
 1. `orca repo list --json`에서 대상을 찾는다. 기존 로컬 클론은 `orca repo add --path <path>`로 등록한다.
    로컬 클론이 없으면 사용자에게 어디에 클론할지 묻는다.
@@ -30,16 +43,9 @@
    - 그 worktree가 자기 항목이 없다: workspace 안에 있는 worktree이고, Orca는 workspace의 터미널 중 어느 것이
      그 안에서 실행 중인지 구분하지 못한다. 사용자에게 workspace의 터미널 제목을 보여 주고, 그중 하나로 작업 요약을
      보낼지 다음 경우처럼 새 터미널을 시작할지 묻는다.
-   - 해당 브랜치의 worktree가 없고 `git -C <clone> check-ignore -q .claude/worktrees/<name>`이 성공한다. 여기서
-     `<name>`은 브랜치 이름의 `/`를 `-`로 바꾼 것이고, 그 디렉터리가 이미 있으면 `-2` 같은 접미사를 붙인다:
-     새 workspace 대신 workspace 안에 worktree를 만든다.
-     `git -C <clone> worktree add -b <branch> <clone>/.claude/worktrees/<name> <remote>/<base>`를 실행하고, 로컬이나
-     원격에 이미 있는 브랜치이면 `git -C <clone> worktree add <clone>/.claude/worktrees/<name> <branch>`를 실행한다.
-     그다음 `orca terminal create --worktree id:<workspace id> --title <branch>
-     --command "cd '<worktree path>' && <host>" --json`을 실행하고 5단계로 진행한다.
-   - 그 밖의 경우: 대상이 그 경로를 무시하지 않으므로 그곳의 worktree가 클론에서 추적되지 않은 파일로 보인다.
-     `orca worktree create --repo id:<repoId> --name <branch> --base-branch <base> --agent <host> --json`을 실행한다.
-     작업 디렉터리가 Orca worktree이면 `--parent-worktree active`를, 아니면 `--no-parent`를 추가한다.
+   - 해당 브랜치의 worktree가 없다: "세션 위치"에서 정한 부모를 사용해
+     `orca worktree create --repo id:<repoId> --name <branch> --base-branch <base>
+     --agent <host> --parent-worktree <parent> --json`을 실행한다.
      `--prompt`는 전달하지 않는다.
 4. `orca worktree create` 뒤에는 Orca가 설정된 접두사를 붙이고 `/`를 대체해 새 브랜치 이름을 직접 정한다. 결과의
    `branch`가 정한 이름과 다르고 정한 이름의 브랜치가 아직 없으면 `git -C <worktree path> branch -m <branch>`를
@@ -83,4 +89,7 @@ Orca CLI나 런타임을 사용할 수 없으면 일반 Git worktree를 사용�
   종료하라고 사용자에게 한 줄로 권한다. 세션을 직접 종료하지 않는다.
 - 할 일이 남았으면 계속 진행하고, 대상의 결과가 필요할 때만 `orca terminal read --terminal <handle> --json`으로
   읽는다.
-- worktree나 그 브랜치는 사용자가 요청할 때만 삭제한다.
+- 하위 세션의 작업이 기준 브랜치에 병합되면, 터미널을 닫고 worktree와 브랜치를 삭제할지 각각의 이름을 명시해
+  한 번 제안한다. 제안하기 전에 worktree에 커밋하지 않은 변경이 없고, 다른 해시로 적용된 커밋을 포함해 모든
+  커밋의 내용이 기준 브랜치에 들어 있는지 확인한다. 사용자가 승인한 것만 삭제한다. 그 밖의 경우에는 사용자가
+  요청할 때만 worktree나 브랜치를 삭제한다.

@@ -1,8 +1,8 @@
 # Cross-repository work
 
 Read this before changing files in a Git repository other than the working repository, the one that holds the
-session's working directory, and before messaging another agent session. Reading another repository needs none
-of it.
+session's working directory, before starting an agent session in Orca, and before messaging another agent session.
+Reading another repository needs none of it.
 
 Make the change in a worktree of the target repository on this task's branch, never in a checkout on another branch,
 such as a main clone on the default branch, which may hold other work. The target's session owns the change, so its
@@ -12,6 +12,19 @@ own instructions, hooks, and branch rules apply.
 
 Use the Orca CLI when `orca status --json` reports a reachable runtime. For a flag this file does not give, run
 `orca skills get orca-cli` once.
+
+### Session placement
+
+Start every new agent session under a workspace that Orca already lists for its repository, in this repository as
+in another one; never create an independent top-level worktree while one exists. A repository's workspace is the
+entry whose path is its clone in `orca worktree list --repo id:<repoId> --json`. The parent is the current Orca
+worktree when it belongs to that repository, and that workspace otherwise.
+
+- A session in the working repository that edits no file runs as a new terminal in the current worktree, or with Orca
+  orchestration as `worker-start --worktree current`.
+- A session that edits files gets a child worktree through steps 2 to 6 below, or with Orca orchestration
+  `worker-start --worktree new-child --base-branch <base>`, never `new-top-level`.
+- Pass `--no-parent` only for a repository that Orca lists no workspace for.
 
 1. Find the target in `orca repo list --json`. Register an existing local clone with `orca repo add --path <path>`.
    When no local clone exists, ask the user where to clone it.
@@ -27,17 +40,8 @@ Use the Orca CLI when `orca status --json` reports a reachable runtime. For a fl
    - The worktree has no entry of its own: it sits inside the workspace, and Orca cannot tell which of the
      workspace's terminals runs in it. Show the user the workspace's terminal titles and ask whether to send the brief
      to one of them or to start a new terminal as in the next case.
-   - No worktree is on the branch, and `git -C <clone> check-ignore -q .claude/worktrees/<name>` succeeds, where
-     `<name>` is the branch with `/` replaced by `-`, plus a suffix such as `-2` while that directory already exists:
-     create the worktree inside the workspace instead of a new workspace. Run
-     `git -C <clone> worktree add -b <branch> <clone>/.claude/worktrees/<name> <remote>/<base>`, or
-     `git -C <clone> worktree add <clone>/.claude/worktrees/<name> <branch>` for a branch that exists locally or on
-     the remote. Then run `orca terminal create --worktree id:<workspace id> --title <branch>
-     --command "cd '<worktree path>' && <host>" --json` and continue at step 5.
-   - Otherwise, the target does not ignore that path, and a worktree there would show as untracked files in the
-     clone. Run `orca worktree create --repo id:<repoId> --name <branch> --base-branch <base> --agent <host> --json`.
-     Add `--parent-worktree active` when the working directory is an Orca worktree, and `--no-parent` otherwise.
-     Pass no `--prompt`.
+   - No worktree is on the branch: run `orca worktree create --repo id:<repoId> --name <branch> --base-branch <base>
+     --agent <host> --parent-worktree <parent> --json` with the parent from "Session placement". Pass no `--prompt`.
 4. After `orca worktree create`, Orca names the new branch itself, with its configured prefix and `/` replaced. When
    the result's `branch` differs from the chosen name and that branch does not exist yet, run
    `git -C <worktree path> branch -m <branch>`. When it already exists locally or on `origin`, run
@@ -82,4 +86,7 @@ protected value into it; the session that needs the file reports it to the user.
   in the target worktree's session and end this one. Never end a session yourself.
 - Otherwise continue the remaining work, and read the target with `orca terminal read --terminal <handle> --json` only
   when its result is needed.
-- Remove a worktree or its branch only when the user asks.
+- When a child session's work is merged into its base, offer once to close its terminal and remove its worktree and
+  branch, naming each. Before offering, confirm that the worktree has no uncommitted change and that the base holds
+  the content of every one of its commits, including commits applied under another hash. Remove only what the user
+  approves; otherwise remove a worktree or branch only when the user asks.
