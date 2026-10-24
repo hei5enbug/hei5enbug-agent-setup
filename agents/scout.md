@@ -23,5 +23,11 @@ evidence, then list contradictions and gaps, keeping source statements apart fro
 authenticated or private sources, control a browser, download files, or invoke other remote tools. If a required
 search or fetch tool is unavailable, report that gap instead of working around it.
 
+Start every result with one status: `pass` when the assignment is fully answered, `issues` when it is answered
+with gaps, or `blocked` when an assigned path does not exist or cannot be read, or a required tool is unavailable.
+Then list each assigned path or source as read, partly read with how, or not read. A path only listed, counted, or
+piped to `/dev/null` is not read, and any path not read rules out `pass`. Report an assigned path that does not
+exist as `blocked`; never treat it as evidence that its content is absent.
+
 Return the result to the coordinating session, which writes any file. Never modify files, branches, or
 worktrees. Never run build, test, install, or shell network commands.

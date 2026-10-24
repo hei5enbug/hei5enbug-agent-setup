@@ -16,6 +16,10 @@ Use observed duration to report elapsed time and a range for remaining work befo
 Distinguish elapsed wall time, parallel-worker duration, and partial token coverage. Do not invent monetary
 costs or assume an unknown quota is sufficient.
 
+Before reporting or acting on a measured speedup, regression, cost, or eval score, including one outside a model
+trial, name what bounds it, confirm the run did the intended work, and, when variance matters, alternate the
+compared sides over at least five runs each within an authorized budget; otherwise report the number as unconfirmed.
+
 Expand only for an unresolved decision that more cases can answer and within an explicitly authorized larger
 budget. Otherwise report inconclusive results and request a concrete extension only when needed. A budget
 ceiling is not a target. Stop new starts at the first case/call/time cap, user stop, unavailable required

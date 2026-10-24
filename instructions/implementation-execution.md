@@ -40,7 +40,8 @@ Each assignment states:
 - Task ID and the concrete result
 - Allowed edit paths and protected paths
 - Prerequisites and shared-resource exclusions
-- Verification and completion evidence
+- Verification and completion evidence; a read-only result starts with the status and path coverage that the
+  scout definition sets
 - The selected model ID and effort
 
 For main-owned work, keep these fields compact and retain the main session's current model and effort.

@@ -57,7 +57,9 @@ Do not enable extra billing or change authentication to make the review availabl
 
 For an implementation review, provide the accepted scope, complete change diff, relevant source paths,
 acceptance criteria, and check results instead of the conversation history. Include necessary untracked
-files; a tracked-only diff can omit the implementation. Return concise findings with severity and evidence.
+files; a tracked-only diff can omit the implementation. Return concise findings with severity and evidence, and name
+the one fact the change is safe because of and how far it was proven: asserted, cited at `file:line`, argued step by
+step, executed by a script or test, or reproduced in the running app.
 
 ## Review checks
 
@@ -100,11 +102,12 @@ not performed and why.
 
 ## Finalization
 
-The authoring session checks every finding against the frozen scope and authoritative evidence, applies
-supported corrections once, and rejects unsupported scope expansion. Do not run another model review after
-the corrections.
+The authoring session checks every finding against the frozen scope and authoritative evidence and sorts it
+into fix now, worth considering, note only, or rejected, each with a one-line reason. A finding without a traced
+reachable caller or input path is a possibility, never fix now, until traced. Apply supported fix-now corrections
+once, and reject unsupported scope expansion. Do not run another model review after the corrections.
 
-Report the resolved reviewer model, reasoning effort, that one read-only pass ran, and any unresolved
-finding. When validation could not run, report the unavailable requirement and reason instead. When the user
+Report the resolved reviewer model, reasoning effort, that one read-only pass ran, each finding's category and
+reason, the safety fact and its proof level for an implementation review, and any unresolved finding. When validation could not run, report the unavailable requirement and reason instead. When the user
 declined the gate, report only that independent validation did not run. Every one of these results belongs
 in the reply, never in the deliverable.

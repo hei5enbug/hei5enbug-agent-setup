@@ -63,12 +63,40 @@ def test_공유_모델_라우팅은_위임_때_읽고_시작_문맥에는_본문
     assert "## Keep role settings fixed" not in rendered
 
 
+def released_role(tag: str, name: str) -> str:
+    return subprocess.run(
+        ["git", "show", f"{tag}:standalone-agents/codex-{name}.toml"],
+        cwd=REPO, check=True, capture_output=True, text=True,
+    ).stdout
+
+
+@pytest.mark.parametrize("user_edited", [False, True])
+@pytest.mark.parametrize("name", ["scout", "reviewer"])
+def test_v2_10_1_scout와_reviewer는_원본과_같을_때만_현재_역할로_교체한다(tmp_path, monkeypatch, name, user_edited):
+    """v2.10.1에 들어 있던 scout와 reviewer의 미수정 복사본은 현재 역할로 바꾸고 사용자 수정본은 그대로 둔다."""
+    # Given
+    released = released_role("v2.10.1", name)
+    target = tmp_path / f"agents/{name}.toml"
+    target.parent.mkdir()
+    original = released + ("\n# user setting\n" if user_edited else "")
+    target.write_text(original)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+
+    # When
+    context.provision_codex_agents(REPO)
+
+    # Then
+    current = (REPO / f"standalone-agents/codex-{name}.toml").read_text()
+    assert released != current
+    assert target.read_text() == (original if user_edited else current)
+
+
 @pytest.mark.parametrize("user_edited", [False, True])
 def test_구형_scout는_원본과_같을_때만_현재_역할로_교체한다(tmp_path, monkeypatch, user_edited):
     """이전 scout의 미수정 복사본은 실행 중 조사를 허용하도록 교체하고 사용자 수정본은 그대로 둔다."""
     # Given
     current = (REPO / "standalone-agents/codex-scout.toml").read_text()
-    previous = current.replace("sandbox_mode", 'model_reasoning_effort = "xhigh"\nsandbox_mode', 1)
+    previous = released_role("v2.10.1", "scout").replace("sandbox_mode", 'model_reasoning_effort = "xhigh"\nsandbox_mode', 1)
     previous = previous.replace(
         "Read-only worker for one bounded local investigation, including a local-evidence research ticket "
         "that a skill assigns.",
@@ -113,7 +141,7 @@ def test_effort를_고정하던_역할_파일은_원본과_같을_때만_effort_
     """effort 줄이 있던 scout, designer, reviewer의 미수정 복사본은 effort 없는 현재 파일로 바꾸고 사용자 수정본은 그대로 둔다."""
     # Given
     current = (REPO / f"standalone-agents/codex-{name}.toml").read_text()
-    previous = current.replace("sandbox_mode", 'model_reasoning_effort = "xhigh"\nsandbox_mode', 1)
+    previous = released_role("v2.10.1", name).replace("sandbox_mode", 'model_reasoning_effort = "xhigh"\nsandbox_mode', 1)
     target = tmp_path / f"agents/{name}.toml"
     target.parent.mkdir()
     original = previous + ("\n# user setting\n" if user_edited else "")

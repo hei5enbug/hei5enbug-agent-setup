@@ -305,6 +305,7 @@ RETIRED_CODEX_AGENTS = {
         "910da79ee988b53f4a94186a469c4479c7e34bf61bec8dfd27ef1ab73cc171da",
         "e81d0cfcd3a4986204c289fb8c457bd279ba8c2d24d43679d02b1661581301e7",
         "49e5f7dab3d3b9384b49250e8622fd57cf65b600d7eb1b3b5b1732554ef1b5c7",
+        "57ca9a0c1b168c1491b71f2df46964042c42bed4cc0de8f200ea2060a12734e1",
     },
     "explorer": {"bfde4fbbe2740152ad537d576612a34619a57a45adb56072e3f945610ef820af"},
     "worker": {
@@ -316,7 +317,10 @@ RETIRED_CODEX_AGENTS = {
         "c8c525a3a7fdfb5adbff1cf7474d24dfba35527eb070f4a5206c164b248d43ed",
         "be8b8dc3f856bd8fdab5e15f17b464deab2e50819d3a7d060cccbc2847b7610a",
     },
-    "reviewer": {"5d2bd7dd2786e5824cfed218fb2a3ff0ae966d193a0495782cbe70defafc9cca"},
+    "reviewer": {
+        "5d2bd7dd2786e5824cfed218fb2a3ff0ae966d193a0495782cbe70defafc9cca",
+        "b06153c12413af3da6a587bb13bbbb3ef3907d20c65d273dd928c5097d92539d",
+    },
     "researcher": {"940a7daace75165d8eceeece93a3c4960c42d187754738a744244059d5a0e5c1"},
 }
 
