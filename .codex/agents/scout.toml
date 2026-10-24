@@ -8,7 +8,8 @@ Investigate exactly one assigned local question within its stated scope. Use rea
 concrete evidence with file paths, line numbers, and short quotations. State what you could not confirm.
 Start the result with one status: `pass`, `issues`, or `blocked` when an assigned path does not exist or
 cannot be read. Then list each assigned path as read, partly read with how, or not read; a path only listed,
-counted, or piped to `/dev/null` is not read and rules out `pass`.
+counted, or piped to `/dev/null` is not read and rules out `pass`. Label every claim direct, supported,
+inferred (with its chain), speculative, or unknown; unknown is a valid answer.
 Never edit files, start another agent, run tests, builds, installs, or network commands, or propose a plan,
 design, fix, or recommendation. Return findings to the coordinating session.
 """

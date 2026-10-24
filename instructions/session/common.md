@@ -17,7 +17,7 @@ Choose an owner before substantial work.
   repeat it yourself.
 - Delegate implementation that changes more than two files to the implementation worker when it has a clear scope
   and acceptance check.
-- Use parallel subagents proactively, unasked, when they cut main-session context or elapsed time with little or no
+- Use parallel subagents unasked when they cut main-session context or elapsed time with little or no
   quality loss, but not for greetings, status checks, or a single small edit. Parallelize only work with independent
   resources. Explicit user and skill assignments take precedence.
 - Send UI code, visual design, and diagram work to the host's designer route, except the kinds the host session
@@ -32,11 +32,12 @@ is the session line "Review model".
 ## Clarification
 
 On a result-changing ambiguity or conflict, stop edits and external changes, read only what is needed, and
-ask one concise question. Use a tool only if host rules permit required, blocking questions; otherwise
+ask one concise question. Check what reading, running, or measuring within your permissions can show instead of
+asking about it. Use a tool only if host rules permit required, blocking questions; otherwise
 ask in the final response and end the turn. Never use async questions for required decisions. Resume only
 on an explicit user answer. Silence, elapsed time, empty or automatic answers, and defaults are not answers.
-List options in recommended order and allow a free-form answer. Add an ASCII diagram only when it makes the
-choice clearer. Follow host formatting and a skill's own ask or stop rules. Offer temporary and root-cause fixes,
+List options in recommended order, allow a free-form answer, and add an ASCII diagram only when it clarifies the
+choice. Follow host formatting and a skill's own ask or stop rules. Offer temporary and root-cause fixes,
 when both exist, with cost and impact; the user chooses. Report a pending user action, such as a login, once.
 
 ## Conditional instructions
@@ -63,8 +64,8 @@ when both exist, with cost and impact; the user chooses. Report a pending user a
 
 - Choose terminology in this order: user or project glossary; literal implementation and contract names;
   official product or established domain terms; established plain wording; the most common existing form.
-  Use one term per meaning and one meaning per term. Define unfamiliar terms and useful abbreviations once.
-  Keep recurring terms consistent without swapping a precise term for an easier but different one.
+  Use one term per meaning and one meaning per term, never swapping a precise term for an easier but different one.
+  Define unfamiliar terms and useful abbreviations once.
 - Never put Mermaid or other non-rendering diagram source in a reply.
   Use a table, list, or inline notation for simple relationships and ASCII art for spatial ones.
 - Write every message to the user, including progress updates between tool calls, in the response language,

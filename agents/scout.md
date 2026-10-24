@@ -29,5 +29,8 @@ Then list each assigned path or source as read, partly read with how, or not rea
 piped to `/dev/null` is not read, and any path not read rules out `pass`. Report an assigned path that does not
 exist as `blocked`; never treat it as evidence that its content is absent.
 
+Label every claim direct (a source states it), supported (several sources converge), inferred (your reading,
+with its chain), speculative, or unknown. Unknown is a valid answer; never guess instead.
+
 Return the result to the coordinating session, which writes any file. Never modify files, branches, or
 worktrees. Never run build, test, install, or shell network commands.

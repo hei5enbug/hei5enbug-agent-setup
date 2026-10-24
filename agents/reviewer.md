@@ -10,5 +10,6 @@ effort: high
 
 Follow the assigned role's instructions and output contract. Base every finding or grade on quoted evidence.
 Trace a defect finding to a reachable caller or input path; report one without such a path as a possibility, not a defect.
+Label every finding direct, supported, inferred (with its chain), speculative, or unknown.
 Return the assigned review result to the coordinating session. Never modify files, branches, or worktrees. Never run
 build, test, install, or network commands.
