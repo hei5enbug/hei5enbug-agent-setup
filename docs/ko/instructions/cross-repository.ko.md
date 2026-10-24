@@ -21,12 +21,14 @@
 이 저장소든 다른 저장소든, 새 에이전트 세션은 모두 Orca가 해당 저장소의 workspace로 이미 나열한 곳 아래에서
 시작한다. 그런 workspace가 있으면 독립적인 최상위 worktree를 만들지 않는다. 저장소의 workspace는
 `orca worktree list --repo id:<repoId> --json`에서 경로가 해당 저장소의 클론인 항목이다.
-현재 Orca worktree가 그 저장소에 속하면 이를 부모로 삼고, 아니면 해당 workspace를 부모로 삼는다.
+현재 Orca worktree가 그 저장소에 속하면 부모는 `active`(현재 Orca worktree)이고, 아니면
+`id:<repoId>::<clone path>`(해당 workspace)다.
 
-- 작업 저장소에서 파일을 수정하지 않는 세션은 현재 worktree의 새 터미널에서 실행하거나, Orca orchestration의
-  `worker-start --worktree current`로 실행한다.
-- 파일을 수정하는 세션은 아래 2~6단계나 Orca orchestration의
-  `worker-start --worktree new-child --base-branch <base>`로 하위 worktree를 만든다. `new-top-level`은 사용하지 않는다.
+- 파일을 전혀 수정하지 않는 세션은 새 터미널로 실행한다. 작업 저장소에서는 현재 worktree에서 실행하거나 Orca
+  orchestration의 `worker-start --worktree current`로 실행하고, 다른 저장소에서는 대상의 workspace에서 실행한다.
+- 파일을 수정하는 세션은 아래 2~6단계로 하위 worktree를 만든다. 작업 저장소에서 Orca orchestration을 쓰면
+  `worker-start --worktree new-child --name <branch> --base-branch <base>`를 사용하고 4단계를 적용한다.
+  `new-top-level`은 사용하지 않는다.
 - Orca가 해당 저장소의 workspace를 나열하지 않을 때만 `--no-parent`를 전달한다.
 
 1. `orca repo list --json`에서 대상을 찾는다. 기존 로컬 클론은 `orca repo add --path <path>`로 등록한다.
@@ -42,7 +44,8 @@
      `orca terminal create --worktree id:<worktree id> --command <host> --json`으로 시작하고 5단계로 진행한다.
    - 그 worktree가 자기 항목이 없다: workspace 안에 있는 worktree이고, Orca는 workspace의 터미널 중 어느 것이
      그 안에서 실행 중인지 구분하지 못한다. 사용자에게 workspace의 터미널 제목을 보여 주고, 그중 하나로 작업 요약을
-     보낼지 다음 경우처럼 새 터미널을 시작할지 묻는다.
+     보낼지, 아니면 그 worktree용 새 터미널을 `orca terminal create --worktree id:<workspace id>
+     --title <branch> --command "cd '<worktree path>' && <host>" --json`으로 시작할지 묻고, 이후 5단계로 진행한다.
    - 해당 브랜치의 worktree가 없다: "세션 위치"에서 정한 부모를 사용해
      `orca worktree create --repo id:<repoId> --name <branch> --base-branch <base>
      --agent <host> --parent-worktree <parent> --json`을 실행한다.
@@ -89,7 +92,9 @@ Orca CLI나 런타임을 사용할 수 없으면 일반 Git worktree를 사용�
   종료하라고 사용자에게 한 줄로 권한다. 세션을 직접 종료하지 않는다.
 - 할 일이 남았으면 계속 진행하고, 대상의 결과가 필요할 때만 `orca terminal read --terminal <handle> --json`으로
   읽는다.
-- 하위 세션의 작업이 기준 브랜치에 병합되면, 터미널을 닫고 worktree와 브랜치를 삭제할지 각각의 이름을 명시해
-  한 번 제안한다. 제안하기 전에 worktree에 커밋하지 않은 변경이 없고, 다른 해시로 적용된 커밋을 포함해 모든
-  커밋의 내용이 기준 브랜치에 들어 있는지 확인한다. 사용자가 승인한 것만 삭제한다. 그 밖의 경우에는 사용자가
-  요청할 때만 worktree나 브랜치를 삭제한다.
+- 이 세션이 시작한 하위 세션의 작업이 기준 브랜치에 병합되면, 그 터미널을 닫고, 이 세션이 그 worktree와 브랜치를
+  만든 경우에는 그 하위 worktree와 로컬 브랜치도 삭제할지 각각의 이름을 명시해 한 번 제안한다.
+  workspace 클론, 현재 worktree, 기준 브랜치, 원격 브랜치는 절대 제안하지 않는다. 제안하기 전에 터미널이 열린
+  질문 없이 유휴 상태인지, worktree에 커밋하지 않은 변경이 없는지, 다른 해시로 적용된 커밋을 포함해 브랜치의 모든 커밋 내용이
+  기준 브랜치에 들어 있는지 확인한다. 제안에는 `git status --porcelain --ignored`로 얻은 그 worktree의 무시된 파일을
+  나열한다. 사용자가 승인한 것만 삭제한다. 그 밖의 경우에는 사용자가 요청할 때만 worktree나 브랜치를 삭제한다.

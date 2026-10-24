@@ -17,13 +17,14 @@ Use the Orca CLI when `orca status --json` reports a reachable runtime. For a fl
 
 Start every new agent session under a workspace that Orca already lists for its repository, in this repository as
 in another one; never create an independent top-level worktree while one exists. A repository's workspace is the
-entry whose path is its clone in `orca worktree list --repo id:<repoId> --json`. The parent is the current Orca
-worktree when it belongs to that repository, and that workspace otherwise.
+entry whose path is its clone in `orca worktree list --repo id:<repoId> --json`. The parent is `active`, the current
+Orca worktree, when it belongs to that repository, and `id:<repoId>::<clone path>`, that workspace, otherwise.
 
-- A session in the working repository that edits no file runs as a new terminal in the current worktree, or with Orca
-  orchestration as `worker-start --worktree current`.
-- A session that edits files gets a child worktree through steps 2 to 6 below, or with Orca orchestration
-  `worker-start --worktree new-child --base-branch <base>`, never `new-top-level`.
+- A session that edits no file runs as a new terminal: in the current worktree for the working repository, or with
+  Orca orchestration `worker-start --worktree current`, and in the target's workspace for another repository.
+- A session that edits files gets a child worktree through steps 2 to 6 below. With Orca orchestration in the working
+  repository, use `worker-start --worktree new-child --name <branch> --base-branch <base>` and apply step 4; never
+  `new-top-level`.
 - Pass `--no-parent` only for a repository that Orca lists no workspace for.
 
 1. Find the target in `orca repo list --json`. Register an existing local clone with `orca repo add --path <path>`.
@@ -39,7 +40,8 @@ worktree when it belongs to that repository, and that workspace otherwise.
      `orca terminal create --worktree id:<worktree id> --command <host> --json` and continue at step 5.
    - The worktree has no entry of its own: it sits inside the workspace, and Orca cannot tell which of the
      workspace's terminals runs in it. Show the user the workspace's terminal titles and ask whether to send the brief
-     to one of them or to start a new terminal as in the next case.
+     to one of them or to start a new terminal there with `orca terminal create --worktree id:<workspace id>
+     --title <branch> --command "cd '<worktree path>' && <host>" --json`, then continue at step 5.
    - No worktree is on the branch: run `orca worktree create --repo id:<repoId> --name <branch> --base-branch <base>
      --agent <host> --parent-worktree <parent> --json` with the parent from "Session placement". Pass no `--prompt`.
 4. After `orca worktree create`, Orca names the new branch itself, with its configured prefix and `/` replaced. When
@@ -86,7 +88,10 @@ protected value into it; the session that needs the file reports it to the user.
   in the target worktree's session and end this one. Never end a session yourself.
 - Otherwise continue the remaining work, and read the target with `orca terminal read --terminal <handle> --json` only
   when its result is needed.
-- When a child session's work is merged into its base, offer once to close its terminal and remove its worktree and
-  branch, naming each. Before offering, confirm that the worktree has no uncommitted change and that the base holds
-  the content of every one of its commits, including commits applied under another hash. Remove only what the user
-  approves; otherwise remove a worktree or branch only when the user asks.
+- When a child session that this session started has its work merged into the base, offer once to close its terminal
+  and, when this session created them, its child worktree and that worktree's local branch, naming each. Never offer
+  the workspace clone, the current worktree, the base branch, or a remote branch. Before offering, confirm that the
+  terminal is idle with no open question, that the worktree has no uncommitted change, and that the base holds the
+  content of every commit of the branch, including commits applied under another hash; list the worktree's ignored
+  files from `git status --porcelain --ignored` in the offer. Remove only what the user approves; otherwise remove a
+  worktree or branch only when the user asks.
