@@ -71,7 +71,9 @@ impossible, propose removing that rule.
 
 Draft every level 1 to 3 proposal as a runnable check in the temporary folder, then run it twice:
 
-- Against the current tree, where it passes, or fails only on live instances that you report.
+- Against the current tree, where it passes, or fails only on live instances that you report. When running it
+  would write into the repository, such as caches or build output, run it on a copy of the working tree in the
+  temporary folder instead.
 - Against a real past instance: export the tree of a commit that still contained the mistake with
   `git archive <commit> | tar -x -C <temporary folder>/<commit>` and run the check there. It must fail, and its
   error must name the correct alternative.
