@@ -101,7 +101,7 @@ def build_codex(dest: Path) -> None:
     for offset in range(3):
         day = old_day - timedelta(days=offset)
         folder = codex / "sessions" / day.strftime("%Y/%m/%d")
-        write(folder / f"rollout-{day.strftime('%Y-%m-%d')}T10-00-00-demo-{offset}.jsonl", 2 * MIB)
+        write(folder / f"rollout-{day.strftime('%Y-%m-%d')}T10-00-00-0199aaaa-0000-7000-8000-00000000000{offset}.jsonl", 2 * MIB)
     for index in range(4):
         (codex / ".tmp" / f"git-demo{index}").mkdir(parents=True, exist_ok=True)
     age(codex, 60 * DAY)

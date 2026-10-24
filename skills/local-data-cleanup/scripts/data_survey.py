@@ -34,7 +34,7 @@ def discover(ctx: Context, snap: Snapshot, only: Only = None) -> tuple[list[Memb
 
 
 def evaluate_member(ctx: Context, snap: Snapshot, git: GitProbe, member: Member) -> Evaluation:
-    measures = member.measures or tuple(measure(path) for path in member.paths)
+    measures = member.measures or tuple(measure(path, member.shipped) for path in member.paths)
     return evaluate(ctx, snap, git, member, measures)
 
 

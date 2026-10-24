@@ -19,9 +19,10 @@ Candidates: <JSON list>
 
 For each candidate, answer `delete` only when every point holds:
 1. Every path exists and is what the kind and description say it is.
-2. A superseded release or plugin version is older than the version its `current` or launcher link, or the
-   installed-plugin list, uses, and is not that version.
-3. No path is, or holds, a state database, credential, configuration, history, or memory file.
+2. A superseded release is older than the version its `current` or launcher link uses, and a superseded plugin
+   version is older than every version the installed-plugin list uses; neither is a version in use.
+3. No path is, or holds, a state database, credential, configuration, history, or memory file. Files shipped
+   inside a release or a plugin or marketplace package do not count, except state databases and credentials.
 4. Nothing under the paths changed within the recent window, and old session records are older than the age
    threshold.
 5. No path resolves outside the known roots.

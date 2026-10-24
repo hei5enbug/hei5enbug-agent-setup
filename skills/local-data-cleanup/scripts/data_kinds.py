@@ -145,8 +145,8 @@ def plugin_reasons(ctx: Context, snap: Snapshot, market: str, plugin: str, name:
     installed = [parse_version(str(entry.get("version", ""))) for entry in entries]
     if any(version is None for version in installed):
         return (reason("version", f"an installed version of {plugin}@{market} cannot be parsed"),)
-    highest = max(installed)
-    problem = version_reason(name, ".".join(map(str, highest)), highest, "highest installed version")
+    lowest = min(installed)
+    problem = version_reason(name, ".".join(map(str, lowest)), lowest, "lowest installed version")
     if problem:
         return (problem,)
     owner = plugin_owner_reason(ctx, snap, entries)
@@ -167,10 +167,23 @@ def plugin_versions(ctx: Context, snap: Snapshot, only: Only) -> list[Member]:
     return members
 
 
-def session_reasons(ctx: Context, snap: Snapshot, project: str, session_id: str) -> tuple[dict, ...]:
+def session_owner_reasons(snap: Snapshot, session_id: str, host: str) -> list[dict]:
     found = []
-    if session_id in snap.components:
+    if snap.processes is None:
+        found.append(reason("owner", f"unknown: the process list is unavailable ({snap.process_error})"))
+    elif session_id in snap.components:
         found.append(reason("owner", f"a running process names session {session_id}"))
+    if host != "claude":
+        return found
+    if snap.sessions is None:
+        found.append(reason("owner", f"unknown: {snap.sessions_error}"))
+    elif any(session_id in name or session_id in text for name, text in snap.sessions):
+        found.append(reason("owner", f"an active session file mentions {session_id}"))
+    return found
+
+
+def session_reasons(ctx: Context, snap: Snapshot, project: str, session_id: str) -> tuple[dict, ...]:
+    found = session_owner_reasons(snap, session_id, "claude")
     record = os.path.join(ctx.claude_dir, "projects", project, session_id + ".jsonl")
     try:
         age_ns = snap.now.timestamp() * NS_PER_SECOND - os.stat(record).st_mtime_ns
@@ -178,10 +191,6 @@ def session_reasons(ctx: Context, snap: Snapshot, project: str, session_id: str)
             found.append(reason("owner", f"the record of session {session_id} changed within the recent window"))
     except OSError:
         pass
-    if snap.sessions is None:
-        found.append(reason("owner", f"unknown: {snap.sessions_error}"))
-    elif any(session_id in name or session_id in text for name, text in snap.sessions):
-        found.append(reason("owner", f"an active session file mentions {session_id}"))
     return tuple(found)
 
 

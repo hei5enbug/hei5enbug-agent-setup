@@ -8,6 +8,9 @@ from data_common import RECORDS_CONSEQUENCE
 from data_measure import Measure
 
 
+SHIPPED_KINDS = frozenset({"superseded-release", "superseded-plugin-version"})
+
+
 @dataclass(frozen=True)
 class Member:
     kind: str
@@ -17,6 +20,10 @@ class Member:
     group: str | None = None
     full_checks: bool = True
     measures: tuple[Measure, ...] | None = None
+
+    @property
+    def shipped(self) -> bool:
+        return self.kind in SHIPPED_KINDS
 
 
 @dataclass(frozen=True)

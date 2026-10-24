@@ -3,11 +3,17 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import unittest
+from pathlib import Path
 
-from data_fixture import HOLD_CODE, FixtureCase
+from data_fixture import HOLD_CODE, OLD_DAYS, FixtureCase
+
+LIVE_ID = "0199aaaa-0000-7000-8000-000000000001"
+ENDED_ID = "0199aaaa-0000-7000-8000-000000000002"
+PAST_UPDATE = "2020-01-01T00:00:00.000Z"
 
 
 class OwnerAndOpenCase(FixtureCase):
@@ -63,6 +69,53 @@ class OwnerAndOpenCase(FixtureCase):
         # then
         self.assertIn("owner", self.checks_of(self.item(result, "busy-session")))
 
+    def test_old_claude_record_of_an_active_session_fails_owner(self) -> None:
+        """활성 세션 파일이 세션 ID를 언급하는 오래된 Claude 기록은 owner 검사에서 실패하고 다른 오래된 기록은 후보로 남는다."""
+        # given
+        for name in ("live-record", "ended-record"):
+            self.write(self.claude / "projects" / "demo-project" / f"{name}.jsonl", 20000)
+        self.age(self.claude / "projects", days=OLD_DAYS)
+        self.write(self.claude / "sessions" / "100.json", 10).write_text('{"sessionId": "live-record"}')
+        # when
+        result = self.survey("--host", "claude")
+        # then
+        live = self.item(result, "live-record.jsonl")
+        self.assertEqual("report-only", live["verdict"])
+        self.assertIn("owner", self.checks_of(live))
+        self.assertEqual("candidate", self.item(result, "ended-record.jsonl")["verdict"])
+
+    def test_codex_day_folder_named_by_a_process_or_unidentified_fails_owner(self) -> None:
+        """실행 중인 프로세스가 세션 ID를 부르는 Codex 날짜 폴더와 세션을 알 수 없는 날짜 폴더는 owner 검사에서 실패한다."""
+        # given
+        days = {"named": "2026/01/05", "unnamed": "2026/01/06", "ended": "2026/01/07"}
+        self.write(self.codex / "sessions" / days["named"] / f"rollout-2026-01-05T10-00-00-{LIVE_ID}.jsonl")
+        self.write(self.codex / "sessions" / days["unnamed"] / "rollout-without-id.jsonl")
+        self.write(self.codex / "sessions" / days["ended"] / f"rollout-2026-01-07T10-00-00-{ENDED_ID}.jsonl")
+        self.age(self.codex / "sessions")
+        self.wait_ready(self.spawn(HOLD_CODE, "resume", LIVE_ID))
+        # when
+        result = self.survey("--host", "codex")
+        # then
+        named, unnamed = self.item(result, days["named"]), self.item(result, days["unnamed"])
+        self.assertEqual(("report-only", {"owner"}), (named["verdict"], self.checks_of(named)))
+        self.assertEqual(("report-only", {"owner"}), (unnamed["verdict"], self.checks_of(unnamed)))
+        self.assertIn("unknown", unnamed["reasons"][0]["detail"])
+        self.assertEqual("candidate", self.item(result, days["ended"])["verdict"])
+
+    def test_record_whose_session_became_active_after_the_merge_is_skipped(self) -> None:
+        """병합 뒤에 세션이 활성 상태가 된 오래된 기록은 삭제 때 owner로 건너뛰고 지우지 않는다."""
+        # given
+        record = self.write(self.claude / "projects" / "demo-project" / "resumed-record.jsonl", 20000)
+        self.age(record)
+        merged = self.offer_all(self.survey("--host", "claude"))
+        self.write(self.claude / "sessions" / "100.json", 10).write_text('{"sessionId": "resumed-record"}')
+        # when
+        result = self.delete(str(self.item(merged, "resumed-record")["id"]))
+        # then
+        self.assertEqual(1, result.code)
+        self.assertTrue(record.exists())
+        self.assertIn("owner", {r["check"] for r in result.data["skipped"][0]["reasons"]})
+
 
 class ProtectedCase(FixtureCase):
     def test_state_database_is_protected_even_inside_a_temp_entry(self) -> None:
@@ -105,6 +158,66 @@ class ProtectedCase(FixtureCase):
         # then
         self.assertEqual("protected", self.item(result, "user-kept")["verdict"])
         self.assertEqual("candidate", self.item(result, "not-kept")["verdict"])
+
+    def test_nested_configuration_history_or_memory_inside_a_temp_entry_is_protected(self) -> None:
+        """임시 항목 안 깊은 곳에 설정, 히스토리, 메모리 폴더가 있으면 그 항목은 protected이고 평범한 항목은 후보다."""
+        # given
+        tmp = self.codex / ".tmp"
+        self.write(tmp / "stale-config" / "nested" / "settings.json", 300)
+        self.write(tmp / "stale-history" / "history.jsonl", 300)
+        self.write(tmp / "stale-memory" / "deep" / "memory" / "note.md", 300)
+        self.write(tmp / "plain" / "data.bin")
+        self.age(tmp)
+        # when
+        result = self.survey("--host", "codex")
+        # then
+        for name in ("stale-config", "stale-history", "stale-memory"):
+            self.assertEqual("protected", self.item(result, f"<codex>/.tmp/{name}")["verdict"], name)
+        self.assertEqual("candidate", self.item(result, "<codex>/.tmp/plain")["verdict"])
+
+    def test_files_shipped_in_a_plugin_package_do_not_protect_it(self) -> None:
+        """플러그인 패키지에 함께 배포된 skills, hooks.json, settings.json, AGENTS.md는 캐시 버전이나 임시 항목을 보호하지 않는다."""
+        # given
+        old = self.cache / "demo-market" / "demo-plugin" / "1.0.0"
+        current = self.cache / "demo-market" / "demo-plugin" / "1.1.0"
+        for folder in (old, current):
+            self.write_plugin(folder, ".claude-plugin")
+        self.write_installed(current, "1.1.0")
+        clone = self.codex / ".tmp" / "marketplace-clone"
+        self.write(clone / ".agents" / "plugins" / "marketplace.json", 100)
+        self.write(clone / "AGENTS.md", 100)
+        self.write_plugin(clone / "plugins" / "demo-plugin", ".codex-plugin")
+        self.age(self.home)
+        # when
+        result = self.survey()
+        # then
+        self.assertEqual("candidate", self.item(result, "demo-plugin/1.0.0")["verdict"])
+        self.assertEqual("candidate", self.item(result, "<codex>/.tmp/marketplace-clone")["verdict"])
+
+    def test_configuration_added_inside_an_offered_item_after_the_merge_is_skipped(self) -> None:
+        """병합 뒤에 offer 항목 안에 설정 파일이 생기면 삭제 때 protected로 건너뛰고 지우지 않는다."""
+        # given
+        entry = self.write(self.codex / ".tmp" / "stale" / "data.bin").parent
+        self.age(entry)
+        merged = self.offer_all(self.survey("--host", "codex"))
+        self.write(entry / "nested" / "settings.json", 300)
+        self.age(entry)
+        # when
+        result = self.delete(str(self.item(merged, "<codex>/.tmp/stale")["id"]))
+        # then
+        self.assertEqual(1, result.code)
+        self.assertTrue((entry / "nested" / "settings.json").exists())
+        self.assertEqual({"protected"}, {r["check"] for r in result.data["skipped"][0]["reasons"]})
+
+    def write_plugin(self, folder: Path, marker: str) -> None:
+        self.write(folder / marker / "plugin.json", 100)
+        for name in ("skills/demo/SKILL.md", "agents/demo.md", "hooks/hooks.json", "settings.json", "CLAUDE.md"):
+            self.write(folder / name, 100)
+
+    def write_installed(self, path: Path, version: str) -> None:
+        entry = {"scope": "user", "installPath": str(path), "version": version, "lastUpdated": PAST_UPDATE}
+        record = {"version": 2, "plugins": {"demo-plugin@demo-market": [entry]}}
+        self.write(self.claude / "plugins" / "installed_plugins.json").write_text(json.dumps(record), encoding="utf-8")
 
 
 class RecentOutsideGitCase(FixtureCase):
@@ -193,6 +306,46 @@ class MissingCommandCase(FixtureCase):
         # then
         self.assertIn("owner", self.checks_of(self.item(result, "any-session")))
         self.assertNotIn("candidate", {item["verdict"] for item in result.data["items"]})
+
+    def failing_commands(self, *failing: str) -> dict[str, str]:
+        commands = self.root / ("failing-" + "-".join(failing))
+        commands.mkdir()
+        for name in ("ps", "lsof", "git"):
+            if name in failing:
+                script = commands / name
+                script.write_text(f'#!/bin/sh\n"{shutil.which(name)}" "$@"\nexit 1\n', encoding="utf-8")
+                script.chmod(0o755)
+            else:
+                os.symlink(shutil.which(name), commands / name)
+        return self.env(PATH=str(commands))
+
+    def test_a_probe_that_exits_with_an_error_is_unknown_despite_its_output(self) -> None:
+        """ps나 lsof가 출력을 내더라도 0이 아닌 종료 코드로 끝나면 그 검사는 unknown이 되어 후보가 생기지 않는다."""
+        # given
+        self.scratch("any-session")
+        cases = {"lsof": "open", "ps": "owner"}
+        for command, check in cases.items():
+            with self.subTest(command=command):
+                # when
+                result = self.survey("--host", "claude", environment=self.failing_commands(command))
+                # then
+                item = self.item(result, "any-session")
+                self.assertEqual("report-only", item["verdict"])
+                details = [r["detail"] for r in item["reasons"] if r["check"] == check]
+                self.assertTrue(details and "unknown" in details[0], item["reasons"])
+
+    def test_delete_skips_an_item_when_lsof_exits_with_an_error(self) -> None:
+        """삭제할 때 lsof가 0이 아닌 종료 코드로 끝나면 선택 항목을 open 때문에 건너뛰고 지우지 않는다."""
+        # given
+        target = self.scratch("chosen-session")
+        merged = self.offer_all(self.survey("--host", "claude"))
+        arguments = ["delete", "--plan", str(self.out / "plan.json"), "--select", str(self.item(merged, "chosen-session")["id"])]
+        # when
+        result = self.run_script(*arguments, environment=self.failing_commands("lsof"))
+        # then
+        self.assertEqual(1, result.code)
+        self.assertTrue(target.exists())
+        self.assertIn("open", {r["check"] for r in result.data["skipped"][0]["reasons"]})
 
 
 if __name__ == "__main__":

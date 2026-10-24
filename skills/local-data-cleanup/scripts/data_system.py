@@ -80,6 +80,9 @@ def run_command(command: list[str]) -> tuple[str | None, str]:
         return None, f"{command[0]} is not available"
     except (OSError, subprocess.SubprocessError) as error:
         return None, f"{command[0]} failed: {error}"
+    if done.returncode != 0:
+        detail = (done.stderr.strip().splitlines() or ["no error message"])[0]
+        return None, f"{command[0]} exited with status {done.returncode}: {detail}"
     return done.stdout, ""
 
 

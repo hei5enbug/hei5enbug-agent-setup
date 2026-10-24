@@ -14,6 +14,7 @@ from data_fixture import SCRIPT_DIR, FixtureCase
 CONSEQUENCE = "These sessions can no longer be resumed or reviewed."
 PAST_UPDATE = "2020-01-01T00:00:00.000Z"
 FUTURE_UPDATE = "2099-01-01T00:00:00.000Z"
+SESSION_ID = "0199aaaa-0000-7000-8000-000000000003"
 
 
 class ReleaseCase(FixtureCase):
@@ -117,6 +118,26 @@ class PluginVersionCase(FixtureCase):
         # then
         self.assertEqual({"owner"}, self.checks_of(self.item(result, "demo-plugin/1.0.0")))
 
+    def test_version_between_installed_versions_is_not_a_candidate(self) -> None:
+        """설치된 버전이 1.0.0과 1.2.0이면 둘 사이의 1.1.0은 version 때문에 보고 전용이고 둘보다 낮은 0.9.0만 후보다."""
+        # given
+        plugin = self.cache / "demo-market" / "demo-plugin"
+        for name in ("0.9.0", "1.0.0", "1.1.0", "1.2.0"):
+            self.write(plugin / name / "plugin.bin")
+            self.age(plugin / name)
+        entries = [
+            {"scope": scope, "installPath": str(plugin / version), "version": version, "lastUpdated": PAST_UPDATE}
+            for scope, version in (("user", "1.2.0"), ("project", "1.0.0"))
+        ]
+        record = {"version": 2, "plugins": {"demo-plugin@demo-market": entries}}
+        self.write(self.claude / "plugins" / "installed_plugins.json").write_text(json.dumps(record), encoding="utf-8")
+        # when
+        result = self.survey("--host", "claude")
+        # then
+        between = self.item(result, "demo-plugin/1.1.0")
+        self.assertEqual(("report-only", {"version"}), (between["verdict"], self.checks_of(between)))
+        self.assertEqual("candidate", self.item(result, "demo-plugin/0.9.0")["verdict"])
+
 
 class RecordsCase(FixtureCase):
     def claude_pair(self, project: str, name: str, days: float, size: int = 20000) -> None:
@@ -149,7 +170,7 @@ class RecordsCase(FixtureCase):
         self.claude_pair("demo-project", "recent", days=1, size=90000)
         self.write(self.claude / "projects" / "demo-project" / "memory" / "note.md", 30000)
         for day, size in (("2026/01/05", 60000), ("2026/01/06", 30000), ("2026/02/01", 8000)):
-            self.write(self.codex / "sessions" / day / "rollout.jsonl", size)
+            self.write(self.codex / "sessions" / day / f"rollout-demo-{SESSION_ID}.jsonl", size)
             self.age(self.codex / "sessions" / day)
         self.write(self.codex / "archived_sessions" / "old.jsonl", 20000)
         self.age(self.codex / "archived_sessions" / "old.jsonl")
@@ -196,6 +217,28 @@ class RecordsCase(FixtureCase):
         # then
         self.assertLessEqual(self.item(result, "linked")["size"], self.item(result, "single")["size"] + 8192)
         self.assertTrue(single.exists())
+
+    def test_hard_link_outside_the_item_is_not_counted(self) -> None:
+        """항목 밖에도 하드링크가 남는 파일은 지워도 공간이 돌아오지 않으므로 항목 크기에 넣지 않는다."""
+        # given
+        shared = self.scratch("shared", size=200000)
+        (self.root / "outside").mkdir()
+        os.link(shared / "data.bin", self.root / "outside" / "kept.bin")
+        # when
+        result = self.survey("--host", "claude")
+        # then
+        self.assertLess(self.item(result, "shared")["size"], 100000)
+
+    def test_codex_plugin_storage_is_listed_as_other(self) -> None:
+        """Codex 데이터 폴더의 plugins는 이 스킬이 회수하는 종류가 아니므로 other로 보고 전용으로 나온다."""
+        # given
+        self.write(self.codex / "plugins" / "cache" / "demo-market" / "demo-plugin" / "1.0.0" / "plugin.bin")
+        self.age(self.codex)
+        # when
+        result = self.survey("--host", "codex")
+        # then
+        item = self.item(result, "<codex>/plugins")
+        self.assertEqual(("other", "report-only", {"kind"}), (item["kind"], item["verdict"], self.checks_of(item)))
 
 
 class DefaultRootCase(FixtureCase):

@@ -287,6 +287,22 @@ class DeleteCase(FixtureCase):
         self.assertTrue((releases / "1.0.1-demo").exists())
         self.assertTrue(database.exists() and wal.exists())
 
+    def test_freed_size_leaves_out_a_file_hard_linked_outside_the_item(self) -> None:
+        """항목 밖에 하드링크가 남는 파일은 삭제해도 확보 용량에 넣지 않고 밖의 링크는 그대로 남는다."""
+        # given
+        target = self.scratch("linked-session", size=200000)
+        kept = self.root / "outside" / "kept.bin"
+        kept.parent.mkdir()
+        os.link(target / "data.bin", kept)
+        merged = self.offer_all(self.survey("--host", "claude"))
+        # when
+        result = self.delete(str(self.item(merged, "linked-session")["id"]))
+        # then
+        self.assertEqual(0, result.code, result.data)
+        self.assertFalse(target.exists())
+        self.assertTrue(kept.exists())
+        self.assertLess(result.data["freed_total"], 100000)
+
     def test_plan_that_is_not_a_merge_output_exits_with_two(self) -> None:
         """병합 결과가 아닌 계획 파일은 종료 코드 2로 거부한다."""
         # given

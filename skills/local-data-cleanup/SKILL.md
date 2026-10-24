@@ -10,9 +10,10 @@ description: >-
   project's own build output.
 compatibility: >-
   Needs Python 3.12 or later, filesystem access to the hosts' data folders, and the `ps`, `lsof`, and `git`
-  commands; a missing command makes the checks that need it unknown, so nothing they cover is offered. Without
-  administrator rights, `lsof` sees only the current user's processes. The second verdict needs a read-only agent
-  on the other host.
+  commands; a missing command, or one that exits with a non-zero status, makes the checks that need it unknown,
+  so nothing they cover is offered. `lsof` runs without search terms, so no exit status means "no matches".
+  Without administrator rights, `lsof` sees only the current user's processes. The second verdict needs a
+  read-only agent on the other host.
 ---
 
 # Local Data Cleanup
@@ -87,16 +88,23 @@ Every other top-level entry of the Claude Code and Codex data folders is listed 
 state, such as a database, credential, configuration, or history, and report-only otherwise, so the user sees where
 the rest of the space goes. It is never offered.
 
+A size is the space on disk that deleting the item frees. A hard-linked file counts only when every one of its
+links lies inside the item, because a link elsewhere keeps its space in use.
+
 An item is a candidate only when every check passes; any failed or unknown check makes it report-only:
 
 - No live process names the item or its session, no recorded session that owns it is active, and no running host
-  process could still load a superseded plugin version.
+  process could still load a superseded plugin version. Old session records get the same session checks as
+  scratch folders; a record file whose session ID cannot be read, or a process list or session file that cannot be
+  read, makes the check unknown.
 - No process holds a file or its working folder open under the item.
 - The item is not the target of a `current` or launcher link, not an installed plugin path, and does not contain
   or sit inside one.
 - Nothing under the item changed within the last 24 hours.
 - The item is not and does not contain a state database, credential, configuration, history, memory, or an entry
-  the user protected with `--protect`. These are never offered.
+  the user protected with `--protect`. These are never offered. Inside a superseded release, a cached plugin
+  version, or a plugin or marketplace package, only state databases and credentials count, because the
+  configuration-like files there ship as code.
 - Its resolved real path stays inside the known data and session temporary roots.
 - No Git work tree that holds the item or sits inside it has uncommitted changes or untracked files that are not
   ignored.

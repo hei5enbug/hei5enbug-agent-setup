@@ -19,7 +19,7 @@ def protected_reasons(ctx: Context, snap: Snapshot, path: str, measure: Measure)
     if is_protected_name(name):
         found.append(reason("protected", f"{ctx.display(path)} is a protected name"))
     for inner in measure.protected:
-        found.append(reason("protected", f"{ctx.display(inner)} is a state database or credential"))
+        found.append(reason("protected", f"{ctx.display(inner)} is protected state, configuration, history, or memory"))
     path_real = real(path)
     for protect, protect_real in zip(ctx.protect, snap.real_protect):
         covers = within(path_real, protect_real) or within(protect_real, path_real)
