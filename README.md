@@ -25,6 +25,7 @@ hei5enbug-agent-setup/
 ├── .codex-plugin/plugin.json
 ├── .github/workflows/validate.yml
 ├── AGENTS.md
+├── issue-target.json
 ├── docs/
 │   ├── rule-enforcement.md
 │   └── ko/
@@ -93,6 +94,7 @@ hei5enbug-agent-setup/
     ├── local-data-cleanup/
     ├── mistake-enforcer/
     ├── orca-plugin-refresh/
+    ├── report-skill-gap/
     ├── session-retro/
     ├── skill-builder/
     ├── suggest-commit/
@@ -1130,12 +1132,45 @@ execution-path isolation; semantic equivalence still requires human or model rev
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Converts Markdown, HTML, PDF, DOCX, and Google Docs content into Confluence pages, preserves document structure and assets, and keeps pages synchronized with source revisions without losing web edits or inline comments. [Korean guide](docs/ko/skills/document-to-confluence/SKILL.ko.md). |
 | [`local-data-cleanup`](skills/local-data-cleanup/SKILL.md) | Surveys Claude Code and Codex local data read-only, checks every candidate against fixed safety rules and an independent verdict from the other host, reports it by size, and deletes only the items you select. [Korean guide](docs/ko/skills/local-data-cleanup/SKILL.ko.md). |
 | [`mistake-enforcer`](skills/mistake-enforcer/SKILL.md) | Groups mistakes that agents repeat in a repository into classes from commits, reverts, review comments, and corrections, picks the highest enforcement level that works, and proves each proposed check fails on a real past instance. Runs only when you ask for it. [Korean guide](docs/ko/skills/mistake-enforcer/SKILL.ko.md). |
+| [`report-skill-gap`](skills/report-skill-gap/SKILL.md) | Drafts one issue for one gap in a plugin's skill or instruction, or for a workflow no skill covers, removes the case's identifiers and private details from the proposal, and files it at the tracker the owning plugin declares, after a preview when the tracker is public. Starts only when you name it. [Korean guide](docs/ko/skills/report-skill-gap/SKILL.ko.md). |
 | [`session-retro`](skills/session-retro/SKILL.md) | Reviews a day's Claude Code and Codex sessions of a repository with read-only scouts, turns corrections, failures, and repeated work into evidence-backed skill improvements per plugin, asks the open decisions, and writes plans on request. [Korean guide](docs/ko/skills/session-retro/SKILL.ko.md). |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | Creates, tests, and packages agent skills through a draft → test → review → improve loop. [Korean guide](docs/ko/skills/skill-builder/SKILL.ko.md). |
 | [`orca-plugin-refresh`](skills/orca-plugin-refresh/SKILL.md) | Updates this plugin and other plugins you name in Claude Code and Codex, with a per-host install gate, and applies the installed versions to idle Orca-managed sessions without restarting them. [Korean guide](docs/ko/skills/orca-plugin-refresh/SKILL.ko.md). |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | Reads the staged and unstaged changes, or the scope you name, plus recent commit history, then suggests five commit messages that match the repo's style. When you ask it to commit, it commits with the single best subject instead. [Korean guide](docs/ko/skills/suggest-commit/SKILL.ko.md). |
 | [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | Writes or reviews technical design documents and RFCs without taking ownership of implementation planning. [Korean guide](docs/ko/skills/technical-design-writer/SKILL.ko.md). |
 | [`tiki-taka`](skills/tiki-taka/SKILL.md) | Runs a turn-limited debate between the current agent and an opposing Claude/Codex session to surface and resolve issues. [Korean guide](docs/ko/skills/tiki-taka/SKILL.ko.md). |
+
+### Issue tracker declaration
+
+`report-skill-gap` files an issue only at a tracker that the owning plugin declares in `issue-target.json` at its
+root, next to `.claude-plugin/` and `.codex-plugin/`. The skill learns every tracker from these files, so this plugin
+never needs to know about a plugin that builds on it. This plugin declares its own repository:
+
+```json
+{
+  "version": 1,
+  "tracker": {"kind": "github", "location": "hei5enbug/hei5enbug-agent-setup"},
+  "language": "en",
+  "body_format": "markdown",
+  "labels": ["bug", "enhancement"],
+  "public": true,
+  "write_approval": "preview"
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `version` | Always `1`. |
+| `tracker` | `kind` is `github`, `gitlab`, `jira`, or `other`; `location` is `owner/repo` on GitHub, otherwise the project URL or key. |
+| `language` | Language tag of the issue text, such as `en` or `ko`. |
+| `body_format` | `markdown`, `jira-wiki`, or `plain`. |
+| `labels` | Labels the skill may choose from; it picks one, or none when the list is empty. |
+| `public` | `true` when anyone can read the tracker. A public tracker always gets a preview. |
+| `write_approval` | `preview` shows the final text and waits for approval; `direct` files when you name the skill. |
+| `content_rules` | Optional path, relative to the plugin root, of extra rules that remove content from every issue. |
+
+Unknown keys make the declaration invalid. A plugin without the file, or with an invalid one, gets the draft in the
+conversation and no issue.
 
 ## Related
 

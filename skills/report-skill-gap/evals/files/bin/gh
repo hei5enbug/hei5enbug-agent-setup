@@ -1,0 +1,25 @@
+#!/bin/sh
+# Evaluation stand-in for gh: answers reads from fixtures and refuses every write.
+here=$(cd "$(dirname "$0")" && pwd)
+log="${FAKE_GH_LOG:-/dev/null}"
+printf '%s\n' "gh $*" >> "$log"
+repo=""
+prev=""
+for arg in "$@"; do
+  case "$prev" in --repo|-R) repo="$arg" ;; esac
+  case "$arg" in --repo=*) repo="${arg#--repo=}" ;; esac
+  prev="$arg"
+done
+case "$1 $2" in
+  "auth status")
+    echo "github.com: logged in as demo-user"
+    ;;
+  "issue list")
+    file="$here/../trackers/$(printf '%s' "$repo" | tr '/' '_').json"
+    if [ -f "$file" ]; then cat "$file"; else echo "[]"; fi
+    ;;
+  *)
+    echo "fake gh: only 'auth status' and 'issue list' are available in this evaluation" >&2
+    exit 1
+    ;;
+esac

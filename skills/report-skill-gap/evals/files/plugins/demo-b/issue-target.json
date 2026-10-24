@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "tracker": {"kind": "github", "location": "demo-org/demo-b-internal"},
+  "language": "ko",
+  "body_format": "markdown",
+  "labels": ["bug", "improvement"],
+  "public": false,
+  "write_approval": "direct",
+  "content_rules": "references/issue-rules.md"
+}

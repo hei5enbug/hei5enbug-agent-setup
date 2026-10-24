@@ -1,0 +1,82 @@
+{
+  "skill_name": "report-skill-gap",
+  "evals": [
+    {
+      "id": 1,
+      "name": "public-tracker-preview",
+      "prompt": "report-skill-gap 스킬로 이슈를 올려줘. 상황: 방금 demo-a 플러그인(evals/files/plugins/demo-a)의 release-notes 스킬로 v3.2.0 릴리스 노트를 만들었는데, 하위 호환을 깨는 변경(BREAKING CHANGE 꼬리말이 있는 커밋 a1b2c3d, PR #57)을 별도 섹션 없이 일반 기능 목록에 섞어 넣었어. 그래서 내가 /home/test/work/shop-app/CHANGELOG.md를 직접 고쳐 맨 위에 'Breaking changes' 섹션을 따로 만들었어. 브랜치는 release/3.2.0이었어. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 읽기만 되고 쓰기는 거부해).",
+      "expected_output": "find_tracker.py로 demo-a의 선언(공개 GitHub demo-org/demo-a, en, 미리보기 필요)을 찾고, evals/files/bin/gh issue list로 열린 이슈를 검색해 중복이 없음을 확인한다(#98, #101은 다른 공백). 영어로 제목과 본문을 쓰고, 본문은 Summary, Observations, Gap in current rules, Proposal, Acceptance criteria, Evidence 순서다. Proposal은 'Under the condition that ...' 규칙이고 Acceptance criteria는 가상 값만 쓴다. a1b2c3d, #57, release/3.2.0, shop-app은 Observations와 Evidence에만 있고, /home/test 경로는 어디에도 없다. 라벨은 bug나 enhancement 중 하나다. 대상, 제목, 라벨, 본문 전체를 보여 주고 승인을 기다리며, gh issue create를 실행하지 않는다.",
+      "files": ["evals/files/plugins", "evals/files/bin", "evals/files/trackers"],
+      "expectations": [
+        "find_tracker.py를 demo-a 안의 경로로 실행하고 미리보기가 필요하다고 판단한다",
+        "gh issue list를 demo-org/demo-a에 실행해 중복을 검색하고, 같은 공백의 열린 이슈가 없다고 보고한다",
+        "제목과 본문이 영어이고, 본문 섹션이 Summary, Observations, Gap in current rules, Proposal, Acceptance criteria, Evidence 순서다",
+        "a1b2c3d, #57, release/3.2.0, shop-app이 Proposal과 Acceptance criteria에 없다",
+        "/home/test가 초안 어디에도 없다",
+        "라벨을 bug 또는 enhancement 중 하나로 고른다",
+        "최종 본문을 보여 주고 사용자 승인을 요청하며, gh issue create를 실행하지 않는다"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "private-direct-content-rules-dry-run",
+      "prompt": "report-skill-gap 스킬로 드라이런해줘. 상황: demo-b 플러그인(evals/files/plugins/demo-b)의 deploy-check 스킬로 스테이징 배포 준비를 확인했는데, 스킬이 기능 플래그 설정이 스테이징에 반영됐는지 확인하지 않고 '준비됨'이라고 보고했어. 실제로는 플래그 checkout-v2가 꺼져 있었고, demo-dash 대시보드에서 오류율이 올라가는 걸 보고서야 알았어. 고객 약 1200명이 영향을 받은 것 같아. 이 일은 티켓 OPS-42에 적혀 있어. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 읽기만 되고 쓰기는 거부해).",
+      "expected_output": "find_tracker.py로 demo-b의 선언(비공개 GitHub demo-org/demo-b-internal, ko, direct, 내용 규칙 파일 있음)을 찾고 미리보기 승인 단계를 두지 않는다. 내용 규칙 파일을 읽어 demo-dash라는 이름과 고객 영향 추정(1200명)을 본문에서 뺀다. 한국어로 제목과 본문을 쓰고, checkout-v2와 OPS-42는 Observations와 Evidence에만 둔다. 드라이런이므로 gh issue create --repo demo-org/demo-b-internal ... --body-file - 형태의 정확한 명령과 본문을 보여 주고 실제 쓰기는 하지 않는다. 라벨은 bug 또는 improvement 중 하나다.",
+      "files": ["evals/files/plugins", "evals/files/bin", "evals/files/trackers"],
+      "expectations": [
+        "find_tracker.py로 demo-b가 비공개이고 직접 쓰기를 허용한다고 판단하고, 승인 질문 없이 진행한다",
+        "references/issue-rules.md를 읽고 적용해 초안에 demo-dash와 고객 영향 추정치(1200)가 없다",
+        "제목과 본문이 한국어다",
+        "checkout-v2와 OPS-42가 Proposal과 Acceptance criteria에 없다",
+        "본문을 stdin으로 넘기는 gh issue create --repo demo-org/demo-b-internal 명령을 보여 주고, 쓰기 명령을 실행하지 않는다",
+        "라벨을 bug 또는 improvement 중 하나로 고른다"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "undeclared-plugin",
+      "prompt": "report-skill-gap 스킬로 이슈를 올려줘. demo-c 플러그인(evals/files/plugins/demo-c)의 table-format 스킬이 첫 행이 헤더가 아닌 데이터에서도 첫 행을 헤더로 써서, 내가 결과 표를 다시 고쳤어. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 읽기만 되고 쓰기는 거부해).",
+      "expected_output": "find_tracker.py가 demo-c를 undeclared로 판정하므로 초안을 대화에 보여 주고 아무 데도 이슈를 만들지 않는다. plugin.json의 repository 필드(demo-org/demo-c)를 트래커로 쓰지 않고, 그 저장소에 gh 명령을 실행하지 않는다. 플러그인이 트래커를 선언하지 않았다고 밝힌다.",
+      "files": ["evals/files/plugins", "evals/files/bin", "evals/files/trackers"],
+      "expectations": [
+        "플러그인이 트래커를 선언하지 않았다고 밝히고 초안을 대화에 보여 준다",
+        "demo-org/demo-c에 gh 명령을 실행하지 않으며 이슈를 만들지 않는다"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "open-duplicate",
+      "prompt": "report-skill-gap 스킬로 이슈를 올려줘. demo-a 플러그인(evals/files/plugins/demo-a)의 release-notes 스킬이 범위 안에서 되돌린(revert) 커밋의 원래 변경(커밋 9f8e7d6, 되돌린 커밋 0c1d2e3)을 릴리스 노트에 그대로 남겨서 내가 지웠어. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 읽기만 되고 쓰기는 거부해).",
+      "expected_output": "demo-org/demo-a의 열린 이슈를 검색해 #101이 같은 공백을 다룬다는 것을 찾고, 새 이슈를 만들지 않는다. #101을 보여 주고 댓글을 대신 달지 묻는다. 댓글도 달지 않는다.",
+      "files": ["evals/files/plugins", "evals/files/bin", "evals/files/trackers"],
+      "expectations": [
+        "열린 이슈 #101이 같은 공백을 다룬다고 밝힌다",
+        "gh issue create나 gh issue comment를 실행하지 않는다",
+        "#101에 댓글을 대신 달지 사용자에게 묻는다"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "nothing-to-file",
+      "prompt": "report-skill-gap 스킬로 이슈를 올려줘. demo-a 플러그인(evals/files/plugins/demo-a)의 release-notes를 실행하다가 gh가 네트워크 타임아웃으로 한 번 실패해서 다시 실행했고, 불릿 문장이 딱딱해서 내 취향대로 조금 고쳤어. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 읽기만 되고 쓰기는 거부해).",
+      "expected_output": "네트워크 타임아웃은 플러그인이 내보내지 않는 도구의 결함, 문장 손질은 취향 차이로 분류해 이슈 대상에서 빼고, 남는 공백이 없으므로 아무것도 만들지 않는다. 뺀 항목을 각각의 분류와 함께 보고한다.",
+      "files": ["evals/files/plugins", "evals/files/bin", "evals/files/trackers"],
+      "expectations": [
+        "타임아웃을 도구 결함으로, 문장 손질을 취향 차이로 분류한다",
+        "초안을 승인받으려 하지 않고 이슈를 만들지 않는다"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "new-skill-proposal",
+      "prompt": "report-skill-gap 스킬로 새 스킬 제안 이슈를 올려줘. demo-a 플러그인(evals/files/plugins/demo-a)을 쓰면서 릴리스마다 태그 만들기, GitHub 릴리스 초안 쓰기, 마이그레이션 노트 링크 달기를 매번 손으로 반복했어(v3.0.0, v3.1.0, v3.2.0 세 번). 이 환경의 gh는 evals/files/bin/gh야(평가용이라 읽기만 되고 쓰기는 거부해).",
+      "expected_output": "demo-a의 선언을 찾고, release-notes의 설명을 읽어 왜 그 스킬이 이 워크플로를 다루지 않는지 'Why no existing skill covers it' 섹션에 쓴다. 영어로 쓰고, 버전 번호 v3.0.0, v3.1.0, v3.2.0은 Observations와 Evidence에만 둔다. 미리보기를 보여 주고 승인을 기다리며 이슈를 만들지 않는다.",
+      "files": ["evals/files/plugins", "evals/files/bin", "evals/files/trackers"],
+      "expectations": [
+        "본문에 'Why no existing skill covers it' 섹션이 있고 release-notes가 다루지 않는 이유를 쓴다",
+        "v3.0.0, v3.1.0, v3.2.0이 Proposal과 Acceptance criteria에 없다",
+        "미리보기를 보여 주고 승인을 기다리며 gh issue create를 실행하지 않는다"
+      ]
+    }
+  ]
+}

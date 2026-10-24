@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "tracker": {"kind": "github", "location": "demo-org/demo-a"},
+  "language": "en",
+  "body_format": "markdown",
+  "labels": ["bug", "enhancement"],
+  "public": true,
+  "write_approval": "preview"
+}

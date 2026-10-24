@@ -1,0 +1,4 @@
+[
+  {"number": 98, "title": "release-notes: support a custom changelog template", "url": "https://github.com/demo-org/demo-a/issues/98", "labels": [{"name": "enhancement"}]},
+  {"number": 101, "title": "release-notes: entries for reverted commits stay in the generated notes", "url": "https://github.com/demo-org/demo-a/issues/101", "labels": [{"name": "bug"}], "body": "## Summary\nWhen a commit is reverted inside the release range, release-notes still lists the original change.\n"}
+]
