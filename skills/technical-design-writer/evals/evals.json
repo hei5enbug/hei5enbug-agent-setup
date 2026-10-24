@@ -216,6 +216,18 @@
         "Because the reviewer runs on Claude, the usage of 25.0 percent does not let the review start without the user's answer.",
         "No reviewer is invoked before the user answers the post-draft approval question."
       ]
+    },
+    {
+      "id": 19,
+      "prompt": "Write a design document for adding a new notification channel. The draft proposal keeps the supported channel names both in the API validation list and in a separate worker routing table, which maintainers update by hand, and splits the service into fetch, transform, and send modules. Choosing the queue boundary between the API and the workers is hard to reverse.",
+      "expected_output": "The design flags the two hand-synced channel lists and names one source the other derives from, flags or justifies the execution-order split, and compares at least two structurally different queue-boundary candidates.",
+      "files": [],
+      "expectations": [
+        "The document identifies the API validation list and the worker routing table as lists kept in sync by hand and names a single source that the other derives from.",
+        "The document either restructures the fetch, transform, and send split by owned knowledge or records why it stays under alternatives and trade-offs.",
+        "The alternatives section compares at least two structurally different candidates for the queue boundary.",
+        "The document does not add implementation steps or execution order that the request did not ask for."
+      ]
     }
   ]
 }

@@ -35,7 +35,8 @@ resolves the type, apply that evidence.
 3. Gather source contracts and evidence. Prefer requirements, code, schemas, configuration, measured results,
    and official interfaces over descriptive prose. Draft the opening first, then describe the target design,
    boundaries, behavior, contracts, failure handling, constraints, alternatives, and trade-offs in the target
-   language. Apply the precision, structure, table, diagram, and language rules in `SKILL.md`.
+   language. Apply the precision, structure, table, diagram, and language rules in `SKILL.md`. Screen every
+   candidate with "Structural red flags" below.
 4. Plan terminology changes for the entire affected scope. Update references and cited headings together.
    Ask before renaming implementation identifiers or externally visible contract names. When a material fact,
    decision, definition, or contract changes, check the statements that depend on it in the edited document,
@@ -51,6 +52,18 @@ resolves the type, apply that evidence.
 6. Apply the independent model validation reference supplied by the session instructions. It owns the user
    confirmation gate, reviewer selection, model configuration, review checks, failure handling,
    finalization, and result reporting. Do not send the document to a reviewer before that gate passes.
+
+## Structural red flags
+
+Screen every candidate design, including each alternative you compare, for these faults:
+
+- A shallow module: an interface nearly as large as the behavior it hides.
+- One internal decision, such as a format, limit, or rule, repeated across modules instead of owned by one.
+- Modules split by execution order, such as read, then process, then write, instead of by the knowledge each owns.
+- Lists, tables, or enumerations that must be kept in sync by hand. Name the single source the others derive from.
+
+Fix a flag in the target design, or record why it stays under alternatives and trade-offs. When a boundary decision
+is hard to reverse, compare at least two structurally different candidates.
 
 ## Output template
 
@@ -90,4 +103,6 @@ section rather than filling it with placeholders.
 - Contracts, constraints, alternatives, and material trade-offs are complete and precise.
 - Execution order appears only when requested or needed to establish feasibility, safety, or compatibility.
 - No speculative extension, unrelated refactor, or unrequested low-level detail remains.
+- Every structural red flag is fixed or recorded with its reason, and a hard-to-reverse boundary has two
+  structurally different candidates.
 - The shared independent validation contract is satisfied, including its gate and the user's answer.

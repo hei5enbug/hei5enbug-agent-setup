@@ -22,6 +22,9 @@ Finish when required results and checks are accepted. Report implemented behavio
 remaining limits separately. Optional follow-ups and an unperformed optional independent review do not keep
 an accepted implementation open; the existing independent-review approval contract still applies.
 
+Before a planned pause, a handoff, or an expected compaction of this work, or when continuing from a resume note,
+read [pause and resume](pause-and-resume.md).
+
 ## Check evidence
 
 Keep a compact record of each check's scope, command, result, and relevant input/environment state. Accept
