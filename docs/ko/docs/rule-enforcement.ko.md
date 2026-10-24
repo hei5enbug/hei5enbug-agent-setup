@@ -80,7 +80,10 @@
 | `skills/decision-navigator/tests/test_local_lock.py`, `skills/decision-navigator/tests/test_decision_eval_fixtures.py` | 티켓 점유는 한 번에 하나만 성공하고, 평가 픽스처는 계속 쓸 수 있다. | `skills/decision-navigator/SKILL.md` |
 | `skills/deep-interview/tests/test_interview_eval_fixtures.py` | 인터뷰 평가 사례는 상태 흐름과 입력 파일을 유지한다. | `skills/deep-interview/SKILL.md` |
 | `skills/document-to-confluence/tests/test_column_widths.py`, `skills/document-to-confluence/tests/test_image_size.py`, `skills/document-to-confluence/tests/test_text_parity.py`, `skills/document-to-confluence/tests/test_validate_body.py` | 변환한 페이지는 열 너비, 이미지 크기, 텍스트 일치를 지키고 로컬 경로를 담지 않는다. | `skills/document-to-confluence/SKILL.md` |
-| `skills/document-to-confluence/tests/test_render_diagrams.mjs` | Mermaid 다이어그램은 고정한 렌더러로 그리고, 파싱에 실패하면 대체 경로로 넘어간다. | `skills/document-to-confluence/SKILL.md` |
+| `skills/document-to-confluence/tests/test_render_diagrams.mjs` | 다이어그램 캡처는 유효하고 겹치지 않는 파일 이름을 쓰고, 요청이 없으면 브라우저 샌드박스를 켜 두며, 항상 브라우저를 닫는다. | `skills/document-to-confluence/references/diagrams.md` (Naming and browser flags) |
 | `skills/orca-plugin-refresh/tests/test_orca_plugin_refresh.py` | 갱신은 입력창이 빈 유휴 세션에만 입력을 보낸다. | `skills/orca-plugin-refresh/SKILL.md` |
 | `skills/tiki-taka/tests/test_runner.py`, `skills/tiki-taka/tests/test_stream_agent.py`, `skills/tiki-taka/tests/test_detached_job.py`, `skills/tiki-taka/tests/test_questions.py` | 토론 실행기는 상태, 완료 판정, 정리, 질문 파일 규칙을 지킨다. | `skills/tiki-taka/SKILL.md` |
+| `skills/local-data-cleanup/tests/test_survey_kinds.py`, `skills/local-data-cleanup/tests/test_survey_checks.py`, `skills/local-data-cleanup/tests/test_merge_delete.py` | 조사는 읽기 전용으로 남고 안전하지 않은 후보를 보고 전용이나 보호 항목으로 바꾸며, 삭제는 두 판정이 모두 허용하고 사용자가 고른 항목만 지운다. | `skills/local-data-cleanup/SKILL.md` |
+| `skills/report-skill-gap/tests/test_find_tracker.py` | 트래커 탐색은 플러그인 루트를 찾아 `issue-target.json`을 검증하고, 선언이 없거나 잘못되면 트래커를 추측하지 않고 그 상태를 보고한다. | `skills/report-skill-gap/SKILL.md` |
+| `tests/test_issue_target.py` | 이 플러그인 루트의 `issue-target.json`은 공개 GitHub 트래커를 선언한다. | `README.md` (report-skill-gap) |
 | `skills/skill-builder/scripts/quick_validate.py`를 모든 스킬에 실행 | 모든 스킬 폴더가 검증을 통과한다. | `README.md` (Development checks) |
