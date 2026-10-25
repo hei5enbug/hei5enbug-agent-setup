@@ -1338,6 +1338,13 @@ class OrcaIdleCallbackTest(unittest.TestCase):
         self.assertEqual(2, len(tracked))
 
 
+HOST_ONLY_HOOKS = {
+    ("UserPromptSubmit", "scripts/session_context.py"),
+    ("PreToolUse", "scripts/agent_guard.py"),
+    ("PermissionRequest", "scripts/datagrip_guard.py"),
+}
+
+
 class UpdateTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -1364,7 +1371,7 @@ class UpdateTest(unittest.TestCase):
         manifest_dir.mkdir(parents=True, exist_ok=True)
         manifest = {"name": refresh.PLUGIN, "version": manifest_version or version}
         if host == "claude":
-            manifest["hooks"] = "./config/claude-mod.json"
+            manifest["hooks"] = ["./config/claude-mod.json", "./hooks/claude-hooks.json"]
             config = root / "config" / "claude-mod.json"
             module = root / "hooks" / "mod" / "register.js"
             config.parent.mkdir(parents=True, exist_ok=True)
@@ -1373,24 +1380,30 @@ class UpdateTest(unittest.TestCase):
                 config.write_text(json.dumps({"modules": ["../hooks/mod/register.js"]}), encoding="utf-8")
             if not missing_module:
                 module.write_text("export function register() {}\n", encoding="utf-8")
+        else:
+            manifest["hooks"] = ["./hooks/hooks.json", "./hooks/codex-hooks.json"]
         (manifest_dir / "plugin.json").write_text(json.dumps(manifest), encoding="utf-8")
-        hooks = []
+        shared, host_only = {}, {}
         launcher = root / refresh.HOOK_LAUNCHER
         launcher.parent.mkdir(parents=True, exist_ok=True)
         launcher.write_text("#!/bin/sh\n", encoding="utf-8")
-        for target in refresh.REQUIRED_HOOK_TARGETS:
+        for target in refresh.REQUIRED_HOOK_TARGETS[host]:
             path = root / target
             path.parent.mkdir(parents=True, exist_ok=True)
             if target != missing_target:
                 path.write_text("# hook target\n", encoding="utf-8")
+        for event, target in refresh.REQUIRED_HOOKS[host]:
             if direct_hooks:
                 command = f'python3 "${{CLAUDE_PLUGIN_ROOT}}/{target}"'
             else:
                 command = f'sh "${{CLAUDE_PLUGIN_ROOT}}/{refresh.HOOK_LAUNCHER}" {Path(target).name}'
-            hooks.append({"type": "command", "command": command})
+            events = host_only if (event, target) in HOST_ONLY_HOOKS else shared
+            events.setdefault(event, []).append({"hooks": [{"type": "command", "command": command}]})
         hook_path = root / "hooks" / "hooks.json"
         hook_path.parent.mkdir(parents=True, exist_ok=True)
-        hook_path.write_text(json.dumps({"hooks": {"SessionStart": [{"hooks": hooks}]}}), encoding="utf-8")
+        hook_path.write_text(json.dumps({"hooks": shared}), encoding="utf-8")
+        host_path = root / "hooks" / f"{host}-hooks.json"
+        host_path.write_text(json.dumps({"hooks": host_only}), encoding="utf-8")
         instructions = root / "instructions"
         instructions.mkdir(parents=True, exist_ok=True)
         (instructions / "policy.md").write_text(instruction or f"{host} {version}\n", encoding="utf-8")
@@ -2325,6 +2338,160 @@ class UpdateTest(unittest.TestCase):
                 self.assertEqual(("plugin_hook_target_missing",) * 2, (strict.exception.code, lenient.exception.code))
         hooks_path.write_text(json.dumps(payload), encoding="utf-8")
         self.assertTrue(refresh.validate_install("codex", install)["digest"])
+
+
+    def test_호스트가_불러오는_훅_파일마다_필수_대상을_확인한다(self):
+        """Claude는 hooks.json과 claude-hooks.json, Codex는 hooks.json과 codex-hooks.json의 대상 합집합이 호스트별 필수 대상을 채워야 한다."""
+        # Given
+        installs = {host: self.install(host, "1.1.0") for host in refresh.HOSTS}
+
+        for host, install in installs.items():
+            with self.subTest(host=host):
+                host_file = Path(install["root"]) / "hooks" / f"{host}-hooks.json"
+                original = host_file.read_text(encoding="utf-8")
+                host_file.write_text(json.dumps({"hooks": {"Stop": [{"hooks": [
+                    {"type": "command", "command": f'sh "${{CLAUDE_PLUGIN_ROOT}}/{refresh.HOOK_LAUNCHER}" language_guard.py'}]}]}}), encoding="utf-8")
+
+                # When
+                with self.assertRaises(refresh.RefreshError) as omitted:
+                    refresh.validate_install(host, install)
+                host_file.write_text(original, encoding="utf-8")
+
+                # Then
+                self.assertEqual("plugin_hook_target_missing", omitted.exception.code)
+                self.assertTrue(refresh.validate_install(host, install)["hooks"])
+
+    def test_호스트_전용_등록이_빠지면_스크립트가_다른_이벤트에_남아도_실패한다(self):
+        """Claude의 UserPromptSubmit session_context가 빠져 파일이 비면 plugin_hooks_invalid, Codex의 DataGrip PermissionRequest가 빠지면 plugin_hook_target_missing이다."""
+        cases = {"claude": ("UserPromptSubmit", "plugin_hooks_invalid"), "codex": ("PermissionRequest", "plugin_hook_target_missing")}
+        for host, (event, code) in cases.items():
+            with self.subTest(host=host):
+                # Given
+                install = self.install(host, "1.1.0")
+                host_file = Path(install["root"]) / "hooks" / f"{host}-hooks.json"
+                payload = json.loads(host_file.read_text(encoding="utf-8"))
+                del payload["hooks"][event]
+                host_file.write_text(json.dumps(payload), encoding="utf-8")
+
+                # When
+                with self.assertRaises(refresh.RefreshError) as omitted:
+                    refresh.validate_install(host, install)
+
+                # Then
+                self.assertEqual(code, omitted.exception.code)
+
+    def test_Claude_전용_훅_파일에_훅_객체가_없으면_엄격_모드에서_실패한다(self):
+        """Mod 설정이 아닌 나열 파일이 {}이면 건너뛰지 않고 plugin_hooks_invalid이다."""
+        # Given
+        install = self.install("claude", "1.1.0")
+        (Path(install["root"]) / "hooks" / "claude-hooks.json").write_text("{}", encoding="utf-8")
+
+        # When
+        with self.assertRaises(refresh.RefreshError) as invalid:
+            refresh.validate_install("claude", install)
+
+        # Then
+        self.assertEqual("plugin_hooks_invalid", invalid.exception.code)
+
+    def test_매니페스트_훅_목록에_객체가_있으면_엄격_모드는_실패하고_동반_검사는_멈추지_않는다(self):
+        """경로가 아닌 항목은 엄격 모드에서 plugin_hooks_invalid이고, 엄격하지 않은 검사는 그 항목을 건너뛴다."""
+        # Given
+        install = self.install("codex", "1.1.0")
+        root = Path(install["root"])
+        manifest = {"name": refresh.PLUGIN, "hooks": ["./hooks/hooks.json", {"hooks": {}}]}
+
+        # When
+        with self.assertRaises(refresh.RefreshError) as invalid:
+            refresh.check_hooks("codex", root, True, manifest)
+        relaxed, _ = refresh.check_hooks("codex", root, False, manifest)
+
+        # Then
+        self.assertEqual("plugin_hooks_invalid", invalid.exception.code)
+        self.assertTrue(relaxed.startswith(b"./hooks/hooks.json\0"))
+
+    def test_필수_대상은_호스트마다_다르다(self):
+        """Claude Code는 agent_guard.py를 요구하지 않고 Codex는 요구한다."""
+        # Given
+        required = refresh.REQUIRED_HOOK_TARGETS
+
+        # When
+        claude, codex = set(required["claude"]), set(required["codex"])
+
+        # Then
+        self.assertNotIn("scripts/agent_guard.py", claude)
+        self.assertEqual(claude | {"scripts/agent_guard.py"}, codex)
+
+    def test_Codex_훅_파일_하나만_바뀌어도_훅_해시가_달라진다(self):
+        """다이제스트는 hooks.json뿐 아니라 매니페스트가 나열한 모든 훅 파일을 읽기 순서대로 덮는다."""
+        # Given
+        install = self.install("codex", "1.1.0")
+        root = Path(install["root"])
+        before = refresh.validate_install("codex", install)["hooks"]
+        host_file = root / "hooks" / "codex-hooks.json"
+        payload = json.loads(host_file.read_text(encoding="utf-8"))
+        payload["revision"] = "changed"
+        host_file.write_text(json.dumps(payload), encoding="utf-8")
+
+        # When
+        after = refresh.validate_install("codex", install)["hooks"]
+        listed = refresh.hooks_digest("codex", root)
+
+        # Then
+        self.assertNotEqual(before, after)
+        self.assertEqual(after, listed)
+
+    def test_Claude_Mod_설정과_훅이_없는_나열_파일은_훅_파일로_읽지_않는다(self):
+        """Claude는 hooks.json과 훅 객체가 있는 나열 파일만 읽고, modules가 있는 Mod 설정은 건너뛴다."""
+        # Given
+        install = self.install("claude", "1.1.0")
+        root = Path(install["root"])
+        manifest = json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+
+        # When
+        entries = refresh.hook_file_entries("claude", manifest)
+        hooks_bytes, targets = refresh.check_hooks("claude", root, True, manifest)
+
+        # Then
+        self.assertEqual([("./hooks/hooks.json", False), ("./config/claude-mod.json", True), ("./hooks/claude-hooks.json", False)], entries)
+        self.assertNotIn(b"modules", hooks_bytes)
+        self.assertTrue(set(refresh.REQUIRED_HOOKS["claude"]) <= targets)
+
+    def test_나열한_훅_파일이_없거나_루트_밖이면_엄격_모드만_실패한다(self):
+        """매니페스트가 나열한 훅 파일이 없으면 plugin_hooks_missing, 루트 밖이면 plugin_hooks_invalid이고 동반 플러그인 검사는 건너뛴다."""
+        # Given
+        install = self.install("codex", "1.1.0")
+        root = Path(install["root"])
+        manifest_path = root / ".codex-plugin" / "plugin.json"
+        base = json.loads(manifest_path.read_text(encoding="utf-8"))
+        cases = [("./hooks/gone.json", "plugin_hooks_missing"), ("../outside.json", "plugin_hooks_invalid"), ("hooks/codex-hooks.json", "plugin_hooks_invalid")]
+
+        for listed, code in cases:
+            with self.subTest(listed=listed):
+                manifest = {**base, "hooks": ["./hooks/hooks.json", listed]}
+                manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+                # When
+                with self.assertRaises(refresh.RefreshError) as strict:
+                    refresh.validate_install("codex", install)
+                lenient = refresh.check_hooks("codex", root, False, manifest)
+
+                # Then
+                self.assertEqual(code, strict.exception.code)
+                self.assertTrue(lenient[0])
+
+    def test_매니페스트가_훅을_나열하지_않는_Codex_플러그인은_hooks_json을_읽는다(self):
+        """나열이 없는 동반 플러그인은 예전처럼 hooks/hooks.json만 읽고, 파일이 없으면 None을 돌려준다."""
+        # Given
+        with_hooks = self.companion("codex", "plain", "mk", "1.0.0", hooks=[{"type": "command", "command": "echo a"}])
+        without = self.companion("codex", "bare", "mk", "1.0.0")
+
+        # When
+        found = refresh.check_hooks("codex", with_hooks, False, {"name": "plain"})
+        absent = refresh.check_hooks("codex", without, False, {"name": "bare"})
+
+        # Then
+        self.assertTrue(found[0].startswith(b"./hooks/hooks.json\0"))
+        self.assertEqual((None, set()), absent)
 
 
 class FakeCli:

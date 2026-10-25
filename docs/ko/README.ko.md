@@ -38,6 +38,8 @@ hei5enbug-agent-setup/
 │       ├── instructions/
 │       └── skills/
 ├── hooks/hooks.json
+├── hooks/claude-hooks.json
+├── hooks/codex-hooks.json
 ├── hooks/mod/
 ├── config/claude-mod.json
 ├── config/model-registry.json
@@ -194,7 +196,8 @@ Claude Code는 `language` 설정에서 언어를 가져오며, 로컬 프로젝�
 
 ### DataGrip 쿼리 가드
 
-`PreToolUse` 훅과 `PermissionRequest` 훅인 `scripts/datagrip_guard.py`는 DataGrip MCP 도구 `execute_sql_query` 실행 전에 동작합니다.
+두 호스트의 `PreToolUse` 훅과 Codex 전용 `PermissionRequest` 훅인 `scripts/datagrip_guard.py`는
+DataGrip MCP 도구 `execute_sql_query` 실행 전에 동작합니다.
 가드는 `projectPath`가 가리키는 DataGrip 프로젝트의 `.idea/dataSources.xml`에서 연결 정보를 읽습니다.
 운영이 아니고 확인된 연결에서는 PostgreSQL과 SQL Server의 읽기 쿼리를 승인 없이 실행합니다. PostgreSQL 읽기는 읽기 전용 트랜잭션에서
 `SET LOCAL statement_timeout = '60s';`와 함께 실행됩니다. 운영 연결에서는 PostgreSQL 읽기 전에 기록된 계획이 필요하고, SQL Server 읽기에는
@@ -786,7 +789,10 @@ macOS와 Linux에서 플러그인 훅은 `instructions/session/core.md`, `instru
 훅은 Python 표준 라이브러리만 사용한다.
 루트 `AGENTS.md`는 이 저장소 개발에만 적용하며 훅은 이 파일을 읽지 않는다.
 
-두 호스트 모두 `hooks/hooks.json`을 자동으로 찾는다.
+`hooks/hooks.json`은 두 호스트에서 모두 동작하는 훅을 담는다. Claude Code는 이 파일을 자동으로 찾고
+`.claude-plugin/plugin.json`의 `hooks` 경로인 모드 설정과, Claude Code 전용 프롬프트 알림을 담은
+`hooks/claude-hooks.json`을 이어서 합친다. Codex는 `.codex-plugin/plugin.json`이 나열한 파일인
+`hooks/hooks.json`과, Codex 전용 에이전트 차단 훅과 DataGrip 권한 요청 훅을 담은 `hooks/codex-hooks.json`을 불러온다.
 Codex가 제공하는 `PLUGIN_ROOT`가 설치 디렉터리를 가리키면 로더는 Codex 지침을 선택한다.
 스크립트 위치는 두 호스트가 제공하는 `CLAUDE_PLUGIN_ROOT`로 찾는다.
 사용자 전역 지침 파일이나 작업 저장소의 지침 파일은 복사하거나 덮어쓰지 않는다.
@@ -800,7 +806,7 @@ Codex가 제공하는 `PLUGIN_ROOT`가 설치 디렉터리를 가리키면 로�
 | 도구 호출 종료 | 진행 상황 안내가 다른 언어로 쓰였으면 `PostToolUse`가 언어 알림을 추가한다. |
 | 답변 종료 | 답변이 응답 언어로 쓰이지 않았으면 `Stop`이 다시 쓰도록 요청한다. |
 | Claude Code에서 사용자가 프롬프트 제출 | `UserPromptSubmit`이 메인 세션의 "Implementation worker route", "Worker agent model", "Review model" 줄을 세션 시작 시 기록한 줄과 비교하고, `/config` 변경으로 달라졌으면 새 줄을 한 번 제공한다. |
-| DataGrip 쿼리 실행 직전 | `PreToolUse`와 `PermissionRequest`가 `execute_sql_query` 실행 전에 DataGrip 쿼리 가드를 실행한다. |
+| DataGrip 쿼리 실행 직전 | `PreToolUse`가 두 호스트에서 `execute_sql_query` 실행 전에 DataGrip 쿼리 가드를 실행하고, `PermissionRequest`는 Codex에서만 실행한다. |
 | Bash, MCP 또는 대상 파일 도구 호출 실행 | `PreToolUse`가 상태 파일 보호와 민감 읽기 검사를 포함한 승인 가드를 실행한다. `PermissionRequest`는 Claude Code에서 호스트 프롬프트를 흡수하고 Codex에서는 승인된 뒤 네이티브 창을 건너뛰며, `PostToolUse`와 `PostToolUseFailure`는 승인을 기록한다. 양쪽 호스트의 `UserPromptSubmit`은 승인 요청 횟수를 초기화하고 사용자 승인을 기록하며 즉시 재시도 컨텍스트를 제공한다. |
 | 조건에 맞는 작업 시작 | 에이전트가 `instructions/`의 필수 참조를 읽는다. |
 | 플러그인 업데이트 설치 | 새 세션이 설치된 버전을 읽는다. 저장소에 푸시하는 것만으로는 반영되지 않는다. |
@@ -821,8 +827,8 @@ Codex는 현재 플러그인 훅 정의를 사용자가 검토하고 신뢰한 �
 훅이 꺼져 있거나 조직 정책이 플러그인 훅을 금지하면 자동 적용되지 않는다.
 설치·업데이트 후 호스트의 훅 설정에서 활성화 여부를 확인하고, Codex에서는 신뢰 여부도 확인한다.
 에이전트 차단 훅, 언어 가드, DataGrip 쿼리 가드처럼 업데이트가 새로 추가하거나 바꾼 훅은 Codex의 `/hooks`에서 신뢰하기 전까지 건너뛴다.
-이번 릴리스에서 모든 훅 명령이 `scripts/hook_python.sh`를 거쳐 시작하도록 `hooks/hooks.json`이 바뀌었으므로,
-Codex 사용자는 업데이트 후 바뀐 훅을 `/hooks`에서 한 번 다시 신뢰해야 한다.
+Codex의 신뢰는 플러그인 파일 내용도 포함하므로, 플러그인을 업데이트할 때마다 모든 플러그인 훅이 `modified`가 된다.
+Codex 사용자는 업데이트할 때마다 `/hooks`에서 훅을 다시 신뢰해야 한다.
 Claude Code mod는 Codex 훅이 아니므로 이 신뢰 절차가 적용되지 않는다.
 업데이트 후에는 Claude Code를 재시작하거나 Codex에서 새 세션을 시작한다.
 훅은 호스트의 신뢰 설정을 우회하지 않으며, 실행 중인 세션의 플러그인 버전을 바꾸지 않는다.

@@ -1975,5 +1975,22 @@ class CodexAutoSettingsTest(unittest.TestCase):
         self.assertEqual(self.saved()["subagent_policy"], {"value": True, "ok": True})
 
 
+class SessionContextRegistrationTest(unittest.TestCase):
+    def test_프롬프트_제출_알림은_Claude_전용_파일에만_등록된다(self):
+        """UserPromptSubmit의 session_context 훅은 claude-hooks.json에만 있고 공용 hooks.json과 Codex 전용 파일에는 없다."""
+        # Given
+        command = 'sh "${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh" session_context.py'
+
+        # When
+        claude = json.loads((REPO_ROOT / "hooks/claude-hooks.json").read_text())["hooks"]
+        shared = json.dumps(HOOKS["UserPromptSubmit"])
+        codex = (REPO_ROOT / "hooks/codex-hooks.json").read_text()
+
+        # Then
+        self.assertEqual(claude, {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": command, "timeout": 5}]}]})
+        self.assertNotIn("session_context.py", shared)
+        self.assertNotIn("session_context.py", codex)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -11,7 +11,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GUARD = REPO_ROOT / "scripts/agent_guard.py"
-HOOKS = json.loads((REPO_ROOT / "hooks/hooks.json").read_text(encoding="utf-8"))["hooks"]
+HOOKS = json.loads((REPO_ROOT / "hooks/codex-hooks.json").read_text(encoding="utf-8"))["hooks"]
 
 
 class AgentGuardTest(unittest.TestCase):
@@ -544,8 +544,8 @@ class AgentGuardTest(unittest.TestCase):
         self.assertIsNone(other_event)
         self.assertIsNone(no_input)
 
-    def test_두_호스트의_Agent_호출_전에_가드_훅이_실행된다(self):
-        """PreToolUse 훅은 Claude의 Agent·Task와 Codex의 spawn_agent를 잡는 Agent 매처로 가드를 실행한다."""
+    def test_Codex의_Agent_호출_전에_가드_훅이_실행된다(self):
+        """Codex 전용 hooks/codex-hooks.json의 PreToolUse 훅이 Agent 매처로 가드를 실행한다."""
         # When
         entries = [
             (group["matcher"], hook["command"])

@@ -1609,15 +1609,9 @@ class RegistrationTest(LanguageGuardCase):
                 self.assertEqual(groups[0]["hooks"], [{**expected_hook, "async": True} if event == "PostToolUse" else expected_hook])
 
     def test_기존_훅_등록은_바뀌지_않는다(self):
-        """SessionStart, SubagentStart, PreToolUse 항목은 그대로다."""
+        """SessionStart, SubagentStart 항목은 그대로이고 hooks.json의 PreToolUse에는 Codex 전용 Agent 가드가 없다."""
         # Given
         session = [{"hooks": [{"type": "command", "command": 'sh "${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh" session_context.py', "timeout": 10}]}]
-        guard = [
-            {
-                "matcher": "Agent|Task",
-                "hooks": [{"type": "command", "command": 'sh "${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh" agent_guard.py', "timeout": 5}],
-            }
-        ]
 
         # When
         names = set(HOOKS)
@@ -1630,7 +1624,7 @@ class RegistrationTest(LanguageGuardCase):
         )
         self.assertEqual(HOOKS["SessionStart"], session)
         self.assertEqual(HOOKS["SubagentStart"], session)
-        self.assertEqual(HOOKS["PreToolUse"][: len(guard)], guard)
+        self.assertNotIn("agent_guard.py", json.dumps(HOOKS["PreToolUse"]))
 
     def test_등록된_명령은_플러그인_루트에서_실제로_실행된다(self):
         """hooks.json의 명령 문자열을 셸로 실행하면 Stop 입력에 차단 출력을 낸다."""

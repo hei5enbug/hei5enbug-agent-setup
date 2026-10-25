@@ -15,6 +15,7 @@
     "developer-tools"
   ],
   "skills": "./skills/",
+  "hooks": ["./hooks/hooks.json", "./hooks/codex-hooks.json"],
   "interface": {
     "displayName": "Hei5enbug Agent Skills",
     "shortDescription": "Reusable engineering and documentation skills.",

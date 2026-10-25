@@ -12,19 +12,21 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = REPO_ROOT / "scripts" / "hook_python.sh"
 LAUNCHER_COMMAND = re.compile(r'sh "\$\{CLAUDE_PLUGIN_ROOT\}/scripts/hook_python\.sh" ([a-z_]+\.py)')
 SYSTEM_PATH = "/usr/bin:/bin"
+CODEX_ONLY_HOOKS = [
+    ("PreToolUse", "Agent|Task", "agent_guard.py", 5, False),
+    ("PermissionRequest", "^mcp__datagrip__execute_sql_query$", "datagrip_guard.py", 10, False),
+]
+CLAUDE_ONLY_HOOKS = [("UserPromptSubmit", None, "session_context.py", 5, False)]
 EXPECTED_HOOKS = [
     ("SessionStart", None, "session_context.py", 10, False),
     ("SubagentStart", None, "session_context.py", 10, False),
-    ("PreToolUse", "Agent|Task", "agent_guard.py", 5, False),
     ("PreToolUse", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),
     ("PreToolUse", "^mcp__datagrip__execute_sql_query$", "datagrip_guard.py", 10, False),
     ("PermissionRequest", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),
-    ("PermissionRequest", "^mcp__datagrip__execute_sql_query$", "datagrip_guard.py", 10, False),
     ("PostToolUse", None, "language_guard.py", 5, True),
     ("PostToolUse", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),
     ("PostToolUseFailure", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),
     ("UserPromptSubmit", None, "approval_guard.py", 5, False),
-    ("UserPromptSubmit", None, "session_context.py", 5, False),
     ("Stop", None, "language_guard.py", 5, False),
 ]
 
@@ -196,6 +198,55 @@ def test_hooks_json의_모든_명령이_런처_형식이고_이벤트_matcher_ti
     assert all(entry[2] is not None for entry in entries)
     assert [(e, m, s[1], t, a) for e, m, s, t, a in entries] == EXPECTED_HOOKS
     assert all((REPO_ROOT / "scripts" / script).is_file() for _, _, script, _, _ in EXPECTED_HOOKS)
+
+
+def _launcher_entries(name):
+    hooks = json.loads((REPO_ROOT / "hooks" / name).read_text(encoding="utf-8"))["hooks"]
+    return [
+        (event, group.get("matcher"), LAUNCHER_COMMAND.fullmatch(handler["command"]), handler["timeout"],
+         handler.get("async", False))
+        for event, groups in hooks.items() for group in groups for handler in group["hooks"]
+    ]
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [("codex-hooks.json", CODEX_ONLY_HOOKS), ("claude-hooks.json", CLAUDE_ONLY_HOOKS)],
+)
+def test_호스트_전용_훅_파일은_그_호스트에서만_동작하는_등록만_담는다(name, expected):
+    # given
+    entries = _launcher_entries(name)
+    # when
+    simplified = [(e, m, s[1], t, a) for e, m, s, t, a in entries if s is not None]
+    # then
+    assert len(simplified) == len(entries)
+    assert simplified == expected
+    assert all((REPO_ROOT / "scripts" / script).is_file() for _, _, script, _, _ in expected)
+
+
+def test_훅_등록은_세_파일_중_정확히_한_곳에만_있다():
+    # given
+    entries = [entry for name in ("hooks.json", "codex-hooks.json", "claude-hooks.json") for entry in _launcher_entries(name)]
+    # when
+    keys = [(e, m, s[1], t, a) for e, m, s, t, a in entries]
+    # then
+    assert len(keys) == len(set(keys))
+    assert sorted(keys, key=str) == sorted([*EXPECTED_HOOKS, *CODEX_ONLY_HOOKS, *CLAUDE_ONLY_HOOKS], key=str)
+
+
+def test_매니페스트는_호스트별_훅_파일을_나열하고_다른_호스트_파일은_싣지_않는다():
+    # given
+    codex = json.loads((REPO_ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    claude = json.loads((REPO_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    # when
+    codex_listed, claude_listed = codex["hooks"], claude["hooks"]
+    # then
+    assert codex_listed == ["./hooks/hooks.json", "./hooks/codex-hooks.json"]
+    assert claude_listed == ["./config/claude-mod.json", "./hooks/claude-hooks.json"]
+    assert all((REPO_ROOT / path).is_file() for path in [*codex_listed, *claude_listed])
+    assert "claude-hooks.json" not in json.dumps(codex_listed)
+    assert "codex-hooks.json" not in json.dumps(claude_listed)
+    assert "./hooks/hooks.json" not in claude_listed
 
 
 def test_hooks_json은_python3을_직접_부르는_명령을_더_이상_담지_않는다():

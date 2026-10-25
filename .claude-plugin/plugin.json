@@ -16,7 +16,7 @@
     "developer-tools"
   ],
   "skills": "./skills/",
-  "hooks": "./config/claude-mod.json",
+  "hooks": ["./config/claude-mod.json", "./hooks/claude-hooks.json"],
   "types": "./hooks/mod/types.d.ts",
   "agents": [
     "./agents/scout.md",

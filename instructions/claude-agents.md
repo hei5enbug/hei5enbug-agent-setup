@@ -12,7 +12,8 @@ resume; in the last case, apply its effective-settings checks first. Other dispa
 - Never use a built-in subagent, including `general-purpose`, `Explore`, `Plan`, `claude`, or a fork. The
   exceptions are `claude-code-guide` and `statusline-setup`, which have narrow purposes that do not overlap
   `scout` or `worker`. Always name the subagent type, because an omitted type runs `general-purpose`.
-- The plugin's agent guard hook denies an omitted type and every built-in type except those two exceptions; every
+- The denial belongs to the plugin's Claude Code mod. It hides `general-purpose`, `Explore`, `Plan`, and `claude`
+  from the agent list and denies them, an omitted type (which runs `general-purpose`), and every fork; every
   other type, including a plugin agent or a definition from any user, project, CLI, or managed source, passes.
   When it denies a call, use the plugin agent that fits or work in the main conversation.
 

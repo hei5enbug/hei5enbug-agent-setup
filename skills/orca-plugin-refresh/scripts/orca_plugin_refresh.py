@@ -31,12 +31,27 @@ HOSTS = ("claude", "codex")
 RUN_ID = re.compile(r"^[0-9a-f]{32}$")
 HANDLE = re.compile(r"^[A-Za-z0-9._:-]{1,200}$")
 RUNTIME_PATHS = ("skills", "instructions", "scripts", "hooks", "config", "agents", "standalone-agents", ".claude-plugin", ".codex-plugin")
-REQUIRED_HOOK_TARGETS = (
-    "scripts/session_context.py",
-    "scripts/agent_guard.py",
-    "scripts/datagrip_guard.py",
-    "scripts/language_guard.py",
-)
+REQUIRED_HOOKS = {
+    "claude": (
+        ("SessionStart", "scripts/session_context.py"),
+        ("SubagentStart", "scripts/session_context.py"),
+        ("UserPromptSubmit", "scripts/session_context.py"),
+        ("PreToolUse", "scripts/datagrip_guard.py"),
+        ("PostToolUse", "scripts/language_guard.py"),
+        ("Stop", "scripts/language_guard.py"),
+    ),
+    "codex": (
+        ("SessionStart", "scripts/session_context.py"),
+        ("SubagentStart", "scripts/session_context.py"),
+        ("PreToolUse", "scripts/agent_guard.py"),
+        ("PreToolUse", "scripts/datagrip_guard.py"),
+        ("PermissionRequest", "scripts/datagrip_guard.py"),
+        ("PostToolUse", "scripts/language_guard.py"),
+        ("Stop", "scripts/language_guard.py"),
+    ),
+}
+REQUIRED_HOOK_TARGETS = {host: tuple(dict.fromkeys(script for _, script in hooks)) for host, hooks in REQUIRED_HOOKS.items()}
+DEFAULT_HOOKS = "./hooks/hooks.json"
 HOOK_LAUNCHER = "scripts/hook_python.sh"
 LAUNCHED_SCRIPT = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*\.py")
 HOOK_ROOT = "${CLAUDE_PLUGIN_ROOT}/"
@@ -47,7 +62,7 @@ CODEX_TURN_ENV = ("CODEX_THREAD_ID", "CODEX_SESSION_ID")
 CODEX_IDLE_EVENTS = {"task_complete", "turn_aborted"}
 ROLLOUT_RECENT_SECONDS = 30 * 60
 ROLLOUT_TAIL_BYTES = 64 * 1024
-HOOKS_TRUST_WARNING = {"code": "codex_hooks_need_trust", "message": "hooks.json changed; review and trust the plugin hooks in Codex /hooks, or they are skipped."}
+HOOKS_TRUST_WARNING = {"code": "codex_hooks_need_trust", "message": "Hook definitions changed; review and trust the plugin hooks in Codex /hooks, or they are skipped."}
 RELOAD_DONE = re.compile(r"Reloaded: \d+ plugins?")
 RELOAD_REFUSED = re.compile(r"reload changes MCP tools|/reload-plugins --force", re.IGNORECASE)
 CLAUDE_COMPACTED = re.compile(r"Compacted|Conversation compacted")
@@ -223,6 +238,8 @@ def inside(root: Path, path: Path) -> bool:
 def validate_claude_mod(root: Path, manifest: dict) -> None:
     missing = RefreshError("plugin_hook_target_missing", "An installed claude plugin mod file is missing.")
     hooks = manifest.get("hooks")
+    if isinstance(hooks, list):
+        hooks = hooks[0] if hooks else None
     if not isinstance(hooks, str) or not hooks:
         raise missing
     config_path = root / hooks
@@ -251,70 +268,123 @@ def read_manifest(host: str, root: Path, plugin: str, version: str) -> dict:
     return manifest
 
 
-def check_hooks(host: str, root: Path, strict: bool) -> tuple[bytes | None, set[str]]:
-    """Read hooks/hooks.json and require every plugin-root hook target to exist.
+def hook_file_entries(host: str, manifest: dict | None) -> list[tuple[str, bool]]:
+    """Return the hook file paths the host loads, in load order, each with whether another check owns it.
 
-    Strict mode is this plugin's contract: the file must exist and every hook must be a recognizable command.
-    Otherwise a missing file is allowed and hooks without a plugin-root target are skipped.
+    Claude Code always loads hooks/hooks.json and then merges the manifest `hooks` paths; the first listed path is
+    the mod config, which validate_claude_mod checks. Codex loads the manifest `hooks` paths, or hooks/hooks.json
+    when the manifest lists none.
     """
-    hooks_path = root / "hooks" / "hooks.json"
+    value = manifest.get("hooks") if isinstance(manifest, dict) else None
+    listed = [value] if isinstance(value, str) else list(value) if isinstance(value, list) else []
+    entries = [(DEFAULT_HOOKS, False)] if host == "claude" else []
+    entries += [(item, host == "claude" and index == 0) for index, item in enumerate(listed)]
+    if not entries:
+        entries = [(DEFAULT_HOOKS, False)]
+    seen: set = set()
+    return [(path, owned) for path, owned in entries
+            if not isinstance(path, str) or not (path in seen or seen.add(path))]
+
+
+def read_hook_file(host: str, root: Path, entry: str, strict: bool, owned: bool) -> tuple[bytes, dict] | None:
+    """Read one hook file; None means it is skipped, and a problem it cannot skip raises."""
+    invalid = RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.")
+    missing = RefreshError("plugin_hooks_missing", f"The installed {host} plugin hooks are unavailable or unreadable.")
+    path = root / entry if isinstance(entry, str) and entry.startswith("./") else None
+    if path is None or not inside(root, path):
+        if strict and not owned:
+            raise invalid
+        return None
     try:
-        hooks_bytes = hooks_path.read_bytes()
-        payload = json.loads(hooks_bytes.decode("utf-8"))
+        data = path.read_bytes()
+        payload = json.loads(data.decode("utf-8"))
     except FileNotFoundError as error:
-        if strict:
-            raise RefreshError("plugin_hooks_missing", f"The installed {host} plugin hooks are unavailable or unreadable.") from error
-        return None, set()
+        if strict and not owned:
+            raise missing from error
+        return None
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise RefreshError("plugin_hooks_missing", f"The installed {host} plugin hooks are unavailable or unreadable.") from error
-    events = payload.get("hooks") if isinstance(payload, dict) else None
-    if not isinstance(events, dict) or (strict and not events):
-        raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.")
-    seen_targets: set[str] = set()
-    for groups in events.values():
+        if owned:
+            return None
+        raise missing from error
+    if not isinstance(payload, dict) or not isinstance(payload.get("hooks"), dict):
+        if owned or (not strict and entry != DEFAULT_HOOKS):
+            return None
+        raise invalid
+    return data, payload["hooks"]
+
+
+def scan_hook_events(host: str, root: Path, events: dict, strict: bool) -> set[tuple[str, str]]:
+    """Require every plugin-root hook target in one hook file to exist; return each (event, script) it registers."""
+    invalid = RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.")
+    unsupported_target = RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hook target is unsupported.")
+    seen_targets: set[tuple[str, str]] = set()
+    for event, groups in events.items():
         if not isinstance(groups, list):
-            raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.")
+            raise invalid
         for group in groups:
             entries = group.get("hooks") if isinstance(group, dict) else None
             if not isinstance(entries, list):
-                raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.")
+                raise invalid
             for entry in entries:
                 if not isinstance(entry, dict) or (entry.get("type") == "command" and not isinstance(entry.get("command"), str)):
-                    raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.")
+                    raise invalid
                 if entry.get("type") != "command":
                     if strict:
-                        raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.")
+                        raise invalid
                     continue
                 try:
                     argv = shlex.split(entry["command"])
                 except ValueError as error:
                     if strict:
-                        raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.") from error
+                        raise invalid from error
                     continue
                 hits = [index for index, item in enumerate(argv) if item.startswith(HOOK_ROOT)]
                 if strict and not any(hits):
-                    raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hook target is unsupported.")
+                    raise unsupported_target
                 for index in hits:
                     relative_target = argv[index].removeprefix(HOOK_ROOT)
                     targets = [relative_target]
                     if relative_target == HOOK_LAUNCHER:
                         script = argv[index + 1] if index + 1 < len(argv) else ""
                         if not LAUNCHED_SCRIPT.fullmatch(script):
-                            raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hook target is unsupported.")
+                            raise unsupported_target
                         targets.append(f"scripts/{script}")
                     for target in targets:
                         if not (root / target).is_file():
                             raise RefreshError("plugin_hook_target_missing", f"An installed {host} plugin hook target is missing.")
-                    seen_targets.add(targets[-1])
-    return hooks_bytes, seen_targets
+                    seen_targets.add((event, targets[-1]))
+    return seen_targets
+
+
+def check_hooks(host: str, root: Path, strict: bool, manifest: dict | None = None) -> tuple[bytes | None, set[tuple[str, str]]]:
+    """Read the hook files the host loads and require every plugin-root hook target to exist.
+
+    Strict mode is this plugin's contract: every file the host loads must exist and every hook must be a recognizable
+    command. Otherwise a missing file is allowed and hooks without a plugin-root target are skipped. The returned
+    bytes cover every loaded file in load order, so a change to any of them changes the digest; None means no file.
+    """
+    records: list[bytes] = []
+    seen_targets: set[tuple[str, str]] = set()
+    for entry, owned in hook_file_entries(host, manifest):
+        loaded = read_hook_file(host, root, entry, strict, owned)
+        if loaded is None:
+            continue
+        data, events = loaded
+        if strict and not events:
+            raise RefreshError("plugin_hooks_invalid", f"The installed {host} plugin hooks are unsupported.")
+        seen_targets |= scan_hook_events(host, root, events, strict)
+        records.append(entry.encode("utf-8") + b"\0" + data + b"\0")
+    return (b"".join(records) if records else None), seen_targets
 
 
 def validate_install(host: str, install: dict) -> dict:
     root = Path(install["root"])
     manifest = read_manifest(host, root, PLUGIN, install["version"])
-    hooks_bytes, seen_targets = check_hooks(host, root, strict=True)
-    if not set(REQUIRED_HOOK_TARGETS) <= seen_targets:
+    hooks_bytes, seen_targets = check_hooks(host, root, strict=True, manifest=manifest)
+    if not set(REQUIRED_HOOKS[host]) <= seen_targets:
         raise RefreshError("plugin_hook_target_missing", f"The installed {host} plugin hooks omit a required target.")
+    if hooks_bytes is None:
+        raise RefreshError("plugin_hooks_missing", f"The installed {host} plugin hooks are unavailable or unreadable.")
     if host == "claude":
         validate_claude_mod(root, manifest)
     try:
@@ -608,18 +678,22 @@ def describe_plugin(host: str, plugin_id: str, context: dict) -> dict | None:
     return {"version": version, "root": root.resolve(), "local": False}
 
 
-def hooks_digest(root: Path) -> str | None:
+def hooks_digest(host: str, root: Path) -> str | None:
+    """Hash every hook file the installed plugin loads, in load order; None when it has none or they cannot be read."""
+    manifest_path = root / (".claude-plugin/plugin.json" if host == "claude" else ".codex-plugin/plugin.json")
     try:
-        return hashlib.sha256((root / "hooks" / "hooks.json").read_bytes()).hexdigest()
-    except OSError:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        hooks_bytes, _ = check_hooks(host, root, strict=False, manifest=manifest)
+    except (OSError, UnicodeError, ValueError, RefreshError):
         return None
+    return hashlib.sha256(hooks_bytes).hexdigest() if hooks_bytes is not None else None
 
 
 def validate_companion(host: str, plugin_id: str, found: dict) -> str | None:
-    """Check the installed manifest and every plugin-root hook target; return the hooks file digest, None without one."""
+    """Check the installed manifest and every plugin-root hook target; return the hook files digest, None without one."""
     root = found["root"]
-    read_manifest(host, root, plugin_id.partition("@")[0], found["version"])
-    hooks_bytes, _ = check_hooks(host, root, strict=False)
+    manifest = read_manifest(host, root, plugin_id.partition("@")[0], found["version"])
+    hooks_bytes, _ = check_hooks(host, root, strict=False, manifest=manifest)
     return hashlib.sha256(hooks_bytes).hexdigest() if hooks_bytes is not None else None
 
 
@@ -636,7 +710,7 @@ def refresh_companion(host: str, plugin_id: str, update: bool, context: dict) ->
             if found.get("note"):
                 result["note"] = found["note"]
             return result
-        before_hooks = hooks_digest(found["root"])
+        before_hooks = hooks_digest(host, found["root"])
         if update:
             blocked = run_install(host, plugin_id, context)
             if blocked:

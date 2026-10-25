@@ -35,6 +35,8 @@ hei5enbug-agent-setup/
 │       ├── instructions/
 │       └── skills/
 ├── hooks/hooks.json
+├── hooks/claude-hooks.json
+├── hooks/codex-hooks.json
 ├── hooks/mod/
 ├── config/claude-mod.json
 ├── config/model-registry.json
@@ -196,9 +198,9 @@ quote.
 
 ### DataGrip query guard
 
-A `PreToolUse` hook and a `PermissionRequest` hook, both `scripts/datagrip_guard.py`, run before the DataGrip MCP tool
-`execute_sql_query`. The guard reads the connection from `.idea/dataSources.xml` in the DataGrip project that
-`projectPath` names. PostgreSQL and SQL Server reads on non-production, recognized connections
+A `PreToolUse` hook on both hosts and a `PermissionRequest` hook on Codex only, both `scripts/datagrip_guard.py`, run
+before the DataGrip MCP tool `execute_sql_query`. The guard reads the connection from `.idea/dataSources.xml` in the
+DataGrip project that `projectPath` names. PostgreSQL and SQL Server reads on non-production, recognized connections
 run without approval, and PostgreSQL reads run inside a read-only transaction with
 `SET LOCAL statement_timeout = '60s';`. A production connection needs a recorded plan before a PostgreSQL read and gets
 lock safeguards on a SQL Server read; see the production read rules under [Approval guard](#approval-guard). With
@@ -846,9 +848,12 @@ Python 3.12 or later must be available as `python3` on the host's `PATH`, or as 
 interpreter option names (see "Feature options"). The hook uses only the Python standard library.
 Root `AGENTS.md` governs development of this repository only; the hook never reads it.
 
-Both hosts discover `hooks/hooks.json` automatically. Codex sets `PLUGIN_ROOT` to the installed plugin
-directory; the loader uses that value to select Codex rules. Both hosts provide `CLAUDE_PLUGIN_ROOT`
-for locating the script. No user or project instruction file is copied, linked, or overwritten.
+`hooks/hooks.json` holds the hooks that run on both hosts. Claude Code discovers it automatically and merges the
+`hooks` paths in `.claude-plugin/plugin.json`: the mod config, then `hooks/claude-hooks.json`, which holds the
+Claude Code-only prompt notice. Codex loads the files `.codex-plugin/plugin.json` lists, `hooks/hooks.json` and
+`hooks/codex-hooks.json`, which holds the Codex-only agent guard and DataGrip permission hook. Codex sets
+`PLUGIN_ROOT` to the installed plugin directory; the loader uses that value to select Codex rules. Both hosts provide
+`CLAUDE_PLUGIN_ROOT` for locating the script. No user or project instruction file is copied, linked, or overwritten.
 
 | When | Behavior |
 |---|---|
@@ -859,7 +864,7 @@ for locating the script. No user or project instruction file is copied, linked, 
 | A tool call finishes | `PostToolUse` adds a language reminder after a progress update in another language. |
 | A reply ends | `Stop` asks for a rewrite when the reply is not in the response language. |
 | A user submits a prompt on Claude Code | `UserPromptSubmit` compares the main session's "Implementation worker route", "Worker agent model", and "Review model" lines with the ones recorded at session start, and supplies the new lines once when a `/config` change altered them. |
-| A DataGrip query is about to run | `PreToolUse` and `PermissionRequest` run the DataGrip query guard before `execute_sql_query`. |
+| A DataGrip query is about to run | `PreToolUse` runs the DataGrip query guard before `execute_sql_query` on both hosts; `PermissionRequest` runs it on Codex only. |
 | A Bash, MCP, or covered file tool call runs | `PreToolUse` runs the approval guard, including file-state protection and sensitive reads. `PermissionRequest` absorbs host prompts on Claude Code and skips Codex's native window once approved; `PostToolUse` and `PostToolUseFailure` record approvals. `UserPromptSubmit` resets the approval request counts, records user approval, and supplies immediate-retry context on both hosts. |
 | A matching task begins | The agent reads the required reference under `instructions/`. |
 | A plugin update is installed | A new session reads that installed version. A repository push alone changes nothing locally. |
@@ -879,9 +884,9 @@ Codex requires review and trust of the current plugin hook definition before run
 Disabled hooks or enterprise policies that prohibit plugin hooks prevent automatic loading.
 After installation or update, use the host's hook controls to check that these hooks are enabled and,
 in Codex, trusted. A hook that an update adds or changes, such as the agent guard, the language guard, or the DataGrip
-query guard, stays skipped in Codex until you trust it in `/hooks`. `hooks/hooks.json` changed in this release,
-because every hook command now starts through `scripts/hook_python.sh`. Codex users must trust the changed hooks once
-in `/hooks` after updating. The Claude Code mod is not a Codex hook, so this trust step does not apply to
+query guard, stays skipped in Codex until you trust it in `/hooks`. Codex trust also covers the plugin's
+files, so every plugin update leaves all plugin hooks `modified`. Codex users must trust them again in `/hooks` after
+each update. The Claude Code mod is not a Codex hook, so this trust step does not apply to
 it. Restart Claude Code or start a new Codex session after updating.
 The hook does not bypass host trust settings or change an already running session to a new plugin version.
 The `orca-plugin-refresh` skill uses those markers to apply an update to running Orca sessions without restarting them.

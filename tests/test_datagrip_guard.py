@@ -2129,9 +2129,12 @@ class TestEventAndHostDispatch:
 
 
 class TestHooksRegistration:
-    @pytest.mark.parametrize("event_name", ["PreToolUse", "PermissionRequest"])
-    def test_datagrip_guard_entry_exists_with_matcher_command_and_timeout(self, event_name):
-        """PreToolUse와 PermissionRequest에 DataGrip 쿼리 도구만 잡는 matcher로 가드가 등록돼 있다."""
+    @pytest.mark.parametrize(
+        ("event_name", "hooks_file"),
+        [("PreToolUse", "hooks.json"), ("PermissionRequest", "codex-hooks.json")],
+    )
+    def test_datagrip_guard_entry_exists_with_matcher_command_and_timeout(self, event_name, hooks_file):
+        """PreToolUse는 공용 hooks.json에, PermissionRequest는 Codex 전용 codex-hooks.json에 DataGrip 쿼리 도구만 잡는 matcher로 등록돼 있다."""
         # given
         expected = {
             "matcher": "^mcp__datagrip__execute_sql_query$",
@@ -2140,9 +2143,20 @@ class TestHooksRegistration:
             ],
         }
         # when
-        groups = HOOKS[event_name]
+        groups = json.loads((REPO_ROOT / "hooks" / hooks_file).read_text())["hooks"][event_name]
         # then
-        assert expected in groups
+        assert groups.count(expected) == 1
+
+    def test_PermissionRequest_등록은_Claude_Code가_읽는_파일에_없다(self):
+        """Claude Code의 PermissionRequest에서는 가드가 출력할 수 없으므로 hooks.json과 claude-hooks.json에 등록하지 않는다."""
+        # given
+        files = ("hooks.json", "claude-hooks.json")
+        # when
+        claude_groups = [
+            json.loads((REPO_ROOT / "hooks" / name).read_text())["hooks"].get("PermissionRequest", []) for name in files
+        ]
+        # then
+        assert all("datagrip_guard.py" not in json.dumps(groups) for groups in claude_groups)
 
     def test_matcher_matches_only_the_query_tool(self):
         """등록된 matcher 정규식은 쿼리 실행 도구 이름만 고른다."""
@@ -2154,7 +2168,7 @@ class TestHooksRegistration:
         assert matches == {TOOL_NAME: True, "mcp__datagrip__list_tables": False, "x" + TOOL_NAME: False, TOOL_NAME + "x": False}
 
     def test_existing_agent_guard_entry_is_kept(self):
-        """기존 Agent 가드 등록은 그대로 남아 있다."""
+        """Agent 가드 등록은 hooks/codex-hooks.json에 그대로 남아 있다."""
         # given
         expected = {
             "matcher": "Agent|Task",
@@ -2163,9 +2177,10 @@ class TestHooksRegistration:
             ],
         }
         # when
-        groups = HOOKS["PreToolUse"]
+        groups = json.loads((REPO_ROOT / "hooks/codex-hooks.json").read_text())["hooks"]["PreToolUse"]
         # then
-        assert expected in groups
+        assert groups == [expected]
+        assert expected not in HOOKS["PreToolUse"]
 
     def test_registered_command_runs_from_the_plugin_root(self):
         """등록된 명령 문자열을 셸로 실행하면 DataGrip 쓰기 쿼리에 ask를 출력한다."""

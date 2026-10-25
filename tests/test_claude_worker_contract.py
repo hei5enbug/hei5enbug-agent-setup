@@ -175,12 +175,12 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         manifest = json.loads(PLUGIN_MANIFEST.read_text(encoding="utf-8"))
 
         # When
-        config_path = REPO_ROOT / manifest["hooks"]
+        config_path = REPO_ROOT / manifest["hooks"][0]
         modules = json.loads(config_path.read_text(encoding="utf-8"))["modules"]
         options = manifest["userConfig"]
 
         # Then
-        self.assertEqual(manifest["hooks"], "./config/claude-mod.json")
+        self.assertEqual(manifest["hooks"], ["./config/claude-mod.json", "./hooks/claude-hooks.json"])
         self.assertEqual(modules, ["../hooks/mod/register.js"])
         self.assertTrue(all((config_path.parent / module).is_file() for module in modules))
         self.assertEqual(
@@ -450,7 +450,8 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
             self.assertIn(name, exceptions.split("Always name", 1)[0])
         self.assertIn("Always name the subagent type, because an omitted type runs `general-purpose`.", built_in)
         self.assertIn(
-            "The plugin's agent guard hook denies an omitted type and every built-in type except those two exceptions",
+            "The denial belongs to the plugin's Claude Code mod. It hides `general-purpose`, `Explore`, `Plan`, and `claude` "
+            "from the agent list and denies them, an omitted type (which runs `general-purpose`), and every fork",
             built_in,
         )
 
