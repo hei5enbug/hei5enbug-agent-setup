@@ -8,6 +8,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
@@ -49,6 +50,8 @@ READ_SHELL_RULES = (
 )
 SYNTHETIC_MODEL = "<synthetic>"
 PREFLIGHT_PROMPT = "Run the shell command `true` exactly once, then reply with OK only."
+GUARD_COMMAND = re.compile(r'sh "[^"]*/scripts/hook_python\.sh" approval_guard\.py')
+SHELL_TOOL = "Bash"
 MCP_SERVER_NAME = re.compile(r"[A-Za-z0-9_-]+")
 CODEX_HOOKS_MESSAGE = "The approval guard hooks did not run in Codex; trust them in /hooks"
 CLAUDE_HOOKS_MESSAGE = "The approval guard hooks did not run in Claude Code"
@@ -341,6 +344,14 @@ def child_environment(marker: str) -> dict:
     return environment
 
 
+def kill_group(pid: int) -> None:
+    """Kill the process group the runner started for a child; one that already exited, even unreaped, is left alone."""
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
 def run_child(marker: str, command: list[str], prompt: str, cwd: str, timeout: int) -> str:
     environment = child_environment(marker)
     try:
@@ -353,10 +364,7 @@ def run_child(marker: str, command: list[str], prompt: str, cwd: str, timeout: i
     try:
         stdout, stderr = child.communicate(prompt, timeout=timeout)
     except subprocess.TimeoutExpired:
-        try:
-            os.killpg(child.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+        kill_group(child.pid)
         child.communicate()
         raise RunnerError(EXIT_RUN, f"{command[0]} exceeded the {timeout} second timeout") from None
     if child.returncode != 0:
@@ -384,6 +392,132 @@ def codex_mcp_off(marker: str, cwd: str, timeout: int) -> list[str]:
     for name in names:
         flags += ["-c", f"mcp_servers.{name}.enabled=false"]
     return flags
+
+
+def read_reply(stream, message_id: int) -> dict | None:
+    """Read JSON lines until the message with this id, ignoring messages without it; None when the stream ends first."""
+    for line in iter(stream.readline, ""):
+        if not line.strip():
+            continue
+        try:
+            message = json.loads(line)
+        except json.JSONDecodeError as error:
+            raise RunnerError(EXIT_RUN, "The Codex app-server wrote a line that is not JSON") from error
+        if isinstance(message, dict) and message.get("id") == message_id:
+            return message
+    return None
+
+
+def send_line(child: subprocess.Popen, message: dict) -> None:
+    child.stdin.write(json.dumps(message) + "\n")
+    child.stdin.flush()
+
+
+def exchange_hooks(child: subprocess.Popen, cwd: str) -> tuple[str, dict | None]:
+    """Initialize the app-server and ask for the folder's hooks; return the last method sent and its reply."""
+    send_line(child, {"id": 1, "method": "initialize", "params": {"clientInfo": {"name": "role_runner", "version": "1"}}})
+    reply = read_reply(child.stdout, 1)
+    if reply is None or "error" in reply:
+        return "initialize", reply
+    send_line(child, {"method": "initialized"})
+    send_line(child, {"id": 2, "method": "hooks/list", "params": {"cwds": [cwd]}})
+    return "hooks/list", read_reply(child.stdout, 2)
+
+
+def app_server_hooks(marker: str, mcp_off: list[str], cwd: str, timeout: int) -> object:
+    """Ask a Codex app-server for the folder's hooks, keeping stdin open until it answers, and return the result."""
+    command = ["codex", "app-server", *mcp_off]
+    try:
+        child = subprocess.Popen(
+            command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, encoding="utf-8", errors="replace", cwd=cwd, env=child_environment(marker), start_new_session=True,
+        )
+    except OSError as error:
+        raise RunnerError(EXIT_RUN, f"Cannot start {command[0]} app-server: {error}") from error
+    expired = threading.Event()
+
+    def expire() -> None:
+        expired.set()
+        kill_group(child.pid)
+
+    timer = threading.Timer(timeout, expire)
+    timer.start()
+    method, reply = "initialize", None
+    try:
+        method, reply = exchange_hooks(child, cwd)
+    except OSError:
+        pass
+    finally:
+        timer.cancel()
+        returncode = child.poll()
+        kill_group(child.pid)
+        child.stdout.close()
+        try:
+            child.stdin.close()
+        except OSError:
+            pass
+        child.wait()
+    if expired.is_set():
+        raise RunnerError(EXIT_RUN, f"codex app-server exceeded the {timeout} second timeout")
+    if reply is None:
+        raise RunnerError(EXIT_RUN, f"codex app-server ended before answering {method} (exit {returncode})")
+    if "error" in reply:
+        raise RunnerError(EXIT_RUN, f"codex app-server rejected {method}: {str(reply['error'])[:500]}")
+    return reply.get("result")
+
+
+def hooks_for_cwd(result: object, cwd: str) -> list:
+    """Return the hook list of the entry for this folder in a hooks/list result."""
+    data = result.get("data") if isinstance(result, dict) else None
+    wanted = Path(cwd).resolve()
+    for entry in data if isinstance(data, list) else []:
+        if isinstance(entry, dict) and isinstance(entry.get("cwd"), str) and Path(entry["cwd"]).resolve() == wanted:
+            hooks = entry.get("hooks")
+            return hooks if isinstance(hooks, list) else []
+    raise RunnerError(EXIT_RUN, f"codex app-server listed no hooks entry for {cwd}")
+
+
+def covers_shell(matcher: object) -> bool:
+    """Whether a hook matcher selects the shell tool; an empty matcher selects every tool and an invalid regex none."""
+    if matcher is None or matcher in ("", "*"):
+        return True
+    if not isinstance(matcher, str):
+        return False
+    try:
+        return re.search(matcher, SHELL_TOOL) is not None
+    except re.error:
+        return False
+
+
+def is_guard_hook(hook: object) -> bool:
+    return (
+        isinstance(hook, dict) and hook.get("eventName") == "preToolUse"
+        and isinstance(hook.get("command"), str) and GUARD_COMMAND.fullmatch(hook["command"]) is not None
+    )
+
+
+def guard_hook_ready(hook: dict) -> bool:
+    """Whether a guard PreToolUse hook runs before every shell call: a sync command hook, enabled, trusted or managed."""
+    return (
+        hook.get("handlerType") == "command" and hook.get("enabled") is True and hook.get("async") is False
+        and (hook.get("trustStatus") == "trusted" or hook.get("isManaged") is True) and covers_shell(hook.get("matcher"))
+    )
+
+
+def require_hooks_ready(marker: str, mcp_off: list[str], cwd: str, timeout: int) -> None:
+    """Require a ready guard PreToolUse hook for the folder, so no assignment runs unguarded."""
+    listed = hooks_for_cwd(app_server_hooks(marker, mcp_off, cwd, timeout), cwd)
+    hooks = [hook for hook in listed if is_guard_hook(hook)]
+    if any(guard_hook_ready(hook) for hook in hooks):
+        return
+    found = [
+        {
+            "key": hook.get("key"), "enabled": hook.get("enabled"), "trust": hook.get("trustStatus"),
+            "async": hook.get("async"), "matcher": hook.get("matcher"),
+        }
+        for hook in hooks
+    ]
+    raise RunnerError(EXIT_EVIDENCE, CODEX_HOOKS_MESSAGE, {"hooks": found})
 
 
 def state_home() -> Path:
@@ -431,6 +565,17 @@ def json_lines(path: Path):
             yield entry
 
 
+def count_tool_calls(rollout: Path) -> int:
+    """Count the rollout entries that record a tool call, not counting web searches."""
+    count = 0
+    for entry in json_lines(rollout):
+        payload = entry.get("payload")
+        kind = payload.get("type") if isinstance(payload, dict) else None
+        if isinstance(kind, str) and kind.endswith("_call") and kind != "web_search_call":
+            count += 1
+    return count
+
+
 def verify_codex(stdout: str, model: str, effort: str, sandbox: str) -> dict:
     thread_id = thread_id_from(stdout)
     if thread_id is None:
@@ -462,7 +607,7 @@ def verify_codex(stdout: str, model: str, effort: str, sandbox: str) -> dict:
                 f"turn_context names sandbox {sandbox_type!r}, expected {sandbox!r}",
                 {"rollout": rollout.as_posix(), "turns": len(turns)},
             )
-    return {"rollout": rollout.as_posix(), "turns": len(turns), "session": thread_id}
+    return {"rollout": rollout.as_posix(), "turns": len(turns), "session": thread_id, "tool_calls": count_tool_calls(rollout)}
 
 
 def claude_result(stdout: str) -> dict:
@@ -522,21 +667,34 @@ def discard(path: Path) -> None:
         pass
 
 
-def execute_codex(args: argparse.Namespace, run: Run, prompt: str, cwd: str) -> dict:
-    """Preflight the approval guard hooks in a fresh thread, then send the assignment to it with exec resume."""
-    mcp_off = [] if run.mcp else codex_mcp_off(run.target, cwd, args.timeout)
-    sandbox = sandbox_for(run)
+def preflight_thread(run: Run, cwd: str, mcp_off: list[str], timeout: int) -> Run:
+    """Preflight the guard hooks in a fresh thread unless resuming one, require its PreToolUse heartbeat, and return the run on it."""
     if run.resume is None:
         with tempfile.TemporaryDirectory(prefix="role-runner-") as scratch:
             output = str(Path(scratch) / "preflight.txt")
-            stdout = run_child(run.target, codex_command(run, cwd, output, mcp_off), PREFLIGHT_PROMPT, cwd, args.timeout)
+            stdout = run_child(run.target, codex_command(run, cwd, output, mcp_off), PREFLIGHT_PROMPT, cwd, timeout)
         thread_id = thread_id_from(stdout)
         if thread_id is None:
             raise RunnerError(EXIT_EVIDENCE, "No thread.started event with a thread_id in the Codex preflight output")
         run = replace(run, resume=thread_id)
     require_heartbeat("codex", run.resume, CODEX_HOOKS_MESSAGE)
+    return run
+
+
+def execute_codex(args: argparse.Namespace, run: Run, prompt: str, cwd: str) -> dict:
+    """A writing run preflights a fresh thread and resumes it; a read-only run checks hooks/list, then runs once."""
+    mcp_off = [] if run.mcp else codex_mcp_off(run.target, cwd, args.timeout)
+    sandbox = sandbox_for(run)
+    if run.writing:
+        run = preflight_thread(run, cwd, mcp_off, args.timeout)
+    else:
+        require_hooks_ready(run.target, mcp_off, cwd, args.timeout)
+        if run.resume is not None:
+            require_heartbeat("codex", run.resume, CODEX_HOOKS_MESSAGE)
     stdout = run_child(run.target, codex_command(run, cwd, args.result, mcp_off), prompt, cwd, args.timeout)
     evidence = verify_codex(stdout, run.model, run.effort, sandbox)
+    if not run.writing and evidence["tool_calls"]:
+        require_heartbeat("codex", evidence["session"], CODEX_HOOKS_MESSAGE)
     result_path = Path(args.result)
     if not result_path.is_file() or not result_path.read_text(encoding="utf-8").strip():
         raise RunnerError(EXIT_EVIDENCE, f"Codex wrote no answer at {result_path}")

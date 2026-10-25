@@ -955,10 +955,15 @@ Without `--mcp`, a Codex child gets `-c mcp_servers.<name>.enabled=false` for ev
 and a Claude child keeps `--strict-mcp-config`. A Claude child that may edit also receives `Bash` in `--tools` and
 `--allowedTools`; the guard denies writes the main session has not approved and every irreversible action.
 Each child receives `HEI5ENBUG_PARENT_SESSION` so it can use the main
-session's approvals. Before sending the assignment to Codex, the runner sends “Run the shell command `true` exactly
-once, then reply with OK only.” and requires `heartbeats/codex-<thread_id>.PreToolUse`. This confirms that the guard
-received a tool event; a plain, `UserPromptSubmit`, or `SessionStart` heartbeat does not satisfy that check. Claude
-children require `heartbeats/claude-<session_id>.UserPromptSubmit` or the existing plain heartbeat, since Claude does
+session's approvals. Before a read-only Codex run, the runner asks `codex app-server` for the folder's hooks
+(`hooks/list`). It requires an approval guard `PreToolUse` hook that is enabled, synchronous, trusted or managed, and
+matches `Bash`; otherwise it exits 4 without a model call. After the run, it requires
+`heartbeats/codex-<thread_id>.PreToolUse` whenever the rollout records a tool call. A Codex run that can write first
+sends “Run the shell command `true` exactly once, then reply with OK only.” and requires that heartbeat before it sends
+the assignment, so the guard has checked a tool call before any write can run. A plain, `UserPromptSubmit`, or
+`SessionStart` heartbeat satisfies neither check. Codex trust also covers the plugin's files: with Codex CLI 0.164.0,
+an edit to any plugin file, even `README.md`, marked every plugin hook `modified`, so after each plugin update Codex
+skips the hooks and the runner exits 4 until you trust them again in `/hooks`. Claude children require `heartbeats/claude-<session_id>.UserPromptSubmit` or the existing plain heartbeat, since Claude does
 not gate plugin hooks by trust. A missing required heartbeat exits 4.
 Exit code 0 means the result is verified, 2 a usage error to fix, 3 that the role could not run, and 4 that the
 required hook evidence was missing or the recorded model, effort, or sandbox did not match, so the result is

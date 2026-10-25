@@ -42,13 +42,60 @@ from pathlib import Path
 
 name = Path(sys.argv[0]).name
 config = json.loads(os.environ.get("FAKE_CONFIG", "{{}}"))
-stdin = sys.stdin.read()
+is_server = name == "codex" and sys.argv[1:2] == ["app-server"]
+stdin = "" if is_server else sys.stdin.read()
 with open(os.environ["FAKE_LOG"], "a") as log:
     log.write(json.dumps({{
         "name": name, "argv": sys.argv[1:], "stdin": stdin, "cwd": os.getcwd(),
         "role": os.environ.get("HEI5ENBUG_ASSIGNED_ROLE"), "pid": os.getpid(),
-        "parent": os.environ.get("HEI5ENBUG_PARENT_SESSION"),
+        "parent": os.environ.get("HEI5ENBUG_PARENT_SESSION"), "started": time.time(),
     }}) + "\\n")
+
+
+def guard_hook(cwd):
+    command = config.get("hooks_command", 'sh "/abs/plugin/root/scripts/hook_python.sh" approval_guard.py')
+    return {{
+        "key": "plugin@market:hooks/hooks.json:pre_tool_use:1:0", "eventName": "preToolUse", "handlerType": "command",
+        "command": command, "async": config.get("hooks_async", False),
+        "matcher": config.get("hooks_matcher", "^(Bash|Read|Edit|Write)$"), "timeoutSec": 10, "source": "plugin",
+        "pluginId": "plugin@market", "enabled": config.get("hooks_enabled", True),
+        "isManaged": config.get("hooks_managed", False), "currentHash": "sha256:x",
+        "trustStatus": config.get("hooks_trust", "trusted"),
+    }}
+
+
+def serve_hooks():
+    """Answer initialize and hooks/list only after reading each request, like the real app-server."""
+    if config.get("hooks_exit"):
+        sys.exit(config["hooks_exit"])
+    if config.get("hooks_sleep"):
+        time.sleep(config["hooks_sleep"])
+    for line in sys.stdin:
+        request = json.loads(line)
+        if request.get("method") == "initialize":
+            print(json.dumps({{"id": request["id"], "result": {{"userAgent": "fake"}}}}), flush=True)
+            print(json.dumps({{"method": "notice", "params": {{}}}}), flush=True)
+        elif request.get("method") == "hooks/list":
+            if config.get("hooks_not_json"):
+                print("not json", flush=True)
+                continue
+            if config.get("hooks_bad_bytes"):
+                sys.stdout.buffer.write(b"\\xff\\xfe\\n")
+                sys.stdout.flush()
+                continue
+            if config.get("hooks_error"):
+                print(json.dumps({{"id": request["id"], "error": {{"code": -32600, "message": "bad request"}}}}), flush=True)
+                continue
+            cwd = request["params"]["cwds"][0]
+            hooks = [] if config.get("hooks_empty") else [guard_hook(cwd)]
+            entries = [] if config.get("hooks_no_entry") else [{{"cwd": cwd, "warnings": [], "errors": [], "hooks": hooks}}]
+            print(json.dumps({{"id": request["id"], "result": {{"data": entries}}}}), flush=True)
+            return
+
+
+if is_server:
+    serve_hooks()
+    sys.exit(0)
 
 
 def touch_heartbeat(host, session_id):
@@ -93,6 +140,9 @@ if name == "codex":
         home = Path(os.environ["CODEX_HOME"]) / "sessions" / "2026" / "10" / "12"
         home.mkdir(parents=True, exist_ok=True)
         lines = [json.dumps({{"type": "session_meta", "payload": {{"id": "x"}}}})]
+        if not config.get("no_tool_calls"):
+            lines.append(json.dumps({{"type": "response_item", "payload": {{"type": "function_call", "name": "exec"}}}}))
+        lines.append(json.dumps({{"type": "response_item", "payload": {{"type": "web_search_call"}}}}))
         for turn in config.get("turns", [{{"model": "gpt-5.6-luna", "effort": "high"}}]):
             turn = dict(turn)
             turn.setdefault("sandbox_policy", {{"type": sandbox}})
@@ -170,7 +220,7 @@ class RoleRunnerTest(unittest.TestCase):
         heartbeat.with_name(heartbeat.name + "." + event).touch()
 
     def calls(self):
-        """Every logged child call in order, including the MCP listing and the hook preflight."""
+        """Every logged child call in order, including the MCP listing and the hook readiness call."""
         return [json.loads(line) for line in self.log.read_text().splitlines()]
 
     def logged(self):
@@ -178,20 +228,28 @@ class RoleRunnerTest(unittest.TestCase):
         return self.calls()[-1]
 
     def executions(self):
-        """The logged exec calls, without the MCP listing."""
-        return [call for call in self.calls() if call["argv"][:2] != ["mcp", "list"]]
+        """The logged exec calls, without the MCP listing and the app-server readiness calls."""
+        return [call for call in self.calls() if call["argv"][:2] != ["mcp", "list"] and call["argv"][:1] != ["app-server"]]
+
+    def app_server_calls(self):
+        """The logged hook readiness calls to codex app-server."""
+        return [call for call in self.calls() if call["argv"][:1] == ["app-server"]]
 
     def status(self, completed):
         return json.loads(completed.stdout.strip().splitlines()[-1])
 
     def codex_argv(self, *, search=False, sandbox="read-only", model="gpt-5.6-luna", effort="high", add_dirs=(), mcp_off=True, output=None):
-        """The assignment run of a Codex child: the scoped exec resume of the preflight thread."""
-        return self.codex_resume_argv(
-            search=search, sandbox=sandbox, model=model, effort=effort, roots=add_dirs, mcp_off=mcp_off, output=output,
+        """The assignment run of a Codex child: the scoped exec resume of the preflight thread when it writes, else one fresh exec."""
+        if sandbox == "workspace-write":
+            return self.codex_resume_argv(
+                search=search, sandbox=sandbox, model=model, effort=effort, roots=add_dirs, mcp_off=mcp_off, output=output,
+            )
+        return self.codex_start_argv(
+            search=search, sandbox=sandbox, model=model, effort=effort, add_dirs=add_dirs, mcp_off=mcp_off, output=output,
         )
 
     def codex_start_argv(self, *, search=False, sandbox="read-only", model="gpt-5.6-luna", effort="high", add_dirs=(), mcp_off=True, output=None):
-        """The first exec of a Codex child, which the hook preflight sends before the assignment."""
+        """The fresh exec of a Codex child: the assignment of a read-only run, or the hook preflight of a writing run."""
         argv = ["--search"] if search else []
         argv += ["exec", "-m", model, "-c", f'model_reasoning_effort="{effort}"', "-s", sandbox, "-C", str(self.workspace)]
         argv += self.mcp_off_flags(mcp_off)
@@ -390,7 +448,8 @@ class RoleRunnerTest(unittest.TestCase):
             self.assertNotIn("--ephemeral", argv)
             self.assertNotIn("--dangerously", text)
             self.assertNotIn("danger-full-access", text)
-            self.assertNotIn("-s", argv)
+            sandboxes = [argv[index + 1] for index, item in enumerate(argv) if item == "-s"]
+            self.assertTrue(all(value in ("read-only", "workspace-write") for value in sandboxes), sandboxes)
             configs = [argv[index + 1] for index, item in enumerate(argv) if item in ("-c", "--config")]
             allowed = (
                 "model_reasoning_effort=", "sandbox_mode=", "mcp_servers.", "sandbox_workspace_write.writable_roots=",
@@ -1704,16 +1763,14 @@ class RoleRunnerTest(unittest.TestCase):
         listing = self.calls()[0]
         self.assertEqual(["mcp", "list", "--json"], listing["argv"])
         names = ("aside", "data-dog_2")
-        first, second = self.executions()
-        output = first["argv"][first["argv"].index("-o") + 1]
-        self.assertEqual(self.codex_start_argv(mcp_off=names, output=output), first["argv"])
-        self.assertEqual(self.codex_resume_argv(mcp_off=names), second["argv"])
-        for call in (first, second):
+        (execution,) = self.executions()
+        self.assertEqual(self.codex_start_argv(mcp_off=names), execution["argv"])
+        for call in (*self.app_server_calls(), execution):
             self.assertNotIn("mcp_servers={}", call["argv"])
             self.assertNotIn("secret-command", " ".join(call["argv"]))
 
     def test_MCP_서버_목록은_자식과_같은_환경으로_조회한다(self):
-        """codex mcp list는 자식 실행과 같은 역할 표식과 부모 세션 환경을 받는다."""
+        """codex mcp list와 hook 점검 app-server는 자식 실행과 같은 역할 표식과 부모 세션 환경을 받는다."""
         # Given
         extra = {"HEI5ENBUG_PARENT_SESSION": "claude:parent-1"}
 
@@ -1722,10 +1779,13 @@ class RoleRunnerTest(unittest.TestCase):
 
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
-        listing, preflight = self.calls()[0], self.calls()[1]
+        listing = self.calls()[0]
         self.assertEqual(["mcp", "list", "--json"], listing["argv"])
         self.assertEqual(("scout", "claude:parent-1"), (listing["role"], listing["parent"]))
-        self.assertEqual((preflight["role"], preflight["parent"]), (listing["role"], listing["parent"]))
+        (readiness,) = self.app_server_calls()
+        (execution,) = self.executions()
+        for call in (readiness, execution):
+            self.assertEqual((call["role"], call["parent"]), (listing["role"], listing["parent"]))
 
     def test_MCP_서버_목록이_비어_있으면_끄기_설정을_넘기지_않는다(self):
         """서버가 하나도 없으면 -c mcp_servers 설정 없이 실행한다."""
@@ -1778,7 +1838,7 @@ class RoleRunnerTest(unittest.TestCase):
 
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
-        self.assertEqual(self.calls(), self.executions())
+        self.assertEqual(len(self.calls()), len(self.executions()) + len(self.app_server_calls()))
         self.assertFalse(any(item.startswith("mcp_servers.") for call in self.calls() for item in call["argv"]))
 
     def test_resume도_서버_목록을_조회해_끄기_설정을_넘긴다(self):
@@ -1794,6 +1854,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertEqual(["mcp", "list", "--json"], self.calls()[0]["argv"])
         self.assertEqual(self.codex_resume_argv(mcp_off=("only",)), self.logged()["argv"])
+        self.assertEqual(["app-server", *self.mcp_off_flags(("only",))], self.app_server_calls()[0]["argv"])
 
     def test_부모_세션은_자식_환경에_상속값_Claude_Codex_순서로_들어간다(self):
         """HEI5ENBUG_PARENT_SESSION은 기존 값을 유지하고, 없으면 CLAUDECODE와 세션 ID가 있을 때 claude:ID, 그다음 codex:ID이며, 없으면 비워 둔다."""
@@ -1832,8 +1893,8 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertEqual("claude:c9", self.logged()["parent"])
 
-    def test_Codex는_true_한_번으로_훅을_확인한_뒤_같은_스레드에_할당을_보낸다(self):
-        """첫 codex exec는 true 한 번과 OK 응답을 요청하고 같은 설정의 exec resume으로 할당을 전달한다."""
+    def test_Codex는_훅을_점검한_뒤_할당_하나만_exec로_보낸다(self):
+        """새 Codex 실행은 app-server로 훅을 점검하고, 확인용 턴 없이 할당을 담은 exec 하나만 보낸다."""
         # Given
         arguments = ["scout"]
 
@@ -1842,18 +1903,155 @@ class RoleRunnerTest(unittest.TestCase):
 
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
-        first, second = self.executions()
-        self.assertEqual("Run the shell command `true` exactly once, then reply with OK only.", first["stdin"])
-        self.assertIn("Find the answer.", second["stdin"])
-        output = first["argv"][first["argv"].index("-o") + 1]
-        self.assertNotEqual(str(self.result), output)
-        self.assertEqual(self.codex_start_argv(output=output), first["argv"])
-        self.assertEqual(self.codex_resume_argv(), second["argv"])
-        self.assertEqual(THREAD, self.status(completed)["evidence"]["session"])
+        self.assertEqual(["mcp", "app-server", "exec"], [call["argv"][0] for call in self.calls()])
+        (execution,) = self.executions()
+        self.assertIn("Find the answer.", execution["stdin"])
+        self.assertNotIn("exactly once", execution["stdin"])
+        self.assertEqual(self.codex_start_argv(), execution["argv"])
+        (readiness,) = self.app_server_calls()
+        self.assertEqual(["app-server", *self.mcp_off_flags()], readiness["argv"])
+        self.assertEqual(str(self.workspace), readiness["cwd"])
+        evidence = self.status(completed)["evidence"]
+        self.assertEqual((THREAD, 1), (evidence["session"], evidence["tool_calls"]))
         self.assertEqual("codex answer", self.result.read_text())
 
-    def test_Codex_훅_하트비트가_없으면_할당을_보내지_않고_종료_코드_4이다(self):
-        """preflight thread의 하트비트가 없으면 할당 없이 종료 코드 4와 /hooks 안내를 낸다."""
+    def test_준비된_훅은_관리됨_표시나_셸을_덮는_matcher로도_통과한다(self):
+        """untrusted여도 isManaged이면, 그리고 matcher가 비었거나 *이거나 Bash를 덮으면 할당을 보낸다."""
+        # Given
+        configurations = [
+            {"hooks_trust": "untrusted", "hooks_managed": True},
+            {"hooks_matcher": None},
+            {"hooks_matcher": ""},
+            {"hooks_matcher": "*"},
+            {"hooks_matcher": "Bash"},
+            {"hooks_matcher": "^(Agent|Bash)$"},
+        ]
+        for config in configurations:
+            with self.subTest(config=config):
+                self.log.unlink(missing_ok=True)
+
+                # When
+                completed = self.run_runner("scout", config=config)
+
+                # Then
+                self.assertEqual(0, completed.returncode, completed.stderr)
+                self.assertEqual(1, len(self.executions()))
+
+    def test_훅이_준비되지_않았으면_할당을_보내지_않고_종료_코드_4이다(self):
+        """신뢰 안 됨, 수정됨, 꺼짐, 비동기, 셸을 덮지 않는 matcher, 잘못된 정규식, 훅 없음, 다른 명령만 있는 경우는 exec 없이 종료 코드 4이다."""
+        # Given
+        cases = {
+            "untrusted": {"hooks_trust": "untrusted"},
+            "modified": {"hooks_trust": "modified"},
+            "disabled": {"hooks_enabled": False},
+            "async": {"hooks_async": True},
+            "matcher": {"hooks_matcher": "^Agent$"},
+            "invalid regex": {"hooks_matcher": "("},
+            "empty": {"hooks_empty": True},
+            "foreign command": {"hooks_command": "sh other_hook.py"},
+            "name only": {"hooks_command": "echo approval_guard.py"},
+        }
+        for label, config in cases.items():
+            with self.subTest(case=label):
+                self.log.unlink(missing_ok=True)
+
+                # When
+                completed = self.run_runner("scout", config=config)
+
+                # Then
+                self.assertEqual(4, completed.returncode)
+                self.assertIn(role_runner.CODEX_HOOKS_MESSAGE, completed.stderr)
+                self.assertEqual([], self.executions())
+                self.assertFalse(self.result.exists())
+                status = self.status(completed)
+                self.assertFalse(status["verified"])
+                hooks = status["evidence"]["hooks"]
+                self.assertEqual(0 if label in ("empty", "foreign command", "name only") else 1, len(hooks))
+
+    def test_훅_증거는_찾은_훅의_키_활성_신뢰_상태를_남긴다(self):
+        """준비되지 않은 훅의 증거는 키, enabled, trust를 담는다."""
+        # Given
+        config = {"hooks_trust": "modified"}
+
+        # When
+        completed = self.run_runner("scout", config=config)
+
+        # Then
+        (hook,) = self.status(completed)["evidence"]["hooks"]
+        self.assertEqual("plugin@market:hooks/hooks.json:pre_tool_use:1:0", hook["key"])
+        self.assertEqual((True, "modified"), (hook["enabled"], hook["trust"]))
+
+    def test_app_server가_답하지_못하면_할당을_보내지_않고_종료_코드_3이다(self):
+        """app-server가 오류 응답, 비정상 종료, JSON이 아닌 출력, cwd 항목 없음, 시간 초과이면 exec 없이 종료 코드 3이다."""
+        # Given
+        cases = {
+            "error reply": ({"hooks_error": True}, "rejected"),
+            "exit": ({"hooks_exit": 5}, "ended before answering"),
+            "not json": ({"hooks_not_json": True}, "not JSON"),
+            "invalid utf-8": ({"hooks_bad_bytes": True}, "not JSON"),
+            "no entry": ({"hooks_no_entry": True}, "no hooks entry"),
+            "timeout": ({"hooks_sleep": 60}, "timeout"),
+        }
+        for label, (config, reason) in cases.items():
+            with self.subTest(case=label):
+                self.log.unlink(missing_ok=True)
+
+                # When
+                completed = self.run_runner("scout", "--timeout", "2", config=config)
+
+                # Then
+                self.assertEqual(3, completed.returncode, completed.stderr)
+                self.assertIn(reason, completed.stderr)
+                self.assertEqual([], self.executions())
+                self.assertFalse(self.result.exists())
+                self.assertFalse(self.status(completed)["verified"])
+
+    def test_시간_초과된_app_server는_강제로_끝낸다(self):
+        """제한 시간을 넘긴 app-server 프로세스는 남지 않는다."""
+        # Given
+        config = {"hooks_sleep": 60}
+
+        # When
+        started = time.monotonic()
+        completed = self.run_runner("scout", "--timeout", "1", config=config)
+        elapsed = time.monotonic() - started
+
+        # Then
+        self.assertEqual(3, completed.returncode)
+        self.assertLess(elapsed, 30)
+        pid = self.app_server_calls()[0]["pid"]
+        alive = True
+        for _ in range(50):
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                alive = False
+                break
+            time.sleep(0.1)
+        self.assertFalse(alive)
+
+    def test_점검과_exec는_같은_MCP_끄기_설정과_환경을_받는다(self):
+        """hook 점검 app-server는 exec와 같은 -c mcp_servers 설정, 역할 표식, 부모 세션, 작업 폴더를 받는다."""
+        # Given
+        config = {"mcp_list": json.dumps([{"name": "only"}, {"name": "second"}])}
+        extra = {"HEI5ENBUG_PARENT_SESSION": "claude:parent-9"}
+
+        # When
+        completed = self.run_runner("scout", config=config, extra_env=extra)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        (readiness,) = self.app_server_calls()
+        (execution,) = self.executions()
+        flags = self.mcp_off_flags(("only", "second"))
+        self.assertEqual(["app-server", *flags], readiness["argv"])
+        self.assertEqual(self.codex_start_argv(mcp_off=("only", "second")), execution["argv"])
+        for key in ("role", "parent", "cwd"):
+            self.assertEqual(execution[key], readiness[key])
+        self.assertEqual(("scout", "claude:parent-9"), (readiness["role"], readiness["parent"]))
+
+    def test_도구를_쓴_실행에_PreToolUse_하트비트가_없으면_결과를_버리고_종료_코드_4이다(self):
+        """rollout에 도구 호출이 있는데 thread의 PreToolUse 하트비트가 없으면 결과를 남기지 않고 종료 코드 4이다."""
         # Given
         config = {"no_heartbeat": True}
 
@@ -1863,14 +2061,38 @@ class RoleRunnerTest(unittest.TestCase):
         # Then
         self.assertEqual(4, completed.returncode)
         self.assertIn("The approval guard hooks did not run in Codex; trust them in /hooks", completed.stderr)
-        executions = self.executions()
-        self.assertEqual(["Run the shell command `true` exactly once, then reply with OK only."],
-                         [call["stdin"] for call in executions])
+        self.assertEqual(1, len(self.executions()))
+        self.assertTrue(self.status(completed)["evidence"]["heartbeat"].endswith(".PreToolUse"))
         self.assertFalse(self.result.exists())
         self.assertFalse(self.status(completed)["verified"])
 
-    def test_Codex는_일반_하트비트만_있으면_할당을_보내지_않는다(self):
-        """일반 하트비트만 있고 PreToolUse 증거가 없으면 Codex 할당을 막고 종료 코드 4를 낸다."""
+    def test_도구를_쓰지_않은_실행은_하트비트가_없어도_통과한다(self):
+        """rollout에 도구 호출이 없으면 가드가 막을 호출이 없으므로 하트비트 없이 종료 코드 0이고 tool_calls는 0이다."""
+        # Given
+        config = {"no_heartbeat": True, "no_tool_calls": True}
+
+        # When
+        completed = self.run_runner("scout", config=config)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(0, self.status(completed)["evidence"]["tool_calls"])
+        self.assertEqual("codex answer", self.result.read_text())
+
+    def test_웹_검색_호출은_도구_호출로_세지_않는다(self):
+        """web_search_call만 있는 rollout은 도구 호출 0건이다."""
+        # Given
+        config = {"no_heartbeat": True, "no_tool_calls": True}
+
+        # When
+        completed = self.run_runner("researcher", config=config)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(0, self.status(completed)["evidence"]["tool_calls"])
+
+    def test_Codex는_일반_하트비트만_있으면_도구를_쓴_결과를_버린다(self):
+        """일반 하트비트만 있고 PreToolUse 증거가 없으면 도구를 쓴 실행의 결과를 버리고 종료 코드 4를 낸다."""
         # Given
         config = {"legacy_only": True}
 
@@ -1885,7 +2107,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertFalse(self.result.exists())
 
     def test_Codex는_차단하지_않는_이벤트_하트비트로_통과하지_않는다(self):
-        """UserPromptSubmit이나 SessionStart 증거만으로는 Codex의 PreToolUse 검사를 통과할 수 없다."""
+        """UserPromptSubmit이나 SessionStart 증거만으로는 도구를 쓴 Codex 실행이 PreToolUse 검사를 통과할 수 없다."""
         # Given
         configurations = [{"heartbeat_event": event} for event in ("UserPromptSubmit", "SessionStart")]
 
@@ -1913,7 +2135,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertFalse(self.result.exists())
 
     def test_Codex는_PreToolUse_하트비트만_있어도_통과한다(self):
-        """Codex의 PreToolUse 하트비트가 있으면 일반 파일이 없어도 할당을 전달한다."""
+        """Codex의 PreToolUse 하트비트가 있으면 일반 파일이 없어도 통과한다."""
         # Given
         config = {"event_only": True}
 
@@ -1922,10 +2144,10 @@ class RoleRunnerTest(unittest.TestCase):
 
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
-        self.assertEqual(2, len(self.executions()))
+        self.assertEqual(1, len(self.executions()))
 
-    def test_Codex_preflight에_thread_id가_없으면_종료_코드_4이고_할당을_보내지_않는다(self):
-        """preflight 출력에 thread.started가 없으면 하트비트를 확인할 수 없어 종료 코드 4이다."""
+    def test_Codex_출력에_thread_id가_없으면_종료_코드_4이고_결과를_남기지_않는다(self):
+        """출력에 thread.started가 없으면 rollout을 찾을 수 없어 종료 코드 4이다."""
         # Given
         config = {"no_thread": True}
 
@@ -1935,6 +2157,95 @@ class RoleRunnerTest(unittest.TestCase):
         # Then
         self.assertEqual(4, completed.returncode)
         self.assertEqual(1, len(self.executions()))
+        self.assertFalse(self.result.exists())
+
+    def test_쓰기_Codex_실행은_true_한_번으로_훅을_확인한_뒤_같은_스레드에_할당을_보낸다(self):
+        """쓰기 실행의 첫 codex exec는 true 한 번과 OK 응답을 요청하고, 같은 설정의 exec resume이 할당을 전달한다."""
+        # Given
+        directory = str(self.base)
+        arguments = ["worker", "--add-dir", directory]
+
+        # When
+        completed = self.run_runner(*arguments)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        first, second = self.executions()
+        self.assertEqual("Run the shell command `true` exactly once, then reply with OK only.", first["stdin"])
+        self.assertIn("Find the answer.", second["stdin"])
+        output = first["argv"][first["argv"].index("-o") + 1]
+        self.assertNotEqual(str(self.result), output)
+        self.assertEqual(self.codex_start_argv(sandbox="workspace-write", add_dirs=(directory,), output=output), first["argv"])
+        self.assertEqual(self.codex_resume_argv(sandbox="workspace-write", roots=(directory,)), second["argv"])
+        self.assertEqual(THREAD, self.status(completed)["evidence"]["session"])
+        self.assertEqual("codex answer", self.result.read_text())
+
+    def test_쓰기_Codex_실행은_app_server를_부르지_않고_preflight_경로를_탄다(self):
+        """worker, 쓰기 capability, --resume한 worker는 codex app-server를 부르지 않으므로 app-server가 실패해도 통과한다."""
+        # Given
+        self.beat("codex", THREAD)
+        config = {"hooks_exit": 5, "turns": [{"model": "gpt-6.1-sol", "effort": "high"}]}
+        cases = {
+            "worker": ["worker", "--add-dir", str(self.base)],
+            "resumed worker": ["worker", "--add-dir", str(self.base), "--resume", THREAD],
+            "capability": ["language", "--host", "claude", "--instructions", str(self.instructions)],
+        }
+        for label, arguments in cases.items():
+            with self.subTest(case=label):
+                self.log.unlink(missing_ok=True)
+                run_config = config if label == "capability" else {"hooks_exit": 5}
+
+                # When
+                completed = self.run_runner(*arguments, config=run_config)
+
+                # Then
+                self.assertEqual(0, completed.returncode, completed.stderr)
+                self.assertEqual([], self.app_server_calls())
+                self.assertEqual(1 if label == "resumed worker" else 2, len(self.executions()))
+
+    def test_쓰기_Codex_훅_하트비트가_없으면_할당을_보내지_않고_종료_코드_4이다(self):
+        """쓰기 실행에서 preflight thread의 하트비트가 없으면 할당 없이 종료 코드 4와 /hooks 안내를 낸다."""
+        # Given
+        config = {"no_heartbeat": True}
+
+        # When
+        completed = self.run_runner("worker", "--add-dir", str(self.base), config=config)
+
+        # Then
+        self.assertEqual(4, completed.returncode)
+        self.assertIn("The approval guard hooks did not run in Codex; trust them in /hooks", completed.stderr)
+        self.assertEqual(["Run the shell command `true` exactly once, then reply with OK only."],
+                         [call["stdin"] for call in self.executions()])
+        self.assertFalse(self.result.exists())
+        self.assertFalse(self.status(completed)["verified"])
+
+    def test_쓰기_Codex_preflight에_thread_id가_없으면_종료_코드_4이고_할당을_보내지_않는다(self):
+        """쓰기 실행의 preflight 출력에 thread.started가 없으면 하트비트를 확인할 수 없어 종료 코드 4이다."""
+        # Given
+        config = {"no_thread": True}
+
+        # When
+        completed = self.run_runner("worker", "--add-dir", str(self.base), config=config)
+
+        # Then
+        self.assertEqual(4, completed.returncode)
+        self.assertIn("Codex preflight output", completed.stderr)
+        self.assertEqual(1, len(self.executions()))
+        self.assertFalse(self.result.exists())
+
+    def test_쓰기_Codex는_일반_하트비트만_있으면_할당을_보내지_않는다(self):
+        """쓰기 실행에서 일반 하트비트만 있고 PreToolUse 증거가 없으면 할당 없이 종료 코드 4이다."""
+        # Given
+        config = {"legacy_only": True}
+
+        # When
+        completed = self.run_runner("worker", "--add-dir", str(self.base), config=config)
+
+        # Then
+        self.assertEqual(4, completed.returncode)
+        self.assertEqual(1, len(self.executions()))
+        self.assertTrue(self.status(completed)["evidence"]["heartbeat"].endswith(".PreToolUse"))
+        self.assertFalse(self.result.exists())
 
     def test_하트비트는_XDG_STATE_HOME이_없으면_홈의_local_state를_본다(self):
         """XDG_STATE_HOME이 없으면 ~/.local/state 아래 하트비트로 확인한다."""
@@ -1950,7 +2261,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertTrue(heartbeat.is_file())
 
     def test_resume은_기존_하트비트가_있을_때만_할당을_보낸다(self):
-        """--resume은 preflight 없이 그 thread의 하트비트를 먼저 확인하고, 없으면 할당 없이 종료 코드 4이다."""
+        """--resume은 그 thread의 하트비트를 먼저 확인하고, 없으면 할당 없이 종료 코드 4이다."""
         # Given
         config = {"no_heartbeat": True}
 
@@ -1961,6 +2272,22 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(4, completed.returncode)
         self.assertIn("trust them in /hooks", completed.stderr)
         self.assertEqual([], self.executions())
+        self.assertEqual(1, len(self.app_server_calls()))
+
+    def test_resume은_훅이_준비되지_않았으면_하트비트가_있어도_할당을_보내지_않는다(self):
+        """--resume도 먼저 hook 점검을 하므로 훅이 신뢰되지 않았으면 종료 코드 4이고 exec를 보내지 않는다."""
+        # Given
+        self.beat("codex", THREAD)
+        config = {"hooks_trust": "untrusted"}
+
+        # When
+        completed = self.run_runner("scout", "--resume", THREAD, config=config)
+
+        # Then
+        self.assertEqual(4, completed.returncode)
+        self.assertIn(role_runner.CODEX_HOOKS_MESSAGE, completed.stderr)
+        self.assertEqual([], self.executions())
+        self.assertFalse(self.result.exists())
 
     def test_Claude_하트비트가_없으면_종료_코드_4이고_결과를_쓰지_않는다(self):
         """Claude 실행 뒤 결과 JSON의 session_id 하트비트가 없으면 종료 코드 4이고 결과를 남기지 않는다."""
@@ -2157,7 +2484,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertIn("use high", str(caught.exception))
 
     def test_읽기_전용_두_쌍은_자식을_동시에_시작하고_상태_줄_둘을_찍는다(self):
-        """scout에 쌍 둘을 주면 두 자식의 hook 점검이 모두 시작된 뒤에 첫 assignment가 실행되고, 상태 줄 둘과 결과 파일 둘이 남는다."""
+        """scout에 쌍 둘을 주면 두 자식의 exec가 겹쳐 시작되고, 상태 줄 둘과 결과 파일 둘이 남는다."""
         # Given
         pairs = self.pair_args("A", "B")
 
@@ -2167,14 +2494,15 @@ class RoleRunnerTest(unittest.TestCase):
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
         executions = self.executions()
-        resumes = [index for index, call in enumerate(executions) if "resume" in call["argv"]]
-        starts = [index for index, call in enumerate(executions) if "resume" not in call["argv"]]
-        self.assertEqual(2, len(starts))
-        self.assertLess(max(starts), min(resumes))
+        self.assertEqual(2, len(executions))
+        self.assertNotIn("resume", [item for call in executions for item in call["argv"]])
+        self.assertEqual(2, len(self.app_server_calls()))
+        starts = [call["started"] for call in executions]
+        self.assertLess(max(starts) - min(starts), 0.5)
         self.assertEqual({True}, {line["verified"] for line in self.status_lines(completed)})
         self.assertEqual(2, len(self.status_lines(completed)))
         self.assertEqual(["codex answer"] * 2, [(self.base / f"result-{name}.md").read_text() for name in "AB"])
-        prompts = [call["stdin"] for call in executions if "resume" in call["argv"]]
+        prompts = [call["stdin"] for call in executions]
         self.assertEqual({"A", "B"}, {name for name in "AB" if any(f"ASSIGN_{name}" in prompt for prompt in prompts)})
 
     def test_배치의_종료_코드는_쌍_가운데_가장_큰_값이고_상태_줄은_입력_순서다(self):
@@ -2282,8 +2610,8 @@ class RoleRunnerTest(unittest.TestCase):
                 self.assertIn(reason, completed.stderr)
                 self.assertFalse(self.log.exists())
 
-    def test_읽기_전용_Codex_명령은_모든_exec와_resume에_스킬_목록_끄기를_넘긴다(self):
-        """scout의 hook 점검 exec와 assignment exec resume는 -c skills.max_context_tokens=1을 넘기고 MCP 목록 조회는 넘기지 않는다."""
+    def test_읽기_전용_Codex_명령은_exec에_스킬_목록_끄기를_넘긴다(self):
+        """scout의 assignment exec는 -c skills.max_context_tokens=1을 넘기고 MCP 목록 조회는 넘기지 않는다."""
         # Given
         arguments = ["scout"]
 
@@ -2292,16 +2620,14 @@ class RoleRunnerTest(unittest.TestCase):
 
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
-        executions = self.executions()
-        self.assertEqual(2, len(executions))
-        for call in executions:
-            argv = call["argv"]
-            self.assertEqual("-c", argv[argv.index("skills.max_context_tokens=1") - 1])
+        (execution,) = self.executions()
+        argv = execution["argv"]
+        self.assertEqual("-c", argv[argv.index("skills.max_context_tokens=1") - 1])
         listing = self.calls()[0]["argv"]
         self.assertNotIn("skills.max_context_tokens=1", listing)
 
     def test_쓰기_Codex_명령은_스킬_목록_끄기를_넘기지_않는다(self):
-        """worker는 쓰기 실행이므로 hook 점검 exec와 assignment exec resume 어디에도 skills.max_context_tokens를 넘기지 않는다."""
+        """worker는 쓰기 실행이므로 assignment exec에 skills.max_context_tokens를 넘기지 않는다."""
         # Given
         arguments = ["worker", "--add-dir", str(self.base)]
 

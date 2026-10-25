@@ -890,10 +890,16 @@ Claude에는 `--disable-slash-commands`를 넘깁니다.
 `codex mcp list --json`이 보여 주는 서버마다 `-c mcp_servers.<name>.enabled=false`를 넘기고, Claude 자식은
 `--strict-mcp-config`를 유지합니다. 편집 가능한 Claude 자식은 `--tools`와 `--allowedTools`에 `Bash`도 받습니다.
 가드는 메인 세션이 승인하지 않은 쓰기와 모든 되돌릴 수 없는 작업을 거부합니다.
-자식마다 `HEI5ENBUG_PARENT_SESSION`을 넘겨 메인 세션의 승인을 쓰게 합니다. Codex에 할당을
-보내기 전에 “Run the shell command `true` exactly once, then reply with OK only.”를 먼저 보내고
-`heartbeats/codex-<thread_id>.PreToolUse`를 요구합니다. 가드가 도구 이벤트를 받았다는 증거이며, 일반 파일이나
-`UserPromptSubmit`·`SessionStart` 하트비트만으로는 이 검사를 통과하지 못합니다. Claude는 플러그인 훅에 신뢰 절차를 적용하지
+자식마다 `HEI5ENBUG_PARENT_SESSION`을 넘겨 메인 세션의 승인을 쓰게 합니다. 읽기 전용 Codex 실행 전에는
+`codex app-server`에 그 폴더의 훅 목록(`hooks/list`)을 묻습니다. 켜져 있고, 동기 실행이며, 신뢰되었거나 관리형이고,
+`Bash`에 맞는 승인 가드 `PreToolUse` 훅이 있어야 하며, 없으면 모델 호출 없이 종료 코드 4로 끝납니다. 실행 뒤에는
+rollout에 도구 호출이 기록되어 있으면 `heartbeats/codex-<thread_id>.PreToolUse`를 요구합니다. 쓰기가 가능한 Codex
+실행은 먼저 “Run the shell command `true` exactly once, then reply with OK only.”를 보내고, 할당을 보내기 전에 그
+하트비트를 요구합니다. 그래서 어떤 쓰기든 실행되기 전에 가드가 도구 호출을 한 번 검사한 상태가 됩니다. 일반 파일이나
+`UserPromptSubmit`·`SessionStart` 하트비트로는 두 검사 모두 통과하지 못합니다. Codex의 신뢰는 플러그인 파일 내용도
+포함합니다. Codex CLI 0.164.0에서 `README.md`를 포함한 플러그인 파일 하나만 고쳐도 모든 플러그인 훅이 `modified`가
+되었으므로, 플러그인을 업데이트할 때마다 `/hooks`에서 다시 신뢰하기 전까지 Codex는 훅을 건너뛰고 실행기는 종료 코드
+4로 끝납니다. Claude는 플러그인 훅에 신뢰 절차를 적용하지
 않으므로 자식의 `heartbeats/claude-<session_id>.UserPromptSubmit` 또는 기존 일반 하트비트를 요구합니다.
 필수 하트비트가 없으면 종료 코드 4입니다. 종료 코드 0은 결과가 검증되었다는
 뜻이고, 2는 고쳐야 할 사용 오류, 3은 역할을 실행하지 못했다는 뜻, 4는 필수 훅 증거가 없거나 기록된 모델, 사고 강도, 샌드박스가 달라 결과를
