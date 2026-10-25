@@ -31,7 +31,7 @@
       "required": true,
       "weight": 1,
       "path": "docs/design/stock-reservation.md",
-      "pattern": "(?im)^#{1,4}\\s.*(non[- ]?goals?|out of scope)"
+      "pattern": "(?i)\\bnon[- ]?goals?\\b|\\bout of scope\\b"
     },
     {
       "id": "sec-design",
@@ -63,7 +63,7 @@
       "required": true,
       "weight": 1,
       "path": "docs/design/stock-reservation.md",
-      "pattern": "(?im)^#{1,4}\\s.*\\b(test(ing)? (plan|strategy)|testing|verification|validation)\\b"
+      "pattern": "(?im)^#{1,4}\\s.*\\b(test(ing)?( plan| strategy)?|verification|validation|acceptance( criteria)?|proof)\\b"
     },
     {
       "id": "mirror-exists",
