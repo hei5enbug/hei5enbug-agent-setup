@@ -2,20 +2,44 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import secrets
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from typing import Any, Callable
 
 from .config import (
     REPO_ROOT, RUBRIC_EFFORT, RUBRIC_FALLBACK_EFFORT, RUBRIC_FALLBACK_MODEL, RUBRIC_MODEL, RUBRIC_RETRY_EXITS,
 )
+from .matrix import read_json, write_json
 
 Runner = Callable[..., subprocess.CompletedProcess]
 RUBRIC_TIMEOUT_SECONDS = 1800
 JSON_OBJECT = re.compile(r"\{.*\}", re.S)
+OPAQUE_LENGTH = 16
+_SALT_LOCK = threading.Lock()
+
+
+def campaign_salt(base_dir: Path) -> str:
+    """The random salt stored once in campaign.json; created on first use."""
+    with _SALT_LOCK:
+        path = base_dir / "campaign.json"
+        data = read_json(path, {})
+        salt = data.get("rubric_salt") if isinstance(data, dict) else None
+        if not salt:
+            salt = secrets.token_hex(16)
+            write_json(path, {**(data if isinstance(data, dict) else {}), "rubric_salt": salt})
+        return str(salt)
+
+
+def opaque_dir(base_dir: Path, run_id: str) -> Path:
+    """<campaign folder>/rubric/<opaque>: a name that does not reveal the task, variant, or repetition."""
+    seed = f"{base_dir.name}\0{run_id}\0{campaign_salt(base_dir)}"
+    return base_dir / "rubric" / hashlib.sha256(seed.encode("utf-8")).hexdigest()[:OPAQUE_LENGTH]
 
 
 def artifact_text(rubric: dict[str, Any], repo: Path, final_answer: str) -> str:
@@ -129,6 +153,7 @@ def grade(
     text = assignment_for(task_prompt, rubric, artifact)
     assignment, result = work_dir / "assignment.md", work_dir / "result.md"
     assignment.write_text(text, encoding="utf-8")
+    result.unlink(missing_ok=True)
     primary = run_primary(work_dir, assignment, result, run, repo_root)
     status = runner_status(primary)
     if primary.returncode == 0:

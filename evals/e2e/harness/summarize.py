@@ -26,14 +26,35 @@ def mean(values: Sequence[float]) -> float | None:
     return sum(values) / len(values) if values else None
 
 
+def run_spend(metrics: dict[str, Any] | None) -> tuple[float, float]:
+    """(Claude USD, Codex estimated USD) one run's metrics report; the list cost stands in when the stream has no total."""
+    cost = (metrics or {}).get("cost") or {}
+    claude = cost.get("claude_total_cost_usd")
+    if not isinstance(claude, (int, float)) or isinstance(claude, bool):
+        claude = cost.get("claude_list_cost_usd")
+    codex = cost.get("codex_list_cost_usd_estimate")
+    return (float(claude) if isinstance(claude, (int, float)) else 0.0, float(codex) if isinstance(codex, (int, float)) else 0.0)
+
+
+def attempts_spend(run_json: Path, rep: Any) -> tuple[float, float]:
+    """Spend of the archived earlier attempts of one run: results/<task>/<variant>/attempts/rep<k>/<n>/metrics.json."""
+    folder = run_json.parent.parent / "attempts" / f"rep{rep}"
+    spent = [run_spend(read_json(item / "metrics.json", None)) for item in sorted(folder.glob("*")) if item.is_dir()]
+    return sum(item[0] for item in spent), sum(item[1] for item in spent)
+
+
 def load_results(run_root: Path, campaign: str) -> list[dict[str, Any]]:
-    """Every run's metrics (with its status), from results/<task>/<variant>/rep<k>/metrics.json or run.json."""
+    """Every run's metrics (with its status), from results/<task>/<variant>/rep<k>/metrics.json or run.json.
+
+    Each row also carries `spend_claude` and `spend_codex`: the final attempt plus every archived attempt."""
     rows: list[dict[str, Any]] = []
     for run_json in sorted(campaign_dir(run_root, campaign).glob("results/*/*/rep*/run.json")):
         run = read_json(run_json, {})
         metrics = read_json(run_json.with_name("metrics.json"), None)
+        final, archived = run_spend(metrics), attempts_spend(run_json, run.get("rep"))
         rows.append({**(metrics or {}), "run_id": run.get("run_id"), "task": run.get("task"), "variant": run.get("variant"),
-                     "rep": run.get("rep"), "status": run.get("status"), "has_metrics": metrics is not None})
+                     "rep": run.get("rep"), "status": run.get("status"), "has_metrics": metrics is not None,
+                     "spend_claude": final[0] + archived[0], "spend_codex": final[1] + archived[1]})
     return rows
 
 
@@ -67,7 +88,15 @@ def runner_total(row: dict[str, Any]) -> int:
     return sum(sum(counts.values()) for counts in (row.get("role_runner_calls") or {}).values())
 
 
-def stats_row(rows: list[dict[str, Any]]) -> list[str]:
+def spend_cells(rows: list[dict[str, Any]], successes: int) -> list[str]:
+    claude = sum(float(r.get("spend_claude") or 0.0) for r in rows)
+    codex = sum(float(r.get("spend_codex") or 0.0) for r in rows)
+    per_success = (claude + codex) / successes if successes else None
+    return [fmt(claude, 3), fmt(codex, 3), fmt(per_success, 3)]
+
+
+def stats_row(rows: list[dict[str, Any]], spend_rows: list[dict[str, Any]] | None = None) -> list[str]:
+    """Statistics of the graded final attempts; spend covers `spend_rows` (default `rows`) with archived attempts."""
     n = len(rows)
     claude = present(rows, lambda r: (r.get("cost") or {}).get("claude_total_cost_usd"))
     codex = present(rows, lambda r: (r.get("cost") or {}).get("codex_list_cost_usd_estimate"))
@@ -84,13 +113,15 @@ def stats_row(rows: list[dict[str, Any]]) -> list[str]:
         fmt(mean([float(sum((r.get("subagent_launches_by_type") or {}).values())) for r in rows])),
         fmt(mean([float(runner_total(r)) for r in rows])), fmt(mean(present(rows, lambda r: r.get("approval_prompts")))),
         fmt(mean([float((r.get("retries") or {}).get("total", 0)) for r in rows])), str(handoff),
+        *spend_cells(rows if spend_rows is None else spend_rows, success),
     ]
 
 
 HEADER = [
     "n", "success", "correctness mean", "test pass mean", "Claude cost USD p50/p95", "Codex est. USD p50/p95",
     "wall s p50/p95", "turns p50", "tool calls p50", "subagents mean", "role_runner mean", "approvals mean",
-    "retries mean", "handoff misses",
+    "retries mean", "handoff misses", "spend incl. attempts Claude USD", "spend incl. attempts Codex est. USD",
+    "cost per success USD",
 ]
 
 
@@ -109,12 +140,15 @@ def group_by(rows: list[dict[str, Any]], key: str) -> dict[str, list[dict[str, A
 
 
 def variant_section(variant: str, rows: list[dict[str, Any]]) -> list[str]:
-    done = graded(rows)
-    per_task = [[task, *stats_row(items)] for task, items in group_by(done, "task").items()]
+    done, all_by_task = graded(rows), group_by(rows, "task")
+    per_task = [[task, *stats_row(items, all_by_task.get(task, items))] for task, items in group_by(done, "task").items()]
     lines = [f"### Variant {variant}", ""]
     lines += table("task", per_task) if per_task else ["No graded runs."]
-    lines += ["", "Overall", ""] + table("variant", [[variant, *stats_row(done)]])
-    return lines + [""]
+    lines += ["", "Overall", ""] + table("variant", [[variant, *stats_row(done, rows)]])
+    notes = ("Statistics describe the final attempt of each graded run. Spend adds every run of the task or variant, "
+             "including archived earlier attempts and runs that did not finish; cost per success is that spend, "
+             "Claude plus Codex estimate, divided by the successes.")
+    return lines + ["", notes, ""]
 
 
 def status_counts(rows: list[dict[str, Any]]) -> str:

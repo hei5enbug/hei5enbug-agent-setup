@@ -13,9 +13,10 @@ REQUIRED_FLAGS = ("--plugin-dir", "--settings", "--permission-prompt-tool", "--m
 
 
 def command_problems(argv: list[str]) -> list[str]:
-    problems = [f"missing {flag}" for flag in REQUIRED_FLAGS if flag not in argv]
-    problems += [f"forbidden {arg}" for arg in argv if arg in FORBIDDEN_ARGS or arg.startswith("--permission-mode")]
-    if APPROVER_TOOL not in argv:
+    options = argv[:len(argv) - 1 - argv[::-1].index("--")] if "--" in argv else argv
+    problems = [f"missing {flag}" for flag in REQUIRED_FLAGS if flag not in options]
+    problems += [f"forbidden {arg}" for arg in options if arg in FORBIDDEN_ARGS or arg.startswith("--permission-mode")]
+    if APPROVER_TOOL not in options:
         problems.append("approver tool not wired")
     return problems
 

@@ -61,15 +61,23 @@ def claude_requests_by_source(
     main_events: list[dict[str, Any]] | None,
     subagents: list[dict[str, Any]],
     stream_events: list[dict[str, Any]],
+    runners: list[dict[str, Any]] | None = None,
 ) -> tuple[dict[str, list[dict[str, Any]]], str]:
-    """Prefer transcript usage (final output counts); fall back to the stream. Returns the source label too."""
+    """Prefer transcript usage (final output counts); fall back to the stream. Returns the source label too.
+
+    `runners` are the Claude role_runner sessions ({role, events}); their usage is counted as `runner:<role>`."""
     if main_events:
         by_source: dict[str, list[dict[str, Any]]] = {"main": claude_requests(main_events)}
         for record in subagents:
             source = f"subagent:{(record.get('meta') or {}).get('agentType', 'unknown')}"
             by_source[source] = by_source.get(source, []) + claude_requests(record.get("events", []))
-        return by_source, "transcripts"
-    return split_stream_requests(stream_events), "stream"
+        label = "transcripts"
+    else:
+        by_source, label = split_stream_requests(stream_events), "stream"
+    for record in runners or []:
+        source = f"runner:{record.get('role', 'unknown')}"
+        by_source[source] = by_source.get(source, []) + claude_requests(record.get("events", []))
+    return by_source, label
 
 
 def sum_fields(rows: Iterable[dict[str, Any]], fields: tuple[str, ...]) -> dict[str, int]:

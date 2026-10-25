@@ -44,6 +44,13 @@
       "function": "new_tests"
     },
     {
+      "id": "agent-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    },
+    {
       "id": "readme-shipping",
       "kind": "file_contains",
       "required": true,

@@ -6,8 +6,8 @@
   "fixture": "inventory-service",
   "prompt_file": "prompts/T01.txt",
   "limits": {
-    "wall_seconds": 1500,
-    "max_budget_usd": 12
+    "wall_seconds": 3600,
+    "max_budget_usd": 25
   },
   "checks": [
     {

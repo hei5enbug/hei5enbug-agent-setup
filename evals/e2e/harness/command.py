@@ -8,7 +8,7 @@ from typing import Any
 
 from .config import (
     AGENT_EFFORT, AGENT_MODEL, APPROVER_SERVER, APPROVER_TOOL, FORBIDDEN_ARGS, HARNESS_DIR, INSTALLED_PLUGIN_KEY,
-    HarnessConfig,
+    RESERVED_ARGS, HarnessConfig,
 )
 
 APPROVER_SCRIPT = HARNESS_DIR / "approval_mcp.py"
@@ -27,6 +27,12 @@ def load_variant(variants_root: Path, name: str) -> dict[str, Any]:
     return validate_variant(variant, name)
 
 
+def is_reserved_arg(item: str) -> bool:
+    """True for a flag the harness owns or that bypasses permissions, also in the `--flag=value` form."""
+    flag = item.split("=", 1)[0] if item.startswith("-") else item
+    return flag in FORBIDDEN_ARGS or flag in RESERVED_ARGS or item.startswith("--permission-mode")
+
+
 def validate_variant(variant: Any, name: str = "variant") -> dict[str, Any]:
     if not isinstance(variant, dict) or not isinstance(variant.get("name"), str) or not isinstance(variant.get("ref"), str):
         raise ConfigError(f"{name}: a variant needs string 'name' and 'ref'")
@@ -34,7 +40,7 @@ def validate_variant(variant: Any, name: str = "variant") -> dict[str, Any]:
         if not isinstance(variant.get(key, kind()), kind):
             raise ConfigError(f"{name}: '{key}' must be a {kind.__name__}")
     extra = [str(item) for item in variant.get("extra_args", [])]
-    banned = sorted(item for item in extra if item in FORBIDDEN_ARGS or item.startswith("--permission-mode"))
+    banned = sorted(item for item in extra if is_reserved_arg(item))
     if banned:
         raise ConfigError(f"{name}: extra_args may not contain {banned}")
     return {"name": variant["name"], "ref": variant["ref"], "settings": dict(variant.get("settings", {})),
@@ -66,7 +72,10 @@ def merge_settings(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any
 
 
 def run_settings(variant: dict[str, Any]) -> dict[str, Any]:
-    return merge_settings({"enabledPlugins": {INSTALLED_PLUGIN_KEY: False}}, variant["settings"])
+    """Default settings plus the variant's; the installed plugin stays off whatever the variant says."""
+    merged = merge_settings({"enabledPlugins": {INSTALLED_PLUGIN_KEY: False}}, variant["settings"])
+    enabled = merged.get("enabledPlugins")
+    return {**merged, "enabledPlugins": {**(enabled if isinstance(enabled, dict) else {}), INSTALLED_PLUGIN_KEY: False}}
 
 
 def mcp_config(approval_log: Path) -> dict[str, Any]:
@@ -79,9 +88,11 @@ def mcp_config(approval_log: Path) -> dict[str, Any]:
 def build_command(
     cfg: HarnessConfig, task: dict[str, Any], variant: dict[str, Any], prompt: str, plugin_dir: str, run_dir: Path,
 ) -> list[str]:
-    """The full agent command. It never passes bypass or permission-mode flags: runs start in the user's default mode."""
+    """The full agent command. It never passes bypass or permission-mode flags: runs start in the user's default mode.
+
+    The prompt follows `--`, so a prompt that starts with a dash, such as `--version ...`, is not read as an option."""
     return [
-        cfg.claude_bin, "-p", prompt, "--model", AGENT_MODEL, "--effort", AGENT_EFFORT,
+        cfg.claude_bin, "-p", "--model", AGENT_MODEL, "--effort", AGENT_EFFORT,
         "--output-format", "stream-json", "--verbose", "--include-hook-events",
         "--plugin-dir", plugin_dir,
         "--settings", str(run_dir / "settings.json"),
@@ -89,4 +100,5 @@ def build_command(
         "--permission-prompt-tool", APPROVER_TOOL,
         "--max-budget-usd", str(task["limits"]["max_budget_usd"]),
         *variant["extra_args"],
+        "--", prompt,
     ]

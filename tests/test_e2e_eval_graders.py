@@ -407,6 +407,101 @@ class TranscriptCheckTest(TempCase):
         self.assertEqual(verdicts, [True, True, False, False])
 
 
+class ReviewCompletionTest(TempCase):
+    def verdicts(self, view_fields: dict[str, Any], *groups: tuple[dict[str, Any], ...]) -> list[bool]:
+        repo, base, tasks = self.sample()
+        spec = {"kind": "review_before_report"}
+        return [self.verdict(spec, repo, base, tasks, {**make_view(delegations=group), **view_fields})[0] for group in groups]
+
+    def test_종료를_모르는_role_runner_리뷰나_오류_결과의_Agent_리뷰는_리뷰로_치지_않는다(self):
+        """exit가 None인 role_runner와 is_error인 Agent는 실패, 완료된 Agent는 통과다."""
+        # given
+        unknown = (delegation("role_runner", "review", exit_code=None),)
+        errored = ({**delegation("agent", "review"), "is_error": True, "completed": False},)
+        completed = ({**delegation("agent", "review"), "is_error": False, "completed": True},)
+
+        # when
+        results = self.verdicts({}, unknown, errored, completed)
+
+        # then
+        self.assertEqual(results, [False, False, True])
+
+    def test_최종_답변_뒤에_시작한_리뷰는_인정하지_않는다(self):
+        """final_answer_order 이상의 order를 가진 리뷰 위임은 최종 답변 뒤라서 실패한다."""
+        # given
+        before = ({**delegation("role_runner", "review", exit_code=0), "order": 2},)
+        after = ({**delegation("role_runner", "review", exit_code=0), "order": 5},)
+
+        # when
+        results = self.verdicts({"final_answer_order": 5}, before, after)
+
+        # then
+        self.assertEqual(results, [True, False])
+
+
+class SymlinkGradingTest(TempCase):
+    def make_hidden(self, tasks: Path) -> dict[str, str]:
+        write_files(tasks / "hidden" / "TX", {"test_hidden.py": "def test_hidden():\n    assert True\n"})
+        return {"source": "hidden/TX", "dest": "tests/hidden"}
+
+    def test_테스트_폴더가_바깥을_가리키는_링크여도_원본_테스트는_복사본_안에만_복원된다(self):
+        """tests가 심볼릭 링크여도 링크 대상 폴더에는 아무것도 쓰지 않고 기존 테스트 검사는 통과한다."""
+        # given
+        repo, base, tasks = self.sample()
+        outside = self.root / "outside"
+        outside.mkdir()
+        shutil.rmtree(repo / "tests")
+        os.symlink(outside, repo / "tests")
+
+        # when
+        passed, detail = self.verdict({"kind": "pytest", "suite": "preexisting"}, repo, base, tasks)
+
+        # then
+        self.assertEqual(list(outside.iterdir()), [])
+        self.assertTrue(passed, detail)
+
+    def test_숨은_테스트_목적지가_링크여도_링크_대상에_쓰지_않는다(self):
+        """tests/hidden이 바깥 폴더로의 링크여도 숨은 테스트는 복사본 안에 설치된다."""
+        # given
+        repo, base, tasks = self.sample()
+        outside = self.root / "outside"
+        outside.mkdir()
+        os.symlink(outside, repo / "tests" / "hidden")
+        hidden = self.make_hidden(tasks)
+
+        # when
+        passed, detail = self.verdict({"kind": "pytest", "suite": "hidden"}, repo, base, tasks, hidden_tests=hidden)
+
+        # then
+        self.assertEqual(list(outside.iterdir()), [])
+        self.assertTrue(passed, detail)
+
+    def test_테스트_파일이_바깥_파일로의_링크여도_그_파일을_덮어쓰지_않는다(self):
+        """tests/test_app.py가 바깥 파일을 가리켜도 원본 복원이 그 파일 내용을 바꾸지 않는다."""
+        # given
+        repo, base, tasks = self.sample()
+        victim = self.root / "victim.py"
+        victim.write_text("VICTIM\n", encoding="utf-8")
+        (repo / "tests" / "test_app.py").unlink()
+        os.symlink(victim, repo / "tests" / "test_app.py")
+
+        # when
+        self.verdict({"kind": "pytest", "suite": "preexisting"}, repo, base, tasks)
+
+        # then
+        self.assertEqual(victim.read_text(encoding="utf-8"), "VICTIM\n")
+
+    def test_복사본_밖으로_나가는_목적지는_채점_오류다(self):
+        """상위 폴더로 빠지는 상대 경로는 GradingError를 낸다."""
+        # given
+        root = self.root / "copy"
+        root.mkdir()
+
+        # when / then
+        with self.assertRaises(graders.GradingError):
+            graders.prepare_destination(root, "../escape")
+
+
 class CustomAndPytestCheckTest(TempCase):
     def test_custom_검사는_tasks_custom_모듈의_함수를_부른다(self):
         """tasks/custom/<id>.py의 지정한 함수가 (통과, 설명, 데이터)를 돌려준다."""
@@ -906,6 +1001,49 @@ class GoldenTaskTest(TempCase):
         self.assertEqual(by_id["exact-api"]["missing_in"], ["w1"])
         self.assertEqual(by_id["exact-api"]["traced_failures"], ["hidden-tests"])
         self.assertEqual(by_id["korean-mirror"]["traced_failures"], ["mirror-updated"])
+
+    def t02_with_extended_test(self, body: str) -> dict[str, dict[str, Any]]:
+        task, repo, base = self.materialize("T02")
+        apply_reference("T02", repo)
+        (repo / "tests" / "test_shipping.py").unlink()
+        existing = repo / "tests" / "test_orders.py"
+        existing.write_text(existing.read_text(encoding="utf-8") + body, encoding="utf-8")
+        result = self.grade_task(task, repo, base, make_view("done"))
+        return {check["id"]: check for check in result["checks"]}
+
+    def test_T02는_기존_테스트_파일에_배송_테스트를_더해도_new_tests를_통과한다(self):
+        """새 파일이 아니어도 기존 파일의 diff가 shipping을 다루는 def test_를 더하면 통과한다."""
+        # given
+        body = "\n\ndef test_shipping_fee_is_added():\n    assert True\n"
+
+        # when
+        checks = self.t02_with_extended_test(body)
+
+        # then
+        self.assertEqual((checks["new-tests"]["passed"], checks["agent-tests"]["passed"]), (True, True))
+
+    def test_T02는_배송과_무관한_테스트만_더하면_new_tests에서_실패한다(self):
+        """shipping을 언급하지 않는 추가 테스트는 새 테스트로 인정하지 않는다."""
+        # given
+        body = "\n\ndef test_unrelated():\n    assert True\n"
+
+        # when
+        checks = self.t02_with_extended_test(body)
+
+        # then
+        self.assertFalse(checks["new-tests"]["passed"])
+
+    def test_T02는_추가한_테스트가_깨져_있으면_agent_tests에서_실패한다(self):
+        """배송 테스트가 있어도 실패하는 테스트가 들어 있으면 필수 검사 agent-tests가 실패한다."""
+        # given
+        body = "\n\ndef test_shipping_broken():\n    assert False\n"
+
+        # when
+        checks = self.t02_with_extended_test(body)
+
+        # then
+        self.assertEqual((checks["new-tests"]["passed"], checks["agent-tests"]["passed"]), (True, False))
+        self.assertTrue(checks["agent-tests"]["required"])
 
     def test_T03의_버그는_고치지_않으면_숨은_테스트_다섯_중_셋이_실패한다(self):
         """원본 코드에서는 0 수량 품목 뒤 품목이 합계에서 빠지는 세 가지 경우가 실패한다."""

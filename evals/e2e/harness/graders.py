@@ -33,6 +33,10 @@ SUMMARY_LINE = re.compile(r"^(?:=+ )?(?P<body>(?:\d+ [a-z]+(?:, )?)+|no tests ra
 SUMMARY_COUNT = re.compile(r"(\d+) (passed|failed|errors?|skipped|xfailed|xpassed|deselected|warnings?)")
 FAILED_ID = re.compile(r"^(?:FAILED|ERROR) (\S+)", re.MULTILINE)
 
+class GradingError(RuntimeError):
+    """A grading copy cannot be written without leaving its root."""
+
+
 CheckResult = tuple[bool, str, dict[str, Any]]
 CheckFunction = Callable[["GradeContext", Mapping[str, Any]], CheckResult]
 
@@ -60,6 +64,40 @@ def git(repo: Path, *args: str, env: Mapping[str, str] | None = None, check: boo
     if check and completed.returncode != 0:
         raise RuntimeError(f"git {' '.join(args)} failed: {completed.stderr.strip()}")
     return completed.stdout
+
+
+def contained(root: Path, path: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def _replace_with_directory(path: Path) -> None:
+    path.unlink()
+    path.mkdir()
+
+
+def prepare_destination(root: Path, relative: str) -> Path:
+    """Make `root/relative` writable without following a link: turn every symlinked component into a plain directory
+    and drop every symlink below the destination, then verify that the result is inside `root`."""
+    if PurePosixPath(relative).is_absolute() or ".." in PurePosixPath(relative).parts:
+        raise GradingError(f"destination {relative!r} leaves the grading copy")
+    current = root
+    for part in PurePosixPath(relative).parts:
+        current = current / part
+        if current.is_symlink():
+            _replace_with_directory(current)
+    current.mkdir(parents=True, exist_ok=True)
+    for directory, names, files in os.walk(current):
+        for name in [*names, *files]:
+            entry = Path(directory) / name
+            if entry.is_symlink():
+                entry.unlink()
+    if not contained(root, current):
+        raise GradingError(f"destination {relative!r} resolves outside the grading copy")
+    return current
 
 
 def is_noise(path: str) -> bool:
@@ -220,7 +258,7 @@ class GradeContext:
         if not spec:
             return None
         source = self.tasks_root / spec["source"]
-        destination = root / spec["dest"]
+        destination = prepare_destination(root, spec["dest"])
         shutil.copytree(source, destination, dirs_exist_ok=True)
         return spec["dest"]
 
@@ -228,7 +266,7 @@ class GradeContext:
         original = self.fixtures_root / self.task["fixture"] / "tests"
         if not original.is_dir():
             return []
-        restored = root / "tests"
+        restored = prepare_destination(root, "tests")
         shutil.copytree(original, restored, dirs_exist_ok=True,
                         ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache", "*.pyc"))
         return [f"tests/{path}" for path in walk_files(original) if re.search(r"(^|/)(test_[^/]*|[^/]*_test)\.py$", path)]
@@ -433,10 +471,19 @@ def check_answer_contains(ctx: GradeContext, spec: Mapping[str, Any]) -> CheckRe
     return len(hit) >= minimum, f"{len(hit)} of {len(spec['patterns'])} patterns found, need {minimum}", {"hit": hit}
 
 
+def review_completed(delegation: Mapping[str, Any]) -> bool:
+    """A role_runner review needs exit 0; an agent review needs a completed result that is not an error."""
+    if delegation.get("kind") == "role_runner":
+        return delegation.get("exit") == 0
+    return delegation.get("kind") == "agent" and not delegation.get("is_error") and delegation.get("completed", True)
+
+
 def check_review_before_report(ctx: GradeContext, spec: Mapping[str, Any]) -> CheckResult:
+    limit = ctx.view.get("final_answer_order")
     reviews = [d for d in ctx.view.get("delegations", [])
-               if d.get("class") == "review" and (d.get("kind") == "agent" or d.get("exit") == 0)]
-    return bool(reviews), f"{len(reviews)} review delegation(s)", {"reviews": [d.get("tool_use_id") for d in reviews]}
+               if d.get("class") == "review" and review_completed(d) and (limit is None or d.get("order", 0) < limit)]
+    return bool(reviews), f"{len(reviews)} completed review delegation(s) before the final answer", {
+        "reviews": [d.get("tool_use_id") for d in reviews]}
 
 
 def load_custom(ctx: GradeContext, function: str) -> Callable[[Any], CheckResult]:

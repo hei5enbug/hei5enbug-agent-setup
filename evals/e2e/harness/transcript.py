@@ -11,7 +11,8 @@ from .config import USAGE_LIMIT_PATTERN
 
 AGENT_TOOLS = frozenset({"Agent", "Task"})
 ROLE_RUNNER_CALL = re.compile(r"role_runner\.py\s+((?!-)[\w-]+)")
-ASSIGNMENT_FLAG = re.compile(r"--assignment\s+(\S+)")
+ASSIGNMENT_FLAG = re.compile(r"""--assignment(?:\s+|=)("[^"]*"|'[^']*'|\S+)""")
+LEADING_CD = re.compile(r"""\A\s*cd\s+("[^"]*"|'[^']*'|\S+)\s*&&""")
 HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1\n(.*?)\n\s*\2(?=\s|$)", re.S)
 EXIT_CODE_PREFIX = re.compile(r"^Exit code (\d+)")
 EXIT_MARKER = re.compile(r"\bexit=(\d+)")
@@ -81,7 +82,8 @@ def role_runner_status(text: str) -> dict[str, Any] | None:
     return None
 
 
-def bash_exit_code(text: str, is_error: bool) -> int:
+def bash_exit_code(text: str, is_error: bool) -> int | None:
+    """The exit code a Bash result shows, or None when it shows none (for example a background launch)."""
     status = role_runner_status(text)
     if status is not None and isinstance(status.get("exit"), int):
         return int(status["exit"])
@@ -91,14 +93,43 @@ def bash_exit_code(text: str, is_error: bool) -> int:
     marker = EXIT_MARKER.findall(text)
     if marker:
         return int(marker[-1])
-    return 1 if is_error else 0
+    return 1 if is_error else None
+
+
+def unquote(token: str) -> str:
+    return token[1:-1] if len(token) >= 2 and token[0] == token[-1] and token[0] in "\"'" else token
+
+
+def assignment_paths(command: str) -> list[str]:
+    """The literal --assignment paths of a command, without their quotes."""
+    return [unquote(token) for token in ASSIGNMENT_FLAG.findall(command)]
+
+
+def leading_cd(command: str) -> str | None:
+    """The directory of a leading `cd <dir> &&`, without quotes, or None."""
+    match = LEADING_CD.match(command)
+    return unquote(match.group(1)) if match else None
+
+
+def later_runner_exit(calls: list[dict[str, Any]], start: int, role: str, source: str, claimed: set[str]) -> int | None:
+    """The exit of a role_runner status line for `role` in a later result of the same source; each line counts once."""
+    for call in calls[start + 1:]:
+        if call["source"] != source or call["id"] in claimed:
+            continue
+        if call["name"] == "Bash" and ROLE_RUNNER_CALL.search(str(call["input"].get("command") or "")):
+            continue
+        status = role_runner_status(call["result_text"])
+        if status and str(status.get("role", "")).lower() == role.lower() and isinstance(status.get("exit"), int):
+            claimed.add(call["id"])
+            return int(status["exit"])
+    return None
 
 
 def assignment_text(command: str, assignments: dict[str, str]) -> str:
     bodies = [match.group(3) for match in HEREDOC.finditer(command)]
     if bodies:
         return "\n\n".join(bodies)
-    for path in ASSIGNMENT_FLAG.findall(command):
+    for path in assignment_paths(command):
         if path in assignments:
             return assignments[path]
     return ""
@@ -160,6 +191,7 @@ def build_tool_calls(events: list[dict[str, Any]], subagents: list[dict[str, Any
 
 def build_delegations(calls: list[dict[str, Any]], assignments: dict[str, str]) -> list[dict[str, Any]]:
     delegations: list[dict[str, Any]] = []
+    claimed: set[str] = set()
     for order, call in enumerate(calls):
         if call["source"] != "main":
             continue
@@ -168,15 +200,19 @@ def build_delegations(calls: list[dict[str, Any]], assignments: dict[str, str]) 
             delegations.append({
                 "kind": "agent", "type": agent_type, "class": classify_agent(agent_type),
                 "prompt": str(call["input"].get("prompt") or ""), "exit": None, "tool_use_id": call["id"], "order": order,
+                "is_error": bool(call["is_error"]), "completed": bool(call["result_text"].strip()) and not call["is_error"],
             })
         elif call["name"] == "Bash":
             command = str(call["input"].get("command") or "")
             match = ROLE_RUNNER_CALL.search(command)
             if match:
+                code = bash_exit_code(call["result_text"], call["is_error"])
+                if code is None:
+                    code = later_runner_exit(calls, order, match.group(1), call["source"], claimed)
                 delegations.append({
                     "kind": "role_runner", "type": match.group(1), "class": classify_role(match.group(1)),
-                    "prompt": assignment_text(command, assignments),
-                    "exit": bash_exit_code(call["result_text"], call["is_error"]), "tool_use_id": call["id"], "order": order,
+                    "prompt": assignment_text(command, assignments), "exit": code, "tool_use_id": call["id"],
+                    "order": order, "is_error": bool(call["is_error"]), "completed": code == 0,
                 })
     return delegations
 
@@ -201,6 +237,20 @@ def result_event(events: list[dict[str, Any]]) -> dict[str, Any] | None:
     return results[-1] if results else None
 
 
+def final_answer_order(events: list[dict[str, Any]]) -> int:
+    """How many tool calls had started when the last main assistant text began; later calls came after the answer."""
+    started: set[str] = set()
+    at_last_text = None
+    for event in events:
+        if event.get("type") != "assistant":
+            continue
+        blocks = content_blocks(event)
+        if event.get("parent_tool_use_id") is None and any(b.get("type") == "text" and str(b.get("text", "")).strip() for b in blocks):
+            at_last_text = len(started)
+        started.update(str(b.get("id")) for b in blocks if b.get("type") == "tool_use")
+    return len(started) if at_last_text is None else at_last_text
+
+
 def build_view(
     events: list[dict[str, Any]],
     subagents: list[dict[str, Any]] | None = None,
@@ -218,6 +268,7 @@ def build_view(
         "assistant_texts": assistant_texts(events),
         "tool_calls": calls,
         "delegations": build_delegations(calls, assignments or {}),
+        "final_answer_order": final_answer_order(events),
         "approvals": list(approvals or []),
         "permission_denials": list(denials) if isinstance(denials, list) else [],
     }

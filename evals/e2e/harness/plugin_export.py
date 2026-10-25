@@ -15,7 +15,7 @@ from .config import PLUGIN_NAME
 
 SHA_LENGTH = 7
 EXPORT_RECORD = "plugin-export.json"
-EXCLUDED_PATHS = ("evals",)
+EXCLUDED_PATHS = ("evals", "tests/test_e2e_eval_*.py")
 
 
 class ExportError(RuntimeError):
@@ -43,12 +43,15 @@ def export_dir(run_root: Path, sha: str) -> Path:
 def export_plugin(repo_root: Path, run_root: Path, ref: str) -> dict[str, Any]:
     """Extract `git archive <ref>` once per sha and return {ref, sha, path}; an existing export is reused.
 
-    The evaluation folder is left out, so an agent that reads the plugin source cannot see hidden tests."""
+    The evaluation folder and its unit tests are left out, so an agent that reads the plugin source cannot see hidden
+    tests or reference answers. An export made with a different exclusion list is rebuilt."""
     sha = resolve_ref(repo_root, ref)
     target = export_dir(run_root, sha)
     record = target.parent / EXPORT_RECORD
     if record.is_file() and target.is_dir():
-        return {**json.loads(record.read_text(encoding="utf-8")), "path": str(target)}
+        existing = json.loads(record.read_text(encoding="utf-8"))
+        if existing.get("excluded") == list(EXCLUDED_PATHS):
+            return {**existing, "path": str(target)}
     staging = target.parent.with_name(f".{sha[:SHA_LENGTH]}.staging")
     shutil.rmtree(staging, ignore_errors=True)
     staging.mkdir(parents=True)

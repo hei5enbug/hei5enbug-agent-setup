@@ -19,8 +19,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "evals/e2e"))
 
 from harness import (  # noqa: E402
-    campaign, collect, command, environment, matrix, metrics, plugin_export, pricing, process, rubric, runner, summarize,
-    transcript, usage,
+    campaign, cli, codex_calls, collect, command, environment, inputs, matrix, metrics, plugin_export, pricing, process,
+    rubric, runner, summarize, transcript, usage,
 )
 from harness.config import HarnessConfig  # noqa: E402
 from harness.pilot_check import command_problems  # noqa: E402
@@ -619,6 +619,21 @@ class ResumeTest(unittest.TestCase):
         self.assertFalse(spec.result_dir.exists())
         self.assertEqual(matrix.prior_attempts(spec), 2)
 
+    def test_다시_시작하는_실행의_작업_저장소는_지우지_않고_attempts_아래_work로_옮긴다(self):
+        """이전 시도의 작업 폴더가 attempts/rep<k>/<n>/work로 보존된다."""
+        # given
+        spec = self.spec()
+        spec.result_dir.mkdir(parents=True)
+        (spec.repo).mkdir(parents=True)
+        (spec.repo / "edited.py").write_text("print('kept')\n", encoding="utf-8")
+
+        # when
+        moved = matrix.move_aside(spec)
+
+        # then
+        self.assertEqual((moved / "work" / "repo" / "edited.py").read_text(encoding="utf-8"), "print('kept')\n")
+        self.assertFalse(spec.work_dir.exists())
+
     def test_상태_파일은_실행_ID별_상태를_저장하고_다시_읽는다(self):
         """CampaignState는 set한 상태를 파일로 남기고 새 인스턴스가 읽는다."""
         # given
@@ -764,6 +779,18 @@ class CommandLineTest(unittest.TestCase):
         self.assertEqual(argv[argv.index("--permission-prompt-tool") + 1], "mcp__eval_approver__approve")
         self.assertEqual(command_problems(argv), [])
 
+    def test_대시로_시작하는_프롬프트도_옵션_끝_표시_뒤에_있어서_옵션으로_읽히지_않는다(self):
+        """`--version ...`으로 시작하는 프롬프트는 마지막 `--` 바로 뒤의 인자로 들어간다."""
+        # given
+        prompt = "--version 옵션 추가해줘."
+
+        # when
+        argv = command.build_command(HarnessConfig(), self.task, self.variant, prompt, "/tmp/p", Path("/tmp/run"))
+
+        # then
+        self.assertEqual(argv[-2:], ["--", prompt])
+        self.assertEqual(argv.count(prompt), 1)
+
     def test_변형의_extra_args에_우회_플래그가_있으면_거부한다(self):
         """변형 파일이 우회 플래그를 넣으려 하면 ConfigError다."""
         # given
@@ -814,6 +841,15 @@ out = os.environ["FAKE_OUT"]
 with open(out, "w") as handle:
     json.dump({{"argv": sys.argv[1:], "env": sorted(os.environ)}}, handle)
 mode = os.environ.get("FAKE_MODE", "complete")
+child_file = os.environ.get("FAKE_CHILD")
+if child_file:
+    import subprocess
+    child = subprocess.Popen(["sleep", "30"], start_new_session=True)
+    with open(child_file, "w") as handle:
+        handle.write(str(child.pid))
+    time.sleep(float(os.environ.get("FAKE_HOLD", "0")))
+if mode == "hang":
+    time.sleep(30)
 if mode == "stubborn":
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
@@ -824,6 +860,40 @@ print(json.dumps({{"type": "assistant", "message": {{"id": "m1", "model": "claud
 print(json.dumps({{"type": "result", "subtype": "success", "is_error": False, "result": "ok", "num_turns": 1,
     "total_cost_usd": 0.01, "session_id": "fake-1", "permission_denials": []}}))
 """
+
+
+def pid_running(pid: int) -> bool:
+    state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+    return bool(state) and not state.startswith("Z")
+
+
+class DescendantTrackingTest(unittest.TestCase):
+    TABLE = {10: (1, 10, "S"), 11: (10, 11, "S"), 12: (11, 11, "S"), 20: (1, 20, "S")}
+
+    def test_루트_아래의_모든_자손과_그_프로세스_그룹을_찾는다(self):
+        """새 세션을 연 자손도 ppid를 따라가 pid와 pgid 쌍으로 모은다."""
+        # given
+        table = self.TABLE
+
+        # when
+        found = process.find_descendants(table, {10})
+
+        # then
+        self.assertEqual(found, {11: 11, 12: 11})
+
+    def test_살아있는_자손은_같은_그룹에서_좀비가_아닌_것만_센다(self):
+        """사라졌거나 좀비이거나 pgid가 달라진 pid는 살아있는 자손이 아니다."""
+        # given
+        tables = [self.TABLE, {11: (1, 11, "S"), 12: (1, 12, "S")}]
+        tracker = process.DescendantTracker(10, reader=lambda: tables[0])
+        tracker.refresh()
+        tables[0] = {11: (1, 11, "Z"), 12: (1, 99, "S"), 13: (1, 13, "S")}
+
+        # when
+        alive = tracker.alive()
+
+        # then
+        self.assertEqual(alive, {})
 
 
 class ProcessAndRunTest(unittest.TestCase):
@@ -873,6 +943,71 @@ class ProcessAndRunTest(unittest.TestCase):
         self.assertLess(result.wall_seconds, 10)
         self.assertLess(result.returncode, 0)
 
+    def start_child_env(self, mode: str, hold: str = "0") -> tuple[dict[str, str], Path]:
+        child_file = self.root / "child.pid"
+        self.addCleanup(lambda: child_file.is_file() and self.kill_quietly(int(child_file.read_text(encoding="utf-8"))))
+        env = {**os.environ, "FAKE_OUT": str(self.out), "FAKE_MODE": mode, "FAKE_CHILD": str(child_file), "FAKE_HOLD": hold}
+        return env, child_file
+
+    @staticmethod
+    def kill_quietly(pid: int) -> None:
+        try:
+            os.kill(pid, 9)
+        except OSError:
+            pass
+
+    def test_제한_시간을_넘기면_새_세션에서_시작한_자손_프로세스도_끝내고_수를_기록한다(self):
+        """role_runner처럼 start_new_session으로 뜬 자식이 타임아웃 뒤에도 남지 않고 orphans_killed로 센다."""
+        # given
+        env, child_file = self.start_child_env("hang")
+
+        # when
+        result = process.run_agent([str(self.fake)], self.root, env, self.root / "s.jsonl", self.root / "e.txt", 1.5, 0.3, 0.3, 0.2)
+
+        # then
+        child = int(child_file.read_text(encoding="utf-8"))
+        self.assertTrue(result.timed_out)
+        self.assertEqual((result.orphans_killed, result.error), (1, None))
+        self.assertFalse(pid_running(child))
+
+    def test_정상_종료_뒤에도_이_실행이_남긴_자손은_끝내고_leftover_killed로_센다(self):
+        """에이전트가 먼저 끝나고 자식만 남으면 감시해 둔 자손이므로 종료하고 1로 기록한다."""
+        # given
+        env, child_file = self.start_child_env("leave", hold="1.2")
+
+        # when
+        result = process.run_agent([str(self.fake)], self.root, env, self.root / "s.jsonl", self.root / "e.txt", 20.0, 0.3, 0.3, 0.2)
+
+        # then
+        child = int(child_file.read_text(encoding="utf-8"))
+        self.assertFalse(result.timed_out)
+        self.assertEqual((result.leftover_killed, result.orphans_killed), (1, 0))
+        self.assertFalse(pid_running(child))
+
+    def test_자손이_없는_정상_실행은_정리한_프로세스가_없다(self):
+        """남은 자손이 없으면 두 카운트는 모두 0이다."""
+        # given
+        env = {**os.environ, "FAKE_OUT": str(self.out)}
+
+        # when
+        result = process.run_agent([str(self.fake)], self.root, env, self.root / "s.jsonl", self.root / "e.txt", 20.0, 0.3, 0.3, 0.2)
+
+        # then
+        self.assertEqual((result.orphans_killed, result.leftover_killed), (0, 0))
+
+    def test_실행_기록에_정리한_자손_수가_들어간다(self):
+        """run.json에 orphans_killed와 leftover_killed가 남는다."""
+        # given
+        env, child_file = self.start_child_env("hang")
+        cfg = HarnessConfig(**{**self.cfg.__dict__, "extra_env": {k: v for k, v in env.items() if k.startswith("FAKE_")}})
+
+        # when
+        run = runner.execute_run(self.spec, self.task, self.variant, self.plugin, cfg, {})
+
+        # then
+        saved = json.loads((self.spec.result_dir / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual((run["orphans_killed"], saved["orphans_killed"], saved["leftover_killed"]), (1, 1, 0))
+
     def test_실행이_끝난_프로세스는_timed_out이_아니고_출력이_파일에_남는다(self):
         """정상 종료한 가짜 claude의 stdout이 stream.jsonl로 저장된다."""
         # given
@@ -914,6 +1049,87 @@ class ProcessAndRunTest(unittest.TestCase):
         env_record = json.loads((self.spec.result_dir / "env.json").read_text(encoding="utf-8"))
         self.assertIn("ORCA_TERMINAL_HANDLE", env_record["removed_env_names"])
         self.assertTrue(json.loads((self.spec.result_dir / "metrics.json").read_text(encoding="utf-8"))["success"])
+
+    def write_stream(self, events: list[dict[str, Any]]) -> None:
+        self.spec.result_dir.mkdir(parents=True, exist_ok=True)
+        text = "".join(json.dumps(event) + "\n" for event in events)
+        (self.spec.result_dir / "stream.jsonl").write_text(text, encoding="utf-8")
+
+    def finished_run(self, **extra: Any) -> dict[str, Any]:
+        return {"run_id": self.spec.run_id, "task": "T09", "variant": "baseline", "rep": 1, "status": "complete",
+                "base_commit": "base123", "plugin": {"path": "/tmp/p"}, "attempts": 1, **extra}
+
+    def test_Codex_롤아웃의_명령이_채점_뷰와_메트릭의_codex_항목에_들어온다(self):
+        """롤아웃의 exec 명령은 source가 codex:<역할>인 Bash 호출로 채점기에 보이고 main 집계에는 섞이지 않는다."""
+        # given
+        self.write_stream(sample_events())
+        codex_dir = self.spec.result_dir / "codex"
+        codex_dir.mkdir()
+        script = 'await tools.exec_command({cmd:"git clean -fdx",workdir:"/w"});'
+        item = {"type": "response_item", "payload": {"type": "custom_tool_call", "name": "exec", "call_id": "c1", "input": script}}
+        (codex_dir / "rollout-r1.jsonl").write_text(json.dumps(item) + "\n", encoding="utf-8")
+        seen: dict[str, Any] = {}
+        self.graders.grade_run = lambda task, repo, base, view, tasks_root, work: seen.update(view=view) or self.grade(task, repo, base, view, tasks_root, work)
+
+        # when
+        result = runner.analyze(self.spec, self.task, self.finished_run(), self.cfg)
+
+        # then
+        codex = [c for c in seen["view"]["tool_calls"] if c["source"].startswith("codex:")]
+        self.assertEqual([(c["name"], c["source"], c["input"]["command"]) for c in codex], [("Bash", "codex:reviewer", "git clean -fdx")])
+        self.assertEqual(result["tool_calls_by_tool"]["codex"], {"Bash": 1})
+        self.assertEqual(result["tool_calls_by_tool"]["main"]["Bash"], 1)
+        self.assertEqual(result["tool_calls_by_tool"]["total"]["Bash"], 1)
+
+    def test_루브릭_채점_폴더는_변형을_드러내지_않는_불투명한_이름이고_결과가_기록된다(self):
+        """rubric/<16자리 16진수> 아래에서 채점하고 grade/rubric.json에 rubric_dir을 남긴다."""
+        # given
+        self.spec.result_dir.mkdir(parents=True)
+        (self.spec.result_dir / "prompt.txt").write_text("do it", encoding="utf-8")
+        task = {**self.task, "rubric": {"artifact": {"kind": "final_answer"}}}
+        used: list[Path] = []
+
+        def fake_grade(task_arg, artifact, prompt, work_dir, **kwargs):
+            used.append(work_dir)
+            return {"scores": {"a": 5}, "mean": 5.0, "passed": True}
+
+        # when
+        with mock.patch.object(runner.rubric, "grade", side_effect=fake_grade):
+            runner.grade_run(self.spec, task, {"base_commit": "b"}, self.cfg, self.graders, {"final_answer": "answer"})
+
+        # then
+        work = used[0]
+        saved = json.loads((self.spec.result_dir / "grade" / "rubric.json").read_text(encoding="utf-8"))
+        self.assertEqual(work.parent, self.spec.base_dir / "rubric")
+        self.assertRegex(work.name, r"^[0-9a-f]{16}$")
+        self.assertNotIn("baseline", str(work))
+        self.assertNotIn("T09", str(work))
+        self.assertEqual(saved["rubric_dir"], str(work))
+        self.assertTrue(json.loads((self.spec.base_dir / "campaign.json").read_text(encoding="utf-8"))["rubric_salt"])
+
+    def test_기록을_다시_모으면_Claude_Codex_기록이_복사되고_채점이_다시_된다(self):
+        """저장된 시간 창과 작업 폴더로 롤아웃을 찾고 세션 ID로 기록을 복사한 뒤 metrics.json을 다시 쓴다."""
+        # given
+        self.write_stream(sample_events())
+        self.spec.repo.mkdir(parents=True)
+        project = self.root / "claude" / "projects" / "-tmp-demo"
+        project.mkdir(parents=True)
+        (project / "s-1.jsonl").write_text(json.dumps(assistant("m1", text_block("hi"))) + "\n", encoding="utf-8")
+        day = self.root / "codex" / "sessions" / "2026" / "10" / "25"
+        day.mkdir(parents=True)
+        meta = {"type": "session_meta", "payload": {"cwd": str(self.spec.repo), "timestamp": "2026-10-25T12:10:00Z"}}
+        (day / "rollout-r1.jsonl").write_text(json.dumps(meta) + "\n", encoding="utf-8")
+        run = self.finished_run(session_id="s-1", started_at="2026-10-25T12:00:00+00:00", ended_at="2026-10-25T12:30:00+00:00")
+        matrix.write_json(self.spec.result_dir / "run.json", run)
+
+        # when
+        result = runner.regrade_run(self.spec, self.task, self.cfg, self.graders, recollect_records=True)
+
+        # then
+        self.assertTrue((self.spec.result_dir / "transcripts" / "main.jsonl").is_file())
+        self.assertTrue((self.spec.result_dir / "codex" / "rollout-r1.jsonl").is_file())
+        self.assertEqual(result["collected"]["codex"], ["rollout-r1.jsonl"])
+        self.assertTrue((self.spec.result_dir / "metrics.json").is_file())
 
     def test_결과_메시지가_없이_끝난_실행은_infra_failed다(self):
         """result 메시지 없이 종료되면 상태는 infra_failed이고 채점하지 않는다."""
@@ -972,10 +1188,13 @@ class PluginExportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo, run_root = Path(tmp) / "repo", Path(tmp) / "runs"
             (repo / "evals/e2e/tasks/hidden").mkdir(parents=True)
+            (repo / "tests").mkdir()
             git = ["git", "-c", "user.name=Demo Dev", "-c", "user.email=dev@example.com", "-c", "commit.gpgsign=false"]
             subprocess.run([*git, "init", "-q", "-b", "main"], cwd=repo, check=True)
             (repo / "a.txt").write_text("one", encoding="utf-8")
             (repo / "evals/e2e/tasks/hidden/test_secret.py").write_text("x = 1\n", encoding="utf-8")
+            (repo / "tests/test_e2e_eval_graders.py").write_text("ANSWER = 1\n", encoding="utf-8")
+            (repo / "tests/test_other.py").write_text("y = 2\n", encoding="utf-8")
             subprocess.run([*git, "add", "."], cwd=repo, check=True)
             subprocess.run([*git, "commit", "-q", "-m", "init"], cwd=repo, check=True)
 
@@ -985,7 +1204,35 @@ class PluginExportTest(unittest.TestCase):
             # then
             self.assertTrue((Path(exported["path"]) / "a.txt").is_file())
             self.assertFalse((Path(exported["path"]) / "evals").exists())
-            self.assertEqual(exported["excluded"], ["evals"])
+            self.assertFalse((Path(exported["path"]) / "tests/test_e2e_eval_graders.py").exists())
+            self.assertTrue((Path(exported["path"]) / "tests/test_other.py").is_file())
+            self.assertEqual(exported["excluded"], ["evals", "tests/test_e2e_eval_*.py"])
+
+    def test_제외_목록이_다른_예전_내보내기는_다시_만든다(self):
+        """제외 목록이 달랐던 기록이 있으면 같은 sha여도 새 목록으로 다시 내보낸다."""
+        # given
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, run_root = Path(tmp) / "repo", Path(tmp) / "runs"
+            repo.mkdir()
+            git = ["git", "-c", "user.name=Demo Dev", "-c", "user.email=dev@example.com", "-c", "commit.gpgsign=false"]
+            subprocess.run([*git, "init", "-q", "-b", "main"], cwd=repo, check=True)
+            (repo / "tests").mkdir()
+            (repo / "a.txt").write_text("one", encoding="utf-8")
+            (repo / "tests/test_e2e_eval_x.py").write_text("x = 1\n", encoding="utf-8")
+            subprocess.run([*git, "add", "."], cwd=repo, check=True)
+            subprocess.run([*git, "commit", "-q", "-m", "init"], cwd=repo, check=True)
+            first = plugin_export.export_plugin(repo, run_root, "HEAD")
+            record = Path(first["path"]).parent / "plugin-export.json"
+            record.write_text(json.dumps({**first, "excluded": ["evals"]}), encoding="utf-8")
+            (Path(first["path"]) / "tests").mkdir(exist_ok=True)
+            (Path(first["path"]) / "tests/test_e2e_eval_x.py").write_text("leak\n", encoding="utf-8")
+
+            # when
+            again = plugin_export.export_plugin(repo, run_root, "HEAD")
+
+            # then
+            self.assertFalse((Path(again["path"]) / "tests/test_e2e_eval_x.py").exists())
+            self.assertEqual(again["excluded"], ["evals", "tests/test_e2e_eval_*.py"])
 
     def test_없는_ref를_내보내려_하면_오류가_난다(self):
         """해석되지 않는 ref는 ExportError다."""
@@ -1225,6 +1472,409 @@ class CollectTest(unittest.TestCase):
 
             # then
             self.assertEqual([m.name for m in matches], ["rollout-in.jsonl"])
+
+
+class DelegationExitTest(unittest.TestCase):
+    def runner_events(self, first_result: str, later: list[tuple[str, str]]) -> list[dict[str, Any]]:
+        events = [assistant("a", tool_use("t1", "Bash", {"command": role_runner_command("reviewer")})), tool_result("t1", first_result)]
+        for index, (command_text, result_text) in enumerate(later, start=2):
+            events += [assistant(f"b{index}", tool_use(f"t{index}", "Bash", {"command": command_text})), tool_result(f"t{index}", result_text)]
+        return events
+
+    def test_상태_줄도_종료_표식도_없는_role_runner_결과의_exit는_알_수_없음이다(self):
+        """백그라운드 실행 직후 결과처럼 종료 정보가 없으면 exit는 0이 아니라 None이다."""
+        # given
+        events = self.runner_events("Command running in background with ID: b1", [])
+
+        # when
+        view = transcript.build_view(events)
+
+        # then
+        self.assertIsNone(view["delegations"][0]["exit"])
+
+    def test_뒤의_도구_결과에_같은_역할의_상태_줄이_있으면_그_exit를_쓴다(self):
+        """백그라운드로 띄운 reviewer의 상태 줄이 나중 결과에 나오면 그 종료 코드를 가진다."""
+        # given
+        events = self.runner_events("Command running in background", [("cat /tmp/work/r.md", status_line("reviewer", 0))])
+
+        # when
+        view = transcript.build_view(events)
+
+        # then
+        self.assertEqual(view["delegations"][0]["exit"], 0)
+
+    def test_다른_역할의_상태_줄은_가져오지_않는다(self):
+        """worker 상태 줄은 reviewer 위임의 exit가 아니다."""
+        # given
+        events = self.runner_events("started", [("cat /tmp/work/r.md", status_line("worker", 0))])
+
+        # when
+        view = transcript.build_view(events)
+
+        # then
+        self.assertIsNone(view["delegations"][0]["exit"])
+
+    def test_같은_상태_줄을_두_위임에_중복으로_주지_않는다(self):
+        """같은 역할 위임이 둘이고 상태 줄이 하나면 첫 위임만 그 exit를 받는다."""
+        # given
+        events = self.runner_events("started", [])
+        events += [assistant("c", tool_use("t9", "Bash", {"command": role_runner_command("reviewer")})), tool_result("t9", "started"),
+                   assistant("d", tool_use("t10", "Bash", {"command": "cat /tmp/work/r.md"})), tool_result("t10", status_line("reviewer", 0))]
+
+        # when
+        view = transcript.build_view(events)
+
+        # then
+        self.assertEqual([d["exit"] for d in view["delegations"]], [0, None])
+
+    def test_Agent_위임에_도구_결과의_오류_여부가_기록된다(self):
+        """Agent 결과가 is_error면 위임은 is_error이고 완료로 치지 않는다."""
+        # given
+        events = [assistant("a", tool_use("g1", "Agent", {"subagent_type": SCOUT, "prompt": "p"})), tool_result("g1", "boom", True),
+                  assistant("b", tool_use("g2", "Agent", {"subagent_type": SCOUT, "prompt": "p"})), tool_result("g2", "fine")]
+
+        # when
+        view = transcript.build_view(events)
+
+        # then
+        self.assertEqual([(d["is_error"], d["completed"]) for d in view["delegations"]], [(True, False), (False, True)])
+
+    def test_마지막_어시스턴트_텍스트_이전에_시작한_도구_호출_수를_기록한다(self):
+        """final_answer_order는 마지막 메인 텍스트 전에 시작한 도구 호출 수다."""
+        # given
+        events = sample_events()
+
+        # when
+        view = transcript.build_view(events)
+
+        # then
+        self.assertEqual(view["final_answer_order"], 4)
+
+
+def rollout_item(kind: str, **fields: Any) -> dict[str, Any]:
+    return {"type": "response_item", "payload": {"type": kind, **fields}}
+
+
+class CodexCallsTest(unittest.TestCase):
+    def test_exec_스크립트의_cmd_문자열을_이스케이프를_풀어_명령마다_Bash_호출로_만든다(self):
+        """tools.exec_command({cmd:"..."}) 여러 개는 호출 여러 개가 되고 출력은 첫 호출에 붙는다."""
+        # given
+        script = ('const r = await Promise.allSettled([tools.exec_command({cmd:"echo \\"hi\\" && git clean -fd",workdir:"/w"}),'
+                  "tools.exec_command({cmd:'cat a.txt\\nls'})]);")
+        events = [rollout_item("custom_tool_call", name="exec", call_id="c1", input=script),
+                  rollout_item("custom_tool_call_output", call_id="c1", output=[{"type": "input_text", "text": "out-1"}])]
+
+        # when
+        calls = codex_calls.rollout_tool_calls(events, "reviewer", "rollout-x.jsonl")
+
+        # then
+        self.assertEqual([c["input"]["command"] for c in calls], ['echo "hi" && git clean -fd', "cat a.txt\nls"])
+        self.assertEqual([c["result_text"] for c in calls], ["out-1", ""])
+        self.assertEqual({(c["name"], c["source"], c["parent"]) for c in calls}, {("Bash", "codex:reviewer", None)})
+
+    def test_function_call과_local_shell_call의_명령을_읽고_종료_코드로_오류를_표시한다(self):
+        """cmd/command 인자, bash -lc 배열, local_shell_call 액션을 모두 Bash 호출로 읽는다."""
+        # given
+        events = [
+            rollout_item("function_call", name="exec_command", call_id="f1", arguments=json.dumps({"cmd": "ls -la"})),
+            rollout_item("function_call", name="shell", call_id="f2", arguments=json.dumps({"command": ["bash", "-lc", "rm -rf build"]})),
+            rollout_item("function_call_output", call_id="f2", output=json.dumps({"output": "gone", "metadata": {"exit_code": 1}})),
+            rollout_item("local_shell_call", call_id="l1", action={"type": "exec", "command": ["bash", "-lc", "git status"]}),
+            rollout_item("function_call_output", call_id="l1", output="clean"),
+        ]
+
+        # when
+        calls = codex_calls.rollout_tool_calls(events, "worker", "rollout-x.jsonl")
+
+        # then
+        self.assertEqual([c["input"]["command"] for c in calls], ["ls -la", "rm -rf build", "git status"])
+        self.assertEqual([c["is_error"] for c in calls], [False, True, False])
+        self.assertEqual(calls[2]["result_text"], "clean")
+
+    def test_apply_patch_호출은_apply_patch_도구로_기록된다(self):
+        """custom_tool_call apply_patch의 입력 패치 텍스트가 호출 입력이 된다."""
+        # given
+        patch = "*** Begin Patch\n*** Update File: a.py\n*** End Patch\n"
+        events = [rollout_item("custom_tool_call", name="apply_patch", call_id="p1", input=patch),
+                  rollout_item("custom_tool_call_output", call_id="p1", output="Done")]
+
+        # when
+        calls = codex_calls.rollout_tool_calls(events, "worker", "rollout-x.jsonl")
+
+        # then
+        self.assertEqual([(c["name"], c["input"]["patch"], c["result_text"]) for c in calls], [("apply_patch", patch, "Done")])
+
+    def test_역할을_모르는_롤아웃은_codex_unknown으로_묶는다(self):
+        """상태 줄로 역할을 알 수 없으면 source는 codex:unknown이다."""
+        # given
+        rollouts = [{"role": "unknown", "name": "rollout-z.jsonl",
+                     "events": [rollout_item("function_call", name="shell", call_id="u1", arguments=json.dumps({"cmd": "pwd"}))]}]
+
+        # when
+        calls = codex_calls.codex_tool_calls(rollouts)
+
+        # then
+        self.assertEqual([c["source"] for c in calls], ["codex:unknown"])
+
+
+class AssignmentAndRunnerRecordTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.repo = self.root / "repo"
+        (self.repo / "sub").mkdir(parents=True)
+        (self.repo / ".tmp").mkdir()
+
+    def call(self, command_text: str) -> list[dict[str, Any]]:
+        return [{"name": "Bash", "input": {"command": command_text}, "result_text": ""}]
+
+    def test_상대_할당_경로는_실행_저장소를_기준으로_찾는다(self):
+        """에이전트의 cwd인 실행 저장소 기준 상대 경로 할당 파일도 복사된다."""
+        # given
+        (self.repo / ".tmp" / "a.md").write_text("assign A", encoding="utf-8")
+        calls = self.call("python3 /p/scripts/role_runner.py reviewer --assignment .tmp/a.md")
+
+        # when
+        texts = collect.collect_assignments(calls, self.root / "out", self.repo)
+
+        # then
+        self.assertEqual(texts, {".tmp/a.md": "assign A"})
+
+    def test_맨_앞_cd_디렉터리와_따옴표_경로를_풀어서_찾는다(self):
+        """`cd sub && ... --assignment "a b.md"`는 sub 아래의 파일이고 뷰는 같은 경로 키로 본문을 찾는다."""
+        # given
+        (self.repo / "sub" / "a b.md").write_text("assign B", encoding="utf-8")
+        command_text = 'cd sub && python3 /p/scripts/role_runner.py reviewer --assignment "a b.md"'
+
+        # when
+        texts = collect.collect_assignments(self.call(command_text), self.root / "out", self.repo)
+
+        # then
+        self.assertEqual(texts, {"a b.md": "assign B"})
+        self.assertEqual(transcript.assignment_text(command_text, texts), "assign B")
+
+    def test_Claude_role_runner_세션_기록을_복사하고_역할별_출처로_사용량을_센다(self):
+        """status 줄의 evidence.transcript를 runner/<역할>-<n>.jsonl로 복사하고 runner:<역할> 토큰과 비용을 센다."""
+        # given
+        source = self.root / "runner-session.jsonl"
+        source.write_text(json.dumps(assistant("r1", text_block("review"), claude_usage(100, 50))) + "\n", encoding="utf-8")
+        status = json.dumps({"role": "reviewer", "runner": "claude", "exit": 0, "evidence": {"transcript": str(source)}})
+        calls = [{"name": "Bash", "input": {"command": "x"}, "result_text": "log\n" + status}]
+
+        # when
+        names = collect.collect_runner_transcripts(calls, self.root / "runner")
+        runners = collect.load_runner_transcripts(self.root / "runner")
+        by_source, _ = usage.claude_requests_by_source([assistant("m1", text_block("hi"))], [], [], runners)
+        report = usage.claude_token_report(by_source)
+
+        # then
+        self.assertEqual(names, ["reviewer-1.jsonl"])
+        self.assertEqual(report["tokens"]["runner:reviewer"][OPUS]["output"], 50)
+        self.assertGreater(report["list_cost_usd"], usage.claude_token_report({"main": by_source["main"]})["list_cost_usd"])
+
+
+class SettingsAndArgumentsTest(unittest.TestCase):
+    def test_하네스가_정한_플래그는_extra_args로_바꿀_수_없다(self):
+        """모델, 효과, 설정, 플러그인 경로 등 예약 플래그는 --x=value 형태까지 거부한다."""
+        for flag in ("--model", "--effort", "--settings", "--plugin-dir", "--mcp-config", "--permission-prompt-tool",
+                     "--max-budget-usd", "--output-format", "-p", "--print", "--permission-prompts", "--strict-mcp-config"):
+            for args in ([flag, "x"], [f"{flag}=x"]):
+                with self.subTest(args=args):
+                    # given
+                    variant = {"name": "bad", "ref": "HEAD", "extra_args": args}
+
+                    # when / then
+                    with self.assertRaises(command.ConfigError):
+                        command.validate_variant(variant)
+
+    def test_다른_플래그는_extra_args로_허용된다(self):
+        """예약되지 않은 플래그는 그대로 통과한다."""
+        # given
+        variant = {"name": "ok", "ref": "HEAD", "extra_args": ["--add-dir", "/tmp/x"]}
+
+        # when
+        checked = command.validate_variant(variant)
+
+        # then
+        self.assertEqual(checked["extra_args"], ["--add-dir", "/tmp/x"])
+
+    def test_변형이_설치본_플러그인을_켜려_해도_실행_설정에서는_꺼진다(self):
+        """enabledPlugins에 설치본을 true로 적어도 병합 뒤 false로 강제된다."""
+        # given
+        key = "hei5enbug-agent-setup@hei5enbug"
+        variants = [{"enabledPlugins": {key: True, "other@x": True}}, {"enabledPlugins": "everything"}, {"enabledPlugins": None}]
+
+        for settings in variants:
+            with self.subTest(settings=settings):
+                variant = command.validate_variant({"name": "v", "ref": "HEAD", "settings": settings})
+
+                # when
+                result = command.run_settings(variant)
+
+                # then
+                self.assertIs(result["enabledPlugins"][key], False)
+
+
+class CliPathTest(unittest.TestCase):
+    def test_상대_경로로_준_루트들은_절대_경로로_바뀐다(self):
+        """--run-root 등 네 경로 옵션이 상대 경로여도 설정에는 절대 경로가 들어간다."""
+        # given
+        args = cli.build_parser().parse_args(["summarize", "--campaign", "c", "--run-root", "rel/runs", "--tasks-root", "t",
+                                              "--variants-root", "v", "--fixtures-root", "f"])
+
+        # when
+        cfg = cli.config_from(args)
+
+        # then
+        for path in (cfg.run_root, cfg.tasks_root, cfg.variants_root, cfg.fixtures_root):
+            self.assertTrue(path.is_absolute(), path)
+        self.assertEqual(cfg.run_root, (Path.cwd() / "rel/runs").resolve())
+
+    def test_run은_변경된_입력_허용_플래그를_받고_regrade는_recollect를_받는다(self):
+        """새 옵션이 파서에 있다."""
+        # given / when
+        run_args = cli.build_parser().parse_args(["run", "--allow-changed-inputs"])
+        regrade_args = cli.build_parser().parse_args(["regrade", "--campaign", "c", "--recollect"])
+
+        # then
+        self.assertEqual((run_args.allow_changed_inputs, regrade_args.recollect), (True, True))
+
+
+class CampaignInputsTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        tasks = self.root / "tasks"
+        (tasks / "prompts").mkdir(parents=True)
+        (tasks / "hidden" / "T01").mkdir(parents=True)
+        (tasks / "custom").mkdir()
+        (tasks / "hidden" / "T01" / "test_h.py").write_text("one\n", encoding="utf-8")
+        (tasks / "custom" / "T01.py").write_text("one\n", encoding="utf-8")
+        body = {"id": "T01", "fixture": "demo", "prompt_file": "prompts/T01.txt", "limits": {"wall_seconds": 60, "max_budget_usd": 1}}
+        (tasks / "T01.json").write_text(json.dumps(body), encoding="utf-8")
+        (tasks / "prompts" / "T01.txt").write_text("do it\n", encoding="utf-8")
+        variants = self.root / "variants"
+        variants.mkdir()
+        (variants / "baseline.json").write_text('{"name": "baseline", "ref": "HEAD"}', encoding="utf-8")
+        self.cfg = HarnessConfig(run_root=self.root / "runs", tasks_root=tasks, variants_root=variants)
+        self.sha = "a" * 40
+        for patch in (mock.patch.object(campaign.plugin_export, "export_plugin", return_value={"ref": "HEAD", "sha": "a", "path": "/tmp/p"}),
+                      mock.patch.object(campaign.environment, "capture_base", return_value={}),
+                      mock.patch.object(inputs.plugin_export, "resolve_ref", side_effect=lambda repo, ref: self.sha)):
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def run_once(self, **kwargs: Any) -> int:
+        return campaign.run_campaign(self.cfg, "c1", ["T01"], ["baseline"], 1, 1, frozenset(), io.StringIO(),
+                                     fake_run_function({}, []), **kwargs)
+
+    def stored(self) -> dict[str, Any]:
+        return json.loads((self.cfg.run_root / "c1" / "campaign.json").read_text(encoding="utf-8"))
+
+    def test_첫_실행은_변형_sha와_입력_지문을_campaign_json에_저장한다(self):
+        """campaign.json의 inputs에 변형 sha, 항목별 해시, 전체 지문이 들어간다."""
+        # given / when
+        self.run_once()
+
+        # then
+        recorded = self.stored()["inputs"]
+        self.assertEqual(recorded["variant_shas"], {"baseline": self.sha})
+        self.assertRegex(recorded["fingerprint"], r"^[0-9a-f]{64}$")
+        self.assertTrue({"variant:baseline", "task:T01", "hidden:T01", "custom:T01.py"} <= set(recorded["parts"]))
+
+    def test_변형_sha가_바뀐_채_이어서_실행하면_거부한다(self):
+        """ref가 다른 커밋을 가리키게 된 캠페인은 ConfigError로 멈춘다."""
+        # given
+        self.run_once()
+        self.sha = "b" * 40
+
+        # when / then
+        with self.assertRaises(command.ConfigError) as caught:
+            self.run_once()
+        self.assertIn("variant sha baseline", str(caught.exception))
+
+    def test_숨은_테스트나_과제_정의가_바뀐_채_이어서_실행하면_거부한다(self):
+        """tasks/hidden과 tasks/custom, 과제 JSON 중 무엇이 바뀌어도 거부한다."""
+        for relative in ("hidden/T01/test_h.py", "custom/T01.py", "T01.json"):
+            with self.subTest(relative=relative):
+                # given
+                self.setUp()
+                self.run_once()
+                path = self.cfg.tasks_root / relative
+                path.write_text(path.read_text(encoding="utf-8") + " ", encoding="utf-8")
+
+                # when / then
+                with self.assertRaises(command.ConfigError):
+                    self.run_once()
+
+    def test_허용_플래그를_주면_이어서_실행하고_변경을_기록한다(self):
+        """--allow-changed-inputs는 거부 대신 input_changes에 기록하고 새 입력을 저장한다."""
+        # given
+        self.run_once()
+        self.sha = "b" * 40
+
+        # when
+        code = self.run_once(allow_changed_inputs=True)
+
+        # then
+        data = self.stored()
+        self.assertEqual(code, 0)
+        self.assertEqual(len(data["input_changes"]), 1)
+        self.assertIn("variant sha baseline", data["input_changes"][0]["changed"][0])
+        self.assertEqual(data["inputs"]["variant_shas"], {"baseline": "b" * 40})
+
+    def test_입력이_같으면_이어서_실행해도_거부하지_않고_염_값은_유지한다(self):
+        """같은 입력으로 다시 실행하면 통과하고 생성 시각과 루브릭 salt가 그대로다."""
+        # given
+        self.run_once()
+        before = self.stored()
+
+        # when
+        self.run_once()
+
+        # then
+        after = self.stored()
+        self.assertEqual((after["created"], after["rubric_salt"], after["input_changes"]), (before["created"], before["rubric_salt"], []))
+
+
+def attempt_metrics(root: Path, task: str, variant: str, rep: int, number: int, claude: float, codex: float = 0.0) -> None:
+    spec = matrix.make_spec(root, "camp", task, variant, rep)
+    folder = spec.result_dir.parent / "attempts" / f"rep{rep}" / str(number)
+    matrix.write_json(folder / "metrics.json", {"cost": {"claude_total_cost_usd": claude, "codex_list_cost_usd_estimate": codex}})
+
+
+class SpendSummaryTest(unittest.TestCase):
+    def test_표는_보관된_이전_시도를_포함한_총비용과_성공당_비용을_보인다(self):
+        """최종 시도 1.0과 보관된 시도 5.0+Codex 2.0이면 지출은 6.000 / 2.000, 성공당 비용은 8.000이다."""
+        # given
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_rows(root, [metrics_row("T01", "A", 1, True, 1.0, 10.0)])
+            attempt_metrics(root, "T01", "A", 1, 1, 5.0, 2.0)
+
+            # when
+            text = summarize.summarize(root, "camp")
+
+            # then
+            self.assertIn("spend incl. attempts Claude USD", text)
+            self.assertIn("| 6.000 | 2.000 | 8.000 |", text)
+            self.assertEqual(text.count("| 6.000 | 2.000 | 8.000 |"), 2)
+
+    def test_성공이_없으면_성공당_비용은_빈칸이고_끝내지_못한_실행의_지출도_더한다(self):
+        """최종이 usage_limited인 실행의 보관 시도 비용도 합계에 들어가고 성공이 0이면 '-'다."""
+        # given
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_rows(root, [metrics_row("T01", "A", 1, False, 1.0, 10.0), metrics_row("T01", "A", 2, False, 1.0, 10.0, "usage_limited")])
+            attempt_metrics(root, "T01", "A", 2, 1, 3.0)
+
+            # when
+            text = summarize.summarize(root, "camp")
+
+            # then
+            self.assertIn("| 4.000 | 0.000 | - |", text)
 
 
 if __name__ == "__main__":

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import secrets
 import shlex
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Callable, TextIO
 
-from . import command, environment, plugin_export
+from . import command, environment, inputs, plugin_export
 from .config import EXIT_USAGE_LIMIT, STATUS_RUNNING, STATUS_USAGE_LIMITED, HarnessConfig
 from .matrix import CampaignState, RunSpec, campaign_dir, make_spec, move_aside, plan_matrix, read_json, runs_to_start, write_json
 from .runner import execute_run, regrade_run
@@ -45,13 +46,15 @@ def print_plan(out: TextIO, cfg: HarnessConfig, specs: list[RunSpec], tasks: dic
 
 def run_campaign(
     cfg: HarnessConfig, campaign: str, task_ids: list[str], variant_names: list[str], reps: int, parallel: int,
-    only_rerun: frozenset[str], out: TextIO, run_function: RunFunction = execute_run,
+    only_rerun: frozenset[str], out: TextIO, run_function: RunFunction = execute_run, allow_changed_inputs: bool = False,
 ) -> int:
-    """Execute the matrix; returns 75 when a usage limit stopped it, else 0."""
+    """Execute the matrix; returns 75 when a usage limit stopped it, else 0. Changed inputs refuse a resume."""
     tasks, variants = load_plan(cfg, task_ids, variant_names)
     specs = build_specs(cfg, campaign, task_ids, variant_names, reps)
     base = campaign_dir(cfg.run_root, campaign)
-    write_campaign_file(cfg, base, campaign, task_ids, variant_names, reps)
+    current = inputs.compute_inputs(cfg, task_ids, variant_names)
+    changes = inputs.check_inputs(read_json(base / "campaign.json", {}).get("inputs"), current, allow_changed_inputs)
+    write_campaign_file(cfg, base, campaign, task_ids, variant_names, reps, current, changes)
     state = CampaignState(base / "state.json")
     todo, skipped = runs_to_start(specs, state.snapshot(), only_rerun)
     out.write(f"{len(todo)} to run, {len(skipped)} already complete\n")
@@ -83,20 +86,39 @@ def run_campaign(
     return 0
 
 
-def write_campaign_file(cfg: HarnessConfig, base: Any, campaign: str, tasks: list[str], variants: list[str], reps: int) -> None:
+def write_campaign_file(
+    cfg: HarnessConfig, base: Any, campaign: str, tasks: list[str], variants: list[str], reps: int,
+    current_inputs: dict[str, Any], changes: list[str],
+) -> None:
+    """Write campaign.json, keeping what an earlier run stored (creation time, rubric salt, input history)."""
     path = base / "campaign.json"
     existing = read_json(path, {})
     created = existing.get("created") or datetime.now(timezone.utc).isoformat()
     head = environment.run_command(["git", "rev-parse", "HEAD"], cfg.repo_root)
+    history = list(existing.get("input_changes", []))
+    if changes:
+        history.append({"at": datetime.now(timezone.utc).isoformat(), "changed": changes,
+                        "previous_fingerprint": (existing.get("inputs") or {}).get("fingerprint"),
+                        "fingerprint": current_inputs["fingerprint"]})
+    stored = existing.get("inputs") or {}
+    merged_inputs = {
+        "variant_shas": {**stored.get("variant_shas", {}), **current_inputs["variant_shas"]},
+        "parts": {**stored.get("parts", {}), **current_inputs["parts"]},
+        "fingerprint": current_inputs["fingerprint"],
+    } if stored else current_inputs
     write_json(path, {
+        **existing,
         "campaign": campaign, "tasks": tasks, "variants": variants, "reps": reps, "created": created,
         "order": [f"{task}-{variant}-r{rep}" for rep, task, variant in plan_matrix(tasks, variants, reps)],
-        "harness_git_sha": head,
+        "harness_git_sha": head, "inputs": merged_inputs, "input_changes": history,
+        "rubric_salt": existing.get("rubric_salt") or secrets.token_hex(16),
     })
 
 
-def regrade_campaign(cfg: HarnessConfig, campaign: str, run_ids: frozenset[str], out: TextIO, graders: Any = None) -> int:
-    """Re-grade finished runs of a campaign from their saved work repos."""
+def regrade_campaign(
+    cfg: HarnessConfig, campaign: str, run_ids: frozenset[str], out: TextIO, graders: Any = None, recollect: bool = False,
+) -> int:
+    """Re-grade finished runs of a campaign from their saved work repos, copying the host records again on request."""
     base = campaign_dir(cfg.run_root, campaign)
     state = CampaignState(base / "state.json").snapshot()
     done = 0
@@ -106,7 +128,7 @@ def regrade_campaign(cfg: HarnessConfig, campaign: str, run_ids: frozenset[str],
             continue
         spec = make_spec(cfg.run_root, campaign, task_id, variant, rep)
         task = command.load_task(cfg.tasks_root, task_id)
-        result = regrade_run(spec, task, cfg, graders)
+        result = regrade_run(spec, task, cfg, graders, recollect)
         out.write(f"{run_id}: {'regraded' if result else 'skipped'}\n")
         done += 1 if result else 0
     return 0 if done else 1

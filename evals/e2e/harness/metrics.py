@@ -41,11 +41,14 @@ def plugin_checks(
 
 
 def tool_counts(view: dict[str, Any]) -> dict[str, dict[str, int]]:
+    """Claude-side calls by session (`total` is main plus subagent); Codex role_runner calls are counted apart."""
     main: Counter[str] = Counter()
     sub: Counter[str] = Counter()
+    codex: Counter[str] = Counter()
     for call in view["tool_calls"]:
-        (main if call["source"] == "main" else sub)[call["name"]] += 1
-    return {"main": dict(main), "subagent": dict(sub), "total": dict(main + sub)}
+        group = main if call["source"] == "main" else codex if str(call["source"]).startswith("codex:") else sub
+        group[call["name"]] += 1
+    return {"main": dict(main), "subagent": dict(sub), "total": dict(main + sub), "codex": dict(codex)}
 
 
 def _failed(call: dict[str, Any]) -> bool:

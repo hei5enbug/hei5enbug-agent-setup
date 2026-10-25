@@ -26,6 +26,11 @@ class RunSpec:
     def repo(self) -> Path:
         return self.work_dir / "repo"
 
+    @property
+    def base_dir(self) -> Path:
+        """The campaign folder this run belongs to."""
+        return self.work_dir.parent.parent
+
 
 def run_id_for(task: str, variant: str, rep: int) -> str:
     return f"{task}-{variant}-r{rep}"
@@ -52,6 +57,9 @@ def plan_matrix(tasks: list[str], variants: list[str], reps: int) -> list[tuple[
     return order
 
 
+WORK_ARCHIVE_NAME = "work"
+
+
 def attempts_dir(spec: RunSpec) -> Path:
     return spec.result_dir.parent / "attempts" / f"rep{spec.rep}"
 
@@ -62,14 +70,14 @@ def prior_attempts(spec: RunSpec) -> int:
 
 
 def move_aside(spec: RunSpec) -> Path | None:
-    """Move an existing result dir (and its work dir) into attempts/rep<k>/<n>/ and return the new location."""
+    """Move an existing result dir and its work dir into attempts/rep<k>/<n>/ (as `work/`) and return that folder."""
     if not spec.result_dir.exists():
         return None
     target = attempts_dir(spec) / str(prior_attempts(spec) + 1)
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(spec.result_dir), str(target))
     if spec.work_dir.exists():
-        shutil.rmtree(spec.work_dir, ignore_errors=True)
+        shutil.move(str(spec.work_dir), str(target / WORK_ARCHIVE_NAME))
     return target
 
 

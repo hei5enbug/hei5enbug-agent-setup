@@ -41,6 +41,10 @@ RETRIED_STATUSES = frozenset({STATUS_INFRA_FAILED, STATUS_USAGE_LIMITED, STATUS_
 
 USAGE_LIMIT_PATTERN = re.compile(r"usage limit|limit reached|hit your limit|rate limit|out of extra usage|quota", re.I)
 FORBIDDEN_ARGS = frozenset({"--dangerously-skip-permissions", "--bare", "--permission-mode", "bypassPermissions"})
+RESERVED_ARGS = frozenset({
+    "--model", "--effort", "--settings", "--plugin-dir", "--mcp-config", "--permission-prompt-tool", "--max-budget-usd",
+    "--output-format", "-p", "--print", "--permission-prompts", "--strict-mcp-config", "--",
+})
 
 RUBRIC_MODEL = "gpt-6-astra"
 RUBRIC_EFFORT = "xhigh"

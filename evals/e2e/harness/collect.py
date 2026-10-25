@@ -1,4 +1,4 @@
-"""Copy the host records of one run (main and subagent transcripts, Codex rollouts, assignments) next to its results."""
+"""Copy the host records of one run (main, subagent, and role runner transcripts, Codex rollouts, assignments)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from .transcript import ASSIGNMENT_FLAG, read_jsonl, role_runner_status
+from .transcript import assignment_paths, leading_cd, read_jsonl, role_runner_status
 
 ROLLOUT_MARGIN_BEFORE = timedelta(seconds=5)
 ROLLOUT_MARGIN_AFTER = timedelta(seconds=120)
@@ -117,10 +117,10 @@ def collect_codex(codex_home: Path, work_dir: Path, start: datetime, end: dateti
 
 
 def rollout_roles(tool_calls: list[dict[str, Any]]) -> dict[str, str]:
-    """Map rollout file name -> role from the role_runner status lines in Bash results."""
+    """Map rollout file name -> role from the role_runner status lines in tool results."""
     roles: dict[str, str] = {}
     for call in tool_calls:
-        status = role_runner_status(call.get("result_text", "")) if call.get("name") == "Bash" else None
+        status = role_runner_status(call.get("result_text", ""))
         evidence = status.get("evidence") if status else None
         if isinstance(evidence, dict) and evidence.get("rollout"):
             roles[Path(str(evidence["rollout"])).name] = str(status.get("role") or status.get("capability") or "unknown")
@@ -136,15 +136,26 @@ def load_rollouts(directory: Path, roles: dict[str, str]) -> list[dict[str, Any]
     ]
 
 
-def collect_assignments(tool_calls: list[dict[str, Any]], destination: Path) -> dict[str, str]:
-    """Copy assignment files still on disk that Bash role_runner commands named literally; index them by path."""
+def resolve_assignment(path: str, command: str, repo: Path | None) -> Path:
+    """An --assignment path as the shell saw it: relative paths start in the leading `cd` directory or the run repo."""
+    source = Path(path).expanduser()
+    if source.is_absolute() or repo is None:
+        return source
+    folder = leading_cd(command)
+    base = Path(folder).expanduser() if folder else Path()
+    return (base if base.is_absolute() else repo / base) / source
+
+
+def collect_assignments(tool_calls: list[dict[str, Any]], destination: Path, repo: Path | None = None) -> dict[str, str]:
+    """Copy assignment files still on disk that Bash role_runner commands named; index them by the literal path."""
     texts: dict[str, str] = {}
     names: dict[str, str] = {}
     for call in tool_calls:
         if call.get("name") != "Bash":
             continue
-        for path in ASSIGNMENT_FLAG.findall(str(call.get("input", {}).get("command", ""))):
-            source = Path(path)
+        command = str(call.get("input", {}).get("command", ""))
+        for path in assignment_paths(command):
+            source = resolve_assignment(path, command, repo)
             if source.is_file() and path not in texts:
                 destination.mkdir(parents=True, exist_ok=True)
                 text = source.read_text(encoding="utf-8", errors="replace")
@@ -154,6 +165,44 @@ def collect_assignments(tool_calls: list[dict[str, Any]], destination: Path) -> 
     if names:
         (destination / "index.json").write_text(json.dumps(names, indent=2), encoding="utf-8")
     return texts
+
+
+def runner_transcript_paths(tool_calls: list[dict[str, Any]]) -> list[tuple[str, Path]]:
+    """(role, transcript path) of every Claude role_runner session named by a status line, in first-seen order."""
+    found: list[tuple[str, Path]] = []
+    for call in tool_calls:
+        status = role_runner_status(str(call.get("result_text", "")))
+        evidence = status.get("evidence") if status else None
+        if status and status.get("runner") == "claude" and isinstance(evidence, dict) and evidence.get("transcript"):
+            entry = (str(status.get("role") or "unknown"), Path(str(evidence["transcript"])))
+            if entry not in found:
+                found.append(entry)
+    return found
+
+
+def collect_runner_transcripts(tool_calls: list[dict[str, Any]], destination: Path) -> list[str]:
+    """Copy the transcripts of Claude role_runner sessions to <role>-<n>.jsonl; return the copied names."""
+    copied: list[str] = []
+    counts: dict[str, int] = {}
+    for role, source in runner_transcript_paths(tool_calls):
+        if not source.is_file():
+            continue
+        counts[role] = counts.get(role, 0) + 1
+        name = f"{role}-{counts[role]}.jsonl"
+        destination.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination / name)
+        copied.append(name)
+    return copied
+
+
+def load_runner_transcripts(directory: Path) -> list[dict[str, Any]]:
+    """[{role, name, events}] for each copied <role>-<n>.jsonl."""
+    if not directory.is_dir():
+        return []
+    return [
+        {"role": item.stem.rsplit("-", 1)[0], "name": item.name, "events": read_jsonl(item)}
+        for item in sorted(directory.glob("*.jsonl"))
+    ]
 
 
 def load_assignments(directory: Path) -> dict[str, str]:

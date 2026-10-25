@@ -37,6 +37,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--parallel", type=int, default=DEFAULT_PARALLEL)
     run.add_argument("--only-rerun", help="comma-separated run ids to rerun even when complete")
     run.add_argument("--dry-run", action="store_true")
+    run.add_argument("--allow-changed-inputs", action="store_true",
+                     help="resume although a variant ref, task, hidden test, or custom check changed since the campaign began")
     summary = sub.add_parser("summarize", help="print campaign tables")
     add_common(summary)
     summary.add_argument("--campaign", required=True)
@@ -46,6 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(regrade)
     regrade.add_argument("--campaign", required=True)
     regrade.add_argument("--run-ids", help="comma-separated run ids; default all")
+    regrade.add_argument("--recollect", action="store_true", help="copy the host records again before grading")
     export = sub.add_parser("export-plugin", help="export a plugin revision")
     add_common(export)
     export.add_argument("--ref", required=True)
@@ -56,13 +59,17 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def absolute(path: Path) -> Path:
+    return path.expanduser().resolve()
+
+
 def config_from(args: argparse.Namespace) -> HarnessConfig:
     base = HarnessConfig()
     return HarnessConfig(
-        run_root=args.run_root,
-        tasks_root=args.tasks_root or base.tasks_root,
-        fixtures_root=args.fixtures_root or base.fixtures_root,
-        variants_root=args.variants_root or base.variants_root,
+        run_root=absolute(args.run_root),
+        tasks_root=absolute(args.tasks_root or base.tasks_root),
+        fixtures_root=absolute(args.fixtures_root or base.fixtures_root),
+        variants_root=absolute(args.variants_root or base.variants_root),
     )
 
 
@@ -77,6 +84,7 @@ def do_run(args: argparse.Namespace, cfg: HarnessConfig) -> int:
         return 0
     return campaign.run_campaign(
         cfg, args.campaign, task_ids, variant_names, args.reps, args.parallel, frozenset(split(args.only_rerun)), sys.stdout,
+        allow_changed_inputs=args.allow_changed_inputs,
     )
 
 
@@ -98,7 +106,9 @@ def dispatch(args: argparse.Namespace) -> int:
     if args.action == "summarize":
         return do_summarize(args, cfg)
     if args.action == "regrade":
-        return campaign.regrade_campaign(cfg, args.campaign, frozenset(split(args.run_ids)), sys.stdout)
+        return campaign.regrade_campaign(
+            cfg, args.campaign, frozenset(split(args.run_ids)), sys.stdout, recollect=args.recollect,
+        )
     if args.action == "export-plugin":
         info = plugin_export.export_plugin(cfg.repo_root, cfg.run_root, args.ref)
         sys.stdout.write(f"{info['ref']} {info['sha']} {info['path']}\n")

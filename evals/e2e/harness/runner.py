@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import os
 import shutil
+from datetime import datetime
 from typing import Any
 
-from . import collect, command, environment, metrics, rubric, transcript, usage
+from . import codex_calls, collect, command, environment, metrics, rubric, transcript, usage
 from .config import FINISHED_STATUSES, STATUS_COMPLETE, STATUS_INFRA_FAILED, STATUS_TIMED_OUT, STATUS_USAGE_LIMITED, HarnessConfig
 from .matrix import RunSpec, prior_attempts, read_json, write_json
 from .process import ProcessResult, run_agent
@@ -49,7 +50,8 @@ def grade_run(
         return grade, None
     prompt = (spec.result_dir / "prompt.txt").read_text(encoding="utf-8")
     artifact = rubric.artifact_text(task["rubric"], spec.repo, view["final_answer"])
-    result = rubric.grade(task, artifact, prompt, grade_dir / "rubric-work", repo_root=cfg.repo_root)
+    work = rubric.opaque_dir(spec.base_dir, spec.run_id)
+    result = {**rubric.grade(task, artifact, prompt, work, repo_root=cfg.repo_root), "rubric_dir": str(work)}
     write_json(grade_dir / "rubric.json", result)
     return grade, result
 
@@ -62,13 +64,15 @@ def analyze(spec: RunSpec, task: dict[str, Any], run: dict[str, Any], cfg: Harne
     subagents = collect.load_subagents(directory / "transcripts" / "subagents")
     main_events = transcript.read_jsonl(directory / "transcripts" / "main.jsonl")
     approvals = transcript.read_jsonl(directory / "approvals.jsonl")
-    view = transcript.build_view(events, subagents, approvals, collect.load_assignments(directory / "assignments"))
+    base_view = transcript.build_view(events, subagents, approvals, collect.load_assignments(directory / "assignments"))
+    rollouts = collect.load_rollouts(directory / "codex", collect.rollout_roles(base_view["tool_calls"]))
+    view = {**base_view, "tool_calls": [*base_view["tool_calls"], *codex_calls.codex_tool_calls(rollouts)]}
+    runners = collect.load_runner_transcripts(directory / "transcripts" / "runner")
     write_json(directory / "view.json", view)
     grade, rubric_result = None, None
     if run["status"] in FINISHED_STATUSES:
         grade, rubric_result = grade_run(spec, task, run, cfg, graders or load_graders(), view)
-    by_source, usage_source = usage.claude_requests_by_source(main_events, subagents, events)
-    rollouts = collect.load_rollouts(directory / "codex", collect.rollout_roles(view["tool_calls"]))
+    by_source, usage_source = usage.claude_requests_by_source(main_events, subagents, events, runners)
     result = metrics.build_metrics(
         run=run, task=task, view=view, facts=facts, claude_report=usage.claude_token_report(by_source),
         codex_report=usage.codex_token_report(rollouts), grade=grade, rubric=rubric_result,
@@ -90,13 +94,15 @@ def finish_run(spec: RunSpec, task: dict[str, Any], run: dict[str, Any], proc: P
     records = collect_records(spec, facts["session_id"], proc)
     subagents = collect.load_subagents(spec.result_dir / "transcripts" / "subagents")
     calls = transcript.build_view(events, subagents)["tool_calls"]
-    collect.collect_assignments(calls, spec.result_dir / "assignments")
+    collect.collect_assignments(calls, spec.result_dir / "assignments", spec.repo)
+    records = {**records, "runner": collect.collect_runner_transcripts(calls, spec.result_dir / "transcripts" / "runner")}
     limit = transcript.usage_limit_reason(events)
     finished = {
         **run, "status": decide_status(facts, limit, proc.timed_out), "returncode": proc.returncode,
         "timed_out": proc.timed_out, "wall_seconds": proc.wall_seconds, "started_at": proc.started_at.isoformat(),
         "ended_at": proc.ended_at.isoformat(), "session_id": facts["session_id"], "usage_limit": limit,
-        "error": proc.error, "collected": records,
+        "error": proc.error, "collected": records, "orphans_killed": proc.orphans_killed,
+        "leftover_killed": proc.leftover_killed,
     }
     write_json(spec.result_dir / "run.json", finished)
     try:
@@ -134,11 +140,42 @@ def execute_run(
     return finish_run(spec, task, run, proc, cfg)
 
 
-def regrade_run(spec: RunSpec, task: dict[str, Any], cfg: HarnessConfig, graders: Any = None) -> dict[str, Any] | None:
+def parse_moment(value: Any) -> datetime | None:
+    try:
+        return datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+
+
+def recollect(spec: RunSpec, run: dict[str, Any]) -> dict[str, Any]:
+    """Copy the host records again (Claude, subagents, runner sessions, Codex rollouts); return the updated run record."""
+    directory, previous = spec.result_dir, run.get("collected") or {}
+    claude = collect.collect_claude(environment.claude_config_dir(), str(run.get("session_id") or ""), directory / "transcripts")
+    events = transcript.read_jsonl(directory / "stream.jsonl")
+    calls = transcript.build_view(events, collect.load_subagents(directory / "transcripts" / "subagents"))["tool_calls"]
+    collect.collect_assignments(calls, directory / "assignments", spec.repo)
+    runner_names = collect.collect_runner_transcripts(calls, directory / "transcripts" / "runner")
+    start, end = parse_moment(run.get("started_at")), parse_moment(run.get("ended_at"))
+    codex = collect.collect_codex(environment.codex_home(), spec.work_dir, start, end, directory / "codex") if start and end else []
+    collected = {
+        "claude": claude if claude["main"] else previous.get("claude", claude),
+        "codex": codex or previous.get("codex", []),
+        "runner": runner_names or previous.get("runner", []),
+    }
+    updated = {**run, "collected": collected}
+    write_json(directory / "run.json", updated)
+    return updated
+
+
+def regrade_run(
+    spec: RunSpec, task: dict[str, Any], cfg: HarnessConfig, graders: Any = None, recollect_records: bool = False,
+) -> dict[str, Any] | None:
     """Re-run grading and metrics for a finished run from its saved results and work repo."""
     run = read_json(spec.result_dir / "run.json")
     if not isinstance(run, dict) or run.get("status") not in FINISHED_STATUSES or not spec.repo.is_dir():
         return None
+    if recollect_records:
+        run = recollect(spec, run)
     analyze(spec, task, run, cfg, graders)
     if "grade_error" in run:
         run = {key: value for key, value in run.items() if key != "grade_error"}
