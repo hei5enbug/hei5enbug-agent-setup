@@ -1,0 +1,7 @@
+두 가지 해줘.
+
+1) inventory report 에 --format 옵션 추가. text(기본)는 지금 그대로고, json이면 stdout에 JSON 객체 하나만 찍어줘:
+{"valuation": {"MAIN": "404.00", "EAST": "90.00"}, "low_stock": [{"sku": "WIDGET", "name": "Widget", "quantity": 3}], "orders": {"placed": 1, "shipped": 0, "cancelled": 0}}
+valuation 값은 소수 두 자리 문자열이고 창고 순서는 text 출력과 같게.
+
+2) 재고 부족 기준이 지금 reports.LOW_STOCK_THRESHOLD = 5 로 박혀 있는데, 환경변수 INVENTORY_LOW_STOCK 으로 바꿀 수 있게 해줘. 기본 5, Config.low_stock_threshold 로 노출하고 정수가 아니거나 음수면 ConfigError. report는 text든 json이든 이 값을 써야 해.

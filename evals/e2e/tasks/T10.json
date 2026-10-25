@@ -1,0 +1,92 @@
+{
+  "id": "T10",
+  "title": "Read-only investigation of cancellation and stock restoration",
+  "category": "investigation",
+  "path": "scout: read-only question",
+  "fixture": "inventory-service",
+  "prompt_file": "prompts/T10.txt",
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 6
+  },
+  "checks": [
+    {
+      "id": "no-changes",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 2
+    },
+    {
+      "id": "answer-names-code",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 2,
+      "min": 4,
+      "patterns": [
+        "cancel_order",
+        "\\brelease\\b",
+        "allocations?",
+        "orders\\.py|OrderService",
+        "stock\\.py|StockLedger",
+        "audit"
+      ]
+    }
+  ],
+  "constraints": [
+    {
+      "id": "read-only",
+      "text": "Do not modify any file",
+      "keywords": [
+        "read-only",
+        "do not modify",
+        "do not change",
+        "수정하지",
+        "읽기만"
+      ],
+      "applies_to": [
+        "implementation",
+        "investigation"
+      ],
+      "check_ids": [
+        "no-changes"
+      ]
+    }
+  ],
+  "rubric": {
+    "artifact": {
+      "kind": "final_answer"
+    },
+    "criteria": [
+      {
+        "id": "accuracy",
+        "weight": 3,
+        "description": "The explanation matches the code: cancel_order checks the order is placed, releases each line's recorded allocations back to the warehouses they came from, marks the order cancelled, and the stock ledger writes audit entries; nothing is invented."
+      },
+      {
+        "id": "warehouse_handling",
+        "weight": 2,
+        "description": "It explains that stock returns to the specific warehouses recorded per order line at placement, not by current priority, and shows an example."
+      },
+      {
+        "id": "reservation_answer",
+        "weight": 2,
+        "description": "It states correctly that the codebase has no reservation concept: stock is taken when the order is placed."
+      },
+      {
+        "id": "evidence",
+        "weight": 1,
+        "description": "It cites files and functions so the reader can verify the claims."
+      },
+      {
+        "id": "edge_cases",
+        "weight": 1,
+        "description": "It mentions the cases that block or change the flow (shipped or already cancelled orders are rejected, unknown warehouse aborts before any change)."
+      }
+    ],
+    "scale": [
+      1,
+      5
+    ],
+    "pass_mean": 3.5
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "id": "T12",
+  "title": "Partial order cancellation with independent review",
+  "category": "feature",
+  "path": "implementation with final review",
+  "fixture": "inventory-service",
+  "prompt_file": "prompts/T12.txt",
+  "limits": {
+    "wall_seconds": 2400,
+    "max_budget_usd": 20
+  },
+  "hidden_tests": {
+    "source": "hidden/T12",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 4,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "review",
+      "kind": "review_before_report",
+      "required": true,
+      "weight": 2
+    },
+    {
+      "id": "readme-cancel-item",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "README.md",
+      "pattern": "cancel_item|(?i:partial)"
+    },
+    {
+      "id": "mirror-updated",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "docs/ko/README.ko.md",
+      "pattern": "cancel_item|부분 취소"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "api-contract",
+      "text": "Use the exact API: OrderService.cancel_item, InvalidOrderState, UnknownOrder, ValidationError, allocations restored last-first, reference order-<id>:cancel-item",
+      "keywords": [
+        "cancel_item",
+        "InvalidOrderState",
+        "allocations"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-tests"
+      ]
+    },
+    {
+      "id": "korean-mirror",
+      "text": "Update docs/ko/README.ko.md together with README.md",
+      "keywords": [
+        "ko.md",
+        "docs/ko",
+        "mirror",
+        "미러"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "mirror-updated"
+      ]
+    }
+  ],
+  "rubric": null
+}

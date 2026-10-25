@@ -1,0 +1,12 @@
+주문 부분 취소 기능 넣어줘. API는 이렇게 잡자.
+
+OrderService.cancel_item(order_id: int, sku: str, quantity: int) -> Order
+
+- placed 상태 주문에서만 가능. shipped/cancelled면 InvalidOrderState, 없는 주문이면 UnknownOrder.
+- 주문에 없는 sku이거나 quantity가 1 미만이거나 그 라인 수량보다 크면 ValidationError.
+- 취소한 수량만큼 재고를 되돌리는데, 그 라인의 allocations 중 마지막에 할당된 창고부터 거꾸로 채워. 라인의 allocations도 줄어든 수량에 맞게 갱신해야 해.
+- 라인 수량이 0이 되면 라인을 지우고, 마지막 라인까지 없어지면 주문 전체를 cancel_order와 똑같이 cancelled 처리(status, cancelled_at).
+- subtotal/tax/total은 새 수량 기준으로 다시 계산(대량 할인 구간 포함).
+- 감사 로그 reference는 "order-<id>:cancel-item".
+
+README의 주문 설명에도 한 줄 추가해줘. 다 구현하고 보고하기 전에 독립적인 리뷰를 한 번 받고, 지적사항 반영해서 보고해줘.

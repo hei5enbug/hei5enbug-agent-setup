@@ -24,7 +24,11 @@ LINK_PATTERN = re.compile(r"\]\(([^)]+)\)")
 
 
 def is_eval_fixture(path: Path) -> bool:
-    return any(parent.name == "files" and parent.parent.name == "evals" for parent in path.parents)
+    return any(
+        (parent.name == "files" and parent.parent.name == "evals")
+        or (parent.name == "fixtures" and parent.parent.name == "e2e" and parent.parent.parent.name == "evals")
+        for parent in path.parents
+    )
 
 
 def markdown_files(root):
@@ -126,6 +130,18 @@ class KoreanMirrorTest(unittest.TestCase):
         self.assertTrue(operator_guide.is_file())
         self.assertNotIn(fixture, sources)
         self.assertIn(operator_guide, sources)
+
+    def test_e2e_평가_픽스처_저장소의_markdown은_미러가_필요_없다(self):
+        """evals/e2e/fixtures 아래 가상 저장소의 문서는 픽스처라서 미러 원본에서 빠진다."""
+        # Given
+        fixture = REPO_ROOT / "evals/e2e/fixtures/notes-cli/README.md"
+        harness_doc = REPO_ROOT / "evals/e2e/README.md"
+
+        # When
+        verdicts = (is_eval_fixture(fixture), is_eval_fixture(harness_doc))
+
+        # Then
+        self.assertEqual(verdicts, (True, False))
 
 
 class MarkdownDiscoveryTest(unittest.TestCase):

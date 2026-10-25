@@ -1,0 +1,1 @@
+inventory/importer.py 에 테스트가 하나도 없어. 테스트 추가해서 라인 커버리지 90% 이상 맞춰줘. importer 코드 자체는 건드리지 마.

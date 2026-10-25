@@ -35,8 +35,10 @@ hei5enbug-agent-setup/
 │       ├── AGENTS.ko.md
 │       ├── README.ko.md
 │       ├── agents/
+│       ├── evals/
 │       ├── instructions/
 │       └── skills/
+├── evals/e2e/
 ├── hooks/hooks.json
 ├── hooks/claude-hooks.json
 ├── hooks/codex-hooks.json
@@ -1048,6 +1050,9 @@ claude plugin test .
 
 Orca CLI가 필요한 테스트는 Orca가 설치되어 있지 않으면 건너뛰므로 CI는 Orca 없이도 통과합니다. Orca를 설치한 뒤
 `python3 -m pytest`를 다시 실행하면 이 테스트까지 확인합니다.
+
+`evals/e2e/`의 엔드투엔드 평가는 실제 에이전트 세션을 실행하므로 이 검사에 들어가지 않습니다. `python3 -m pytest`는
+그 단위 테스트만 실행합니다. [평가 README](evals/e2e/README.ko.md)를 참고하세요.
 
 ## 지침 언어
 

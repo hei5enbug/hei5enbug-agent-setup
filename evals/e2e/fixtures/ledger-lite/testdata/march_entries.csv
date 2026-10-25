@@ -1,0 +1,11 @@
+date,account,amount,memo
+2026-03-01,bank,5000.00,Opening deposit
+2026-03-01,equity,-5000.00,Opening deposit
+2026-03-05,rent,1200.00,March rent
+2026-03-05,bank,-1200.00,March rent
+2026-03-12,bank,2300.50,Invoice 1042
+2026-03-12,sales,-2300.50,Invoice 1042
+2026-03-20,supplies,149.99,Printer paper
+2026-03-20,bank,-149.99,Printer paper
+2026-03-31,payroll,1500.00,March payroll
+2026-03-31,bank,-1500.00,March payroll

@@ -1,0 +1,11 @@
+재고 서비스에 배송비 정책 넣어줘. 규칙은 이래.
+
+- 주문 소계(subtotal, 할인 적용 후 세금 전)가 INVENTORY_FREE_SHIPPING_MIN(기본 100.00) 이상이면 기본 배송비 0, 미만이면 INVENTORY_SHIPPING_FEE(기본 5.00).
+- express 배송은 위 금액에 INVENTORY_EXPRESS_SURCHARGE(기본 12.00)가 더 붙어. 무료배송 대상이어도 추가요금은 내야 해.
+- inventory/shipping.py 에 ShippingPolicy(frozen dataclass, 필드는 flat_fee, free_threshold, express_surcharge 모두 Decimal, 기본값은 위 기본값)랑 quote(self, subtotal: Decimal, method: str = "standard") -> Decimal 메서드. method는 "standard"/"express"만 되고 나머지는 ValueError.
+- Config.from_env()가 위 환경변수 세 개를 읽어서 Config.shipping_policy(ShippingPolicy)로 노출. 숫자가 아니거나 음수면 ConfigError.
+- OrderService.create_order(customer, lines, shipping="standard"). 주문에 shipping_method, shipping_fee를 저장하고 total = subtotal + tax + shipping_fee. 세금은 지금처럼 소계에만 붙어. create_app(config=...)로 만든 앱에서는 그 config의 정책이 적용돼야 해. 잘못된 shipping 값이면 재고는 건드리지 말고 에러.
+- CLI: order create 에 --shipping {standard,express} 옵션(기본 standard). order show 에서 Total 바로 위에 "Shipping: 17.00 (express)" 형식으로 한 줄 보여줘.
+- 저장했다 다시 불러와도 값이 유지돼야 하고, 이 필드가 없는 예전 데이터 파일도 로드돼야 해(standard, 0.00으로).
+
+README에 설정 변수랑 옵션 설명 추가하고, 테스트도 추가해줘.

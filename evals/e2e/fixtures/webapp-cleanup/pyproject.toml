@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "webapp-cleanup"
+version = "0.2.0"
+description = "Tiny status dashboard served with the standard library"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["webapp*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

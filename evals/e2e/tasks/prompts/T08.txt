@@ -1,0 +1,1 @@
+config/settings.toml 에서 page_size 기본값을 20에서 50으로 바꿔줘.

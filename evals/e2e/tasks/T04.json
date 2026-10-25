@@ -1,0 +1,111 @@
+{
+  "id": "T04",
+  "title": "Rename memo to note across code, tests, and docs",
+  "category": "refactor",
+  "path": "multi-file mechanical rename",
+  "fixture": "notes-cli",
+  "prompt_file": "prompts/T04.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 10
+  },
+  "hidden_tests": {
+    "source": "hidden/T04",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden"
+    },
+    {
+      "id": "agent-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "all"
+    },
+    {
+      "id": "no-memo-left",
+      "kind": "grep_absent",
+      "required": true,
+      "weight": 2,
+      "glob": "**",
+      "pattern": "(?i)memo"
+    },
+    {
+      "id": "old-module-removed",
+      "kind": "file_absent",
+      "required": true,
+      "weight": 1,
+      "path": "notes_cli/memo.py"
+    },
+    {
+      "id": "ko-no-memo",
+      "kind": "grep_absent",
+      "required": true,
+      "weight": 1,
+      "glob": "docs/ko/**",
+      "pattern": "메모"
+    },
+    {
+      "id": "ko-uses-note",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "docs/ko/README.ko.md",
+      "pattern": "노트",
+      "min_count": 3
+    }
+  ],
+  "constraints": [
+    {
+      "id": "korean-mirror",
+      "text": "Update the Korean mirror docs/ko/README.ko.md (메모 -> 노트) with README.md",
+      "keywords": [
+        "ko.md",
+        "docs/ko",
+        "mirror",
+        "미러",
+        "메모",
+        "노트"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "ko-no-memo",
+        "ko-uses-note"
+      ]
+    },
+    {
+      "id": "exact-naming",
+      "text": "Rename mechanically: Memo -> Note, MemoStore -> NoteStore, make_memo -> make_note, module note.py, subcommand note",
+      "keywords": [
+        "NoteStore",
+        "note.py",
+        "make_note",
+        "Note"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-tests",
+        "old-module-removed"
+      ]
+    }
+  ],
+  "rubric": null
+}

@@ -87,3 +87,10 @@
 | `skills/report-skill-gap/tests/test_find_tracker.py` | 트래커 탐색은 플러그인 루트를 찾아 `issue-target.json`을 검증하고, 선언이 없거나 잘못되면 트래커를 추측하지 않고 그 상태를 보고한다. | `skills/report-skill-gap/SKILL.md` |
 | `tests/test_issue_target.py` | 이 플러그인 루트의 `issue-target.json`은 공개 GitHub 트래커를 선언한다. | `README.md` (report-skill-gap) |
 | `skills/skill-builder/scripts/quick_validate.py`를 모든 스킬에 실행 | 모든 스킬 폴더가 검증을 통과한다. | `README.md` (Development checks) |
+
+## 평가 하네스
+
+| 집행자 | 집행하는 규칙 | 규칙 위치 |
+|---|---|---|
+| `tests/test_e2e_eval_harness.py` | 엔드투엔드 실행은 시험할 플러그인 리비전을 불러오고, 권한이나 플러그인 훅을 절대 우회하지 않으며, 사용량 한도 뒤에 이어서 실행하고, 모든 변형의 토큰, 비용, 결과를 같은 방식으로 기록한다. | `evals/e2e/README.md` |
+| `tests/test_e2e_eval_graders.py` | 골든 작업마다 채점기는 수정하지 않은 픽스처를 실패시키고 기준 해답을 통과시키며, 채점하는 저장소를 바꾸지 않는다. | `evals/e2e/README.md` (Graders) |

@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ledger-lite"
+version = "0.2.0"
+description = "Tiny double-entry journal with month-end balances and bank statement reconciliation"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["ledger*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

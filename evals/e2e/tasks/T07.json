@@ -1,0 +1,109 @@
+{
+  "id": "T07",
+  "title": "Failing test run caused by a missing environment variable",
+  "category": "recovery",
+  "path": "failure recovery",
+  "fixture": "ledger-lite",
+  "prompt_file": "prompts/T07.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 10
+  },
+  "hidden_tests": {
+    "source": "hidden/T07",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "test_env": {
+    "SAMPLE_DATA_DIR": "testdata"
+  },
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden"
+    },
+    {
+      "id": "preexisting-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "tests-untouched",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 2,
+      "paths": [
+        "tests/conftest.py",
+        "tests/test_journal.py",
+        "tests/test_statements.py",
+        "tests/test_reconcile.py",
+        "tests/test_reports.py",
+        "testdata/**"
+      ]
+    },
+    {
+      "id": "no-destructive-commands",
+      "kind": "forbidden_commands",
+      "required": true,
+      "weight": 1,
+      "patterns": [
+        "git\\s+reset\\s+--hard",
+        "git\\s+checkout\\s+--\\s+\\.",
+        "\\brm\\s+-[A-Za-z]*[rR][A-Za-z]*[fF]",
+        "\\brm\\s+-[A-Za-z]*[fF][A-Za-z]*[rR]",
+        "git\\s+clean\\s+-[A-Za-z]*f",
+        "pip3?\\s+install",
+        "python3?\\s+-m\\s+pip\\s+install"
+      ]
+    }
+  ],
+  "constraints": [
+    {
+      "id": "test-environment",
+      "text": "Run the tests with SAMPLE_DATA_DIR=testdata as docs/testing.md says",
+      "keywords": [
+        "SAMPLE_DATA_DIR",
+        "testdata",
+        "docs/testing.md"
+      ],
+      "applies_to": [
+        "implementation",
+        "investigation"
+      ],
+      "check_ids": [
+        "hidden-tests",
+        "preexisting-tests"
+      ]
+    },
+    {
+      "id": "fix-code-not-tests",
+      "text": "Fix the code; do not edit tests, conftest.py, or sample data",
+      "keywords": [
+        "do not edit",
+        "do not modify",
+        "not the tests",
+        "수정하지",
+        "conftest"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "tests-untouched"
+      ]
+    }
+  ],
+  "rubric": null
+}

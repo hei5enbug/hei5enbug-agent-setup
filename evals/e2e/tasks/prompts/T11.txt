@@ -1,0 +1,1 @@
+--version 옵션 추가해줘. pyproject.toml에 적힌 version을 읽어서 "notes-cli 0.3.1" 같은 형식으로 한 줄 출력하면 돼. 구현하고 커밋까지 해줘.

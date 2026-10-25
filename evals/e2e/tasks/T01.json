@@ -1,0 +1,174 @@
+{
+  "id": "T01",
+  "title": "Design document for stock reservation",
+  "category": "design",
+  "path": "skill path: design document",
+  "fixture": "inventory-service",
+  "prompt_file": "prompts/T01.txt",
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 12
+  },
+  "checks": [
+    {
+      "id": "doc-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "docs/design/stock-reservation.md"
+    },
+    {
+      "id": "sec-problem-goals",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "docs/design/stock-reservation.md",
+      "pattern": "(?im)^#{1,4}\\s.*\\b(problem|goals?|background|motivation|context)\\b"
+    },
+    {
+      "id": "sec-non-goals",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "docs/design/stock-reservation.md",
+      "pattern": "(?im)^#{1,4}\\s.*(non[- ]?goals?|out of scope)"
+    },
+    {
+      "id": "sec-design",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "docs/design/stock-reservation.md",
+      "pattern": "(?im)^#{1,4}\\s.*\\b(design|proposal|approach|solution|architecture)\\b"
+    },
+    {
+      "id": "sec-alternatives",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "docs/design/stock-reservation.md",
+      "pattern": "(?im)^#{1,4}\\s.*\\b(alternatives?|options considered|rejected)\\b"
+    },
+    {
+      "id": "sec-risks",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "docs/design/stock-reservation.md",
+      "pattern": "(?im)^#{1,4}\\s.*\\b(risks?|open questions?|unresolved)\\b"
+    },
+    {
+      "id": "sec-test-plan",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "docs/design/stock-reservation.md",
+      "pattern": "(?im)^#{1,4}\\s.*\\b(test(ing)? (plan|strategy)|testing|verification|validation)\\b"
+    },
+    {
+      "id": "mirror-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "docs/ko/docs/design/stock-reservation.ko.md"
+    },
+    {
+      "id": "mirror-links-source",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "docs/ko/docs/design/stock-reservation.ko.md",
+      "pattern": "stock-reservation\\.md"
+    },
+    {
+      "id": "source-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 2,
+      "paths": [
+        "inventory/**",
+        "tests/**",
+        "tools/**",
+        "pyproject.toml"
+      ]
+    }
+  ],
+  "constraints": [
+    {
+      "id": "english-doc-with-mirror",
+      "text": "Write the design in English at docs/design/stock-reservation.md and its Korean mirror at docs/ko/docs/design/stock-reservation.ko.md",
+      "keywords": [
+        "ko.md",
+        "docs/ko",
+        "mirror",
+        "미러"
+      ],
+      "applies_to": [
+        "implementation",
+        "design"
+      ],
+      "check_ids": [
+        "mirror-exists"
+      ]
+    },
+    {
+      "id": "no-code-change",
+      "text": "Do not change code; the deliverable is documents only",
+      "keywords": [
+        "do not change",
+        "do not modify",
+        "no code",
+        "documents only",
+        "read-only",
+        "코드는",
+        "수정하지"
+      ],
+      "applies_to": [
+        "implementation",
+        "investigation",
+        "design"
+      ],
+      "check_ids": [
+        "source-unchanged"
+      ]
+    }
+  ],
+  "rubric": {
+    "artifact": {
+      "kind": "file",
+      "path": "docs/design/stock-reservation.md"
+    },
+    "criteria": [
+      {
+        "id": "codebase_fit",
+        "weight": 2,
+        "description": "The design builds on the real code: it names the actual modules and functions (stock allocation across warehouses by priority, order creation and cancellation, JSON storage) and says what changes in each, instead of describing a generic system."
+      },
+      {
+        "id": "concurrency_and_expiry",
+        "weight": 2,
+        "description": "It explains how two simultaneous requests for the same stock are kept from overselling given the single JSON file storage, and how holds expire (who releases them, when, with which clock) including holds that expire while an order is being placed."
+      },
+      {
+        "id": "cancellation_interaction",
+        "weight": 1,
+        "description": "It states how a reservation relates to order creation and to the existing cancel flow that returns stock to the warehouses it came from, including partial and repeated release."
+      },
+      {
+        "id": "trade_offs",
+        "weight": 1,
+        "description": "It compares real alternatives (for example holding stock in the ledger versus a separate hold table, lazy expiry versus a sweeper) and states why one is chosen."
+      },
+      {
+        "id": "testability",
+        "weight": 1,
+        "description": "The test plan is concrete: named scenarios, use of the injected clock, and what is verified for each."
+      }
+    ],
+    "scale": [
+      1,
+      5
+    ],
+    "pass_mean": 3.5
+  }
+}

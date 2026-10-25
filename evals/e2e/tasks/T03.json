@@ -1,0 +1,65 @@
+{
+  "id": "T03",
+  "title": "Bug fix from a user report",
+  "category": "bugfix",
+  "path": "investigation then fix",
+  "fixture": "inventory-service",
+  "prompt_file": "prompts/T03.txt",
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 12
+  },
+  "hidden_tests": {
+    "source": "hidden/T03",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "regression-test-added",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "regression_test_added"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "regression-test",
+      "text": "Add a regression test for the fix",
+      "keywords": [
+        "regression",
+        "test",
+        "테스트"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "regression-test-added"
+      ]
+    }
+  ],
+  "rubric": null
+}

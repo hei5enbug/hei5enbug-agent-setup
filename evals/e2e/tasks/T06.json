@@ -1,0 +1,91 @@
+{
+  "id": "T06",
+  "title": "Tests for the untested CSV importer",
+  "category": "testing",
+  "path": "test authoring with a measurable target",
+  "fixture": "inventory-service",
+  "prompt_file": "prompts/T06.txt",
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 12
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "coverage",
+      "kind": "coverage",
+      "required": true,
+      "weight": 3,
+      "module": "inventory/importer.py",
+      "min_percent": 90
+    },
+    {
+      "id": "module-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 2,
+      "paths": [
+        "inventory/importer.py"
+      ]
+    },
+    {
+      "id": "tests-pass",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "all"
+    },
+    {
+      "id": "only-tests-changed",
+      "kind": "only_changed",
+      "required": true,
+      "weight": 1,
+      "allow": [
+        "tests/**"
+      ]
+    }
+  ],
+  "constraints": [
+    {
+      "id": "keep-module",
+      "text": "Do not change inventory/importer.py",
+      "keywords": [
+        "importer.py",
+        "unchanged",
+        "do not modify",
+        "do not change",
+        "건드리지",
+        "수정하지"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "module-unchanged"
+      ]
+    },
+    {
+      "id": "coverage-target",
+      "text": "Reach at least 90 percent line coverage of inventory/importer.py",
+      "keywords": [
+        "90",
+        "coverage",
+        "커버리지"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "coverage"
+      ]
+    }
+  ],
+  "rubric": null
+}

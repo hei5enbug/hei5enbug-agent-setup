@@ -32,8 +32,10 @@ hei5enbug-agent-setup/
 │       ├── AGENTS.ko.md
 │       ├── README.ko.md
 │       ├── agents/
+│       ├── evals/
 │       ├── instructions/
 │       └── skills/
+├── evals/e2e/
 ├── hooks/hooks.json
 ├── hooks/claude-hooks.json
 ├── hooks/codex-hooks.json
@@ -1120,6 +1122,9 @@ claude plugin test .
 
 Tests that need the Orca CLI skip when it is not installed, so CI passes without Orca. After installing Orca,
 run `python3 -m pytest` again to cover them.
+
+The end-to-end evaluation in `evals/e2e/` runs real agent sessions, so it is not one of these checks; only its
+unit tests run with `python3 -m pytest`. See [its README](evals/e2e/README.md).
 
 ## Instruction language
 

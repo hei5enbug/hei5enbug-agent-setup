@@ -1,0 +1,119 @@
+{
+  "id": "T02",
+  "title": "Shipping fee policy across the order flow",
+  "category": "feature",
+  "path": "worker delegation: multi-file implementation",
+  "fixture": "inventory-service",
+  "prompt_file": "prompts/T02.txt",
+  "limits": {
+    "wall_seconds": 2400,
+    "max_budget_usd": 20
+  },
+  "hidden_tests": {
+    "source": "hidden/T02",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 4,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "new-tests",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "new_tests"
+    },
+    {
+      "id": "readme-shipping",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "README.md",
+      "pattern": "(?i)shipping"
+    },
+    {
+      "id": "mirror-updated",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "docs/ko/README.ko.md",
+      "pattern": "(?i)shipping|배송비"
+    },
+    {
+      "id": "files-changed",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "files_changed"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "korean-mirror",
+      "text": "Update the Korean mirror docs/ko/README.ko.md together with README.md",
+      "keywords": [
+        "ko.md",
+        "docs/ko",
+        "mirror",
+        "미러"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "mirror-updated"
+      ]
+    },
+    {
+      "id": "exact-api",
+      "text": "Use the exact names: ShippingPolicy, quote, Config.shipping_policy, create_order(..., shipping=)",
+      "keywords": [
+        "ShippingPolicy",
+        "shipping.py",
+        "quote(",
+        "shipping_policy"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-tests"
+      ]
+    },
+    {
+      "id": "new-tests",
+      "text": "Add tests for the new behavior under tests/",
+      "keywords": [
+        "test",
+        "테스트"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "new-tests"
+      ]
+    }
+  ],
+  "rubric": null
+}

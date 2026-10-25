@@ -1,0 +1,72 @@
+{
+  "id": "T05",
+  "title": "Two independent report changes",
+  "category": "feature",
+  "path": "parallel independent changes",
+  "fixture": "inventory-service",
+  "prompt_file": "prompts/T05.txt",
+  "limits": {
+    "wall_seconds": 1800,
+    "max_budget_usd": 15
+  },
+  "hidden_tests": {
+    "source": "hidden/T05",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-json",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_report_json.py"
+      ]
+    },
+    {
+      "id": "hidden-low-stock",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_low_stock_env.py"
+      ]
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "contracts",
+      "text": "Follow the given contracts: report --format json shape and INVENTORY_LOW_STOCK / Config.low_stock_threshold",
+      "keywords": [
+        "--format",
+        "INVENTORY_LOW_STOCK",
+        "low_stock_threshold"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-json",
+        "hidden-low-stock"
+      ]
+    }
+  ],
+  "rubric": null
+}

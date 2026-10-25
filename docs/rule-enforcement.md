@@ -84,3 +84,10 @@ impossible, remove the written rule it replaces and update its row.
 | `skills/report-skill-gap/tests/test_find_tracker.py` | The tracker lookup finds the plugin root, validates its `issue-target.json`, and reports an undeclared or invalid declaration instead of guessing a tracker. | `skills/report-skill-gap/SKILL.md` |
 | `tests/test_issue_target.py` | This plugin's root `issue-target.json` declares its public GitHub tracker. | `README.md` (report-skill-gap) |
 | `skills/skill-builder/scripts/quick_validate.py` run over every skill | Every skill folder validates. | `README.md` (Development checks) |
+
+## Evaluation harness
+
+| Enforcer | Rule it enforces | Written in |
+|---|---|---|
+| `tests/test_e2e_eval_harness.py` | End-to-end runs load the plugin revision under test, never bypass permissions or the plugin's hooks, resume after a usage limit, and record tokens, cost, and outcomes the same way for every variant. | `evals/e2e/README.md` |
+| `tests/test_e2e_eval_graders.py` | Each golden task's graders fail the unmodified fixture, pass the reference solution, and never change the graded repository. | `evals/e2e/README.md` (Graders) |
