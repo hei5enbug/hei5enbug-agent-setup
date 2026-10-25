@@ -31,7 +31,7 @@
       "required": true,
       "weight": 1,
       "path": "docs/design/stock-reservation.md",
-      "pattern": "(?i)\\bnon[- ]?goals?\\b|\\bout of scope\\b"
+      "pattern": "(?i)\\bnon[- ]?goals?\\b|\\bout of scope\\b|\\bnot (?:a )?goals?\\b"
     },
     {
       "id": "sec-design",

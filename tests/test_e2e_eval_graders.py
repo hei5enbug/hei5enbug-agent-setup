@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -1001,6 +1002,20 @@ class GoldenTaskTest(TempCase):
         self.assertEqual(by_id["exact-api"]["missing_in"], ["w1"])
         self.assertEqual(by_id["exact-api"]["traced_failures"], ["hidden-tests"])
         self.assertEqual(by_id["korean-mirror"]["traced_failures"], ["mirror-updated"])
+
+    def test_T01_비목표_검사는_not_goals_문장도_비목표로_인정한다(self):
+        """설계 스킬이 목표 절 안에 쓰는 'are not goals' 목록도 비목표로 보고, 목표만 있는 문서는 거른다."""
+        # given
+        check = next(item for item in self.load("T01")["checks"] if item["id"] == "sec-non-goals")
+        accepted = ["The following are not goals of this design:", "Reporting is not a goal.", "## Non-goals",
+                    "Refunds are out of scope."]
+        rejected = ["The goal is to hold stock.", "Goals and scope"]
+
+        # when
+        found = {text: re.search(check["pattern"], text) is not None for text in accepted + rejected}
+
+        # then
+        self.assertEqual(found, {**{text: True for text in accepted}, **{text: False for text in rejected}})
 
     def t02_with_extended_test(self, body: str) -> dict[str, dict[str, Any]]:
         task, repo, base = self.materialize("T02")
