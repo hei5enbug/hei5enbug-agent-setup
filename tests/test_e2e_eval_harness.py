@@ -1189,9 +1189,13 @@ class PluginExportTest(unittest.TestCase):
             repo, run_root = Path(tmp) / "repo", Path(tmp) / "runs"
             (repo / "evals/e2e/tasks/hidden").mkdir(parents=True)
             (repo / "tests").mkdir()
+            (repo / "docs/ko/evals/e2e").mkdir(parents=True)
+            (repo / "docs/ko/other").mkdir(parents=True)
             git = ["git", "-c", "user.name=Demo Dev", "-c", "user.email=dev@example.com", "-c", "commit.gpgsign=false"]
             subprocess.run([*git, "init", "-q", "-b", "main"], cwd=repo, check=True)
             (repo / "a.txt").write_text("one", encoding="utf-8")
+            (repo / "docs/ko/evals/e2e/README.ko.md").write_text("# 과제\n", encoding="utf-8")
+            (repo / "docs/ko/other/guide.ko.md").write_text("# 안내\n", encoding="utf-8")
             (repo / "evals/e2e/tasks/hidden/test_secret.py").write_text("x = 1\n", encoding="utf-8")
             (repo / "tests/test_e2e_eval_graders.py").write_text("ANSWER = 1\n", encoding="utf-8")
             (repo / "tests/test_other.py").write_text("y = 2\n", encoding="utf-8")
@@ -1204,9 +1208,11 @@ class PluginExportTest(unittest.TestCase):
             # then
             self.assertTrue((Path(exported["path"]) / "a.txt").is_file())
             self.assertFalse((Path(exported["path"]) / "evals").exists())
+            self.assertFalse((Path(exported["path"]) / "docs/ko/evals").exists())
+            self.assertTrue((Path(exported["path"]) / "docs/ko/other/guide.ko.md").is_file())
             self.assertFalse((Path(exported["path"]) / "tests/test_e2e_eval_graders.py").exists())
             self.assertTrue((Path(exported["path"]) / "tests/test_other.py").is_file())
-            self.assertEqual(exported["excluded"], ["evals", "tests/test_e2e_eval_*.py"])
+            self.assertEqual(exported["excluded"], ["evals", "docs/ko/evals", "tests/test_e2e_eval_*.py"])
 
     def test_제외_목록이_다른_예전_내보내기는_다시_만든다(self):
         """제외 목록이 달랐던 기록이 있으면 같은 sha여도 새 목록으로 다시 내보낸다."""
@@ -1232,7 +1238,7 @@ class PluginExportTest(unittest.TestCase):
 
             # then
             self.assertFalse((Path(again["path"]) / "tests/test_e2e_eval_x.py").exists())
-            self.assertEqual(again["excluded"], ["evals", "tests/test_e2e_eval_*.py"])
+            self.assertEqual(again["excluded"], ["evals", "docs/ko/evals", "tests/test_e2e_eval_*.py"])
 
     def test_없는_ref를_내보내려_하면_오류가_난다(self):
         """해석되지 않는 ref는 ExportError다."""

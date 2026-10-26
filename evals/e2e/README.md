@@ -10,8 +10,9 @@ repository README; only its unit tests are.
 ## What one run does
 
 1. The harness exports the variant's plugin revision with `git archive <ref>` into
-   `<run root>/plugins/<sha>/hei5enbug-agent-setup/`. The export leaves out `evals/` and `tests/test_e2e_eval_*.py`,
-   so an agent that reads the plugin source cannot see the hidden tests, the reference solutions, or expected answers.
+   `<run root>/plugins/<sha>/hei5enbug-agent-setup/`. The export leaves out `evals/`, its Korean mirror
+   `docs/ko/evals/`, and `tests/test_e2e_eval_*.py`, so an agent that reads the plugin source cannot see the hidden
+   tests, the reference solutions, or expected answers.
 2. It copies the task's fixture from `fixtures/` into `<run root>/<campaign>/work/<run id>/repo/`, commits it with a
    fixed fictional identity and date, and runs the task's setup script when it has one.
 3. It starts the agent in that folder:

@@ -13,8 +13,9 @@
 ## 실행 한 번에 하는 일
 
 1. 하네스는 변형의 플러그인 리비전을 `git archive <ref>`로
-   `<run root>/plugins/<sha>/hei5enbug-agent-setup/`에 내보낸다. 내보낼 때 `evals/`와 `tests/test_e2e_eval_*.py`는
-   빼므로, 플러그인 소스를 읽는 에이전트도 숨은 테스트, 기준 해답, 기대 답변을 볼 수 없다.
+   `<run root>/plugins/<sha>/hei5enbug-agent-setup/`에 내보낸다. 내보낼 때 `evals/`, 그 한국어 미러
+   `docs/ko/evals/`, `tests/test_e2e_eval_*.py`는 빼므로, 플러그인 소스를 읽는 에이전트도 숨은 테스트, 기준 해답,
+   기대 답변을 볼 수 없다.
 2. 작업의 픽스처를 `fixtures/`에서 `<run root>/<campaign>/work/<run id>/repo/`로 복사하고, 고정된 가상 작성자와
    날짜로 커밋한 뒤, 작업에 설정 스크립트가 있으면 실행한다.
 3. 그 폴더에서 에이전트를 시작한다.
