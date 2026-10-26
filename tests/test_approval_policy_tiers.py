@@ -805,6 +805,7 @@ ALLOWED_STATE_READS = [
     "cat ${{HOME}}/.local/state/{name}/approvals/claude-s1.json",
     "ls $XDG_STATE_HOME/{name}/approvals",
     'ls "${{XDG_STATE_HOME}}/{name}/heartbeats"',
+    "ls $HOME/.local/state/{name}/pycache",
     'ls "${{XDG_STATE_HOME:-/home/user/.local/state}}/{name}/approvals"',
     'ls -la "$HOME/.local/state/{name}/approvals" | head',
     'find "$HOME/.local/state/{name}/approvals" -type f',

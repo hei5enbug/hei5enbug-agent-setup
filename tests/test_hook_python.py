@@ -304,3 +304,122 @@ def test_Claude_옵션이_상대_값이어도_유효한_절대_경로의_HEI5ENB
     result = launch(plugin, "sample.py", CLAUDE_PLUGIN_OPTION_PYTHON="py312", HEI5ENBUG_PYTHON=str(codex))
     # then
     assert result.stdout.startswith("codex ")
+
+
+def arguments_interpreter(path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('#!/bin/sh\nfor argument in "$@"; do echo "$argument"; done\necho END\ncat\nexit 3\n', encoding="utf-8")
+    path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return path
+
+
+def launch_arguments(plugin, tmp_path, *args, stdin="", **env):
+    interpreter = arguments_interpreter(tmp_path / "args" / "python")
+    result = launch(plugin, "sample.py", *args, stdin=stdin, CLAUDE_PLUGIN_OPTION_PYTHON=str(interpreter), **env)
+    head, _, tail = result.stdout.partition("END\n")
+    return result, head.splitlines(), tail
+
+
+def test_절대_경로의_XDG_STATE_HOME이_있으면_상태_폴더의_pycache를_접두로_하여_모듈로_실행한다(plugin, tmp_path):
+    # given
+    state = tmp_path / "state"
+    payload = json.dumps({"hook_event_name": "Stop"})
+    # when
+    result, arguments, passed = launch_arguments(plugin, tmp_path, "one", "x y", stdin=payload, XDG_STATE_HOME=str(state))
+    # then
+    assert arguments[:3] == ["-X", f"pycache_prefix={state}/hei5enbug-agent-setup/pycache", "-c"]
+    assert "runpy.run_module" in "\n".join(arguments[3:-4])
+    assert arguments[-4:] == [str(plugin), "sample.py", "one", "x y"]
+    assert passed == payload
+    assert result.returncode == 3
+
+
+def test_XDG_STATE_HOME이_없고_HOME만_있으면_HOME의_local_state를_쓴다(plugin, tmp_path):
+    # given
+    home = tmp_path / "home"
+    # when
+    _, arguments, _ = launch_arguments(plugin, tmp_path, HOME=str(home))
+    # then
+    assert arguments[:2] == ["-X", f"pycache_prefix={home}/.local/state/hei5enbug-agent-setup/pycache"]
+
+
+def test_상대_경로의_XDG_STATE_HOME과_HOME이_없으면_캐시_없이_기존_형식으로_실행한다(plugin, tmp_path):
+    # given
+    environment = {"XDG_STATE_HOME": "relative/state"}
+    # when
+    result, arguments, _ = launch_arguments(plugin, tmp_path, "one", **environment)
+    # then
+    assert arguments == [str(plugin / "sample.py"), "one"]
+    assert result.returncode == 3
+
+
+def test_상대_경로의_XDG_STATE_HOME이_있으면_HOME이_있어도_캐시_없이_실행한다(plugin, tmp_path):
+    # given
+    environment = {"XDG_STATE_HOME": "relative/state", "HOME": str(tmp_path / "home")}
+    # when
+    _, arguments, _ = launch_arguments(plugin, tmp_path, **environment)
+    # then
+    assert arguments == [str(plugin / "sample.py")]
+
+
+def test_모듈로_실행해도_스크립트는_main_이름과_자신의_경로와_인자를_본다(plugin, tmp_path):
+    # given
+    (plugin / "where.py").write_text(
+        "import sys\nprint(__name__, __file__, sys.argv[0], sys.argv[1:], sys.path[0])\n", encoding="utf-8")
+    environment = {"XDG_STATE_HOME": str(tmp_path / "state"), "CLAUDE_PLUGIN_OPTION_PYTHON": shutil.which("python3")}
+    # when
+    cached = launch(plugin, "where.py", "a", "b c", **environment)
+    plain = launch(plugin, "where.py", "a", "b c", CLAUDE_PLUGIN_OPTION_PYTHON=shutil.which("python3"))
+    # then
+    assert cached.returncode == 0, cached.stderr
+    assert cached.stdout == plain.stdout
+    assert cached.stdout.strip() == f"__main__ {plugin / 'where.py'} {plugin / 'where.py'} ['a', 'b c'] {plugin}"
+
+
+def test_PYTHONSAFEPATH에서도_PYTHONPATH의_첫_경로를_지우지_않는다(plugin, tmp_path):
+    # given
+    vendor = tmp_path / "vendor"
+    vendor.mkdir()
+    (vendor / "vendored.py").write_text("NAME = 'vendored'\n", encoding="utf-8")
+    (plugin / "uses_vendor.py").write_text("import vendored\nprint(vendored.NAME)\n", encoding="utf-8")
+    environment = {"PYTHONSAFEPATH": "1", "PYTHONPATH": str(vendor),
+                   "CLAUDE_PLUGIN_OPTION_PYTHON": shutil.which("python3")}
+    # when
+    cached = launch(plugin, "uses_vendor.py", XDG_STATE_HOME=str(tmp_path / "state"), **environment)
+    plain = launch(plugin, "uses_vendor.py", **environment)
+    # then
+    assert cached.returncode == plain.returncode == 0, cached.stderr
+    assert cached.stdout == plain.stdout == "vendored\n"
+
+
+@pytest.fixture
+def real_plugin(tmp_path):
+    scripts = tmp_path / "real" / "scripts"
+    shutil.copytree(REPO_ROOT / "scripts", scripts, ignore=shutil.ignore_patterns("__pycache__"))
+    return scripts
+
+
+def run_real(scripts, script, event, **env):
+    environment = {"PATH": os.environ["PATH"], "CLAUDE_PLUGIN_OPTION_PYTHON": shutil.which("python3"), **env}
+    return subprocess.run(["sh", str(scripts / "hook_python.sh"), script], input=event, text=True,
+                          capture_output=True, timeout=60, env=environment, cwd=scripts.parents[1])
+
+
+@pytest.mark.parametrize(("script", "event"), [
+    ("language_guard.py", {"hook_event_name": "Stop", "session_id": "s", "last_assistant_message": "done"}),
+    ("approval_guard.py", {"hook_event_name": "UserPromptSubmit", "session_id": "s", "prompt": "hello"}),
+])
+def test_실제_훅_스크립트는_캐시_접두_실행과_기존_실행의_출력과_종료_코드가_같고_바이트코드를_상태_폴더에만_쓴다(
+        real_plugin, tmp_path, script, event):
+    # given
+    home = tmp_path / "home"
+    state = tmp_path / "state"
+    payload = json.dumps(event)
+    # when
+    plain = run_real(real_plugin, script, payload, HOME=str(home), XDG_STATE_HOME="relative")
+    cached = run_real(real_plugin, script, payload, HOME=str(home), XDG_STATE_HOME=str(state))
+    # then
+    assert cached.returncode == plain.returncode == 0, cached.stderr
+    assert cached.stdout == plain.stdout
+    assert list((state / "hei5enbug-agent-setup" / "pycache").rglob("*.pyc"))
+    assert not list(real_plugin.rglob("__pycache__"))

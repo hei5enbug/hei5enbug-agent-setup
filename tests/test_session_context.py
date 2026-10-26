@@ -1137,11 +1137,13 @@ class SessionContextTest(unittest.TestCase):
         self.assertIn("# Claude Code only", context)
 
     def test_hook_does_not_modify_user_or_project_files(self):
+        bytecode = self.base / "state" / "hei5enbug-agent-setup" / "pycache"
+
         def snapshot():
             return {
                 p.relative_to(self.base): p.read_bytes()
                 for p in self.base.rglob("*")
-                if p.is_file() and not p.is_relative_to(self.codex_home)
+                if p.is_file() and not p.is_relative_to(self.codex_home) and not p.is_relative_to(bytecode)
             }
 
         before = snapshot()

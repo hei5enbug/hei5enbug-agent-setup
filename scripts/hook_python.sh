@@ -14,13 +14,29 @@ if [ -z "$script" ] || [ ! -f "$dir/$script" ]; then
   exit 1
 fi
 shift
+interpreter=
 for python in "$CLAUDE_PLUGIN_OPTION_PYTHON" "$HEI5ENBUG_PYTHON"; do
   case $python in
     /*)
       if [ -f "$python" ] && [ -x "$python" ]; then
-        exec "$python" "$dir/$script" "$@"
+        interpreter=$python
+        break
       fi
       ;;
   esac
 done
-exec python3 "$dir/$script" "$@"
+[ -n "$interpreter" ] || interpreter=python3
+state=${XDG_STATE_HOME:-${HOME:+$HOME/.local/state}}
+case $state in
+  /*)
+    exec "$interpreter" -X "pycache_prefix=$state/hei5enbug-agent-setup/pycache" -c 'import os, sys
+if sys.path and sys.path[0] == "":
+    del sys.path[0]
+sys.path.insert(0, os.path.abspath(sys.argv[1]))
+import runpy
+module = sys.argv[2][:-3]
+del sys.argv[1:3]
+runpy.run_module(module, run_name="__main__", alter_sys=True)' "$dir" "$script" "$@"
+    ;;
+esac
+exec "$interpreter" "$dir/$script" "$@"

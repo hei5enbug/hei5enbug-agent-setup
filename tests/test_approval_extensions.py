@@ -237,7 +237,7 @@ def test_the_plugin_refresh_script_status_is_not_self_approval():
     assert outcome.kind != "forbidden"
 
 
-@pytest.mark.parametrize("directory", ["approvals", "heartbeats"])
+@pytest.mark.parametrize("directory", ["approvals", "heartbeats", "pycache"])
 @pytest.mark.parametrize("command", [
     "ls {path}", "cat {path}/f", "head {path}/f", "tail {path}/f", "grep x {path}/f",
     "wc {path}/f", "stat {path}", "file {path}/f", "find {path} -type f", "echo {path}",
@@ -248,7 +248,7 @@ def test_read_only_state_commands_are_not_self_approval(state, fake_bin, directo
     """승인과 heartbeat 상태 경로를 허용 목록의 명령으로 읽기만 하면 자기 승인으로 거부하지 않는다."""
     # given
     approvals = state_mod.state_dir()
-    path = approvals if directory == "approvals" else approvals.parent / "heartbeats"
+    path = approvals if directory == "approvals" else approvals.parent / directory
     event = bash_event(command.format(path=shlex.quote(str(path))), cwd=state)
     # when
     output = guard.handle(event, "claude")
@@ -256,7 +256,7 @@ def test_read_only_state_commands_are_not_self_approval(state, fake_bin, directo
     assert decision(output) != "deny"
 
 
-@pytest.mark.parametrize("directory", ["approvals", "heartbeats"])
+@pytest.mark.parametrize("directory", ["approvals", "heartbeats", "pycache"])
 @pytest.mark.parametrize("command", [
     "echo x > {path}/f", "touch {path}/f", "rm {path}/f", "cp a {path}/f", "mv a {path}/f",
     "sed -i s/a/b/ {path}/f", "tee {path}/f", "python3 -c \"open('{path}/f', 'w').write('x')\"",
@@ -272,8 +272,23 @@ def test_state_writes_and_unconfirmed_reads_stay_self_approval(state, fake_bin, 
     """상태 경로의 쓰기와 읽기 전용임을 확인할 수 없는 명령은 자기 승인 사유로 거부한다."""
     # given
     approvals = state_mod.state_dir()
-    path = approvals if directory == "approvals" else approvals.parent / "heartbeats"
+    path = approvals if directory == "approvals" else approvals.parent / directory
     event = bash_event(command.format(path=path), cwd=state)
+    # when
+    output = guard.handle(event, "claude")
+    # then
+    assert decision(output) == "deny"
+    assert output["hookSpecificOutput"]["permissionDecisionReason"].startswith(guard.SELF_APPROVAL_REASON)
+
+
+@pytest.mark.parametrize("directory", ["approvals", "heartbeats", "pycache"])
+@pytest.mark.parametrize("spelling", ["{base}/./{name}", "{base}//{name}", "{base}/x/../{name}", "{base}/./x/..//{name}"])
+def test_equivalent_spellings_of_state_paths_stay_self_approval(state, fake_bin, directory, spelling):
+    """상태 폴더를 `/./`, `//`, `x/../`처럼 다르게 적어 쓰기를 해도 자기 승인 사유로 거부한다."""
+    # given
+    base = state_mod.state_dir().parent
+    path = spelling.format(base=base, name=directory)
+    event = bash_event(f"cp /tmp/forged {path}/f", cwd=state)
     # when
     output = guard.handle(event, "claude")
     # then
@@ -418,7 +433,7 @@ def test_substitutions_preserve_self_approval_denials(state, fake_bin, command):
 
 
 @pytest.mark.parametrize("tool", ["Edit", "Write", "MultiEdit", "NotebookEdit", "apply_patch"])
-@pytest.mark.parametrize("directory", ["approvals", "heartbeats"])
+@pytest.mark.parametrize("directory", ["approvals", "heartbeats", "pycache"])
 @pytest.mark.parametrize("host", ["claude", "codex"])
 def test_file_tools_cannot_edit_guard_state(state, tool, directory, host):
     """파일 편집 도구로 승인이나 heartbeat 상태를 고칠 수 없다."""

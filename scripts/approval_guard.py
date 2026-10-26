@@ -24,7 +24,7 @@ from collections import namedtuple
 from pathlib import Path
 from urllib.parse import urlsplit
 
-sys.dont_write_bytecode = True
+sys.dont_write_bytecode = sys.pycache_prefix is None
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from plugin_toggles import detect_host, enabled  # noqa: E402
 import approval_state  # noqa: E402
@@ -957,11 +957,15 @@ def _resolved(path, cwd):
     return (Path(cwd) / expanded).resolve()
 
 
+def _guard_state_dirs():
+    root = approval_state.state_dir()
+    return (root, root.parent / "heartbeats", root.parent / "pycache")
+
+
 def _state_path(path, cwd):
     candidate = _resolved(path, cwd)
-    return any(candidate == directory or directory in candidate.parents for directory in (
-        approval_state.state_dir().resolve(), (approval_state.state_dir().parent / "heartbeats").resolve(),
-    ))
+    return any(candidate == directory or directory in candidate.parents
+               for directory in (item.resolve() for item in _guard_state_dirs()))
 
 
 def _protected_path(path, cwd, env=None):
@@ -4487,13 +4491,23 @@ def _expand_state_variables(command):
     return STATE_VARIABLE.sub(replace, command)
 
 
+def _collapse_path_spelling(text):
+    """The text with `//`, `/./`, and `name/../` collapsed, so an equivalent spelling of a state folder still matches."""
+    text = re.sub(r"/(?:\.?/)+", "/", text)
+    while True:
+        collapsed = re.sub(r"[^/\s\"']+/\.\./", "", text)
+        if collapsed == text:
+            return text
+        text = collapsed
+
+
 def _self_approval_reason(command):
     """Return why a command is self-approval, or None. A command that names the state folders may use only a path prefix variable."""
     if _runs_guard(command):
         return SELF_APPROVAL_REASON
-    if (str(approval_state.state_dir()) in command or "hei5enbug-agent-setup/approvals" in command
-            or str(approval_state.state_dir().parent / "heartbeats") in command
-            or "hei5enbug-agent-setup/heartbeats" in command):
+    spelled = _collapse_path_spelling(command)
+    if any(str(directory) in spelled or f"hei5enbug-agent-setup/{directory.name}" in spelled
+           for directory in _guard_state_dirs()):
         command = _expand_state_variables(command)
         trigger = next((item for item in DYNAMIC_TRIGGERS if item in command), None)
         if trigger:

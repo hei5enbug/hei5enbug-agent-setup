@@ -816,6 +816,9 @@ with `/` and names an existing executable file counts. An empty, relative, missi
 `python3` on the `PATH`, so an unset option behaves as before. Setting the path skips a version-manager shim, such
 as a pyenv shim, which adds about 150 ms to each hook process on one measured machine and can select a different
 Python per project.
+The launcher caches compiled bytecode under `$XDG_STATE_HOME/hei5enbug-agent-setup/pycache/` (default
+`~/.local/state`). This is a guard state folder, so the approval guard denies agent writes there like those to
+`approvals/` and `heartbeats/`. Without an absolute state folder, hooks run without a cache.
 
 Without a matching launcher environment, the Mod refuses pinned GPT requests before a provider request. This refusal
 has no toggle. The session instructions and operating rules also have no toggle, except the `orca_worktree` line,
