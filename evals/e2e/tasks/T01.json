@@ -31,7 +31,7 @@
       "required": true,
       "weight": 1,
       "path": "docs/design/stock-reservation.md",
-      "pattern": "(?i)\\bnon[- ]?goals?\\b|\\bout of scope\\b|\\bnot (?:a )?goals?\\b"
+      "pattern": "(?i)\\bnon[- ]?goals?\\b|\\bout of scope\\b|\\boutside (?:of |the |this )?scope\\b|\\bnot (?:a )?goals?\\b|\\b(?:this|the) (?:design|document|proposal|change) (?:deliberately |intentionally )?(?:leaves (?:\\w+ ){0,2}out\\b(?! of\\b)|does not (?:cover|address|include)\\b|excludes\\b)"
     },
     {
       "id": "sec-design",
@@ -39,7 +39,7 @@
       "required": true,
       "weight": 1,
       "path": "docs/design/stock-reservation.md",
-      "pattern": "(?im)^#{1,4}\\s.*\\b(design|proposal|approach|solution|architecture)\\b"
+      "pattern": "(?im)^#{1,4}\\s(?!(?:current|existing)\\b).*\\b(design|proposal|approach|solution|architecture|interfaces?|data (?:model|contract|schema)|invariants?|failure handling)\\b"
     },
     {
       "id": "sec-alternatives",

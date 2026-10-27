@@ -1017,6 +1017,39 @@ class GoldenTaskTest(TempCase):
         # then
         self.assertEqual(found, {**{text: True for text in accepted}, **{text: False for text in rejected}})
 
+    def test_T01_비목표_검사는_설계가_주어인_제외_문장을_인정하고_우연한_문장은_거른다(self):
+        """'The design leaves these out' 같은 설계 범위 제외 문장은 비목표로 보고, 제외 문장이 없는 문서 문장은 거른다."""
+        # given
+        check = next(item for item in self.load("T01")["checks"] if item["id"] == "sec-non-goals")
+        accepted = ["The design leaves these out:", "This design does not cover payment integration.",
+                    "The document deliberately excludes refunds.", "Partial confirmation is outside the scope."]
+        rejected = ["The sweep leaves expired holds out of available stock.",
+                    "The design leaves expired holds out of available stock.", "The design keeps these constraints:",
+                    "The design has four goals:", "Release does not cover expired holds."]
+
+        # when
+        found = {text: re.search(check["pattern"], text) is not None for text in accepted + rejected}
+
+        # then
+        self.assertEqual(found, {**{text: True for text in accepted}, **{text: False for text in rejected}})
+
+    def test_T01_설계_검사는_목표_설계_내용을_주제별_제목으로_나눈_문서를_인정한다(self):
+        """인터페이스, 데이터 계약, 불변식, 실패 처리 제목은 설계 절로 보고, 설계 내용이 없는 제목만 있는 문서는 거른다."""
+        # given
+        check = next(item for item in self.load("T01")["checks"] if item["id"] == "sec-design")
+        accepted = ["## Target design", "## Interfaces", "## Command line interface and errors", "## Data contract",
+                    "### Data model", "### Invariants", "### Failure handling"]
+        rejected = "\n".join(["# Stock reservation", "## Goals and scope", "### Current behavior", "## Current interfaces",
+                              "## Existing data model", "## Terms",
+                              "## Alternatives and trade-offs", "## Risks", "## Acceptance criteria",
+                              "The interface stays the same.", "## Assumptions and open questions"])
+
+        # when
+        found = {text: re.search(check["pattern"], text) is not None for text in accepted + [rejected]}
+
+        # then
+        self.assertEqual(found, {**{text: True for text in accepted}, rejected: False})
+
     def t02_with_extended_test(self, body: str) -> dict[str, dict[str, Any]]:
         task, repo, base = self.materialize("T02")
         apply_reference("T02", repo)
