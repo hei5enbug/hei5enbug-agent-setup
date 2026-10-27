@@ -3301,15 +3301,8 @@ def _fold_text(node, names):
     return None
 
 
-def _confined_python_writes(content, cwd, env):
-    """Whether Python text is provably read-only once each of its literal `open` writes is counted as a read, and every
-    one of those writes lands in a temporary root or the session folder."""
-    if "chdir" in content:
-        return False
-    try:
-        tree = ast.parse(content)
-    except SyntaxError:
-        return False
+def _literal_names(tree):
+    """The module-level names that one assignment binds to a text the parser can fold."""
     stores = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
@@ -3321,6 +3314,51 @@ def _confined_python_writes(content, cwd, env):
             value = _fold_text(node.value, names)
             if value is not None:
                 names[node.targets[0].id] = value
+    return names
+
+
+SHELL_FILE_WRITE = re.compile(r"(?<![0-9&])>(?!&)(?!\s*/dev/null)|\b(?:tee|cp|mv|dd|ln|install|truncate)\b|\bsed\s+-\S*i")
+
+
+def _may_write_own_path(body, script, cwd):
+    """Whether a script body writes, or may write, to the file it is saved in: a Python `open` for writing whose target
+    is that path or cannot be folded to a literal, or any shell file write or reference to its own name."""
+    try:
+        tree = ast.parse(body)
+    except SyntaxError:
+        return bool(SHELL_FILE_WRITE.search(body) or script.name in body or "$0" in body or "BASH_SOURCE" in body)
+    names = _literal_names(tree)
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open"):
+            continue
+        mode = next((keyword.value for keyword in node.keywords if keyword.arg == "mode"),
+                    node.args[1] if len(node.args) > 1 else None)
+        if mode is None or isinstance(mode, ast.Constant) and isinstance(mode.value, str) and not set(
+                mode.value) & set("wax+"):
+            continue
+        target = next((keyword.value for keyword in node.keywords if keyword.arg == "file"),
+                      node.args[0] if node.args else None)
+        text = _fold_text(target, names) if target is not None else None
+        if not text or "\0" in text:
+            return True
+        try:
+            if (Path(cwd) / os.path.expanduser(text)).resolve() == script.resolve():
+                return True
+        except (OSError, RuntimeError):
+            return True
+    return False
+
+
+def _confined_python_writes(content, cwd, env):
+    """Whether Python text is provably read-only once each of its literal `open` writes is counted as a read, and every
+    one of those writes lands in a temporary root or the session folder."""
+    if "chdir" in content:
+        return False
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return False
+    names = _literal_names(tree)
     session = Path(env.get("_APPROVAL_SESSION_DIR", cwd)).resolve()
     for node in ast.walk(tree):
         if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open"):
@@ -3381,7 +3419,7 @@ def _classify_script(words, cwd, depth, env, variables=None, choices=None):
     if depth >= MAX_DEPTH:
         return _script_unknown(resolved, words, env, "recursion limit")
     try:
-        pending = _PENDING_SCRIPTS.get(resolved)
+        pending = _PENDING_SCRIPTS.pop(resolved, None)
         content = pending if pending is not None else _script_content(resolved)
         if mode == "executable":
             header = content.splitlines()[0] if content else ""
@@ -4189,7 +4227,8 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
         elif written is not None and recording and block_depth == 0 and _runs_unconditionally(index, segments, operators):
             script_path = next((_script_path(target, cwd, variables) for _, operator, target in segment.redirects
                                 if operator == ">"), None)
-            if script_path is not None and len(written.encode()) <= MAX_SCRIPT_BYTES:
+            if (script_path is not None and len(written.encode()) <= MAX_SCRIPT_BYTES
+                    and not _may_write_own_path(written, script_path, cwd)):
                 _PENDING_SCRIPTS[script_path] = written
             else:
                 _PENDING_SCRIPTS.clear()

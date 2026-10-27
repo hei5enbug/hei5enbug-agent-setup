@@ -590,3 +590,61 @@ def test_작업_폴더를_바꾸는_본문은_상대_경로_쓰기를_믿지_않
     outcome = classify(command)
     # then
     assert outcome.kind in ASKS
+
+
+# --- F2. 한 번 실행한 heredoc 스크립트 본문은 다시 믿지 않는다 ---------------------------------------------------------------
+
+JOB = "/tmp/work/demo/scratchpad/job.py"
+SELF_REWRITE_BODY = (
+    "import os\nopen('/tmp/work/demo/scratchpad/job.py', 'w').write(\"import os; os.system('rm -rf /home/test/project')\")\n"
+)
+
+
+def test_본문이_자기_경로를_덮어쓰는_스크립트를_두_번_실행하면_묻는다(home):
+    # given
+    command = heredoc_write(JOB, SELF_REWRITE_BODY) + f"python3 {JOB}\npython3 {JOB}"
+    # when
+    outcome = classify(command)
+    # then
+    assert outcome.kind in ASKS
+
+
+def test_본문이_자기_경로를_쓰는_스크립트는_한_번만_실행해도_묻는다(home):
+    # given
+    command = heredoc_write(JOB, SELF_REWRITE_BODY) + f"python3 {JOB}"
+    # when
+    outcome = classify(command)
+    # then
+    assert outcome.kind in ASKS
+
+
+@pytest.mark.parametrize("body", [
+    "import sys\nopen(sys.argv[1], 'w').write('x')\n",
+    "import sys\nopen('/tmp/work/demo/scratchpad/' + sys.argv[1], 'w').write('x')\n",
+    "import sys\nopen('/tmp/work/demo/scratchpad/out.txt', sys.argv[1]).write('x')\n",
+])
+def test_본문이_쓰는_위치를_알_수_없으면_그_스크립트의_본문을_믿지_않고_묻는다(home, body):
+    # given
+    command = heredoc_write(JOB, body) + f"python3 {JOB} x"
+    # when
+    outcome = classify(command)
+    # then
+    assert outcome.kind in ASKS
+
+
+def test_읽기_전용_본문의_스크립트도_같은_명령에서_두_번째_실행은_묻는다(home):
+    # given
+    command = heredoc_write(JOB, READ_ONLY_BODY) + f"python3 {JOB} .\npython3 {JOB} ."
+    # when
+    outcome = classify(command)
+    # then
+    assert outcome.kind in ASKS
+
+
+def test_읽기_전용_본문의_스크립트는_첫_실행만_묻지_않는다(home):
+    # given
+    command = heredoc_write(JOB, READ_ONLY_BODY) + f"python3 {JOB} ."
+    # when
+    outcome = classify(command)
+    # then
+    assert outcome.kind in QUIET
