@@ -88,10 +88,11 @@ protected value into it; the session that needs the file reports it to the user.
   in the target worktree's session and end this one. Never end a session yourself.
 - Otherwise continue the remaining work, and read the target with `orca terminal read --terminal <handle> --json` only
   when its result is needed.
-- When a child session that this session started has its work merged into the base, offer once to close its terminal
-  and, when this session created them, its child worktree and that worktree's local branch, naming each. Never offer
-  the workspace clone, the current worktree, the base branch, or a remote branch. Before offering, confirm that the
-  terminal is idle with no open question, that the worktree has no uncommitted change, and that the base holds the
-  content of every commit of the branch, including commits applied under another hash; list the worktree's ignored
-  files from `git status --porcelain --ignored` in the offer. Remove only what the user approves; otherwise remove a
-  worktree or branch only when the user asks.
+- When a child session that this session started has its work merged into the base, close its terminal and, when
+  this session created them, its child worktree and that worktree's local branch, and name each in the reply.
+  Never close the workspace clone, the current worktree, the base branch, or a remote branch. First confirm that
+  the terminal is idle with no open question, that the worktree has no uncommitted change, that the base holds the
+  content of every commit of the branch, including commits applied under another hash, and that
+  `git status --porcelain --ignored` lists only regenerable caches such as `__pycache__`, `.pytest_cache`, or
+  `node_modules`. When a check fails, offer once instead and list the ignored files; remove only what the user
+  approves, and otherwise remove a worktree or branch only when the user asks.

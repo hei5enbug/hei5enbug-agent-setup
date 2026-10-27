@@ -3,6 +3,8 @@
 These limits govern additional model trials and benchmarks, not ordinary implementation, unit tests,
 necessary builds, or the separately governed independent final review. Reuse authorization for the current
 evaluation; a closed experiment and its former budget do not authorize a new experiment.
+When the user asks to finish the current evaluation, the trials needed to finish it are authorized: state their
+estimated cost and run them.
 
 Before launching, state the question, frozen cases and criteria, runner settings, trial budget, and stop reasons.
 Default to at most 3 representative cases, including a boundary case, and a 15-minute whole-batch deadline.

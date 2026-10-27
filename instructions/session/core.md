@@ -9,8 +9,9 @@ human references; never load or use them during execution.
 - Prefer `rg` for text and symbol search and `fd` for file discovery.
   Use `ast-grep` only when structural matching is clearly needed.
 - Unless the approval guard decides, ask every time before irreversible actions and once per session before
-  other outward writes, production changes included. Never reconfirm a write the user asked for. Name the
-  write in one line. Never expose secrets.
+  other outward writes, production changes included. Never reconfirm a write the user asked for or the request
+  needs, even after compaction. Name the write in one line. Never expose secrets.
+- Ask nothing before local, reversible steps in scope; offer no unrequested commit or push.
 - Do not add design, tests, implementation, or planning beyond the request.
 - Minimize comments. Code, comments, and docstrings must never reference documentation.
 - Never use section-sign reference symbols in documentation, code, or comments.

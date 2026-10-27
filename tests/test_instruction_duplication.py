@@ -37,9 +37,10 @@ CORE_OWNED = (
     ),
     (
         "Unless the approval guard decides, ask every time before irreversible actions and once per session before "
-        "other outward writes, production changes included. Never reconfirm a write the user asked for. Name the "
-        "write in one line. Never expose secrets."
+        "other outward writes, production changes included. Never reconfirm a write the user asked for or "
+        "the request needs, even after compaction. Name the write in one line. Never expose secrets."
     ),
+    "Ask nothing before local, reversible steps in scope; offer no unrequested commit or push.",
     "Before writing or editing any documentation file, read [documentation rules](../documentation.md).",
 )
 
