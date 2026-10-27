@@ -1370,6 +1370,22 @@ def _expand_segment_words(segment, statics):
     return words
 
 
+PLAIN_ENVIRONMENT_ARGUMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:=.*)?", re.S)
+
+
+def _plain_environment_edit(program):
+    """For a plain `unset NAME...` or `export NAME[=value]...` (no options, only names): the names whose fixed value is
+    forgotten, so the other fixed variables survive it. An exported value is never recorded as fixed. None for any other
+    form, which forgets every fixed variable."""
+    name = os.path.basename(program[0]) if program else ""
+    arguments = program[1:]
+    if (name not in ("unset", "export") or not arguments
+            or not all(PLAIN_ENVIRONMENT_ARGUMENT.fullmatch(argument) for argument in arguments)
+            or name == "unset" and any("=" in argument for argument in arguments)):
+        return None
+    return {argument.partition("=")[0] for argument in arguments if name == "unset" or "=" in argument}
+
+
 def _unconditional_assignment(segment, operators, after_assignment):
     """Whether a standalone assignment always runs in the current shell: it follows nothing, `;`, or another assignment
     joined by `&&`, and it is not sent to the background or a pipe."""
@@ -1712,6 +1728,27 @@ def _clean_tracked_tree(args, cwd, env):
     return status is not None and not status.strip()
 
 
+TOP_STASH = "stash@{0}"
+
+
+def _lossless_stash_drop(global_args, args, cwd, env):
+    """Whether `git stash drop` of the newest stash, named or not, loses nothing: the stash holds no untracked files, and
+    the work tree already equals it for every tracked file. Any other form, a failed or timed out query, or an earlier
+    command that may change files means no."""
+    flags = [arg for arg in args[2:] if arg.startswith("-")]
+    operands = [arg for arg in args[2:] if not arg.startswith("-")]
+    if (args[:2] != ["stash", "drop"] or any(flag not in ("-q", "--quiet") for flag in flags)
+            or operands not in ([], [TOP_STASH])):
+        return False
+    directory = _git_directory(global_args, cwd, env)
+    if directory is None or FILES_MAY_CHANGE in env:
+        return False
+    commit = _git_lookup(directory, env, "rev-list", "--parents", "-n", "1", TOP_STASH, "--")
+    if commit is None or len(commit.split()) != 3:
+        return False
+    return _git_lookup(directory, env, "diff", "--quiet", TOP_STASH, "--") is not None
+
+
 DEFAULT_BRANCHES = frozenset({"main", "master", "develop", "trunk"})
 PUSH_PLAIN_FLAGS = frozenset({
     "-u", "--set-upstream", "-n", "--dry-run", "-v", "--verbose", "-q", "--quiet", "--no-verify", "--verify", "--progress",
@@ -1863,6 +1900,9 @@ def _git_gh(cli, args, command, cwd=None, env=None):
                 _has_flag(args, "--staged", "-S") and not _has_flag(args, "--worktree", "-W"))
         elif verb == "stash":
             destructive = words[1:2] in (["drop"], ["clear"])
+            if destructive and _lossless_stash_drop(global_args, args, cwd or os.getcwd(),
+                                                    dict(os.environ if env is None else env)):
+                destructive, write = False, True
         discard = not destructive and approval_state.session_scope() and (
             _git_discards(words, args, short)
             or verb == "rm" and _git_rm_discards(global_args, args, cwd or os.getcwd(),
@@ -1946,7 +1986,7 @@ def _tmpdir_default(operand, values):
 
 
 VALUE_REFERENCE = re.compile(
-    r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*|\d)(?::-([^${}`\s]*))?\}|([A-Za-z_][A-Za-z0-9_]*|\d))")
+    r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*|\d)(?::-([^${}`\s]*)|:\?[^${}`]*)?\}|([A-Za-z_][A-Za-z0-9_]*|\d))")
 SCRIPT_ZERO = r'"?\$(?:0|\{0\}|\{BASH_SOURCE\[0\]\})"?'
 SCRIPT_DIRNAME = rf"\$\(\s*dirname\s+{SCRIPT_ZERO}\s*\)"
 SCRIPT_FOLDER = re.compile(
@@ -1968,9 +2008,10 @@ REMOVAL_IGNORED = "Recursive removal of ignored files"
 
 
 def _expand_references(text, lookup):
-    """Every value `text` can take when each `$NAME`, `${NAME}`, or `${NAME:-default}` takes any value that
-    `lookup(name, default)` returns. None when a command runs, a reference stays unresolved, or the combinations exceed
-    the limit."""
+    """Every value `text` can take when each `$NAME`, `${NAME}`, `${NAME:-default}`, or `${NAME:?message}` takes any
+    value that `lookup(name, default)` returns; the last form aborts the shell when the name is unset or empty, so it
+    can only take the values `$NAME` takes. None when a command runs, a reference stays unresolved, or the combinations
+    exceed the limit."""
     if "`" in text or "$(" in text:
         return None
     results, position = [""], 0
@@ -1978,6 +2019,8 @@ def _expand_references(text, lookup):
         options = lookup(match[1] or match[3], match[2])
         if options is None:
             return None
+        if match[2] is None and ":?" in match[0]:
+            options = tuple(option for option in options if option)
         literal = text[position:match.start()]
         results = [done + literal + option for done in results for option in options]
         if len(results) > VALUE_LIMIT:
@@ -2031,6 +2074,15 @@ def _wide_effect(words, raw):
 
 def _positional(name):
     return name.isdigit() or name == SCRIPT_FOLDER_KEY
+
+
+def _loop_raws(segment, words, start):
+    """The raw shell words of `words[start:]`, where `words` is the tail of the segment's words, or None when the raw
+    words do not line up with the words."""
+    raw = segment.raw
+    if len(raw) != len(segment.words) or len(words) > len(raw):
+        return None
+    return raw[len(raw) - len(words) + start:]
 
 
 def _loop_effects(segments, index):
@@ -2118,8 +2170,7 @@ class _ValueFlow:
         resolved = _mktemp_directory(text, environment)
         if resolved is not None:
             return (resolved,)
-        values = _expand_references(text, lambda name, default: self._lookup(name, default, environment))
-        return None if values is None or any(re.search(r"\s", value) for value in values) else values
+        return _expand_references(text, lambda name, default: self._lookup(name, default, environment))
 
     def _restore(self, saved):
         """Go back to `saved` after a group whose assignments do not last; a name only that group assigned stays
@@ -2241,7 +2292,7 @@ class _ValueFlow:
                 variable = words[1] if word in ("for", "select") and len(words) > 1 else None
                 values = None
                 if variable is not None and len(words) > 3 and words[2] == "in":
-                    values = self._loop_values(words[3:], environment)
+                    values = self._loop_values(words[3:], _loop_raws(segments[index], words, 3), environment)
                 names, wide = _loop_effects(segments, index)
                 self._poison(names, everything=wide)
                 self._push("loop", before, phase="cond", variable=variable)
@@ -2261,11 +2312,20 @@ class _ValueFlow:
             words.pop(0)
         self._effect(words, before, after, raw, environment)
 
-    def _loop_values(self, items, environment):
+    def _loop_values(self, items, raws, environment):
+        """The words a `for` list can take: an unquoted expansion splits its value at white space, and a value with white
+        space whose quoting is unknown leaves the list unresolved."""
         values = []
-        for item in items:
+        for position, item in enumerate(items):
             expanded = self._expand(item, environment)
             if expanded is None:
+                return None
+            raw = raws[position] if raws is not None and position < len(raws) else None
+            if raw is not None and _unquoted_reference(raw) and _mktemp_directory(item, environment) is None:
+                if "IFS" in self.state:
+                    return None
+                expanded = tuple(field for value in expanded for field in value.split())
+            elif any(re.search(r"\s", value) for value in expanded) and raw is None:
                 return None
             values.extend(expanded)
         return tuple(dict.fromkeys(values)) if len(values) <= VALUE_LIMIT else None
@@ -2322,6 +2382,47 @@ def _script_seed(resolved, positional, lookup):
     for number in range(1, 10):
         seed[str(number)] = _expand_references(positional[number - 1], lookup) if number <= len(positional) else ("",)
     return seed
+
+
+def _shell_c_seed(segment, lookup):
+    """For a `sh|bash|zsh -c '<script>' <name> <arg>...` call: the script and the flow table that starts it, with `$0` and
+    `$1` to `$9` taken from the call's arguments when they resolve. An unquoted argument whose value has white space
+    splits into more words, so it and every argument after it stay unresolved. (None, None) for any other call."""
+    words, _ = strip_prefix(segment.words)
+    if not words or os.path.basename(words[0]) not in SHELLS or not _shell_c(words[1:]):
+        return None, None
+    args = words[1:]
+    index = next(position for position, arg in enumerate(args) if SHELL_C_FLAG.fullmatch(arg))
+    rest = args[index + 2:]
+    raw = segment.raw if len(segment.raw) == len(segment.words) else None
+    raws = raw[len(raw) - len(rest):] if raw is not None and rest else [None] * len(rest)
+    table, resolved = {}, True
+    for number in range(10):
+        if number < len(rest):
+            quoted = raws[number]
+            values = _expand_references(rest[number], lookup) if resolved else None
+            if values is not None and quoted is not None and "'" in quoted:
+                values = None
+            elif values is not None and (quoted is None or _unquoted_reference(quoted)) and any(
+                    re.search(r"\s", value) for value in values):
+                values = None
+            resolved = resolved and values is not None
+        else:
+            values = ("",) if resolved and number else None
+        table[str(number)] = values
+    return args[index + 1], table
+
+
+def _covered_only_as_commands(body):
+    """Whether every covered CLI the script names outside quoted data is the program of a simple command, which the
+    classification of the script already judged."""
+    try:
+        segments = tokenize(body)
+    except ParseError:
+        return False
+    programs = sum(1 for segment in segments
+                   if (words := strip_prefix(segment.words)[0]) and os.path.basename(words[0]) in COVERED)
+    return programs == len(list(COVERED_WORD.finditer(_without_data(body))))
 
 
 def _operand_texts(operand, values, choices):
@@ -2587,6 +2688,58 @@ def _git_rm_discards(global_args, args, cwd, env):
     return _discards_work(targets, env, untracked=False)
 
 
+def _holds_git_entry(cwd, directory):
+    """Whether the folder a glob lists holds a `.git` file or folder; a folder that cannot be resolved counts as holding
+    one."""
+    try:
+        return os.path.lexists((Path(cwd) / os.path.expanduser(directory or ".")).resolve() / ".git")
+    except (OSError, RuntimeError):
+        return True
+
+
+EVAL_WORKSPACE = "harness-eval"
+EVAL_RUNS = "runs"
+
+
+def _evaluation_scratch(covering, expanded, cwd):
+    """Whether a removal target lies strictly inside the plugin's evaluation workspace, `<state root>/harness-eval`, and
+    reaches neither a `runs` folder nor a path outside it. The target arrives resolved, so a symbolic link out of the
+    workspace puts it outside; a glob is checked against the entries it matches."""
+    try:
+        root = (approval_state.state_dir().parent / EVAL_WORKSPACE).resolve()
+        if not covering.relative_to(root).parts:
+            return False
+        matches = _operand_paths(expanded, cwd) if re.search(r"[*?\[]", expanded) else [covering]
+        return all(match.relative_to(root).parts and EVAL_RUNS not in match.relative_to(root).parts
+                   for match in matches)
+    except (ValueError, OSError, RuntimeError):
+        return False
+
+
+SHALLOW_TEMPORARY_ROOTS = {"folders": 4}
+TEMPORARY_FOLDER_DEPTH = 2
+_REMOVAL_TRACE = None
+
+
+def _inside_temporary_root(path, extra=0):
+    """Whether a resolved path, with `extra` more levels that a glob adds below it, lies strictly inside a temporary
+    root and deeper than its top-level folders; the system folder `/var/folders` needs its per-user levels as well."""
+    for root in TEMPORARY_ROOTS:
+        try:
+            depth = len(path.relative_to(Path(root).resolve()).parts)
+        except (ValueError, OSError, RuntimeError):
+            continue
+        if depth + extra >= SHALLOW_TEMPORARY_ROOTS.get(Path(root).name, TEMPORARY_FOLDER_DEPTH):
+            return True
+    return False
+
+
+def _trace_removal(inside):
+    """While a trace is open, record whether one `rm` call removes only static paths strictly inside a temporary root."""
+    if _REMOVAL_TRACE is not None:
+        _REMOVAL_TRACE.append(inside)
+
+
 def _execution_policy(cli, args, cwd, env, variables, command, choices=None, raw_args=None):
     session = Path(env.get("_APPROVAL_SESSION_DIR", env.get("CLAUDE_PROJECT_DIR") or cwd)).resolve()
     target = lambda kind, label, every_time=False: Outcome(kind, [f"{cli}:{_digest(command)}"], [label],
@@ -2626,9 +2779,10 @@ def _execution_policy(cli, args, cwd, env, variables, command, choices=None, raw
         flags = [arg for arg in args if arg.startswith("-")]
         recursive = "--recursive" in flags or any(not arg.startswith("--") and set(arg[1:]) & {"r", "R"} for arg in flags)
         if not recursive:
+            _trace_removal(False)
             return Outcome("pass", [], [])
         values = {**env, **variables}
-        outside = []
+        outside, in_temporary_root = [], True
         for position, operand in enumerate(args):
             if operand.startswith("-"):
                 continue
@@ -2645,7 +2799,8 @@ def _execution_policy(cli, args, cwd, env, variables, command, choices=None, raw
                     continue
                 head, tail = os.path.split(expanded)
                 if re.search(r"[*?\[]", tail) and not re.search(r"[*?\[]", head) and re.search(r"[^*?.\[\]]", tail):
-                    if fnmatch.fnmatch(".git", tail):
+                    if fnmatch.fnmatch(".git", tail) and (
+                            re.search(r"[A-Za-z]", re.sub(r"\[[^\]]*\]", "", tail)) or _holds_git_entry(cwd, head)):
                         return target("always", "Recursive removal of a protected or external path", True)
                     link = Path(cwd) / os.path.expanduser(head or ".")
                     path = link.resolve() / "_"
@@ -2660,13 +2815,16 @@ def _execution_policy(cli, args, cwd, env, variables, command, choices=None, raw
                 if (path == Path("/") or path == Path.home() or path == session or path in session.parents
                         or ".git" in path.parts):
                     return target("always", "Recursive removal of a protected or external path", True)
-                if not (path.is_relative_to(session) or temporary):
+                in_temporary_root = in_temporary_root and _inside_temporary_root(
+                    covering, int(bool(re.search(r"[*?\[]", expanded))))
+                if not (path.is_relative_to(session) or temporary or _evaluation_scratch(covering, expanded, cwd)):
                     outside.append((covering, link))
         if outside:
             labels = None if IN_EXEC in env or FILES_MAY_CHANGE in env else _removal_scope(outside, cwd, env)
             if labels is None:
                 return target("always", "Recursive removal of a protected or external path", True)
             return Outcome("write", [f"{cli}:{_digest(command)}"], labels)
+        _trace_removal(in_temporary_root)
         return Outcome("pass", [], [])
     return None
 
@@ -3830,8 +3988,10 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
             verdicts.append(classify_text(body, cwd, depth + 1, scoped_env, variables, statics, flow.choices()))
             files_stable = files_stable and verdicts[-1].kind == "read"
         scoped_env = current_env if files_stable else {**current_env, FILES_MAY_CHANGE: "1"}
+        shell_script, shell_seed = _shell_c_seed(segment, _value_lookup(flow.choices(), {**current_env, **variables}))
         for body in _indirect_regions(region, [segment]):
-            verdict = classify_text(body, cwd, depth + 1, {**scoped_env, **assignments})
+            verdict = classify_text(body, cwd, depth + 1, {**scoped_env, **assignments}, None, None,
+                                    shell_seed if body == shell_script else None)
             if verdict.kind in ("secret", "sensitive", "forbidden", "always"):
                 verdicts.append(verdict)
             else:
@@ -3846,7 +4006,8 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
                             pure_python = bool(inner) and all(words and PYTHON.fullmatch(os.path.basename(words[0])) for words in inner)
                         except ParseError:
                             pass
-                    verdicts.append(verdict if pure_python or verdict.kind == "read" and shell else _unclassified(match.group(0), body))
+                    classified = verdict.kind == "read" or verdict.kind == "pass" and _covered_only_as_commands(body)
+                    verdicts.append(verdict if pure_python or classified and shell else _unclassified(match.group(0), body))
         name = os.path.basename(program[0]) if program else ""
         if (PYTHON.fullmatch(name) and "-c" not in program and "-m" not in program
                 and _python_inline_code(program[1:]) is None):
@@ -3878,7 +4039,11 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
             _PENDING_SCRIPTS.clear()
         if name == "mkdir" and recording and block_depth == 0 and _runs_unconditionally(index, segments, operators):
             made_directories |= _made_directories(program, cwd, variables)
-        if (name in ENVIRONMENT_CHANGERS or name in VARIABLE_WRITERS or name == "printf" and "-v" in program
+        forgotten = None if ":=" in region or "((" in region else _plain_environment_edit(program)
+        if forgotten is not None:
+            for key in forgotten:
+                statics.pop(key, None)
+        elif (name in ENVIRONMENT_CHANGERS or name in VARIABLE_WRITERS or name == "printf" and "-v" in program
                 or ":=" in region or "((" in region):
             statics.clear()
         elif name in ("for", "select") and len(program) > 1:
@@ -4265,6 +4430,26 @@ def _plain_command(command):
     return not (_destructive_text(command) or REMOTE_PROGRAM.search(command) or DESTRUCTIVE_COMMAND.search(command))
 
 
+RM_WORD = re.compile(r"(?<![\w./-])rm(?![\w-])")
+
+
+def _removes_only_inside_temporary_root(command, cwd):
+    """Whether a command that the guard passes holds recursive removals and every `rm` in it removes only static paths
+    strictly inside a temporary root. Claude Code's own check of dangerous removals asks even when the guard passes, and
+    only a PermissionRequest answer can settle it. The command is classified again with a trace of each `rm` call; a
+    call the trace missed, an unresolved target, or a non-recursive removal means no."""
+    global _REMOVAL_TRACE
+    mentions = len(RM_WORD.findall(command))
+    if not mentions:
+        return False
+    trace = _REMOVAL_TRACE = []
+    try:
+        outcome = _classify_safely(lambda: classify_text(command, cwd), command)
+    finally:
+        _REMOVAL_TRACE = None
+    return outcome.kind == "pass" and len(trace) >= mentions and all(trace)
+
+
 def _claude_permission(session, outcome, tool_input, tool_name, cwd):
     """Claude's PermissionRequest answers `allow` only for what the session's write approval already covers."""
     if outcome.kind == "pass":
@@ -4277,6 +4462,8 @@ def _claude_permission(session, outcome, tool_input, tool_name, cwd):
             return approval_state.permission_allow()
         if tool_name == "Bash" and isinstance(command, str) and _plain_command(command) and (
                 _session_covered(session) or approval_state.is_approved("claude", session, [approval_state.WRITE_KEY])):
+            return approval_state.permission_allow()
+        if tool_name == "Bash" and isinstance(command, str) and _removes_only_inside_temporary_root(command, cwd):
             return approval_state.permission_allow()
         return None
     if approval_state.all_granted("claude", session, outcome):
