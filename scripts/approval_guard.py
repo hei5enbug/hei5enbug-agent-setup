@@ -3263,6 +3263,76 @@ READONLY_SECRET_TEXT = re.compile(
     r"|token|passw|id_rsa|\.npmrc|\.pypirc",
     re.I,
 )
+TOKEN_COUNT_WORD = re.compile(r"(?<![A-Za-z0-9/\\.])tokens(?![A-Za-z0-9]|\.\w)")
+
+
+def _secret_text(value):
+    """Whether a string literal names something secret; the plural `tokens` as the last word of an identifier or in
+    prose counts usage and is not a secret name."""
+    return bool(READONLY_SECRET_TEXT.search(TOKEN_COUNT_WORD.sub("", value)))
+
+
+def _environ_literal_read(node, parents, bound):
+    """Whether `node`, an `os.environ` attribute, is only read as `os.environ.get(<literal>, ...)` or
+    `os.environ[<literal>]` with a literal name that does not look secret."""
+    if not (isinstance(node.value, ast.Name) and bound.get(node.value.id) == "os"):
+        return False
+    parent = parents.get(node)
+    if isinstance(parent, ast.Subscript) and parent.value is node and isinstance(parent.ctx, ast.Load):
+        key = parent.slice
+    elif (isinstance(parent, ast.Attribute) and parent.attr == "get" and isinstance(parents.get(parent), ast.Call)
+          and parents[parent].func is parent):
+        call = parents[parent]
+        if any(isinstance(arg, ast.Starred) for arg in call.args) or any(item.arg is None for item in call.keywords):
+            return False
+        key = call.args[0] if call.args else None
+    else:
+        return False
+    return isinstance(key, ast.Constant) and isinstance(key.value, str) and not SECRET_NAME.search(key.value)
+
+
+def _string_replace(node, parents, bound):
+    """Whether `node`, a `.replace` attribute, is the string method: called with two or three positional arguments on
+    something that is not an imported module or `pathlib` class (`os.replace`, `Path.replace(path, target)`)."""
+    call = parents.get(node)
+    if not (isinstance(call, ast.Call) and call.func is node and 2 <= len(call.args) <= 3 and not call.keywords
+            and not any(isinstance(arg, ast.Starred) for arg in call.args)):
+        return False
+    root = node.value
+    while isinstance(root, (ast.Attribute, ast.Subscript)):
+        root = root.value
+    if isinstance(root, ast.Call):
+        return not (isinstance(root.func, ast.Name) and root.func.id == "type")
+    if isinstance(root, ast.Name):
+        return not ((root is node.value and root.id in bound) or bound.get(root.id, "").split(".")[0] == "pathlib")
+    return True
+
+
+def _path_module_aliased(parents, bound):
+    """Whether `os` or a `pathlib` name is used other than as an attribute base or a called constructor, so that
+    `.replace` may reach a path mover through an alias."""
+    for node, parent in parents.items():
+        if not (isinstance(node, ast.Name) and node.id in bound):
+            continue
+        origin = bound[node.id]
+        if origin == "os" and not (isinstance(parent, ast.Attribute) and parent.value is node):
+            return True
+        if origin.split(".")[0] == "pathlib":
+            current = node
+            while isinstance(parents.get(current), ast.Attribute) and parents[current].value is current:
+                current = parents[current]
+            outer = parents.get(current)
+            if not (isinstance(outer, ast.Call) and outer.func is current):
+                return True
+    return False
+
+
+def _blocked_attribute(node, parents, bound, aliased):
+    if node.attr == "replace":
+        return aliased or not _string_replace(node, parents, bound)
+    if node.attr == "environ":
+        return not _environ_literal_read(node, parents, bound)
+    return node.attr in READONLY_BLOCKED
 
 
 def _read_mode_open(node, bound):
@@ -3314,11 +3384,12 @@ def _read_only_python(tree):
                 bound[alias.asname or alias.name] = full
                 if alias.name == "open":
                     openers.add(alias.asname or alias.name)
+    aliased = _path_module_aliased(parents, bound)
     for node in ast.walk(tree):
-        if isinstance(node, ast.Constant) and isinstance(node.value, str) and READONLY_SECRET_TEXT.search(node.value):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and _secret_text(node.value):
             return False
         if isinstance(node, ast.Attribute):
-            if (node.attr in READONLY_BLOCKED or READONLY_PROCESS.fullmatch(node.attr)
+            if (_blocked_attribute(node, parents, bound, aliased) or READONLY_PROCESS.fullmatch(node.attr)
                     or node.attr.startswith("__") and node.attr not in READONLY_DUNDERS):
                 return False
             if node.attr == "open" and not (isinstance(parents.get(node), ast.Call) and parents[node].func is node):
@@ -3590,6 +3661,8 @@ def _may_write_own_path(body, script, cwd):
             continue
         target = next((keyword.value for keyword in node.keywords if keyword.arg == "file"),
                       node.args[0] if node.args else None)
+        if target is not None and _argv_index(target, tree) is not None:
+            continue
         text = _fold_text(target, names) if target is not None else None
         if not text or "\0" in text:
             return True
@@ -3601,9 +3674,10 @@ def _may_write_own_path(body, script, cwd):
     return False
 
 
-def _confined_python_writes(content, cwd, env):
+def _confined_python_writes(content, cwd, env, argv=None, script=None):
     """Whether Python text is provably read-only once each of its literal `open` writes is counted as a read, and every
-    one of those writes lands in a temporary root or the session folder."""
+    one of those writes lands in a temporary root or the session folder. `argv` holds the resolved paths of the run's
+    arguments after the script, or None for an argument that does not resolve; a `sys.argv[N]` target uses them."""
     if "chdir" in content:
         return False
     try:
@@ -3621,6 +3695,14 @@ def _confined_python_writes(content, cwd, env):
             continue
         target = next((keyword.value for keyword in node.keywords if keyword.arg == "file"),
                       node.args[0] if node.args else None)
+        index = _argv_index(target, tree) if target is not None else None
+        if index is not None:
+            path = argv[index - 1] if argv and 0 < index <= len(argv) else None
+            if (path is None or path == script or path in _PENDING_SCRIPTS
+                    or not _temporary(path.parent, env)):
+                return False
+            mode.value = "r"
+            continue
         text = _fold_text(target, names) if target is not None else None
         if not text or "\0" in text:
             return False
@@ -3629,6 +3711,29 @@ def _confined_python_writes(content, cwd, env):
             return False
         mode.value = "r"
     return _read_only_python(tree)
+
+
+def _argv_index(target, tree):
+    """The constant index N of a `sys.argv[N]` target, when `sys` is the imported module and the script never changes
+    `sys.argv`; else None."""
+    if not (isinstance(target, ast.Subscript) and isinstance(target.value, ast.Attribute)
+            and target.value.attr == "argv" and isinstance(target.value.value, ast.Name)
+            and target.value.value.id == "sys" and isinstance(target.slice, ast.Constant)
+            and type(target.slice.value) is int):
+        return None
+    if not any(isinstance(node, ast.Import) and any(alias.name == "sys" and alias.asname is None for alias in node.names)
+               for node in ast.walk(tree)):
+        return None
+    parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id == "sys" and not isinstance(node.ctx, ast.Load):
+            return None
+        if isinstance(node, ast.Attribute) and node.attr == "argv":
+            parent = parents.get(node)
+            if not isinstance(node.ctx, ast.Load) or isinstance(parent, ast.Attribute) or (
+                    isinstance(parent, ast.Subscript) and not isinstance(parent.ctx, ast.Load)):
+                return None
+    return target.slice.value
 
 
 def _classify_script(words, cwd, depth, env, variables=None, choices=None):
@@ -3682,7 +3787,9 @@ def _classify_script(words, cwd, depth, env, variables=None, choices=None):
             else:
                 return Outcome("pass", [], [])
         if mode == "python":
-            if pending is not None and not _confined_python_writes(pending, cwd, env):
+            script_args = args if path == words[0] else args[args.index(path) + 1:]
+            argv = [_script_path(arg, cwd, variables or {}) for arg in script_args]
+            if pending is not None and not _confined_python_writes(pending, cwd, env, argv, resolved):
                 return _script_unknown(resolved, words, env, "unreadable")
             readonly = not any(_protected_argument(arg, cwd, env) for arg in args)
             verdict = _python_policy(content, cwd, depth, env, readonly)

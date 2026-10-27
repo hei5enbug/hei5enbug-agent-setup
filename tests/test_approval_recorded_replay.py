@@ -179,3 +179,292 @@ def test_코디네이터가_남긴_PWD_삭제_사례는_계속_매번_묻는다(
     output = guard.handle(bash(command, home / "project"), "claude")
     # then
     assert decision(output) == "ask"
+
+
+# --- J1. heredoc analysis scripts whose bodies use str.replace, os.environ reads, token-named JSON keys, and writes to
+# a temp path passed as an argument ------------------------------------------------------------------------------------
+
+LINKCHECK_BODY = r'''import re, sys, os, unicodedata
+from pathlib import Path
+root = Path(sys.argv[1])
+files = [root/'README.md', root/'AGENTS.md'] + sorted((root/'docs').rglob('*.md'))
+def slug(h):
+    h = re.sub(r'`([^`]*)`', r'\1', h)
+    h = h.strip().lower()
+    h = ''.join(c for c in h if c.isalnum() or c in ' -_' or unicodedata.category(c).startswith('L'))
+    return h.replace(' ', '-')
+def anchors(p):
+    out, seen, fence = set(), {}, False
+    for line in p.read_text().splitlines():
+        if line.lstrip().startswith('```'): fence = not fence; continue
+        if fence: continue
+        m = re.match(r'^(#{1,6})\s+(.*?)\s*#*\s*$', line)
+        if m:
+            s = slug(m.group(2)); n = seen.get(s, 0); seen[s] = n+1
+            out.add(s if n == 0 else f'{s}-{n}')
+    return out
+bad = 0
+for f in files:
+    text = f.read_text(); fence = False
+    refs = dict(re.findall(r'^\[([^\]]+)\]:\s*(\S+)', text, re.M))
+    for i, line in enumerate(text.splitlines(), 1):
+        for m in re.finditer(r'\[[^\]]+\]\[([^\]]+)\]', line):
+            if m.group(1) not in refs: print(f'{f}:{i}: undefined ref [{m.group(1)}]'); bad += 1
+print('problems:', bad)
+'''
+
+BUILD_BLOG_BODY = r'''import re
+S="{S}"
+R="/home/test/repo/docs/blog/page.html"
+old=open(f"{S}/backup/docs/blog/new/page.html").read()
+svgs=re.findall(r"<svg.*?</svg>",old,flags=re.S)
+assert len(svgs)==5
+def rep(s,pairs):
+    for a,b in pairs:
+        assert a in s,a
+        s=s.replace(a,b)
+    return s
+f1=rep(svgs[0],[("first wording","second wording")])
+f3=open(f"{S}/fig3_stage1.svg").read().rstrip()
+t=open(f"{S}/map_blog_template.html").read()
+for i,f in enumerate([f1,f3],1):
+    t=t.replace("{{FIG%d}}"%i,f)
+open(f"{S}/map_blog_pre.html","w").write(t)
+'''
+
+BUILD_STAGES_BODY = r'''import re,sys
+S='{S}/ais-blog'
+orig=open(S+'/original.html',encoding='utf-8').read()
+svgs=re.findall(r'<svg .*?</svg>',orig,flags=re.S)
+assert len(svgs)==6,len(svgs)
+chain,struct=svgs[2],svgs[3]
+
+def rep(text,pairs):
+    for a,b in pairs:
+        assert a in text,a
+        text=text.replace(a,b)
+    return text
+
+chain=rep(chain,[('aria-label="before"','aria-label="after"')])
+struct=rep(struct,[('<rect x="556" y="8" width="16" height="12" rx="3" fill="#161616" stroke="#52a9ff"/>','<rect x="496"/>')])
+t=open(S+'/template.html',encoding='utf-8').read()
+for k,v in {'SVG_CHAIN':chain,'SVG_STRUCT':struct}.items():
+    assert '{{%s}}'%k in t
+    t=t.replace('{{%s}}'%k,v)
+open(S+'/assembled.html','w',encoding='utf-8').write(t)
+'''
+
+MEASURE_BODY = r'''"""Count rewrites in the last 14 days of transcripts.
+
+usage: python3 measure_language_guard.py [days]
+"""
+import collections
+import glob
+import json
+import os
+import re
+import sys
+import time
+
+DAYS = int(sys.argv[1]) if len(sys.argv) > 1 else 14
+NOW = time.time()
+ROOTS = sorted({
+    os.path.realpath(os.path.join(os.environ.get("CLAUDE_CONFIG_DIR", os.path.expanduser("~/.claude")), "projects")),
+    os.path.realpath(os.path.expanduser("~/.claude/projects")),
+})
+SCRIPT = re.compile(r"hook_python\.sh\"?\s+language_guard\.py")
+
+
+def entries(path):
+    with open(path, errors="replace") as stream:
+        for line in stream:
+            try:
+                yield json.loads(line)
+            except ValueError:
+                continue
+
+
+def main():
+    stats = collections.Counter()
+    extra_tokens = []
+    for root in ROOTS:
+        for path in glob.glob(os.path.join(root, "**", "*.jsonl"), recursive=True):
+            pending = 0
+            for d in entries(path):
+                msg = d.get("message") or {}
+                if d.get("type") == "assistant":
+                    pending += int((msg.get("usage") or {}).get("output_tokens") or 0)
+            extra_tokens.append(pending)
+    print(json.dumps({
+        "window_days": DAYS,
+        "counts": dict(stats),
+        "rewrite_output_tokens_real": {"n": len(extra_tokens), "sum": sum(extra_tokens), "p50": 0},
+    }, indent=1))
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+ASKS_BODY = r'''import json, sys, collections, re
+out = []
+for line in open(sys.argv[1]):
+    f = line.strip()
+    uses, hooks, results = {}, {}, []
+    entry = None
+    for raw in open(f, errors="replace"):
+        try: r = json.loads(raw)
+        except ValueError: continue
+        entry = entry or r.get("entrypoint")
+        a = r.get("attachment")
+        if isinstance(a, dict) and a.get("type") == "hook_success" and a.get("hookEvent") == "PreToolUse":
+            hooks[a.get("toolUseID")] = (a.get("stdout"), a.get("command"))
+    out.append({"file": f, "entry": entry, "hook": hooks})
+json.dump(out, open(sys.argv[2], "w"), ensure_ascii=False, indent=1, default=str)
+c = collections.Counter((o["entry"], len(o["hook"])) for o in out)
+for k, n in c.most_common(): print(n, k)
+'''
+
+SOURCES_BODY = r'''"""Attribute every eval permission prompt to a decision.
+
+Usage: python3 approval_sources.py <results-dir> <arm> [<arm> ...]
+"""
+import collections
+import json
+import sys
+from pathlib import Path
+
+
+def decisions(stream):
+    open_calls, found = [], collections.defaultdict(list)
+    for line in stream.read_text(encoding="utf-8").splitlines():
+        entry = json.loads(line)
+        if entry.get("type") == "assistant":
+            for block in entry["message"].get("content", []):
+                if block.get("type") == "tool_use":
+                    open_calls.append((block["id"], json.dumps(block.get("input"), ensure_ascii=False)))
+        elif entry.get("subtype") == "hook_response":
+            reason = entry.get("stdout") or ""
+            found[open_calls[-1][0]].append(reason.split(": ", 1)[-1])
+    return found
+
+
+def main():
+    root, arms = Path(sys.argv[1]), sys.argv[2:]
+    for arm in arms:
+        runs = sorted(path for path in root.glob(f"*/{arm}/rep*") if (path / "stream.jsonl").is_file())
+        for run in runs:
+            found = decisions(run / "stream.jsonl")
+            print(" | ".join((run.relative_to(root).as_posix(), str(len(found)), "x".replace("x", "\n"))))
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+CONVERT_BODY = ('"""Convert."""\nimport re\nimport sys\n\ntext = open(sys.argv[2], encoding="utf-8").read()\n'
+                'converted = re.sub("a", "b", text).replace("c", "d")\n'
+                'with open(sys.argv[3], "w", encoding="utf-8") as target:\n    target.write(converted)\n')
+
+
+def j1_cases(base):
+    s = base / "scratchpad"
+    home = base / "home"
+    state = home / ".local" / "state" / "hei5enbug-agent-setup"
+    return [
+        ("J1 linkcheck with str.replace", f"cd {base}/project && " + heredoc(f"{s}/linkcheck.py", LINKCHECK_BODY)
+         + f"python3 {s}/linkcheck.py .", {}),
+        ("J1 blog builder with str.replace and a template", f"S={s}; cd $S; sed -i 's/a/b/' map_blog_template.html\n"
+         + heredoc("fig3_stage1.svg", "<svg viewBox=\"0 0 880 380\">\n  <g></g>\n</svg>\n")
+         + heredoc("build_map_blog.py", BUILD_BLOG_BODY.replace("{S}", str(s)))
+         + "python3 build_map_blog.py && python3 blog-preview/svg_to_dg.py light map_blog_pre.html \"$R\" 2>&1 | "
+         "tail -5; R=\"/home/test/repo/docs/blog/page.html\"; ls -la \"$R\"", {"convert": "blog-preview"}),
+        ("J1 stage builder then converter in the scratchpad", f"S={s}/ais-blog; cat > $S/build.py <<'EOF'\n"
+         + BUILD_STAGES_BODY.replace("{S}", str(s)) + f"EOF\npython3 $S/build.py && python3 {s}/blog-preview/"
+         f"svg_to_dg.py dark $S/assembled.html $S/converted.html; echo exit $?; grep -c 'dg-' $S/converted.html",
+         {"convert": "blog-preview"}),
+        ("J1 token-counting script in plugin state", "mkdir -p ~/.local/state/hei5enbug-agent-setup/harness-eval/final/v12"
+         " && " + heredoc("~/.local/state/hei5enbug-agent-setup/harness-eval/final/v12/measure_language_guard.py",
+                          MEASURE_BODY) + "cd ~/.local/state/hei5enbug-agent-setup/harness-eval/final/v12 && "
+         "python3 measure_language_guard.py 14", {}),
+        ("J1 script that writes its result to a scratchpad argument", f"S={s}; cd {home}/.claude/projects; "
+         + heredoc("$S/asks.py", ASKS_BODY) + "python3 $S/asks.py $S/files.txt $S/asks.json", {}),
+        ("J1 attribution script in plugin state", "D=~/.local/state/hei5enbug-agent-setup/harness-eval/followups; "
+         + heredoc("$D/approval_sources.py", SOURCES_BODY) + "python3 $D/approval_sources.py ~/.local/state/"
+         "hei5enbug-agent-setup/harness-eval/runs/final-regression/results control-0abc123 main-0def456", {}),
+    ]
+
+
+def run_j_case(base, command, options, monkeypatch):
+    home = base / "home"
+    (home / ".claude" / "projects").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("XDG_STATE_HOME", str(home / ".local" / "state"))
+    scratch = base / "scratchpad"
+    if options.get("convert"):
+        (scratch / options["convert"]).mkdir(exist_ok=True)
+        (scratch / options["convert"] / "svg_to_dg.py").write_text(CONVERT_BODY)
+    return guard.handle(bash(command, base / "project"), "claude")
+
+
+@pytest.mark.parametrize("index", range(6))
+def test_기록된_heredoc_분석_스크립트는_str_replace_환경변수_토큰_키_인자_쓰기가_있어도_묻지_않는다(home, monkeypatch, index):
+    # given
+    title, command, options = j1_cases(home)[index]
+    # when
+    output = run_j_case(home, command, options, monkeypatch)
+    # then
+    assert decision(output) not in ("ask", "deny"), (title, output)
+
+
+J1_MUST_ASK = [
+    ("os.replace", "import os, sys\nos.replace(sys.argv[1], sys.argv[1] + '.bak')\n", ""),
+    ("aliased os.replace", "import os as o\no.replace('a.txt', 'b.txt')\n", ""),
+    ("os module in a variable", "import os\nm = os\nm.replace('a.txt', 'b.txt')\n", ""),
+    ("Path.replace", "import sys\nfrom pathlib import Path\nPath(sys.argv[1]).replace(sys.argv[2])\n", ""),
+    ("unbound Path.replace", "from pathlib import Path\nPath.replace(Path('a.txt'), 'b.txt')\n", ""),
+    ("type(path).replace", "from pathlib import Path\np = Path('a.txt')\ntype(p).replace(p, 'b.txt')\n", ""),
+    ("replace with a keyword", "import re\nprint('abc'.replace('a', 'b', count=1), re)\n\nfrom pathlib import Path\n"
+     "Path('a.txt').replace(target='b.txt')\n", ""),
+    ("shutil.rmtree", "import shutil, sys\nshutil.rmtree(sys.argv[1])\n", ""),
+    ("secret-named environment variable", "import os\nprint(os.environ.get('DEMO_API_TOKEN'))\n", ""),
+    ("secret-named environment subscript", "import os\nprint(os.environ['DEMO_PASSWORD'])\n", ""),
+    ("non-literal environment name", "import os, sys\nprint(os.environ.get(sys.argv[1]))\n", "HOME"),
+    ("whole environment", "import os\nprint(dict(os.environ))\n", ""),
+    ("environment write", "import os\nos.environ['DEMO_MODE'] = 'x'\n", ""),
+    ("token as a singular word", "print('access_token')\n", ""),
+    ("token key as a variable name", "print('API_TOKEN')\n", ""),
+    ("tokens file", "print('~/.config/demo/tokens.json')\n", ""),
+    ("env file", "print('.env')\n", ""),
+    ("credential path", "print('.aws/credentials')\n", ""),
+    ("argument write outside temp", "import sys\nopen(sys.argv[1], 'w').write('x')\n", "/home/test/out.txt"),
+    ("argument write beyond the arguments", "import sys\nopen(sys.argv[3], 'w').write('x')\n", "{S}/a.txt {S}/b.txt"),
+    ("argument write to the script itself", "import sys\nopen(sys.argv[1], 'w').write('x')\n", "{S}/t.py"),
+    ("argument write to the script name", "import sys\nopen(sys.argv[0], 'w').write('x')\n", "{S}/a.txt"),
+    ("argument write after changing argv", "import sys\nsys.argv[1] = '/home/test/out.txt'\nopen(sys.argv[1], 'w')."
+     "write('x')\n", "{S}/a.txt"),
+    ("argument write with an unresolved argument", "import sys\nopen(sys.argv[1], 'w').write('x')\n", "$UNSET/a.txt"),
+]
+
+
+@pytest.mark.parametrize("index", range(len(J1_MUST_ASK)))
+def test_heredoc_스크립트가_경로_이동_비밀_이름_임시_폴더_밖_쓰기를_하면_계속_묻는다(home, monkeypatch, index):
+    # given
+    title, body, args = J1_MUST_ASK[index]
+    s = home / "scratchpad"
+    command = f"cat > {s}/t.py <<'EOF'\n{body}EOF\npython3 {s}/t.py {args.replace('{S}', str(s))}"
+    # when
+    output = run_j_case(home, command, {}, monkeypatch)
+    # then
+    assert decision(output) == "ask", (title, output)
+
+
+def test_인자로_받은_임시_폴더_안_경로에_쓰는_heredoc_스크립트는_묻지_않는다(home, monkeypatch):
+    # given
+    s = home / "scratchpad"
+    body = "import sys\nopen(sys.argv[2], 'a').write(open(sys.argv[1]).read())\n"
+    command = f"cat > {s}/t.py <<'EOF'\n{body}EOF\npython3 {s}/t.py {s}/in.txt {s}/out.txt"
+    # when
+    output = run_j_case(home, command, {}, monkeypatch)
+    # then
+    assert decision(output) not in ("ask", "deny")
