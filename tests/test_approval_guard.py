@@ -1711,3 +1711,156 @@ def test_datagrip_do_나_call로_시작하는_문장은_운영에서_항상_묻�
     outcome = datagrip_guard.classify_query(tool_input)
     # then
     assert outcome.kind == kind
+
+
+# --- guard source in a git work tree versus running plugin code -------------------------------------------------------------
+
+GUARD_SOURCE = "scripts/approval_guard.py"
+RUNNING_ROOT = GUARD_PATH.resolve().parents[1]
+
+
+def source_edit(path=GUARD_SOURCE):
+    return ("python3 - <<'EOF'\nfrom pathlib import Path\n"
+            f"p=Path(\"{path}\"); s=p.read_text(); p.write_text(s.replace(\"a\",\"b\"))\nEOF\n")
+
+
+@pytest.fixture
+def source_tree(state, monkeypatch):
+    monkeypatch.setenv("HOME", str(state / "home"))
+    monkeypatch.setenv("CODEX_HOME", str(state / "codex-home"))
+    tree = state / "work" / "demo"
+    (tree / ".git").mkdir(parents=True)
+    (tree / "scripts").mkdir()
+    (tree / GUARD_SOURCE).write_text("a\n")
+    return tree
+
+
+def plugin_copy(base):
+    copy = base / "plugins" / "cache" / "example" / "demo-plugin" / "1.0.0"
+    (copy / "scripts").mkdir(parents=True)
+    (copy / GUARD_SOURCE).write_text("a\n")
+    return copy
+
+
+@pytest.mark.parametrize("command", [
+    source_edit(),
+    source_edit("scripts/approval_state.py"),
+    "python3 - <<'EOF'\ns=open('scripts/approval_guard.py').read()\nopen('scripts/approval_guard.py','w').write(s)\nEOF\n",
+    "python3 - <<'EOF'\nfrom pathlib import Path\nfor n in ('approval_guard.py','approval_state.py'):\n"
+    "    p=Path('scripts')/n; p.write_text(p.read_text())\nEOF\n",
+    "sed -i 's/a/b/' scripts/approval_guard.py",
+])
+def test_git_작업_트리의_가드_소스를_고치는_명령은_자기_보호로_거부하지_않는다(source_tree, command):
+    # given
+    event = bash_event(command, cwd=source_tree)
+    # when
+    output = guard.handle(event, "claude")
+    # then
+    assert output is None or decision_of(output) != "deny", output
+
+
+def test_git_작업_트리의_가드_소스를_절대_경로로_고치는_heredoc도_거부하지_않는다(source_tree):
+    # given
+    event = bash_event(source_edit(source_tree / GUARD_SOURCE), cwd=source_tree.parent)
+    # when
+    output = guard.handle(event, "claude")
+    # then
+    assert output is None or decision_of(output) != "deny", output
+
+
+def test_git_작업_트리가_아닌_곳의_가드_소스를_고치는_heredoc은_계속_거부한다(state):
+    # given
+    folder = state / "plain"
+    (folder / "scripts").mkdir(parents=True)
+    event = bash_event(source_edit(), cwd=folder)
+    # when
+    output = guard.handle(event, "claude")
+    # then
+    assert decision_of(output) == "deny"
+
+
+@pytest.mark.parametrize("place", ["running_root", "running_scripts", "claude_cache", "codex_cache", "claude_default",
+                                   "codex_default"])
+def test_실행_중인_플러그인_폴더와_설치된_플러그인_캐시의_가드_소스를_고치는_heredoc은_거부한다(source_tree, state, place):
+    # given
+    folders = {
+        "running_root": RUNNING_ROOT,
+        "running_scripts": RUNNING_ROOT / "scripts",
+        "claude_cache": plugin_copy(state / "claude-config"),
+        "codex_cache": plugin_copy(state / "codex-home"),
+        "claude_default": plugin_copy(state / "home" / ".claude"),
+        "codex_default": plugin_copy(state / "home" / ".codex"),
+    }
+    folder = folders[place]
+    path = "approval_guard.py" if place == "running_scripts" else GUARD_SOURCE
+    # when
+    relative = guard.handle(bash_event(source_edit(path), cwd=folder), "claude")
+    absolute = guard.handle(bash_event(source_edit(folder / path), cwd=source_tree), "claude")
+    # then
+    assert decision_of(relative) == "deny" and decision_of(absolute) == "deny"
+    assert "Approvals come only from the user" in reason_of(relative)
+
+
+@pytest.mark.parametrize("target", ["claude-config", "codex-home"])
+def test_플러그인_캐시_안의_다른_파일에_쓰는_heredoc도_거부한다(source_tree, state, target):
+    # given
+    copy = plugin_copy(state / target)
+    body = f"from pathlib import Path\nPath(\"{copy}/skills/demo/SKILL.md\").write_text(\"x\")\n"
+    event = bash_event(f"python3 - <<'EOF'\n{body}EOF\n", cwd=source_tree)
+    # when
+    output = guard.handle(event, "claude")
+    # then
+    assert decision_of(output) == "deny"
+
+
+def test_플러그인_캐시의_파일을_읽기만_하는_heredoc은_거부하지_않는다(source_tree, state):
+    # given
+    copy = plugin_copy(state / "claude-config")
+    body = f"from pathlib import Path\nprint(len(Path(\"{copy}/README.md\").read_text()))\n"
+    event = bash_event(f"python3 - <<'EOF'\n{body}EOF\n", cwd=source_tree)
+    # when
+    output = guard.handle(event, "claude")
+    # then
+    assert output is None or decision_of(output) != "deny", output
+
+
+@pytest.mark.parametrize("folder", ["approvals", "heartbeats", "pycache"])
+def test_가드_상태_폴더와_pycache에_쓰는_heredoc은_작업_트리에서도_거부한다(source_tree, state, folder):
+    # given
+    target = state / "xdg" / "hei5enbug-agent-setup" / folder / "x.json"
+    body = f"from pathlib import Path\nPath(\"{target}\").write_text(\"x\")\n"
+    event = bash_event(f"python3 - <<'EOF'\n{body}EOF\n", cwd=source_tree)
+    # when
+    output = guard.handle(event, "claude")
+    # then
+    assert decision_of(output) == "deny"
+
+
+@pytest.mark.parametrize("body", [
+    "import approval_guard\n",
+    "from approval_state import approve_text\n",
+    "__import__('approval_state')\n",
+    "import subprocess\nsubprocess.run(['python3', 'scripts/approval_guard.py'])\n",
+    "import runpy\nrunpy.run_path('scripts/approval_state.py')\n",
+])
+def test_작업_트리에서도_가드_모듈을_가져오거나_실행하는_heredoc은_거부한다(source_tree, body):
+    # given
+    event = bash_event(f"python3 - <<'EOF'\n{body}EOF\n", cwd=source_tree)
+    # when
+    output = guard.handle(event, "claude")
+    # then
+    assert decision_of(output) == "deny"
+
+
+@pytest.mark.parametrize("command", [
+    "python3 scripts/approval_guard.py",
+    "python3 -m approval_guard",
+    "python3 -c 'import approval_guard'",
+])
+def test_작업_트리에서도_가드_스크립트를_실행하거나_가져오는_명령은_거부한다(source_tree, command):
+    # given
+    event = bash_event(command, cwd=source_tree)
+    # when
+    output = guard.handle(event, "claude")
+    # then
+    assert decision_of(output) == "deny"

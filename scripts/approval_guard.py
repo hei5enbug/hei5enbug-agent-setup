@@ -6042,7 +6042,7 @@ def handle(event, host):
         if wrapped is not None:
             command = wrapped
         outcome = _request_outcome(command, _cwd(event))
-        reason = _self_approval_reason(command) if name == "PreToolUse" and outcome is None else None
+        reason = _self_approval_reason(command, _cwd(event)) if name == "PreToolUse" and outcome is None else None
         if reason:
             return approval_state.pre_output("deny", reason)
         outcome = outcome or _classify_safely(lambda: classify_text(command, _cwd(event)), command)
@@ -6514,8 +6514,8 @@ def _state_text_only_python(body):
 PYTHON_DOCUMENT = re.compile(r"(?m)^([^\n]*?)<<[ \t]*(['\"])([A-Za-z_]\w*)\2[^\n]*\n")
 
 
-def _text_only_python_documents(text):
-    """Spans of quoted-delimiter heredoc bodies that a plain `python3 -` reads and that carry state spellings only as text."""
+def _python_stdin_documents(text):
+    """The bodies of quoted-delimiter heredocs that a plain `python3 -` reads, as (start, end) spans in `text`."""
     spans = []
     for match in PYTHON_DOCUMENT.finditer(text):
         if any(start <= match.start() < stop for start, stop in spans):
@@ -6533,10 +6533,61 @@ def _text_only_python_documents(text):
         end = re.search(r"(?m)^" + re.escape(match[3]) + r"[ \t]*\r?$", text[match.end():])
         if end is None:
             continue
-        body_end = match.end() + end.start()
-        if _state_text_only_python(text[match.end():body_end]):
-            spans.append((match.end(), body_end))
+        spans.append((match.end(), match.end() + end.start()))
     return spans
+
+
+def _text_only_python_documents(text):
+    """Spans of quoted-delimiter heredoc bodies that a plain `python3 -` reads and that carry state spellings only as text."""
+    return [(start, stop) for start, stop in _python_stdin_documents(text) if _state_text_only_python(text[start:stop])]
+
+
+def _plugin_install_dirs():
+    """The folders that hold running plugin code: the Claude and Codex plugin caches, and the folder and plugin root that
+    this running guard was loaded from."""
+    home = Path.home()
+    bases = [Path(os.environ["CLAUDE_CONFIG_DIR"]) if os.environ.get("CLAUDE_CONFIG_DIR") else home / ".claude", home / ".claude",
+             Path(os.environ["CODEX_HOME"]) if os.environ.get("CODEX_HOME") else home / ".codex", home / ".codex"]
+    script = Path(__file__).resolve()
+    return [root.resolve() for root in (*(base / "plugins" / "cache" for base in bases), script.parent, script.parent.parent)]
+
+
+def _in_git_work_tree(path):
+    return any((parent / ".git").exists() for parent in (path, *path.parents))
+
+
+def _guard_source_reason(command, cwd):
+    """Why a Python heredoc in the command touches running guard code, or None. Code that runs or imports a guard module is
+    denied. A string that names a guard script, or any path in a plugin cache or in the folder this guard runs from while
+    the code is not read-only, is denied unless it names a guard script in a git work tree outside those folders."""
+    protected = _plugin_install_dirs()
+    for start, stop in _python_stdin_documents(command):
+        body = command[start:stop]
+        if _code_runs_guard(body):
+            return SELF_APPROVAL_REASON
+        try:
+            tree = ast.parse(body)
+        except SyntaxError:
+            if any(name in body for name in GUARD_SCRIPTS):
+                return SELF_APPROVAL_REASON
+            continue
+        readonly = None
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Constant) and isinstance(node.value, str) and 0 < len(node.value) < 4096
+                    and "\0" not in node.value and "\n" not in node.value):
+                continue
+            try:
+                path = (Path(cwd) / os.path.expanduser(node.value)).resolve()
+            except (OSError, RuntimeError, ValueError):
+                continue
+            inside = any(path == root or root in path.parents for root in protected)
+            if os.path.basename(node.value) in GUARD_SCRIPTS and (inside or not _in_git_work_tree(path)):
+                return SELF_APPROVAL_REASON
+            if inside:
+                readonly = _read_only_python(tree) if readonly is None else readonly
+                if not readonly:
+                    return SELF_APPROVAL_REASON
+    return None
 
 
 def _heredoc_outputs(text):
@@ -6638,9 +6689,17 @@ def _mention_text(command):
     return _blank(text, spans)
 
 
-def _self_approval_reason(command):
-    """Return why a command is self-approval, or None. A command that names the state folders may use only a path prefix variable."""
-    if _runs_guard(command):
+def _self_approval_reason(command, cwd=None):
+    """Return why a command is self-approval, or None. A command that names the state folders may use only a path prefix variable.
+    With a working folder, the bodies of Python heredocs are judged by `_guard_source_reason` instead of as command words."""
+    if cwd is None:
+        guarded = _runs_guard(command)
+    else:
+        reason = _guard_source_reason(command, cwd)
+        if reason:
+            return reason
+        guarded = _runs_guard(_blank(command, _python_stdin_documents(command)))
+    if guarded:
         return SELF_APPROVAL_REASON
     command = _mention_text(command)
     if _mentions_state(command):
