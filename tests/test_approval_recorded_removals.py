@@ -425,7 +425,7 @@ def test_앞선_명령이_파일을_바꿀_수_있으면_stash_drop은_매번_�
 
 # --- C2. Claude Code의 위험한 삭제 확인 --------------------------------------------------------------------------------------
 
-def test_기록된_삭제_형태는_사전_확인은_통과하지만_허용_목록에_없는_명령이_섞여_있어_권한_요청은_허용하지_않는다(home):
+def test_기록된_삭제_형태는_사전_확인을_통과하고_권한_요청은_허용한다(home):
     # given
     commands = (UNQUOTED_LOOP, COPY_WORKTREE_PLAIN, BASH_C_POSITIONAL, BASH_C_LOOP)
     # when
@@ -433,7 +433,7 @@ def test_기록된_삭제_형태는_사전_확인은_통과하지만_허용_목�
     answers = [permission(command) for command in commands]
     # then
     assert [outcome.kind for outcome in outcomes] == ["pass"] * len(commands)
-    assert answers == [None] * len(commands)
+    assert answers == [ALLOW] * len(commands)
 
 
 @pytest.mark.parametrize("command", [
@@ -502,13 +502,8 @@ def test_임시_삭제_뒤에_다른_파괴_명령이_붙으면_권한_요청을
     "rm -rf /tmp/work/cache && go test ./...",
     "rm -rf /tmp/work/cache; mkdir -p /home/test/x",
     "rm -rf /tmp/work/cache; cp a.txt /home/test/b.txt",
-    "rm -rf /tmp/work/cache; mv /tmp/work/a.txt /tmp/work/b.txt",
-    "rm -rf /tmp/work/cache; cp /tmp/work/a.txt /tmp/work/b.txt",
-    "rm -rf /tmp/work/cache; touch /tmp/work/b.txt",
-    "rm -rf /tmp/work/cache; echo hi > /tmp/work/b.txt",
     "rm -rf /tmp/work/cache; echo hi | tee /tmp/work/b.txt",
     "rm -rf /tmp/work/cache; echo hi > /home/test/note.txt",
-    "rm -rf /tmp/work/cache; git status",
     "rm -rf /tmp/work/cache; ls() { dd if=/dev/zero of=/home/test/x count=1; }; ls",
     "rm -rf /tmp/work/cache; PATH=/home/test/bin; ls",
     "rm -rf /tmp/work/cache; bash -c 'dd if=/dev/zero of=/home/test/x count=1'",
@@ -658,3 +653,108 @@ def test_인덱스까지_되살렸으면_stash_drop은_매번_묻지_않는다(h
     # then
     assert outcome.kind in ("pass", "write")
     assert outcome.every_time is False
+
+
+# --- C2b. 임시 삭제 옆의 읽기와 임시 폴더로 가둔 쓰기 --------------------------------------------------------------------------
+
+TEMP_REMOVAL = "rm -rf /tmp/work/cache; "
+TEMP_COPY = "/tmp/work/demo"
+
+
+@pytest.mark.parametrize("tail", [
+    "shopt -s nullglob",
+    "git status",
+    "git -C /tmp/work status --short | wc -l",
+    "git log --oneline | head -3",
+    "git diff --stat | tail -1",
+    "ls /tmp/work | grep demo",
+    "mv /tmp/work/a.txt /tmp/work/b.txt",
+    "cp /tmp/work/a.txt /tmp/work/b.txt",
+    "cp -R src /tmp/work/demo/",
+    "cp /home/test/src.txt /tmp/work/demo/src.txt",
+    "touch /tmp/work/b.txt",
+    "echo hi > /tmp/work/b.txt",
+    "echo hi >> /tmp/work/b.txt 2>&1",
+    "git worktree add /tmp/work/demo/wt HEAD",
+    "git worktree add --detach /tmp/work/demo/wt",
+    f"cd {TEMP_COPY} && go build ./...",
+    f"cd {TEMP_COPY} && go vet ./... && go test -count=1 -run TestOne ./api/... 2>&1 | tail -5",
+    f"cd {TEMP_COPY} && go test -race -v .",
+])
+def test_임시_삭제_옆의_읽기와_임시_폴더_안쪽_쓰기만_있으면_권한_요청을_허용한다(home, tail):
+    # given
+    command = TEMP_REMOVAL + tail
+    # when
+    answer = permission(command)
+    # then
+    assert answer == ALLOW
+
+
+@pytest.mark.parametrize("tail", [
+    "dd if=/dev/zero of=/home/test/important.txt count=1",
+    "cp x /home/test/y",
+    "cp x /tmp/work",
+    "cp -t /home/test x",
+    "mv /home/test/a /tmp/work/b",
+    "mv /tmp/work/a /home/test/b",
+    "touch /home/test/b",
+    "touch -r /home/test/a /tmp/work/b",
+    "echo hi | tee /home/test/log",
+    "echo x > /home/test/f",
+    "echo x > $UNSET/f",
+    "git push",
+    "git commit -m x",
+    "git worktree add /home/test/wt HEAD",
+    "git worktree add -b topic /tmp/work/demo/wt HEAD",
+    "git worktree add /tmp/work/demo/wt --force",
+    "git worktree remove /tmp/work/demo/wt",
+    "sort -o /home/test/x /tmp/work/in",
+    "go run .",
+    "go install ./...",
+    "go build ./...",
+    f"cd {TEMP_COPY}; go build ./...",
+    f"cd {TEMP_COPY} && go test ./... -exec /tmp/x",
+    f"cd {TEMP_COPY} && go build -o /home/test/bin ./...",
+    f"cd {TEMP_COPY} && go test -coverprofile=/home/test/c.out ./...",
+    f"cd {TEMP_COPY} && go generate ./...",
+    f"cd {TEMP_COPY} && go test ./../..",
+    "cd /home/test/project && go test ./...",
+    "GOFLAGS=-o=/home/test go build ./...",
+    f"cd {TEMP_COPY} && GOFLAGS=-exec=/tmp/x go test ./...",
+    f"export GOFLAGS=-exec=/tmp/x; cd {TEMP_COPY} && go test ./...",
+    f"cd {TEMP_COPY} && GOCACHE=/home/test/cache go build ./...",
+    "curl https://example.com",
+    "make",
+    "docker ps",
+    "kubectl get pods",
+    "uniq /tmp/work/in /home/test/out",
+    "bash -c 'cp x /home/test/y'",
+    "git -C /home/test/repo worktree add /tmp/work/demo/wt HEAD",
+])
+def test_임시_삭제_옆에_밖으로_쓰거나_허용되지_않은_명령이_붙으면_권한_요청을_허용하지_않는다(home, tail):
+    # given
+    command = TEMP_REMOVAL + tail
+    # when
+    answer = permission(command)
+    # then
+    assert answer is None
+
+
+def test_환경에_Go_환경_변수가_있으면_임시_폴더_안의_go_빌드도_허용하지_않는다(home, monkeypatch):
+    # given
+    monkeypatch.setenv("GOFLAGS", "-exec=/tmp/x")
+    command = f"{TEMP_REMOVAL}cd {TEMP_COPY} && go test ./..."
+    # when
+    answer = permission(command)
+    # then
+    assert answer is None
+
+
+def test_기록된_삭제_형태에_밖으로_쓰는_명령이_더해지면_권한_요청을_허용하지_않는다(home):
+    # given
+    commands = [f"{command}; dd if=/dev/zero of=/home/test/important.txt count=1"
+                for command in (UNQUOTED_LOOP, COPY_WORKTREE_PLAIN, BASH_C_POSITIONAL, BASH_C_LOOP)]
+    # when
+    answers = [permission(command) for command in commands]
+    # then
+    assert answers == [None] * len(commands)

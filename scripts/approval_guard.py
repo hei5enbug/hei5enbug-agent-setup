@@ -2858,7 +2858,7 @@ def _trace_removal(inside):
 
 _COMMAND_TRACE = None
 INERT_PROGRAMS = frozenset({"cd", "ls", "pwd", "echo", "printf", "true", "false", "wc", "du", "df", "sleep", "[", "[[",
-                            "test", ":", "for", "dirname", "basename"})
+                            "test", ":", "for", "dirname", "basename", "shopt"})
 PATH_ALTERING_NAMES = re.compile(r"PATH|IFS|ENV|BASH_ENV|SHELLOPTS|BASHOPTS|PROMPT_COMMAND|PS4|LD_\w*|DYLD_\w*")
 FUNCTION_DEFINITION = re.compile(r"\(\s*\)")
 MKDIR_FLAGS = re.compile(r"-[pv]+")
@@ -2871,23 +2871,28 @@ def _trace_command(safe):
         _COMMAND_TRACE.append(safe)
 
 
-def _static_absolute_texts(operand, raw, values, choices):
-    """Every absolute path text an operand can take, resolving `$(dirname ...)` of a resolvable operand; None when it
-    still expands, runs another command, or splits at white space."""
+def _static_texts(operand, raw, values, choices):
+    """Every text a path operand can take, resolving `$(dirname ...)` of a resolvable operand; None when it still
+    expands, runs another command, or splits at white space."""
     inner = re.fullmatch(r"\$\(\s*dirname\s+(?:--\s+)?(.+?)\s*\)", operand)
     if inner is not None:
         word = inner[1]
         if len(word) > 1 and word[0] == word[-1] and word[0] in "'\"":
             word = word[1:-1]
         texts = _static_absolute_texts(word, None, values, choices)
-        found = None if texts is None else [os.path.dirname(text) for text in texts]
-    else:
-        found = _operand_texts(operand, values, choices)
-        if found is not None and raw is not None and _unquoted_reference(raw) and _mktemp_directory(
-                operand, values) is None:
-            if "IFS" in values or "IFS" in (choices or {}) or re.search(r"\s", operand):
-                return None
-            found = [field for text in found for field in text.split()]
+        return None if texts is None else [os.path.dirname(text) for text in texts]
+    found = _operand_texts(operand, values, choices)
+    if found is not None and raw is not None and _unquoted_reference(raw) and _mktemp_directory(
+            operand, values) is None:
+        if "IFS" in values or "IFS" in (choices or {}) or re.search(r"\s", operand):
+            return None
+        found = [field for text in found for field in text.split()]
+    return found or None
+
+
+def _static_absolute_texts(operand, raw, values, choices):
+    """Every absolute path text an operand can take, or None when it is not fully static."""
+    found = _static_texts(operand, raw, values, choices)
     if not found or any(not text.startswith("/") or re.search(r"[*?\[]", text) for text in found):
         return None
     return found
@@ -2919,11 +2924,182 @@ def _mkdir_inside_temporary_root(args, raw_args, cwd, values, choices):
     return True
 
 
-def _redirects_write_no_file(redirects):
-    """Whether no redirect of a command writes a file: standard output and error may go to `/dev/null` or join each
-    other."""
-    return all(">" not in operator or target == "/dev/null" or (operator == ">&" and target in ("1", "2"))
-               for _, operator, target in redirects)
+def _redirects_write_only_inside_temporary_root(redirects, cwd, values, choices):
+    """Whether every output redirect of a command goes to `/dev/null`, joins standard output or error, or writes a
+    static file strictly inside a temporary root."""
+    for _, operator, target in redirects:
+        if ">" not in operator or target == "/dev/null" or (operator == ">&" and target in ("1", "2")):
+            continue
+        texts = _static_absolute_texts(target, None, values, choices)
+        if texts is None or not _strictly_inside_temporary_root(texts, cwd):
+            return False
+    return True
+
+
+def _operand_pairs(args, raw_args, allowed_flag):
+    """The operands of a call as (text, raw) pairs, or None when a flag is not one that `allowed_flag` accepts."""
+    pairs, flags_ended = [], False
+    for position, arg in enumerate(args):
+        raw = raw_args[position] if raw_args is not None and position < len(raw_args) else arg
+        if not flags_ended and arg == "--":
+            flags_ended = True
+        elif not flags_ended and arg.startswith("-") and arg != "-":
+            if not allowed_flag(arg):
+                return None
+        else:
+            pairs.append((arg, raw))
+    return pairs
+
+
+def _copy_flag(arg):
+    return COPY_FLAGS.fullmatch(arg) is not None or arg in COPY_LONG_FLAGS
+
+
+def _copy_sources_resolve(sources, destinations, values, choices, cwd):
+    """Whether every `cp` source is a static word that cannot read as an option and, where a destination is an existing
+    folder, lands strictly inside a temporary root under its own name."""
+    folders = [Path(cwd) / text for text in destinations if (Path(cwd) / text).is_dir()]
+    for arg, raw in sources:
+        texts = _static_texts(arg, raw, values, choices)
+        if texts is None or any(not text or text.startswith("-") or text[0] in "*?[" for text in texts):
+            return False
+        if folders and any(re.search(r"[*?\[]", text) for text in texts):
+            return False
+        for folder in folders:
+            if not _strictly_inside_temporary_root(
+                    [str(folder / os.path.basename(text.rstrip("/"))) for text in texts], cwd):
+                return False
+    return True
+
+
+def _copy_inside_temporary_root(cli, args, raw_args, cwd, values, choices):
+    """Whether a plain `cp` or `mv` writes only static paths strictly inside a temporary root; a `cp` may read from
+    anywhere, while a `mv` also removes its sources and so needs them inside as well."""
+    pairs = _operand_pairs(args, raw_args, _copy_flag)
+    if pairs is None or len(pairs) < 2:
+        return False
+    (destination, destination_raw), sources = pairs[-1], pairs[:-1]
+    destinations = _static_absolute_texts(destination, destination_raw, values, choices)
+    if destinations is None or not _strictly_inside_temporary_root(destinations, cwd):
+        return False
+    if cli == "mv":
+        for arg, raw in sources:
+            texts = _static_absolute_texts(arg, raw, values, choices)
+            if texts is None or not _strictly_inside_temporary_root(texts, cwd):
+                return False
+    return _copy_sources_resolve(sources, destinations, values, choices, cwd)
+
+
+def _touch_inside_temporary_root(args, raw_args, cwd, values, choices):
+    """Whether a flagless `touch` creates only static files strictly inside a temporary root."""
+    pairs = _operand_pairs(args, raw_args, lambda arg: False)
+    if not pairs:
+        return False
+    for arg, raw in pairs:
+        texts = _static_absolute_texts(arg, raw, values, choices)
+        if texts is None or not _strictly_inside_temporary_root(texts, cwd):
+            return False
+    return True
+
+
+COMMIT_ISH = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./^~-]*")
+
+
+def _worktree_add_inside_temporary_root(args, raw_args, cwd, values, choices):
+    """Whether `git worktree add [--detach] <path> [<commit-ish>]` puts the new work tree at a static path strictly
+    inside a temporary root. Its only effect outside is the administrative entry under `.git/worktrees/`, which
+    `git worktree prune` or `git worktree remove` undoes; it creates no ref and changes no tracked file."""
+    if args[:2] != ["worktree", "add"]:
+        return False
+    pairs = _operand_pairs(args[2:], raw_args[2:] if raw_args is not None else None, lambda arg: arg == "--detach")
+    if not pairs or len(pairs) > 2 or "--" in args[2:]:
+        return False
+    if len(pairs) == 2 and not COMMIT_ISH.fullmatch(pairs[1][0]):
+        return False
+    texts = _static_absolute_texts(pairs[0][0], pairs[0][1], values, choices)
+    return texts is not None and _strictly_inside_temporary_root(texts, cwd)
+
+
+GO_BOOLEAN_FLAGS = frozenset({"-v", "-race", "-short", "-cover", "-failfast", "-json", "-vet=off", "-mod=readonly",
+                              "-mod=vendor", "-trimpath"})
+GO_VALUE_FLAGS = frozenset({"-count", "-p", "-parallel", "-timeout", "-run", "-tags"})
+GO_FLAG_VALUE = re.compile(r"[A-Za-z0-9_.,|^()*+?/][A-Za-z0-9_.,|^()*+?/-]*")
+GO_PACKAGE = re.compile(r"\.|(?:\./)?(?:[A-Za-z0-9_][A-Za-z0-9_.-]*/)*(?:\.\.\.|[A-Za-z0-9_][A-Za-z0-9_.-]*)")
+GO_ENVIRONMENT_NAMES = ("GOFLAGS", "GOENV", "GOCACHE")
+
+
+def _go_arguments_confined(args):
+    """Whether the words after `go build|vet|test` are only plain flags and relative package patterns."""
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        name, equals, value = arg.partition("=")
+        if arg in GO_BOOLEAN_FLAGS:
+            index += 1
+        elif name in GO_VALUE_FLAGS and equals:
+            if not GO_FLAG_VALUE.fullmatch(value):
+                return False
+            index += 1
+        elif arg in GO_VALUE_FLAGS and index + 1 < len(args):
+            if not GO_FLAG_VALUE.fullmatch(args[index + 1]):
+                return False
+            index += 2
+        elif not arg.startswith("-") and GO_PACKAGE.fullmatch(arg):
+            index += 1
+        else:
+            return False
+    return True
+
+
+def _go_inside_temporary_root(args, cwd, env, variables):
+    """Whether `go build|vet|test` with only plain flags and relative package patterns runs in a folder strictly inside
+    a temporary root and with no Go environment override: its artifacts go to that copy and to the regenerable build
+    cache. `go build` of several packages discards its results."""
+    if not args or args[0] not in ("build", "vet", "test") or not _go_arguments_confined(args[1:]):
+        return False
+    if any(name in source for name in GO_ENVIRONMENT_NAMES for source in (env, variables)):
+        return False
+    return _strictly_inside_temporary_root(["."], cwd)
+
+
+def _confined_command(cli, args, raw_args, cwd, env, variables, choices, assignments):
+    """Whether one simple command is a write the guard can confine to a temporary root: `cp`, `mv`, and `touch` of
+    static paths inside it, `git worktree add` into it, and `go build|vet|test` run inside it."""
+    if assignments:
+        return False
+    values = {**env, **variables}
+    if cli in ("cp", "mv"):
+        return _copy_inside_temporary_root(cli, args, raw_args, cwd, values, choices)
+    if cli == "touch":
+        return _touch_inside_temporary_root(args, raw_args, cwd, values, choices)
+    if cli == "git":
+        return _worktree_add_inside_temporary_root(args, raw_args, cwd, values, choices)
+    if cli == "go":
+        return _go_inside_temporary_root(args, cwd, env, variables)
+    return False
+
+
+READER_BLOCKED_PROGRAMS = frozenset(COVERED - {"git"}) | SHELLS
+
+
+def _filter_may_write(cli, args):
+    """Whether a filter program of the guard writes a file or runs a program through one of its options."""
+    if cli == "sort":
+        return any(arg.startswith("--output") or re.fullmatch(r"-[A-Za-z]*o.*", arg) for arg in args)
+    if cli == "uniq":
+        return sum(1 for arg in args if not arg.startswith("-")) > 1
+    return cli in ("rg", "grep", "egrep", "fgrep") and any(arg.startswith(("--pre", "--hostname-bin")) for arg in args)
+
+
+def _read_verdict(cli, args, verdict):
+    """Whether the guard classified one simple command as a local read: its kind `read`, or one of its filter programs
+    (`head`, `tail`, `grep`, and the others). Remote and infrastructure programs other than `git`, shells, and Python are
+    never accepted here."""
+    if cli in READER_BLOCKED_PROGRAMS or PYTHON.fullmatch(cli):
+        return False
+    if verdict.kind == "read":
+        return True
+    return verdict.kind == "pass" and verdict.exe in FILTERS and not _filter_may_write(verdict.exe, args)
 
 
 def _inert_command(cli, args, raw_args, cwd, env, variables, choices, assignments):
@@ -2951,6 +3127,20 @@ def _inert_command(cli, args, raw_args, cwd, env, variables, choices, assignment
             return False
         return True
     return False
+
+
+def _command_trace_entry(cli, args, raw_args, cwd, env, variables, choices, assignments):
+    """The trace entry of one simple command: True when it is inert or a write confined to a temporary root, False when
+    nothing can accept it, None when it is acceptable only if the guard classifies it as a local read."""
+    if any(PATH_ALTERING_NAMES.fullmatch(name) for name in assignments):
+        return False
+    if any(_unmodeled_expansion(arg) for arg in (cli, *args)) or cli != os.path.basename(cli):
+        return False
+    if _inert_command(cli, args, raw_args, cwd, env, variables, choices, assignments):
+        return True
+    if _confined_command(cli, args, raw_args, cwd, env, variables, choices, assignments):
+        return True
+    return None
 
 
 def _execution_policy(cli, args, cwd, env, variables, command, choices=None, raw_args=None):
@@ -3563,6 +3753,16 @@ def _xargs_input_is_inert(argv, program, segment, segments, index, operators, st
 
 def _classify_argv(words, heredoc, cwd, depth, command, inherited_env=None, variables=None, choices=None,
                    raw=None):
+    slot = len(_COMMAND_TRACE) if _COMMAND_TRACE is not None else None
+    verdict = _classify_words(words, heredoc, cwd, depth, command, inherited_env, variables, choices, raw)
+    if slot is not None and slot < len(_COMMAND_TRACE) and _COMMAND_TRACE[slot] is None:
+        stripped, _ = strip_prefix(words)
+        _COMMAND_TRACE[slot] = _read_verdict(os.path.basename(stripped[0]), stripped[1:], verdict)
+    return verdict
+
+
+def _classify_words(words, heredoc, cwd, depth, command, inherited_env=None, variables=None, choices=None,
+                    raw=None):
     helper = _helper_args(words)
     if helper is not None:
         _trace_command(False)
@@ -3585,7 +3785,8 @@ def _classify_argv(words, heredoc, cwd, depth, command, inherited_env=None, vari
         return _sensitive(command)
     raw_args = raw[len(words) - len(stripped) + 1:] if raw is not None and len(raw) == len(words) else None
     if _COMMAND_TRACE is not None:
-        _trace_command(_inert_command(cli, stripped[1:], raw_args, cwd, env, variables or {}, choices, assignments))
+        _trace_command(_command_trace_entry(cli, stripped[1:], raw_args, cwd, env, variables or {}, choices,
+                                            assignments))
     policy = _execution_policy(cli, stripped[1:], cwd, env, variables or {}, command, choices, raw_args)
     if policy is not None:
         return policy
@@ -3815,6 +4016,19 @@ def _cd_changes_directory(segment, operators):
     depth = sum({"(": 1, ")": -1}.get(op[1], 0) for op in operators if op[3] <= segment.start)
     return (depth == 0 and (before is None or before[1] == ";")
             and (after is None or after[1] in ("&&", ";")))
+
+
+def _followed_by_and(segment, operators):
+    """Whether the next operator after a segment is `&&`, so the command after it runs only when the segment succeeds."""
+    after = min((op for op in operators if op[2] >= segment.end), key=lambda op: op[2], default=None)
+    return after is not None and after[1] == "&&"
+
+
+def _chained_by_and(segments, operators, first, last):
+    """Whether segment `last` follows segment `first` through `&&` operators alone."""
+    start, stop = segments[first].end, segments[last].start
+    between = [op for op in operators if op[2] >= start and op[3] <= stop]
+    return last > first and bool(between) and all(op[1] == "&&" for op in between)
 
 
 def _python_documents(text, cwd, depth, env):
@@ -4240,8 +4454,10 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
     current_env = environment
     flow = _ValueFlow(choices)
     made_directories = set()
+    pending_cd = None
     for index, segment in enumerate(segments):
         flow.visit(segments, index, operators, current_env)
+        command_cwd = pending_cd[0] if pending_cd and _chained_by_and(segments, operators, pending_cd[1], index) else cwd
         if segment.start in filtered_segments:
             filtered = filtered_segments[segment.start]
             if filtered is not None:
@@ -4260,7 +4476,8 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
             current_env[COMMAND_GIT_CONFIG] = ",".join(sorted(
                 named | set(filter(None, current_env.get(COMMAND_GIT_CONFIG, "").split(",")))))
         if _COMMAND_TRACE is not None:
-            _trace_command(_redirects_write_no_file(segment.redirects))
+            _trace_command(_redirects_write_only_inside_temporary_root(
+                segment.redirects, command_cwd, {**current_env, **variables}, flow.choices()))
         region = checked[segment.start:segment.end]
         substitutions = list(_substitution_spans(region))
         scoped_env = current_env if files_stable else {**current_env, FILES_MAY_CHANGE: "1"}
@@ -4330,10 +4547,13 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
         elif name in ("for", "select") and len(program) > 1:
             statics.pop(program[1], None)
         if name == "cd" and len(program) == 2:
+            pending_cd = None
             if _cd_changes_directory(segment, operators):
                 directory = _script_path(program[1], cwd, variables)
                 if directory is not None and (directory.is_dir() or _PENDING_SCRIPTS and directory in made_directories):
                     cwd = str(directory)
+                elif directory is not None and _COMMAND_TRACE is not None and _followed_by_and(segment, operators):
+                    pending_cd = (str(directory), index)
             continue
         if not program and assignments:
             _trace_command(not any(PATH_ALTERING_NAMES.fullmatch(key) for key in assignments))
@@ -4364,7 +4584,8 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
         if argv:
             argv = [*segment.words[:len(segment.words) - len(program)], *argv]
         verdict = (_unclassified(name, text) if dynamic_program and COVERED_WORD.search(region)
-                   else _classify_argv(argv or segment.words, segment.heredoc and not argv, cwd, depth, text, scoped_env,
+                   else _classify_argv(argv or segment.words, segment.heredoc and not argv, command_cwd, depth, text,
+                                       scoped_env,
                                        variables, flow.choices(), None if argv else segment.raw))
         if argv and (verdict.kind == "read" or verdict.kind == "pass" and os.path.basename(
                 (strip_prefix(argv)[0] or [""])[0]) in OPERAND_READERS) and not (
@@ -4721,7 +4942,8 @@ def _removes_only_inside_temporary_root(command, cwd):
     """Whether a command that the guard passes holds recursive removals and every `rm` in it removes only static paths
     strictly inside a temporary root. Claude Code's own check of dangerous removals asks even when the guard passes, and
     only a PermissionRequest answer can settle it. The command is classified again with a trace of each `rm` call; a
-    call the trace missed, an unresolved target, or a non-recursive removal means no."""
+    call the trace missed, an unresolved target, or a non-recursive removal means no. Every other command in it must be
+    inert, a local read the guard itself classifies, or a write confined to a temporary root."""
     global _REMOVAL_TRACE, _COMMAND_TRACE
     mentions = len(RM_WORD.findall(command))
     if not mentions or FUNCTION_DEFINITION.search(command):
@@ -4732,7 +4954,8 @@ def _removes_only_inside_temporary_root(command, cwd):
         outcome = _classify_safely(lambda: classify_text(command, cwd), command)
     finally:
         _REMOVAL_TRACE = _COMMAND_TRACE = None
-    return outcome.kind == "pass" and len(trace) >= mentions and all(trace) and all(commands)
+    return (outcome.kind == "pass" and len(trace) >= mentions and all(trace)
+            and all(entry is True for entry in commands))
 
 
 def _claude_permission(session, outcome, tool_input, tool_name, cwd):
