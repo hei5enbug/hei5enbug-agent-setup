@@ -1671,12 +1671,14 @@ def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spa
         helper = state.get("helper") or {}
         helper_waiting = alive(helper.get("pid")) and not state.get("helper_finished_at")
         initiator = next((entry for entry in sessions if entry["initiator"]), None)
-        state["initiator"] = {"handle": initiator["handle"], "host": initiator["host"]} if initiator else None
+        state["initiator"] = ({key: initiator.get(key) for key in ("handle", "host", "screen_identified")}
+                              if initiator else None)
         state["compact_mode"] = mode
         if own or deferred:
             handed = time.time()
             items = [
-                {key: entry.get(key) for key in ("handle", "host", "actions", "title", "worktree", "compact_reason", "detail", "probe_retries")} | {"deferred_at": handed}
+                {key: entry.get(key) for key in ("handle", "host", "actions", "title", "worktree", "compact_reason", "detail", "probe_retries",
+                                                 "screen_identified")} | {"deferred_at": handed}
                 for entry in deferred
             ]
             handed_off = True
@@ -1700,7 +1702,7 @@ def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spa
                         state.pop("self", None)
             if handed_off and own:
                 own.update(status="queued_after_turn", detail="waits_for_this_turn_to_end")
-                state["self"] = {key: own[key] for key in ("handle", "host", "actions", "title", "worktree")}
+                state["self"] = {key: own.get(key) for key in ("handle", "host", "actions", "title", "worktree", "screen_identified")}
                 state["self"].update(compact_reason=own.get("compact_reason"), helper_pid=pid, helper_started_at=now(), deferred_at=handed)
                 state.pop("self_finished_at", None)
         state["sessions"] = {**state.get("sessions", {}), **{entry["handle"]: public(entry) for entry in sessions}}
@@ -1712,7 +1714,7 @@ def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spa
 
 def notify(orca: Orca, entry: dict, run_id: str, sleep: Callable[[float], None]) -> str:
     message = f"Plugin refresh run {run_id} finished. Run `{status_command(run_id)}` and report every session, including any that were not refreshed."
-    notice = {"handle": entry["handle"], "host": entry["host"]}
+    notice = {"handle": entry["handle"], "host": entry["host"], "screen_identified": entry.get("screen_identified")}
     deadline = time.time() + NOTIFY_SECONDS
     reason: str | None = "not_attempted"
     while time.time() < deadline:

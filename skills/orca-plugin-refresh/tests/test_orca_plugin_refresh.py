@@ -939,8 +939,41 @@ class FollowUpTest(DriveTest):
         self.assertTrue(result["ok"])
         saved = refresh.load_run(run_id)
         self.assertEqual(["term_busy"], [item["handle"] for item in saved["follow_up"]])
-        self.assertEqual({"handle": "term_self", "host": "claude"}, saved["initiator"])
+        self.assertEqual({"handle": "term_self", "host": "claude", "screen_identified": False}, saved["initiator"])
         self.assertEqual(4242, saved["helper"]["pid"])
+
+    def test_표식으로_잡아_미룬_세션의_에이전트가_끝나면_도우미는_명령도_알림도_보내지_않는다(self):
+        """agentIdentity 없이 표식과 화면으로 잡은 세션과 시작 세션을 도우미에 넘긴 뒤 둘 다 셸만 남으면, 도우미는 어느 쪽에도 보내지 않는다."""
+        # Given
+        for handle in ("term_self", "term_busy"):
+            self.write_marker(handle, "claude", digest="old")
+        bare = [{**terminal(handle, None), "agentIdentity": None} for handle in ("term_self", "term_busy")]
+        fake = FakeOrca(bare, busy={"term_busy": 10**6}, on_send=self.simulate)
+        run_id = self.save_state()
+        with patch.object(refresh, "Orca", return_value=fake):
+            refresh.command_apply(run_id, "auto", [], 1, spawn=lambda run: 4242)
+        exited = CLAUDE_EMPTY + ["Resume this session with: claude --resume demo", "demo@example % "]
+        fake.screens.update({"term_self": list(exited), "term_busy": list(exited)})
+        fake.busy.clear()
+
+        def refuse(orca, handle, text):
+            raise AssertionError(f"sent {text!r} to the shell left in {handle}")
+
+        fake.on_send = refuse
+
+        # When
+        with (
+            patch.object(refresh, "Orca", return_value=fake),
+            patch.multiple(refresh, FOLLOW_UP_SECONDS=0.5, SELF_WAIT_SECONDS=0.5, NOTIFY_SECONDS=0.5),
+        ):
+            saved = refresh.load_run(run_id)
+            saved["follow_up"] = [{**item, "deferred_at": time.time()} for item in saved["follow_up"]]
+            refresh.save_json(refresh.run_path(run_id), saved)
+            refresh.command_self_apply(run_id, sleep=lambda seconds: time.sleep(0.02))
+
+        # Then
+        self.assertEqual([], fake.sent)
+        self.assertNotEqual("sent", refresh.command_status(run_id)["self_notification"])
 
     def test_도우미는_대기_완료_콜백을_받은_뒤_보내고_한_번만_알린다(self):
         """도우미는 바쁜 세션의 대기 완료 신호를 받은 뒤 다시 확인하고 보내며, 끝나면 시작한 세션에 결과 확인을 한 번 요청한다."""
