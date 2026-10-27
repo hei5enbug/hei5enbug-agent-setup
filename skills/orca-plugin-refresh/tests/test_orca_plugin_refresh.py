@@ -332,6 +332,41 @@ class DriveTest(unittest.TestCase):
         claude_commands = [text for handle, text in fake.sent if handle == "term_claude"]
         self.assertEqual(["/reload-plugins", "/compact"], claude_commands)
 
+    def test_Orca가_agentIdentity를_빠뜨려도_표식과_화면이_같은_호스트면_세션으로_잡는다(self):
+        """agentIdentity가 없는 터미널은 이 플러그인의 세션 표식이 가리키는 호스트의 입력창이 화면 맨 아래에 있을 때만 그 호스트 세션으로 본다."""
+        # Given
+        exited = CLAUDE_EMPTY + ["Resume this session with: claude --resume demo", "demo@example % "]
+        for handle, host in (("term_claude", "claude"), ("term_codex", "codex"), ("term_exited", "claude"),
+                             ("term_mismatch", "codex")):
+            self.write_marker(handle, host)
+        fake = FakeOrca(
+            [{**terminal(handle, None), "agentIdentity": None} for handle in
+             ("term_claude", "term_codex", "term_exited", "term_mismatch", "term_shell")],
+            screens={"term_codex": CODEX_EMPTY, "term_exited": exited, "term_shell": ["demo@example % "]},
+        )
+
+        # When
+        sessions = refresh.plan_sessions(fake, self.state, "never", [])
+
+        # Then
+        self.assertEqual({"term_claude": "claude", "term_codex": "codex"},
+                         {entry["handle"]: entry["host"] for entry in sessions})
+
+    def test_agentIdentity_없이_잡은_세션은_표식이_다른_호스트로_바뀔_때만_사라진_것으로_본다(self):
+        """작업 중 화면이 달라져도 표식이 같은 호스트를 가리키면 남겨 두고, 표식이 사라지거나 다른 호스트면 사라진 것으로 본다."""
+        # Given
+        self.write_marker("term_claude", "claude")
+        entry = {"handle": "term_claude", "host": "claude"}
+        live = {"term_claude": {**terminal("term_claude", None), "agentIdentity": None}}
+        kept = refresh.terminal_gone(entry, live)
+        self.write_marker("term_claude", "codex")
+
+        # When
+        switched = refresh.terminal_gone(entry, live)
+
+        # Then
+        self.assertEqual((False, True), (kept, switched))
+
     def test_입력이_남은_세션은_보내지_않고_기한에_건너뛴다(self):
         """입력 줄에 글자가 있으면 명령을 보내지 않고, 기한이 지나면 이유와 함께 건너뛴 것으로 남긴다."""
         # Given
@@ -2739,7 +2774,8 @@ class LiveOrcaContractTest(unittest.TestCase):
 
         # Then
         self.assertIn(handle, terminals)
-        self.assertTrue({"agentIdentity", "connected", "writable"} <= set(terminals[handle]))
+        self.assertTrue({"connected", "writable"} <= set(terminals[handle]))
+        self.assertIn(refresh.terminal_host(orca, terminals[handle]), {"claude", "codex"})
         self.assertIsInstance(idle, bool)
         self.assertTrue(lines and all(isinstance(line, str) for line in lines))
         self.assertTrue(draft is None or isinstance(draft, str))

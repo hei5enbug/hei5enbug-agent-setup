@@ -903,6 +903,40 @@ def agent_host(terminal: dict) -> str | None:
     return "codex" if identity == "codex" else None
 
 
+def marker_host(terminal: dict) -> str | None:
+    """The host this plugin's session marker names for a terminal that Orca recorded no agentIdentity for."""
+    handle = terminal.get("handle")
+    if terminal.get("agentIdentity") or not isinstance(handle, str):
+        return None
+    host = (read_marker(handle) or {}).get("host")
+    return host if host in ("claude", "codex") else None
+
+
+def terminal_host(orca: Orca, terminal: dict) -> str | None:
+    """Orca's agentIdentity, or, when Orca recorded none, the marker's host while that host's composer still ends the
+    screen. A marker outlives the session, so a shell left in the terminal never matches."""
+    host = marker_host(terminal)
+    if host is None:
+        return agent_host(terminal)
+    try:
+        lines, _ = orca.screen(terminal["handle"])
+    except RefreshError:
+        return None
+    return host if screen_host(lines) == host else None
+
+
+def screen_host(lines: Sequence[str]) -> str | None:
+    """The agent whose composer ends the screen, followed only by its indented footer."""
+    def footer_only(rest: Sequence[str]) -> bool:
+        return all(not line.strip() or line[:1].isspace() for line in rest)
+
+    bounds = composer_bounds(lines)
+    claude = bounds is not None and footer_only(lines[bounds[1] + 1:])
+    prompts = [index for index, line in enumerate(lines) if line.strip().startswith("›")]
+    codex = bool(prompts) and input_state("codex", lines) != "unknown" and footer_only(lines[prompts[-1] + 1:])
+    return None if claude == codex else "claude" if claude else "codex"
+
+
 def opening_rule(line: str) -> bool:
     """Claude Code may print the session name at the end of the composer's top rule."""
     return bool(SEPARATOR.match(line) or TITLED_SEPARATOR.match(line))
@@ -994,7 +1028,7 @@ def plan_sessions(orca: Orca, state: dict, mode: str, only: Sequence[str]) -> li
     initiator = os.environ.get("ORCA_TERMINAL_HANDLE")
     sessions: list[dict] = []
     for terminal in orca.terminals():
-        host = agent_host(terminal)
+        host = terminal_host(orca, terminal)
         handle = terminal.get("handle")
         if host is None or not isinstance(handle, str) or not HANDLE.fullmatch(handle):
             continue
@@ -1062,7 +1096,7 @@ def claude_draft_state(orca: Orca, handle: str, draft: str, sleep: Callable[[flo
 def terminal_gone(entry: dict, live: dict[str, dict]) -> bool:
     """True when the session's terminal left Orca's list or no longer runs the entry's agent host."""
     terminal = live.get(entry["handle"])
-    return terminal is None or agent_host(terminal) != entry["host"]
+    return terminal is None or (marker_host(terminal) or agent_host(terminal)) != entry["host"]
 
 
 def probe_left_input_clean(orca: Orca, handle: str, draft: str) -> bool:

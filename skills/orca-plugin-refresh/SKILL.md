@@ -27,7 +27,9 @@ versions to running Orca sessions without ending them. It never restarts a sessi
 
 The plugin's session-start hook writes one marker per Orca terminal with the host, plugin directory, transcript
 path, and a digest of the executable instructions. Only the terminal's interactive session writes it; a child
-`claude -p` or `codex exec` started inside that terminal does not. The script compacts only a session whose marker
+`claude -p` or `codex exec` started inside that terminal does not. When Orca's terminal record names no agent, the
+script treats the terminal as the marker's host only while that host's input line ends the screen, so a shell left
+behind with an old marker is never targeted. The script compacts only a session whose marker
 is missing, holds another digest, points a Codex session at a replaced plugin directory, or points a Claude Code
 session at a removed one. Only this plugin's instruction digest decides this, not the other plugins. When Claude
 Code answers that a session has too few messages to compact and its transcript holds no prompt, the script sends
