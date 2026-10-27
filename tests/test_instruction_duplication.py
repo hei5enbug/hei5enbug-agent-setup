@@ -36,11 +36,12 @@ CORE_OWNED = (
         "structural matching is clearly needed."
     ),
     (
-        "Unless the approval guard decides, ask every time before irreversible actions and once per session before "
-        "other outward writes, production changes included. Never reconfirm a write the user asked for or "
-        "the request needs, even after compaction. Name the write in one line. Never expose secrets."
+        "Unless the approval guard decides, ask before each irreversible action and once per session before other "
+        "outward writes, including production. Never reconfirm a requested or required write, even after "
+        "compaction. Name the write in one line. Never expose secrets."
     ),
-    "Ask nothing before local, reversible steps in scope; offer no unrequested commit or push.",
+    "Ask nothing before local, reversible steps in scope; offer no unrequested commit, push, tag, release, publish, "
+    "or install.",
     "Before writing or editing any documentation file, read [documentation rules](../documentation.md).",
 )
 
