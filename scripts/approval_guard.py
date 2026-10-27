@@ -5740,13 +5740,168 @@ def _collapse_path_spelling(text):
         text = collapsed
 
 
+def _mentions_state(text):
+    spelled = _collapse_path_spelling(text)
+    return any(str(directory) in spelled or f"hei5enbug-agent-setup/{directory.name}" in spelled
+               for directory in _guard_state_dirs())
+
+
+def _state_text_only_python(body):
+    """Whether Python code can carry a state folder spelling only as text: every `open` has a literal target outside the
+    state folders, and with those opens counted as reads the code passes the read-only test."""
+    try:
+        tree = ast.parse(body)
+    except SyntaxError:
+        return False
+    names = _literal_names(tree)
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open"):
+            continue
+        target = next((keyword.value for keyword in node.keywords if keyword.arg == "file"),
+                      node.args[0] if node.args else None)
+        text = _fold_text(target, names) if target is not None else None
+        if not text or "\0" in text or _mentions_state(text) or _state_path(text, "/"):
+            return False
+        mode = next((keyword.value for keyword in node.keywords if keyword.arg == "mode"),
+                    node.args[1] if len(node.args) > 1 else None)
+        if isinstance(mode, ast.Constant) and isinstance(mode.value, str):
+            mode.value = "r"
+    return _read_only_python(tree)
+
+
+PYTHON_DOCUMENT = re.compile(r"(?m)^([^\n]*?)<<[ \t]*(['\"])([A-Za-z_]\w*)\2[^\n]*\n")
+
+
+def _text_only_python_documents(text):
+    """Spans of quoted-delimiter heredoc bodies that a plain `python3 -` reads and that carry state spellings only as text."""
+    spans = []
+    for match in PYTHON_DOCUMENT.finditer(text):
+        if any(start <= match.start() < stop for start, stop in spans):
+            continue
+        try:
+            segments = tokenize(match[0])
+            marker = match.end(1) - match.start()
+            segment = next(item for item in segments if item.start <= marker < item.end)
+            words, _ = strip_prefix(segment.words)
+        except (ParseError, StopIteration):
+            continue
+        if (not words or not PYTHON.fullmatch(os.path.basename(words[0])) or segment.redirects[1:]
+                or not all(arg.startswith("-") and not arg.startswith(("-c", "-m")) for arg in words[1:])):
+            continue
+        end = re.search(r"(?m)^" + re.escape(match[3]) + r"[ \t]*\r?$", text[match.end():])
+        if end is None:
+            continue
+        body_end = match.end() + end.start()
+        if _state_text_only_python(text[match.end():body_end]):
+            spans.append((match.end(), body_end))
+    return spans
+
+
+def _heredoc_outputs(text):
+    """The file words that heredoc commands write with `>`, `>>`, or `tee`."""
+    outputs = []
+    for line in text.splitlines():
+        if "<<" not in line:
+            continue
+        try:
+            tokens = _lex(line)
+        except ParseError:
+            continue
+        words = [token[1] for token in tokens if token[0] == "word"]
+        outputs.extend(tokens[index + 1][1] for index, token in enumerate(tokens[:-1])
+                       if token[0] == "op" and token[1] in (">", ">>", ">|") and tokens[index + 1][0] == "word")
+        if "tee" in words:
+            outputs.extend(word for word in words[words.index("tee") + 1:] if not word.startswith("-"))
+    return outputs
+
+
+RUNNERS = r"(?:python[\d.]*|node|ruby|perl|php|bash|sh|zsh|source|\.|exec)"
+
+
+def _runs_written_file(text, outputs):
+    """Whether a file that a heredoc command writes is later run by an interpreter or as a command."""
+    for output in outputs:
+        name = r"[\"']?(?:\S*/)?" + re.escape(os.path.basename(output)) + r"(?![\w.-])"
+        if re.search(r"(?:^|[\s;&|(])" + RUNNERS + r"\s+(?:-\S+\s+)*" + name, text):
+            return True
+        if re.search(r"(?:^|[;&|(\n])[ \t]*" + name + r"[\"']?[ \t]*(?:$|[;&|)\n])", text, re.M):
+            return True
+    return False
+
+
+def _message_spans(text, tokens):
+    """Spans of `git commit -m` message values and of `echo` and `printf` words whose output goes to a file outside the
+    state folders, when the text holds no expansion that runs a command."""
+    spans, segment = [], []
+    for token in [*tokens, ("op", ";", len(text), len(text))]:
+        if token[0] == "op" and token[1] in SEPARATOR_OPERATORS:
+            spans.extend(_segment_message_spans(text, segment))
+            segment = []
+        else:
+            segment.append(token)
+    return spans
+
+
+def _plain_text_token(text, token):
+    raw = text[token[2]:token[3]]
+    return (raw.startswith("'") and raw.endswith("'") and "'" not in raw[1:-1]) or not re.search(r"\$\(|`|<\(|>\(", raw)
+
+
+def _segment_message_spans(text, tokens):
+    words = [token for token in tokens if token[0] == "word"]
+    redirects = [(tokens[index], tokens[index + 1]) for index in range(len(tokens) - 1)
+                 if tokens[index][0] == "op" and tokens[index + 1][0] == "word"]
+    redirect_words = {id(target) for _, target in redirects}
+    words = [token for token in words if id(token) not in redirect_words]
+    program, _ = strip_prefix([token[1] for token in words])
+    if not program:
+        return []
+    body = words[len(words) - len(program):]
+    name = os.path.basename(program[0])
+    if name == "git" and program[1:2] == ["commit"]:
+        values = []
+        for index, token in enumerate(body[:-1]):
+            if token[1] == "--message" or re.fullmatch(r"-[A-Za-z]*m", token[1]):
+                values.append(body[index + 1])
+        values.extend(token for token in body if token[1].startswith("--message=") and token not in values)
+        return [(token[2], token[3]) for token in values if _plain_text_token(text, token)]
+    if name in ("echo", "printf"):
+        if not redirects or any(op[1] not in (">", ">>") or _mentions_state(target[1]) or re.search(
+                r"[$`*?\[{]", target[1]) or _state_path(target[1], "/") for op, target in redirects):
+            return []
+        return [(token[2], token[3]) for token in body[1:] if _plain_text_token(text, token)]
+    return []
+
+
+COMMIT_HEREDOC = re.compile(
+    r"(\bgit\b[^\n;&|]*\bcommit\b[^\n;&|]*?(?:-m|--message)[ =]\s*\"\$\(cat\s+<<-?\s*'(\w+)'[^\n]*\n)(.*?)(\n[ \t]*\2[ \t]*\n?\s*\)\")",
+    re.S)
+
+
+def _mention_text(command):
+    """The command with the text that cannot touch a state folder blanked: heredoc data, Python heredoc bodies that only
+    carry text, commit messages, and the words of an `echo` or `printf` that writes elsewhere."""
+    text = _heredoc_data(command)
+    outputs = _heredoc_outputs(command)
+    spans = []
+    if text != command and _runs_written_file(command, outputs):
+        text = command
+    spans.extend(_text_only_python_documents(command))
+    spans.extend((match.start(3), match.end(3)) for match in COMMIT_HEREDOC.finditer(command))
+    try:
+        tokens = _lex(text)
+        spans.extend(_message_spans(text, tokens))
+    except ParseError:
+        pass
+    return _blank(text, spans)
+
+
 def _self_approval_reason(command):
     """Return why a command is self-approval, or None. A command that names the state folders may use only a path prefix variable."""
     if _runs_guard(command):
         return SELF_APPROVAL_REASON
-    spelled = _collapse_path_spelling(command)
-    if any(str(directory) in spelled or f"hei5enbug-agent-setup/{directory.name}" in spelled
-           for directory in _guard_state_dirs()):
+    command = _mention_text(command)
+    if _mentions_state(command):
         command = _expand_state_variables(command)
         trigger = next((item for item in DYNAMIC_TRIGGERS if item in command), None)
         if trigger:

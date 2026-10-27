@@ -661,3 +661,107 @@ def test_이름_열_뒤의_sed_tr_단계는_묻지_않는다(home, monkeypatch):
                                home / "project"), "claude")
     # then
     assert decision(output) not in ("ask", "deny")
+
+
+# --- J4. text that mentions a guard state folder without touching it ---------------------------------------------------------
+
+PYCACHE = "$XDG_STATE_HOME/hei5enbug-agent-setup/pycache"
+TEST_BODY = '''
+
+def arguments_interpreter(path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('#!/bin/sh\\nfor argument in "$@"; do echo "$argument"; done\\necho END\\ncat\\nexit 3\\n')
+    return path
+
+
+def test_pycache_prefix(plugin, tmp_path):
+    # given
+    state = tmp_path / "state"
+    # then
+    assert arguments[:3] == ["-X", f"pycache_prefix={state}/hei5enbug-agent-setup/pycache", "-c"]
+    assert `echo` in "$XDG_STATE_HOME/hei5enbug-agent-setup/pycache"
+'''
+README_EDIT = f'''p='README.md'
+s=open(p).read()
+a="Python per project.\\n"
+assert s.count(a)==1
+s=s.replace(a,a+"""The launcher caches compiled bytecode under `{PYCACHE}/` (default
+`~/.local/state`). This is a guard state folder, so the approval guard denies agent writes there like those to
+`approvals/` and `heartbeats/`.
+""")
+open(p,'w').write(s)
+'''
+REVIEW_TEXT = f'''Review the uncommitted change (`git diff HEAD`). Do not edit files.
+- This change moves the cache to {PYCACHE} and protects that folder exactly like approvals/ and heartbeats/.
+- The guard adds `_guard_state_dirs()` to `_state_path`; checks already run: full pytest passed.
+'''
+
+
+def j4_allowed(base):
+    repo = base / "project"
+    s = base / "scratchpad"
+    return [
+        ("cat >> a test file, body names the cache", f"cd {repo} && cat >> tests/test_x.py <<'PYEOF'\n{TEST_BODY}PYEOF\n"
+         "env -u GIT_CONFIG_COUNT python3 -m pytest -p no:cacheprovider -q tests/test_x.py 2>&1 | tail -30"),
+        ("python heredoc edits README with the cache path", f"cd {repo} && python3 - <<'PYEOF'\n{README_EDIT}PYEOF\n"
+         "git diff README.md docs | grep '^[+-]'\nE=\"env -u GIT_CONFIG_COUNT\"\n"
+         "$E python3 -m pytest -p no:cacheprovider -q tests/ -k approval 2>&1 | tail -8\ngit status --short"),
+        ("review assignment written beside a diff", f"S={s}; git diff > $S/c6.diff; wc -l $S/c6.diff; cat > "
+         f"$S/review-c6.md <<'EOF'\n{REVIEW_TEXT}EOF\ngrep -c pycache $S/review-c6.md"),
+        ("git commit message with the cache path", f"cd {repo} && git commit -q -m \"fix: cache bytecode under {PYCACHE}\""),
+        ("git commit single-quoted message", f"cd {repo} && git commit -q -m 'docs: the guard protects {PYCACHE}'"),
+        ("git commit heredoc message", f"cd {repo} && git commit -q -m \"$(cat <<'EOF'\nfix: keep {PYCACHE} guarded\n\n"
+         "The `approvals/` folder stays protected.\nEOF\n)\""),
+        ("echo the cache path into a note", f"echo \"bytecode goes to {PYCACHE}\" > {s}/notes.md"),
+        ("printf the cache path into a note", f"printf '%s\\n' \"see {PYCACHE}\" >> {s}/notes.md"),
+    ]
+
+
+def j4_denied(base):
+    state = base / "xdg" / "hei5enbug-agent-setup"
+    s = base / "scratchpad"
+    return [
+        ("ls the cache folder then touch a file", f"ls {state}/pycache; touch {state}/pycache/f"),
+        ("rm the approvals", f"rm -rf {state}/approvals"),
+        ("cat into an approval file", f"cat > {state}/approvals/x <<'EOF'\nx\nEOF"),
+        ("python opens a state path for writing", f"python3 - <<'EOF'\nopen('{state}/approvals/x', 'w').write('1')\nEOF"),
+        ("python writes a state path held in a name", f"python3 - <<'EOF'\np = '{state}/pycache/x.py'\n"
+         "open(p, 'w').write('1')\nEOF"),
+        ("python spawns a command that names a state path", f"python3 - <<'EOF'\nimport os\n"
+         f"os.system('rm -rf {state}/approvals')\nEOF"),
+        ("python opens a path it builds from the state text", f"python3 - <<'EOF'\nimport sys\n"
+         f"name = '{state}/approvals/'\nopen(name + sys.argv[1], 'w').write('1')\nEOF"),
+        ("cd into heartbeats", f"cd {state}/heartbeats"),
+        ("echo into an approval file", f"echo 1 > {state}/approvals/y"),
+        ("echo that runs a substitution", f"echo \"$(rm -rf {state}/approvals)\" > {s}/n.md"),
+        ("git commit message that runs a substitution", f"git commit -q -m \"see `ls {state}/approvals`\""),
+        ("heredoc piped to bash", f"cat <<'EOF' | bash\nrm -rf {state}/approvals\nEOF"),
+        ("heredoc written to a script that runs", f"cat > {s}/x.sh <<'EOF'\nrm -rf {state}/approvals\nEOF\nbash {s}/x.sh"),
+        ("cat of a state file into a note", f"cat {state}/approvals/s.json > {s}/copy.json"),
+        ("heredoc script that python runs", f"cat > {s}/x.py <<'EOF'\nprint('{state}/approvals')\nEOF\npython3 {s}/x.py"),
+        ("heredoc script run from another folder", f"cd {s} && cat > x.py <<'EOF'\nprint('{state}/approvals')\nEOF\n"
+         "python3 -u x.py"),
+        ("unquoted python heredoc", f"python3 - <<EOF\nopen('{state}/approvals/x', 'w')\nEOF"),
+        ("python heredoc with an extra import", f"python3 - <<'EOF'\nimport subprocess\n"
+         f"print('{state}/pycache')\nsubprocess.run(['ls'])\nEOF"),
+    ]
+
+
+@pytest.mark.parametrize("index", range(8))
+def test_가드_상태_폴더_경로가_글자로만_나오는_명령은_거부하지_않는다(home, index):
+    # given
+    title, command = j4_allowed(home)[index]
+    # when
+    output = guard.handle(bash(command, home / "project"), "claude")
+    # then
+    assert decision(output) != "deny", (title, output)
+
+
+@pytest.mark.parametrize("index", range(18))
+def test_가드_상태_폴더를_실제로_다루는_명령은_계속_거부한다(home, index):
+    # given
+    title, command = j4_denied(home)[index]
+    # when
+    output = guard.handle(bash(command, home / "project"), "claude")
+    # then
+    assert decision(output) == "deny", (title, output)
