@@ -21,8 +21,10 @@ files, tracked project files, shared host caches, configuration, or history. Nev
 
 ## Asking
 
-List each item with its path, its size, and why it counts as this session's, such as the command that created it.
-Then ask once whether to remove them. This question is the approval that irreversible deletion needs. Delete only the
+Remove without asking the items whose loss cannot matter: regenerable caches, such as `__pycache__` or
+`.pytest_cache`, and files in the session's own scratch or temporary folder that no reply presented as a result. Name
+them and the freed size in the report. For every other item, list it with its path, its size, and why it counts as
+this session's, such as the command that created it. Then ask once whether to remove them. This question is the approval that irreversible deletion needs. Delete only the
 items the user confirms. When the user declines or does not answer, keep everything and do not ask about the same
 items again.
 
