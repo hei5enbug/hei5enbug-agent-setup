@@ -3736,6 +3736,45 @@ def _argv_index(target, tree):
     return target.slice.value
 
 
+EXPORT_HARNESS = "evals/e2e/harness/cli.py"
+EXPORT_PLUGIN_NAME = "hei5enbug-agent-setup"
+EXPORT_REF = re.compile(r"[A-Za-z0-9][A-Za-z0-9._~^/@-]*")
+
+
+def _export_arguments(arguments):
+    """Whether the arguments after the harness script are `export-plugin`, optionally with one literal `--ref` value."""
+    if arguments[:1] != ["export-plugin"]:
+        return False
+    rest = arguments[1:]
+    if len(rest) == 2 and rest[0] == "--ref":
+        return bool(EXPORT_REF.fullmatch(rest[1]))
+    return not rest or len(rest) == 1 and rest[0].startswith("--ref=") and bool(EXPORT_REF.fullmatch(rest[0][6:]))
+
+
+def _own_export_run(script, arguments, env):
+    """Whether a Python run is this plugin's evaluation harness exporting a commit: only `export-plugin [--ref <ref>]`,
+    on a script that is committed and unchanged in the work tree whose `.claude-plugin/plugin.json` names this plugin.
+    That subcommand writes only under the plugin's own state folder."""
+    if not _export_arguments(arguments) or FILES_MAY_CHANGE in env:
+        return False
+    directory = _git_directory([], script.parent, env)
+    top = _git_lookup(directory, env, "rev-parse", "--show-toplevel") if directory is not None else None
+    if not top or not top.strip():
+        return False
+    root = Path(top.strip()).resolve()
+    if script != root / EXPORT_HARNESS:
+        return False
+    committed = _git_lookup(root, env, "rev-parse", f"HEAD:{EXPORT_HARNESS}")
+    current = _git_lookup(root, env, "hash-object", "--", EXPORT_HARNESS)
+    if not committed or committed != current:
+        return False
+    try:
+        manifest = json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(manifest, dict) and manifest.get("name") == EXPORT_PLUGIN_NAME
+
+
 def _classify_script(words, cwd, depth, env, variables=None, choices=None):
     cli = os.path.basename(words[0])
     args = words[1:]
@@ -3788,7 +3827,9 @@ def _classify_script(words, cwd, depth, env, variables=None, choices=None):
                 return Outcome("pass", [], [])
         if mode == "python":
             script_args = args if path == words[0] else args[args.index(path) + 1:]
-            argv = [_script_path(arg, cwd, variables or {}) for arg in script_args]
+            if pending is None and _own_export_run(resolved, script_args, env):
+                return Outcome("pass", [], [])
+            argv =[_script_path(arg, cwd, variables or {}) for arg in script_args]
             if pending is not None and not _confined_python_writes(pending, cwd, env, argv, resolved):
                 return _script_unknown(resolved, words, env, "unreadable")
             readonly = not any(_protected_argument(arg, cwd, env) for arg in args)
@@ -4136,6 +4177,36 @@ def _chained_by_and(segments, operators, first, last):
     start, stop = segments[first].end, segments[last].start
     between = [op for op in operators if op[2] >= start and op[3] <= stop]
     return last > first and bool(between) and all(op[1] == "&&" for op in between)
+
+
+def _process_substitutions(text, cwd, depth, env, variables):
+    """Replace each unquoted `<(...)` by a same-length inert path, so that offsets stay valid, and classify the command
+    inside it on its own. An unbalanced substitution leaves the text unchanged."""
+    if "<(" not in text:
+        return text, []
+    pieces, verdicts, last, index, quote = [], [], 0, 0, None
+    try:
+        while index < len(text):
+            char = text[index]
+            if char == "\\" and quote != "'":
+                index += 2
+            elif quote == "'":
+                quote = None if char == "'" else quote
+                index += 1
+            elif quote is None and text.startswith("<(", index) and text[index - 1:index] != "<":
+                end = _substitution_end(text, index)
+                verdicts.append(classify_text(text[index + 2:end - 1], cwd, depth + 1, env, variables))
+                pieces.extend((text[last:index], "/" + "z" * (end - index - 1)))
+                last = index = end
+            elif text.startswith("$(", index) or char == "`":
+                index = _substitution_end(text, index)
+            else:
+                if char in ("'", '"'):
+                    quote = char if quote is None else None if quote == char else quote
+                index += 1
+    except ParseError:
+        return text, []
+    return "".join((*pieces, text[last:])), verdicts
 
 
 def _python_documents(text, cwd, depth, env):
@@ -4527,6 +4598,8 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
     heredoc_scripts, script_bodies = _heredoc_scripts(text)
     text = _heredoc_data(text)
     text, python_verdicts = _python_documents(text, cwd, depth, environment)
+    text, substitution_verdicts = _process_substitutions(text, cwd, depth, environment, variables)
+    python_verdicts = [*python_verdicts, *substitution_verdicts]
     try:
         segments = tokenize(text)
         operators = [token for token in _lex(text) if token[0] == "op"]

@@ -468,3 +468,120 @@ def test_인자로_받은_임시_폴더_안_경로에_쓰는_heredoc_스크립�
     output = run_j_case(home, command, {}, monkeypatch)
     # then
     assert decision(output) not in ("ask", "deny")
+
+
+# --- J2. the plugin's own evaluation harness exports a commit under the plugin state folder -----------------------------
+
+PLUGIN_NAME = "hei5enbug-agent-setup"
+EXPORT = "python3 evals/e2e/harness/cli.py export-plugin"
+
+
+def plugin_repo(root, name=PLUGIN_NAME, tracked=True):
+    def git(*args):
+        subprocess.run(["git", "-c", "user.name=demo", "-c", "user.email=demo@example.com", *args], cwd=root,
+                       check=True, capture_output=True)
+    (root / ".claude-plugin").mkdir(parents=True)
+    (root / ".claude-plugin" / "plugin.json").write_text(f'{{"name": "{name}"}}\n')
+    (root / "evals" / "e2e" / "harness").mkdir(parents=True)
+    (root / "evals" / "e2e" / "harness" / "cli.py").write_text("import subprocess, sys\nsubprocess.run(sys.argv[1:])\n")
+    (root / "scripts").mkdir()
+    (root / "scripts" / "x.py").write_text("x = 1\n")
+    git("init", "-q")
+    git("add", "-A")
+    git("commit", "-q", "-m", "one")
+    (root / "scripts" / "x.py").write_text("x = 2\n")
+    git("commit", "-q", "-am", "two")
+    if not tracked:
+        git("rm", "-q", "--cached", "evals/e2e/harness/cli.py")
+        git("commit", "-q", "-m", "untrack")
+    return root
+
+
+def export_command(base, repo, tail=f"{EXPORT} --ref a1b2c3d"):
+    plugins = base / "xdg" / PLUGIN_NAME / "harness-eval" / "runs" / "plugins"
+    return (f"cd {repo} && {tail} 2>&1 | tail -5; ls {plugins}/ | grep a1b2; "
+            "diff <(git show HEAD~1:scripts/x.py) <(git show HEAD:scripts/x.py) && echo same")
+
+
+def test_이_플러그인의_추적된_하네스_export_plugin_호출은_묻지_않는다(home):
+    # given
+    repo = plugin_repo(home / "repo")
+    # when
+    output = guard.handle(bash(export_command(home, repo), home / "project"), "claude")
+    # then
+    assert decision(output) not in ("ask", "deny")
+
+
+@pytest.mark.parametrize("tail", [
+    f"{EXPORT}",
+    f"{EXPORT} --ref HEAD~1",
+    "python3 ./evals/e2e/harness/cli.py export-plugin --ref a1b2c3d",
+])
+def test_export_plugin은_ref가_없거나_상대_경로여도_묻지_않는다(home, tail):
+    # given
+    repo = plugin_repo(home / "repo")
+    # when
+    output = guard.handle(bash(export_command(home, repo, tail), home / "project"), "claude")
+    # then
+    assert decision(output) not in ("ask", "deny")
+
+
+def test_절대_경로로_부른_추적된_하네스의_export_plugin도_묻지_않는다(home):
+    # given
+    repo = plugin_repo(home / "repo")
+    tail = f"python3 {repo}/evals/e2e/harness/cli.py export-plugin --ref a1b2c3d"
+    # when
+    output = guard.handle(bash(export_command(home, repo, tail), home / "project"), "claude")
+    # then
+    assert decision(output) not in ("ask", "deny")
+
+
+@pytest.mark.parametrize("title", ["other subcommand", "unknown flag", "extra operand", "modified script",
+                                   "untracked script", "another plugin", "no plugin manifest"])
+def test_export_plugin이_아니거나_추적되지_않았거나_다른_저장소의_하네스는_계속_묻는다(home, title):
+    # given
+    tail = f"{EXPORT} --ref a1b2c3d"
+    repo = plugin_repo(home / "repo", name="demo-plugin" if title == "another plugin" else PLUGIN_NAME,
+                       tracked=title != "untracked script")
+    if title == "other subcommand":
+        tail = "python3 evals/e2e/harness/cli.py run --ref a1b2c3d"
+    elif title == "unknown flag":
+        tail = f"{EXPORT} --ref a1b2c3d --out /home/test/out"
+    elif title == "extra operand":
+        tail = f"{EXPORT} --ref a1b2c3d extra"
+    elif title == "modified script":
+        (repo / "evals" / "e2e" / "harness" / "cli.py").write_text("import os\nos.system('echo hi')\n")
+    elif title == "no plugin manifest":
+        (repo / ".claude-plugin" / "plugin.json").unlink()
+        subprocess.run(["git", "-c", "user.name=d", "-c", "user.email=d@example.com", "commit", "-q", "-am", "x"],
+                       cwd=repo, check=True, capture_output=True)
+    # when
+    output = guard.handle(bash(export_command(home, repo, tail), home / "project"), "claude")
+    # then
+    assert decision(output) == "ask", (title, output)
+
+
+def test_프로세스_치환_안의_git_읽기는_읽기로_본다(home):
+    # given
+    repo = plugin_repo(home / "repo")
+    command = f"cd {repo} && diff <(git show HEAD~1:scripts/x.py) <(git show HEAD:scripts/x.py) && echo same"
+    # when
+    output = guard.handle(bash(command, home / "project"), "claude")
+    # then
+    assert decision(output) not in ("ask", "deny")
+
+
+@pytest.mark.parametrize("command", [
+    "diff <(git show HEAD:scripts/x.py) <(git push origin main)",
+    "diff <(git show HEAD:scripts/x.py) <(git reset --hard HEAD~1)",
+    "cat <(rm -rf /home/test/work)",
+    "bash <(git show HEAD:scripts/x.py)",
+    "diff <(git show HEAD:scripts/x.py) <(git show HEAD:scripts/x.py",
+])
+def test_프로세스_치환_안의_쓰기나_실행은_계속_묻는다(home, command):
+    # given
+    repo = plugin_repo(home / "repo")
+    # when
+    output = guard.handle(bash(f"cd {repo} && {command}", home / "project"), "claude")
+    # then
+    assert decision(output) == "ask", output
