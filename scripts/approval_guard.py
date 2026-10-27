@@ -4313,6 +4313,20 @@ def _sed_masks(words):
     return False
 
 
+def _simple_sed(words):
+    """A standard-input `sed` that applies one `s` substitution with only the `g` and `I` flags."""
+    args = words[1:]
+    if args[:1] in (["-E"], ["-r"], ["--regexp-extended"]):
+        args = args[1:]
+    return len(args) == 1 and re.fullmatch(r"s([^\w\\\s])(.*?)\1(.*?)\1[gI]*", args[0]) is not None
+
+
+def _simple_tr(words):
+    """A `tr` over its standard input: set operands only, with the `-c`, `-d`, and `-s` options."""
+    operands = [arg for arg in words[1:] if not re.fullmatch(r"-[cds]+", arg)]
+    return 1 <= len(operands) <= 2 and not any(len(arg) > 1 and arg.startswith("-") for arg in operands)
+
+
 def _names_only_pattern(pattern):
     """An anchored pattern whose every element refuses `=` can match only inside the variable name."""
     rest = pattern[1:]
@@ -4430,15 +4444,27 @@ def _environment_filter(text):
     if any("$" in word or "`" in word for words in rest if not (words and words[0] == "awk" and _awk_names(words))
            for word in words):
         return None
-    if any(not words or words[0] not in ("grep", "rg", "head", "sort", "wc", "cut", "awk", "sed") for words in rest):
+    if any(not words or words[0] not in ("grep", "rg", "head", "sort", "wc", "cut", "awk", "sed", "tr", "tail", "uniq")
+           for words in rest):
         return None
     name_only = [_name_only_stage(words) for words in rest]
-    if any(words[0] in ("cut", "awk", "sed") and not named and not _cut_characters(words)
-           for words, named in zip(rest, name_only)):
+    first_names = next((position for position, named in enumerate(name_only) if named), len(rest))
+    after_names = [position > first_names for position in range(len(rest))]
+
+    def allowed(position, words, named):
+        if words[0] in ("tr", "tail", "uniq") and not after_names[position]:
+            return False
+        if words[0] == "tr":
+            return _simple_tr(words)
+        if words[0] in ("cut", "awk", "sed"):
+            return named or _cut_characters(words) or after_names[position] and words[0] == "sed" and _simple_sed(words)
+        return True
+
+    if not all(allowed(position, words, named) for position, (words, named) in enumerate(zip(rest, name_only))):
         return None
     numeric_options = {"-n", "--lines", "-c", "--bytes", "-k", "--key", "--parallel", "--batch-size", "-S", "--buffer-size"}
     for words in rest:
-        if words[0] in ("head", "sort", "wc"):
+        if words[0] in ("head", "sort", "wc", "tail", "uniq"):
             for index, word in enumerate(words[1:], 1):
                 if not word.startswith("-") and not (word.isdigit() and words[index - 1] in numeric_options):
                     return None

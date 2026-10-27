@@ -585,3 +585,79 @@ def test_프로세스_치환_안의_쓰기나_실행은_계속_묻는다(home, c
     output = guard.handle(bash(f"cd {repo} && {command}", home / "project"), "claude")
     # then
     assert decision(output) == "ask", output
+
+
+# --- J3. `env | grep` stages that print only variable names ---------------------------------------------------------------
+
+J3_RECORDED = ("cd {repo}; U=$(env | grep '^GIT_' | cut -d= -f1 | sed 's/^/-u /' | tr '\\n' ' '); env $U python3 -m pytest "
+               "-q -p no:cacheprovider tests/test_demo.py 2>&1 | tail -1; env -u GIT_CONFIG_COUNT -u GIT_CONFIG_KEY_0 "
+               "-u GIT_CONFIG_VALUE_0 -u GIT_CONFIG_KEY_1 -u GIT_CONFIG_VALUE_1 python3 -m pytest -q -p no:cacheprovider "
+               "tests/test_demo.py 2>&1 | tail -1")
+
+
+def secret_environment(monkeypatch):
+    monkeypatch.setenv("DEMO_API_TOKEN", "abc123def456")
+    monkeypatch.setenv("DEMO_PASSWORD", "hunter2hunter2")
+
+
+def test_이름만_출력하는_env_grep_cut_파이프라인은_기록된_모양으로_묻지_않는다(home, monkeypatch):
+    # given
+    for name, value in GIT_CONFIG.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("GIT_ASKPASS_TOKEN", "abc123def456")
+    # when
+    output = guard.handle(bash(J3_RECORDED.format(repo=home / "project"), home / "project"), "claude")
+    # then
+    assert decision(output) not in ("ask", "deny"), output
+
+
+@pytest.mark.parametrize("cut", ["cut -d= -f1", "cut -d '=' -f1", "cut --delimiter== -f1", "cut -d= -f 1",
+                                 "cut -d= --fields=1", "cut -f1 -d="])
+@pytest.mark.parametrize("pattern", ["'^GIT_'", "token", "-i secret", "'.'"])
+def test_cut으로_이름_열만_남기는_env_grep은_패턴과_상관없이_묻지_않는다(home, monkeypatch, cut, pattern):
+    # given
+    secret_environment(monkeypatch)
+    # when
+    output = guard.handle(bash(f"env | grep {pattern} | {cut}", home / "project"), "claude")
+    # then
+    assert decision(output) not in ("ask", "deny"), output
+
+
+@pytest.mark.parametrize("stage", ["cut -d= -f2", "cut -f1", "cut -d= -f1-", "cut -d= -f1,2", "cut -c1-60",
+                                   "cut -d= -f2-", "cut -d: -f1", "cut -d= -f1 -s -z"])
+def test_값이_나올_수_있는_cut_단계는_비밀_이름과_맞으면_계속_민감_조회다(home, monkeypatch, stage):
+    # given
+    secret_environment(monkeypatch)
+    # when
+    output = guard.handle(bash(f"env | grep -i token | {stage}", home / "project"), "claude")
+    # then
+    assert decision(output) == "ask", (stage, output)
+
+
+@pytest.mark.parametrize("pipeline", [
+    "env | grep -i token | sed 's/^/-u /' | cut -d= -f1",
+    "env | grep -i token | tr 'a-z' 'A-Z' | cut -d= -f1",
+    "env | grep -i token | tr '\\n' ' '",
+    "env | grep -i token | sed 's/^/-u /'",
+    "env | grep -i token | cut -d= -f2 | sed 's/^/-u /'",
+    "env | grep -i token | cut -d= -f1 | sed -n 'w /home/test/names.txt'",
+    "env | grep -i token | cut -d= -f1 | sed 's/a/b/e'",
+    "env | grep -i token | cut -d= -f1 | tr a b /home/test/names.txt",
+])
+def test_이름_열을_남기기_전의_변환이나_값을_남기는_변환은_계속_민감_조회다(home, monkeypatch, pipeline):
+    # given
+    secret_environment(monkeypatch)
+    # when
+    output = guard.handle(bash(pipeline, home / "project"), "claude")
+    # then
+    assert decision(output) == "ask", (pipeline, output)
+
+
+def test_이름_열_뒤의_sed_tr_단계는_묻지_않는다(home, monkeypatch):
+    # given
+    secret_environment(monkeypatch)
+    # when
+    output = guard.handle(bash("env | grep -i token | cut -d= -f1 | sed 's/^/-u /' | tr '\\n' ' '",
+                               home / "project"), "claude")
+    # then
+    assert decision(output) not in ("ask", "deny")
