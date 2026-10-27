@@ -2717,3 +2717,100 @@ class RoleRunnerTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CodexHookAutoTrustTest(unittest.TestCase):
+    OFFICIAL = role_runner.codex_hook_trust.PLUGIN_ID
+
+    def guard(self, trust):
+        return {"key": f"{self.OFFICIAL}:hooks/hooks.json:pre_tool_use:0:0", "eventName": "preToolUse",
+                "handlerType": "command", "command": 'sh "/abs/root/scripts/hook_python.sh" approval_guard.py',
+                "async": False, "matcher": "^(Bash)$", "pluginId": self.OFFICIAL, "enabled": True, "isManaged": False,
+                "currentHash": "sha256:x", "sourcePath": "/abs/root/hooks/hooks.json", "trustStatus": trust}
+
+    def listing(self, trust):
+        return {"data": [{"cwd": "/tmp/work", "hooks": [self.guard(trust)]}]}
+
+    def test_신뢰가_풀린_이_플러그인의_가드_훅은_자동으로_신뢰한_뒤_실행을_허용한다(self):
+        """준비 확인에서 가드 훅이 modified이면 검증된 설치본에서 다시 신뢰하고, 그 뒤 신뢰됨으로 보이면 통과한다."""
+        # Given
+        healed = [self.guard("trusted")]
+        with (
+            mock.patch.object(role_runner, "app_server_hooks", return_value=self.listing("modified")),
+            mock.patch.object(role_runner.codex_hook_trust, "heal", return_value=healed) as heal,
+        ):
+            # When
+            role_runner.require_hooks_ready("m", [], "/tmp/work", 10)
+
+        # Then
+        self.assertEqual("codex", heal.call_args.args[1][0])
+        self.assertEqual(["app-server"], heal.call_args.args[1][1:])
+
+    def test_자동_신뢰가_거부되면_이유와_함께_종료_코드_4로_멈춘다(self):
+        """설치본 검증이나 쓰기가 실패하면 기존처럼 /hooks 안내와 함께 종료 코드 4로 끝나고 이유를 증거에 남긴다."""
+        # Given
+        refusal = role_runner.codex_hook_trust.TrustError("the installed copy has local changes")
+        with (
+            mock.patch.object(role_runner, "app_server_hooks", return_value=self.listing("modified")),
+            mock.patch.object(role_runner.codex_hook_trust, "heal", side_effect=refusal),
+        ):
+            # When
+            with self.assertRaises(role_runner.RunnerError) as raised:
+                role_runner.require_hooks_ready("m", [], "/tmp/work", 10)
+
+        # Then
+        self.assertEqual(role_runner.EXIT_EVIDENCE, raised.exception.code)
+        self.assertEqual("the installed copy has local changes", raised.exception.evidence["auto_trust"])
+
+    def test_다른_플러그인의_가드_훅은_자동으로_신뢰하지_않는다(self):
+        """이 플러그인이 아닌 훅은 신뢰를 쓰지 않고 기존처럼 종료 코드 4로 멈춘다."""
+        # Given
+        listing = self.listing("modified")
+        listing["data"][0]["hooks"][0].update(pluginId="other@market", key="other@market:hooks/hooks.json:pre_tool_use:0:0")
+        with (
+            mock.patch.object(role_runner, "app_server_hooks", return_value=listing),
+            mock.patch.object(role_runner.codex_hook_trust, "heal") as heal,
+        ):
+            # When
+            with self.assertRaises(role_runner.RunnerError) as raised:
+                role_runner.require_hooks_ready("m", [], "/tmp/work", 10)
+
+        # Then
+        heal.assert_not_called()
+        self.assertEqual(role_runner.EXIT_EVIDENCE, raised.exception.code)
+
+    def test_쓰기_실행의_사전_점검이_신뢰_해제로_실패하면_자동_신뢰_뒤_한_번_더_점검한다(self):
+        """사전 점검이 가드 heartbeat 없이 끝나고 가드 훅이 modified이면, 다시 신뢰한 뒤 새 스레드로 한 번만 재시도한다."""
+        # Given
+        run = mock.Mock(resume=None, target="m")
+        retried = mock.Mock(resume="thread-2")
+        failure = role_runner.RunnerError(role_runner.EXIT_EVIDENCE, role_runner.CODEX_HOOKS_MESSAGE)
+        with (
+            mock.patch.object(role_runner, "preflight_thread", side_effect=[failure, retried]) as preflight,
+            mock.patch.object(role_runner, "app_server_hooks", return_value=self.listing("modified")),
+            mock.patch.object(role_runner.codex_hook_trust, "heal", return_value=[self.guard("trusted")]),
+        ):
+            # When
+            result = role_runner.preflight_healing(run, "/tmp/work", [], 10)
+
+        # Then
+        self.assertIs(retried, result)
+        self.assertEqual(2, preflight.call_count)
+
+    def test_쓰기_실행의_사전_점검_실패가_신뢰와_무관하면_재시도하지_않는다(self):
+        """가드 훅이 이미 신뢰됨이면 다른 원인이므로 자동 신뢰도 재시도도 하지 않고 원래 오류를 낸다."""
+        # Given
+        run = mock.Mock(resume=None, target="m")
+        failure = role_runner.RunnerError(role_runner.EXIT_EVIDENCE, role_runner.CODEX_HOOKS_MESSAGE)
+        with (
+            mock.patch.object(role_runner, "preflight_thread", side_effect=[failure]) as preflight,
+            mock.patch.object(role_runner, "app_server_hooks", return_value=self.listing("trusted")),
+            mock.patch.object(role_runner.codex_hook_trust, "heal") as heal,
+        ):
+            # When
+            with self.assertRaises(role_runner.RunnerError):
+                role_runner.preflight_healing(run, "/tmp/work", [], 10)
+
+        # Then
+        heal.assert_not_called()
+        self.assertEqual(1, preflight.call_count)

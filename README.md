@@ -894,8 +894,13 @@ Disabled hooks or enterprise policies that prohibit plugin hooks prevent automat
 After installation or update, use the host's hook controls to check that these hooks are enabled and,
 in Codex, trusted. A hook that an update adds or changes, such as the agent guard, the language guard, or the DataGrip
 query guard, stays skipped in Codex until you trust it in `/hooks`. Codex trust also covers the plugin's
-files, so every plugin update leaves all plugin hooks `modified`. Codex users must trust them again in `/hooks` after
-each update. The Claude Code mod is not a Codex hook, so this trust step does not apply to
+files, so every plugin update leaves all plugin hooks `modified`. The plugin re-trusts only its own hooks, and only
+when the installed copy is a clean git checkout of the official repository, apart from Codex's install marker, whose
+HEAD is on its `main` branch or a `v*` tag: `orca-plugin-refresh` does this right after a Codex install, and the role
+runner does it when its readiness check or preflight finds the guard untrusted. It records each hook's current hash
+through the `codex app-server` method `config/value/write` and confirms the result with `hooks/list`. Otherwise,
+including for a locally edited copy and for other plugins, trust the hooks again in `/hooks` after each update.
+The Claude Code mod is not a Codex hook, so this trust step does not apply to
 it. Restart Claude Code or start a new Codex session after updating.
 The hook does not bypass host trust settings or change an already running session to a new plugin version.
 The `orca-plugin-refresh` skill uses those markers to apply an update to running Orca sessions without restarting them.
@@ -977,7 +982,9 @@ sends “Run the shell command `true` exactly once, then reply with OK only.” 
 the assignment, so the guard has checked a tool call before any write can run. A plain, `UserPromptSubmit`, or
 `SessionStart` heartbeat satisfies neither check. Codex trust also covers the plugin's files: with Codex CLI 0.164.0,
 an edit to any plugin file, even `README.md`, marked every plugin hook `modified`, so after each plugin update Codex
-skips the hooks and the runner exits 4 until you trust them again in `/hooks`. Claude children require `heartbeats/claude-<session_id>.UserPromptSubmit` or the existing plain heartbeat, since Claude does
+skips the hooks. The runner then re-trusts this plugin's hooks from a verified official copy, as described above, and
+checks again or preflights once more; when that is not allowed or fails, it exits 4 with the reason in `auto_trust`
+until you trust them again in `/hooks`. Claude children require `heartbeats/claude-<session_id>.UserPromptSubmit` or the existing plain heartbeat, since Claude does
 not gate plugin hooks by trust. A missing required heartbeat exits 4.
 Exit code 0 means the result is verified, 2 a usage error to fix, 3 that the role could not run, and 4 that the
 required hook evidence was missing or the recorded model, effort, or sandbox did not match, so the result is

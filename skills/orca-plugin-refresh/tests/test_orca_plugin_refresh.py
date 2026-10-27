@@ -1414,6 +1414,9 @@ class UpdateTest(unittest.TestCase):
         for name in (*refresh.CODEX_TURN_ENV, refresh.COMPANION_ENV):
             os.environ.pop(name, None)
         self.addCleanup(self.env.stop)
+        trust = patch.object(refresh, "trust_codex_hooks", return_value="automatic trust is off in these tests")
+        self.trust_codex_hooks = trust.start()
+        self.addCleanup(trust.stop)
 
     def install(self, host, version, *, root=None, missing_target=None, manifest_version=None, instruction=None,
                 missing_config=False, missing_module=False, direct_hooks=False):
@@ -1459,6 +1462,28 @@ class UpdateTest(unittest.TestCase):
         instructions.mkdir(parents=True, exist_ok=True)
         (instructions / "policy.md").write_text(instruction or f"{host} {version}\n", encoding="utf-8")
         return {"version": version, "root": root.as_posix()}
+
+    def test_Codex_설치_뒤_이_플러그인의_훅을_자동으로_신뢰하면_경고_대신_신뢰했다고_알린다(self):
+        """플러그인 파일이 바뀐 Codex 설치 뒤 자동 신뢰가 성공하면 경고 없이 codex_hooks_trusted를 남기고, 실패하면 이유와 함께 경고한다."""
+        # Given
+        codex_before = self.install("codex", "1.0.0", instruction="old\n")
+        codex_after = self.install("codex", "1.1.0", instruction="new\n")
+        states = [codex_before, codex_after, codex_before, codex_after]
+        self.trust_codex_hooks.side_effect = [None, "the installed copy has local changes"]
+
+        # When
+        with (
+            patch.object(refresh, "installed", side_effect=lambda host: states.pop(0)),
+            patch.object(refresh, "run", side_effect=lambda argv, **kwargs: None),
+            patch.object(refresh, "executable", side_effect=lambda name: name),
+        ):
+            trusted = refresh.update_host("codex")
+            refused = refresh.update_host("codex")
+
+        # Then
+        self.assertEqual(([], True), (trusted["warnings"], trusted.get("codex_hooks_trusted")))
+        self.assertEqual([("codex_hooks_need_trust", "the installed copy has local changes")],
+                         [(warning["code"], warning.get("detail")) for warning in refused["warnings"]])
 
     def test_Codex는_훅_정의가_같아도_플러그인_파일이_바뀌면_다시_신뢰하라고_경고한다(self):
         """Codex 훅 신뢰는 플러그인 파일 전체를 따르므로 지침 파일만 바뀌어도 경고하고, 파일이 그대로면 경고하지 않는다."""
@@ -2626,6 +2651,31 @@ def write_rollout(home, name, events, *, text=None, age=0.0):
         stamp = time.time() - age
         os.utime(path, (stamp, stamp))
     return path
+
+
+class CodexHookTrustTest(unittest.TestCase):
+    def listing(self, root, trust):
+        hook = {"key": f"{refresh.CODEX_HOOK_TRUST.PLUGIN_ID}:hooks/hooks.json:pre_tool_use:0:0", "trustStatus": trust,
+                "pluginId": refresh.CODEX_HOOK_TRUST.PLUGIN_ID, "currentHash": "sha256:x",
+                "sourcePath": str(Path(root) / "hooks" / "hooks.json")}
+        return [{"data": [{"cwd": str(Path.home()), "hooks": [hook]}]}]
+
+    def test_신뢰할_훅이_없으면_성공으로_보고_검증되지_않은_설치본은_이유를_돌려준다(self):
+        """이 플러그인의 훅이 모두 신뢰됨이면 None이고, git 저장소가 아닌 설치본의 modified 훅은 신뢰하지 않고 이유를 돌려준다."""
+        # Given
+        with tempfile.TemporaryDirectory() as root:
+            calls = [self.listing(root, "trusted"), self.listing(root, "modified")]
+            with (
+                patch.object(refresh, "executable", side_effect=lambda name: name),
+                patch.object(refresh.CODEX_HOOK_TRUST, "app_server_calls", side_effect=lambda *args: calls.pop(0)),
+            ):
+                # When
+                outcomes = [refresh.trust_codex_hooks(), refresh.trust_codex_hooks()]
+
+        # Then
+        self.assertIsNone(outcomes[0])
+        self.assertIsInstance(outcomes[1], str)
+        self.assertEqual([], calls)
 
 
 class CodexGateTest(unittest.TestCase):

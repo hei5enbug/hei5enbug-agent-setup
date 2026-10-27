@@ -129,6 +129,8 @@ def load_plugin_script(name: str):
 
 
 SESSION_CONTEXT = load_plugin_script("session_context")
+CODEX_HOOK_TRUST = load_plugin_script("codex_hook_trust")
+CODEX_TRUST_TIMEOUT_SECONDS = 60
 
 
 def executable(name: str) -> str:
@@ -596,8 +598,27 @@ def update_host(host: str, context: dict | None = None) -> dict:
             )
     if host == "codex" and codex_trust_reset(before_snapshot["hooks"], after_snapshot["hooks"], before_bundle,
                                              bundle_digest(Path(after["root"]))):
-        result["warnings"].append(dict(HOOKS_TRUST_WARNING))
+        reason = trust_codex_hooks()
+        if reason is None:
+            result["codex_hooks_trusted"] = True
+        else:
+            result["warnings"].append({**HOOKS_TRUST_WARNING, "detail": reason})
     return result
+
+
+def trust_codex_hooks() -> str | None:
+    """Re-trust this plugin's Codex hooks that the install left untrusted, from a verified official copy only; None when
+    none are left untrusted, otherwise why they were not trusted."""
+    command, cwd = [executable("codex"), "app-server"], str(Path.home())
+    try:
+        result = CODEX_HOOK_TRUST.app_server_calls(command, dict(os.environ), cwd, [("hooks/list", {"cwds": [cwd]})],
+                                                   CODEX_TRUST_TIMEOUT_SECONDS)[0]
+        listed = CODEX_HOOK_TRUST.listed_hooks(result, cwd)
+        if CODEX_HOOK_TRUST.candidates(listed):
+            CODEX_HOOK_TRUST.heal(listed, command, dict(os.environ), cwd, CODEX_TRUST_TIMEOUT_SECONDS)
+    except (CODEX_HOOK_TRUST.TrustError, RefreshError) as error:
+        return str(error)
+    return None
 
 
 def companion_entries(value: object) -> list:

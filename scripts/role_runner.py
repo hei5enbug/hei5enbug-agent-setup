@@ -17,6 +17,7 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import agent_guard  # noqa: E402
+import codex_hook_trust  # noqa: E402
 import session_context  # noqa: E402
 
 
@@ -504,20 +505,39 @@ def guard_hook_ready(hook: dict) -> bool:
     )
 
 
+def guard_ready(listed: list) -> bool:
+    return any(guard_hook_ready(hook) for hook in listed if is_guard_hook(hook))
+
+
+def heal_hooks(marker: str, mcp_off: list[str], cwd: str, timeout: int, listed: list) -> tuple[list, str | None]:
+    """Re-trust this plugin's hooks that a release left untrusted, from a verified official copy only; return the hooks
+    Codex lists afterwards, or the unchanged list and the reason nothing was trusted."""
+    if not codex_hook_trust.candidates(listed):
+        return listed, None
+    try:
+        healed = codex_hook_trust.heal(listed, ["codex", "app-server", *mcp_off], child_environment(marker), cwd, timeout)
+    except codex_hook_trust.TrustError as error:
+        return listed, str(error)
+    return healed, None
+
+
 def require_hooks_ready(marker: str, mcp_off: list[str], cwd: str, timeout: int) -> None:
     """Require a ready guard PreToolUse hook for the folder, so no assignment runs unguarded."""
     listed = hooks_for_cwd(app_server_hooks(marker, mcp_off, cwd, timeout), cwd)
-    hooks = [hook for hook in listed if is_guard_hook(hook)]
-    if any(guard_hook_ready(hook) for hook in hooks):
+    if guard_ready(listed):
+        return
+    listed, reason = heal_hooks(marker, mcp_off, cwd, timeout, listed)
+    if guard_ready(listed):
         return
     found = [
         {
             "key": hook.get("key"), "enabled": hook.get("enabled"), "trust": hook.get("trustStatus"),
             "async": hook.get("async"), "matcher": hook.get("matcher"),
         }
-        for hook in hooks
+        for hook in listed if is_guard_hook(hook)
     ]
-    raise RunnerError(EXIT_EVIDENCE, CODEX_HOOKS_MESSAGE, {"hooks": found})
+    evidence = {"hooks": found, **({"auto_trust": reason} if reason else {})}
+    raise RunnerError(EXIT_EVIDENCE, CODEX_HOOKS_MESSAGE, evidence)
 
 
 def state_home() -> Path:
@@ -681,12 +701,26 @@ def preflight_thread(run: Run, cwd: str, mcp_off: list[str], timeout: int) -> Ru
     return run
 
 
+def preflight_healing(run: Run, cwd: str, mcp_off: list[str], timeout: int) -> Run:
+    """Preflight a fresh thread; when its guard hook did not run because a release left it untrusted, re-trust it from a
+    verified official copy and preflight once more."""
+    try:
+        return preflight_thread(run, cwd, mcp_off, timeout)
+    except RunnerError as error:
+        if error.code != EXIT_EVIDENCE or run.resume is not None:
+            raise
+        listed = hooks_for_cwd(app_server_hooks(run.target, mcp_off, cwd, timeout), cwd)
+        if guard_ready(listed) or not guard_ready(heal_hooks(run.target, mcp_off, cwd, timeout, listed)[0]):
+            raise
+    return preflight_thread(run, cwd, mcp_off, timeout)
+
+
 def execute_codex(args: argparse.Namespace, run: Run, prompt: str, cwd: str) -> dict:
     """A writing run preflights a fresh thread and resumes it; a read-only run checks hooks/list, then runs once."""
     mcp_off = [] if run.mcp else codex_mcp_off(run.target, cwd, args.timeout)
     sandbox = sandbox_for(run)
     if run.writing:
-        run = preflight_thread(run, cwd, mcp_off, args.timeout)
+        run = preflight_healing(run, cwd, mcp_off, args.timeout)
     else:
         require_hooks_ready(run.target, mcp_off, cwd, args.timeout)
         if run.resume is not None:

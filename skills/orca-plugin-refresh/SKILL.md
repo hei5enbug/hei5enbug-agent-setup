@@ -75,8 +75,10 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
    - `unreleased_same_version`: Claude Code keeps its installed copy because the version did not change. Tell
      the user these files reach Claude Code only after a version bump.
    - `codex_hooks_need_trust`: the plugin's hook definitions changed, appeared, or disappeared, or a plugin with
-     hooks changed any file, because Codex ties hook trust to every plugin file. Ask the user to trust that
-     plugin's hooks in Codex `/hooks`; Codex skips untrusted hooks.
+     hooks changed any file, because Codex ties hook trust to every plugin file. For this plugin the script first
+     re-trusts its own hooks when the installed copy is a clean official checkout on `main` or a `v*` tag, and then
+     reports `codex_hooks_trusted: true` instead of this warning; otherwise the warning carries the reason in
+     `detail`. Ask the user to trust that plugin's hooks in Codex `/hooks`; Codex skips untrusted hooks.
    - `unreleased_check_unavailable`: the script could not tell whether Claude Code missed same-version files.
      Report the reason.
 3. **Apply to the sessions.** When this plugin's host update succeeded, or `apply-installed` returned that host
