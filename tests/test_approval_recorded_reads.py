@@ -669,6 +669,7 @@ def test_파일에서_읽은_입력을_받는_xargs_rg는_옵션_구분자가_�
     "find . -name '*.md' | xargs grep -c demo",
     "echo a.txt b.txt | xargs grep -l demo",
     "printf '%s\\n' a.txt b.txt | xargs rg -l demo",
+    "xargs grep -l demo < /tmp/work/arguments.txt",
     "xargs wc -l < /tmp/work/arguments.txt",
     "xargs ls -la < /tmp/work/arguments.txt",
     "xargs stat < /tmp/work/arguments.txt",
@@ -683,7 +684,7 @@ def test_입력이_옵션처럼_보이는_단어를_낼_수_없거나_옵션_구
 
 
 @pytest.mark.parametrize("command", [
-    "xargs grep -l demo < /tmp/work/arguments.txt",
+    "xargs grep -l demo < /home/test/arguments.txt",
     "cat /tmp/work/arguments.txt | xargs rg -l demo",
     "find -- -x -type f | xargs rg -l demo",
     "find /tmp/work/demo -printf '%p\\n' | xargs rg -l demo",

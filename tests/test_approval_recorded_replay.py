@@ -355,7 +355,7 @@ def main():
         runs = sorted(path for path in root.glob(f"*/{arm}/rep*") if (path / "stream.jsonl").is_file())
         for run in runs:
             found = decisions(run / "stream.jsonl")
-            print(" | ".join((run.relative_to(root).as_posix(), str(len(found)), "x".replace("x", "\n"))))
+            print(" | ".join((run.relative_to(root).as_posix(), str(len(found)), reason.replace("x", "\n"))))
 
 
 if __name__ == "__main__":
@@ -832,7 +832,6 @@ def test_짧은_앵커나_비밀_이름이나_범위_없는_패턴이나_목록_
     "for S in /home/test; do xargs grep -l x < $S/files.txt; done",
     "xargs grep -l x < $UNSET/files.txt",
     "xargs -a /home/test/list.txt grep -l x < $S/files.txt",
-    "xargs grep -h -o '.\\{150\\}PermissionRequest.\\{150\\}' < $S/files.txt | head -3",
 ])
 def test_목록_경로가_바뀌었거나_앵커가_앞에_없으면_xargs_grep은_계속_묻는다(home, body):
     # given
@@ -841,3 +840,402 @@ def test_목록_경로가_바뀌었거나_앵커가_앞에_없으면_xargs_grep�
     output = guard.handle(bash(command, home / "project"), "claude")
     # then
     assert decision(output) == "ask", (body, output)
+
+
+# --- J7. a git read script in the scratchpad, and the work tree's own code run from an archive copy -------------------------
+
+SAME_DEFS_BODY = '''import ast, subprocess, sys
+from pathlib import Path
+root, orig_rel, new_glob = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+def defs(src):
+    out = {}
+    for node in ast.parse(src).body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            out[node.name] = ast.dump(node)
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for t in targets:
+                if isinstance(t, ast.Name): out[t.id] = ast.dump(node.value) if node.value else ""
+    return out
+old = defs(subprocess.run(["git", "-C", str(root), "show", f"HEAD:{orig_rel}"], capture_output=True, text=True, check=True).stdout)
+new = {}
+for p in sorted(root.glob(new_glob)):
+    for k, v in defs(p.read_text()).items():
+        new.setdefault(k, []).append((p.name, v))
+missing = [k for k in old if k not in new]
+changed = [k for k in old if k in new and all(v != old[k] for _, v in new[k])]
+dup = {k: [n for n, _ in v] for k, v in new.items() if len(v) > 1}
+print("old defs", len(old), "missing", missing, "changed", changed)
+print("defined in several files", dup)
+'''
+
+J7_COMMAND = ("S={s}; cd $S/wt-split && python3 $S/same_defs.py . skills/demo/scripts/demo_tool.py "
+              "'skills/demo/scripts/*.py'; wc -l skills/demo/scripts/*.py | tail -9; "
+              "rm -rf skills/demo/scripts/__pycache__; d=$(mktemp -d $S/pyc.XXXX); git archive HEAD | tar -x -C $d; "
+              "cp skills/demo/scripts/*.py $d/skills/demo/scripts/; "
+              "python3 $d/skills/demo/scripts/demo_tool.py --help >/dev/null; "
+              "ls $d/skills/demo/scripts/ $d/scripts | grep -c pycache; rm -rf $d")
+
+
+def j7_tree(base, name=PLUGIN_NAME, defs_body=SAME_DEFS_BODY):
+    scratch = base / "scratchpad"
+    tree = scratch / "wt-split"
+    (tree / ".claude-plugin").mkdir(parents=True)
+    (tree / ".claude-plugin" / "plugin.json").write_text(f'{{"name": "{name}"}}\n')
+    (tree / "skills" / "demo" / "scripts").mkdir(parents=True)
+    (tree / "skills" / "demo" / "scripts" / "demo_tool.py").write_text(
+        "import argparse\nparser = argparse.ArgumentParser()\nparser.parse_args()\n")
+    (tree / "skills" / "demo" / "scripts" / "helper.py").write_text("VALUE = 1\n")
+    (tree / "scripts").mkdir()
+    (tree / "scripts" / "x.py").write_text("x = 1\n")
+    for args in (("init", "-q"), ("add", "-A"), ("commit", "-q", "-m", "base")):
+        subprocess.run(["git", "-c", "user.name=demo", "-c", "user.email=demo@example.com", *args], cwd=tree,
+                       check=True, capture_output=True)
+    (scratch / "same_defs.py").write_text(defs_body)
+    return scratch
+
+
+def j7_command(scratch, command=J7_COMMAND):
+    return command.replace("{s}", str(scratch))
+
+
+def test_기록된_git_읽기_스크립트와_작업_트리_아카이브_복사본_실행은_묻지_않는다(home):
+    # given
+    command = j7_command(j7_tree(home))
+    # when
+    output = guard.handle(bash(command, home / "project"), "claude")
+    # then
+    assert decision(output) not in ("ask", "deny"), output
+
+
+J7_MUST_ASK = [
+    ("mktemp template outside temp", J7_COMMAND.replace("mktemp -d $S/pyc.XXXX", "mktemp -d ~/x.XXXX")),
+    ("download into the archive copy", J7_COMMAND.replace(
+        "python3 $d/skills", "curl -o $d/skills/demo/scripts/demo_tool.py https://example.com/x.py; python3 $d/skills")),
+    ("copy from another folder", J7_COMMAND.replace("cp skills/demo/scripts/*.py", "cp /home/test/other/*.py")),
+    ("sed edit of the copy", J7_COMMAND.replace(
+        "python3 $d/skills", "sed -i 's/a/b/' $d/skills/demo/scripts/demo_tool.py; python3 $d/skills")),
+    ("inline code instead of a script", J7_COMMAND.replace(
+        "python3 $d/skills/demo/scripts/demo_tool.py --help", "python3 -c 'import os; os.system(\"true\")' $d")),
+    ("expansion in an argument", J7_COMMAND.replace("demo_tool.py --help", "demo_tool.py $(echo --help)")),
+    ("redirect outside temp", J7_COMMAND.replace("--help >/dev/null", "--help > /home/test/out.txt")),
+    ("archive of another ref", J7_COMMAND.replace("git archive HEAD", "git archive origin/main")),
+    ("extract elsewhere then run", J7_COMMAND.replace("tar -x -C $d", "tar -x -C /home/test/x")),
+]
+
+
+@pytest.mark.parametrize("index", range(len(J7_MUST_ASK)))
+def test_템플릿이_없거나_다른_내용을_채우거나_고쳐서_실행하면_계속_묻는다(home, index):
+    # given
+    title, command = J7_MUST_ASK[index]
+    # when
+    output = guard.handle(bash(j7_command(j7_tree(home), command), home / "project"), "claude")
+    # then
+    assert decision(output) == "ask", (title, output)
+
+
+def test_작업_트리의_플러그인_이름이_다르면_아카이브_복사본_실행은_계속_묻는다(home):
+    # given
+    command = j7_command(j7_tree(home, name="demo-plugin"))
+    # when
+    output = guard.handle(bash(command, home / "project"), "claude")
+    # then
+    assert decision(output) == "ask", output
+
+
+@pytest.mark.parametrize("argv", ['["git", "push"]', '["sh", "-c", "git status"]', '["git", "-C", str(root), "push"]',
+                                  '["git", "--output=x", "show", "HEAD"]', '["git", str(root), "show"]',
+                                  'sys.argv[1:]', '["git", "show", "HEAD"], shell=True',
+                                  '["git", "show", "HEAD"], stdout=open("x", "w")', '["git", "show", str(root)]'])
+def test_git_읽기가_아닌_subprocess_run이_있는_스크립트는_계속_묻는다(home, argv):
+    # given
+    body = SAME_DEFS_BODY.replace('["git", "-C", str(root), "show", f"HEAD:{orig_rel}"]', argv)
+    command = j7_command(j7_tree(home, defs_body=body), "S={s}; cd $S/wt-split && python3 $S/same_defs.py . a b")
+    # when
+    output = guard.handle(bash(command, home / "project"), "claude")
+    # then
+    assert decision(output) == "ask", (argv, output)
+
+
+# --- J8. grep -o with a bounded context around a literal ---------------------------------------------------------------------
+
+J8_CONTEXT = "xargs grep -h -o '.\\{150\\}PermissionRequest.\\{150\\}' < $S/files.txt | grep -v '\"text\"' | head -3"
+J8_TYPES = "xargs grep -h -o '\"type\":\"[a-z_]*\"' < $S/files.txt | sort | uniq -c | sort -rn | head -40"
+
+
+@pytest.mark.parametrize("body", [
+    J8_CONTEXT + "; echo ===; " + J8_TYPES,
+    "xargs grep -h -oE '.{150}PermissionRequest.{150}' < $S/files.txt | head -3",
+    "xargs grep -h -o '.\\{20,200\\}PermissionRequest' < $S/files.txt | head -3",
+    "xargs grep -h -o '\"type\":\"[A-Za-z0-9_]*\"' < $S/files.txt | sort | uniq -c",
+    "xargs grep -h -o '[^\"]*\"PermissionRequest\"[^\"]*' < $S/files.txt | head",
+    "xargs grep -h -o 'PermissionRequest.\\{512\\}' < $S/files.txt | head",
+])
+def test_고정_문자열_둘레의_범위가_있는_grep_o는_목록_파일에서도_묻지_않는다(home, body):
+    # given
+    command = j6(home, body)
+    # when
+    output = guard.handle(bash(command, home / "project"), "claude")
+    # then
+    assert decision(output) not in ("ask", "deny"), (body, output)
+
+
+@pytest.mark.parametrize("body", [
+    "xargs grep -h -o '.\\{600\\}PermissionRequest' < $S/files.txt",
+    "xargs grep -h -o '.\\{300\\}PermissionRequest.\\{300\\}' < $S/files.txt",
+    "xargs grep -h -o '.*PermissionRequest.*' < $S/files.txt",
+    "xargs grep -h -o '.\\{150\\}token.\\{150\\}' < $S/files.txt",
+    "xargs grep -h -o '.\\{150\\}abc.\\{150\\}' < $S/files.txt",
+    "xargs grep -h -o '[^a]*PermissionRequest' < $S/files.txt",
+    "xargs grep -h -o '.\\{150\\}PermissionRequest.\\{150\\}' < /home/test/list.txt",
+    "xargs rg -o '.\\{150\\}PermissionRequest.\\{150\\}' < $S/files.txt",
+    "xargs grep -h -o '.\\{150\\}PermissionRequest.\\{0,\\}' < $S/files.txt",
+])
+def test_범위가_없거나_너무_넓거나_짧은_고정_문자열이면_grep_o는_계속_묻는다(home, body):
+    # given
+    command = j6(home, body)
+    # when
+    output = guard.handle(bash(command, home / "project"), "claude")
+    # then
+    assert decision(output) == "ask", (body, output)
+
+
+# --- J9. a stdlib HTML parser in a heredoc analysis script -------------------------------------------------------------------
+
+BLOGCHECK_BODY = r'''import re, sys
+from html.parser import HTMLParser
+pairs = [('page_a','A'),('page_b','B')]
+css = open('docs/blog/blog.css').read()
+defined = set(re.findall(r'\.([a-zA-Z][\w-]*)', css))
+for name, pre in pairs:
+    h = open(f'docs/blog/{name}.html').read(); md = open(f'docs/notes/{name}.md').read()
+    table = {}
+    for line in md.splitlines():
+        m = re.match(rf'^\|\s*({pre}-\d\d)\s*\|(.*)\|\s*$', line)
+        if m:
+            cells = [c.strip() for c in m.group(2).split('|')]
+            table[m.group(1)] = cells[2] if len(cells) > 2 else '?'
+    print(f'== {name}: md metrics', table)
+    for m in re.finditer(r'<(span|text)([^>]*)data-metric="([^"]+)"([^>]*)>(.*?)</\1>', h, re.S):
+        attrs = m.group(2) + m.group(4); mid = m.group(3); val = re.sub('<[^>]+>','',m.group(5))
+        cls = re.search(r'class="([^"]*)"', attrs); cls = cls.group(1) if cls else ''
+        ok = mid in table
+        print(f'  {mid:9} [{cls}] {val!r}  md={table.get(mid)!r}{"" if ok else "  !!MISSING"}')
+    used = set()
+    for c in re.findall(r'class="([^"]*)"', h): used |= set(c.split())
+    undef = sorted(c for c in used if c not in defined)
+    print('  undefined classes:', undef)
+    class P(HTMLParser):
+        void = {'meta','link','br','img','hr','input','path','rect','circle','line','use'}
+        def __init__(s): super().__init__(); s.st=[]; s.err=[]
+        def handle_starttag(s,t,a):
+            if t not in s.void: s.st.append(t)
+        def handle_startendtag(s,t,a): pass
+        def handle_endtag(s,t):
+            if t in s.void: return
+            if s.st and s.st[-1]==t: s.st.pop()
+            else: s.err.append((t, s.getpos(), s.st[-3:]))
+    p = P(); p.feed(h); print('  tag errors:', p.err[:5], 'unclosed:', p.st[:5])
+'''
+
+
+def blogcheck_command(base, body=BLOGCHECK_BODY):
+    s = base / "scratchpad"
+    return f"cd {base}/project && cat > {s}/blogcheck.py <<'EOF'\n{body}EOF\npython3 {s}/blogcheck.py"
+
+
+def test_html_parser를_쓰는_읽기_전용_heredoc_점검_스크립트는_묻지_않는다(home):
+    # given
+    command = blogcheck_command(home)
+    # when
+    output = guard.handle(bash(command, home / "project"), "claude")
+    # then
+    assert decision(output) not in ("ask", "deny"), output
+
+
+@pytest.mark.parametrize("extra", ["open('/home/test/x', 'w').write('1')\n", "import urllib.request\n",
+                                   "import subprocess\nsubprocess.run(['ls'])\n"])
+def test_점검_스크립트에_밖으로_쓰기나_네트워크_가져오기가_더해지면_계속_묻는다(home, extra):
+    # given
+    command = blogcheck_command(home, BLOGCHECK_BODY + extra)
+    # when
+    output = guard.handle(bash(command, home / "project"), "claude")
+    # then
+    assert decision(output) == "ask", (extra, output)
+
+
+# --- J10. Python heredocs that write state-folder spellings only as text --------------------------------------------------------
+
+README_TWO_FILES = f'''p='README.md'
+s=open(p).read()
+a="Python per project.\\n"
+assert s.count(a)==1
+s=s.replace(a,a+"""The launcher caches compiled bytecode under `{PYCACHE}/` (default
+`~/.local/state`). This is a guard state folder, so the approval guard denies agent writes there like those to
+`approvals/` and `heartbeats/`. Without an absolute state folder, hooks run without a cache.
+""")
+open(p,'w').write(s)
+p='docs/ko/README.ko.md'
+s=open(p).read()
+a="Another sentence.\\n"
+assert s.count(a)==1
+s=s.replace(a,a+"""The launcher caches bytecode under `{PYCACHE}/` (default `~/.local/state`).
+This folder is a guard state folder, so the guard denies writes like those to `approvals/` and `heartbeats/`.
+""")
+open(p,'w').write(s)
+'''
+README_FOLLOWERS = (
+    "git diff README.md docs | grep '^[+-]'\n"
+    "E=\"env -u GIT_CONFIG_COUNT -u GIT_CONFIG_KEY_0 -u GIT_CONFIG_KEY_1 -u GIT_CONFIG_VALUE_0 -u GIT_CONFIG_VALUE_1\"\n"
+    "$E python3 -m pytest -p no:cacheprovider -o addopts=\"\" -q tests/test_hook_python.py tests/test_approval_guard.py "
+    "2>&1 | tail -8\n"
+    "$E python3 -m pytest -p no:cacheprovider -o addopts=\"\" -q tests/ -k approval 2>&1 | tail -8\n"
+    "git status --short")
+
+
+def test_두_README를_고치는_python_heredoc은_상태_폴더_경로가_글자로만_있으면_거부하지_않는다(home):
+    # given
+    command = f"cd {home}/project && python3 - <<'PYEOF'\n{README_TWO_FILES}PYEOF\n{README_FOLLOWERS}"
+    # when
+    output = guard.handle(bash(command, home / "project"), "claude")
+    # then
+    assert decision(output) != "deny", output
+
+
+@pytest.mark.parametrize("body", [
+    "import os\nopen(os.path.expandvars('$XDG_STATE_HOME/hei5enbug-agent-setup/approvals/x'), 'w').write('1')\n",
+    "from pathlib import Path\n(Path.home() / '.local/state/hei5enbug-agent-setup/heartbeats').write_text('1')\n",
+    "from pathlib import Path\np = Path.home() / '.local/state' / 'hei5enbug-agent-setup/pycache'\np.write_text('1')\n",
+    "import shutil\nshutil.copy('a', '$XDG_STATE_HOME/hei5enbug-agent-setup/approvals/x')\n",
+    "import os\nos.remove('$XDG_STATE_HOME/hei5enbug-agent-setup/approvals/x')\n",
+    "import subprocess\nsubprocess.run(['rm', '$XDG_STATE_HOME/hei5enbug-agent-setup/approvals/x'])\n",
+    "target = '$XDG_STATE_HOME/hei5enbug-agent-setup/approvals/x'\nopen(target, 'w').write('1')\n",
+    "import os\nname = '$XDG_STATE_HOME/hei5enbug-agent-setup/approvals/x'\nos.rename('a', name)\n",
+    "text = 'hei5enbug-agent-setup/approvals'\nopen(text + '/x', 'w').write('1')\n",
+    "import os\nos.chdir('$XDG_STATE_HOME/hei5enbug-agent-setup/heartbeats')\n",
+])
+def test_python_heredoc이_상태_경로를_실제_경로_피연산자로_쓰면_계속_거부한다(home, body):
+    # given
+    command = f"cd {home}/project && python3 - <<'PYEOF'\n{body}PYEOF\n"
+    # when
+    output = guard.handle(bash(command, home / "project"), "claude")
+    # then
+    assert decision(output) == "deny", (body, output)
+
+
+# --- J11. shell scripts run by path that set their own variables, as on 390dd1c ---------------------------------------------
+
+KEYSNAP_BODY = '''"""Snapshot per-top-level-key hashes of a settings file (never content).
+
+usage: python3 keysnap.py <label>
+"""
+
+import hashlib
+import json
+import os
+import re
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parents[1]
+SNAPSHOTS = HERE / "snapshots"
+SENSITIVE = re.compile(r"key|secret|pass|auth|cred|env|header|url", re.I)
+
+
+def main():
+    SNAPSHOTS.mkdir(exist_ok=True)
+    settings = Path(os.path.expanduser("~/.claude/settings.json"))
+    data = json.loads(settings.read_text()) if settings.exists() else {}
+    hashes = {key: hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()[:12] for key, value in data.items()}
+    stamp = datetime.now(timezone.utc).isoformat()
+    (SNAPSHOTS / f"settings-keyhash-{sys.argv[1]}.json").write_text(json.dumps({"at": stamp, "keys": hashes}))
+    print(len(hashes), "keys at", stamp)
+
+
+if __name__ == "__main__":
+    main()
+'''
+FINAL_REGRESSION = '''#!/bin/sh
+# Final regression of the main tip against the investigation start on all tasks.
+# Resume: run this file again; finished runs are skipped. Exit 75 = usage limit.
+REPO=/tmp/work/demo/repo
+F=$HOME/.local/state/hei5enbug-agent-setup/harness-eval/final
+E=$HOME/.local/state/hei5enbug-agent-setup/harness-eval/experiments
+cd "$REPO" || exit 1
+python3 "$E/scripts/keysnap.py" final-regression-start > "$F/logs/final-regression-keysnap.txt" 2>&1
+echo "$(date -u +%FT%TZ) start final-regression control-0abc123,main-0def456 all tasks reps=3" >> "$F/logs/driver.log"
+python3 -u evals/e2e/harness/cli.py run --campaign final-regression --variants control-0abc123,main-0def456 \\
+  --reps 3 --variants-root "$F/variants" >> "$F/logs/final-regression-run.log" 2>&1
+code=$?
+echo "$(date -u +%FT%TZ) end final-regression exit=$code" >> "$F/logs/driver.log"
+python3 "$E/scripts/keysnap.py" final-regression-end >> "$F/logs/final-regression-keysnap.txt" 2>&1
+exit $code
+'''
+CLOSURE_RUN = '''#!/bin/sh
+# Campaigns: a closure task, then the final main run.
+# Resume: run this file again; finished runs are skipped. Exit 75 = usage limit, 4 = Codex hooks untrusted.
+REPO=/tmp/work/demo/repo
+S=$HOME/.local/state/hei5enbug-agent-setup/harness-eval
+G=$S/closure
+E=$S/experiments
+cd "$REPO" || exit 1
+step() {
+  campaign=$1; variants=$2; tasks=$3; reps=$4
+  "$G/probe.sh" || return $?
+  python3 "$E/scripts/keysnap.py" "$campaign-start" >> "$G/logs/keysnap.txt" 2>&1
+  echo "$(date -u +%FT%TZ) start $campaign variants=$variants tasks=$tasks reps=$reps" >> "$G/logs/driver.log"
+  if [ -n "$tasks" ]; then set -- --tasks "$tasks"; else set --; fi
+  python3 -u evals/e2e/harness/cli.py run --campaign "$campaign" --variants "$variants" "$@" \\
+    --reps "$reps" --variants-root "$G/variants" >> "$G/logs/$campaign-run.log" 2>&1
+  code=$?
+  echo "$(date -u +%FT%TZ) end $campaign exit=$code" >> "$G/logs/driver.log"
+  python3 "$E/scripts/keysnap.py" "$campaign-end" >> "$G/logs/keysnap.txt" 2>&1
+  return $code
+}
+case "${1:-all}" in
+  t09|all) step t09-closure control-0abc123,main-0def456 T09 6 || exit $? ;;
+esac
+case "${1:-all}" in
+  final|all) step final-main main-0def456 "" 1 || exit $? ;;
+esac
+echo "$(date -u +%FT%TZ) campaigns done" >> "$G/logs/driver.log"
+'''
+
+
+@pytest.fixture
+def harness(home, monkeypatch):
+    user = home / "user"
+    state = user / ".local" / "state" / "hei5enbug-agent-setup" / "harness-eval"
+    (state / "experiments" / "scripts").mkdir(parents=True)
+    (state / "final").mkdir()
+    (state / "closure").mkdir()
+    (state / "experiments" / "scripts" / "keysnap.py").write_text(KEYSNAP_BODY)
+    for path, body in ((state / "final" / "final_regression.sh", FINAL_REGRESSION),
+                       (state / "closure" / "run.sh", CLOSURE_RUN)):
+        path.write_text(body)
+        path.chmod(0o755)
+    monkeypatch.setenv("HOME", str(user))
+    monkeypatch.setenv("XDG_STATE_HOME", str(user / ".local" / "state"))
+    (home / "bin").mkdir()
+    for name, body in (("final_regression.sh", FINAL_REGRESSION), ("run.sh", CLOSURE_RUN)):
+        (home / "bin" / name).write_text(body.replace("/tmp/work/demo/repo", str(home / "repo")))
+        (home / "bin" / name).chmod(0o755)
+    for path in (state / "final" / "final_regression.sh", state / "closure" / "run.sh"):
+        path.write_text(path.read_text().replace("/tmp/work/demo/repo", str(home / "repo")))
+    (home / "repo" / "evals" / "e2e" / "harness").mkdir(parents=True)
+    (home / "repo" / "evals" / "e2e" / "harness" / "cli.py").write_text("import argparse\nargparse.ArgumentParser().parse_args()\n")
+    return state
+
+
+@pytest.mark.parametrize("where", ["state", "elsewhere"])
+@pytest.mark.parametrize("script, tail", [("final/final_regression.sh", ""), ("closure/run.sh", "; echo \"run.sh exit=$?\"")])
+def test_자기_변수를_정하고_키_스냅샷_스크립트를_부르는_셸_스크립트는_390dd1c처럼_묻지_않는다(home, harness, script, tail, where):
+    # given
+    folder = "~/.local/state/hei5enbug-agent-setup/harness-eval/" if where == "state" else f"{home}/bin/"
+    name = script if where == "state" else script.split("/")[-1]
+    command = f"{folder}{name}{tail}"
+    # when
+    output = guard.handle(bash(command, home / "repo"), "claude")
+    # then
+    assert decision(output) not in ("ask", "deny"), output

@@ -1279,10 +1279,10 @@ def _temp_path(path, cwd, env):
 def _static_value(value, statics, environment):
     """The fixed text of an assigned value: a `mktemp -d` substitution resolves like `rm` targets, anything that still
     expands or runs a command has none."""
-    resolved = _mktemp_directory(value, environment)
+    expanded = _expand_path_variables(value, statics)
+    resolved = _mktemp_directory(expanded if "mktemp" in value else value, environment)
     if resolved is not None:
         return resolved
-    expanded = _expand_path_variables(value, statics)
     return None if "$" in expanded or "`" in expanded else expanded
 
 
@@ -2256,6 +2256,11 @@ class _ValueFlow:
         if folder:
             text = SCRIPT_FOLDER.sub(lambda _: folder[0], text)
         resolved = _mktemp_directory(text, environment)
+        template = re.fullmatch(r"\$\(\s*mktemp((?:\s+[^\s()`;&|<>\\'\"]+)*)\s*\)", text)
+        if resolved is None and template is not None:
+            texts = _expand_references(template[1], lambda name, default: self._lookup(name, default, environment))
+            resolved = (_mktemp_directory(f"$(mktemp{texts[0]})", environment)
+                        if texts is not None and len(texts) == 1 else None)
         if resolved is not None:
             return (resolved,)
         return _expand_references(text, lambda name, default: self._lookup(name, default, environment))
@@ -3238,7 +3243,7 @@ READONLY_MODULES = frozenset({
     "hashlib", "base64", "enum", "decimal", "fractions", "heapq", "bisect", "copy", "pprint", "io", "difflib",
     "unicodedata", "uuid", "random", "platform", "shlex", "urllib.parse", "html", "zoneinfo",
     "calendar", "numbers", "abc", "contextlib", "struct", "binascii", "ipaddress", "tomllib", "configparser", "ast",
-    "stat", "errno", "__future__", "shutil",
+    "stat", "errno", "__future__", "shutil", "html.parser",
 })
 READONLY_SHUTIL = frozenset({"which", "get_terminal_size", "disk_usage"})
 READONLY_BLOCKED = frozenset({
@@ -3299,6 +3304,8 @@ def _string_replace(node, parents, bound):
             and not any(isinstance(arg, ast.Starred) for arg in call.args)):
         return False
     root = node.value
+    if isinstance(root, ast.Constant):
+        return False
     while isinstance(root, (ast.Attribute, ast.Subscript)):
         root = root.value
     if isinstance(root, ast.Call):
@@ -3358,17 +3365,64 @@ def _read_mode_open(node, bound):
     return mode is None or (isinstance(mode, ast.Constant) and mode.value in ("r", "rb", "rt"))
 
 
-def _read_only_python(tree):
+GIT_RUN_GLOBALS = frozenset({"-C", "--no-pager", "--no-optional-locks"})
+GIT_RUN_KEYWORDS = frozenset({"capture_output", "text", "check", "encoding", "errors", "timeout", "universal_newlines"})
+
+
+def _git_run_command(call):
+    """The command text that a `subprocess.run([...])` call with a literal git argv stands for, or None. Only `-C` may take
+    a computed value, and a word after the subcommand may be computed only as an f-string that starts with a literal
+    word not beginning with `-`; computed words stand for a placeholder."""
+    if (ast.unparse(call.func) != "subprocess.run" or len(call.args) != 1 or not isinstance(call.args[0], ast.List)
+            or any(keyword.arg not in GIT_RUN_KEYWORDS or not isinstance(keyword.value, ast.Constant)
+                   for keyword in call.keywords)):
+        return None
+    items = call.args[0].elts
+    if len(items) < 2 or not (isinstance(items[0], ast.Constant) and items[0].value == "git"):
+        return None
+    words, subcommand, position = ["git"], False, 1
+    while position < len(items):
+        item = items[position]
+        if isinstance(item, ast.Constant) and isinstance(item.value, str):
+            if item.value.startswith("--output") or not subcommand and item.value not in GIT_RUN_GLOBALS and (
+                    item.value.startswith("-")):
+                return None
+            words.append(item.value)
+            subcommand = subcommand or not item.value.startswith("-") and words[-2:-1] != ["-C"]
+            if item.value == "-C" and not subcommand and position + 1 < len(items):
+                words.append(".")
+                position += 1
+        elif (subcommand and isinstance(item, ast.JoinedStr) and item.values
+              and isinstance(item.values[0], ast.Constant) and isinstance(item.values[0].value, str)
+              and item.values[0].value and not item.values[0].value.startswith("-")):
+            words.append(item.values[0].value + "x")
+        else:
+            return None
+        position += 1
+    return shlex.join(words) if subcommand else None
+
+
+def _git_read_runs(processes, cwd, depth, env):
+    """The `subprocess.run` calls among `processes` when every process call is one with a literal git argv that the guard
+    classifies as a read, else None."""
+    for call in processes:
+        command = _git_run_command(call)
+        if command is None or classify_text(command, cwd, depth + 1, env).kind != "read":
+            return None
+    return frozenset(processes)
+
+
+def _read_only_python(tree, runs=frozenset()):
     """A conservative, exact test for Python code that cannot change anything: only listed standard modules, no process,
     network, environment, dynamic execution, or file mutation, and every `open` in a literal read mode. Anything that the
-    test cannot decide is not read-only."""
+    test cannot decide is not read-only. `runs` holds the git read calls that may use `subprocess.run`."""
     parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
     bound = {}
     openers = {"open"}
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name not in READONLY_MODULES:
+                if alias.name not in READONLY_MODULES and not (alias.name == "subprocess" and runs):
                     return False
                 bound[alias.asname or alias.name.split(".")[0]] = alias.name if alias.asname else alias.name.split(".")[0]
         elif isinstance(node, ast.ImportFrom):
@@ -3402,6 +3456,12 @@ def _read_only_python(tree):
             if bound.get(node.id) == "shutil" and not (
                     isinstance(parents.get(node), ast.Attribute) and parents[node].attr in READONLY_SHUTIL):
                 return False
+            if bound.get(node.id) == "subprocess":
+                attribute = parents.get(node)
+                call = parents.get(attribute)
+                if not (isinstance(attribute, ast.Attribute) and attribute.attr == "run" and call in runs
+                        and call.func is attribute):
+                    return False
             if node.id in openers and not (isinstance(parents.get(node), ast.Call) and parents[node].func is node):
                 return False
         elif isinstance(node, ast.Call):
@@ -3446,6 +3506,10 @@ def _python_policy(content, cwd, depth, env, readonly=False):
     sdk = bool(SDK_IMPORT.search(imports))
     if not processes and not sdk:
         return _read() if readonly and _read_only_python(tree) else Outcome("pass", [], [])
+    if readonly and processes and not sdk:
+        runs = _git_read_runs(processes, cwd, depth, env)
+        if runs is not None and _read_only_python(tree, runs):
+            return _read()
     values = {node.targets[0].id: node.value for node in ast.walk(tree) if isinstance(node, ast.Assign)
               and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)}
     commands = []
@@ -3757,22 +3821,119 @@ def _own_export_run(script, arguments, env):
     That subcommand writes only under the plugin's own state folder."""
     if not _export_arguments(arguments) or FILES_MAY_CHANGE in env:
         return False
-    directory = _git_directory([], script.parent, env)
-    top = _git_lookup(directory, env, "rev-parse", "--show-toplevel") if directory is not None else None
-    if not top or not top.strip():
-        return False
-    root = Path(top.strip()).resolve()
-    if script != root / EXPORT_HARNESS:
+    root = _plugin_tree(script.parent, env)
+    if root is None or script != root / EXPORT_HARNESS:
         return False
     committed = _git_lookup(root, env, "rev-parse", f"HEAD:{EXPORT_HARNESS}")
     current = _git_lookup(root, env, "hash-object", "--", EXPORT_HARNESS)
-    if not committed or committed != current:
-        return False
+    return bool(committed) and committed == current
+
+
+def _plugin_tree(directory, env):
+    """The root of the git work tree that holds `directory` when its `.claude-plugin/plugin.json` names this plugin,
+    else None."""
+    git_directory = _git_directory([], directory, env)
+    top = _git_lookup(git_directory, env, "rev-parse", "--show-toplevel") if git_directory is not None else None
+    if not top or not top.strip():
+        return None
+    root = Path(top.strip()).resolve()
     try:
         manifest = json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
+        return None
+    return root if isinstance(manifest, dict) and manifest.get("name") == EXPORT_PLUGIN_NAME else None
+
+
+_ARCHIVE_COPIES = {}
+ARCHIVE_FLAGS = re.compile(r"-[rRp]+")
+
+
+def _archive_directory(word, variables, statics, env):
+    """The resolved path `word` when it is the folder that a variable got from a `mktemp -d` substitution in this command
+    and the folder lies strictly inside a temporary root, else None."""
+    if not word.startswith("/"):
+        return None
+    path = Path(os.path.normpath(word)).resolve()
+    named = any(MKTEMP_OPERAND.fullmatch(value) and statics.get(name) is not None
+                and Path(statics[name]).resolve() == path for name, value in variables.items())
+    return path if named and _temporary(path.parent, env) else None
+
+
+def _tar_extract_target(program):
+    """The folder after `-C` of a `tar` call that only extracts from standard input, else None."""
+    forms = (["tar", "-x", "-C"], ["tar", "-xf", "-", "-C"], ["tar", "-x", "-f", "-", "-C"], ["tar", "-xC"])
+    for form in forms:
+        if len(program) == len(form) + 1 and program[:len(form)] == form:
+            return program[-1]
+    return None
+
+
+def _unconditional_pipeline(index, segments, operators):
+    """Whether the two segments ending at `index` run as one pipeline that follows nothing or `;` and is followed by
+    nothing or `;`."""
+    first, last = segments[index - 1], segments[index]
+    before = max((op for op in operators if op[3] <= first.start), key=lambda op: op[3], default=None)
+    after = min((op for op in operators if op[2] >= last.end), key=lambda op: op[2], default=None)
+    between = [op for op in operators if op[2] >= first.end and op[3] <= last.start]
+    return ((before is None or before[1] == ";") and (after is None or after[1] == ";")
+            and len(between) == 1 and between[0][1] == "|")
+
+
+def _archive_fill(segment, program, segments, index, operators, cwd, variables, statics, env, steady):
+    """Record or extend a folder that holds only this plugin's work tree: a `mktemp -d` folder that
+    `git archive HEAD | tar -x -C <folder>` fills from the current work tree, and relative paths of that work tree that
+    `cp` adds. Returns whether the segment is such a step."""
+    if not steady or not program or segment.redirects:
         return False
-    return isinstance(manifest, dict) and manifest.get("name") == EXPORT_PLUGIN_NAME
+    name = os.path.basename(program[0])
+    if name == "tar" and index > 0:
+        previous, _ = strip_prefix(segments[index - 1].words)
+        target = _tar_extract_target(program)
+        folder = _archive_directory(target, variables, statics, env) if target else None
+        root = _plugin_tree(cwd, env) if folder is not None else None
+        if (previous == ["git", "archive", "HEAD"] and not segments[index - 1].redirects and root is not None
+                and _unconditional_pipeline(index, segments, operators)):
+            _ARCHIVE_COPIES[folder] = root
+            return True
+        return False
+    if name != "cp" or not _ARCHIVE_COPIES or not _runs_unconditionally(index, segments, operators):
+        return False
+    args = program[1:]
+    flags = [arg for arg in args if arg.startswith("-")]
+    words = [arg for arg in args if not arg.startswith("-")]
+    if len(words) < 2 or any(not ARCHIVE_FLAGS.fullmatch(flag) for flag in flags):
+        return False
+    destination = _static_value(words[-1], statics, env)
+    if destination is None:
+        return False
+    target = Path(os.path.normpath(destination)).resolve()
+    folder = next((key for key in _ARCHIVE_COPIES if target == key or key in target.parents), None)
+    if folder is None or not Path(cwd).resolve().is_relative_to(_ARCHIVE_COPIES[folder]):
+        return False
+    for source in words[:-1]:
+        if re.search(r"[$`~]|(?:^|/)\.\.(?:/|$)", source) or source.startswith("/"):
+            return False
+        matches = glob.glob(os.path.join(cwd, source))
+        if not matches or any(not Path(item).resolve().is_relative_to(_ARCHIVE_COPIES[folder]) for item in matches):
+            return False
+    return True
+
+
+def _keeps_archive(segment, program, region, cwd, variables, statics, env):
+    """Whether a segment leaves an archive copy as it is: a segment that `_keeps_pending` accepts, or a run of a Python file
+    inside the copy."""
+    if _keeps_pending(segment, program, region, cwd, variables):
+        return True
+    if not program or not PYTHON.fullmatch(os.path.basename(program[0])) or segment.redirects and not (
+            _redirects_allowed([segment])):
+        return False
+    operand = _first_operand(program[1:])
+    return operand is not None and _in_archive(Path(os.path.normpath(Path(cwd) / operand)).resolve())
+
+
+def _in_archive(path):
+    """Whether a resolved path lies inside a folder that the archive registry holds."""
+    return any(key in path.parents for key in _ARCHIVE_COPIES)
 
 
 def _classify_script(words, cwd, depth, env, variables=None, choices=None):
@@ -3798,6 +3959,10 @@ def _classify_script(words, cwd, depth, env, variables=None, choices=None):
     if path is None:
         return None
     resolved = _script_path(path, cwd, variables or {})
+    if resolved is not None and mode == "python" and resolved.suffix == ".py" and _in_archive(resolved):
+        script_args = args if path == words[0] else args[args.index(path) + 1:]
+        if not any(re.search(r"[$`*?\[{~]", arg) for arg in script_args):
+            return Outcome("pass", [], [])
     if resolved is None:
         return _script_unknown(path, words, env, "unresolved path")
     if resolved == Path(WRAPPER):
@@ -3901,43 +4066,50 @@ def _xargs_input_is_inert(argv, program, segment, segments, index, operators, st
 
 ONLY_MATCHING_FLAGS = re.compile(r"-[hoiE]+")
 ONLY_MATCHING_LONG = frozenset({"--only-matching", "--no-filename", "--ignore-case", "--extended-regexp"})
-BOUNDED_COUNT_LIMIT = 1000
+BOUNDED_TOTAL_LIMIT = 512
+CHARACTER_CLASS = re.compile(r"\[\^?[^\]\\\n\[]+\]")
+NARROW_CLASS = re.compile(r"(?:[A-Za-z0-9_]|[a-z]-[a-z]|[A-Z]-[A-Z]|[0-9]-[0-9])+")
+
+
+def _open_ended_class(text):
+    """Whether a character class may repeat without a bound: it excludes the double quote, or it is a narrow positive
+    class of letters, digits, and `_`."""
+    inner = text[1:-1]
+    if inner.startswith("^"):
+        return '"' in inner[1:]
+    return NARROW_CLASS.fullmatch(inner) is not None
 
 
 def _anchored_pattern(pattern, extended):
-    """Whether a grep pattern starts with a literal anchor of at least six characters and has no secret-name word, and
-    every variable part after it is a character class or a lone `.` with a count that is bounded or `*`: so `grep -o`
-    can print only text next to the anchor."""
+    """Whether a grep pattern holds a literal run of at least six characters and no secret-name word, and every variable
+    part is bounded: a lone `.` or a character class with an explicit count, or a class that may repeat without a bound
+    only when it excludes the double quote or is a narrow positive class. The explicit counts add up to at most 512."""
     if len(pattern) > 300 or "\n" in pattern or SECRET_NAME.search(pattern):
         return False
     quantifier = re.compile(r"[*+?]|\{(\d+)(?:,(\d+))?\}" if extended else r"\*|\\\{(\d+)(?:,(\d+))?\\\}")
-    bounded = re.compile(r"\{(\d+)(?:,(\d+))?\}" if extended else r"\\\{(\d+)(?:,(\d+))?\\\}")
-    leading, variable, position = 0, False, 0
+    longest = run = total = position = 0
     while position < len(pattern):
-        char = pattern[position]
-        class_match = re.compile(r"\[\^?[^\]\\\n\[]+\]").match(pattern, position)
-        if class_match or char == ".":
+        class_match = CHARACTER_CLASS.match(pattern, position)
+        if class_match or pattern[position] == ".":
             end = class_match.end() if class_match else position + 1
             counted = quantifier.match(pattern, end)
-            if counted is None and class_match:
+            if counted is None or counted[0] == "?":
+                total += 1
+            elif counted[1] is not None:
+                total += int(counted[2] or counted[1])
+            elif class_match is None or not _open_ended_class(class_match[0]):
                 return False
-            if counted is not None:
-                if counted[0] in ("+", "?") and not extended or class_match is None and not bounded.fullmatch(counted[0]):
-                    return False
-                top = counted[2] or counted[1]
-                if top is not None and int(top) > BOUNDED_COUNT_LIMIT:
-                    return False
-                end = counted.end()
-            variable, position = True, end
+            longest, run = max(longest, run), 0
+            position = counted.end() if counted else end
         elif pattern.startswith("\\.", position):
-            leading, position = leading + (not variable), position + 2
-        elif re.fullmatch(r"[^.\[\]*\\^$+?{}()|]", char):
+            run, position = run + 1, position + 2
+        elif re.fullmatch(r"[^.\[\]*\\^$+?{}()|]", pattern[position]):
             if quantifier.match(pattern, position + 1):
                 return False
-            leading, position = leading + (not variable), position + 1
+            run, position = run + 1, position + 1
         else:
             return False
-    return leading >= 6
+    return max(longest, run) >= 6 and total <= BOUNDED_TOTAL_LIMIT
 
 
 def _anchored_only_matching(argv):
@@ -4696,6 +4868,7 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
     if depth == 0:
         _DISCARD_CACHE.clear()
         _PENDING_SCRIPTS.clear()
+        _ARCHIVE_COPIES.clear()
     script = unwrap_wrapper(text)
     if script is not None:
         return classify_text(script, cwd, depth + 1, env, variables)
@@ -4832,6 +5005,12 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
                 _PENDING_SCRIPTS.clear()
         elif _PENDING_SCRIPTS and (first in LOOP_OPENERS or not _keeps_pending(segment, program, region, cwd, variables)):
             _PENDING_SCRIPTS.clear()
+        if _archive_fill(segment, program, segments, index, operators, cwd, variables, statics,
+                         {**current_env, **variables}, recording and block_depth == 0):
+            pass
+        elif _ARCHIVE_COPIES and (first in LOOP_OPENERS or not _keeps_archive(
+                segment, program, region, cwd, variables, statics, {**current_env, **variables})):
+            _ARCHIVE_COPIES.clear()
         if name == "mkdir" and recording and block_depth == 0 and _runs_unconditionally(index, segments, operators):
             made_directories |= _made_directories(program, cwd, variables)
         forgotten = None if ":=" in region or "((" in region else _plain_environment_edit(program)
@@ -4858,8 +5037,13 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
             fixed = (standalone and recording and block_depth == 0
                      and _unconditional_assignment(segment, operators, was_assignment))
             if standalone:
+                known = {name: current_env[name] for name in FLOW_ENVIRONMENT if current_env.get(name)}
+                folder = flow.state.get(SCRIPT_FOLDER_KEY)
                 for key, value in assignments.items():
-                    variables[key] = _expand_path_variables(value, variables)
+                    if folder and len(folder) == 1 and SCRIPT_FOLDER.fullmatch(value):
+                        variables[key] = folder[0]
+                    else:
+                        variables[key] = _expand_path_variables(value, {**known, **variables})
                     if key != "_APPROVAL_SESSION_DIR":
                         current_env[key] = variables[key]
                     if "$(" in value or "`" in value:
@@ -5877,27 +6061,93 @@ def _mentions_state(text):
                for directory in _guard_state_dirs())
 
 
+TEXT_METHODS = frozenset({
+    "replace", "write", "format", "count", "startswith", "endswith", "find", "rfind", "index", "join", "strip", "lstrip",
+    "rstrip", "split", "splitlines", "lower", "upper", "encode", "removeprefix", "removesuffix", "center",
+})
+TEXT_CALLS = frozenset({"print", "len", "str", "repr"})
+DYNAMIC_NAMES = frozenset({"eval", "exec", "compile", "__import__", "getattr", "setattr", "globals", "vars", "locals"})
+PROCESS_MODULES = frozenset({"subprocess", "importlib", "runpy", "ctypes", "multiprocessing", "pty", "socket"})
+
+
+def _open_texts(target, tree, names):
+    """Every text the target of an `open` can take when it is a string literal, a name that only literal strings are
+    assigned to, or a fold of literals; else None."""
+    if isinstance(target, ast.Name):
+        values = [node.value for node in ast.walk(tree) if isinstance(node, ast.Assign)
+                  and any(isinstance(item, ast.Name) and item.id == target.id for item in node.targets)]
+        texts = [item.value for item in values if isinstance(item, ast.Constant) and isinstance(item.value, str)]
+        return texts if values and len(texts) == len(values) else None
+    text = _fold_text(target, names)
+    return None if text is None else [text]
+
+
+def _text_only_use(source, parents, tree):
+    """Whether the state spelling in `source` only flows into text: concatenation, formatting, string methods, `write`,
+    `print`, comparisons, and names that are used the same way. A path or process call, a `/` join, or anything else
+    that could use it as a path means no."""
+    pending, seen = [source], set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        parent = parents.get(current)
+        if parent is None or isinstance(parent, (ast.Expr, ast.Compare, ast.Assert, ast.Return)):
+            continue
+        if isinstance(parent, (ast.JoinedStr, ast.FormattedValue)) or (
+                isinstance(parent, ast.BinOp) and isinstance(parent.op, (ast.Add, ast.Mod))):
+            pending.append(parent)
+        elif isinstance(parent, ast.Call) and current is not parent.func:
+            func = parent.func
+            if isinstance(func, ast.Attribute) and func.attr in TEXT_METHODS:
+                pending.append(parent)
+            elif not (isinstance(func, ast.Name) and func.id in TEXT_CALLS):
+                return False
+        elif isinstance(parent, ast.Attribute) and parent.attr in TEXT_METHODS and isinstance(
+                parents.get(parent), ast.Call) and parents[parent].func is parent:
+            pending.append(parents[parent])
+        elif isinstance(parent, (ast.Assign, ast.AugAssign)) and current is parent.value:
+            targets = parent.targets if isinstance(parent, ast.Assign) else [parent.target]
+            if not all(isinstance(item, ast.Name) for item in targets):
+                return False
+            pending.extend(node for node in ast.walk(tree) if isinstance(node, ast.Name)
+                           and isinstance(node.ctx, ast.Load) and node.id in {item.id for item in targets})
+        else:
+            return False
+    return True
+
+
 def _state_text_only_python(body):
-    """Whether Python code can carry a state folder spelling only as text: every `open` has a literal target outside the
-    state folders, and with those opens counted as reads the code passes the read-only test."""
+    """Whether Python code can carry a state folder spelling only as text: it spawns no process and runs no dynamic code,
+    every `open` has a literal target outside the state folders, and each string that holds a state spelling only flows
+    into text."""
     try:
         tree = ast.parse(body)
     except SyntaxError:
         return False
+    parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
     names = _literal_names(tree)
     for node in ast.walk(tree):
-        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open"):
-            continue
-        target = next((keyword.value for keyword in node.keywords if keyword.arg == "file"),
-                      node.args[0] if node.args else None)
-        text = _fold_text(target, names) if target is not None else None
-        if not text or "\0" in text or _mentions_state(text) or _state_path(text, "/"):
+        if isinstance(node, ast.Name) and node.id in DYNAMIC_NAMES or isinstance(node, ast.Attribute) and (
+                node.attr in READONLY_BLOCKED - {"replace", "environ"} and node.attr not in TEXT_METHODS
+                or READONLY_PROCESS.fullmatch(node.attr) or node.attr in ("run", "Popen", "import_module")):
             return False
-        mode = next((keyword.value for keyword in node.keywords if keyword.arg == "mode"),
-                    node.args[1] if len(node.args) > 1 else None)
-        if isinstance(mode, ast.Constant) and isinstance(mode.value, str):
-            mode.value = "r"
-    return _read_only_python(tree)
+        if isinstance(node, ast.Import) and any(alias.name.split(".")[0] in PROCESS_MODULES for alias in node.names):
+            return False
+        if isinstance(node, ast.ImportFrom) and (node.module or "").split(".")[0] in PROCESS_MODULES:
+            return False
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open":
+            target = next((keyword.value for keyword in node.keywords if keyword.arg == "file"),
+                          node.args[0] if node.args else None)
+            texts = _open_texts(target, tree, names) if target is not None else None
+            if not texts or any("\0" in text or not text or _mentions_state(text) or _state_path(text, "/")
+                                for text in texts):
+                return False
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and _mentions_state(node.value):
+            if not _text_only_use(node, parents, tree):
+                return False
+    return True
 
 
 PYTHON_DOCUMENT = re.compile(r"(?m)^([^\n]*?)<<[ \t]*(['\"])([A-Za-z_]\w*)\2[^\n]*\n")
