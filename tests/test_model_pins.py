@@ -23,7 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = json.loads((REPO_ROOT / "config" / "model-registry.json").read_text(encoding="utf-8"))
 PINS = REGISTRY["pins"]
 
-PINS_VERIFIED_ON = "2026-10-12"
+PINS_VERIFIED_ON = "2026-10-27"
 
 MODEL_ID = re.compile(
     r"\b(?P<id>claude-(?P<claude>fable|opus|sonnet|haiku)-\d+(?:-\d+)*"
