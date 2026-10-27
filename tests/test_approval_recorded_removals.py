@@ -516,7 +516,7 @@ def test_임시_삭제_뒤에_다른_파괴_명령이_붙으면_권한_요청을
 def test_임시_삭제_뒤에_허용된_무해한_명령이_아닌_것이_있으면_권한_요청을_허용하지_않는다(home, command):
     # given
     # when
-    answer = permission(command)
+    answer = permission(command, cwd=Path("/home/test/project"))
     # then
     assert answer is None
 
@@ -735,7 +735,7 @@ def test_임시_삭제_옆에_밖으로_쓰거나_허용되지_않은_명령이_
     # given
     command = TEMP_REMOVAL + tail
     # when
-    answer = permission(command)
+    answer = permission(command, cwd=Path("/home/test/project"))
     # then
     assert answer is None
 
