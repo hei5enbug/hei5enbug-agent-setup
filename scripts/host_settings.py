@@ -306,7 +306,7 @@ def _confirmed_hook_problem() -> Problem | None:
     try:
         import approval_state
 
-        digest = approval_state.hooks_hash()
+        digest = approval_state.hooks_hash("codex")
         if digest is None:
             return None
         heartbeats = approval_state.state_dir().parent / "heartbeats"

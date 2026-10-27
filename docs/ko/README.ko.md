@@ -655,7 +655,8 @@ Claude의 `defaultMode: dontAsk`는 가드가 요청하는 승인을 거부합�
 
 유효한 세션 ID가 있는 모든 이벤트는 토글 검사 전에 가능한 경우
 `$XDG_STATE_HOME/hei5enbug-agent-setup/heartbeats/<host>-<session_id>`와 `.<EventName>` 파일을 만들거나 갱신합니다.
-`PreToolUse`는 현재 `hooks/hooks.json`의 SHA-256도 `heartbeats/confirmed-<host>`에 한 줄로 기록합니다.
+`PreToolUse`는 그 호스트가 읽는 훅 파일, 즉 `hooks/hooks.json`과 플러그인 manifest가 나열한 다른 훅 파일의 SHA-256도
+`heartbeats/confirmed-<host>`에 한 줄로 기록합니다. 그래서 한 호스트 전용 훅 파일이 바뀌어도 다른 호스트에는 경고하지 않습니다.
 해시가 없거나 다르면 `UserPromptSubmit`이 세션당 한 번 경고를 추가하고 세션 상태에 표시 여부를 저장합니다.
 경고는 훅 변경 뒤 가드의 도구 검사가 아직 관찰되지 않았다고 설명합니다. Codex 사용자에게 `/hooks`에서 플러그인 훅을
 신뢰하도록 안내하고, 그전에는 쓰기가 승인 없이 실행될 수 있다고 알립니다.

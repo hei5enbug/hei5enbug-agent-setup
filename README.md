@@ -701,8 +701,10 @@ Claude `defaultMode: dontAsk` denies approvals the guard asks for. Codex `rules/
 these settings and never edits them.
 
 Every event carrying a valid session ID touches `$XDG_STATE_HOME/hei5enbug-agent-setup/heartbeats/<host>-<session_id>`
-and its `.<EventName>` file before the toggle check, on a best-effort basis. `PreToolUse` also writes the SHA-256 of
-the current `hooks/hooks.json` as one line in `heartbeats/confirmed-<host>`. When this hash is missing or differs,
+and its `.<EventName>` file before the toggle check, on a best-effort basis. `PreToolUse` also writes a SHA-256 of
+the hook files that host loads, `hooks/hooks.json` plus the other hook files its plugin manifest lists, as one line
+in `heartbeats/confirmed-<host>`, so a change to one host's own hook file never warns the other host. When this hash
+is missing or differs,
 `UserPromptSubmit` adds a warning once per session and records that it was shown in the session state. The warning
 explains that the guard has not been seen checking a tool call since its hooks changed, asks Codex users to trust
 the plugin hooks in `/hooks`, and states that writes may run without approval until then. A classifier exception

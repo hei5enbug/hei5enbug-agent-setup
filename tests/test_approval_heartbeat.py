@@ -168,7 +168,14 @@ def test_disabled_guard_still_records_pretooluse_event_and_hash(state, script, h
     else:
         env.pop("PLUGIN_ROOT", None)
     event = bash_event("true")
-    expected = hashlib.sha256((GUARD_PATH.parents[1] / "hooks/hooks.json").read_bytes()).hexdigest() + "\n"
+    root = GUARD_PATH.parents[1]
+    manifest = json.loads((root / f".{host}-plugin/plugin.json").read_text())
+    digest = hashlib.sha256((root / "hooks/hooks.json").read_bytes())
+    for entry in manifest["hooks"]:
+        name = entry.removeprefix("./")
+        if name != "hooks/hooks.json":
+            digest.update(b"\0" + name.encode() + b"\0" + (root / name).read_bytes())
+    expected = digest.hexdigest() + "\n"
     # when
     completed = subprocess.run([sys.executable, str(GUARD_PATH.with_name(script))],
                                input=json.dumps(event), capture_output=True, text=True, env=env)
@@ -178,3 +185,50 @@ def test_disabled_guard_still_records_pretooluse_event_and_hash(state, script, h
     assert (heartbeat_dir() / f"{host}-s1").exists()
     assert (heartbeat_dir() / f"{host}-s1.PreToolUse").exists()
     assert (heartbeat_dir() / f"confirmed-{host}").read_text() == expected
+
+
+@pytest.fixture
+def plugin_root(state, monkeypatch):
+    root = state / "plugin"
+    files = {
+        "hooks/hooks.json": '{"hooks": {}}\n',
+        "hooks/claude-hooks.json": '{"hooks": {"UserPromptSubmit": []}}\n',
+        "hooks/codex-hooks.json": '{"hooks": {"PermissionRequest": []}}\n',
+        ".claude-plugin/plugin.json": json.dumps({"hooks": ["./hooks/claude-hooks.json"]}),
+        ".codex-plugin/plugin.json": json.dumps({"hooks": ["./hooks/hooks.json", "./hooks/codex-hooks.json"]}),
+    }
+    for name, text in files.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text)
+    monkeypatch.setattr(state_mod, "HOOKS_PATH", root / "hooks" / "hooks.json", raising=False)
+    return root
+
+
+@pytest.mark.parametrize(("changed", "warned", "quiet"), [
+    ("hooks/codex-hooks.json", "codex", "claude"),
+    ("hooks/claude-hooks.json", "claude", "codex"),
+])
+def test_호스트_전용_훅_파일이_바뀌면_그_호스트에만_경고한다(plugin_root, changed, warned, quiet):
+    """호스트가 읽는 전용 훅 파일이 바뀌면 그 호스트의 확인만 무효가 되고 다른 호스트에는 경고하지 않는다."""
+    # given
+    guard.handle(bash_event("true", session="previous"), "claude")
+    guard.handle(bash_event("true", session="previous"), "codex")
+    (plugin_root / changed).write_text('{"hooks": {"PreToolUse": []}}\n')
+    # when
+    outputs = {host: guard.handle(prompt_event(), host) for host in ("claude", "codex")}
+    # then
+    assert outputs[warned]["hookSpecificOutput"]["additionalContext"] == WARNING
+    assert outputs[quiet] is None
+
+
+@pytest.mark.parametrize("host", ["claude", "codex"])
+def test_훅_해시는_기본_훅_파일과_호스트_manifest가_나열한_훅_파일을_모두_덮는다(plugin_root, host):
+    """호스트 해시는 hooks.json 바이트에 이어 manifest가 나열한 다른 훅 파일의 경로와 바이트를 차례로 더한 SHA-256이다."""
+    # given
+    extra = {"claude": "hooks/claude-hooks.json", "codex": "hooks/codex-hooks.json"}[host]
+    digest = hashlib.sha256((plugin_root / "hooks/hooks.json").read_bytes())
+    digest.update(b"\0" + extra.encode() + b"\0" + (plugin_root / extra).read_bytes())
+    # when
+    actual = state_mod.hooks_hash(host)
+    # then
+    assert actual == digest.hexdigest()

@@ -132,6 +132,7 @@ PARENT_REASON = (
     "there, then retry."
 )
 HOOKS_PATH = Path(__file__).resolve().parents[1] / "hooks" / "hooks.json"
+HOOK_MANIFESTS = {"claude": ".claude-plugin", "codex": ".codex-plugin"}
 HOOKS_WARNING = (
     "The approval guard has not yet been seen checking a tool call since its hooks changed. "
     "On Codex, trust the plugin hooks in /hooks; until then writes may run without approval."
@@ -181,11 +182,22 @@ def request_exhausted(host, session, keys) -> bool:
     return any(counts.get(key, 0) >= MAX_REQUESTS for key in keys)
 
 
-def hooks_hash():
+def hooks_hash(host):
+    """The SHA-256 of the default hook file followed by the path and bytes of each other hook file the host's plugin
+    manifest lists, so a change to one host's own hook file leaves the other host's confirmation valid."""
+    root = HOOKS_PATH.parents[1]
     try:
-        return hashlib.sha256(HOOKS_PATH.read_bytes()).hexdigest()
-    except OSError:
+        digest = hashlib.sha256(HOOKS_PATH.read_bytes())
+        manifest = root / HOOK_MANIFESTS.get(host, "") / "plugin.json"
+        listed = json.loads(manifest.read_text(encoding="utf-8")).get("hooks") if manifest.is_file() else None
+        for entry in listed if isinstance(listed, list) else [listed]:
+            if isinstance(entry, dict):
+                digest.update(b"\0inline\0" + json.dumps(entry, sort_keys=True).encode())
+            elif isinstance(entry, str) and (path := (root / entry).resolve()) != HOOKS_PATH.resolve():
+                digest.update(b"\0" + path.relative_to(root.resolve()).as_posix().encode() + b"\0" + path.read_bytes())
+    except (OSError, UnicodeError, ValueError, AttributeError):
         return None
+    return digest.hexdigest()
 
 
 def heartbeat(host, session, event_name=None):
@@ -199,7 +211,7 @@ def heartbeat(host, session, event_name=None):
             if session_key(event_name) is not None:
                 (directory / f"{host}-{session}.{event_name}").touch()
         if event_name == "PreToolUse":
-            digest = hooks_hash()
+            digest = hooks_hash(host)
             if digest is not None:
                 confirmed = directory / f"confirmed-{host}"
                 temp = confirmed.with_name(f".{confirmed.name}.{os.getpid()}.tmp")
@@ -210,7 +222,7 @@ def heartbeat(host, session, event_name=None):
 
 
 def hooks_warning(host, session):
-    digest = hooks_hash()
+    digest = hooks_hash(host)
     try:
         confirmed = (state_dir().parent / "heartbeats" / f"confirmed-{host}").read_text(encoding="utf-8").strip()
     except (OSError, UnicodeError):
