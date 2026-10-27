@@ -19,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "evals/e2e"))
 
 from harness import (  # noqa: E402
-    campaign, cli, codex_calls, collect, command, environment, inputs, matrix, metrics, plugin_export, pricing, process,
+    approval_mcp, campaign, cli, codex_calls, collect, command, environment, inputs, matrix, metrics, plugin_export, pricing, process,
     rubric, runner, summarize, transcript, usage,
 )
 from harness.config import HarnessConfig  # noqa: E402
@@ -822,6 +822,24 @@ class CommandLineTest(unittest.TestCase):
         self.assertEqual(server["env"], {"EVAL_APPROVAL_LOG": "/tmp/run/approvals.jsonl"})
         self.assertTrue(server["args"][0].endswith("approval_mcp.py"))
 
+    def test_승인_MCP_설정은_실행_폴더가_주어지면_환경으로_넘긴다(self):
+        """실행 폴더를 주면 EVAL_RUN_FOLDER가 EVAL_APPROVAL_LOG와 함께 env에 들어간다."""
+        # given / when
+        config = command.mcp_config(Path("/tmp/run/approvals.jsonl"), Path("/tmp/work/run-1"))
+
+        # then
+        env = config["mcpServers"]["eval_approver"]["env"]
+        self.assertEqual(env, {"EVAL_APPROVAL_LOG": "/tmp/run/approvals.jsonl", "EVAL_RUN_FOLDER": "/tmp/work/run-1"})
+
+    def test_승인_MCP_설정은_에이전트_작업_위치도_환경으로_넘긴다(self):
+        """작업 위치를 주면 상대 경로를 풀 기준인 EVAL_RUN_CWD도 env에 들어간다."""
+        # given / when
+        config = command.mcp_config(Path("/tmp/run/approvals.jsonl"), Path("/tmp/work/run-1"), Path("/tmp/work/run-1/repo"))
+
+        # then
+        env = config["mcpServers"]["eval_approver"]["env"]
+        self.assertEqual(env["EVAL_RUN_CWD"], "/tmp/work/run-1/repo")
+
     def test_자식_환경에서_ORCA_변수만_빠지고_이름이_기록된다(self):
         """ORCA_로 시작하는 변수는 제거되고 제거된 이름 목록이 돌아온다."""
         # given
@@ -833,6 +851,133 @@ class CommandLineTest(unittest.TestCase):
         # then
         self.assertEqual(removed, ["ORCA_TERMINAL", "ORCA_X"])
         self.assertEqual(env, {"PATH": "/bin", "HOME": "/home/test", "EXTRA": "e"})
+
+
+class ApprovalDecisionTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.base = Path(self.tmp.name).resolve()
+        self.folder = self.base / "work" / "run-1"
+        (self.folder / "repo").mkdir(parents=True)
+        (self.base / "outside").mkdir()
+
+    def decide(self, tool_name: str, tool_input: dict[str, Any], folder: Path | None = None) -> dict[str, Any]:
+        return approval_mcp.decision({"tool_name": tool_name, "input": tool_input}, str(self.folder if folder is None else folder))
+
+    def test_실행_폴더_안의_파일_쓰기는_허용하고_입력을_그대로_돌려준다(self):
+        """폴더 안 절대 경로와 상대 경로 모두 allow다."""
+        # given
+        absolute = {"file_path": str(self.folder / "repo" / "a.py")}
+        relative = {"file_path": "repo/a.py"}
+
+        # when
+        results = (self.decide("Write", absolute), self.decide("Edit", relative))
+
+        # then
+        self.assertEqual(results[0], {"behavior": "allow", "updatedInput": absolute})
+        self.assertEqual(results[1]["behavior"], "allow")
+
+    def test_실행_폴더_밖의_경로는_거부하고_경로와_허용_폴더를_사유에_적는다(self):
+        """폴더 밖 절대 경로의 Write는 deny이고 message가 경로와 폴더 이름을 담는다."""
+        # given
+        target = str(self.base / "outside" / "b.py")
+
+        # when
+        result = self.decide("Write", {"file_path": target})
+
+        # then
+        self.assertEqual(result["behavior"], "deny")
+        self.assertIn(target, result["message"])
+        self.assertIn(str(self.folder), result["message"])
+
+    def test_상위_경로로_폴더를_벗어나는_요청은_거부한다(self):
+        """폴더 안에서 시작해도 ..로 밖에 닿으면 deny다."""
+        # given
+        escaped = {"file_path": str(self.folder / "repo" / ".." / ".." / ".." / "outside" / "c.py")}
+        relative = {"file_path": "../outside/c.py"}
+
+        # when
+        results = (self.decide("Edit", escaped), self.decide("Edit", relative))
+
+        # then
+        self.assertEqual([item["behavior"] for item in results], ["deny", "deny"])
+
+    def test_폴더_안_심볼릭_링크가_밖을_가리키면_거부한다(self):
+        """realpath로 풀어 보므로 링크를 통한 탈출도 deny다."""
+        # given
+        link = self.folder / "repo" / "link"
+        link.symlink_to(self.base / "outside", target_is_directory=True)
+
+        # when
+        result = self.decide("Write", {"file_path": str(link / "d.py")})
+
+        # then
+        self.assertEqual(result["behavior"], "deny")
+
+    def test_상대_경로는_에이전트_작업_위치를_기준으로_푼다(self):
+        """작업 위치가 repo면 ../notes.md는 실행 폴더 안이라 allow, ../../outside/g.py는 밖이라 deny다."""
+        # given
+        cwd = str(self.folder / "repo")
+        inside, escaped = {"file_path": "../notes.md"}, {"file_path": "../../../outside/g.py"}
+
+        # when
+        results = [approval_mcp.decision({"tool_name": "Write", "input": item}, str(self.folder), cwd) for item in (inside, escaped)]
+
+        # then
+        self.assertEqual([item["behavior"] for item in results], ["allow", "deny"])
+
+    def test_notebook_path나_file_path를_가진_다른_도구도_같은_규칙으로_거부한다(self):
+        """NotebookEdit의 notebook_path와 Read의 file_path도 폴더 밖이면 deny다."""
+        # given
+        outside = str(self.base / "outside" / "n.ipynb")
+
+        # when
+        results = (self.decide("NotebookEdit", {"notebook_path": outside}), self.decide("Read", {"file_path": outside}))
+
+        # then
+        self.assertEqual([item["behavior"] for item in results], ["deny", "deny"])
+
+    def test_Bash_요청은_경로와_상관없이_허용한다(self):
+        """명령에 폴더 밖 경로가 있어도 Bash는 allow다."""
+        # given
+        tool_input = {"command": f"cat {self.base / 'outside' / 'x.txt'}"}
+
+        # when
+        result = self.decide("Bash", tool_input)
+
+        # then
+        self.assertEqual(result, {"behavior": "allow", "updatedInput": tool_input})
+
+    def test_실행_폴더가_설정되지_않으면_예전처럼_모두_허용한다(self):
+        """폴더 값이 없으면 폴더 밖 경로도 allow다."""
+        # given
+        tool_input = {"file_path": str(self.base / "outside" / "e.py")}
+
+        # when
+        result = approval_mcp.decision({"tool_name": "Write", "input": tool_input}, None)
+
+        # then
+        self.assertEqual(result["behavior"], "allow")
+
+    def test_허용과_거부_요청은_모두_결정과_함께_로그에_남는다(self):
+        """승인 질문 수가 줄지 않도록 deny도 approvals.jsonl에 한 줄로 기록한다."""
+        # given
+        log = self.base / "approvals.jsonl"
+        calls = [("Write", {"file_path": str(self.folder / "repo" / "a.py")}), ("Write", {"file_path": str(self.base / "outside" / "f.py")})]
+
+        # when
+        replies = [
+            approval_mcp.handle({"jsonrpc": "2.0", "id": index, "method": "tools/call",
+                                 "params": {"name": "approve", "arguments": {"tool_name": name, "input": tool_input, "tool_use_id": f"t{index}"}}},
+                                str(log), str(self.folder))
+            for index, (name, tool_input) in enumerate(calls)
+        ]
+
+        # then
+        lines = transcript.read_jsonl(log)
+        self.assertEqual([(line["tool_name"], line["decision"]) for line in lines], [("Write", "allow"), ("Write", "deny")])
+        self.assertEqual(json.loads(replies[1]["result"]["content"][0]["text"])["behavior"], "deny")
 
 
 FAKE_CLAUDE = """#!{python}
@@ -860,6 +1005,15 @@ print(json.dumps({{"type": "assistant", "message": {{"id": "m1", "model": "claud
 print(json.dumps({{"type": "result", "subtype": "success", "is_error": False, "result": "ok", "num_turns": 1,
     "total_cost_usd": 0.01, "session_id": "fake-1", "permission_denials": []}}))
 """
+
+
+class PidKiller:
+    @staticmethod
+    def kill(pid: int) -> None:
+        try:
+            os.kill(pid, 9)
+        except OSError:
+            pass
 
 
 def pid_running(pid: int) -> bool:
@@ -1080,6 +1234,61 @@ class ProcessAndRunTest(unittest.TestCase):
         self.assertEqual(result["tool_calls_by_tool"]["codex"], {"Bash": 1})
         self.assertEqual(result["tool_calls_by_tool"]["main"]["Bash"], 1)
         self.assertEqual(result["tool_calls_by_tool"]["total"]["Bash"], 1)
+
+    def test_실행_파일을_쓸_때_승인_서버에_실행_작업_폴더를_넘긴다(self):
+        """mcp.json의 EVAL_RUN_FOLDER는 실행의 work_dir이고 에이전트 저장소는 그 안에 있다."""
+        # given
+        prompt = command.read_prompt(self.cfg.tasks_root, self.task)
+
+        # when
+        runner.write_run_files(self.spec, self.task, self.variant, prompt, self.cfg, self.plugin)
+
+        # then
+        config = json.loads((self.spec.result_dir / "mcp.json").read_text(encoding="utf-8"))
+        env = config["mcpServers"]["eval_approver"]["env"]
+        self.assertEqual(env["EVAL_RUN_FOLDER"], str(self.spec.work_dir))
+        self.assertEqual(env["EVAL_RUN_CWD"], str(self.spec.repo))
+        self.assertEqual(self.spec.repo.parent, self.spec.work_dir)
+
+    def failing_grader(self, task, repo, base, view, tasks_root, work):
+        raise RuntimeError("boom")
+
+    def test_채점이_실패해도_사용량_메트릭은_쓰고_grade_error를_남기고_오류를_전파한다(self):
+        """grade_run이 예외를 내면 metrics.json에 비용과 grade_error가 기록되고 예외는 그대로 올라간다."""
+        # given
+        self.write_stream(sample_events())
+        self.graders.grade_run = self.failing_grader
+
+        # when
+        with self.assertRaises(RuntimeError):
+            runner.analyze(self.spec, self.task, self.finished_run(), self.cfg)
+
+        # then
+        saved = json.loads((self.spec.result_dir / "metrics.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["grade_error"], "RuntimeError: boom")
+        self.assertEqual(saved["cost"]["claude_total_cost_usd"], 0.5)
+        self.assertGreater(saved["cost"]["claude_list_cost_usd"], 0)
+        self.assertEqual((saved["success"], saved["correctness"]), (False, None))
+
+    def test_채점_실패한_실행은_run_json에_grade_error가_남고_다시_채점하면_둘_다_사라진다(self):
+        """finish_run이 grade_error를 run.json에 쓰고, regrade가 성공하면 run.json과 metrics.json에서 지운다."""
+        # given
+        self.graders.grade_run = self.failing_grader
+        task = {**self.task, "limits": {"wall_seconds": 30, "max_budget_usd": 2}}
+        run = runner.execute_run(self.spec, task, self.variant, self.plugin, self.cfg, {})
+        failed_metrics = json.loads((self.spec.result_dir / "metrics.json").read_text(encoding="utf-8"))
+        self.graders.grade_run = self.grade
+
+        # when
+        regraded = runner.regrade_run(self.spec, task, self.cfg, self.graders)
+
+        # then
+        self.assertEqual(run["grade_error"], "RuntimeError: boom")
+        self.assertEqual(failed_metrics["cost"]["claude_total_cost_usd"], 0.01)
+        self.assertNotIn("grade_error", regraded)
+        saved = json.loads((self.spec.result_dir / "metrics.json").read_text(encoding="utf-8"))
+        self.assertNotIn("grade_error", saved)
+        self.assertTrue(saved["success"])
 
     def test_루브릭_채점_폴더는_변형을_드러내지_않는_불투명한_이름이고_결과가_기록된다(self):
         """rubric/<16자리 16진수> 아래에서 채점하고 grade/rubric.json에 rubric_dir을 남긴다."""
@@ -1335,6 +1544,58 @@ class RubricTest(unittest.TestCase):
         # then
         self.assertTrue((self.work / ".git").is_dir())
         self.assertEqual(result["runner_status"], status)
+
+    def test_러너에는_바깥_제한보다_짧은_자체_timeout을_명시한다(self):
+        """reviewer 러너가 바깥 제한 전에 스스로 끝나도록 --timeout을 바깥 제한보다 작게 넘긴다."""
+        # given
+        timeouts: list[float] = []
+
+        def fake(command, **kwargs):
+            self.commands.append(command)
+            timeouts.append(kwargs["timeout"])
+            Path(command[command.index("--result") + 1]).write_text('{"scores": {"a": 5, "b": 5}}', encoding="utf-8")
+            return completed(0)
+
+        # when
+        self.grade(fake)
+
+        # then
+        runner_timeout = int(self.commands[0][self.commands[0].index("--timeout") + 1])
+        self.assertEqual(timeouts, [rubric.RUBRIC_TIMEOUT_SECONDS])
+        self.assertEqual(runner_timeout, rubric.RUNNER_TIMEOUT_SECONDS)
+        self.assertLess(runner_timeout, rubric.RUBRIC_TIMEOUT_SECONDS)
+
+    def test_바깥_제한_시간이_지나면_새_세션의_자손_프로세스까지_끝내고_시간_초과를_알린다(self):
+        """role_runner가 별도 세션으로 띄운 자식은 러너만 죽여서는 남으므로, 기본 실행기는 자손을 추적해 끝낸다."""
+        # given
+        fake_root = self.work / "plugin"
+        (fake_root / "scripts").mkdir(parents=True)
+        pid_file = self.work / "child.pid"
+        (fake_root / "scripts" / "role_runner.py").write_text(
+            "import subprocess, sys, time\n"
+            "child = subprocess.Popen(['sleep', '30'], start_new_session=True)\n"
+            f"open({str(pid_file)!r}, 'w').write(str(child.pid))\n"
+            "time.sleep(30)\n", encoding="utf-8")
+        self.addCleanup(lambda: pid_file.is_file() and PidKiller.kill(int(pid_file.read_text(encoding="utf-8"))))
+
+        # when
+        with mock.patch.object(rubric, "RUBRIC_TIMEOUT_SECONDS", 2):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                rubric.grade(self.task, "The answer text.", "Explain the flow.", self.work / "grading", repo_root=fake_root)
+
+        # then
+        self.assertFalse(pid_running(int(pid_file.read_text(encoding="utf-8"))))
+
+    def test_기본_실행기는_정상_종료한_명령의_출력과_입력을_다룬다(self):
+        """제한 안에 끝나면 stdin 입력을 넘기고 stdout, 종료 코드를 CompletedProcess로 돌려준다."""
+        # given
+        command_line = [sys.executable, "-c", "import sys; print(sys.stdin.read().upper()); sys.exit(3)"]
+
+        # when
+        result = rubric.run_cleaning_tree(command_line, timeout=20, input="abc", cwd=self.work)
+
+        # then
+        self.assertEqual((result.returncode, result.stdout), (3, "ABC\n"))
 
     def test_점수가_빠졌거나_범위를_벗어나면_오류로_기록하고_통과시키지_않는다(self):
         """기준 하나가 빠진 응답은 error를 가진 불통과 결과다."""
@@ -1761,10 +2022,13 @@ class CampaignInputsTest(unittest.TestCase):
         body = {"id": "T01", "fixture": "demo", "prompt_file": "prompts/T01.txt", "limits": {"wall_seconds": 60, "max_budget_usd": 1}}
         (tasks / "T01.json").write_text(json.dumps(body), encoding="utf-8")
         (tasks / "prompts" / "T01.txt").write_text("do it\n", encoding="utf-8")
+        (self.root / "fixtures" / "demo").mkdir(parents=True)
+        (self.root / "fixtures" / "demo" / "app.py").write_text("print('one')\n", encoding="utf-8")
         variants = self.root / "variants"
         variants.mkdir()
         (variants / "baseline.json").write_text('{"name": "baseline", "ref": "HEAD"}', encoding="utf-8")
-        self.cfg = HarnessConfig(run_root=self.root / "runs", tasks_root=tasks, variants_root=variants)
+        self.cfg = HarnessConfig(run_root=self.root / "runs", tasks_root=tasks, fixtures_root=self.root / "fixtures",
+                                 variants_root=variants)
         self.sha = "a" * 40
         for patch in (mock.patch.object(campaign.plugin_export, "export_plugin", return_value={"ref": "HEAD", "sha": "a", "path": "/tmp/p"}),
                       mock.patch.object(campaign.environment, "capture_base", return_value={}),
@@ -1802,8 +2066,8 @@ class CampaignInputsTest(unittest.TestCase):
         self.assertIn("variant sha baseline", str(caught.exception))
 
     def test_숨은_테스트나_과제_정의가_바뀐_채_이어서_실행하면_거부한다(self):
-        """tasks/hidden과 tasks/custom, 과제 JSON 중 무엇이 바뀌어도 거부한다."""
-        for relative in ("hidden/T01/test_h.py", "custom/T01.py", "T01.json"):
+        """tasks/hidden과 tasks/custom, 과제 JSON, 프롬프트 파일 중 무엇이 바뀌어도 거부한다."""
+        for relative in ("hidden/T01/test_h.py", "custom/T01.py", "T01.json", "prompts/T01.txt"):
             with self.subTest(relative=relative):
                 # given
                 self.setUp()
@@ -1814,6 +2078,48 @@ class CampaignInputsTest(unittest.TestCase):
                 # when / then
                 with self.assertRaises(command.ConfigError):
                     self.run_once()
+
+    def test_입력_지문은_과제_프롬프트와_픽스처_트리를_항목으로_가진다(self):
+        """parts에 prompt:<과제>와 fixture:<이름>이 있고 내용이 바뀌면 changed_inputs가 그 이름을 돌려준다."""
+        # given
+        before = inputs.compute_inputs(self.cfg, ["T01"], ["baseline"])
+        (self.cfg.fixtures_root / "demo" / "app.py").write_text("print('two')\n", encoding="utf-8")
+        after_fixture = inputs.compute_inputs(self.cfg, ["T01"], ["baseline"])
+        (self.cfg.tasks_root / "prompts" / "T01.txt").write_text("do more\n", encoding="utf-8")
+        after_prompt = inputs.compute_inputs(self.cfg, ["T01"], ["baseline"])
+
+        # when
+        fixture_changes = inputs.changed_inputs(before, after_fixture)
+        prompt_changes = inputs.changed_inputs(after_fixture, after_prompt)
+
+        # then
+        self.assertTrue({"prompt:T01", "fixture:demo"} <= set(before["parts"]))
+        self.assertEqual(fixture_changes, ["fixture:demo"])
+        self.assertEqual(prompt_changes, ["prompt:T01"])
+
+    def test_픽스처가_바뀐_채_이어서_실행하면_거부한다(self):
+        """fixtures_root 아래 파일이 바뀐 캠페인은 ConfigError로 멈춘다."""
+        # given
+        self.run_once()
+        (self.cfg.fixtures_root / "demo" / "app.py").write_text("print('two')\n", encoding="utf-8")
+
+        # when / then
+        with self.assertRaises(command.ConfigError) as caught:
+            self.run_once()
+        self.assertIn("fixture:demo", str(caught.exception))
+
+    def test_저장된_기록에_없는_새_항목은_변경으로_세지_않는다(self):
+        """지문 항목이 늘기 전에 저장된 기록은 prompt, fixture 키가 없어도 같은 입력이면 변경이 없다."""
+        # given
+        current = inputs.compute_inputs(self.cfg, ["T01"], ["baseline"])
+        legacy_parts = {key: value for key, value in current["parts"].items() if not key.startswith(("prompt:", "fixture:"))}
+        stored = {"variant_shas": current["variant_shas"], "parts": legacy_parts}
+
+        # when
+        changes = inputs.changed_inputs(stored, current)
+
+        # then
+        self.assertEqual(changes, [])
 
     def test_허용_플래그를_주면_이어서_실행하고_변경을_기록한다(self):
         """--allow-changed-inputs는 거부 대신 input_changes에 기록하고 새 입력을 저장한다."""
@@ -1881,6 +2187,95 @@ class SpendSummaryTest(unittest.TestCase):
 
             # then
             self.assertIn("| 4.000 | 0.000 | - |", text)
+
+
+def write_metrics_only(root: Path, row: dict[str, Any], **extra: Any) -> None:
+    spec = matrix.make_spec(root, "camp", row["task"], row["variant"], row["rep"])
+    matrix.write_json(spec.result_dir / "run.json", {k: row[k] for k in ("run_id", "task", "variant", "rep", "status")})
+    matrix.write_json(spec.result_dir / "metrics.json", {**row, **extra})
+
+
+class GradeErrorSummaryTest(unittest.TestCase):
+    def test_채점_오류_실행은_성공_통계에서_빠지지만_지출에는_들어간다(self):
+        """grade_error가 있는 실행은 n과 성공 수에 세지 않고 비용은 지출 합계에 더한다."""
+        # given
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_metrics_only(root, metrics_row("T01", "A", 1, True, 1.0, 10.0))
+            write_metrics_only(root, metrics_row("T01", "A", 2, False, 2.0, 10.0), grade_error="RuntimeError: boom")
+
+            # when
+            text = summarize.summarize(root, "camp")
+
+            # then
+            self.assertIn("| T01 | 1 | 1/1 |", text)
+            self.assertIn("| 3.000 | 0.000 | 3.000 |", text)
+            self.assertIn("complete=2", text)
+
+    def test_보관된_이전_시도가_채점_오류여도_지출에_더한다(self):
+        """attempts 아래 metrics.json에 grade_error가 있어도 그 비용은 시도 지출에 들어간다."""
+        # given
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            spec = matrix.make_spec(root, "camp", "T01", "A", 1)
+            folder = spec.result_dir.parent / "attempts" / "rep1" / "1"
+            matrix.write_json(folder / "metrics.json", {"grade_error": "RuntimeError: boom", "cost": {"claude_total_cost_usd": 4.0}})
+
+            # when
+            spent = summarize.attempts_spend(spec.result_dir / "run.json", 1)
+
+            # then
+            self.assertEqual(spent, (4.0, 0.0))
+
+
+class ClaudeSpendTest(unittest.TestCase):
+    def test_토큰_보고는_출처별_목록_비용을_담고_러너_출처만_따로_합산한다(self):
+        """runner:<역할> 출처의 비용만 claude_runner_list_cost_usd로 기록된다."""
+        # given
+        main = {"id": "m", "model": OPUS, **usage.claude_usage(claude_usage(1000, 0))}
+        reviewer = {"id": "r", "model": OPUS, **usage.claude_usage(claude_usage(2000, 0))}
+        report = usage.claude_token_report({"main": [main], "subagent:demo": [main], "runner:reviewer": [reviewer]})
+        run = {"run_id": "T01-baseline-r1", "task": "T01", "variant": "baseline", "rep": 1, "status": "complete"}
+        codex = {"tokens": {}, "list_cost_usd_estimate": 0.0, "unpriced_models": []}
+
+        # when
+        result = metrics.build_metrics(run=run, task={}, view=transcript.build_view(sample_events()), facts=metrics.stream_facts(sample_events()),
+                                       claude_report=report, codex_report=codex, grade=None, rubric=None, checks={}, usage_source="stream")
+
+        # then
+        self.assertAlmostEqual(result["cost"]["claude_runner_list_cost_usd"], 2000 * 4.0 / 1_000_000)
+        self.assertAlmostEqual(result["cost"]["claude_list_cost_usd"], 4000 * 4.0 / 1_000_000)
+
+    def test_총비용이_있으면_러너_목록_비용을_더하고_없으면_목록_비용만_쓴다(self):
+        """러너를 두 번 세지 않는다: 총비용+러너, 총비용이 없으면 이미 러너를 담은 목록 비용, 둘 다 없으면 None."""
+        # given
+        with_total = {"cost": {"claude_total_cost_usd": 1.0, "claude_runner_list_cost_usd": 0.5, "claude_list_cost_usd": 9.0}}
+        without_total = {"cost": {"claude_total_cost_usd": None, "claude_runner_list_cost_usd": 0.5, "claude_list_cost_usd": 3.0}}
+        old_record = {"cost": {"claude_total_cost_usd": 1.0}}
+
+        # when
+        values = [summarize.claude_cost(item) for item in (with_total, without_total, old_record, {}, None)]
+
+        # then
+        self.assertEqual(values, [1.5, 3.0, 1.0, None, None])
+
+    def test_요약의_비용_칸과_지출과_비교_차이에_러너_비용이_들어간다(self):
+        """A는 1.0+0.5, B는 3.0+1.0이면 비용 칸 1.500, 지출 1.500, 차이 +2.500이다."""
+        # given
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first = metrics_row("T01", "A", 1, True, 1.0, 10.0)
+            second = metrics_row("T01", "B", 1, True, 3.0, 10.0)
+            write_metrics_only(root, {**first, "cost": {**first["cost"], "claude_runner_list_cost_usd": 0.5}})
+            write_metrics_only(root, {**second, "cost": {**second["cost"], "claude_runner_list_cost_usd": 1.0}})
+
+            # when
+            text = summarize.summarize(root, "camp", ("A", "B"))
+
+            # then
+            self.assertIn("1.500 / 1.500 (n=1)", text)
+            self.assertIn("| 1.500 | 0.000 | 1.500 |", text)
+            self.assertIn("| T01 | 1 | 0 | 0 | no | +2.500 |", text)
 
 
 if __name__ == "__main__":

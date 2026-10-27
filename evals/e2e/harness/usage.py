@@ -11,6 +11,7 @@ from .transcript import agent_sources
 CLAUDE_FIELDS = ("input", "output", "cache_read", "cache_write_5m", "cache_write_1h")
 CODEX_FIELDS = ("input", "output", "cache_read", "cache_write", "reasoning")
 SYNTHETIC_MODEL = "<synthetic>"
+RUNNER_SOURCE_PREFIX = "runner:"
 
 
 def claude_usage(usage: dict[str, Any]) -> dict[str, int]:
@@ -75,7 +76,7 @@ def claude_requests_by_source(
     else:
         by_source, label = split_stream_requests(stream_events), "stream"
     for record in runners or []:
-        source = f"runner:{record.get('role', 'unknown')}"
+        source = f"{RUNNER_SOURCE_PREFIX}{record.get('role', 'unknown')}"
         by_source[source] = by_source.get(source, []) + claude_requests(record.get("events", []))
     return by_source, label
 
@@ -89,10 +90,12 @@ def sum_fields(rows: Iterable[dict[str, Any]], fields: tuple[str, ...]) -> dict[
 
 
 def claude_token_report(by_source: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
-    """Tokens by source and model plus the recomputed list cost; unpriced models are listed, not guessed."""
+    """Tokens by source and model plus the recomputed list cost, in total and per source; unpriced models are listed."""
     tokens: dict[str, dict[str, dict[str, int]]] = {}
     cost, unpriced = 0.0, set()
+    cost_by_source: dict[str, float] = {}
     for source, requests in by_source.items():
+        cost_by_source[source] = 0.0
         by_model: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for request in requests:
             by_model[request["model"]].append(request)
@@ -101,8 +104,10 @@ def claude_token_report(by_source: dict[str, list[dict[str, Any]]]) -> dict[str,
                 unpriced.add(request["model"])
             else:
                 cost += price
+                cost_by_source[source] += price
         tokens[source] = {model: _with_total_write(sum_fields(rows, CLAUDE_FIELDS)) for model, rows in by_model.items()}
-    return {"tokens": tokens, "list_cost_usd": cost, "unpriced_models": sorted(unpriced)}
+    return {"tokens": tokens, "list_cost_usd": cost, "list_cost_usd_by_source": cost_by_source,
+            "unpriced_models": sorted(unpriced)}
 
 
 def _with_total_write(totals: dict[str, int]) -> dict[str, int]:

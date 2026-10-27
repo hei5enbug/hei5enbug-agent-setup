@@ -26,14 +26,25 @@ def mean(values: Sequence[float]) -> float | None:
     return sum(values) / len(values) if values else None
 
 
-def run_spend(metrics: dict[str, Any] | None) -> tuple[float, float]:
-    """(Claude USD, Codex estimated USD) one run's metrics report; the list cost stands in when the stream has no total."""
+def number(value: Any) -> float | None:
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def claude_cost(metrics: dict[str, Any] | None) -> float | None:
+    """One run's Claude USD: the stream total plus the separate role runner processes, else the list cost alone.
+
+    The list cost already holds the runner and subagent tokens; the stream total holds the subagents but not the runners."""
     cost = (metrics or {}).get("cost") or {}
-    claude = cost.get("claude_total_cost_usd")
-    if not isinstance(claude, (int, float)) or isinstance(claude, bool):
-        claude = cost.get("claude_list_cost_usd")
-    codex = cost.get("codex_list_cost_usd_estimate")
-    return (float(claude) if isinstance(claude, (int, float)) else 0.0, float(codex) if isinstance(codex, (int, float)) else 0.0)
+    total = number(cost.get("claude_total_cost_usd"))
+    if total is not None:
+        return total + (number(cost.get("claude_runner_list_cost_usd")) or 0.0)
+    return number(cost.get("claude_list_cost_usd"))
+
+
+def run_spend(metrics: dict[str, Any] | None) -> tuple[float, float]:
+    """(Claude USD, Codex estimated USD) one run's metrics report; 0 stands in for a missing figure."""
+    codex = number(((metrics or {}).get("cost") or {}).get("codex_list_cost_usd_estimate"))
+    return (claude_cost(metrics) or 0.0, codex or 0.0)
 
 
 def attempts_spend(run_json: Path, rep: Any) -> tuple[float, float]:
@@ -59,7 +70,7 @@ def load_results(run_root: Path, campaign: str) -> list[dict[str, Any]]:
 
 
 def graded(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [row for row in rows if row.get("status") in FINISHED_STATUSES and row.get("has_metrics")]
+    return [row for row in rows if row.get("status") in FINISHED_STATUSES and row.get("has_metrics") and not row.get("grade_error")]
 
 
 def fmt(value: float | None, digits: int = 2) -> str:
@@ -98,7 +109,7 @@ def spend_cells(rows: list[dict[str, Any]], successes: int) -> list[str]:
 def stats_row(rows: list[dict[str, Any]], spend_rows: list[dict[str, Any]] | None = None) -> list[str]:
     """Statistics of the graded final attempts; spend covers `spend_rows` (default `rows`) with archived attempts."""
     n = len(rows)
-    claude = present(rows, lambda r: (r.get("cost") or {}).get("claude_total_cost_usd"))
+    claude = present(rows, claude_cost)
     codex = present(rows, lambda r: (r.get("cost") or {}).get("codex_list_cost_usd_estimate"))
     wall = present(rows, lambda r: r.get("wall_seconds"))
     turns = present(rows, lambda r: r.get("num_turns"))
@@ -145,8 +156,9 @@ def variant_section(variant: str, rows: list[dict[str, Any]]) -> list[str]:
     lines = [f"### Variant {variant}", ""]
     lines += table("task", per_task) if per_task else ["No graded runs."]
     lines += ["", "Overall", ""] + table("variant", [[variant, *stats_row(done, rows)]])
-    notes = ("Statistics describe the final attempt of each graded run. Spend adds every run of the task or variant, "
-             "including archived earlier attempts and runs that did not finish; cost per success is that spend, "
+    notes = ("Statistics describe the final attempt of each graded run; a run whose grading failed is not graded. "
+             "Spend adds every run of the task or variant, including archived earlier attempts, runs that did not "
+             "finish, and runs whose grading failed; cost per success is that spend, "
              "Claude plus Codex estimate, divided by the successes.")
     return lines + ["", notes, ""]
 
@@ -175,7 +187,7 @@ def compare(rows_a: list[dict[str, Any]], rows_b: list[dict[str, Any]], names: t
         flip = _majority(a_success) != _majority(b_success) if a_success and b_success else None
         lines.append("| " + " | ".join([
             task, str(len(shared)), str(a_only), str(b_only), MISSING if flip is None else ("yes" if flip else "no"),
-            delta(a_rows, b_rows, lambda r: (r.get("cost") or {}).get("claude_total_cost_usd"), 3),
+            delta(a_rows, b_rows, claude_cost, 3),
             delta(a_rows, b_rows, lambda r: r.get("wall_seconds"), 0),
             delta(a_rows, b_rows, lambda r: r.get("num_turns"), 0), delta(a_rows, b_rows, total_calls, 0),
         ]) + " |")

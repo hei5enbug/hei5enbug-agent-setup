@@ -44,10 +44,15 @@ repository README; only its unit tests are.
 ### Approvals
 
 The user answers permission prompts in real use. The harness stands in for the user with a small stdio MCP server,
-`harness/approval_mcp.py`, passed as `--permission-prompt-tool`. It approves every request and logs it to
-`approvals.jsonl`. The number of lines is the approval-prompt count, a friction metric. A plugin hook that returns
-`ask` reaches this tool; the pilot confirmed this with a forced `git clean -f`. Calls that the permission mode or the
-plugin's guard allow without a prompt never reach it, so they are not counted.
+`harness/approval_mcp.py`, passed as `--permission-prompt-tool`. It allows every Bash request. It denies a file-tool
+request (`Write`, `Edit`, `MultiEdit`, `NotebookEdit`, or any request with a `file_path` or `notebook_path`) whose
+path resolves outside the run's work folder, `work/<run id>/`, after `..` and symlinks are resolved. The denial
+message names the path and the folder. A relative path starts in the agent's working directory,
+`work/<run id>/repo/`. Every other request is allowed. The server logs each request, allowed or
+denied, with its decision to `approvals.jsonl`. The number of lines is the approval-prompt count, a friction
+metric, so a denied request still counts. An `mcp.json` without `EVAL_RUN_FOLDER` keeps the older allow-all
+behavior. A plugin hook that returns `ask` reaches this tool; the pilot confirmed this with a forced `git clean -f`.
+Calls that the permission mode or the plugin's guard allow without a prompt never reach it, so they are not counted.
 
 The harness cannot answer a question that the agent asks with `AskUserQuestion`. The approver lets the call through,
 and the run ends with the question unanswered. Task prompts therefore leave no decision open that would change the
@@ -80,8 +85,9 @@ infrastructure reason or hit a usage limit is started again, and its old records
 `attempts/rep<k>/<n>/`. When a run reports a usage limit, the harness starts no new run, lets running ones finish, and
 exits with code 75.
 
-The first `run` stores each variant's resolved revision and fingerprints of the variant and task inputs in
-`campaign.json`. A resume whose inputs differ stops, unless `--allow-changed-inputs` is given; then the harness
+The first `run` stores each variant's resolved revision and a fingerprint per input in `campaign.json`: the variant
+file, the task file, the task's prompt file, the task's fixture tree, and the hidden tests and custom checks of the
+task. A resume whose inputs differ stops, unless `--allow-changed-inputs` is given; then the harness
 records the change in `campaign.json`.
 
 ### Variants
@@ -117,13 +123,16 @@ Each `metrics.json` separates measured values from estimates.
 | Success, correctness, test pass rate, regressions | Graders. Success means every required check passed and, for a rubric task, the rubric mean reached its pass mark. Correctness is the weighted share of passed checks. |
 | Tokens by model and source | Main transcript and subagent records, deduplicated by message ID; Codex `token_count` events per rollout. |
 | `claude_total_cost_usd` | The result message of `claude -p`, a client-side estimate. |
-| `claude_list_cost_usd` | Tokens priced with `harness/pricing.py` (official Claude list prices, checked 2026-10-25). |
+| `claude_list_cost_usd` | Tokens priced with `harness/pricing.py` (official Claude list prices, checked 2026-10-25). It includes the main session, subagents, and separate Claude role runner processes. |
+| `claude_runner_list_cost_usd` | The list cost of the separate Claude role runner processes alone. The stream's total cost leaves them out. |
+| Claude spend in the summary | `claude_total_cost_usd` plus `claude_runner_list_cost_usd`; `claude_list_cost_usd` alone when the stream has no total. Subagents are already inside the total, and no process is counted twice. |
 | `codex_list_cost_usd_estimate` | Codex tokens at OpenAI API list prices (checked 2026-10-25). It is an estimate: Codex runs on a ChatGPT plan, which is not billed per token. |
 | Wall time, turns, tool calls by tool, subagent launches by type | Harness clock and the stream; Codex tool calls are counted under their own key. |
 | Role runner calls by role and exit code | Bash calls of `role_runner.py` and their status lines. |
 | Retries | A failing Bash command run again, an agent type launched again after an error, a role runner run again after a non-zero exit. |
 | Approval prompts, permission denials | `approvals.jsonl` and the result message. |
 | Spend including attempts, cost per success | Summary only: every attempt of a task, and that spend divided by the successes. |
+| `grade_error` | Present when grading raised. `metrics.json` still holds usage, cost, and tool counts, and `run.json` records the same error. The summary leaves such a run out of the success and correctness statistics but counts its spend. `regrade` clears the error once grading succeeds. |
 | Handoff loss | Task constraints that the main session knew but that a delegation prompt did not mention, and checks that failed because of it. |
 
 ## Graders
@@ -135,8 +144,10 @@ checks live in `tasks/custom/`.
 
 The rubric grade covers only what a script cannot judge: design quality for T01 and answer quality for T10. The
 assignment holds the task prompt, the rubric, and the artifact, but no variant name, revision, or model name. It runs
-in `<campaign>/rubric/<opaque id>/`, a folder whose name reveals no variant, through `python3 scripts/role_runner.py reviewer --model gpt-6-astra --effort xhigh`. When the runner exits with 3 or
-4, `claude-opus-5-5` grades instead, and `rubric.json` records the fallback.
+in `<campaign>/rubric/<opaque id>/`, a folder whose name reveals no variant, through `python3 scripts/role_runner.py reviewer --model gpt-6-astra --effort xhigh --timeout 1500`. When the runner exits
+with 3 or 4, `claude-opus-5-5` grades instead, and `rubric.json` records the fallback. The harness stops a grader
+that is still running after 1800 seconds, together with every process it started, and the run's grading then fails
+with `grade_error`.
 
 `tests/test_e2e_eval_graders.py` proves each task's graders: the unmodified fixture fails, and the reference
 solution in `tasks/reference/` passes.
@@ -163,6 +174,10 @@ real one has: a README, an `AGENTS.md` with a Korean mirror rule, tests, and Kor
 
 ## Known limits
 
+- Bash requests are always allowed, so a campaign must run on a machine where an agent may run any shell command.
+  The approver denies only file-tool requests that resolve outside the run's work folder.
+- The process-tree poll in `harness/process.py` can miss a detached child that starts after the last poll and before
+  the agent exits, so such a child is not terminated.
 - Calls that need no prompt in the user's permission mode are not counted as approvals, so the approval count
   measures prompts the user would see, not every guarded call.
 - The Codex cost is an estimate at API list prices, and the long-context tier is chosen per request from its input

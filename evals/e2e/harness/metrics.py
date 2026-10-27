@@ -7,7 +7,7 @@ from typing import Any
 
 from .config import INLINE_PLUGIN_SOURCE, INSTALLED_PLUGIN_KEY, MOD_MARKER, PLUGIN_NAME, STATUS_TIMED_OUT, STATUS_USAGE_LIMITED
 from .transcript import init_event, mod_marker_present, result_event
-from .usage import agent_models
+from .usage import RUNNER_SOURCE_PREFIX, agent_models
 
 
 def stream_facts(events: list[dict[str, Any]]) -> dict[str, Any]:
@@ -125,6 +125,12 @@ def merged_success(grade: dict[str, Any] | None, task: dict[str, Any], rubric: d
     return True if not task.get("rubric") else bool(rubric and rubric.get("passed"))
 
 
+def runner_list_cost(claude_report: dict[str, Any]) -> float:
+    """List cost of the separate Claude role runner processes, which the stream's total cost does not include."""
+    by_source = claude_report.get("list_cost_usd_by_source") or {}
+    return sum(cost for source, cost in by_source.items() if source.startswith(RUNNER_SOURCE_PREFIX))
+
+
 def build_metrics(
     *, run: dict[str, Any], task: dict[str, Any], view: dict[str, Any], facts: dict[str, Any],
     claude_report: dict[str, Any], codex_report: dict[str, Any], grade: dict[str, Any] | None,
@@ -140,6 +146,7 @@ def build_metrics(
         "cost": {
             "claude_total_cost_usd": facts.get("total_cost_usd"),
             "claude_list_cost_usd": claude_report["list_cost_usd"],
+            "claude_runner_list_cost_usd": runner_list_cost(claude_report),
             "codex_list_cost_usd_estimate": codex_report["list_cost_usd_estimate"],
             "codex_is_estimate": True,
             "unpriced_models": sorted(set(claude_report["unpriced_models"]) | set(codex_report["unpriced_models"])),

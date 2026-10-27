@@ -7,10 +7,11 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from . import plugin_export
-from .command import ConfigError, load_variant
+from .command import ConfigError, load_task, load_variant
 from .config import HarnessConfig
 
 TREES = ("hidden", "custom")
+IGNORED_PARTS = frozenset({"__pycache__", ".pytest_cache", ".git"})
 
 
 def _digest(chunks: Iterable[bytes]) -> str:
@@ -32,17 +33,19 @@ def tree_digest(root: Path) -> str:
     if root.is_file():
         return file_digest(root)
     chunks: list[bytes] = []
-    for path in sorted(item for item in root.rglob("*") if item.is_file() and "__pycache__" not in item.parts):
+    files = (item for item in root.rglob("*") if item.is_file() and not IGNORED_PARTS & set(item.relative_to(root).parts))
+    for path in sorted(files):
         chunks += [path.relative_to(root).as_posix().encode(), b"\0", path.read_bytes(), b"\0"]
     return _digest(chunks)
 
 
 def compute_inputs(cfg: HarnessConfig, task_ids: list[str], variant_names: list[str]) -> dict[str, Any]:
-    """Resolved variant shas plus one digest per variant file, task file, hidden-test folder, and custom check."""
+    """Resolved variant shas plus a digest per variant, task, prompt, fixture tree, hidden-test folder, and custom check."""
     variant_shas = {name: variant_sha(cfg, name) for name in variant_names}
     parts: dict[str, str] = {f"variant:{name}": file_digest(cfg.variants_root / f"{name}.json") for name in variant_names}
     for task_id in task_ids:
         parts[f"task:{task_id}"] = file_digest(cfg.tasks_root / f"{task_id}.json")
+        parts.update(task_content_parts(cfg, task_id))
         for tree in TREES:
             folder = cfg.tasks_root / tree
             for candidate in sorted(folder.iterdir()) if folder.is_dir() else []:
@@ -51,6 +54,18 @@ def compute_inputs(cfg: HarnessConfig, task_ids: list[str], variant_names: list[
     shas = {f"sha:{name}": sha for name, sha in variant_shas.items()}
     fingerprint = _digest(f"{key}={value}\n".encode() for key, value in sorted({**parts, **shas}.items()))
     return {"variant_shas": variant_shas, "parts": parts, "fingerprint": fingerprint}
+
+
+def task_content_parts(cfg: HarnessConfig, task_id: str) -> dict[str, str]:
+    """Digests of the task's prompt file and fixture tree; none when the task file cannot be read."""
+    try:
+        task = load_task(cfg.tasks_root, task_id)
+    except ConfigError:
+        return {}
+    return {
+        f"prompt:{task_id}": file_digest(cfg.tasks_root / task["prompt_file"]),
+        f"fixture:{task['fixture']}": tree_digest(cfg.fixtures_root / task["fixture"]),
+    }
 
 
 def variant_sha(cfg: HarnessConfig, name: str) -> str:

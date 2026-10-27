@@ -78,10 +78,12 @@ def run_settings(variant: dict[str, Any]) -> dict[str, Any]:
     return {**merged, "enabledPlugins": {**(enabled if isinstance(enabled, dict) else {}), INSTALLED_PLUGIN_KEY: False}}
 
 
-def mcp_config(approval_log: Path) -> dict[str, Any]:
+def mcp_config(approval_log: Path, run_folder: Path | None = None, cwd: Path | None = None) -> dict[str, Any]:
+    """The approver server config; it denies file tools outside `run_folder` and reads relative paths from `cwd`."""
+    folder = {"EVAL_RUN_FOLDER": str(run_folder)} if run_folder else {}
+    env = {"EVAL_APPROVAL_LOG": str(approval_log), **folder, **({"EVAL_RUN_CWD": str(cwd)} if run_folder and cwd else {})}
     return {"mcpServers": {APPROVER_SERVER: {
-        "type": "stdio", "command": "python3", "args": [str(APPROVER_SCRIPT)],
-        "env": {"EVAL_APPROVAL_LOG": str(approval_log)},
+        "type": "stdio", "command": "python3", "args": [str(APPROVER_SCRIPT)], "env": env,
     }}}
 
 

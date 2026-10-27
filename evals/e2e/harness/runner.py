@@ -33,7 +33,7 @@ def write_run_files(
     spec.result_dir.mkdir(parents=True, exist_ok=True)
     (spec.result_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
     write_json(spec.result_dir / "settings.json", command.run_settings(variant))
-    write_json(spec.result_dir / "mcp.json", command.mcp_config(spec.result_dir / "approvals.jsonl"))
+    write_json(spec.result_dir / "mcp.json", command.mcp_config(spec.result_dir / "approvals.jsonl", spec.work_dir, spec.repo))
     argv = command.build_command(cfg, task, variant, prompt, plugin["path"], spec.result_dir)
     write_json(spec.result_dir / "command.json", {"argv": argv, "cwd": str(spec.repo)})
     return argv
@@ -69,16 +69,23 @@ def analyze(spec: RunSpec, task: dict[str, Any], run: dict[str, Any], cfg: Harne
     view = {**base_view, "tool_calls": [*base_view["tool_calls"], *codex_calls.codex_tool_calls(rollouts)]}
     runners = collect.load_runner_transcripts(directory / "transcripts" / "runner")
     write_json(directory / "view.json", view)
-    grade, rubric_result = None, None
+    grade, rubric_result, failure = None, None, None
     if run["status"] in FINISHED_STATUSES:
-        grade, rubric_result = grade_run(spec, task, run, cfg, graders or load_graders(), view)
+        try:
+            grade, rubric_result = grade_run(spec, task, run, cfg, graders or load_graders(), view)
+        except Exception as error:  # noqa: BLE001 - usage and cost are still written; the error is raised after metrics.json
+            failure = error
     by_source, usage_source = usage.claude_requests_by_source(main_events, subagents, events, runners)
     result = metrics.build_metrics(
         run=run, task=task, view=view, facts=facts, claude_report=usage.claude_token_report(by_source),
         codex_report=usage.codex_token_report(rollouts), grade=grade, rubric=rubric_result,
         checks=metrics.plugin_checks(facts, run["plugin"]["path"], main_events, subagents), usage_source=usage_source,
     )
+    if failure is not None:
+        result = {**result, "grade_error": f"{type(failure).__name__}: {failure}"}
     write_json(directory / "metrics.json", result)
+    if failure is not None:
+        raise failure
     return result
 
 
