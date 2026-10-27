@@ -648,3 +648,56 @@ def test_읽기_전용_본문의_스크립트는_첫_실행만_묻지_않는다(
     outcome = classify(command)
     # then
     assert outcome.kind in QUIET
+
+
+# --- F3. xargs 입력이 옵션처럼 보이는 단어를 낼 수 있으면 grep과 rg는 민감하다 ----------------------------------------------
+
+def test_파일에서_읽은_입력을_받는_xargs_rg는_옵션_구분자가_없으면_민감하다(home):
+    # given
+    command = "xargs rg -l demo < /tmp/work/arguments.txt"
+    # when
+    outcome = classify(command)
+    # then
+    assert outcome.kind == "sensitive"
+
+
+@pytest.mark.parametrize("command", [
+    "xargs rg -l demo -- < /tmp/work/arguments.txt",
+    "xargs grep -l -- demo < /tmp/work/arguments.txt",
+    "xargs -I{} grep -l -- demo {} < /tmp/work/arguments.txt",
+    "find /tmp/work/demo -type f -print0 | xargs -0 rg -l demo",
+    "find . -name '*.md' | xargs grep -c demo",
+    "echo a.txt b.txt | xargs grep -l demo",
+    "printf '%s\\n' a.txt b.txt | xargs rg -l demo",
+    "xargs wc -l < /tmp/work/arguments.txt",
+    "xargs ls -la < /tmp/work/arguments.txt",
+    "xargs stat < /tmp/work/arguments.txt",
+    "xargs du -k < /tmp/work/arguments.txt",
+])
+def test_입력이_옵션처럼_보이는_단어를_낼_수_없거나_옵션_구분자가_앞서면_xargs_판독기는_읽기다(home, command):
+    # given
+    # when
+    outcome = classify(command)
+    # then
+    assert outcome.kind in QUIET, command
+
+
+@pytest.mark.parametrize("command", [
+    "xargs grep -l demo < /tmp/work/arguments.txt",
+    "cat /tmp/work/arguments.txt | xargs rg -l demo",
+    "find -- -x -type f | xargs rg -l demo",
+    "find /tmp/work/demo -printf '%p\\n' | xargs rg -l demo",
+    "find /tmp/work/demo -exec echo --pre=x {} + | xargs rg -l demo",
+    'find "$UNSET_ROOT" -type f | xargs rg -l demo',
+    "echo --pre=x a.txt | xargs rg -l demo",
+    "echo 'a.txt -x' | xargs rg -l demo",
+    "echo *.txt | xargs rg -l demo",
+    "ls /tmp/work/demo | xargs rg -l demo",
+    "xargs -a /tmp/work/arguments.txt rg -l demo",
+])
+def test_입력이_옵션처럼_보이는_단어를_낼_수_있으면_옵션_구분자가_없는_xargs_판독기는_민감하다(home, command):
+    # given
+    # when
+    outcome = classify(command)
+    # then
+    assert outcome.kind == "sensitive", command

@@ -1440,6 +1440,63 @@ def _prints_no_content(words):
     return name in ("grep", "egrep", "fgrep", "rg") and _lists_names_only(name, stripped[1:])
 
 
+FIND_OUTPUT_ACTIONS = frozenset({"-printf", "-fprintf", "-ls", "-fls", "-exec", "-execdir", "-ok", "-okdir", "-fprint",
+                                 "-fprint0"})
+PLAIN_LITERAL = re.compile(r"[^$`\\*?\[{}~()<>|&;]*")
+
+
+def _find_prints_plain_paths(args):
+    """Whether a `find` call prints only paths that start with one of its literal roots, none of which starts with `-`."""
+    index = 0
+    while index < len(args) and args[index] in ("-H", "-L", "-P"):
+        index += 1
+    roots = []
+    while index < len(args) and not args[index].startswith("-") and args[index] not in ("(", "\\(", "!"):
+        roots.append(args[index])
+        index += 1
+    return (all(PLAIN_LITERAL.fullmatch(root) for root in roots) and "--" not in args
+            and not FIND_OUTPUT_ACTIONS & set(args))
+
+
+def _echoes_plain_words(name, args):
+    """Whether an `echo` or `printf` call prints only literal words, none of which starts with `-`."""
+    if name == "echo" and args[:1] == ["-n"]:
+        args = args[1:]
+    if name == "printf":
+        args = [re.sub(r"\\[nt]", " ", args[0])] + args[1:] if args else args
+    return bool(args) and all(PLAIN_LITERAL.fullmatch(arg) and not any(word.startswith("-") for word in arg.split())
+                              for arg in args)
+
+
+def _xargs_reads_file(args):
+    """Whether the options of an `xargs` call, before its command, name a file that supplies the input."""
+    index = 0
+    while index < len(args) and args[index] != "--" and args[index].startswith("-"):
+        arg = args[index]
+        if arg == "-a" or arg.startswith("--arg-file") or arg.startswith("-a") and not arg.startswith("--"):
+            return True
+        name = arg.split("=", 1)[0]
+        index += 2 if arg in XARGS_VALUE_OPTIONS or (
+            name in XARGS_LONG_VALUES and "=" not in arg and name not in ("--eof", "--max-lines")) else 1
+    return False
+
+
+def _xargs_input_has_no_options(argv, call, segment, producer):
+    """Whether the words `xargs` appends cannot start with `-` and so cannot reach the command as options: an `--`
+    precedes them, or they come from a pipe whose producer prints only literal words or `find` paths."""
+    marks = [position for position, word in enumerate(argv) if XARGS_ARGUMENT in word]
+    if marks and "--" in argv[:marks[0]]:
+        return True
+    if producer is None or _xargs_reads_file(call) or any(op == "<" or op == "<<" or op == "<<<"
+                                                         for _, op, _ in segment.redirects):
+        return False
+    words, _ = strip_prefix(producer)
+    name = os.path.basename(words[0]) if words else ""
+    if name == "find":
+        return _find_prints_plain_paths(words[1:])
+    return name in ("echo", "printf") and _echoes_plain_words(name, words[1:])
+
+
 def _xargs_argv(args):
     """The simple command an `xargs` call runs, with its input as one unresolved operand, or None when the call has an
     option, a shell, `eval`, a nested `xargs`, or a replacement in the command name that makes it opaque."""
@@ -3483,6 +3540,22 @@ def _classify_script(words, cwd, depth, env, variables=None, choices=None):
     return Outcome("pass", [], [])
 
 
+LISTERS = frozenset({"wc", "ls", "stat", "du"})
+
+
+def _xargs_input_is_inert(argv, program, segment, segments, index, operators, statics):
+    """Whether the input of an `xargs` reader is harmless: `wc`, `ls`, `stat`, and `du` take no option that runs a program
+    or prints file content, and anything else needs the input to be free of option-like words."""
+    stripped, _ = strip_prefix(argv)
+    if os.path.basename(stripped[0]) in LISTERS:
+        return True
+    producer = None
+    before = max((op for op in operators if op[3] <= segment.start), key=lambda op: op[3], default=None)
+    if index > 0 and before is not None and before[1] == "|" and segments[index - 1].end <= before[2]:
+        producer = _expand_segment_words(segments[index - 1], statics)
+    return _xargs_input_has_no_options(argv, program[1:], segment, producer)
+
+
 def _classify_argv(words, heredoc, cwd, depth, command, inherited_env=None, variables=None, choices=None,
                    raw=None):
     helper = _helper_args(words)
@@ -4283,7 +4356,9 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
                    else _classify_argv(argv or segment.words, segment.heredoc and not argv, cwd, depth, text, scoped_env,
                                        variables, flow.choices(), None if argv else segment.raw))
         if argv and (verdict.kind == "read" or verdict.kind == "pass" and os.path.basename(
-                (strip_prefix(argv)[0] or [""])[0]) in OPERAND_READERS) and not _prints_no_content(argv):
+                (strip_prefix(argv)[0] or [""])[0]) in OPERAND_READERS) and not (
+                _prints_no_content(argv) and _xargs_input_is_inert(argv, program, segment, segments, index, operators,
+                                                                    statics)):
             verdict = _sensitive(text)
         inert = verdict.kind == "pass" and (not name or name in FILE_INERT) and flow.outside_loop_header()
         files_stable = files_stable and (verdict.kind == "read" or inert) and _redirects_allowed([segment])
