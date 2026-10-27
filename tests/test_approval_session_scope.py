@@ -875,3 +875,18 @@ def test_tiered_범위의_삭제_분류는_바뀌지_않고_git을_읽지_않는
     outcome = classify_in(command, repo_root)
     # then
     assert outcome.kind == "pass" and not outcome.critical and not outcome.every_time
+
+
+def test_상속된_값과_같아도_명령이_직접_지정한_GIT_CONFIG는_깨끗한_강제_git_rm을_크리티컬로_만든다(dirty, monkeypatch):
+    # given
+    for name, value in CREDENTIAL_PROMPT_CONFIG.items():
+        monkeypatch.setenv(name, value)
+    # when
+    assigned = classify_in("GIT_CONFIG_COUNT=2 git rm -f src/clean.py", dirty)
+    exported = classify_in("export GIT_CONFIG_COUNT=2; git rm -f src/clean.py", dirty)
+    standalone = classify_in("GIT_CONFIG_COUNT=2; git rm -f src/clean.py", dirty)
+    wrapped = classify_in("env GIT_CONFIG_COUNT=2 git rm -f src/clean.py", dirty)
+    plain = classify_in("git rm -f src/clean.py", dirty)
+    # then
+    assert assigned.critical and exported.critical and standalone.critical and wrapped.critical
+    assert not plain.critical

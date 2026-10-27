@@ -701,3 +701,34 @@ def test_입력이_옵션처럼_보이는_단어를_낼_수_있으면_옵션_구
     outcome = classify(command)
     # then
     assert outcome.kind == "sensitive", command
+
+
+# --- F5. 값이 거짓이어도 이름 자체가 비밀일 수 있는 GIT_CONFIG_KEY ---------------------------------------------------------
+
+@pytest.mark.parametrize("key", [
+    "http.https://demo:secret@example.com/.sslVerify",
+    "http.extraHeader",
+    "url.https://demo:secret@example.com/.insteadOf",
+])
+def test_값이_거짓이어도_허용_목록에_없는_GIT_CONFIG_키는_민감하다(home, monkeypatch, key):
+    # given
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", key)
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "false")
+    # when
+    outcome = classify("env | grep GIT_CONFIG")
+    # then
+    assert outcome.kind == "sensitive"
+
+
+def test_허용_목록의_자격_증명_키는_대소문자와_관계없이_읽기다(home, monkeypatch):
+    # given
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "2")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "credential.Interactive")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "false")
+    monkeypatch.setenv("GIT_CONFIG_KEY_1", "credential.GUIPROMPT")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_1", "false")
+    # when
+    outcome = classify("env | grep GIT_CONFIG")
+    # then
+    assert outcome.kind == "read"

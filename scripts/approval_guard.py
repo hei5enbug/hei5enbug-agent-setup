@@ -1722,13 +1722,16 @@ GIT_HARMLESS_ENV = frozenset({
 })
 GIT_HARMLESS_OPTIONS = frozenset({"--no-pager", "-P", "--no-optional-locks", "--paginate", "-p"})
 GIT_HARMLESS_CONFIG = frozenset({"credential.interactive", "credential.guiprompt"})
+COMMAND_GIT_CONFIG = "_APPROVAL_COMMAND_GIT_CONFIG"
+GIT_CONFIG_WORD = re.compile(r"GIT_CONFIG_[A-Z0-9_]+")
 GIT_CONFIG_ENTRY = re.compile(r"GIT_CONFIG_(?:KEY|VALUE)_(\d+)")
 
 
 def _inherited_git_config(env):
     """The `GIT_CONFIG_*` names in `env` that the hook process inherited unchanged, when its own `GIT_CONFIG_COUNT`
     entries only set keys, such as the credential prompt settings a terminal exports, that cannot change which
-    repository git acts on or what it runs. A command that sets any of these variables itself gets no exemption."""
+    repository git acts on or what it runs. A command that names any of these variables itself, by assignment, `export`,
+    or `env`, gets no exemption for them even when it repeats the inherited value."""
     inherited = {name: value for name, value in os.environ.items() if name.startswith("GIT_CONFIG_")}
     count = inherited.get("GIT_CONFIG_COUNT", "")
     if not count.isdigit():
@@ -1740,7 +1743,8 @@ def _inherited_git_config(env):
     keys = [inherited.get(f"GIT_CONFIG_KEY_{index}") for index in range(int(count))]
     if not all(key is not None and key.lower() in GIT_HARMLESS_CONFIG for key in keys):
         return set()
-    return {name for name, value in inherited.items() if env.get(name) == value}
+    set_by_command = set(env.get(COMMAND_GIT_CONFIG, "").split(","))
+    return {name for name, value in inherited.items() if env.get(name) == value and name not in set_by_command}
 
 
 def _git_directory(global_args, cwd, env):
@@ -4001,13 +4005,15 @@ def _cut_characters(words):
 
 def _inert_variable(name, value):
     """Whether a secret-named variable cannot hold a secret: an empty or on/off-like value, the count of Git config
-    entries, or a Git config name whose paired value is itself empty or on/off-like."""
+    entries, or a Git config name that is one of the inert credential prompt keys with an empty or on/off-like paired
+    value."""
+    match = re.fullmatch(r"GIT_CONFIG_KEY_(\d+)", name)
+    if match is not None:
+        return (value.lower() in GIT_HARMLESS_CONFIG
+                and os.environ.get("GIT_CONFIG_VALUE_" + match[1], "x").lower() in INERT_VALUES)
     if value.lower() in INERT_VALUES:
         return True
-    if name == "GIT_CONFIG_COUNT":
-        return value.isdigit()
-    match = re.fullmatch(r"GIT_CONFIG_KEY_(\d+)", name)
-    return match is not None and os.environ.get("GIT_CONFIG_VALUE_" + match[1], "x").lower() in INERT_VALUES
+    return name == "GIT_CONFIG_COUNT" and value.isdigit()
 
 
 def _name_only_stage(words):
@@ -4249,6 +4255,10 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
                        for fd, operator, target in segment.redirects],
         )
         program, assignments = strip_prefix(segment.words)
+        named = {name for word in segment.words for name in GIT_CONFIG_WORD.findall(word)}
+        if named:
+            current_env[COMMAND_GIT_CONFIG] = ",".join(sorted(
+                named | set(filter(None, current_env.get(COMMAND_GIT_CONFIG, "").split(",")))))
         if _COMMAND_TRACE is not None:
             _trace_command(_redirects_write_no_file(segment.redirects))
         region = checked[segment.start:segment.end]
