@@ -352,6 +352,22 @@ class DriveTest(unittest.TestCase):
         self.assertEqual({"term_claude": "claude", "term_codex": "codex"},
                          {entry["handle"]: entry["host"] for entry in sessions})
 
+    def test_agentIdentity_없이_잡은_세션이_대기_중_끝나_셸이_남으면_보내지_않는다(self):
+        """표식으로 잡은 세션은 보내기 직전에도 그 호스트의 입력창이 화면 맨 아래에 있어야 하며, 옛 입력창 아래 셸 프롬프트가 있으면 보내지 않는다."""
+        # Given
+        self.write_marker("term_claude", "claude")
+        live = {"term_claude": {**terminal("term_claude", None), "agentIdentity": None}}
+        fake = FakeOrca(list(live.values()))
+        entry = refresh.plan_sessions(fake, self.state, "never", [])[0]
+        fake.screens["term_claude"] = CLAUDE_EMPTY + ["Resume this session with: claude --resume demo", "demo@example % "]
+
+        # When
+        reason, _ = refresh.ready(fake, entry, live)
+
+        # Then
+        self.assertEqual("input_unknown", reason)
+        self.assertEqual([], fake.sent)
+
     def test_agentIdentity_없이_잡은_세션은_표식이_다른_호스트로_바뀔_때만_사라진_것으로_본다(self):
         """작업 중 화면이 달라져도 표식이 같은 호스트를 가리키면 남겨 두고, 표식이 사라지거나 다른 호스트면 사라진 것으로 본다."""
         # Given

@@ -1069,6 +1069,7 @@ def plan_sessions(orca: Orca, state: dict, mode: str, only: Sequence[str]) -> li
             "title": terminal.get("title"),
             "worktree": terminal.get("worktreePath"),
             "initiator": handle == initiator,
+            "screen_identified": marker_host(terminal) is not None,
             "actions": [],
             "status": "pending",
             "detail": None,
@@ -1146,6 +1147,8 @@ def ready(orca: Orca, entry: dict, live: dict[str, dict]) -> tuple[str | None, l
     if not orca.idle(entry["handle"]):
         return "busy", []
     lines, draft = orca.screen(entry["handle"])
+    if entry.get("screen_identified") and screen_host(lines) != entry["host"]:
+        return "input_unknown", lines
     entry["observed_draft"] = draft if isinstance(draft, str) else None
     if not (isinstance(draft, str) and draft.strip()):
         state = input_state(entry["host"], lines)
