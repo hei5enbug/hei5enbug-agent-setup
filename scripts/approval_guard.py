@@ -765,11 +765,39 @@ DOCKER_OBJECTS = frozenset({
 DOCKER_READS = (("context", "show"), ("compose", "ps"), ("compose", "logs"), ("compose", "config"))
 
 
+DOCKER_METADATA_FIELD = re.compile(r"\.(?:Labels|Name|Driver|Mountpoint|CreatedAt|Id|RepoTags|Size)(?:\.[\w-]+)*")
+DOCKER_TEMPLATE_ACTION = re.compile(r"\{\{(.*?)\}\}", re.S)
+DOCKER_TEMPLATE_STRING = re.compile(r'"(?:[^"\\]|\\.)*"|`[^`]*`')
+
+
+def _metadata_template(template):
+    """Whether a Go template has at least one action and each action only names metadata fields: the labels, name,
+    driver, mount point, creation time, ID, tags, and size, with the `json` and `index` helpers."""
+    actions = DOCKER_TEMPLATE_ACTION.findall(template)
+    outside = DOCKER_TEMPLATE_ACTION.sub("", template)
+    if not actions or "{{" in outside or "}}" in outside:
+        return False
+    for action in actions:
+        words = DOCKER_TEMPLATE_STRING.sub(" ", action).split()
+        if not words or not all(word in ("json", "index") or DOCKER_METADATA_FIELD.fullmatch(word) for word in words):
+            return False
+    return True
+
+
+def _docker_metadata_inspect(cli, kind, args, env):
+    """A local `docker volume|image|network inspect` whose format template shows only metadata fields."""
+    templates = option_values(args, "-f", ("--format",))
+    return (cli == "docker" and kind[:2] in (["volume", "inspect"], ["image", "inspect"], ["network", "inspect"])
+            and bool(templates) and all(isinstance(template, str) and _metadata_template(template) for template in templates)
+            and _local_engine(args, env, cli))
+
+
 def _docker_rules(kind, args, env, cwd, engine="docker"):
     read = (
         (bool(kind) and kind[0] in DOCKER_READ_FIRST)
         or (len(kind) >= 2 and kind[0] in DOCKER_OBJECTS and kind[1] in ("ls", "inspect"))
         or _matches(kind, DOCKER_READS)
+        or kind[:2] == ["system", "df"] and engine == "docker" and _local_engine(args, env, engine)
     )
     always = (kind[:2] == ["compose", "down"] and (_has_flag(args, "-v") or _has_flag(args, "--volumes"))
               and not _local_engine(args, env, engine))
@@ -826,7 +854,7 @@ def classify_cli(cli, args, env, cwd, command, depth=0):
     if cli == "curl":
         return _classify_curl(args, command)
     kind = subcommand_words(args)
-    if ((cli in ("docker", "podman") and "inspect" in kind[:2])
+    if ((cli in ("docker", "podman") and "inspect" in kind[:2] and not _docker_metadata_inspect(cli, kind, args, env))
             or (cli in ("kubectl", "oc", "docker", "podman") and "exec" in kind
                 and any(os.path.basename(arg) in ("env", "printenv") for arg in args))):
         return _sensitive(command)
@@ -1349,6 +1377,51 @@ def _unconditional_assignment(segment, operators, after_assignment):
     after = min((op for op in operators if op[2] >= segment.end), key=lambda op: op[2], default=None)
     return ((before is None or before[1] == ";" or (before[1] == "&&" and after_assignment))
             and (after is None or after[1] in (";", "&&")))
+
+
+LISTING_OPTIONS = {
+    "grep": (frozenset("lLcq"), "efmABCDd", frozenset({"--files-with-matches", "--files-without-match", "--count", "--quiet",
+                                                       "--silent"})),
+    "rg": (frozenset("lcq"), "efgmABCdjEMrtT", frozenset({"--files-with-matches", "--files-without-match", "--count",
+                                                          "--count-matches", "--quiet"})),
+}
+LISTING_BLOCKED = frozenset({"--json", "--vimgrep", "--passthru", "--pre", "--replace", "--only-matching"})
+LISTING_LONG_VALUES = frozenset({"--regexp", "--file", "--max-count", "--after-context", "--before-context", "--context",
+                                 "--include", "--exclude", "--exclude-dir", "--glob", "--type", "--type-not"})
+
+
+def _lists_names_only(name, args):
+    """Whether a grep or rg call has an option that makes it print only file names or counts."""
+    letters, values, longs = LISTING_OPTIONS["rg" if name == "rg" else "grep"]
+    found, index = False, 0
+    while index < len(args):
+        arg = args[index]
+        index += 1
+        if arg == "--":
+            break
+        if arg.split("=", 1)[0] in LISTING_BLOCKED:
+            return False
+        if arg.startswith("--"):
+            found = found or arg in longs
+            index += arg in LISTING_LONG_VALUES
+        elif arg.startswith("-") and len(arg) > 1:
+            for position, letter in enumerate(arg[1:], 1):
+                if letter in values:
+                    index += position == len(arg) - 1
+                    break
+                found = found or letter in letters
+    return found
+
+
+def _prints_no_content(words):
+    """Whether a simple command can print only the names, counts, sizes, or metadata of the files it is given."""
+    stripped, _ = strip_prefix(words)
+    if not stripped:
+        return False
+    name = os.path.basename(stripped[0])
+    if name in ("wc", "ls", "stat", "du"):
+        return True
+    return name in ("grep", "egrep", "fgrep", "rg") and _lists_names_only(name, stripped[1:])
 
 
 def _xargs_argv(args):
@@ -2767,6 +2840,198 @@ def _python_policy(content, cwd, depth, env, readonly=False):
                    every_time=bool(destructive))
 
 
+_PENDING_SCRIPTS = {}
+PENDING_KEEPERS = frozenset({
+    "cd", "mkdir", "echo", "printf", "true", "false", "test", "[", "[[", ":", "ls", "pwd", "wc", "head", "tail", "sort",
+    "cut", "tr", "du", "stat", "grep", "egrep", "fgrep", "sleep", "read", "for", "case", "done", "fi", "esac", "chmod",
+    "exit", "cat",
+})
+LOOP_OPENERS = frozenset({"while", "until", "for", "select"})
+
+
+def _heredoc_scripts(text):
+    """The bodies of quoted-delimiter heredocs that a lone `cat` writes to one file, by the start of that `cat`, and the
+    text spans of those bodies with their closing delimiter lines."""
+    if "<<" not in text:
+        return {}, []
+    lines = text.splitlines(keepends=True)
+    found, spans, index, offset = {}, [], 0, 0
+    while index < len(lines):
+        line = lines[index]
+        base = offset
+        offset += len(line)
+        index += 1
+        if "<<" not in line:
+            continue
+        try:
+            tokens = _lex(line)
+        except ParseError:
+            continue
+        documents = []
+        for position, token in enumerate(tokens[:-1]):
+            if token[0] == "op" and token[1] == "<<" and tokens[position + 1][0] == "word":
+                delimiter = tokens[position + 1][1]
+                tabs = line[token[3]:token[3] + 1] == "-"
+                raw = line[tokens[position + 1][2]:tokens[position + 1][3]]
+                documents.append((position, delimiter[1:] if tabs else delimiter, tabs,
+                                  any(char in raw for char in "'\"\\")))
+        bodies, opened = [], offset
+        for _position, delimiter, tabs, _quoted in documents:
+            body = []
+            while index < len(lines):
+                candidate = lines[index].rstrip("\r\n")
+                index += 1
+                offset += len(lines[index - 1])
+                if (candidate.lstrip("\t") if tabs else candidate) == delimiter:
+                    bodies.append("".join(item.lstrip("\t") if tabs else item for item in body))
+                    break
+                body.append(lines[index - 1])
+            else:
+                bodies.append(None)
+        if len(documents) != 1 or not documents[0][3] or bodies[0] is None:
+            continue
+        start = _lone_cat_start(tokens, documents[0][0])
+        if start is not None:
+            found[base + start] = bodies[0]
+            spans.append((opened, offset))
+    return found, spans
+
+
+def _lone_cat_start(tokens, document):
+    """The start of the command that holds the heredoc at `document` when it is a plain `cat` with exactly that heredoc
+    and one `>` file output, not piped; else None."""
+    groups, separators = [[]], []
+    for position, token in enumerate(tokens):
+        if token[0] == "op" and token[1] in SEPARATOR_OPERATORS:
+            groups.append([])
+            separators.append(token[1])
+        else:
+            groups[-1].append((position, token))
+    for number, group in enumerate(groups):
+        if not any(position == document for position, _ in group):
+            continue
+        neighbours = separators[max(number - 1, 0):number + 1]
+        if any(separator in PIPE_OPERATORS for separator in neighbours):
+            return None
+        words, operators, cursor = [], [], 0
+        while cursor < len(group):
+            token = group[cursor][1]
+            if token[0] == "word":
+                words.append(token[1])
+                cursor += 1
+            elif cursor + 1 < len(group) and group[cursor + 1][1][0] == "word":
+                operators.append(token[1])
+                cursor += 2
+            else:
+                return None
+        if words == ["cat"] and sorted(operators) == ["<<", ">"] and group[0][1][0] == "word":
+            return group[0][1][2]
+    return None
+
+
+def _runs_unconditionally(index, segments, operators):
+    """Whether segment `index` always runs: it follows nothing or `;`, or a chain of `&&` that only `mkdir` and `cd`
+    precede, and it is not sent to the background or a pipe."""
+    segment = segments[index]
+    after = min((op for op in operators if op[2] >= segment.end), key=lambda op: op[2], default=None)
+    if after is not None and after[1] not in (";", "&&"):
+        return False
+    while True:
+        before = max((op for op in operators if op[3] <= segment.start), key=lambda op: op[3], default=None)
+        if before is None or before[1] == ";":
+            return True
+        if before[1] != "&&" or index == 0:
+            return False
+        index -= 1
+        segment = segments[index]
+        words, _ = strip_prefix(segment.words)
+        if not words or os.path.basename(words[0]) not in ("mkdir", "cd"):
+            return False
+
+
+def _keeps_pending(segment, program, region, cwd, variables):
+    """Whether a segment leaves the files written earlier in the same command unchanged: no substitution or file
+    redirect, and either a command that cannot modify a file or the run of a pending script itself."""
+    if re.search(r"\$\(|`|[<>]\(", region) or not _redirects_allowed([segment]):
+        return False
+    if not program:
+        return True
+    name = os.path.basename(program[0])
+    if name == "sort" and any(re.match(r"-[^-]*o|--output", arg) for arg in program[1:]):
+        return False
+    if name in PENDING_KEEPERS:
+        return True
+    operand = (program[0] if program[0].startswith(("./", "/")) else
+               _first_operand(program[1:]) if PYTHON.fullmatch(name) or name in SHELLS else None)
+    return operand is not None and _script_path(operand, cwd, variables) in _PENDING_SCRIPTS
+
+
+def _made_directories(program, cwd, variables):
+    paths = set()
+    for arg in program[1:]:
+        if not arg.startswith("-"):
+            path = _script_path(arg, cwd, variables)
+            if path is not None:
+                paths.update((path, *path.parents))
+    return paths
+
+
+def _fold_text(node, names):
+    """The text of a string literal, a once-assigned name that holds one, or a `+` or f-string of those; else None."""
+    if isinstance(node, ast.Constant):
+        return node.value if isinstance(node.value, str) else None
+    if isinstance(node, ast.Name):
+        return names.get(node.id)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left, right = _fold_text(node.left, names), _fold_text(node.right, names)
+        return None if left is None or right is None else left + right
+    if isinstance(node, ast.JoinedStr):
+        parts = [_fold_text(item.value if isinstance(item, ast.FormattedValue) and item.conversion == -1
+                            and item.format_spec is None else item, names) for item in node.values]
+        return None if any(part is None for part in parts) else "".join(parts)
+    return None
+
+
+def _confined_python_writes(content, cwd, env):
+    """Whether Python text is provably read-only once each of its literal `open` writes is counted as a read, and every
+    one of those writes lands in a temporary root or the session folder."""
+    if "chdir" in content:
+        return False
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return False
+    stores = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            stores[node.id] = stores.get(node.id, 0) + 1
+    names = {}
+    for node in tree.body:
+        if (isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
+                and stores.get(node.targets[0].id) == 1):
+            value = _fold_text(node.value, names)
+            if value is not None:
+                names[node.targets[0].id] = value
+    session = Path(env.get("_APPROVAL_SESSION_DIR", cwd)).resolve()
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open"):
+            continue
+        mode = next((keyword.value for keyword in node.keywords if keyword.arg == "mode"),
+                    node.args[1] if len(node.args) > 1 else None)
+        if not (isinstance(mode, ast.Constant) and isinstance(mode.value, str) and set(mode.value) & set("wax+")):
+            continue
+        target = next((keyword.value for keyword in node.keywords if keyword.arg == "file"),
+                      node.args[0] if node.args else None)
+        text = _fold_text(target, names) if target is not None else None
+        if not text or "\0" in text:
+            return False
+        path = (Path(cwd) / os.path.expanduser(text)).resolve()
+        if not (_temporary(path, env) or path.is_relative_to(session)):
+            return False
+        mode.value = "r"
+    return _read_only_python(tree)
+
+
 def _classify_script(words, cwd, depth, env, variables=None, choices=None):
     cli = os.path.basename(words[0])
     args = words[1:]
@@ -2807,7 +3072,8 @@ def _classify_script(words, cwd, depth, env, variables=None, choices=None):
     if depth >= MAX_DEPTH:
         return _script_unknown(resolved, words, env, "recursion limit")
     try:
-        content = _script_content(resolved)
+        pending = _PENDING_SCRIPTS.get(resolved)
+        content = pending if pending is not None else _script_content(resolved)
         if mode == "executable":
             header = content.splitlines()[0] if content else ""
             if re.match(r"#!.*\bpython[\d.]*\b", header):
@@ -2817,6 +3083,8 @@ def _classify_script(words, cwd, depth, env, variables=None, choices=None):
             else:
                 return Outcome("pass", [], [])
         if mode == "python":
+            if pending is not None and not _confined_python_writes(pending, cwd, env):
+                return _script_unknown(resolved, words, env, "unreadable")
             readonly = not any(_protected_argument(arg, cwd, env) for arg in args)
             verdict = _python_policy(content, cwd, depth, env, readonly)
             if verdict.kind in ("write", "always"):
@@ -3285,6 +3553,38 @@ def _awk_filter(args):
     return len(rest) == 1 and AWK_PRINT.fullmatch(rest[0].strip()) is not None
 
 
+CUT_RANGE = r"(?:\d+(?:-\d*)?|-\d+)(?:,(?:\d+(?:-\d*)?|-\d+))*"
+INERT_VALUES = frozenset({"", "true", "false", "0", "1", "yes", "no", "on", "off", "never", "always", "auto"})
+
+
+def _changes_environment(segment):
+    """Whether a segment changes the shell's environment for the commands after it: a standalone assignment or an
+    environment changer. A `NAME=value command` prefix lasts for that command only."""
+    if not segment.words:
+        return False
+    program, _ = strip_prefix(segment.words)
+    return (all(ASSIGNMENT.match(word) for word in segment.words)
+            or any(os.path.basename(words[0]) in ENVIRONMENT_CHANGERS for words in (segment.words, program) if words))
+
+
+def _cut_characters(words):
+    """`cut -c1-60` only shortens each line, so it shows nothing that the filter before it did not."""
+    args = words[1:]
+    return words[0] == "cut" and (len(args) == 1 and re.fullmatch(r"-c" + CUT_RANGE, args[0]) is not None
+                                  or len(args) == 2 and args[0] == "-c" and re.fullmatch(CUT_RANGE, args[1]) is not None)
+
+
+def _inert_variable(name, value):
+    """Whether a secret-named variable cannot hold a secret: an empty or on/off-like value, the count of Git config
+    entries, or a Git config name whose paired value is itself empty or on/off-like."""
+    if value.lower() in INERT_VALUES:
+        return True
+    if name == "GIT_CONFIG_COUNT":
+        return value.isdigit()
+    match = re.fullmatch(r"GIT_CONFIG_KEY_(\d+)", name)
+    return match is not None and os.environ.get("GIT_CONFIG_VALUE_" + match[1], "x").lower() in INERT_VALUES
+
+
 def _name_only_stage(words):
     checks = {"cut": _cut_names, "awk": _awk_names, "sed": _sed_masks}
     return checks.get(words[0], _grep_names)(words)
@@ -3310,7 +3610,8 @@ def _environment_filter(text):
     if any(not words or words[0] not in ("grep", "rg", "head", "sort", "wc", "cut", "awk", "sed") for words in rest):
         return None
     name_only = [_name_only_stage(words) for words in rest]
-    if any(words[0] in ("cut", "awk", "sed") and not named for words, named in zip(rest, name_only)):
+    if any(words[0] in ("cut", "awk", "sed") and not named and not _cut_characters(words)
+           for words, named in zip(rest, name_only)):
         return None
     numeric_options = {"-n", "--lines", "-c", "--bytes", "-k", "--key", "--parallel", "--batch-size", "-S", "--buffer-size"}
     for words in rest:
@@ -3362,7 +3663,8 @@ def _environment_filter(text):
         return _sensitive(text)
     invert = any("v" in flag or flag == "--invert-match" for flag in flags)
     for name, value in os.environ.items():
-        if bool(regex.search(name + "=" + value)) != invert and SECRET_NAME.search(name):
+        if (bool(regex.search(name + "=" + value)) != invert and SECRET_NAME.search(name)
+                and not _inert_variable(name, value)):
             return _sensitive(text)
     return _read()
 
@@ -3453,6 +3755,7 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
         return Outcome("pass", [], [])
     if depth == 0:
         _DISCARD_CACHE.clear()
+        _PENDING_SCRIPTS.clear()
     script = unwrap_wrapper(text)
     if script is not None:
         return classify_text(script, cwd, depth + 1, env, variables)
@@ -3469,6 +3772,7 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
     filtered = _environment_filter(text)
     if filtered is not None:
         return filtered
+    heredoc_scripts, script_bodies = _heredoc_scripts(text)
     text = _heredoc_data(text)
     text, python_verdicts = _python_documents(text, cwd, depth, environment)
     try:
@@ -3480,10 +3784,7 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
     filtered_segments = {}
     start = 0
     boundaries = [(token[2], token[3]) for token in operators if token[1] in (";", "&&", "||")]
-    changes_environment = "()" in text or any(
-        segment.words and (ASSIGNMENT.match(segment.words[0]) or os.path.basename(segment.words[0]) in ENVIRONMENT_CHANGERS)
-        for segment in segments
-    )
+    changes_environment = "()" in text or any(_changes_environment(segment) for segment in segments)
     if boundaries and not changes_environment:
         for end, following in [*boundaries, (len(text), len(text))]:
             filtered = _environment_filter(text[start:end].strip())
@@ -3506,6 +3807,7 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
     substitution_names = set()
     current_env = environment
     flow = _ValueFlow(choices)
+    made_directories = set()
     for index, segment in enumerate(segments):
         flow.visit(segments, index, operators, current_env)
         if segment.start in filtered_segments:
@@ -3562,6 +3864,20 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
         was_assignment, after_assignment = after_assignment, False
         block_depth = (block_depth + 1 if first in BLOCK_OPENERS
                        else max(0, block_depth - 1) if first in BLOCK_CLOSERS else block_depth)
+        written = heredoc_scripts.get(segment.start)
+        if any(start <= segment.start < stop for start, stop in script_bodies):
+            pass
+        elif written is not None and recording and block_depth == 0 and _runs_unconditionally(index, segments, operators):
+            script_path = next((_script_path(target, cwd, variables) for _, operator, target in segment.redirects
+                                if operator == ">"), None)
+            if script_path is not None and len(written.encode()) <= MAX_SCRIPT_BYTES:
+                _PENDING_SCRIPTS[script_path] = written
+            else:
+                _PENDING_SCRIPTS.clear()
+        elif _PENDING_SCRIPTS and (first in LOOP_OPENERS or not _keeps_pending(segment, program, region, cwd, variables)):
+            _PENDING_SCRIPTS.clear()
+        if name == "mkdir" and recording and block_depth == 0 and _runs_unconditionally(index, segments, operators):
+            made_directories |= _made_directories(program, cwd, variables)
         if (name in ENVIRONMENT_CHANGERS or name in VARIABLE_WRITERS or name == "printf" and "-v" in program
                 or ":=" in region or "((" in region):
             statics.clear()
@@ -3570,7 +3886,7 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
         if name == "cd" and len(program) == 2:
             if _cd_changes_directory(segment, operators):
                 directory = _script_path(program[1], cwd, variables)
-                if directory is not None and directory.is_dir():
+                if directory is not None and (directory.is_dir() or _PENDING_SCRIPTS and directory in made_directories):
                     cwd = str(directory)
             continue
         if not program and assignments:
@@ -3604,7 +3920,7 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
                    else _classify_argv(argv or segment.words, segment.heredoc and not argv, cwd, depth, text, scoped_env,
                                        variables, flow.choices(), None if argv else segment.raw))
         if argv and (verdict.kind == "read" or verdict.kind == "pass" and os.path.basename(
-                (strip_prefix(argv)[0] or [""])[0]) in OPERAND_READERS):
+                (strip_prefix(argv)[0] or [""])[0]) in OPERAND_READERS) and not _prints_no_content(argv):
             verdict = _sensitive(text)
         inert = verdict.kind == "pass" and (not name or name in FILE_INERT) and flow.outside_loop_header()
         files_stable = files_stable and (verdict.kind == "read" or inert) and _redirects_allowed([segment])

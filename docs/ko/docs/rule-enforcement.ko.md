@@ -54,6 +54,7 @@
 | `tests/test_approval_one_approval.py`, `tests/test_approval_session_write.py` | 세션당 한 번의 승인이 파괴적이지 않은 쓰기를 모두 다루고, 되돌릴 수 없는 호출은 계속 묻는다. | `instructions/session/core.md`, `README.md` (Approval guard) |
 | `tests/test_approval_session_scope.py` | `session` 범위는 중대한 종류를 빼고 세션당 한 번 묻는다. | `README.md` (Approval guard) |
 | `tests/test_approval_local_scope.py`, `tests/test_approval_removal_targets.py` | 버려도 되는 로컬 작업은 매번 묻지 않고, 재귀 삭제는 대상을 풀어서 판단한다. | `README.md` (Approval guard) |
+| `tests/test_approval_recorded_reads.py` | 기록된 실수 없는 조회는 묻지 않는다: 따옴표 구분자 heredoc으로 쓰고 같은 명령에서 실행하는 스크립트, 이름이나 개수만 출력하는 xargs 조회, 비밀이 아닌 값에 대한 `env \| grep`, 로컬 docker 메타데이터. 내용을 출력하거나 비밀이 드러나는 인접 형태는 계속 묻는다. | `README.md` (Approval guard) |
 | `tests/test_approval_false_positives.py`, `tests/test_approval_classification_safety.py` | 무해한 호출과 비밀 메타데이터 조회를 쓰기나 비밀 값 출력으로 오인하지 않는다. | `README.md` (Approval guard) |
 | `tests/test_approval_extensions.py`, `tests/test_approval_reuse.py` | 사전 승인 키와 민감 조회 승인은 지정한 대상만 다룬다. | `README.md` (Approval guard) |
 | `tests/test_approval_retries.py` | 답을 받지 못한 승인 요청이 반복되면 새 프롬프트 전까지 거부한다. | `README.md` (Approval guard) |
