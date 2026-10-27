@@ -10,6 +10,7 @@ The guard always exits 0; covered calls fail closed when their classification fa
 """
 import argparse
 import ast
+import copy as copy_module
 import fnmatch
 import functools
 import glob
@@ -3611,8 +3612,9 @@ class _PathTexts:
     """Folds the path expressions of a script that is fully literal into the texts they can have, with one placeholder
     for each formatted piece of an f-string; None stands for anything that cannot be decided."""
 
-    def __init__(self, tree):
+    def __init__(self, tree, env=None):
         self.tree = tree
+        self.env = env or {}
         self.parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
         self.dynamic = False
 
@@ -3656,6 +3658,8 @@ class _PathTexts:
             return self.name_texts(node, depth)
         if isinstance(node, ast.Call):
             return self.call_texts(node, depth)
+        if isinstance(node, ast.Subscript):
+            return self.temporary_root_texts(node)
         if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
             left, right = self.texts(node.left, depth + 1), self.texts(node.right, depth + 1)
             if left is None or right is None or len(left) * len(right) > 64:
@@ -3664,6 +3668,15 @@ class _PathTexts:
                 return None
             return [os.path.join(first, second) for first in left for second in right]
         return None
+
+    def temporary_root_texts(self, node):
+        """`os.environ["TMPDIR"]` stands for the temporary folder of the hook's environment when that is set."""
+        root = self.env.get("TMPDIR")
+        literal = isinstance(node.slice, ast.Constant) and node.slice.value == "TMPDIR"
+        if not (literal and ast.unparse(node.value) == "os.environ" and self.bound("os.environ")
+                and root and os.path.isabs(root)):
+            return None
+        return [root]
 
     def call_texts(self, node, depth):
         function = ast.unparse(node.func)
@@ -3678,6 +3691,17 @@ class _PathTexts:
             if found is not None and function == "os.path.expanduser":
                 return [os.path.expanduser(item) for item in found]
             return found
+        if function in ("Path", "pathlib.Path") and len(node.args) > 1:
+            parts = [self.texts(arg, depth + 1) for arg in node.args]
+            if any(part is None for part in parts) or any(item.startswith(("/", "~")) for part in parts[1:]
+                                                          for item in part):
+                return None
+            joined = [""]
+            for part in parts:
+                if len(joined) * len(part) > 64:
+                    return None
+                joined = [os.path.join(first, second) for first in joined for second in part]
+            return joined
         return None
 
     def name_texts(self, node, depth):
@@ -3746,7 +3770,7 @@ def _confine_writes(tree, cwd, cwd_known, env, protect=(), suffixes=None):
     so that the read-only test can then judge the rest."""
     if any(isinstance(node, (ast.Global, ast.Nonlocal)) for node in ast.walk(tree)):
         return False
-    resolver = _PathTexts(tree)
+    resolver = _PathTexts(tree, env)
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
@@ -3924,6 +3948,18 @@ def _documents_only(content, cwd, cwd_known, env):
     return _exec_files_confined(tree, cwd, cwd_known, env, (".md",), True) and _read_only_python(tree, execs=execs)
 
 
+def _git_reads_with_temp_writes(tree, processes, cwd, depth, cwd_known, env):
+    """Whether a script runs only literal read-only git commands and writes only to temporary space, and the rest is
+    read-only Python. The check works on a copy of `tree`, because confining writes rewrites them."""
+    copy = copy_module.deepcopy(tree)
+    order = {id(node): index for index, node in enumerate(ast.walk(tree))}
+    nodes = list(ast.walk(copy))
+    mapped = [nodes[order[id(node)]] for node in processes]
+    runs = _git_read_runs(mapped, cwd, depth, env)
+    return (runs is not None and _confine_writes(copy, cwd, cwd_known, env)
+            and _read_only_python(copy, runs))
+
+
 def _python_policy(content, cwd, depth, env, readonly=False, cwd_known=True):
     if _code_runs_guard(content):
         return Outcome("forbidden", [], [SELF_APPROVAL_REASON])
@@ -3957,6 +3993,8 @@ def _python_policy(content, cwd, depth, env, readonly=False, cwd_known=True):
         runs = _git_read_runs(processes, cwd, depth, env)
         if runs is not None and _read_only_python(tree, runs):
             return _read()
+        if runs is not None and _git_reads_with_temp_writes(tree, processes, cwd, depth, cwd_known, env):
+            return Outcome("pass", [], [])
     values = {node.targets[0].id: node.value for node in ast.walk(tree) if isinstance(node, ast.Assign)
               and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)}
     commands = []

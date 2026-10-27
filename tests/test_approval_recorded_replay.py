@@ -1732,3 +1732,98 @@ def test_임시_폴더_안쪽_삭제는_그대로_묻지_않는다(home, monkeyp
     result = bash_decision(home, monkeypatch, command)
     # then
     assert result not in ("ask", "deny"), target
+
+
+# --- L2-3. a python heredoc that reads a git blob through a literal subprocess call and writes the result to temp ----------
+
+BLOB_PATH = "tests/test_demo.py"
+BLOB_TEMPLATE = '''import subprocess, os
+from pathlib import Path
+cur = Path("{blob}").read_text()
+head = subprocess.run({argv},capture_output=True,text=True,check=True).stdout
+start = cur.index("\\n\\nCONFIG = {{")
+{write}
+'''
+TMPDIR_WRITE = 'Path(os.environ["TMPDIR"],"item1.py").write_text(head + cur[start:])'
+
+
+def blob_command(argv='["git","show","HEAD:tests/test_demo.py"]', write=TMPDIR_WRITE, call_extra=""):
+    body = BLOB_TEMPLATE.format(blob=BLOB_PATH, argv=argv, write=write)
+    if call_extra:
+        body = body.replace("capture_output=True", call_extra + ",capture_output=True")
+    return f"python3 - <<'EOF'\n{body}EOF"
+
+
+def blob_decision(home, monkeypatch, command):
+    monkeypatch.setenv("TMPDIR", str(home.parent))
+    return decision(guard.handle(bash(command, home / "project"), "claude"))
+
+
+@pytest.mark.parametrize("write", [
+    TMPDIR_WRITE,
+    'Path("/tmp/work/item1.py").write_text(head + cur[start:])',
+    'open("/tmp/work/item1.py", "w").write(head + cur[start:])',
+])
+def test_리터럴_git_읽기_subprocess와_임시_폴더_쓰기가_함께_있는_heredoc은_묻지_않는다(home, monkeypatch, write):
+    # given
+    command = blob_command(write=write)
+    # when
+    result = blob_decision(home, monkeypatch, command)
+    # then
+    assert result not in ("ask", "deny"), (write, result)
+
+
+@pytest.mark.parametrize("argv", [
+    '["git","diff","HEAD","--","tests/test_demo.py"]', '["git","log","-1","--format=%H"]',
+    '["git","rev-parse","HEAD"]', '["git","ls-files"]', '["git","cat-file","-p","HEAD:tests/test_demo.py"]',
+    '["git","status","--short"]', '["git","-C","/tmp/work","show","HEAD:a.py"]',
+])
+def test_다른_읽기_git_하위_명령도_임시_폴더_쓰기와_함께_묻지_않는다(home, monkeypatch, argv):
+    # given
+    command = blob_command(argv=argv)
+    # when
+    result = blob_decision(home, monkeypatch, command)
+    # then
+    assert result not in ("ask", "deny"), (argv, result)
+
+
+@pytest.mark.parametrize("argv", [
+    '["git","commit","-m","x"]', '["git","push"]', '["git","checkout","main"]', '["git","reset","--hard"]',
+    '["git","-c","core.pager=sh","show","HEAD"]', '["git","--exec-path=/tmp/work","show","HEAD"]',
+    '["git","show","--output=x","HEAD"]', '["git","diff","--output","x"]', '["git","show",sys.argv[1]]',
+    'sys.argv[1:]', '["git","show","HEAD"], shell=True', '"git show HEAD", shell=True',
+])
+def test_쓰기_git_하위_명령_비리터럴_argv_shell_true_git_c는_임시_쓰기와_함께여도_계속_묻는다(home, monkeypatch, argv):
+    # given
+    command = blob_command(argv=argv.replace(", shell=True", "")).replace(
+        "check=True)", "check=True" + (", shell=True" if "shell=True" in argv else "") + ")")
+    command = command.replace("import subprocess, os", "import subprocess, os, sys")
+    # when
+    result = blob_decision(home, monkeypatch, command)
+    # then
+    assert result == "ask", (argv, result)
+
+
+@pytest.mark.parametrize("write", [
+    'Path("/home/test/item1.py").write_text(head + cur[start:])',
+    'Path(os.environ["HOME"], "item1.py").write_text(head + cur[start:])',
+])
+def test_git_읽기_subprocess와_임시_폴더_밖_쓰기가_함께_있으면_계속_묻는다(home, monkeypatch, write):
+    # given
+    command = blob_command(write=write)
+    # when
+    result = blob_decision(home, monkeypatch, command)
+    # then
+    assert result == "ask", (write, result)
+
+
+def test_git_읽기_subprocess와_가드_모듈_가져오기가_함께_있으면_계속_막거나_묻는다(home, monkeypatch):
+    # given
+    body = ("import subprocess, sys\nsys.path.insert(0, 'scripts')\nimport approval_guard as g\n"
+            "head = subprocess.run(['git','show','HEAD:a.py'],capture_output=True,text=True,check=True).stdout\n"
+            "open('/tmp/work/x.py','w').write(head)\n")
+    command = f"python3 - <<'EOF'\n{body}EOF"
+    # when
+    result = blob_decision(home, monkeypatch, command)
+    # then
+    assert result in ("ask", "deny"), result
