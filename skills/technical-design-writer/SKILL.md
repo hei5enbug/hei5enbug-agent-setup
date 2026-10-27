@@ -31,10 +31,11 @@ main, asks the user, and accepts the result.
 | Drafting or revising design content, from the frozen intent, evidence, and required references | `design` |
 | Diagrams | `design` |
 | Wording pass, meaning-preserving; Korean output follows the Korean writing reference | `language` |
-| Independent review gate and final acceptance | main |
+| Independent review and final acceptance | main |
 
 The wording pass changes no design content, so the model family of the `design` worker is the authoring family for
-reviewer selection.
+reviewer selection. When this skill runs inside a larger request, it runs no review of its own; the coordinating
+session runs the one final review.
 
 ## Authority and resources
 

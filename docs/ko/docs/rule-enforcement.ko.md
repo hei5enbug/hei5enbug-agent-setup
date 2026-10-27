@@ -29,18 +29,18 @@
 | `tests/test_session_context.py` | 세션 훅은 core, common, 호스트 지침을 크기 상한 안에서 설정·경로 알림과 함께 렌더링한다. | `instructions/session/`, `README.md` (Automatic instructions) |
 | `tests/test_session_settings_notice.py` | 설정 알림은 알린 설정이 바뀔 때만 나온다. | `README.md` (Automatic instructions) |
 | `tests/test_commit_routing.py` | 새 커밋은 모두 `suggest-commit` 커밋 모드를 거친다. | `instructions/session/common.md` |
-| `tests/test_planning_contract.py` | 계획과 설계 절차는 분리되고, 모델 선택의 출처는 하나이며, 독립 검증은 읽기 전용 1회다. | `instructions/implementation-planning.md`, `instructions/independent-model-validation.md` |
+| `tests/test_planning_contract.py` | 계획과 설계 절차는 분리되고, 모델 선택의 출처는 하나이며, 독립 검증은 마지막 단계에서 자동으로 1회 실행하고 더 이른 검토는 승인이 필요하며, 읽기 전용 1회다. | `instructions/implementation-planning.md`, `instructions/independent-model-validation.md` |
 | `tests/test_delegation_contract.py` | 호스트는 위임 계약을 받고, 수정하지 않은 이전 역할 파일은 교체하되 사용자가 고친 파일은 둔다. | `instructions/session/common.md`, `instructions/implementation-delegation.md` |
 | `tests/test_claude_worker_contract.py` | Claude Code worker와 에이전트 정의는 선언한 도구, 모델, 어댑터 규칙을 유지한다. | `agents/`, `instructions/claude-agents.md` |
 | `tests/test_codex_worker_contract.py` | Codex worker와 designer 역할은 할당받은 worker 규칙과 어댑터를 따른다. | `standalone-agents/`, `instructions/codex-agents.md`, `README.md` (Structure) |
-| `tests/test_reviewer_contract.py` | 검토자는 모델과 읽기 전용 도구를 고정하고, scout는 로컬 조사만 맡는다. | `agents/`, `standalone-agents/`, `instructions/model-routing.md` |
+| `tests/test_reviewer_contract.py` | 검토자는 모델과 읽기 전용 도구를 고정하고, 독립 검증 표는 레지스트리의 계열별 검토자를 그대로 적으며, scout는 로컬 조사만 맡는다. | `agents/`, `standalone-agents/`, `instructions/model-routing.md` |
 | `tests/test_worker_route_accept.py` | `auto` 구현 worker 경로가 Claude 세션 문맥과 매니페스트에 나타난다. | `README.md` (Feature options) |
 | `tests/test_worker_setting.py` | worker 모델과 사고 강도는 환경 변수, 저장한 옵션, 매니페스트 기본값 순으로 정한다. | `README.md` (Feature options) |
 | `tests/test_role_runner.py` | 역할 실행기는 역할마다 샌드박스, 모델, 사고 강도, 도구를 넘기고 실제 실행을 검증한다. | `instructions/claude-agents.md`, `instructions/model-routing.md` |
 | `tests/test_verify_spawn.py` | 생성한 Codex 에이전트는 기록에 기대한 모델과 사고 강도가 있을 때만 인정한다. | `instructions/codex-agents.md` |
 | `tests/test_agent_guard.py` | Codex 내장 에이전트는 거부하고, 설치한 역할은 고정한 모델과 사고 강도로만 실행한다. | `instructions/codex-agents.md` |
 | `tests/test_runtime_regressions.py` | 역할 파일을 동시에 만들 때도 사용자 파일을 보존한다. | `README.md` (Structure) |
-| `tests/test_codex_usage.py`, `tests/test_codex_usage_accept.py` | Codex 주간 사용률을 안전하게 파싱하고, 모르면 `null`로 보고한다. | `instructions/independent-model-validation.md` |
+| `tests/test_codex_usage.py`, `tests/test_codex_usage_accept.py` | Codex 주간 사용률을 안전하게 파싱하고, 모르면 `null`로 보고한다. | `scripts/codex_usage.py`, `hooks/mod/board.js` |
 | `tests/test_language_guard.py` | 사용자에게 보내는 답변과 진행 안내는 응답 언어를 쓴다. | `instructions/session/common.md`, `README.md` (Response language) |
 | `tests/test_host_settings.py` | 세션 시작은 실제로 적용되는 호스트 권한 설정을 짧게 알린다. | `README.md` (Host settings) |
 | `tests/test_hook_python.py` | 훅은 설정한 Python 인터프리터를 고르고, 없으면 `python3`으로 대체한다. | `README.md` (Feature options) |

@@ -99,9 +99,8 @@ exit 3 or 4, continue in the main conversation.
 
 - A skill review role is read-only judgment work, including a review persona, grader, comparator, or analyzer. Run
   the `reviewer` role with `--model` set to the model in the session line "Review model".
-- Independent validation, once its confirmation gate passes under independent model validation, runs the `reviewer` role
-  with `--model` set to the reviewer that file selects. For a Claude-authored result, that is the "Review model"
-  line.
+- Independent validation, when it is due under independent model validation, runs the `reviewer` role with `--model`
+  and effort set to the reviewer that file selects. The "Review model" line does not apply to it.
 - Send a local-evidence research ticket or bounded public research through the `investigation` capability.
   Do not use `scout` for a review role. Private or authenticated remote access, including external tool work such as
   issue trackers and pull request services, goes to the `implementation` capability, and edits go to the capability

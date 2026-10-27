@@ -25,9 +25,8 @@ Choose an owner before substantial work.
 - If delegation is unavailable, use the fallback route the host rules name; without one, continue authorized work
   in the main session. Report the limitation once.
 
-Independent read-only review is the exception to main-session review. Before finishing a substantial change,
-read [independent model validation](../independent-model-validation.md). For a Claude-authored result, the reviewer
-is the session line "Review model".
+Independent review is the exception to main-session review. Before finishing a substantial change, read
+[independent model validation](../independent-model-validation.md).
 
 ## Clarification
 

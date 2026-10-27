@@ -81,10 +81,11 @@ Before dispatching after a main-model or profile switch, and after session resum
 role settings and relevant tool availability. Preserve each role's pinned model and effort. Never rewrite a
 worker's model to match the main model.
 
-Choose the optional independent reviewer from the actual model family that authored the deliverable, not from
-the execution host. Follow the existing reviewer approval and model-mapping rules. When both families materially
-contributed, record that contribution; the final authoring family still selects the single approved reviewer.
-Do not claim independence from every contributor or add another review call.
+Choose the independent reviewer from the actual model family that authored the deliverable, not from
+the execution host. It uses the reviewer range, timing, and approval rules in
+[independent model validation](independent-model-validation.md), never the `review_model` setting, which serves only
+skill review roles. When both families materially contributed, record that contribution; the final authoring family
+still selects the single reviewer. Do not claim independence from every contributor or add another review call.
 
 ## Capability pins
 
@@ -103,7 +104,8 @@ The runner's mechanics are in [Claude Code agents](claude-agents.md#role-runner)
 | language | `gpt-6.1-sol` / `high` (up to `xhigh`) (runner) | `claude-opus-5-5` / `high` (up to `xhigh`) (runner) | `gpt-6.1-sol` / `high` (up to `xhigh`) (runner) | `claude-opus-5-5` / `high` (up to `xhigh`) (runner) |
 | review | `gpt-6-astra` / `high` (up to `xhigh`) (runner) | `claude-opus-5-5` / `high` (`reviewer`) | `claude-opus-5-5` / `high` (up to `xhigh`) (runner) | `gpt-6.1-sol` / `high` (up to `xhigh`) (`reviewer`) |
 
-The Claude Code `review` primary uses the `review_model` setting in place of its default model. When that primary
+The Claude Code `review` primary uses the `review_model` setting in place of its default model; independent
+validation does not use it. When that primary
 resolves to a Claude model, the Claude Code `review` fallback is `gpt-6-astra` / `high` (up to `xhigh`) through the
 role runner instead of the `reviewer` entry. An entry marked `(runner)` runs through the role runner, and an entry
 marked with an agent name runs that plugin agent on its pinned model and effort.

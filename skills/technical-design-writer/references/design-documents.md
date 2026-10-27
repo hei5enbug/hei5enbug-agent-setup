@@ -50,9 +50,9 @@ resolves the type, apply that evidence.
 5. Validate copied contracts, examples, commands, links, calculations, and diagrams with the strongest
    available method. Separate unsupported content under `SKILL.md`, remove drafting notes and unnecessary
    content, record actual removals, and run the completion gate.
-6. Apply the independent model validation reference supplied by the session instructions. It owns the user
-   confirmation gate, reviewer selection, model configuration, review checks, failure handling,
-   finalization, and result reporting. Do not send the document to a reviewer before that gate passes.
+6. Apply the independent model validation reference supplied by the session instructions. It owns when the
+   review runs, reviewer selection, model configuration, review checks, failure handling,
+   finalization, and result reporting. Do not send the document to a reviewer before that reference makes it due.
 
 ## Structural red flags
 
@@ -107,4 +107,4 @@ section rather than filling it with placeholders.
 - No speculative extension, unrelated refactor, or unrequested low-level detail remains.
 - Every structural red flag is fixed or recorded with its reason, and a hard-to-reverse boundary has two
   structurally different candidates.
-- The shared independent validation contract is satisfied, including its gate and the user's answer.
+- The shared independent validation contract is satisfied, including its timing and any user answer it requires.

@@ -26,8 +26,7 @@ def test_두_호스트는_가벼운_위임_기준과_검토_연결만_항상_받
         "Delegate investigation of more than three files or a long log as independent questions run together",
         "Parallelize only work with independent resources",
         "continue authorized work in the main session",
-        "Independent read-only review is the exception to main-session review",
-        'For a Claude-authored result, the reviewer is the session line "Review model"',
+        "Independent review is the exception to main-session review",
     ]
 
     # When
@@ -200,7 +199,7 @@ def test_메인_대체_처리는_부분_작업과_권한_검증을_보존한다(
 
 
 def test_중요_변경의_독립_검토는_개별_승인과_실제_설정_확인을_요구한다():
-    """구현 검토는 개별 승인 뒤 한 번 수행하고 실제 모델·사고 강도와 미추적 변경까지 확인한다."""
+    """구현 검토는 최종 단계에서 자동으로 한 번 수행하고 더 이른 검토만 승인을 요구하며, 실제 모델·사고 강도와 미추적 변경까지 확인한다."""
     # Given
     path = REPO / "instructions/independent-model-validation.md"
 
@@ -209,17 +208,16 @@ def test_중요_변경의_독립_검토는_개별_승인과_실제_설정_확인
 
     # Then
     assert "completed implementation changes" in text
-    assert "general workflow is not approval to invoke a reviewer" in text
+    assert "runs only when the user approves it for that deliverable" in text
     assert "exactly one reviewer that the mapping below selects" in text
-    effort = "`high`, or `xhigh` for several components, a public contract, security, concurrency, or a hook or guard"
-    assert f"| Claude | the `review_model` setting (default `gpt-6-astra`) | {effort} |" in text
-    assert f"| GPT | `claude-fable-5-1` | {effort} |" in text
+    assert "| Claude | `gpt-6.1-sol` or `gpt-6-astra` | `high` or `xhigh` |" in text
+    assert "| GPT | `claude-opus-5-5` or `claude-fable-5-1` | `high` or `xhigh` |" in text
+    assert "the `review_model` setting" not in text
     assert "Code that a delegated worker wrote belongs to that worker's model family." in text
-    assert "say in the result that the review is not cross-family" in text
     assert "A role runner exit code 3 or 4 means the same." in text
     assert "do not substitute" in text
     assert ".ko.md" not in text
-    assert text.index("Use this model mapping: | Authoring model family") > 0
+    assert text.index("| Authoring model family | Reviewer | Reasoning effort |") > 0
     assert "verify the actual model and effort from host records" in text
     assert "Include necessary untracked files" in text
     assert "Do not enable extra billing or change authentication" in text

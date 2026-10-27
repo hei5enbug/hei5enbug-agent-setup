@@ -61,16 +61,16 @@
     },
     {
       "id": 6,
-      "prompt": "Create a design document for replacing a batch export with an event stream. Explain the target contract, failure behavior, constraints, and the trade-off against keeping the batch path. I did not ask for an implementation plan. Validate the completed draft as required. Simulation fact: running `python3 <plugin>/scripts/codex_usage.py` prints {\"weekly_used_percent\": 82.0, \"limit_reset_at\": 1792651191, \"observed_at\": \"2026-10-17T07:30:00.000Z\"}, and no review was approved so far. The author of this draft is a Claude model, and the configured review model is gpt-6-astra, which runs on Codex.",
-      "expected_output": "The result is a minimal target-design document rather than an execution plan. The Codex weekly usage is above 70 percent, so after the complete draft the agent asks the user whether to run the one required read-only review, names the resolved reviewer family and effort, and waits before invoking a reviewer.",
+      "prompt": "Create a design document for replacing a batch export with an event stream. Explain the target contract, failure behavior, constraints, and the trade-off against keeping the batch path. I did not ask for an implementation plan. Validate the completed draft as required. This design is the whole request. The author of this draft is a Claude model, and the design covers one bounded component.",
+      "expected_output": "The result is a minimal target-design document rather than an execution plan. After the complete draft the agent runs the one required read-only review automatically without asking the user, with `gpt-6.1-sol` at `high`, and reports the actual reviewer model, effort, and result.",
       "files": [],
       "expectations": [
         "The document focuses on the selected target design and includes only current-state problems needed to justify a target decision.",
         "The document includes material contracts, constraints, failure behavior, alternatives, and trade-offs without speculative extension points.",
         "Execution slices and work order are omitted because the user did not request them and they are not needed to establish feasibility.",
-        "Because the usage is above 70 percent, the agent asks for approval after drafting to review this exact deliverable and names the model family and reasoning effort required by the authoring-family mapping.",
-        "No reviewer is invoked before the user answers the post-draft approval question.",
-        "The agent does not treat the earlier broad request to validate as approval of the not-yet-seen final draft."
+        "The agent runs the review after the complete draft without asking the user for approval and without reading any usage figure.",
+        "Exactly one read-only reviewer from the other model family runs on the exact final draft, `gpt-6.1-sol` at `high` for one bounded component.",
+        "The final response records the actual reviewer model and effort, that one pass ran, and any unresolved finding."
       ]
     },
     {
@@ -194,27 +194,26 @@
     },
     {
       "id": 17,
-      "prompt": "Create a design document for replacing a batch export with an event stream. Explain the target contract, failure behavior, constraints, and the trade-off against keeping the batch path. I did not ask for an implementation plan. Validate the completed draft as required. Simulation fact: running `python3 <plugin>/scripts/codex_usage.py` prints {\"weekly_used_percent\": 25.0, \"limit_reset_at\": 1792651191, \"observed_at\": \"2026-10-17T07:30:00.000Z\"}, and no review was approved so far. The author of this draft is a Claude model, and the configured review model is gpt-6-astra, which runs on Codex.",
-      "expected_output": "The result is a minimal target-design document rather than an execution plan. The Codex weekly usage is at most 70 percent, so after the complete draft the agent runs the one required read-only review without asking the user, with the reviewer from the other model family at the mapped effort, and reports the actual reviewer model, effort, and result.",
+      "prompt": "Create a design document for replacing a batch export with an event stream. Explain the target contract, failure behavior, constraints, and the trade-off against keeping the batch path. I did not ask for an implementation plan. Validate the completed draft as required. This design is one step of a larger request that also asks the coordinating session to implement the design with several workers. The author of this draft is a Claude model.",
+      "expected_output": "The result is a minimal target-design document rather than an execution plan. The skill does not run its own final review; the one independent review is left to the coordinating session after all work in the request is done.",
       "files": [],
       "expectations": [
         "The document focuses on the selected target design and omits execution slices that the user did not request.",
-        "The agent reads the Codex weekly usage with the helper script before deciding about the review.",
-        "Because the usage is at most 70 percent, the agent does not ask the user for approval before the review.",
-        "Exactly one read-only reviewer from the other model family runs at the mapped reasoning effort on the exact final draft.",
-        "The final response records the actual reviewer model and effort, that one pass ran, and any unresolved finding."
+        "The agent invokes no reviewer after the design draft because the skill runs inside a larger request.",
+        "The agent does not ask the user for approval of a review of this intermediate draft and does not self-review in its place.",
+        "The reply notes that the coordinating session runs the one final independent review over the combined result of every worker and the main session."
       ]
     },
     {
       "id": 18,
-      "prompt": "Create a design document for replacing a batch export with an event stream. Explain the target contract, failure behavior, constraints, and the trade-off against keeping the batch path. I did not ask for an implementation plan. Validate the completed draft as required. Simulation fact: running `python3 <plugin>/scripts/codex_usage.py` prints {\"weekly_used_percent\": 25.0, \"limit_reset_at\": 1792651191, \"observed_at\": \"2026-10-17T07:30:00.000Z\"}, and no review was approved so far. The author of this draft is a GPT model, so the reviewer is claude-fable-5-1, which runs on Claude.",
-      "expected_output": "The result is a minimal target-design document rather than an execution plan. The reviewer runs on Claude, so the low Codex usage does not remove the question: after the complete draft the agent asks the user whether to run the one required read-only review, names the reviewer family and effort, and waits before invoking a reviewer.",
+      "prompt": "Create a design document for replacing a batch export with an event stream. Explain the target contract, failure behavior, constraints, and the trade-off against keeping the batch path. I did not ask for an implementation plan. Validate the completed draft as required. This design is the whole request and covers several components and a public contract. The author of this draft is a GPT model.",
+      "expected_output": "The result is a minimal target-design document rather than an execution plan. After the complete draft the agent runs the one required read-only review automatically without asking the user, with `claude-fable-5-1` or `xhigh`, and reports the actual reviewer model, effort, and result.",
       "files": [],
       "expectations": [
         "The document focuses on the selected target design and omits execution slices that the user did not request.",
-        "The agent asks for approval after drafting and names the reviewer model family and reasoning effort that the authoring-family mapping gives.",
-        "Because the reviewer runs on Claude, the usage of 25.0 percent does not let the review start without the user's answer.",
-        "No reviewer is invoked before the user answers the post-draft approval question."
+        "The agent runs the review after the complete draft without asking the user for approval, even though the reviewer runs on Claude.",
+        "Exactly one read-only reviewer, `claude-opus-5-5` or `claude-fable-5-1`, runs on the exact final draft; the stronger model or `xhigh` fits several components and a public contract.",
+        "The final response records the actual reviewer model and effort, that one pass ran, and any unresolved finding."
       ]
     },
     {

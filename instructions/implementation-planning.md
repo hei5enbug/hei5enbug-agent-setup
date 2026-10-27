@@ -69,8 +69,8 @@ Identify reusable evidence and its invalidation conditions under the
 ## 5. Plan validation
 
 Apply [independent model validation](independent-model-validation.md) to the completed draft. That reference
-owns the user confirmation gate, the reviewer input, model selection, review checks, execution boundary,
-failure handling, and result reporting. Do not send the draft to a reviewer before that gate passes.
+owns when the review runs, the reviewer input, model selection, review checks, execution boundary,
+failure handling, and result reporting. Do not send the draft to a reviewer before that reference makes it due.
 
 ## 6. Plan finalization
 

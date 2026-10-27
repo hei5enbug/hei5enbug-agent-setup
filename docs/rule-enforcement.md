@@ -26,18 +26,18 @@ impossible, remove the written rule it replaces and update its row.
 | `tests/test_session_context.py` | The session hook renders core, common, and host instructions under the size caps, with the settings and route notices. | `instructions/session/`, `README.md` (Automatic instructions) |
 | `tests/test_session_settings_notice.py` | A settings notice appears only when the announced settings change. | `README.md` (Automatic instructions) |
 | `tests/test_commit_routing.py` | Every new commit goes through `suggest-commit` commit mode. | `instructions/session/common.md` |
-| `tests/test_planning_contract.py` | Planning and design workflows stay separate, model selection has one source, and independent validation is one read-only pass. | `instructions/implementation-planning.md`, `instructions/independent-model-validation.md` |
+| `tests/test_planning_contract.py` | Planning and design workflows stay separate, model selection has one source, independent validation runs automatically once in the final stage while an earlier review needs approval, and it is one read-only pass. | `instructions/implementation-planning.md`, `instructions/independent-model-validation.md` |
 | `tests/test_delegation_contract.py` | Hosts receive the delegation contract, and earlier unmodified role files are replaced while user-edited ones stay. | `instructions/session/common.md`, `instructions/implementation-delegation.md` |
 | `tests/test_claude_worker_contract.py` | Claude Code worker and agent definitions keep their declared tools, models, and adapter rules. | `agents/`, `instructions/claude-agents.md` |
 | `tests/test_codex_worker_contract.py` | Codex worker and designer roles follow the assigned-worker rules and their adapter. | `standalone-agents/`, `instructions/codex-agents.md`, `README.md` (Structure) |
-| `tests/test_reviewer_contract.py` | Reviewers pin their model and read-only tools, and the scout handles only local investigation. | `agents/`, `standalone-agents/`, `instructions/model-routing.md` |
+| `tests/test_reviewer_contract.py` | Reviewers pin their model and read-only tools, the independent validation table names the registry's reviewers per family, and the scout handles only local investigation. | `agents/`, `standalone-agents/`, `instructions/model-routing.md` |
 | `tests/test_worker_route_accept.py` | The `auto` implementation worker route appears in the Claude session context and manifest. | `README.md` (Feature options) |
 | `tests/test_worker_setting.py` | The worker model and effort come from the environment, the saved option, then the manifest default. | `README.md` (Feature options) |
 | `tests/test_role_runner.py` | The role runner passes each role's sandbox, model, effort, and tools, and verifies the actual run. | `instructions/claude-agents.md`, `instructions/model-routing.md` |
 | `tests/test_verify_spawn.py` | A spawned Codex agent counts only when its records show the expected model and effort. | `instructions/codex-agents.md` |
 | `tests/test_agent_guard.py` | Codex built-in agents are denied, and installed roles run only with their pinned model and effort. | `instructions/codex-agents.md` |
 | `tests/test_runtime_regressions.py` | Concurrent role-file creation keeps a user's file. | `README.md` (Structure) |
-| `tests/test_codex_usage.py`, `tests/test_codex_usage_accept.py` | The Codex weekly usage reading is parsed safely and reports unknown as `null`. | `instructions/independent-model-validation.md` |
+| `tests/test_codex_usage.py`, `tests/test_codex_usage_accept.py` | The Codex weekly usage reading is parsed safely and reports unknown as `null`. | `scripts/codex_usage.py`, `hooks/mod/board.js` |
 | `tests/test_language_guard.py` | User-facing replies and progress updates use the response language. | `instructions/session/common.md`, `README.md` (Response language) |
 | `tests/test_host_settings.py` | The session start reports effective host permission settings briefly. | `README.md` (Host settings) |
 | `tests/test_hook_python.py` | Hooks pick the configured Python interpreter and fall back to `python3`. | `README.md` (Feature options) |

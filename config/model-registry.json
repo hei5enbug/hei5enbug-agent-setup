@@ -84,6 +84,7 @@
     "effort": "high",
     "max_effort": "xhigh",
     "default_review_model": "gpt-6-astra",
+    "independent_review": {"claude": ["gpt-6.1-sol", "gpt-6-astra"], "gpt": ["claude-opus-5-5", "claude-fable-5-1"], "effort": "high", "max_effort": "xhigh"},
     "review_cross_family_fallback": {"model": "gpt-6-astra", "effort": "high", "max_effort": "xhigh", "via": "runner"},
     "review_models": [
       "claude-fable-5-1",

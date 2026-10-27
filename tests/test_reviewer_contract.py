@@ -132,6 +132,24 @@ class ReviewerContractTest(unittest.TestCase):
         self.assertIn("reviews the same material once and makes the final decision", routing_text)
         self.assertEqual(routing_text.count("Do not run another review round."), 1)
 
+    def test_독립_검증_표는_레지스트리의_계열별_검토자를_그대로_적는다(self):
+        """독립 검증 문서의 매핑 표는 레지스트리 independent_review가 정한 계열별 모델과 같은 모델만 적는다."""
+        # Given
+        registry = json.loads((REPO_ROOT / "config/model-registry.json").read_text(encoding="utf-8"))["runner"]["independent_review"]
+        text = (REPO_ROOT / "instructions/independent-model-validation.md").read_text(encoding="utf-8")
+        rows = re.findall(r"^\| (Claude|GPT) \| (.+?) \| (.+?) \|$", text, re.MULTILINE)
+
+        # When
+        table = {family.lower(): re.findall(r"`([^`]+)`", models) for family, models, _ in rows}
+        efforts = {family.lower(): re.findall(r"`([^`]+)`", effort) for family, _, effort in rows}
+
+        # Then
+        self.assertEqual({"claude", "gpt"}, set(table))
+        self.assertEqual(registry["claude"], table["claude"])
+        self.assertEqual(registry["gpt"], table["gpt"])
+        for family in table:
+            self.assertEqual([registry["effort"], registry["max_effort"]], efforts[family])
+
 
 if __name__ == "__main__":
     unittest.main()

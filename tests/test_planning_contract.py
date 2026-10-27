@@ -35,8 +35,8 @@ class PlanningContractTest(unittest.TestCase):
     def test_model_selection_has_one_canonical_source(self):
         validation = VALIDATION.read_text()
         mapping = (
-            re.compile(r"\| GPT \| `claude-fable-[\d-]+` \| `high`, or `xhigh` for [^|]+ \|"),
-            re.compile(r"\| Claude \| the `review_model` setting \(default `gpt-[\d.]+-astra`\) \| `high`, or `xhigh` for [^|]+ \|"),
+            re.compile(r"\| GPT \| `claude-opus-[\d-]+` or `claude-fable-[\d-]+` \| `high` or `xhigh` \|"),
+            re.compile(r"\| Claude \| `gpt-[\d.]+-sol` or `gpt-[\d.]+-astra` \| `high` or `xhigh` \|"),
         )
         for row in mapping:
             self.assertRegex(validation, row)
@@ -66,22 +66,26 @@ class PlanningContractTest(unittest.TestCase):
         self.assertIn("not a debate", validation)
         self.assertIn("do not substitute", validation)
 
-    def test_validation_runs_only_after_a_user_confirmation_gate(self):
-        validation = VALIDATION.read_text()
-        self.assertIn("## Confirmation gate", validation)
-        self.assertIn("only when the user approves it", validation)
-        self.assertIn("Ask for every deliverable", validation)
-        self.assertIn("write nothing about the skipped review inside it", validation)
+    def test_final_review_is_automatic_and_an_earlier_review_needs_approval(self):
+        validation = " ".join(VALIDATION.read_text().split())
+        self.assertIn("## When to review", validation)
+        self.assertNotIn("Confirmation gate", validation)
+        self.assertIn("automatically, without a question, exactly once per request", validation)
+        self.assertIn("Any earlier review", validation)
+        self.assertIn("runs only when the user approves it for that deliverable", validation)
+        self.assertIn("write nothing about it inside the deliverable", validation)
+        self.assertIn("An assigned worker, and a skill run inside a larger request, never runs its own final review", validation)
+        self.assertNotIn("weekly_used_percent", validation)
         self.assertLess(
-            validation.index("## Confirmation gate"),
+            validation.index("## When to review"),
             validation.index("## Reviewer selection"),
         )
 
         for path in (IMPLEMENTATION, DESIGN):
-            text = path.read_text()
+            text = " ".join(path.read_text().split())
             with self.subTest(path=path.relative_to(REPO_ROOT)):
-                self.assertIn("confirmation gate", text)
-                self.assertNotIn("Confirmation gate", text)
+                self.assertIn("when the review runs", text)
+                self.assertNotIn("confirmation gate", text.lower())
                 self.assertNotIn("only when the user approves it", text)
 
 

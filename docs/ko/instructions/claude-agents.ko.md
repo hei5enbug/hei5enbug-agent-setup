@@ -98,8 +98,8 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
 
 - 스킬이 맡긴 검토 역할(검토 페르소나, grader, comparator, analyzer)은 읽기 전용 판단 작업이다. 세션 줄 "Review model"의
   모델을 `--model`로 지정해 `reviewer` 역할을 실행한다.
-- 독립 검증은 독립 모델 검증에 따른 확인 게이트를 통과한 뒤, 그 파일이 고른 검토자를 `--model`로 지정해 `reviewer` 역할로
-  실행한다. Claude가 작성한 결과라면 "Review model" 줄의 모델이다.
+- 독립 검증은 독립 모델 검증에 따라 검토 시점이 되면, 그 파일이 고른 검토자의 모델과 강도를 `--model` 등으로 지정해
+  `reviewer` 역할로 실행한다. "Review model" 줄은 독립 검증에 적용하지 않는다.
 - 로컬 근거 조사 티켓과 공개 자료 조사는 `investigation` 기능으로 맡긴다. 검토 역할에는 `scout`를 사용하지
   않는다. 비공개·인증 원격 접근과 이슈 트래커, 풀 리퀘스트 서비스 같은 외부 도구 작업은 `implementation` 기능으로,
   수정은 스킬이 지정한 기능 작업자로 보낸다. 그 밖에는 메인 대화에서 처리한다.

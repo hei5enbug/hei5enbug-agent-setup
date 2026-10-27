@@ -778,8 +778,8 @@ with this one (`refresh_plugins`) are string options in Claude Code. Choose `aut
 or `sonnet` for the route; an unset or unrecognized value uses `auto`, where the main session picks the worker per
 assignment. Choose `apply` or `report` for the host settings mode; an unset or unrecognized value uses `apply`. It
 decides whether `SessionStart` may change allowlisted Codex settings; see [Host settings](#host-settings). The review
-model runs independent validation and skill review roles at `high`, or at `xhigh` under the effort rule in
-[model routing](instructions/model-routing.md#keep-role-settings-fixed). Choose one of the
+model runs skill review roles at `high`, or at `xhigh` under the effort rule in
+[model routing](instructions/model-routing.md#keep-role-settings-fixed); independent validation does not use it. Choose one of the
 seven pinned model IDs; an unset or unrecognized value uses `gpt-6-astra`. Set plugin options in `/config` or with
 `claude plugin configure`. On Codex, set environment variables before starting the
 session. A value of `false`, `0`, `off`, or `no`, in any letter case, turns a boolean feature off.
@@ -991,15 +991,15 @@ model, effort, quota, permission to delegate, or settings evidence is unavailabl
 that limitation and continues authorized work after stopping any affected worker. It preserves partial work,
 user settings, permissions, and acceptance checks. It never silently substitutes a worker model.
 
-After a substantial change and its checks are ready, the main session runs one independent review under
-[independent model validation](instructions/independent-model-validation.md), without asking while the Codex weekly
-usage that `scripts/codex_usage.py` reads is at most 70 percent. On Claude Code, the `review_model`
-setting (default `gpt-6-astra`) reviews a Claude-authored result, and a GPT-authored result goes to `claude-fable-5-1`;
-Codex uses its mapping in that file. Every reviewer runs at `high`, or at `xhigh` for several components, a
-public contract, security, concurrency, or a hook or guard. When the configured reviewer shares the author's
-model family, the result says the review is not cross-family. When the usage is above 70 percent or unknown, or the
-reviewer runs on Claude, approval is required for the particular result, and a decline is not asked again. An unavailable reviewer, or a role runner exit code 3 or 4, means independent validation
-was not performed; no other model substitutes for it. Routine author inspection and tests always remain.
+In its final stage, when no other work remains for the request, the main session runs one independent review of the
+combined result under [independent model validation](instructions/independent-model-validation.md), automatically and
+without a question. A Claude-authored result goes to `gpt-6.1-sol` or `gpt-6-astra`, and a GPT-authored result goes to
+`claude-opus-5-5` or `claude-fable-5-1`. The main session picks the lighter model at `high` for one bounded component,
+and the stronger model or `xhigh` for several components, a public contract, security, concurrency, or a hook or
+guard. Any earlier review, such as one of a single worker's change, needs the user's approval for that deliverable, and
+a decline is not asked again. An assigned worker and a skill run inside a larger request never run their own final
+review. An unavailable reviewer, or a role runner exit code 3 or 4, means independent validation was not performed; no
+other model substitutes for it. Routine author inspection and tests always remain.
 
 Codex requires a direct user request or applicable `AGENTS.md` or skill instructions to authorize subagents;
 hook instructions alone cannot grant it. Without authorization, the main session continues directly.

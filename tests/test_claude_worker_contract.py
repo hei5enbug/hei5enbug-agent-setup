@@ -456,7 +456,7 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         )
 
     def test_스킬_검토와_독립_검증은_검토_모델_줄의_reviewer를_쓴다(self):
-        """스킬 검토 역할은 Review model 줄의 모델로 reviewer 역할을 실행하고, 독립 검증은 승인 뒤 같은 역할로 실행한다."""
+        """스킬 검토 역할은 Review model 줄의 모델로 reviewer 역할을 실행하고, 독립 검증은 검토 시점이 되면 그 파일이 고른 검토자로 같은 역할을 실행한다."""
         # Given
         text = CLAUDE_AGENTS.read_text(encoding="utf-8")
 
@@ -470,8 +470,8 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
             skill_workers,
         )
         self.assertIn(
-            "Independent validation, once its confirmation gate passes under independent model validation, runs the "
-            "`reviewer` role with `--model` set to the reviewer that file selects.",
+            "Independent validation, when it is due under independent model validation, runs the "
+            "`reviewer` role with `--model` and effort set to the reviewer that file selects.",
             skill_workers,
         )
         self.assertIn("Send a local-evidence research ticket or bounded public research through the `investigation` capability.", skill_workers)

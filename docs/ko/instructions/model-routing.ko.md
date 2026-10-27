@@ -80,9 +80,10 @@ Skill Builder의 시험 실행과 기타 비검토 참여자는 표에 나온 �
 사용 가능성을 다시 확인한다. 각 역할의 고정 모델과 사고 강도를 유지한다. worker의 모델을 메인 모델과
 같게 바꾸지 않는다.
 
-선택적 독립 검토자는 실행 호스트가 아니라 결과물을 작성한 실제 모델 계열을 기준으로 고른다. 기존 검토
-승인 및 모델 선택 규칙을 따른다. 두 계열이 모두 실질적으로 기여했으면 그 기여를 기록한다. 최종 작성자의
-모델 계열이 승인된 검토자 한 명을 결정한다. 모든 기여자에 대한 독립성을 주장하거나 검토 호출을 추가하지
+독립 검토자는 실행 호스트가 아니라 결과물을 작성한 실제 모델 계열을 기준으로 고른다. 검토자 범위, 시점, 승인은
+[독립 모델 검증](independent-model-validation.ko.md)의 규칙을 따르며, 스킬 검토 역할에만 쓰는 `review_model` 설정은
+쓰지 않는다. 두 계열이 모두 실질적으로 기여했으면 그 기여를 기록한다. 최종 작성자의
+모델 계열이 검토자 한 명을 결정한다. 모든 기여자에 대한 독립성을 주장하거나 검토 호출을 추가하지
 않는다.
 
 ## 기능별 고정값
@@ -103,7 +104,7 @@ Skill Builder의 시험 실행과 기타 비검토 참여자는 표에 나온 �
 | language | `gpt-6.1-sol` / `high`(최대 `xhigh`) (runner) | `claude-opus-5-5` / `high`(최대 `xhigh`) (runner) | `gpt-6.1-sol` / `high`(최대 `xhigh`) (runner) | `claude-opus-5-5` / `high`(최대 `xhigh`) (runner) |
 | review | `gpt-6-astra` / `high`(최대 `xhigh`) (runner) | `claude-opus-5-5` / `high` (`reviewer`) | `claude-opus-5-5` / `high`(최대 `xhigh`) (runner) | `gpt-6.1-sol` / `high`(최대 `xhigh`) (`reviewer`) |
 
-Claude Code의 `review` 기본 항목은 기본 모델 대신 `review_model` 설정을 쓴다. 이 기본 항목이 Claude 모델로 정해지면
+Claude Code의 `review` 기본 항목은 기본 모델 대신 `review_model` 설정을 쓴다. 독립 검증은 이 설정을 쓰지 않는다. 이 기본 항목이 Claude 모델로 정해지면
 Claude Code의 `review` 대체 항목은 `reviewer` 항목 대신 역할 실행기로 `gpt-6-astra` / `high`(최대 `xhigh`)를 실행한다. `(runner)`로
 표시한 항목은 역할 실행기로 실행하고, 에이전트 이름으로 표시한 항목은 그 플러그인 에이전트를 고정된 모델과 사고 강도로
 실행한다.

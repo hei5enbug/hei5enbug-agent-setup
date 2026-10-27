@@ -125,23 +125,20 @@
   worker's result. A worker reports new causes or missing decisions to the main session instead of widening
   scope.
 
-  After an implementation change passes its assigned checks, run one read-only final review of the final
-  diff, sized to the change:
+  Run one read-only final review of the combined final diff, sized to the change and to its authoring family:
 
   | Change | Final review |
   |---|---|
   | Trivial: a typo, wording, version, or metadata edit, a translation, or a mechanical edit its checks fully cover | None |
-  | Bounded: one component with clear acceptance checks and no public contract, security, concurrency, hook, or guard change | `code_reviewer`; in Claude Code, `role_runner.py reviewer --model gpt-6.1-sol`, which runs at the runner's default `high` |
-  | Complex: several components, a public contract, security, concurrency, a hook or guard, or work drafted on `gpt-6.1-sol` | `role_runner.py reviewer --model gpt-6-astra --effort xhigh` |
+  | Bounded, Claude-authored: one component with clear acceptance checks and no public contract, security, concurrency, hook, or guard change | `role_runner.py reviewer --model gpt-6.1-sol`, which runs at the runner's default `high` |
+  | Complex, Claude-authored: several components, a public contract, security, concurrency, or a hook or guard | `role_runner.py reviewer --model gpt-6-astra --effort xhigh` |
+  | GPT-authored, including work drafted on `gpt-6.1-sol` | `role_runner.py reviewer --model claude-opus-5-5`, or `claude-fable-5-1` with `--effort xhigh` when complex |
 
-  Run it without asking while the Codex weekly usage is at most 70 percent. Read that usage as `used_percent`
-  of the rate-limit window whose `window_minutes` is 10080, in the newest `token_count` event under
-  `~/.codex/sessions`. Above 70 percent, or without a reading, ask once before the review. Give the reviewer
-  the final diff, requirements, and check evidence. When the Astra reviewer is unavailable, use the
-  `code_reviewer` route instead. The main session verifies findings and decides acceptance; do not start a
-  second review round. An approved independent validation of the same final diff replaces this review. This
-  route does not change independent validation's reviewer settings or approval gate. Its review accuracy was
-  not measured by Frontier v4.
+  It runs automatically once, after all work for the request is done and its checks pass, over the combined final
+  diff; any earlier review needs the user's approval. Give the reviewer the final diff, requirements, and check
+  evidence. When the `gpt-6-astra` reviewer is unavailable on a Claude-authored change, use the `code_reviewer` route
+  instead. The main session verifies findings and decides acceptance; do not start a second review round. Its
+  review accuracy was not measured by Frontier v4.
 
   Frontier v4 covers 23 challenging behavioral-reconstruction tasks with one attempt per model and effort.
   It defines no easy/normal/hard labels and evaluates no documentation; the routing above is this
