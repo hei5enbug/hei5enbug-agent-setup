@@ -772,6 +772,62 @@ def test_session_범위에서_캐시만_지우거나_깨끗한_git_rm은_크리�
     assert not classify_in(command, dirty).critical
 
 
+CREDENTIAL_PROMPT_CONFIG = {
+    "GIT_CONFIG_COUNT": "2",
+    "GIT_CONFIG_KEY_0": "credential.interactive",
+    "GIT_CONFIG_VALUE_0": "false",
+    "GIT_CONFIG_KEY_1": "credential.guiPrompt",
+    "GIT_CONFIG_VALUE_1": "false",
+}
+
+
+def test_상속된_GIT_CONFIG가_자격_증명_프롬프트만_끄면_깨끗한_git_rm은_크리티컬이_아니다(dirty, monkeypatch):
+    # given
+    for name, value in CREDENTIAL_PROMPT_CONFIG.items():
+        monkeypatch.setenv(name, value)
+    # when
+    outcome = classify_in("git rm -f src/clean.py", dirty)
+    # then
+    assert not outcome.critical
+
+
+@pytest.mark.parametrize("assignments", [
+    "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.worktree GIT_CONFIG_VALUE_0=../other",
+    "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/tmp/work/hooks",
+    "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.rm GIT_CONFIG_VALUE_0='!rm -rf src'",
+    "GIT_CONFIG_COUNT=3 GIT_CONFIG_KEY_0=credential.interactive GIT_CONFIG_VALUE_0=false"
+    " GIT_CONFIG_KEY_1=credential.guiPrompt GIT_CONFIG_VALUE_1=false"
+    " GIT_CONFIG_KEY_2=core.worktree GIT_CONFIG_VALUE_2=../other",
+    "GIT_CONFIG_COUNT=x GIT_CONFIG_KEY_0=credential.interactive GIT_CONFIG_VALUE_0=false",
+    "GIT_CONFIG_COUNT=0",
+    "GIT_CONFIG_KEY_1=core.worktree",
+    "GIT_CONFIG_PARAMETERS=\"'core.worktree'='../other'\"",
+])
+def test_명령에_붙은_GIT_CONFIG는_상속된_자격_증명_설정이_있어도_강제_git_rm을_크리티컬로_만든다(dirty, monkeypatch, assignments):
+    # given
+    for name, value in CREDENTIAL_PROMPT_CONFIG.items():
+        monkeypatch.setenv(name, value)
+    # when
+    outcome = classify_in(f"{assignments} git rm -f src/clean.py", dirty)
+    # then
+    assert outcome.critical
+
+
+@pytest.mark.parametrize("extra", [
+    {"GIT_CONFIG_COUNT": "3", "GIT_CONFIG_KEY_2": "core.hooksPath", "GIT_CONFIG_VALUE_2": "/tmp/work/hooks"},
+    {"GIT_CONFIG_KEY_2": "alias.rm", "GIT_CONFIG_VALUE_2": "!rm -rf src"},
+    {"GIT_CONFIG_PARAMETERS": "'core.worktree'='../other'"},
+])
+def test_상속된_GIT_CONFIG에_다른_키가_섞이면_강제_git_rm은_크리티컬이다(dirty, monkeypatch, extra):
+    # given
+    for name, value in {**CREDENTIAL_PROMPT_CONFIG, **extra}.items():
+        monkeypatch.setenv(name, value)
+    # when
+    outcome = classify_in("git rm -f src/clean.py", dirty)
+    # then
+    assert outcome.critical
+
+
 def test_session_범위의_삭제_검사는_같은_명령_안에서_저장소마다_한_번만_상태를_읽는다(dirty, monkeypatch):
     # given
     calls = []

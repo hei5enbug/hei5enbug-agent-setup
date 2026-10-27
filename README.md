@@ -331,7 +331,9 @@ Local-scope rules keep disposable or recoverable local work off the every-time l
   `--no-pager`, `-P`, `--no-optional-locks`, `--paginate`, and `-p` (so `-c`, `--config-env`, `--git-dir`,
   `--work-tree`, `--namespace`, and `--bare` all count); and any `GIT_*` variable except `GIT_EDITOR`,
   `GIT_SEQUENCE_EDITOR`, `GIT_PAGER`, `GIT_TERMINAL_PROMPT`, `GIT_ASKPASS`, `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_TRACE*`,
-  `GIT_PROGRESS_DELAY`, `GIT_FLUSH`, and `GIT_MERGE_AUTOEDIT`. So does a command
+  `GIT_PROGRESS_DELAY`, `GIT_FLUSH`, and `GIT_MERGE_AUTOEDIT`. `GIT_CONFIG_COUNT` entries the session inherited
+  unchanged are also exempt when they only set `credential.interactive` or `credential.guiPrompt`, as some
+  terminals export; a command that sets any `GIT_CONFIG_*` variable itself still counts. So does a command
   inside `kubectl`/`oc`/`docker`/`podman` `exec`, and so does any earlier segment in the same command that is not a
   plain read without file output (`printf x >> a; git reset --hard` asks every time).
 

@@ -324,7 +324,9 @@ Codex `apply_patch` 호출 전에 `scripts/approval_guard.py`를 실행합니다
   (`-c`, `--config-env`, `--git-dir`, `--work-tree`, `--namespace`, `--bare` 모두 해당),
   또는 다음 예외 이외의 `GIT_*` 변수가 있는 경우입니다. 예외는 `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`,
   `GIT_PAGER`, `GIT_TERMINAL_PROMPT`, `GIT_ASKPASS`, `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_TRACE*`,
-  `GIT_PROGRESS_DELAY`, `GIT_FLUSH`, `GIT_MERGE_AUTOEDIT`입니다.
+  `GIT_PROGRESS_DELAY`, `GIT_FLUSH`, `GIT_MERGE_AUTOEDIT`입니다. 세션이 그대로 물려받은 `GIT_CONFIG_COUNT` 항목이
+  일부 터미널이 내보내는 것처럼 `credential.interactive`나 `credential.guiPrompt`만 설정하면 이것도 예외입니다.
+  명령이 `GIT_CONFIG_*` 변수를 직접 설정하면 여전히 해당합니다.
   `kubectl`·`oc`·`docker`·`podman`의 `exec` 안의 명령에도 매번 묻습니다.
   같은 명령의 앞선 세그먼트 중 파일 출력 없는 단순 읽기가 아닌 것이 있어도 매번 묻습니다.
   예를 들어 `printf x >> a; git reset --hard`는 매번 묻습니다.

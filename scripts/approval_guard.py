@@ -1575,6 +1575,26 @@ GIT_HARMLESS_ENV = frozenset({
     "GIT_PROGRESS_DELAY", "GIT_FLUSH", "GIT_MERGE_AUTOEDIT",
 })
 GIT_HARMLESS_OPTIONS = frozenset({"--no-pager", "-P", "--no-optional-locks", "--paginate", "-p"})
+GIT_HARMLESS_CONFIG = frozenset({"credential.interactive", "credential.guiprompt"})
+GIT_CONFIG_ENTRY = re.compile(r"GIT_CONFIG_(?:KEY|VALUE)_(\d+)")
+
+
+def _inherited_git_config(env):
+    """The `GIT_CONFIG_*` names in `env` that the hook process inherited unchanged, when its own `GIT_CONFIG_COUNT`
+    entries only set keys, such as the credential prompt settings a terminal exports, that cannot change which
+    repository git acts on or what it runs. A command that sets any of these variables itself gets no exemption."""
+    inherited = {name: value for name, value in os.environ.items() if name.startswith("GIT_CONFIG_")}
+    count = inherited.get("GIT_CONFIG_COUNT", "")
+    if not count.isdigit():
+        return set()
+    for name in inherited:
+        entry = GIT_CONFIG_ENTRY.fullmatch(name)
+        if name != "GIT_CONFIG_COUNT" and (entry is None or int(entry[1]) >= int(count)):
+            return set()
+    keys = [inherited.get(f"GIT_CONFIG_KEY_{index}") for index in range(int(count))]
+    if not all(key is not None and key.lower() in GIT_HARMLESS_CONFIG for key in keys):
+        return set()
+    return {name for name, value in inherited.items() if env.get(name) == value}
 
 
 def _git_directory(global_args, cwd, env):
@@ -1589,7 +1609,9 @@ def _git_directory(global_args, cwd, env):
             index += 1
         else:
             return None
-    if any(name.startswith("GIT_") and name not in GIT_HARMLESS_ENV and not name.startswith("GIT_TRACE") for name in env):
+    exempt = _inherited_git_config(env)
+    if any(name.startswith("GIT_") and name not in GIT_HARMLESS_ENV and not name.startswith("GIT_TRACE")
+           and name not in exempt for name in env):
         return None
     return directory
 
