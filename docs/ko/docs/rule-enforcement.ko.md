@@ -44,7 +44,7 @@
 | `tests/test_language_guard.py` | 사용자에게 보내는 답변과 진행 안내는 응답 언어를 쓴다. | `instructions/session/common.md`, `README.md` (Response language) |
 | `tests/test_host_settings.py` | 세션 시작은 실제로 적용되는 호스트 권한 설정을 짧게 알린다. | `README.md` (Host settings) |
 | `tests/test_hook_python.py` | 훅은 설정한 Python 인터프리터를 고르고, 없으면 `python3`으로 대체한다. | `README.md` (Feature options) |
-| `tests/test_codex_hook_trust.py` | 플러그인은 신뢰가 풀린 자기 Codex 훅만, `main`이나 `v*` 태그에 있는 깨끗한 공식 checkout에서만 다시 신뢰하고 `hooks/list`로 확인한다. | `README.md` (Automatic instructions, Situation-based delegation) |
+| `tests/test_codex_hook_trust.py` | 플러그인은 신뢰가 풀린 자기 Codex 훅만, HEAD를 공식 원격이 지금 `main`이나 `v*` 태그로 광고하거나 `main`에 포함하는 깨끗한 공식 checkout에서만 다시 신뢰하고 `hooks/list`로 확인한다. | `README.md` (Automatic instructions, Situation-based delegation) |
 
 ## 승인과 데이터 가드
 

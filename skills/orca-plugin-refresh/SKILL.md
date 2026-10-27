@@ -76,7 +76,8 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
      the user these files reach Claude Code only after a version bump.
    - `codex_hooks_need_trust`: the plugin's hook definitions changed, appeared, or disappeared, or a plugin with
      hooks changed any file, because Codex ties hook trust to every plugin file. For this plugin the script first
-     re-trusts its own hooks when the installed copy is a clean official checkout on `main` or a `v*` tag, and then
+     re-trusts its own hooks when the installed copy is a clean official checkout whose HEAD the official remote
+     currently advertises for `main` or a `v*` tag, or contains in its `main`, and then
      reports `codex_hooks_trusted: true` instead of this warning; otherwise the warning carries the reason in
      `detail`. Ask the user to trust that plugin's hooks in Codex `/hooks`; Codex skips untrusted hooks.
    - `unreleased_check_unavailable`: the script could not tell whether Claude Code missed same-version files.

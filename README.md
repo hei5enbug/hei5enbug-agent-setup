@@ -895,8 +895,11 @@ After installation or update, use the host's hook controls to check that these h
 in Codex, trusted. A hook that an update adds or changes, such as the agent guard, the language guard, or the DataGrip
 query guard, stays skipped in Codex until you trust it in `/hooks`. Codex trust also covers the plugin's
 files, so every plugin update leaves all plugin hooks `modified`. The plugin re-trusts only its own hooks, and only
-when the installed copy is a clean git checkout of the official repository, apart from Codex's install marker, whose
-HEAD is on its `main` branch or a `v*` tag: `orca-plugin-refresh` does this right after a Codex install, and the role
+when the installed copy is a clean git checkout of the official repository, apart from Codex's install marker, with no
+tracked file marked skip-worktree or assume-unchanged, and its HEAD is a commit the official repository advertises right
+now for `main` or a `v*` tag (`git ls-remote`), or an ancestor of that `main` tip fetched into a scratch repository.
+Local refs and tags count for nothing, and without network access it does not trust. `orca-plugin-refresh` does this
+right after a Codex install, and the role
 runner does it when its readiness check or preflight finds the guard untrusted. It records each hook's current hash
 through the `codex app-server` method `config/value/write` and confirms the result with `hooks/list`. Otherwise,
 including for a locally edited copy and for other plugins, trust the hooks again in `/hooks` after each update.

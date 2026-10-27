@@ -2,7 +2,9 @@
 
 Codex ties hook trust to a hash of every plugin file, so each marketplace update leaves the hooks `modified`. The plugin
 re-trusts only its own hooks, only while the installed copy is a clean git checkout of the official repository whose HEAD
-is on its `main` branch or a `v*` tag, and confirms the result through `hooks/list`.
+the official repository itself vouches for, and confirms the result through `hooks/list`. Local refs and tags prove
+nothing, so HEAD must be a commit the official remote advertises right now for `main` or a `v*` tag, or an ancestor of
+its current `main`; any network or verification failure refuses.
 """
 
 from __future__ import annotations
@@ -11,20 +13,21 @@ import json
 import os
 import signal
 import subprocess
+import tempfile
 import threading
 from pathlib import Path
 from typing import Sequence
 
 PLUGIN_ID = "hei5enbug-agent-setup@hei5enbug"
-OFFICIAL_REMOTES = frozenset({
-    "https://github.com/hei5enbug/hei5enbug-agent-setup.git",
-    "https://github.com/hei5enbug/hei5enbug-agent-setup",
-})
+OFFICIAL_URL = "https://github.com/hei5enbug/hei5enbug-agent-setup.git"
+OFFICIAL_REMOTES = frozenset({OFFICIAL_URL, OFFICIAL_URL.removesuffix(".git")})
 INSTALL_MARKER = ".codex-marketplace-install.json"
 UNTRUSTED = frozenset({"untrusted", "modified"})
-MAIN_REF = "refs/remotes/origin/main"
-TAG_PATTERN = "refs/tags/v*"
+MAIN = "refs/heads/main"
+TAGS = "refs/tags/v*"
+PROBE_REF = "refs/official/main"
 GIT_TIMEOUT_SECONDS = 20
+NETWORK_TIMEOUT_SECONDS = 120
 
 
 class TrustError(Exception):
@@ -56,29 +59,57 @@ def plugin_root(hooks: Sequence[dict]) -> Path:
     return roots.pop()
 
 
-def _git(root: Path, *args: str) -> subprocess.CompletedProcess:
+def _git(root: Path, *args: str, timeout: float = GIT_TIMEOUT_SECONDS) -> subprocess.CompletedProcess:
     environment = {name: value for name, value in os.environ.items() if not name.startswith("GIT_")}
     environment.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, GIT_TERMINAL_PROMPT="0", LC_ALL="C")
     try:
         return subprocess.run(
             ["git", "-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "--no-optional-locks", "-C", str(root),
              *args],
-            capture_output=True, text=True, timeout=GIT_TIMEOUT_SECONDS, env=environment, stdin=subprocess.DEVNULL,
+            capture_output=True, text=True, timeout=timeout, env=environment, stdin=subprocess.DEVNULL,
             check=False,
         )
     except (OSError, subprocess.SubprocessError) as error:
         raise TrustError(f"git could not run: {error}") from error
 
 
-def _git_output(root: Path, *args: str) -> str:
-    completed = _git(root, *args)
+def _git_output(root: Path, *args: str, timeout: float = GIT_TIMEOUT_SECONDS) -> str:
+    completed = _git(root, *args, timeout=timeout)
     if completed.returncode != 0:
         raise TrustError(f"git {args[0]} failed in {root}")
     return completed.stdout
 
 
+def advertised(root: Path) -> tuple[str | None, set[str]]:
+    """The commit the official remote advertises now for `main`, and the commits its `v*` tags point to, peeled."""
+    tags: dict[str, str] = {}
+    main = None
+    for line in _git_output(root, "ls-remote", "--", OFFICIAL_URL, MAIN, TAGS, timeout=NETWORK_TIMEOUT_SECONDS).splitlines():
+        commit, _, ref = line.partition("\t")
+        if ref == MAIN:
+            main = commit
+        elif ref.startswith("refs/tags/v"):
+            name = ref.removesuffix("^{}")
+            if ref.endswith("^{}") or name not in tags:
+                tags[name] = commit
+    return main, set(tags.values())
+
+
+def on_official_main(root: Path, head: str) -> bool:
+    """Whether HEAD is an ancestor of the official `main` tip, fetched into a scratch repository that borrows the
+    checkout's objects, so the installed copy's own `.git` is never written."""
+    objects = Path(_git_output(root, "rev-parse", "--path-format=absolute", "--git-path", "objects").strip())
+    with tempfile.TemporaryDirectory(prefix="codex-hook-trust-") as scratch:
+        probe = Path(scratch) / "probe.git"
+        _git_output(Path(scratch), "init", "--bare", "-q", str(probe))
+        (probe / "objects" / "info" / "alternates").write_text(f"{objects}\n", encoding="utf-8")
+        _git_output(probe, "fetch", "--no-tags", "-q", "--", OFFICIAL_URL, f"+{MAIN}:{PROBE_REF}",
+                    timeout=NETWORK_TIMEOUT_SECONDS)
+        return _git(probe, "merge-base", "--is-ancestor", head, PROBE_REF).returncode == 0
+
+
 def verify_checkout(root: Path) -> None:
-    """Raise unless the folder is a clean checkout of the official repository at a commit on `main` or a `v*` tag.
+    """Raise unless the folder is a clean checkout of the official repository at a commit the official remote vouches for.
 
     Only the marketplace install marker may sit beside the tracked files; any other untracked, ignored, staged, or
     modified file, or a tracked file marked skip-worktree or assume-unchanged, means the copy was edited locally."""
@@ -98,12 +129,11 @@ def verify_checkout(root: Path) -> None:
     if flagged:
         raise TrustError("the installed copy marks tracked files skip-worktree or assume-unchanged, which hides local edits")
     head = _git_output(root, "rev-parse", "--verify", "HEAD^{commit}").strip()
-    refs = [MAIN_REF] if _git(root, "rev-parse", "--verify", "--quiet", MAIN_REF).returncode == 0 else []
-    refs += _git_output(root, "for-each-ref", "--format=%(refname)", "--contains", head, TAG_PATTERN).split()
-    if not refs:
-        raise TrustError("the checkout has neither the official main branch nor a release tag to compare with")
-    if not any(_git(root, "merge-base", "--is-ancestor", head, ref).returncode == 0 for ref in refs):
-        raise TrustError("HEAD is on neither the official main branch nor a release tag")
+    main, released = advertised(root)
+    if head == main or head in released:
+        return
+    if main is None or not on_official_main(root, head):
+        raise TrustError("the official repository advertises no main or v* tag commit that contains HEAD")
 
 
 def trust_writes(hooks: Sequence[dict]) -> list[dict]:

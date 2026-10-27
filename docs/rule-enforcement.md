@@ -41,7 +41,7 @@ impossible, remove the written rule it replaces and update its row.
 | `tests/test_language_guard.py` | User-facing replies and progress updates use the response language. | `instructions/session/common.md`, `README.md` (Response language) |
 | `tests/test_host_settings.py` | The session start reports effective host permission settings briefly. | `README.md` (Host settings) |
 | `tests/test_hook_python.py` | Hooks pick the configured Python interpreter and fall back to `python3`. | `README.md` (Feature options) |
-| `tests/test_codex_hook_trust.py` | The plugin re-trusts only its own untrusted Codex hooks, only from a clean official checkout on `main` or a `v*` tag, and confirms the trust through `hooks/list`. | `README.md` (Automatic instructions, Situation-based delegation) |
+| `tests/test_codex_hook_trust.py` | The plugin re-trusts only its own untrusted Codex hooks, only from a clean official checkout whose HEAD the official remote currently advertises for `main` or a `v*` tag or contains in `main`, and confirms the trust through `hooks/list`. | `README.md` (Automatic instructions, Situation-based delegation) |
 
 ## Approval and data guards
 

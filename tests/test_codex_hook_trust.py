@@ -12,7 +12,6 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import codex_hook_trust as trust  # noqa: E402
 
-OFFICIAL = "https://github.com/hei5enbug/hei5enbug-agent-setup.git"
 KEY = f"{trust.PLUGIN_ID}:hooks/hooks.json:pre_tool_use:0:0"
 FAKE_APP_SERVER = """#!{python}
 import json, os, sys
@@ -51,7 +50,7 @@ def git(root, *args):
 
 
 @pytest.fixture
-def installed(tmp_path):
+def official(tmp_path, monkeypatch):
     origin = tmp_path / "origin"
     (origin / "hooks").mkdir(parents=True)
     (origin / "hooks" / "hooks.json").write_text('{"hooks": {}}\n')
@@ -60,11 +59,17 @@ def installed(tmp_path):
     git(origin, "add", ".")
     git(origin, "commit", "-q", "-m", "release")
     git(origin, "tag", "v1.0.0")
+    monkeypatch.setattr(trust, "OFFICIAL_URL", origin.as_uri(), raising=False)
+    monkeypatch.setattr(trust, "OFFICIAL_REMOTES", frozenset({origin.as_uri()}))
+    return origin
+
+
+@pytest.fixture
+def installed(tmp_path, official):
     root = tmp_path / "codex-home" / "plugins" / "cache" / "hei5enbug" / "hei5enbug-agent-setup" / "1.0.0"
     root.parent.mkdir(parents=True)
-    git(tmp_path, "clone", "-q", str(origin), str(root))
-    git(root, "remote", "set-url", "origin", OFFICIAL)
-    (root / trust.INSTALL_MARKER).write_text(json.dumps({"source_type": "git", "source": OFFICIAL}))
+    git(tmp_path, "clone", "-q", official.as_uri(), str(root))
+    (root / trust.INSTALL_MARKER).write_text(json.dumps({"source_type": "git", "source": official.as_uri()}))
     return root
 
 
@@ -124,14 +129,55 @@ def test_색인_플래그로_수정을_숨긴_설치본도_검증에_실패한�
         trust.verify_checkout(installed)
 
 
-def test_main_원격_참조가_없어도_릴리스_태그의_커밋이면_통과하고_둘_다_없으면_실패한다(installed):
+def test_로컬_커밋에_로컬_v_태그와_위조한_origin_main을_붙여도_검증에_실패한다(installed):
     # given
-    git(installed, "update-ref", "-d", trust.MAIN_REF)
-    git(installed, "update-ref", "-d", "refs/remotes/origin/HEAD")
-    tagged = trust.verify_checkout(installed)
-    git(installed, "tag", "-d", "v1.0.0")
+    (installed / "hooks" / "hooks.json").write_text('{"hooks": {"PreToolUse": []}}\n')
+    git(installed, "commit", "-q", "-am", "local")
+    git(installed, "tag", "v-local")
+    git(installed, "tag", "v9.9.9")
+    git(installed, "update-ref", "refs/remotes/origin/main", "HEAD")
     # when / then
-    assert tagged is None
+    with pytest.raises(trust.TrustError):
+        trust.verify_checkout(installed)
+
+
+def test_공식_원격이_지금_광고하는_릴리스_태그의_커밋이면_main에_없어도_통과한다(installed, official):
+    # given
+    git(official, "checkout", "-q", "-b", "hotfix")
+    (official / "hooks" / "hooks.json").write_text('{"hooks": {"Stop": []}}\n')
+    git(official, "commit", "-q", "-am", "hotfix")
+    git(official, "tag", "-a", "v1.0.1", "-m", "hotfix")
+    git(official, "checkout", "-q", "main")
+    git(installed, "fetch", "-q", "origin", "tag", "v1.0.1")
+    git(installed, "checkout", "-q", "--detach", "v1.0.1")
+    git(installed, "update-ref", "-d", "refs/remotes/origin/main")
+    # when
+    result = trust.verify_checkout(installed)
+    # then
+    assert result is None
+
+
+def test_공식_main이_앞서_나가도_그_조상이면_통과하고_설치본의_git에는_쓰지_않는다(installed, official):
+    # given
+    (official / "README.md").write_text("next\n")
+    git(official, "add", "README.md")
+    git(official, "commit", "-q", "-m", "next")
+    git(installed, "update-ref", "-d", "refs/remotes/origin/main")
+    refs_before = git(installed, "for-each-ref")
+    # when
+    result = trust.verify_checkout(installed)
+    # then
+    assert result is None
+    assert git(installed, "for-each-ref") == refs_before
+
+
+def test_공식_원격에_닿지_못하면_거부한다(installed, tmp_path, monkeypatch):
+    # given
+    missing = (tmp_path / "missing").as_uri()
+    monkeypatch.setattr(trust, "OFFICIAL_URL", missing, raising=False)
+    monkeypatch.setattr(trust, "OFFICIAL_REMOTES", frozenset({missing}))
+    git(installed, "remote", "set-url", "origin", missing)
+    # when / then
     with pytest.raises(trust.TrustError):
         trust.verify_checkout(installed)
 
