@@ -2007,12 +2007,38 @@ REMOVAL_TRACKED = "Recursive removal of tracked files"
 REMOVAL_IGNORED = "Recursive removal of ignored files"
 
 
+UNMODELED_EXPANSION = re.compile(
+    r"(?<!\$)\{[^{}]*(?:,|\.\.)[^{}]*\}|\$[@*]|\$\{[@*]|\$\(\(|[<>]\(|(?:^|[=:])~[A-Za-z_]")
+
+
+def _unmodeled_expansion(text):
+    """Whether a word holds an expansion the guard does not model: brace expansion, `$@`, `$*`, arithmetic expansion,
+    process substitution, or `~user`."""
+    return UNMODELED_EXPANSION.search(text) is not None
+
+
+def _unquoted_glob(raw):
+    """Whether a raw shell word holds a glob character outside quotes."""
+    quote, index = None, 0
+    while index < len(raw):
+        char = raw[index]
+        if char == "\\" and quote != "'":
+            index += 2
+            continue
+        if char in "'\"" and quote in (None, char):
+            quote = None if quote else char
+        elif quote is None and char in "*?[":
+            return True
+        index += 1
+    return False
+
+
 def _expand_references(text, lookup):
     """Every value `text` can take when each `$NAME`, `${NAME}`, `${NAME:-default}`, or `${NAME:?message}` takes any
     value that `lookup(name, default)` returns; the last form aborts the shell when the name is unset or empty, so it
     can only take the values `$NAME` takes. None when a command runs, a reference stays unresolved, or the combinations
     exceed the limit."""
-    if "`" in text or "$(" in text:
+    if "`" in text or "$(" in text or _unmodeled_expansion(text):
         return None
     results, position = [""], 0
     for match in VALUE_REFERENCE.finditer(text):
@@ -2377,10 +2403,18 @@ def _value_lookup(choices, values):
 
 def _script_seed(resolved, positional, lookup):
     """The flow table a script starts with: its own path and folder, and the values of `$1` to `$9` from the call's
-    literal arguments, each unresolved when its argument is."""
+    literal arguments, each unresolved when its argument is or when a glob in an earlier or the same argument may change
+    the argument count."""
     seed = {"0": (str(resolved),), SCRIPT_FOLDER_KEY: (str(resolved.parent),)}
+    settled = True
     for number in range(1, 10):
-        seed[str(number)] = _expand_references(positional[number - 1], lookup) if number <= len(positional) else ("",)
+        values = None
+        if settled and number <= len(positional):
+            settled = re.search(r"[*?\[]", positional[number - 1]) is None
+            values = _expand_references(positional[number - 1], lookup) if settled else None
+        elif settled:
+            values = ("",)
+        seed[str(number)] = values
     return seed
 
 
@@ -2401,7 +2435,9 @@ def _shell_c_seed(segment, lookup):
         if number < len(rest):
             quoted = raws[number]
             values = _expand_references(rest[number], lookup) if resolved else None
-            if values is not None and quoted is not None and "'" in quoted:
+            if resolved and (_unquoted_glob(quoted) if quoted is not None else re.search(r"[*?\[]", rest[number])):
+                values = None
+            elif values is not None and quoted is not None and "'" in quoted:
                 values = None
             elif values is not None and (quoted is None or _unquoted_reference(quoted)) and any(
                     re.search(r"\s", value) for value in values):
@@ -2428,6 +2464,8 @@ def _covered_only_as_commands(body):
 def _operand_texts(operand, values, choices):
     """Every text a recursive `rm` operand can take, or None when it still expands or runs a command. Without a flow
     table the operand resolves against `values` alone."""
+    if _unmodeled_expansion(operand):
+        return None
     if choices is None:
         expanded = (_mktemp_directory(operand, values)
                     or _mktemp_directory(_expand_path_variables(operand, values), values)
@@ -2711,9 +2749,25 @@ def _evaluation_scratch(covering, expanded, cwd):
             return False
         matches = _operand_paths(expanded, cwd) if re.search(r"[*?\[]", expanded) else [covering]
         return all(match.relative_to(root).parts and EVAL_RUNS not in match.relative_to(root).parts
-                   for match in matches)
+                   and _holds_no_runs_folder(match) for match in matches)
     except (ValueError, OSError, RuntimeError):
         return False
+
+
+EVAL_WALK_LIMIT = 5000
+
+
+def _holds_no_runs_folder(path):
+    """Whether no folder named `runs` lies below an existing path; a walk that fails or passes the entry limit counts as
+    finding one."""
+    failed, seen = [], 0
+    if not path.is_dir():
+        return True
+    for _, folders, files in os.walk(path, onerror=failed.append):
+        seen += len(folders) + len(files)
+        if failed or seen > EVAL_WALK_LIMIT or EVAL_RUNS in folders:
+            return False
+    return not failed
 
 
 SHALLOW_TEMPORARY_ROOTS = {"folders": 4}
@@ -2738,6 +2792,103 @@ def _trace_removal(inside):
     """While a trace is open, record whether one `rm` call removes only static paths strictly inside a temporary root."""
     if _REMOVAL_TRACE is not None:
         _REMOVAL_TRACE.append(inside)
+
+
+_COMMAND_TRACE = None
+INERT_PROGRAMS = frozenset({"cd", "ls", "pwd", "echo", "printf", "true", "false", "wc", "du", "df", "sleep", "[", "[[",
+                            "test", ":", "for", "dirname", "basename"})
+PATH_ALTERING_NAMES = re.compile(r"PATH|IFS|ENV|BASH_ENV|SHELLOPTS|BASHOPTS|PROMPT_COMMAND|PS4|LD_\w*|DYLD_\w*")
+FUNCTION_DEFINITION = re.compile(r"\(\s*\)")
+MKDIR_FLAGS = re.compile(r"-[pv]+")
+MKDIR_LONG_FLAGS = frozenset({"--parents", "--verbose"})
+
+
+def _trace_command(safe):
+    """While a trace is open, record whether one simple command is inert or writes only inside a temporary root."""
+    if _COMMAND_TRACE is not None:
+        _COMMAND_TRACE.append(safe)
+
+
+def _static_absolute_texts(operand, raw, values, choices):
+    """Every absolute path text an operand can take, resolving `$(dirname ...)` of a resolvable operand; None when it
+    still expands, runs another command, or splits at white space."""
+    inner = re.fullmatch(r"\$\(\s*dirname\s+(?:--\s+)?(.+?)\s*\)", operand)
+    if inner is not None:
+        word = inner[1]
+        if len(word) > 1 and word[0] == word[-1] and word[0] in "'\"":
+            word = word[1:-1]
+        texts = _static_absolute_texts(word, None, values, choices)
+        found = None if texts is None else [os.path.dirname(text) for text in texts]
+    else:
+        found = _operand_texts(operand, values, choices)
+        if found is not None and raw is not None and _unquoted_reference(raw) and _mktemp_directory(
+                operand, values) is None:
+            if "IFS" in values or "IFS" in (choices or {}) or re.search(r"\s", operand):
+                return None
+            found = [field for text in found for field in text.split()]
+    if not found or any(not text.startswith("/") or re.search(r"[*?\[]", text) for text in found):
+        return None
+    return found
+
+
+def _strictly_inside_temporary_root(texts, cwd):
+    try:
+        return all(_inside_temporary_root((Path(cwd) / text).resolve()) for text in texts)
+    except (OSError, RuntimeError):
+        return False
+
+
+def _mkdir_inside_temporary_root(args, raw_args, cwd, values, choices):
+    """Whether a `mkdir` call with plain flags creates only static folders strictly inside a temporary root."""
+    operands = []
+    for position, arg in enumerate(args):
+        if arg == "--" or MKDIR_FLAGS.fullmatch(arg) or arg in MKDIR_LONG_FLAGS:
+            continue
+        if arg.startswith("-"):
+            return False
+        raw = raw_args[position] if raw_args is not None and position < len(raw_args) else arg
+        operands.append((arg, raw))
+    if not operands:
+        return False
+    for arg, raw in operands:
+        texts = _static_absolute_texts(arg, raw, values, choices)
+        if texts is None or not _strictly_inside_temporary_root(texts, cwd):
+            return False
+    return True
+
+
+def _redirects_write_no_file(redirects):
+    """Whether no redirect of a command writes a file: standard output and error may go to `/dev/null` or join each
+    other."""
+    return all(">" not in operator or target == "/dev/null" or (operator == ">&" and target in ("1", "2"))
+               for _, operator, target in redirects)
+
+
+def _inert_command(cli, args, raw_args, cwd, env, variables, choices, assignments):
+    """Whether one simple command is inert or writes only inside a temporary root: the structure and test words of the
+    shell, `cd`, `echo`, `printf`, and other commands that only print, `rm` (judged by its own trace), `mkdir` of
+    static folders strictly inside a temporary root, `mktemp -d`, and `sh|bash|zsh -c` with a parseable script (whose
+    commands are judged on their own)."""
+    if any(PATH_ALTERING_NAMES.fullmatch(name) for name in assignments):
+        return False
+    if any(_unmodeled_expansion(arg) for arg in (cli, *args)) or cli != os.path.basename(cli):
+        return False
+    if cli == "rm" or cli in INERT_PROGRAMS:
+        return not (cli == "printf" and "-v" in args)
+    if cli == "mktemp":
+        return all(arg in ("-d", "-u", "--directory") for arg in args)
+    if cli == "mkdir":
+        return _mkdir_inside_temporary_root(args, raw_args, cwd, {**env, **variables}, choices)
+    if cli in SHELLS:
+        script = _shell_c(args)
+        if not script:
+            return False
+        try:
+            tokenize(script)
+        except ParseError:
+            return False
+        return True
+    return False
 
 
 def _execution_policy(cli, args, cwd, env, variables, command, choices=None, raw_args=None):
@@ -3298,9 +3449,11 @@ def _classify_argv(words, heredoc, cwd, depth, command, inherited_env=None, vari
                    raw=None):
     helper = _helper_args(words)
     if helper is not None:
+        _trace_command(False)
         return _classify_helper(helper, cwd, depth, command, inherited_env)
     stripped, assignments = strip_prefix(words)
     if not stripped:
+        _trace_command(not any(PATH_ALTERING_NAMES.fullmatch(name) for name in assignments))
         if any(os.path.basename(word) == "env" for word in words):
             return _sensitive(command)
         return Outcome("pass", [], [])
@@ -3315,6 +3468,8 @@ def _classify_argv(words, heredoc, cwd, depth, command, inherited_env=None, vari
             return _read()
         return _sensitive(command)
     raw_args = raw[len(words) - len(stripped) + 1:] if raw is not None and len(raw) == len(words) else None
+    if _COMMAND_TRACE is not None:
+        _trace_command(_inert_command(cli, stripped[1:], raw_args, cwd, env, variables or {}, choices, assignments))
     policy = _execution_policy(cli, stripped[1:], cwd, env, variables or {}, command, choices, raw_args)
     if policy is not None:
         return policy
@@ -3937,6 +4092,7 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
         segments = tokenize(text)
         operators = [token for token in _lex(text) if token[0] == "op"]
     except ParseError:
+        _trace_command(False)
         match = COVERED_WORD.search(_without_data(text))
         return _unclassified(match.group(0), text) if match else Outcome("pass", [], [])
     filtered_segments = {}
@@ -3981,6 +4137,8 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
                        for fd, operator, target in segment.redirects],
         )
         program, assignments = strip_prefix(segment.words)
+        if _COMMAND_TRACE is not None:
+            _trace_command(_redirects_write_no_file(segment.redirects))
         region = checked[segment.start:segment.end]
         substitutions = list(_substitution_spans(region))
         scoped_env = current_env if files_stable else {**current_env, FILES_MAY_CHANGE: "1"}
@@ -4055,7 +4213,8 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
                     cwd = str(directory)
             continue
         if not program and assignments:
-            standalone = all(ASSIGNMENT.match(word) for word in segment.words)
+            _trace_command(not any(PATH_ALTERING_NAMES.fullmatch(key) for key in assignments))
+            standalone =all(ASSIGNMENT.match(word) for word in segment.words)
             fixed = (standalone and recording and block_depth == 0
                      and _unconditional_assignment(segment, operators, was_assignment))
             if standalone:
@@ -4438,16 +4597,17 @@ def _removes_only_inside_temporary_root(command, cwd):
     strictly inside a temporary root. Claude Code's own check of dangerous removals asks even when the guard passes, and
     only a PermissionRequest answer can settle it. The command is classified again with a trace of each `rm` call; a
     call the trace missed, an unresolved target, or a non-recursive removal means no."""
-    global _REMOVAL_TRACE
+    global _REMOVAL_TRACE, _COMMAND_TRACE
     mentions = len(RM_WORD.findall(command))
-    if not mentions:
+    if not mentions or FUNCTION_DEFINITION.search(command):
         return False
     trace = _REMOVAL_TRACE = []
+    commands = _COMMAND_TRACE = []
     try:
         outcome = _classify_safely(lambda: classify_text(command, cwd), command)
     finally:
-        _REMOVAL_TRACE = None
-    return outcome.kind == "pass" and len(trace) >= mentions and all(trace)
+        _REMOVAL_TRACE = _COMMAND_TRACE = None
+    return outcome.kind == "pass" and len(trace) >= mentions and all(trace) and all(commands)
 
 
 def _claude_permission(session, outcome, tool_input, tool_name, cwd):

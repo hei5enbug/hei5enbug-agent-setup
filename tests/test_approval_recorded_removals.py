@@ -425,12 +425,15 @@ def test_앞선_명령이_파일을_바꿀_수_있으면_stash_drop은_매번_�
 
 # --- C2. Claude Code의 위험한 삭제 확인 --------------------------------------------------------------------------------------
 
-def test_임시_폴더_안쪽으로_정적으로_해석되는_삭제만_있으면_권한_요청을_허용한다(home):
+def test_기록된_삭제_형태는_사전_확인은_통과하지만_허용_목록에_없는_명령이_섞여_있어_권한_요청은_허용하지_않는다(home):
     # given
+    commands = (UNQUOTED_LOOP, COPY_WORKTREE_PLAIN, BASH_C_POSITIONAL, BASH_C_LOOP)
     # when
-    answers = [permission(command) for command in (UNQUOTED_LOOP, COPY_WORKTREE_PLAIN, BASH_C_POSITIONAL, BASH_C_LOOP)]
+    outcomes = [classify(command) for command in commands]
+    answers = [permission(command) for command in commands]
     # then
-    assert answers == [ALLOW, ALLOW, ALLOW, ALLOW]
+    assert [outcome.kind for outcome in outcomes] == ["pass"] * len(commands)
+    assert answers == [None] * len(commands)
 
 
 @pytest.mark.parametrize("command", [
@@ -481,3 +484,140 @@ def test_삭제가_아닌_부분이_묻는_명령은_권한_요청을_허용하�
     answer = permission(command)
     # then
     assert answer is None
+
+
+# --- F1. 임시 폴더 삭제 허용의 범위, 중괄호와 비어 있는 위치 인자, 평가 작업 공간의 상위 폴더 ----------------------------------
+
+def test_임시_삭제_뒤에_다른_파괴_명령이_붙으면_권한_요청을_허용하지_않는다(home):
+    # given
+    command = "rm -rf /tmp/work/cache; dd if=/dev/zero of=/home/test/important.txt count=1"
+    # when
+    answer = permission(command)
+    # then
+    assert answer is None
+
+
+@pytest.mark.parametrize("command", [
+    "rm -rf /tmp/work/cache; python3 -c 'print(1)'",
+    "rm -rf /tmp/work/cache && go test ./...",
+    "rm -rf /tmp/work/cache; mkdir -p /home/test/x",
+    "rm -rf /tmp/work/cache; cp a.txt /home/test/b.txt",
+    "rm -rf /tmp/work/cache; mv /tmp/work/a.txt /tmp/work/b.txt",
+    "rm -rf /tmp/work/cache; cp /tmp/work/a.txt /tmp/work/b.txt",
+    "rm -rf /tmp/work/cache; touch /tmp/work/b.txt",
+    "rm -rf /tmp/work/cache; echo hi > /tmp/work/b.txt",
+    "rm -rf /tmp/work/cache; echo hi | tee /tmp/work/b.txt",
+    "rm -rf /tmp/work/cache; echo hi > /home/test/note.txt",
+    "rm -rf /tmp/work/cache; git status",
+    "rm -rf /tmp/work/cache; ls() { dd if=/dev/zero of=/home/test/x count=1; }; ls",
+    "rm -rf /tmp/work/cache; PATH=/home/test/bin; ls",
+    "rm -rf /tmp/work/cache; bash -c 'dd if=/dev/zero of=/home/test/x count=1'",
+    "rm -rf /tmp/work/cache; bash -c 'echo \"'",
+    "rm -rf /tmp/work/cache; ls $(dd if=/dev/zero of=/home/test/x count=1)",
+    "rm -rf /tmp/work/cache; cat <(dd if=/dev/zero of=/home/test/x count=1)",
+    "rm -rf /tmp/work/cache; mkdir -p /tmp/work/../../home/test/x",
+    'rm -rf /tmp/work/cache; mkdir -p "$(dirname /home/test/x)"',
+])
+def test_임시_삭제_뒤에_허용된_무해한_명령이_아닌_것이_있으면_권한_요청을_허용하지_않는다(home, command):
+    # given
+    # when
+    answer = permission(command)
+    # then
+    assert answer is None
+
+
+def test_임시_삭제와_무해한_명령과_임시_폴더_안쪽_쓰기만_있으면_권한_요청을_허용한다(home):
+    # given
+    commands = [
+        "rm -rf /tmp/work/cache; ls /tmp/work | wc -l; echo done; du -sh /tmp/work; df -h /; sleep 1; pwd",
+        "rm -rf /tmp/work/cache > /dev/null 2>&1; echo done 2>&1",
+        "T=/tmp/work/demo; mkdir -p $T/a $T/b; ls $T | wc -l; rm -rf $T",
+        "rm -rf /tmp/work/cache; if [ -d /tmp/work ]; then echo yes; else echo no; fi",
+    ]
+    # when
+    answers = [permission(command) for command in commands]
+    # then
+    assert answers == [ALLOW] * len(commands)
+
+
+COPY_LOOP_INERT = (
+    f'W={SCRATCH}/wt1; mkdir -p "$W"; G1="api/cmd/x api/internal/y docs/a.md"; for p in $G1; do rm -rf "${{W:?}}"/"${{p:?}}"; '
+    'if [ -e "$p" ]; then mkdir -p "$(dirname "$W/$p")"; fi; done; ls -A "$W" | wc -l'
+)
+BASH_C_LOOP_INERT = (
+    "bash -c '\n"
+    f"W={SCRATCH}/wt1\n"
+    "for p in api/cmd/x api/internal/y docs/a.md; do\n"
+    '  rm -rf "${W:?}/${p:?}"; mkdir -p "$(dirname "$W/$p")"\n'
+    "done\n"
+    'ls -A "$W" | wc -l\''
+)
+BASH_C_POSITIONAL_INERT = (
+    f'S={SCRATCH}; bash -c \'rm -rf "$1"/*\' _ "$S"; ls -A "$S" | wc -l; du -sh "$S"; df -h /'
+)
+UNQUOTED_LOOP_INERT = (
+    f"W={SCRATCH}/wt1 && mkdir -p $W && "
+    'G1="api/cmd/x docs/a.md" && for p in $G1; do rm -rf $W/$p; [ -e $p ] && mkdir -p $(dirname $W/$p); done'
+)
+
+
+def test_임시_폴더_안쪽으로_정적으로_해석되는_삭제와_무해한_명령만_있으면_권한_요청을_허용한다(home):
+    # given
+    commands = (UNQUOTED_LOOP_INERT, COPY_LOOP_INERT, BASH_C_POSITIONAL_INERT, BASH_C_LOOP_INERT)
+    # when
+    answers = [permission(command) for command in commands]
+    # then
+    assert answers == [ALLOW] * len(commands)
+
+
+def test_중괄호_확장이_위치_인자를_바꾸면_삭제_대상은_해석되지_않은_것으로_본다(home):
+    # given
+    command = "bash -c 'rm -rf \"$2\"' _ /tmp/work/{scratch,../../home/test/project}"
+    # when
+    outcome = classify(command)
+    # then
+    assert outcome.kind == "always" and outcome.every_time is True
+    assert outcome.descriptions == [UNRESOLVED]
+
+
+def test_없는_위치_인자는_빈_문자열이_아니라_해석되지_않은_것으로_본다(home):
+    # given
+    command = "bash -c 'rm -rf \"$2\"/*' _ /tmp/work/x"
+    # when
+    outcome = classify(command)
+    # then
+    assert outcome.kind == "always" and outcome.every_time is True
+
+
+@pytest.mark.parametrize("command", [
+    "bash -c 'rm -rf \"$1\"' _ /tmp/work/*",
+    "bash -c 'rm -rf \"$1\"' _ ~root/x",
+    "rm -rf /tmp/work/{scratch,../../home/test/project}",
+    "rm -rf /tmp/work/{1..3}",
+    "for p in {a,../../../home/test/project}; do rm -rf \"/tmp/work/$p\"; done",
+])
+def test_셸이_바꾸는_확장을_해석할_수_없는_삭제_대상은_매번_묻는다(home, command):
+    # given
+    # when
+    outcome = classify(command)
+    # then
+    assert outcome.kind == "always" and outcome.every_time is True
+
+
+def test_평가_작업_공간_폴더_아래에_실행_기록_폴더가_있으면_그_상위_폴더의_삭제는_매번_묻는다(outside_temp):
+    # given
+    (eval_root() / "deterministic" / "runs" / "r1").mkdir(parents=True)
+    # when
+    outcome = classify(f"rm -rf {eval_root()}/deterministic")
+    # then
+    assert outcome.kind == "always" and outcome.every_time is True
+    assert outcome.descriptions == [PROTECTED]
+
+
+def test_평가_작업_공간_폴더_아래에_실행_기록_폴더가_없으면_그_폴더의_삭제는_묻지_않는다(outside_temp):
+    # given
+    (eval_root() / "deterministic" / "c7").mkdir(parents=True)
+    # when
+    outcome = classify(f"rm -rf {eval_root()}/deterministic/c7")
+    # then
+    assert outcome.kind == "pass"
