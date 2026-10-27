@@ -1444,6 +1444,10 @@ VALIDATE_SCRIPT = ("import subprocess, sys\n\ndef run(detector, skill):\n"
 J14_SCRIPTS = ("skills/skill-builder/scripts/quick_validate.py", "scripts/role_runner.py", "scripts/host_tool.py",
                "skills/orca-plugin-refresh/scripts/orca_plugin_refresh.py", "hooks/x.py", "skills/demo/scripts/run_tests.py",
                "skills/demo/scripts/release_notes.py", "skills/demo/scripts/model_runner.py")
+J14_EFFECTFUL = ("skills/local-data-cleanup/scripts/data_removal.py", "scripts/plugin_toggles.py",
+                 "skills/skill-builder/scripts/run_eval.py", "skills/skill-builder/scripts/run_loop.py",
+                 "skills/tiki-taka/scripts/detached_job.py", "skills/tiki-taka/scripts/stream_agent.py")
+J14_SCRIPTS += J14_EFFECTFUL
 J14_LOOP = ("for s in decision-navigator deep-interview flowchart-design session-retro tiki-taka report-skill-gap; "
             "do python3 skills/skill-builder/scripts/quick_validate.py skills/$s 2>&1 | tail -1; done")
 
@@ -1525,6 +1529,12 @@ J14_ASKS = [
     ("excepted", "python3 skills/demo/scripts/model_runner.py x"),
     ("excepted", "python3 skills/demo/scripts/release_notes.py x"),
     ("excepted", "python3 scripts/approval_guard.py"),
+    ("excepted", "python3 skills/local-data-cleanup/scripts/data_removal.py x"),
+    ("excepted", "python3 scripts/plugin_toggles.py x"),
+    ("excepted", "python3 skills/skill-builder/scripts/run_eval.py x"),
+    ("excepted", "python3 skills/skill-builder/scripts/run_loop.py x"),
+    ("excepted", "python3 skills/tiki-taka/scripts/detached_job.py x"),
+    ("excepted", "python3 skills/tiki-taka/scripts/stream_agent.py x"),
     ("outside", "python3 other/quick_validate.py x"),
     ("environment", "DEMO=1 python3 skills/skill-builder/scripts/quick_validate.py x"),
     ("env wrapper", "env DEMO=1 python3 skills/skill-builder/scripts/quick_validate.py x"),

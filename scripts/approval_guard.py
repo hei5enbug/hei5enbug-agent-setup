@@ -4189,12 +4189,16 @@ def _own_export_run(script, arguments, env):
 
 REPO_SCRIPT_FOLDERS = re.compile(r"scripts(?:/.+)?|skills/[^/]+/scripts(?:/.+)?")
 REPO_SCRIPT_EXCEPTIONS = re.compile(r"runner|publish|release|install|refresh", re.I)
+REPO_SCRIPT_EFFECTFUL = frozenset({"data_removal.py", "plugin_toggles.py", "run_eval.py", "run_loop.py",
+                                   "detached_job.py", "stream_agent.py"})
 
 
 def _repo_script_excepted(parts):
-    """Whether a work-tree path, as its parts, names a guard file, a hook, a runner, or a publishing, release, install, or
-    refresh script, whose run is never judged as the repository's own code."""
-    return parts[-1] in GUARD_SCRIPTS or "hooks" in parts or bool(REPO_SCRIPT_EXCEPTIONS.search(parts[-1]))
+    """Whether a work-tree path, as its parts, names a guard file, a hook, a runner, a publishing, release, install, or
+    refresh script, or a script that deletes data, changes settings, or starts model or agent runs, whose run is never
+    judged as the repository's own code."""
+    return (parts[-1] in GUARD_SCRIPTS or parts[-1] in REPO_SCRIPT_EFFECTFUL or "hooks" in parts
+            or bool(REPO_SCRIPT_EXCEPTIONS.search(parts[-1])))
 
 
 def _own_repo_script(script, plain, env):
