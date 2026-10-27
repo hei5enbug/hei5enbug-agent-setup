@@ -1239,3 +1239,198 @@ def test_자기_변수를_정하고_키_스냅샷_스크립트를_부르는_셸_
     output = guard.handle(bash(command, home / "repo"), "claude")
     # then
     assert decision(output) not in ("ask", "deny"), output
+
+
+# --- J12. a python heredoc that runs text read from a file of the plugin's work folders ----------------------------------------
+
+J12_AGG = ('import tiktoken\nenc=tiktoken.get_encoding("o200k_base")\nA={"demo-one": "first text", "demo-two": "second text"}\n'
+           't=sum(len(enc.encode(v)) for k, v in A.items())\nprint(t)\n')
+J12_EXEC = ('exec(open(Path.home()/".local/state/hei5enbug-agent-setup/harness-eval/final/agg_tokens.py").read().split("t=sum")[0]'
+            '.replace("import tiktoken\\nenc=tiktoken.get_encoding(\\"o200k_base\\")",""))\n')
+J12_REWRITE = r'''for name, text in A.items():
+    p = Path(f"skills/{name}/SKILL.md"); t = p.read_text(encoding="utf-8")
+    body = "\n".join("  " + l for l in textwrap.wrap(text, 100, break_long_words=False, break_on_hyphens=False))
+    new, n = re.subn(r"^description: >-\n(?:  .*\n)+", lambda m: "description: >-\n" + body + "\n", t, count=1, flags=re.M)
+    assert n == 1, name; p.write_text(new, encoding="utf-8")
+def sub(path, old, new):
+    p = Path(path); t = p.read_text(encoding="utf-8")
+    assert t.count(old) == 1, (path, old[:40]); p.write_text(t.replace(old, new), encoding="utf-8")
+sub("docs/ko/skills/demo-one/SKILL.ko.md",
+"""old line one
+old line two""",
+"""new line one""")
+sub("docs/ko/skills/demo-two/SKILL.ko.md",
+"""old two""",
+"""new two""")
+'''
+J12_HEAD = "import re, textwrap\nfrom pathlib import Path\n"
+J12_TAIL = ("env -u GIT_CONFIG_COUNT -u GIT_CONFIG_KEY_0 -u GIT_CONFIG_VALUE_0 python3 -m pytest -q tests/test_demo.py 2>&1 "
+            "| tail -1; cd ~/.local/state/hei5enbug-agent-setup/harness-eval/final && uv run -q --no-project --with tiktoken "
+            "--with pyyaml python listing_tokens.py {wt} < /dev/null | cut -c1-260")
+
+
+def j12_command(wt, executes=J12_EXEC, rewrite=J12_REWRITE, tail=J12_TAIL):
+    return f"cd {wt} && python3 - <<'EOF'\n{J12_HEAD}{executes}{rewrite}EOF\n{tail.replace('{wt}', str(wt))}"
+
+
+@pytest.fixture
+def j12(home, monkeypatch):
+    user = home / "user"
+    final = user / ".local" / "state" / "hei5enbug-agent-setup" / "harness-eval" / "final"
+    final.mkdir(parents=True)
+    (final / "agg_tokens.py").write_text(J12_AGG)
+    (final / "listing_tokens.py").write_text("print(1)\n")
+    monkeypatch.setenv("HOME", str(user))
+    monkeypatch.setenv("XDG_STATE_HOME", str(user / ".local" / "state"))
+    wt = home / "scratchpad" / "wt" / "skill-descriptions"
+    wt.mkdir(parents=True)
+    return wt
+
+
+def j12_decision(home, command):
+    return decision(guard.handle(bash(command, home / "project"), "claude"))
+
+
+def test_상태_폴더_파일을_읽어_exec하는_heredoc은_임시_폴더_안에서만_쓰면_묻지_않는다(home, j12):
+    # given
+    command = j12_command(j12)
+    # when
+    result = j12_decision(home, command)
+    # then
+    assert result not in ("ask", "deny")
+
+
+def test_기록된_exec_heredoc_모양은_분류가_pass다(home, j12):
+    # given
+    command = j12_command(j12)
+    # when
+    outcome = guard.classify_text(command, str(home / "project"))
+    # then
+    assert outcome.kind == "pass"
+
+
+J12_P_BODIES = {
+    "subprocess": 'import subprocess; subprocess.run(["curl", "https://example.com"])\nA={}\nt=sum(1 for k in A)\n',
+    "urlopen": 'import urllib.request\nurllib.request.urlopen("https://example.com")\nA={}\nt=sum(1 for k in A)\n',
+    "absolute write": 'from pathlib import Path\nPath("/home/test/out.md").write_text("x")\nA={}\nt=sum(1 for k in A)\n',
+    "relative write outside the folder": 'from pathlib import Path\nPath("../../out.md").write_text("x")\nA={}\nt=sum(1 for k in A)\n',
+    "write in an unresolved place": 'import sys\nfrom pathlib import Path\nPath(sys.argv[1]).write_text("x")\nA={}\nt=sum(1 for k in A)\n',
+    "environment": 'import os\nA={"k": dict(os.environ)}\nt=sum(1 for k in A)\n',
+    "nested exec": 'exec("print(1)")\nA={}\nt=sum(1 for k in A)\n',
+    "third-party import left in the text": "import tiktoken\nenc=tiktoken.get_encoding(\"o200k_base\")\nA={}\nt=sum(1 for k in A)\n",
+}
+
+
+@pytest.mark.parametrize("title", list(J12_P_BODIES))
+def test_exec한_파일이_프로세스_네트워크_밖_쓰기를_하면_계속_묻는다(home, j12, title):
+    # given
+    final = Path(os.environ["XDG_STATE_HOME"]) / "hei5enbug-agent-setup" / "harness-eval" / "final"
+    body = J12_P_BODIES[title]
+    (final / "agg_tokens.py").write_text(body)
+    executes = J12_EXEC if title != "third-party import left in the text" else (
+        'exec(open(Path.home()/".local/state/hei5enbug-agent-setup/harness-eval/final/agg_tokens.py").read().split("t=sum")[0])\n')
+    # when
+    result = j12_decision(home, j12_command(j12, executes=executes))
+    # then
+    assert result == "ask", (title, result)
+
+
+def test_replace가_exec한_텍스트에_프로세스_호출을_끼워_넣으면_묻는다(home, j12):
+    # given
+    injected = ('exec(open(Path.home()/".local/state/hei5enbug-agent-setup/harness-eval/final/agg_tokens.py").read()'
+                '.replace("print(t)", "import subprocess; subprocess.run([\\"curl\\", \\"https://example.com\\"])"))\n')
+    # when
+    result = j12_decision(home, j12_command(j12, executes=injected))
+    # then
+    assert result == "ask"
+
+
+@pytest.mark.parametrize("executes", [
+    'exec(open("/home/test/x.py").read())\n',
+    'import sys\nexec(open(sys.argv[1]).read())\n',
+    'exec(open(Path.home()/".local/state/hei5enbug-agent-setup/harness-eval/final/missing.py").read())\n',
+    'code = open("/tmp/work/demo/a.py").read()\nexec(code)\n',
+    'exec(open(Path.home()/".local/state/hei5enbug-agent-setup/harness-eval/final/agg_tokens.py").read(), {})\n',
+])
+def test_exec의_대상이_작업_폴더_밖이거나_글자로_정해지지_않으면_묻는다(home, j12, executes):
+    # given
+    command = j12_command(j12, executes=executes)
+    # when
+    result = j12_decision(home, command)
+    # then
+    assert result == "ask", (executes, result)
+
+
+def test_작업_폴더_밖의_파일을_exec하면_묻는다(home, j12, monkeypatch):
+    # given
+    monkeypatch.setattr(guard, "TEMPORARY_ROOTS", ("/nonexistent-temp-root",))
+    monkeypatch.setenv("TMPDIR", "/nonexistent-tmpdir")
+    elsewhere = Path(os.environ["HOME"]) / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "x.py").write_text("A = {}\n")
+    command = f'cd {j12} && python3 - <<\'EOF\'\nexec(open("{elsewhere}/x.py").read())\nEOF\n'
+    # when
+    result = j12_decision(home, command)
+    # then
+    assert result == "ask"
+
+
+def test_가드_상태_폴더의_파일을_exec하면_묻거나_거부한다(home, j12):
+    # given
+    approvals = Path(os.environ["XDG_STATE_HOME"]) / "hei5enbug-agent-setup" / "approvals"
+    approvals.mkdir(parents=True)
+    (approvals / "x.py").write_text("A = {}\n")
+    executes = 'exec(open(Path.home()/".local/state/hei5enbug-agent-setup/approvals/x.py").read())\n'
+    # when
+    result = j12_decision(home, j12_command(j12, executes=executes, rewrite=""))
+    # then
+    assert result in ("ask", "deny")
+
+
+J12_WRITES = {
+    "absolute path outside temp": 'Path("/home/test/out.md").write_text("x")\n',
+    "absolute open outside temp": 'open("/home/test/out.md", "w").write("x")\n',
+    "parent folder": 'Path("../out.md").write_text("x")\n',
+    "home path": 'Path.home().joinpath("out.md").write_text("x")\n',
+    "the exec target itself": ('Path.home().joinpath(".local/state/hei5enbug-agent-setup/harness-eval/final/agg_tokens.py")'
+                               '.write_text("x")\n'),
+    "unresolved target": 'import sys\nPath(sys.argv[1]).write_text("x")\n',
+}
+
+
+@pytest.mark.parametrize("title", list(J12_WRITES))
+def test_exec_heredoc이_임시_폴더_밖이나_정해지지_않은_경로에_쓰면_묻는다(home, j12, title):
+    # given
+    command = j12_command(j12, rewrite=J12_WRITES[title])
+    # when
+    result = j12_decision(home, command)
+    # then
+    assert result == "ask", (title, result)
+
+
+def test_작업_폴더가_임시_폴더_밖이면_상대_경로_쓰기가_있는_exec_heredoc은_묻는다(home, j12, monkeypatch):
+    # given
+    monkeypatch.setattr(guard, "TEMPORARY_ROOTS", ("/nonexistent-temp-root",))
+    monkeypatch.setenv("TMPDIR", "/nonexistent-tmpdir")
+    # when
+    result = j12_decision(home, j12_command(j12))
+    # then
+    assert result == "ask"
+
+
+def test_앞선_줄에서_cd한_exec_heredoc의_상대_경로_쓰기는_폴더를_알_수_없어_묻는다(home, j12):
+    # given
+    command = f"cd /home/test\n{j12_command(j12)}"
+    # when
+    result = guard.handle(bash(command, j12), "claude")
+    # then
+    assert decision(result) == "ask"
+
+
+def test_exec가_없는_heredoc의_쓰기_판정은_바뀌지_않는다(home, j12):
+    # given
+    command = f"cd {j12} && python3 - <<'EOF'\nfrom pathlib import Path\nPath('/home/test/out.md').write_text('x')\nEOF\n"
+    # when
+    result = j12_decision(home, command)
+    # then
+    assert result not in ("ask", "deny")
