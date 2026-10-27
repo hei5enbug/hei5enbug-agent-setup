@@ -113,6 +113,17 @@ def test_로컬에서_바뀐_설치본은_검증에_실패한다(installed, chan
         trust.verify_checkout(installed)
 
 
+@pytest.mark.parametrize("flag", ["--skip-worktree", "--assume-unchanged"])
+def test_색인_플래그로_수정을_숨긴_설치본도_검증에_실패한다(installed, flag):
+    # given
+    git(installed, "update-index", flag, "hooks/hooks.json")
+    (installed / "hooks" / "hooks.json").write_text('{"hooks": {"PreToolUse": []}}\n')
+    assert git(installed, "status", "--porcelain") == "?? .codex-marketplace-install.json"
+    # when / then
+    with pytest.raises(trust.TrustError):
+        trust.verify_checkout(installed)
+
+
 def test_main_원격_참조가_없어도_릴리스_태그의_커밋이면_통과하고_둘_다_없으면_실패한다(installed):
     # given
     git(installed, "update-ref", "-d", trust.MAIN_REF)

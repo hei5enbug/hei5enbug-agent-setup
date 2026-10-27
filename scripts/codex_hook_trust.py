@@ -61,7 +61,8 @@ def _git(root: Path, *args: str) -> subprocess.CompletedProcess:
     environment.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, GIT_TERMINAL_PROMPT="0", LC_ALL="C")
     try:
         return subprocess.run(
-            ["git", "-c", "core.fsmonitor=false", "--no-optional-locks", "-C", str(root), *args],
+            ["git", "-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "--no-optional-locks", "-C", str(root),
+             *args],
             capture_output=True, text=True, timeout=GIT_TIMEOUT_SECONDS, env=environment, stdin=subprocess.DEVNULL,
             check=False,
         )
@@ -80,7 +81,7 @@ def verify_checkout(root: Path) -> None:
     """Raise unless the folder is a clean checkout of the official repository at a commit on `main` or a `v*` tag.
 
     Only the marketplace install marker may sit beside the tracked files; any other untracked, ignored, staged, or
-    modified file means the copy was edited locally."""
+    modified file, or a tracked file marked skip-worktree or assume-unchanged, means the copy was edited locally."""
     root = Path(root).resolve()
     top = _git_output(root, "rev-parse", "--show-toplevel").strip()
     if not top or Path(top).resolve() != root:
@@ -93,6 +94,9 @@ def verify_checkout(root: Path) -> None:
     ).split("\0") if entry]
     if any(entry != f"?? {INSTALL_MARKER}" for entry in entries):
         raise TrustError("the installed copy has local changes")
+    flagged = [line for line in _git_output(root, "ls-files", "-v", "-z").split("\0") if line and (line[0].islower() or line[0] == "S")]
+    if flagged:
+        raise TrustError("the installed copy marks tracked files skip-worktree or assume-unchanged, which hides local edits")
     head = _git_output(root, "rev-parse", "--verify", "HEAD^{commit}").strip()
     refs = [MAIN_REF] if _git(root, "rev-parse", "--verify", "--quiet", MAIN_REF).returncode == 0 else []
     refs += _git_output(root, "for-each-ref", "--format=%(refname)", "--contains", head, TAG_PATTERN).split()
