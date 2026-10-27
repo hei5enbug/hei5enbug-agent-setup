@@ -16,6 +16,12 @@ SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "orca_plugin_refresh.
 SPEC = importlib.util.spec_from_file_location("orca_plugin_refresh_under_test", SCRIPT)
 refresh = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(refresh)
+import refresh_core
+import refresh_follow
+import refresh_install
+import refresh_plugins
+import refresh_screen
+import refresh_sessions
 
 CLAUDE_EMPTY = [
     "❯ /reload-plugins",
@@ -128,7 +134,7 @@ class ComposerBoundaryTest(unittest.TestCase):
         """입력창 후보가 없으면 같은 줄들을 구분선마다 다시 검사하지 않는다."""
         # Given
         lines = ["─" * 40] * 64
-        with patch.object(refresh, "opening_rule", wraps=refresh.opening_rule) as opening:
+        with patch.object(refresh_screen, "opening_rule", wraps=refresh.opening_rule) as opening:
             # When
             state = refresh.input_state("claude", lines)
 
@@ -201,7 +207,7 @@ class ComposerBoundaryTest(unittest.TestCase):
         item = terminal(handle, "claude")
         fake = FakeOrca([item], screens={handle: [rule, "❯ ", "  " + "─" * 8, "  draft", rule]})
         entry = {"handle": handle, "host": "claude", "status": "pending", "actions": ["reload"]}
-        with patch.object(refresh, "read_marker", return_value=None):
+        with patch.object(refresh_sessions, "read_marker", return_value=None):
             # When
             refresh.step(fake, entry, {}, {handle: item})
 
@@ -218,7 +224,7 @@ class ComposerBoundaryTest(unittest.TestCase):
         fake = FakeOrca([terminal(handle, "claude")], screens={handle: lines})
         entry = {"handle": handle, "host": "claude", "actions": ["reload"], "sent_at": time.time(),
                  "before": refresh.result_counts(lines), "before_lines": []}
-        with patch.object(refresh, "read_marker", return_value=None), patch.object(refresh, "transcript_records", return_value=[]):
+        with patch.object(refresh_sessions, "read_marker", return_value=None), patch.object(refresh_sessions, "transcript_records", return_value=[]):
             # When
             outcome = refresh.verify(fake, entry, {})
 
@@ -234,7 +240,7 @@ class ComposerBoundaryTest(unittest.TestCase):
         fake = FakeOrca([terminal(handle, "claude")], screens={handle: lines})
         entry = {"handle": handle, "host": "claude", "actions": ["reload"], "sent_at": time.time(),
                  "before": refresh.result_counts(lines), "before_lines": []}
-        with patch.object(refresh, "read_marker", return_value=None), patch.object(refresh, "transcript_records", return_value=[]):
+        with patch.object(refresh_sessions, "read_marker", return_value=None), patch.object(refresh_sessions, "transcript_records", return_value=[]):
             # When
             outcome = refresh.verify(fake, entry, {})
 
@@ -284,12 +290,13 @@ class DriveTest(unittest.TestCase):
         self.env = patch.dict(os.environ, {"ORCA_USER_DATA_PATH": self.temp.name, "XDG_STATE_HOME": self.temp.name, "ORCA_TERMINAL_HANDLE": "term_self"})
         self.env.start()
         self.addCleanup(self.env.stop)
-        for name in ("POLL_SECONDS", "DRAFT_STABLE_SECONDS", "IDLE_CONFIRM_SECONDS", "PROBE_RECHECK_SECONDS"):
-            patcher = patch.object(refresh, name, 0)
+        for module, name in ((refresh_sessions, "POLL_SECONDS"), (refresh_sessions, "DRAFT_STABLE_SECONDS"),
+                             (refresh_follow, "IDLE_CONFIRM_SECONDS"), (refresh_sessions, "PROBE_RECHECK_SECONDS")):
+            patcher = patch.object(module, name, 0)
             patcher.start()
             self.addCleanup(patcher.stop)
         self.state = {"hosts": {"claude": {"digest": "d", "root": self.temp.name}, "codex": {"digest": "d", "root": self.temp.name}}, "sessions": {}}
-        installed = patch.object(refresh, "install_current", return_value=True)
+        installed = patch.object(refresh_follow, "install_current", return_value=True)
         self.install_current = installed.start()
         self.addCleanup(installed.stop)
 
@@ -692,7 +699,7 @@ class ReviewRegressionTest(DriveTest):
         entry = {"handle": "term_claude", "host": "claude", "actions": ["reload"], "status": "pending", "observed_draft": None}
 
         # When
-        with patch.object(refresh, "ready", return_value=(None, CLAUDE_EMPTY)):
+        with patch.object(refresh_sessions, "ready", return_value=(None, CLAUDE_EMPTY)):
             refresh.step(fake, entry, self.state["hosts"]["claude"], {"term_claude": terminal("term_claude", "claude")})
 
         # Then
@@ -707,7 +714,7 @@ class ReviewRegressionTest(DriveTest):
         entry = {"handle": "term_claude", "host": "claude", "actions": ["clear"], "status": "pending", "detail": "empty_session_needs_clear"}
 
         # When
-        with patch.object(refresh, "claude_has_prompts", return_value=True):
+        with patch.object(refresh_sessions, "claude_has_prompts", return_value=True):
             refresh.step(fake, entry, self.state["hosts"]["claude"], {"term_claude": terminal("term_claude", "claude")})
 
         # Then
@@ -1156,11 +1163,11 @@ class FollowUpTest(DriveTest):
         entries = [{"handle": "term_busy", "host": "claude", "actions": ["reload"], "status": "pending", "detail": "busy", "deadline": time.time() + 60, "deferred_at": time.time()}]
 
         def expire(seconds):
-            if seconds == refresh.IDLE_CONFIRM_SECONDS:
+            if seconds == refresh_follow.IDLE_CONFIRM_SECONDS:
                 entries[0]["deadline"] = time.time() - 1
 
         # When
-        with patch.object(refresh, "IDLE_CONFIRM_SECONDS", 0.001):
+        with patch.object(refresh_follow, "IDLE_CONFIRM_SECONDS", 0.001):
             refresh.follow_up(fake, entries, self.state, sleep=expire)
 
         # Then
@@ -1391,7 +1398,7 @@ class OrcaWaitTest(unittest.TestCase):
         completed = [refresh.subprocess.CompletedProcess(["orca"], code, stdout=json.dumps(body), stderr="") for code, body in responses]
 
         # When
-        with patch.object(refresh, "executable", return_value="orca"), patch.object(refresh, "run", side_effect=completed):
+        with patch.object(refresh_core, "executable", return_value="orca"), patch.object(refresh_core, "run", side_effect=completed):
             orca = refresh.Orca()
             observed = [orca.idle("term_x"), orca.idle("term_x")]
             with self.assertRaises(refresh.RefreshError) as stale:
@@ -1506,9 +1513,9 @@ class UpdateTest(unittest.TestCase):
 
         # When
         with (
-            patch.object(refresh, "installed", side_effect=lambda host: states.pop(0)),
-            patch.object(refresh, "run", side_effect=lambda argv, **kwargs: None),
-            patch.object(refresh, "executable", side_effect=lambda name: name),
+            patch.object(refresh_install, "installed", side_effect=lambda host: states.pop(0)),
+            patch.object(refresh_core, "run", side_effect=lambda argv, **kwargs: None),
+            patch.object(refresh_core, "executable", side_effect=lambda name: name),
         ):
             trusted = refresh.update_host("codex")
             refused = refresh.update_host("codex")
@@ -1527,9 +1534,9 @@ class UpdateTest(unittest.TestCase):
 
         # When
         with (
-            patch.object(refresh, "installed", side_effect=lambda host: states.pop(0)),
-            patch.object(refresh, "run", side_effect=lambda argv, **kwargs: None),
-            patch.object(refresh, "executable", side_effect=lambda name: name),
+            patch.object(refresh_install, "installed", side_effect=lambda host: states.pop(0)),
+            patch.object(refresh_core, "run", side_effect=lambda argv, **kwargs: None),
+            patch.object(refresh_core, "executable", side_effect=lambda name: name),
         ):
             changed = refresh.update_host("codex")
             same = refresh.update_host("codex")
@@ -1556,9 +1563,9 @@ class UpdateTest(unittest.TestCase):
 
         # When
         with (
-            patch.object(refresh, "installed", side_effect=fake_installed),
-            patch.object(refresh, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
-            patch.object(refresh, "executable", side_effect=lambda name: name),
+            patch.object(refresh_install, "installed", side_effect=fake_installed),
+            patch.object(refresh_core, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
+            patch.object(refresh_core, "executable", side_effect=lambda name: name),
             patch.object(refresh, "claude_unreleased_changes", return_value=(["skills/x/SKILL.md"], None)),
         ):
             claude_result = refresh.update_host("claude")
@@ -1580,9 +1587,9 @@ class UpdateTest(unittest.TestCase):
 
         # When
         with (
-            patch.object(refresh, "installed", side_effect=lambda host: states.pop(0)),
-            patch.object(refresh, "run"),
-            patch.object(refresh, "executable", side_effect=lambda name: name),
+            patch.object(refresh_install, "installed", side_effect=lambda host: states.pop(0)),
+            patch.object(refresh_core, "run"),
+            patch.object(refresh_core, "executable", side_effect=lambda name: name),
             patch.object(refresh, "claude_unreleased_changes", return_value=([], "the installed commit is not in the marketplace clone")),
         ):
             result = refresh.update_host("claude")
@@ -1600,9 +1607,9 @@ class UpdateTest(unittest.TestCase):
 
         # When
         with (
-            patch.object(refresh, "installed", side_effect=lambda host: states.pop(0)),
-            patch.object(refresh, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
-            patch.object(refresh, "executable", side_effect=lambda name: name),
+            patch.object(refresh_install, "installed", side_effect=lambda host: states.pop(0)),
+            patch.object(refresh_core, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
+            patch.object(refresh_core, "executable", side_effect=lambda name: name),
         ):
             with self.assertRaises(refresh.RefreshError) as invalid:
                 refresh.update_host("codex")
@@ -1615,9 +1622,9 @@ class UpdateTest(unittest.TestCase):
         before = self.install("claude", "1.0.0")
         commands = []
         with (
-            patch.object(refresh, "installed", side_effect=[before, after]),
-            patch.object(refresh, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
-            patch.object(refresh, "executable", side_effect=lambda name: name),
+            patch.object(refresh_install, "installed", side_effect=[before, after]),
+            patch.object(refresh_core, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
+            patch.object(refresh_core, "executable", side_effect=lambda name: name),
             patch.object(refresh, "claude_unreleased_changes", return_value=([], None)),
         ):
             return refresh.update_host("claude")
@@ -1746,16 +1753,16 @@ class UpdateTest(unittest.TestCase):
 
         # When
         with (
-            patch.object(refresh, "installed", side_effect=[before, mismatch]),
-            patch.object(refresh, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
-            patch.object(refresh, "executable", side_effect=lambda name: name),
+            patch.object(refresh_install, "installed", side_effect=[before, mismatch]),
+            patch.object(refresh_core, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
+            patch.object(refresh_core, "executable", side_effect=lambda name: name),
         ):
             with self.assertRaises(refresh.RefreshError) as manifest:
                 refresh.update_host("codex")
         with (
-            patch.object(refresh, "installed", side_effect=[before, valid_after]),
-            patch.object(refresh, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
-            patch.object(refresh, "executable", side_effect=lambda name: name),
+            patch.object(refresh_install, "installed", side_effect=[before, valid_after]),
+            patch.object(refresh_core, "run", side_effect=lambda argv, **kwargs: commands.append(list(argv))),
+            patch.object(refresh_core, "executable", side_effect=lambda name: name),
             patch.object(refresh.SESSION_CONTEXT, "instructions_digest", side_effect=["before", ""]),
         ):
             with self.assertRaises(refresh.RefreshError) as digest:
@@ -1779,7 +1786,7 @@ class UpdateTest(unittest.TestCase):
                 path.write_bytes(b"\xff")
                 try:
                     # When
-                    with patch.object(refresh, "installed", side_effect=lambda host: roots[host]), patch.object(refresh, "run") as commands:
+                    with patch.object(refresh_install, "installed", side_effect=lambda host: roots[host]), patch.object(refresh_core, "run") as commands:
                         result = refresh.command_apply_installed()
 
                     # Then
@@ -1816,8 +1823,8 @@ class UpdateTest(unittest.TestCase):
         with patch.dict(
             os.environ,
             {"XDG_STATE_HOME": str(state_home), "CODEX_HOME": str(codex_home), "ORCA_USER_DATA_PATH": ""},
-        ), patch.object(refresh, "executable", side_effect=lambda name: name), patch.object(
-            refresh, "run", side_effect=read_only_run
+        ), patch.object(refresh_core, "executable", side_effect=lambda name: name), patch.object(
+            refresh_core, "run", side_effect=read_only_run
         ), patch.object(refresh, "update_host", side_effect=AssertionError("apply-installed must not update hosts")):
             # When
             result = refresh.command_apply_installed()
@@ -1898,8 +1905,8 @@ class UpdateTest(unittest.TestCase):
 
     def run_with(self, fake, function, *args):
         with (
-            patch.object(refresh, "run", side_effect=fake),
-            patch.object(refresh, "executable", side_effect=lambda name: name),
+            patch.object(refresh_core, "run", side_effect=fake),
+            patch.object(refresh_core, "executable", side_effect=lambda name: name),
             patch.object(refresh, "claude_unreleased_changes", return_value=([], None)),
             patch.object(refresh, "Orca", side_effect=AssertionError("updating must not read Orca")),
         ):
@@ -1967,7 +1974,7 @@ class UpdateTest(unittest.TestCase):
             with self.subTest(entry=entry), self.assertRaises(refresh.RefreshError) as refused:
                 refresh.companion_ids(["good@mk", entry])
             self.assertEqual(("plugin_id_invalid", 2), (refused.exception.code, refused.exception.details["entry"]))
-        with patch.object(refresh, "run", side_effect=fake), contextlib.redirect_stdout(output):
+        with patch.object(refresh_core, "run", side_effect=fake), contextlib.redirect_stdout(output):
             code = refresh.main(["update", "--also", "good@mk", "--also", secret, "--json"])
         self.write_saved_option(["good@mk", 7])
         with self.assertRaises(refresh.RefreshError) as not_text:
@@ -2296,7 +2303,7 @@ class UpdateTest(unittest.TestCase):
                     return refresh.RefreshError("codex_turn_in_progress", "A turn started.") if host == "codex" and trigger in fake.commands else None
 
                 # When
-                with patch.object(refresh, "install_gate", side_effect=gate):
+                with patch.object(refresh_install, "install_gate", side_effect=gate):
                     result = self.run_with(fake, refresh.command_update, ["one@mk", "two@mk"])
 
                 # Then
@@ -2384,7 +2391,7 @@ class UpdateTest(unittest.TestCase):
                 self.assertEqual("codex_turn_in_progress", gate.code)
         write_rollout(home, "idle", [rollout_event("task_complete")])
         Path(home / "sessions" / "2026" / "10" / "20" / "rollout-odd.jsonl").unlink()
-        with patch.object(refresh, "rollout_idle", side_effect=RuntimeError("unexpected")):
+        with patch.object(refresh_install, "rollout_idle", side_effect=RuntimeError("unexpected")):
             unexpected = refresh.install_gate("codex")
         with patch.object(refresh.os, "walk", side_effect=ValueError("unexpected")):
             walk = refresh.install_gate("codex")
@@ -2410,7 +2417,7 @@ class UpdateTest(unittest.TestCase):
             return original(host, plugin_id, found)
 
         # When
-        with patch.object(refresh, "validate_companion", side_effect=flaky):
+        with patch.object(refresh_plugins, "validate_companion", side_effect=flaky):
             result = self.run_with(fake, refresh.command_update, ["denied@mk", "value@mk", "fine@mk"])
         state = refresh.load_run(result["run_id"])
 
@@ -2699,7 +2706,7 @@ class CodexHookTrustTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             calls = [self.listing(root, "trusted"), self.listing(root, "modified")]
             with (
-                patch.object(refresh, "executable", side_effect=lambda name: name),
+                patch.object(refresh_core, "executable", side_effect=lambda name: name),
                 patch.object(refresh.CODEX_HOOK_TRUST, "app_server_calls", side_effect=lambda *args: calls.pop(0)),
             ):
                 # When
@@ -2846,7 +2853,7 @@ class CodexGateTest(unittest.TestCase):
         with patch.object(refresh.os, "walk", broken_walk):
             walk_error = self.code()
         write_rollout(self.home, "recent", [rollout_event("task_complete")])
-        with patch.object(refresh, "rollout_idle", side_effect=PermissionError("denied")):
+        with patch.object(refresh_install, "rollout_idle", side_effect=PermissionError("denied")):
             read_error = self.code()
         shutil.rmtree(self.home / "sessions")
         (self.home / "sessions").write_text("not a folder", encoding="utf-8")
