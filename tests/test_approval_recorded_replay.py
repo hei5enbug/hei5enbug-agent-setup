@@ -1679,3 +1679,56 @@ def test_비밀_이름의_export이거나_값이_나올_수_있는_env_목록은
     result = bash_decision(home, monkeypatch, command)
     # then
     assert result == "ask"
+
+
+# --- L3. a recursive removal of a temporary root, or of a folder that holds one, asks every time -------------------------
+
+SHARED_TEMP_TARGETS = [
+    "/private/tmp", "/tmp", "/tmp/", "/private/tmp/claude-501", "/tmp/claude-501", "/var/folders", "/private/var/folders",
+    "/private/var/folders/y1", "/private/var/folders/y1/abcdef", "/tmp/../tmp", "/tmp//", "/private", "/var",
+    "\"$TMPDIR\"", "$TMPDIR", "~/.cache", "/tmp/*", "\"$TMPDIR\"/*",
+]
+
+
+@pytest.mark.parametrize("target", SHARED_TEMP_TARGETS)
+def test_임시_폴더_자체나_그것을_담은_공용_폴더를_지우면_매번_묻는다(home, monkeypatch, target):
+    # given
+    monkeypatch.setenv("TMPDIR", str(home.parent))
+    command = f"rm -rf {target}"
+    # when
+    result = bash_decision(home, monkeypatch, command)
+    # then
+    assert result == "ask", target
+
+
+def test_TMPDIR가_가리키는_폴더를_위치_인자로_지우는_도우미_호출은_매번_묻는다(home, monkeypatch):
+    # given
+    monkeypatch.setenv("TMPDIR", str(home.parent))
+    helper(home)
+    # when
+    result = bash_decision(home, monkeypatch, f"{home}/pt.sh orca ../..")
+    # then
+    assert result == "ask"
+
+
+def test_임시_폴더_바로_아래_공용_폴더로_올라가는_도우미_호출은_매번_묻는다(home, monkeypatch):
+    # given
+    helper(home)
+    # when
+    result = bash_decision(home, monkeypatch, f"{home}/pt.sh orca " + "../" * 14 + "tmp")
+    # then
+    assert result == "ask"
+
+
+@pytest.mark.parametrize("target", [
+    "{base}/pt/o1", "{base}/pt", "{base}/x/y", "/tmp/work/a", "/private/tmp/claude-501/job1/x", "\"$TMPDIR\"/pt",
+    "$TMPDIR/pt/o1", "/tmp/demo*", "~/.cache/demo",
+])
+def test_임시_폴더_안쪽_삭제는_그대로_묻지_않는다(home, monkeypatch, target):
+    # given
+    monkeypatch.setenv("TMPDIR", str(home.parent))
+    command = "rm -rf " + target.replace("{base}", str(home))
+    # when
+    result = bash_decision(home, monkeypatch, command)
+    # then
+    assert result not in ("ask", "deny"), target

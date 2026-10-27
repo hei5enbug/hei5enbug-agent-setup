@@ -1258,6 +1258,25 @@ def _temp_roots(env):
     return [Path(path).resolve() for path in (*TEMPORARY_ROOTS, env.get("TMPDIR") or "/tmp", str(Path.home() / ".cache"))]
 
 
+SHARED_TEMPORARY_FOLDER = re.compile(r"claude-\d+")
+
+
+def _shared_temporary(path, env):
+    """Whether a resolved path is a temporary root, a folder that holds one, or a folder every session of a user shares:
+    the per-user levels of `/var/folders` and a `claude-<uid>` folder directly in `/tmp`."""
+    if any(path == root or path in root.parents for root in _temp_roots(env)):
+        return True
+    for root in TEMPORARY_ROOTS:
+        try:
+            parts = path.relative_to(Path(root).resolve()).parts
+        except (ValueError, OSError, RuntimeError):
+            continue
+        if parts and (len(parts) < SHALLOW_TEMPORARY_ROOTS.get(Path(root).name, 1)
+                      or len(parts) == 1 and SHARED_TEMPORARY_FOLDER.fullmatch(parts[0])):
+            return True
+    return False
+
+
 def _job_tmp(path):
     """Whether a resolved path lies inside a Claude Code job temp folder, `~/.claude/jobs/<id>/tmp`."""
     try:
@@ -3291,8 +3310,9 @@ def _execution_policy(cli, args, cwd, env, variables, command, choices=None, raw
                     link = Path(cwd) / os.path.expanduser(fixed or ".")
                     path = covering = link.resolve()
                 temporary = _temporary(path, env)
+                emptied = covering if not re.search(r"[*?\[]", expanded) or not re.search(r"\w", tail) else path
                 if (path == Path("/") or path == Path.home() or path == session or path in session.parents
-                        or ".git" in path.parts):
+                        or ".git" in path.parts or temporary and _shared_temporary(emptied, env)):
                     return target("always", "Recursive removal of a protected or external path", True)
                 in_temporary_root = in_temporary_root and _inside_temporary_root(
                     covering, int(bool(re.search(r"[*?\[]", expanded))))
