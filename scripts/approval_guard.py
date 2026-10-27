@@ -2162,6 +2162,25 @@ def _wide_effect(words, raw):
     return names | set("123456789") if name in POSITIONAL_WRITERS else names
 
 
+def _narrow_effect(words, raw):
+    """For a plain `export NAME[=value]...` or `unset NAME...` call: the literal names it writes and whether an argument
+    of `unset` is not a literal name (so it may unset any variable). None for any other command."""
+    if words[:1] not in (["export"], ["unset"]) or ":=" in raw or "((" in raw:
+        return None
+    names, dynamic = set(), False
+    for word in words[1:]:
+        name = word.partition("=")[0] if words[0] == "export" else word
+        if words[0] == "unset" and word in ("-v", "-f"):
+            continue
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+            names.add(name)
+        elif words[0] == "unset" and not word.startswith("-"):
+            dynamic = True
+        else:
+            return None
+    return names, dynamic
+
+
 def _positional(name):
     return name.isdigit() or name == SCRIPT_FOLDER_KEY
 
@@ -2176,9 +2195,9 @@ def _loop_raws(segment, words, start):
 
 
 def _loop_effects(segments, index):
-    """The names the body of the loop that segment `index` opens may write, and whether anything in it may write any
-    name."""
-    names, wide, depth, closed = set(), False, 0, False
+    """The names the body of the loop that segment `index` opens may write, whether anything in it may write any name, and
+    whether it may unset any variable."""
+    names, wide, depth, closed, dynamic = set(), False, 0, False, False
     for segment in segments[index + 1:]:
         words = list(segment.words)
         while words and (words[0] in FLOW_LEADS or words[0] in ("if", "elif")):
@@ -2197,11 +2216,16 @@ def _loop_effects(segments, index):
         if words and len(assigned) == len(words):
             names.update(word.partition("=")[0] for word in assigned)
             continue
+        narrow = _narrow_effect(words, " ".join(segment.raw)) if words else None
+        if narrow is not None:
+            names.update(narrow[0])
+            dynamic = dynamic or narrow[1]
+            continue
         effect = _wide_effect(words, " ".join(segment.raw)) if words else None
         if effect is not None:
             wide = True
             names.update(effect)
-    return names, wide or not closed
+    return names, wide or not closed, dynamic
 
 
 class _ValueFlow:
@@ -2241,6 +2265,41 @@ class _ValueFlow:
         for table in tables:
             for name in [*(name for name in table if not _positional(name)), *names] if everything else names:
                 table[name] = None
+
+    def _tables(self):
+        top = self.frames[-1] if self.frames else None
+        tables = [self.state]
+        if top is not None and top.get("phase") == "cond":
+            tables += [top["entry"], *top["branches"]]
+        return tables
+
+    def _widen_unset(self, environment):
+        """A command that may unset any variable: every resolved name may also be empty, as may the environment names
+        the table reads when it holds no value."""
+        for table in self._tables():
+            for name, values in list(table.items()):
+                if values is not None and not _positional(name):
+                    table[name] = tuple(dict.fromkeys((*values, "")))
+            for name in FLOW_ENVIRONMENT:
+                if name not in table and environment.get(name):
+                    table[name] = (environment[name], "")
+
+    def _shift(self, words, before, after):
+        """Follow a plain `shift [N]` that always runs, outside loops: the positional values move down by N. False when
+        it cannot be followed: it may not run, runs in a pipe, a condition, or a loop, N is not a digit, or the values
+        it would drop or the argument count are not known."""
+        if (words[0] != "shift" or len(words) > 2 or len(words) == 2 and not re.fullmatch(r"[1-9]", words[1])
+                or before in ("&&", "||", *PIPE_OPERATORS) or after in (*PIPE_OPERATORS, "&")
+                or any(frame["kind"] == "loop" or frame.get("phase") == "cond" for frame in self.frames)):
+            return False
+        count = int(words[1]) if len(words) == 2 else 1
+        old = [self.state.get(str(number)) for number in range(1, 10)]
+        if old[count - 1] is None or any(not value for value in old[count - 1]):
+            return False
+        for number in range(1, 10):
+            moved = old[number + count - 1] if number + count <= 9 else (old[8] if old[8] == ("",) else None)
+            self.state[str(number)] = moved
+        return True
 
     def _lookup(self, name, default, environment):
         if name in self.state:
@@ -2388,8 +2447,10 @@ class _ValueFlow:
                 values = None
                 if variable is not None and len(words) > 3 and words[2] == "in":
                     values = self._loop_values(words[3:], _loop_raws(segments[index], words, 3), environment)
-                names, wide = _loop_effects(segments, index)
+                names, wide, dynamic = _loop_effects(segments, index)
                 self._poison(names, everything=wide)
+                if dynamic:
+                    self._widen_unset(environment)
                 self._push("loop", before, phase="cond", variable=variable)
                 if variable is not None:
                     self.state[variable] = values
@@ -2432,6 +2493,14 @@ class _ValueFlow:
         assigned = [word for word in words if ASSIGNMENT.match(word)]
         if len(assigned) != len(words):
             self.may_skip = True
+            if self._shift(words, before, after):
+                return
+            narrow = _narrow_effect(words, raw)
+            if narrow is not None:
+                self._poison(narrow[0])
+                if narrow[1]:
+                    self._widen_unset(environment)
+                return
             effect = _wide_effect(words, raw)
             if effect is not None:
                 self._poison(effect, everything=True)
@@ -5092,6 +5161,25 @@ def _cut_characters(words):
                                   or len(args) == 2 and args[0] == "-c" and re.fullmatch(CUT_RANGE, args[1]) is not None)
 
 
+def _plain_assignment_segment(segment):
+    """Whether a segment only assigns, or exports with `NAME=value` or `NAME`, variables whose names are neither secret
+    names nor names that change how later commands are found or started."""
+    words = list(segment.words)
+    if words[:1] == ["export"]:
+        words = words[1:]
+        if not words or any(word.startswith("-") for word in words):
+            return False
+    elif not all(ASSIGNMENT.match(word) for word in words):
+        return False
+    names = [word.partition("=")[0] for word in words]
+    return all(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) and not SECRET_NAME.search(name)
+               and not PATH_ALTERING_NAMES.fullmatch(name) for name in names)
+
+
+def _only_plain_environment_changes(segments):
+    return all(_plain_assignment_segment(segment) for segment in segments if _changes_environment(segment))
+
+
 def _inert_variable(name, value):
     """Whether a secret-named variable cannot hold a secret: an empty or on/off-like value, the count of Git config
     entries, or a Git config name that is one of the inert credential prompt keys with an empty or on/off-like paired
@@ -5110,7 +5198,9 @@ def _name_only_stage(words):
     return checks.get(words[0], _grep_names)(words)
 
 
-def _environment_filter(text):
+def _environment_filter(text, names_only=False):
+    """The read outcome of an `env` listing through filters, or None. With `names_only`, only a listing that prints
+    nothing but variable names qualifies."""
     try:
         segments = tokenize(text)
         operators = [token[1] for token in _lex(text) if token[0] == "op"]
@@ -5155,6 +5245,8 @@ def _environment_filter(text):
         plain = all(named or words[0] not in ("grep", "rg") or _plain_grep(words)
                     for words, named in zip(rest, name_only))
         return _read() if plain else None
+    if names_only:
+        return None
     if any(words[0] == "wc" and "-l" in words for words in rest):
         return _read()
     words = rest[0]
@@ -5321,9 +5413,10 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
     start = 0
     boundaries = [(token[2], token[3]) for token in operators if token[1] in (";", "&&", "||")]
     changes_environment = "()" in text or any(_changes_environment(segment) for segment in segments)
-    if boundaries and not changes_environment:
+    names_only = changes_environment and "()" not in text and _only_plain_environment_changes(segments)
+    if boundaries and (not changes_environment or names_only):
         for end, following in [*boundaries, (len(text), len(text))]:
-            filtered = _environment_filter(text[start:end].strip())
+            filtered = _environment_filter(text[start:end].strip(), names_only=changes_environment)
             if filtered is not None:
                 members = [segment for segment in segments if start <= segment.start < end]
                 for index, segment in enumerate(members):

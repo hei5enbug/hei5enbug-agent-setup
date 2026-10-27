@@ -534,7 +534,7 @@ def test_반복문_변수를_스크립트_인자로_넘기면_가능한_값마�
     ('rm -rf "$1"', '"$(cat list)"', UNRESOLVED),
     ('rm -rf "$1"', '"$UNSET_VARIABLE"', UNRESOLVED),
     ('set -- /home/test; rm -rf "$1"', "/tmp/work/a", UNRESOLVED),
-    ('shift; rm -rf "$1"', "/tmp/work/a /tmp/work/b", UNRESOLVED),
+    ('while true; do shift; rm -rf "$1"; done', "/tmp/work/a /tmp/work/b", UNRESOLVED),
     ('d=$(cat "$1"); rm -rf "$d"', "list", UNRESOLVED),
 ])
 def test_스크립트_인자를_알_수_없거나_보호_경로면_그대로_매번_묻는다(home, body, call, description):

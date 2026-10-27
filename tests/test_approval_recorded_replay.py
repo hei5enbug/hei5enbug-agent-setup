@@ -1589,3 +1589,93 @@ def test_role_runner는_기존_규칙대로_계속_묻지_않는다(home, j14):
     result = j14_decision(home, command)
     # then
     assert result not in ("ask", "deny")
+
+
+# --- L2. a helper script whose removal target is a positional parameter, and an export before a names-only env listing --
+
+HELPER_BODY = """#!/bin/bash
+mode=$1; shift; bt=$1; shift
+for v in $(env | grep -o '^GIT_CONFIG_[A-Z0-9_]*'); do unset $v; done
+if [ "$mode" = orca ]; then
+  export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=credential.interactive GIT_CONFIG_VALUE_0=false GIT_CONFIG_KEY_1=credential.guiPrompt GIT_CONFIG_VALUE_1=false
+fi
+rm -rf {base}/pt/$bt
+exec python3 -m pytest -q -p no:cacheprovider --basetemp={base}/pt/$bt "$@"
+"""
+HELPER_CALLS = [
+    "{base}/pt.sh orca o1 tests/test_approval_local_scope.py tests/test_approval_session_scope.py 2>&1 "
+    "| grep -E \"^E |passed|failed\" | head -8",
+    "({base}/pt.sh clean fc -x -q 2>&1 | tail -4 > {base}/full-clean.txt) & wait",
+]
+LISTING = "env | grep GIT_CONFIG | sed 's/=.*//'"
+
+
+def helper(base, body=HELPER_BODY):
+    script = base / "pt.sh"
+    script.write_text(body.replace("{base}", str(base)))
+    script.chmod(0o755)
+    return script
+
+
+def bash_decision(home, monkeypatch, command):
+    for name, value in GIT_CONFIG.items():
+        monkeypatch.setenv(name, value)
+    return decision(guard.handle(bash(command, home / "project"), "claude"))
+
+
+@pytest.mark.parametrize("call", HELPER_CALLS)
+def test_위치_인자로_삭제_대상을_만드는_임시_폴더_도우미_호출은_묻지_않는다(home, monkeypatch, call):
+    # given
+    helper(home)
+    # when
+    result = bash_decision(home, monkeypatch, call.replace("{base}", str(home)))
+    # then
+    assert result not in ("ask", "deny")
+
+
+@pytest.mark.parametrize("body, call", [
+    ("mode=$1; shift; bt=$1; shift\nrm -rf $bt\n", "{base}/pt.sh orca /home/test/data"),
+    ("mode=$1; shift; bt=$1; shift\nrm -rf {base}/pt/$bt\n", "{base}/pt.sh orca " + "../" * 14 + "home/test/data"),
+    ("mode=$1; shift; bt=$1; shift\nrm -rf {base}/pt/$bt\n", "{base}/pt.sh orca \"$(cat list)\""),
+    ("mode=$1; shift; bt=$1; shift\nrm -rf {base}/pt/$bt\n", "{base}/pt.sh orca \"$UNSET_VARIABLE\""),
+    ("mode=$1; shift; set -- /home/test/data; bt=$1\nrm -rf $bt\n", "{base}/pt.sh orca o1"),
+    ("mode=$1; shift $n; bt=$1\nrm -rf {base}/pt/$bt\n", "{base}/pt.sh orca o1"),
+    ("while true; do shift; bt=$1; rm -rf {base}/pt/$bt; done\n", "{base}/pt.sh orca o1"),
+    ("mode=$1; [ -n \"$mode\" ] && shift; bt=$1\nrm -rf {base}/pt/$bt\n", "{base}/pt.sh orca o1"),
+])
+def test_위치_인자를_따라갈_수_없거나_임시_폴더_밖이면_도우미_호출은_계속_묻는다(home, monkeypatch, body, call):
+    # given
+    helper(home, "#!/bin/bash\n" + body)
+    # when
+    result = bash_decision(home, monkeypatch, call.replace("{base}", str(home)))
+    # then
+    assert result == "ask"
+
+
+@pytest.mark.parametrize("prefix", [
+    "export PYTEST_ADDOPTS=\"--basetemp=$TMPDIR/pt\"; ",
+    "echo $TMPDIR; export PYTEST_ADDOPTS=\"--basetemp=$TMPDIR/pt\"; ",
+    "FOO=1; ",
+])
+def test_비밀이_아닌_이름의_export_뒤_이름만_보이는_env_목록은_묻지_않는다(home, monkeypatch, prefix):
+    # given
+    command = prefix + LISTING + " ; GIT_CONFIG_COUNT=2 python3 -m pytest -q tests/test_demo.py 2>&1 | tail -3"
+    # when
+    result = bash_decision(home, monkeypatch, command)
+    # then
+    assert result not in ("ask", "deny")
+
+
+@pytest.mark.parametrize("command", [
+    "export DEMO_API_TOKEN=abc; " + LISTING,
+    "export PYTEST_ADDOPTS=x; env | grep DEMO_API",
+    "export PYTEST_ADDOPTS=x; env | grep DEMO_API | sed 's/=/:/'",
+    "export PYTEST_ADDOPTS=x; env | grep DEMO_API | sed 's/GIT//'",
+])
+def test_비밀_이름의_export이거나_값이_나올_수_있는_env_목록은_계속_묻는다(home, monkeypatch, command):
+    # given
+    monkeypatch.setenv("DEMO_API_TOKEN", "abc")
+    # when
+    result = bash_decision(home, monkeypatch, command)
+    # then
+    assert result == "ask"
