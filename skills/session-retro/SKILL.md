@@ -1,13 +1,9 @@
 ---
 name: session-retro
 description: >-
-  Review one day's coding-agent session history for a repository, from Claude Code and Codex, and turn
-  the evidence into concrete improvements for existing skills and candidates for new skills, grouped by
-  plugin. Use when the user asks to look back over a day's sessions of a repository to find skill or
-  plugin improvements, such as "오늘 이 레포 세션 히스토리 보고 스킬 개선점 정리해줘" or "review today's agent
-  sessions for skill improvements", and when the user then asks to resolve the open decisions or to write
-  the resulting plans. Do not use to summarize a single conversation, to debug one failure, or to review
-  code.
+  Review a repository's day of Claude Code and Codex sessions and turn it into skill improvements and
+  new-skill candidates by plugin, such as "오늘 이 레포 세션 히스토리 보고 스킬 개선점 정리해줘", and, when asked,
+  resolve its decisions or write its plans. Not for one conversation, one failure, or code review.
 compatibility: >-
   Needs filesystem read access to the hosts' session folders and Python 3.12 or later for the bundled
   listing script. Independent read-only workers are optional; without them the main session reads the

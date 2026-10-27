@@ -1,10 +1,9 @@
 ---
 name: tiki-taka
 description: >-
-  Runs a bounded, evidence-based debate between the current agent host and a dedicated Claude or
-  Codex opponent session. Never trigger automatically. Use only when the user explicitly asks with
-  phrases such as "두 에이전트로 토론시켜", "Codex와 토론", "반대 의견도 받아 겨뤄봐", "적대적으로
-  검토", or invokes /tiki-taka directly.
+  Run a bounded, evidence-based debate with a Claude or Codex opponent session. Never trigger
+  automatically; only on an explicit ask such as "두 에이전트로 토론시켜", "Codex와 토론", "적대적으로 검토", or
+  /tiki-taka.
 compatibility: >-
   The core workflow runs from any agent host with shell, filesystem, and Python access. The bundled
   runner requires at least one supported opponent CLI, Claude or Codex.

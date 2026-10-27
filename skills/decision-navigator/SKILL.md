@@ -1,9 +1,8 @@
 ---
 name: decision-navigator
 description: >-
-  Plan a large effort that spans more than one agent session as a shared map of decision tickets,
-  then resolve the tickets one at a time until the route to the destination is clear. Use only when
-  the user explicitly asks to create or continue a decision-navigator map.
+  Map a multi-session effort as decision tickets and resolve them one by one. Use only when the user
+  explicitly asks to create or continue a decision-navigator map.
 compatibility: >-
   Requires filesystem access and Python 3 for atomic ticket claims. Independent workers are
   optional. All map state stays in local Markdown files under .decision-navigator.

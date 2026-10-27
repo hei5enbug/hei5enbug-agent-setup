@@ -1,10 +1,8 @@
 ---
 name: deep-interview
 description: >-
-  Conduct a rigorous Socratic requirements interview before implementation. Use only when the user
-  explicitly asks to run a deep interview, by naming the skill or by invoking its command. Do not
-  start it because a request looks vague, ambitious, risky, or underspecified, and do not offer to
-  start it unprompted.
+  Run a Socratic requirements interview before implementation. Use only when the user explicitly asks
+  for a deep interview by name or command; never start or offer it on your own.
 compatibility: >-
   Works in any conversational agent host. Structured questions, repository exploration, independent
   workers, external research, and persistence are optional capabilities with in-context fallbacks.

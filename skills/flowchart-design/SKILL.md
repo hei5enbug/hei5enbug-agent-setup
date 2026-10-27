@@ -1,11 +1,10 @@
 ---
 name: flowchart-design
 description: >-
-  Design, revise, validate, and export clear static flow diagrams across SVG, HTML/CSS, Figma,
-  FigJam, draw.io, Mermaid, and raster deliverables. Use for flowcharts, process maps, architecture
-  flows, decision flows, diagram-system unification, spacing and routing repair, overlap removal,
-  accessible labeling, viewBox tightening, or PNG export correction. Works across agent hosts by
-  separating the semantic graph from tool-specific rendering and using capability-based fallbacks.
+  Design, fix, validate, and export static flow diagrams (SVG, HTML/CSS, Figma, FigJam, draw.io,
+  Mermaid, raster). Use for flowcharts, process, architecture, or decision flows, diagram-system
+  unification, spacing and routing repair, overlap removal, accessible labels, viewBox tightening, or
+  PNG export fixes.
 compatibility: >-
   The semantic and layout workflow works in any agent host. Editable rendering, image inspection,
   browser measurement, and export require corresponding host capabilities. A text-specification

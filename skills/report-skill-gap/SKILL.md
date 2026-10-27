@@ -1,10 +1,9 @@
 ---
 name: report-skill-gap
 description: >-
-  Draft one issue for one gap in a plugin's skill or instruction, or for one repeatable workflow that no skill
-  covers, and file it at the issue tracker that the owning plugin declares in issue-target.json at its root. Use only
-  when the user explicitly names report-skill-gap or invokes it directly. Do not start it on your own after a
-  correction, a finished workflow, or a session review.
+  File one issue for one skill or instruction gap, or one uncovered repeatable workflow, at the
+  tracker the plugin's issue-target.json declares. Use only when the user explicitly names or invokes
+  report-skill-gap; never on your own after a correction, a finished workflow, or a session review.
 compatibility: >-
   Needs filesystem read access to the owning plugin and Python 3.12 or later for the bundled script. Filing on
   GitHub needs an authenticated gh CLI; another tracker kind needs a connected tool for that tracker. Without
