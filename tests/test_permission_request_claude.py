@@ -432,3 +432,212 @@ def test_세션_아이디가_없으면_편집은_결정을_내지_않고_상태�
     # then
     assert output is None
     assert not (project.parent / "xdg").exists() or not any((project.parent / "xdg").rglob("*.json"))
+
+
+# --- auto-memory files of the session's own project -------------------------------------------------------------------------
+
+PROJECT_FOLDER = "-tmp-work-demo"
+
+
+@pytest.fixture
+def memory(project, monkeypatch):
+    """The recorded setup: the config folder's `projects` is a link to another projects folder."""
+    base = project.parent
+    real = base / "profile" / "projects"
+    (real / PROJECT_FOLDER / "memory").mkdir(parents=True)
+    (real / "-tmp-other" / "memory").mkdir(parents=True)
+    config = base / "claude-config"
+    config.mkdir(exist_ok=True)
+    (config / "projects").symlink_to(real, target_is_directory=True)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(config))
+    return {"linked": config / "projects" / PROJECT_FOLDER, "real": real / PROJECT_FOLDER, "other": real / "-tmp-other",
+            "base": base, "config": config}
+
+
+def memory_request(project, tool, path, transcript="unset", session="s1", name="PermissionRequest"):
+    inputs = {"Write": {"file_path": str(path), "content": "x"},
+              "Edit": {"file_path": str(path), "old_string": "a", "new_string": "b"},
+              "MultiEdit": {"file_path": str(path), "edits": [{"old_string": "a", "new_string": "b"}]},
+              "NotebookEdit": {"notebook_path": str(path), "new_source": "x"}}[tool]
+    value = event(project, tool, inputs, name, session)
+    if transcript != "unset":
+        value["transcript_path"] = None if transcript is None else str(transcript)
+    return value
+
+
+@pytest.mark.parametrize("tool", ["Write", "Edit", "MultiEdit"])
+@pytest.mark.parametrize("spelling", ["linked", "real"])
+@pytest.mark.parametrize("transcript_spelling", ["linked", "real"])
+def test_자기_프로젝트의_메모리_md_파일_쓰기는_링크된_projects_폴더에서도_허용한다(
+        project, memory, tool, spelling, transcript_spelling):
+    # given
+    request = memory_request(project, tool, memory[spelling] / "memory" / "MEMORY.md",
+                             memory[transcript_spelling] / "s1.jsonl")
+    # when
+    output = guard.handle(request, "claude")
+    # then
+    assert output == ALLOW
+
+
+def test_하위_에이전트_기록에서도_자기_프로젝트의_메모리_md_파일_쓰기를_허용한다(project, memory):
+    # given
+    transcript = memory["linked"] / "s1" / "subagents" / "agent-1.jsonl"
+    request = memory_request(project, "Write", memory["linked"] / "memory" / "topic.md", transcript)
+    # when
+    output = guard.handle(request, "claude")
+    # then
+    assert output == ALLOW
+
+
+def test_메모리_폴더_안_하위_폴더의_md_파일도_허용한다(project, memory):
+    # given
+    request = memory_request(project, "Write", memory["linked"] / "memory" / "notes" / "a.md",
+                             memory["linked"] / "s1.jsonl")
+    # when
+    output = guard.handle(request, "claude")
+    # then
+    assert output == ALLOW
+
+
+@pytest.mark.parametrize("name", ["notes.txt", "MEMORY.md.bak", ".md", "script.py", "MEMORY"])
+def test_메모리_폴더의_md가_아닌_파일은_답하지_않는다(project, memory, name):
+    # given
+    request = memory_request(project, "Write", memory["linked"] / "memory" / name, memory["linked"] / "s1.jsonl")
+    # when
+    output = guard.handle(request, "claude")
+    # then
+    assert output != ALLOW
+
+
+def test_메모리_폴더_밖으로_나가는_경로는_답하지_않는다(project, memory):
+    # given
+    transcript = memory["linked"] / "s1.jsonl"
+    escapes = [memory["linked"] / "memory" / ".." / "outside.md", memory["linked"] / "outside.md",
+               memory["linked"] / "memory" / ".." / ".." / "-tmp-other" / "memory" / "a.md"]
+    # when
+    outputs = [guard.handle(memory_request(project, "Write", path, transcript), "claude") for path in escapes]
+    # then
+    assert ALLOW not in outputs
+
+
+def test_메모리_폴더_안_링크가_밖을_가리키면_답하지_않는다(project, memory):
+    # given
+    outside = memory["base"] / "outside"
+    outside.mkdir()
+    (memory["real"] / "memory" / "link").symlink_to(outside, target_is_directory=True)
+    (memory["real"] / "memory" / "file.md").symlink_to(outside / "target.md")
+    transcript = memory["linked"] / "s1.jsonl"
+    # when
+    outputs = [guard.handle(memory_request(project, "Write", memory["linked"] / "memory" / item, transcript), "claude")
+               for item in ("link/x.md", "file.md")]
+    # then
+    assert ALLOW not in outputs
+
+
+def test_메모리_폴더_자체가_프로젝트_밖을_가리키면_답하지_않는다(project, memory):
+    # given
+    outside = memory["base"] / "outside-memory"
+    outside.mkdir()
+    folder = memory["real"] / "memory"
+    folder.rmdir()
+    folder.symlink_to(outside, target_is_directory=True)
+    request = memory_request(project, "Write", memory["linked"] / "memory" / "a.md", memory["linked"] / "s1.jsonl")
+    # when
+    output = guard.handle(request, "claude")
+    # then
+    assert output != ALLOW
+
+
+def test_다른_프로젝트의_메모리_폴더는_답하지_않는다(project, memory):
+    # given
+    request = memory_request(project, "Write", memory["other"] / "memory" / "a.md", memory["linked"] / "s1.jsonl")
+    # when
+    output = guard.handle(request, "claude")
+    # then
+    assert output != ALLOW
+
+
+def test_projects_폴더_밖의_기록_경로는_메모리_폴더를_정하지_못해_답하지_않는다(project, memory):
+    # given
+    request = memory_request(project, "Write", memory["linked"] / "memory" / "a.md", memory["base"] / "t" / "s1.jsonl")
+    # when
+    output = guard.handle(request, "claude")
+    # then
+    assert output != ALLOW
+
+
+@pytest.mark.parametrize("tool", ["NotebookEdit"])
+def test_쓰기_편집_도구가_아니면_메모리_파일도_답하지_않는다(project, memory, tool):
+    # given
+    request = memory_request(project, tool, memory["linked"] / "memory" / "a.md", memory["linked"] / "s1.jsonl")
+    # when
+    output = guard.handle(request, "claude")
+    # then
+    assert output != ALLOW
+
+
+def test_읽기는_메모리_파일이어도_답하지_않는다(project, memory):
+    # given
+    path = memory["linked"] / "memory" / "a.md"
+    request = {**event(project, "Read", {"file_path": str(path)}), "transcript_path": str(memory["linked"] / "s1.jsonl")}
+    # when
+    output = guard.handle(request, "claude")
+    # then
+    assert output != ALLOW
+
+
+def test_기록_경로가_없으면_정리한_프로젝트_폴더_이름이_맞는_메모리만_허용한다(project, memory, monkeypatch):
+    # given
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", "/tmp/work/demo")
+    own = memory_request(project, "Write", memory["linked"] / "memory" / "a.md")
+    other = memory_request(project, "Write", memory["other"] / "memory" / "a.md")
+    # when
+    outputs = [guard.handle(own, "claude"), guard.handle(other, "claude")]
+    # then
+    assert outputs[0] == ALLOW
+    assert outputs[1] != ALLOW
+
+
+def test_기록_경로가_null이어도_정리한_프로젝트_폴더_이름으로_판단한다(project, memory, monkeypatch):
+    # given
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", "/tmp/work/demo")
+    request = memory_request(project, "Write", memory["linked"] / "memory" / "a.md", transcript=None)
+    # when
+    output = guard.handle(request, "claude")
+    # then
+    assert output == ALLOW
+
+
+def test_기록_경로가_없고_프로젝트_폴더도_모르면_답하지_않는다(project, memory, monkeypatch):
+    # given
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR")
+    request = memory_request(project, "Write", memory["linked"] / "memory" / "a.md")
+    # when
+    output = guard.handle(request, "claude")
+    # then
+    assert output != ALLOW
+
+
+def test_기록_경로가_없으면_설정_폴더_변수가_없을_때_홈의_claude_projects를_쓴다(project, memory, monkeypatch):
+    # given
+    home = memory["base"] / "home"
+    (home / ".claude").mkdir(parents=True)
+    (home / ".claude" / "projects").symlink_to(memory["real"].parent, target_is_directory=True)
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", "/tmp/work/demo")
+    request = memory_request(project, "Write", home / ".claude" / "projects" / PROJECT_FOLDER / "memory" / "a.md")
+    # when
+    output = guard.handle(request, "claude")
+    # then
+    assert output == ALLOW
+
+
+def test_메모리_md_쓰기_허용은_사전_도구_호출_결정을_바꾸지_않는다(project, memory):
+    # given
+    request = memory_request(project, "Write", memory["linked"] / "memory" / "a.md", memory["linked"] / "s1.jsonl",
+                             name="PreToolUse")
+    # when
+    output = guard.handle(request, "claude")
+    # then
+    assert output is None or output["hookSpecificOutput"].get("permissionDecision") != "allow"

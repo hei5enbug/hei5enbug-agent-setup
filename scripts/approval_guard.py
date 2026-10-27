@@ -5164,8 +5164,47 @@ def _removes_only_inside_temporary_root(command, cwd):
             and all(entry is True for entry in commands))
 
 
-def _claude_permission(session, outcome, tool_input, tool_name, cwd):
+MEMORY_TOOLS = frozenset({"Write", "Edit", "MultiEdit"})
+
+
+def _memory_project_folder(event):
+    """The folder of this session's project under Claude's projects folder: the transcript path's nearest ancestor whose
+    parent is named `projects`, else, only when the event has no transcript path, the folder that the sanitized
+    CLAUDE_PROJECT_DIR names under `$CLAUDE_CONFIG_DIR/projects` or `~/.claude/projects`."""
+    transcript = event.get("transcript_path") if isinstance(event, dict) else None
+    if transcript is not None:
+        if not isinstance(transcript, str) or not transcript:
+            return None
+        return next((parent for parent in Path(transcript).parents if parent.parent.name == "projects"), None)
+    project = os.environ.get("CLAUDE_PROJECT_DIR")
+    if not project:
+        return None
+    configured = os.environ.get("CLAUDE_CONFIG_DIR")
+    root = Path(configured) if configured else Path.home() / ".claude"
+    return root / "projects" / re.sub(r"[^A-Za-z0-9]", "-", project)
+
+
+def _auto_memory_file(tool_input, event, cwd):
+    """Whether a Write, Edit, or MultiEdit targets a Markdown file inside this session's own auto-memory folder, after
+    both the file and the folder resolve through links, and the folder stays inside the project folder."""
+    path = tool_input.get("file_path") if isinstance(tool_input, dict) else None
+    if not isinstance(path, str) or not path or "\0" in path or not path.endswith(".md") or path.endswith("/.md"):
+        return False
+    project = _memory_project_folder(event)
+    if project is None:
+        return False
+    try:
+        folder = (project / "memory").resolve()
+        target = (Path(cwd) / os.path.expanduser(path)).resolve()
+        return folder.is_relative_to(project.resolve()) and target != folder and target.is_relative_to(folder)
+    except (OSError, RuntimeError, ValueError):
+        return False
+
+
+def _claude_permission(session, outcome, tool_input, tool_name, cwd, event=None):
     """Claude's PermissionRequest answers `allow` only for what the session's write approval already covers."""
+    if outcome.kind in ("pass", "write") and tool_name in MEMORY_TOOLS and _auto_memory_file(tool_input, event, cwd):
+        return approval_state.permission_allow()
     if outcome.kind == "pass":
         if tool_name in EDIT_TOOLS:
             return _edit_permission(session, tool_input, tool_name, cwd)
@@ -5319,7 +5358,7 @@ def _decide(name, host, session, outcome, tool_use_id=None, tool_input=None, too
         return None
     if name == "PermissionRequest":
         if host == "claude":
-            return _claude_permission(session, outcome, tool_input, tool_name, cwd)
+            return _claude_permission(session, outcome, tool_input, tool_name, cwd, event)
         return codex_permission(session, outcome, tool_use_id, tool_input, tool_name, event)
     return None
 
