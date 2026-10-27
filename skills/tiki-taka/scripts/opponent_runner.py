@@ -464,17 +464,20 @@ def run_supervised(
 
 
 MCP_SERVER_NAME = re.compile(r"[A-Za-z0-9_-]+")
+MCP_LIST_TIMEOUT_SECONDS = 60
 
 
-def codex_mcp_off(repo: Path, timeout_seconds: int) -> list[str]:
-    """Codex가 설정한 MCP 서버마다 끄는 -c 설정을 만든다. 목록을 읽지 못하면 MCP를 켠 채 실행하지 않는다."""
+def codex_mcp_off(repo: Path) -> list[str]:
+    """Codex가 설정한 MCP 서버마다 끄는 -c 설정을 만든다. 목록을 읽지 못하면 MCP를 켠 채 실행하지 않는다.
+
+    목록 조회는 상대 응답이 아니므로 응답 제한 시간과 별개의 제한 시간을 쓴다."""
     try:
         completed = subprocess.run(
             ["codex", "mcp", "list", "--json"],
             cwd=repo,
             capture_output=True,
             text=True,
-            timeout=timeout_seconds,
+            timeout=MCP_LIST_TIMEOUT_SECONDS,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
@@ -594,7 +597,7 @@ def invoke_opponent(
 
     try:
         if args.opponent == "codex":
-            mcp_off = codex_mcp_off(repo, args.timeout_seconds)
+            mcp_off = codex_mcp_off(repo)
             participant = codex_participant_command(repo, output, effort, session_id, mcp_off)
             command = supervisor_command(
                 "codex",

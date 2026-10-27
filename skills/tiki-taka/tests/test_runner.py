@@ -59,6 +59,7 @@ class RunnerTest(unittest.TestCase):
                 if mcp_log:
                     with open(mcp_log, "a", encoding="utf-8") as target:
                         target.write(json.dumps({"argv": arguments, "cwd": os.getcwd()}) + "\n")
+                time.sleep(float(os.environ.get("FAKE_MCP_DELAY", "0")))
                 if os.environ.get("FAKE_MCP_EXIT"):
                     print("fake mcp failure", file=sys.stderr)
                     raise SystemExit(int(os.environ["FAKE_MCP_EXIT"]))
@@ -602,6 +603,18 @@ class RunnerTest(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertTrue((state / "uncertain").exists())
+        self.assertIn("시간 초과", result.stderr)
+
+    def test_느린_MCP_목록_조회는_응답_제한_시간을_쓰지_않는다(self) -> None:
+        """Codex MCP 목록 조회가 응답 제한 시간보다 오래 걸려도 교환을 시작하고, 응답 시간 초과만 불확실 상태로 남긴다."""
+        # given
+        state = self.root / "slow-mcp-state"
+        self.environment["FAKE_MCP_DELAY"] = "1.5"
+        # when
+        result = self.run_runner("codex", state, "--max-exchanges", "1", "--timeout-seconds", "1", delay=3)
+        # then
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue((state / "uncertain").exists(), result.stderr)
         self.assertIn("시간 초과", result.stderr)
 
     def test_detached_job_can_be_observed_and_collected(self) -> None:
