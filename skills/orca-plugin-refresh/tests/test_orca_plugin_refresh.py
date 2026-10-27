@@ -1444,6 +1444,26 @@ class UpdateTest(unittest.TestCase):
         (instructions / "policy.md").write_text(instruction or f"{host} {version}\n", encoding="utf-8")
         return {"version": version, "root": root.as_posix()}
 
+    def test_Codex는_훅_정의가_같아도_플러그인_파일이_바뀌면_다시_신뢰하라고_경고한다(self):
+        """Codex 훅 신뢰는 플러그인 파일 전체를 따르므로 지침 파일만 바뀌어도 경고하고, 파일이 그대로면 경고하지 않는다."""
+        # Given
+        codex_before = self.install("codex", "1.0.0", instruction="old\n")
+        codex_after = self.install("codex", "1.1.0", instruction="new\n")
+        states = [codex_before, codex_after, codex_before, codex_before]
+
+        # When
+        with (
+            patch.object(refresh, "installed", side_effect=lambda host: states.pop(0)),
+            patch.object(refresh, "run", side_effect=lambda argv, **kwargs: None),
+            patch.object(refresh, "executable", side_effect=lambda name: name),
+        ):
+            changed = refresh.update_host("codex")
+            same = refresh.update_host("codex")
+
+        # Then
+        self.assertEqual(["codex_hooks_need_trust"], [warning["code"] for warning in changed["warnings"]])
+        self.assertEqual([], same["warnings"])
+
     def test_같은_버전의_미배포_변경과_Codex_훅_변경을_경고한다(self):
         """Claude가 같은 버전이라 새 파일을 받지 못하면 버전을 올리라고, Codex 훅 정의가 바뀌면 다시 신뢰하라고 경고한다."""
         # Given
@@ -2090,25 +2110,27 @@ class UpdateTest(unittest.TestCase):
             self.assertTrue(result["hosts"][host]["digest"])
         self.assertEqual([], fake.installs())
 
-    def test_Codex_훅이_바뀌거나_생기거나_없어지면_동반_플러그인도_다시_신뢰하라고_경고한다(self):
-        """Codex 동반 플러그인의 hooks.json이 달라지거나 새로 생기거나 사라지면 경고하고, 같거나 Claude이면 경고하지 않는다."""
+    def test_Codex_훅이_바뀌거나_생기거나_없어지거나_훅이_있는_플러그인의_파일이_바뀌면_동반_플러그인도_다시_신뢰하라고_경고한다(self):
+        """Codex는 플러그인 파일 전체로 훅 신뢰를 정하므로, 훅 정의가 달라지거나 생기거나 사라질 때와 훅이 있는 플러그인의 파일이 바뀔 때 경고하고, 파일이 같거나 훅이 없거나 Claude이면 경고하지 않는다."""
         # Given
         hooks_a = [{"type": "command", "command": "echo a"}]
         hooks_b = [{"type": "command", "command": "echo b"}]
-        cases = [("codex", None, hooks_a, True), ("codex", hooks_a, hooks_b, True), ("codex", hooks_a, None, True),
-                 ("codex", hooks_a, hooks_a, False), ("codex", None, None, False), ("claude", hooks_a, hooks_b, False)]
+        cases = [("codex", None, hooks_a, "1.1.0", True), ("codex", hooks_a, hooks_b, "1.1.0", True),
+                 ("codex", hooks_a, None, "1.1.0", True), ("codex", hooks_a, hooks_a, "1.1.0", True),
+                 ("codex", hooks_a, hooks_a, "1.0.0", False), ("codex", None, None, "1.1.0", False),
+                 ("claude", hooks_a, hooks_b, "1.1.0", False)]
 
-        for index, (host, before, after, warned) in enumerate(cases):
-            with self.subTest(host=host, before=before, after=after):
+        for index, (host, before, after, version, warned) in enumerate(cases):
+            with self.subTest(host=host, before=before, after=after, version=version):
                 fake = FakeCli()
                 plugin_id = f"hk{index}@mk"
-                self.stage_companion(fake, host, plugin_id, "1.0.0", "1.1.0", old={"hooks": before}, new={"hooks": after})
+                self.stage_companion(fake, host, plugin_id, "1.0.0", version, old={"hooks": before}, new={"hooks": after})
 
                 # When
                 result = self.run_with(fake, refresh.refresh_companion, host, plugin_id, True, {})
 
                 # Then
-                self.assertEqual("updated", result["status"])
+                self.assertEqual("updated" if version != "1.0.0" else "current", result["status"])
                 self.assertEqual(["codex_hooks_need_trust"] if warned else [], [warning["code"] for warning in result["warnings"]])
 
     def test_Claude는_에이전트_환경에서도_설치한다(self):

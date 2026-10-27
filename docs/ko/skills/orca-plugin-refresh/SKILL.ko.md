@@ -73,7 +73,8 @@ compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 �
    업데이트가 이 스킬을 불러온 설치 디렉터리를 삭제할 수 있기 때문이다. 모든 경고를 보고한다.
    - `unreleased_same_version`: 버전이 바뀌지 않아 Claude Code가 설치본을 유지한다. 이 파일이 Claude Code에
      반영되려면 버전을 올려야 한다고 알린다.
-   - `codex_hooks_need_trust`: 플러그인의 훅 정의가 바뀌었거나 새로 생겼거나 사라졌다. Codex가 신뢰하지 않은
+   - `codex_hooks_need_trust`: 플러그인의 훅 정의가 바뀌었거나 새로 생겼거나 사라졌거나, 훅이 있는 플러그인의
+     파일이 하나라도 바뀌었다. Codex는 훅 신뢰를 플러그인의 모든 파일에 묶기 때문이다. Codex가 신뢰하지 않은
      훅을 건너뛰므로 Codex `/hooks`에서 그 플러그인의 훅을 신뢰하도록 요청한다.
    - `unreleased_check_unavailable`: Claude Code가 같은 버전의 파일을 놓쳤는지 확인할 수 없다. 이유를 알린다.
 3. **세션에 적용한다.** 이 플러그인의 호스트 업데이트가 성공했거나 `apply-installed` 결과에 그 호스트의 오류가

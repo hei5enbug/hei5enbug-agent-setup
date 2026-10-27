@@ -62,7 +62,8 @@ CODEX_TURN_ENV = ("CODEX_THREAD_ID", "CODEX_SESSION_ID")
 CODEX_IDLE_EVENTS = {"task_complete", "turn_aborted"}
 ROLLOUT_RECENT_SECONDS = 30 * 60
 ROLLOUT_TAIL_BYTES = 64 * 1024
-HOOKS_TRUST_WARNING = {"code": "codex_hooks_need_trust", "message": "Hook definitions changed; review and trust the plugin hooks in Codex /hooks, or they are skipped."}
+HOOKS_TRUST_WARNING = {"code": "codex_hooks_need_trust", "message": "The plugin's hooks or files changed, which resets Codex hook trust; review and trust the plugin hooks in Codex /hooks, or they are skipped."}
+BUNDLE_SKIPPED_DIRS = frozenset({"__pycache__", ".venv"})
 RELOAD_DONE = re.compile(r"Reloaded: \d+ plugins?")
 RELOAD_REFUSED = re.compile(r"reload changes MCP tools|/reload-plugins --force", re.IGNORECASE)
 CLAUDE_COMPACTED = re.compile(r"Compacted|Conversation compacted")
@@ -567,6 +568,7 @@ def update_host(host: str, context: dict | None = None) -> dict:
         if local.get("note"):
             result["note"] = local["note"]
         return result
+    before_bundle = bundle_digest(Path(before["root"])) if host == "codex" else None
     blocked = run_install(host, PLUGIN_ID, context)
     if blocked:
         blocked.details.update(root=before["root"], recovery_command=recovery_command(before["root"], context.get("ids", ())))
@@ -592,7 +594,8 @@ def update_host(host: str, context: dict | None = None) -> dict:
             result["warnings"].append(
                 {"code": "unreleased_same_version", "message": "Claude Code keeps the installed copy because the version did not change; bump the version to release these files.", "files": pending[:20]}
             )
-    if host == "codex" and before_snapshot["hooks"] != after_snapshot["hooks"]:
+    if host == "codex" and codex_trust_reset(before_snapshot["hooks"], after_snapshot["hooks"], before_bundle,
+                                             bundle_digest(Path(after["root"]))):
         result["warnings"].append(dict(HOOKS_TRUST_WARNING))
     return result
 
@@ -689,6 +692,29 @@ def hooks_digest(host: str, root: Path) -> str | None:
     return hashlib.sha256(hooks_bytes).hexdigest() if hooks_bytes is not None else None
 
 
+def bundle_digest(root: Path) -> str | None:
+    """Hash every file of an installed plugin the way Codex scopes hook trust, skipping bytecode, virtual environments,
+    and package metadata; None when the folder cannot be read."""
+    digest = hashlib.sha256()
+    try:
+        for path in sorted(Path(root).rglob("*")):
+            relative = path.relative_to(root)
+            if (set(relative.parts) & BUNDLE_SKIPPED_DIRS or any(part.endswith(".egg-info") for part in relative.parts)
+                    or path.suffix == ".pyc" or not path.is_file()):
+                continue
+            digest.update(relative.as_posix().encode("utf-8") + b"\0" + path.read_bytes() + b"\0")
+    except OSError:
+        return None
+    return digest.hexdigest()
+
+
+def codex_trust_reset(hooks_before: str | None, hooks_after: str | None, bundle_before: str | None,
+                      bundle_after: str | None) -> bool:
+    """Whether an install leaves Codex hook trust to redo: the hook definitions changed, or a plugin that has hooks
+    changed any file, since Codex ties trust to the whole plugin."""
+    return hooks_before != hooks_after or (hooks_after is not None and (bundle_before != bundle_after or bundle_after is None))
+
+
 def validate_companion(host: str, plugin_id: str, found: dict) -> str | None:
     """Check the installed manifest and every plugin-root hook target; return the hook files digest, None without one."""
     root = found["root"]
@@ -711,6 +737,7 @@ def refresh_companion(host: str, plugin_id: str, update: bool, context: dict) ->
                 result["note"] = found["note"]
             return result
         before_hooks = hooks_digest(host, found["root"])
+        before_bundle = bundle_digest(found["root"]) if host == "codex" else None
         if update:
             blocked = run_install(host, plugin_id, context)
             if blocked:
@@ -722,7 +749,8 @@ def refresh_companion(host: str, plugin_id: str, update: bool, context: dict) ->
             result["after_version"] = found["version"]
         after_hooks = validate_companion(host, plugin_id, found)
         result["status"] = "updated" if result["after_version"] != result["before_version"] else "current"
-        if update and host == "codex" and before_hooks != after_hooks:
+        if update and host == "codex" and codex_trust_reset(before_hooks, after_hooks, before_bundle,
+                                                            bundle_digest(found["root"])):
             result["warnings"].append(dict(HOOKS_TRUST_WARNING))
     except RefreshError as error:
         result.update(status="error", code=error.code, message=error.message)
