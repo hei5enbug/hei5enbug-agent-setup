@@ -3369,6 +3369,28 @@ def _secret_text(value):
     return bool(READONLY_SECRET_TEXT.search(TOKEN_COUNT_WORD.sub("", value)))
 
 
+SEARCH_TEXT_METHODS = frozenset({
+    "index", "find", "rfind", "rindex", "split", "rsplit", "partition", "rpartition", "replace", "startswith",
+    "endswith", "count", "strip", "lstrip", "rstrip",
+})
+SEARCH_TEXT_REGEX = frozenset({"search", "sub", "subn", "findall", "finditer", "match", "fullmatch", "compile", "split"})
+
+
+def _search_text_literal(node, parents, bound):
+    """Whether the string literal `node` is only search text: the first argument of a string method or of a `re`
+    function, or the left operand of `in` and `not in`. Such a literal is never opened, sent, or read as a name."""
+    parent = parents.get(node)
+    if isinstance(parent, ast.Compare):
+        return parent.left is node and isinstance(parent.ops[0], (ast.In, ast.NotIn))
+    if not (isinstance(parent, ast.Call) and parent.args and parent.args[0] is node
+            and isinstance(parent.func, ast.Attribute)):
+        return False
+    func = parent.func
+    if isinstance(func.value, ast.Name) and bound.get(func.value.id) == "re":
+        return func.attr in SEARCH_TEXT_REGEX
+    return func.attr in SEARCH_TEXT_METHODS
+
+
 def _environ_literal_read(node, parents, bound):
     """Whether `node`, an `os.environ` attribute, is only read as `os.environ.get(<literal>, ...)` or
     `os.environ[<literal>]` with a literal name that does not look secret."""
@@ -3535,7 +3557,8 @@ def _read_only_python(tree, runs=frozenset(), execs=frozenset()):
     for node in ast.walk(tree):
         if node in vetted and not isinstance(node, ast.Call):
             continue
-        if isinstance(node, ast.Constant) and isinstance(node.value, str) and _secret_text(node.value):
+        if (isinstance(node, ast.Constant) and isinstance(node.value, str) and _secret_text(node.value)
+                and not _search_text_literal(node, parents, bound)):
             return False
         if isinstance(node, ast.Attribute):
             if (_blocked_attribute(node, parents, bound, aliased) or READONLY_PROCESS.fullmatch(node.attr)

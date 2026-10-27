@@ -1827,3 +1827,81 @@ def test_git_읽기_subprocess와_가드_모듈_가져오기가_함께_있으면
     result = blob_decision(home, monkeypatch, command)
     # then
     assert result in ("ask", "deny"), result
+
+
+# --- L2-3 recorded form. a search string that merely looks like a secret word is text, not a secret read ---------------
+
+RECORDED_BODY = '''import subprocess, os
+from pathlib import Path
+cur = Path("tests/test_demo.py").read_text()
+head = subprocess.run(["git","show","HEAD:tests/test_demo.py"],capture_output=True,text=True,check=True).stdout
+start = cur.index("\\n\\nCREDENTIAL_PROMPT_CONFIG = {")
+Path(os.environ["TMPDIR"],"item1.py").write_text(head + cur[start:])
+'''
+
+
+def secret_word_command(middle, writes_value="head + cur"):
+    body = BLOB_TEMPLATE.format(blob=BLOB_PATH, argv='["git","show","HEAD:tests/test_demo.py"]',
+                                write=f'{middle}\nPath("/tmp/work/out.py").write_text({writes_value})')
+    return f"python3 - <<'EOF'\n{body}EOF"
+
+
+def test_기록된_L2_3_본문은_검색_문자열에_credential이_있어도_묻지_않는다(home, monkeypatch):
+    # given
+    command = f"python3 - <<'EOF'\n{RECORDED_BODY}EOF"
+    # when
+    result = blob_decision(home, monkeypatch, command)
+    # then
+    assert result not in ("ask", "deny"), result
+
+
+@pytest.mark.parametrize("middle", [
+    'pos = cur.index("\\nTOKEN_LIMIT = ")',
+    'pos = cur.find("password_hint")',
+    'pos = cur.rfind("secret_key")',
+    'parts = cur.split("# credentials")',
+    'parts = cur.rsplit("token", 1)',
+    'parts = cur.partition("PASSWORD_FIELD")',
+    'parts = cur.rpartition("secret")',
+    'cur = cur.replace("old_token", "new_name")',
+    'ok = cur.startswith("# secret")',
+    'ok = cur.endswith("token\\n")',
+    'n = cur.count("password")',
+    'cur = cur.strip("# credential ")',
+    'ok = "API_TOKEN = " in cur',
+    'ok = "password" not in cur',
+    'import re\nm = re.search(r"(?m)^SECRET_\\w+", cur)',
+    'import re\ncur = re.sub(r"token=\\w+", "", cur)',
+    'import re\nfound = re.findall(r"password\\s*=", cur)',
+    'import re\nm = re.match(r"credential", cur)',
+    'import re\npattern = re.compile(r"secret_\\d+")',
+])
+def test_검색_문자열로만_쓰인_비밀_단어는_읽기_전용_임시_쓰기_스크립트에서_묻지_않는다(home, monkeypatch, middle):
+    # given
+    command = secret_word_command(middle)
+    # when
+    result = blob_decision(home, monkeypatch, command)
+    # then
+    assert result not in ("ask", "deny"), (middle, result)
+
+
+@pytest.mark.parametrize("middle", [
+    'secret = open(os.path.expanduser("~/.netrc")).read()',
+    'print(os.environ["API_TOKEN"])',
+    'print(Path("secrets.env").read_text())',
+    'import keyring\nprint(keyring.get_password("svc", "user"))',
+    'print(Path("credentials.json").read_text())',
+    'text = open("password.txt").read()',
+    'print("token")',
+    'sys_name = "API_TOKEN"; value = os.environ.get(sys_name)',
+    'print(os.environ.get("API_TOKEN"))',
+    'path = "secrets.env"; print(Path(path).read_text())',
+    'print(cur.replace("a", "b") + open("secret.txt").read())',
+])
+def test_비밀을_읽거나_출력하는_리터럴은_임시_쓰기와_함께여도_계속_묻는다(home, monkeypatch, middle):
+    # given
+    command = secret_word_command(middle)
+    # when
+    result = blob_decision(home, monkeypatch, command)
+    # then
+    assert result in ("ask", "deny"), (middle, result)
