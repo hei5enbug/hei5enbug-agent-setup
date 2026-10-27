@@ -3899,6 +3899,97 @@ def _xargs_input_is_inert(argv, program, segment, segments, index, operators, st
     return _xargs_input_has_no_options(argv, program[1:], segment, producer)
 
 
+ONLY_MATCHING_FLAGS = re.compile(r"-[hoiE]+")
+ONLY_MATCHING_LONG = frozenset({"--only-matching", "--no-filename", "--ignore-case", "--extended-regexp"})
+BOUNDED_COUNT_LIMIT = 1000
+
+
+def _anchored_pattern(pattern, extended):
+    """Whether a grep pattern starts with a literal anchor of at least six characters and has no secret-name word, and
+    every variable part after it is a character class or a lone `.` with a count that is bounded or `*`: so `grep -o`
+    can print only text next to the anchor."""
+    if len(pattern) > 300 or "\n" in pattern or SECRET_NAME.search(pattern):
+        return False
+    quantifier = re.compile(r"[*+?]|\{(\d+)(?:,(\d+))?\}" if extended else r"\*|\\\{(\d+)(?:,(\d+))?\\\}")
+    bounded = re.compile(r"\{(\d+)(?:,(\d+))?\}" if extended else r"\\\{(\d+)(?:,(\d+))?\\\}")
+    leading, variable, position = 0, False, 0
+    while position < len(pattern):
+        char = pattern[position]
+        class_match = re.compile(r"\[\^?[^\]\\\n\[]+\]").match(pattern, position)
+        if class_match or char == ".":
+            end = class_match.end() if class_match else position + 1
+            counted = quantifier.match(pattern, end)
+            if counted is None and class_match:
+                return False
+            if counted is not None:
+                if counted[0] in ("+", "?") and not extended or class_match is None and not bounded.fullmatch(counted[0]):
+                    return False
+                top = counted[2] or counted[1]
+                if top is not None and int(top) > BOUNDED_COUNT_LIMIT:
+                    return False
+                end = counted.end()
+            variable, position = True, end
+        elif pattern.startswith("\\.", position):
+            leading, position = leading + (not variable), position + 2
+        elif re.fullmatch(r"[^.\[\]*\\^$+?{}()|]", char):
+            if quantifier.match(pattern, position + 1):
+                return False
+            leading, position = leading + (not variable), position + 1
+        else:
+            return False
+    return leading >= 6
+
+
+def _anchored_only_matching(argv):
+    """Whether an `xargs grep` call prints only text that an anchored pattern matches: `-o`, a harmless option set, and
+    one pattern before the appended input."""
+    stripped, _ = strip_prefix(argv)
+    if (not stripped or os.path.basename(stripped[0]) != "grep" or stripped[-1] != XARGS_ARGUMENT
+            or sum(XARGS_ARGUMENT in word for word in stripped) != 1):
+        return False
+    patterns, flags = [], []
+    for word in stripped[1:-1]:
+        if ONLY_MATCHING_FLAGS.fullmatch(word) or word in ONLY_MATCHING_LONG:
+            flags.append(word)
+        elif word.startswith("-") or len(patterns) == 1:
+            return False
+        else:
+            patterns.append(word)
+    only = any(word == "--only-matching" or word.startswith("-") and not word.startswith("--") and "o" in word
+               for word in flags)
+    extended = any(word == "--extended-regexp" or not word.startswith("--") and "E" in word for word in flags)
+    return only and len(patterns) == 1 and _anchored_pattern(patterns[0], extended)
+
+
+VARIABLE_REWRITE = r"(?:\b(?:read|mapfile|readarray|getopts|let|printf|declare|typeset|eval)\b[^;&|\n]*|\bfor\s+){name}\b"
+
+
+def _xargs_temp_list(program, segment, cwd, variables, text, environment):
+    """Whether an `xargs` call takes its list from one `<` redirect of a file that lies inside a temporary root, with no
+    other redirect and no `-a` option. A variable in the path counts only when it holds a value from an assignment and
+    nothing before the call reads, loops over, or evaluates into it."""
+    if _xargs_reads_file(program[1:]) or len(segment.redirects) != 1 or segment.redirects[0][1] != "<":
+        return False
+    target = segment.redirects[0][2]
+    before = text[:segment.start]
+    for match in VARIABLE_REFERENCE.finditer(target):
+        name = match[1] or match[2]
+        if name not in variables or re.search(VARIABLE_REWRITE.format(name=re.escape(name)), before) or ":=" in before:
+            return False
+    expanded = _expand_path_variables(target, variables)
+    return "$" not in expanded and "`" not in expanded and _temp_path(expanded, cwd, environment)
+
+
+def _xargs_list_read(argv, program, segment, cwd, variables, text, environment):
+    """Whether `xargs grep` over a list file inside a temporary root prints only file names or counts (any pattern), or
+    only text next to an anchored pattern. Never `rg`, and never with an `--` before the input."""
+    stripped, _ = strip_prefix(argv)
+    if (not stripped or os.path.basename(stripped[0]) != "grep" or "--" in stripped
+            or not _xargs_temp_list(program, segment, cwd, variables, text, environment)):
+        return False
+    return _prints_no_content(argv) or _anchored_only_matching(argv)
+
+
 def _classify_argv(words, heredoc, cwd, depth, command, inherited_env=None, variables=None, choices=None,
                    raw=None):
     slot = len(_COMMAND_TRACE) if _COMMAND_TRACE is not None else None
@@ -4796,7 +4887,8 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
         if argv and (verdict.kind == "read" or verdict.kind == "pass" and os.path.basename(
                 (strip_prefix(argv)[0] or [""])[0]) in OPERAND_READERS) and not (
                 _prints_no_content(argv) and _xargs_input_is_inert(argv, program, segment, segments, index, operators,
-                                                                    statics)):
+                                                                    statics)) and not _xargs_list_read(
+                argv, program, segment, command_cwd, variables, text, current_env):
             verdict = _sensitive(text)
         inert = verdict.kind == "pass" and (not name or name in FILE_INERT) and flow.outside_loop_header()
         files_stable = files_stable and (verdict.kind == "read" or inert) and _redirects_allowed([segment])

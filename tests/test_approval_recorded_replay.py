@@ -765,3 +765,79 @@ def test_가드_상태_폴더를_실제로_다루는_명령은_계속_거부한�
     output = guard.handle(bash(command, home / "project"), "claude")
     # then
     assert decision(output) == "deny", (title, output)
+
+
+# --- J6. anchored grep -o and list-file xargs greps over transcripts ---------------------------------------------------------
+
+J6_LOOP = ("while read f; do head -c 200000 \"$f\" | grep -o '\"entrypoint\":\"[^\"]*\"' | head -1 | tr '\\n' ' '; "
+           "echo \"$f\" | grep -c subagents; done < $S/files.txt | sort | uniq -c")
+J6_CONTENT = "xargs grep -h -o '\"content\":\"[^\"]\\{0,40\\}doesn.t want to proceed[^\"]\\{0,200\\}' < $S/files.txt | head -3"
+J6_EVENT = "xargs grep -h -o '\"hookEvent\":\"PermissionRequest\"' < $S/files.txt | wc -l"
+J6_TYPES = "xargs grep -h -o '\"type\":\"[a-z_]*\"' < $S/files.txt | sort | uniq -c | sort -rn | head -40"
+J6_NAME = ("f=$(xargs grep -l '쓰기 승인:' < $S/files.txt | head -1); echo $f; grep -n '쓰기 승인:' \"$f\" | head -2 | "
+           "cut -c1-1500")
+
+
+def j6(base, body):
+    return f"cd {base}/project; S={base}/scratchpad; {body}"
+
+
+@pytest.mark.parametrize("body", [
+    J6_LOOP + "; " + J6_CONTENT + "; " + J6_EVENT,
+    J6_TYPES,
+    J6_NAME,
+    "xargs grep -c 'anything at all' < $S/files.txt | sort | uniq -c",
+    "xargs grep -l -i 'x' < $S/files.txt | wc -l",
+    "xargs grep -h -o '\"entrypoint\":\"[^\"]*\"' < $S/files.txt | sort | uniq -c",
+    "xargs grep -h -oE '\"entrypoint\":\"[^\"]{0,40}\"' < $S/files.txt | head -3",
+    "while read f; do head -c 100 \"$f\" | grep -o '\"entrypoint\":\"[^\"]*\"' | head -1; done < $S/files.txt",
+])
+def test_목록_파일의_xargs_grep과_고정_앵커_grep_o는_기록된_모양으로_묻지_않는다(home, body):
+    # given
+    command = j6(home, body)
+    # when
+    output = guard.handle(bash(command, home / "project"), "claude")
+    # then
+    assert decision(output) not in ("ask", "deny"), (body, output)
+
+
+@pytest.mark.parametrize("body", [
+    "xargs grep -h -o 'ab[^\"]*' < $S/files.txt",
+    "xargs grep -h -o '\"api_token\":\"[^\"]*\"' < $S/files.txt",
+    "xargs grep -h -o '\"entrypoint\":\"[^\"]*\"' < /home/test/list.txt",
+    "xargs grep -h -o 'entrypoint.*' < $S/files.txt",
+    "xargs grep -h -o '\"entrypoint\"[\\s\\S]*' < $S/files.txt",
+    "xargs grep -h -o '\"entrypoint\":\"[^\"]\\{0,\\}\"' < $S/files.txt",
+    "xargs grep -h '\"entrypoint\":\"' < $S/files.txt",
+    "xargs grep -h -o -A3 '\"entrypoint\":\"[^\"]*\"' < $S/files.txt",
+    "xargs grep -h -o -f /home/test/patterns '\"entrypoint\":\"' < $S/files.txt",
+    "xargs rg -o '\"entrypoint\":\"[^\"]*\"' < $S/files.txt",
+    "xargs rg -l 'x' < $S/files.txt",
+    "xargs grep -l 'x' < /home/test/list.txt",
+    "xargs grep -c 'x' < /home/test/list.txt",
+    "xargs grep -h -o '\"entrypoint\":\"[^\"]*\"' -- < $S/files.txt",
+    "xargs grep -h -o '\"entrypoint\":\"[^\"]*\"' < $S/files.txt > /home/test/out.txt",
+])
+def test_짧은_앵커나_비밀_이름이나_범위_없는_패턴이나_목록_밖_파일이면_계속_묻는다(home, body):
+    # given
+    command = j6(home, body)
+    # when
+    output = guard.handle(bash(command, home / "project"), "claude")
+    # then
+    assert decision(output) == "ask", (body, output)
+
+
+@pytest.mark.parametrize("body", [
+    "read S < /home/test/where.txt; xargs grep -l x < $S/files.txt",
+    "for S in /home/test; do xargs grep -l x < $S/files.txt; done",
+    "xargs grep -l x < $UNSET/files.txt",
+    "xargs -a /home/test/list.txt grep -l x < $S/files.txt",
+    "xargs grep -h -o '.\\{150\\}PermissionRequest.\\{150\\}' < $S/files.txt | head -3",
+])
+def test_목록_경로가_바뀌었거나_앵커가_앞에_없으면_xargs_grep은_계속_묻는다(home, body):
+    # given
+    command = j6(home, body)
+    # when
+    output = guard.handle(bash(command, home / "project"), "claude")
+    # then
+    assert decision(output) == "ask", (body, output)
