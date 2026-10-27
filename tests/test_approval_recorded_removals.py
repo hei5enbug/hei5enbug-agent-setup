@@ -621,3 +621,40 @@ def test_평가_작업_공간_폴더_아래에_실행_기록_폴더가_없으면
     outcome = classify(f"rm -rf {eval_root()}/deterministic/c7")
     # then
     assert outcome.kind == "pass"
+
+
+# --- F4. 스태시의 인덱스 부모는 작업 트리가 같아도 따로 지킨다 ------------------------------------------------------------------
+
+def stash_with_staged_content(home, apply_flags):
+    """HEAD holds A, the index B, and the work tree C; the stash is applied back with `apply_flags`."""
+    root = home / "repo"
+    root.mkdir()
+    (root / "a.txt").write_text("A\n")
+    git(root, "init", "-q")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "base")
+    (root / "a.txt").write_text("B\n")
+    git(root, "add", "a.txt")
+    (root / "a.txt").write_text("C\n")
+    git(root, "stash", "-q")
+    git(root, "stash", "apply", "-q", *apply_flags)
+    return root
+
+
+def test_스테이지한_내용이_스태시에만_남아_있으면_작업_트리가_같아도_stash_drop은_매번_묻는다(home):
+    # given
+    root = stash_with_staged_content(home, [])
+    # when
+    outcome = classify("git stash drop -q", root)
+    # then
+    assert outcome.kind == "always" and outcome.every_time is True
+
+
+def test_인덱스까지_되살렸으면_stash_drop은_매번_묻지_않는다(home):
+    # given
+    root = stash_with_staged_content(home, ["--index"])
+    # when
+    outcome = classify("git stash drop -q", root)
+    # then
+    assert outcome.kind in ("pass", "write")
+    assert outcome.every_time is False

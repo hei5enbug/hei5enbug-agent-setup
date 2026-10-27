@@ -1790,7 +1790,7 @@ TOP_STASH = "stash@{0}"
 
 def _lossless_stash_drop(global_args, args, cwd, env):
     """Whether `git stash drop` of the newest stash, named or not, loses nothing: the stash holds no untracked files, and
-    the work tree already equals it for every tracked file. Any other form, a failed or timed out query, or an earlier
+    the work tree already equals it for every tracked file and the index equals the stash's index commit. Any other form, a failed or timed out query, or an earlier
     command that may change files means no."""
     flags = [arg for arg in args[2:] if arg.startswith("-")]
     operands = [arg for arg in args[2:] if not arg.startswith("-")]
@@ -1803,7 +1803,8 @@ def _lossless_stash_drop(global_args, args, cwd, env):
     commit = _git_lookup(directory, env, "rev-list", "--parents", "-n", "1", TOP_STASH, "--")
     if commit is None or len(commit.split()) != 3:
         return False
-    return _git_lookup(directory, env, "diff", "--quiet", TOP_STASH, "--") is not None
+    return (_git_lookup(directory, env, "diff", "--quiet", TOP_STASH, "--") is not None
+            and _git_lookup(directory, env, "diff", "--cached", "--quiet", TOP_STASH + "^2", "--") is not None)
 
 
 DEFAULT_BRANCHES = frozenset({"main", "master", "develop", "trunk"})
