@@ -412,10 +412,16 @@ def test_숫자_접미사가_붙은_운영_단어와_알_수_없는_이름은_�
     assert db_read_policy.is_production(name)
 
 
-def fake_kubectl(home, context):
+def fake_kubectl(home, context, delay=0):
     script = home / "bin" / "kubectl"
-    script.write_text(f'#!/bin/sh\ncase "$*" in *current-context*) echo {context};; *) echo fake;; esac\n')
+    script.write_text(f'#!/bin/sh\nsleep {delay}\ncase "$*" in *current-context*) echo {context};; *) echo fake;; esac\n')
     script.chmod(0o755)
+
+
+def stub_current_context(monkeypatch, context):
+    real = guard._lookup
+    monkeypatch.setattr(guard, "_lookup", lambda argv, env, cwd: context if argv[-2:] == ["config", "current-context"]
+                        else real(argv, env, cwd))
 
 
 @pytest.mark.parametrize("command", [
@@ -441,7 +447,7 @@ def test_데이터베이스_환경_변수가_개발_대상이면_크리티컬이
 
 def test_helm_컨텍스트_환경_변수도_운영이면_크리티컬이다(session_scope, monkeypatch):
     # given
-    fake_kubectl(session_scope, "demo-dev")
+    stub_current_context(monkeypatch, "demo-dev")
     classify = lambda command: guard.classify_text(command, str(session_scope))
     # then
     assert not classify("helm uninstall rel -n web").critical
@@ -449,6 +455,18 @@ def test_helm_컨텍스트_환경_변수도_운영이면_크리티컬이다(sess
     assert not classify("HELM_KUBECONTEXT=demo-prod helm uninstall rel --kube-context demo-dev -n web").critical
     monkeypatch.setenv("HELM_KUBECONTEXT", "demo-prod")
     assert classify("helm uninstall rel -n web").critical
+
+
+@pytest.mark.parametrize("current", ["demo-dev", "demo-prod"])
+@pytest.mark.parametrize("command", ["helm uninstall rel -n web", "kubectl delete pod x -n web"])
+def test_현재_컨텍스트_조회가_시간_초과되면_운영으로_보고_크리티컬이다(session_scope, monkeypatch, current, command):
+    # given
+    fake_kubectl(session_scope, current, delay=2)
+    monkeypatch.setattr(guard, "LOOKUP_TIMEOUT_SECONDS", 0.2)
+    # when
+    outcome = guard.classify_text(command, str(session_scope))
+    # then
+    assert outcome.critical
 
 
 @pytest.mark.parametrize("command", [
