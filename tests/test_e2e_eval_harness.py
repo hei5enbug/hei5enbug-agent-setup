@@ -9,6 +9,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -989,6 +990,7 @@ mode = os.environ.get("FAKE_MODE", "complete")
 child_file = os.environ.get("FAKE_CHILD")
 if child_file:
     import subprocess
+    time.sleep(float(os.environ.get("FAKE_SPAWN_DELAY", "0")))
     child = subprocess.Popen(["sleep", "30"], start_new_session=True)
     with open(child_file, "w") as handle:
         handle.write(str(child.pid))
@@ -1097,11 +1099,27 @@ class ProcessAndRunTest(unittest.TestCase):
         self.assertLess(result.wall_seconds, 10)
         self.assertLess(result.returncode, 0)
 
-    def start_child_env(self, mode: str, hold: str = "0") -> tuple[dict[str, str], Path]:
+    def start_child_env(self, mode: str, hold: str = "0", spawn_delay: str = "0") -> tuple[dict[str, str], Path]:
         child_file = self.root / "child.pid"
         self.addCleanup(lambda: child_file.is_file() and self.kill_quietly(int(child_file.read_text(encoding="utf-8"))))
-        env = {**os.environ, "FAKE_OUT": str(self.out), "FAKE_MODE": mode, "FAKE_CHILD": str(child_file), "FAKE_HOLD": hold}
+        env = {**os.environ, "FAKE_OUT": str(self.out), "FAKE_MODE": mode, "FAKE_CHILD": str(child_file), "FAKE_HOLD": hold,
+               "FAKE_SPAWN_DELAY": spawn_delay}
         return env, child_file
+
+    def start_timer_after_child(self, child_file: Path) -> None:
+        """Start the run's wall-clock limit only once the fake agent has started its child, so load cannot time the run
+        out before there is a descendant to count."""
+        original = process._wait_tracking
+
+        def wait_tracking(*args, **kwargs):
+            deadline = time.monotonic() + 30
+            while not child_file.is_file() and time.monotonic() < deadline:
+                time.sleep(0.05)
+            return original(*args, **kwargs)
+
+        patcher = mock.patch.object(process, "_wait_tracking", wait_tracking)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     @staticmethod
     def kill_quietly(pid: int) -> None:
@@ -1114,6 +1132,7 @@ class ProcessAndRunTest(unittest.TestCase):
         """role_runner처럼 start_new_session으로 뜬 자식이 타임아웃 뒤에도 남지 않고 orphans_killed로 센다."""
         # given
         env, child_file = self.start_child_env("hang")
+        self.start_timer_after_child(child_file)
 
         # when
         result = process.run_agent([str(self.fake)], self.root, env, self.root / "s.jsonl", self.root / "e.txt", 1.5, 0.3, 0.3, 0.2)
@@ -1150,9 +1169,10 @@ class ProcessAndRunTest(unittest.TestCase):
         self.assertEqual((result.orphans_killed, result.leftover_killed), (0, 0))
 
     def test_실행_기록에_정리한_자손_수가_들어간다(self):
-        """run.json에 orphans_killed와 leftover_killed가 남는다."""
+        """가짜 claude가 부하로 제한 시간보다 늦게 자식을 띄워도 run.json에 orphans_killed와 leftover_killed가 남는다."""
         # given
-        env, child_file = self.start_child_env("hang")
+        env, child_file = self.start_child_env("hang", spawn_delay="1.5")
+        self.start_timer_after_child(child_file)
         cfg = HarnessConfig(**{**self.cfg.__dict__, "extra_env": {k: v for k, v in env.items() if k.startswith("FAKE_")}})
 
         # when
