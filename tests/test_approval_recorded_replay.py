@@ -1434,3 +1434,148 @@ def test_exec가_없는_heredoc의_쓰기_판정은_바뀌지_않는다(home, j1
     result = j12_decision(home, command)
     # then
     assert result not in ("ask", "deny")
+
+
+# --- J14. the repository's own tracked, unmodified scripts run as plain `python3 <path>` --------------------------------------
+
+VALIDATE_SCRIPT = ("import subprocess, sys\n\ndef run(detector, skill):\n"
+                   "    return subprocess.run([sys.executable, str(detector), str(skill)], capture_output=True, text=True)\n"
+                   "\nif __name__ == '__main__':\n    print(run('check_x.py', sys.argv[1]))\n")
+J14_SCRIPTS = ("skills/skill-builder/scripts/quick_validate.py", "scripts/role_runner.py", "scripts/host_tool.py",
+               "skills/orca-plugin-refresh/scripts/orca_plugin_refresh.py", "hooks/x.py", "skills/demo/scripts/run_tests.py",
+               "skills/demo/scripts/release_notes.py", "skills/demo/scripts/model_runner.py")
+J14_LOOP = ("for s in decision-navigator deep-interview flowchart-design session-retro tiki-taka report-skill-gap; "
+            "do python3 skills/skill-builder/scripts/quick_validate.py skills/$s 2>&1 | tail -1; done")
+
+
+def j14_git(root, *args):
+    subprocess.run(["git", "-c", "user.name=demo", "-c", "user.email=demo@example.com", *args], cwd=root, check=True,
+                   capture_output=True)
+
+
+def j14_repo(root, name=PLUGIN_NAME):
+    (root / ".claude-plugin").mkdir(parents=True)
+    (root / ".claude-plugin" / "plugin.json").write_text(f'{{"name": "{name}"}}\n')
+    for script in J14_SCRIPTS:
+        (root / script).parent.mkdir(parents=True, exist_ok=True)
+        (root / script).write_text(VALIDATE_SCRIPT)
+    j14_git(root, "init", "-q")
+    j14_git(root, "add", "-A")
+    j14_git(root, "commit", "-q", "-m", "one")
+    return root
+
+
+@pytest.fixture
+def j14(home, monkeypatch):
+    monkeypatch.setenv("HOME", str(home / "user"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(home / "user" / ".local" / "state"))
+    return j14_repo(home / "scratchpad" / "repo")
+
+
+def j14_decision(home, command):
+    return decision(guard.handle(bash(command, home / "project"), "claude"))
+
+
+def test_추적되고_바뀌지_않은_저장소_검증_스크립트_반복_호출은_묻지_않는다(home, j14):
+    # given
+    command = f"cd {j14} && {J14_LOOP}"
+    # when
+    result = j14_decision(home, command)
+    # then
+    assert result not in ("ask", "deny")
+
+
+@pytest.mark.parametrize("call", [
+    "python3 -u skills/skill-builder/scripts/quick_validate.py skills/x",
+    "python3 ./skills/skill-builder/scripts/quick_validate.py skills/x extra --flag",
+    "python3 {repo}/skills/skill-builder/scripts/quick_validate.py {repo}/skills/x 2>&1 | tail -1",
+    "python3 skills/demo/scripts/run_tests.py > /dev/null",
+    "python3 skills/skill-builder/scripts/quick_validate.py x > {tmp}/out.txt",
+])
+def test_추적된_저장소_스크립트는_경로_표기와_일반_인자가_달라도_묻지_않는다(home, j14, call):
+    # given
+    command = f"cd {j14} && " + call.replace("{repo}", str(j14)).replace("{tmp}", str(home / "scratchpad"))
+    # when
+    result = j14_decision(home, command)
+    # then
+    assert result not in ("ask", "deny"), call
+
+
+def j14_change(repo, title):
+    script = repo / "skills" / "skill-builder" / "scripts" / "quick_validate.py"
+    if title == "unstaged edit":
+        script.write_text(VALIDATE_SCRIPT + "# edit\n")
+    elif title == "staged edit":
+        script.write_text(VALIDATE_SCRIPT + "# edit\n")
+        j14_git(repo, "add", str(script))
+    elif title == "untracked":
+        script.parent.joinpath("new_check.py").write_text(VALIDATE_SCRIPT)
+    elif title == "another plugin":
+        (repo / ".claude-plugin" / "plugin.json").write_text('{"name": "demo-plugin"}\n')
+        j14_git(repo, "commit", "-q", "-am", "rename")
+
+
+J14_ASKS = [
+    ("unstaged edit", "python3 skills/skill-builder/scripts/quick_validate.py x"),
+    ("staged edit", "python3 skills/skill-builder/scripts/quick_validate.py x"),
+    ("untracked", "python3 skills/skill-builder/scripts/new_check.py x"),
+    ("another plugin", "python3 skills/skill-builder/scripts/quick_validate.py x"),
+    ("excepted", "python3 skills/orca-plugin-refresh/scripts/orca_plugin_refresh.py status"),
+    ("excepted", "python3 hooks/x.py"),
+    ("excepted", "python3 skills/demo/scripts/model_runner.py x"),
+    ("excepted", "python3 skills/demo/scripts/release_notes.py x"),
+    ("excepted", "python3 scripts/approval_guard.py"),
+    ("outside", "python3 other/quick_validate.py x"),
+    ("environment", "DEMO=1 python3 skills/skill-builder/scripts/quick_validate.py x"),
+    ("env wrapper", "env DEMO=1 python3 skills/skill-builder/scripts/quick_validate.py x"),
+    ("redirect", "python3 skills/skill-builder/scripts/quick_validate.py x > /home/test/out"),
+    ("earlier edit", "sed -i 's/x/y/' skills/skill-builder/scripts/quick_validate.py; python3 skills/skill-builder/scripts/"
+     "quick_validate.py x"),
+]
+
+
+@pytest.mark.parametrize("title, call", J14_ASKS)
+def test_바뀌었거나_추적되지_않았거나_제외된_스크립트와_환경_리다이렉트가_있는_호출은_계속_묻는다(home, j14, title, call):
+    # given
+    (j14 / "other").mkdir()
+    (j14 / "other" / "quick_validate.py").write_text(VALIDATE_SCRIPT)
+    j14_git(j14, "add", "-A")
+    j14_git(j14, "commit", "-q", "-m", "other")
+    j14_change(j14, title)
+    # when
+    result = j14_decision(home, f"cd {j14} && {call}")
+    # then
+    assert result in ("ask", "deny"), (title, call, result)
+
+
+S04_TAIL = (J14_LOOP + "; env -u GIT_CONFIG_COUNT -u GIT_CONFIG_KEY_0 -u GIT_CONFIG_VALUE_0 python3 -m pytest -q "
+            "tests/test_korean_mirrors.py tests/test_public_boundary.py 2>&1 | tail -1; cd ~/.local/state/hei5enbug-agent-setup/"
+            "harness-eval/final && uv run -q --no-project --with tiktoken --with pyyaml python listing_tokens.py {wt} "
+            "< /dev/null | cut -c1-260")
+
+
+def test_기록된_s04_전체_명령은_묻지_않는다(home, j12, j14):
+    # given
+    command = j12_command(j14, tail=S04_TAIL)
+    # when
+    result = j12_decision(home, command)
+    # then
+    assert result not in ("ask", "deny")
+
+
+def test_기록된_s04_명령에서_검증_스크립트가_바뀌었으면_묻는다(home, j12, j14):
+    # given
+    j14_change(j14, "unstaged edit")
+    # when
+    result = j12_decision(home, j12_command(j14, tail=S04_TAIL))
+    # then
+    assert result == "ask"
+
+
+def test_role_runner는_기존_규칙대로_계속_묻지_않는다(home, j14):
+    # given
+    command = f"cd {j14} && python3 scripts/role_runner.py x"
+    # when
+    result = j14_decision(home, command)
+    # then
+    assert result not in ("ask", "deny")

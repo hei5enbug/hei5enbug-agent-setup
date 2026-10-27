@@ -1202,6 +1202,8 @@ BLOCK_OPENERS = frozenset({"if", "while", "until", "for", "case", "select", "{"}
 BLOCK_CLOSERS = frozenset({"fi", "done", "esac", "}"})
 FILES_MAY_CHANGE = "_APPROVAL_FILES_MAY_CHANGE"
 IN_EXEC = "_APPROVAL_IN_EXEC"
+REDIRECTED = "_APPROVAL_REDIRECTED"
+SCRIPTS_STABLE = "_APPROVAL_SCRIPTS_STABLE"
 OPERAND_READERS = FILE_READS | FILTERS | frozenset({
     "sed", "file", "stat", "ls", "find", "base64", "xxd", "od", "strings", "diff", "cmp", "tar", "zip", "unzip",
 })
@@ -3412,11 +3414,12 @@ def _git_read_runs(processes, cwd, depth, env):
     return frozenset(processes)
 
 
-def _read_only_python(tree, runs=frozenset()):
+def _read_only_python(tree, runs=frozenset(), execs=frozenset()):
     """A conservative, exact test for Python code that cannot change anything: only listed standard modules, no process,
     network, environment, dynamic execution, or file mutation, and every `open` in a literal read mode. Anything that the
-    test cannot decide is not read-only. `runs` holds the git read calls that may use `subprocess.run`."""
+    test cannot decide is not read-only. `runs` holds the git read calls that may use `subprocess.run`, and `execs` the vetted `exec` calls, whose own text is not judged."""
     parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
+    vetted = {node for call in execs for node in ast.walk(call)}
     bound = {}
     openers = {"open"}
     for node in ast.walk(tree):
@@ -3440,6 +3443,8 @@ def _read_only_python(tree, runs=frozenset()):
                     openers.add(alias.asname or alias.name)
     aliased = _path_module_aliased(parents, bound)
     for node in ast.walk(tree):
+        if node in vetted and not isinstance(node, ast.Call):
+            continue
         if isinstance(node, ast.Constant) and isinstance(node.value, str) and _secret_text(node.value):
             return False
         if isinstance(node, ast.Attribute):
@@ -3646,9 +3651,9 @@ def _write_target_ok(text, cwd, cwd_known, env):
         return False
 
 
-def _confine_writes(tree, cwd, cwd_known, env, protect=()):
+def _confine_writes(tree, cwd, cwd_known, env, protect=(), suffixes=None):
     """Whether every `write_text`, `write_bytes`, and write-mode `open` of a script has a path that folds to a temporary
-    location and never names a file of `protect`. A confined write is renamed to its read twin in `tree`
+    location, ends with one of `suffixes` when they are given, and never names a file of `protect`. A confined write is renamed to its read twin in `tree`
     so that the read-only test can then judge the rest."""
     if any(isinstance(node, (ast.Global, ast.Nonlocal)) for node in ast.walk(tree)):
         return False
@@ -3676,6 +3681,8 @@ def _confine_writes(tree, cwd, cwd_known, env, protect=()):
             return False
         for text in texts:
             if not _write_target_ok(text.replace(PLACEHOLDER, "x"), cwd, cwd_known, env):
+                return False
+            if suffixes and not text.endswith(suffixes):
                 return False
             if any(_may_name(text, cwd, item) for item in protect):
                 return False
@@ -3772,7 +3779,7 @@ def _exec_file_zone(path, env):
     return not any(path == item.resolve() or item.resolve() in path.parents for item in _guard_state_dirs())
 
 
-def _exec_file_ok(path, transforms, cwd, cwd_known, env):
+def _exec_file_ok(path, transforms, cwd, cwd_known, env, suffixes=None):
     """Whether the text that `exec` runs from one file, after the string transforms, is read-only Python with temporary
     writes only."""
     try:
@@ -3785,17 +3792,17 @@ def _exec_file_ok(path, transforms, cwd, cwd_known, env):
         tree = ast.parse(text)
     except (OSError, RuntimeError, ValueError, SyntaxError, UnicodeError):
         return False
-    return _confine_writes(tree, cwd, cwd_known, env, (resolved,)) and _read_only_python(tree)
+    return _confine_writes(tree, cwd, cwd_known, env, (resolved,), suffixes) and _read_only_python(tree)
 
 
-def _exec_files_confined(tree, cwd, cwd_known, env):
+def _exec_files_confined(tree, cwd, cwd_known, env, suffixes=None, always=False):
     """Whether each `exec` of a script runs text read from a literal file under the plugin's work folders or a temporary
     root that is itself read-only Python, and each write of the script and of that text stays in temporary space. A script
-    without `exec` of a read file is not judged here."""
+    without `exec` of a read file is not judged here unless `always` is set."""
     calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
              and node.func.id == "exec"]
     if not calls:
-        return True
+        return not always or _confine_writes(tree, cwd, cwd_known, env, (), suffixes)
     if _store_count(tree, "exec") or _store_count(tree, "open"):
         return False
     resolver = _PathTexts(tree)
@@ -3810,10 +3817,22 @@ def _exec_files_confined(tree, cwd, cwd_known, env):
         for text in texts:
             path = Path(os.path.expanduser(text))
             path = path if path.is_absolute() else Path(cwd) / path
-            if not _exec_file_ok(path, transforms, cwd, cwd_known, env):
+            if not _exec_file_ok(path, transforms, cwd, cwd_known, env, suffixes):
                 return False
             protected.append(path.resolve())
-    return _confine_writes(tree, cwd, cwd_known, env, tuple(protected))
+    return _confine_writes(tree, cwd, cwd_known, env, tuple(protected), suffixes)
+
+
+def _documents_only(content, cwd, cwd_known, env):
+    """Whether a Python heredoc can change nothing but Markdown files inside temporary space: every write has a literal
+    `.md` target there, each `exec` runs a vetted state or temporary file, and the rest is read-only."""
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return False
+    execs = frozenset(node for node in ast.walk(tree) if isinstance(node, ast.Call)
+                      and isinstance(node.func, ast.Name) and node.func.id == "exec")
+    return _exec_files_confined(tree, cwd, cwd_known, env, (".md",), True) and _read_only_python(tree, execs=execs)
 
 
 def _python_policy(content, cwd, depth, env, readonly=False, cwd_known=True):
@@ -4168,6 +4187,35 @@ def _own_export_run(script, arguments, env):
     return bool(committed) and committed == current
 
 
+REPO_SCRIPT_FOLDERS = re.compile(r"scripts(?:/.+)?|skills/[^/]+/scripts(?:/.+)?")
+REPO_SCRIPT_EXCEPTIONS = re.compile(r"runner|publish|release|install|refresh", re.I)
+
+
+def _repo_script_excepted(parts):
+    """Whether a work-tree path, as its parts, names a guard file, a hook, a runner, or a publishing, release, install, or
+    refresh script, whose run is never judged as the repository's own code."""
+    return parts[-1] in GUARD_SCRIPTS or "hooks" in parts or bool(REPO_SCRIPT_EXCEPTIONS.search(parts[-1]))
+
+
+def _own_repo_script(script, plain, env):
+    """Whether a run is this plugin's own code: a plain `python3 <script>` of a `.py` file under `scripts/` or
+    `skills/*/scripts/` of a work tree whose `.claude-plugin/plugin.json` names this plugin, unchanged from HEAD and
+    tracked, with no earlier command that may change files. Guard files, hooks, runners, and scripts that publish,
+    release, install, or refresh are left to the usual judgement."""
+    if (not plain or FILES_MAY_CHANGE in env and SCRIPTS_STABLE not in env or REDIRECTED in env
+            or script.suffix != ".py"):
+        return False
+    root = _plugin_tree(script.parent, env)
+    if root is None or not script.is_relative_to(root):
+        return False
+    relative = script.relative_to(root)
+    if not REPO_SCRIPT_FOLDERS.fullmatch(relative.parent.as_posix() + "/" + relative.name) or _repo_script_excepted(relative.parts):
+        return False
+    committed = _git_lookup(root, env, "rev-parse", f"HEAD:{relative.as_posix()}")
+    current = _git_lookup(root, env, "hash-object", "--", relative.as_posix())
+    return bool(committed) and committed == current
+
+
 def _plugin_tree(directory, env):
     """The root of the git work tree that holds `directory` when its `.claude-plugin/plugin.json` names this plugin,
     else None."""
@@ -4275,7 +4323,7 @@ def _in_archive(path):
     return any(key in path.parents for key in _ARCHIVE_COPIES)
 
 
-def _classify_script(words, cwd, depth, env, variables=None, choices=None):
+def _classify_script(words, cwd, depth, env, variables=None, choices=None, plain=False):
     cli = os.path.basename(words[0])
     args = words[1:]
     path = None
@@ -4332,6 +4380,9 @@ def _classify_script(words, cwd, depth, env, variables=None, choices=None):
         if mode == "python":
             script_args = args if path == words[0] else args[args.index(path) + 1:]
             if pending is None and _own_export_run(resolved, script_args, env):
+                return Outcome("pass", [], [])
+            if (pending is None and not any(_protected_argument(arg, cwd, env) for arg in script_args)
+                    and _own_repo_script(resolved, plain, env)):
                 return Outcome("pass", [], [])
             argv =[_script_path(arg, cwd, variables or {}) for arg in script_args]
             if pending is not None and not _confined_python_writes(pending, cwd, env, argv, resolved):
@@ -4551,7 +4602,7 @@ def _classify_words(words, heredoc, cwd, depth, command, inherited_env=None, var
             return Outcome("write", ["python:execute"], ["Python execution with --execute"])
     if cli in FILE_READS and any(_protected_path(arg, cwd, env) for arg in stripped[1:] if not arg.startswith("-")):
         return _sensitive(command)
-    script = _classify_script(stripped, cwd, depth, env, variables, choices)
+    script = _classify_script(stripped, cwd, depth, env, variables, choices, all(word in SHELL_KEYWORDS for word in words[:len(words) - len(stripped)]))
     if script is not None:
         if PYTHON.fullmatch(cli) and "--execute" in stripped[1:] and script.kind in ("pass", "read"):
             return Outcome("write", ["python:execute"], ["Python execution with --execute"])
@@ -4833,7 +4884,9 @@ def _heredoc_cwd(before, segments, segment, cwd):
 
 
 def _python_documents(text, cwd, depth, env):
-    verdicts, spans = [], []
+    """Blank the heredoc bodies that a plain `python3` reads and return the verdicts for them, plus those among them that
+    can change only Markdown files in temporary space."""
+    verdicts, spans, quiet = [], [], []
     pattern = re.compile(r"(?m)^([^\n]*?)<<[ \t]*(['\"]?)([A-Za-z_][\w]*)\2[^\n]*\n")
     for match in pattern.finditer(text):
         if any(start <= match.start() < stop for start, stop in spans):
@@ -4856,6 +4909,8 @@ def _python_documents(text, cwd, depth, env):
                       and not any(_protected_argument(arg, cwd, env) for arg in words[1:]))
         here, known = _heredoc_cwd(text[:match.start()], segments, segment, cwd)
         verdict = _python_policy(text[match.end():body_end], here, depth, env, stdin_code, known)
+        if verdict.kind == "pass" and _documents_only(text[match.end():body_end], here, known, env):
+            quiet.append(verdict)
         if verdict.kind in ("pass", "read") and "--execute" in words:
             verdict = Outcome("write", ["python:execute"], ["Python execution with --execute"])
         verdicts.append(verdict)
@@ -4872,7 +4927,7 @@ def _python_documents(text, cwd, depth, env):
                     verdicts.append(classify_text(body, cwd, depth + 1, env))
         spans.append((match.start() + segment.start, match.end(3) + len(match[2])))
         spans.append((match.end(), match.end() + end.end()))
-    return _blank(text, spans), verdicts
+    return _blank(text, spans), verdicts, quiet
 
 
 def _cut_names(words):
@@ -5248,7 +5303,7 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
         return filtered
     heredoc_scripts, script_bodies = _heredoc_scripts(text)
     text = _heredoc_data(text)
-    text, python_verdicts = _python_documents(text, cwd, depth, environment)
+    text, python_verdicts, quiet_verdicts = _python_documents(text, cwd, depth, environment)
     text, substitution_verdicts = _process_substitutions(text, cwd, depth, environment, variables)
     python_verdicts = [*python_verdicts, *substitution_verdicts]
     try:
@@ -5281,6 +5336,8 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
     after_assignment = False
     judged, temp_writes = not python_verdicts, 0
     files_stable = all(verdict.kind == "read" for verdict in python_verdicts)
+    script_stable = (FILES_MAY_CHANGE not in environment or SCRIPTS_STABLE in environment) and all(
+        verdict.kind == "read" or any(verdict is item for item in quiet_verdicts) for verdict in python_verdicts)
     substitution_names = set()
     current_env = environment
     flow = _ValueFlow(choices)
@@ -5294,6 +5351,7 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
             if filtered is not None:
                 verdicts.append(filtered)
             files_stable = files_stable and filtered is not None and filtered.kind == "read"
+            script_stable = script_stable and filtered is not None and filtered.kind == "read"
             judged = False
             continue
         segment = segment._replace(
@@ -5315,6 +5373,7 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
         for _, _, body in substitutions:
             verdicts.append(classify_text(body, cwd, depth + 1, scoped_env, variables, statics, flow.choices()))
             files_stable = files_stable and verdicts[-1].kind == "read"
+            script_stable = script_stable and verdicts[-1].kind == "read"
         scoped_env = current_env if files_stable else {**current_env, FILES_MAY_CHANGE: "1"}
         shell_script, shell_seed = _shell_c_seed(segment, _value_lookup(flow.choices(), {**current_env, **variables}))
         for body in _indirect_regions(region, [segment]):
@@ -5427,7 +5486,11 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
             argv = [*segment.words[:len(segment.words) - len(program)], *argv]
         verdict = (_unclassified(name, text) if dynamic_program and COVERED_WORD.search(region)
                    else _classify_argv(argv or segment.words, segment.heredoc and not argv, command_cwd, depth, text,
-                                       scoped_env,
+                                       {**{key: value for key, value in scoped_env.items() if key != SCRIPTS_STABLE},
+                                        **({SCRIPTS_STABLE: "1"} if script_stable else {}),
+                                        **({} if _redirects_write_only_inside_temporary_root(
+                                            segment.redirects, command_cwd, {**current_env, **variables},
+                                            flow.choices()) else {REDIRECTED: "1"})},
                                        variables, flow.choices(), None if argv else segment.raw))
         if argv and (verdict.kind == "read" or verdict.kind == "pass" and os.path.basename(
                 (strip_prefix(argv)[0] or [""])[0]) in OPERAND_READERS) and not (
@@ -5436,7 +5499,9 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
                 argv, program, segment, command_cwd, variables, text, current_env):
             verdict = _sensitive(text)
         inert = verdict.kind == "pass" and (not name or name in FILE_INERT) and flow.outside_loop_header()
+        header = verdict.kind == "pass" and name == "for" and not substitutions
         files_stable = files_stable and (verdict.kind == "read" or inert) and _redirects_allowed([segment])
+        script_stable = script_stable and (verdict.kind == "read" or inert or header) and _redirects_allowed([segment])
         output = name in ("echo", "printf") and (substitutions or any(
             re.search(r"\$(?:" + re.escape(key) + r"\b|\{" + re.escape(key) + r"\})", region)
             for key in substitution_names
