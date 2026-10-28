@@ -704,7 +704,8 @@ Python code in a heredoc, `-c` option, or script file that writes, moves, or rem
 location asks every time: `~/.ssh`, `~/.aws`, `~/.gnupg`, the shell startup files `~/.zshrc`, `~/.bashrc`,
 `~/.profile`, `~/.bash_profile`, and `~/.zprofile`, a `.git/hooks` folder, and the Claude and Codex settings files
 (`settings.json` and `settings.local.json` in a `.claude` folder or `$CLAUDE_CONFIG_DIR`, `~/.claude.json`, and
-`config.toml` or `hooks.json` in a `.codex` folder or `$CODEX_HOME`). The guard follows the path through keyword
+`config.toml` or `hooks.json` in a `.codex` folder or `$CODEX_HOME`). A file or folder that is a symbolic link counts
+under its own name and under its target. The guard follows the path through keyword
 arguments such as `dst=`, `path=`, and `target=` and through `with_suffix`, `with_name`, and `with_stem`, which change
 the path. Ordinary Python writes in the work tree or elsewhere are not asked about.
 
@@ -749,12 +750,13 @@ ends, and a session file that has been idle for 7 days is deleted when another a
 hooks in `/hooks`.
 
 The `approval_scope` option chooses how often the guard asks. `tiered`, the default, works as described above.
-`session` asks once per session: the first approval of any kind covers every later call in that session, except three
+`session` asks once per session: the first approval of any kind covers every later call in that session, except four
 kinds that still ask every time and whose approval covers only that call. They are discarding uncommitted work
 (`git reset --hard`, `git clean`, a `git checkout` or `git restore` that drops working-tree changes, and
 `git worktree remove --force`, and removing files that hold uncommitted changes or untracked files that are not
-ignored), deleting statements on a production database connection, and production
-infrastructure deletion such as `kubectl delete` on a production context. A connection or context counts as
+ignored), deleting statements on a production database connection, production
+infrastructure deletion such as `kubectl delete` on a production context, and Python that writes a security-sensitive
+location (see the self-approval rules above). A connection or context counts as
 production when its name has a production word or no development word, so an unknown name stays production. Denied
 calls stay denied in both scopes.
 

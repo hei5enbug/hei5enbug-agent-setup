@@ -154,3 +154,126 @@ def test_평범한_위치에_쓰는_파이썬은_묻지_않는다(world, title, 
     decision, reason = verdict(world, command)
     # then
     assert decision not in ("ask", "deny"), (title, shape, decision, reason)
+
+
+def completed(world, command, session="s1"):
+    event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": command},
+             "session_id": session, "cwd": str(world["project"])}
+    asked = guard.handle(event, "claude")
+    guard.handle({**event, "hook_event_name": "PostToolUse"}, "claude")
+    return asked
+
+
+@pytest.fixture
+def session_scope(world, monkeypatch):
+    monkeypatch.setenv("CLAUDE_PLUGIN_OPTION_APPROVAL_SCOPE", "session")
+    monkeypatch.setenv("HEI5ENBUG_APPROVAL_SCOPE", "session")
+    return world
+
+
+UNRELATED_WRITE = "python3 -c \"import os; os.system('echo hi')\""
+
+
+@pytest.mark.parametrize("title,template", SENSITIVE_WRITES[:6] + SENSITIVE_WRITES[10:13],
+                         ids=[item[0] for item in SENSITIVE_WRITES[:6] + SENSITIVE_WRITES[10:13]])
+def test_세션_전체_승인이_있어도_민감한_위치에_쓰는_파이썬은_매번_묻는다(session_scope, title, template):
+    # given
+    first = completed(session_scope, UNRELATED_WRITE)
+    assert first["hookSpecificOutput"]["permissionDecision"] == "ask"
+    assert verdict(session_scope, "python3 -c \"import os; os.system('echo again')\"")[0] == "allow"
+    command = shapes(session_scope, template.format(**session_scope))["inline"]
+    # when
+    results = [completed(session_scope, command), completed(session_scope, command)]
+    # then
+    decisions = [(item["hookSpecificOutput"]["permissionDecision"], item["hookSpecificOutput"]["permissionDecisionReason"])
+                 for item in results]
+    assert all(decision == "ask" and reason.startswith("Asks every time") for decision, reason in decisions), decisions
+
+
+def test_민감한_위치에_쓰는_파이썬은_크리티컬이라_세션_승인을_만들지_않는다(session_scope):
+    # given
+    command = shapes(session_scope, "open('{home}/.zshrc', 'a').write('x')".format(**session_scope))["inline"]
+    # when
+    first = completed(session_scope, command)
+    later = verdict(session_scope, "python3 -c \"import os; os.system('echo hi')\"")
+    # then
+    assert first["hookSpecificOutput"]["permissionDecision"] == "ask"
+    assert later[0] == "ask" and later[1].startswith("Session approval")
+
+
+def test_세션_전체_승인_뒤에도_평범한_파이썬_쓰기는_조용하다(session_scope):
+    # given
+    completed(session_scope, UNRELATED_WRITE)
+    command = shapes(session_scope, "open('{scratch}/a.txt', 'w').write('x')".format(**session_scope))["inline"]
+    # when
+    result = verdict(session_scope, command)
+    # then
+    assert result[0] not in ("ask", "deny")
+
+
+@pytest.fixture
+def linked(world):
+    """Sensitive files and folders that are symbolic links into a dotfiles folder."""
+    home, dots = world["home"], world["home"] / "dotfiles"
+    dots.mkdir()
+    (home / ".claude").mkdir(exist_ok=True)
+    for name, target in ((".zshrc", "zshrc"), (".claude/settings.json", "claude-settings.json"),
+                         (".claude.json", "claude.json"), (".codex/hooks.json", "hooks.json")):
+        (dots / target).write_text("x")
+        (home / name).parent.mkdir(exist_ok=True)
+        (home / name).symlink_to(dots / target)
+    (dots / "ssh").mkdir()
+    (home / ".ssh").symlink_to(dots / "ssh")
+    return {**world, "dots": dots}
+
+
+LINKED_WRITES = [
+    ("zshrc through the link", "open('{home}/.zshrc', 'a').write('x')"),
+    ("zshrc target", "open('{dots}/zshrc', 'a').write('x')"),
+    ("settings through the link", "open('{home}/.claude/settings.json', 'w').write('{{}}')"),
+    ("settings target", "open('{dots}/claude-settings.json', 'w').write('{{}}')"),
+    ("claude json target", "from pathlib import Path\nPath('{dots}/claude.json').write_text('{{}}')"),
+    ("codex hooks target", "import os\nos.remove('{dots}/hooks.json')"),
+    ("ssh folder target", "open('{dots}/ssh/authorized_keys', 'a').write('x')"),
+    ("ssh folder through the link", "open('{home}/.ssh/authorized_keys', 'a').write('x')"),
+    ("moved over the link", "import os\nos.replace('{scratch}/rc', '{home}/.zshrc')"),
+]
+
+
+@pytest.mark.parametrize("title,template", LINKED_WRITES, ids=[item[0] for item in LINKED_WRITES])
+@pytest.mark.parametrize("shape", ["heredoc", "inline"])
+def test_심볼릭_링크로_바뀐_민감한_파일과_폴더도_그_이름과_링크_대상_모두_매번_묻는다(linked, title, template, shape):
+    # given
+    command = shapes(linked, template.format(**linked))[shape]
+    # when
+    decision, reason = verdict(linked, command)
+    # then
+    assert decision == "ask" and reason.startswith("Asks every time"), (title, shape, decision, reason)
+
+
+def test_민감한_파일이_링크여도_같은_폴더의_다른_파일은_묻지_않는다(linked):
+    # given
+    commands = [shapes(linked, body.format(**linked))["inline"] for body in (
+        "open('{dots}/notes.txt', 'w').write('x')", "open('{home}/zshrc.txt', 'w').write('x')",
+        "open('{home}/.claude/commands.md', 'w').write('x')")]
+    # when
+    results = [verdict(linked, command)[0] for command in commands]
+    # then
+    assert all(result not in ("ask", "deny") for result in results), results
+
+
+def test_홈_폴더가_링크여도_민감한_파일을_링크_이름과_실제_이름_모두로_알아본다(world, monkeypatch):
+    # given
+    real = world["home"].parent / "real-home"
+    real.mkdir()
+    (real / ".ssh").mkdir()
+    shortcut = world["home"].parent / "short-home"
+    shortcut.symlink_to(real)
+    monkeypatch.setenv("HOME", str(shortcut))
+    commands = [shapes(world, body.format(short=shortcut, real=real))["inline"] for body in (
+        "open('{short}/.zshrc', 'a').write('x')", "open('{real}/.zshrc', 'a').write('x')",
+        "open('{real}/.ssh/authorized_keys', 'a').write('x')", "open('{short}/.ssh/authorized_keys', 'a').write('x')")]
+    # when
+    results = [verdict(world, command)[0] for command in commands]
+    # then
+    assert results == ["ask"] * 4

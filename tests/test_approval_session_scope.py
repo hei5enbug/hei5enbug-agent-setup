@@ -1,4 +1,4 @@
-"""Acceptance checks: the opt-in `session` approval scope asks once per session except for three critical kinds."""
+"""Acceptance checks: the opt-in `session` approval scope asks once per session except for the critical kinds."""
 import os
 import re
 import subprocess

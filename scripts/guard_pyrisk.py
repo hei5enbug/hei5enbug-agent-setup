@@ -440,26 +440,46 @@ SENSITIVE_WRITE_TAIL = re.compile(
     r"(?:^|/)(?:\.(?:ssh|aws|gnupg)(?:/|$)|\.git/hooks(?:/|$)|\.claude/settings(?:\.local)?\.json$|\.claude\.json$"
     r"|\.codex/(?:config\.toml|hooks\.json)$)")
 STARTUP_FILES = (".zshrc", ".bashrc", ".profile", ".bash_profile", ".zprofile")
+HOME_SETTINGS = (".claude.json", ".claude/settings.json", ".claude/settings.local.json", ".codex/config.toml",
+                 ".codex/hooks.json")
+SENSITIVE_FOLDERS = (".ssh", ".aws", ".gnupg")
 CONFIG_FILES = {"CLAUDE_CONFIG_DIR": ("settings.json", "settings.local.json"), "CODEX_HOME": ("config.toml", "hooks.json")}
 
 
+def _identities(path):
+    """A path as spelled and as its symbolic links resolve."""
+    return {os.path.abspath(path), str(Path(path).resolve())}
+
+
 def _sensitive_locations(env):
-    """The exact files that hold shell startup commands or the host settings of this machine."""
-    home = Path.home().resolve()
-    found = {str(home / name) for name in STARTUP_FILES}
+    """The files that hold shell startup commands or the host settings of this machine, and the folders of keys and
+    credentials, each under the spelling of the home folder and under where its symbolic links lead."""
+    homes = {Path.home(), Path.home().resolve()}
+    files, folders = set(), set()
+    for home in homes:
+        for name in (*STARTUP_FILES, *HOME_SETTINGS):
+            files.update(_identities(home / name))
+        for name in SENSITIVE_FOLDERS:
+            folders.update(_identities(home / name))
     for variable, names in CONFIG_FILES.items():
         folder = env.get(variable)
         if folder and os.path.isabs(folder):
-            found.update(str(Path(folder).resolve() / name) for name in names)
-    return found
+            for name in names:
+                files.update(_identities(Path(folder) / name))
+    return files, folders
 
 
 def sensitive_write(tree, cwd, env):
     """The first path text that a script writes in a security-sensitive location, or None: the `.ssh`, `.aws`, and `.gnupg`
-    folders, shell startup files in the home folder, git hooks, and the Claude and Codex settings files."""
-    exact = _sensitive_locations(env)
-    return path_matches(tree, cwd, env, lambda *spellings: any(item in exact or bool(SENSITIVE_WRITE_TAIL.search(item)) for item in spellings),
-                        SENSITIVE_WRITE_TAIL)
+    folders, shell startup files in the home folder, git hooks, and the Claude and Codex settings files. A path counts
+    under the spelling it has and under the target of its symbolic links, and so does each protected location."""
+    files, folders = _sensitive_locations(env)
+
+    def protected(spelling):
+        return (spelling in files or bool(SENSITIVE_WRITE_TAIL.search(spelling))
+                or any(spelling == folder or spelling.startswith(f"{folder}{os.sep}") for folder in folders))
+
+    return path_matches(tree, cwd, env, lambda *spellings: any(protected(item) for item in spellings), SENSITIVE_WRITE_TAIL)
 
 
 MAX_LITERAL_CODE = 65536

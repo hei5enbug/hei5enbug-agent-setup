@@ -62,7 +62,7 @@
 | `tests/test_approval_recorded_replay.py` | 에이전트 실수 없이 기록된 승인 가드 ask를 모두 훅으로 다시 실행하면 묻지도 막지도 않고, 남겨 둔 `$PWD` 삭제는 계속 묻는다. | `README.md` (Approval guard) |
 | `tests/test_approval_python_risks.py` | 자격 증명 파일을 읽거나 비밀 이름 환경변수 값을 출력하는 Python 코드는 `cat`과 같은 민감 읽기 판정을 받고, 설정 여부 검사·이름 나열·검색어·평범한 읽기와 쓰기는 묻지 않는다. | `README.md` (Approval guard) |
 | `tests/test_approval_installed_code.py` | 리다이렉트·`tee`·`sed -i`·`cp`·`mv`·`install`·`rsync`·Python·네이티브 파일 도구로 플러그인 캐시나 실행 중인 플러그인 루트에 쓰는 호출은 캐시가 git 작업 트리로 연결된 심볼릭 링크인 경우에도 경로를 푼 뒤 자기 수정으로 거부하고, 그 코드를 읽거나 다른 곳에 쓰는 호출은 허용한다. | `README.md` (Approval guard) |
-| `tests/test_approval_python_sensitive_writes.py` | `~/.ssh`·`~/.aws`·`~/.gnupg`, 셸 시작 파일, git 훅, Claude·Codex 설정 파일에 쓰는 Python은 매번 묻고, 작업 트리와 임시 공간의 평범한 Python 쓰기는 묻지 않는다. | `README.md` (Approval guard) |
+| `tests/test_approval_python_sensitive_writes.py` | `~/.ssh`·`~/.aws`·`~/.gnupg`, 셸 시작 파일, git 훅, Claude·Codex 설정 파일에 쓰는 Python은 심볼릭 링크 이름과 대상 양쪽으로, 세션 전체 승인 뒤에도 매번 묻고, 작업 트리와 임시 공간의 평범한 Python 쓰기는 묻지 않는다. | `README.md` (Approval guard) |
 | `tests/test_approval_python_exec.py` | 문자열 리터럴 `exec`·`eval`은 중첩 리터럴과 이스케이프로 가린 가드 모듈 이름까지, 리터럴 딕셔너리 네임스페이스는 코드가 읽는 이름에 묶어 같은 코드를 제자리에 쓴 것과 똑같이 판정하고, 리터럴이 아닌 네임스페이스나 변수·`input()`·표준 입력을 받는 `exec`는 계속 묻되 다른 Python 판정도 그대로 받는다. | `README.md` (Approval guard) |
 | `tests/test_approval_false_positives.py`, `tests/test_approval_classification_safety.py` | 무해한 호출과 비밀 메타데이터 조회를 쓰기나 비밀 값 출력으로 오인하지 않는다. | `README.md` (Approval guard) |
 | `tests/test_approval_extensions.py`, `tests/test_approval_reuse.py` | 사전 승인 키와 민감 조회 승인은 지정한 대상만 다룬다. | `README.md` (Approval guard) |

@@ -178,7 +178,7 @@ def _python_risk(code, cwd, env):
     location = sensitive_write(tree, cwd, env)
     if location:
         return Outcome("always", ["python:sensitive-write:" + _digest(ast.unparse(tree))],
-                       [f"Python write to a protected location: {location}"], every_time=True)
+                       [f"Python write to a protected location: {location}"], every_time=True, critical=True)
     exposure = credential_read(tree, cwd, env) or secret_environment(tree)
     return _sensitive(exposure) if exposure else None
 

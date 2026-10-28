@@ -654,8 +654,8 @@ completing (declines included); stop retrying and tell the user.”입니다. �
 heredoc·`-c` 옵션·스크립트 파일의 Python 코드가 보안에 민감한 위치의 경로를 쓰거나 옮기거나 지우면 매번 묻습니다.
 대상은 `~/.ssh`, `~/.aws`, `~/.gnupg`, 셸 시작 파일 `~/.zshrc`, `~/.bashrc`, `~/.profile`, `~/.bash_profile`,
 `~/.zprofile`, `.git/hooks` 폴더, Claude와 Codex 설정 파일(`.claude` 폴더나 `$CLAUDE_CONFIG_DIR`의 `settings.json`·
-`settings.local.json`, `~/.claude.json`, `.codex` 폴더나 `$CODEX_HOME`의 `config.toml`·`hooks.json`)입니다.
-가드는 `dst=`·`path=`·`target=` 같은 키워드 인자와 경로를 바꾸는 `with_suffix`·`with_name`·`with_stem`을 거쳐도 경로를 따라갑니다.
+`settings.local.json`, `~/.claude.json`, `.codex` 폴더나 `$CODEX_HOME`의 `config.toml`·`hooks.json`)입니다. 심볼릭 링크인 파일이나 폴더는 자기 이름과 링크 대상
+양쪽으로 따집니다. 가드는 `dst=`·`path=`·`target=` 같은 키워드 인자와 경로를 바꾸는 `with_suffix`·`with_name`·`with_stem`을 거쳐도 경로를 따라갑니다.
 작업 트리나 그 밖의 평범한 Python 쓰기는 묻지 않습니다.
 
 비밀 값이 필요한 명령은 비밀 도우미를 사용합니다: `python3 <plugin root>/scripts/secret_exec.py --secret
@@ -694,10 +694,10 @@ Claude의 `defaultMode: dontAsk`는 가드가 요청하는 승인을 거부합�
 Codex에서는 `/hooks`에서 훅을 신뢰해야 합니다.
 
 `approval_scope` 옵션은 가드가 얼마나 자주 묻는지 정합니다. 기본값 `tiered`는 위 설명대로 동작합니다.
-`session`은 세션당 한 번 묻습니다. 어떤 종류든 첫 승인이 그 세션의 이후 호출을 모두 덮습니다. 다만 세 가지는 계속
+`session`은 세션당 한 번 묻습니다. 어떤 종류든 첫 승인이 그 세션의 이후 호출을 모두 덮습니다. 다만 네 가지는 계속
 매번 묻고, 그 승인은 해당 호출에만 적용됩니다. 커밋하지 않은 작업 버리기(`git reset --hard`, `git clean`, 작업 트리
 변경을 버리는 `git checkout`이나 `git restore`, `git worktree remove --force`, 커밋하지 않은 변경이나 무시되지 않은 새 파일이 있는 파일 삭제), 운영 DB 연결의 삭제 문장, 운영
-context의 `kubectl delete` 같은 운영 인프라 삭제입니다. 연결이나 context 이름에 운영 단어가 있거나 개발 단어가 없으면
+context의 `kubectl delete` 같은 운영 인프라 삭제, 보안에 민감한 위치에 쓰는 Python(위 자기 승인 규칙 참고)입니다. 연결이나 context 이름에 운영 단어가 있거나 개발 단어가 없으면
 운영으로 보므로, 알 수 없는 이름은 운영으로 남습니다. 거부되는 호출은 두 범위 모두에서 계속 거부됩니다.
 
 ### 호스트 설정
