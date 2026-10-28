@@ -6,6 +6,8 @@ they never load a shared system.
 - Narrow every read: name the context, namespace, resource group, or label, and add `--limit` or `-o name`.
 - Bound logs with `--tail` and `--since`. Never follow them with `-f`.
 - Avoid cluster-wide or all-namespace queries on production unless the task needs them.
+- Open a port-forward or other tunnel only on a free port the tool picks or one with no listener. Before any request,
+  confirm the tunnel still runs and owns that port; otherwise send nothing, never retry, and report. Stop it when done.
 - For DB queries, prefer tabularis MCP `run_query` with a small `limit` when `list_connections` lists the target;
   otherwise DataGrip MCP, otherwise a CLI through `secret_exec.py`.
 - Before a PostgreSQL read on a production connection (a name with `prod` or `운영`, or without a dev, test, QA,
