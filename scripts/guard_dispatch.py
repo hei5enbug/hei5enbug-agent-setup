@@ -34,7 +34,7 @@ from guard_git import COMMAND_GIT_CONFIG, FILES_MAY_CHANGE, IN_EXEC, STASH_OWN_D
 from guard_cloud import Rules, _classify_curl, _classify_sql, _docker_metadata_inspect, _local_engine
 from guard_self import CLI_RULES, MAX_DEPTH, PYTHON_EXEC, _code_runs_guard, _first_operand, _request_outcome
 from guard_pyread import _git_run_command, _read_only_python
-from guard_pyrisk import credential_read, secret_environment, sensitive_write
+from guard_pyrisk import credential_read, inline_literal_executions, secret_environment, sensitive_write
 from guard_installed import INSTALLED_CODE_REASON, installed_code_write, python_writes_installed_code
 from guard_pywrite import _confine_writes, _documents_only, _exec_files_confined
 from guard_proof import SELF_APPROVAL_REASON, _self_approval
@@ -170,7 +170,7 @@ def _python_risk(code, cwd, env):
     """The outcome for Python code, given as text or as a parsed tree, that writes installed plugin code or a protected
     location, or exposes a credential, or None."""
     try:
-        tree = ast.parse(code) if isinstance(code, str) else code
+        tree = inline_literal_executions(ast.parse(code)) if isinstance(code, str) else code
     except (SyntaxError, ValueError):
         return None
     if python_writes_installed_code(tree, cwd, env):
@@ -190,10 +190,12 @@ def _python_policy(content, cwd, depth, env, readonly=False, cwd_known=True):
         tree = ast.parse(content)
     except SyntaxError:
         return _unclassified("python", content) if PYTHON_EXEC.search(content) or SDK_IMPORT.search(content) else Outcome("pass", [], [])
+    written, tree = tree, inline_literal_executions(tree)
+    readonly = readonly and tree is written
     risk = _python_risk(tree, cwd, env)
     if risk is not None:
         return risk
-    if not _exec_files_confined(ast.parse(content), cwd, cwd_known, env):
+    if "exec" in content and not _exec_files_confined(copy_module.deepcopy(tree), cwd, cwd_known, env):
         return Outcome("write", ["python:" + _digest(content)], ["Python process or SDK execution"])
     imports = "\n".join(ast.unparse(node) for node in ast.walk(tree) if isinstance(node, (ast.Import, ast.ImportFrom)))
     aliases = {}

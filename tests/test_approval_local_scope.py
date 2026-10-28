@@ -91,7 +91,7 @@ def test_awk가_필드만_출력하면_조회_파이프의_끝이_될_수_있다
 def test_필드_출력이_아닌_awk는_조회_파이프로_보지_않는다(home, command):
     # given
     # when
-    outcome = classify(command)
+    outcome = classify(command, home)
     # then
     assert outcome.kind == "pass"
 

@@ -1,5 +1,6 @@
 """Credential reads and secret environment values in Python code, for the approval guard."""
 import ast
+import copy as copy_module
 import os
 import re
 from collections import Counter
@@ -425,3 +426,75 @@ def sensitive_write(tree, cwd, env):
     exact = _sensitive_locations(env)
     return path_matches(tree, cwd, env, lambda resolved: resolved in exact or bool(SENSITIVE_WRITE_TAIL.search(resolved)),
                         SENSITIVE_WRITE_TAIL)
+
+
+MAX_LITERAL_CODE = 65536
+MAX_INLINE_DEPTH = 3
+PLAIN_ARGUMENT = (ast.Name, ast.Constant, ast.Dict, ast.Load)
+
+
+def _literal_execution(node, name, rebound):
+    """The code text of `exec("...")` or `eval("...")` with a string literal and at most plain name, constant, or dict
+    arguments for the namespaces, else None."""
+    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == name
+            and name not in rebound and node.args and 1 <= len(node.args) <= 3 and not node.keywords):
+        return None
+    code = node.args[0]
+    if not (isinstance(code, ast.Constant) and isinstance(code.value, str) and len(code.value) <= MAX_LITERAL_CODE):
+        return None
+    if any(not isinstance(item, PLAIN_ARGUMENT) for arg in node.args[1:] for item in ast.walk(arg)):
+        return None
+    return code.value
+
+
+class _Inliner(ast.NodeTransformer):
+    """Replaces `exec("<code>")` statements and `eval("<expression>")` calls by the code itself, so that the rules for
+    ordinary code judge it. Text that does not parse stays a call."""
+
+    def __init__(self, rebound):
+        self.rebound = rebound
+        self.depth = 0
+
+    def visit_Expr(self, node):
+        code = _literal_execution(node.value, "exec", self.rebound)
+        parsed = self.parse(code, "exec")
+        if parsed is None:
+            return self.generic_visit(node)
+        return self.nested(parsed.body) or ast.Pass()
+
+    def visit_Call(self, node):
+        code = _literal_execution(node, "eval", self.rebound)
+        parsed = self.parse(code, "eval")
+        if parsed is None:
+            return self.generic_visit(node)
+        return self.nested([parsed.body])[0]
+
+    def parse(self, code, mode):
+        if code is None or self.depth >= MAX_INLINE_DEPTH:
+            return None
+        try:
+            return ast.parse(code, mode=mode)
+        except (SyntaxError, ValueError):
+            return None
+
+    def nested(self, nodes):
+        self.depth += 1
+        try:
+            found = []
+            for node in nodes:
+                visited = self.visit(node)
+                found.extend(visited if isinstance(visited, list) else [visited])
+            return found
+        finally:
+            self.depth -= 1
+
+
+def inline_literal_executions(tree):
+    """A copy of the tree in which each `exec` and `eval` of a string literal is replaced by the code it runs."""
+    rebound = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name) and not isinstance(node.ctx, ast.Load)
+               and node.id in ("exec", "eval")}
+    rebound |= {node.name for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.ClassDef))
+                and node.name in ("exec", "eval")}
+    if not any(isinstance(node, ast.Name) and node.id in ("exec", "eval") for node in ast.walk(tree)):
+        return tree
+    return ast.fix_missing_locations(_Inliner(rebound).visit(copy_module.deepcopy(tree)))

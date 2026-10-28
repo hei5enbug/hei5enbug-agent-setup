@@ -475,7 +475,11 @@ heredocs, stdin files, and script files
 are writes when they run a process or import a cloud/database SDK. Literal process commands, including keyword
 arguments, are classified. Destructive process commands, SDK call names, or destructive text in Python that runs a
 process or imports an SDK ask every time. Other Python passes, even when its strings name CLI
-commands (`python3 -c` code never becomes a read); an explicit `--execute` still makes it a write. Node and other
+commands (`python3 -c` code never becomes a read); an explicit `--execute` still makes it a write. An `exec` or `eval`
+of a string literal is judged by the code it runs, as if that code were written in place, so a harmless literal passes
+and one that reads a credential or writes a protected location gets that decision. An `exec` or `eval` of a variable,
+`input()`, or standard input keeps the old result, a session write, and still draws the credential, installed-code, and
+protected-location decisions for the rest of the script. Node and other
 non-shell, non-Python executables pass.
 Reads need no approval; writes need the session write approval; destructive, forced, and secret calls keep their normal
 rules. Unreadable or larger script files are unclassified. An inspected shell script naming a covered CLI or importing
