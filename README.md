@@ -692,8 +692,10 @@ are denied on both hosts.
 Installed plugin code is protected the same way. A write into the Claude or Codex plugin caches
 (`~/.claude/plugins/cache`, `$CLAUDE_CONFIG_DIR/plugins/cache`, `~/.codex/plugins/cache`) or the running plugin root is
 denied on both hosts, whether it is a redirection, `tee`, `sed -i`, the destination of `cp`, `mv`, `install`, `rsync`, or
-`ln`, or Python code in a heredoc, `-c` option, or script file that writes, moves, or removes such a path. The guard
-resolves `..`, repeated slashes, `~`, known variables, and symbolic links before it compares. Reading that code stays
+`ln`, Python code in a heredoc, `-c` option, or script file that writes, moves, or removes such a path, or a `Write`,
+`Edit`, `MultiEdit`, `NotebookEdit`, or `apply_patch` call whose target lies there. The guard resolves `..`, repeated
+slashes, `~`, known variables, and symbolic links before it compares, and it knows a cache both by its configured
+location and by where its link leads, so a cache that links into a git work tree stays protected. Reading that code stays
 allowed.
 
 Python code in a heredoc, `-c` option, or script file that writes, moves, or removes a path in a security-sensitive

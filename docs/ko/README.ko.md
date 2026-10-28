@@ -645,8 +645,10 @@ completing (declines included); stop retrying and tell the user.”입니다. �
 설치된 플러그인 코드도 같은 방식으로 보호합니다. Claude나 Codex 플러그인 캐시(`~/.claude/plugins/cache`,
 `$CLAUDE_CONFIG_DIR/plugins/cache`, `~/.codex/plugins/cache`)나 실행 중인 플러그인 루트에 쓰는 호출은 양쪽 호스트에서
 거부합니다. 리다이렉션, `tee`, `sed -i`, `cp`·`mv`·`install`·`rsync`·`ln`의 대상, heredoc·`-c` 옵션·스크립트 파일의 Python
-코드가 그 경로를 쓰거나 옮기거나 지우는 경우가 모두 해당합니다. 가드는 비교 전에 `..`, 반복된 슬래시, `~`, 알려진 변수,
-심볼릭 링크를 풀어서 봅니다. 그 코드를 읽는 것은 계속 허용합니다.
+코드가 그 경로를 쓰거나 옮기거나 지우는 경우, 대상이 그곳에 있는 `Write`·`Edit`·`MultiEdit`·`NotebookEdit`·`apply_patch`
+호출이 모두 해당합니다. 가드는 비교 전에 `..`, 반복된 슬래시, `~`, 알려진 변수, 심볼릭 링크를 풀어서 보고, 캐시를 설정된
+위치와 링크가 가리키는 위치 양쪽으로 알아보므로 git 작업 트리로 연결된 캐시도 계속 보호됩니다. 그 코드를 읽는 것은 계속
+허용합니다.
 
 heredoc·`-c` 옵션·스크립트 파일의 Python 코드가 보안에 민감한 위치의 경로를 쓰거나 옮기거나 지우면 매번 묻습니다.
 대상은 `~/.ssh`, `~/.aws`, `~/.gnupg`, 셸 시작 파일 `~/.zshrc`, `~/.bashrc`, `~/.profile`, `~/.bash_profile`,

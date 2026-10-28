@@ -328,3 +328,88 @@ def test_캐시에서_온_실행_루트가_git_작업_트리로_풀려도_개발
     written = guard_installed.installed_code_write(["cp", "a", f"{checkout}/scripts/x.py"], [], str(world["project"]), {})
     # then
     assert written
+
+
+def file_tool_verdict(world, tool, path, host="claude", cwd=None):
+    tool_input = {"file_path": path, "notebook_path": path,
+                  "command": f"*** Begin Patch\n*** Update File: {path}\n+x\n*** End Patch"}
+    event = {"hook_event_name": "PreToolUse", "session_id": "s1", "tool_name": tool, "tool_input": tool_input,
+             "cwd": str(cwd or world["project"])}
+    output = guard.handle(event, host)
+    return output["hookSpecificOutput"]["permissionDecision"] if output else None
+
+
+FILE_TOOLS = ["Write", "Edit", "MultiEdit", "NotebookEdit", "apply_patch"]
+
+
+@pytest.mark.parametrize("tool", FILE_TOOLS)
+@pytest.mark.parametrize("host", ["claude", "codex"])
+@pytest.mark.parametrize("template", [
+    "{claude}/scripts/tool.py", "{codex}/scripts/tool.py", "{custom}/scripts/tool.py", "{claude}/scripts/new.py",
+    "~/.claude/plugins/cache/market/demo/1.0.0/scripts/tool.py", "{claude}/scripts/../scripts//tool.py",
+    "{root}/scripts/guard_extra.py",
+])
+def test_파일_편집_도구도_설치된_플러그인_코드는_자기_수정으로_거부한다(world, tool, host, template):
+    # given
+    path = fill(world, template)
+    # when
+    result = file_tool_verdict(world, tool, path, host)
+    # then
+    assert result == "deny", (tool, path)
+
+
+@pytest.mark.parametrize("tool", FILE_TOOLS)
+def test_파일_편집_도구의_상대_경로와_심볼릭_링크도_설치된_코드로_본다(world, tool):
+    # given
+    link = world["scratch"] / "link"
+    link.symlink_to(world["claude"] / "scripts")
+    # when
+    relative = file_tool_verdict(world, tool, "scripts/tool.py", cwd=world["claude"])
+    linked = file_tool_verdict(world, tool, str(link / "tool.py"))
+    # then
+    assert (relative, linked) == ("deny", "deny")
+
+
+@pytest.mark.parametrize("tool", FILE_TOOLS)
+@pytest.mark.parametrize("template", [
+    "{scratch}/note.txt", "{project}/a.txt", "{home}/.claude/plugins/cache-notes.txt",
+    "{home}/.claude/plugins/installed_plugins.json.demo",
+])
+def test_파일_편집_도구가_다른_곳을_고치면_거부하지_않는다(world, tool, template):
+    # given
+    path = fill(world, template)
+    # when
+    result = file_tool_verdict(world, tool, path)
+    # then
+    assert result not in ("deny", "ask")
+
+
+def test_읽기_도구는_설치된_코드를_읽을_수_있다(world):
+    # given
+    path = fill(world, "{claude}/scripts/tool.py")
+    # when
+    result = file_tool_verdict(world, "Read", path)
+    # then
+    assert result not in ("deny", "ask")
+
+
+@pytest.mark.parametrize("tool", FILE_TOOLS)
+def test_git_작업_트리인_개발용_플러그인_루트는_파일_편집_도구에도_예외다(world, monkeypatch, tool):
+    # given
+    monkeypatch.setattr(guard_installed, "_in_git_work_tree", lambda path: True)
+    path = fill(world, "{root}/README.md")
+    # when
+    result = file_tool_verdict(world, tool, path)
+    # then
+    assert result not in ("deny", "ask")
+
+
+@pytest.mark.parametrize("tool", FILE_TOOLS)
+def test_개발용_예외가_있어도_캐시_안_파일_편집은_거부한다(world, monkeypatch, tool):
+    # given
+    monkeypatch.setattr(guard_installed, "_in_git_work_tree", lambda path: True)
+    path = fill(world, "{codex}/scripts/tool.py")
+    # when
+    result = file_tool_verdict(world, tool, path)
+    # then
+    assert result == "deny"

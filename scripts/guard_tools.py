@@ -11,6 +11,7 @@ from approval_state import Outcome
 from plugin_toggles import detect_host
 from guard_shell import _datagrip, _digest, _merge, _read, tool_words
 from guard_paths import _protected_path, _resolved, _sensitive, _state_path
+from guard_installed import INSTALLED_CODE_REASON, path_in_installed_code
 from guard_proof import SELF_APPROVAL_REASON
 import guard_dispatch
 from guard_dispatch import _python_policy
@@ -263,6 +264,8 @@ def classify_file_tool(tool, tool_input, cwd):
         paths = [tool_input[key] for key in ("file_path", "notebook_path") if isinstance(tool_input.get(key), str)]
     if tool != "Read" and any(_state_path(path, cwd) for path in paths):
         return Outcome("forbidden", [], [SELF_APPROVAL_REASON])
+    if tool != "Read" and any(path_in_installed_code(path, cwd) for path in paths):
+        return Outcome("forbidden", [], [INSTALLED_CODE_REASON])
     if tool != "Read" and any(_resolved(path, cwd) == db_read_policy.limits_path().resolve() for path in paths):
         return Outcome("always", [f"db-limits:{_digest(' '.join(paths))}"], ["Change to the database read limits file"],
                        every_time=True)
