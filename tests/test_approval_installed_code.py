@@ -10,6 +10,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import approval_guard as guard  # noqa: E402
 import approval_state as state_mod  # noqa: E402
+import guard_installed  # noqa: E402
 
 
 @pytest.fixture
@@ -36,6 +37,7 @@ def world(tmp_path, monkeypatch):
     state_mod.prompt_language.cache_clear()
     for name in [name for name in os.environ if name.startswith("GIT_")] + ["KUBECONFIG", "CODEX_HOME"]:
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(guard_installed, "_in_git_work_tree", lambda path: False)
     return {"home": home, "project": project, "tmp": tmp_path, "scratch": scratch, **caches}
 
 
@@ -231,3 +233,30 @@ def test_설치된_코드를_다른_곳으로_복사하는_인라인_파이썬�
     result = verdict(world, "python3 -c '" + body.replace("'", "'\"'\"'") + "'")
     # then
     assert result[0] not in ("deny", "ask")
+
+
+DEVELOPMENT_ROOT_WRITES = [
+    "sed -i 's/a/b/' {root}/README.md",
+    "cp {scratch}/new.py {root}/scripts/",
+]
+
+
+@pytest.mark.parametrize("template", DEVELOPMENT_ROOT_WRITES)
+def test_git_작업_트리인_개발용_플러그인_루트로의_쓰기는_설치된_코드로_보지_않는다(world, monkeypatch, template):
+    # given
+    monkeypatch.setattr(guard_installed, "_in_git_work_tree", lambda path: True)
+    command = fill(world, template)
+    # when
+    written = guard_installed.installed_code_write(command.split(), [], str(world["project"]), {})
+    # then
+    assert not written
+
+
+def test_git_작업_트리라도_플러그인_캐시_안이면_설치된_코드로_본다(world, monkeypatch):
+    # given
+    monkeypatch.setattr(guard_installed, "_in_git_work_tree", lambda path: True)
+    command = fill(world, "cp {scratch}/new.py {codex}/scripts/tool.py")
+    # when
+    result = verdict(world, command)
+    # then
+    assert result[0] == "deny"

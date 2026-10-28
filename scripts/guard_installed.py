@@ -3,7 +3,7 @@ import os
 import re
 from pathlib import Path
 from guard_paths import _expand_path_variables
-from guard_proof import _plugin_install_dirs
+from guard_proof import _in_git_work_tree, _plugin_install_dirs
 from guard_pyrisk import path_matches
 
 INSTALLED_CODE_REASON = (
@@ -33,8 +33,17 @@ SED_IN_PLACE = re.compile(r"-[A-Za-z]*i[^\s]*|--in-place(?:=.*)?")
 SED_SCRIPT_OPTIONS = ("-e", "-f", "--expression", "--file")
 
 
+def _installed_roots():
+    """The plugin caches, and the running plugin root unless it is a development checkout: a git work tree outside the
+    caches, which changes through ordinary commits rather than releases."""
+    roots = _plugin_install_dirs()
+    caches = [root for root in roots if root.name == "cache" and root.parent.name == "plugins"]
+    return [root for root in roots if root in caches or any(cache in root.parents for cache in caches)
+            or not _in_git_work_tree(root)]
+
+
 def _under_installed_code(resolved):
-    return any(resolved == str(root) or resolved.startswith(f"{root}{os.sep}") for root in _plugin_install_dirs())
+    return any(resolved == str(root) or resolved.startswith(f"{root}{os.sep}") for root in _installed_roots())
 
 
 def path_in_installed_code(text, cwd):
