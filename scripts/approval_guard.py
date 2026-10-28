@@ -1205,6 +1205,7 @@ FILES_MAY_CHANGE = "_APPROVAL_FILES_MAY_CHANGE"
 IN_EXEC = "_APPROVAL_IN_EXEC"
 REDIRECTED = "_APPROVAL_REDIRECTED"
 SCRIPTS_STABLE = "_APPROVAL_SCRIPTS_STABLE"
+STASH_OWN_DROP = "_APPROVAL_STASH_OWN_DROP"
 OPERAND_READERS = FILE_READS | FILTERS | frozenset({
     "sed", "file", "stat", "ls", "find", "base64", "xxd", "od", "strings", "diff", "cmp", "tar", "zip", "unzip",
 })
@@ -1833,6 +1834,99 @@ def _lossless_stash_drop(global_args, args, cwd, env):
             and _git_lookup(directory, env, "diff", "--cached", "--quiet", TOP_STASH + "^2", "--") is not None)
 
 
+STASH_TAG = r"[A-Za-z0-9_][A-Za-z0-9_.-]*"
+STASH_FINDER = (r"\$\(\s*git stash list --format=(?:'(?:%H|%gd) %gs'|\"(?:%H|%gd) %gs\")\s*\|\s*grep (?:-F )?("
+                + STASH_TAG + r")\s*\|\s*cut -d' ' -f1\s*\)")
+STASH_FOUND = re.compile(STASH_FINDER)
+STASH_FOUND_ASSIGNMENT = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)=" + STASH_FINDER)
+STASH_VARIABLE = re.compile(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
+STASH_QUIET = frozenset({"-q", "--quiet"})
+STASH_UNSAFE = frozenset({"cd", "pushd", "popd", "eval", "source", ".", "exec"}) | SHELLS
+
+
+def _stash_push_tag(words):
+    """The tag of a plain `git stash push [-q] [-u] -m <tag> [-- <paths>]`, else None."""
+    if words[:3] != ["git", "stash", "push"]:
+        return None
+    tag, index = None, 3
+    while index < len(words) and words[index] != "--":
+        if words[index] in STASH_QUIET or words[index] in ("-u", "--include-untracked"):
+            index += 1
+        elif words[index] in ("-m", "--message") and tag is None and index + 1 < len(words):
+            tag = words[index + 1]
+            index += 2
+        else:
+            return None
+    return tag if tag is not None and re.fullmatch(STASH_TAG, tag) else None
+
+
+def _stash_entry(words, verb, variables):
+    """The entry that a plain `git stash apply|drop [-q] <entry>` names: the tag that the command found it by, or the
+    literal `stash@{0}`. None for any other form."""
+    if words[:3] != ["git", "stash", verb]:
+        return None
+    operands = [word for word in words[3:] if word not in STASH_QUIET]
+    if len(operands) != 1 or operands[0].startswith("-"):
+        return None
+    operand = operands[0]
+    found, variable = STASH_FOUND.fullmatch(operand), STASH_VARIABLE.fullmatch(operand)
+    if operand == TOP_STASH:
+        return operand
+    if found:
+        return found[1]
+    return variables.get(variable[1] or variable[2]) if variable else None
+
+
+def _own_stash_drops(segments, operators):
+    """The indexes of `git stash drop` segments that drop a stash entry this command pushed with `git stash push -m
+    <tag>` and applied right before, through an always-running `git stash apply` that `&&` joins to the drop. The drop
+    finds the entry by the same tag, or names `stash@{0}` while it is the newest entry this command pushed. Any other
+    stash command, directory change, shell, or git variable between them ends what the check knows."""
+    allowed, created, top, variables, applied, depth = set(), set(), None, {}, None, 0
+    for index, segment in enumerate(segments):
+        words = segment.words
+        first = words[0] if words else ""
+        nested = first in BLOCK_OPENERS or first in BLOCK_CLOSERS
+        depth = depth + 1 if first in BLOCK_OPENERS else max(0, depth - 1) if first in BLOCK_CLOSERS else depth
+        plain = depth == 0 and not nested and not segment.redirects and not segment.heredoc
+        steady = plain and _runs_unconditionally(index, segments, operators)
+        tag = _stash_push_tag(words)
+        if tag is not None and steady:
+            created.add(tag)
+            top, applied = tag, None
+            continue
+        assignment = STASH_FOUND_ASSIGNMENT.fullmatch(words[0]) if len(words) == 1 else None
+        if assignment and steady:
+            variables[assignment[1]] = assignment[2]
+            continue
+        if words[:3] == ["git", "stash", "apply"]:
+            entry = _stash_entry(words, "apply", variables)
+            entry = top if entry == TOP_STASH else entry
+            applied = (index, entry) if steady and entry in created else None
+            continue
+        if words[:3] == ["git", "stash", "list"]:
+            continue
+        if words[:3] == ["git", "stash", "drop"]:
+            entry = _stash_entry(words, "drop", variables)
+            entry = top if entry == TOP_STASH else entry
+            after = min((op for op in operators if op[2] >= segment.end), key=lambda op: op[2], default=None)
+            if (plain and applied is not None and applied == (index - 1, entry) and entry in created
+                    and (after is None or after[1] in (";", "&&"))
+                    and _chained_by_and(segments, operators, index - 1, index)):
+                allowed.add(index)
+                created.discard(entry)
+            else:
+                created = set()
+            top, applied = None, None
+            continue
+        for name in [key for key in variables
+                     if any(re.search(rf"(?<![A-Za-z0-9_]){key}(?![A-Za-z0-9_])", word) for word in words)]:
+            del variables[name]
+        if os.path.basename(first) in STASH_UNSAFE or any("stash" in word or "GIT_" in word for word in words):
+            created, top, applied = set(), None, None
+    return allowed
+
+
 DEFAULT_BRANCHES = frozenset({"main", "master", "develop", "trunk"})
 PUSH_PLAIN_FLAGS = frozenset({
     "-u", "--set-upstream", "-n", "--dry-run", "-v", "--verbose", "-q", "--quiet", "--no-verify", "--verify", "--progress",
@@ -1984,8 +2078,9 @@ def _git_gh(cli, args, command, cwd=None, env=None):
                 _has_flag(args, "--staged", "-S") and not _has_flag(args, "--worktree", "-W"))
         elif verb == "stash":
             destructive = words[1:2] in (["drop"], ["clear"])
-            if destructive and _lossless_stash_drop(global_args, args, cwd or os.getcwd(),
-                                                    dict(os.environ if env is None else env)):
+            if destructive and (words[1:2] == ["drop"] and env is not None and STASH_OWN_DROP in env
+                                or _lossless_stash_drop(global_args, args, cwd or os.getcwd(),
+                                                        dict(os.environ if env is None else env))):
                 destructive, write = False, True
         discard = not destructive and approval_state.session_scope() and (
             _git_discards(words, args, short)
@@ -4370,6 +4465,36 @@ def _own_repo_script(script, plain, env):
     return bool(committed) and committed == current
 
 
+def _stdin_filter(verdict, program):
+    """Whether a segment is one of the guard's filter programs (`grep`, `tail`, `cut`, and the others) without an option
+    that writes a file or runs a program."""
+    return (verdict.kind == "pass" and verdict.exe in FILTERS and bool(program)
+            and not _filter_may_write(verdict.exe, program[1:]))
+
+
+NODE_VERSION_FLAGS = frozenset({"--version", "-v"})
+
+
+def _own_node_check(program, cwd, env):
+    """Whether a segment only prints the node version or runs `node --test <file>` on a test file of this plugin's work
+    tree that is tracked and unchanged from HEAD. Such a run is the repository's own code, under the trust that the
+    own-script rule gives its scripts, so it does not count as a writer of those scripts."""
+    if program[:1] != ["node"] or len(program) not in (2, 3):
+        return False
+    if len(program) == 2:
+        return program[1] in NODE_VERSION_FLAGS
+    path = Path(program[2]) if program[1] == "--test" and not re.search(r"[$`*?\[{~]", program[2]) else None
+    if path is None or path.suffix not in (".mjs", ".js", ".cjs"):
+        return False
+    script = (Path(cwd) / path).resolve()
+    root = _plugin_tree(script.parent, env)
+    if root is None or not script.is_relative_to(root) or "tests" not in script.relative_to(root).parts[:-1]:
+        return False
+    relative = script.relative_to(root).as_posix()
+    committed = _git_lookup(root, env, "rev-parse", f"HEAD:{relative}")
+    return bool(committed) and committed == _git_lookup(root, env, "hash-object", "--", relative)
+
+
 def _plugin_tree(directory, env):
     """The root of the git work tree that holds `directory` when its `.claude-plugin/plugin.json` names this plugin,
     else None."""
@@ -5473,6 +5598,7 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
         if request is not None:
             return request
     environment = dict(os.environ if env is None else env)
+    environment.pop(STASH_OWN_DROP, None)
     if depth == 0 or "_APPROVAL_SESSION_DIR" not in environment:
         environment["_APPROVAL_SESSION_DIR"] = environment.get("CLAUDE_PROJECT_DIR") or cwd
     filtered = _environment_filter(text)
@@ -5521,6 +5647,7 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
     flow = _ValueFlow(choices)
     made_directories = set()
     pending_cd = None
+    own_drops = _own_stash_drops(segments, operators) if recording and "stash" in text else set()
     for index, segment in enumerate(segments):
         flow.visit(segments, index, operators, current_env)
         command_cwd = pending_cd[0] if pending_cd and _chained_by_and(segments, operators, pending_cd[1], index) else cwd
@@ -5553,6 +5680,7 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
             files_stable = files_stable and verdicts[-1].kind == "read"
             script_stable = script_stable and verdicts[-1].kind == "read"
         scoped_env = current_env if files_stable else {**current_env, FILES_MAY_CHANGE: "1"}
+        scoped_env = {key: value for key, value in scoped_env.items() if key != STASH_OWN_DROP}
         shell_script, shell_seed = _shell_c_seed(segment, _value_lookup(flow.choices(), {**current_env, **variables}))
         for body in _indirect_regions(region, [segment]):
             verdict = classify_text(body, cwd, depth + 1, {**scoped_env, **assignments}, None, None,
@@ -5666,6 +5794,7 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
                    else _classify_argv(argv or segment.words, segment.heredoc and not argv, command_cwd, depth, text,
                                        {**{key: value for key, value in scoped_env.items() if key != SCRIPTS_STABLE},
                                         **({SCRIPTS_STABLE: "1"} if script_stable else {}),
+                                        **({STASH_OWN_DROP: "1"} if index in own_drops else {}),
                                         **({} if _redirects_write_only_inside_temporary_root(
                                             segment.redirects, command_cwd, {**current_env, **variables},
                                             flow.choices()) else {REDIRECTED: "1"})},
@@ -5679,7 +5808,9 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
         inert = verdict.kind == "pass" and (not name or name in FILE_INERT) and flow.outside_loop_header()
         header = verdict.kind == "pass" and name == "for" and not substitutions
         files_stable = files_stable and (verdict.kind == "read" or inert) and _redirects_allowed([segment])
-        script_stable = script_stable and (verdict.kind == "read" or inert or header) and _redirects_allowed([segment])
+        script_stable = script_stable and (verdict.kind == "read" or inert or header or _stdin_filter(verdict, program)
+                                           or not assignments and _own_node_check(program, command_cwd, current_env)
+                                           ) and _redirects_allowed([segment])
         output = name in ("echo", "printf") and (substitutions or any(
             re.search(r"\$(?:" + re.escape(key) + r"\b|\{" + re.escape(key) + r"\})", region)
             for key in substitution_names

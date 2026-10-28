@@ -1905,3 +1905,166 @@ def test_비밀을_읽거나_출력하는_리터럴은_임시_쓰기와_함께�
     result = blob_decision(home, monkeypatch, command)
     # then
     assert result in ("ask", "deny"), (middle, result)
+
+
+# --- L2-4. this plugin's tracked node test file runs before a loop of its tracked scripts --------------------------------
+
+NODE_TEST = "skills/document-to-confluence/tests/test_render_diagrams.mjs"
+NODE_LOOP = ('for s in skills/*/; do python3 skills/skill-builder/scripts/quick_validate.py "$s" >/dev/null 2>&1 || '
+             'echo "FAIL $s"; done; echo validated')
+NODE_RECORDED = (f"node --version; node --test {NODE_TEST} 2>&1 | tail -8 | grep -E \"pass|fail\"; {NODE_LOOP}")
+
+
+@pytest.fixture
+def l24(j14):
+    (j14 / NODE_TEST).parent.mkdir(parents=True)
+    (j14 / NODE_TEST).write_text("import test from 'node:test';\ntest('a', () => {});\n")
+    (j14 / "tools").mkdir()
+    (j14 / "tools" / "run.mjs").write_text("console.log(1);\n")
+    j14_git(j14, "add", "-A")
+    j14_git(j14, "commit", "-q", "-m", "node")
+    return j14
+
+
+@pytest.mark.parametrize("prefix", [
+    "node --version; ",
+    f"node --test {NODE_TEST}; ",
+    f"node --test {NODE_TEST} 2>&1 | tail -3; ",
+    f"node --version; node --test ./{NODE_TEST}; ",
+    "",
+])
+def test_추적된_node_테스트_실행_뒤의_추적된_스크립트_반복은_묻지_않는다(home, l24, prefix):
+    # given
+    command = f"cd {l24} && " + prefix + NODE_LOOP
+    # when
+    result = j14_decision(home, command)
+    # then
+    assert result not in ("ask", "deny"), prefix
+
+
+def test_기록된_L2_4_명령은_묻지_않는다(home, l24):
+    # given
+    command = f"cd {l24} && {NODE_RECORDED}"
+    # when
+    result = j14_decision(home, command)
+    # then
+    assert result not in ("ask", "deny")
+
+
+def l24_change(repo, title):
+    if title == "modified test":
+        (repo / NODE_TEST).write_text("import test from 'node:test';\ntest('b', () => {});\n")
+    elif title == "untracked test":
+        (repo / NODE_TEST).with_name("test_new.mjs").write_text("console.log(2);\n")
+
+
+L24_ASKS = [
+    ("modified test", f"node --test {NODE_TEST}; "),
+    ("untracked test", f"node --test {NODE_TEST.replace('render_diagrams', 'new')}; "),
+    ("none", "node -e 'console.log(1)'; "),
+    ("none", "node --eval 'console.log(1)'; "),
+    ("none", f"node --test -e 'x' {NODE_TEST}; "),
+    ("none", "node tools/run.mjs; "),
+    ("none", f"node --test {NODE_TEST} extra.mjs; "),
+    ("none", f"sed -i 's/a/b/' skills/skill-builder/scripts/quick_validate.py; node --test {NODE_TEST}; "),
+    ("none", f"node --test {NODE_TEST}; cp scripts/host_tool.py skills/skill-builder/scripts/quick_validate.py; "),
+    ("none", f"node --test {NODE_TEST} > skills/skill-builder/scripts/quick_validate.py; "),
+    ("none", f"node --test {NODE_TEST}; git checkout HEAD~1 -- skills; "),
+    ("none", f"node --test /home/test/other/test_x.mjs; "),
+    ("none", "node --test tools/run.mjs; "),
+    ("none", "echo a | sort -o skills/skill-builder/scripts/quick_validate.py; "),
+    ("modified test", f"node --test {NODE_TEST} 2>&1 | tail -3; "),
+]
+
+
+@pytest.mark.parametrize("title, prefix", L24_ASKS)
+def test_바뀌었거나_추적되지_않은_node_파일이나_node_e_또는_앞선_쓰기가_있으면_스크립트_반복은_계속_묻는다(home, l24, title, prefix):
+    # given
+    l24_change(l24, title)
+    command = f"cd {l24} && " + prefix + NODE_LOOP
+    # when
+    result = j14_decision(home, command)
+    # then
+    assert result in ("ask", "deny"), (title, prefix, result)
+
+
+# --- L2-5. a drop of the stash entry this command pushed under a tag and applied right before ----------------------------
+
+STASH_PUSH = "git stash push -q -m h2tmp -- tests/a.py tests/b.py"
+STASH_SHA = "$(git stash list --format='%H %gs' | grep h2tmp | cut -d' ' -f1)"
+STASH_REF = "$(git stash list --format='%gd %gs' | grep h2tmp | cut -d' ' -f1)"
+STASH_TEST = "python3 -m pytest -q tests/a.py"
+STASH_RECORDED = (f"{STASH_PUSH}; {STASH_TEST}; S={STASH_SHA}; git stash apply -q $S && "
+                  f"git stash drop -q \"{STASH_REF}\"")
+
+
+def stash_decision(home, command):
+    cwd = home / "project"
+    grant_write(cwd)
+    return decision(guard.handle(bash(command, cwd), "claude"))
+
+
+@pytest.mark.parametrize("command", [
+    STASH_RECORDED,
+    f"{STASH_PUSH}; {STASH_TEST}; S={STASH_SHA}; git stash apply -q $S && git stash drop -q stash@{{0}}",
+    f"{STASH_PUSH}; {STASH_TEST}; git stash apply -q stash@{{0}} && git stash drop -q stash@{{0}}",
+    f"{STASH_PUSH}; git stash apply stash@{{0}} && git stash drop stash@{{0}}",
+    f"{STASH_PUSH}; S={STASH_SHA}; git stash apply --quiet \"$S\" && git stash drop --quiet \"{STASH_REF}\"",
+    f"{STASH_PUSH}; S={STASH_SHA}; git stash apply -q ${{S}} && git stash drop \"{STASH_REF}\"",
+    f"{STASH_PUSH}; git stash apply -q \"{STASH_REF}\" && git stash drop -q \"{STASH_REF}\"",
+    f"{STASH_PUSH}; {STASH_TEST}; git stash apply -q stash@{{0}} && git stash drop -q \"{STASH_REF}\"",
+])
+def test_같은_명령에서_태그로_만들고_적용한_스태시의_drop은_세션_쓰기로_묻지_않는다(home, command):
+    # when
+    result = stash_decision(home, command)
+    # then
+    assert result not in ("ask", "deny"), command
+
+
+def test_태그_스태시_drop은_세션_쓰기_승인이_없으면_한_번_묻는다(home):
+    # when
+    result = decision(guard.handle(bash(STASH_RECORDED, home / "project"), "claude"))
+    # then
+    assert result == "ask"
+
+
+STASH_OTHER_REF = STASH_REF.replace("h2tmp", "other")
+STASH_OTHER_SHA = STASH_SHA.replace("h2tmp", "other")
+
+
+@pytest.mark.parametrize("title, command", [
+    ("drop without apply", f"{STASH_PUSH}; {STASH_TEST}; git stash drop -q \"{STASH_REF}\""),
+    ("drop literal without apply", f"{STASH_PUSH}; git stash drop -q stash@{{0}}"),
+    ("drop of another tag", f"{STASH_PUSH}; S={STASH_SHA}; git stash apply -q $S && git stash drop -q \"{STASH_OTHER_REF}\""),
+    ("apply of another tag", f"{STASH_PUSH}; S={STASH_OTHER_SHA}; git stash apply -q $S && git stash drop -q \"{STASH_REF}\""),
+    ("joined by semicolon", f"{STASH_PUSH}; S={STASH_SHA}; git stash apply -q $S; git stash drop -q \"{STASH_REF}\""),
+    ("joined by or", f"{STASH_PUSH}; S={STASH_SHA}; git stash apply -q $S || git stash drop -q \"{STASH_REF}\""),
+    ("apply behind or", f"{STASH_PUSH}; true || git stash apply -q stash@{{0}} && git stash drop -q stash@{{0}}"),
+    ("apply in pipeline", f"{STASH_PUSH}; git stash apply -q stash@{{0}} | cat && git stash drop -q stash@{{0}}"),
+    ("clear", f"{STASH_PUSH}; git stash apply -q stash@{{0}} && git stash clear"),
+    ("not created here", f"S={STASH_SHA}; git stash apply -q $S && git stash drop -q \"{STASH_REF}\""),
+    ("not created here literal", "git stash apply -q stash@{0} && git stash drop -q stash@{0}"),
+    ("push behind or", f"false || {STASH_PUSH}; git stash apply -q stash@{{0}} && git stash drop -q stash@{{0}}"),
+    ("push inside condition", f"if true; then {STASH_PUSH}; fi; git stash apply -q stash@{{0}} && git stash drop -q stash@{{0}}"),
+    ("push without tag", "git stash push -q -- tests/a.py; git stash apply -q stash@{0} && git stash drop -q stash@{0}"),
+    ("push with another tag", f"git stash push -q -m other; git stash apply -q stash@{{0}} && git stash drop -q \"{STASH_REF}\""),
+    ("later push moves the top", f"{STASH_PUSH}; S={STASH_SHA}; git stash push -q -m other; git stash apply -q $S && "
+     "git stash drop -q stash@{0}"),
+    ("pop in between", f"{STASH_PUSH}; git stash pop -q; git stash apply -q stash@{{0}} && git stash drop -q stash@{{0}}"),
+    ("drop in between", f"{STASH_PUSH}; git stash drop -q stash@{{1}}; git stash apply -q stash@{{0}} && git stash drop -q stash@{{0}}"),
+    ("other index", f"{STASH_PUSH}; git stash apply -q stash@{{0}} && git stash drop -q stash@{{1}}"),
+    ("directory change", f"{STASH_PUSH}; cd /home/test/other; git stash apply -q stash@{{0}} && git stash drop -q stash@{{0}}"),
+    ("git dir variable", f"{STASH_PUSH}; export GIT_DIR=/home/test/other/.git; git stash apply -q stash@{{0}} && git stash drop -q stash@{{0}}"),
+    ("git global option", f"{STASH_PUSH}; git stash apply -q stash@{{0}} && git -C /home/test/other stash drop -q stash@{{0}}"),
+    ("second drop", f"{STASH_PUSH}; git stash apply -q stash@{{0}} && git stash drop -q stash@{{0}}; git stash drop -q stash@{{0}}"),
+    ("tag by pattern", f"{STASH_PUSH}; S=$(git stash list --format='%H %gs' | grep h2 | cut -d' ' -f1); "
+     f"git stash apply -q $S && git stash drop -q \"{STASH_REF}\""),
+    ("different variable", f"{STASH_PUSH}; S={STASH_SHA}; T=abc; git stash apply -q $T && git stash drop -q \"{STASH_REF}\""),
+    ("variable reassigned", f"{STASH_PUSH}; S={STASH_SHA}; S=abc; git stash apply -q $S && git stash drop -q \"{STASH_REF}\""),
+    ("in a loop", f"{STASH_PUSH}; for i in 1 2; do git stash apply -q stash@{{0}} && git stash drop -q stash@{{0}}; done"),
+])
+def test_스태시를_이_명령이_만들고_적용하지_않았거나_다른_항목이면_drop은_계속_매번_묻는다(home, title, command):
+    # when
+    result = stash_decision(home, command)
+    # then
+    assert result in ("ask", "deny"), (title, command, result)
