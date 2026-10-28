@@ -355,6 +355,7 @@ class SessionContextTest(unittest.TestCase):
             "CODEX_HOME": str(codex_home),
             "PLUGIN_ROOT": str(REPO_ROOT),
             "PATH": f"{self.bin}{os.pathsep}{os.defpath}",
+            "HEI5ENBUG_APPROVAL_GUARD": "",
         }
 
         # when
