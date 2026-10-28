@@ -518,8 +518,12 @@ argv의 `-u`·`--user` 또는 `Authorization` 헤더는 메서드 자체의 결�
 
 Claude `Read`와 Bash 읽기(`cat`, `less`, `head`, `tail`, `grep`, `rg`)가 `~/.kube/config`, 모든 `KUBECONFIG` 경로,
 `~/.aws/credentials`, `~/.aws/config`, `~/.azure/**`, `~/.config/gcloud/**`, `~/.pgpass`, `~/.docker/config.json`,
-`~/.netrc`, `.env*` 파일을 읽으면 민감 호출입니다. 단 이름이 `.example`, `.sample`, `.template`, `.dist`로 끝나는
-템플릿은 제외합니다. 필터 없는 `printenv`, 명령 없는 `env`,
+`~/.netrc`, `~/.config/gh/hosts.yml`, `~/.ssh` 아래의 개인 키(`*.pub`, `known_hosts`, `config` 제외), `.env*` 파일을 읽으면
+민감 호출입니다. 단 이름이 `.example`, `.sample`, `.template`, `.dist`로 끝나는 템플릿은 제외합니다. Python 코드도 같은 판정을
+받습니다. heredoc, `-c` 코드, 스크립트가 이 파일을 열거나 읽거나 불러오면(경로는 `Path.home()`, `os.path.expanduser`,
+`os.path.join`, f-string, 한 번만 대입한 이름으로 적을 수 있음), 또는 비밀로 보이는 이름의 환경변수 값
+(`os.environ[...]`, `os.environ.get`, `os.getenv`)을 출력하거나 보내면 민감 읽기입니다. 그런 변수가 설정됐는지 검사하거나,
+변수 이름만 나열하거나, 파일이 있는지만 확인하거나, 비밀 단어를 검색어로만 쓰면 묻지 않습니다. 필터 없는 `printenv`, 명령 없는 `env`,
 `kubectl exec ... env|printenv`, `docker inspect`, `docker exec ... env`, `terraform`의 state와 JSON·raw 출력,
 `helm get all`·`get manifest`·`get values`도 같습니다. 한 세션의 첫 민감 읽기는 한 번 묻고, 그 뒤로는 모든 민감 읽기를
 세션이 끝날 때까지 실행합니다. 비밀 거부는 그대로여서, 비밀 값을 출력하는 명령은 승인한 뒤에도 거부합니다.

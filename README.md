@@ -547,8 +547,13 @@ and `key=value` or `--key value` pairs whose key names a secret.
 
 Claude `Read` and Bash reads (`cat`, `less`, `head`, `tail`, `grep`, `rg`) of `~/.kube/config`, any `KUBECONFIG` path,
 `~/.aws/credentials`, `~/.aws/config`, `~/.azure/**`, `~/.config/gcloud/**`, `~/.pgpass`, `~/.docker/config.json`,
-`~/.netrc`, or `.env*` files are sensitive, except templates whose names end in `.example`, `.sample`, `.template`,
-or `.dist`. So are unfiltered `printenv`, `env` without a command,
+`~/.netrc`, `~/.config/gh/hosts.yml`, private keys under `~/.ssh` (not `*.pub`, `known_hosts`, or `config`), or `.env*`
+files are sensitive, except templates whose names end in `.example`, `.sample`, `.template`, or `.dist`. Python code
+gets the same decision: a heredoc, `-c` code, or script that opens, reads, or loads one of these files (the path may be
+spelled through `Path.home()`, `os.path.expanduser`, `os.path.join`, an f-string, or a name assigned once), or that
+prints or sends the value of an environment variable with a secret-like name (`os.environ[...]`, `os.environ.get`,
+`os.getenv`), is a sensitive read. Testing whether such a variable is set, listing variable names, checking that a file
+exists, and using the secret word only as search text stay silent. So are unfiltered `printenv`, `env` without a command,
 `kubectl exec ... env|printenv`, `docker inspect`, `docker exec ... env`, `terraform` state and JSON or raw output, and
 `helm get all`, `get manifest`, and `get values`. The first sensitive read of a session asks once; after that, every
 sensitive read runs for the rest of the session. The secret denial stays: a command that would print a secret value is

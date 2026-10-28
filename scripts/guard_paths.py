@@ -9,6 +9,7 @@ from guard_shell import _one_line, strip_prefix
 
 
 ENV_TEMPLATE_SUFFIXES = (".example", ".sample", ".template", ".dist")
+SSH_PUBLIC_NAMES = ("known_hosts", "known_hosts.old", "config")
 
 
 def _sensitive(text):
@@ -37,9 +38,12 @@ def _protected_path(path, cwd, env=None):
     home = Path.home()
     protected = [home / item for item in (
         ".kube/config", ".aws/credentials", ".aws/config", ".pgpass", ".docker/config.json", ".netrc",
+        ".config/gh/hosts.yml",
     )]
     protected.extend(_resolved(item, cwd) for item in env.get("KUBECONFIG", "").split(os.pathsep) if item)
     if candidate.name.startswith(".env") and not candidate.name.endswith(ENV_TEMPLATE_SUFFIXES) or candidate in protected:
+        return True
+    if home / ".ssh" in candidate.parents and not candidate.name.endswith(".pub") and candidate.name not in SSH_PUBLIC_NAMES:
         return True
     return any(candidate == directory or directory in candidate.parents for directory in (
         home / ".azure", home / ".config/gcloud",

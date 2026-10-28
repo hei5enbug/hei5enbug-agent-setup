@@ -37,6 +37,7 @@ GUARD_MODULE_NAMES = (
     "guard_permissions",
     "guard_proof",
     "guard_pyread",
+    "guard_pyrisk",
     "guard_pywrite",
     "guard_reads",
     "guard_scripts",

@@ -34,6 +34,7 @@ from guard_git import COMMAND_GIT_CONFIG, FILES_MAY_CHANGE, IN_EXEC, STASH_OWN_D
 from guard_cloud import Rules, _classify_curl, _classify_sql, _docker_metadata_inspect, _local_engine
 from guard_self import CLI_RULES, MAX_DEPTH, PYTHON_EXEC, _code_runs_guard, _first_operand, _request_outcome
 from guard_pyread import _git_run_command, _read_only_python
+from guard_pyrisk import credential_read, secret_environment
 from guard_pywrite import _confine_writes, _documents_only, _exec_files_confined
 from guard_proof import SELF_APPROVAL_REASON, _self_approval
 from guard_scripts import (
@@ -163,6 +164,16 @@ def _git_reads_with_temp_writes(tree, processes, cwd, depth, cwd_known, env):
             and _read_only_python(copy, runs))
 
 
+def _python_risk(code, cwd, env):
+    """The outcome for Python code, given as text or as a parsed tree, that exposes a credential, or None."""
+    try:
+        tree = ast.parse(code) if isinstance(code, str) else code
+    except (SyntaxError, ValueError):
+        return None
+    exposure = credential_read(tree, cwd, env) or secret_environment(tree)
+    return _sensitive(exposure) if exposure else None
+
+
 def _python_policy(content, cwd, depth, env, readonly=False, cwd_known=True):
     if _code_runs_guard(content):
         return Outcome("forbidden", [], [SELF_APPROVAL_REASON])
@@ -170,6 +181,9 @@ def _python_policy(content, cwd, depth, env, readonly=False, cwd_known=True):
         tree = ast.parse(content)
     except SyntaxError:
         return _unclassified("python", content) if PYTHON_EXEC.search(content) or SDK_IMPORT.search(content) else Outcome("pass", [], [])
+    risk = _python_risk(tree, cwd, env)
+    if risk is not None:
+        return risk
     if not _exec_files_confined(ast.parse(content), cwd, cwd_known, env):
         return Outcome("write", ["python:" + _digest(content)], ["Python process or SDK execution"])
     imports = "\n".join(ast.unparse(node) for node in ast.walk(tree) if isinstance(node, (ast.Import, ast.ImportFrom)))
@@ -290,7 +304,7 @@ def _classify_script(words, cwd, depth, env, variables=None, choices=None, plain
                 return Outcome("pass", [], [])
             argv =[_script_path(arg, cwd, variables or {}) for arg in script_args]
             if pending is not None and not _confined_python_writes(pending, cwd, env, argv, resolved):
-                return _script_unknown(resolved, words, env, "unreadable")
+                return _python_risk(pending, cwd, env) or _script_unknown(resolved, words, env, "unreadable")
             readonly = not any(_protected_argument(arg, cwd, env) for arg in args)
             verdict = _python_policy(content, cwd, depth, env, readonly)
             if verdict.kind in ("write", "always"):
