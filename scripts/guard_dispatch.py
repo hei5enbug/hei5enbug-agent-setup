@@ -35,6 +35,7 @@ from guard_cloud import Rules, _classify_curl, _classify_sql, _docker_metadata_i
 from guard_self import CLI_RULES, MAX_DEPTH, PYTHON_EXEC, _code_runs_guard, _first_operand, _request_outcome
 from guard_pyread import _git_run_command, _read_only_python
 from guard_pyrisk import credential_read, secret_environment
+from guard_installed import INSTALLED_CODE_REASON, installed_code_write, python_writes_installed_code
 from guard_pywrite import _confine_writes, _documents_only, _exec_files_confined
 from guard_proof import SELF_APPROVAL_REASON, _self_approval
 from guard_scripts import (
@@ -135,6 +136,7 @@ def _classify_helper(args, cwd, depth, command, env=None):
 
 
 TEMP_WRITE_EXE = "temp-write"
+INSTALLED_WRITERS = frozenset({"cp", "mv", "install", "rsync", "ln", "tee", "sed"})
 OPERAND_READERS = FILE_READS | FILTERS | frozenset({
     "sed", "file", "stat", "ls", "find", "base64", "xxd", "od", "strings", "diff", "cmp", "tar", "zip", "unzip",
 })
@@ -165,11 +167,14 @@ def _git_reads_with_temp_writes(tree, processes, cwd, depth, cwd_known, env):
 
 
 def _python_risk(code, cwd, env):
-    """The outcome for Python code, given as text or as a parsed tree, that exposes a credential, or None."""
+    """The outcome for Python code, given as text or as a parsed tree, that writes installed plugin code or exposes a
+    credential, or None."""
     try:
         tree = ast.parse(code) if isinstance(code, str) else code
     except (SyntaxError, ValueError):
         return None
+    if python_writes_installed_code(tree, cwd, env):
+        return Outcome("forbidden", [], [INSTALLED_CODE_REASON])
     exposure = credential_read(tree, cwd, env) or secret_environment(tree)
     return _sensitive(exposure) if exposure else None
 
@@ -641,6 +646,9 @@ def classify_text(text, cwd, depth=0, env=None, variables=None, statics=None, ch
                     classified = verdict.kind == "read" or verdict.kind == "pass" and _covered_only_as_commands(body)
                     verdicts.append(verdict if pure_python or classified and shell else _unclassified(match.group(0), body))
         name = os.path.basename(program[0]) if program else ""
+        if (segment.redirects or name in INSTALLED_WRITERS) and installed_code_write(
+                program, segment.redirects, command_cwd, {**current_env, **variables}):
+            verdicts.append(Outcome("forbidden", [], [INSTALLED_CODE_REASON]))
         if (PYTHON.fullmatch(name) and "-c" not in program and "-m" not in program
                 and _python_inline_code(program[1:]) is None):
             for _, operator, target in segment.redirects:

@@ -32,6 +32,7 @@ GUARD_MODULE_NAMES = (
     "guard_dispatch",
     "guard_expand",
     "guard_git",
+    "guard_installed",
     "guard_own",
     "guard_paths",
     "guard_permissions",

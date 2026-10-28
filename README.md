@@ -254,8 +254,8 @@ tiers, or is denied or passed:
   approving it grants that approval too, and the prompt says so.
 - **Request** asks for a bundle of session approvals before the actual calls.
 - **Secret** is denied on both hosts because the command would print a secret value.
-- **Forbidden** is denied on both hosts: running the guard scripts or editing the approval state (see the
-  self-approval rules below).
+- **Forbidden** is denied on both hosts: running the guard scripts, editing the approval state, or writing
+  installed plugin code (see the self-approval rules below).
 - **Pass** is a call the guard does not cover, so the host's own permission flow decides.
 
 The every-time list holds the actions that affect remote or production systems or destroy local data that cannot be
@@ -684,6 +684,13 @@ denial names the trigger, for example `It was denied because of "$(".`
 Plain reads of guard files, such as `cat` or `rg`, are not denied. The validated `request` command above is the only
 execution exception. File edits inside either state directory, including paths named in an `apply_patch` patch,
 are denied on both hosts.
+
+Installed plugin code is protected the same way. A write into the Claude or Codex plugin caches
+(`~/.claude/plugins/cache`, `$CLAUDE_CONFIG_DIR/plugins/cache`, `~/.codex/plugins/cache`) or the running plugin root is
+denied on both hosts, whether it is a redirection, `tee`, `sed -i`, the destination of `cp`, `mv`, `install`, `rsync`, or
+`ln`, or Python code in a heredoc, `-c` option, or script file that writes, moves, or removes such a path. The guard
+resolves `..`, repeated slashes, `~`, known variables, and symbolic links before it compares. Reading that code stays
+allowed.
 
 Commands that need a secret value use the secret helper: `python3 <plugin root>/scripts/secret_exec.py --secret
 DB_PASSWORD=k8s:<context>/<namespace>/<secret>/<key> -- <command>`. The sources are `k8s:`, `keyvault:<vault>/<name>`,

@@ -248,7 +248,7 @@ Codex `apply_patch` 호출 전에 `scripts/approval_guard.py`를 실행합니다
   프롬프트가 이를 밝힙니다.
 - **요청**은 실제 호출 전에 세션 승인 묶음을 요청합니다.
 - **비밀**은 명령이 비밀 값을 출력하므로 두 호스트 모두에서 거부됩니다.
-- **금지**는 두 호스트 모두에서 거부됩니다. 가드 스크립트를 실행하거나 승인 상태를 편집하는 경우입니다(아래 자기 승인 규칙 참고).
+- **금지**는 두 호스트 모두에서 거부됩니다. 가드 스크립트를 실행하거나, 승인 상태를 편집하거나, 설치된 플러그인 코드를 쓰는 경우입니다(아래 자기 승인 규칙 참고).
 - **통과**는 가드가 다루지 않는 호출이므로 호스트의 기존 권한 절차가 결정합니다.
 
 매번 묻는 목록에는 원격·운영 시스템에 영향을 주거나 복구할 수 없는 로컬 데이터를 지우는 작업을 둡니다.
@@ -638,6 +638,12 @@ completing (declines included); stop retrying and tell the user.”입니다. �
 `$`, `$(`, 백틱, `<(`, `>(`, 중괄호는 거부하며, 거부 사유가 원인을 밝힙니다(예: `It was denied because of "$(".`).
 `cat`이나 `rg`로 가드 파일을 읽기만 하는 명령은 거부되지 않습니다. 위에서 검증한 `request` 명령만 실행 예외입니다.
 두 상태 디렉터리 안의 파일 편집은 `apply_patch` 패치가 가리키는 경로를 포함해 양쪽 호스트 모두 거부합니다.
+
+설치된 플러그인 코드도 같은 방식으로 보호합니다. Claude나 Codex 플러그인 캐시(`~/.claude/plugins/cache`,
+`$CLAUDE_CONFIG_DIR/plugins/cache`, `~/.codex/plugins/cache`)나 실행 중인 플러그인 루트에 쓰는 호출은 양쪽 호스트에서
+거부합니다. 리다이렉션, `tee`, `sed -i`, `cp`·`mv`·`install`·`rsync`·`ln`의 대상, heredoc·`-c` 옵션·스크립트 파일의 Python
+코드가 그 경로를 쓰거나 옮기거나 지우는 경우가 모두 해당합니다. 가드는 비교 전에 `..`, 반복된 슬래시, `~`, 알려진 변수,
+심볼릭 링크를 풀어서 봅니다. 그 코드를 읽는 것은 계속 허용합니다.
 
 비밀 값이 필요한 명령은 비밀 도우미를 사용합니다: `python3 <plugin root>/scripts/secret_exec.py --secret
 DB_PASSWORD=k8s:<context>/<namespace>/<secret>/<key> -- <command>`. 소스는 `k8s:`, `keyvault:<vault>/<name>`,

@@ -313,3 +313,90 @@ def secret_environment(tree):
                 and _value_exposed(node, parents, uses)):
             return key.value
     return None
+
+
+PATH_WRITE_METHODS = frozenset({
+    "write_text", "write_bytes", "touch", "mkdir", "unlink", "rmdir", "symlink_to", "hardlink_to", "chmod", "lchmod",
+    "rename", "replace",
+})
+SHUTIL_SOURCES_AND_TARGETS = {
+    "copy": (1,), "copy2": (1,), "copyfile": (1,), "copytree": (1,), "copymode": (1,), "copystat": (1,),
+    "move": (0, 1), "rmtree": (0,), "make_archive": (0,), "unpack_archive": (1,), "chown": (0,),
+}
+OS_WRITE_POSITIONS = {
+    "remove": (0,), "unlink": (0,), "rmdir": (0,), "removedirs": (0,), "mkdir": (0,), "makedirs": (0,),
+    "truncate": (0,), "chmod": (0,), "chown": (0,), "lchown": (0,), "utime": (0,), "mkfifo": (0,), "mknod": (0,),
+    "rename": (0, 1), "replace": (0, 1), "renames": (0, 1), "symlink": (1,), "link": (1,),
+}
+
+
+def _mode_writes(mode):
+    """Whether the mode argument of an `open` call can write: a literal mode with a write letter, or a mode that is not a
+    literal."""
+    if isinstance(mode, ast.Constant) and isinstance(mode.value, str):
+        return bool(set(mode.value) & set("wax+"))
+    return mode is not None
+
+
+def _call_targets(node, folder, dotted, tail):
+    """The path expressions that one call changes."""
+    func = node.func
+    args = node.args
+    if dotted == "open" or dotted.split(".")[0] in OPEN_MODULES and tail == "open":
+        target = _keyword(node, "file", 0)
+        return [target] if target is not None and _mode_writes(_keyword(node, "mode", 1)) else []
+    if dotted == "os.open":
+        flags = _keyword(node, "flags", 1)
+        target = _keyword(node, "path", 0)
+        return [target] if target is not None and flags is not None and OS_OPEN_WRITE.search(ast.unparse(flags)) else []
+    if dotted.startswith("shutil.") and tail in SHUTIL_SOURCES_AND_TARGETS:
+        return [args[index] for index in SHUTIL_SOURCES_AND_TARGETS[tail] if index < len(args)]
+    if dotted.startswith("os.") and tail in OS_WRITE_POSITIONS:
+        return [args[index] for index in OS_WRITE_POSITIONS[tail] if index < len(args)]
+    if not isinstance(func, ast.Attribute):
+        return []
+    if tail == "open":
+        return [func.value] if _mode_writes(_keyword(node, "mode", 0)) else []
+    if tail == "replace" and len(args) != 1 or tail not in PATH_WRITE_METHODS:
+        return []
+    return [func.value, *args[:1]] if tail in ("rename", "replace", "symlink_to", "hardlink_to") else [func.value]
+
+
+def write_targets(tree, folder):
+    """The path texts that a script can create, change, move, or remove, from `open` in a write mode, `write_text`,
+    `write_bytes`, `Path` mutators, `shutil`, and `os`."""
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or any(isinstance(arg, ast.Starred) for arg in node.args):
+            continue
+        func = node.func
+        dotted = _dotted(func, folder.aliases) or ""
+        tail = func.attr if isinstance(func, ast.Attribute) else func.id if isinstance(func, ast.Name) else ""
+        for target in _call_targets(node, folder, dotted, tail):
+            found.extend(folder.fold(target))
+    return found
+
+
+def _resolved_text(text, cwd):
+    """The resolved absolute spelling of a path text without a wildcard, else None."""
+    if not text or "\0" in text or "*" in text:
+        return None
+    try:
+        return str(Path(cwd, os.path.expanduser(text)).resolve())
+    except (OSError, RuntimeError, ValueError):
+        return None
+
+
+def path_matches(tree, cwd, env, exact, tail):
+    """Whether a script writes a path for which `exact(resolved)` is true, or whose text with unknown parts matches the
+    `tail` expression."""
+    folder = _Folder(tree, _aliases(tree), env)
+    for text in write_targets(tree, folder):
+        resolved = _resolved_text(text, cwd)
+        if resolved is not None:
+            if exact(resolved):
+                return text
+        elif text.replace("*", "").strip("/.") and tail.search(re.sub(r"/{2,}", "/", text)):
+            return text
+    return None
+
