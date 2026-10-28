@@ -1427,6 +1427,39 @@ class HostRecordTest(unittest.TestCase):
         # Then
         self.assertEqual([None, None, "busy", "idle"], states)
 
+    def test_TaskStop으로_멈춘_작업은_알림을_기다리지_않는다(self):
+        """TaskStop 결과가 멈췄다고 알린 ID는 지우고, 다른 ID를 멈춘 결과는 남은 작업을 지우지 않는다."""
+        # Given
+        launch = result_record("Command running in background with ID: bg1. Output is being written to: /tmp/work/bg1.output")
+        stopped = result_record('{"message":"Successfully stopped task: bg1 (sleep 60)","task_id":"bg1"}')
+        other = result_record('{"message":"Successfully stopped task: bg9 (sleep 60)","task_id":"bg9"}')
+        head = [user_record("질문"), launch, assistant_record()]
+
+        # When
+        states = [self.state([*head, stopped, assistant_record(), turn_end()]),
+                  self.state([*head, other, assistant_record(), turn_end()])]
+
+        # Then
+        self.assertEqual(["idle", None], states)
+
+    def test_차례_도중_첨부로_받은_알림도_받은_것으로_본다(self):
+        """진행 중인 차례에 queued_command 첨부로 들어온 알림은 그 ID를 지우고, 대기열 등록 기록이나 다른 첨부는 지우지 않는다."""
+        # Given
+        launch = result_record("Command running in background with ID: bg1. Output is being written to: /tmp/work/bg1.output")
+        prompt = "<task-notification>\n<task-id>bg1</task-id>\n<status>completed</status>\n</task-notification>"
+        attached = {"type": "attachment", "attachment": {"type": "queued_command", "prompt": prompt}, "timestamp": refresh.now()}
+        enqueued = {"type": "queue-operation", "operation": "enqueue", "content": prompt, "timestamp": refresh.now()}
+        other = {"type": "attachment", "attachment": {"type": "edited_text_file", "snippet": prompt}, "timestamp": refresh.now()}
+        head = [user_record("질문"), launch, assistant_record()]
+
+        # When
+        states = [self.state([*head, attached, assistant_record(), turn_end()]),
+                  self.state([*head, enqueued, assistant_record(), turn_end()]),
+                  self.state([*head, other, assistant_record(), turn_end()])]
+
+        # Then
+        self.assertEqual(["idle", None, None], states)
+
     def test_작업_시작_문구마다_ID를_읽고_ID가_없는_백그라운드_실행은_판단하지_않는다(self):
         """이동·에이전트·모니터·Task ID 문구에서 ID를 읽어 알림 여부를 보고, 실행 중이라고 하면서 ID를 주지 않는 결과는 None이다."""
         # Given

@@ -25,7 +25,8 @@ ASYNC_AGENT = re.compile(r"Async agent launched successfully")
 AGENT_ID = re.compile(r"agentId: ([\w-]+)")
 BACKGROUND_MENTION = re.compile(r"(?:\brun(?:s|ning)?|\bmoved)\b[^\n]{0,60}?\b(?:in|to) the background")
 NOTIFIED_ID = re.compile(r"<task-id>([\w-]+)</task-id>")
-SCAN_MARKERS = (b"background", b"Async agent", b"Monitor started", b"Task ID:", b"<task-id>")
+STOPPED_ID = re.compile(r"Successfully stopped task: ([\w-]+)")
+SCAN_MARKERS = (b"background", b"Async agent", b"Monitor started", b"Task ID:", b"<task-id>", b"stopped task")
 EARLIER_SCANS: dict[str, dict] = {}
 
 
@@ -124,8 +125,12 @@ def track_pending(record: dict, pending: set[str]) -> bool:
         ids, no_id = launched_ids(text)
         unknown = unknown or no_id
         pending.update(ids)
+        pending.difference_update(STOPPED_ID.findall(text))
     if record.get("type") == "user":
         pending.difference_update(NOTIFIED_ID.findall(text_of(message_content(record))))
+    attachment = record.get("attachment")
+    if record.get("type") == "attachment" and isinstance(attachment, dict) and attachment.get("type") == "queued_command":
+        pending.difference_update(NOTIFIED_ID.findall(text_of(attachment.get("prompt"))))
     return unknown
 
 
