@@ -1473,17 +1473,19 @@ class HostRecordTest(unittest.TestCase):
         self.assertEqual({"future": None, "past": "idle", "stopped": "idle", "cron": None}, states)
 
     def test_결과가_아직_없는_가장_새_슬래시_명령은_진행_중이고_끝난_명령은_건너뛴다(self):
-        """가장 새 command-name 기록에 뒤따르는 stdout이 없으면 busy이고, 있으면 그 명령 기록은 건너뛰고 앞선 차례로 판단한다."""
+        """가장 새 command-name 기록에 뒤따르는 stdout이 없으면 busy이고, 사용자 stdout 기록이나 local_command system 기록이 있으면 그 명령 기록은 건너뛰고 앞선 차례로 판단한다."""
         # Given
         running = [*FINISHED_TURN, user_record("<command-name>/compact</command-name>"),
                    user_record("<local-command-caveat>The command below was run directly</local-command-caveat>")]
         done = [*running, user_record("<local-command-stdout>Compacted</local-command-stdout>")]
+        reloaded = [*running, {"type": "system", "subtype": "local_command", "timestamp": refresh.now(),
+                               "content": "<local-command-stdout>Reloaded: 7 plugins</local-command-stdout>"}]
 
         # When
-        states = [self.state(running), self.state(done)]
+        states = [self.state(running), self.state(done), self.state(reloaded)]
 
         # Then
-        self.assertEqual(["busy", "idle"], states)
+        self.assertEqual(["busy", "idle", "idle"], states)
 
     def test_차례_종료_기록이_한_번도_없으면_진행_중으로_단정하지_않는다(self):
         """차례 종료 기록을 쓰지 않는 버전일 수 있으므로 마지막이 assistant 기록이어도 None이고, 기록이 있으면 busy이다."""

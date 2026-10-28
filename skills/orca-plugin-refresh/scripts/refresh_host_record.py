@@ -58,7 +58,10 @@ def classify(record: dict) -> str:
     """`neutral`, `command`, `output`, `finished`, or `active` for one Claude Code transcript record."""
     kind = record.get("type")
     if kind == "system":
-        return "finished" if record.get("subtype") == "turn_duration" else "neutral"
+        subtype = record.get("subtype")
+        if subtype == "turn_duration":
+            return "finished"
+        return "output" if subtype == "local_command" else "neutral"
     if kind == "assistant":
         return "active"
     if kind != "user" or record.get("isMeta") or record.get("isCompactSummary"):
