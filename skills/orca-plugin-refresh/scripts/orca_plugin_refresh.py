@@ -52,6 +52,7 @@ from refresh_sessions import (  # noqa: E402
     plan_sessions, probe_left_input_clean, read_marker, ready, result_counts, settle, step, terminal_gone, terminal_host,
     transcript_outcome, transcript_records, transcript_size, verify,
 )
+from refresh_sessions import HELD_INPUT, OPEN_STATUSES, host_record, release_held  # noqa: E402
 
 RUNTIME_PATHS = ("skills", "instructions", "scripts", "hooks", "config", "agents", "standalone-agents", ".claude-plugin", ".codex-plugin")
 SELF_WAIT_SECONDS = 60 * 60
@@ -240,7 +241,8 @@ def continuation_script(hosts: dict[str, dict]) -> str:
 
 
 def public(entry: dict) -> dict:
-    keys = ("host", "title", "worktree", "status", "detail", "completed", "actions", "compact_reason", "note", "initiator")
+    keys = ("host", "title", "worktree", "status", "detail", "completed", "actions", "compact_reason", "note", "initiator",
+            "ready_signal", "input")
     view = {key: entry.get(key) for key in keys if entry.get(key) not in (None, [], False)}
     view["terminal"] = f"…{entry['handle'][-6:]}"
     return view
@@ -360,8 +362,11 @@ def notify(orca: Orca, entry: dict, run_id: str, sleep: Callable[[float], None])
             live = {item.get("handle"): item for item in orca.terminals()}
             reason, _ = driver.ready(orca, notice, live)
             if reason is None and (entry["host"] != "claude" or orca.draft(entry["handle"]) == notice.get("observed_draft")):
-                orca.send(entry["handle"], message)
-                return "sent"
+                record = driver.host_record(notice)
+                if record != "busy" and (record is not None or orca.idle(entry["handle"])):
+                    orca.send(entry["handle"], message)
+                    return "sent"
+                reason = "turn_started"
             if reason in {"terminal_gone", "probe_interrupted", "unsent_input"}:
                 break
         except RefreshError as error:

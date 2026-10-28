@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from refresh_core import HANDLE, SESSION_CONTEXT, RefreshError, parse_time
+from refresh_host_record import COMMAND_RECORD_PREFIXES, TRANSCRIPT_TAIL_BYTES, record_state
 from refresh_orca import Orca
 from refresh_screen import composer_bounds, input_state, codex_fresh, screen_host
 
@@ -19,16 +20,20 @@ CODEX_COMPACTED = re.compile(r"Context compacted")
 CLAUDE_NOTHING_TO_COMPACT = re.compile(r"Not enough messages to compact")
 CLAUDE_COMPACT_ERROR = re.compile(r"Error during compaction|Compaction canceled")
 COMMANDS = {"reload": "/reload-plugins", "compact": "/compact", "clear": "/clear"}
-COMMAND_RECORD_PREFIXES = ("<command-name>", "<local-command-caveat>", "<local-command-stdout>", "<local-command-stderr>")
 CLEAR_TIMEOUT = 60.0
 PROBE_KEY = "x"
 DRAFT_STABLE_SECONDS = 5.0
 PROBE_RETRIES = 3
 PROBE_RECHECK_SECONDS = 3.0
-TRANSCRIPT_TAIL_BYTES = 512 * 1024
+CLEAR_SETTLE_SECONDS = 3.0
+TYPE_CONFIRM_SECONDS = 3.0
+RESTORE_WAIT_SECONDS = 120.0
+UNRESTORABLE_INPUT = re.compile(r"\[Pasted text #\d+|\[Image #\d+\]")
+HELD_INPUT: dict[str, str] = {}
 BACKSPACE = "\x7f"
 POLL_SECONDS = 2.0
 FINAL_STATUSES = frozenset({"done", "skipped", "failed"})
+OPEN_STATUSES = frozenset({"pending", "sent", "restoring"})
 RELOAD_TIMEOUT = 45.0
 COMPACT_TIMEOUT = 300.0
 
@@ -71,6 +76,11 @@ def read_marker(handle: str) -> dict | None:
     except (OSError, json.JSONDecodeError):
         return None
     return payload if isinstance(payload, dict) else None
+
+
+def host_record(entry: dict) -> str | None:
+    """`idle` or `busy` from the host's own turn record named by the session marker; None when it cannot decide."""
+    return record_state(entry["host"], (read_marker(entry["handle"]) or {}).get("transcript_path"))
 
 
 def compact_reason(host: str, marker: dict | None, target: dict, mode: str) -> str | None:
@@ -177,24 +187,28 @@ def probe_left_input_clean(orca: Orca, handle: str, draft: str) -> bool:
     return after == draft or not (isinstance(after, str) and after.strip())
 
 
-def ready(orca: Orca, entry: dict, live: dict[str, dict]) -> tuple[str | None, list[str]]:
-    """Return (None, screen) when a command can be sent safely, otherwise the reason to wait."""
-    if terminal_gone(entry, live):
-        return "terminal_gone", []
-    terminal = live[entry["handle"]]
-    if terminal.get("connected") is not True or terminal.get("writable") is not True or terminal.get("orphaned") is True:
-        return "terminal_unavailable", []
-    if not orca.idle(entry["handle"]):
-        return "busy", []
+def restorable_text(draft: object) -> bool:
+    """Only text the Orca CLI can type back verbatim: one line, no paste or image placeholder, and no leading `-`, which
+    the CLI could read as an option."""
+    return (isinstance(draft, str) and bool(draft.strip()) and "\n" not in draft and "\r" not in draft
+            and not draft.startswith("-") and not UNRESTORABLE_INPUT.search(draft))
+
+
+def unsent_input(entry: dict, draft: object, lines: list[str]) -> tuple[str, list[str]]:
+    entry["input_restorable"] = entry["host"] == "claude" and entry.get("typed_draft") == draft and restorable_text(draft)
+    return "unsent_input", lines
+
+
+def input_ready(orca: Orca, entry: dict) -> tuple[str | None, list[str]]:
     lines, draft = orca.screen(entry["handle"])
     if entry.get("screen_identified") and screen_host(lines) != entry["host"]:
         return "input_unknown", lines
     entry["observed_draft"] = draft if isinstance(draft, str) else None
     if not (isinstance(draft, str) and draft.strip()):
         state = input_state(entry["host"], lines)
-        return (None if state == "empty" else ("unsent_input" if state == "text" else "input_unknown")), lines
+        return (None if state == "empty" else (unsent_input(entry, None, lines)[0] if state == "text" else "input_unknown")), lines
     if entry["host"] != "claude" or entry.get("typed_draft") == draft:
-        return "unsent_input", lines
+        return unsent_input(entry, draft, lines)
     seen = entry.get("draft_seen")
     if not seen or seen[0] != draft:
         entry["draft_seen"] = (draft, time.time())
@@ -211,8 +225,149 @@ def ready(orca: Orca, entry: dict, live: dict[str, dict]) -> tuple[str | None, l
         return "probe_interrupted", lines
     if verdict == "text":
         entry["typed_draft"] = draft
-        return "unsent_input", lines
+        return unsent_input(entry, draft, lines)
     return None, lines
+
+
+def ready(orca: Orca, entry: dict, live: dict[str, dict]) -> tuple[str | None, list[str]]:
+    """Return (None, screen) when a command can be sent safely, otherwise the reason to wait.
+
+    The host's own turn record decides first; Orca's idle signal decides only when the record cannot.
+    """
+    if terminal_gone(entry, live):
+        return "terminal_gone", []
+    terminal = live[entry["handle"]]
+    if terminal.get("connected") is not True or terminal.get("writable") is not True or terminal.get("orphaned") is True:
+        return "terminal_unavailable", []
+    record = host_record(entry)
+    if record == "busy" or (record is None and not orca.idle(entry["handle"])):
+        return "busy", []
+    reason, lines = input_ready(orca, entry)
+    if reason in (None, "unsent_input"):
+        entry["ready_signal"] = "host_record" if record == "idle" else "tui_idle"
+    return reason, lines
+
+
+def line_empty(orca: Orca, handle: str, probed: dict | None = None, sleep: Callable[[float], None] = time.sleep) -> tuple[bool, object]:
+    """(True, ghost suggestion or None) when the input line holds nothing typed, otherwise (False, its draft)."""
+    try:
+        draft = settle(lambda: orca.draft(handle), lambda value: not (isinstance(value, str) and value.strip()), sleep, CLEAR_SETTLE_SECONDS)
+        if not (isinstance(draft, str) and draft.strip()):
+            return True, None
+        verdict = probed.get(draft) if probed is not None else None
+        if verdict is None:
+            verdict = claude_draft_state(orca, handle, draft, sleep)
+            if probed is not None and verdict != "interrupted":
+                probed[draft] = verdict
+    except RefreshError:
+        return False, None
+    return verdict == "empty", draft
+
+
+def drop_held(entry: dict) -> None:
+    HELD_INPUT.pop(entry["handle"], None)
+    entry.pop("line_probes", None)
+    entry["input_held"] = False
+
+
+def read_line(orca: Orca, handle: str) -> object:
+    """The input line's draft once it is blank or has stopped changing for CLEAR_SETTLE_SECONDS."""
+    return settle(lambda: orca.draft(handle), lambda value: not (isinstance(value, str) and value.strip()), time.sleep, CLEAR_SETTLE_SECONDS)
+
+
+def leftover_of(text: str, line: object) -> bool:
+    """True when the line holds a non-empty piece of `text` at its start or end, which is what an interrupted clear leaves."""
+    return isinstance(line, str) and bool(line.strip()) and (text.startswith(line) or text.endswith(line))
+
+
+def complete_line(orca: Orca, handle: str, text: str, line: str) -> bool:
+    """Type back the part of `text` missing around `line` and report whether the draft now equals `text`."""
+    missing = text[len(line):] if text.startswith(line) else text[: len(text) - len(line)]
+    if missing.startswith("-"):
+        for character in missing:
+            orca.keys(handle, character)
+    elif missing:
+        orca.keys(handle, missing)
+    return settle(lambda: orca.draft(handle), lambda value: value == text, time.sleep, TYPE_CONFIRM_SECONDS) == text
+
+
+def recover_clear(orca: Orca, entry: dict, text: str, line: object) -> bool:
+    """End an entry whose clear left `line`: complete it when it is a piece of the text, otherwise keep holding it."""
+    if not leftover_of(text, line):
+        entry.update(status="failed", detail="input_clear_failed", actions=[])
+        return True
+    restored = complete_line(orca, entry["handle"], text, line)
+    drop_held(entry)
+    if restored:
+        entry.update(status="skipped", detail="input_clear_failed", input="restored", actions=[])
+    else:
+        entry.update(status="failed", detail="input_restore_unconfirmed", actions=[])
+    return True
+
+
+def hold_input(orca: Orca, entry: dict) -> bool:
+    """Keep the entry's typed draft in memory and clear the line; True when the entry ended instead of being cleared."""
+    handle, text = entry["handle"], entry["observed_draft"]
+    HELD_INPUT[handle] = text
+    entry["input_held"] = True
+    try:
+        for _ in text:
+            orca.keys(handle, BACKSPACE)
+    except RefreshError:
+        try:
+            line = read_line(orca, handle)
+        except RefreshError:
+            line = None
+        return recover_clear(orca, entry, text, line)
+    try:
+        remaining = read_line(orca, handle)
+    except RefreshError:
+        remaining = None
+    if not (leftover_of(text, remaining) and remaining != text):
+        empty, remaining = line_empty(orca, handle)
+        if empty:
+            entry["observed_draft"] = remaining
+            return False
+    return recover_clear(orca, entry, text, remaining)
+
+
+def release_held(orca: Orca, entry: dict) -> bool:
+    """Give a cleared draft back once the entry has no action left; True while the entry still holds input."""
+    if not entry.get("input_held") or entry["status"] in ("pending", "sent"):
+        return False
+    if entry["status"] != "restoring":
+        entry["outcome"] = (entry["status"], entry.get("detail"))
+        entry.update(status="restoring", restore_started=time.time())
+    handle, text = entry["handle"], HELD_INPUT.get(entry["handle"])
+    failure = "input_not_restored_line_in_use"
+    try:
+        try:
+            line = read_line(orca, handle)
+        except RefreshError:
+            line = None
+        if text is not None and line != text and leftover_of(text, line):
+            failure = "input_restore_unconfirmed"
+            empty = complete_line(orca, handle, text, line)
+        else:
+            empty, _ = line_empty(orca, handle, entry.setdefault("line_probes", {}))
+            if not empty and time.time() - entry["restore_started"] < RESTORE_WAIT_SECONDS:
+                return True
+            if empty:
+                failure = "input_restore_unconfirmed"
+                if text is None:
+                    empty = False
+                else:
+                    orca.keys(handle, text)
+                    empty = settle(lambda: orca.draft(handle), lambda value: value == text, time.sleep, TYPE_CONFIRM_SECONDS) == text
+    except RefreshError:
+        empty, failure = False, "input_restore_unconfirmed"
+    drop_held(entry)
+    if empty:
+        status, detail = entry.pop("outcome")
+        entry.update(status=status, detail=detail, input="restored")
+    else:
+        entry.update(status="failed", detail=failure, actions=[])
+    return True
 
 
 def result_counts(lines: Sequence[str]) -> dict[str, int]:
@@ -390,15 +545,34 @@ def step(orca: Orca, entry: dict, target: dict, live: dict[str, dict]) -> None:
         if codex_fresh(screen):
             entry.update(status="done", detail="fresh_session_loads_on_first_turn", actions=[])
             return
-    if reason:
+    typed = reason == "unsent_input" and entry.get("input_restorable") and not entry.get("input_held")
+    if reason == "unsent_input" and not typed:
+        entry.update(status="skipped", detail="input_not_restorable", input="not_restorable", actions=[])
+        return
+    if reason and not typed:
         return
     marker = read_marker(entry["handle"])
     if entry["actions"][0] == "clear" and claude_has_prompts((marker or {}).get("transcript_path")):
         entry["actions"].insert(0, "compact")
         finish(entry, "failed:compact_needs_more_messages")
         return
-    if entry["host"] == "claude" and orca.draft(entry["handle"]) != entry.get("observed_draft"):
+    def moved() -> bool:
+        return entry["host"] == "claude" and orca.draft(entry["handle"]) != entry.get("observed_draft")
+
+    if moved():
         entry["detail"] = "input_changed"
+        return
+    if typed:
+        entry["detail"] = None
+        if hold_input(orca, entry):
+            return
+        if moved():
+            entry["detail"] = "input_changed"
+            return
+        lines = orca.screen(entry["handle"])[0]
+    record = host_record(entry)
+    if record == "busy" or (record is None and not orca.idle(entry["handle"])):
+        entry["detail"] = "turn_started"
         return
     entry["before"] = result_counts(lines)
     entry["before_lines"] = lines
@@ -421,7 +595,7 @@ def drive(orca: Orca, sessions: list[dict], state: dict, deadline: float, sleep:
             for entry in sessions:
                 if entry["status"] == "pending":
                     entry.update(status=expire, detail=entry.get("detail") or "deadline_reached")
-        active = [entry for entry in sessions if entry["status"] in {"pending", "sent"}]
+        active = [entry for entry in sessions if entry["status"] in OPEN_STATUSES or entry.get("input_held")]
         if not active:
             return
         try:
@@ -429,6 +603,8 @@ def drive(orca: Orca, sessions: list[dict], state: dict, deadline: float, sleep:
         except RefreshError:
             live = None
         for entry in active:
+            if release_held(orca, entry):
+                continue
             if live is None:
                 entry["detail"] = "terminal_list_unavailable"
                 continue

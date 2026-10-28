@@ -233,29 +233,33 @@ def codex_home() -> Path:
     return Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
 
 
-def rollout_idle(path: Path) -> bool:
-    """True only when the last complete line of a Codex rollout file records the end of a turn."""
+def rollout_last_record(path: Path) -> dict | None:
+    """The last complete JSON object of a Codex rollout file, or None when the tail is partial, empty, or not an object."""
     with path.open("rb") as stream:
         size = stream.seek(0, os.SEEK_END)
         start = max(0, size - ROLLOUT_TAIL_BYTES)
         stream.seek(start)
         data = stream.read()
     if not data.endswith(b"\n"):
-        return False
+        return None
     lines = data.split(b"\n")
     if start:
         lines = lines[1:]
     lines = [line for line in lines if line.strip()]
     if not lines:
-        return False
+        return None
     try:
         record = json.loads(lines[-1].decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
-        return False
-    if not isinstance(record, dict):
-        return False
-    payload = record.get("payload")
-    return record.get("type") == "event_msg" and isinstance(payload, dict) and payload.get("type") in CODEX_IDLE_EVENTS
+        return None
+    return record if isinstance(record, dict) else None
+
+
+def rollout_idle(path: Path) -> bool:
+    """True only when the last complete line of a Codex rollout file records the end of a turn."""
+    record = rollout_last_record(path)
+    payload = record.get("payload") if record else None
+    return bool(record) and record.get("type") == "event_msg" and isinstance(payload, dict) and payload.get("type") in CODEX_IDLE_EVENTS
 
 
 def install_gate(host: str) -> RefreshError | None:

@@ -10,11 +10,12 @@ import refresh_sessions as driver
 from refresh_core import RefreshError, parse_time
 from refresh_install import validate_install
 from refresh_orca import Orca
-from refresh_sessions import FINAL_STATUSES, compact_reason, step, terminal_gone
+from refresh_sessions import FINAL_STATUSES, OPEN_STATUSES, compact_reason, host_record, release_held, step, terminal_gone
 
 
 IDLE_CONFIRM_SECONDS = 3.0
 INSTALL_CHECK_SECONDS = 30.0
+WAITING_DETAILS = ("busy", "waiting_for_idle", "deadline_reached", "turn_started")
 
 
 class IdleWaiters:
@@ -141,14 +142,14 @@ def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[flo
     reported: set[str] = set()
 
     def report() -> None:
-        finished = [entry for entry in entries if entry["status"] in FINAL_STATUSES and entry["handle"] not in reported]
+        finished = [entry for entry in entries if entry["status"] in FINAL_STATUSES and not entry.get("input_held") and entry["handle"] not in reported]
         if finished and progress:
             reported.update(entry["handle"] for entry in finished)
             progress(finished)
 
     try:
         while True:
-            active = [entry for entry in entries if entry["status"] in {"pending", "sent"}]
+            active = [entry for entry in entries if entry["status"] in OPEN_STATUSES or entry.get("input_held")]
             if not active:
                 return
             try:
@@ -157,28 +158,33 @@ def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[flo
                 live = None
             for entry in active:
                 report()
+                if release_held(orca, entry):
+                    continue
                 if entry["status"] == "pending":
                     if live is not None and terminal_gone(entry, live):
                         waiters.cancel(entry["handle"])
                         entry.update(status="skipped", detail="terminal_gone", actions=[])
                         continue
                     if time.time() >= entry["deadline"]:
-                        busy = entry.get("detail") in (None, "busy", "waiting_for_idle", "deadline_reached")
+                        busy = entry.get("detail") in (None, *WAITING_DETAILS)
                         entry.update(status="skipped", detail="not_idle_before_deadline" if busy else entry["detail"], actions=[])
                         continue
                     if live is None:
                         entry["detail"] = "terminal_list_unavailable"
                         continue
                     handle = entry["handle"]
-                    if handle not in waiters.failed and entry.get("detail") in ("busy", "waiting_for_idle", "deadline_reached"):
+                    if handle not in waiters.failed and entry.get("detail") in WAITING_DETAILS:
+                        record = host_record(entry)
                         idle = waiters.take(handle)
-                        if idle is None:
+                        if record == "busy" or (record is None and idle is None):
                             waiters.start(handle, entry["deadline"])
                             entry["detail"] = "waiting_for_idle"
                             continue
-                        if not idle:
+                        if record is None and not idle:
                             continue
                         sleep(IDLE_CONFIRM_SECONDS)
+                        if record == "idle" and host_record(entry) != "idle":
+                            continue
                     still_needed(entry, state, cache)
                     if entry["status"] != "pending":
                         continue

@@ -86,8 +86,9 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
    without an error, run `python3 <script> apply --run-id <run_id> --json` in the foreground with a shell timeout
    of at least 600 seconds. Do not ask the user to confirm this step; the script's checks decide which sessions
    receive commands. For about 20 seconds the script sends a command only to an idle session whose input line is
-   empty, then keeps confirming the commands already sent. It hands every session that is still busy or not ready
-   to one detached helper as `deferred` instead of waiting. An `already_running` error means another run is still
+   empty or holds text it can clear and restore exactly, then keeps confirming the commands already sent and
+   restoring the text. It hands every session that is still busy or not ready to one detached helper as `deferred`
+   instead of waiting. An `already_running` error means another run is still
    sending; wait for it, then run `apply` again. A host with an update error stays blocked while successful hosts
    can proceed.
 4. **Report every session.** Show the terminal suffix, host, worktree, status, completed actions, and detail:
@@ -95,26 +96,33 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
      `fresh_session_loads_on_first_turn` marks a Codex session that never ran a turn. The note
      `empty_session_cleared` marks an empty Claude Code session that got `/clear`, and
      `instructions_load_on_next_turn` marks a compacted Codex session.
-   - `skipped`: the session stayed busy, kept unsent input, showed an unreadable input line, changed its input
-     just before the send, reached the deadline, or closed.
+   - `skipped`: the session stayed busy, held input that cannot be restored exactly (`input_not_restorable`),
+     showed an unreadable input line, changed its input just before the send, reached the deadline, or closed.
+     `input_clear_failed` means the line could not be cleared and the script typed the text back.
+   - Every session also reports `ready_signal` (`host_record` or `tui_idle`, the signal that allowed the send) and,
+     when it held input, `input` (`restored` or `not_restorable`).
    - `failed`: an action was sent but not confirmed, or Claude Code refused it. A reload refusal that asks for
      `--force` means a plugin's MCP tools changed; do not force it without the user's approval.
      `compact_needs_more_messages` means the conversation is too short to compact; its instructions refresh at
      its next compaction or restart. `probe_interrupted_check_input` means the input line changed while the
-     script checked it and did not return to its earlier state, or such checks kept being interrupted; tell the user to check that session's input line for a stray `x`, because the script
-     never deletes input it did not type. `helper_start_failed` means this session's follow-up could not start;
-     run `apply` again.
+     script checked it and did not return to its earlier state, or such checks kept being interrupted; tell the
+     user to check that session's input line for a stray `x`, because the script never deletes input it did not
+     type. `input_restore_unconfirmed` means the saved text was not confirmed back on the input line, and
+     `input_not_restored_line_in_use` means the user typed new text, so the saved text was not typed back and is
+     gone; tell the user to check that session's input line. `helper_start_failed` means this session's follow-up
+     could not start; run `apply` again.
    - `blocked`: that host's plugin update failed or its installed manifest, hook targets, or instruction digest
      did not validate.
    - `deferred`: the session was busy or not ready, so the detached helper finishes it; see step 5.
    - `queued_after_turn`: this session itself; see step 5.
 5. **Let the helper finish.** When `apply` reports `deferred` or `queued_after_turn`, report the first results
-   and end the turn. One detached helper waits on Orca's idle callback (`orca terminal wait --for tui-idle`) for
-   every deferred session at once and for this session. When a session reports idle, the helper confirms it
-   again after three seconds, checks that the installed plugin still matches the run and that the session has
-   not already loaded the new instructions, and only then sends the remaining actions. A session deferred for
-   another reason, such as an unreadable input line, is checked again on every poll. A deferred session that is
-   not ready within one hour of the handoff stays unsent, as `not_idle_before_deadline` or with its last reason.
+   and end the turn. One detached helper watches every deferred session and this session. Each session's own turn
+   record decides first, and Orca's idle callback (`orca terminal wait --for tui-idle`) decides only when the
+   record cannot. When a session reports idle, the helper confirms it again after three seconds, checks that the
+   installed plugin still matches the run and that the session has not already loaded the new instructions, and
+   only then sends the remaining actions. A session deferred for another reason, such as an unreadable input line,
+   is checked again on every poll. A deferred session that is not ready within one hour of the handoff stays
+   unsent, as `not_idle_before_deadline` or with its last reason.
    A session whose terminal closes is skipped at once as `terminal_gone`, and its wait ends. The status shows each
    session's final result as soon as it is reached, so `status` reports progress while the helper runs.
    After every session finishes, the helper sends this session one prompt that asks to run
@@ -143,14 +151,24 @@ result is not ok when this plugin has a host error or any companion has the stat
   successful result.
 - The Codex gate reads only Codex rollout files modified in the last 30 minutes and counts a session as idle
   only when its last complete line ends a turn. A partial or unreadable last line defers. It reads no prompt text.
-- A command goes only to a connected, writable, idle terminal whose input line is empty. A short race between
-  that check and the send remains.
+- A command goes only to a connected, writable, idle terminal whose input line is empty or was cleared as below.
+  The host's own turn record decides idle or busy first and is read again right before each send, where an
+  undecided record needs `tui-idle` too; a Claude Code transcript whose newest turn has ended with no background
+  task, subagent, or scheduled wakeup owing a notification, also anywhere earlier in the file, means idle, a turn in
+  progress means busy, and a Codex rollout's last complete line decides the same way. When the record is missing,
+  partial, or not decisive, Orca's `tui-idle` decides. A short race remains.
 - Orca hides the Claude Code input line from the screen and reports it as a draft, which also carries Claude
   Code's grey prompt suggestion. When a draft stays unchanged for five seconds, the script types one character
   and deletes it only when the draft shows exactly that character: a suggestion is replaced and typed text is
-  extended, and both come back unchanged. A session with typed text is skipped, never sent to. When a check is interrupted but the draft then
-  returns to its earlier state or empties, no character of the script's remains, so it checks again later, up to
-  three more times. The script checks the draft again just before each send.
+  extended, and both come back unchanged. When the probe shows typed text of one line without a paste or image
+  placeholder or a leading `-`, the script keeps it only in memory, clears it with backspaces, sends the commands,
+  and types it back without Enter once the last action is confirmed or fails, or before the session is handed to
+  the helper, completing a line that a failed clear left partly cleared; a crash between the clear and the restore
+  loses it. Any other unsent input is left untouched and the
+  session is skipped.
+  When a check is interrupted but the draft then returns to its earlier state or empties, no character of the
+  script's remains, so it checks again later, up to three more times. The script checks the draft again just before
+  each send.
 - `/clear` runs only after Claude Code refuses to compact and the transcript, read again right before the send,
   holds no prompt.
 - Each result is confirmed from transcript records appended after the send, or from a marker rewritten after it,
