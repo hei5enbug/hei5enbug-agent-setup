@@ -8,7 +8,6 @@ LINE_LIMIT = 800
 # Files that already exceed the limit, each capped at its line count when the limit was introduced. Lower a ceiling
 # when a file shrinks and remove the entry once the file is within the limit; never raise one.
 CEILINGS = {
-    "scripts/approval_guard.py": 7143,
     "scripts/datagrip_guard.py": 992,
     "scripts/approval_state.py": 822,
 }

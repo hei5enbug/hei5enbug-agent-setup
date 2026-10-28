@@ -837,8 +837,8 @@ def _native_ready(event):
     """Whether Codex's native approval window asks for this call (the approval guard decides, see native_ready)."""
     if event is None:
         return False
-    import approval_guard
-    return approval_guard.native_ready(event)
+    import guard_permissions
+    return guard_permissions.native_ready(event)
 
 
 def codex_unapproved(tool_input, session_id, tool_use_id=None, event=None):
@@ -889,8 +889,8 @@ def codex_permission_request(tool_input, session_id=None, tool_use_id=None, even
             return None
         outcome = classify_query(tool_input)
         if event is not None and outcome.kind == "write" and _native_ready(event):
-            import approval_guard
-            return approval_guard.codex_permission(session_id, outcome, tool_use_id, tool_input, TOOL_NAME, event)
+            import guard_permissions
+            return guard_permissions.codex_permission(session_id, outcome, tool_use_id, tool_input, TOOL_NAME, event)
         if not approval_state.permission_allowed("codex", session_id, outcome, tool_use_id):
             return None
     return approval_state.permission_allow()

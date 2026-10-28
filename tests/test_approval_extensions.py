@@ -10,6 +10,7 @@ import pytest
 from test_approval_guard import (
     GUARD_PATH, bash_event, fake_bin, guard, project, query_event, state, state_mod, datagrip_guard, PG_ID, MSSQL_ID,
 )
+import guard_dispatch  # noqa: E402
 
 
 def decision(output):
@@ -603,7 +604,7 @@ def test_classifier_errors_fail_closed_with_the_failure_reason(state, fake_bin, 
     # given
     def broken(*args, **kwargs):
         raise RuntimeError("broken")
-    monkeypatch.setattr(guard, "classify_text", broken)
+    monkeypatch.setattr(guard_dispatch, "classify_text", broken)
     # when
     output = guard.handle(bash_event("kubectl get pods"), host)
     # then

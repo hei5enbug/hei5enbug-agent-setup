@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 
 from test_approval_guard import bash_event, datagrip_guard, fake_bin, guard, state, state_mod  # noqa: F401
+import guard_dispatch  # noqa: E402
+import guard_tools  # noqa: E402
 
 WRITE_KEY = state_mod.WRITE_KEY
 SENSITIVE_KEY = state_mod.SENSITIVE_KEY
@@ -191,7 +193,7 @@ def test_분류기_예외는_매번_묻는_작업이고_stderr에_한_줄을_남
     # given
     def fail(*args, **kwargs):
         raise RuntimeError("boom")
-    monkeypatch.setattr(guard, "classify_text", fail)
+    monkeypatch.setattr(guard_dispatch, "classify_text", fail)
     # when
     output = guard.handle(bash_event("echo hi", cwd=state), "claude")
     # then
@@ -205,7 +207,7 @@ def test_mcp_분류기_예외도_stderr에_한_줄을_남긴다(state, monkeypat
     # given
     def fail(*args, **kwargs):
         raise KeyError("boom")
-    monkeypatch.setattr(guard, "classify_mcp", fail)
+    monkeypatch.setattr(guard_tools, "classify_mcp", fail)
     # when
     output = guard.handle(mcp_event("mcp__demo__thing", {}), "claude")
     # then
@@ -620,7 +622,7 @@ def test_승인_뒤_재분류가_예외를_던져도_세션_쓰기가_기록된�
     event = bash_event(f"python3 {script}", cwd=state, tool_use_id="toolu_1")
     guard.handle(event, "claude")
     assert state_mod._load("claude", "s1")["asked"] == [{"id": "toolu_1", "keys": [WRITE_KEY]}]
-    monkeypatch.setattr(guard, "classify_text", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("slow")))
+    monkeypatch.setattr(guard_dispatch, "classify_text", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("slow")))
     # when
     guard.handle({**event, "hook_event_name": "PostToolUse"}, "claude")
     # then

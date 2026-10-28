@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import approval_guard as guard  # noqa: E402
+import guard_paths  # noqa: E402
 
 NON_TEMPORARY_HOME = "/nonexistent-home"
 NON_TEMPORARY_TMPDIR = "/nonexistent-tmpdir"
@@ -43,7 +44,7 @@ def git(root, *args):
 @pytest.fixture
 def work_tree(home, monkeypatch):
     """A Git work tree outside every temporary root, with the session folder elsewhere."""
-    monkeypatch.setattr(guard, "TEMPORARY_ROOTS", ("/nonexistent-temp-root",))
+    monkeypatch.setattr(guard_paths, "TEMPORARY_ROOTS", ("/nonexistent-temp-root",))
     session = home / "session"
     session.mkdir()
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(session))
@@ -653,7 +654,7 @@ def linked_script(home, monkeypatch):
     """A script whose real folder is a temporary root and whose link folder is not."""
     real = home / "temp"
     real.mkdir()
-    monkeypatch.setattr(guard, "TEMPORARY_ROOTS", (str(real),))
+    monkeypatch.setattr(guard_paths, "TEMPORARY_ROOTS", (str(real),))
     (real / "cleanup.sh").write_text('#!/bin/bash\nD=$(dirname "$0"); rm -rf "$D/cache"\n')
     tools = home / "tools"
     tools.mkdir()

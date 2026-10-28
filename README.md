@@ -68,6 +68,7 @@ hei5enbug-agent-setup/
 │   ├── approval_state.py
 │   ├── approve_wrapper.sh
 │   ├── datagrip_guard.py
+│   ├── guard_*.py
 │   ├── hook_python.sh
 │   ├── host_settings.py
 │   ├── language_guard.py
@@ -664,8 +665,9 @@ retry approved by the third code. `PostToolUse` or `PostToolUseFailure` resets t
 keys, and `UserPromptSubmit` resets every count, so a write the user asks for after a stop is asked again. Already
 approved session keys do not use another key's request budget.
 
-The agent cannot approve anything itself. A Bash command that runs `approval_guard.py`, `datagrip_guard.py`, or
-`approval_state.py` as a program, with `-m`, or through Python code that imports it, is denied on both hosts.
+The agent cannot approve anything itself. A Bash command that runs `approval_guard.py`, `datagrip_guard.py`,
+`approval_state.py`, or one of the `guard_*.py` modules the approval guard imports as a program, with `-m`, or through
+Python code that imports it, is denied on both hosts.
 Commands naming the approval or heartbeat state directory are denied unless every simple command is an allowed read:
 `ls`, `cat`, `head`, `tail`, `grep`, `wc`, `stat`, `file`, `find`, or `echo`. `find` may use only read options such
 as `-type`, `-name`, `-maxdepth`, or `-print`, and no glob characters. The command must have no braces,

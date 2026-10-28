@@ -52,6 +52,7 @@
 | 집행자 | 집행하는 규칙 | 규칙 위치 |
 |---|---|---|
 | `tests/test_approval_guard.py` | 읽기는 통과하고, 쓰기는 승인이 필요하며, 파괴적 호출은 매번 묻고, 비밀 값 출력은 거부한다. | `instructions/session/core.md`, `README.md` (Approval guard) |
+| `tests/test_approval_guard_modules.py` | 승인 가드의 분리된 모듈은 순환 없이 층으로 가져오고, 바꿔 끼우는 이름마다 소유 모듈이 하나이며, 진입점과 똑같이 프로그램이나 import로 쓰면 거부된다. | `README.md` (Approval guard) |
 | `tests/test_approval_policy_tiers.py` | 조회, 세션 승인, 매번 승인 층이 경계를 지킨다. | `README.md` (Approval guard) |
 | `tests/test_approval_one_approval.py`, `tests/test_approval_session_write.py` | 세션당 한 번의 승인이 파괴적이지 않은 쓰기를 모두 다루고, 되돌릴 수 없는 호출은 계속 묻는다. | `instructions/session/core.md`, `README.md` (Approval guard) |
 | `tests/test_approval_session_scope.py` | `session` 범위는 중대한 종류를 빼고 세션당 한 번 묻는다. | `README.md` (Approval guard) |

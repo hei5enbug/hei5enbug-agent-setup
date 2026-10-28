@@ -14,6 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import approval_guard as guard  # noqa: E402
+import guard_cloud  # noqa: E402
 import approval_state as state_mod  # noqa: E402
 
 NON_TEMPORARY_HOME = "/nonexistent-home"
@@ -29,7 +30,7 @@ def home(tmp_path, monkeypatch):
     monkeypatch.setenv("TMPDIR", NON_TEMPORARY_TMPDIR)
     for name in [name for name in os.environ if name.startswith("GIT_")]:
         monkeypatch.delenv(name)
-    monkeypatch.setattr(guard, "PODMAN_SYSTEM_CONFIGS", (), raising=False)
+    monkeypatch.setattr(guard_cloud, "PODMAN_SYSTEM_CONFIGS", (), raising=False)
     for name in ("KUBECONFIG", "AWS_PROFILE", "CLOUDSDK_CORE_PROJECT", "DOCKER_CONTEXT", "DOCKER_HOST", "CONTAINER_HOST",
                  "CONTAINER_CONNECTION", "CLAUDE_PROJECT_DIR", "DOCKER_CONFIG", "CONTAINERS_CONF", "XDG_CONFIG_HOME",
                  "HEI5ENBUG_PARENT_SESSION"):
@@ -972,7 +973,7 @@ def test_시스템_수준_podman_설정도_원격_기본값이면_원격이다(h
     # given
     system = home / "system.conf"
     system.write_text('[engine]\nactive_service = "prod"\n')
-    monkeypatch.setattr(guard, "PODMAN_SYSTEM_CONFIGS", (str(system),))
+    monkeypatch.setattr(guard_cloud, "PODMAN_SYSTEM_CONFIGS", (str(system),))
     # when
     outcome = classify("podman rm c1", home)
     # then

@@ -49,6 +49,7 @@ impossible, remove the written rule it replaces and update its row.
 | Enforcer | Rule it enforces | Written in |
 |---|---|---|
 | `tests/test_approval_guard.py` | Reads pass, writes need approval, destructive calls ask every time, and secret output is denied. | `instructions/session/core.md`, `README.md` (Approval guard) |
+| `tests/test_approval_guard_modules.py` | The approval guard's split modules import in layers without cycles, own each swappable name once, and are denied as programs or imports exactly like the entry point. | `README.md` (Approval guard) |
 | `tests/test_approval_policy_tiers.py` | The read, session approval, and every-time tiers keep their boundaries. | `README.md` (Approval guard) |
 | `tests/test_approval_one_approval.py`, `tests/test_approval_session_write.py` | One approval per session covers non-destructive writes; irreversible calls still ask. | `instructions/session/core.md`, `README.md` (Approval guard) |
 | `tests/test_approval_session_scope.py` | The `session` scope asks once per session except for its critical kinds. | `README.md` (Approval guard) |

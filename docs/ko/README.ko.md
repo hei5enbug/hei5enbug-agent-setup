@@ -71,6 +71,7 @@ hei5enbug-agent-setup/
 │   ├── approval_state.py
 │   ├── approve_wrapper.sh
 │   ├── datagrip_guard.py
+│   ├── guard_*.py
 │   ├── hook_python.sh
 │   ├── host_settings.py
 │   ├── language_guard.py
@@ -622,8 +623,8 @@ completing (declines included); stop retrying and tell the user.”입니다. �
 실행합니다. `PostToolUse`나 `PostToolUseFailure`는 끝난 호출의 키별 횟수를 초기화하고, `UserPromptSubmit`은 모든 횟수를
 초기화하므로, 중단된 뒤 사용자가 요청한 쓰기는 다시 승인을 묻습니다. 이미 세션 승인된 키는 다른 키의 요청 한도를 쓰지 않습니다.
 
-에이전트는 스스로 승인할 수 없습니다. `approval_guard.py`, `datagrip_guard.py`, `approval_state.py`를 프로그램으로,
-`-m`으로, 또는 이를 가져오는 Python 코드로 실행하는 Bash 명령은 두 호스트 모두에서 거부됩니다.
+에이전트는 스스로 승인할 수 없습니다. `approval_guard.py`, `datagrip_guard.py`, `approval_state.py`, 그리고 승인 가드가 가져오는
+`guard_*.py` 모듈을 프로그램으로, `-m`으로, 또는 이를 가져오는 Python 코드로 실행하는 Bash 명령은 두 호스트 모두에서 거부됩니다.
 승인 또는 heartbeat 상태 디렉터리를 가리키는 명령은 모든 단순 명령이 허용된 읽기 명령일 때만 예외입니다.
 허용 목록은 `ls`, `cat`, `head`, `tail`, `grep`, `wc`, `stat`, `file`, `find`, `echo`입니다. `find`는 `-type`, `-name`,
 `-maxdepth`, `-print` 같은 읽기 옵션만 쓸 수 있고 글롭 문자를 쓸 수 없습니다. 명령에는 중괄호, 치환, 변수 대입 접두사,

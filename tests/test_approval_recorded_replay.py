@@ -13,6 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import approval_guard as guard  # noqa: E402
+import guard_paths  # noqa: E402
 import approval_state as state_mod  # noqa: E402
 
 READ_ONLY_BODY = "import json, re, sys\nfrom pathlib import Path\nprint(len(list(Path(sys.argv[1]).glob('*'))))\n"
@@ -151,7 +152,7 @@ def run_case(home, command, options, monkeypatch):
             monkeypatch.setenv(name, value)
     cwd = home / "project"
     if options.get("outside_temp"):
-        monkeypatch.setattr(guard, "TEMPORARY_ROOTS", ("/nonexistent-temp-root",))
+        monkeypatch.setattr(guard_paths, "TEMPORARY_ROOTS", ("/nonexistent-temp-root",))
         monkeypatch.setenv("TMPDIR", "/nonexistent-tmpdir")
         monkeypatch.setenv("HOME", "/nonexistent-home")
     if options.get("cwd") == "repo":
@@ -1363,7 +1364,7 @@ def test_exec의_대상이_작업_폴더_밖이거나_글자로_정해지지_않
 
 def test_작업_폴더_밖의_파일을_exec하면_묻는다(home, j12, monkeypatch):
     # given
-    monkeypatch.setattr(guard, "TEMPORARY_ROOTS", ("/nonexistent-temp-root",))
+    monkeypatch.setattr(guard_paths, "TEMPORARY_ROOTS", ("/nonexistent-temp-root",))
     monkeypatch.setenv("TMPDIR", "/nonexistent-tmpdir")
     elsewhere = Path(os.environ["HOME"]) / "elsewhere"
     elsewhere.mkdir()
@@ -1410,7 +1411,7 @@ def test_exec_heredoc이_임시_폴더_밖이나_정해지지_않은_경로에_�
 
 def test_작업_폴더가_임시_폴더_밖이면_상대_경로_쓰기가_있는_exec_heredoc은_묻는다(home, j12, monkeypatch):
     # given
-    monkeypatch.setattr(guard, "TEMPORARY_ROOTS", ("/nonexistent-temp-root",))
+    monkeypatch.setattr(guard_paths, "TEMPORARY_ROOTS", ("/nonexistent-temp-root",))
     monkeypatch.setenv("TMPDIR", "/nonexistent-tmpdir")
     # when
     result = j12_decision(home, j12_command(j12))

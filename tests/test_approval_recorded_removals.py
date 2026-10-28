@@ -12,6 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import approval_guard as guard  # noqa: E402
+import guard_paths  # noqa: E402
 import approval_state as state_mod  # noqa: E402
 
 NON_TEMPORARY_HOME = "/nonexistent-home"
@@ -66,7 +67,7 @@ def home(tmp_path, monkeypatch):
 @pytest.fixture
 def outside_temp(home, monkeypatch):
     """The test folder is not a temporary root, so the folders under it get no temporary-root exemption."""
-    monkeypatch.setattr(guard, "TEMPORARY_ROOTS", ("/nonexistent-temp-root",))
+    monkeypatch.setattr(guard_paths, "TEMPORARY_ROOTS", ("/nonexistent-temp-root",))
     return home
 
 

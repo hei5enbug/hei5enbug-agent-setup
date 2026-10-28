@@ -13,6 +13,9 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import approval_guard as guard  # noqa: E402
 import approval_state as state_mod  # noqa: E402
 import datagrip_guard  # noqa: E402
+import guard_git  # noqa: E402
+import guard_paths  # noqa: E402
+import guard_shell  # noqa: E402
 import db_read_policy  # noqa: E402
 
 PROD_ID = "11111111-1111-4111-8111-111111111111"
@@ -420,7 +423,7 @@ def fake_kubectl(home, context, delay=0):
 
 def stub_current_context(monkeypatch, context):
     real = guard._lookup
-    monkeypatch.setattr(guard, "_lookup", lambda argv, env, cwd: context if argv[-2:] == ["config", "current-context"]
+    monkeypatch.setattr(guard_shell, "_lookup", lambda argv, env, cwd: context if argv[-2:] == ["config", "current-context"]
                         else real(argv, env, cwd))
 
 
@@ -462,7 +465,7 @@ def test_helm_컨텍스트_환경_변수도_운영이면_크리티컬이다(sess
 def test_현재_컨텍스트_조회가_시간_초과되면_운영으로_보고_크리티컬이다(session_scope, monkeypatch, current, command):
     # given
     fake_kubectl(session_scope, current, delay=2)
-    monkeypatch.setattr(guard, "LOOKUP_TIMEOUT_SECONDS", 0.2)
+    monkeypatch.setattr(guard_shell, "LOOKUP_TIMEOUT_SECONDS", 0.2)
     # when
     outcome = guard.classify_text(command, str(session_scope))
     # then
@@ -709,7 +712,7 @@ def test_session_범위에서_작업_트리_밖_경로의_삭제는_그대로다
 
 def test_session_범위에서_git_상태를_알_수_없으면_삭제는_매번_묻는다(repo, monkeypatch):
     # given
-    monkeypatch.setattr(guard, "_git_probe", lambda *args: None)
+    monkeypatch.setattr(guard_git, "_git_probe", lambda *args: None)
     # when
     outcomes = [classify_in(command, repo) for command in ("rm src/clean.py", "rm -rf build")]
     # then
@@ -742,7 +745,7 @@ def test_session_범위에서_git_밖_폴더_아래_저장소의_변경된_작�
     workspace = session_scope / "workspace"
     inner = make_repo(workspace / "inner")
     (inner / "src" / "app.py").write_text("print(5)\n", encoding="utf-8")
-    monkeypatch.setattr(guard, "_temporary", lambda path, env: False)
+    monkeypatch.setattr(guard_paths, "_temporary", lambda path, env: False)
     # when
     dirty_outcome = classify_in("rm -rf workspace", session_scope)
     run_git(inner, "checkout", "-q", "--", "src/app.py")
@@ -850,7 +853,7 @@ def test_session_범위의_삭제_검사는_같은_명령_안에서_저장소마
     # given
     calls = []
     original = guard._git_probe
-    monkeypatch.setattr(guard, "_git_probe", lambda directory, env, *args: calls.append(args) or original(directory, env, *args))
+    monkeypatch.setattr(guard_git, "_git_probe", lambda directory, env, *args: calls.append(args) or original(directory, env, *args))
     # when
     outcome = classify_in("rm src/app.py; rm src/app.py", dirty)
     # then
@@ -870,7 +873,7 @@ def test_tiered_범위의_삭제_분류는_바뀌지_않고_git을_읽지_않는
     repo_root = make_repo(home / "repo")
     (repo_root / "src" / "app.py").write_text("print(3)\n", encoding="utf-8")
     (repo_root / "docs" / "notes.txt").write_text("notes\n", encoding="utf-8")
-    monkeypatch.setattr(guard, "_git_probe", lambda *args: pytest.fail("tiered scope must not probe git"))
+    monkeypatch.setattr(guard_git, "_git_probe", lambda *args: pytest.fail("tiered scope must not probe git"))
     # when
     outcome = classify_in(command, repo_root)
     # then
