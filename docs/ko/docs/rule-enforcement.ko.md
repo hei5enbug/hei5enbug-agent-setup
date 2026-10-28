@@ -16,7 +16,7 @@
 | 집행자 | 집행하는 규칙 | 규칙 위치 |
 |---|---|---|
 | `tests/test_public_boundary.py` | 추적 파일과 커밋 메시지에 로컬 경로, 실명, 비밀 값, 비공개 내용이 없고, 보호 섹션은 바뀌지 않은 채 마지막에 있다. | `AGENTS.md` (Public boundary) |
-| `tests/test_release_version.py` | 기준 태그 이후 계획 버전은 하나이고, 모든 매니페스트에서 같으며, 기준보다 낮지 않고, 버전만 바꾸는 커밋이 없다. | `AGENTS.md` (릴리스 기준) |
+| `tests/test_release_version.py` | 기준 태그 이후 계획 버전은 하나이고(더 낮은 단계의 다음 버전을 나중에 더 높은 단계로 다시 고른 경우는 제외), 모든 매니페스트에서 같으며, 기준보다 낮지 않고, 버전만 바꾸는 커밋이 없다. | `AGENTS.md` (릴리스 기준) |
 | `tests/test_model_pins.py` | 런타임 파일은 고정한 전체 모델 ID로만 모델을 부르고, 고정값은 14일 안에 다시 확인한다. | `AGENTS.md` (모델 고정) |
 | `tests/test_korean_mirrors.py` | 사람이 읽는 영어 Markdown 파일마다 실행 폴더 밖에 원본을 링크한 비권위 한국어 미러가 있다. | `AGENTS.md` (한국어 미러) |
 | `tests/test_instruction_duplication.py` | 공유 규칙은 정본 파일 하나에만 있고, 호스트 파일과 저장소 파일은 core나 common 규칙을 복사하지 않는다. | `AGENTS.md` (단일 정본) |

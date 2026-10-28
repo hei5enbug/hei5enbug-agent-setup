@@ -13,7 +13,7 @@ impossible, remove the written rule it replaces and update its row.
 | Enforcer | Rule it enforces | Written in |
 |---|---|---|
 | `tests/test_public_boundary.py` | No local paths, real names, secrets, or private content in tracked files and commit messages; the protected section stays unchanged and last. | `AGENTS.md` (Public boundary) |
-| `tests/test_release_version.py` | One planned version since the baseline tag, the same in every manifest, never below the baseline, and no version-only commit. | `AGENTS.md` (release baseline) |
+| `tests/test_release_version.py` | One planned version since the baseline tag, apart from a lower-level next version later re-chosen upward, the same in every manifest, never below the baseline, and no version-only commit. | `AGENTS.md` (release baseline) |
 | `tests/test_model_pins.py` | Runtime files name models only by the pinned full IDs, and the pins are reverified within 14 days. | `AGENTS.md` (model pins) |
 | `tests/test_korean_mirrors.py` | Every human-readable English Markdown file has a linked, non-authoritative Korean mirror outside executable folders. | `AGENTS.md` (Korean mirrors) |
 | `tests/test_instruction_duplication.py` | A shared rule lives in one canonical file; host and repository files do not copy core or common rules. | `AGENTS.md` (one canonical source) |

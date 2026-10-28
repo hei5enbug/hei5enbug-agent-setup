@@ -91,6 +91,7 @@ hei5enbug-agent-setup/
 │   ├── codex-scout.toml
 │   └── codex-worker.toml
 └── skills/
+    ├── aside-browser-tasks/
     ├── decision-navigator/
     ├── deep-interview/
     ├── flowchart-design/
@@ -1191,6 +1192,7 @@ execution-path isolation; semantic equivalence still requires human or model rev
 
 | Skill | What it does |
 |---|---|
+| [`aside-browser-tasks`](skills/aside-browser-tasks/SKILL.md) | Runs browser work in the user's Aside Browser, with their logins, through the on-demand `aside` CLI instead of an always-running MCP server, when the agent's own tools cannot finish it: Jira or Confluence work the connected tools cannot do, a frontend or visual check, a URL web fetch cannot open, or a search the built-in one leaves thin. It picks a direct REPL call or Aside's own agent by measured cost and returns only the needed result. [Korean guide](docs/ko/skills/aside-browser-tasks/SKILL.ko.md). |
 | [`decision-navigator`](skills/decision-navigator/SKILL.md) | Maps a multi-session effort into decision tickets and resolves them one at a time until the implementation route is clear. [Korean guide](docs/ko/skills/decision-navigator/SKILL.ko.md). |
 | [`deep-interview`](skills/deep-interview/SKILL.md) | Runs a Socratic interview that scores requirement ambiguity after every answer and will not move to execution until it drops below the threshold. [Korean guide](docs/ko/skills/deep-interview/SKILL.ko.md). |
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | A shared design standard so flow charts built in SVG, HTML/CSS, Figma, or draw.io all read as one design system. [Korean guide](docs/ko/skills/flowchart-design/SKILL.ko.md). |

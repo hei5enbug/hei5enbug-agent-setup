@@ -43,6 +43,18 @@ def baseline_tag() -> str | None:
     return max(tags, key=lambda tag: version_tuple(tag[1:])) if tags else None
 
 
+def superseded_versions(baseline: str, planned: str) -> set[str]:
+    """Lower-level next versions of the baseline that a later change may re-choose up to the planned version."""
+    major, minor, patch = version_tuple(baseline)
+    patch_bump = f"{major}.{minor}.{patch + 1}"
+    minor_bump = f"{major}.{minor + 1}.0"
+    if planned == f"{major + 1}.0.0":
+        return {patch_bump, minor_bump}
+    if planned == minor_bump:
+        return {patch_bump}
+    return set()
+
+
 def commit_files(revision_range: str) -> dict[str, set[str]]:
     output = git("log", "--format=%x00%H", "--name-only", revision_range) or ""
     commits = {}
@@ -79,6 +91,28 @@ class ReleaseVersionTest(unittest.TestCase):
                 self.assertIsNone(README_VERSION.search(path.read_text()))
 
 
+class SupersededVersionsTest(unittest.TestCase):
+    def test_더_높은_단계로_다시_고른_계획만_더_낮은_단계의_다음_버전을_허용한다(self):
+        """계획 버전을 더 높은 단계로 다시 고르면 더 낮은 단계의 다음 버전만 허용하고, 같은 단계에서 다시 올린 버전은 허용하지 않는다."""
+        cases = {
+            "2.12.0": {"2.11.6"},
+            "3.0.0": {"2.11.6", "2.12.0"},
+            "2.11.6": set(),
+            "2.11.7": set(),
+            "2.13.0": set(),
+        }
+        for planned, expected in cases.items():
+            with self.subTest(planned=planned):
+                # Given
+                baseline = "2.11.5"
+
+                # When
+                superseded = superseded_versions(baseline, planned)
+
+                # Then
+                self.assertEqual(superseded, expected)
+
+
 class ReleaseBaselineTest(unittest.TestCase):
     def setUp(self):
         self.baseline = baseline_tag()
@@ -97,17 +131,18 @@ class ReleaseBaselineTest(unittest.TestCase):
         self.assertGreaterEqual(version_tuple(planned), version_tuple(baseline), f"{planned} is below {self.baseline}")
 
     def test_릴리스_기준_이후_계획한_버전은_하나뿐이다(self):
-        """릴리스 기준 태그 이후 매니페스트에 나타난 버전은 기준 버전과 계획 버전 둘 중 하나뿐이어야 한다."""
+        """릴리스 기준 태그 이후 매니페스트에 나타난 버전은 기준 버전, 계획 버전, 계획 버전으로 다시 고르기 전의 더 낮은 단계 버전뿐이어야 한다."""
         # Given
         baseline = self.baseline[1:]
         planned = planned_version()
+        allowed = {baseline, planned} | superseded_versions(baseline, planned)
 
         # When
         history = git("log", f"{self.baseline}..HEAD", "-p", "--", CLAUDE_MANIFEST) or ""
         introduced = set(MANIFEST_VERSION_ADDED.findall(history))
 
         # Then
-        self.assertLessEqual(introduced, {baseline, planned}, f"more than one planned version since {self.baseline}")
+        self.assertLessEqual(introduced, allowed, f"more than one planned version since {self.baseline}")
 
     def test_릴리스_기준_이후_변경이_있으면_계획한_버전은_기준보다_높다(self):
         """릴리스 기준 태그 이후 추적 파일이 바뀌었으면 매니페스트의 계획 버전은 기준 버전보다 높아야 한다."""

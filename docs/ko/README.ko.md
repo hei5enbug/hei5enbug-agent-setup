@@ -94,6 +94,7 @@ hei5enbug-agent-setup/
 │   ├── codex-scout.toml
 │   └── codex-worker.toml
 └── skills/
+    ├── aside-browser-tasks/
     ├── decision-navigator/
     ├── deep-interview/
     ├── flowchart-design/
@@ -1107,6 +1108,7 @@ Orca CLI가 필요한 테스트는 Orca가 설치되어 있지 않으면 건너�
 
 | 스킬 | 하는 일 |
 |---|---|
+| [`aside-browser-tasks`](../../skills/aside-browser-tasks/SKILL.md) | 에이전트 자체 도구로 끝낼 수 없는 브라우저 작업을, 상시 실행되는 MCP 서버 대신 필요할 때만 실행하는 `aside` CLI를 통해 사용자가 로그인해 둔 Aside Browser에서 수행합니다. 연결된 도구로 할 수 없는 Jira나 Confluence 작업, 프런트엔드나 시각적 검사, 웹 가져오기로 열 수 없는 URL, 내장 검색만으로는 정보가 부족한 검색이 해당합니다. 측정된 비용에 따라 직접 REPL을 호출하거나 Aside 자체 에이전트를 선택하고 필요한 결과만 반환합니다. [한국어 안내](skills/aside-browser-tasks/SKILL.ko.md) |
 | [`decision-navigator`](../../skills/decision-navigator/SKILL.md) | 여러 세션에 걸친 작업을 의사 결정 티켓으로 나누고, 구현 경로가 분명해질 때까지 티켓을 하나씩 해결합니다. [한국어 안내](skills/decision-navigator/SKILL.ko.md) |
 | [`deep-interview`](../../skills/deep-interview/SKILL.md) | 답변마다 요구사항의 모호함 정도를 점수로 측정하는 소크라테스식 인터뷰를 진행하며, 그 점수가 기준값 이하로 내려가기 전에는 실행 단계로 넘어가지 않습니다. [한국어 안내](skills/deep-interview/SKILL.ko.md) |
 | [`flowchart-design`](../../skills/flowchart-design/SKILL.md) | SVG, HTML/CSS, Figma, draw.io 등 어떤 도구로 만들어도 하나의 디자인 시스템처럼 보이게 하는 플로우차트 공통 디자인 기준입니다. [한국어 안내](skills/flowchart-design/SKILL.ko.md) |

@@ -175,7 +175,8 @@
   `pyproject.toml`, and `uv.lock` on the same version. A release is a tag only; never make a separate commit to release
   or to change only the version. When the user publishes a release, run every development check in `README.md` on
   `HEAD`, tag `HEAD` `v<version>`, and push the tag. `tests/test_release_version.py` rejects a version below the
-  baseline, more than one planned version since it, a change since it while the planned version still equals it, and a
+  baseline, more than one planned version since it other than a lower-level next version later re-chosen upward, a change
+  since it while the planned version still equals it, and a
   commit since it that changes only version files.
   Choose the next semantic version from the highest-impact unreleased change:
 
