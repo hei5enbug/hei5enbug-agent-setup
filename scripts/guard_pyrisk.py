@@ -431,55 +431,109 @@ def sensitive_write(tree, cwd, env):
 
 MAX_LITERAL_CODE = 65536
 MAX_INLINE_DEPTH = 3
-PLAIN_ARGUMENT = (ast.Name, ast.Constant, ast.Dict, ast.Load)
+
+
+def _namespace_bindings(arguments):
+    """The names that explicit `exec` or `eval` namespaces bind, from dict literals with text keys and constant values (a
+    later namespace wins), `None` for no explicit namespace, or False when a namespace is anything else."""
+    found, given = {}, False
+    for argument in arguments:
+        if isinstance(argument, ast.Constant) and argument.value is None:
+            continue
+        given = True
+        if not isinstance(argument, ast.Dict):
+            return False
+        for key, value in zip(argument.keys, argument.values):
+            if not (isinstance(key, ast.Constant) and isinstance(key.value, str) and isinstance(value, ast.Constant)):
+                return False
+            found[key.value] = value
+    return found if given else None
 
 
 def _literal_execution(node, name, rebound):
-    """The code text of `exec("...")` or `eval("...")` with a string literal and at most plain name, constant, or dict
-    arguments for the namespaces, else None."""
+    """The code text of `exec("...")` or `eval("...")` with a string literal and the bindings of its explicit namespaces,
+    as (text, bindings), else None. Namespaces that are not dict literals of constants leave the call as it is."""
     if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == name
             and name not in rebound and node.args and 1 <= len(node.args) <= 3 and not node.keywords):
         return None
     code = node.args[0]
     if not (isinstance(code, ast.Constant) and isinstance(code.value, str) and len(code.value) <= MAX_LITERAL_CODE):
         return None
-    if any(not isinstance(item, PLAIN_ARGUMENT) for arg in node.args[1:] for item in ast.walk(arg)):
-        return None
-    return code.value
+    bindings = _namespace_bindings(node.args[1:])
+    return None if bindings is False else (code.value, bindings)
+
+
+def _bound_names(tree):
+    """Every name that a piece of code assigns, deletes, imports, declares, or receives as a parameter."""
+    found = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and not isinstance(node.ctx, ast.Load):
+            found.add(node.id)
+        elif isinstance(node, ast.arg):
+            found.add(node.arg)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.ExceptHandler,
+                               ast.MatchAs, ast.MatchStar)) and node.name:
+            found.add(node.name)
+        elif isinstance(node, ast.MatchMapping) and node.rest:
+            found.add(node.rest)
+        elif isinstance(node, ast.alias):
+            found.add(node.asname or node.name.split(".")[0])
+        elif isinstance(node, (ast.Global, ast.Nonlocal)):
+            found.update(node.names)
+    return found
+
+
+class _Substitute(ast.NodeTransformer):
+    def __init__(self, bindings):
+        self.bindings = bindings
+
+    def visit_Name(self, node):
+        if isinstance(node.ctx, ast.Load) and node.id in self.bindings:
+            return copy_module.deepcopy(self.bindings[node.id])
+        return node
 
 
 class _Inliner(ast.NodeTransformer):
     """Replaces `exec("<code>")` statements and `eval("<expression>")` calls by the code itself, so that the rules for
-    ordinary code judge it. Text that does not parse stays a call."""
+    ordinary code judge it. A literal dict namespace gives its constant values to the names the code reads; code that
+    assigns one of those names stays a call. Text that does not parse stays a call."""
 
     def __init__(self, rebound):
         self.rebound = rebound
         self.depth = 0
+        self.bindings = {}
 
     def visit_Expr(self, node):
-        code = _literal_execution(node.value, "exec", self.rebound)
-        parsed = self.parse(code, "exec")
+        literal = _literal_execution(node.value, "exec", self.rebound)
+        parsed = self.parse(literal, "exec")
         if parsed is None:
             return self.generic_visit(node)
-        return self.nested(parsed.body) or ast.Pass()
+        return self.nested(parsed[0].body, parsed[1]) or ast.Pass()
 
     def visit_Call(self, node):
-        code = _literal_execution(node, "eval", self.rebound)
-        parsed = self.parse(code, "eval")
+        literal = _literal_execution(node, "eval", self.rebound)
+        parsed = self.parse(literal, "eval")
         if parsed is None:
             return self.generic_visit(node)
-        return self.nested([parsed.body])[0]
+        return self.nested([parsed[0].body], parsed[1])[0]
 
-    def parse(self, code, mode):
-        if code is None or self.depth >= MAX_INLINE_DEPTH:
+    def parse(self, literal, mode):
+        """The parsed code and the bindings that apply to it, else None."""
+        if literal is None or self.depth >= MAX_INLINE_DEPTH:
             return None
+        code, explicit = literal
+        scope = self.bindings if explicit is None else explicit
         try:
-            return ast.parse(code, mode=mode)
+            tree = ast.parse(code, mode=mode)
         except (SyntaxError, ValueError):
             return None
+        if scope and _bound_names(tree) & scope.keys():
+            return None
+        return (_Substitute(scope).visit(tree) if scope else tree), scope
 
-    def nested(self, nodes):
+    def nested(self, nodes, scope):
         self.depth += 1
+        outer, self.bindings = self.bindings, scope
         try:
             found = []
             for node in nodes:
@@ -488,6 +542,7 @@ class _Inliner(ast.NodeTransformer):
             return found
         finally:
             self.depth -= 1
+            self.bindings = outer
 
 
 def inline_literal_executions(tree):

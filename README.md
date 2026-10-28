@@ -477,7 +477,9 @@ arguments, are classified. Destructive process commands, SDK call names, or dest
 process or imports an SDK ask every time. Other Python passes, even when its strings name CLI
 commands (`python3 -c` code never becomes a read); an explicit `--execute` still makes it a write. An `exec` or `eval`
 of a string literal is judged by the code it runs, as if that code were written in place, so a harmless literal passes
-and one that reads a credential or writes a protected location gets that decision. An `exec` or `eval` of a variable,
+and one that reads a credential or writes a protected location gets that decision. A namespace argument that is a dict
+literal of constants gives those values to the names the code reads; any other namespace, such as `globals()` or a
+variable, is not unfolded and keeps the session write. An `exec` or `eval` of a variable,
 `input()`, or standard input keeps the old result, a session write, and still draws the credential, installed-code, and
 protected-location decisions for the rest of the script. Node and other
 non-shell, non-Python executables pass.

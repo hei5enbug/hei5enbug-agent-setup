@@ -185,3 +185,91 @@ def test_이스케이프가_가드_이름이_아닌_리터럴_exec는_거부하�
     results = [verdict(world, command)[0] for command in commands]
     # then
     assert all(result not in ("ask", "deny") for result in results), results
+
+
+NAMESPACE_CASES = [
+    ("write ssh", "open(p, 'w').write('x')", "{home}/.ssh/authorized_keys"),
+    ("write zshrc", "open(p, 'a').write('x')", "{home}/.zshrc"),
+    ("write cache", "open(p, 'w').write('x')", "{cache}/a.py"),
+    ("read netrc", "print(open(p).read())", "{home}/.netrc"),
+    ("write work tree", "open(p, 'w').write('x')", "{project}/out.txt"),
+    ("print", "print(p)", "{project}/out.txt"),
+]
+
+
+@pytest.mark.parametrize("title,code,path", NAMESPACE_CASES, ids=[item[0] for item in NAMESPACE_CASES])
+@pytest.mark.parametrize("namespaces", ["{{'p': {path!r}}}", "{{'p': {path!r}}}, {{}}", "{{}}, {{'p': {path!r}}}"])
+@pytest.mark.parametrize("shape", [heredoc, inline])
+def test_리터럴_딕셔너리_이름공간의_값은_코드에_묶어_같은_코드를_직접_쓴_것처럼_판정한다(world, title, code, path, namespaces, shape):
+    # given
+    path = path.format(**world)
+    direct = verdict(world, shape(f"p = {path!r}\n{code}"))
+    spaces = namespaces.format(path=path)
+    # when
+    wrapped = verdict(world, shape(f"exec({code!r}, {spaces})"))
+    evaluated = verdict(world, shape(f"eval({code!r}, {spaces})")) if "\n" not in code and "=" not in code else None
+    # then
+    assert kind(wrapped) == kind(direct), (title, direct, wrapped)
+    assert evaluated is None or kind(evaluated) == kind(direct), (title, direct, evaluated)
+
+
+def test_이름공간이_바뀌지_않는_두_번째_exec도_같은_이름을_따로_묶는다(world):
+    # given
+    body = ("exec(\"open(p, 'w').write('x')\", {'p': '%s/out.txt'})\n"
+            "exec(\"open(p, 'w').write('x')\", {'p': '%s/.ssh/authorized_keys'})" % (world["project"], world["home"]))
+    # when
+    decision, reason = verdict(world, inline(body))
+    # then
+    assert decision == "ask" and reason.startswith("Asks every time")
+
+
+def test_중첩_exec는_바깥_이름공간의_값을_이어받는다(world):
+    # given
+    inner = "exec(\"open(p, 'w').write('x')\")"
+    body = f"exec({inner!r}, {{'p': '{world['home']}/.zshrc'}})"
+    # when
+    decision, reason = verdict(world, inline(body))
+    # then
+    assert decision == "ask" and reason.startswith("Asks every time")
+
+
+def test_안쪽_exec의_이름공간은_바깥_값과_섞지_않는다(world):
+    # given
+    inner = "exec(\"open(p, 'w').write('x')\", {'p': '%s/.zshrc'})" % world["home"]
+    body = f"exec({inner!r}, {{'p': '{world['project']}/out.txt'}})"
+    # when
+    decision, reason = verdict(world, inline(body))
+    # then
+    assert decision == "ask" and reason.startswith("Asks every time")
+
+
+NON_LITERAL_NAMESPACES = [
+    "ns = {{'p': '{path}'}}\nexec(\"open(p, 'w').write('x')\", ns)",
+    "exec(\"open(p, 'w').write('x')\", globals())",
+    "exec(\"open(p, 'w').write('x')\", {{'p': '{path}'}}, locals())",
+    "import sys\nexec(\"open(p, 'w').write('x')\", {{'p': sys.argv[1]}})",
+    "exec(\"open(p, 'w').write('x')\", {{**dict(p='{path}')}})",
+    "exec(\"open(p, 'w').write('x')\", {{'p': '{path}', 'q': [1]}})",
+    "exec(\"p = '/tmp/a'\\nopen(p, 'w').write('x')\", {{'p': '{path}'}})",
+    "exec(\"open(p, 'w').write('x')\", globals={{'p': '{path}'}})",
+]
+
+
+@pytest.mark.parametrize("body", NON_LITERAL_NAMESPACES)
+def test_리터럴_딕셔너리가_아닌_이름공간은_풀지_않고_동적_실행으로_묻는다(world, body):
+    # given
+    command = inline(body.format(path=f"{world['home']}/.ssh/authorized_keys"))
+    # when
+    decision, reason = verdict(world, command)
+    # then
+    assert decision == "ask", (body, decision)
+
+
+def test_이름공간을_준_해롭지_않은_exec와_eval은_묻지_않는다(world):
+    # given
+    commands = [inline("exec('print(x + 1)', {'x': 1})"), inline("print(eval('a + b', {'a': 1, 'b': 2}))"),
+                heredoc("exec('print(1)', {})"), inline("exec('print(x)', {'x': 'a'}, {'y': 2})")]
+    # when
+    results = [verdict(world, command)[0] for command in commands]
+    # then
+    assert all(result not in ("ask", "deny") for result in results), results
