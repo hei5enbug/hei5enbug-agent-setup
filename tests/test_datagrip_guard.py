@@ -17,6 +17,7 @@ HOOKS = json.loads((REPO_ROOT / "hooks/hooks.json").read_text())["hooks"]
 _spec = importlib.util.spec_from_file_location("datagrip_guard_under_test", HOOK_PATH)
 hook = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(hook)
+import datagrip_sql  # noqa: E402
 
 PG_ID = "11111111-1111-4111-8111-111111111111"
 MSSQL_ID = "22222222-2222-4222-8222-222222222222"
@@ -667,9 +668,9 @@ def run_script(stdin, *args, python=None, extra_env=None):
 
 def apply_path(monkeypatch, path):
     if path == "regex":
-        monkeypatch.setattr(hook, "pglast_parser", None)
+        monkeypatch.setattr(datagrip_sql, "pglast_parser", None)
     elif path == "parser":
-        assert hook.pglast_parser is not None, "install the dev extra so that pglast is available"
+        assert datagrip_sql.pglast_parser is not None, "install the dev extra so that pglast is available"
 
 
 @pytest.fixture(autouse=True)
@@ -1197,7 +1198,7 @@ class TestPostgresParser:
         def boom(sql):
             raise RuntimeError("parser failure")
 
-        monkeypatch.setattr(hook.pglast_parser, "parse_sql_json", boom)
+        monkeypatch.setattr(datagrip_sql.pglast_parser, "parse_sql_json", boom)
         # when
         output = decide(PG_ID, "SELECT 1")
         # then

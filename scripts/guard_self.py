@@ -26,6 +26,7 @@ GUARD_MODULE_NAMES = (
     "approval_state_records",
     "approval_state_store",
     "datagrip_guard",
+    "datagrip_sql",
     "db_read_policy",
     "guard_cloud",
     "guard_dispatch",

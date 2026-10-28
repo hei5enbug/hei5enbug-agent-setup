@@ -194,7 +194,7 @@ def _every_time(tool, connection, digest, description):
 def _loosened_setting(sql, lock_timeout_limit):
     """The name of the first SQL Server LOCK_TIMEOUT or DEADLOCK_PRIORITY statement in the read that is outside the
     safe bounds (a LOCK_TIMEOUT from 0 to the limit, a DEADLOCK_PRIORITY of LOW or -5 or lower), else None."""
-    from datagrip_guard import fold, split_statements
+    from datagrip_sql import fold, split_statements
     try:
         statements = split_statements(sql, False)
     except ValueError:

@@ -22,6 +22,7 @@ LATE_BOUND = {
     "classify_mcp": "guard_tools",
     "_REMOVAL_TRACE": "guard_temp",
     "_COMMAND_TRACE": "guard_temp",
+    "pglast_parser": "datagrip_sql",
 }
 
 
@@ -83,7 +84,7 @@ def test_가드_모듈의_모듈_수준_가져오기에는_순환이_없다():
 def test_바꿔_끼우는_이름은_정의_모듈_하나에만_묶여_있다(name):
     # given
     owner = LATE_BOUND[name]
-    others = [stem for stem in split_stems() if stem != owner]
+    others = [stem for stem in [*split_stems(), "datagrip_guard"] if stem != owner]
     # when
     holders = [stem for stem in others if hasattr(importlib.import_module(stem), name)]
     # then

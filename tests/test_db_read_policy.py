@@ -7,6 +7,7 @@ import pytest
 
 from test_approval_guard import bash_event, datagrip_guard, guard, state, state_mod
 
+import datagrip_sql  # noqa: E402
 import db_read_policy as policy  # noqa: E402
 
 TABULARIS = "mcp__tabularis__run_query"
@@ -22,7 +23,7 @@ PG_DEV, PG_PROD, MS_PROD, MS_DEV, PG_APPROVAL = "11111111-0000-4000-8000-0000000
 @pytest.fixture(autouse=True, params=["parser", "regex"])
 def sql_parser(request, monkeypatch):
     if request.param == "regex":
-        monkeypatch.setattr(datagrip_guard, "pglast_parser", None)
+        monkeypatch.setattr(datagrip_sql, "pglast_parser", None)
     return request.param
 
 
