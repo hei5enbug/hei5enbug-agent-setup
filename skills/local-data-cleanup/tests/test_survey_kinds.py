@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -107,6 +108,17 @@ class PluginVersionCase(FixtureCase):
         self.assertEqual("report-only", old["verdict"])
         self.assertIn("owner", self.checks_of(old))
         self.assertIn("started before the update", json.dumps(old["reasons"]))
+
+    def test_spawned_child_keeps_the_requested_argv0_on_every_interpreter_build(self) -> None:
+        """argv[0]를 지정해 띄운 자식은 인터프리터 빌드와 상관없이 ps의 args 첫 토큰이 그 이름이다."""
+        # given
+        name = str(self.root / "bin" / "claude")
+        process = self.spawn(argv0=name)
+        self.wait_ready(process)
+        # when
+        done = subprocess.run(["ps", "-ww", "-o", "args=", "-p", str(process.pid)], capture_output=True, text=True, check=True)
+        # then
+        self.assertEqual(name, done.stdout.split()[0])
 
     def test_broken_installed_list_makes_versions_report_only(self) -> None:
         """installed_plugins.json이 올바른 JSON이 아니면 owner 검사가 실패해 어떤 버전도 후보가 되지 않는다."""

@@ -1,11 +1,12 @@
 """Stdlib line coverage for one module, measured with sys.settrace while pytest runs in a child process.
 
-Executable lines come from the code objects of the module (`co_lines`), executed lines from `line` trace events.
+Executable lines are the lines of the module code objects (`co_lines`) that start a statement, executed lines from `line` trace events.
 The fixture tool `tools/linecov.py` uses the same algorithm so a run can measure what the grader measures.
 """
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import subprocess
@@ -20,16 +21,25 @@ DEFAULT_PYTEST_ARGS = ("-q", "-p", "no:cacheprovider", "tests")
 DEFAULT_TIMEOUT_SECONDS = 600
 
 
-def executable_lines(source: str, filename: str) -> set[int]:
+def statement_lines(tree: ast.AST) -> set[int]:
     lines: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.stmt):
+            lines.add(node.lineno)
+            lines.update(decorator.lineno for decorator in getattr(node, "decorator_list", ()))
+    return lines
+
+
+def executable_lines(source: str, filename: str) -> set[int]:
+    reported: set[int] = set()
     stack = [compile(source, filename, "exec")]
     while stack:
         code = stack.pop()
         if code.co_name == "__annotate__":
             continue
-        lines.update(line for _start, _end, line in code.co_lines() if line is not None and line > 0)
+        reported.update(line for _start, _end, line in code.co_lines() if line is not None and line > 0)
         stack.extend(const for const in code.co_consts if isinstance(const, types.CodeType))
-    return lines
+    return reported & statement_lines(ast.parse(source, filename))
 
 
 def percent_covered(executable: set[int], executed: set[int]) -> float:

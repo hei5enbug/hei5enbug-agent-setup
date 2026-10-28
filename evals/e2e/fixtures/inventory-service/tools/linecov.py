@@ -8,6 +8,7 @@ and prints the percentage of executable lines that ran together with the line nu
 
 from __future__ import annotations
 
+import ast
 import os
 import sys
 import threading
@@ -19,16 +20,25 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PYTEST_ARGS = ["-q", "-p", "no:cacheprovider", "tests"]
 
 
-def executable_lines(source: str, filename: str) -> set[int]:
+def statement_lines(tree: ast.AST) -> set[int]:
     lines: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.stmt):
+            lines.add(node.lineno)
+            lines.update(decorator.lineno for decorator in getattr(node, "decorator_list", ()))
+    return lines
+
+
+def executable_lines(source: str, filename: str) -> set[int]:
+    reported: set[int] = set()
     stack = [compile(source, filename, "exec")]
     while stack:
         code = stack.pop()
         if code.co_name == "__annotate__":
             continue
-        lines.update(line for _start, _end, line in code.co_lines() if line is not None and line > 0)
+        reported.update(line for _start, _end, line in code.co_lines() if line is not None and line > 0)
         stack.extend(const for const in code.co_consts if isinstance(const, types.CodeType))
-    return lines
+    return reported & statement_lines(ast.parse(source, filename))
 
 
 def collapse_ranges(numbers: Sequence[int]) -> str:

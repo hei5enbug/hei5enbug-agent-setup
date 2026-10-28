@@ -24,6 +24,7 @@ ISOLATED_VARIABLES = (
     "TMPDIR",
 )
 HOLD_CODE = "import sys,time;print('ready',flush=True);time.sleep(300)"
+HOLD_SHELL = "echo ready; read line"
 OPEN_CODE = "import sys,time;f=open(sys.stdin.readline().strip());print('ready',flush=True);time.sleep(300)"
 CHILD_TIMEOUT = 20
 
@@ -131,9 +132,13 @@ class FixtureCase(unittest.TestCase):
         return folder
 
     def spawn(self, code: str = HOLD_CODE, *args: str, cwd: Path | None = None, argv0: str | None = None) -> subprocess.Popen:
-        command = [argv0 or sys.executable, "-c", code, *args]
+        # A framework Python on macOS re-executes itself under another path, so a requested argv[0] needs a plain shell.
+        if argv0:
+            command, executable = [argv0, "-c", HOLD_SHELL], "/bin/sh"
+        else:
+            command, executable = [sys.executable, "-c", code, *args], sys.executable
         process = subprocess.Popen(
-            command, executable=sys.executable, cwd=cwd or self.work, env=self.env(),
+            command, executable=executable, cwd=cwd or self.work, env=self.env(),
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
         )
         self.addCleanup(self.stop, process)
