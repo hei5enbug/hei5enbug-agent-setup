@@ -5,7 +5,6 @@ Each file holds `approved` keys that last for the rest of the session, `once` ke
 `pending` codes. On Codex the user approves a pending code by typing `승인 <CODE>` (or `approve <CODE>`) in chat. A hook event
 without a usable session id has no memory: writes ask on Claude and are denied on Codex, and no code is stored.
 """
-import fcntl
 import functools
 import hashlib
 import json
@@ -13,16 +12,14 @@ import os
 import re
 import secrets
 import time
-from collections import namedtuple
-from contextlib import contextmanager
 from pathlib import Path
-
-# Two keys last for the rest of the session: WRITE_KEY for writes and SENSITIVE_KEY for reads that may expose a protected
-# value. Every other key of an always outcome asks every time. exe names a psql read so the caller can enforce
-# read-only mode. critical marks discarding local work, production database deletion, and production infrastructure
-# deletion: with the `session` approval scope only those keep asking every time.
-Outcome = namedtuple("Outcome", "kind keys descriptions exe writes every_time critical",
-                     defaults=(None, (), False, False))
+from approval_state_store import (
+    Outcome, RETENTION_SECONDS, SESSION_ID, _cleanup, _empty, _locked, _read, _write, session_key, state_dir,
+)
+from approval_state_records import (
+    PLAN_TTL_SECONDS, RISK_KINDS, RISK_LIMIT, _plan_entries, plan_path, record_risk, record_worker_pair,
+    recorded_plan, recorded_worker_pair, risk_path, store_plan, worker_record_path,
+)
 
 WRITE_KEY = "write:session"
 SENSITIVE_KEY = "sensitive:session"
@@ -31,7 +28,6 @@ SESSION_KEYS = frozenset({WRITE_KEY, SENSITIVE_KEY})
 KEY_SEPARATOR = "\x1f"
 CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ23456789"
 CODE_LENGTH = 6
-RETENTION_SECONDS = 7 * 24 * 60 * 60
 MAX_REQUESTS = 3
 LINE_LIMIT = 100
 PROMPTS = {
@@ -81,8 +77,6 @@ REDACTIONS = (
     (re.compile(r"(?<![\w.-])(" + _SECRET_WORD + r")=(?:" + _VALUE + "|)", re.I), r"\1=***"),
     (re.compile(r"(?<![\w-])(--[\w-]*(?:" + SECRET_NAME.pattern + r")[\w-]*)(\s+)(?!-)(?:" + _VALUE + ")", re.I), r"\1\2***"),
 )
-
-
 SECRET_PATTERNS_PATH = Path(__file__).resolve().parents[1] / "config" / "secret-patterns.json"
 
 
@@ -121,7 +115,8 @@ def redact(text: str) -> str:
     for pattern, replacement in REDACTIONS:
         text = pattern.sub(replacement, text)
     return redact_tokens(text)
-SESSION_ID = re.compile(r"[A-Za-z0-9._-]{1,128}")
+
+
 APPROVAL_TEXT = re.compile(r"(?:승인|approve)\s+([A-Z2-9]{6})", re.IGNORECASE)
 UNKNOWN_SESSION = "the session is unknown, so the approval cannot be recorded"
 RETRY_INSTRUCTION = (
@@ -238,120 +233,6 @@ def hooks_warning(host, session):
     return HOOKS_WARNING if _mutate(host, session, change) else None
 
 
-def state_dir() -> Path:
-    state = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
-    return Path(state) / "hei5enbug-agent-setup" / "approvals"
-
-
-def worker_record_path(host: str, session: str) -> Path:
-    return state_dir().parent / "worker-settings" / f"{host}-{session}.json"
-
-
-def record_worker_pair(host: str, session, model: str, effort: str) -> None:
-    """Fix the worker model and effort announced at session start; older records are pruned like approval state."""
-    if session_key(session) is None:
-        return
-    path = worker_record_path(host, session)
-    with _locked(path.parent):
-        _write(path, {"model": model, "effort": effort})
-        _cleanup(path.parent, path)
-
-
-def recorded_worker_pair(host: str, session) -> tuple[str, str] | None:
-    if session_key(session) is None:
-        return None
-    try:
-        data = json.loads(worker_record_path(host, session).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    model, effort = (data.get(key) for key in ("model", "effort")) if isinstance(data, dict) else (None, None)
-    return (model, effort) if isinstance(model, str) and isinstance(effort, str) else None
-
-
-PLAN_TTL_SECONDS = 30 * 60
-
-
-def plan_path(host: str, session: str) -> Path:
-    return state_dir() / "db-plans" / f"{host}-{session}.json"
-
-
-def _plan_entries(path: Path) -> list:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return []
-    entries = data.get("plans") if isinstance(data, dict) else None
-    now = time.time()
-    return [
-        entry for entry in entries or []
-        if isinstance(entry, dict) and all(isinstance(entry.get(key), str) for key in ("tool", "connection", "digest"))
-        and type(entry.get("at")) in (int, float) and 0 <= now - entry["at"] <= PLAN_TTL_SECONDS
-    ]
-
-
-def store_plan(host: str, session, tool: str, connection: str, digest: str, cost, rows) -> None:
-    """Record a database read plan estimate for one session; entries older than the plan lifetime are dropped."""
-    if session_key(session) is None:
-        return
-    path = plan_path(host, session)
-    with _locked(path.parent):
-        kept = [entry for entry in _plan_entries(path)
-                if (entry["tool"], entry["connection"], entry["digest"]) != (tool, connection, digest)]
-        kept.append({"tool": tool, "connection": connection, "digest": digest, "cost": cost, "rows": rows,
-                     "at": time.time()})
-        _write(path, {"plans": kept})
-        _cleanup(path.parent, path)
-
-
-def recorded_plan(host: str, session, tool: str, connection: str, digest: str):
-    """The newest unexpired plan record for the session, tool, connection, and read digest, or None."""
-    if session_key(session) is None:
-        return None
-    matches = [entry for entry in _plan_entries(plan_path(host, session))
-               if (entry["tool"], entry["connection"], entry["digest"]) == (tool, connection, digest)]
-    return max(matches, key=lambda entry: entry["at"], default=None)
-
-
-RISK_LIMIT = 200
-RISK_KINDS = frozenset({"write", "request", "always"})
-
-
-def risk_path(host: str, session: str) -> Path:
-    return state_dir() / "risk" / f"{host}-{session}.json"
-
-
-def record_risk(host: str, session, tool_use_id, outcome: Outcome) -> None:
-    """Record a write, request, every-time, or critical call's kind by tool_use_id for the Claude Code mod's transcript
-    marker, keeping the newest entries. The record never reaches the model, and any failure only drops the marker:
-    unreadable or malformed data counts as empty, and no error reaches the caller."""
-    try:
-        if session_key(session) is None or not isinstance(tool_use_id, str) or not tool_use_id:
-            return
-        if outcome.kind not in RISK_KINDS and not outcome.critical:
-            return
-        path = risk_path(host, session)
-        with _locked(path.parent):
-            try:
-                data = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                data = {}
-            calls = data.get("calls") if isinstance(data, dict) else None
-            kept = [call for call in calls if isinstance(call, dict) and call.get("id") != tool_use_id] \
-                if isinstance(calls, list) else []
-            kept.append({"id": tool_use_id, "kind": outcome.kind, "critical": bool(outcome.critical)})
-            _write(path, {"calls": kept[-RISK_LIMIT:]})
-            _cleanup(path.parent, path)
-    except Exception:
-        return
-
-
-def session_key(value):
-    """Return the session id when it is a usable string, otherwise None (the hook has no memory then)."""
-    if isinstance(value, str) and SESSION_ID.fullmatch(value):
-        return value
-    return None
-
-
 def pre_output(decision: str, reason: str) -> dict:
     return {"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
@@ -367,72 +248,6 @@ def permission_allow() -> dict:
 def permission_deny(message: str) -> dict:
     return {"hookSpecificOutput": {
         "hookEventName": "PermissionRequest", "decision": {"behavior": "deny", "message": message}}}
-
-
-def _empty() -> dict:
-    return {"approved": [], "approved_at": {}, "once": [], "pending": {}, "inflight": [], "hooks_warning_shown": False,
-            "request_counts": {}, "asked": []}
-
-
-def _read(path: Path) -> dict:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return _empty()
-    if not isinstance(data, dict):
-        return _empty()
-    approved = [key for key in data.get("approved", []) if isinstance(key, str)]
-    times = data.get("approved_at", {})
-    times = times if isinstance(times, dict) else {}
-    once = [key for key in data.get("once", []) if isinstance(key, str)]
-    pending = data.get("pending", {})
-    pending = {
-        code: entry for code, entry in pending.items()
-        if isinstance(entry, dict) and isinstance(entry.get("key"), str)
-    } if isinstance(pending, dict) else {}
-    inflight = [
-        entry for entry in data.get("inflight", [])
-        if isinstance(entry, dict) and isinstance(entry.get("key"), str)
-    ]
-    counts = data.get("request_counts", {})
-    counts = {
-        key: value for key, value in counts.items()
-        if isinstance(key, str) and type(value) is int and value >= 0
-    } if isinstance(counts, dict) else {}
-    asked = [entry for entry in data.get("asked", [])
-             if isinstance(entry, dict) and isinstance(entry.get("keys"), list)
-             and all(isinstance(key, str) for key in entry["keys"])]
-    return {
-        "approved": sorted(set(approved)), "once": sorted(set(once)), "pending": pending, "inflight": inflight,
-        "approved_at": {key: times[key] for key in approved if type(times.get(key)) in (int, float)},
-        "hooks_warning_shown": data.get("hooks_warning_shown") is True,
-        "request_counts": counts,
-        "asked": asked,
-    }
-
-
-def _write(path: Path, data: dict) -> None:
-    temp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    temp.write_text(json.dumps(data, ensure_ascii=False, sort_keys=True), encoding="utf-8")
-    os.replace(temp, path)
-
-
-def _cleanup(directory: Path, keep: Path) -> None:
-    cutoff = time.time() - RETENTION_SECONDS
-    for path in directory.glob("*.json"):
-        if path != keep and path.stat().st_mtime < cutoff:
-            path.unlink(missing_ok=True)
-
-
-@contextmanager
-def _locked(directory: Path):
-    directory.mkdir(parents=True, exist_ok=True)
-    with open(directory / ".lock", "a", encoding="utf-8") as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 def _path(host: str, session: str) -> Path:

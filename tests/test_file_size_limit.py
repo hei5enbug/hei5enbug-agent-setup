@@ -9,7 +9,6 @@ LINE_LIMIT = 800
 # when a file shrinks and remove the entry once the file is within the limit; never raise one.
 CEILINGS = {
     "scripts/datagrip_guard.py": 992,
-    "scripts/approval_state.py": 822,
 }
 
 

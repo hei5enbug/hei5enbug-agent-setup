@@ -65,7 +65,7 @@ hei5enbug-agent-setup/
 ├── scripts/
 │   ├── agent_guard.py
 │   ├── approval_guard.py
-│   ├── approval_state.py
+│   ├── approval_state*.py
 │   ├── approve_wrapper.sh
 │   ├── datagrip_guard.py
 │   ├── guard_*.py
@@ -666,7 +666,7 @@ keys, and `UserPromptSubmit` resets every count, so a write the user asks for af
 approved session keys do not use another key's request budget.
 
 The agent cannot approve anything itself. A Bash command that runs `approval_guard.py`, `datagrip_guard.py`,
-`approval_state.py`, or one of the `guard_*.py` modules the approval guard imports as a program, with `-m`, or through
+`approval_state.py`, or one of the `approval_state_*.py` and `guard_*.py` modules they import as a program, with `-m`, or through
 Python code that imports it, is denied on both hosts.
 Commands naming the approval or heartbeat state directory are denied unless every simple command is an allowed read:
 `ls`, `cat`, `head`, `tail`, `grep`, `wc`, `stat`, `file`, `find`, or `echo`. `find` may use only read options such

@@ -1,3 +1,4 @@
+import fcntl
 import json
 import os
 import re
@@ -1201,18 +1202,18 @@ def test_쓰기마다_7일_지난_상태_파일을_지우고_최근_파일은_�
 def test_쓰기는_잠금을_잡고_임시_파일을_남기지_않는다(state, monkeypatch):
     # given
     calls = []
-    real_flock = state_mod.fcntl.flock
+    real_flock = fcntl.flock
 
     def spy(handle, operation):
         calls.append(operation)
         return real_flock(handle, operation)
 
-    monkeypatch.setattr(state_mod.fcntl, "flock", spy)
+    monkeypatch.setattr(fcntl, "flock", spy)
     # when
     state_mod.record_approved("claude", "s1", ["k"])
     # then
-    assert state_mod.fcntl.LOCK_EX in calls
-    assert calls[-1] == state_mod.fcntl.LOCK_UN
+    assert fcntl.LOCK_EX in calls
+    assert calls[-1] == fcntl.LOCK_UN
     leftovers = [path.name for path in state_mod.state_dir().iterdir() if path.name.endswith(".tmp")]
     assert leftovers == []
 

@@ -23,6 +23,8 @@ SOURCE_COMMANDS = frozenset({".", "source"})
 GUARD_MODULE_NAMES = (
     "approval_guard",
     "approval_state",
+    "approval_state_records",
+    "approval_state_store",
     "datagrip_guard",
     "db_read_policy",
     "guard_cloud",
