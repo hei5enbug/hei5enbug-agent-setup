@@ -18,11 +18,18 @@
   agent options. Prefer a supported feature that covers the need over custom code, and state which features you
   checked and why you chose the approach.
 - Every change to this repository must improve, or at least preserve, both the recurring token and context cost
-  of normal use and the quality of its output. Never trade one for the other without measured evidence and the
-  owner's decision.
+  of normal use and the quality of its output. When they conflict, the owner decided on 2026-10-27 that quality wins:
+  choose the option with the higher measured quality, never adopt one that lowers quality to save tokens, and record
+  any added cost with its measurement in the change report.
   Preserve correctness and required validation while reducing unnecessary instruction loading, repeated reads,
   tool calls, and duplicated content. Reuse loaded instructions and validation results only while their relevant
   inputs remain unchanged. During local work, run checks affected by the change; broaden them for unresolved risks.
+- Keep on an always-loaded surface, meaning a skill description, a `SKILL.md` body, or a session instruction file,
+  only the rules that every run of that surface needs. Move a rule needed only under a condition to a reference
+  file, and leave one entry line on the surface in the form "Before <action>, read <reference>." Reading that
+  reference and stopping when it is missing follow the session core's conditional-instruction rule. A change that
+  implements an issue reports its quality evaluation result and the before-and-after size, in lines or tokens, of
+  the always-loaded text it changes.
 - Maintain a complete, meaning-equivalent Korean mirror for every human-readable English Markdown file at
   `docs/ko/<repository-relative source path with the final .md replaced by .ko.md>`. Update, move, or delete
   each source and its mirror together. Start each mirror with its title, then a quoted block linking the English
