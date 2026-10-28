@@ -62,6 +62,7 @@
 | `tests/test_approval_recorded_replay.py` | 에이전트 실수 없이 기록된 승인 가드 ask를 모두 훅으로 다시 실행하면 묻지도 막지도 않고, 남겨 둔 `$PWD` 삭제는 계속 묻는다. | `README.md` (Approval guard) |
 | `tests/test_approval_python_risks.py` | 자격 증명 파일을 읽거나 비밀 이름 환경변수 값을 출력하는 Python 코드는 `cat`과 같은 민감 읽기 판정을 받고, 설정 여부 검사·이름 나열·검색어·평범한 읽기와 쓰기는 묻지 않는다. | `README.md` (Approval guard) |
 | `tests/test_approval_installed_code.py` | 리다이렉트·`tee`·`sed -i`·`cp`·`mv`·`install`·`rsync`·Python으로 플러그인 캐시나 실행 중인 플러그인 루트에 쓰는 호출은 경로를 푼 뒤 자기 수정으로 거부하고, 그 코드를 읽거나 다른 곳에 쓰는 호출은 허용한다. | `README.md` (Approval guard) |
+| `tests/test_approval_python_sensitive_writes.py` | `~/.ssh`·`~/.aws`·`~/.gnupg`, 셸 시작 파일, git 훅, Claude·Codex 설정 파일에 쓰는 Python은 매번 묻고, 작업 트리와 임시 공간의 평범한 Python 쓰기는 묻지 않는다. | `README.md` (Approval guard) |
 | `tests/test_approval_false_positives.py`, `tests/test_approval_classification_safety.py` | 무해한 호출과 비밀 메타데이터 조회를 쓰기나 비밀 값 출력으로 오인하지 않는다. | `README.md` (Approval guard) |
 | `tests/test_approval_extensions.py`, `tests/test_approval_reuse.py` | 사전 승인 키와 민감 조회 승인은 지정한 대상만 다룬다. | `README.md` (Approval guard) |
 | `tests/test_approval_retries.py` | 답을 받지 못한 승인 요청이 반복되면 새 프롬프트 전까지 거부한다. | `README.md` (Approval guard) |

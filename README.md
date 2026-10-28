@@ -692,6 +692,13 @@ denied on both hosts, whether it is a redirection, `tee`, `sed -i`, the destinat
 resolves `..`, repeated slashes, `~`, known variables, and symbolic links before it compares. Reading that code stays
 allowed.
 
+Python code in a heredoc, `-c` option, or script file that writes, moves, or removes a path in a security-sensitive
+location asks every time: `~/.ssh`, `~/.aws`, `~/.gnupg`, the shell startup files `~/.zshrc`, `~/.bashrc`,
+`~/.profile`, `~/.bash_profile`, and `~/.zprofile`, a `.git/hooks` folder, and the Claude and Codex settings files
+(`settings.json` and `settings.local.json` in a `.claude` folder or `$CLAUDE_CONFIG_DIR`, `~/.claude.json`, and
+`config.toml` or `hooks.json` in a `.codex` folder or `$CODEX_HOME`). Ordinary Python writes in the work tree or
+elsewhere are not asked about.
+
 Commands that need a secret value use the secret helper: `python3 <plugin root>/scripts/secret_exec.py --secret
 DB_PASSWORD=k8s:<context>/<namespace>/<secret>/<key> -- <command>`. The sources are `k8s:`, `keyvault:<vault>/<name>`,
 `aws:<secret id>[#<json key>]`, and `gcp:<project>/<name>[/<version>]`. `--file VAR=<source>` passes the path of a

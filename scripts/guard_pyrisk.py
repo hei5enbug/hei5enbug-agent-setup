@@ -400,3 +400,28 @@ def path_matches(tree, cwd, env, exact, tail):
             return text
     return None
 
+
+SENSITIVE_WRITE_TAIL = re.compile(
+    r"(?:^|/)(?:\.(?:ssh|aws|gnupg)(?:/|$)|\.git/hooks(?:/|$)|\.claude/settings(?:\.local)?\.json$|\.claude\.json$"
+    r"|\.codex/(?:config\.toml|hooks\.json)$)")
+STARTUP_FILES = (".zshrc", ".bashrc", ".profile", ".bash_profile", ".zprofile")
+CONFIG_FILES = {"CLAUDE_CONFIG_DIR": ("settings.json", "settings.local.json"), "CODEX_HOME": ("config.toml", "hooks.json")}
+
+
+def _sensitive_locations(env):
+    """The exact files that hold shell startup commands or the host settings of this machine."""
+    home = Path.home().resolve()
+    found = {str(home / name) for name in STARTUP_FILES}
+    for variable, names in CONFIG_FILES.items():
+        folder = env.get(variable)
+        if folder and os.path.isabs(folder):
+            found.update(str(Path(folder).resolve() / name) for name in names)
+    return found
+
+
+def sensitive_write(tree, cwd, env):
+    """The first path text that a script writes in a security-sensitive location, or None: the `.ssh`, `.aws`, and `.gnupg`
+    folders, shell startup files in the home folder, git hooks, and the Claude and Codex settings files."""
+    exact = _sensitive_locations(env)
+    return path_matches(tree, cwd, env, lambda resolved: resolved in exact or bool(SENSITIVE_WRITE_TAIL.search(resolved)),
+                        SENSITIVE_WRITE_TAIL)

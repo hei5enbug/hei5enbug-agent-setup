@@ -34,7 +34,7 @@ from guard_git import COMMAND_GIT_CONFIG, FILES_MAY_CHANGE, IN_EXEC, STASH_OWN_D
 from guard_cloud import Rules, _classify_curl, _classify_sql, _docker_metadata_inspect, _local_engine
 from guard_self import CLI_RULES, MAX_DEPTH, PYTHON_EXEC, _code_runs_guard, _first_operand, _request_outcome
 from guard_pyread import _git_run_command, _read_only_python
-from guard_pyrisk import credential_read, secret_environment
+from guard_pyrisk import credential_read, secret_environment, sensitive_write
 from guard_installed import INSTALLED_CODE_REASON, installed_code_write, python_writes_installed_code
 from guard_pywrite import _confine_writes, _documents_only, _exec_files_confined
 from guard_proof import SELF_APPROVAL_REASON, _self_approval
@@ -167,14 +167,18 @@ def _git_reads_with_temp_writes(tree, processes, cwd, depth, cwd_known, env):
 
 
 def _python_risk(code, cwd, env):
-    """The outcome for Python code, given as text or as a parsed tree, that writes installed plugin code or exposes a
-    credential, or None."""
+    """The outcome for Python code, given as text or as a parsed tree, that writes installed plugin code or a protected
+    location, or exposes a credential, or None."""
     try:
         tree = ast.parse(code) if isinstance(code, str) else code
     except (SyntaxError, ValueError):
         return None
     if python_writes_installed_code(tree, cwd, env):
         return Outcome("forbidden", [], [INSTALLED_CODE_REASON])
+    location = sensitive_write(tree, cwd, env)
+    if location:
+        return Outcome("always", ["python:sensitive-write:" + _digest(ast.unparse(tree))],
+                       [f"Python write to a protected location: {location}"], every_time=True)
     exposure = credential_read(tree, cwd, env) or secret_environment(tree)
     return _sensitive(exposure) if exposure else None
 

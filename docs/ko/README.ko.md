@@ -645,6 +645,12 @@ completing (declines included); stop retrying and tell the user.”입니다. �
 코드가 그 경로를 쓰거나 옮기거나 지우는 경우가 모두 해당합니다. 가드는 비교 전에 `..`, 반복된 슬래시, `~`, 알려진 변수,
 심볼릭 링크를 풀어서 봅니다. 그 코드를 읽는 것은 계속 허용합니다.
 
+heredoc·`-c` 옵션·스크립트 파일의 Python 코드가 보안에 민감한 위치의 경로를 쓰거나 옮기거나 지우면 매번 묻습니다.
+대상은 `~/.ssh`, `~/.aws`, `~/.gnupg`, 셸 시작 파일 `~/.zshrc`, `~/.bashrc`, `~/.profile`, `~/.bash_profile`,
+`~/.zprofile`, `.git/hooks` 폴더, Claude와 Codex 설정 파일(`.claude` 폴더나 `$CLAUDE_CONFIG_DIR`의 `settings.json`·
+`settings.local.json`, `~/.claude.json`, `.codex` 폴더나 `$CODEX_HOME`의 `config.toml`·`hooks.json`)입니다.
+작업 트리나 그 밖의 평범한 Python 쓰기는 묻지 않습니다.
+
 비밀 값이 필요한 명령은 비밀 도우미를 사용합니다: `python3 <plugin root>/scripts/secret_exec.py --secret
 DB_PASSWORD=k8s:<context>/<namespace>/<secret>/<key> -- <command>`. 소스는 `k8s:`, `keyvault:<vault>/<name>`,
 `aws:<secret id>[#<json key>]`, `gcp:<project>/<name>[/<version>]`입니다. `--file VAR=<source>`는 값 대신 임시 파일의 경로를
