@@ -2078,9 +2078,10 @@ def _git_gh(cli, args, command, cwd=None, env=None):
                 _has_flag(args, "--staged", "-S") and not _has_flag(args, "--worktree", "-W"))
         elif verb == "stash":
             destructive = words[1:2] in (["drop"], ["clear"])
-            if destructive and (words[1:2] == ["drop"] and env is not None and STASH_OWN_DROP in env
-                                or _lossless_stash_drop(global_args, args, cwd or os.getcwd(),
-                                                        dict(os.environ if env is None else env))):
+            if destructive and words[1:2] == ["drop"] and env is not None and STASH_OWN_DROP in env:
+                destructive = False
+            elif destructive and _lossless_stash_drop(global_args, args, cwd or os.getcwd(),
+                                                      dict(os.environ if env is None else env)):
                 destructive, write = False, True
         discard = not destructive and approval_state.session_scope() and (
             _git_discards(words, args, short)

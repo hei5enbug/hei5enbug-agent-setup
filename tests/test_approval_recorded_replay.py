@@ -2004,7 +2004,7 @@ def stash_decision(home, command):
     return decision(guard.handle(bash(command, cwd), "claude"))
 
 
-@pytest.mark.parametrize("command", [
+STASH_OWN_CYCLES = [
     STASH_RECORDED,
     f"{STASH_PUSH}; {STASH_TEST}; S={STASH_SHA}; git stash apply -q $S && git stash drop -q stash@{{0}}",
     f"{STASH_PUSH}; {STASH_TEST}; git stash apply -q stash@{{0}} && git stash drop -q stash@{{0}}",
@@ -2013,7 +2013,10 @@ def stash_decision(home, command):
     f"{STASH_PUSH}; S={STASH_SHA}; git stash apply -q ${{S}} && git stash drop \"{STASH_REF}\"",
     f"{STASH_PUSH}; git stash apply -q \"{STASH_REF}\" && git stash drop -q \"{STASH_REF}\"",
     f"{STASH_PUSH}; {STASH_TEST}; git stash apply -q stash@{{0}} && git stash drop -q \"{STASH_REF}\"",
-])
+]
+
+
+@pytest.mark.parametrize("command", STASH_OWN_CYCLES)
 def test_같은_명령에서_태그로_만들고_적용한_스태시의_drop은_세션_쓰기로_묻지_않는다(home, command):
     # when
     result = stash_decision(home, command)
@@ -2021,18 +2024,19 @@ def test_같은_명령에서_태그로_만들고_적용한_스태시의_drop은_
     assert result not in ("ask", "deny"), command
 
 
-def test_태그_스태시_drop은_세션_쓰기_승인이_없으면_한_번_묻는다(home):
+@pytest.mark.parametrize("command", STASH_OWN_CYCLES)
+def test_같은_명령의_태그_스태시_순환은_세션_쓰기_승인이_없어도_묻지_않는다(home, command):
     # when
-    result = decision(guard.handle(bash(STASH_RECORDED, home / "project"), "claude"))
+    result = decision(guard.handle(bash(command, home / "project"), "claude"))
     # then
-    assert result == "ask"
+    assert result not in ("ask", "deny"), command
 
 
 STASH_OTHER_REF = STASH_REF.replace("h2tmp", "other")
 STASH_OTHER_SHA = STASH_SHA.replace("h2tmp", "other")
 
 
-@pytest.mark.parametrize("title, command", [
+STASH_MUST_ASK = [
     ("drop without apply", f"{STASH_PUSH}; {STASH_TEST}; git stash drop -q \"{STASH_REF}\""),
     ("drop literal without apply", f"{STASH_PUSH}; git stash drop -q stash@{{0}}"),
     ("drop of another tag", f"{STASH_PUSH}; S={STASH_SHA}; git stash apply -q $S && git stash drop -q \"{STASH_OTHER_REF}\""),
@@ -2062,7 +2066,10 @@ STASH_OTHER_SHA = STASH_SHA.replace("h2tmp", "other")
     ("different variable", f"{STASH_PUSH}; S={STASH_SHA}; T=abc; git stash apply -q $T && git stash drop -q \"{STASH_REF}\""),
     ("variable reassigned", f"{STASH_PUSH}; S={STASH_SHA}; S=abc; git stash apply -q $S && git stash drop -q \"{STASH_REF}\""),
     ("in a loop", f"{STASH_PUSH}; for i in 1 2; do git stash apply -q stash@{{0}} && git stash drop -q stash@{{0}}; done"),
-])
+]
+
+
+@pytest.mark.parametrize("title, command", STASH_MUST_ASK)
 def test_스태시를_이_명령이_만들고_적용하지_않았거나_다른_항목이면_drop은_계속_매번_묻는다(home, title, command):
     # when
     result = stash_decision(home, command)
