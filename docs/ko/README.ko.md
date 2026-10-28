@@ -1116,7 +1116,7 @@ Orca CLI가 필요한 테스트는 Orca가 설치되어 있지 않으면 건너�
 | [`document-to-confluence`](../../skills/document-to-confluence/SKILL.md) | Markdown, HTML, PDF, DOCX, Google Docs 문서를 Confluence 페이지로 변환하고, 문서 구조와 첨부 파일을 보존하며, 이후 원본 변경도 웹 편집과 인라인 댓글을 잃지 않고 페이지에 반영합니다. [한국어 안내](skills/document-to-confluence/SKILL.ko.md) |
 | [`local-data-cleanup`](../../skills/local-data-cleanup/SKILL.md) | Claude Code와 Codex의 로컬 데이터를 읽기 전용으로 조사하고, 후보마다 고정된 안전 규칙과 다른 호스트의 독립 판정을 확인해 크기순으로 보고하며, 사용자가 고른 항목만 삭제합니다. [한국어 안내](skills/local-data-cleanup/SKILL.ko.md) |
 | [`mistake-enforcer`](../../skills/mistake-enforcer/SKILL.md) | 커밋, 되돌린 커밋, 리뷰 댓글, 사용자 교정에서 에이전트가 저장소에서 되풀이하는 실수를 유형별로 묶고, 효과가 있는 가장 높은 집행 수준을 고르며, 제안한 검사가 실제 과거 사례에서 실패하는지 증명합니다. 요청할 때만 실행됩니다. [한국어 안내](skills/mistake-enforcer/SKILL.ko.md) |
-| [`report-skill-gap`](../../skills/report-skill-gap/SKILL.md) | 플러그인의 스킬이나 지침에 있는 빈틈 하나 또는 어떤 스킬도 다루지 않는 작업 흐름을 이슈 초안으로 만들고, 제안에서 사례의 식별자와 비공개 세부 정보를 뺀 뒤 담당 플러그인이 선언한 트래커에 등록합니다. 공개 트래커이면 미리 보여 줍니다. 이름을 불러야만 시작합니다. [한국어 안내](skills/report-skill-gap/SKILL.ko.md) |
+| [`report-skill-gap`](../../skills/report-skill-gap/SKILL.md) | 플러그인의 스킬이나 지침에 있는 빈틈 하나 또는 어떤 스킬도 다루지 않는 작업 흐름을 이슈 초안으로 만들고, 제안에서 사례의 식별자와 비공개 세부 정보를 뺀 뒤 담당 플러그인이 선언한 트래커에 등록합니다. 공개 트래커이면 미리 보여 줍니다. 이름을 부르면 시작하고, `issue-target.json`에 `recommend`를 둔 플러그인은 고친 결과 뒤에 한 줄 제안도 받으며 승인해야만 시작합니다. [한국어 안내](skills/report-skill-gap/SKILL.ko.md) |
 | [`session-retro`](../../skills/session-retro/SKILL.md) | 한 저장소의 하루 Claude Code·Codex 세션을 읽기 전용 scout로 검토하고, 정정·실패·반복 작업을 플러그인별 근거 있는 스킬 개선안으로 바꾸며, 남은 결정을 묻고 요청하면 계획안을 씁니다. [한국어 안내](skills/session-retro/SKILL.ko.md) |
 | [`skill-builder`](../../skills/skill-builder/SKILL.md) | 초안 작성 → 테스트 → 검토 → 개선 순환을 통해 에이전트 스킬을 만들고, 검증하고, 패키징합니다. [한국어 안내](skills/skill-builder/SKILL.ko.md) |
 | [`orca-plugin-refresh`](../../skills/orca-plugin-refresh/SKILL.md) | 이 플러그인과 지정한 다른 플러그인을 호스트별 설치 게이트를 거쳐 Claude Code와 Codex에 업데이트하고, 설치된 버전을 대기 중인 Orca 관리 세션에 재시작 없이 반영합니다. [한국어 안내](skills/orca-plugin-refresh/SKILL.ko.md) |
@@ -1148,14 +1148,17 @@ Orca CLI가 필요한 테스트는 Orca가 설치되어 있지 않으면 건너�
 | `version` | 항상 `1`입니다. |
 | `tracker` | `kind`는 `github`, `gitlab`, `jira`, `other` 중 하나입니다. `location`은 GitHub에서는 `owner/repo`이고, 그 외에는 프로젝트 URL이나 키입니다. |
 | `language` | 이슈에 쓰는 글의 언어 태그입니다. 예를 들어 `en`이나 `ko`입니다. |
-| `body_format` | `markdown`, `jira-wiki`, `plain` 중 하나입니다. |
-| `labels` | 스킬이 고를 수 있는 라벨입니다. 하나를 고르며, 목록이 비어 있으면 고르지 않습니다. |
+| `body_format` | `markdown`, `jira-wiki`, `plain`, `html` 중 하나입니다. |
+| `labels` | 스킬이 고를 수 있는 라벨 목록이며 하나를 고르고, 목록이 비어 있으면 고르지 않습니다. 또는 `;`로 구분한 태그 템플릿 문자열이며, `{skill}`은 담당 스킬의 이름이 되고 모든 태그를 적용합니다. 새 스킬 제안에서는 `{skill}`이 제안하는 스킬의 이름 다음에 `new-skill`이 오는 형태로 바뀝니다. 다른 플레이스홀더는 쓸 수 없습니다. |
 | `public` | 누구나 트래커를 읽을 수 있으면 `true`입니다. 공개 트래커에서는 항상 미리 보여 줍니다. |
 | `write_approval` | `preview`는 최종 내용을 보여 주고 승인을 기다립니다. `direct`는 스킬 이름을 부르면 등록합니다. |
 | `content_rules` | 모든 이슈에서 내용을 제외하는 추가 규칙 파일의 경로입니다. 선택 사항이며 플러그인 루트를 기준으로 합니다. |
+| `recommend` | 선택 사항인 불리언이며 생략하면 `false`입니다. `true`이면 남은 작업이 없고, 이 플러그인의 빈틈 때문에 생긴 이미 끝난 결과를 사용자가 정정했거나 끝난 작업 흐름을 스킬이나 이슈로 만들어 달라고 요청했을 때, 요청받지 않아도 에이전트가 한 줄로 등록을 제안할 수 있습니다. 등록은 사용자가 이후 메시지에서 승인한 뒤에만 시작합니다. |
 
 알 수 없는 키가 있으면 선언은 유효하지 않습니다.
 파일이 없거나 유효하지 않은 플러그인은 대화에서 초안만 받고 이슈는 등록되지 않습니다.
+`github`이 아닌 종류의 트래커에서는 선언된 위치에 닿는 연결된 도구를 쓰고, 없으면 이미 인증된 해당 트래커의 공식 CLI를 씁니다.
+둘 다 없으면 초안만 보여 주고 등록하지 않습니다.
 
 ## 관련 링크
 

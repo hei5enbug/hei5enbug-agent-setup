@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "tracker": {"kind": "other", "location": "example-org/demo-project"},
+  "language": "en",
+  "body_format": "html",
+  "labels": "{skill}; skill-feedback",
+  "public": false,
+  "write_approval": "direct",
+  "recommend": true
+}

@@ -21,12 +21,16 @@ ALLOWED_KEYS = (
     "public",
     "write_approval",
     "content_rules",
+    "recommend",
 )
-REQUIRED_KEYS = tuple(key for key in ALLOWED_KEYS if key != "content_rules")
+OPTIONAL_KEYS = ("content_rules", "recommend")
+REQUIRED_KEYS = tuple(key for key in ALLOWED_KEYS if key not in OPTIONAL_KEYS)
 TRACKER_KINDS = ("github", "gitlab", "jira", "other")
-BODY_FORMATS = ("markdown", "jira-wiki", "plain")
+BODY_FORMATS = ("markdown", "jira-wiki", "plain", "html")
 WRITE_APPROVALS = ("preview", "direct")
 GITHUB_LOCATION = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?/[A-Za-z0-9._-]+")
+PLACEHOLDER = re.compile(r"\{[^{}]*\}")
+SKILL_PLACEHOLDER = "{skill}"
 LANGUAGE = re.compile(r"[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*")
 UNREADABLE_JSON = (ValueError, RecursionError)
 EXIT_OK = 0
@@ -114,8 +118,10 @@ def check_choice(field: str, value: Any, choices: Sequence[str]) -> list[str]:
 
 
 def check_labels(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return check_label_template(value)
     if not isinstance(value, list):
-        return ["labels: must be a list"]
+        return ["labels: must be a list or a template string"]
     problems = []
     if not all(is_text(label) for label in value):
         problems.append("labels: every label must be a non-empty string")
@@ -125,8 +131,27 @@ def check_labels(value: Any) -> list[str]:
     return problems
 
 
+def check_label_template(value: str) -> list[str]:
+    problems = []
+    tags = [tag.strip() for tag in value.split(";")]
+    if not all(tags):
+        problems.append("labels: a template needs non-empty tags separated by ;")
+    if len(set(tags)) != len(tags):
+        problems.append("labels: a template must not contain duplicate tags")
+    for placeholder in PLACEHOLDER.findall(value):
+        if placeholder != SKILL_PLACEHOLDER:
+            problems.append(f"labels: unknown placeholder {placeholder}; the only placeholder is {SKILL_PLACEHOLDER}")
+    if re.search(r"[{}]", PLACEHOLDER.sub("", value)):
+        problems.append("labels: unbalanced brace in the template")
+    return problems
+
+
 def check_public(value: Any) -> list[str]:
     return [] if isinstance(value, bool) else ["public: must be a boolean"]
+
+
+def check_recommend(value: Any) -> list[str]:
+    return [] if isinstance(value, bool) else ["recommend: must be a boolean"]
 
 
 def resolve_content_rules(value: Any, root: Path) -> tuple[Path | None, list[str]]:
@@ -156,6 +181,7 @@ def validate(data: Any, root: Path) -> tuple[Path | None, list[str]]:
         "body_format": lambda value: check_choice("body_format", value, BODY_FORMATS),
         "labels": check_labels,
         "public": check_public,
+        "recommend": check_recommend,
         "write_approval": lambda value: check_choice("write_approval", value, WRITE_APPROVALS),
     }
     for field, check in checks.items():
@@ -175,9 +201,11 @@ def build_target(data: dict[str, Any], rules: Path | None) -> dict[str, Any]:
         "language": data["language"],
         "body_format": data["body_format"],
         "labels": data["labels"],
+        "label_mode": "template" if isinstance(data["labels"], str) else "pick",
         "public": data["public"],
         "write_approval": data["write_approval"],
         "content_rules": str(rules) if rules is not None else None,
+        "recommend": data.get("recommend", False),
         "preview_required": data["public"] or data["write_approval"] == "preview",
     }
 

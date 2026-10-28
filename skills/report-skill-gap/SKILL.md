@@ -3,11 +3,14 @@ name: report-skill-gap
 description: >-
   File one issue for one skill or instruction gap, or one uncovered repeatable workflow, at the
   tracker the plugin's issue-target.json declares. Use only when the user explicitly names or invokes
-  report-skill-gap; never on your own after a correction, a finished workflow, or a session review.
+  report-skill-gap, never on your own; when no work remains after the user corrected a finished result caused by
+  a plugin's skill or instruction gap, or asked to turn a finished workflow into a skill or an issue, read its
+  recommendation rules first.
 compatibility: >-
   Needs filesystem read access to the owning plugin and Python 3.12 or later for the bundled script. Filing on
-  GitHub needs an authenticated gh CLI; another tracker kind needs a connected tool for that tracker. Without
-  the tool, the skill shows the draft and files nothing.
+  GitHub needs an authenticated gh CLI; another tracker kind needs a connected tool that reaches the declared
+  location, or that tracker kind's official CLI that is already authenticated. Without either, the skill shows
+  the draft and files nothing.
 ---
 
 # Report Skill Gap
@@ -17,6 +20,9 @@ Use this English `SKILL.md` as the only executable source.
 Turn one gap into one issue at the tracker of the plugin that owns it. The tracker comes only from that plugin's
 declaration; this skill never guesses one. Run every step in the main session: the work is a few reads and at most
 one write.
+
+Before suggesting this skill without being asked, read [recommendation rules](references/recommendation.md); when
+it is missing, suggest nothing.
 
 ## Boundaries
 
@@ -76,11 +82,15 @@ Read the owning `SKILL.md` or instruction file and only the references that the 
 proposal, read the descriptions of the owning plugin's skills to show why none covers the workflow. When
 `target.content_rules` is set, read that file and apply it with the rules in step 5.
 
+Before step 4, when `target.tracker.kind` is not `github`, `target.body_format` is `html`, or `target.label_mode` is
+`template`, read [declaration options](references/declaration-options.md); when it is missing, show the draft and
+file nothing.
+
 ### 4. Search for duplicates
 
 Search the target's open issues with two or three keyword sets taken from the gap. On GitHub, run
 `gh issue list --repo <location> --state open --search "<keywords>" --json number,title,url,labels --limit 20`.
-On another tracker, use its connected tool.
+On another tracker, use the path that reference chooses.
 
 - Under the condition that an open issue covers the same gap, create nothing. Show that issue and ask whether
   to add a comment instead. Before commenting, show the comment text and comment only after the user approves it.
@@ -103,7 +113,10 @@ instruction and the gap in one line. The body has these sections, in this order:
 6. Evidence
 
 Use the format's own headings: `##` in Markdown, `h2.` in Jira wiki markup, and a plain heading line followed by a
-blank line in plain text. Pick the one label from `target.labels` that fits; add none when the list is empty.
+blank line in plain text; for `html`, follow the declaration options.
+
+Tags depend on `target.label_mode`. For `pick`, pick the one label from `target.labels` that fits; add none when
+the list is empty. For `template`, expand the tags as the declaration options say.
 
 Apply these content rules to every draft:
 
@@ -120,8 +133,8 @@ whole draft for every excluded value, and rewrite until none remains.
 
 ### 6. Get approval
 
-- Under the condition that `preview_required` is true, show the target, title, label, and the exact body in a
-  code block. Write only after the user approves that text in a later message. When the text changes after
+- Under the condition that `preview_required` is true, show the target, title, label or tags, and the exact body in
+  a code block. Write only after the user approves that text in a later message. When the text changes after
   approval, show it again and wait for a new approval.
 - Under the condition that `preview_required` is false, naming the skill authorizes the single create. File
   without a preview step.
@@ -136,15 +149,16 @@ gh issue create --repo <location> --title "<title>" --label "<label>" --body-fil
 EOF
 ```
 
-On another tracker, create the issue with its connected tool, at the declared location only.
+On another tracker, create the issue with the path the declaration options choose, at the declared location only.
 
 ### 8. Verify
 
-Read the created issue back and confirm its title, label, and section order. On GitHub, run
+Read the created issue back and confirm its title, every tag, and section order. On GitHub, run
 `gh issue view <number> --repo <location> --json number,title,labels,body,url`, and fetch the rendered body with
 `gh api repos/<location>/issues/<number> -H "Accept: application/vnd.github.html+json" --jq .body_html`. The
-rendered body must show no raw markup, such as a literal `##`, `**`, or `\n`. Search the Proposal and Acceptance
-criteria for the case's identifiers again.
+rendered body must show no raw markup, such as a literal `##`, `**`, or `\n`. On another tracker, read it back with
+the same path, and for `html` also run the declaration options' rendered check. Search the Proposal and
+Acceptance criteria for the case's identifiers again.
 
 When a check fails, show the corrected text. Under the condition that `preview_required` is true, edit the issue
 only after the user approves the correction. When a check cannot run, report it as unverified.

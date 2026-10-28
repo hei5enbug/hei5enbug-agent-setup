@@ -1,0 +1,31 @@
+#!/bin/sh
+# Evaluation stand-in for az: answers reads from fixtures and refuses every write.
+here=$(cd "$(dirname "$0")" && pwd)
+log="${FAKE_AZ_LOG:-/dev/null}"
+printf '%s\n' "az $*" >> "$log"
+case "$1 $2" in
+  "account show")
+    echo '{"user": {"name": "demo-user", "type": "user"}}'
+    ;;
+  "boards query"|"boards work-item")
+    case "$*" in
+      *demo-project*) ;;
+      *)
+        echo "ERROR: TF200016: The following project does not exist: $*" >&2
+        exit 1
+        ;;
+    esac
+    if [ "$1 $2 $3" = "boards work-item show" ]; then
+      cat "$here/../trackers/example-org_demo-project_work-item.json"
+    elif [ "$1 $2 $3" = "boards work-item create" ] || [ "$1 $2 $3" = "boards work-item update" ]; then
+      echo "fake az: writes are refused in this evaluation" >&2
+      exit 1
+    else
+      cat "$here/../trackers/example-org_demo-project_query.json"
+    fi
+    ;;
+  *)
+    echo "fake az: only 'account show', 'boards query', and 'boards work-item show' are available in this evaluation" >&2
+    exit 1
+    ;;
+esac

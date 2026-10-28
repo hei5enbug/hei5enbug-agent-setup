@@ -92,9 +92,11 @@ class DeclaredTest(FindTrackerCase):
                 "language": "en",
                 "body_format": "markdown",
                 "labels": ["bug", "enhancement"],
+                "label_mode": "pick",
                 "public": True,
                 "write_approval": "direct",
                 "content_rules": None,
+                "recommend": False,
                 "preview_required": True,
             },
             data["target"],
@@ -414,11 +416,23 @@ class SchemaTest(FindTrackerCase):
             ),
             "tracker not an object": (declaration(tracker="demo-org/demo-a"), "tracker"),
             "bad language": (declaration(language="english_US"), "language"),
-            "bad body_format": (declaration(body_format="html"), "body_format"),
+            "bad body_format": (declaration(body_format="rtf"), "body_format"),
             "duplicate label": (declaration(labels=["bug", "bug"]), "labels"),
             "empty label": (declaration(labels=["bug", ""]), "labels"),
             "label not a string": (declaration(labels=[1]), "labels"),
-            "labels not a list": (declaration(labels="bug"), "labels"),
+            "labels a number": (declaration(labels=5), "labels"),
+            "labels an object": (declaration(labels={"a": "b"}), "labels"),
+            "template with an unknown placeholder": (declaration(labels="{owner}; skill-feedback"), "{owner}"),
+            "template with an empty segment": (declaration(labels="{skill};;skill-feedback"), "labels"),
+            "template with a trailing separator": (declaration(labels="{skill}; "), "labels"),
+            "empty template": (declaration(labels=""), "labels"),
+            "template with duplicate tags": (declaration(labels="skill-feedback; skill-feedback"), "labels"),
+            "template with an unclosed brace": (declaration(labels="{skill; bug"), "labels"),
+            "template with a stray closing brace": (declaration(labels="skill}; bug"), "labels"),
+            "template with an empty placeholder": (declaration(labels="{}; bug"), "labels"),
+            "recommend as string": (declaration(recommend="true"), "recommend"),
+            "recommend as number": (declaration(recommend=1), "recommend"),
+            "recommend null": (declaration(recommend=None), "recommend"),
             "public as string": (declaration(public="true"), "public"),
             "bad write_approval": (declaration(write_approval="auto"), "write_approval"),
             "content_rules absolute": (declaration(content_rules="/etc/hosts"), "content_rules"),
@@ -476,6 +490,119 @@ class SchemaTest(FindTrackerCase):
         result = self.run_script(root)
         # Then
         self.assertEqual("pt-BR", self.parse(result)["target"]["language"])
+
+
+class TrackerKeysTest(FindTrackerCase):
+    def target_of(self, data: object) -> dict:
+        root = self.plugin()
+        self.declare(root, data)
+        return self.parse(self.run_script(root))["target"]
+
+    def test_html_body_format_is_valid(self) -> None:
+        """body_format에 html을 선언할 수 있다."""
+        # Given
+        data = declaration(body_format="html")
+        # When
+        target = self.target_of(data)
+        # Then
+        self.assertEqual("html", target["body_format"])
+
+    def test_list_labels_are_picked_and_kept_as_declared(self) -> None:
+        """목록 라벨은 pick 모드이고 선언한 그대로 유지된다."""
+        # Given
+        data = declaration(labels=["bug", "enhancement"])
+        # When
+        target = self.target_of(data)
+        # Then
+        self.assertEqual("pick", target["label_mode"])
+        self.assertEqual(["bug", "enhancement"], target["labels"])
+
+    def test_template_labels_are_kept_as_declared_in_template_mode(self) -> None:
+        """템플릿 문자열 라벨은 template 모드이고 선언한 문자열 그대로 유지된다."""
+        # Given
+        data = declaration(labels="{skill}; skill-feedback")
+        # When
+        target = self.target_of(data)
+        # Then
+        self.assertEqual("template", target["label_mode"])
+        self.assertEqual("{skill}; skill-feedback", target["labels"])
+
+    def test_template_without_a_placeholder_is_valid(self) -> None:
+        """플레이스홀더가 없는 고정 태그 템플릿도 유효하다."""
+        # Given
+        data = declaration(labels="skill-feedback;  demo ")
+        # When
+        target = self.target_of(data)
+        # Then
+        self.assertEqual("template", target["label_mode"])
+
+    def test_single_tag_template_is_valid(self) -> None:
+        """구분자가 없는 한 개짜리 템플릿도 유효하다."""
+        # Given
+        data = declaration(labels="{skill}")
+        # When
+        target = self.target_of(data)
+        # Then
+        self.assertEqual("template", target["label_mode"])
+
+    def test_list_label_with_braces_keeps_the_old_validation(self) -> None:
+        """목록 라벨은 중괄호가 있어도 예전 검증만 받아 유효하다."""
+        # Given
+        data = declaration(labels=["bug}", "{skill}"])
+        # When
+        target = self.target_of(data)
+        # Then
+        self.assertEqual("pick", target["label_mode"])
+        self.assertEqual(["bug}", "{skill}"], target["labels"])
+
+    def test_empty_label_list_stays_in_pick_mode(self) -> None:
+        """빈 라벨 목록은 pick 모드로 유지된다."""
+        # Given
+        data = declaration(labels=[])
+        # When
+        target = self.target_of(data)
+        # Then
+        self.assertEqual("pick", target["label_mode"])
+        self.assertEqual([], target["labels"])
+
+    def test_recommend_is_false_when_absent(self) -> None:
+        """recommend를 생략하면 target.recommend는 false이다."""
+        # Given
+        data = declaration()
+        # When
+        target = self.target_of(data)
+        # Then
+        self.assertIs(False, target["recommend"])
+
+    def test_recommend_true_is_reported(self) -> None:
+        """recommend를 true로 선언하면 target.recommend가 true이다."""
+        # Given
+        data = declaration(recommend=True)
+        # When
+        target = self.target_of(data)
+        # Then
+        self.assertIs(True, target["recommend"])
+
+    def test_recommend_false_is_reported(self) -> None:
+        """recommend를 false로 선언하면 target.recommend가 false이다."""
+        # Given
+        data = declaration(recommend=False)
+        # When
+        target = self.target_of(data)
+        # Then
+        self.assertIs(False, target["recommend"])
+
+    def test_unknown_placeholder_problem_names_the_placeholder(self) -> None:
+        """알 수 없는 플레이스홀더 문제는 그 플레이스홀더 이름을 담는다."""
+        # Given
+        root = self.plugin()
+        self.declare(root, declaration(labels="{owner}; skill-feedback"))
+        # When
+        result = self.run_script(root)
+        # Then
+        data = self.parse(result, code=1)
+        self.assertEqual("invalid", data["status"])
+        self.assertTrue(any("{owner}" in problem for problem in data["problems"]), data["problems"])
 
 
 class ContentRulesTest(FindTrackerCase):

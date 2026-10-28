@@ -1200,7 +1200,7 @@ execution-path isolation; semantic equivalence still requires human or model rev
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Converts Markdown, HTML, PDF, DOCX, and Google Docs content into Confluence pages, preserves document structure and assets, and keeps pages synchronized with source revisions without losing web edits or inline comments. [Korean guide](docs/ko/skills/document-to-confluence/SKILL.ko.md). |
 | [`local-data-cleanup`](skills/local-data-cleanup/SKILL.md) | Surveys Claude Code and Codex local data read-only, checks every candidate against fixed safety rules and an independent verdict from the other host, reports it by size, and deletes only the items you select. [Korean guide](docs/ko/skills/local-data-cleanup/SKILL.ko.md). |
 | [`mistake-enforcer`](skills/mistake-enforcer/SKILL.md) | Groups mistakes that agents repeat in a repository into classes from commits, reverts, review comments, and corrections, picks the highest enforcement level that works, and proves each proposed check fails on a real past instance. Runs only when you ask for it. [Korean guide](docs/ko/skills/mistake-enforcer/SKILL.ko.md). |
-| [`report-skill-gap`](skills/report-skill-gap/SKILL.md) | Drafts one issue for one gap in a plugin's skill or instruction, or for a workflow no skill covers, removes the case's identifiers and private details from the proposal, and files it at the tracker the owning plugin declares, after a preview when the tracker is public. Starts only when you name it. [Korean guide](docs/ko/skills/report-skill-gap/SKILL.ko.md). |
+| [`report-skill-gap`](skills/report-skill-gap/SKILL.md) | Drafts one issue for one gap in a plugin's skill or instruction, or for a workflow no skill covers, removes the case's identifiers and private details from the proposal, and files it at the tracker the owning plugin declares, after a preview when the tracker is public. Starts when you name it; a plugin that sets `recommend` in `issue-target.json` also gets a one-line suggestion after a correction, and it starts only on your approval. [Korean guide](docs/ko/skills/report-skill-gap/SKILL.ko.md). |
 | [`session-retro`](skills/session-retro/SKILL.md) | Reviews a day's Claude Code and Codex sessions of a repository with read-only scouts, turns corrections, failures, and repeated work into evidence-backed skill improvements per plugin, asks the open decisions, and writes plans on request. [Korean guide](docs/ko/skills/session-retro/SKILL.ko.md). |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | Creates, tests, and packages agent skills through a draft → test → review → improve loop. [Korean guide](docs/ko/skills/skill-builder/SKILL.ko.md). |
 | [`orca-plugin-refresh`](skills/orca-plugin-refresh/SKILL.md) | Updates this plugin and other plugins you name in Claude Code and Codex, with a per-host install gate, and applies the installed versions to idle Orca-managed sessions without restarting them. [Korean guide](docs/ko/skills/orca-plugin-refresh/SKILL.ko.md). |
@@ -1231,14 +1231,17 @@ never needs to know about a plugin that builds on it. This plugin declares its o
 | `version` | Always `1`. |
 | `tracker` | `kind` is `github`, `gitlab`, `jira`, or `other`; `location` is `owner/repo` on GitHub, otherwise the project URL or key. |
 | `language` | Language tag of the issue text, such as `en` or `ko`. |
-| `body_format` | `markdown`, `jira-wiki`, or `plain`. |
-| `labels` | Labels the skill may choose from; it picks one, or none when the list is empty. |
+| `body_format` | `markdown`, `jira-wiki`, `plain`, or `html`. |
+| `labels` | Either a list of labels the skill may choose from, of which it picks one (none when the list is empty), or a template string of tags separated by `;` in which `{skill}` becomes the owning skill's name and every tag is applied. A new-skill proposal expands `{skill}` to the proposed skill's name followed by `new-skill`. No other placeholder is allowed. |
 | `public` | `true` when anyone can read the tracker. A public tracker always gets a preview. |
 | `write_approval` | `preview` shows the final text and waits for approval; `direct` files when you name the skill. |
 | `content_rules` | Optional path, relative to the plugin root, of extra rules that remove content from every issue. |
+| `recommend` | Optional boolean, `false` when absent. `true` lets the agent suggest filing in one line, without being asked, when no work remains and you corrected a finished result caused by a gap in this plugin or asked to turn a finished workflow into a skill or an issue. Filing starts only after you approve in a later message. |
 
 Unknown keys make the declaration invalid. A plugin without the file, or with an invalid one, gets the draft in the
-conversation and no issue.
+conversation and no issue. For a tracker kind other than `github`, the skill uses its connected tool when that tool
+reaches the declared location, otherwise that tracker's official CLI when it is already authenticated; with neither,
+it shows the draft and files nothing.
 
 ## Related
 

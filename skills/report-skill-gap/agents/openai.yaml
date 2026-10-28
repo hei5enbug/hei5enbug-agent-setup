@@ -2,4 +2,4 @@ interface:
   display_name: "Report Skill Gap"
   short_description: "File one skill or instruction gap at the tracker its plugin declares"
 policy:
-  allow_implicit_invocation: false
+  allow_implicit_invocation: true
