@@ -27,6 +27,9 @@ PROBE_RETRIES = 3
 PROBE_RECHECK_SECONDS = 3.0
 CLEAR_SETTLE_SECONDS = 3.0
 TYPE_CONFIRM_SECONDS = 3.0
+DELETE_KEY = "\x1b[3~"
+CLEAR_MARGIN = 8
+CLEAR_ROUNDS = 3
 RESTORE_WAIT_SECONDS = 120.0
 UNRESTORABLE_INPUT = re.compile(r"\[Pasted text #\d+|\[Image #\d+\]")
 HELD_INPUT: dict[str, str] = {}
@@ -249,19 +252,25 @@ def ready(orca: Orca, entry: dict, live: dict[str, dict]) -> tuple[str | None, l
 
 
 def line_empty(orca: Orca, handle: str, probed: dict | None = None, sleep: Callable[[float], None] = time.sleep) -> tuple[bool, object]:
-    """(True, ghost suggestion or None) when the input line holds nothing typed, otherwise (False, its draft)."""
+    """(True, ghost suggestion or None) when Claude Code's input line holds nothing typed, otherwise (False, its draft).
+
+    An empty or ghost-only draft counts only while the composer on screen reads as empty too.
+    """
     try:
         draft = settle(lambda: orca.draft(handle), lambda value: not (isinstance(value, str) and value.strip()), sleep, CLEAR_SETTLE_SECONDS)
-        if not (isinstance(draft, str) and draft.strip()):
-            return True, None
-        verdict = probed.get(draft) if probed is not None else None
-        if verdict is None:
-            verdict = claude_draft_state(orca, handle, draft, sleep)
-            if probed is not None and verdict != "interrupted":
-                probed[draft] = verdict
+        ghost = draft if isinstance(draft, str) and draft.strip() else None
+        if ghost is not None:
+            verdict = probed.get(ghost) if probed is not None else None
+            if verdict is None:
+                verdict = claude_draft_state(orca, handle, ghost, sleep)
+                if probed is not None and verdict != "interrupted":
+                    probed[ghost] = verdict
+            if verdict != "empty":
+                return False, ghost
+        shown = settle(lambda: input_state("claude", orca.screen(handle)[0]), lambda value: value == "empty", sleep, CLEAR_SETTLE_SECONDS)
     except RefreshError:
         return False, None
-    return verdict == "empty", draft
+    return shown == "empty", ghost
 
 
 def drop_held(entry: dict) -> None:
@@ -303,6 +312,51 @@ def recover_clear(orca: Orca, entry: dict, text: str, line: object) -> bool:
     else:
         entry.update(status="failed", detail="input_restore_unconfirmed", actions=[])
     return True
+
+
+def typed_length(entry: dict, lines: Sequence[str]) -> int:
+    """How many characters the input line may hold, from the observed draft and the composer on screen."""
+    draft = entry.get("observed_draft")
+    length = len(draft) if isinstance(draft, str) else 0
+    if entry["host"] == "codex":
+        prompts = [line.strip()[1:].strip() for line in lines if line.strip().startswith("›")]
+        return max(length, len(prompts[-1]) if prompts else 0)
+    bounds = composer_bounds(lines)
+    if bounds is not None:
+        length = max(length, sum(len(line.strip()) for line in lines[bounds[0] + 1:bounds[1]]))
+    return length
+
+
+def input_cleared(orca: Orca, entry: dict) -> tuple[bool, object]:
+    """(True, ghost suggestion or None) when the host's input line holds nothing typed."""
+    if entry["host"] == "codex":
+        state = settle(lambda: input_state("codex", orca.screen(entry["handle"])[0]), lambda value: value == "empty", time.sleep, CLEAR_SETTLE_SECONDS)
+        return state == "empty", None
+    return line_empty(orca, entry["handle"])
+
+
+def clear_input(orca: Orca, entry: dict, lines: Sequence[str]) -> bool:
+    """Delete input that cannot be restored exactly, without keeping it; False when the line stayed non-empty."""
+    handle = entry["handle"]
+    for attempt in range(CLEAR_ROUNDS):
+        count = typed_length(entry, lines) + CLEAR_MARGIN
+        for _ in range(count):
+            orca.keys(handle, BACKSPACE)
+        if attempt:
+            for _ in range(count):
+                orca.keys(handle, DELETE_KEY)
+        empty, remaining = input_cleared(orca, entry)
+        entry["observed_draft"] = remaining if isinstance(remaining, str) else None
+        if empty:
+            for key in ("typed_draft", "draft_seen"):
+                entry.pop(key, None)
+            entry["input"] = "cleared"
+            return True
+        lines = orca.screen(handle)[0]
+    for key in ("observed_draft", "typed_draft", "draft_seen"):
+        entry.pop(key, None)
+    entry.update(status="skipped", detail="input_clear_failed", input="clear_failed", actions=[])
+    return False
 
 
 def hold_input(orca: Orca, entry: dict) -> bool:
@@ -546,10 +600,11 @@ def step(orca: Orca, entry: dict, target: dict, live: dict[str, dict]) -> None:
             entry.update(status="done", detail="fresh_session_loads_on_first_turn", actions=[])
             return
     typed = reason == "unsent_input" and entry.get("input_restorable") and not entry.get("input_held")
-    if reason == "unsent_input" and not typed:
-        entry.update(status="skipped", detail="input_not_restorable", input="not_restorable", actions=[])
+    cleared = reason == "unsent_input" and not typed
+    if cleared and entry.get("input_held"):
+        entry.update(status="skipped", detail="input_changed", actions=[])
         return
-    if reason and not typed:
+    if reason and not (typed or cleared):
         return
     marker = read_marker(entry["handle"])
     if entry["actions"][0] == "clear" and claude_has_prompts((marker or {}).get("transcript_path")):
@@ -565,6 +620,14 @@ def step(orca: Orca, entry: dict, target: dict, live: dict[str, dict]) -> None:
     if typed:
         entry["detail"] = None
         if hold_input(orca, entry):
+            return
+        if moved():
+            entry["detail"] = "input_changed"
+            return
+        lines = orca.screen(entry["handle"])[0]
+    elif cleared:
+        entry["detail"] = None
+        if not clear_input(orca, entry, lines):
             return
         if moved():
             entry["detail"] = "input_changed"

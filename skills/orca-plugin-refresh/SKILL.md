@@ -86,8 +86,8 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
    without an error, run `python3 <script> apply --run-id <run_id> --json` in the foreground with a shell timeout
    of at least 600 seconds. Do not ask the user to confirm this step; the script's checks decide which sessions
    receive commands. For about 20 seconds the script sends a command only to an idle session whose input line is
-   empty or holds text it can clear and restore exactly, then keeps confirming the commands already sent and
-   restoring the text. It hands every session that is still busy or not ready to one detached helper as `deferred`
+   empty or cleared of typed text, then keeps confirming the commands already sent and restoring any text it can
+   restore exactly. It hands every session that is still busy or not ready to one detached helper as `deferred`
    instead of waiting. An `already_running` error means another run is still
    sending; wait for it, then run `apply` again. A host with an update error stays blocked while successful hosts
    can proceed.
@@ -96,11 +96,11 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
      `fresh_session_loads_on_first_turn` marks a Codex session that never ran a turn. The note
      `empty_session_cleared` marks an empty Claude Code session that got `/clear`, and
      `instructions_load_on_next_turn` marks a compacted Codex session.
-   - `skipped`: the session stayed busy, held input that cannot be restored exactly (`input_not_restorable`),
-     showed an unreadable input line, changed its input just before the send, reached the deadline, or closed.
-     `input_clear_failed` means the line could not be cleared and the script typed the text back.
+   - `skipped`: the session stayed busy, showed an unreadable input line, changed its input just before the send,
+     reached the deadline, or closed. `input_clear_failed` means the line could not be cleared, so nothing was sent
+     (`input` is `clear_failed`), or that the script typed the text back.
    - Every session also reports `ready_signal` (`host_record` or `tui_idle`, the signal that allowed the send) and,
-     when it held input, `input` (`restored` or `not_restorable`).
+     when it held input, `input` (`restored`, or `cleared` for input that could not be restored exactly).
    - `failed`: an action was sent but not confirmed, or Claude Code refused it. A reload refusal that asks for
      `--force` means a plugin's MCP tools changed; do not force it without the user's approval.
      `compact_needs_more_messages` means the conversation is too short to compact; its instructions refresh at
@@ -164,8 +164,8 @@ result is not ok when this plugin has a host error or any companion has the stat
   placeholder or a leading `-`, the script keeps it only in memory, clears it with backspaces, sends the commands,
   and types it back without Enter once the last action is confirmed or fails, or before the session is handed to
   the helper, completing a line that a failed clear left partly cleared; a crash between the clear and the restore
-  loses it. Any other unsent input is left untouched and the
-  session is skipped.
+  loses it. Input that cannot be restored exactly is cleared the same way before the refresh is applied, the
+  report says `cleared`, and the cleared input is not kept anywhere.
   When a check is interrupted but the draft then returns to its earlier state or empties, no character of the
   script's remains, so it checks again later, up to three more times. The script checks the draft again just before
   each send.

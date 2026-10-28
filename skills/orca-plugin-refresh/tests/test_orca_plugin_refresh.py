@@ -232,21 +232,27 @@ class ComposerBoundaryTest(unittest.TestCase):
         # Then
         self.assertEqual([False, False, True, True, False], observed)
 
-    def test_초안의_구분선_뒤에_갱신_명령을_추가하지_않는다(self):
-        """별도 초안 정보가 없어도 화면에 작성 중인 입력이 있으면 명령을 보내지 않는다."""
+    def test_초안의_구분선_뒤에도_화면에_보이는_입력은_지우고_보낸다(self):
+        """별도 초안 정보가 없어도 화면에 작성 중인 입력이 있으면 입력으로 알아보고, 지운 뒤 보내며 cleared로 알린다."""
         # Given
         rule = "─" * 40
         handle = "term_example"
         item = terminal(handle, "claude")
         fake = FakeOrca([item], screens={handle: [rule, "❯ ", "  " + "─" * 8, "  draft", rule]})
+
+        def erase(orca, name, text):
+            if text == refresh.BACKSPACE:
+                orca.screens[name] = [rule, "❯ ", rule]
+        fake.on_keys = erase
         entry = {"handle": handle, "host": "claude", "status": "pending", "actions": ["reload"]}
         with patch.object(refresh_sessions, "read_marker", return_value=None):
             # When
             refresh.step(fake, entry, {}, {handle: item})
 
         # Then
-        self.assertEqual([], fake.sent)
-        self.assertEqual(("skipped", "input_not_restorable", "not_restorable"), (entry["status"], entry["detail"], entry["input"]))
+        self.assertEqual([(handle, "/reload-plugins")], fake.sent)
+        self.assertEqual(refresh.BACKSPACE, fake.keystrokes[0][1])
+        self.assertEqual(("sent", "cleared"), (entry["status"], entry["input"]))
 
     def test_검증은_초안에_적힌_미제출_결과를_완료로_보지_않는다(self):
         """결과 개수가 늘지 않은 상태에서 초안에만 적힌 명령과 결과는 완료가 아니다."""
@@ -426,20 +432,25 @@ class DriveTest(unittest.TestCase):
         # Then
         self.assertEqual((False, True), (kept, switched))
 
-    def test_정확히_알_수_없는_입력이_남은_세션은_줄을_건드리지_않고_바로_건너뛴다(self):
-        """Orca 초안 없이 화면에만 보이는 입력은 되돌릴 수 없으므로 명령을 보내지 않고 기한을 기다리지 않은 채 이유와 함께 건너뛴다."""
+    def test_정확히_알_수_없는_입력이_남은_세션은_줄을_지우고_보낸다(self):
+        """Orca 초안 없이 화면에만 보이는 입력은 되돌릴 수 없으므로 지운 뒤 명령을 보내고, 지웠다고 알린다."""
         # Given
         typed = CLAUDE_EMPTY[:3] + ["❯ 쓰던 글"] + CLAUDE_EMPTY[4:]
-        fake = FakeOrca([terminal("term_claude", "claude")], screens={"term_claude": typed})
+        fake = FakeOrca([terminal("term_claude", "claude")], screens={"term_claude": typed}, on_send=self.simulate)
+
+        def erase(orca, handle, text):
+            if text == refresh.BACKSPACE:
+                orca.screens[handle] = list(CLAUDE_EMPTY)
+        fake.on_keys = erase
         sessions = refresh.plan_sessions(fake, self.state, "never", [])
 
         # When
-        refresh.drive(fake, sessions, self.state, time.time() + 0.3, sleep=lambda seconds: None)
+        refresh.drive(fake, sessions, self.state, time.time() + 5, sleep=lambda seconds: None)
 
         # Then
-        self.assertEqual([], fake.sent)
-        self.assertEqual([], fake.keystrokes)
-        self.assertEqual(("skipped", "input_not_restorable", "not_restorable"), (sessions[0]["status"], sessions[0]["detail"], sessions[0]["input"]))
+        self.assertEqual([("term_claude", "/reload-plugins")], fake.sent)
+        self.assertEqual(refresh.BACKSPACE, fake.keystrokes[0][1])
+        self.assertEqual(("done", "cleared"), (sessions[0]["status"], sessions[0]["input"]))
 
     def test_턴이_없던_Codex_세션은_첫_턴에_새_지침을_불러오므로_보내지_않는다(self):
         """Orca가 대기 상태로 보지 않는 새 Codex 세션은 배너만 있고 대화가 없으면 할 일 없음으로 끝내고, 대화가 있으면 계속 기다린다."""
@@ -1881,9 +1892,34 @@ class HostRecordFlowTest(unittest.TestCase):
         self.assertEqual({"busy": ("not_sent:turn_started", 0), "undecided_blocked": ("not_sent:turn_started", 0),
                           "undecided_idle": ("sent", 1)}, outcomes)
 
-    def test_정확히_되돌릴_수_없는_입력은_줄을_그대로_두고_보내지_않고_바로_건너뛴다(self):
-        """demo-d: 붙여넣기 자리표시, 이미지 자리표시, 여러 줄 초안, -로 시작하는 초안은 키를 보내지 않고 명령도 없이 input_not_restorable로 끝낸다."""
-        for draft in ("[Pasted text #1 +20 lines]", "앞 [Image #2] 뒤", "첫째 줄\n둘째 줄", "-v 옵션 설명"):
+    def test_정확히_되돌릴_수_없는_입력은_지우고_보내고_글은_어디에도_남기지_않는다(self):
+        """demo-d: 붙여넣기 자리표시가 있는 초안은 지운 뒤 명령을 보내 확인하고 cleared로 알리며, 실행 상태 폴더 어느 파일에도 글이 없다."""
+        # Given
+        draft = "[Pasted text #1 +20 lines]"
+        self.marker_with("demo-d", FINISHED_TURN)
+        fake = FakeOrca([terminal("demo-d", "claude")], typed={"demo-d": draft}, on_send=self.simulate)
+        run_id = "d" * 32
+        refresh.save_json(refresh.run_path(run_id), {**self.state, "run_id": run_id})
+
+        # When
+        with patch.object(refresh, "Orca", return_value=fake):
+            result = refresh.command_apply(run_id, "never", [], 60, spawn=lambda run: 1)
+
+        # Then
+        self.assertEqual([("demo-d", "/reload-plugins")], fake.sent)
+        typed = [text for _, text in fake.keystrokes]
+        self.assertEqual([refresh.PROBE_KEY, refresh.BACKSPACE], typed[:2])
+        self.assertEqual([refresh.BACKSPACE] * (len(draft) + refresh_sessions.CLEAR_MARGIN), typed[2:])
+        self.assertIsNone(fake.draft("demo-d"))
+        view = result["sessions"][0]
+        self.assertEqual(("done", "applied", "cleared"), (view["status"], view["detail"], view["input"]))
+        stored = [path for path in Path(self.temp.name).rglob("*") if path.is_file() and draft in path.read_text(errors="replace")]
+        self.assertEqual([], stored)
+        self.assertEqual({}, refresh_sessions.HELD_INPUT)
+
+    def test_이미지_여러_줄_하이픈으로_시작하는_초안도_지우고_보낸다(self):
+        """이미지 자리표시, 여러 줄, -로 시작하는 초안은 되돌릴 수 없으므로 모두 지운 뒤 보내고 cleared로 알린다."""
+        for draft in ("앞 [Image #2] 뒤", "첫째 줄\n둘째 줄", "-v 옵션 설명"):
             with self.subTest(draft=draft):
                 # Given
                 fake = FakeOrca([terminal("demo-d", "claude")], typed={"demo-d": draft}, on_send=self.simulate)
@@ -1893,25 +1929,122 @@ class HostRecordFlowTest(unittest.TestCase):
                 refresh.drive(fake, sessions, self.state, time.time() + 5, sleep=lambda seconds: None)
 
                 # Then
-                self.assertEqual([], fake.sent)
-                self.assertEqual([refresh.PROBE_KEY, refresh.BACKSPACE], [text for _, text in fake.keystrokes])
-                self.assertEqual(draft, fake.draft("demo-d"))
-                self.assertEqual(("skipped", "input_not_restorable", "not_restorable"),
-                                 (sessions[0]["status"], sessions[0]["detail"], sessions[0]["input"]))
+                self.assertEqual([("demo-d", "/reload-plugins")], fake.sent)
+                self.assertIsNone(fake.draft("demo-d"))
+                self.assertNotIn(draft, [text for _, text in fake.keystrokes])
+                self.assertEqual(("done", "cleared"), (sessions[0]["status"], sessions[0]["input"]))
 
-    def test_Codex_입력줄에_글이_있으면_건드리지_않고_바로_건너뛴다(self):
-        """Codex는 입력줄 글을 정확히 알 수 없으므로 키도 명령도 보내지 않고 input_not_restorable로 끝낸다."""
+    def test_Codex_입력줄의_글도_지우고_보낸다(self):
+        """Codex 입력줄에 글이 있으면 화면이 빈 입력줄로 확인될 때까지 지운 뒤 명령을 보내고 cleared로 알린다."""
         # Given
         typed = CODEX_EMPTY[:2] + ["› 쓰다 만 요청"] + CODEX_EMPTY[3:]
         fake = FakeOrca([terminal("demo-d", "codex")], screens={"demo-d": typed}, on_send=self.simulate)
+
+        def edit_screen(orca, handle, text):
+            lines = orca.screens[handle]
+            index = max(i for i, line in enumerate(lines) if line.strip().startswith("›"))
+            body = lines[index].strip()[1:].strip()
+            lines[index] = "› " + (body[:-1] if text == refresh.BACKSPACE else body)
+        fake.on_keys = edit_screen
         sessions = self.entries(fake, "always")
 
         # When
         refresh.drive(fake, sessions, self.state, time.time() + 5, sleep=lambda seconds: None)
 
         # Then
-        self.assertEqual(([], []), (fake.sent, fake.keystrokes))
-        self.assertEqual(("skipped", "input_not_restorable", "not_restorable"), (sessions[0]["status"], sessions[0]["detail"], sessions[0]["input"]))
+        self.assertEqual([("demo-d", "/compact")], fake.sent)
+        self.assertEqual({refresh.BACKSPACE}, {text for _, text in fake.keystrokes})
+        self.assertEqual(("done", "cleared"), (sessions[0]["status"], sessions[0]["input"]))
+
+    def screen_only_text(self, delete_clears, handle="demo-d"):
+        typed = CLAUDE_EMPTY[:3] + ["❯ 쓰던 글"] + CLAUDE_EMPTY[4:]
+        fake = FakeOrca([terminal(handle, "claude")], screens={handle: typed}, on_send=self.simulate)
+
+        def keys(orca, name, text):
+            if text == refresh_sessions.DELETE_KEY:
+                orca.typed[name] = ""
+                if delete_clears:
+                    orca.screens[name] = list(CLAUDE_EMPTY)
+        fake.on_keys = keys
+        return fake
+
+    def test_커서가_맨_앞인_화면_글은_백스페이스로_안_지워져도_앞으로_지우기_뒤에야_보낸다(self):
+        """Orca 초안 없이 화면에만 보이는 글이 백스페이스로 남으면 지운 것으로 치지 않고, 앞으로 지우기 시도로 화면이 비어야 명령을 보낸다."""
+        # Given
+        fake = self.screen_only_text(delete_clears=True)
+        sessions = self.entries(fake)
+
+        # When
+        refresh.drive(fake, sessions, self.state, time.time() + 5, sleep=lambda seconds: None)
+
+        # Then
+        texts = [text for _, text in fake.keystrokes]
+        self.assertIn(refresh_sessions.DELETE_KEY, texts)
+        self.assertEqual([("demo-d", "/reload-plugins")], fake.sent)
+        self.assertEqual(("done", "cleared"), (sessions[0]["status"], sessions[0]["input"]))
+
+    def test_화면_글이_끝내_안_지워지면_보내지_않고_지우기_실패로_건너뛴다(self):
+        """초안이 비어 있어도 화면 입력줄에 글이 남아 있으면 지운 것으로 치지 않아 명령을 보내지 않고 clear_failed로 끝낸다."""
+        # Given
+        fake = self.screen_only_text(delete_clears=False)
+        sessions = self.entries(fake)
+
+        # When
+        refresh.drive(fake, sessions, self.state, time.time() + 5, sleep=lambda seconds: None)
+
+        # Then
+        self.assertEqual([], fake.sent)
+        self.assertEqual(("skipped", "input_clear_failed", "clear_failed"), (sessions[0]["status"], sessions[0]["detail"], sessions[0]["input"]))
+
+    def test_지운_뒤_미룬_세션은_도우미가_끝낸_보고에도_cleared로_남는다(self):
+        """입력을 지운 뒤 새 턴이 시작돼 도우미에 넘긴 세션은 도우미가 명령을 보내 끝낸 뒤에도 input이 cleared이다."""
+        # Given
+        self.marker_with("demo-d", FINISHED_TURN)
+        fake = self.screen_only_text(delete_clears=True)
+        fake.on_keys = lambda orca, name, text: orca.screens.__setitem__(name, list(CLAUDE_EMPTY)) if text == refresh.BACKSPACE else None
+        phase = {"helper": False, "calls": 0}
+
+        def host_record(entry):
+            phase["calls"] += 1
+            return "idle" if phase["helper"] or phase["calls"] == 1 else "busy"
+        run_id = "e" * 32
+        refresh.save_json(refresh.run_path(run_id), {**self.state, "run_id": run_id})
+
+        # When
+        with patch.object(refresh_sessions, "host_record", side_effect=host_record), patch.object(refresh, "Orca", return_value=fake):
+            applied = refresh.command_apply(run_id, "never", [], 1, spawn=lambda run: 4242)
+            handed = refresh.load_run(run_id)["follow_up"][0]
+            phase["helper"] = True
+            refresh.command_self_apply(run_id, sleep=lambda seconds: None)
+
+        # Then
+        self.assertEqual("deferred", applied["sessions"][0]["status"])
+        self.assertEqual("cleared", handed["input"])
+        final = refresh.command_status(run_id)["sessions"][0]
+        self.assertEqual(("done", "cleared"), (final["status"], final["input"]))
+        self.assertEqual([("demo-d", "/reload-plugins")], fake.sent)
+
+    def test_모든_시도_뒤에도_줄이_비지_않으면_보내지_않고_지우기_실패로_건너뛴다(self):
+        """백스페이스와 앞으로 지우기를 모두 쓴 세 번의 시도 뒤에도 입력이 남으면 명령을 보내지 않고 input_clear_failed / clear_failed로 끝낸다."""
+        # Given
+        draft = "[Pasted text #1 +20 lines]"
+        fake = FakeOrca([terminal("demo-d", "claude")], typed={"demo-d": draft}, on_send=self.simulate)
+
+        def stubborn(orca, handle, text):
+            if text in (refresh.BACKSPACE, refresh_sessions.DELETE_KEY):
+                orca.typed[handle] = draft
+        fake.on_keys = stubborn
+        sessions = self.entries(fake)
+
+        # When
+        refresh.drive(fake, sessions, self.state, time.time() + 5, sleep=lambda seconds: None)
+
+        # Then
+        self.assertEqual([], fake.sent)
+        self.assertEqual(draft, fake.draft("demo-d"))
+        self.assertEqual(("skipped", "input_clear_failed", "clear_failed"), (sessions[0]["status"], sessions[0]["detail"], sessions[0]["input"]))
+        self.assertEqual(refresh_sessions.CLEAR_ROUNDS - 1, [text for _, text in fake.keystrokes].count(refresh_sessions.DELETE_KEY) // (len(draft) + refresh_sessions.CLEAR_MARGIN))
+        self.assertNotIn("observed_draft", sessions[0])
 
     def test_지운_줄이_비지_않고_남은_글이_저장한_글의_뒷부분이면_앞부분을_다시_쳐서_건너뛴다(self):
         """커서가 중간에 있어 일부만 지워졌으면 지운 앞부분을 다시 쳐서 같은 글로 확인하고, 명령은 보내지 않고 input_clear_failed로 건너뛴다."""

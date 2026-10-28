@@ -318,7 +318,7 @@ def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spa
             handed = time.time()
             items = [
                 {key: entry.get(key) for key in ("handle", "host", "actions", "title", "worktree", "compact_reason", "detail", "probe_retries",
-                                                 "screen_identified")} | {"deferred_at": handed}
+                                                 "screen_identified", "input", "ready_signal")} | {"deferred_at": handed}
                 for entry in deferred
             ]
             handed_off = True
