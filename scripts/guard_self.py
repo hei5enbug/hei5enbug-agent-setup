@@ -13,12 +13,14 @@ from guard_shell import (
     tokenize,
 )
 from guard_paths import _resolved
+from guard_pyrisk import inline_literal_executions
 from guard_cloud import (
     _aws_rules, _az_rules, _docker_rules, _gcloud_rules, _gsutil_rules, _helm_rules, _kubectl_rules, _terraform_rules,
 )
 
 
 MAX_DEPTH = 4
+MAX_NESTED_CODE = 12
 SOURCE_COMMANDS = frozenset({".", "source"})
 GUARD_MODULE_NAMES = (
     "approval_guard",
@@ -137,20 +139,8 @@ def _names_guard(node, tainted):
     return False
 
 
-def _code_runs_guard(code):
-    """True when Python code imports a guard module or passes a guard name to a process or exec call.
-
-    A guard path that only appears as data, such as a list of files to check, does not count. Code that cannot be
-    parsed falls back to the conservative text check.
-    """
-    if GUARD_CODE.search(code):
-        return True
-    if not any(module in code for module in GUARD_MODULES) or PYTHON_EXEC.search(code) is None:
-        return False
-    try:
-        tree = ast.parse(code)
-    except (SyntaxError, ValueError):
-        return True
+def _passes_guard_name(tree):
+    """True when a process or exec call receives a guard name directly or through a name assigned one."""
     tainted = set()
     for _ in range(3):
         for node in ast.walk(tree):
@@ -163,6 +153,41 @@ def _code_runs_guard(code):
             if any(_names_guard(arg, tainted) for arg in [*node.args, *(k.value for k in node.keywords)]):
                 return True
     return False
+
+
+def _literal_code_texts(tree):
+    """The string literal that each remaining `exec` or `eval` call runs."""
+    return [node.args[0].value for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("exec", "eval")
+            and node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str)]
+
+
+def _code_runs_guard(code, depth=0):
+    """True when Python code imports a guard module or passes a guard name to a process or exec call, also when an
+    `exec` or `eval` of a string literal, at any nesting level, does so after its escapes are decoded.
+
+    A guard path that only appears as data, such as a list of files to check, does not count. Code that cannot be
+    parsed falls back to the conservative text check.
+    """
+    if GUARD_CODE.search(code):
+        return True
+    runs = PYTHON_EXEC.search(code) is not None
+    named = runs and any(module in code for module in GUARD_MODULES)
+    if not (runs or "eval" in code or not code.isascii()):
+        return False
+    try:
+        tree = ast.parse(code)
+    except (SyntaxError, ValueError):
+        return named
+    if depth > MAX_NESTED_CODE:
+        return True
+    if _passes_guard_name(tree):
+        return True
+    inlined = inline_literal_executions(tree)
+    nested = _literal_code_texts(inlined)
+    if ast.dump(inlined) != ast.dump(tree):
+        nested.append(ast.unparse(inlined))
+    return any(_code_runs_guard(text, depth + 1) for text in nested)
 
 
 def _python_runs_guard(args):

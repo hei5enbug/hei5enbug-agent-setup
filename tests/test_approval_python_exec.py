@@ -144,3 +144,44 @@ def test_리터럴이_아닌_exec라도_같은_코드가_설치된_코드에_쓰
     decision, _ = verdict(world, inline(body))
     # then
     assert decision == "deny"
+
+
+def nested(code, levels):
+    for _ in range(levels):
+        code = wrap(code, "exec")
+    return code
+
+
+ESCAPED_GUARD_RUNS = [
+    'exec("import guard_\\x70ermissions")',
+    'exec("from guard_\\x70ermissions import x")',
+    'exec("import approval_\\x73tate")',
+    'print(eval("__import__(\'guard_\\x70ermissions\')"))',
+    'exec("exec(\'import guard_\\\\x70ermissions\')")',
+    nested('exec("import guard_\\x70ermissions")', 6),
+    'exec("import guard_\\x70ermissions", {})',
+    'exec("import guard_\\x70ermissions", globals())',
+    'import subprocess\nsubprocess.run(["python3", "guard_\\x70ermissions.py"])',
+    'import subprocess\nsubprocess.run(["python3", "-c", "import guard_\\x70ermissions"])',
+]
+
+
+@pytest.mark.parametrize("body", ESCAPED_GUARD_RUNS)
+@pytest.mark.parametrize("shape", [heredoc, inline])
+def test_이스케이프로_가린_가드_모듈_실행도_직접_가져온_것처럼_거부한다(world, body, shape):
+    # given
+    command = shape(body)
+    # when
+    result = verdict(world, command)
+    # then
+    assert result[0] == "deny", (body, result)
+
+
+def test_이스케이프가_가드_이름이_아닌_리터럴_exec는_거부하지_않는다(world):
+    # given
+    commands = [inline('exec("x = \'guard_\\x70lain\'\\nprint(len(x))")'), inline('exec("print(\'\\x70\')")'),
+                heredoc('exec("import json\\nprint(json.dumps({}))")')]
+    # when
+    results = [verdict(world, command)[0] for command in commands]
+    # then
+    assert all(result not in ("ask", "deny") for result in results), results
