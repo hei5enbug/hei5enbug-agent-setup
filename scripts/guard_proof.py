@@ -100,14 +100,31 @@ def _text_only_python_documents(text):
     return [(start, stop) for start, stop in _python_stdin_documents(text) if _state_text_only_python(text[start:stop])]
 
 
-def _plugin_install_dirs():
-    """The folders that hold running plugin code: the Claude and Codex plugin caches, and the folder and plugin root that
-    this running guard was loaded from."""
+def _configured_cache_dirs():
+    """The plugin caches at their configured locations, before any symbolic link is followed."""
     home = Path.home()
     bases = [Path(os.environ["CLAUDE_CONFIG_DIR"]) if os.environ.get("CLAUDE_CONFIG_DIR") else home / ".claude", home / ".claude",
              Path(os.environ["CODEX_HOME"]) if os.environ.get("CODEX_HOME") else home / ".codex", home / ".codex"]
-    script = Path(__file__).resolve()
-    return [root.resolve() for root in (*(base / "plugins" / "cache" for base in bases), script.parent, script.parent.parent)]
+    return [Path(os.path.abspath(base / "plugins" / "cache")) for base in bases]
+
+
+def _plugin_cache_dirs():
+    """The plugin caches under both identities: where they are configured and where their symbolic links lead, so a cache
+    that is a link into any other folder stays a cache."""
+    configured = _configured_cache_dirs()
+    return list(dict.fromkeys([*configured, *(root.resolve() for root in configured)]))
+
+
+def _running_plugin_roots():
+    """The folder and plugin root that this running guard was loaded from, as (path as loaded, resolved path) pairs."""
+    script = Path(os.path.abspath(__file__))
+    return [(root, root.resolve()) for root in (script.parent, script.parent.parent)]
+
+
+def _plugin_install_dirs():
+    """The resolved folders that hold running plugin code: the Claude and Codex plugin caches, and the folder and plugin
+    root that this running guard was loaded from."""
+    return [*(root.resolve() for root in _configured_cache_dirs()), *(resolved for _, resolved in _running_plugin_roots())]
 
 
 def _in_git_work_tree(path):

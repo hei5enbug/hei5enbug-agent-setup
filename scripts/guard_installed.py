@@ -3,7 +3,7 @@ import os
 import re
 from pathlib import Path
 from guard_paths import _expand_path_variables
-from guard_proof import _in_git_work_tree, _plugin_install_dirs
+from guard_proof import _in_git_work_tree, _plugin_cache_dirs, _running_plugin_roots
 from guard_pyrisk import path_matches
 
 INSTALLED_CODE_REASON = (
@@ -34,26 +34,32 @@ SED_SCRIPT_OPTIONS = ("-e", "-f", "--expression", "--file")
 
 
 def _installed_roots():
-    """The plugin caches, and the running plugin root unless it is a development checkout: a git work tree outside the
-    caches, which changes through ordinary commits rather than releases."""
-    roots = _plugin_install_dirs()
-    caches = [root for root in roots if root.name == "cache" and root.parent.name == "plugins"]
-    return [root for root in roots if root in caches or any(cache in root.parents for cache in caches)
-            or not _in_git_work_tree(root)]
+    """The plugin caches under their configured and resolved locations, and the running plugin root unless it is a
+    development checkout: a git work tree that neither lies in a cache nor is reached through one, because that changes
+    through ordinary commits rather than releases."""
+    caches = _plugin_cache_dirs()
+    roots = list(caches)
+    for loaded, resolved in _running_plugin_roots():
+        cached = any(cache in (*loaded.parents, loaded) or cache in (*resolved.parents, resolved) for cache in caches)
+        if cached or not _in_git_work_tree(resolved):
+            roots.extend((loaded, resolved))
+    return roots
 
 
-def _under_installed_code(resolved):
-    return any(resolved == str(root) or resolved.startswith(f"{root}{os.sep}") for root in _installed_roots())
+def _under_installed_code(*spellings):
+    """Whether any spelling of a path lies in installed plugin code."""
+    roots = _installed_roots()
+    return any(spelling == str(root) or spelling.startswith(f"{root}{os.sep}") for spelling in spellings for root in roots)
 
 
 def path_in_installed_code(text, cwd):
-    """Whether a path text, resolved through `..`, repeated slashes, and symbolic links, lies in a plugin cache or in the
-    running plugin root."""
+    """Whether a path text, resolved through `..`, repeated slashes, and symbolic links, or spelled as given, lies in a
+    plugin cache or in the running plugin root."""
     try:
-        resolved = str(Path(cwd, os.path.expanduser(text)).resolve())
+        joined = Path(cwd, os.path.expanduser(text))
+        return _under_installed_code(str(joined.resolve()), os.path.abspath(joined))
     except (OSError, RuntimeError, ValueError):
         return False
-    return _under_installed_code(resolved)
 
 
 def python_writes_installed_code(tree, cwd, env):

@@ -378,24 +378,25 @@ def write_targets(tree, folder):
     return found
 
 
-def _resolved_text(text, cwd):
-    """The resolved absolute spelling of a path text without a wildcard, else None."""
+def _spellings(text, cwd):
+    """The resolved and the expanded, unresolved absolute spellings of a path text without a wildcard, else None."""
     if not text or "\0" in text or "*" in text:
         return None
     try:
-        return str(Path(cwd, os.path.expanduser(text)).resolve())
+        joined = Path(cwd, os.path.expanduser(text))
+        return str(joined.resolve()), os.path.abspath(joined)
     except (OSError, RuntimeError, ValueError):
         return None
 
 
 def path_matches(tree, cwd, env, exact, tail):
-    """Whether a script writes a path for which `exact(resolved)` is true, or whose text with unknown parts matches the
-    `tail` expression."""
+    """Whether a script writes a path for which `exact(resolved, expanded)` is true, or whose text with unknown parts
+    matches the `tail` expression."""
     folder = _Folder(tree, _aliases(tree), env)
     for text in write_targets(tree, folder):
-        resolved = _resolved_text(text, cwd)
-        if resolved is not None:
-            if exact(resolved):
+        spellings = _spellings(text, cwd)
+        if spellings is not None:
+            if exact(*spellings):
                 return text
         elif text.replace("*", "").strip("/.") and tail.search(re.sub(r"/{2,}", "/", text)):
             return text
@@ -424,7 +425,7 @@ def sensitive_write(tree, cwd, env):
     """The first path text that a script writes in a security-sensitive location, or None: the `.ssh`, `.aws`, and `.gnupg`
     folders, shell startup files in the home folder, git hooks, and the Claude and Codex settings files."""
     exact = _sensitive_locations(env)
-    return path_matches(tree, cwd, env, lambda resolved: resolved in exact or bool(SENSITIVE_WRITE_TAIL.search(resolved)),
+    return path_matches(tree, cwd, env, lambda *spellings: any(item in exact or bool(SENSITIVE_WRITE_TAIL.search(item)) for item in spellings),
                         SENSITIVE_WRITE_TAIL)
 
 

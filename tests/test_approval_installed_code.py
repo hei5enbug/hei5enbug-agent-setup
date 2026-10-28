@@ -260,3 +260,71 @@ def test_git_작업_트리라도_플러그인_캐시_안이면_설치된_코드�
     result = verdict(world, command)
     # then
     assert result[0] == "deny"
+
+
+@pytest.fixture
+def linked(world, monkeypatch):
+    """Plugin caches that are symbolic links to a store inside a git work tree."""
+    import shutil
+    store = world["tmp"] / "work" / "plugin-store"
+    (world["tmp"] / "work" / ".git").mkdir(parents=True)
+    for name, cache in (("claude", world["claude"]), ("codex", world["codex"]), ("custom", world["custom"])):
+        base = cache.parents[3] / "cache"
+        target = store / name
+        shutil.move(str(base), str(target))
+        base.symlink_to(target)
+    monkeypatch.undo()
+    monkeypatch.setenv("HOME", str(world["home"]))
+    monkeypatch.setenv("XDG_STATE_HOME", str(world["home"] / ".local" / "state"))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(world["custom"].parents[4]))
+    monkeypatch.setenv("HEI5ENBUG_RESPONSE_LANGUAGE", "English")
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(world["project"]))
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    state_mod.prompt_language.cache_clear()
+    return {**world, "store": store}
+
+
+LINKED_WRITES = [
+    "echo x > {claude}/scripts/tool.py",
+    "echo x > {codex}/scripts/tool.py",
+    "echo x > {custom}/scripts/tool.py",
+    "cp {scratch}/new.py ~/.claude/plugins/cache/market/demo/1.0.0/scripts/tool.py",
+    "cp {scratch}/new.py ~/.codex/plugins/cache/market/demo/1.0.0/scripts/tool.py",
+    "sed -i 's/a/b/' {store}/claude/market/demo/1.0.0/scripts/tool.py",
+    "python3 -c \"open('{claude}/scripts/tool.py', 'w').write('x')\"",
+    "python3 -c \"open('{store}/codex/market/demo/1.0.0/scripts/tool.py', 'w').write('x')\"",
+]
+
+
+@pytest.mark.parametrize("template", LINKED_WRITES)
+def test_플러그인_캐시가_git_작업_트리_안으로_가는_심볼릭_링크여도_쓰기는_거부한다(linked, template):
+    # given
+    command = fill(linked, template)
+    # when
+    result = verdict(linked, command)
+    # then
+    assert result[0] == "deny", command
+
+
+def test_링크된_캐시_옆의_일반_파일_쓰기는_거부하지_않는다(linked):
+    # given
+    commands = [fill(linked, "echo x > {tmp}/work/note.txt"), fill(linked, "echo x > {store}/note.txt"),
+                fill(linked, "cp {scratch}/a.txt {project}/a.txt")]
+    # when
+    results = [verdict(linked, command)[0] for command in commands]
+    # then
+    assert results == [None, None, None] or all(result not in ("deny", "ask") for result in results), results
+
+
+def test_캐시에서_온_실행_루트가_git_작업_트리로_풀려도_개발용_예외를_받지_않는다(world, monkeypatch):
+    # given
+    checkout = world["tmp"] / "dev-checkout"
+    (checkout / "scripts").mkdir(parents=True)
+    version = world["claude"].parent / "2.0.0"
+    version.symlink_to(checkout)
+    monkeypatch.setattr(guard_installed, "_in_git_work_tree", lambda path: True)
+    monkeypatch.setattr(guard_installed, "_running_plugin_roots", lambda: [(version, checkout.resolve())])
+    # when
+    written = guard_installed.installed_code_write(["cp", "a", f"{checkout}/scripts/x.py"], [], str(world["project"]), {})
+    # then
+    assert written
