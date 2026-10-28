@@ -147,8 +147,10 @@ verified evaluation runner when required. See the conditional [model routing con
 
 On Claude Code, `config/claude-mod.json` loads the mod `hooks/mod/register.js`, which holds the Claude-only guards:
 the built-in subagent block, role pinning, and the GPT refusal. The [Approval guard](#approval-guard) holds approvals
-on both hosts. The mod was tested with Claude Code
-2.1.292. When the mod does not load, such as on an older Claude Code, with `disableAllHooks`, or under a managed
+on both hosts. The mod is verified on Claude Code 2.1.307 and later, the oldest version
+whose `claude plugin test` run passes. That run fails on 2.1.306 and earlier, and 2.1.292 also refuses to load a hook
+module that passes `$` into a function imported from another file. The plugin manifest has no field that declares a
+minimum Claude Code version. When the mod does not load, such as on an older Claude Code, with `disableAllHooks`, or under a managed
 policy, these guards are absent and the host's normal permission flow applies.
 
 Role pinning pins each plugin role's model and effort on every request: `scout` uses `claude-sonnet-5-5` with `medium`,
@@ -1154,7 +1156,7 @@ installations from the `hei5enbug` marketplace.
 ## Development checks
 
 The bundled scripts need Python 3.12 or later with PyYAML. The Node tests need Node.js. The mod tests and the plugin
-validation need the Claude Code CLI, version 2.1.292 in CI. Run the checks that `.github/workflows/validate.yml`
+validation need the Claude Code CLI, version 2.1.307 or later, and 2.1.307 in CI. Run the checks that `.github/workflows/validate.yml`
 runs on macOS and Linux, plus the plugin validation:
 
 ```bash

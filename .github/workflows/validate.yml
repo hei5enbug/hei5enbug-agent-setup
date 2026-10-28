@@ -54,7 +54,7 @@ jobs:
       - name: Install Claude Code CLI
         run: |
           set -euo pipefail
-          curl -fsSL https://claude.ai/install.sh | bash -s 2.1.292
+          curl -fsSL https://claude.ai/install.sh | bash -s 2.1.307
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Test Claude Code mod

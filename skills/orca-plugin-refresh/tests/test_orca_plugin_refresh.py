@@ -1055,14 +1055,19 @@ class FollowUpTest(DriveTest):
                 ready.screens["term_claude"] = list(CLAUDE_EMPTY[2:])
 
         stuck = counting(FakeOrca([terminal("term_claude", "claude")], screens={"term_claude": list(unreadable)}))
+        now = [1000.0]
         stays = {"handle": "term_claude", "host": "claude", "actions": ["reload"], "status": "pending", "detail": "input_unknown",
-                 "deadline": time.time() + 0.3, "deferred_at": time.time()}
+                 "deadline": now[0] + 0.3, "deferred_at": now[0]}
+
+        def tick(seconds):
+            now[0] += max(seconds, 0.02)
 
         # When
         refresh.follow_up(ready, [recovering], self.state, sleep=recover)
         recovered_reads = len(reads)
         reads.clear()
-        refresh.follow_up(stuck, [stays], self.state, sleep=lambda seconds: time.sleep(0.02))
+        with patch("time.time", lambda: now[0]), patch("time.sleep", tick):
+            refresh.follow_up(stuck, [stays], self.state, sleep=tick)
 
         # Then
         self.assertEqual("done", recovering["status"])

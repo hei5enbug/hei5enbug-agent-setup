@@ -150,7 +150,9 @@ Codex 내장 `worker`를 대신하고, `scout`는 내장 `explorer`를 건드리
 
 Claude Code에서는 `config/claude-mod.json`이 mod `hooks/mod/register.js`를 불러옵니다. 이 mod가 Claude 전용 가드인
 내장 서브에이전트 차단, 역할 고정, GPT 거부를 담당합니다. 양쪽 호스트의 승인은 [승인 가드](#승인-가드)가 보관합니다.
-mod는 Claude Code 2.1.292에서 시험했습니다.
+mod는 Claude Code 2.1.307 이상에서 검증했습니다. 이 버전이 `claude plugin test`를 통과하는 가장 오래된 버전입니다. 2.1.306 이하에서는
+테스트 실행이 실패하고 2.1.292는 `$`를 다른 파일에서 가져온 함수로 넘기는 hook 모듈을 불러오지 않습니다. 플러그인 매니페스트에는 필요한
+최소 Claude Code 버전을 선언하는 필드가 없습니다.
 오래된 Claude Code, `disableAllHooks`, 관리 정책 등으로 mod가 로드되지 않으면 이 가드들은 동작하지 않고 호스트의 기본 권한
 흐름이 적용됩니다.
 
@@ -1070,7 +1072,7 @@ Codex 턴이 없을 때까지 기다립니다. 명령 자체가 Codex 턴 안에
 ## 개발 검사
 
 번들 스크립트에는 Python 3.12 이상과 PyYAML이 필요하고, Node 테스트에는 Node.js가 필요합니다. mod 테스트와 플러그인 검증에는
-Claude Code CLI가 필요하며 CI는 2.1.292 버전을 씁니다. `.github/workflows/validate.yml`이 macOS와 Linux에서 실행하는 검사와
+Claude Code CLI가 필요하며 2.1.307 이상이 필요하고 CI는 2.1.307 버전을 씁니다. `.github/workflows/validate.yml`이 macOS와 Linux에서 실행하는 검사와
 플러그인 검증을 실행합니다.
 
 ```bash
