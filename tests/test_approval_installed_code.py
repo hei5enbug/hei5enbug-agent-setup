@@ -187,6 +187,15 @@ PYTHON_WRITES = [
     "from pathlib import Path\nPath('{claude}/scripts/tool.py').open('w').write('x')",
     "with open('{claude}/scripts/../scripts//tool.py', 'a') as f:\n    f.write('x')",
     "open('{root}/scripts/guard_extra.py', 'w').write('x')",
+    "import shutil\nshutil.copyfile(src='{scratch}/new.py', dst='{claude}/scripts/tool.py')",
+    "import shutil\nshutil.move(dst='{codex}/scripts/tool.py', src='{scratch}/new.py')",
+    "import shutil\nshutil.rmtree(path='{claude}/scripts')",
+    "import os\nos.remove(path='{claude}/scripts/tool.py')",
+    "import os\nos.replace(src='{scratch}/new.py', dst='{custom}/scripts/tool.py')",
+    "open(file='{claude}/scripts/tool.py', mode='w').write('x')",
+    "from pathlib import Path\nPath('{scratch}/new.py').rename(target='{claude}/scripts/tool.py')",
+    "from pathlib import Path\nPath('{claude}/scripts/tool.txt').with_suffix('.py').write_text('x')",
+    "from pathlib import Path\nPath('{claude}/scripts/other.py').with_name('tool.py').write_text('x')",
 ]
 
 
@@ -211,6 +220,8 @@ PYTHON_QUIET = [
     "import json\nopen('{scratch}/out.json', 'w').write(json.dumps({{'a': 1}}))",
     "from pathlib import Path\nPath('{project}/notes.txt').write_text('x')",
     "import os\nprint(os.listdir('{claude}/scripts'))",
+    "from pathlib import Path\nPath('{claude}/scripts/tool.py').with_suffix('.txt').read_text() if False else None",
+    "import os\nos.remove(path='{scratch}/gone.txt') if False else None",
 ]
 
 
@@ -226,9 +237,13 @@ def test_설치된_코드를_읽거나_다른_곳에_쓰는_파이썬은_거부�
     assert result[0] not in ("deny", "ask"), (template, shape)
 
 
-def test_설치된_코드를_다른_곳으로_복사하는_인라인_파이썬은_거부하지_않는다(world):
+@pytest.mark.parametrize("template", [
+    "import shutil\nshutil.copy('{custom}/scripts/tool.py', '{scratch}/copy.py')",
+    "import shutil\nshutil.copyfile(src='{claude}/scripts/tool.py', dst='{scratch}/copy.py')",
+])
+def test_설치된_코드를_다른_곳으로_복사하는_인라인_파이썬은_거부하지_않는다(world, template):
     # given
-    body = fill(world, "import shutil\nshutil.copy('{custom}/scripts/tool.py', '{scratch}/copy.py')")
+    body = fill(world, template)
     # when
     result = verdict(world, "python3 -c '" + body.replace("'", "'\"'\"'") + "'")
     # then

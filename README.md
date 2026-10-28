@@ -704,8 +704,9 @@ Python code in a heredoc, `-c` option, or script file that writes, moves, or rem
 location asks every time: `~/.ssh`, `~/.aws`, `~/.gnupg`, the shell startup files `~/.zshrc`, `~/.bashrc`,
 `~/.profile`, `~/.bash_profile`, and `~/.zprofile`, a `.git/hooks` folder, and the Claude and Codex settings files
 (`settings.json` and `settings.local.json` in a `.claude` folder or `$CLAUDE_CONFIG_DIR`, `~/.claude.json`, and
-`config.toml` or `hooks.json` in a `.codex` folder or `$CODEX_HOME`). Ordinary Python writes in the work tree or
-elsewhere are not asked about.
+`config.toml` or `hooks.json` in a `.codex` folder or `$CODEX_HOME`). The guard follows the path through keyword
+arguments such as `dst=`, `path=`, and `target=` and through `with_suffix`, `with_name`, and `with_stem`, which change
+the path. Ordinary Python writes in the work tree or elsewhere are not asked about.
 
 Commands that need a secret value use the secret helper: `python3 <plugin root>/scripts/secret_exec.py --secret
 DB_PASSWORD=k8s:<context>/<namespace>/<secret>/<key> -- <command>`. The sources are `k8s:`, `keyvault:<vault>/<name>`,

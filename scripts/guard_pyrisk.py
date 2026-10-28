@@ -15,7 +15,7 @@ HOME_VARIABLES = frozenset({"HOME", "USERPROFILE"})
 ENVIRONMENTS = frozenset({"os.environ", "os.environb"})
 PATH_CLASSES = frozenset({"Path", "PurePath", "PosixPath", "PurePosixPath"})
 SAME_TEXT_CALLS = frozenset({"expanduser", "expandvars", "abspath", "realpath", "normpath", "str", "fspath", "relpath"})
-SAME_TEXT_METHODS = frozenset({"expanduser", "resolve", "absolute", "as_posix", "with_suffix"})
+SAME_TEXT_METHODS = frozenset({"expanduser", "resolve", "absolute", "as_posix"})
 FORMAT_FIELD = re.compile(r"\{[^{}]*\}|%[-#0 +]*\d*(?:\.\d+)?[sdrif]")
 CREDENTIAL_FILE = re.compile(
     r"(?:^|/)(?:\.aws/(?:credentials|config)|\.kube/config|\.docker/config\.json|\.netrc|\.pgpass"
@@ -58,6 +58,26 @@ def _cross(options, joiner):
         if len(result) > MAX_ALTERNATIVES:
             return UNKNOWN
     return result
+
+
+def _split_name(path):
+    """The folder part, the last component, and the suffix of that component of a path text, as `pathlib` reads them."""
+    folder, _, name = path.rstrip("/").rpartition("/")
+    dot = name.rfind(".")
+    suffix = name[dot:] if 0 < dot < len(name) - 1 else ""
+    return (folder + "/" if folder or path.startswith("/") else ""), name, suffix
+
+
+def _renamed(path, build):
+    folder, name, suffix = _split_name(path)
+    return f"{folder}{build(name, suffix)}" if name else path
+
+
+RENAMING_METHODS = {
+    "with_suffix": lambda path, text: _renamed(path, lambda name, suffix: name[:len(name) - len(suffix)] + text),
+    "with_name": lambda path, text: _renamed(path, lambda name, suffix: text),
+    "with_stem": lambda path, text: _renamed(path, lambda name, suffix: text + suffix),
+}
 
 
 def _join_path(first, second):
@@ -170,6 +190,8 @@ class _Folder:
         owner = self.fold(func.value, depth + 1)
         if tail in SAME_TEXT_METHODS:
             return owner
+        if tail in RENAMING_METHODS and len(args) == 1 and len(node.args) == 1 and not node.keywords:
+            return _cross([owner, args[0]], RENAMING_METHODS[tail])
         if tail == "joinpath" and args:
             return _cross([owner, *args], _join_path)
         if tail == "format" and isinstance(func.value, ast.Constant):
@@ -191,9 +213,14 @@ def _mode_reads(mode):
 
 
 def _keyword(node, name, position):
+    """The argument of a call that is named `name` or sits at `position`, also when it is passed through `**{...}`."""
     for item in node.keywords:
         if item.arg == name:
             return item.value
+        if item.arg is None and isinstance(item.value, ast.Dict):
+            for key, value in zip(item.value.keys, item.value.values):
+                if isinstance(key, ast.Constant) and key.value == name:
+                    return value
     return node.args[position] if len(node.args) > position else None
 
 
@@ -321,13 +348,16 @@ PATH_WRITE_METHODS = frozenset({
     "rename", "replace",
 })
 SHUTIL_SOURCES_AND_TARGETS = {
-    "copy": (1,), "copy2": (1,), "copyfile": (1,), "copytree": (1,), "copymode": (1,), "copystat": (1,),
-    "move": (0, 1), "rmtree": (0,), "make_archive": (0,), "unpack_archive": (1,), "chown": (0,),
+    "copy": (("dst", 1),), "copy2": (("dst", 1),), "copyfile": (("dst", 1),), "copytree": (("dst", 1),),
+    "copymode": (("dst", 1),), "copystat": (("dst", 1),), "move": (("src", 0), ("dst", 1)), "rmtree": (("path", 0),),
+    "make_archive": (("base_name", 0),), "unpack_archive": (("extract_dir", 1),), "chown": (("path", 0),),
 }
 OS_WRITE_POSITIONS = {
-    "remove": (0,), "unlink": (0,), "rmdir": (0,), "removedirs": (0,), "mkdir": (0,), "makedirs": (0,),
-    "truncate": (0,), "chmod": (0,), "chown": (0,), "lchown": (0,), "utime": (0,), "mkfifo": (0,), "mknod": (0,),
-    "rename": (0, 1), "replace": (0, 1), "renames": (0, 1), "symlink": (1,), "link": (1,),
+    "remove": (("path", 0),), "unlink": (("path", 0),), "rmdir": (("path", 0),), "removedirs": (("name", 0),),
+    "mkdir": (("path", 0),), "makedirs": (("name", 0),), "truncate": (("path", 0),), "chmod": (("path", 0),),
+    "chown": (("path", 0),), "lchown": (("path", 0),), "utime": (("path", 0),), "mkfifo": (("path", 0),),
+    "mknod": (("path", 0),), "rename": (("src", 0), ("dst", 1)), "replace": (("src", 0), ("dst", 1)),
+    "renames": (("old", 0), ("new", 1)), "symlink": (("dst", 1),), "link": (("dst", 1),),
 }
 
 
@@ -350,17 +380,20 @@ def _call_targets(node, folder, dotted, tail):
         flags = _keyword(node, "flags", 1)
         target = _keyword(node, "path", 0)
         return [target] if target is not None and flags is not None and OS_OPEN_WRITE.search(ast.unparse(flags)) else []
-    if dotted.startswith("shutil.") and tail in SHUTIL_SOURCES_AND_TARGETS:
-        return [args[index] for index in SHUTIL_SOURCES_AND_TARGETS[tail] if index < len(args)]
-    if dotted.startswith("os.") and tail in OS_WRITE_POSITIONS:
-        return [args[index] for index in OS_WRITE_POSITIONS[tail] if index < len(args)]
+    for module, table in (("shutil.", SHUTIL_SOURCES_AND_TARGETS), ("os.", OS_WRITE_POSITIONS)):
+        if dotted.startswith(module) and tail in table:
+            found = (_keyword(node, name, index) for name, index in table[tail])
+            return [target for target in found if target is not None]
     if not isinstance(func, ast.Attribute):
         return []
     if tail == "open":
         return [func.value] if _mode_writes(_keyword(node, "mode", 0)) else []
-    if tail == "replace" and len(args) != 1 or tail not in PATH_WRITE_METHODS:
+    if tail == "replace" and len(args) + len(node.keywords) != 1 or tail not in PATH_WRITE_METHODS:
         return []
-    return [func.value, *args[:1]] if tail in ("rename", "replace", "symlink_to", "hardlink_to") else [func.value]
+    if tail in ("rename", "replace", "symlink_to", "hardlink_to"):
+        destination = _keyword(node, "target", 0)
+        return [func.value, *([destination] if destination is not None else [])]
+    return [func.value]
 
 
 def write_targets(tree, folder):

@@ -74,6 +74,10 @@ CREDENTIAL_READS = [
     ("f-string path", "import os\nhome = os.environ['HOME']\nprint(open(f'{home}/.aws/credentials').read())"),
     ("json load", "import json, os\nprint(json.load(open(os.path.expanduser('~/.docker/config.json'))))"),
     ("netrc module", "import netrc\nprint(netrc.netrc().authenticators('example.com'))"),
+    ("with_suffix to env", "from pathlib import Path\nprint(Path('.env.example').with_suffix('').read_text())"),
+    ("with_name to env", "from pathlib import Path\nprint(Path('config/app.txt').with_name('.env').read_text())"),
+    ("with_name to credentials", "from pathlib import Path\nprint(Path.home().joinpath('.aws', 'x').with_name('credentials').read_text())"),
+    ("with_stem to netrc", "from pathlib import Path\nprint(Path.home().joinpath('.pgp').with_stem('.netrc').read_text())"),
     ("loop over names", "from pathlib import Path\nfor name in ('.netrc', '.pgpass'):\n    print((Path.home() / name).read_text())"),
 ]
 
@@ -162,6 +166,9 @@ QUIET_PYTHON = [
     ("search text", "line = 'a .netrc b'\nprint('.netrc' in line, line.startswith('.aws'), line.split('credentials'))"),
     ("regex text", "import re\nprint(re.sub(r'\\.ssh|\\.netrc', '', 'x .ssh y'))"),
     ("exists only", "import os\nprint(os.path.exists(os.path.expanduser('~/.netrc')))"),
+    ("with_suffix to template", "from pathlib import Path\nprint(Path('.env').with_suffix('.example').read_text())"),
+    ("with_suffix of a plain file", "from pathlib import Path\nprint(Path('config.txt').with_suffix('.py').read_text())"),
+    ("with_name of a plain file", "from pathlib import Path\nprint(Path('docs/a.md').with_name('b.md').read_text())"),
     ("template env file", "print(open('.env.example').read())"),
     ("plain work tree read", "print(open('README.md').read()[:10])"),
     ("work tree write", "from pathlib import Path\nPath('notes.txt').write_text('x')"),

@@ -655,6 +655,7 @@ heredoc·`-c` 옵션·스크립트 파일의 Python 코드가 보안에 민감�
 대상은 `~/.ssh`, `~/.aws`, `~/.gnupg`, 셸 시작 파일 `~/.zshrc`, `~/.bashrc`, `~/.profile`, `~/.bash_profile`,
 `~/.zprofile`, `.git/hooks` 폴더, Claude와 Codex 설정 파일(`.claude` 폴더나 `$CLAUDE_CONFIG_DIR`의 `settings.json`·
 `settings.local.json`, `~/.claude.json`, `.codex` 폴더나 `$CODEX_HOME`의 `config.toml`·`hooks.json`)입니다.
+가드는 `dst=`·`path=`·`target=` 같은 키워드 인자와 경로를 바꾸는 `with_suffix`·`with_name`·`with_stem`을 거쳐도 경로를 따라갑니다.
 작업 트리나 그 밖의 평범한 Python 쓰기는 묻지 않습니다.
 
 비밀 값이 필요한 명령은 비밀 도우미를 사용합니다: `python3 <plugin root>/scripts/secret_exec.py --secret

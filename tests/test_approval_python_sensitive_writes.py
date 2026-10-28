@@ -72,6 +72,23 @@ SENSITIVE_WRITES = [
     ("path in a variable", "import os\ntarget = os.path.expanduser('~/.ssh/authorized_keys')\nopen(target, 'a').write('x')"),
     ("through the dot-dot spelling", "open('{home}/work/../.zshrc', 'a').write('x')"),
     ("f-string with an unknown home", "import sys\nopen(f'{{sys.argv[1]}}/.ssh/authorized_keys', 'a').write('x')"),
+    ("keyword copyfile", "import shutil\nshutil.copyfile(src='{scratch}/key', dst='{home}/.ssh/id_ed25519')"),
+    ("keyword move", "import shutil\nshutil.move(dst='{home}/.zshrc', src='{scratch}/rc')"),
+    ("keyword rmtree", "import shutil\nshutil.rmtree(path='{home}/.gnupg')"),
+    ("keyword remove", "import os\nos.remove(path='{home}/.zshrc')"),
+    ("keyword rename", "import os\nos.rename(src='{scratch}/rc', dst='{home}/.zshrc')"),
+    ("keyword makedirs", "import os\nos.makedirs(name='{home}/.ssh/new')"),
+    ("keyword symlink", "import os\nos.symlink(src='{scratch}/rc', dst='{home}/.zshrc')"),
+    ("keyword open", "open(file='{home}/.zshrc', mode='a').write('x')"),
+    ("keyword path rename", "from pathlib import Path\nPath('{scratch}/rc').rename(target='{home}/.zshrc')"),
+    ("keyword path replace", "from pathlib import Path\nPath('{scratch}/rc').replace(target='{home}/.zshrc')"),
+    ("keyword path symlink", "from pathlib import Path\nPath('{home}/.zshrc').symlink_to(target='{scratch}/rc')"),
+    ("keywords in a literal dict", "import shutil\nshutil.copyfile(**{{'src': '{scratch}/k', 'dst': '{home}/.ssh/id_ed25519'}})"),
+    ("with_suffix to settings", "from pathlib import Path\nPath('{project}/.claude/settings.txt').with_suffix('.json').write_text('{{}}')"),
+    ("with_name to settings", "from pathlib import Path\nPath('{project}/.claude/x.json').with_name('settings.json').write_text('{{}}')"),
+    ("with_stem to settings", "from pathlib import Path\nPath('{project}/.claude/other.json').with_stem('settings').write_text('{{}}')"),
+    ("with_name to zshrc", "from pathlib import Path\nPath('{home}/zshrc.txt').with_name('.zshrc').write_text('x')"),
+    ("with_suffix to hook", "from pathlib import Path\nPath('{project}/.git/hooks/pre-commit.sample').with_suffix('').write_text('x')"),
 ]
 
 
@@ -115,6 +132,15 @@ ORDINARY_WRITES = [
     ("read of a hook", "print(open('{project}/.git/hooks/pre-commit.sample').read() if False else 'ok')"),
     ("read of ssh config", "print(open('{home}/.ssh/known_hosts').read() if False else 'ok')"),
     ("names only", "import os\nprint(os.listdir('{home}'))"),
+    ("keyword copyfile", "import shutil\nshutil.copyfile(src='{home}/.zshrc', dst='{scratch}/zshrc')"),
+    ("keyword remove", "import os\nos.remove(path='{scratch}/a.txt') if False else None"),
+    ("keyword rename", "import os\nos.rename(src='{scratch}/a', dst='{scratch}/b') if False else None"),
+    ("keyword open", "open(file='{scratch}/a.txt', mode='w').write('x')"),
+    ("keyword path rename", "from pathlib import Path\nif False:\n    Path('{scratch}/a').rename(target='{scratch}/b')"),
+    ("with_suffix elsewhere", "from pathlib import Path\nPath('{project}/.claude/settings.json').with_suffix('.bak').write_text('x')"),
+    ("with_suffix other json", "from pathlib import Path\nPath('{project}/out/settings.txt').with_suffix('.json').write_text('{{}}')"),
+    ("with_name elsewhere", "from pathlib import Path\nPath('{home}/zshrc.txt').with_name('notes.txt').write_text('x')"),
+    ("with_stem elsewhere", "from pathlib import Path\nPath('{project}/.claude/other.json').with_stem('local').write_text('{{}}')"),
 ]
 
 
