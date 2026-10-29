@@ -295,6 +295,14 @@ def handled(state: dict, handle: str) -> str | None:
     return None
 
 
+def handoff_point(handle: str) -> dict:
+    """The transcript and its size at the handoff, both None when there is no transcript yet to measure from."""
+    path = (read_marker(handle) or {}).get("transcript_path")
+    if isinstance(path, str) and Path(path).is_file():
+        return {"handoff_transcript": path, "handoff_offset": transcript_size(path)}
+    return {"handoff_transcript": None, "handoff_offset": None}
+
+
 def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spawn: Callable[[str], int] = spawn_self_apply) -> dict:
     with exclusive("sessions"):
         state = load_run(run_id)
@@ -318,7 +326,8 @@ def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spa
             handed = time.time()
             items = [
                 {key: entry.get(key) for key in ("handle", "host", "actions", "title", "worktree", "compact_reason", "detail", "probe_retries",
-                                                 "screen_identified", "input", "ready_signal")} | {"deferred_at": handed}
+                                                 "screen_identified", "input", "ready_signal")}
+                | {"deferred_at": handed, **handoff_point(entry["handle"])}
                 for entry in deferred
             ]
             handed_off = True
@@ -337,13 +346,15 @@ def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spa
                 else:
                     state["helper"] = {"pid": pid, "started_at": now()}
                     state.pop("helper_finished_at", None)
+                    state.pop("others_finished_at", None)
                     state["follow_up"] = items
                     if not own:
                         state.pop("self", None)
             if handed_off and own:
                 own.update(status="queued_after_turn", detail="waits_for_this_turn_to_end")
                 state["self"] = {key: own.get(key) for key in ("handle", "host", "actions", "title", "worktree", "screen_identified")}
-                state["self"].update(compact_reason=own.get("compact_reason"), helper_pid=pid, helper_started_at=now(), deferred_at=handed)
+                state["self"].update(compact_reason=own.get("compact_reason"), helper_pid=pid, helper_started_at=now(), deferred_at=handed,
+                                   **handoff_point(own["handle"]))
                 state.pop("self_finished_at", None)
         state["sessions"] = {**state.get("sessions", {}), **{entry["handle"]: public(entry) for entry in sessions}}
         state["applied_at"] = now()
@@ -400,12 +411,18 @@ def command_self_apply(run_id: str, sleep: Callable[[float], None] = time.sleep,
                 saved = load_run(run_id)
                 views = {entry["handle"]: public(entry) for entry in finished}
                 sessions = saved.setdefault("sessions", {})
-                if any(sessions.get(handle) != view for handle, view in views.items()):
-                    sessions.update(views)
+                changed = any(sessions.get(handle) != view for handle, view in views.items())
+                sessions.update(views)
+                if own_entry and not saved.get("others_finished_at") and all(
+                        entry["status"] in FINAL_STATUSES and not entry.get("input_held") for entry in entries if not entry["initiator"]):
+                    saved["others_finished_at"] = now()
+                    changed = True
+                if changed:
                     save_json(run_path(run_id), saved)
             except (RefreshError, OSError):
                 pass
 
+        record([])
         follow_up(orca, entries, state, sleep=sleep, waiters=waiters, progress=record)
         state = load_run(run_id)
         for entry in entries:
@@ -443,6 +460,7 @@ def command_status(run_id: str) -> dict:
         "not_refreshed": [item for item in state.get("sessions", {}).values() if item.get("status") in {"skipped", "failed", "blocked"}],
         "helper_finished_at": state.get("helper_finished_at"),
         "self_finished_at": state.get("self_finished_at"),
+        "others_finished_at": state.get("others_finished_at"),
         "self_notification": state.get("self_notification"),
     }
 

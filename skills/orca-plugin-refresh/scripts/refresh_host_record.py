@@ -16,13 +16,14 @@ COMMAND_RECORD_PREFIXES = ("<command-name>", "<local-command-caveat>", "<local-c
 COMMAND_OUTPUT_PREFIXES = COMMAND_RECORD_PREFIXES[2:]
 INTERRUPT_PREFIX = "[Request interrupted by user"
 BACKGROUND_IDS = (
-    re.compile(r"running in background with ID: ([\w-]+)"),
-    re.compile(r"moved to the background \(ID: ([\w-]+)"),
-    re.compile(r"Monitor started \(task ([\w-]+)"),
-    re.compile(r"Task ID: ([\w-]+)"),
+    re.compile(r"^Command running in background with ID: ([\w-]+)", re.MULTILINE),
+    re.compile(r"^Command (?:did not complete within its \d+s timeout and )?was moved to the background \(ID: ([\w-]+)", re.MULTILINE),
+    re.compile(r"^Monitor started \(task ([\w-]+)", re.MULTILINE),
+    re.compile(r"^(?:\w+(?: \w+)* launched in background\. )?Task ID: ([\w-]+)", re.MULTILINE),
 )
-ASYNC_AGENT = re.compile(r"Async agent launched successfully")
+ASYNC_AGENT = re.compile(r"^Async agent launched successfully", re.MULTILINE)
 AGENT_ID = re.compile(r"agentId: ([\w-]+)")
+QUOTED_ID = re.compile(r"\(ID: |with ID: |Task ID: |\(task ")
 BACKGROUND_MENTION = re.compile(r"(?:\brun(?:s|ning)?|\bmoved)\b[^\n]{0,60}?\b(?:in|to) the background")
 NOTIFIED_ID = re.compile(r"<task-id>([\w-]+)</task-id>")
 STOPPED_ID = re.compile(r"Successfully stopped task: ([\w-]+)")
@@ -93,7 +94,8 @@ def launched_ids(text: str) -> tuple[list[str], bool]:
             ids.append(found.group(1))
         else:
             return ids, True
-    return ids, not ids and bool(BACKGROUND_MENTION.search(text))
+    first = text.split("\n", 1)[0]
+    return ids, not ids and not QUOTED_ID.search(first) and bool(BACKGROUND_MENTION.search(first))
 
 
 def wakeup_pending(record: dict, now: float) -> bool:

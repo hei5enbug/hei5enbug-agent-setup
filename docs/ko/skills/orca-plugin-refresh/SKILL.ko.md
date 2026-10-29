@@ -93,6 +93,7 @@ compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 �
      `fresh_session_loads_on_first_turn`은 턴을 진행하지 않은 Codex 세션을 나타낸다.
      `empty_session_cleared`는 비어 있는 Claude Code 세션에 `/clear`를 보냈다는 뜻이다.
      `instructions_load_on_next_turn`은 compact된 Codex 세션이 다음 턴에 지침을 불러온다는 뜻이다.
+     `applied_by_session`은 세션이 넘긴 뒤 `/reload-plugins`를 스스로 실행했다는 뜻이다.
    - `skipped`: 세션이 계속 바빴거나, 입력 줄을 읽을 수 없거나, 보내기 직전에 입력이 바뀌었거나, 제한 시간에
      도달했거나, 세션이 닫혔다. `input_clear_failed`는 입력 줄을 지우지 못해 아무것도 보내지 않았거나
      (`input`이 `clear_failed`), 스크립트가 글을 다시 입력했다는 뜻이다.
@@ -119,6 +120,9 @@ compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 �
    한 시간 안에 준비되지 않은 세션에는 보내지 않고 `not_idle_before_deadline`이나 마지막 이유로 남긴다.
    터미널이 닫힌 세션은 곧바로 `terminal_gone`으로 건너뛰고 그 대기를 끝낸다. 상태에는 세션마다 최종 결과가
    정해지는 즉시 기록되므로, 도우미가 도는 동안에도 `status`로 진행 상황을 볼 수 있다.
+   상태의 `others_finished_at`이 설정돼 있고 이 세션만 아직 `queued_after_turn`이면 다른 모든 세션은 최종 상태이므로
+   기다리지 말고 보고한다. 이 세션의 작업은 턴이 끝난 뒤 실행되며, 사용자가 이 세션에서 `/reload-plugins`(나열돼
+   있으면 `/compact`도)를 실행하면 완료로 센다.
    모든 세션이 끝나면 도우미는 `python3 <script> status --run-id <run_id> --json`을 실행하라는 프롬프트를 이
    세션에 한 번 보내고, 자신이 시작한 Orca 대기를 모두 끝낸 뒤 종료한다. 그 프롬프트가 오면 명령을 실행하고
    `hosts`의 플러그인 상태와 함께 모든 세션을 보고한다. `not_refreshed`는 업데이트를 받지 못한 세션 목록이다.

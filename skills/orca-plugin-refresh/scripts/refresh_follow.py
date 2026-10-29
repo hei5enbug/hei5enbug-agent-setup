@@ -131,6 +131,34 @@ def still_needed(entry: dict, state: dict, cache: dict[str, tuple[float, bool]])
         entry.update(status="done", detail="already_current")
 
 
+def reloaded_since_handoff(entry: dict) -> bool:
+    """True when the transcript the session had at the handoff, read past that point, holds a successful reload."""
+    path, offset = entry.get("handoff_transcript"), entry.get("handoff_offset")
+    if not isinstance(path, str) or not isinstance(offset, int) or driver.transcript_size(path) < offset:
+        return False
+    records = driver.transcript_records(path, offset)
+    return any(driver.transcript_outcome(entry["host"], "reload", [record]) == "done" for record in records)
+
+
+def applied_by_session(entry: dict, state: dict, cache: dict[str, tuple[float, bool]], waiters: IdleWaiters) -> None:
+    """Finish an entry the session already brought up to date itself since the handoff, even while busy. Sends nothing."""
+    host = entry["host"]
+    target = state["hosts"][host]
+    if not install_current(host, target, cache):
+        entry.update(status="skipped", detail="install_changed", actions=[])
+        return
+    if host == "claude" and "reload" in entry["actions"] and reloaded_since_handoff(entry):
+        entry["actions"].remove("reload")
+        entry["reloaded_by_session"] = True
+    marker = driver.read_marker(entry["handle"])
+    written = parse_time((marker or {}).get("written_at")) or 0.0
+    if marker and written >= entry.get("deferred_at", float("inf")) and compact_reason(host, marker, target, "auto") is None:
+        entry["actions"] = []
+    if not entry["actions"]:
+        waiters.cancel(entry["handle"])
+        entry.update(status="done", detail="applied_by_session" if entry.get("reloaded_by_session") else "already_current")
+
+
 def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[float], None] = time.sleep, waiters: IdleWaiters | None = None,
               progress: Callable[[list[dict]], None] | None = None) -> None:
     """Apply deferred sessions when Orca reports them idle, each before its own deadline, then end every wait.
@@ -168,6 +196,9 @@ def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[flo
                     if time.time() >= entry["deadline"]:
                         busy = entry.get("detail") in (None, *WAITING_DETAILS)
                         entry.update(status="skipped", detail="not_idle_before_deadline" if busy else entry["detail"], actions=[])
+                        continue
+                    applied_by_session(entry, state, cache, waiters)
+                    if entry["status"] != "pending":
                         continue
                     if live is None:
                         entry["detail"] = "terminal_list_unavailable"

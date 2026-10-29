@@ -1330,6 +1330,227 @@ class FollowUpTest(DriveTest):
         final = {item["terminal"]: item["status"] for item in refresh.command_status(run_id)["sessions"]}
         self.assertEqual({"…term_a": "done", "…term_b": "skipped"}, final)
 
+    def session_entry(self, actions, transcript, **extra):
+        return {"handle": "term_claude", "host": "claude", "actions": list(actions), "status": "pending", "initiator": True, "detail": "busy",
+                "deadline": time.time() + 2, "deferred_at": time.time() - 1, "handoff_transcript": str(transcript),
+                "handoff_offset": transcript.stat().st_size, **extra}
+
+    def session_refusal(self, transcript):
+        record = {"type": "system", "subtype": "local_command", "timestamp": refresh.now(),
+                  "content": "This reload changes MCP tools (demo) — Run /reload-plugins --force to apply."}
+        with open(transcript, "a") as stream:
+            stream.write(json.dumps(record) + "\n")
+
+    def test_넘길_때의_기록_대신_다른_기록이나_줄어든_기록의_reload는_세지_않는다(self):
+        """같은 터미널에서 다른 기록을 이어 열었거나 넘길 때의 기록이 그때보다 짧아졌으면, 그 안의 예전 reload 결과로 완료 처리하지 않는다."""
+        # Given
+        handed, resumed = Path(self.temp.name) / "handed.jsonl", Path(self.temp.name) / "resumed.jsonl"
+        write_records(handed, [*RUNNING_TURN, *RUNNING_TURN])
+        write_records(resumed, RUNNING_TURN)
+        self.session_reload(resumed)
+        self.write_marker("term_claude", "claude", digest="old", transcript=resumed)
+        entries = [self.session_entry(["reload"], handed, deadline=time.time() + 0.3)]
+        write_records(handed, RUNNING_TURN)
+        self.session_reload(handed)
+        fake = FakeOrca([terminal("term_claude", "claude")], busy={"term_claude": 10**6})
+        fake.never_idle = {"term_claude"}
+
+        # When
+        refresh.follow_up(fake, entries, self.state, sleep=lambda seconds: time.sleep(0.01))
+
+        # Then
+        self.assertEqual(("skipped", "not_idle_before_deadline"), (entries[0]["status"], entries[0]["detail"]))
+        self.assertEqual([], fake.sent)
+
+    def test_reload가_한_번_거부된_뒤_성공하면_세션이_적용한_것으로_끝낸다(self):
+        """넘긴 뒤 첫 reload가 --force를 요구해 거부돼도 그 뒤 성공 결과가 있으면 applied_by_session으로 끝낸다."""
+        # Given
+        transcript = Path(self.temp.name) / "session.jsonl"
+        write_records(transcript, RUNNING_TURN)
+        self.write_marker("term_claude", "claude", digest="old", transcript=transcript)
+        entries = [self.session_entry(["reload"], transcript)]
+        self.session_refusal(transcript)
+        self.session_reload(transcript)
+        fake = FakeOrca([terminal("term_claude", "claude")], busy={"term_claude": 10**6})
+        fake.never_idle = {"term_claude"}
+
+        # When
+        refresh.follow_up(fake, entries, self.state, sleep=lambda seconds: time.sleep(0.01))
+
+        # Then
+        self.assertEqual(("done", "applied_by_session"), (entries[0]["status"], entries[0]["detail"]))
+        self.assertEqual([], fake.sent)
+
+    def test_넘길_때_기록이_없어도_쉬지_않는_세션의_표식이_새로_쓰이면_끝낸다(self):
+        """넘길 때 기록 파일이 없어 reload 근거를 읽지 못해도, 계속 바쁜 세션의 표식이 넘긴 뒤 새 지침으로 쓰이면 already_current로 끝낸다."""
+        # Given
+        self.write_marker("term_claude", "claude", digest="old")
+        entries = [{**self.session_entry(["compact"], Path(self.temp.name)), "handoff_transcript": None, "handoff_offset": None}]
+        fake = FakeOrca([terminal("term_claude", "claude")], busy={"term_claude": 10**6})
+        fake.never_idle = {"term_claude"}
+        seen = []
+
+        def compact_by_session(seconds):
+            seen.append(entries[0]["status"])
+            self.write_marker("term_claude", "claude")
+            time.sleep(0.01)
+
+        # When
+        refresh.follow_up(fake, entries, self.state, sleep=compact_by_session)
+
+        # Then
+        self.assertEqual(("done", "already_current"), (entries[0]["status"], entries[0]["detail"]))
+        self.assertEqual([], fake.sent)
+
+    def session_reload(self, transcript):
+        record = {"type": "system", "subtype": "local_command", "timestamp": refresh.now(), "content": "<local-command-stdout>Reloaded: 6 plugins · 27 skills</local-command-stdout>"}
+        with open(transcript, "a") as stream:
+            stream.write(json.dumps(record) + "\n")
+
+    def test_세션이_넘긴_뒤_직접_reload하면_쉬지_않아도_보내지_않고_세션이_적용한_것으로_끝낸다(self):
+        """넘기기 전에 있던 reload 결과는 무시하고, 넘긴 뒤 쓰인 성공 결과가 있으면 한가해지기를 기다리지 않고 applied_by_session으로 끝내며 아무것도 보내지 않는다."""
+        # Given
+        transcript = Path(self.temp.name) / "session.jsonl"
+        write_records(transcript, [*RUNNING_TURN])
+        self.session_reload(transcript)
+        self.write_marker("term_claude", "claude", digest="old", transcript=transcript)
+        entries = [self.session_entry(["reload"], transcript)]
+        fake = FakeOrca([terminal("term_claude", "claude")], busy={"term_claude": 10**6})
+        fake.never_idle = {"term_claude"}
+        seen = []
+
+        def reload_by_session(seconds):
+            seen.append((entries[0]["status"], list(entries[0]["actions"])))
+            self.session_reload(transcript)
+            time.sleep(0.01)
+
+        # When
+        refresh.follow_up(fake, entries, self.state, sleep=reload_by_session)
+
+        # Then
+        self.assertEqual([("pending", ["reload"]), ("done", [])], seen)
+        self.assertEqual(("done", "applied_by_session"), (entries[0]["status"], entries[0]["detail"]))
+        self.assertEqual([], fake.sent)
+
+    def test_세션이_reload만_직접_했으면_compact는_남기고_표식이_새로_쓰이면_끝낸다(self):
+        """reload 결과가 있어도 compact가 남아 있으면 항목은 열려 있고, 넘긴 뒤 새 지침으로 표식이 다시 쓰이면 applied_by_session으로 끝낸다."""
+        # Given
+        transcript = Path(self.temp.name) / "session.jsonl"
+        write_records(transcript, [*RUNNING_TURN])
+        self.write_marker("term_claude", "claude", digest="old", transcript=transcript)
+        entries = [self.session_entry(["reload", "compact"], transcript)]
+        fake = FakeOrca([terminal("term_claude", "claude")], busy={"term_claude": 10**6})
+        fake.never_idle = {"term_claude"}
+        seen = []
+
+        def act(seconds):
+            seen.append((entries[0]["status"], list(entries[0]["actions"])))
+            if len(seen) == 1:
+                self.session_reload(transcript)
+            elif len(seen) == 2:
+                self.write_marker("term_claude", "claude", transcript=transcript)
+            time.sleep(0.01)
+
+        # When
+        refresh.follow_up(fake, entries, self.state, sleep=act)
+
+        # Then
+        self.assertEqual([("pending", ["reload", "compact"]), ("pending", ["compact"]), ("done", [])], seen)
+        self.assertEqual(("done", "applied_by_session", []), (entries[0]["status"], entries[0]["detail"], entries[0]["actions"]))
+        self.assertEqual([], fake.sent)
+
+    def test_세션이_직접_적용했어도_설치가_바뀌었으면_건너뛴다(self):
+        """넘긴 뒤 reload가 기록돼 있어도 설치본이 달라졌으면 먼저 install_changed로 건너뛰고 완료로 세지 않는다."""
+        # Given
+        transcript = Path(self.temp.name) / "session.jsonl"
+        write_records(transcript, [*RUNNING_TURN])
+        self.write_marker("term_claude", "claude", digest="old", transcript=transcript)
+        entries = [self.session_entry(["reload"], transcript)]
+        self.session_reload(transcript)
+        self.install_current.return_value = False
+        fake = FakeOrca([terminal("term_claude", "claude")], busy={"term_claude": 10**6})
+        fake.never_idle = {"term_claude"}
+
+        # When
+        refresh.follow_up(fake, entries, self.state, sleep=lambda seconds: time.sleep(0.01))
+
+        # Then
+        self.assertEqual(("skipped", "install_changed"), (entries[0]["status"], entries[0]["detail"]))
+        self.assertEqual([], fake.sent)
+
+    def test_넘길_때_세션의_기록_크기를_도우미_항목과_시작_세션에_저장한다(self):
+        """apply는 미룬 세션과 시작 세션 모두에 표식의 기록 파일 경로와 그때의 바이트 크기를 저장하고, 기록 파일이 아직 없으면 둘 다 None을 저장한다."""
+        # Given
+        busy_file, self_file = Path(self.temp.name) / "busy.jsonl", Path(self.temp.name) / "self.jsonl"
+        write_records(busy_file, RUNNING_TURN)
+        write_records(self_file, FINISHED_TURN)
+        self.write_marker("term_busy", "claude", transcript=busy_file)
+        self.write_marker("term_new", "claude", transcript=Path(self.temp.name) / "missing.jsonl")
+        self.write_marker("term_self", "claude", transcript=self_file)
+        fake = FakeOrca([terminal("term_self", "claude"), terminal("term_busy", "claude"), terminal("term_new", "claude")],
+                        busy={"term_busy": 10**6, "term_new": 10**6})
+        run_id = self.save_state()
+
+        # When
+        with patch.object(refresh, "Orca", return_value=fake):
+            refresh.command_apply(run_id, "never", [], 1, spawn=lambda run: 4242)
+
+        # Then
+        saved = refresh.load_run(run_id)
+        points = {item["handle"]: (item["handoff_transcript"], item["handoff_offset"]) for item in saved["follow_up"]}
+        self.assertEqual({"term_busy": (str(busy_file), busy_file.stat().st_size), "term_new": (None, None)}, points)
+        self.assertEqual((str(self_file), self_file.stat().st_size), (saved["self"]["handoff_transcript"], saved["self"]["handoff_offset"]))
+
+    def test_다른_세션이_모두_끝나면_시작_세션을_기다리는_동안에도_다른_세션_종료_시각을_남긴다(self):
+        """시작 세션만 남아 도우미가 계속 기다려도 나머지가 모두 최종 상태가 되는 순간 others_finished_at이 한 번 기록되고 status가 돌려준다."""
+        # Given
+        fake = FakeOrca([terminal("term_busy", "claude"), terminal("term_self", "claude")],
+                        busy={"term_busy": 10**6, "term_self": 10**6}, on_send=self.simulate)
+        fake.never_idle = {"term_self"}
+        run_id = self.save_state(follow_up=[{"handle": "term_busy", "host": "claude", "actions": ["reload"], "detail": "busy", "deferred_at": time.time()}],
+                                 **{"self": {"handle": "term_self", "host": "claude", "actions": ["reload"], "title": "t", "worktree": "/tmp/work"},
+                                    "initiator": {"handle": "term_self", "host": "claude"}})
+        snapshots = []
+
+        def watch(seconds):
+            saved = refresh.load_run(run_id)
+            snapshots.append((saved.get("others_finished_at"), saved.get("helper_finished_at")))
+            time.sleep(0.02)
+
+        # When
+        with patch.object(refresh, "Orca", return_value=fake), patch.multiple(refresh, SELF_WAIT_SECONDS=1.5, NOTIFY_SECONDS=0.2):
+            refresh.command_self_apply(run_id, sleep=watch)
+
+        # Then
+        self.assertEqual((None, None), snapshots[0])
+        self.assertTrue(any(others and not helper for others, helper in snapshots))
+        status = refresh.command_status(run_id)
+        self.assertTrue(status["others_finished_at"])
+        self.assertTrue(status["helper_finished_at"])
+        self.assertEqual({"…m_busy": "done", "…m_self": "skipped"}, {item["terminal"]: item["status"] for item in status["sessions"]})
+
+    def test_시작_세션만_도우미에_넘겼으면_시작할_때_바로_다른_세션_종료_시각을_남긴다(self):
+        """기다릴 다른 세션이 없으면 도우미가 시작 세션을 기다리기 전에 others_finished_at을 기록한다."""
+        # Given
+        fake = FakeOrca([terminal("term_self", "claude")], busy={"term_self": 10**6})
+        fake.never_idle = {"term_self"}
+        run_id = self.save_state(**{"self": {"handle": "term_self", "host": "claude", "actions": ["reload"], "title": "t", "worktree": "/tmp/work"},
+                                    "initiator": {"handle": "term_self", "host": "claude"}})
+        snapshots = []
+
+        def watch(seconds):
+            saved = refresh.load_run(run_id)
+            snapshots.append((saved.get("others_finished_at"), saved.get("helper_finished_at")))
+            time.sleep(0.02)
+
+        # When
+        with patch.object(refresh, "Orca", return_value=fake), patch.multiple(refresh, SELF_WAIT_SECONDS=0.5, NOTIFY_SECONDS=0.2):
+            refresh.command_self_apply(run_id, sleep=watch)
+
+        # Then
+        self.assertTrue(snapshots[0][0])
+        self.assertIsNone(snapshots[0][1])
+
     def test_취소한_뒤_등록된_대기_프로세스도_종료한다(self):
         """세션의 대기를 취소하면 그 뒤에 등록되는 같은 세션의 프로세스도 바로 종료되고 다른 세션의 대기는 그대로 둔다."""
         # Given
@@ -1461,13 +1682,15 @@ class HostRecordTest(unittest.TestCase):
         self.assertEqual(["idle", None, None], states)
 
     def test_작업_시작_문구마다_ID를_읽고_ID가_없는_백그라운드_실행은_판단하지_않는다(self):
-        """이동·에이전트·모니터·Task ID 문구에서 ID를 읽어 알림 여부를 보고, 실행 중이라고 하면서 ID를 주지 않는 결과는 None이다."""
+        """이동·시간 초과·에이전트·모니터·Task ID·워크플로 문구에서 ID를 읽어 알림 여부를 보고, 실행 중이라고 하면서 ID를 주지 않는 결과는 None이다."""
         # Given
         launches = {
-            "moved": ("Command moved to the background (ID: bg2)", "bg2"),
+            "moved": ("Command was moved to the background (ID: bg2)", "bg2"),
+            "timeout": ("Command did not complete within its 120s timeout and was moved to the background (ID: bg6)", "bg6"),
             "agent": ("Async agent launched successfully.\nagentId: ag3 (internal)", "ag3"),
             "monitor": ("Monitor started (task mon4, expires in 30m)", "mon4"),
             "task": ("Task ID: task5", "task5"),
+            "workflow": ("Workflow launched in background. Task ID: wf7", "wf7"),
         }
 
         # When
@@ -1482,6 +1705,25 @@ class HostRecordTest(unittest.TestCase):
         self.assertEqual({name: None for name in launches}, pending)
         self.assertEqual({name: "idle" for name in launches}, notified)
         self.assertEqual((None, None), (unknown, no_agent_id))
+
+    def test_작업_시작_문구는_줄_맨_앞일_때만_세고_앞선_출력_줄_뒤의_이동_문구는_센다(self):
+        """따옴표 안·JSON·번호 붙은 파일 줄에 인용된 시작 문구는 첫 줄에 있어도, 첫 줄이 아닌 곳의 실행 언급도 세지 않고, 앞선 출력 줄 뒤에 줄을 시작하는 이동 문구는 센다."""
+        # Given
+        quoted = ['RESULT:"Command running in background with ID: demo-1. Output is being written to: /tmp/work/demo-1.output"',
+                  '{"text": "Async agent launched successfully.\\nagentId: demo-2"}',
+                  "3\tTask ID: demo-3", "4\tCommand was moved to the background (ID: demo-4)"]
+        later_mention = "file listing\nthe job runs in the background now"
+        moved = "first output line\nsecond output line\nCommand was moved to the background (ID: demo-5)"
+
+        # When
+        ignored = [self.state([user_record("질문"), result_record(text), turn_end()]) for text in quoted]
+        mention_later = self.state([user_record("질문"), result_record(later_mention), turn_end()])
+        counted = self.state([user_record("질문"), result_record(moved), turn_end()])
+
+        # Then
+        self.assertEqual(["idle"] * 4, ignored)
+        self.assertEqual("idle", mention_later)
+        self.assertIsNone(counted)
 
     def test_앞으로_올_깨우기_예약과_반복_예약이_있으면_판단하지_않는다(self):
         """이미 지난 ScheduleWakeup이나 stop인 것은 무시하고, 아직 오지 않은 깨우기와 CronCreate가 있으면 None이다."""

@@ -95,7 +95,8 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
    - `done`: every needed action is confirmed. `already_current` means nothing was needed, and
      `fresh_session_loads_on_first_turn` marks a Codex session that never ran a turn. The note
      `empty_session_cleared` marks an empty Claude Code session that got `/clear`, and
-     `instructions_load_on_next_turn` marks a compacted Codex session.
+     `instructions_load_on_next_turn` marks a compacted Codex session, and
+     `applied_by_session` marks a session that ran `/reload-plugins` itself after the handoff.
    - `skipped`: the session stayed busy, showed an unreadable input line, changed its input just before the send,
      reached the deadline, or closed. `input_clear_failed` means the line could not be cleared, so nothing was sent
      (`input` is `clear_failed`), or that the script typed the text back.
@@ -125,6 +126,9 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
    unsent, as `not_idle_before_deadline` or with its last reason.
    A session whose terminal closes is skipped at once as `terminal_gone`, and its wait ends. The status shows each
    session's final result as soon as it is reached, so `status` reports progress while the helper runs.
+   When `others_finished_at` is set and only this session is still `queued_after_turn`, every other session is final,
+   so report them without waiting; this session's actions run after its turn ends, or count as done once the user
+   runs `/reload-plugins` (and `/compact` when listed) in it.
    After every session finishes, the helper sends this session one prompt that asks to run
    `python3 <script> status --run-id <run_id> --json`, ends all of its Orca waits, and exits. When that prompt
    arrives, run it and report every session, with the companion statuses from `hosts`; `not_refreshed` lists the
