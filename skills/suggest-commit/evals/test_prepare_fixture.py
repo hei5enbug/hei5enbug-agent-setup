@@ -187,6 +187,28 @@ class PrepareFixtureTest(unittest.TestCase):
             self.assertEqual(evidence["untracked"], ["scratch.txt"])
             self.assertEqual(evidence["remotes"], "")
 
+    def test_cleanup_history_fixture_has_four_area_commits_on_a_feature_branch(self) -> None:
+        """기록 정리 픽스처는 feature/demo-a 브랜치에 문서와 소스를 번갈아 바꾼 커밋 네 개와 깨끗한 작업 트리를 가진다."""
+        # given
+        with tempfile.TemporaryDirectory(prefix="suggest-commit-eval-test.") as temporary:
+            repo = self.make_fixture("cleanup-history", Path(temporary))
+
+            # when
+            branch = git(repo, "branch", "--show-current").stdout.strip()
+            base = git(repo, "rev-parse", "--verify", "HEAD~4").stdout.strip()
+            history = git(repo, "log", "--format=%s", "HEAD~4..HEAD").stdout.splitlines()
+            areas = git(repo, "diff", "--name-only", "HEAD~4", "HEAD").stdout.splitlines()
+            status = git(repo, "status", "--short").stdout
+            remotes = git(repo, "remote", "-v").stdout
+
+            # then
+            self.assertEqual(branch, "feature/demo-a")
+            self.assertTrue(base)
+            self.assertEqual(len(history), 4)
+            self.assertEqual(sorted(areas), ["docs/guide.md", "src/exporter.py"])
+            self.assertEqual(status, "")
+            self.assertEqual(remotes, "")
+
     def test_fixture_builder_rejects_the_actual_repository(self) -> None:
         """실제 저장소 안에는 평가 저장소를 만들지 않는다."""
         # given
@@ -202,7 +224,10 @@ class PrepareFixtureTest(unittest.TestCase):
         # then
         self.assertIsNotNone(error)
         self.assertIn("outside the actual repository", str(error))
-        self.assertEqual(FIXTURE_CASES, ("commit-ready", "commit-staged", "documented-ticket", "no-change", "unborn-mixed"))
+        self.assertEqual(
+            FIXTURE_CASES,
+            ("cleanup-history", "commit-ready", "commit-staged", "documented-ticket", "no-change", "unborn-mixed"),
+        )
 
     def test_cli_emits_a_usable_repository_working_directory(self) -> None:
         """준비 명령은 생성한 저장소의 실제 작업 경로를 출력한다."""

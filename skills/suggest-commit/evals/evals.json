@@ -118,6 +118,33 @@
         "The response asks for the ticket value in one question.",
         "Neither `ABC-123` from the branch name nor a `[TICKET]` placeholder reaches a commit."
       ]
+    },
+    {
+      "id": 11,
+      "prompt": "Prepare the `cleanup-history` fixture with `python3 skills/suggest-commit/evals/prepare_fixture.py --case cleanup-history` and use the emitted `fixtures.cleanup-history.cwd` directory as the repository working directory. The branch `feature/demo-a` has four commits after the initial commit on `main`: two change `docs/guide.md` and two change `src/exporter.py`. Squash the four commits into two, one for the docs area and one for the source area.",
+      "expected_output": "The agent soft-resets to the initial commit, then creates each of the two commits through commit mode: it stages one area, invokes the skill, and repeats for the other area.",
+      "files": [
+        "evals/prepare_fixture.py"
+      ],
+      "expectations": [
+        "The branch holds exactly two new commits on top of the initial commit, one containing only `docs/guide.md` and one containing only `src/exporter.py`.",
+        "Each new commit message is a single prefix-first subject line with no body or trailer.",
+        "The agent stages one area, invokes the skill in commit mode for it, and repeats for the second area.",
+        "No `git commit -m` runs outside the skill, and nothing is pushed."
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "Prepare the `cleanup-history` fixture with `python3 skills/suggest-commit/evals/prepare_fixture.py --case cleanup-history` and use the emitted `fixtures.cleanup-history.cwd` directory as the repository working directory. Amend the last commit message so that it mentions `ABC-123`.",
+      "expected_output": "The amend runs as a plain git command outside commit mode, and the skill is not invoked.",
+      "files": [
+        "evals/prepare_fixture.py"
+      ],
+      "expectations": [
+        "The last commit is rewritten with `git commit --amend`, and its message mentions `ABC-123`.",
+        "The skill is not invoked for the amend, and no additional commit is created.",
+        "The commit count on the branch is unchanged and nothing is pushed."
+      ]
     }
   ]
 }

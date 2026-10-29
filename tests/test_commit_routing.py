@@ -10,6 +10,10 @@ import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+SHARED_EXCLUSION = (
+    "Amend, rebase, merge, revert, and cherry-pick run outside commit mode; "
+    "every other new commit uses it, including each one a squash or split creates."
+)
 COMMON = REPO_ROOT / "instructions/session/common.md"
 SKILL = REPO_ROOT / "skills/suggest-commit/SKILL.md"
 CODEX_METADATA = REPO_ROOT / "skills/suggest-commit/agents/openai.yaml"
@@ -34,7 +38,21 @@ class CommitRoutingTest(unittest.TestCase):
 
         # Then
         self.assertTrue(routes)
-        self.assertIn("Amends, merges, reverts, and cherry-picks are outside this rule.", common)
+
+    def test_제외_명령은_스킬_한_곳에만_적고_공통_지침은_그곳을_가리킨다(self):
+        """제외 목록과 기록 정리 커밋 포함 규칙은 스킬의 Modes 절에만 있고, 공통 지침은 그 절을 가리키며 옛 문구는 어디에도 없다."""
+        # Given
+        common, skill = normalized(COMMON), normalized(SKILL)
+
+        # When
+        modes = " ".join(section(SKILL.read_text(encoding="utf-8"), "Modes").split())
+        old_phrases = [phrase for phrase in ("rewrite existing commits", "are outside this rule") if phrase in common + skill]
+
+        # Then
+        self.assertIn(SHARED_EXCLUSION, modes)
+        self.assertNotIn("cherry-pick", common)
+        self.assertIn("Only the commands its Modes section names run outside it.", common)
+        self.assertEqual([], old_phrases)
 
     def test_스킬_설명은_커밋_요청에도_실행된다(self):
         """스킬 설명은 두 호스트의 자동 실행 신호이므로 커밋 요청과 제목 하나 선택을 담는다."""

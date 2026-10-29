@@ -14,7 +14,7 @@ from typing import Iterable
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-FIXTURE_CASES = ("commit-ready", "commit-staged", "documented-ticket", "no-change", "unborn-mixed")
+FIXTURE_CASES = ("cleanup-history", "commit-ready", "commit-staged", "documented-ticket", "no-change", "unborn-mixed")
 AUTHOR_NAME = "Suggest Commit Evaluation"
 AUTHOR_EMAIL = "suggest-commit-eval@example.invalid"
 
@@ -164,6 +164,21 @@ def _seed_cache_repository(repo: Path, template_dir: Path, environment: dict[str
         _commit(repo, subject, environment)
 
 
+def _create_cleanup_history(repo: Path, template_dir: Path, environment: dict[str, str]) -> None:
+    _initialize_repo(repo, template_dir, environment)
+    _write(repo, "README.md", "Cleanup evaluation repository.\n")
+    _commit(repo, "chore: seed cleanup evaluation", environment)
+    _git(repo, "checkout", "--quiet", "-b", "feature/demo-a", environment=environment)
+    _write(repo, "docs/guide.md", "# Guide\n\nDescribe the exporter.\n")
+    _commit(repo, "docs: add exporter guide", environment)
+    _write(repo, "src/exporter.py", "def export(rows):\n    return list(rows)\n")
+    _commit(repo, "feat: add exporter", environment)
+    _write(repo, "docs/guide.md", "# Guide\n\nDescribe the exporter.\n\nList the supported formats.\n")
+    _commit(repo, "docs: list exporter formats", environment)
+    _write(repo, "src/exporter.py", "def export(rows):\n    return [row for row in rows if row]\n")
+    _commit(repo, "fix: skip empty rows", environment)
+
+
 def _create_commit_ready(repo: Path, template_dir: Path, environment: dict[str, str]) -> None:
     _seed_cache_repository(repo, template_dir, environment)
     _write(repo, "src/cache.py", CACHE_AFTER)
@@ -199,6 +214,7 @@ def _create_unborn_mixed(repo: Path, template_dir: Path, environment: dict[str, 
 
 
 BUILDERS = {
+    "cleanup-history": _create_cleanup_history,
     "commit-ready": _create_commit_ready,
     "commit-staged": _create_commit_staged,
     "documented-ticket": _create_documented_ticket,

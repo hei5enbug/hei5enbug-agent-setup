@@ -25,7 +25,9 @@ Choose the mode from the request:
 - **Commit mode** answers a request to create a commit, such as "commit this" or "커밋해줘", including one that also
   asks to push. It commits the scope with the single most appropriate subject, as "Commit Mode" describes.
 
-A request to amend, merge, revert, cherry-pick, or rewrite existing commits is neither mode.
+Amend, rebase, merge, revert, and cherry-pick run outside commit mode; every other new commit uses it, including
+each one a squash or split creates. For such a history cleanup, stage exactly one intended scope, run commit mode on
+it, and repeat for the next.
 
 ## Absolute Rule: No Trailers
 
