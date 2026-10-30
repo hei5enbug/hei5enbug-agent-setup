@@ -19,6 +19,8 @@ SHELL_TOOLS = frozenset({"Bash", "shell", "exec_command", "local_shell", "shell_
 GIT_OR_GH = re.compile(r"\b(?:git|gh)\b")
 BLOCK_EXIT = 2
 COMMAND_LABEL = "command"
+ASSIGNMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$", re.S)
+VARIABLE = re.compile(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
 
 
 def command_from(payload: object) -> tuple[str, str] | None:
@@ -42,6 +44,25 @@ def iter_segments(command: str, base_line: int = 1) -> Iterator[Segment]:
         payload = boundary_shell.shell_payload(segment.tokens)
         if payload:
             yield from iter_segments(payload, segment.line)
+
+
+def assignments(tokens: tuple[str, ...]) -> dict[str, str] | None:
+    """The variables a segment made only of `NAME=value` words, optionally after `export`, assigns."""
+    words = tokens[1:] if tokens[:1] == ("export",) else tokens
+    matches = [ASSIGNMENT.match(word) for word in words]
+    if not words or not all(matches):
+        return None
+    return {match.group(1): match.group(2) for match in matches}
+
+
+def expand(text: str, variables: dict[str, str]) -> str:
+    """`$NAME` and `${NAME}` replaced from `variables`; text with an unknown variable or a substitution stays as written."""
+    if "$(" in text or "`" in text:
+        return text
+    names = [first or second for first, second in VARIABLE.findall(text)]
+    if any(name not in variables for name in names):
+        return text
+    return VARIABLE.sub(lambda match: variables[match.group(1) or match.group(2)], text)
 
 
 def resolve_dir(base: str, directory: str) -> str:
@@ -129,13 +150,13 @@ def git_findings(target: Target, directory: str, words) -> list[str]:
     return boundary_git.identity_findings(where, words, target.git_config, author=False)
 
 
-def target_findings(segment: Segment, target: Target, directory: str, words) -> list[str]:
+def target_findings(segment: Segment, target: Target, directory: str, words, variables: dict[str, str]) -> list[str]:
     from public_boundary import scan_text
 
     where = fold_dirs(directory, target.git_dirs)
     text = blank_directory_arguments(segment.text, target.git_dirs)
     findings = scan_text(COMMAND_LABEL, "\n" * (segment.line - 1) + text, words=words)
-    for name in (item for item in target.files if item != "-"):
+    for name in (expand(item, variables) for item in target.files if item != "-"):
         content = read_named_file(where, name)
         if content is not None:
             findings.extend(scan_text(name, content, words=words))
@@ -155,9 +176,15 @@ def check_command(command: str, cwd: str, root: str) -> tuple[list[str], list[st
     problems: list[str] = []
     words = None
     directory = cwd
+    variables = dict(os.environ)
     for segment in iter_segments(command):
+        assigned = assignments(segment.tokens)
+        if assigned is not None:
+            variables.update({name: expand(value, variables) for name, value in assigned.items()})
+            continue
         changed = boundary_shell.change_dir(segment.tokens)
         if changed is not None:
+            changed = expand(changed, variables)
             directory = directory if re.search(r"[$`]", changed) else resolve_dir(directory, changed)
             continue
         target = boundary_shell.classify(segment.tokens)
@@ -165,7 +192,7 @@ def check_command(command: str, cwd: str, root: str) -> tuple[list[str], list[st
             continue
         words = load_private_words(Path(root)) if words is None else words
         try:
-            findings.extend(target_findings(segment, target, directory, words))
+            findings.extend(target_findings(segment, target, directory, words, variables))
         except boundary_git.CheckError as error:
             problems.append(str(error))
         except Exception as error:

@@ -324,6 +324,25 @@ class GhWriteTests(SandboxCase):
         self.assertEqual(2, result.returncode)
         self.assertIn("body.md:2: github-token", result.stderr)
 
+    def test_같은_명령에서_대입한_변수와_환경변수로_가리킨_본문_파일도_검사한다(self) -> None:
+        """앞 세그먼트의 대입이나 환경변수로 가리킨 --body-file은 풀어서 검사하고, 풀 수 없는 변수는 확인할 수 없다며 막아야 한다."""
+        # given
+        (self.root / "notes").mkdir()
+        (self.root / "notes" / "body.md").write_text(f"one\n{SECRET}\n", encoding="utf-8")
+        assigned = f'D={self.root}/notes; gh issue create --title t --body-file "$D/body.md"'
+        from_env = 'gh issue create --title t --body-file "${NOTES_DIR}/body.md"'
+        unknown = 'gh issue create --title t --body-file "$MISSING_DIR/body.md"'
+
+        # when
+        results = [self.hook(assigned), self.hook(from_env, env={**self.env, "NOTES_DIR": str(self.root / "notes")}),
+                   self.hook(unknown)]
+
+        # then
+        self.assertEqual([2, 2, 2], [result.returncode for result in results])
+        self.assertIn("body.md:2: github-token", results[0].stderr)
+        self.assertIn("body.md:2: github-token", results[1].stderr)
+        self.assertIn("could not be checked", results[2].stderr)
+
     def test_표준_입력_본문은_명령_문자열에서_검사한다(self) -> None:
         """--body-file -와 heredoc으로 준 본문도 명령 문자열에서 막아야 한다."""
         # given
