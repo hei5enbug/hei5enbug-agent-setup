@@ -123,6 +123,9 @@ Include:
 - **compatibility**: required tools, dependencies, and supported environments when relevant
 - **body**: the executable workflow, constraints, references, and output contracts
 
+Write the workflow as its default run: give each step the inputs it needs and what it produces, so that a user can
+skip steps or run only some of them.
+
 Make the description specific enough to trigger on real intent without becoming a list of keywords. Avoid tuning it to one model family's routing habits.
 
 ### Anatomy of a portable skill

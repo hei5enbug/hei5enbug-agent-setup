@@ -74,6 +74,20 @@ class CommonRulesTest(unittest.TestCase):
         # When / Then
         self.assert_in_every_context(rule)
 
+    def test_스킬의_워크플로는_사용자가_줄일_수_있는_기본_실행이고_skill_builder는_단계를_따로_실행할_수_있게_쓴다(self):
+        """세션 문맥은 요청한 단계만 실행하고 건너뛴 단계를 알리게 하며, skill-builder는 단계마다 입력을 적어 일부만 실행할 수 있게 한다."""
+        # Given
+        builder = " ".join((REPO_ROOT / "skills/skill-builder/SKILL.md").read_text(encoding="utf-8").split())
+
+        # When
+        default_run = "Write the workflow as its default run: give each step the inputs it needs and what it produces"
+
+        # Then
+        self.assert_in_every_context(
+            "A skill's workflow is a default the user can narrow: run only the steps asked for, and name skipped ones at the end."
+        )
+        self.assertIn(default_run, builder)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,6 +6,7 @@
 - When the target is a known symbol, file path, glob, or literal string, search directly in the main session.
 - Create every new commit, whether the user asked for it or a task requires it, through the `suggest-commit`
   skill in its commit mode. Only the commands its Modes section names run outside it.
+- A skill's workflow is a default the user can narrow: run only the steps asked for, and name skipped ones at the end.
 - After a rename, a changed decision, or a rollback, update or report every earlier output of the work that still
   shows the old value, such as code, documents, descriptions, tickets, or comments, and list each in the report.
 
