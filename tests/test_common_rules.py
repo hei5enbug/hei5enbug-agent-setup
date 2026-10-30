@@ -111,6 +111,32 @@ class CommonRulesTest(unittest.TestCase):
             with self.subTest(rule=rule):
                 self.assertIn(rule, guidance)
 
+    def test_사용자가_직접_쓴_turbogoal이나_ulw는_빠른_모드를_켜고_품질과_승인_규칙은_그대로_둔다(self):
+        """세션 문맥은 붙여 넣거나 인용한 글이 아닌 사용자 글의 키워드에만 빠른 모드 참조를 읽게 하고, 참조는 로컬 상한과 유지할 규칙을 정한다."""
+        # Given
+        fast = " ".join((REPO_ROOT / "instructions/fast-mode.md").read_text(encoding="utf-8").split())
+
+        # When
+        rules = (
+            "Text the user pasted or quoted, and code spans and blocks, do not count.",
+            "the free, inactive, and speculative pages of `vm_stat` on macOS",
+            "the available column of `free -m` on Linux",
+            "the number of CPU cores minus one or one process per 1 GB of available memory, whichever is lower, but at "
+            "least one,",
+            "`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`",
+            "`agents.max_concurrent_threads_per_session`",
+            "Keep the pinned or user-requested models and efforts, every required check, the final review, and every approval rule.",
+            "Never parallelize tightly dependent steps.",
+        )
+
+        # Then
+        self.assert_in_every_context(
+            "When the user's own words, not pasted or quoted text or code, contain the word `turbogoal` or `ulw`, read"
+        )
+        for rule in rules:
+            with self.subTest(rule=rule):
+                self.assertIn(rule, fast)
+
 
 if __name__ == "__main__":
     unittest.main()

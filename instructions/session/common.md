@@ -22,7 +22,8 @@ Choose an owner before substantial work.
   and acceptance check.
 - Use parallel subagents unasked when they cut main-session context or elapsed time with little or no
   quality loss, but not for greetings, status checks, or a single small edit. Parallelize only work with independent
-  resources. Explicit user and skill assignments take precedence.
+  resources. Explicit user and skill assignments take precedence. When the user's own words, not pasted or quoted
+  text or code, contain the word `turbogoal` or `ulw`, read [fast mode](../fast-mode.md).
 - Send UI code, visual design, and diagram work to the host's designer route, except the kinds the host session
   file assigns to the main session.
 - If delegation is unavailable, use the fallback route the host rules name; without one, continue authorized work
