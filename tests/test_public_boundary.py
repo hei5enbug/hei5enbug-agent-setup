@@ -8,101 +8,21 @@ commit message reachable from HEAD. Findings name the location and kind only, ne
 from __future__ import annotations
 
 import hashlib
-import re
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / ".githooks"))
+
+from public_boundary import ALLOWED_MATCHES, collect_text_files, scan_text  # noqa: E402
+
 AGENTS = REPO_ROOT / "AGENTS.md"
 SECTION_HEADING = "## Public boundary (protected)"
 PROTECTED_SECTION_SHA256 = "c0106bb1988e01e7adf842bb0689f8abb9c81001a738c9f971a02d4dbc0ec99b"
-
-FICTIONAL_HOME_NAMES = frozenset(
-    {"test", "user", "alice", "bob", "u", "a", "other", "me", "demo", "nobody", "runner"}
-)
-ALLOWED_EMAIL_DOMAINS = frozenset({"example.com", "example.org", "example.net"})
-RESERVED_TOP_LEVEL_DOMAINS = frozenset({"test", "invalid", "example", "localhost"})
-
-_NAME = r"[A-Za-z0-9._-]+"
-_END = r"""(?=$|[\s"'`:;,)/])"""
-HOME_PATH = re.compile(
-    rf"/Users/(?P<mac>{_NAME}){_END}|/home/(?P<linux>{_NAME}){_END}"
-    rf"|C:\\{{1,2}}Users\\{{1,2}}(?P<win>{_NAME})(?:\\|{_END})"
-)
-EMAIL = re.compile(
-    r"(?P<local>[A-Za-z0-9._%+-]+)@(?P<domain>[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})"
-)
-SECRET_SHAPES = (
-    ("private-key-header", re.compile("-----BEGIN [A-Z ]*PRIVATE" + " KEY-----")),
-    ("aws-access-key-id", re.compile("AKI" + "A[0-9A-Z]{16}")),
-    ("github-token", re.compile(r"(?:gh[pos]_|github_pat_)[A-Za-z0-9_]{20,}")),
-    ("slack-token", re.compile("xox" + r"[abprs]-")),
-)
-
-# Per-file allowlist of exact matched strings, each with the reason the file may contain it.
-ALLOWED_MATCHES: dict[str, dict[str, str]] = {}
-
-
-def _git(root: Path, *args: str, stdin: bytes | None = None) -> bytes:
-    return subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, input=stdin).stdout
-
-
-def _decode_text(data: bytes) -> str | None:
-    if b"\0" in data[:8192]:
-        return None
-    try:
-        return data.decode("utf-8")
-    except UnicodeDecodeError:
-        return None
-
-
-def _staged_blobs(root: Path) -> dict[str, bytes]:
-    entries: dict[str, str] = {}
-    for record in _git(root, "ls-files", "-s", "-z").split(b"\0"):
-        if not record:
-            continue
-        meta, _, raw_path = record.partition(b"\t")
-        mode, sha, _stage = meta.decode().split()
-        if mode in ("120000", "160000"):
-            continue
-        entries[raw_path.decode("utf-8", "surrogateescape")] = sha
-    if not entries:
-        return {}
-    shas = list(dict.fromkeys(entries.values()))
-    out = _git(root, "cat-file", "--batch", stdin=("\n".join(shas) + "\n").encode())
-    contents: dict[str, bytes] = {}
-    position = 0
-    for sha in shas:
-        end = out.index(b"\n", position)
-        _sha, _type, size = out[position:end].split()
-        start = end + 1
-        contents[sha] = out[start : start + int(size)]
-        position = start + int(size) + 1
-    return {name: contents[sha] for name, sha in entries.items()}
-
-
-def collect_text_files(root: Path) -> list[tuple[str, str]]:
-    """Return what a commit would contain: staged blobs of tracked paths and working files not yet added."""
-    files = []
-    for name, data in _staged_blobs(root).items():
-        text = _decode_text(data)
-        if text is not None:
-            files.append((name, text))
-    others = _git(root, "ls-files", "-o", "--exclude-standard", "-z").split(b"\0")
-    for raw in others:
-        if not raw:
-            continue
-        name = raw.decode("utf-8", "surrogateescape")
-        path = root / name
-        if not path.is_file() or path.is_symlink():
-            continue
-        text = _decode_text(path.read_bytes())
-        if text is not None:
-            files.append((name, text))
-    return files
 
 
 def _commit_messages() -> list[tuple[str, str]]:
@@ -120,36 +40,6 @@ def _commit_messages() -> list[tuple[str, str]]:
         ).stdout
         messages.append((f"commit {sha[:12]}", body))
     return messages
-
-
-def _domain_allowed(domain: str) -> bool:
-    if domain.rsplit(".", 1)[1] in RESERVED_TOP_LEVEL_DOMAINS:
-        return True
-    return any(domain == allowed or domain.endswith("." + allowed) for allowed in ALLOWED_EMAIL_DOMAINS)
-
-
-def scan_text(label: str, text: str, allowed: dict[str, str] | None = None) -> list[str]:
-    allowed = allowed or {}
-    findings = []
-    for number, line in enumerate(text.splitlines(), start=1):
-        for match in HOME_PATH.finditer(line):
-            name = (match.group("mac") or match.group("linux") or match.group("win")).rstrip(".")
-            if name.lower() in FICTIONAL_HOME_NAMES or match.group(0) in allowed:
-                continue
-            findings.append(f"{label}:{number}: home-path")
-        for match in EMAIL.finditer(line):
-            domain = match.group("domain").lower()
-            if match.group("local") == "git" and line[match.end() : match.end() + 1] == ":":
-                continue
-            if _domain_allowed(domain) or match.group(0) in allowed:
-                continue
-            findings.append(f"{label}:{number}: email")
-        for kind, pattern in SECRET_SHAPES:
-            for match in pattern.finditer(line):
-                if match.group(0) in allowed:
-                    continue
-                findings.append(f"{label}:{number}: {kind}")
-    return findings
 
 
 def protected_section(text: str) -> str:

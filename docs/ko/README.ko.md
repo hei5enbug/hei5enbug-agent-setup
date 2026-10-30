@@ -1088,6 +1088,12 @@ claude plugin test .
 Orca CLI가 필요한 테스트는 Orca가 설치되어 있지 않으면 건너뛰므로 CI는 Orca 없이도 통과합니다. Orca를 설치한 뒤
 `python3 -m pytest`를 다시 실행하면 이 테스트까지 확인합니다.
 
+공개 경계를 어기는 커밋, 푸시, 태그, GitHub 쓰기를 실행하기 전에 막으려면 클론마다 한 번
+`git config core.hooksPath .githooks`를 실행합니다. 이 공개 저장소에 적을 수 없는 이름까지 막으려면
+`HEI5ENBUG_PUBLIC_BOUNDARY_WORDS`에 저장소 밖의 단어 목록 파일을 지정합니다. 한 줄에 단어나 구절 하나를 적습니다.
+Claude Code는 `.claude/settings.json`의 프로젝트 훅을 읽고, Codex는 프로젝트를 신뢰하고 `/hooks`에서 훅을 검토한
+뒤에만 `.codex/hooks.json`의 훅을 실행합니다.
+
 `evals/e2e/`의 엔드투엔드 평가는 실제 에이전트 세션을 실행하므로 이 검사에 들어가지 않습니다. `python3 -m pytest`는
 그 단위 테스트만 실행합니다. [평가 README](evals/e2e/README.ko.md)를 참고하세요.
 

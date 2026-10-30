@@ -1172,6 +1172,12 @@ claude plugin test .
 Tests that need the Orca CLI skip when it is not installed, so CI passes without Orca. After installing Orca,
 run `python3 -m pytest` again to cover them.
 
+To block a commit, push, tag, or GitHub write that breaks the public boundary before it runs, run
+`git config core.hooksPath .githooks` once per clone. To also block names that cannot be listed in this public
+repository, set `HEI5ENBUG_PUBLIC_BOUNDARY_WORDS` to a word list file outside the repository, one word or phrase per
+line. Claude Code loads the project hook from `.claude/settings.json`; Codex runs the hook in `.codex/hooks.json`
+only after you trust the project and review the hook in `/hooks`.
+
 The end-to-end evaluation in `evals/e2e/` runs real agent sessions, so it is not one of these checks; only its
 unit tests run with `python3 -m pytest`. See [its README](evals/e2e/README.md).
 

@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/.githooks/public_boundary.py\"; [ ! -f \"$f\" ] || exec python3 \"$f\" agent-hook",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
