@@ -12,7 +12,7 @@ import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterator, Sequence
+from typing import Callable, Iterator, Sequence
 
 
 PLUGIN = "hei5enbug-agent-setup"
@@ -22,6 +22,7 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 HOSTS = ("claude", "codex")
 RUN_ID = re.compile(r"^[0-9a-f]{32}$")
 HANDLE = re.compile(r"^[A-Za-z0-9._:-]{1,200}$")
+RUN_STATE_WAIT_SECONDS = 60.0
 
 
 class RefreshError(Exception):
@@ -138,3 +139,16 @@ def exclusive(name: str, wait_seconds: float = 0.0) -> Iterator[None]:
             yield
         finally:
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def update_run(run_id: str, change: Callable[[dict], dict | None]) -> dict:
+    """Read, change, and save one run's state under its own short lock, so concurrent writers never lose an update.
+
+    A `change` that returns None saves nothing.
+    """
+    with exclusive("run-state", wait_seconds=RUN_STATE_WAIT_SECONDS):
+        saved = change(load_run(run_id))
+        if saved is None:
+            return load_run(run_id)
+        save_json(run_path(run_id), saved)
+        return saved

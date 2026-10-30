@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 import uuid
+from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 from typing import Callable, Sequence
 
@@ -24,10 +25,11 @@ import refresh_install as installs  # noqa: E402
 import refresh_sessions as driver  # noqa: E402
 from refresh_core import (  # noqa: E402
     CODEX_HOOK_TRUST, HANDLE, HOSTS, MARKETPLACE, PLUGIN, PLUGIN_ID, PLUGIN_ROOT, RUN_ID, SESSION_CONTEXT, RefreshError,
-    exclusive, executable, load_plugin_script, load_run, now, parse_time, run, run_json, run_path, save_json, state_root,
+    exclusive, executable, load_plugin_script, load_run, now, parse_time, run, run_json, run_path, save_json, state_root, update_run,
 )
+from refresh_feed import RunFeed  # noqa: E402
 from refresh_follow import (  # noqa: E402
-    IDLE_CONFIRM_SECONDS, INSTALL_CHECK_SECONDS, IdleWaiters, follow_up, install_current, still_needed,
+    IDLE_CONFIRM_SECONDS, INSTALL_CHECK_SECONDS, IdleWaiters, SendLock, follow_up, install_current, still_needed,
 )
 from refresh_install import (  # noqa: E402
     BUNDLE_SKIPPED_DIRS, CODEX_IDLE_EVENTS, CODEX_TURN_ENV, DEFAULT_HOOKS, HOOK_LAUNCHER, HOOK_ROOT, HOOKS_TRUST_WARNING,
@@ -346,27 +348,20 @@ def handoff_point(handle: str) -> dict:
     return {"handoff_transcript": None, "handoff_offset": None}
 
 
-def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spawn: Callable[[str], int] = spawn_self_apply) -> dict:
-    with exclusive("sessions"):
-        state = load_run(run_id)
-        orca = Orca()
-        sessions = plan_sessions(orca, state, mode, only)
-        for entry in sessions:
-            previous = handled(state, entry["handle"])
-            if previous:
-                entry.update(status=previous, detail="already_handled_in_this_run", actions=[], handled=True)
-        others = [entry for entry in sessions if not entry["initiator"] and not entry.get("handled")]
-        drive(orca, others, state, time.time() + seconds, expire="deferred")
-        own = next((entry for entry in sessions if entry["initiator"] and entry["status"] == "pending"), None)
-        deferred = [entry for entry in others if entry["status"] == "deferred"]
+def commit_apply(run_id: str, mode: str, sessions: list[dict], others: list[dict], spawn: Callable[[str], int]) -> None:
+    """Record this apply and hand its deferred sessions to the live helper or a new one, on the run state read afresh under its lock."""
+    own = next((entry for entry in sessions if entry["initiator"] and entry["status"] == "pending"), None)
+    deferred = [entry for entry in others if entry["status"] == "deferred"]
+    initiator = next((entry for entry in sessions if entry["initiator"]), None)
+    handed = time.time()
+
+    def change(state: dict) -> dict:
         helper = state.get("helper") or {}
         helper_waiting = alive(helper.get("pid")) and not state.get("helper_finished_at")
-        initiator = next((entry for entry in sessions if entry["initiator"]), None)
         state["initiator"] = ({key: initiator.get(key) for key in ("handle", "host", "screen_identified")}
                               if initiator else None)
         state["compact_mode"] = mode
         if own or deferred:
-            handed = time.time()
             items = [
                 {key: entry.get(key) for key in ("handle", "host", "actions", "title", "worktree", "compact_reason", "detail", "probe_retries",
                                                  "screen_identified", "input", "ready_signal", "release", "host_release_outdated")}
@@ -377,6 +372,8 @@ def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spa
             if helper_waiting:
                 pid = helper["pid"]
                 state["follow_up"] = [*state.get("follow_up", []), *items]
+                if items:
+                    state.pop("others_finished_at", None)
             else:
                 try:
                     pid = spawn(run_id)
@@ -399,28 +396,49 @@ def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spa
                 state["self"].update(compact_reason=own.get("compact_reason"), helper_pid=pid, helper_started_at=now(), deferred_at=handed,
                                    **handoff_point(own["handle"]))
                 state.pop("self_finished_at", None)
-        state["sessions"] = {**state.get("sessions", {}), **{entry["handle"]: public(entry) for entry in sessions}}
+        state["sessions"] = {**state.get("sessions", {}), **{entry["handle"]: public(entry) for entry in sessions if not entry.get("handled")}}
         state["applied_at"] = now()
-        save_json(run_path(run_id), state)
+        return state
+
+    update_run(run_id, change)
+
+
+def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spawn: Callable[[str], int] = spawn_self_apply) -> dict:
+    with exclusive("sessions"):
+        state = load_run(run_id)
+        orca = Orca()
+        sessions = plan_sessions(orca, state, mode, only)
+        for entry in sessions:
+            previous = handled(state, entry["handle"])
+            if previous:
+                entry.update(status=previous, detail="already_handled_in_this_run", actions=[], handled=True)
+        others = [entry for entry in sessions if not entry["initiator"] and not entry.get("handled")]
+        drive(orca, others, state, time.time() + seconds, expire="deferred")
+        commit_apply(run_id, mode, sessions, others, spawn)
     summary = {status: sum(1 for entry in sessions if entry["status"] == status) for status in {entry["status"] for entry in sessions}}
     return {"ok": all(entry["status"] in {"done", "queued_after_turn", "deferred"} for entry in sessions), "run_id": run_id, "summary": summary, "sessions": [public(entry) for entry in sessions]}
 
 
-def notify(orca: Orca, entry: dict, run_id: str, sleep: Callable[[float], None]) -> str:
+def lock_guard() -> AbstractContextManager:
+    return exclusive("sessions")
+
+
+def notify(orca: Orca, entry: dict, run_id: str, sleep: Callable[[float], None], guard: Callable[[], AbstractContextManager] = nullcontext) -> str:
     message = f"Plugin refresh run {run_id} finished. Run `{status_command(run_id)}` and report every session, including any that were not refreshed."
     notice = {"handle": entry["handle"], "host": entry["host"], "screen_identified": entry.get("screen_identified")}
     deadline = time.time() + NOTIFY_SECONDS
     reason: str | None = "not_attempted"
     while time.time() < deadline:
         try:
-            live = {item.get("handle"): item for item in orca.terminals()}
-            reason, _ = driver.ready(orca, notice, live)
-            if reason is None and (entry["host"] != "claude" or orca.draft(entry["handle"]) == notice.get("observed_draft")):
-                record = driver.host_record(notice)
-                if record != "busy" and (record is not None or orca.idle(entry["handle"])):
-                    orca.send(entry["handle"], message)
-                    return "sent"
-                reason = "turn_started"
+            with guard():
+                live = {item.get("handle"): item for item in orca.terminals()}
+                reason, _ = driver.ready(orca, notice, live)
+                if reason is None and (entry["host"] != "claude" or orca.draft(entry["handle"]) == notice.get("observed_draft")):
+                    record = driver.host_record(notice)
+                    if record != "busy" and (record is not None or orca.idle(entry["handle"])):
+                        orca.send(entry["handle"], message)
+                        return "sent"
+                    reason = "turn_started"
             if reason in {"terminal_gone", "probe_interrupted", "unsent_input"}:
                 break
         except RefreshError as error:
@@ -430,61 +448,59 @@ def notify(orca: Orca, entry: dict, run_id: str, sleep: Callable[[float], None])
 
 
 def command_self_apply(run_id: str, sleep: Callable[[float], None] = time.sleep, waiters: IdleWaiters | None = None) -> int:
-    """The one detached helper: finish deferred sessions and this session, then send one result notice and exit."""
-    with exclusive("sessions", wait_seconds=SELF_WAIT_SECONDS):
-        state = load_run(run_id)
-        own = state.get("self")
-        follow = [item for item in state.get("follow_up", []) if isinstance(item, dict)]
-        if not isinstance(own, dict) and not follow:
-            return 0
-        start = time.time()
-        entries = [
-            {**item, "actions": list(item["actions"]), "status": "pending", "initiator": False,
-             "detail": item.get("detail") or "busy", "deadline": item.get("deferred_at", start) + FOLLOW_UP_SECONDS}
-            for item in follow
-        ]
-        own_entry = None
-        if isinstance(own, dict):
-            own_entry = {**own, "actions": list(own["actions"]), "status": "pending", "initiator": True, "detail": None, "deadline": start + SELF_WAIT_SECONDS}
-            entries.append(own_entry)
-        orca = Orca()
+    """The one detached helper: finish deferred sessions and this session, then send one result notice and exit.
 
-        def record(finished: list[dict]) -> None:
-            try:
-                saved = load_run(run_id)
-                views = {entry["handle"]: public(entry) for entry in finished}
-                sessions = saved.setdefault("sessions", {})
-                changed = any(sessions.get(handle) != view for handle, view in views.items())
-                sessions.update(views)
-                if own_entry and not saved.get("others_finished_at") and all(
-                        entry["status"] in FINAL_STATUSES and not entry.get("input_held") for entry in entries if not entry["initiator"]):
-                    saved["others_finished_at"] = now()
-                    changed = True
-                if changed:
-                    save_json(run_path(run_id), saved)
-            except (RefreshError, OSError):
-                pass
+    It holds the sessions lock only while sending to a session and confirming it, and reads the run state again on
+    every pass so sessions that a later `apply` hands over join this helper.
+    """
+    feed = RunFeed(run_id, FOLLOW_UP_SECONDS, SELF_WAIT_SECONDS)
+    with exclusive("run-state", wait_seconds=core.RUN_STATE_WAIT_SECONDS):
+        entries = feed.poll()
+    if not entries:
+        return 0
+    state = load_run(run_id)
+    orca = Orca()
+    guard = SendLock(lock_guard)
 
-        record([])
-        follow_up(orca, entries, state, sleep=sleep, waiters=waiters, progress=record)
-        state = load_run(run_id)
+    def record(finished: list[dict]) -> None:
+        def change(saved: dict) -> dict:
+            views = {entry["handle"]: public(entry) for entry in finished}
+            sessions = saved.setdefault("sessions", {})
+            changed = any(sessions.get(handle) != view for handle, view in views.items())
+            sessions.update(views)
+            if any(entry["initiator"] for entry in entries) and not saved.get("others_finished_at") and all(
+                    entry["status"] in FINAL_STATUSES and not entry.get("input_held") for entry in entries if not entry["initiator"]):
+                saved["others_finished_at"] = now()
+                changed = True
+            return saved if changed else None
+
+        try:
+            update_run(run_id, change)
+        except (RefreshError, OSError):
+            pass
+
+    record([])
+    follow_up(orca, entries, state, sleep=sleep, waiters=waiters, progress=record, lock=guard,
+              incoming=lambda closing: feed.close() if closing else feed.poll())
+    own_entry = next((entry for entry in entries if entry["initiator"]), None)
+    finished = now()
+
+    def conclude(saved: dict) -> dict:
         for entry in entries:
-            state["sessions"][entry["handle"]] = public(entry)
-        finished = now()
-        state["helper_finished_at"] = finished
-        if own_entry:
-            state["self_finished_at"] = finished
-        state["self_notification"] = "pending"
-        save_json(run_path(run_id), state)
-        if own_entry:
-            notification = notify(orca, own_entry, run_id, sleep) if own_entry["status"] in {"done", "failed"} else "not_sent:session_skipped"
-        elif isinstance(state.get("initiator"), dict):
-            notification = notify(orca, dict(state["initiator"]), run_id, sleep)
-        else:
-            notification = "not_sent:no_orca_initiator"
-        state = load_run(run_id)
-        state["self_notification"] = notification
-        save_json(run_path(run_id), state)
+            saved.setdefault("sessions", {})[entry["handle"]] = public(entry)
+        if own_entry and (saved.get("self") or {}).get("deferred_at") == own_entry.get("deferred_at"):
+            saved["self_finished_at"] = finished
+        saved["self_notification"] = "pending"
+        return saved
+
+    state = update_run(run_id, conclude)
+    if own_entry:
+        notification = notify(orca, own_entry, run_id, sleep, lock_guard) if own_entry["status"] in {"done", "failed"} else "not_sent:session_skipped"
+    elif isinstance(state.get("initiator"), dict):
+        notification = notify(orca, dict(state["initiator"]), run_id, sleep, lock_guard)
+    else:
+        notification = "not_sent:no_orca_initiator"
+    update_run(run_id, lambda saved: {**saved, "self_notification": notification})
     return 0
 
 

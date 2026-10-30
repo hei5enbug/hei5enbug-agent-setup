@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 import refresh_sessions as driver
-from refresh_core import HANDLE, RefreshError, exclusive, load_run, parse_time, run_path, save_json
+from refresh_core import HANDLE, RefreshError, exclusive, load_run, parse_time, update_run
 from refresh_host_record import record_state
 from refresh_orca import Orca
 from refresh_process import ProcessOs, SessionProcess, find_session_process, installed_release, launch_arguments, release_of
@@ -179,7 +179,6 @@ def run_resume(run_id: str, handles: Sequence[str], orca: Orca | None = None, sy
                 except RefreshError as error:
                     result = {"status": "failed", "detail": error.code}
             views.append((handle, resume_view(handle, entry, result)))
-        state["resumed"] = {**state.get("resumed", {}), **{handle: view for handle, view in views}}
-        save_json(run_path(run_id), state)
+        update_run(run_id, lambda saved: {**saved, "resumed": {**saved.get("resumed", {}), **dict(views)}})
     sessions = [view for _, view in views]
     return {"ok": all(view["status"] == "done" for view in sessions), "run_id": run_id, "sessions": sessions}

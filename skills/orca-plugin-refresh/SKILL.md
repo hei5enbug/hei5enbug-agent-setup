@@ -90,8 +90,7 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
    receive commands. For about 20 seconds the script sends a command only to an idle session whose input line is
    empty or cleared of typed text, then keeps confirming the commands already sent and restoring any text it can
    restore exactly. It hands every session that is still busy or not ready to one detached helper as `deferred`
-   instead of waiting. An `already_running` error means another run is still
-   sending; wait for it, then run `apply` again. A host with an update error stays blocked while successful hosts
+   instead of waiting. An `already_running` error means another run is sending at this moment; wait for it, then run `apply` again. A host with an update error stays blocked while successful hosts
    can proceed.
 4. **Report every session.** Show the terminal suffix, host, worktree, status, completed actions, and detail:
    - `done`: every needed action is confirmed. `already_current` means nothing was needed, and
@@ -192,8 +191,9 @@ result is not ok when this plugin has a host error or any companion has the stat
   holds no prompt.
 - Each result is confirmed from transcript records appended after the send, or from a marker rewritten after it,
   and from the screen only when no transcript is available.
-- One lock covers every process that sends commands, including the detached helper.
-- Each run starts at most one helper. It ends every Orca wait it started before it exits, and its deferred
+- One lock covers every process that sends commands. The detached helper holds it only while it sends to a session
+  and confirms the command, never while it waits for a session to become idle, so `apply` can run meanwhile.
+- Each run starts at most one helper. Sessions a later `apply` defers join the running helper. It ends every Orca wait it started before it exits, and its deferred
   sessions and this session wait at most one hour.
 - When the Orca idle wait fails for a session, the helper checks that session by polling until its deadline.
 - `/compact` summarizes the conversation, so it runs only for sessions whose instructions are stale.

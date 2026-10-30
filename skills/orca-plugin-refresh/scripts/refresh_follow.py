@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 import threading
 import time
+from contextlib import AbstractContextManager, ExitStack
 from typing import Callable
 
 import refresh_install as installs
@@ -98,6 +99,36 @@ class IdleWaiters:
             thread.join(timeout=5)
 
 
+class SendLock:
+    """Holds the machine-wide sessions lock across loop passes only while a command is in flight or typed text is held."""
+
+    def __init__(self, factory: Callable[[], AbstractContextManager] | None = None) -> None:
+        self.factory = factory
+        self.stack: ExitStack | None = None
+
+    def acquire(self) -> bool:
+        if self.factory is None or self.stack is not None:
+            return True
+        stack = ExitStack()
+        try:
+            stack.enter_context(self.factory())
+        except RefreshError as error:
+            if error.code != "already_running":
+                raise
+            return False
+        self.stack = stack
+        return True
+
+    def release(self) -> None:
+        stack, self.stack = self.stack, None
+        if stack is not None:
+            stack.close()
+
+
+def sending(entries: list[dict]) -> bool:
+    return any(entry["status"] in ("sent", "restoring") or entry.get("input_held") for entry in entries)
+
+
 def install_current(host: str, target: dict, cache: dict[str, tuple[float, bool]]) -> bool:
     """True while the installed plugin still matches the run's target; rechecked at most every INSTALL_CHECK_SECONDS."""
     checked = cache.get(host)
@@ -160,12 +191,16 @@ def applied_by_session(entry: dict, state: dict, cache: dict[str, tuple[float, b
 
 
 def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[float], None] = time.sleep, waiters: IdleWaiters | None = None,
-              progress: Callable[[list[dict]], None] | None = None) -> None:
+              progress: Callable[[list[dict]], None] | None = None, lock: SendLock | None = None,
+              incoming: Callable[[bool], list[dict]] | None = None) -> None:
     """Apply deferred sessions when Orca reports them idle, each before its own deadline, then end every wait.
 
-    `progress` receives the entries that reached a final status since its last call.
+    `progress` receives the entries that reached a final status since its last call. `lock` is taken only to send
+    to a session and kept until every command in flight is confirmed. `incoming(closing)` returns entries that
+    joined meanwhile; they are added to `entries`, and a final-status entry of the same handle is replaced.
     """
     waiters = waiters or IdleWaiters(orca)
+    lock = lock or SendLock()
     cache: dict[str, tuple[float, bool]] = {}
     reported: set[str] = set()
 
@@ -175,10 +210,24 @@ def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[flo
             reported.update(entry["handle"] for entry in finished)
             progress(finished)
 
+    def join(joined: list[dict]) -> bool:
+        taken = False
+        for new in joined:
+            if any(entry["handle"] == new["handle"] and (entry["status"] in OPEN_STATUSES or entry.get("input_held")) for entry in entries):
+                continue
+            entries[:] = [entry for entry in entries if entry["handle"] != new["handle"]] + [new]
+            reported.discard(new["handle"])
+            taken = True
+        return taken
+
     try:
         while True:
+            if incoming:
+                join(incoming(False))
             active = [entry for entry in entries if entry["status"] in OPEN_STATUSES or entry.get("input_held")]
             if not active:
+                if incoming and join(incoming(True)):
+                    continue
                 return
             try:
                 live = {item.get("handle"): item for item in orca.terminals()}
@@ -186,6 +235,8 @@ def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[flo
                 live = None
             for entry in active:
                 report()
+                if entry.get("input_held") and not lock.acquire():
+                    continue
                 if release_held(orca, entry):
                     continue
                 if entry["status"] == "pending":
@@ -222,11 +273,16 @@ def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[flo
                     if time.time() >= entry["deadline"]:
                         entry.update(status="skipped", detail="not_idle_before_deadline", actions=[])
                         continue
+                if not lock.acquire():
+                    continue
                 try:
                     step(orca, entry, state["hosts"][entry["host"]], live)
                 except RefreshError as error:
                     entry.update(status="failed", detail=error.code, actions=[])
+            if not sending(entries):
+                lock.release()
             report()
             sleep(driver.POLL_SECONDS)
     finally:
         waiters.stop()
+        lock.release()
