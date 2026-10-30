@@ -9,6 +9,7 @@ import json
 import os
 import re
 import sys
+from dataclasses import replace
 from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
@@ -63,6 +64,11 @@ def expand(text: str, variables: dict[str, str]) -> str:
     if any(name not in variables for name in names):
         return text
     return VARIABLE.sub(lambda match: variables[match.group(1) or match.group(2)], text)
+
+
+def expand_text(text: str, variables: dict[str, str]) -> str:
+    """`$NAME` and `${NAME}` replaced where `variables` knows the name; other text stays as written."""
+    return VARIABLE.sub(lambda match: variables.get(match.group(1) or match.group(2), match.group(0)), text)
 
 
 def resolve_dir(base: str, directory: str) -> str:
@@ -120,7 +126,7 @@ def push_findings(target: Target, top, words) -> list[str]:
 
     findings = []
     if boundary_git.has_head(top):
-        findings.extend(boundary_git.range_findings(top, ["HEAD", "--not", "--remotes"], "HEAD", words))
+        findings.extend(boundary_git.range_findings(top, ["HEAD", "--not", "--remotes"], words))
     tags = boundary_git.local_tags(top)
     if target.has_option("--tags", "--follow-tags"):
         names = list(tags)
@@ -154,7 +160,7 @@ def target_findings(segment: Segment, target: Target, directory: str, words, var
     from public_boundary import scan_text
 
     where = fold_dirs(directory, target.git_dirs)
-    text = blank_directory_arguments(segment.text, target.git_dirs)
+    text = blank_directory_arguments(expand_text(segment.text, variables), target.git_dirs)
     findings = scan_text(COMMAND_LABEL, "\n" * (segment.line - 1) + text, words=words)
     for name in (expand(item, variables) for item in target.files if item != "-"):
         content = read_named_file(where, name)
@@ -188,6 +194,8 @@ def check_command(command: str, cwd: str, root: str) -> tuple[list[str], list[st
             directory = directory if re.search(r"[$`]", changed) else resolve_dir(directory, changed)
             continue
         target = boundary_shell.classify(segment.tokens)
+        if target is not None:
+            target = replace(target, git_dirs=tuple(expand_text(item, variables) for item in target.git_dirs))
         if target is None or not in_scope(target, directory, root):
             continue
         words = load_private_words(Path(root)) if words is None else words

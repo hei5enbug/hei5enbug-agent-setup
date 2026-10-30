@@ -115,31 +115,37 @@ def _commit_findings(top: Path, shas: list[str], words: Words) -> list[str]:
     return findings
 
 
-def _changed_paths(top: Path, shas: list[str]) -> set[str]:
+def _introduced_blobs(top: Path, shas: list[str]) -> dict[str, str]:
+    """Every blob version the commits add or change, labeled by commit and path, one entry per blob."""
     raw = git(
-        top, "diff-tree", "--stdin", "--no-commit-id", "--name-only", "-r", "-z", "--root", "--diff-filter=ACMR",
+        top, "diff-tree", "--stdin", "-r", "-z", "-m", "--root", "--no-abbrev", "--diff-filter=ACMR",
         stdin=("\n".join(shas) + "\n").encode(),
     )
-    return set(_paths(raw))
-
-
-def _tip_blobs(top: Path, tip: str, paths: set[str]) -> dict[str, str]:
-    entries = {}
-    for record in git(top, "ls-tree", "-r", "-z", tip).split(b"\0"):
-        meta, _, raw_path = record.partition(b"\t")
-        name = raw_path.decode("utf-8", "surrogateescape")
-        parts = meta.split()
-        if record and name in paths and parts[0].decode() not in SKIPPED_MODES and parts[1] == b"blob":
-            entries[name] = parts[2].decode()
+    tokens = [item.decode("utf-8", "surrogateescape") for item in raw.split(b"\0")]
+    entries: dict[str, str] = {}
+    seen: set[str] = set()
+    commit = ""
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        index += 1
+        if not token.startswith(":"):
+            commit = token
+            continue
+        meta = token[1:].split()
+        index += 2 if meta[4][0] in "RC" else 1
+        label = f"commit {commit[:12]} {tokens[index - 1]}"
+        if meta[1] not in SKIPPED_MODES and meta[3] not in seen:
+            seen.add(meta[3])
+            entries[label] = meta[3]
     return entries
 
 
-def range_findings(top: Path, rev_args: list[str], tip: str, words: Words) -> list[str]:
+def range_findings(top: Path, rev_args: list[str], words: Words) -> list[str]:
     shas = git(top, "rev-list", *rev_args).decode().split()
     if not shas:
         return []
-    paths = _changed_paths(top, shas)
-    blobs = read_blobs(top, _tip_blobs(top, tip, paths))
+    blobs = read_blobs(top, _introduced_blobs(top, shas))
     return _commit_findings(top, shas, words) + _scan_blobs(blobs, words)
 
 
@@ -167,11 +173,11 @@ def push_ref_findings(top: Path, line: str, words: Words) -> list[str]:
         findings.extend(tag_findings(top, local_ref.removeprefix("refs/tags/"), local_sha, words))
     fresh = [local_sha, "--not", "--remotes"]
     if ZERO_SHA.match(remote_sha):
-        return findings + range_findings(top, fresh, local_sha, words)
+        return findings + range_findings(top, fresh, words)
     try:
-        return findings + range_findings(top, [f"{remote_sha}..{local_sha}"], local_sha, words)
+        return findings + range_findings(top, [f"{remote_sha}..{local_sha}"], words)
     except CheckError:
-        return findings + range_findings(top, fresh, local_sha, words)
+        return findings + range_findings(top, fresh, words)
 
 
 def pre_push_findings(top: Path, stdin_text: str, words: Words) -> list[str]:
