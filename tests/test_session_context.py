@@ -674,7 +674,7 @@ class SessionContextTest(unittest.TestCase):
                 self.assertNotIn("](<", context)
 
     def test_메인_컨텍스트_크기는_루트_경로_길이에_좌우되지_않는다(self):
-        """짧은 루트와 약 100자 루트의 메인 컨텍스트는 헤더의 경로 길이만 다르고 둘 다 8000바이트 아래다."""
+        """짧은 루트와 약 100자 루트의 메인 컨텍스트는 헤더의 경로 길이만 다르고, 알림 몫 900바이트를 남기도록 둘 다 8700바이트 아래다."""
         # Given
         parent = Path(tempfile.mkdtemp(prefix="h5", dir="/tmp")).resolve()
         short = parent / "p"
@@ -695,7 +695,7 @@ class SessionContextTest(unittest.TestCase):
 
                 # Then
                 for root, context in rendered.items():
-                    self.assertLess(len(context.encode("utf-8")), 8000)
+                    self.assertLess(len(context.encode("utf-8")), session_context.MAX_CONTEXT_BYTES - 900)
                     self.assertEqual(context.count(root.as_posix()), 2)
                 normalized = [context.replace(root.as_posix(), "<root>") for root, context in rendered.items()]
                 self.assertEqual(normalized[0], normalized[1])
@@ -1127,7 +1127,7 @@ class SessionContextTest(unittest.TestCase):
         self.assertIn("instructions were not loaded", result.stderr)
 
     def test_oversized_context_reports_failure(self):
-        (self.root / "instructions/session/common.md").write_text("x" * 9001)
+        (self.root / "instructions/session/common.md").write_text("x" * (session_context.MAX_CONTEXT_BYTES + 1))
         result = self.run_hook()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("context budget", result.stderr)
@@ -1993,6 +1993,18 @@ class SessionContextRegistrationTest(unittest.TestCase):
         self.assertEqual(claude, {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": command, "timeout": 5}]}]})
         self.assertNotIn("session_context.py", shared)
         self.assertNotIn("session_context.py", codex)
+
+    def test_세션_시작_훅은_Codex가_지침을_파일로_빼지_않게_전체를_넘긴다(self):
+        """Codex는 약 2,500토큰을 넘는 훅 출력을 파일로 빼고 미리보기만 주므로, SessionStart 훅은 additionalContextLimit 0으로 전체를 넘긴다."""
+        # Given
+        entries = HOOKS["SessionStart"]
+
+        # When
+        handlers = [handler for entry in entries for handler in entry["hooks"] if "session_context.py" in handler["command"]]
+
+        # Then
+        self.assertEqual(1, len(handlers))
+        self.assertEqual(0, handlers[0].get("additionalContextLimit"))
 
 
 if __name__ == "__main__":

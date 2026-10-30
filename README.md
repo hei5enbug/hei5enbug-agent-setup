@@ -943,8 +943,10 @@ it. Restart Claude Code or start a new Codex session after updating.
 The hook does not bypass host trust settings or change an already running session to a new plugin version.
 The `orca-plugin-refresh` skill uses those markers to apply an update to running Orca sessions without restarting them.
 
-A missing or empty session file, an invalid local reference, main context larger than 9,000 UTF-8 bytes, or a role
-context larger than 4,000 UTF-8 bytes produces an error on stderr and no partial context. Session-start hook errors do
+A missing or empty session file, an invalid local reference, main context larger than 9,600 UTF-8 bytes, or a role
+context larger than 4,000 UTF-8 bytes produces an error on stderr and no partial context. The main limit stays under
+the 10,000 characters Claude Code passes from one hook field, and the session-start hook sets
+`additionalContextLimit` to `0` so that Codex passes the whole context instead of a file path and a preview. Session-start hook errors do
 not reliably block the host; resolve any reported loading error before relying on automatic instructions. Keep the
 session files short and move details into conditional references. Windows execution and live model adherence are not
 covered by the tests.

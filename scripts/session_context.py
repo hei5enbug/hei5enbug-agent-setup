@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
 LOCAL_LINK = re.compile(r"\[([^\]]+)\]\(([^\s)]+)\)")
-MAX_CONTEXT_BYTES = 9000
+MAX_CONTEXT_BYTES = 9600
 MAX_ROLE_CONTEXT_BYTES = 4000
 ASSIGNED_ROLE_ENV = "HEI5ENBUG_ASSIGNED_ROLE"
 ASSIGNED_WORKERS_HEADING = "## Assigned workers"

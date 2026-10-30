@@ -32,12 +32,8 @@ Independent review is the exception to main-session review. Before finishing a s
 
 On a result-changing ambiguity or conflict, stop edits and external changes, read only what is needed, and
 ask one concise question. Check what reading, running, or measuring within your permissions can show instead of
-asking about it. Use a tool only if host rules permit required, blocking questions; otherwise
-ask in the final response and end the turn. Never use async questions for required decisions. Resume only
-on an explicit user answer. Silence, elapsed time, empty or automatic answers, and defaults are not answers.
-List options in recommended order, allow a free-form answer, and add an ASCII diagram only when it clarifies the
-choice. Follow host formatting and a skill's own ask or stop rules. Offer temporary and root-cause fixes,
-when both exist, with cost and impact; the user chooses. Report a pending user action, such as a login, once.
+asking about it. Resume only on an explicit user answer. Silence, elapsed time, empty or automatic answers, and
+defaults are not answers. Before asking the user anything, read [asking the user](../asking-the-user.md).
 
 ## Conditional instructions
 
