@@ -62,6 +62,18 @@ class CommonRulesTest(unittest.TestCase):
             with self.subTest(step=step):
                 self.assertIn(step, asking)
 
+    def test_이름_결정_배포가_바뀌면_이미_만든_산출물의_옛_값을_찾아_고치고_보고한다(self):
+        """이름 변경, 결정 변경, 되돌리기 뒤에는 작업이 만들거나 올린 산출물의 옛 값을 고치거나 알리고 최종 보고에 적는다."""
+        # Given
+        rule = (
+            "After a rename, a changed decision, or a rollback, update or report every earlier output of the work that "
+            "still shows the old value, such as code, documents, descriptions, tickets, or comments, and list each in "
+            "the report."
+        )
+
+        # When / Then
+        self.assert_in_every_context(rule)
+
 
 if __name__ == "__main__":
     unittest.main()
