@@ -1153,6 +1153,37 @@ class RoleRunnerTest(unittest.TestCase):
                 self.assertEqual(2, self.status(completed)["exit"])
                 self.assertFalse(self.log.exists())
 
+    def test_user_requested는_via가_agent인_primary를_entry의_모델과_요청한_effort로_실행기에서_실행한다(self):
+        """Codex investigation의 primary는 via agent이지만 --user-requested --effort xhigh는 entry의 모델 luna와 xhigh로 실행하고 기록으로 검증한다."""
+        # Given
+        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "xhigh"}]}
+        arguments = ["investigation", "--host", "codex", "--user-requested", "--effort", "xhigh", "--instructions", str(self.instructions)]
+
+        # When
+        completed = self.run_runner(*arguments, config=config)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(self.codex_argv(model="gpt-5.6-luna", effort="xhigh"), self.logged()["argv"])
+        status = self.status(completed)
+        self.assertEqual(
+            ("codex", "gpt-5.6-luna", "xhigh", True, True, 0),
+            (status["runner"], status["model"], status["effort"], status["verified"], status["user_requested"], status["exit"]),
+        )
+
+    def test_user_requested_없이는_via가_agent인_primary에_effort만_줘도_종료_코드_2이다(self):
+        """플래그가 없으면 Codex investigation primary는 --effort xhigh를 줘도 via agent로 거부하고 자식을 띄우지 않는다."""
+        # Given
+        arguments = ["investigation", "--host", "codex", "--effort", "xhigh", "--instructions", str(self.instructions)]
+
+        # When
+        completed = self.run_runner(*arguments)
+
+        # Then
+        self.assertEqual(2, completed.returncode)
+        self.assertIn("via 'agent'", completed.stderr)
+        self.assertFalse(self.log.exists())
+
     def test_agent는_fallback_없이는_실행하지_않고_종료_코드_2이다(self):
         """agent 모드는 --fallback이 없으면 자식을 띄우지 않고 종료 코드 2이다."""
         # Given
@@ -1426,6 +1457,129 @@ class RoleRunnerTest(unittest.TestCase):
 
                 # Then
                 self.assertEqual(2, completed.returncode, completed.stderr)
+                self.assertFalse(self.log.exists())
+
+    def test_user_requested_없이는_reviewer가_아닌_역할의_model과_상한을_넘는_effort를_거부한다(self):
+        """플래그가 없으면 scout의 --model, reviewer의 xhigh 위 effort, agent의 --model은 모두 종료 코드 2이고 자식을 띄우지 않는다."""
+        # Given
+        cases = [
+            ["scout", "--model", "claude-opus-5-5"],
+            ["reviewer", "--model", "claude-opus-5-5", "--effort", "max"],
+            ["scout", "--effort", "max"],
+        ]
+
+        # When
+        outcomes = [self.run_runner(*case).returncode for case in cases]
+
+        # Then
+        self.assertEqual([2] * len(cases), outcomes)
+        self.assertFalse(self.log.exists())
+
+    def test_user_requested는_model이나_effort_없이는_종료_코드_2이다(self):
+        """--user-requested만 주면 요청한 값이 없으므로 자식을 띄우지 않고 종료 코드 2이다."""
+        # Given
+        arguments = ["reviewer", "--user-requested"]
+
+        # When
+        completed = self.run_runner(*arguments)
+
+        # Then
+        self.assertEqual(2, completed.returncode)
+        self.assertIn("--user-requested", completed.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_user_requested는_reviewer에_요청한_모델과_max_effort를_적용하고_기록으로_검증한다(self):
+        """claude-opus-5-5 max를 요청하면 claude -p가 그 모델과 effort로 실행되고 상태 줄에 요청 표시와 검증이 남는다."""
+        # Given
+        config = {"entries": [{"model": "claude-opus-5-5", "effort": "max"}]}
+        arguments = ["reviewer", "--user-requested", "--model", "claude-opus-5-5", "--effort", "max"]
+
+        # When
+        completed = self.run_runner(*arguments, config=config)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(self.claude_argv(effort="max", writing=False)[:6], self.logged()["argv"][:6])
+        status = self.status(completed)
+        self.assertEqual(
+            ("claude", "claude-opus-5-5", "max", True, True, 0),
+            (status["runner"], status["model"], status["effort"], status["verified"], status["user_requested"], status["exit"]),
+        )
+
+    def test_user_requested는_기록의_effort가_요청과_다르면_종료_코드_4이다(self):
+        """요청한 effort가 호스트 기록과 다르면 검증 실패로 종료 코드 4이고 결과를 쓰지 않는다."""
+        # Given
+        config = {"entries": [{"model": "claude-opus-5-5", "effort": "high"}]}
+        arguments = ["reviewer", "--user-requested", "--model", "claude-opus-5-5", "--effort", "max"]
+
+        # When
+        completed = self.run_runner(*arguments, config=config)
+
+        # Then
+        self.assertEqual(4, completed.returncode)
+        self.assertFalse(self.result.exists())
+
+    def test_user_requested는_모든_역할과_capability와_agent에서_요청한_모델로_실행한다(self):
+        """scout, researcher, worker, capability, agent 모두 요청한 모델의 실행기로 실행하고 상태 줄에 그 모델을 남긴다."""
+        # Given
+        approved = str(self.base / "approved")
+        cases = [
+            (["scout", "--model", "claude-opus-5-5"], "claude", "claude-opus-5-5"),
+            (["researcher", "--model", "gpt-6.1-sol"], "codex", "gpt-6.1-sol"),
+            (["worker", "--model", "claude-haiku-5-5", "--add-dir", approved], "claude", "claude-haiku-5-5"),
+            (["implementation", "--host", "claude", "--model", "claude-opus-5-5", "--add-dir", approved,
+              "--instructions", str(self.instructions)], "claude", "claude-opus-5-5"),
+            (["review", "--host", "claude", "--model", "claude-fable-5-1", "--instructions", str(self.instructions)], "claude", "claude-fable-5-1"),
+            (["agent", "--name", "hei5enbug-agent-setup:scout", "--fallback", "--model", "claude-opus-5-5"], "claude", "claude-opus-5-5"),
+        ]
+        for arguments, runner, model in cases:
+            with self.subTest(arguments=arguments):
+                config = (
+                    {"turns": [{"model": model, "effort": "high"}]} if runner == "codex"
+                    else {"model": model, "entries": [{"model": model, "effort": "high"}]}
+                )
+
+                # When
+                completed = self.run_runner(*arguments, "--user-requested", config=config)
+
+                # Then
+                self.assertEqual(0, completed.returncode, completed.stderr)
+                status = self.status(completed)
+                self.assertEqual((runner, model, True), (status["runner"], status["model"], status["user_requested"]))
+
+    def test_user_requested는_max_effort_상한_없이_모델이_허용하는_effort를_codex_실행에_넘긴다(self):
+        """Codex 모델에 max를 요청하면 effort 규칙이 허용하는 한 model_reasoning_effort로 넘기고 기록으로 검증한다."""
+        # Given
+        config = {"turns": [{"model": "gpt-6.1-sol", "effort": "max"}]}
+        arguments = ["scout", "--user-requested", "--model", "gpt-6.1-sol", "--effort", "max"]
+
+        # When
+        completed = self.run_runner(*arguments, config=config)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(self.codex_argv(model="gpt-6.1-sol", effort="max"), self.logged()["argv"])
+        self.assertEqual(("max", True), (self.status(completed)["effort"], self.status(completed)["verified"]))
+
+    def test_user_requested는_실행할_수_없는_모델과_모델이_허용하지_않는_effort를_이름과_함께_거부한다(self):
+        """지원하지 않는 모델, Luna의 max, 알 수 없는 effort, 웹 검색이 없는 researcher는 종료 코드 2이고 대체를 실행하지 않았다고 알린다."""
+        # Given
+        cases = [
+            (["reviewer", "--model", "gpt-5.4"], "gpt-5.4"),
+            (["scout", "--model", "opus"], "opus"),
+            (["scout", "--model", "gpt-5.6-luna", "--effort", "max"], "max"),
+            (["reviewer", "--effort", "turbo"], "turbo"),
+            (["researcher", "--model", "claude-opus-5-5"], "researcher"),
+        ]
+        for arguments, name in cases:
+            with self.subTest(arguments=arguments):
+                # When
+                completed = self.run_runner(*arguments, "--user-requested")
+
+                # Then
+                self.assertEqual(2, completed.returncode)
+                self.assertIn(name, completed.stderr)
+                self.assertIn("no fallback ran", completed.stderr)
                 self.assertFalse(self.log.exists())
 
     def test_capability의_mcp는_Codex에서_MCP_설정을_남기고_Claude에서는_strict를_뺀다(self):

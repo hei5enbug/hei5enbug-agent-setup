@@ -140,8 +140,22 @@ def allowed_efforts(entry: dict, model: str) -> list[str]:
     return [level for level in levels[levels.index(lowest) : levels.index(highest) + 1] if rule is None or level in rule]
 
 
-def chosen_effort(requested: str | None, entry: dict, model: str) -> str:
-    """Return the requested effort when the entry's range allows it, else the entry's own effort; refuse a level outside it."""
+def requested_efforts(model: str) -> list[str]:
+    """Return every registry level the model's effort rule allows, with no entry range, for an effort the user named."""
+    rule = REGISTRY["effort_rules"].get(model)
+    return [level for level in REGISTRY["efforts"] if rule is None or level in rule]
+
+
+def chosen_effort(requested: str | None, entry: dict, model: str, user_requested: bool = False) -> str:
+    """Return the requested effort when the entry's range allows it, else the entry's own effort; refuse a level outside it.
+
+    A user request replaces the range with the model's own effort rule, and refuses with the model and level named."""
+    if user_requested:
+        allowed = requested_efforts(model)
+        effort = requested or entry["effort"]
+        if effort not in allowed:
+            raise UsageError(f"{effort} is not an effort {model} allows ({', '.join(allowed)}); no fallback ran")
+        return effort
     if requested is None:
         return entry["effort"]
     allowed = allowed_efforts(entry, model)
@@ -173,9 +187,10 @@ def agent_run(args: argparse.Namespace, host: str) -> Run:
         raise UsageError(f"{name}: access must be read or write")
     if access == "write" and not args.add_dirs:
         raise UsageError(f"{name} writes, so it needs --add-dir for each directory it may write")
+    model = args.model or fallback["model"]
     return Run(
-        target=AGENT_TARGET, role=None, capability=None, fallback=True, runner=runner_for(fallback["model"]),
-        model=fallback["model"], effort=chosen_effort(args.effort, fallback, fallback["model"]), writing=access == "write",
+        target=AGENT_TARGET, role=None, capability=None, fallback=True, runner=runner_for(model),
+        model=model, effort=chosen_effort(args.effort, fallback, model, args.user_requested), writing=access == "write",
         add_dirs=tuple(args.add_dirs),
         resume=args.resume, instructions=None, agent=name, body=body, web_tools=web_tools_in(definition), mcp=args.mcp,
     )

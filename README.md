@@ -163,7 +163,11 @@ the check cannot parse is allowed. A word counts as a declaration builtin such a
 Role pinning pins each plugin role's model and effort on every request: `scout` uses `claude-sonnet-5-5` with `medium`,
 `worker` uses `worker_model` with `worker_effort` (default `claude-haiku-5-5` with `high`), `sonnet-worker` uses `claude-sonnet-5-5` with `high`, `designer` uses
 `claude-opus-5-5` with `xhigh`, and `reviewer` uses `claude-opus-5-5` with `high`. A subagent that answers on another model is stopped: its later requests
-end with a refusal, its tool calls are denied, and its result is replaced with a warning. Only when role pinning is
+end with a refusal, its tool calls are denied, and its result is replaced with a warning. The one exception is a model or
+effort the user names in their own latest main-session prompt for delegated work: the mod runs an Agent call that carries
+that model on it, or an Agent call that carries the role's own pinned model when only an effort is named, with the named
+effort when exactly one is named and the model allows it, and checks the run against those values. Text in a pasted block or a fenced code block (opened by three or more backticks or tildes) does not count, and the next prompt without a request returns to the
+pins. Only when role pinning is
 active, the registered mod `prompt.submit` hook adds the line `hei5enbug-agent-setup mod: role pinning active` as
 context to the first main-session prompt of each conversation, again after `/clear` or `/resume`. This line lets the
 main session send assignments directly and skip per-delegation settings and subagent record checks. The mod uses no
@@ -1010,7 +1014,10 @@ agent --name <name> --fallback`, both with `--assignment <file> --result <file>`
 `--model <id>` for `reviewer`, `--add-dir <dir>` for `worker`, a writing capability, or a `write` agent, `--mcp` for a
 capability or agent that needs MCP tools or network, `--host claude|codex` to pick a capability's host entry, `--fallback`
 for its fallback entry, and `--resume <session_id>` to continue a run from the `evidence.session` in its status line.
-`--effort <level>` raises a run within its entry's range, whose lower bound is the default. Repeating `--assignment`
+`--effort <level>` raises a run within its entry's range, whose lower bound is the default. `--user-requested` marks a
+model or effort the user named for that work: with it, `--model <id>` is allowed for every role, capability, and agent
+mode, a capability entry that is not `via: runner` runs through the runner on its own model, and `--effort <level>` may be any level the model's effort rule allows; a model the runner cannot run or an effort
+the model does not allow exits 2 with no fallback run, and the status line gains `"user_requested": true`. Repeating `--assignment`
 and `--result` runs up to six read-only assignments of one target in parallel, with one status line each, and the
 runner exits with the highest of their exit codes. A read-only child runs without the host's skill catalog: Codex
 gets `-c skills.max_context_tokens=1`, and Claude gets `--disable-slash-commands`. The runner

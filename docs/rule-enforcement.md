@@ -36,7 +36,8 @@ impossible, remove the written rule it replaces and update its row.
 | `tests/test_reviewer_contract.py` | Reviewers pin their model and read-only tools, the independent validation table names the registry's reviewers per family, and the scout handles only local investigation. | `agents/`, `standalone-agents/`, `instructions/model-routing.md` |
 | `tests/test_worker_route_accept.py` | The `auto` implementation worker route appears in the Claude session context and manifest. | `README.md` (Feature options) |
 | `tests/test_worker_setting.py` | The worker model and effort come from the environment, the saved option, then the manifest default. | `README.md` (Feature options) |
-| `tests/test_role_runner.py` | The role runner passes each role's sandbox, model, effort, and tools, and verifies the actual run. | `instructions/claude-agents.md`, `instructions/model-routing.md` |
+| `tests/test_role_runner.py` | The role runner passes each role's sandbox, model, effort, and tools, verifies the actual run, and opens `--model` and `--effort` beyond the pins only with `--user-requested`. | `instructions/claude-agents.md`, `instructions/model-routing.md` |
+| `hooks/mod/agents.test.ts` | The mod pins each role's model and effort and honors another model or effort only when the user's own latest prompt names it. | `instructions/claude-agents.md`, `instructions/model-routing.md` |
 | `tests/test_verify_spawn.py` | A spawned Codex agent counts only when its records show the expected model and effort. | `instructions/codex-agents.md` |
 | `tests/test_agent_guard.py` | Codex built-in agents are denied, and installed roles run only with their pinned model and effort. | `instructions/codex-agents.md` |
 | `tests/test_runtime_regressions.py` | Concurrent role-file creation keeps a user's file. | `README.md` (Structure) |

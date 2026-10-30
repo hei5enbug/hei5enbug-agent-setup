@@ -146,6 +146,14 @@ main session instead. `--resume <session_id>` continues a Codex or Claude run fr
 line. The status line, exit codes, `--effort`, and batched read-only assignments match
 [Claude Code agents](claude-agents.md#role-runner).
 
+## Requested model or effort
+
+The pins stay the default. When the user names a model or effort for delegated work, run that work through the role
+runner with `--user-requested` and the `--model` or `--effort` the user named, as
+[Claude Code agents](claude-agents.md#requested-model-or-effort) describes. The runner verifies the requested values
+from the host record. The agent guard denies a spawn of a plugin role with a pair other than the pinned one. The
+request covers that work only. When the requested model or effort cannot run, report it and ask. Start no fallback.
+
 ## Fallback
 
 Every fallback is the other model family; a fallback that needs the other host's model runs through the role runner, and

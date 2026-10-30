@@ -167,6 +167,9 @@ zsh 등호 단어 차단은 Bash 도구가 zsh를 실행할 때 적용됩니다.
 `worker`는 `worker_model`과 `worker_effort`(기본 `claude-haiku-5-5`와 `high`), `sonnet-worker`는 `claude-sonnet-5-5`와 `high`, `designer`는
 `claude-opus-5-5`와 `xhigh`, `reviewer`는 `claude-opus-5-5`와 `high`를 씁니다.
 다른 모델로 응답한 서브에이전트는 중단됩니다. 이후 요청은 거부되고 도구 호출은 막히며 결과는 경고로 바뀝니다.
+유일한 예외는 사용자가 메인 세션의 가장 최근 프롬프트에서 위임 작업에 직접 지정한 모델이나 사고 강도입니다. mod는 그 모델을 넘긴
+Agent 호출을 지정한 모델로 실행하고, 사고 강도만 지정된 경우에는 역할의 고정 모델을 넘긴 Agent 호출을 그 강도로 실행합니다.
+사고 강도는 하나만 지정되었고 모델이 허용할 때 쓰며, 실행 결과는 그 값으로 검증합니다. 붙여넣은 블록이나 펜스 코드 블록(백틱 또는 물결표 세 개 이상으로 여는 블록) 안의 글은 요청으로 세지 않으며, 요청 없는 다음 프롬프트부터는 다시 고정값을 씁니다.
 역할 고정이 활성화된 경우에만 등록된 mod `prompt.submit` 훅이 대화마다 메인 세션의 첫 프롬프트에
 `hei5enbug-agent-setup mod: role pinning active` 줄을 컨텍스트로 붙이고, `/clear`나 `/resume` 뒤에도 다시 붙입니다.
 이 줄이 있으면 메인 세션은 작업 지시를 바로 보내고 위임마다 설정과 서브에이전트 기록을 확인하지 않아도 됩니다.
@@ -935,7 +938,10 @@ Claude Code에서는 `scripts/role_runner.py`가 scout, researcher, reviewer, Co
 `--assignment <file> --result <file>`과 함께 실행합니다. `reviewer`에는 `--model <id>`, `worker`, 쓰기 기능, 쓰기 접근 에이전트에는
 `--add-dir <dir>`, MCP 도구나 네트워크가 필요한 기능이나 에이전트에는 `--mcp`, 기능의 호스트 항목을 고르려면 `--host claude|codex`,
 대체 항목에는 `--fallback`, 실행을 이어 가려면 상태 줄의 `evidence.session`으로 `--resume <session_id>`를 더할 수 있습니다.
-`--effort <level>`은 항목에 지정된 범위 안에서 사고 강도를 높이며, 하한이 기본값입니다. `--assignment`와 `--result`를
+`--effort <level>`은 항목에 지정된 범위 안에서 사고 강도를 높이며, 하한이 기본값입니다. `--user-requested`는 사용자가 그
+작업에 지정한 모델이나 사고 강도를 표시합니다. 이 플래그가 있으면 `--model <id>`를 모든 역할, 기능, 에이전트 모드에 쓸 수 있고, `via: runner`가 아닌 기능 항목도 그 항목의 모델로 실행기에서 실행하며
+`--effort <level>`은 모델의 사고 강도 규칙이 허용하는 모든 수준을 쓸 수 있습니다. 실행기가 실행할 수 없는 모델이나 모델이
+허용하지 않는 사고 강도는 대체 실행 없이 종료 코드 2로 끝나고, 상태 줄에 `"user_requested": true`가 추가됩니다. `--assignment`와 `--result`를
 반복하면 같은 대상의 읽기 전용 할당을 최대 여섯 개 병렬로 실행하고 각각 상태 줄을 출력하며, 실행기는 그중 가장 높은 종료 코드로
 끝납니다. 읽기 전용 자식은 호스트의 스킬 목록 없이 실행합니다. Codex에는 `-c skills.max_context_tokens=1`을,
 Claude에는 `--disable-slash-commands`를 넘깁니다.

@@ -193,3 +193,64 @@ export function resetClaudeRolePins() {
   pinTable = undefined;
   manifests.clear();
 }
+
+const CLAUDE_PREFIX = "claude-";
+const QUOTED_TEXT = [
+  /<pasted_content\b[^>]*>[\s\S]*?<\/pasted_content>/gi,
+  /<pasted_content\b[^>]*\/>/gi,
+  /(?<!`)(`{3,})(?!`)[\s\S]*?(?:\1|$)/g,
+  /(?<!~)(~{3,})(?!~)[\s\S]*?(?:\1|$)/g,
+];
+
+function textWithoutQuotes(text) {
+  return QUOTED_TEXT.reduce((rest, pattern) => rest.replace(pattern, " "), text);
+}
+
+function escaped(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function claudeAliases(registry) {
+  return Object.keys(registry.pins).filter((key) => key.startsWith(CLAUDE_PREFIX)).map((key) => key.slice(CLAUDE_PREFIX.length));
+}
+
+export function claudeModelId(registry, value) {
+  if (typeof value !== "string") return undefined;
+  const name = value.trim().toLowerCase();
+  if (Object.values(registry.pins).includes(name) && name.startsWith(CLAUDE_PREFIX)) return name;
+  const pinned = registry.pins[`${CLAUDE_PREFIX}${name}`];
+  return typeof pinned === "string" && pinned.startsWith(CLAUDE_PREFIX) ? pinned : undefined;
+}
+
+function namedIn(text, words, boundary) {
+  return words.filter((word) => new RegExp(`${boundary.before}${escaped(word)}${boundary.after}`, "i").test(text));
+}
+
+const ID_BOUNDARY = { before: "(?<![\\w.-])", after: "(?![\\w-]|\\.\\d)" };
+const WORD_BOUNDARY = { before: "(?<![\\w-])", after: "(?![\\w-])" };
+
+export function userRequest(registry, text) {
+  const body = textWithoutQuotes(typeof text === "string" ? text : "");
+  const ids = namedIn(body, Object.values(registry.pins), ID_BOUNDARY);
+  const aliases = namedIn(body, claudeAliases(registry), WORD_BOUNDARY).map((alias) => registry.pins[`${CLAUDE_PREFIX}${alias}`]);
+  const models = [...new Set([...ids, ...aliases])].filter((model) => model.startsWith(CLAUDE_PREFIX));
+  const efforts = namedIn(body, registry.efforts ?? [], WORD_BOUNDARY);
+  return { models, efforts };
+}
+
+function effortAllowed(registry, model, effort) {
+  const allowed = registry.effort_rules?.[model];
+  return (registry.efforts ?? []).includes(effort) && (!Array.isArray(allowed) || allowed.includes(effort));
+}
+
+export function requestedPin(registry, callModel, request, declared) {
+  const model = claudeModelId(registry, callModel);
+  if (model === undefined) return undefined;
+  const named = request.efforts.length === 1 ? request.efforts[0] : undefined;
+  if (!request.models.includes(model)) {
+    const effortOnly = model === declared.model && named !== undefined && effortAllowed(registry, model, named);
+    return effortOnly ? { model, effort: named } : undefined;
+  }
+  const effort = named !== undefined && effortAllowed(registry, model, named) ? named : declared.effort;
+  return effortAllowed(registry, model, effort) ? { model, effort } : undefined;
+}

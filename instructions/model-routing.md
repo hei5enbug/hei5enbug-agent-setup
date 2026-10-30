@@ -28,7 +28,10 @@ GPT Luna is explicitly pinned to `gpt-5.6-luna` with `high` or `xhigh` only; nev
 An entry with `max_effort` starts at its `effort`, the lower bound. Raise it to `max_effort`, with the runner's
 `--effort` or a Codex spawn's effort, only when the assignment spans several components or touches a public
 contract, security, concurrency, parsing, or a hook or guard, or when a result at the lower effort was rejected.
-Entries without `max_effort`, including Claude Code plugin agents, keep their pinned effort. The worker settings
+Entries without `max_effort`, including Claude Code plugin agents, keep their pinned effort. Delegated work for which
+the user names a model or effort is the exception, under the host agent rules in
+[Claude Code agents](claude-agents.md#requested-model-or-effort) and
+[Codex agents](codex-agents.md#requested-model-or-effort). The worker settings
 are the user's explicit choice among the allowed values, never a runtime substitution. If the host cannot verify
 these settings, stop that delegation and use the named cross-family fallback or the main session. Automatic
 newest-release refresh excludes this user-selected pin.

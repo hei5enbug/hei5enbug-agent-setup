@@ -85,6 +85,23 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
 기능의 `via: runner` 대체는 `role_runner.py <capability> --fallback`으로 실행한다. `--mcp`는 할당이 MCP 도구나 네트워크를 쓸 때만
 붙인다. 실행기가 종료 코드 3 또는 4로 끝나면 메인 대화에서 계속한다.
 
+## 요청한 모델이나 사고 강도
+
+고정값이 기본값이다. 사용자가 이번 위임 작업에 모델이나 사고 강도를 직접 지정했을 때만 고정값과 다른 값을 쓴다. 요청은
+그 작업에만 적용하며, 요청 없이 이어지는 다음 위임은 고정값으로 돌아간다.
+
+- 플러그인 에이전트: Agent 호출의 `model`에 요청한 모델의 별칭(`opus`, `sonnet`, `haiku`, `fable`)을 넣는다. 요청한 `effort`는
+  같은 호출에서 `model`과 함께 넘긴다. 사고 강도만 요청받았다면 역할의 고정 모델 별칭을 그 강도와 함께 넘긴다. 고정 모델은 소스
+  디렉터리의 `config/model-registry.json`에서 `claude_agents` 아래 역할의 `model`이다(`worker`는 세션 줄 "Worker agent model", 다른
+  플러그인의 에이전트는 그 플러그인의 `.claude-plugin/model-roles.json`). 그러면 mod는 사용자의 가장 최근 프롬프트가 직접 그 값을 지정한 경우에만 요청한
+  모델과 사고 강도를 고정하고, 다른 모델로 응답한 실행은 실패로 처리한다.
+- 역할 실행기: 사용자가 지정한 값에 `--user-requested`와 `--model <id>` 또는 `--effort <level>`을 붙인다. 이 값에 한해
+  `reviewer` 전용 제한과 `xhigh` 제한이 풀린다.
+- 요청한 모델이나 사고 강도를 어떤 경로에서도 실행할 수 없으면(플러그인 에이전트에 GPT 모델을 요청하거나, 모델이나 경로가 받지
+  않는 사고 강도를 요청한 경우) 보고하고 사용자에게 묻는다. 대체 경로는
+  시작하지 않는다.
+- 실제 모델과 사고 강도는 고정 실행과 같은 방식으로, 요청한 값에 맞는지 검증한다.
+
 ## 조사
 
 - 세션의 위임 규칙이 선택한 범위가 한정된 조사는 계획 중이든 실행 중이든 `scout` 역할로 실행한다. 각 scout에 질문 하나와
@@ -120,7 +137,7 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
   메인 세션에 맡긴 종류는 예외다. 그 밖의 에이전트는 쓰지 않는다.
 - `worker` 에이전트는 세션 줄 "Worker agent model"에 적힌 모델과 사고 강도로 실행한다(기본값은 Haiku, `high`).
 - 호출 단위 모델은 정의보다 우선하므로 플러그인 에이전트를 호출하거나 재개할 때 넘기지 않는다. 정의에는 공유 모델
-  라우팅이 정리한 모델과 사고 강도가 고정되어 있다.
+  라우팅이 정리한 모델과 사고 강도가 고정되어 있다. 유일한 예외는 "요청한 모델이나 사고 강도" 절의 사용자 요청이다.
 - 아래 항목은 플러그인 에이전트가 실행될 때마다 적용한다. 실행기의 대체 경로, `worker`와 Sonnet worker, designer가 해당한다.
 - 세션 컨텍스트에 `hei5enbug-agent-setup mod: role pinning active` 줄이 있으면 대화마다 첫 프롬프트에 이 줄을 붙이는
   등록된 플러그인 mod의 `prompt.submit` 훅이 역할 고정 활성 상태를 확인한 것이다. mod는 서브에이전트 요청마다 레지스트리와 설치된 플러그인이 선언한

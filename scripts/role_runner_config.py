@@ -111,6 +111,7 @@ class Run:
     body: str | None = None
     web_tools: tuple[str, ...] = ()
     mcp: bool = False
+    user_requested: bool = False
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -128,4 +129,5 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--resume")
     parser.add_argument("--name")
     parser.add_argument("--mcp", action="store_true")
+    parser.add_argument("--user-requested", action="store_true", dest="user_requested")
     return parser

@@ -1251,3 +1251,315 @@ test("sonnet-worker와 다른 역할은 worker 옵션을 무시한다", { option
     ["claude-opus-5-5", "high"],
   ]);
 });
+
+const OPUS = "claude-opus-5-5";
+const HAIKU = "claude-haiku-5-5";
+
+function requestWorld(extra = {}) {
+  return { sessionId: () => SESSION, ...extra };
+}
+
+function requestSinks(on) {
+  const received = [];
+  on("agent.spawn", (_$, e) => {
+    received.push(e.model);
+    return { model: e.model, agentId: `agent-${received.length}` };
+  });
+  on("prompt.submit", (_$, e) => ({ text: e.text }));
+  return received;
+}
+
+test("사용자가 모델과 effort를 직접 말하면 같은 모델을 넘긴 호출은 그 모델과 effort로 시작하고 기록한다", async ($, on) => {
+  // given
+  const data = environment(on, undefined, requestWorld());
+  const received = requestSinks(on);
+  const seen = [];
+  stepSink(on, seen, OPUS);
+  await $.prompt.submit({ text: "이 변경을 claude-opus-5-5 모델로 max effort로 검토해줘" });
+
+  // when
+  const spawn = await $.agent.spawn(spawnInput(SCOUT, { model: "opus", tool_use_id: "toolu_req" }));
+  const first = await step($, { agentId: "agent-1", model: PINNED, effort: "low" });
+
+  // then
+  expect(received).toEqual([OPUS]);
+  expect(spawn).toEqual({ model: OPUS, agentId: "agent-1" });
+  expect(data.roles[SESSION]).toEqual([
+    { agentId: "agent-1", agent: SCOUT, role: "scout", model: OPUS, effort: "max", requested: true, toolUseId: "toolu_req", time: NOW },
+  ]);
+  expect(seen).toEqual([{ model: OPUS, effort: "max", agentId: "agent-1" }]);
+  expect(first.result.stopReason).toBe("end_turn");
+});
+
+test("프롬프트에 별칭만 말해도 레지스트리 고정 모델로 풀어 요청한 모델로 시작하고 effort는 역할 고정값을 둔다", async ($, on) => {
+  // given
+  const data = environment(on, undefined, requestWorld());
+  const received = requestSinks(on);
+  await $.prompt.submit({ text: "Please run the reviewer on Haiku." });
+
+  // when
+  await $.agent.spawn(spawnInput(REVIEWER, { model: "haiku" }));
+  await $.agent.spawn(spawnInput(REVIEWER, { model: HAIKU, tool_use_id: "toolu_full" }));
+
+  // then
+  expect(received).toEqual([HAIKU, HAIKU]);
+  expect(data.roles[SESSION].map((item) => [item.model, item.effort, item.requested])).toEqual([
+    [HAIKU, "high", true],
+    [HAIKU, "high", true],
+  ]);
+});
+
+test("사용자가 말하지 않은 모델을 호출이 넘기면 무시하고 역할 고정 모델로 시작한다", async ($, on) => {
+  // given
+  const data = environment(on, undefined, requestWorld());
+  const received = requestSinks(on);
+  await $.prompt.submit({ text: "워커로 구현해줘. sonnet 말고 다른 건 쓰지 마." });
+
+  // when
+  await $.agent.spawn(spawnInput(WORKER, { model: "opus" }));
+  await $.agent.spawn(spawnInput(WORKER, { model: "fable", tool_use_id: "toolu_two" }));
+
+  // then
+  expect(received).toEqual([WORKER_PINNED, WORKER_PINNED]);
+  expect(data.roles[SESSION].every((item) => item.requested === undefined)).toBe(true);
+});
+
+test("요청이 없던 세션에서 호출이 모델을 넘겨도 지금처럼 역할 고정 모델과 effort로 시작한다", async ($, on) => {
+  // given
+  const data = environment(on, undefined, requestWorld());
+  const received = requestSinks(on);
+  await $.prompt.submit({ text: "범위를 정리해줘" });
+
+  // when
+  await $.agent.spawn(spawnInput(SCOUT, { model: "opus" }));
+
+  // then
+  expect(received).toEqual([PINNED]);
+  expect(data.roles[SESSION][0]).toEqual(expect.objectContaining({ model: PINNED, effort: "medium" }));
+});
+
+test("요청한 다음의 새 메인 프롬프트가 요청 없이 오면 다음 위임은 역할 고정값으로 돌아간다", async ($, on) => {
+  // given
+  const data = environment(on, undefined, requestWorld());
+  const received = requestSinks(on);
+  await $.prompt.submit({ text: "opus 모델 max effort로 검토해줘" });
+  await $.agent.spawn(spawnInput(SCOUT, { model: "opus", tool_use_id: "toolu_a" }));
+
+  // when
+  await $.prompt.submit({ text: "이어서 진행해줘" });
+  await $.agent.spawn(spawnInput(SCOUT, { model: "opus", tool_use_id: "toolu_b" }));
+
+  // then
+  expect(received).toEqual([OPUS, PINNED]);
+  expect(data.roles[SESSION].map((item) => [item.model, item.effort])).toEqual([
+    [OPUS, "max"],
+    [PINNED, "medium"],
+  ]);
+});
+
+test("붙여넣은 블록과 코드 블록 안의 모델 이름은 요청으로 세지 않는다", async ($, on) => {
+  // given
+  environment(on, undefined, requestWorld());
+  const received = requestSinks(on);
+  const pasted = '로그를 봐줘 <pasted_content id="1">use claude-opus-5-5 at max, opus</pasted_content> 끝';
+  const fenced = "예시:\n```\nmodel: opus\neffort: max\n```\n이 설정은 쓰지 마.";
+  const unterminated = "예시:\n```\nmodel: claude-opus-5-5";
+
+  // when
+  const results = [];
+  for (const text of [pasted, fenced, unterminated]) {
+    await $.prompt.submit({ text });
+    await $.agent.spawn(spawnInput(SCOUT, { model: "opus" }));
+    results.push(received.at(-1));
+  }
+
+  // then
+  expect(results).toEqual([PINNED, PINNED, PINNED]);
+});
+
+test("물결표 울타리와 더 긴 백틱 울타리 블록 안의 모델 이름은 요청으로 세지 않고 울타리 밖 요청은 센다", async ($, on) => {
+  // given
+  environment(on, undefined, requestWorld());
+  const received = requestSinks(on);
+  const tilde = "예시:\n~~~\nmodel: opus\neffort: max\n~~~\n이 설정은 쓰지 마.";
+  const longTilde = "예시:\n~~~~\n~~~\nmodel: opus\neffort: max\n~~~~\n끝";
+  const longBacktick = "예시:\n````\n```\nmodel: opus\neffort: max\n````\n끝";
+  const unterminatedTilde = "예시:\n~~~\nmodel: claude-opus-5-5";
+  const outside = "```\nx\n```\nopus 모델 max effort로 검토해줘";
+
+  // when
+  const results = [];
+  for (const text of [tilde, longTilde, longBacktick, unterminatedTilde, outside]) {
+    await $.prompt.submit({ text });
+    await $.agent.spawn(spawnInput(SCOUT, { model: "opus" }));
+    results.push(received.at(-1));
+  }
+
+  // then
+  expect(results).toEqual([PINNED, PINNED, PINNED, PINNED, OPUS]);
+});
+
+test("백틱으로 감싼 모델 ID와 effort도 사용자의 요청으로 센다", async ($, on) => {
+  // given
+  const data = environment(on, undefined, requestWorld());
+  const received = requestSinks(on);
+  await $.prompt.submit({ text: "Review this with `claude-opus-5-5` at `max`" });
+
+  // when
+  await $.agent.spawn(spawnInput(SCOUT, { model: "opus" }));
+
+  // then
+  expect(received).toEqual([OPUS]);
+  expect(data.roles[SESSION][0]).toEqual(expect.objectContaining({ model: OPUS, effort: "max", requested: true }));
+});
+
+test("effort만 말한 요청은 호출이 역할 고정 모델의 별칭을 넘길 때 고정 모델과 그 effort로 시작하고 기록한다", async ($, on) => {
+  // given
+  const data = environment(on, undefined, requestWorld());
+  const received = requestSinks(on);
+  const seen = [];
+  stepSink(on, seen, PINNED);
+  await $.prompt.submit({ text: "max effort로 검토해줘" });
+
+  // when
+  await $.agent.spawn(spawnInput(SCOUT, { model: "sonnet", tool_use_id: "toolu_alias" }));
+  await $.agent.spawn(spawnInput(SCOUT, { model: PINNED, tool_use_id: "toolu_full" }));
+  await step($, { agentId: "agent-1", effort: "low" });
+
+  // then
+  expect(received).toEqual([PINNED, PINNED]);
+  expect(data.roles[SESSION].map((item) => [item.model, item.effort, item.requested])).toEqual([
+    [PINNED, "max", true],
+    [PINNED, "max", true],
+  ]);
+  expect(seen).toEqual([{ model: PINNED, effort: "max", agentId: "agent-1" }]);
+});
+
+test("effort만 말한 요청이라도 effort를 말하지 않았거나 여러 개 말했거나 모델 없는 호출이면 고정 effort를 둔다", async ($, on) => {
+  // given
+  const data = environment(on, undefined, requestWorld());
+  requestSinks(on);
+
+  // when
+  await $.prompt.submit({ text: "검토해줘" });
+  await $.agent.spawn(spawnInput(SCOUT, { model: "sonnet", tool_use_id: "toolu_none" }));
+  await $.prompt.submit({ text: "low 나 max effort로 해줘" });
+  await $.agent.spawn(spawnInput(SCOUT, { model: "sonnet", tool_use_id: "toolu_two" }));
+  await $.prompt.submit({ text: "max effort로 해줘" });
+  await $.agent.spawn(spawnInput(SCOUT, { tool_use_id: "toolu_bare" }));
+
+  // then
+  expect(data.roles[SESSION].map((item) => [item.model, item.effort, item.requested])).toEqual([
+    [PINNED, "medium", undefined],
+    [PINNED, "medium", undefined],
+    [PINNED, "medium", undefined],
+  ]);
+});
+
+test("effort만 말한 요청에서 역할 고정 모델이 아닌 모델을 넘긴 호출은 무시하고 고정값으로 시작한다", async ($, on) => {
+  // given
+  const data = environment(on, undefined, requestWorld());
+  const received = requestSinks(on);
+  await $.prompt.submit({ text: "max effort로 해줘" });
+
+  // when
+  await $.agent.spawn(spawnInput(SCOUT, { model: "opus" }));
+
+  // then
+  expect(received).toEqual([PINNED]);
+  expect(data.roles[SESSION][0]).toEqual(expect.objectContaining({ model: PINNED, effort: "medium" }));
+  expect(data.roles[SESSION][0].requested).toBeUndefined();
+});
+
+test("effort만 말한 요청도 레지스트리 effort 규칙이 모델에 허용하지 않으면 고정 effort를 둔다", async ($, on) => {
+  // given
+  const restricted = JSON.stringify({ ...JSON.parse(REGISTRY), effort_rules: { "gpt-5.6-luna": ["high", "xhigh"], [PINNED]: ["medium", "high"] } });
+  const data = environment(on, undefined, requestWorld({ registry: restricted }));
+  requestSinks(on);
+  await $.prompt.submit({ text: "max effort로 해줘" });
+
+  // when
+  await $.agent.spawn(spawnInput(SCOUT, { model: "sonnet" }));
+
+  // then
+  expect(data.roles[SESSION][0]).toEqual(expect.objectContaining({ model: PINNED, effort: "medium" }));
+  expect(data.roles[SESSION][0].requested).toBeUndefined();
+});
+
+test("레지스트리 effort 규칙이 허용하지 않거나 여러 effort를 말하면 모델만 따르고 고정 effort를 둔다", async ($, on) => {
+  // given
+  const restricted = JSON.stringify({ ...JSON.parse(REGISTRY), effort_rules: { "gpt-5.6-luna": ["high", "xhigh"], [OPUS]: ["high", "xhigh"] } });
+  const data = environment(on, undefined, requestWorld({ registry: restricted }));
+  requestSinks(on);
+
+  // when
+  await $.prompt.submit({ text: "opus 모델 max effort로 검토해줘" });
+  await $.agent.spawn(spawnInput(REVIEWER, { model: "opus", tool_use_id: "toolu_rule" }));
+  await $.prompt.submit({ text: "opus 모델로 low 아니면 xhigh로 검토해줘" });
+  await $.agent.spawn(spawnInput(REVIEWER, { model: "opus", tool_use_id: "toolu_two" }));
+
+  // then
+  expect(data.roles[SESSION].map((item) => [item.model, item.effort])).toEqual([
+    [OPUS, "high"],
+    [OPUS, "high"],
+  ]);
+});
+
+test("GPT 모델을 말한 요청은 플러그인 에이전트에 적용하지 않고 고정 모델로 시작한다", async ($, on) => {
+  // given
+  environment(on, undefined, requestWorld());
+  const received = requestSinks(on);
+  await $.prompt.submit({ text: "gpt-5.6-luna 모델 high로 돌려줘" });
+
+  // when
+  await $.agent.spawn(spawnInput(SCOUT, { model: "gpt-5.6-luna" }));
+
+  // then
+  expect(received).toEqual([PINNED]);
+});
+
+test("하위 에이전트 프롬프트와 사용자 입력이 아닌 프롬프트는 요청을 만들거나 지우지 않는다", async ($, on) => {
+  // given
+  environment(on, undefined, requestWorld());
+  const received = requestSinks(on);
+  await $.prompt.submit({ text: "sub opus max", agentId: AGENT_ID });
+  await $.prompt.submit({ text: "notify opus max", origin: { kind: "task-notification" } });
+  await $.agent.spawn(spawnInput(SCOUT, { model: "opus", tool_use_id: "toolu_a" }));
+  await $.prompt.submit({ text: "opus 모델 max effort로 검토해줘", origin: { kind: "composer" } });
+
+  // when
+  await $.prompt.submit({ text: "작업이 끝났다는 알림", origin: { kind: "task-notification" } });
+  await $.agent.spawn(spawnInput(SCOUT, { model: "opus", tool_use_id: "toolu_b" }));
+
+  // then
+  expect(received).toEqual([PINNED, OPUS]);
+});
+
+test("요청한 모델과 다른 모델로 응답하면 고정 실패로 기록하고 이후 요청을 거절한다", async ($, on) => {
+  // given
+  const data = environment(on, undefined, requestWorld());
+  requestSinks(on);
+  stepSink(on, [], PINNED);
+  await $.prompt.submit({ text: "opus 모델로 검토해줘" });
+  await $.agent.spawn(spawnInput(SCOUT, { model: "opus" }));
+
+  // when
+  await step($, { agentId: "agent-1" });
+  const second = await step($, { agentId: "agent-1", index: 1 });
+
+  // then
+  expect(data.roles[SESSION][0]).toEqual(expect.objectContaining({ model: OPUS, mismatch: true }));
+  expect(second.result.stopReason).toBe("refusal");
+});
+
+test("role_pinning 옵션이 꺼지면 프롬프트 요청도 기록하지 않는다", { options: { role_pinning: false } }, async ($, on) => {
+  // given
+  const data = environment(on, undefined, requestWorld());
+  on("prompt.submit", (_$, e) => ({ text: e.text }));
+
+  // when
+  await $.prompt.submit({ text: "opus max" });
+
+  // then
+  expect(data.requests).toBeUndefined();
+});

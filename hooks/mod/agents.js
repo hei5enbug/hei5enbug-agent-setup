@@ -1,5 +1,5 @@
 import { atom, read, update } from "claude-code";
-import { claudeRolePins, configuredWorkerPin } from "./registry.js";
+import { claudeRolePins, configuredWorkerPin, modelRegistry, requestedPin, userRequest } from "./registry.js";
 
 const WORKER_AGENT = "hei5enbug-agent-setup:worker";
 const HIDDEN_AGENTS = /^(general-purpose|explore|plan|claude)$/i;
@@ -12,6 +12,9 @@ const BUILT_IN_DENIAL =
 const PLUGIN_AGENT = /^[^:]+:/;
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const STORE_KEY = "roles";
+const REQUEST_KEY = "requests";
+const USER_PROMPT_ORIGINS = ["composer", "bridge", "sdk"];
+const NO_REQUEST = { models: [], efforts: [] };
 const MARKER = "hei5enbug-agent-setup mod: role pinning active";
 const markerSession = atom({ plugin: "hei5enbug-agent-setup", key: "roleMarkerSession" }, null);
 const REFUSAL_TEXT =
@@ -48,6 +51,42 @@ function updateRoles($, change) {
   });
   storeQueue = run.catch(() => undefined);
   return run;
+}
+
+function prunedRequests(stored, now) {
+  if (!isRecord(stored)) return {};
+  const live = Object.entries(stored).filter(([, item]) => isRecord(item) && typeof item.time === "number" && item.time >= now - RETENTION_MS);
+  return Object.fromEntries(live);
+}
+
+async function sessionRequest($) {
+  const stored = await $.store.get(REQUEST_KEY);
+  const item = isRecord(stored) ? stored[await $.session.id()] : undefined;
+  const listed = (value) => (Array.isArray(value) ? value.filter((name) => typeof name === "string") : []);
+  return isRecord(item) ? { models: listed(item.models), efforts: listed(item.efforts) } : NO_REQUEST;
+}
+
+function saveRequest($, request) {
+  const run = storeQueue.then(async () => {
+    const now = await $.clock.now();
+    const sessionId = await $.session.id();
+    const { [sessionId]: _replaced, ...others } = prunedRequests(await $.store.get(REQUEST_KEY), now);
+    const empty = request.models.length === 0 && request.efforts.length === 0;
+    await $.store.set(REQUEST_KEY, empty ? others : { ...others, [sessionId]: { ...request, time: now } });
+  });
+  storeQueue = run.catch(() => undefined);
+  return run;
+}
+
+function isUserPrompt(e) {
+  return e.agentId === undefined && e.isMeta !== true && (e.origin === undefined || USER_PROMPT_ORIGINS.includes(e.origin.kind));
+}
+
+async function recordRequest($, e) {
+  const request = userRequest(await modelRegistry($), e.text);
+  const earlier = await sessionRequest($);
+  const unchanged = request.models.length === 0 && request.efforts.length === 0 && earlier === NO_REQUEST;
+  if (!unchanged) await saveRequest($, request);
 }
 
 async function sessionEntries($) {
@@ -130,15 +169,18 @@ async function pinSpawn($, e, next, unrecorded, options) {
   if (await consumeRetryNotice($, e.subagentType)) {
     return { deny: fallbackDenial($.plugin.root, e.subagentType, declared.access) };
   }
-  const result = await next({ ...e, model: declared.primary.model });
+  const requested = requestedPin(await modelRegistry($), e.model, await sessionRequest($), declared.primary);
+  const pin = requested ?? declared.primary;
+  const result = await next({ ...e, model: pin.model });
   if (result.deny !== undefined || result.agentId === undefined) return result;
   try {
     await recordRole($, {
       agentId: result.agentId,
       agent: e.subagentType,
       role: declared.role,
-      model: declared.primary.model,
-      effort: declared.primary.effort,
+      model: pin.model,
+      effort: pin.effort,
+      ...(requested === undefined ? {} : { requested: true }),
       toolUseId: e.tool_use_id,
     });
   } catch {
@@ -214,6 +256,7 @@ export function registerRolePinning(on, options) {
   }).catch(($, e, next) => next(e));
 
   on("prompt.submit", async ($, e, next) => {
+    if (isUserPrompt(e)) await recordRequest($, e);
     if (e.agentId !== undefined) return next(e);
     const sessionId = await $.session.id();
     if ((await read($, markerSession)) === sessionId) return next(e);

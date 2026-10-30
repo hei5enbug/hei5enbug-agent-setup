@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from role_runner_agents import accepts_add_dir
+from role_runner_agents import accepts_add_dir, runner_for
 from role_runner_config import AGENT_TARGET, CAPABILITIES, MAX_BATCH, REVIEW_MODELS, ROLES, UsageError
 
 
@@ -15,12 +15,9 @@ def validate(args: argparse.Namespace) -> None:
         raise UsageError(
             f"Unknown target: {target}. Roles: {', '.join(ROLES)}. Capabilities: {', '.join(CAPABILITIES)}. Or agent."
         )
-    if args.model is not None and target != "reviewer":
-        raise UsageError("--model is allowed only for the reviewer role")
+    validate_request(args, target)
     if args.add_dirs and not accepts_add_dir(target):
         raise UsageError("--add-dir is allowed only for the worker role, writing capabilities, and agent mode")
-    if args.model is not None and args.model not in REVIEW_MODELS:
-        raise UsageError(f"--model must be one of: {', '.join(REVIEW_MODELS)}")
     if args.timeout <= 0:
         raise UsageError("--timeout must be a positive number of seconds")
     if is_role and args.fallback:
@@ -44,6 +41,24 @@ def validate(args: argparse.Namespace) -> None:
     if args.resume is not None and not args.resume:
         raise UsageError("--resume must name a session id")
     validate_pairs(args)
+
+
+def validate_request(args: argparse.Namespace, target: str) -> None:
+    """Check --model and --user-requested: only a user request opens --model to every target and any listed model."""
+    if args.user_requested and args.model is None and args.effort is None:
+        raise UsageError("--user-requested needs the --model or --effort the user named")
+    if args.model is None:
+        return
+    if target != "reviewer" and not args.user_requested:
+        raise UsageError("--model is allowed only for the reviewer role, or with --user-requested for a model the user named")
+    if args.model not in REVIEW_MODELS:
+        if args.user_requested:
+            raise UsageError(
+                f"--model {args.model} is not a model this runner can run ({', '.join(REVIEW_MODELS)}); no fallback ran"
+            )
+        raise UsageError(f"--model must be one of: {', '.join(REVIEW_MODELS)}")
+    if target == "researcher" and runner_for(args.model) == "claude":
+        raise UsageError(f"--model {args.model} cannot run the researcher role, which needs web search; no fallback ran")
 
 
 def validate_pairs(args: argparse.Namespace) -> None:

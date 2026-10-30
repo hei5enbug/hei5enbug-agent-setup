@@ -184,6 +184,7 @@ def status(run: Run | None, verified: bool, evidence: dict, code: int) -> str:
             "model": run.model if run else None,
             "effort": run.effort if run else None,
             "verified": verified, "evidence": evidence, "exit": code,
+            **({"user_requested": True} if run and run.user_requested else {}),
         },
         ensure_ascii=False,
     )
@@ -212,30 +213,30 @@ def resolve(args: argparse.Namespace) -> Run:
         model = args.model or (DEFAULT_REVIEW_MODEL if target == "reviewer" else ROLE_MODEL)
         return Run(
             target=target, role=target, capability=None, fallback=False, runner=runner_for(model), model=model,
-            effort=chosen_effort(args.effort, ROLE_ENTRY, model), writing=target == "worker", add_dirs=tuple(args.add_dirs),
+            effort=chosen_effort(args.effort, ROLE_ENTRY, model, args.user_requested), writing=target == "worker", add_dirs=tuple(args.add_dirs),
             resume=args.resume, instructions=None,
         )
     host = args.host or default_host()
     primary = capability_model(target, host)
     entry = capability_fallback(target, host, primary) if args.fallback else CAPABILITIES[target][host]["primary"]
-    if entry["via"] != "runner":
+    if entry["via"] != "runner" and args.model is None and not args.user_requested:
         raise UsageError(
             f"The {host} {'fallback' if args.fallback else 'primary'} entry of {target} has via {entry['via']!r}; "
             "the runner runs only via 'runner'. Use the agent route or the main session."
         )
-    model = entry["model"] if args.fallback else primary
-    if args.fallback and runner_for(model) == runner_for(primary):
+    model = args.model or (entry["model"] if args.fallback else primary)
+    if args.fallback and args.model is None and runner_for(model) == runner_for(primary):
         raise UsageError(f"The fallback {model} of {target} must be the other model family from its primary {primary}")
     return Run(
         target=target, role=None, capability=target, fallback=args.fallback, runner=runner_for(model), model=model,
-        effort=chosen_effort(args.effort, entry, model), writing=target in WRITING_CAPABILITIES,
+        effort=chosen_effort(args.effort, entry, model, args.user_requested), writing=target in WRITING_CAPABILITIES,
         add_dirs=tuple(args.add_dirs), resume=args.resume, instructions=Path(args.instructions), mcp=args.mcp,
     )
 
 
 def plan(args: argparse.Namespace) -> Run:
     validate(args)
-    run = resolve(args)
+    run = replace(resolve(args), user_requested=args.user_requested)
     if run.writing and run.runner == "claude" and not run.add_dirs and run.agent is None:
         label = f"capability {run.capability}" if run.capability else f"role {run.role}"
         raise UsageError(f"The Claude path of the writing {label} needs --add-dir for each directory it may edit")

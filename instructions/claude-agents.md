@@ -86,6 +86,23 @@ one the current host can run in-host uses the named agent. A plugin agent's cros
 `role_runner.py <capability> --fallback`. Pass `--mcp` only when the assignment needs MCP tools or network. On runner
 exit 3 or 4, continue in the main conversation.
 
+## Requested model or effort
+
+The pins stay the default. Use a model or effort other than the pinned one only when the user named it for this
+delegated work. It covers that work only; the next delegation without a request returns to the pins.
+
+- Plugin agent: set the Agent call's `model` to the alias of the requested model (`opus`, `sonnet`, `haiku`, or
+  `fable`). Pass a requested `effort` on the same call as a `model`. For an effort-only request, pass the alias of the
+  role's pinned model together with the effort. That pin is the role's `model` under `claude_agents` in
+  `config/model-registry.json` in the source directory (for `worker`, the session line "Worker agent model"; for another
+  plugin's agent, its `.claude-plugin/model-roles.json`). The mod then pins the requested model and effort only when
+  the user's own latest prompt names them, and fails a run that answers on another model.
+- Role runner: add `--user-requested` with `--model <id>` or `--effort <level>` for the values the user named. It
+  lifts the `reviewer`-only and `xhigh` limits for those values only.
+- When the requested model or effort cannot run on any route, such as a GPT model for a plugin agent or an effort the
+  model or route does not take, report it and ask. Start no fallback.
+- Verify the actual model and effort as for a pinned run, against the requested values.
+
 ## Investigation
 
 - For bounded investigation that the session delegation rule selects, during planning or execution, run the
@@ -128,7 +145,8 @@ This section adds only the Claude Code worker integration.
 - The `worker` agent runs on the model and effort in the session line "Worker agent model" (Haiku at `high` by
   default).
 - Never pass a per-invocation model to a plugin agent on an invocation or resume, because that overrides its
-  definition, which pins the model and effort that shared model routing lists.
+  definition, which pins the model and effort that shared model routing lists. The only exception is the user's own
+  request under "Requested model or effort".
 - The bullets below apply whenever a plugin agent runs: a runner fallback, the `worker` or Sonnet worker, and the
   designer.
 - When the session context has the line `hei5enbug-agent-setup mod: role pinning active`, the registered plugin mod's

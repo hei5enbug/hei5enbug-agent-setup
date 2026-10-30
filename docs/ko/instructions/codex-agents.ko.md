@@ -138,6 +138,14 @@ python3 <Source directory>/scripts/role_runner.py <capability> --host codex --in
 계속한다. `--resume <session_id>`는 상태 줄의 `evidence.session`으로 Codex 또는 Claude 실행을 이어 간다. 상태 줄,
 종료 코드, `--effort`, 읽기 전용 할당 일괄 실행은 [Claude Code 에이전트](claude-agents.ko.md#역할-실행기)와 같다.
 
+## 요청한 모델이나 사고 강도
+
+고정값이 기본값이다. 사용자가 위임 작업에 모델이나 사고 강도를 지정하면, 그 작업을 `--user-requested`와 사용자가 지정한
+`--model` 또는 `--effort`를 붙여 역할 실행기로 실행한다. 방법은
+[Claude Code 에이전트](claude-agents.ko.md#요청한-모델이나-사고-강도)에 적혀 있다. 실행기는 요청한 값을 호스트 기록으로 검증한다.
+agent guard는 고정된 쌍이 아닌 쌍으로 플러그인 역할을 생성하는 요청을 거부한다. 요청은 그 작업에만 적용한다. 요청한 모델이나
+사고 강도를 실행할 수 없으면 보고하고 사용자에게 묻는다. 대체 경로는 시작하지 않는다.
+
 ## 대체
 
 모든 대체 항목은 다른 모델 계열이다. 다른 호스트의 모델이 필요한 대체 항목은 역할 실행기를 거치고, 현재 호스트에서 바로 실행할
