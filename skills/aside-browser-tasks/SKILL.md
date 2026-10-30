@@ -102,6 +102,8 @@ Run `aside repl "<code>"` with the whole flow in one call. These limits were eac
   the task names, and print only the fields you need.
 - Before using `googleSearch` or a site global such as `slack` or `gmail`, read `aside skills show <name>` and
   follow it. Run one Google query at a time; parallel queries trigger a CAPTCHA.
+- Before writing REPL code that waits, reads the text of several elements, finds an element by placeholder or
+  role, or writes a file, read `references/repl-api-gaps.md`.
 - For any other API, read `aside guide repl`.
 
 Jira issue through REST:

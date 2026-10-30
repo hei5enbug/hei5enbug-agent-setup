@@ -98,6 +98,8 @@ rm -f "$log"
   작업에서 지정한 사이트에 대한 GET이나 HEAD 요청에만 사용하고, 필요한 필드만 출력한다.
 - `googleSearch`나 `slack`, `gmail` 같은 사이트 전역 객체를 사용하기 전에 `aside skills show <name>`을 읽고 따른다.
   Google 쿼리는 한 번에 하나만 실행한다. 병렬 쿼리는 CAPTCHA를 유발한다.
+- 기다리기, 여러 요소의 텍스트 읽기, placeholder나 역할(role)로 요소 찾기, 파일 쓰기를 하는 REPL 코드를 쓰기 전에
+  `references/repl-api-gaps.md`를 읽는다.
 - 다른 API는 `aside guide repl`을 읽는다.
 
 REST로 Jira 이슈 조회:
