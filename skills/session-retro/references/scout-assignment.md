@@ -7,7 +7,10 @@ You are a read-only scout. Do not edit any file and do not propose fixes, design
 Answer in <the user's language>.
 
 Read these session records: <paths of the session file and of its subagent files>
-Host: <Claude Code or Codex>. Day: <YYYY-MM-DD> in <time zone>; read only the records of that day.
+Condensed copies, when given: <paths of the condensed files>. Each line is `L<original line number> <kind> <text>`;
+cite the original line number, and open an original only to check a quote.
+Host: <Claude Code or Codex>. Period: <YYYY-MM-DD, or start and end date-times> in <time zone>; read only the
+records in it.
 
 Return exactly these six sections. Cite each item with the record's line number, and quote at most a short
 phrase. Never copy a credential, token, or personal data.

@@ -1,12 +1,13 @@
 ---
 name: session-retro
 description: >-
-  Review a repository's day of Claude Code and Codex sessions and turn it into skill improvements and
-  new-skill candidates by plugin, such as "오늘 이 레포 세션 히스토리 보고 스킬 개선점 정리해줘", and, when asked,
-  resolve its decisions or write its plans. Not for one conversation, one failure, or code review.
+  Review a day or time range of Claude Code and Codex sessions, of one repository or all, and turn it into
+  skill improvements and new-skill candidates by plugin, such as "오늘 이 레포 세션 히스토리 보고 스킬
+  개선점 정리해줘", and, when asked, resolve its decisions or write its plans. Not for one conversation, one
+  failure, or code review.
 compatibility: >-
   Needs filesystem read access to the hosts' session folders and Python 3.12 or later for the bundled
-  listing script. Independent read-only workers are optional; without them the main session reads the
+  scripts. Independent read-only workers are optional; without them the main session reads the
   sessions itself.
 ---
 
@@ -14,8 +15,9 @@ compatibility: >-
 
 Use this English `SKILL.md` and its English references as the only executable sources.
 
-Find what went wrong or was repeated in a day's agent sessions, and turn it into evidence-backed skill
-improvements. The evidence comes from the session records; the improvements are decided in the main session.
+Find what went wrong or was repeated in a day's or time range's agent sessions, and turn it into
+evidence-backed skill improvements. The evidence comes from the session records; the improvements are decided
+in the main session.
 
 ## Execution placement
 
@@ -45,21 +47,24 @@ main, asks the user, and accepts the result.
 
 ### 1. Fix the target
 
-Settle from the request: the day (default today in the local time zone), the repository whose sessions to
-read (default the current working directory), and the plugins the improvements are for. When the request is
-ambiguous, such as "this repository" while several repositories are in view, state the reading you chose.
+Settle from the request: the day (default today in the local time zone) or a time range with a start and an
+end (the end defaults to now), the repository whose sessions to read (default the current working directory)
+or all repositories, and the plugins the improvements are for. When the request is ambiguous, such as "this
+repository" while several repositories are in view, state the reading you chose.
 
 ### 2. List the sessions
 
 Run the bundled script, resolving its path from the directory that holds this `SKILL.md`:
 
 ```text
-python3 scripts/list_sessions.py --date <YYYY-MM-DD> --cwd <repository path> [--tz <zone>] [--claude-dir <dir>] [--codex-dir <dir>]
+python3 scripts/list_sessions.py (--date <YYYY-MM-DD> | --since <YYYY-MM-DDTHH:MM> [--until <YYYY-MM-DDTHH:MM>]) (--cwd <repository path> | --all-cwd) [--tz <zone>] [--claude-dir <dir>] [--codex-dir <dir>]
 ```
 
 It prints one JSON object with `sessions` and `skipped`, and exits with 0 when the scan finished, 2 for an
-invalid argument, and 1 when a session folder exists but cannot be listed. Pass `--claude-dir` or
-`--codex-dir` only when the user names other session folders. Report every `skipped` entry.
+invalid argument, and 1 when a session folder exists but cannot be listed. A range is half-open: `--since`
+is included, `--until` is not, both in `--tz`. With `--all-cwd`, each session carries its `cwd`; group the
+sessions by it and review each folder's sessions. Pass `--claude-dir` or `--codex-dir` only when the user
+names other session folders. Report every `skipped` entry.
 
 Choose the sessions to review:
 
@@ -75,6 +80,9 @@ with the assignment in `references/scout-assignment.md`. When that capability ro
 records in the main session with the same assignment. The worker returns evidence only, in six sections: the
 user's requests; corrections, complaints, and repeated instructions; failures and retries; skill use; repeated
 manual work; and what it could not confirm. It never proposes an improvement.
+
+Add up the sizes of the files of each session or group. When they exceed
+1 MB, read `references/condensing.md` before giving them to a worker.
 
 Check that each worker ran on the model and effort the `investigation` entry pins before you accept its result.
 When a worker fails, use that capability's fallback once and report the substitution.

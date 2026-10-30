@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""세션 목록 스크립트의 하루 경계, 호스트별 선별, 출력 형식, 오류 처리를 검사한다."""
+"""세션 목록 스크립트의 하루·시간 범위 경계, 모든 작업 폴더 목록, 호스트별 선별, 출력 형식, 오류 처리를 검사한다."""
 
 from __future__ import annotations
 
@@ -93,9 +93,9 @@ class ListSessionsCase(unittest.TestCase):
         self,
         env: dict[str, str] | None = None,
         run_cwd: Path | None = None,
-        **options: str | Path | None,
+        **options: str | Path | bool | None,
     ) -> subprocess.CompletedProcess[str]:
-        values: dict[str, str | Path | None] = {
+        values: dict[str, str | Path | bool | None] = {
             "date": DAY,
             "tz": ZONE,
             "cwd": CWD,
@@ -105,7 +105,9 @@ class ListSessionsCase(unittest.TestCase):
         values.update(options)
         command = [sys.executable, str(SCRIPT)]
         for name, value in values.items():
-            if value is not None:
+            if value is True:
+                command.append("--" + name.replace("_", "-"))
+            elif value is not None:
                 command += ["--" + name.replace("_", "-"), str(value)]
         environment = {key: value for key, value in os.environ.items() if key not in ISOLATED_ENV}
         environment.update(env or {})
@@ -683,6 +685,152 @@ class OutputAndArgumentsTest(ListSessionsCase):
         self.assertEqual(cwd, data["cwd"])
         self.assertEqual(1, len(data["sessions"]))
         self.assertIn(f'"cwd": "{cwd}"', result.stdout)
+
+
+class RangeAndAllFoldersTest(ListSessionsCase):
+    SINCE = "2026-10-14T09:00"
+    UNTIL = "2026-10-14T10:00"
+
+    def range_scan(self, **options: str | Path | bool | None) -> subprocess.CompletedProcess[str]:
+        values = {"date": None, "since": self.SINCE, "until": self.UNTIL}
+        values.update(options)
+        return self.scan(**values)
+
+    def test_range_is_half_open_in_the_chosen_zone(self) -> None:
+        """--since는 포함하고 --until은 포함하지 않는 반열린 구간으로 지정한 시간대의 기록만 센다."""
+        # Given
+        self.claude_file(
+            [
+                claude_entry("2026-10-14T00:00:00Z", "SECRET-a"),
+                claude_entry("2026-10-14T00:59:59Z", "SECRET-b"),
+                claude_entry("2026-10-13T23:59:59.999Z"),
+                claude_entry("2026-10-14T01:00:00Z"),
+            ]
+        )
+        # When
+        result = self.range_scan()
+        # Then
+        data = self.parse(result)
+        session = data["sessions"][0]
+        self.assertEqual("2026-10-14T09:00:00+09:00", session["first_record"])
+        self.assertEqual("2026-10-14T09:59:59+09:00", session["last_record"])
+        self.assertEqual(2, session["user_messages"])
+        self.assertEqual("2026-10-14T09:00:00+09:00", data["since"])
+        self.assertEqual("2026-10-14T10:00:00+09:00", data["until"])
+        self.assertNotIn("date", data)
+        self.assertNotIn("cwd", session)
+
+    def test_session_with_records_only_outside_the_range_is_omitted(self) -> None:
+        """범위 밖의 기록만 가진 세션은 같은 날이어도 목록에 넣지 않는다."""
+        # Given
+        self.claude_file([claude_entry("2026-10-13T23:59:59Z"), claude_entry("2026-10-14T01:00:00Z")])
+        self.codex_file([codex_meta("2026-10-14T01:00:00Z"), codex_user_message("2026-10-14T01:30:00Z")])
+        # When
+        result = self.range_scan()
+        # Then
+        self.assertEqual([], self.parse(result)["sessions"])
+
+    def test_range_can_span_several_days_and_accepts_seconds(self) -> None:
+        """며칠에 걸친 범위도 읽고, 초를 붙인 날짜 시각을 받아들인다."""
+        # Given
+        self.claude_file([claude_entry("2026-10-12T23:00:00Z")], name="day-one.jsonl")
+        self.claude_file([claude_entry("2026-10-14T05:00:00Z")], name="day-three.jsonl")
+        self.claude_file([claude_entry("2026-10-14T08:00:01Z")], name="after.jsonl")
+        # When
+        result = self.range_scan(since="2026-10-13T08:00:00", until="2026-10-14T17:00:00")
+        # Then
+        ids = [item["session_id"] for item in self.parse(result)["sessions"]]
+        self.assertEqual(["day-one", "day-three"], ids)
+
+    def test_until_defaults_to_now(self) -> None:
+        """--until을 생략하면 지금까지를 범위로 삼아 미래 시각의 기록은 세지 않는다."""
+        # Given
+        self.claude_file([claude_entry("2026-10-14T01:00:00Z"), claude_entry("2999-01-01T00:00:00Z")])
+        # When
+        result = self.range_scan(since="2026-01-01T00:00", until=None)
+        # Then
+        data = self.parse(result)
+        self.assertEqual([1], [item["user_messages"] for item in data["sessions"]])
+        self.assertIsInstance(data["until"], str)
+
+    def test_range_uses_the_local_time_zone_when_tz_is_omitted(self) -> None:
+        """--tz를 생략하면 TZ 환경 변수의 시간대로 날짜 시각을 해석한다."""
+        # Given
+        self.claude_file([claude_entry("2026-10-14T00:00:00Z")])
+        # When
+        result = self.range_scan(tz=None, env={"TZ": ZONE})
+        # Then
+        data = self.parse(result)
+        self.assertEqual(ZONE, data["tz"])
+        self.assertEqual(1, len(data["sessions"]))
+
+    def test_all_cwd_lists_sessions_of_every_folder_with_their_cwd(self) -> None:
+        """--all-cwd는 모든 작업 폴더의 Claude Code와 Codex 세션을 cwd와 함께 나열한다."""
+        # Given
+        self.claude_file([claude_entry("2026-10-14T00:10:00Z", cwd=CWD)], name="claude-a.jsonl")
+        self.claude_file(
+            [claude_entry("2026-10-14T00:20:00Z", cwd=OTHER_CWD)], name="claude-b.jsonl", cwd=OTHER_CWD
+        )
+        self.claude_file([claude_entry("2026-10-14T00:25:00Z")], name="claude-c.jsonl", cwd="/work/no-cwd")
+        self.codex_file([codex_meta("2026-10-14T00:30:00Z", cwd="/work/project-c", session_id="codex-c")])
+        # When
+        result = self.range_scan(cwd=None, all_cwd=True)
+        # Then
+        data = self.parse(result)
+        self.assertIsNone(data["cwd"])
+        found = {item["session_id"]: item["cwd"] for item in data["sessions"]}
+        self.assertEqual(
+            {"claude-a": CWD, "claude-b": OTHER_CWD, "claude-c": None, "codex-c": "/work/project-c"}, found
+        )
+
+    def test_all_cwd_also_works_with_a_single_day(self) -> None:
+        """--all-cwd는 --date와도 함께 쓸 수 있고 하루 경계를 그대로 지킨다."""
+        # Given
+        self.claude_file([claude_entry("2026-10-14T01:00:00Z", cwd=CWD)], name="in.jsonl")
+        self.claude_file(
+            [claude_entry("2026-10-13T14:00:00Z", cwd=OTHER_CWD)], name="out.jsonl", cwd=OTHER_CWD
+        )
+        # When
+        result = self.scan(cwd=None, all_cwd=True)
+        # Then
+        data = self.parse(result)
+        self.assertEqual(DAY, data["date"])
+        self.assertEqual(["in"], [item["session_id"] for item in data["sessions"]])
+
+    def test_all_cwd_skips_unlistable_project_entries_without_failing(self) -> None:
+        """프로젝트 폴더가 아닌 파일이 섞여 있어도 --all-cwd 탐색은 계속한다."""
+        # Given
+        (self.claude_dir / "projects").mkdir(parents=True)
+        (self.claude_dir / "projects" / "stray.txt").write_text("x", encoding="utf-8")
+        self.claude_file([claude_entry("2026-10-14T00:10:00Z", cwd=CWD)])
+        # When
+        result = self.range_scan(cwd=None, all_cwd=True)
+        # Then
+        self.assertEqual(["claude-1"], [item["session_id"] for item in self.parse(result)["sessions"]])
+
+    def test_invalid_range_arguments_exit_with_two(self) -> None:
+        """잘못된 날짜 시각, 순서가 뒤집힌 범위, 함께 못 쓰는 옵션은 stderr 메시지와 종료 코드 2로 거부한다."""
+        cases = {
+            "malformed since": ({"since": "2026-10-14"}, "invalid --since"),
+            "malformed since hour": ({"since": "2026-10-14T9:00"}, "invalid --since"),
+            "impossible since": ({"since": "2026-13-14T09:00"}, "invalid --since"),
+            "malformed until": ({"until": "tomorrow"}, "invalid --until"),
+            "equal bounds": ({"until": self.SINCE}, "must be earlier"),
+            "reversed bounds": ({"until": "2026-10-14T08:00"}, "must be earlier"),
+            "future since": ({"since": "2999-01-01T00:00", "until": None}, "must be earlier"),
+            "until alone": ({"since": None}, "--until requires --since"),
+            "date with range": ({"date": DAY}, "--date cannot be combined"),
+            "date with since only": ({"date": DAY, "until": None}, "--date cannot be combined"),
+            "cwd with all-cwd": ({"all_cwd": True}, "--all-cwd cannot be combined with --cwd"),
+        }
+        for label, (options, message) in cases.items():
+            with self.subTest(label):
+                # When
+                result = self.range_scan(**options)
+                # Then
+                self.assertEqual(2, result.returncode, result.stderr)
+                self.assertEqual("", result.stdout)
+                self.assertIn(message, result.stderr)
 
 
 if __name__ == "__main__":

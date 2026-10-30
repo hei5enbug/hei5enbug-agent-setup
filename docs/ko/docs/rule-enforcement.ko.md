@@ -86,7 +86,7 @@
 | `skills/skill-builder/tests/test_benchmark.py`, `skills/skill-builder/tests/test_evaluation.py` | 벤치마크는 토큰 값을 지어내지 않고, 트리거 평가는 실제 모델 없이 동작한다. | `skills/skill-builder/SKILL.md` |
 | `skills/skill-builder/tests/test_implementation_worker_scope.py`, `skills/skill-builder/tests/test_model_runner.py` | 평가 모델 어댑터와 실행기는 범위와 프로세스 계약을 지킨다. | `skills/skill-builder/references/execution-methods.md` |
 | `skills/skill-builder/tests/test_package_skill.py`, `skills/skill-builder/tests/test_viewer.py` | 패키징은 파일 경계를 지키고, 평가 뷰어는 HTML을 이스케이프하며 피드백을 저장한다. | `skills/skill-builder/SKILL.md` |
-| `skills/session-retro/tests/test_list_sessions.py` | 세션 목록은 하루 경계, 호스트 필터, 출력 형식, 오류 처리를 지킨다. | `skills/session-retro/SKILL.md` |
+| `skills/session-retro/tests/test_list_sessions.py`, `skills/session-retro/tests/test_condense_records.py`, `skills/session-retro/tests/test_skill_surface.py` | 세션 목록은 하루·시간 범위 경계, 모든 폴더 목록, 호스트 필터, 출력 형식, 오류 처리를 지키고, 기록 압축은 모든 사용자 입력과 오류를 원래 줄 번호와 함께 길이 제한 안에서 남기며, 스킬은 압축 절차를 참조 파일에 둔다. | `skills/session-retro/SKILL.md`, `skills/session-retro/references/condensing.md` |
 | `skills/decision-navigator/tests/test_local_lock.py`, `skills/decision-navigator/tests/test_decision_eval_fixtures.py` | 티켓 점유는 한 번에 하나만 성공하고, 평가 픽스처는 계속 쓸 수 있다. | `skills/decision-navigator/SKILL.md` |
 | `skills/deep-interview/tests/test_interview_eval_fixtures.py` | 인터뷰 평가 사례는 상태 흐름과 입력 파일을 유지한다. | `skills/deep-interview/SKILL.md` |
 | `skills/document-to-confluence/tests/test_column_widths.py`, `skills/document-to-confluence/tests/test_image_size.py`, `skills/document-to-confluence/tests/test_text_parity.py`, `skills/document-to-confluence/tests/test_validate_body.py` | 변환한 페이지는 열 너비, 이미지 크기, 텍스트 일치를 지키고 로컬 경로를 담지 않는다. | `skills/document-to-confluence/SKILL.md` |
