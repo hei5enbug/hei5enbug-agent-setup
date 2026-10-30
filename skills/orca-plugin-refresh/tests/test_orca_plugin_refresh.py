@@ -3345,6 +3345,111 @@ class UpdateTest(unittest.TestCase):
                 self.assertEqual("updated" if version != "1.0.0" else "current", result["status"])
                 self.assertEqual(["codex_hooks_need_trust"] if warned else [], [warning["code"] for warning in result["warnings"]])
 
+    def stage_hooked_companions(self, fake, plugin_ids):
+        hooks = [{"type": "command", "command": "echo a"}]
+        for plugin_id in plugin_ids:
+            self.stage_companion(fake, "codex", plugin_id, "1.0.0", "1.1.0", old={"hooks": hooks}, new={"hooks": hooks})
+
+    @contextlib.contextmanager
+    def listed_hooks(self, statuses, failure=None):
+        """Fake the Codex app-server: record each call batch and list one hook per (plugin ID, trust status) pair."""
+        batches = []
+
+        def fake_calls(command, env, cwd, calls, timeout):
+            batches.append([method for method, _ in calls])
+            if failure:
+                raise failure
+            hooks = [{"pluginId": plugin_id, "trustStatus": status} for plugin_id, status in statuses]
+            return [{"data": [{"cwd": cwd, "hooks": hooks}]}]
+
+        with patch.object(refresh.CODEX_HOOK_TRUST, "app_server_calls", side_effect=fake_calls):
+            yield batches
+
+    def test_동반_플러그인_설치_뒤_Codex가_훅을_모두_신뢰됨으로_나열하면_신뢰_경고를_내지_않는다(self):
+        """파일이 바뀐 동반 플러그인이라도 설치 뒤 Codex가 그 훅을 모두 trusted로 나열하면 codex_hooks_need_trust를 보고하지 않는다."""
+        # Given
+        fake = FakeCli()
+        self.stage(fake)
+        self.stage_hooked_companions(fake, ["hk@mk"])
+
+        # When
+        with self.listed_hooks([("hk@mk", "trusted"), ("hk@mk", "trusted")]) as batches:
+            result = self.run_with(fake, refresh.command_update, ["hk@mk"])
+
+        # Then
+        companion = result["hosts"]["codex"]["plugins"][0]
+        self.assertEqual(("updated", []), (companion["status"], companion["warnings"]))
+        self.assertEqual([["hooks/list"]], batches)
+
+    def test_동반_플러그인_설치_뒤_Codex가_훅을_신뢰되지_않음으로_나열하면_그_개수와_함께_경고한다(self):
+        """untrusted 또는 modified로 나열된 훅이 있는 동반 플러그인만, 그 훅 개수를 detail에 담아 경고하고 한 번의 목록 조회를 함께 쓴다."""
+        # Given
+        fake = FakeCli()
+        self.stage(fake)
+        self.stage_hooked_companions(fake, ["bad@mk", "good@mk"])
+        listed = [("bad@mk", "untrusted"), ("bad@mk", "modified"), ("bad@mk", "trusted"), ("good@mk", "trusted"),
+                  (refresh.PLUGIN_ID, "untrusted")]
+
+        # When
+        with self.listed_hooks(listed) as batches:
+            result = self.run_with(fake, refresh.command_update, ["bad@mk", "good@mk"])
+
+        # Then
+        plugins = {item["plugin"]: item for item in result["hosts"]["codex"]["plugins"]}
+        self.assertEqual([("codex_hooks_need_trust", "Codex lists 2 hooks as untrusted or modified")],
+                         [(warning["code"], warning.get("detail")) for warning in plugins["bad@mk"]["warnings"]])
+        self.assertEqual([], plugins["good@mk"]["warnings"])
+        self.assertEqual([["hooks/list"]], batches)
+
+    def test_Codex_훅_목록을_읽지_못하면_기존대로_경고하고_읽지_못했다고_알린다(self):
+        """hooks/list가 실패하면 동반 플러그인의 codex_hooks_need_trust를 유지하고 detail에 신뢰 상태를 읽지 못했다고 적는다."""
+        # Given
+        fake = FakeCli()
+        self.stage(fake)
+        self.stage_hooked_companions(fake, ["hk@mk"])
+        failure = refresh.CODEX_HOOK_TRUST.TrustError("codex app-server timed out")
+
+        # When
+        with self.listed_hooks([], failure=failure) as batches:
+            result = self.run_with(fake, refresh.command_update, ["hk@mk"])
+
+        # Then
+        warnings = result["hosts"]["codex"]["plugins"][0]["warnings"]
+        self.assertEqual(["codex_hooks_need_trust"], [warning["code"] for warning in warnings])
+        self.assertIn("could not be read", warnings[0]["detail"])
+        self.assertEqual([["hooks/list"]], batches)
+
+    def test_동반_플러그인의_훅은_신뢰를_쓰지_않고_목록만_조회한다(self):
+        """untrusted 훅이 남은 동반 플러그인에 대해서도 app-server에는 hooks/list만 보내고 config/value/write는 보내지 않는다."""
+        # Given
+        fake = FakeCli()
+        self.stage(fake)
+        self.stage_hooked_companions(fake, ["hk@mk"])
+
+        # When
+        with self.listed_hooks([("hk@mk", "modified")]) as batches:
+            self.run_with(fake, refresh.command_update, ["hk@mk"])
+
+        # Then
+        self.assertEqual([["hooks/list"]], batches)
+
+    def test_Codex_훅_목록은_신뢰가_초기화될_수_있는_설치가_있을_때만_한_번_조회한다(self):
+        """동반 플러그인 파일이 그대로여서 훅 신뢰가 초기화되지 않으면 hooks/list를 한 번도 조회하지 않는다."""
+        # Given
+        fake = FakeCli()
+        self.stage(fake)
+        hooks = [{"type": "command", "command": "echo a"}]
+        self.stage_companion(fake, "codex", "same@mk", "1.0.0", old={"hooks": hooks})
+
+        # When
+        with self.listed_hooks([("same@mk", "untrusted")]) as batches:
+            result = self.run_with(fake, refresh.command_update, ["same@mk"])
+
+        # Then
+        self.assertEqual(("current", []), (result["hosts"]["codex"]["plugins"][0]["status"],
+                                           result["hosts"]["codex"]["plugins"][0]["warnings"]))
+        self.assertEqual([], batches)
+
     def test_Claude는_에이전트_환경에서도_설치한다(self):
         """Claude Code는 새 버전을 옛 폴더 옆에 두므로 에이전트 세션 환경 변수가 있어도 이 플러그인과 동반 플러그인을 설치한다."""
         # Given

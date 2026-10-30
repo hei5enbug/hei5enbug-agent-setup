@@ -79,7 +79,9 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
      re-trusts its own hooks when the installed copy is a clean official checkout whose HEAD the official remote
      currently advertises for `main` or a `v*` tag, or contains in its `main`, and then
      reports `codex_hooks_trusted: true` instead of this warning; otherwise the warning carries the reason in
-     `detail`. Ask the user to trust that plugin's hooks in Codex `/hooks`; Codex skips untrusted hooks.
+     `detail`. A companion keeps it only while Codex still lists one of its hooks as untrusted or modified (count in
+     `detail`), or when that listing could not be read; the script never trusts a companion's hooks. Ask the user to
+     trust that plugin's hooks in Codex `/hooks`; Codex skips untrusted hooks.
    - `unreleased_check_unavailable`: the script could not tell whether Claude Code missed same-version files.
      Report the reason.
 3. **Apply to the sessions.** When this plugin's host update succeeded, or `apply-installed` returned that host

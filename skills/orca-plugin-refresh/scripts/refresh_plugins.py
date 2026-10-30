@@ -152,6 +152,7 @@ def refresh_companion(host: str, plugin_id: str, update: bool, context: dict) ->
         if update and host == "codex" and codex_trust_reset(before_hooks, after_hooks, before_bundle,
                                                             bundle_digest(found["root"])):
             result["warnings"].append(dict(HOOKS_TRUST_WARNING))
+            context.setdefault("trust_reset", []).append(plugin_id)
     except RefreshError as error:
         result.update(status="error", code=error.code, message=error.message)
     except (OSError, ValueError):

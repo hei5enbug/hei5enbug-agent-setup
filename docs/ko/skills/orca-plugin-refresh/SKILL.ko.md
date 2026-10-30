@@ -77,8 +77,10 @@ compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 �
      파일이 하나라도 바뀌었다. Codex는 훅 신뢰를 플러그인의 모든 파일에 묶기 때문이다. 이 플러그인이면 스크립트가
      먼저, 설치본이 깨끗한 공식 checkout이고 그 HEAD를 공식 원격이 지금 `main`이나 `v*` 태그로 광고하거나 `main`에 포함할 때
      자기 훅을 다시 신뢰하고, 그러면 이 경고 대신
-     `codex_hooks_trusted: true`를 알린다. 그렇지 않으면 경고의 `detail`에 이유를 담는다. Codex가 신뢰하지 않은
-     훅을 건너뛰므로 Codex `/hooks`에서 그 플러그인의 훅을 신뢰하도록 요청한다.
+     `codex_hooks_trusted: true`를 알린다. 그렇지 않으면 경고의 `detail`에 이유를 담는다. 동반 플러그인은
+     Codex가 그 훅 중 하나라도 아직 untrusted나 modified로 나열할 때(개수는 `detail`에 담긴다) 또는 그 목록을 읽지
+     못했을 때만 이 경고를 유지하며, 스크립트는 동반 플러그인의 훅을 신뢰하지 않는다. Codex가 신뢰하지 않은 훅을
+     건너뛰므로 Codex `/hooks`에서 그 플러그인의 훅을 신뢰하도록 요청한다.
    - `unreleased_check_unavailable`: Claude Code가 같은 버전의 파일을 놓쳤는지 확인할 수 없다. 이유를 알린다.
 3. **세션에 적용한다.** 이 플러그인의 호스트 업데이트가 성공했거나 `apply-installed` 결과에 그 호스트의 오류가
    없으면 `python3 <script> apply --run-id <run_id> --json`을 셸 제한 시간 600초 이상으로 포그라운드에서

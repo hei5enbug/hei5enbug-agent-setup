@@ -172,6 +172,45 @@ def trust_codex_hooks() -> str | None:
     return None
 
 
+def untrusted_hook_counts() -> dict[str, int]:
+    """How many hooks Codex lists as untrusted or modified, by plugin ID."""
+    command, cwd = [core.executable("codex"), "app-server"], str(Path.home())
+    result = CODEX_HOOK_TRUST.app_server_calls(command, dict(os.environ), cwd, [("hooks/list", {"cwds": [cwd]})],
+                                               CODEX_TRUST_TIMEOUT_SECONDS)[0]
+    counts: dict[str, int] = {}
+    for hook in CODEX_HOOK_TRUST.listed_hooks(result, cwd):
+        if isinstance(hook, dict) and hook.get("trustStatus") in CODEX_HOOK_TRUST.UNTRUSTED and isinstance(hook.get("pluginId"), str):
+            counts[hook["pluginId"]] = counts.get(hook["pluginId"], 0) + 1
+    return counts
+
+
+def settle_companion_trust(plugins: list[dict], context: dict) -> list[dict]:
+    """Narrow each companion's provisional trust warning to the hooks Codex still lists as untrusted or modified.
+
+    One listing, taken after the last companion install, serves every companion that may have lost trust. Nothing is
+    trusted here; a listing that fails keeps the warning with the reason."""
+    pending = set(context.get("trust_reset", ()))
+    if not pending:
+        return plugins
+    try:
+        counts, unread = untrusted_hook_counts(), None
+    except (CODEX_HOOK_TRUST.TrustError, RefreshError, OSError):
+        counts, unread = {}, "Codex hook trust state could not be read"
+    settled = []
+    for plugin in plugins:
+        if plugin["plugin"] not in pending:
+            settled.append(plugin)
+            continue
+        count = counts.get(plugin["plugin"], 0)
+        kept = [warning for warning in plugin["warnings"] if warning["code"] != HOOKS_TRUST_WARNING["code"]]
+        if unread:
+            kept.append({**HOOKS_TRUST_WARNING, "detail": unread})
+        elif count:
+            kept.append({**HOOKS_TRUST_WARNING, "detail": f"Codex lists {count} hook{'s' if count != 1 else ''} as untrusted or modified"})
+        settled.append({**plugin, "warnings": kept})
+    return settled
+
+
 def host_failure(error: RefreshError) -> dict:
     entry = {"error": {"code": error.code, "message": error.message}}
     for key in ("root", "recovery_command"):
@@ -198,7 +237,8 @@ def command_update(also: Sequence[str] = ()) -> dict:
             hosts[host] = host_failure(error)
         except (OSError, ValueError):
             hosts[host] = host_failure(RefreshError("plugin_check_failed", f"A {host} plugin file could not be checked."))
-        hosts[host]["plugins"] = [refresh_companion(host, plugin_id, True, context) for plugin_id in ids]
+        plugins = [refresh_companion(host, plugin_id, True, context) for plugin_id in ids]
+        hosts[host]["plugins"] = settle_companion_trust(plugins, context)
     return refresh_report(run_id, hosts, extra)
 
 
