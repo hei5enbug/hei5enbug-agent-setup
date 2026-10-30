@@ -147,12 +147,18 @@ verified evaluation runner when required. See the conditional [model routing con
 ### Claude Code mod
 
 On Claude Code, `config/claude-mod.json` loads the mod `hooks/mod/register.js`, which holds the Claude-only guards:
-the built-in subagent block, role pinning, and the GPT refusal. The [Approval guard](#approval-guard) holds approvals
-on both hosts. The mod is verified on Claude Code 2.1.307 and later, the oldest version
+the built-in subagent block, role pinning, the GPT refusal, and the zsh equals-word block. The
+[Approval guard](#approval-guard) holds approvals on both hosts. The mod is verified on Claude Code 2.1.307 and later, the oldest version
 whose `claude plugin test` run passes. That run fails on 2.1.306 and earlier, and 2.1.292 also refuses to load a hook
 module that passes `$` into a function imported from another file. The plugin manifest has no field that declares a
 minimum Claude Code version. When the mod does not load, such as on an older Claude Code, with `disableAllHooks`, or under a managed
 policy, these guards are absent and the host's normal permission flow applies.
+
+The zsh equals-word block applies when the Bash tool runs zsh: `CLAUDE_CODE_SHELL` names a zsh binary or, when it does
+not name bash or zsh, `$SHELL` does; when neither names bash or zsh, the mod assumes zsh. In zsh, an unquoted word that starts with `=` becomes a command
+path, so `echo =====` fails before the rest of the command runs. The mod's `tool.check` hook denies such a command with a
+hint to quote the word, and it ignores quoted text, `[[ ... ]]`, `(( ... ))`, here-documents, and comments. A command
+the check cannot parse is allowed. A word counts as a declaration builtin such as `export` or a keyword such as `if` only where a command may start, so `printf '%s\n' export x==foo` is allowed.
 
 Role pinning pins each plugin role's model and effort on every request: `scout` uses `claude-sonnet-5-5` with `medium`,
 `worker` uses `worker_model` with `worker_effort` (default `claude-haiku-5-5` with `high`), `sonnet-worker` uses `claude-sonnet-5-5` with `high`, `designer` uses

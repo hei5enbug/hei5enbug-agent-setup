@@ -4,5 +4,7 @@ Before dispatching an agent or a model runner, read [Claude Code agent rules](..
 
 The response language is the `language` setting; without one, reply in the user's language.
 
+In zsh, quote a word that starts with `=`; an unquoted `$var` is not word-split, so use `${=var}` or an array.
+
 The main session draws ASCII and Mermaid diagrams in documents, edits existing SVG diagrams, and makes new
 SVG or PNG flowcharts of up to seven nodes; other UI code and visual design go to the designer.

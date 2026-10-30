@@ -1,4 +1,4 @@
 {
-  "description": "Claude Code mod for hei5enbug-agent-setup: built-in subagent guard, role model pinning, one-time session approval, GPT request refusal, risk labels on tool calls, and the parallel work board.",
+  "description": "Claude Code mod for hei5enbug-agent-setup: built-in subagent guard, role model pinning, one-time session approval, GPT request refusal, a zsh equals-word block, risk labels on tool calls, and the parallel work board.",
   "modules": ["../hooks/mod/register.js"]
 }

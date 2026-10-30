@@ -150,12 +150,18 @@ Codex 내장 `worker`를 대신하고, `scout`는 내장 `explorer`를 건드리
 ### Claude Code mod
 
 Claude Code에서는 `config/claude-mod.json`이 mod `hooks/mod/register.js`를 불러옵니다. 이 mod가 Claude 전용 가드인
-내장 서브에이전트 차단, 역할 고정, GPT 거부를 담당합니다. 양쪽 호스트의 승인은 [승인 가드](#승인-가드)가 보관합니다.
+내장 서브에이전트 차단, 역할 고정, GPT 거부, zsh 등호 단어 차단을 담당합니다. 양쪽 호스트의 승인은 [승인 가드](#승인-가드)가 보관합니다.
 mod는 Claude Code 2.1.307 이상에서 검증했습니다. 이 버전이 `claude plugin test`를 통과하는 가장 오래된 버전입니다. 2.1.306 이하에서는
 테스트 실행이 실패하고 2.1.292는 `$`를 다른 파일에서 가져온 함수로 넘기는 hook 모듈을 불러오지 않습니다. 플러그인 매니페스트에는 필요한
 최소 Claude Code 버전을 선언하는 필드가 없습니다.
 오래된 Claude Code, `disableAllHooks`, 관리 정책 등으로 mod가 로드되지 않으면 이 가드들은 동작하지 않고 호스트의 기본 권한
 흐름이 적용됩니다.
+
+zsh 등호 단어 차단은 Bash 도구가 zsh를 실행할 때 적용됩니다. `CLAUDE_CODE_SHELL`이 zsh 바이너리를 가리키거나, bash나 zsh를
+가리키지 않을 때는 `$SHELL`이 가리킬 때입니다. 둘 다 bash나 zsh를 가리키지 않으면 mod는 zsh로 간주합니다. zsh에서는 `=`로
+시작하는 따옴표 없는 단어가 명령 경로로 바뀌므로 `echo =====`는 나머지 명령이 실행되기 전에 실패합니다. mod의 `tool.check`
+훅은 이런 명령을 단어를 따옴표로 감싸라는 안내와 함께 거부하며, 따옴표 안 텍스트, `[[ ... ]]`, `(( ... ))`, here-document,
+주석은 무시합니다. 해석할 수 없는 명령은 허용합니다. `export` 같은 선언 내장 명령과 `if` 같은 키워드는 명령이 시작될 수 있는 위치에서만 그렇게 보므로 `printf '%s\n' export x==foo`는 허용합니다.
 
 역할 고정은 플러그인 역할마다 모델과 사고 강도를 모든 요청에 고정합니다. `scout`는 `claude-sonnet-5-5`와 `medium`,
 `worker`는 `worker_model`과 `worker_effort`(기본 `claude-haiku-5-5`와 `high`), `sonnet-worker`는 `claude-sonnet-5-5`와 `high`, `designer`는

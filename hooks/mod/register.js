@@ -3,6 +3,7 @@ import { registerWorkBoard } from "./board.js";
 import { registerGpt } from "./gpt.js";
 import { registerSecretRedaction } from "./redact.js";
 import { registerRiskHighlight } from "./risk.js";
+import { registerZshGuard } from "./zsh.js";
 
 const OFF_VALUES = new Set(["false", "0", "off", "no"]);
 
@@ -17,6 +18,7 @@ export function register(on, options) {
   if (enabled(settings.agent_guard)) registerAgentGuard(on);
   if (enabled(settings.role_pinning)) registerRolePinning(on, settings);
   registerGpt(on);
+  registerZshGuard(on);
   if (enabled(settings.risk_highlight)) registerRiskHighlight(on);
   if (enabled(settings.work_board)) registerWorkBoard(on);
   if (enabled(settings.secret_redaction)) registerSecretRedaction(on);
