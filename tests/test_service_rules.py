@@ -33,6 +33,39 @@ class ServiceRulesTest(unittest.TestCase):
             with self.subTest(rule=rule):
                 self.assertIn(rule, services)
 
+    def test_이슈를_만들기_전에_열린_이슈와_닫힌_이슈를_모두_찾아_중복_완료_충돌을_가린다(self):
+        """어느 트래커든 이슈를 만들기 전에 모든 상태를 검색하고, report-skill-gap 4단계도 닫힌 이슈와 충돌까지 같은 결과로 다룬다."""
+        # Given
+        services = normalized(SERVICES)
+        skill = normalized(REPO_ROOT / "skills/report-skill-gap/SKILL.md")
+
+        # When
+        rules = (
+            "Before creating an issue or ticket on any tracker, search its open and closed items with two or three "
+            "keyword sets.",
+            "When an open item covers it, create nothing and offer a comment on that item.",
+            "When a closed item already finished it, create nothing and report that item.",
+            "When an item or a recorded decision conflicts with or contradicts it, show both and ask before creating.",
+            "When a related item neither duplicates nor conflicts with it, name that item in the new issue.",
+            "Report the searches you ran.",
+        )
+        skill_rules = (
+            "Search the target's open and closed issues with two or three keyword sets",
+            "--state all",
+            "Under the condition that a closed issue already finished the gap, create nothing and report that issue.",
+            "show both and ask before drafting.",
+            "name it in the new issue.",
+        )
+
+        # Then
+        for rule in rules:
+            with self.subTest(rule=rule):
+                self.assertIn(rule, services)
+        for rule in skill_rules:
+            with self.subTest(skill_rule=rule):
+                self.assertIn(rule, skill)
+        self.assertNotIn("--state open", skill)
+
 
 if __name__ == "__main__":
     unittest.main()

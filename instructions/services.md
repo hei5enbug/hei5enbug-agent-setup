@@ -12,6 +12,16 @@ Fetch directly only for genuinely public pages or when no MCP server covers the 
 - When a list is needed, request a small page narrowed by time, field, or query, and read further pages only when
   the answer needs them.
 
+## Creating an issue or ticket
+
+Before creating an issue or ticket on any tracker, search its open and closed items with two or three keyword sets.
+
+- When an open item covers it, create nothing and offer a comment on that item.
+- When a closed item already finished it, create nothing and report that item.
+- When an item or a recorded decision conflicts with or contradicts it, show both and ask before creating.
+- When a related item neither duplicates nor conflicts with it, name that item in the new issue.
+- Report the searches you ran.
+
 ## Access fallback
 
 A failure of one access path does not make a service unavailable. When a path fails, try each other path available in

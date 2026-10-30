@@ -88,12 +88,16 @@ file nothing.
 
 ### 4. Search for duplicates
 
-Search the target's open issues with two or three keyword sets taken from the gap. On GitHub, run
-`gh issue list --repo <location> --state open --search "<keywords>" --json number,title,url,labels --limit 20`.
+Search the target's open and closed issues with two or three keyword sets taken from the gap. On GitHub, run
+`gh issue list --repo <location> --state all --search "<keywords>" --json number,title,url,state,labels --limit 20`.
 On another tracker, use the path that reference chooses.
 
 - Under the condition that an open issue covers the same gap, create nothing. Show that issue and ask whether
   to add a comment instead. Before commenting, show the comment text and comment only after the user approves it.
+- Under the condition that a closed issue already finished the gap, create nothing and report that issue.
+- Under the condition that an issue or a recorded decision proposes the opposite or otherwise conflicts with the
+  gap, show both and ask before drafting.
+- Under the condition that a related issue neither duplicates nor conflicts with the gap, name it in the new issue.
 - Under the condition that the search cannot run, show the draft and file nothing.
 
 Note the title style of the issues the search returns; the new title follows it.
