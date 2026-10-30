@@ -88,6 +88,29 @@ class CommonRulesTest(unittest.TestCase):
         )
         self.assertIn(default_run, builder)
 
+    def test_반복될_교정과_조사는_승인을_받아_작업별로_읽히는_짧은_저장소_지침이나_ADR로_남긴다(self):
+        """세션 문맥은 작업을 끝내기 전에 저장소 지침 참조를 읽게 하고, 참조는 승인, 검사 우선, 진입 줄, 짧은 ADR, 교체를 정한다."""
+        # Given
+        guidance = " ".join((REPO_ROOT / "instructions/repository-guidance.md").read_text(encoding="utf-8").split())
+
+        # When
+        rules = (
+            "recommend recording it in one line, and change no file until the user approves",
+            "recommend the `mistake-enforcer` skill instead of a written rule",
+            "Keep in that file only rules that every task needs.",
+            '"Before <task>, read <file>."',
+            "a short ADR of at most 30 lines",
+            "Replace or delete an outdated entry instead of appending to it.",
+        )
+
+        # Then
+        self.assert_in_every_context(
+            "Before ending work in which a user correction or a costly investigation is likely to recur, read"
+        )
+        for rule in rules:
+            with self.subTest(rule=rule):
+                self.assertIn(rule, guidance)
+
 
 if __name__ == "__main__":
     unittest.main()

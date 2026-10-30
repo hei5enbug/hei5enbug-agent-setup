@@ -47,6 +47,8 @@
 - 첫 구현 변경 전에 [구현 실행 규칙](../implementation-execution.ko.md)을 읽는다.
 - 다른 저장소를 변경하거나 Orca 세션을 시작하거나 Orca 세션에 메시지를 보내기 전에
   [다른 저장소 작업](../cross-repository.ko.md)을 읽는다.
+- 사용자의 교정이나 비용이 큰 조사가 다시 일어날 것 같은 작업을 끝내기 전에 [저장소 지침](../repository-guidance.ko.md)을
+  읽는다.
 
 ## 계획과 설계 작업
 
