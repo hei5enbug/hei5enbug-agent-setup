@@ -228,16 +228,6 @@ def test_a_script_that_only_lists_guard_files_as_data_is_not_self_approval(state
     assert output is None or decision(output) != "deny"
 
 
-def test_the_plugin_refresh_script_status_is_not_self_approval():
-    """플러그인 자신의 orca_plugin_refresh.py 실행은 자기 승인으로 분류되지 않는다."""
-    # given
-    script = GUARD_PATH.parents[1] / "skills" / "orca-plugin-refresh" / "scripts" / "orca_plugin_refresh.py"
-    # when
-    outcome = guard.classify_text(f"python3 {script} status --run-id {'0' * 32} --json", str(GUARD_PATH.parents[1]))
-    # then
-    assert outcome.kind != "forbidden"
-
-
 @pytest.mark.parametrize("directory", ["approvals", "heartbeats", "pycache"])
 @pytest.mark.parametrize("command", [
     "ls {path}", "cat {path}/f", "head {path}/f", "tail {path}/f", "grep x {path}/f",

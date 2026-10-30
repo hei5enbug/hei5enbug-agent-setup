@@ -599,7 +599,7 @@ class RunnerTest(unittest.TestCase):
             "1",
             "--timeout-seconds",
             "1",
-            delay=2,
+            delay=1.5,
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertTrue((state / "uncertain").exists())
@@ -609,9 +609,9 @@ class RunnerTest(unittest.TestCase):
         """Codex MCP 목록 조회가 응답 제한 시간보다 오래 걸려도 교환을 시작하고, 응답 시간 초과만 불확실 상태로 남긴다."""
         # given
         state = self.root / "slow-mcp-state"
-        self.environment["FAKE_MCP_DELAY"] = "1.5"
+        self.environment["FAKE_MCP_DELAY"] = "1.3"
         # when
-        result = self.run_runner("codex", state, "--max-exchanges", "1", "--timeout-seconds", "1", delay=3)
+        result = self.run_runner("codex", state, "--max-exchanges", "1", "--timeout-seconds", "1", delay=2)
         # then
         self.assertNotEqual(result.returncode, 0)
         self.assertTrue((state / "uncertain").exists(), result.stderr)
@@ -627,7 +627,7 @@ class RunnerTest(unittest.TestCase):
             "--timeout-seconds",
             "5",
             "--detach",
-            delay=0.5,
+            delay=0.3,
         )
         self.assertEqual(launched.returncode, 0, launched.stderr)
         self.assertIn("state_dir=", launched.stdout)
@@ -655,7 +655,7 @@ class RunnerTest(unittest.TestCase):
         state = self.root / "race-state"
         call_log = self.root / "codex-calls.log"
         environment = self.environment.copy()
-        environment["FAKE_DELAY"] = "1"
+        environment["FAKE_DELAY"] = "0.5"
         environment["FAKE_CALL_LOG"] = str(call_log)
         command = [
             "bash",

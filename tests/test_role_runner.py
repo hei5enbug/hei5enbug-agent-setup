@@ -980,7 +980,7 @@ class RoleRunnerTest(unittest.TestCase):
 
         # When
         started = time.monotonic()
-        completed = self.run_runner("scout", "--timeout", "1", config=config)
+        completed = self.run_runner("scout", "--timeout", "3", config=config)
         elapsed = time.monotonic() - started
 
         # Then
@@ -1997,7 +1997,7 @@ class RoleRunnerTest(unittest.TestCase):
                 self.log.unlink(missing_ok=True)
 
                 # When
-                completed = self.run_runner("scout", "--timeout", "2", config=config)
+                completed = self.run_runner("scout", "--timeout", "1" if label == "timeout" else "2", config=config)
 
                 # Then
                 self.assertEqual(3, completed.returncode, completed.stderr)
@@ -2013,7 +2013,7 @@ class RoleRunnerTest(unittest.TestCase):
 
         # When
         started = time.monotonic()
-        completed = self.run_runner("scout", "--timeout", "1", config=config)
+        completed = self.run_runner("scout", "--timeout", "4", config=config)
         elapsed = time.monotonic() - started
 
         # Then

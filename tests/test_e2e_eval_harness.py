@@ -1135,7 +1135,7 @@ class ProcessAndRunTest(unittest.TestCase):
         self.start_timer_after_child(child_file)
 
         # when
-        result = process.run_agent([str(self.fake)], self.root, env, self.root / "s.jsonl", self.root / "e.txt", 1.5, 0.3, 0.3, 0.2)
+        result = process.run_agent([str(self.fake)], self.root, env, self.root / "s.jsonl", self.root / "e.txt", 0.8, 0.3, 0.3, 0.2)
 
         # then
         child = int(child_file.read_text(encoding="utf-8"))
@@ -1146,7 +1146,7 @@ class ProcessAndRunTest(unittest.TestCase):
     def test_정상_종료_뒤에도_이_실행이_남긴_자손은_끝내고_leftover_killed로_센다(self):
         """에이전트가 먼저 끝나고 자식만 남으면 감시해 둔 자손이므로 종료하고 1로 기록한다."""
         # given
-        env, child_file = self.start_child_env("leave", hold="1.2")
+        env, child_file = self.start_child_env("leave", hold="0.6")
 
         # when
         result = process.run_agent([str(self.fake)], self.root, env, self.root / "s.jsonl", self.root / "e.txt", 20.0, 0.3, 0.3, 0.2)
@@ -1599,7 +1599,7 @@ class RubricTest(unittest.TestCase):
         self.addCleanup(lambda: pid_file.is_file() and PidKiller.kill(int(pid_file.read_text(encoding="utf-8"))))
 
         # when
-        with mock.patch.object(rubric, "RUBRIC_TIMEOUT_SECONDS", 2):
+        with mock.patch.object(rubric, "RUBRIC_TIMEOUT_SECONDS", 1):
             with self.assertRaises(subprocess.TimeoutExpired):
                 rubric.grade(self.task, "The answer text.", "Explain the flow.", self.work / "grading", repo_root=fake_root)
 

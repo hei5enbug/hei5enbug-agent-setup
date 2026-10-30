@@ -1564,7 +1564,7 @@ class FollowUpTest(DriveTest):
             time.sleep(0.02)
 
         # When
-        with patch.object(refresh, "Orca", return_value=fake), patch.multiple(refresh, SELF_WAIT_SECONDS=1.5, NOTIFY_SECONDS=0.2):
+        with patch.object(refresh, "Orca", return_value=fake), patch.multiple(refresh, SELF_WAIT_SECONDS=0.6, NOTIFY_SECONDS=0.1):
             refresh.command_self_apply(run_id, sleep=watch)
 
         # Then

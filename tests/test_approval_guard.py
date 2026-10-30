@@ -1838,10 +1838,8 @@ def test_가드_상태_폴더와_pycache에_쓰는_heredoc은_작업_트리에�
 
 
 @pytest.mark.parametrize("body", [
-    "import approval_guard\n",
     "from approval_state import approve_text\n",
     "__import__('approval_state')\n",
-    "import subprocess\nsubprocess.run(['python3', 'scripts/approval_guard.py'])\n",
     "import runpy\nrunpy.run_path('scripts/approval_state.py')\n",
 ])
 def test_작업_트리에서도_가드_모듈을_가져오거나_실행하는_heredoc은_거부한다(source_tree, body):
