@@ -1172,6 +1172,8 @@ claude plugin test .
 Tests that need the Orca CLI skip when it is not installed, so CI passes without Orca. After installing Orca,
 run `python3 -m pytest` again to cover them.
 
+For a faster run on a multi-core machine, run `python3 -m pytest -n auto`, which spreads the tests over worker processes.
+
 To block a commit, push, tag, or GitHub write that breaks the public boundary before it runs, run
 `git config core.hooksPath .githooks` once per clone. To also block names that cannot be listed in this public
 repository, set `HEI5ENBUG_PUBLIC_BOUNDARY_WORDS` to a word list file outside the repository, one word or phrase per

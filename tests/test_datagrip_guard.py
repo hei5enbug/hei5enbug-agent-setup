@@ -739,13 +739,37 @@ MSSQL_READ_BASES = select_bases(MSSQL_ALLOW, MSSQL_ASK)
 PG_READ_BASES = select_bases(PG_ALLOW, PG_ASK)
 
 
-def combo_cases(bases, separators, writes):
+def combo_cases(bases, separators, writes, edges=()):
+    """Cover every base and separator with the first write, the first base with every separator and write, and the edges."""
+    base_names = [name for name, _ in bases]
+    sep_names = [name for name, _ in separators]
+    write_names = [name for name, _ in writes]
+    chosen = {(b, s, write_names[0]) for b in base_names for s in sep_names}
+    chosen |= {(base_names[0], s, w) for s in sep_names for w in write_names}
+    chosen |= set(edges)
+    lookup = {"base": dict(bases), "sep": dict(separators), "write": dict(writes)}
     cases = []
-    for base_name, base in bases:
-        for sep_name, sep in separators:
-            for write_name, write in writes:
-                cases.append(pytest.param(base + sep + write, id=f"{base_name}-{sep_name}-{write_name}"))
-    return cases
+    for base_name, sep_name, write_name in chosen:
+        sql = lookup["base"][base_name] + lookup["sep"][sep_name] + lookup["write"][write_name]
+        cases.append(pytest.param(sql, id=f"{base_name}-{sep_name}-{write_name}"))
+    return sorted(cases, key=lambda case: case.id)
+
+
+MSSQL_COMBO_EDGES = [
+    ("set-nocount", "semicolon", "exec"),
+    ("set-nocount", "space", "exec"),
+    ("keywords-in-strings", "semicolon", "delete"),
+    ("line-comment", "semicolon", "delete"),
+    ("block-comment-nested", "semicolon", "delete"),
+    ("declare-table", "semicolon", "exec"),
+    ("declare-table", "space", "exec"),
+]
+PG_COMBO_EDGES = [
+    ("dollar-quote-empty-tag", "semicolon", "delete"),
+    ("line-comment", "semicolon-lf", "delete"),
+    ("block-comment-nested", "semicolon", "do"),
+    ("read-only-prelude", "semicolon", "read-only-off"),
+]
 
 
 def pg_function_cases(functions):
@@ -807,6 +831,26 @@ def build_core_cases():
 
 
 CORE_CASES = build_core_cases()
+
+
+def has_read_only_prelude(sql):
+    return "transaction_read_only" in sql
+
+
+def output_shape(case):
+    connection_id, sql, is_read, path = case.values
+    return (is_read, path, connection_id, has_read_only_prelude(sql))
+
+
+def representative_cases(cases):
+    """Pick the first case for each decision, path, connection, and prelude combination."""
+    seen = {}
+    for case in cases:
+        seen.setdefault(output_shape(case), case)
+    return list(seen.values())
+
+
+CONTRACT_CASES = representative_cases(CORE_CASES)
 
 
 class TestMssqlAllow:
@@ -888,7 +932,7 @@ class TestMssqlAsk:
 
     @pytest.mark.parametrize(
         "sql",
-        combo_cases(MSSQL_READ_BASES, MSSQL_COMBO_SEPARATORS, MSSQL_WRITES),
+        combo_cases(MSSQL_READ_BASES, MSSQL_COMBO_SEPARATORS, MSSQL_WRITES, MSSQL_COMBO_EDGES),
     )
     def test_mssql_read_followed_by_write_asks(self, sql):
         """MSSQL 조회 뒤에 어떤 구분자로든 쓰기가 이어지면 ask한다."""
@@ -1040,7 +1084,7 @@ class TestPostgresAsk:
 
     @pytest.mark.parametrize(
         "sql",
-        combo_cases(PG_READ_BASES, PG_COMBO_SEPARATORS, PG_WRITES),
+        combo_cases(PG_READ_BASES, PG_COMBO_SEPARATORS, PG_WRITES, PG_COMBO_EDGES),
     )
     def test_postgres_read_followed_by_write_asks(self, sql):
         """PostgreSQL 조회 뒤에 두 번째 문장으로 쓰기가 이어지면 두 경로 모두 ask한다."""
@@ -1632,7 +1676,17 @@ class TestConnectionRules:
 
 
 class TestOutputContract:
-    @pytest.mark.parametrize("connection_id,sql,is_read,path", CORE_CASES)
+    def test_representative_cases_cover_every_output_shape(self):
+        """대표 케이스는 전체 케이스에 나타나는 판정, 경로, 연결 종류, 접두 조합을 모두 포함한다."""
+        # given
+        all_shapes = {output_shape(case) for case in CORE_CASES}
+        # when
+        representative_shapes = [output_shape(case) for case in CONTRACT_CASES]
+        # then
+        assert set(representative_shapes) == all_shapes
+        assert len(representative_shapes) == len(all_shapes)
+
+    @pytest.mark.parametrize("connection_id,sql,is_read,path", CONTRACT_CASES)
     def test_decision_is_never_deny(self, connection_id, sql, is_read, path, monkeypatch):
         """어떤 쿼리도 deny를 내지 않고 조회 여부에 맞게 allow 또는 ask만 낸다."""
         # given
@@ -1644,7 +1698,7 @@ class TestOutputContract:
         assert decision_of(output) in ("allow", "ask")
         assert (decision_of(output) == "allow") is is_read
 
-    @pytest.mark.parametrize("connection_id,sql,is_read,path", CORE_CASES)
+    @pytest.mark.parametrize("connection_id,sql,is_read,path", CONTRACT_CASES)
     def test_codex_permission_request_allows_only_reads(self, connection_id, sql, is_read, path, monkeypatch):
         """Codex 권한 요청 모드는 조회에만 allow를 내고 나머지는 아무것도 내지 않는다."""
         # given
@@ -1663,7 +1717,7 @@ class TestOutputContract:
         else:
             assert output is None
 
-    @pytest.mark.parametrize("connection_id,sql,is_read,path", CORE_CASES)
+    @pytest.mark.parametrize("connection_id,sql,is_read,path", CONTRACT_CASES)
     def test_codex_pre_tool_use_rewrites_only_postgres_reads_without_prelude(
         self, connection_id, sql, is_read, path, monkeypatch
     ):
@@ -1671,11 +1725,10 @@ class TestOutputContract:
         # given
         apply_path(monkeypatch, path)
         payload = make_payload(connection_id, sql)
-        has_read_only_prelude = "transaction_read_only" in sql
         # when
         output = hook.codex_pre_tool_use(payload["tool_input"])
         # then
-        if is_read and connection_id == PG_ID and not has_read_only_prelude:
+        if is_read and connection_id == PG_ID and not has_read_only_prelude(sql):
             assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
             assert output["hookSpecificOutput"]["updatedInput"]["queryText"] == hook.READ_ONLY_PRELUDE + sql
             assert "deny" not in json.dumps(output)

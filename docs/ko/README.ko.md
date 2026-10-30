@@ -1088,6 +1088,8 @@ claude plugin test .
 Orca CLI가 필요한 테스트는 Orca가 설치되어 있지 않으면 건너뛰므로 CI는 Orca 없이도 통과합니다. Orca를 설치한 뒤
 `python3 -m pytest`를 다시 실행하면 이 테스트까지 확인합니다.
 
+코어가 여러 개인 컴퓨터에서 더 빠르게 실행하려면 테스트를 작업 프로세스에 나누어 돌리는 `python3 -m pytest -n auto`를 실행합니다.
+
 공개 경계를 어기는 커밋, 푸시, 태그, GitHub 쓰기를 실행하기 전에 막으려면 클론마다 한 번
 `git config core.hooksPath .githooks`를 실행합니다. 이 공개 저장소에 적을 수 없는 이름까지 막으려면
 `HEI5ENBUG_PUBLIC_BOUNDARY_WORDS`에 저장소 밖의 단어 목록 파일을 지정합니다. 한 줄에 단어나 구절 하나를 적습니다.
