@@ -111,7 +111,10 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
      the reported counts. A reload refusal that asks for
      `--force` means a plugin's MCP tools changed; do not force it without the user's approval.
      `compact_needs_more_messages` means the conversation is too short to compact; its instructions refresh at
-     its next compaction or restart. `probe_interrupted_check_input` means the input line changed while the
+     its next compaction or restart. `compact_dialog_open` means `/compact` opened a dialog other than the
+     "acts on the main conversation, not this agent" one, which the script leaves open without sending a key; that
+     one it answers by moving the selection to `Run /compact on the main conversation` and never confirming
+     `Cancel`. `probe_interrupted_check_input` means the input line changed while the
      script checked it and did not return to its earlier state, or such checks kept being interrupted; tell the
      user to check that session's input line for a stray `x`, because the script never deletes input it did not
      type. `input_restore_unconfirmed` means the saved text was not confirmed back on the input line, and

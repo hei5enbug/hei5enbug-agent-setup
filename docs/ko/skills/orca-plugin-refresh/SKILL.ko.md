@@ -109,7 +109,9 @@ compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 �
      있다. `--force`를 요청하는 reload 거부는
      플러그인의 MCP 도구가 바뀌었다는 뜻이다. 사용자 승인 없이 강제로 진행하지 않는다.
      `compact_needs_more_messages`는 대화가 너무 짧아 compact할 수 없다는 뜻이다. 다음 compact 또는 재시작 때
-     지침이 갱신된다. `probe_interrupted_check_input`은 스크립트가 입력 줄을 확인하는 동안 입력 줄이 바뀌고
+     지침이 갱신된다. `compact_dialog_open`은 `/compact`가 "acts on the main conversation, not this
+     agent" 대화상자가 아닌 다른 대화상자를 열었다는 뜻이며, 스크립트는 키를 보내지 않고 그대로 둔다. 그 대화상자는
+     선택을 `Run /compact on the main conversation`으로 옮겨 답하며 `Cancel`은 절대 확인하지 않는다. `probe_interrupted_check_input`은 스크립트가 입력 줄을 확인하는 동안 입력 줄이 바뀌고
      원래 상태로 돌아오지 않았거나, 그런 확인 중단이 계속됐다는 뜻이다. 스크립트는 직접 입력하지 않은 내용을 지우지 않으므로, 해당 세션 입력 줄에 불필요한 `x`가 있는지
      확인하라고 알린다. `input_restore_unconfirmed`는 저장한 글이 입력 줄에 다시 있는지 확인되지 않았다는 뜻이고,
      `input_not_restored_line_in_use`는 사용자가 새 글을 입력해 저장한 글을 다시 입력하지 않았으며 그 글은 사라졌다는

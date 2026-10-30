@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from refresh_core import HANDLE, SESSION_CONTEXT, RefreshError, parse_time
+from refresh_dialog import answer_compact_dialog, dialog_open
 from refresh_host_record import COMMAND_RECORD_PREFIXES, TRANSCRIPT_TAIL_BYTES, record_state
 from refresh_orca import Orca
 from refresh_process import session_release
@@ -208,6 +209,8 @@ def unsent_input(entry: dict, draft: object, lines: list[str]) -> tuple[str, lis
 
 def input_ready(orca: Orca, entry: dict) -> tuple[str | None, list[str]]:
     lines, draft = orca.screen(entry["handle"])
+    if entry["host"] == "claude" and dialog_open(lines):
+        return "input_unknown", lines
     if entry.get("screen_identified") and screen_host(lines) != entry["host"]:
         return "input_unknown", lines
     entry["observed_draft"] = draft if isinstance(draft, str) else None
@@ -399,6 +402,14 @@ def release_held(orca: Orca, entry: dict) -> bool:
     handle, text = entry["handle"], HELD_INPUT.get(entry["handle"])
     failure = "input_not_restored_line_in_use"
     try:
+        blocked = dialog_open(orca.screen(handle)[0])
+    except RefreshError:
+        blocked = False
+    if blocked:
+        drop_held(entry)
+        entry.update(status="failed", detail="compact_dialog_open", input="cleared", actions=[])
+        return True
+    try:
         try:
             line = read_line(orca, handle)
         except RefreshError:
@@ -542,6 +553,10 @@ def verify(orca: Orca, entry: dict, target: dict) -> str | None:
             return "done"
         return "failed:clear_unconfirmed" if elapsed > CLEAR_TIMEOUT else None
     lines, _ = orca.screen(entry["handle"])
+    if action == "compact" and entry["host"] == "claude":
+        dialog = answer_compact_dialog(orca, entry, lines)
+        if dialog != "none":
+            return None if dialog == "wait" else dialog
     grew = {name: count > entry["before"].get(name, 0) for name, count in result_counts(lines).items()}
     before_lines = entry.get("before_lines", [])
     if action == "reload":
