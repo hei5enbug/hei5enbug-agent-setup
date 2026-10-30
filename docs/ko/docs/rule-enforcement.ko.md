@@ -96,6 +96,7 @@
 | `skills/orca-plugin-refresh/tests/test_refresh_handoff_compact.py` | 갱신은 인계 뒤에도 transcript 끝부분으로 세션의 유휴 여부를 판단하고, 메시지가 너무 적어 거절된 compact는 안내와 함께 완료로 보고한다. | `skills/orca-plugin-refresh/SKILL.md` |
 | `skills/orca-plugin-refresh/tests/test_refresh_compact_dialog.py` | 갱신은 /compact 에이전트 보기 대화상자에서 실행 선택지만 확인하고, 다른 열린 대화상자에는 입력하지 않는다. | `skills/orca-plugin-refresh/SKILL.md` |
 | `skills/orca-plugin-refresh/tests/test_refresh_lock_scope.py` | 갱신은 명령을 보내고 확인하는 동안에만 sessions 잠금을 쥐고, 두 프로세스가 동시에 보내지 않게 한다. | `skills/orca-plugin-refresh/SKILL.md` |
+| `skills/orca-plugin-refresh/tests/test_refresh_orphaned.py` | 갱신은 닿을 수 있는 고아 터미널에도 같은 확인을 거쳐 보내고, 닿을 수 없는 터미널은 바로 건너뛰며, 고아 터미널은 사용자가 승인한 뒤 `close`로만 닫는다. | `skills/orca-plugin-refresh/SKILL.md` |
 | `skills/tiki-taka/tests/test_runner.py`, `skills/tiki-taka/tests/test_stream_agent.py`, `skills/tiki-taka/tests/test_detached_job.py`, `skills/tiki-taka/tests/test_questions.py` | 토론 실행기는 상태, 완료 판정, 정리, 질문 파일 규칙을 지킨다. | `skills/tiki-taka/SKILL.md` |
 | `skills/local-data-cleanup/tests/test_survey_kinds.py`, `skills/local-data-cleanup/tests/test_survey_checks.py`, `skills/local-data-cleanup/tests/test_merge_delete.py` | 조사는 읽기 전용으로 남고 안전하지 않은 후보를 보고 전용이나 보호 항목으로 바꾸며, 삭제는 두 판정이 모두 허용하고 사용자가 고른 항목만 지운다. | `skills/local-data-cleanup/SKILL.md` |
 | `skills/report-skill-gap/tests/test_find_tracker.py` | 트래커 탐색은 플러그인 루트를 찾아 `issue-target.json`을 검증하고, 선언이 없거나 잘못되면 트래커를 추측하지 않고 그 상태를 보고한다. | `skills/report-skill-gap/SKILL.md` |

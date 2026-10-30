@@ -125,6 +125,7 @@ def plan_sessions(orca: Orca, state: dict, mode: str, only: Sequence[str]) -> li
             "title": terminal.get("title"),
             "worktree": terminal.get("worktreePath"),
             "initiator": handle == initiator,
+            "orphaned": terminal.get("orphaned") is True,
             "screen_identified": marker_host(terminal) is not None,
             "actions": [],
             "status": "pending",
@@ -247,8 +248,8 @@ def ready(orca: Orca, entry: dict, live: dict[str, dict]) -> tuple[str | None, l
     if terminal_gone(entry, live):
         return "terminal_gone", []
     terminal = live[entry["handle"]]
-    if terminal.get("connected") is not True or terminal.get("writable") is not True or terminal.get("orphaned") is True:
-        return "terminal_unavailable", []
+    if terminal.get("connected") is not True or terminal.get("writable") is not True:
+        return ("terminal_orphaned" if terminal.get("orphaned") is True else "terminal_unavailable"), []
     record = host_record(entry)
     if record == "busy" or (record is None and not orca.idle(entry["handle"])):
         return "busy", []
@@ -614,7 +615,7 @@ def step(orca: Orca, entry: dict, target: dict, live: dict[str, dict]) -> None:
         return
     reason, lines = ready(orca, entry, live)
     entry["detail"] = reason
-    if reason == "terminal_gone":
+    if reason in ("terminal_gone", "terminal_orphaned"):
         entry.update(status="skipped", actions=[])
         return
     if reason == "probe_interrupted":

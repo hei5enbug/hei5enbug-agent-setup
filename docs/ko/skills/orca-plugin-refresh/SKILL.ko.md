@@ -100,7 +100,8 @@ compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 �
      `instructions_on_next_compaction`은 프롬프트가 있는 Claude Code 세션이 reload 확인 뒤 `/compact`를 너무 짧다는 이유로
      거부당했다는 뜻이며, 지침은 다음 compact 또는 재시작 때 갱신된다.
    - `skipped`: 세션이 계속 바빴거나, 입력 줄을 읽을 수 없거나, 보내기 직전에 입력이 바뀌었거나, 제한 시간에
-     도달했거나, 세션이 닫혔다. `input_clear_failed`는 입력 줄을 지우지 못해 아무것도 보내지 않았거나
+     도달했거나, 세션이 닫혔다. `terminal_orphaned`는 고아 터미널(Orca 탭이 닫힌 터미널)이 연결되지 않았거나 쓸 수 없다는
+     뜻이며, 새로고침한 고아 세션은 `orphaned`를 보고한다. `input_clear_failed`는 입력 줄을 지우지 못해 아무것도 보내지 않았거나
      (`input`이 `clear_failed`), 스크립트가 글을 다시 입력했다는 뜻이다.
    - 모든 세션은 `ready_signal`(전송을 허용한 신호인 `host_record` 또는 `tui_idle`)도 보고하고, 입력을 붙들었다면
      `input`(`restored`, 정확히 되돌릴 수 없는 입력이면 `cleared`)도 보고한다.
@@ -141,11 +142,16 @@ compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 �
 6. **재개를 제안한다.** `resume_approval_needed`를 보고한 세션(`plugin_load_error` 또는 `host_release_outdated`)을
    모두 보여 주고 사용자가 승인할 세션을 묻는다. 고치면 그 세션이 끝나고 같은 대화가 다시 열린다.
    `resume`을 실행하기 전에 `references/resume.md`를 읽고, 승인된 터미널에만 실행한다.
+7. **고아 터미널 닫기를 제안한다.** `python3 <script> orphans --run-id <run_id> --json`을 실행하고, 고아 에이전트 터미널마다
+   호스트, 작업 트리, 유휴 시간을 보여 주며 추천되지 않은 터미널은 `failed_check`를 알린다. 추천된(`recommended`) 터미널 중
+   어느 것을 닫을지 사용자에게 한 번 묻는다. `close`를 실행하기 전에 `references/orphaned-terminals.md`를 읽고, 승인된
+   터미널에만 실행한다.
 
 `--compact`의 기본값은 `auto`이며 낡은 세션만 compact한다. 사용자가 명시적으로 요청한 경우에만
 `--compact always` 또는 `--compact never`를 전달한다. `plan`과 `self-apply`는 스크립트가 스스로 사용하는
 내부 하위 명령이므로 직접 실행하지 않는다. Orca 터미널에 명령을 직접 보내지 않으며, 이 요청에서
-사용자가 승인한 세션에 `resume`을 실행하는 경우가 아니면 세션을 끝내지 않는다. 스스로 `--force`를 전달하지 않는다.
+사용자가 승인한 세션에 `resume`을 실행하는 경우가 아니면 세션을 끝내지 않고, 승인한 터미널에 `close`를 실행하는 경우가 아니면
+터미널을 닫지 않는다. 스스로 `--force`를 전달하지 않는다.
 
 스크립트는 모든 세션이 `done`, `deferred`, `queued_after_turn` 중 하나이거나 업데이트 또는 `apply-installed` 결과가 ok이면
 `0`으로 종료한다. 그렇지 않으면, 그리고 사용법 오류에도 `2`로 종료한다. 이 플러그인에 호스트 오류가 있거나

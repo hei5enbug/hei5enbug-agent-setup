@@ -101,7 +101,8 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
      `instructions_on_next_compaction` marks a Claude Code session with prompts whose `/compact` was refused as
      too short after the reload was confirmed; its instructions refresh at its next compaction or restart.
    - `skipped`: the session stayed busy, showed an unreadable input line, changed its input just before the send,
-     reached the deadline, or closed. `input_clear_failed` means the line could not be cleared, so nothing was sent
+     reached the deadline, or closed. `terminal_orphaned` means an orphaned terminal (its Orca tab was closed) is not
+     connected or not writable; a refreshed orphaned session reports `orphaned`. `input_clear_failed` means the line could not be cleared, so nothing was sent
      (`input` is `clear_failed`), or that the script typed the text back.
    - Every session also reports `ready_signal` (`host_record` or `tui_idle`, the signal that allowed the send) and,
      when it held input, `input` (`restored`, or `cleared` for input that could not be restored exactly).
@@ -146,11 +147,16 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
 6. **Offer the resume.** Show every session that reports `resume_approval_needed` (`plugin_load_error` or
    `host_release_outdated`) and ask which the user approves; fixing one ends it and resumes the same conversation.
    Before running `resume`, read `references/resume.md`, and run it only for the approved terminals.
+7. **Offer to close orphaned terminals.** Run `python3 <script> orphans --run-id <run_id> --json`, show each orphaned
+   agent terminal with host, worktree, and idle time, and name the `failed_check` of each one not recommended. Ask the
+   user once which `recommended` terminals to close. Before running `close`, read `references/orphaned-terminals.md`,
+   and run it only for the approved terminals.
 
 `--compact` defaults to `auto`, which compacts only stale sessions. Pass `--compact always` or `--compact never`
 only when the user explicitly asks for it. `plan` and `self-apply` are internal subcommands that the script uses
 itself; never run them by hand. Never send commands to Orca terminals by hand, never end a session except through
-`resume` for one the user approved in this request, and never pass `--force` on your own.
+`resume` and never close a terminal except through `close`, each for one the user approved in this request, and
+never pass `--force` on your own.
 
 The script exits with `0` when every session is `done`, `deferred`, or `queued_after_turn`, or when the update or
 `apply-installed` result is ok. It exits with `2` otherwise, and on a usage error. An update or `apply-installed`

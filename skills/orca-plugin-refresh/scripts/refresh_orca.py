@@ -100,6 +100,9 @@ class Orca:
         if not isinstance(send, dict) or send.get("accepted") is not True:
             raise RefreshError("input_not_accepted", "Orca did not accept the keystroke.")
 
+    def close(self, handle: str) -> None:
+        self.call("terminal", "close", "--terminal", handle)
+
     def send(self, handle: str, text: str) -> None:
         send = self.call("terminal", "send", "--terminal", handle, "--text", text, "--enter").get("send")
         if not isinstance(send, dict) or send.get("accepted") is not True:
