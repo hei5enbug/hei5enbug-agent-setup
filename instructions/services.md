@@ -5,6 +5,13 @@ Slack, Notion, and other hosted content.
 Anonymous fetching has no user session and private links can fail with HTTP 401.
 Fetch directly only for genuinely public pages or when no MCP server covers the host.
 
+## Read size
+
+- When a read targets one item, such as a user, a message, a page, or an issue, use the service's search or
+  single-item lookup instead of a full list.
+- When a list is needed, request a small page narrowed by time, field, or query, and read further pages only when
+  the answer needs them.
+
 ## Access fallback
 
 A failure of one access path does not make a service unavailable. When a path fails, try each other path available in
