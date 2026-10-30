@@ -286,6 +286,20 @@ class UsageErrorTest(FindTrackerCase):
         result = self.run_script(missing)
         # Then
         self.assert_usage_error(result)
+        self.assertEqual(f"path does not exist: {missing}", json.loads(result.stdout)["error"])
+
+    def test_help_option_prints_usage_and_succeeds(self) -> None:
+        """-h나 --help를 주면 경로로 읽지 않고 사용법을 출력한 뒤 0으로 끝난다."""
+        for option in ("-h", "--help"):
+            with self.subTest(option=option):
+                # Given
+                arguments = (option,)
+                # When
+                result = self.run_script(*arguments)
+                # Then
+                self.assertEqual(0, result.returncode)
+                self.assertIn("usage: find_tracker.py <path>", result.stdout)
+                self.assertNotIn("path does not exist", result.stdout + result.stderr)
 
     def test_missing_argument_is_a_usage_error(self) -> None:
         """인자가 없으면 사용법 오류이다."""

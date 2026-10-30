@@ -241,9 +241,13 @@ def report(root: Path, declaration: Path | None) -> tuple[dict[str, Any], int]:
     return {**result, "status": "declared", "target": build_target(data, rules)}, EXIT_OK
 
 
+USAGE = "usage: find_tracker.py <path>"
+HELP_OPTIONS = ("-h", "--help")
+
+
 def locate(argv: Sequence[str]) -> Path:
     if len(argv) != 1:
-        raise UsageError("usage: find_tracker.py <path>")
+        raise UsageError(USAGE)
     path = Path(argv[0])
     if not path.exists():
         raise UsageError(f"path does not exist: {argv[0]}")
@@ -256,6 +260,9 @@ def emit(payload: dict[str, Any]) -> None:
 
 
 def main(argv: Sequence[str]) -> int:
+    if list(argv) in ([option] for option in HELP_OPTIONS):
+        print(f"{USAGE}\n\n{__doc__}")
+        return EXIT_OK
     try:
         root = locate(argv)
     except UsageError as error:
