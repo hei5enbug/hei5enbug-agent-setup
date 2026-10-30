@@ -4,7 +4,7 @@ import re
 from typing import Sequence
 
 
-CLAUDE_PLACEHOLDER = re.compile(r'^Try ".*"$')
+CLAUDE_PLACEHOLDER = re.compile(r'^(Try ".*"|Message @[\w:.-]+…+)$')
 CODEX_PLACEHOLDERS = {"Ask Codex to do anything", "Ask a follow-up question"}
 CODEX_STARTING = "Waiting for startup"
 SEPARATOR = re.compile(r"^\s*─{8,}\s*$")

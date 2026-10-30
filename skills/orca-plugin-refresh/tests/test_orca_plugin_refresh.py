@@ -147,6 +147,36 @@ class InputStateTest(unittest.TestCase):
         # Then
         self.assertEqual(["empty", "empty", "text", "text", "empty", "text", "unknown"], states)
 
+    def test_Claude_입력창의_에이전트_멘션_안내는_비었다고_보고_글자는_입력_중으로_본다(self):
+        """백그라운드 에이전트가 있을 때 빈 입력창에 뜨는 `Message @이름…` 안내만 비었다고 보고, 줄임표 없이 이름만 있거나 글을 더 쓰면 입력 중으로 본다."""
+        # Given
+        hint = CLAUDE_EMPTY[:3] + ["❯ Message @demo-agent-set……"] + CLAUDE_EMPTY[4:]
+        bare = CLAUDE_EMPTY[:3] + ["❯ Message @demo-agent"] + CLAUDE_EMPTY[4:]
+        typed = CLAUDE_EMPTY[:3] + ["❯ Message @demo-agent 에게 보낼 글"] + CLAUDE_EMPTY[4:]
+
+        # When
+        states = [refresh.input_state("claude", lines) for lines in (hint, bare, typed)]
+
+        # Then
+        self.assertEqual(["empty", "text", "text"], states)
+
+    def test_Claude_입력창의_에이전트_멘션_안내는_입력이_아니므로_지우지_않고_보낸다(self):
+        """빈 입력창에 뜬 에이전트 멘션 안내는 사용자가 쓴 글이 아니므로 지우기 없이 명령을 보내고 done으로 끝낸다."""
+        # Given
+        rule = "─" * 40
+        handle = "term_example"
+        item = terminal(handle, "claude")
+        fake = FakeOrca([item], screens={handle: [rule, "❯ Message @demo-agent-set……", rule]})
+        entry = {"handle": handle, "host": "claude", "status": "pending", "actions": ["reload"]}
+        with patch.object(refresh_sessions, "read_marker", return_value=None):
+            # When
+            refresh.step(fake, entry, {}, {handle: item})
+
+        # Then
+        self.assertEqual([(handle, "/reload-plugins")], fake.sent)
+        self.assertEqual([], fake.keystrokes)
+        self.assertEqual("sent", entry["status"])
+
     def test_Codex_입력창은_맨_아래_작성줄만_판단한다(self):
         """이전 대화의 › 줄은 무시하고 상태 줄 바로 위의 작성줄만 보며, 시작 중이거나 모양이 다르면 알 수 없음으로 본다."""
         # Given
