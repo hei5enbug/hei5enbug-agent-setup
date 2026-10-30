@@ -41,6 +41,27 @@ class CommonRulesTest(unittest.TestCase):
         # When / Then
         self.assert_in_every_context(*phrases)
 
+    def test_일정이나_다음_실행을_기다리기_전에_지금_안전하게_확인할_방법을_먼저_찾는다(self):
+        """세션 문맥은 기다리기 전에 직접 확인하고 묻기 참조를 읽게 하며, 참조는 지금 확인할 방법과 기다릴 때 밝힐 내용을 정한다."""
+        # Given
+        asking = " ".join((REPO_ROOT / "instructions/asking-the-user.md").read_text(encoding="utf-8").split())
+
+        # When
+        steps = (
+            "Before proposing to wait for a schedule, a later run, or new data,",
+            "such as a manual trigger, a dry run, a replay of recorded input, or a comparison with a past window",
+            "Propose waiting only when none exists, and give the reason and the earliest time to check.",
+        )
+
+        # Then
+        self.assert_in_every_context(
+            "instead of asking about it or waiting for a later run.",
+            "Before asking the user anything or proposing to wait, read",
+        )
+        for step in steps:
+            with self.subTest(step=step):
+                self.assertIn(step, asking)
+
 
 if __name__ == "__main__":
     unittest.main()

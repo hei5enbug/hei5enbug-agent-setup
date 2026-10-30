@@ -32,8 +32,9 @@ Independent review is the exception to main-session review. Before finishing a s
 
 On a result-changing ambiguity or conflict, stop edits and external changes, read only what is needed, and
 ask one concise question. Check what reading, running, or measuring within your permissions can show instead of
-asking about it. Resume only on an explicit user answer. Silence, elapsed time, empty or automatic answers, and
-defaults are not answers. Before asking the user anything, read [asking the user](../asking-the-user.md).
+asking about it or waiting for a later run. Resume only on an explicit user answer. Silence, elapsed time, empty or
+automatic answers, and defaults are not answers. Before asking the user anything or proposing to wait, read
+[asking the user](../asking-the-user.md).
 
 ## Conditional instructions
 
