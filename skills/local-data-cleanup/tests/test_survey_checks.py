@@ -20,19 +20,19 @@ class OwnerAndOpenCase(FixtureCase):
     def test_live_process_naming_or_inside_a_scratch_folder_blocks_it(self) -> None:
         """실행 중인 프로세스가 argv로 이름을 부르거나 작업 폴더가 안에 있는 스크래치 폴더는 후보가 되지 않는다."""
         # given
-        named, inside, free = self.scratch("demo-a"), self.scratch("demo-c"), self.scratch("demo-b")
+        named, inside, free = self.scratch("argv-named"), self.scratch("cwd-inside"), self.scratch("unheld")
         self.wait_ready(self.spawn(HOLD_CODE, str(named)))
         self.wait_ready(self.spawn(cwd=inside))
         # when
         result = self.survey("--host", "claude")
         # then
-        by_name = self.item(result, "demo-a")
+        by_name = self.item(result, "argv-named")
         self.assertEqual("report-only", by_name["verdict"])
         self.assertIn("owner", self.checks_of(by_name))
-        by_cwd = self.item(result, "demo-c")
+        by_cwd = self.item(result, "cwd-inside")
         self.assertEqual("report-only", by_cwd["verdict"])
         self.assertTrue(self.checks_of(by_cwd) & {"owner", "open"})
-        self.assertEqual("candidate", self.item(result, "demo-b")["verdict"])
+        self.assertEqual("candidate", self.item(result, "unheld")["verdict"])
         self.assertTrue(free.exists())
 
     def test_member_held_open_by_a_child_fails_open(self) -> None:
