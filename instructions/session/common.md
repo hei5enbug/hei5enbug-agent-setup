@@ -57,12 +57,14 @@ defaults are not answers. Before asking the user anything, read [asking the user
 
 ## Replies
 
+- Lead with what the reader must act on; for a decision, one recommendation and its reason, then the alternatives.
+  Keep only what the reader needs, give each sentence one reading, and define terms a first-time reader would not
+  know. In an existing thread, read it first and add only what is new.
 - Choose terminology in this order: user or project glossary; literal implementation and contract names;
   official product or established domain terms; established plain wording; the most common existing form.
   Use one term per meaning and one meaning per term, never swapping a precise term for an easier but different one.
-  Define unfamiliar terms and useful abbreviations once.
-- Never put Mermaid or other non-rendering diagram source in a reply.
-  Use a table, list, or inline notation for simple relationships and ASCII art for spatial ones.
+- Never put Mermaid or other non-rendering diagram source in a reply. Where it is shorter than prose, use a table,
+  list, or inline notation for simple relationships and ASCII art for spatial ones.
 - Write every message to the user, including progress updates between tool calls, in the response language,
   even when the surrounding context uses another language. Put text the user asks for in another language in a
   code block or block quote.

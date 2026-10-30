@@ -30,6 +30,7 @@
 | `tests/test_session_context.py` | 세션 훅은 core, common, 호스트 지침을 크기 상한 안에서 설정·경로 알림과 함께 렌더링한다. | `instructions/session/`, `README.md` (Automatic instructions) |
 | `tests/test_session_settings_notice.py` | 설정 알림은 알린 설정이 바뀔 때만 나온다. | `README.md` (Automatic instructions) |
 | `tests/test_commit_routing.py` | 새 커밋은 모두 `suggest-commit` 커밋 모드를 거친다. | `instructions/session/common.md` |
+| `tests/test_common_rules.py` | 두 호스트의 메인 세션 문맥에 공통 답변 규칙이 실린다. | `instructions/session/common.md` |
 | `tests/test_planning_contract.py` | 계획과 설계 절차는 분리되고, 모델 선택의 출처는 하나이며, 독립 검증은 마지막 단계에서 자동으로 1회 실행하고 더 이른 검토는 승인이 필요하며, 읽기 전용 1회다. | `instructions/implementation-planning.md`, `instructions/independent-model-validation.md` |
 | `tests/test_delegation_contract.py` | 호스트는 위임 계약을 받고, 수정하지 않은 이전 역할 파일은 교체하되 사용자가 고친 파일은 둔다. | `instructions/session/common.md`, `instructions/implementation-delegation.md` |
 | `tests/test_claude_worker_contract.py` | Claude Code worker와 에이전트 정의는 선언한 도구, 모델, 어댑터 규칙을 유지한다. | `agents/`, `instructions/claude-agents.md` |

@@ -27,6 +27,7 @@ impossible, remove the written rule it replaces and update its row.
 | `tests/test_session_context.py` | The session hook renders core, common, and host instructions under the size caps, with the settings and route notices. | `instructions/session/`, `README.md` (Automatic instructions) |
 | `tests/test_session_settings_notice.py` | A settings notice appears only when the announced settings change. | `README.md` (Automatic instructions) |
 | `tests/test_commit_routing.py` | Every new commit goes through `suggest-commit` commit mode. | `instructions/session/common.md` |
+| `tests/test_common_rules.py` | The main session context of both hosts carries the common reply rules. | `instructions/session/common.md` |
 | `tests/test_planning_contract.py` | Planning and design workflows stay separate, model selection has one source, independent validation runs automatically once in the final stage while an earlier review needs approval, and it is one read-only pass. | `instructions/implementation-planning.md`, `instructions/independent-model-validation.md` |
 | `tests/test_delegation_contract.py` | Hosts receive the delegation contract, and earlier unmodified role files are replaced while user-edited ones stay. | `instructions/session/common.md`, `instructions/implementation-delegation.md` |
 | `tests/test_claude_worker_contract.py` | Claude Code worker and agent definitions keep their declared tools, models, and adapter rules. | `agents/`, `instructions/claude-agents.md` |
