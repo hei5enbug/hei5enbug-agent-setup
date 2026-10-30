@@ -22,8 +22,24 @@ import refresh_follow
 import refresh_host_record
 import refresh_install
 import refresh_plugins
+import refresh_reload
 import refresh_screen
 import refresh_sessions
+
+_ISOLATION: list = []
+
+
+def setUpModule():
+    for patcher in (patch.object(refresh_sessions, "session_release", return_value={}),
+                    patch.object(refresh_reload, "find_session_process", return_value=None)):
+        patcher.start()
+        _ISOLATION.append(patcher)
+
+
+def tearDownModule():
+    while _ISOLATION:
+        _ISOLATION.pop().stop()
+
 
 CLAUDE_EMPTY = [
     "❯ /reload-plugins",

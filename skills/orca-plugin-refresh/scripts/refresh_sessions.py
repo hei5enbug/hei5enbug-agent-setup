@@ -10,6 +10,8 @@ from typing import Callable, Sequence
 from refresh_core import HANDLE, SESSION_CONTEXT, RefreshError, parse_time
 from refresh_host_record import COMMAND_RECORD_PREFIXES, TRANSCRIPT_TAIL_BYTES, record_state
 from refresh_orca import Orca
+from refresh_process import session_release
+from refresh_reload import judge_reload, local_text, reload_report, screen_report
 from refresh_screen import composer_bounds, input_state, codex_fresh, screen_host
 
 
@@ -127,6 +129,8 @@ def plan_sessions(orca: Orca, state: dict, mode: str, only: Sequence[str]) -> li
             "status": "pending",
             "detail": None,
         }
+        if host == "claude":
+            entry.update(session_release(handle))
         if "error" in target:
             entry.update(status="blocked", detail=f"{host}_update_failed")
         else:
@@ -463,14 +467,14 @@ def transcript_records(path: object, offset: int) -> list[dict]:
     return records
 
 
-def transcript_outcome(host: str, action: str, records: list[dict]) -> str | None:
-    for record in records:
+def transcript_outcome(host: str, action: str, records: list[dict], entry: dict | None = None) -> str | None:
+    for index, record in enumerate(records):
         content = str(record.get("content") or "") if record.get("subtype") == "local_command" else ""
         if host == "claude" and action == "reload" and content:
             if RELOAD_REFUSED.search(content):
                 return "failed:reload_needs_force"
             if RELOAD_DONE.search(content):
-                return "done"
+                return judge_reload(entry, reload_report(local_text(records[index:])))
         if host == "claude" and action == "compact" and content:
             if CLAUDE_NOTHING_TO_COMPACT.search(content):
                 return "nothing_to_compact"
@@ -527,7 +531,7 @@ def verify(orca: Orca, entry: dict, target: dict) -> str | None:
     elapsed = time.time() - entry["sent_at"]
     marker = read_marker(entry["handle"])
     records = transcript_records(entry.get("transcript"), entry.get("transcript_offset", 0))
-    from_transcript = transcript_outcome(entry["host"], action, records)
+    from_transcript = transcript_outcome(entry["host"], action, records, entry)
     if from_transcript:
         if entry["host"] == "codex":
             entry["note"] = "instructions_load_on_next_turn"
@@ -544,7 +548,7 @@ def verify(orca: Orca, entry: dict, target: dict) -> str | None:
         if grew["refused"] or (last_item_is(lines, "/reload-plugins", RELOAD_REFUSED) and not last_item_is(before_lines, "/reload-plugins", RELOAD_REFUSED)):
             return "failed:reload_needs_force"
         if grew["reloaded"] or (last_item_is(lines, "/reload-plugins", RELOAD_DONE) and not last_item_is(before_lines, "/reload-plugins", RELOAD_DONE)):
-            return "done"
+            return judge_reload(entry, screen_report(lines))
         return "failed:reload_unconfirmed" if elapsed > RELOAD_TIMEOUT else None
     if entry["host"] == "claude":
         if newer_marker(entry, marker, target):

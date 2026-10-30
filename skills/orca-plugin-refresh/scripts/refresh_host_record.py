@@ -161,6 +161,12 @@ def owes_notification(records: list[dict], now: float, earlier: set[str] | None 
 
 def claude_state(records: list[dict], now: float | None = None, earlier: Callable[[], set[str]] | None = None) -> str | None:
     """`idle`, `busy`, or None for the host's own Claude Code turn record, judged from the transcript tail."""
+    verdict = claude_turn(records, now, earlier)
+    return None if verdict == "owing" else verdict
+
+
+def claude_turn(records: list[dict], now: float | None = None, earlier: Callable[[], set[str]] | None = None) -> str | None:
+    """Like `claude_state`, but `owing` when the turn ended while a background task, subagent, or wakeup still owes a notification."""
     if not records:
         return None
     kinds = [classify(record) for record in records]
@@ -176,7 +182,7 @@ def claude_state(records: list[dict], now: float | None = None, earlier: Callabl
                 return "busy"
             finished_commands.update(COMMAND_NAME.findall(plain_text(message_content(records[index])) or ""))
         elif kind == "finished":
-            return None if owes_notification(records, time.time() if now is None else now, earlier() if earlier else None) else "idle"
+            return "owing" if owes_notification(records, time.time() if now is None else now, earlier() if earlier else None) else "idle"
         elif kind == "active" and typed_command(records[index]) not in finished_commands:
             return "busy" if has_duration else None
     return None
@@ -231,8 +237,9 @@ def earlier_pending(path: str, boundary: int) -> set[str]:
     return set(cached["pending"])
 
 
-def record_state(host: str, path: object, now: float | None = None) -> str | None:
-    """`idle`, `busy`, or None (cannot decide) from the host's transcript or rollout file at `path`."""
+def record_state(host: str, path: object, now: float | None = None, detailed: bool = False) -> str | None:
+    """`idle`, `busy`, or None (cannot decide) from the host's transcript or rollout file at `path`; with `detailed`, a Claude Code
+    turn that ended while a background task still owes a notification is `owing` instead of None."""
     if not isinstance(path, str) or not path or not Path(path).is_file():
         return None
     try:
@@ -247,6 +254,7 @@ def record_state(host: str, path: object, now: float | None = None) -> str | Non
         if tail is None:
             return None
         records, boundary = tail
-        return claude_state(records, now, (lambda: earlier_pending(path, boundary)) if boundary else None)
+        earlier = (lambda: earlier_pending(path, boundary)) if boundary else None
+        return claude_turn(records, now, earlier) if detailed else claude_state(records, now, earlier)
     except OSError:
         return None

@@ -104,7 +104,11 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
      (`input` is `clear_failed`), or that the script typed the text back.
    - Every session also reports `ready_signal` (`host_record` or `tui_idle`, the signal that allowed the send) and,
      when it held input, `input` (`restored`, or `cleared` for input that could not be restored exactly).
-   - `failed`: an action was sent but not confirmed, or Claude Code refused it. A reload refusal that asks for
+     A Claude Code session also reports its `release`, and `host_release_outdated` with both versions when it runs
+     an older release than the installed one or its executable is gone.
+   - `failed`: an action was sent but not confirmed, or Claude Code refused it. `plugin_load_error` means the
+     reload answered with `N error(s) during load` or loaded fewer plugins than are enabled; `plugin_load` holds
+     the reported counts. A reload refusal that asks for
      `--force` means a plugin's MCP tools changed; do not force it without the user's approval.
      `compact_needs_more_messages` means the conversation is too short to compact; its instructions refresh at
      its next compaction or restart. `probe_interrupted_check_input` means the input line changed while the
@@ -136,11 +140,14 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
    arrives, run it and report every session, with the companion statuses from `hosts`; `not_refreshed` lists the
    sessions that did not receive the update. When `self_notification` in the status is not `sent`, the prompt
    could not be delivered; the status still holds the result.
+6. **Offer the resume.** Show every session that reports `resume_approval_needed` (`plugin_load_error` or
+   `host_release_outdated`) and ask which the user approves; fixing one ends it and resumes the same conversation.
+   Before running `resume`, read `references/resume.md`, and run it only for the approved terminals.
 
 `--compact` defaults to `auto`, which compacts only stale sessions. Pass `--compact always` or `--compact never`
 only when the user explicitly asks for it. `plan` and `self-apply` are internal subcommands that the script uses
-itself; never run them by hand. Never send commands to Orca terminals by hand, never exit or restart a session,
-and never pass `--force` on your own.
+itself; never run them by hand. Never send commands to Orca terminals by hand, never end a session except through
+`resume` for one the user approved in this request, and never pass `--force` on your own.
 
 The script exits with `0` when every session is `done`, `deferred`, or `queued_after_turn`, or when the update or
 `apply-installed` result is ok. It exits with `2` otherwise, and on a usage error. An update or `apply-installed`

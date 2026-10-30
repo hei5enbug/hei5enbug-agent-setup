@@ -17,7 +17,8 @@ compatibility: >-
 ---
 
 이 스킬은 `hei5enbug-agent-setup`과 사용자가 고른 다른 플러그인을 업데이트한 뒤, 설치된 버전을 실행 중인
-Orca 세션에 세션을 끝내지 않고 적용한다. 세션을 다시 시작하거나 대화를 바꾸지 않는다.
+Orca 세션에 세션을 끝내지 않고 적용한다. 스스로 세션을 끝내지 않으며, 사용자가 현재 요청에서 그 세션을 승인한 뒤에만
+`resume`으로 세션을 끝내고 다시 연다.
 
 ## 업데이트가 실행 중인 세션에 반영되는 방법
 
@@ -101,7 +102,11 @@ compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 �
      (`input`이 `clear_failed`), 스크립트가 글을 다시 입력했다는 뜻이다.
    - 모든 세션은 `ready_signal`(전송을 허용한 신호인 `host_record` 또는 `tui_idle`)도 보고하고, 입력을 붙들었다면
      `input`(`restored`, 정확히 되돌릴 수 없는 입력이면 `cleared`)도 보고한다.
-   - `failed`: 보낸 작업이 확인되지 않았거나 Claude Code가 거부했다. `--force`를 요청하는 reload 거부는
+     Claude Code 세션은 `release`도 보고하며, 설치된 릴리스보다 오래된 릴리스로 실행 중이거나 실행 파일이 없어졌으면 두 버전과
+     함께 `host_release_outdated`를 보고한다.
+   - `failed`: 보낸 작업이 확인되지 않았거나 Claude Code가 거부했다. `plugin_load_error`는 reload 답이
+     `N error(s) during load`를 알렸거나 활성화된 플러그인보다 적게 불러왔다는 뜻이며, `plugin_load`에 보고된 개수가
+     있다. `--force`를 요청하는 reload 거부는
      플러그인의 MCP 도구가 바뀌었다는 뜻이다. 사용자 승인 없이 강제로 진행하지 않는다.
      `compact_needs_more_messages`는 대화가 너무 짧아 compact할 수 없다는 뜻이다. 다음 compact 또는 재시작 때
      지침이 갱신된다. `probe_interrupted_check_input`은 스크립트가 입력 줄을 확인하는 동안 입력 줄이 바뀌고
@@ -130,11 +135,14 @@ compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 �
    `hosts`의 플러그인 상태와 함께 모든 세션을 보고한다. `not_refreshed`는 업데이트를 받지 못한 세션 목록이다.
    상태의 `self_notification`이 `sent`가 아니면 프롬프트를 전달하지 못한 것이다. 그래도 상태에 작업 결과가
    남아 있다.
+6. **재개를 제안한다.** `resume_approval_needed`를 보고한 세션(`plugin_load_error` 또는 `host_release_outdated`)을
+   모두 보여 주고 사용자가 승인할 세션을 묻는다. 고치면 그 세션이 끝나고 같은 대화가 다시 열린다.
+   `resume`을 실행하기 전에 `references/resume.md`를 읽고, 승인된 터미널에만 실행한다.
 
 `--compact`의 기본값은 `auto`이며 낡은 세션만 compact한다. 사용자가 명시적으로 요청한 경우에만
 `--compact always` 또는 `--compact never`를 전달한다. `plan`과 `self-apply`는 스크립트가 스스로 사용하는
-내부 하위 명령이므로 직접 실행하지 않는다. Orca 터미널에 명령을 직접 보내거나 세션을 종료·재시작하지
-않는다. 스스로 `--force`를 전달하지 않는다.
+내부 하위 명령이므로 직접 실행하지 않는다. Orca 터미널에 명령을 직접 보내지 않으며, 이 요청에서
+사용자가 승인한 세션에 `resume`을 실행하는 경우가 아니면 세션을 끝내지 않는다. 스스로 `--force`를 전달하지 않는다.
 
 스크립트는 모든 세션이 `done`, `deferred`, `queued_after_turn` 중 하나이거나 업데이트 또는 `apply-installed` 결과가 ok이면
 `0`으로 종료한다. 그렇지 않으면, 그리고 사용법 오류에도 `2`로 종료한다. 이 플러그인에 호스트 오류가 있거나

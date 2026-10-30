@@ -137,7 +137,7 @@ def reloaded_since_handoff(entry: dict) -> bool:
     if not isinstance(path, str) or not isinstance(offset, int) or driver.transcript_size(path) < offset:
         return False
     records = driver.transcript_records(path, offset)
-    return any(driver.transcript_outcome(entry["host"], "reload", [record]) == "done" for record in records)
+    return any(driver.transcript_outcome(entry["host"], "reload", [record], entry) == "done" for record in records)
 
 
 def applied_by_session(entry: dict, state: dict, cache: dict[str, tuple[float, bool]], waiters: IdleWaiters) -> None:

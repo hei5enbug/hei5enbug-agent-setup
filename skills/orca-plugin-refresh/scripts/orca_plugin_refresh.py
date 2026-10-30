@@ -36,6 +36,7 @@ from refresh_install import (  # noqa: E402
     read_hook_file, read_manifest, rollout_idle, run_install, scan_hook_events, validate_claude_mod, validate_install,
 )
 from refresh_orca import Orca  # noqa: E402
+from refresh_resume import run_resume  # noqa: E402
 from refresh_plugins import (  # noqa: E402
     COMPANION_ENV, COMPANION_ID, COMPANION_LIMIT, claude_marketplace, companion_entries, companion_ids, describe_plugin,
     folder_version, local_source, refresh_companion, validate_companion,
@@ -282,8 +283,10 @@ def continuation_script(hosts: dict[str, dict]) -> str:
 
 def public(entry: dict) -> dict:
     keys = ("host", "title", "worktree", "status", "detail", "completed", "actions", "compact_reason", "note", "initiator",
-            "ready_signal", "input")
+            "ready_signal", "input", "release", "host_release_outdated", "plugin_load")
     view = {key: entry.get(key) for key in keys if entry.get(key) not in (None, [], False)}
+    if entry.get("detail") == "plugin_load_error" or entry.get("host_release_outdated"):
+        view["resume_approval_needed"] = True
     view["terminal"] = f"…{entry['handle'][-6:]}"
     return view
 
@@ -366,7 +369,7 @@ def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spa
             handed = time.time()
             items = [
                 {key: entry.get(key) for key in ("handle", "host", "actions", "title", "worktree", "compact_reason", "detail", "probe_retries",
-                                                 "screen_identified", "input", "ready_signal")}
+                                                 "screen_identified", "input", "ready_signal", "release", "host_release_outdated")}
                 | {"deferred_at": handed, **handoff_point(entry["handle"])}
                 for entry in deferred
             ]
@@ -497,6 +500,7 @@ def command_status(run_id: str) -> dict:
         "run_id": run_id,
         "hosts": state.get("hosts"),
         "sessions": list(state.get("sessions", {}).values()),
+        "resumed": list(state.get("resumed", {}).values()),
         "not_refreshed": [item for item in state.get("sessions", {}).values() if item.get("status") in {"skipped", "failed", "blocked"}],
         "helper_finished_at": state.get("helper_finished_at"),
         "self_finished_at": state.get("self_finished_at"),
@@ -521,6 +525,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if name == "apply":
             sub.add_argument("--timeout-seconds", type=int, default=DEFAULT_APPLY_SECONDS)
     commands.add_parser("self-apply").add_argument("--run-id", required=True)
+    resume = commands.add_parser("resume")
+    resume.add_argument("--run-id", required=True)
+    resume.add_argument("--terminal", action="append", required=True)
+    resume.add_argument("--json", action="store_true")
     status = commands.add_parser("status")
     status.add_argument("--run-id", required=True)
     status.add_argument("--json", action="store_true")
@@ -534,6 +542,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             output = command_apply_installed(args.also)
         elif args.command == "plan":
             output = command_plan(args.run_id, args.compact, args.terminal)
+        elif args.command == "resume":
+            output = run_resume(args.run_id, args.terminal)
         elif args.command == "apply":
             output = command_apply(args.run_id, args.compact, args.terminal, max(5, args.timeout_seconds))
         else:
