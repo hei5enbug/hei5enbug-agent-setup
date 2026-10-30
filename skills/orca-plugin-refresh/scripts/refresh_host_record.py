@@ -14,6 +14,7 @@ from refresh_install import CODEX_IDLE_EVENTS, rollout_last_record
 TRANSCRIPT_TAIL_BYTES = 512 * 1024
 COMMAND_RECORD_PREFIXES = ("<command-name>", "<local-command-caveat>", "<local-command-stdout>", "<local-command-stderr>")
 COMMAND_OUTPUT_PREFIXES = COMMAND_RECORD_PREFIXES[2:]
+COMMAND_NAME = re.compile(r"<command-name>\s*(/\S+?)\s*</command-name>")
 INTERRUPT_PREFIX = "[Request interrupted by user"
 BACKGROUND_IDS = (
     re.compile(r"^Command running in background with ID: ([\w-]+)", re.MULTILINE),
@@ -76,6 +77,14 @@ def classify(record: dict) -> str:
     if text.startswith(COMMAND_RECORD_PREFIXES):
         return "output" if text.startswith(COMMAND_OUTPUT_PREFIXES) else "neutral"
     return "active"
+
+
+def typed_command(record: dict) -> str | None:
+    """The slash command name of a plain user record that is only a typed slash command, such as `/compact`."""
+    if record.get("type") != "user":
+        return None
+    words = (plain_text(message_content(record)) or "").split()
+    return words[0] if words and words[0].startswith("/") else None
 
 
 def tool_result_texts(record: dict) -> list[str]:
@@ -157,15 +166,18 @@ def claude_state(records: list[dict], now: float | None = None, earlier: Callabl
     kinds = [classify(record) for record in records]
     has_duration = any(record.get("type") == "system" and record.get("subtype") == "turn_duration" for record in records)
     output_seen = False
+    finished_commands: set[str] = set()
     for index in range(len(records) - 1, -1, -1):
         kind = kinds[index]
         if kind == "output":
             output_seen = True
-        elif kind == "command" and not output_seen:
-            return "busy"
+        elif kind == "command":
+            if not output_seen:
+                return "busy"
+            finished_commands.update(COMMAND_NAME.findall(plain_text(message_content(records[index])) or ""))
         elif kind == "finished":
             return None if owes_notification(records, time.time() if now is None else now, earlier() if earlier else None) else "idle"
-        elif kind == "active":
+        elif kind == "active" and typed_command(records[index]) not in finished_commands:
             return "busy" if has_duration else None
     return None
 

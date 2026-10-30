@@ -1792,6 +1792,25 @@ class HostRecordTest(unittest.TestCase):
         # Then
         self.assertEqual(["busy", "idle", "idle"], states)
 
+    def test_입력한_슬래시_명령_기록_뒤에_그_명령의_기록과_결과가_오면_끝난_명령으로_보고_쉬는_중이다(self):
+        """/compact나 /reload-plugins를 입력한 일반 사용자 기록 뒤에 그 명령의 command-name 기록과 결과가 있으면 idle이고, 결과가 없거나 다른 명령의 결과만 있으면 busy이다."""
+        # Given
+        compacted = [*FINISHED_TURN, user_record("/compact"), {"type": "system", "subtype": "compact_boundary"},
+                     {**user_record("요약"), "isCompactSummary": True}, user_record("<command-name>/compact</command-name>"),
+                     user_record("<local-command-stdout>Compacted (ctrl+o to see full summary)</local-command-stdout>"),
+                     {"type": "attachment"}, {"type": "last-prompt"}, {"type": "ai-title"}, {"type": "mode"}, {"type": "permission-mode"}]
+        reloaded = [*FINISHED_TURN, user_record("/reload-plugins"), user_record("<command-name>/reload-plugins</command-name>"),
+                    {"type": "system", "subtype": "local_command", "content": "<local-command-stdout>Reloaded: 7 plugins</local-command-stdout>"}]
+        typed_only = [*FINISHED_TURN, user_record("/compact")]
+        other_command = [*FINISHED_TURN, user_record("/compact"), user_record("<command-name>/clear</command-name>"),
+                         user_record("<local-command-stdout>Cleared</local-command-stdout>")]
+
+        # When
+        states = [self.state(records) for records in (compacted, reloaded, typed_only, other_command)]
+
+        # Then
+        self.assertEqual(["idle", "idle", "busy", "busy"], states)
+
     def test_차례_종료_기록이_한_번도_없으면_진행_중으로_단정하지_않는다(self):
         """차례 종료 기록을 쓰지 않는 버전일 수 있으므로 마지막이 assistant 기록이어도 None이고, 기록이 있으면 busy이다."""
         # Given
@@ -1946,6 +1965,22 @@ class HostRecordFlowTest(unittest.TestCase):
         self.assertEqual([("demo-a", "/reload-plugins")], fake.sent)
         self.assertEqual(("done", "host_record"), (sessions[0]["status"], sessions[0]["ready_signal"]))
         self.assertEqual("host_record", refresh.public(sessions[0])["ready_signal"])
+
+    def test_compact를_받고_쉬는_세션에_다음_실행이_남은_reload를_보내고_완료로_확인한다(self):
+        """demo-a: 앞선 실행이 보낸 /compact의 입력 기록·결과로 끝난 대화 기록이면 다음 실행이 /reload-plugins를 보내고 done으로 확인한다."""
+        # Given
+        self.marker_with("demo-a", [*FINISHED_TURN, user_record("/compact"), {"type": "system", "subtype": "compact_boundary"},
+                                    user_record("<command-name>/compact</command-name>"),
+                                    user_record("<local-command-stdout>Compacted</local-command-stdout>"), {"type": "last-prompt"}])
+        fake = FakeOrca([terminal("demo-a", "claude")], busy={"demo-a": 10**9}, on_send=self.simulate)
+        sessions = self.entries(fake)
+
+        # When
+        refresh.drive(fake, sessions, self.state, time.time() + 5, sleep=lambda seconds: None)
+
+        # Then
+        self.assertEqual([("demo-a", "/reload-plugins")], fake.sent)
+        self.assertEqual(("done", "host_record"), (sessions[0]["status"], sessions[0]["ready_signal"]))
 
     def test_도우미도_Orca_대기_신호_없이_끝난_차례면_확인_뒤_보낸다(self):
         """demo-a: 도우미는 대기 콜백이 끝내 오지 않아도 대화 기록이 끝난 차례이고 확인 뒤에도 그대로면 보낸다."""
