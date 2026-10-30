@@ -156,7 +156,7 @@ def still_needed(entry: dict, state: dict, cache: dict[str, tuple[float, bool]])
     if marker and written >= entry.get("deferred_at", float("inf")) and compact_reason(host, marker, target, "auto") is None:
         entry.update(status="done", detail="already_current", actions=[])
         return
-    if "compact" in entry["actions"] and compact_reason(host, marker, target, state.get("compact_mode", "auto")) is None:
+    if "compact" in entry["actions"] and compact_reason(host, marker, target, entry.get("compact_mode") or state.get("compact_mode", "auto")) is None:
         entry["actions"].remove("compact")
     if not entry["actions"]:
         entry.update(status="done", detail="already_current")

@@ -366,7 +366,7 @@ def commit_apply(run_id: str, mode: str, sessions: list[dict], others: list[dict
             items = [
                 {key: entry.get(key) for key in ("handle", "host", "actions", "title", "worktree", "compact_reason", "detail", "probe_retries",
                                                  "screen_identified", "input", "ready_signal", "release", "host_release_outdated", "orphaned")}
-                | {"deferred_at": handed, **handoff_point(entry["handle"])}
+                | {"compact_mode": mode, "deferred_at": handed, **handoff_point(entry["handle"])}
                 for entry in deferred
             ]
             handed_off = True
@@ -394,7 +394,7 @@ def commit_apply(run_id: str, mode: str, sessions: list[dict], others: list[dict
             if handed_off and own:
                 own.update(status="queued_after_turn", detail="waits_for_this_turn_to_end")
                 state["self"] = {key: own.get(key) for key in ("handle", "host", "actions", "title", "worktree", "screen_identified")}
-                state["self"].update(compact_reason=own.get("compact_reason"), helper_pid=pid, helper_started_at=now(), deferred_at=handed,
+                state["self"].update(compact_reason=own.get("compact_reason"), compact_mode=mode, helper_pid=pid, helper_started_at=now(), deferred_at=handed,
                                    **handoff_point(own["handle"]))
                 state.pop("self_finished_at", None)
         state["sessions"] = {**state.get("sessions", {}), **{entry["handle"]: public(entry) for entry in sessions if not entry.get("handled")}}

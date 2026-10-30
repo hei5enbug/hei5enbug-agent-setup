@@ -555,6 +555,8 @@ def verify(orca: Orca, entry: dict, target: dict) -> str | None:
         return "failed:clear_unconfirmed" if elapsed > CLEAR_TIMEOUT else None
     lines, _ = orca.screen(entry["handle"])
     if action == "compact" and entry["host"] == "claude":
+        if elapsed > COMPACT_TIMEOUT and dialog_open(lines):
+            return "failed:compact_dialog_open"
         dialog = answer_compact_dialog(orca, entry, lines)
         if dialog != "none":
             return None if dialog == "wait" else dialog

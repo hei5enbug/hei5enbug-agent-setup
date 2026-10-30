@@ -28,6 +28,11 @@ def split_nul(data: bytes) -> list[str]:
     return [os.fsdecode(part) for part in data.split(b"\0") if part]
 
 
+def split_argv(data: bytes) -> list[str]:
+    """NUL-terminated arguments with interior empty ones kept; only the single trailing terminator is dropped."""
+    return [os.fsdecode(part) for part in data.removesuffix(b"\0").split(b"\0")] if data else []
+
+
 def env_mapping(items: Sequence[str]) -> dict[str, str]:
     pairs = (item.partition("=") for item in items if "=" in item)
     return {name: value for name, _, value in pairs}
@@ -72,7 +77,7 @@ def read_args_macos(pid: int) -> tuple[list[str], dict[str, str]] | None:
 
 def read_args_linux(pid: int) -> tuple[list[str], dict[str, str]] | None:
     try:
-        argv = split_nul(Path(f"/proc/{pid}/cmdline").read_bytes())
+        argv = split_argv(Path(f"/proc/{pid}/cmdline").read_bytes())
         environment = split_nul(Path(f"/proc/{pid}/environ").read_bytes())
     except OSError:
         return None
@@ -115,8 +120,10 @@ def list_processes() -> list[tuple[int, str]]:
     try:
         result = subprocess.run(["ps", "-axo", "pid=,comm="], stdin=subprocess.DEVNULL, capture_output=True, text=True,
                                 timeout=COMMAND_TIMEOUT, check=False)
-    except (OSError, subprocess.SubprocessError):
-        return []
+    except (OSError, subprocess.SubprocessError) as error:
+        raise RefreshError("process_list_failed", "The process list could not be read.") from error
+    if result.returncode != 0:
+        raise RefreshError("process_list_failed", "The process list could not be read.")
     processes = []
     for line in result.stdout.splitlines():
         pid, _, name = line.strip().partition(" ")
@@ -162,20 +169,20 @@ class SessionProcess:
         return self.env.get("CLAUDE_CONFIG_DIR") or None
 
 
-def find_session_process(handle: str, system: ProcessOs | None = None) -> SessionProcess | None:
-    """The interactive Claude Code process of an Orca terminal, matched on `ORCA_TERMINAL_HANDLE` in its own environment.
+def scan_session_processes(handle: str, system: ProcessOs | None = None) -> tuple[list[SessionProcess], list[int]]:
+    """The matching processes and the pids of `claude` processes whose arguments could not be read.
 
-    A child started inside the terminal inherits the handle. It is ignored when its start-up environment names another entry
-    point or when it runs in print mode, whose start-up environment still carries the parent's `cli`. More than one match is
-    ambiguous and raises.
+    A failed process listing raises `RefreshError`.
     """
     system = system or ProcessOs()
     found: list[SessionProcess] = []
+    unreadable: list[int] = []
     for pid, name in system.list_processes():
         if Path(name).name != "claude":
             continue
         args = system.read_args(pid)
         if args is None:
+            unreadable.append(pid)
             continue
         argv, env = args
         if env.get("ORCA_TERMINAL_HANDLE") != handle or env.get("CLAUDE_CODE_ENTRYPOINT", "cli") != "cli":
@@ -184,6 +191,17 @@ def find_session_process(handle: str, system: ProcessOs | None = None) -> Sessio
             continue
         exe = system.exe_path(pid) or system.lsof_path(pid)
         found.append(SessionProcess(pid, tuple(argv), env, exe))
+    return found, unreadable
+
+
+def find_session_process(handle: str, system: ProcessOs | None = None) -> SessionProcess | None:
+    """The interactive Claude Code process of an Orca terminal, matched on `ORCA_TERMINAL_HANDLE` in its own environment.
+
+    A child started inside the terminal inherits the handle. It is ignored when its start-up environment names another entry
+    point or when it runs in print mode, whose start-up environment still carries the parent's `cli`. More than one match is
+    ambiguous and raises.
+    """
+    found, _ = scan_session_processes(handle, system)
     if len(found) > 1:
         raise RefreshError("session_process_ambiguous", "More than one interactive Claude Code process claims this terminal.")
     return found[0] if found else None

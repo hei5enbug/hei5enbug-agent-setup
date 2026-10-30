@@ -10,7 +10,8 @@ import refresh_sessions as driver
 from refresh_core import HANDLE, RefreshError, exclusive, load_run, parse_time, update_run
 from refresh_host_record import record_state
 from refresh_orca import Orca
-from refresh_process import ProcessOs, SessionProcess, find_session_process, installed_release, launch_arguments, release_of
+from refresh_process import (ProcessOs, SessionProcess, find_session_process, installed_release, launch_arguments, release_of,
+                             scan_session_processes)
 
 SESSION_ID = re.compile(r"^[0-9A-Za-z][0-9A-Za-z-]{7,79}$")
 EXIT_TIMEOUT = 60.0
@@ -64,11 +65,12 @@ def wait_for(check: Callable[[], bool], timeout: float, sleep: Callable[[float],
 
 
 def process_ended(handle: str, pid: int, system: ProcessOs | None) -> bool:
+    """True only when the process list was read and shows the process gone; any unreadable state counts as not ended."""
     try:
-        current = find_session_process(handle, system)
+        found, unreadable = scan_session_processes(handle, system)
     except RefreshError:
         return False
-    return current is None or current.pid != pid
+    return pid not in unreadable and all(item.pid != pid for item in found)
 
 
 def resumed_marker(handle: str, snapshot: dict | None, sent_at: float) -> dict | None:
@@ -98,6 +100,10 @@ def reload_after_resume(orca: Orca, entry: dict, state: dict, sleep: Callable[[f
 def end_and_resume(orca: Orca, entry: dict, state: dict, process: SessionProcess, line: str, session_id: str,
                    system: ProcessOs | None, sleep: Callable[[float], None]) -> dict:
     handle = entry["handle"]
+    live = {item.get("handle"): item for item in orca.terminals()}
+    reason = not_ready_reason(orca, entry, live, sleep)
+    if reason:
+        return {"status": "skipped", "detail": reason}
     orca.send(handle, "/exit")
     if not wait_for(lambda: process_ended(handle, process.pid, system), EXIT_TIMEOUT, sleep):
         return {"status": "failed", "detail": "exit_timeout"}

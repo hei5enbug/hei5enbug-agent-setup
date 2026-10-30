@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 import refresh_sessions as driver
-from refresh_core import HANDLE, RefreshError, exclusive, load_run, run_path, save_json
+from refresh_core import HANDLE, RefreshError, exclusive, load_run, update_run
 from refresh_host_record import record_state
 from refresh_orca import Orca
 
@@ -127,7 +127,7 @@ def run_close(run_id: str, handles: Sequence[str], orca: Orca | None = None,
     if not handles or any(not HANDLE.fullmatch(handle) for handle in handles):
         raise RefreshError("terminal_invalid", "Name each approved terminal with a valid --terminal handle.")
     with exclusive("sessions"):
-        state = load_run(run_id)
+        load_run(run_id)
         orca = orca or Orca()
         results = {}
         for handle in dict.fromkeys(handles):
@@ -136,7 +136,6 @@ def run_close(run_id: str, handles: Sequence[str], orca: Orca | None = None,
             except RefreshError as error:
                 result = {"status": "failed", "detail": error.code}
             results[handle] = {"terminal": f"…{handle[-6:]}", **result}
-        state["closed"] = {**state.get("closed", {}), **results}
-        save_json(run_path(run_id), state)
+        update_run(run_id, lambda saved: {**saved, "closed": {**saved.get("closed", {}), **results}})
     sessions = list(results.values())
     return {"ok": all(item["status"] == "closed" for item in sessions), "run_id": run_id, "sessions": sessions}
