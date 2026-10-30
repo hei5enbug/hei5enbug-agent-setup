@@ -97,6 +97,8 @@ compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 �
      `empty_session_cleared`는 비어 있는 Claude Code 세션에 `/clear`를 보냈다는 뜻이다.
      `instructions_load_on_next_turn`은 compact된 Codex 세션이 다음 턴에 지침을 불러온다는 뜻이다.
      `applied_by_session`은 세션이 넘긴 뒤 `/reload-plugins`를 스스로 실행했다는 뜻이다.
+     `instructions_on_next_compaction`은 프롬프트가 있는 Claude Code 세션이 reload 확인 뒤 `/compact`를 너무 짧다는 이유로
+     거부당했다는 뜻이며, 지침은 다음 compact 또는 재시작 때 갱신된다.
    - `skipped`: 세션이 계속 바빴거나, 입력 줄을 읽을 수 없거나, 보내기 직전에 입력이 바뀌었거나, 제한 시간에
      도달했거나, 세션이 닫혔다. `input_clear_failed`는 입력 줄을 지우지 못해 아무것도 보내지 않았거나
      (`input`이 `clear_failed`), 스크립트가 글을 다시 입력했다는 뜻이다.
@@ -108,8 +110,7 @@ compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 �
      `N error(s) during load`를 알렸거나 활성화된 플러그인보다 적게 불러왔다는 뜻이며, `plugin_load`에 보고된 개수가
      있다. `--force`를 요청하는 reload 거부는
      플러그인의 MCP 도구가 바뀌었다는 뜻이다. 사용자 승인 없이 강제로 진행하지 않는다.
-     `compact_needs_more_messages`는 대화가 너무 짧아 compact할 수 없다는 뜻이다. 다음 compact 또는 재시작 때
-     지침이 갱신된다. `compact_dialog_open`은 `/compact`가 "acts on the main conversation, not this
+     `compact_dialog_open`은 `/compact`가 "acts on the main conversation, not this
      agent" 대화상자가 아닌 다른 대화상자를 열었다는 뜻이며, 스크립트는 키를 보내지 않고 그대로 둔다. 그 대화상자는
      선택을 `Run /compact on the main conversation`으로 옮겨 답하며 `Cancel`은 절대 확인하지 않는다. `probe_interrupted_check_input`은 스크립트가 입력 줄을 확인하는 동안 입력 줄이 바뀌고
      원래 상태로 돌아오지 않았거나, 그런 확인 중단이 계속됐다는 뜻이다. 스크립트는 직접 입력하지 않은 내용을 지우지 않으므로, 해당 세션 입력 줄에 불필요한 `x`가 있는지
@@ -163,7 +164,8 @@ compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 �
 - 명령은 연결되고 쓰기가 가능하며, 입력이 비어 있거나 아래처럼 지운, 유휴 상태인 터미널에만 보낸다.
   호스트 자신의 턴 기록이 한가함이나 바쁨을 먼저 판단하며, 각 전송 직전에 다시 읽고 그때 판단하지 못하면
   `tui-idle`도 요구한다. 가장 최근 턴이 끝났고, 파일 앞쪽을 포함해 알림을 남긴 백그라운드 작업, 서브에이전트,
-  예약된 깨우기가 없는 Claude Code 대화 기록이면 한가함이고,
+  예약된 깨우기가 없는 Claude Code 대화 기록이나, 앞에 진행 중인 항목이 없거나 파일이 300초 동안 바뀌지 않았다면 종료 기록이 없는
+  앞선 차례가 있어도 끝난 슬래시 명령으로 끝나는 기록이면 넘긴 뒤 새 기록이 없어도 한가함이고,
   진행 중인 턴이면 바쁨이며, Codex 롤아웃은 마지막으로 완성된 줄이 같은 방식으로 판단한다. 기록이 없거나
   불완전하거나 판단할 수 없으면 Orca의 `tui-idle`이 판단한다. 짧은 경쟁 조건은 남아 있다.
 - Orca는 Claude Code 입력 줄을 화면에 표시하지 않고 초안으로 제공한다. 이 초안에는 회색 안내 문구도

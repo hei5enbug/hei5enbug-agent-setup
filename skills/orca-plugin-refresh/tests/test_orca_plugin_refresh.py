@@ -611,7 +611,7 @@ class DriveTest(unittest.TestCase):
         return respond
 
     def test_compact할_대화가_없는_빈_세션만_clear로_새_지침을_넣는다(self):
-        """Claude가 compact할 메시지가 없다고 답하면 사용자 프롬프트가 없는 세션만 /clear로 지침을 넣고, 프롬프트가 있으면 지우지 않고 실패로 알린다."""
+        """Claude가 compact할 메시지가 없다고 답하면 사용자 프롬프트가 없는 세션만 /clear로 지침을 넣고, 프롬프트가 있으면 지우지 않고 done과 다음 compact 안내로 끝낸다."""
         # Given
         empty = self.compact_refused_session("term_claude_empty", prompts=False)
         used = self.compact_refused_session("term_claude_used", prompts=True)
@@ -627,7 +627,7 @@ class DriveTest(unittest.TestCase):
         # Then
         by_handle = {entry["handle"]: entry for entry in sessions}
         self.assertEqual(("done", ["clear"], "empty_session_cleared"), (by_handle["term_claude_empty"]["status"], by_handle["term_claude_empty"]["completed"], by_handle["term_claude_empty"]["note"]))
-        self.assertEqual(("failed", "compact_needs_more_messages"), (by_handle["term_claude_used"]["status"], by_handle["term_claude_used"]["detail"]))
+        self.assertEqual(("done", "instructions_on_next_compaction"), (by_handle["term_claude_used"]["status"], by_handle["term_claude_used"]["note"]))
         self.assertNotIn(("term_claude_used", "/clear"), fake.sent)
 
     def test_MCP_변경으로_reload가_거부되면_실패로_보고한다(self):
@@ -818,7 +818,7 @@ class ReviewRegressionTest(DriveTest):
 
         # Then
         self.assertEqual([], fake.sent)
-        self.assertEqual(("failed", "compact_needs_more_messages", ["compact:compact_needs_more_messages"]), (entry["status"], entry["detail"], entry["completed"]))
+        self.assertEqual(("done", "instructions_on_next_compaction", ["compact:nothing_to_compact"]), (entry["status"], entry["note"], entry["completed"]))
 
     def test_슬래시로_시작하는_실제_프롬프트는_대화로_센다(self):
         """/review 같은 사용자 명령은 대화로 세고, 스크립트가 보내는 명령과 명령 기록 줄만 대화가 아닌 것으로 본다."""

@@ -98,7 +98,9 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
      `fresh_session_loads_on_first_turn` marks a Codex session that never ran a turn. The note
      `empty_session_cleared` marks an empty Claude Code session that got `/clear`, and
      `instructions_load_on_next_turn` marks a compacted Codex session, and
-     `applied_by_session` marks a session that ran `/reload-plugins` itself after the handoff.
+     `applied_by_session` marks a session that ran `/reload-plugins` itself after the handoff, and
+     `instructions_on_next_compaction` marks a Claude Code session with prompts whose `/compact` was refused as
+     too short after the reload was confirmed; its instructions refresh at its next compaction or restart.
    - `skipped`: the session stayed busy, showed an unreadable input line, changed its input just before the send,
      reached the deadline, or closed. `input_clear_failed` means the line could not be cleared, so nothing was sent
      (`input` is `clear_failed`), or that the script typed the text back.
@@ -110,8 +112,7 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
      reload answered with `N error(s) during load` or loaded fewer plugins than are enabled; `plugin_load` holds
      the reported counts. A reload refusal that asks for
      `--force` means a plugin's MCP tools changed; do not force it without the user's approval.
-     `compact_needs_more_messages` means the conversation is too short to compact; its instructions refresh at
-     its next compaction or restart. `compact_dialog_open` means `/compact` opened a dialog other than the
+     `compact_dialog_open` means `/compact` opened a dialog other than the
      "acts on the main conversation, not this agent" one, which the script leaves open without sending a key; that
      one it answers by moving the selection to `Run /compact on the main conversation` and never confirming
      `Cancel`. `probe_interrupted_check_input` means the input line changed while the
@@ -170,8 +171,10 @@ result is not ok when this plugin has a host error or any companion has the stat
 - A command goes only to a connected, writable, idle terminal whose input line is empty or was cleared as below.
   The host's own turn record decides idle or busy first and is read again right before each send, where an
   undecided record needs `tui-idle` too; a Claude Code transcript whose newest turn has ended with no background
-  task, subagent, or scheduled wakeup owing a notification, also anywhere earlier in the file, means idle, a turn in
-  progress means busy, and a Codex rollout's last complete line decides the same way. When the record is missing,
+  task, subagent, or scheduled wakeup owing a notification, also anywhere earlier in the file, or that ends with a
+  finished slash command and either nothing active before it or, when the file is unchanged for 300 seconds, an
+  earlier turn with no end record, means idle, even when no record follows the handoff, a turn
+  in progress means busy, and a Codex rollout's last complete line decides the same way. When the record is missing,
   partial, or not decisive, Orca's `tui-idle` decides. A short race remains.
 - Orca hides the Claude Code input line from the screen and reports it as a draft, which also carries Claude
   Code's grey prompt suggestion. When a draft stays unchanged for five seconds, the script types one character

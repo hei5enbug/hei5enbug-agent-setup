@@ -12,6 +12,7 @@ from refresh_install import CODEX_IDLE_EVENTS, rollout_last_record
 
 
 TRANSCRIPT_TAIL_BYTES = 512 * 1024
+STALE_TRANSCRIPT_SECONDS = 300.0
 COMMAND_RECORD_PREFIXES = ("<command-name>", "<local-command-caveat>", "<local-command-stdout>", "<local-command-stderr>")
 COMMAND_OUTPUT_PREFIXES = COMMAND_RECORD_PREFIXES[2:]
 COMMAND_NAME = re.compile(r"<command-name>\s*(/\S+?)\s*</command-name>")
@@ -159,14 +160,21 @@ def owes_notification(records: list[dict], now: float, earlier: set[str] | None 
     return bool(pending)
 
 
-def claude_state(records: list[dict], now: float | None = None, earlier: Callable[[], set[str]] | None = None) -> str | None:
+def claude_state(records: list[dict], now: float | None = None, earlier: Callable[[], set[str]] | None = None, stale: bool = False) -> str | None:
     """`idle`, `busy`, or None for the host's own Claude Code turn record, judged from the transcript tail."""
-    verdict = claude_turn(records, now, earlier)
+    verdict = claude_turn(records, now, earlier, stale)
     return None if verdict == "owing" else verdict
 
 
-def claude_turn(records: list[dict], now: float | None = None, earlier: Callable[[], set[str]] | None = None) -> str | None:
-    """Like `claude_state`, but `owing` when the turn ended while a background task, subagent, or wakeup still owes a notification."""
+def settled(records: list[dict], now: float | None, earlier: Callable[[], set[str]] | None) -> str:
+    return "owing" if owes_notification(records, time.time() if now is None else now, earlier() if earlier else None) else "idle"
+
+
+def claude_turn(records: list[dict], now: float | None = None, earlier: Callable[[], set[str]] | None = None, stale: bool = False) -> str | None:
+    """Like `claude_state`, but `owing` when the turn ended while a background task, subagent, or wakeup still owes a notification.
+
+    `stale` marks a transcript file untouched for STALE_TRANSCRIPT_SECONDS; a finished slash command then ends a tail whose
+    earlier turns carry no end record."""
     if not records:
         return None
     kinds = [classify(record) for record in records]
@@ -182,10 +190,12 @@ def claude_turn(records: list[dict], now: float | None = None, earlier: Callable
                 return "busy"
             finished_commands.update(COMMAND_NAME.findall(plain_text(message_content(records[index])) or ""))
         elif kind == "finished":
-            return "owing" if owes_notification(records, time.time() if now is None else now, earlier() if earlier else None) else "idle"
+            return settled(records, now, earlier)
         elif kind == "active" and typed_command(records[index]) not in finished_commands:
-            return "busy" if has_duration else None
-    return None
+            if has_duration:
+                return "busy"
+            return settled(records, now, earlier) if finished_commands and stale else None
+    return settled(records, now, earlier) if finished_commands else None
 
 
 def transcript_tail(path: str) -> tuple[list[dict], int] | None:
@@ -255,6 +265,8 @@ def record_state(host: str, path: object, now: float | None = None, detailed: bo
             return None
         records, boundary = tail
         earlier = (lambda: earlier_pending(path, boundary)) if boundary else None
-        return claude_turn(records, now, earlier) if detailed else claude_state(records, now, earlier)
+        age = (time.time() if now is None else now) - os.stat(path).st_mtime
+        stale = age >= STALE_TRANSCRIPT_SECONDS
+        return claude_turn(records, now, earlier, stale) if detailed else claude_state(records, now, earlier, stale)
     except OSError:
         return None

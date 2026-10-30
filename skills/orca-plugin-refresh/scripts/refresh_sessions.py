@@ -589,6 +589,13 @@ def finish(entry: dict, outcome: str) -> None:
         entry.update(status="pending" if entry["actions"] else "done", detail=None if entry["actions"] else "applied")
 
 
+def compaction_refused(entry: dict) -> None:
+    """End an entry whose compaction Claude Code refused for a session with prompts: the reload is confirmed and the
+    instructions arrive at the next compaction."""
+    entry.setdefault("completed", []).append("compact:nothing_to_compact")
+    entry.update(status="done", detail="applied", actions=[], note="instructions_on_next_compaction")
+
+
 def step(orca: Orca, entry: dict, target: dict, live: dict[str, dict]) -> None:
     if entry["status"] == "sent":
         outcome = verify(orca, entry, target)
@@ -596,11 +603,11 @@ def step(orca: Orca, entry: dict, target: dict, live: dict[str, dict]) -> None:
             return
         if outcome == "nothing_to_compact":
             if claude_has_prompts((read_marker(entry["handle"]) or {}).get("transcript_path")):
-                outcome = "failed:compact_needs_more_messages"
+                compaction_refused(entry)
             else:
                 entry["actions"][0] = "clear"
                 entry.update(status="pending", detail="empty_session_needs_clear")
-                return
+            return
         finish(entry, outcome)
         return
     if entry["status"] != "pending" or not entry["actions"]:
@@ -627,8 +634,7 @@ def step(orca: Orca, entry: dict, target: dict, live: dict[str, dict]) -> None:
         return
     marker = read_marker(entry["handle"])
     if entry["actions"][0] == "clear" and claude_has_prompts((marker or {}).get("transcript_path")):
-        entry["actions"].insert(0, "compact")
-        finish(entry, "failed:compact_needs_more_messages")
+        compaction_refused(entry)
         return
     def moved() -> bool:
         return entry["host"] == "claude" and orca.draft(entry["handle"]) != entry.get("observed_draft")
