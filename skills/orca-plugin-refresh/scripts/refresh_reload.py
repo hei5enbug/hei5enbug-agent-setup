@@ -5,7 +5,7 @@ import os
 import re
 import subprocess
 from pathlib import Path
-from typing import Sequence
+from typing import Mapping, Sequence
 
 import refresh_core as core
 from refresh_core import RefreshError
@@ -15,7 +15,8 @@ RELOAD_LINE = re.compile(r"Reloaded: (?P<counts>\d+ plugins?[^\n]*)")
 LOAD_ERRORS = re.compile(r"(\d+) errors? during load")
 COUNT_SEGMENT = re.compile(r"\s*(\d+) (plugin|skill|agent|hook)s?\s*")
 LIST_TIMEOUT = 60.0
-EXPECTED_CACHE: dict[tuple[str, str], int | None] = {}
+SESSION_PLUGIN_VARIABLES = ("CLAUDE_CONFIG_DIR", "CLAUDE_CODE_PLUGIN_DIRS", "CLAUDE_CODE_PLUGIN_CACHE_DIR", "CLAUDE_CODE_PLUGIN_SEED_DIR")
+EXPECTED_CACHE: dict[tuple[tuple[str, str], ...], int | None] = {}
 
 
 def reload_report(text: str) -> dict | None:
@@ -47,13 +48,15 @@ def screen_report(lines: Sequence[str], follow: int = 3) -> dict | None:
     return reload_report("\n".join(lines[starts[-1]:starts[-1] + follow + 1]))
 
 
-def enabled_count(config_dir: str | None, cwd: str | None) -> int | None:
-    """Entries with `enabled: true` in `claude plugin list --json` for that configuration folder and working folder."""
+def enabled_count(session_env: Mapping[str, str], cwd: str | None) -> int | None:
+    """Entries with `enabled: true` in `claude plugin list --json` for the session's plugin variables and working folder.
+
+    The caller's own `SESSION_PLUGIN_VARIABLES` are dropped, so only the values in `session_env` decide what is counted.
+    """
     if not cwd or not Path(cwd).is_dir():
         return None
-    environment = {key: value for key, value in os.environ.items() if key != "CLAUDE_CONFIG_DIR"}
-    if config_dir:
-        environment["CLAUDE_CONFIG_DIR"] = config_dir
+    environment = {key: value for key, value in os.environ.items() if key not in SESSION_PLUGIN_VARIABLES}
+    environment.update({name: session_env[name] for name in SESSION_PLUGIN_VARIABLES if session_env.get(name)})
     try:
         result = subprocess.run([core.executable("claude"), "plugin", "list", "--json"], stdin=subprocess.DEVNULL,
                                 capture_output=True, text=True, timeout=LIST_TIMEOUT, check=False, env=environment, cwd=cwd)
@@ -68,7 +71,8 @@ def enabled_count(config_dir: str | None, cwd: str | None) -> int | None:
 def expected_plugins(entry: dict) -> int | None:
     """The lower bound of plugins the session's host should load, or None when it cannot be told.
 
-    The count is read once per configuration folder and working folder from the session process's own environment.
+    The count is read once per working folder and set of `SESSION_PLUGIN_VARIABLES` values, taken from the session process's own
+    environment.
     """
     try:
         process = find_session_process(entry["handle"])
@@ -76,9 +80,10 @@ def expected_plugins(entry: dict) -> int | None:
         return None
     if process is None:
         return None
-    key = (process.config_dir or "", str(entry.get("worktree") or ""))
+    session_env = {name: process.env[name] for name in SESSION_PLUGIN_VARIABLES if process.env.get(name)}
+    key = (*session_env.items(), ("worktree", str(entry.get("worktree") or "")))
     if key not in EXPECTED_CACHE:
-        EXPECTED_CACHE[key] = enabled_count(process.config_dir, entry.get("worktree"))
+        EXPECTED_CACHE[key] = enabled_count(session_env, entry.get("worktree"))
     return EXPECTED_CACHE[key]
 
 

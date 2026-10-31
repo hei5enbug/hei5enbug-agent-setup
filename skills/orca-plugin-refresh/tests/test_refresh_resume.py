@@ -66,9 +66,9 @@ class FakeProcesses:
         self.files = {OLD_EXE, NEW_EXE}
         self.help_text = HELP
 
-    def add(self, handle, argv, exe, config_dir, *, entrypoint=None, comm="claude"):
+    def add(self, handle, argv, exe, config_dir, *, entrypoint=None, comm="claude", extra_env=None):
         self.next_pid += 1
-        env = {"ORCA_TERMINAL_HANDLE": handle}
+        env = {"ORCA_TERMINAL_HANDLE": handle, **(extra_env or {})}
         if config_dir:
             env["CLAUDE_CONFIG_DIR"] = config_dir
         if entrypoint:
@@ -233,7 +233,24 @@ class ReloadAnswerTest(ResumeCase):
 
         # Then
         self.assertEqual([7, 7, 7], counts)
-        self.enabled_count.assert_called_once_with(CONFIG_DIR, self.temp.name)
+        self.enabled_count.assert_called_once_with({"CLAUDE_CONFIG_DIR": CONFIG_DIR}, self.temp.name)
+
+    def test_세션_전용_플러그인_폴더가_다른_세션은_활성화_수를_따로_읽는다(self):
+        """CLAUDE_CODE_PLUGIN_DIRS만 다른 두 세션은 각자의 값으로, 변수가 없는 세션은 그 변수 없이 claude plugin list를 실행한다."""
+        # Given
+        for handle, extra in (("term_a", {"CLAUDE_CODE_PLUGIN_DIRS": "/tmp/work/a"}), ("term_b", {"CLAUDE_CODE_PLUGIN_DIRS": "/tmp/work/b"}), ("term_c", {})):
+            self.processes.add(handle, ["claude"], NEW_EXE, CONFIG_DIR, extra_env=extra)
+        entries = [{"handle": handle, "worktree": self.temp.name} for handle in ("term_a", "term_b", "term_c")]
+
+        # When
+        counts = [refresh_reload.expected_plugins(entry) for entry in entries]
+
+        # Then
+        self.assertEqual([7, 7, 7], counts)
+        self.assertEqual([call.args for call in self.enabled_count.call_args_list],
+                         [({"CLAUDE_CONFIG_DIR": CONFIG_DIR, "CLAUDE_CODE_PLUGIN_DIRS": "/tmp/work/a"}, self.temp.name),
+                          ({"CLAUDE_CONFIG_DIR": CONFIG_DIR, "CLAUDE_CODE_PLUGIN_DIRS": "/tmp/work/b"}, self.temp.name),
+                          ({"CLAUDE_CONFIG_DIR": CONFIG_DIR}, self.temp.name)])
 
     def test_같은_수의_플러그인을_불러온_reload_답은_done이다(self):
         """오류가 없고 활성화 수와 같거나 많이 불러오면 done이며 이전 보고를 지운다."""
@@ -246,6 +263,56 @@ class ReloadAnswerTest(ResumeCase):
         # Then
         self.assertEqual(("done", "applied"), (entry["status"], entry["detail"]))
         self.assertNotIn("plugin_load", entry)
+
+
+class EnabledCountTest(unittest.TestCase):
+    PLUGINS = [{"id": "a", "enabled": True}, {"id": "b", "enabled": False}, {"id": "c", "enabled": True}, "x", {"id": "d"}]
+
+    def run_count(self, session_env):
+        caller = {"PATH": "/usr/bin", "CLAUDE_CODE_PLUGIN_DIRS": "/tmp/work/caller", "CLAUDE_CONFIG_DIR": "/home/test/stray"}
+        listed = type("Listed", (), {"returncode": 0, "stdout": json.dumps(self.PLUGINS)})()
+        with tempfile.TemporaryDirectory() as cwd, patch.dict(os.environ, caller, clear=True), \
+                patch.object(refresh_reload.core, "executable", return_value=CLAUDE_PATH), \
+                patch.object(refresh_reload.subprocess, "run", return_value=listed) as run:
+            count = refresh_reload.enabled_count(session_env, cwd)
+        return count, run.call_args.kwargs["env"]
+
+    def test_세션에_없는_플러그인_변수는_호출자의_값을_물려받지_않는다(self):
+        """세션 환경에 CLAUDE_CODE_PLUGIN_DIRS가 없으면 호출자 환경에 있어도 하위 프로세스에는 없고, 설정 폴더도 세션 값만 쓴다."""
+        # Given
+        session_env = {"CLAUDE_CONFIG_DIR": CONFIG_DIR}
+
+        # When
+        count, environment = self.run_count(session_env)
+
+        # Then
+        self.assertEqual(2, count)
+        self.assertNotIn("CLAUDE_CODE_PLUGIN_DIRS", environment)
+        self.assertEqual(CONFIG_DIR, environment["CLAUDE_CONFIG_DIR"])
+        self.assertEqual("/usr/bin", environment["PATH"])
+
+    def test_세션의_플러그인_변수는_호출자의_값을_덮어쓴다(self):
+        """세션 환경에 자기 CLAUDE_CODE_PLUGIN_DIRS가 있으면 하위 프로세스에는 정확히 그 값만 들어간다."""
+        # Given
+        session_env = {"CLAUDE_CONFIG_DIR": CONFIG_DIR, "CLAUDE_CODE_PLUGIN_DIRS": "/tmp/work/session"}
+
+        # When
+        count, environment = self.run_count(session_env)
+
+        # Then
+        self.assertEqual(2, count)
+        self.assertEqual("/tmp/work/session", environment["CLAUDE_CODE_PLUGIN_DIRS"])
+
+    def test_세션에_설정_폴더가_없으면_호출자의_설정_폴더도_쓰지_않는다(self):
+        """세션 환경에 CLAUDE_CONFIG_DIR가 없으면 호출자의 값이 하위 프로세스에 남지 않는다."""
+        # Given
+        session_env = {}
+
+        # When
+        count, environment = self.run_count(session_env)
+
+        # Then
+        self.assertNotIn("CLAUDE_CONFIG_DIR", environment)
 
 
 class ReleaseReportTest(ResumeCase):
