@@ -1,5 +1,7 @@
 # Documentation files
 
+Before writing or restructuring a README, read [README rules](readme-writing.md).
+
 Use [technical-design-writer](../skills/technical-design-writer/SKILL.md) only when the user explicitly
 requests technical design work, such as a technical design document, architecture proposal, RFC, system
 design, data design, API design, or design outline, or directly invokes that skill. Its Create and Improve

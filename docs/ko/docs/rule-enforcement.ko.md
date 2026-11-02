@@ -27,56 +27,56 @@
 
 | 집행자 | 집행하는 규칙 | 규칙 위치 |
 |---|---|---|
-| `tests/test_session_context.py` | 세션 훅은 core, common, 호스트 지침을 크기 상한 안에서 설정·경로 알림과 함께 렌더링한다. | `instructions/session/`, `README.md` (Automatic instructions) |
-| `tests/test_session_settings_notice.py` | 설정 알림은 알린 설정이 바뀔 때만 나온다. | `README.md` (Automatic instructions) |
+| `tests/test_session_context.py` | 세션 훅은 core, common, 호스트 지침을 크기 상한 안에서 설정·경로 알림과 함께 렌더링한다. | `instructions/session/`, `docs/instructions-and-delegation.md` (Automatic instructions) |
+| `tests/test_session_settings_notice.py` | 설정 알림은 알린 설정이 바뀔 때만 나온다. | `docs/instructions-and-delegation.md` (Automatic instructions) |
 | `tests/test_commit_routing.py` | 새 커밋은 모두 `suggest-commit` 커밋 모드를 거친다. | `instructions/session/common.md` |
 | `tests/test_common_rules.py` | 두 호스트의 메인 세션 문맥에 공통 답변 규칙이 실린다. | `instructions/session/common.md` |
 | `tests/test_service_rules.py` | 호스팅 서비스는 검색이나 단건 조회, 작은 페이지로 읽는다. | `instructions/services.md` |
 | `tests/test_planning_contract.py` | 계획과 설계 절차는 분리되고, 모델 선택의 출처는 하나이며, 독립 검증은 마지막 단계에서 자동으로 1회 실행하고 더 이른 검토는 승인이 필요하며, 읽기 전용 1회다. | `instructions/implementation-planning.md`, `instructions/independent-model-validation.md` |
 | `tests/test_delegation_contract.py` | 호스트는 위임 계약을 받고, 수정하지 않은 이전 역할 파일은 교체하되 사용자가 고친 파일은 둔다. | `instructions/session/common.md`, `instructions/implementation-delegation.md` |
 | `tests/test_claude_worker_contract.py` | Claude Code worker와 에이전트 정의는 선언한 도구, 모델, 어댑터 규칙을 유지한다. | `agents/`, `instructions/claude-agents.md` |
-| `tests/test_codex_worker_contract.py` | Codex worker와 designer 역할은 할당받은 worker 규칙과 어댑터를 따른다. | `standalone-agents/`, `instructions/codex-agents.md`, `README.md` (Structure) |
+| `tests/test_codex_worker_contract.py` | Codex worker와 designer 역할은 할당받은 worker 규칙과 어댑터를 따른다. | `standalone-agents/`, `instructions/codex-agents.md`, `docs/instructions-and-delegation.md` (Agent registration) |
 | `tests/test_reviewer_contract.py` | 검토자는 모델과 읽기 전용 도구를 고정하고, 독립 검증 표는 레지스트리의 계열별 검토자를 그대로 적으며, scout는 로컬 조사만 맡는다. | `agents/`, `standalone-agents/`, `instructions/model-routing.md` |
-| `tests/test_worker_route_accept.py` | `auto` 구현 worker 경로가 Claude 세션 문맥과 매니페스트에 나타난다. | `README.md` (Feature options) |
-| `tests/test_worker_setting.py` | worker 모델과 사고 강도는 환경 변수, 저장한 옵션, 매니페스트 기본값 순으로 정한다. | `README.md` (Feature options) |
+| `tests/test_worker_route_accept.py` | `auto` 구현 worker 경로가 Claude 세션 문맥과 매니페스트에 나타난다. | `docs/configuration.md` (Feature options) |
+| `tests/test_worker_setting.py` | worker 모델과 사고 강도는 환경 변수, 저장한 옵션, 매니페스트 기본값 순으로 정한다. | `docs/configuration.md` (Feature options) |
 | `tests/test_role_runner.py` | 역할 실행기는 역할마다 샌드박스, 모델, 사고 강도, 도구를 넘기고 실제 실행을 검증하며, 고정값을 넘는 `--model`과 `--effort`는 `--user-requested`가 있을 때만 허용한다. | `instructions/claude-agents.md`, `instructions/model-routing.md` |
 | `hooks/mod/agents.test.ts` | mod는 역할마다 모델과 사고 강도를 고정하고, 사용자의 가장 최근 프롬프트가 직접 지정한 경우에만 다른 모델이나 사고 강도를 따른다. | `instructions/claude-agents.md`, `instructions/model-routing.md` |
 | `tests/test_verify_spawn.py` | 생성한 Codex 에이전트는 기록에 기대한 모델과 사고 강도가 있을 때만 인정한다. | `instructions/codex-agents.md` |
 | `tests/test_agent_guard.py` | Codex 내장 에이전트는 거부하고, 설치한 역할은 고정한 모델과 사고 강도로만 실행한다. | `instructions/codex-agents.md` |
-| `tests/test_runtime_regressions.py` | 역할 파일을 동시에 만들 때도 사용자 파일을 보존한다. | `README.md` (Structure) |
+| `tests/test_runtime_regressions.py` | 역할 파일을 동시에 만들 때도 사용자 파일을 보존한다. | `docs/instructions-and-delegation.md` (Agent registration) |
 | `tests/test_codex_usage.py`, `tests/test_codex_usage_accept.py` | Codex 주간 사용률을 안전하게 파싱하고, 모르면 `null`로 보고한다. | `scripts/codex_usage.py`, `hooks/mod/board.js` |
-| `tests/test_language_guard.py` | 사용자에게 보내는 답변과 진행 안내는 응답 언어를 쓴다. | `instructions/session/common.md`, `README.md` (Response language) |
-| `tests/test_host_settings.py` | 세션 시작은 실제로 적용되는 호스트 권한 설정을 짧게 알린다. | `README.md` (Host settings) |
-| `tests/test_hook_python.py` | 훅은 설정한 Python 인터프리터를 고르고, 없으면 `python3`으로 대체한다. | `README.md` (Feature options) |
-| `tests/test_codex_hook_trust.py` | 플러그인은 신뢰가 풀린 자기 Codex 훅만, HEAD를 공식 원격이 지금 `main`이나 `v*` 태그로 광고하거나 `main`에 포함하는 깨끗한 공식 checkout에서만 다시 신뢰하고 `hooks/list`로 확인한다. | `README.md` (Automatic instructions, Situation-based delegation) |
+| `tests/test_language_guard.py` | 사용자에게 보내는 답변과 진행 안내는 응답 언어를 쓴다. | `instructions/session/common.md`, `docs/guards.md` (Response language) |
+| `tests/test_host_settings.py` | 세션 시작은 실제로 적용되는 호스트 권한 설정을 짧게 알린다. | `docs/configuration.md` (Host settings) |
+| `tests/test_hook_python.py` | 훅은 설정한 Python 인터프리터를 고르고, 없으면 `python3`으로 대체한다. | `docs/configuration.md` (Feature options) |
+| `tests/test_codex_hook_trust.py` | 플러그인은 신뢰가 풀린 자기 Codex 훅만, HEAD를 공식 원격이 지금 `main`이나 `v*` 태그로 광고하거나 `main`에 포함하는 깨끗한 공식 checkout에서만 다시 신뢰하고 `hooks/list`로 확인한다. | `docs/instructions-and-delegation.md` (Automatic instructions, Situation-based delegation) |
 
 ## 승인과 데이터 가드
 
 | 집행자 | 집행하는 규칙 | 규칙 위치 |
 |---|---|---|
-| `tests/test_approval_guard.py` | 읽기는 통과하고, 쓰기는 승인이 필요하며, 파괴적 호출은 매번 묻고, 비밀 값 출력은 거부한다. | `instructions/session/core.md`, `README.md` (Approval guard) |
-| `tests/test_approval_guard_modules.py` | 승인 가드의 분리된 모듈은 순환 없이 층으로 가져오고, 바꿔 끼우는 이름마다 소유 모듈이 하나이며, 진입점과 똑같이 프로그램이나 import로 쓰면 거부된다. | `README.md` (Approval guard) |
-| `tests/test_approval_policy_tiers.py` | 조회, 세션 승인, 매번 승인 층이 경계를 지킨다. | `README.md` (Approval guard) |
-| `tests/test_approval_one_approval.py`, `tests/test_approval_session_write.py` | 세션당 한 번의 승인이 파괴적이지 않은 쓰기를 모두 다루고, 되돌릴 수 없는 호출은 계속 묻는다. | `instructions/session/core.md`, `README.md` (Approval guard) |
-| `tests/test_approval_session_scope.py` | `session` 범위는 중대한 종류를 빼고 세션당 한 번 묻는다. | `README.md` (Approval guard) |
-| `tests/test_approval_local_scope.py`, `tests/test_approval_removal_targets.py` | 버려도 되는 로컬 작업은 매번 묻지 않고, 재귀 삭제는 대상을 풀어서 판단한다. | `README.md` (Approval guard) |
-| `tests/test_approval_recorded_reads.py` | 기록된 실수 없는 조회는 묻지 않는다: 따옴표 구분자 heredoc으로 쓰고 같은 명령에서 실행하는 스크립트, 이름이나 개수만 출력하는 xargs 조회, 비밀이 아닌 값에 대한 `env \| grep`, 로컬 docker 메타데이터. 내용을 출력하거나 비밀이 드러나는 인접 형태는 계속 묻는다. | `README.md` (Approval guard) |
-| `tests/test_approval_recorded_removals.py` | 기록된 실수 없는 삭제는 묻지 않는다: `${VAR:?}`, 리터럴 `for` 목록, `bash -c` 인자, `unset`·`export`를 지나도 유지되는 `mktemp` 추적으로 정해지는 대상, `.git`이 없는 `.[!.]*` 글롭, `runs` 밖의 플러그인 평가 작업 폴더, 잃는 내용이 없는 stash drop, Claude의 위험한 삭제 확인에서 답하는 임시 폴더 안 삭제. 풀리지 않거나 보호되거나 내용을 잃는 인접 형태는 계속 묻는다. | `README.md` (Approval guard) |
-| `tests/test_approval_recorded_replay.py` | 에이전트 실수 없이 기록된 승인 가드 ask를 모두 훅으로 다시 실행하면 묻지도 막지도 않고, 남겨 둔 `$PWD` 삭제는 계속 묻는다. | `README.md` (Approval guard) |
-| `tests/test_approval_python_risks.py` | 자격 증명 파일을 읽거나 비밀 이름 환경변수 값을 출력하는 Python 코드는 `cat`과 같은 민감 읽기 판정을 받고, 설정 여부 검사·이름 나열·검색어·평범한 읽기와 쓰기는 묻지 않는다. | `README.md` (Approval guard) |
-| `tests/test_approval_installed_code.py` | 리다이렉트·`tee`·`sed -i`·`cp`·`mv`·`install`·`rsync`·Python·네이티브 파일 도구로 플러그인 캐시나 실행 중인 플러그인 루트에 쓰는 호출은 캐시가 git 작업 트리로 연결된 심볼릭 링크인 경우에도 경로를 푼 뒤 자기 수정으로 거부하고, 그 코드를 읽거나 다른 곳에 쓰는 호출은 허용한다. | `README.md` (Approval guard) |
-| `tests/test_approval_python_sensitive_writes.py` | `~/.ssh`·`~/.aws`·`~/.gnupg`, 셸 시작 파일, git 훅, Claude·Codex 설정 파일에 쓰는 Python은 심볼릭 링크 이름과 대상 양쪽으로, 세션 전체 승인 뒤에도 매번 묻고, 작업 트리와 임시 공간의 평범한 Python 쓰기는 묻지 않는다. | `README.md` (Approval guard) |
-| `tests/test_approval_python_exec.py` | 문자열 리터럴 `exec`·`eval`은 중첩 리터럴과 이스케이프로 가린 가드 모듈 이름까지, 리터럴 딕셔너리 네임스페이스는 코드가 읽는 이름에 묶어 같은 코드를 제자리에 쓴 것과 똑같이 판정하고, 리터럴이 아닌 네임스페이스나 변수·`input()`·표준 입력을 받는 `exec`는 계속 묻되 다른 Python 판정도 그대로 받는다. | `README.md` (Approval guard) |
-| `tests/test_approval_false_positives.py`, `tests/test_approval_classification_safety.py` | 무해한 호출과 비밀 메타데이터 조회를 쓰기나 비밀 값 출력으로 오인하지 않는다. | `README.md` (Approval guard) |
-| `tests/test_approval_extensions.py`, `tests/test_approval_reuse.py` | 사전 승인 키와 민감 조회 승인은 지정한 대상만 다룬다. | `README.md` (Approval guard) |
-| `tests/test_approval_retries.py` | 답을 받지 못한 승인 요청이 반복되면 새 프롬프트 전까지 거부한다. | `README.md` (Approval guard) |
-| `tests/test_approval_heartbeat.py` | 가드는 현재 훅이 도구를 검사했는지 확인한다. | `README.md` (Approval guard) |
-| `tests/test_approval_risk_record.py`, `tests/test_approval_wording.py` | 쓰기와 중대한 호출을 기록하고, 승인 문구는 언어 설정을 따른다. | `README.md` (Claude Code mod, Approval guard) |
-| `tests/test_approval_review_fixes.py` | 래퍼 형태, `curl` 자격 증명, 가림 처리, 실행 가능한 MCP 입력을 안전하게 분류한다. | `README.md` (Approval guard) |
-| `tests/test_approval_tabularis.py` | Tabularis 쿼리는 연결 메타데이터와 맞는 SQL 분류기를 따른다. | `README.md` (Approval guard) |
-| `tests/test_codex_native_approval.py`, `tests/test_permission_request_claude.py` | 각 호스트의 자체 승인 창이 세션의 첫 쓰기 승인을 이어받는다. | `README.md` (Approval guard) |
-| `tests/test_datagrip_guard.py`, `tests/test_db_read_policy.py` | 데이터베이스 쿼리는 읽기일 때만 묻지 않고 실행한다. | `instructions/infrastructure-access.md`, `README.md` (DataGrip query guard) |
-| `tests/test_limits_file_protection.py` | 데이터베이스 읽기 한도 파일을 보호한다. | `README.md` (Approval guard) |
+| `tests/test_approval_guard.py` | 읽기는 통과하고, 쓰기는 승인이 필요하며, 파괴적 호출은 매번 묻고, 비밀 값 출력은 거부한다. | `instructions/session/core.md`, `docs/approval-guard.md` (Approval guard) |
+| `tests/test_approval_guard_modules.py` | 승인 가드의 분리된 모듈은 순환 없이 층으로 가져오고, 바꿔 끼우는 이름마다 소유 모듈이 하나이며, 진입점과 똑같이 프로그램이나 import로 쓰면 거부된다. | `docs/approval-guard.md` (Approval guard) |
+| `tests/test_approval_policy_tiers.py` | 조회, 세션 승인, 매번 승인 층이 경계를 지킨다. | `docs/approval-guard.md` (Approval guard) |
+| `tests/test_approval_one_approval.py`, `tests/test_approval_session_write.py` | 세션당 한 번의 승인이 파괴적이지 않은 쓰기를 모두 다루고, 되돌릴 수 없는 호출은 계속 묻는다. | `instructions/session/core.md`, `docs/approval-guard.md` (Approval guard) |
+| `tests/test_approval_session_scope.py` | `session` 범위는 중대한 종류를 빼고 세션당 한 번 묻는다. | `docs/approval-guard.md` (Approval guard) |
+| `tests/test_approval_local_scope.py`, `tests/test_approval_removal_targets.py` | 버려도 되는 로컬 작업은 매번 묻지 않고, 재귀 삭제는 대상을 풀어서 판단한다. | `docs/approval-guard.md` (Approval guard) |
+| `tests/test_approval_recorded_reads.py` | 기록된 실수 없는 조회는 묻지 않는다: 따옴표 구분자 heredoc으로 쓰고 같은 명령에서 실행하는 스크립트, 이름이나 개수만 출력하는 xargs 조회, 비밀이 아닌 값에 대한 `env \| grep`, 로컬 docker 메타데이터. 내용을 출력하거나 비밀이 드러나는 인접 형태는 계속 묻는다. | `docs/approval-guard.md` (Approval guard) |
+| `tests/test_approval_recorded_removals.py` | 기록된 실수 없는 삭제는 묻지 않는다: `${VAR:?}`, 리터럴 `for` 목록, `bash -c` 인자, `unset`·`export`를 지나도 유지되는 `mktemp` 추적으로 정해지는 대상, `.git`이 없는 `.[!.]*` 글롭, `runs` 밖의 플러그인 평가 작업 폴더, 잃는 내용이 없는 stash drop, Claude의 위험한 삭제 확인에서 답하는 임시 폴더 안 삭제. 풀리지 않거나 보호되거나 내용을 잃는 인접 형태는 계속 묻는다. | `docs/approval-guard.md` (Approval guard) |
+| `tests/test_approval_recorded_replay.py` | 에이전트 실수 없이 기록된 승인 가드 ask를 모두 훅으로 다시 실행하면 묻지도 막지도 않고, 남겨 둔 `$PWD` 삭제는 계속 묻는다. | `docs/approval-guard.md` (Approval guard) |
+| `tests/test_approval_python_risks.py` | 자격 증명 파일을 읽거나 비밀 이름 환경변수 값을 출력하는 Python 코드는 `cat`과 같은 민감 읽기 판정을 받고, 설정 여부 검사·이름 나열·검색어·평범한 읽기와 쓰기는 묻지 않는다. | `docs/approval-guard.md` (Approval guard) |
+| `tests/test_approval_installed_code.py` | 리다이렉트·`tee`·`sed -i`·`cp`·`mv`·`install`·`rsync`·Python·네이티브 파일 도구로 플러그인 캐시나 실행 중인 플러그인 루트에 쓰는 호출은 캐시가 git 작업 트리로 연결된 심볼릭 링크인 경우에도 경로를 푼 뒤 자기 수정으로 거부하고, 그 코드를 읽거나 다른 곳에 쓰는 호출은 허용한다. | `docs/approval-guard.md` (Approval guard) |
+| `tests/test_approval_python_sensitive_writes.py` | `~/.ssh`·`~/.aws`·`~/.gnupg`, 셸 시작 파일, git 훅, Claude·Codex 설정 파일에 쓰는 Python은 심볼릭 링크 이름과 대상 양쪽으로, 세션 전체 승인 뒤에도 매번 묻고, 작업 트리와 임시 공간의 평범한 Python 쓰기는 묻지 않는다. | `docs/approval-guard.md` (Approval guard) |
+| `tests/test_approval_python_exec.py` | 문자열 리터럴 `exec`·`eval`은 중첩 리터럴과 이스케이프로 가린 가드 모듈 이름까지, 리터럴 딕셔너리 네임스페이스는 코드가 읽는 이름에 묶어 같은 코드를 제자리에 쓴 것과 똑같이 판정하고, 리터럴이 아닌 네임스페이스나 변수·`input()`·표준 입력을 받는 `exec`는 계속 묻되 다른 Python 판정도 그대로 받는다. | `docs/approval-guard.md` (Approval guard) |
+| `tests/test_approval_false_positives.py`, `tests/test_approval_classification_safety.py` | 무해한 호출과 비밀 메타데이터 조회를 쓰기나 비밀 값 출력으로 오인하지 않는다. | `docs/approval-guard.md` (Approval guard) |
+| `tests/test_approval_extensions.py`, `tests/test_approval_reuse.py` | 사전 승인 키와 민감 조회 승인은 지정한 대상만 다룬다. | `docs/approval-guard.md` (Approval guard) |
+| `tests/test_approval_retries.py` | 답을 받지 못한 승인 요청이 반복되면 새 프롬프트 전까지 거부한다. | `docs/approval-guard.md` (Approval guard) |
+| `tests/test_approval_heartbeat.py` | 가드는 현재 훅이 도구를 검사했는지 확인한다. | `docs/approval-guard.md` (Approval guard) |
+| `tests/test_approval_risk_record.py`, `tests/test_approval_wording.py` | 쓰기와 중대한 호출을 기록하고, 승인 문구는 언어 설정을 따른다. | `docs/claude-code-mod.md`, `docs/approval-guard.md` |
+| `tests/test_approval_review_fixes.py` | 래퍼 형태, `curl` 자격 증명, 가림 처리, 실행 가능한 MCP 입력을 안전하게 분류한다. | `docs/approval-guard.md` (Approval guard) |
+| `tests/test_approval_tabularis.py` | Tabularis 쿼리는 연결 메타데이터와 맞는 SQL 분류기를 따른다. | `docs/approval-guard.md` (Approval guard) |
+| `tests/test_codex_native_approval.py`, `tests/test_permission_request_claude.py` | 각 호스트의 자체 승인 창이 세션의 첫 쓰기 승인을 이어받는다. | `docs/approval-guard.md` (Approval guard) |
+| `tests/test_datagrip_guard.py`, `tests/test_db_read_policy.py` | 데이터베이스 쿼리는 읽기일 때만 묻지 않고 실행한다. | `instructions/infrastructure-access.md`, `docs/guards.md` (DataGrip query guard) |
+| `tests/test_limits_file_protection.py` | 데이터베이스 읽기 한도 파일을 보호한다. | `docs/approval-guard.md` (Approval guard) |
 | `tests/test_secret_exec.py`, `tests/test_secret_patterns.py` | 비밀 값은 출력되지 않은 채 명령에 전달되고, 공유 패턴이 그 값을 가린다. | `instructions/protected-values.md` |
 
 ## 스킬
@@ -104,7 +104,7 @@
 | `skills/tiki-taka/tests/test_runner.py`, `skills/tiki-taka/tests/test_stream_agent.py`, `skills/tiki-taka/tests/test_detached_job.py`, `skills/tiki-taka/tests/test_questions.py` | 토론 실행기는 상태, 완료 판정, 정리, 질문 파일 규칙을 지킨다. | `skills/tiki-taka/SKILL.md` |
 | `skills/local-data-cleanup/tests/test_survey_kinds.py`, `skills/local-data-cleanup/tests/test_survey_checks.py`, `skills/local-data-cleanup/tests/test_merge_delete.py` | 조사는 읽기 전용으로 남고 안전하지 않은 후보를 보고 전용이나 보호 항목으로 바꾸며, 삭제는 두 판정이 모두 허용하고 사용자가 고른 항목만 지운다. | `skills/local-data-cleanup/SKILL.md` |
 | `skills/report-skill-gap/tests/test_find_tracker.py` | 트래커 탐색은 플러그인 루트를 찾아 `issue-target.json`을 검증하고, 선언이 없거나 잘못되면 트래커를 추측하지 않고 그 상태를 보고한다. | `skills/report-skill-gap/SKILL.md` |
-| `tests/test_issue_target.py` | 이 플러그인 루트의 `issue-target.json`은 공개 GitHub 트래커를 선언한다. | `README.md` (report-skill-gap) |
+| `tests/test_issue_target.py` | 이 플러그인 루트의 `issue-target.json`은 공개 GitHub 트래커를 선언한다. | `docs/development.md` (Issue tracker declaration) |
 | `skills/skill-builder/scripts/quick_validate.py`를 모든 스킬에 실행 | 모든 스킬 폴더가 검증을 통과한다. | `README.md` (Development checks) |
 
 ## 평가 하네스

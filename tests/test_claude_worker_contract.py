@@ -504,7 +504,7 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         )
         text = " ".join(CLAUDE_AGENTS.read_text(encoding="utf-8").split())
         routing = " ".join((REPO_ROOT / "instructions/model-routing.md").read_text(encoding="utf-8").split())
-        readme = " ".join((REPO_ROOT / "README.md").read_text(encoding="utf-8").split())
+        delegation_doc = " ".join((REPO_ROOT / "docs/instructions-and-delegation.md").read_text(encoding="utf-8").split())
 
         # When
         fallback = text.split("## Fallback", 1)[1].split("## Investigation", 1)[0]
@@ -512,7 +512,7 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         # Then
         self.assertIn(narrowed, fallback)
         self.assertIn(narrowed, routing)
-        self.assertIn(narrowed, readme)
+        self.assertIn(narrowed, delegation_doc)
         self.assertIn("`role_runner.py agent --name <name> --fallback`", fallback)
         self.assertIn("On runner exit 3 or 4, continue in the main conversation.", fallback)
         self.assertIn("is denied once, naming the runner fallback command", text)

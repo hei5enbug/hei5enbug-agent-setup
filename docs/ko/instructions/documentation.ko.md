@@ -3,6 +3,8 @@
 > 영어 원본: [documentation.md](../../../instructions/documentation.md)
 > 이 문서는 사람을 위한 비권위 한국어 번역본이다. 에이전트 실행 시 읽거나 사용하지 않는다.
 
+README를 작성하거나 구조를 바꾸기 전에 [README 규칙](readme-writing.ko.md)을 읽는다.
+
 사용자가 기술 설계 문서, 아키텍처 제안서, RFC, 시스템 설계, 데이터 설계, API 설계 또는 설계 개요를 명시적으로
 요청하거나 스킬을 직접 호출했을 때만
 [기술 설계 문서 작성](../skills/technical-design-writer/SKILL.ko.md)을 사용한다. 새 문서와 개선 작업은 설계 문서 절차와
