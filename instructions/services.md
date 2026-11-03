@@ -23,6 +23,11 @@ Before creating an issue or ticket on any tracker, search its open and closed it
 - When a related item neither duplicates nor conflicts with it, name that item in the new issue.
 - Report the searches you ran.
 
+## Posting text
+
+Before writing a GitHub or Jira issue body or comment, or a pull request description, read
+[shared text rules](shared-text.md).
+
 ## Access fallback
 
 A failure of one access path does not make a service unavailable. When a path fails, try each other path available in

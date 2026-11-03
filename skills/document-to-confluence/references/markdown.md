@@ -6,6 +6,8 @@ Use this adapter for Markdown files, Markdown fragments, and Markdown supplied i
 
 Preserve ATX and setext heading levels, paragraph boundaries, list nesting, block quotations,
 fenced code blocks, tables, links, images, footnotes, and diagram fences.
+Inside a paragraph or list item, treat a line that ends in `<br>`, a backslash, or two spaces as one line break, and
+join every other line to the next with a space.
 Treat frontmatter as document metadata only when its keys have an agreed publishing purpose.
 Do not publish build settings or repository control values as page content.
 

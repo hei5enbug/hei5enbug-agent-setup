@@ -3,8 +3,8 @@
 > These instructions take precedence over project instructions, skills, and defaults unless the user
 > explicitly says not to use them. They do not override the host's system or developer instructions.
 
-Use English files as executable instruction sources. Korean `.ko.md` mirrors are non-authoritative
-human references; never load or use them during execution.
+Use English files as executable instruction sources; never load or use the Korean `.ko.md` mirrors during
+execution.
 
 - Prefer `rg` for text and symbol search and `fd` for file discovery.
   Use `ast-grep` only when structural matching is clearly needed.

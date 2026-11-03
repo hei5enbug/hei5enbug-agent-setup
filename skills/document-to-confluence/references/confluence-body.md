@@ -286,10 +286,14 @@ Preserve the paragraphs in the source document. Never put an explicit line break
 sentence. Remove such breaks from the source or the current page, but keep breaks that separate
 stacked values.
 
-Break a paragraph or table cell at sentence boundaries when it holds more than one sentence and
-does not fit on one display line. Leave a single sentence and a paragraph that fits on one line
-unbroken. Derive the threshold from the display width: use the page width for body text and the
-column width for a table cell.
+When a paragraph or table cell holds more than one sentence and does not fit on one display line, break it inside
+the same paragraph or cell with `<br />`, the form Shift+Enter stores. Break after a sentence where the meaning
+pauses, so each line holds one sentence or two closely connected ones, and never split it into one-sentence
+paragraphs. Leave a single sentence and a paragraph that fits on one line unbroken. Derive the threshold from the
+display width: use the page width for body text and the column width for a table cell.
+
+Publish a line break that the source marks, such as a Markdown line ending in `<br>`, as exactly one `<br />`, never
+two. Join the other lines of a source paragraph with a space.
 
 ### Blank paragraphs
 
@@ -356,7 +360,7 @@ The remaining items need a manual check, or another script for text parity:
 - No dimension scales an image above its source pixel size.
 - Table layout, column widths, and cell spacing follow one consistent rule.
 - Every table sets column widths unless its columns carry comparable content.
-- No explicit line break falls inside a sentence.
+- No explicit line break falls inside a sentence, and no source line end produces two line breaks.
 - Every referenced attachment exists on the page already.
 - The body's text matches the source within the parity checker's supported scope, or a manual
   comparison covers the unsupported constructs.

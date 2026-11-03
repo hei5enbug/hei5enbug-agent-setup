@@ -1009,7 +1009,7 @@ class SessionContextTest(unittest.TestCase):
         context = self.context(self.run_hook("codex"))
 
         # Then
-        self.assertIn("This is an explicit exception to the preceding trigger boundary", context)
+        self.assertIn("are an exception: they remain automatic", context)
         self.assertIn("($I/implementation-planning.md)", context)
         self.assertIn("($I/independent-model-validation.md)", context)
         self.assertNotIn("An implementation plan must let an executor proceed", context)

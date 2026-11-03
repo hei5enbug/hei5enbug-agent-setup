@@ -1,6 +1,9 @@
 # Documentation files
 
 Before writing or restructuring a README, read [README rules](readme-writing.md).
+Before writing, shortening, or rewriting a summary or a document shared with colleagues, or Markdown that will be
+published to Confluence or whose project requires one source line per rendered line, read
+[shared text rules](shared-text.md).
 
 Use [technical-design-writer](../skills/technical-design-writer/SKILL.md) only when the user explicitly
 requests technical design work, such as a technical design document, architecture proposal, RFC, system
@@ -35,7 +38,8 @@ For ordinary documentation, apply these writing mechanics directly:
   Do not mechanically replace a familiar loanword or established expression with a supposedly purer or
   simpler alternative. Examples are evidence for a decision, not a global substitution table.
 - Give each page one reader goal and each section one responsibility. Use at most three heading levels and
-  keep Markdown prose lines within 120 characters, except for tables, URLs, code, and exact literals.
+  keep Markdown prose lines within 120 characters, except for tables, URLs, code, and exact literals. Markdown
+  that the line-break section of the shared text rules covers follows that section instead.
 - Use a table for three or more comparable items with stable fields. Use a diagram only when a complex
   branch, state change, interaction, boundary, dependency, or data relationship becomes clearer visually.
 - Keep one detailed source for each topic. Use stable path-and-heading references and verify every link and
@@ -44,4 +48,5 @@ For ordinary documentation, apply these writing mechanics directly:
   convention is not evidence of a unit. Keep unspecified details unspecified, and label proposed choices
   separately from observed facts.
 
-Chat replies use only the terminology and reply-format rules in the common instructions.
+Chat replies use only the terminology and reply-format rules in the common instructions, plus the shared text
+rules for a summary the user asks for.
