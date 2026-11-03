@@ -18,8 +18,9 @@ Treat a convention as the safe default, not as a proven constraint.
 These statements have no recorded observation behind them. Confirm them at use time.
 
 - Confluence Data Center and Server behave like Cloud for the rules below. They were not tested.
-- Every connected Confluence tool accepts the HTML body representation used here. Tools that
-  accept only storage format or ADF need a conversion step this document does not describe.
+- Every connected Confluence tool accepts the HTML body representation used here. A tool that
+  accepts only storage format needs `scripts/storage_body.py`; one that accepts only ADF needs a
+  conversion step this document does not describe.
   Storage-format forms observed so far appear next to the rule they belong to.
 - The `width` and `height` convention on `img`, the block-element rule for table cells, and the
   text escaping rule are conventions, not verified constraints.
@@ -189,19 +190,21 @@ element around the selected text in the page body:
 A save whose body lacks a comment's marker leaves the comment without an anchor, and the page shows it as
 deleted content. A body rebuilt from the source has no markers until you put them back.
 
-When you write in another body format, confirm before the first write that it preserves the marker;
-otherwise write the body in storage format.
+The HTML body does not keep markers. Write a page that has markers in storage format, and keep the previous
+stored body.
 
 Before every republish:
 
 1. List the page's inline comments, open and resolved, with each marker reference and original selection.
-2. Wrap each original selection in the rebuilt body with its marker.
-3. When the selection no longer exists, wrap the new text that carries the same meaning and report the move.
-   When no text carries that meaning, ask the user before saving.
-4. When a selection spans inline formatting such as code, wrap each text piece with the same reference. Nest
-   markers when selections overlap.
-5. After saving, confirm that every listed reference is in the stored body and that each comment still reports
-   its anchor. When a browser is available, check the rendered page for a deleted-content notice.
+2. Convert the validated HTML body with `scripts/storage_body.py`. Restore the markers with
+   `scripts/comment_markers.py restore` from the previous stored body and the converted body.
+3. When the restorer exits non-zero, it lists each unresolved reference with its old context and writes no body.
+   Choose the new text that carries the same meaning, rerun with `--anchor` or `--anchors`, and report the
+   move. When no text carries that meaning, ask the user before saving.
+4. Save only a body that holds every listed reference.
+5. After saving, run `scripts/comment_markers.py check` on the previous body and the stored body. Fix every
+   missing reference and save again. Confirm that each comment still reports its anchor; when a browser is
+   available, check the rendered page for a deleted-content notice.
 
 ## Tables
 

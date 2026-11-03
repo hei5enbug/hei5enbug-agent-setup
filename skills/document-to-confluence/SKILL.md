@@ -283,7 +283,8 @@ When republishing:
 3. Apply the requested update mode without silently deleting Confluence-only content.
 4. Preserve stable attachment names and macro identifiers when their semantic content remains.
 5. Re-run extraction when the source format or exporter changes because block boundaries may change.
-6. Re-anchor inline comments as "Inline comment markers" in `references/confluence-body.md` describes.
+6. When the page has inline comment markers, convert, restore, and check them as "Inline comment markers" in
+   `references/confluence-body.md` describes.
 
 ## Rules for every source
 
@@ -304,6 +305,8 @@ When republishing:
 | `scripts/column_widths.py` | Produces integer column-width ratios and rejects impossible floors or incomplete image constraints. Usage: `column_widths.py --columns COLUMNS [--total TOTAL] [--char-width CHAR_WIDTH] [--padding PADDING] [--min-width MIN_WIDTH] [--wide-char WIDE_CHAR] [--narrow-char NARROW_CHAR] [--floor FLOOR]`. |
 | `scripts/text_parity.py` | Compares text for its declared Markdown subset and reports unsupported constructs. Usage: `text_parity.py [--drop DROP] [--drop-title] [--context CONTEXT] source body`. |
 | `scripts/validate_body.py` | Checks mechanical Confluence body rules within its declared scope. Usage: `validate_body.py [--attachments [ATTACHMENTS ...]] body`. |
+| `scripts/storage_body.py` | Converts the validated HTML body to storage format, keeping the contents macro with its identifier, attachment images with sizes, column widths, empty paragraphs, single line breaks, rules, and in-page anchors. Fails naming any construct it does not map. Usage: `storage_body.py [--output OUTPUT] body`. |
+| `scripts/comment_markers.py` | `restore` re-wraps each previous inline comment selection in a new storage body and refuses to guess a place; `check` lists marker references missing from a read-back body. Usage: `comment_markers.py restore [--anchor REF BEFORE SELECTION AFTER] [--anchors ANCHORS] --output OUTPUT previous new` and `comment_markers.py check previous readback`. |
 | `scripts/render_diagrams.mjs` | Captures elements of local HTML under valid, unique names (`id`, or `diagram-N` without one) and always closes the browser. Usage: `render_diagrams.mjs --html FILE --out DIR [--selector CSS] [--scale N] [--browser PATH] [--strip-prefix PREFIX] [--no-sandbox]`. |
 | `assets/diagram-template.html` | Provides a starting point for consistent HTML and CSS diagrams. |
 

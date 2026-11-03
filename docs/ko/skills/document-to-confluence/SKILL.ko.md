@@ -266,7 +266,8 @@ Confluence 도구를 선택하거나 호출하기 전에 상위 Confluence 지�
 3. Confluence 전용 콘텐츠를 몰래 삭제하지 않고 요청한 갱신 방식을 적용한다.
 4. 의미 콘텐츠가 유지되면 안정적인 첨부 파일 이름과 매크로 식별자를 보존한다.
 5. 원본 형식이나 내보내기 도구가 바뀌면 블록 경계가 달라질 수 있으므로 추출을 다시 실행한다.
-6. `references/confluence-body.md`의 "Inline comment markers" 절에서 설명한 대로 인라인 댓글의 앵커를 다시 지정한다.
+6. 페이지에 인라인 댓글 마커가 있으면 `references/confluence-body.md`의 "Inline comment markers" 절에서
+   설명한 대로 변환하고 복원하고 확인한다.
 
 ## 모든 원본의 규칙
 
@@ -286,6 +287,8 @@ Confluence 도구를 선택하거나 호출하기 전에 상위 Confluence 지�
 | `scripts/column_widths.py` | 정수 열 너비 비율을 만들고 불가능한 최소값이나 불완전한 이미지 제약을 거부한다. 사용법: `column_widths.py --columns COLUMNS [--total TOTAL] [--char-width CHAR_WIDTH] [--padding PADDING] [--min-width MIN_WIDTH] [--wide-char WIDE_CHAR] [--narrow-char NARROW_CHAR] [--floor FLOOR]`. |
 | `scripts/text_parity.py` | 선언된 Markdown 범위의 텍스트를 비교하고 지원되지 않는 구조를 알린다. 사용법: `text_parity.py [--drop DROP] [--drop-title] [--context CONTEXT] source body`. |
 | `scripts/validate_body.py` | 선언된 범위 안에서 기계적인 Confluence 본문 규칙을 검사한다. 사용법: `validate_body.py [--attachments [ATTACHMENTS ...]] body`. |
+| `scripts/storage_body.py` | 검증한 HTML 본문을 저장 형식으로 변환하며, 식별자를 포함한 목차 매크로, 크기를 포함한 첨부 이미지, 열 너비, 빈 문단, 단일 줄바꿈, 구분선과 페이지 내 앵커를 유지한다. 매핑하지 않는 구조가 있으면 그 이름을 밝히며 실패한다. 사용법: `storage_body.py [--output OUTPUT] body`. |
+| `scripts/comment_markers.py` | `restore`는 이전 인라인 댓글 선택 영역을 새 저장 형식 본문에서 각각 다시 감싸며 위치 추측은 거부한다. `check`는 다시 읽은 본문에 없는 마커 참조를 나열한다. 사용법: `comment_markers.py restore [--anchor REF BEFORE SELECTION AFTER] [--anchors ANCHORS] --output OUTPUT previous new`와 `comment_markers.py check previous readback`. |
 | `scripts/render_diagrams.mjs` | 로컬 HTML의 요소를 유효하고 고유한 이름(`id`, 없으면 `diagram-N`)으로 캡처하며 항상 브라우저를 닫는다. 사용법: `render_diagrams.mjs --html FILE --out DIR [--selector CSS] [--scale N] [--browser PATH] [--strip-prefix PREFIX] [--no-sandbox]`. |
 | `assets/diagram-template.html` | 일관된 HTML·CSS 다이어그램을 위한 시작점을 제공한다. |
 
