@@ -24,6 +24,12 @@ stop conditions, and check-evidence reuse. Keep these fields with the existing a
 | Material requirement or design decision remains open | Investigate and resolve it in the main session before dispatch under the clarification rules. |
 | Existing assigned worker | Follow "Assigned workers" in implementation delegation. Report a missing decision or conflict to the coordinator, and never start another planning workflow. |
 
+When a ticket, an accepted plan, or your own earlier scope summary lists work items for the task, compare the
+user's instruction with that list before the first change. An item the instruction does not mention is a
+result-changing ambiguity, not a sign that it is out of scope: ask one question with these options in this order,
+include now, defer within the same ticket, split into a new ticket, or drop, and change nothing until the user
+answers. When the user explicitly narrows the scope, ask nothing and record each excluded item with its destination.
+
 This preparation is not a requested implementation plan. It runs no planning or design skill, no six-stage
 planning workflow, and no independent validation.
 
@@ -53,3 +59,11 @@ Use the [check-evidence rules](work-efficiency.md#check-evidence) when accepting
 checks. The main session checks scope, correctness, regressions, and test evidence for all work, including its own.
 A check that mutates tracked files is implementation work and needs an owner. A failed assigned check is a failure
 even when the cause lies outside the task.
+
+## Unfinished agreed items
+
+While an agreed item of the task's ticket or plan is not done, open every later report with it: the first sentence
+names the item, says it is not done, and gives its decided destination, and the results follow. State it again at
+each later milestone of the same ticket, such as a pull request description, a QA or approval report, and a closing
+proposal. Before proposing to close a ticket, list each agreed item as done or not done, and do not propose closing
+while one is not done unless the user decided where it goes.
