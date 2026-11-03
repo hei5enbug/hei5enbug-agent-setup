@@ -14,7 +14,8 @@
 ## Orca worktree
 
 `orca status --json`이 접근 가능한 런타임을 보고하면 Orca CLI를 사용한다. 이 파일에 없는 플래그가 필요하면
-`orca skills get orca-cli`를 한 번 실행한다.
+`orca skills get orca-cli`를 한 번 실행한다. 저장소를 둘 이상 변경하는 작업의 Orca 세션을 시작하거나 그런 작업에
+참여하기 전에 [Orca worktree 그룹](orca-groups.ko.md)을 읽는다.
 
 ### 세션 위치
 
@@ -22,7 +23,8 @@
 시작한다. 그런 workspace가 있으면 독립적인 최상위 worktree를 만들지 않는다. 저장소의 workspace는
 `orca worktree list --repo id:<repoId> --json`에서 경로가 해당 저장소의 클론인 항목이다.
 현재 Orca worktree가 그 저장소에 속하면 부모는 `active`(현재 Orca worktree)이고, 아니면
-`id:<repoId>::<clone path>`(해당 workspace)다.
+`id:<repoId>::<clone path>`(해당 workspace)다. 저장소를 둘 이상 변경하는 작업에서는 다른 모든 저장소의 worktree를
+그 대신 그룹의 루트 아래에 둔다.
 
 - 파일을 전혀 수정하지 않는 세션은 새 터미널로 실행한다. 작업 저장소에서는 현재 worktree에서 실행하거나 Orca
   orchestration의 `worker-start --worktree current`로 실행하고, 다른 저장소에서는 대상의 workspace에서 실행한다.
@@ -92,6 +94,7 @@ Orca CLI나 런타임을 사용할 수 없으면 일반 Git worktree를 사용�
   종료하라고 사용자에게 한 줄로 권한다. 세션을 직접 종료하지 않는다.
 - 할 일이 남았으면 계속 진행하고, 대상의 결과가 필요할 때만 `orca terminal read --terminal <handle> --json`으로
   읽는다.
+- 그룹 구성원에게는 [Orca worktree 그룹](orca-groups.ko.md)의 정리 절차가 이 항목을 대신한다.
 - 이 세션이 시작한 하위 세션의 작업이 기준 브랜치에 병합되면 그 터미널을 닫고, 이 세션이 그 worktree와 브랜치를
   만든 경우에는 그 하위 worktree와 로컬 브랜치도 삭제하며, 답변에 각각의 이름을 명시한다.
   workspace 클론, 현재 worktree, 기준 브랜치, 원격 브랜치는 절대 닫거나 삭제하지 않는다. 먼저 터미널이 열린 질문 없이

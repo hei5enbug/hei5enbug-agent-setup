@@ -11,14 +11,16 @@ own instructions, hooks, and branch rules apply.
 ## Orca worktree
 
 Use the Orca CLI when `orca status --json` reports a reachable runtime. For a flag this file does not give, run
-`orca skills get orca-cli` once.
+`orca skills get orca-cli` once. Before starting Orca sessions for a task that changes more than one repository, or
+joining such a task, read [Orca worktree groups](orca-groups.md).
 
 ### Session placement
 
 Start every new agent session under a workspace that Orca already lists for its repository, in this repository as
 in another one; never create an independent top-level worktree while one exists. A repository's workspace is the
 entry whose path is its clone in `orca worktree list --repo id:<repoId> --json`. The parent is `active`, the current
-Orca worktree, when it belongs to that repository, and `id:<repoId>::<clone path>`, that workspace, otherwise.
+Orca worktree, when it belongs to that repository, and `id:<repoId>::<clone path>`, that workspace, otherwise. In a
+task that changes more than one repository, every other repository's worktree goes under the group's root instead.
 
 - A session that edits no file runs as a new terminal: in the current worktree for the working repository, or with
   Orca orchestration `worker-start --worktree current`, and in the target's workspace for another repository.
@@ -88,6 +90,7 @@ protected value into it; the session that needs the file reports it to the user.
   in the target worktree's session and end this one. Never end a session yourself.
 - Otherwise continue the remaining work, and read the target with `orca terminal read --terminal <handle> --json` only
   when its result is needed.
+- For a member of a group, the cleanup in [Orca worktree groups](orca-groups.md) replaces this bullet.
 - When a child session that this session started has its work merged into the base, close its terminal and, when
   this session created them, its child worktree and that worktree's local branch, and name each in the reply.
   Never close the workspace clone, the current worktree, the base branch, or a remote branch. First confirm that
