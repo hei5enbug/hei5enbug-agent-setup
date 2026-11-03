@@ -52,7 +52,7 @@ class PlanningContractTest(unittest.TestCase):
             for path in root.rglob("*.md"):
                 if path.name.endswith(".ko.md") or path == VALIDATION:
                     continue
-                with self.subTest(path=path.relative_to(REPO_ROOT)):
+                with self.subTest(path=str(path.relative_to(REPO_ROOT))):
                     text = path.read_text()
                     for signature in signatures:
                         self.assertNotIn(signature, text)
@@ -83,7 +83,7 @@ class PlanningContractTest(unittest.TestCase):
 
         for path in (IMPLEMENTATION, DESIGN):
             text = " ".join(path.read_text().split())
-            with self.subTest(path=path.relative_to(REPO_ROOT)):
+            with self.subTest(path=str(path.relative_to(REPO_ROOT))):
                 self.assertIn("when the review runs", text)
                 self.assertNotIn("confirmation gate", text.lower())
                 self.assertNotIn("only when the user approves it", text)

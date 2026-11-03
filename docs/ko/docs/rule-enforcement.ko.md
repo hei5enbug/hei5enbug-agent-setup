@@ -20,6 +20,7 @@
 | `tests/test_model_pins.py` | 런타임 파일은 고정한 전체 모델 ID로만 모델을 부르고, 고정값은 14일 안에 다시 확인한다. | `AGENTS.md` (모델 고정) |
 | `tests/test_korean_mirrors.py` | 사람이 읽는 영어 Markdown 파일마다 실행 폴더 밖에 원본을 링크한 비권위 한국어 미러가 있다. | `AGENTS.md` (한국어 미러) |
 | `tests/test_instruction_duplication.py` | 공유 규칙은 정본 파일 하나에만 있고, 호스트 파일과 저장소 파일은 core나 common 규칙을 복사하지 않는다. | `AGENTS.md` (단일 정본) |
+| `tests/test_subtest_parameters.py`, `conftest.py` | `subTest` 키워드 값은 pytest-xdist가 컨트롤러로 보낼 수 있는 단순한 값이므로, 직렬 실행이 통과하면 `python3 -m pytest -n auto`도 통과한다. | 이 문서 |
 | `tests/test_rule_enforcement.py` | 이 표가 모든 테스트 파일을 적는다. | 이 문서 |
 | `tests/test_file_size_limit.py` | `scripts/`와 `skills/*/scripts/` 아래 Python 파일은 800줄 이하로 유지한다. | 이 파일 (소유자 규칙: 파일당 800줄 이하) |
 

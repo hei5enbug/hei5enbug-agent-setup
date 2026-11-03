@@ -17,6 +17,7 @@ impossible, remove the written rule it replaces and update its row.
 | `tests/test_model_pins.py` | Runtime files name models only by the pinned full IDs, and the pins are reverified within 14 days. | `AGENTS.md` (model pins) |
 | `tests/test_korean_mirrors.py` | Every human-readable English Markdown file has a linked, non-authoritative Korean mirror outside executable folders. | `AGENTS.md` (Korean mirrors) |
 | `tests/test_instruction_duplication.py` | A shared rule lives in one canonical file; host and repository files do not copy core or common rules. | `AGENTS.md` (one canonical source) |
+| `tests/test_subtest_parameters.py`, `conftest.py` | A `subTest` keyword value is a plain value that pytest-xdist can send to its controller, so `python3 -m pytest -n auto` passes whenever the serial run passes. | This file |
 | `tests/test_rule_enforcement.py` | This table names every test file. | This file |
 | `tests/test_file_size_limit.py` | Python files under `scripts/` and `skills/*/scripts/` stay within 800 lines. | This file (owner rule: at most 800 lines per file) |
 

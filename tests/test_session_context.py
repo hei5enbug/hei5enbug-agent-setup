@@ -1478,7 +1478,7 @@ class SessionContextTest(unittest.TestCase):
         # Then
         self.assertTrue(links)
         for path, link in links:
-            with self.subTest(path=path, link=link):
+            with self.subTest(path=str(path.relative_to(REPO_ROOT)), link=link):
                 target = (path.parent / link.split("#", 1)[0]).resolve()
                 self.assertTrue(target.is_relative_to(REPO_ROOT))
                 self.assertTrue(target.is_file())

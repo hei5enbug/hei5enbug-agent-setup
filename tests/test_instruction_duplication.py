@@ -121,7 +121,7 @@ class AgentsFileStaysADeltaTest(unittest.TestCase):
         for path in (AGENTS, CLAUDE_AGENTS, CODEX_AGENTS):
             text = normalized_text(path)
             for rule in COMMON_OWNED + CORE_OWNED:
-                with self.subTest(path=path.relative_to(REPO_ROOT), rule=rule):
+                with self.subTest(path=str(path.relative_to(REPO_ROOT)), rule=rule):
                     self.assertNotIn(rule, text)
 
     def test_agents_does_not_duplicate_the_host_agent_pointer(self):
@@ -131,7 +131,7 @@ class AgentsFileStaysADeltaTest(unittest.TestCase):
             with self.subTest(pointer=pointer):
                 self.assertNotIn(pointer, text)
         for path in HOST_SESSION_FILES:
-            with self.subTest(path=path.relative_to(REPO_ROOT)):
+            with self.subTest(path=str(path.relative_to(REPO_ROOT))):
                 self.assertIn("agent rules", path.read_text(encoding="utf-8"))
 
     def test_agents_keeps_its_own_repository_rules(self):
@@ -203,7 +203,7 @@ class CanonicalSentencesHaveOneOwnerTest(unittest.TestCase):
         hosts = (CLAUDE_AGENTS, CODEX_AGENTS)
 
         for path in hosts:
-            with self.subTest(path=path.relative_to(REPO_ROOT)):
+            with self.subTest(path=str(path.relative_to(REPO_ROOT))):
                 # When
                 text = normalized_text(path)
 

@@ -75,7 +75,7 @@ class KoreanMirrorTest(unittest.TestCase):
 
         # Then
         for source, mirror, exists in observed:
-            with self.subTest(source=source.relative_to(REPO_ROOT)):
+            with self.subTest(source=str(source.relative_to(REPO_ROOT))):
                 self.assertTrue(exists, f"missing Korean mirror: {mirror}")
                 text = mirror.read_text(encoding="utf-8")
                 self.assertIn("영어 원본:", text)
@@ -100,7 +100,7 @@ class KoreanMirrorTest(unittest.TestCase):
             if source == REPO_ROOT / "README.md":
                 continue
             for target in LINK_PATTERN.findall(source.read_text(encoding="utf-8")):
-                with self.subTest(source=source.relative_to(REPO_ROOT), target=target):
+                with self.subTest(source=str(source.relative_to(REPO_ROOT)), target=target):
                     self.assertFalse(target.split("#", 1)[0].endswith(".ko.md"))
 
     def test_스키마와_한국어_문서는_미러_원본에서_제외한다(self):
