@@ -62,6 +62,25 @@ class CommonRulesTest(unittest.TestCase):
             with self.subTest(step=step):
                 self.assertIn(step, asking)
 
+    def test_질문_창의_문구도_답변_규칙을_따르고_사용자가_쓰지_않은_용어는_풀어_쓰거나_같은_곳에서_정의한다(self):
+        """질문, 머리말, 선택지 이름과 설명은 그 창만 보는 사람이 읽을 수 있게 쓰고, 사용자가 쓰지 않은 용어와 식별자는 바꾸거나 정의한다."""
+        # Given
+        asking = " ".join((REPO_ROOT / "instructions/asking-the-user.md").read_text(encoding="utf-8").split())
+
+        # When
+        rules = (
+            "Word the question, its header, and each option's label and description by the reply rules in the common "
+            "session instructions, for a reader who sees only that dialog.",
+            "When a term, abbreviation, internal component name, or code identifier that the user has not used in the "
+            "conversation would appear there, replace it with plain words or define it in the same text,",
+        )
+
+        # Then
+        self.assert_in_every_context("Before asking the user anything or proposing to wait, read")
+        for rule in rules:
+            with self.subTest(rule=rule):
+                self.assertIn(rule, asking)
+
     def test_이름_결정_배포가_바뀌면_이미_만든_산출물의_옛_값을_찾아_고치고_보고한다(self):
         """이름 변경, 결정 변경, 되돌리기 뒤에는 작업이 만들거나 올린 산출물의 옛 값을 고치거나 알리고 최종 보고에 적는다."""
         # Given
