@@ -81,6 +81,27 @@ class CommonRulesTest(unittest.TestCase):
             with self.subTest(rule=rule):
                 self.assertIn(rule, asking)
 
+    def test_질문_창_입력은_원문_글자로_쓰고_깨진_글자_신고에는_자기_입력부터_확인한다(self):
+        """구조화된 질문 도구의 입력은 유니코드 이스케이프 없이 쓰고 다시 읽으며, 깨진 글자 신고에는 자기 도구 입력을 먼저 본다."""
+        # Given
+        asking = " ".join((REPO_ROOT / "instructions/asking-the-user.md").read_text(encoding="utf-8").split())
+
+        # When
+        rules = (
+            "write the question, its header, and each option's label and description as raw characters, never as JSON "
+            "unicode escapes such as `\\uXXXX`,",
+            "reread it once before sending and fix any character that differs from the word you meant.",
+            "When the user reports a wrong or garbled character in a question dialog, read your own tool input as "
+            "stored in the session transcript file first,",
+            "Say whether the reported character is in that stored input before naming any other cause, and name the "
+            "host or a plugin only when that input is correct and the shown text differs.",
+        )
+
+        # Then
+        for rule in rules:
+            with self.subTest(rule=rule):
+                self.assertIn(rule, asking)
+
     def test_이름_결정_배포가_바뀌면_이미_만든_산출물의_옛_값을_찾아_고치고_보고한다(self):
         """이름 변경, 결정 변경, 되돌리기 뒤에는 작업이 만들거나 올린 산출물의 옛 값을 고치거나 알리고 최종 보고에 적는다."""
         # Given

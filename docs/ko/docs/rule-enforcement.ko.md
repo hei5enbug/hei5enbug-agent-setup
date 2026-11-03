@@ -31,7 +31,7 @@
 | `tests/test_session_context.py` | 세션 훅은 core, common, 호스트 지침을 크기 상한 안에서 설정·경로 알림과 함께 렌더링한다. | `instructions/session/`, `docs/instructions-and-delegation.md` (Automatic instructions) |
 | `tests/test_session_settings_notice.py` | 설정 알림은 알린 설정이 바뀔 때만 나온다. | `docs/instructions-and-delegation.md` (Automatic instructions) |
 | `tests/test_commit_routing.py` | 새 커밋은 모두 `suggest-commit` 커밋 모드를 거친다. | `instructions/session/common.md` |
-| `tests/test_common_rules.py` | 두 호스트의 메인 세션 문맥에 공통 답변 규칙이 실리고, 질문 규칙은 모든 질문 대화상자의 글에 이를 적용하며 사용자가 쓰지 않은 용어를 설명하거나 바꾼다. | `instructions/session/common.md`, `instructions/asking-the-user.md` |
+| `tests/test_common_rules.py` | 두 호스트의 메인 세션 문맥에 공통 답변 규칙이 실리고, 질문 규칙은 모든 질문 대화상자의 글에 이를 적용하고, 사용자가 쓰지 않은 용어를 설명하거나 바꾸며, 구조화된 질문 도구의 입력을 원문 글자로 쓰고 다시 읽고, 사용자가 깨진 글자를 알리면 자신의 도구 입력부터 확인한다. | `instructions/session/common.md`, `instructions/asking-the-user.md` |
 | `tests/test_service_rules.py` | 호스팅 서비스는 검색이나 단건 조회, 작은 페이지로 읽는다. | `instructions/services.md` |
 | `tests/test_markdown_line_breaks.py` | 줄바꿈을 유지해야 하는 Markdown 글에서 문단과 목록 항목 안의 소프트 줄바꿈, 문단을 끝내는 줄바꿈, 길이 제한을 넘고 문장이 둘 이상인 본문 줄을 코드 펜스, 바깥 세로선 유무와 관계없는 표, 제목 밖에서 검사한다. | `instructions/shared-text.md` (줄바꿈) |
 | `tests/test_planning_contract.py` | 계획과 설계 절차는 분리되고, 모델 선택의 출처는 하나이며, 독립 검증은 마지막 단계에서 자동으로 1회 실행하고 더 이른 검토는 승인이 필요하며, 읽기 전용 1회다. | `instructions/implementation-planning.md`, `instructions/independent-model-validation.md` |
