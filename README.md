@@ -128,8 +128,10 @@ which spreads the tests over worker processes.
 To block a commit, push, tag, or GitHub write that breaks the public boundary before it runs, run
 `git config core.hooksPath .githooks` once per clone. To also block names that cannot be listed in this public
 repository, set `HEI5ENBUG_PUBLIC_BOUNDARY_WORDS` to a word list file outside the repository, one word or phrase per
-line. Claude Code loads the project hook from `.claude/settings.json`; Codex runs the hook in `.codex/hooks.json`
-only after you trust the project and review the hook in `/hooks`.
+line, or install a plugin that declares one in [`public-boundary.json`](docs/development.md#private-word-list-declaration).
+Claude Code loads the project hook from `.claude/settings.json`; Codex runs the hook in `.codex/hooks.json`
+only after you trust the project and review the hook in `/hooks`. The installed plugin also runs the same check from
+sessions in any project, for every repository an installed plugin declares public.
 
 The end-to-end evaluation in `evals/e2e/` runs real agent sessions, so it is not one of these checks; only its
 unit tests run with `python3 -m pytest`. See [its README](evals/e2e/README.md).

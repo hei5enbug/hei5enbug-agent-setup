@@ -40,7 +40,7 @@ class SandboxCase(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name).resolve()
         self.env = {
-            **{key: value for key, value in os.environ.items() if not key.startswith(("GIT_", "HEI5ENBUG_"))},
+            **{key: value for key, value in os.environ.items() if not key.startswith(("GIT_", "HEI5ENBUG_", "CLAUDE_", "CODEX_", "PLUGIN_ROOT"))},
             "HOME": str(self.root / "h"),
             "GIT_CONFIG_GLOBAL": os.devnull,
             "GIT_CONFIG_NOSYSTEM": "1",

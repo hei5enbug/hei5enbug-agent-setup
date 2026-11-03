@@ -22,6 +22,7 @@ EXPECTED_HOOKS = [
     ("SubagentStart", None, "session_context.py", 10, False),
     ("PreToolUse", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),
     ("PreToolUse", "^mcp__datagrip__execute_sql_query$", "datagrip_guard.py", 10, False),
+    ("PreToolUse", "^Bash$", "public_boundary_hook.py", 30, False),
     ("PermissionRequest", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),
     ("PostToolUse", None, "language_guard.py", 5, True),
     ("PostToolUse", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),

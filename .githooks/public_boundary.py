@@ -133,20 +133,26 @@ def read_word_file(path: Path) -> list[str]:
     return [line.strip() for line in lines if line.strip() and not line.strip().startswith("#")]
 
 
-def load_private_words(root: Path, environ: dict[str, str] | None = None) -> tuple[re.Pattern[str], ...]:
-    """Read the private word list the environment names; ignore one that lies inside the repository."""
+def env_word_list(root: Path, environ: dict[str, str] | None = None) -> tuple[Path | None, list[str], str | None]:
+    """Return the environment list's path, its words, and the reason it was not read."""
     value = (environ if environ is not None else os.environ).get(PRIVATE_WORDS_ENV)
     if not value:
-        return ()
+        return None, [], None
     path = Path(value).expanduser().resolve()
     if path == root.resolve() or root.resolve() in path.parents:
-        print(f"public boundary: {PRIVATE_WORDS_ENV} points inside the repository; ignored", file=sys.stderr)
-        return ()
+        return None, [], f"public boundary: {PRIVATE_WORDS_ENV} points inside the repository; ignored"
     try:
-        return compile_private_words(read_word_file(path))
+        return path, read_word_file(path), None
     except (OSError, UnicodeDecodeError):
-        print(f"public boundary: {PRIVATE_WORDS_ENV} could not be read; private words not checked", file=sys.stderr)
-        return ()
+        return None, [], f"public boundary: {PRIVATE_WORDS_ENV} could not be read; private words not checked"
+
+
+def load_private_words(root: Path, environ: dict[str, str] | None = None) -> tuple[re.Pattern[str], ...]:
+    """Read the private word list the environment names; ignore one that lies inside the repository."""
+    _path, words, note = env_word_list(root, environ)
+    if note:
+        print(note, file=sys.stderr)
+    return compile_private_words(words)
 
 
 def scan_text(
@@ -183,5 +189,22 @@ def scan_text(
     return findings
 
 
+class PrivateWords(tuple):
+    """Compiled private word patterns, plus the identity emails whose own text the identity check leaves out."""
+
+    def __new__(cls, patterns: tuple[re.Pattern[str], ...] = (), allowed_identity_emails: frozenset[str] = frozenset()):
+        instance = super().__new__(cls, patterns)
+        instance.allowed_identity_emails = frozenset(email.strip().lower() for email in allowed_identity_emails)
+        return instance
+
+
+IDENTITY_EMAIL = re.compile(r"<([^<>]*)>(?=[^<>]*$)")
+
+
 def scan_identity(label: str, text: str, words: tuple[re.Pattern[str], ...] = ()) -> list[str]:
+    """Scan an identity; an email the word lists allow is left out, and the rest of the identity is still scanned."""
+    allowed = getattr(words, "allowed_identity_emails", frozenset())
+    match = IDENTITY_EMAIL.search(text)
+    if match and match.group(1).strip().lower() in allowed:
+        text = text[: match.start()] + text[match.end() :]
     return scan_text(label, text, words=words, check_email=IDENTITY_CHECKS_EMAIL)

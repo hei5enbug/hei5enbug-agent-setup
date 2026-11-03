@@ -2182,6 +2182,10 @@ class TestEventAndHostDispatch:
         assert all("deny" not in output for output in outputs)
 
 
+def datagrip_group() -> dict:
+    return next(group for group in HOOKS["PreToolUse"] if "datagrip_guard.py" in json.dumps(group))
+
+
 class TestHooksRegistration:
     @pytest.mark.parametrize(
         ("event_name", "hooks_file"),
@@ -2215,7 +2219,7 @@ class TestHooksRegistration:
     def test_matcher_matches_only_the_query_tool(self):
         """등록된 matcher 정규식은 쿼리 실행 도구 이름만 고른다."""
         # given
-        matcher = HOOKS["PreToolUse"][-1]["matcher"]
+        matcher = datagrip_group()["matcher"]
         # when
         matches = {name: bool(re.search(matcher, name)) for name in (TOOL_NAME, "mcp__datagrip__list_tables", "x" + TOOL_NAME, TOOL_NAME + "x")}
         # then
@@ -2239,7 +2243,7 @@ class TestHooksRegistration:
     def test_registered_command_runs_from_the_plugin_root(self):
         """등록된 명령 문자열을 셸로 실행하면 DataGrip 쓰기 쿼리에 ask를 출력한다."""
         # given
-        handler = HOOKS["PreToolUse"][-1]["hooks"][0]
+        handler = datagrip_group()["hooks"][0]
         bin_dir = Path(_PROJECT_TEMP.name) / "bin"
         bin_dir.mkdir(exist_ok=True)
         link = bin_dir / "python3"

@@ -13,6 +13,8 @@ class Segment:
     text: str
     line: int
     tokens: tuple[str, ...]
+    piped: bool = False
+    depth: int = 0
 
 
 @dataclass(frozen=True)
@@ -25,6 +27,8 @@ class Target:
     files: tuple[str, ...]
     options: tuple[tuple[str, str | None], ...]
     positionals: tuple[str, ...]
+    git_dir: str | None = None
+    work_tree: str | None = None
 
     def has_option(self, *names: str) -> bool:
         return any(name in names for name, _value in self.options)
@@ -39,6 +43,11 @@ SHELLS = frozenset({"bash", "sh", "zsh", "dash"})
 ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 SHELL_C_FLAG = re.compile(r"^-[A-Za-z]*c[A-Za-z]*$")
 HEREDOC_STOPS = " \t\n;|&()<>"
+PIPE_SEPARATORS = ("|", "|&")
+RESET_SEPARATORS = (";", "&&", "||", "&")
+STATIC_PRODUCERS = frozenset({"cat", "echo", "printf"})
+REDIRECT_OPERATORS = frozenset({"<", ">", ">>"})
+GIT_PATH_GLOBALS = ("--git-dir", "--work-tree")
 
 GIT_VALUE_GLOBALS = frozenset({"--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"})
 COMMIT_VALUES = frozenset(
@@ -80,6 +89,7 @@ class _Splitter:
         self.full: list[str] = []
         self.pending: list[tuple[str, bool]] = []
         self.segments: list[Segment] = []
+        self.piped = False
         self.i = 0
 
     def emit(self, text: str, to_head: bool = True) -> None:
@@ -97,7 +107,8 @@ class _Splitter:
         text = "".join(self.full).strip()
         tokens = tokenize("".join(self.head))
         if text and tokens:
-            self.segments.append(Segment(text, self.start, tokens))
+            self.segments.append(Segment(text, self.start, tokens, self.piped))
+            self.piped = False
         self.head = []
         self.full = []
 
@@ -110,6 +121,16 @@ class _Splitter:
         if c == "&" and prev not in "<>" and nxt != ">":
             return 1
         return 0
+
+    def separate(self) -> None:
+        length = self.separator_length()
+        separator = self.command[self.i : self.i + length]
+        self.flush()
+        if separator in PIPE_SEPARATORS:
+            self.piped = True
+        elif separator in RESET_SEPARATORS:
+            self.piped = False
+        self.i += length
 
     def heredoc(self) -> bool:
         cmd, j = self.command, self.i + 2
@@ -181,8 +202,7 @@ class _Splitter:
             elif c == "\n":
                 self.newline()
             elif self.separator_length():
-                self.flush()
-                self.i += self.separator_length()
+                self.separate()
             else:
                 self.emit(c)
                 self.i += 1
@@ -191,6 +211,7 @@ class _Splitter:
 
 
 def tokenize(text: str) -> tuple[str, ...]:
+    text = text.replace("\\\n", "")
     try:
         return tuple(shlex.split(text))
     except ValueError:
@@ -290,12 +311,17 @@ def classify(tokens: list[str] | tuple[str, ...]) -> Target | None:
 def _classify_git(args: list[str]) -> Target | None:
     dirs: list[str] = []
     config: list[str] = []
+    paths: dict[str, str] = {}
     index = 0
     while index < len(args) and args[index].startswith("-"):
         flag = args[index]
+        name, equals, inline = flag.partition("=")
         if flag in ("-C", "-c") and index + 1 < len(args):
             (dirs if flag == "-C" else config).append(args[index + 1])
             index += 2
+        elif name in GIT_PATH_GLOBALS and (equals or index + 1 < len(args)):
+            paths[name] = inline if equals else args[index + 1]
+            index += 1 if equals else 2
         else:
             index += 2 if flag in GIT_VALUE_GLOBALS else 1
     if index >= len(args):
@@ -309,7 +335,10 @@ def _classify_git(args: list[str]) -> Target | None:
     if sub == "tag" and (names & TAG_READ_ONLY or not (names & TAG_CREATE_FLAGS or positionals)):
         return None
     files = option_values(options, "-F", "--file") if sub in ("commit", "tag") else ()
-    return Target("git", sub, tuple(dirs), tuple(config), None, files, options, positionals)
+    return Target(
+        "git", sub, tuple(dirs), tuple(config), None, files, options, positionals,
+        paths.get("--git-dir"), paths.get("--work-tree"),
+    )
 
 
 def _gh_files(group: str, options: tuple[tuple[str, str | None], ...]) -> tuple[str, ...]:
@@ -318,7 +347,7 @@ def _gh_files(group: str, options: tuple[tuple[str, str | None], ...]) -> tuple[
     inputs = option_values(options, "--input")
     fields = option_values(options, *GH_FIELD_OPTIONS)
     attached = tuple(value.partition("=")[2][1:] for value in fields if value.partition("=")[2].startswith("@"))
-    return tuple(path for path in inputs + attached if path != "-")
+    return inputs + attached
 
 
 def _classify_gh(args: list[str]) -> Target | None:
@@ -347,3 +376,38 @@ def normalize_repo(spec: str) -> str | None:
     cleaned = spec.strip().replace(":", "/").removesuffix(".git").rstrip("/")
     parts = [part for part in cleaned.split("/") if part]
     return "/".join(parts[-2:]).lower() if len(parts) >= 2 else None
+
+
+def redirect_files(tokens: list[str] | tuple[str, ...]) -> tuple[str, ...]:
+    """The files that `<` redirects name in a segment's words."""
+    files: list[str] = []
+    words = list(tokens)
+    index = 0
+    while index < len(words):
+        word = words[index]
+        index += 1
+        if word == "<" and index < len(words):
+            files.append(words[index])
+            index += 1
+        elif word.startswith("<") and not word.startswith("<<") and len(word) > 1:
+            files.append(word[1:])
+    return tuple(files)
+
+
+def producer_files(tokens: list[str] | tuple[str, ...]) -> tuple[str, ...] | None:
+    """The files a pipeline producer outputs when that is known from its words alone, else None."""
+    words = strip_prefix(tokens)
+    if not words or os.path.basename(words[0]) not in STATIC_PRODUCERS:
+        return None
+    if os.path.basename(words[0]) != "cat":
+        return ()
+    files: list[str] = []
+    skip = False
+    for word in words[1:]:
+        if skip:
+            skip = False
+        elif word in REDIRECT_OPERATORS:
+            skip = True
+        elif not word.startswith(("<", ">", "-")):
+            files.append(word)
+    return tuple(files)

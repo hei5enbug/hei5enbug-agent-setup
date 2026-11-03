@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from public_boundary import _decode_text, read_blobs, scan_identity, scan_text
@@ -28,11 +31,53 @@ def git(cwd: Path | str, *args: str, config: tuple[str, ...] = (), stdin: bytes 
     return done.stdout
 
 
+@contextmanager
+def repository_environment(overrides: dict[str, str]) -> Iterator[None]:
+    """Run git calls as if the command had set GIT_DIR or GIT_WORK_TREE, then put the process environment back."""
+    saved = {name: os.environ.get(name) for name in overrides}
+    os.environ.update(overrides)
+    try:
+        yield
+    finally:
+        for name, value in saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
 def try_git(cwd: Path | str, *args: str) -> str | None:
     try:
         return git(cwd, *args).decode("utf-8", "replace").strip()
     except CheckError:
         return None
+
+
+def git_lines(cwd: Path | str, *args: str, config: tuple[str, ...] = ()) -> list[str]:
+    try:
+        text = git(cwd, *args, config=config).decode("utf-8", "replace")
+    except CheckError:
+        return []
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def remote_urls(cwd: Path | str, name: str, config: tuple[str, ...] = ()) -> list[str]:
+    """The URLs a push to `name` reaches; a word that is no configured remote is a URL itself, with rewrites applied."""
+    urls = git_lines(cwd, "remote", "get-url", "--all", "--push", name, config=config)
+    return urls or git_lines(cwd, "ls-remote", "--get-url", name, config=config) or [name]
+
+
+def default_push_remote(cwd: Path | str, config: tuple[str, ...] = ()) -> str:
+    """Where a push with no destination goes: the branch's pushRemote, remote.pushDefault, the branch's remote, origin."""
+    branch = next(iter(git_lines(cwd, "symbolic-ref", "-q", "--short", "HEAD", config=config)), None)
+    keys = [f"branch.{branch}.pushRemote"] if branch else []
+    keys.append("remote.pushDefault")
+    keys.extend([f"branch.{branch}.remote"] if branch else [])
+    for key in keys:
+        found = git_lines(cwd, "config", "--get", key, config=config)
+        if found:
+            return found[0]
+    return "origin"
 
 
 def toplevel(cwd: Path | str) -> Path | None:

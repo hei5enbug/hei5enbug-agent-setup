@@ -1,6 +1,7 @@
-# Response language and DataGrip guards
+# Response language, DataGrip, and public boundary guards
 
-This page explains how response-language checks and DataGrip query safeguards behave on each host.
+This page explains how response-language checks, DataGrip query safeguards, and the public boundary check behave on
+each host.
 
 ## Response language
 
@@ -53,3 +54,49 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 
 Without it, PostgreSQL falls back to a stricter text check that may ask more often but still never lets a write run
 without approval.
+
+## Public boundary check
+
+A `PreToolUse` hook on `Bash` calls `scripts/public_boundary_hook.py` in every project on both hosts, with the
+`approval_guard` option on or off. It loads the scanner from the plugin's `.githooks/` folder and blocks a `git` or
+`gh` write before it runs when the text, commits, or tags it would publish contain a home path, a secret shape, an
+email address, or a private word. The block reports each finding's kind and location, never the matched value. A
+command that has no `git` or `gh` word, a read-only command, and a command aimed at another repository pass with no
+output; nothing beyond the standard library loads until a `git` or `gh` word appears.
+
+A repository is protected when an installed plugin declares it public: its root `issue-target.json` has
+`"public": true` and a `tracker` of kind `github` with the location `<owner>/<repo>`. Installed plugins are those in
+Claude Code's `plugins/installed_plugins.json` under `CLAUDE_CONFIG_DIR` (default `~/.claude`), the newest cached
+version of each plugin under `plugins/cache/<marketplace>/<plugin>/<version>` in `CODEX_HOME` (default `~/.codex`),
+and the running plugin's own root (`CLAUDE_PLUGIN_ROOT`, or `PLUGIN_ROOT` on Codex). A `gh` write is in scope when
+`--repo` or `-R` names a protected repository, or, without it, when `GH_REPO` does (set inline for that command, by an
+earlier `export` in the same command, or in the hook's environment), or, without either, when the working directory's
+`origin` does. Leading `NAME=value` words apply to their own command only. A `git`
+commit or tag is in scope when the `origin` of its repository is a protected repository: the checkout of the
+working directory, or the git directory that the command sets with `--git-dir`, `GIT_DIR`, or `GIT_WORK_TREE`. A
+`git push` is in scope when any destination it reaches is protected: an explicit URL or remote name, resolved through
+the remote's push URL, or, without one, the branch's push remote and then `origin`.
+Variables in these values are expanded from the command's own assignments, and a target that cannot be resolved is
+treated as protected: an unresolved `--repo`, `GH_REPO`, or push destination is scanned, and an unresolved git
+directory blocks. The directories that select the repository (`-C`, `--git-dir`, `--work-tree`, `GIT_DIR`, and
+`GIT_WORK_TREE`) are not scanned as published text.
+
+A write that reads its body from stdin, such as `--body-file -`, `-F -`, or `git commit -F -`, is scanned with its
+source: a heredoc as part of the command, a pipeline's earlier commands, including ones on earlier lines that end with
+`|`, with the files that a `cat` or a `<` redirect names after wildcard expansion, and `echo` or `printf` text. Any other command that feeds the pipeline blocks the write, because its output
+cannot be checked before it runs. The hook also blocks a `git` or `gh` command when its scanner is missing or fails.
+
+Private words come from the file `HEI5ENBUG_PUBLIC_BOUNDARY_WORDS` names, and from every installed plugin that
+declares one in a root file `public-boundary.json`, exactly `{"version": 1, "private_words_file": "<path>"}`. The path
+is relative and must stay inside that plugin root; a text word file holds one word or phrase per line, with `#` comment
+lines, and a `.json` file holds `words`, optional `patterns`, and optional `allowed_identity_emails`, as
+[the declaration](development.md#private-word-list-declaration) describes. An invalid declaration or an unreadable
+file is reported as a problem that names the plugin and the reason, never a word, and the write is blocked because it
+could not be checked. This repository never holds a list.
+
+When a public write is scanned and no list was found, the hook says so each time. A write that passes prints JSON with
+`systemMessage` for the user and `hookSpecificOutput.additionalContext` for the model; a blocked write adds the same
+sentence to the error output.
+
+The project hooks in `.claude/settings.json` and `.codex/hooks.json` stay for a session in a checkout of this
+repository whose installed plugin is older or missing, so both hooks may run for one call there.

@@ -142,6 +142,34 @@ conversation and no issue. For a tracker kind other than `github`, the skill use
 reaches the declared location, otherwise that tracker's official CLI when it is already authenticated; with neither, it
 shows the draft and files nothing.
 
+## Private word list declaration
+
+Any installed plugin, usually a private one, may name words that must never reach a public repository, such as its
+organization's name, in a root `public-boundary.json`:
+
+```json
+{"version": 1, "private_words_file": "<path relative to the plugin root>"}
+```
+
+The declaration holds exactly these two keys, and the path stays inside that plugin's root. A text file holds one word
+or phrase per line; blank lines and lines starting with `#` are ignored. A file whose name ends in `.json` holds an
+object instead:
+
+```json
+{
+  "words": ["<word>"],
+  "patterns": [{"regex": "<regular expression>", "ignore_case": true}],
+  "allowed_identity_emails": ["<address>"]
+}
+```
+
+`words` is required; `patterns` and `allowed_identity_emails` are optional. A word matches as a whole word, ignoring
+case. An address in `allowed_identity_emails` may appear as the commit author or committer email even when it contains
+a private word; the identity's name and every other place are still checked. This plugin's public boundary hook
+checks every git or gh write to a repository that an installed plugin declares public against the words of every
+installed list. An invalid declaration
+blocks those writes until it is fixed. The list itself never enters a public repository, this one included.
+
 ## Archived skill
 
 - `omo-model-config` was removed; its last version is in the [`v1.3.0`

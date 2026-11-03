@@ -1,9 +1,9 @@
-# 응답 언어와 DataGrip 가드
+# 응답 언어, DataGrip, 공개 경계 가드
 
 > 영어 원본: [guards.md](../../guards.md)
 > 이 문서는 사람을 위한 비권위 한국어 번역본이다. 에이전트 실행 시 읽거나 사용하지 않는다.
 
-이 문서는 호스트별 응답 언어 검사와 DataGrip 쿼리 보호 동작을 설명합니다.
+이 문서는 호스트별 응답 언어 검사, DataGrip 쿼리 보호, 공개 경계 검사의 동작을 설명합니다.
 
 ## 응답 언어
 
@@ -55,3 +55,46 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 ```
 
 파서가 없으면 PostgreSQL은 더 엄격한 텍스트 검사로 대체합니다. 이 검사는 승인을 더 자주 요청할 수 있지만, 승인 없이 쓰기가 실행되는 일은 여전히 없습니다.
+
+## 공개 경계 검사
+
+두 호스트 모두 `approval_guard` 옵션의 활성화 여부와 관계없이 모든 프로젝트에서 `Bash`의 `PreToolUse` 훅이
+`scripts/public_boundary_hook.py`를 호출합니다. 이 훅은 플러그인의 `.githooks/` 폴더에서 스캐너를 불러오며,
+공개할 텍스트, 커밋, 태그에 홈 경로, 비밀 값 형태, 이메일 주소, 비공개 단어가 있으면 `git` 또는 `gh` 쓰기를
+실행 전에 차단합니다. 차단할 때는 발견한 항목마다 종류와 위치만 보고하며, 일치한 값은 보고하지 않습니다.
+`git`이나 `gh` 단어가 없는 명령, 읽기 전용 명령, 다른 저장소를 대상으로 한 명령은 출력 없이 통과합니다.
+`git`이나 `gh` 단어가 나타나기 전에는 표준 라이브러리 외에 아무것도 불러오지 않습니다.
+
+설치된 플러그인이 공개로 선언한 저장소는 보호 대상입니다. 루트 `issue-target.json`에 `"public": true`가 있고,
+`tracker`의 종류가 `github`이며 위치가 `<owner>/<repo>`인 경우입니다. 설치된 플러그인은
+`CLAUDE_CONFIG_DIR`(기본값 `~/.claude`) 아래 Claude Code의 `plugins/installed_plugins.json`에 있는 플러그인,
+`CODEX_HOME`(기본값 `~/.codex`)의 `plugins/cache/<marketplace>/<plugin>/<version>` 아래 각 플러그인의 최신 캐시 버전,
+그리고 실행 중인 플러그인의 루트(`CLAUDE_PLUGIN_ROOT`, Codex에서는 `PLUGIN_ROOT`)입니다. `gh` 쓰기는 `--repo`나 `-R`이
+보호 대상 저장소를 지정하면 검사 범위에 듭니다. 그 옵션이 없으면 `GH_REPO`가 지정한 저장소를 따릅니다. 이 값은 해당 명령에
+인라인으로 설정하거나, 같은 명령의 앞선 `export`로 설정하거나, 훅의 환경에 설정할 수 있습니다. 둘 다 없으면 작업 디렉터리의
+`origin`을 따릅니다. 앞에 붙인 `NAME=value`는 해당 명령에만 적용됩니다. `git` 커밋과 태그는 그 저장소의
+`origin`이 보호 대상 저장소일 때 검사 범위에 듭니다. 그 저장소는 작업 디렉터리의 체크아웃이거나, 명령이 `--git-dir`,
+`GIT_DIR`, `GIT_WORK_TREE`로 지정한 git 디렉터리입니다. `git push`는 닿는 목적지 중 하나라도 보호 대상이면 검사 범위에
+듭니다. 목적지는 명시한 URL이나 remote 이름이며 remote의 push URL로 확인하고, 없으면 브랜치의 push remote, 그다음
+`origin`입니다. 이 값들의 변수는 명령 자신의 할당으로 확장하며, 확인할 수 없는 대상은 보호 대상으로 봅니다. 확인할 수 없는
+`--repo`, `GH_REPO`, push 목적지는 검사하고, 확인할 수 없는 git 디렉터리는 차단합니다. 저장소를 고르는 디렉터리(`-C`,
+`--git-dir`, `--work-tree`, `GIT_DIR`, `GIT_WORK_TREE`)는 공개되는 텍스트로 검사하지 않습니다.
+
+`--body-file -`, `-F -`, `git commit -F -`처럼 본문을 표준 입력에서 읽는 쓰기는 그 출처와 함께 검사합니다. heredoc은
+명령의 일부로, 파이프라인은 `|`로 끝나는 앞 줄의 명령을 포함한 앞선 명령과, 와일드카드를 확장한 뒤 `cat`이나 `<`
+리디렉션이 지정한 파일로, `echo`나 `printf`는 그 텍스트로
+검사합니다. 그 밖의 명령이 파이프라인에 내용을 넣으면 실행 전에 출력을 검사할 수 없으므로 쓰기를 차단합니다. 스캐너가
+없거나 실패하면 훅은 `git`이나 `gh` 명령도 차단합니다.
+
+비공개 단어는 `HEI5ENBUG_PUBLIC_BOUNDARY_WORDS`가 지정한 파일과, 설치된 각 플러그인이 루트의
+`public-boundary.json`에 정확히 `{"version": 1, "private_words_file": "<path>"}`로 선언한 파일에서 가져옵니다.
+경로는 상대 경로이며 해당 플러그인 루트 안에 있어야 합니다. 텍스트 단어 파일은 한 줄에 단어나 구절 하나를 담고, `#` 주석
+줄을 사용합니다. `.json` 파일은 [선언](development.ko.md#비공개-단어-목록-선언)에서 설명한 대로 `words`와 선택 항목인
+`patterns`, `allowed_identity_emails`를 담습니다. 선언이 유효하지 않거나 파일을 읽을 수 없으면 플러그인 이름과 이유만
+담은 문제로 보고하며, 단어는 보고하지 않습니다. 검사를 완료할 수 없으므로 쓰기를 차단합니다. 이 저장소에는 목록을 두지 않습니다.
+
+공개 쓰기를 검사할 때 목록을 찾지 못하면 훅은 매번 그 사실을 알립니다. 통과한 쓰기는 사용자용 `systemMessage`와
+모델용 `hookSpecificOutput.additionalContext`가 있는 JSON을 출력합니다. 차단된 쓰기는 오류 출력에 같은 문장을 추가합니다.
+
+이 저장소의 체크아웃에서 설치된 플러그인이 오래되었거나 없는 세션을 위해 `.claude/settings.json`과
+`.codex/hooks.json`의 프로젝트 훅도 유지하므로, 그곳에서는 호출 한 번에 두 훅이 모두 실행될 수 있습니다.
