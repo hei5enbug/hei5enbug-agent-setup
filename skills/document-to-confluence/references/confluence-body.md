@@ -47,6 +47,18 @@ Preserve values the converter generated on an earlier save, notably macro identi
 The converter rewrites this into its own figure node with the matching width metadata. You do not
 write that node yourself.
 
+### Captioned image
+
+**Observed on 2026-11-03.** Through a connected Confluence page tool, this figure with an external image URL was
+stored as an `ac:image` holding `<ac:caption><p>CAPTION</p></ac:caption>`. The same figure without
+`data-type="media-single"` was rejected. An attachment download URL in this form was not tested.
+
+```html
+<figure data-type="media-single" data-layout="center"><img src="/wiki/download/attachments/PAGE_ID/FILENAME" alt="..." width="900" height="225"><figcaption>CAPTION</figcaption></figure>
+```
+
+`scripts/storage_body.py` converts this figure for a storage-format write.
+
 ### A hand-written media-single container is rejected
 
 **Verified.** Sending a `div` carrying `data-type="media-single"` fails the request with an
@@ -126,6 +138,9 @@ carries one, send it back unchanged, because it is how the page tracks that macr
 **Observed on 2026-10-14.** Adding `"style":{"value":"none"}` to `macroParams` in the HTML body, sent through
 a connected Confluence page tool, was accepted. The stored macro carried `style=none`, and the rendered view
 marked the list style as `none`.
+
+**Observed on 2026-11-03.** With `style=none` and `maxLevel` 3, the rendered contents list indented level-3 entries
+by 24 px under their level-2 entries, without bullets.
 
 **Observed.** In storage format, `<ac:parameter ac:name="style">none</ac:parameter>` inside the `toc` macro
 was stored and returned unchanged on read-back after REST API saves. A version message on another page
@@ -288,6 +303,29 @@ saved in the editor, held an empty paragraph as `<p />`.
 Source newlines do not create a visible blank line. When checking whether a blank line already exists,
 count every empty-paragraph form above.
 
+### Heading spacing
+
+**Observed on 2026-11-03** in Confluence Cloud's page view at a 1440 px viewport. A heading's top gap does not
+depend on its level. Before a level-2 heading that follows a paragraph, the gap was 27 px with nothing, 55 px with a
+trailing line break, 61 px with a divider, and 94 px with a blank paragraph, which reads as excessive.
+
+Where the opening layout applies, separate each heading from the block before it:
+
+| Block before the heading | Separator |
+|---|---|
+| The table of contents or any other block, before a top-level heading | One divider, `<hr />`, and no blank paragraph |
+| A paragraph, before a lower-level heading | One line break, `<br />`, at the end of the paragraph after its last sentence: the form Shift+Enter stores |
+| An image, before a lower-level heading | The image's caption: the source caption, or the image's alternative text when the source has none. Nothing when it has neither |
+| Any other block, such as a table, list, panel, or code block, before a lower-level heading | Nothing; the block's border or margin gives the gap |
+| The heading's parent heading | Nothing |
+
+Add nothing to a heading inside a cell, list, or panel. Count a separator that is already in place. On a page that
+still uses the earlier form, a blank paragraph before each top-level heading, replace that paragraph with the
+divider.
+
+**Observed on 2026-11-03.** Through a connected Confluence page tool, `<hr>` was stored as `<hr />` and a trailing
+`<br>` as `<br /></p>`. Both forms returned unchanged when read back in storage format.
+
 ## Source artifacts that do not belong on the page
 
 Remove or replace these during conversion. They may be valid in the source application but do not
@@ -323,6 +361,6 @@ The remaining items need a manual check, or another script for text parity:
 - The body's text matches the source within the parity checker's supported scope, or a manual
   comparison covers the unsupported constructs.
 - The version message names what changed.
-- On a page with the opening layout, no heading sits above the table of contents, and each top-level heading
-  has exactly one blank paragraph before it.
+- On a page with the opening layout, no heading sits above the table of contents, and each heading has the
+  separator "Heading spacing" requires, with no blank paragraph before it.
 - Each expandable block has a descriptive title, and its content matches the source.

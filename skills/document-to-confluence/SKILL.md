@@ -228,18 +228,19 @@ convention that would undo it, and report that convention edit instead.
 - **Opening layout.** Apply this layout by default to a page this run creates. When republishing an existing
   page whose current body already uses it, keep it. Apply it to any other existing page only when the user
   asks for it. When the user asks to publish unchanged or limits the edit to named parts, apply none of it,
-  including blank paragraphs, outside the permitted scope.
+  including heading spacing, outside the permitted scope.
   - When the body has a table of contents, put the native macro first in the body and use its bullet-free
-    style. Do not add a heading such as "목차" above it. Replace a hand-written contents list and its heading,
-    such as one carried over from a Markdown source, with the macro. Headings often carry their own numbers,
-    so list markers duplicate them. If the write format cannot store the style, keep the default and report it.
+    style. Set its `maxLevel` to the deepest heading level the body uses, so lower-level headings appear
+    indented under their parents. Do not add a heading such as "목차" above it. Replace a hand-written
+    contents list and its heading, such as one carried over from a Markdown source, with the macro. Headings
+    often carry their own numbers, so list markers duplicate them. If the write format cannot store the style,
+    keep the default and report it.
   - When the body has a table of contents, move opening prose that precedes the first heading into a section
     below it. Title it "개요" in Korean, or the page-language equivalent, when the prose explains the page's
     purpose or overall behavior, and "배경" when it explains why a problem or investigation arose. Keep the
     prose unchanged. Without a table of contents or opening prose, leave the opening as it is.
-  - Put one visible blank paragraph immediately before each top-level body heading, including the first
-    heading after the table of contents. Count any existing empty paragraph at that position as the blank
-    line, and add none inside cells, lists, panels, or lower-level sections.
+  - Space each heading from the block before it as "Heading spacing" in `references/confluence-body.md`
+    describes, including the first heading after the table of contents.
 - **Layout.** Apply the column-width and line-break rules in `references/confluence-body.md` to every table,
   paragraph, and cell, including the panel and the change-history table.
 - **Suggestions.** In the report, list content that seems outside the page's purpose or better suited to
