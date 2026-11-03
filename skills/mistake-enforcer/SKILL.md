@@ -4,8 +4,9 @@ description: >-
   Turn mistakes that agents keep repeating in a repository into enforced checks. Groups evidence from
   commits, reverts, review comments, and user corrections into mistake classes, picks the highest
   enforcement level that works, and proves each proposed check fails on a real past instance. Use only
-  when the user explicitly asks to turn repeated mistakes into checks or invokes the skill by name. Do not
-  start it for a single bug fix, a code review, or a session summary.
+  when the user explicitly asks to turn repeated mistakes into checks, to audit which written rules agents
+  miss most, or invokes the skill by name. Do not start it for a single bug fix, a code review, or a session
+  summary.
 compatibility: >-
   Needs Git and filesystem access to the target repository. Reading pull request review comments needs the
   hosting service's command-line tool; without it the skill uses the other sources and says so.
@@ -41,6 +42,8 @@ directory), the period (default the last 30 days), and the sources. Gather from 
 - Review comments on pull requests merged in the period, when the hosting service's tool is installed and
   authenticated. Follow the session's service access rules. Without the tool, skip this source and report it.
 - User corrections that the user supplies, or that the session records or saved feedback the user names contain.
+- Session records, for an audit of which written rules agents miss: before reading them, read
+  `references/rule-audit.md`.
 - The repository's written rules and any rule-to-enforcer index it keeps, to tell which rules a check already
   enforces.
 

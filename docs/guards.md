@@ -103,3 +103,14 @@ repository whose installed plugin is older or missing, so both hooks may run for
 The `skill-issue-creator` skill calls `skills/skill-issue-creator/scripts/scan_draft.py` to scan an issue draft with
 the same scanner before it is posted. It also reads the list that the plugin owning the tracker declares, passed as
 `--plugin-root`, even when that plugin is not installed.
+
+## Required checks at commit and push
+
+A `PreToolUse` hook on `Bash`, `scripts/required_checks_hook.py`, runs on both hosts. When a command runs `git commit`
+or `git push`, including with global options such as `-C` or `-c`, or inside `&&`, `;`, `|`, or a subshell, it adds one
+reminder to the model's context: before a commit or push, the reply lists each check that the project instructions or a
+changed skill require, as done or as not done with its reason, and a check not done is never waived by judging the
+change small. Any other command, malformed input, and a missing command produce no output. The hook never blocks or
+approves anything; it only adds context. It exists because, in 7 of 1,259 Claude Code main sessions between 2026-10-04
+and 2026-11-03, the agent finished, committed, or pushed with a required check skipped by its own judgment or offered
+instead of run.

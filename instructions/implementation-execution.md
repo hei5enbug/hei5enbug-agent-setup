@@ -60,6 +60,11 @@ checks. The main session checks scope, correctness, regressions, and test eviden
 A check that mutates tracked files is implementation work and needs an owner. A failed assigned check is a failure
 even when the cause lies outside the task.
 
+Before reporting the work finished, and before each commit or push, list every check that the project instructions
+or a skill you used or changed require for this change, such as an evaluation, a test run, or a final review, and
+show each as done, or as not done with its reason. Never waive one by your own judgment of the change's size or kind.
+Do not commit or push while one is not done unless the user agrees after seeing that list.
+
 ## Unfinished agreed items
 
 While an agreed item of the task's ticket or plan is not done, open every later report with it: the first sentence

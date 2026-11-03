@@ -1,0 +1,5 @@
+{"type": "attachment", "sessionId": "bbbb0000-0000-0000-0000-000000000002", "timestamp": "2026-10-12T01:00:00Z", "attachment": {"type": "hook_success", "response": {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": "Run `pytest` before the commit. Step 7 pending."}}}}
+{"type": "attachment", "sessionId": "bbbb0000-0000-0000-0000-000000000002", "timestamp": "2026-10-12T01:00:00Z", "attachment": {"type": "hook_success", "response": {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": "New hook: check `foo.md` 12 times"}}}}
+{"type": "user", "sessionId": "bbbb0000-0000-0000-0000-000000000002", "timestamp": "2026-10-12T02:00:00Z", "message": {"role": "user", "content": "README에 한 줄 추가해줘"}}
+{"type": "assistant", "sessionId": "bbbb0000-0000-0000-0000-000000000002", "timestamp": "2026-10-12T03:00:00Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "추가했습니다."}]}}
+{broken line
