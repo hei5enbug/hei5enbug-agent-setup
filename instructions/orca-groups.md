@@ -64,7 +64,7 @@ alone.
 - It never answers a member's approval prompt or a question meant for the user; it reports it to the user.
 - Before the root stops, for example at a usage limit, it writes the table into a resume note under
   [pause and resume](pause-and-resume.md), so a resumed session continues from it.
-- The root's own board status is the group's summary under Orca worktree status: it becomes
+- The root's own board status is the group's summary under [Orca worktree status](orca-worktree-status.md): it becomes
   `completed` only after every member is `completed` and the root itself has nothing left.
 
 ## Cleanup of finished members

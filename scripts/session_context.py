@@ -21,6 +21,8 @@ MAX_ROLE_CONTEXT_BYTES = 4000
 ASSIGNED_ROLE_ENV = "HEI5ENBUG_ASSIGNED_ROLE"
 ASSIGNED_WORKERS_HEADING = "## Assigned workers"
 CROSS_REPOSITORY_REFERENCE = "cross-repository.md"
+ORCA_STATUS_REFERENCE = "orca-worktree-status.md"
+ORCA_TERMINAL_ENV = "ORCA_TERMINAL_HANDLE"
 INSTRUCTIONS_VARIABLE = "$I"
 IMPLEMENTATION_AGENTS = {
     "claude": {
@@ -189,6 +191,8 @@ def render_context(root: Path, host: str, kind: str = "main") -> str:
             sources[1] = "\n".join(
                 line for line in sources[1].split("\n") if CROSS_REPOSITORY_REFERENCE not in line
             )
+        if not os.environ.get(ORCA_TERMINAL_ENV):
+            sources[1] = "\n".join(line for line in sources[1].split("\n") if ORCA_STATUS_REFERENCE not in line)
     else:
         sources = [read_instruction(session_dir / "core.md", root)]
         if kind == "implementation":

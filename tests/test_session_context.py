@@ -689,6 +689,7 @@ class SessionContextTest(unittest.TestCase):
         for host in ("claude", "codex"):
             with self.subTest(host=host), mock.patch.dict(os.environ, environment):
                 os.environ.pop("PLUGIN_ROOT", None)
+                os.environ.pop("ORCA_TERMINAL_HANDLE", None)
 
                 # When
                 rendered = {root: session_context.render_context(root, host) for root in (short, long)}
@@ -887,6 +888,25 @@ class SessionContextTest(unittest.TestCase):
                 self.assertEqual(
                     [line for line in default.splitlines() if reference not in line and not line.startswith("Notice:")],
                     [line for line in disabled.splitlines() if not line.startswith("Notice:")],
+                )
+
+    def test_Orca_터미널_세션만_worktree_상태_참조_줄을_받는다(self):
+        """ORCA_TERMINAL_HANDLE이 있으면 두 호스트 모두 worktree 상태 참조 줄을 받고, 없으면 그 줄만 빠진다."""
+        # Given
+        reference = "orca-worktree-status.md"
+        orca = {"ORCA_TERMINAL_HANDLE": "term_demo"}
+        for host in ("claude", "codex"):
+            with self.subTest(host=host):
+                # When
+                outside = self.context(self.run_hook(host))
+                inside = self.context(self.run_hook(host, extra_env=orca))
+
+                # Then
+                self.assertNotIn(reference, outside)
+                self.assertIn(reference, inside)
+                self.assertEqual(
+                    [line for line in inside.splitlines() if reference not in line and not line.startswith("Notice:")],
+                    [line for line in outside.splitlines() if not line.startswith("Notice:")],
                 )
 
     def test_Codex와_역할_컨텍스트는_역할_고정_줄을_받지_않는다(self):
