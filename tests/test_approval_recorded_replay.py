@@ -1449,7 +1449,7 @@ J14_EFFECTFUL = ("skills/local-data-cleanup/scripts/data_removal.py", "scripts/p
                  "skills/skill-builder/scripts/run_eval.py", "skills/skill-builder/scripts/run_loop.py",
                  "skills/tiki-taka/scripts/detached_job.py", "skills/tiki-taka/scripts/stream_agent.py")
 J14_SCRIPTS += J14_EFFECTFUL
-J14_LOOP = ("for s in decision-navigator deep-interview flowchart-design session-retro tiki-taka report-skill-gap; "
+J14_LOOP = ("for s in decision-navigator deep-interview flowchart-design session-retro tiki-taka skill-issue-creator; "
             "do python3 skills/skill-builder/scripts/quick_validate.py skills/$s 2>&1 | tail -1; done")
 
 

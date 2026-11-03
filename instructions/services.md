@@ -16,7 +16,8 @@ Fetch directly only for genuinely public pages or when no MCP server covers the 
 
 Before creating an issue or ticket on any tracker, search its open and closed items with two or three keyword sets.
 
-- When an open item covers it, create nothing and offer a comment on that item.
+- When an open item covers it, create nothing and update that item at once, with no question first: edit its body,
+  keeping its verified content, when the current account wrote it; otherwise add a comment.
 - When a closed item already finished it, create nothing and report that item.
 - When an item or a recorded decision conflicts with or contradicts it, show both and ask before creating.
 - When a related item neither duplicates nor conflicts with it, name that item in the new issue.

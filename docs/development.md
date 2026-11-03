@@ -96,9 +96,9 @@ hei5enbug-agent-setup/
     ├── local-data-cleanup/
     ├── mistake-enforcer/
     ├── orca-plugin-refresh/
-    ├── report-skill-gap/
     ├── session-retro/
     ├── skill-builder/
+    ├── skill-issue-creator/
     ├── suggest-commit/
     ├── technical-design-writer/
     └── tiki-taka/
@@ -109,9 +109,9 @@ the same `skills/` directory for Codex and Claude Code without copying skills in
 
 ## Issue tracker declaration
 
-`report-skill-gap` files an issue only at a tracker that the owning plugin declares in `issue-target.json` at its root,
-next to `.claude-plugin/` and `.codex-plugin/`. The skill learns every tracker from these files, so this plugin never
-needs to know about a plugin that builds on it. This plugin declares its own repository:
+`skill-issue-creator` files an issue only at a tracker that the owning plugin declares in `issue-target.json` at its
+root, next to `.claude-plugin/` and `.codex-plugin/`. The skill learns every tracker from these files, so this plugin
+never needs to know about a plugin that builds on it. This plugin declares its own repository:
 
 ```json
 {
@@ -121,7 +121,7 @@ needs to know about a plugin that builds on it. This plugin declares its own rep
   "body_format": "markdown",
   "labels": ["bug", "enhancement"],
   "public": true,
-  "write_approval": "preview"
+  "write_approval": "direct"
 }
 ```
 
@@ -132,8 +132,8 @@ needs to know about a plugin that builds on it. This plugin declares its own rep
 | `language` | Language tag of the issue text, such as `en` or `ko`. |
 | `body_format` | `markdown`, `jira-wiki`, `plain`, or `html`. |
 | `labels` | Either a list of labels the skill may choose from, of which it picks one (none when the list is empty), or a template string of tags separated by `;` in which `{skill}` becomes the owning skill's name and every tag is applied. A new-skill proposal expands `{skill}` to the proposed skill's name followed by `new-skill`. No other placeholder is allowed. |
-| `public` | `true` when anyone can read the tracker. A public tracker always gets a preview. |
-| `write_approval` | `preview` shows the final text and waits for approval; `direct` files when you name the skill. |
+| `public` | `true` when anyone can read the tracker. A public tracker gets the leak check before every write and keeps case identifiers and private names out of the issue; a private tracker gets every detail that helps a coding agent. |
+| `write_approval` | `preview` shows the final text and waits for approval before every write, public or private; `direct` files when you name the skill and shows a short preview afterwards. |
 | `content_rules` | Optional path, relative to the plugin root, of extra rules that remove content from every issue. |
 | `recommend` | Optional boolean, `false` when absent. `true` lets the agent suggest filing in one line, without being asked, when no work remains and you corrected a finished result caused by a gap in this plugin or asked to turn a finished workflow into a skill or an issue. Filing starts only after you approve in a later message. |
 
@@ -167,7 +167,7 @@ object instead:
 case. An address in `allowed_identity_emails` may appear as the commit author or committer email even when it contains
 a private word; the identity's name and every other place are still checked. This plugin's public boundary hook
 checks every git or gh write to a repository that an installed plugin declares public against the words of every
-installed list. An invalid declaration
+installed list, and `skill-issue-creator` checks a public draft against them before filing. An invalid declaration
 blocks those writes until it is fixed. The list itself never enters a public repository, this one included.
 
 ## Archived skill

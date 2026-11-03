@@ -81,7 +81,7 @@ See [configuration](docs/configuration.md) for defaults and [updates](docs/updat
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Publish documents to Confluence and synchronize revisions while preserving web edits and comments. [한국어](docs/ko/skills/document-to-confluence/SKILL.ko.md) |
 | [`local-data-cleanup`](skills/local-data-cleanup/SKILL.md) | Check agent data, report it by size, and delete only the items you select. [한국어](docs/ko/skills/local-data-cleanup/SKILL.ko.md) |
 | [`mistake-enforcer`](skills/mistake-enforcer/SKILL.md) | Turn recurring repository mistakes into checks proven on past cases, when requested. [한국어](docs/ko/skills/mistake-enforcer/SKILL.ko.md) |
-| [`report-skill-gap`](skills/report-skill-gap/SKILL.md) | File a skill or instruction gap at its declared tracker after removing private case details. [한국어](docs/ko/skills/report-skill-gap/SKILL.ko.md) |
+| [`skill-issue-creator`](skills/skill-issue-creator/SKILL.md) | File a skill or instruction gap at its declared tracker, checking a public draft for private names first. [한국어](docs/ko/skills/skill-issue-creator/SKILL.ko.md) |
 | [`session-retro`](skills/session-retro/SKILL.md) | Review session history for evidence-backed skill improvements and requested plans. [한국어](docs/ko/skills/session-retro/SKILL.ko.md) |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | Create, evaluate, improve, and package agent skills. [한국어](docs/ko/skills/skill-builder/SKILL.ko.md) |
 | [`orca-plugin-refresh`](skills/orca-plugin-refresh/SKILL.md) | Update plugins and apply them to idle Orca sessions without restarting them. [한국어](docs/ko/skills/orca-plugin-refresh/SKILL.ko.md) |

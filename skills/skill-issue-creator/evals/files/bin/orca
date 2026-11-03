@@ -1,0 +1,52 @@
+#!/bin/sh
+# Evaluation stand-in for orca: answers reads from fixtures and records every command in FAKE_ORCA_LOG.
+# FAKE_ORCA_MODE=up (default) reaches a runtime with one idle claude terminal in the demo-a workspace; down does not.
+here=$(cd "$(dirname "$0")" && pwd)
+plugin="$here/../plugins/demo-a"
+log="${FAKE_ORCA_LOG:-/dev/null}"
+state="${FAKE_ORCA_STATE:-${TMPDIR:-/tmp}/orca-last-send}"
+printf '%s\n' "orca $*" >> "$log"
+if [ "${FAKE_ORCA_MODE:-up}" = "down" ]; then
+  echo "orca: runtime is not reachable" >&2
+  exit 1
+fi
+case "$1 $2" in
+  "status --json")
+    echo '{"ok": true, "runtime": {"reachable": true}}'
+    ;;
+  "repo list")
+    printf '[{"id": "repo_demo_a", "path": "%s", "name": "demo-a"}]\n' "$plugin"
+    ;;
+  "worktree list")
+    printf '[{"id": "repo_demo_a::%s", "path": "%s", "repoId": "repo_demo_a", "isMainWorktree": true}]\n' "$plugin" "$plugin"
+    ;;
+  "terminal list")
+    echo '[{"handle": "term_demo_a_1", "title": "claude", "agent": "claude"}]'
+    ;;
+  "terminal wait")
+    echo '{"wait": {"satisfied": true}}'
+    ;;
+  "terminal read")
+    if [ -f "$state" ]; then printf '> %s\n' "$(cat "$state")"; else echo '> '; fi
+    ;;
+  "terminal send")
+    prev=""
+    for arg in "$@"; do
+      if [ "$prev" = "--text" ]; then
+        if [ "$arg" = "x" ]; then printf 'x' > "$state"; else rm -f "$state"; fi
+      fi
+      prev="$arg"
+    done
+    echo '{"accepted": true}'
+    ;;
+  "terminal create")
+    echo '{"handle": "term_demo_a_new"}'
+    ;;
+  "orchestration send")
+    echo '{"ok": true}'
+    ;;
+  *)
+    echo "fake orca: unsupported command in this evaluation" >&2
+    exit 1
+    ;;
+esac

@@ -98,3 +98,6 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 
 이 저장소의 체크아웃에서 설치된 플러그인이 오래되었거나 없는 세션을 위해 `.claude/settings.json`과
 `.codex/hooks.json`의 프로젝트 훅도 유지하므로, 그곳에서는 호출 한 번에 두 훅이 모두 실행될 수 있습니다.
+`skill-issue-creator` 스킬은 `skills/skill-issue-creator/scripts/scan_draft.py`를 호출해 게시 전에 같은 스캐너로
+이슈 초안을 검사합니다. 트래커를 소유한 플러그인이 선언한 목록도 `--plugin-root`로 받아 읽으며, 그 플러그인이 설치되지
+않았어도 읽습니다.

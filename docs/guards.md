@@ -100,3 +100,6 @@ sentence to the error output.
 
 The project hooks in `.claude/settings.json` and `.codex/hooks.json` stay for a session in a checkout of this
 repository whose installed plugin is older or missing, so both hooks may run for one call there.
+The `skill-issue-creator` skill calls `skills/skill-issue-creator/scripts/scan_draft.py` to scan an issue draft with
+the same scanner before it is posted. It also reads the list that the plugin owning the tracker declares, passed as
+`--plugin-root`, even when that plugin is not installed.

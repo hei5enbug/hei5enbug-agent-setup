@@ -1,0 +1,4 @@
+[
+  {"number": 98, "title": "release-notes: support a custom changelog template", "url": "https://github.com/demo-org/demo-a/issues/98", "state": "OPEN", "labels": [{"name": "enhancement"}], "author": {"login": "other-dev"}, "body": "## Summary\nrelease-notes cannot render the notes with a custom changelog template.\n\n## Proposal\n- Under the condition that a template path is given, render the notes with it.\n"},
+  {"number": 101, "title": "release-notes: entries for reverted commits stay in the generated notes", "url": "https://github.com/demo-org/demo-a/issues/101", "state": "OPEN", "labels": [{"name": "bug"}], "author": {"login": "demo-user"}, "body": "## Summary\nWhen a commit is reverted inside the release range, release-notes still lists the original change.\n"}
+]

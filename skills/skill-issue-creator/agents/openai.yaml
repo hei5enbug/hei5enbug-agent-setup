@@ -1,0 +1,5 @@
+interface:
+  display_name: "Skill Issue Creator"
+  short_description: "File one skill or instruction gap at the tracker its plugin declares"
+policy:
+  allow_implicit_invocation: true

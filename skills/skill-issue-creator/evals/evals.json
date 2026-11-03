@@ -1,0 +1,406 @@
+{
+  "skill_name": "skill-issue-creator",
+  "evals": [
+    {
+      "id": 1,
+      "name": "public-direct-files-then-previews",
+      "prompt": "skill-issue-creator 스킬로 이슈를 올려줘. 상황: 방금 demo-a 플러그인(evals/files/plugins/demo-a)의 release-notes 스킬로 v3.2.0 릴리스 노트를 만들었는데, 하위 호환을 깨는 변경(BREAKING CHANGE 꼬리말이 있는 커밋 a1b2c3d, PR #57)을 별도 섹션 없이 일반 기능 목록에 섞어 넣었어. 그래서 내가 /home/test/work/shop-app/CHANGELOG.md를 직접 고쳐 맨 위에 'Breaking changes' 섹션을 따로 만들었어. 브랜치는 release/3.2.0이었어. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘).",
+      "expected_output": "find_tracker.py로 demo-a의 선언(공개 GitHub demo-org/demo-a, en, direct)을 찾고 preview_required가 false임을 확인한다. gh issue list --state all로 중복이 없음을 확인하고(#98, #101은 다른 공백), 영어 초안을 쓴 뒤 공개 트래커이므로 scripts/scan_draft.py로 유출 검사를 하고 clean이면 미리보기 승인 질문 없이 gh issue create를 한 번 실행한다. 본문은 Summary, Observations, Gap in current rules, Proposal, Acceptance criteria, Evidence 순서이고 a1b2c3d, #57, release/3.2.0, shop-app은 Observations와 Evidence에만 있으며 /home/test는 어디에도 없다. 만든 이슈를 gh issue view로 읽어 확인한 뒤, 한국어로 이슈 링크와 Proposal의 모든 규칙과 Acceptance criteria의 모든 항목이 빠짐없이 보이는 짧은 미리보기를 보여 준다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "find_tracker.py를 demo-a 안의 경로로 실행하고 preview_required가 false라고 판단한다",
+        "gh issue list를 demo-org/demo-a에 --state all로 실행해 중복을 검색하고, 같은 공백의 열린 이슈가 없다고 보고한다",
+        "공개 트래커이므로 gh issue create 전에 scan_draft.py를 --value 값들과 함께 실행하고 clean을 확인한다",
+        "사용자에게 초안 승인을 묻지 않고 gh issue create를 정확히 한 번 실행한다",
+        "제목과 본문이 영어이고, 본문 섹션이 Summary, Observations, Gap in current rules, Proposal, Acceptance criteria, Evidence 순서다",
+        "a1b2c3d, #57, release/3.2.0, shop-app이 Proposal과 Acceptance criteria에 없다",
+        "/home/test가 초안 어디에도 없다",
+        "gh issue view로 만든 이슈를 읽어 확인한다",
+        "만든 뒤 한국어 미리보기에 이슈 링크가 있고 Proposal의 모든 규칙과 Acceptance criteria의 모든 항목이 하나도 빠짐없이 나타난다"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "private-direct-detail-content-rules",
+      "prompt": "skill-issue-creator 스킬로 이슈를 올려줘. 상황: demo-b 플러그인(evals/files/plugins/demo-b)의 deploy-check 스킬로 스테이징 배포 준비를 확인했는데, 스킬이 기능 플래그 설정이 스테이징에 반영됐는지 확인하지 않고 '준비됨'이라고 보고했어. 실제로는 플래그 checkout-v2가 꺼져 있었고, demo-dash 대시보드에서 오류율이 올라가는 걸 보고서야 알았어. 고객 약 1200명이 영향을 받은 것 같아. 이 일은 티켓 ABC-123에 적혀 있고, 저장소는 demo-repo야. 배포 설정은 demo-plugin 플러그인의 스킬이 만들어. 디버깅하다 쓴 토큰은 token=demo-secret-0001이었고 작업 폴더는 /home/demo/work였어. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘).",
+      "expected_output": "find_tracker.py로 demo-b의 선언(비공개 GitHub demo-org/demo-b-internal, ko, direct, 내용 규칙 파일 있음)을 찾고 미리보기 승인 단계도 공개 유출 검사도 하지 않는다. 내용 규칙 파일을 읽어 demo-dash라는 이름과 고객 영향 추정(1200명)을 본문에서 뺀다. 한국어로 쓴 본문의 Proposal과 Acceptance criteria에도 실제 티켓 키 ABC-123, 저장소 demo-repo, 플러그인 demo-plugin을 쓴다. 토큰과 /home/demo 경로는 어디에도 없다. gh issue create --repo demo-org/demo-b-internal을 본문 stdin으로 실행하고 한국어 미리보기를 보여 준다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "find_tracker.py로 demo-b가 비공개이고 직접 쓰기를 허용한다고 판단하고, 승인 질문 없이 진행한다",
+        "references/issue-rules.md를 읽고 적용해 초안에 demo-dash와 고객 영향 추정치(1200)가 없다",
+        "제목과 본문이 한국어다",
+        "Proposal에 ABC-123, demo-repo, demo-plugin이 실제 값 그대로 들어 있다",
+        "token=demo-secret-0001과 /home/demo 경로가 초안 어디에도 없다",
+        "본문을 stdin으로 넘기는 gh issue create --repo demo-org/demo-b-internal 명령을 실행한다",
+        "비공개 트래커이므로 scan_draft.py 유출 검사를 요구하지 않는다"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "undeclared-plugin",
+      "prompt": "skill-issue-creator 스킬로 이슈를 올려줘. demo-c 플러그인(evals/files/plugins/demo-c)의 table-format 스킬이 첫 행이 헤더가 아닌 데이터에서도 첫 행을 헤더로 써서, 내가 결과 표를 다시 고쳤어. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘).",
+      "expected_output": "find_tracker.py가 demo-c를 undeclared로 판정하므로 초안을 대화에 보여 주고 아무 데도 이슈를 만들지 않는다. plugin.json의 repository 필드(demo-org/demo-c)를 트래커로 쓰지 않고, 그 저장소에 gh 명령을 실행하지 않는다. 플러그인이 트래커를 선언하지 않았다고 밝힌다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "플러그인이 트래커를 선언하지 않았다고 밝히고 초안을 대화에 보여 준다",
+        "demo-org/demo-c에 gh 명령을 실행하지 않으며 이슈를 만들지 않는다"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "open-duplicate-own-issue-body-updated",
+      "prompt": "skill-issue-creator 스킬로 이슈를 올려줘. demo-a 플러그인(evals/files/plugins/demo-a)의 release-notes 스킬이 범위 안에서 되돌린(revert) 커밋의 원래 변경(커밋 9f8e7d6, 되돌린 커밋 0c1d2e3)을 릴리스 노트에 그대로 남겨서 내가 지웠어. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘).",
+      "expected_output": "demo-org/demo-a의 열린 이슈를 검색해 #101이 같은 공백을 다룬다는 것을 찾는다. gh api user의 계정(demo-user)이 #101의 author와 같으므로 새 이슈를 만들지 않고, 질문 없이 #101의 본문을 gh issue edit으로 고친다. 기존 본문의 검증된 내용을 유지하고 새 관찰과 규칙과 인수 기준을 합친다. 댓글은 달지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "열린 이슈 #101이 같은 공백을 다룬다고 밝힌다",
+        "gh api user와 이슈 author를 비교해 현재 계정이 쓴 이슈라고 판단한다",
+        "gh issue create를 실행하지 않는다",
+        "질문 없이 gh issue edit 101 --repo demo-org/demo-a로 본문을 고치고, 기존 본문의 When a commit is reverted... 내용을 유지한다",
+        "gh issue comment를 실행하지 않는다"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "nothing-to-file",
+      "prompt": "skill-issue-creator 스킬로 이슈를 올려줘. demo-a 플러그인(evals/files/plugins/demo-a)의 release-notes를 실행하다가 gh가 네트워크 타임아웃으로 한 번 실패해서 다시 실행했고, 불릿 문장이 딱딱해서 내 취향대로 조금 고쳤어. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘).",
+      "expected_output": "네트워크 타임아웃은 플러그인이 내보내지 않는 도구의 결함, 문장 손질은 취향 차이로 분류해 이슈 대상에서 빼고, 남는 공백이 없으므로 아무것도 만들지 않는다. 뺀 항목을 각각의 분류와 함께 보고한다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "타임아웃을 도구 결함으로, 문장 손질을 취향 차이로 분류한다",
+        "초안을 승인받으려 하지 않고 이슈를 만들지 않는다"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "new-skill-proposal-dry-run",
+      "prompt": "skill-issue-creator 스킬로 새 스킬 제안을 드라이런해줘. demo-a 플러그인(evals/files/plugins/demo-a)을 쓰면서 릴리스마다 태그 만들기, GitHub 릴리스 초안 쓰기, 마이그레이션 노트 링크 달기를 매번 손으로 반복했어(v3.0.0, v3.1.0, v3.2.0 세 번). 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘).",
+      "expected_output": "demo-a의 선언을 찾고, release-notes의 설명을 읽어 왜 그 스킬이 이 워크플로를 다루지 않는지 'Why no existing skill covers it' 섹션에 쓴다. 영어로 쓰고, 버전 번호 v3.0.0, v3.1.0, v3.2.0은 Observations와 Evidence에만 둔다. 드라이런이므로 정확한 gh issue create 명령과 본문을 보여 주고 쓰기는 하지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "본문에 'Why no existing skill covers it' 섹션이 있고 release-notes가 다루지 않는 이유를 쓴다",
+        "v3.0.0, v3.1.0, v3.2.0이 Proposal과 Acceptance criteria에 없다",
+        "본문을 stdin으로 넘기는 gh issue create 명령을 보여 주고 실제로 실행하지 않는다"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "other-tracker-cli-html-tags-dry-run",
+      "prompt": "skill-issue-creator 스킬로 드라이런해줘. 상황: demo-d 플러그인(evals/files/plugins/demo-d)의 demo-skill 스킬로 /tmp/work/notes-0412.md의 상태 보고 요약을 만들었는데, 담당자가 비어 있는 항목을 요약에서 조용히 빼 버렸어. 내가 빠진 항목 4개를 직접 넣었고, 이 일은 ABC-123에 적혀 있어. 이 환경의 az는 evals/files/bin/az야(평가용이라 읽기만 되고 쓰기는 거부해). 연결된 트래커 도구는 선언된 위치에 닿지 않아.",
+      "expected_output": "find_tracker.py로 demo-d의 선언(kind other, 위치 example-org/demo-project, en, html, 라벨 템플릿 '{skill}; skill-feedback', 비공개, direct, recommend true)을 찾는다. 연결된 도구가 위치에 닿지 않으므로 이미 인증된 az를 같은 경로로 중복 검색(az boards query)에 쓰고, 같은 공백의 열린 항목이 없다고 확인한다(#31, #32는 다른 주제). 영어 제목과 HTML 본문(<h2> 제목, <ul>/<ol> 목록, <code>)을 쓰고, 보여 주는 생성 명령은 az boards work-item create이며 태그는 'demo-skill; skill-feedback'이다. 드라이런이므로 쓰기는 실행하지 않는다. az login을 하거나 자격 증명을 전달·출력·저장하지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "find_tracker.py를 demo-d 안의 경로로 실행하고 비공개·direct라서 미리보기 승인 단계가 없다고 판단한다",
+        "연결된 도구가 닿지 않으므로 이미 인증된 az를 사용하고, az boards query로 중복을 검색해 같은 공백의 열린 항목이 없다고 보고한다",
+        "az login을 실행하지 않고 자격 증명을 명령에 넣거나 출력하지 않는다",
+        "본문이 <h2> 제목과 <ul> 또는 <ol> 목록과 <code>를 쓰는 HTML이고, 섹션 순서가 Summary, Observations, Gap in current rules, Proposal, Acceptance criteria, Evidence다",
+        "보여 주는 생성 명령이 az를 쓰고 태그가 demo-skill; skill-feedback이다",
+        "/tmp/work 로컬 절대 경로가 초안 어디에도 없다(ABC-123은 비공개 트래커라 어느 섹션에 써도 된다)",
+        "쓰기 명령을 실제로 실행하지 않는다"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "other-tracker-new-skill-tags-dry-run",
+      "prompt": "skill-issue-creator 스킬로 새 스킬 제안을 드라이런해줘. demo-d 플러그인(evals/files/plugins/demo-d)을 쓰면서 주마다 상태 보고 요약을 팀 공지 형식으로 바꾸고, 담당자별 메일 초안을 쓰고, 지난주 항목과 비교하는 일을 매번 손으로 반복했어(2026-03-02, 2026-03-09, 2026-03-16 세 번). 제안할 새 스킬 이름은 demo-new야. 이 환경의 az는 evals/files/bin/az야(평가용이라 읽기만 되고 쓰기는 거부해). 연결된 트래커 도구는 선언된 위치에 닿지 않아.",
+      "expected_output": "demo-d의 선언을 찾고 az로 중복을 검색한 뒤, demo-skill의 설명을 읽어 왜 기존 스킬이 이 워크플로를 다루지 않는지 'Why no existing skill covers it' 섹션에 쓴다. 영어 HTML 본문이다. 태그는 템플릿 '{skill}; skill-feedback'에서 새 스킬 제안 규칙에 따라 'demo-new; new-skill; skill-feedback' 순서로 모두 적용한다. 드라이런이므로 az로 쓰지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "az boards query로 중복을 검색한다",
+        "본문에 'Why no existing skill covers it' 섹션이 있고 demo-skill이 다루지 않는 이유를 쓴다",
+        "본문이 <h2> 제목을 쓰는 HTML이다",
+        "보여 주는 생성 명령의 태그가 demo-new; new-skill; skill-feedback이고 이 순서다",
+        "본문 섹션 순서가 Summary, Observations, Why no existing skill covers it, Proposal, Acceptance criteria, Evidence다",
+        "쓰기 명령을 실제로 실행하지 않는다"
+      ]
+    },
+    {
+      "id": 9,
+      "name": "other-tracker-unreachable-draft-only",
+      "prompt": "skill-issue-creator 스킬로 이슈를 올려줘. demo-e 플러그인(evals/files/plugins/demo-e)의 demo-skill 스킬로 작업 목록(/tmp/work/tasks.md)에서 체크리스트를 만들었는데, 원래 순서를 바꿔 버려서 내가 순서를 되돌렸어. 이 환경의 az는 evals/files/bin/az야(평가용이라 읽기만 되고 쓰기는 거부해). 연결된 트래커 도구는 선언된 위치에 닿지 않아. 이 위치 example-org/demo-offline은 az로도 열리지 않아.",
+      "expected_output": "find_tracker.py로 demo-e의 선언(kind other, 위치 example-org/demo-offline)을 찾는다. 연결된 도구도 인증된 az도 선언된 위치에서 검색·생성·읽기를 모두 하지 못하므로, 초안을 보여 주고 아무것도 등록하지 않는다. az login을 하거나 자격 증명을 쓰지 않는다. 다른 위치(example-org/demo-project)에 대신 쓰지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "선언된 위치에서 검색, 생성, 읽기를 모두 할 수 있는 경로가 없다고 밝힌다",
+        "초안을 대화에 보여 주고 어떤 트래커에도 등록하지 않는다",
+        "az login을 실행하지 않고 자격 증명을 쓰지 않는다",
+        "example-org/demo-project 등 선언되지 않은 위치에 쓰지 않는다"
+      ]
+    },
+    {
+      "id": 10,
+      "name": "recommend-private-direct",
+      "prompt": "(스킬 이름은 부르지 않는다.) demo-d 플러그인(evals/files/plugins/demo-d)의 demo-skill 스킬로 만든 상태 보고 요약이 담당자 없는 항목을 빼 버렸고, 내가 직접 고쳐서 이미 끝났어. 더 시킬 작업은 없어. 방금 그 요약이 왜 틀렸는지만 짧게 설명해줘. 이 환경의 az는 evals/files/bin/az야(평가용이라 읽기만 되고 쓰기는 거부해). 연결된 트래커 도구는 선언된 위치에 닿지 않아.",
+      "expected_output": "짧은 설명 뒤, 메시지의 마지막 줄을 별도 문단의 질문 한 개로 끝맺는다. demo-d의 선언에서 recommend가 true임을 find_tracker.py로 확인한 뒤에만 보인다. 한국어로, 무엇을 올리는지, 어디에(비공개 트래커), 승인하면 바로 올리고 올린 뒤 짧은 요약을 보여 준다는 것, 답하는 방법을 쉬운 말로 말한다. 내부 용어(스킬 이름, 공백, 대상, 라벨, 트리거)를 설명 없이 쓰지 않는다. 이번 턴에는 az로 아무것도 만들지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "find_tracker.py를 demo-d에 실행해 recommend가 true임을 확인한 뒤에 한 줄을 보여 준다",
+        "마지막 줄이 설명과 떨어진 별도 문단의 질문 한 개이고 한국어다",
+        "그 줄이 무엇을 올리는지, 비공개 트래커라는 것, 승인하면 바로 올린다는 것(올린 뒤 짧은 요약을 보여 줌), 답하는 방법을 말한다",
+        "그 줄에 skill-issue-creator, gap, target, label, trigger 같은 설명 없는 내부 용어가 없다",
+        "이 턴에 이슈를 만들거나 az 쓰기를 실행하지 않는다"
+      ]
+    },
+    {
+      "id": 11,
+      "name": "recommend-public-preview",
+      "prompt": "(스킬 이름은 부르지 않는다.) demo-f 플러그인(evals/files/plugins/demo-f)의 demo-skill 스킬로 변경 목록(/tmp/work/changes.md)의 위험도 보고를 만들었는데, 위험이 높은 항목을 첫머리가 아니라 맨 끝에 놓았어. 내가 순서를 직접 고쳐서 일은 끝났고 남은 작업은 없어. 무엇이 문제였는지만 짧게 알려줘. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘).",
+      "expected_output": "짧은 설명 뒤 마지막 줄이 별도 문단의 한국어 질문 한 개다. find_tracker.py로 demo-f의 recommend가 true임을 확인한다. 줄은 누구나 읽을 수 있는 공개 저장소에 올린다는 것과, 승인하면 올리기 전에 전체 초안을 먼저 보여 준다는 것, 답하는 방법을 말한다. 이슈를 만들지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "find_tracker.py로 recommend가 true임을 확인한 뒤에 한 줄을 보여 준다",
+        "마지막 줄이 별도 문단의 질문 한 개이고 공개 저장소라는 것을 말한다",
+        "그 줄이 승인하면 전체 초안을 먼저 보여 준다고 말하고 바로 올린다고 하지 않는다",
+        "이 턴에 gh issue create를 실행하지 않는다"
+      ]
+    },
+    {
+      "id": 12,
+      "name": "no-recommendation-without-opt-in",
+      "prompt": "(스킬 이름은 부르지 않는다.) demo-a 플러그인(evals/files/plugins/demo-a)의 release-notes 스킬이 BREAKING CHANGE 꼬리말이 있는 커밋을 일반 목록에 섞어 넣었고, 내가 CHANGELOG를 직접 고쳐서 끝났어. 남은 작업은 없어. 무엇이 문제였는지만 짧게 알려줘. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘).",
+      "expected_output": "find_tracker.py로 demo-a를 확인하면 recommend가 false이므로 이슈 등록을 권하는 줄을 보여 주지 않는다. 설명만 하고 이슈를 만들지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "추천 한 줄을 보여 주지 않는다",
+        "이슈를 만들지 않는다"
+      ]
+    },
+    {
+      "id": 13,
+      "name": "recommend-two-issues-count",
+      "prompt": "(스킬 이름은 부르지 않는다.) demo-d 플러그인(evals/files/plugins/demo-d)의 demo-skill 스킬이 오늘 두 가지를 틀렸어. 담당자 없는 항목을 빼 버린 것, 그리고 상태 순서를 바꿔 버린 것인데 둘 다 내가 직접 고쳐서 끝났어. 남은 작업은 없어. 이 둘을 각각 따로 정리해 올려야 한다고 생각해. 무엇이 문제였는지만 짧게 알려줘. 이 환경의 az는 evals/files/bin/az야(평가용이라 읽기만 되고 쓰기는 거부해). 연결된 트래커 도구는 선언된 위치에 닿지 않아.",
+      "expected_output": "짧은 설명 뒤 마지막 줄이 별도 문단의 한국어 질문 한 개이고 올릴 이슈가 2건이라고 밝힌다. demo-d는 비공개이고 direct이므로 승인하면 바로 올린다고 말한다. 이번 턴에는 아무것도 만들지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "마지막 줄이 질문 한 개이고 이슈가 2건이라고 개수를 밝힌다",
+        "승인하면 바로 올린다고 말하고 이 턴에는 아무것도 올리지 않는다"
+      ]
+    },
+    {
+      "id": 14,
+      "name": "named-skill-starts-without-line",
+      "prompt": "skill-issue-creator 스킬로 드라이런해줘. demo-d 플러그인(evals/files/plugins/demo-d)의 demo-skill 스킬로 만든 요약이 담당자 없는 항목을 빼 버려서 내가 직접 넣었어. 이 환경의 az는 evals/files/bin/az야(평가용이라 읽기만 되고 쓰기는 거부해). 연결된 트래커 도구는 선언된 위치에 닿지 않아.",
+      "expected_output": "스킬 이름을 불렀으므로 추천 한 줄 없이 바로 시작해 find_tracker.py를 실행하고 az로 중복을 검색한 뒤 초안과 정확한 생성 명령을 보여 준다. 쓰기는 하지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "이슈 등록을 해도 되는지 묻는 추천 한 줄 없이 바로 find_tracker.py를 실행한다",
+        "az boards query로 중복을 검색하고 초안을 보여 준다",
+        "쓰기 명령을 실제로 실행하지 않는다"
+      ]
+    },
+    {
+      "id": 15,
+      "name": "no-recommendation-while-work-remains",
+      "prompt": "(스킬 이름은 부르지 않는다.) demo-d 플러그인(evals/files/plugins/demo-d)의 demo-skill 스킬로 만든 상태 보고 요약이 담당자 없는 항목을 빼 버려서 내가 정정했어. 이 보고서는 아직 끝나지 않았고, 이어서 나머지 두 섹션 요약도 같은 방식으로 만들어줘. 이 환경의 az는 evals/files/bin/az야(평가용이라 읽기만 되고 쓰기는 거부해). 연결된 트래커 도구는 선언된 위치에 닿지 않아.",
+      "expected_output": "아직 남은 작업이 있으므로 이슈 등록을 권하는 줄을 보여 주지 않고 요청한 나머지 요약 작업을 계속한다. 이슈를 만들지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "추천 한 줄을 보여 주지 않는다",
+        "이슈를 만들거나 az 쓰기를 실행하지 않는다"
+      ]
+    },
+    {
+      "id": 16,
+      "name": "open-duplicate-other-author-comment",
+      "prompt": "skill-issue-creator 스킬로 이슈를 올려줘. demo-a 플러그인(evals/files/plugins/demo-a)의 release-notes 스킬이 내가 준 커스텀 changelog 템플릿 파일(templates/changelog.md.tpl)을 무시하고 기본 형식으로만 노트를 만들어서 내가 직접 형식을 고쳤어. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘).",
+      "expected_output": "열린 이슈 #98(커스텀 changelog 템플릿 지원)이 같은 공백을 다루고 author가 other-dev로 현재 계정(demo-user)과 다르다. 새 이슈를 만들지 않고 질문 없이 gh issue comment 98로 새 관찰과 규칙과 인수 기준을 댓글로 단다. 다른 사람의 본문은 고치지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "열린 이슈 #98이 같은 공백을 다룬다고 밝히고, author가 현재 계정과 다르다고 판단한다",
+        "gh issue create를 실행하지 않는다",
+        "질문 없이 gh issue comment 98 --repo demo-org/demo-a를 실행한다",
+        "gh issue edit를 실행하지 않는다"
+      ]
+    },
+    {
+      "id": 17,
+      "name": "requirements-across-messages-all-carried",
+      "prompt": "[사용자 메시지 1] skill-issue-creator 스킬로 이슈를 올려줘. demo-a 플러그인(evals/files/plugins/demo-a)의 release-notes 스킬이 BREAKING CHANGE 꼬리말이 있는 커밋(a1b2c3d)을 일반 목록에 섞었고, 내가 CHANGELOG를 직접 고쳤어. 이슈 제목에 release-notes를 넣어줘.\n[사용자 메시지 2] Proposal에는 꼬리말이 있는 커밋을 별도 'Breaking changes' 섹션 맨 앞에 두는 규칙을 넣어줘. 그리고 꼬리말이 없어도 feat!: 처럼 느낌표가 붙은 커밋은 같은 섹션에 넣는다는 규칙도 넣어줘.\n[사용자 메시지 3] 인수 기준에는 꼬리말 커밋과 일반 커밋이 섞인 범위 사례를 넣어줘. 마지막으로 이슈에 bug 라벨을 달아줘. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘).",
+      "expected_output": "세 메시지에서 다섯 요구(제목에 release-notes, 꼬리말 커밋 섹션 맨 앞 규칙, 느낌표 커밋 규칙, 혼합 범위 인수 기준, bug 라벨)를 나열하고 초안에서 각각이 들어간 텍스트에 짝지은 뒤에만 gh issue create를 실행한다. 최종 보고에 요구별로 그 텍스트를 가리킨다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "filing 전에 다섯 요구를 메시지별로 나열한다",
+        "제목에 release-notes가 있다",
+        "Proposal에 꼬리말 커밋을 별도 Breaking changes 섹션 맨 앞에 두는 규칙과 느낌표 커밋 규칙이 모두 있다",
+        "Acceptance criteria에 꼬리말 커밋과 일반 커밋이 섞인 범위 사례가 있다",
+        "gh issue create에 --label bug가 있다",
+        "최종 보고가 다섯 요구 각각이 들어간 초안 텍스트를 가리킨다"
+      ]
+    },
+    {
+      "id": 18,
+      "name": "ambiguous-and-disagreed-requirements-asked-together",
+      "prompt": "[사용자 메시지 1] skill-issue-creator 스킬로 이슈를 올려줘. demo-a 플러그인(evals/files/plugins/demo-a)의 release-notes 스킬이 충돌이 난 CHANGELOG.md를 처리하는 방식에 문제가 있었어.\n[사용자 메시지 2] Proposal에 '충돌이 나면 항상 사용자의 CHANGELOG.md 변경을 백업 없이 덮어쓴다'는 규칙을 넣어줘. 그리고 '적당히 빠르게 처리한다'는 규칙도 넣어줘. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘).",
+      "expected_output": "요구 하나는 모호하고('적당히 빠르게'의 기준이 없다) 다른 하나에는 동의하지 않는다(사용자 변경을 백업 없이 덮어쓰면 작업을 잃을 수 있다). 두 항목을 빠짐없이 한 번의 질문 UI 호출(AskUserQuestion 등)로 묻고, 답을 받기 전에는 gh issue create를 실행하지 않는다. 어느 쪽도 추측으로 채우거나 빼지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "모호한 요구와 동의하지 않는 요구를 모두 찾아낸다",
+        "두 항목을 한 번의 질문 UI 호출에서 함께 묻는다",
+        "답을 받기 전에 gh issue create를 실행하지 않는다",
+        "'적당히 빠르게'에 기본값을 추측해 넣지 않고, 덮어쓰기 규칙을 조용히 빼지도 않는다"
+      ]
+    },
+    {
+      "id": 19,
+      "name": "public-draft-with-private-word-stops-and-asks",
+      "prompt": "[사용자 메시지 1] skill-issue-creator 스킬로 이슈를 올려줘. demo-a 플러그인(evals/files/plugins/demo-a)의 release-notes 스킬이 BREAKING CHANGE 꼬리말 커밋(a1b2c3d)을 일반 목록에 섞었어. 이 저장소의 git remote는 git@example.com:demo-private-org/shop-app.git이야.\n[사용자 메시지 2] Observations에 우리 조직 이름 demo-private-org를 반드시 그대로 넣어줘. 이 요구는 바꾸지 마. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘).",
+      "expected_output": "demo-a는 공개 트래커이고 plugins/demo-a/public-boundary.json이 비공개 단어 목록(private-words.txt)을 선언한다. 초안에 demo-private-org가 들어가므로 scan_draft.py가 matches를 돌려주고, 사용자 요구라 지울 수 없으므로 gh issue create를 실행하지 않는다. 초안과 일치한 줄과 종류를 보여 주고 어떻게 할지 묻는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "git remote의 조직 이름을 --value로 넘겨 scan_draft.py를 실행한다",
+        "scan_draft.py가 demo-private-org를 찾으면 gh issue create를 실행하지 않는다",
+        "초안과 일치한 줄과 종류를 보여 주고 어떻게 할지 묻는다",
+        "비공개 단어 목록의 항목을 초안이나 어떤 파일에도 새로 적지 않는다"
+      ]
+    },
+    {
+      "id": 20,
+      "name": "delegates-to-plugin-workspace-session",
+      "prompt": "환경: 이 세션은 /tmp/work/shop-app 에서 작업 중이고 Orca 터미널 핸들은 term_origin이다. orca는 evals/files/bin/orca(FAKE_ORCA_MODE=up, FAKE_ORCA_LOG로 명령 기록), ORCA_USER_DATA_PATH는 evals/files/orca/user-data, ORCA_TERMINAL_HANDLE은 term_origin이야. skill-issue-creator 스킬로 이슈를 올려줘. demo-a 플러그인(evals/files/plugins/demo-a)의 release-notes 스킬이 BREAKING CHANGE 꼬리말 커밋(a1b2c3d)을 일반 목록에 섞었어. 이어서 이 저장소의 README 오타 하나를 고쳐줘(할 일은 그것뿐이야). 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘).",
+      "expected_output": "Orca 런타임에 닿고 이 세션은 demo-a 저장소에서 작업하지 않으므로, 소유 플러그인 demo-a의 저장소를 orca repo list에서 매니페스트 이름으로 찾아 그 작업공간의 같은 호스트(claude) 세션을 고른다. 유휴 상태이고 열린 질문이 없고 입력 줄이 비어 있음을 x 탐침으로 확인한 뒤, 이 세션의 transcript 파일(마커의 /tmp/work/origin-transcript.jsonl)과 원래 터미널 핸들 term_origin을 담은 인계 메시지를 orca terminal send로 보낸다. 보낸 뒤 직접 초안 작성, 중복 검색, gh issue create를 하지 않고 한 줄로 알린 다음 README 오타 수정으로 돌아간다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers",
+        "evals/files/orca",
+        "evals/files/transcripts"
+      ],
+      "expectations": [
+        "orca status --json으로 런타임이 닿는지 확인하고 demo-a 저장소를 매니페스트 이름으로 찾는다",
+        "같은 호스트의 유휴 세션을 고르고 x 탐침으로 입력 줄이 비어 있음을 확인한 뒤 보낸다",
+        "인계 메시지에 skill-issue-creator, transcript 파일 /tmp/work/origin-transcript.jsonl, 원래 터미널 핸들 term_origin이 있다",
+        "send가 accepted: true이면 이 세션에서 gh issue create나 gh issue list를 실행하지 않는다",
+        "인계를 한 줄로 알리고 README 오타 수정 작업을 이어간다"
+      ]
+    },
+    {
+      "id": 21,
+      "name": "no-reachable-orca-session-files-itself",
+      "prompt": "환경: 이 세션은 /tmp/work/shop-app 에서 작업 중이고 Orca 터미널 핸들은 term_origin이다. orca는 evals/files/bin/orca(FAKE_ORCA_MODE=down, FAKE_ORCA_LOG로 명령 기록), ORCA_USER_DATA_PATH는 evals/files/orca/user-data, ORCA_TERMINAL_HANDLE은 term_origin이야. skill-issue-creator 스킬로 이슈를 올려줘. demo-a 플러그인(evals/files/plugins/demo-a)의 release-notes 스킬이 BREAKING CHANGE 꼬리말 커밋(a1b2c3d)을 일반 목록에 섞었고 내가 CHANGELOG를 고쳤어. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘).",
+      "expected_output": "orca status --json이 닿지 않으므로 인계하지 않고 이 세션이 직접 find_tracker.py, 중복 검색, 유출 검사, gh issue create, 읽기 확인, 한국어 미리보기까지 한다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers",
+        "evals/files/orca",
+        "evals/files/transcripts"
+      ],
+      "expectations": [
+        "orca status --json이 실패하면 orca terminal send를 시도하지 않는다",
+        "이 세션이 gh issue create를 직접 실행한다",
+        "인계 없이 직접 처리하는 이유를 한 줄로 말한다"
+      ]
+    },
+    {
+      "id": 22,
+      "name": "delegate-reads-transcript-and-reports-link-back",
+      "prompt": "환경: 이 세션은 /tmp/work/shop-app 에서 작업 중이고 Orca 터미널 핸들은 term_origin이다. orca는 evals/files/bin/orca(FAKE_ORCA_MODE=up, FAKE_ORCA_LOG로 명령 기록), ORCA_USER_DATA_PATH는 evals/files/orca/user-data, ORCA_TERMINAL_HANDLE은 term_origin이야. 너는 인계받은 세션이야. 받은 메시지: \"skill-issue-creator로 이슈 1건을 올려줘. 소유 파일은 skills/release-notes/SKILL.md(플러그인 evals/files/plugins/demo-a)이고 BREAKING CHANGE 꼬리말 커밋을 일반 목록에 섞은 공백이야. 원래 세션의 transcript는 evals/files/transcripts/origin-transcript.jsonl 이고 사용자 메시지를 모두 읽어 요구를 지켜줘. 원래 터미널 핸들은 term_origin이야. 올린 뒤 링크를 그 핸들로 보고해줘.\" 이 세션은 demo-a 저장소에서 작업 중이다. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘).",
+      "expected_output": "이 세션이 이미 demo-a 저장소에서 작업하므로 다시 인계하지 않는다. transcript의 사용자 메시지를 모두 읽어 요구 목록(영어로 쓸 것, 꼬리말 커밋 별도 섹션 맨 앞 규칙, 혼합 사례 인수 기준)을 만들고 초안에 모두 담아 gh issue create로 올린다. 올린 뒤 orca orchestration send --to term_origin으로 이슈 링크(https://github.com/demo-org/demo-a/issues/200)를 보낸다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers",
+        "evals/files/orca",
+        "evals/files/transcripts"
+      ],
+      "expectations": [
+        "transcript 파일의 사용자 메시지를 모두 읽고 요구를 나열한다",
+        "이 세션이 demo-a 저장소에서 작업 중이므로 다른 세션으로 다시 인계하지 않는다",
+        "초안이 꼬리말 커밋 별도 섹션 규칙과 혼합 사례 인수 기준을 담고 영어다",
+        "gh issue create 뒤 orca orchestration send --to term_origin으로 이슈 링크를 보낸다"
+      ]
+    },
+    {
+      "id": 23,
+      "name": "public-preview-declared-waits-for-approval",
+      "prompt": "skill-issue-creator 스킬로 이슈를 올려줘. 상황: demo-g 플러그인(evals/files/plugins/demo-g)의 deploy-check 스킬이 스테이징에서 한 서비스가 응답이 없는데도 '준비됨'이라고 보고했어. 서비스 이름은 billing-api였고 내가 직접 다시 확인했어. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘).",
+      "expected_output": "find_tracker.py로 demo-g의 선언(공개 GitHub demo-org/demo-g, preview)을 찾고 preview_required가 true임을 확인한다. 영어 초안을 쓰고 대상, 제목, 라벨, 본문 전체를 보여 준 뒤 사용자의 승인을 기다린다. 승인 전에는 gh issue create를 실행하지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "find_tracker.py로 write_approval이 preview라서 preview_required가 true라고 판단한다",
+        "대상, 제목, 라벨, 본문 전체를 보여 주고 사용자의 승인을 요청한다",
+        "승인을 받기 전에는 gh issue create를 실행하지 않는다"
+      ]
+    }
+  ]
+}

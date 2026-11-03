@@ -1,0 +1,4 @@
+{"type": "user", "message": {"role": "user", "content": "release-notes 스킬로 v3.2.0 노트를 만들었는데 BREAKING CHANGE 커밋 a1b2c3d를 일반 목록에 섞었어. 내가 CHANGELOG를 고쳤어."}}
+{"type": "assistant", "message": {"role": "assistant", "content": "알겠습니다. 어떤 규칙을 이슈로 올릴까요?"}}
+{"type": "user", "message": {"role": "user", "content": "이슈에는 BREAKING CHANGE 꼬리말이 있는 커밋을 항상 별도 'Breaking changes' 섹션에 먼저 두는 규칙을 넣어줘."}}
+{"type": "user", "message": {"role": "user", "content": "인수 기준에는 꼬리말이 있는 커밋과 없는 커밋이 섞인 경우를 꼭 넣어줘. 이슈는 영어로 써."}}

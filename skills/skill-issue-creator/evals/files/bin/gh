@@ -1,0 +1,39 @@
+#!/bin/sh
+# Evaluation stand-in for gh: answers reads from fixtures and records every write in FAKE_GH_LOG without sending it.
+here=$(cd "$(dirname "$0")" && pwd)
+log="${FAKE_GH_LOG:-/dev/null}"
+printf '%s\n' "gh $*" >> "$log"
+repo=""
+prev=""
+for arg in "$@"; do
+  case "$prev" in --repo|-R) repo="$arg" ;; esac
+  case "$arg" in --repo=*) repo="${arg#--repo=}" ;; esac
+  prev="$arg"
+done
+file="$here/../trackers/$(printf '%s' "$repo" | tr '/' '_').json"
+case "$1 $2" in
+  "auth status")
+    echo "github.com: logged in as demo-user"
+    ;;
+  "api user")
+    echo "demo-user"
+    ;;
+  "issue list")
+    if [ -f "$file" ]; then cat "$file"; else echo "[]"; fi
+    ;;
+  "issue view")
+    if [ -f "$file" ]; then cat "$file"; else echo "{}"; fi
+    ;;
+  "issue create")
+    cat >> "$log"
+    echo "https://github.com/$repo/issues/200"
+    ;;
+  "issue edit"|"issue comment")
+    cat >> "$log"
+    echo "https://github.com/$repo/issues/$3"
+    ;;
+  *)
+    echo "fake gh: unsupported command in this evaluation" >&2
+    exit 1
+    ;;
+esac

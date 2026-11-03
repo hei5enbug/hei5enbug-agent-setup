@@ -34,16 +34,18 @@ class ServiceRulesTest(unittest.TestCase):
                 self.assertIn(rule, services)
 
     def test_이슈를_만들기_전에_열린_이슈와_닫힌_이슈를_모두_찾아_중복_완료_충돌을_가린다(self):
-        """어느 트래커든 이슈를 만들기 전에 모든 상태를 검색하고, report-skill-gap 4단계도 닫힌 이슈와 충돌까지 같은 결과로 다룬다."""
+        """어느 트래커든 이슈를 만들기 전에 모든 상태를 검색하고, skill-issue-creator 5단계도 닫힌 이슈와 충돌까지 같은 결과로 다룬다."""
         # Given
         services = normalized(SERVICES)
-        skill = normalized(REPO_ROOT / "skills/report-skill-gap/SKILL.md")
+        skill = normalized(REPO_ROOT / "skills/skill-issue-creator/SKILL.md")
+        update = normalized(REPO_ROOT / "skills/skill-issue-creator/references/update-in-place.md")
 
         # When
         rules = (
             "Before creating an issue or ticket on any tracker, search its open and closed items with two or three "
             "keyword sets.",
-            "When an open item covers it, create nothing and offer a comment on that item.",
+            "When an open item covers it, create nothing and update that item at once, with no question first: edit its "
+            "body, keeping its verified content, when the current account wrote it; otherwise add a comment.",
             "When a closed item already finished it, create nothing and report that item.",
             "When an item or a recorded decision conflicts with or contradicts it, show both and ask before creating.",
             "When a related item neither duplicates nor conflicts with it, name that item in the new issue.",
@@ -52,6 +54,8 @@ class ServiceRulesTest(unittest.TestCase):
         skill_rules = (
             "Search the target's open and closed issues with two or three keyword sets",
             "--state all",
+            "Under the condition that an open issue covers the same gap, create nothing and update that issue at once, "
+            "with no question first.",
             "Under the condition that a closed issue already finished the gap, create nothing and report that issue.",
             "show both and ask before drafting.",
             "name it in the new issue.",
@@ -65,6 +69,8 @@ class ServiceRulesTest(unittest.TestCase):
             with self.subTest(skill_rule=rule):
                 self.assertIn(rule, skill)
         self.assertNotIn("--state open", skill)
+        self.assertIn("The current account wrote it: edit its body.", update)
+        self.assertIn("Someone else wrote it: add a comment", update)
 
 
 if __name__ == "__main__":

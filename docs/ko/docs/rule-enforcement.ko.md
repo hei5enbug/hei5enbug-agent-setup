@@ -15,7 +15,7 @@
 
 | 집행자 | 집행하는 규칙 | 규칙 위치 |
 |---|---|---|
-| `tests/test_public_boundary.py`, `tests/test_public_boundary_hooks.py`, `tests/test_public_boundary_hooks_more.py`, `tests/test_public_boundary_plugin.py`, `tests/test_public_boundary_plugin_scope.py`, `.githooks/public_boundary.py` | 추적 파일, 커밋 메시지, 태그, GitHub 글에 로컬 경로, 실명, 비밀 값, 비공개 내용이 없다. 플러그인 수준 훅(`hooks/hooks.json`, `scripts/public_boundary_hook.py`)은 어느 프로젝트의 세션에서든 설치된 플러그인이 선언한 공개 GitHub 저장소에 대한 해당 쓰기를 차단하고, `HEI5ENBUG_PUBLIC_BOUNDARY_WORDS`와 설치된 각 플러그인의 `public-boundary.json`에서 비공개 단어를 읽으며, 목록을 찾지 못할 때마다 그 사실을 알린다. 프로젝트 에이전트 훅(`.claude/settings.json`, `.codex/hooks.json`)과 Git 훅(`.githooks/`)은 체크아웃에서 커밋, push, 태그, GitHub 쓰기를 실행하기 전에 막고, CI는 push 뒤에 저장소 테스트를 마지막 방어선으로 실행한다. 보호 섹션은 바뀌지 않은 채 마지막에 있다. | `AGENTS.md` (Public boundary) |
+| `tests/test_public_boundary.py`, `tests/test_public_boundary_hooks.py`, `tests/test_public_boundary_hooks_more.py`, `tests/test_public_boundary_plugin.py`, `tests/test_public_boundary_plugin_scope.py`, `skills/skill-issue-creator/tests/test_scan_draft.py`, `.githooks/public_boundary.py` | 추적 파일, 커밋 메시지, 태그, GitHub 글에 로컬 경로, 실명, 비밀 값, 비공개 내용이 없다. 플러그인 수준 훅(`hooks/hooks.json`, `scripts/public_boundary_hook.py`)은 어느 프로젝트의 세션에서든 설치된 플러그인이 선언한 공개 GitHub 저장소에 대한 해당 쓰기를 차단하고, `HEI5ENBUG_PUBLIC_BOUNDARY_WORDS`와 설치된 각 플러그인의 `public-boundary.json`에서 비공개 단어를 읽으며, 목록을 찾지 못할 때마다 그 사실을 알린다. 프로젝트 에이전트 훅(`.claude/settings.json`, `.codex/hooks.json`)과 Git 훅(`.githooks/`)은 체크아웃에서 커밋, push, 태그, GitHub 쓰기를 실행하기 전에 막고, CI는 push 뒤에 저장소 테스트를 마지막 방어선으로 실행한다. 보호 섹션은 바뀌지 않은 채 마지막에 있다. | `AGENTS.md` (Public boundary) |
 | `tests/test_release_version.py` | 기준 태그 이후 계획 버전은 하나이고(더 낮은 단계의 다음 버전을 나중에 더 높은 단계로 다시 고른 경우는 제외), 모든 매니페스트에서 같으며, 기준보다 낮지 않고, 버전만 바꾸는 커밋이 없다. | `AGENTS.md` (릴리스 기준) |
 | `tests/test_model_pins.py` | 런타임 파일은 고정한 전체 모델 ID로만 모델을 부르고, 고정값은 14일 안에 다시 확인한다. | `AGENTS.md` (모델 고정) |
 | `tests/test_korean_mirrors.py` | 사람이 읽는 영어 Markdown 파일마다 실행 폴더 밖에 원본을 링크한 비권위 한국어 미러가 있다. | `AGENTS.md` (한국어 미러) |
@@ -103,7 +103,7 @@
 | `skills/orca-plugin-refresh/tests/test_refresh_review_fixes.py` | 갱신은 `/exit` 직전에 준비 상태를 다시 확인하고, 읽을 수 없는 프로세스 상태를 종료로 보지 않으며, 열린 /compact 대화상자에 제한 시간을 두고, `closed`를 도우미 결과를 덮어쓰지 않고 합쳐 저장하며, 넘겨받은 항목마다 compact 모드를 지키고, 재실행 때 빈 인자를 보존한다. | `skills/orca-plugin-refresh/SKILL.md` |
 | `skills/tiki-taka/tests/test_runner.py`, `skills/tiki-taka/tests/test_stream_agent.py`, `skills/tiki-taka/tests/test_detached_job.py`, `skills/tiki-taka/tests/test_questions.py` | 토론 실행기는 상태, 완료 판정, 정리, 질문 파일 규칙을 지킨다. | `skills/tiki-taka/SKILL.md` |
 | `skills/local-data-cleanup/tests/test_survey_kinds.py`, `skills/local-data-cleanup/tests/test_survey_checks.py`, `skills/local-data-cleanup/tests/test_merge_delete.py` | 조사는 읽기 전용으로 남고 안전하지 않은 후보를 보고 전용이나 보호 항목으로 바꾸며, 삭제는 두 판정이 모두 허용하고 사용자가 고른 항목만 지운다. | `skills/local-data-cleanup/SKILL.md` |
-| `skills/report-skill-gap/tests/test_find_tracker.py` | 트래커 탐색은 플러그인 루트를 찾아 `issue-target.json`을 검증하고, 선언이 없거나 잘못되면 트래커를 추측하지 않고 그 상태를 보고한다. | `skills/report-skill-gap/SKILL.md` |
+| `skills/skill-issue-creator/tests/test_find_tracker.py` | 트래커 탐색은 플러그인 루트를 찾아 `issue-target.json`을 검증하고, 선언이 없거나 잘못되면 트래커를 추측하지 않고 그 상태를 보고한다. | `skills/skill-issue-creator/SKILL.md` |
 | `tests/test_issue_target.py` | 이 플러그인 루트의 `issue-target.json`은 공개 GitHub 트래커를 선언한다. | `docs/development.md` (Issue tracker declaration) |
 | `skills/skill-builder/scripts/quick_validate.py`를 모든 스킬에 실행 | 모든 스킬 폴더가 검증을 통과한다. | `README.md` (Development checks) |
 
