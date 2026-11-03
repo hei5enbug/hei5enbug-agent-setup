@@ -59,6 +59,10 @@ class PluginSandbox(unittest.TestCase):
             "CODEX_HOME": str(self.codex),
             "GIT_CONFIG_GLOBAL": os.devnull,
             "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_AUTHOR_NAME": "Demo Sandbox",
+            "GIT_AUTHOR_EMAIL": "sandbox@example.com",
+            "GIT_COMMITTER_NAME": "Demo Sandbox",
+            "GIT_COMMITTER_EMAIL": "sandbox@example.com",
         }
 
     def make_own_plugin(self) -> Path:
