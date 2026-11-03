@@ -85,7 +85,7 @@ Claude Code의 `/config`에서 옵션을 고르거나 Codex를 시작하기 전�
 | [`skill-issue-creator`](../../skills/skill-issue-creator/SKILL.md) | 공개 초안에 비공개 이름이 있는지 먼저 확인한 뒤 스킬이나 지침의 빈틈을 선언된 트래커에 등록합니다. [한국어](skills/skill-issue-creator/SKILL.ko.md) |
 | [`session-retro`](../../skills/session-retro/SKILL.md) | 세션 기록을 검토해 근거 있는 스킬 개선안과 요청한 계획을 만듭니다. [한국어](skills/session-retro/SKILL.ko.md) |
 | [`skill-builder`](../../skills/skill-builder/SKILL.md) | 에이전트 스킬을 만들고 평가하고 개선하고 패키징합니다. [한국어](skills/skill-builder/SKILL.ko.md) |
-| [`orca-plugin-refresh`](../../skills/orca-plugin-refresh/SKILL.md) | 플러그인을 업데이트하고 대기 중인 Orca 세션에 재시작 없이 반영합니다. [한국어](skills/orca-plugin-refresh/SKILL.ko.md) |
+| [`orca-plugin-refresh`](../../skills/orca-plugin-refresh/SKILL.md) | 플러그인을 업데이트해 실행 중인 Orca 세션에 적용하고, 오래된 Claude Code 릴리스의 세션은 재개합니다. [한국어](skills/orca-plugin-refresh/SKILL.ko.md) |
 | [`suggest-commit`](../../skills/suggest-commit/SKILL.md) | 저장소 스타일에 맞는 커밋 메시지 5개를 추천하거나 요청 시 커밋합니다. [한국어](skills/suggest-commit/SKILL.ko.md) |
 | [`technical-design-writer`](../../skills/technical-design-writer/SKILL.md) | 구현 계획과 구분해 기술 설계 문서와 RFC를 작성하고 검토합니다. [한국어](skills/technical-design-writer/SKILL.ko.md) |
 | [`tiki-taka`](../../skills/tiki-taka/SKILL.md) | 횟수가 제한된 Claude/Codex 토론으로 쟁점을 해결합니다. [한국어](skills/tiki-taka/SKILL.ko.md) |

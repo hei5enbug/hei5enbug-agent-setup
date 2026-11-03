@@ -1,10 +1,11 @@
 ---
 name: orca-plugin-refresh
 description: >-
-  Refresh hei5enbug-agent-setup and any other plugins the user names in Claude Code and Codex, then apply the
-  installed versions to idle Orca-managed sessions, waiting up to one hour for busy ones. Claude Code installs
-  at any time; a Codex install waits until no Codex turn is running. Use apply-installed when installation is
-  already complete and the user asks to refresh running sessions.
+  Update hei5enbug-agent-setup and any plugins the user names in Claude Code and Codex, then apply the installed
+  versions to running Orca agent sessions: reload or compact idle ones and resume ones on an older Claude Code
+  release. Use for requests to refresh or restart running Orca sessions on a newer Claude Code release or to apply
+  an installed update to them, even without the skill's name; use apply-installed when installation is already
+  done. Not for creating worktrees, reading terminals, or Orca browser work.
 compatibility: >-
   Requires macOS or Linux, Python 3.12+, and the user-scope hei5enbug-agent-setup plugin from the hei5enbug
   marketplace. The claude and codex CLIs read installed versions and update the installs. Applying to
@@ -16,7 +17,9 @@ compatibility: >-
 Use this English `SKILL.md` as the only executable source.
 
 This skill updates `hei5enbug-agent-setup` and the other plugins the user chose, then applies the installed
-versions to running Orca sessions without ending them. It never restarts a session or replaces a conversation.
+versions to running Orca sessions without ending them. It never restarts a session or replaces a conversation,
+except that `apply` first resumes, without asking, a Claude Code session on an older release that passes every
+resume check (step 3).
 
 ## How an update reaches a running session
 
@@ -91,7 +94,10 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
    empty or cleared of typed text, then keeps confirming the commands already sent and restoring any text it can
    restore exactly. It hands every session that is still busy or not ready to one detached helper as `deferred`
    instead of waiting. An `already_running` error means another run is sending at this moment; wait for it, then run `apply` again. A host with an update error stays blocked while successful hosts
-   can proceed.
+   can proceed. Before it sends anything, `apply` resumes each other Claude Code session that reports
+   `host_release_outdated` and passes every resume check; a resumed session gets no `/reload-plugins`, and
+   `/compact` afterwards only when its instructions are stale. Before reporting a session that `apply` resumed or
+   tried to resume, read `references/resume.md`.
 4. **Report every session.** Show the terminal suffix, host, worktree, status, completed actions, and detail:
    - `done`: every needed action is confirmed. `already_current` means nothing was needed, and
      `fresh_session_loads_on_first_turn` marks a Codex session that never ran a turn. The note
@@ -118,7 +124,8 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
      `Cancel`. `probe_interrupted_check_input` means the input line changed while the
      script checked it and did not return to its earlier state, or such checks kept being interrupted; tell the
      user to check that session's input line for a stray `x`, because the script never deletes input it did not
-     type. `input_restore_unconfirmed` means the saved text was not confirmed back on the input line, and
+     type. `probe_character_left` means the same with the stray `x` at `probe_position` (1-based) in the line.
+     `input_restore_unconfirmed` means the saved text was not confirmed back on the input line, and
      `input_not_restored_line_in_use` means the user typed new text, so the saved text was not typed back and is
      gone; tell the user to check that session's input line. `helper_start_failed` means this session's follow-up
      could not start; run `apply` again.
@@ -144,8 +151,9 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
    arrives, run it and report every session, with the companion statuses from `hosts`; `not_refreshed` lists the
    sessions that did not receive the update. When `self_notification` in the status is not `sent`, the prompt
    could not be delivered; the status still holds the result.
-6. **Offer the resume.** Show every session that reports `resume_approval_needed` (`plugin_load_error` or
-   `host_release_outdated`) and ask which the user approves; fixing one ends it and resumes the same conversation.
+6. **Offer the resume.** Show once every session that reports `resume_approval_needed` (`plugin_load_error`, or
+   `host_release_outdated` with the failed check in `resume_check`) and ask which the user approves; fixing one ends
+   it and resumes the same conversation.
    Before running `resume`, read `references/resume.md`, and run it only for the approved terminals.
 7. **Offer to close orphaned terminals.** Run `python3 <script> orphans --run-id <run_id> --json`, show each orphaned
    agent terminal with host, worktree, and idle time, and name the `failed_check` of each one not recommended. Ask the
@@ -154,9 +162,11 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
 
 `--compact` defaults to `auto`, which compacts only stale sessions. Pass `--compact always` or `--compact never`
 only when the user explicitly asks for it. `plan` and `self-apply` are internal subcommands that the script uses
-itself; never run them by hand. Never send commands to Orca terminals by hand, never end a session except through
-`resume` and never close a terminal except through `close`, each for one the user approved in this request, and
-never pass `--force` on your own.
+itself; never run them by hand. Never send commands to Orca terminals by hand, except to finish a session the script
+skipped: only with the user's approval for that session and after the checks in `references/manual-finish.md`
+(read it first), and record every result with `record-manual`. Never end a session except through `resume`, for one
+the user approved in this request, or through the resume in `apply`; never close a terminal except through `close`,
+for one the user approved in this request; and never pass `--force` on your own.
 
 The script exits with `0` when every session is `done`, `deferred`, or `queued_after_turn`, or when the update or
 `apply-installed` result is ok. It exits with `2` otherwise, and on a usage error. An update or `apply-installed`

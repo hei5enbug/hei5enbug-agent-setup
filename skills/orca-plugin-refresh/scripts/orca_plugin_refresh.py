@@ -39,7 +39,9 @@ from refresh_install import (  # noqa: E402
 )
 from refresh_orca import Orca  # noqa: E402
 from refresh_orphans import run_close, run_orphans  # noqa: E402
-from refresh_resume import run_resume  # noqa: E402
+from refresh_manual import ACTIONS as MANUAL_ACTIONS, RESULTS as MANUAL_RESULTS, run_record_manual  # noqa: E402
+from refresh_process import ProcessOs  # noqa: E402
+from refresh_resume import resume_outdated, run_resume  # noqa: E402
 from refresh_plugins import (  # noqa: E402
     COMPANION_ENV, COMPANION_ID, COMPANION_LIMIT, claude_marketplace, companion_entries, companion_ids, describe_plugin,
     folder_version, local_source, refresh_companion, validate_companion,
@@ -285,8 +287,9 @@ def continuation_script(hosts: dict[str, dict]) -> str:
 
 
 def public(entry: dict) -> dict:
-    keys = ("host", "title", "worktree", "status", "detail", "completed", "actions", "compact_reason", "note", "initiator",
-            "ready_signal", "input", "release", "host_release_outdated", "plugin_load", "orphaned")
+    keys = ("host", "title", "worktree", "status", "detail", "completed", "actions", "planned", "compact_reason", "note", "initiator",
+            "ready_signal", "input", "release", "host_release_outdated", "plugin_load", "orphaned", "resume_check",
+            "exit_late", "exit_state", "terminal_handle", "resume_line", "probe_position")
     view = {key: entry.get(key) for key in keys if entry.get(key) not in (None, [], False)}
     if entry.get("detail") == "plugin_load_error" or entry.get("host_release_outdated"):
         view["resume_approval_needed"] = True
@@ -364,8 +367,9 @@ def commit_apply(run_id: str, mode: str, sessions: list[dict], others: list[dict
         state["compact_mode"] = mode
         if own or deferred:
             items = [
-                {key: entry.get(key) for key in ("handle", "host", "actions", "title", "worktree", "compact_reason", "detail", "probe_retries",
+                {key: entry.get(key) for key in ("handle", "host", "actions", "planned", "title", "worktree", "compact_reason", "detail", "probe_retries",
                                                  "screen_identified", "input", "ready_signal", "release", "host_release_outdated", "orphaned")}
+                | {key: entry[key] for key in ("completed", "note") if entry.get(key)}
                 | {"compact_mode": mode, "deferred_at": handed, **handoff_point(entry["handle"])}
                 for entry in deferred
             ]
@@ -404,7 +408,8 @@ def commit_apply(run_id: str, mode: str, sessions: list[dict], others: list[dict
     update_run(run_id, change)
 
 
-def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spawn: Callable[[str], int] = spawn_self_apply) -> dict:
+def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spawn: Callable[[str], int] = spawn_self_apply,
+                  system: ProcessOs | None = None, sleep: Callable[[float], None] = time.sleep) -> dict:
     with exclusive("sessions"):
         state = load_run(run_id)
         orca = Orca()
@@ -414,7 +419,8 @@ def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spa
             if previous:
                 entry.update(status=previous, detail="already_handled_in_this_run", actions=[], handled=True)
         others = [entry for entry in sessions if not entry["initiator"] and not entry.get("handled")]
-        drive(orca, others, state, time.time() + seconds, expire="deferred")
+        resume_outdated(orca, others, state, run_id, system, sleep)
+        drive(orca, others, state, time.time() + seconds, sleep, expire="deferred")
         commit_apply(run_id, mode, sessions, others, spawn)
     summary = {status: sum(1 for entry in sessions if entry["status"] == status) for status in {entry["status"] for entry in sessions}}
     return {"ok": all(entry["status"] in {"done", "queued_after_turn", "deferred"} for entry in sessions), "run_id": run_id, "summary": summary, "sessions": [public(entry) for entry in sessions]}
@@ -553,6 +559,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     close.add_argument("--run-id", required=True)
     close.add_argument("--terminal", action="append", required=True)
     close.add_argument("--json", action="store_true")
+    manual = commands.add_parser("record-manual")
+    manual.add_argument("--run-id", required=True)
+    manual.add_argument("--terminal", required=True)
+    manual.add_argument("--action", required=True, choices=MANUAL_ACTIONS)
+    manual.add_argument("--result", required=True, choices=MANUAL_RESULTS)
+    manual.add_argument("--detail")
+    manual.add_argument("--json", action="store_true")
     status = commands.add_parser("status")
     status.add_argument("--run-id", required=True)
     status.add_argument("--json", action="store_true")
@@ -568,6 +581,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             output = command_plan(args.run_id, args.compact, args.terminal)
         elif args.command == "resume":
             output = run_resume(args.run_id, args.terminal)
+        elif args.command == "record-manual":
+            output = run_record_manual(args.run_id, args.terminal, args.action, args.result, args.detail)
         elif args.command == "orphans":
             output = run_orphans(args.run_id)
         elif args.command == "close":

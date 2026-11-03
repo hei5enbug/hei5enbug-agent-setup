@@ -11,7 +11,7 @@ from refresh_core import HANDLE, SESSION_CONTEXT, RefreshError, parse_time
 from refresh_dialog import answer_compact_dialog, dialog_open
 from refresh_host_record import COMMAND_RECORD_PREFIXES, TRANSCRIPT_TAIL_BYTES, record_state
 from refresh_orca import Orca
-from refresh_process import session_release
+from refresh_process import session_process_present, session_release
 from refresh_reload import judge_reload, local_text, reload_report, screen_report
 from refresh_screen import composer_bounds, input_state, codex_fresh, screen_host
 
@@ -28,6 +28,8 @@ PROBE_KEY = "x"
 DRAFT_STABLE_SECONDS = 5.0
 PROBE_RETRIES = 3
 PROBE_RECHECK_SECONDS = 3.0
+SCREEN_REREADS = 2
+SCREEN_REREAD_SECONDS = 0.5
 CLEAR_SETTLE_SECONDS = 3.0
 TYPE_CONFIRM_SECONDS = 3.0
 DELETE_KEY = "\x1b[3~"
@@ -60,17 +62,24 @@ def marker_host(terminal: dict) -> str | None:
     return host if host in ("claude", "codex") else None
 
 
-def terminal_host(orca: Orca, terminal: dict) -> str | None:
+def terminal_host(orca: Orca, terminal: dict, sleep: Callable[[float], None] = time.sleep) -> str | None:
     """Orca's agentIdentity, or, when Orca recorded none, the marker's host while that host's composer still ends the
-    screen. A marker outlives the session, so a shell left in the terminal never matches."""
+    screen. A marker outlives the session, so a shell left in the terminal never matches. A screen that names no host is
+    read again, and then the terminal's own process decides; a screen that names another host never matches."""
     host = marker_host(terminal)
     if host is None:
         return agent_host(terminal)
-    try:
-        lines, _ = orca.screen(terminal["handle"])
-    except RefreshError:
-        return None
-    return host if screen_host(lines) == host else None
+    for attempt in range(SCREEN_REREADS + 1):
+        try:
+            lines, _ = orca.screen(terminal["handle"])
+        except RefreshError:
+            return None
+        seen = screen_host(lines)
+        if seen is not None:
+            return host if seen == host else None
+        if attempt < SCREEN_REREADS:
+            sleep(SCREEN_REREAD_SECONDS)
+    return host if host == "claude" and session_process_present(terminal["handle"]) else None
 
 
 def read_marker(handle: str) -> dict | None:
@@ -144,6 +153,7 @@ def plan_sessions(orca: Orca, state: dict, mode: str, only: Sequence[str]) -> li
                 entry["compact_reason"] = reason
             if not entry["actions"]:
                 entry.update(status="done", detail="already_current")
+            entry["planned"] = list(entry["actions"])
         sessions.append(entry)
     return sessions
 
@@ -157,27 +167,44 @@ def settle(read: Callable[[], object], until: Callable[[object], bool], sleep: C
     return value
 
 
-def claude_draft_state(orca: Orca, handle: str, draft: str, sleep: Callable[[float], None] = time.sleep) -> str:
+def probe_position(draft: str, shown: object) -> int | None:
+    """The offset at which `shown` is `draft` with one probe character inserted, else None."""
+    if shown == PROBE_KEY:
+        return 0
+    if not isinstance(shown, str) or len(shown) != len(draft) + 1:
+        return None
+    return next((index for index in range(len(draft) + 1) if shown == draft[:index] + PROBE_KEY + draft[index:]), None)
+
+
+def claude_draft_state(orca: Orca, handle: str, draft: str, sleep: Callable[[float], None] = time.sleep,
+                       trace: dict | None = None) -> str:
     """Tell typed text from Claude Code's ghost prompt suggestion; return `empty`, `text`, or `interrupted`.
 
-    Orca reports both as `draft`. Typing one character replaces a suggestion but appends to typed text, and a
-    backspace restores the original draft. The backspace is sent only when the draft shows exactly the probe's own
-    character, so input that arrives during the probe is never deleted.
+    Orca reports both as `draft`. Typing one character replaces a suggestion but is inserted into typed text at the
+    cursor, and one backspace removes it again. The backspace is sent only when the draft shows the probe's own
+    character and nothing else changed, so input that arrives during the probe is never deleted. When the character
+    stays on the line, `trace["probe_position"]` holds its 1-based position.
     """
+    def left(shown: object) -> str:
+        position = probe_position(draft, shown)
+        if trace is not None and position is not None and shown != draft:
+            trace["probe_position"] = position + 1
+        return "interrupted"
+
     orca.keys(handle, PROBE_KEY)
     try:
         probed = settle(lambda: orca.draft(handle), lambda value: value != draft, sleep)
     except RefreshError:
         return "interrupted"
-    if probed not in (PROBE_KEY, draft + PROBE_KEY):
+    if probe_position(draft, probed) is None:
         return "interrupted"
     orca.keys(handle, BACKSPACE)
     try:
         restored = settle(lambda: orca.draft(handle), lambda value: value == draft, sleep)
     except RefreshError:
-        return "interrupted"
+        return left(probed)
     if restored != draft:
-        return "interrupted"
+        return left(restored)
     return "empty" if probed == PROBE_KEY else "text"
 
 
@@ -226,13 +253,16 @@ def input_ready(orca: Orca, entry: dict) -> tuple[str | None, list[str]]:
         return "input_settling", lines
     if time.time() - seen[1] < DRAFT_STABLE_SECONDS:
         return "input_settling", lines
-    verdict = claude_draft_state(orca, entry["handle"], draft)
+    trace: dict = {}
+    verdict = claude_draft_state(orca, entry["handle"], draft, trace=trace)
     if verdict == "interrupted":
         retries = entry.get("probe_retries") or 0
         if retries < PROBE_RETRIES and probe_left_input_clean(orca, entry["handle"], draft):
             entry["probe_retries"] = retries + 1
             entry.pop("draft_seen", None)
             return "input_settling", lines
+        if "probe_position" in trace:
+            entry["probe_position"] = trace["probe_position"]
         return "probe_interrupted", lines
     if verdict == "text":
         entry["typed_draft"] = draft
@@ -311,14 +341,14 @@ def complete_line(orca: Orca, handle: str, text: str, line: str) -> bool:
 def recover_clear(orca: Orca, entry: dict, text: str, line: object) -> bool:
     """End an entry whose clear left `line`: complete it when it is a piece of the text, otherwise keep holding it."""
     if not leftover_of(text, line):
-        entry.update(status="failed", detail="input_clear_failed", actions=[])
+        entry.update(status="failed", detail="input_clear_failed")
         return True
     restored = complete_line(orca, entry["handle"], text, line)
     drop_held(entry)
     if restored:
         entry.update(status="skipped", detail="input_clear_failed", input="restored", actions=[])
     else:
-        entry.update(status="failed", detail="input_restore_unconfirmed", actions=[])
+        entry.update(status="failed", detail="input_restore_unconfirmed")
     return True
 
 
@@ -408,7 +438,7 @@ def release_held(orca: Orca, entry: dict) -> bool:
         blocked = False
     if blocked:
         drop_held(entry)
-        entry.update(status="failed", detail="compact_dialog_open", input="cleared", actions=[])
+        entry.update(status="failed", detail="compact_dialog_open", input="cleared")
         return True
     try:
         try:
@@ -436,7 +466,7 @@ def release_held(orca: Orca, entry: dict) -> bool:
         status, detail = entry.pop("outcome")
         entry.update(status=status, detail=detail, input="restored")
     else:
-        entry.update(status="failed", detail=failure, actions=[])
+        entry.update(status="failed", detail=failure)
     return True
 
 
@@ -584,12 +614,13 @@ def verify(orca: Orca, entry: dict, target: dict) -> str | None:
 
 
 def finish(entry: dict, outcome: str) -> None:
-    finished = entry["actions"].pop(0)
+    finished = entry["actions"][0]
     entry.setdefault("completed", []).append(finished if outcome == "done" else f"{finished}:{outcome[7:]}")
     if outcome != "done":
-        entry.update(status="failed", detail=outcome[7:], actions=[])
-    else:
-        entry.update(status="pending" if entry["actions"] else "done", detail=None if entry["actions"] else "applied")
+        entry.update(status="failed", detail=outcome[7:])
+        return
+    entry["actions"].pop(0)
+    entry.update(status="pending" if entry["actions"] else "done", detail=None if entry["actions"] else "applied")
 
 
 def compaction_refused(entry: dict) -> None:
@@ -621,7 +652,8 @@ def step(orca: Orca, entry: dict, target: dict, live: dict[str, dict]) -> None:
         entry.update(status="skipped", actions=[])
         return
     if reason == "probe_interrupted":
-        entry.update(status="failed", detail="probe_interrupted_check_input", actions=[])
+        detail = "probe_character_left" if entry.get("probe_position") else "probe_interrupted_check_input"
+        entry.update(status="failed", detail=detail)
         return
     if entry["host"] == "codex" and reason in (None, "busy"):
         screen = lines if reason is None else orca.screen(entry["handle"])[0]
@@ -705,5 +737,5 @@ def drive(orca: Orca, sessions: list[dict], state: dict, deadline: float, sleep:
             try:
                 step(orca, entry, state["hosts"][entry["host"]], live)
             except RefreshError as error:
-                entry.update(status="failed", detail=error.code, actions=[])
+                entry.update(status="failed", detail=error.code)
         sleep(POLL_SECONDS)

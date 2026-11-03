@@ -32,7 +32,9 @@ Start a new Codex thread or restart Claude Code after updating so the host loads
 ## Apply an update to running Orca sessions
 
 Ask for `orca-plugin-refresh` after a release to update this plugin, and any other plugins you name, and apply the
-installed versions to idle Orca-managed sessions without restarting them. The skill runs only when you ask for it.
+installed versions to idle Orca-managed sessions without restarting them, except for a Claude Code session on an older
+release, which it resumes as described below. Ask for it by name or in plain words, such as restarting the running Orca
+sessions on a newer Claude Code release. The skill runs only when you ask for it.
 `update --json` installs the new version in Claude Code and Codex. Add `--also <plugin@marketplace>` for each other
 plugin; without it, the `HEI5ENBUG_REFRESH_PLUGINS` environment variable (comma-separated IDs) and then the saved
 `refresh_plugins` option name them, and the first non-empty source wins. Each companion is updated and validated per
@@ -59,6 +61,15 @@ The skill decides that instructions are stale from the session-start marker: it 
 points at a plugin directory that was replaced or removed. It sends a command only to an idle terminal whose input line
 is empty and confirms every result from the session transcript or the screen. For a Claude Code session, the skill may
 type and delete one character to tell a grey prompt suggestion from typed text; it never sends to a session with typed
-text. A busy session is retried for up to one hour and is then reported as skipped. The session that runs the skill is
+text. A busy session is retried for up to one hour and is then reported as skipped. Before it sends anything, the
+skill ends and resumes, in the same terminal and with the same conversation, each session that runs an older Claude
+Code release than the installed one and passes every check: its turn record is idle, no background task, subagent, or
+wakeup owes a notification, no question or approval prompt is open, and its input line is empty. It does not ask first,
+and a resumed session gets no `/reload-plugins` and gets `/compact` only when its instructions are stale. A session
+that fails a check, and every session that reports a plugin load error, is shown once for your approval before the
+skill ends it. If the old process has not ended after 60 seconds, the skill keeps checking for 120 more seconds and
+sends the resume line once the terminal shows an empty shell prompt; otherwise it gives you the terminal and the exact
+line to run. When the script skips a session by mistake, the agent can finish it by hand with your approval for that
+session and record the result in the run. The session that runs the skill is
 handled last by a detached helper after its turn ends. Sessions outside Orca need `/reload-plugins` or `/compact` by
 hand. The skill supports macOS and Linux user-scope installations from the `hei5enbug` marketplace.

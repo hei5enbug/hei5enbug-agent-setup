@@ -207,6 +207,15 @@ def find_session_process(handle: str, system: ProcessOs | None = None) -> Sessio
     return found[0] if found else None
 
 
+def session_process_present(handle: str, system: ProcessOs | None = None) -> bool:
+    """True when an interactive Claude Code process claims the terminal; an unreadable process list counts as absent."""
+    try:
+        found, _ = scan_session_processes(handle, system)
+    except RefreshError:
+        return False
+    return bool(found)
+
+
 def release_of(path: str | None) -> str | None:
     """The release named by an executable's file or version-folder name, such as `.../versions/2.1.311`."""
     if not path:

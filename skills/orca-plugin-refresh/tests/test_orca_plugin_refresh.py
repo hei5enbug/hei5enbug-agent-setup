@@ -31,7 +31,9 @@ _ISOLATION: list = []
 
 def setUpModule():
     for patcher in (patch.object(refresh_sessions, "session_release", return_value={}),
-                    patch.object(refresh_reload, "find_session_process", return_value=None)):
+                    patch.object(refresh_reload, "find_session_process", return_value=None),
+                    patch.object(refresh_sessions, "session_process_present", return_value=False),
+                    patch.object(refresh_sessions, "SCREEN_REREAD_SECONDS", 0)):
         patcher.start()
         _ISOLATION.append(patcher)
 

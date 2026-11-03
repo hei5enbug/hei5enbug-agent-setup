@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import contextlib
 import dataclasses
+import io
+import json
+import os
 import subprocess
+import tempfile
+import time
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -21,6 +27,7 @@ from refresh_feed import RunFeed
 import refresh_orphans
 import refresh_process
 import refresh_resume
+import refresh_screen
 import refresh_sessions
 
 HANDLE = resume_tests.HANDLE
@@ -180,6 +187,81 @@ class HandedCompactModeTest(base.DriveTest):
         # Then
         self.assertEqual("always", entry["compact_mode"])
         self.assertIn("compact", entry["actions"])
+
+
+class ShellPromptInputTest(unittest.TestCase):
+    def test_프롬프트_뒤에_입력한_글자가_있으면_빈_프롬프트로_보지_않는다(self):
+        """프롬프트 문자 뒤에 사용자가 입력한 글자가 있으면 그 글자가 프롬프트 문자로 끝나도 빈 프롬프트가 아니고, 입력이 없는 프롬프트는 빈 것으로 본다."""
+        # Given
+        cases = {
+            "user@host ~ % ": True,
+            "user@host ~ %": True,
+            "bash-3.2$ ": True,
+            "$ ": True,
+            "# ": True,
+            "❯ ": True,
+            "repo on main ❯ ": True,
+            "$ echo draft #": False,
+            "% ls >": False,
+            "❯ git status": False,
+            "user@host ~ % echo draft %": False,
+        }
+
+        # When
+        results = {line: refresh_screen.shell_prompt_empty(["output", line]) for line in cases}
+
+        # Then
+        self.assertEqual(cases, results)
+
+
+class AutomaticFailureManualRecoveryTest(unittest.TestCase):
+    RUN = "e" * 32
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        env = patch.dict(os.environ, {"XDG_STATE_HOME": self.temp.name})
+        env.start()
+        self.addCleanup(env.stop)
+        polling = patch.object(refresh_sessions, "POLL_SECONDS", 0)
+        polling.start()
+        self.addCleanup(polling.stop)
+
+    def saved_view(self, entry):
+        refresh.save_json(refresh.run_path(self.RUN), {"run_id": self.RUN, "hosts": {}, "sessions": {entry["handle"]: refresh.public(entry)}})
+
+    def record(self, action):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            refresh.main(["record-manual", "--run-id", self.RUN, "--terminal", "term_claude", "--action", action, "--result", "done", "--json"])
+        return json.loads(output.getvalue())
+
+    def failed_entry(self, how):
+        entry = {"handle": "term_claude", "host": "claude", "status": "sent", "detail": None, "actions": ["reload", "compact"]}
+        if how == "unconfirmed":
+            refresh_sessions.finish(entry, "failed:reload_unconfirmed")
+            return entry
+        entry["status"] = "pending"
+        fake = FakeOrca([terminal("term_claude", "claude")])
+        error = refresh_sessions.RefreshError("terminal_unreadable", "x")
+        with patch.object(refresh_sessions, "step", side_effect=error):
+            refresh_sessions.drive(fake, [entry], {"hosts": {"claude": {}}}, time.time() + 60)
+        return entry
+
+    def test_자동_동작이_실패한_뒤_손으로_reload만_끝내도_남은_compact가_있으면_done이_아니다(self):
+        """reload와 compact를 계획한 세션이 자동으로 실패한 뒤 reload만 손으로 끝냈다고 기록하면 세션은 done이 아니고 compact가 남으며, compact까지 기록해야 done이 된다."""
+        for how in ("unconfirmed", "step_error"):
+            with self.subTest(how=how):
+                # Given
+                self.saved_view(self.failed_entry(how))
+
+                # When
+                reloaded = self.record("reload")
+                compacted = self.record("compact")
+
+                # Then
+                self.assertEqual(("failed", ["compact"]), (reloaded["session"]["status"], reloaded["session"]["actions"]))
+                self.assertEqual(("done", "applied_by_agent"), (compacted["session"]["status"], compacted["session"]["detail"]))
 
 
 class ArgvSplitTest(unittest.TestCase):

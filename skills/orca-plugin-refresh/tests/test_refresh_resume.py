@@ -53,6 +53,7 @@ Options:
 Commands:
   agents                                List agents
 """
+SHELL_AFTER_EXIT = ["Resume this session with:", "claude --resume 11111111-2222-3333-4444-555555555555", "demo@example ~ %"]
 LATER = lambda: (datetime.now(timezone.utc) + timedelta(seconds=2)).isoformat(timespec="milliseconds")
 
 
@@ -106,7 +107,8 @@ class ResumeCase(unittest.TestCase):
         self.addCleanup(env.stop)
         for module, name, value in ((refresh_sessions, "POLL_SECONDS", 0), (refresh_sessions, "DRAFT_STABLE_SECONDS", 0),
                                     (refresh_sessions, "PROBE_RECHECK_SECONDS", 0), (refresh_sessions, "CLEAR_SETTLE_SECONDS", 0),
-                                    (refresh_sessions, "TYPE_CONFIRM_SECONDS", 0), (refresh_resume, "EXIT_TIMEOUT", 0.05),
+                                    (refresh_sessions, "TYPE_CONFIRM_SECONDS", 0), (refresh_resume, "EXIT_TIMEOUT", 0.05), (refresh_resume, "LATE_EXIT_TIMEOUT", 0.05),
+                                    (refresh_sessions, "SCREEN_REREAD_SECONDS", 0),
                                     (refresh_resume, "MARKER_TIMEOUT", 0.05), (refresh_resume, "READY_TIMEOUT", 0.05),
                                     (refresh_resume, "RELOAD_TIMEOUT_AFTER_RESUME", 5.0), (refresh_resume, "POLL", 0)):
             patcher = patch.object(module, name, value)
@@ -125,6 +127,7 @@ class ResumeCase(unittest.TestCase):
         self.write_marker(source="startup")
         self.pid = self.processes.add(HANDLE, self.launch_args, self.exe, self.config_dir)
         self.hang_on_exit = False
+        self.screen_after_exit = SHELL_AFTER_EXIT
         self.resumed_source = "resume"
         self.resumed_session = SESSION_ID
         self.resumed_config = self.config_dir
@@ -144,7 +147,9 @@ class ResumeCase(unittest.TestCase):
         if text == "/exit":
             if not self.hang_on_exit:
                 self.processes.table.pop(self.pid, None)
+                fake.screens[handle] = list(self.screen_after_exit)
         elif "--resume" in text:
+            fake.screens[handle] = list(base.CLAUDE_EMPTY)
             tokens = shlex.split(text)
             config = tokens[0].partition("=")[2] if tokens[0].startswith("CLAUDE_CONFIG_DIR=") else None
             start = 1 if config is not None else 0
@@ -358,20 +363,121 @@ class ReleaseReportTest(ResumeCase):
         self.assertNotIn("host_release_outdated", entry)
         self.assertNotIn("resume_approval_needed", refresh.public(entry))
 
-    def test_승인_없이는_어떤_경로도_세션을_끝내지_않는다(self):
-        """오래된 릴리스와 로드 오류가 있는 세션도 apply는 reload만 보내고 /exit은 보내지 않으며 보고서에 승인 필요를 적는다."""
+    def test_로드_오류가_있는_세션은_승인_없이_끝내지_않는다(self):
+        """최신 릴리스로 도는 세션이 plugin_load_error를 내면 apply는 reload만 보내고 /exit은 보내지 않으며 보고서에 승인 필요를 적는다."""
         # Given
+        self.processes.table[self.pid]["exe"] = NEW_EXE
         self.reload_answer = BAD_RELOAD
 
         # When
         with patch.object(refresh, "Orca", return_value=self.fake):
-            result = refresh.command_apply(self.run_id, "never", [], 60, spawn=lambda run: 1)
+            result = refresh.command_apply(self.run_id, "never", [], 60, spawn=lambda run: 1, sleep=lambda seconds: None)
 
         # Then
         self.assertEqual([(HANDLE, "/reload-plugins")], self.fake.sent)
         view = result["sessions"][0]
         self.assertEqual(("failed", "plugin_load_error", True), (view["status"], view["detail"], view["resume_approval_needed"]))
-        self.assertIn("host_release_outdated", view)
+
+
+class OutdatedResumeTest(ResumeCase):
+    def apply(self, mode="never"):
+        with patch.object(refresh, "Orca", return_value=self.fake), patch.object(refresh_resume, "Orca", return_value=self.fake):
+            return refresh.command_apply(self.run_id, mode, [], 60, spawn=lambda run: 1, sleep=lambda seconds: None)
+
+    def test_유휴_상태의_오래된_릴리스_세션은_묻지_않고_다시_열며_reload를_보내지_않는다(self):
+        """host_release_outdated이고 모든 재개 확인을 통과한 유휴 세션은 승인 없이 /exit 뒤 재개하고, 재개된 세션에는 /reload-plugins도 /compact도 보내지 않는다."""
+        # Given
+        self.write_marker("startup")
+
+        # When
+        result = self.apply()
+
+        # Then
+        self.assertEqual(["/exit"], [text for _, text in self.fake.sent[:1]])
+        self.assertIn("--resume", self.fake.sent[1][1])
+        self.assertEqual(2, len(self.fake.sent))
+        view = result["sessions"][0]
+        self.assertEqual(("done", ["resumed"]), (view["status"], view["completed"]))
+        self.assertNotIn("resume_approval_needed", view)
+        self.assertEqual("done", refresh.load_run(self.run_id)["resumed"][HANDLE]["status"])
+
+    def test_재개한_세션은_지시문이_낡았을_때만_그_뒤에_compact를_받는다(self):
+        """표식의 지시문 digest가 달라 compact가 계획된 세션은 재개 뒤 /reload-plugins 없이 /compact만 받는다."""
+        # Given
+        self.state["hosts"]["claude"]["digest"] = "new"
+        refresh.save_json(refresh.run_path(self.run_id), {**self.state, "run_id": self.run_id})
+        resume_effects = self.fake.on_send
+
+        def with_compact(fake, handle, text):
+            resume_effects(fake, handle, text)
+            if text == "/compact":
+                marker = {**refresh.read_marker(HANDLE), "digest": "new", "source": "compact", "written_at": LATER()}
+                (refresh.SESSION_CONTEXT.marker_directory() / f"{HANDLE}.json").write_text(json.dumps(marker))
+        self.fake.on_send = with_compact
+
+        # When
+        result = self.apply("auto")
+
+        # Then
+        texts = [text for _, text in self.fake.sent]
+        self.assertEqual("/exit", texts[0])
+        self.assertIn("--resume", texts[1])
+        self.assertEqual(["/compact"], texts[2:])
+        self.assertEqual(["resumed", "compact"], result["sessions"][0]["completed"])
+
+    def test_알림을_기다리는_백그라운드_작업이_있으면_끝내지_않고_승인_목록에_남긴다(self):
+        """재개 확인에서 background_task로 걸린 오래된 릴리스 세션은 /exit 없이 reload를 받고 승인 필요로 보고된다."""
+        # Given
+        write_records(self.transcript, [*FINISHED_TURN, user_record("백그라운드"), assistant_record(tool_use("Bash", run_in_background=True)),
+                                        result_record("Command running in background with ID: bg1"), assistant_record(), turn_end()])
+
+        # When
+        result = self.apply()
+
+        # Then
+        self.assertNotIn((HANDLE, "/exit"), self.fake.sent)
+        self.assertEqual([(HANDLE, "/reload-plugins")], self.fake.sent)
+        view = result["sessions"][0]
+        self.assertEqual(("background_task", True), (view["resume_check"], view["resume_approval_needed"]))
+
+    def test_입력줄에_쓰던_글이_있으면_끝내지_않는다(self):
+        """입력줄에 사용자가 쓴 글이 있는 오래된 릴리스 세션은 /exit를 받지 않고 그 글도 지워지지 않는다."""
+        # Given
+        self.fake.typed[HANDLE] = "쓰던 글"
+
+        # When
+        result = self.apply()
+
+        # Then
+        self.assertNotIn((HANDLE, "/exit"), self.fake.sent)
+        self.assertEqual("unsent_input", result["sessions"][0].get("resume_check"))
+        self.assertTrue(result["sessions"][0]["resume_approval_needed"])
+
+    def test_이전_apply가_plugin_load_error로_저장한_세션은_다시_apply해도_끝내지_않는다(self):
+        """같은 실행의 앞선 apply가 plugin_load_error로 저장한 오래된 릴리스 세션은 다시 apply해도 /exit를 받지 않고 승인 목록에 남는다."""
+        # Given
+        saved = refresh.load_run(self.run_id)
+        refresh.save_json(refresh.run_path(self.run_id), {**saved, "sessions": {HANDLE: {"status": "failed", "detail": "plugin_load_error"}}})
+
+        # When
+        result = self.apply()
+
+        # Then
+        self.assertNotIn((HANDLE, "/exit"), self.fake.sent)
+        self.assertNotIn("resumed", refresh.load_run(self.run_id))
+        self.assertTrue(result["sessions"][0]["resume_approval_needed"])
+
+    def test_이_세션_자신은_끝내지_않는다(self):
+        """apply를 실행하는 세션 자신은 오래된 릴리스여도 재개 대상에서 빠진다."""
+        # Given
+        self.fake.list[0]["handle"] = "term_self"
+        self.processes.table[self.pid]["env"]["ORCA_TERMINAL_HANDLE"] = "term_self"
+
+        # When
+        self.apply()
+
+        # Then
+        self.assertNotIn(("term_self", "/exit"), self.fake.sent)
 
 
 class ResumeTest(ResumeCase):
@@ -421,6 +527,19 @@ class ResumeTest(ResumeCase):
         view = result["sessions"][0]
         self.assertEqual(("failed", "plugin_load_error", 5), (view["status"], view["detail"], view["plugin_load"]["plugins"]))
         self.assertFalse(result["ok"])
+
+    def test_프로세스가_끝나도_셸_프롬프트가_비어_있지_않으면_재개_줄을_보내지_않는다(self):
+        """/exit 뒤 프로세스가 곧바로 끝나도 터미널에 비어 있는 셸 프롬프트가 보이지 않으면 재개 줄을 보내지 않고 exit_timeout과 재개 줄을 알린다."""
+        # Given
+        self.screen_after_exit = ["Resume this session with:", "$ claude --resume x --flag"]
+
+        # When
+        result = self.resume()
+
+        # Then
+        view = result["sessions"][0]
+        self.assertEqual([(HANDLE, "/exit")], self.fake.sent)
+        self.assertEqual(("failed", "exit_timeout", "ended_late", HANDLE), (view["status"], view["detail"], view["exit_state"], view["terminal_handle"]))
 
     def test_프로세스가_끝나지_않으면_exit_timeout으로_실패하고_명령을_더_보내지_않는다(self):
         """/exit 뒤에도 프로세스가 남아 있으면 제한 시간 뒤 exit_timeout으로 실패하고 재개 명령을 보내지 않는다."""

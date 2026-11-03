@@ -96,7 +96,8 @@
 | `skills/document-to-confluence/tests/test_column_widths.py`, `skills/document-to-confluence/tests/test_image_size.py`, `skills/document-to-confluence/tests/test_text_parity.py`, `skills/document-to-confluence/tests/test_validate_body.py` | 변환한 페이지는 열 너비, 이미지 크기, 텍스트 일치를 지키고 로컬 경로를 담지 않는다. | `skills/document-to-confluence/SKILL.md` |
 | `skills/document-to-confluence/tests/test_render_diagrams.mjs` | 다이어그램 캡처는 유효하고 겹치지 않는 파일 이름을 쓰고, 요청이 없으면 브라우저 샌드박스를 켜 두며, 항상 브라우저를 닫는다. | `skills/document-to-confluence/references/diagrams.md` (Naming and browser flags) |
 | `skills/orca-plugin-refresh/tests/test_orca_plugin_refresh.py` | 갱신은 입력창이 빈 유휴 세션에만 입력을 보낸다. | `skills/orca-plugin-refresh/SKILL.md` |
-| `skills/orca-plugin-refresh/tests/test_refresh_resume.py` | 갱신은 플러그인 로드 오류가 있는 reload를 실패로 보고하고, 세션 종료와 재개는 승인된 유휴 세션에 대한 `resume`으로만 한다. | `skills/orca-plugin-refresh/SKILL.md` |
+| `skills/orca-plugin-refresh/tests/test_refresh_resume.py` | 갱신은 플러그인 로드 오류가 있는 reload를 실패로 보고한다. 세션 종료와 재개는 승인된 유휴 세션에 대한 `resume` 또는 모든 재개 검사를 통과한 이전 Claude Code 릴리스의 유휴 세션에 대한 `apply`로만 하며, 늦어진 종료로 프로세스가 끝나면 재개 명령줄을 보낸다. | `skills/orca-plugin-refresh/SKILL.md` |
+| `skills/orca-plugin-refresh/tests/test_refresh_probe_host_manual.py` | 갱신은 자신이 입력한 확인용 문자를 지우거나 그 정확한 위치를 보고하고, 화면만으로 판단할 수 없으면 프로세스로 Claude Code 세션을 식별하며, 에이전트가 수동으로 완료한 작업을 `record-manual`로 기록한다. | `skills/orca-plugin-refresh/SKILL.md` |
 | `skills/orca-plugin-refresh/tests/test_refresh_handoff_compact.py` | 갱신은 인계 뒤에도 transcript 끝부분으로 세션의 유휴 여부를 판단하고, 메시지가 너무 적어 거절된 compact는 안내와 함께 완료로 보고한다. | `skills/orca-plugin-refresh/SKILL.md` |
 | `skills/orca-plugin-refresh/tests/test_refresh_compact_dialog.py` | 갱신은 /compact 에이전트 보기 대화상자에서 실행 선택지만 확인하고, 다른 열린 대화상자에는 입력하지 않는다. | `skills/orca-plugin-refresh/SKILL.md` |
 | `skills/orca-plugin-refresh/tests/test_refresh_lock_scope.py` | 갱신은 명령을 보내고 확인하는 동안에만 sessions 잠금을 쥐고, 두 프로세스가 동시에 보내지 않게 한다. | `skills/orca-plugin-refresh/SKILL.md` |

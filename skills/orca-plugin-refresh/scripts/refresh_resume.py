@@ -10,11 +10,13 @@ import refresh_sessions as driver
 from refresh_core import HANDLE, RefreshError, exclusive, load_run, parse_time, update_run
 from refresh_host_record import record_state
 from refresh_orca import Orca
+from refresh_screen import shell_prompt_empty
 from refresh_process import (ProcessOs, SessionProcess, find_session_process, installed_release, launch_arguments, release_of,
                              scan_session_processes)
 
 SESSION_ID = re.compile(r"^[0-9A-Za-z][0-9A-Za-z-]{7,79}$")
 EXIT_TIMEOUT = 60.0
+LATE_EXIT_TIMEOUT = 120.0
 MARKER_TIMEOUT = 90.0
 READY_TIMEOUT = 20.0
 RELOAD_TIMEOUT_AFTER_RESUME = 120.0
@@ -64,13 +66,42 @@ def wait_for(check: Callable[[], bool], timeout: float, sleep: Callable[[float],
         sleep(POLL)
 
 
-def process_ended(handle: str, pid: int, system: ProcessOs | None) -> bool:
-    """True only when the process list was read and shows the process gone; any unreadable state counts as not ended."""
+def process_state(handle: str, pid: int, system: ProcessOs | None) -> str:
+    """`ended` only when the process list was read and shows the process gone; `unreadable` when it could not be read."""
     try:
         found, unreadable = scan_session_processes(handle, system)
     except RefreshError:
+        return "unreadable"
+    if pid in unreadable:
+        return "unreadable"
+    return "running" if any(item.pid == pid for item in found) else "ended"
+
+
+def at_shell_prompt(orca: Orca, handle: str) -> bool:
+    try:
+        return shell_prompt_empty(orca.screen(handle)[0])
+    except RefreshError:
         return False
-    return pid not in unreadable and all(item.pid != pid for item in found)
+
+
+LATE_EXIT_STATES = {"ended": "ended_late", "unreadable": "process_list_unreadable", "running": "still_running"}
+
+
+def late_exit_failure(orca: Orca, handle: str, pid: int, line: str, system: ProcessOs | None,
+                      sleep: Callable[[float], None]) -> dict | None:
+    """Keep checking after the exit wait ran out; None once the process is gone and the terminal shows an empty shell
+    prompt, otherwise the failure that gives the user the terminal and the exact resume line."""
+    state = "running"
+
+    def settled() -> bool:
+        nonlocal state
+        state = process_state(handle, pid, system)
+        return state == "ended" and at_shell_prompt(orca, handle)
+
+    if wait_for(settled, LATE_EXIT_TIMEOUT, sleep):
+        return None
+    return {"status": "failed", "detail": "exit_timeout", "exit_state": LATE_EXIT_STATES[state], "terminal_handle": handle,
+            "resume_line": line}
 
 
 def resumed_marker(handle: str, snapshot: dict | None, sent_at: float) -> dict | None:
@@ -98,15 +129,23 @@ def reload_after_resume(orca: Orca, entry: dict, state: dict, sleep: Callable[[f
 
 
 def end_and_resume(orca: Orca, entry: dict, state: dict, process: SessionProcess, line: str, session_id: str,
-                   system: ProcessOs | None, sleep: Callable[[float], None]) -> dict:
+                   system: ProcessOs | None, sleep: Callable[[float], None], reload: bool = True) -> dict:
     handle = entry["handle"]
     live = {item.get("handle"): item for item in orca.terminals()}
     reason = not_ready_reason(orca, entry, live, sleep)
     if reason:
         return {"status": "skipped", "detail": reason}
     orca.send(handle, "/exit")
-    if not wait_for(lambda: process_ended(handle, process.pid, system), EXIT_TIMEOUT, sleep):
-        return {"status": "failed", "detail": "exit_timeout"}
+    late: dict = {}
+
+    def shell_ready() -> bool:
+        return process_state(handle, process.pid, system) == "ended" and at_shell_prompt(orca, handle)
+
+    if not wait_for(shell_ready, EXIT_TIMEOUT, sleep):
+        failure = late_exit_failure(orca, handle, process.pid, line, system, sleep)
+        if failure:
+            return failure
+        late = {"exit_late": True}
     snapshot, sent_at = driver.read_marker(handle), time.time()
     orca.send(handle, line)
     marker: dict | None = None
@@ -126,14 +165,16 @@ def end_and_resume(orca: Orca, entry: dict, state: dict, process: SessionProcess
         started = None
     if started is None:
         return {"status": "failed", "detail": "resumed_process_missing"}
-    after = {"release_after": release_of(started.exe)}
+    after = {"release_after": release_of(started.exe), **late}
     if started.config_dir != process.config_dir:
         return finished(after, "failed", "config_dir_mismatch")
+    if not reload:
+        return {**after, "status": "done", "detail": "resumed"}
     return {**after, **reload_after_resume(orca, entry, state, sleep)}
 
 
 def resume_session(orca: Orca, entry: dict, state: dict, live: dict[str, dict], system: ProcessOs | None,
-                   sleep: Callable[[float], None]) -> dict:
+                   sleep: Callable[[float], None], reload: bool = True) -> dict:
     """End and resume one session only when every check judges it idle; otherwise `skipped` with the reason."""
     result = {"release_before": entry.get("release")}
     session_id = session_id_of(driver.read_marker(entry["handle"]))
@@ -141,7 +182,8 @@ def resume_session(orca: Orca, entry: dict, state: dict, live: dict[str, dict], 
         return finished(result, "skipped", "session_id_unknown")
     reason = not_ready_reason(orca, entry, live, sleep)
     if reason:
-        return finished(result, "skipped", reason)
+        position = {"probe_position": entry["probe_position"]} if reason == "probe_interrupted" and entry.get("probe_position") else {}
+        return finished(result, "skipped", reason, **position)
     try:
         process = find_session_process(entry["handle"], system)
     except RefreshError as error:
@@ -154,12 +196,57 @@ def resume_session(orca: Orca, entry: dict, state: dict, live: dict[str, dict], 
         return finished(result, "skipped", "launch_arguments_unknown")
     line = resume_line(claude, process.config_dir, arguments, session_id)
     note = {} if process.config_dir else {"note": "no_config_dir_in_process"}
-    return {**result, **note, **end_and_resume(orca, entry, state, process, line, session_id, system, sleep)}
+    return {**result, **note, **end_and_resume(orca, entry, state, process, line, session_id, system, sleep, reload)}
 
 
 def resume_view(handle: str, entry: dict | None, result: dict) -> dict:
     view = {"terminal": f"…{handle[-6:]}", "worktree": (entry or {}).get("worktree"), **result}
     return {key: value for key, value in view.items() if value not in (None, [], False)}
+
+
+RESUME_CARRIED = ("note", "exit_late", "exit_state", "terminal_handle", "resume_line", "probe_position")
+
+
+def record_resume(entry: dict, result: dict) -> None:
+    """Fold one resume result into an apply entry: no reload is left for a resumed session, a compact only when planned."""
+    carried = {key: result[key] for key in RESUME_CARRIED if result.get(key)}
+    if result["status"] == "skipped":
+        entry.update(resume_check=result["detail"], **{key: value for key, value in carried.items() if key == "probe_position"})
+    elif result["status"] == "done":
+        remaining = [action for action in entry["actions"] if action == "compact"]
+        entry.pop("host_release_outdated", None)
+        entry.update(carried, release=result.get("release_after") or entry.get("release"), actions=remaining,
+                     completed=[*entry.get("completed", []), "resumed"], status="pending" if remaining else "done",
+                     detail=None if remaining else "applied")
+    else:
+        entry.update(carried, status="failed", detail=result["detail"])
+
+
+def saved_detail(state: dict, handle: str) -> str | None:
+    """The detail this run already saved for a session; a `plugin_load_error` keeps it waiting for the user's approval."""
+    return (state.get("sessions", {}).get(handle) or {}).get("detail")
+
+
+def resume_outdated(orca: Orca, sessions: Sequence[dict], state: dict, run_id: str, system: ProcessOs | None = None,
+                    sleep: Callable[[float], None] = time.sleep) -> None:
+    """Resume, before anything else is sent, each session that runs an older release and passes every resume check.
+
+    A session that fails a check stays as planned and keeps its place in the resume approval list."""
+    candidates = [entry for entry in sessions if entry["host"] == "claude" and entry.get("host_release_outdated")
+                  and entry["status"] == "pending" and not entry["initiator"] and not entry.get("handled")
+                  and saved_detail(state, entry["handle"]) != "plugin_load_error"]
+    views: dict[str, dict] = {}
+    for entry in candidates:
+        live = {item.get("handle"): item for item in orca.terminals()}
+        try:
+            result = resume_session(orca, entry, state, live, system, sleep, reload=False)
+        except RefreshError as error:
+            result = {"status": "failed", "detail": error.code}
+        record_resume(entry, result)
+        if result["status"] != "skipped":
+            views[entry["handle"]] = resume_view(entry["handle"], entry, result)
+    if views:
+        update_run(run_id, lambda saved: {**saved, "resumed": {**saved.get("resumed", {}), **views}})
 
 
 def run_resume(run_id: str, handles: Sequence[str], orca: Orca | None = None, system: ProcessOs | None = None,

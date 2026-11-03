@@ -1,7 +1,14 @@
 # Resume a session
 
-Run this only for a Claude Code session that reports `resume_approval_needed`, and only for the terminals the user
-approved in the current request. Run `python3 <script> resume --run-id <run_id> --terminal <handle> --json`, repeating
+`apply` runs this resume by itself, before it sends anything, for each other Claude Code session that reports
+`host_release_outdated` and passes every check below; it does not ask. A resumed session gets no `/reload-plugins`,
+because the new process loads the installed plugins at start, and it gets `/compact` afterwards only when its loaded
+instructions are stale, so the conversation ends with one copy of the current instructions. A session that fails a
+check stays as planned, shows the failed check in `resume_check`, and is offered once for approval. A session with
+`plugin_load_error` is never resumed without approval.
+
+Run the `resume` subcommand only for a Claude Code session that reports `resume_approval_needed`, and only for the
+terminals the user approved in the current request. Run `python3 <script> resume --run-id <run_id> --terminal <handle> --json`, repeating
 `--terminal` once per approved session. The handle is the full Orca terminal handle, not the `…` suffix in a report.
 
 ## What the script does
@@ -13,14 +20,17 @@ For each named terminal, in this order, it:
    approval prompt on screen, and has an empty input line. Otherwise it skips the session and sends nothing.
 3. Finds the session's process by the `ORCA_TERMINAL_HANDLE` in its own environment, and reads its exact arguments and
    `CLAUDE_CONFIG_DIR` from that process, never from the terminal's shell.
-4. Sends `/exit`, waits for that process to end, then sends one line in the same terminal: the process's
+4. Sends `/exit`, waits up to 60 seconds for that process to end, then keeps checking for 120 more seconds. It sends
+   one line in the same terminal once the process is gone and the terminal shows a shell prompt with an empty input
+   line, and the line is: the process's
    `CLAUDE_CONFIG_DIR`, the current `claude` executable, the original option arguments, and
    `--resume <conversation ID>`.
    It reads which tokens are option values from `claude --help`, drops the positional prompt, and drops `--continue`,
    `--resume`, `--session-id`, `--fork-session`, and `--print`. When the help is unreadable or an option is not in it,
    it skips the session before `/exit` as `launch_arguments_unknown`.
 5. Confirms that the session marker was rewritten with `source: resume` for the same conversation, that the new process
-   has the same `CLAUDE_CONFIG_DIR`, and that a following `/reload-plugins` loads without an error.
+   has the same `CLAUDE_CONFIG_DIR`, and that a following `/reload-plugins` loads without an error. The resume in `apply` sends no reload and skips
+   that last confirmation.
 
 ## Report each session
 
@@ -32,7 +42,12 @@ For each named terminal, in this order, it:
   later. `session_id_unknown`, `process_not_found`, `session_process_ambiguous`, `claude_missing`, and
   `launch_arguments_unknown` mean the script could not identify what to resume. `not_a_claude_session` means
   the terminal is not a Claude Code session.
-- `failed`: the session was ended. `exit_timeout` means the process did not end, and no resume line was sent.
+- `done` with `exit_late`: the process ended, or the terminal showed an empty shell prompt, only after the first 60
+  seconds, and the resume line was sent after that.
+- `failed`: the session was ended. `exit_timeout` means no resume line was sent, and the report carries
+  `terminal_handle`, the exact `resume_line`, and `exit_state`: `ended_late` (the process ended but the terminal showed
+  no empty shell prompt), `process_list_unreadable` (the process list could not be read), or `still_running`. Give the
+  user the terminal and the exact line; the session has no Claude Code until it runs.
   `resume_marker_missing` and `resume_session_mismatch` mean the resumed session was not confirmed to hold the same
   conversation. `resumed_process_missing` and `config_dir_mismatch` mean the new process is missing or runs on a
   different configuration folder. `plugin_load_error` means the resumed session still reports a load error, with

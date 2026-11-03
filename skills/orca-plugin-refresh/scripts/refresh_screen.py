@@ -10,6 +10,8 @@ CODEX_STARTING = "Waiting for startup"
 SEPARATOR = re.compile(r"^\s*─{8,}\s*$")
 TITLED_SEPARATOR = re.compile(r"^─{8,} \S.* ─+\s*$")
 CODEX_FOOTER = re.compile(r"^\s{2}\S.* · ")
+PROMPT_CHARACTERS = "$%#>❯➜»"
+SPACED_PROMPT = re.compile(rf"[{re.escape(PROMPT_CHARACTERS)}](?=\s)")
 
 
 def screen_host(lines: Sequence[str]) -> str | None:
@@ -22,6 +24,21 @@ def screen_host(lines: Sequence[str]) -> str | None:
     prompts = [index for index, line in enumerate(lines) if line.strip().startswith("›")]
     codex = bool(prompts) and input_state("codex", lines) != "unknown" and footer_only(lines[prompts[-1] + 1:])
     return None if claude == codex else "claude" if claude else "codex"
+
+
+def shell_prompt_empty(lines: Sequence[str]) -> bool:
+    """True when the screen ends with a shell prompt and nothing typed after it, and no agent composer ends the screen."""
+    last = next((line.rstrip("\r\n") for line in reversed(lines) if line.strip()), "")
+    return prompt_line_empty(last) and screen_host(lines) is None
+
+
+def prompt_line_empty(line: str) -> bool:
+    """Nothing but whitespace follows the first prompt character that is followed by whitespace, or the line ends with a
+    prompt character; typed text after a prompt, even text ending in a prompt character, is not empty."""
+    spaced = SPACED_PROMPT.search(line)
+    if spaced:
+        return not line[spaced.end():].strip()
+    return line.rstrip().endswith(tuple(PROMPT_CHARACTERS))
 
 
 def opening_rule(line: str) -> bool:
