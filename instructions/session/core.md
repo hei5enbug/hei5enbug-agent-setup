@@ -29,4 +29,4 @@ Reuse an unchanged instruction file still in context; reread it only after it ch
   [infrastructure access](../infrastructure-access.md). For protected values, including local files,
   environment variables, logs, or indirect access, also read [protected-value access rules](../protected-values.md).
 - Before writing or editing any documentation file, read [documentation rules](../documentation.md).
-- Before writing or editing test code, read [test rules](../testing.md).
+- Before writing or editing test code, or specifying tests in a worker assignment, read [test rules](../testing.md).
