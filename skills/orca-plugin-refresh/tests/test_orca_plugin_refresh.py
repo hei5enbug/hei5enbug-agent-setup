@@ -27,13 +27,15 @@ import refresh_screen
 import refresh_sessions
 
 _ISOLATION: list = []
+CLAUDE_UPDATE_SKIPPED = {"status": "skipped", "before": None, "after": None, "reason": "claude_missing"}
 
 
 def setUpModule():
     for patcher in (patch.object(refresh_sessions, "session_release", return_value={}),
                     patch.object(refresh_reload, "find_session_process", return_value=None),
                     patch.object(refresh_sessions, "session_process_present", return_value=False),
-                    patch.object(refresh_sessions, "SCREEN_REREAD_SECONDS", 0)):
+                    patch.object(refresh_sessions, "SCREEN_REREAD_SECONDS", 0),
+                    patch.object(refresh, "run_claude_update", return_value=CLAUDE_UPDATE_SKIPPED)):
         patcher.start()
         _ISOLATION.append(patcher)
 
@@ -2987,7 +2989,7 @@ class UpdateTest(unittest.TestCase):
         self.assertEqual(result["run_id"], state["run_id"])
         self.assertEqual({"run_id", "created_at", "hosts", "sessions"}, set(state))
         self.assertEqual({}, state["sessions"])
-        self.assertEqual({"before_version", "after_version", "root", "previous_root", "digest", "instructions_changed", "warnings", "plugins"}, set(state["hosts"]["claude"]))
+        self.assertEqual({"before_version", "after_version", "root", "previous_root", "digest", "instructions_changed", "warnings", "plugins", "claude_code"}, set(state["hosts"]["claude"]))
         self.assertEqual([], state["hosts"]["claude"]["plugins"])
         self.assertEqual("1.2.3", state["hosts"]["claude"]["after_version"])
         self.assertEqual(result["run_id"], applied["run_id"])

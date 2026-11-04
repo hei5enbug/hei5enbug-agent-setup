@@ -51,7 +51,9 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
    for the corrected ID. The script drops duplicates and this plugin's own ID and keeps at most 10 companions;
    `companions_dropped` reports any extras. If installation was already completed outside this skill, or the user
    asks to apply the installed version, run `python3 <script> apply-installed --json`; it reads installed roots
-   and runs no marketplace or install commands.
+   and runs no plugin marketplace or install commands. Both commands first run `claude update` once, so sessions
+   compare against the newest Claude Code release, unless `DISABLE_UPDATES` turns updates off or `claude` is not
+   on `PATH`; run them with a shell timeout of at least 600 seconds.
 2. **Handle the update result.** Report each host's version change, then every plugin in
    `hosts.<host>.plugins` with its status, versions, and warnings:
    - `updated` or `current`: the version changed or stayed, and the install validated.
@@ -60,6 +62,10 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
      never deployed. Claude Code reloads that folder with `/reload-plugins`.
    - `deferred`: the host's install gate held it back; see the Codex gate below.
    - `error`: report its `code` and `message`. It never blocks this plugin or the session apply.
+
+   Also report `hosts.claude.claude_code`: its `status` (`updated`, `current`, `skipped`, or `failed`), `before` and
+   `after` releases, the `reason` of a skip, and `exit_status` and `detail` of a failure with its
+   `claude_update_failed` warning, which never blocks the plugin result or `apply`.
 
    When this plugin itself loads from a local source on a host, that host reports `local_source: true`, runs no
    install command, and stays usable for `apply`. When this plugin's host has an `error`, report its code and
@@ -177,7 +183,8 @@ result is not ok when this plugin has a host error or any companion has the stat
 
 - Commands are argument lists, never a shell. Each host updates a marketplace at most once per run, then the
   plugin: Claude Code runs `claude plugin marketplace update` and `claude plugin update`, and Codex runs
-  `codex plugin marketplace upgrade` and `codex plugin add`.
+  `codex plugin marketplace upgrade` and `codex plugin add`. `update` and `apply-installed` also run `claude update`
+  once first.
 - Before reporting an install as successful, the script checks the installed manifest name and version and every
   hook target that points into the plugin directory. For this plugin it also checks every required hook target,
   the Claude Code mod files, and the instruction digest. A failed plugin does not hide another plugin's or host's

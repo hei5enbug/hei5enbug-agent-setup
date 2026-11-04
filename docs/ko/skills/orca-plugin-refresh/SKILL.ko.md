@@ -53,7 +53,9 @@ compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 �
    아무것도 실행하지 않는다. 사용자에게 고친 ID를 물어본다. 스크립트는 중복과 이 플러그인 자신의 ID를 빼고
    함께 새로고침할 플러그인을 최대 10개까지 남기며, 초과한 플러그인은 `companions_dropped`로 알린다. 설치를 이 스킬
    밖에서 이미 마쳤거나 사용자가 설치된 버전을 적용해 달라고 하면 `python3 <script> apply-installed --json`을
-   실행한다. 이 명령은 설치 경로를 읽고 마켓플레이스나 설치 명령을 실행하지 않는다.
+   실행한다. 이 명령은 설치 경로를 읽고 플러그인 마켓플레이스나 설치 명령을 실행하지 않는다. 두 명령은 먼저
+   `claude update`를 한 번 실행해 세션이 가장 새로운 Claude Code 릴리스와 비교되게 한다. 다만 `DISABLE_UPDATES`가
+   업데이트를 끄거나 `claude`가 `PATH`에 없으면 실행하지 않는다. 셸 제한 시간은 600초 이상으로 한다.
 2. **업데이트 결과를 처리한다.** 각 호스트의 버전 변화를 보고한 뒤 `hosts.<host>.plugins`의 모든 플러그인을
    상태, 버전, 경고와 함께 보고한다.
    - `updated` 또는 `current`: 버전이 바뀌었거나 그대로이며 설치본이 검증됐다.
@@ -62,6 +64,10 @@ compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 �
      배포되는 일은 없다. Claude Code는 `/reload-plugins`로 그 폴더를 다시 불러온다.
    - `deferred`: 호스트의 설치 게이트가 막았다. 아래 Codex 게이트를 본다.
    - `error`: `code`와 `message`를 알린다. 이 플러그인이나 세션 적용을 막지 않는다.
+
+   `hosts.claude.claude_code`도 보고한다. `status`(`updated`, `current`, `skipped`, `failed`), 전후 릴리스
+   `before`와 `after`, 건너뛴 경우의 `reason`, 실패한 경우의 `exit_status`와 `detail` 및 `claude_update_failed`
+   경고를 알리며, 이 경고는 플러그인 결과나 `apply`를 막지 않는다.
 
    이 플러그인 자체가 호스트에서 로컬 소스로 로드되면 그 호스트는 `local_source: true`로 보고하고, 설치 명령을
    실행하지 않으며, `apply`에는 계속 쓸 수 있다. 이 플러그인의 호스트에 `error`가 있으면 코드와 메시지를 알린다.
@@ -172,7 +178,7 @@ compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 �
 
 - 명령은 인자 목록이며 셸을 거치지 않는다. 각 호스트는 한 실행에서 마켓플레이스를 최대 한 번 갱신한 뒤
   플러그인을 갱신한다. Claude Code는 `claude plugin marketplace update`와 `claude plugin update`를, Codex는
-  `codex plugin marketplace upgrade`와 `codex plugin add`를 실행한다.
+  `codex plugin marketplace upgrade`와 `codex plugin add`를 실행한다. `update`와 `apply-installed`는 그 전에 `claude update`도 한 번 실행한다.
 - 설치 성공을 보고하기 전에 설치된 manifest의 이름과 버전, 플러그인 디렉터리를 가리키는 모든 훅 대상을
   확인한다. 이 플러그인은 필수 훅 대상, Claude Code Mod 파일, 지침 digest도 확인한다. 한 플러그인이 실패해도
   다른 플러그인이나 호스트의 성공 결과는 가려지지 않는다.

@@ -23,6 +23,7 @@ if SCRIPTS_FOLDER not in sys.path:
 import refresh_core as core  # noqa: E402
 import refresh_install as installs  # noqa: E402
 import refresh_sessions as driver  # noqa: E402
+from refresh_claude_update import attach_claude_update, run_claude_update  # noqa: E402
 from refresh_core import (  # noqa: E402
     CODEX_HOOK_TRUST, HANDLE, HOSTS, MARKETPLACE, PLUGIN, PLUGIN_ID, PLUGIN_ROOT, RUN_ID, SESSION_CONTEXT, RefreshError,
     exclusive, executable, load_plugin_script, load_run, now, parse_time, run, run_json, run_path, save_json, state_root, update_run,
@@ -234,6 +235,7 @@ def refresh_report(run_id: str, hosts: dict[str, dict], extra: dict) -> dict:
 def command_update(also: Sequence[str] = ()) -> dict:
     ids, extra = companion_ids(also)
     run_id = uuid.uuid4().hex
+    claude_step = run_claude_update()
     hosts: dict[str, dict] = {}
     for host in HOSTS:
         context: dict = {"ids": ids}
@@ -245,12 +247,13 @@ def command_update(also: Sequence[str] = ()) -> dict:
             hosts[host] = host_failure(RefreshError("plugin_check_failed", f"A {host} plugin file could not be checked."))
         plugins = [refresh_companion(host, plugin_id, True, context) for plugin_id in ids]
         hosts[host]["plugins"] = settle_companion_trust(plugins, context)
-    return refresh_report(run_id, hosts, extra)
+    return refresh_report(run_id, attach_claude_update(hosts, claude_step), extra)
 
 
 def command_apply_installed(also: Sequence[str] = ()) -> dict:
     ids, extra = companion_ids(also)
     run_id = uuid.uuid4().hex
+    claude_step = run_claude_update()
     hosts: dict[str, dict] = {}
     for host in HOSTS:
         try:
@@ -271,7 +274,7 @@ def command_apply_installed(also: Sequence[str] = ()) -> dict:
             hosts[host] = host_failure(RefreshError("plugin_check_failed", f"A {host} plugin file could not be checked."))
         context: dict = {}
         hosts[host]["plugins"] = [refresh_companion(host, plugin_id, False, context) for plugin_id in ids]
-    return refresh_report(run_id, hosts, extra)
+    return refresh_report(run_id, attach_claude_update(hosts, claude_step), extra)
 
 
 def continuation_script(hosts: dict[str, dict]) -> str:
