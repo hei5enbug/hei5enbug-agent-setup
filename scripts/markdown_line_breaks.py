@@ -4,6 +4,8 @@
 Usage:
     markdown_line_breaks.py [--max-chars N] FILE
 
+FILE may be - to read the Markdown from standard input.
+
 Findings, each with its line number, kind, and line text:
 
     soft-break      a line the same paragraph, list item, or block quotation continues on the next line,
@@ -14,7 +16,8 @@ Findings, each with its line number, kind, and line text:
                     https addresses; a single sentence is never reported, since it cannot be split
 
 A marked line break is a trailing <br>, <br/>, or <br />, a backslash, or two spaces. Fenced code and diagram
-blocks, front matter, tables with or without outer pipes, headings, HTML block lines, and blank lines are ignored.
+blocks (also inside a block quotation), front matter, tables with or without outer pipes, headings, HTML block
+lines, and blank lines are ignored. A line that begins with inline HTML or an autolink is prose.
 
 A JSON report goes to standard output. Exit codes: 0 no finding, 1 findings, 2 usage or read error.
 """
@@ -29,6 +32,17 @@ from pathlib import Path
 
 DEFAULT_MAX_CHARS = 120
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
+QUOTE_PREFIX = re.compile(r"^(?:\s{0,3}>\s?)+")
+HTML_BLOCK_TAGS = (
+    "address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt"
+    "|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main"
+    "|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|section|source|summary|table|tbody|td|tfoot|th|thead"
+    "|title|tr|track|ul|pre|script|style|textarea"
+)
+HTML_BLOCK_START = re.compile(rf"^\s{{0,3}}(?:</?(?:{HTML_BLOCK_TAGS})(?:\s|/?>|$)|<[!?])", re.IGNORECASE)
+HTML_TAG_ONLY = re.compile(
+    r"""^\s{0,3}</?[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][\w.:-]*(?:\s*=\s*(?:[^\s"'=<>`]+|'[^']*'|"[^"]*"))?)*\s*/?>\s*$"""
+)
 HEADING = re.compile(r"^\s{0,3}#{1,6}(\s|$)")
 SETEXT_UNDERLINE = re.compile(r"^\s{0,3}(=+|-+)\s*$")
 LIST_ITEM = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
@@ -77,8 +91,12 @@ def length_findings(block: list, max_chars: int) -> list:
 
 
 def starts_ignored_block(line: str) -> bool:
-    stripped = line.strip()
-    return stripped.startswith(("|", "<")) or bool(HEADING.match(line))
+    return (
+        line.strip().startswith("|")
+        or bool(HEADING.match(line))
+        or bool(HTML_BLOCK_START.match(line))
+        or bool(HTML_TAG_ONLY.match(line))
+    )
 
 
 def body_start(lines: list) -> int:
@@ -101,8 +119,12 @@ def table_lines(lines: list, start: int) -> frozenset:
     return frozenset(indexes)
 
 
+def fence_marker(line: str):
+    return FENCE.match(QUOTE_PREFIX.sub("", line, count=1))
+
+
 def closes_fence(line: str, fence: str) -> bool:
-    marker = FENCE.match(line)
+    marker = fence_marker(line)
     return bool(marker) and marker.group(1)[0] == fence[0] and len(marker.group(1)) >= len(fence)
 
 
@@ -117,7 +139,7 @@ def prose_blocks(lines: list, start: int):
     block, fence, tables = [], None, table_lines(lines, start)
     for index in range(start, len(lines)):
         line = lines[index]
-        marker = FENCE.match(line)
+        marker = fence_marker(line)
         if fence is not None:
             fence = None if closes_fence(line, fence) else fence
             continue
@@ -149,14 +171,14 @@ def check(text: str, max_chars: int = DEFAULT_MAX_CHARS) -> list:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Report Markdown line-break findings.")
     parser.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS, help="longest prose line; 0 turns the check off")
-    parser.add_argument("file", help="Markdown file to check")
+    parser.add_argument("file", help="Markdown file to check, or - to read standard input")
     return parser
 
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        text = Path(args.file).read_text(encoding="utf-8")
+        text = sys.stdin.read() if args.file == "-" else Path(args.file).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:
         print(f"error: cannot read {args.file}: {error}", file=sys.stderr)
         return 2

@@ -145,6 +145,20 @@ class MissingSelectionTest(unittest.TestCase):
         self.assertEqual("ambiguous", result.unresolved[0]["reason"])
         self.assertEqual(new, result.body)
 
+    def test_선택할_글자가_없는_앵커는_복원으로_세지_않고_보고한다(self):
+        # Given
+        previous = f"<p>{marker('demo-a', 'old')}</p>"
+        new = "<p>new</p>"
+        anchor = {"ref": "demo-a", "before": "new", "selection": "\x00", "after": ""}
+
+        # When
+        result = restore(previous, new, [anchor])
+
+        # Then
+        self.assertEqual([], result.restored)
+        self.assertEqual(["demo-a"], [item["ref"] for item in result.unresolved])
+        self.assertEqual(new, result.body)
+
     def test_앵커의_앞뒤_문맥이_자리를_하나로_좁힌다(self):
         # Given
         anchor = {"ref": "demo-b", "before": "둘째 ", "selection": "문장", "after": " 끝"}
@@ -181,6 +195,40 @@ class NestingAndSplitTest(unittest.TestCase):
         # Then
         self.assertEqual([], result.unresolved)
         self.assertEqual(previous, result.body)
+
+    def test_자식_표시는_복원된_부모_표시_안에서만_자리를_찾는다(self):
+        # Given
+        previous = (
+            f'<h2><ac:inline-comment-marker ac:ref="demo-d">A {marker("demo-c", "key")} Z{CLOSE}</h2>'
+            "<p>old tail</p>"
+        )
+        new = "<h2>A key Z</h2><p>new tail</p><h2>B key Z</h2><p>old tail</p>"
+
+        # When
+        result = restore(previous, new)
+
+        # Then
+        expected = (
+            f'<h2><ac:inline-comment-marker ac:ref="demo-d">A {marker("demo-c", "key")} Z{CLOSE}</h2>'
+            "<p>new tail</p><h2>B key Z</h2><p>old tail</p>"
+        )
+        self.assertEqual([], result.unresolved)
+        self.assertEqual(expected, result.body)
+
+    def test_부모_표시_안에서_자식의_자리를_찾지_못하면_밖에_감싸지_않고_보고한다(self):
+        # Given
+        previous = (
+            f'<h2><ac:inline-comment-marker ac:ref="demo-d">A {marker("demo-c", "key")} Z{CLOSE}</h2>'
+        )
+        new = "<h2>A new Z</h2><h2>B key Z</h2>"
+        anchor = {"ref": "demo-d", "before": "", "selection": "A new Z", "after": ""}
+
+        # When
+        result = restore(previous, new, [anchor])
+
+        # Then
+        self.assertEqual(["demo-c"], [item["ref"] for item in result.unresolved])
+        self.assertNotIn("demo-c", references(result.body))
 
     def test_서식을_가로지르는_선택_영역은_같은_참조의_조각으로_나뉜다(self):
         # Given
@@ -347,6 +395,19 @@ class CommandLineTest(unittest.TestCase):
         self.assertIsNone(written)
         report = json.loads(result.stdout)
         self.assertEqual("demo-b", report["unresolved"][0]["ref"])
+
+    def test_블록_경계만_고른_앵커는_출력_파일을_쓰지_않고_0이_아닌_값으로_끝난다(self):
+        # Given
+        files = {"prev": f"<p>{marker('demo-a', 'old')}</p>", "new": "<p>new</p>"}
+
+        # When
+        result, written = self.run_script(
+            "restore", "{prev}", "{new}", "--output", "{out}", "--anchor", "demo-a", "new", "¶", "", files=files
+        )
+
+        # Then
+        self.assertNotEqual(0, result.returncode)
+        self.assertIsNone(written)
 
     def test_anchor_옵션으로_다시_실행하면_성공한다(self):
         # Given

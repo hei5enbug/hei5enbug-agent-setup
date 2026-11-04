@@ -17,9 +17,9 @@ newlines are shown as line breaks. Each section names when it applies.
   - Write three or more items of the same kind as a lead sentence and a list.
   - Make a one-sentence paragraph that only introduces the next table or figure, and continues the previous
     paragraph's topic, the last line of that paragraph.
-- Before posting or finishing such text, write it to a file and run
-  `python3 <Source directory>/scripts/markdown_line_breaks.py FILE`, adding `--max-chars 0` for a GitHub body. Fix
-  every finding.
+- Before posting or finishing such text, run `python3 <Source directory>/scripts/markdown_line_breaks.py FILE` on
+  it, adding `--max-chars 0` for a GitHub body. When the workflow writes no local file, pass the text on standard
+  input with `-` as FILE. Fix every finding.
 
 ## Readable shared text
 

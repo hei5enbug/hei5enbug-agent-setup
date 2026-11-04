@@ -18,8 +18,9 @@
     밀접하게 연결된 두 문장을 둔다. 문장 중간에서는 줄을 나누지 않는다.
   - 같은 종류의 항목이 세 개 이상이면 도입 문장과 목록으로 쓴다.
   - 다음 표나 그림만 소개하면서 앞 문단의 주제를 이어 가는 한 문장짜리 문단은 앞 문단의 마지막 줄로 넣는다.
-- 이런 글을 게시하거나 마무리하기 전에 파일로 쓰고 `python3 <Source directory>/scripts/markdown_line_breaks.py FILE`을
-  실행한다. GitHub 본문에는 `--max-chars 0`을 추가한다. 모든 지적 사항을 고친다.
+- 이런 글을 게시하거나 마무리하기 전에 `python3 <Source directory>/scripts/markdown_line_breaks.py FILE`을 실행한다.
+  GitHub 본문에는 `--max-chars 0`을 추가한다. 작업 흐름에서 로컬 파일을 쓰지 않으면 FILE에 `-`를 지정하고 텍스트를
+  표준 입력으로 전달한다. 모든 지적 사항을 고친다.
 
 ## 읽기 쉬운 공유 글
 

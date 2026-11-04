@@ -8,7 +8,7 @@ restore PREVIOUS NEW --output FILE [--anchor REF BEFORE SELECTION AFTER]... [--a
     - one occurrence of the selection: wrapped in place;
     - several occurrences: the previous text around the selection picks the one whose surroundings match
       best, and only when that match is clear and unique;
-    - markers that were nested are restored in the same nesting order;
+    - markers that were nested are restored in the same nesting order, a child only inside its restored parent;
     - a selection that crosses inline formatting is split into pieces that share the reference;
     - a selection never matches across block boundaries;
     - text inside an ac:parameter element is neither searched nor wrapped.
@@ -17,8 +17,9 @@ restore PREVIOUS NEW --output FILE [--anchor REF BEFORE SELECTION AFTER]... [--a
     not guessed. The command then exits 1, writes no output file, and prints each reference with its old
     context (a block boundary shows as the pilcrow sign). Re-run with an explicit anchor chosen by the
     agent: BEFORE, SELECTION, and AFTER are plain text of the new body (a pilcrow sign stands for a block
-    boundary); BEFORE + SELECTION + AFTER must match exactly one place. --anchors takes the same data as a
-    JSON list of objects with ref, before, selection, and after.
+    boundary); BEFORE + SELECTION + AFTER must match exactly one place, and SELECTION must hold text, not
+    only block boundaries. Before writing, every reference of PREVIOUS must be present in the result.
+    --anchors takes the same data as a JSON list of objects with ref, before, selection, and after.
     A reference that NEW already marks is kept untouched.
 
 check PREVIOUS READBACK
@@ -90,6 +91,7 @@ class Selection:
     after: str
     depth: int
     contiguous: bool
+    parent: str = ""
 
 
 @dataclass(frozen=True)
@@ -179,11 +181,20 @@ def previous_selections(previous: str) -> list:
     items, pieces = scan(previous)
     ordered_refs = list(dict.fromkeys(piece.ref for piece in sorted(pieces, key=lambda p: p.start)))
     by_ref = {ref: [p for p in pieces if p.ref == ref] for ref in ordered_refs}
-    selections = [build_selection(items, group) for group in by_ref.values()]
+    selections = [build_selection(items, group, parent_ref(pieces, group)) for group in by_ref.values()]
     return sorted(selections, key=lambda s: s.depth)
 
 
-def build_selection(items: list, group: list) -> Selection:
+def parent_ref(pieces: list, group: list) -> str:
+    """Return the reference of the marker that directly encloses the first piece of a group, or an empty text."""
+    first = min(group, key=lambda p: (p.start, p.depth))
+    for piece in pieces:
+        if piece.depth == first.depth - 1 and piece.start <= first.start and piece.end >= first.end:
+            return piece.ref
+    return ""
+
+
+def build_selection(items: list, group: list, parent: str = "") -> Selection:
     first = min(group, key=lambda p: (p.start, p.depth))
     start, end = min(p.start for p in group), max(p.end for p in group)
     while start < end and items[start] is SEPARATOR:
@@ -200,6 +211,7 @@ def build_selection(items: list, group: list) -> Selection:
         after=stream_text(items[end:end + CONTEXT_CHARS]),
         depth=first.depth,
         contiguous=contiguous,
+        parent=parent,
     )
 
 
@@ -293,9 +305,18 @@ def unresolved_entry(selection: Selection, reason: str, candidates: int, anchore
     return {**entry, "anchor": True} if anchored else entry
 
 
+def within_parent(selection: Selection, pieces: list, candidates: list) -> list:
+    """Keep the candidates that lie inside the already placed parent marker of a nested selection."""
+    spans = [p for p in pieces if p.ref == selection.parent]
+    if not selection.parent or not spans:
+        return candidates
+    low, high = min(p.start for p in spans), max(p.end for p in spans)
+    return [c for c in candidates if c >= low and c + len(selection.text) <= high]
+
+
 def restore_one(body: str, selection: Selection, anchor):
     """Return (new body, unresolved entry or None)."""
-    items, _ = scan(body)
+    items, pieces = scan(body)
     if anchor is not None:
         start, reason = anchor_start(anchor, items)
         length = len(anchor["selection"])
@@ -303,7 +324,7 @@ def restore_one(body: str, selection: Selection, anchor):
     elif not selection.contiguous:
         return body, unresolved_entry(selection, "noncontiguous", 0, False)
     else:
-        found = occurrences(items, selection.text)
+        found = within_parent(selection, pieces, occurrences(items, selection.text))
         start, reason = choose_start(selection, items, found)
         length, candidates = len(selection.text), len(found)
     if start is None:
@@ -331,7 +352,20 @@ def restore_markers(previous: str, new: str, anchors: list) -> RestoreResult:
             unresolved.append(problem)
         else:
             restored.append(selection.ref)
-    return RestoreResult(body, restored, kept, unresolved)
+    return verify_restored(body, selections, by_ref, RestoreResult(body, restored, kept, unresolved))
+
+
+def verify_restored(body: str, selections: list, anchors: dict, result: RestoreResult) -> RestoreResult:
+    """Move every restored reference that the finished body does not hold to the unresolved list."""
+    _, pieces = scan(body)
+    present = {piece.ref for piece in pieces}
+    missing = [s for s in selections if s.ref not in present and s.ref not in {u["ref"] for u in result.unresolved}]
+    if not missing:
+        return result
+    lost = {s.ref for s in missing}
+    extra = [unresolved_entry(s, "not-restored", 0, s.ref in anchors) for s in missing]
+    restored = [ref for ref in result.restored if ref not in lost]
+    return RestoreResult(result.body, restored, result.kept, [*result.unresolved, *extra])
 
 
 def summarize(body: str) -> dict:
@@ -362,8 +396,8 @@ def read_text(name: str) -> str:
 def normalize_anchor(raw: dict) -> dict:
     if not isinstance(raw, dict) or not isinstance(raw.get("ref"), str) or not isinstance(raw.get("selection"), str):
         raise MarkerError("each anchor needs string fields ref and selection")
-    if not raw["selection"]:
-        raise MarkerError(f"anchor {raw['ref']} has an empty selection")
+    if not raw["selection"].replace(DISPLAY_SENTINEL, "").replace(SENTINEL, ""):
+        raise MarkerError(f"anchor {raw['ref']} has no selectable text")
     fields = {key: raw.get(key, "") for key in ("before", "after")}
     if not all(isinstance(value, str) for value in fields.values()):
         raise MarkerError(f"anchor {raw['ref']} before and after must be strings")

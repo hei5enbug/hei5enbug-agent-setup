@@ -3,10 +3,12 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -50,6 +52,29 @@ class SoftBreakTest(unittest.TestCase):
 
         # Then
         self.assertEqual([], found)
+
+    def test_인용문_안의_펜스_내용은_보고하지_않는다(self):
+        # Given
+        quoted = "> ```mermaid\n> graph TD\n> A --> B\n> ```\n"
+        nested_list = "- item\n  ```\n  a\n  b\n  ```\n"
+
+        # When
+        found = (kinds(quoted), kinds(nested_list))
+
+        # Then
+        self.assertEqual(([], []), found)
+
+    def test_인라인_html로_시작하는_문단의_이어지는_줄은_soft_break로_보고한다(self):
+        # Given
+        inline = "<code>demo-a</code> continues\non the next line.\n"
+        autolink = "<https://example.com> is here\nand more.\n"
+        block = "<div>\nline\n\nnext\n"
+
+        # When
+        found = (kinds(inline), kinds(autolink), kinds(block))
+
+        # Then
+        self.assertEqual(([(1, "soft-break")], [(1, "soft-break")], []), found)
 
     def test_올바른_줄바꿈과_연속된_목록_항목은_보고하지_않고_이어지는_목록_줄은_보고한다(self):
         # Given
@@ -148,6 +173,19 @@ class CommandLineTest(unittest.TestCase):
         # Then
         self.assertEqual(1, code)
         self.assertEqual([{"line": 3, "kind": "soft-break", "text": "first"}], json.loads(output)["findings"])
+
+    def test_파일_인자가_하이픈이면_표준_입력을_읽고_같은_보고와_종료_코드를_낸다(self):
+        # Given
+        content = "ok\n\nfirst\nsecond\n"
+        buffer = io.StringIO()
+
+        # When
+        with patch.object(sys, "stdin", io.StringIO(content)), redirect_stdout(buffer):
+            code = MODULE.main(["-"])
+
+        # Then
+        self.assertEqual(1, code)
+        self.assertEqual([{"line": 3, "kind": "soft-break", "text": "first"}], json.loads(buffer.getvalue())["findings"])
 
     def test_없는_파일은_2로_끝난다(self):
         # Given
