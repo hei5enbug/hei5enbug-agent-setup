@@ -29,6 +29,7 @@ class Target:
     positionals: tuple[str, ...]
     git_dir: str | None = None
     work_tree: str | None = None
+    operand_repos: tuple[str, ...] = ()
 
     def has_option(self, *names: str) -> bool:
         return any(name in names for name, _value in self.options)
@@ -67,17 +68,25 @@ TAG_CREATE_FLAGS = frozenset({"-a", "--annotate", "-s", "--sign", "-m", "--messa
 PUSH_VALUES = frozenset({"--repo", "-o", "--push-option", "--receive-pack", "--exec"})
 GH_VALUES = frozenset(
     {"-R", "--repo", "-t", "--title", "-b", "--body", "-F", "--body-file", "--notes-file", "-n", "--notes",
-     "-f", "--field", "--raw-field", "--input", "-X", "--method", "-H", "--header", "-q", "--jq", "--hostname"}
+     "-f", "--field", "--raw-field", "--input", "-X", "--method", "-H", "--header", "-q", "--jq", "--hostname",
+     "-c", "--comment", "--subject"}
 )
 GH_WRITES = {
-    "issue": frozenset({"create", "edit", "comment"}),
-    "pr": frozenset({"create", "edit", "comment", "review"}),
+    "issue": frozenset({"create", "edit", "comment", "close", "reopen"}),
+    "pr": frozenset({"create", "edit", "comment", "review", "close", "reopen", "merge"}),
     "release": frozenset({"create", "edit"}),
 }
 GH_FILE_OPTIONS = frozenset({"-F", "--body-file", "--notes-file"})
 GH_FIELD_OPTIONS = frozenset({"-f", "-F", "--field", "--raw-field"})
+GH_TYPED_FIELD_OPTIONS = frozenset({"-F", "--field"})
 GH_WRITE_METHODS = frozenset({"POST", "PATCH", "PUT"})
 API_REPO = re.compile(r"^/?repos/([^/]+)/([^/]+)")
+ITEM_URL = re.compile(r"^https?://([^/]+)/([^/]+)/([^/]+)/(?:issues|pull)/\d+", re.I)
+GITHUB_HOST = "github.com"
+URL_SCHEME = re.compile(r"^([A-Za-z][A-Za-z0-9+.-]*)://")
+HOST_PORT = re.compile(r":\d+$")
+STDIN_REDIRECT = re.compile(r"^0?<(?![<(&])(.*)$")
+FILE_DESCRIPTOR_REDIRECT = re.compile(r"^\d*[<>]")
 
 
 class _Splitter:
@@ -345,7 +354,7 @@ def _gh_files(group: str, options: tuple[tuple[str, str | None], ...]) -> tuple[
     if group != "api":
         return option_values(options, *GH_FILE_OPTIONS)
     inputs = option_values(options, "--input")
-    fields = option_values(options, *GH_FIELD_OPTIONS)
+    fields = option_values(options, *GH_TYPED_FIELD_OPTIONS)
     attached = tuple(value.partition("=")[2][1:] for value in fields if value.partition("=")[2].startswith("@"))
     return inputs + attached
 
@@ -366,31 +375,68 @@ def _classify_gh(args: list[str]) -> Target | None:
         if method not in GH_WRITE_METHODS and not (method is None and has_body):
             return None
         endpoint = API_REPO.match(positionals[1]) if len(positionals) > 1 else None
-        repo = repo or (f"{endpoint.group(1)}/{endpoint.group(2)}" if endpoint else None)
+        hosts = option_values(options, "--hostname")
+        prefix = f"{hosts[-1]}/" if hosts else ""
+        repo = repo or (f"{prefix}{endpoint.group(1)}/{endpoint.group(2)}" if endpoint else None)
     else:
         return None
-    return Target("gh", "gh-write", (), (), repo, _gh_files(group, options), options, positionals)
+    return Target(
+        "gh", "gh-write", (), (), repo, _gh_files(group, options), options, positionals,
+        operand_repos=_item_repos(positionals[2:]),
+    )
 
 
-def normalize_repo(spec: str) -> str | None:
-    cleaned = spec.strip().replace(":", "/").removesuffix(".git").rstrip("/")
-    parts = [part for part in cleaned.split("/") if part]
-    return "/".join(parts[-2:]).lower() if len(parts) >= 2 else None
+def _item_repos(operands: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    """The repositories that issue and pull-request URL operands name, with their hosts."""
+    found = (ITEM_URL.match(word) for word in operands)
+    return tuple(name for match in found if match and (name := normalize_repo("/".join(match.groups()))))
+
+
+def split_repo(spec: str, default_host: str = GITHUB_HOST) -> tuple[str, str, str] | None:
+    """The host, owner, and name a repository URL or `[HOST/]OWNER/REPO` names; `default_host` when it names no host."""
+    text = spec.strip().rstrip("/").removesuffix(".git").rstrip("/")
+    scheme = URL_SCHEME.match(text)
+    if scheme:
+        text = text[scheme.end() :]
+    elif ":" in text.split("/")[0]:
+        text = text.replace(":", "/", 1)
+    head, _, rest = text.partition("/")
+    user_host = "@" in head
+    segments = [part for part in [head.rpartition("@")[2], *rest.split("/")] if part]
+    hosted = user_host or (scheme is not None and scheme.group(1).lower() != "file")
+    bare_host = scheme is None and not user_host and len(segments) >= 3 and not text.startswith(("/", ".", "~"))
+    host = HOST_PORT.sub("", segments[0]).lower() if (hosted or bare_host) and segments else default_host
+    path = segments[1:] if hosted or bare_host else segments
+    if len(path) < 2:
+        return None
+    return host, path[-2].lower(), path[-1].lower()
+
+
+def normalize_repo(spec: str, default_host: str = GITHUB_HOST) -> str | None:
+    """`owner/name` for a github.com repository and `host/owner/name` for one on another host."""
+    parts = split_repo(spec, default_host)
+    if parts is None:
+        return None
+    host, owner, name = parts
+    return f"{owner}/{name}" if host in (GITHUB_HOST, f"www.{GITHUB_HOST}") else f"{host}/{owner}/{name}"
 
 
 def redirect_files(tokens: list[str] | tuple[str, ...]) -> tuple[str, ...]:
-    """The files that `<` redirects name in a segment's words."""
+    """The files that `<` and `0<` redirects name in a segment's words."""
     files: list[str] = []
     words = list(tokens)
     index = 0
     while index < len(words):
         word = words[index]
         index += 1
-        if word == "<" and index < len(words):
+        match = STDIN_REDIRECT.match(word)
+        if match is None:
+            continue
+        if match.group(1):
+            files.append(match.group(1))
+        elif index < len(words):
             files.append(words[index])
             index += 1
-        elif word.startswith("<") and not word.startswith("<<") and len(word) > 1:
-            files.append(word[1:])
     return tuple(files)
 
 
@@ -408,6 +454,6 @@ def producer_files(tokens: list[str] | tuple[str, ...]) -> tuple[str, ...] | Non
             skip = False
         elif word in REDIRECT_OPERATORS:
             skip = True
-        elif not word.startswith(("<", ">", "-")):
+        elif not word.startswith("-") and not FILE_DESCRIPTOR_REDIRECT.match(word):
             files.append(word)
     return tuple(files)

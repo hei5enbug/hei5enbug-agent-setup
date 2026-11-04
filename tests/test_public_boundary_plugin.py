@@ -75,7 +75,7 @@ class PluginSandbox(unittest.TestCase):
 
     def make_repo(self, path: Path, origin: str) -> Path:
         path.mkdir(parents=True)
-        subprocess.run(["git", "init", "-q"], cwd=path, check=True, capture_output=True)
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=path, check=True, capture_output=True)
         subprocess.run(["git", "remote", "add", "origin", origin], cwd=path, check=True, capture_output=True)
         return path
 
@@ -102,11 +102,11 @@ class PluginSandbox(unittest.TestCase):
         return self.install_claude(name, files)
 
     def run_hook(self, command: str, cwd: Path | None = None, env: dict[str, str] | None = None,
-                 tool: str = "Bash") -> subprocess.CompletedProcess[str]:
+                 tool: str = "Bash", timeout: float | None = None) -> subprocess.CompletedProcess[str]:
         payload = {"tool_name": tool, "tool_input": {"command": command}, "cwd": str(cwd or self.session)}
         argv = [sys.executable, str(self.own / "scripts" / "public_boundary_hook.py")]
         return subprocess.run(argv, input=json.dumps(payload), text=True, capture_output=True,
-                              cwd=self.base, env=env or self.env)
+                              cwd=self.base, env=env or self.env, timeout=timeout)
 
     def issue(self, body: str, repo: str = PUBLIC_REPO) -> str:
         return f'gh issue create --repo {repo} --title t --body "{body}"'

@@ -71,20 +71,37 @@ version of each plugin under `plugins/cache/<marketplace>/<plugin>/<version>` in
 and the running plugin's own root (`CLAUDE_PLUGIN_ROOT`, or `PLUGIN_ROOT` on Codex). A `gh` write is in scope when
 `--repo` or `-R` names a protected repository, or, without it, when `GH_REPO` does (set inline for that command, by an
 earlier `export` in the same command, or in the hook's environment), or, without either, when the working directory's
-`origin` does. Leading `NAME=value` words apply to their own command only. A `git`
+`origin` does. An issue or pull-request URL operand, such as `gh issue comment <url>`, names its own repository, and the
+`{owner}` and `{repo}` placeholders of a `gh api` endpoint take `GH_REPO` or the `origin` of the working directory, as
+`gh` does. A repository name that carries a host protects only the `github.com` repository: `git.example.com/<owner>/<repo>`
+is a different repository. A repository given without a host, and the current repository, take the host that `GH_HOST`
+sets, inline, by `export`, or in the hook's environment, and `github.com` otherwise. A `gh` close, reopen, or merge that leaves a comment or message is a write too. Leading `NAME=value` words apply to their own command only. A `git`
 commit or tag is in scope when the `origin` of its repository is a protected repository: the checkout of the
 working directory, or the git directory that the command sets with `--git-dir`, `GIT_DIR`, or `GIT_WORK_TREE`. A
 `git push` is in scope when any destination it reaches is protected: an explicit URL or remote name, resolved through
-the remote's push URL, or, without one, the branch's push remote and then `origin`.
-Variables in these values are expanded from the command's own assignments, and a target that cannot be resolved is
-treated as protected: an unresolved `--repo`, `GH_REPO`, or push destination is scanned, and an unresolved git
-directory blocks. The directories that select the repository (`-C`, `--git-dir`, `--work-tree`, `GIT_DIR`, and
+the remote's push URL, or, without one, the branch's push remote and then `origin`. A push scans every commit reachable
+from each ref it sends (HEAD and every local branch when it names none, every branch for `--all`, tags for `--tags`) and leaves
+out only the remote-tracking refs of a configured destination remote that is protected, so a commit an unrelated remote
+already holds is still scanned.
+Variables in these values, including those in `git -c` settings, are expanded from the command's own assignments, and a
+target that cannot be resolved is treated as protected: an unresolved `--repo`, `GH_REPO`, or push destination is
+scanned, and an unresolved git directory blocks, as does an unresolved `-C` or `cd` value before a `git` write or a
+`gh` write that does not name its repository. The directories that select the repository (`-C`, `--git-dir`, `--work-tree`, `GIT_DIR`, and
 `GIT_WORK_TREE`) are not scanned as published text.
 
 A write that reads its body from stdin, such as `--body-file -`, `-F -`, or `git commit -F -`, is scanned with its
 source: a heredoc as part of the command, a pipeline's earlier commands, including ones on earlier lines that end with
-`|`, with the files that a `cat` or a `<` redirect names after wildcard expansion, and `echo` or `printf` text. Any other command that feeds the pipeline blocks the write, because its output
-cannot be checked before it runs. The hook also blocks a `git` or `gh` command when its scanner is missing or fails.
+`|`, with the files that a `cat` or a `<` or `0<` redirect names after wildcard expansion, and `echo` or `printf` text.
+Any other command that feeds the pipeline blocks the write, because its output cannot be checked before it runs. A body
+or message built with a command substitution is scanned when the substitution is a heredoc, an `echo` or `printf`
+with literal text, or a `cat` of named files, and blocks otherwise. An input file that is not a regular file, such as
+a named pipe, and a file whose name cannot be resolved also block the write, without waiting on the file. A `gh api`
+`-f` or `--raw-field` value is literal text, and only `-F` or `--field` reads an `@file`. The hook also blocks a `git` or `gh` command when its scanner is missing or fails.
+
+The hook blocks these forms because it cannot check what they would publish: an unresolved `cd` or `git -C` directory, a
+command substitution other than a heredoc, a literal `echo` or `printf`, or a `cat` of named files, an unresolved stdin
+file name, and an input file that is not a regular file. Write the path literally, or pass the body through a heredoc or
+a file, instead.
 
 Private words come from the file `HEI5ENBUG_PUBLIC_BOUNDARY_WORDS` names, and from every installed plugin that
 declares one in a root file `public-boundary.json`, exactly `{"version": 1, "private_words_file": "<path>"}`. The path

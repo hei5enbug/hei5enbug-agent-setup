@@ -8,8 +8,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import replace
 from functools import cached_property
 from pathlib import Path
@@ -17,15 +18,22 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from boundary_plugins import WordSources
+    from boundary_push import PushContext
     from boundary_shell import Segment, Target
 
 SHELL_TOOLS = frozenset({"Bash", "shell", "exec_command", "local_shell", "shell_command"})
 GIT_OR_GH = re.compile(r"\b(?:git|gh)\b")
 BLOCK_EXIT = 2
 GH_REPO_VARIABLE = "GH_REPO"
+GH_HOST_VARIABLE = "GH_HOST"
 COMMAND_LABEL = "command"
 STDIN_OPAQUE = "the body comes from a command whose output cannot be checked; pass it in a heredoc or a file"
 UNRESOLVED_GIT_DIR = "the git directory the command sets cannot be resolved; set it to a literal path"
+UNRESOLVED_DIRECTORY = "the directory the command works in cannot be resolved; change to a literal path first"
+STDIN_UNRESOLVED = "the file that feeds the body has a name that cannot be resolved; use a literal file name"
+SUBSTITUTION_OPAQUE = "a body or message holds a command substitution whose output cannot be checked; use a file or a heredoc"
+NOT_REGULAR = "{name} is not a regular file, so it is not read"
+PLACEHOLDER = re.compile(r"\{(?:owner|repo)\}")
 GIT_DIR_VARIABLE = "GIT_DIR"
 GIT_WORK_TREE_VARIABLE = "GIT_WORK_TREE"
 UNRESOLVED = re.compile(r"[$`]")
@@ -124,16 +132,57 @@ def origin_repo(directory: str) -> str | None:
     return boundary_shell.normalize_repo(url) if url else None
 
 
-def push_destinations(target: Target, where: str, variables: dict[str, str]) -> list[str] | None:
-    """The URLs a push reaches, or None when its destination holds a variable or substitution that cannot be resolved."""
+def configured_host(variables: dict[str, str]) -> str | None:
+    """The host GH_HOST sets for gh, lowercased, or None when it is not set."""
+    value = expand(variables.get(GH_HOST_VARIABLE, ""), variables).strip().lower()
+    return value or None
+
+
+def current_repo(directory: str, variables: dict[str, str]) -> tuple[str, str, str] | None:
+    """The host, owner, and name of the working directory's origin; GH_HOST, when set, replaces its host."""
+    import boundary_git
+    import boundary_shell
+
+    url = boundary_git.try_git(directory, "remote", "get-url", "origin")
+    parts = boundary_shell.split_repo(url) if url else None
+    host = configured_host(variables)
+    return (host, parts[1], parts[2]) if parts and host else parts
+
+
+def fill_placeholders(named: str, variables: dict[str, str], directory: str) -> str | None:
+    """`{owner}` and `{repo}` in a gh repository replaced from GH_REPO or the origin, as gh does; None when neither names one."""
+    import boundary_shell
+
+    host = configured_host(variables) or boundary_shell.GITHUB_HOST
+    chosen = expand(variables.get(GH_REPO_VARIABLE, ""), variables)
+    if chosen:
+        parts = None if UNRESOLVED.search(chosen) else boundary_shell.split_repo(chosen, host)
+    else:
+        parts = current_repo(directory, variables)
+    if parts is None:
+        return None
+    host, owner, name = parts
+    filled = named.replace("{owner}", owner).replace("{repo}", name)
+    return filled if filled.count("/") >= 2 or host == boundary_shell.GITHUB_HOST else f"{host}/{filled}"
+
+
+def push_destination(target: Target, where: str, variables: dict[str, str]) -> str | None:
+    """The remote name or URL a push goes to, or None when it holds a variable or substitution that cannot be resolved."""
     import boundary_git
 
     named = [value for name, value in target.options if name == "--repo" and value]
     word = expand_text(named[-1] if named else target.positionals[0] if target.positionals else "", variables)
     if UNRESOLVED.search(word):
         return None
-    word = word or boundary_git.default_push_remote(where, target.git_config)
-    return boundary_git.remote_urls(where, word, target.git_config)
+    return word or boundary_git.default_push_remote(where, target.git_config)
+
+
+def push_destinations(target: Target, where: str, variables: dict[str, str]) -> list[str] | None:
+    """The URLs a push reaches, or None when its destination holds a variable or substitution that cannot be resolved."""
+    import boundary_git
+
+    word = push_destination(target, where, variables)
+    return None if word is None else boundary_git.remote_urls(where, word, target.git_config)
 
 
 class Scope:
@@ -179,12 +228,23 @@ class Scope:
                 return self.contains_push(target, where, variables, overrides or {})
             return self.contains_git(where, overrides or {})
         named = target.repo or variables.get(GH_REPO_VARIABLE)
-        if named:
-            named = expand(named, variables)
-            spec = boundary_shell.normalize_repo(named)
-            return spec is None or UNRESOLVED.search(named) is not None or spec in self.repositories
-        spec = origin_repo(directory)
-        return spec is not None and spec in self.repositories
+        candidates = [expand(named, variables)] if named else []
+        host = configured_host(variables)
+        if host and UNRESOLVED.search(host):
+            return True
+        if not candidates and not target.operand_repos:
+            current = current_repo(directory, variables)
+            spec = boundary_shell.normalize_repo("/".join(current)) if current else None
+            return spec is not None and spec in self.repositories
+        for candidate in candidates:
+            if PLACEHOLDER.search(candidate):
+                candidate = fill_placeholders(candidate, variables, directory)
+                if candidate is None:
+                    return True
+            spec = boundary_shell.normalize_repo(candidate, host or boundary_shell.GITHUB_HOST)
+            if spec is None or UNRESOLVED.search(candidate) or spec in self.repositories:
+                return True
+        return any(spec in self.repositories for spec in target.operand_repos)
 
     def contains_push(self, target: Target, where: str, variables: dict[str, str], overrides: dict[str, str]) -> bool:
         """A push is checked when any destination it reaches is protected, or in project mode when its checkout is."""
@@ -196,7 +256,7 @@ class Scope:
             if boundary_git.try_git(where, "rev-parse", "--absolute-git-dir") is None:
                 return False
             destinations = push_destinations(target, where, variables)
-        return destinations is None or any(self.names_protected(url) for url in destinations)
+        return destinations is None or any(UNRESOLVED.search(url) or self.names_protected(url) for url in destinations)
 
     def names_protected(self, url: str) -> bool:
         import boundary_shell
@@ -236,37 +296,34 @@ def blank_directory_arguments(text: str, directories: tuple[str, ...]) -> str:
     return text
 
 
-def read_named_file(base: str, name: str) -> str | None:
+def read_regular_file(path: str, name: str) -> bytes:
+    """The bytes of a regular file; a pipe, device, or directory is refused without waiting on it."""
     import boundary_git
-    from public_boundary import _decode_text
 
+    if path == os.devnull:
+        return b""
     try:
-        with open(resolve_dir(base, name), "rb") as handle:
-            return _decode_text(handle.read())
+        if not stat.S_ISREG(os.stat(path).st_mode):
+            raise boundary_git.CheckError(NOT_REGULAR.format(name=name))
+        with os.fdopen(os.open(path, os.O_RDONLY | os.O_NONBLOCK), "rb") as handle:
+            if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                raise boundary_git.CheckError(NOT_REGULAR.format(name=name))
+            return handle.read()
     except OSError as error:
         raise boundary_git.CheckError(f"{name} could not be read ({error.strerror})") from error
 
 
-def push_findings(target: Target, top, words) -> list[str]:
+def read_named_file(base: str, name: str) -> str | None:
+    from public_boundary import _decode_text
+
+    return _decode_text(read_regular_file(resolve_dir(base, name), name))
+
+
+def git_findings(
+    target: Target, directory: str, words, overrides: dict[str, str] | None = None, push: PushContext | None = None
+) -> list[str]:
     import boundary_git
-
-    findings = []
-    if boundary_git.has_head(top):
-        findings.extend(boundary_git.range_findings(top, ["HEAD", "--not", "--remotes"], words))
-    tags = boundary_git.local_tags(top)
-    if target.has_option("--tags", "--follow-tags"):
-        names = list(tags)
-    else:
-        refspecs = [spec for spec in target.positionals[1:] if spec != "tag"]
-        names = [re.sub(r"^\+|:.*$", "", spec).removeprefix("refs/tags/") for spec in refspecs]
-    for name in dict.fromkeys(names):
-        if name in tags:
-            findings.extend(boundary_git.tag_findings(top, name, tags[name], words))
-    return findings
-
-
-def git_findings(target: Target, directory: str, words, overrides: dict[str, str] | None = None) -> list[str]:
-    import boundary_git
+    import boundary_push
 
     where = fold_dirs(directory, target.git_dirs)
     top = boundary_git.toplevel(where) or (Path(where) if overrides else None)
@@ -277,8 +334,8 @@ def git_findings(target: Target, directory: str, words, overrides: dict[str, str
         if target.has_option("-a", "--all"):
             findings += boundary_git.worktree_findings(top, words)
         return findings + boundary_git.identity_findings(where, words, target.git_config)
-    if target.kind == "push":
-        return push_findings(target, top, words)
+    if target.kind == "push" and push is not None:
+        return boundary_push.push_findings(target, top, fold_dirs(directory, target.git_dirs), words, push)
     return boundary_git.identity_findings(where, words, target.git_config, author=False)
 
 
@@ -299,6 +356,22 @@ def expand_globs(base: str, name: str) -> list[str]:
     return [match for match in matches if os.path.isfile(resolve_dir(base, match))] or [name]
 
 
+def substituted_files(texts: Iterable[str], variables: dict[str, str], base: str) -> list[str]:
+    """The files that command substitutions in `texts` read, as the shell would expand them; refuses unknown output."""
+    import boundary_git
+    import boundary_substitution
+
+    names: list[str] = []
+    for text in texts:
+        if "$(" not in text and "`" not in text:
+            continue
+        files = boundary_substitution.substitution_files(expand_text(text, variables))
+        if files is None:
+            raise boundary_git.CheckError(SUBSTITUTION_OPAQUE)
+        names.extend(item for word in files for item in expand_globs(base, expand(word, variables)))
+    return names
+
+
 def stdin_findings(segment: Segment, upstream: list[Segment], directory: str, words, variables: dict[str, str]) -> list[str]:
     """Scan what reaches a write's stdin: earlier pipeline segments, the files they or a `<` redirect read."""
     import boundary_git
@@ -315,7 +388,10 @@ def stdin_findings(segment: Segment, upstream: list[Segment], directory: str, wo
         if produced is None:
             raise boundary_git.CheckError(STDIN_OPAQUE)
         names.extend(item for word in produced for item in expand_globs(directory, expand(word, variables)))
+        names.extend(substituted_files(producer.tokens, variables, directory))
     for name in (expand(item, variables) for item in names):
+        if UNRESOLVED.search(name):
+            raise boundary_git.CheckError(STDIN_UNRESOLVED)
         content = read_stdin_file(directory, name)
         if content is not None:
             findings.extend(scan_text(name, content, words=words))
@@ -340,20 +416,28 @@ def pipeline_before(segments: list[Segment], index: int) -> list[Segment]:
 def target_findings(
     segment: Segment, target: Target, directory: str, words, variables: dict[str, str],
     upstream: list[Segment] | None = None, overrides: dict[str, str] | None = None, selected: tuple[str, ...] = (),
+    protected: Callable[[str], bool] = lambda _url: False,
 ) -> list[str]:
+    from boundary_push import PushContext
     from public_boundary import scan_text
 
     where = fold_dirs(directory, target.git_dirs)
     text = blank_directory_arguments(expand_text(segment.text, variables), selected)
     findings = scan_text(COMMAND_LABEL, "\n" * (segment.line - 1) + text, words=words)
-    for name in (expand(item, variables) for item in target.files if item != "-"):
+    values = [value for _name, value in target.options if value]
+    named = [expand(item, variables) for item in target.files if item != "-"]
+    for name in named + substituted_files(values, variables, where):
         content = read_named_file(where, name)
         if content is not None:
             findings.extend(scan_text(name, content, words=words))
     if "-" in target.files:
         findings.extend(stdin_findings(segment, upstream or [], directory, words, variables))
     if target.tool == "git":
-        findings.extend(git_findings(target, directory, words, overrides))
+        push = PushContext(
+            push_destination(target, where, variables) if target.kind == "push" else None,
+            lambda word: expand_text(word, variables), protected,
+        )
+        findings.extend(git_findings(target, directory, words, overrides, push))
     return findings
 
 
@@ -374,6 +458,25 @@ def repository_overrides(target: Target, declared: dict[str, str], variables: di
     return chosen
 
 
+def expand_target(target: Target, variables: dict[str, str]) -> Target:
+    """The target with the variables its repository, directories, and git configuration name replaced."""
+    return replace(
+        target,
+        git_dirs=tuple(expand_text(item, variables) for item in target.git_dirs),
+        git_config=tuple(expand_text(item, variables) for item in target.git_config),
+        repo=expand(target.repo, variables) if target.repo else None,
+        git_dir=expand_text(target.git_dir, variables) if target.git_dir else None,
+        work_tree=expand_text(target.work_tree, variables) if target.work_tree else None,
+    )
+
+
+def needs_directory(target: Target, variables: dict[str, str]) -> bool:
+    """Whether the repository a write reaches depends on the directory it runs in: git always, gh without a named one."""
+    if target.tool == "git":
+        return True
+    return not (target.repo or variables.get(GH_REPO_VARIABLE) or target.operand_repos)
+
+
 def check_command(command: str, cwd: str, scope: Scope) -> tuple[list[str], list[str], bool]:
     """Return the findings, the problems, and whether a write to a protected repository was scanned."""
     import boundary_git
@@ -383,6 +486,7 @@ def check_command(command: str, cwd: str, scope: Scope) -> tuple[list[str], list
     problems: list[str] = []
     scanned = False
     directory = cwd
+    lost = False
     variables = dict(os.environ)
     declared: dict[str, str] = {}
     segments = list(iter_segments(command))
@@ -396,20 +500,19 @@ def check_command(command: str, cwd: str, scope: Scope) -> tuple[list[str], list
         changed = boundary_shell.change_dir(segment.tokens)
         if changed is not None:
             changed = expand(changed, variables)
-            directory = directory if re.search(r"[$`]", changed) else resolve_dir(directory, changed)
+            lost = UNRESOLVED.search(changed) is not None
+            directory = directory if lost else resolve_dir(directory, changed)
             continue
         target = boundary_shell.classify(segment.tokens)
         if target is None:
             continue
         inline = {name: expand(value, variables) for name, value in inline_assignments(segment.tokens).items()}
         local = {**variables, **inline}
-        target = replace(
-            target,
-            git_dirs=tuple(expand_text(item, local) for item in target.git_dirs),
-            repo=expand(target.repo, local) if target.repo else None,
-            git_dir=expand_text(target.git_dir, local) if target.git_dir else None,
-            work_tree=expand_text(target.work_tree, local) if target.work_tree else None,
-        )
+        target = expand_target(target, local)
+        if any(UNRESOLVED.search(item) for item in target.git_dirs) or (lost and needs_directory(target, local)):
+            scanned = True
+            problems.append(UNRESOLVED_DIRECTORY)
+            continue
         overrides = repository_overrides(target, {**declared, **inline}, local, fold_dirs(directory, target.git_dirs))
         if overrides is None:
             scanned = True
@@ -418,12 +521,16 @@ def check_command(command: str, cwd: str, scope: Scope) -> tuple[list[str], list
         if not scope.contains(target, directory, local, overrides):
             continue
         scanned = True
+        if lost and target.files:
+            problems.append(UNRESOLVED_DIRECTORY)
+            continue
         try:
             with boundary_git.repository_environment(overrides):
                 findings.extend(
                     target_findings(
                         segment, target, directory, scope.sources.words, local,
                         pipeline_before(segments, index), overrides, repository_selection(target, inline, local),
+                        scope.names_protected,
                     )
                 )
         except boundary_git.CheckError as error:

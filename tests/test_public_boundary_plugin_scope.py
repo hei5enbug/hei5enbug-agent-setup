@@ -6,6 +6,7 @@ from stdin through a pipeline. Every case runs in the sandbox that `test_public_
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -335,3 +336,318 @@ class StdinBodyTests(PluginSandbox):
         self.assertEqual([2] * 3, [result.returncode for result in blocked])
         self.assertTrue(all("home-path" in result.stderr for result in blocked))
         self.assertEqual(0, passed.returncode, passed.stderr)
+
+    def test_명령_치환으로_넘긴_본문도_결과를_알_수_있을_때만_통과시킨다(self) -> None:
+        """$(cat 파일)은 그 파일을 읽어 검사하고, 출력을 미리 알 수 없는 치환은 확인하지 못해 막으며, 같은 구간의 heredoc 치환은 통과한다."""
+        # given
+        (self.session / "body.md").write_text(f"see {HOME_PATH}\n", encoding="utf-8")
+        (self.session / "clean.md").write_text("a clean body\n", encoding="utf-8")
+        write = f"gh issue create -R {PUBLIC_REPO} --title t"
+        leaking = [
+            f'{write} --body "$(cat body.md)"',
+            f"""printf "%s" "$(cat body.md)" | {write} --body-file -""",
+            f"{write} --body \"$(cat <<'EOF'\nsee {HOME_PATH}\nEOF\n)\"",
+        ]
+        opaque = [f'{write} --body "$(curl -s https://example.com/b)"', f'{write} --body "`date`"']
+        clean = [f'{write} --body "$(cat clean.md)"', f"{write} --body \"$(cat <<'EOF'\nhello\nEOF\n)\""]
+
+        # when
+        found = [self.run_hook(command) for command in leaking]
+        unchecked = [self.run_hook(command) for command in opaque]
+        passed = [self.run_hook(command) for command in clean]
+
+        # then
+        self.assertEqual([2] * 3, [r.returncode for r in found], [r.stderr for r in found])
+        self.assertTrue(all("home-path" in r.stderr for r in found))
+        self.assertEqual([2, 2], [r.returncode for r in unchecked])
+        self.assertTrue(all("cannot be checked" in r.stderr for r in unchecked))
+        self.assertEqual([0, 0], [r.returncode for r in passed], [r.stderr for r in passed])
+
+    def test_파일_기술자를_붙인_stdin_리다이렉트도_본문_파일로_검사한다(self) -> None:
+        """0<파일과 0< 파일은 표준 입력 파일이고, 이름을 알 수 없는 입력 파일은 확인하지 못해 막는다."""
+        # given
+        (self.session / "body.md").write_text(f"see {HOME_PATH}\n", encoding="utf-8")
+        write = f"gh issue create -R {PUBLIC_REPO} --title t --body-file -"
+        leaking = [f"{write} 0<body.md", f"{write} 0< body.md", f"cat 0<body.md | {write}"]
+        unresolved = f'{write} < "$UNKNOWN_BODY_FILE"'
+
+        # when
+        found = [self.run_hook(command) for command in leaking]
+        blocked = self.run_hook(unresolved)
+
+        # then
+        self.assertEqual([2] * 3, [r.returncode for r in found], [r.stderr for r in found])
+        self.assertTrue(all("home-path" in r.stderr for r in found))
+        self.assertEqual(2, blocked.returncode, blocked.stderr)
+        self.assertIn("could not be checked, so it is blocked", blocked.stderr)
+
+    def test_일반_파일이_아닌_입력은_열지_않고_막는다(self) -> None:
+        """쓰는 쪽이 없는 FIFO를 표준 입력으로 받는 쓰기는 훅이 멈추지 않고 확인하지 못했다며 즉시 막는다."""
+        # given
+        os.mkfifo(self.session / "body.fifo")
+        command = (f"printf hello > body.fifo & gh issue create -R {PUBLIC_REPO} --title t --body-file - < body.fifo")
+
+        # when
+        result = self.run_hook(command, timeout=10)
+
+        # then
+        self.assertEqual(2, result.returncode, result.stderr)
+        self.assertIn("could not be checked, so it is blocked", result.stderr)
+
+
+SSH_USER = "git"  # kept out of the literal so the URL is not read as an email address
+
+
+class PushSourceTests(PluginSandbox):
+    def commit(self, repo: Path, message: str) -> None:
+        identity = {**self.env, "GIT_AUTHOR_NAME": "A", "GIT_AUTHOR_EMAIL": "a@example.com",
+                    "GIT_COMMITTER_NAME": "A", "GIT_COMMITTER_EMAIL": "a@example.com"}
+        subprocess.run(["git", "commit", "-q", "--allow-empty", "-m", message], cwd=repo, check=True,
+                       capture_output=True, env=identity)
+
+    def git(self, repo: Path, *args: str) -> None:
+        subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, env=self.env)
+
+    def test_다른_원격이_이미_가진_커밋도_보호_대상_목적지로_보내면_검사한다(self) -> None:
+        """HEAD가 무관한 origin/main에 이미 있어도 URL 목적지로 push하면 도달 가능한 모든 커밋을 검사한다."""
+        # given
+        self.commit(self.session, f"fix: see {HOME_PATH}")
+        self.git(self.session, "update-ref", "refs/remotes/origin/main", "HEAD")
+
+        # when
+        result = self.run_hook(f"git push {PUBLIC_ORIGIN} HEAD:refs/heads/import")
+
+        # then
+        self.assertEqual(2, result.returncode, result.stderr)
+        self.assertIn("home-path", result.stderr)
+
+    def test_명시한_브랜치가_HEAD와_달라도_그_브랜치의_커밋을_검사한다(self) -> None:
+        """git push 목적지 feature는 HEAD가 아니라 feature에서 닿는 커밋을 검사하고, 깨끗한 브랜치는 통과한다."""
+        # given
+        self.commit(self.session, "chore: clean start")
+        self.git(self.session, "switch", "-q", "-c", "feature")
+        self.commit(self.session, f"fix: see {HOME_PATH}")
+        self.git(self.session, "switch", "-q", "main")
+
+        # when
+        leaking = self.run_hook(f"git push {PUBLIC_ORIGIN} feature")
+        clean = self.run_hook(f"git push {PUBLIC_ORIGIN} main")
+
+        # then
+        self.assertEqual(2, leaking.returncode, leaking.stderr)
+        self.assertIn("home-path", leaking.stderr)
+        self.assertEqual(0, clean.returncode, clean.stderr)
+
+    def test_보호_대상_원격으로_push하면_그_원격의_추적_참조에_있는_커밋은_다시_검사하지_않는다(self) -> None:
+        """이미 올라간 커밋은 그 원격의 origin/main에 있어 건너뛰고, 새로 만든 커밋만 검사한다."""
+        # given
+        checkout = self.make_repo(self.base / "work" / "public-clone", PUBLIC_ORIGIN)
+        self.commit(checkout, f"fix: see {HOME_PATH}")
+        self.git(checkout, "update-ref", "refs/remotes/origin/main", "HEAD")
+        self.commit(checkout, "chore: clean follow-up")
+        passed = self.run_hook("git push origin main", cwd=checkout)
+        self.commit(checkout, f"fix: see {HOME_PATH} again")
+
+        # when
+        blocked = self.run_hook("git push origin main", cwd=checkout)
+
+        # then
+        self.assertEqual(0, passed.returncode, passed.stderr)
+        self.assertEqual(2, blocked.returncode, blocked.stderr)
+        self.assertIn("home-path", blocked.stderr)
+
+    def test_ref_없는_push는_HEAD와_모든_로컬_브랜치를_검사하고_목적지_추적_참조는_제외한다(self) -> None:
+        """push.default나 remote push 설정이 다른 브랜치를 보낼 수 있으므로, 다른 브랜치의 새 커밋은 막고 이미 올라간 커밋은 통과한다."""
+        # given
+        self.commit(self.session, "chore: clean start")
+        self.git(self.session, "switch", "-q", "-c", "other")
+        self.commit(self.session, f"fix: see {HOME_PATH}")
+        self.git(self.session, "switch", "-q", "main")
+        self.git(self.session, "config", "remote.pub.url", PUBLIC_ORIGIN)
+
+        # when
+        by_url = self.run_hook(f"git push {PUBLIC_ORIGIN}")
+        by_remote = self.run_hook("git push pub")
+        self.git(self.session, "update-ref", "refs/remotes/pub/other", "other")
+        excluded = self.run_hook("git push pub")
+
+        # then
+        self.assertEqual([2, 2], [by_url.returncode, by_remote.returncode], [by_url.stderr, by_remote.stderr])
+        self.assertIn("home-path", by_url.stderr)
+        self.assertEqual(0, excluded.returncode, excluded.stderr)
+
+    def test_git_C가_가리키는_폴더를_알_수_없으면_확인하지_못해_막는다(self) -> None:
+        """-C 값이나 cd 값이 명령 치환이면 보호 체크아웃이 아니라고 단정하지 않고 막는다."""
+        # given
+        checkout = self.make_repo(self.base / "work" / "public-clone", PUBLIC_ORIGIN)
+        self.commit(checkout, f"fix: see {HOME_PATH}")
+        (self.session / "repo-path.txt").write_text(str(checkout), encoding="utf-8")
+        commands = ['git -C "$(cat repo-path.txt)" push origin HEAD', 'cd "$(cat repo-path.txt)" && git push origin HEAD']
+
+        # when
+        results = [self.run_hook(command) for command in commands]
+
+        # then
+        self.assertEqual([2, 2], [r.returncode for r in results], [r.stderr for r in results])
+        self.assertTrue(all("could not be checked, so it is blocked" in r.stderr for r in results))
+
+    def test_git_c로_덮어쓴_pushurl이_셸_변수여도_확장한_목적지로_판단한다(self) -> None:
+        """-c remote.origin.pushurl=$R는 R의 값으로 판단하고, 알 수 없는 변수면 보호 대상으로 본다."""
+        # given
+        self.commit(self.session, f"fix: see {HOME_PATH}")
+        commands = [
+            f'R={PUBLIC_ORIGIN}; git -c remote.origin.pushurl="$R" push origin HEAD',
+            'git -c remote.origin.pushurl="$UNKNOWN_URL" push origin HEAD',
+        ]
+
+        # when
+        results = [self.run_hook(command) for command in commands]
+
+        # then
+        self.assertEqual([2, 2], [r.returncode for r in results], [r.stderr for r in results])
+        self.assertTrue(all("home-path" in r.stderr for r in results))
+
+
+    def test_push_목적지도_호스트까지_같아야_보호_대상이다(self) -> None:
+        """포트나 사용자 정보가 붙은 github.com URL은 막고, 같은 소유자와 이름의 다른 호스트 URL은 통과한다."""
+        # given
+        self.commit(self.session, f"fix: see {HOME_PATH}")
+        blocked = [
+            f"git push ssh://{SSH_USER}@github.com/demo-owner/demo-public.git HEAD",
+            "git push https://github.com:443/demo-owner/demo-public HEAD",
+        ]
+        passing = [
+            "git push ssh://git@git.example.com:22/demo-owner/demo-public.git HEAD",
+            "git push git@git.example.com:demo-owner/demo-public.git HEAD",
+        ]
+
+        # when
+        stopped = [self.run_hook(command) for command in blocked]
+        passed = [self.run_hook(command) for command in passing]
+
+        # then
+        self.assertEqual([2, 2], [r.returncode for r in stopped], [r.stderr for r in stopped])
+        self.assertEqual([0, 0], [r.returncode for r in passed], [r.stderr for r in passed])
+
+
+class GhTargetTests(PluginSandbox):
+    body = f'--body "see {HOME_PATH}"'
+    public_issue = f"https://github.com/{PUBLIC_REPO}/issues/1"
+
+    def test_이슈와_PR_URL로_지정한_댓글도_그_저장소를_보호_대상으로_본다(self) -> None:
+        """현재 저장소와 무관한 origin에서도 URL 피연산자의 저장소로 판단하고, 다른 저장소 URL은 통과한다."""
+        # given
+        leaking = [
+            f"gh issue comment {self.public_issue} {self.body}",
+            f"gh pr comment https://github.com/{PUBLIC_REPO}/pull/2 {self.body}",
+            f"gh issue close {self.public_issue} --comment 'see {HOME_PATH}'",
+        ]
+        other = f"gh issue comment https://github.com/{OTHER_REPO}/issues/1 {self.body}"
+
+        # when
+        blocked = [self.run_hook(command) for command in leaking]
+        passed = self.run_hook(other)
+
+        # then
+        self.assertEqual([2] * 3, [r.returncode for r in blocked], [r.stderr for r in blocked])
+        self.assertTrue(all("home-path" in r.stderr for r in blocked))
+        self.assertEqual(0, passed.returncode, passed.stderr)
+
+    def test_gh_api의_owner_repo_자리표시자는_GH_REPO나_현재_저장소로_채워_판단한다(self) -> None:
+        """GH_REPO가 보호 대상이거나 현재 폴더의 origin이 보호 대상이면 막고, 그렇지 않으면 통과한다."""
+        # given
+        endpoint = "gh api 'repos/{owner}/{repo}/issues/1/comments' -f " + f"body='see {HOME_PATH}'"
+        checkout = self.make_repo(self.base / "work" / "public-clone", PUBLIC_ORIGIN)
+
+        # when
+        by_variable = self.run_hook(f"GH_REPO={PUBLIC_REPO} {endpoint}")
+        by_origin = self.run_hook(endpoint, cwd=checkout)
+        unrelated = self.run_hook(endpoint)
+
+        # then
+        self.assertEqual(2, by_variable.returncode, by_variable.stderr)
+        self.assertEqual(2, by_origin.returncode, by_origin.stderr)
+        self.assertEqual(0, unrelated.returncode, unrelated.stderr)
+
+    def test_닫기와_다시_열기와_병합의_본문도_쓰기로_검사한다(self) -> None:
+        """issue close, pr close, pr reopen, pr merge가 싣는 텍스트도 보호 대상 저장소에서는 검사한다."""
+        # given
+        commands = [
+            f"gh issue close 1 -R {PUBLIC_REPO} --comment 'see {HOME_PATH}'",
+            f"gh issue reopen 1 -R {PUBLIC_REPO} -c 'see {HOME_PATH}'",
+            f"gh pr close 1 -R {PUBLIC_REPO} --comment 'see {HOME_PATH}'",
+            f"gh pr reopen 1 -R {PUBLIC_REPO} --comment 'see {HOME_PATH}'",
+            f"gh pr merge 1 -R {PUBLIC_REPO} --squash --body 'see {HOME_PATH}'",
+        ]
+        clean = f"gh issue close 1 -R {PUBLIC_REPO} --comment 'done'"
+
+        # when
+        blocked = [self.run_hook(command) for command in commands]
+        passed = self.run_hook(clean)
+
+        # then
+        self.assertEqual([2] * 5, [r.returncode for r in blocked], [r.stderr for r in blocked])
+        self.assertTrue(all("home-path" in r.stderr for r in blocked))
+        self.assertEqual(0, passed.returncode, passed.stderr)
+
+    def test_gh_api의_raw_field는_골뱅이로_시작해도_문자열이고_field만_파일을_읽는다(self) -> None:
+        """--raw-field와 -f의 @값은 파일이 아니므로 통과하고, -F의 @파일은 읽지 못하면 막는다."""
+        # given
+        base = f"gh api repos/{PUBLIC_REPO}/issues/1/comments"
+
+        # when
+        raw = [self.run_hook(f"{base} --raw-field body=@demo"), self.run_hook(f"{base} -f body=@demo")]
+        typed = self.run_hook(f"{base} -F body=@demo")
+
+        # then
+        self.assertEqual([0, 0], [r.returncode for r in raw], [r.stderr for r in raw])
+        self.assertEqual(2, typed.returncode, typed.stderr)
+        self.assertIn("demo could not be read", typed.stderr)
+
+    def test_호스트가_다른_저장소는_같은_소유자와_이름이어도_보호_대상이_아니다(self) -> None:
+        """-R, GH_REPO, URL, push 목적지의 호스트가 github.com이 아니면 통과하고, github.com 표기는 계속 막는다."""
+        # given
+        other_host = "git.example.com"
+        passing = [
+            f"gh issue create -R {other_host}/{PUBLIC_REPO} --title t {self.body}",
+            f"GH_REPO={other_host}/{PUBLIC_REPO} gh issue create --title t {self.body}",
+            f"gh issue comment https://{other_host}/{PUBLIC_REPO}/issues/1 {self.body}",
+        ]
+        blocked = [
+            f"gh issue create -R github.com/{PUBLIC_REPO} --title t {self.body}",
+            f"gh issue create -R {PUBLIC_REPO} --title t {self.body}",
+        ]
+
+        # when
+        passed = [self.run_hook(command) for command in passing]
+        stopped = [self.run_hook(command) for command in blocked]
+
+        # then
+        self.assertEqual([0] * 3, [r.returncode for r in passed], [r.stderr for r in passed])
+        self.assertEqual([2, 2], [r.returncode for r in stopped])
+
+    def test_GH_HOST가_있으면_호스트_없는_저장소와_현재_저장소는_그_호스트로_판단한다(self) -> None:
+        """GH_HOST가 엔터프라이즈 호스트면 통과하고 github.com이면 막으며, 환경, 인라인, export 모두 같다."""
+        # given
+        checkout = self.make_repo(self.base / "work" / "public-clone", PUBLIC_ORIGIN)
+        enterprise_env = {**self.env, "GH_HOST": "git.example.com"}
+        create = f"gh issue create --title t {self.body}"
+        named = f"gh issue create -R {PUBLIC_REPO} --title t {self.body}"
+
+        # when
+        passing = [
+            self.run_hook(f"GH_HOST=git.example.com {named}"),
+            self.run_hook(named, env=enterprise_env),
+            self.run_hook(f"export GH_HOST=git.example.com; {named}"),
+            self.run_hook(f"GH_HOST=git.example.com {create}", cwd=checkout),
+            self.run_hook(create, cwd=checkout, env=enterprise_env),
+        ]
+        blocked = [
+            self.run_hook(f"GH_HOST=github.com {named}"),
+            self.run_hook(f"GH_HOST=github.com {create}", cwd=checkout),
+            self.run_hook(f"GH_HOST=git.example.com gh issue create -R github.com/{PUBLIC_REPO} --title t {self.body}"),
+        ]
+
+        # then
+        self.assertEqual([0] * 5, [r.returncode for r in passing], [r.stderr for r in passing])
+        self.assertEqual([2] * 3, [r.returncode for r in blocked], [r.stderr for r in blocked])
