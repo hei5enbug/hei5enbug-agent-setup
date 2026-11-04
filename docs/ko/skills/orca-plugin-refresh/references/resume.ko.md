@@ -25,6 +25,8 @@
 4. `/exit`를 보내 그 프로세스가 끝나기를 최대 60초 기다린 뒤, 120초 동안 더 확인한다. 프로세스가 사라지고 터미널에
    입력 줄이 빈 셸 프롬프트가 나타나면 같은 터미널에 한 줄을 보낸다. 그 줄은 프로세스의 `CLAUDE_CONFIG_DIR`,
    현재 `claude` 실행 파일, 원래 옵션 인자, 그리고 `--resume <conversation ID>`로 이루어진다.
+   프롬프트는 ASCII 프롬프트 문자로 끝나거나, 그런 문자가 없으면 private-use 글리프나 git 표시로 끝나고 오른쪽에
+   넓은 간격이 없을 때 빈 것으로 본다.
    어느 토큰이 옵션 값인지는 `claude --help`에서 읽고, 위치 인자 프롬프트와 `--continue`, `--resume`, `--session-id`,
    `--fork-session`, `--print`는 뺀다. 도움말을 읽을 수 없거나 옵션이 도움말에 없으면 `/exit` 전에
    `launch_arguments_unknown`으로 그 세션을 건너뛴다.
@@ -47,6 +49,8 @@
 - `failed`: 세션을 끝냈다. `exit_timeout`은 재개 줄을 보내지 않았다는 뜻이며, 보고에는 `terminal_handle`, 정확한
   `resume_line`, 그리고 `exit_state`가 담긴다. `exit_state`는 `ended_late`(프로세스는 끝났지만 터미널에 입력이 빈
   셸 프롬프트가 나타나지 않음), `process_list_unreadable`(프로세스 목록을 읽지 못함), `still_running` 중 하나다.
+  `ended_late`에는 `prompt_shape`도 담긴다. 마지막 화면 줄의 마지막 글자, 그 글자가 ASCII가 아닌지, 셸 프롬프트
+  문자가 있는지, 에이전트 화면이 아직 보이는지를 알려 주므로 터미널을 읽지 않고도 원인을 가릴 수 있다.
   사용자에게 터미널과 정확한 줄을 알려 준다. 그 줄을 실행하기 전까지 해당 세션에는 Claude Code가 없다.
   `resume_marker_missing`과 `resume_session_mismatch`는 재개된 세션이 같은 대화인지 확인하지 못했다는 뜻이다.
   `resumed_process_missing`과 `config_dir_mismatch`는 새 프로세스가 없거나 다른 설정 폴더로 실행 중이라는 뜻이다.

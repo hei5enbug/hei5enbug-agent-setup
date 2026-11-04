@@ -189,6 +189,9 @@ class HandedCompactModeTest(base.DriveTest):
         self.assertIn("compact", entry["actions"])
 
 
+AGNOSTER_PROMPT = " user@host \ue0b0 ~/work/demo \ue0b0 feature/x ±\ue0b0 "
+
+
 class ShellPromptInputTest(unittest.TestCase):
     def test_프롬프트_뒤에_입력한_글자가_있으면_빈_프롬프트로_보지_않는다(self):
         """프롬프트 문자 뒤에 사용자가 입력한 글자가 있으면 그 글자가 프롬프트 문자로 끝나도 빈 프롬프트가 아니고, 입력이 없는 프롬프트는 빈 것으로 본다."""
@@ -208,6 +211,13 @@ class ShellPromptInputTest(unittest.TestCase):
             "$echo draft #": False,
             "user@host ~ %echo draft >": False,
             "bash-3.2$echo hi #": False,
+            AGNOSTER_PROMPT: True,
+            AGNOSTER_PROMPT.rstrip(): True,
+            f"{AGNOSTER_PROMPT}echo draft": False,
+            f" ~/demo \ue0b0 echo draft{' ' * 9}\ue0b2 main \ue0b0": False,
+            f" ~/demo \ue0b0 echo draft{' ' * 9}main ": False,
+            "~/demo (main) ± ": True,
+            "~/demo (main) ± echo draft": False,
         }
 
         # When
@@ -215,6 +225,22 @@ class ShellPromptInputTest(unittest.TestCase):
 
         # Then
         self.assertEqual(cases, results)
+
+
+class ScreenShapeTest(unittest.TestCase):
+    def test_마지막_줄의_글자_없이_끝_글자와_종류만_설명한다(self):
+        """마지막 비어 있지 않은 줄의 마지막 글자 코드, ASCII 밖 여부, 프롬프트 문자 포함 여부, 에이전트 화면 여부만 알려 주고 줄의 글은 담지 않는다."""
+        # Given
+        glyph_screen = ["output", AGNOSTER_PROMPT, "", "   "]
+        blank_screen = ["", "  "]
+
+        # When
+        glyph = refresh_screen.screen_shape(glyph_screen)
+        blank = refresh_screen.screen_shape(blank_screen)
+
+        # Then
+        self.assertEqual({"ends_with": "U+E0B0", "non_ascii_end": True, "prompt_character": False, "agent_screen": None}, glyph)
+        self.assertEqual({"ends_with": None, "non_ascii_end": False, "prompt_character": False, "agent_screen": None}, blank)
 
 
 class AutomaticFailureManualRecoveryTest(unittest.TestCase):

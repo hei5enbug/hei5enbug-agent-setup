@@ -10,7 +10,7 @@ import refresh_sessions as driver
 from refresh_core import HANDLE, RefreshError, exclusive, load_run, parse_time, update_run
 from refresh_host_record import record_state
 from refresh_orca import Orca
-from refresh_screen import shell_prompt_empty
+from refresh_screen import screen_shape, shell_prompt_empty
 from refresh_process import (ProcessOs, SessionProcess, find_session_process, installed_release, launch_arguments, release_of,
                              scan_session_processes)
 
@@ -92,16 +92,25 @@ def late_exit_failure(orca: Orca, handle: str, pid: int, line: str, system: Proc
     """Keep checking after the exit wait ran out; None once the process is gone and the terminal shows an empty shell
     prompt, otherwise the failure that gives the user the terminal and the exact resume line."""
     state = "running"
+    screen: list[str] | None = None
 
     def settled() -> bool:
-        nonlocal state
-        state = process_state(handle, pid, system)
-        return state == "ended" and at_shell_prompt(orca, handle)
+        nonlocal state, screen
+        state, screen = process_state(handle, pid, system), None
+        if state != "ended":
+            return False
+        try:
+            screen = orca.screen(handle)[0]
+        except RefreshError:
+            return False
+        return shell_prompt_empty(screen)
 
     if wait_for(settled, LATE_EXIT_TIMEOUT, sleep):
         return None
-    return {"status": "failed", "detail": "exit_timeout", "exit_state": LATE_EXIT_STATES[state], "terminal_handle": handle,
-            "resume_line": line}
+    failure = {"status": "failed", "detail": "exit_timeout", "exit_state": LATE_EXIT_STATES[state], "terminal_handle": handle,
+               "resume_line": line}
+    shape = {"prompt_shape": screen_shape(screen)} if state == "ended" and screen is not None else {}
+    return {**failure, **shape}
 
 
 def resumed_marker(handle: str, snapshot: dict | None, sent_at: float) -> dict | None:
@@ -204,7 +213,7 @@ def resume_view(handle: str, entry: dict | None, result: dict) -> dict:
     return {key: value for key, value in view.items() if value not in (None, [], False)}
 
 
-RESUME_CARRIED = ("note", "exit_late", "exit_state", "terminal_handle", "resume_line", "probe_position")
+RESUME_CARRIED = ("note", "exit_late", "exit_state", "terminal_handle", "resume_line", "prompt_shape", "probe_position")
 
 
 def record_resume(entry: dict, result: dict) -> None:

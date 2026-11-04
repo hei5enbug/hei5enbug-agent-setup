@@ -12,6 +12,8 @@ TITLED_SEPARATOR = re.compile(r"^─{8,} \S.* ─+\s*$")
 CODEX_FOOTER = re.compile(r"^\s{2}\S.* · ")
 PROMPT_CHARACTERS = "$%#>❯➜»"
 SPACED_PROMPT = re.compile(rf"[{re.escape(PROMPT_CHARACTERS)}](?=\s)")
+GLYPH_PROMPT_END = re.compile("[\ue000-\uf8ff±✗✘✔✓●✚]$")
+RIGHT_PROMPT_GAP = re.compile(r"\S {4,}\S")
 
 
 def screen_host(lines: Sequence[str]) -> str | None:
@@ -26,21 +28,34 @@ def screen_host(lines: Sequence[str]) -> str | None:
     return None if claude == codex else "claude" if claude else "codex"
 
 
+def last_screen_line(lines: Sequence[str]) -> str:
+    return next((line.rstrip("\r\n") for line in reversed(lines) if line.strip()), "")
+
+
 def shell_prompt_empty(lines: Sequence[str]) -> bool:
     """True when the screen ends with a shell prompt and nothing typed after it, and no agent composer ends the screen."""
-    last = next((line.rstrip("\r\n") for line in reversed(lines) if line.strip()), "")
-    return prompt_line_empty(last) and screen_host(lines) is None
+    return prompt_line_empty(last_screen_line(lines)) and screen_host(lines) is None
+
+
+def screen_shape(lines: Sequence[str]) -> dict:
+    """What the last non-blank screen line ends with, without its text."""
+    ending = last_screen_line(lines).rstrip()[-1:]
+    return {"ends_with": f"U+{ord(ending):04X}" if ending else None, "non_ascii_end": bool(ending) and not ending.isascii(),
+            "prompt_character": any(char in last_screen_line(lines) for char in PROMPT_CHARACTERS), "agent_screen": screen_host(lines)}
 
 
 def prompt_line_empty(line: str) -> bool:
     """Nothing but whitespace follows the first prompt character that is followed by whitespace. Without such a
     character the line is empty only when its single prompt character ends it; any other prompt character means
-    typed text may follow a prompt that is not separated from it, so the line is not proven empty."""
+    typed text may follow a prompt that is not separated from it, so the line is not proven empty. A line that
+    ends with neither is empty when a prompt glyph or git mark ends it and no wide gap hides a right-side prompt."""
     spaced = SPACED_PROMPT.search(line)
     if spaced:
         return not line[spaced.end():].strip()
     stripped = line.rstrip()
-    return stripped.endswith(tuple(PROMPT_CHARACTERS)) and sum(stripped.count(char) for char in PROMPT_CHARACTERS) == 1
+    if stripped.endswith(tuple(PROMPT_CHARACTERS)):
+        return sum(stripped.count(char) for char in PROMPT_CHARACTERS) == 1
+    return bool(GLYPH_PROMPT_END.search(stripped)) and not RIGHT_PROMPT_GAP.search(stripped.strip())
 
 
 def opening_rule(line: str) -> bool:

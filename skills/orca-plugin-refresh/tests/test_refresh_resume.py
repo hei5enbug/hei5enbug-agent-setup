@@ -53,6 +53,7 @@ Options:
 Commands:
   agents                                List agents
 """
+AGNOSTER_PROMPT = " user@host \ue0b0 ~/work/demo \ue0b0 feature/x ±\ue0b0 "
 SHELL_AFTER_EXIT = ["Resume this session with:", "claude --resume 11111111-2222-3333-4444-555555555555", "demo@example ~ %"]
 LATER = lambda: (datetime.now(timezone.utc) + timedelta(seconds=2)).isoformat(timespec="milliseconds")
 
@@ -540,6 +541,34 @@ class ResumeTest(ResumeCase):
         view = result["sessions"][0]
         self.assertEqual([(HANDLE, "/exit")], self.fake.sent)
         self.assertEqual(("failed", "exit_timeout", "ended_late", HANDLE), (view["status"], view["detail"], view["exit_state"], view["terminal_handle"]))
+
+    def test_프롬프트_문자가_없는_글리프_프롬프트가_비어_있으면_재개_줄을_보낸다(self):
+        """/exit 뒤 화면이 ASCII 프롬프트 문자 없이 private-use 글리프로 끝나는 빈 프롬프트이면 재개 줄을 보내고 done을 보고한다."""
+        # Given
+        self.screen_after_exit = ["Resume this session with:", AGNOSTER_PROMPT]
+
+        # When
+        result = self.resume()
+
+        # Then
+        self.assertEqual("/exit", self.fake.sent[0][1])
+        self.assertIn("--resume", self.fake.sent[1][1])
+        self.assertEqual("done", result["sessions"][0]["status"])
+
+    def test_글리프_프롬프트_뒤에_입력한_글이_있으면_모양만_남기고_재개_줄을_보내지_않는다(self):
+        """글리프 프롬프트 뒤에 입력한 글이 있으면 재개 줄을 보내지 않고 exit_timeout과 ended_late를 보고하며 prompt_shape에 글 없이 끝 글자의 모양만 담는다."""
+        # Given
+        self.screen_after_exit = ["Resume this session with:", f"{AGNOSTER_PROMPT}echo draft"]
+
+        # When
+        result = self.resume()
+
+        # Then
+        view = result["sessions"][0]
+        self.assertEqual([(HANDLE, "/exit")], self.fake.sent)
+        self.assertEqual(("failed", "exit_timeout", "ended_late"), (view["status"], view["detail"], view["exit_state"]))
+        self.assertEqual({"ends_with": "U+0074", "non_ascii_end": False, "prompt_character": False, "agent_screen": None}, view["prompt_shape"])
+        self.assertEqual(view["prompt_shape"], refresh.load_run(self.run_id)["resumed"][HANDLE]["prompt_shape"])
 
     def test_프로세스가_끝나지_않으면_exit_timeout으로_실패하고_명령을_더_보내지_않는다(self):
         """/exit 뒤에도 프로세스가 남아 있으면 제한 시간 뒤 exit_timeout으로 실패하고 재개 명령을 보내지 않는다."""

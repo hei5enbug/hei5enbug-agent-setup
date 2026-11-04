@@ -25,6 +25,8 @@ For each named terminal, in this order, it:
    line, and the line is: the process's
    `CLAUDE_CONFIG_DIR`, the current `claude` executable, the original option arguments, and
    `--resume <conversation ID>`.
+   A prompt counts as empty when it ends with an ASCII prompt character, or, for a prompt without one, with a
+   private-use glyph or git mark and no wide right-side gap.
    It reads which tokens are option values from `claude --help`, drops the positional prompt, and drops `--continue`,
    `--resume`, `--session-id`, `--fork-session`, and `--print`. When the help is unreadable or an option is not in it,
    it skips the session before `/exit` as `launch_arguments_unknown`.
@@ -46,8 +48,10 @@ For each named terminal, in this order, it:
   seconds, and the resume line was sent after that.
 - `failed`: the session was ended. `exit_timeout` means no resume line was sent, and the report carries
   `terminal_handle`, the exact `resume_line`, and `exit_state`: `ended_late` (the process ended but the terminal showed
-  no empty shell prompt), `process_list_unreadable` (the process list could not be read), or `still_running`. Give the
-  user the terminal and the exact line; the session has no Claude Code until it runs.
+  no empty shell prompt), `process_list_unreadable` (the process list could not be read), or `still_running`.
+  `ended_late` also carries `prompt_shape`: the last screen line's final character, whether it is non-ASCII, whether it
+  has a shell prompt character, and whether an agent screen is still shown, so the cause can be told without reading the
+  terminal. Give the user the terminal and the exact line; the session has no Claude Code until it runs.
   `resume_marker_missing` and `resume_session_mismatch` mean the resumed session was not confirmed to hold the same
   conversation. `resumed_process_missing` and `config_dir_mismatch` mean the new process is missing or runs on a
   different configuration folder. `plugin_load_error` means the resumed session still reports a load error, with
