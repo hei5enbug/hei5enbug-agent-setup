@@ -9,10 +9,12 @@ from __future__ import annotations
 import json
 import os
 import re
-import shlex
 import sys
 
 SEPARATORS = "();<>|&\n"
+WHITESPACE = " \t\r"
+QUOTES = "'\""
+CONTROL_WORDS = frozenset({"if", "then", "else", "elif", "do", "while", "until", "!", "{"})
 FALLBACK_SPLIT = re.compile(r"&&|\|\||[;|&()\n]")
 ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 WRAPPERS = frozenset({"env", "command", "time", "exec", "nohup"})
@@ -27,21 +29,62 @@ MESSAGE = (
 
 
 def segments_of(command: str) -> list[list[str]]:
-    """Split a command into simple commands, keeping quoted separators inside their words."""
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=SEPARATORS)
-    lexer.whitespace = " \t\r"
-    lexer.whitespace_split = True
-    lexer.commenters = ""
-    segments: list[list[str]] = [[]]
+    """Split a command into simple commands; quoted or escaped separators stay inside their words."""
     try:
-        for token in lexer:
-            if token and all(char in SEPARATORS for char in token):
-                segments.append([])
-            else:
-                segments[-1].append(token)
+        return split_segments(command)
     except ValueError:
         return [segment.split() for segment in FALLBACK_SPLIT.split(command)]
-    return [segment for segment in segments if segment]
+
+
+def split_segments(command: str) -> list[list[str]]:
+    segments: list[list[str]] = [[]]
+    word: list[str] = []
+    in_word = False
+    quote = ""
+    escaped = False
+
+    def end_word() -> None:
+        nonlocal in_word
+        if in_word:
+            segments[-1].append("".join(word))
+            word.clear()
+            in_word = False
+
+    for char in command:
+        if escaped:
+            if char != "\n":
+                word.append(char)
+            escaped = False
+        elif quote:
+            if char == quote:
+                quote = ""
+            elif char == "\\" and quote == '"':
+                escaped = True
+            else:
+                word.append(char)
+        elif char == "\\":
+            escaped, in_word = True, True
+        elif char in QUOTES:
+            quote, in_word = char, True
+        elif char in SEPARATORS:
+            end_word()
+            segments.append([])
+        elif char in WHITESPACE:
+            end_word()
+        else:
+            word.append(char)
+            in_word = True
+    if quote or escaped:
+        raise ValueError("unterminated quote or escape")
+    end_word()
+    return [without_control_words(segment) for segment in segments if segment]
+
+
+def without_control_words(tokens: list[str]) -> list[str]:
+    index = 0
+    while index < len(tokens) and tokens[index] in CONTROL_WORDS:
+        index += 1
+    return tokens[index:]
 
 
 def git_subcommand(tokens: list[str]) -> str | None:

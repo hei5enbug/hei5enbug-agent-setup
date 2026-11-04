@@ -12,7 +12,9 @@ workflow; the boundaries and the proof rules still apply.
 3. Classify each candidate against the written rules: count a miss only when the user corrects the agent for
    breaking a written rule, or a final report lists a required step as not done or offers it instead of doing it.
    A new request, a question, or an unwritten preference is not a miss. A read-only reviewer may classify large
-   candidate sets; give it the candidates and the rule files, and keep the evidence free of private details.
+   candidate sets; give it the candidates and the rule files, and keep the evidence free of private details. Each
+   candidate holds an excerpt around the matched text and a locator, the record file relative to its records folder
+   and the line, for reading the whole entry when the excerpt does not decide.
 4. Report one row per rule: the rule, its `path:line`, sessions, hits, hits per 100 replies, current enforcement,
    the chosen level, and the always-read tokens before and after the fix. A rule with misses in two or more
    sessions is a class; one session is a watch item.

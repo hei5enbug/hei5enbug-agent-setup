@@ -24,6 +24,8 @@ EXAMPLE_LIMIT = 3
 UNMATCHED_LIMIT = 20
 EXAMPLE_TEXT = 160
 CANDIDATE_TEXT = 300
+EXCERPT_CONTEXT = 150
+ELLIPSIS = "…"
 SIGNATURE_TEXT = 100
 
 
@@ -38,6 +40,8 @@ class Signal:
     timestamp: str
     text: str
     previous: str = ""
+    file: str = ""
+    line: int = 0
 
 
 def parse_moment(value: str) -> datetime:
@@ -103,13 +107,13 @@ def assistant_text(entry: dict) -> str:
 
 
 def iter_entries(path: Path):
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for number, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
         try:
             entry = json.loads(line)
         except ValueError:
             continue
         if isinstance(entry, dict):
-            yield entry
+            yield number, entry
 
 
 def in_window(entry: dict, since: datetime, until: datetime) -> bool:
@@ -130,10 +134,11 @@ class FileScan:
     prompts: int
 
 
-def scan_file(path: Path, since: datetime, until: datetime) -> FileScan:
+def scan_file(path: Path, since: datetime, until: datetime, label: str) -> FileScan:
+    """Scan one record file; label names it relative to its records folder, so no home path reaches a candidate."""
     scan = FileScan([], set(), 0, 0)
     last_reply = Signal("final", "", "", "")
-    for entry in iter_entries(path):
+    for number, entry in iter_entries(path):
         if not in_window(entry, since, until):
             continue
         session = entry.get("sessionId") if isinstance(entry.get("sessionId"), str) else path.stem
@@ -142,27 +147,32 @@ def scan_file(path: Path, since: datetime, until: datetime) -> FileScan:
         reply = assistant_text(entry)
         if reply:
             scan.replies += 1
-            last_reply = Signal("final", session, stamp, reply)
+            last_reply = Signal("final", session, stamp, reply, "", label, number)
         for kind, text in entry_signals(entry):
             if kind == "user":
                 scan.prompts += 1
                 if last_reply.text:
                     scan.signals.append(last_reply)
-                scan.signals.append(Signal(kind, session, stamp, text, last_reply.text[-CANDIDATE_TEXT:]))
+                scan.signals.append(Signal(kind, session, stamp, text, last_reply.text[-CANDIDATE_TEXT:], label, number))
                 last_reply = Signal("final", "", "", "")
             else:
-                scan.signals.append(Signal(kind, session, stamp, text))
+                scan.signals.append(Signal(kind, session, stamp, text, "", label, number))
     if last_reply.text:
         scan.signals.append(last_reply)
     return scan
 
 
-def record_files(folders: list[Path]) -> list[Path]:
+def record_files(folders: list[Path]) -> list[tuple[Path, str]]:
+    """Return each main-session record file with its path relative to the records folder that holds it."""
     files = []
     for folder in folders:
         if not folder.is_dir():
             raise AuditError(f"records folder not found: {folder}")
-        files.extend(path for path in folder.rglob("*.jsonl") if "subagents" not in path.relative_to(folder).parts)
+        files.extend(
+            (path, path.relative_to(folder).as_posix())
+            for path in folder.rglob("*.jsonl")
+            if "subagents" not in path.relative_to(folder).parts
+        )
     return sorted(files)
 
 
@@ -225,6 +235,14 @@ def unmatched_report(rules: list[dict], signals: list[Signal]) -> list[dict]:
     return rows[:UNMATCHED_LIMIT]
 
 
+def excerpt(text: str, pattern: re.Pattern) -> str:
+    found = pattern.search(text)
+    if found is None:
+        return text[:CANDIDATE_TEXT]
+    start, end = max(0, found.start() - EXCERPT_CONTEXT), min(len(text), found.end() + EXCERPT_CONTEXT)
+    return f"{ELLIPSIS if start else ''}{text[start:end]}{ELLIPSIS if end < len(text) else ''}"
+
+
 def candidate_rows(signals: list[Signal], correction: re.Pattern, not_done: re.Pattern) -> list[dict]:
     rows = []
     for signal in signals:
@@ -238,7 +256,8 @@ def candidate_rows(signals: list[Signal], correction: re.Pattern, not_done: re.P
                 "session": signal.session,
                 "timestamp": signal.timestamp,
                 "kind": kind,
-                "text": signal.text[:CANDIDATE_TEXT],
+                "text": excerpt(signal.text, pattern),
+                "locator": {"file": signal.file, "line": signal.line},
                 "previous": signal.previous if kind == "correction" else "",
             }
         )
@@ -250,7 +269,7 @@ def audit(args: argparse.Namespace) -> tuple[dict, list[dict]]:
     rules = load_rules(Path(args.rules))
     correction, not_done = re.compile(args.correction_pattern, re.IGNORECASE), re.compile(args.not_done_pattern, re.IGNORECASE)
     files = record_files([Path(folder) for folder in args.records])
-    scans = [scan_file(path, since, until) for path in files]
+    scans = [scan_file(path, since, until, label) for path, label in files]
     signals = [signal for scan in scans for signal in scan.signals]
     replies = sum(scan.replies for scan in scans)
     report = {

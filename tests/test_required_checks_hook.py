@@ -50,6 +50,15 @@ class RequiredChecksHookTest(unittest.TestCase):
             "echo done | git push origin main",
             "cd /tmp/work\ngit push origin main",
             "git -C '/tmp/work (copy)' push",
+            "if true; then git commit -m demo; fi",
+            "if false; then echo a; elif true; then git push; else echo b; fi",
+            "if false; then echo a; else git commit -m demo; fi",
+            "while true; do git push; done",
+            "until false; do git commit -m demo; break; done",
+            "! git push origin main",
+            "{ git push origin main; }",
+            "if ! git commit -m demo; then echo failed; fi",
+            "if true; then if true; then git push; fi; fi",
         ]
 
         for command in commands:
@@ -64,6 +73,11 @@ class RequiredChecksHookTest(unittest.TestCase):
             bash_event("git log --oneline"),
             bash_event("git log --grep commit"),
             bash_event("echo 'example; git push origin main'"),
+            bash_event("echo ';' git push"),
+            bash_event("echo '|' git commit -m x"),
+            bash_event("echo \\; git push"),
+            bash_event('echo "a && git push"'),
+            bash_event("if true; then echo git push; fi"),
             bash_event("ls"),
             json.dumps({"tool_name": "Read", "tool_input": {"file_path": "/tmp/work/git-commit.md"}}),
             json.dumps({"tool_name": "Bash", "tool_input": {"command": 3}}),

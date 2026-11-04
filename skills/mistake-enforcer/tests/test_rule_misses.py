@@ -129,6 +129,48 @@ class CandidateTest(AuditCase):
         self.assertNotIn("끝났습니다", joined)
 
 
+class CandidateExcerptTest(AuditCase):
+    SESSION = "cccc0000-0000-0000-0000-000000000003"
+
+    def write_records(self, entries):
+        folder = self.tmp / "long-records" / "proj-long"
+        folder.mkdir(parents=True)
+        path = folder / f"{self.SESSION}.jsonl"
+        path.write_text("".join(json.dumps(entry) + "\n" for entry in entries), encoding="utf-8")
+        return folder.parent, path
+
+    @staticmethod
+    def entry(kind, text):
+        content = text if kind == "user" else [{"type": "text", "text": text}]
+        return {"type": kind, "timestamp": "2026-10-10T00:00:00Z", "sessionId": CandidateExcerptTest.SESSION,
+                "message": {"content": content}}
+
+    def test_후보_본문이_300자를_넘어도_일치한_문장과_앞뒤_맥락_및_기록_위치를_내보낸다(self):
+        # Given
+        long_report = "x" * 301 + " Required evaluation not run. " + "y" * 301
+        long_correction = "z" * 301 + " 왜 평가를 안 했어? " + "w" * 301
+        records, path = self.write_records([
+            self.entry("user", "hello"),
+            self.entry("assistant", long_report),
+            self.entry("user", long_correction),
+        ])
+        out = self.tmp / "candidates.json"
+
+        # When
+        result = self.run_audit([REMINDER_RULE], "--candidates", str(out), records=records)
+
+        # Then
+        self.assertEqual(result.returncode, 0, result.stderr)
+        by_kind = {item["kind"]: item for item in json.loads(out.read_text(encoding="utf-8"))}
+        not_done, correction = by_kind["not-done"], by_kind["correction"]
+        self.assertIn("Required evaluation not run.", not_done["text"])
+        self.assertIn("x" * 20, not_done["text"])
+        self.assertIn("y" * 20, not_done["text"])
+        self.assertEqual(not_done["locator"], {"file": path.relative_to(records).as_posix(), "line": 2})
+        self.assertIn("왜 평가를 안 했어", correction["text"])
+        self.assertEqual(correction["locator"], {"file": path.relative_to(records).as_posix(), "line": 3})
+
+
 class FailureTest(AuditCase):
     def test_잘못된_규칙_파일은_종료_코드_2로_실패한다(self):
         # Given
