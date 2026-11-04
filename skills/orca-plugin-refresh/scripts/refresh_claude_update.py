@@ -30,7 +30,8 @@ def read_json(path: Path) -> object:
 
 
 def run_command(argv: list[str], timeout: float) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout, check=False)
+    return subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          timeout=timeout, check=False)
 
 
 def current_release() -> str | None:

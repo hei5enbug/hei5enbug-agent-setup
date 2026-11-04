@@ -25,8 +25,8 @@
 4. `/exit`를 보내 그 프로세스가 끝나기를 최대 60초 기다린 뒤, 120초 동안 더 확인한다. 프로세스가 사라지고 터미널에
    입력 줄이 빈 셸 프롬프트가 나타나면 같은 터미널에 한 줄을 보낸다. 그 줄은 프로세스의 `CLAUDE_CONFIG_DIR`,
    현재 `claude` 실행 파일, 원래 옵션 인자, 그리고 `--resume <conversation ID>`로 이루어진다.
-   프롬프트는 ASCII 프롬프트 문자로 끝나거나, 그런 문자가 없으면 private-use 글리프나 git 표시로 끝나고 오른쪽에
-   넓은 간격이 없을 때 빈 것으로 본다.
+   프롬프트는 ASCII 프롬프트 문자로 끝나거나, ASCII 프롬프트 문자가 하나도 없는 줄이면 Powerline 구분자 같은
+   private-use 글리프로 끝나고 오른쪽에 넓은 간격이 없을 때 빈 것으로 본다.
    어느 토큰이 옵션 값인지는 `claude --help`에서 읽고, 위치 인자 프롬프트와 `--continue`, `--resume`, `--session-id`,
    `--fork-session`, `--print`는 뺀다. 도움말을 읽을 수 없거나 옵션이 도움말에 없으면 `/exit` 전에
    `launch_arguments_unknown`으로 그 세션을 건너뛴다.

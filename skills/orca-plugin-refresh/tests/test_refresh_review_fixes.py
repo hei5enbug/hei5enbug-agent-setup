@@ -216,7 +216,10 @@ class ShellPromptInputTest(unittest.TestCase):
             f"{AGNOSTER_PROMPT}echo draft": False,
             f" ~/demo \ue0b0 echo draft{' ' * 9}\ue0b2 main \ue0b0": False,
             f" ~/demo \ue0b0 echo draft{' ' * 9}main ": False,
-            "~/demo (main) ± ": True,
+            "~/demo (main) ± ": False,
+            f"{AGNOSTER_PROMPT}echo ✓": False,
+            "bash-3.2$rm -rf ./drafts; echo ✓ ": False,
+            "bash-3.2$echo \ue0b0 ": False,
             "~/demo (main) ± echo draft": False,
         }
 

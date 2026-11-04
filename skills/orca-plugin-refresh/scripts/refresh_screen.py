@@ -12,7 +12,7 @@ TITLED_SEPARATOR = re.compile(r"^─{8,} \S.* ─+\s*$")
 CODEX_FOOTER = re.compile(r"^\s{2}\S.* · ")
 PROMPT_CHARACTERS = "$%#>❯➜»"
 SPACED_PROMPT = re.compile(rf"[{re.escape(PROMPT_CHARACTERS)}](?=\s)")
-GLYPH_PROMPT_END = re.compile("[\ue000-\uf8ff±✗✘✔✓●✚]$")
+GLYPH_PROMPT_END = re.compile("[\ue000-\uf8ff]$")
 RIGHT_PROMPT_GAP = re.compile(r"\S {4,}\S")
 
 
@@ -47,14 +47,17 @@ def screen_shape(lines: Sequence[str]) -> dict:
 def prompt_line_empty(line: str) -> bool:
     """Nothing but whitespace follows the first prompt character that is followed by whitespace. Without such a
     character the line is empty only when its single prompt character ends it; any other prompt character means
-    typed text may follow a prompt that is not separated from it, so the line is not proven empty. A line that
-    ends with neither is empty when a prompt glyph or git mark ends it and no wide gap hides a right-side prompt."""
+    typed text may follow a prompt that is not separated from it, so the line is not proven empty. A line with no
+    prompt character is empty when a private-use prompt glyph, which typed text does not end with, ends it and no
+    wide gap hides a right-side prompt."""
     spaced = SPACED_PROMPT.search(line)
     if spaced:
         return not line[spaced.end():].strip()
     stripped = line.rstrip()
     if stripped.endswith(tuple(PROMPT_CHARACTERS)):
         return sum(stripped.count(char) for char in PROMPT_CHARACTERS) == 1
+    if any(char in stripped for char in PROMPT_CHARACTERS):
+        return False
     return bool(GLYPH_PROMPT_END.search(stripped)) and not RIGHT_PROMPT_GAP.search(stripped.strip())
 
 

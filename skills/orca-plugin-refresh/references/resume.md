@@ -25,8 +25,8 @@ For each named terminal, in this order, it:
    line, and the line is: the process's
    `CLAUDE_CONFIG_DIR`, the current `claude` executable, the original option arguments, and
    `--resume <conversation ID>`.
-   A prompt counts as empty when it ends with an ASCII prompt character, or, for a prompt without one, with a
-   private-use glyph or git mark and no wide right-side gap.
+   A prompt counts as empty when it ends with an ASCII prompt character, or, for a line with no ASCII prompt
+   character, with a private-use glyph such as a Powerline separator and no wide right-side gap.
    It reads which tokens are option values from `claude --help`, drops the positional prompt, and drops `--continue`,
    `--resume`, `--session-id`, `--fork-session`, and `--print`. When the help is unreadable or an option is not in it,
    it skips the session before `/exit` as `launch_arguments_unknown`.

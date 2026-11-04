@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -229,6 +230,21 @@ def stub_update(order, step):
         return step
 
     return call
+
+
+class RunCommandTest(unittest.TestCase):
+    def test_출력에_잘못된_바이트가_있어도_예외_없이_종료_코드와_대체_글자를_돌려준다(self):
+        """claude update 출력이 UTF-8로 읽히지 않아도 단계가 멈추지 않고 실패 결과로 남도록 종료 코드와 대체한 출력을 돌려준다."""
+        # Given
+        argv = [sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'bad \\xff\\xfe'); sys.exit(3)"]
+
+        # When
+        result = claude_update.run_command(argv, 30)
+
+        # Then
+        self.assertEqual(3, result.returncode)
+        self.assertIn("bad", result.stdout)
+        self.assertIn("\ufffd", result.stdout)
 
 
 class CommandWiringTest(unittest.TestCase):
