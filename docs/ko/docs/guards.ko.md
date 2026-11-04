@@ -80,8 +80,10 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 `origin`이 보호 대상 저장소일 때 검사 범위에 듭니다. 그 저장소는 작업 디렉터리의 체크아웃이거나, 명령이 `--git-dir`,
 `GIT_DIR`, `GIT_WORK_TREE`로 지정한 git 디렉터리입니다. `git push`는 닿는 목적지 중 하나라도 보호 대상이면 검사 범위에
 듭니다. 목적지는 명시한 URL이나 remote 이름이며 remote의 push URL로 확인하고, 없으면 브랜치의 push remote, 그다음
-`origin`입니다. push는 보내는 ref(ref를 지정하지 않으면 HEAD와 모든 로컬 브랜치, `--all`이면 모든 브랜치, `--tags`이면 태그)에서 닿는
-모든 커밋을 검사하며, 설정되어 있고 보호 대상인 목적지 remote의 원격 추적 ref에 있는 커밋만 제외합니다. 따라서 무관한
+`origin`입니다. push는 보내는 ref에서 닿는 모든 커밋을 검사합니다. ref를 지정하지 않으면 HEAD를 검사하고,
+`push.default=matching`이나 `remote.<name>.push` 설정이 더 보낼 수 있으면 모든 로컬 브랜치도 검사합니다. `--all`이면
+모든 브랜치, `--tags`이면 태그를 검사하고, 지정한 ref가 아직 없으면 HEAD와 모든 브랜치를 검사합니다. `2>&1` 같은
+리다이렉트는 ref로 보지 않습니다. 이때 설정되어 있고 보호 대상인 목적지 remote의 원격 추적 ref에 있는 커밋만 제외합니다. 따라서 무관한
 remote가 이미 가진 커밋도 검사합니다. 이 값들의 변수는 `git -c` 설정의 변수를 포함해 명령 자신의 할당으로 확장하며,
 확인할 수 없는 대상은 보호 대상으로 봅니다. 확인할 수 없는 `--repo`, `GH_REPO`, push 목적지는 검사하고, 확인할 수 없는 git
 디렉터리는 차단합니다. 확인할 수 없는 `-C`나 `cd` 값도 `git` 쓰기와 저장소를 지정하지 않은 `gh` 쓰기 앞에서는 차단합니다. 저장소를 고르는 디렉터리(`-C`,

@@ -87,6 +87,7 @@ URL_SCHEME = re.compile(r"^([A-Za-z][A-Za-z0-9+.-]*)://")
 HOST_PORT = re.compile(r":\d+$")
 STDIN_REDIRECT = re.compile(r"^0?<(?![<(&])(.*)$")
 FILE_DESCRIPTOR_REDIRECT = re.compile(r"^\d*[<>]")
+REDIRECT_WORD = re.compile(r"^(?:\d+|&)?(?:>>|>&|<&|>\||<>|>|<(?!<))(.*)$")
 
 
 class _Splitter:
@@ -269,6 +270,18 @@ def change_dir(tokens: list[str] | tuple[str, ...]) -> str | None:
     return None
 
 
+def without_redirects(words: tuple[str, ...]) -> tuple[str, ...]:
+    """Words left after dropping redirections such as `2>&1` or `> log`, with the file a bare operator names."""
+    kept: list[str] = []
+    skip = False
+    for word in words:
+        match = None if skip else REDIRECT_WORD.match(word)
+        if not skip and match is None:
+            kept.append(word)
+        skip = match is not None and not match.group(1)
+    return tuple(kept)
+
+
 def parse_options(
     args: list[str], takes_value: frozenset[str]
 ) -> tuple[tuple[tuple[str, str | None], ...], tuple[str, ...]]:
@@ -340,6 +353,7 @@ def _classify_git(args: list[str]) -> Target | None:
     if values is None:
         return None
     options, positionals = parse_options(rest, values)
+    positionals = without_redirects(positionals)
     names = {name for name, _value in options}
     if sub == "tag" and (names & TAG_READ_ONLY or not (names & TAG_CREATE_FLAGS or positionals)):
         return None

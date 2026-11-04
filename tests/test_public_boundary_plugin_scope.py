@@ -456,25 +456,67 @@ class PushSourceTests(PluginSandbox):
         self.assertEqual(2, blocked.returncode, blocked.stderr)
         self.assertIn("home-path", blocked.stderr)
 
-    def test_ref_없는_push는_HEAD와_모든_로컬_브랜치를_검사하고_목적지_추적_참조는_제외한다(self) -> None:
-        """push.default나 remote push 설정이 다른 브랜치를 보낼 수 있으므로, 다른 브랜치의 새 커밋은 막고 이미 올라간 커밋은 통과한다."""
+    def test_ref_없는_push는_다른_브랜치를_보낼_설정이_있을_때만_모든_로컬_브랜치를_검사한다(self) -> None:
+        """push.default=matching이나 remote push 설정이 있으면 다른 브랜치의 새 커밋을 막고, 기본 설정에서는 HEAD만 검사한다."""
         # given
         self.commit(self.session, "chore: clean start")
         self.git(self.session, "switch", "-q", "-c", "other")
         self.commit(self.session, f"fix: see {HOME_PATH}")
         self.git(self.session, "switch", "-q", "main")
         self.git(self.session, "config", "remote.pub.url", PUBLIC_ORIGIN)
+        self.git(self.session, "config", "remote.spread.url", PUBLIC_ORIGIN)
+        self.git(self.session, "config", "remote.spread.push", "refs/heads/*:refs/heads/*")
 
         # when
-        by_url = self.run_hook(f"git push {PUBLIC_ORIGIN}")
-        by_remote = self.run_hook("git push pub")
-        self.git(self.session, "update-ref", "refs/remotes/pub/other", "other")
-        excluded = self.run_hook("git push pub")
+        results = [
+            self.run_hook(command)
+            for command in (
+                f"git -c push.default=matching push {PUBLIC_ORIGIN}",
+                "git -c push.default=matching push pub",
+                "git push spread",
+                "git push pub",
+                f"git push {PUBLIC_ORIGIN}",
+            )
+        ]
 
         # then
-        self.assertEqual([2, 2], [by_url.returncode, by_remote.returncode], [by_url.stderr, by_remote.stderr])
-        self.assertIn("home-path", by_url.stderr)
-        self.assertEqual(0, excluded.returncode, excluded.stderr)
+        self.assertEqual([2, 2, 2, 0, 0], [r.returncode for r in results], [r.stderr for r in results])
+        self.assertIn("home-path", results[0].stderr)
+
+    def test_ref_없는_push도_목적지_원격의_추적_참조에_있는_커밋은_다시_검사하지_않는다(self) -> None:
+        """matching 설정으로 모든 로컬 브랜치를 검사할 때도 pub/other에 이미 있는 커밋은 건너뛴다."""
+        # given
+        self.commit(self.session, "chore: clean start")
+        self.git(self.session, "switch", "-q", "-c", "other")
+        self.commit(self.session, f"fix: see {HOME_PATH}")
+        self.git(self.session, "switch", "-q", "main")
+        self.git(self.session, "config", "remote.pub.url", PUBLIC_ORIGIN)
+        self.git(self.session, "update-ref", "refs/remotes/pub/other", "other")
+
+        # when
+        result = self.run_hook("git -c push.default=matching push pub")
+
+        # then
+        self.assertEqual(0, result.returncode, result.stderr)
+
+    def test_push_뒤의_리다이렉트는_보낼_브랜치나_목적지로_읽지_않는다(self) -> None:
+        """2>&1이나 > 파일 같은 리다이렉트 때문에 로컬 전용 브랜치까지 검사하지 않고, 이름을 댄 브랜치는 그대로 검사한다."""
+        # given
+        self.commit(self.session, "chore: clean start")
+        self.git(self.session, "switch", "-q", "-c", "other")
+        self.commit(self.session, f"fix: see {HOME_PATH}")
+        self.git(self.session, "switch", "-q", "main")
+        self.git(self.session, "config", "remote.pub.url", PUBLIC_ORIGIN)
+        clean = ["git push pub main 2>&1 | tail -1", "git push pub main > push.log 2>&1", "git push pub main 2>/dev/null"]
+
+        # when
+        passed = [self.run_hook(command) for command in clean]
+        named = self.run_hook("git push pub other 2>&1")
+
+        # then
+        self.assertEqual([0, 0, 0], [r.returncode for r in passed], [r.stderr for r in passed])
+        self.assertEqual(2, named.returncode, named.stderr)
+        self.assertIn("home-path", named.stderr)
 
     def test_git_C가_가리키는_폴더를_알_수_없으면_확인하지_못해_막는다(self) -> None:
         """-C 값이나 cd 값이 명령 치환이면 보호 체크아웃이 아니라고 단정하지 않고 막는다."""

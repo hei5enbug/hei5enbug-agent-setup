@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 UNRESOLVED = re.compile(r"[$`]")
 TAG_KEYWORD = "tag"
 BRANCH_FLAGS = ("--all", "--branches")
+SINGLE_BRANCH_DEFAULTS = frozenset({"simple", "current", "upstream", "tracking", "nothing"})
 
 
 @dataclass(frozen=True)
@@ -45,11 +46,21 @@ def _resolve(top: Path, source: str) -> str | None:
     return boundary_git.try_git(top, "rev-parse", "--verify", "-q", f"{source}^{{commit}}")
 
 
-def pushed_revisions(target: Target, top: Path, expand: Callable[[str], str]) -> list[str]:
+def sends_other_branches(where: Path | str, destination: str | None, config: tuple[str, ...]) -> bool:
+    """Whether a push that names no ref may send more than the current branch: push.default=matching, or a
+    remote.<name>.push refspec for the destination remote."""
+    mode = boundary_git.git_lines(where, "config", "--get", "push.default", config=config)
+    if mode and mode[-1] not in SINGLE_BRANCH_DEFAULTS:
+        return True
+    key = f"remote.{destination}.push"
+    return bool(destination and boundary_git.git_lines(where, "config", "--get-all", key, config=config))
+
+
+def pushed_revisions(target: Target, top: Path, expand: Callable[[str], str], other_branches: bool = True) -> list[str]:
     """The `git rev-list` starting points for everything the push sends.
 
-    A push that names no ref can send several branches, since push.default and remote.<name>.push decide, and a ref
-    that does not exist yet may be created by the same command; both take HEAD's and every local branch's commits.
+    A push that names no ref sends HEAD's branch, and every local branch when other_branches says its settings may
+    send more. A ref that does not exist yet may be created by the same command, so it takes HEAD and every branch.
     """
     if target.has_option("-d", "--delete"):
         return []
@@ -72,11 +83,11 @@ def pushed_revisions(target: Target, top: Path, expand: Callable[[str], str]) ->
         resolved = f"--glob={source}" if "*" in source else _resolve(top, source)
         missing = missing or resolved is None
         revisions.extend([resolved] if resolved else [])
-    implicit = not specs and not target.has_option(*BRANCH_FLAGS, "--mirror", "--tags")
-    spread = missing or implicit or (not specs and target.has_option("--follow-tags"))
-    if spread and boundary_git.has_head(top):
+    explicit = target.has_option(*BRANCH_FLAGS, "--mirror", "--tags")
+    implicit = not specs and (not explicit or target.has_option("--follow-tags"))
+    if (missing or implicit) and boundary_git.has_head(top):
         revisions.append("HEAD")
-    if spread:
+    if missing or (implicit and other_branches):
         revisions.append("--branches")
     return revisions
 
@@ -96,7 +107,8 @@ def already_pushed(where: Path | str, context: PushContext, target: Target) -> l
 
 def push_findings(target: Target, top: Path, where: Path | str, words, context: PushContext) -> list[str]:
     findings: list[str] = []
-    revisions = pushed_revisions(target, top, context.expand)
+    other_branches = sends_other_branches(where, context.destination, target.git_config)
+    revisions = pushed_revisions(target, top, context.expand, other_branches)
     if revisions:
         findings.extend(boundary_git.range_findings(top, revisions + already_pushed(where, context, target), words))
     tags = boundary_git.local_tags(top)

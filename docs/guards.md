@@ -80,9 +80,11 @@ commit or tag is in scope when the `origin` of its repository is a protected rep
 working directory, or the git directory that the command sets with `--git-dir`, `GIT_DIR`, or `GIT_WORK_TREE`. A
 `git push` is in scope when any destination it reaches is protected: an explicit URL or remote name, resolved through
 the remote's push URL, or, without one, the branch's push remote and then `origin`. A push scans every commit reachable
-from each ref it sends (HEAD and every local branch when it names none, every branch for `--all`, tags for `--tags`) and leaves
-out only the remote-tracking refs of a configured destination remote that is protected, so a commit an unrelated remote
-already holds is still scanned.
+from each ref it sends: HEAD when it names none, and every local branch as well when `push.default=matching` or a
+`remote.<name>.push` setting may send more; every branch for `--all`; tags for `--tags`; and HEAD and every branch
+for a named ref that does not exist yet. Redirections such as `2>&1` are not refs. It leaves out only the
+remote-tracking refs of a configured destination remote that is protected, so a commit an unrelated remote already
+holds is still scanned.
 Variables in these values, including those in `git -c` settings, are expanded from the command's own assignments, and a
 target that cannot be resolved is treated as protected: an unresolved `--repo`, `GH_REPO`, or push destination is
 scanned, and an unresolved git directory blocks, as does an unresolved `-C` or `cd` value before a `git` write or a
