@@ -142,14 +142,7 @@ Markdown에서는 `##`, Jira 위키 마크업에서는 `h2.`를 쓴다.
 - 콘텐츠 규칙 파일이 제외하는 문장은 모두 뺀다.
 - `target.public`이 false이면 [비공개 트래커의 상세 정보](references/private-tracker.ko.md)를 읽은 뒤,
   코딩 에이전트의 작업에 도움이 되는 나머지 세부 정보를 모두 넣는다.
-- `target.public`이 true이면 다음을 따른다.
-  - Acceptance criteria는 `demo-a`, `example.com`, `/tmp/work`, `ABC-123` 같은 가상 값으로 쓴다.
-  - 사례의 식별자는 Observations와 Evidence에만 넣는다.
-  - 내부 URL, 호스트 이름, 계정 식별자와 비공개 조직, 제품, 저장소, 플러그인, 사람, 채널의 이름은 제외한다.
-  - 제안에는 담당 플러그인과 공개 도구의 이름만 쓴다.
-    다른 플러그인은 역할로 설명하여, 담당 플러그인이 자신을 기반으로 만든 플러그인의 이름을 알 필요가 없게 한다.
-  - Proposal과 Acceptance criteria에서 1단계의 식별자를 하나씩 검색하고, 전체 초안에서 제외해야 할 값을 모두 검색한다.
-    하나도 남지 않을 때까지 고쳐 쓴다.
+- `target.public`이 true이면 초안을 쓰기 전에 [공개 트래커의 상세 정보](references/public-tracker.ko.md)를 읽고 적용한다.
 
 2단계에서 나열한 각 요구 사항을 그 내용을 담은 초안 문구에 연결한다.
 모든 요구 사항이 연결될 때만 등록한다. 최종 보고에는 각 요구 사항에 해당하는 문구를 명시한다.

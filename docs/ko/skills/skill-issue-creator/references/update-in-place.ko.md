@@ -27,18 +27,21 @@ GitHub에서는 `gh issue view <number> --repo <location> --json author`의 `aut
   ```
 
 - 다른 사람이 작성했다면 새 관찰 내용, 규칙, 기준을 댓글로 추가하고 그 사람의 본문은 그대로 둔다.
-  GitHub에서는 `gh issue comment <number> --repo <location> --body-file -`를 사용하고 같은 방식으로 텍스트를 표준 입력으로 전달한다.
+  GitHub에서는 `gh issue comment <number> --repo <location> --body-file -`를 사용하고 같은 방식으로 텍스트를
+  표준 입력으로 전달한다. 출력된 링크에서 `#issuecomment-` 뒤의 숫자인 댓글 ID를 보관한다.
 
-먼저 질문하지 않는다. `preview_required`가 true일 때 아래의 승인만 사용자를 기다린다. 이후 쓴 내용을 다시 읽고 링크와 무엇을 변경했는지 보고한다. 편집한 본문은 8단계처럼 읽는다.
-댓글은 이슈의 댓글에서 읽으며, GitHub에서는
-`gh issue view <number> --repo <location> --comments --json comments --jq '.comments[-1]'`로 현재 계정이 썼는지와
-텍스트에 원시 마크업이 보이지 않는지 확인한다.
+먼저 질문하지 않는다. `preview_required`가 true일 때 아래의 승인만 사용자를 기다린다. 이후 쓴 내용을 다시 읽고
+링크와 무엇을 변경했는지 보고한다. 편집한 본문은 8단계처럼 읽는다. 댓글은 ID로 읽으며, GitHub에서는
+`gh api repos/<location>/issues/comments/<id> --jq '{user: .user.login, body}'`로 현재 계정이 썼는지와
+텍스트에 원시 마크업이 보이지 않는지 확인한다. 자신의 댓글 뒤에 다른 댓글이 달릴 수 있으므로 위치로 댓글을 고르지 않는다.
 
 ## 다시 읽기 실패 또는 미리 보기 후 변경
 
 이 스킬이 쓴 것만 바꾸고 다시 읽는다. 이 스킬이 만들었거나 현재 계정이 쓴 이슈는 같은 명령으로 본문을 편집한다.
-댓글은 그 댓글을 고치며, GitHub에서는 `gh issue comment <number> --repo <location> --edit-last --body-file -`에
-텍스트를 표준 입력으로 전달한다. 다른 사람이 쓴 이슈의 본문은 편집하지 않는다.
+댓글은 ID로 해당 댓글을 고치며, GitHub에서는
+`gh api -X PATCH repos/<location>/issues/comments/<id> -F body=@-`에 텍스트를 표준 입력으로 전달한다.
+다른 사람이 쓴 이슈의 본문은 편집하지 않는다. 댓글은 해당 이슈에서 현재 계정의 마지막 댓글을 편집하는 `--edit-last`로
+편집하지 않는다.
 
 ## 승인
 

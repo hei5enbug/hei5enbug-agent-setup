@@ -22,20 +22,21 @@ with `gh api user --jq .login`; on another tracker, compare with the connected t
   ```
 
 - Someone else wrote it: add a comment with the new observations, rules, and criteria, and leave their body alone. On
-  GitHub, use `gh issue comment <number> --repo <location> --body-file -` with the text on stdin the same way.
+  GitHub, use `gh issue comment <number> --repo <location> --body-file -` with the text on stdin the same way, and keep
+  the comment ID from the link it prints, the number after `#issuecomment-`.
 
 Ask no question first; only the approval below, under the condition that `preview_required` is true, waits for the
 user. Then read back what you wrote, and report its link and which change was made: an edited body as in step 8; a
-comment through the issue's comments, on GitHub with
-`gh issue view <number> --repo <location> --comments --json comments --jq '.comments[-1]'`, confirming that the
-current account wrote it and that its text shows no raw markup.
+comment by its ID, on GitHub with `gh api repos/<location>/issues/comments/<id> --jq '{user: .user.login, body}'`,
+confirming that the current account wrote it and that its text shows no raw markup. Never pick the comment by its
+position, because another comment can arrive after yours.
 
 ## Failed read-back or a change after the preview
 
 Change only what this skill wrote, then read it back again: the body of an issue it created or the current account
-wrote, with the same command; for a comment, that comment, on GitHub with
-`gh issue comment <number> --repo <location> --edit-last --body-file -` and the text on stdin. Never edit the body of an
-issue someone else wrote.
+wrote, with the same command; for a comment, that comment by its ID, on GitHub with
+`gh api -X PATCH repos/<location>/issues/comments/<id> -F body=@-` and the text on stdin. Never edit the body of an
+issue someone else wrote, or a comment through `--edit-last`, which edits the account's latest comment on the issue.
 
 ## Approval
 

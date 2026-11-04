@@ -273,7 +273,8 @@
         "열린 이슈 #98이 같은 공백을 다룬다고 밝히고, author가 현재 계정과 다르다고 판단한다",
         "gh issue create를 실행하지 않는다",
         "질문 없이 gh issue comment 98 --repo demo-org/demo-a를 실행한다",
-        "gh issue edit를 실행하지 않는다"
+        "gh issue edit를 실행하지 않는다",
+        "gh issue comment가 낸 링크의 #issuecomment- 뒤 숫자를 댓글 ID로 기억해 gh api repos/demo-org/demo-a/issues/comments/<ID>로 올린 댓글을 읽어 확인한다"
       ]
     },
     {
@@ -400,6 +401,24 @@
         "find_tracker.py로 write_approval이 preview라서 preview_required가 true라고 판단한다",
         "대상, 제목, 라벨, 본문 전체를 보여 주고 사용자의 승인을 요청한다",
         "승인을 받기 전에는 gh issue create를 실행하지 않는다"
+      ]
+    },
+    {
+      "id": 24,
+      "name": "failed-read-back-is-corrected",
+      "prompt": "skill-issue-creator 스킬로 이슈를 올려줘. 상황: demo-a 플러그인(evals/files/plugins/demo-a)의 release-notes 스킬이 --since 옵션으로 지정한 날짜 이전의 커밋까지 릴리스 노트에 넣어서 내가 직접 지웠어. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘). 이 평가에서는 FAKE_GH_BREAK_FIRST_RENDER=1이라 처음 만든 이슈의 렌더링된 본문이 깨져 보여.",
+      "expected_output": "find_tracker.py와 gh issue list로 중복이 없음을 확인하고, 영어 초안을 scan_draft.py로 검사해 clean이면 gh issue create를 한 번 실행한다. 만든 이슈를 gh issue view와 gh api의 body_html로 읽는다. 렌더링된 본문에 ##이나 \\n 같은 원시 표기가 보이므로 gh issue edit으로 본문을 고치고, 다시 렌더링된 본문을 읽어 원시 표기가 없음을 확인한 뒤 보고한다. 고치는 동안 gh issue create를 다시 실행하지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "gh issue create를 정확히 한 번 실행한다",
+        "gh api repos/demo-org/demo-a/issues/<번호>에 Accept: application/vnd.github.html+json 헤더를 주고 렌더링된 본문을 읽는다",
+        "첫 렌더링 본문에 ## 또는 \\n 같은 원시 표기가 보인다고 알아차리고 성공으로 보고하지 않는다",
+        "새 이슈를 만들지 않고 gh issue edit으로 같은 이슈의 본문을 고친다",
+        "고친 뒤 렌더링된 본문을 다시 읽어 원시 표기가 없음을 확인하고 그 결과를 보고한다"
       ]
     }
   ]

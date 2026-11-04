@@ -1,39 +1,293 @@
-#!/bin/sh
-# Evaluation stand-in for gh: answers reads from fixtures and records every write in FAKE_GH_LOG without sending it.
-here=$(cd "$(dirname "$0")" && pwd)
-log="${FAKE_GH_LOG:-/dev/null}"
-printf '%s\n' "gh $*" >> "$log"
-repo=""
-prev=""
-for arg in "$@"; do
-  case "$prev" in --repo|-R) repo="$arg" ;; esac
-  case "$arg" in --repo=*) repo="${arg#--repo=}" ;; esac
-  prev="$arg"
-done
-file="$here/../trackers/$(printf '%s' "$repo" | tr '/' '_').json"
-case "$1 $2" in
-  "auth status")
-    echo "github.com: logged in as demo-user"
-    ;;
-  "api user")
-    echo "demo-user"
-    ;;
-  "issue list")
-    if [ -f "$file" ]; then cat "$file"; else echo "[]"; fi
-    ;;
-  "issue view")
-    if [ -f "$file" ]; then cat "$file"; else echo "{}"; fi
-    ;;
-  "issue create")
-    cat >> "$log"
-    echo "https://github.com/$repo/issues/200"
-    ;;
-  "issue edit"|"issue comment")
-    cat >> "$log"
-    echo "https://github.com/$repo/issues/$3"
-    ;;
-  *)
-    echo "fake gh: unsupported command in this evaluation" >&2
-    exit 1
-    ;;
-esac
+#!/usr/bin/env python3
+"""Evaluation stand-in for gh: reads come from fixtures plus the issues and comments written during one evaluation.
+
+Every command is logged to FAKE_GH_LOG with the body that was sent. Created issues, edits, and comments are kept as
+JSON in FAKE_GH_STATE, or in FAKE_GH_LOG plus ".state" when only the log is set, so a later read returns the
+requested item and its rendered body. Nothing leaves the machine and the fixtures are never changed.
+
+Set FAKE_GH_BREAK_FIRST_RENDER=1 while creating an issue to make its rendered body show raw markup until the body
+is edited, so an evaluation can observe a failed read-back and its correction.
+"""
+
+import html
+import json
+import os
+import re
+import sys
+import tempfile
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+USER = "demo-user"
+FIRST_NUMBER = 200
+FIRST_COMMENT_ID = 3000
+VALUE_FLAGS = {
+    "--repo": "repo", "-R": "repo", "--title": "title", "-t": "title", "--label": "label", "-l": "label",
+    "--body": "body", "-b": "body", "--body-file": "body_file", "--json": "json", "--jq": "jq", "-q": "jq",
+    "--add-label": "label", "--state": "state", "-s": "state", "--search": "search", "-S": "search",
+    "--limit": "limit", "-L": "limit", "-F": "field", "-f": "field", "--field": "field", "--raw-field": "field", "-H": "header", "--header": "header", "-X": "method", "--method": "method",
+}
+
+
+def parse(argv):
+    options, positional, index = {"label": [], "fields": []}, [], 0
+    while index < len(argv):
+        arg = argv[index]
+        if arg.startswith("--") and "=" in arg and arg.split("=", 1)[0] in VALUE_FLAGS:
+            arg, value = arg.split("=", 1)
+            argv = [*argv[:index], arg, value, *argv[index + 1:]]
+        name = VALUE_FLAGS.get(arg)
+        if arg == "-F" and positional[:1] == ["issue"]:
+            name = "body_file"
+        if name and index + 1 < len(argv):
+            index += 1
+            if name in ("label", "field"):
+                options["label" if name == "label" else "fields"].append(argv[index])
+            else:
+                options[name] = argv[index]
+        elif arg.startswith("-"):
+            options[arg.lstrip("-")] = True
+        else:
+            positional.append(arg)
+        index += 1
+    return options, positional
+
+
+def state_path(repo):
+    configured = os.environ.get("FAKE_GH_STATE")
+    log = os.environ.get("FAKE_GH_LOG")
+    if configured:
+        folder = Path(configured)
+    elif log and log != "/dev/null":
+        folder = Path(log + ".state")
+    else:
+        folder = Path(tempfile.gettempdir()) / "fake-gh-state"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder / (repo.replace("/", "_") + ".json")
+
+
+def load_state(repo):
+    path = state_path(repo)
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"issues": []}
+
+
+def save_state(repo, state):
+    state_path(repo).write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def fixture_issues(repo):
+    path = HERE.parent / "trackers" / (repo.replace("/", "_") + ".json")
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+
+
+def all_issues(repo, state):
+    written = {issue["number"] for issue in state["issues"]}
+    base = [{"comments": [], **issue} for issue in fixture_issues(repo) if issue["number"] not in written]
+    return sorted([*base, *state["issues"]], key=lambda issue: issue["number"])
+
+
+def find(repo, state, number):
+    for issue in all_issues(repo, state):
+        if str(issue["number"]) == str(number):
+            return issue
+    sys.exit(f"GraphQL: Could not resolve to an Issue with the number of {number}. (repository.issue)")
+
+
+def replace_issue(repo, state, issue):
+    others = [item for item in state["issues"] if item["number"] != issue["number"]]
+    save_state(repo, {**state, "issues": [*others, issue]})
+
+
+def read_body(options):
+    if options.get("body_file") == "-":
+        return sys.stdin.read()
+    if options.get("body_file"):
+        return Path(options["body_file"]).read_text(encoding="utf-8")
+    return options.get("body")
+
+
+def inline(text):
+    escaped = html.escape(text, quote=False)
+    escaped = re.sub(r"`([^`]+)`", r"<code>\1</code>", escaped)
+    return re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", escaped)
+
+
+def render(body):
+    blocks, lines, index = [], body.split("\n"), 0
+    while index < len(lines):
+        line = lines[index]
+        heading = re.match(r"^(#{1,6}) (.+)$", line)
+        if heading:
+            level = len(heading.group(1))
+            blocks.append(f"<h{level}>{inline(heading.group(2))}</h{level}>")
+        elif re.match(r"^([-*]|\d+\.) ", line):
+            tag = "ol" if line[0].isdigit() else "ul"
+            items = []
+            while index < len(lines) and re.match(r"^([-*]|\d+\.) ", lines[index]):
+                items.append(f"<li>{inline(re.sub(r'^([-*]|\d+\.) ', '', lines[index]))}</li>")
+                index += 1
+            index -= 1
+            blocks.append(f"<{tag}>" + "".join(items) + f"</{tag}>")
+        elif line.strip():
+            paragraph = [line]
+            while index + 1 < len(lines) and lines[index + 1].strip() and not re.match(r"^(#|[-*] |\d+\. )", lines[index + 1]):
+                index += 1
+                paragraph.append(lines[index])
+            blocks.append("<p>" + inline(" ".join(paragraph)) + "</p>")
+        index += 1
+    return "\n".join(blocks)
+
+
+def rendered_body(issue):
+    body = issue.get("body") or ""
+    if issue.get("render_broken"):
+        return "<p>" + html.escape(body.replace("\n", "\\n"), quote=False) + "</p>"
+    return render(body)
+
+
+def select(path, data):
+    if path in (".", None):
+        return data
+    construct = re.fullmatch(r"\{(.*)\}", path)
+    if construct:
+        pairs = [item.split(":", 1) if ":" in item else [item, "." + item.strip()] for item in construct.group(1).split(",")]
+        return {name.strip(): select(source.strip(), data) for name, source in pairs}
+    if not re.fullmatch(r"(\.[A-Za-z_]\w*|\[-?\d+\])+", path):
+        sys.exit(f"fake gh: unsupported --jq expression {path}")
+    for key, index in re.findall(r"\.([A-Za-z_]\w*)|\[(-?\d+)\]", path):
+        data = data.get(key) if key else data[int(index)]
+    return data
+
+
+def emit(data, options):
+    data = select(options.get("jq"), data)
+    print(data if isinstance(data, str) else json.dumps(data, ensure_ascii=False))
+
+
+def public_view(issue, options):
+    wanted = [field for field in options.get("json", "").split(",") if field]
+    return {key: issue.get(key) for key in wanted} if wanted else {k: v for k, v in issue.items() if k != "render_broken"}
+
+
+def create_issue(repo, state, options):
+    number = max([FIRST_NUMBER - 1, *(issue["number"] for issue in state["issues"])]) + 1
+    labels = [{"name": name} for value in options["label"] for name in value.split(",")]
+    issue = {"number": number, "title": options.get("title", ""), "url": f"https://github.com/{repo}/issues/{number}",
+             "state": "OPEN", "labels": labels, "author": {"login": USER}, "body": read_body(options) or "",
+             "comments": [], "render_broken": os.environ.get("FAKE_GH_BREAK_FIRST_RENDER") == "1"}
+    replace_issue(repo, state, issue)
+    print(issue["url"])
+
+
+def edit_issue(repo, state, number, options):
+    issue = find(repo, state, number)
+    body = read_body(options)
+    changes = {"title": options["title"]} if "title" in options else {}
+    if body is not None:
+        changes.update(body=body, render_broken=False)
+    replace_issue(repo, state, {**issue, **changes})
+    print(issue["url"])
+
+
+def next_comment_id(repo, state):
+    known = [c["id"] for issue in all_issues(repo, state) for c in issue.get("comments") or []]
+    return max([FIRST_COMMENT_ID - 1, *known]) + 1
+
+
+def comment_issue(repo, state, number, options):
+    issue = find(repo, state, number)
+    body = read_body(options) or ""
+    comments = list(issue.get("comments") or [])
+    if options.get("edit-last") and comments:
+        comments[-1] = {**comments[-1], "body": body}
+        link = comments[-1]["url"]
+    else:
+        identifier = next_comment_id(repo, state)
+        link = f"{issue['url']}#issuecomment-{identifier}"
+        login = {"login": USER}
+        comments.append({"id": identifier, "author": login, "user": login, "body": body, "url": link})
+    replace_issue(repo, state, {**issue, "comments": comments})
+    print(link)
+
+
+def find_comment(repo, state, identifier):
+    for issue in all_issues(repo, state):
+        for comment in issue.get("comments") or []:
+            if str(comment.get("id")) == identifier:
+                return issue, comment
+    sys.exit("gh: Not Found (HTTP 404)")
+
+
+def field_body(options):
+    value = next((v.split("=", 1)[1] for v in options.get("fields", []) if v.startswith("body=")), None)
+    if value == "@-":
+        return sys.stdin.read()
+    return Path(value[1:]).read_text(encoding="utf-8") if value and value.startswith("@") else value
+
+
+def api_comment(repo, identifier, options):
+    state = load_state(repo)
+    issue, comment = find_comment(repo, state, identifier)
+    if options.get("method", "GET").upper() == "PATCH":
+        body = field_body(options)
+        log_body(options, body)
+        comment = {**comment, "body": body or ""}
+        comments = [comment if c["id"] == comment["id"] else c for c in issue["comments"]]
+        replace_issue(repo, state, {**issue, "comments": comments})
+    emit({key: value for key, value in comment.items()}, options)
+
+
+def api(repo_path, options):
+    on_comment = re.fullmatch(r"repos/([^/]+/[^/]+)/issues/comments/(\d+)", repo_path)
+    if on_comment:
+        return api_comment(on_comment.group(1), on_comment.group(2), options)
+    match = re.fullmatch(r"repos/([^/]+/[^/]+)/issues/(\d+)", repo_path)
+    if not match:
+        sys.exit("fake gh: unsupported api path in this evaluation")
+    repo = match.group(1)
+    issue = find(repo, load_state(repo), match.group(2))
+    emit({**public_view(issue, {}), "body_html": rendered_body(issue)}, options)
+
+
+def main(argv):
+    log = os.environ.get("FAKE_GH_LOG", "/dev/null")
+    with open(log, "a", encoding="utf-8") as handle:
+        handle.write("gh " + " ".join(argv) + "\n")
+    options, positional = parse(argv)
+    repo = options.get("repo", "")
+    command, number = " ".join(positional[:2]), positional[2] if len(positional) > 2 else None
+    state = load_state(repo)
+    if command == "auth status":
+        print(f"github.com: logged in as {USER}")
+    elif command == "api user":
+        print(USER)
+    elif positional[:1] == ["api"] and len(positional) > 1:
+        api(positional[1], options)
+    elif command == "issue list":
+        print(json.dumps([public_view(issue, {}) for issue in all_issues(repo, state)], ensure_ascii=False))
+    elif command == "issue view" and number:
+        emit(public_view(find(repo, state, number), options), options)
+    elif command == "issue create":
+        create_issue(repo, state, with_logged_body(log, options))
+    elif command == "issue edit" and number:
+        edit_issue(repo, state, number, with_logged_body(log, options))
+    elif command == "issue comment" and number:
+        comment_issue(repo, state, number, with_logged_body(log, options))
+    else:
+        sys.exit("fake gh: unsupported command in this evaluation")
+
+
+def log_body(_options, body):
+    if body is not None:
+        with open(os.environ.get("FAKE_GH_LOG", "/dev/null"), "a", encoding="utf-8") as handle:
+            handle.write(body if body.endswith("\n") else body + "\n")
+
+
+def with_logged_body(log, options):
+    body = read_body(options)
+    log_body(options, body)
+    return {**options, "body": body, "body_file": None}
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

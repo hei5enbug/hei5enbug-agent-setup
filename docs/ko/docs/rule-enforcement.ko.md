@@ -110,6 +110,7 @@
 | `skills/local-data-cleanup/tests/test_survey_kinds.py`, `skills/local-data-cleanup/tests/test_survey_checks.py`, `skills/local-data-cleanup/tests/test_merge_delete.py` | 조사는 읽기 전용으로 남고 안전하지 않은 후보를 보고 전용이나 보호 항목으로 바꾸며, 삭제는 두 판정이 모두 허용하고 사용자가 고른 항목만 지운다. | `skills/local-data-cleanup/SKILL.md` |
 | `skills/mistake-enforcer/tests/test_rule_misses.py` | 규칙 누락 점검은 기간 안의 메인 세션 기록만 대상으로 훅 알림, 중지 피드백, 거부, 사용자 교정과 최종 보고의 미완료 항목을 규칙별로 집계하고, 어떤 규칙에도 연결되지 않은 훅 메시지를 나열한다. | `skills/mistake-enforcer/references/rule-audit.md` |
 | `skills/skill-issue-creator/tests/test_find_tracker.py` | 트래커 탐색은 플러그인 루트를 찾아 `issue-target.json`을 검증하고, 선언이 없거나 잘못되면 트래커를 추측하지 않고 그 상태를 보고한다. | `skills/skill-issue-creator/SKILL.md` |
+| `skills/skill-issue-creator/tests/test_fake_gh.py` | 평가용 가짜 `gh`는 평가 사례가 만든 이슈와 댓글을 보관하고, 요청한 이슈와 그 렌더링된 본문을 돌려주며, 댓글을 ID로 읽고 고친다. 그래서 사례가 스킬의 다시 읽기 확인을 검사할 수 있다. | `skills/skill-issue-creator/references/update-in-place.md`, `skills/skill-issue-creator/evals/` |
 | `tests/test_issue_target.py` | 이 플러그인 루트의 `issue-target.json`은 공개 GitHub 트래커를 선언한다. | `docs/development.md` (Issue tracker declaration) |
 | `skills/skill-builder/scripts/quick_validate.py`를 모든 스킬에 실행 | 모든 스킬 폴더가 검증을 통과한다. | `README.md` (Development checks) |
 

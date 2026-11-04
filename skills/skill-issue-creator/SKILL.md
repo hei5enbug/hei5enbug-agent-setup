@@ -141,15 +141,8 @@ Apply these content rules to every draft:
 - Leave out every sentence that the content-rules file excludes.
 - Under the condition that `target.public` is false, include every other detail that helps a coding agent do the
   work, after reading [private tracker detail](references/private-tracker.md).
-- Under the condition that `target.public` is true:
-  - Write Acceptance criteria with fictional values, such as `demo-a`, `example.com`, `/tmp/work`, and `ABC-123`.
-  - Put the case's identifiers only in Observations and Evidence.
-  - Leave out internal URLs, host names, account identifiers, and the names of private organizations, products,
-    repositories, plugins, people, and channels.
-  - Name in the proposal only the owning plugin and public tools. Describe any other plugin by its role, so the
-    owning plugin never has to name a plugin that builds on it.
-  - Search the Proposal and Acceptance criteria for each identifier from step 1 and the whole draft for every
-    excluded value, and rewrite until none remains.
+- Under the condition that `target.public` is true, read [public tracker detail](references/public-tracker.md)
+  before drafting and apply it.
 
 Map each listed requirement from step 2 to the draft text that carries it. File only when every requirement maps; the
 final report names that text for each.

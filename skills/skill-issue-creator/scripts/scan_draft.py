@@ -39,6 +39,14 @@ def result(status: str, findings: list[dict], lists: int, problems: list[str]) -
     return {"status": status, "findings": findings, "private_word_lists": lists, "problems": problems}
 
 
+def session_value_pattern(value: str) -> re.Pattern[str]:
+    """Match a session value as a whole word; a symbol at either end also matches next to more characters."""
+    body = r"\s+".join(re.escape(part) for part in value.split())
+    head = "(?<!\\w)" if value.strip()[0].isalnum() else ""
+    tail = "(?!\\w)" if value.strip()[-1].isalnum() else ""
+    return re.compile(rf"{head}{body}{tail}", re.IGNORECASE)
+
+
 def scan(draft: str, values: list[str], owners: tuple[Path, ...] = ()) -> dict:
     sys.path.insert(0, str(SCANNER_DIR))
     try:
@@ -54,9 +62,9 @@ def scan(draft: str, values: list[str], owners: tuple[Path, ...] = ()) -> dict:
         match = FINDING.match(text)
         found.append({"line": int(match.group(1)), "kind": match.group(2)})
     for index, value in enumerate(values):
-        patterns = public_boundary.compile_private_words([value])
+        pattern = session_value_pattern(value)
         for number, line in enumerate(draft.splitlines(), start=1):
-            if any(pattern.search(line) for pattern in patterns):
+            if pattern.search(line):
                 found.append({"line": number, "kind": SESSION_VALUE, "value": index})
     found.sort(key=lambda item: (item["line"], item["kind"], item.get("value", -1)))
     problems = [*sources.problems, *sources.notes]

@@ -97,6 +97,21 @@ class CheckDraftTests(CheckDraftCase):
         self.assertEqual([{"line": 1, "kind": "session-value", "value": 0},
                           {"line": 3, "kind": "session-value", "value": 1}], findings)
 
+    def test_하이픈으로_끝나는_티켓_접두사_값은_뒤에_숫자가_붙어도_찾는다(self) -> None:
+        """끝이 글자나 숫자가 아닌 --value는 바로 뒤에 식별자 문자가 붙어도 일치하고, 앞쪽 단어 경계는 유지한다."""
+        # given
+        draft = "See DEMO-123.\nXDEMO-9 is another key\nplain demo text\n"
+
+        # when
+        result = self.run_script(draft, "--value", "DEMO-")
+
+        # then
+        self.assertEqual(1, result.returncode)
+        data = json.loads(result.stdout)
+        self.assertEqual("matches", data["status"])
+        self.assertEqual([{"line": 1, "kind": "session-value", "value": 0}], data["findings"])
+        self.assertNotIn("DEMO-", result.stdout)
+
     def test_설치된_플러그인_선언의_단어를_찾고_단어는_출력하지_않는다(self) -> None:
         """발견한 모든 목록을 읽어 비공개 단어를 잡고, 읽은 목록 수를 알린다."""
         # given
