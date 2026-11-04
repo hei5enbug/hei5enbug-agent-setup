@@ -127,6 +127,26 @@ class ProbeInterruptedTest(unittest.TestCase):
         self.assertNotIn("probe_position", entry)
         self.assertEqual([("term_claude", refresh.PROBE_KEY)], fake.keystrokes)
 
+    def test_확인_중_사용자가_이어_써도_남은_확인_글자의_위치를_알려_준다(self):
+        """확인 글자가 들어간 뒤 사용자가 글 끝에 더 입력해 확인 글자가 남으면 키를 더 보내지 않고, 남은 글자의 1부터 센 위치와 함께 probe_character_left로 알린다."""
+        # Given
+        fake = CursorOrca([terminal("term_claude", "claude")], typed={"term_claude": self.TYPED}, cursor=len(self.TYPED))
+
+        def user_appends(fake, handle, text):
+            fake.typed[handle] += "y"
+        fake.on_keys = user_appends
+        entry = {"handle": "term_claude", "host": "claude", "status": "pending", "actions": ["reload"], "draft_seen": (self.TYPED, 0.0)}
+        live = {"term_claude": terminal("term_claude", "claude")}
+
+        # When
+        with patch.object(refresh_sessions, "read_marker", return_value=None):
+            refresh.step(fake, entry, {}, live)
+
+        # Then
+        self.assertEqual(("failed", "probe_character_left", len(self.TYPED) + 1), (entry["status"], entry["detail"], entry["probe_position"]))
+        self.assertEqual(self.TYPED + "xy", fake.draft("term_claude"))
+        self.assertEqual([("term_claude", refresh.PROBE_KEY)], fake.keystrokes)
+
 
 class SequencedScreens(FakeOrca):
     """A fake Orca whose screen reads come from a fixed sequence, the last one repeating."""
@@ -409,6 +429,48 @@ class RecordManualTest(unittest.TestCase):
         self.assertEqual((2, "session_not_recordable"), (done[0], done[1]["error"]["code"]))
         self.assertEqual((2, "session_not_in_run"), (unknown[0], unknown[1]["error"]["code"]))
         self.assertEqual("done", refresh_core.load_run(self.RUN)["sessions"]["term_done"]["status"])
+
+    def save_resume_only(self, sessions):
+        resumed = {"term_demo": {"terminal": "…m_demo", "status": "skipped", "detail": "not_a_claude_session"}}
+        refresh.save_json(refresh.run_path(self.RUN), {"run_id": self.RUN, "hosts": {}, "sessions": sessions, "resumed": resumed})
+
+    def test_apply에_없던_터미널의_건너뛴_재개도_손으로_끝내면_기록된다(self):
+        """apply가 세션으로 고르지 않아 sessions에 없는 터미널의 재개가 not_a_claude_session으로 건너뛰어졌어도, 손으로 재개를 끝냈다고 기록하면 resumed가 수동 완료로 바뀐다."""
+        # Given
+        self.save_resume_only({})
+
+        # When
+        code, output = self.record("--terminal", "term_demo", "--action", "resume", "--result", "done")
+
+        # Then
+        self.assertEqual(0, code)
+        self.assertEqual([("done", True)], [(item["status"], item["manual"]) for item in self.status()["resumed"]])
+        self.assertEqual({}, refresh_core.load_run(self.RUN)["sessions"])
+
+    def test_재개_기록은_이미_done인_세션의_남은_결과를_바꾸지_않고_resumed만_갱신한다(self):
+        """sessions에서는 done인 터미널의 재개가 resumed에서 건너뛰어졌다면 손으로 한 재개 실패 기록이 resumed만 failed와 이유로 바꾸고 세션 결과는 그대로 둔다."""
+        # Given
+        self.save_resume_only({"term_demo": {"terminal": "…m_demo", "host": "claude", "status": "done", "detail": "applied"}})
+
+        # When
+        code, _ = self.record("--terminal", "term_demo", "--action", "resume", "--result", "failed", "--detail", "manual_resume_failed")
+
+        # Then
+        saved = refresh_core.load_run(self.RUN)
+        self.assertEqual(0, code)
+        self.assertEqual(("failed", "manual_resume_failed"), (saved["resumed"]["term_demo"]["status"], saved["resumed"]["term_demo"]["detail"]))
+        self.assertEqual(("done", "applied"), (saved["sessions"]["term_demo"]["status"], saved["sessions"]["term_demo"]["detail"]))
+
+    def test_재개가_아닌_동작은_sessions에_없으면_여전히_거부한다(self):
+        """sessions에 없는 터미널은 resumed에 건너뜀이 있어도 reload 같은 다른 동작은 기록할 수 없다."""
+        # Given
+        self.save_resume_only({})
+
+        # When
+        code, output = self.record("--terminal", "term_demo", "--action", "reload", "--result", "done")
+
+        # Then
+        self.assertEqual((2, "session_not_in_run"), (code, output["error"]["code"]))
 
 
 if __name__ == "__main__":

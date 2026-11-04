@@ -217,7 +217,7 @@ def record_resume(entry: dict, result: dict) -> None:
         entry.pop("host_release_outdated", None)
         entry.update(carried, release=result.get("release_after") or entry.get("release"), actions=remaining,
                      completed=[*entry.get("completed", []), "resumed"], status="pending" if remaining else "done",
-                     detail=None if remaining else "applied")
+                     detail=None if remaining else "applied", **({"compact_after_resume": True} if remaining else {}))
     else:
         entry.update(carried, status="failed", detail=result["detail"])
 

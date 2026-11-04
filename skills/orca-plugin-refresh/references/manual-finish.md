@@ -32,3 +32,6 @@ marked `done` once none is left, so `status` and `not_refreshed` show it. The re
 `actions`, or, when an automatic step cleared them, the `planned` actions not yet done; a `resume` also finishes a
 planned reload, because the new process loads the installed plugins.
 The command rejects a terminal that is not in the run and a session whose status is not `skipped` or `failed`.
+The one exception is `--action resume`: when the run's `resumed` list holds a `skipped` or `failed` resume for the
+terminal, the record updates that entry to `done` or `failed` with `manual` set, even if the terminal has no session
+result or its session result is already `done`, and the session result stays as it was.

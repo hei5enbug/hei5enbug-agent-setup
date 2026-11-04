@@ -176,6 +176,22 @@ def probe_position(draft: str, shown: object) -> int | None:
     return next((index for index in range(len(draft) + 1) if shown == draft[:index] + PROBE_KEY + draft[index:]), None)
 
 
+def probe_location(draft: str, shown: object) -> int | None:
+    """The offset of the probe character in `shown` when other input was added around it: `shown` still holds all of
+    `draft`, and the one probe character sits in the added stretch; None when text was replaced or the character is
+    not the only one of its kind there."""
+    if not isinstance(shown, str):
+        return None
+    exact = probe_position(draft, shown)
+    if exact is not None:
+        return exact
+    limit = min(len(draft), len(shown))
+    head = next((index for index in range(limit) if draft[index] != shown[index]), limit)
+    tail = next((index for index in range(limit - head) if draft[-1 - index] != shown[-1 - index]), limit - head)
+    added = shown[head:len(shown) - tail]
+    return head + added.index(PROBE_KEY) if head + tail == len(draft) and added.count(PROBE_KEY) == 1 else None
+
+
 def claude_draft_state(orca: Orca, handle: str, draft: str, sleep: Callable[[float], None] = time.sleep,
                        trace: dict | None = None) -> str:
     """Tell typed text from Claude Code's ghost prompt suggestion; return `empty`, `text`, or `interrupted`.
@@ -186,7 +202,7 @@ def claude_draft_state(orca: Orca, handle: str, draft: str, sleep: Callable[[flo
     stays on the line, `trace["probe_position"]` holds its 1-based position.
     """
     def left(shown: object) -> str:
-        position = probe_position(draft, shown)
+        position = probe_location(draft, shown)
         if trace is not None and position is not None and shown != draft:
             trace["probe_position"] = position + 1
         return "interrupted"
@@ -197,7 +213,7 @@ def claude_draft_state(orca: Orca, handle: str, draft: str, sleep: Callable[[flo
     except RefreshError:
         return "interrupted"
     if probe_position(draft, probed) is None:
-        return "interrupted"
+        return left(probed)
     orca.keys(handle, BACKSPACE)
     try:
         restored = settle(lambda: orca.draft(handle), lambda value: value == draft, sleep)

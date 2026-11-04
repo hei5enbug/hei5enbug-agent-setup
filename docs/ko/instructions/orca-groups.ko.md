@@ -15,14 +15,18 @@
   나열되면 그룹이 이미 있는 것이다. 나열된 worktree 중 `parentWorktreeId`가 다른 나열된 worktree를 가리키지 않는
   것이 루트이며, 새 구성원은 그 아래에 둔다. Jira 키만 사용하려면 Orca의 Jira 연결이 필요하다. 아무것도 찾지 못하면
   전체 이슈 링크로 다시 시도한다. 그 밖의 경우에는 이 세션의 worktree가 루트가 된다.
-- 루트 세션에서 다른 각 저장소의 구성원을 루트 orchestration Run의 worker로 시작한다. 이렇게 하면 루트의 자식이 되어
-  질문하고 보고할 수 있다.
-  `orca orchestration worker-start --worktree new-child --repo id:<repoId> --name <branch> --base-branch <base>
-  --agent <host> --task-title "<ticket key> <repository>" --spec-file <brief file> --json`을 사용한다. 다른 저장소
-  작업의 2단계대로 브랜치와 기준 브랜치를 고르고, `orca worktree list`에 표시된 브랜치에 4단계를 적용하며, 6단계대로
-  작업 요약을 쓴다. `orca orchestration run-list --json`에 목표가 티켓 키로 시작하는 Run이 있으면 `--run <run id>`를
-  전달해 모든 구성원이 참여하게 한다. 없으면 `orca orchestration run-create --objective "<ticket key> <summary>"
-  --json`으로 먼저 만들어 나중의 세션이 찾을 수 있게 한다.
+- 루트 세션에서 다른 각 저장소의 구성원을 루트의 자식이자 루트 orchestration Run의 worker로 만들어 질문하고 보고할 수
+  있게 한다. 다른 저장소 작업의 2단계대로 브랜치와 기준 브랜치를 고른다. 에이전트 없이 구성원의 worktree를
+  `orca worktree create --repo id:<repoId> --name <branch> --base-branch <base>
+  --parent-worktree id:<root id> --reference <link or key> --json`으로 만들고, 다른 저장소 작업의 4단계를 적용한 뒤
+  `orca worktree list`에서 브랜치를 확인한다. 그 뒤에만 해당 worktree에서 worker를 시작해 브랜치가 확정되기 전에
+  실행되지 않게 한다.
+  `orca orchestration worker-start --worktree path:<worktree path> --agent <host> --task-title "<ticket key>
+  <repository>" --spec-file <brief file> --json`을 사용하고, 다른 저장소 작업의 6단계대로 작업 요약을 쓴다.
+  `orca orchestration run-list --json`에 목표가 티켓 키, 공백, 티켓 요약 순서인 Run이 있으면 `--run <run id>`를 전달해
+  모든 구성원이 참여하게 한다. 같은 문자로 시작하기만 하는 더 긴 키는 다른 티켓이다. 없으면
+  `orca orchestration run-create --objective "<ticket key>
+  <summary>" --json`으로 Run을 먼저 만들어 나중의 세션이 찾을 수 있게 한다.
 - 루트를 포함한 모든 구성원에 티켓을 연결한다. `orca worktree create`에 `--reference <link or key>`를 쓰거나,
   이 옵션 없이 만든 worktree에는 `orca reference add`를 사용한다.
 - 나중에 그룹에 참여하는 세션은 `orca worktree create --repo id:<repoId> --name
@@ -64,13 +68,15 @@
 - 구성원의 승인 창이나 사용자에게 한 질문에 대신 답하지 않는다. 사용자에게 보고한다.
 - 사용량 한도 등으로 루트가 멈추기 전에 [중단과 재개](pause-and-resume.ko.md)에 따라 재개 메모에 표를 기록해,
   재개한 세션이 이어서 진행할 수 있게 한다.
+- 구성원의 보드 상태가 `completed`이면 완료된 것이다. Orca worktree 상태가 사용자 지정 때문에 보드를 변경하지 않는
+  경우에는 구성원의 최종 보고가 남은 작업 없이 일을 마쳤다고 하면 완료된 것이다.
 - 루트 자신의 보드 상태는 [Orca worktree 상태](orca-worktree-status.ko.md)에 따른 그룹의 요약이다. 모든 구성원이
-  `completed`이고 루트 자신도 남은 작업이 없을 때만 `completed`가 된다.
+  완료되고 루트 자신도 남은 작업이 없을 때만 `completed`가 된다.
 
 ## 완료된 구성원 정리
 
-구성원의 상태가 `completed`가 되면 어느 세션이 시작했든 루트가 즉시 정리한다. 루트 자신이 끝날 때도 전체 그룹에서
-놓친 `completed` 구성원이 있는지 한 번 더 확인한다. 그룹 구성원에게는 이 절차가 다른 저장소 작업의 "인수인계 후"를
+구성원이 완료되면 어느 세션이 시작했든 루트가 즉시 정리한다. 루트 자신이 끝날 때도 전체 그룹에서
+놓친 완료된 구성원이 있는지 한 번 더 확인한다. 그룹 구성원에게는 이 절차가 다른 저장소 작업의 "인수인계 후"를
 대신한다. 그 검사는 그대로 적용한다. 터미널이 열린 질문 없이 유휴 상태이고, worktree에 커밋하지 않은 변경이 없으며,
 기준 브랜치에 해당 브랜치의 내용이 들어 있고, 무시된 파일은 다시 만들 수 있는 캐시나 빌드 산출물뿐이어야 한다.
 검사에 실패하면 아무것도 삭제하지 않고 사용자에게 한 번 묻는다.
@@ -84,6 +90,8 @@
 3. 구성원의 터미널을 닫는다. worker이면 `orca orchestration worker-release --dispatch <id> --json`을 사용하고,
    그렇지 않으면 `orca terminal close --terminal <handle> --json`을 사용한다.
 4. `orca worktree rm --worktree id:<worktree id> --delete-branch --json`으로 worktree와 로컬 브랜치를 삭제한다.
+   2단계에서 그곳의 프로세스를 실행 상태로 남겼다면 worktree와 브랜치를 유지하고 대신 이를 보고한다. 그 프로세스가
+   끝나거나 사용자가 중단을 승인한 뒤에만 삭제한다.
 
 이후 구성원의 터미널, 프로세스, 리스너가 남지 않았는지 확인하고, 닫거나 중단한 항목을 각각 보고한다. 주 체크아웃에서
 작업한 구성원은 백그라운드 작업, 프로세스, 터미널만 중단하거나 닫는다. 체크아웃과 기본 브랜치는 절대 건드리지 않는다.

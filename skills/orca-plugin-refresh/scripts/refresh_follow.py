@@ -144,6 +144,16 @@ def install_current(host: str, target: dict, cache: dict[str, tuple[float, bool]
     return same
 
 
+def compact_owed(entry: dict, marker: dict | None) -> bool:
+    """True while a compaction planned for the conversation a resume carried over is still outstanding. The resume
+    rewrote the marker with the installed digest, so only a marker rewritten after the handoff by a compaction or a
+    clear shows it is done."""
+    if not entry.get("compact_after_resume") or "compact" not in entry["actions"]:
+        return False
+    written = parse_time((marker or {}).get("written_at")) or 0.0
+    return not (marker and marker.get("source") in ("compact", "clear") and written >= entry.get("deferred_at", float("inf")))
+
+
 def still_needed(entry: dict, state: dict, cache: dict[str, tuple[float, bool]]) -> None:
     """Before a deferred send, stop on a changed install and drop actions the session no longer needs."""
     host = entry["host"]
@@ -153,10 +163,12 @@ def still_needed(entry: dict, state: dict, cache: dict[str, tuple[float, bool]])
         return
     marker = driver.read_marker(entry["handle"])
     written = parse_time((marker or {}).get("written_at")) or 0.0
-    if marker and written >= entry.get("deferred_at", float("inf")) and compact_reason(host, marker, target, "auto") is None:
+    owed = compact_owed(entry, marker)
+    if marker and written >= entry.get("deferred_at", float("inf")) and compact_reason(host, marker, target, "auto") is None and not owed:
         entry.update(status="done", detail="already_current", actions=[])
         return
-    if "compact" in entry["actions"] and compact_reason(host, marker, target, entry.get("compact_mode") or state.get("compact_mode", "auto")) is None:
+    if ("compact" in entry["actions"] and not owed
+            and compact_reason(host, marker, target, entry.get("compact_mode") or state.get("compact_mode", "auto")) is None):
         entry["actions"].remove("compact")
     if not entry["actions"]:
         entry.update(status="done", detail="already_current")
@@ -184,7 +196,7 @@ def applied_by_session(entry: dict, state: dict, cache: dict[str, tuple[float, b
     marker = driver.read_marker(entry["handle"])
     written = parse_time((marker or {}).get("written_at")) or 0.0
     if marker and written >= entry.get("deferred_at", float("inf")) and compact_reason(host, marker, target, "auto") is None:
-        entry["actions"] = []
+        entry["actions"] = [action for action in entry["actions"] if action == "compact" and compact_owed(entry, marker)]
     if not entry["actions"]:
         waiters.cancel(entry["handle"])
         entry.update(status="done", detail="applied_by_session" if entry.get("reloaded_by_session") else "already_current")

@@ -687,7 +687,7 @@ class ReviewRegressionTest(DriveTest):
         self.assertEqual("추천 문구", fake.draft("term_claude"))
 
     def test_확인_중에_사용자가_입력하면_지우지_않고_실패로_알린다(self):
-        """확인용 글자 뒤에 사용자가 글자를 더 치면 백스페이스를 보내지 않아 사용자 입력을 지우지 않고 그 세션을 실패로 남긴다."""
+        """확인용 글자 뒤에 사용자가 글자를 더 치면 백스페이스를 보내지 않아 사용자 입력을 지우지 않고, 남은 확인 글자의 1부터 센 위치와 함께 그 세션을 실패로 남긴다."""
         # Given
         fake = FakeOrca([terminal("term_claude", "claude")], typed={"term_claude": "쓰던 글"})
 
@@ -701,7 +701,8 @@ class ReviewRegressionTest(DriveTest):
         refresh.drive(fake, sessions, self.state, time.time() + 0.5, sleep=lambda seconds: None)
 
         # Then
-        self.assertEqual(("failed", "probe_interrupted_check_input"), (sessions[0]["status"], sessions[0]["detail"]))
+        self.assertEqual(("failed", "probe_character_left", len("쓰던 글") + 1),
+                         (sessions[0]["status"], sessions[0]["detail"], sessions[0]["probe_position"]))
         self.assertNotIn(("term_claude", refresh.BACKSPACE), fake.keystrokes)
         self.assertEqual("쓰던 글xU", fake.draft("term_claude"))
         self.assertEqual([], fake.sent)

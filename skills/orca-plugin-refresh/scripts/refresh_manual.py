@@ -61,6 +61,13 @@ def recorded_view(view: dict, action: str, result: str, detail: str | None) -> d
     return settled_view(changed, remaining, failed)
 
 
+def resumed_record(skipped: dict, result: str, detail: str | None) -> dict:
+    """A skipped or failed resume record after the agent finished the resume by hand, leaving the session's own record alone."""
+    status = {"terminal": skipped.get("terminal"), "worktree": skipped.get("worktree")}
+    outcome = {"status": "done", "detail": "resumed"} if result == "done" else {"status": "failed", "detail": detail}
+    return {key: value for key, value in {**status, **outcome, "manual": True}.items() if value is not None}
+
+
 def run_record_manual(run_id: str, handle: str, action: str, result: str, detail: str | None) -> dict:
     """Record one action that the agent finished by hand on a session the script skipped, so `status` shows it."""
     if not HANDLE.fullmatch(handle):
@@ -74,9 +81,13 @@ def run_record_manual(run_id: str, handle: str, action: str, result: str, detail
 
     def change(saved: dict) -> dict:
         view = saved.get("sessions", {}).get(handle)
+        recordable = isinstance(view, dict) and view.get("status") in RECORDABLE
+        skipped = saved.get("resumed", {}).get(handle)
+        if not recordable and action == "resume" and isinstance(skipped, dict) and skipped.get("status") in RECORDABLE:
+            return {**saved, "resumed": {**saved["resumed"], handle: resumed_record(skipped, result, detail)}}
         if not isinstance(view, dict):
             raise RefreshError("session_not_in_run", "This run holds no result for that session.")
-        if view.get("status") not in RECORDABLE:
+        if not recordable:
             raise RefreshError("session_not_recordable", "Only a session the script skipped or failed can be recorded by hand.")
         updated = recorded_view(view, action, result, detail)
         resumed = saved.get("resumed", {})
@@ -85,4 +96,4 @@ def run_record_manual(run_id: str, handle: str, action: str, result: str, detail
         return {**saved, "sessions": {**saved["sessions"], handle: updated}, **({"resumed": resumed} if resumed else {})}
 
     saved = update_run(run_id, change)
-    return {"ok": True, "run_id": run_id, "session": saved["sessions"][handle]}
+    return {"ok": True, "run_id": run_id, "session": saved.get("sessions", {}).get(handle) or saved["resumed"][handle]}

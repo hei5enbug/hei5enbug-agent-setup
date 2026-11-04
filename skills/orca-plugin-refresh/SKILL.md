@@ -165,7 +165,8 @@ only when the user explicitly asks for it. `plan` and `self-apply` are internal 
 itself; never run them by hand. Never send commands to Orca terminals by hand, except to finish a session the script
 skipped: only with the user's approval for that session and after the checks in `references/manual-finish.md`
 (read it first), and record every result with `record-manual`. Never end a session except through `resume`, for one
-the user approved in this request, or through the resume in `apply`; never close a terminal except through `close`,
+the user approved in this request, through the resume in `apply`, or by hand as `references/manual-finish.md`
+describes for a skipped session the user approved; never close a terminal except through `close`,
 for one the user approved in this request; and never pass `--force` on your own.
 
 The script exits with `0` when every session is `done`, `deferred`, or `queued_after_turn`, or when the update or

@@ -13,6 +13,7 @@ import test_orca_plugin_refresh as base
 from test_orca_plugin_refresh import FINISHED_TURN, RUNNING_TURN, FakeOrca, refresh, terminal, user_record, write_records
 
 import refresh_host_record
+import refresh_resume
 import refresh_sessions
 
 HANDLE = "demo-a"
@@ -124,6 +125,74 @@ class HandoffTailTest(unittest.TestCase):
         self.assertIsNone(refresh.host_record(entries[0]))
         self.assertEqual([], fake.sent)
         self.assertEqual(("skipped", "not_idle_before_deadline"), (entries[0]["status"], entries[0]["detail"]))
+
+
+class CompactAfterResumeHandoffTest(unittest.TestCase):
+    setUp = base.DriveTest.setUp
+    write_marker = base.DriveTest.write_marker
+
+    def deferred_compact(self, path):
+        return [{"handle": HANDLE, "host": "claude", "actions": ["compact"], "status": "pending", "detail": "busy",
+                 "compact_after_resume": True, "deadline": time.time() + 5, "deferred_at": time.time(),
+                 "handoff_transcript": str(path), "handoff_offset": path.stat().st_size}]
+
+    def follow(self, entries, on_send=None):
+        fake = FakeOrca([terminal(HANDLE, "claude")], busy={HANDLE: 10**9}, on_send=on_send)
+        fake.never_idle = {HANDLE}
+        refresh.follow_up(fake, entries, self.state, sleep=lambda seconds: None)
+        return fake
+
+    def test_재개_뒤_남긴_compact는_표식이_현재_지침이어도_도우미가_보낸다(self):
+        """demo-a: 재개가 표식을 설치된 지침으로 다시 썼어도 재개 뒤 compact가 남은 세션은 도우미가 already_current로 닫지 않고 /compact를 보낸다."""
+        # Given
+        path = write_records(Path(self.temp.name) / f"{HANDLE}.jsonl", FINISHED_TURN)
+        self.write_marker(HANDLE, "claude", digest="d", transcript=path)
+        entries = self.deferred_compact(path)
+
+        def respond(fake, handle, text):
+            self.write_marker(handle, "claude", digest="d", transcript=path)
+
+        # When
+        fake = self.follow(entries, respond)
+
+        # Then
+        self.assertEqual([(HANDLE, "/compact")], fake.sent)
+        self.assertEqual("done", entries[0]["status"])
+        self.assertNotEqual("already_current", entries[0]["detail"])
+
+    def test_재개_뒤_남긴_compact도_세션이_핸드오프_뒤_스스로_compact했으면_보내지_않는다(self):
+        """demo-a: 핸드오프 뒤 세션이 스스로 compact해 표식이 source compact로 다시 쓰였다면 남은 compact는 이미 끝난 것으로 보고 아무것도 보내지 않는다."""
+        # Given
+        path = write_records(Path(self.temp.name) / f"{HANDLE}.jsonl", FINISHED_TURN)
+        self.write_marker(HANDLE, "claude", digest="d", transcript=path)
+        entries = [{**self.deferred_compact(path)[0], "deferred_at": time.time() - 5}]
+        marker_path = refresh.SESSION_CONTEXT.marker_directory() / f"{HANDLE}.json"
+        marker = json.loads(marker_path.read_text())
+        marker_path.write_text(json.dumps({**marker, "source": "compact", "written_at": refresh.now()}))
+
+        # When
+        fake = self.follow(entries)
+
+        # Then
+        self.assertEqual([], fake.sent)
+        self.assertEqual("done", entries[0]["status"])
+
+    def test_재개가_끝났어도_compact가_남으면_표시를_남기고_도우미_항목으로_넘긴다(self):
+        """demo-a: 재개가 끝난 뒤 계획한 compact가 남은 세션은 compact_after_resume 표시를 받고, 미룰 때 그 표시가 도우미 항목에 실린다."""
+        # Given
+        entry = {"handle": HANDLE, "host": "claude", "actions": ["reload", "compact"], "status": "pending", "detail": None,
+                 "initiator": False, "completed": []}
+        run_id = "a" * 32
+        refresh.save_json(refresh.run_path(run_id), {**self.state, "run_id": run_id})
+
+        # When
+        refresh_resume.record_resume(entry, {"status": "done", "detail": "resumed", "release_after": "2.2.0"})
+        deferred = {**entry, "status": "deferred"}
+        refresh.commit_apply(run_id, "auto", [deferred], [deferred], lambda run: 4242)
+
+        # Then
+        self.assertEqual((["compact"], True), (entry["actions"], entry["compact_after_resume"]))
+        self.assertEqual([True], [item.get("compact_after_resume") for item in refresh.load_run(run_id)["follow_up"]])
 
 
 class StaleCommandTailTest(unittest.TestCase):

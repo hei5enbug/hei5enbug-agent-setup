@@ -13,14 +13,17 @@ alone.
   worktrees, the group exists: its root is the listed worktree whose `parentWorktreeId` is not another listed one, and
   new members go under it. A bare Jira key needs Orca's Jira connection; when it finds nothing, retry with the full
   issue link. Otherwise this session's worktree becomes the root.
-- From the root session, start each other repository's member as a worker of the root's orchestration Run, so it
-  becomes the root's child and can ask and report:
-  `orca orchestration worker-start --worktree new-child --repo id:<repoId> --name <branch> --base-branch <base>
-  --agent <host> --task-title "<ticket key> <repository>" --spec-file <brief file> --json`. Choose the branch and base
-  as in step 2 of cross-repository work, apply its step 4 to the branch that `orca worktree list` shows, and write the
-  brief as its step 6 does. When `orca orchestration run-list --json` lists a Run whose objective starts with the
-  ticket key, pass `--run <run id>` so every member joins it; otherwise create it first with
-  `orca orchestration run-create --objective "<ticket key> <summary>" --json` so a later session can find it.
+- From the root session, make each other repository's member the root's child and a worker of the root's
+  orchestration Run, so it can ask and report. Choose the branch and base as in step 2 of cross-repository work. Create
+  the member's worktree without an agent, `orca worktree create --repo id:<repoId> --name <branch> --base-branch <base>
+  --parent-worktree id:<root id> --reference <link or key> --json`, apply step 4 of cross-repository work, and confirm
+  the branch in `orca worktree list`. Only then start the worker on that worktree, so it never runs before its branch
+  is final: `orca orchestration worker-start --worktree path:<worktree path> --agent <host> --task-title "<ticket key>
+  <repository>" --spec-file <brief file> --json`, with the brief written as step 6 of cross-repository work does.
+  When `orca orchestration run-list --json` lists a Run whose objective is the ticket key followed by a space and its
+  summary, pass `--run <run id>` so every member joins it; a longer key that only begins with the same characters is
+  another ticket. Otherwise create the Run first with `orca orchestration run-create --objective "<ticket key>
+  <summary>" --json` so a later session can find it.
 - Attach the ticket to every member, the root included: `--reference <link or key>` on `orca worktree create`, or
   `orca reference add` for a worktree created without it.
 - A later session that joins the group creates its worktree with `orca worktree create --repo id:<repoId> --name
@@ -64,13 +67,15 @@ alone.
 - It never answers a member's approval prompt or a question meant for the user; it reports it to the user.
 - Before the root stops, for example at a usage limit, it writes the table into a resume note under
   [pause and resume](pause-and-resume.md), so a resumed session continues from it.
+- A member is finished when its board status is `completed`, or, on a board that Orca worktree status leaves
+  unchanged because it is customized, when the member's final report says its work is done with nothing left.
 - The root's own board status is the group's summary under [Orca worktree status](orca-worktree-status.md): it becomes
-  `completed` only after every member is `completed` and the root itself has nothing left.
+  `completed` only after every member is finished and the root itself has nothing left.
 
 ## Cleanup of finished members
 
-When a member's status becomes `completed`, the root cleans it up at once, whichever session started it. When the
-root itself finishes, it sweeps the whole group once more for a `completed` member it missed. This replaces "After the
+When a member is finished, the root cleans it up at once, whichever session started it. When the root itself
+finishes, it sweeps the whole group once more for a finished member it missed. This replaces "After the
 handoff" in cross-repository work for group members; its checks still apply: the terminal is idle with no open
 question, the worktree has no uncommitted change, the base holds the branch's content, and ignored files are only
 regenerable caches or build output. When a check fails, remove nothing and ask the user once.
@@ -84,6 +89,8 @@ regenerable caches or build output. When a check fails, remove nothing and ask t
 3. Close the member's terminal: `orca orchestration worker-release --dispatch <id> --json` for a worker, otherwise
    `orca terminal close --terminal <handle> --json`.
 4. Remove its worktree and local branch with `orca worktree rm --worktree id:<worktree id> --delete-branch --json`.
+   When step 2 left a process running there, keep the worktree and branch and report them instead; remove them only
+   after that process ends or the user approves stopping it.
 
 Afterwards confirm that no terminal, process, or listener of the member remains, and report each item closed. For a
 member that worked in a main checkout, stop only its background work, processes, and terminal; never touch the

@@ -33,12 +33,14 @@ def shell_prompt_empty(lines: Sequence[str]) -> bool:
 
 
 def prompt_line_empty(line: str) -> bool:
-    """Nothing but whitespace follows the first prompt character that is followed by whitespace, or the line ends with a
-    prompt character; typed text after a prompt, even text ending in a prompt character, is not empty."""
+    """Nothing but whitespace follows the first prompt character that is followed by whitespace. Without such a
+    character the line is empty only when its single prompt character ends it; any other prompt character means
+    typed text may follow a prompt that is not separated from it, so the line is not proven empty."""
     spaced = SPACED_PROMPT.search(line)
     if spaced:
         return not line[spaced.end():].strip()
-    return line.rstrip().endswith(tuple(PROMPT_CHARACTERS))
+    stripped = line.rstrip()
+    return stripped.endswith(tuple(PROMPT_CHARACTERS)) and sum(stripped.count(char) for char in PROMPT_CHARACTERS) == 1
 
 
 def opening_rule(line: str) -> bool:

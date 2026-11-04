@@ -369,7 +369,7 @@ def commit_apply(run_id: str, mode: str, sessions: list[dict], others: list[dict
             items = [
                 {key: entry.get(key) for key in ("handle", "host", "actions", "planned", "title", "worktree", "compact_reason", "detail", "probe_retries",
                                                  "screen_identified", "input", "ready_signal", "release", "host_release_outdated", "orphaned")}
-                | {key: entry[key] for key in ("completed", "note") if entry.get(key)}
+                | {key: entry[key] for key in ("completed", "note", "compact_after_resume") if entry.get(key)}
                 | {"compact_mode": mode, "deferred_at": handed, **handoff_point(entry["handle"])}
                 for entry in deferred
             ]

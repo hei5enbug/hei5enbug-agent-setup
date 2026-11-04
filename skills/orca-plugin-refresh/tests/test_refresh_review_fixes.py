@@ -205,6 +205,9 @@ class ShellPromptInputTest(unittest.TestCase):
             "% ls >": False,
             "❯ git status": False,
             "user@host ~ % echo draft %": False,
+            "$echo draft #": False,
+            "user@host ~ %echo draft >": False,
+            "bash-3.2$echo hi #": False,
         }
 
         # When
