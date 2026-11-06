@@ -46,7 +46,8 @@ Claude Code는 이 옵션을 `/config`에서 읽고, Codex는 `HEI5ENBUG_HOST_SE
 ## 기능 옵션
 
 끌 수 있는 boolean 기능은 일곱 가지이며 각각 기본값은 켜짐입니다. Claude Code의 구현 worker 경로, worker 모델과 사고 강도,
-검토 모델, 호스트 설정 모드, 훅 Python 인터프리터, 이 플러그인과 함께
+검토 모델, 호스트 설정 모드, 에이전트 세션을 시작하는 데 필요한 최소 여유 메모리(`session_memory_min_mb`),
+훅 Python 인터프리터, 이 플러그인과 함께
 새로고침할 플러그인(`refresh_plugins`)은 문자열 옵션입니다. 경로는 `auto`, `codex`, `haiku`, `sol`, `sonnet` 중 하나를 고르고, 값이 비어 있거나 알 수 없으면
 `auto`를 씁니다.
 `auto`에서는 메인 세션이 작업마다 worker를 고릅니다. 호스트 설정 모드는 `apply`와 `report` 중 하나를 고르고, 값이 비어 있거나
@@ -83,6 +84,7 @@ Codex 설정이나 Claude 설정을 쓰지 않습니다. Codex 설정을 쓰는 
 | 승인 범위 | `approval_scope`(`tiered` 또는 `session`, 기본값 `tiered`) | `HEI5ENBUG_APPROVAL_SCOPE` |
 | 다른 저장소에 Orca 워크트리 사용 | `orca_worktree` | `HEI5ENBUG_ORCA_WORKTREE` |
 | 호스트 설정 모드 | `host_settings` (`apply` 또는 `report`, 기본 `apply`) | `HEI5ENBUG_HOST_SETTINGS` |
+| 에이전트 세션을 시작하는 데 필요한 최소 여유 메모리 | `session_memory_min_mb` (MB, 기본값 `2048`; `0`, `off`, `false`, `no`이면 차단 규칙을 끔; [Orca 세션 시작](guards.ko.md#orca-세션-시작) 참고) | `HEI5ENBUG_SESSION_MEMORY_MIN_MB` |
 | 훅 Python 인터프리터 | `python` (절대 경로, 기본값 빈 문자열) | `HEI5ENBUG_PYTHON` |
 | 이 플러그인과 함께 새로고침할 플러그인 | `refresh_plugins` (쉼표로 구분한 `plugin@marketplace` ID, 기본값 빈 문자열) | `HEI5ENBUG_REFRESH_PLUGINS` |
 | `~/.codex/AGENTS.md`의 서브에이전트 허용 블록 | 해당 없음 | `HEI5ENBUG_SUBAGENT_POLICY` |

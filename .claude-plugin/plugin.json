@@ -1,7 +1,7 @@
 {
   "name": "hei5enbug-agent-setup",
   "displayName": "Hei5enbug Agent Skills",
-  "version": "2.17.1",
+  "version": "2.18.0",
   "description": "Portable agent skills for repeatable engineering and documentation workflows.",
   "author": {
     "name": "hei5enbug",
@@ -135,6 +135,12 @@
       "description": "apply: at session start, back up and fix the allowlisted host settings that cause extra approval prompts; report: only report them.",
       "options": ["apply", "report"],
       "default": "apply"
+    },
+    "session_memory_min_mb": {
+      "type": "string",
+      "title": "Minimum free memory to start an agent session",
+      "description": "Megabytes of available memory the plugin keeps free: a command that starts another agent session through Orca is denied below this value so the agent queues the session until another one finishes. 0, off, false, or no turns the check off; an invalid value uses 2048. Unknown memory never denies.",
+      "default": "2048"
     },
     "python": {
       "type": "string",

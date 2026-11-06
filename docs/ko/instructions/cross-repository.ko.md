@@ -31,6 +31,8 @@
 - 파일을 수정하는 세션은 아래 2~6단계로 하위 worktree를 만든다. 작업 저장소에서 Orca orchestration을 쓰면
   `worker-start --worktree new-child --name <branch> --base-branch <base>`를 사용하고 4단계를 적용한다.
   `new-top-level`은 사용하지 않는다.
+- 플러그인이 메모리 부족으로 세션 시작을 거부하면 인수인계를 메모리 대기 상태로 기록하고, 이 작업의 다른 세션이
+  끝나거나 정리된 뒤에 시작한다. 메모리를 폴링하지 않는다.
 - Orca가 해당 저장소의 workspace를 나열하지 않으면 부모를 지정해 worktree를 만든 뒤
   `orca worktree set --worktree id:<worktree id> --no-parent --json`을 실행한다.
   플러그인 훅이 최상위 worktree 생성을 거부한다.

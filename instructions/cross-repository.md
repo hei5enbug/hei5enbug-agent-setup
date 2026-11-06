@@ -27,6 +27,8 @@ task that changes more than one repository, every other repository's worktree go
 - A session that edits files gets a child worktree through steps 2 to 6 below. With Orca orchestration in the working
   repository, use `worker-start --worktree new-child --name <branch> --base-branch <base>` and apply step 4; never
   `new-top-level`.
+- When the plugin denies a session start for low memory, record the handoff as waiting for memory and start it after
+  another session of this task finishes or is cleaned up, never polling memory.
 - For a repository that Orca lists no workspace for, create the worktree with a parent, then run
   `orca worktree set --worktree id:<worktree id> --no-parent --json`. A plugin hook denies a top-level create.
 

@@ -83,6 +83,7 @@ See [configuration](docs/configuration.md) for defaults and [updates](docs/updat
 | [`mistake-enforcer`](skills/mistake-enforcer/SKILL.md) | Turn recurring repository mistakes into checks proven on past cases, when requested. [한국어](docs/ko/skills/mistake-enforcer/SKILL.ko.md) |
 | [`skill-issue-creator`](skills/skill-issue-creator/SKILL.md) | File a skill or instruction gap at its declared tracker, checking a public draft for private names first. [한국어](docs/ko/skills/skill-issue-creator/SKILL.ko.md) |
 | [`session-retro`](skills/session-retro/SKILL.md) | Review session history for evidence-backed skill improvements and requested plans. [한국어](docs/ko/skills/session-retro/SKILL.ko.md) |
+| [`session-triage`](skills/session-triage/SKILL.md) | Sort running Orca agent sessions by who waits on whom and act on them with one approval, freeing the memory idle ones hold. [한국어](docs/ko/skills/session-triage/SKILL.ko.md) |
 | [`skill-builder`](skills/skill-builder/SKILL.md) | Create, evaluate, improve, and package agent skills. [한국어](docs/ko/skills/skill-builder/SKILL.ko.md) |
 | [`orca-plugin-refresh`](skills/orca-plugin-refresh/SKILL.md) | Update plugins and apply them to running Orca sessions, resuming sessions on an older Claude Code release. [한국어](docs/ko/skills/orca-plugin-refresh/SKILL.ko.md) |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | Suggest five repository-style commit messages, or commit when asked. [한국어](docs/ko/skills/suggest-commit/SKILL.ko.md) |

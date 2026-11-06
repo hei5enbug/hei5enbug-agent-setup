@@ -84,6 +84,7 @@ Claude Code의 `/config`에서 옵션을 고르거나 Codex를 시작하기 전�
 | [`mistake-enforcer`](../../skills/mistake-enforcer/SKILL.md) | 요청하면 반복되는 저장소 실수를 과거 사례로 검증한 검사로 바꿉니다. [한국어](skills/mistake-enforcer/SKILL.ko.md) |
 | [`skill-issue-creator`](../../skills/skill-issue-creator/SKILL.md) | 공개 초안에 비공개 이름이 있는지 먼저 확인한 뒤 스킬이나 지침의 빈틈을 선언된 트래커에 등록합니다. [한국어](skills/skill-issue-creator/SKILL.ko.md) |
 | [`session-retro`](../../skills/session-retro/SKILL.md) | 세션 기록을 검토해 근거 있는 스킬 개선안과 요청한 계획을 만듭니다. [한국어](skills/session-retro/SKILL.ko.md) |
+| [`session-triage`](../../skills/session-triage/SKILL.md) | 실행 중인 Orca 에이전트 세션을 누가 누구를 기다리는지에 따라 분류하고 한 번의 승인으로 조치해 유휴 세션이 차지한 메모리를 확보합니다. [한국어](skills/session-triage/SKILL.ko.md) |
 | [`skill-builder`](../../skills/skill-builder/SKILL.md) | 에이전트 스킬을 만들고 평가하고 개선하고 패키징합니다. [한국어](skills/skill-builder/SKILL.ko.md) |
 | [`orca-plugin-refresh`](../../skills/orca-plugin-refresh/SKILL.md) | 플러그인을 업데이트해 실행 중인 Orca 세션에 적용하고, 오래된 Claude Code 릴리스의 세션은 재개합니다. [한국어](skills/orca-plugin-refresh/SKILL.ko.md) |
 | [`suggest-commit`](../../skills/suggest-commit/SKILL.md) | 저장소 스타일에 맞는 커밋 메시지 5개를 추천하거나 요청 시 커밋합니다. [한국어](skills/suggest-commit/SKILL.ko.md) |

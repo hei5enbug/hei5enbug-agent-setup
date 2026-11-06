@@ -29,7 +29,8 @@ alone.
 - Start a member only when it can finish its part without waiting on another member. When its part needs a contract,
   schema, API, or decision that another member has not shared yet, create neither its worktree nor its worker: list it
   in the status table as waiting on that item, and start it once the item is shared. Start members without such a
-  dependency together.
+  dependency together. When the plugin denies a start for low memory, list the member as waiting for memory and start
+  it after another member finishes or is cleaned up, never polling memory.
 - Attach the ticket to every member, the root included, by its full issue link, which needs no Jira connection:
   `--reference <issue link>` on `orca worktree create`, or `orca reference add` for a worktree created without it.
   When attaching still fails, keep the ticket key in the worktree's branch or display name and report the failure.

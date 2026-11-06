@@ -129,9 +129,10 @@ remote가 이미 가진 커밋도 검사합니다. 이 값들의 변수는 `git 
 세션 1,259개 중 7개에서 에이전트가 필수 검사를 스스로 판단해 건너뛰거나 실행하는 대신 제안만 한 채 작업을 마치거나
 커밋하거나 푸시했기 때문입니다.
 
-## 최상위 Orca worktree
+## Orca 세션 시작
 
-두 호스트 모두 `Bash`의 `PreToolUse` 훅인 `scripts/orca_placement_hook.py`를 실행합니다.
+두 호스트 모두 `Bash`의 `PreToolUse` 훅인 `scripts/orca_placement_hook.py`를 실행하며 두 규칙을 적용합니다.
+배치 규칙은 최상위 worktree 생성을 거부합니다.
 명령이 `orca worktree create`에 `--no-parent`를 쓰거나 `orca orchestration worker-start`에
 `--worktree new-top-level`을 쓰면 호출을 거부하고, `instructions/cross-repository.md`의 "Session placement"에 따라
 대신 사용할 부모를 알려 줍니다. `$(...)`나 백틱 명령 치환의 안쪽도 검사하고, here-document 본문에서는 그런 치환만
@@ -140,3 +141,15 @@ remote가 이미 가진 커밋도 검사합니다. 이 값들의 변수는 `git 
 `orca worktree set --no-parent`로 기존 worktree를 최상위로 옮길 수 있습니다. Codex에서는 `/hooks`에서 이 훅을
 신뢰해야 합니다. 이 훅을 둔 이유는 2026-11-06에 조정 세션이 티켓 두 개를 위해 티켓 참조 없이 `--no-parent`로
 worktree 세 개를 만들어, `orca reference find`가 하나도 찾지 못했고 이후 세션이 그룹에 참여할 수 없었기 때문입니다.
+
+메모리 규칙은 사용 가능한 메모리가 `session_memory_min_mb` 옵션(기본값 2048 MB)보다 적으면 Orca를 통해
+에이전트 세션을 시작하는 명령을 거부합니다. 에이전트는 컴퓨터가 스왑을 쓰게 만드는 대신 세션을 대기열에 넣고
+다른 세션이 끝난 뒤에 시작합니다. 대상은 `--agent`가 있는 `orca worktree create`,
+`orca orchestration worker-start`, `orca agent launch`, `--command`가 `cd '<path>' &&` 같은 앞부분
+뒤에서라도 `claude`나 `codex`를 실행하는 `orca terminal create`이며, 명령 치환 안에서도 검사하지만 작은따옴표
+안이나 이스케이프된 `$` 뒤는 검사하지 않습니다. 다른 명령에는 적용하지 않습니다. 두 규칙이 모두
+적용되면 배치 규칙의 거부가 우선합니다. 사용 가능한 메모리는 macOS에서는 memory-pressure의 여유 비율에
+물리 메모리를 곱한 값, Linux에서는 `MemAvailable` 값이며, 대상 명령을 찾은 뒤에만 읽습니다.
+1초 안에 읽을 수 없거나 다른 플랫폼이면 명령을 허용합니다. 옵션을 `0`, `off`, `false`, `no`로 설정하면
+규칙이 꺼지고, 값이 0 이상의 정수가 아니면 2048을 사용합니다. Codex에서는 `HEI5ENBUG_SESSION_MEMORY_MIN_MB`를
+설정합니다.

@@ -134,9 +134,10 @@ approves anything; it only adds context. It exists because, in 7 of 1,259 Claude
 and 2026-11-03, the agent finished, committed, or pushed with a required check skipped by its own judgment or offered
 instead of run.
 
-## Top-level Orca worktrees
+## Orca session start
 
-A `PreToolUse` hook on `Bash`, `scripts/orca_placement_hook.py`, runs on both hosts. When a command runs
+A `PreToolUse` hook on `Bash`, `scripts/orca_placement_hook.py`, runs on both hosts and applies two rules. The
+placement rule denies a top-level worktree. When a command runs
 `orca worktree create` with `--no-parent`, or `orca orchestration worker-start` with `--worktree new-top-level`, it
 denies the call and names the parent to use instead, following "Session placement" in
 `instructions/cross-repository.md`. It also checks the inside of a `$(...)` or backtick command substitution, and
@@ -145,3 +146,14 @@ malformed input, and a missing command produce no output. Moving an existing wor
 stays allowed for a repository with no workspace or an explicit user request. On Codex, trust the hook in `/hooks`.
 It exists because on 2026-11-06 a coordinating session created three worktrees for two tickets with `--no-parent` and
 no ticket reference, so `orca reference find` found none of them and later sessions could not join the group.
+
+The memory rule denies a command that starts an agent session through Orca when the available memory is below the
+`session_memory_min_mb` option, 2048 MB by default, so the agent queues the session and starts it after another one
+finishes instead of pushing the machine into swap. It covers `orca worktree create` with `--agent`, `orca orchestration
+worker-start`, `orca agent launch`, and `orca terminal create` whose `--command` runs `claude` or `codex`, also
+after a prefix such as `cd '<path>' &&`, and it checks inside a command substitution but not inside single quotes or
+after an escaped `$`; nothing else is gated. The placement deny takes precedence when both apply. Available
+memory comes from the macOS memory-pressure free percentage times physical memory, or from `MemAvailable` on Linux, and
+is read only after such a command is found. When it cannot be read within one second, or on another platform, the
+command is allowed. Set the option to `0`, `off`, `false`, or `no` to turn the rule off; a value that is not a
+non-negative integer uses 2048. On Codex, set `HEI5ENBUG_SESSION_MEMORY_MIN_MB`.
