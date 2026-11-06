@@ -6,6 +6,7 @@ import os
 import time
 import unittest
 from contextlib import redirect_stdout
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -150,7 +151,8 @@ class CompactAfterResumeHandoffTest(unittest.TestCase):
         entries = self.deferred_compact(path)
 
         def respond(fake, handle, text):
-            self.write_marker(handle, "claude", digest="d", transcript=path)
+            later = datetime.now(timezone.utc) + timedelta(seconds=1)
+            self.write_marker(handle, "claude", digest="d", transcript=path, written_at=later.isoformat(timespec="milliseconds"))
 
         # When
         fake = self.follow(entries, respond)

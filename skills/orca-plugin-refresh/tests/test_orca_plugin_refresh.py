@@ -394,10 +394,10 @@ class DriveTest(unittest.TestCase):
         self.install_current = installed.start()
         self.addCleanup(installed.stop)
 
-    def write_marker(self, handle, host, digest="d", transcript=None):
+    def write_marker(self, handle, host, digest="d", transcript=None, written_at=None):
         directory = refresh.SESSION_CONTEXT.marker_directory()
         directory.mkdir(parents=True, exist_ok=True)
-        payload = {"schema": 1, "host": host, "root": self.temp.name, "digest": digest, "written_at": refresh.now()}
+        payload = {"schema": 1, "host": host, "root": self.temp.name, "digest": digest, "written_at": written_at or refresh.now()}
         if transcript is not None:
             payload["transcript_path"] = str(transcript)
         (directory / f"{handle}.json").write_text(json.dumps(payload))
