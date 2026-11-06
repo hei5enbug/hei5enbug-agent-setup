@@ -72,6 +72,10 @@ class FakeOrca:
         self.typed = dict(typed or {})
         self.sent: list[tuple[str, str]] = []
         self.keystrokes: list[tuple[str, str]] = []
+        self.mail: set[str] = set()
+
+    def mail_pending(self, handle):
+        return handle in self.mail
 
     def terminals(self):
         return [dict(item) for item in self.list]

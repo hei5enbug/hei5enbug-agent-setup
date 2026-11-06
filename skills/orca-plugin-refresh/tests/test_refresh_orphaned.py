@@ -335,6 +335,20 @@ class OrphanListingTest(OrphanCase):
         self.assertEqual("input_not_empty", self.by_handle(report)[CLAUDE]["failed_check"])
         self.assertEqual("쓰던 글", fake.typed[CLAUDE])
 
+    def test_안_읽은_오케스트레이션_메일이_있으면_input_unknown으로_추천하지_않는다(self):
+        """Orca가 곧 알림을 입력창에 넣을 고아 터미널은 입력창을 건드리지 않고 input_unknown으로 나열만 한다."""
+        # Given
+        self.session(CLAUDE, "claude", FINISHED_TURN)
+        fake = OrphanFake([orphan(CLAUDE, "claude")])
+        fake.mail.add(CLAUDE)
+
+        # When
+        report = self.listing(fake)
+
+        # Then
+        self.assertEqual("input_unknown", self.by_handle(report)[CLAUDE]["failed_check"])
+        self.assertEqual([], fake.keystrokes)
+
     def test_연결되지_않은_고아는_terminal_unreachable로_추천하지_않는다(self):
         """연결되지 않았거나 쓸 수 없는 고아는 화면을 읽지 못하므로 terminal_unreachable로 나열만 한다."""
         # Given

@@ -252,6 +252,8 @@ def unsent_input(entry: dict, draft: object, lines: list[str]) -> tuple[str, lis
 
 
 def input_ready(orca: Orca, entry: dict) -> tuple[str | None, list[str]]:
+    if orca.mail_pending(entry["handle"]):
+        return "orchestration_mail_pending", []
     lines, draft = orca.screen(entry["handle"])
     if entry["host"] == "claude" and dialog_open(lines):
         return "input_unknown", lines
@@ -455,6 +457,8 @@ def release_held(orca: Orca, entry: dict) -> bool:
     if blocked:
         drop_held(entry)
         entry.update(status="failed", detail="compact_dialog_open", input="cleared")
+        return True
+    if time.time() - entry["restore_started"] < RESTORE_WAIT_SECONDS and orca.mail_pending(handle):
         return True
     try:
         try:

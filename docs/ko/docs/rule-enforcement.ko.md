@@ -102,6 +102,7 @@
 | `skills/orca-plugin-refresh/tests/test_orca_plugin_refresh.py` | 갱신은 입력창이 빈 유휴 세션에만 입력을 보낸다. | `skills/orca-plugin-refresh/SKILL.md` |
 | `skills/orca-plugin-refresh/tests/test_refresh_claude_update.py` | 갱신은 계획 전에 `claude update`를 한 번 실행하고, `DISABLE_UPDATES`가 업데이트를 끄거나 `claude`가 없으면 건너뛰며, 전후 릴리스를 보고해 이전 릴리스의 세션을 오래된 것으로 보고, 실패한 업데이트는 플러그인 결과를 바꾸지 않는 경고로 보고한다. | `skills/orca-plugin-refresh/SKILL.md` |
 | `skills/orca-plugin-refresh/tests/test_refresh_resume.py` | 갱신은 플러그인 로드 오류가 있는 reload를 실패로 보고한다. 세션 종료와 재개는 승인된 유휴 세션에 대한 `resume` 또는 모든 재개 검사를 통과한 이전 Claude Code 릴리스의 유휴 세션에 대한 `apply`로만 하며, 늦어진 종료로 프로세스가 끝나면 재개 명령줄을 보낸다. | `skills/orca-plugin-refresh/SKILL.md` |
+| `skills/orca-plugin-refresh/tests/test_refresh_mail_pending.py` | 갱신은 Orca가 세션의 터미널 앞으로 읽지 않은 오케스트레이션 메일을 갖고 있거나 받은 메일함을 읽을 수 없는 동안 확인용 문자를 입력하지 않고 명령도 보내지 않으며, 메일이 읽힌 뒤에 진행한다. | `skills/orca-plugin-refresh/SKILL.md` |
 | `skills/orca-plugin-refresh/tests/test_refresh_probe_host_manual.py` | 갱신은 자신이 입력한 확인용 문자를 지우거나 그 정확한 위치를 보고하고, 화면만으로 판단할 수 없으면 프로세스로 Claude Code 세션을 식별하며, 에이전트가 수동으로 완료한 작업을 `record-manual`로 기록한다. | `skills/orca-plugin-refresh/SKILL.md` |
 | `skills/orca-plugin-refresh/tests/test_refresh_handoff_compact.py` | 갱신은 인계 뒤에도 transcript 끝부분으로 세션의 유휴 여부를 판단하고, 메시지가 너무 적어 거절된 compact는 안내와 함께 완료로 보고한다. | `skills/orca-plugin-refresh/SKILL.md` |
 | `skills/orca-plugin-refresh/tests/test_refresh_compact_dialog.py` | 갱신은 /compact 에이전트 보기 대화상자에서 실행 선택지만 확인하고, 다른 열린 대화상자에는 입력하지 않는다. | `skills/orca-plugin-refresh/SKILL.md` |

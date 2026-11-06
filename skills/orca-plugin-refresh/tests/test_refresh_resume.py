@@ -686,6 +686,18 @@ class NeverEndedTest(ResumeCase):
         # Then
         self.assert_kept(result, "unsent_input")
 
+    def test_안_읽은_오케스트레이션_메일이_있는_세션은_승인돼도_끝내지_않는다(self):
+        """Orca가 곧 알림을 입력창에 넣을 세션은 orchestration_mail_pending으로 건너뛰고 아무것도 보내지 않는다."""
+        # Given
+        self.fake.mail.add(HANDLE)
+
+        # When
+        result = self.resume()
+
+        # Then
+        self.assert_kept(result, "orchestration_mail_pending")
+        self.assertEqual([], self.fake.keystrokes)
+
     def test_도구_승인이나_질문을_기다리는_세션은_승인돼도_끝내지_않는다(self):
         """마지막 기록이 답이 없는 도구 호출이면 승인 대기로 보아 busy로 건너뛴다."""
         # Given

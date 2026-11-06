@@ -8,6 +8,9 @@ from typing import Callable
 import refresh_core as core
 from refresh_core import RefreshError, run_json
 
+INBOX_LIMIT = 100000
+MAIL_PAGE_LIMIT = 100
+
 
 class Orca:
     """Thin wrapper over the Orca CLI so the refresh logic can be tested without Orca."""
@@ -29,6 +32,103 @@ class Orca:
         if not isinstance(result, dict):
             raise RefreshError("orca_invalid", "Orca returned an unsupported result.")
         return result
+
+    def orchestration(self, *args: str) -> dict | None:
+        """One read-only orchestration call; None when this Orca does not know the `orchestration` command at all."""
+        result = core.run([*self.command, "orchestration", *args, "--json"], timeout=15, check=False)
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            raise RefreshError("invalid_json", "Orca returned unreadable JSON for an orchestration call.") from error
+        if not isinstance(payload, dict):
+            raise RefreshError("orca_invalid", "Orca returned an unsupported orchestration result.")
+        if payload.get("ok") is False:
+            error = payload.get("error")
+            if isinstance(error, dict) and error.get("code") == "invalid_argument" and str(error.get("message", "")).startswith("Unknown command"):
+                return None
+            code = error.get("code") if isinstance(error, dict) and isinstance(error.get("code"), str) else "orca_rejected"
+            raise RefreshError(code, f"Orca rejected `orchestration {args[0]}`.")
+        result_body = payload.get("result")
+        if payload.get("ok") is not True or not isinstance(result_body, dict):
+            raise RefreshError("orca_invalid", "Orca returned an unsupported orchestration result.")
+        return result_body
+
+    def paged(self, key: str, *args: str) -> list[dict]:
+        """Every row of a paged orchestration listing, following `nextCursor` until it is absent."""
+        rows: list[dict] = []
+        cursor: str | None = None
+        for _ in range(MAIL_PAGE_LIMIT):
+            page = self.orchestration(*args, *(["--cursor", cursor] if cursor else []))
+            items = page.get(key) if page is not None else None
+            if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
+                raise RefreshError("orca_invalid", f"Orca returned an unsupported {key} list.")
+            rows.extend(items)
+            cursor = page.get("nextCursor")
+            if not cursor:
+                return rows
+            if not isinstance(cursor, str):
+                break
+        raise RefreshError("orca_invalid", f"Orca returned too many pages of {key}.")
+
+    def dispatch_terminals(self) -> dict[str, str]:
+        """Dispatch ID to worker terminal across every run; `worker-list` alone covers only the caller's bound run."""
+        terminals: dict[str, str] = {}
+        for run in self.paged("runs", "run-list"):
+            if not isinstance(run.get("id"), str):
+                continue
+            for worker in self.paged("workers", "worker-list", "--run", run["id"], "--limit", "100"):
+                if isinstance(worker.get("dispatchId"), str) and isinstance(worker.get("terminal"), str):
+                    terminals[worker["dispatchId"]] = worker["terminal"]
+        return terminals
+
+    def mail_pending(self, handle: str) -> bool:
+        """True when Orca holds unread orchestration mail for the terminal, or cannot say.
+
+        Orca writes a notice about unread mail into an idle agent's input line and presses Enter, so anything typed
+        or sent meanwhile would be merged into that notice. An Orca without orchestration never does, so it counts
+        as no mail. Mail whose recipient does not resolve to a terminal counts against no session, and so does mail
+        Orca keeps only as history, which it never turns into a notice.
+        """
+        try:
+            inbox = self.orchestration("inbox", "--limit", str(INBOX_LIMIT), "--full")
+            if inbox is None:
+                return False
+            messages = inbox.get("messages")
+            if not isinstance(messages, list) or any(not isinstance(item, dict) for item in messages) or len(messages) >= INBOX_LIMIT:
+                raise RefreshError("orca_invalid", "Orca returned an unsupported or truncated inbox.")
+            resolved: dict[str, str | None] = {}
+            workers: dict[str, str] | None = None
+            for message in messages:
+                contract = message.get("delivery_contract")
+                if message.get("read") or (isinstance(contract, str) and contract != "current_delivery"):
+                    continue
+                recipient = message.get("to_handle")
+                if not isinstance(recipient, str):
+                    continue
+                if recipient not in resolved:
+                    if recipient.startswith("run:"):
+                        try:
+                            run = self.orchestration("run-show", "--id", recipient[4:], "--full")
+                        except RefreshError as error:
+                            if error.code != "run_not_found":
+                                raise
+                            run = {"run": {}}
+                        record = run.get("run") if run is not None else None
+                        if not isinstance(record, dict):
+                            raise RefreshError("orca_invalid", "Orca returned an unsupported run.")
+                        coordinator = record.get("coordinator_handle")
+                        resolved[recipient] = coordinator if isinstance(coordinator, str) else None
+                    elif recipient.startswith("dispatch:"):
+                        if workers is None:
+                            workers = self.dispatch_terminals()
+                        resolved[recipient] = workers.get(recipient[9:])
+                    else:
+                        resolved[recipient] = recipient
+                if resolved[recipient] == handle:
+                    return True
+            return False
+        except RefreshError:
+            return True
 
     def terminals(self) -> list[dict]:
         result = self.call("terminal", "list")

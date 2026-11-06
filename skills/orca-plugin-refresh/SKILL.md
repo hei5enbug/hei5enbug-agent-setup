@@ -115,7 +115,8 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
    - `skipped`: the session stayed busy, showed an unreadable input line, changed its input just before the send,
      reached the deadline, or closed. `terminal_orphaned` means an orphaned terminal (its Orca tab was closed) is not
      connected or not writable; a refreshed orphaned session reports `orphaned`. `input_clear_failed` means the line could not be cleared, so nothing was sent
-     (`input` is `clear_failed`), or that the script typed the text back.
+     (`input` is `clear_failed`), or that the script typed the text back. `orchestration_mail_pending` means Orca
+     still held unread orchestration mail for the session, or could not say, so nothing was typed or sent.
    - Every session also reports `ready_signal` (`host_record` or `tui_idle`, the signal that allowed the send) and,
      when it held input, `input` (`restored`, or `cleared` for input that could not be restored exactly).
      A Claude Code session also reports its `release`, and `host_release_outdated` with both versions when it runs
@@ -199,6 +200,11 @@ result is not ok when this plugin has a host error or any companion has the stat
   earlier turn with no end record, means idle, even when no record follows the handoff, a turn
   in progress means busy, and a Codex rollout's last complete line decides the same way. When the record is missing,
   partial, or not decisive, Orca's `tui-idle` decides. A short race remains.
+- Orca delivers an orchestration mail notice by typing it into an idle agent's input line and pressing Enter,
+  which submits whatever is already on the line. Before it probes, sends, or types held input back, the script
+  reads Orca's orchestration inbox and leaves a session alone while mail Orca will announce to it is unread or the
+  inbox cannot be read. Held input is typed back after two minutes even then, so it is not lost. Mail that arrives
+  during the probe or the send itself remains a race.
 - Orca hides the Claude Code input line from the screen and reports it as a draft, which also carries Claude
   Code's grey prompt suggestion. When a draft stays unchanged for five seconds, the script types one character
   and deletes it only when the draft shows exactly that character: a suggestion is replaced and typed text is
