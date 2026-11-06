@@ -2,6 +2,8 @@
 """Print one JSON overview that joins Orca's agent sessions with their memory and terminal handles.
 
 Read-only: it runs `worktree ps --agent-wait`, `terminal list`, and `diagnostics memory` once each and writes nothing.
+`worktrees_without_agent` lists every non-main worktree that no agent session runs in, with or without a terminal, and a
+main worktree only while it still has a live terminal.
 Exit 0 on success, 2 with a one-line stderr reason when Orca is unreachable or a required read fails.
 """
 
@@ -162,9 +164,19 @@ def build_overview(runner: Runner, now_ms: int, env: dict[str, str]) -> dict:
         }
         if not agents:
             live = worktree.get("liveTerminalCount")
-            if isinstance(live, int) and live > 0:
-                own = [t.get("handle") for t in terminals if isinstance(t, dict) and t.get("worktreeId") == worktree.get("worktreeId")]
-                without_agent.append({**base, "live_terminals": live, "terminal_handles": [h for h in own if isinstance(h, str)]})
+            live = live if isinstance(live, int) and not isinstance(live, bool) and live > 0 else 0
+            if worktree.get("isArchived") is True or (base["is_main_worktree"] and live == 0):
+                continue
+            own = [t.get("handle") for t in terminals if isinstance(t, dict) and t.get("worktreeId") == worktree.get("worktreeId")]
+            without_agent.append(
+                {
+                    **base,
+                    "parent_worktree_id": worktree.get("parentWorktreeId"),
+                    "child_count": len(worktree.get("childWorktreeIds") or []),
+                    "live_terminals": live,
+                    "terminal_handles": [h for h in own if isinstance(h, str)],
+                }
+            )
             continue
         for agent in agents:
             pane = agent.get("paneKey")

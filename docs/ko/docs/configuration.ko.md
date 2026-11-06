@@ -83,6 +83,7 @@ Codex 설정이나 Claude 설정을 쓰지 않습니다. Codex 설정을 쓰는 
 | 승인 가드 | `approval_guard` | `HEI5ENBUG_APPROVAL_GUARD` |
 | 승인 범위 | `approval_scope`(`tiered` 또는 `session`, 기본값 `tiered`) | `HEI5ENBUG_APPROVAL_SCOPE` |
 | 다른 저장소에 Orca 워크트리 사용 | `orca_worktree` | `HEI5ENBUG_ORCA_WORKTREE` |
+| 모델 턴 없는 Orca 상태 기록 | `orca_status_writes` ([Orca 상태](guards.ko.md#orca-상태) 참고) | `HEI5ENBUG_ORCA_STATUS_WRITES` |
 | 호스트 설정 모드 | `host_settings` (`apply` 또는 `report`, 기본 `apply`) | `HEI5ENBUG_HOST_SETTINGS` |
 | 에이전트 세션을 시작하는 데 필요한 최소 여유 메모리 | `session_memory_min_mb` (MB, 기본값 `2048`; `0`, `off`, `false`, `no`이면 차단 규칙을 끔; [Orca 세션 시작](guards.ko.md#orca-세션-시작) 참고) | `HEI5ENBUG_SESSION_MEMORY_MIN_MB` |
 | 훅 Python 인터프리터 | `python` (절대 경로, 기본값 빈 문자열) | `HEI5ENBUG_PYTHON` |

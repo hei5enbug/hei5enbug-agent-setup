@@ -131,25 +131,68 @@ remote가 이미 가진 커밋도 검사합니다. 이 값들의 변수는 `git 
 
 ## Orca 세션 시작
 
-두 호스트 모두 `Bash`의 `PreToolUse` 훅인 `scripts/orca_placement_hook.py`를 실행하며 두 규칙을 적용합니다.
-배치 규칙은 최상위 worktree 생성을 거부합니다.
-명령이 `orca worktree create`에 `--no-parent`를 쓰거나 `orca orchestration worker-start`에
-`--worktree new-top-level`을 쓰면 호출을 거부하고, `instructions/cross-repository.md`의 "Session placement"에 따라
-대신 사용할 부모를 알려 줍니다. `$(...)`나 백틱 명령 치환의 안쪽도 검사하고, here-document 본문에서는 그런 치환만
-검사합니다. 다른 명령, 이 단어들을 언급만 하는 텍스트, 잘못된 형식의 입력, 명령이 없는 입력에는
-아무것도 출력하지 않습니다. workspace가 없는 저장소이거나 사용자가 명시적으로 요청한 경우에는
-`orca worktree set --no-parent`로 기존 worktree를 최상위로 옮길 수 있습니다. Codex에서는 `/hooks`에서 이 훅을
-신뢰해야 합니다. 이 훅을 둔 이유는 2026-11-06에 조정 세션이 티켓 두 개를 위해 티켓 참조 없이 `--no-parent`로
-worktree 세 개를 만들어, `orca reference find`가 하나도 찾지 못했고 이후 세션이 그룹에 참여할 수 없었기 때문입니다.
+두 호스트 모두 `Bash`와 `EnterWorktree`의 `PreToolUse` 훅인 `scripts/orca_placement_hook.py`를 실행합니다. 거부할
+이유가 없는 명령, 이 단어들을 언급만 하는 텍스트, 잘못된 형식의 입력, 명령이 없는 입력에는 아무것도 출력하지
+않습니다. 훅은 `$(...)`나 백틱 명령 치환의 안쪽도 검사하고, here-document 본문에서는 그런 치환만 검사합니다.
+Codex에서는 `/hooks`에서 이 훅을 신뢰해야 합니다.
 
-메모리 규칙은 사용 가능한 메모리가 `session_memory_min_mb` 옵션(기본값 2048 MB)보다 적으면 Orca를 통해
-에이전트 세션을 시작하는 명령을 거부합니다. 에이전트는 컴퓨터가 스왑을 쓰게 만드는 대신 세션을 대기열에 넣고
-다른 세션이 끝난 뒤에 시작합니다. 대상은 `--agent`가 있는 `orca worktree create`,
-`orca orchestration worker-start`, `orca agent launch`, `--command`가 `cd '<path>' &&` 같은 앞부분
-뒤에서라도 `claude`나 `codex`를 실행하는 `orca terminal create`이며, 명령 치환 안에서도 검사하지만 작은따옴표
-안이나 이스케이프된 `$` 뒤는 검사하지 않습니다. 다른 명령에는 적용하지 않습니다. 두 규칙이 모두
-적용되면 배치 규칙의 거부가 우선합니다. 사용 가능한 메모리는 macOS에서는 memory-pressure의 여유 비율에
-물리 메모리를 곱한 값, Linux에서는 `MemAvailable` 값이며, 대상 명령을 찾은 뒤에만 읽습니다.
-1초 안에 읽을 수 없거나 다른 플랫폼이면 명령을 허용합니다. 옵션을 `0`, `off`, `false`, `no`로 설정하면
-규칙이 꺼지고, 값이 0 이상의 정수가 아니면 2048을 사용합니다. Codex에서는 `HEI5ENBUG_SESSION_MEMORY_MIN_MB`를
-설정합니다.
+- **최상위 worktree.** `--no-parent`가 있는 `orca worktree create`나 `--worktree new-top-level`이 있는
+  `orca orchestration worker-start`는 `instructions/cross-repository.md`의 "Session placement"에 따라 대신 사용할
+  부모를 알려 주며 거부합니다. workspace가 없는 저장소이거나 사용자가 명시적으로 요청한 경우에는
+  `orca worktree set --no-parent`로 기존 worktree를 최상위로 옮길 수 있습니다. 이 규칙을 둔 이유는 2026-11-06에
+  조정 세션이 티켓 두 개를 위해 티켓 참조 없이 `--no-parent`로 worktree 세 개를 만들어, `orca reference find`가
+  하나도 찾지 못했고 이후 세션이 그룹에 참여할 수 없었기 때문입니다.
+- **다른 저장소의 부모.** `orca worktree create`, `--worktree new-child`로 worktree를 만드는 `worker-start`,
+  `orca worktree set --parent-worktree`는 부모가 worktree와 다른 저장소에 속하면 거부합니다. 각 worktree는 자기
+  저장소의 workspace 아래에 두고, 한 티켓의 worktree는 참조, 이름, Run으로 묶기 때문입니다
+  (`instructions/orca-groups.md`). 훅은 `id:<repoId>`와 `id:<repoId>::<path>` 선택자에서는 Orca 저장소 ID를,
+  `path:` 선택자에서는 Git 디렉터리를 비교합니다. `active`는 현재 worktree이며, 그 저장소 ID는
+  `orca worktree current`에서 한 번 읽습니다. 이름이나 브랜치 선택자, 확인할 수 없는 저장소, 읽을 수 없는 Orca는
+  명령을 허용합니다.
+- **작업이 남은 완료.** `orca worktree set --workspace-status completed`는 대상 worktree, 즉 현재 worktree나
+  `--worktree` 선택자가 `id:<repoId>::<path>`나 `path:`로 가리키는 worktree에 커밋하지 않은 변경이나 업스트림에 없는
+  커밋이 있으면 거부하며, 거부 사유에 남은 것을 나열합니다. 깨끗한 worktree, 다른 상태, 확인할 수 없는 대상은
+  허용합니다.
+- **호스트가 만드는 worktree.** Orca 터미널에서 `path` 없는 `EnterWorktree`는 Orca가 목록에 올리지 않는 worktree를
+  만들므로, 대신 쓸 `orca worktree create` 명령을 알려 주며 거부합니다. 기존 `path`로 들어가는 호출과 Orca 밖의
+  호출은 허용합니다.
+- **메모리 부족.** 사용 가능한 메모리가 `session_memory_min_mb` 옵션(기본값 2048 MB)보다 적으면 Orca를 통해
+  에이전트 세션을 시작하는 명령을 거부합니다. 에이전트는 컴퓨터가 스왑을 쓰게 만드는 대신 세션을 대기열에 넣고
+  다른 세션이 끝난 뒤에 시작합니다. 대상은 `--agent`가 있는 `orca worktree create`,
+  `orca orchestration worker-start`, `orca agent launch`, `--command`가 `cd '<path>' &&` 같은 앞부분
+  뒤에서라도 `claude`나 `codex`를 실행하는 `orca terminal create`이며, 명령 치환 안에서도 검사하지만 작은따옴표
+  안이나 이스케이프된 `$` 뒤는 검사하지 않습니다. 다른 명령에는 적용하지 않습니다. 둘 이상이 적용되면 배치 거부가
+  우선합니다. 사용 가능한 메모리는 macOS에서는 memory-pressure의 여유 비율에 물리 메모리를 곱한 값, Linux에서는
+  `MemAvailable` 값이며, 대상 명령을 찾은 뒤에만 읽습니다. 1초 안에 읽을 수 없거나 다른 플랫폼이면 명령을
+  허용합니다. 옵션을 `0`, `off`, `false`, `no`로 설정하면 규칙이 꺼지고, 값이 0 이상의 정수가 아니면 2048을
+  사용합니다. Codex에서는 `HEI5ENBUG_SESSION_MEMORY_MIN_MB`를 설정합니다.
+
+## Orca 상태
+
+훅 스크립트 하나인 `scripts/orca_status_hook.py`가 세션의 Orca worktree를 작업에 맞춥니다. 이 훅은
+`ORCA_TERMINAL_HANDLE`이 설정된 경우에만 실행되고, 서브에이전트나 지정된 작업자에서는 실행되지 않으며, Orca, Git,
+기록을 읽지 못하면 그 이벤트를 통과시킵니다. Codex는 도구 호출을 스크립트 텍스트로 기록하므로 Claude Code 기록만
+읽습니다. 그래서 Codex에서는 도구 호출이나 프롬프트 뒤에 쓰는 기록만 적용되며, 질문 행은 `instructions/orca-worktree-status.md`대로 세션이 직접 씁니다. 같은 턴에 답을 받은 질문 도구 호출은 아무것도 쓰지 않습니다.
+
+기록에는 모델 턴이 필요 없으며 세션 자신의 현재 worktree에 적용됩니다. 각 기록은 이벤트마다 최대 한 번 일어납니다.
+
+| 이벤트 | 훅 | 기록 |
+|---|---|---|
+| pull request나 merge request 생성: `gh pr create`, `az repos pr create`, `glab mr create`이며 도구 출력에 링크나 Azure DevOps 요청 ID가 보임, `--help`, `-h`, `--dry-run`은 해당하지 않음 | `PostToolUse` | 상태 `in-review`, 코멘트 `Waiting for review: <링크>` |
+| 턴이 `?`로 끝나는 마지막 줄의 질문으로 끝났고 `orca worktree set`을 실행하지 않음 | `Stop` | `--unread`, 코멘트 `Waiting for you: <첫 줄, 약 80자> · <이전 코멘트>` |
+| 사용자의 다음 프롬프트, 코멘트가 아직 훅이 쓴 그대로일 때 | `UserPromptSubmit` | 세션 상태 파일에 보관한 이전 코멘트 |
+| 상태가 `completed`, `todo`이거나 없는 현재 worktree 안의 편집이나 `git commit`, 커밋은 `git -C <dir>`이나 앞의 `cd <dir> &&`가 가리키는 곳 기준 | `PostToolUse` | 상태 `in-progress`, 코멘트는 그대로 |
+
+Claude Code `language` 설정이 한국어이면 라벨은 한국어(`리뷰 대기`, `답변 대기`)이고, 아니면 영어입니다. 기본 네 가지
+밖의 상태 ID는 건드리지 않습니다. 보드를 사용자 정의한 것이므로 코멘트만 씁니다. worktree 안에서 확인한 뒤에는 작업 재개 기록이
+60초 동안 Orca를 다시 읽지 않으며, 밖의 편집이나 커밋은 기록도 대기 시작도 하지 않습니다. `orca_status_writes` 옵션으로 이 기록을 끌 수 있으며, Claude Code에서는
+`/config`, Codex에서는 `HEI5ENBUG_ORCA_STATUS_WRITES`를 씁니다. 상태는
+`$XDG_STATE_HOME/hei5enbug-agent-setup/orca-status/<session id>.json`에 둡니다.
+
+두 가지는 아직 모델이 필요하므로, `Stop` 훅이 상태마다 한 번 멈춤을 막고 정확한 명령을 알려 주며 답을 반복하지 않고
+턴을 끝내라고 요청하는 두 문장 이하의 알림을 보냅니다. 주 클론이 아니고, 자동 이름을 그대로 쓰며, 이 세션에서 파일을
+고치거나 커밋한 작업용 worktree에는 `orca worktree set --display-name`을 알립니다. `orca worktree set`을 실행하고도
+`orca terminal rename`을 한 번도 실행하지 않은 세션에는 탭 제목을 알리며, 둘 다 해당하면 알림 하나에 두 명령을 담습니다.
+각 알림은 세션당 최대 한 번 일어나고, 훅 때문에 이어진 멈춤에서는 다시 일어나지 않습니다. 알림 한 번에 측정한 한
+컴퓨터 기준 약 265,000 캐시 읽기와 출력 토큰이 들며, 이것이 반복되는 유일한 모델 비용입니다. Orca는 탭 제목을
+보고하지 않으므로 훅은 세션 자신의 `orca terminal rename` 명령만으로 제목을 판단합니다.

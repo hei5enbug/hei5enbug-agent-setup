@@ -9,7 +9,8 @@ Run independent validation automatically, without a question, exactly once per r
 no other work remains, over the combined result of every worker and the main session. For a requested plan, design,
 or RFC, that is the complete draft. For implementation, it is the final change with its passing checks when
 behavior, public contracts, security, concurrency, migrations, or several components materially change. Skip
-routine small edits unless the user requests review.
+routine small edits unless the user requests review. A change made to fix performance or resource use, or one that
+changes how much work a code path does, is never a routine small edit.
 
 Any earlier review, such as one of a single worker's change or of an intermediate draft, runs only when the user
 approves it for that deliverable: name the reviewer model and reasoning effort in one short question and wait for
@@ -50,14 +51,17 @@ records before counting the review as complete. A silent fallback or effort cap 
 Do not enable extra billing or change authentication to make the review available.
 
 For an implementation review, provide the accepted scope, complete change diff, relevant source paths,
-acceptance criteria, and check results instead of the conversation history. Include necessary untracked
-files; a tracked-only diff can omit the implementation. Return concise findings with severity and evidence, and name
+acceptance criteria, and check results instead of the conversation history. Also provide the callers and consumers
+of each changed function, contract, schema, or setting that the author found, and baseline measurements, such as a
+previous run time, when the change can affect them. Include necessary untracked files; a tracked-only diff can omit
+the implementation. Return concise findings with severity and evidence, and name
 the one fact the change is safe because of and how far it was proven: asserted, cited at `file:line`, argued step by
 step, executed by a script or test, or reproduced in the running app.
 
 ## Review checks
 
-For every deliverable, report only evidence-backed findings for:
+Zero findings is a valid result. Report only findings you are confident are real, each backed by evidence, for every
+deliverable:
 
 - Missing requirements or acceptance criteria
 - Contradictions and materially ambiguous wording
@@ -75,6 +79,10 @@ For completed implementation, also check:
 - Correctness, regressions, permission boundaries, and failure handling
 - Missing acceptance checks or unsupported claims of successful verification
 - Integration conflicts, unsafe concurrency, and incomplete main-session fallback
+- Side effects: trace each changed function, contract, schema, or setting to its callers, consumers, stored data,
+  and deployment configuration, and report only effects reached on a traced path
+- Compute and resource efficiency at a realistic input size: repeated expensive work inside loops, N+1 queries or
+  calls, unbounded scans or loads, memory that grows with input, and run time against a given baseline
 
 For a technical design document or RFC, also check:
 

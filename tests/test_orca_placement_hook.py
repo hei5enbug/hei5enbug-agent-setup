@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import atexit
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -18,30 +21,50 @@ MEMORY_ENV = "HEI5ENBUG_AVAILABLE_MEMORY_MB_FOR_TESTS"
 OPTION_ENV = "CLAUDE_PLUGIN_OPTION_SESSION_MEMORY_MIN_MB"
 ENOUGH_MB = "100000"
 REASON = (
-    "Blocked: this command creates a top-level Orca worktree. Put a new worktree under an existing workspace so "
-    "every worktree of one ticket stays in one group: use `--parent-worktree active` in this repository, "
-    "`--parent-worktree id:<repoId>::<clone path>` for another repository's workspace, or the group root's id for a "
-    "task that changes several repositories; with orchestration, use `--worktree new-child` or an existing "
-    "worktree. Only when Orca lists no workspace for the repository, or the user asked for a top-level worktree in "
+    "Blocked: this command creates a top-level Orca worktree. Put a new worktree under its own repository's "
+    "existing workspace: use `--parent-worktree active` in this repository, "
+    "or `--parent-worktree id:<repoId>::<clone path>` for another repository's workspace; with orchestration, use "
+    "`--worktree new-child` or an existing worktree. Only when Orca lists no workspace for the repository, or the "
+    "user asked for a top-level worktree in "
     "this conversation, create it with a parent and then run `orca worktree set --worktree <id> --no-parent "
     "--json`."
 )
 
 
+STUB_DIRECTORY = tempfile.mkdtemp(prefix="orca-stub-")
+atexit.register(shutil.rmtree, STUB_DIRECTORY, True)
+STUB = Path(STUB_DIRECTORY) / "orca"
+STUB.write_text('#!/bin/sh\nif [ -n "$ORCA_STUB_JSON" ]; then cat "$ORCA_STUB_JSON"; else exit 1; fi\n')
+STUB.chmod(0o755)
+
+
 def run_hook(
-    stdin: str, memory_mb: str | None = ENOUGH_MB, option: str | None = None
+    stdin: str, memory_mb: str | None = ENOUGH_MB, option: str | None = None, orca_terminal: bool = False,
+    orca_json: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    env = {key: value for key, value in os.environ.items() if key not in {MEMORY_ENV, OPTION_ENV, "PLUGIN_ROOT"}}
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in {MEMORY_ENV, OPTION_ENV, "PLUGIN_ROOT", "ORCA_TERMINAL_HANDLE", "ORCA_STUB_JSON"}
+    }
+    env["PATH"] = f"{STUB_DIRECTORY}{os.pathsep}{env.get('PATH', '')}"
     env[MEMORY_ENV] = "unknown" if memory_mb is None else memory_mb
     if option is not None:
         env[OPTION_ENV] = option
+    if orca_terminal:
+        env["ORCA_TERMINAL_HANDLE"] = "term_test"
+    if orca_json is not None:
+        env["ORCA_STUB_JSON"] = orca_json
     return subprocess.run(
         [sys.executable, str(SCRIPT)], input=stdin, capture_output=True, text=True, check=False, env=env
     )
 
 
-def bash_event(command: str) -> str:
-    return json.dumps({"tool_name": "Bash", "tool_input": {"command": command}})
+def bash_event(command: str, cwd: str | None = None) -> str:
+    event = {"tool_name": "Bash", "tool_input": {"command": command}}
+    if cwd is not None:
+        event["cwd"] = cwd
+    return json.dumps(event)
 
 
 class OrcaPlacementHookTest(unittest.TestCase):
@@ -264,6 +287,238 @@ class SessionMemoryGateTest(unittest.TestCase):
         self.assertIsNone(session_memory.parse_darwin(""))
         self.assertIsNone(session_memory.parse_darwin(f"abc\n{eight_gib}\n"))
         self.assertIsNone(session_memory.parse_darwin(f"250\n{eight_gib}\n"))
+
+
+def git(path: Path, *args: str) -> None:
+    subprocess.run(
+        ["git", "-c", "user.name=Demo", "-c", "user.email=demo@example.com", "-C", str(path), *args],
+        capture_output=True, text=True, check=True,
+    )
+
+
+COMPLETED = "orca worktree set --worktree {selector} --workspace-status completed --comment done --json"
+
+
+class CompletedStatusGateTest(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        origin = root / "origin.git"
+        subprocess.run(["git", "init", "--bare", "-b", "main", str(origin)], capture_output=True, check=True)
+        self.work = root / "work"
+        subprocess.run(["git", "clone", str(origin), str(self.work)], capture_output=True, check=True)
+        (self.work / "a.txt").write_text("a\n")
+        git(self.work, "add", "a.txt")
+        git(self.work, "commit", "-m", "first")
+        git(self.work, "push", "-u", "origin", "HEAD:main")
+        git(self.work, "branch", "--set-upstream-to=origin/main")
+
+    def run_completed(self, selector: str = "active", command: str | None = None) -> subprocess.CompletedProcess[str]:
+        text = command or COMPLETED.format(selector=selector)
+        return run_hook(bash_event(text, cwd=str(self.work)))
+
+    def reason_of(self, result: subprocess.CompletedProcess[str]) -> str:
+        self.assertEqual(result.returncode, 0, result.stderr)
+        output = json.loads(result.stdout)["hookSpecificOutput"]
+        self.assertEqual(output["permissionDecision"], "deny")
+        return output["permissionDecisionReason"]
+
+    def test_완료로_바꾸려는_워크트리에_커밋하지_않은_변경이_있으면_차단하고_남은_것을_알려준다(self):
+        # Regression: a false Done leaves uncommitted work behind a completed card
+        # Given
+        (self.work / "a.txt").write_text("changed\n")
+        (self.work / "new.txt").write_text("new\n")
+
+        # When
+        reason = self.reason_of(self.run_completed())
+
+        # Then
+        self.assertIn("2 uncommitted changes", reason)
+        self.assertIn("a.txt", reason)
+        self.assertIn("new.txt", reason)
+        self.assertIn("--comment", reason)
+
+    def test_업스트림에_없는_커밋이_있으면_차단한다(self):
+        # Regression: a false Done leaves unpushed commits behind a completed card
+        # Given
+        (self.work / "a.txt").write_text("two\n")
+        git(self.work, "commit", "-am", "second")
+
+        # When
+        reason = self.reason_of(self.run_completed())
+
+        # Then
+        self.assertIn("1 commit its upstream lacks", reason)
+        self.assertNotIn("uncommitted", reason)
+
+    def test_업스트림이_없는_브랜치의_커밋도_원격에_없으면_남은_일로_센다(self):
+        # Regression: a branch that was never pushed passes as done because it has no upstream
+        # Given
+        git(self.work, "checkout", "-b", "feature/abc-123")
+        (self.work / "b.txt").write_text("b\n")
+        git(self.work, "add", "b.txt")
+        git(self.work, "commit", "-m", "feature")
+
+        # When
+        reason = self.reason_of(self.run_completed(selector=f"id:repo-id::{self.work}"))
+
+        # Then
+        self.assertIn("1 commit its upstream lacks", reason)
+
+    def test_깨끗하고_푸시된_워크트리나_다른_상태와_풀_수_없는_선택자는_통과한다(self):
+        # Regression: a gate that blocks a clean Done, other statuses, or a target it cannot resolve
+        # Given
+        commands = [
+            COMPLETED.format(selector="active"),
+            COMPLETED.format(selector=f"path:{self.work}"),
+            COMPLETED.format(selector=f"id:repo-id::{self.work}"),
+        ]
+        (self.work / "a.txt").write_text("dirty\n")
+        dirty = [
+            "orca worktree set --worktree active --workspace-status in-review --comment waits --json",
+            "orca worktree set --worktree active --comment completed --json",
+            COMPLETED.format(selector="name:demo"),
+            COMPLETED.format(selector="branch:feature/abc-123"),
+            COMPLETED.format(selector="path:/home/test/does-not-exist"),
+            'echo "orca worktree set --workspace-status completed"',
+        ]
+
+        # When / Then
+        for command in dirty:
+            with self.subTest(command=command):
+                result = self.run_completed(command=command)
+                self.assertEqual((result.returncode, result.stdout), (0, ""), result.stderr)
+        git(self.work, "checkout", "--", "a.txt")
+        for command in commands:
+            with self.subTest(command=command):
+                result = self.run_completed(command=command)
+                self.assertEqual((result.returncode, result.stdout), (0, ""), result.stderr)
+
+
+def current_worktree_json(repo_id: str = "repo-a") -> str:
+    record = {"id": f"{repo_id}::/home/test/{repo_id}", "repoId": repo_id, "path": f"/home/test/{repo_id}"}
+    return json.dumps({"ok": True, "result": {"worktree": record}})
+
+
+class ParentRepositoryGateTest(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.current = self.root / "current.json"
+        self.current.write_text(current_worktree_json())
+        for name in ("a", "b"):
+            subprocess.run(["git", "init", "-q", "-b", "main", str(self.root / name)], check=True)
+        git(self.root / "a", "commit", "--allow-empty", "-m", "first")
+        self.linked = self.root / "a-feature"
+        git(self.root / "a", "worktree", "add", "-b", "feature", str(self.linked))
+
+    def run_command(self, command: str, orca_json: str | None = "default") -> subprocess.CompletedProcess[str]:
+        stub = str(self.current) if orca_json == "default" else orca_json
+        return run_hook(bash_event(command, cwd=str(self.root / "a")), orca_json=stub)
+
+    def assert_denied(self, command: str, orca_json: str | None = "default") -> None:
+        result = self.run_command(command, orca_json)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        reason = json.loads(result.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+        self.assertIn("parent belongs to another repository", reason)
+        self.assertIn("--reference <issue link>", reason)
+
+    def assert_allowed(self, command: str, orca_json: str | None = "default") -> None:
+        result = self.run_command(command, orca_json)
+        self.assertEqual((result.returncode, result.stdout), (0, ""), result.stderr)
+
+    def test_다른_저장소의_워크트리를_부모로_주는_생성과_설정과_워커_시작을_차단한다(self):
+        # Regression: a ticket's worktrees in several repositories were nested under one group root
+        commands = [
+            "orca worktree create --repo id:repo-b --name x --parent-worktree active --json",
+            "orca worktree create --repo id:repo-b --name x --parent-worktree id:repo-a::/home/test/repo-a --json",
+            f"orca worktree create --repo path:{self.root / 'b'} --name x --parent-worktree path:{self.root / 'a'} --json",
+            f"orca worktree create --repo path:{self.root / 'b'} --name x --parent-worktree active --json",
+            "orca orchestration worker-start --worktree new-child --repo id:repo-b --agent claude --spec x --json",
+            "orca worktree set --worktree id:repo-b::/home/test/repo-b --parent-worktree id:repo-a::/home/test/repo-a",
+            "orca worktree set --worktree active --parent-worktree id:repo-b::/home/test/repo-b --json",
+            'result="$(orca worktree create --repo id:repo-b --name x --parent-worktree active --json)"',
+        ]
+        for command in commands:
+            with self.subTest(command=command):
+                self.assert_denied(command)
+
+    def test_자기_저장소의_작업공간이나_연결된_워크트리를_부모로_주면_허용한다(self):
+        # Regression: a gate that blocks the placement the rule asks for
+        commands = [
+            "orca worktree create --repo id:repo-a --name x --parent-worktree active --json",
+            "orca worktree create --repo id:repo-b --name x --parent-worktree id:repo-b::/home/test/repo-b --json",
+            f"orca worktree create --repo path:{self.root / 'a'} --name x --parent-worktree path:{self.linked} --json",
+            "orca worktree create --repo id:repo-a --name x --json",
+            "orca orchestration worker-start --worktree new-child --agent claude --spec x --json",
+            "orca orchestration worker-start --worktree current --repo id:repo-b --agent claude --spec x",
+            "orca orchestration worker-start --worktree new-child --repo id:repo-a --agent claude --spec x --json",
+            "orca worktree set --worktree id:repo-a::/home/test/repo-a --parent-worktree active --json",
+            "orca worktree set --worktree active --comment hello --json",
+        ]
+        for command in commands:
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+    def test_저장소를_알_수_없으면_허용한다(self):
+        # Regression: a gate that denies when it cannot tell, such as a name selector or an unreadable Orca
+        commands = [
+            "orca worktree create --repo name:demo --name x --parent-worktree active --json",
+            "orca worktree create --repo id:repo-b --name x --parent-worktree branch:feature/abc-123 --json",
+            "orca worktree create --repo id:repo-b --name x --parent-worktree name:demo --json",
+            "orca worktree set --worktree name:demo --parent-worktree id:repo-a::/home/test/repo-a",
+        ]
+        for command in commands:
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+        self.assert_allowed("orca worktree create --repo id:repo-b --name x --parent-worktree active --json", None)
+
+
+def enter_event(**tool_input) -> str:
+    return json.dumps({"tool_name": "EnterWorktree", "tool_input": tool_input})
+
+
+class EnterWorktreeGateTest(unittest.TestCase):
+    def test_오르카_터미널에서_새_워크트리를_만드는_호출은_차단하고_오르카_명령을_알려준다(self):
+        # Regression: worktrees made with the host tool inside Orca are never listed by Orca
+        for tool_input in ({}, {"name": "feature-x"}, {"path": ""}, {"name": "x", "path": "  "}):
+            with self.subTest(tool_input=tool_input):
+                # When
+                result = run_hook(enter_event(**tool_input), orca_terminal=True)
+
+                # Then
+                self.assertEqual(result.returncode, 0, result.stderr)
+                reason = json.loads(result.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+                self.assertIn("orca worktree create --repo path:<repo> --name <branch> --base-branch <base>", reason)
+                self.assertIn("--parent-worktree active --json", reason)
+
+    def test_오르카_밖이거나_기존_경로로_들어가거나_다른_도구면_허용한다(self):
+        # Regression: a gate that blocks entering a worktree Orca already lists, or any work outside Orca
+        cases = [
+            (enter_event(name="feature-x"), False),
+            (enter_event(path="/tmp/work/abc-123"), True),
+            (json.dumps({"tool_name": "Bash", "tool_input": {"command": "echo EnterWorktree"}}), True),
+        ]
+        for stdin, orca_terminal in cases:
+            with self.subTest(stdin=stdin, orca_terminal=orca_terminal):
+                # When
+                result = run_hook(stdin, orca_terminal=orca_terminal)
+
+                # Then
+                self.assertEqual((result.returncode, result.stdout), (0, ""), result.stderr)
+
+    def test_훅_등록은_엔터워크트리를_같은_훅으로_매칭한다(self):
+        # Regression: the gate exists but no matcher sends EnterWorktree calls to it
+        hooks = json.loads((Path(__file__).resolve().parents[1] / "hooks/hooks.json").read_text())["hooks"]
+        groups = [
+            group for group in hooks["PreToolUse"]
+            if any("orca_placement_hook.py" in handler["command"] for handler in group["hooks"])
+        ]
+
+        # When / Then
+        self.assertEqual([group["matcher"] for group in groups], ["^(Bash|EnterWorktree)$"])
 
 
 if __name__ == "__main__":

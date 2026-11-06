@@ -3,8 +3,13 @@
 It denies `orca worktree create` with `--no-parent` and `orca orchestration worker-start` with `--worktree
 new-top-level`, also inside a command substitution; a here-document body is checked only for command
 substitutions, since Bash never runs it as a command. It also denies a command that starts an agent session through
-Orca when the available memory is below the `session_memory_min_mb` option. The input is parsed only when its raw
-text contains orca and a word one of those rules needs.
+Orca when the available memory is below the `session_memory_min_mb` option.
+
+It denies a worktree whose parent belongs to another repository than the worktree itself, from `orca worktree create`,
+a `worker-start` that creates a worktree, or `orca worktree set --parent-worktree`, when both repositories can be
+resolved. It also denies `orca worktree set --workspace-status completed` for a worktree with uncommitted changes or commits
+its upstream lacks, and, inside an Orca terminal, an `EnterWorktree` call that would create a worktree Orca never
+lists. The input is parsed only when its raw text contains orca and a word one of those rules needs, or EnterWorktree.
 """
 
 from __future__ import annotations
@@ -12,7 +17,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import sys
+from dataclasses import dataclass
 
 import plugin_toggles
 import session_memory
@@ -24,13 +31,17 @@ MAX_TEXTS = 64
 DEFAULT_MIN_MB = 2048
 MEMORY_OFF_VALUES = frozenset({"0", "off", "false", "no"})
 AGENT_PROGRAMS = frozenset({"claude", "codex"})
-PREFILTER_WORDS = ("no-parent", "new-top-level", "--agent", "worker-start", "--command")
+PREFILTER_WORDS = (
+    "no-parent", "new-top-level", "--agent", "worker-start", "--command", "completed", "parent-worktree",
+)
+GIT_TIMEOUT_SECONDS = 2
+MAX_LISTED_FILES = 5
 REASON = (
-    "Blocked: this command creates a top-level Orca worktree. Put a new worktree under an existing workspace so "
-    "every worktree of one ticket stays in one group: use `--parent-worktree active` in this repository, "
-    "`--parent-worktree id:<repoId>::<clone path>` for another repository's workspace, or the group root's id for a "
-    "task that changes several repositories; with orchestration, use `--worktree new-child` or an existing "
-    "worktree. Only when Orca lists no workspace for the repository, or the user asked for a top-level worktree in "
+    "Blocked: this command creates a top-level Orca worktree. Put a new worktree under its own repository's "
+    "existing workspace: use `--parent-worktree active` in this repository, "
+    "or `--parent-worktree id:<repoId>::<clone path>` for another repository's workspace; with orchestration, use "
+    "`--worktree new-child` or an existing worktree. Only when Orca lists no workspace for the repository, or the "
+    "user asked for a top-level worktree in "
     "this conversation, create it with a parent and then run `orca worktree set --worktree <id> --no-parent "
     "--json`."
 )
@@ -41,6 +52,24 @@ MEMORY_REASON = (
     "running session or worker of this task finishes or is cleaned up; never poll memory. When nothing of this "
     "task is running, tell the user in one line and suggest the session-triage skill to free memory. The user can "
     "lower `session_memory_min_mb`."
+)
+PARENT_REASON = (
+    "Blocked: this worktree's parent belongs to another repository. Every worktree goes under its own repository's "
+    "workspace, `--parent-worktree id:<repoId>::<clone path>`, or `active` only when the current worktree is that "
+    "workspace, also in a task that changes several repositories. Tie a ticket's worktrees in several repositories by "
+    "`--reference <issue link>`, a display name that starts with the ticket key, and one orchestration Run, as "
+    "`instructions/orca-groups.md` says."
+)
+ENTER_REASON = (
+    "Blocked: a worktree made with EnterWorktree is one Orca never lists. Create it through Orca so the sidebar and "
+    "the board show it: `orca worktree create --repo path:<repo> --name <branch> --base-branch <base> "
+    "--parent-worktree active --json`, then work in the path it returns; to continue in an existing worktree, call "
+    "EnterWorktree with its `path`."
+)
+COMPLETED_REASON = (
+    "Blocked: this worktree is not done, so it cannot be marked completed: {remaining}. Commit and push the work, "
+    "or keep the status and write what remains in `--comment`; set `completed` only when no change of the task "
+    "is left."
 )
 
 
@@ -120,6 +149,155 @@ def memory_reason() -> str | None:
     return MEMORY_REASON.format(available=available, threshold=threshold)
 
 
+@dataclass
+class RepoRef:
+    """What a selector says about a repository: its Orca id and a path inside it, or the current worktree."""
+
+    id: str | None = None
+    path: str | None = None
+    current: bool = False
+
+
+def repo_ref(selector: str | None, cwd: str, worktree: bool) -> RepoRef | None:
+    """Resolve a `--repo`, `--worktree`, or `--parent-worktree` selector; None when it names no known repository."""
+    if selector is None or selector in ("active", "current"):
+        return RepoRef(path=cwd, current=True)
+    if selector.startswith("id:"):
+        value = selector[3:]
+        if "::" in value:
+            repo_id, path = value.split("::", 1)
+            return RepoRef(id=repo_id or None, path=path or None)
+        return None if worktree or not value else RepoRef(id=value)
+    if selector.startswith("path:") and len(selector) > 5:
+        return RepoRef(path=selector[5:])
+    return None
+
+
+def git_common_dir(path: str) -> str | None:
+    output = git_output(path, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    return os.path.realpath(output.strip()) if output and output.strip() else None
+
+
+def current_repo_id() -> str | None:
+    try:
+        result = subprocess.run(
+            ["orca", "worktree", "current", "--json"],
+            capture_output=True, text=True, timeout=GIT_TIMEOUT_SECONDS, check=False,
+        )
+        value = json.loads(result.stdout)["result"]["worktree"]["repoId"]
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError):
+        return None
+    return value if result.returncode == 0 and isinstance(value, str) and value else None
+
+
+def same_repository(first: RepoRef, second: RepoRef) -> bool | None:
+    """Return whether two references name one repository, or None when that cannot be decided."""
+    for left, right in ((first, second), (second, first)):
+        if left.current and left.id is None and right.id is not None:
+            left.id = current_repo_id()
+    if first.id is not None and second.id is not None:
+        return first.id == second.id
+    if first.path is not None and second.path is not None:
+        directories = (git_common_dir(first.path), git_common_dir(second.path))
+        return directories[0] == directories[1] if all(directories) else None
+    return None
+
+
+def parent_denial(tokens: list[str], cwd: str) -> bool:
+    """Report whether a command gives a worktree a parent that belongs to another repository."""
+    arguments = orca_arguments(tokens)
+    if arguments is None or "--no-parent" in arguments:
+        return False
+    pair = [token for token in arguments if not token.startswith("-")][:2]
+    parent = option_after(arguments, "--parent-worktree")
+    if pair == ["worktree", "create"]:
+        target = repo_ref(option_after(arguments, "--repo"), cwd, worktree=False)
+    elif pair == ["worktree", "set"]:
+        target = repo_ref(option_after(arguments, "--worktree"), cwd, worktree=True)
+    elif pair == ["orchestration", "worker-start"] and option_after(arguments, "--worktree") == "new-child":
+        target, parent = repo_ref(option_after(arguments, "--repo"), cwd, worktree=False), "current"
+    else:
+        return False
+    parent_ref = repo_ref(parent, cwd, worktree=True) if parent is not None else None
+    if target is None or parent_ref is None:
+        return False
+    return same_repository(target, parent_ref) is False
+
+
+def worktree_path(arguments: list[str], cwd: str) -> str | None:
+    """Return the path a `--worktree` selector names, the current directory for the current worktree, or None."""
+    selector = option_after(arguments, "--worktree")
+    if selector is None or selector in ("active", "current"):
+        return cwd
+    if selector.startswith("id:") and "::" in selector:
+        return selector.split("::", 1)[1] or None
+    if selector.startswith("path:"):
+        return selector[len("path:") :] or None
+    return None
+
+
+def git_output(path: str, *arguments: str) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "-C", path, "--no-optional-locks", *arguments],
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return result.stdout if result.returncode == 0 else None
+
+
+def remaining_work(path: str) -> str | None:
+    """Describe the uncommitted changes and unpushed commits of the worktree at `path`; None when none or unreadable."""
+    status = git_output(path, "status", "--porcelain")
+    if status is None:
+        return None
+    parts = []
+    changes = [line[3:] for line in status.splitlines() if line.strip()]
+    if changes:
+        listed = ", ".join(changes[:MAX_LISTED_FILES])
+        more = f", and {len(changes) - MAX_LISTED_FILES} more" if len(changes) > MAX_LISTED_FILES else ""
+        parts.append(f"{len(changes)} uncommitted change{'s' if len(changes) != 1 else ''} ({listed}{more})")
+    ahead = git_output(path, "rev-list", "--count", "@{upstream}..HEAD")
+    if ahead is None:
+        ahead = git_output(path, "rev-list", "--count", "HEAD", "--not", "--remotes")
+    if ahead is not None and ahead.strip().isdigit() and int(ahead) > 0:
+        count = int(ahead)
+        parts.append(f"{count} commit{'s' if count != 1 else ''} its upstream lacks")
+    return "; ".join(parts) or None
+
+
+def completed_denial(tokens: list[str], cwd: str) -> str | None:
+    arguments = orca_arguments(tokens)
+    if arguments is None:
+        return None
+    if [token for token in arguments if not token.startswith("-")][:2] != ["worktree", "set"]:
+        return None
+    if option_after(arguments, "--workspace-status") != "completed":
+        return None
+    path = worktree_path(arguments, cwd)
+    remaining = remaining_work(path) if path and os.path.isdir(path) else None
+    return COMPLETED_REASON.format(remaining=remaining) if remaining else None
+
+
+def creates_worktree_through_host(raw: str) -> bool:
+    """Report whether `raw` is an EnterWorktree call, inside an Orca terminal, that creates a worktree."""
+    if not os.environ.get("ORCA_TERMINAL_HANDLE"):
+        return False
+    try:
+        event = json.loads(raw)
+    except ValueError:
+        return False
+    if not isinstance(event, dict) or event.get("tool_name") != "EnterWorktree":
+        return False
+    tool_input = event.get("tool_input")
+    path = tool_input.get("path") if isinstance(tool_input, dict) else None
+    return not (isinstance(path, str) and path.strip())
+
+
 def split_heredocs(text: str) -> tuple[str, list[str]]:
     """Return the text without here-document bodies, and the bodies whose delimiter is unquoted."""
     kept: list[str] = []
@@ -191,6 +369,14 @@ def texts_to_check(command: str) -> list[str]:
     return checked
 
 
+def event_cwd(raw: str) -> str:
+    try:
+        value = json.loads(raw).get("cwd")
+    except (ValueError, AttributeError):
+        value = None
+    return value if isinstance(value, str) and value else os.getcwd()
+
+
 def deny(reason: str) -> None:
     output = {
         "hookSpecificOutput": {
@@ -204,6 +390,9 @@ def deny(reason: str) -> None:
 
 def main() -> int:
     raw = sys.stdin.read()
+    if "EnterWorktree" in raw and creates_worktree_through_host(raw):
+        deny(ENTER_REASON)
+        return 0
     if "orca" not in raw or not (
         any(word in raw for word in PREFILTER_WORDS) or ("agent" in raw and "launch" in raw)
     ):
@@ -214,8 +403,15 @@ def main() -> int:
     segments = [tokens for text in texts_to_check(command) for tokens in segments_of(text)]
     if any(creates_top_level_worktree(tokens) for tokens in segments):
         deny(REASON)
+    elif any(parent_denial(tokens, event_cwd(raw)) for tokens in segments):
+        deny(PARENT_REASON)
     elif any(starts_agent_session(tokens) for tokens in segments):
         reason = memory_reason()
+        if reason:
+            deny(reason)
+    else:
+        cwd = event_cwd(raw)
+        reason = next((r for r in (completed_denial(tokens, cwd) for tokens in segments) if r), None)
         if reason:
             deny(reason)
     return 0

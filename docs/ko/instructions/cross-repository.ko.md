@@ -22,15 +22,18 @@
 이 저장소든 다른 저장소든, 새 에이전트 세션은 모두 Orca가 해당 저장소의 workspace로 이미 나열한 곳 아래에서
 시작한다. 그런 workspace가 있으면 독립적인 최상위 worktree를 만들지 않는다. 저장소의 workspace는
 `orca worktree list --repo id:<repoId> --json`에서 경로가 해당 저장소의 클론인 항목이다.
-현재 Orca worktree가 그 저장소에 속하면 부모는 `active`(현재 Orca worktree)이고, 아니면
-`id:<repoId>::<clone path>`(해당 workspace)다. 저장소를 둘 이상 변경하는 작업에서는 다른 모든 저장소의 worktree를
-그 대신 그룹의 루트 아래에 둔다.
+새 worktree의 부모는 모두 자기 저장소의 workspace인 `id:<repoId>::<clone path>`이며, 현재 worktree가 그 workspace일
+때만 `active`를 쓴다. 저장소를 둘 이상 변경하는 작업에서도 다른 저장소의 worktree 아래에 worktree를 두지 않는다.
+그 worktree들은 [Orca worktree 그룹](orca-groups.ko.md)대로 티켓으로 묶는다. 플러그인 훅은 그런 부모를 거부한다.
 
 - 파일을 전혀 수정하지 않는 세션은 새 터미널로 실행한다. 작업 저장소에서는 현재 worktree에서 실행하거나 Orca
   orchestration의 `worker-start --worktree current`로 실행하고, 다른 저장소에서는 대상의 workspace에서 실행한다.
 - 파일을 수정하는 세션은 아래 2~6단계로 하위 worktree를 만든다. 작업 저장소에서 Orca orchestration을 쓰면
   `worker-start --worktree new-child --name <branch> --base-branch <base>`를 사용하고 4단계를 적용한다.
   `new-top-level`은 사용하지 않는다.
+- Orca 터미널에서 작업용 새 worktree는 `orca worktree create ... --parent-worktree active`로 만들고, `EnterWorktree` 같은
+  호스트 자체 worktree 도구로는 만들지 않는다. 그래야 Orca가 목록에 보여 준다. 플러그인 훅은 그 도구가 worktree를
+  만들려 할 때 거부한다.
 - 플러그인이 메모리 부족으로 세션 시작을 거부하면 인수인계를 메모리 대기 상태로 기록하고, 이 작업의 다른 세션이
   끝나거나 정리된 뒤에 시작한다. 메모리를 폴링하지 않는다.
 - Orca가 해당 저장소의 workspace를 나열하지 않으면 부모를 지정해 worktree를 만든 뒤
@@ -98,7 +101,8 @@ Orca CLI나 런타임을 사용할 수 없으면 일반 Git worktree를 사용�
   종료하라고 사용자에게 한 줄로 권한다. 세션을 직접 종료하지 않는다.
 - 할 일이 남았으면 계속 진행하고, 대상의 결과가 필요할 때만 `orca terminal read --terminal <handle> --json`으로
   읽는다.
-- 그룹 구성원에게는 [Orca worktree 그룹](orca-groups.ko.md)의 정리 절차가 이 항목을 대신한다.
+- 그룹 구성원에게는 [Orca worktree 그룹](orca-groups.ko.md)의 정리 절차가 아래의 병합된 작업 항목을 대신한다.
+  그 뒤의 사용되지 않는 worktree 항목은 구성원에게도 적용된다.
 - 이 세션이 시작한 하위 세션의 작업이 기준 브랜치에 병합되면 그 터미널을 닫고, 이 세션이 그 worktree와 브랜치를
   만든 경우에는 그 하위 worktree와 로컬 브랜치도 삭제하며, 답변에 각각의 이름을 명시한다.
   workspace 클론, 현재 worktree, 기준 브랜치, 원격 브랜치는 절대 닫거나 삭제하지 않는다. 먼저 터미널이 열린 질문 없이
@@ -106,3 +110,11 @@ Orca CLI나 런타임을 사용할 수 없으면 일반 Git worktree를 사용�
   기준 브랜치에 들어 있는지, `git status --porcelain --ignored`에 `__pycache__`, `.pytest_cache`, `node_modules`처럼
   다시 만들 수 있는 캐시만 나열되는지 확인한다. 검사에 실패하면 대신 한 번 제안하고 무시된 파일을 나열한다.
   사용자가 승인한 것만 삭제하며, 그 밖의 경우에는 사용자가 요청할 때만 worktree나 브랜치를 삭제한다.
+- 이 세션이 시작한 하위 worktree는 더 이상 그 안에서 실행되는 에이전트 세션이 없고 작업이 원격에 있으면, pull request가
+  아직 병합되지 않았어도 그 터미널과 로컬 브랜치와 함께 삭제한다. 다음을 모두 확인한다. `git status --porcelain`이
+  비어 있고, `git fetch` 뒤 `git rev-list --count @{upstream}..HEAD`가 0이어서 업스트림이 없는 브랜치는 통과하지
+  못하며, 작업 디렉터리가 worktree 안에 있는 프로세스가 없고(예: `lsof -d cwd -Fpn`으로 확인), 무시된 파일은 다시 만들
+  수 있는 캐시나 빌드 산출물뿐이다. 인수인계 메모처럼 다시 만들 수 없는 무시된 파일은 먼저 이 세션의 worktree로 복사한
+  뒤 계속한다. pull request와 원격 브랜치는 남으며, 답변에 작업을 보관하는 브랜치 이름을 명시한다. 나중 작업에 이
+  worktree가 필요하면 3단계와 4단계로 원격 브랜치에서 다시 만든다. worktree를 만든 뒤 브랜치가 `origin`에 있으므로
+  `git switch <branch>`를 실행한다. 검사에 실패하면 worktree를 유지하고 실패한 검사를 명시한다.

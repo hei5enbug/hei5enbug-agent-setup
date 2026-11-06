@@ -151,17 +151,33 @@ class JoinCase(unittest.TestCase):
         row = data["sessions"][0]
         self.assertEqual(("feature/p", 2), (row["branch"], row["child_count"]))
 
-    def test_에이전트가_없고_터미널만_있는_워크트리를_따로_나열한다(self) -> None:
-        """에이전트 없이 터미널만 붙들고 있는 워크트리가 개요에서 빠지면 사용자가 그 메모리를 놓친다."""
+    def test_에이전트가_없는_비주_워크트리는_터미널이_없어도_나열하고_주_워크트리는_터미널이_있을_때만_나열한다(self) -> None:
+        """터미널도 에이전트도 없는 워크트리가 개요에서 보이지 않으면 정리 대상에서 영영 빠진다."""
         # given
-        idle = worktree("shell-only", [], liveTerminalCount=1)
-        empty = worktree("nothing", [], liveTerminalCount=0)
-        fake = FakeOrca(ps=[idle, empty], terminals=[terminal("term_shell", "tab-s:leaf-s", idle["worktreeId"])])
+        idle = worktree("shell-only", [], liveTerminalCount=1, childWorktreeIds=["c1"])
+        empty = worktree("nothing", [], liveTerminalCount=0, parentWorktreeId="repo-1::/tmp/work/root")
+        archived = worktree("archived", [], liveTerminalCount=0, isArchived=True)
+        main_idle = worktree("main-shell", [], liveTerminalCount=1, isMainWorktree=True)
+        main_empty = worktree("main-empty", [], liveTerminalCount=0, isMainWorktree=True)
+        busy = worktree("busy", [agent(PANE_A)])
+        fake = FakeOrca(
+            ps=[idle, empty, archived, main_idle, main_empty, busy],
+            terminals=[terminal("term_shell", "tab-s:leaf-s", idle["worktreeId"]), terminal(HANDLE_A, PANE_A, busy["worktreeId"])],
+            mem=memory(None, {PANE_A: MIB}),
+        )
         # when
         _, data, _ = run(fake)
         # then
-        self.assertEqual([], data["sessions"])
-        self.assertEqual([("shell-only", ["term_shell"])], [(w["display_name"], w["terminal_handles"]) for w in data["worktrees_without_agent"]])
+        rows = {w["display_name"]: w for w in data["worktrees_without_agent"]}
+        self.assertEqual(["shell-only", "nothing", "main-shell"], list(rows))
+        self.assertEqual(["term_shell"], rows["shell-only"]["terminal_handles"])
+        self.assertEqual(([], 0), (rows["nothing"]["terminal_handles"], rows["nothing"]["live_terminals"]))
+        self.assertEqual((1, 0), (rows["shell-only"]["child_count"], rows["nothing"]["child_count"]))
+        self.assertEqual(
+            ("/tmp/work/nothing", "feature/nothing", "repo-1::/tmp/work/root"),
+            (rows["nothing"]["path"], rows["nothing"]["branch"], rows["nothing"]["parent_worktree_id"]),
+        )
+        self.assertEqual(["busy"], [s["display_name"] for s in data["sessions"]])
 
 
 class FieldCase(unittest.TestCase):

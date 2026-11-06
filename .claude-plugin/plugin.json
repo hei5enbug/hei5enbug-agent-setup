@@ -1,7 +1,7 @@
 {
   "name": "hei5enbug-agent-setup",
   "displayName": "Hei5enbug Agent Skills",
-  "version": "2.18.1",
+  "version": "2.19.0",
   "description": "Portable agent skills for repeatable engineering and documentation workflows.",
   "author": {
     "name": "hei5enbug",
@@ -127,6 +127,12 @@
       "type": "boolean",
       "title": "Orca worktrees for other repositories",
       "description": "Before changing another Git repository, hand the change to a new Orca worktree of that repository with its own agent session instead of editing an existing checkout, and start new Orca agent sessions under the repository's existing Orca workspace.",
+      "default": true
+    },
+    "orca_status_writes": {
+      "type": "boolean",
+      "title": "Orca status writes",
+      "description": "In an Orca terminal, write the Orca text that follows from an event without a model turn: in-review and the link after a pull or merge request is created, a waiting comment and the unread mark when a turn ends with a question (restored at the next prompt), and in-progress when work resumes on a completed or not started worktree.",
       "default": true
     },
     "host_settings": {

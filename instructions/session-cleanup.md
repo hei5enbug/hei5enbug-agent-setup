@@ -16,8 +16,11 @@ Offer once, at the end of the work, only when all of these hold; otherwise ask n
 
 Offer only an item this session created and can show it created: its own scratch or temporary folder, or a file or
 folder whose creation appears in this session's commands or tool calls. Never offer another session's files, user
-files, tracked project files, shared host caches, configuration, or history. Never include a worktree or its branch;
-[cross-repository work](cross-repository.md) covers removing those.
+files, tracked project files, shared host caches, configuration, or history. Keep task worktrees and their branches
+out of this file; [cross-repository work](cross-repository.md) covers removing those. A Git worktree this session
+added with `git worktree add` only for a temporary check is this session's item: remove it with
+`git -C <repository> worktree remove <path>`, never by deleting its folder, which leaves a stale record. Remove it
+without asking when it has no uncommitted change; otherwise list it with its changes and ask.
 
 ## Asking
 

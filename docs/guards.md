@@ -136,24 +136,71 @@ instead of run.
 
 ## Orca session start
 
-A `PreToolUse` hook on `Bash`, `scripts/orca_placement_hook.py`, runs on both hosts and applies two rules. The
-placement rule denies a top-level worktree. When a command runs
-`orca worktree create` with `--no-parent`, or `orca orchestration worker-start` with `--worktree new-top-level`, it
-denies the call and names the parent to use instead, following "Session placement" in
-`instructions/cross-repository.md`. It also checks the inside of a `$(...)` or backtick command substitution, and
-in a here-document body checks only such substitutions. Any other command, text that only mentions these words,
-malformed input, and a missing command produce no output. Moving an existing worktree to the top level with `orca worktree set --no-parent`
-stays allowed for a repository with no workspace or an explicit user request. On Codex, trust the hook in `/hooks`.
-It exists because on 2026-11-06 a coordinating session created three worktrees for two tickets with `--no-parent` and
-no ticket reference, so `orca reference find` found none of them and later sessions could not join the group.
+A `PreToolUse` hook on `Bash` and `EnterWorktree`, `scripts/orca_placement_hook.py`, runs on both hosts. A command that
+has no reason to be denied produces no output, and so do text that only mentions these words, malformed input, and a
+missing command. The hook also checks the inside of a `$(...)` or backtick command substitution, and in a
+here-document body checks only such substitutions. On Codex, trust the hook in `/hooks`.
 
-The memory rule denies a command that starts an agent session through Orca when the available memory is below the
-`session_memory_min_mb` option, 2048 MB by default, so the agent queues the session and starts it after another one
-finishes instead of pushing the machine into swap. It covers `orca worktree create` with `--agent`, `orca orchestration
-worker-start`, `orca agent launch`, and `orca terminal create` whose `--command` runs `claude` or `codex`, also
-after a prefix such as `cd '<path>' &&`, and it checks inside a command substitution but not inside single quotes or
-after an escaped `$`; nothing else is gated. The placement deny takes precedence when both apply. Available
-memory comes from the macOS memory-pressure free percentage times physical memory, or from `MemAvailable` on Linux, and
-is read only after such a command is found. When it cannot be read within one second, or on another platform, the
-command is allowed. Set the option to `0`, `off`, `false`, or `no` to turn the rule off; a value that is not a
-non-negative integer uses 2048. On Codex, set `HEI5ENBUG_SESSION_MEMORY_MIN_MB`.
+- **Top-level worktree.** `orca worktree create` with `--no-parent`, or `orca orchestration worker-start` with
+  `--worktree new-top-level`, is denied with the parent to use instead, following "Session placement" in
+  `instructions/cross-repository.md`. Moving an existing worktree to the top level with `orca worktree set --no-parent`
+  stays allowed for a repository with no workspace or an explicit user request. It exists because on 2026-11-06 a
+  coordinating session created three worktrees for two tickets with `--no-parent` and no ticket reference, so
+  `orca reference find` found none of them and later sessions could not join the group.
+- **Parent of another repository.** `orca worktree create`, a `worker-start` that creates a worktree with
+  `--worktree new-child`, and `orca worktree set --parent-worktree` are denied when the parent belongs to another
+  repository than the worktree, because each worktree sits under its own repository's workspace and a ticket's
+  worktrees are tied by reference, name, and Run (`instructions/orca-groups.md`). The hook compares Orca repository
+  ids from `id:<repoId>` and `id:<repoId>::<path>` selectors, and Git directories for `path:` selectors; `active` is
+  the current worktree, whose repository id it reads once from `orca worktree current`. A name or branch selector, an
+  unreadable repository, or an unreadable Orca allows the command.
+- **Done with work left.** `orca worktree set --workspace-status completed` is denied when the target worktree, the
+  current one or one that a `--worktree` selector names by `id:<repoId>::<path>` or `path:`, has uncommitted changes or
+  commits its upstream lacks, and the reason lists what remains. A clean worktree, another status, or a target that
+  cannot be resolved is allowed.
+- **Worktree the host creates.** In an Orca terminal, `EnterWorktree` without a `path` creates a worktree that Orca
+  never lists, so it is denied with the `orca worktree create` command to use. Entering an existing `path`, and any
+  call outside Orca, stays allowed.
+- **Low memory.** A command that starts an agent session through Orca is denied when the available memory is below the
+  `session_memory_min_mb` option, 2048 MB by default, so the agent queues the session and starts it after another one
+  finishes instead of pushing the machine into swap. It covers `orca worktree create` with `--agent`,
+  `orca orchestration worker-start`, `orca agent launch`, and `orca terminal create` whose `--command` runs `claude`
+  or `codex`, also after a prefix such as `cd '<path>' &&`, and it checks inside a command substitution but not
+  inside single quotes or after an escaped `$`; nothing else is gated. The placement denies take precedence when both
+  apply. Available memory comes from the macOS memory-pressure free percentage times physical memory, or from
+  `MemAvailable` on Linux, and is read only after such a command is found. When it cannot be read within one second,
+  or on another platform, the command is allowed. Set the option to `0`, `off`, `false`, or `no` to turn the rule off;
+  a value that is not a non-negative integer uses 2048. On Codex, set `HEI5ENBUG_SESSION_MEMORY_MIN_MB`.
+
+## Orca status
+
+One hook script, `scripts/orca_status_hook.py`, keeps the session's Orca worktree in step with its work. It runs only
+when `ORCA_TERMINAL_HANDLE` is set, never in a subagent or an assigned worker, and any failed read of Orca, Git, or
+the transcript lets the event pass. It reads Claude Code transcripts only, because Codex records tool calls as script
+text, so on Codex only the writes that follow a tool call or a prompt apply, and the session writes the question row
+itself as `instructions/orca-worktree-status.md` says. A question tool call answered in the same turn writes nothing.
+
+The writes need no model turn and apply to the session's own current worktree. Each happens at most once per event.
+
+| Event | Hook | Write |
+|---|---|---|
+| A pull or merge request is created: `gh pr create`, `az repos pr create`, `glab mr create`, and the tool output shows its link or Azure DevOps request id; `--help`, `-h`, and `--dry-run` never count | `PostToolUse` | Status `in-review`, comment `Waiting for review: <link>` |
+| A turn ends with a question, its last line ending in `?`, and ran no `orca worktree set` | `Stop` | `--unread`, comment `Waiting for you: <first line, about 80 characters> · <earlier comment>` |
+| The user's next prompt, while the comment is still the one the hook wrote | `UserPromptSubmit` | The earlier comment, kept in the session's state file |
+| An edit, or `git commit`, inside the current worktree, whose status is `completed`, `todo`, or unset; a commit counts where `git -C <dir>` or a leading `cd <dir> &&` puts it | `PostToolUse` | Status `in-progress`, comment unchanged |
+
+Labels are Korean (`리뷰 대기`, `답변 대기`) when the Claude Code `language` setting names Korean, and English
+otherwise. A status id outside the four defaults is left alone: the board is customized, so only the comment is
+written. After a check inside the worktree, the resumed-work write waits 60 seconds before it reads Orca again; an
+edit or commit elsewhere neither writes nor starts that wait. The `orca_status_writes` option turns these writes off,
+in `/config` on Claude Code and with `HEI5ENBUG_ORCA_STATUS_WRITES` on Codex. The state lives in
+`$XDG_STATE_HOME/hei5enbug-agent-setup/orca-status/<session id>.json`.
+
+Two things still need the model, so the `Stop` hook blocks the stop once per state with a reminder of at most two
+sentences that names the exact command and asks the model to end the turn without repeating the reply. A task worktree
+that is not the main clone, still shows its automatic name, and has a file edited or committed in this session is
+reminded of `orca worktree set --display-name`. A session that ran `orca worktree set` and never `orca terminal rename`
+is reminded of the tab title; when both apply, one reminder carries both commands. Each reminder fires at most once
+per session, and a stop that continues from a hook never gets another. One reminder costs about 265,000 cache-read
+and output tokens on one measured machine, so these are the only recurring model cost. Orca cannot report a tab title,
+so the hook judges the title only by the session's own `orca terminal rename` commands.

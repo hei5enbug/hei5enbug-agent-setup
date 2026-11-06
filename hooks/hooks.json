@@ -65,7 +65,7 @@
         ]
       },
       {
-        "matcher": "^Bash$",
+        "matcher": "^(Bash|EnterWorktree)$",
         "hooks": [
           {
             "type": "command",
@@ -95,6 +95,16 @@
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" language_guard.py",
             "timeout": 5,
             "async": true
+          }
+        ]
+      },
+      {
+        "matcher": "^(Bash|Edit|Write|MultiEdit|NotebookEdit|apply_patch)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" orca_status_hook.py",
+            "timeout": 10
           }
         ]
       },
@@ -130,6 +140,15 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" orca_status_hook.py",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "Stop": [
@@ -139,6 +158,15 @@
             "type": "command",
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" language_guard.py",
             "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" orca_status_hook.py",
+            "timeout": 10
           }
         ]
       }

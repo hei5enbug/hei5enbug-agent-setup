@@ -53,6 +53,31 @@
         "The current session demo-tools is shown and kept, with no action proposed for it.",
         "One approval question lists only the demo-review sleep, and no `orca terminal send`, exit command, or `orca worktree set` runs before the answer."
       ]
+    },
+    {
+      "id": 5,
+      "prompt": "탭 이름 정리해줘. 스크립트 결과: 호스트 메모리는 넉넉해. 세션: (1) feature/ABC-501 / display name \"ABC-501 결제 API 검증\" / board in-progress / claude / working 6분 / 메모리 640MB / term_demo_a / 마지막 메시지: \"결제 API 응답 검증 테스트를 돌리는 중입니다.\" 탭 제목은 'zsh'로 보여. (2) demo-docs / display name \"ABC-502 문서 정리\" / board in-review / codex / done 30분 / 메모리 500MB / term_demo_b / 마지막 메시지: \"문서 PR을 올렸고 리뷰를 기다립니다.\" 탭 제목은 'codex'로 보여. (3) 현재 세션 demo-tools / done 1분 / 메모리 600MB / term_demo_self.",
+      "expected_output": "A table that proposes retitle for the two other sessions with a proposed title built from the ticket key and a short summary, shows the current session without any action, and asks one question in which the retitle items are individually selectable and not preselected. Nothing runs before the answer.",
+      "files": [],
+      "expectations": [
+        "The two sessions other than the current one, whose tabs show only zsh or codex, each get a retitle row with a proposed title such as 'ABC-501 결제 API 검증' and 'ABC-502 문서 정리', judged from the session's own task.",
+        "The response says or implies that Orca cannot report a tab title, so each retitle is an individually selectable item, never preselected.",
+        "The current session term_demo_self appears in the table with no action, and no command targets its terminal.",
+        "No `orca terminal rename` command runs before the user answers; after approval each rename uses `orca terminal rename --terminal <handle> --title \"<title>\" --json` and types nothing into the terminal."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "세션 정리해줘. 스크립트 결과: 호스트 메모리는 넉넉해. sessions는 현재 세션 demo-tools(term_demo_self, 600MB)뿐이야. worktrees_without_agent: (1) demo-api / feature/ABC-601 / 주 worktree 아님 / 자식 없음 / board in-review / terminal_handles [term_demo_a] / 터미널 화면은 빈 셸 프롬프트 / 코멘트: \"PR #41 리뷰 대기\" / git status 깨끗 / git fetch 뒤 업스트림 origin/feature/ABC-601에 없는 커밋 0개 / 작업 디렉터리가 그 안에 있는 프로세스 없음 / 무시된 파일은 __pycache__뿐 (2) demo-web / feature/ABC-602 / 주 worktree 아님 / 자식 없음 / board in-review / terminal_handles [term_demo_b] / 빈 셸 프롬프트 / git status 깨끗 / git fetch 뒤 업스트림에 없는 커밋 2개 (3) demo-docs / feature/ABC-603 / 주 worktree 아님 / 자식 없음 / terminal_handles [term_demo_c] / 빈 셸 프롬프트 / git status 깨끗 / 업스트림이 없는 브랜치 / 무시된 파일 NOTES-handoff.md가 있는데 다시 만들 수 없는 인수인계 메모야.",
+      "expected_output": "A table that proposes clean up for demo-api, whose work is fully on the remote and whose pull request is still open, naming origin/feature/ABC-601 as the branch that keeps the work, and keeps demo-web and demo-docs with the failed check named: two commits missing from the upstream, and no upstream branch. It asks one question and runs nothing before the answer.",
+      "files": [],
+      "expectations": [
+        "demo-api is recommended for clean up even though its pull request is not merged and no agent session exists, because every check passes: clean status, zero commits missing from the upstream after a fetch, no process inside, only regenerable ignored files.",
+        "The plan for demo-api sends no exit command, closes the terminal in terminal_handles, runs orca worktree rm with --delete-branch, and says the pull request and origin/feature/ABC-601 keep the work.",
+        "demo-web is kept and the failed check is named: two commits are not on its upstream branch.",
+        "demo-docs is kept and the failed check is named: the branch has no upstream. The response notes that the non-regenerable NOTES-handoff.md would first be copied to the current session's worktree if the other checks passed.",
+        "No orca terminal close or orca worktree rm command runs before the user answers, and the current session is never acted on."
+      ]
     }
   ]
 }

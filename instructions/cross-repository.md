@@ -18,15 +18,19 @@ joining such a task, read [Orca worktree groups](orca-groups.md).
 
 Start every new agent session under a workspace that Orca already lists for its repository, in this repository as
 in another one; never create an independent top-level worktree while one exists. A repository's workspace is the
-entry whose path is its clone in `orca worktree list --repo id:<repoId> --json`. The parent is `active`, the current
-Orca worktree, when it belongs to that repository, and `id:<repoId>::<clone path>`, that workspace, otherwise. In a
-task that changes more than one repository, every other repository's worktree goes under the group's root instead.
+entry whose path is its clone in `orca worktree list --repo id:<repoId> --json`. The parent of every new worktree is its
+own repository's workspace, `id:<repoId>::<clone path>`, or `active` only when the current worktree is that workspace.
+Never put a worktree under another repository's worktree, also in a task that changes several repositories; the
+ticket ties those worktrees, as in [Orca worktree groups](orca-groups.md). A plugin hook denies such a parent.
 
 - A session that edits no file runs as a new terminal: in the current worktree for the working repository, or with
   Orca orchestration `worker-start --worktree current`, and in the target's workspace for another repository.
 - A session that edits files gets a child worktree through steps 2 to 6 below. With Orca orchestration in the working
   repository, use `worker-start --worktree new-child --name <branch> --base-branch <base>` and apply step 4; never
   `new-top-level`.
+- Create a new worktree for a task in an Orca terminal with `orca worktree create ... --parent-worktree active`, never
+  with the host's own worktree tool such as `EnterWorktree`, so that Orca lists it. A plugin hook denies that tool
+  when it would create a worktree.
 - When the plugin denies a session start for low memory, record the handoff as waiting for memory and start it after
   another session of this task finishes or is cleaned up, never polling memory.
 - For a repository that Orca lists no workspace for, create the worktree with a parent, then run
@@ -93,7 +97,8 @@ protected value into it; the session that needs the file reports it to the user.
   in the target worktree's session and end this one. Never end a session yourself.
 - Otherwise continue the remaining work, and read the target with `orca terminal read --terminal <handle> --json` only
   when its result is needed.
-- For a member of a group, the cleanup in [Orca worktree groups](orca-groups.md) replaces this bullet.
+- For a member of a group, the cleanup in [Orca worktree groups](orca-groups.md) replaces the merged-work bullet
+  below; the unused-worktree bullet after it applies to a member too.
 - When a child session that this session started has its work merged into the base, close its terminal and, when
   this session created them, its child worktree and that worktree's local branch, and name each in the reply.
   Never close the workspace clone, the current worktree, the base branch, or a remote branch. First confirm that
@@ -102,3 +107,12 @@ protected value into it; the session that needs the file reports it to the user.
   `git status --porcelain --ignored` lists only regenerable caches such as `__pycache__`, `.pytest_cache`, or
   `node_modules`. When a check fails, offer once instead and list the ignored files; remove only what the user
   approves, and otherwise remove a worktree or branch only when the user asks.
+- A child worktree that this session started is also removed, with its terminal and local branch, when no agent
+  session runs in it any more and its work is on the remote, even before its pull request is merged. Confirm all of
+  these: `git status --porcelain` is empty; after `git fetch`, `git rev-list --count @{upstream}..HEAD` is 0, so a
+  branch with no upstream does not pass; no process has its working directory inside the worktree, for example from
+  `lsof -d cwd -Fpn`; and ignored files are only regenerable caches or build output. First copy an ignored file that
+  is not regenerable, such as a handoff note, to this session's worktree, then go on. The pull request and the remote
+  branch stay, and the reply names the branch that keeps the work. When later work needs the worktree, recreate it
+  from the remote branch with steps 3 and 4: create the worktree, then `git switch <branch>` because the branch
+  exists on `origin`. When a check fails, keep the worktree and name the check.
