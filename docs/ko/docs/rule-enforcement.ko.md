@@ -49,6 +49,7 @@
 | `tests/test_codex_usage.py`, `tests/test_codex_usage_accept.py` | Codex 주간 사용률을 안전하게 파싱하고, 모르면 `null`로 보고한다. | `scripts/codex_usage.py`, `hooks/mod/board.js` |
 | `tests/test_language_guard.py` | 사용자에게 보내는 답변과 진행 안내는 응답 언어를 쓴다. | `instructions/session/common.md`, `docs/guards.md` (Response language) |
 | `tests/test_required_checks_hook.py` | 두 호스트에서 커밋이나 푸시 전에 훅(`hooks/hooks.json`, `scripts/required_checks_hook.py`)이 프로젝트 지침이나 변경한 스킬에서 요구하는 각 검사를 완료 또는 미완료로 나열하라고 에이전트에게 알리며, 차단하거나 승인하지 않는다. | `instructions/implementation-execution.md` (Acceptance), `docs/guards.md` (Required checks at commit and push) |
+| `tests/test_orca_placement_hook.py` | 최상위 Orca worktree를 만드는 명령인 `orca worktree create --no-parent`나 `orca orchestration worker-start --worktree new-top-level`은 거부하고 대신 사용할 부모를 알려 준다. | `instructions/cross-repository.md` (Session placement) |
 | `tests/test_host_settings.py` | 세션 시작은 실제로 적용되는 호스트 권한 설정을 짧게 알린다. | `docs/configuration.md` (Host settings) |
 | `tests/test_hook_python.py` | 훅은 설정한 Python 인터프리터를 고르고, 없으면 `python3`으로 대체한다. | `docs/configuration.md` (Feature options) |
 | `tests/test_codex_hook_trust.py` | 플러그인은 신뢰가 풀린 자기 Codex 훅만, HEAD를 공식 원격이 지금 `main`이나 `v*` 태그로 광고하거나 `main`에 포함하는 깨끗한 공식 checkout에서만 다시 신뢰하고 `hooks/list`로 확인한다. | `docs/instructions-and-delegation.md` (Automatic instructions, Situation-based delegation) |

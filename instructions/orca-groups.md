@@ -9,14 +9,16 @@ alone.
 
 - The root is the worktree of the session that starts and coordinates the task. It stays where "Session placement"
   puts it. Which repository deploys or merges first decides that order, not the root.
-- Before creating anything for a ticket, run `orca reference find <issue link or ticket key> --json`. When it lists
-  worktrees, the group exists: its root is the listed worktree whose `parentWorktreeId` is not another listed one, and
-  new members go under it. A bare Jira key needs Orca's Jira connection; when it finds nothing, retry with the full
-  issue link. Otherwise this session's worktree becomes the root.
+- Before creating anything for a ticket, look for its group. Run `orca reference find <issue link> --json`; a bare
+  ticket key works only while `orca jira connection --json` reports `connected: true`. When it lists none, also look in
+  `orca worktree list --json` for a worktree whose branch or display name contains the exact ticket key, not a longer
+  key that begins with it, because a member created without a reference is missing from the first search. When either
+  lists worktrees, the group exists: its root is the listed worktree whose `parentWorktreeId` is not another listed
+  one, and new members go under it. Otherwise this session's worktree becomes the root.
 - From the root session, make each other repository's member the root's child and a worker of the root's
   orchestration Run, so it can ask and report. Choose the branch and base as in step 2 of cross-repository work. Create
   the member's worktree without an agent, `orca worktree create --repo id:<repoId> --name <branch> --base-branch <base>
-  --parent-worktree id:<root id> --reference <link or key> --json`, apply step 4 of cross-repository work, and confirm
+  --parent-worktree id:<root id> --reference <issue link> --json`, apply step 4 of cross-repository work, and confirm
   the branch in `orca worktree list`. Only then start the worker on that worktree, so it never runs before its branch
   is final: `orca orchestration worker-start --worktree path:<worktree path> --agent <host> --task-title "<ticket key>
   <repository>" --spec-file <brief file> --json`, with the brief written as step 6 of cross-repository work does.
@@ -24,10 +26,15 @@ alone.
   summary, pass `--run <run id>` so every member joins it; a longer key that only begins with the same characters is
   another ticket. Otherwise create the Run first with `orca orchestration run-create --objective "<ticket key>
   <summary>" --json` so a later session can find it.
-- Attach the ticket to every member, the root included: `--reference <link or key>` on `orca worktree create`, or
-  `orca reference add` for a worktree created without it.
+- Start a member only when it can finish its part without waiting on another member. When its part needs a contract,
+  schema, API, or decision that another member has not shared yet, create neither its worktree nor its worker: list it
+  in the status table as waiting on that item, and start it once the item is shared. Start members without such a
+  dependency together.
+- Attach the ticket to every member, the root included, by its full issue link, which needs no Jira connection:
+  `--reference <issue link>` on `orca worktree create`, or `orca reference add` for a worktree created without it.
+  When attaching still fails, keep the ticket key in the worktree's branch or display name and report the failure.
 - A later session that joins the group creates its worktree with `orca worktree create --repo id:<repoId> --name
-  <branch> --base-branch <base> --agent <host> --parent-worktree id:<root id> --reference <link or key> --json`, hands
+  <branch> --base-branch <base> --agent <host> --parent-worktree id:<root id> --reference <issue link> --json`, hands
   off as cross-repository work does, and tells the root through the root's Run, found by its objective in
   `orca orchestration run-list --json`.
 - One coordinating session may cover several tickets: each ticket's worktrees sit under that session's worktree and
@@ -61,7 +68,8 @@ alone.
 
 ## Status
 
-- The root keeps a table of its members: repository, worktree, branch, pull request, checks, and open blockers.
+- The root keeps a table of its members: repository, worktree, branch, pull request, checks, and open blockers, and
+  for a member not started yet, the item it waits for.
 - It updates the table on events, such as `worker_done`, a question, or a shared change, and reads a member with
   `orca orchestration worker-read` only after a long silence, never by continuous polling.
 - It never answers a member's approval prompt or a question meant for the user; it reports it to the user.

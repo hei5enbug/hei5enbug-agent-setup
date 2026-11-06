@@ -31,7 +31,9 @@
 - 파일을 수정하는 세션은 아래 2~6단계로 하위 worktree를 만든다. 작업 저장소에서 Orca orchestration을 쓰면
   `worker-start --worktree new-child --name <branch> --base-branch <base>`를 사용하고 4단계를 적용한다.
   `new-top-level`은 사용하지 않는다.
-- Orca가 해당 저장소의 workspace를 나열하지 않을 때만 `--no-parent`를 전달한다.
+- Orca가 해당 저장소의 workspace를 나열하지 않으면 부모를 지정해 worktree를 만든 뒤
+  `orca worktree set --worktree id:<worktree id> --no-parent --json`을 실행한다.
+  플러그인 훅이 최상위 worktree 생성을 거부한다.
 
 1. `orca repo list --json`에서 대상을 찾는다. 기존 로컬 클론은 `orca repo add --path <path>`로 등록한다.
    로컬 클론이 없으면 사용자에게 어디에 클론할지 묻는다.

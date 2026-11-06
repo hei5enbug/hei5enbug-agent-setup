@@ -24,6 +24,7 @@ EXPECTED_HOOKS = [
     ("PreToolUse", "^mcp__datagrip__execute_sql_query$", "datagrip_guard.py", 10, False),
     ("PreToolUse", "^Bash$", "public_boundary_hook.py", 30, False),
     ("PreToolUse", "^Bash$", "required_checks_hook.py", 5, False),
+    ("PreToolUse", "^Bash$", "orca_placement_hook.py", 5, False),
     ("PermissionRequest", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),
     ("PostToolUse", None, "language_guard.py", 5, True),
     ("PostToolUse", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),

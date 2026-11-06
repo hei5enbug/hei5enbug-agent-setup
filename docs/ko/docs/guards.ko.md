@@ -128,3 +128,15 @@ remote가 이미 가진 커밋도 검사합니다. 이 값들의 변수는 `git 
 훅은 차단하거나 승인하지 않고 문맥만 추가합니다. 이 훅을 둔 이유는 2026-10-04부터 2026-11-03까지 Claude Code 메인
 세션 1,259개 중 7개에서 에이전트가 필수 검사를 스스로 판단해 건너뛰거나 실행하는 대신 제안만 한 채 작업을 마치거나
 커밋하거나 푸시했기 때문입니다.
+
+## 최상위 Orca worktree
+
+두 호스트 모두 `Bash`의 `PreToolUse` 훅인 `scripts/orca_placement_hook.py`를 실행합니다.
+명령이 `orca worktree create`에 `--no-parent`를 쓰거나 `orca orchestration worker-start`에
+`--worktree new-top-level`을 쓰면 호출을 거부하고, `instructions/cross-repository.md`의 "Session placement"에 따라
+대신 사용할 부모를 알려 줍니다. `$(...)`나 백틱 명령 치환의 안쪽도 검사하고, here-document 본문에서는 그런 치환만
+검사합니다. 다른 명령, 이 단어들을 언급만 하는 텍스트, 잘못된 형식의 입력, 명령이 없는 입력에는
+아무것도 출력하지 않습니다. workspace가 없는 저장소이거나 사용자가 명시적으로 요청한 경우에는
+`orca worktree set --no-parent`로 기존 worktree를 최상위로 옮길 수 있습니다. Codex에서는 `/hooks`에서 이 훅을
+신뢰해야 합니다. 이 훅을 둔 이유는 2026-11-06에 조정 세션이 티켓 두 개를 위해 티켓 참조 없이 `--no-parent`로
+worktree 세 개를 만들어, `orca reference find`가 하나도 찾지 못했고 이후 세션이 그룹에 참여할 수 없었기 때문입니다.

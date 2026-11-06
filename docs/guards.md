@@ -133,3 +133,15 @@ change small. Any other command, malformed input, and a missing command produce 
 approves anything; it only adds context. It exists because, in 7 of 1,259 Claude Code main sessions between 2026-10-04
 and 2026-11-03, the agent finished, committed, or pushed with a required check skipped by its own judgment or offered
 instead of run.
+
+## Top-level Orca worktrees
+
+A `PreToolUse` hook on `Bash`, `scripts/orca_placement_hook.py`, runs on both hosts. When a command runs
+`orca worktree create` with `--no-parent`, or `orca orchestration worker-start` with `--worktree new-top-level`, it
+denies the call and names the parent to use instead, following "Session placement" in
+`instructions/cross-repository.md`. It also checks the inside of a `$(...)` or backtick command substitution, and
+in a here-document body checks only such substitutions. Any other command, text that only mentions these words,
+malformed input, and a missing command produce no output. Moving an existing worktree to the top level with `orca worktree set --no-parent`
+stays allowed for a repository with no workspace or an explicit user request. On Codex, trust the hook in `/hooks`.
+It exists because on 2026-11-06 a coordinating session created three worktrees for two tickets with `--no-parent` and
+no ticket reference, so `orca reference find` found none of them and later sessions could not join the group.

@@ -63,6 +63,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" orca_placement_hook.py",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PermissionRequest": [

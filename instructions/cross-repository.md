@@ -27,7 +27,8 @@ task that changes more than one repository, every other repository's worktree go
 - A session that edits files gets a child worktree through steps 2 to 6 below. With Orca orchestration in the working
   repository, use `worker-start --worktree new-child --name <branch> --base-branch <base>` and apply step 4; never
   `new-top-level`.
-- Pass `--no-parent` only for a repository that Orca lists no workspace for.
+- For a repository that Orca lists no workspace for, create the worktree with a parent, then run
+  `orca worktree set --worktree id:<worktree id> --no-parent --json`. A plugin hook denies a top-level create.
 
 1. Find the target in `orca repo list --json`. Register an existing local clone with `orca repo add --path <path>`.
    When no local clone exists, ask the user where to clone it.

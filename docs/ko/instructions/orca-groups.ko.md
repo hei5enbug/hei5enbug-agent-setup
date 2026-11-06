@@ -11,14 +11,16 @@
 
 - 루트는 작업을 시작하고 조정하는 세션의 worktree다. "세션 위치"가 정한 곳에 그대로 둔다. 배포나 병합 순서는 어느
   저장소가 먼저 배포되거나 병합되어야 하는지에 따라 정하며, 루트가 결정하지 않는다.
-- 티켓을 위해 무언가를 만들기 전에 `orca reference find <issue link or ticket key> --json`을 실행한다. worktree가
-  나열되면 그룹이 이미 있는 것이다. 나열된 worktree 중 `parentWorktreeId`가 다른 나열된 worktree를 가리키지 않는
-  것이 루트이며, 새 구성원은 그 아래에 둔다. Jira 키만 사용하려면 Orca의 Jira 연결이 필요하다. 아무것도 찾지 못하면
-  전체 이슈 링크로 다시 시도한다. 그 밖의 경우에는 이 세션의 worktree가 루트가 된다.
+- 티켓을 위해 무언가를 만들기 전에 그 그룹을 찾는다. `orca reference find <issue link> --json`을 실행한다.
+  티켓 키만 사용하는 방식은 `orca jira connection --json`이 `connected: true`를 보고할 때만 동작한다.
+  아무것도 나열되지 않으면 `orca worktree list --json`에서도 브랜치나 표시 이름에 정확한 티켓 키가 포함된
+  worktree를 찾는다. 그 키로 시작하는 더 긴 키는 제외한다. 참조 없이 만든 구성원은 첫 번째 검색에서 빠지기 때문이다.
+  어느 쪽이든 worktree가 나열되면 그룹이 이미 있는 것이다. 나열된 worktree 중 `parentWorktreeId`가 다른 나열된
+  worktree를 가리키지 않는 것이 루트이며, 새 구성원은 그 아래에 둔다. 그 밖의 경우에는 이 세션의 worktree가 루트가 된다.
 - 루트 세션에서 다른 각 저장소의 구성원을 루트의 자식이자 루트 orchestration Run의 worker로 만들어 질문하고 보고할 수
   있게 한다. 다른 저장소 작업의 2단계대로 브랜치와 기준 브랜치를 고른다. 에이전트 없이 구성원의 worktree를
   `orca worktree create --repo id:<repoId> --name <branch> --base-branch <base>
-  --parent-worktree id:<root id> --reference <link or key> --json`으로 만들고, 다른 저장소 작업의 4단계를 적용한 뒤
+  --parent-worktree id:<root id> --reference <issue link> --json`으로 만들고, 다른 저장소 작업의 4단계를 적용한 뒤
   `orca worktree list`에서 브랜치를 확인한다. 그 뒤에만 해당 worktree에서 worker를 시작해 브랜치가 확정되기 전에
   실행되지 않게 한다.
   `orca orchestration worker-start --worktree path:<worktree path> --agent <host> --task-title "<ticket key>
@@ -27,10 +29,14 @@
   모든 구성원이 참여하게 한다. 같은 문자로 시작하기만 하는 더 긴 키는 다른 티켓이다. 없으면
   `orca orchestration run-create --objective "<ticket key>
   <summary>" --json`으로 Run을 먼저 만들어 나중의 세션이 찾을 수 있게 한다.
-- 루트를 포함한 모든 구성원에 티켓을 연결한다. `orca worktree create`에 `--reference <link or key>`를 쓰거나,
-  이 옵션 없이 만든 worktree에는 `orca reference add`를 사용한다.
+- 다른 구성원을 기다리지 않고 자신의 부분을 끝낼 수 있을 때만 구성원을 시작한다. 다른 구성원이 아직 공유하지 않은
+  계약, 스키마, API, 결정이 필요하면 worktree와 worker 모두 만들지 않는다. 상태 표에 해당 항목을 기다리는 것으로
+  적고, 그 항목이 공유된 뒤에 시작한다. 그런 의존성이 없는 구성원은 함께 시작한다.
+- 루트를 포함한 모든 구성원에 Jira 연결이 필요 없는 전체 이슈 링크로 티켓을 연결한다.
+  `orca worktree create`에 `--reference <issue link>`를 쓰거나, 이 옵션 없이 만든 worktree에는
+  `orca reference add`를 사용한다. 그래도 연결에 실패하면 worktree의 브랜치나 표시 이름에 티켓 키를 남기고 실패를 보고한다.
 - 나중에 그룹에 참여하는 세션은 `orca worktree create --repo id:<repoId> --name
-  <branch> --base-branch <base> --agent <host> --parent-worktree id:<root id> --reference <link or key> --json`으로
+  <branch> --base-branch <base> --agent <host> --parent-worktree id:<root id> --reference <issue link> --json`으로
   worktree를 만들고, 다른 저장소 작업과 같은 방식으로 인수인계하며, `orca orchestration run-list --json`의 목표로
   찾은 루트의 Run을 통해 루트에 알린다.
 - 조정 세션 하나가 여러 티켓을 맡을 수 있다. 각 티켓의 worktree는 해당 세션의 worktree 아래에 두고 각자의 참조를
@@ -62,7 +68,8 @@
 
 ## 상태
 
-- 루트는 구성원 표를 유지한다. 저장소, worktree, 브랜치, pull request, 검사, 미해결 차단 요인을 담는다.
+- 루트는 구성원 표를 유지한다. 저장소, worktree, 브랜치, pull request, 검사, 미해결 차단 요인을 담고,
+  아직 시작하지 않은 구성원은 무엇을 기다리는지도 적는다.
 - `worker_done`, 질문, 공유된 변경 같은 이벤트가 생기면 표를 갱신한다. 오랫동안 소식이 없을 때만
   `orca orchestration worker-read`로 구성원을 읽고, 계속 폴링하지 않는다.
 - 구성원의 승인 창이나 사용자에게 한 질문에 대신 답하지 않는다. 사용자에게 보고한다.
