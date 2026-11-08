@@ -1,13 +1,12 @@
 ---
 name: session-triage
 description: >-
-  Show every Claude Code and Codex agent session running in Orca in one table, sort them by whether they wait for
-  the user, stalled, finished, or still working, and act on all of them after one approval: answer-only items shown,
-  one instruction sent to a stalled session, an idle session exited to free its memory while keeping its terminal
-  and recording how to resume it, a finished session's clean worktree removed, or a session's tab renamed to its
-  current task. Use when the user asks to see, sort out, or clean up running agent sessions in Orca, to find
-  sessions waiting on them or stalled, or to free the memory those sessions use, such as "세션 정리해줘", "대기 중인 세션 보여줘", or "free memory used by my agent
-  sessions", and when a plugin memory-gate denial suggested it and the user agrees. Not for updating plugins and
+  Table every Claude Code and Codex agent session running in Orca by state (waiting for the user, stalled,
+  finished, working) and, after one approval, act on them: send a stalled one an instruction, exit an idle one to
+  free memory with a resume note, remove a finished session's clean worktree, or rename a tab to its current task.
+  Use when the user asks to see, sort out, or clean up running Orca agent sessions, find ones waiting on them or
+  stalled, or free the memory they use, such as "세션 정리해줘", "대기 중인 세션 보여줘", or "free memory used by
+  my agent sessions", or agrees after a plugin memory-gate denial suggested it. Not for updating plugins and
   reloading sessions (orca-plugin-refresh), disk cleanup (local-data-cleanup), or creating worktrees.
 compatibility: >-
   Needs Python 3.12 or later and the `orca` CLI reaching a running Orca (`ORCA_CLI_COMMAND` overrides the

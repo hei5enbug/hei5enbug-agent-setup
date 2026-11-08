@@ -1,0 +1,22 @@
+[
+  {"query": "세션 정리해줘", "should_trigger": true},
+  {"query": "Orca에 떠 있는 에이전트 세션 중에 나 기다리는 거 있어?", "should_trigger": true},
+  {"query": "멈춘 것 같은 Claude 세션 있으면 찾아서 계속하라고 한 줄 보내줘", "should_trigger": true},
+  {"query": "free memory used by my agent sessions, I have way too many codex terminals open", "should_trigger": true},
+  {"query": "show me all the claude and codex sessions running in orca and which ones are done", "should_trigger": true},
+  {"query": "끝난 세션 워크트리는 지우고 남은 세션 탭 이름도 지금 하는 작업으로 바꿔줘", "should_trigger": true},
+  {"query": "아까 메모리 부족이라고 막히면서 세션 정리하라고 하던데, 그거 해줘", "should_trigger": true},
+  {"query": "orca 세션이 너무 많아서 어떤 게 아직 일하는 중인지 모르겠어. 상태별로 정리해서 보여줘", "should_trigger": true},
+  {"query": "idle 상태인 codex 세션들 종료해서 메모리 좀 확보해줘. 나중에 이어서 할 수 있게 해두고", "should_trigger": true},
+  {"query": "which of my orca agents are stuck? nudge them along", "should_trigger": true},
+  {"query": "플러그인 업데이트하고 실행 중인 Orca 세션들 다시 로드해줘", "should_trigger": false},
+  {"query": "Claude랑 Codex가 디스크를 너무 많이 쓰는데 정리해줘", "should_trigger": false},
+  {"query": "새 워크트리 만들어서 거기서 codex 띄워줘", "should_trigger": false},
+  {"query": "이 Orca 터미널 출력 읽어서 빌드 끝났는지 알려줘", "should_trigger": false},
+  {"query": "Codex 워커 두 개 띄워서 이 작업 나눠 시키고 결과 받아와", "should_trigger": false},
+  {"query": "오늘 이 레포 세션 히스토리 보고 스킬 개선점 정리해줘", "should_trigger": false},
+  {"query": "my mac is out of memory, which apps are using the most RAM?", "should_trigger": false},
+  {"query": "git worktree prune 해서 깨진 워크트리 정리해줘", "should_trigger": false},
+  {"query": "tmux 세션 목록 보여주고 안 쓰는 건 kill 해줘", "should_trigger": false},
+  {"query": "이 대화에서 지금까지 한 작업을 요약해줘", "should_trigger": false}
+]
