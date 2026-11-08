@@ -270,6 +270,16 @@ class ReviewTest(unittest.TestCase):
         self.assertTrue(place["git"])
         self.assertNotEqual(str(caller.resolve()), str(Path(place["cwd"]).resolve()))
 
+    def test_과제는_올릴_곳의_규칙이_요구하는_내용을_지울_거리로_보고하지_말라고_한다(self):
+        """팀 규칙이 요구하는 검사 결과까지 지우라는 보고가 나오면 작성자가 끝없이 고치게 되므로, 과제에 규칙 우선 문장이 들어간다."""
+        # given
+        self.draft.write_text(CLEAN_DRAFT, encoding="utf-8")
+        # when
+        result = self.review("none")
+        # then
+        self.assertEqual(0, result.returncode, result.stdout)
+        self.assertIn("never report as removable what they require", self.assignment())
+
     def test_과제에는_글_종류마다_독자가_함께_보는_것이_적혀_diff_되풀이_판단이_종류에_맞는다(self):
         """최종 보고의 독자는 diff를 보지 않았고 PR 설명의 독자는 diff를 보므로, 과제에 종류별 독자 문장이 들어간다."""
         for kind, phrase in (("final-report", "has not read the diff"), ("pr-description", "sees the diff")):

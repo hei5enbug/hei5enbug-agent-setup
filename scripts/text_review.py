@@ -53,7 +53,10 @@ When a length budget is given and the draft exceeds it, also list each fact that
 author's note gives the author's reason for keeping a sentence that an earlier run flagged; accept or reject each \
 note on its merits.
 
-Report nothing else, and report no finding you cannot quote or point to.
+Report nothing else, and report no finding you cannot quote or point to. The destination's writing rules take \
+precedence: never report as removable what they require. Judge each finding for the reader named below; a fact that \
+reader has not seen, such as a change made beyond the request, is not a restatement. Report only a finding a careful \
+editor would make on any reading, not a matter of taste; a careful draft should get an empty list.
 
 Answer with one JSON object in a ```json fence and nothing after it:
 {"findings": [{"type": "removable" | "missing" | "ambiguous", "quote": "...", "reason": "..."}], \
