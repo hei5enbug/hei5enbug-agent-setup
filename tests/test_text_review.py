@@ -276,9 +276,9 @@ class ReviewTest(unittest.TestCase):
         self.assertTrue(place["git"])
         self.assertNotEqual(str(caller.resolve()), str(Path(place["cwd"]).resolve()))
 
-    def test_기본으로_검토자_둘을_실행하고_reviews_1이면_하나만_실행한다(self):
-        """한 번의 깨끗한 검토는 우연일 수 있으므로 기본은 독립 검토 둘이고, 채점은 --reviews 1로 기준을 고정한다."""
-        for extra, expected in (((), 2), (("--reviews", "1"), 1)):
+    def test_기본으로_검토자_하나를_실행하고_reviews_2이면_둘을_동시에_실행한다(self):
+        """검토자 둘이 평가에서 통과율을 올리지 못하고 비용만 두 배였으므로 기본은 하나이고, --reviews로만 늘린다."""
+        for extra, expected in (((), 1), (("--reviews", "2"), 2)):
             with self.subTest(extra=extra):
                 # given
                 (self.out / "started").unlink(missing_ok=True)
@@ -293,7 +293,7 @@ class ReviewTest(unittest.TestCase):
         # given
         mode = "split"
         # when
-        result = self.review(mode)
+        result = self.review(mode, "--reviews", "2")
         # then
         self.assertEqual(1, result.returncode, result.stdout)
         payload = json.loads(result.stdout)
@@ -305,7 +305,7 @@ class ReviewTest(unittest.TestCase):
         # given
         mode = "split3"
         # when
-        result = self.review(mode)
+        result = self.review(mode, "--reviews", "2")
         # then
         self.assertEqual(3, result.returncode, result.stdout)
         self.assertNotIn("findings", json.loads(result.stdout))
@@ -315,7 +315,7 @@ class ReviewTest(unittest.TestCase):
         # given
         mode = "findings"
         # when
-        result = self.review(mode)
+        result = self.review(mode, "--reviews", "2")
         # then
         self.assertEqual(1, result.returncode)
         self.assertEqual(1, len(json.loads(result.stdout)["findings"]))
