@@ -25,8 +25,15 @@ FAKE_RUNNER = textwrap.dedent(
     value = lambda flag: argv[argv.index(flag) + 1]
     capture = Path = None
     out = os.environ["FAKE_OUT"]
-    with open(os.path.join(out, "started"), "w") as handle:
-        handle.write("1")
+    with open(os.path.join(out, "started"), "a") as handle:
+        handle.write("1\\n")
+    mode = os.environ["FAKE_MODE"]
+    if mode in ("split", "split3"):
+        try:
+            os.close(os.open(os.path.join(out, "first"), os.O_CREAT | os.O_EXCL))
+            mode = "findings" if mode == "split" else "exit3"
+        except FileExistsError:
+            mode = "none"
     with open(os.path.join(out, "argv.json"), "w") as handle:
         json.dump(argv, handle)
     with open(os.path.join(out, "cwd.json"), "w") as handle:
@@ -35,7 +42,6 @@ FAKE_RUNNER = textwrap.dedent(
         assignment = source.read()
     with open(os.path.join(out, "assignment.md"), "w", encoding="utf-8") as handle:
         handle.write(assignment)
-    mode = os.environ["FAKE_MODE"]
     findings = {"findings": [{"type": "removable", "quote": "x", "reason": "y"}], "over_budget_facts": ["f1"]}
     clean = {"findings": []}
     if mode == "findings":
@@ -269,6 +275,50 @@ class ReviewTest(unittest.TestCase):
         place = json.loads((self.out / "cwd.json").read_text(encoding="utf-8"))
         self.assertTrue(place["git"])
         self.assertNotEqual(str(caller.resolve()), str(Path(place["cwd"]).resolve()))
+
+    def test_기본으로_검토자_둘을_실행하고_reviews_1이면_하나만_실행한다(self):
+        """한 번의 깨끗한 검토는 우연일 수 있으므로 기본은 독립 검토 둘이고, 채점은 --reviews 1로 기준을 고정한다."""
+        for extra, expected in (((), 2), (("--reviews", "1"), 1)):
+            with self.subTest(extra=extra):
+                # given
+                (self.out / "started").unlink(missing_ok=True)
+                # when
+                result = self.review("none", *extra)
+                # then
+                self.assertEqual(0, result.returncode, result.stdout)
+                self.assertEqual(expected, len((self.out / "started").read_text().split()))
+
+    def test_검토자_하나라도_발견을_내면_그_발견으로_종료_코드_1을_낸다(self):
+        """두 검토 중 하나만 깨끗하면 통과가 아니므로, 다른 검토의 발견을 돌려주고 종료 코드 1을 낸다."""
+        # given
+        mode = "split"
+        # when
+        result = self.review(mode)
+        # then
+        self.assertEqual(1, result.returncode, result.stdout)
+        payload = json.loads(result.stdout)
+        self.assertEqual(["x"], [item["quote"] for item in payload["findings"]])
+        self.assertEqual(2, len(payload["runners"]))
+
+    def test_한_검토가_판정을_못_내고_다른_검토가_깨끗하면_통과가_아니라_종료_코드_3을_낸다(self):
+        """확인 검토 하나가 빠진 채 통과시키면 두 번 깨끗해야 한다는 조건이 무너지므로 판정 없음으로 끝낸다."""
+        # given
+        mode = "split3"
+        # when
+        result = self.review(mode)
+        # then
+        self.assertEqual(3, result.returncode, result.stdout)
+        self.assertNotIn("findings", json.loads(result.stdout))
+
+    def test_두_검토가_같은_발견을_내면_한_번만_보고한다(self):
+        """같은 문장에 같은 종류의 발견이 두 번 보이면 작성자가 같은 수정을 두 번 하므로 하나로 합친다."""
+        # given
+        mode = "findings"
+        # when
+        result = self.review(mode)
+        # then
+        self.assertEqual(1, result.returncode)
+        self.assertEqual(1, len(json.loads(result.stdout)["findings"]))
 
     def test_최종_보고의_독자에게는_커밋하지_않은_변경처럼_남은_일이_필요한_사실로_적힌다(self):
         """검토자가 커밋하지 않았다는 문장을 지우라고 하면 사용자가 남은 일을 모르게 되므로, 최종 보고의 독자 문장이 그 사실을 필요하다고 적는다."""

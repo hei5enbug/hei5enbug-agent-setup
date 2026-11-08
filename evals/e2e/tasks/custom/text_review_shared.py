@@ -78,7 +78,7 @@ def review(ctx, kind: str, draft: Path | None, rules: str | None = None, sources
            budget: int | None = None, no_ticket_keys: bool = False) -> tuple[bool, str, dict]:
     if draft is None:
         return False, "no text was written", {}
-    args = ["--kind", kind, "--draft", str(draft)]
+    args = ["--kind", kind, "--draft", str(draft), "--reviews", "1"]
     rules_file = existing(ctx, rules) if rules else None
     if rules_file:
         args += ["--rules", str(rules_file)]

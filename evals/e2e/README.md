@@ -150,7 +150,8 @@ that is still running after 1800 seconds, together with every process it started
 with `grade_error`.
 
 The text tasks (T13 to T20) grade a finished text with `scripts/text_review.py`, run from the repository that
-holds the harness, not from the exported plugin. The required check `text-review-clean` passes only on exit 0; exit 1
+holds the harness, not from the exported plugin, with `--reviews 1` so the grade rests on one reviewer as before
+the script's default of two. The required check `text-review-clean` passes only on exit 0; exit 1
 fails it with the findings as detail. Any other exit means the reviewer reached no verdict, so the check raises and
 the run records `grade_error`; `regrade` retries it. The informational check `ran-text-review` records whether the
 agent ran `text_review.py review`. The shared code is `tasks/custom/text_review_shared.py`; the unit tests replace the

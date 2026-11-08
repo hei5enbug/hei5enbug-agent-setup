@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 KINDS = (
@@ -17,6 +18,7 @@ KINDS = (
 )
 REVIEW_MODELS = {kind: "gpt-6.1-sol" for kind in KINDS}
 DEFAULT_TIMEOUT = 600
+DEFAULT_REVIEWS = 2
 RUNNER_GRACE_SECONDS = 60
 EXIT_OK, EXIT_FINDINGS, EXIT_USAGE, EXIT_REVIEW_FAILED = 0, 1, 2, 3
 FINDING_TYPES = ("removable", "missing", "ambiguous")
@@ -355,6 +357,7 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument("--no-ticket-keys", action="store_true")
     review.add_argument("--model")
     review.add_argument("--timeout", type=positive, default=DEFAULT_TIMEOUT)
+    review.add_argument("--reviews", type=positive, default=DEFAULT_REVIEWS)
     review.add_argument("--runner", default=str(Path(__file__).resolve().with_name("role_runner.py")))
     return parser
 
@@ -380,16 +383,40 @@ def command_review(args: argparse.Namespace) -> int:
     model = args.model or REVIEW_MODELS[args.kind]
     base = {"stage": "review", "kind": args.kind, "model": model}
     assignment = build_assignment(args.kind, draft, rules, sources, args.note, args.budget)
-    try:
-        result = run_reviewer(args, assignment, model)
-    except ReviewFailure as failure:
-        emit({**base, "error": str(failure), "runner": failure.runner})
+    with ThreadPoolExecutor(max_workers=args.reviews) as pool:
+        outcomes = list(pool.map(lambda _: review_once(args, assignment, model), range(args.reviews)))
+    runners = [outcome["runner"] for outcome in outcomes]
+    findings = unique(item for outcome in outcomes for item in outcome.get("findings", []))
+    facts = unique(fact for outcome in outcomes for fact in outcome.get("over_budget_facts", []))
+    errors = [outcome["error"] for outcome in outcomes if "error" in outcome]
+    status = {"runner": runners[0], "runners": runners}
+    if findings:
+        emit({**base, "findings": findings, "over_budget_facts": facts, **status, **({"errors": errors} if errors else {})})
+        return EXIT_FINDINGS
+    if errors:
+        emit({**base, "error": "; ".join(errors), **status})
         return EXIT_REVIEW_FAILED
+    emit({**base, "findings": [], "over_budget_facts": facts, **status})
+    return EXIT_OK
+
+
+def review_once(args: argparse.Namespace, assignment: str, model: str) -> dict:
+    try:
+        return run_reviewer(args, assignment, model)
+    except ReviewFailure as failure:
+        return {"error": str(failure), "runner": failure.runner}
     except TextReviewError as failure:
-        emit({**base, "error": str(failure), "runner": {"exit": None, "verified": None}})
-        return failure.code
-    emit({**base, **result})
-    return EXIT_FINDINGS if result["findings"] else EXIT_OK
+        return {"error": str(failure), "runner": {"exit": None, "verified": None}}
+
+
+def unique(items) -> list:
+    seen, kept = set(), []
+    for item in items:
+        key = (item.get("type"), item.get("quote")) if isinstance(item, dict) else item
+        if key not in seen:
+            seen.add(key)
+            kept.append(item)
+    return kept
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -35,8 +35,8 @@ python3 <Source directory>/scripts/text_review.py review --kind <kind> --draft <
   `shared-document`, `final-report`, or `other`. Pass the destination's writing rules with `--rules`, the request,
   diff, or ticket the text reports on with `--source`, the length budget with `--budget <characters>`, and
   `--no-ticket-keys` when the destination's rules forbid a ticket key.
-- It first checks the patterns the text alone decides and stops on them; fix each finding. It then has a reviewer with
-  no conversation context review the draft against only the rules and sources you passed.
+- It first checks the patterns the text alone decides and stops on them; fix each finding. It then has two reviewers
+  with no conversation context review the draft at once against only the rules and sources you passed.
 - Exit 0: post. Exit 1: apply each finding to the whole text and run it again. To keep a flagged sentence, pass your
   reason with `--note` and let the next run judge it. Post only after a run returns no findings.
 - After three runs that still return findings, post nothing, show the user the remaining findings, and ask. Send a

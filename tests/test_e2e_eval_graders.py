@@ -1414,7 +1414,7 @@ class GoldenTaskTest(TempCase):
         self.assertEqual((result[0], checked[0]), (True, True))
         self.assertEqual(json.loads((tree / "scripts" / "argv.json").read_text(encoding="utf-8")),
                          ["check", "--kind", "commit-message", str(repo / "out/page.txt")])
-        self.assertEqual(argv, ["review", "--kind", "shared-document", "--draft", str(repo / "out/page.txt"),
+        self.assertEqual(argv, ["review", "--kind", "shared-document", "--draft", str(repo / "out/page.txt"), "--reviews", "1",
                                 "--rules", str(repo / "docs/writing-rules.md"), "--source", str(repo / "notes/source.txt"),
                                 "--budget", "1500", "--no-ticket-keys"])
 
