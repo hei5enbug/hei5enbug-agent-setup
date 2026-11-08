@@ -270,6 +270,16 @@ class ReviewTest(unittest.TestCase):
         self.assertTrue(place["git"])
         self.assertNotEqual(str(caller.resolve()), str(Path(place["cwd"]).resolve()))
 
+    def test_최종_보고의_독자에게는_커밋하지_않은_변경처럼_남은_일이_필요한_사실로_적힌다(self):
+        """검토자가 커밋하지 않았다는 문장을 지우라고 하면 사용자가 남은 일을 모르게 되므로, 최종 보고의 독자 문장이 그 사실을 필요하다고 적는다."""
+        # given
+        self.draft.write_text(CLEAN_DRAFT, encoding="utf-8")
+        # when
+        result = self.review("none", kind="final-report")
+        # then
+        self.assertEqual(0, result.returncode, result.stdout)
+        self.assertIn("an uncommitted change", self.assignment())
+
     def test_과제는_올릴_곳의_규칙이_요구하는_내용을_지울_거리로_보고하지_말라고_한다(self):
         """팀 규칙이 요구하는 검사 결과까지 지우라는 보고가 나오면 작성자가 끝없이 고치게 되므로, 과제에 규칙 우선 문장이 들어간다."""
         # given

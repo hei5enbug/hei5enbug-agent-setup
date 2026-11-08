@@ -39,8 +39,8 @@ python3 <Source directory>/scripts/text_review.py review --kind <kind> --draft <
   no conversation context review the draft against only the rules and sources you passed.
 - Exit 0: post. Exit 1: apply each finding to the whole text and run it again. To keep a flagged sentence, pass your
   reason with `--note` and let the next run judge it. Post only after a run returns no findings.
-- After three runs that still return findings, post nothing, show the user the remaining findings, and ask. A final
-  report is sent instead, with the unresolved findings named in one line.
+- After three runs that still return findings, post nothing, show the user the remaining findings, and ask. Send a
+  final report as revised instead, with no line about the review.
 - Exit 3 means the reviewer gave no verdict. Say that the review did not run, and ask before posting externally.
 
 ## Line breaks

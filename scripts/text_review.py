@@ -72,7 +72,10 @@ READERS = {
     "commit-message": "someone reading history, who sees the diff of this commit.",
     "chat-message": "a teammate who reads only this message.",
     "shared-document": "a colleague who reads only this document and its links.",
-    "final-report": "the user who asked for the work and has not read the diff, the logs, or the tool output.",
+    "final-report": (
+        "the user who asked for the work and has not read the diff, the logs, or the tool output. What is left for "
+        "them, such as an uncommitted change, a skipped step, or a failing check, is a fact they need."
+    ),
     "other": "someone who reads only this text and its links.",
 }
 
