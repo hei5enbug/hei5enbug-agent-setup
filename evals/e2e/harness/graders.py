@@ -496,7 +496,8 @@ def load_custom(ctx: GradeContext, function: str) -> Callable[[Any], CheckResult
 def check_custom(ctx: GradeContext, spec: Mapping[str, Any]) -> CheckResult:
     function = load_custom(ctx, spec.get("function", "check"))
     context = types.SimpleNamespace(repo=ctx.repo, base=ctx.base, view=ctx.view, task=ctx.task, work=ctx.work,
-                                    changes=dict(ctx.changes), git=ctx.git, porcelain=ctx.porcelain)
+                                    changes=dict(ctx.changes), git=ctx.git, porcelain=ctx.porcelain,
+                                    tasks_root=ctx.tasks_root)
     ok, detail, data = function(context)
     return bool(ok), str(detail), dict(data or {})
 
@@ -517,6 +518,8 @@ def run_check(ctx: GradeContext, spec: Mapping[str, Any]) -> dict[str, Any]:
     try:
         ok, detail, data = CHECKS[spec["kind"]](ctx, spec)
     except Exception as exc:  # a broken check must fail visibly, not stop the grade
+        if getattr(exc, "no_verdict", False):
+            raise  # the check could not reach a verdict, so the run records grade_error and regrade retries it
         ok, detail, data = False, f"check error: {type(exc).__name__}: {exc}", {}
     return {"id": spec["id"], "kind": spec["kind"], "required": bool(spec.get("required", False)),
             "weight": spec.get("weight", 1), "passed": bool(ok), "detail": detail, "data": data}

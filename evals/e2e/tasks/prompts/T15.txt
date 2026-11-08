@@ -1,0 +1,1 @@
+notes/guide-notes.txt에 정리한 내용으로 이슈 본문을 써줘. 작성 규칙은 docs/writing-rules.md의 이슈 본문 항목이야. 그대로 이슈에 올릴 거니까 out/issue-body.txt에 저장해줘.

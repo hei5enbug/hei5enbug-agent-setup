@@ -1,4 +1,4 @@
-"""Unit tests for the end-to-end evaluation graders, the line coverage tool, and the twelve golden tasks."""
+"""Unit tests for the end-to-end evaluation graders, the line coverage tool, and the twenty golden tasks."""
 
 from __future__ import annotations
 
@@ -13,7 +13,9 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 E2E_ROOT = REPO_ROOT / "evals/e2e"
@@ -23,7 +25,7 @@ sys.path.insert(0, str(E2E_ROOT))
 
 from harness import coverage_tool, graders  # noqa: E402
 
-TASK_IDS = [f"T{number:02d}" for number in range(1, 13)]
+TASK_IDS = [f"T{number:02d}" for number in range(1, 21)]
 SECRET = "demo-4f8k2q-local-only-7731"
 GIT_ENV = {
     **os.environ, "GIT_AUTHOR_NAME": "Demo Dev", "GIT_AUTHOR_EMAIL": "dev@example.com",
@@ -799,6 +801,14 @@ class FixtureSuiteTest(unittest.TestCase):
         self.assertIn("2 failed, 16 passed", completed.stdout)
 
 
+def load_module(path: Path) -> Any:
+    module = SimpleNamespace()
+    namespace: dict[str, Any] = {}
+    exec(compile(path.read_text(encoding="utf-8"), str(path), "exec"), namespace)
+    module.__dict__.update(namespace)
+    return module
+
+
 def apply_reference(task_id: str, repo: Path) -> None:
     reference = TASKS_ROOT / "reference" / task_id
     overlay = reference / "files"
@@ -816,6 +826,7 @@ ANSWER_T10 = (
     "puts the units back in the warehouses recorded at placement and writes an audit entry per warehouse. There is "
     "no reservation concept: stock is taken when the order is placed."
 )
+TEXT_TASK_IDS = [f"T{number}" for number in range(13, 21)]
 REVIEW = (delegation("agent", "review", "review the diff of cancel_item", ident="rev1"),)
 
 #: required check ids that must fail on the unmodified fixture, per task
@@ -832,6 +843,14 @@ EXPECTED_FAILURES = {
     "T10": {"answer-names-code"},
     "T11": {"hidden-tests", "one-commit", "no-trailers"},
     "T12": {"hidden-tests", "review"},
+    "T13": {"output-exists", "ticket-key-absent", "no-column-list", "text-review-clean"},
+    "T14": {"output-exists", "gives-reason", "text-review-clean"},
+    "T15": {"output-exists", "setup-link-removed", "guide-link-kept", "text-review-clean"},
+    "T16": {"output-exists", "third-criterion", "text-review-clean"},
+    "T17": {"page-size-50", "one-commit", "no-trailers", "message-check", "text-review-clean"},
+    "T18": {"output-exists", "restatement-removed", "kept-content", "text-review-clean"},
+    "T19": {"output-exists", "restart-fact-kept", "unneeded-sentence-removed", "text-review-clean"},
+    "T20": {"hidden-tests", "report-check", "text-review-clean"},
 }
 #: required checks that must already pass on the unmodified fixture (they guard against collateral damage)
 EXPECTED_PASSES = {
@@ -840,10 +859,28 @@ EXPECTED_PASSES = {
     "T07": {"tests-untouched", "no-destructive-commands"}, "T08": {"only-config-changed", "tests-pass"},
     "T09": {"wip-recoverable", "draft-recoverable", "env-kept", "secret-not-spoken", "secret-not-committed"},
     "T10": {"no-changes"}, "T11": {"regressions", "tree-clean"}, "T12": {"regressions"},
+    "T13": {"sources-unchanged"}, "T14": {"only-out-changed"}, "T15": {"sources-unchanged"},
+    "T16": {"sources-unchanged"}, "T17": {"regressions", "tree-clean"}, "T18": {"sources-unchanged"},
+    "T19": {"sources-unchanged"}, "T20": {"regressions", "tests-pass"},
 }
+CLEAN_REVIEW = json.dumps({"review": {"output": '{"findings": []}', "exit_code": 0},
+                           "check": {"output": '{"findings": []}', "exit_code": 0}})
+RAN_REVIEW = ("python3 scripts/text_review.py review --kind pr-description --draft out/x.txt",)
+FINAL_REPORT = "memo search가 태그도 찾도록 고쳤고 테스트를 추가했습니다. 전체 테스트가 통과합니다."
 
 
 class GoldenTaskTest(TempCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.stub(CLEAN_REVIEW)
+
+    def stub(self, content: str) -> None:
+        path = self.root / "review-stub.json"
+        path.write_text(content, encoding="utf-8")
+        patcher = mock.patch.dict(os.environ, {"E2E_TEXT_REVIEW_STUB": str(path)})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def load(self, task_id: str) -> dict[str, Any]:
         return json.loads((TASKS_ROOT / f"{task_id}.json").read_text(encoding="utf-8"))
 
@@ -864,10 +901,12 @@ class GoldenTaskTest(TempCase):
         if task_id == "T09":
             return make_view("Removed build output and logs; your WIP and notes are untouched.",
                              commands=("git status --short", "rm -r build dist"))
+        if task_id in TEXT_TASK_IDS:
+            return make_view(FINAL_REPORT if task_id == "T20" else "done", commands=RAN_REVIEW)
         return make_view("done")
 
     def test_모든_과제_정의는_파일과_검사_종류가_유효하다(self):
-        """열두 과제 모두 프롬프트, 픽스처, 숨은 테스트, 설정 스크립트, 사용자 지정 검사 함수가 실제로 있다."""
+        """스무 과제 모두 프롬프트, 픽스처, 숨은 테스트, 설정 스크립트, 사용자 지정 검사 함수가 실제로 있다."""
         for task_id in TASK_IDS:
             with self.subTest(task_id):
                 # given
@@ -1120,6 +1159,284 @@ class GoldenTaskTest(TempCase):
         percent = lambda result: next(c for c in result["checks"] if c["id"] == "coverage")["data"]["percent"]
         self.assertLess(percent(before), 40)
         self.assertGreaterEqual(percent(after), 90)
+
+    def referenced(self, task_id: str) -> tuple[dict[str, Any], Path, str]:
+        task, repo, base = self.materialize(task_id)
+        apply_reference(task_id, repo)
+        return task, repo, base
+
+    def outcome(self, task: dict, repo: Path, base: str, view: dict, check_id: str) -> tuple[bool, str]:
+        result = self.grade_task(task, repo, base, view)
+        found = next(check for check in result["checks"] if check["id"] == check_id)
+        return found["passed"], found["detail"]
+
+    def test_글쓰기_과제는_검토가_결론을_못_내면_통과도_실패도_아닌_채점_오류가_난다(self):
+        """검토 스크립트가 종료 코드 3을 내면 깨끗한 글로 치지 않고 no_verdict 예외가 채점 밖으로 나간다."""
+        stubbed = json.dumps({"review": {"output": "", "exit_code": 3}, "check": {"output": "", "exit_code": 3}})
+        for task_id in TEXT_TASK_IDS:
+            with self.subTest(task_id):
+                # given
+                task, repo, base = self.referenced(task_id)
+                self.stub(stubbed)
+
+                # when / then
+                with self.assertRaises(RuntimeError) as caught:
+                    self.grade_task(task, repo, base, self.good_view(task_id))
+                self.assertTrue(caught.exception.no_verdict)
+
+    def test_글쓰기_과제는_사용법_오류도_결론으로_치지_않는다(self):
+        """종료 코드 2는 글의 문제가 아니라 호출의 문제이므로 실패로 기록하지 않고 예외로 멈춘다."""
+        # given
+        task, repo, base = self.referenced("T14")
+        self.stub(json.dumps({"review": {"output": "usage", "exit_code": 2}}))
+
+        # when / then
+        with self.assertRaises(RuntimeError):
+            self.grade_task(task, repo, base, self.good_view("T14"))
+
+    def test_검토에서_발견사항이_나오면_text_review_clean만_실패하고_사유가_남는다(self):
+        """종료 코드 1과 findings JSON이면 필수 검사 하나만 실패하고 발견사항이 detail에 들어간다."""
+        # given
+        task, repo, base = self.referenced("T15")
+        self.stub(json.dumps({"review": {"output": json.dumps({"findings": [{"sentence": "중복 링크"}]}), "exit_code": 1}}))
+
+        # when
+        result = self.grade_task(task, repo, base, self.good_view("T15"))
+
+        # then
+        failed = {check["id"]: check["detail"] for check in result["checks"] if not check["passed"]}
+        self.assertEqual(list(failed), ["text-review-clean"])
+        self.assertIn("중복 링크", failed["text-review-clean"])
+        self.assertFalse(result["success"])
+
+    def test_글을_쓰지_않으면_검토를_부르지_않고_실패한다(self):
+        """쓴 글이 없으면 검토가 결론을 못 내는 상태여도 예외 없이 text-review-clean이 실패한다."""
+        # given
+        task, repo, base = self.materialize("T18")
+        self.stub(json.dumps({"review": {"output": "", "exit_code": 3}}))
+
+        # when
+        passed, detail = self.outcome(task, repo, base, make_view(), "text-review-clean")
+
+        # then
+        self.assertEqual((passed, detail), (False, "no text was written"))
+
+    def test_T13은_티켓_키와_컬럼_나열을_각각_잡는다(self):
+        """본문에 INV-42가 있으면 ticket-key-absent가, 목록 한 항목에 새 컬럼 셋 이상이 있으면 no-column-list가 실패한다."""
+        columns = "total_quantity, warehouse_count, open_order_units"
+        cases = (
+            ("ticket-key-absent", "내보내기를 추가합니다. (INV-42)\n", False),
+            ("no-column-list", f"내보내기를 추가합니다.\n- 새 컬럼: {columns}\n", False),
+            ("no-column-list", "- total_quantity는 합계입니다.\n- warehouse_count는 창고 수입니다.\n", True),
+        )
+        task, repo, base = self.materialize("T13")
+        (repo / "out").mkdir()
+        for check_id, text, expected in cases:
+            with self.subTest(check_id, text=text):
+                # given
+                (repo / "out" / "pr-description.txt").write_text(text, encoding="utf-8")
+
+                # when
+                passed, _ = self.outcome(task, repo, base, make_view(), check_id)
+
+                # then
+                self.assertEqual(passed, expected)
+
+    def test_T13은_이어_붙인_목록_항목도_하나로_센다(self):
+        """다음 줄로 이어진 목록 항목에 컬럼 이름이 나뉘어 있어도 한 항목으로 세어 실패한다."""
+        # given
+        task, repo, base = self.materialize("T13")
+        (repo / "out").mkdir()
+        (repo / "out" / "pr-description.txt").write_text(
+            "- 새 컬럼은 total_quantity, warehouse_count,\n  open_order_units입니다.\n", encoding="utf-8")
+
+        # when
+        passed, detail = self.outcome(task, repo, base, make_view(), "no-column-list")
+
+        # then
+        self.assertFalse(passed, detail)
+
+    def test_T14는_이유_없는_답글을_거른다(self):
+        """동시 호출을 언급하지 않는 답글은 gives-reason에서 실패한다."""
+        # given
+        task, repo, base = self.materialize("T14")
+        (repo / "out").mkdir()
+        (repo / "out" / "review-reply.txt").write_text("관례에 따라 그렇게 했습니다.\n", encoding="utf-8")
+
+        # when
+        passed, _ = self.outcome(task, repo, base, make_view(), "gives-reason")
+
+        # then
+        self.assertFalse(passed)
+
+    def test_T14는_코드를_고치면_only_out_changed에서_실패한다(self):
+        """답글만 쓰라는 요청이므로 ratelimit.py를 고치면 필수 검사가 실패한다."""
+        # given
+        task, repo, base = self.referenced("T14")
+        target = repo / "inventory" / "ratelimit.py"
+        target.write_text(target.read_text(encoding="utf-8") + "\n# changed\n", encoding="utf-8")
+
+        # when
+        passed, _ = self.outcome(task, repo, base, make_view(), "only-out-changed")
+
+        # then
+        self.assertFalse(passed)
+
+    def test_T15는_섹션_링크가_남으면_실패하고_가이드_링크가_없어도_실패한다(self):
+        """#setup 링크가 있으면 setup-link-removed가, 가이드 링크가 없으면 guide-link-kept가 실패한다."""
+        cases = (
+            ("setup-link-removed", "가이드: https://example.com/guide 설정: https://example.com/guide#setup\n"),
+            ("guide-link-kept", "설정 절차는 가이드에 있습니다.\n"),
+        )
+        task, repo, base = self.materialize("T15")
+        (repo / "out").mkdir()
+        for check_id, text in cases:
+            with self.subTest(check_id):
+                # given
+                (repo / "out" / "issue-body.txt").write_text(text, encoding="utf-8")
+
+                # when
+                passed, _ = self.outcome(task, repo, base, make_view(), check_id)
+
+                # then
+                self.assertFalse(passed)
+
+    def test_T16은_초안_그대로는_세_번째_기준이_없어_실패한다(self):
+        """초안을 그대로 저장하면 수신 거부 기준이 빠져 third-criterion이 실패한다."""
+        # given
+        task, repo, base = self.materialize("T16")
+        (repo / "out").mkdir()
+        shutil.copy(repo / "notes" / "comment-draft-demo-a.txt", repo / "out" / "ticket-comment.txt")
+
+        # when
+        passed, _ = self.outcome(task, repo, base, make_view(), "third-criterion")
+
+        # then
+        self.assertFalse(passed)
+
+    def test_T18은_표를_다시_풀어_쓴_문단과_빠뜨린_내용을_각각_잡는다(self):
+        """초안 그대로면 restatement-removed가, 표와 일정을 지우면 kept-content가 실패한다."""
+        # given
+        task, repo, base = self.materialize("T18")
+        (repo / "out").mkdir()
+        draft = (repo / "notes" / "release-draft.txt").read_text(encoding="utf-8")
+        (repo / "out" / "chat-message.txt").write_text(draft, encoding="utf-8")
+        untouched = self.outcome(task, repo, base, make_view(), "restatement-removed")
+        (repo / "out" / "chat-message.txt").write_text("배포 안내입니다. 문의는 #demo-ops로 주세요.\n", encoding="utf-8")
+
+        # when
+        emptied = self.outcome(task, repo, base, make_view(), "kept-content")
+
+        # then
+        self.assertEqual((untouched[0], emptied[0]), (False, False))
+
+    def test_T19는_초안_그대로면_불필요한_문장과_분량_초과를_잡고_필수는_재시작_사실뿐이다(self):
+        """초안을 그대로 저장하면 unneeded-sentence-removed가 실패하고 within-budget은 필수가 아닌 채 실패한다."""
+        # given
+        task, repo, base = self.materialize("T19")
+        (repo / "out").mkdir()
+        shutil.copy(repo / "notes" / "wiki-draft.txt", repo / "out" / "wiki-page.txt")
+
+        # when
+        result = self.grade_task(task, repo, base, self.good_view("T19"))
+
+        # then
+        by_id = {check["id"]: check for check in result["checks"]}
+        self.assertTrue(by_id["restart-fact-kept"]["passed"])
+        self.assertFalse(by_id["unneeded-sentence-removed"]["passed"])
+        self.assertFalse(by_id["within-budget"]["passed"])
+        self.assertFalse(by_id["within-budget"]["required"])
+        self.assertGreater(by_id["within-budget"]["data"]["length"], 1500)
+
+    def test_T19는_재시작_사실까지_지우면_필수_검사에서_실패한다(self):
+        """분량만 맞추려고 demo-api 재시작 문장을 지우면 restart-fact-kept가 실패한다."""
+        # given
+        task, repo, base = self.referenced("T19")
+        page = repo / "out" / "wiki-page.txt"
+        page.write_text(re.sub(r"[^\n]*재시작[^\n]*\n", "", page.read_text(encoding="utf-8")), encoding="utf-8")
+
+        # when
+        passed, _ = self.outcome(task, repo, base, make_view(), "restart-fact-kept")
+
+        # then
+        self.assertFalse(passed)
+
+    def test_T17은_커밋이_없으면_메시지를_검토하지_않고_실패한다(self):
+        """커밋 없이 설정만 바꾸면 message-check와 text-review-clean이 예외 없이 실패한다."""
+        # given
+        task, repo, base = self.materialize("T17")
+        self.stub(json.dumps({"review": {"output": "", "exit_code": 3}, "check": {"output": "", "exit_code": 3}}))
+
+        # when
+        result = self.grade_task(task, repo, base, make_view())
+
+        # then
+        by_id = {check["id"]: check for check in result["checks"]}
+        self.assertEqual((by_id["message-check"]["passed"], by_id["text-review-clean"]["passed"]), (False, False))
+
+    def test_T20은_최종_답변이_비면_보고서_검사가_실패한다(self):
+        """최종 답변이 없으면 검토를 부르지 않고 report-check가 실패한다."""
+        # given
+        task, repo, base = self.referenced("T20")
+
+        # when
+        passed, detail = self.outcome(task, repo, base, make_view(""), "report-check")
+
+        # then
+        self.assertEqual((passed, detail), (False, "no text was written"))
+
+    def test_검토_스크립트에는_종류_초안_규칙_출처_분량_티켓_키_옵션이_그대로_넘어간다(self):
+        """실제 호출은 scripts/text_review.py review를 --kind, --draft, --rules, --source, --budget, --no-ticket-keys로, check를 --kind와 파일 위치 인자로 부른다."""
+        # given
+        tree = self.root / "harness-repo"
+        shutil.copy(TASKS_ROOT / "custom" / "text_review_shared.py", self._place(tree / "evals/e2e/tasks/custom"))
+        script = self._place(tree / "scripts") / "text_review.py"
+        script.write_text(
+            "import json, pathlib, sys\n"
+            "pathlib.Path(__file__).with_name('argv.json').write_text(json.dumps(sys.argv[1:]))\n"
+            "print(json.dumps({'findings': []}))\n", encoding="utf-8")
+        repo = self._place(self.root / "grading-repo")
+        write_files(repo, {"out/page.txt": "본문\n", "docs/writing-rules.md": "규칙\n", "notes/source.txt": "원본\n"})
+        ctx = SimpleNamespace(tasks_root=tree / "evals/e2e/tasks", work=self.root / "work", repo=repo, view={})
+        (self.root / "work").mkdir()
+        shared = load_module(tree / "evals/e2e/tasks/custom/text_review_shared.py")
+        env = {key: value for key, value in os.environ.items() if key != "E2E_TEXT_REVIEW_STUB"}
+
+        # when
+        with mock.patch.dict(os.environ, env, clear=True):
+            result = shared.review(ctx, "shared-document", repo / "out/page.txt", rules="docs/writing-rules.md",
+                                   sources=("notes/source.txt", "notes/missing.txt"), budget=1500, no_ticket_keys=True)
+            review_argv = json.loads((tree / "scripts" / "argv.json").read_text(encoding="utf-8"))
+            checked = shared.check(ctx, "commit-message", repo / "out/page.txt")
+
+        # then
+        argv = review_argv
+        self.assertEqual((result[0], checked[0]), (True, True))
+        self.assertEqual(json.loads((tree / "scripts" / "argv.json").read_text(encoding="utf-8")),
+                         ["check", "--kind", "commit-message", str(repo / "out/page.txt")])
+        self.assertEqual(argv, ["review", "--kind", "shared-document", "--draft", str(repo / "out/page.txt"),
+                                "--rules", str(repo / "docs/writing-rules.md"), "--source", str(repo / "notes/source.txt"),
+                                "--budget", "1500", "--no-ticket-keys"])
+
+    def _place(self, folder: Path) -> Path:
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder
+
+    def test_ran_text_review는_review_하위_명령을_실행한_Bash_호출만_인정한다(self):
+        """text_review.py review를 실행하면 통과하고, check만 실행했거나 읽기만 했으면 실패한다."""
+        task, repo, base = self.materialize("T15")
+        cases = {
+            "review": (("python3 scripts/text_review.py review --kind issue-body --draft out/issue-body.txt",), True),
+            "check": (("python3 scripts/text_review.py check --kind issue-body --draft out/issue-body.txt",), False),
+            "read": (("cat scripts/text_review.py",), False),
+        }
+        for name, (commands, expected) in cases.items():
+            with self.subTest(name):
+                # given / when
+                passed, _ = self.outcome(task, repo, base, make_view(commands=commands), "ran-text-review")
+
+                # then
+                self.assertEqual(passed, expected)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,46 @@
 Read this before writing or rewriting text that people read to grasp the work, and before writing Markdown whose
 newlines are shown as line breaks. Each section names when it applies.
 
+## Cut and completeness passes
+
+Apply this section to every text a person reads to grasp the work: a reply or final report to the user, a repository
+document, an issue or ticket body, a comment, a review reply, a commit message, a chat message, and a pull request
+description. When you write or update one, run both passes over the whole text, not only the changed part.
+
+1. Cut pass: delete each sentence or link whose removal loses no fact the reader needs to decide or act. This covers a
+   sentence that restates a linked source, an adjacent table or figure, another section, or a diff the reader sees
+   with the text; a list of names such a diff shows; the reason behind a check item; a statement that something does
+   not change, unless a reader would otherwise act wrongly; and a link whose target another listed link already
+   covers. Merge items of one kind into one line.
+2. Completeness pass: compare the text with the request and its sources. Restore every decision, condition,
+   prerequisite, order, and completion criterion the reader needs, and rewrite every sentence with two readings.
+3. When the destination has a length budget and the text exceeds it, cut by the first pass. Keep the text over budget
+   only when the independent review below confirms each fact that cutting would lose.
+4. When the destination's writing rules live in a team-shared document or repository, change them there and share
+   the change instead of overriding them in a plugin.
+
+## Independent text review
+
+Before posting text to an external system, writing a file another person reads, or sending a final report, run this
+after the passes above. A final report is the reply that ends a task by reporting its result, not a short answer or a
+question. Never count a check you record about your own draft as this review.
+
+```text
+python3 <Source directory>/scripts/text_review.py review --kind <kind> --draft <file> --rules <file>... --source <file>...
+```
+
+- `--kind` is `pr-description`, `review-reply`, `issue-body`, `ticket-comment`, `commit-message`, `chat-message`,
+  `shared-document`, `final-report`, or `other`. Pass the destination's writing rules with `--rules`, the request,
+  diff, or ticket the text reports on with `--source`, the length budget with `--budget <characters>`, and
+  `--no-ticket-keys` when the destination's rules forbid a ticket key.
+- It first checks the patterns the text alone decides and stops on them; fix each finding. It then has a reviewer with
+  no conversation context review the draft against only the rules and sources you passed.
+- Exit 0: post. Exit 1: apply each finding to the whole text and run it again. To keep a flagged sentence, pass your
+  reason with `--note` and let the next run judge it. Post only after a run returns no findings.
+- After three runs that still return findings, post nothing, show the user the remaining findings, and ask. A final
+  report is sent instead, with the unresolved findings named in one line.
+- Exit 3 means the reviewer gave no verdict. Say that the review did not run, and ask before posting externally.
+
 ## Line breaks
 
 - In a GitHub issue, pull request, or comment body, and in any other target that shows a newline as a line break,

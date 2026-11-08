@@ -144,6 +144,14 @@ BABA) 시간대 영향이 고르게 퍼지게 한다.
 `claude-opus-5-5`가 대신 채점하고, `rubric.json`에 대체 사실을 기록한다. 채점기가 1800초 뒤에도 실행 중이면 하네스가
 그 프로세스와 그것이 시작한 모든 프로세스를 멈추고, 그 실행의 채점은 `grade_error`로 실패한다.
 
+글쓰기 작업(T13~T20)은 완성한 글을 `scripts/text_review.py`로 채점한다. 이 스크립트는 내보낸 플러그인이 아니라
+하네스가 있는 저장소의 것을 쓴다. 필수 검사 `text-review-clean`은 종료 코드 0일 때만 통과하고, 1이면 발견사항을
+detail에 담아 실패한다. 다른 종료 코드는 검토가 결론에 이르지 못했다는 뜻이므로 검사가 예외를 던지고, 그 실행은
+`grade_error`를 기록하며 `regrade`로 다시 시도한다. 참고용 검사 `ran-text-review`는 에이전트가
+`text_review.py review`를 실행했는지 기록한다. 공용 코드는 `tasks/custom/text_review_shared.py`에 있고, 단위 테스트는
+`E2E_TEXT_REVIEW_STUB`이 가리키는 JSON 파일로 스크립트를 대신한다. 사용자 정의 검사는 예외에 `no_verdict = True`를
+달아, 실패한 검사를 기록하는 대신 채점을 `grade_error`로 멈추게 할 수 있다.
+
 `tests/test_e2e_eval_graders.py`는 작업마다 채점기를 증명한다. 수정하지 않은 픽스처는 실패하고
 `tasks/reference/`의 기준 해답은 통과한다.
 
@@ -166,6 +174,14 @@ BABA) 시간대 영향이 고르게 퍼지게 한다.
 | T10 | inventory-service | 읽기 전용 조사 | 주문 취소가 재고를 복구하는 방식 설명 |
 | T11 | notes-cli | 커밋 스킬 | 작은 변경 후 메시지 규칙을 지킨 커밋 |
 | T12 | inventory-service | 최종 리뷰 | 변경 후 보고 전에 독립 리뷰 |
+| T13 | inventory-service | 풀 리퀘스트 설명 | 티켓 키와 diff에 보이는 목록을 금지하는 규칙 아래, 컬럼 네 개를 더한 브랜치의 설명 |
+| T14 | inventory-service | 리뷰 답글 | 검사를 왜 lock 안에서 하는지 답하기 |
+| T15 | ops-notes | 이슈 본문 | 가이드와, 가이드가 이미 링크하는 설정 절을 함께 링크한 이슈 메모 |
+| T16 | ops-notes | 티켓 코멘트 | 완료 기준 셋 중 둘만 적은 코멘트 초안 마무리 |
+| T17 | notes-cli | 커밋 메시지 | 설정 한 줄 변경 후 커밋 |
+| T18 | ops-notes | 채팅 메시지 | 표를 다시 풀어 쓴 문단이 있는 배포 안내 |
+| T19 | ops-notes | 공유 문서 | 1,500자 한도에 1,600자쯤 되는 위키 초안 |
+| T20 | notes-cli | 최종 보고 | 테스트를 더한 작은 변경 후 보고 |
 
 ## 알려진 한계
 

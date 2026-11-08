@@ -1,0 +1,1 @@
+review/comment-1.txt에 리뷰어가 코멘트를 남겼어. 코드는 건드리지 말고 답글만 써줘. 작성 규칙은 docs/writing-rules.md야. 그대로 리뷰 스레드에 올릴 거니까 out/review-reply.txt에 저장해줘.

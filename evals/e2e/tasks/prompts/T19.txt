@@ -1,0 +1,1 @@
+notes/wiki-draft.txt가 위키에 올릴 demo-flag 가이드 초안이야. 위키 페이지는 1,500자까지만 받아. 작성 규칙은 docs/writing-rules.md의 위키 페이지 항목이야. 그대로 올릴 거니까 out/wiki-page.txt에 저장해줘.

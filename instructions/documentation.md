@@ -49,4 +49,4 @@ For ordinary documentation, apply these writing mechanics directly:
   separately from observed facts.
 
 Chat replies use only the terminology and reply-format rules in the common instructions, plus the shared text
-rules for a summary the user asks for.
+rules for a final report or a summary.

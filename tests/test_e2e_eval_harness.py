@@ -2128,6 +2128,19 @@ class CampaignInputsTest(unittest.TestCase):
             self.run_once()
         self.assertIn("fixture:demo", str(caught.exception))
 
+    def test_과제_이름이_아닌_공용_사용자_지정_검사_파일도_지문에_들어가고_바뀌면_거부한다(self):
+        """tasks/custom 아래 T<번호>.py가 아닌 공용 파일이 바뀐 캠페인은 ConfigError로 멈춘다."""
+        # given
+        shared = self.cfg.tasks_root / "custom" / "text_review_shared.py"
+        shared.write_text("one\n", encoding="utf-8")
+        self.run_once()
+        shared.write_text("two\n", encoding="utf-8")
+
+        # when / then
+        with self.assertRaises(command.ConfigError) as caught:
+            self.run_once()
+        self.assertIn("custom:text_review_shared.py", str(caught.exception))
+
     def test_저장된_기록에_없는_새_항목은_변경으로_세지_않는다(self):
         """지문 항목이 늘기 전에 저장된 기록은 prompt, fixture 키가 없어도 같은 입력이면 변경이 없다."""
         # given

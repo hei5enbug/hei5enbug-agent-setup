@@ -1,0 +1,64 @@
+{
+  "id": "T13",
+  "title": "Pull request description for a branch that adds columns",
+  "category": "writing",
+  "path": "pr-description text",
+  "fixture": "inventory-service",
+  "prompt_file": "prompts/T13.txt",
+  "setup": "setup/T13.py",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/pr-description.txt"
+    },
+    {
+      "id": "ticket-key-absent",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "ticket_key_absent"
+    },
+    {
+      "id": "no-column-list",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_column_list"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "inventory/**",
+        "tests/**",
+        "review/**",
+        "docs/**"
+      ]
+    },
+    {
+      "id": "text-review-clean",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "text_review_clean"
+    },
+    {
+      "id": "ran-text-review",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "ran_text_review"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

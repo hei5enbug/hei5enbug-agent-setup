@@ -1,0 +1,1 @@
+notes/release-draft.txt가 팀 채널에 올릴 배포 안내 초안이야. 올릴 최종본을 만들어줘. 작성 규칙은 docs/writing-rules.md의 채팅 메시지 항목이야. 그대로 올릴 거니까 out/chat-message.txt에 저장해줘.

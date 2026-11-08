@@ -1,0 +1,1 @@
+demo-a 티켓에 달 코멘트를 완성해줘. 요청 내용은 notes/request-demo-a.txt, 검증 결과는 notes/verification-demo-a.txt, 쓰다 만 초안은 notes/comment-draft-demo-a.txt에 있어. 작성 규칙은 docs/writing-rules.md야. 그대로 티켓에 달 거니까 out/ticket-comment.txt에 저장해줘.

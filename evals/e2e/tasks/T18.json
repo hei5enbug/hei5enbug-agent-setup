@@ -1,0 +1,61 @@
+{
+  "id": "T18",
+  "title": "Release announcement without a paragraph that restates its table",
+  "category": "writing",
+  "path": "chat-message text",
+  "fixture": "ops-notes",
+  "prompt_file": "prompts/T18.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/chat-message.txt"
+    },
+    {
+      "id": "restatement-removed",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "restatement_removed"
+    },
+    {
+      "id": "kept-content",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "kept_content"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**"
+      ]
+    },
+    {
+      "id": "text-review-clean",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "text_review_clean"
+    },
+    {
+      "id": "ran-text-review",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "ran_text_review"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

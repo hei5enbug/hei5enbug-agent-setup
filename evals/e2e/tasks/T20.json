@@ -1,0 +1,70 @@
+{
+  "id": "T20",
+  "title": "Tag search with a final report",
+  "category": "writing",
+  "path": "final-report text",
+  "fixture": "notes-cli",
+  "prompt_file": "prompts/T20.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "hidden_tests": {
+    "source": "hidden/T20",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "tests-pass",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    },
+    {
+      "id": "report-check",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "report_check"
+    },
+    {
+      "id": "text-review-clean",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "text_review_clean"
+    },
+    {
+      "id": "ran-text-review",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "ran_text_review"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

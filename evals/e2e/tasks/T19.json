@@ -1,0 +1,68 @@
+{
+  "id": "T19",
+  "title": "Wiki page cut to its character budget",
+  "category": "writing",
+  "path": "shared-document text",
+  "fixture": "ops-notes",
+  "prompt_file": "prompts/T19.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/wiki-page.txt"
+    },
+    {
+      "id": "restart-fact-kept",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "restart_fact_kept"
+    },
+    {
+      "id": "unneeded-sentence-removed",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "unneeded_sentence_removed"
+    },
+    {
+      "id": "within-budget",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "within_budget"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**"
+      ]
+    },
+    {
+      "id": "text-review-clean",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "text_review_clean"
+    },
+    {
+      "id": "ran-text-review",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "ran_text_review"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

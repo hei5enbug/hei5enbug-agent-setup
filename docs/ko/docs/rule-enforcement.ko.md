@@ -34,6 +34,8 @@
 | `tests/test_common_rules.py` | 두 호스트의 메인 세션 문맥에 공통 답변 규칙이 실리고, 질문 규칙은 모든 질문 대화상자의 글에 이를 적용하고, 사용자가 쓰지 않은 용어를 설명하거나 바꾸며, 구조화된 질문 도구의 입력을 원문 글자로 쓰고 다시 읽고, 사용자가 깨진 글자를 알리면 자신의 도구 입력부터 확인한다. | `instructions/session/common.md`, `instructions/asking-the-user.md` |
 | `tests/test_service_rules.py` | 호스팅 서비스는 검색이나 단건 조회, 작은 페이지로 읽는다. | `instructions/services.md` |
 | `tests/test_markdown_line_breaks.py` | 줄바꿈을 유지해야 하는 Markdown 글에서 문단과 목록 항목 안의 소프트 줄바꿈, 문단을 끝내는 줄바꿈, 길이 제한을 넘고 문장이 둘 이상인 본문 줄을 코드 펜스, 바깥 세로선 유무와 관계없는 표, 제목 밖에서 검사한다. | `instructions/shared-text.md` (줄바꿈) |
+| `tests/test_text_review.py` | `scripts/text_review.py`의 `check`는 펜스 코드 밖에서 목록 항목 하나의 식별자 코드 조각 세 개 이상(이슈 본문 제외), 요청 시 티켓 키, 같은 점검을 적은 목록 항목 둘, 바뀌지 않는다고만 말하는 문장, 한 페이지를 조각 유무만 달리해 가리키는 링크 둘을 0이 아닌 종료 코드로 보고한다. `review`는 `check`를 먼저 실행하고, `check`에 발견이 있으면 검토자를 시작하지 않으며, 실행기가 실패하거나 답을 해석할 수 없으면 통과로 보지 않고 종료 코드 3을 낸다. | `instructions/shared-text.md` |
+| `tests/test_writing_surfaces.py` | `config/writing-surfaces.json`은 `scripts/text_review.py`가 검토하는 글 종류를 `other`만 빼고 모두 나열하고, 목록이 가리키는 규칙 파일과 작성 파일이 모두 있으며, 종류마다 평가 작업에 필수 `text-review-clean` 검사가 있다. | `AGENTS.md` |
 | `tests/test_planning_contract.py` | 계획과 설계 절차는 분리되고, 모델 선택의 출처는 하나이며, 독립 검증은 마지막 단계에서 자동으로 1회 실행하고 더 이른 검토는 승인이 필요하며, 읽기 전용 1회다. | `instructions/implementation-planning.md`, `instructions/independent-model-validation.md` |
 | `tests/test_delegation_contract.py` | 호스트는 위임 계약을 받고, 수정하지 않은 이전 역할 파일은 교체하되 사용자가 고친 파일은 둔다. | `instructions/session/common.md`, `instructions/implementation-delegation.md` |
 | `tests/test_claude_worker_contract.py` | Claude Code worker와 에이전트 정의는 선언한 도구, 모델, 어댑터 규칙을 유지한다. | `agents/`, `instructions/claude-agents.md` |

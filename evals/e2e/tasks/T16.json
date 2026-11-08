@@ -1,0 +1,54 @@
+{
+  "id": "T16",
+  "title": "Ticket comment that reports every completion criterion",
+  "category": "writing",
+  "path": "ticket-comment text",
+  "fixture": "ops-notes",
+  "prompt_file": "prompts/T16.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/ticket-comment.txt"
+    },
+    {
+      "id": "third-criterion",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "third_criterion_present"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**"
+      ]
+    },
+    {
+      "id": "text-review-clean",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "text_review_clean"
+    },
+    {
+      "id": "ran-text-review",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "ran_text_review"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

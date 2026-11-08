@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -11,6 +12,7 @@ from .command import ConfigError, load_task, load_variant
 from .config import HarnessConfig
 
 TREES = ("hidden", "custom")
+TASK_FILE = re.compile(r"T\d+\.py")
 IGNORED_PARTS = frozenset({"__pycache__", ".pytest_cache", ".git"})
 
 
@@ -51,6 +53,10 @@ def compute_inputs(cfg: HarnessConfig, task_ids: list[str], variant_names: list[
             for candidate in sorted(folder.iterdir()) if folder.is_dir() else []:
                 if candidate.stem == task_id:
                     parts[f"{tree}:{candidate.name}"] = tree_digest(candidate)
+    custom = cfg.tasks_root / "custom"
+    for shared in sorted(custom.glob("*.py")) if custom.is_dir() else []:
+        if not TASK_FILE.fullmatch(shared.name):
+            parts[f"custom:{shared.name}"] = file_digest(shared)
     shas = {f"sha:{name}": sha for name, sha in variant_shas.items()}
     fingerprint = _digest(f"{key}={value}\n".encode() for key, value in sorted({**parts, **shas}.items()))
     return {"variant_shas": variant_shas, "parts": parts, "fingerprint": fingerprint}

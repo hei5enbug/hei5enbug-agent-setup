@@ -1,0 +1,49 @@
+{
+  "kinds": {
+    "pr-description": {
+      "rules": ["instructions/shared-text.md", "instructions/services.md"],
+      "writers": ["instructions/services.md"],
+      "eval_task": "T13"
+    },
+    "review-reply": {
+      "rules": ["instructions/shared-text.md", "instructions/services.md"],
+      "writers": ["instructions/services.md"],
+      "eval_task": "T14"
+    },
+    "issue-body": {
+      "rules": ["instructions/shared-text.md", "instructions/services.md", "skills/skill-issue-creator/SKILL.md"],
+      "writers": ["instructions/services.md", "skills/skill-issue-creator/SKILL.md"],
+      "eval_task": "T15"
+    },
+    "ticket-comment": {
+      "rules": ["instructions/shared-text.md", "instructions/services.md"],
+      "writers": ["instructions/services.md", "skills/aside-browser-tasks/SKILL.md"],
+      "eval_task": "T16"
+    },
+    "commit-message": {
+      "rules": ["instructions/shared-text.md", "skills/suggest-commit/SKILL.md"],
+      "writers": ["skills/suggest-commit/SKILL.md"],
+      "eval_task": "T17"
+    },
+    "chat-message": {
+      "rules": ["instructions/shared-text.md"],
+      "writers": ["instructions/shared-text.md", "skills/aside-browser-tasks/SKILL.md"],
+      "eval_task": "T18"
+    },
+    "shared-document": {
+      "rules": ["instructions/shared-text.md", "instructions/documentation.md"],
+      "writers": [
+        "instructions/documentation.md",
+        "skills/docs-rewrite/SKILL.md",
+        "skills/document-to-confluence/SKILL.md",
+        "skills/technical-design-writer/SKILL.md"
+      ],
+      "eval_task": "T19"
+    },
+    "final-report": {
+      "rules": ["instructions/shared-text.md", "instructions/session/common.md"],
+      "writers": ["instructions/session/common.md"],
+      "eval_task": "T20"
+    }
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "id": "T15",
+  "title": "Issue body that links a guide once",
+  "category": "writing",
+  "path": "issue-body text",
+  "fixture": "ops-notes",
+  "prompt_file": "prompts/T15.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/issue-body.txt"
+    },
+    {
+      "id": "setup-link-removed",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "redundant_link_removed"
+    },
+    {
+      "id": "guide-link-kept",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "guide_link_kept"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**"
+      ]
+    },
+    {
+      "id": "text-review-clean",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "text_review_clean"
+    },
+    {
+      "id": "ran-text-review",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "ran_text_review"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

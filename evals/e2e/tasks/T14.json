@@ -1,0 +1,54 @@
+{
+  "id": "T14",
+  "title": "Review reply that explains why a check runs inside a lock",
+  "category": "writing",
+  "path": "review-reply text",
+  "fixture": "inventory-service",
+  "prompt_file": "prompts/T14.txt",
+  "setup": "setup/T14.py",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/review-reply.txt"
+    },
+    {
+      "id": "gives-reason",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "gives_reason"
+    },
+    {
+      "id": "only-out-changed",
+      "kind": "only_changed",
+      "required": true,
+      "weight": 1,
+      "allow": [
+        "out/**"
+      ]
+    },
+    {
+      "id": "text-review-clean",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "text_review_clean"
+    },
+    {
+      "id": "ran-text-review",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "ran_text_review"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

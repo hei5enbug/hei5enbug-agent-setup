@@ -68,7 +68,7 @@ automatic answers, and defaults are not answers. Before asking the user anything
 - Lead with what the reader must act on; for a decision, one recommendation and its reason, then the alternatives.
   Keep only what the reader needs, give each sentence one reading, and define terms a first-time reader would not
   know. In an existing thread, read it first and add only what is new.
-- Before writing a summary the user asks for, read [shared text rules](../shared-text.md).
+- Before a final report, summary, or text others read, read [shared text](../shared-text.md).
 - Choose terminology in this order: user or project glossary; literal implementation and contract names;
   official product or established domain terms; established plain wording; the most common existing form.
   Use one term per meaning and one meaning per term, never swapping a precise term for an easier but different one.

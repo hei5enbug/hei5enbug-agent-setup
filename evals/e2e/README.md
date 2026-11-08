@@ -149,6 +149,14 @@ with 3 or 4, `claude-opus-5-5` grades instead, and `rubric.json` records the fal
 that is still running after 1800 seconds, together with every process it started, and the run's grading then fails
 with `grade_error`.
 
+The text tasks (T13 to T20) grade a finished text with `scripts/text_review.py`, run from the repository that
+holds the harness, not from the exported plugin. The required check `text-review-clean` passes only on exit 0; exit 1
+fails it with the findings as detail. Any other exit means the reviewer reached no verdict, so the check raises and
+the run records `grade_error`; `regrade` retries it. The informational check `ran-text-review` records whether the
+agent ran `text_review.py review`. The shared code is `tasks/custom/text_review_shared.py`; the unit tests replace the
+script through a JSON file named by `E2E_TEXT_REVIEW_STUB`. A custom check can mark an exception `no_verdict = True`
+to make grading stop with `grade_error` instead of recording a failed check.
+
 `tests/test_e2e_eval_graders.py` proves each task's graders: the unmodified fixture fails, and the reference
 solution in `tasks/reference/` passes.
 
@@ -171,6 +179,14 @@ real one has: a README, an `AGENTS.md` with a Korean mirror rule, tests, and Kor
 | T10 | inventory-service | Read-only investigation | Explain how order cancellation restores stock |
 | T11 | notes-cli | Commit skill | Small change, then a commit that follows the message rules |
 | T12 | inventory-service | Final review | Change, then an independent review before the report |
+| T13 | inventory-service | Pull request description | Description for a branch that adds four columns, under rules that forbid a ticket key and diff-visible lists |
+| T14 | inventory-service | Review reply | Answer why a check runs inside a lock |
+| T15 | ops-notes | Issue body | Issue notes that link a guide and its setup section, which the guide already links |
+| T16 | ops-notes | Ticket comment | Finish a comment draft that reports two of three completion criteria |
+| T17 | notes-cli | Commit message | One-line setting change, then a commit |
+| T18 | ops-notes | Chat message | Release announcement with a paragraph that restates its table |
+| T19 | ops-notes | Shared document | Wiki draft of about 1,600 characters for a 1,500-character budget |
+| T20 | notes-cli | Final report | Small change with tests, then a report |
 
 ## Known limits
 
