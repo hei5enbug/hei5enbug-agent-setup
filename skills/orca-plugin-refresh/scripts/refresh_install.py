@@ -42,16 +42,50 @@ ROLLOUT_RECENT_SECONDS = 30 * 60
 ROLLOUT_TAIL_BYTES = 64 * 1024
 HOOKS_TRUST_WARNING = {"code": "codex_hooks_need_trust", "message": "The plugin's hooks or files changed, which resets Codex hook trust; review and trust the plugin hooks in Codex /hooks, or they are skipped."}
 BUNDLE_SKIPPED_DIRS = frozenset({"__pycache__", ".venv"})
+HOME_RECORD_WARNING = {"code": "claude_home_project_record", "message": "Claude Code recorded the user install again as a project install for the home folder because a session ran there; it points to the same install."}
+
+
+def is_home_folder(value: object) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        return Path(value).resolve() == Path.home().resolve()
+    except (OSError, RuntimeError):
+        return False
+
+
+def effective_claude_record(records: list[dict]) -> tuple[dict | None, bool]:
+    """The one record that stands for a plugin in Claude Code's list, and whether a home-folder project record was merged into it.
+
+    Two records merge only when they are an enabled user record and an enabled project record for the home folder with the same
+    install path and version; any other number or mix of records has no effective record.
+    """
+    if len(records) == 1:
+        return records[0], False
+    if len(records) != 2:
+        return None, False
+    users = [record for record in records if record.get("scope") == "user"]
+    projects = [record for record in records if record.get("scope") == "project"]
+    if len(users) != 1 or len(projects) != 1:
+        return None, False
+    user, project = users[0], projects[0]
+    same = all(user.get(key) == project.get(key) and isinstance(user.get(key), str) and user.get(key) for key in ("installPath", "version"))
+    if same and user.get("enabled") is True and project.get("enabled") is True and is_home_folder(project.get("projectPath")):
+        return user, True
+    return None, False
 
 
 def installed(host: str) -> dict:
     if host == "claude":
         payload = run_json([core.executable("claude"), "plugin", "list", "--json"])
-        matches = [item for item in payload if isinstance(item, dict) and item.get("id") == PLUGIN_ID] if isinstance(payload, list) else []
-        if len(matches) != 1 or matches[0].get("enabled") is not True:
+        records = [item for item in payload if isinstance(item, dict) and item.get("id") == PLUGIN_ID] if isinstance(payload, list) else []
+        record, merged = effective_claude_record(records)
+        if record is None or record.get("enabled") is not True:
             raise RefreshError("claude_plugin_missing", "The Claude Code plugin is not installed and enabled exactly once.")
-        root = Path(str(matches[0].get("installPath") or ""))
+        matches = [record]
+        root = Path(str(record.get("installPath") or ""))
     else:
+        merged = False
         payload = run_json([core.executable("codex"), "plugin", "list", "--json"])
         items = payload.get("installed") if isinstance(payload, dict) else None
         matches = [item for item in items if isinstance(item, dict) and item.get("pluginId") == PLUGIN_ID] if isinstance(items, list) else []
@@ -61,7 +95,7 @@ def installed(host: str) -> dict:
     version = matches[0].get("version")
     if not isinstance(version, str) or not root.is_absolute() or not root.is_dir():
         raise RefreshError(f"{host}_root_missing", f"The installed {host} plugin directory is unavailable.")
-    return {"version": version, "root": root.resolve().as_posix(), "item": matches[0]}
+    return {"version": version, "root": root.resolve().as_posix(), "item": matches[0], "home_project_record": merged}
 
 
 def inside(root: Path, path: Path) -> bool:

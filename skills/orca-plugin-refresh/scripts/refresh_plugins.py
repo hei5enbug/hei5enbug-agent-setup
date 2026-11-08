@@ -9,8 +9,8 @@ from typing import Sequence
 
 import refresh_core as core
 from refresh_core import PLUGIN_ID, RefreshError, load_plugin_script, run_json
-from refresh_install import (HOOKS_TRUST_WARNING, bundle_digest, check_hooks, codex_home, codex_trust_reset, hooks_digest, inside,
-                             read_manifest, run_install)
+from refresh_install import (HOME_RECORD_WARNING, HOOKS_TRUST_WARNING, bundle_digest, check_hooks, codex_home, codex_trust_reset,
+                             effective_claude_record, hooks_digest, inside, read_manifest, run_install)
 
 
 COMPANION_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}@[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
@@ -94,17 +94,19 @@ def describe_plugin(host: str, plugin_id: str, context: dict) -> dict | None:
     """The plugin's listing on `host` as {version, root, local, note?}, or None unless it is installed and enabled exactly once."""
     name, _, marketplace = plugin_id.partition("@")
     payload = run_json([core.executable(host), "plugin", "list", "--json"])
+    merged = False
     if host == "claude":
-        items = [item for item in payload if isinstance(item, dict) and item.get("id") == plugin_id] if isinstance(payload, list) else []
+        records = [item for item in payload if isinstance(item, dict) and item.get("id") == plugin_id] if isinstance(payload, list) else []
+        item, merged = effective_claude_record(records)
     else:
         listed = payload.get("installed") if isinstance(payload, dict) else None
         items = [item for item in listed if isinstance(item, dict) and item.get("pluginId") == plugin_id] if isinstance(listed, list) else []
-    if len(items) != 1 or items[0].get("enabled") is not True:
+        item = items[0] if len(items) == 1 else None
+    if item is None or item.get("enabled") is not True:
         return None
-    item = items[0]
     local = local_source(host, plugin_id, item, context)
     if local:
-        return {"root": None, "local": True, **local}
+        return {"root": None, "local": True, "home_project_record": merged, **local}
     if host == "claude":
         root = Path(str(item.get("installPath") or ""))
     else:
@@ -112,7 +114,7 @@ def describe_plugin(host: str, plugin_id: str, context: dict) -> dict | None:
     version = item.get("version")
     if not isinstance(version, str) or not version or not root.is_absolute() or not root.is_dir():
         raise RefreshError(f"{host}_root_missing", f"The installed {host} plugin directory is unavailable.")
-    return {"version": version, "root": root.resolve(), "local": False}
+    return {"version": version, "root": root.resolve(), "local": False, "home_project_record": merged}
 
 
 def validate_companion(host: str, plugin_id: str, found: dict) -> str | None:
@@ -131,6 +133,8 @@ def refresh_companion(host: str, plugin_id: str, update: bool, context: dict) ->
             result["status"] = "not_installed"
             return result
         result["before_version"] = result["after_version"] = found["version"]
+        if found.get("home_project_record"):
+            result["warnings"].append(dict(HOME_RECORD_WARNING))
         if found["local"]:
             result["status"] = "local_source"
             if found.get("note"):

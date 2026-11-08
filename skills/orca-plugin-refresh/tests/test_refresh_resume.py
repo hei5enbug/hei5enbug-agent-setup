@@ -297,6 +297,18 @@ class EnabledCountTest(unittest.TestCase):
         self.assertEqual(CONFIG_DIR, environment["CLAUDE_CONFIG_DIR"])
         self.assertEqual("/usr/bin", environment["PATH"])
 
+    def test_홈_폴더_세션이_같은_플러그인을_두_번_나열해도_서로_다른_플러그인_수로_센다(self):
+        """사용자 기록과 홈 폴더 프로젝트 기록이 한 플러그인을 두 번 나열해도 기대 수는 플러그인 ID 기준으로 센다."""
+        # Given
+        self.PLUGINS = [{"id": "a", "scope": "user", "enabled": True}, {"id": "a", "scope": "project", "enabled": True},
+                        {"id": "c", "enabled": True}, {"id": "b", "enabled": False}, {"id": "b", "enabled": False}]
+
+        # When
+        count, _ = self.run_count({"CLAUDE_CONFIG_DIR": CONFIG_DIR})
+
+        # Then
+        self.assertEqual(2, count)
+
     def test_세션의_플러그인_변수는_호출자의_값을_덮어쓴다(self):
         """세션 환경에 자기 CLAUDE_CODE_PLUGIN_DIRS가 있으면 하위 프로세스에는 정확히 그 값만 들어간다."""
         # Given

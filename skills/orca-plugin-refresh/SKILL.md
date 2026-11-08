@@ -93,6 +93,8 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
      trust that plugin's hooks in Codex `/hooks`; Codex skips untrusted hooks.
    - `unreleased_check_unavailable`: the script could not tell whether Claude Code missed same-version files.
      Report the reason.
+   - `claude_home_project_record`: a session ran in the home folder, so Claude Code listed the user install a second
+     time as a home-folder project install of the same copy. The script treated them as one install; nothing to do.
 3. **Apply to the sessions.** When this plugin's host update succeeded, or `apply-installed` returned that host
    without an error, run `python3 <script> apply --run-id <run_id> --json` in the foreground with a shell timeout
    of at least 600 seconds. Do not ask the user to confirm this step; the script's checks decide which sessions

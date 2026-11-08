@@ -49,7 +49,7 @@ def screen_report(lines: Sequence[str], follow: int = 3) -> dict | None:
 
 
 def enabled_count(session_env: Mapping[str, str], cwd: str | None) -> int | None:
-    """Entries with `enabled: true` in `claude plugin list --json` for the session's plugin variables and working folder.
+    """Distinct plugin IDs with an `enabled: true` entry in `claude plugin list --json` for the session's plugin variables and working folder.
 
     The caller's own `SESSION_PLUGIN_VARIABLES` are dropped, so only the values in `session_env` decide what is counted.
     """
@@ -65,7 +65,7 @@ def enabled_count(session_env: Mapping[str, str], cwd: str | None) -> int | None
         return None
     if not isinstance(plugins, list):
         return None
-    return sum(1 for item in plugins if isinstance(item, dict) and item.get("enabled") is True)
+    return len({item.get("id") for item in plugins if isinstance(item, dict) and item.get("enabled") is True})
 
 
 def expected_plugins(entry: dict) -> int | None:

@@ -3222,6 +3222,91 @@ class UpdateTest(unittest.TestCase):
         (clone / "plugins" / "bare").mkdir(parents=True)
         return clone
 
+    def test_홈_폴더_프로젝트_기록이_사용자_기록과_같은_설치면_update와_apply_installed가_진행하고_경고한다(self):
+        """사용자 기록과 같은 버전과 설치 경로의 홈 폴더 프로젝트 기록은 한 설치로 합쳐 claude_plugin_missing 없이 진행하고 경고를 낸다."""
+        # Given
+        fake = FakeCli()
+        self.stage(fake)
+        fake.duplicate(refresh.PLUGIN_ID)
+
+        # When
+        updated = self.run_with(fake, refresh.command_update, [])
+        applied = self.run_with(fake, refresh.command_apply_installed, [])
+
+        # Then
+        for result in (updated, applied):
+            claude = result["hosts"]["claude"]
+            self.assertNotIn("error", claude)
+            self.assertEqual(["claude_home_project_record"], [warning["code"] for warning in claude["warnings"]])
+            self.assertNotIn("claude_home_project_record", json.dumps(result["hosts"]["codex"]))
+        self.assertEqual(("1.0.0", "1.1.0"), (updated["hosts"]["claude"]["before_version"], updated["hosts"]["claude"]["after_version"]))
+        self.assertTrue(applied["ok"])
+
+    def test_홈_폴더_프로젝트_기록이_있는_동반_플러그인도_설치된_것으로_보고하고_경고한다(self):
+        """같은 설치를 가리키는 홈 폴더 프로젝트 기록 때문에 동반 플러그인이 not_installed로 건너뛰어지지 않는다."""
+        # Given
+        fake = FakeCli()
+        self.stage(fake)
+        self.stage_companion(fake, "claude", "dup@mk", "1.0.0", "1.1.0")
+        self.stage_companion(fake, "claude", "stay@mk", "1.0.0")
+        fake.duplicate("dup@mk")
+        fake.duplicate("stay@mk")
+
+        # When
+        updated = self.run_with(fake, refresh.command_update, ["dup@mk", "stay@mk"])
+        applied = self.run_with(fake, refresh.command_apply_installed, ["dup@mk", "stay@mk"])
+
+        # Then
+        plugins = {item["plugin"]: item for item in updated["hosts"]["claude"]["plugins"]}
+        self.assertEqual({"dup@mk": ("updated", "1.1.0"), "stay@mk": ("current", "1.0.0")},
+                         {name: (item["status"], item["after_version"]) for name, item in plugins.items()})
+        for item in (*plugins.values(), *applied["hosts"]["claude"]["plugins"]):
+            self.assertNotEqual("not_installed", item["status"])
+            self.assertEqual(["claude_home_project_record"], [warning["code"] for warning in item["warnings"]])
+
+    def test_다른_버전이나_설치_경로나_다른_폴더의_프로젝트_기록은_합치지_않고_claude_plugin_missing으로_남긴다(self):
+        """실제로 두 설치인 중복 기록은 합치지 않아, 이 플러그인은 실패하고 동반 플러그인은 not_installed로 남는다."""
+        cases = {
+            "version": {"version": "0.9.0"},
+            "install_path": {"installPath": "/home/test/other-install"},
+            "other_folder": {"projectPath": "/home/test/other-project"},
+            "disabled": {"enabled": False},
+        }
+        for name, override in cases.items():
+            with self.subTest(case=name):
+                # Given
+                fake = FakeCli()
+                self.stage(fake, upgrade=False)
+                self.stage_companion(fake, "claude", "dup@mk", "1.0.0")
+                fake.duplicate(refresh.PLUGIN_ID, **override)
+                fake.duplicate("dup@mk", **override)
+
+                # When
+                result = self.run_with(fake, refresh.command_apply_installed, ["dup@mk"])
+
+                # Then
+                claude = result["hosts"]["claude"]
+                self.assertEqual("claude_plugin_missing", claude["error"]["code"])
+                self.assertEqual(["not_installed"], [item["status"] for item in claude["plugins"]])
+
+    def test_사용자_기록이_없거나_프로젝트_기록이_둘_이상이면_합치지_않는다(self):
+        """사용자 기록 없이 프로젝트 기록만 둘이거나 사용자 기록 하나에 프로젝트 기록이 둘이면 합치지 않는다."""
+        # Given
+        user = {"id": "p@mk", "scope": "user", "enabled": True, "version": "1.0.0", "installPath": "/home/test/p"}
+        project = {**user, "scope": "project", "projectPath": str(Path.home())}
+
+        # When
+        merged = refresh_install.effective_claude_record([user, project])
+        three = refresh_install.effective_claude_record([user, project, dict(project)])
+        projects_only = refresh_install.effective_claude_record([project, dict(project)])
+        single = refresh_install.effective_claude_record([user])
+
+        # Then
+        self.assertEqual((user, True), merged)
+        self.assertEqual((None, False), three)
+        self.assertEqual((None, False), projects_only)
+        self.assertEqual((user, False), single)
+
     def test_로컬_소스_플러그인은_설치_명령_없이_로컬_소스로_보고한다(self):
         """디렉터리나 파일 마켓플레이스와 git이 아닌 Codex 소스는 설치하지 않고, Claude는 폴더의 manifest에서 버전을 읽는다."""
         # Given
@@ -3902,9 +3987,14 @@ class FakeCli:
         self.upgrades: dict[tuple[str, str], dict] = {}
         self.marketplaces: list[dict] = []
         self.failing: set[tuple[str, ...]] = set()
+        self.duplicates: dict[str, dict] = {}
 
     def add(self, host, plugin_id, version, root, enabled=True, source="git"):
         self.plugins[host][plugin_id] = {"version": version, "root": str(root), "enabled": enabled, "source": source}
+
+    def duplicate(self, plugin_id, **overrides):
+        """List the Claude Code plugin a second time as a project record for the home folder, with `overrides` applied."""
+        self.duplicates[plugin_id] = overrides
 
     def upgrade(self, host, plugin_id, version, root):
         self.upgrades[(host, plugin_id)] = {"version": version, "root": str(root)}
@@ -3914,7 +4004,11 @@ class FakeCli:
 
     def listing(self, host):
         if host == "claude":
-            return [{"id": name, "enabled": item["enabled"], "version": item["version"], "installPath": item["root"]} for name, item in self.plugins[host].items()]
+            records = [{"id": name, "scope": "user", "enabled": item["enabled"], "version": item["version"], "installPath": item["root"]}
+                       for name, item in self.plugins[host].items()]
+            home = str(Path.home())
+            return records + [{**record, "scope": "project", "projectPath": home, **self.duplicates[record["id"]]}
+                              for record in records if record["id"] in self.duplicates]
         installed = []
         for name, item in self.plugins[host].items():
             entry = {"pluginId": name, "enabled": item["enabled"], "version": item["version"]}

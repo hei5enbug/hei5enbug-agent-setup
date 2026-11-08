@@ -33,7 +33,7 @@ from refresh_follow import (  # noqa: E402
     IDLE_CONFIRM_SECONDS, INSTALL_CHECK_SECONDS, IdleWaiters, SendLock, follow_up, install_current, still_needed,
 )
 from refresh_install import (  # noqa: E402
-    BUNDLE_SKIPPED_DIRS, CODEX_IDLE_EVENTS, CODEX_TURN_ENV, DEFAULT_HOOKS, HOOK_LAUNCHER, HOOK_ROOT, HOOKS_TRUST_WARNING,
+    BUNDLE_SKIPPED_DIRS, CODEX_IDLE_EVENTS, CODEX_TURN_ENV, DEFAULT_HOOKS, HOME_RECORD_WARNING, HOOK_LAUNCHER, HOOK_ROOT, HOOKS_TRUST_WARNING,
     LAUNCHED_SCRIPT, REQUIRED_HOOK_TARGETS, REQUIRED_HOOKS, ROLLOUT_RECENT_SECONDS, ROLLOUT_TAIL_BYTES, bundle_digest,
     check_hooks, codex_home, codex_trust_reset, hook_file_entries, hooks_digest, inside, install_gate, installed,
     read_hook_file, read_manifest, rollout_idle, run_install, scan_hook_events, validate_claude_mod, validate_install,
@@ -113,6 +113,7 @@ def update_host(host: str, context: dict | None = None) -> dict:
     before = installs.installed(host)
     before_snapshot = validate_install(host, before)
     local = local_source(host, PLUGIN_ID, before.get("item"), context)
+    merged = [dict(HOME_RECORD_WARNING)] if before.get("home_project_record") else []
     if local:
         version = local["version"] or before["version"]
         result = {
@@ -122,7 +123,7 @@ def update_host(host: str, context: dict | None = None) -> dict:
             "previous_root": before["root"],
             "digest": before_snapshot["digest"],
             "instructions_changed": False,
-            "warnings": [],
+            "warnings": merged,
             "local_source": True,
         }
         if local.get("note"):
@@ -142,7 +143,7 @@ def update_host(host: str, context: dict | None = None) -> dict:
         "previous_root": before["root"],
         "digest": after_snapshot["digest"],
         "instructions_changed": before_snapshot["digest"] != after_snapshot["digest"],
-        "warnings": [],
+        "warnings": [dict(HOME_RECORD_WARNING)] if before.get("home_project_record") or after.get("home_project_record") else [],
     }
     if host == "claude":
         pending, unknown = claude_unreleased_changes()
@@ -266,7 +267,7 @@ def command_apply_installed(also: Sequence[str] = ()) -> dict:
                 "previous_root": PLUGIN_ROOT.as_posix(),
                 "digest": current_snapshot["digest"],
                 "instructions_changed": False,
-                "warnings": [],
+                "warnings": [dict(HOME_RECORD_WARNING)] if current.get("home_project_record") else [],
             }
         except RefreshError as error:
             hosts[host] = host_failure(error)
