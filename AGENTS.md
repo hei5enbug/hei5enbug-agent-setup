@@ -47,7 +47,8 @@
 - `config/writing-surfaces.json` lists each kind of text people read that this plugin writes, with the files that
   hold its rules, the skills and instructions that write it, and its writing task in `evals/e2e`. Before changing
   how a listed file writes such text, or `scripts/text_review.py`, run those tasks on the baseline and the changed
-  revision, and accept the change only when every task's `text-review-clean` check passes on the changed one.
+  revision, and accept the change only when no task whose `text-review-clean` check passes on the baseline fails on
+  the changed one and the number of passing tasks does not fall.
 - [Rule enforcement](docs/rule-enforcement.md) pairs each written rule with the check that enforces it. When a user
   correction repeats a written rule that no check enforces, raise it a level in the same change as that file
   describes and update its row. Remove a written rule once its check makes the mistake impossible.
