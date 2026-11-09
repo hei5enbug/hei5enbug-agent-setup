@@ -57,6 +57,9 @@ def compute_inputs(cfg: HarnessConfig, task_ids: list[str], variant_names: list[
     for shared in sorted(custom.glob("*.py")) if custom.is_dir() else []:
         if not TASK_FILE.fullmatch(shared.name):
             parts[f"custom:{shared.name}"] = file_digest(shared)
+    grader = cfg.repo_root / "scripts" / "text_review.py"
+    if grader.is_file():
+        parts["grader:scripts/text_review.py"] = file_digest(grader)
     shas = {f"sha:{name}": sha for name, sha in variant_shas.items()}
     fingerprint = _digest(f"{key}={value}\n".encode() for key, value in sorted({**parts, **shas}.items()))
     return {"variant_shas": variant_shas, "parts": parts, "fingerprint": fingerprint}

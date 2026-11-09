@@ -985,7 +985,8 @@ FAKE_CLAUDE = """#!{python}
 import json, os, signal, sys, time
 out = os.environ["FAKE_OUT"]
 with open(out, "w") as handle:
-    json.dump({{"argv": sys.argv[1:], "env": sorted(os.environ)}}, handle)
+    json.dump({{"argv": sys.argv[1:], "env": sorted(os.environ), "tmpdir": os.environ.get("TMPDIR"),
+                "tmpdir_exists": os.path.isdir(os.environ.get("TMPDIR", ""))}}, handle)
 mode = os.environ.get("FAKE_MODE", "complete")
 child_file = os.environ.get("FAKE_CHILD")
 if child_file:
@@ -1223,6 +1224,31 @@ class ProcessAndRunTest(unittest.TestCase):
         env_record = json.loads((self.spec.result_dir / "env.json").read_text(encoding="utf-8"))
         self.assertIn("ORCA_TERMINAL_HANDLE", env_record["removed_env_names"])
         self.assertTrue(json.loads((self.spec.result_dir / "metrics.json").read_text(encoding="utf-8"))["success"])
+
+    def test_에이전트_프로세스의_TMPDIR은_실행_폴더_안의_tmp이고_시작할_때_이미_있다(self):
+        """에이전트가 돌리는 검토자의 Codex 기록이 실행 폴더 밖에 남으면 비용이 집계되지 않으므로, TMPDIR을 work_dir 아래로 준다."""
+        # given
+        task = {**self.task, "limits": {"wall_seconds": 30, "max_budget_usd": 2}}
+
+        # when
+        runner.execute_run(self.spec, task, self.variant, self.plugin, self.cfg, {})
+
+        # then
+        seen = json.loads(self.out.read_text(encoding="utf-8"))
+        self.assertEqual(str(self.spec.work_dir / "tmp"), seen["tmpdir"])
+        self.assertTrue(seen["tmpdir_exists"])
+
+    def test_설정의_extra_env가_TMPDIR을_덮어쓸_수_있다(self):
+        """실행자가 TMPDIR을 따로 정하면 그 값을 따라야 하므로, 기본 TMPDIR은 extra_env보다 앞에 둔다."""
+        # given
+        task = {**self.task, "limits": {"wall_seconds": 30, "max_budget_usd": 2}}
+        cfg = HarnessConfig(**{**self.cfg.__dict__, "extra_env": {"FAKE_OUT": str(self.out), "TMPDIR": str(self.root)}})
+
+        # when
+        runner.execute_run(self.spec, task, self.variant, self.plugin, cfg, {})
+
+        # then
+        self.assertEqual(str(self.root), json.loads(self.out.read_text(encoding="utf-8"))["tmpdir"])
 
     def write_stream(self, events: list[dict[str, Any]]) -> None:
         self.spec.result_dir.mkdir(parents=True, exist_ok=True)
@@ -2140,6 +2166,22 @@ class CampaignInputsTest(unittest.TestCase):
         with self.assertRaises(command.ConfigError) as caught:
             self.run_once()
         self.assertIn("custom:text_review_shared.py", str(caught.exception))
+
+    def test_채점에_쓰는_text_review_스크립트가_바뀐_채_이어서_실행하면_거부한다(self):
+        """공용 채점 파일이 실행하는 scripts/text_review.py가 바뀌어도 지문이 같으면 다른 채점 기준으로 이어지므로 ConfigError로 멈춘다."""
+        # given
+        repo_root = self.root / "repo"
+        script = repo_root / "scripts" / "text_review.py"
+        script.parent.mkdir(parents=True)
+        script.write_text("one\n", encoding="utf-8")
+        self.cfg = HarnessConfig(**{**self.cfg.__dict__, "repo_root": repo_root})
+        self.run_once()
+        script.write_text("two\n", encoding="utf-8")
+
+        # when / then
+        with self.assertRaises(command.ConfigError) as caught:
+            self.run_once()
+        self.assertIn("grader:scripts/text_review.py", str(caught.exception))
 
     def test_저장된_기록에_없는_새_항목은_변경으로_세지_않는다(self):
         """지문 항목이 늘기 전에 저장된 기록은 prompt, fixture 키가 없어도 같은 입력이면 변경이 없다."""

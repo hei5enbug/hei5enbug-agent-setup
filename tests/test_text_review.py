@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -8,6 +9,7 @@ import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -67,8 +69,8 @@ def run_script(*args, stdin=None, env=None):
     )
 
 
-def rules_of(result):
-    return [(item["rule"], item["line"]) for item in json.loads(result.stdout)["findings"]]
+def rules_of(result, key="findings"):
+    return [(item["rule"], item["line"]) for item in json.loads(result.stdout)[key]]
 
 
 class CheckTest(unittest.TestCase):
@@ -82,7 +84,7 @@ class CheckTest(unittest.TestCase):
         result = self.check(text)
         # then
         self.assertEqual(0, result.returncode)
-        self.assertEqual({"findings": []}, json.loads(result.stdout))
+        self.assertEqual({"findings": [], "advisories": []}, json.loads(result.stdout))
 
     def test_목록_항목_하나에_식별자_코드_세_개_이상이면_identifier_list로_보고한다(self):
         # given
@@ -181,7 +183,8 @@ class CheckTest(unittest.TestCase):
         # then
         self.assertEqual(0, result.returncode)
 
-    def test_바뀌지_않는다는_주장만_하는_문장은_unchanged_only로_보고한다(self):
+    def test_바뀌지_않는다는_주장만_하는_문장은_발견이_아니라_unchanged_only_권고로_보고한다(self):
+        """독자가 틀리게 행동할 수 있어 필요한 바뀌지 않는다는 문장이 점검 단계에서 글 게시를 막지 않도록, 권고로만 보고하고 종료 코드 0을 낸다."""
         # given
         sentences = [
             "The API is unchanged.", "Defaults remain still unchanged.", "The cache does not change.",
@@ -193,7 +196,19 @@ class CheckTest(unittest.TestCase):
                 # when
                 result = self.check(f"{sentence}\n")
                 # then
-                self.assertEqual([("unchanged-only", 1)], rules_of(result))
+                self.assertEqual(0, result.returncode)
+                self.assertEqual([], json.loads(result.stdout)["findings"])
+                self.assertEqual([("unchanged-only", 1)], rules_of(result, "advisories"))
+
+    def test_바뀌지_말라는_명령문은_발견도_권고도_아니다(self):
+        """변경하지 말라는 지시를 바뀌지 않는다는 주장으로 오인해 표시하지 않도록, does와 did만 주장으로 본다."""
+        # given
+        text = "Do not change the schema before the backup finishes.\n"
+        # when
+        result = self.check(text)
+        # then
+        self.assertEqual(0, result.returncode)
+        self.assertEqual({"findings": [], "advisories": []}, json.loads(result.stdout))
 
     def test_같은_페이지를_가리키는_링크_둘은_뒤의_것을_same_page_links로_보고한다(self):
         # given
@@ -221,7 +236,7 @@ class CheckTest(unittest.TestCase):
         # when
         result = self.check(text)
         # then
-        self.assertEqual(160, len(json.loads(result.stdout)["findings"][0]["text"]))
+        self.assertEqual(160, len(json.loads(result.stdout)["advisories"][0]["text"]))
 
     def test_읽을_수_없는_파일과_알_수_없는_종류는_종료_코드_2를_낸다(self):
         # given
@@ -363,6 +378,66 @@ class ReviewTest(unittest.TestCase):
         self.assertEqual("check", payload["stage"])
         self.assertEqual("identifier-list", payload["findings"][0]["rule"])
         self.assertFalse((self.out / "started").exists())
+
+    def test_바뀌지_않는다는_문장은_점검에서_멈추지_않고_검토자_과제에_표시한_줄로_들어간다(self):
+        """권고가 점검 단계에서 검토자에게 닿기 전에 멈추면 검토자와 메모가 판단할 수 없으므로, 과제에 표시한 줄 구역을 넣어 검토자를 실행한다."""
+        # given
+        self.draft.write_text("The cache does not change.\n", encoding="utf-8")
+        # when
+        result = self.review("none")
+        # then
+        self.assertEqual(0, result.returncode, result.stdout)
+        self.assertTrue((self.out / "started").exists())
+        text = self.assignment()
+        self.assertIn("## Lines the text check flagged", text)
+        self.assertIn("```\nThe cache does not change.\n```", text)
+
+    def test_표시한_줄이_없으면_과제에_표시한_줄_구역이_없다(self):
+        """권고가 없는데 구역이 들어가면 검토자가 없는 줄을 찾으려 하므로, 권고가 있을 때만 구역을 넣는다."""
+        # given
+        mode = "none"
+        # when
+        self.review(mode)
+        # then
+        self.assertNotIn("Lines the text check flagged", self.assignment())
+
+    def test_git이_없어_준비가_실패하면_트레이스백이_아니라_error를_내고_종료_코드_3을_낸다(self):
+        """준비 단계의 OSError가 종료 코드 1의 트레이스백이 되면 평가 도구가 발견으로 읽으므로, 판정 없음으로 종료 코드 3을 낸다."""
+        # given
+        empty = self.root / "empty-bin"
+        empty.mkdir()
+        # when
+        result = run_script(
+            "review", "--kind", "pr-description", "--draft", str(self.draft), "--runner", str(self.runner),
+            env={"FAKE_OUT": str(self.out), "FAKE_MODE": "none", "PATH": str(empty)},
+        )
+        # then
+        self.assertEqual(3, result.returncode, result.stdout + result.stderr)
+        self.assertIn("error", json.loads(result.stdout))
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_실행기_바깥_제한_시간은_실행기의_순차_단계_전체보다_길다(self):
+        """실행기가 단계마다 전체 제한 시간을 쓰므로 바깥 제한이 짧으면 실행기가 정리하기 전에 죽으므로, 바깥 제한은 제한 시간의 4배 이상이다."""
+        # given
+        spec = importlib.util.spec_from_file_location("text_review_under_test", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        seen = {}
+
+        def capture(command, **kwargs):
+            if "timeout" in kwargs:
+                seen["timeout"] = kwargs["timeout"]
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+        timeout = 90
+        args = module.build_parser().parse_args(
+            ["review", "--kind", "other", "--draft", "-", "--timeout", str(timeout), "--runner", str(self.runner)])
+        # when
+        with mock.patch.object(module.subprocess, "run", capture):
+            with self.assertRaises(module.TextReviewError):
+                module.run_reviewer(args, "assignment", "gpt-6.1-sol")
+        # then
+        self.assertGreaterEqual(seen["timeout"], 4 * timeout)
 
     def test_검토자가_발견을_돌려주면_종료_코드_1과_발견_목록을_낸다(self):
         # given

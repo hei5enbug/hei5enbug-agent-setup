@@ -12,6 +12,8 @@ from .config import FINISHED_STATUSES, STATUS_COMPLETE, STATUS_INFRA_FAILED, STA
 from .matrix import RunSpec, prior_attempts, read_json, write_json
 from .process import ProcessResult, run_agent
 
+AGENT_TMP_NAME = "tmp"
+
 
 def load_graders() -> Any:
     from . import graders
@@ -128,7 +130,10 @@ def execute_run(
     shutil.rmtree(spec.work_dir, ignore_errors=True)
     prompt = command.read_prompt(cfg.tasks_root, task)
     argv = write_run_files(spec, task, variant, prompt, cfg, plugin)
-    env, removed = environment.child_environment(os.environ, {**cfg.extra_env, **variant["env"]})
+    agent_tmp = spec.work_dir / AGENT_TMP_NAME
+    agent_tmp.mkdir(parents=True, exist_ok=True)
+    overrides = {"TMPDIR": str(agent_tmp), **cfg.extra_env, **variant["env"]}
+    env, removed = environment.child_environment(os.environ, overrides)
     write_json(spec.result_dir / "env.json", environment.run_snapshot(base_snapshot, plugin, removed))
     run: dict[str, Any] = {
         "run_id": spec.run_id, "task": spec.task, "variant": spec.variant, "rep": spec.rep, "plugin": plugin,

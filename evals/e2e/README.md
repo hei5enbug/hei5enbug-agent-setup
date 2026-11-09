@@ -87,8 +87,8 @@ exits with code 75.
 
 The first `run` stores each variant's resolved revision and a fingerprint per input in `campaign.json`: the variant
 file, the task file, the task's prompt file, the task's fixture tree, and the hidden tests and custom checks of the
-task. A resume whose inputs differ stops, unless `--allow-changed-inputs` is given; then the harness
-records the change in `campaign.json`.
+task, and `scripts/text_review.py`, which grades the text tasks. A resume whose inputs differ stops, unless
+`--allow-changed-inputs` is given; then the harness records the change in `campaign.json`.
 
 ### Variants
 
@@ -156,7 +156,8 @@ fails it with the findings as detail. Any other exit means the reviewer reached 
 the run records `grade_error`; `regrade` retries it. The informational check `ran-text-review` records whether the
 agent ran `text_review.py review`. The shared code is `tasks/custom/text_review_shared.py`; the unit tests replace the
 script through a JSON file named by `E2E_TEXT_REVIEW_STUB`. A custom check can mark an exception `no_verdict = True`
-to make grading stop with `grade_error` instead of recording a failed check.
+to make grading stop with `grade_error` instead of recording a failed check. The agent's `TMPDIR` lies inside the run's
+work folder, so the reviews the agent runs are counted in its cost; the grader's own reviews are not.
 
 `tests/test_e2e_eval_graders.py` proves each task's graders: the unmodified fixture fails, and the reference
 solution in `tasks/reference/` passes.

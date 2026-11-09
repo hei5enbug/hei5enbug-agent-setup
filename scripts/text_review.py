@@ -20,6 +20,7 @@ REVIEW_MODELS = {kind: "gpt-6.1-sol" for kind in KINDS}
 DEFAULT_TIMEOUT = 600
 DEFAULT_REVIEWS = 1
 RUNNER_GRACE_SECONDS = 60
+RUNNER_TIMEOUT_STAGES = 4
 EXIT_OK, EXIT_FINDINGS, EXIT_USAGE, EXIT_REVIEW_FAILED = 0, 1, 2, 3
 FINDING_TYPES = ("removable", "missing", "ambiguous")
 LINE_TEXT_LIMIT = 160
@@ -30,7 +31,7 @@ AGENT_FACING_KINDS = ("issue-body",)
 
 UNCHANGED_PATTERNS = (
     r"\b(?:is|are|was|were|stays?|remains?)\s+(?:still\s+)?unchanged\b",
-    r"\b(?:does|did|do)(?:\s+not|n't)\s+change\b",
+    r"\b(?:does|did)(?:\s+not|n't)\s+change\b",
     r"\bno\s+changes?\s+(?:to|in)\b",
     r"\bnothing\s+changes\b",
     r"변경(?:이|은)?\s*없",
@@ -66,6 +67,12 @@ Answer with one JSON object in a ```json fence and nothing after it:
 An empty findings list means the draft passes.
 """
 
+FLAGGED_HEADING = "## Lines the text check flagged\n"
+FLAGGED_EXPLANATION = (
+    "Each line below may say only that something is unchanged. Report it as removable unless a reader would act "
+    "wrongly without it.\n"
+)
+
 READERS = {
     "pr-description": "a reviewer who sees the diff next to this text.",
     "review-reply": "the reviewer who asked, who sees the diff and the review thread.",
@@ -92,6 +99,7 @@ TICKET_KEY = re.compile(r"(?<![A-Za-z0-9_-])([A-Z][A-Z0-9]{1,9})-[0-9]+(?![A-Za-
 STANDARD_PREFIXES = frozenset({"UTF", "SHA", "ISO", "RFC", "IEEE", "HTTP", "TLS", "MD", "AES", "RSA", "CVE", "GPT"})
 LABEL = re.compile(r"^([^:：]{1,%d}?)\s*[:：](?!//)" % LABEL_MAX_LENGTH)
 BACKTICK_RUN = re.compile(r"`+")
+NO_RUNNER = {"exit": None, "verified": None}
 JSON_FENCE = re.compile(r"(`{3,})json[ \t]*\n(.*?)\n\1", re.DOTALL)
 
 
@@ -240,16 +248,21 @@ def same_page_links(lines: list[tuple[int, str]]) -> list[dict]:
     return found
 
 
-def check_text(text: str, kind: str | None, no_ticket_keys: bool) -> list[dict]:
+def check_text(text: str, kind: str | None, no_ticket_keys: bool) -> tuple[list[dict], list[dict]]:
+    """Return the findings and, separately, the advisories that only a reader of the whole text can judge."""
     lines = prose_lines(text)
     numbered = dict(lines)
     items = collect_items(lines)
-    found = repeated_check(items, numbered) + unchanged_only(lines) + same_page_links(lines)
+    found = repeated_check(items, numbered) + same_page_links(lines)
     if kind not in AGENT_FACING_KINDS:
         found += identifier_list(items, numbered)
     if no_ticket_keys:
         found += ticket_key(lines)
-    return sorted(found, key=lambda item: (item["line"], item["rule"]))
+    return sort_items(found), sort_items(unchanged_only(lines))
+
+
+def sort_items(items: list[dict]) -> list[dict]:
+    return sorted(items, key=lambda item: (item["line"], item["rule"]))
 
 
 def fenced(content: str) -> str:
@@ -264,8 +277,17 @@ def named_files(heading: str, files: list[tuple[str, str]]) -> list[str]:
     return [f"## {heading}\n", *[f"### {name}\n\n{fenced(content)}\n" for name, content in files]]
 
 
-def build_assignment(kind: str, draft: str, rules: list, sources: list, notes: list[str], budget: int | None) -> str:
+def flagged_section(advisories: list[dict]) -> list[str]:
+    if not advisories:
+        return []
+    lines = "\n".join(item["text"] for item in advisories)
+    return [FLAGGED_HEADING, FLAGGED_EXPLANATION, f"{fenced(lines)}\n"]
+
+
+def build_assignment(kind: str, draft: str, rules: list, sources: list, notes: list[str], budget: int | None,
+                     advisories: list[dict]) -> str:
     parts = [REVIEWER_INSTRUCTIONS, f"Text kind: {kind}\n", f"Reader: {READERS[kind]}\n"]
+    parts += flagged_section(advisories)
     parts += named_files("Destination writing rules", rules)
     parts += named_files("Sources", sources)
     if notes:
@@ -306,18 +328,30 @@ def parse_result(text: str) -> dict:
     return {"findings": findings, "over_budget_facts": facts}
 
 
-def run_reviewer(args: argparse.Namespace, assignment: str, model: str) -> dict:
-    work = Path(tempfile.mkdtemp(prefix="text-review-"))
+def prepare_folder(work: Path, assignment: str) -> tuple[Path, Path]:
     try:
-        if subprocess.run(["git", "init", "-q", str(work)], capture_output=True, check=False).returncode != 0:
-            raise ReviewFailure("git init failed for the reviewer's folder", {"exit": None, "verified": None})
-        assignment_file, result_file = work / "assignment.md", work / "result.md"
+        started = subprocess.run(["git", "init", "-q", str(work)], capture_output=True, check=False)
+        if started.returncode != 0:
+            raise ReviewFailure("git init failed for the reviewer's folder", NO_RUNNER)
+        assignment_file = work / "assignment.md"
         assignment_file.write_text(assignment, encoding="utf-8")
+    except OSError as error:
+        raise ReviewFailure(f"cannot prepare the reviewer's folder: {error}", NO_RUNNER) from error
+    return assignment_file, work / "result.md"
+
+
+def run_reviewer(args: argparse.Namespace, assignment: str, model: str) -> dict:
+    try:
+        work = Path(tempfile.mkdtemp(prefix="text-review-"))
+    except OSError as error:
+        raise ReviewFailure(f"cannot create the reviewer's folder: {error}", NO_RUNNER) from error
+    try:
+        assignment_file, result_file = prepare_folder(work, assignment)
         command = [sys.executable, str(Path(args.runner).resolve()), "reviewer", "--model", model, "--timeout", str(args.timeout),
                    "--assignment", str(assignment_file), "--result", str(result_file)]
         try:
             done = subprocess.run(command, cwd=work, capture_output=True, text=True,
-                                  timeout=args.timeout + RUNNER_GRACE_SECONDS)
+                                  timeout=args.timeout * RUNNER_TIMEOUT_STAGES + RUNNER_GRACE_SECONDS)
         except (OSError, subprocess.TimeoutExpired) as error:
             raise TextReviewError(f"the runner did not finish: {error}", EXIT_REVIEW_FAILED) from error
         runner = {"exit": done.returncode, "verified": parse_status(done.stdout)}
@@ -367,8 +401,8 @@ def emit(payload: dict) -> None:
 
 
 def command_check(args: argparse.Namespace) -> int:
-    found = check_text(read_input(args.file), args.kind, args.no_ticket_keys)
-    emit({"findings": found})
+    found, advisories = check_text(read_input(args.file), args.kind, args.no_ticket_keys)
+    emit({"findings": found, "advisories": advisories})
     return EXIT_FINDINGS if found else EXIT_OK
 
 
@@ -376,13 +410,13 @@ def command_review(args: argparse.Namespace) -> int:
     draft = read_input(args.draft)
     rules = [(Path(path).name, read_input(path)) for path in args.rules]
     sources = [(Path(path).name, read_input(path)) for path in args.source]
-    found = check_text(draft, args.kind, args.no_ticket_keys)
+    found, advisories = check_text(draft, args.kind, args.no_ticket_keys)
     if found:
-        emit({"stage": "check", "findings": found})
+        emit({"stage": "check", "findings": found, "advisories": advisories})
         return EXIT_FINDINGS
     model = args.model or REVIEW_MODELS[args.kind]
     base = {"stage": "review", "kind": args.kind, "model": model}
-    assignment = build_assignment(args.kind, draft, rules, sources, args.note, args.budget)
+    assignment = build_assignment(args.kind, draft, rules, sources, args.note, args.budget, advisories)
     with ThreadPoolExecutor(max_workers=args.reviews) as pool:
         outcomes = list(pool.map(lambda _: review_once(args, assignment, model), range(args.reviews)))
     runners = [outcome["runner"] for outcome in outcomes]
@@ -405,8 +439,8 @@ def review_once(args: argparse.Namespace, assignment: str, model: str) -> dict:
         return run_reviewer(args, assignment, model)
     except ReviewFailure as failure:
         return {"error": str(failure), "runner": failure.runner}
-    except TextReviewError as failure:
-        return {"error": str(failure), "runner": {"exit": None, "verified": None}}
+    except (TextReviewError, OSError) as failure:
+        return {"error": str(failure), "runner": NO_RUNNER}
 
 
 def unique(items) -> list:
