@@ -78,6 +78,31 @@
         "demo-docs is kept and the failed check is named: the branch has no upstream. The response notes that the non-regenerable NOTES-handoff.md would first be copied to the current session's worktree if the other checks passed.",
         "No orca terminal close or orca worktree rm command runs before the user answers, and the current session is never acted on."
       ]
+    },
+    {
+      "id": 7,
+      "prompt": "세션 정리해줘. 스크립트 결과: 호스트 메모리는 넉넉해. sessions는 현재 세션 demo-tools(term_demo_self, 600MB)뿐이고 worktrees_without_agent는 비어 있어. renamed_main_worktrees: (1) worktree_id repo-1::/tmp/work/demo-api / 경로 /tmp/work/demo-api / 표시 이름 \"ABC-7 demo\" / display_name_mode fixed / 브랜치 main. 이 main clone은 여러 세션이 함께 쓰는 주 worktree야. 우선 표로 보여주고 어떻게 할지 물어봐.",
+      "expected_output": "A table that shows nothing else to act on but lists the main clone demo-api with its display name ABC-7 demo, its path, and mode fixed under the recommended action restore name, with a clause saying a main clone is shared by every session in it. It asks one question that offers restore name as an individually selectable item that is not preselected, and runs no orca worktree set command before the answer.",
+      "files": [],
+      "expectations": [
+        "The response shows the main clone demo-api with its display name ABC-7 demo, its path /tmp/work/demo-api, and display name mode fixed, with the recommended action restore name.",
+        "The response explains that a main clone is shared by every session in it, so the pinned name misleads the other sessions.",
+        "The question offers restore name as an individually selectable item and does not preselect it.",
+        "No orca worktree set command runs before the user answers, and the current session is never acted on."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "세션 정리해줘. 스크립트 결과: 호스트 메모리는 넉넉해. sessions는 현재 세션 demo-tools(term_demo_self, 600MB)뿐이고 worktrees_without_agent는 비어 있어. renamed_main_worktrees: (1) worktree_id repo-1::/tmp/work/demo-api / 경로 /tmp/work/demo-api / 표시 이름 \"ABC-7 demo\" / display_name_mode fixed / 브랜치 main. 이 main clone은 여러 세션이 함께 쓰는 주 worktree야. 앞에서 보여 준 표에서 demo-api의 restore name만 승인할게. 실행하고 결과를 알려줘. 이 환경의 orca는 evals/files/bin/orca야(평가용이라 호출은 FAKE_ORCA_LOG에 기록만 되고 정해진 데모 상태를 돌려줘).",
+      "expected_output": "Runs only the approved restore name: orca worktree set on id:repo-1::/tmp/work/demo-api with an empty --display-name, then reads the worktree back with orca worktree list and reports it restored because displayNameMode is automatic. Runs nothing else that changes Orca.",
+      "files": [
+        "evals/files/bin"
+      ],
+      "expectations": [
+        "The fake orca log shows `worktree set` for `id:repo-1::/tmp/work/demo-api` with an empty `--display-name` value.",
+        "After that call, the log shows `worktree list` read back, and the response reports the name restored because the entry shows displayNameMode automatic.",
+        "The log shows no other Orca call that changes state, such as another `worktree set`, `terminal send`, `terminal rename`, or `worktree rm`."
+      ]
     }
   ]
 }

@@ -86,11 +86,12 @@ def ok(result: dict) -> tuple[int, str, str]:
 class FakeOrca:
     """Answers each Orca read from a fixture keyed by its first two arguments and records every call."""
 
-    def __init__(self, ps=None, terminals=None, mem=None, failures=None) -> None:
+    def __init__(self, ps=None, terminals=None, mem=None, failures=None, listed=None) -> None:
         self.answers = {
             ("worktree", "ps"): ok({"worktrees": ps if ps is not None else [], "truncated": False}),
             ("terminal", "list"): ok({"terminals": terminals if terminals is not None else []}),
             ("diagnostics", "memory"): ok(mem if mem is not None else memory(None, {})),
+            ("worktree", "list"): ok({"worktrees": listed if listed is not None else []}),
         }
         self.answers.update(failures or {})
         self.calls: list[list[str]] = []
@@ -178,6 +179,69 @@ class JoinCase(unittest.TestCase):
             (rows["nothing"]["path"], rows["nothing"]["branch"], rows["nothing"]["parent_worktree_id"]),
         )
         self.assertEqual(["busy"], [s["display_name"] for s in data["sessions"]])
+
+
+class RenamedMainCase(unittest.TestCase):
+    @staticmethod
+    def listed(name: str, **fields) -> dict:
+        row = {
+            "id": f"repo-1::/tmp/work/{name}",
+            "path": f"/tmp/work/{name}",
+            "branch": f"refs/heads/feature/{name}",
+            "displayName": name,
+            "isMainWorktree": False,
+        }
+        row.update(fields)
+        return row
+
+    def test_표시_이름이_고정된_주_워크트리만_renamed_main_worktrees에_나열한다(self) -> None:
+        """공유 주 클론의 고정 이름은 그 안의 모든 세션을 가리므로 automatic이 아닌 모드가 확인된 주 클론만 보여 준다."""
+        # given
+        fixed = self.listed("fixed-main", isMainWorktree=True, displayName="ABC-7 demo", displayNameMode="fixed")
+        automatic = self.listed("auto-main", isMainWorktree=True, displayNameMode="automatic")
+        unknown = self.listed("unknown-main", isMainWorktree=True)
+        child = self.listed("fixed-child", displayNameMode="fixed")
+        fake = FakeOrca(listed=[fixed, automatic, unknown, child])
+        # when
+        _, data, _ = run(fake)
+        # then
+        self.assertEqual(
+            [
+                {
+                    "worktree_id": "repo-1::/tmp/work/fixed-main",
+                    "path": "/tmp/work/fixed-main",
+                    "display_name": "ABC-7 demo",
+                    "display_name_mode": "fixed",
+                    "branch": "feature/fixed-main",
+                }
+            ],
+            data["renamed_main_worktrees"],
+        )
+        self.assertEqual([], data["warnings"])
+
+    def test_고정_이름_주_워크트리가_없으면_빈_목록이다(self) -> None:
+        # given
+        fake = standard_fake()
+        # when
+        _, data, _ = run(fake)
+        # then
+        self.assertEqual([], data["renamed_main_worktrees"])
+
+    def test_worktree_list_읽기가_실패하면_빈_목록과_경고_한_줄만_더하고_나머지는_그대로다(self) -> None:
+        """부가 확인이 실패했다고 세션 개요 전체를 막으면 안 되므로 종료 코드 0을 유지하고 확인을 못 했음을 알린다."""
+        # given
+        baseline_code, baseline, _ = run(standard_fake())
+        failing = standard_fake(failures={("worktree", "list"): (1, "", "orca unreachable\n")})
+        # when
+        code, data, _ = run(failing)
+        # then
+        self.assertEqual((0, 0), (baseline_code, code))
+        self.assertEqual([], data["renamed_main_worktrees"])
+        self.assertEqual(["main-clone name check could not run: orca worktree list failed: orca unreachable"], data["warnings"])
+        self.assertEqual(
+            {**baseline, "warnings": data["warnings"]},
+            data,
+        )
 
 
 class FieldCase(unittest.TestCase):
@@ -339,7 +403,7 @@ class FailureCase(unittest.TestCase):
 
 
 class ReadOnlyCase(unittest.TestCase):
-    def test_정해진_세_읽기_명령을_한_번씩만_실행한다(self) -> None:
+    def test_정해진_네_읽기_명령을_한_번씩만_실행한다(self) -> None:
         """메모리 조회는 프로세스를 훑으므로 반복하면 느려지고, 읽기 외 명령이 섞이면 읽기 전용 약속이 깨진다."""
         # given
         fake = standard_fake()
@@ -347,7 +411,12 @@ class ReadOnlyCase(unittest.TestCase):
         run(fake)
         # then
         self.assertEqual(
-            [["orca", "worktree", "ps", "--agent-wait", "--json"], ["orca", "terminal", "list", "--json"], ["orca", "diagnostics", "memory", "--json"]],
+            [
+                ["orca", "worktree", "ps", "--agent-wait", "--json"],
+                ["orca", "terminal", "list", "--json"],
+                ["orca", "diagnostics", "memory", "--json"],
+                ["orca", "worktree", "list", "--json"],
+            ],
             fake.calls,
         )
 
@@ -373,6 +442,7 @@ class ProcessCase(unittest.TestCase):
                         "ps": {"ok": True, "result": {"worktrees": [worktree("a", [agent(PANE_A)])]}},
                         "list": {"ok": True, "result": {"terminals": [terminal(HANDLE_A, PANE_A)]}},
                         "memory": {"ok": True, "result": memory(None, {PANE_A: 50 * MIB})},
+                        "worktree_list": {"ok": True, "result": {"worktrees": []}},
                     }
                 ),
                 encoding="utf-8",
@@ -382,6 +452,7 @@ class ProcessCase(unittest.TestCase):
                 "#!/usr/bin/env python3\nimport json, sys\n"
                 f"answers = json.load(open({str(fixture)!r}))\n"
                 "key = {'ps': 'ps', 'list': 'list', 'memory': 'memory'}[sys.argv[2]]\n"
+                "if sys.argv[1] == 'worktree' and sys.argv[2] == 'list': key = 'worktree_list'\n"
                 "print(json.dumps(answers[key]))\n",
                 encoding="utf-8",
             )

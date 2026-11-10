@@ -17,8 +17,7 @@
 작업용으로 만든 worktree에서는 작업을 시작할 때 `--display-name "<ticket key> <short summary>"`를 설정한다.
 티켓이 없으면 짧은 작업 이름을 쓴다. 이후에는 작업 범위가 바뀔 때만 이름을 바꾸며, worktree가
 `displayNameMode: automatic`을 표시하거나 이 세션이 마지막으로 설정한 이름을 유지하고 있을 때만 바꾼다. 다른 이름은
-사용자가 정한 것이므로 유지한다. 여러 세션이 공유하는 저장소의 주 클론, 즉 `isMainWorktree: true`인 항목의 이름은
-바꾸지 않는다.
+사용자가 정한 것이므로 유지한다.
 
 ## 탭 제목
 

@@ -34,18 +34,21 @@ REASON = (
 STUB_DIRECTORY = tempfile.mkdtemp(prefix="orca-stub-")
 atexit.register(shutil.rmtree, STUB_DIRECTORY, True)
 STUB = Path(STUB_DIRECTORY) / "orca"
-STUB.write_text('#!/bin/sh\nif [ -n "$ORCA_STUB_JSON" ]; then cat "$ORCA_STUB_JSON"; else exit 1; fi\n')
+STUB.write_text(
+    '#!/bin/sh\nif [ "$2" = list ] && [ -n "$ORCA_STUB_LIST" ]; then cat "$ORCA_STUB_LIST"; exit 0; fi\n'
+    'if [ -n "$ORCA_STUB_JSON" ]; then cat "$ORCA_STUB_JSON"; else exit 1; fi\n'
+)
 STUB.chmod(0o755)
 
 
 def run_hook(
     stdin: str, memory_mb: str | None = ENOUGH_MB, option: str | None = None, orca_terminal: bool = False,
-    orca_json: str | None = None,
+    orca_json: str | None = None, orca_list: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     env = {
         key: value
         for key, value in os.environ.items()
-        if key not in {MEMORY_ENV, OPTION_ENV, "PLUGIN_ROOT", "ORCA_TERMINAL_HANDLE", "ORCA_STUB_JSON"}
+        if key not in {MEMORY_ENV, OPTION_ENV, "PLUGIN_ROOT", "ORCA_TERMINAL_HANDLE", "ORCA_STUB_JSON", "ORCA_STUB_LIST"}
     }
     env["PATH"] = f"{STUB_DIRECTORY}{os.pathsep}{env.get('PATH', '')}"
     env[MEMORY_ENV] = "unknown" if memory_mb is None else memory_mb
@@ -55,6 +58,8 @@ def run_hook(
         env["ORCA_TERMINAL_HANDLE"] = "term_test"
     if orca_json is not None:
         env["ORCA_STUB_JSON"] = orca_json
+    if orca_list is not None:
+        env["ORCA_STUB_LIST"] = orca_list
     return subprocess.run(
         [sys.executable, str(SCRIPT)], input=stdin, capture_output=True, text=True, check=False, env=env
     )
@@ -474,6 +479,98 @@ class ParentRepositoryGateTest(unittest.TestCase):
             with self.subTest(command=command):
                 self.assert_allowed(command)
         self.assert_allowed("orca worktree create --repo id:repo-b --name x --parent-worktree active --json", None)
+
+
+MAIN_CLONE = "/tmp/work/demo-a"
+CHILD = "/tmp/work/demo-a-abc-1"
+RENAME_MAIN = 'orca worktree set --worktree {selector} --display-name "ABC-1 demo" --json'
+
+
+def listed(path: str, main: bool, name: str, branch: str, repo_id: str = "repo-a") -> dict:
+    return {
+        "id": f"{repo_id}::{path}", "repoId": repo_id, "path": path, "isMainWorktree": main, "displayName": name,
+        "branch": f"refs/heads/{branch}", "identity": {"key": f"wt2:local:{name}"},
+    }
+
+
+class MainCloneRenameGateTest(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        records = [
+            listed(MAIN_CLONE, True, "main", "main"),
+            listed(CHILD, False, "abc-1-api", "feature/ABC-1"),
+            listed("/tmp/work/demo-b", True, "twin", "main", "repo-b"),
+            listed("/tmp/work/demo-b-x", False, "twin", "feature/x", "repo-b"),
+        ]
+        self.listing = self.write("list.json", {"ok": True, "result": {"worktrees": records}})
+        self.current = self.write("current.json", {"ok": True, "result": {"worktree": records[0]}})
+
+    def write(self, name: str, payload: dict) -> str:
+        path = self.root / name
+        path.write_text(json.dumps(payload))
+        return str(path)
+
+    def run_command(self, command: str, current: str | None = "default", listing: str | None = "default"):
+        return run_hook(
+            bash_event(command, cwd="/tmp/work"),
+            orca_json=self.current if current == "default" else current,
+            orca_list=self.listing if listing == "default" else listing,
+        )
+
+    def assert_denied(self, command: str, **options) -> None:
+        result = self.run_command(command, **options)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        output = json.loads(result.stdout)["hookSpecificOutput"]
+        self.assertEqual(output["permissionDecision"], "deny")
+        reason = output["permissionDecisionReason"]
+        self.assertIn("main clone", reason)
+        self.assertIn('orca terminal rename --terminal "$ORCA_TERMINAL_HANDLE" --title', reason)
+
+    def assert_allowed(self, command: str, **options) -> None:
+        result = self.run_command(command, **options)
+        self.assertEqual((result.returncode, result.stdout), (0, ""), result.stderr)
+
+    def test_메인_클론에_표시_이름을_주는_명령은_모든_선택자_형식에서_차단하고_세션_제목을_안내한다(self):
+        # Regression: a session renamed the shared main clone, so every other session in it showed a ticket it was not on
+        selectors = [
+            f"path:{MAIN_CLONE}", f"id:repo-a::{MAIN_CLONE}", "name:main", "branch:main", "branch:refs/heads/main",
+            "identity:wt2:local:main", "active", "current",
+        ]
+        for selector in selectors:
+            with self.subTest(selector=selector):
+                self.assert_denied(RENAME_MAIN.format(selector=selector))
+        self.assert_denied(f'orca worktree set --worktree path:{MAIN_CLONE} --display-name="ABC-1 demo"')
+        self.assert_denied(f'x="$(orca worktree set --worktree path:{MAIN_CLONE} --display-name \'ABC-1 demo\')"')
+        self.assert_denied(f'cd /tmp/work && orca worktree set --worktree path:{MAIN_CLONE} --comment c --display-name n')
+
+    def test_연결된_워크트리와_빈_이름과_이름이_아닌_변경은_메인_클론에도_허용한다(self):
+        # Regression: a gate that blocks child worktrees, the restore of the automatic name, or other metadata
+        commands = [
+            RENAME_MAIN.format(selector=f"path:{CHILD}"),
+            RENAME_MAIN.format(selector=f"id:repo-a::{CHILD}"),
+            RENAME_MAIN.format(selector="name:abc-1-api"),
+            f'orca worktree set --worktree path:{MAIN_CLONE} --display-name "" --json',
+            f"orca worktree set --worktree path:{MAIN_CLONE} --display-name= --json",
+            f'orca worktree set --worktree path:{MAIN_CLONE} --comment "ABC-1 demo" --json',
+            f'echo "orca worktree set --worktree path:{MAIN_CLONE} --display-name x"',
+        ]
+        for command in commands:
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+        child_current = self.write("child.json", {"ok": True, "result": {"worktree": listed(CHILD, False, "x", "y")}})
+        self.assert_allowed(RENAME_MAIN.format(selector="active"), current=child_current)
+
+    def test_오르카를_읽지_못하거나_대상을_못_찾거나_하나로_정할_수_없으면_허용한다(self):
+        # Regression: a gate that denies when it cannot tell
+        command = RENAME_MAIN.format(selector=f"path:{MAIN_CLONE}")
+        self.assert_allowed(command, current=None, listing=None)
+        self.assert_allowed(command, listing=self.write("bad.json", {"ok": False}))
+        self.assert_allowed(RENAME_MAIN.format(selector="path:/tmp/work/unknown"))
+        self.assert_allowed(RENAME_MAIN.format(selector="name:twin"))
+        self.assert_allowed(RENAME_MAIN.format(selector="folder:abc"))
+        self.assert_allowed(RENAME_MAIN.format(selector="active"), current=None)
 
 
 def enter_event(**tool_input) -> str:

@@ -9,7 +9,12 @@ It denies a worktree whose parent belongs to another repository than the worktre
 a `worker-start` that creates a worktree, or `orca worktree set --parent-worktree`, when both repositories can be
 resolved. It also denies `orca worktree set --workspace-status completed` for a worktree with uncommitted changes or commits
 its upstream lacks, and, inside an Orca terminal, an `EnterWorktree` call that would create a worktree Orca never
-lists. The input is parsed only when its raw text contains orca and a word one of those rules needs, or EnterWorktree.
+lists. It denies `orca worktree set --display-name <name>` with a non-empty name on a worktree that `orca worktree list`
+marks `isMainWorktree: true`, resolving `path:`, `id:`, `name:`, `branch:`, and `identity:` selectors through the list
+and `active` or `current` through `orca worktree current` in the event's directory; an empty name restores the automatic
+name and stays allowed. An unreadable Orca, an unlisted target, or a selector that matches both a main clone and
+another worktree lets the command pass. The input is parsed only when its raw text contains orca and a word one of
+those rules needs, or EnterWorktree.
 """
 
 from __future__ import annotations
@@ -33,8 +38,10 @@ MEMORY_OFF_VALUES = frozenset({"0", "off", "false", "no"})
 AGENT_PROGRAMS = frozenset({"claude", "codex"})
 PREFILTER_WORDS = (
     "no-parent", "new-top-level", "--agent", "worker-start", "--command", "completed", "parent-worktree",
+    "display-name",
 )
 GIT_TIMEOUT_SECONDS = 2
+ORCA_TIMEOUT_SECONDS = 2
 MAX_LISTED_FILES = 5
 REASON = (
     "Blocked: this command creates a top-level Orca worktree. Put a new worktree under its own repository's "
@@ -65,6 +72,11 @@ ENTER_REASON = (
     "the board show it: `orca worktree create --repo path:<repo> --name <branch> --base-branch <base> "
     "--parent-worktree active --json`, then work in the path it returns; to continue in an existing worktree, call "
     "EnterWorktree with its `path`."
+)
+MAIN_CLONE_REASON = (
+    "Blocked: this worktree is the repository's main clone, which other sessions share, so its display name must "
+    "stay automatic. Never rename it. Label this session with `orca terminal rename --terminal "
+    "\"$ORCA_TERMINAL_HANDLE\" --title \"<ticket key> <short summary>\" --json` instead."
 )
 COMPLETED_REASON = (
     "Blocked: this worktree is not done, so it cannot be marked completed: {remaining}. Commit and push the work, "
@@ -283,6 +295,76 @@ def completed_denial(tokens: list[str], cwd: str) -> str | None:
     return COMPLETED_REASON.format(remaining=remaining) if remaining else None
 
 
+def orca_result(cwd: str, *arguments: str) -> dict | None:
+    """Return the `result` of an `orca ... --json` command run in `cwd`, or None when it failed."""
+    try:
+        run = subprocess.run(
+            ["orca", *arguments, "--json"], capture_output=True, text=True, timeout=ORCA_TIMEOUT_SECONDS, check=False,
+            cwd=cwd if os.path.isdir(cwd) else None,
+        )
+        payload = json.loads(run.stdout)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    result = payload.get("result") if isinstance(payload, dict) and run.returncode == 0 else None
+    return result if isinstance(result, dict) else None
+
+
+def branch_name(value: object) -> str:
+    return value.removeprefix("refs/heads/") if isinstance(value, str) else ""
+
+
+def same_path(first: object, second: object) -> bool:
+    if not (isinstance(first, str) and isinstance(second, str) and first and second):
+        return False
+    return os.path.realpath(first) == os.path.realpath(second)
+
+
+def selects(record: dict, selector: str) -> bool:
+    """Report whether a listed worktree record is the one an explicit selector names."""
+    kind, _, value = selector.partition(":")
+    if not value:
+        return False
+    if kind == "path":
+        return same_path(record.get("path"), value)
+    if kind == "id":
+        repo_id, _, path = value.partition("::")
+        return record.get("id") == value or (
+            bool(path) and record.get("repoId") == repo_id and same_path(record.get("path"), path)
+        )
+    if kind == "name":
+        return record.get("displayName") == value
+    if kind == "branch":
+        return branch_name(record.get("branch")) == branch_name(value)
+    if kind == "identity":
+        identity = record.get("identity")
+        return (identity.get("key") if isinstance(identity, dict) else identity) == value
+    return False
+
+
+def targets_main_clone(selector: str, cwd: str) -> bool:
+    """Report whether Orca lists worktrees for a selector and marks every one of them as a repository's main clone."""
+    if selector in ("active", "current"):
+        result = orca_result(cwd, "worktree", "current")
+        record = result.get("worktree") if result else None
+        return isinstance(record, dict) and record.get("isMainWorktree") is True
+    result = orca_result(cwd, "worktree", "list")
+    records = result.get("worktrees") if result else None
+    if not isinstance(records, list):
+        return False
+    matches = [record for record in records if isinstance(record, dict) and selects(record, selector)]
+    return bool(matches) and all(record.get("isMainWorktree") is True for record in matches)
+
+
+def main_clone_rename_denial(tokens: list[str], cwd: str) -> bool:
+    """Report whether a command gives a repository's main clone a display name."""
+    arguments = orca_arguments(tokens)
+    if arguments is None or [token for token in arguments if not token.startswith("-")][:2] != ["worktree", "set"]:
+        return False
+    name = option_after(arguments, "--display-name")
+    selector = option_after(arguments, "--worktree")
+    return bool(name and name.strip() and selector and targets_main_clone(selector, cwd))
+
+
 def creates_worktree_through_host(raw: str) -> bool:
     """Report whether `raw` is an EnterWorktree call, inside an Orca terminal, that creates a worktree."""
     if not os.environ.get("ORCA_TERMINAL_HANDLE"):
@@ -412,6 +494,8 @@ def main() -> int:
     else:
         cwd = event_cwd(raw)
         reason = next((r for r in (completed_denial(tokens, cwd) for tokens in segments) if r), None)
+        if reason is None and any(main_clone_rename_denial(tokens, cwd) for tokens in segments):
+            reason = MAIN_CLONE_REASON
         if reason:
             deny(reason)
     return 0

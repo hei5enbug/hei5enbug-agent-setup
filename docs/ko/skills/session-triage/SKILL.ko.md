@@ -26,7 +26,7 @@ Python 3.12 이상과 실행 중인 Orca에 접근할 수 있는 `orca` CLI가 �
   프롬프트에 사용자 대신 답하지 않는다.
 - 프로세스를 강제 종료하지 않는다. 세션은 유휴 프롬프트에 해당 세션의 종료 명령을 입력해서만 끝내고, 터미널은
   그 에이전트가 종료되고 그 worktree에서 다른 것이 실행되지 않을 때만 닫는다.
-- 현황판 상태를 바꾸지 않는다. `sleep`에 필요한 코멘트와 `retitle`이 설정하는 탭 제목만 쓴다.
+- 현황판 상태를 바꾸지 않는다. `sleep`에 필요한 코멘트, `retitle`이 설정하는 탭 제목, `restore name`이 지우는 고정된 표시 이름만 쓴다.
 - 한 번의 승인은 질문에 나열한 조치만 허용한다. 침묵은 승인이 아니다. 목록 밖의 조치는 새로 물어야 한다.
 - 검사가 실패하거나 결과를 읽을 수 없으면 해당 세션을 건너뛰고 이유를 밝힌다. 우회하려고 재시도하지 않는다.
 
@@ -39,8 +39,8 @@ python3 scripts/session_overview.py
 ```
 
 이 `SKILL.md`가 있는 디렉터리를 기준으로 한 상대 경로로, 실행할 때마다 한 번만 실행한다. 읽기 전용이며
-`host_total_mb`, `host_available_mb`, `sessions[]`, `worktrees_without_agent[]`, `warnings[]`를 담은
-JSON 객체 하나를 출력한다. `worktrees_without_agent[]`는 에이전트 세션이 실행되지 않는 모든 주 worktree가 아닌
+`host_total_mb`, `host_available_mb`, `sessions[]`, `worktrees_without_agent[]`, `renamed_main_worktrees[]`,
+`warnings[]`를 담은 JSON 객체 하나를 출력한다. `worktrees_without_agent[]`는 에이전트 세션이 실행되지 않는 모든 주 worktree가 아닌
 worktree를 터미널이 있든 없든 담고(`terminal_handles`가 비어 있을 수 있다), 주 worktree는 라이브 터미널이 있는 동안만
 담는다. 종료 코드 2는 Orca에 접근할 수 없거나 필수 조회가 실패했다는 뜻이다. 한 줄짜리 이유를
 보고하고 멈춘다. 행에 영향을 주는 경고를 모두 보여 준다. 메모리나 터미널 핸들이 `null`이면 그 값을 모른다는 뜻이며,
@@ -82,11 +82,13 @@ worktree를 터미널이 있든 없든 담고(`terminal_handles`가 비어 있�
 사용자의 언어로 `needs you`를 먼저 정렬한 표 하나를 보여 준다. 세션, 저장소 또는 표시 이름, 분류, 기다리는 대상이나
 마지막으로 한 일을 한 줄로, 현재 상태 경과 시간(분), 메모리, 권고 조치(`retitle`이면 제안하는 제목)를 적는다. 호스트의 전체 메모리와 사용 가능한
 메모리, 터미널 메모리를 알 수 없는 `worktrees_without_agent` 행(각 행에 질문 전에 실행한 `clean up` 또는 `keep`과
-실패한 검사), 경고도 덧붙인다.
+실패한 검사), 경고도 덧붙인다. 표 아래에는 `renamed_main_worktrees` 행마다 표시 이름, 경로, 모드를 보여 주고
+권고 조치 `restore name`을 적는다. 주 클론은 그 안의 모든 세션이 공유하므로 고정된 이름은 그 세션 모두에게 오해를
+준다.
 
 그다음 제안하는 조치를 나열한 질문 하나를 한다. `sleep`, `continue`(보낼 정확한 지시 포함), `clean up`을
-호스트 질문 도구가 허용하는 방식에 따라 미리 선택하거나 개별 선택할 수 있게 하고, `retitle` 항목은 개별 선택만
-가능하게 하며 미리 선택하지 않는다. 답을 기다리고 그전에 아무것도
+호스트 질문 도구가 허용하는 방식에 따라 미리 선택하거나 개별 선택할 수 있게 하고, `retitle`과 `restore name` 항목은
+개별 선택만 가능하게 하며 미리 선택하지 않는다. 답을 기다리고 그전에 아무것도
 실행하지 않는다. 조치할 것이 없으면 그렇다고 말하고 묻지 않는다.
 
 ### 5. 승인된 조치 실행
@@ -105,6 +107,10 @@ worktree를 터미널이 있든 없든 담고(`terminal_handles`가 비어 있�
   재개 명령이 보이지 않으면 그렇게 밝히고 코멘트에 세션의 `conversation_name`을 남긴다.
 - `retitle`: `orca terminal rename --terminal <handle> --title "<title>" --json`. 터미널에 아무것도 입력하지 않으므로
   화면 확인이 필요 없다.
+- `restore name`: `orca worktree set --worktree "id:<worktree_id>" --display-name "" --json`. 빈 이름은 고정된
+  이름을 지워 Orca가 다시 자동 이름을 보여 주게 한다. 그다음 `orca worktree list --json`으로 그 worktree를 다시 읽고,
+  해당 항목이 `displayNameMode: automatic`을 보일 때만 복원됐다고 보고한다. 아니면 항목이 보이는 모드를 보고한다.
+  그 질문에서 사용자가 승인하지 않았다면 절대 실행하지 않는다.
 - `clean up`: 먼저 다음 조건을 모두 확인한다. 하나라도 실패하면 실행하는 대신 사용자에게 묻는다.
   - worktree가 메인 worktree가 아니고, 하위 worktree가 없고, 현재 세션의 worktree가 아니다.
   - `orca terminal list --worktree "id:<worktree_id>" --json`에 이 세션의 터미널만 있고, 개요의 다른 행에 같은

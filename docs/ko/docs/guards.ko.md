@@ -159,6 +159,12 @@ Codex에서는 `/hooks`에서 이 훅을 신뢰해야 합니다.
 - **호스트가 만드는 worktree.** Orca 터미널에서 `path` 없는 `EnterWorktree`는 Orca가 목록에 올리지 않는 worktree를
   만들므로, 대신 쓸 `orca worktree create` 명령을 알려 주며 거부합니다. 기존 `path`로 들어가는 호출과 Orca 밖의
   호출은 허용합니다.
+- **주 클론 이름.** 비어 있지 않은 이름을 주는 `orca worktree set --display-name`은 `--worktree` 선택자가 가리키는
+  worktree가 모두 `orca worktree list`에서 저장소의 주 클론일 때 거부합니다. `active`와 `current`는
+  `orca worktree current`로 읽습니다. 그대로 두면 주 클론의 모든 세션이 한 작업의 이름 아래 보이므로, 거부 사유는 세션에
+  이름을 붙이는 `orca terminal rename`을 알려 줍니다. Orca의 자동 이름을 되돌리는 빈 이름, 목록에 없는 대상, Orca를 읽을
+  수 없는 경우는 허용합니다. 2026-11-06에 한 세션이 저장소의 주 클론에 티켓 이름을 고정했기 때문에 생겼습니다. 그때도
+  글로 된 규칙은 이미 이를 금지하고 있었습니다.
 - **메모리 부족.** 사용 가능한 메모리가 `session_memory_min_mb` 옵션(기본값 2048 MB)보다 적으면 Orca를 통해
   에이전트 세션을 시작하는 명령을 거부합니다. 에이전트는 컴퓨터가 스왑을 쓰게 만드는 대신 세션을 대기열에 넣고
   다른 세션이 끝난 뒤에 시작합니다. 대상은 `--agent`가 있는 `orca worktree create`,

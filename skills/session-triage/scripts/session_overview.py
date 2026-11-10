@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Print one JSON overview that joins Orca's agent sessions with their memory and terminal handles.
 
-Read-only: it runs `worktree ps --agent-wait`, `terminal list`, and `diagnostics memory` once each and writes nothing.
+Read-only: it runs `worktree ps --agent-wait`, `terminal list`, `diagnostics memory`, and `worktree list` once each and
+writes nothing.
 `worktrees_without_agent` lists every non-main worktree that no agent session runs in, with or without a terminal, and a
 main worktree only while it still has a live terminal.
+`renamed_main_worktrees` lists every main worktree that `worktree list` reports with a display name mode that is present
+and not `automatic`; when that read fails it is empty and a warning says so.
 Exit 0 on success, 2 with a one-line stderr reason when Orca is unreachable or a required read fails.
 """
 
@@ -21,6 +24,7 @@ MESSAGE_LIMIT = 400
 PROMPT_LIMIT = 160
 READ_TIMEOUT_SECONDS = 60
 MIB = 1024 * 1024
+AUTOMATIC_NAME_MODE = "automatic"
 
 Runner = Callable[[Sequence[str]], "tuple[int, str, str]"]
 
@@ -118,6 +122,30 @@ def handles_by_pane(terminals: list[dict]) -> dict[str, str]:
     return found
 
 
+def renamed_main_worktrees(runner: Runner, command: list[str], warnings: list[str]) -> list[dict]:
+    try:
+        listed = read_result(runner, command, ["worktree", "list"]).get("worktrees")
+        if not isinstance(listed, list):
+            raise OverviewError("orca worktree list returned an unsupported worktree list")
+    except OverviewError as error:
+        warnings.append(f"main-clone name check could not run: {error}")
+        return []
+    return [
+        {
+            "worktree_id": row.get("id"),
+            "path": row.get("path"),
+            "display_name": row.get("displayName"),
+            "display_name_mode": row["displayNameMode"],
+            "branch": branch_name(row.get("branch")),
+        }
+        for row in listed
+        if isinstance(row, dict)
+        and row.get("isMainWorktree") is True
+        and isinstance(row.get("displayNameMode"), str)
+        and row["displayNameMode"] not in ("", AUTOMATIC_NAME_MODE)
+    ]
+
+
 def build_overview(runner: Runner, now_ms: int, env: dict[str, str]) -> dict:
     command = orca_command(env)
     current = env.get("ORCA_TERMINAL_HANDLE") or None
@@ -211,6 +239,7 @@ def build_overview(runner: Runner, now_ms: int, env: dict[str, str]) -> dict:
         "current_terminal_handle": current,
         "sessions": sessions,
         "worktrees_without_agent": without_agent,
+        "renamed_main_worktrees": renamed_main_worktrees(runner, command, warnings),
         "warnings": warnings,
     }
 

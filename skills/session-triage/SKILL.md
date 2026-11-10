@@ -26,7 +26,8 @@ that needs no user decision yourself: read, classify, draft, and verify. Ask onc
   another session's prompt for the user.
 - Never kill a process. A session ends only by its own exit command typed at an idle prompt, and a terminal closes
   only after its agent exited and nothing else runs in that worktree.
-- Never change a board status. Write only the comment a `sleep` needs and the tab title a `retitle` sets.
+- Never change a board status. Write only the comment a `sleep` needs, the tab title a
+  `retitle` sets, and the pinned display name a `restore name` clears.
 - One approval covers only the actions listed in the question. Silence is not approval. Anything outside the list
   needs a new question.
 - A check that fails, or cannot be read, skips that session and says why. Do not retry around it.
@@ -40,7 +41,8 @@ python3 scripts/session_overview.py
 ```
 
 Run it by its path relative to the directory that holds this `SKILL.md`, once per run. It is read-only and prints
-one JSON object: `host_total_mb`, `host_available_mb`, `sessions[]`, `worktrees_without_agent[]`, and `warnings[]`.
+one JSON object: `host_total_mb`, `host_available_mb`, `sessions[]`, `worktrees_without_agent[]`,
+`renamed_main_worktrees[]`, and `warnings[]`.
 `worktrees_without_agent[]` holds every non-main worktree that no agent session runs in, with or without a terminal
 (`terminal_handles` may be empty), and a main worktree only while it has a live terminal.
 Exit 2 means Orca was unreachable or a required read failed; report its one-line reason and stop. Show every
@@ -82,12 +84,14 @@ another agent session. When it is unknown, say so and do not call it low. A sess
 Show one table sorted with `needs you` first, in the user's language: session, repository or display name, class,
 what it waits for or did last in one line, minutes in state, memory, recommended action (for `retitle`, the
 proposed title). Add the host's total and available memory, the `worktrees_without_agent` rows with their terminal
-memory unknown, each with `clean up` or `keep` and the failed check, run before asking, and the warnings.
+memory unknown, each with `clean up` or `keep` and the failed check, run before asking, and the warnings. Under the
+table, show each `renamed_main_worktrees` row (display name, path, mode) with the recommended action `restore name`:
+a main clone is shared by every session in it, so a pinned name misleads all of them.
 
 Then ask one question that lists the proposed actions, `sleep`, `continue` (with the exact instruction), and
-`clean up`, preselected or individually selectable as the host's question tool allows, and any `retitle` items,
-individually selectable and never preselected. Wait for the answer. Run nothing before it. When there is nothing
-to act on, say so and ask nothing.
+`clean up`, preselected or individually selectable as the host's question tool allows, and any `retitle` and
+`restore name` items, individually selectable and never preselected. Wait for the answer. Run nothing before it.
+When there is nothing to act on, say so and ask nothing.
 
 ### 5. Run the approved actions
 
@@ -104,6 +108,10 @@ delete the `x`, skip that session, and say the user's text is there. Recheck the
   in the note.
 - `retitle`: `orca terminal rename --terminal <handle> --title "<title>" --json`. It types nothing into the
   terminal, so it needs no screen check.
+- `restore name`: `orca worktree set --worktree "id:<worktree_id>" --display-name "" --json`. An empty name clears the
+  pinned name so Orca shows its automatic name again. Then read the worktree back with `orca worktree list --json` and
+  report it restored only when its entry shows `displayNameMode: automatic`; otherwise report the mode it shows. Never
+  run it without the user's approval in that question.
 - `clean up`: first confirm all of these, and ask the user instead when any fails:
   - the worktree is not a main worktree, has no children, and is not the current session's worktree;
   - `orca terminal list --worktree "id:<worktree_id>" --json` shows only this session's terminal, and no other row

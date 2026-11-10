@@ -14,7 +14,6 @@ created for another session's task.
 In a worktree created for the task, set `--display-name "<ticket key> <short summary>"`, or a short task name without
 a ticket, when the task starts. Change it again only when the task's scope changes, and only while the worktree shows
 `displayNameMode: automatic` or still carries the name this session last set; any other name is the user's, so keep it.
-Never rename the repository's main clone, the entry with `isMainWorktree: true`, which other sessions share.
 
 ## Tab title
 

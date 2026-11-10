@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+"""Evaluation stand-in for orca: logs every call to FAKE_ORCA_LOG and answers a fixed demo state.
+
+The main clone /tmp/work/demo-api shows the pinned name "ABC-7 demo" until a `worktree set --display-name ""` call
+clears it; later `worktree list` calls then show its automatic name. Nothing reaches a real Orca.
+"""
+
+import json
+import os
+import sys
+from pathlib import Path
+
+LOG = Path(os.environ.get("FAKE_ORCA_LOG", "/tmp/fake-orca.log"))
+STATE = LOG.with_suffix(LOG.suffix + ".state")
+ARGS = sys.argv[1:]
+with LOG.open("a", encoding="utf-8") as stream:
+    stream.write(json.dumps(ARGS, ensure_ascii=False) + "\n")
+
+
+def cleared() -> bool:
+    return STATE.exists()
+
+
+def main_row() -> dict:
+    pinned = not cleared()
+    return {"id": "repo-1::/tmp/work/demo-api", "path": "/tmp/work/demo-api", "branch": "refs/heads/main",
+            "displayName": "ABC-7 demo" if pinned else "main", "displayNameMode": "fixed" if pinned else "automatic",
+            "isMainWorktree": True, "comment": ""}
+
+
+words = [arg for arg in ARGS if not arg.startswith("-")]
+if words[:2] == ["worktree", "set"]:
+    if "--display-name" in ARGS and ARGS[ARGS.index("--display-name") + 1 : ARGS.index("--display-name") + 2] == [""]:
+        STATE.write_text("cleared\n", encoding="utf-8")
+    print(json.dumps({"ok": True, "result": {"worktree": main_row()}}))
+elif words[:2] == ["worktree", "list"]:
+    print(json.dumps({"ok": True, "result": {"worktrees": [main_row()], "totalCount": 1, "truncated": False}}))
+else:
+    print(json.dumps({"ok": True, "result": {}}))

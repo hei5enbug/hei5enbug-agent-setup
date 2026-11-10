@@ -164,6 +164,12 @@ here-document body checks only such substitutions. On Codex, trust the hook in `
 - **Worktree the host creates.** In an Orca terminal, `EnterWorktree` without a `path` creates a worktree that Orca
   never lists, so it is denied with the `orca worktree create` command to use. Entering an existing `path`, and any
   call outside Orca, stays allowed.
+- **Main clone name.** `orca worktree set --display-name` with a non-empty name is denied when every worktree its
+  `--worktree` selector names is a repository's main clone in `orca worktree list`; `active` and `current` are read
+  from `orca worktree current`. Every session in a main clone would otherwise show under one task's name, so the
+  reason names `orca terminal rename` for labeling the session. An empty name, which restores Orca's automatic name,
+  an unlisted target, and an unreadable Orca are allowed. It exists because on 2026-11-06 a session pinned a ticket
+  name on its repository's main clone, which a written rule already forbade.
 - **Low memory.** A command that starts an agent session through Orca is denied when the available memory is below the
   `session_memory_min_mb` option, 2048 MB by default, so the agent queues the session and starts it after another one
   finishes instead of pushing the machine into swap. It covers `orca worktree create` with `--agent`,
