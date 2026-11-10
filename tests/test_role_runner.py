@@ -559,8 +559,8 @@ class RoleRunnerTest(unittest.TestCase):
         # Then
         self.assertIn("designer", str(caught.exception))
 
-    def test_스크립트의_모델_ID는_모델_고정값_일곱_개와_같다(self):
-        """검토 모델 목록은 PINS의 일곱 ID와 정확히 같다."""
+    def test_스크립트의_모델_ID는_모델_고정값_여덟_개와_같다(self):
+        """검토 모델 목록은 PINS의 여덟 ID와 정확히 같다."""
         # Given
         pins = set(PINS.values())
 
@@ -569,7 +569,7 @@ class RoleRunnerTest(unittest.TestCase):
 
         # Then
         self.assertEqual(pins, listed)
-        self.assertEqual(7, len(role_runner.REVIEW_MODELS))
+        self.assertEqual(8, len(role_runner.REVIEW_MODELS))
         self.assertIn(role_runner.DEFAULT_REVIEW_MODEL, listed)
         self.assertIn(role_runner.ROLE_MODEL, listed)
 
@@ -1529,7 +1529,7 @@ class RoleRunnerTest(unittest.TestCase):
             (["worker", "--model", "claude-haiku-5-5", "--add-dir", approved], "claude", "claude-haiku-5-5"),
             (["implementation", "--host", "claude", "--model", "claude-opus-5-5", "--add-dir", approved,
               "--instructions", str(self.instructions)], "claude", "claude-opus-5-5"),
-            (["review", "--host", "claude", "--model", "claude-fable-5-1", "--instructions", str(self.instructions)], "claude", "claude-fable-5-1"),
+            (["review", "--host", "claude", "--model", "claude-fable-5-2", "--instructions", str(self.instructions)], "claude", "claude-fable-5-2"),
             (["agent", "--name", "hei5enbug-agent-setup:scout", "--fallback", "--model", "claude-opus-5-5"], "claude", "claude-opus-5-5"),
         ]
         for arguments, runner, model in cases:

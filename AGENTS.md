@@ -144,7 +144,7 @@
   | Trivial: a typo, wording, version, or metadata edit, a translation, or a mechanical edit its checks fully cover | None |
   | Bounded, Claude-authored: one component with clear acceptance checks and no public contract, security, concurrency, hook, or guard change | `role_runner.py reviewer --model gpt-6.1-sol`, which runs at the runner's default `high` |
   | Complex, Claude-authored: several components, a public contract, security, concurrency, or a hook or guard | `role_runner.py reviewer --model gpt-6-astra --effort xhigh` |
-  | GPT-authored, including work drafted on `gpt-6.1-sol` | `role_runner.py reviewer --model claude-opus-5-5`, or `claude-fable-5-1` with `--effort xhigh` when complex |
+  | GPT-authored, including work drafted on `gpt-6.1-sol` | `role_runner.py reviewer --model claude-opus-5-5`, or `claude-fable-5-2` with `--effort xhigh` when complex |
 
   It runs automatically once, after all work for the request is done and its checks pass, over the combined final
   diff; any earlier review needs the user's approval. Give the reviewer the final diff, requirements, and check
@@ -175,6 +175,9 @@
   exclude previews. When a family has a newer release, update `pins` in `config/model-registry.json` and every
   reference in the same change until `tests/test_model_pins.py` passes. Runtime files name models only by these
   full IDs; never add an alias or a runtime lookup of the newest release.
+- Before changing the model of the `language` capability or of `scripts/text_review.py`, run `evals/korean-writing`
+  on the candidates and the current model and record the result in its README; change the model only when the
+  decision rule there picks a winner.
 - When tests skip because the Orca CLI is not installed, ask the user whether to install Orca and rerun them
   before you report the checks as passing.
 - The release baseline is the newest `v<major>.<minor>.<patch>` tag reachable from `HEAD`. A version that appears only

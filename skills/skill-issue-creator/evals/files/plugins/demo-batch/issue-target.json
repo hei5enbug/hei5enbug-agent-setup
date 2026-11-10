@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "tracker": {
+    "kind": "github",
+    "location": "demo-org/demo-batch"
+  },
+  "language": "en",
+  "body_format": "markdown",
+  "labels": [
+    "bug",
+    "enhancement"
+  ],
+  "public": false,
+  "write_approval": "direct"
+}

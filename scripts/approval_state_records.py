@@ -82,7 +82,7 @@ def risk_path(host: str, session: str) -> Path:
     return state_dir() / "risk" / f"{host}-{session}.json"
 
 
-def record_risk(host: str, session, tool_use_id, outcome: Outcome) -> None:
+def record_risk(host: str, session, tool_use_id, outcome: Outcome, source=None) -> None:
     """Record a write, request, every-time, or critical call's kind by tool_use_id for the Claude Code mod's transcript
     marker, keeping the newest entries. The record never reaches the model, and any failure only drops the marker:
     unreadable or malformed data counts as empty, and no error reaches the caller."""
@@ -100,7 +100,8 @@ def record_risk(host: str, session, tool_use_id, outcome: Outcome) -> None:
             calls = data.get("calls") if isinstance(data, dict) else None
             kept = [call for call in calls if isinstance(call, dict) and call.get("id") != tool_use_id] \
                 if isinstance(calls, list) else []
-            kept.append({"id": tool_use_id, "kind": outcome.kind, "critical": bool(outcome.critical)})
+            call = {"id": tool_use_id, "kind": outcome.kind, "critical": bool(outcome.critical)}
+            kept.append({**call, "source": source} if isinstance(source, str) and source else call)
             _write(path, {"calls": kept[-RISK_LIMIT:]})
             _cleanup(path.parent, path)
     except Exception:

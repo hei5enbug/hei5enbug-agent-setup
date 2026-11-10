@@ -1,0 +1,155 @@
+[
+ {
+  "id": "t1",
+  "kind": "ticket-comment",
+  "title": "Ticket comment on ABC-123 reporting a fix",
+  "reader": "The person who reported ABC-123, a support lead who does not read code and needs to know what happened and what to do next. The comment is posted on the ticket.",
+  "sources": "Ticket ABC-123 (reporter: support lead): \"demo-a report export fails with a timeout when the report is large.\"\n\nDev notes (English, from the engineer):\n- root cause: export ran one single DB query that loaded every row at once, no pagination. On big reports this went over the 30 s statement timeout of the database.\n- fix: export now reads rows in pages of 500 and streams them into the file as it goes. Shipped in demo-a 1.4.2.\n- verified on staging with a 12,000-row report: export finished without timeout.\n- exports that already failed are NOT retried automatically. The reporter has to start the export again from the Reports page.\n- small reports behave the same as before.",
+  "facts": [
+   {
+    "id": "f1",
+    "text": "Cause: the export loaded all rows in one query without pagination, so on large reports it exceeded the database statement timeout."
+   },
+   {
+    "id": "f2",
+    "text": "Fix: export now reads rows in pages and streams them into the file as it goes."
+   },
+   {
+    "id": "f3",
+    "text": "The fix ships in demo-a 1.4.2."
+   },
+   {
+    "id": "f4",
+    "text": "Verified on staging with a large report, which exported without a timeout."
+   },
+   {
+    "id": "f5",
+    "text": "Exports that already failed are not retried automatically; the reporter must start the export again from the Reports page."
+   }
+  ]
+ },
+ {
+  "id": "t2",
+  "kind": "chat-message",
+  "title": "Team chat message announcing a release of demo-a",
+  "reader": "The demo-a team channel: developers, QA, and the support lead. They read it between other work and need to know what changed and whether they must act.",
+  "sources": "Release notes draft (mixed):\n- demo-a 2.3.0 is live in production as of today 14:00 KST.\n- New: CSV export on the invoice list page.\n- Fixed: login redirect loop on Safari (ABC-130).\n- Action needed ONLY for self-hosted installs: set the new env var EXPORT_BUCKET before upgrading, otherwise the app refuses to start. Cloud customers need to do nothing.\n- Rollback: if the error rate stays above 2% for 30 minutes, the on-call engineer rolls back to 2.2.9. QA smoke test already passed on staging.",
+  "facts": [
+   {
+    "id": "f1",
+    "text": "demo-a 2.3.0 is live in production as of today 14:00 KST."
+   },
+   {
+    "id": "f2",
+    "text": "New: CSV export on the invoice list page."
+   },
+   {
+    "id": "f3",
+    "text": "Fixed: the login redirect loop on Safari (ABC-130)."
+   },
+   {
+    "id": "f4",
+    "text": "Self-hosted installs must set the new env var EXPORT_BUCKET before upgrading, otherwise the app refuses to start; cloud customers need to do nothing."
+   },
+   {
+    "id": "f5",
+    "text": "Rollback: if the error rate stays above 2% for 30 minutes, the on-call engineer rolls back to 2.2.9."
+   }
+  ]
+ },
+ {
+  "id": "t3",
+  "kind": "pr-description",
+  "title": "Pull request description",
+  "reader": "Two teammates who will review the pull request. They know the demo-a codebase but have not seen this change.",
+  "sources": "Task notes from the author (English):\n- Problem: webhook deliveries from demo-a to customer endpoints (example.com) were dropped when the endpoint answered 503. There was no retry, so customers silently lost events.\n- Change: webhook delivery now retries up to 5 times with exponential backoff, the delay doubling each time starting at 2 seconds.\n- After the 5th failed attempt the event is marked `failed` and shows in the admin Events page.\n- 4xx answers are NOT retried (the endpoint rejected the event on purpose).\n- The max is configurable through WEBHOOK_MAX_RETRIES, default 5.\n- Tests: unit tests for the backoff schedule, plus a manual run against a stub endpoint that returns 503 twice and then 200; the event was delivered on the third attempt.\n- Reviewer focus: please check the backoff arithmetic in `backoff.py`.",
+  "facts": [
+   {
+    "id": "f1",
+    "text": "Problem: webhook deliveries were dropped when the customer endpoint answered 503, with no retry, so customers silently lost events."
+   },
+   {
+    "id": "f2",
+    "text": "Change: delivery retries up to 5 times with exponential backoff, the delay doubling from 2 seconds."
+   },
+   {
+    "id": "f3",
+    "text": "After the 5th failed attempt the event is marked failed and appears on the admin Events page."
+   },
+   {
+    "id": "f4",
+    "text": "4xx responses are not retried; the maximum is configurable with WEBHOOK_MAX_RETRIES (default 5)."
+   },
+   {
+    "id": "f5",
+    "text": "Tested with unit tests of the backoff schedule and a manual run against a stub endpoint that failed first and then succeeded, so the event was delivered on a retry."
+   },
+   {
+    "id": "f6",
+    "text": "Reviewers should check the backoff arithmetic in backoff.py."
+   }
+  ]
+ },
+ {
+  "id": "t4",
+  "kind": "shared-document",
+  "title": "Shared document section explaining a rule",
+  "reader": "New and existing developers on the demo-a team reading the team handbook. They want to know what the rule is, when it bends, and why it exists.",
+  "sources": "Handbook notes (English, from the team lead):\n- Section: \"Review contract for main\".\n- The contract: every change to the demo-a `main` branch needs one approving review from a code owner before it is merged. No self-approval.\n- Exception for urgent fixes: the on-call lead can approve instead of a code owner. A code owner must then review the merged change within one business day.\n- The contract applies to `main` only. Feature branches have no review requirement.\n- Why: in a past incident an unreviewed change to main broke the release build and delayed the release by two days.",
+  "facts": [
+   {
+    "id": "f1",
+    "text": "Every change to demo-a main needs one approving review from a code owner before merging; no self-approval."
+   },
+   {
+    "id": "f2",
+    "text": "Urgent fixes: the on-call lead may approve instead of a code owner."
+   },
+   {
+    "id": "f3",
+    "text": "For such an urgent fix, a code owner must review the merged change within one business day."
+   },
+   {
+    "id": "f4",
+    "text": "The rule applies only to main; feature branches have no review requirement."
+   },
+   {
+    "id": "f5",
+    "text": "Reason: an unreviewed change to main once broke the release build and delayed the release."
+   }
+  ]
+ },
+ {
+  "id": "t5",
+  "kind": "final-report",
+  "title": "Final report to a user after a change",
+  "reader": "The user who asked for the change in a chat with a coding agent. They will read this one reply and decide what to do next; they have not seen the diff.",
+  "sources": "The user's request: \"The nightly cleanup job in demo-a deletes files that someone is still editing. Make it skip recently modified files.\"\n\nWork log (English, from the agent):\n- Changed cleanup.py: the job now skips any file modified within the last 24 hours; before it deleted everything older than 7 days by creation time, which caught files edited yesterday.\n- Added a regression test: a file created 10 days ago but modified 1 hour ago survives the cleanup run. The test fails on the old code and passes now. The rest of the existing test suite passes too.\n- Not verified: behavior on Windows paths, no Windows machine was available here.\n- Nothing is committed; the change is in the working tree.\n- Open question for the user: should the same 24-hour rule apply to the tmp/ folder, which currently is cleaned separately? The agent recommends yes, to keep one rule.",
+  "facts": [
+   {
+    "id": "f1",
+    "text": "The cleanup job now skips any file modified within the last 24 hours."
+   },
+   {
+    "id": "f2",
+    "text": "Previously it deleted everything older than 7 days by creation time, which also caught files edited recently."
+   },
+   {
+    "id": "f3",
+    "text": "A new regression test checks that a file that is old by creation time but was modified recently survives the cleanup; it fails on the old code and passes now, and the existing tests still pass."
+   },
+   {
+    "id": "f4",
+    "text": "Behavior on Windows paths is not verified because no Windows machine was available."
+   },
+   {
+    "id": "f5",
+    "text": "Nothing is committed; the change is in the working tree."
+   },
+   {
+    "id": "f6",
+    "text": "Question for the user: apply the same 24-hour rule to the tmp/ folder (currently cleaned separately)? The agent recommends yes, to keep one rule."
+   }
+  ]
+ }
+]

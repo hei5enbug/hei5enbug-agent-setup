@@ -46,7 +46,7 @@ The opponent may start a new command-line process for each exchange. Resume the 
   If both are available and no evidence distinguishes them, ask the user which opponent to use.
 - Fix a Codex opponent to `gpt-6.1-sol` with `xhigh` reasoning effort. The runner reads each opponent's model and
   effort from the `opponents` entry of `config/model-registry.json` at the plugin root.
-- Fix a Claude opponent to `claude-fable-5-1` with `xhigh` reasoning effort. Do not substitute another model. When that
+- Fix a Claude opponent to `claude-fable-5-2` with `xhigh` reasoning effort. Do not substitute another model. When that
   model is unavailable or returns a quota error, the opponent has failed: report the failure and stop the debate.
 - Pass `--fast` to reduce the opponent's reasoning effort to `high` only when the user explicitly prioritizes speed or cost over quality.
 - Never infer or automatically use `--fast` for an ordinary request.

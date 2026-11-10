@@ -425,6 +425,109 @@ completing (declines included); stop retrying and tell the user.”입니다. �
 실행합니다. `PostToolUse`나 `PostToolUseFailure`는 끝난 호출의 키별 횟수를 초기화하고, `UserPromptSubmit`은 모든 횟수를
 초기화하므로, 중단된 뒤 사용자가 요청한 쓰기는 다시 승인을 묻습니다. 이미 세션 승인된 키는 다른 키의 요청 한도를 쓰지 않습니다.
 
+## 스킬이 선언하는 쓰기
+
+사용자가 스킬의 시작을 승인한 뒤 오래 도는 실행은 사용자가 자리를 비운 동안 새 쓰기 키에 닿을 수 있습니다. 플러그인은 스킬의 시작이 덮는 쓰기를 선언할 수 있고, 가드는 그 쓰기를 질문 없이 실행합니다. 선언이
+없는 플러그인은 위에서 설명한 대로 동작합니다.
+
+### 선언 파일
+
+플러그인은 루트에 `approval-grants.json` 파일 하나를 둡니다. 가드는 이 파일을 지금 실행 중인 Claude Code 설치가
+`installed_plugins.json`(`$CLAUDE_CONFIG_DIR/plugins` 또는 `~/.claude/plugins` 아래)에 설치된 것으로 적은 버전에서만 읽습니다.
+설치된 플러그인 코드가 가드가 에이전트로부터 보호하는 대상이기 때문입니다. 그래서 이전 버전으로 되돌린 플러그인은 그 이전
+선언을 적용하고, 그 파일에 없는 플러그인이나 다른 호스트의 캐시에만 있는 사본에는 선언이 없습니다. 작업 트리로
+향하는 링크처럼 플러그인 캐시 밖으로 풀리는 파일은 무시합니다. 레이아웃이 틀린 파일은 통째로 거부합니다.
+
+```json
+{
+  "skills": {
+    "demo-run": {
+      "entries": [
+        {"command": "az repos pr update --status completed"},
+        {"command": "git push -u origin <branch:feature/*>"},
+        {"command": "kubectl rollout restart <workload> -n <ns:@grant> --context <ctx:@grant>",
+         "never": {"ctx": ["prod-ctx"]}},
+        {"command": "curl -X DELETE https://<host:api.dev.example.com|api.stg.example.com>/<path>", "destructive": true},
+        {"tool": "mcp__demo__demo_post_message", "arguments": {"channel": "C123"}}
+      ]
+    }
+  }
+}
+```
+
+항목에는 `command`(명령 예시) 또는 `tool`(전체 `mcp__<server>__<tool>` 이름과, 호출이 지녀야 할 값을 적은 `arguments`) 중 정확히 하나가 있습니다. `never`는
+자리표시자 이름을 절대 받아들이지 않는 값에 대응시키고, `destructive: true`는 가드가 파괴적으로 분류하는 호출까지 그 항목이 덮게 합니다. 다른 키가 있으면 그 항목은 잘못된 항목이 되어,
+grant가 무시하고 이유를 알립니다.
+
+| 자리표시자 | 받아들이는 값 |
+|---|---|
+| `<name>` | 모든 값 |
+| `<name:a\|b>` | 나열한 값 중 하나 |
+| `<name:glob>` | glob에 맞는 값(예: `<branch:feature/*>`) |
+| `<name:@grant>` | grant 명령이 `name`에 넘긴 값 |
+
+자리표시자는 인자 전체나 URL 경로 같은 인자의 일부를 대신할 수 있습니다. 예시 값이 JSON 객체인 옵션은 모든 깊이에서 예시와 키가 정확히 같은 인라인 JSON 객체를 받아들이며, 각 값은 예시와 같거나
+JSON 문자열로 적은 자리표시자가 받아들이는 값이어야 합니다. 키가 더 있거나 모자란 경우, 타입이 다른 경우, 반복된 키, `@body.json`처럼 파일에서 읽는 값은 절대 일치하지 않습니다.
+
+### grant, 거부, link
+
+스킬은 시작한 뒤 grant 명령을 실행합니다.
+
+```bash
+python3 <plugin root>/scripts/approval_guard.py grant --skill demo-run --value ctx=dev-ctx --value ns=demo
+```
+
+`--skill`은 `<skill>` 또는 `<plugin>:<skill>`을 받고, `--value name=value`는 `@grant` 자리표시자에 값을 넘기며 반복할 수 있습니다. `PreToolUse` 훅이
+`request`와 같은 방식으로 이 호출을 판정하고, 스킬 이름과 시각을 붙여 grant를 세션 상태 파일에 저장합니다. 명령은 저장된 보고서를 출력합니다. 유지한 항목, 이유와 함께 무시한 항목, grant한
+값, 거절한 값입니다. 같은 세션에서 다시 실행하면 유지 항목을 새로 정하고 값을 더합니다. 항목의 `never` 목록에 있는 값은 거절하고 알리며, 나머지 grant는 기록합니다.
+
+훅은 아래 조건이 모두 맞을 때만 grant하고, 아니면 호출을 거부하며 아무것도 grant하지 않습니다.
+
+- 호스트가 Claude Code입니다. 이 검사에는 transcript가 필요해서 Codex는 거부합니다.
+- 호출이 메인 세션에서 옵니다. 이벤트에 `agent_id`가 없어 서브에이전트가 아니고, `HEI5ENBUG_PARENT_SESSION`이 없어 워커나 자식이 아닙니다.
+- 세션 transcript의 메인 스레드가 사용자가 입력한 명령이나 `Skill` 도구 호출로 그 스킬이 시작되었음을 보여 줍니다. 서브에이전트, 도구 결과, 스킬이 주입한 텍스트에 기록된 시작은 인정하지
+  않습니다.
+- 설치된 플러그인의 `approval-grants.json`이 그 스킬을 선언합니다. 두 플러그인이 같은 이름을 선언하면 `<plugin>:<skill>` 형태가 필요합니다.
+
+grant는 아래 조건이 맞는 항목만 유지하고 나머지는 무시합니다.
+
+- 모든 자리표시자를 받아들이는 값으로 채웠을 때 가드가 명령 예시를 쓰기로 분류하거나, 항목에 `destructive: true`가 있으면 파괴적으로 분류하며, 치명적으로는 분류하지 않습니다. 민감 조회, 비밀
+  접근, 분류되지 않은 명령은 무시합니다. 도구 항목도 같은 방식으로 쓰기로 분류되어야 합니다.
+- 키의 대상 부분에 닿는 자리표시자(호스트, 데이터베이스, 컨텍스트, 네임스페이스, 푸시 원격 등)는 값을 나열하거나 grant에서 받아야 합니다. 거기에 열린 자리표시자나 glob이 있으면 항목을 무시합니다.
+- 푸시 예시는 원격과 모든 refspec을 밝히고, 일반 플래그만 쓰며, 강제나 삭제 형태(`--force`, `--force-with-lease`, `-f`, `--delete`, `-d`, `--mirror`,
+  `+`나 `:`로 시작하는 refspec)가 없습니다. refspec 없는 `git push`는 가드가 읽지 않는 설정에서 refspec을 가져오므로 무시합니다.
+
+`HEI5ENBUG_PARENT_SESSION`으로 연결된 자식 프로세스는 그 세션의 승인 키를 쓰듯 그 세션의 grant를 씁니다. 자식을 시작하는 스킬은 자기 Bash 호출에서 `python3 <plugin
+root>/scripts/approval_guard.py link`를 실행합니다. 이 명령은 현재 세션의 값 (예: `claude:<session id>`)을 출력합니다. 그런 다음 그 텍스트를 환경 변수로 붙여
+자식을 시작합니다. 예: `HEI5ENBUG_PARENT_SESSION=claude:<session id> claude -p ...`. 링크 없이 시작한 자식에게는 grant가 없고, 비대화형 자식은 전처럼
+묻습니다.
+
+### 쓰기나 호출 매칭
+
+가드는 먼저 다른 곳과 똑같이 쓰기를 분류합니다. 치명적인 쓰기는 절대 일치하지 않습니다. 파괴적으로 분류된 쓰기는 `destructive: true`인 항목에만 일치합니다. 쓰기가 파이프, 리다이렉션, 셸 확장,
+환경 변수 접두어가 없는 단순 명령 하나이고 아래가 모두 맞으면 유지된 항목과 일치합니다.
+
+- 예시의 모든 리터럴 부분이 쓰기와 같습니다. 위치 인자, 옵션 값, 한 인자 안에서 자리표시자 둘레의 텍스트를 포함합니다. 위치 인자 개수도 같습니다.
+- 쓰기가 예시의 모든 옵션을 예시와 같은 횟수만큼 지닙니다. `--option value`와 `--option=value`는 같고, `--namespace`의 `-n` 같은 별칭은 다른 옵션입니다. 쓰기에 옵션이
+  더 있어도 됩니다. 다만 명령줄 밖에서 동작이나 대상을 바꿀 수 있는 옵션은 안 됩니다. 이름이 설정, 파일, 입력, kubeconfig,
+  URL, 다음 요청, 요청, 출력을 가리키는 옵션, `-K`, `-f`, `-o`, `-:`, 그리고 값이 `@`나 `file:`로 시작하는 추가 옵션이 여기에 해당합니다.
+- 채운 값 모두를 해당 자리표시자가 받아들이고 `never` 목록에 없습니다. 반복되는 자리표시자는 값 하나만 가집니다.
+- 쓰기의 값으로 채운 예시가 쓰기와 같은 키로 분류됩니다. `git`이나 `gh` 키처럼 키가 명령 텍스트의 다이제스트이면 채운 예시의 단어가 쓰기의 단어와 하나하나 같아야 합니다.
+- 푸시는 refspec을 명시하고, 강제나 삭제 형태가 없으며, 채운 값에 `:`가 들어 있거나 `+`로 시작하는 값이 없습니다. 그래서 `+feature/demo`와
+  `staging-1:refs/tags/release-1`은 절대 일치하지 않습니다.
+
+MCP 호출은 도구 이름이 같고, 항목이 나열한 인자를 모두 지니며, 각 값이 받아들여지면 도구 항목과 일치합니다. 가드가 파괴적으로 분류한 호출은 `destructive: true`인 항목에만 일치하고, 치명적인
+호출은 절대 일치하지 않습니다.
+
+일치한 호출은 묻지 않고 실행되며 세션 승인을 남기지 않습니다. Claude Code 모드용 호출 기록은 `source` 필드에 `<plugin>:<skill>`로 그 스킬을 승인의 출처로 적습니다. 유지된 어떤
+항목에도 일치하지 않는 쓰기는 전과 같이 동작합니다.
+
+### 이 기능이 신뢰하는 것
+
+가드는 스킬이 메인 세션에서 시작되었는지와 쓰기가 유지된 항목에 일치하는지를 확인합니다. 두 가지는 선언한 플러그인에 맡깁니다. 스킬은 사용자의 요청이나 승인이 있을 때만 시작한다는 점, 그리고 어떤 항목도 운영
+대상을 받아들이거나 grant하지 않는다는 점입니다. grant는 사용자가 스킬을 승인한 위에 얹는 가드레일이지 보안 경계가 아닙니다. 유지된 항목과 grant한 값은 세션이 끝날 때까지 유지되며, 사용자가 시작하지
+않은 스킬은 이를 얻지 못합니다.
+
 ## 보호되는 상태와 코드
 
 에이전트는 스스로 승인할 수 없습니다. `approval_guard.py`, `datagrip_guard.py`, `approval_state.py`, 그리고 이들이 가져오는
@@ -437,7 +540,7 @@ completing (declines included); stop retrying and tell the user.”입니다. �
 `${XDG_STATE_HOME}`, `${XDG_STATE_HOME:-<절대 경로>}`뿐이며, 각각 단어의 맨 앞에서 `/`로 이어지는 경로 접두로만 쓸 수 있습니다.
 예: `ls "$HOME/.local/state/hei5enbug-agent-setup/approvals"`. 가드는 경로를 검사하기 전에 이 변수를 풉니다. 그 밖의
 `$`, `$(`, 백틱, `<(`, `>(`, 중괄호는 거부하며, 거부 사유가 원인을 밝힙니다(예: `It was denied because of "$(".`).
-`cat`이나 `rg`로 가드 파일을 읽기만 하는 명령은 거부되지 않습니다. 위에서 검증한 `request` 명령만 실행 예외입니다.
+`cat`이나 `rg`로 가드 파일을 읽기만 하는 명령은 거부되지 않습니다. 위에서 검증한 `request`, `grant`, `link` 명령만 실행 예외입니다.
 두 상태 디렉터리 안의 파일 편집은 `apply_patch` 패치가 가리키는 경로를 포함해 양쪽 호스트 모두 거부합니다.
 
 설치된 플러그인 코드도 같은 방식으로 보호합니다. Claude나 Codex 플러그인 캐시(`~/.claude/plugins/cache`,
@@ -463,7 +566,7 @@ DB_PASSWORD=k8s:<context>/<namespace>/<secret>/<key> -- <command>`. 소스는 `k
 stderr는 출력하지 않습니다. 각 조회의 제한 시간은 30초입니다. 시간이 지나면 소스와 `timed out`을 알리고 2로 종료합니다.
 
 역할 실행기의 자식에 `HEI5ENBUG_PARENT_SESSION=<host>:<session_id>`가 있으면 부모의 승인 키도 읽으며 상태는 바꾸지
-않습니다. 잘못된 값은 무시합니다. 자식은 `UserPromptSubmit`에서 코드를 기록하거나 `request`를 실행할 수 없습니다.
+않습니다. 잘못된 값은 무시합니다. 자식은 `UserPromptSubmit`에서 코드를 기록하거나 `request`, `grant`를 실행할 수 없습니다.
 부모에게 없는 세션 승인이 필요한 호출은 메인 세션에서 요청(`request --key write:session` 또는 `--key sensitive:session`)한
 다음 다시 시도하라는 안내와 함께 거부합니다. 자식은 부모 세션이 가진 `write:session`과 `sensitive:session` 승인을 그대로
 사용하며, Codex 자식은 네이티브 창을 쓰지 않습니다. 자식에서 매번 묻는 작업은 모두 거부하며 메인 세션이 직접 실행합니다.

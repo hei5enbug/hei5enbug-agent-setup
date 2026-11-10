@@ -1,0 +1,32 @@
+[
+ {
+  "number": 310,
+  "title": "demo-triage: answer high-priority tickets sooner",
+  "url": "https://github.com/demo-org/demo-batch/issues/310",
+  "state": "OPEN",
+  "labels": [
+   {
+    "name": "enhancement"
+   }
+  ],
+  "author": {
+   "login": "demo-user"
+  },
+  "body": "## Summary\ndemo-triage assigns tickets by arrival time only, so a new P1 ticket waits behind older low-priority ones.\n\n## Proposal\n1. Under the condition that a ticket is P1 and has waited more than one hour, assign it before all others.\n\n## Acceptance criteria\n1. Given a P1 ticket that has waited two hours and an older P3 ticket, the P1 ticket is assigned first.\n"
+ },
+ {
+  "number": 311,
+  "title": "demo-triage: assign by priority class",
+  "url": "https://github.com/demo-org/demo-batch/issues/311",
+  "state": "OPEN",
+  "labels": [
+   {
+    "name": "enhancement"
+   }
+  ],
+  "author": {
+   "login": "demo-user"
+  },
+  "body": "## Summary\ndemo-triage has no rule for lower priorities.\n\n## Proposal\n1. Under the condition that a ticket is P2, assign it after the P1 tickets that arrived before it.\n\n## Acceptance criteria\n1. Given a P1 ticket that arrived before a P2 ticket, the P1 ticket is assigned first.\n"
+ }
+]

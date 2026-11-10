@@ -140,7 +140,7 @@
   | 사소함: 오타, 문구, 버전, 메타데이터 수정, 번역, 또는 검사가 모두 확인하는 기계적 수정 | 없음 |
   | 범위 한정, Claude 작성: 완료 검사가 분명한 구성 요소 하나이고, 공개 계약, 보안, 동시성, 훅, 가드 변경이 없음 | `role_runner.py reviewer --model gpt-6.1-sol`이며, runner 기본값인 `high`로 실행된다 |
   | 복잡함, Claude 작성: 여러 구성 요소, 공개 계약, 보안, 동시성, 훅이나 가드 | `role_runner.py reviewer --model gpt-6-astra --effort xhigh` |
-  | GPT 작성(`gpt-6.1-sol`로 작성한 작업 포함) | `role_runner.py reviewer --model claude-opus-5-5`, 복잡하면 `--effort xhigh`와 함께 `claude-fable-5-1` |
+  | GPT 작성(`gpt-6.1-sol`로 작성한 작업 포함) | `role_runner.py reviewer --model claude-opus-5-5`, 복잡하면 `--effort xhigh`와 함께 `claude-fable-5-2` |
 
   이 검토는 요청의 모든 작업이 끝나고 검사를 통과한 뒤 합쳐진 최종 diff를 대상으로 질문 없이 자동으로 한 번 실행한다.
   더 이른 검토에는 사용자의 승인이 필요하다. 검토자에게 최종 diff, 요구사항, 검사 근거를
@@ -169,6 +169,8 @@
   모델은 제외한다. 계열에 더 새로운 릴리스가 있으면 같은 변경에서 `config/model-registry.json`의 `pins`와 모든 참조를
   갱신하고 `tests/test_model_pins.py`가 통과할 때까지 맞춘다. 실행 파일은 모델을 이 전체 ID로만 적는다. 별칭이나 실행 시점의
   최신 릴리스 조회는 추가하지 않는다.
+- `language` 기능이나 `scripts/text_review.py`의 모델을 바꾸기 전에 후보와 현재 모델에 `evals/korean-writing`을
+  실행하고 결과를 그 README에 기록한다. 모델은 그곳의 결정 규칙이 승자를 고를 때만 바꾼다.
 - Orca CLI가 설치되어 있지 않아 테스트를 건너뛰면, 검사가 통과했다고 보고하기 전에 Orca를 설치하고 다시 실행할지
   사용자에게 묻는다.
 - `HEAD`에서 닿는 가장 새로운 `v<major>.<minor>.<patch>` 태그가 릴리스 기준이다. 매니페스트에만 있는 버전은 이미

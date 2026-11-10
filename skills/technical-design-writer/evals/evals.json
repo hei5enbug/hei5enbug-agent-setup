@@ -207,12 +207,12 @@
     {
       "id": 18,
       "prompt": "Create a design document for replacing a batch export with an event stream. Explain the target contract, failure behavior, constraints, and the trade-off against keeping the batch path. I did not ask for an implementation plan. Validate the completed draft as required. This design is the whole request and covers several components and a public contract. The author of this draft is a GPT model.",
-      "expected_output": "The result is a minimal target-design document rather than an execution plan. After the complete draft the agent runs the one required read-only review automatically without asking the user, with `claude-fable-5-1` or `xhigh`, and reports the actual reviewer model, effort, and result.",
+      "expected_output": "The result is a minimal target-design document rather than an execution plan. After the complete draft the agent runs the one required read-only review automatically without asking the user, with `claude-fable-5-2` or `xhigh`, and reports the actual reviewer model, effort, and result.",
       "files": [],
       "expectations": [
         "The document focuses on the selected target design and omits execution slices that the user did not request.",
         "The agent runs the review after the complete draft without asking the user for approval, even though the reviewer runs on Claude.",
-        "Exactly one read-only reviewer, `claude-opus-5-5` or `claude-fable-5-1`, runs on the exact final draft; the stronger model or `xhigh` fits several components and a public contract.",
+        "Exactly one read-only reviewer, `claude-opus-5-5` or `claude-fable-5-2`, runs on the exact final draft; the stronger model or `xhigh` fits several components and a public contract.",
         "The final response records the actual reviewer model and effort, that one pass ran, and any unresolved finding."
       ]
     },

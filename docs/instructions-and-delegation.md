@@ -161,7 +161,7 @@ acceptance checks. It never silently substitutes a worker model.
 In its final stage, when no other work remains for the request, the main session runs one independent review of the
 combined result under [independent model validation](../instructions/independent-model-validation.md), automatically and
 without a question. A Claude-authored result goes to `gpt-6.1-sol` or `gpt-6-astra`, and a GPT-authored result goes to
-`claude-opus-5-5` or `claude-fable-5-1`. The main session picks the lighter model at `high` for one bounded component,
+`claude-opus-5-5` or `claude-fable-5-2`. The main session picks the lighter model at `high` for one bounded component,
 and the stronger model or `xhigh` for several components, a public contract, security, concurrency, or a hook or guard.
 Any earlier review, such as one of a single worker's change, needs the user's approval for that deliverable, and a
 decline is not asked again. An assigned worker and a skill run inside a larger request never run their own final review.

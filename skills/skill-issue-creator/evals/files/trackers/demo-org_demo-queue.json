@@ -1,0 +1,62 @@
+[
+ {
+  "number": 300,
+  "title": "demo-intake: keep each response under 80 words",
+  "url": "https://github.com/demo-org/demo-queue/issues/300",
+  "state": "OPEN",
+  "labels": [
+   {
+    "name": "enhancement"
+   }
+  ],
+  "author": {
+   "login": "demo-user"
+  },
+  "body": "## Summary\nResponses written by demo-intake run long.\n\n## Gap in current rules\n`instructions/shared-writing.md` says: \"Keep each reply under 80 words.\"\n\n## Proposal\n1. Under the condition that the first response exceeds 80 words, shorten it to the 80-word limit that the shared writing rules set.\n\n## Acceptance criteria\n1. A 120-word first response is cut to fewer than 80 words and keeps the team name.\n"
+ },
+ {
+  "number": 301,
+  "title": "demo-intake: add a glossary of queue terms",
+  "url": "https://github.com/demo-org/demo-queue/issues/301",
+  "state": "OPEN",
+  "labels": [
+   {
+    "name": "enhancement"
+   }
+  ],
+  "author": {
+   "login": "demo-user"
+  },
+  "body": "## Summary\ndemo-intake uses queue terms inconsistently.\n\n## Proposal\n1. Create `instructions/glossary.md` with the queue terms that demo-intake uses, each with one definition.\n2. Under the condition that demo-intake writes a term, use the glossary wording.\n\n## Acceptance criteria\n1. A first response that names the \"hold queue\" uses the glossary definition.\n"
+ },
+ {
+  "number": 302,
+  "title": "shared text: one glossary for every reply",
+  "url": "https://github.com/demo-org/demo-queue/issues/302",
+  "state": "OPEN",
+  "labels": [
+   {
+    "name": "enhancement"
+   }
+  ],
+  "author": {
+   "login": "demo-user"
+  },
+  "body": "## Summary\nReplies across the plugin name the same queue differently.\n\n## Proposal\n1. Create `instructions/glossary.md` with the terms that replies use.\n2. The implementer decides whether the glossary applies to demo-intake only or to every shared text.\n\n## Acceptance criteria\n1. Two different replies that name the \"hold queue\" use the same word.\n"
+ },
+ {
+  "number": 303,
+  "title": "demo-intake: route by language",
+  "url": "https://github.com/demo-org/demo-queue/issues/303",
+  "state": "OPEN",
+  "labels": [
+   {
+    "name": "enhancement"
+   }
+  ],
+  "author": {
+   "login": "other-dev"
+  },
+  "body": "## Summary\nItems in other languages land in the wrong team.\n\n## Proposal\n1. Under the condition that an item is not in English, route it to the language team.\n"
+ }
+]

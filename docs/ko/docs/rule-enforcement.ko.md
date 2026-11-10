@@ -77,6 +77,8 @@
 | `tests/test_approval_python_exec.py` | 문자열 리터럴 `exec`·`eval`은 중첩 리터럴과 이스케이프로 가린 가드 모듈 이름까지, 리터럴 딕셔너리 네임스페이스는 코드가 읽는 이름에 묶어 같은 코드를 제자리에 쓴 것과 똑같이 판정하고, 리터럴이 아닌 네임스페이스나 변수·`input()`·표준 입력을 받는 `exec`는 계속 묻되 다른 Python 판정도 그대로 받는다. | `docs/approval-guard.md` (Approval guard) |
 | `tests/test_approval_false_positives.py`, `tests/test_approval_classification_safety.py` | 무해한 호출과 비밀 메타데이터 조회를 쓰기나 비밀 값 출력으로 오인하지 않는다. | `docs/approval-guard.md` (Approval guard) |
 | `tests/test_approval_extensions.py`, `tests/test_approval_reuse.py` | 사전 승인 키와 민감 조회 승인은 지정한 대상만 다룬다. | `docs/approval-guard.md` (Approval guard) |
+| `tests/test_approval_declared.py` | 스킬이 선언한 쓰기는 가드가 쓰기로 분류하고 대상이 나열됐거나 grant로 받는 경우에만 유지되며, 쓰기나 MCP 호출은 리터럴, 옵션, JSON 본문, 허용 값이 모두 맞는 유지된 항목에만 일치하고 치명적이거나 강제이거나 refspec을 넓힌 호출에는 일치하지 않는다. | `docs/approval-guard.md` (Writes a skill declares) |
+| `tests/test_approval_grants.py` | 메인 세션 transcript가 시작을 보여 주는 스킬만 선언한 쓰기를 grant할 수 있다. 서브에이전트, 워커, 자식, Codex 세션, 잘못된 선언, 플러그인 캐시 밖의 파일은 grant할 수 없다. grant된 쓰기는 묻지 않고 실행되며 그 기록이 스킬을 적는다. 링크한 자식은 grant를 쓰고, 링크 없는 자식과 선언 없는 플러그인은 전처럼 묻는다. | `docs/approval-guard.md` (Writes a skill declares) |
 | `tests/test_approval_retries.py` | 답을 받지 못한 승인 요청이 반복되면 새 프롬프트 전까지 거부한다. | `docs/approval-guard.md` (Approval guard) |
 | `tests/test_approval_heartbeat.py` | 가드는 현재 훅이 도구를 검사했는지 확인한다. | `docs/approval-guard.md` (Approval guard) |
 | `tests/test_approval_risk_record.py`, `tests/test_approval_wording.py` | 쓰기와 중대한 호출을 기록하고, 승인 문구는 언어 설정을 따른다. | `docs/claude-code-mod.md`, `docs/approval-guard.md` |
@@ -128,3 +130,4 @@
 |---|---|---|
 | `tests/test_e2e_eval_harness.py` | 엔드투엔드 실행은 시험할 플러그인 리비전을 불러오고, 권한이나 플러그인 훅을 절대 우회하지 않으며, 사용량 한도 뒤에 이어서 실행하고, 모든 변형의 토큰, 비용, 결과를 같은 방식으로 기록한다. | `evals/e2e/README.md` |
 | `tests/test_e2e_eval_graders.py` | 골든 작업마다 채점기는 수정하지 않은 픽스처를 실패시키고 기준 해답을 통과시키며, 채점하는 저장소를 바꾸지 않는다. | `evals/e2e/README.md` (Graders) |
+| `tests/test_korean_writing_eval.py` | 한국어 글쓰기 평가는 글쓰기 규칙을 실행 시점에 `instructions/shared-text.md`에서 읽고, 필수 사실이 있는 고정된 작업 다섯 개를 유지하며, 채점자에게 작성자의 모델 이름을 보이지 않고, 시드 검사에서 빠진 사실과 번역투를 잡고, 승자에게 모든 채점자의 과반이 필요하도록 결정 규칙을 적용한다. | `evals/korean-writing/README.md` |

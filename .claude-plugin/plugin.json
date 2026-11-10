@@ -67,7 +67,7 @@
       "type": "string",
       "title": "Worker model",
       "description": "Model of the plugin worker agent in Claude Code. Takes effect after /reload-plugins or in a new session.",
-      "options": ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
+      "options": ["claude-fable-5-2", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
       "default": "claude-haiku-5-5"
     },
     "worker_effort": {
@@ -95,7 +95,7 @@
       "type": "string",
       "title": "Review model",
       "description": "Model that runs independent validation and skill review roles at xhigh. GPT models run through codex exec and Claude models through claude -p.",
-      "options": ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "gpt-6-astra", "gpt-5.6-luna", "gpt-6.1-sol"],
+      "options": ["claude-fable-5-2", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "gpt-6-astra", "gpt-5.6-luna", "gpt-6.1-sol", "gpt-6.1-terra"],
       "default": "gpt-6-astra"
     },
     "language_guard": {

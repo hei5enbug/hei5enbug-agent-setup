@@ -1,15 +1,17 @@
 # Independent model validation
 
 Use this English file as the single canonical source for independent validation of implementation plans,
-technical design documents, RFCs, and completed implementation changes.
+technical design documents, RFCs, issue bodies, and completed implementation changes.
 
 ## When to review
 
 Run independent validation automatically, without a question, exactly once per request: in its final stage, when
 no other work remains, over the combined result of every worker and the main session. For a requested plan, design,
-or RFC, that is the complete draft. For implementation, it is the final change with its passing checks when
-behavior, public contracts, security, concurrency, migrations, or several components materially change. Skip
-routine small edits unless the user requests review. A change made to fix performance or resource use, or one that
+or RFC, that is the complete draft. For a request that files or rewrites one or more issues whose proposals change
+behavior, a public contract, or several components, it is the bodies of all those issues as one complete draft,
+reviewed before the first write to the tracker with the owning files as evidence. For implementation, it is the final
+change with its passing checks when behavior, public contracts, security, concurrency, migrations, or several
+components materially change. Skip routine small edits unless the user requests review. A change made to fix performance or resource use, or one that
 changes how much work a code path does, is never a routine small edit.
 
 Any earlier review, such as one of a single worker's change or of an intermediate draft, runs only when the user
@@ -30,11 +32,11 @@ decision.
 | Authoring model family | Reviewer | Reasoning effort |
 |---|---|---|
 | Claude | `gpt-6.1-sol` or `gpt-6-astra` | `high` or `xhigh` |
-| GPT | `claude-opus-5-5` or `claude-fable-5-1` | `high` or `xhigh` |
+| GPT | `claude-opus-5-5` or `claude-fable-5-2` | `high` or `xhigh` |
 
 The coordinating session picks one reviewer and effort from the row by scope and risk: the lighter model
 (`gpt-6.1-sol`, `claude-opus-5-5`) at `high` for one bounded component, and the stronger model (`gpt-6-astra`,
-`claude-fable-5-1`) or `xhigh` for several components, a public contract, security, concurrency, or a hook or guard.
+`claude-fable-5-2`) or `xhigh` for several components, a public contract, security, concurrency, or a hook or guard.
 
 Select the actual authoring model family, not the execution host. Code that a delegated worker wrote belongs to
 that worker's model family. GPT authoring in Claude Code follows the GPT row. If both families materially

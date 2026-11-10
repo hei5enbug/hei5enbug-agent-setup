@@ -32,7 +32,7 @@ const REGISTRY = JSON.stringify({
 });
 const MANIFEST = JSON.stringify({
   userConfig: {
-    worker_model: { options: ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"] },
+    worker_model: { options: ["claude-fable-5-2", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"] },
     worker_effort: { options: ["low", "medium", "high", "xhigh", "max"] },
   },
 });

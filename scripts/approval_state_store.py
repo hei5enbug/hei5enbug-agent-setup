@@ -33,7 +33,30 @@ def session_key(value):
 
 def _empty() -> dict:
     return {"approved": [], "approved_at": {}, "once": [], "pending": {}, "inflight": [], "hooks_warning_shown": False,
-            "request_counts": {}, "asked": []}
+            "request_counts": {}, "asked": [], "grants": {}}
+
+
+def _grants(value) -> dict:
+    """The skill grants of a state file: each is {"plugin", "skill", "at", "entries", "values", "report"}; anything
+    malformed is dropped."""
+    if not isinstance(value, dict):
+        return {}
+    kept = {}
+    for label, record in value.items():
+        if not (isinstance(label, str) and isinstance(record, dict) and isinstance(record.get("entries"), list)
+                and isinstance(record.get("values"), dict)):
+            continue
+        values = {name: [item for item in items if isinstance(item, str)] for name, items in record["values"].items()
+                  if isinstance(name, str) and isinstance(items, list)}
+        kept[label] = {
+            "plugin": record.get("plugin") if isinstance(record.get("plugin"), str) else "",
+            "skill": record.get("skill") if isinstance(record.get("skill"), str) else "",
+            "at": record["at"] if type(record.get("at")) in (int, float) else 0,
+            "entries": [entry for entry in record["entries"] if isinstance(entry, dict)],
+            "values": values,
+            "report": record.get("report") if isinstance(record.get("report"), str) else "",
+        }
+    return kept
 
 
 def _read(path: Path) -> dict:
@@ -65,6 +88,7 @@ def _read(path: Path) -> dict:
              if isinstance(entry, dict) and isinstance(entry.get("keys"), list)
              and all(isinstance(key, str) for key in entry["keys"])]
     return {
+        "grants": _grants(data.get("grants")),
         "approved": sorted(set(approved)), "once": sorted(set(once)), "pending": pending, "inflight": inflight,
         "approved_at": {key: times[key] for key in approved if type(times.get(key)) in (int, float)},
         "hooks_warning_shown": data.get("hooks_warning_shown") is True,

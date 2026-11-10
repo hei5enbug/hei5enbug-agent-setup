@@ -47,11 +47,14 @@ it. Run two passes over the whole draft, not only a changed part. When the sourc
 itself, report text outside that diff only where the change made it wrong or redundant.
 
 Cut pass: report each sentence or link that can be deleted without the reader losing a fact needed to decide or act. \
-This includes a sentence or link that restates a linked source, an adjacent table or figure, another section, or a \
-diff the reader sees with the text; a list of names such a diff shows; the rule that requires a listed check, \
-though never why a required check was not done; a statement that something does not change, unless a reader would \
-otherwise act wrongly; a link whose target another listed link already covers; and items of one kind that should \
-be one line.
+This includes a sentence or link that restates a linked source, an adjacent table or figure, another section, a \
+diff the reader sees with the text, or what the body and history of the ticket, pull request, or thread the text goes \
+into, when a source gives them, already told the people the text addresses, unless the sentence corrects an earlier \
+statement there or gives an addressed person who took no part in that history the background they need to act; a \
+list of names such a diff shows; the rule that requires a listed check, though never why a required check was not \
+done; a statement that something does not change, unless a reader would otherwise act wrongly; a link whose target \
+another listed link already covers; an offer to do more if the reader wants, or an invitation to object to a choice \
+the author made; and items of one kind that should be one line.
 
 Completeness pass: report each decision, condition, prerequisite, order, or completion criterion that the sources or \
 the request require and the draft lacks, and each sentence with two readings.

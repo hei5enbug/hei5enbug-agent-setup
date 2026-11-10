@@ -211,7 +211,7 @@ def test_중요_변경의_독립_검토는_개별_승인과_실제_설정_확인
     assert "runs only when the user approves it for that deliverable" in text
     assert "exactly one reviewer that the mapping below selects" in text
     assert "| Claude | `gpt-6.1-sol` or `gpt-6-astra` | `high` or `xhigh` |" in text
-    assert "| GPT | `claude-opus-5-5` or `claude-fable-5-1` | `high` or `xhigh` |" in text
+    assert "| GPT | `claude-opus-5-5` or `claude-fable-5-2` | `high` or `xhigh` |" in text
     assert "the `review_model` setting" not in text
     assert "Code that a delegated worker wrote belongs to that worker's model family." in text
     assert "A role runner exit code 3 or 4 means the same." in text

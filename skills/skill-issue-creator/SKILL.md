@@ -2,9 +2,11 @@
 name: skill-issue-creator
 description: >-
   File one issue for one skill or instruction gap, or one uncovered repeatable workflow, at the
-  tracker the plugin's issue-target.json declares. Use only when the user explicitly names or invokes
-  skill-issue-creator, never on your own; when no work remains after the user corrected a finished result caused by
-  a plugin's skill or instruction gap, or asked to turn a finished workflow into a skill or an issue, read its
+  tracker the plugin's issue-target.json declares, and check that a plugin's open issues still hold. Use
+  when the user names skill-issue-creator, asks in plain words to file, add, or change such an issue, or asks whether
+  a plugin's open issues are still right or ready to implement; a message that only mentions a tracker starts
+  nothing, and never start on your own. When no work remains after the user asked for a change to a result that a
+  skill or instruction produced, or asked to turn a finished workflow into a skill or an issue, read its
   recommendation rules first.
 compatibility: >-
   Needs filesystem read access to the owning plugin and Python 3.12 or later for the bundled script. Filing on
@@ -20,8 +22,12 @@ Use this English `SKILL.md` as the only executable source.
 Turn one gap into one issue at the tracker of the plugin that owns it. The tracker comes only from that plugin's
 declaration; this skill never guesses one.
 
-Before suggesting this skill without being asked, read [recommendation rules](references/recommendation.md); when
-it is missing, suggest nothing.
+Before suggesting this skill without being asked, or deciding whether a plain request starts it, read
+[recommendation rules](references/recommendation.md); when it is missing, suggest nothing.
+
+Under the condition that the user asks whether a plugin's open issues are still right, or asks to make them ready to
+implement, run step 3, then read [open issue review](references/open-issue-review.md) and follow it instead of steps
+1, 2, and 4 to 9.
 
 ## Boundaries
 
@@ -126,6 +132,12 @@ Note the title style of the issues the search returns; the new title follows it.
 
 ### 6. Draft
 
+Before writing, list each choice the Proposal would have to make that the request, the code, and the existing rules do
+not settle, such as whether a new step covers every kind of input or only some, or where an exception ends. A rule that
+settles a nearby case does not settle this one. Under the condition that any such choice exists, ask about every one in
+one call of the host's question UI before the gate in step 7, and write each answer into the Proposal as a decided
+rule. Never settle one yourself, and never file an issue that leaves one to the implementer.
+
 Write the title and body in `target.language` and `target.body_format`. The title names the owning skill or
 instruction and the gap in one line. The body has these sections, in this order:
 
@@ -138,6 +150,10 @@ instruction and the gap in one line. The body has these sections, in this order:
 5. Acceptance criteria: numbered eval cases
 6. Evidence
 
+Before drafting, when the proposal relies on another issue or another plugin's release, shares a file with another
+open issue's proposal, assigns a new file name, number, or identifier, or states a fact that can change before
+implementation, read [implementable body](references/implementable-body.md).
+
 Check each Proposal rule before writing it:
 
 - Under the condition that a rule is drawn from the session's case, test it against at least one different case.
@@ -146,6 +162,13 @@ Check each Proposal rule before writing it:
 - Under the condition that a rule governs writing, state the result the reader must be able to tell, not a format,
   label, or fixed order. Write one example sentence under the rule for a different case; under the condition that
   it reads awkwardly, revise the rule or drop it.
+
+Check each acceptance criterion the same way:
+
+- Under the condition that its verdict would depend on a model's judgment that can differ between runs, such as
+  "zero reviewer findings", restate it as a check on a seeded input: what the output must no longer contain and what
+  it must still contain.
+- Under the condition that the user states an acceptance rule, write it as stated.
 
 Use the format's own headings: `##` in Markdown, `h2.` in Jira wiki markup, and a plain heading line followed by a
 blank line in plain text; for `html`, follow the declaration options.
@@ -172,6 +195,11 @@ final report names that text for each.
   approval, show it again and wait for a new approval.
 - Under the condition that `preview_required` is false, naming the skill authorizes the single create. File
   without a preview step.
+- Under the condition that the request files or rewrites one or more issues whose proposals change behavior, a public
+  contract, or several components, read [independent model validation](../../instructions/independent-model-validation.md)
+  before the first write, and run its one pass over all those bodies together as the complete draft, with the owning
+  files as evidence. Apply its findings once, then write. When the review cannot run, write anyway and report that it
+  did not run, as that file says for an unavailable reviewer.
 - Under the condition that `target.public` is true, read [public leak check](references/public-leak-check.md) before
   any write to the tracker, whether a create, an edit, or a comment; it can stop the write.
 

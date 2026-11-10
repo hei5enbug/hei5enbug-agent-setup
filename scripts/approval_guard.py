@@ -5,6 +5,8 @@ Reads run without approval, writes and sensitive reads ask once per session, and
 Requests bundle session keys, secrets and forbidden state edits are denied, and pass leaves the host in charge.
 Every verb and CLI table lives in the guard_* modules this entry point imports. DataGrip queries are classified
 by datagrip_guard, which makes its own PreToolUse decision; this entry point records and consumes their approvals.
+A skill started in the main session can grant the writes its plugin declares (approval_state_grants); `grant` and `link`
+are decided by the PreToolUse hook like `request`, and a write or MCP call that matches a granted entry runs without a prompt.
 Production database reads (tabularis and DataGrip) follow db_read_policy, and this entry point records plan estimates.
 The guard always exits 0; covered calls fail closed when their classification fails.
 """
@@ -19,6 +21,7 @@ sys.dont_write_bytecode = sys.pycache_prefix is None
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from plugin_toggles import detect_host, enabled  # noqa: E402
 import approval_state  # noqa: E402
+import approval_state_grants  # noqa: E402
 from approval_state import Outcome  # noqa: E402
 from guard_shell import (  # noqa: E402
     LOOKUP_TIMEOUT_SECONDS, WRAPPER, _datagrip, _digest, _lookup, _merge, read_only_command, tokenize, tool_words,
@@ -85,6 +88,15 @@ def _decide(name, host, session, outcome, tool_use_id=None, tool_input=None, too
     return None
 
 
+def _record_source(host, session, tool_use_id, outcome, skill):
+    """Name the skill whose declared entry approved the call in the call's risk record; a failure drops only the name."""
+    try:
+        if host == "claude":
+            approval_state.record_risk(host, session, tool_use_id, outcome, skill)
+    except Exception:
+        return
+
+
 def handle(event, host):
     if not isinstance(event, dict):
         return None
@@ -119,6 +131,7 @@ def handle(event, host):
         return None
     tool_input = event.get("tool_input")
     wrapped = None
+    command_text = None
     if tool == "Bash":
         command = tool_input.get("command") if isinstance(tool_input, dict) else None
         if not isinstance(command, str):
@@ -126,6 +139,10 @@ def handle(event, host):
         wrapped = unwrap_wrapper(command)
         if wrapped is not None:
             command = wrapped
+        request = approval_state_grants.invocation(command, _cwd(event))
+        if request is not None:
+            return approval_state_grants.decide(name, host, event, request)
+        command_text = command
         outcome = _request_outcome(command, _cwd(event))
         reason = _self_approval_reason(command, _cwd(event)) if name == "PreToolUse" and outcome is None else None
         if reason:
@@ -142,11 +159,19 @@ def handle(event, host):
         return None
     if name == "PreToolUse":
         _record_risk(host, session, tool_use_id, tool, outcome)
+        if outcome.kind in ("write", "always"):
+            skill = approval_state_grants.matching_skill(host, session, tool, tool_input, command_text, _cwd(event))
+            if skill is not None:
+                _record_source(host, session, tool_use_id, outcome, skill)
+                return approval_state.pre_output("allow", f"Approved by the skill {skill}: {approval_state.describe(outcome)}") \
+                    if host == "claude" else None
     return _decide(name, host, session, outcome, tool_use_id, tool_input, tool, _cwd(event), event,
                    wrapped is not None)
 
 
 def main() -> int:
+    if len(sys.argv) > 1 and sys.argv[1] in approval_state_grants.VERBS:
+        return approval_state_grants.run_cli(sys.argv[1], sys.argv[2:])
     if len(sys.argv) > 1:
         try:
             if sys.argv[1] != "request" or approval_state.parent_session():

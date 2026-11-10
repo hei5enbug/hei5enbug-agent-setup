@@ -137,7 +137,7 @@ class RunnerTest(unittest.TestCase):
             if quota_once and "--session-id" in sys.argv:
                 print(json.dumps({
                     "type": "system",
-                    "model": "claude-fable-5-1",
+                    "model": "claude-fable-5-2",
                 }), flush=True)
                 print(json.dumps({
                     "type": "result",
@@ -146,7 +146,7 @@ class RunnerTest(unittest.TestCase):
                 }), flush=True)
                 print("reached your model limit", file=sys.stderr, flush=True)
                 raise SystemExit(0)
-            active_model = "claude-opus-5-5" if "--resume" in sys.argv else "claude-fable-5-1"
+            active_model = "claude-opus-5-5" if "--resume" in sys.argv else "claude-fable-5-2"
             session_flag = "--session-id" if "--session-id" in sys.argv else "--resume"
             session_id = sys.argv[sys.argv.index(session_flag) + 1]
             effort = sys.argv[sys.argv.index("--effort") + 1]

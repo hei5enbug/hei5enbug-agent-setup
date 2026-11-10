@@ -1,13 +1,14 @@
 {
   "version": 1,
   "pins": {
-    "claude-fable": "claude-fable-5-1",
+    "claude-fable": "claude-fable-5-2",
     "claude-opus": "claude-opus-5-5",
     "claude-sonnet": "claude-sonnet-5-5",
     "claude-haiku": "claude-haiku-5-5",
     "gpt-astra": "gpt-6-astra",
     "gpt-luna": "gpt-5.6-luna",
-    "gpt-sol": "gpt-6.1-sol"
+    "gpt-sol": "gpt-6.1-sol",
+    "gpt-terra": "gpt-6.1-terra"
   },
   "user_selected_pins": ["gpt-luna"],
   "efforts": ["low", "medium", "high", "xhigh", "max"],
@@ -84,21 +85,22 @@
     "effort": "high",
     "max_effort": "xhigh",
     "default_review_model": "gpt-6-astra",
-    "independent_review": {"claude": ["gpt-6.1-sol", "gpt-6-astra"], "gpt": ["claude-opus-5-5", "claude-fable-5-1"], "effort": "high", "max_effort": "xhigh"},
+    "independent_review": {"claude": ["gpt-6.1-sol", "gpt-6-astra"], "gpt": ["claude-opus-5-5", "claude-fable-5-2"], "effort": "high", "max_effort": "xhigh"},
     "review_cross_family_fallback": {"model": "gpt-6-astra", "effort": "high", "max_effort": "xhigh", "via": "runner"},
     "review_models": [
-      "claude-fable-5-1",
+      "claude-fable-5-2",
       "claude-opus-5-5",
       "claude-sonnet-5-5",
       "claude-haiku-5-5",
       "gpt-6-astra",
       "gpt-5.6-luna",
-      "gpt-6.1-sol"
+      "gpt-6.1-sol",
+      "gpt-6.1-terra"
     ]
   },
   "opponents": {
     "codex": {"model": "gpt-6.1-sol"},
-    "claude": {"model": "claude-fable-5-1"},
+    "claude": {"model": "claude-fable-5-2"},
     "effort": "xhigh",
     "fast_effort": "high"
   }

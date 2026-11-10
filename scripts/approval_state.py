@@ -293,6 +293,28 @@ def approved_keys(host, session):
     return approved
 
 
+def session_grants(host, session) -> dict:
+    """The skill grants this session recorded, by `<plugin>:<skill>`."""
+    return _load(host, session)["grants"]
+
+
+def held_grants(host, session) -> dict:
+    """The skill grants this session holds, with a linked parent session's grants, which a child uses as it uses the
+    parent's approved keys."""
+    held = dict(_load(host, session)["grants"])
+    parent = parent_session()
+    if parent:
+        held.update(_load(*parent)["grants"])
+    return held
+
+
+def record_grant(host, session, label: str, record: dict) -> None:
+    """Store one skill's grant, replacing an earlier grant of the same skill."""
+    def change(data):
+        data["grants"] = {**data["grants"], label: record}
+    _mutate(host, session, change)
+
+
 def record_approved(host: str, session: str, keys) -> None:
     def change(data):
         _grant(data, keys)

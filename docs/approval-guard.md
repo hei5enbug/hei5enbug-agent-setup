@@ -436,6 +436,132 @@ third code. `PostToolUse` or `PostToolUseFailure` resets the count for the finis
 resets every count, so a write the user asks for after a stop is asked again. Already approved session keys do not use
 another key's request budget.
 
+## Writes a skill declares
+
+A long run that the user started by approving a skill's start can reach new write keys while the user is away. A plugin
+may declare the writes that its skill's start covers, and the guard then runs them without a question. A plugin with no
+declaration behaves as described above.
+
+### The declaration file
+
+A plugin ships one `approval-grants.json` at its root. The guard reads it only from the version that the running Claude
+Code installation lists as installed in `installed_plugins.json` (under `$CLAUDE_CONFIG_DIR/plugins`, or
+`~/.claude/plugins`), because installed plugin code is what the guard protects from the agent. A rolled-back plugin
+therefore applies its older declaration, and a plugin that file does not list, or a copy only in another host's cache,
+has no declaration. The guard ignores a file that resolves outside the plugin caches, such as a link into a work tree. A
+file with a wrong layout is refused as a whole.
+
+```json
+{
+  "skills": {
+    "demo-run": {
+      "entries": [
+        {"command": "az repos pr update --status completed"},
+        {"command": "git push -u origin <branch:feature/*>"},
+        {"command": "kubectl rollout restart <workload> -n <ns:@grant> --context <ctx:@grant>",
+         "never": {"ctx": ["prod-ctx"]}},
+        {"command": "curl -X DELETE https://<host:api.dev.example.com|api.stg.example.com>/<path>", "destructive": true},
+        {"tool": "mcp__demo__demo_post_message", "arguments": {"channel": "C123"}}
+      ]
+    }
+  }
+}
+```
+
+An entry has exactly one of `command` (a command example) or `tool` (the full `mcp__<server>__<tool>` name, with
+`arguments` that name the values a call must carry). `never` maps a placeholder name to values that are never accepted,
+and `destructive: true` lets the entry cover a call the guard classifies as destructive. Any other key makes that entry
+invalid, and the grant ignores it and reports why.
+
+| Placeholder | Accepts |
+|---|---|
+| `<name>` | any value |
+| `<name:a\|b>` | one of the listed values |
+| `<name:glob>` | a value that matches the glob, such as `<branch:feature/*>` |
+| `<name:@grant>` | a value the grant command passed for `name` |
+
+A placeholder may stand for a whole argument or for part of one, such as a URL path. An option whose example value is a
+JSON object accepts an inline JSON object with exactly the example's keys at every depth, where each value equals the
+example's or is accepted by a placeholder written as a JSON string. An extra or missing key, a different type, a
+repeated key, and a value read from a file such as `@body.json` never match.
+
+### Grant, deny, and link
+
+The skill runs the grant command after it starts:
+
+```bash
+python3 <plugin root>/scripts/approval_guard.py grant --skill demo-run --value ctx=dev-ctx --value ns=demo
+```
+
+`--skill` takes `<skill>` or `<plugin>:<skill>`, and `--value name=value` passes a value for an `@grant` placeholder and
+may repeat. The `PreToolUse` hook decides the call, as it does for `request`, and stores the grant in the session's
+state file with the skill's name and the time. The command prints the stored report: the entries kept, the entries
+ignored with the reason, the values granted, and any value refused. Running it again in the same session replaces the
+kept entries and adds values. A value on an entry's `never` list is refused and reported, and the rest of the grant is
+recorded.
+
+The hook grants only when all of these hold; otherwise it denies the call and grants nothing:
+
+- The host is Claude Code, because the check needs its transcript. Codex is denied.
+- The call comes from the main session: no `agent_id` on the event, so it is not a subagent, and no
+  `HEI5ENBUG_PARENT_SESSION`, so it is not a worker or child.
+- The main thread of the session's transcript shows that the skill started, by a command the user typed or by a `Skill`
+  tool call. A start recorded in a subagent, in a tool result, or in text that a skill injected does not count.
+- An installed plugin's `approval-grants.json` declares the skill. A skill name that two plugins declare needs the
+  `<plugin>:<skill>` form.
+
+The grant keeps an entry only when these hold, and ignores it otherwise:
+
+- With every placeholder filled by an accepted value, the guard classifies the command example as a write, or as
+  destructive when the entry sets `destructive: true`, and not as critical. It ignores a sensitive read, a secret
+  access, and an unclassified command. A tool entry must classify as a write the same way.
+- Every placeholder that reaches the target part of the key, such as a host, a database, a context, a namespace, or a
+  push remote, lists its values or takes them from the grant. An open placeholder or a glob there ignores the entry.
+- A push example names its remote and every refspec, uses only plain flags, and has no force or deletion form
+  (`--force`, `--force-with-lease`, `-f`, `--delete`, `-d`, `--mirror`, or a refspec that starts with `+` or `:`). A
+  plain `git push` reads its refspecs from configuration the guard does not read, so it is ignored.
+
+A child process uses the grants of the session that `HEI5ENBUG_PARENT_SESSION` links it to, as it uses that session's
+approved keys. A skill that starts a child runs `python3 <plugin root>/scripts/approval_guard.py link` in its own Bash
+call, which prints the value for the current session, such as `claude:<session id>`. It then starts the child with that
+text as the environment variable, for example `HEI5ENBUG_PARENT_SESSION=claude:<session id> claude -p ...`. A child
+started without the link has no grants, and a non-interactive child asks as before.
+
+### Matching a write or call
+
+The guard first classifies the write as it does everywhere else. A critical write never matches. A write classified as
+destructive matches only an entry with `destructive: true`. A write matches a kept entry when it is one simple command
+with no pipe, redirection, shell expansion, or environment prefix, and all of these hold:
+
+- Every literal part of the example equals the write's, including a positional argument, an option value, and the text
+  around a placeholder inside one argument. The write has the same number of positional arguments.
+- The write carries every option of the example, each exactly as many times as the example has it. `--option value` and
+  `--option=value` are equal, and an alias such as `-n` for `--namespace` is a different option. The write may carry
+  more options, except one that can change the operation or target from outside the command line: an option whose name
+  names a config, file, input, kubeconfig, URL, next request, request, or output, `-K`, `-f`, `-o`, `-:`, or any extra
+  option whose value starts with `@` or `file:`.
+- Every filled value is accepted by its placeholder and is not on the `never` list. A placeholder that repeats takes one
+  value.
+- The example filled with the write's values classifies to the same key as the write. For a key that is a digest of the
+  command text, such as a `git` or `gh` key, the filled example's words must equal the write's words one for one.
+- A push names its refspecs explicitly, carries no force or deletion form, and no filled value contains `:` or starts
+  with `+`, so `+feature/demo` and `staging-1:refs/tags/release-1` never match.
+
+An MCP call matches a tool entry when the tool name is equal, the call carries every argument the entry lists, and each
+value is accepted. A call the guard classifies as destructive matches only an entry with `destructive: true`, and a
+critical call never matches.
+
+A matching call runs without a prompt and leaves no session approval behind. The call's record for the Claude Code mod
+names the skill, as `<plugin>:<skill>` in its `source` field, as the source of the approval. A write that matches no
+kept entry behaves as before.
+
+### What this trusts
+
+The guard checks that the skill started in the main session and that the write matches a kept entry. It relies on the
+declaring plugin for two things: the skill starts only on the user's request or approval, and no entry accepts or is
+granted a production target. A grant is a guardrail on top of the user's approval of the skill, not a security boundary.
+The kept entries and granted values last until the session ends, and a skill the user did not start never gets them.
+
 ## Protected state and code
 
 The agent cannot approve anything itself. A Bash command that runs `approval_guard.py`, `datagrip_guard.py`,
@@ -448,9 +574,9 @@ redirection except to `/dev/null`. The only variables allowed are `$HOME`, `${HO
 `${XDG_STATE_HOME}`, and `${XDG_STATE_HOME:-<absolute path>}`, and each must start a word as a path prefix followed by
 `/`, as in `ls "$HOME/.local/state/hei5enbug-agent-setup/approvals"`. The guard expands them before it checks the path.
 Any other `$`, `$(`, backtick, `<(`, `>(`, or brace is denied, and the denial names the trigger, for example `It was
-denied because of "$(".` Plain reads of guard files, such as `cat` or `rg`, are not denied. The validated `request`
-command above is the only execution exception. File edits inside either state directory, including paths named in an
-`apply_patch` patch, are denied on both hosts.
+denied because of "$(".` Plain reads of guard files, such as `cat` or `rg`, are not denied. The validated `request`,
+`grant`, and `link` commands are the only execution exceptions. File edits inside either state directory, including paths
+named in an `apply_patch` patch, are denied on both hosts.
 
 Installed plugin code is protected the same way. A write into the Claude or Codex plugin caches
 (`~/.claude/plugins/cache`, `$CLAUDE_CONFIG_DIR/plugins/cache`, `~/.codex/plugins/cache`) or the running plugin root is
@@ -479,8 +605,8 @@ fetch command's exit code, never the fetch's stderr. Each fetch has a 30-second 
 source with `timed out`.
 
 A role runner child with `HEI5ENBUG_PARENT_SESSION=<host>:<session_id>` also reads the parent's approved keys without
-changing its state. Malformed values are ignored. Children cannot record codes from `UserPromptSubmit` or run `request`;
-a call that needs a session approval the parent lacks is denied with instructions to request it in the main session
+changing its state. Malformed values are ignored. Children cannot record codes from `UserPromptSubmit` or run `request`
+or `grant`; a call that needs a session approval the parent lacks is denied with instructions to request it in the main session
 (`request --key write:session` or `--key sensitive:session`) and retry. Children use the parent's `write:session` and
 `sensitive:session` approvals while the parent session holds them, and Codex children never use the native window. Every
 every-time action in a child is denied; the main session runs it itself. Claude children that may edit receive `Bash` in
