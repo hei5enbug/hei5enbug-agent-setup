@@ -219,11 +219,15 @@ the only recurring model cost. Orca cannot report a tab title, so the hook judge
 
 `scripts/final_report_hook.py`, a `Stop` hook on Claude Code only, keeps the turn going once when a final report that
 follows a change was never checked by the independent text review in `instructions/shared-text.md`. It returns its
-reason as `hookSpecificOutput.additionalContext`, which Claude Code shows as `Stop hook feedback`, not as a hook error,
-under the same `stop_hook_active` protection as a block. It continues the turn only when all of these hold:
+reason as `hookSpecificOutput.additionalContext`, which Claude Code shows as `Stop hook feedback`, not as a hook error.
+It gives each of its two reasons at most once per turn: it finds its own earlier feedback in the current turn of the
+transcript instead of skipping every stop where `stop_hook_active` is true. A stop that this hook or another hook
+continued is therefore still checked, and a report sent after the requested review is still compared with the reviewed
+draft. It continues the turn only when all of these hold:
 
-- The event is the main session: it has no `agent_id`, `stop_hook_active` is not true, and neither
-  `HEI5ENBUG_ASSIGNED_ROLE` nor `HEI5ENBUG_PARENT_SESSION` is set.
+- The event is the main session: it has no `agent_id`, and neither `HEI5ENBUG_ASSIGNED_ROLE` nor
+  `HEI5ENBUG_PARENT_SESSION` is set.
+- The current turn has not yet received the same reason.
 - `background_tasks` is absent or empty, because work still running means the reply is not a final report.
 - The current turn, from the last real user prompt to the end, changed files: an `Edit`, `Write`, `MultiEdit`, or
   `NotebookEdit` call, a Bash `git commit`, or a Bash command that, after its heredoc bodies are removed, writes a file

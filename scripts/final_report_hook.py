@@ -54,17 +54,23 @@ WRITE_CALL = re.compile(
 )
 
 
+MISSING_REVIEW = "ends with a final report that no text review checked"
+CHANGED_REPORT = "differs from the draft that the last passing text review checked"
+FEEDBACK_MARKS = ((MISSING_REVIEW, MISSING_REVIEW.encode()), (CHANGED_REPORT, CHANGED_REPORT.encode()))
+
+
 @dataclass(frozen=True)
 class TurnFacts:
     changed_files: bool = False
     reviewed: bool = False
     review_ids: frozenset[str] = frozenset()
     digest: str | None = None
+    told: frozenset[str] = frozenset()
 
 
 def reason_text(root: Path) -> str:
     return (
-        "This turn changed files and ends with a final report that no text review checked. "
+        f"This turn changed files and {MISSING_REVIEW}. "
         f"Read {root}/instructions/shared-text.md, section \"Independent text review\", then run "
         f"`python3 {root}/scripts/text_review.py review --kind {FINAL_REPORT_KIND} --draft <file> ...` on the report "
         "and apply its findings. "
@@ -90,7 +96,7 @@ def runs_review(command: str) -> bool:
 
 def mismatch_reason_text(root: Path) -> str:
     return (
-        "The final report differs from the draft that the last passing text review checked. "
+        f"The final report {CHANGED_REPORT}. "
         "Send that reviewed text unchanged, or run "
         f"`python3 {root}/scripts/text_review.py review --kind {FINAL_REPORT_KIND} --draft <file> ...` "
         "again on the changed report and send the text that passes."
@@ -364,6 +370,9 @@ def current_turn_facts(transcript_path: str) -> TurnFacts:
     facts = TurnFacts()
     with open(transcript_path, "rb") as stream:
         for line in stream:
+            told = frozenset(mark for mark, raw in FEEDBACK_MARKS if raw in line)
+            if told - facts.told:
+                facts = replace(facts, told=facts.told | told)
             if skips_line(line):
                 continue
             try:
@@ -398,7 +407,7 @@ def is_report(text: str) -> bool:
 def is_main_session(event: dict) -> bool:
     if os.environ.get("HEI5ENBUG_ASSIGNED_ROLE") or os.environ.get("HEI5ENBUG_PARENT_SESSION"):
         return False
-    return not event.get("agent_id") and event.get("stop_hook_active") is not True
+    return not event.get("agent_id")
 
 
 def feedback(reason: str) -> dict:
@@ -419,9 +428,9 @@ def decide(event: object) -> dict | None:
     if not facts.changed_files:
         return None
     root = Path(__file__).resolve().parents[1]
-    if facts.digest and report_digest(message) != facts.digest:
+    if facts.digest and report_digest(message) != facts.digest and CHANGED_REPORT not in facts.told:
         return feedback(mismatch_reason_text(root))
-    if not facts.reviewed and is_report(message):
+    if not facts.reviewed and is_report(message) and MISSING_REVIEW not in facts.told:
         return feedback(reason_text(root))
     return None
 

@@ -24,6 +24,11 @@ def entry(kind: str, message: dict, **extra) -> str:
     return json.dumps({"type": kind, "isSidechain": False, "message": message, **extra}, separators=(",", ":"))
 
 
+def feedback_entry(reason: str) -> str:
+    attachment = {"type": "hook_additional_context", "content": [reason], "hookName": "Stop", "hookEvent": "Stop"}
+    return json.dumps({"type": "attachment", "attachment": attachment}, separators=(",", ":"))
+
+
 def prompt(text: str = "do the task") -> str:
     return entry("user", {"role": "user", "content": text})
 
@@ -232,9 +237,37 @@ class FinalReportHookTest(unittest.TestCase):
         self.write(prompt(), assistant(edit()))
         self.assert_blocks(self.run_hook(background_tasks=[]))
 
-    def test_훅에서_이어진_정지는_통과한다(self):
-        self.write(prompt(), assistant(edit()))
+    def test_이번_턴에_같은_피드백을_이미_받았으면_통과한다(self):
+        # Given
+        told = feedback_entry("This turn changed files and ends with a final report that no text review checked.")
+        self.write(prompt(), assistant(edit()), told)
+        # When / Then
         self.assert_passes(self.run_hook(stop_hook_active=True))
+
+    def test_다른_훅이_이어_간_정지에서도_검토가_없으면_한_번_이어_간다(self):
+        self.write(prompt(), assistant(edit()))
+        self.assert_blocks(self.run_hook(stop_hook_active=True))
+
+    def test_검토_요청으로_이어진_뒤_초안과_다른_보고를_보내면_한_번_더_이어_간다(self):
+        # Given
+        draft = "Reviewed draft of the report. " * 4
+        told = feedback_entry("This turn changed files and ends with a final report that no text review checked.")
+        self.write(prompt(), assistant(edit()), told, assistant(bash(REVIEW, "r1")), result("r1", digest_output(draft)))
+        # When
+        output = self.assert_blocks(self.run_hook(stop_hook_active=True, last_assistant_message=REPORT))
+        # Then
+        self.assertIn("differs from the draft", output["reason"])
+
+    def test_초안과_다르다는_피드백을_이미_받았으면_통과한다(self):
+        draft = "Reviewed draft of the report. " * 4
+        told = feedback_entry("The final report differs from the draft that the last passing text review checked.")
+        self.write(prompt(), assistant(edit()), assistant(bash(REVIEW, "r1")), result("r1", digest_output(draft)), told)
+        self.assert_passes(self.run_hook(stop_hook_active=True, last_assistant_message=REPORT))
+
+    def test_이전_턴의_피드백은_새_턴에_영향을_주지_않는다(self):
+        told = feedback_entry("This turn changed files and ends with a final report that no text review checked.")
+        self.write(prompt("earlier"), assistant(edit()), told, prompt("next task"), assistant(edit()))
+        self.assert_blocks(self.run_hook())
 
     def test_하위_에이전트에서는_통과한다(self):
         self.write(prompt(), assistant(edit()))

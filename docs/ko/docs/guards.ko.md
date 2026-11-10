@@ -211,11 +211,14 @@ worktree에는 `orca worktree set --display-name`을 알립니다. `orca worktre
 
 Claude Code 전용 `Stop` 훅인 `scripts/final_report_hook.py`는 변경 뒤에 나가는 최종 보고를
 `instructions/shared-text.md`의 독립 텍스트 검토가 확인하지 않았을 때 턴을 한 번 이어 가게 합니다. 이유는
-`hookSpecificOutput.additionalContext`로 돌려주며, Claude Code는 이를 훅 오류가 아니라 `Stop hook feedback`으로 표시하고
-막을 때와 같은 `stop_hook_active` 보호를 적용합니다. 아래 조건이 모두 맞을 때만 턴을 이어 가게 합니다.
+`hookSpecificOutput.additionalContext`로 돌려주며, Claude Code는 이를 훅 오류가 아니라 `Stop hook feedback`으로
+표시합니다. 두 가지 이유를 각각 한 턴에 한 번까지만 보냅니다. `stop_hook_active`가 true인 멈춤을 모두 건너뛰는 대신, 세션
+기록의 현재 턴에서 자신이 앞서 보낸 피드백을 찾습니다. 그래서 이 훅이나 다른 훅이 이어 간 멈춤도 검사하고, 요청한 검토
+뒤에 보낸 보고도 검토한 초안과 비교합니다. 아래 조건이 모두 맞을 때만 턴을 이어 가게 합니다.
 
-- 이벤트가 주 세션의 것입니다. `agent_id`가 없고, `stop_hook_active`가 true가 아니며, `HEI5ENBUG_ASSIGNED_ROLE`과
-  `HEI5ENBUG_PARENT_SESSION`이 모두 설정되지 않았습니다.
+- 이벤트가 주 세션의 것입니다. `agent_id`가 없고, `HEI5ENBUG_ASSIGNED_ROLE`과 `HEI5ENBUG_PARENT_SESSION`이 모두
+  설정되지 않았습니다.
+- 현재 턴이 같은 이유를 아직 받지 않았습니다.
 - `background_tasks`가 없거나 비어 있습니다. 작업이 아직 돌고 있으면 그 답은 최종 보고가 아니기 때문입니다.
 - 마지막 실제 사용자 프롬프트부터 끝까지의 현재 턴이 파일을 바꿨습니다. `Edit`, `Write`, `MultiEdit`,
   `NotebookEdit` 호출, Bash `git commit`, 또는 heredoc 본문을 뺀 Bash 명령이 `>`, `>>`, `>|`, `&>`, `tee`,
