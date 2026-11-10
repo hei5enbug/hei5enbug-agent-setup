@@ -1,8 +1,8 @@
 """Stop hook that makes the independent text review run before a final report that follows a change.
 
-It blocks the stop once when the main session ends a turn that changed files with a report that no `text_review.py`
-review checked, or that differs from the draft the last passing review checked. Any unreadable input lets the stop
-pass.
+It continues the turn once, as Stop hook feedback, when the main session ends a turn that changed files with a report
+that no `text_review.py` review checked, or that differs from the draft the last passing review checked. Any
+unreadable input lets the stop pass.
 """
 
 from __future__ import annotations
@@ -401,6 +401,11 @@ def is_main_session(event: dict) -> bool:
     return not event.get("agent_id") and event.get("stop_hook_active") is not True
 
 
+def feedback(reason: str) -> dict:
+    """Continue the turn as Stop hook feedback, which Claude Code shows instead of a hook error."""
+    return {"hookSpecificOutput": {"hookEventName": "Stop", "additionalContext": reason}}
+
+
 def decide(event: object) -> dict | None:
     if not isinstance(event, dict) or event.get("hook_event_name") not in (None, "Stop"):
         return None
@@ -415,9 +420,9 @@ def decide(event: object) -> dict | None:
         return None
     root = Path(__file__).resolve().parents[1]
     if facts.digest and report_digest(message) != facts.digest:
-        return {"decision": "block", "reason": mismatch_reason_text(root)}
+        return feedback(mismatch_reason_text(root))
     if not facts.reviewed and is_report(message):
-        return {"decision": "block", "reason": reason_text(root)}
+        return feedback(reason_text(root))
     return None
 
 

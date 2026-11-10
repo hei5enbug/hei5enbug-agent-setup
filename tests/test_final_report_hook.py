@@ -80,8 +80,10 @@ class FinalReportHookTest(unittest.TestCase):
 
     def assert_blocks(self, result: subprocess.CompletedProcess) -> dict:
         output = json.loads(result.stdout)
-        self.assertEqual(output["decision"], "block")
-        return output
+        self.assertNotIn("decision", output)
+        specific = output["hookSpecificOutput"]
+        self.assertEqual(specific["hookEventName"], "Stop")
+        return {"reason": specific["additionalContext"]}
 
     def assert_passes(self, result: subprocess.CompletedProcess) -> None:
         self.assertEqual(result.stdout, "")

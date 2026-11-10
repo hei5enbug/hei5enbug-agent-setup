@@ -210,8 +210,9 @@ worktree에는 `orca worktree set --display-name`을 알립니다. `orca worktre
 ## 최종 보고 검토
 
 Claude Code 전용 `Stop` 훅인 `scripts/final_report_hook.py`는 변경 뒤에 나가는 최종 보고를
-`instructions/shared-text.md`의 독립 텍스트 검토가 확인하지 않았을 때 멈춤을 한 번 막습니다. 아래 조건이 모두 맞을 때만
-막습니다.
+`instructions/shared-text.md`의 독립 텍스트 검토가 확인하지 않았을 때 턴을 한 번 이어 가게 합니다. 이유는
+`hookSpecificOutput.additionalContext`로 돌려주며, Claude Code는 이를 훅 오류가 아니라 `Stop hook feedback`으로 표시하고
+막을 때와 같은 `stop_hook_active` 보호를 적용합니다. 아래 조건이 모두 맞을 때만 턴을 이어 가게 합니다.
 
 - 이벤트가 주 세션의 것입니다. `agent_id`가 없고, `stop_hook_active`가 true가 아니며, `HEI5ENBUG_ASSIGNED_ROLE`과
   `HEI5ENBUG_PARENT_SESSION`이 모두 설정되지 않았습니다.
@@ -244,10 +245,10 @@ Claude Code 전용 `Stop` 훅인 `scripts/final_report_hook.py`는 변경 뒤에
 다른 실행에서는 Bash heredoc으로 문서를 쓴 뒤 검토 없이 보고를 보냈기 때문에 이 훅이 있습니다.
 
 훅은 턴이 파일을 바꿨고, 통과한 `text_review.py review`나 `check --kind final-report`가 `final_report_sha256`을 냈는데
-보낸 보고의 SHA-256이 그 값과 다를 때도 막으며, 보고의 길이는 상관없고 비어 있지 않은 마지막 줄이 `?`나 `？`로 끝나는
+보낸 보고의 SHA-256이 그 값과 다를 때도 턴을 이어 가게 하며, 보고의 길이는 상관없고 비어 있지 않은 마지막 줄이 `?`나 `？`로 끝나는
 메시지만 제외합니다. 양쪽 모두 줄바꿈 방식, 줄 끝 공백, 반복된 빈 줄, 앞뒤 빈 줄의 차이는
 무시합니다. 이유는 보고가 마지막으로 통과한 검토가 확인한 초안과 다르다고 말하고, 그 글을 그대로 보내거나 바뀐 보고를
-다시 검토하라고 요청합니다. 검토가 해시를 낸 적이 없는 턴은 이 규칙으로 막지 않습니다. 이슈 #69의 다른 평가 실행에서
+다시 검토하라고 요청합니다. 검토가 해시를 낸 적이 없는 턴은 이 규칙으로 이어 가게 하지 않습니다. 이슈 #69의 다른 평가 실행에서
 에이전트가 검토를 통과한 뒤 최종 보고에 줄을 더해 보냈고, 채점자가 그 줄에서 문제를 찾았기 때문에 이 규칙이 있습니다.
 인터프리터 스크립트 감지와 길이에 상관없는 불일치 규칙은 이슈 #69의 이후 평가 실행 둘 때문에 있습니다. 한 실행은
 `python3` heredoc 스크립트로만 파일을 고친 뒤 검토 없이 711자 보고를 보냈고, 다른 실행은 통과한 초안과 다른 296자 보고를
