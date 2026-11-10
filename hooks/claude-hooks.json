@@ -1,5 +1,16 @@
 {
   "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" language_guard.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [

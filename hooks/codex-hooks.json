@@ -12,6 +12,18 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" language_guard.py",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
     "PermissionRequest": [
       {
         "matcher": "^mcp__datagrip__execute_sql_query$",

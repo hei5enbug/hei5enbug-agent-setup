@@ -15,6 +15,8 @@ from unittest import mock
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "scripts" / "language_guard.py"
 HOOKS = json.loads((REPO_ROOT / "hooks/hooks.json").read_text())["hooks"]
+CLAUDE_HOOKS = json.loads((REPO_ROOT / "hooks/claude-hooks.json").read_text())["hooks"]
+CODEX_HOOKS = json.loads((REPO_ROOT / "hooks/codex-hooks.json").read_text())["hooks"]
 
 ENGLISH = "I checked the deployment logs and restarted the worker. Everything looks healthy now."
 KOREAN = "배포 로그를 확인하고 worker를 다시 시작했습니다. 지금은 모든 상태가 정상입니다."
@@ -25,6 +27,8 @@ STOP_REASON = (
     "Keep code, identifiers, paths, and commands as they are, and put any text the user asked for "
     "in another language in a code block or block quote."
 )
+CLAUDE_STOP_OUTPUT = {"hookSpecificOutput": {"hookEventName": "Stop", "additionalContext": STOP_REASON}}
+CODEX_STOP_OUTPUT = {"decision": "block", "reason": STOP_REASON}
 REMINDER = (
     "Your previous progress message was not written in Korean. "
     "Write every following message to the user, including progress updates, in Korean."
@@ -140,6 +144,9 @@ class LanguageGuardCase(unittest.TestCase):
         self.assertEqual(result.stderr, b"")
         return json.loads(result.stdout)
 
+    def assert_rewrite(self, result, host="claude"):
+        self.assertEqual(self.output(result), CODEX_STOP_OUTPUT if host == "codex" else CLAUDE_STOP_OUTPUT)
+
     def stop_event(self, message=ENGLISH, **fields):
         event = {
             "hook_event_name": "Stop",
@@ -203,7 +210,7 @@ class DelegatedSessionTest(LanguageGuardCase):
                         ])
                         event = self.stop_event() if event_name == "Stop" else self.post_event(transcript)
                         expected = (
-                            {"decision": "block", "reason": STOP_REASON} if event_name == "Stop" else
+                            (CODEX_STOP_OUTPUT if host == "codex" else CLAUDE_STOP_OUTPUT) if event_name == "Stop" else
                             {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": REMINDER}}
                         )
 
@@ -368,7 +375,7 @@ class ResolutionTest(LanguageGuardCase):
         result = self.run_guard(event, host="codex")
 
         # Then
-        self.assertEqual(self.output(result), {"decision": "block", "reason": STOP_REASON})
+        self.assert_rewrite(result, "codex")
 
     def test_Codex는_환경_변수의_언어로_강제하고_지역_코드를_받아들인다(self):
         """HEI5ENBUG_RESPONSE_LANGUAGE가 ja-JP이면 일본어를 기준으로 판단하고 사유에 Japanese를 쓴다."""
@@ -403,7 +410,7 @@ class ResolutionTest(LanguageGuardCase):
         result = self.run_guard(event, host="codex")
 
         # Then
-        self.assertEqual(self.output(result)["decision"], "block")
+        self.assert_rewrite(result, "codex")
 
     def test_PLUGIN_ROOT가_다른_경로면_Claude_Code로_본다(self):
         """상속된 PLUGIN_ROOT가 이 플러그인 루트가 아니면 Claude Code 규칙을 따른다."""
@@ -466,8 +473,8 @@ class ToggleTest(LanguageGuardCase):
                 post = self.run_guard(self.post_event(transcript), CLAUDE_PLUGIN_OPTION_LANGUAGE_GUARD=value)
 
                 # Then
-                self.assertEqual(self.output(claude)["decision"], "block")
-                self.assertEqual(self.output(codex)["decision"], "block")
+                self.assert_rewrite(claude)
+                self.assert_rewrite(codex, "codex")
                 self.assertEqual(self.output(post)["hookSpecificOutput"]["additionalContext"], REMINDER)
 
     def test_호스트가_아닌_쪽의_토글은_영향을_주지_않는다(self):
@@ -481,8 +488,8 @@ class ToggleTest(LanguageGuardCase):
         claude = self.run_guard(event, HEI5ENBUG_LANGUAGE_GUARD="off")
 
         # Then
-        self.assertEqual(self.output(codex)["decision"], "block")
-        self.assertEqual(self.output(claude)["decision"], "block")
+        self.assert_rewrite(codex, "codex")
+        self.assert_rewrite(claude)
 
 
 class ComplianceTest(unittest.TestCase):
@@ -627,16 +634,19 @@ class StopTest(LanguageGuardCase):
         self.use_korean_setting()
 
     def test_영어_답변은_한_줄_차단_사유와_함께_막힌다(self):
-        """한국어가 아닌 마지막 답변은 decision이 block이고 정해진 사유가 한 줄로 출력된다."""
+        """한국어가 아닌 마지막 답변은 Claude Code에는 Stop additionalContext로, Codex에는 decision block으로 정해진 사유가 출력된다."""
         # Given
         event = self.stop_event(ENGLISH)
 
         # When
-        result = self.run_guard(event)
+        claude = self.run_guard(event)
+        codex = self.run_guard(event, host="codex")
 
         # Then
-        self.assertEqual(self.output(result), {"decision": "block", "reason": STOP_REASON})
-        self.assertEqual(len(result.stdout.decode().strip().splitlines()), 1)
+        self.assert_rewrite(claude)
+        self.assert_rewrite(codex, "codex")
+        self.assertEqual(len(claude.stdout.decode().strip().splitlines()), 1)
+        self.assertEqual(len(codex.stdout.decode().strip().splitlines()), 1)
 
     def test_한국어_답변은_막지_않는다(self):
         """한국어 답변은 아무것도 출력하지 않고 exit 0으로 끝난다."""
@@ -696,8 +706,8 @@ class StopTest(LanguageGuardCase):
 
         # Then
         self.assert_silent(after_cap)
-        self.assertEqual(self.output(new_prompt)["decision"], "block")
-        self.assertEqual(self.output(new_turn)["decision"], "block")
+        self.assert_rewrite(new_prompt)
+        self.assert_rewrite(new_turn)
         state = json.loads((self.data / "language_guard_state.json").read_text())
         self.assertEqual(set(state), {"session-1:prompt-1", "session-1:prompt-2", "session-1:turn-9"})
 
@@ -720,7 +730,7 @@ class StopTest(LanguageGuardCase):
         # Then
         for results in inactive:
             for result in results:
-                self.assertEqual(self.output(result)["decision"], "block")
+                self.assert_rewrite(result)
         for result in active:
             self.assert_silent(result)
         self.assertFalse((self.data / "language_guard_state.json").exists())
@@ -738,7 +748,7 @@ class StopTest(LanguageGuardCase):
 
         # Then
         self.assertEqual([r.stdout != b"" for r in a_results], [True, True, True, False])
-        self.assertEqual(self.output(b_first)["decision"], "block")
+        self.assert_rewrite(b_first)
         state = json.loads((self.data / "language_guard_state.json").read_text())
         self.assertEqual({k: v["count"] for k, v in state.items()}, {"session-1:turn-a": 3, "session-1:turn-b": 1})
 
@@ -751,7 +761,7 @@ class StopTest(LanguageGuardCase):
         result = self.run_guard(event, host="codex", PLUGIN_DATA=str(self.data))
 
         # Then
-        self.assertEqual(self.output(result)["decision"], "block")
+        self.assert_rewrite(result, "codex")
         self.assertTrue((self.data / "language_guard_state.json").is_file())
 
     def test_CLAUDE_PLUGIN_DATA가_PLUGIN_DATA보다_우선한다(self):
@@ -798,7 +808,7 @@ class StopTest(LanguageGuardCase):
         result = self.run_guard(event, CLAUDE_PLUGIN_DATA=str(self.data))
 
         # Then
-        self.assertEqual(self.output(result)["decision"], "block")
+        self.assert_rewrite(result)
         state = json.loads((self.data / "language_guard_state.json").read_text())
         self.assertEqual(state["session-1:prompt-1"]["count"], 1)
 
@@ -817,8 +827,8 @@ class StopTest(LanguageGuardCase):
         results = {name: self.run_guard(event) for name, event in events.items()}
 
         # Then
-        self.assertEqual(self.output(results["inactive"])["decision"], "block")
-        self.assertEqual(self.output(results["missing"])["decision"], "block")
+        self.assert_rewrite(results["inactive"])
+        self.assert_rewrite(results["missing"])
         self.assert_silent(results["active"])
 
     def test_저장할_수_없는_데이터_디렉터리는_stop_hook_active로_대신한다(self):
@@ -836,7 +846,7 @@ class StopTest(LanguageGuardCase):
 
         # Then
         self.assert_silent(stopped)
-        self.assertEqual(self.output(blocked)["decision"], "block")
+        self.assert_rewrite(blocked)
 
     def test_Claude_기록에서_마지막_답변을_읽는다(self):
         """last_assistant_message가 없으면 Claude Code 기록의 마지막 일반 assistant 메시지를 본다."""
@@ -855,7 +865,7 @@ class StopTest(LanguageGuardCase):
         result = self.run_guard(event)
 
         # Then
-        self.assertEqual(self.output(result)["decision"], "block")
+        self.assert_rewrite(result)
 
     def test_Claude_기록은_사이드체인과_합성_메시지를_건너뛴다(self):
         """사이드체인 메시지와 model이 <synthetic>인 메시지는 마지막 답변으로 보지 않는다."""
@@ -894,8 +904,8 @@ class StopTest(LanguageGuardCase):
         plain = self.run_guard(self.stop_event(None, transcript_path=string_content))
 
         # Then
-        self.assertEqual(self.output(split)["decision"], "block")
-        self.assertEqual(self.output(plain)["decision"], "block")
+        self.assert_rewrite(split)
+        self.assert_rewrite(plain)
 
     def test_Codex_기록에서_마지막_최종_답변을_읽는다(self):
         """last_assistant_message가 없으면 Codex 기록의 final_answer를 우선해 본다."""
@@ -916,7 +926,7 @@ class StopTest(LanguageGuardCase):
         result = self.run_guard(event, host="codex")
 
         # Then
-        self.assertEqual(self.output(result)["decision"], "block")
+        self.assert_rewrite(result, "codex")
 
     def test_Codex_기록은_final_answer가_있으면_뒤의_다른_메시지보다_우선한다(self):
         """final_answer가 한국어이면 그 앞이나 뒤의 영어 commentary는 판정하지 않는다."""
@@ -949,7 +959,7 @@ class StopTest(LanguageGuardCase):
         result = self.run_guard(event, host="codex")
 
         # Then
-        self.assertEqual(self.output(result)["decision"], "block")
+        self.assert_rewrite(result, "codex")
 
     def test_Codex_기록은_이전_턴의_답변을_보지_않는다(self):
         """사용자 메시지 앞의 이전 턴 영어 답변은 이번 턴 판정에 쓰지 않는다."""
@@ -986,8 +996,8 @@ class StopTest(LanguageGuardCase):
         codex_result = self.run_guard(self.stop_event(None, transcript_path=codex), host="codex")
 
         # Then
-        self.assertEqual(self.output(claude_result)["decision"], "block")
-        self.assertEqual(self.output(codex_result)["decision"], "block")
+        self.assert_rewrite(claude_result)
+        self.assert_rewrite(codex_result, "codex")
 
     def test_답변도_기록도_없으면_출력이_없다(self):
         """last_assistant_message, 기록 경로, 기록 파일이 모두 없으면 조용히 끝난다."""
@@ -1416,7 +1426,7 @@ class RobustnessTest(LanguageGuardCase):
         result = self.run_guard(event)
 
         # Then
-        self.assertEqual(self.output(result)["decision"], "block")
+        self.assert_rewrite(result)
 
     def test_차단_출력은_도구_호출을_거부하는_필드를_담지_않는다(self):
         """어느 출력에도 permissionDecision 같은 거부 필드가 없다."""
@@ -1568,7 +1578,7 @@ class TailWideningTest(LanguageGuardCase):
         # Then
         self.assertEqual(text, ENGLISH)
         self.assertEqual(limits, [GUARD.INITIAL_TAIL_BYTES, GUARD.TAIL_BYTES])
-        self.assertEqual(self.output(result)["decision"], "block")
+        self.assert_rewrite(result)
 
     def test_Stop은_마지막_assistant_묶음이_창_처음에서_시작하면_넓혀_읽는다(self):
         """마지막 메시지 묶음의 앞부분이 창 밖에 걸쳐 있으면 넓혀 읽어 묶음 전체를 판정한다."""
@@ -1589,24 +1599,36 @@ class TailWideningTest(LanguageGuardCase):
 
 
 class RegistrationTest(LanguageGuardCase):
-    def test_hooks_json은_PostToolUse와_Stop에_가드를_등록한다(self):
-        """PostToolUse는 async로, Stop은 동기로 matcher 없이 language_guard.py를 timeout 5로 실행한다."""
+    def test_가드는_Stop은_공통으로_PostToolUse는_호스트별로_등록한다(self):
+        """hooks.json은 Stop만 동기로, claude-hooks.json은 PostToolUse를 동기로, codex-hooks.json은 PostToolUse를 async로 matcher 없이 timeout 5로 등록한다."""
         # Given
         expected_command = 'sh "${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh" language_guard.py'
         expected_hook = {"type": "command", "command": expected_command, "timeout": 5}
+        sources = {"hooks.json": HOOKS, "claude-hooks.json": CLAUDE_HOOKS, "codex-hooks.json": CODEX_HOOKS}
 
         # When
-        entries = {
-            event: [group for group in HOOKS[event] if "language_guard.py" in group["hooks"][0]["command"]]
+        registered = {
+            (name, event): [
+                group for group in hooks.get(event, []) if "language_guard.py" in group["hooks"][0]["command"]
+            ]
+            for name, hooks in sources.items()
             for event in ("PostToolUse", "Stop")
         }
 
         # Then
-        for event, groups in entries.items():
-            with self.subTest(event=event):
+        expected = {
+            ("hooks.json", "Stop"): expected_hook,
+            ("claude-hooks.json", "PostToolUse"): expected_hook,
+            ("codex-hooks.json", "PostToolUse"): {**expected_hook, "async": True},
+        }
+        for key, groups in registered.items():
+            with self.subTest(source=key[0], event=key[1]):
+                if key not in expected:
+                    self.assertEqual(groups, [])
+                    continue
                 self.assertEqual(len(groups), 1)
                 self.assertNotIn("matcher", groups[0])
-                self.assertEqual(groups[0]["hooks"], [{**expected_hook, "async": True} if event == "PostToolUse" else expected_hook])
+                self.assertEqual(groups[0]["hooks"], [expected[key]])
 
     def test_기존_훅_등록은_바뀌지_않는다(self):
         """SessionStart, SubagentStart 항목은 그대로이고(SessionStart는 Codex에 전체 문맥을 넘기는 한도 0만 더한다) hooks.json의 PreToolUse에는 Codex 전용 Agent 가드가 없다."""
@@ -1629,7 +1651,7 @@ class RegistrationTest(LanguageGuardCase):
         self.assertNotIn("agent_guard.py", json.dumps(HOOKS["PreToolUse"]))
 
     def test_등록된_명령은_플러그인_루트에서_실제로_실행된다(self):
-        """hooks.json의 명령 문자열을 셸로 실행하면 Stop 입력에 차단 출력을 낸다."""
+        """hooks.json의 명령 문자열을 셸로 실행하면 Stop 입력에 재작성 요청 출력을 낸다."""
         # Given
         self.use_korean_setting()
         handler = HOOKS["Stop"][0]["hooks"][0]
@@ -1649,7 +1671,7 @@ class RegistrationTest(LanguageGuardCase):
 
         # Then
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout), {"decision": "block", "reason": STOP_REASON})
+        self.assertEqual(json.loads(result.stdout), CLAUDE_STOP_OUTPUT)
 
 
 class SessionContextLanguageTest(unittest.TestCase):

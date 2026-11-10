@@ -13,11 +13,14 @@ Korean, Japanese, Chinese, Russian, Ukrainian, Greek, Arabic, Hebrew, Thai, and 
 English or French, the instruction alone applies.
 
 The check ignores code, quotes, and URLs. A text passes when at least 30% of its letters are in the target script, and
-very short text always passes. A `Stop` hook asks for a rewrite when a reply fails, at most 3 times per turn. Delegated
-child sessions are not checked: a session with `HEI5ENBUG_ASSIGNED_ROLE` or `HEI5ENBUG_PARENT_SESSION` set, such as a
-role runner child, returns its answer to the coordinating session, which replies to the user. A `PostToolUse` hook adds
-a reminder after a progress update in another language. It runs asynchronously, so the reminder reaches the model on the
-next turn. Put text the user asks for in another language in a code block or block quote.
+very short text always passes. A `Stop` hook asks for a rewrite when a reply fails, at most 3 times per turn. Claude
+Code shows that request as `Stop hook feedback`, not as a hook error, and Codex receives it as a continuation prompt.
+Delegated child sessions are not checked: a session with `HEI5ENBUG_ASSIGNED_ROLE` or `HEI5ENBUG_PARENT_SESSION` set,
+such as a role runner child, returns its answer to the coordinating session, which replies to the user. A `PostToolUse`
+hook adds a reminder after a progress update in another language, before the model's next request in the same turn.
+Claude Code runs it synchronously, because it adds a background hook's output to the same turn only when the hook
+finishes before the next model request. Codex runs it in the background and adds its output to the next model request
+of the turn. Put text the user asks for in another language in a code block or block quote.
 
 ## DataGrip query guard
 
@@ -196,11 +199,12 @@ edit or commit elsewhere neither writes nor starts that wait. The `orca_status_w
 in `/config` on Claude Code and with `HEI5ENBUG_ORCA_STATUS_WRITES` on Codex. The state lives in
 `$XDG_STATE_HOME/hei5enbug-agent-setup/orca-status/<session id>.json`.
 
-Two things still need the model, so the `Stop` hook blocks the stop once per state with a reminder of at most two
-sentences that names the exact command and asks the model to end the turn without repeating the reply. A task worktree
-that is not the main clone, still shows its automatic name, and has a file edited or committed in this session is
-reminded of `orca worktree set --display-name`. A session that ran `orca worktree set` and never `orca terminal rename`
-is reminded of the tab title; when both apply, one reminder carries both commands. Each reminder fires at most once
-per session, and a stop that continues from a hook never gets another. One reminder costs about 265,000 cache-read
-and output tokens on one measured machine, so these are the only recurring model cost. Orca cannot report a tab title,
-so the hook judges the title only by the session's own `orca terminal rename` commands.
+Two things still need the model, so the `Stop` hook keeps the turn going once per state with a reminder of at most two
+sentences that names the exact command and asks the model to end the turn without repeating the reply. Claude Code shows
+that reminder as `Stop hook feedback`, not as a hook error. A task worktree that is not the main clone, still shows its
+automatic name, and has a file edited or committed in this session is reminded of `orca worktree set --display-name`. A
+session that ran `orca worktree set` and never `orca terminal rename` is reminded of the tab title; when both apply, one
+reminder carries both commands. Each reminder fires at most once per session, and a stop that continues from a hook
+never gets another. One reminder costs about 265,000 cache-read and output tokens on one measured machine, so these are
+the only recurring model cost. Orca cannot report a tab title, so the hook judges the title only by the session's own
+`orca terminal rename` commands.

@@ -2010,7 +2010,7 @@ class SessionContextRegistrationTest(unittest.TestCase):
         codex = (REPO_ROOT / "hooks/codex-hooks.json").read_text()
 
         # Then
-        self.assertEqual(claude, {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": command, "timeout": 5}]}]})
+        self.assertEqual(claude["UserPromptSubmit"], [{"hooks": [{"type": "command", "command": command, "timeout": 5}]}])
         self.assertNotIn("session_context.py", shared)
         self.assertNotIn("session_context.py", codex)
 

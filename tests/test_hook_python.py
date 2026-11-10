@@ -14,9 +14,13 @@ LAUNCHER_COMMAND = re.compile(r'sh "\$\{CLAUDE_PLUGIN_ROOT\}/scripts/hook_python
 SYSTEM_PATH = "/usr/bin:/bin"
 CODEX_ONLY_HOOKS = [
     ("PreToolUse", "Agent|Task", "agent_guard.py", 5, False),
+    ("PostToolUse", None, "language_guard.py", 5, True),
     ("PermissionRequest", "^mcp__datagrip__execute_sql_query$", "datagrip_guard.py", 10, False),
 ]
-CLAUDE_ONLY_HOOKS = [("UserPromptSubmit", None, "session_context.py", 5, False)]
+CLAUDE_ONLY_HOOKS = [
+    ("PostToolUse", None, "language_guard.py", 5, False),
+    ("UserPromptSubmit", None, "session_context.py", 5, False),
+]
 EXPECTED_HOOKS = [
     ("SessionStart", None, "session_context.py", 10, False),
     ("SubagentStart", None, "session_context.py", 10, False),
@@ -26,7 +30,6 @@ EXPECTED_HOOKS = [
     ("PreToolUse", "^Bash$", "required_checks_hook.py", 5, False),
     ("PreToolUse", "^(Bash|EnterWorktree)$", "orca_placement_hook.py", 5, False),
     ("PermissionRequest", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),
-    ("PostToolUse", None, "language_guard.py", 5, True),
     ("PostToolUse", "^(Bash|Edit|Write|MultiEdit|NotebookEdit|apply_patch)$", "orca_status_hook.py", 10, False),
     ("PostToolUse", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),
     ("PostToolUseFailure", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),

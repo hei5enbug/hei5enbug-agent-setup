@@ -9,11 +9,11 @@ mechanically from an event, on the session's own current worktree:
   restores that comment while it is still the hook's own;
 - after an edit or a commit inside the worktree, whose status is `completed`, `todo`, or unset (PostToolUse), `in-progress`.
 
-The `orca_status_writes` option turns these writes off. At Stop it also blocks the stop once per state with a
-one-command instruction, which costs model tokens only then, when a task worktree the session changed still has its
-automatic name, or when the session updated its worktree and never titled its tab. A failed read of Orca, Git, or the
-transcript lets the event pass. A Codex transcript records tool calls as script text, so the hook reads Claude Code
-transcripts only.
+The `orca_status_writes` option turns these writes off. At Stop it also keeps the turn going once per state with a
+one-command instruction, which Claude Code shows as Stop hook feedback rather than a hook error, and which costs model
+tokens only then, when a task worktree the session changed still has its automatic name, or when the session updated
+its worktree and never titled its tab. A failed read of Orca, Git, or the transcript lets the event pass. A Codex
+transcript records tool calls as script text, so the hook reads Claude Code transcripts only.
 """
 
 from __future__ import annotations
@@ -500,7 +500,11 @@ def handle_stop(event: dict, state: State, writes: bool) -> dict | None:
     if writes:
         write_question(event, turns, state)
     reason = evaluate(turns, state)
-    return {"decision": "block", "reason": reason} if reason else None
+    if not reason:
+        return None
+    if language_guard.detect_host() == "claude":
+        return {"hookSpecificOutput": {"hookEventName": "Stop", "additionalContext": reason}}
+    return {"decision": "block", "reason": reason}
 
 
 def handle(event: object) -> dict | None:

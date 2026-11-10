@@ -366,16 +366,19 @@ def may_block(event: dict) -> bool:
     return event.get("stop_hook_active") is not True
 
 
-def handle_stop(event: dict, language: str) -> dict | None:
+def handle_stop(event: dict, language: str, host: str) -> dict | None:
     text = last_assistant_text(event)
     if not text.strip() or is_compliant(text, language):
         return None
     if not may_block(event):
         return None
-    return {"decision": "block", "reason": STOP_REASON.format(language=language)}
+    reason = STOP_REASON.format(language=language)
+    if host == "claude":
+        return {"hookSpecificOutput": {"hookEventName": "Stop", "additionalContext": reason}}
+    return {"decision": "block", "reason": reason}
 
 
-def handle_post_tool_use(event: dict, language: str) -> dict | None:
+def handle_post_tool_use(event: dict, language: str, host: str) -> dict | None:
     text = preceding_progress_text(event)
     if text is None or not text.strip() or is_compliant(text, language):
         return None
@@ -398,8 +401,9 @@ def handle(event: object) -> dict | None:
     handler = HANDLERS.get(event.get("hook_event_name"))
     if handler is None:
         return None
-    language = resolve_language(event, detect_host())
-    return handler(event, language) if language else None
+    host = detect_host()
+    language = resolve_language(event, host)
+    return handler(event, language, host) if language else None
 
 
 def main() -> int:

@@ -143,8 +143,9 @@ class HookCase(unittest.TestCase):
 
     def assert_blocks(self, output: dict | None, *needles: str) -> str:
         self.assertIsNotNone(output)
-        self.assertEqual(output["decision"], "block")
-        reason = output["reason"]
+        self.assertEqual(output["hookSpecificOutput"]["hookEventName"], "Stop")
+        self.assertNotIn("decision", output)
+        reason = output["hookSpecificOutput"]["additionalContext"]
         self.assertLessEqual(reason.count(". ") + 1, 2, reason)
         self.assertIn("end the turn without repeating the reply", reason)
         for needle in needles:
