@@ -20,6 +20,7 @@ CODEX_ONLY_HOOKS = [
 CLAUDE_ONLY_HOOKS = [
     ("PostToolUse", None, "language_guard.py", 5, False),
     ("UserPromptSubmit", None, "session_context.py", 5, False),
+    ("Stop", None, "final_report_hook.py", 5, False),
 ]
 EXPECTED_HOOKS = [
     ("SessionStart", None, "session_context.py", 10, False),

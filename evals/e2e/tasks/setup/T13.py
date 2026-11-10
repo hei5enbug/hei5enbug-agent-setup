@@ -1,4 +1,4 @@
-"""Branch with a stock export that adds four columns, the team's writing rules, and the local check log."""
+"""Branch with a stock export that adds four columns, the team's writing rules, and an uncommitted local check log."""
 
 from __future__ import annotations
 
@@ -93,11 +93,13 @@ CHECK_LOG = """Local check results, oldest first
 def main(repo: str) -> None:
     root = Path(repo)
     add_writing_rules(root)
-    subprocess.run(["git", "checkout", "-q", "-b", "feature/report-columns"], cwd=root, check=True)
+    subprocess.run(["git", "checkout", "-q", "-b", "feature/INV-42-report-columns"], cwd=root, check=True)
     write(root, "inventory/export.py", EXPORT)
     write(root, "tests/test_export.py", TEST)
-    write(root, "review/check-log.txt", CHECK_LOG)
     commit(root, "feat: add the stock export")
+    write(root, "review/check-log.txt", CHECK_LOG)
+    with (root / ".git" / "info" / "exclude").open("a", encoding="utf-8") as exclude:
+        exclude.write("review/\n")
 
 
 if __name__ == "__main__":

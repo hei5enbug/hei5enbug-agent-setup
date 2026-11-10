@@ -1,1 +1,1 @@
-feature/report-columns 브랜치에서 재고 내보내기 기능을 만들었어. 이 브랜치로 올릴 PR 설명을 써줘. 티켓은 INV-42이고, 로컬 검증 결과는 review/check-log.txt에 있어. PR 작성 규칙은 docs/writing-rules.md야. 그대로 PR에 붙여넣을 거니까 out/pr-description.txt에 저장해줘.
+feature/INV-42-report-columns 브랜치에서 재고 내보내기 기능을 만들었어. 이 브랜치로 올릴 PR 설명을 써줘. 티켓은 INV-42이고, 로컬 검증 결과는 review/check-log.txt에 있어. PR 작성 규칙은 docs/writing-rules.md야. 그대로 PR에 붙여넣을 거니까 out/pr-description.txt에 저장해줘.

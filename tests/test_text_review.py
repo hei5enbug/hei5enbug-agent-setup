@@ -95,6 +95,23 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(1, result.returncode)
         self.assertEqual([("identifier-list", 2)], rules_of(result))
 
+    def test_최종_보고가_통과하면_정규화한_해시를_내고_다른_종류와_실패한_점검에는_내지_않는다(self):
+        # given
+        text = CLEAN_DRAFT
+        padded = "\n\n" + CLEAN_DRAFT.replace("\n\n", "  \n\n\n\n") + "\n\n"
+        # when
+        passed = self.check(text, "--kind", "final-report")
+        padded_result = self.check(padded, "--kind", "final-report")
+        other = self.check(text, "--kind", "pr-description")
+        failed = self.check("- Added `user_id`, `user_name`, and `user_email` columns\n", "--kind", "final-report")
+        # then
+        digest = json.loads(passed.stdout)["final_report_sha256"]
+        self.assertRegex(digest, r"^[0-9a-f]{64}$")
+        self.assertEqual(digest, json.loads(padded_result.stdout)["final_report_sha256"])
+        self.assertNotIn("final_report_sha256", json.loads(other.stdout))
+        self.assertEqual(1, failed.returncode)
+        self.assertNotIn("final_report_sha256", json.loads(failed.stdout))
+
     def test_공백이_있는_코드_조각은_식별자로_세지_않는다(self):
         # given
         text = "- Ran `git status`, `git diff`, and `git log --oneline`\n"
@@ -452,6 +469,24 @@ class ReviewTest(unittest.TestCase):
         self.assertEqual("removable", payload["findings"][0]["type"])
         self.assertEqual(["f1"], payload["over_budget_facts"])
         self.assertEqual({"exit": 0, "verified": True}, payload["runner"])
+
+    def test_최종_보고_검토가_통과하면_해시를_내고_발견이_있거나_다른_종류이면_내지_않는다(self):
+        # given
+        digest = self.load_digest(CLEAN_DRAFT)
+        # when
+        passed = self.review("none", kind="final-report")
+        found = self.review("findings", kind="final-report")
+        other = self.review("none")
+        # then
+        self.assertEqual(digest, json.loads(passed.stdout)["final_report_sha256"])
+        self.assertNotIn("final_report_sha256", json.loads(found.stdout))
+        self.assertNotIn("final_report_sha256", json.loads(other.stdout))
+
+    def load_digest(self, text):
+        spec = importlib.util.spec_from_file_location("text_review_digest", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.report_digest(text)
 
     def test_검토자가_발견을_돌려주지_않으면_종료_코드_0을_낸다(self):
         # given

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import shutil
@@ -21,6 +22,7 @@ DEFAULT_TIMEOUT = 600
 DEFAULT_REVIEWS = 1
 RUNNER_GRACE_SECONDS = 60
 RUNNER_TIMEOUT_STAGES = 4
+FINAL_REPORT_KIND = "final-report"
 EXIT_OK, EXIT_FINDINGS, EXIT_USAGE, EXIT_REVIEW_FAILED = 0, 1, 2, 3
 FINDING_TYPES = ("removable", "missing", "ambiguous")
 LINE_TEXT_LIMIT = 160
@@ -41,13 +43,15 @@ UNCHANGED_PATTERNS = (
 
 REVIEWER_INSTRUCTIONS = """\
 You have no conversation context. Review the draft below, which is addressed to a reader who will decide or act on \
-it. Run two passes over the whole draft, not only a changed part.
+it. Run two passes over the whole draft, not only a changed part. When the sources include a diff of the draft \
+itself, report text outside that diff only where the change made it wrong or redundant.
 
 Cut pass: report each sentence or link that can be deleted without the reader losing a fact needed to decide or act. \
 This includes a sentence or link that restates a linked source, an adjacent table or figure, another section, or a \
-diff the reader sees with the text; a list of names such a diff shows; the reason behind a check item; a statement that something does not change, \
-unless a reader would otherwise act wrongly; a link whose target another listed link already covers; and items of \
-one kind that should be one line.
+diff the reader sees with the text; a list of names such a diff shows; the rule that requires a listed check, \
+though never why a required check was not done; a statement that something does not change, unless a reader would \
+otherwise act wrongly; a link whose target another listed link already covers; and items of one kind that should \
+be one line.
 
 Completeness pass: report each decision, condition, prerequisite, order, or completion criterion that the sources or \
 the request require and the draft lacks, and each sentence with two readings.
@@ -56,10 +60,12 @@ When a length budget is given and the draft exceeds it, also list each fact that
 author's note gives the author's reason for keeping a sentence that an earlier run flagged; accept or reject each \
 note on its merits.
 
-Report nothing else, and report no finding you cannot quote or point to. The destination's writing rules take \
-precedence: never report as removable what they require. Judge each finding for the reader named below; a fact that \
-reader has not seen, such as a change made beyond the request, is not a restatement. Report only a finding a careful \
-editor would make on any reading, not a matter of taste; a careful draft should get an empty list.
+Before you answer, go through every sentence and link of the draft in order and decide for each one whether the cut \
+pass removes it. A title, a heading, a commit subject, and the opening sentence that states the text's main point \
+are never removable. Report nothing else, and report no finding you cannot quote or point to. The destination's writing \
+rules take precedence: never report as removable what they require. Judge each finding for the reader named below; \
+a fact that reader has not seen, such as a change made beyond the request, is not a restatement. Report only a \
+finding a careful editor would make on any reading, not a matter of taste; a careful draft should get an empty list.
 
 Answer with one JSON object in a ```json fence and nothing after it:
 {"findings": [{"type": "removable" | "missing" | "ambiguous", "quote": "...", "reason": "..."}], \
@@ -83,7 +89,10 @@ READERS = {
     "shared-document": "a colleague who reads only this document and its links.",
     "final-report": (
         "the user who asked for the work and has not read the diff, the logs, or the tool output. What is left for "
-        "them, such as an uncommitted change, a skipped step, or a failing check, is a fact they need."
+        "them, such as an uncommitted change, a skipped step and why it was skipped, or a failing check, is a fact "
+        "they need, and so is the regression each new test catches. A file, function, or test name they need not "
+        "open or act on, how the work went, such as earlier failures, retries, or who did each part, and a count "
+        "they did not ask for are not."
     ),
     "other": "someone who reads only this text and its links.",
 }
@@ -396,13 +405,26 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def report_digest(text: str) -> str:
+    lines = [line.rstrip() for line in text.replace("\r\n", "\n").split("\n")]
+    collapsed = [line for index, line in enumerate(lines) if line or index == 0 or lines[index - 1]]
+    normalized = "\n".join(collapsed).strip("\n")
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def passed_digest(kind: str | None, draft: str) -> dict:
+    return {"final_report_sha256": report_digest(draft)} if kind == FINAL_REPORT_KIND else {}
+
+
 def emit(payload: dict) -> None:
     print(json.dumps(payload, ensure_ascii=False))
 
 
 def command_check(args: argparse.Namespace) -> int:
-    found, advisories = check_text(read_input(args.file), args.kind, args.no_ticket_keys)
-    emit({"findings": found, "advisories": advisories})
+    text = read_input(args.file)
+    found, advisories = check_text(text, args.kind, args.no_ticket_keys)
+    digest = {} if found else passed_digest(args.kind, text)
+    emit({"findings": found, "advisories": advisories, **digest})
     return EXIT_FINDINGS if found else EXIT_OK
 
 
@@ -430,7 +452,7 @@ def command_review(args: argparse.Namespace) -> int:
     if errors:
         emit({**base, "error": "; ".join(errors), **status})
         return EXIT_REVIEW_FAILED
-    emit({**base, "findings": [], "over_budget_facts": facts, **status})
+    emit({**base, "findings": [], "over_budget_facts": facts, **status, **passed_digest(args.kind, draft)})
     return EXIT_OK
 
 

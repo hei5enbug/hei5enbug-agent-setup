@@ -532,6 +532,12 @@ class MainCloneRenameGateTest(unittest.TestCase):
         result = self.run_command(command, **options)
         self.assertEqual((result.returncode, result.stdout), (0, ""), result.stderr)
 
+    def test_에이전트_실행과_함께_쓴_메인_클론_이름_변경도_차단한다(self):
+        self.assert_denied(
+            "orca agent launch --worktree active --agent claude --json; "
+            f'orca worktree set --worktree path:{MAIN_CLONE} --display-name "ABC-1 demo"'
+        )
+
     def test_메인_클론에_표시_이름을_주는_명령은_모든_선택자_형식에서_차단하고_세션_제목을_안내한다(self):
         # Regression: a session renamed the shared main clone, so every other session in it showed a ticket it was not on
         selectors = [

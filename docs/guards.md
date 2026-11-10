@@ -214,3 +214,51 @@ reminder carries both commands. Each reminder fires at most once per session, an
 never gets another. One reminder costs about 265,000 cache-read and output tokens on one measured machine, so these are
 the only recurring model cost. Orca cannot report a tab title, so the hook judges the title only by the session's own
 `orca terminal rename` commands.
+
+## Final report review
+
+`scripts/final_report_hook.py`, a `Stop` hook on Claude Code only, blocks the stop once when a final report that follows
+a change was never checked by the independent text review in `instructions/shared-text.md`. It blocks only when all of
+these hold:
+
+- The event is the main session: it has no `agent_id`, `stop_hook_active` is not true, and neither
+  `HEI5ENBUG_ASSIGNED_ROLE` nor `HEI5ENBUG_PARENT_SESSION` is set.
+- `background_tasks` is absent or empty, because work still running means the reply is not a final report.
+- The current turn, from the last real user prompt to the end, changed files: an `Edit`, `Write`, `MultiEdit`, or
+  `NotebookEdit` call, a Bash `git commit`, or a Bash command that, after its heredoc bodies are removed, writes a file
+  through `>`, `>>`, `>|`, `&>`, `tee`, or `sed -i` and `perl -i`. Such a write counts only for a literal path that
+  does not start with `$`, `~`, or `&` and is not under `/dev/`, `/tmp/`, `/private/`, or `/var/folders/`. A Bash
+  command also counts when it runs `python`, `python3`, `python3.N`, `node`, `ruby`, or `perl`, also after `env` and the
+  other wrappers, with code from a heredoc on its stdin or from `-c` or `-e`, and that code, heredoc body included,
+  contains a write call such as `write_text(`, `write_bytes(`, `.write(` (not on `stdout` or `stderr`), `open(` with a
+  `w`, `a`, or `x` mode, `json.dump(`, `shutil.copy`, `shutil.move`, `os.replace(`, `os.rename(`, `writeFileSync(`,
+  `appendFileSync(`, or `File.write(`. The hook does not resolve the path such a script writes. Delegated work counts
+  too, because a delegated run's edits are not in the main transcript: an `Agent` or `Task` call whose `subagent_type`,
+  compared without case, contains none of `scout`, `review`, `explore`, `plan`, `guide`, or `statusline`, or has no
+  `subagent_type`, since the default agent can write; and a Bash command that runs `role_runner.py`, by basename and
+  also after `python3`, with `worker`, `implementation`, `designer`, `language`, `writer`, or `agent` as its first
+  positional argument.
+- The turn ran no `text_review.py review --kind final-report` and no `text_review.py check --kind final-report`, also
+  after `python3`. A review of another kind, such as a document the turn wrote, does not count.
+- `last_assistant_message` is a report: at least 400 characters after stripping, with a last non-empty line that does not
+  end with `?` or `？`.
+
+The reason, at most four sentences, says that this turn changed files and ends with a final report that no text review
+checked, names the plugin's `instructions/shared-text.md` section "Independent text review" and the
+`text_review.py review --kind final-report --draft <file> ...` command, asks to apply its findings, asks to review every
+other text this turn wrote for other people the same way with its own `--kind`, and asks to send the report again. The
+hook streams the transcript once and starts no subprocess. A missing transcript, a read or parse error, or malformed
+input lets the stop pass, and a passing stop prints nothing. It exists because, in an evaluation run
+for issue #69, the agent sent its final report without reading the text rules or running the review, and in another it
+wrote a document with a Bash heredoc and then sent its report unreviewed.
+
+The hook also blocks when the turn changed files and a passing `text_review.py review` or `check --kind final-report`
+printed a `final_report_sha256`, and the SHA-256 of the sent report differs from it, whatever the report's length; only a
+message whose last non-empty line ends with `?` or `？` is exempt. Both sides ignore line-ending
+differences, trailing spaces, repeated blank lines, and leading or trailing blank lines. The reason says that the report
+differs from the draft the last passing review checked and asks to send that text unchanged or to review the changed
+report again. A turn whose reviews never printed a digest is not blocked on this rule. It exists because, in another
+evaluation run for issue #69, the agent added lines to its final report after the review passed, and the grader found
+problems in them. The interpreter-script detection and the any-length mismatch rule exist because two later evaluation
+runs for issue #69 edited files only through `python3` heredoc scripts and sent an unreviewed 711-character report, and
+sent a 296-character report that differed from the passing draft.

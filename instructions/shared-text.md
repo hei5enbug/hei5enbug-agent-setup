@@ -7,13 +7,18 @@ newlines are shown as line breaks. Each section names when it applies.
 
 Apply this section to every text a person reads to grasp the work: a reply or final report to the user, a repository
 document, an issue or ticket body, a comment, a review reply, a commit message, a chat message, and a pull request
-description. When you write or update one, run both passes over the whole text, not only the changed part.
+description. When you write or update one, run both passes over the whole text, not only the changed part. In an
+existing text you change only in part, act on what they find outside your change only where your change made that
+text wrong or redundant.
 
 1. Cut pass: delete each sentence or link whose removal loses no fact the reader needs to decide or act. This covers a
    sentence that restates a linked source, an adjacent table or figure, another section, or a diff the reader sees
-   with the text; a list of names such a diff shows; the reason behind a check item; a statement that something does
-   not change, unless a reader would otherwise act wrongly; and a link whose target another listed link already
-   covers. Merge items of one kind into one line.
+   with the text; a list of names such a diff shows; the rule that requires a listed check, though never why a
+   required check was not done; a statement that something does not change, unless a reader would otherwise act
+   wrongly; and a link whose target another listed link already covers. Merge items of one kind into one line.
+   In a final report, describe each change by its behavior and each new test, in one sentence, by the regression it
+   catches. Name a file, function, or test only when the user must open or act on it, and leave out how the work
+   went, such as earlier failures, retries, or who did each part, and counts the user did not ask for.
 2. Completeness pass: compare the text with the request and its sources. Restore every decision, condition,
    prerequisite, order, and completion criterion the reader needs, and rewrite every sentence with two readings.
 3. When the destination has a length budget and the text exceeds it, cut by the first pass. Keep the text over budget
@@ -34,11 +39,14 @@ python3 <Source directory>/scripts/text_review.py review --kind <kind> --draft <
 - `--kind` is `pr-description`, `review-reply`, `issue-body`, `ticket-comment`, `commit-message`, `chat-message`,
   `shared-document`, `final-report`, or `other`. Pass the destination's writing rules with `--rules`, the request,
   diff, or ticket the text reports on with `--source`, the length budget with `--budget <characters>`, and
-  `--no-ticket-keys` when the destination's rules forbid a ticket key.
+  `--no-ticket-keys` when the destination's rules forbid a ticket key. For a final report, pass the user's request and
+  the diff of the whole change as `--source`, and `--rules` only for report rules the user or the project gave. For an
+  existing text you changed only in part, also pass its diff as `--source`.
 - It first checks the patterns the text alone decides and stops on them; fix each finding. It then has a reviewer with
   no conversation context review the draft against only the rules and sources you passed.
-- Exit 0: post. Exit 1: apply each finding to the whole text and run it again. To keep a flagged sentence, pass your
-  reason with `--note` and let the next run judge it. Post only after a run returns no findings.
+- Exit 0: post the reviewed text unchanged. Exit 1: apply each finding to the whole text and run it again. To keep a
+  flagged sentence, pass your reason with `--note` and let the next run judge it. Post only after a run returns no
+  findings.
 - Count only runs that reach the reviewer. After three such runs that still return findings, post nothing, show the
   user the remaining findings, and ask. Send a final report as revised instead, with no line about the review, once
   `text_review.py check --kind final-report <file>` returns no findings for it.

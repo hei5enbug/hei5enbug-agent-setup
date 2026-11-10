@@ -483,21 +483,20 @@ def main() -> int:
     if command is None:
         return 0
     segments = [tokens for text in texts_to_check(command) for tokens in segments_of(text)]
+    cwd = event_cwd(raw)
     if any(creates_top_level_worktree(tokens) for tokens in segments):
         deny(REASON)
-    elif any(parent_denial(tokens, event_cwd(raw)) for tokens in segments):
+        return 0
+    if any(parent_denial(tokens, cwd) for tokens in segments):
         deny(PARENT_REASON)
-    elif any(starts_agent_session(tokens) for tokens in segments):
-        reason = memory_reason()
-        if reason:
-            deny(reason)
-    else:
-        cwd = event_cwd(raw)
+        return 0
+    reason = memory_reason() if any(starts_agent_session(tokens) for tokens in segments) else None
+    if reason is None:
         reason = next((r for r in (completed_denial(tokens, cwd) for tokens in segments) if r), None)
-        if reason is None and any(main_clone_rename_denial(tokens, cwd) for tokens in segments):
-            reason = MAIN_CLONE_REASON
-        if reason:
-            deny(reason)
+    if reason is None and any(main_clone_rename_denial(tokens, cwd) for tokens in segments):
+        reason = MAIN_CLONE_REASON
+    if reason:
+        deny(reason)
     return 0
 
 

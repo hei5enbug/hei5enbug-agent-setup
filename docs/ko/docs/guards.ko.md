@@ -206,3 +206,49 @@ worktree에는 `orca worktree set --display-name`을 알립니다. `orca worktre
 일어나고, 훅 때문에 이어진 멈춤에서는 다시 일어나지 않습니다. 알림 한 번에 측정한 한 컴퓨터 기준 약 265,000 캐시 읽기와
 출력 토큰이 들며, 이것이 반복되는 유일한 모델 비용입니다. Orca는 탭 제목을 보고하지 않으므로 훅은 세션 자신의
 `orca terminal rename` 명령만으로 제목을 판단합니다.
+
+## 최종 보고 검토
+
+Claude Code 전용 `Stop` 훅인 `scripts/final_report_hook.py`는 변경 뒤에 나가는 최종 보고를
+`instructions/shared-text.md`의 독립 텍스트 검토가 확인하지 않았을 때 멈춤을 한 번 막습니다. 아래 조건이 모두 맞을 때만
+막습니다.
+
+- 이벤트가 주 세션의 것입니다. `agent_id`가 없고, `stop_hook_active`가 true가 아니며, `HEI5ENBUG_ASSIGNED_ROLE`과
+  `HEI5ENBUG_PARENT_SESSION`이 모두 설정되지 않았습니다.
+- `background_tasks`가 없거나 비어 있습니다. 작업이 아직 돌고 있으면 그 답은 최종 보고가 아니기 때문입니다.
+- 마지막 실제 사용자 프롬프트부터 끝까지의 현재 턴이 파일을 바꿨습니다. `Edit`, `Write`, `MultiEdit`,
+  `NotebookEdit` 호출, Bash `git commit`, 또는 heredoc 본문을 뺀 Bash 명령이 `>`, `>>`, `>|`, `&>`, `tee`,
+  `sed -i`, `perl -i`로 파일을 쓰는 경우가 그렇습니다. 이런 쓰기는 `$`, `~`, `&`로 시작하지 않고 `/dev/`, `/tmp/`,
+  `/private/`, `/var/folders/` 아래가 아닌 글자 그대로의 경로일 때만 셉니다. 또 Bash 명령이 `env` 등 래퍼 뒤에 오는 경우를
+  포함해 `python`, `python3`, `python3.N`, `node`, `ruby`, `perl`을 실행하면서 코드를 stdin의 heredoc이나 `-c`, `-e`로
+  받고, 그 코드(heredoc 본문 포함)에 `write_text(`, `write_bytes(`, `.write(`(`stdout`, `stderr`에 대한 것은 제외),
+  쓰기 모드(`w`, `a`, `x`)의 `open(`, `json.dump(`, `shutil.copy`, `shutil.move`, `os.replace(`, `os.rename(`,
+  `writeFileSync(`, `appendFileSync(`, `File.write(` 같은 쓰기 호출이 있으면 셉니다. 훅은 그런 스크립트가 쓰는 경로를
+  해석하지 않습니다. 위임한 작업도 셉니다. 위임된 실행의 편집은 주 세션 기록에 남지 않기 때문입니다. `subagent_type`을
+  대소문자 구분 없이 봤을 때 `scout`, `review`, `explore`, `plan`, `guide`, `statusline` 중 어느 것도 포함하지 않거나
+  `subagent_type`이 없는 `Agent`·`Task` 호출(기본 에이전트는 쓸 수 있기 때문)과, `role_runner.py`를 파일 이름 기준으로
+  (`python3` 뒤에 붙은 경우도 포함해) 실행하면서 첫 위치 인자가 `worker`, `implementation`, `designer`, `language`,
+  `writer`, `agent`인 Bash 명령이 그렇습니다.
+- 그 턴이 `text_review.py review --kind final-report`와 `text_review.py check --kind final-report`를 하나도 실행하지
+  않았습니다. 그 턴이 쓴 문서처럼 다른 종류의 글을 검토한 것은 치지 않습니다.
+  `python3` 뒤에 붙은 실행도 셉니다.
+- `last_assistant_message`가 보고입니다. 앞뒤 공백을 뺀 길이가 400자 이상이고, 비어 있지 않은 마지막 줄이 `?`나
+  `？`로 끝나지 않습니다.
+
+이유는 네 문장 이내이며, 이 턴이 파일을 바꿨고 어떤 텍스트 검토도 확인하지 않은 최종 보고로 끝난다고 말하고, 플러그인의
+`instructions/shared-text.md`의 "Independent text review" 절과 `text_review.py review --kind final-report --draft <file> ...`
+명령을 알리며, 그 결과를 반영하라고 요청하고, 이 턴이 다른 사람을 위해 쓴 나머지 모든 글도 각자의 `--kind`로 같은 방식으로
+검토하라고 요청한 뒤, 보고를 다시 보내라고 요청합니다. 훅은 기록을 한 번만 스트리밍으로 읽고 하위 프로세스를
+시작하지 않습니다. 기록이 없거나 읽기나 파싱에 실패하거나 입력 형식이 잘못되면 멈춤을 통과시키고, 통과할 때는 아무것도
+출력하지 않습니다. 이슈 #69의 평가 실행에서 에이전트가 텍스트 규칙을 읽지도 검토를 실행하지도 않고 최종 보고를 보냈고,
+다른 실행에서는 Bash heredoc으로 문서를 쓴 뒤 검토 없이 보고를 보냈기 때문에 이 훅이 있습니다.
+
+훅은 턴이 파일을 바꿨고, 통과한 `text_review.py review`나 `check --kind final-report`가 `final_report_sha256`을 냈는데
+보낸 보고의 SHA-256이 그 값과 다를 때도 막으며, 보고의 길이는 상관없고 비어 있지 않은 마지막 줄이 `?`나 `？`로 끝나는
+메시지만 제외합니다. 양쪽 모두 줄바꿈 방식, 줄 끝 공백, 반복된 빈 줄, 앞뒤 빈 줄의 차이는
+무시합니다. 이유는 보고가 마지막으로 통과한 검토가 확인한 초안과 다르다고 말하고, 그 글을 그대로 보내거나 바뀐 보고를
+다시 검토하라고 요청합니다. 검토가 해시를 낸 적이 없는 턴은 이 규칙으로 막지 않습니다. 이슈 #69의 다른 평가 실행에서
+에이전트가 검토를 통과한 뒤 최종 보고에 줄을 더해 보냈고, 채점자가 그 줄에서 문제를 찾았기 때문에 이 규칙이 있습니다.
+인터프리터 스크립트 감지와 길이에 상관없는 불일치 규칙은 이슈 #69의 이후 평가 실행 둘 때문에 있습니다. 한 실행은
+`python3` heredoc 스크립트로만 파일을 고친 뒤 검토 없이 711자 보고를 보냈고, 다른 실행은 통과한 초안과 다른 296자 보고를
+보냈습니다.
