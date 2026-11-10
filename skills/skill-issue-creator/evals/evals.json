@@ -420,6 +420,121 @@
         "새 이슈를 만들지 않고 gh issue edit으로 같은 이슈의 본문을 고친다",
         "고친 뒤 렌더링된 본문을 다시 읽어 원시 표기가 없음을 확인하고 그 결과를 보고한다"
       ]
+    },
+    {
+      "id": 25,
+      "name": "owner-scope-shared-instruction-file",
+      "prompt": "skill-issue-creator 스킬로 이슈 초안을 드라이런으로만 보여줘. 상황: demo-h 플러그인(evals/files/plugins/demo-h)의 demo-reply 스킬로 지원 티켓 답변 초안을 만들었는데, 내가 \"답변하기 전에 스레드 전체를 읽어\"와 \"독자가 이미 아는 사실은 빼\"라고 고쳐 줬어. 이 두 가지를 규칙으로 올리고 싶어. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘). 드라이런이니까 초안만 보여줘.",
+      "expected_output": "demo-h의 선언을 찾고 demo-reply SKILL.md와 instructions/shared-writing.md를 읽는다. 두 규칙은 demo-reply 밖의 이 플러그인 답변과 스킬 전반에도 적용되므로 담당 파일을 instructions/shared-writing.md로 하고, 이슈 제목과 본문에도 그 파일을 담당으로 쓴다. 영어 초안과 정확한 gh issue create 명령을 보여 주고 쓰기는 하지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "두 규칙(스레드 전체 읽기, 독자가 이미 아는 사실 생략)의 담당 파일을 instructions/shared-writing.md로 지정한다",
+        "두 규칙을 skills/demo-reply/SKILL.md의 담당으로 지정하지 않는다",
+        "gh issue create 명령과 본문을 보여 주고 실제로 실행하지 않는다"
+      ]
+    },
+    {
+      "id": 26,
+      "name": "overfitted-opening-is-generalized",
+      "prompt": "skill-issue-creator 스킬로 이슈 초안을 드라이런으로만 보여줘. 상황: demo-h 플러그인(evals/files/plugins/demo-h)의 demo-reply 스킬이 쓴 답변 초안을 내가 \"Order ABC-123 delivered late: fixed.\"로 시작하도록 고쳤어. 이 시작 방식이 더 읽기 좋아서 규칙으로 올리고 싶어. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘). 드라이런이니까 초안만 보여줘.",
+      "expected_output": "사례에서 나온 규칙은 다른 사례(예: 릴리스 노트)에도 맞는지 시험한다. 이 사례의 시작 문구를 그대로 옮긴 규칙은 버리거나, 다른 사례에도 맞는 원칙으로 다시 쓴다. 'Order ABC-123 delivered late: fixed.'라는 문구는 Proposal 어디에도 나오지 않는다. 드라이런이므로 쓰기는 하지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "Proposal의 규칙이 'Order <id> ... fixed' 형태의 시작 문구를 요구하지 않거나, 릴리스 노트 같은 다른 사례에도 맞는 원칙으로 다시 쓰여 있다",
+        "Order ABC-123 delivered late: fixed. 라는 사례의 시작 문구가 Proposal에 나오지 않는다",
+        "초안에 gh issue create 명령을 보여 주고, gh 로그에 실제 실행 기록이 없다"
+      ]
+    },
+    {
+      "id": 27,
+      "name": "writing-rule-states-reader-result",
+      "prompt": "skill-issue-creator 스킬로 이슈 초안을 드라이런으로만 보여줘. 상황: demo-h 플러그인(evals/files/plugins/demo-h)의 demo-reply 스킬이 쓴 답변에서 한 번만 한 조치와 앞으로 계속 일어나는 동작이 섞여 있어서, 고객이 무엇이 끝났고 무엇이 계속되는지 알 수 없었어. 그 답변을 고칠 때 나는 앞에 `Manual:`과 `Automatic:`을 붙여서 구분했어. 답변이 이런 구분을 하도록 규칙으로 올리고 싶어. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘). 드라이런이니까 초안만 보여줘.",
+      "expected_output": "글쓰기 규칙은 형식이나 레이블이 아니라 독자가 알 수 있어야 하는 결과로 쓴다. Proposal은 각 문장이 조치가 한 번 일어났는지 계속 일어나는지를 보여 준다는 규칙으로 쓰고, 그 규칙 아래에 다른 사례(예: 캐시를 한 번 비웠고 이제 야간 작업이 비운다)의 예시 문장을 둔다. `Manual:`과 `Automatic:` 레이블을 요구하는 규칙은 없다. 드라이런이므로 쓰기는 하지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "Proposal의 규칙이 각 문장에서 조치가 한 번 일어났는지 계속 일어나는지를 독자가 알 수 있어야 한다는 결과로 쓰여 있다",
+        "Proposal이 `Manual:`이나 `Automatic:` 같은 레이블, 형식, 고정된 순서를 요구하는 규칙을 두지 않는다",
+        "규칙 아래에 이 사례와 다른 사례를 든 예시 문장이 하나 있다",
+        "초안에 gh issue create 명령을 보여 주고, gh 로그에 실제 실행 기록이 없다"
+      ]
+    },
+    {
+      "id": 28,
+      "name": "existing-rule-is-widened",
+      "prompt": "skill-issue-creator 스킬로 이슈 초안을 드라이런으로만 보여줘. 상황: demo-h 플러그인(evals/files/plugins/demo-h)의 demo-reply 스킬이 고객에게 보내는 답변 초안에 내부 작업 티켓 번호를 넣었고, 내가 \"내부 작업 티켓은 인용하지 마\"라고 지웠어. 이걸 규칙으로 올리고 싶어. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘). 드라이런이니까 초안만 보여줘.",
+      "expected_output": "demo-reply SKILL.md를 읽고 이미 있는 규칙 'Include only the identifiers the reader needs to act.'가 이 정정을 거의 다룬다는 것을 알아본다. 'Gap in current rules'에 그 규칙을 인용하고, Proposal은 새 규칙을 추가하지 않고 그 규칙을 넓힌다(예: 내부 작업 티켓을 그런 식별자의 하나로 명시). 드라이런이므로 쓰기는 하지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "'Gap in current rules'가 기존 규칙 'Include only the identifiers the reader needs to act.'를 그대로 인용한다",
+        "Proposal이 그 기존 규칙을 넓히거나 명확하게 하는 항목이고, 내부 작업 티켓에 대한 별도의 새 규칙을 추가하지 않는다",
+        "초안에 gh issue create 명령을 보여 주고, gh 로그에 실제 실행 기록이 없다"
+      ]
+    },
+    {
+      "id": 29,
+      "name": "same-owner-same-topic-one-issue",
+      "prompt": "skill-issue-creator 스킬로 이슈 초안을 드라이런으로만 보여줘. 상황: demo-h 플러그인(evals/files/plugins/demo-h)의 demo-reply 스킬이 해결 메모(resolution notes)를 읽고 답변을 쓰는데, 해결 메모에 있는 내용 세 가지를 답변에 옮기지 않아서 내가 매번 직접 넣었어. 첫째, 해결 메모의 임시 우회 방법. 둘째, 수정이 들어간 버전. 셋째, 수정이 배포되는 날짜. 세 가지 모두 demo-reply가 해결 메모에서 무엇을 답변에 옮기는지에 관한 것이고, 해결 메모를 읽는 건 demo-reply뿐이라 다른 답변 작성에는 해당하지 않아. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘). 드라이런이니까 초안만 보여줘.",
+      "expected_output": "세 빈틈이 모두 skills/demo-reply/SKILL.md의 같은 주제(해결 메모에서 답변으로 옮기는 내용)이므로 묻지 않고 이슈 초안 하나로 묶는다. Proposal에 번호를 붙인 항목 세 개와 각각에 대응하는 인수 기준을 두고, gh issue create 명령 하나를 보여 주되 실행하지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "어느 빈틈을 등록할지 묻지 않고 초안 하나를 보여 준다",
+        "담당 파일을 skills/demo-reply/SKILL.md로 지정한다",
+        "Proposal에 번호를 붙인 항목이 세 개 있고 각각 하나의 빈틈(우회 방법, 수정 버전, 배포 날짜)에 대응한다",
+        "Acceptance criteria에 세 항목 각각에 대응하는 기준이 최소 하나씩 있다",
+        "초안에 gh issue create 명령이 정확히 하나 있고, gh 로그에 실제 실행 기록이 없다"
+      ]
+    },
+    {
+      "id": 30,
+      "name": "single-skill-only-gap-regression",
+      "prompt": "skill-issue-creator 스킬로 이슈 초안을 드라이런으로만 보여줘. 상황: demo-h 플러그인(evals/files/plugins/demo-h)의 demo-reply 스킬이 답변을 쓰고 나서 초안을 사용자에게 보이기 전에 티켓 상태를 \"해결됨\"으로 바꾸라는 단계가 없어서 내가 매번 직접 바꿨어. 이건 demo-reply 스킬의 흐름에만 해당하고 다른 답변 작성에는 해당하지 않아. 이와 관련된 기존 규칙은 없어. 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘). 드라이런이니까 초안만 보여줘.",
+      "expected_output": "이 빈틈은 demo-reply에만 해당하고 기존 규칙이 없으므로 담당 파일을 skills/demo-reply/SKILL.md로 하고, 새 규칙 하나를 담은 이슈 초안 하나를 보여 준다. 공통 지침 파일로 옮기거나 기존 규칙을 넓히는 것으로 바꾸지 않는다. 드라이런이므로 쓰기는 하지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "담당 파일을 skills/demo-reply/SKILL.md로 지정한다",
+        "Proposal에 번호를 붙인 항목이 하나뿐이고(그 규칙의 예외는 같은 항목 안에 있어도 된다), instructions/shared-writing.md는 담당 파일이 아니다",
+        "초안 하나를 보여 주고 gh issue create를 실제로 실행하지 않는다"
+      ]
+    },
+    {
+      "id": 31,
+      "name": "different-owners-ask-which-to-file",
+      "prompt": "skill-issue-creator 스킬로 이슈 초안을 드라이런으로만 보여줘. 상황: demo-h 플러그인(evals/files/plugins/demo-h)을 쓰다가 빈틈 두 개를 찾았어. 하나는 demo-reply 스킬이 초안을 보인 뒤 사용자에게 승인 질문을 하지 않는 점으로, demo-reply 스킬에만 해당해(skills/demo-reply/SKILL.md). 다른 하나는 이 플러그인의 모든 답변이 사과 표현을 지나치게 반복하는 점으로, 플러그인의 공통 글쓰기 규칙에 해당해(instructions/shared-writing.md). 이 환경의 gh는 evals/files/bin/gh야(평가용이라 쓰기는 FAKE_GH_LOG에 기록만 되고 가짜 URL을 돌려줘). 드라이런이니까 초안만 보여줘.",
+      "expected_output": "두 빈틈은 담당 파일이 달라 하나의 이슈로 합치지 않는다. 한 번 실행에 이슈는 최대 하나이므로 어느 것을 등록할지 사용자에게 묻고, 두 빈틈을 한 이슈에 섞은 초안을 보여 주지 않는다. 쓰기는 하지 않는다.",
+      "files": [
+        "evals/files/plugins",
+        "evals/files/bin",
+        "evals/files/trackers"
+      ],
+      "expectations": [
+        "두 빈틈을 각각 skills/demo-reply/SKILL.md와 instructions/shared-writing.md가 담당하는 별개의 빈틈으로 나눈다",
+        "어느 것을 먼저 등록할지 사용자에게 묻는다",
+        "두 빈틈을 하나의 이슈 초안에 합치지 않고 gh issue create를 실행하지 않는다"
+      ]
     }
   ]
 }

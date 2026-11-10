@@ -36,10 +36,13 @@ it is missing, suggest nothing.
 
 ### 1. Fix the gap
 
-Settle one gap from the conversation: what the skill or instruction did, what the user had to correct or repeat,
-and the rule that would have prevented it. Name the owning file, such as the loaded `SKILL.md` or instruction
-file, by its path. For a new-skill proposal, the owner is the plugin that should ship the skill; ask when it is
-not clear.
+Settle each gap from the conversation: what the skill or instruction did, what the user had to correct or repeat,
+and the rule that would have prevented it. Name the owning file of each proposed rule by its path. Under the
+condition that a rule would also hold for work outside the skill that ran, such as the same plugin's other skills
+or its replies, its owner is the plugin's shared instruction file that covers that work; keep in the skill only
+the rules that hold for it alone. Under the condition that no shared file covers that work, name the closest one
+and say so in the issue. For a new-skill proposal, the owner is the plugin that should ship the skill; ask when it
+is not clear.
 
 Leave out, and list for the final report, anything that is not a gap in the plugin's rules:
 
@@ -47,8 +50,10 @@ Leave out, and list for the final report, anything that is not a gap in the plug
 - a defect in a tool the plugin does not ship, such as a CLI or network failure;
 - a taste difference that no rule of the plugin decides.
 
-When nothing remains, file nothing and report the list. When several gaps remain, ask which one to file; never
-merge them into one issue.
+When nothing remains, file nothing and report the list. Group the remaining gaps by owning file and topic: gaps
+that share one owning file and one topic form one issue, with one numbered Proposal item and at least one
+acceptance criterion each. When more than one group remains, ask which one to file; never merge gaps with
+different owning files, or with one owner but unrelated topics, into one issue.
 
 Collect the case's identifiers while you read the conversation: issue and pull request numbers, branch names,
 commit hashes, file and folder names from the user's work, dates, people, host names, and ticket keys.
@@ -92,9 +97,12 @@ there, or returns here.
 
 ### 4. Read the sources
 
-Read the owning `SKILL.md` or instruction file and only the references that the gap touches. For a new-skill
-proposal, read the descriptions of the owning plugin's skills to show why none covers the workflow. When
-`target.content_rules` is set, read that file and apply it with the rules in step 6.
+Read the owning `SKILL.md` or instruction file and only the references that the gap touches. Compare each
+proposed rule with the rules already in the owning file and in the skill that ran. Under the condition that an
+existing rule covers or nearly covers it, propose widening or clarifying that rule instead of adding a new one, and
+quote the existing rule in "Gap in current rules"; under the condition that the widened rule would also hold outside
+that skill, propose moving it to the shared file in the same Proposal item. For a new-skill proposal, read the descriptions of the owning plugin's skills to show why none
+covers the workflow. When `target.content_rules` is set, read that file and apply it with the rules in step 6.
 
 When `target.tracker.kind` is not `github`, `target.body_format` is `html`, or `target.label_mode` is `template`,
 read [declaration options](references/declaration-options.md) before step 5; when it is missing, show the draft and
@@ -124,10 +132,20 @@ instruction and the gap in one line. The body has these sections, in this order:
 1. Summary
 2. Observations
 3. Gap in current rules, or "Why no existing skill covers it" for a new-skill proposal
-4. Proposal: each rule written as "Under the condition that X, do Y", as a decision test that also handles
-   cases the incident did not show
+4. Proposal: one numbered item per gap, each rule written as "Under the condition that X, do Y", as a decision
+   test that also handles cases the incident did not show; keep a rule's exceptions inside its own item, and add no
+   item that no gap needs
 5. Acceptance criteria: numbered eval cases
 6. Evidence
+
+Check each Proposal rule before writing it:
+
+- Under the condition that a rule is drawn from the session's case, test it against at least one different case.
+  Under the condition that it holds only for the prompting case, drop it or restate the principle behind it.
+  Never copy the case's phrasing, order, values, or names into a rule.
+- Under the condition that a rule governs writing, state the result the reader must be able to tell, not a format,
+  label, or fixed order. Write one example sentence under the rule for a different case; under the condition that
+  it reads awkwardly, revise the rule or drop it.
 
 Use the format's own headings: `##` in Markdown, `h2.` in Jira wiki markup, and a plain heading line followed by a
 blank line in plain text; for `html`, follow the declaration options.
