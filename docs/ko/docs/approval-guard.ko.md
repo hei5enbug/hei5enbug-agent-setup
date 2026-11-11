@@ -444,6 +444,8 @@ completing (declines included); stop retrying and tell the user.”입니다. �
     "demo-run": {
       "entries": [
         {"command": "az repos pr update --status completed"},
+        {"command": "az repos pr update --id <id> --status completed --delete-source-branch false",
+         "extra_options": false},
         {"command": "git push -u origin <branch:feature/*>"},
         {"command": "kubectl rollout restart <workload> -n <ns:@grant> --context <ctx:@grant>",
          "never": {"ctx": ["prod-ctx"]}},
@@ -456,7 +458,7 @@ completing (declines included); stop retrying and tell the user.”입니다. �
 ```
 
 항목에는 `command`(명령 예시) 또는 `tool`(전체 `mcp__<server>__<tool>` 이름과, 호출이 지녀야 할 값을 적은 `arguments`) 중 정확히 하나가 있습니다. `never`는
-자리표시자 이름을 절대 받아들이지 않는 값에 대응시키고, `destructive: true`는 가드가 파괴적으로 분류하는 호출까지 그 항목이 덮게 합니다. 다른 키가 있으면 그 항목은 잘못된 항목이 되어,
+자리표시자 이름을 절대 받아들이지 않는 값에 대응시키고, `destructive: true`는 가드가 파괴적으로 분류하는 호출까지 그 항목이 덮게 하며, 명령 항목의 `extra_options: false`는 그 항목이 자기 옵션 밖의 옵션을 더하지 않는 쓰기에만 일치하게 합니다([쓰기나 호출 매칭](#쓰기나-호출-매칭) 참고). `extra_options`는 `true`나 `false`를 받고 기본값은 `true`입니다. 다른 키가 있거나 다른 값이면 그 항목은 잘못된 항목이 되어,
 grant가 무시하고 이유를 알립니다.
 
 | 자리표시자 | 받아들이는 값 |
@@ -510,14 +512,14 @@ root>/scripts/approval_guard.py link`를 실행합니다. 이 명령은 현재 �
 - 예시의 모든 리터럴 부분이 쓰기와 같습니다. 위치 인자, 옵션 값, 한 인자 안에서 자리표시자 둘레의 텍스트를 포함합니다. 위치 인자 개수도 같습니다.
 - 쓰기가 예시의 모든 옵션을 예시와 같은 횟수만큼 지닙니다. `--option value`와 `--option=value`는 같고, `--namespace`의 `-n` 같은 별칭은 다른 옵션입니다. 쓰기에 옵션이
   더 있어도 됩니다. 다만 명령줄 밖에서 동작이나 대상을 바꿀 수 있는 옵션은 안 됩니다. 이름이 설정, 파일, 입력, kubeconfig,
-  URL, 다음 요청, 요청, 출력을 가리키는 옵션, `-K`, `-f`, `-o`, `-:`, 그리고 값이 `@`나 `file:`로 시작하는 추가 옵션이 여기에 해당합니다.
+  URL, 다음 요청, 요청, 출력을 가리키는 옵션, `-K`, `-f`, `-o`, `-:`, 그리고 값이 `@`나 `file:`로 시작하는 추가 옵션이 여기에 해당합니다. `"extra_options": false`인 항목은 추가 옵션을 모두 거부합니다. 쓰기는 항목의 옵션만 정확히 지녀야 하며, `<id>` 같은 자리표시자는 여전히 그 값과 일치합니다. 위 예시의 두 번째 항목은 `az repos pr update --id 7 --status completed --delete-source-branch false`와 일치하지만, 같은 쓰기에 `--bypass-policy true --bypass-policy-reason x`나 `--auto-complete true`가 붙으면 거부합니다.
 - 채운 값 모두를 해당 자리표시자가 받아들이고 `never` 목록에 없습니다. 반복되는 자리표시자는 값 하나만 가집니다.
 - 쓰기의 값으로 채운 예시가 쓰기와 같은 키로 분류됩니다. `git`이나 `gh` 키처럼 키가 명령 텍스트의 다이제스트이면 채운 예시의 단어가 쓰기의 단어와 하나하나 같아야 합니다.
 - 푸시는 refspec을 명시하고, 강제나 삭제 형태가 없으며, 채운 값에 `:`가 들어 있거나 `+`로 시작하는 값이 없습니다. 그래서 `+feature/demo`와
   `staging-1:refs/tags/release-1`은 절대 일치하지 않습니다.
 
 MCP 호출은 도구 이름이 같고, 항목이 나열한 인자를 모두 지니며, 각 값이 받아들여지면 도구 항목과 일치합니다. 가드가 파괴적으로 분류한 호출은 `destructive: true`인 항목에만 일치하고, 치명적인
-호출은 절대 일치하지 않습니다.
+호출은 절대 일치하지 않습니다. DataGrip `execute_sql_query` 호출도 같은 방식으로 일치합니다. `datagrip_guard.py`와 승인 가드가 [MCP와 데이터베이스 호출](#mcp와-데이터베이스-호출)처럼 쿼리를 분류한 뒤, 비운영 데이터 소스의 파괴적이지 않은 쓰기는 일치하는 항목이 필요하고 파괴적 문장은 `destructive: true`인 항목이 필요합니다. 운영 데이터 소스나 확인되지 않은 데이터 소스는 절대 일치하지 않으므로 그 쓰기나 문장은 전처럼 묻습니다. grant는 `projectPath`와 `connectionId`가 grant 실행 시점에 확인되는 비운영 데이터 소스를 가리킬 때만 그런 항목을 유지합니다.
 
 일치한 호출은 묻지 않고 실행되며 세션 승인을 남기지 않습니다. Claude Code 모드용 호출 기록은 `source` 필드에 `<plugin>:<skill>`로 그 스킬을 승인의 출처로 적습니다. 유지된 어떤
 항목에도 일치하지 않는 쓰기는 전과 같이 동작합니다.
@@ -587,8 +589,8 @@ Claude의 `defaultMode: dontAsk`는 가드가 요청하는 승인을 거부합�
 해시가 없거나 다르면 `UserPromptSubmit`이 세션당 한 번 경고를 추가하고 세션 상태에 표시 여부를 저장합니다.
 경고는 훅 변경 뒤 가드의 도구 검사가 아직 관찰되지 않았다고 설명합니다. Codex 사용자에게 `/hooks`에서 플러그인 훅을
 신뢰하도록 안내하고, 그전에는 쓰기가 승인 없이 실행될 수 있다고 알립니다.
-분류기 예외는 “The approval guard failed to check this call” 이유로 매번 승인을 요청하고, stderr에
-`approval_guard: classifier error: <예외 이름>`을 남깁니다. 가드를 끄면 여전히 아무것도 출력하지 않습니다.
+분류기 예외는 “hei5enbug-agent-setup approval guard failed; approve only if the call looks right” 이유로 매번 승인을 요청하고,
+플러그인과 승인 가드의 이름, 예외 이름, 다음 단계를 담은 한 줄을 stderr에 남깁니다. 가드를 끄면 여전히 아무것도 출력하지 않습니다.
 
 승인 가드는 보안 경계가 아니라 안전장치입니다. 셸 전체 권한을 가진 에이전트는 우회할 수 있습니다. 가드가 다루지 않는 호출은 호스트의 기존 권한 절차를 따릅니다. 승인 상태는
 `$XDG_STATE_HOME/hei5enbug-agent-setup/approvals/`(기본값 `~/.local/state`) 아래에 호스트와 세션마다 한 파일씩 저장됩니다.

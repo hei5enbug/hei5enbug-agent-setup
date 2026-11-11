@@ -457,6 +457,8 @@ file with a wrong layout is refused as a whole.
     "demo-run": {
       "entries": [
         {"command": "az repos pr update --status completed"},
+        {"command": "az repos pr update --id <id> --status completed --delete-source-branch false",
+         "extra_options": false},
         {"command": "git push -u origin <branch:feature/*>"},
         {"command": "kubectl rollout restart <workload> -n <ns:@grant> --context <ctx:@grant>",
          "never": {"ctx": ["prod-ctx"]}},
@@ -470,8 +472,10 @@ file with a wrong layout is refused as a whole.
 
 An entry has exactly one of `command` (a command example) or `tool` (the full `mcp__<server>__<tool>` name, with
 `arguments` that name the values a call must carry). `never` maps a placeholder name to values that are never accepted,
-and `destructive: true` lets the entry cover a call the guard classifies as destructive. Any other key makes that entry
-invalid, and the grant ignores it and reports why.
+`destructive: true` lets the entry cover a call the guard classifies as destructive, and `extra_options: false` on a
+command entry makes it match only a write that adds no option beyond the entry's own (see
+[Matching a write or call](#matching-a-write-or-call)). `extra_options` takes `true` or `false`, and `true` is the
+default. Any other key, or another value, makes that entry invalid, and the grant ignores it and reports why.
 
 | Placeholder | Accepts |
 |---|---|
@@ -539,7 +543,10 @@ with no pipe, redirection, shell expansion, or environment prefix, and all of th
   `--option=value` are equal, and an alias such as `-n` for `--namespace` is a different option. The write may carry
   more options, except one that can change the operation or target from outside the command line: an option whose name
   names a config, file, input, kubeconfig, URL, next request, request, or output, `-K`, `-f`, `-o`, `-:`, or any extra
-  option whose value starts with `@` or `file:`.
+  option whose value starts with `@` or `file:`. An entry with `"extra_options": false` refuses every extra option: the
+  write must carry exactly the entry's options, though a placeholder such as `<id>` still matches its value. The second
+  entry of the example above matches `az repos pr update --id 7 --status completed --delete-source-branch false` but
+  refuses the same write with `--bypass-policy true --bypass-policy-reason x` or `--auto-complete true`.
 - Every filled value is accepted by its placeholder and is not on the `never` list. A placeholder that repeats takes one
   value.
 - The example filled with the write's values classifies to the same key as the write. For a key that is a digest of the
@@ -549,7 +556,12 @@ with no pipe, redirection, shell expansion, or environment prefix, and all of th
 
 An MCP call matches a tool entry when the tool name is equal, the call carries every argument the entry lists, and each
 value is accepted. A call the guard classifies as destructive matches only an entry with `destructive: true`, and a
-critical call never matches.
+critical call never matches. A DataGrip `execute_sql_query` call matches the same way, after `datagrip_guard.py` and the
+approval guard classify the query as in [MCP and database calls](#mcp-and-database-calls): a non-destructive write on a
+non-production data source needs a matching entry, and a destructive statement needs one with `destructive: true`. A
+production or unidentified data source never matches, so its write or statement asks as before. The grant keeps such an
+entry only when its `projectPath` and `connectionId` name a non-production data source that resolves when the grant
+runs.
 
 A matching call runs without a prompt and leaves no session approval behind. The call's record for the Claude Code mod
 names the skill, as `<plugin>:<skill>` in its `source` field, as the source of the approval. A write that matches no
@@ -626,8 +638,8 @@ hook files that host loads, `hooks/hooks.json` plus the other hook files its plu
 missing or differs, `UserPromptSubmit` adds a warning once per session and records that it was shown in the session
 state. The warning explains that the guard has not been seen checking a tool call since its hooks changed, asks Codex
 users to trust the plugin hooks in `/hooks`, and states that writes may run without approval until then. A classifier
-exception asks every time with “The approval guard failed to check this call” and writes `approval_guard: classifier
-error: <ExceptionName>` to stderr. Turning the guard off still prints nothing.
+exception asks every time with “hei5enbug-agent-setup approval guard failed; approve only if the call looks right” and
+writes one line to stderr that names the plugin and the approval guard, the exception name, and the next step. Turning the guard off still prints nothing.
 
 The approval guard is a guardrail, not a security boundary: an agent with full shell access could bypass it. Calls the
 guard does not cover follow the host's own permission flow. Approval state lives under `$XDG_STATE_HOME/hei5enbug-

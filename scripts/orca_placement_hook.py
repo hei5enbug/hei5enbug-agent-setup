@@ -26,6 +26,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 
+import hook_runtime
 import plugin_toggles
 import session_memory
 from required_checks_hook import ASSIGNMENT, WRAPPERS, command_of, segments_of
@@ -194,7 +195,7 @@ def current_repo_id() -> str | None:
     try:
         result = subprocess.run(
             ["orca", "worktree", "current", "--json"],
-            capture_output=True, text=True, timeout=GIT_TIMEOUT_SECONDS, check=False,
+            capture_output=True, text=True, timeout=hook_runtime.call_timeout(GIT_TIMEOUT_SECONDS), check=False,
         )
         value = json.loads(result.stdout)["result"]["worktree"]["repoId"]
     except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError):
@@ -254,7 +255,7 @@ def git_output(path: str, *arguments: str) -> str | None:
             ["git", "-C", path, "--no-optional-locks", *arguments],
             capture_output=True,
             text=True,
-            timeout=GIT_TIMEOUT_SECONDS,
+            timeout=hook_runtime.call_timeout(GIT_TIMEOUT_SECONDS),
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
@@ -299,7 +300,8 @@ def orca_result(cwd: str, *arguments: str) -> dict | None:
     """Return the `result` of an `orca ... --json` command run in `cwd`, or None when it failed."""
     try:
         run = subprocess.run(
-            ["orca", *arguments, "--json"], capture_output=True, text=True, timeout=ORCA_TIMEOUT_SECONDS, check=False,
+            ["orca", *arguments, "--json"], capture_output=True, text=True,
+            timeout=hook_runtime.call_timeout(ORCA_TIMEOUT_SECONDS), check=False,
             cwd=cwd if os.path.isdir(cwd) else None,
         )
         payload = json.loads(run.stdout)
@@ -501,4 +503,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(hook_runtime.run("orca_placement_hook.py", main))

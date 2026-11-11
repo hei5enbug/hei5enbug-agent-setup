@@ -9,6 +9,7 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import hook_runtime  # noqa: E402
 from approval_state import recorded_worker_pair  # noqa: E402
 from plugin_toggles import detect_host, enabled, valid_worker_pair, worker_setting  # noqa: E402
 
@@ -271,4 +272,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(hook_runtime.run("agent_guard.py", main))

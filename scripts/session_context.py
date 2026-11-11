@@ -13,6 +13,7 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import hook_runtime  # noqa: E402
 
 
 LOCAL_LINK = re.compile(r"\[([^\]]+)\]\(([^\s)]+)\)")
@@ -359,11 +360,19 @@ def provision_codex_agents(root: Path) -> None:
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
         content = source.read_text(encoding="utf-8")
+        descriptor, temp = tempfile.mkstemp(dir=agents, prefix=f".{name}.", suffix=".tmp")
         try:
-            with target.open("x", encoding="utf-8") as stream:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
                 stream.write(content)
+            os.chmod(temp, 0o644)
+            os.link(temp, target)
         except FileExistsError:
             pass
+        finally:
+            try:
+                os.unlink(temp)
+            except OSError:
+                pass
 
 
 SUBAGENT_BLOCK = (
@@ -665,11 +674,15 @@ def main() -> int:
                     except Exception:
                         pass
     except (OSError, ValueError, KeyError, TypeError) as error:
-        print(f"hei5enbug-agent-setup instructions were not loaded: {error}", file=sys.stderr)
+        print(
+            f"{hook_runtime.PLUGIN} session context hook: instructions were not loaded ({error}), so this session "
+            "runs without the plugin's rules. Fix the problem named in the parentheses, then start a new session.",
+            file=sys.stderr,
+        )
         return 1
     print(json.dumps({"hookSpecificOutput": {"hookEventName": event_name, "additionalContext": context}}))
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(hook_runtime.run("session_context.py", main))

@@ -53,6 +53,7 @@ def plugin(tmp_path):
     scripts = tmp_path / "plugin" / "scripts"
     scripts.mkdir(parents=True)
     shutil.copy(LAUNCHER, scripts / "hook_python.sh")
+    shutil.copy(LAUNCHER.with_name("hook_interpreter.sh"), scripts / "hook_interpreter.sh")
     (scripts / "sample.py").write_text("", encoding="utf-8")
     (scripts / "notes.txt").write_text("", encoding="utf-8")
     fake_interpreter(tmp_path / "bin" / "python3", "path-python3")

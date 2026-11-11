@@ -1158,13 +1158,14 @@ class SessionContextTest(unittest.TestCase):
         self.assertIn("# Claude Code only", context)
 
     def test_hook_does_not_modify_user_or_project_files(self):
-        bytecode = self.base / "state" / "hei5enbug-agent-setup" / "pycache"
+        plugin_state = self.base / "state" / "hei5enbug-agent-setup"
+        own = (plugin_state / "pycache", plugin_state / "interpreter")
 
         def snapshot():
             return {
                 p.relative_to(self.base): p.read_bytes()
                 for p in self.base.rglob("*")
-                if p.is_file() and not p.is_relative_to(self.codex_home) and not p.is_relative_to(bytecode)
+                if p.is_file() and not p.is_relative_to(self.codex_home) and not any(p.is_relative_to(d) for d in own)
             }
 
         before = snapshot()
@@ -1246,6 +1247,28 @@ class SessionContextTest(unittest.TestCase):
             self.scout.read_text(encoding="utf-8"),
             (REPO_ROOT / "standalone-agents/codex-scout.toml").read_text(encoding="utf-8"),
         )
+
+    def test_프로비저닝이_쓰는_도중_중단돼도_불완전한_최종_파일이나_임시_파일을_남기지_않는다(self):
+        """프로비저닝이 중단돼도 최종 에이전트 파일은 온전하게만 생기고 임시 파일은 남지 않는다."""
+        # Given
+        class Interrupted(BaseException):
+            pass
+
+        # When
+        with mock.patch.dict(os.environ, {"CODEX_HOME": str(self.codex_home)}):
+            with mock.patch("os.link", side_effect=Interrupted):
+                with self.assertRaises(Interrupted):
+                    session_context.provision_codex_agents(REPO_ROOT)
+            interrupted = sorted(p.name for p in self.scout.parent.iterdir())
+            session_context.provision_codex_agents(REPO_ROOT)
+
+        # Then
+        self.assertEqual(interrupted, [])
+        self.assertEqual(
+            self.scout.read_text(encoding="utf-8"),
+            (REPO_ROOT / "standalone-agents/codex-scout.toml").read_text(encoding="utf-8"),
+        )
+        self.assertFalse(any(p.name.endswith(".tmp") for p in self.scout.parent.iterdir()))
 
     def test_Codex_세션은_사용자가_작성한_연구원_역할을_그대로_둔다(self):
         """Codex 세션은 사용자가 작성한 researcher 역할을 덮어쓰지도 지우지도 않는다."""

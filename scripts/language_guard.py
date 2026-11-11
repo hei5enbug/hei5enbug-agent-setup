@@ -10,6 +10,7 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import hook_runtime  # noqa: E402
 from plugin_toggles import enabled  # noqa: E402
 
 
@@ -398,7 +399,8 @@ def handle(event: object) -> dict | None:
         return None
     if not isinstance(event, dict) or event.get("agent_id"):
         return None
-    handler = HANDLERS.get(event.get("hook_event_name"))
+    name = event.get("hook_event_name")
+    handler = HANDLERS.get(name) if isinstance(name, str) else None
     if handler is None:
         return None
     host = detect_host()
@@ -410,8 +412,13 @@ def main() -> int:
     if not enabled("language_guard"):
         return 0
     try:
-        output = handle(json.load(sys.stdin))
-    except Exception:
+        event = json.load(sys.stdin)
+    except ValueError:
+        return 0
+    try:
+        output = handle(event)
+    except Exception as error:
+        hook_runtime.report_error("language_guard.py", error)
         output = None
     if output is not None:
         print(json.dumps(output, ensure_ascii=False))
@@ -419,4 +426,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(hook_runtime.run("language_guard.py", main))

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "f=\"$CLAUDE_PROJECT_DIR/.githooks/public_boundary.py\"; [ ! -f \"$f\" ] || exec python3 \"$f\" agent-hook",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.githooks/agent_hook.sh\"; [ ! -f \"$f\" ] || exec sh \"$f\"",
             "timeout": 30
           }
         ]

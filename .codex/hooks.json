@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/.githooks/public_boundary.py\"; [ ! -f \"$f\" ] || exec python3 \"$f\" agent-hook",
+            "command": "d=$PWD; while [ -n \"$d\" ] && [ ! -f \"$d/.githooks/agent_hook.sh\" ]; do d=${d%/*}; done; [ -z \"$d\" ] || exec sh \"$d/.githooks/agent_hook.sh\"",
             "timeout": 30
           }
         ]

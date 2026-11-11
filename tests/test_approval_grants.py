@@ -8,9 +8,13 @@ import sys
 
 import pytest
 
-from test_approval_guard import GUARD_PATH, SCRIPTS, bash_event, decision_of, fake_bin, guard, reason_of, state  # noqa: F401
+from test_approval_guard import (  # noqa: F401
+    APPROVAL_ID, GUARD_PATH, PG_ID, REPO_ROOT, SCRIPTS, bash_event, decision_of, fake_bin, guard, make_project, query_event,
+    reason_of, state,
+)
 
 import approval_state  # noqa: E402
+import datagrip_guard  # noqa: E402
 from approval_state_grants import entry_from_json, parent_link  # noqa: E402
 from role_runner_child import parent_session as runner_parent_session  # noqa: E402
 
@@ -333,6 +337,8 @@ def test_형식이_틀린_선언_파일은_통째로_거부된다(home, fake_bin
     {"tool": "demo_post_message", "arguments": {}},
     {"command": "az x", "arguments": {}},
     {"command": "az x", "destructive": "yes"},
+    {"command": "az x", "extra_options": "no"},
+    {"tool": "mcp__a__b", "arguments": {}, "extra_options": False},
     {"command": "az x", "never": {"ctx": "prod-ctx"}},
     "az repos pr update",
 ])
@@ -579,3 +585,119 @@ def test_셸_치환이나_앞붙임이_있는_grant와_link는_허용하지_않�
     output = run(command, home, transcript_path=str(transcript(home, TYPED)))
     # then
     assert decision_of(output) != "allow"
+
+
+PR_COMPLETE_EXACT = "az repos pr update --id 7 --status completed --delete-source-branch false"
+PR_BYPASS = f"{PR_COMPLETE_EXACT} --bypass-policy true --bypass-policy-reason x"
+PR_ENTRY = "az repos pr update --id <id> --status completed --delete-source-branch false"
+
+
+def test_extra_options가_거짓인_항목은_정책_우회가_붙은_완료만_묻고_정확한_완료는_묻지_않는다(home, fake_bin):
+    # given
+    declare(home, [{"command": PR_ENTRY, "extra_options": False}])
+    granted(home)
+    # when
+    exact = run(PR_COMPLETE_EXACT, home)
+    bypass = run(PR_BYPASS, home)
+    # then
+    assert decision_of(exact) == "allow"
+    assert decision_of(bypass) == "ask"
+
+
+def test_extra_options를_적지_않은_항목은_추가_옵션이_붙은_같은_완료와_여전히_일치한다(home, fake_bin):
+    # given
+    declare(home, [{"command": PR_ENTRY}])
+    granted(home)
+    # when
+    bypass = run(PR_BYPASS, home)
+    # then
+    assert decision_of(bypass) == "allow"
+
+
+DG_INSERT = "INSERT INTO t VALUES (1)"
+DG_DROP = "DROP TABLE t"
+
+
+def datagrip_entry(project, connection_id, sql, **extra):
+    arguments = {"projectPath": str(project), "connectionId": connection_id, "queryText": sql}
+    return {"tool": datagrip_guard.TOOL_NAME, "arguments": arguments, **extra}
+
+
+def datagrip_decision(project, connection_id, sql):
+    """The Claude decisions of both DataGrip hooks: the datagrip guard's and the approval guard's, which may be absent."""
+    event = query_event(project, connection_id, sql)
+    return datagrip_guard.handle(event), guard.handle(event, "claude")
+
+
+def test_선언한_비운영_DataGrip_쓰기는_묻지_않고_운영이나_선언하지_않은_쓰기는_평소처럼_묻는다(home, fake_bin):
+    # given
+    project = make_project(home)
+    declare(home, [datagrip_entry(project, PG_ID, DG_INSERT), datagrip_entry(project, APPROVAL_ID, DG_INSERT)])
+    granted(home)
+    # when
+    declared, _ = datagrip_decision(project, PG_ID, DG_INSERT)
+    production, _ = datagrip_decision(project, APPROVAL_ID, DG_INSERT)
+    undeclared, _ = datagrip_decision(project, PG_ID, "UPDATE t SET a = 1")
+    # then
+    assert decision_of(declared) == "allow"
+    assert LABEL in reason_of(declared)
+    assert decision_of(production) == "ask"
+    assert decision_of(undeclared) == "ask"
+
+
+def test_DataGrip_파괴_문장은_destructive_항목이_있는_비운영_연결에서만_묻지_않는다(home, fake_bin):
+    # given
+    project = make_project(home)
+    declare(home, [datagrip_entry(project, PG_ID, DG_DROP, destructive=True),
+                   datagrip_entry(project, APPROVAL_ID, DG_DROP, destructive=True)])
+    granted(home)
+    # when
+    declared, approval_side = datagrip_decision(project, PG_ID, DG_DROP)
+    other, other_approval_side = datagrip_decision(project, PG_ID, "DROP TABLE u")
+    production, _ = datagrip_decision(project, APPROVAL_ID, DG_DROP)
+    # then
+    assert decision_of(declared) == "allow"
+    assert approval_side is None
+    assert decision_of(other) == "ask"
+    assert decision_of(other_approval_side) == "ask"
+    assert decision_of(production) == "ask"
+
+
+def test_destructive가_없는_DataGrip_파괴_항목은_버려지고_파괴_문장은_묻는다(home, fake_bin):
+    # given
+    project = make_project(home)
+    declare(home, [datagrip_entry(project, PG_ID, DG_DROP)])
+    output = granted(home)
+    # when
+    asked, _ = datagrip_decision(project, PG_ID, DG_DROP)
+    # then
+    assert "0 entries kept, 1 ignored" in reason_of(output)
+    assert decision_of(asked) == "ask"
+
+
+def codex_datagrip_decisions(project, connection_id, sql):
+    """The Codex outputs of the datagrip guard for one query: PreToolUse and PermissionRequest."""
+    event = query_event(project, connection_id, sql)
+    return (datagrip_guard.handle({**event, "hook_event_name": "PreToolUse"}),
+            datagrip_guard.handle({**event, "hook_event_name": "PermissionRequest"}))
+
+
+def test_Codex에서도_선언한_비운영_DataGrip_쓰기는_묻지_않고_운영이나_선언하지_않은_쓰기는_평소처럼_막는다(
+        home, fake_bin, monkeypatch):
+    # given
+    monkeypatch.setenv("PLUGIN_ROOT", str(REPO_ROOT))
+    project = make_project(home)
+    entries = [datagrip_entry(project, PG_ID, DG_INSERT), datagrip_entry(project, APPROVAL_ID, DG_INSERT)]
+    approval_state.record_grant("codex", "s1", LABEL, {"skill": SKILL, "plugin": PLUGIN, "at": 1, "report": "",
+                                                        "entries": entries, "values": {}})
+    # when
+    declared_pre, declared_permission = codex_datagrip_decisions(project, PG_ID, DG_INSERT)
+    production_pre, production_permission = codex_datagrip_decisions(project, APPROVAL_ID, DG_INSERT)
+    undeclared_pre, undeclared_permission = codex_datagrip_decisions(project, PG_ID, "UPDATE t SET a = 1")
+    # then
+    assert declared_pre is None
+    assert declared_permission["hookSpecificOutput"]["decision"] == {"behavior": "allow"}
+    assert decision_of(production_pre) == "deny"
+    assert decision_of(undeclared_pre) == "deny"
+    assert production_permission is None
+    assert undeclared_permission is None

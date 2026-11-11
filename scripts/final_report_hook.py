@@ -18,6 +18,7 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import hook_runtime  # noqa: E402
 from orca_status_hook import is_real_prompt  # noqa: E402
 from required_checks_hook import ASSIGNMENT, WRAPPERS, git_subcommand, segments_of  # noqa: E402
 from text_review import report_digest  # noqa: E402
@@ -437,8 +438,13 @@ def decide(event: object) -> dict | None:
 
 def main() -> int:
     try:
-        result = decide(json.load(sys.stdin))
-    except Exception:
+        event = json.load(sys.stdin)
+    except ValueError:
+        return 0
+    try:
+        result = decide(event)
+    except Exception as error:
+        hook_runtime.report_error("final_report_hook.py", error)
         return 0
     if result:
         print(json.dumps(result, ensure_ascii=False))
@@ -446,4 +452,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(hook_runtime.run("final_report_hook.py", main))

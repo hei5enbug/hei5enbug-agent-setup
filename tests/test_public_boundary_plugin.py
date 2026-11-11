@@ -69,6 +69,7 @@ class PluginSandbox(unittest.TestCase):
         root = self.base / "own"
         (root / "scripts").mkdir(parents=True)
         shutil.copy(HOOK_SOURCE, root / "scripts" / "public_boundary_hook.py")
+        shutil.copy(HOOK_SOURCE.with_name("hook_runtime.py"), root / "scripts" / "hook_runtime.py")
         shutil.copytree(REPO_ROOT / ".githooks", root / ".githooks", ignore=shutil.ignore_patterns("__pycache__"))
         write_json(root / "issue-target.json", target(PUBLIC_REPO))
         return root

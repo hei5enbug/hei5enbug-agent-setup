@@ -42,6 +42,12 @@ def main(argv: list[str]) -> int:
     if mode == "agent-hook":
         import boundary_agent
 
+        scripts = os.path.join(ROOT, "scripts")
+        if os.path.isfile(os.path.join(scripts, "hook_runtime.py")):
+            sys.path.insert(0, scripts)
+            import hook_runtime
+
+            return hook_runtime.run(hook_runtime.PROJECT_HOOK, lambda: boundary_agent.run(sys.stdin.read(), ROOT))
         return boundary_agent.run(sys.stdin.read(), ROOT)
     import boundary_git
 

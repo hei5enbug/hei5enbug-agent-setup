@@ -27,6 +27,7 @@ class Entry:
     arguments: Mapping[str, object] = field(default_factory=dict)
     never: Mapping[str, tuple] = field(default_factory=dict)
     destructive: bool = False
+    extra_options: bool = True
 
     @property
     def is_mcp(self) -> bool:

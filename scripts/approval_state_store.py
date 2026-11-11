@@ -33,7 +33,8 @@ def session_key(value):
 
 def _empty() -> dict:
     return {"approved": [], "approved_at": {}, "once": [], "pending": {}, "inflight": [], "hooks_warning_shown": False,
-            "request_counts": {}, "asked": [], "grants": {}}
+            "request_counts": {}, "asked": [], "grants": {},
+            "machine_load_shown": False}
 
 
 def _grants(value) -> dict:
@@ -94,6 +95,7 @@ def _read(path: Path) -> dict:
         "hooks_warning_shown": data.get("hooks_warning_shown") is True,
         "request_counts": counts,
         "asked": asked,
+        "machine_load_shown": data.get("machine_load_shown") is True,
     }
 
 

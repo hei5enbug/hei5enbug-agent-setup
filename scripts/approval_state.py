@@ -21,6 +21,7 @@ from approval_state_records import (
     recorded_plan, recorded_worker_pair, risk_path, store_plan, worker_record_path,
 )
 
+FAILURE_REASON = "hei5enbug-agent-setup approval guard failed; approve only if the call looks right"
 WRITE_KEY = "write:session"
 SENSITIVE_KEY = "sensitive:session"
 ALL_KEY = "session:all"
@@ -233,6 +234,23 @@ def hooks_warning(host, session):
     return HOOKS_WARNING if _mutate(host, session, change) else None
 
 
+def machine_load_shown(host, session, short: bool) -> bool:
+    """Record whether this prompt found a shortage, and return True when the notice should be shown now.
+
+    The notice shows on the first prompt of a shortage and again only after a prompt that found none. A session
+    without a usable id has no memory, so it shows on every prompt that finds a shortage.
+    """
+    if session_key(session) is None:
+        return short
+    if _load(host, session)["machine_load_shown"] == short:
+        return False
+
+    def change(data):
+        data["machine_load_shown"] = short
+    _mutate(host, session, change)
+    return short
+
+
 def pre_output(decision: str, reason: str) -> dict:
     return {"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
@@ -268,8 +286,8 @@ def _mutate(host: str, session, change):
     with _locked(directory):
         data = _read(path)
         result = change(data)
-        _write(path, data)
         _cleanup(directory, path)
+        _write(path, data)
     return result
 
 

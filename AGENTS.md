@@ -24,6 +24,11 @@
   Preserve correctness and required validation while reducing unnecessary instruction loading, repeated reads,
   tool calls, and duplicated content. Reuse loaded instructions and validation results only while their relevant
   inputs remain unchanged. During local work, run checks affected by the change; broaden them for unresolved risks.
+- Absolute rule (owner decision, 2026-11-11): an evaluation that costs model calls uses only the fewest fixed
+  representative and boundary cases that decide its acceptance criteria, about three by default and rarely more than
+  ten, and states each criterion as a pass or fail per case, never as a rate over a large sample. An evaluation that
+  fixes the model, effort, or prompt of a skill or agent may add cases that separate difficulty levels. Deterministic
+  tests that cost no model tokens have no such limit. Write issue acceptance criteria under the same rule.
 - Keep on an always-loaded surface, meaning a skill description, a `SKILL.md` body, or a session instruction file,
   only the rules that every run of that surface needs. Move a rule needed only under a condition to a reference
   file, and leave one entry line on the surface in the form "Before <action>, read <reference>." Reading that

@@ -30,7 +30,7 @@ TYPED_COMMAND = re.compile(
     r"\s*(?:<command-message>[^<]*</command-message>\s*)?<command-name>/?[A-Za-z0-9._:-]+</command-name>"
     r"(?:\s*<command-args>[^<]*</command-args>)?\s*")
 SHELL_EXPANSION = re.compile(r"[`$]|<\(|>\(")
-ENTRY_KEYS = frozenset({"command", "tool", "arguments", "never", "destructive"})
+ENTRY_KEYS = frozenset({"command", "tool", "arguments", "never", "destructive", "extra_options"})
 VERBS = ("grant", "link")
 PARENT_SESSION_ENV = "HEI5ENBUG_PARENT_SESSION"
 SKILL_SPEC = re.compile(r"[A-Za-z0-9._-]+(?::[A-Za-z0-9._-]+)?")
@@ -58,7 +58,8 @@ def split_skill(spec: str) -> tuple:
 def entry_from_json(label: str, raw) -> Entry:
     """The entry a declaration object describes; ValueError names what is wrong."""
     if not isinstance(raw, dict) or set(raw) - ENTRY_KEYS:
-        raise ValueError("an entry that is not an object with only command, tool, arguments, never, destructive")
+        raise ValueError(
+            "an entry that is not an object with only command, tool, arguments, never, destructive, extra_options")
     command, tool = raw.get("command"), raw.get("tool")
     if (command is None) == (tool is None):
         raise ValueError("an entry needs exactly one of command and tool")
@@ -69,11 +70,15 @@ def entry_from_json(label: str, raw) -> Entry:
     arguments, never, destructive = raw.get("arguments", {}), raw.get("never", {}), raw.get("destructive", False)
     if not isinstance(arguments, dict) or not isinstance(destructive, bool) or not isinstance(never, dict):
         raise ValueError("arguments and never are objects and destructive is true or false")
+    extra_options = raw.get("extra_options", True)
+    if not isinstance(extra_options, bool) or (tool is not None and "extra_options" in raw):
+        raise ValueError("extra_options is true or false and belongs to a command entry")
     if any(not isinstance(name, str) or not isinstance(values, list) or not all(isinstance(v, str) for v in values)
            for name, values in never.items()):
         raise ValueError("never maps a placeholder name to a list of values")
     return Entry(label, command=command, tool=tool, arguments=arguments,
-                 never={name: tuple(values) for name, values in never.items()}, destructive=destructive)
+                 never={name: tuple(values) for name, values in never.items()}, destructive=destructive,
+                 extra_options=extra_options)
 
 
 def entry_to_json(entry: Entry) -> dict:
@@ -81,6 +86,8 @@ def entry_to_json(entry: Entry) -> dict:
         "tool": entry.tool, "arguments": dict(entry.arguments)}
     if entry.never:
         raw["never"] = {name: list(values) for name, values in entry.never.items()}
+    if not entry.extra_options:
+        raw["extra_options"] = False
     return {**raw, "destructive": True} if entry.destructive else raw
 
 

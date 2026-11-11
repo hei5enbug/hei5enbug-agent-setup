@@ -7,7 +7,10 @@ mechanically from an event, on the session's own current worktree:
 - when a turn ends with a question and ran no `orca worktree set` (Stop), `--unread` and a comment that starts with a
   waiting label and the question's first line, keeping the earlier comment; the user's next prompt (UserPromptSubmit)
   restores that comment while it is still the hook's own;
-- after an edit or a commit inside the worktree, whose status is `completed`, `todo`, or unset (PostToolUse), `in-progress`.
+- after an edit or a commit inside the worktree, whose status is `completed`, `todo`, or unset (PostToolUse),
+  `in-progress`;
+- after the session renames its own terminal tab with a literal title (PostToolUse), that title is remembered, and each
+  later prompt (UserPromptSubmit) gets one context line that names it, so the session can retitle when its work moves on.
 
 The `orca_status_writes` option turns these writes off. At Stop it also keeps the turn going once per state with a
 one-command instruction, which Claude Code shows as Stop hook feedback rather than a hook error, and which costs model
@@ -36,6 +39,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import approval_state_store  # noqa: E402
+import hook_runtime  # noqa: E402
 import language_guard  # noqa: E402
 import plugin_toggles  # noqa: E402
 from orca_placement_hook import orca_arguments  # noqa: E402
@@ -58,6 +62,13 @@ PATCH_PATH = re.compile(r"^\*\*\* (?:Update|Add) File: (.+)$", re.MULTILINE)
 ASSISTANT_ENTRY = re.compile(rb'"type": ?"assistant"')
 USER_ENTRY = re.compile(rb'"type": ?"user"')
 TOOL_RESULT_BLOCK = re.compile(rb'"type": ?"tool_result"')
+TAB_TITLE_LINE = (
+    "Current Orca tab title: {title}. If this prompt asks about or for work the title does not name, such as another "
+    "ticket, pull request, repository, document, or goal, retitle the tab and refresh the worktree comment before "
+    "starting it. A follow-up, fix, review, merge, or question on the titled work keeps the title, as does one the "
+    "user set."
+)
+TERMINAL_HANDLE_REFERENCES = frozenset({"$ORCA_TERMINAL_HANDLE", "${ORCA_TERMINAL_HANDLE}"})
 LABELS = {
     "Korean": {"review": "리뷰 대기", "question": "답변 대기"},
     "English": {"review": "Waiting for review", "question": "Waiting for you"},
@@ -235,13 +246,14 @@ def worktree_set(worktree: dict, *flags: str) -> bool:
 
 @dataclass
 class State:
-    """One session's memory: fired fingerprints, the comment the hook replaced, and the status recheck time."""
+    """One session's memory: fired fingerprints, the comment the hook replaced, the status recheck time, and its title."""
 
     path: Path | None
     fired: set[str] = field(default_factory=set)
     previous_comment: str | None = None
     written_comment: str | None = None
     status_ok_until: float = 0.0
+    tab_title: str | None = None
 
     @classmethod
     def load(cls, session_id: object) -> State:
@@ -257,7 +269,7 @@ class State:
             return state
         fired = data.get("fired")
         state.fired = {item for item in fired if isinstance(item, str)} if isinstance(fired, list) else set()
-        for name in ("previous_comment", "written_comment"):
+        for name in ("previous_comment", "written_comment", "tab_title"):
             if isinstance(data.get(name), str):
                 setattr(state, name, data[name])
         if isinstance(data.get("status_ok_until"), (int, float)):
@@ -273,6 +285,7 @@ class State:
             "previous_comment": self.previous_comment,
             "written_comment": self.written_comment,
             "status_ok_until": self.status_ok_until,
+            "tab_title": self.tab_title,
         }
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -425,6 +438,69 @@ def restore_comment(state: State) -> None:
     state.save()
 
 
+def option_values(arguments: list[str], name: str) -> list[str]:
+    """Return the value of each `name` option in `arguments`, written as `name value` or `name=value`."""
+    values = []
+    for index, token in enumerate(arguments):
+        if token == name and index + 1 < len(arguments):
+            values.append(arguments[index + 1])
+        elif token.startswith(f"{name}="):
+            values.append(token[len(name) + 1 :])
+    return values
+
+
+def literal_rename_title(command: str) -> str | None:
+    """Return the title that the last `orca terminal rename` of this session's own terminal sets, if readable."""
+    handle = os.environ.get("ORCA_TERMINAL_HANDLE")
+    found = None
+    for tokens in segments_of(command):
+        arguments = orca_arguments(tokens)
+        if arguments is None:
+            continue
+        if [token for token in arguments if not token.startswith("-")][:2] != ["terminal", "rename"]:
+            continue
+        terminals, titles = option_values(arguments, "--terminal"), option_values(arguments, "--title")
+        if not terminals or not titles or not (terminals[-1] in TERMINAL_HANDLE_REFERENCES or terminals[-1] == handle):
+            continue
+        title = " ".join(titles[-1].split())
+        if title and "$" not in title and "`" not in title:
+            found = title
+    return found
+
+
+def rename_confirmed(output: str, title: str) -> bool:
+    """True when the output holds the JSON of an `orca terminal rename` that set `title`: result.rename.title."""
+    decoder = json.JSONDecoder()
+    index = output.find("{")
+    while index != -1:
+        try:
+            data, end = decoder.raw_decode(output, index)
+        except ValueError:
+            index = output.find("{", index + 1)
+            continue
+        result = data.get("result") if isinstance(data, dict) else None
+        rename = result.get("rename") if isinstance(result, dict) else None
+        if isinstance(rename, dict) and isinstance(rename.get("title"), str):
+            if " ".join(rename["title"].split()) == title:
+                return True
+        index = output.find("{", end)
+    return False
+
+
+def record_title(command: str, state: State, output: str) -> None:
+    title = literal_rename_title(command)
+    if title is not None and title != state.tab_title and rename_confirmed(output, title):
+        state.tab_title = title
+        state.save()
+
+
+def title_context(state: State) -> dict | None:
+    if not state.tab_title:
+        return None
+    line = TAB_TITLE_LINE.format(title=state.tab_title)
+    return {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": line}}
+
+
 RENAME_COMMAND = '`orca terminal rename --terminal "$ORCA_TERMINAL_HANDLE" --title "<ticket key> <short summary>" --json`'
 END_TURN = "then end the turn without repeating the reply."
 R4_REASON = f"This session's terminal tab has no title for its task. Run {RENAME_COMMAND}, {END_TURN}"
@@ -464,12 +540,22 @@ def applies(event: object) -> bool:
     return isinstance(event, dict) and not event.get("agent_id")
 
 
+def record_own_rename(event: dict, state: State) -> None:
+    tool_input = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
+    command = tool_input.get("command")
+    if event.get("tool_name") == "Bash" and isinstance(command, str) and "rename" in command:
+        record_title(command, state, response_text(event))
+
+
 def handle_post_tool_use(event: dict, state: State) -> None:
+    record_own_rename(event, state)
     tool_input = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
     name = event.get("tool_name")
     if name == "Bash":
         command = tool_input.get("command")
-        if not isinstance(command, str) or not ("create" in command or "commit" in command):
+        if not isinstance(command, str):
+            return
+        if not ("create" in command or "commit" in command):
             return
         turn = Turn()
         command_signals(command, turn)
@@ -512,22 +598,31 @@ def handle(event: object) -> dict | None:
         return None
     writes = plugin_toggles.enabled("orca_status_writes")
     name = event.get("hook_event_name")
-    if name not in ("Stop", "PostToolUse", "UserPromptSubmit") or (name != "Stop" and not writes):
+    if name not in ("Stop", "PostToolUse", "UserPromptSubmit"):
         return None
     state = State.load(event.get("session_id"))
     if name == "Stop":
         return handle_stop(event, state, writes)
     if name == "PostToolUse":
-        handle_post_tool_use(event, state)
-    else:
+        if writes:
+            handle_post_tool_use(event, state)
+        else:
+            record_own_rename(event, state)
+        return None
+    if writes:
         restore_comment(state)
-    return None
+    return title_context(state)
 
 
 def main() -> int:
     try:
-        output = handle(json.load(sys.stdin))
-    except Exception:
+        event = json.load(sys.stdin)
+    except ValueError:
+        return 0
+    try:
+        output = handle(event)
+    except Exception as error:
+        hook_runtime.report_error("orca_status_hook.py", error)
         output = None
     if output is not None:
         print(json.dumps(output, ensure_ascii=False))
@@ -535,4 +630,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(hook_runtime.run("orca_status_hook.py", main))

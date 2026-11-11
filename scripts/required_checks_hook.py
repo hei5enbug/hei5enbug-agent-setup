@@ -125,4 +125,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    import hook_runtime
+
+    sys.exit(hook_runtime.run("required_checks_hook.py", main))

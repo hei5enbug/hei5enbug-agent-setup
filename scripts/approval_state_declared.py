@@ -291,10 +291,13 @@ def _loads_more(example: list, actual: list) -> bool:
                for kind, name, value in actual)
 
 
-def _match_shape(example: list, actual: list, context: tuple) -> Optional[tuple]:
+def _match_shape(example: list, actual: list, context: tuple, extra_options: bool = True) -> Optional[tuple]:
     """The captured values and the example filled from the write, matched by positional index and by option name. An
-    extra option that loads settings or input from elsewhere never matches."""
+    extra option that loads settings or input from elsewhere never matches, and no extra option does when the entry
+    sets `extra_options` to false."""
     if _loads_more(example, actual):
+        return None
+    if not extra_options and sum(item[0] == "opt" for item in actual) != sum(item[0] == "opt" for item in example):
         return None
     positionals = [item[2] for item in actual if item[0] == "pos"]
     if len([item for item in example if item[0] == "pos"]) != len(positionals):
@@ -338,7 +341,7 @@ def _command_match(entry: Entry, words: list, outcome, grants: Mapping, cwd: str
         for pattern, word in zip(example, words):
             captured = merge_captures(captured, match_text(pattern, word, *context))
         return captured is not None and not _push_value_problem(words, captured)
-    matched = _match_shape(_arguments(example), _arguments(words), context)
+    matched = _match_shape(_arguments(example), _arguments(words), context, entry.extra_options)
     if matched is None or _push_value_problem(words, matched[0]):
         return False
     again = guard_dispatch.classify_text(shlex.join(_filled_words(matched[1])), cwd)

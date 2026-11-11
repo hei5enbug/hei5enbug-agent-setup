@@ -46,7 +46,9 @@ COMMITTED|SNAPSHOT`, `ARITHABORT`, `ANSI_NULLS`, `ANSI_WARNINGS`, `ANSI_PADDING`
 `CONCAT_NULL_YIELDS_NULL`, `XACT_ABORT`, `STATISTICS IO|TIME`, and `SHOWPLAN_XML|ALL|TEXT` statements. On Codex, a write
 opens Codex's native approval window when it is ready, and is denied with a code otherwise; an every-time query is
 always denied with a code; see [Approval guard](approval-guard.md#approval-guard). With the toggle off, every write asks
-as before. In Codex, trust the hook in `/hooks`.
+as before. On Claude Code, a query that a kept entry of a started skill declares, on a non-production connection, runs
+without a prompt; see [Matching a write or call](approval-guard.md#matching-a-write-or-call). In Codex, trust the hook
+in `/hooks`.
 
 Optionally, install the `pglast` parser once:
 
@@ -198,6 +200,16 @@ The writes need no model turn and apply to the session's own current worktree. E
 | The user's next prompt, while the comment is still the one the hook wrote | `UserPromptSubmit` | The earlier comment, kept in the session's state file |
 | An edit, or `git commit`, inside the current worktree, whose status is `completed`, `todo`, or unset; a commit counts where `git -C <dir>` or a leading `cd <dir> &&` puts it | `PostToolUse` | Status `in-progress`, comment unchanged |
 
+The hook also keeps the session's tab title, with no Orca write. After a `PostToolUse` of a Bash command whose
+`orca terminal rename` names this terminal, as `"$ORCA_TERMINAL_HANDLE"` or its value, and whose `--title` or
+`--title=` is a literal with no `$` or backtick, the title goes to the state file and a later rename replaces it. A
+rename of another terminal, or a title the hook cannot read literally, is ignored and the earlier title stays. At each
+`UserPromptSubmit` of a session with a kept title, the hook adds one context line, `Current Orca tab title: <title>.
+If this prompt asks about or for work the title does not name, such as another ticket, pull request, repository,
+document, or goal, retitle the tab and refresh the worktree comment before starting it. A follow-up, fix, review,
+merge, or question on the titled work keeps the title, as does one the user set.`, about 330 characters; a session with no kept title gets nothing. The title
+comes from the tool input, so it works on Codex too.
+
 Labels are Korean (`리뷰 대기`, `답변 대기`) when the Claude Code `language` setting names Korean, and English
 otherwise. A status id outside the four defaults is left alone: the board is customized, so only the comment is
 written. After a check inside the worktree, the resumed-work write waits 60 seconds before it reads Orca again; an
@@ -211,9 +223,9 @@ that reminder as `Stop hook feedback`, not as a hook error. A task worktree that
 automatic name, and has a file edited or committed in this session is reminded of `orca worktree set --display-name`. A
 session that ran `orca worktree set` and never `orca terminal rename` is reminded of the tab title; when both apply, one
 reminder carries both commands. Each reminder fires at most once per session, and a stop that continues from a hook
-never gets another. One reminder costs about 265,000 cache-read and output tokens on one measured machine, so these are
-the only recurring model cost. Orca cannot report a tab title, so the hook judges the title only by the session's own
-`orca terminal rename` commands.
+never gets another. One reminder costs about 265,000 cache-read and output tokens on one measured machine; apart from
+the tab title line, which adds about 330 characters to each prompt, these are the only recurring model cost. Orca
+cannot report a tab title, so the hook judges the title only by the session's own `orca terminal rename` commands.
 
 ## Final report review
 
@@ -267,3 +279,41 @@ evaluation run for issue #69, the agent added lines to its final report after th
 problems in them. The interpreter-script detection and the any-length mismatch rule exist because two later evaluation
 runs for issue #69 edited files only through `python3` heredoc scripts and sent an unreviewed 711-character report, and
 sent a 296-character report that differed from the passing draft.
+
+## Hook time limits and machine load
+
+Each hook gets half of the timeout its registration declares, counted from when its launcher started. The launcher
+records that time in `HEI5ENBUG_HOOK_STARTED_AT` (seconds since the epoch) when the shell can read the clock without a
+child process, and a hook without it counts from its own process start. The declared timeouts live once in
+`scripts/hook_runtime.py`, and a test compares them with every hooks file. A hook that starts after its deadline does
+no work and returns the timeout result at once. A hook that runs out of time stops, discards what it was about to print,
+and answers on its own:
+
+- A hook whose output can deny a call or a permission request denies it: the approval guard on `PreToolUse` and
+  `PermissionRequest`, the Orca placement hook, the agent guard, and the DataGrip guard with a decision whose reason
+  names the plugin and the hook, says it could not finish because the machine is busy, and tells the agent to retry
+  after the load drops or to check which sessions are using the machine; the public boundary hooks block with exit
+  status 2 and the same text on stderr.
+- Every other hook, including a `Stop` hook that would otherwise continue the turn, exits with status 0 and no output,
+  so the agent's work continues.
+
+The `orca` and `git` calls of the Orca placement hook have no fixed limit of their own, so a stalled call ends in that
+denial. A failure that reaches the agent or the user, such as a non-zero exit, text on stderr, or a denial, names the
+plugin and the hook, says what was skipped or blocked, and gives the next step, without a traceback. Malformed or
+unrelated input still ends silently. A hook that runs on every tool call or prompt starts no child process and makes no
+network call except what its decision needs for that input, such as `orca` only for an `orca` command; the one
+background interpreter resolution in [configuration](configuration.md) is the only exception.
+
+At each user prompt, the `UserPromptSubmit` pass of the approval guard adds one line to the prompt context when the
+1-minute load average is at least twice the logical CPU count, available memory is below 10% of physical memory, or
+the free space of the volume that holds the working directory is below 10%. The line names each short resource with its
+current value and threshold and tells the agent to tell the user before heavy work, such as a build, a full test suite,
+or several parallel agents. For CPU or memory the agent names the processes or Orca sessions using most of it, or says
+that none stands out, and recommends checking those sessions and waiting until the load drops; for storage it
+recommends freeing space, because waiting does not help. The agent does not block or delay light work. The line shows
+once per session per crossing: after it shows, no line follows until a prompt finds none of the three conditions, and
+the next prompt where one holds shows it again. The counters come from the operating system without a child process
+(`os.getloadavg`, `os.cpu_count`, `os.statvfs`, `/proc/meminfo` on Linux, and a `sysctl` read through `ctypes` on
+macOS), and a counter that cannot be read counts as no shortage. It exists because, on a machine with a load average of
+60 to 69 on 10 logical cores, Codex sessions showed `hook timed out after 5s` before many commands and the timed-out
+checks did not apply.

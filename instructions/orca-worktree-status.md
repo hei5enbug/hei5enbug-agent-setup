@@ -19,9 +19,9 @@ a ticket, when the task starts. Change it again only when the task's scope chang
 
 At the same events as the display name, and in the main clone too, set the session's own tab title with
 `orca terminal rename --terminal "$ORCA_TERMINAL_HANDLE" --title "<ticket key> <short summary>" --json`, or a short
-task name without a ticket. In the main clone the tab title is the only place that names the task. Orca does not report
-a tab title back: keep one only when the user said they set it themselves, and otherwise replace it when the task
-changes.
+task name without a ticket. In the main clone the tab title is the only place that names the task. The plugin hook
+shows the session its last set title with each prompt: when a prompt asks for work the title does not name, retitle the
+tab and refresh the worktree comment before starting it, and keep a title the user said they set by hand.
 
 ## Board status and comment
 

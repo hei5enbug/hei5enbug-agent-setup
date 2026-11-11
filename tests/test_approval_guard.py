@@ -1825,7 +1825,7 @@ def test_플러그인_캐시의_파일을_읽기만_하는_heredoc은_거부하�
     assert output is None or decision_of(output) != "deny", output
 
 
-@pytest.mark.parametrize("folder", ["approvals", "heartbeats", "pycache"])
+@pytest.mark.parametrize("folder", ["approvals", "heartbeats", "pycache", "interpreter"])
 def test_가드_상태_폴더와_pycache에_쓰는_heredoc은_작업_트리에서도_거부한다(source_tree, state, folder):
     # given
     target = state / "xdg" / "hei5enbug-agent-setup" / folder / "x.json"

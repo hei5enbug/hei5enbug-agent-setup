@@ -445,6 +445,164 @@ class ResumeWriteTest(HookCase):
         self.assertEqual(len(self.writes()), 1)
 
 
+class TabTitleContextTest(HookCase):
+    def rename(self, title: str, terminal: str = '"$ORCA_TERMINAL_HANDLE"', env: dict | None = None) -> None:
+        command = f"orca terminal rename --terminal {terminal} --title {title} --json"
+        shown = title.strip('"')
+        output = json.dumps({"id": "req_1", "ok": True, "result": {"rename": {"handle": "term_test", "title": shown}}},
+                            indent=2)
+        self.tool_event("Bash", {"command": command}, {"stdout": output}, env)
+
+    def context_of(self, output: dict | None) -> str | None:
+        if output is None:
+            return None
+        self.assertEqual(output["hookSpecificOutput"]["hookEventName"], "UserPromptSubmit")
+        return output["hookSpecificOutput"]["additionalContext"]
+
+    def test_탭_제목을_바꾼_세션은_다음_프롬프트마다_그_제목과_재설정_안내_한_줄을_받는다(self):
+        # Regression: the session never sees the title it set, so it cannot tell that a new request is another task
+        # Given
+        self.rename('"ABC-1 login fix"')
+
+        # When
+        first = self.context_of(self.submit_prompt())
+        second = self.context_of(self.submit_prompt())
+
+        # Then
+        self.assertEqual(first, second)
+        self.assertEqual(len(first.splitlines()), 1)
+        self.assertIn("Current Orca tab title: ABC-1 login fix.", first)
+        self.assertIn("retitle the tab", first)
+        self.assertIn("worktree comment", first)
+        self.assertIn("as does one the user set", first)
+
+    def test_상태_쓰기_토글이_꺼져도_탭_제목은_기억하고_프롬프트에_알린다(self):
+        # Regression: turning off Orca writes also hides the title line, which is context and writes nothing
+        # Given
+        env = {"CLAUDE_PLUGIN_OPTION_ORCA_STATUS_WRITES": "false"}
+        self.rename('"ABC-1 login fix"', env=env)
+
+        # When
+        line = self.context_of(self.submit_prompt(env))
+
+        # Then
+        self.assertIn("Current Orca tab title: ABC-1 login fix.", line)
+        self.assertEqual(self.writes(), [])
+
+    def test_탭_제목을_바꾼_적이_없으면_프롬프트에_아무것도_더하지_않는다(self):
+        # Regression: a session without a title gets a line that names nothing, on top of the missing-title reminder
+        # Given
+        self.tool_event("Bash", {"command": SET_NAME}, {"stdout": "{}"})
+
+        # When
+        output = self.submit_prompt()
+
+        # Then
+        self.assertIsNone(output)
+
+    def test_제목을_다시_바꾸면_새_제목으로_바뀌고_첫_제목은_남지_않는다(self):
+        # Regression: the line keeps the first task's title after the session retitled the tab
+        # Given
+        self.rename('"ABC-1 login fix"')
+        self.rename('"ABC-2 report export"')
+
+        # When
+        context = self.context_of(self.submit_prompt())
+
+        # Then
+        self.assertIn("Current Orca tab title: ABC-2 report export.", context)
+        self.assertNotIn("ABC-1", context)
+
+    def test_다른_터미널의_이름_변경은_기록하지_않고_이전_제목을_그대로_둔다(self):
+        # Regression: a rename of another tab replaces this session's title, or creates one it never set
+        # Given
+        self.rename('"ABC-9 other tab"', terminal="term_other")
+
+        # When
+        before = self.submit_prompt()
+        self.rename('"ABC-1 login fix"')
+        self.rename('"ABC-9 other tab"', terminal="term_other")
+        after = self.context_of(self.submit_prompt())
+
+        # Then
+        self.assertIsNone(before)
+        self.assertIn("ABC-1 login fix", after)
+        self.assertNotIn("ABC-9", after)
+
+    def test_이_세션의_터미널_핸들을_값으로_직접_써도_기록한다(self):
+        # Regression: a command that spells out the handle instead of the variable is missed
+        # Given
+        self.rename('"ABC-3 literal handle"', terminal="term_test")
+
+        # When
+        context = self.context_of(self.submit_prompt())
+
+        # Then
+        self.assertIn("Current Orca tab title: ABC-3 literal handle.", context)
+
+    def test_글자_그대로_읽을_수_없는_제목은_기록하지_않고_이전_제목을_그대로_둔다(self):
+        # Regression: a shell variable or command substitution is stored as a title, or erases the earlier one
+        # Given
+        self.rename('"ABC-1 login fix"')
+
+        # When
+        for title in ('"$NEW_TITLE"', '"ABC-2 $(git branch --show-current)"', '"ABC-2 `date`"', "$(date)"):
+            with self.subTest(title=title):
+                self.rename(title)
+                context = self.context_of(self.submit_prompt())
+
+                # Then
+                self.assertIn("Current Orca tab title: ABC-1 login fix.", context)
+
+    def test_실행되지_않은_이름_변경은_성공한_명령_안에_있어도_기록하지_않는다(self):
+        # Regression: `true || orca terminal rename ...` succeeds without renaming, yet its title is reported as current
+        # Given
+        command = 'true || orca terminal rename --terminal "$ORCA_TERMINAL_HANDLE" --title "ABC-2 export" --json'
+
+        # When
+        self.tool_event("Bash", {"command": command}, {"stdout": ""})
+        before = self.submit_prompt()
+        self.tool_event("Bash", {"command": command}, {"stdout": '{"ok": true, "result": {"rename": {"title": "ABC-9 other"}}}'})
+        mismatched = self.submit_prompt()
+
+        # Then
+        self.assertIsNone(before)
+        self.assertIsNone(mismatched)
+
+    def test_오르카_터미널_밖이면_제목을_기록하지도_알리지도_않는다(self):
+        # Regression: the line appears in sessions with no Orca tab
+        # Given
+        outside = {"ORCA_TERMINAL_HANDLE": None}
+        self.rename('"ABC-1 login fix"', env=outside)
+
+        # When
+        before = self.submit_prompt()
+        self.rename('"ABC-2 recorded inside"')
+        after = self.submit_prompt(outside)
+
+        # Then
+        self.assertIsNone(before)
+        self.assertIsNone(after)
+
+    def test_대기_코멘트_복원과_제목_안내가_같은_프롬프트에서_함께_일어난다(self):
+        # Regression: adding the title line skips or changes the waiting-comment restore
+        # Given
+        self.set_orca(worktree_json(comment="구현 중"))
+        self.rename('"ABC-1 login fix"')
+        self.write(prompt(), assistant(text("Continue?")))
+        self.stop()
+        written = self.writes()[0].split("--comment ", 1)[1].rsplit(" --unread", 1)[0]
+        self.log.unlink()
+        self.set_orca(worktree_json(comment=written))
+
+        # When
+        output = self.submit_prompt()
+
+        # Then
+        self.assertEqual(self.writes(), [f"worktree set --worktree id:repo-id::{WORKTREE} --comment 구현 중 --json"])
+        self.assertIn("ABC-1 login fix", self.context_of(output))
+
+
 class NoWriteTest(HookCase):
     def events(self):
         yield "pull request", lambda env, **extra: self.tool_event("Bash", {"command": PULL_REQUEST}, {"stdout": PR_URL}, env, **extra)

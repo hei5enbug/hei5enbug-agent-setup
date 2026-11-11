@@ -6,8 +6,9 @@ import re
 import sys
 from pathlib import Path
 import approval_state
+import hook_runtime
 import db_read_policy
-from approval_state import Outcome
+from approval_state import FAILURE_REASON, Outcome
 from plugin_toggles import detect_host
 from guard_shell import _datagrip, _digest, _merge, _read, tool_words
 from guard_paths import _protected_path, _resolved, _sensitive, _state_path
@@ -18,6 +19,7 @@ from guard_dispatch import _python_policy
 
 
 TABULARIS_TOOL = "mcp__tabularis__run_query"
+DATAGRIP_TOOL = "mcp__datagrip__execute_sql_query"
 MCP_READ_VERBS = frozenset({
     "get", "list", "search", "read", "fetch", "query", "find", "lookup", "describe", "show", "view", "check",
     "count", "browse", "download", "export", "preview", "introspect", "analyze", "explain", "info", "whoami",
@@ -28,7 +30,6 @@ MCP_WRITE_WORDS = frozenset({
     "rename", "link", "react", "reaction", "publish", "merge", "close", "reopen", "assign", "invite", "patch",
 })
 MCP_DESTRUCTIVE_WORDS = frozenset({"delete", "trash", "remove", "destroy", "purge", "drop", "unshare", "revoke"})
-FAILURE_REASON = "The approval guard failed to check this call"
 EXEC_WORDS = frozenset({"repl", "exec", "execute", "eval", "run", "code", "script", "command"})
 
 
@@ -204,6 +205,8 @@ def _classify_executable(tool, tool_input, cwd):
 def classify_mcp(tool, tool_input=None, cwd=None, host=None, session=None):
     if tool == TABULARIS_TOOL:
         return classify_tabularis(tool_input, host, session)
+    if tool == DATAGRIP_TOOL:
+        return _datagrip().classify_query(tool_input)
     part = mcp_tool_part(tool)
     words = tool_words(part) if part else []
     sql = list(_input_strings(tool_input, sql_only=True))
@@ -243,7 +246,7 @@ def classify_mcp(tool, tool_input=None, cwd=None, host=None, session=None):
 
 
 def _report_error(error):
-    print(f"approval_guard: classifier error: {type(error).__name__}", file=sys.stderr)
+    hook_runtime.report_error("approval_guard.py", error)
 
 
 def _classify_safely(classifier, identity):

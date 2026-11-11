@@ -3,6 +3,11 @@ case $0 in
   */*) dir=${0%/*} ;;
   *) dir=. ;;
 esac
+if [ ! -f "$dir/hook_interpreter.sh" ]; then
+  echo "hei5enbug-agent-setup hook launcher (hook_python.sh) did not run the hook because hook_interpreter.sh is missing next to it. Reinstall the plugin, then retry." >&2
+  exit 1
+fi
+. "$dir/hook_interpreter.sh"
 script=$1
 case $script in
   '' | */* | -* | .* | *[!A-Za-z0-9_.-]*) script= ;;
@@ -10,23 +15,11 @@ case $script in
   *) script= ;;
 esac
 if [ -z "$script" ] || [ ! -f "$dir/$script" ]; then
-  echo "hook_python.sh: the first argument must be a .py file next to this launcher" >&2
+  echo "hei5enbug-agent-setup hook launcher (hook_python.sh) did not run a hook because its first argument is not a .py file next to the launcher. Fix the hook command so it names a script in the plugin's scripts folder." >&2
   exit 1
 fi
 shift
-interpreter=
-for python in "$CLAUDE_PLUGIN_OPTION_PYTHON" "$HEI5ENBUG_PYTHON"; do
-  case $python in
-    /*)
-      if [ -f "$python" ] && [ -x "$python" ]; then
-        interpreter=$python
-        break
-      fi
-      ;;
-  esac
-done
-[ -n "$interpreter" ] || interpreter=python3
-state=${XDG_STATE_HOME:-${HOME:+$HOME/.local/state}}
+hook_select_interpreter
 case $state in
   /*)
     exec "$interpreter" -X "pycache_prefix=$state/hei5enbug-agent-setup/pycache" -c 'import os, sys

@@ -22,6 +22,7 @@ not a read, asks every time.
 Codex denies only unapproved writes and always-asking queries, through approval_state; the guard always exits 0.
 While Codex's native approval window can ask (the approval guard's native_ready), it leaves a write to the
 window instead and remembers the session approval it grants; an always-asking query keeps the one-time code.
+A query that a kept skill grant entry declares on a non-production data source (`granted_skill`) runs without either.
 
 Claude Code PreToolUse prints a permission decision; PermissionRequest prints nothing. Codex PreToolUse prints an
 allow with the read-only prefix for PostgreSQL reads, and PermissionRequest prints an allow for any read. Anything
@@ -40,6 +41,7 @@ from pathlib import Path
 
 sys.dont_write_bytecode = sys.pycache_prefix is None
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import hook_runtime  # noqa: E402
 from plugin_toggles import enabled  # noqa: E402
 import approval_state  # noqa: E402
 import db_read_policy  # noqa: E402
@@ -151,6 +153,18 @@ def classify_query(tool_input) -> Outcome:
     )
 
 
+def granted_skill(host: str, session_id, tool_input):
+    """The skill whose kept entry declares this non-production query, else None. A production or unidentified data
+    source never matches. The grant modules load only when the session holds a grant."""
+    if not isinstance(tool_input, dict) or not approval_state.held_grants(host, session_id):
+        return None
+    source = find_data_source(tool_input)
+    if source is None or db_read_policy.is_production(source.get("name")):
+        return None
+    import approval_state_grants
+    return approval_state_grants.matching_skill(host, session_id, TOOL_NAME, tool_input, None, os.getcwd())
+
+
 def unapproved_write(tool_input, session_id, tool_use_id=None) -> dict:
     """Claude decision for a query that is not a read: an approved write runs without the prelude, anything else asks."""
     if not approval_on():
@@ -220,6 +234,9 @@ def decide(tool_input, session_id=None, tool_use_id=None) -> dict:
     if approval_on():
         outcome = classify_query(tool_input)
         if outcome.kind != "read":
+            skill = granted_skill("claude", session_id, tool_input) if outcome.kind in ("write", "always") else None
+            if skill is not None:
+                return result("allow", f"Approved by the skill {skill}: {approval_state.describe(outcome)}")
             return approval_state.pre_decision("claude", session_id, outcome, tool_use_id)
     kind = connection_kind(tool_input)
     if kind == "unknown":
@@ -267,6 +284,8 @@ def codex_unapproved(tool_input, session_id, tool_use_id=None, event=None):
         return None
     outcome = classify_query(tool_input)
     if outcome.kind in ("write", "always"):
+        if granted_skill("codex", session_id, tool_input) is not None:
+            return None
         if (outcome.kind == "write" and approval_state.session_key(session_id) is not None
                 and _native_ready(event)):
             return None
@@ -305,6 +324,8 @@ def codex_permission_request(tool_input, session_id=None, tool_use_id=None, even
         if not approval_on():
             return None
         outcome = classify_query(tool_input)
+        if outcome.kind in ("write", "always") and granted_skill("codex", session_id, tool_input) is not None:
+            return approval_state.permission_allow()
         if event is not None and outcome.kind == "write" and _native_ready(event):
             import guard_permissions
             return guard_permissions.codex_permission(session_id, outcome, tool_use_id, tool_input, TOOL_NAME, event)
@@ -335,7 +356,7 @@ def handle(event):
             return decide(tool_input, session_id, tool_use_id)
         except Exception:
             return approval_state.pre_decision("claude", session_id, Outcome(
-                "always", ["sql:always:guard-failure"], ["The approval guard failed to check this call"], every_time=True,
+                "always", ["sql:always:guard-failure"], [approval_state.FAILURE_REASON], every_time=True,
                 critical=True,
             ), tool_use_id)
     try:
@@ -346,7 +367,7 @@ def handle(event):
     except Exception:
         if name == "PreToolUse":
             return approval_state.pre_decision("codex", session_id, Outcome(
-                "always", ["sql:always:guard-failure"], ["The approval guard failed to check this call"], every_time=True,
+                "always", ["sql:always:guard-failure"], [approval_state.FAILURE_REASON], every_time=True,
                 critical=True,
             ), tool_use_id)
     return None
@@ -398,7 +419,8 @@ def main() -> int:
         return child.returncode if child.returncode >= 0 else 1
     try:
         output = handle(event)
-    except Exception:
+    except Exception as error:
+        hook_runtime.report_error("datagrip_guard.py", error)
         output = None
     if output is not None:
         print(json.dumps(output, ensure_ascii=False))
@@ -406,4 +428,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(hook_runtime.run("datagrip_guard.py", main))

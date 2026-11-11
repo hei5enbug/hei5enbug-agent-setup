@@ -16,10 +16,9 @@ from guard_expand import _expand_segment_words
 import guard_temp
 import guard_dispatch
 from guard_dispatch import DESTRUCTIVE_COMMAND, TEMP_WRITE_EXE
-from guard_tools import _classify_safely, _report_error, tabularis_connection
+from guard_tools import DATAGRIP_TOOL, _classify_safely, _report_error, tabularis_connection
 
 
-DATAGRIP_TOOL = "mcp__datagrip__execute_sql_query"
 SECRET_REASON = (
     "This command would print a secret value. Run it through `python3 {root}/scripts/secret_exec.py --secret "
     "VAR=<source> -- <command>` instead; the value reaches the command only through an environment variable or a "

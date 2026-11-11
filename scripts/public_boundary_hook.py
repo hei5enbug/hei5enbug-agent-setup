@@ -14,7 +14,8 @@ GIT_OR_GH = re.compile(r"(?:\b|(?<=\\[nrt]))(?:git|gh)\b")
 SCANNER_DIR = ".githooks"
 SCANNER_MODULE = "boundary_agent.py"
 BLOCK_EXIT = 2
-UNCHECKED_NOTICE = "the command was blocked because it could not be checked"
+UNCHECKED_NOTICE = "so the command was blocked because it could not be checked"
+HOOK_LABEL = "hei5enbug-agent-setup public boundary hook"
 
 
 def main() -> int:
@@ -24,7 +25,11 @@ def main() -> int:
     root = Path(__file__).resolve().parents[1]
     scanner = root / SCANNER_DIR
     if not (scanner / SCANNER_MODULE).is_file():
-        print(f"public boundary: the scanner folder is missing from the plugin; {UNCHECKED_NOTICE}", file=sys.stderr)
+        print(
+            f"{HOOK_LABEL}: the scanner folder is missing from the plugin, {UNCHECKED_NOTICE}. "
+            "Reinstall the plugin, then run the command again.",
+            file=sys.stderr,
+        )
         return BLOCK_EXIT
     sys.path.insert(0, str(scanner))
     try:
@@ -32,9 +37,16 @@ def main() -> int:
 
         return boundary_agent.run(raw, str(root), project=False)
     except Exception as error:
-        print(f"public boundary: the check failed ({type(error).__name__}); {UNCHECKED_NOTICE}", file=sys.stderr)
+        print(
+            f"{HOOK_LABEL}: the check failed ({type(error).__name__}), {UNCHECKED_NOTICE}. "
+            "Run the command again; if it repeats, report the error name.",
+            file=sys.stderr,
+        )
         return BLOCK_EXIT
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import hook_runtime
+
+    sys.exit(hook_runtime.run("public_boundary_hook.py", main))

@@ -199,7 +199,10 @@ def test_분류기_예외는_매번_묻는_작업이고_stderr에_한_줄을_남
     # then
     assert decision(output) == "ask"
     assert reason(output).startswith("Asks every time:")
-    assert capsys.readouterr().err == "approval_guard: classifier error: RuntimeError\n"
+    assert capsys.readouterr().err == (
+        "hei5enbug-agent-setup approval guard hit an internal error (RuntimeError), so it could not finish its check "
+        "of this call. Run the step again; if it repeats, report the error name and the hook.\n"
+    )
 
 
 def test_mcp_분류기_예외도_stderr에_한_줄을_남긴다(state, monkeypatch, capsys):
@@ -212,7 +215,10 @@ def test_mcp_분류기_예외도_stderr에_한_줄을_남긴다(state, monkeypat
     output = guard.handle(mcp_event("mcp__demo__thing", {}), "claude")
     # then
     assert decision(output) == "ask"
-    assert capsys.readouterr().err == "approval_guard: classifier error: KeyError\n"
+    assert capsys.readouterr().err == (
+        "hei5enbug-agent-setup approval guard hit an internal error (KeyError), so it could not finish its check "
+        "of this call. Run the step again; if it repeats, report the error name and the hook.\n"
+    )
 
 
 def test_분류된_매번_작업은_모두_every_time_표시를_갖는다(state, fake_bin):

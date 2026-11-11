@@ -23,7 +23,7 @@ def _resolved(path, cwd):
 
 def _guard_state_dirs():
     root = approval_state.state_dir()
-    return (root, root.parent / "heartbeats", root.parent / "pycache")
+    return (root, root.parent / "heartbeats", root.parent / "pycache", root.parent / "interpreter")
 
 
 def _state_path(path, cwd):

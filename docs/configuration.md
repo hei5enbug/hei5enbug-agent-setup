@@ -94,11 +94,29 @@ The hook Python interpreter is the absolute path of a Python 3.12 or later inter
 the SQL guard's parser. Every hook starts through `scripts/hook_python.sh`, which runs its script with this interpreter.
 It uses the Claude Code `python` option first and then `HEI5ENBUG_PYTHON`, and only a path that starts with `/` and
 names an existing executable file counts. An empty, relative, missing, or invalid value falls back to `python3` on the
-`PATH`, so an unset option behaves as before. Setting the path skips a version-manager shim, such as a pyenv shim, which
-adds about 150 ms to each hook process on one measured machine and can select a different Python per project. The
-launcher caches compiled bytecode under `$XDG_STATE_HOME/hei5enbug-agent-setup/pycache/` (default `~/.local/state`).
-This is a guard state folder, so the approval guard denies agent writes there like those to `approvals/` and
-`heartbeats/`. Without an absolute state folder, hooks run without a cache.
+`PATH`, so an unset option behaves as before. Setting the path skips a version-manager shim, such as a pyenv shim. On one
+machine whose 10 logical cores carried a 1-minute load average of 60 to 69, `python3 -c pass` took 2.05 to 3.18 s
+through the shim and 0.09 to 0.17 s through the real interpreter, `required_checks_hook.py` on one Bash input took 1.81
+to 3.75 s against 0.24 to 0.73 s, and `orca_placement_hook.py` took 2.02 to 2.26 s against 0.56 to 0.81 s. A shim can
+also select a different Python per project. The launcher caches compiled bytecode under
+`$XDG_STATE_HOME/hei5enbug-agent-setup/pycache/` (default `~/.local/state`). This is a guard state folder, so the
+approval guard denies agent writes there like those to `approvals/`, `heartbeats/`, and `interpreter/`. Without an
+absolute state folder, hooks run without a cache.
+
+Without a valid configured path, the launcher also caches the interpreter it resolves. It reads the first `python3` on
+`PATH` without starting a process, and when `interpreter/cache` in the state folder names that same `python3` and an
+executable file, it runs that absolute path. The resolver writes the cache and then a second file, `interpreter/verified`,
+inside a folder only the current user can enter. The launcher trusts the cache only when both files belong to the current
+user, neither is a symlink, and the cache is not newer than `verified`, so a rewrite of the cache by another account
+makes it newer and the hook runs with `python3` from `PATH`. A hook also removes a cache that group or others can write.
+The remaining limit is a write in the instant between the launcher's check and its read, which needs write access to a
+file the current user owns. On a cold or stale cache, such as after another `python3` came first on `PATH` or the file
+was deleted, the hook runs with `python3` from `PATH` as before, and one detached resolver runs that `python3` once, from
+the root folder, to print its `sys.executable`, keeps the result only for Python 3.12 or later, and writes the cache. All
+sessions share the lock file `interpreter/lock`, which holds the resolver's process ID, so at most one resolver runs and
+a hook takes the lock over only when that process is gone. When resolution fails, nothing is cached and
+`interpreter/failed` stops further attempts for a minute across all sessions. Resolution follows the user's default
+`python3`, not a project's version file.
 
 Without a matching launcher environment, the Mod refuses pinned GPT requests before a provider request. This refusal has
 no toggle. The session instructions and operating rules also have no toggle, except the `orca_worktree` line, which

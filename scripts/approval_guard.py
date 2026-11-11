@@ -19,8 +19,10 @@ from pathlib import Path
 
 sys.dont_write_bytecode = sys.pycache_prefix is None
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import hook_runtime  # noqa: E402
 from plugin_toggles import detect_host, enabled  # noqa: E402
 import approval_state  # noqa: E402
+import machine_load  # noqa: E402
 import approval_state_grants  # noqa: E402
 from approval_state import Outcome  # noqa: E402
 from guard_shell import (  # noqa: E402
@@ -97,6 +99,19 @@ def _record_source(host, session, tool_use_id, outcome, skill):
         return
 
 
+def _machine_load_line(host, event):
+    """The prompt-context line for a CPU, memory, or storage shortage, shown once per shortage for the session."""
+    if approval_state.parent_session():
+        return None
+    try:
+        found = machine_load.shortages(machine_load.system_counters(_cwd(event)))
+        if not approval_state.machine_load_shown(host, event.get("session_id"), bool(found)):
+            return None
+    except (OSError, ValueError, TypeError, ArithmeticError):
+        return None
+    return machine_load.notice_line(found)
+
+
 def handle(event, host):
     if not isinstance(event, dict):
         return None
@@ -108,12 +123,12 @@ def handle(event, host):
     if name == "UserPromptSubmit":
         approval_state.reset_request_counts(host, session)
         output = approval_state.approve_prompt(host, session, event.get("prompt"))
-        warning = approval_state.hooks_warning(host, session)
-        if warning:
+        lines = [line for line in (approval_state.hooks_warning(host, session), _machine_load_line(host, event)) if line]
+        if lines:
             if output is None:
-                return {"hookSpecificOutput": {"hookEventName": name, "additionalContext": warning}}
+                return {"hookSpecificOutput": {"hookEventName": name, "additionalContext": "\n".join(lines)}}
             context = output["hookSpecificOutput"]["additionalContext"]
-            output["hookSpecificOutput"]["additionalContext"] = warning + "\n" + context
+            output["hookSpecificOutput"]["additionalContext"] = "\n".join([*lines, context])
         return output
     if name not in EVENTS or not isinstance(tool, str):
         return None
@@ -126,7 +141,11 @@ def handle(event, host):
         elif name == "PreToolUse" and host == "claude" and enabled("datagrip_guard"):
             outcome = _classify_safely(lambda: _datagrip().classify_query(event.get("tool_input")), tool)
             _record_risk(host, session, tool_use_id, tool, outcome)
-            if outcome.kind == "always":
+            skill = _datagrip().granted_skill(host, session, event.get("tool_input")) \
+                if outcome.kind in ("write", "always") else None
+            if skill is not None:
+                _record_source(host, session, tool_use_id, outcome, skill)
+            elif outcome.kind == "always":
                 return approval_state.pre_decision(host, session, outcome, tool_use_id)
         return None
     tool_input = event.get("tool_input")
@@ -206,4 +225,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main() if len(sys.argv) > 1 else hook_runtime.run("approval_guard.py", main))
