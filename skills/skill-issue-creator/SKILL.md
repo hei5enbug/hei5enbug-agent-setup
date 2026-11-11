@@ -198,7 +198,8 @@ final report names that text for each.
 - Under the condition that the request files or rewrites one or more issues whose proposals change behavior, a public
   contract, or several components, read [independent model validation](../../instructions/independent-model-validation.md)
   before the first write, and run its one pass over all those bodies together as the complete draft, with the owning
-  files as evidence. Apply its findings once, then write. When the review cannot run, write anyway and report that it
+  files as evidence. Sort and apply its findings once as that file says, finish the independent text review that
+  [shared text](../../instructions/shared-text.md) requires for an issue body, then write. When the review cannot run, write anyway and report that it
   did not run, as that file says for an unavailable reviewer.
 - Under the condition that `target.public` is true, read [public leak check](references/public-leak-check.md) before
   any write to the tracker, whether a create, an edit, or a comment; it can stop the write.
