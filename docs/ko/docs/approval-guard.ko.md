@@ -519,7 +519,7 @@ root>/scripts/approval_guard.py link`를 실행합니다. 이 명령은 현재 �
   `staging-1:refs/tags/release-1`은 절대 일치하지 않습니다.
 
 MCP 호출은 도구 이름이 같고, 항목이 나열한 인자를 모두 지니며, 각 값이 받아들여지면 도구 항목과 일치합니다. 가드가 파괴적으로 분류한 호출은 `destructive: true`인 항목에만 일치하고, 치명적인
-호출은 절대 일치하지 않습니다. DataGrip `execute_sql_query` 호출도 같은 방식으로 일치합니다. `datagrip_guard.py`와 승인 가드가 [MCP와 데이터베이스 호출](#mcp와-데이터베이스-호출)처럼 쿼리를 분류한 뒤, 비운영 데이터 소스의 파괴적이지 않은 쓰기는 일치하는 항목이 필요하고 파괴적 문장은 `destructive: true`인 항목이 필요합니다. 운영 데이터 소스나 확인되지 않은 데이터 소스는 절대 일치하지 않으므로 그 쓰기나 문장은 전처럼 묻습니다. grant는 `projectPath`와 `connectionId`가 grant 실행 시점에 확인되는 비운영 데이터 소스를 가리킬 때만 그런 항목을 유지합니다.
+호출은 절대 일치하지 않습니다. DataGrip `execute_sql_query` 호출과 `mcp__tabularis__run_query` 호출도 같은 방식으로 일치합니다. `datagrip_guard.py`와 승인 가드가 [MCP와 데이터베이스 호출](#mcp와-데이터베이스-호출)처럼 쿼리를 분류한 뒤, 비운영 데이터 소스나 연결의 파괴적이지 않은 쓰기는 일치하는 항목이 필요하고 파괴적 문장은 `destructive: true`인 항목이 필요합니다. 운영이거나 확인되지 않은 데이터 소스나 연결은 절대 일치하지 않으므로 그 쓰기나 문장은 전처럼 묻습니다. grant는 `projectPath`와 `connectionId`가 grant 실행 시점에 확인되는 비운영 데이터 소스를 가리킬 때만 그런 항목을 유지합니다.
 
 일치한 호출은 묻지 않고 실행되며 세션 승인을 남기지 않습니다. Claude Code 모드용 호출 기록은 `source` 필드에 `<plugin>:<skill>`로 그 스킬을 승인의 출처로 적습니다. 유지된 어떤
 항목에도 일치하지 않는 쓰기는 전과 같이 동작합니다.

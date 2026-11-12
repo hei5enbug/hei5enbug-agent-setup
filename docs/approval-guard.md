@@ -556,10 +556,11 @@ with no pipe, redirection, shell expansion, or environment prefix, and all of th
 
 An MCP call matches a tool entry when the tool name is equal, the call carries every argument the entry lists, and each
 value is accepted. A call the guard classifies as destructive matches only an entry with `destructive: true`, and a
-critical call never matches. A DataGrip `execute_sql_query` call matches the same way, after `datagrip_guard.py` and the
-approval guard classify the query as in [MCP and database calls](#mcp-and-database-calls): a non-destructive write on a
-non-production data source needs a matching entry, and a destructive statement needs one with `destructive: true`. A
-production or unidentified data source never matches, so its write or statement asks as before. The grant keeps such an
+critical call never matches. A DataGrip `execute_sql_query` call and a `mcp__tabularis__run_query` call match the same way, after
+`datagrip_guard.py` and the approval guard classify the query as in [MCP and database calls](#mcp-and-database-calls): a
+non-destructive write on a non-production data source or connection needs a matching entry, and a destructive statement
+needs one with `destructive: true`. A production or unidentified data source or connection never matches, so its write
+or statement asks as before. The grant keeps such an
 entry only when its `projectPath` and `connectionId` name a non-production data source that resolves when the grant
 runs.
 

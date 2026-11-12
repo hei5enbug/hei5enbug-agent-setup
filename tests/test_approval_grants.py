@@ -675,6 +675,50 @@ def test_destructive가_없는_DataGrip_파괴_항목은_버려지고_파괴_문
     assert decision_of(asked) == "ask"
 
 
+TABULARIS_TOOL = "mcp__tabularis__run_query"
+TB_UPDATE = "UPDATE demo.items SET flag = 1"
+
+
+@pytest.fixture
+def tabularis_dir(home, monkeypatch):
+    directory = home / "tabularis"
+    directory.mkdir()
+    monkeypatch.setenv("HEI5ENBUG_TABULARIS_DIR", str(directory))
+    connections = [{"id": name, "name": name, "params": {"driver": "postgresql"}} for name in ("demo-prod", "demo-dev")]
+    (directory / "connections.json").write_text(json.dumps(connections), encoding="utf-8")
+    return directory
+
+
+def tabularis_decision(connection_id, session="s1", tool_use_id=None):
+    event = {"hook_event_name": "PreToolUse", "tool_name": TABULARIS_TOOL, "session_id": session,
+             "tool_use_id": tool_use_id,
+             "tool_input": {"connection_id": connection_id, "query": TB_UPDATE}}
+    return guard.handle(event, "claude")
+
+
+def test_선언한_tabularis_쓰기는_운영이나_확인되지_않는_연결에서_묻고_비운영_연결에서만_묻지_않는다(
+        home, fake_bin, tabularis_dir):
+    # given
+    declare(home, [{"tool": TABULARIS_TOOL,
+                    "arguments": {"connection_id": "<connection>", "query": "UPDATE demo.items SET flag = <value>"}}])
+    granted(home)
+    # when
+    production = tabularis_decision("demo-prod")
+    unidentified = tabularis_decision("no-such-connection")
+    development = tabularis_decision("demo-dev", tool_use_id="toolu_dev")
+    # then
+    assert decision_of(production) == "ask"
+    assert LABEL not in reason_of(production)
+    assert production == tabularis_decision("demo-prod", session="no-grant")
+    assert decision_of(unidentified) == "ask"
+    assert LABEL not in reason_of(unidentified)
+    assert unidentified == tabularis_decision("no-such-connection", session="no-grant")
+    assert decision_of(development) == "allow"
+    assert LABEL in reason_of(development)
+    calls = {call["id"]: call for call in json.loads(approval_state.risk_path("claude", "s1").read_text())["calls"]}
+    assert SKILL in calls["toolu_dev"]["source"]
+
+
 def codex_datagrip_decisions(project, connection_id, sql):
     """The Codex outputs of the datagrip guard for one query: PreToolUse and PermissionRequest."""
     event = query_event(project, connection_id, sql)

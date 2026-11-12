@@ -37,6 +37,7 @@ from guard_proof import SELF_APPROVAL_REASON, _self_approval, _self_approval_rea
 from guard_scripts import DISCARD_LABEL, _aggregate  # noqa: E402
 import guard_dispatch  # noqa: E402
 from guard_dispatch import TEMP_WRITE_EXE, _classify_argv, classify_text  # noqa: E402
+import db_read_policy  # noqa: E402
 import guard_tools  # noqa: E402
 from guard_tools import (  # noqa: E402
     FAILURE_REASON, TABULARIS_TOOL, _classify_safely, _report_error, classify_file_tool, classify_mcp,
@@ -88,6 +89,14 @@ def _decide(name, host, session, outcome, tool_use_id=None, tool_input=None, too
             return _claude_permission(session, outcome, tool_input, tool_name, cwd, event)
         return codex_permission(session, outcome, tool_use_id, tool_input, tool_name, event)
     return None
+
+
+def _grantable_call(tool, tool_input):
+    """A tabularis call can match a kept entry only on a connection that resolves to one non-production connection."""
+    if tool != TABULARIS_TOOL:
+        return True
+    connection = tabularis_connection(tool_input.get("connection_id") if isinstance(tool_input, dict) else None)
+    return connection is not None and not db_read_policy.is_production(connection[1])
 
 
 def _record_source(host, session, tool_use_id, outcome, skill):
@@ -179,7 +188,8 @@ def handle(event, host):
     if name == "PreToolUse":
         _record_risk(host, session, tool_use_id, tool, outcome)
         if outcome.kind in ("write", "always"):
-            skill = approval_state_grants.matching_skill(host, session, tool, tool_input, command_text, _cwd(event))
+            skill = approval_state_grants.matching_skill(host, session, tool, tool_input, command_text, _cwd(event)) \
+                if _grantable_call(tool, tool_input) else None
             if skill is not None:
                 _record_source(host, session, tool_use_id, outcome, skill)
                 return approval_state.pre_output("allow", f"Approved by the skill {skill}: {approval_state.describe(outcome)}") \
