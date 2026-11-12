@@ -19,9 +19,11 @@ joining such a task, read [Orca worktree groups](orca-groups.md).
 Start every new agent session under a workspace that Orca already lists for its repository, in this repository as
 in another one; never create an independent top-level worktree while one exists. A repository's workspace is the
 entry whose path is its clone in `orca worktree list --repo id:<repoId> --json`. The parent of every new worktree is its
-own repository's workspace, `id:<repoId>::<clone path>`, or `active` only when the current worktree is that workspace.
-Never put a worktree under another repository's worktree, also in a task that changes several repositories; the
-ticket ties those worktrees, as in [Orca worktree groups](orca-groups.md). A plugin hook denies such a parent.
+own repository's workspace, `id:<repoId>::<clone path>`, or `active` only when the current worktree is that workspace,
+unless the user names an Orca folder workspace to group a ticket's worktrees under: then the parent is that folder,
+`--parent-worktree folder:<id>`, on `orca worktree create` or `orca worktree set`. Never put a worktree under another
+repository's worktree, also in a task that changes several repositories; the ticket ties those worktrees, as in
+[Orca worktree groups](orca-groups.md). A plugin hook denies such a parent.
 
 - A session that edits no file runs as a new terminal: in the current worktree for the working repository, or with
   Orca orchestration `worker-start --worktree current`, and in the target's workspace for another repository.
@@ -97,6 +99,9 @@ protected value into it; the session that needs the file reports it to the user.
   in the target worktree's session and end this one. Never end a session yourself.
 - Otherwise continue the remaining work, and read the target with `orca terminal read --terminal <handle> --json` only
   when its result is needed.
+- When the task ends, finished child worktrees of this repository and of the task's ticket are removed as "Cleanup
+  when the task ends" in [Orca worktree status](orca-worktree-status.md) says, whichever session started them, and
+  the two bullets below apply only to a child worktree this session started before then.
 - For a member of a group, the cleanup in [Orca worktree groups](orca-groups.md) replaces the merged-work bullet
   below; the unused-worktree bullet after it applies to a member too.
 - When a child session that this session started has its work merged into the base, close its terminal and, when

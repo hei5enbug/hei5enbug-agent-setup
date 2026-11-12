@@ -7,7 +7,7 @@ Orca when the available memory is below the `session_memory_min_mb` option.
 
 It denies a worktree whose parent belongs to another repository than the worktree itself, from `orca worktree create`,
 a `worker-start` that creates a worktree, or `orca worktree set --parent-worktree`, when both repositories can be
-resolved. It also denies `orca worktree set --workspace-status completed` for a worktree with uncommitted changes or commits
+resolved; a `folder:<id>` parent, an Orca folder workspace, belongs to no repository and is allowed. It also denies `orca worktree set --workspace-status completed` for a worktree with uncommitted changes or commits
 its upstream lacks, and, inside an Orca terminal, an `EnterWorktree` call that would create a worktree Orca never
 lists. It denies `orca worktree set --display-name <name>` with a non-empty name on a worktree that `orca worktree list`
 marks `isMainWorktree: true`, resolving `path:`, `id:`, `name:`, `branch:`, and `identity:` selectors through the list
@@ -64,7 +64,8 @@ MEMORY_REASON = (
 PARENT_REASON = (
     "Blocked: this worktree's parent belongs to another repository. Every worktree goes under its own repository's "
     "workspace, `--parent-worktree id:<repoId>::<clone path>`, or `active` only when the current worktree is that "
-    "workspace, also in a task that changes several repositories. Tie a ticket's worktrees in several repositories by "
+    "workspace, or under the Orca folder workspace the user named for the ticket, `--parent-worktree folder:<id>`, "
+    "also in a task that changes several repositories. Tie a ticket's worktrees in several repositories by "
     "`--reference <issue link>`, a display name that starts with the ticket key, and one orchestration Run, as "
     "`instructions/orca-groups.md` says."
 )
@@ -81,8 +82,7 @@ MAIN_CLONE_REASON = (
 )
 COMPLETED_REASON = (
     "Blocked: this worktree is not done, so it cannot be marked completed: {remaining}. Commit and push the work, "
-    "or keep the status and write what remains in `--comment`; set `completed` only when no change of the task "
-    "is left."
+    "or keep the status unchanged; set `completed` only when no change of the task is left."
 )
 
 
@@ -223,6 +223,8 @@ def parent_denial(tokens: list[str], cwd: str) -> bool:
         return False
     pair = [token for token in arguments if not token.startswith("-")][:2]
     parent = option_after(arguments, "--parent-worktree")
+    if parent is not None and parent.startswith("folder:"):
+        return False
     if pair == ["worktree", "create"]:
         target = repo_ref(option_after(arguments, "--repo"), cwd, worktree=False)
     elif pair == ["worktree", "set"]:

@@ -202,7 +202,6 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
                 "approval_guard",
                 "approval_scope",
                 "orca_worktree",
-                "orca_status_writes",
                 "host_settings",
                 "session_memory_min_mb",
                 "python",

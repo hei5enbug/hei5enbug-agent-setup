@@ -14,7 +14,10 @@ repository README; only its unit tests are.
    `docs/ko/evals/`, and `tests/test_e2e_eval_*.py`, so an agent that reads the plugin source cannot see the hidden
    tests, the reference solutions, or expected answers.
 2. It copies the task's fixture from `fixtures/` into `<run root>/<campaign>/work/<run id>/repo/`, commits it with a
-   fixed fictional identity and date, and runs the task's setup script when it has one.
+   fixed fictional identity and date, and runs the task's setup script when it has one. A setup script may build
+   more state beside the repository, in `<run root>/<campaign>/work/<run id>/`, and a task's `env` map gives the agent
+   environment values in which `{repo}`, `{work}`, and `{PATH}` stand for the repository, that folder, and the current
+   `PATH`. The variant's `env` and the configuration's `extra_env` still win over it.
 3. It starts the agent in that folder:
 
    ```text
@@ -159,13 +162,18 @@ script through a JSON file named by `E2E_TEXT_REVIEW_STUB`. A custom check can m
 to make grading stop with `grade_error` instead of recording a failed check. The agent's `TMPDIR` lies inside the run's
 work folder, so the reviews the agent runs are counted in its cost; the grader's own reviews are not.
 
+A custom check reads the original run folder through `ctx.origin`, the graded copy's source, so a task such as T21
+can inspect the Git worktrees and the fake Orca state that its setup script built beside the repository.
+
 `tests/test_e2e_eval_graders.py` proves each task's graders: the unmodified fixture fails, and the reference
 solution in `tasks/reference/` passes.
 
 ## Golden tasks
 
 Prompts are in Korean, as the real user writes them. The fixtures are fictional repositories with the conventions a
-real one has: a README, an `AGENTS.md` with a Korean mirror rule, tests, and Korean mirrors.
+real one has: a README, an `AGENTS.md` with a Korean mirror rule, tests, and Korean mirrors. T21 runs with
+`ORCA_TERMINAL_HANDLE` set and a fake `orca` first on `PATH`, built by `tasks/setup/fake_orca.py`; it keeps its state
+in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval_orca_cleanup.py`.
 
 | Task | Fixture | Path it exercises | Request |
 |---|---|---|---|
@@ -189,6 +197,7 @@ real one has: a README, an `AGENTS.md` with a Korean mirror rule, tests, and Kor
 | T18 | ops-notes | Chat message | Release announcement with a paragraph that restates its table |
 | T19 | ops-notes | Shared document | Wiki draft of about 1,600 characters for a 1,500-character budget |
 | T20 | notes-cli | Final report | Small change with tests, then a report |
+| T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
 
 ## Known limits
 

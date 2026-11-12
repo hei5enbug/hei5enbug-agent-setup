@@ -1,0 +1,1 @@
+ABC-123 (https://example.com/browse/ABC-123) 작업이야. 이 링크는 Jira가 아니라 로컬 이슈 메모라서 티켓 상태 확인이나 변경은 하지 않아도 돼. config/settings.toml 에서 page_size 기본값을 20에서 50으로 바꿔줘.

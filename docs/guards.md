@@ -155,13 +155,15 @@ here-document body checks only such substitutions. On Codex, trust the hook in `
 - **Parent of another repository.** `orca worktree create`, a `worker-start` that creates a worktree with
   `--worktree new-child`, and `orca worktree set --parent-worktree` are denied when the parent belongs to another
   repository than the worktree, because each worktree sits under its own repository's workspace and a ticket's
-  worktrees are tied by reference, name, and Run (`instructions/orca-groups.md`). The hook compares Orca repository
+  worktrees are tied by reference, name, and Run (`instructions/orca-groups.md`). A `folder:<id>` parent, the Orca
+  folder workspace the user names for a ticket, belongs to no repository and is allowed. The hook compares Orca repository
   ids from `id:<repoId>` and `id:<repoId>::<path>` selectors, and Git directories for `path:` selectors; `active` is
   the current worktree, whose repository id it reads once from `orca worktree current`. A name or branch selector, an
   unreadable repository, or an unreadable Orca allows the command.
 - **Done with work left.** `orca worktree set --workspace-status completed` is denied when the target worktree, the
   current one or one that a `--worktree` selector names by `id:<repoId>::<path>` or `path:`, has uncommitted changes or
-  commits its upstream lacks, and the reason lists what remains. A clean worktree, another status, or a target that
+  commits its upstream lacks, and the reason lists what remains. The reason never asks for a comment, because sessions
+  write none. A clean worktree, another status, or a target that
   cannot be resolved is allowed.
 - **Worktree the host creates.** In an Orca terminal, `EnterWorktree` without a `path` creates a worktree that Orca
   never lists, so it is denied with the `orca worktree create` command to use. Entering an existing `path`, and any
@@ -185,37 +187,21 @@ here-document body checks only such substitutions. On Codex, trust the hook in `
 
 ## Orca status
 
-One hook script, `scripts/orca_status_hook.py`, keeps the session's Orca worktree in step with its work. It runs only
-when `ORCA_TERMINAL_HANDLE` is set, never in a subagent or an assigned worker, and any failed read of Orca, Git, or
-the transcript lets the event pass. It reads Claude Code transcripts only, because Codex records tool calls as script
-text, so on Codex only the writes that follow a tool call or a prompt apply, and the session writes the question row
-itself as `instructions/orca-worktree-status.md` says. A question tool call answered in the same turn writes nothing.
+One hook script, `scripts/orca_status_hook.py`, keeps the session's tab title and reminds it of a missing name or tab
+title. It writes nothing to Orca: no board status, no worktree comment, and no unread flag, because those went stale;
+the user sets statuses, and Orca itself notifies the user when a session asks a question. It runs only when
+`ORCA_TERMINAL_HANDLE` is set, never in a subagent or an assigned worker, and any failed read of Orca, Git, or the
+transcript lets the event pass. It reads Claude Code transcripts only, because Codex records tool calls as script text.
 
-The writes need no model turn and apply to the session's own current worktree. Each happens at most once per event.
-
-| Event | Hook | Write |
-|---|---|---|
-| A pull or merge request is created: `gh pr create`, `az repos pr create`, `glab mr create`, and the tool output shows its link or Azure DevOps request id; `--help`, `-h`, and `--dry-run` never count | `PostToolUse` | Status `in-review`, comment `Waiting for review: <link>` |
-| A turn ends with a question, its last line ending in `?`, and ran no `orca worktree set` | `Stop` | `--unread`, comment `Waiting for you: <first line, about 80 characters> · <earlier comment>` |
-| The user's next prompt, while the comment is still the one the hook wrote | `UserPromptSubmit` | The earlier comment, kept in the session's state file |
-| An edit, or `git commit`, inside the current worktree, whose status is `completed`, `todo`, or unset; a commit counts where `git -C <dir>` or a leading `cd <dir> &&` puts it | `PostToolUse` | Status `in-progress`, comment unchanged |
-
-The hook also keeps the session's tab title, with no Orca write. After a `PostToolUse` of a Bash command whose
-`orca terminal rename` names this terminal, as `"$ORCA_TERMINAL_HANDLE"` or its value, and whose `--title` or
-`--title=` is a literal with no `$` or backtick, the title goes to the state file and a later rename replaces it. A
-rename of another terminal, or a title the hook cannot read literally, is ignored and the earlier title stays. At each
-`UserPromptSubmit` of a session with a kept title, the hook adds one context line, `Current Orca tab title: <title>.
-If this prompt asks about or for work the title does not name, such as another ticket, pull request, repository,
-document, or goal, retitle the tab and refresh the worktree comment before starting it. A follow-up, fix, review,
-merge, or question on the titled work keeps the title, as does one the user set.`, about 330 characters; a session with no kept title gets nothing. The title
-comes from the tool input, so it works on Codex too.
-
-Labels are Korean (`리뷰 대기`, `답변 대기`) when the Claude Code `language` setting names Korean, and English
-otherwise. A status id outside the four defaults is left alone: the board is customized, so only the comment is
-written. After a check inside the worktree, the resumed-work write waits 60 seconds before it reads Orca again; an
-edit or commit elsewhere neither writes nor starts that wait. The `orca_status_writes` option turns these writes off,
-in `/config` on Claude Code and with `HEI5ENBUG_ORCA_STATUS_WRITES` on Codex. The state lives in
-`$XDG_STATE_HOME/hei5enbug-agent-setup/orca-status/<session id>.json`.
+The hook keeps the session's tab title. After a `PostToolUse` of a Bash command whose `orca terminal rename` names this
+terminal, as `"$ORCA_TERMINAL_HANDLE"` or its value, and whose `--title` or `--title=` is a literal with no `$` or
+backtick, the title goes to the state file and a later rename replaces it. A rename of another terminal, or a title the
+hook cannot read literally, is ignored and the earlier title stays. At each `UserPromptSubmit` of a session with a kept
+title, the hook adds one context line, `Current Orca tab title: <title>. If this prompt asks about or for work the title
+does not name, such as another ticket, pull request, repository, document, or goal, retitle the tab before starting it.
+A follow-up, fix, review, merge, or question on the titled work keeps the title, as does one the user set.`, about 300
+characters; a session with no kept title gets nothing. The title comes from the tool input, so it works on Codex too. The
+state lives in `$XDG_STATE_HOME/hei5enbug-agent-setup/orca-status/<session id>.json`.
 
 Two things still need the model, so the `Stop` hook keeps the turn going once per state with a reminder of at most two
 sentences that names the exact command and asks the model to end the turn without repeating the reply. Claude Code shows
@@ -224,7 +210,7 @@ automatic name, and has a file edited or committed in this session is reminded o
 session that ran `orca worktree set` and never `orca terminal rename` is reminded of the tab title; when both apply, one
 reminder carries both commands. Each reminder fires at most once per session, and a stop that continues from a hook
 never gets another. One reminder costs about 265,000 cache-read and output tokens on one measured machine; apart from
-the tab title line, which adds about 330 characters to each prompt, these are the only recurring model cost. Orca
+the tab title line, which adds about 300 characters to each prompt, these are the only recurring model cost. Orca
 cannot report a tab title, so the hook judges the title only by the session's own `orca terminal rename` commands.
 
 ## Final report review

@@ -1,0 +1,89 @@
+{
+  "id": "T21",
+  "title": "Finish a ticket task and leave no finished child worktree behind",
+  "category": "orca",
+  "path": "Orca worktree cleanup at task end",
+  "fixture": "notes-cli",
+  "prompt_file": "prompts/T21.txt",
+  "setup": "setup/T21.py",
+  "env": {
+    "ORCA_TERMINAL_HANDLE": "term_demo_a",
+    "FAKE_ORCA_STATE": "{work}/orca-state/state.json",
+    "PATH": "{work}/fake-bin:{PATH}"
+  },
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 6
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "page-size-50",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "config/settings.toml",
+      "pattern": "(?m)^page_size = 50$"
+    },
+    {
+      "id": "tests-pass",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    },
+    {
+      "id": "case4-pushed-child-removed",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "pushed_child_removed"
+    },
+    {
+      "id": "case5-unpushed-child-kept",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "unpushed_child_kept"
+    },
+    {
+      "id": "case5-named-in-report",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 1,
+      "patterns": [
+        "login[ -]spike"
+      ]
+    },
+    {
+      "id": "case6-ticket-worktree-removed-and-folder-completed",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "ticket_worktree_removed_and_folder_completed"
+    },
+    {
+      "id": "case7-other-repository-untouched",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "other_repository_untouched"
+    },
+    {
+      "id": "main-clones-and-remote-kept",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "main_clones_and_remote_kept"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

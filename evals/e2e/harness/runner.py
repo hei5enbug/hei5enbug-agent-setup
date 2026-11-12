@@ -132,7 +132,10 @@ def execute_run(
     argv = write_run_files(spec, task, variant, prompt, cfg, plugin)
     agent_tmp = spec.work_dir / AGENT_TMP_NAME
     agent_tmp.mkdir(parents=True, exist_ok=True)
-    overrides = {"TMPDIR": str(agent_tmp), **cfg.extra_env, **variant["env"]}
+    overrides = {
+        "TMPDIR": str(agent_tmp), **command.task_environment(task, spec.repo, spec.work_dir),
+        **cfg.extra_env, **variant["env"],
+    }
     env, removed = environment.child_environment(os.environ, overrides)
     write_json(spec.result_dir / "env.json", environment.run_snapshot(base_snapshot, plugin, removed))
     run: dict[str, Any] = {

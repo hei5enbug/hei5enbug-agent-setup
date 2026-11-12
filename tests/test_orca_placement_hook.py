@@ -342,7 +342,7 @@ class CompletedStatusGateTest(unittest.TestCase):
         self.assertIn("2 uncommitted changes", reason)
         self.assertIn("a.txt", reason)
         self.assertIn("new.txt", reason)
-        self.assertIn("--comment", reason)
+        self.assertNotIn("--comment", reason)
 
     def test_업스트림에_없는_커밋이_있으면_차단한다(self):
         # Regression: a false Done leaves unpushed commits behind a completed card
@@ -466,6 +466,30 @@ class ParentRepositoryGateTest(unittest.TestCase):
         for command in commands:
             with self.subTest(command=command):
                 self.assert_allowed(command)
+
+    def test_사용자가_정한_폴더_작업공간을_부모로_주는_생성과_설정은_허용하고_다른_저장소의_부모는_계속_차단한다(self):
+        # Regression: a ticket's worktrees cannot be grouped under the folder the user named, or the folder case
+        # loosens the denial of another repository's worktree as a parent
+        # Given
+        allowed = [
+            "orca worktree create --repo id:demo --parent-worktree folder:demo-folder",
+            "orca worktree set --worktree id:demo::/tmp/work/demo-a --parent-worktree folder:demo-folder",
+            "orca worktree create --repo id:demo --name x --parent-worktree folder:demo-folder --json",
+        ]
+        denied = [
+            "orca worktree create --repo id:demo --parent-worktree id:other::/tmp/work/other",
+            "orca worktree set --worktree id:demo::/tmp/work/demo-a --parent-worktree id:other::/tmp/work/other",
+        ]
+
+        # When / Then
+        for command in allowed:
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+        for command in denied:
+            with self.subTest(command=command):
+                self.assert_denied(command)
+        reason = json.loads(self.run_command(denied[0]).stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+        self.assertIn("folder:<id>", reason)
 
     def test_저장소를_알_수_없으면_허용한다(self):
         # Regression: a gate that denies when it cannot tell, such as a name selector or an unreadable Orca

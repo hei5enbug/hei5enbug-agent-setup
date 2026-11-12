@@ -2,9 +2,9 @@
 
 Read this before starting Orca sessions for a task that changes more than one repository, and before a later session
 joins such a task. A group is every Orca worktree created for one ticket or issue, identified by its key or link, or
-for the current request when there is none. Every worktree sits under its own repository's workspace, never under
-another repository's worktree; the ticket ties the group together, not Orca's lineage. A single-repository task
-follows [cross-repository work](cross-repository.md) alone.
+for the current request when there is none. Every worktree sits under its own repository's workspace, or under the Orca
+folder workspace the user names for the ticket, never under another repository's worktree; the ticket ties the group
+together, not Orca's lineage. A single-repository task follows [cross-repository work](cross-repository.md) alone.
 
 ## Grouping
 
@@ -35,6 +35,9 @@ follows [cross-repository work](cross-repository.md) alone.
   in the status table as waiting on that item, and start it once the item is shared. Start members without such a
   dependency together. When the plugin denies a start for low memory, list the member as waiting for memory and start
   it after another member finishes or is cleaned up, never polling memory.
+- When the user names an Orca folder workspace to group a ticket's worktrees, that folder is the parent instead of the
+  repository's workspace: `--parent-worktree folder:<id>` on `orca worktree create`, or on `orca worktree set` for an
+  existing worktree. Without that naming, use the repository's own workspace.
 - One coordinating session may cover several tickets; each ticket has its own reference, names, and Run.
 - A repository whose part is done in its main checkout cannot be a member. Leave it there, name it in the
   coordinator's status, and move the work to a worktree only when the user asks.
@@ -68,35 +71,17 @@ follows [cross-repository work](cross-repository.md) alone.
 - It never answers a member's approval prompt or a question meant for the user; it reports it to the user.
 - Before the coordinator stops, for example at a usage limit, it writes the table into a resume note under
   [pause and resume](pause-and-resume.md), so a resumed session continues from it.
-- A member is finished when its board status is `completed`, or, on a board that Orca worktree status leaves
-  unchanged because it is customized, when the member's final report says its work is done with nothing left.
-- The coordinator's own board status is the group's summary under [Orca worktree status](orca-worktree-status.md): it
-  becomes `completed` only after every member is finished and the coordinator itself has nothing left.
+- A member is finished when its final report or `worker_done` says nothing is left.
 
 ## Cleanup of finished members
 
-When a member is finished, the coordinator cleans it up at once, whichever session started it. When the coordinator
-itself finishes, it sweeps the whole group once more for a finished member it missed. This replaces "After the
-handoff" in cross-repository work for group members; its checks still apply: the terminal is idle with no open
-question, the worktree has no uncommitted change, the base holds the branch's content, and ignored files are only
-regenerable caches or build output. When a check fails, remove nothing and ask the user once.
+Any session of the group removes its finished worktrees when its task ends, as "Cleanup when the task ends" in
+[Orca worktree status](orca-worktree-status.md) says, whichever session started them. In addition, when a member is
+finished, the coordinator cleans it up at once by the same checks and steps, and when the coordinator itself finishes,
+it sweeps the whole group once more for a finished member it missed. This replaces "After the handoff" in
+cross-repository work for group members. For a member that worked in a main checkout, stop only its background work,
+processes, and terminal; never touch the checkout or its default branch.
 
-A member whose session has ended is cleaned up the same way before its pull request merges, once its work is on the
-remote: apply the unused-worktree condition under "After the handoff" in cross-repository work, with this member's
-steps below and the coordinator's worktree as the place for a non-regenerable ignored file.
-
-1. Have the member stop its own background work, such as background shell tasks and monitors, and confirm none remain.
-2. Find the listeners tied to the member's worktree with `orca ports --worktree id:<worktree id> --json`, and the
-   processes whose working directory is inside it, for example with `lsof -d cwd -Fpn`. Stop those that the member's
-   terminal or session started. Report a process the session did not start, such as one the user runs there, and leave
-   it running unless the user approves. Closing a terminal stops the processes of its session, `nohup` jobs included,
-   but not a process that detached into a session of its own, such as a daemon or a container.
-3. Close the member's terminal: `orca orchestration worker-release --dispatch <id> --json` for a worker, otherwise
-   `orca terminal close --terminal <handle> --json`.
-4. Remove its worktree and local branch with `orca worktree rm --worktree id:<worktree id> --delete-branch --json`.
-   When step 2 left a process running there, keep the worktree and branch and report them instead; remove them only
-   after that process ends or the user approves stopping it.
-
-Afterwards confirm that no terminal, process, or listener of the member remains, and report each item closed. For a
-member that worked in a main checkout, stop only its background work, processes, and terminal; never touch the
-checkout or its default branch.
+Before the coordinator closes a worker's terminal, have the worker stop its own background work, such as background
+shell tasks and monitors, and confirm none remain. Afterwards confirm that no terminal, process, or listener of the
+member remains, and report each item closed.

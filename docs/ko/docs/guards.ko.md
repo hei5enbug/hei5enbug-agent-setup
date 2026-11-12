@@ -151,11 +151,12 @@ Codex에서는 `/hooks`에서 이 훅을 신뢰해야 합니다.
   (`instructions/orca-groups.md`). 훅은 `id:<repoId>`와 `id:<repoId>::<path>` 선택자에서는 Orca 저장소 ID를,
   `path:` 선택자에서는 Git 디렉터리를 비교합니다. `active`는 현재 worktree이며, 그 저장소 ID는
   `orca worktree current`에서 한 번 읽습니다. 이름이나 브랜치 선택자, 확인할 수 없는 저장소, 읽을 수 없는 Orca는
-  명령을 허용합니다.
+  명령을 허용합니다. 사용자가 티켓을 위해 정한 Orca 폴더 workspace인 `folder:<id>` 부모는 어느 저장소에도 속하지
+  않으므로 허용합니다.
 - **작업이 남은 완료.** `orca worktree set --workspace-status completed`는 대상 worktree, 즉 현재 worktree나
   `--worktree` 선택자가 `id:<repoId>::<path>`나 `path:`로 가리키는 worktree에 커밋하지 않은 변경이나 업스트림에 없는
-  커밋이 있으면 거부하며, 거부 사유에 남은 것을 나열합니다. 깨끗한 worktree, 다른 상태, 확인할 수 없는 대상은
-  허용합니다.
+  커밋이 있으면 거부하며, 거부 사유에 남은 것을 나열합니다. 세션은 코멘트를 쓰지 않으므로 거부 사유가 코멘트를 요구하지
+  않습니다. 깨끗한 worktree, 다른 상태, 확인할 수 없는 대상은 허용합니다.
 - **호스트가 만드는 worktree.** Orca 터미널에서 `path` 없는 `EnterWorktree`는 Orca가 목록에 올리지 않는 worktree를
   만들므로, 대신 쓸 `orca worktree create` 명령을 알려 주며 거부합니다. 기존 `path`로 들어가는 호출과 Orca 밖의
   호출은 허용합니다.
@@ -178,34 +179,20 @@ Codex에서는 `/hooks`에서 이 훅을 신뢰해야 합니다.
 
 ## Orca 상태
 
-훅 스크립트 하나인 `scripts/orca_status_hook.py`가 세션의 Orca worktree를 작업에 맞춥니다. 이 훅은
-`ORCA_TERMINAL_HANDLE`이 설정된 경우에만 실행되고, 서브에이전트나 지정된 작업자에서는 실행되지 않으며, Orca, Git,
-기록을 읽지 못하면 그 이벤트를 통과시킵니다. Codex는 도구 호출을 스크립트 텍스트로 기록하므로 Claude Code 기록만
-읽습니다. 그래서 Codex에서는 도구 호출이나 프롬프트 뒤에 쓰는 기록만 적용되며, 질문 행은 `instructions/orca-worktree-status.md`대로 세션이 직접 씁니다. 같은 턴에 답을 받은 질문 도구 호출은 아무것도 쓰지 않습니다.
+훅 스크립트 하나인 `scripts/orca_status_hook.py`가 세션의 탭 제목을 유지하고, 이름이나 탭 제목이 없으면 세션에 알립니다.
+Orca에는 아무것도 쓰지 않습니다. 보드 상태, worktree 설명, 읽지 않음 플래그는 오래된 값이 되므로 쓰지 않으며, 상태는
+사용자가 정하고 세션이 질문하면 Orca가 스스로 사용자에게 알립니다. 이 훅은 `ORCA_TERMINAL_HANDLE`이 설정된 경우에만
+실행되고, 서브에이전트나 지정된 작업자에서는 실행되지 않으며, Orca, Git, 기록을 읽지 못하면 그 이벤트를 통과시킵니다.
+Codex는 도구 호출을 스크립트 텍스트로 기록하므로 Claude Code 기록만 읽습니다.
 
-기록에는 모델 턴이 필요 없으며 세션 자신의 현재 worktree에 적용됩니다. 각 기록은 이벤트마다 최대 한 번 일어납니다.
-
-| 이벤트 | 훅 | 기록 |
-|---|---|---|
-| pull request나 merge request 생성: `gh pr create`, `az repos pr create`, `glab mr create`이며 도구 출력에 링크나 Azure DevOps 요청 ID가 보임, `--help`, `-h`, `--dry-run`은 해당하지 않음 | `PostToolUse` | 상태 `in-review`, 코멘트 `Waiting for review: <링크>` |
-| 턴이 `?`로 끝나는 마지막 줄의 질문으로 끝났고 `orca worktree set`을 실행하지 않음 | `Stop` | `--unread`, 코멘트 `Waiting for you: <첫 줄, 약 80자> · <이전 코멘트>` |
-| 사용자의 다음 프롬프트, 코멘트가 아직 훅이 쓴 그대로일 때 | `UserPromptSubmit` | 세션 상태 파일에 보관한 이전 코멘트 |
-| 상태가 `completed`, `todo`이거나 없는 현재 worktree 안의 편집이나 `git commit`, 커밋은 `git -C <dir>`이나 앞의 `cd <dir> &&`가 가리키는 곳 기준 | `PostToolUse` | 상태 `in-progress`, 코멘트는 그대로 |
-
-훅은 Orca에 쓰지 않고 세션의 탭 제목도 기억합니다. 이 터미널을 `"$ORCA_TERMINAL_HANDLE"`이나 그 값으로 가리키고
-`--title` 또는 `--title=`이 `$`나 백틱 없는 글자 그대로의 값인 `orca terminal rename`을 Bash로 실행한 `PostToolUse`
-뒤에 그 제목을 상태 파일에 저장하고, 이후의 이름 변경이 그것을 교체합니다. 다른 터미널의 이름 변경이나 훅이 글자 그대로
-읽을 수 없는 제목은 무시하고 이전 제목을 유지합니다. 기억한 제목이 있는 세션의 모든 `UserPromptSubmit`에서 훅은
+훅은 세션의 탭 제목을 기억합니다. 이 터미널을 `"$ORCA_TERMINAL_HANDLE"`이나 그 값으로 가리키고 `--title` 또는
+`--title=`이 `$`나 백틱 없는 글자 그대로의 값인 `orca terminal rename`을 Bash로 실행한 `PostToolUse` 뒤에 그 제목을 상태
+파일에 저장하고, 이후의 이름 변경이 그것을 교체합니다. 다른 터미널의 이름 변경이나 훅이 글자 그대로 읽을 수 없는 제목은
+무시하고 이전 제목을 유지합니다. 기억한 제목이 있는 세션의 모든 `UserPromptSubmit`에서 훅은
 `Current Orca tab title: <title>. If this prompt asks about or for work the title does not name, such as another
-ticket, pull request, repository, document, or goal, retitle the tab and refresh the worktree comment before starting
-it. A follow-up, fix, review, merge, or question on the titled work keeps the title, as does one the user set.` 한
-줄(약 330자)을 컨텍스트에 더하며,
-기억한 제목이 없는 세션에는 아무것도 더하지 않습니다. 제목은 도구 입력에서 얻으므로 Codex에서도 동작합니다.
-
-Claude Code `language` 설정이 한국어이면 라벨은 한국어(`리뷰 대기`, `답변 대기`)이고, 아니면 영어입니다. 기본 네 가지
-밖의 상태 ID는 건드리지 않습니다. 보드를 사용자 정의한 것이므로 코멘트만 씁니다. worktree 안에서 확인한 뒤에는 작업 재개 기록이
-60초 동안 Orca를 다시 읽지 않으며, 밖의 편집이나 커밋은 기록도 대기 시작도 하지 않습니다. `orca_status_writes` 옵션으로 이 기록을 끌 수 있으며, Claude Code에서는
-`/config`, Codex에서는 `HEI5ENBUG_ORCA_STATUS_WRITES`를 씁니다. 상태는
+ticket, pull request, repository, document, or goal, retitle the tab before starting it. A follow-up, fix, review,
+merge, or question on the titled work keeps the title, as does one the user set.` 한 줄(약 300자)을 컨텍스트에 더하며,
+기억한 제목이 없는 세션에는 아무것도 더하지 않습니다. 제목은 도구 입력에서 얻으므로 Codex에서도 동작합니다. 상태는
 `$XDG_STATE_HOME/hei5enbug-agent-setup/orca-status/<session id>.json`에 둡니다.
 
 두 가지는 아직 모델이 필요하므로, `Stop` 훅이 상태마다 한 번 턴을 이어 가게 하며, 정확한 명령을 알려 주고 답을 반복하지
@@ -214,7 +201,7 @@ Claude Code `language` 설정이 한국어이면 라벨은 한국어(`리뷰 대
 worktree에는 `orca worktree set --display-name`을 알립니다. `orca worktree set`을 실행하고도 `orca terminal rename`을 한
 번도 실행하지 않은 세션에는 탭 제목을 알리며, 둘 다 해당하면 알림 하나에 두 명령을 담습니다. 각 알림은 세션당 최대 한 번
 일어나고, 훅 때문에 이어진 멈춤에서는 다시 일어나지 않습니다. 알림 한 번에 측정한 한 컴퓨터 기준 약 265,000 캐시 읽기와
-출력 토큰이 들며, 매 프롬프트에 약 330자를 더하는 탭 제목 줄을 빼면 이것이 반복되는 유일한 모델 비용입니다. Orca는 탭
+출력 토큰이 들며, 매 프롬프트에 약 300자를 더하는 탭 제목 줄을 빼면 이것이 반복되는 유일한 모델 비용입니다. Orca는 탭
 제목을 보고하지 않으므로 훅은 세션 자신의 `orca terminal rename` 명령만으로 제목을 판단합니다.
 
 ## 최종 보고 검토

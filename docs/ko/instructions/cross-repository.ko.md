@@ -23,8 +23,10 @@
 시작한다. 그런 workspace가 있으면 독립적인 최상위 worktree를 만들지 않는다. 저장소의 workspace는
 `orca worktree list --repo id:<repoId> --json`에서 경로가 해당 저장소의 클론인 항목이다.
 새 worktree의 부모는 모두 자기 저장소의 workspace인 `id:<repoId>::<clone path>`이며, 현재 worktree가 그 workspace일
-때만 `active`를 쓴다. 저장소를 둘 이상 변경하는 작업에서도 다른 저장소의 worktree 아래에 worktree를 두지 않는다.
-그 worktree들은 [Orca worktree 그룹](orca-groups.ko.md)대로 티켓으로 묶는다. 플러그인 훅은 그런 부모를 거부한다.
+때만 `active`를 쓴다. 다만 사용자가 티켓의 worktree를 묶을 Orca 폴더 workspace를 정했다면 그 폴더가 부모이며,
+`orca worktree create`나 `orca worktree set`에 `--parent-worktree folder:<id>`를 쓴다. 저장소를 둘 이상 변경하는
+작업에서도 다른 저장소의 worktree 아래에 worktree를 두지 않는다. 그 worktree들은
+[Orca worktree 그룹](orca-groups.ko.md)대로 티켓으로 묶는다. 플러그인 훅은 그런 부모를 거부한다.
 
 - 파일을 전혀 수정하지 않는 세션은 새 터미널로 실행한다. 작업 저장소에서는 현재 worktree에서 실행하거나 Orca
   orchestration의 `worker-start --worktree current`로 실행하고, 다른 저장소에서는 대상의 workspace에서 실행한다.
@@ -101,6 +103,9 @@ Orca CLI나 런타임을 사용할 수 없으면 일반 Git worktree를 사용�
   종료하라고 사용자에게 한 줄로 권한다. 세션을 직접 종료하지 않는다.
 - 할 일이 남았으면 계속 진행하고, 대상의 결과가 필요할 때만 `orca terminal read --terminal <handle> --json`으로
   읽는다.
+- 작업이 끝나면 이 저장소와 작업 티켓의 완료된 자식 worktree를, 어느 세션이 시작했든,
+  [Orca worktree 상태](orca-worktree-status.ko.md)의 "작업이 끝날 때의 정리"대로 삭제한다. 아래 두 항목은 그 전에
+  이 세션이 시작한 자식 worktree에만 적용된다.
 - 그룹 구성원에게는 [Orca worktree 그룹](orca-groups.ko.md)의 정리 절차가 아래의 병합된 작업 항목을 대신한다.
   그 뒤의 사용되지 않는 worktree 항목은 구성원에게도 적용된다.
 - 이 세션이 시작한 하위 세션의 작업이 기준 브랜치에 병합되면 그 터미널을 닫고, 이 세션이 그 worktree와 브랜치를

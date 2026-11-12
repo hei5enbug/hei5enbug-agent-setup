@@ -48,8 +48,7 @@
 - 첫 구현 변경 전에 [구현 실행 규칙](../implementation-execution.ko.md)을 읽는다.
 - 다른 저장소를 변경하거나 Orca 세션을 시작하거나 Orca 세션에 메시지를 보내기 전에
   [다른 저장소 작업](../cross-repository.ko.md)을 읽는다.
-- 작업의 첫 파일 변경, pull request, 진행을 막는 질문 전에 [Orca worktree 상태](../orca-worktree-status.ko.md)를
-  읽는다.
+- 작업의 첫 파일 변경 전과 최종 보고 전에 [Orca worktree 상태](../orca-worktree-status.ko.md)를 읽는다.
 - 사용자의 교정이나 비용이 큰 조사가 다시 일어날 것 같은 작업을 끝내기 전에 [저장소 지침](../repository-guidance.ko.md)을
   읽는다.
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -58,6 +59,18 @@ def load_task(tasks_root: Path, task_id: str) -> dict[str, Any]:
     if missing or not isinstance(limits, dict) or "wall_seconds" not in limits or "max_budget_usd" not in limits:
         raise ConfigError(f"{task_id}: task needs id, fixture, prompt_file, and limits.wall_seconds/max_budget_usd")
     return task
+
+
+def task_environment(task: dict[str, Any], repo: Path, work: Path) -> dict[str, str]:
+    """The task's own environment for the agent; `{repo}`, `{work}`, and `{PATH}` in a value name the run's folders and the current PATH."""
+    tokens = {"{repo}": str(repo), "{work}": str(work), "{PATH}": os.environ.get("PATH", "")}
+    result: dict[str, str] = {}
+    for key, value in (task.get("env") or {}).items():
+        text = str(value)
+        for token, replacement in tokens.items():
+            text = text.replace(token, replacement)
+        result[str(key)] = text
+    return result
 
 
 def read_prompt(tasks_root: Path, task: dict[str, Any]) -> str:

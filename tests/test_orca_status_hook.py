@@ -1,4 +1,4 @@
-"""Hook that writes Orca status text for the session's events and reminds it of a missing name or tab title."""
+"""Hook that writes nothing to Orca, keeps the session's tab title, and reminds it of a missing name or tab title."""
 
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ import orca_status_hook  # noqa: E402
 WORKTREE = "/home/test/work/abc-123-api"
 PULL_REQUEST = "gh pr create --title t --body b"
 PR_URL = "https://example.com/org/repo/pull/7"
-SET_STATUS = 'orca worktree set --worktree active --workspace-status in-review --comment "waits for review" --json'
 SET_NAME = 'orca worktree set --worktree active --display-name "ABC-123 api" --json'
 RENAME = 'orca terminal rename --terminal "$ORCA_TERMINAL_HANDLE" --title "ABC-123 api" --json'
 
@@ -153,298 +152,6 @@ class HookCase(unittest.TestCase):
         return reason
 
 
-class ReviewWriteTest(HookCase):
-    def test_풀리퀘스트를_만들면_모델_없이_in_review와_링크_코멘트를_한_번_쓴다(self):
-        # Regression: a pull request left the board on in-progress with a stale comment
-        # Given
-        event = {"command": PULL_REQUEST}
-        response = {"stdout": f"Creating pull request\n{PR_URL}\n"}
-
-        # When
-        output = self.tool_event("Bash", event, response)
-        self.tool_event("Bash", event, response)
-
-        # Then
-        self.assertIsNone(output)
-        self.assertEqual(
-            self.writes(),
-            [f"worktree set --worktree id:repo-id::{WORKTREE} --workspace-status in-review "
-             f"--comment Waiting for review: {PR_URL} --json"],
-        )
-
-    def test_다른_저장소_도구의_요청_생성도_쓰고_다른_명령은_쓰지_않는다(self):
-        # Regression: a creator missing from the list, or an unrelated command counted as a request
-        creators = ["az repos pr create --title t", "cd /tmp/work && glab mr create --fill"]
-        others = ["gh pr view 1", 'echo "gh pr create"', "git status", "git push"]
-        for command in creators:
-            with self.subTest(command=command):
-                self.state_reset()
-                self.log.unlink(missing_ok=True)
-                self.tool_event("Bash", {"command": command}, {"stdout": PR_URL})
-                self.assertEqual(len(self.writes()), 1)
-        for command in others:
-            with self.subTest(command=command):
-                self.state_reset()
-                self.log.unlink(missing_ok=True)
-                self.tool_event("Bash", {"command": command}, {"stdout": PR_URL})
-                self.assertEqual(self.writes(), [])
-
-    def test_사용자_정의_보드는_상태를_바꾸지_않고_코멘트만_쓴다(self):
-        # Regression: a customized board status id overwritten
-        # Given
-        self.set_orca(worktree_json(status="qa"))
-
-        # When
-        self.tool_event("Bash", {"command": PULL_REQUEST}, {"stdout": PR_URL})
-
-        # Then
-        self.assertEqual(
-            self.writes(), [f"worktree set --worktree id:repo-id::{WORKTREE} --comment Waiting for review: {PR_URL} --json"]
-        )
-
-    def test_도움말과_드라이런과_생성_결과가_없는_출력은_아무것도_쓰지_않는다(self):
-        # Regression: a successful `gh pr create --help`, or any output without the created request, set in-review
-        cases = [
-            ("gh pr create --help", {"stdout": f"Usage: gh pr create\nSee {PR_URL}"}),
-            ("gh pr create -h", {"stdout": PR_URL}),
-            ("gh pr create --dry-run", {"stdout": PR_URL}),
-            (PULL_REQUEST, {"stdout": "created"}),
-            (PULL_REQUEST, {"stdout": "https://example.com/docs/pull-requests"}),
-            ("az repos pr create --title t", {"stdout": '{"status": "active"}'}),
-            (PULL_REQUEST, {}),
-        ]
-        for command, response in cases:
-            with self.subTest(command=command, response=response):
-                self.state_reset()
-                self.log.unlink(missing_ok=True)
-                self.tool_event("Bash", {"command": command}, response)
-                self.assertEqual(self.writes(), [])
-
-    def test_azure_출력의_풀리퀘스트_번호도_생성_결과로_본다(self):
-        # Regression: an Azure DevOps request, which prints JSON and no URL line, never reached in-review
-        # Given
-        output = json.dumps({"pullRequestId": 12, "repository": {"webUrl": "https://example.com/p/_git/r"}})
-
-        # When
-        self.tool_event("Bash", {"command": "az repos pr create --title t"}, {"stdout": output})
-
-        # Then
-        self.assertEqual(
-            self.writes(),
-            [f"worktree set --worktree id:repo-id::{WORKTREE} --workspace-status in-review "
-             "--comment Waiting for review: https://example.com/p/_git/r/pullrequest/12 --json"],
-        )
-
-
-class QuestionWriteTest(HookCase):
-    def test_질문으로_끝난_턴은_읽지_않음과_대기_코멘트를_이전_코멘트_앞에_쓴다(self):
-        # Regression: a worktree waiting on the user kept the old comment and no unread mark
-        # Given
-        self.set_orca(worktree_json(comment="구현 중"))
-        self.write(prompt(), assistant(text("정리했습니다.\n\n어느 쪽으로 진행할까요?")))
-
-        # When
-        output = self.stop()
-
-        # Then
-        self.assertIsNone(output)
-        self.assertEqual(
-            self.writes(),
-            [f"worktree set --worktree id:repo-id::{WORKTREE} --comment Waiting for you: 어느 쪽으로 진행할까요? · 구현 중 --unread --json"],
-        )
-
-    def test_마지막_질문_줄을_80자로_줄여_쓰고_두_번째_멈춤은_쓰지_않는다(self):
-        # Regression: a long question overflows the comment, or the same question is written at every stop
-        # Given
-        long_question = "Which of the three rollout orders should we use for the database migration, the API, and the web app?"
-        self.write(prompt(), assistant(text(long_question)))
-
-        # When
-        self.stop()
-        self.stop()
-
-        # Then
-        self.assertEqual(len(self.writes()), 1)
-        comment = self.writes()[0].split("--comment ", 1)[1].rsplit(" --unread", 1)[0]
-        self.assertTrue(comment.startswith("Waiting for you: Which of the three rollout orders"))
-        self.assertLessEqual(len(comment.removeprefix("Waiting for you: ")), 80)
-        self.assertTrue(comment.endswith("…"))
-
-    def test_같은_턴에_답을_받은_선택_질문은_대기_코멘트를_쓰지_않고_마지막_질문_줄은_쓴다(self):
-        # Regression: an AskUserQuestion answered inside the turn left a waiting comment on a worktree that kept working
-        # Given
-        answered = [
-            prompt(),
-            assistant(tool("AskUserQuestion", questions=[{"question": "Which order?"}])),
-            tool_result(),
-            assistant(text("Applied the first order.")),
-        ]
-        self.write(*answered)
-
-        # When
-        self.stop()
-
-        # Then
-        self.assertEqual(self.writes(), [])
-
-        # When: the same turn ends with a question line
-        self.write(*answered[:-1], assistant(text("Applied it.\n\nShall I push?")))
-        self.stop()
-
-        # Then
-        self.assertIn("--comment Waiting for you: Shall I push? --unread", self.writes()[0])
-
-    def test_한국어_언어_설정이면_한국어_라벨을_쓴다(self):
-        # Regression: labels ignore the Claude Code language setting
-        # Given
-        (self.config / "settings.json").write_text(json.dumps({"language": "Korean"}))
-        self.write(prompt(), assistant(text("계속할까요?")))
-
-        # When
-        self.stop()
-
-        # Then
-        self.assertIn("--comment 답변 대기: 계속할까요?", self.writes()[0])
-
-    def test_턴에_오르카_설정을_했거나_질문이_아니거나_이미_이어지는_중이면_쓰지_않는다(self):
-        # Regression: overwriting the session's own update, noise on plain answers, and a write after a reminder
-        cases = {
-            "own set in the turn": ([prompt(), assistant(bash(SET_STATUS), text("Ready to continue?"))], {}),
-            "plain answer": ([prompt(), assistant(text("done."))], {}),
-            "already continuing": ([prompt(), assistant(text("Continue?"))], {"stop_hook_active": True}),
-        }
-        for name, (lines, options) in cases.items():
-            with self.subTest(name=name):
-                self.log.unlink(missing_ok=True)
-                self.state_reset()
-                self.write(*lines)
-                self.stop(**options)
-                self.assertEqual(self.writes(), [])
-
-    def test_다음_프롬프트는_훅이_쓴_코멘트일_때만_이전_코멘트로_되돌린다(self):
-        # Regression: the waiting label stays after the user answers, or the restore overwrites a newer comment
-        # Given
-        self.set_orca(worktree_json(comment="구현 중"))
-        self.write(prompt(), assistant(text("Continue?")))
-        self.stop()
-        written = self.writes()[0].split("--comment ", 1)[1].rsplit(" --unread", 1)[0]
-        self.log.unlink()
-
-        # When: the comment is still the hook's own
-        self.set_orca(worktree_json(comment=written))
-        self.submit_prompt()
-
-        # Then
-        self.assertEqual(self.writes(), [f"worktree set --worktree id:repo-id::{WORKTREE} --comment 구현 중 --json"])
-
-        # When: a later prompt finds nothing left to restore
-        self.log.unlink()
-        self.submit_prompt()
-
-        # Then
-        self.assertEqual(self.writes(), [])
-
-    def test_코멘트가_그사이_바뀌었으면_덮어쓰지_않고_기억만_지운다(self):
-        # Regression: restoring over a comment the session wrote after the question
-        # Given
-        self.write(prompt(), assistant(text("Continue?")))
-        self.stop()
-        self.log.unlink()
-        self.set_orca(worktree_json(comment="리뷰 대기: https://example.com/pr/1"))
-
-        # When
-        self.submit_prompt()
-        self.set_orca(worktree_json(comment="Waiting for you: Continue?"))
-        self.submit_prompt()
-
-        # Then
-        self.assertEqual(self.writes(), [])
-
-
-class ResumeWriteTest(HookCase):
-    def test_완료나_할일이거나_상태가_없는_워크트리의_편집과_커밋은_진행중으로_바꾼다(self):
-        # Regression: work resumed on a completed card that kept saying done
-        for status in ("completed", "todo", None):
-            with self.subTest(status=status):
-                self.state_reset()
-                self.log.unlink(missing_ok=True)
-                self.set_orca(worktree_json(status=status))
-
-                # When
-                self.tool_event("Edit", {"file_path": f"{WORKTREE}/src/app.py"})
-
-                # Then
-                self.assertEqual(self.writes(), [f"worktree set --worktree id:repo-id::{WORKTREE} --workspace-status in-progress --json"])
-        self.state_reset()
-        self.log.unlink()
-        self.tool_event("Bash", {"command": "git commit -m work"})
-        self.assertEqual(len(self.writes()), 1)
-
-    def test_진행중이거나_검토중이거나_밖의_파일이거나_사용자_정의_상태면_쓰지_않는다(self):
-        # Regression: flipping a review or customized status, or a scratch edit reopening finished work
-        cases = {
-            "in-progress": (worktree_json(status="in-progress"), f"{WORKTREE}/a.py"),
-            "in-review": (worktree_json(status="in-review"), f"{WORKTREE}/a.py"),
-            "customized": (worktree_json(status="qa"), f"{WORKTREE}/a.py"),
-            "outside": (worktree_json(status="completed"), "/tmp/scratch/a.py"),
-        }
-        for name, (record, path) in cases.items():
-            with self.subTest(name=name):
-                self.state_reset()
-                self.log.unlink(missing_ok=True)
-                self.set_orca(record)
-                self.tool_event("Edit", {"file_path": path})
-                self.assertEqual(self.writes(), [])
-
-    def test_다른_체크아웃의_커밋은_이_카드를_다시_열지_않고_이_워크트리의_커밋은_연다(self):
-        # Regression: `git -C /other commit` or a `cd /other &&` commit reopened this worktree's completed card
-        # Given
-        self.set_orca(worktree_json(status="completed"))
-        elsewhere = ["git -C /home/test/other commit -m x", "cd /home/test/other && git commit -m x", "cd $DIR && git commit"]
-        here = ["git commit -m x", f"git -C {WORKTREE} commit -m x", f"cd {WORKTREE}/sub && git commit -m x"]
-
-        # When / Then
-        for command in elsewhere:
-            with self.subTest(command=command):
-                self.state_reset()
-                self.log.unlink(missing_ok=True)
-                self.tool_event("Bash", {"command": command})
-                self.assertEqual(self.writes(), [])
-        for command in here:
-            with self.subTest(command=command):
-                self.state_reset()
-                self.log.unlink(missing_ok=True)
-                self.tool_event("Bash", {"command": command})
-                self.assertEqual(len(self.writes()), 1)
-
-    def test_밖의_파일을_고친_뒤에도_바로_이어진_이_저장소_편집은_카드를_다시_연다(self):
-        # Regression: a scratch edit cached the check and hid the next real resume for 60 seconds
-        # Given
-        self.set_orca(worktree_json(status="completed"))
-
-        # When
-        self.tool_event("Edit", {"file_path": "/tmp/scratch/a.py"})
-        self.tool_event("Edit", {"file_path": f"{WORKTREE}/src/app.py"})
-
-        # Then
-        self.assertEqual(
-            self.writes(), [f"worktree set --worktree id:repo-id::{WORKTREE} --workspace-status in-progress --json"]
-        )
-
-    def test_상태를_확인한_뒤_잠시_동안은_오르카를_다시_읽지_않는다(self):
-        # Regression: reading Orca after every edit slows each tool call
-        # Given
-        self.set_orca(worktree_json(status="completed"))
-
-        # When
-        for index in range(3):
-            self.tool_event("Edit", {"file_path": f"{WORKTREE}/f{index}.py"})
-
-        # Then
-        self.assertEqual(len(self.reads()), 1)
-        self.assertEqual(len(self.writes()), 1)
-
-
 class TabTitleContextTest(HookCase):
     def rename(self, title: str, terminal: str = '"$ORCA_TERMINAL_HANDLE"', env: dict | None = None) -> None:
         command = f"orca terminal rename --terminal {terminal} --title {title} --json"
@@ -473,21 +180,8 @@ class TabTitleContextTest(HookCase):
         self.assertEqual(len(first.splitlines()), 1)
         self.assertIn("Current Orca tab title: ABC-1 login fix.", first)
         self.assertIn("retitle the tab", first)
-        self.assertIn("worktree comment", first)
+        self.assertNotIn("worktree comment", first)
         self.assertIn("as does one the user set", first)
-
-    def test_상태_쓰기_토글이_꺼져도_탭_제목은_기억하고_프롬프트에_알린다(self):
-        # Regression: turning off Orca writes also hides the title line, which is context and writes nothing
-        # Given
-        env = {"CLAUDE_PLUGIN_OPTION_ORCA_STATUS_WRITES": "false"}
-        self.rename('"ABC-1 login fix"', env=env)
-
-        # When
-        line = self.context_of(self.submit_prompt(env))
-
-        # Then
-        self.assertIn("Current Orca tab title: ABC-1 login fix.", line)
-        self.assertEqual(self.writes(), [])
 
     def test_탭_제목을_바꾼_적이_없으면_프롬프트에_아무것도_더하지_않는다(self):
         # Regression: a session without a title gets a line that names nothing, on top of the missing-title reminder
@@ -584,37 +278,52 @@ class TabTitleContextTest(HookCase):
         self.assertIsNone(before)
         self.assertIsNone(after)
 
-    def test_대기_코멘트_복원과_제목_안내가_같은_프롬프트에서_함께_일어난다(self):
-        # Regression: adding the title line skips or changes the waiting-comment restore
-        # Given
-        self.set_orca(worktree_json(comment="구현 중"))
-        self.rename('"ABC-1 login fix"')
-        self.write(prompt(), assistant(text("Continue?")))
-        self.stop()
-        written = self.writes()[0].split("--comment ", 1)[1].rsplit(" --unread", 1)[0]
-        self.log.unlink()
-        self.set_orca(worktree_json(comment=written))
 
-        # When
-        output = self.submit_prompt()
-
-        # Then
-        self.assertEqual(self.writes(), [f"worktree set --worktree id:repo-id::{WORKTREE} --comment 구현 중 --json"])
-        self.assertIn("ABC-1 login fix", self.context_of(output))
-
-
-class NoWriteTest(HookCase):
+class NoOrcaWriteTest(HookCase):
     def events(self):
         yield "pull request", lambda env, **extra: self.tool_event("Bash", {"command": PULL_REQUEST}, {"stdout": PR_URL}, env, **extra)
         yield "edit", lambda env, **extra: self.tool_event("Edit", {"file_path": f"{WORKTREE}/a.py"}, None, env, **extra)
+        yield "commit", lambda env, **extra: self.tool_event("Bash", {"command": "git commit -m x"}, None, env, **extra)
 
-    def test_오르카_밖이거나_서브에이전트이거나_토글이_꺼지면_아무것도_쓰지_않는다(self):
-        # Regression: noise outside Orca, in a subagent, or after the user turned the writes off
+    def test_풀리퀘스트_생성_완료_상태_워크트리의_편집_질문으로_끝난_턴은_오르카_설정을_호출하지_않는다(self):
+        # Regression: the hook wrote stale board statuses, comments, and unread flags into Orca
+        # Given
+        self.set_orca(worktree_json(status="completed", comment="구현 중"))
+        self.write(prompt(), assistant(edit(f"{WORKTREE}/a.py"), text("Shall I push?")))
+
+        # When
+        for _, run in self.events():
+            run({})
+        self.stop()
+        self.submit_prompt()
+
+        # Then
+        self.assertEqual(self.writes(), [])
+        self.assertEqual([call for call in self.calls() if not call.startswith("worktree current")], [])
+
+    def test_이름_변경_뒤_다음_프롬프트는_탭_제목_줄을_받고_그_줄에_워크트리_코멘트가_없다(self):
+        # Regression: the tab title line asks the session to refresh a worktree comment that is no longer written
+        # Given
+        command = 'orca terminal rename --terminal "$ORCA_TERMINAL_HANDLE" --title "ABC-123 demo" --json'
+        output = json.dumps({"ok": True, "result": {"rename": {"handle": "term_test", "title": "ABC-123 demo"}}})
+        self.tool_event("Bash", {"command": command}, {"stdout": output})
+
+        # When
+        context = self.submit_prompt()["hookSpecificOutput"]["additionalContext"]
+
+        # Then
+        self.assertIn("Current Orca tab title: ABC-123 demo.", context)
+        self.assertIn("retitle the tab", context)
+        self.assertNotIn("worktree comment", context)
+        self.assertEqual(self.writes(), [])
+
+    def test_오르카_밖이거나_서브에이전트이면_아무것도_하지_않는다(self):
+        # Regression: noise outside Orca or in a subagent
+        # Given
         self.set_orca(worktree_json(status="completed"))
         cases = {
             "outside Orca": ({"ORCA_TERMINAL_HANDLE": None}, {}),
             "assigned role": ({"HEI5ENBUG_ASSIGNED_ROLE": "worker"}, {}),
-            "toggle off": ({"CLAUDE_PLUGIN_OPTION_ORCA_STATUS_WRITES": "false"}, {}),
             "subagent": ({}, {"agent_id": "agent-1"}),
         }
         for name, (env, extra) in cases.items():
@@ -622,22 +331,12 @@ class NoWriteTest(HookCase):
                 with self.subTest(name=name, kind=kind):
                     self.state_reset()
                     self.log.unlink(missing_ok=True)
+
+                    # When
                     run(env, **extra)
-                    self.assertEqual(self.writes(), [])
 
-    def test_토글이_꺼져도_질문과_프롬프트는_쓰지_않고_이름_알림은_계속한다(self):
-        # Regression: the toggle silences the name reminder, or leaves question writes running
-        # Given
-        env = {"CLAUDE_PLUGIN_OPTION_ORCA_STATUS_WRITES": "false"}
-        self.write(prompt(), assistant(edit(f"{WORKTREE}/a.py"), text("Continue?")))
-
-        # When
-        output = self.stop(env)
-        self.submit_prompt(env)
-
-        # Then
-        self.assertEqual(self.writes(), [])
-        self.assert_blocks(output, "--display-name")
+                    # Then
+                    self.assertEqual(self.calls(), [])
 
     def test_오르카를_읽지_못하면_조용히_통과한다(self):
         # Regression: an Orca failure breaks the tool call or blocks the stop
@@ -712,7 +411,7 @@ class NameAndTitleRuleTest(HookCase):
         # Regression: six tabs named only by a path stub
         # Given
         self.set_orca(worktree_json(main=True))
-        self.write(prompt(), assistant(bash(SET_STATUS)), prompt("n"), assistant(text("fine.")))
+        self.write(prompt(), assistant(bash(SET_NAME)), prompt("n"), assistant(text("fine.")))
 
         # When
         output = self.stop()
@@ -724,7 +423,7 @@ class NameAndTitleRuleTest(HookCase):
     def test_제목을_바꿨거나_설정을_한_적이_없으면_제목_규칙은_발동하지_않는다(self):
         # Regression: reminding a session that already titled its tab, or one that never touched Orca
         cases = {
-            "renamed": [prompt(), assistant(bash(SET_STATUS), bash(RENAME)), prompt("n"), assistant(text("ok."))],
+            "renamed": [prompt(), assistant(bash(SET_NAME), bash(RENAME)), prompt("n"), assistant(text("ok."))],
             "never set": [prompt(), assistant(text("ok."))],
         }
         for name, lines in cases.items():
@@ -772,10 +471,10 @@ class SignalDetectionTest(unittest.TestCase):
         named = self.signals("orca worktree set --worktree active --display-name x")
         self.assertTrue(named.set_any and named.named)
         self.assertFalse(self.signals("orca worktree set --worktree active --comment x").named)
-        for command in ('echo "gh pr create"', "gh pr view 1", "git status", "orca worktree current --json"):
+        for command in ('echo "git commit"', "gh pr view 1", "git status", "orca worktree current --json"):
             with self.subTest(command=command):
                 turn = self.signals(command)
-                self.assertFalse(turn.pull_request or turn.commit or turn.set_any or turn.rename)
+                self.assertFalse(turn.commit or turn.set_any or turn.rename)
 
 
 if __name__ == "__main__":

@@ -57,6 +57,10 @@ def compute_inputs(cfg: HarnessConfig, task_ids: list[str], variant_names: list[
     for shared in sorted(custom.glob("*.py")) if custom.is_dir() else []:
         if not TASK_FILE.fullmatch(shared.name):
             parts[f"custom:{shared.name}"] = file_digest(shared)
+    setup = cfg.tasks_root / "setup"
+    for shared in sorted(setup.glob("*.py")) if setup.is_dir() else []:
+        if not TASK_FILE.fullmatch(shared.name):
+            parts[f"setup:{shared.name}"] = file_digest(shared)
     grader = cfg.repo_root / "scripts" / "text_review.py"
     if grader.is_file():
         parts["grader:scripts/text_review.py"] = file_digest(grader)
@@ -73,6 +77,7 @@ def task_content_parts(cfg: HarnessConfig, task_id: str) -> dict[str, str]:
         return {}
     return {
         f"prompt:{task_id}": file_digest(cfg.tasks_root / task["prompt_file"]),
+        **({f"setup:{task_id}": file_digest(cfg.tasks_root / task["setup"])} if task.get("setup") else {}),
         f"fixture:{task['fixture']}": tree_digest(cfg.fixtures_root / task["fixture"]),
     }
 

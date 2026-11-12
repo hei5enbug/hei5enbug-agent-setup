@@ -82,7 +82,6 @@ settings.
 | Approval guard | `approval_guard` | `HEI5ENBUG_APPROVAL_GUARD` |
 | Approval scope | `approval_scope` (`tiered` or `session`, default `tiered`) | `HEI5ENBUG_APPROVAL_SCOPE` |
 | Orca worktrees for other repositories | `orca_worktree` | `HEI5ENBUG_ORCA_WORKTREE` |
-| Orca status writes without a model turn | `orca_status_writes` (see [Orca status](guards.md#orca-status)) | `HEI5ENBUG_ORCA_STATUS_WRITES` |
 | Host settings mode | `host_settings` (`apply` or `report`, default `apply`) | `HEI5ENBUG_HOST_SETTINGS` |
 | Minimum free memory to start an agent session | `session_memory_min_mb` (MB, default `2048`; `0`, `off`, `false`, or `no` turns the gate off; see [Orca session start](guards.md#orca-session-start)) | `HEI5ENBUG_SESSION_MEMORY_MIN_MB` |
 | Hook Python interpreter | `python` (an absolute path, default empty) | `HEI5ENBUG_PYTHON` |
