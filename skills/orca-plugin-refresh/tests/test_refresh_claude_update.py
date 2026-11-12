@@ -263,6 +263,8 @@ class CommandWiringTest(unittest.TestCase):
         with (
             patch.object(refresh, "run_claude_update", side_effect=stub_update(order, step)),
             patch.object(refresh, "update_host", side_effect=host),
+            patch.object(refresh.installs, "install_gate", return_value=None),
+            patch.object(refresh, "prepare_marketplaces", side_effect=lambda ids, context, **kwargs: context.update(release_pins={}, release_errors={})),
             patch.object(refresh, "save_json"),
         ):
             return refresh.command_update(), order

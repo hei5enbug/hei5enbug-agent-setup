@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Sequence
 
 import refresh_core as core
+from refresh_codex_release import install_time
 from refresh_core import PLUGIN_ID, RefreshError, load_plugin_script, run_json
 from refresh_install import (HOME_RECORD_WARNING, HOOKS_TRUST_WARNING, bundle_digest, check_hooks, codex_home, codex_trust_reset,
                              effective_claude_record, hooks_digest, inside, read_manifest, run_install)
@@ -140,8 +141,13 @@ def refresh_companion(host: str, plugin_id: str, update: bool, context: dict) ->
             if found.get("note"):
                 result["note"] = found["note"]
             return result
+        previous_root = str(found["root"])
         before_hooks = hooks_digest(host, found["root"])
         before_bundle = bundle_digest(found["root"]) if host == "codex" else None
+        saved = context.get("codex_before", {}).get(plugin_id) if host == "codex" else None
+        if saved:
+            previous_root, before_hooks, before_bundle = saved["root"], saved["hooks"], saved["bundle"]
+            result["before_version"] = saved["version"]
         if update:
             blocked = run_install(host, plugin_id, context)
             if blocked:
@@ -152,9 +158,13 @@ def refresh_companion(host: str, plugin_id: str, update: bool, context: dict) ->
                 raise RefreshError(f"{host}_plugin_missing", f"The {host} plugin is not installed and enabled exactly once after the update.")
             result["after_version"] = found["version"]
         after_hooks = validate_companion(host, plugin_id, found)
+        if host == "codex":
+            result.update(root=str(found["root"]), previous_root=previous_root)
+            result["installed_at"] = install_time(found["root"])
         result["status"] = "updated" if result["after_version"] != result["before_version"] else "current"
-        if update and host == "codex" and codex_trust_reset(before_hooks, after_hooks, before_bundle,
-                                                            bundle_digest(found["root"])):
+        if update and host == "codex" and ((after_hooks is not None and plugin_id.partition("@")[2] in context.get("release_pins", {}))
+                                          or codex_trust_reset(before_hooks, after_hooks, before_bundle,
+                                                               bundle_digest(found["root"]))):
             result["warnings"].append(dict(HOOKS_TRUST_WARNING))
             context.setdefault("trust_reset", []).append(plugin_id)
     except RefreshError as error:

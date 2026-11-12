@@ -769,7 +769,7 @@ class NeverEndedTest(ResumeCase):
 
         # Then
         self.assertEqual([], self.fake.sent)
-        self.assertEqual("not_a_claude_session", result["sessions"][0]["detail"])
+        self.assertEqual("not_an_agent_session", result["sessions"][0]["detail"])
 
 
 class ProcessLookupTest(unittest.TestCase):

@@ -8,7 +8,7 @@ name: orca-plugin-refresh
 description: >-
   Claude Code와 Codex에서 hei5enbug-agent-setup과 사용자가 지정한 플러그인을 업데이트한 뒤, 설치된 버전을
   실행 중인 Orca 에이전트 세션에 적용한다. 유휴 세션은 reload하거나 compact하고, 오래된 Claude Code 릴리스의
-  세션은 재개한다. 스킬 이름이 없어도 실행 중인 Orca 세션을 더 새로운 Claude Code 릴리스로 새로고침하거나
+  세션은 재개하고, 불러온 플러그인 폴더가 교체된 Codex 세션의 재개를 제안한다. 스킬 이름이 없어도 실행 중인 Orca 세션을 더 새로운 Claude Code 릴리스로 새로고침하거나
   재시작해 달라는 요청, 또는 설치된 업데이트를 세션에 적용해 달라는 요청에 사용한다. 설치가 이미 끝났으면
   apply-installed를 사용한다. 작업 트리 생성, 터미널 읽기, Orca 브라우저 작업에는 사용하지 않는다.
 compatibility: >-
@@ -21,13 +21,13 @@ compatibility: >-
 
 이 스킬은 `hei5enbug-agent-setup`과 사용자가 고른 다른 플러그인을 업데이트한 뒤, 설치된 버전을 실행 중인
 Orca 세션에 세션을 끝내지 않고 적용한다. 세션을 재시작하거나 대화를 교체하지 않는다. 다만 `apply`는 모든
-재개 확인을 통과한 오래된 릴리스의 Claude Code 세션을 먼저 묻지 않고 재개한다(3단계).
+재개 확인을 통과한 오래된 릴리스의 Claude Code 세션을 먼저 묻지 않고 재개한다(3단계). 플러그인 폴더가 교체된 Codex 세션은 승인을 받아 재개할 수 있다(6단계).
 
 ## 업데이트가 실행 중인 세션에 반영되는 방법
 
 | 구분 | Claude Code | Codex |
 |---|---|---|
-| 스킬, 에이전트, 훅 | `/reload-plugins`가 모든 플러그인을 다시 불러온다 | 다음 턴에서 새 설치본을 자동으로 불러온다 |
+| 스킬, 에이전트, 훅 | `/reload-plugins`가 모든 플러그인을 다시 불러온다 | 플러그인 폴더가 교체된 세션은 승인을 받아 재개해야 한다 |
 | 세션 지침 | `/compact` | `/compact`; 다음 턴에서 지침을 불러온다 |
 
 플러그인의 세션 시작 훅은 Orca 터미널마다 호스트, 플러그인 디렉터리, 대화 기록 경로, 실행 지침의 digest가
@@ -36,7 +36,8 @@ Orca 세션에 세션을 끝내지 않고 적용한다. 세션을 재시작하�
 입력 줄이 화면 맨 아래에 있을 때만 그 터미널을 표식의 호스트로 본다. 그래서 오래된 표식이 남은 셸은 대상이 되지 않는다.
 표식이 없거나 digest가 다르거나, Codex 세션의 플러그인
 디렉터리가 교체됐거나, Claude Code 세션이 삭제된 디렉터리를 가리킬 때만 스크립트가 세션을 compact한다. 이
-판단은 이 플러그인의 지침 digest만 따르고 다른 플러그인은 보지 않는다. Claude Code가 대화가 너무 짧아
+판단은 이 플러그인의 지침 digest만 따르고 다른 플러그인은 보지 않는다. 교체 전에 시작한 Codex 프로세스는
+compact 대신 재개 규칙을 따른다. Claude Code가 대화가 너무 짧아
 compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 스크립트가 `/clear`를 보낸다. 비어 있는 세션에는
 잃을 내용이 없기 때문이다. 한 번도 턴을 진행하지 않은 Codex 세션은 첫 턴에서 새 지침을 불러오므로 따로
 처리하지 않는다.
@@ -44,6 +45,8 @@ compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 �
 ## 작업 흐름
 
 `<script>`는 이 `SKILL.md`가 있는 디렉터리의 `scripts/orca_plugin_refresh.py`다.
+
+Codex 플러그인을 업데이트하거나 훅 신뢰 경고를 보고하기 전에 `references/codex-releases.md`를 읽는다.
 
 1. **설치 경로를 고른다.** 새 버전을 설치하려면 `python3 <script> update --json`을 실행한다. 다른 플러그인도
    함께 새로고침하려면 사용자가 말한 ID마다 `--also <plugin@marketplace>`를 전달한다. 이 플래그는 여러 번
@@ -83,14 +86,6 @@ compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 �
    업데이트가 이 스킬을 불러온 설치 디렉터리를 삭제할 수 있기 때문이다. 모든 경고를 보고한다.
    - `unreleased_same_version`: 버전이 바뀌지 않아 Claude Code가 설치본을 유지한다. 이 파일이 Claude Code에
      반영되려면 버전을 올려야 한다고 알린다.
-   - `codex_hooks_need_trust`: 플러그인의 훅 정의가 바뀌었거나 새로 생겼거나 사라졌거나, 훅이 있는 플러그인의
-     파일이 하나라도 바뀌었다. Codex는 훅 신뢰를 플러그인의 모든 파일에 묶기 때문이다. 이 플러그인이면 스크립트가
-     먼저, 설치본이 깨끗한 공식 checkout이고 그 HEAD를 공식 원격이 지금 `main`이나 `v*` 태그로 광고하거나 `main`에 포함할 때
-     자기 훅을 다시 신뢰하고, 그러면 이 경고 대신
-     `codex_hooks_trusted: true`를 알린다. 그렇지 않으면 경고의 `detail`에 이유를 담는다. 동반 플러그인은
-     Codex가 그 훅 중 하나라도 아직 untrusted나 modified로 나열할 때(개수는 `detail`에 담긴다) 또는 그 목록을 읽지
-     못했을 때만 이 경고를 유지하며, 스크립트는 동반 플러그인의 훅을 신뢰하지 않는다. Codex가 신뢰하지 않은 훅을
-     건너뛰므로 Codex `/hooks`에서 그 플러그인의 훅을 신뢰하도록 요청한다.
    - `unreleased_check_unavailable`: Claude Code가 같은 버전의 파일을 놓쳤는지 확인할 수 없다. 이유를 알린다.
    - `claude_home_project_record`: 홈 폴더에서 세션이 실행되어 Claude Code가 사용자 설치를 같은 사본의 홈 폴더 프로젝트
      설치로 한 번 더 나열했다. 스크립트가 둘을 한 설치로 보았으므로 할 일은 없다.
@@ -156,7 +151,7 @@ compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 �
    `hosts`의 플러그인 상태와 함께 모든 세션을 보고한다. `not_refreshed`는 업데이트를 받지 못한 세션 목록이다.
    상태의 `self_notification`이 `sent`가 아니면 프롬프트를 전달하지 못한 것이다. 그래도 상태에 작업 결과가
    남아 있다.
-6. **재개를 제안한다.** `resume_approval_needed`를 보고한 세션(`plugin_load_error` 또는 실패한 확인이 `resume_check`에
+6. **재개를 제안한다.** `resume_approval_needed`를 보고한 세션(`plugin_load_error`, `codex_plugin_folder_replaced` 또는 실패한 확인이 `resume_check`에
    있는 `host_release_outdated`)을 모두 한 번 보여 주고 사용자가 승인할 세션을 묻는다.
    고치면 그 세션이 끝나고 같은 대화가 다시 열린다.
    `resume`을 실행하기 전에 `references/resume.md`를 읽고, 승인된 터미널에만 실행한다.

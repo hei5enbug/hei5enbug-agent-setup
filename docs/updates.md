@@ -13,7 +13,9 @@ checks](../README.md#development-checks) pass on `HEAD`, tag `HEAD` `v<version>`
 After the release is available, end affected coding-agent sessions and run the update from a normal terminal. Replacing
 a loaded plugin directory can leave a running session with missing hook paths.
 
-Update Codex:
+Before running any Codex update command, set `marketplaces.hei5enbug.ref` in Codex `config.toml` to the released
+`v<major>.<minor>.<patch>` tag. The [Codex installation command](../README.md#codex) resolves the newest release tag.
+Then update Codex:
 
 ```bash
 codex plugin marketplace upgrade hei5enbug
@@ -33,7 +35,7 @@ Start a new Codex thread or restart Claude Code after updating so the host loads
 
 Ask for `orca-plugin-refresh` after a release to update this plugin, and any other plugins you name, and apply the
 installed versions to idle Orca-managed sessions without restarting them, except for a Claude Code session on an older
-release, which it resumes as described below. Ask for it by name or in plain words, such as restarting the running Orca
+release, which it resumes as described below, or an approved Codex session whose plugin folder was replaced. Ask for it by name or in plain words, such as restarting the running Orca
 sessions on a newer Claude Code release. The skill runs only when you ask for it.
 `update --json` installs the new version in Claude Code and Codex. Add `--also <plugin@marketplace>` for each other
 plugin; without it, the `HEI5ENBUG_REFRESH_PLUGINS` environment variable (comma-separated IDs) and then the saved
@@ -54,7 +56,7 @@ workflow](../skills/orca-plugin-refresh/SKILL.md) for commands and limits.
 
 | Part | Claude Code | Codex |
 |---|---|---|
-| Skills, agents, and hooks | The skill sends `/reload-plugins` | The next turn picks up the new install automatically |
+| Skills, agents, and hooks | The skill sends `/reload-plugins` | A replaced plugin folder requires an approved session resume |
 | Session instructions | The skill sends `/compact` when they are stale | The skill sends `/compact` when they are stale; the session loads them on its next turn |
 
 The skill decides that instructions are stale from the session-start marker: it is missing, holds another digest, or
@@ -71,5 +73,5 @@ skill ends it. If the old process has not ended after 60 seconds, the skill keep
 sends the resume line once the terminal shows an empty shell prompt; otherwise it gives you the terminal and the exact
 line to run. When the script skips a session by mistake, the agent can finish it by hand with your approval for that
 session and record the result in the run. The session that runs the skill is
-handled last by a detached helper after its turn ends. Sessions outside Orca need `/reload-plugins` or `/compact` by
-hand. The skill supports macOS and Linux user-scope installations from the `hei5enbug` marketplace.
+handled last by a detached helper after its turn ends. Outside Orca, use `/reload-plugins` or `/compact` by hand; restart or resume Codex when its loaded plugin folder
+was replaced. The skill supports macOS and Linux user-scope installations from the `hei5enbug` marketplace.

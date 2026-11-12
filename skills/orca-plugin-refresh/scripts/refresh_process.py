@@ -7,6 +7,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Sequence
@@ -146,6 +147,7 @@ class ProcessOs:
     realpath: Callable[[str], str] = os.path.realpath
     version_text: Callable[[str], str | None] = lambda path: command_output([path, "--version"])
     help_text: Callable[[str], str | None] = lambda path: command_output([path, "--help"])
+    started_at: Callable[[int], float | None] = lambda pid: process_started_at(pid)
 
 
 def command_output(argv: Sequence[str]) -> str | None:
@@ -157,19 +159,37 @@ def command_output(argv: Sequence[str]) -> str | None:
     return result.stdout if result.returncode == 0 else None
 
 
+def process_started_at(pid: int) -> float | None:
+    try:
+        if sys.platform == "darwin":
+            class BsdInfo(ctypes.Structure):
+                _fields_ = [("ids", ctypes.c_uint32 * 12), ("comm", ctypes.c_char * 16), ("name", ctypes.c_char * 32),
+                            ("state", ctypes.c_uint32 * 6), ("seconds", ctypes.c_uint64), ("microseconds", ctypes.c_uint64)]
+            info = BsdInfo()
+            library = ctypes.CDLL("libproc.dylib", use_errno=True)
+            size = library.proc_pidinfo(pid, 3, 0, ctypes.byref(info), ctypes.sizeof(info))
+            return info.seconds + info.microseconds / 1_000_000 if size == ctypes.sizeof(info) else None
+        fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+        boot = time.time() - time.clock_gettime(time.CLOCK_BOOTTIME)
+        return boot + int(fields[19]) / os.sysconf("SC_CLK_TCK")
+    except (OSError, ValueError, IndexError, StopIteration):
+        return None
+
+
 @dataclass(frozen=True)
 class SessionProcess:
     pid: int
     argv: tuple[str, ...]
     env: dict[str, str]
     exe: str | None
+    host: str = "claude"
 
     @property
     def config_dir(self) -> str | None:
-        return self.env.get("CLAUDE_CONFIG_DIR") or None
+        return self.env.get("CODEX_HOME" if self.host == "codex" else "CLAUDE_CONFIG_DIR") or None
 
 
-def scan_session_processes(handle: str, system: ProcessOs | None = None) -> tuple[list[SessionProcess], list[int]]:
+def scan_session_processes(handle: str, system: ProcessOs | None = None, host: str = "claude") -> tuple[list[SessionProcess], list[int]]:
     """The matching processes and the pids of `claude` processes whose arguments could not be read.
 
     A failed process listing raises `RefreshError`.
@@ -178,32 +198,35 @@ def scan_session_processes(handle: str, system: ProcessOs | None = None) -> tupl
     found: list[SessionProcess] = []
     unreadable: list[int] = []
     for pid, name in system.list_processes():
-        if Path(name).name != "claude":
+        if Path(name).name != host:
             continue
         args = system.read_args(pid)
         if args is None:
             unreadable.append(pid)
             continue
         argv, env = args
-        if env.get("ORCA_TERMINAL_HANDLE") != handle or env.get("CLAUDE_CODE_ENTRYPOINT", "cli") != "cli":
+        if env.get("ORCA_TERMINAL_HANDLE") != handle:
             continue
-        if PRINT_FLAGS.intersection(argv):
+        if host == "claude" and (env.get("CLAUDE_CODE_ENTRYPOINT", "cli") != "cli" or PRINT_FLAGS.intersection(argv)):
+            continue
+        if host == "codex" and (env.get("CODEX_THREAD_ID") or env.get("CODEX_SESSION_ID")
+                                or any(arg in {"exec", "app-server", "mcp-server"} for arg in argv[1:])):
             continue
         exe = system.exe_path(pid) or system.lsof_path(pid)
-        found.append(SessionProcess(pid, tuple(argv), env, exe))
+        found.append(SessionProcess(pid, tuple(argv), env, exe, host))
     return found, unreadable
 
 
-def find_session_process(handle: str, system: ProcessOs | None = None) -> SessionProcess | None:
+def find_session_process(handle: str, system: ProcessOs | None = None, host: str = "claude") -> SessionProcess | None:
     """The interactive Claude Code process of an Orca terminal, matched on `ORCA_TERMINAL_HANDLE` in its own environment.
 
     A child started inside the terminal inherits the handle. It is ignored when its start-up environment names another entry
     point or when it runs in print mode, whose start-up environment still carries the parent's `cli`. More than one match is
     ambiguous and raises.
     """
-    found, _ = scan_session_processes(handle, system)
+    found, _ = scan_session_processes(handle, system, host)
     if len(found) > 1:
-        raise RefreshError("session_process_ambiguous", "More than one interactive Claude Code process claims this terminal.")
+        raise RefreshError("session_process_ambiguous", "More than one interactive agent process claims this terminal.")
     return found[0] if found else None
 
 

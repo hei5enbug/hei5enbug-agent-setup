@@ -45,8 +45,12 @@ Install the bundle once from the GitHub repository using your host's commands.
 ### Codex
 
 ```bash
-codex plugin marketplace add hei5enbug/hei5enbug-agent-setup --ref main
-codex plugin add hei5enbug-agent-setup@hei5enbug
+plugin_release_tag=$(git ls-remote --tags --refs --sort=-version:refname \
+  https://github.com/hei5enbug/hei5enbug-agent-setup.git |
+  awk '$2 ~ /^refs\/tags\/v[0-9]+\.[0-9]+\.[0-9]+$/ {sub("refs/tags/", "", $2); print $2; exit}')
+test -n "$plugin_release_tag" &&
+  codex plugin marketplace add hei5enbug/hei5enbug-agent-setup --ref "$plugin_release_tag" &&
+  codex plugin add hei5enbug-agent-setup@hei5enbug
 ```
 
 ### Claude Code

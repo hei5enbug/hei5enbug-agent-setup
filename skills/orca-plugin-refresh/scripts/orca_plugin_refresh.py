@@ -24,6 +24,7 @@ import refresh_core as core  # noqa: E402
 import refresh_install as installs  # noqa: E402
 import refresh_sessions as driver  # noqa: E402
 from refresh_claude_update import attach_claude_update, run_claude_update  # noqa: E402
+from refresh_codex_release import cached_root, install_time, prepare_marketplaces, verify_files, verify_hook  # noqa: E402
 from refresh_core import (  # noqa: E402
     CODEX_HOOK_TRUST, HANDLE, HOSTS, MARKETPLACE, PLUGIN, PLUGIN_ID, PLUGIN_ROOT, RUN_ID, SESSION_CONTEXT, RefreshError,
     exclusive, executable, load_plugin_script, load_run, now, parse_time, run, run_json, run_path, save_json, state_root, update_run,
@@ -76,7 +77,7 @@ def recovery_command(root: str | None, companions: Sequence[str] = ()) -> str:
     except ValueError:
         relative = current.name
     candidate = Path(root) / relative if root else current
-    script = candidate if candidate.is_file() else current
+    script = current if current.is_file() else candidate if candidate.is_file() else current
     also = "".join(f" --also {shlex.quote(plugin_id)}" for plugin_id in companions)
     return f"python3 {shlex.quote(str(script))} update{also} --json"
 
@@ -112,6 +113,10 @@ def update_host(host: str, context: dict | None = None) -> dict:
     context = {} if context is None else context
     before = installs.installed(host)
     before_snapshot = validate_install(host, before)
+    saved = context.get("codex_before", {}).get(PLUGIN_ID) if host == "codex" else None
+    if saved:
+        before = {**before, "root": saved["root"], "version": saved["version"]}
+        before_snapshot = {**before_snapshot, "digest": saved.get("digest"), "hooks": saved["hooks"]}
     local = local_source(host, PLUGIN_ID, before.get("item"), context)
     merged = [dict(HOME_RECORD_WARNING)] if before.get("home_project_record") else []
     if local:
@@ -129,7 +134,7 @@ def update_host(host: str, context: dict | None = None) -> dict:
         if local.get("note"):
             result["note"] = local["note"]
         return result
-    before_bundle = bundle_digest(Path(before["root"])) if host == "codex" else None
+    before_bundle = saved["bundle"] if saved else bundle_digest(Path(before["root"])) if host == "codex" else None
     blocked = run_install(host, PLUGIN_ID, context)
     if blocked:
         blocked.details.update(root=before["root"], recovery_command=recovery_command(before["root"], context.get("ids", ())))
@@ -143,6 +148,7 @@ def update_host(host: str, context: dict | None = None) -> dict:
         "previous_root": before["root"],
         "digest": after_snapshot["digest"],
         "instructions_changed": before_snapshot["digest"] != after_snapshot["digest"],
+        **({"installed_at": install_time(Path(after["root"]))} if host == "codex" else {}),
         "warnings": [dict(HOME_RECORD_WARNING)] if before.get("home_project_record") or after.get("home_project_record") else [],
     }
     if host == "claude":
@@ -155,8 +161,9 @@ def update_host(host: str, context: dict | None = None) -> dict:
             result["warnings"].append(
                 {"code": "unreleased_same_version", "message": "Claude Code keeps the installed copy because the version did not change; bump the version to release these files.", "files": pending[:20]}
             )
-    if host == "codex" and codex_trust_reset(before_snapshot["hooks"], after_snapshot["hooks"], before_bundle,
-                                             bundle_digest(Path(after["root"]))):
+    if host == "codex" and (MARKETPLACE in context.get("release_pins", {}) or
+                            codex_trust_reset(before_snapshot["hooks"], after_snapshot["hooks"], before_bundle,
+                                              bundle_digest(Path(after["root"])))):
         reason = trust_codex_hooks()
         if reason is None:
             result["codex_hooks_trusted"] = True
@@ -180,30 +187,47 @@ def trust_codex_hooks() -> str | None:
     return None
 
 
-def untrusted_hook_counts() -> dict[str, int]:
-    """How many hooks Codex lists as untrusted or modified, by plugin ID."""
-    command, cwd = [core.executable("codex"), "app-server"], str(Path.home())
-    result = CODEX_HOOK_TRUST.app_server_calls(command, dict(os.environ), cwd, [("hooks/list", {"cwds": [cwd]})],
-                                               CODEX_TRUST_TIMEOUT_SECONDS)[0]
-    counts: dict[str, int] = {}
-    for hook in CODEX_HOOK_TRUST.listed_hooks(result, cwd):
-        if isinstance(hook, dict) and hook.get("trustStatus") in CODEX_HOOK_TRUST.UNTRUSTED and isinstance(hook.get("pluginId"), str):
-            counts[hook["pluginId"]] = counts.get(hook["pluginId"], 0) + 1
-    return counts
-
-
 def settle_companion_trust(plugins: list[dict], context: dict) -> list[dict]:
     """Narrow each companion's provisional trust warning to the hooks Codex still lists as untrusted or modified.
 
     One listing, taken after the last companion install, serves every companion that may have lost trust. Nothing is
-    trusted here; a listing that fails keeps the warning with the reason."""
+    trusted unless the installed files and hook command match a pinned remote release."""
     pending = set(context.get("trust_reset", ()))
     if not pending:
         return plugins
     try:
-        counts, unread = untrusted_hook_counts(), None
+        command, cwd = [core.executable("codex"), "app-server"], str(Path.home())
+        result = CODEX_HOOK_TRUST.app_server_calls(command, dict(os.environ), cwd, [("hooks/list", {"cwds": [cwd]})],
+                                                  CODEX_TRUST_TIMEOUT_SECONDS)[0]
+        hooks = CODEX_HOOK_TRUST.listed_hooks(result, cwd)
+        counts, unread, failures = {}, None, {}
+        for plugin in plugins:
+            plugin_id = plugin["plugin"]
+            targets = [hook for hook in hooks if isinstance(hook, dict) and hook.get("pluginId") == plugin_id
+                       and hook.get("trustStatus") in CODEX_HOOK_TRUST.UNTRUSTED]
+            counts[plugin_id] = len(targets)
+            pin = context.get("release_pins", {}).get(plugin_id.partition("@")[2])
+            if plugin_id not in pending or not targets or not pin or not plugin.get("root"):
+                continue
+            try:
+                root = Path(plugin["root"])
+                for hook in targets:
+                    verify_hook(hook, plugin_id, root)
+                verify_files(root, plugin_id.partition("@")[0], pin)
+                calls = [("config/value/write", {"keyPath": f'hooks.state."{hook["key"]}".trusted_hash',
+                                                 "value": hook["currentHash"], "mergeStrategy": "replace"}) for hook in targets]
+                checked = CODEX_HOOK_TRUST.app_server_calls(command, dict(os.environ), cwd,
+                            [*calls, ("hooks/list", {"cwds": [cwd]})], CODEX_TRUST_TIMEOUT_SECONDS)
+                after = CODEX_HOOK_TRUST.listed_hooks(checked[-1], cwd)
+                trusted = {hook.get("key") for hook in after if isinstance(hook, dict) and hook.get("trustStatus") == "trusted"}
+                if not {hook["key"] for hook in targets} <= trusted:
+                    raise CODEX_HOOK_TRUST.TrustError("Codex did not confirm every hook as trusted")
+                counts[plugin_id] = 0
+                plugin["codex_hooks_trusted"] = True
+            except (CODEX_HOOK_TRUST.TrustError, RefreshError, OSError, ValueError) as error:
+                failures[plugin_id] = str(error)
     except (CODEX_HOOK_TRUST.TrustError, RefreshError, OSError):
-        counts, unread = {}, "Codex hook trust state could not be read"
+        counts, unread, failures = {}, "Codex hook trust state could not be read", {}
     settled = []
     for plugin in plugins:
         if plugin["plugin"] not in pending:
@@ -214,7 +238,7 @@ def settle_companion_trust(plugins: list[dict], context: dict) -> list[dict]:
         if unread:
             kept.append({**HOOKS_TRUST_WARNING, "detail": unread})
         elif count:
-            kept.append({**HOOKS_TRUST_WARNING, "detail": f"Codex lists {count} hook{'s' if count != 1 else ''} as untrusted or modified"})
+            kept.append({**HOOKS_TRUST_WARNING, "detail": failures.get(plugin["plugin"]) or f"Codex lists {count} hook{'s' if count != 1 else ''} as untrusted or modified"})
         settled.append({**plugin, "warnings": kept})
     return settled
 
@@ -241,11 +265,29 @@ def command_update(also: Sequence[str] = ()) -> dict:
     for host in HOSTS:
         context: dict = {"ids": ids}
         try:
+            if host == "codex":
+                gate = installs.install_gate(host)
+                prepare_marketplaces([PLUGIN_ID, *ids], context, advance=gate is None)
+                gate = gate or installs.install_gate(host)
+                blocked = gate if context["release_pins"] or context["release_errors"] else None
+                if blocked:
+                    root = cached_root(PLUGIN_ID)
+                    blocked.details.update(root=root, recovery_command=recovery_command(root, ids))
+                    hosts[host] = host_failure(blocked)
+                    hosts[host]["plugins"] = [{"plugin": plugin_id, "status": "deferred", "code": blocked.code,
+                                              "message": blocked.message, "before_version": None, "after_version": None,
+                                              "warnings": []} for plugin_id in ids]
+                    continue
             hosts[host] = update_host(host, context)
         except RefreshError as error:
             hosts[host] = host_failure(error)
         except (OSError, ValueError):
             hosts[host] = host_failure(RefreshError("plugin_check_failed", f"A {host} plugin file could not be checked."))
+        if host == "codex" and "release_pins" not in context:
+            hosts[host]["plugins"] = [{"plugin": plugin_id, "status": "error", "code": "codex_config_unreadable",
+                                      "message": "Release refs could not be prepared; no Codex command ran.",
+                                      "before_version": None, "after_version": None, "warnings": []} for plugin_id in ids]
+            continue
         plugins = [refresh_companion(host, plugin_id, True, context) for plugin_id in ids]
         hosts[host]["plugins"] = settle_companion_trust(plugins, context)
     return refresh_report(run_id, attach_claude_update(hosts, claude_step), extra)
@@ -257,6 +299,7 @@ def command_apply_installed(also: Sequence[str] = ()) -> dict:
     claude_step = run_claude_update()
     hosts: dict[str, dict] = {}
     for host in HOSTS:
+        context: dict = {}
         try:
             current = installs.installed(host)
             current_snapshot = validate_install(host, current)
@@ -268,12 +311,12 @@ def command_apply_installed(also: Sequence[str] = ()) -> dict:
                 "digest": current_snapshot["digest"],
                 "instructions_changed": False,
                 "warnings": [dict(HOME_RECORD_WARNING)] if current.get("home_project_record") else [],
+                **({"installed_at": install_time(Path(current["root"]))} if host == "codex" else {}),
             }
         except RefreshError as error:
             hosts[host] = host_failure(error)
         except (OSError, ValueError):
             hosts[host] = host_failure(RefreshError("plugin_check_failed", f"A {host} plugin file could not be checked."))
-        context: dict = {}
         hosts[host]["plugins"] = [refresh_companion(host, plugin_id, False, context) for plugin_id in ids]
     return refresh_report(run_id, attach_claude_update(hosts, claude_step), extra)
 
@@ -295,7 +338,7 @@ def public(entry: dict) -> dict:
             "ready_signal", "input", "release", "host_release_outdated", "plugin_load", "orphaned", "resume_check",
             "exit_late", "exit_state", "terminal_handle", "resume_line", "probe_position")
     view = {key: entry.get(key) for key in keys if entry.get(key) not in (None, [], False)}
-    if entry.get("detail") == "plugin_load_error" or entry.get("host_release_outdated"):
+    if entry.get("detail") in {"plugin_load_error", "codex_plugin_folder_replaced"} or entry.get("host_release_outdated"):
         view["resume_approval_needed"] = True
     view["terminal"] = f"…{entry['handle'][-6:]}"
     return view

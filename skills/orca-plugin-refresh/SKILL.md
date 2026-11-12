@@ -3,7 +3,7 @@ name: orca-plugin-refresh
 description: >-
   Update hei5enbug-agent-setup and any plugins the user names in Claude Code and Codex, then apply the installed
   versions to running Orca agent sessions: reload or compact idle ones and resume ones on an older Claude Code
-  release. Use for requests to refresh or restart running Orca sessions on a newer Claude Code release or to apply
+  release, and offer to resume Codex sessions whose loaded plugin folder was replaced. Use for requests to refresh or restart running Orca sessions on a newer Claude Code release or to apply
   an installed update to them, even without the skill's name; use apply-installed when installation is already
   done. Not for creating worktrees, reading terminals, or Orca browser work.
 compatibility: >-
@@ -19,13 +19,13 @@ Use this English `SKILL.md` as the only executable source.
 This skill updates `hei5enbug-agent-setup` and the other plugins the user chose, then applies the installed
 versions to running Orca sessions without ending them. It never restarts a session or replaces a conversation,
 except that `apply` first resumes, without asking, a Claude Code session on an older release that passes every
-resume check (step 3).
+resume check (step 3), and an approved Codex session with a replaced plugin folder can be resumed (step 6).
 
 ## How an update reaches a running session
 
 | Part | Claude Code | Codex |
 |---|---|---|
-| Skills, agents, and hooks | `/reload-plugins` reloads every plugin | The next turn picks up the new install automatically |
+| Skills, agents, and hooks | `/reload-plugins` reloads every plugin | A session with a replaced plugin folder needs an approved resume |
 | Session instructions | `/compact` | `/compact`; the session loads them on its next turn |
 
 The plugin's session-start hook writes one marker per Orca terminal with the host, plugin directory, transcript
@@ -34,7 +34,8 @@ path, and a digest of the executable instructions. Only the terminal's interacti
 script treats the terminal as the marker's host only while that host's input line ends the screen, so a shell left
 behind with an old marker is never targeted. The script compacts only a session whose marker
 is missing, holds another digest, points a Codex session at a replaced plugin directory, or points a Claude Code
-session at a removed one. Only this plugin's instruction digest decides this, not the other plugins. When Claude
+session at a removed one. A Codex process that predates a replacement follows the resume rule instead.
+Only this plugin's instruction digest decides compaction, not the other plugins. When Claude
 Code answers that a session has too few messages to compact and its transcript holds no prompt, the script sends
 `/clear` instead, because an empty session has nothing to lose. A Codex session that never ran a turn needs
 nothing: its first turn loads the new instructions.
@@ -42,6 +43,8 @@ nothing: its first turn loads the new instructions.
 ## Workflow
 
 Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds this `SKILL.md`.
+
+Before updating Codex plugins or reporting their hook-trust warnings, read `references/codex-releases.md`.
 
 1. **Choose the install path.** To install a new version, run `python3 <script> update --json`. To refresh other
    plugins with it, pass each ID the user named as `--also <plugin@marketplace>`; the flag is repeatable and
@@ -83,14 +86,6 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
    from. Report every warning:
    - `unreleased_same_version`: Claude Code keeps its installed copy because the version did not change. Tell
      the user these files reach Claude Code only after a version bump.
-   - `codex_hooks_need_trust`: the plugin's hook definitions changed, appeared, or disappeared, or a plugin with
-     hooks changed any file, because Codex ties hook trust to every plugin file. For this plugin the script first
-     re-trusts its own hooks when the installed copy is a clean official checkout whose HEAD the official remote
-     currently advertises for `main` or a `v*` tag, or contains in its `main`, and then
-     reports `codex_hooks_trusted: true` instead of this warning; otherwise the warning carries the reason in
-     `detail`. A companion keeps it only while Codex still lists one of its hooks as untrusted or modified (count in
-     `detail`), or when that listing could not be read; the script never trusts a companion's hooks. Ask the user to
-     trust that plugin's hooks in Codex `/hooks`; Codex skips untrusted hooks.
    - `unreleased_check_unavailable`: the script could not tell whether Claude Code missed same-version files.
      Report the reason.
    - `claude_home_project_record`: a session ran in the home folder, so Claude Code listed the user install a second
@@ -160,8 +155,8 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
    arrives, run it and report every session, with the companion statuses from `hosts`; `not_refreshed` lists the
    sessions that did not receive the update. When `self_notification` in the status is not `sent`, the prompt
    could not be delivered; the status still holds the result.
-6. **Offer the resume.** Show once every session that reports `resume_approval_needed` (`plugin_load_error`, or
-   `host_release_outdated` with the failed check in `resume_check`) and ask which the user approves; fixing one ends
+6. **Offer the resume.** Show once every session that reports `resume_approval_needed` (`plugin_load_error`,
+   `codex_plugin_folder_replaced`, or `host_release_outdated` with the failed check in `resume_check`) and ask which the user approves; fixing one ends
    it and resumes the same conversation.
    Before running `resume`, read `references/resume.md`, and run it only for the approved terminals.
 7. **Offer to close orphaned terminals.** Run `python3 <script> orphans --run-id <run_id> --json`, show each orphaned

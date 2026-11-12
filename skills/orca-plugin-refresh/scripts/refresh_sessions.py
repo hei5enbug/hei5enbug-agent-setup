@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from refresh_core import HANDLE, SESSION_CONTEXT, RefreshError, parse_time
+from refresh_codex_session import replaced_before_start
 from refresh_dialog import answer_compact_dialog, dialog_open
 from refresh_host_record import COMMAND_RECORD_PREFIXES, TRANSCRIPT_TAIL_BYTES, record_state
 from refresh_orca import Orca
@@ -154,6 +155,10 @@ def plan_sessions(orca: Orca, state: dict, mode: str, only: Sequence[str]) -> li
             if not entry["actions"]:
                 entry.update(status="done", detail="already_current")
             entry["planned"] = list(entry["actions"])
+            if host == "codex":
+                replaced = replaced_before_start(handle, read_marker(handle), target)
+                if replaced is not False:
+                    entry.update(status="skipped", detail="codex_plugin_folder_replaced" if replaced else "codex_process_unavailable", actions=[])
         sessions.append(entry)
     return sessions
 

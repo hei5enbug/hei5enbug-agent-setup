@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import os
+import tempfile
 import tomllib
 import unittest
 from pathlib import Path
@@ -14,6 +16,28 @@ RELEASE_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 MANIFEST_VERSION_ADDED = re.compile(r'^\+\s*"version":\s*"(\d+\.\d+\.\d+)"', re.MULTILINE)
 CLAUDE_MANIFEST = ".claude-plugin/plugin.json"
 VERSION_FILES = frozenset({".codex-plugin/plugin.json", CLAUDE_MANIFEST, "pyproject.toml", "uv.lock"})
+
+
+def readme_release_ref(text: str, tags: list[str]) -> str | None:
+    blocks = re.findall(r"```bash\n(.*?)```", text, re.DOTALL)
+    block = next((value for value in blocks if "codex plugin marketplace add" in value), None)
+    if block is None:
+        return None
+    with tempfile.TemporaryDirectory() as directory:
+        folder = Path(directory)
+        advertised = "\n".join(f"{'a' * 40}\trefs/tags/{tag}" for tag in tags) + "\n"
+        (folder / "tags").write_text(advertised)
+        (folder / "git").write_text('#!/bin/sh\ncat "$RELEASE_TEST_TAGS"\n')
+        (folder / "codex").write_text('#!/bin/sh\nif [ "$1 $2 $3" = "plugin marketplace add" ]; then\n'
+                                      '  while [ "$#" -gt 0 ]; do\n'
+                                      '    if [ "$1" = "--ref" ]; then printf "%s\\n" "$2"; exit; fi\n'
+                                      '    shift\n  done\nfi\n')
+        for name in ("git", "codex"):
+            (folder / name).chmod(0o700)
+        result = subprocess.run(["sh", "-c", block], capture_output=True, text=True, timeout=10, check=False,
+                                env={**os.environ, "PATH": f"{folder}:{os.environ.get('PATH', '')}",
+                                     "RELEASE_TEST_TAGS": str(folder / "tags")})
+        return result.stdout.strip() if result.returncode == 0 else None
 
 
 def git(*args: str) -> str | None:
@@ -89,6 +113,20 @@ class ReleaseVersionTest(unittest.TestCase):
         for path in REPO_ROOT.glob("README*.md"):
             with self.subTest(path=path.name):
                 self.assertIsNone(README_VERSION.search(path.read_text()))
+
+    def test_Codex_설치_예시는_계획_버전이_아닌_최신_릴리스_태그를_사용한다(self):
+        """README 설치 명령은 최신 정식 태그를 고르고 main이나 미출시 계획 버전을 쓰면 검사를 통과하지 못한다."""
+        # Given
+        text = (REPO_ROOT / "README.md").read_text()
+        tags = ["v1.3.0-preview.1", "v1.2.0", "v1.1.0"]
+        examples = [text, text.replace('--ref "$plugin_release_tag"', '--ref main'),
+                    text.replace('--ref "$plugin_release_tag"', '--ref v1.2.1')]
+
+        # When
+        accepted = [readme_release_ref(example, tags) == "v1.2.0" for example in examples]
+
+        # Then
+        self.assertEqual([True, False, False], accepted)
 
 
 class SupersededVersionsTest(unittest.TestCase):

@@ -7,13 +7,20 @@ instructions are stale, so the conversation ends with one copy of the current in
 check stays as planned, shows the failed check in `resume_check`, and is offered once for approval. A session with
 `plugin_load_error` is never resumed without approval.
 
-Run the `resume` subcommand only for a Claude Code session that reports `resume_approval_needed`, and only for the
+Run the `resume` subcommand only for a Claude Code or Codex session that reports `resume_approval_needed`, and only for the
 terminals the user approved in the current request. Run `python3 <script> resume --run-id <run_id> --terminal <handle> --json`, repeating
 `--terminal` once per approved session. The handle is the full Orca terminal handle, not the `…` suffix in a report.
 
+For a Codex session with `codex_plugin_folder_replaced`, the script reads its thread ID
+from the rollout's `session_meta` record, keeps its process's `CODEX_HOME` and launch options, and uses
+`codex resume <thread ID>` in the same terminal after `/exit`. It drops the old prompt, old resume selector, `--last`,
+and `--all`. Unknown options or an unreadable help response stop it before `/exit`. It applies the same idle,
+empty-input, process-exit, and conversation checks below; it also confirms the current plugin root and digest in the
+new marker. Codex receives no `/reload-plugins`. A successful resume removes its not-refreshed status.
+
 ## What the script does
 
-For each named terminal, in this order, it:
+For each named Claude Code terminal, in this order, it:
 
 1. Reads the conversation ID from the session marker's transcript file name. Without one it skips the session.
 2. Checks that the session is idle by its own turn record, owes no background notification, has no open question or
@@ -37,13 +44,14 @@ For each named terminal, in this order, it:
 ## Report each session
 
 - `done` with `resumed`: every confirmation passed. `note: no_config_dir_in_process` means the ended process had no
-  `CLAUDE_CONFIG_DIR`, so the line carries none. `release_before` and `release_after` name the two releases.
+  `CLAUDE_CONFIG_DIR` (Claude Code) or `CODEX_HOME` (Codex), so the line carries none. `release_before` and `release_after` name the two releases.
 - `skipped`: nothing was sent and the session was not ended. `busy`, `unsent_input`, `input_unknown`, and the other
   not-ready reasons mean it was not idle with an empty input line. `background_task` means a background task, subagent,
   or wakeup still owes a notification, and ending the session would stop it; tell the user and let them choose again
   later. `session_id_unknown`, `process_not_found`, `session_process_ambiguous`, `claude_missing`, and
-  `launch_arguments_unknown` mean the script could not identify what to resume. `not_a_claude_session` means
-  the terminal is not a Claude Code session.
+  `launch_arguments_unknown`, and `codex_missing` mean the script could not identify what to resume.
+  `not_an_agent_session` means the terminal is neither a Claude Code nor a Codex session. `resume_not_needed` means
+  the Codex session no longer needs a resume.
 - `done` with `exit_late`: the process ended, or the terminal showed an empty shell prompt, only after the first 60
   seconds, and the resume line was sent after that.
 - `failed`: the session was ended. `exit_timeout` means no resume line was sent, and the report carries
@@ -51,8 +59,10 @@ For each named terminal, in this order, it:
   no empty shell prompt), `process_list_unreadable` (the process list could not be read), or `still_running`.
   `ended_late` also carries `prompt_shape`: the last screen line's final character, whether it is non-ASCII, whether it
   has a shell prompt character, and whether an agent screen is still shown, so the cause can be told without reading the
-  terminal. Give the user the terminal and the exact line; the session has no Claude Code until it runs.
+  terminal. Give the user the terminal and the exact line. Tell them to run it only after confirming that the old process
+  ended and the terminal shows an empty shell prompt.
   `resume_marker_missing` and `resume_session_mismatch` mean the resumed session was not confirmed to hold the same
-  conversation. `resumed_process_missing` and `config_dir_mismatch` mean the new process is missing or runs on a
+  conversation. `resume_plugin_mismatch` means the Codex marker does not match the installed plugin.
+  `resumed_process_missing` and `config_dir_mismatch` mean the new process is missing or runs on a
   different configuration folder. `plugin_load_error` means the resumed session still reports a load error, with
   `plugin_load` holding the counts. Tell the user to check that terminal; the script never retries.

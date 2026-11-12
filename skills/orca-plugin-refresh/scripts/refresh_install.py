@@ -344,6 +344,8 @@ def run_install(host: str, plugin_id: str, context: dict) -> RefreshError | None
         return context["blocked"]
 
     marketplace = plugin_id.partition("@")[2]
+    if host == "codex" and marketplace in context.get("release_errors", {}):
+        raise context["release_errors"][marketplace]
     cli = core.executable(host)
     if marketplace in marketplaces:
         if marketplaces[marketplace]:

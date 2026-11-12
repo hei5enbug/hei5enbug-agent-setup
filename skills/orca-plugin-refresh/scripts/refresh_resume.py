@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 import refresh_sessions as driver
+import refresh_codex_session as codex_session
 from refresh_core import HANDLE, RefreshError, exclusive, load_run, parse_time, update_run
 from refresh_host_record import record_state
 from refresh_orca import Orca
@@ -26,6 +27,8 @@ RECORD_REASONS = {"busy": "busy", "owing": "background_task", None: "host_record
 
 def session_id_of(marker: dict | None) -> str | None:
     """The conversation ID: the stem of the transcript file the session marker names."""
+    if (marker or {}).get("host") == "codex":
+        return codex_session.rollout_identity(marker)[0]
     path = (marker or {}).get("transcript_path")
     stem = Path(path).stem if isinstance(path, str) and path.endswith(".jsonl") else None
     return stem if stem and SESSION_ID.fullmatch(stem) else None
@@ -41,7 +44,7 @@ def resume_line(claude: str, config_dir: str | None, arguments: Sequence[str], s
 def not_ready_reason(orca: Orca, entry: dict, live: dict[str, dict], sleep: Callable[[float], None]) -> str | None:
     """None only when the session is idle by its own turn record, owes no background notification, and has an empty input line."""
     transcript = (driver.read_marker(entry["handle"]) or {}).get("transcript_path")
-    record = record_state("claude", transcript, detailed=True)
+    record = record_state(entry["host"], transcript, detailed=True)
     if record != "idle":
         return RECORD_REASONS.get(record, "busy")
     deadline = time.time() + READY_TIMEOUT
@@ -52,6 +55,8 @@ def not_ready_reason(orca: Orca, entry: dict, live: dict[str, dict], sleep: Call
         sleep(driver.POLL_SECONDS)
     if reason:
         return reason
+    if entry["host"] == "codex":
+        return None
     empty, _ = driver.line_empty(orca, entry["handle"], sleep=sleep)
     return None if empty else "unsent_input"
 
@@ -66,10 +71,10 @@ def wait_for(check: Callable[[], bool], timeout: float, sleep: Callable[[float],
         sleep(POLL)
 
 
-def process_state(handle: str, pid: int, system: ProcessOs | None) -> str:
+def process_state(handle: str, pid: int, system: ProcessOs | None, host: str = "claude") -> str:
     """`ended` only when the process list was read and shows the process gone; `unreadable` when it could not be read."""
     try:
-        found, unreadable = scan_session_processes(handle, system)
+        found, unreadable = scan_session_processes(handle, system, host)
     except RefreshError:
         return "unreadable"
     if pid in unreadable:
@@ -88,7 +93,7 @@ LATE_EXIT_STATES = {"ended": "ended_late", "unreadable": "process_list_unreadabl
 
 
 def late_exit_failure(orca: Orca, handle: str, pid: int, line: str, system: ProcessOs | None,
-                      sleep: Callable[[float], None]) -> dict | None:
+                      sleep: Callable[[float], None], host: str = "claude") -> dict | None:
     """Keep checking after the exit wait ran out; None once the process is gone and the terminal shows an empty shell
     prompt, otherwise the failure that gives the user the terminal and the exact resume line."""
     state = "running"
@@ -96,7 +101,7 @@ def late_exit_failure(orca: Orca, handle: str, pid: int, line: str, system: Proc
 
     def settled() -> bool:
         nonlocal state, screen
-        state, screen = process_state(handle, pid, system), None
+        state, screen = process_state(handle, pid, system, host), None
         if state != "ended":
             return False
         try:
@@ -148,10 +153,10 @@ def end_and_resume(orca: Orca, entry: dict, state: dict, process: SessionProcess
     late: dict = {}
 
     def shell_ready() -> bool:
-        return process_state(handle, process.pid, system) == "ended" and at_shell_prompt(orca, handle)
+        return process_state(handle, process.pid, system, entry["host"]) == "ended" and at_shell_prompt(orca, handle)
 
     if not wait_for(shell_ready, EXIT_TIMEOUT, sleep):
-        failure = late_exit_failure(orca, handle, process.pid, line, system, sleep)
+        failure = late_exit_failure(orca, handle, process.pid, line, system, sleep, entry["host"])
         if failure:
             return failure
         late = {"exit_late": True}
@@ -168,8 +173,12 @@ def end_and_resume(orca: Orca, entry: dict, state: dict, process: SessionProcess
         return {"status": "failed", "detail": "resume_marker_missing"}
     if marker.get("source") != "resume" or session_id_of(marker) != session_id:
         return {"status": "failed", "detail": "resume_session_mismatch"}
+    if entry["host"] == "codex":
+        target = state.get("hosts", {}).get("codex", {})
+        if any(marker.get(key) != target.get(key) for key in ("root", "digest")):
+            return {"status": "failed", "detail": "resume_plugin_mismatch"}
     try:
-        started = find_session_process(handle, system)
+        started = find_session_process(handle, system, entry["host"])
     except RefreshError:
         started = None
     if started is None:
@@ -189,27 +198,29 @@ def resume_session(orca: Orca, entry: dict, state: dict, live: dict[str, dict], 
     session_id = session_id_of(driver.read_marker(entry["handle"]))
     if session_id is None:
         return finished(result, "skipped", "session_id_unknown")
+    host = entry["host"]
     reason = not_ready_reason(orca, entry, live, sleep)
     if reason:
         position = {"probe_position": entry["probe_position"]} if reason == "probe_interrupted" and entry.get("probe_position") else {}
         return finished(result, "skipped", reason, **position)
     try:
-        process = find_session_process(entry["handle"], system)
+        process = find_session_process(entry["handle"], system, host)
     except RefreshError as error:
         return finished(result, "skipped", error.code)
-    claude = installed_release(system)[1]
+    claude = (system or ProcessOs()).which("codex") if host == "codex" else installed_release(system)[1]
     if process is None or claude is None:
-        return finished(result, "skipped", "process_not_found" if process is None else "claude_missing")
-    arguments = launch_arguments(claude, process.argv, system)
+        return finished(result, "skipped", "process_not_found" if process is None else f"{host}_missing")
+    arguments = (codex_session.resume_arguments(process.argv, (system or ProcessOs()).help_text(claude))
+                 if host == "codex" else launch_arguments(claude, process.argv, system))
     if arguments is None:
         return finished(result, "skipped", "launch_arguments_unknown")
-    line = resume_line(claude, process.config_dir, arguments, session_id)
+    line = (codex_session.resume_line if host == "codex" else resume_line)(claude, process.config_dir, arguments, session_id)
     note = {} if process.config_dir else {"note": "no_config_dir_in_process"}
-    return {**result, **note, **end_and_resume(orca, entry, state, process, line, session_id, system, sleep, reload)}
+    return {**result, **note, **end_and_resume(orca, entry, state, process, line, session_id, system, sleep, reload and host == "claude")}
 
 
 def resume_view(handle: str, entry: dict | None, result: dict) -> dict:
-    view = {"terminal": f"…{handle[-6:]}", "worktree": (entry or {}).get("worktree"), **result}
+    view = {"terminal": f"…{handle[-6:]}", "host": (entry or {}).get("host"), "worktree": (entry or {}).get("worktree"), **result}
     return {key: value for key, value in view.items() if value not in (None, [], False)}
 
 
@@ -273,14 +284,22 @@ def run_resume(run_id: str, handles: Sequence[str], orca: Orca | None = None, sy
         views = []
         for handle in requested:
             entry = entries.get(handle)
-            if entry is None or entry["host"] != "claude":
-                result = {"status": "skipped", "detail": "not_a_claude_session"}
+            if entry is None or entry["host"] not in {"claude", "codex"}:
+                result = {"status": "skipped", "detail": "not_an_agent_session"}
+            elif entry["host"] == "codex" and entry.get("detail") != "codex_plugin_folder_replaced":
+                result = {"status": "skipped", "detail": "resume_not_needed"}
             else:
                 try:
                     result = resume_session(orca, entry, state, live, system, sleep)
                 except RefreshError as error:
                     result = {"status": "failed", "detail": error.code}
             views.append((handle, resume_view(handle, entry, result)))
-        update_run(run_id, lambda saved: {**saved, "resumed": {**saved.get("resumed", {}), **dict(views)}})
+        def save_results(saved: dict) -> dict:
+            saved["resumed"] = {**saved.get("resumed", {}), **dict(views)}
+            for handle, view in views:
+                if view["status"] == "done" and view.get("host") == "codex":
+                    saved.setdefault("sessions", {})[handle] = {**view, "completed": ["resumed"]}
+            return saved
+        update_run(run_id, save_results)
     sessions = [view for _, view in views]
     return {"ok": all(view["status"] == "done" for view in sessions), "run_id": run_id, "sessions": sessions}
