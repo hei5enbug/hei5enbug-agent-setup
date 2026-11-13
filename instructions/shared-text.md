@@ -30,6 +30,9 @@ item's body and its whole comment or reply history.
    went, such as earlier failures, retries, or who did each part, and counts the user did not ask for.
 2. Completeness pass: compare the text with the request and its sources. Restore every decision, condition,
    prerequisite, order, and completion criterion the reader needs, and rewrite every sentence with two readings.
+   When a source requires the text itself to report something, such as a measurement or a list that an acceptance
+   criterion says the report includes, or the result departs from what a source proposed or decided, list each such
+   item and each departure before drafting, and confirm that the draft carries each one before its first review run.
    Before the text states a fact as unverified or unknown, or leaves it as a condition to check later, settle it with
    a check that the current permissions and approvals allow, such as reading a file, a read-only command, one minimal
    call, or a dry run, when the check is read-only or reversible, needs no new approval, and is small in time and cost
@@ -63,8 +66,9 @@ python3 <Source directory>/scripts/text_review.py review --kind <kind> --draft <
 - It first checks the patterns the text alone decides and stops on them; fix each finding. It then has a reviewer with
   no conversation context review the draft against only the rules and sources you passed.
 - Exit 0: post the reviewed text unchanged. Exit 1: apply each finding to the whole text, or pass your reason for
-  keeping a flagged sentence with `--note`, and run it again without asking. Post only after a run returns no
-  findings.
+  keeping a flagged sentence with `--note`. When you change the text, it is an update, so run both passes over the
+  whole text again and check that each sentence you added or changed matches the sources, has one meaning, and
+  restates no source, then run the review again without asking. Post only after a run returns no findings.
 - Compare each finding with the findings of the earlier runs of the same draft. It repeats when an earlier run raised
   the same problem in the same sentence or point, whether you applied that finding or answered it with `--note`; a
   different problem in a sentence that an earlier finding changed or a note kept is new. When a finding repeats, stop,
