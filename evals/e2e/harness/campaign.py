@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import contextlib
 import secrets
 import shlex
+import signal
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from typing import Any, Callable, TextIO
+from typing import Any, Callable, Iterator, TextIO
 
 from . import caps, codex_host, command, environment, inputs, plugin_export
-from .config import EXIT_USAGE_LIMIT, HOST_CLAUDE, STATUS_RUNNING, STATUS_USAGE_LIMITED, HarnessConfig
+from .config import EXIT_INTERRUPTED, EXIT_USAGE_LIMIT, HOST_CLAUDE, STATUS_RUNNING, STATUS_USAGE_LIMITED, HarnessConfig
 from .matrix import (
     CampaignState, RunSpec, campaign_dir, make_spec, move_aside, parse_run_id, plan_runs, read_json, run_id_for, runs_to_start,
     write_json,
@@ -59,12 +61,33 @@ def print_plan(out: TextIO, cfg: HarnessConfig, specs: list[RunSpec], tasks: dic
         out.write(f"{header}{setup}{env} {shlex.join(argv)} < /dev/null\n")
 
 
+@contextlib.contextmanager
+def interrupt_on_sigint(interrupt: threading.Event, out: TextIO) -> Iterator[None]:
+    """In the main thread, let SIGINT set `interrupt` and report it once instead of raising; restore the old handler."""
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    def handler(signum: int, frame: Any) -> None:
+        if not interrupt.is_set():
+            interrupt.set()
+            out.write("interrupt received; starting no new run and stopping the running agents\n")
+
+    previous = signal.signal(signal.SIGINT, handler)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGINT, previous)
+
+
 def run_campaign(
     cfg: HarnessConfig, campaign: str, task_ids: list[str], variant_names: list[str], reps: int, parallel: int,
     only_rerun: frozenset[str], out: TextIO, run_function: RunFunction = execute_run, allow_changed_inputs: bool = False,
     hosts: list[str] | None = None,
 ) -> int:
-    """Execute the matrix; returns 75 when a usage limit stopped it, else 0. Changed inputs refuse a resume."""
+    """Execute the matrix; returns 130 after an interrupt, 75 when a usage limit stopped it, else 0.
+
+    Changed inputs refuse a resume."""
     tasks, variants = load_plan(cfg, task_ids, variant_names)
     hosts = hosts or [HOST_CLAUDE]
     specs = build_specs(cfg, campaign, task_ids, variant_names, reps, hosts)
@@ -78,14 +101,17 @@ def run_campaign(
     out.write(f"{len(todo)} to run, {len(skipped)} already complete\n")
     snapshot = environment.capture_base(cfg.claude_bin, cfg.repo_root)
     stop = threading.Event()
+    interrupt = threading.Event()
 
     def job(spec: RunSpec) -> None:
-        if stop.is_set():
+        if stop.is_set() or interrupt.is_set():
             return
         move_aside(spec)
         state.set(spec.run_id, STATUS_RUNNING)
         try:
-            run = run_function(spec, tasks[spec.task], variants[spec.variant], plugins[spec.variant], cfg, snapshot)
+            run = run_function(
+                spec, tasks[spec.task], variants[spec.variant], plugins[spec.variant], cfg, snapshot, interrupt=interrupt,
+            )
         except Exception as error:  # noqa: BLE001 - a crashed job must not take the rest of the matrix down
             out.write(f"{spec.run_id}: infra_failed ({error})\n")
             state.set(spec.run_id, "infra_failed")
@@ -95,8 +121,11 @@ def run_campaign(
         if run["status"] == STATUS_USAGE_LIMITED:
             stop.set()
 
-    with ThreadPoolExecutor(max_workers=max(parallel, 1)) as pool:
+    with interrupt_on_sigint(interrupt, out), ThreadPoolExecutor(max_workers=max(parallel, 1)) as pool:
         list(pool.map(job, todo))
+    if interrupt.is_set():
+        out.write(f"interrupted; resume with the same command: run --campaign {campaign}\n")
+        return EXIT_INTERRUPTED
     if stop.is_set():
         out.write(f"usage limit reached; resume with the same command: run --campaign {campaign}\n")
         return EXIT_USAGE_LIMIT

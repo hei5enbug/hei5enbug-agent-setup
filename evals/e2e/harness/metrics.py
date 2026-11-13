@@ -20,6 +20,7 @@ def stream_facts(events: list[dict[str, Any]]) -> dict[str, Any]:
         "has_result": bool(result),
         "is_error": bool(result.get("is_error")),
         "subtype": result.get("subtype"),
+        "terminal_reason": result.get("terminal_reason"),
         "total_cost_usd": result.get("total_cost_usd"),
         "duration_api_ms": result.get("duration_api_ms"),
         "num_turns": result.get("num_turns"),

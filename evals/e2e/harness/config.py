@@ -35,6 +35,7 @@ DEFAULT_PARALLEL = 3
 SIGINT_GRACE_SECONDS = 20.0
 SIGTERM_GRACE_SECONDS = 10.0
 EXIT_USAGE_LIMIT = 75
+EXIT_INTERRUPTED = 130
 EXIT_FAILURE = 1
 
 STATUS_PENDING = "pending"
@@ -43,8 +44,9 @@ STATUS_COMPLETE = "complete"
 STATUS_INFRA_FAILED = "infra_failed"
 STATUS_USAGE_LIMITED = "usage_limited"
 STATUS_TIMED_OUT = "timed_out"
+STATUS_INTERRUPTED = "interrupted"
 FINISHED_STATUSES = frozenset({STATUS_COMPLETE, STATUS_TIMED_OUT})
-RETRIED_STATUSES = frozenset({STATUS_INFRA_FAILED, STATUS_USAGE_LIMITED, STATUS_RUNNING, STATUS_PENDING})
+RETRIED_STATUSES = frozenset({STATUS_INFRA_FAILED, STATUS_USAGE_LIMITED, STATUS_INTERRUPTED, STATUS_RUNNING, STATUS_PENDING})
 
 USAGE_LIMIT_PATTERN = re.compile(r"usage limit|limit reached|hit your limit|rate limit|out of extra usage|quota", re.I)
 FORBIDDEN_ARGS = frozenset({"--dangerously-skip-permissions", "--bare", "--permission-mode", "bypassPermissions"})

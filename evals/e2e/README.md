@@ -136,9 +136,14 @@ Run every command from the repository root. The default run root is
 repetition (ABAB, then BABA), so time-of-day effects spread evenly.
 
 Running the same `run` command again resumes the campaign. Finished runs are skipped. A run that failed for an
-infrastructure reason or hit a usage limit is started again, and its old records and work folder move to
-`attempts/rep<k>/<n>/`. When a run reports a usage limit, the harness starts no new run, lets running ones finish, and
-exits with code 75.
+infrastructure reason, hit a usage limit, or was interrupted is started again, and its old records and work folder
+move to `attempts/rep<k>/<n>/`. When a run reports a usage limit, the harness starts no new run, lets running ones
+finish, and exits with code 75.
+
+An interrupt of the harness, such as Ctrl-C, starts no new run, stops each running agent and every process it started
+as the wall-clock limit does, records that run as `interrupted`, and exits with code 130. A Claude Code run whose
+stream ends with an aborted result is recorded as `interrupted` too: `claude -p` writes that result when it receives
+SIGINT and then exits with code 0.
 
 The first `run` stores each variant's resolved revision and a fingerprint per input in `campaign.json`: the variant
 file, the task file, the task's prompt file, the task's fixture tree, and the hidden tests and custom checks of the

@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import os
 import shutil
+import threading
 from datetime import datetime
 from typing import Any
 
 from . import caps, codex_calls, codex_host, collect, command, environment, metrics, rubric, transcript, usage
 from .config import (
-    FINISHED_STATUSES, HOST_CODEX, STATUS_COMPLETE, STATUS_INFRA_FAILED, STATUS_TIMED_OUT, STATUS_USAGE_LIMITED, HarnessConfig,
+    FINISHED_STATUSES, HOST_CODEX, STATUS_COMPLETE, STATUS_INFRA_FAILED, STATUS_INTERRUPTED, STATUS_TIMED_OUT,
+    STATUS_USAGE_LIMITED, HarnessConfig,
 )
 from .matrix import RunSpec, prior_attempts, read_json, write_json
 from .process import ProcessResult, run_agent
 
 AGENT_TMP_NAME = "tmp"
+ABORTED_REASON_PREFIX = "aborted"
 
 
 def load_graders() -> Any:
@@ -23,11 +26,15 @@ def load_graders() -> Any:
     return graders
 
 
-def decide_status(facts: dict[str, Any], limit_reason: str | None, timed_out: bool) -> str:
+def decide_status(facts: dict[str, Any], limit_reason: str | None, timed_out: bool, interrupted: bool = False) -> str:
+    if interrupted:
+        return STATUS_INTERRUPTED
     if limit_reason:
         return STATUS_USAGE_LIMITED
     if timed_out:
         return STATUS_TIMED_OUT
+    if str(facts.get("terminal_reason") or "").startswith(ABORTED_REASON_PREFIX):
+        return STATUS_INTERRUPTED
     return STATUS_COMPLETE if facts["has_result"] else STATUS_INFRA_FAILED
 
 
@@ -145,9 +152,9 @@ def finish_run(spec: RunSpec, task: dict[str, Any], run: dict[str, Any], proc: P
     records = {**records, "runner": collect.collect_runner_transcripts(calls, spec.result_dir / "transcripts" / "runner")}
     limit = transcript.usage_limit_reason(events)
     finished = {
-        **run, "status": decide_status(facts, limit, proc.timed_out), "returncode": proc.returncode,
-        "timed_out": proc.timed_out, "wall_seconds": proc.wall_seconds, "started_at": proc.started_at.isoformat(),
-        "ended_at": proc.ended_at.isoformat(), "session_id": facts["session_id"], "usage_limit": limit,
+        **run, "status": decide_status(facts, limit, proc.timed_out, proc.interrupted), "returncode": proc.returncode,
+        "timed_out": proc.timed_out, "interrupted": proc.interrupted, "wall_seconds": proc.wall_seconds,
+        "started_at": proc.started_at.isoformat(), "ended_at": proc.ended_at.isoformat(), "session_id": facts["session_id"], "usage_limit": limit,
         "error": proc.error, "collected": records, "orphans_killed": proc.orphans_killed,
         "leftover_killed": proc.leftover_killed,
     }
@@ -182,8 +189,9 @@ def finish_codex_run(
     answered = state["completed"] or any(
         codex_host.payload_of(event).get("type") == "task_complete" for event in (rollouts[0]["events"] if rollouts else []))
     finished = {
-        **run, "status": decide_status({"has_result": answered}, state["usage_limit"], proc.timed_out),
-        "returncode": proc.returncode, "timed_out": proc.timed_out, "wall_seconds": proc.wall_seconds,
+        **run, "status": decide_status({"has_result": answered}, state["usage_limit"], proc.timed_out, proc.interrupted),
+        "returncode": proc.returncode, "timed_out": proc.timed_out, "interrupted": proc.interrupted,
+        "wall_seconds": proc.wall_seconds,
         "started_at": proc.started_at.isoformat(), "ended_at": proc.ended_at.isoformat(), "session_id": None,
         "usage_limit": state["usage_limit"], "error": proc.error, "collected": {"codex": copied, "runner": runner_names},
         "orphans_killed": proc.orphans_killed, "leftover_killed": proc.leftover_killed,
@@ -193,7 +201,7 @@ def finish_codex_run(
 
 def execute_run(
     spec: RunSpec, task: dict[str, Any], variant: dict[str, Any], plugin: dict[str, Any], cfg: HarnessConfig,
-    base_snapshot: dict[str, Any],
+    base_snapshot: dict[str, Any], interrupt: threading.Event | None = None,
 ) -> dict[str, Any]:
     """Run one agent session and return the final run record (also written as run.json)."""
     shutil.rmtree(spec.work_dir, ignore_errors=True)
@@ -228,7 +236,7 @@ def execute_run(
             return failed
     proc = run_agent(
         argv, spec.repo, env, spec.result_dir / "stream.jsonl", spec.result_dir / "stderr.txt",
-        float(task["limits"]["wall_seconds"]), cfg.sigint_grace, cfg.sigterm_grace,
+        float(task["limits"]["wall_seconds"]), cfg.sigint_grace, cfg.sigterm_grace, interrupt=interrupt,
     )
     return finish_codex_run(spec, task, run, proc, cfg) if codex else finish_run(spec, task, run, proc, cfg)
 

@@ -5,10 +5,12 @@ from __future__ import annotations
 import io
 import json
 import os
+import signal
 import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -650,7 +652,7 @@ class ResumeTest(unittest.TestCase):
 
 
 def fake_run_function(statuses: dict[str, str], calls: list[str]):
-    def run(spec, task, variant, plugin, cfg, snapshot):
+    def run(spec, task, variant, plugin, cfg, snapshot, interrupt=None):
         calls.append(spec.run_id)
         spec.result_dir.mkdir(parents=True, exist_ok=True)
         return {"run_id": spec.run_id, "status": statuses.get(spec.run_id, "complete")}
@@ -723,7 +725,7 @@ class CampaignTest(unittest.TestCase):
     def test_실행이_예외를_던지면_infra_failed로_기록하고_나머지는_계속한다(self):
         """한 실행의 예외가 전체를 멈추지 않고 상태에 infra_failed로 남는다."""
         # given
-        def crashing(spec, *args):
+        def crashing(spec, *args, **kwargs):
             if spec.task == "T02":
                 raise RuntimeError("boom")
             return {"run_id": spec.run_id, "status": "complete"}
@@ -734,6 +736,62 @@ class CampaignTest(unittest.TestCase):
         # then
         state = matrix.CampaignState(self.cfg.run_root / "c1" / "state.json").snapshot()
         self.assertEqual((code, state["T02-baseline-r1"], state["T03-baseline-r1"]), (0, "infra_failed", "complete"))
+
+    def interrupting_run_function(self, started: list[str], seen: list[int]):
+        """Install a SIGINT handler that records its calls, and return a run function that blocks until its `interrupt`
+        event is set while a thread sends this process SIGINT once the first run has started."""
+        first = threading.Event()
+        self.test_handler = lambda signum, frame: seen.append(signum)
+        previous = signal.signal(signal.SIGINT, self.test_handler)
+        self.addCleanup(signal.signal, signal.SIGINT, previous)
+
+        def blocking(spec, task, variant, plugin, cfg, snapshot, interrupt=None):
+            started.append(spec.run_id)
+            first.set()
+            interrupt.wait(10)
+            return {"run_id": spec.run_id, "status": "interrupted"}
+
+        def send_sigint() -> None:
+            first.wait(10)
+            os.kill(os.getpid(), signal.SIGINT)
+
+        threading.Thread(target=send_sigint, daemon=True).start()
+        return blocking
+
+    def run_with(self, run_function) -> int:
+        return campaign.run_campaign(
+            self.cfg, "c1", ["T01", "T02", "T03"], ["baseline"], 1, 1, frozenset(), io.StringIO(), run_function,
+        )
+
+    @unittest.skipUnless(threading.current_thread() is threading.main_thread(), "signal handlers need the main thread")
+    def test_SIGINT를_받으면_새_실행을_시작하지_않고_130으로_끝나며_기존_핸들러를_되돌린다(self):
+        """Ctrl-C는 예외 없이 interrupt만 켜고 T01만 시작된 채 130이며, 끝나면 이전 SIGINT 핸들러가 돌아온다."""
+        # given
+        started: list[str] = []
+        seen: list[int] = []
+        run_function = self.interrupting_run_function(started, seen)
+
+        # when
+        code = self.run_with(run_function)
+
+        # then
+        state = matrix.CampaignState(self.cfg.run_root / "c1" / "state.json").snapshot()
+        self.assertEqual((code, started, seen), (130, ["T01-baseline-r1"], []))
+        self.assertEqual(state, {"T01-baseline-r1": "interrupted"})
+        self.assertIs(signal.getsignal(signal.SIGINT), self.test_handler)
+
+    @unittest.skipUnless(threading.current_thread() is threading.main_thread(), "signal handlers need the main thread")
+    def test_중단된_캠페인을_이어서_실행하면_중단된_실행과_시작하지_않은_실행을_모두_시작한다(self):
+        """interrupted로 남은 T01도 재시도 대상이라 재개 때 T01, T02, T03을 모두 실행한다."""
+        # given
+        self.run_with(self.interrupting_run_function([], []))
+        calls: list[str] = []
+
+        # when
+        code = self.run_all({}, calls)
+
+        # then
+        self.assertEqual((code, calls), (0, ["T01-baseline-r1", "T02-baseline-r1", "T03-baseline-r1"]))
 
     def test_드라이런은_계획과_전체_명령을_출력하고_아무것도_쓰지_않는다(self):
         """dry-run 출력에 run id와 필수 플래그가 있고 실행 루트에 파일이 생기지 않는다."""
@@ -985,10 +1043,20 @@ class ApprovalDecisionTest(unittest.TestCase):
 FAKE_CLAUDE = """#!{python}
 import json, os, signal, sys, time
 out = os.environ["FAKE_OUT"]
+mode = os.environ.get("FAKE_MODE", "complete")
+SUCCESS = {{"type": "result", "subtype": "success", "is_error": False, "result": "ok", "num_turns": 1,
+    "total_cost_usd": 0.01, "session_id": "fake-1", "permission_denials": []}}
+ABORTED = {{"type": "result", "subtype": "error_during_execution", "is_error": True, "num_turns": 1,
+    "session_id": "fake-1", "terminal_reason": "aborted_streaming", "permission_denials": []}}
+INIT = {{"type": "system", "subtype": "init", "session_id": "fake-1", "permissionMode": "auto", "plugins": []}}
+def answer_and_exit(signum, frame):
+    print(json.dumps(SUCCESS), flush=True)
+    os._exit(0)
+if mode == "sigint_result":
+    signal.signal(signal.SIGINT, answer_and_exit)
 with open(out, "w") as handle:
     json.dump({{"argv": sys.argv[1:], "env": sorted(os.environ), "tmpdir": os.environ.get("TMPDIR"),
                 "tmpdir_exists": os.path.isdir(os.environ.get("TMPDIR", ""))}}, handle)
-mode = os.environ.get("FAKE_MODE", "complete")
 child_file = os.environ.get("FAKE_CHILD")
 if child_file:
     import subprocess
@@ -999,6 +1067,12 @@ if child_file:
     time.sleep(float(os.environ.get("FAKE_HOLD", "0")))
 if mode == "hang":
     time.sleep(30)
+if mode == "sigint_result":
+    time.sleep(30)
+if mode == "aborted":
+    print(json.dumps(INIT))
+    print(json.dumps(ABORTED))
+    sys.exit(0)
 if mode == "stubborn":
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
@@ -1250,6 +1324,66 @@ class ProcessAndRunTest(unittest.TestCase):
 
         # then
         self.assertEqual(str(self.root), json.loads(self.out.read_text(encoding="utf-8"))["tmpdir"])
+
+    @staticmethod
+    def interrupt_once_exists(marker: Path) -> threading.Event:
+        """An event that a timer sets shortly after `marker` appears, so the interrupt never precedes the fake agent's start."""
+        interrupt = threading.Event()
+
+        def watch() -> None:
+            deadline = time.monotonic() + 30
+            while not marker.is_file() and time.monotonic() < deadline:
+                time.sleep(0.02)
+            threading.Timer(0.2, interrupt.set).start()
+
+        threading.Thread(target=watch, daemon=True).start()
+        return interrupt
+
+    def test_하네스가_중단되면_에이전트와_새_세션의_자식을_끝내고_interrupted로_돌려준다(self):
+        """interrupt 이벤트가 켜지면 제한 시간을 기다리지 않고 에이전트와 자손을 정리하며 timed_out이 아니다."""
+        # given
+        env, child_file = self.start_child_env("hang")
+        interrupt = self.interrupt_once_exists(child_file)
+
+        # when
+        result = process.run_agent(
+            [str(self.fake)], self.root, env, self.root / "s.jsonl", self.root / "e.txt", 20.0, 0.3, 0.3, 0.2, interrupt=interrupt,
+        )
+
+        # then
+        child = int(child_file.read_text(encoding="utf-8"))
+        self.assertEqual((result.interrupted, result.timed_out), (True, False))
+        self.assertLess(result.wall_seconds, 10)
+        self.assertFalse(pid_running(child))
+
+    def test_하네스가_중단한_실행은_에이전트가_결과를_쓰고_0으로_끝나도_interrupted로_기록한다(self):
+        """SIGINT를 받은 가짜 에이전트가 success 결과를 쓰고 종료해도 하네스 중단 표시가 우선한다."""
+        # given
+        cfg = HarnessConfig(**{**self.cfg.__dict__, "extra_env": {"FAKE_OUT": str(self.out), "FAKE_MODE": "sigint_result"}})
+        task = {**self.task, "limits": {"wall_seconds": 30, "max_budget_usd": 1}}
+        interrupt = self.interrupt_once_exists(self.out)
+
+        # when
+        run = runner.execute_run(self.spec, task, self.variant, self.plugin, cfg, {}, interrupt=interrupt)
+
+        # then
+        saved = json.loads((self.spec.result_dir / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual((run["status"], saved["status"], saved["interrupted"]), ("interrupted", "interrupted", True))
+        self.assertEqual(saved["returncode"], 0)
+        self.assertLess(saved["wall_seconds"], 10)
+
+    def test_스트림이_aborted_결과로_끝난_실행은_하네스_중단이_없어도_interrupted로_기록한다(self):
+        """claude -p가 외부 SIGINT를 받고 aborted result를 쓴 뒤 0으로 끝나면 complete가 아니다."""
+        # given
+        cfg = HarnessConfig(**{**self.cfg.__dict__, "extra_env": {"FAKE_OUT": str(self.out), "FAKE_MODE": "aborted"}})
+        task = {**self.task, "limits": {"wall_seconds": 30, "max_budget_usd": 1}}
+
+        # when
+        run = runner.execute_run(self.spec, task, self.variant, self.plugin, cfg, {})
+
+        # then
+        saved = json.loads((self.spec.result_dir / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual((run["status"], saved["status"], saved["interrupted"]), ("interrupted", "interrupted", False))
 
     def write_stream(self, events: list[dict[str, Any]]) -> None:
         self.spec.result_dir.mkdir(parents=True, exist_ok=True)
