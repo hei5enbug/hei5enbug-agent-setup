@@ -1,0 +1,47 @@
+{
+  "id": "T22",
+  "title": "First draft that reports each required step time and the changed proposal",
+  "category": "writing",
+  "path": "ticket-comment first draft",
+  "fixture": "review-rounds",
+  "prompt_file": "prompts/T22.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/comment-draft.txt"
+    },
+    {
+      "id": "step-times-listed",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "step_times_listed"
+    },
+    {
+      "id": "marker-replaced-mode-check",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "marker_replaced_mode_check"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

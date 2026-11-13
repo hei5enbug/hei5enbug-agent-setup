@@ -1,0 +1,40 @@
+{
+  "id": "T24",
+  "title": "Second draft that says a cache runs once before it is deleted",
+  "category": "writing",
+  "path": "ticket-comment second draft",
+  "fixture": "review-rounds",
+  "prompt_file": "prompts/T24.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/comment-draft.txt"
+    },
+    {
+      "id": "run-before-delete-stated",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "run_before_delete_stated"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

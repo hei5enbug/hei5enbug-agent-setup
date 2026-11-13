@@ -1,0 +1,54 @@
+{
+  "id": "T23",
+  "title": "Second draft that keeps a source exception without restating the criterion",
+  "category": "writing",
+  "path": "ticket-comment second draft",
+  "fixture": "review-rounds",
+  "prompt_file": "prompts/T23.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/comment-draft.txt"
+    },
+    {
+      "id": "exception-and-test-kept",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "exception_and_test_kept"
+    },
+    {
+      "id": "no-unqualified-limit-claim",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_unqualified_limit_claim"
+    },
+    {
+      "id": "criterion-not-restated",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "criterion_not_restated"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

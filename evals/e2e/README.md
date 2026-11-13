@@ -165,6 +165,11 @@ work folder, so the reviews the agent runs are counted in its cost; the grader's
 A custom check reads the original run folder through `ctx.origin`, the graded copy's source, so a task such as T21
 can inspect the Git worktrees and the fake Orca state that its setup script built beside the repository.
 
+T22 to T24 grade the draft that the agent saves for a separate review run, so their prompts tell the agent not to run
+`text_review.py`. T23 and T24 supply the first draft and the finding the first run returned, and the checks read the
+saved second draft by sentence patterns. They have no `text-review-clean` check and are not in
+`config/writing-surfaces.json`.
+
 `tests/test_e2e_eval_graders.py` proves each task's graders: the unmodified fixture fails, and the reference
 solution in `tasks/reference/` passes.
 
@@ -198,6 +203,9 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T19 | ops-notes | Shared document | Wiki draft of about 1,600 characters for a 1,500-character budget |
 | T20 | notes-cli | Final report | Small change with tests, then a report |
 | T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
+| T22 | review-rounds | Ticket comment, first draft | Comment whose work item requires each step's time before and after and whose proposal the result replaced |
+| T23 | review-rounds | Ticket comment, second draft | Revise a draft after a finding that it dropped the work item's exception for a first run without a cache |
+| T24 | review-rounds | Ticket comment, second draft | Revise a draft after a finding that "the check deletes a loose cache" can mean before or after the cache runs |
 
 ## Known limits
 

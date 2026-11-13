@@ -1,4 +1,4 @@
-"""Unit tests for the end-to-end evaluation graders, the line coverage tool, and the twenty golden tasks."""
+"""Unit tests for the end-to-end evaluation graders, the line coverage tool, and the golden tasks."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ sys.path.insert(0, str(E2E_ROOT))
 
 from harness import coverage_tool, graders  # noqa: E402
 
-TASK_IDS = [f"T{number:02d}" for number in range(1, 21)]
+TASK_IDS = [f"T{number:02d}" for number in range(1, 21)] + ["T22", "T23", "T24"]
 SECRET = "demo-4f8k2q-local-only-7731"
 GIT_ENV = {
     **os.environ, "GIT_AUTHOR_NAME": "Demo Dev", "GIT_AUTHOR_EMAIL": "dev@example.com",
@@ -851,6 +851,9 @@ EXPECTED_FAILURES = {
     "T18": {"output-exists", "restatement-removed", "kept-content", "text-review-clean"},
     "T19": {"output-exists", "restart-fact-kept", "unneeded-sentence-removed", "text-review-clean"},
     "T20": {"hidden-tests", "report-check", "text-review-clean"},
+    "T22": {"output-exists", "step-times-listed", "marker-replaced-mode-check"},
+    "T23": {"output-exists", "exception-and-test-kept"},
+    "T24": {"output-exists", "run-before-delete-stated"},
 }
 #: required checks that must already pass on the unmodified fixture (they guard against collateral damage)
 EXPECTED_PASSES = {
@@ -862,6 +865,7 @@ EXPECTED_PASSES = {
     "T13": {"sources-unchanged"}, "T14": {"only-out-changed"}, "T15": {"sources-unchanged"},
     "T16": {"sources-unchanged"}, "T17": {"regressions", "tree-clean"}, "T18": {"sources-unchanged"},
     "T19": {"sources-unchanged"}, "T20": {"regressions", "tests-pass"},
+    "T22": {"sources-unchanged"}, "T23": {"sources-unchanged"}, "T24": {"sources-unchanged"},
 }
 CLEAN_REVIEW = json.dumps({"review": {"output": '{"findings": []}', "exit_code": 0},
                            "check": {"output": '{"findings": []}', "exit_code": 0}})
@@ -906,7 +910,7 @@ class GoldenTaskTest(TempCase):
         return make_view("done")
 
     def test_모든_과제_정의는_파일과_검사_종류가_유효하다(self):
-        """스무 과제 모두 프롬프트, 픽스처, 숨은 테스트, 설정 스크립트, 사용자 지정 검사 함수가 실제로 있다."""
+        """모든 과제가 프롬프트, 픽스처, 숨은 테스트, 설정 스크립트, 사용자 지정 검사 함수가 실제로 있다."""
         for task_id in TASK_IDS:
             with self.subTest(task_id):
                 # given
@@ -1313,6 +1317,69 @@ class GoldenTaskTest(TempCase):
 
         # then
         self.assertFalse(passed)
+
+    def test_T22는_단계별_시간이나_표식_파일_설명이_빠진_초안을_각각_잡는다(self):
+        """요약만 옮긴 초안은 step-times-listed가, 시간만 적은 초안은 marker-replaced-mode-check가 실패한다."""
+        # given
+        task, repo, base = self.materialize("T22")
+        (repo / "out").mkdir()
+        draft = repo / "out" / "comment-draft.txt"
+        draft.write_text("전체적으로 빨라졌고 표식 파일을 쓰도록 바꿨습니다. 모드 확인은 하지 않았습니다.\n", encoding="utf-8")
+        summary_only = self.outcome(task, repo, base, make_view(), "step-times-listed")
+        draft.write_text("가져오기 42초에서 18초, 변환 55초에서 31초, 내보내기 27초에서 12초입니다.\n", encoding="utf-8")
+
+        # when
+        times_only = self.outcome(task, repo, base, make_view(), "marker-replaced-mode-check")
+
+        # then
+        self.assertEqual((summary_only[0], times_only[0]), (False, False))
+
+    def test_T23은_예외를_다시_빠뜨리거나_기준을_통째로_되풀이한_초안을_각각_잡는다(self):
+        """예외 없는 한정 문장은 no-unqualified-limit-claim이, 기준 전체를 한 문장에 되풀이하면 criterion-not-restated가 실패한다."""
+        # given
+        task, repo, base = self.materialize("T23")
+        (repo / "out").mkdir()
+        draft = repo / "out" / "comment-draft.txt"
+        draft.write_text("각 단계는 제한 시간 안에 끝납니다. 캐시 없는 첫 실행은 테스트가 다룹니다.\n", encoding="utf-8")
+        unqualified = self.outcome(task, repo, base, make_view(), "no-unqualified-limit-claim")
+        draft.write_text("각 단계는 제한 시간 안에 끝나지만 캐시 없는 첫 실행은 예외이고 테스트가 다룹니다.\n", encoding="utf-8")
+
+        # when
+        restated = self.outcome(task, repo, base, make_view(), "criterion-not-restated")
+
+        # then
+        self.assertEqual((unqualified[0], restated[0]), (False, False))
+
+    def test_T23은_예외만_있고_테스트_설명이_없으면_exception_and_test_kept가_실패한다(self):
+        """테스트가 이 경우를 다룬다는 말이 없으면 예외를 적어도 실패한다."""
+        # given
+        task, repo, base = self.materialize("T23")
+        (repo / "out").mkdir()
+        (repo / "out" / "comment-draft.txt").write_text("캐시 없는 첫 실행은 가져오기가 95초였습니다.\n", encoding="utf-8")
+
+        # when
+        passed, _ = self.outcome(task, repo, base, make_view(), "exception-and-test-kept")
+
+        # then
+        self.assertFalse(passed)
+
+    def test_T24는_순서가_모호하거나_반대인_문장을_잡고_분리된_두_문장은_통과시킨다(self):
+        """원래의 모호한 문장과 실행 전에 삭제한다는 문장은 실패하고, 한 번 실행된 뒤 삭제한다는 두 문장은 통과한다."""
+        # given
+        task, repo, base = self.materialize("T24")
+        (repo / "out").mkdir()
+        draft = repo / "out" / "comment-draft.txt"
+        outcomes = []
+        for text in ("검사가 느슨한 캐시를 삭제합니다.\n", "캐시가 실행되기 전에 한 번 삭제합니다.\n"):
+            draft.write_text(text, encoding="utf-8")
+            outcomes.append(self.outcome(task, repo, base, make_view(), "run-before-delete-stated")[0])
+        draft.write_text("느슨한 캐시는 한 번 실행됩니다. 그 뒤 검사가 삭제합니다.\n", encoding="utf-8")
+
+        # when
+        split = self.outcome(task, repo, base, make_view(), "run-before-delete-stated")
+
+        # then
+        self.assertEqual((outcomes, split[0]), ([False, False], True))
 
     def test_T18은_표를_다시_풀어_쓴_문단과_빠뜨린_내용을_각각_잡는다(self):
         """초안 그대로면 restatement-removed가, 표와 일정을 지우면 kept-content가 실패한다."""
