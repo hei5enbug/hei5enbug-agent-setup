@@ -30,6 +30,7 @@ OPUS = "claude-opus-5-5"
 SONNET = "claude-sonnet-5-5"
 HAIKU = "claude-haiku-5-5"
 SCOUT = "demo-plugin:scout"
+WITHIN_CAP_ENV = {"CLAUDE_PLUGIN_OPTION_REVIEW_MODEL": "gpt-6.1-sol", "HEI5ENBUG_REVIEW_MODEL": "gpt-6.1-sol"}
 
 
 def claude_usage(i: int = 2, o: int = 10, read: int = 0, w1h: int = 0, w5m: int = 0) -> dict[str, Any]:
@@ -71,7 +72,7 @@ def init_message(path: str = "/tmp/work/plugins/abc1234/hei5enbug-agent-setup") 
 
 def status_line(role: str, exit_code: int, rollout: str | None = None) -> str:
     evidence = {"rollout": rollout} if rollout else {}
-    return json.dumps({"role": role, "runner": "codex", "model": "gpt-6-astra", "verified": True,
+    return json.dumps({"role": role, "runner": "codex", "model": "gpt-6.1-sol", "verified": True,
                        "evidence": evidence, "exit": exit_code})
 
 
@@ -670,7 +671,7 @@ class CampaignTest(unittest.TestCase):
             (tasks / "prompts" / f"{task_id}.txt").write_text("do it\n", encoding="utf-8")
         variants = self.root / "variants"
         variants.mkdir()
-        (variants / "baseline.json").write_text('{"name": "baseline", "ref": "HEAD"}', encoding="utf-8")
+        (variants / "baseline.json").write_text(json.dumps({"name": "baseline", "ref": "HEAD", "env": WITHIN_CAP_ENV}), encoding="utf-8")
         self.cfg = HarnessConfig(run_root=self.root / "runs", tasks_root=tasks, variants_root=variants)
         patches = [mock.patch.object(campaign.plugin_export, "export_plugin", return_value={"ref": "HEAD", "sha": "abc", "path": "/tmp/p"}),
                    mock.patch.object(campaign.environment, "capture_base", return_value={})]
@@ -1495,6 +1496,124 @@ class PluginExportTest(unittest.TestCase):
             self.assertFalse((Path(again["path"]) / "tests/test_e2e_eval_x.py").exists())
             self.assertEqual(again["excluded"], ["evals", "docs/ko/evals", "tests/test_e2e_eval_*.py"])
 
+    def make_repo(self, tmp: str, files: dict[str, str]) -> Path:
+        repo = Path(tmp) / "repo"
+        repo.mkdir(exist_ok=True)
+        git = ["git", "-c", "user.name=Demo Dev", "-c", "user.email=dev@example.com", "-c", "commit.gpgsign=false"]
+        subprocess.run([*git, "init", "-q", "-b", "main"], cwd=repo, check=True)
+        for name, text in files.items():
+            (repo / name).parent.mkdir(parents=True, exist_ok=True)
+            (repo / name).write_text(text, encoding="utf-8")
+        subprocess.run([*git, "add", "."], cwd=repo, check=True)
+        subprocess.run([*git, "commit", "-q", "-m", "init"], cwd=repo, check=True)
+        return repo
+
+    def test_상한_위_모델은_내보낸_폴더에서_상한_안_모델로_바뀌고_바뀐_모델과_수가_기록에_남는다(self):
+        """given 레지스트리, 에이전트, Codex 역할, 스킬, 지침에 fable, astra, terra가 적힌 ref일 때 when 내보내면 then 모두 opus와 sol로 바뀌고 기록에 바뀐 모델과 개수가 남는다."""
+        # given
+        files = {"config/model-registry.json": '{"a": "claude-fable-5-2", "b": "gpt-6-astra", "c": "gpt-6.1-terra", "d": "gpt-6.1-sol"}',
+                 "agents/x.md": "---\nmodel: claude-fable-5-2\n---\n", ".codex/agents/y.toml": 'model = "gpt-6-astra"\n',
+                 "skills/s/SKILL.md": "uses gpt-6-astra and claude-opus-5-5.", "instructions/i.md": "review with claude-fable-5-2.",
+                 "docs/note.md": "gpt-6-astra stays outside the transformed paths"}
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self.make_repo(tmp, files)
+
+            # when
+            exported = plugin_export.export_plugin(repo, Path(tmp) / "runs", "HEAD")
+            root = Path(exported["path"])
+            registry = (root / "config/model-registry.json").read_text(encoding="utf-8")
+            texts = [(root / name).read_text(encoding="utf-8") for name in ("agents/x.md", ".codex/agents/y.toml", "skills/s/SKILL.md", "instructions/i.md")]
+
+            # then
+            self.assertEqual(registry, '{"a": "claude-opus-5-5", "b": "gpt-6.1-sol", "c": "gpt-6.1-sol", "d": "gpt-6.1-sol"}')
+            self.assertEqual([plugin_export.MODEL_TOKEN.findall(text) for text in texts],
+                             [["claude-opus-5-5"], ["gpt-6.1-sol"], ["gpt-6.1-sol", "claude-opus-5-5"], ["claude-opus-5-5"]])
+            self.assertEqual(exported["cap_transform"]["replaced"], {"claude-fable-5-2": 3, "gpt-6-astra": 3, "gpt-6.1-terra": 1})
+            self.assertEqual(exported["cap_transform"]["count"], 7)
+            self.assertRegex(exported["content_digest"], r"^[0-9a-f]{64}$")
+            self.assertIn("gpt-6-astra", (root / "docs/note.md").read_text(encoding="utf-8"))
+
+    def test_예전_개정의_같은_계열_상한_위_모델도_바뀐다(self):
+        """given 예전 fable과 다른 astra 번호가 적힌 ref일 때 when 내보내면 then 같은 계열의 상한 안 모델로 바뀌고 바뀐 ID별 개수가 남는다."""
+        # given
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self.make_repo(tmp, {"config/model-registry.json": '["claude-fable-5-1", "gpt-7-astra", "gpt-6.1-terra"]'})
+
+            # when
+            exported = plugin_export.export_plugin(repo, Path(tmp) / "runs", "HEAD")
+
+            # then
+            text = (Path(exported["path"]) / "config/model-registry.json").read_text(encoding="utf-8")
+            self.assertEqual(text, '["claude-opus-5-5", "gpt-6.1-sol", "gpt-6.1-sol"]')
+            self.assertEqual(exported["cap_transform"]["replaced"], {"claude-fable-5-1": 1, "gpt-6.1-terra": 1, "gpt-7-astra": 1})
+
+    def test_바꾼_뒤에도_상한_밖_모델이_남으면_파일과_상한을_알리고_내보내기를_거부한다(self):
+        """given 바꿀 수 없는 상한 밖 모델 이름이 지침에 있는 ref일 때 when 내보내면 then 그 파일과 모델과 상한을 적은 오류가 나고 내보낸 폴더가 생기지 않는다."""
+        # given
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self.make_repo(tmp, {"instructions/i.md": "ask gpt-7-nova and gpt-6-astra", "a.txt": "x"})
+
+            # when / then
+            with self.assertRaises(plugin_export.ExportError) as caught:
+                plugin_export.export_plugin(repo, Path(tmp) / "runs", "HEAD")
+            message = str(caught.exception)
+            self.assertIn("instructions/i.md", message)
+            self.assertIn("gpt-7-nova", message)
+            self.assertIn("outside the model cap (claude-haiku-5-5, claude-opus-5-5", message)
+            self.assertFalse(list((Path(tmp) / "runs").glob("plugins/*/*")))
+
+    def test_두_변형은_같은_변환을_받고_같은_내용이면_같은_내용_지문이다(self):
+        """given 같은 파일을 가진 두 개정일 때 when 각각 내보내면 then 같은 모델이 같은 모델로 바뀌고 내용 지문이 같다."""
+        # given
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self.make_repo(tmp, {"agents/x.md": "model: claude-fable-5-2\n"})
+            first = plugin_export.export_plugin(repo, Path(tmp) / "one", "HEAD")
+            second = plugin_export.export_plugin(repo, Path(tmp) / "two", "HEAD")
+
+            # then
+            self.assertEqual(first["cap_transform"], second["cap_transform"])
+            self.assertEqual(first["content_digest"], second["content_digest"])
+
+    def test_변환이_없던_예전_내보내기는_다시_만든다(self):
+        """given cap_transform이 없는 예전 기록과 상한 밖 모델이 든 내보낸 폴더일 때 when 다시 내보내면 then 변환된 폴더로 다시 만든다."""
+        # given
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self.make_repo(tmp, {"agents/x.md": "model: claude-fable-5-2\n"})
+            first = plugin_export.export_plugin(repo, Path(tmp) / "runs", "HEAD")
+            record = Path(first["path"]).parent / "plugin-export.json"
+            record.write_text(json.dumps({key: value for key, value in first.items() if key not in ("cap_transform", "path")}), encoding="utf-8")
+            (Path(first["path"]) / "agents/x.md").write_text("model: claude-fable-5-2\n", encoding="utf-8")
+
+            # when
+            again = plugin_export.export_plugin(repo, Path(tmp) / "runs", "HEAD")
+
+            # then
+            self.assertEqual((Path(again["path"]) / "agents/x.md").read_text(encoding="utf-8"), "model: claude-opus-5-5\n")
+            self.assertEqual(again["cap_transform"]["count"], 1)
+
+    def test_변환_내용은_실행의_env_json과_캠페인_입력_지문에_반영된다(self):
+        """given 변환 기록과 내용 지문이 든 내보내기 정보일 때 when 실행 스냅샷과 입력 지문을 만들면 then env 스냅샷에 변환이 있고 내용 지문이 다르면 입력 지문도 다르다."""
+        # given
+        transform = {"replaced": {"gpt-6-astra": 2}, "count": 2}
+        export = {"ref": "HEAD", "sha": "abc", "path": "/tmp/p", "cap_transform": transform, "content_digest": "d1"}
+
+        # when
+        snapshot = environment.run_snapshot({}, export, [])
+
+        # then
+        self.assertEqual(snapshot["cap_transform"], transform)
+        with tempfile.TemporaryDirectory() as tmp:
+            variants = Path(tmp) / "variants"
+            variants.mkdir()
+            (variants / "baseline.json").write_text('{"name": "baseline", "ref": "HEAD"}', encoding="utf-8")
+            cfg = HarnessConfig(run_root=Path(tmp) / "runs", tasks_root=Path(tmp) / "tasks", fixtures_root=Path(tmp) / "fixtures",
+                                variants_root=variants)
+            with mock.patch.object(inputs.plugin_export, "resolve_ref", return_value="a" * 40):
+                one = inputs.compute_inputs(cfg, [], ["baseline"], {"baseline": export})
+                two = inputs.compute_inputs(cfg, [], ["baseline"], {"baseline": {**export, "content_digest": "d2"}})
+        self.assertEqual(one["parts"]["export:baseline"], "d1")
+        self.assertNotEqual(one["fingerprint"], two["fingerprint"])
+
     def test_없는_ref를_내보내려_하면_오류가_난다(self):
         """해석되지 않는 ref는 ExportError다."""
         # given
@@ -1538,7 +1657,7 @@ class RubricTest(unittest.TestCase):
 
         # then
         self.assertEqual((result["mean"], result["passed"], result["fallback"]), (4.5, True, False))
-        self.assertEqual(result["grader"], "gpt-6-astra")
+        self.assertEqual(result["grader"], "gpt-6.1-sol")
         self.assertIn("--effort", self.commands[0])
         self.assertIn("reviewer", self.commands[0])
 
@@ -2099,6 +2218,19 @@ class CampaignInputsTest(unittest.TestCase):
         self.assertEqual(recorded["variant_shas"], {"baseline": self.sha})
         self.assertRegex(recorded["fingerprint"], r"^[0-9a-f]{64}$")
         self.assertTrue({"variant:baseline", "task:T01", "hidden:T01", "custom:T01.py"} <= set(recorded["parts"]))
+
+    def test_변환된_내보내기의_내용이_바뀐_채_이어서_실행하면_거부한다(self):
+        """같은 sha여도 상한 변환 규칙이 바뀌어 내보낸 내용 지문이 달라졌으면 export:<변형>을 이유로 이어서 실행하지 않는다."""
+        # given
+        info = {"ref": "HEAD", "sha": "a", "path": "/tmp/p", "content_digest": "one"}
+        with mock.patch.object(campaign.plugin_export, "export_plugin", return_value=info):
+            self.run_once()
+        with mock.patch.object(campaign.plugin_export, "export_plugin", return_value={**info, "content_digest": "two"}):
+
+            # when / then
+            with self.assertRaises(command.ConfigError) as caught:
+                self.run_once()
+        self.assertIn("export:baseline", str(caught.exception))
 
     def test_변형_sha가_바뀐_채_이어서_실행하면_거부한다(self):
         """ref가 다른 커밋을 가리키게 된 캠페인은 ConfigError로 멈춘다."""

@@ -41,10 +41,17 @@ def tree_digest(root: Path) -> str:
     return _digest(chunks)
 
 
-def compute_inputs(cfg: HarnessConfig, task_ids: list[str], variant_names: list[str]) -> dict[str, Any]:
-    """Resolved variant shas plus a digest per variant, task, prompt, fixture tree, hidden-test folder, and custom check."""
+def compute_inputs(
+    cfg: HarnessConfig, task_ids: list[str], variant_names: list[str], exports: Mapping[str, Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Resolved variant shas plus a digest per variant, task, prompt, fixture tree, hidden-test folder, and custom check.
+
+    `exports` maps a variant name to its plugin export record; the digest of each transformed export is part of the inputs."""
     variant_shas = {name: variant_sha(cfg, name) for name in variant_names}
     parts: dict[str, str] = {f"variant:{name}": file_digest(cfg.variants_root / f"{name}.json") for name in variant_names}
+    for name, export in sorted((exports or {}).items()):
+        if export.get("content_digest"):
+            parts[f"export:{name}"] = str(export["content_digest"])
     for task_id in task_ids:
         parts[f"task:{task_id}"] = file_digest(cfg.tasks_root / f"{task_id}.json")
         parts.update(task_content_parts(cfg, task_id))

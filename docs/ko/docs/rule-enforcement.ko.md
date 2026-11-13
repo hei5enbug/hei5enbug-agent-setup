@@ -137,4 +137,9 @@
 | `tests/test_e2e_eval_harness.py` | 엔드투엔드 실행은 시험할 플러그인 리비전을 불러오고, 권한이나 플러그인 훅을 절대 우회하지 않으며, 사용량 한도 뒤에 이어서 실행하고, 모든 변형의 토큰, 비용, 결과를 같은 방식으로 기록한다. | `evals/e2e/README.md` |
 | `tests/test_e2e_eval_graders.py` | 골든 작업마다 채점기는 수정하지 않은 픽스처를 실패시키고 기준 해답을 통과시키며, 채점하는 저장소를 바꾸지 않는다. | `evals/e2e/README.md` (Graders) |
 | `tests/test_e2e_eval_orca_cleanup.py` | T21 작업은 가짜 Orca와 저장소 세 곳의 Git worktree를 심어 두고, 그 채점기는 수정하지 않은 실행을 실패시키고 기준 정리를 통과시키며, 푸시하지 않은 커밋이 있는 worktree나 다른 저장소의 worktree를 지우거나 티켓 폴더를 열어 두거나 원격 브랜치를 지운 정리는 실패시킨다. | `evals/e2e/README.md` (Golden tasks) |
+| `tests/test_e2e_eval_codex_host.py` | Codex 실행은 자기 `CODEX_HOME`에서 내보낸 플러그인 리비전만 불러오고, 사용자 로그인은 읽지 않고 링크만 하며, 표준 입력을 기다리지 않고, 모델·effort·시간·비용을 기록한다. 어떤 역할이든 `claude-opus-5-5`나 `gpt-6.1-sol`보다 강한 모델을 시작하는 캠페인은 거부하고, 그런 모델을 쓴 실행은 상한 위반으로 표시한다. | `evals/e2e/README.md` (Hosts) |
+| `tests/test_e2e_eval_verdict.py` | 변경은 변경 전에 통과한 사례가 변경 후 실패하지 않고, 호스트별 시간·비용 격차가 1회 먼저·5회 규칙으로 늘지 않을 때만 두 호스트 비교를 통과한다. 개선 주장은 두 호스트에서 번갈아 돈 5회로만 받아들인다. | `evals/e2e/README.md` (Comparison rule) |
+| `tests/test_e2e_eval_records.py` | 측정 기록은 실행마다 호스트, 역할별 모델과 effort, 검사, 시간, 비용, 판정을 담고, 로컬 절대 경로나 상한을 넘는 모델은 담지 않는다. | `evals/e2e/README.md` (Records) |
+| `tests/test_e2e_eval_record_cli.py` | `cli.py record`는 판정이 비교 규칙과 같은 기록을 쓰고, 빠진 값은 측정 안 됨으로 알리며, 커밋된 기록은 모두 검증을 통과한다. | `evals/e2e/README.md` (Records) |
+| `tests/test_evaluation_rules.py` | `AGENTS.md`는 플러그인 변경을 측정 기록으로만 채택하거나 제외하고, `instructions/model-evaluation.md`는 시간, 비용, 한 가지만 바꾸기, 호스트 격차, 남겨 둔 사례 규칙을 유지한다. | `AGENTS.md`, `instructions/model-evaluation.md` |
 | `tests/test_korean_writing_eval.py` | 한국어 글쓰기 평가는 글쓰기 규칙을 실행 시점에 `instructions/shared-text.md`에서 읽고, 필수 사실이 있는 고정된 작업 다섯 개를 유지하며, 채점자에게 작성자의 모델 이름을 보이지 않고, 시드 검사에서 빠진 사실과 번역투를 잡고, 승자에게 모든 채점자의 과반이 필요하도록 결정 규칙을 적용한다. | `evals/korean-writing/README.md` |

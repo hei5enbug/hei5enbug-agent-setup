@@ -5,7 +5,8 @@
 
 이 하네스는 플러그인을 하나의 코딩 에이전트 하네스로 보고 전체를 측정한다. 실행마다 플러그인 리비전 하나를
 불러온 `claude -p`를 시작하고, 버려도 되는 가상 저장소에서 현실적인 개발 작업을 맡긴 뒤 결과를 채점한다.
-두 변형이 같은 작업을 같은 조건에서 실행하므로 결과를 비교할 수 있다.
+두 변형이 같은 작업을 같은 조건에서 실행하므로 결과를 비교할 수 있다. 실행은 에이전트 호스트로 Claude Code나
+Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두에서 판정한다.
 
 이 하네스는 실제 에이전트 세션을 실행하고 실제 모델 사용량을 쓴다. 저장소 README의 개발 검사에는 들어가지
 않으며, 개발 검사에 들어가는 것은 이 하네스의 단위 테스트뿐이다.
@@ -59,6 +60,52 @@
 하네스는 에이전트가 `AskUserQuestion`으로 묻는 질문에 답할 수 없다. 승인 도구는 호출을 통과시키고, 실행은 질문에
 답을 받지 못한 채 끝난다. 그래서 작업 프롬프트는 결과를 바꿀 결정을 열어 두지 않는다.
 
+### Codex 호스트
+
+`--hosts claude,codex`는 같은 내보낸 리비전, 같은 픽스처 사본, 같은 프롬프트, 같은 제한, 같은 채점기와 지표로 작업을
+두 호스트에서 각각 실행한다. 기본값은 `claude`만이다. Codex 실행은 `gpt-6.1-sol`을 `high`로 `codex exec`에 시작하며
+설정은 다음과 같다.
+
+- 실행마다 `<run>/codex-home/`에 자기만의 `CODEX_HOME`을 두므로 사용자 자신의 Codex에 설치된 플러그인이나 설정이
+  들어오지 않는다. `auth.json`은 사용자 자격 증명 파일로 가는 심볼릭 링크이고, 하네스는 그 파일을 읽거나 복사하거나
+  출력하지 않는다. `HARNESS_CODEX_AUTH_HOME`은 그 파일이 있는 다른 폴더를 가리킨다.
+- 플러그인은 내보낸 리비전에서만 불러온다. `codex plugin marketplace add <export>`가 내보낸 폴더를 로컬 마켓플레이스로
+  등록하고, `codex plugin add hei5enbug-agent-setup@<marketplace>`가 그 `CODEX_HOME`에 설치한다. 설정 명령과 결과는
+  `codex-setup.json`에 있다.
+- 하네스가 리비전을 직접 내보내고 검증하므로 `--dangerously-bypass-hook-trust`를 준다. 실행이 플러그인 훅의 신뢰를
+  묻느라 멈추지 않는다. Codex 훅은 그대로 실행된다.
+- 표준 입력은 `/dev/null`이고 `ZDOTDIR`은 빈 폴더다. 그래서 Codex가 시작하는 셸은 사용자의 zsh 시작 파일을 읽지 않고
+  실행이 정한 `PATH`를 유지한다. 하네스는 여기서도 `ORCA_*` 변수를 지운다.
+- 대신 답하는 승인 도구가 없다. Claude Code는 권한 질문 도구에 묻지만, Codex는 `workspace-write` 샌드박스 안에서
+  `approval_policy`를 `never`로 두고 실행하므로 샌드박스 밖 요청은 답을 기다리지 않고 실패한다. 플러그인 자체의 가드
+  훅은 그대로 실행된다.
+- Codex에는 지출 한도 플래그가 없으므로 작업의 경과 시간 제한만 적용한다.
+- 세션의 모델과 effort는 명령줄이 아니라 rollout의 `turn_context` 이벤트에서 읽고, `env.json`에 Codex CLI 버전과 함께
+  기록한다.
+
+Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있고, 실행 id는 `<task>-<variant>-codex-r<k>`다.
+요약은 이를 `<variant> [codex]`로 묶는다.
+
+### 모델 상한
+
+측정에서는 어떤 역할도 `claude-opus-5-5`나 `gpt-6.1-sol`보다 강한 모델을 시작하면 안 된다. 허용 모델은
+`harness/config.py`의 `MODEL_CAP`이고, `harness/records.py`도 같은 집합으로 기록을 검증한다. `run`은 캠페인이 시작되기
+전에, `--dry-run`에서도, 캠페인을 거부하고 메시지에 역할과 모델을 적는다. 변형이 정한 메인 모델, 변형이 정한 플러그인 모델
+옵션, 변형이 `review_model`처럼 상한 밖의 기본값을 그대로 둔 플러그인 모델 옵션, 루브릭 채점기가 대상이다.
+`review_model`을 기본값으로 두는 변형은 `env`에서 `CLAUDE_PLUGIN_OPTION_REVIEW_MODEL`과 `HEI5ENBUG_REVIEW_MODEL`을
+상한 안의 모델로 정한다. 실행 뒤에는 Claude 스트림, Claude 대화 기록, role runner 상태 줄, Codex rollout을 훑는다.
+실행 안에서 답한 상한 밖 모델이 있으면 `success`를 false로 두고 `cap_violation`으로 기록한다.
+
+플러그인의 고정 경로, 예를 들어 레지스트리의 설계와 대체 경로는 상한 위 모델을 이름으로 적고, 위 검사는 이를 보지
+못한다. 그래서 내보낸 모든 플러그인 개정은, 변형과 상관없이 똑같이, 상한 변환을 거친다. 내보낸 사본에서만
+모든 `claude-fable-*` ID(`claude-fable-5-2` 등)는 `claude-opus-5-5`로, 모든 `gpt-*-astra`와 `gpt-*-terra` ID(`gpt-6-astra`,
+`gpt-6.1-terra` 등)는 `gpt-6.1-sol`로 바뀐다. 대상은
+`config/model-registry.json`, `agents/`, `.codex/`, `skills/`, `instructions/`의 텍스트 파일이다(git의 개정은 그대로
+둔다). 하네스는 그 파일을 다시 훑어 상한 밖 모델이 남아 있으면 캠페인을 거부하고, 메시지에 파일과 상한을 적는다.
+변환은 `harness/plugin_export.py`의 `apply_cap_transform`이다. 실행마다 `env.json`에 `cap_transform`(대체 규칙, 바뀐
+모델 ID, 그 개수)이 남고, `plugin-export.json`에는 변환된 내보내기의 다이제스트와 함께 들어가며, 그 다이제스트는 캠페인
+입력 지문의 일부라서 변환이 다른 내보내기로 이어서 실행하면 멈춘다. 변환 없이 이전 하네스가 내보낸 개정은 다시 내보낸다.
+
 ## 명령
 
 모든 명령은 저장소 루트에서 실행한다. 기본 run root는 `~/.local/state/hei5enbug-agent-setup/harness-eval/runs`이고,
@@ -69,6 +116,7 @@
 | 계획과 정확한 명령 보기 | `python3 evals/e2e/harness/cli.py run --campaign <name> --dry-run` |
 | 캠페인 실행 또는 재개 | `python3 evals/e2e/harness/cli.py run --campaign <name> --variants baseline --reps 3` |
 | 일부 작업만 실행 | `--tasks T01,T03` 추가 |
+| 두 호스트에서 실행 | `--hosts claude,codex` 추가 |
 | 끝난 실행 다시 실행 | `--only-rerun T03-baseline-r1,T03-baseline-r2` 추가 |
 | 채점기 수정 후 다시 채점 | `python3 evals/e2e/harness/cli.py regrade --campaign <name> [--run-ids ...]` |
 | 기록을 다시 복사한 뒤 채점 | `regrade`에 `--recollect` 추가 |
@@ -77,6 +125,7 @@
 | 표 출력 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> [--out file.md]` |
 | 두 변형 비교 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | 리비전 내보내기만 하기 | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
+| 변경을 판정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
 
 `--parallel`은 동시에 실행할 수를 정한다(기본 3). 변형이 여럿이면 작업과 반복마다 순서를 번갈아(ABAB, 다음은
 BABA) 시간대 영향이 고르게 퍼지게 한다.
@@ -103,7 +152,7 @@ BABA) 시간대 영향이 고르게 퍼지게 한다.
   campaign.json  state.json
   work/<run id>/repo/                      에이전트 작업 폴더, 실행 뒤에도 남김
   rubric/<opaque id>/                      이름으로 변형을 알 수 없는 루브릭 채점 폴더
-  results/<task>/<variant>/rep<k>/
+  results/<task>/<variant>/rep<k>/         Codex 실행은 results/<task>/<variant>/codex/rep<k>/
     run.json  prompt.txt  command.json  settings.json  mcp.json  env.json
     stream.jsonl  stderr.txt  approvals.jsonl
     transcripts/main.jsonl  transcripts/subagents/  transcripts/runner/  codex/  assignments/
@@ -111,7 +160,8 @@ BABA) 시간대 영향이 고르게 퍼지게 한다.
 ```
 
 `env.json`에는 Claude Code와 Codex CLI 버전, 설치된 플러그인 목록, Claude와 Codex 설정 파일의 SHA-256 해시(내용은
-남기지 않음), 지운 변수의 이름, 하네스 리비전을 기록한다.
+남기지 않음), 지운 변수의 이름, 내보내기의 상한 변환, 하네스 리비전을 기록한다. Codex 실행은 rollout이 보여 주는 CLI 버전, 모델, effort를
+더한다.
 
 ## 지표
 
@@ -142,15 +192,16 @@ BABA) 시간대 영향이 고르게 퍼지게 한다.
 
 루브릭 채점은 스크립트로 판단할 수 없는 것만 맡는다. T01은 설계 품질, T10은 답변 품질이다. 지시에는 작업
 프롬프트, 루브릭, 산출물이 들어가고 변형 이름, 리비전, 모델 이름은 들어가지 않는다. 이름으로 변형을 알 수 없는
-`<campaign>/rubric/<opaque id>/` 폴더에서 `python3 scripts/role_runner.py reviewer --model gpt-6-astra --effort xhigh --timeout 1500`로
-실행한다. 러너가 3이나 4로 끝나면
+`<campaign>/rubric/<opaque id>/` 폴더에서
+`python3 scripts/role_runner.py reviewer --model gpt-6.1-sol --effort high --timeout 1500`로 실행한다. 러너가 3이나 4로 끝나면
 `claude-opus-5-5`가 대신 채점하고, `rubric.json`에 대체 사실을 기록한다. 채점기가 1800초 뒤에도 실행 중이면 하네스가
 그 프로세스와 그것이 시작한 모든 프로세스를 멈추고, 그 실행의 채점은 `grade_error`로 실패한다.
 
 글쓰기 작업(T13~T20)은 완성한 글을 `scripts/text_review.py`로 채점한다. 이 스크립트는 내보낸 플러그인이 아니라
 하네스가 있는 저장소의 것을 쓰고, 스크립트 기본값과 상관없이 `--reviews 1`로 검토자 하나에 기대어
-채점한다. 필수 검사 `text-review-clean`은 종료 코드 0일 때만 통과하고, 1이면 발견사항을
-detail에 담아 실패한다. 다른 종료 코드는 검토가 결론에 이르지 못했다는 뜻이므로 검사가 예외를 던지고, 그 실행은
+채점한다. 필수 검사 `text-review-clean`은 종료 코드 0이면 통과한다. 1이면 채점기가 같은 글을 한 번 더 검토하고,
+두 검토가 모두 발견사항을 돌려줄 때만 검사가 실패한다. detail과 `grade.json`에는 두 검토의 발견사항을 모두 남기고,
+`record`가 이를 기록에 복사한다. 다른 종료 코드는 검토가 결론에 이르지 못했다는 뜻이므로 검사가 예외를 던지고, 그 실행은
 `grade_error`를 기록하며 `regrade`로 다시 시도한다. 참고용 검사 `ran-text-review`는 에이전트가
 `text_review.py review`를 실행했는지 기록한다. 공용 코드는 `tasks/custom/text_review_shared.py`에 있고, 단위 테스트는
 `E2E_TEXT_REVIEW_STUB`이 가리키는 JSON 파일로 스크립트를 대신한다. 사용자 정의 검사는 예외에 `no_verdict = True`를
@@ -194,6 +245,47 @@ detail에 담아 실패한다. 다른 종료 코드는 검토가 결론에 이�
 | T20 | notes-cli | 최종 보고 | 테스트를 더한 작은 변경 후 보고 |
 | T21 | notes-cli | 작업 종료 시 Orca 정리 | 티켓의 설정 한 줄 변경, 가짜 `orca`와 저장소 세 곳의 Git worktree를 심어 둔 상태 |
 
+## 두 호스트에서 변경 비교
+
+플러그인 변경은 그 변경 하나만 다른 이전 변형과 이후 변형으로, 그 변경의 이슈가 정한 사례에서, 두 호스트 모두에서
+측정한다. 규칙의 정확한 단계는 `harness/verdict.py`에 있고, 요약은 다음과 같다.
+
+- 필수 검사를 모두 통과하면 실행이 통과다. 시간은 그 실행의 `wall_seconds`에 보관한 이전 시도의 `wall_seconds`를 더한
+  값이고, 비용은 보관한 이전 시도를 포함한 실행 전체의 정가 지출이다. 요약이 계산하는 Claude 지출에 Codex 추정값을 더한
+  값이다. 어떤 기록에도 기간이 없는 이전 시도가 있으면 시간은 `not measured`다.
+- 품질: 모든 이후 실행이 두 호스트에서 통과하고, 이전에 통과한 사례가 어느 호스트에서도 실패하지 않는다. 품질이
+  실패하면 시간과 비용 격차와 상관없이 그 사례는 실패다.
+- 격차: 한 사례와 한 측정값에서 큰 호스트 값을 작은 호스트 값으로 나눈 값이다. 먼저 변형과 호스트마다 사례를 1회
+  실행한다. 이후 격차가 이전 격차 이하이면 통과한다. 격차가 커지면 판정은 `repeat`이고, 변형과 호스트마다 번갈아 4회를
+  더 실행해 반복 번호로 짝을 짓는다. 그러면 이후 격차 다섯 개의 중앙값이 이전 격차 다섯 개 가운데 가장 큰 값 이하일 때
+  통과한다. 측정값마다 자신의 첫 쌍으로 갈래를 정하므로, 한 측정값을 위한 반복이 첫 쌍에서 통과한 다른 측정값을 바꾸지
+  않는다. 한 호스트나 한 변형에 실행이 없는 반복은 짝이 덜 찬 것이라 `not measured`다.
+- 첫 이전 격차가 2를 넘으면 그 측정값은 그 사례의 통과 조건이 아니다. 사례는 `investigate` 줄을 출력하고, 그 격차를
+  이미 다루는 열린 이슈가 없으면 이슈 하나가 그 격차를 조사한다.
+- 이전 실행이 없는 사례나 호스트는 품질만 판정하고, 그 이후 실행이 이후 변경의 기준선이 된다.
+- 시간이나 비용 값이 없으면 `not measured`이고 통과가 아니다. 이전 실행이 없는 사례나 첫 이전 격차가 2를 넘는 사례도
+  마찬가지다.
+- 개선 주장(`--claim`): 시간이나 비용을 낮추려고 채택하는 변경은 주장하는 측정값을 밝힌다. 사례와 호스트마다 번갈아
+  5회 실행해서, 모든 이후 실행이 통과하고, 주장한 측정값마다 이후 중앙값이 이전 최저값보다 낮고, 주장하지 않은 측정값마다
+  이후 중앙값이 이전 최고값을 넘지 않아야 한다. 먼저 한 쌍을 실행하고, 실패하면 두 번째 쌍을 실행하며, 두 번째도 실패하면
+  주장을 기각한다. 기각된 주장은 그 사례와 전체 판정을 `reject`로 만들고, 아직 결정에 이르지 않은 주장은 둘을
+  `continue to five`나 `second pair`로 두며 `pass`로 두지 않는다.
+
+`record`는 캠페인에서 두 변형의 실행을 두 호스트 모두 읽어, 요청한 작업마다(`--tasks`가 없으면 캠페인이 실행한 작업마다)
+사례 하나를 만든다. 끝나지 않았거나 지표나 채점이 없거나 채점 오류가 있는 실행은 `not measured`로 그 사례에 남고, 실행이
+하나도 없는 작업도 남는다. 역할마다 모델과 effort는 실행 자신의 호스트 기록에서 읽는다. Claude 스트림과 명령줄, 메인과
+모든 자식 세션의 Codex rollout(역할은 `session_meta`에서 읽고, 같은 역할의 두 번째 세션은 별개 호출로 남긴다), role runner
+상태 줄, 루브릭 결과가 그것이다.
+기록 어디에도 없는 effort는 `not measured`로 적는다. 그다음 사례를 판정하고 기록을 검증해 `records/<이슈 번호>.json`에
+쓴다. 사례마다 한 줄, `investigate` 줄, 반복이 필요한 사례, 주장 판정을 출력한다. 기록에는 측정값과 모델, effort, 이슈
+번호 같은 실행 사실, 가상 픽스처 이름만 들어간다. 검증은 절대 로컬 경로, 상한 밖 모델, 빠진 필드를 거부한다.
+`tests/test_e2e_eval_record_cli.py`가 커밋된 모든 기록을 검증한다.
+
+### 기록
+
+| 이슈 | 사례 | 판정 |
+|---|---|---|
+
 ## 알려진 한계
 
 - Bash 요청은 항상 허용하므로, 캠페인은 에이전트가 어떤 셸 명령이든 실행해도 되는 컴퓨터에서 돌려야 한다. 승인
@@ -209,3 +301,6 @@ detail에 담아 실패한다. 다른 종료 코드는 검토가 결론에 이�
 - 모든 실행이 사용자의 Claude와 Codex 계정을 함께 쓰므로 사용량 한도와 서비스 부하가 모든 변형에 영향을 준다.
 - 캠페인을 멈추는 것은 에이전트 자신의 Claude 세션이 낸 사용량 한도뿐이다. 실행 안에서 생긴 Codex 할당량 실패는
   에이전트 결과의 일부이고, role runner 종료 코드로 나타난다.
+- Codex 실행에는 지출 한도가 없다. `codex exec`에 예산 플래그가 없으므로, 폭주한 Codex 실행은 작업의 경과 시간
+  제한에서만 끝난다.
+- Claude 서브에이전트의 effort는 하네스가 복사하는 기록에 없으므로 기록에는 `not measured`로 나온다.

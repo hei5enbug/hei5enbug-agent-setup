@@ -1,1 +1,1 @@
-{"name": "baseline", "ref": "0fb4687", "settings": {}, "env": {}, "extra_args": []}
+{"name": "baseline", "ref": "0fb4687", "settings": {}, "env": {"CLAUDE_PLUGIN_OPTION_REVIEW_MODEL": "gpt-6.1-sol", "HEI5ENBUG_REVIEW_MODEL": "gpt-6.1-sol"}, "extra_args": []}

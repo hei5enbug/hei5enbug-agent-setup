@@ -19,8 +19,18 @@ Distinguish elapsed wall time, parallel-worker duration, and partial token cover
 costs or assume an unknown quota is sufficient.
 
 Before reporting or acting on a measured speedup, regression, cost, or eval score, including one outside a model
-trial, name what bounds it, confirm the run did the intended work, and, when variance matters, alternate the
-compared sides over at least five runs each within an authorized budget; otherwise report the number as unconfirmed.
+trial, name what bounds it, confirm the run did the intended work, and, for a claim that a change is faster or
+cheaper, alternate the compared sides over at least five runs each within an authorized budget; otherwise report the
+number as unconfirmed.
+
+When an evaluation compares methods, models, hosts, or parallel layouts: time is the wall time until the accepted,
+integrated result, never the time to produce a draft; cost is the spend of every attempt, including failed attempts,
+rework, and review, divided by the solved cases; the compared sides differ in one thing only; a time or cost
+difference between two hosts is decided by one run per side and host first and five alternating runs only for a case
+whose host gap grew, while the five-run rule stays for a claim that a change is faster or cheaper. Keep a confirmed,
+reproducible harness failure as a deterministic test where a script can decide it, and otherwise as a retained
+evaluation case; a later comparison runs the smallest subset of retained cases that its change can affect, never the
+whole set by default.
 
 Expand only for an unresolved decision that more cases can answer and within an explicitly authorized larger
 budget. Otherwise report inconclusive results and request a concrete extension only when needed. A budget

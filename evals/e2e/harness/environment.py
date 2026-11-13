@@ -76,4 +76,5 @@ def capture_base(claude_bin: str, repo_root: Path, run: Runner = run_command, en
 
 
 def run_snapshot(base: Mapping[str, Any], plugin: Mapping[str, Any], removed_env: list[str]) -> dict[str, Any]:
-    return {**base, "removed_env_names": removed_env, "plugin_ref": plugin.get("ref"), "plugin_sha": plugin.get("sha")}
+    return {**base, "removed_env_names": removed_env, "plugin_ref": plugin.get("ref"), "plugin_sha": plugin.get("sha"),
+            "cap_transform": plugin.get("cap_transform")}

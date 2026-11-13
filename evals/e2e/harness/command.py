@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from .config import (
-    AGENT_EFFORT, AGENT_MODEL, APPROVER_SERVER, APPROVER_TOOL, FORBIDDEN_ARGS, HARNESS_DIR, INSTALLED_PLUGIN_KEY,
-    RESERVED_ARGS, HarnessConfig,
+    AGENT_EFFORT, APPROVER_SERVER, APPROVER_TOOL, FORBIDDEN_ARGS, HARNESS_DIR, HOST_CLAUDE, HOSTS, INSTALLED_PLUGIN_KEY,
+    MAIN_MODELS, RESERVED_ARGS, HarnessConfig,
 )
 
 APPROVER_SCRIPT = HARNESS_DIR / "approval_mcp.py"
@@ -44,8 +44,26 @@ def validate_variant(variant: Any, name: str = "variant") -> dict[str, Any]:
     banned = sorted(item for item in extra if is_reserved_arg(item))
     if banned:
         raise ConfigError(f"{name}: extra_args may not contain {banned}")
+    if variant["name"].endswith("-codex"):
+        raise ConfigError(f"{name}: a variant name may not end with '-codex', which marks a Codex run id")
+    models = variant.get("models", {})
+    if not isinstance(models, dict) or set(models) - set(HOSTS) or not all(isinstance(v, str) for v in models.values()):
+        raise ConfigError(f"{name}: 'models' must map a host ({', '.join(HOSTS)}) to a model name")
     return {"name": variant["name"], "ref": variant["ref"], "settings": dict(variant.get("settings", {})),
-            "env": {str(k): str(v) for k, v in variant.get("env", {}).items()}, "extra_args": extra}
+            "env": {str(k): str(v) for k, v in variant.get("env", {}).items()}, "extra_args": extra,
+            "models": dict(models)}
+
+
+def validate_hosts(hosts: list[str]) -> list[str]:
+    unknown = [host for host in hosts if host not in HOSTS]
+    if unknown or not hosts:
+        raise ConfigError(f"--hosts takes {', '.join(HOSTS)}; got {', '.join(unknown) or 'nothing'}")
+    return list(dict.fromkeys(hosts))
+
+
+def main_model(variant: dict[str, Any], host: str) -> str:
+    """The main session model of a host: the variant's own choice, else the host's pinned default."""
+    return str((variant.get("models") or {}).get(host) or MAIN_MODELS[host])
 
 
 def load_task(tasks_root: Path, task_id: str) -> dict[str, Any]:
@@ -107,7 +125,7 @@ def build_command(
 
     The prompt follows `--`, so a prompt that starts with a dash, such as `--version ...`, is not read as an option."""
     return [
-        cfg.claude_bin, "-p", "--model", AGENT_MODEL, "--effort", AGENT_EFFORT,
+        cfg.claude_bin, "-p", "--model", main_model(variant, HOST_CLAUDE), "--effort", AGENT_EFFORT,
         "--output-format", "stream-json", "--verbose", "--include-hook-events",
         "--plugin-dir", plugin_dir,
         "--settings", str(run_dir / "settings.json"),

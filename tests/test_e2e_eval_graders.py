@@ -1209,6 +1209,104 @@ class GoldenTaskTest(TempCase):
         self.assertIn("중복 링크", failed["text-review-clean"])
         self.assertFalse(result["success"])
 
+    def test_첫_검토에서_발견사항이_나와도_두_번째_검토에서_없으면_text_review_clean이_통과하고_두_검토의_발견사항이_남는다(self):
+        """첫 검토는 종료 코드 1과 발견사항, 같은 글의 두 번째 검토는 종료 코드 0이면 통과하고 data에 두 검토가 모두 들어간다."""
+        # given
+        task, repo, base = self.referenced("T15")
+        self.stub(json.dumps({
+            "review": {"output": json.dumps({"findings": [{"sentence": "중복 링크"}]}), "exit_code": 1},
+            "review_again": {"output": '{"findings": []}', "exit_code": 0}}))
+
+        # when
+        result = self.grade_task(task, repo, base, self.good_view("T15"))
+
+        # then
+        found = next(check for check in result["checks"] if check["id"] == "text-review-clean")
+        self.assertTrue(found["passed"])
+        self.assertEqual(found["data"]["reviews"], [{"findings": [{"sentence": "중복 링크"}]}, {"findings": []}])
+        self.assertTrue(result["success"])
+
+    def test_두_검토가_모두_발견사항을_내면_text_review_clean이_실패하고_두_검토의_발견사항이_남는다(self):
+        """첫 검토와 두 번째 검토가 모두 종료 코드 1이면 실패하고 data에 두 검토의 발견사항이 따로 들어간다."""
+        # given
+        task, repo, base = self.referenced("T15")
+        self.stub(json.dumps({
+            "review": {"output": json.dumps({"findings": [{"sentence": "중복 링크"}]}), "exit_code": 1},
+            "review_again": {"output": json.dumps({"findings": [{"sentence": "빈 문장"}]}), "exit_code": 1}}))
+
+        # when
+        result = self.grade_task(task, repo, base, self.good_view("T15"))
+
+        # then
+        found = next(check for check in result["checks"] if check["id"] == "text-review-clean")
+        self.assertFalse(found["passed"])
+        self.assertEqual(found["data"]["reviews"], [{"findings": [{"sentence": "중복 링크"}]}, {"findings": [{"sentence": "빈 문장"}]}])
+        self.assertIn("중복 링크", found["detail"])
+        self.assertIn("빈 문장", found["detail"])
+        self.assertFalse(result["success"])
+
+    def test_두_번째_검토가_결론을_못_내면_통과도_실패도_아닌_채점_오류가_난다(self):
+        """첫 검토가 발견사항을 내고 두 번째 검토가 종료 코드 3이면 no_verdict 예외가 나간다."""
+        # given
+        task, repo, base = self.referenced("T15")
+        self.stub(json.dumps({
+            "review": {"output": json.dumps({"findings": [{"sentence": "중복 링크"}]}), "exit_code": 1},
+            "review_again": {"output": "", "exit_code": 3}}))
+
+        # when / then
+        with self.assertRaises(RuntimeError) as caught:
+            self.grade_task(task, repo, base, self.good_view("T15"))
+        self.assertTrue(caught.exception.no_verdict)
+
+    def test_첫_검토에서_발견사항이_나와도_두_번째_검토에서_없으면_text_review_clean이_통과하고_두_검토의_발견사항이_남는다(self):
+        """첫 검토는 종료 코드 1과 발견사항, 같은 글의 두 번째 검토는 종료 코드 0이면 통과하고 data에 두 검토가 모두 들어간다."""
+        # given
+        task, repo, base = self.referenced("T15")
+        self.stub(json.dumps({
+            "review": {"output": json.dumps({"findings": [{"sentence": "중복 링크"}]}), "exit_code": 1},
+            "review_again": {"output": '{"findings": []}', "exit_code": 0}}))
+
+        # when
+        result = self.grade_task(task, repo, base, self.good_view("T15"))
+
+        # then
+        found = next(check for check in result["checks"] if check["id"] == "text-review-clean")
+        self.assertTrue(found["passed"])
+        self.assertEqual(found["data"]["reviews"], [{"findings": [{"sentence": "중복 링크"}]}, {"findings": []}])
+        self.assertTrue(result["success"])
+
+    def test_두_검토가_모두_발견사항을_내면_text_review_clean이_실패하고_두_검토의_발견사항이_남는다(self):
+        """첫 검토와 두 번째 검토가 모두 종료 코드 1이면 실패하고 data에 두 검토의 발견사항이 따로 들어간다."""
+        # given
+        task, repo, base = self.referenced("T15")
+        self.stub(json.dumps({
+            "review": {"output": json.dumps({"findings": [{"sentence": "중복 링크"}]}), "exit_code": 1},
+            "review_again": {"output": json.dumps({"findings": [{"sentence": "빈 문장"}]}), "exit_code": 1}}))
+
+        # when
+        result = self.grade_task(task, repo, base, self.good_view("T15"))
+
+        # then
+        found = next(check for check in result["checks"] if check["id"] == "text-review-clean")
+        self.assertFalse(found["passed"])
+        self.assertEqual(found["data"]["reviews"], [{"findings": [{"sentence": "중복 링크"}]}, {"findings": [{"sentence": "빈 문장"}]}])
+        self.assertIn("중복 링크", found["detail"])
+        self.assertIn("빈 문장", found["detail"])
+        self.assertFalse(result["success"])
+
+    def test_두_번째_검토가_결론을_못_내면_통과도_실패도_아닌_채점_오류가_난다(self):
+        """첫 검토가 발견사항을 내고 두 번째 검토가 종료 코드 3이면 no_verdict 예외가 나간다."""
+        # given
+        task, repo, base = self.referenced("T15")
+        self.stub(json.dumps({
+            "review": {"output": json.dumps({"findings": [{"sentence": "중복 링크"}]}), "exit_code": 1},
+            "review_again": {"output": "", "exit_code": 3}}))
+
+        # when / then
+        with self.assertRaises(RuntimeError) as caught:
+            self.grade_task(task, repo, base, self.good_view("T15"))
+        self.assertTrue(caught.exception.no_verdict)
+
     def test_글을_쓰지_않으면_검토를_부르지_않고_실패한다(self):
         """쓴 글이 없으면 검토가 결론을 못 내는 상태여도 예외 없이 text-review-clean이 실패한다."""
         # given

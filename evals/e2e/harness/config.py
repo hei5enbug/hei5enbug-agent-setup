@@ -14,8 +14,15 @@ FIXTURES_ROOT = E2E_ROOT / "fixtures"
 VARIANTS_ROOT = E2E_ROOT / "variants"
 DEFAULT_RUN_ROOT = Path.home() / ".local/state/hei5enbug-agent-setup/harness-eval/runs"
 
+HOST_CLAUDE = "claude"
+HOST_CODEX = "codex"
+HOSTS = (HOST_CLAUDE, HOST_CODEX)
 AGENT_MODEL = "claude-opus-5-5"
 AGENT_EFFORT = "high"
+CODEX_MODEL = "gpt-6.1-sol"
+CODEX_EFFORT = "high"
+MAIN_MODELS = {HOST_CLAUDE: AGENT_MODEL, HOST_CODEX: CODEX_MODEL}
+MODEL_CAP = frozenset({"claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "gpt-6.1-sol", "gpt-5.6-luna"})
 PLUGIN_NAME = "hei5enbug-agent-setup"
 INSTALLED_PLUGIN_KEY = "hei5enbug-agent-setup@hei5enbug"
 INLINE_PLUGIN_SOURCE = "hei5enbug-agent-setup@inline"
@@ -46,8 +53,8 @@ RESERVED_ARGS = frozenset({
     "--output-format", "-p", "--print", "--permission-prompts", "--strict-mcp-config", "--",
 })
 
-RUBRIC_MODEL = "gpt-6-astra"
-RUBRIC_EFFORT = "xhigh"
+RUBRIC_MODEL = "gpt-6.1-sol"
+RUBRIC_EFFORT = "high"
 RUBRIC_FALLBACK_MODEL = "claude-opus-5-5"
 RUBRIC_FALLBACK_EFFORT = "high"
 RUBRIC_RETRY_EXITS = frozenset({3, 4})
@@ -63,6 +70,7 @@ class HarnessConfig:
     variants_root: Path = VARIANTS_ROOT
     repo_root: Path = REPO_ROOT
     claude_bin: str = "claude"
+    codex_bin: str = "codex"
     sigint_grace: float = SIGINT_GRACE_SECONDS
     sigterm_grace: float = SIGTERM_GRACE_SECONDS
     extra_env: dict[str, str] = field(default_factory=dict)

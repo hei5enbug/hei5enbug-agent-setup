@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import math
 from collections import Counter, defaultdict
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
-from .config import FINISHED_STATUSES
+from .config import FINISHED_STATUSES, HOST_CLAUDE
 from .matrix import campaign_dir, read_json
 
 MISSING = "-"
@@ -54,18 +55,43 @@ def attempts_spend(run_json: Path, rep: Any) -> tuple[float, float]:
     return sum(item[0] for item in spent), sum(item[1] for item in spent)
 
 
+def attempt_wall(folder: Path) -> float | None:
+    """Wall seconds of one archived attempt: its metrics, else its run record, else its start and end; None when unknown."""
+    for path in ("metrics.json", "run.json"):
+        value = (read_json(folder / path, None) or {}).get("wall_seconds")
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0:
+            return float(value)
+    run = read_json(folder / "run.json", None) or {}
+    try:
+        return (datetime.fromisoformat(str(run["ended_at"])) - datetime.fromisoformat(str(run["started_at"]))).total_seconds()
+    except (KeyError, ValueError):
+        return None
+
+
+def attempts_wall(run_json: Path, rep: Any) -> float | None:
+    """Wall seconds of every archived earlier attempt of one run; None when any attempt's duration is unknown."""
+    folder = run_json.parent.parent / "attempts" / f"rep{rep}"
+    walls = [attempt_wall(item) for item in sorted(folder.glob("*")) if item.is_dir()]
+    return None if None in walls else sum(walls)
+
+
 def load_results(run_root: Path, campaign: str) -> list[dict[str, Any]]:
     """Every run's metrics (with its status), from results/<task>/<variant>/rep<k>/metrics.json or run.json.
 
-    Each row also carries `spend_claude` and `spend_codex`: the final attempt plus every archived attempt."""
+    Each row also carries `spend_claude` and `spend_codex`: the final attempt plus every archived attempt, and `wall_total`: the
+    final attempt's wall seconds plus those of every archived attempt, None when any of them is unknown."""
     rows: list[dict[str, Any]] = []
-    for run_json in sorted(campaign_dir(run_root, campaign).glob("results/*/*/rep*/run.json")):
+    base = campaign_dir(run_root, campaign)
+    for run_json in sorted([*base.glob("results/*/*/rep*/run.json"), *base.glob("results/*/*/*/rep*/run.json")]):
         run = read_json(run_json, {})
         metrics = read_json(run_json.with_name("metrics.json"), None)
         final, archived = run_spend(metrics), attempts_spend(run_json, run.get("rep"))
+        earlier, last = attempts_wall(run_json, run.get("rep")), number((metrics or {}).get("wall_seconds"))
         rows.append({**(metrics or {}), "run_id": run.get("run_id"), "task": run.get("task"), "variant": run.get("variant"),
                      "rep": run.get("rep"), "status": run.get("status"), "has_metrics": metrics is not None,
-                     "spend_claude": final[0] + archived[0], "spend_codex": final[1] + archived[1]})
+                     "host": run.get("host") or HOST_CLAUDE,
+                     "spend_claude": final[0] + archived[0], "spend_codex": final[1] + archived[1],
+                     "wall_total": None if earlier is None or last is None else earlier + last})
     return rows
 
 
@@ -206,11 +232,17 @@ def delta(a_rows: list[dict[str, Any]], b_rows: list[dict[str, Any]], getter: Ca
     return f"{b_value - a_value:+.{digits}f}"
 
 
+def host_label(row: dict[str, Any]) -> str:
+    """A Claude Code run keeps its variant name; another host's runs form their own group, `<variant> [<host>]`."""
+    host = row.get("host") or HOST_CLAUDE
+    return str(row.get("variant")) if host == HOST_CLAUDE else f"{row.get('variant')} [{host}]"
+
+
 def summarize(run_root: Path, campaign: str, compare_pair: tuple[str, str] | None = None) -> str:
     rows = load_results(run_root, campaign)
     lines = [f"## Campaign {campaign}", "", f"Runs: {len(rows)} ({status_counts(rows)}). "
              "n is the number of graded runs behind every statistic; percentiles use the nearest-rank method.", ""]
-    variants = group_by(rows, "variant")
+    variants = group_by([{**row, "variant": host_label(row)} for row in rows], "variant")
     for name, items in variants.items():
         lines += variant_section(name, items)
     if compare_pair:

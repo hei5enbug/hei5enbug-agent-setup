@@ -29,6 +29,11 @@
   ten, and states each criterion as a pass or fail per case, never as a rate over a large sample. An evaluation that
   fixes the model, effort, or prompt of a skill or agent may add cases that separate difficulty levels. Deterministic
   tests that cost no model tokens have no such limit. Write issue acceptance criteria under the same rule.
+- A change to a rule, skill, agent, hook, or route of this plugin is adopted or rejected only on a record under
+  `evals/e2e/records/` that `evals/e2e/harness/cli.py record` wrote from a before and an after variant differing only
+  by that change, run on both Claude Code and Codex and judged by the comparison rule in `evals/e2e/README.md`. A
+  candidate with no record stays open as undecided: never close or drop it, and never call an existing rule
+  sufficient, on a judgment alone.
 - Keep on an always-loaded surface, meaning a skill description, a `SKILL.md` body, or a session instruction file,
   only the rules that every run of that surface needs. Move a rule needed only under a condition to a reference
   file, and leave one entry line on the surface in the form "Before <action>, read <reference>." Reading that

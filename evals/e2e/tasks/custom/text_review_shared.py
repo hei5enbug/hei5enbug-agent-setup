@@ -3,6 +3,9 @@
 `review` and `check` exit 0 without findings and 1 with findings. Any other exit means no verdict, so the check
 raises NoVerdict, which the harness records as grade_error and `regrade` can retry. A test replaces the script
 through a JSON file named by E2E_TEXT_REVIEW_STUB: {"review": {"output": "...", "exit_code": 0}, "check": {...}}.
+When the first review returns findings, the same text is reviewed once more and the check fails only when both
+reviews return findings. The optional stub entry "review_again" answers that second review; without it "review"
+answers both.
 """
 
 from __future__ import annotations
@@ -28,10 +31,11 @@ def repository_root(ctx) -> Path:
     return Path(ctx.tasks_root).resolve().parents[2]
 
 
-def run_script(ctx, command: str, args: list[str]) -> tuple[int, str]:
+def run_script(ctx, command: str, args: list[str], again: bool = False) -> tuple[int, str]:
     stub = os.environ.get(STUB_ENV)
     if stub:
-        entry = json.loads(Path(stub).read_text(encoding="utf-8"))[command]
+        seeded = json.loads(Path(stub).read_text(encoding="utf-8"))
+        entry = seeded[f"{command}_again"] if again and f"{command}_again" in seeded else seeded[command]
         return int(entry["exit_code"]), str(entry["output"])
     script = repository_root(ctx) / "scripts" / "text_review.py"
     try:
@@ -91,7 +95,16 @@ def review(ctx, kind: str, draft: Path | None, rules: str | None = None, sources
     if no_ticket_keys:
         args.append("--no-ticket-keys")
     code, output = run_script(ctx, "review", args)
-    return verdict("review", code, output)
+    first = verdict("review", code, output)
+    if first[0]:
+        return first
+    code, output = run_script(ctx, "review", args, again=True)
+    second = verdict("review", code, output)
+    reviews = [{"findings": first[2].get("findings", [])}, {"findings": second[2].get("findings", [])}]
+    if second[0]:
+        return True, f"no findings on the second review; first review: {first[1]}", {"findings": [], "reviews": reviews}
+    return False, f"first review: {first[1]}; second review: {second[1]}", {"findings": second[2].get("findings", []),
+                                                                         "reviews": reviews}
 
 
 def check(ctx, kind: str, draft: Path | None) -> tuple[bool, str, dict]:
