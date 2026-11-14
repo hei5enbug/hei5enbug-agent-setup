@@ -10,8 +10,8 @@ from typing import Any
 
 from . import caps, codex_calls, codex_host, collect, command, environment, metrics, rubric, transcript, usage
 from .config import (
-    FINISHED_STATUSES, HOST_CODEX, STATUS_COMPLETE, STATUS_INFRA_FAILED, STATUS_INTERRUPTED, STATUS_TIMED_OUT,
-    STATUS_USAGE_LIMITED, HarnessConfig,
+    APPROVAL_GUARD_OFF_ENV, FINISHED_STATUSES, HOST_CODEX, STATUS_COMPLETE, STATUS_INFRA_FAILED, STATUS_INTERRUPTED,
+    STATUS_TIMED_OUT, STATUS_USAGE_LIMITED, HarnessConfig,
 )
 from .matrix import RunSpec, prior_attempts, read_json, write_json
 from .process import ProcessResult, run_agent
@@ -212,7 +212,7 @@ def execute_run(
     agent_tmp.mkdir(parents=True, exist_ok=True)
     overrides = {
         "TMPDIR": str(agent_tmp), **command.task_environment(task, spec.repo, spec.work_dir),
-        **cfg.extra_env, **variant["env"], **(codex_host.host_env(spec.result_dir) if codex else {}),
+        **cfg.extra_env, **APPROVAL_GUARD_OFF_ENV, **variant["env"], **(codex_host.host_env(spec.result_dir) if codex else {}),
     }
     env, removed = environment.child_environment(os.environ, overrides)
     write_json(spec.result_dir / "env.json", environment.run_snapshot(base_snapshot, plugin, removed))

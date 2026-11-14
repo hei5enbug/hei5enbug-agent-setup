@@ -1056,7 +1056,9 @@ if mode == "sigint_result":
     signal.signal(signal.SIGINT, answer_and_exit)
 with open(out, "w") as handle:
     json.dump({{"argv": sys.argv[1:], "env": sorted(os.environ), "tmpdir": os.environ.get("TMPDIR"),
-                "tmpdir_exists": os.path.isdir(os.environ.get("TMPDIR", ""))}}, handle)
+                "tmpdir_exists": os.path.isdir(os.environ.get("TMPDIR", "")),
+                "guard": [os.environ.get("CLAUDE_PLUGIN_OPTION_APPROVAL_GUARD"),
+                          os.environ.get("HEI5ENBUG_APPROVAL_GUARD")]}}, handle)
 child_file = os.environ.get("FAKE_CHILD")
 if child_file:
     import subprocess
@@ -1299,6 +1301,18 @@ class ProcessAndRunTest(unittest.TestCase):
         env_record = json.loads((self.spec.result_dir / "env.json").read_text(encoding="utf-8"))
         self.assertIn("ORCA_TERMINAL_HANDLE", env_record["removed_env_names"])
         self.assertTrue(json.loads((self.spec.result_dir / "metrics.json").read_text(encoding="utf-8"))["success"])
+
+    def test_Claude_실행의_에이전트_환경은_승인_가드를_두_변수_모두_false로_끈다(self):
+        """플러그인의 승인 가드는 측정 실행에서 꺼져 있어야 하므로 변형이 정하지 않아도 두 호스트용 변수가 false다."""
+        # given
+        task = {**self.task, "limits": {"wall_seconds": 30, "max_budget_usd": 2}}
+
+        # when
+        runner.execute_run(self.spec, task, self.variant, self.plugin, self.cfg, {})
+
+        # then
+        seen = json.loads(self.out.read_text(encoding="utf-8"))
+        self.assertEqual(seen["guard"], ["false", "false"])
 
     def test_에이전트_프로세스의_TMPDIR은_실행_폴더_안의_tmp이고_시작할_때_이미_있다(self):
         """에이전트가 돌리는 검토자의 Codex 기록이 실행 폴더 밖에 남으면 비용이 집계되지 않으므로, TMPDIR을 work_dir 아래로 준다."""

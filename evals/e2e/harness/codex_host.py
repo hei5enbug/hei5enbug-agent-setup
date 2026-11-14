@@ -26,8 +26,9 @@ DEFAULT_MARKETPLACE = "hei5enbug"
 SETUP_TIMEOUT_SECONDS = 180.0
 SETUP_TAIL = 400
 APPROVAL_HANDLING = (
-    "codex exec runs with approval_policy never in a workspace-write sandbox without network; "
-    "no approver stands in, and the plugin's own guard hooks still run"
+    "codex exec runs with approval_policy never and the danger-full-access sandbox, the same as the owner's Codex "
+    "setting, so the plugin's Claude routes reach the network and the Claude config folder; no approver stands in, "
+    "and the plugin's approval guard is off on both hosts in measurement runs"
 )
 
 
@@ -49,7 +50,7 @@ def build_codex_command(cfg: HarnessConfig, variant: dict[str, Any], prompt: str
     """The agent command. The prompt follows `--`, so a prompt that starts with a dash is not read as an option."""
     return [
         cfg.codex_bin, "exec", "--json", "-m", main_model(variant, HOST_CODEX), "-c", f'model_reasoning_effort="{CODEX_EFFORT}"',
-        "--dangerously-bypass-hook-trust", "-s", "workspace-write", "-C", str(repo), "--", prompt,
+        "--dangerously-bypass-hook-trust", "-s", "danger-full-access", "-C", str(repo), "--", prompt,
     ]
 
 

@@ -56,6 +56,8 @@ message names the path and the folder. A relative path starts in the agent's wor
 denied, with its decision to `approvals.jsonl`. The number of lines is the approval-prompt count, a friction
 metric, so a denied request still counts. An `mcp.json` without `EVAL_RUN_FOLDER` keeps the older allow-all
 behavior. A plugin hook that returns `ask` reaches this tool; the pilot confirmed this with a forced `git clean -f`.
+Measurement runs turn the plugin's approval guard off by default (see "Codex host"), so this happens only in a variant
+that turns it on.
 Calls that the permission mode or the plugin's guard allow without a prompt never reach it, so they are not counted.
 
 The harness cannot answer a question that the agent asks with `AskUserQuestion`. The approver lets the call through,
@@ -78,9 +80,15 @@ prompt, the same limits, and the same graders and metrics. `claude` alone is the
   not stop to ask for trust of the plugin's hooks. Codex hooks still run.
 - Stdin is `/dev/null`, and `ZDOTDIR` is an empty folder, so the shell Codex starts reads none of the user's zsh
   startup files and keeps the `PATH` the run set. The harness removes the `ORCA_*` variables here too.
-- No approver stands in. Claude Code asks the permission-prompt tool, but Codex runs with `approval_policy` set to
-  `never` inside a `workspace-write` sandbox, so a request outside the sandbox fails instead of waiting for an answer.
-  The plugin's own guard hooks still run.
+- `codex exec` runs with `approval_policy` set to `never` and the `danger-full-access` sandbox, the same as the owner's
+  own Codex setting. The plugin's Claude routes (`role_runner.py` starting `claude -p`) need the network and the
+  Claude config folder, and the `workspace-write` sandbox has neither, so every Codex-to-Claude delegation failed
+  there with "Not logged in".
+- No approver stands in on Codex. Claude Code asks the permission-prompt tool when the plugin's approval guard answers
+  "ask", but Codex has no such tool, so the same command would be blocked. Measurement runs therefore turn the guard
+  off on both hosts: the harness sets `CLAUDE_PLUGIN_OPTION_APPROVAL_GUARD` and `HEI5ENBUG_APPROVAL_GUARD` to `false`
+  in the agent environment of every run. A variant sets either variable in its `env` to override the default. The
+  plugin's other hooks still run.
 - Codex has no spend flag, so only the wall-time limit of the task is enforced.
 - The model and effort of the session are read from the `turn_context` event of its rollout, not from the command
   line, and `env.json` records them with the Codex CLI version.

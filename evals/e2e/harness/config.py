@@ -30,6 +30,7 @@ MOD_MARKER = "hei5enbug-agent-setup mod: role pinning active"
 APPROVER_SERVER = "eval_approver"
 APPROVER_TOOL = "mcp__eval_approver__approve"
 REMOVED_ENV_PREFIX = "ORCA_"
+APPROVAL_GUARD_OFF_ENV = {"CLAUDE_PLUGIN_OPTION_APPROVAL_GUARD": "false", "HEI5ENBUG_APPROVAL_GUARD": "false"}
 
 DEFAULT_PARALLEL = 3
 SIGINT_GRACE_SECONDS = 20.0

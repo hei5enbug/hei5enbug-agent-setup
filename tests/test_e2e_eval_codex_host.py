@@ -19,7 +19,7 @@ from unittest import mock
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "evals/e2e"))
 
-from harness import caps, cli, codex_host, command, matrix, rubric, runner  # noqa: E402
+from harness import caps, cli, codex_calls, codex_host, collect, command, matrix, metrics, rubric, runner  # noqa: E402
 from harness.config import HarnessConfig  # noqa: E402
 
 WITHIN_CAP_ENV = {"CLAUDE_PLUGIN_OPTION_REVIEW_MODEL": "gpt-6.1-sol", "HEI5ENBUG_REVIEW_MODEL": "gpt-6.1-sol"}
@@ -36,6 +36,7 @@ with open(log, "a", encoding="utf-8") as stream:
         "HOME": os.environ.get("HOME"), "stdin_is_dev_null": stat.S_ISCHR(stdin.st_mode) and stdin.st_rdev == dev_null.st_rdev,
         "has_orca": any(name.startswith("ORCA_") for name in os.environ), "cwd": os.getcwd(),
         "zdotdir_entries": sorted(os.listdir(os.environ["ZDOTDIR"])) if os.environ.get("ZDOTDIR") else None,
+        "guard": [os.environ.get("CLAUDE_PLUGIN_OPTION_APPROVAL_GUARD"), os.environ.get("HEI5ENBUG_APPROVAL_GUARD")],
     }}) + "\\n")
 if sys.argv[1:2] == ["exec"]:
     day = os.path.join(os.environ["CODEX_HOME"], "sessions", "2026", "11", "13")
@@ -315,7 +316,7 @@ class FakeCodexRunTest(unittest.TestCase):
         self.assertEqual(exec_call["argv"][:7], ["exec", "--json", "-m", "gpt-6.1-sol", "-c", 'model_reasoning_effort="high"',
                                                  "--dangerously-bypass-hook-trust"])
         self.assertEqual(exec_call["argv"][-2:], ["--", "--version 옵션을 붙여줘"])
-        self.assertIn("workspace-write", exec_call["argv"])
+        self.assertEqual(exec_call["argv"][exec_call["argv"].index("-s") + 1], "danger-full-access")
         for call in (market, add, exec_call):
             self.assertEqual(call["CODEX_HOME"], str(home))
             self.assertEqual(call["ZDOTDIR"], str(self.spec.result_dir / "zdotdir"))
@@ -325,6 +326,27 @@ class FakeCodexRunTest(unittest.TestCase):
         self.assertEqual(exec_call["cwd"], str(self.spec.repo.resolve()))
         self.assertEqual(run["status"], "complete")
         self.assertEqual(run["host"], "codex")
+
+    def test_Codex_실행의_에이전트_환경은_승인_가드를_두_변수_모두_false로_끈다(self):
+        """Codex에는 ask를 대신 답하는 승인 도구가 없으므로 측정 실행은 변형이 정하지 않아도 가드를 끈 환경으로 시작한다."""
+        # given / when
+        self.execute()
+
+        # then
+        exec_call = self.calls()[-1]
+        self.assertEqual(exec_call["guard"], ["false", "false"])
+
+    def test_변형의_env가_정한_가드_값은_하네스_기본값보다_우선한다(self):
+        """변형이 HEI5ENBUG_APPROVAL_GUARD를 다른 값으로 정하면 그 값이 에이전트 환경에 들어가고 다른 변수는 기본값을 지킨다."""
+        # given
+        self.variant = command.validate_variant({"name": "baseline", "ref": "HEAD",
+                                                 "env": {**WITHIN_CAP_ENV, "HEI5ENBUG_APPROVAL_GUARD": "true"}})
+
+        # when
+        self.execute()
+
+        # then
+        self.assertEqual(self.calls()[-1]["guard"], ["false", "true"])
 
     def test_사용자의_Codex_설정_파일은_실행_폴더로_복사되지_않는다(self):
         """실행용 CODEX_HOME에는 자격 증명 링크와 이 실행이 만든 것만 있고 사용자의 config.toml은 없다."""
@@ -362,6 +384,91 @@ class FakeCodexRunTest(unittest.TestCase):
 
         # then
         self.assertEqual(os.readlink(self.spec.result_dir / "codex-home" / "auth.json"), str(other / "auth.json"))
+
+
+ROLE_RUNNER_REVIEW = ('python3 /tmp/plugin/scripts/role_runner.py review --assignment /tmp/work/a.md '
+                      '--result /tmp/work/r.md')
+SCRIPT_HEADER = {"type": "input_text", "text": "Script completed\nWall time 1.3 seconds\nOutput:\n"}
+DEMO_STATUS = {"role": None, "capability": "review", "runner": "claude", "model": "claude-opus-5-5",
+               "evidence": {"transcript": "/tmp/demo/r.jsonl"}}
+
+
+def status_line(exit_code: int) -> str:
+    return json.dumps({**DEMO_STATUS, "exit": exit_code})
+
+
+def chunk_item(**fields: Any) -> dict[str, str]:
+    return {"type": "input_text", "text": json.dumps({"chunk_id": "1", "wall_time_seconds": 1.0, **fields})}
+
+
+def exec_pair(call_id: str, script: str, items: list[dict[str, str]]) -> list[dict[str, Any]]:
+    call = {"type": "custom_tool_call", "name": "exec", "call_id": call_id, "input": script}
+    done = {"type": "custom_tool_call_output", "call_id": call_id, "output": [SCRIPT_HEADER, *items]}
+    return [{"type": "response_item", "payload": call}, {"type": "response_item", "payload": done}]
+
+
+def run_command(command_text: str) -> str:
+    return f'text(await tools.exec_command({{cmd:"{command_text}",max_output_tokens:2000}}));'
+
+
+class CodexExecOutputTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.cfg = HarnessConfig(run_root=self.root / "runs", tasks_root=self.root / "tasks")
+        self.spec = matrix.make_spec(self.cfg.run_root, "c", "T08", "baseline", 1, "codex")
+        self.run = {"run_id": self.spec.run_id, "task": "T08", "variant": "baseline", "rep": 1, "host": "codex"}
+
+    def calls_of(self, exec_events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return codex_calls.rollout_tool_calls(exec_events, "main", "rollout-main.jsonl")
+
+    def test_종료_코드가_있는_exec_command_조각의_출력과_종료_코드가_Bash_호출과_위임_exit에_들어온다(self):
+        """exec_command 조각의 output은 이스케이프가 풀린 채 result_text가 되고, exit_code 3이 오류 표시와 위임의 exit 3이 된다."""
+        # given
+        output = f"role_runner: reviewer failed\n{status_line(3)}\n"
+        events = exec_pair("c1", run_command(ROLE_RUNNER_REVIEW), [chunk_item(exit_code=3, output=output)])
+        write_rollout(self.spec.result_dir / "codex", "rollout-main.jsonl", [*rollout_rows(), *events])
+
+        # when
+        view = codex_host.load_records(self.spec, self.run, "gpt-6.1-sol")["view"]
+
+        # then
+        bash = [call for call in view["tool_calls"] if call["name"] == "Bash"]
+        self.assertEqual(len(bash), 1)
+        self.assertIn(status_line(3), bash[0]["result_text"])
+        self.assertTrue(bash[0]["is_error"])
+        self.assertEqual(metrics.runner_calls(view), {"review": {"3": 1}})
+
+    def test_나중_exec의_write_stdin이_가져온_상태_줄이_먼저_시작한_호출에_붙고_러너_기록_경로가_보인다(self):
+        """세션 101이 나중에 낸 출력은 그 세션을 시작한 호출에 붙고, 다른 명령의 출력은 그대로이며, write_stdin은 호출을 만들지 않는다."""
+        # given
+        first = exec_pair("c1", run_command(ROLE_RUNNER_REVIEW), [chunk_item(session_id=101, output="")])
+        script = run_command("ls /tmp/work") + '\ntext(await tools.write_stdin({session_id:101,chars:"",yield_time_ms:30000}));'
+        later = exec_pair("c2", script, [chunk_item(exit_code=0, output="a.md\n"),
+                                         chunk_item(exit_code=0, output=f"{status_line(0)}\n")])
+
+        # when
+        calls = self.calls_of([*first, *later])
+
+        # then
+        self.assertEqual([call["input"]["command"] for call in calls], [ROLE_RUNNER_REVIEW, "ls /tmp/work"])
+        self.assertIn(status_line(0), calls[0]["result_text"])
+        self.assertFalse(calls[0]["is_error"])
+        self.assertEqual(calls[1]["result_text"], "a.md\n")
+        self.assertEqual([path for _, path in collect.runner_transcript_paths(calls)], [Path("/tmp/demo/r.jsonl")])
+
+    def test_출력_항목_수가_문장_수와_다르면_전체_출력을_첫_명령에_붙이던_방식을_유지한다(self):
+        """exec 두 문장에 항목이 하나뿐이면 항목을 문장에 짝지어 추정하지 않고 헤더까지 합친 출력을 첫 호출에 둔다."""
+        # given
+        script = run_command("ls /tmp/work") + "\n" + run_command("cat /tmp/work/a.md")
+        events = exec_pair("c1", script, [{"type": "input_text", "text": "only-one"}])
+
+        # when
+        calls = self.calls_of(events)
+
+        # then
+        self.assertEqual([call["result_text"] for call in calls], [SCRIPT_HEADER["text"] + "\nonly-one", ""])
 
 
 class CodexRecordsTest(unittest.TestCase):

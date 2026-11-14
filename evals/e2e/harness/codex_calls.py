@@ -11,6 +11,9 @@ OUTPUT_TYPES = frozenset({"function_call_output", "local_shell_call_output", "cu
 SHELL_WRAPPERS = frozenset({"bash", "sh", "zsh"})
 JS_COMMAND = re.compile(r"""\bcmd\s*:\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|`((?:[^`\\]|\\.)*)`)""", re.S)
 JS_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f", "v": "\v", "0": "\0"}
+TOOL_STATEMENT = re.compile(r"\btools\.(\w+)\s*\(")
+SESSION_ARGUMENT = re.compile(r"\bsession_id\s*:\s*(\d+)")
+SCRIPT_HEADER = "Script "
 ESCAPE = re.compile(r"\\(?:u\{([0-9a-fA-F]+)\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|(.))", re.S)
 
 
@@ -109,12 +112,110 @@ def _call(call_id: str, name: str, tool_input: dict[str, Any], result: str, is_e
             "parent": None, "source": source}
 
 
+def tool_statements(source: str) -> list[tuple[str, str | None]]:
+    """(tool name, session id its arguments name) of every `tools.<name>(` statement of a script, in source order."""
+    matches = list(TOOL_STATEMENT.finditer(source))
+    ends = [match.start() for match in matches[1:]] + [len(source)]
+    statements: list[tuple[str, str | None]] = []
+    for match, end in zip(matches, ends):
+        session = SESSION_ARGUMENT.search(source, match.end(), end)
+        statements.append((match.group(1), session.group(1) if session else None))
+    return statements
+
+
+def exec_items(output: Any) -> list[str] | None:
+    """The texts of an exec output after its `Script ...` header item, or None when the output has no such header."""
+    if not isinstance(output, list):
+        return None
+    texts = [str(item.get("text", "")) for item in output if isinstance(item, dict)]
+    return texts[1:] if texts and texts[0].startswith(SCRIPT_HEADER) else None
+
+
+def chunk_of(text: str) -> dict[str, Any]:
+    """The JSON object an exec_command or write_stdin item holds, or {} when the item is plain text."""
+    try:
+        body = json.loads(text)
+    except ValueError:
+        return {}
+    return body if isinstance(body, dict) else {}
+
+
+def chunk_output(text: str, chunk: dict[str, Any]) -> str:
+    return chunk["output"] if isinstance(chunk.get("output"), str) else text
+
+
+def chunk_code(chunk: dict[str, Any]) -> int | None:
+    code = chunk.get("exit_code")
+    return code if isinstance(code, int) and not isinstance(code, bool) else None
+
+
+def _extend(calls: list[dict[str, Any]], position: int, output: str, code: int | None) -> list[dict[str, Any]]:
+    call = calls[position]
+    updated = {**call, "result_text": call["result_text"] + output, "is_error": bool(call["is_error"] or code)}
+    return [*calls[:position], updated, *calls[position + 1:]]
+
+
+def _polled(
+    calls: list[dict[str, Any]], pending: dict[str, int], session: str | None, text: str,
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Append the output of a write_stdin poll to the call that session started; a chunk with an exit code ends it."""
+    chunk = chunk_of(text)
+    position = pending.get(session or "")
+    if position is None:
+        return calls, pending
+    code = chunk_code(chunk)
+    rest = pending if code is None else {key: value for key, value in pending.items() if key != session}
+    return _extend(calls, position, chunk_output(text, chunk), code), rest
+
+
+def _started(
+    calls: list[dict[str, Any]], pending: dict[str, int], call_id: str, index: int, command: str, text: str, source: str,
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Add the Bash call of one exec_command statement; a chunk with a session id and no exit code stays pending."""
+    chunk = chunk_of(text)
+    code = chunk_code(chunk)
+    call = _call(f"codex:{call_id}:{index}", "Bash", {"command": command}, chunk_output(text, chunk), bool(code), source)
+    waiting = code is None and chunk.get("session_id") is not None
+    rest = {**pending, str(chunk["session_id"]): len(calls)} if waiting else pending
+    return [*calls, call], rest
+
+
+def _exec_calls(
+    payload: dict[str, Any], call_id: str, output: Any, source: str, calls: list[dict[str, Any]], pending: dict[str, int],
+) -> tuple[list[dict[str, Any]], dict[str, int]] | None:
+    """The calls and pending sessions after an exec script whose output items pair with its statements one to one;
+    None when they do not pair."""
+    statements, items, commands = tool_statements(payload["input"]), exec_items(output), commands_of(payload)
+    if items is None or len(items) != len(statements) or sum(name == "exec_command" for name, _ in statements) != len(commands):
+        return None
+    index = 0
+    for (name, session), text in zip(statements, items):
+        if name == "exec_command":
+            calls, pending = _started(calls, pending, call_id, index, commands[index], text, source)
+            index += 1
+        elif name == "write_stdin":
+            calls, pending = _polled(calls, pending, session, text)
+    return calls, pending
+
+
+def _joined_calls(
+    payload: dict[str, Any], call_id: str, text: str, code: int | None, source: str, calls: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """One call per command; the whole output goes to the first of them."""
+    added = [_call(f"codex:{call_id}:{index}", "Bash", {"command": command}, text if index == 0 else "",
+                   bool(code) and index == 0, source) for index, command in enumerate(commands_of(payload))]
+    return [*calls, *added]
+
+
 def rollout_tool_calls(events: list[dict[str, Any]], role: str, rollout_name: str) -> list[dict[str, Any]]:
-    """Bash and apply_patch calls of one rollout. A script with several commands gives one call per command; the
-    script's whole output is attached to the first of them."""
+    """Bash and apply_patch calls of one rollout. A script with several commands gives one call per command. When the
+    output items of an exec script pair one to one with its `tools.<name>(` statements, each command gets its own
+    result and a later `write_stdin` poll extends the call of its session; otherwise the script's whole output is
+    attached to the first of its commands."""
     outputs = _outputs(events)
     source = f"codex:{role or 'unknown'}"
     calls: list[dict[str, Any]] = []
+    pending: dict[str, int] = {}
     for event in events:
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
         if event.get("type") != "response_item" or payload.get("type") not in CALL_TYPES:
@@ -124,11 +225,15 @@ def rollout_tool_calls(events: list[dict[str, Any]], role: str, rollout_name: st
         text, code = output_text(done.get("output")), exit_code(done.get("output"))
         patch = _patch_text(payload)
         if patch is not None:
-            calls.append(_call(f"codex:{call_id}", "apply_patch", {"patch": patch}, text, bool(code), source))
+            calls = [*calls, _call(f"codex:{call_id}", "apply_patch", {"patch": patch}, text, bool(code), source)]
             continue
-        for index, command in enumerate(commands_of(payload)):
-            calls.append(_call(f"codex:{call_id}:{index}", "Bash", {"command": command}, text if index == 0 else "",
-                               bool(code) and index == 0, source))
+        paired = None
+        if payload.get("type") == "custom_tool_call" and payload.get("name") == "exec" and isinstance(payload.get("input"), str):
+            paired = _exec_calls(payload, call_id, done.get("output"), source, calls, pending)
+        if paired is not None:
+            calls, pending = paired
+        else:
+            calls = _joined_calls(payload, call_id, text, code, source, calls)
     return calls
 
 
