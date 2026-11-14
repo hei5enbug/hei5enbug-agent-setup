@@ -318,6 +318,7 @@ record.
 
 | Issue | Cases | Verdict |
 |---|---|---|
+| [#92](records/92.json) | T02, T08, and T20 before and after; T05, T07, T09, and T12 after, for the item 6 rules | Fail: T08 on Claude Code and T20 on Codex. The owner adopted the change on 2026-11-14 because no plugin file these cases load changed; #105, #86, and #106 follow up. |
 
 ## Known limits
 
