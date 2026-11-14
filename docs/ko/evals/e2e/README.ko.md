@@ -74,8 +74,13 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
   `codex-setup.json`에 있다.
 - 하네스가 리비전을 직접 내보내고 검증하므로 `--dangerously-bypass-hook-trust`를 준다. 실행이 플러그인 훅의 신뢰를
   묻느라 멈추지 않는다. Codex 훅은 그대로 실행된다.
-- 표준 입력은 `/dev/null`이고 `ZDOTDIR`은 빈 폴더다. 그래서 Codex가 시작하는 셸은 사용자의 zsh 시작 파일을 읽지 않고
-  실행이 정한 `PATH`를 유지한다. 하네스는 여기서도 `ORCA_*` 변수를 지운다.
+- 설치 뒤 하네스가 `codex app-server`로 그 실행의 `CODEX_HOME`에서 내보낸 플러그인의 훅을 신뢰 처리한다. 그래야
+  신뢰 우회 플래그 없이 도는 role runner 자신의 Codex 자식이 훅을 검증할 수 있다. 신뢰되지 않은 채 남는 훅이 있으면
+  설정이 실패하고 실행은 `infra_failed`가 된다. `codex-setup.json`에 신뢰한 훅 키가 기록된다.
+- 표준 입력은 `/dev/null`이고 `ZDOTDIR`에는 사용자의 zsh 시작 파일이 없다. 그래서 Codex가 시작하는 셸은 그 파일들을
+  읽지 않는다. 이 폴더의 유일한 파일은 실행의 `PATH`를 export하는 `.zprofile`이다. macOS에서는 `/etc/zprofile`이
+  `path_helper`를 실행해 시스템 폴더를 앞으로 옮기므로, 이 파일이 없으면 Codex 셸의 `python3`이 오래된 시스템
+  Python으로 잡힌다. 하네스는 여기서도 `ORCA_*` 변수를 지운다.
 - `codex exec`는 `approval_policy`를 `never`로, 샌드박스를 `danger-full-access`로 두고 실행한다. 소유자 본인의 Codex
   설정과 같다. 플러그인의 Claude 경로(`role_runner.py`가 `claude -p`를 시작한다)는 네트워크와 Claude 설정 폴더가
   필요한데 `workspace-write` 샌드박스에는 둘 다 없어서, Codex에서 Claude로 맡기는 위임이 모두 "Not logged in"으로

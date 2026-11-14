@@ -7,7 +7,9 @@ import contextlib
 import io
 import json
 import os
+import shutil
 import stat
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -19,7 +21,7 @@ from unittest import mock
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "evals/e2e"))
 
-from harness import caps, cli, codex_calls, codex_host, collect, command, matrix, metrics, rubric, runner  # noqa: E402
+from harness import caps, cli, codex_calls, codex_host, codex_trust, collect, command, matrix, metrics, rubric, runner  # noqa: E402
 from harness.config import HarnessConfig  # noqa: E402
 
 WITHIN_CAP_ENV = {"CLAUDE_PLUGIN_OPTION_REVIEW_MODEL": "gpt-6.1-sol", "HEI5ENBUG_REVIEW_MODEL": "gpt-6.1-sol"}
@@ -47,6 +49,34 @@ if sys.argv[1:2] == ["exec"]:
     print(json.dumps({{"type": "thread.started"}}))
     print(json.dumps({{"type": "turn.completed"}}))
 """
+
+
+PLUGIN_ID = codex_trust.hook_trust_module().PLUGIN_ID
+HOOK_FILE = "/tmp/plugin/hooks/hooks.json"
+
+
+def demo_hook(name: str, status: str, plugin: str = PLUGIN_ID) -> dict[str, Any]:
+    return {"pluginId": plugin, "key": f"{plugin}:{name}", "trustStatus": status, "currentHash": f"sha256:{name}",
+            "sourcePath": HOOK_FILE}
+
+
+class FakeAppServer:
+    """Stands in for `app_server_calls`: the first session lists `before`, every later one lists `after`."""
+
+    def __init__(self, before: list[dict[str, Any]], after: list[dict[str, Any]] | None = None):
+        self.before, self.after, self.sessions = before, before if after is None else after, []
+
+    def __call__(self, command: list[str], env: dict[str, str], cwd: str, calls: list[tuple[str, dict]], timeout: float) -> list:
+        self.sessions.append({"command": command, "codex_home": env.get("CODEX_HOME"), "calls": list(calls)})
+        hooks = self.before if len(self.sessions) == 1 else self.after
+        return [{"data": [{"cwd": params["cwds"][0], "hooks": hooks}]} if method == "hooks/list" else {} for method, params in calls]
+
+    def writes(self) -> list[dict[str, Any]]:
+        return [params for session in self.sessions for method, params in session["calls"] if method == "config/value/write"]
+
+
+def patch_app_server(server: Any) -> Any:
+    return mock.patch.object(codex_trust.hook_trust_module(), "app_server_calls", server)
 
 
 def rollout_rows(model: str = "gpt-6.1-sol", effort: str = "high", cli_version: str = "0.167.2",
@@ -282,6 +312,9 @@ class FakeCodexRunTest(unittest.TestCase):
         patch_graders = mock.patch.object(runner, "load_graders", return_value=graders)
         patch_graders.start()
         self.addCleanup(patch_graders.stop)
+        patch_server = patch_app_server(FakeAppServer([demo_hook("start", "trusted")]))
+        patch_server.start()
+        self.addCleanup(patch_server.stop)
 
     def calls(self) -> list[dict[str, Any]]:
         return [json.loads(line) for line in self.log.read_text(encoding="utf-8").splitlines()]
@@ -320,7 +353,7 @@ class FakeCodexRunTest(unittest.TestCase):
         for call in (market, add, exec_call):
             self.assertEqual(call["CODEX_HOME"], str(home))
             self.assertEqual(call["ZDOTDIR"], str(self.spec.result_dir / "zdotdir"))
-            self.assertEqual(call["zdotdir_entries"], [])
+            self.assertEqual(call["zdotdir_entries"], [".zprofile"])
             self.assertTrue(call["stdin_is_dev_null"])
             self.assertFalse(call["has_orca"])
         self.assertEqual(exec_call["cwd"], str(self.spec.repo.resolve()))
@@ -384,6 +417,136 @@ class FakeCodexRunTest(unittest.TestCase):
 
         # then
         self.assertEqual(os.readlink(self.spec.result_dir / "codex-home" / "auth.json"), str(other / "auth.json"))
+
+
+class PreparedHomeCase(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        user_home = self.root / "user-codex"
+        user_home.mkdir()
+        (user_home / "auth.json").write_text(AUTH_SENTINEL, encoding="utf-8")
+        self.user_home = user_home
+        fake = self.root / "fake_codex"
+        fake.write_text(FAKE_CODEX.format(python=sys.executable), encoding="utf-8")
+        fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+        plugin = self.root / "export" / "hei5enbug-agent-setup"
+        (plugin / ".agents/plugins").mkdir(parents=True)
+        (plugin / ".agents/plugins/marketplace.json").write_text('{"name": "hei5enbug"}', encoding="utf-8")
+        self.plugin_dir = str(plugin)
+        self.cfg = HarnessConfig(run_root=self.root / "runs", codex_bin=str(fake))
+        self.result_dir = self.root / "result"
+        self.result_dir.mkdir()
+        self.env = {**os.environ, **codex_host.host_env(self.result_dir), "FAKE_CODEX_LOG": str(self.root / "calls.jsonl")}
+
+    def prepare(self, server: FakeAppServer, env: dict[str, str] | None = None) -> dict[str, Any]:
+        with patch_app_server(server):
+            return codex_host.prepare_home(self.cfg, self.result_dir, self.plugin_dir, env or self.env, self.user_home)
+
+    def setup_record(self) -> dict[str, Any]:
+        return json.loads((self.result_dir / "codex-setup.json").read_text(encoding="utf-8"))
+
+
+class CodexShellPathTest(PreparedHomeCase):
+    @unittest.skipUnless(shutil.which("zsh"), "zsh is not installed")
+    def test_실행의_ZDOTDIR로_시작한_zsh_로그인_셸은_실행이_정한_PATH를_그대로_쓴다(self):
+        """macOS path_helper가 /etc/zprofile에서 PATH를 다시 정렬해도 로그인 셸의 PATH는 실행 환경의 PATH와 정확히 같다."""
+        # given
+        run_path = "/tmp/demo-bin:/usr/bin:/bin:/tmp/demo-tools"
+        self.prepare(FakeAppServer([demo_hook("start", "trusted")]), {**self.env, "PATH": run_path})
+        shell_env = {"ZDOTDIR": str(self.result_dir / "zdotdir"), "PATH": run_path}
+
+        # when
+        done = subprocess.run([shutil.which("zsh"), "-lc", 'printf %s "$PATH"'], env=shell_env, capture_output=True, text=True,
+                              stdin=subprocess.DEVNULL, timeout=30, check=False)
+
+        # then
+        self.assertEqual(done.stdout, run_path)
+
+    def test_PATH에_공백과_따옴표가_있어도_zprofile은_그_값_하나로_PATH를_정한다(self):
+        """.zprofile은 셸 인용을 거친 export 한 줄이고 다른 내용은 없다."""
+        # given
+        run_path = "/tmp/demo dir/it's:/usr/bin"
+
+        # when
+        self.prepare(FakeAppServer([demo_hook("start", "trusted")]), {**self.env, "PATH": run_path})
+
+        # then
+        entries = sorted(item.name for item in (self.result_dir / "zdotdir").iterdir())
+        self.assertEqual(entries, [".zprofile"])
+        lines = (self.result_dir / "zdotdir" / ".zprofile").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(lines), 1)
+        self.assertTrue(lines[0].startswith("export PATH="))
+
+
+class CodexHookTrustTest(PreparedHomeCase):
+    def test_이_플러그인의_untrusted와_modified_훅에만_신뢰_쓰기를_하고_기록한다(self):
+        """신뢰 쓰기는 이 플러그인의 untrusted와 modified 훅마다 한 번이고, 이미 trusted인 훅과 다른 플러그인의 훅에는 없다."""
+        # given
+        other = "other-plugin@demo"
+        before = [demo_hook("a", "untrusted"), demo_hook("b", "modified"), demo_hook("c", "trusted"),
+                  demo_hook("d", "untrusted", other)]
+        after = [{**hook, "trustStatus": "trusted"} if hook["pluginId"] == PLUGIN_ID else hook for hook in before]
+        server = FakeAppServer(before, after)
+
+        # when
+        record = self.prepare(server)
+
+        # then
+        writes = server.writes()
+        self.assertEqual(len(writes), 2)
+        for name in ("a", "b"):
+            matching = [params for params in writes if f"{PLUGIN_ID}:{name}" in params["keyPath"]]
+            self.assertEqual([params["value"]["trusted_hash"] for params in matching], [f"sha256:{name}"])
+        skipped = (f"{PLUGIN_ID}:c", f"{other}:d")
+        self.assertFalse([params for params in writes if any(key in params["keyPath"] for key in skipped)])
+        self.assertEqual({session["codex_home"] for session in server.sessions}, {str(self.result_dir / "codex-home")})
+        self.assertEqual(sorted(record["hook_trust"]["trusted"]), [f"{PLUGIN_ID}:a", f"{PLUGIN_ID}:b"])
+        self.assertEqual(self.setup_record()["hook_trust"], record["hook_trust"])
+
+    def test_쓰기_뒤에도_이_플러그인의_훅_하나가_untrusted면_설정_실패로_기록하고_멈춘다(self):
+        """다시 나열한 훅 중 하나가 아직 untrusted이면 CodexSetupError가 나고 codex-setup.json에 사유가 남는다."""
+        # given
+        before = [demo_hook("a", "untrusted"), demo_hook("b", "untrusted")]
+        server = FakeAppServer(before, [demo_hook("a", "trusted"), demo_hook("b", "untrusted")])
+
+        # when
+        with self.assertRaises(codex_host.CodexSetupError) as caught:
+            self.prepare(server)
+
+        # then
+        self.assertIn("trust", str(caught.exception))
+        self.assertIn(f"{PLUGIN_ID}:b", self.setup_record()["hook_trust_error"])
+        self.assertNotIn("hook_trust", self.setup_record())
+
+    def test_app_server가_오류를_내면_설정_실패로_바꾼다(self):
+        """app-server 호출이 TrustError로 끝나면 실행은 훅을 신뢰하지 못한 채 시작하지 않고 CodexSetupError를 낸다."""
+        # given
+        error = codex_trust.hook_trust_module().TrustError("codex app-server ended before answering request 2")
+
+        def failing(*args: Any, **kwargs: Any) -> list:
+            raise error
+
+        # when
+        with self.assertRaises(codex_host.CodexSetupError) as caught, patch_app_server(failing):
+            codex_host.prepare_home(self.cfg, self.result_dir, self.plugin_dir, self.env, self.user_home)
+
+        # then
+        self.assertIn("ended before answering", str(caught.exception))
+        self.assertIn("ended before answering", self.setup_record()["hook_trust_error"])
+
+    def test_이_플러그인의_훅이_하나도_나열되지_않으면_설정_실패로_바꾼다(self):
+        """다른 플러그인의 훅만 보이면 내보낸 플러그인이 로드되지 않은 것이므로 CodexSetupError다."""
+        # given
+        server = FakeAppServer([demo_hook("x", "trusted", "other-plugin@demo")])
+
+        # when
+        with self.assertRaises(codex_host.CodexSetupError):
+            self.prepare(server)
+
+        # then
+        self.assertIn("no", self.setup_record()["hook_trust_error"])
 
 
 ROLE_RUNNER_REVIEW = ('python3 /tmp/plugin/scripts/role_runner.py review --assignment /tmp/work/a.md '

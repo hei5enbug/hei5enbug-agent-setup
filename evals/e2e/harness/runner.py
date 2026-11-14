@@ -229,7 +229,7 @@ def execute_run(
         return failed
     if codex:
         try:
-            run["setup"] = codex_host.prepare_home(cfg, spec.result_dir, plugin["path"], env)
+            run["setup"] = codex_host.prepare_home(cfg, spec.result_dir, plugin["path"], env, repo=spec.repo)
         except codex_host.CodexSetupError as error:
             failed = {**run, "status": STATUS_INFRA_FAILED, "error": f"codex setup failed: {error}"}
             write_json(spec.result_dir / "run.json", failed)

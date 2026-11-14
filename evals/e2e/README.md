@@ -78,8 +78,13 @@ prompt, the same limits, and the same graders and metrics. `claude` alone is the
   `CODEX_HOME`. The setup commands and their results are in `codex-setup.json`.
 - `--dangerously-bypass-hook-trust` is set because the harness exports and vets the revision itself, so the run does
   not stop to ask for trust of the plugin's hooks. Codex hooks still run.
-- Stdin is `/dev/null`, and `ZDOTDIR` is an empty folder, so the shell Codex starts reads none of the user's zsh
-  startup files and keeps the `PATH` the run set. The harness removes the `ORCA_*` variables here too.
+- After the install, the harness trusts the exported plugin's hooks in the run's `CODEX_HOME` through `codex
+  app-server`, so a role runner's own Codex child, which runs without the bypass flag, can verify them. A hook that
+  stays untrusted fails the setup and the run is `infra_failed`. `codex-setup.json` lists the trusted hook keys.
+- Stdin is `/dev/null`, and `ZDOTDIR` is a folder with no user zsh startup files, so the shell Codex starts reads none
+  of them. Its only file is a `.zprofile` that exports the run's `PATH`: on macOS `/etc/zprofile` runs `path_helper`,
+  which moves the system folders to the front, so without it `python3` in a Codex shell resolves to an old system
+  Python. The harness removes the `ORCA_*` variables here too.
 - `codex exec` runs with `approval_policy` set to `never` and the `danger-full-access` sandbox, the same as the owner's
   own Codex setting. The plugin's Claude routes (`role_runner.py` starting `claude -p`) need the network and the
   Claude config folder, and the `workspace-write` sandbox has neither, so every Codex-to-Claude delegation failed
