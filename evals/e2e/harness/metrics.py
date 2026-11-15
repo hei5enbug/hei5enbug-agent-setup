@@ -27,10 +27,15 @@ def stream_facts(events: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+BUILTIN_SUFFIX = "@builtin"
+
+
 def extra_plugins(facts: dict[str, Any]) -> list[str]:
-    """Names of the plugins in the init event other than the variant loaded from the export."""
+    """Names of the plugins in the init event other than the variant loaded from the export. A plugin built into
+    Claude Code itself, whose source ends with `@builtin`, is part of the host and not counted."""
     names = [str(p.get("source") or p.get("name")) for p in facts.get("plugins") or [] if isinstance(p, dict)
-             and not (p.get("name") == PLUGIN_NAME and p.get("source") == INLINE_PLUGIN_SOURCE)]
+             and not (p.get("name") == PLUGIN_NAME and p.get("source") == INLINE_PLUGIN_SOURCE)
+             and not str(p.get("source") or "").endswith(BUILTIN_SUFFIX)]
     return sorted(names)
 
 

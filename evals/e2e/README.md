@@ -36,7 +36,8 @@ repository README; only its unit tests are.
    it is, including the default permission mode and Codex. The harness removes the `ORCA_*` variables, so a run cannot
    report to or message the Orca terminal that started it, and `CLAUDE_CODE_PLUGIN_DIRS`, which would load further
    plugins as `--plugin-dir` does. A run whose `system` init event lists a plugin other than the variant is recorded as
-   `infra_failed` with the extra plugin names and is not graded, and `pilot-check` fails it. It never passes a bypass
+   `infra_failed` with the extra plugin names and is not graded, and `pilot-check` fails it. Plugins built into Claude
+   Code itself, whose source ends with `@builtin`, are part of the host and do not count. It never passes a bypass
    mode, `--bare`, or `--permission-mode`.
 4. A wall-clock limit per task stops the agent with SIGINT, then SIGTERM, then SIGKILL. The signals reach the
    agent's process group and every process it started in a session of its own, such as a role runner child, and the

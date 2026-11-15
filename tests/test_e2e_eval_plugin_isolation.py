@@ -17,6 +17,7 @@ from harness import command, environment, matrix, metrics, pilot_check, runner  
 
 VARIANT_PLUGIN = {"name": "hei5enbug-agent-setup", "source": "hei5enbug-agent-setup@inline", "path": "/tmp/work/export"}
 EXTRA_PLUGIN = {"name": "demo-viewer", "source": "demo-viewer@inline", "path": "/tmp/work/demo-viewer"}
+BUILTIN_PLUGIN = {"name": "demo-builtin", "source": "demo-builtin@builtin", "path": "/tmp/work/demo-builtin"}
 
 
 def init_event(plugins: list[dict[str, Any]]) -> dict[str, Any]:
@@ -128,6 +129,17 @@ class ExtraPluginRunTest(unittest.TestCase):
 
         # then
         self.assertEqual((status, runner.contamination_error(facts)), ("complete", None))
+
+    def test_init_이벤트에_호스트_내장_플러그인만_더_있으면_완료로_판정한다(self):
+        """Claude Code에 내장된 @builtin 플러그인은 호스트의 일부라 오염으로 세지 않는다."""
+        # given
+        facts = metrics.stream_facts([init_event([VARIANT_PLUGIN, BUILTIN_PLUGIN]), {"type": "result", "is_error": False}])
+
+        # when
+        status = runner.decide_status(facts, None, False)
+
+        # then
+        self.assertEqual((status, metrics.extra_plugins(facts)), ("complete", []))
 
 
 class PilotCheckExtraPluginTest(unittest.TestCase):

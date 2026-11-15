@@ -39,7 +39,7 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
    `ORCA_*` 변수를 지워서 실행이 자신을 시작한 Orca 터미널에 상태를 알리거나 메시지를 보낼 수 없게 하고,
    `--plugin-dir`처럼 플러그인을 더 올리는 `CLAUDE_CODE_PLUGIN_DIRS`도 지운다. `system` init 이벤트에 변형이 아닌
    플러그인이 보이는 실행은 그 플러그인 이름과 함께 `infra_failed`로 기록하고 채점하지 않으며, `pilot-check`도 그
-   실행을 실패시킨다. 우회 모드, `--bare`, `--permission-mode`는 절대 넘기지 않는다.
+   실행을 실패시킨다. 출처가 `@builtin`으로 끝나는 Claude Code 내장 플러그인은 호스트의 일부라 세지 않는다. 우회 모드, `--bare`, `--permission-mode`는 절대 넘기지 않는다.
 4. 작업마다 정한 실제 경과 시간 제한에 걸리면 에이전트에 SIGINT, SIGTERM, SIGKILL을 차례로 보낸다. 신호는
    에이전트의 프로세스 그룹과, role runner 자식처럼 에이전트가 별도 세션으로 시작한 모든 프로세스에 가고, 하네스는
    남은 프로세스가 없는지 확인한다.
