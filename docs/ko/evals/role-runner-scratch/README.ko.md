@@ -14,7 +14,7 @@
 | 사례 | 실행 | 통과 조건 |
 |---|---|---|
 | Codex의 검증 | 설치된 환경이 없는 시드 저장소에서 `pricing.py`를 검토하도록 맡긴 `role_runner.py reviewer --model gpt-6.1-sol --validation` | 도구 기록에 테스트 명령과 시드한 단언 실패가 있고, 검토가 `test_bulk_discount`를 지목하며, 저장소 스냅샷이 그대로다 |
-| Claude의 검증 | 환경을 설치한 채(`seed --with-env`) 같은 실행 | 막힘: 소유자가 Claude 셸의 쓰기를 가두는 방법을 정하기 전에는 실행기가 Claude 모델의 `--validation`을 거부한다 |
+| Claude의 검증 | 환경을 설치한(`seed --with-env`) 시드 저장소에서 `role_runner.py reviewer --model claude-opus-5-5 --validation` | Codex 사례와 같은 조건 |
 | Codex의 heredoc scout | `--validation` 없이 `role_runner.py scout`에 `data/orders.csv`의 `quantity * unit_cents` 합계를 heredoc Python 명령으로 계산하도록 맡긴다 | 도구 기록에 임시 파일 때문에 실패하지 않은 heredoc Python 명령이 있고, 결과가 기대 합계를 담으며, 테스트나 설치 명령이 없고, 저장소 스냅샷이 그대로다 |
 
 ## 절차

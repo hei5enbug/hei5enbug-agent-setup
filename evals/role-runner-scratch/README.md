@@ -11,7 +11,7 @@ Each case is one run, with these fixed conditions as its pass or fail criteria.
 | Case | Run | Pass when |
 |---|---|---|
 | Validation on Codex | `role_runner.py reviewer --model gpt-6.1-sol --validation` over the seeded repository with no installed environment, assigned to review `pricing.py` | The tool records show a test command and the seeded assertion failing, the review names `test_bulk_discount`, and the repository snapshot is unchanged |
-| Validation on Claude | The same run with the environment installed (`seed --with-env`) | Blocked: the runner refuses `--validation` on a Claude model until the owner decides how to confine a Claude shell's writes |
+| Validation on Claude | `role_runner.py reviewer --model claude-opus-5-5 --validation` over the seeded repository with its environment installed (`seed --with-env`) | The same conditions as the Codex case |
 | Heredoc scout on Codex | `role_runner.py scout` without `--validation`, assigned to total `quantity * unit_cents` over `data/orders.csv` with a heredoc Python command | The tool records show a heredoc Python command that did not fail on its temp file, the result holds the expected total, no test or install command ran, and the repository snapshot is unchanged |
 
 ## Steps

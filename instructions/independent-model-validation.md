@@ -51,8 +51,9 @@ the draft, repository, or external state.
 Keep the main session's model and effort unchanged. Pass the reviewer's model and effort explicitly to a
 separate host runner, and verify the actual model and effort from host records, and the write limit, before counting
 the review as complete. The runner gives the reviewer a sandbox whose only writable path is its per-run scratch folder.
-Run a GPT reviewer with `role_runner.py reviewer --validation`, so it can run the project's tests, calculations, and
-installs inside that folder and edit nothing else; a Claude reviewer has no validation mode and stays read-only.
+Run the independent validation call as `role_runner.py reviewer --validation`, so the reviewer can run the project's
+tests, calculations, and installs inside that folder and edit nothing else; a Claude reviewer starts in that folder and
+works on a copy of the repository.
 Give the reviewer the check commands you ran with their results so it can rerun them. A silent fallback or effort cap
 is not a completed review. Do not enable extra billing or change authentication to make the review available.
 

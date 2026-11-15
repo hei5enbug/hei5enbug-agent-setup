@@ -4,7 +4,9 @@ import json
 import os
 from pathlib import Path
 
-from role_runner_config import EXIT_EVIDENCE, SYNTHETIC_MODEL, RunnerError
+from role_runner_config import (
+    EXIT_EVIDENCE, SANDBOX_CONNECTED, SANDBOX_STATUS_FIELD, SYNTHETIC_MODEL, VALIDATION_PACKAGE_HOSTS, RunnerError,
+)
 
 
 def state_home() -> Path:
@@ -177,12 +179,87 @@ def claude_result(stdout: str) -> dict:
     return parsed
 
 
+def claude_init(stdout: str) -> dict | None:
+    """Return the system init event of a verbose Claude JSON output, or None when the output has none."""
+    try:
+        parsed = json.loads(stdout)
+    except json.JSONDecodeError:
+        return None
+    events = parsed if isinstance(parsed, list) else []
+    return next(
+        (item for item in events if isinstance(item, dict) and item.get("type") == "system" and item.get("subtype") == "init"),
+        None,
+    )
+
+
+def sandbox_settings_in(command: list[str]) -> dict | None:
+    """Return the JSON a command passes after --settings, or None when it passes none or it is not a JSON object."""
+    if "--settings" not in command or command.index("--settings") + 1 >= len(command):
+        return None
+    try:
+        settings = json.loads(command[command.index("--settings") + 1])
+    except json.JSONDecodeError:
+        return None
+    return settings if isinstance(settings, dict) else None
+
+
+def confinement_problem(settings: dict | None, scratch: Path, validation: bool) -> str | None:
+    """Return why a --settings object does not confine a Claude shell's writes to the scratch folder, or None when it does."""
+    sandbox = settings.get("sandbox") if isinstance(settings, dict) else None
+    if not isinstance(sandbox, dict):
+        return "the command carries no sandbox settings"
+    wanted = {"enabled": True, "failIfUnavailable": True, "allowUnsandboxedCommands": False, "excludedCommands": []}
+    for key, value in wanted.items():
+        if sandbox.get(key) != value:
+            return f"sandbox {key} is {sandbox.get(key)!r}, expected {value!r}"
+    filesystem = sandbox.get("filesystem")
+    if not isinstance(filesystem, dict) or filesystem.get("allowWrite") != [scratch.as_posix()]:
+        return f"sandbox allowWrite is not exactly the scratch folder {scratch.as_posix()!r}"
+    if set(filesystem) - {"allowWrite"}:
+        return "sandbox filesystem holds keys other than allowWrite"
+    network = sandbox.get("network")
+    domains = network.get("allowedDomains") if isinstance(network, dict) else None
+    if not isinstance(domains, list) or not set(domains) <= (set(VALIDATION_PACKAGE_HOSTS) if validation else set()):
+        return f"sandbox network allows {domains!r}, more than this run may reach"
+    if network.get("strictAllowlist") is not True:
+        return "sandbox network is not a strict allowlist"
+    return None
+
+
+def verify_sandbox(command: list[str], init: dict | None, scratch: Path, validation: bool) -> None:
+    """Require the command's sandbox settings to confine writes to the scratch folder, and the host's init event to report
+    the folder as its working directory and the sandbox as connected; any missing or wider record exits 4."""
+    problem = confinement_problem(sandbox_settings_in(command), scratch, validation)
+    if problem is not None:
+        raise RunnerError(EXIT_EVIDENCE, f"The Claude run was not confined to its scratch folder: {problem}")
+    if init is None:
+        raise RunnerError(EXIT_EVIDENCE, "The Claude output has no system init event, so its sandbox cannot be verified")
+    version = init.get("claude_code_version")
+    if init.get(SANDBOX_STATUS_FIELD) != SANDBOX_CONNECTED:
+        raise RunnerError(
+            EXIT_EVIDENCE,
+            f"The init event of Claude Code {version} has no {SANDBOX_STATUS_FIELD} of {SANDBOX_CONNECTED!r}, "
+            "so the sandbox is not shown to be active",
+            {"init_keys": sorted(init), "claude_code_version": version},
+        )
+    cwd = init.get("cwd")
+    if not isinstance(cwd, str) or Path(cwd).resolve() != scratch:
+        raise RunnerError(EXIT_EVIDENCE, f"The init event names the working directory {cwd!r}, expected {scratch.as_posix()!r}")
+
+
 def is_synthetic(entry: dict) -> bool:
     message = entry.get("message")
     return isinstance(message, dict) and message.get("model") == SYNTHETIC_MODEL
 
 
-def verify_claude(result: dict, model: str, effort: str) -> dict:
+def verify_claude(
+    result: dict, model: str, effort: str, command: list[str] | None = None, init: dict | None = None,
+    scratch: Path | None = None, validation: bool = False,
+) -> dict:
+    """Verify a Claude run's model and effort; a read-only run, which has a scratch folder, must also show the sandbox
+    that confines its writes to that folder."""
+    if scratch is not None:
+        verify_sandbox(command or [], init, scratch, validation)
     usage = result.get("modelUsage")
     if not isinstance(usage, dict) or set(usage) != {model}:
         found = sorted(usage) if isinstance(usage, dict) else usage

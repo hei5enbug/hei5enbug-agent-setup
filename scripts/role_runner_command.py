@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 
 from role_runner_config import (
-    CLAUDE_SKILLS_OFF, CODEX_NETWORK_ON, CODEX_SKILLS_OFF, MCP_TOOL_RULE, READ_SHELL_RULES, SCRATCH_PROFILE, Run,
+    CLAUDE_SKILLS_OFF, CODEX_NETWORK_ON, CODEX_SKILLS_OFF, MCP_TOOL_RULE, READ_SHELL_RULES, SCRATCH_PROFILE,
+    VALIDATION_PACKAGE_HOSTS, Run,
 )
 
 
@@ -90,7 +91,24 @@ def claude_tools(rules: list[str]) -> list[str]:
     return names
 
 
-def claude_command(run: Run) -> list[str]:
+def claude_sandbox_settings(scratch: Path, network: bool) -> dict:
+    """Return the settings that confine a Claude run's shell: the sandbox must start, no command may leave it, and only
+    the scratch folder is writable. Network reaches the package index hosts for a validation run and nothing otherwise."""
+    return {
+        "sandbox": {
+            "enabled": True, "failIfUnavailable": True, "allowUnsandboxedCommands": False, "excludedCommands": [],
+            "filesystem": {"allowWrite": [scratch.as_posix()]},
+            "network": {"allowedDomains": list(VALIDATION_PACKAGE_HOSTS) if network else [], "strictAllowlist": True},
+        }
+    }
+
+
+def claude_scratch_rules(run: Run, allowed: list[str]) -> list[str]:
+    """A validation run gets the whole shell, which its sandbox confines; any other read-only run keeps its rules."""
+    return [*allowed, "Bash"] if run.validation and "Bash" not in allowed else allowed
+
+
+def claude_command(run: Run, scratch: Path | None = None) -> list[str]:
     if run.agent is not None or run.capability is not None:
         allowed = claude_rules(run)
         tools = claude_tools(allowed)
@@ -99,16 +117,23 @@ def claude_command(run: Run) -> list[str]:
         allowed = ["Read", "Grep", "Glob", *(["Bash"] if run.writing else []), *(edit_rules(run.add_dirs) if run.writing else [])]
         tools = claude_tools(allowed)
         mode = "dontAsk"
+    if not run.writing:
+        if scratch is None:
+            raise ValueError("A read-only Claude run needs a scratch folder")
+        allowed = claude_scratch_rules(run, allowed)
+        tools = claude_tools(allowed)
     command = ["claude", "-p"]
     if run.resume is not None:
         command += ["--resume", run.resume]
     command += ["--model", run.model, "--effort", run.effort, "--output-format", "json"]
     if not run.writing:
-        command += [CLAUDE_SKILLS_OFF]
+        command += ["--verbose", CLAUDE_SKILLS_OFF]
     command += ["--tools", *tools]
     if not run.mcp:
         command += ["--strict-mcp-config"]
     command += ["--permission-mode", mode, "--allowedTools", *allowed]
     for directory in run.add_dirs:
         command += ["--add-dir", directory]
+    if not run.writing:
+        command += ["--settings", json.dumps(claude_sandbox_settings(scratch, run.validation), sort_keys=True)]
     return command

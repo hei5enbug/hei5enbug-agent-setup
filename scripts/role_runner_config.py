@@ -31,7 +31,7 @@ ROLE_DEFINITIONS = {"researcher": "scout"}
 WEB_TOOLS = ("WebSearch", "WebFetch")
 MCP_TOOL_RULE = "mcp__*"
 READ_SHELL_RULES = (
-    "Bash(git diff:*)", "Bash(git show:*)", "Bash(git grep:*)", "Bash(git log:*)", "Bash(git cat-file:*)",
+    "Bash(git -C:*)", "Bash(git diff:*)", "Bash(git show:*)", "Bash(git grep:*)", "Bash(git log:*)", "Bash(git cat-file:*)",
     "Bash(git ls-tree:*)", "Bash(git ls-files:*)", "Bash(git rev-parse:*)", "Bash(git merge-base:*)",
     "Bash(rg:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(wc:*)",
 )
@@ -56,6 +56,9 @@ SCRATCH_VARIABLES = {
     "npm_config_cache": "cache/npm",
     "PIP_CACHE_DIR": "cache/pip",
 }
+VALIDATION_PACKAGE_HOSTS = ("pypi.org", "files.pythonhosted.org", "registry.npmjs.org")
+SANDBOX_STATUS_FIELD = "sandbox_status"
+SANDBOX_CONNECTED = "connected"
 VALIDATION_ROLE = "reviewer"
 REVIEWER_BAN = re.compile(
     r"Never modify files, branches, or worktrees\.\s+Never run\s+build, test, install, or network commands\."
@@ -67,6 +70,14 @@ VALIDATION_RULE = (
     "one exists, and install a dependency a check needs into the scratch folder only when the environment is missing or "
     "does not fit the check. Use the network only for those installs. Edit no file outside the scratch folder, "
     "make no commit or push, and change no external state. Report each command you ran with its result."
+)
+CLAUDE_SCRATCH_RULE = (
+    "Your working directory is your scratch folder, the only path your shell can write. The repository is at {repository}: "
+    "read it by absolute path, and run git as `git -C {repository} <subcommand>`."
+)
+CLAUDE_VALIDATION_COPY = (
+    " To run a check that needs the repository, copy what it needs into the scratch folder first, for example "
+    "`mkdir repo && git -C {repository} archive HEAD | tar -x -C repo`, and run it there."
 )
 VALIDATION_SENTENCE = (
     'You are an assigned reviewer under the "Assigned workers" rules: start no agents, make no commit or push, '

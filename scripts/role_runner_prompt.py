@@ -5,7 +5,7 @@ from pathlib import Path
 
 import session_context
 from role_runner_config import (
-    MCP_NETWORK_RULE, NO_NETWORK_RULE, READ_SHELL_RULES, REVIEWER_BAN, ROLE_DEFINITIONS, ROLE_SENTENCES, ROLES, Run,
+    CLAUDE_SCRATCH_RULE, CLAUDE_VALIDATION_COPY, MCP_NETWORK_RULE, NO_NETWORK_RULE, READ_SHELL_RULES, REVIEWER_BAN, ROLE_DEFINITIONS, ROLE_SENTENCES, ROLES, Run,
     VALIDATION_RULE, VALIDATION_SENTENCE, worker_sentence,
 )
 
@@ -31,15 +31,28 @@ def network_rule(mcp: bool) -> str:
     return MCP_NETWORK_RULE if mcp else NO_NETWORK_RULE
 
 
-def shell_sentence(limited: bool) -> list[str]:
+def shell_sentence(limited: bool, scratch: bool = False) -> list[str]:
     """Name the read-only shell commands a Claude run without --mcp may use; its permission rules match the command prefix."""
     if not limited:
         return []
     commands = ", ".join(f"`{rule[len('Bash('):-len(':*)')]}`" for rule in READ_SHELL_RULES)
+    if scratch:
+        return [
+            f"The shell runs only these read-only commands: {commands}. It starts in your scratch folder, "
+            "so name the repository with `git -C <repository>`; use file tools for other reads."
+        ]
     return [
         f"The shell runs only these read-only commands from the working directory: {commands}. "
         "Do not prefix them with `git -C` or `cd`; use file tools for other reads."
     ]
+
+
+def claude_scratch_sentence(run: Run, repository: str) -> list[str]:
+    """Tell a read-only Claude run, which starts in its scratch folder, where the repository is and how to work on a copy."""
+    if run.runner != "claude" or run.writing:
+        return []
+    text = CLAUDE_SCRATCH_RULE.format(repository=repository)
+    return [text + (CLAUDE_VALIDATION_COPY.format(repository=repository) if run.validation else "")]
 
 
 def capability_sentence(capability: str, mcp: bool = False) -> str:
@@ -57,12 +70,13 @@ def validation_body(body: str) -> str:
     return replaced
 
 
-def compose_prompt(role: str, assignment_text: str, root: Path, validation: bool = False) -> str:
+def compose_prompt(role: str, assignment_text: str, root: Path, validation: bool = False, scratch_rule: list[str] = ()) -> str:
     """Build the full prompt: role sentence, role definition body, worker rules for a worker, then the assignment."""
     if role not in ROLES:
         raise ValueError(f"Unsupported role: {role}")
     body = role_body(role, root)
-    parts = [VALIDATION_SENTENCE, validation_body(body)] if validation else [ROLE_SENTENCES[role], body]
+    sentence = VALIDATION_SENTENCE if validation else ROLE_SENTENCES[role]
+    parts = [sentence, *scratch_rule, validation_body(body) if validation else body]
     if role == "worker":
         parts.append(session_context.assigned_workers_section(root))
     parts.append("## Assignment\n\n" + assignment_text.strip())
@@ -71,11 +85,13 @@ def compose_prompt(role: str, assignment_text: str, root: Path, validation: bool
 
 def compose_capability_prompt(
     capability: str, instructions: str, assignment_text: str, root: Path, mcp: bool = False, limited_shell: bool = False,
+    scratch_rule: list[str] = (),
 ) -> str:
     """Build a capability prompt: capability sentence, instructions body, worker rules, then the assignment."""
     parts = [
         capability_sentence(capability, mcp),
-        *shell_sentence(limited_shell),
+        *scratch_rule,
+        *shell_sentence(limited_shell, bool(scratch_rule)),
         instructions,
         session_context.assigned_workers_section(root),
         "## Assignment\n\n" + assignment_text.strip(),
@@ -83,11 +99,14 @@ def compose_capability_prompt(
     return "\n\n".join(parts) + "\n"
 
 
-def compose_agent_prompt(body: str, assignment_text: str, root: Path, mcp: bool = False, limited_shell: bool = False) -> str:
+def compose_agent_prompt(
+    body: str, assignment_text: str, root: Path, mcp: bool = False, limited_shell: bool = False, scratch_rule: list[str] = (),
+) -> str:
     """Build an agent prompt: the assigned-worker sentence, the agent instructions, worker rules, then the assignment."""
     parts = [
         worker_sentence(network_rule(mcp)),
-        *shell_sentence(limited_shell),
+        *scratch_rule,
+        *shell_sentence(limited_shell, bool(scratch_rule)),
         body,
         session_context.assigned_workers_section(root),
         "## Assignment\n\n" + assignment_text.strip(),
@@ -95,13 +114,14 @@ def compose_agent_prompt(body: str, assignment_text: str, root: Path, mcp: bool 
     return "\n\n".join(parts) + "\n"
 
 
-def compose(run: Run, args: argparse.Namespace, root: Path) -> str:
+def compose(run: Run, args: argparse.Namespace, root: Path, repository: str) -> str:
     assignment_text = Path(args.assignment).read_text(encoding="utf-8")
-    limited_shell = run.runner == "claude" and not run.mcp
+    scratch_rule = claude_scratch_sentence(run, repository)
+    limited_shell = run.runner == "claude" and not run.mcp and not run.validation
     if run.agent is not None:
-        return compose_agent_prompt(run.body, assignment_text, root, run.mcp, limited_shell)
+        return compose_agent_prompt(run.body, assignment_text, root, run.mcp, limited_shell, scratch_rule)
     if run.capability is None:
-        return compose_prompt(run.role, assignment_text, root, run.validation)
+        return compose_prompt(run.role, assignment_text, root, run.validation, scratch_rule)
     instructions = run.instructions.read_text(encoding="utf-8")
     body = without_frontmatter(instructions, run.instructions.as_posix())
-    return compose_capability_prompt(run.capability, body, assignment_text, root, run.mcp, limited_shell)
+    return compose_capability_prompt(run.capability, body, assignment_text, root, run.mcp, limited_shell, scratch_rule)

@@ -23,7 +23,7 @@ from role_runner_config import (  # noqa: E402
     ROLE_ENTRY, ROLE_MODEL, ROLE_SENTENCES, ROLES, WRITING_CAPABILITIES, Run, RunnerError, UsageError, build_parser,
 )
 from role_runner_evidence import (  # noqa: E402
-    claude_result, codex_home, json_lines, require_heartbeat, thread_id_from, turns_before, verify_claude, verify_codex,
+    claude_init, claude_result, codex_home, json_lines, require_heartbeat, thread_id_from, turns_before, verify_claude, verify_codex,
 )
 from role_runner_hooks import exchange_hooks, guard_ready, heal_hooks, hooks_for_cwd, is_guard_hook  # noqa: E402
 from role_runner_prompt import capability_sentence, compose, compose_capability_prompt, compose_prompt  # noqa: E402
@@ -158,26 +158,46 @@ def execute_codex(args: argparse.Namespace, run: Run, prompt: str, cwd: str) -> 
     return evidence
 
 
+def claude_outcome(
+    run: Run, stdout: str, command: list[str] | None = None, init: dict | None = None, scratch: Path | None = None,
+) -> tuple[dict, dict]:
+    result = claude_result(stdout)
+    if result.get("is_error"):
+        raise RunnerError(EXIT_RUN, f"Claude reported an error: {str(result.get('result'))[:2000]}")
+    return result, verify_claude(result, run.model, run.effort, command, init, scratch, run.validation)
+
+
+def run_claude(args: argparse.Namespace, run: Run, prompt: str, cwd: str) -> tuple[dict, dict]:
+    """Run a Claude child and return its result and verified evidence. A read-only run starts in a scratch folder under a
+    sandbox that confines its writes to that folder, and the folder is removed on every exit."""
+    if run.writing:
+        return claude_outcome(run, run_child(run.target, claude_command(run), prompt, cwd, args.timeout))
+    with scratch_folder(cwd, run.add_dirs) as scratch:
+        command = claude_command(run, scratch)
+        stdout = run_child(run.target, command, prompt, scratch.as_posix(), args.timeout, scratch)
+        return claude_outcome(run, stdout, command, claude_init(stdout), scratch)
+
+
+def execute_claude(args: argparse.Namespace, run: Run, prompt: str, cwd: str) -> dict:
+    result, evidence = run_claude(args, run, prompt, cwd)
+    require_heartbeat("claude", evidence["session"], CLAUDE_HOOKS_MESSAGE)
+    text = result.get("result")
+    if not isinstance(text, str) or not text.strip():
+        raise RunnerError(EXIT_EVIDENCE, "Claude returned no answer")
+    Path(args.result).write_text(text, encoding="utf-8")
+    return evidence
+
+
 def execute(args: argparse.Namespace, run: Run, root: Path, cwd: str) -> dict:
     """Run the target, verify its evidence, and return the verified evidence."""
     result_path = Path(args.result)
     try:
-        prompt = compose(run, args, root)
+        prompt = compose(run, args, root, cwd)
     except (OSError, ValueError) as error:
         raise RunnerError(EXIT_RUN, f"Cannot compose the prompt: {error}") from error
     discard(result_path)
     if run.runner == "claude":
-        stdout = run_child(run.target, claude_command(run), prompt, cwd, args.timeout)
-        result = claude_result(stdout)
-        if result.get("is_error"):
-            raise RunnerError(EXIT_RUN, f"Claude reported an error: {str(result.get('result'))[:2000]}")
-        evidence = verify_claude(result, run.model, run.effort)
-        require_heartbeat("claude", evidence["session"], CLAUDE_HOOKS_MESSAGE)
-        text = result.get("result")
-        if not isinstance(text, str) or not text.strip():
-            raise RunnerError(EXIT_EVIDENCE, "Claude returned no answer")
-        result_path.write_text(text, encoding="utf-8")
-        return evidence
+        return execute_claude(args, run, prompt, cwd)
     try:
         return execute_codex(args, run, prompt, cwd)
     except RunnerError:
@@ -250,10 +270,10 @@ def resolve(args: argparse.Namespace) -> Run:
 def plan(args: argparse.Namespace) -> Run:
     validate(args)
     run = replace(resolve(args), user_requested=args.user_requested, validation=args.validation)
-    if run.validation and run.runner == "claude":
+    if run.runner == "claude" and not run.writing and run.resume is not None:
         raise UsageError(
-            f"--validation cannot run on {run.model}: Claude Code offers no documented way to confine a shell's writes "
-            "to the scratch folder, so the owner must decide before the Claude path supports it; use a GPT reviewer model"
+            "--resume is not allowed for a read-only Claude run: it starts in a new scratch folder, and Claude Code resumes "
+            "a session only from the folder that started it"
         )
     if run.writing and run.runner == "claude" and not run.add_dirs and run.agent is None:
         label = f"capability {run.capability}" if run.capability else f"role {run.role}"

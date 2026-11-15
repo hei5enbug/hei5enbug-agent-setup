@@ -25,7 +25,7 @@ RUNNER = REPO_ROOT / "scripts" / "role_runner.py"
 THREAD = "019e0000-aaaa-bbbb-cccc-000000000001"
 SESSION = "11111111-2222-3333-4444-555555555555"
 SHELL_RULES = [
-    "Bash(git diff:*)", "Bash(git show:*)", "Bash(git grep:*)", "Bash(git log:*)", "Bash(git cat-file:*)",
+    "Bash(git -C:*)", "Bash(git diff:*)", "Bash(git show:*)", "Bash(git grep:*)", "Bash(git log:*)", "Bash(git cat-file:*)",
     "Bash(git ls-tree:*)", "Bash(git ls-files:*)", "Bash(git rev-parse:*)", "Bash(git merge-base:*)",
     "Bash(rg:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(wc:*)",
 ]
@@ -46,6 +46,11 @@ config = json.loads(os.environ.get("FAKE_CONFIG", "{{}}"))
 is_server = name == "codex" and sys.argv[1:2] == ["app-server"]
 stdin = "" if is_server else sys.stdin.read()
 scratch = next((found.group(1) for found in (re.search(r'filesystem=[{{]"([^"]+)"="write"', item) for item in sys.argv[1:]) if found), None)
+if scratch is None and "--settings" in sys.argv:
+    try:
+        scratch = json.loads(sys.argv[sys.argv.index("--settings") + 1])["sandbox"]["filesystem"]["allowWrite"][0]
+    except (ValueError, KeyError, IndexError, TypeError):
+        scratch = None
 with open(os.environ["FAKE_LOG"], "a") as log:
     log.write(json.dumps({{
         "name": name, "argv": [item.replace(scratch, "<scratch>") if scratch else item for item in sys.argv[1:]],
@@ -167,10 +172,17 @@ if name == "codex":
 else:
     model = config.get("model", "claude-opus-5-5")
     touch_heartbeat("claude", "{session}")
-    print(json.dumps({{
+    outcome = {{
         "type": "result", "is_error": config.get("is_error", False), "result": config.get("message", "claude answer"),
         "session_id": "{session}", "modelUsage": config.get("usage", {{model: {{}}}}),
-    }}))
+    }}
+    if scratch is None:
+        print(json.dumps(outcome))
+    else:
+        init = {{"type": "system", "subtype": "init", "cwd": os.getcwd(), "claude_code_version": "2.1.325", "session_id": "{session}"}}
+        if not config.get("no_sandbox_status"):
+            init["sandbox_status"] = config.get("sandbox_status", "connected")
+        print(json.dumps([init, outcome] if not config.get("no_init") else [outcome]))
     if not config.get("no_transcript"):
         home = Path(os.environ["CLAUDE_CONFIG_DIR"]) / "projects" / "-some-project"
         home.mkdir(parents=True, exist_ok=True)
@@ -314,20 +326,29 @@ class RoleRunnerTest(unittest.TestCase):
             argv += ["-c", f"sandbox_workspace_write.writable_roots={json.dumps([str(Path(root).resolve()) for root in roots])}"]
         return argv + ["--json", "-o", str(output or self.result), "-"]
 
-    def claude_argv(self, *, model="claude-opus-5-5", effort="high", writing=False, resume=None, add_dirs=()):
+    def claude_argv(self, *, model="claude-opus-5-5", effort="high", writing=False, resume=None, add_dirs=(), validation=False):
         """A capability run on Claude: the read set and the read-only shell, plus edits in approved directories when it writes."""
         tools = ["Read", "Grep", "Glob", "Bash", *(["Edit", "Write"] if writing else [])]
         rules = [f"Edit(/{directory}/**)" for directory in add_dirs]
-        allowed = ["Read", "Grep", "Glob", *SHELL_RULES, *(rules if writing else []), *(["Bash"] if writing else [])]
+        allowed = ["Read", "Grep", "Glob", *SHELL_RULES, *(rules if writing else []), *(["Bash"] if writing or validation else [])]
         argv = ["-p"]
         if resume is not None:
             argv += ["--resume", resume]
         argv += ["--model", model, "--effort", effort, "--output-format", "json"]
-        argv += [] if writing else ["--disable-slash-commands"]
+        argv += [] if writing else ["--verbose", "--disable-slash-commands"]
         argv += ["--tools", *tools, "--strict-mcp-config", "--permission-mode", "dontAsk", "--allowedTools", *allowed]
         for directory in add_dirs:
             argv += ["--add-dir", directory]
-        return argv
+        return argv if writing else argv + ["--settings", self.sandbox_json(validation)]
+
+    def sandbox_json(self, validation=False):
+        """The inline --settings JSON of a read-only Claude run, with <scratch> for the run's scratch folder."""
+        hosts = ["pypi.org", "files.pythonhosted.org", "registry.npmjs.org"] if validation else []
+        settings = {"sandbox": {
+            "enabled": True, "failIfUnavailable": True, "allowUnsandboxedCommands": False, "excludedCommands": [],
+            "filesystem": {"allowWrite": ["<scratch>"]}, "network": {"allowedDomains": hosts, "strictAllowlist": True},
+        }}
+        return json.dumps(settings, sort_keys=True)
 
     def claude_agent_argv(self, *, model="claude-sonnet-5-5", effort="high", writing=False, web=(), mcp=False, add_dirs=()):
         """An agent run on Claude: the read set, the shell list, web tools its definition lists, edits when it writes, and bare Bash with MCP."""
@@ -340,14 +361,14 @@ class RoleRunnerTest(unittest.TestCase):
         if mcp:
             allowed += ["mcp__*"]
         argv = ["-p", "--model", model, "--effort", effort, "--output-format", "json"]
-        argv += [] if writing else ["--disable-slash-commands"]
+        argv += [] if writing else ["--verbose", "--disable-slash-commands"]
         argv += ["--tools", *tools]
         if not mcp:
             argv.append("--strict-mcp-config")
         argv += ["--permission-mode", "dontAsk", "--allowedTools", *allowed]
         for directory in add_dirs:
             argv += ["--add-dir", directory]
-        return argv
+        return argv if writing else argv + ["--settings", self.sandbox_json()]
 
     def write(self, path: Path, text: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -451,9 +472,9 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual("claude", logged["name"])
         self.assertEqual(
             [
-                "-p", "--model", "claude-opus-5-5", "--effort", "high", "--output-format", "json", "--disable-slash-commands",
-                "--tools", "Read", "Grep", "Glob", "--strict-mcp-config", "--permission-mode", "dontAsk",
-                "--allowedTools", "Read", "Grep", "Glob",
+                "-p", "--model", "claude-opus-5-5", "--effort", "high", "--output-format", "json", "--verbose",
+                "--disable-slash-commands", "--tools", "Read", "Grep", "Glob", "--strict-mcp-config", "--permission-mode", "dontAsk",
+                "--allowedTools", "Read", "Grep", "Glob", "--settings", self.sandbox_json(),
             ],
             logged["argv"],
         )
@@ -1753,20 +1774,18 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertEqual(self.codex_argv(), self.logged()["argv"])
 
-    def test_claude_resume은_같은_session_id와_모델과_effort로_실행하고_evidence에_남긴다(self):
-        """Claude capability를 --resume으로 이어 실행하면 claude -p --resume 인자를 쓰고 session을 evidence에 남긴다."""
+    def test_읽기_전용_Claude_실행은_resume을_종료_코드_2로_거부한다(self):
+        """읽기 전용 Claude 실행은 새 scratch 폴더에서 시작하고 Claude Code는 시작한 폴더에서만 세션을 이으므로 --resume을 거부한다."""
         # Given
-        config = {"entries": [{"model": "claude-opus-5-5", "effort": "high"}]}
         arguments = ["review", "--host", "codex", "--resume", SESSION, "--instructions", str(self.instructions)]
 
         # When
-        completed = self.run_runner(*arguments, config=config)
+        completed = self.run_runner(*arguments, config={"entries": [{"model": "claude-opus-5-5", "effort": "high"}]})
 
         # Then
-        self.assertEqual(0, completed.returncode, completed.stderr)
-        self.assertEqual(self.claude_argv(effort="high", resume=SESSION), self.logged()["argv"])
-        status = self.status(completed)
-        self.assertEqual((True, SESSION), (status["verified"], status["evidence"]["session"]))
+        self.assertEqual(2, completed.returncode, completed.stderr)
+        self.assertIn("--resume", completed.stderr)
+        self.assertFalse(self.log.exists())
 
     def test_evidence의_session은_codex에서는_thread_id이고_claude에서는_session_id이다(self):
         """성공한 실행은 재개에 쓸 id를 evidence.session으로 남긴다."""
@@ -3069,16 +3088,6 @@ class RoleRunnerTest(unittest.TestCase):
                 self.assertIn("--validation", completed.stderr)
                 self.assertFalse(self.log.exists())
 
-    def test_validation은_Claude_모델에서는_종료_코드_2이고_자식을_시작하지_않는다(self):
-        """Claude 경로는 scratch 폴더로 쓰기를 가두는 방법이 아직 정해지지 않았으므로 --validation을 거부한다."""
-        # When
-        completed = self.run_runner("reviewer", "--model", "claude-opus-5-5", "--validation")
-
-        # Then
-        self.assertEqual(2, completed.returncode, completed.stderr)
-        self.assertIn("--validation", completed.stderr)
-        self.assertFalse(self.log.exists())
-
     def test_validation_없는_reviewer_프롬프트는_빌드_테스트_설치_네트워크_금지를_담고_네트워크가_없다(self):
         """--validation 없이는 기존 금지 문장이 프롬프트에 있고 권한 프로필에 네트워크 설정이 없다."""
         # When
@@ -3110,6 +3119,147 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertNotIn("Never run build, test, install, or network commands", prompt)
         self.assertNotIn("use no network", prompt)
         self.assertEqual(self.codex_argv(model="gpt-6-astra", validation=True), call["argv"])
+        self.assertTrue(self.status(completed)["validation"])
+
+    def test_읽기_전용_Claude_실행은_scratch_폴더에서_시작하고_샌드박스_설정으로_쓰기를_가둔다(self):
+        """reviewer를 Claude로 실행하면 작업 폴더가 scratch이고, 명령이 scratch만 쓰는 샌드박스 설정을 싣고, 환경 변수가 그 안을 가리킨다."""
+        # Given
+        temp = self.system_temp()
+
+        # When
+        completed = self.run_runner("reviewer", "--model", "claude-opus-5-5", extra_env={"TMPDIR": str(temp)})
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        call = self.logged()
+        scratch = Path(call["scratch"])
+        self.assertEqual(temp.resolve(), scratch.parent)
+        self.assertEqual(scratch, Path(call["cwd"]).resolve())
+        self.assertNotEqual(self.workspace.resolve(), Path(call["cwd"]).resolve())
+        self.assertIn("--settings", call["argv"])
+        self.assertEqual(set(self.SCRATCH_VARIABLES), set(call["env"]))
+        for name, value in call["env"].items():
+            self.assertTrue(Path(value).is_relative_to(scratch), (name, value))
+        self.assertIn(f"The repository is at {self.workspace}", call["stdin"].replace(str(self.workspace.resolve()), str(self.workspace)))
+
+    def test_Claude_쓰기_실행은_scratch_폴더도_샌드박스_설정도_만들지_않는다(self):
+        """Claude 구현 실행(--add-dir)은 작업 폴더가 그대로이고 --settings가 없다."""
+        # Given
+        directory = str(self.base)
+
+        # When
+        completed = self.run_runner(
+            "design", "--host", "codex", "--fallback", "--instructions", str(self.instructions), "--add-dir", directory,
+        )
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        call = self.logged()
+        self.assertNotIn("--settings", call["argv"])
+        self.assertIsNone(call["scratch"])
+        self.assertEqual(self.workspace.resolve(), Path(call["cwd"]).resolve())
+
+    def assert_claude_scratch_removed(self, completed, code):
+        self.assertEqual(code, completed.returncode, completed.stderr)
+        scratch = self.logged()["scratch"]
+        self.assertTrue(scratch)
+        self.assertFalse(Path(scratch).exists())
+
+    def test_Claude_scratch_폴더는_성공_실패_증거_실패_시간_초과_뒤에_모두_없어진다(self):
+        """Claude 실행이 성공, 자식 실패(3), 샌드박스 증거 실패(4), 시간 초과(3)로 끝나도 scratch 폴더가 남지 않는다."""
+        cases = [
+            ({}, [], 0),
+            ({"exit": 1}, [], 3),
+            ({"no_sandbox_status": True}, [], 4),
+            ({"sleep": 5}, ["--timeout", "1"], 3),
+        ]
+        for config, extra, code in cases:
+            with self.subTest(config=config):
+                self.assert_claude_scratch_removed(
+                    self.run_runner("reviewer", "--model", "claude-opus-5-5", *extra, config=config), code,
+                )
+
+    def test_Claude_init_이벤트가_샌드박스_연결을_보이지_않으면_종료_코드_4이고_결과를_쓰지_않는다(self):
+        """init 이벤트가 없거나 sandbox_status가 없거나 connected가 아니면 샌드박스가 켜졌다는 증거가 없어 종료 코드 4이다."""
+        cases = [{"no_init": True}, {"no_sandbox_status": True}, {"sandbox_status": "failed"}]
+        for config in cases:
+            with self.subTest(config=config):
+                # When
+                completed = self.run_runner("reviewer", "--model", "claude-opus-5-5", config=config)
+
+                # Then
+                self.assertEqual(4, completed.returncode, completed.stderr)
+                self.assertFalse(self.result.exists())
+
+    def seeded_command(self, scratch, allow=None, validation=False, **changes):
+        """A claude command whose --settings is the runner's own sandbox block, with the given keys replaced."""
+        settings = json.loads(self.sandbox_json(validation).replace("<scratch>", scratch.as_posix()))
+        sandbox = settings["sandbox"]
+        if allow is not None:
+            sandbox["filesystem"]["allowWrite"] = allow
+        sandbox.update(changes)
+        return ["claude", "-p", "--settings", json.dumps(settings)]
+
+    def test_verify_sandbox는_scratch만_쓰는_설정만_통과시킨다(self):
+        """scratch만 쓰는 설정과 init은 통과하고, 다른 쓰기 경로나 빠진 제한이나 넓은 네트워크는 종료 코드 4로 실패한다."""
+        import role_runner_evidence as evidence
+
+        # Given
+        scratch = (self.base / "role-runner-scratch-x").resolve()
+        init = {"type": "system", "subtype": "init", "cwd": str(scratch), "sandbox_status": "connected"}
+        wider = self.seeded_command(scratch, allow=[scratch.as_posix(), "/tmp/work/demo-a"])
+        other = self.seeded_command(scratch, allow=["/tmp/work/demo-a"])
+        no_limit = ["claude", "-p"]
+        escape = self.seeded_command(scratch, allowUnsandboxedCommands=True)
+        open_network = self.seeded_command(scratch, network={"allowedDomains": ["example.com"], "strictAllowlist": True})
+        validation_hosts = self.seeded_command(scratch, validation=True)
+
+        # When
+        evidence.verify_sandbox(self.seeded_command(scratch), init, scratch, False)
+        evidence.verify_sandbox(validation_hosts, init, scratch, True)
+
+        # Then
+        for command in (wider, other, no_limit, escape, open_network, validation_hosts):
+            with self.subTest(command=command[-1][:80]):
+                with self.assertRaises(role_runner.RunnerError) as raised:
+                    evidence.verify_sandbox(command, init, scratch, False)
+                self.assertEqual(4, raised.exception.code)
+
+    def test_verify_sandbox는_init의_작업_폴더가_scratch가_아니면_종료_코드_4이다(self):
+        """init 이벤트의 cwd가 scratch 폴더가 아니면 통과하지 못한다."""
+        import role_runner_evidence as evidence
+
+        # Given
+        scratch = (self.base / "role-runner-scratch-x").resolve()
+        init = {"type": "system", "subtype": "init", "cwd": "/tmp/work/demo-a", "sandbox_status": "connected"}
+
+        # When / Then
+        with self.assertRaises(role_runner.RunnerError) as raised:
+            evidence.verify_sandbox(self.seeded_command(scratch), init, scratch, False)
+        self.assertEqual(4, raised.exception.code)
+
+    def test_Claude_validation_reviewer는_전체_셸과_패키지_네트워크와_저장소_복사_안내를_받는다(self):
+        """--validation은 Claude reviewer에 샌드박스 안의 전체 셸과 패키지 호스트 네트워크를 주고, 프롬프트가 저장소 위치와 복사 방법을 말한다."""
+        # When
+        completed = self.run_runner("reviewer", "--model", "claude-opus-5-5", "--validation")
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        call = self.logged()
+        self.assertEqual(
+            [
+                "-p", "--model", "claude-opus-5-5", "--effort", "high", "--output-format", "json", "--verbose",
+                "--disable-slash-commands", "--tools", "Read", "Grep", "Glob", "Bash", "--strict-mcp-config",
+                "--permission-mode", "dontAsk", "--allowedTools", "Read", "Grep", "Glob", "Bash",
+                "--settings", self.sandbox_json(True),
+            ],
+            call["argv"],
+        )
+        prompt = " ".join(call["stdin"].split())
+        self.assertIn("Validation mode", prompt)
+        self.assertIn("git -C", prompt)
+        self.assertIn("archive HEAD | tar -x -C repo", prompt)
+        self.assertNotIn("Never run build, test, install, or network commands", prompt)
         self.assertTrue(self.status(completed)["validation"])
 
 
