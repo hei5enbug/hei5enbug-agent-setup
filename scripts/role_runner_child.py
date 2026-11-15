@@ -4,8 +4,10 @@ import json
 import os
 import signal
 import subprocess
+from pathlib import Path
 
 from role_runner_config import ASSIGNED_ROLE_ENV, EXIT_RUN, MCP_SERVER_NAME, PARENT_SESSION_ENV, RunnerError
+from role_runner_scratch import scratch_environment
 
 
 def parent_session(environ) -> str | None:
@@ -22,8 +24,8 @@ def parent_session(environ) -> str | None:
     return None
 
 
-def child_environment(marker: str) -> dict:
-    environment = dict(os.environ)
+def child_environment(marker: str, scratch: Path | None = None) -> dict:
+    environment = {**os.environ, **(scratch_environment(scratch) if scratch is not None else {})}
     environment[ASSIGNED_ROLE_ENV] = marker
     parent = parent_session(environment)
     if parent is not None:
@@ -39,8 +41,8 @@ def kill_group(pid: int) -> None:
         pass
 
 
-def run_child(marker: str, command: list[str], prompt: str, cwd: str, timeout: int) -> str:
-    environment = child_environment(marker)
+def run_child(marker: str, command: list[str], prompt: str, cwd: str, timeout: int, scratch: Path | None = None) -> str:
+    environment = child_environment(marker, scratch)
     try:
         child = subprocess.Popen(
             command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,

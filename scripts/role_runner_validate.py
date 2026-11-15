@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 
 from role_runner_agents import accepts_add_dir, runner_for
-from role_runner_config import AGENT_TARGET, CAPABILITIES, MAX_BATCH, REVIEW_MODELS, ROLES, UsageError
+from role_runner_config import AGENT_TARGET, CAPABILITIES, MAX_BATCH, REVIEW_MODELS, ROLES, VALIDATION_ROLE, UsageError
 
 
 def validate(args: argparse.Namespace) -> None:
@@ -16,6 +16,8 @@ def validate(args: argparse.Namespace) -> None:
             f"Unknown target: {target}. Roles: {', '.join(ROLES)}. Capabilities: {', '.join(CAPABILITIES)}. Or agent."
         )
     validate_request(args, target)
+    if args.validation and target != VALIDATION_ROLE:
+        raise UsageError(f"--validation is allowed only for the {VALIDATION_ROLE} role")
     if args.add_dirs and not accepts_add_dir(target):
         raise UsageError("--add-dir is allowed only for the worker role, writing capabilities, and agent mode")
     if args.timeout <= 0:

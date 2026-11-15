@@ -45,6 +45,33 @@ CLAUDE_HOOKS_MESSAGE = "The approval guard hooks did not run in Claude Code"
 NO_NETWORK_RULE = "use no network"
 MCP_NETWORK_RULE = "use MCP tools and network only for the external work the assignment names"
 CODEX_NETWORK_ON = "sandbox_workspace_write.network_access=true"
+SCRATCH_PREFIX = "role-runner-scratch-"
+SCRATCH_PROFILE = "role-runner-scratch"
+SCRATCH_VARIABLES = {
+    "TMPDIR": "tmp",
+    "TMPPREFIX": "tmp/zsh",
+    "UV_CACHE_DIR": "cache/uv",
+    "XDG_CACHE_HOME": "cache/xdg",
+    "PYTHONPYCACHEPREFIX": "pycache",
+    "npm_config_cache": "cache/npm",
+    "PIP_CACHE_DIR": "cache/pip",
+}
+VALIDATION_ROLE = "reviewer"
+REVIEWER_BAN = re.compile(
+    r"Never modify files, branches, or worktrees\.\s+Never run\s+build, test, install, or network commands\."
+)
+VALIDATION_RULE = (
+    "Validation mode: run the project's tests, scripts, and calculations to check the claims under review. "
+    "The only path you may write is the folder the TMPDIR environment variable names, which is your scratch folder; "
+    "every cache and temporary folder already points into it. Reuse the project's existing environment read-only when "
+    "one exists, and install a dependency a check needs into the scratch folder only when the environment is missing or "
+    "does not fit the check. Use the network only for those installs. Edit no file outside the scratch folder, "
+    "make no commit or push, and change no external state. Report each command you ran with its result."
+)
+VALIDATION_SENTENCE = (
+    'You are an assigned reviewer under the "Assigned workers" rules: start no agents, make no commit or push, '
+    "change no external state, and return findings only under the role's output contract."
+)
 
 
 def worker_sentence(network: str) -> str:
@@ -112,6 +139,7 @@ class Run:
     web_tools: tuple[str, ...] = ()
     mcp: bool = False
     user_requested: bool = False
+    validation: bool = False
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -130,4 +158,5 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--name")
     parser.add_argument("--mcp", action="store_true")
     parser.add_argument("--user-requested", action="store_true", dest="user_requested")
+    parser.add_argument("--validation", action="store_true")
     return parser

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from role_runner_config import (
-    CLAUDE_SKILLS_OFF, CODEX_NETWORK_ON, CODEX_SKILLS_OFF, MCP_TOOL_RULE, READ_SHELL_RULES, Run,
+    CLAUDE_SKILLS_OFF, CODEX_NETWORK_ON, CODEX_SKILLS_OFF, MCP_TOOL_RULE, READ_SHELL_RULES, SCRATCH_PROFILE, Run,
 )
 
 
@@ -19,16 +19,32 @@ def scoped_codex_config(run: Run, mcp_off: list[str]) -> list[str]:
     return ["-c", CODEX_NETWORK_ON] if run.writing else []
 
 
-def codex_command(run: Run, cwd: str, result: str, mcp_off: list[str]) -> list[str]:
+def scratch_profile_config(scratch: Path, network: bool) -> list[str]:
+    """Return the Codex overrides that select a permission profile whose only writable path is the scratch folder."""
+    table = f'{{extends=":read-only", filesystem={{{json.dumps(scratch.as_posix())}="write"}}'
+    table += ", network={enabled=true}}" if network else "}"
+    return ["-c", f'default_permissions="{SCRATCH_PROFILE}"', "-c", f"permissions.{SCRATCH_PROFILE}={table}"]
+
+
+def sandbox_config(run: Run, scratch: Path | None) -> list[str]:
+    """A writing run keeps its sandbox mode; a read-only run gets the scratch-folder profile in its place."""
+    if run.writing:
+        return ["-c", f'sandbox_mode="{sandbox_for(run)}"']
+    if scratch is None:
+        raise ValueError("A read-only Codex run needs a scratch folder")
+    return scratch_profile_config(scratch, run.validation)
+
+
+def codex_command(run: Run, cwd: str, result: str, mcp_off: list[str], scratch: Path | None = None) -> list[str]:
     command = ["codex"]
     if run.role == "researcher" or run.web_tools:
         command.append("--search")
-    sandbox = sandbox_for(run)
     scoped = scoped_codex_config(run, mcp_off) + ([] if run.writing else list(CODEX_SKILLS_OFF))
     if run.resume is not None:
         command += [
             "exec", "resume", run.resume, "-m", run.model,
-            "-c", f'model_reasoning_effort="{run.effort}"', "-c", f'sandbox_mode="{sandbox}"', *scoped,
+            "-c", f'model_reasoning_effort="{run.effort}"',
+            *sandbox_config(run, scratch), *scoped,
         ]
         if run.writing and run.add_dirs:
             roots = [str(Path(directory).resolve()) for directory in run.add_dirs]
@@ -36,7 +52,8 @@ def codex_command(run: Run, cwd: str, result: str, mcp_off: list[str]) -> list[s
         command += ["--json", "-o", result, "-"]
         return command
     command += [
-        "exec", "-m", run.model, "-c", f'model_reasoning_effort="{run.effort}"', "-s", sandbox, "-C", cwd, *scoped,
+        "exec", "-m", run.model, "-c", f'model_reasoning_effort="{run.effort}"',
+        *(["-s", sandbox_for(run)] if run.writing else sandbox_config(run, scratch)), "-C", cwd, *scoped,
     ]
     for directory in run.add_dirs:
         command += ["--add-dir", directory]

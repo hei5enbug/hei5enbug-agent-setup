@@ -25,7 +25,7 @@ limitation and finish without a call.
 ## Reviewer selection
 
 When the review is due under the rule above, send the completed draft to exactly one reviewer that the mapping
-below selects, in a read-only session. Give the reviewer the frozen intent, relevant authoritative evidence,
+below selects, in a read-only session whose only writable path is the runner's scratch folder. Give the reviewer the frozen intent, relevant authoritative evidence,
 and the complete draft. The reviewer returns findings only; the authoring session keeps every final
 decision.
 
@@ -49,9 +49,12 @@ substitute another model tier or a lower reasoning effort than this selection. T
 the draft, repository, or external state.
 
 Keep the main session's model and effort unchanged. Pass the reviewer's model and effort explicitly to a
-separate host runner, enforce read-only tools or sandbox, and verify the actual model and effort from host
-records before counting the review as complete. A silent fallback or effort cap is not a completed review.
-Do not enable extra billing or change authentication to make the review available.
+separate host runner, and verify the actual model and effort from host records, and the write limit, before counting
+the review as complete. The runner gives the reviewer a sandbox whose only writable path is its per-run scratch folder.
+Run a GPT reviewer with `role_runner.py reviewer --validation`, so it can run the project's tests, calculations, and
+installs inside that folder and edit nothing else; a Claude reviewer has no validation mode and stays read-only.
+Give the reviewer the check commands you ran with their results so it can rerun them. A silent fallback or effort cap
+is not a completed review. Do not enable extra billing or change authentication to make the review available.
 
 For an implementation review, provide the accepted scope, complete change diff, relevant source paths,
 acceptance criteria, and check results instead of the conversation history. Also provide the callers and consumers
@@ -100,7 +103,7 @@ reviewer, or repeat validation after finalization. A failed or unavailable revie
 second model call. A declined earlier review authorizes no substitute independent review. Routine author
 inspection and required tests still run; never label them independent validation.
 
-If the required model, effort, read-only execution, or model runner is unavailable, do not substitute
+If the required model, effort, write-limited execution, or model runner is unavailable, do not substitute
 another configuration or present author inspection as independent review. A role runner exit code 3 or 4
 means the same. Finish work that does not depend on the reviewer and report that independent validation was
 not performed and why.
@@ -112,7 +115,7 @@ into fix now, worth considering, note only, or rejected, each with a one-line re
 reachable caller or input path is a possibility, never fix now, until traced. Apply supported fix-now corrections
 once, and reject unsupported scope expansion. Do not run another model review after the corrections.
 
-Report the resolved reviewer model, reasoning effort, that one read-only pass ran, each finding's category and
+Report the resolved reviewer model, reasoning effort, that one write-limited pass ran, each finding's category and
 reason, the safety fact and its proof level for an implementation review, and any unresolved finding. When validation could not run, report the unavailable requirement and reason instead. When the user
 declined an earlier review, report only that independent validation did not run. Every one of these results belongs
 in the reply, never in the deliverable.

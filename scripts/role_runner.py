@@ -23,10 +23,11 @@ from role_runner_config import (  # noqa: E402
     ROLE_ENTRY, ROLE_MODEL, ROLE_SENTENCES, ROLES, WRITING_CAPABILITIES, Run, RunnerError, UsageError, build_parser,
 )
 from role_runner_evidence import (  # noqa: E402
-    claude_result, codex_home, json_lines, require_heartbeat, thread_id_from, verify_claude, verify_codex,
+    claude_result, codex_home, json_lines, require_heartbeat, thread_id_from, turns_before, verify_claude, verify_codex,
 )
 from role_runner_hooks import exchange_hooks, guard_ready, heal_hooks, hooks_for_cwd, is_guard_hook  # noqa: E402
 from role_runner_prompt import capability_sentence, compose, compose_capability_prompt, compose_prompt  # noqa: E402
+from role_runner_scratch import scratch_folder  # noqa: E402
 from role_runner_validate import validate  # noqa: E402
 
 
@@ -126,18 +127,29 @@ def preflight_healing(run: Run, cwd: str, mcp_off: list[str], timeout: int) -> R
     return preflight_thread(run, cwd, mcp_off, timeout)
 
 
+def run_codex(args: argparse.Namespace, run: Run, prompt: str, cwd: str, mcp_off: list[str]) -> dict:
+    """Run a Codex child and verify it: a writing run in its workspace-write sandbox, a read-only run in a scratch folder
+    that holds its only writable path and is removed on every exit."""
+    if run.writing:
+        stdout = run_child(run.target, codex_command(run, cwd, args.result, mcp_off), prompt, cwd, args.timeout)
+        return verify_codex(stdout, run.model, run.effort, sandbox_for(run))
+    with scratch_folder(cwd, run.add_dirs) as scratch:
+        since_turn = turns_before(run.resume) if run.resume is not None else 0
+        command = codex_command(run, cwd, args.result, mcp_off, scratch)
+        stdout = run_child(run.target, command, prompt, cwd, args.timeout, scratch)
+        return verify_codex(stdout, run.model, run.effort, sandbox_for(run), scratch, since_turn)
+
+
 def execute_codex(args: argparse.Namespace, run: Run, prompt: str, cwd: str) -> dict:
     """A writing run preflights a fresh thread and resumes it; a read-only run checks hooks/list, then runs once."""
     mcp_off = [] if run.mcp else codex_mcp_off(run.target, cwd, args.timeout)
-    sandbox = sandbox_for(run)
     if run.writing:
         run = preflight_healing(run, cwd, mcp_off, args.timeout)
     else:
         require_hooks_ready(run.target, mcp_off, cwd, args.timeout)
         if run.resume is not None:
             require_heartbeat("codex", run.resume, CODEX_HOOKS_MESSAGE)
-    stdout = run_child(run.target, codex_command(run, cwd, args.result, mcp_off), prompt, cwd, args.timeout)
-    evidence = verify_codex(stdout, run.model, run.effort, sandbox)
+    evidence = run_codex(args, run, prompt, cwd, mcp_off)
     if not run.writing and evidence["tool_calls"]:
         require_heartbeat("codex", evidence["session"], CODEX_HOOKS_MESSAGE)
     result_path = Path(args.result)
@@ -185,6 +197,7 @@ def status(run: Run | None, verified: bool, evidence: dict, code: int) -> str:
             "effort": run.effort if run else None,
             "verified": verified, "evidence": evidence, "exit": code,
             **({"user_requested": True} if run and run.user_requested else {}),
+            **({"validation": True} if run and run.validation else {}),
         },
         ensure_ascii=False,
     )
@@ -236,7 +249,12 @@ def resolve(args: argparse.Namespace) -> Run:
 
 def plan(args: argparse.Namespace) -> Run:
     validate(args)
-    run = replace(resolve(args), user_requested=args.user_requested)
+    run = replace(resolve(args), user_requested=args.user_requested, validation=args.validation)
+    if run.validation and run.runner == "claude":
+        raise UsageError(
+            f"--validation cannot run on {run.model}: Claude Code offers no documented way to confine a shell's writes "
+            "to the scratch folder, so the owner must decide before the Claude path supports it; use a GPT reviewer model"
+        )
     if run.writing and run.runner == "claude" and not run.add_dirs and run.agent is None:
         label = f"capability {run.capability}" if run.capability else f"role {run.role}"
         raise UsageError(f"The Claude path of the writing {label} needs --add-dir for each directory it may edit")

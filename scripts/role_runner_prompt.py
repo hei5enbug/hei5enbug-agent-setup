@@ -5,7 +5,8 @@ from pathlib import Path
 
 import session_context
 from role_runner_config import (
-    MCP_NETWORK_RULE, NO_NETWORK_RULE, READ_SHELL_RULES, ROLE_DEFINITIONS, ROLE_SENTENCES, ROLES, Run, worker_sentence,
+    MCP_NETWORK_RULE, NO_NETWORK_RULE, READ_SHELL_RULES, REVIEWER_BAN, ROLE_DEFINITIONS, ROLE_SENTENCES, ROLES, Run,
+    VALIDATION_RULE, VALIDATION_SENTENCE, worker_sentence,
 )
 
 
@@ -48,11 +49,20 @@ def capability_sentence(capability: str, mcp: bool = False) -> str:
     )
 
 
-def compose_prompt(role: str, assignment_text: str, root: Path) -> str:
+def validation_body(body: str) -> str:
+    """Replace the reviewer definition's ban on edits and on build, test, install, and network commands with the validation rule."""
+    replaced, count = REVIEWER_BAN.subn(VALIDATION_RULE, body)
+    if count != 1:
+        raise ValueError("The reviewer definition no longer holds the edit and command ban that validation mode replaces")
+    return replaced
+
+
+def compose_prompt(role: str, assignment_text: str, root: Path, validation: bool = False) -> str:
     """Build the full prompt: role sentence, role definition body, worker rules for a worker, then the assignment."""
     if role not in ROLES:
         raise ValueError(f"Unsupported role: {role}")
-    parts = [ROLE_SENTENCES[role], role_body(role, root)]
+    body = role_body(role, root)
+    parts = [VALIDATION_SENTENCE, validation_body(body)] if validation else [ROLE_SENTENCES[role], body]
     if role == "worker":
         parts.append(session_context.assigned_workers_section(root))
     parts.append("## Assignment\n\n" + assignment_text.strip())
@@ -91,7 +101,7 @@ def compose(run: Run, args: argparse.Namespace, root: Path) -> str:
     if run.agent is not None:
         return compose_agent_prompt(run.body, assignment_text, root, run.mcp, limited_shell)
     if run.capability is None:
-        return compose_prompt(run.role, assignment_text, root)
+        return compose_prompt(run.role, assignment_text, root, run.validation)
     instructions = run.instructions.read_text(encoding="utf-8")
     body = without_frontmatter(instructions, run.instructions.as_posix())
     return compose_capability_prompt(run.capability, body, assignment_text, root, run.mcp, limited_shell)
