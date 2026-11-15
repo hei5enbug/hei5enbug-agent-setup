@@ -30,9 +30,10 @@
   fixes the model, effort, or prompt of a skill or agent may add cases that separate difficulty levels. Deterministic
   tests that cost no model tokens have no such limit. Write issue acceptance criteria under the same rule.
 - Efficiency rule (owner decision, 2026-11-15): when an evaluation chooses the most efficient of several candidates,
-  keep only candidates that pass every case; on any case, drop a candidate that is slower than the fastest passing one
-  by more than 1.5 times and by more than 60 seconds; among the rest choose the lowest list-price cost per passing
-  case; and treat costs within 10 percent or within $0.05 of each other as a tie, choosing the faster candidate.
+  keep only candidates that pass every case and, where it measures quality beyond pass or fail, have the highest
+  measured quality, as the quality rule above requires; on any case, drop a candidate that is slower than the fastest
+  remaining one by more than 1.5 times and by more than 60 seconds; among the rest choose the lowest list-price cost
+  per passing case; and treat costs within 10 percent or within $0.05 of each other as a tie, choosing the faster one.
   Before measuring a rule, skill, agent, or hook change, check whether a deterministic script, check, test, or hook
   can do or enforce the same thing, and measure it as a candidate when it can.
 - A change to a rule, skill, agent, hook, or route of this plugin is adopted or rejected only on a record under
@@ -79,7 +80,7 @@
   | Bounded implementation and debugging, easy work | `haiku_worker` | `claude-haiku-5-5` / `xhigh` | `worker` | `gpt-6.1-sol` / `high` |
   | Bounded local, read-only evidence | `scout` | `gpt-5.6-luna` / `xhigh` | `haiku_scout` | `claude-haiku-5-5` / `xhigh` |
   | Mechanical documentation edits with approved content | `writer` | `gpt-6.1-sol` / `high` | `haiku_writer` | `claude-haiku-5-5` / `xhigh` |
-  | One read-only final review of a completed bounded change | `code_reviewer` | `gpt-6.1-sol` / `high` | `opus_code_reviewer` | `claude-opus-5-5` / `high` |
+  | One read-only final review, when the final review table below chooses `gpt-6.1-sol` at `high` | `code_reviewer` | `gpt-6.1-sol` / `high` | `opus_code_reviewer` | `claude-opus-5-5` / `high` |
 
   `haiku_worker` and `sonnet_worker` name the plugin's `hei5enbug-agent-setup:worker` and
   `hei5enbug-agent-setup:sonnet-worker` subagents. The other `haiku_*` names and `opus_code_reviewer` are
@@ -94,7 +95,7 @@
   A fallback never resolves a missing user decision or bypasses a permission or failed acceptance check.
 
   This repository routing overrides the plugin's model and effort routes for these roles and assigns
-  mechanical documentation work to `writer` and bounded final review to `code_reviewer`.
+  mechanical documentation work to `writer`; the final review table below chooses each final reviewer.
   All other plugin ownership, permission, and verification rules still apply. Request the listed model
   and effort explicitly when the host supports it, and verify
   the actual host rollout before relying on either a primary or fallback role. Do not override a pinned
