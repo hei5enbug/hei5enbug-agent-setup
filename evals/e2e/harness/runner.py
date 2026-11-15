@@ -14,7 +14,7 @@ from .config import (
     STATUS_TIMED_OUT, STATUS_USAGE_LIMITED, HarnessConfig,
 )
 from .matrix import RunSpec, prior_attempts, read_json, write_json
-from .process import ProcessResult, run_agent
+from .process import GradingInterrupted, ProcessResult, run_agent
 
 AGENT_TMP_NAME = "tmp"
 ABORTED_REASON_PREFIX = "aborted"
@@ -65,17 +65,22 @@ def write_codex_run_files(
 
 def grade_run(
     spec: RunSpec, task: dict[str, Any], run: dict[str, Any], cfg: HarnessConfig, graders: Any, view: dict[str, Any],
+    interrupt: threading.Event | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Grade a run; a set `interrupt` ends the grading processes and raises GradingInterrupted."""
+    if interrupt is not None and interrupt.is_set():
+        raise GradingInterrupted("harness interrupted before grading")
     grade_dir = spec.result_dir / "grade"
     grade_dir.mkdir(parents=True, exist_ok=True)
-    grade = graders.grade_run(task, spec.repo, run["base_commit"], view, cfg.tasks_root, grade_dir / "work")
+    extra = {} if interrupt is None else {"interrupt": interrupt}
+    grade = graders.grade_run(task, spec.repo, run["base_commit"], view, cfg.tasks_root, grade_dir / "work", **extra)
     write_json(grade_dir / "grade.json", grade)
     if not task.get("rubric"):
         return grade, None
     prompt = (spec.result_dir / "prompt.txt").read_text(encoding="utf-8")
     artifact = rubric.artifact_text(task["rubric"], spec.repo, view["final_answer"])
     work = rubric.opaque_dir(spec.base_dir, spec.run_id)
-    result = {**rubric.grade(task, artifact, prompt, work, repo_root=cfg.repo_root), "rubric_dir": str(work)}
+    result = {**rubric.grade(task, artifact, prompt, work, repo_root=cfg.repo_root, interrupt=interrupt), "rubric_dir": str(work)}
     write_json(grade_dir / "rubric.json", result)
     return grade, result
 
@@ -102,7 +107,10 @@ def claude_records(spec: RunSpec, run: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def analyze(spec: RunSpec, task: dict[str, Any], run: dict[str, Any], cfg: HarnessConfig, graders: Any = None) -> dict[str, Any]:
+def analyze(
+    spec: RunSpec, task: dict[str, Any], run: dict[str, Any], cfg: HarnessConfig, graders: Any = None,
+    interrupt: threading.Event | None = None,
+) -> dict[str, Any]:
     """Build view, grade, and metrics for a run from the files in its result dir."""
     directory = spec.result_dir
     if spec.host == HOST_CODEX:
@@ -115,7 +123,7 @@ def analyze(spec: RunSpec, task: dict[str, Any], run: dict[str, Any], cfg: Harne
     grade, rubric_result, failure = None, None, None
     if run["status"] in FINISHED_STATUSES:
         try:
-            grade, rubric_result = grade_run(spec, task, run, cfg, graders or load_graders(), view)
+            grade, rubric_result = grade_run(spec, task, run, cfg, graders or load_graders(), view, interrupt)
         except Exception as error:  # noqa: BLE001 - usage and cost are still written; the error is raised after metrics.json
             failure = error
     result = metrics.build_metrics(
@@ -142,7 +150,10 @@ def collect_records(spec: RunSpec, session_id: str | None, proc: ProcessResult) 
     return {"claude": claude, "codex": codex}
 
 
-def finish_run(spec: RunSpec, task: dict[str, Any], run: dict[str, Any], proc: ProcessResult, cfg: HarnessConfig) -> dict[str, Any]:
+def finish_run(
+    spec: RunSpec, task: dict[str, Any], run: dict[str, Any], proc: ProcessResult, cfg: HarnessConfig,
+    interrupt: threading.Event | None = None,
+) -> dict[str, Any]:
     events = transcript.read_jsonl(spec.result_dir / "stream.jsonl")
     facts = metrics.stream_facts(events)
     records = collect_records(spec, facts["session_id"], proc)
@@ -158,14 +169,22 @@ def finish_run(spec: RunSpec, task: dict[str, Any], run: dict[str, Any], proc: P
         "error": proc.error, "collected": records, "orphans_killed": proc.orphans_killed,
         "leftover_killed": proc.leftover_killed,
     }
-    return record_and_analyze(spec, task, finished, cfg)
+    return record_and_analyze(spec, task, finished, cfg, interrupt)
 
 
-def record_and_analyze(spec: RunSpec, task: dict[str, Any], finished: dict[str, Any], cfg: HarnessConfig) -> dict[str, Any]:
-    """Write run.json, analyze the run, and add what analysis found (a cap violation, a grading error) to run.json."""
+def record_and_analyze(
+    spec: RunSpec, task: dict[str, Any], finished: dict[str, Any], cfg: HarnessConfig, interrupt: threading.Event | None = None,
+) -> dict[str, Any]:
+    """Write run.json, analyze the run, and add what analysis found (a cap violation, a grading error) to run.json.
+
+    A harness interrupt that stopped or prevented grading records the run as interrupted, so a resume runs it again."""
     write_json(spec.result_dir / "run.json", finished)
     try:
-        result = analyze(spec, task, finished, cfg)
+        result = analyze(spec, task, finished, cfg, interrupt=interrupt)
+    except GradingInterrupted:
+        finished = {**finished, "status": STATUS_INTERRUPTED, "interrupted": True}
+        write_json(spec.result_dir / "run.json", finished)
+        return finished
     except Exception as error:  # noqa: BLE001 - keep the agent outcome; `regrade` repairs a grading failure later
         finished = {**finished, "grade_error": f"{type(error).__name__}: {error}"}
         write_json(spec.result_dir / "run.json", finished)
@@ -178,6 +197,7 @@ def record_and_analyze(spec: RunSpec, task: dict[str, Any], finished: dict[str, 
 
 def finish_codex_run(
     spec: RunSpec, task: dict[str, Any], run: dict[str, Any], proc: ProcessResult, cfg: HarnessConfig,
+    interrupt: threading.Event | None = None,
 ) -> dict[str, Any]:
     """Copy the rollouts the run's CODEX_HOME holds, set the status from the stream and rollouts, then analyze."""
     copied = codex_host.copy_rollouts(spec.result_dir)
@@ -196,7 +216,7 @@ def finish_codex_run(
         "usage_limit": state["usage_limit"], "error": proc.error, "collected": {"codex": copied, "runner": runner_names},
         "orphans_killed": proc.orphans_killed, "leftover_killed": proc.leftover_killed,
     }
-    return record_and_analyze(spec, task, finished, cfg)
+    return record_and_analyze(spec, task, finished, cfg, interrupt)
 
 
 def execute_run(
@@ -238,7 +258,9 @@ def execute_run(
         argv, spec.repo, env, spec.result_dir / "stream.jsonl", spec.result_dir / "stderr.txt",
         float(task["limits"]["wall_seconds"]), cfg.sigint_grace, cfg.sigterm_grace, interrupt=interrupt,
     )
-    return finish_codex_run(spec, task, run, proc, cfg) if codex else finish_run(spec, task, run, proc, cfg)
+    if codex:
+        return finish_codex_run(spec, task, run, proc, cfg, interrupt)
+    return finish_run(spec, task, run, proc, cfg, interrupt)
 
 
 def parse_moment(value: Any) -> datetime | None:

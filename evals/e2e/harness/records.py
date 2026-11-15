@@ -16,7 +16,7 @@ from .caps import MODEL_CAP as ALLOWED_MODELS
 from .caps import normalize
 from .command import ConfigError
 from .config import FINISHED_STATUSES, HOST_CODEX, RUBRIC_EFFORT, RUBRIC_FALLBACK_EFFORT
-from .matrix import campaign_dir, make_spec, read_json
+from .matrix import campaign_dir, make_spec, parse_run_id, read_json
 from .verdict import (
     ACCEPT, BASELINE, CONTINUE_TO_FIVE, FAIL, HOSTS, INVESTIGATE, MEASURES, NOT_MEASURED, PASS, REJECT, REPEAT, SECOND_PAIR,
     claim_verdict, compare, with_claims,
@@ -279,7 +279,9 @@ def run_models(result_dir: Path, host: str, metrics: Mapping[str, Any]) -> dict[
 
 def run_cost(row: Mapping[str, Any]) -> float | None:
     """List-price spend of the whole run, including archived attempts: Claude spend as the summary computes it plus the
-    Codex list estimate. None when the records show none."""
+    Codex list estimate. None when the records show none, or when the final attempt or an archived one has no cost figure."""
+    if not row.get("spend_known"):
+        return None
     total = float(row.get("spend_claude") or 0.0) + float(row.get("spend_codex") or 0.0)
     return total if total > 0 else None
 
@@ -288,10 +290,18 @@ def positive(value: Any) -> float | None:
     return float(value) if is_number(value) else None
 
 
-def unmeasured(row: Mapping[str, Any], reason: str) -> dict[str, Any]:
+def stored_revision(run_root: Path, campaign: str, row: Mapping[str, Any]) -> str | None:
+    """The plugin revision the run itself stored in its run.json, or None when it stored none."""
+    result_dir = make_spec(run_root, campaign, row["task"], row["variant"], int(row["rep"]), row["host"]).result_dir
+    sha = ((read_json(result_dir / "run.json", {}) or {}).get("plugin") or {}).get("sha")
+    return str(sha) if sha else None
+
+
+def unmeasured(row: Mapping[str, Any], reason: str, revision: str | None = None) -> dict[str, Any]:
     """A run that exists but cannot be judged; it stays in its case as "not measured" instead of being dropped."""
     summary = {"rep": int(row["rep"]), "measured": False, "reason": reason, "passed": None, "wall_seconds": None, "cost_usd": None}
-    return {"case": row["task"], "variant": row["variant"], "host": row["host"], "summary": summary, "entry": None}
+    return {"case": row["task"], "variant": row["variant"], "host": row["host"], "summary": summary, "entry": None,
+            "revision": revision}
 
 
 def campaign_runs(run_root: Path, campaign: str, variants: Sequence[str], tasks: Sequence[str] | None) -> list[dict[str, Any]]:
@@ -302,16 +312,17 @@ def campaign_runs(run_root: Path, campaign: str, variants: Sequence[str], tasks:
         if row["variant"] not in variants or (tasks and row["task"] not in tasks) or row["host"] not in HOSTS:
             continue
         host = row["host"]
+        revision = stored_revision(run_root, campaign, row)
         if row.get("status") not in FINISHED_STATUSES:
-            found.append(unmeasured(row, f"run status {row.get('status')}"))
+            found.append(unmeasured(row, f"run status {row.get('status')}", revision))
             continue
         if not row.get("has_metrics") or row.get("grade_error"):
-            found.append(unmeasured(row, "grading failed" if row.get("grade_error") else "no metrics"))
+            found.append(unmeasured(row, "grading failed" if row.get("grade_error") else "no metrics", revision))
             continue
         result_dir = make_spec(run_root, campaign, row["task"], row["variant"], int(row["rep"]), host).result_dir
         grade = read_json(result_dir / "grade" / "grade.json", None)
         if not isinstance(grade, Mapping) or not grade.get("checks"):
-            found.append(unmeasured(row, "no grade"))
+            found.append(unmeasured(row, "no grade", revision))
             continue
         summary = {"rep": int(row["rep"]), "passed": bool(row.get("success")), "wall_seconds": positive(row.get("wall_total")),
                    "cost_usd": run_cost(row)}
@@ -323,7 +334,8 @@ def campaign_runs(run_root: Path, campaign: str, variants: Sequence[str], tasks:
                         if check.get("id") == "text-review-clean" and (check.get("data") or {}).get("reviews")), None)
         if reviews:
             entry["reviews"] = reviews
-        found.append({"case": row["task"], "variant": row["variant"], "host": host, "summary": summary, "entry": entry})
+        found.append({"case": row["task"], "variant": row["variant"], "host": host, "summary": summary, "entry": entry,
+                      "revision": revision})
     return found
 
 
@@ -336,9 +348,27 @@ def expected_tasks(run_root: Path, campaign: str, requested: Sequence[str] | Non
     return sorted({*named, *(run["case"] for run in runs)})
 
 
-def build_cases(runs: Sequence[Mapping[str, Any]], before: str, after: str, tasks: Sequence[str] | None = None) -> list[dict[str, Any]]:
+def planned_runs(run_root: Path, campaign: str) -> set[tuple[str, str, str]]:
+    """(task, variant, host) of every run the campaign scheduled, from the run ids in its campaign.json."""
+    order = (read_json(campaign_dir(run_root, campaign) / "campaign.json", {}) or {}).get("order")
+    found = set()
+    for run_id in order if isinstance(order, list) else []:
+        try:
+            task, variant, _, host = parse_run_id(str(run_id))
+        except ValueError:
+            continue
+        found.add((task, variant, host))
+    return found
+
+
+def build_cases(
+    runs: Sequence[Mapping[str, Any]], before: str, after: str, tasks: Sequence[str] | None = None,
+    planned: set[tuple[str, str, str]] | None = None,
+) -> list[dict[str, Any]]:
     """One case per expected task with the run summaries of each side by host in repetition order, each with its `rep`;
-    a task with no run on a side stays in its case with an empty list."""
+    a task with no run on a side stays in its case with an empty list. A host with no before run whose before run the
+    campaign never scheduled goes in `baseline_hosts`: the campaign shows it cannot run there, so its after run decides
+    quality only. A scheduled before run that is missing, such as one a stopped campaign never reached, is not measured."""
     cases = []
     for task in sorted(set(tasks) if tasks else {run["case"] for run in runs}):
         case: dict[str, Any] = {"id": task, "before": {}, "after": {}}
@@ -347,11 +377,21 @@ def build_cases(runs: Sequence[Mapping[str, Any]], before: str, after: str, task
                 chosen = sorted((run for run in runs if (run["case"], run["variant"], run["host"]) == (task, variant, host)),
                                 key=lambda run: run["summary"]["rep"])
                 case[side][host] = [run["summary"] for run in chosen]
+        case["baseline_hosts"] = [host for host in HOSTS if not case["before"][host] and (task, before, host) not in (planned or set())]
         cases.append(case)
     return cases
 
 
-def variant_revision(run_root: Path, campaign: str, variant: str) -> str:
+def variant_revision(run_root: Path, campaign: str, variant: str, runs: Sequence[Mapping[str, Any]] = ()) -> str:
+    """The revision a variant's runs were measured at, each from its own stored plugin revision. Runs of one variant at
+    different revisions are refused, so a resume that changed the variant never labels old results with the new revision.
+    A run that stored none leaves the campaign's recorded revision of the variant."""
+    stored = sorted({str(run["revision"]) for run in runs if run["variant"] == variant and run.get("revision")})
+    if len(stored) > 1:
+        raise ConfigError(f"variant {variant} has runs at different revisions ({', '.join(item[:12] for item in stored)}); "
+                          "measure each revision in its own campaign")
+    if stored:
+        return stored[0][:12]
     shas = ((read_json(campaign_dir(run_root, campaign) / "campaign.json", {}) or {}).get("inputs") or {}).get("variant_shas") or {}
     revision = str(shas.get(variant) or "")[:12]
     if not revision:
@@ -386,12 +426,12 @@ def record_campaign(
     if unknown or before == after:
         raise ConfigError("--claim takes " + ", ".join(MEASURES) + "; --before and --after name two different variants")
     runs = campaign_runs(run_root, campaign, (before, after), tasks)
-    cases = build_cases(runs, before, after, expected_tasks(run_root, campaign, tasks, runs))
+    cases = build_cases(runs, before, after, expected_tasks(run_root, campaign, tasks, runs), planned_runs(run_root, campaign))
     if not cases or not any(run["entry"] for run in runs):
         raise ConfigError(f"campaign {campaign} holds no finished graded run of {before} or {after}")
     claims = [claim_verdict(case, claimed) for case in cases] if claimed else []
     compared = with_claims(compare(cases), claims)
-    revisions = {name: variant_revision(run_root, campaign, name) for name in (before, after)}
+    revisions = {name: variant_revision(run_root, campaign, name, runs) for name in (before, after)}
     record = build_record(issue, [case["id"] for case in cases], revisions, [run["entry"] for run in runs if run["entry"]],
                           verdict_entries(compared, claims))
     return {"record": record, "compared": compared, "claims": claims}

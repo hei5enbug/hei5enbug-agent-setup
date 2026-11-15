@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import shutil
 import sys
 import tempfile
 import unittest
@@ -244,6 +245,53 @@ class RequestedCasesTest(unittest.TestCase):
         self.assertIn("overall: not measured", out)
 
 
+class BaselineExceptionTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        seed_campaign(self.root)
+        shutil.rmtree(self.root / "camp" / "results" / "T08" / "base" / "codex")
+
+    def schedule(self, run_ids: list[str]) -> None:
+        path = self.root / "camp" / "campaign.json"
+        write(path, {**json.loads(path.read_text(encoding="utf-8")), "order": run_ids})
+
+    def verdicts(self) -> dict:
+        written = json.loads((self.root / "records" / "92.json").read_text(encoding="utf-8"))
+        return {(item["case"], item.get("measure")): item["verdict"] for item in written["verdicts"]}
+
+    def test_캠페인이_예정한_이전_실행이_없으면_기준선이_아니라_측정되지_않음이고_통과가_아니다(self):
+        """given 캠페인이 이전 codex 실행을 예정했지만 중단되어 파일이 없고 이후 실행은 모두 통과했을 때 when record하면 then 사례와 overall이 not measured이다."""
+        # given
+        self.schedule(["T08-base-r1", "T08-changed-r1", "T08-base-codex-r1", "T08-changed-codex-r1"])
+
+        # when
+        code, out, _ = run_cli(self.root, "--tasks", "T08")
+
+        # then
+        self.assertEqual(code, 0)
+        by_case = self.verdicts()
+        self.assertEqual((by_case[("T08", "wall_seconds")], by_case[("T08", "cost_usd")]), ("not measured", "not measured"))
+        self.assertEqual(by_case[("T08", None)], "not measured")
+        self.assertIn("overall: not measured", out)
+
+    def test_캠페인이_이전_변형을_예정하지_않은_호스트는_기준선으로_이후_품질만_본다(self):
+        """given 캠페인이 이전 codex 실행을 예정하지 않았고 이후 실행은 모두 통과했을 때 when record하면 then 격차는 baseline이고 사례는 pass이다."""
+        # given
+        self.schedule(["T08-base-r1", "T08-changed-r1", "T08-changed-codex-r1"])
+
+        # when
+        code, out, _ = run_cli(self.root, "--tasks", "T08")
+
+        # then
+        self.assertEqual(code, 0)
+        by_case = self.verdicts()
+        self.assertEqual((by_case[("T08", "wall_seconds")], by_case[("T08", "cost_usd")]), ("baseline", "baseline"))
+        self.assertEqual(by_case[("T08", None)], "pass")
+        self.assertIn("overall: pass", out)
+
+
 class ClaimOverallTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -345,6 +393,95 @@ class AttemptWallTimeTest(unittest.TestCase):
         by_measure = {item.get("measure"): item["verdict"] for item in written["verdicts"] if item["case"] == "T08"}
         self.assertIsNone(runs[("changed", "codex")])
         self.assertEqual(by_measure["wall_seconds"], "not measured")
+
+
+class RunRevisionTest(unittest.TestCase):
+    OLD = "aaaaaaaaaaaa1111"
+    OTHER = "bbbbbbbbbbbb2222"
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        seed_campaign(self.root)
+
+    def store_revision(self, variant: str, host: str, sha: str) -> None:
+        folder = self.root / "camp" / "results" / "T08" / variant / ("codex" if host == "codex" else "") / "rep1"
+        run = json.loads((folder / "run.json").read_text(encoding="utf-8"))
+        write(folder / "run.json", {**run, "plugin": {"ref": "HEAD", "sha": sha, "path": "/tmp/p"}})
+
+    def test_기록의_개정은_캠페인의_최신_variant_shas가_아니라_각_실행이_저장한_플러그인_개정이다(self):
+        """given 캠페인 파일의 변형 개정이 재개로 바뀌었지만 실행은 모두 이전 개정으로 측정됐을 때 when record하면 then 기록은 실행이 저장한 개정을 쓴다."""
+        # given
+        for host in ("claude", "codex"):
+            self.store_revision("changed", host, self.OLD)
+
+        # when
+        code, _, _ = run_cli(self.root, "--tasks", "T08")
+
+        # then
+        self.assertEqual(code, 0)
+        written = json.loads((self.root / "records" / "92.json").read_text(encoding="utf-8"))
+        self.assertEqual(written["variants"]["changed"], {"revision": "aaaaaaaaaaaa"})
+        self.assertEqual(written["variants"]["base"], {"revision": "0123456789ab"})
+
+    def test_한_변형의_실행이_서로_다른_개정으로_측정됐으면_기록을_쓰지_않고_거부한다(self):
+        """given 한 변형의 claude 실행과 codex 실행이 다른 개정으로 저장됐을 때 when record하면 then 종료 코드 1이고 두 개정을 알리며 기록 파일이 없다."""
+        # given
+        self.store_revision("changed", "claude", self.OLD)
+        self.store_revision("changed", "codex", self.OTHER)
+
+        # when
+        code, _, err = run_cli(self.root, "--tasks", "T08")
+
+        # then
+        self.assertEqual(code, 1)
+        self.assertIn("aaaaaaaaaaaa", err)
+        self.assertIn("bbbbbbbbbbbb", err)
+        self.assertFalse((self.root / "records" / "92.json").exists())
+
+
+class AttemptCostTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        seed_campaign(self.root)
+
+    def written(self):
+        return json.loads((self.root / "records" / "92.json").read_text(encoding="utf-8"))
+
+    def test_비용_기록이_없는_앞선_시도가_있으면_비용은_0이_아니라_측정되지_않음이다(self):
+        """given 첫 시도가 시간은 남았지만 metrics.json 없이 보관되고 다시 돌린 실행이 끝났을 때 when record하면 then 그 실행의 cost_usd는 null이고 비용 판정은 not measured이며 시간은 그대로 더해진다."""
+        # given
+        seed_attempt(self.root, "T08", "changed", "codex", 1, 1, {"status": "infra_failed", "wall_seconds": 50.0}, None)
+
+        # when
+        code, out, _ = run_cli(self.root, "--tasks", "T08")
+
+        # then
+        self.assertEqual(code, 0)
+        written = self.written()
+        runs = {(run["variant"], run["host"]): run for run in written["runs"]}
+        by_measure = {item.get("measure"): item["verdict"] for item in written["verdicts"] if item["case"] == "T08"}
+        self.assertIsNone(runs[("changed", "codex")]["cost_usd"])
+        self.assertEqual(runs[("changed", "codex")]["wall_seconds"], 160.0)
+        self.assertEqual(runs[("changed", "claude")]["cost_usd"], 1.0)
+        self.assertEqual(by_measure["cost_usd"], "not measured")
+        self.assertNotEqual(by_measure[None], "pass")
+
+    def test_앞선_시도의_비용이_기록돼_있으면_그_비용이_더해진다(self):
+        """given 보관된 앞선 시도의 metrics.json에 Codex 비용이 있을 때 when record하면 then 비용은 최종 시도와 합쳐져 측정된다."""
+        # given
+        seed_attempt(self.root, "T08", "changed", "codex", 1, 1, {"status": "timed_out", "wall_seconds": 50.0},
+                     {"wall_seconds": 50.0, "cost": {"codex_list_cost_usd_estimate": 0.5, "claude_list_cost_usd": 0.0}})
+
+        # when
+        run_cli(self.root, "--tasks", "T08")
+
+        # then
+        runs = {(run["variant"], run["host"]): run for run in self.written()["runs"]}
+        self.assertAlmostEqual(runs[("changed", "codex")]["cost_usd"], 2.1)
 
 
 class CommittedRecordsTest(unittest.TestCase):

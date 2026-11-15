@@ -90,6 +90,9 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
   실행의 에이전트 환경에 `CLAUDE_PLUGIN_OPTION_APPROVAL_GUARD`와 `HEI5ENBUG_APPROVAL_GUARD`를 `false`로 넣는다.
   변형은 `env`에서 두 변수 중 하나를 달리 정해 이 기본값을 덮어쓸 수 있다. 플러그인의 다른 훅은 그대로 실행된다.
 - Codex에는 지출 한도 플래그가 없으므로 작업의 경과 시간 제한만 적용한다.
+- 하네스는 rollout의 `exec` 명령, `apply_patch` 호출, 네이티브 `spawn_agent` 호출을 도구 호출로 읽는다. `spawn_agent` 호출은
+  그 호출이 적은 `agent_type`의 서브에이전트 시작으로 세고, 적지 않았으면 `general-purpose`로 센다. 위임의 순서와 최종 답변의
+  순서는 같은 호출들을 센다.
 - 세션의 모델과 effort는 명령줄이 아니라 rollout의 `turn_context` 이벤트에서 읽고, `env.json`에 Codex CLI 버전과 함께
   기록한다.
 
@@ -131,7 +134,7 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 | 채점기 수정 후 다시 채점 | `python3 evals/e2e/harness/cli.py regrade --campaign <name> [--run-ids ...]` |
 | 기록을 다시 복사한 뒤 채점 | `regrade`에 `--recollect` 추가 |
 | 작업이나 변형을 바꾼 뒤 재개 | `run`에 `--allow-changed-inputs` 추가 |
-| 실행마다 파일럿 사실 확인 | `python3 evals/e2e/harness/cli.py pilot-check --campaign <name>` |
+| 실행마다 파일럿 사실 확인(두 호스트 모두이며, 검사한 실행이 없으면 실패) | `python3 evals/e2e/harness/cli.py pilot-check --campaign <name>` |
 | 표 출력 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> [--out file.md]` |
 | 두 변형 비교 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | 리비전 내보내기만 하기 | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
@@ -147,7 +150,10 @@ BABA) 시간대 영향이 고르게 퍼지게 한다.
 Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중인 에이전트와 그 에이전트가 띄운 모든 프로세스를 실제
 경과 시간 제한 때와 같은 방식으로 멈추며, 그 실행을 `interrupted`로 기록하고 종료 코드 130으로 끝난다. 스트림이 aborted
 결과로 끝난 Claude Code 실행도 `interrupted`로 기록한다. `claude -p`는 SIGINT를 받으면 그 결과를 쓰고 종료 코드 0으로
-끝나기 때문이다.
+끝나기 때문이다. 채점 중에 하네스가 중단되면 루브릭 채점기와 채점기의 pytest 실행을 그들이 띄운 모든 프로세스와 함께 제한
+시간을 기다리지 않고 멈추고, 에이전트 실행이 끝난 뒤에 중단이 오면 채점을 시작하지 않는다. 두 경우 모두 그 실행을
+`interrupted`로 기록한다. 사용자 정의 검사가 직접 띄우는 하위 프로세스, 예컨대 글 작업의 `text_review.py` 호출은 자신의 제한
+시간 전에는 멈추지 않는다.
 
 첫 `run`은 변형마다 해석한 리비전과 입력별 지문을 `campaign.json`에 저장한다. 입력은 변형 파일, 작업 파일, 작업의
 프롬프트 파일, 작업의 픽스처 트리, 작업의 숨은 테스트와 사용자 정의 검사, 글쓰기 작업을 채점하는 `scripts/text_review.py`다. 입력이 달라진 상태로 재개하면 멈춘다.
@@ -267,7 +273,8 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 
 - 필수 검사를 모두 통과하면 실행이 통과다. 시간은 그 실행의 `wall_seconds`에 보관한 이전 시도의 `wall_seconds`를 더한
   값이고, 비용은 보관한 이전 시도를 포함한 실행 전체의 정가 지출이다. 요약이 계산하는 Claude 지출에 Codex 추정값을 더한
-  값이다. 어떤 기록에도 기간이 없는 이전 시도가 있으면 시간은 `not measured`다.
+  값이다. 어떤 기록에도 기간이 없는 이전 시도가 있으면 시간은 `not measured`이고, 최종 시도나 보관한 시도의 지표에 그 호스트의
+비용 값이 없으면(예: `metrics.json` 없이 중단된 시도) 비용은 `not measured`다. 요약 표는 그 시도를 여전히 0으로 센다.
 - 품질: 모든 이후 실행이 두 호스트에서 통과하고, 이전에 통과한 사례가 어느 호스트에서도 실패하지 않는다. 품질이
   실패하면 시간과 비용 격차와 상관없이 그 사례는 실패다.
 - 격차: 한 사례와 한 측정값에서 큰 호스트 값을 작은 호스트 값으로 나눈 값이다. 먼저 변형과 호스트마다 사례를 1회
@@ -277,7 +284,9 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
   않는다. 한 호스트나 한 변형에 실행이 없는 반복은 짝이 덜 찬 것이라 `not measured`다.
 - 첫 이전 격차가 2를 넘으면 그 측정값은 그 사례의 통과 조건이 아니다. 사례는 `investigate` 줄을 출력하고, 그 격차를
   이미 다루는 열린 이슈가 없으면 이슈 하나가 그 격차를 조사한다.
-- 이전 실행이 없는 사례나 호스트는 품질만 판정하고, 그 이후 실행이 이후 변경의 기준선이 된다.
+- 이전 변형을 그 호스트에서 돌릴 수 없다고 캠페인이 보여 줄 때만, 이전 실행이 없는 호스트는 품질만 판정하고 그 이후 실행이
+  이후 변경의 기준선이 된다. `record`는 `campaign.json`의 `order`가 그 작업과 호스트에 한 번도 예정하지 않은 이전 실행을 그
+  근거로 본다. 중단된 캠페인이 닿지 못한 실행처럼 예정됐지만 없는 이전 실행은 `not measured`다.
 - 시간이나 비용 값이 없으면 `not measured`이고 통과가 아니다. 이전 실행이 없는 사례나 첫 이전 격차가 2를 넘는 사례도
   마찬가지다.
 - 개선 주장(`--claim`): 시간이나 비용을 낮추려고 채택하는 변경은 주장하는 측정값을 밝힌다. 사례와 호스트마다 번갈아
@@ -291,7 +300,9 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 하나도 없는 작업도 남는다. 역할마다 모델과 effort는 실행 자신의 호스트 기록에서 읽는다. Claude 스트림과 명령줄, 메인과
 모든 자식 세션의 Codex rollout(역할은 `session_meta`에서 읽고, 같은 역할의 두 번째 세션은 별개 호출로 남긴다), role runner
 상태 줄, 루브릭 결과가 그것이다.
-기록 어디에도 없는 effort는 `not measured`로 적는다. 그다음 사례를 판정하고 기록을 검증해 `records/<이슈 번호>.json`에
+기록 어디에도 없는 effort는 `not measured`로 적는다. 변형의 개정은 `campaign.json`의 최신 값이 아니라 그 변형의 실행이
+`run.json`에 저장한 플러그인 개정이다. 한 변형의 실행이 서로 다른 개정이면 `record`가 거부하므로 개정마다 캠페인을 따로
+돌린다. 개정을 저장하지 않은 실행은 캠페인이 적은 개정을 쓴다. 그다음 사례를 판정하고 기록을 검증해 `records/<이슈 번호>.json`에
 쓴다. 사례마다 한 줄, `investigate` 줄, 반복이 필요한 사례, 주장 판정을 출력한다. 기록에는 측정값과 모델, effort, 이슈
 번호 같은 실행 사실, 가상 픽스처 이름만 들어간다. 검증은 절대 로컬 경로, 상한 밖 모델, 빠진 필드를 거부한다.
 `tests/test_e2e_eval_record_cli.py`가 커밋된 모든 기록을 검증한다.

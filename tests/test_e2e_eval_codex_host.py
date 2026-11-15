@@ -21,7 +21,9 @@ from unittest import mock
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "evals/e2e"))
 
-from harness import caps, cli, codex_calls, codex_host, codex_trust, collect, command, matrix, metrics, rubric, runner  # noqa: E402
+from harness import (  # noqa: E402
+    caps, cli, codex_calls, codex_host, codex_trust, collect, command, graders, matrix, metrics, rubric, runner,
+)
 from harness.config import HarnessConfig  # noqa: E402
 
 WITHIN_CAP_ENV = {"CLAUDE_PLUGIN_OPTION_REVIEW_MODEL": "gpt-6.1-sol", "HEI5ENBUG_REVIEW_MODEL": "gpt-6.1-sol"}
@@ -632,6 +634,106 @@ class CodexExecOutputTest(unittest.TestCase):
 
         # then
         self.assertEqual([call["result_text"] for call in calls], [SCRIPT_HEADER["text"] + "\nonly-one", ""])
+
+
+def assistant_message(text: str) -> dict[str, Any]:
+    return {"type": "response_item", "payload": {"type": "message", "role": "assistant",
+                                                  "content": [{"type": "output_text", "text": text}]}}
+
+
+def native_spawn(call_id: str, task_name: str, agent_type: str | None) -> list[dict[str, Any]]:
+    """A native subagent call as Codex writes it: a `spawn_agent` function call and its output naming the child."""
+    arguments = {"task_name": task_name, "fork_turns": "none", "message": "gAAAAAB-encrypted",
+                 **({"agent_type": agent_type, "model": "gpt-6.1-sol", "reasoning_effort": "high"} if agent_type else {})}
+    call = {"type": "function_call", "name": "spawn_agent", "namespace": "collaboration", "call_id": call_id,
+            "arguments": json.dumps(arguments)}
+    done = {"type": "function_call_output", "call_id": call_id, "output": json.dumps({"task_name": f"/root/{task_name}"})}
+    return [{"type": "response_item", "payload": call}, {"type": "response_item", "payload": done}]
+
+
+class CodexNativeDelegationTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.cfg = HarnessConfig(run_root=self.root / "runs", tasks_root=self.root / "tasks")
+        self.spec = matrix.make_spec(self.cfg.run_root, "c", "T08", "baseline", 1, "codex")
+        self.run = {"run_id": self.spec.run_id, "task": "T08", "variant": "baseline", "rep": 1, "host": "codex"}
+
+    def view_of(self, events: list[dict[str, Any]]) -> dict[str, Any]:
+        rows = rollout_rows()
+        write_rollout(self.spec.result_dir / "codex", "rollout-main.jsonl", [*rows[:-1], *events, rows[-1]])
+        return codex_host.load_records(self.spec, self.run, "gpt-6.1-sol")["view"]
+
+    def test_네이티브_spawn_agent_호출은_이름이_붙은_역할의_위임으로_시작_지표에_들어온다(self):
+        """spawn_agent가 worker를 띄우면 위임 하나가 구현 역할로 보이고 launches_by_type과 tool_calls에도 남는다."""
+        # given
+        events = native_spawn("c1", "edit_config", "worker") + [assistant_message("done")]
+
+        # when
+        view = self.view_of(events)
+
+        # then
+        delegations = [item for item in view["delegations"] if item["kind"] == "agent"]
+        self.assertEqual([(item["type"], item["class"], item["completed"]) for item in delegations],
+                         [("worker", "implementation", True)])
+        self.assertEqual(metrics.launches_by_type(view), {"worker": 1})
+        self.assertEqual([call["name"] for call in view["tool_calls"]], ["spawn_agent"])
+
+    def test_역할을_적지_않은_spawn_agent도_위임으로_세고_wait_agent는_위임이_아니다(self):
+        """agent_type이 없는 spawn_agent는 기본 역할의 위임이고, 결과를 기다리는 wait_agent 호출은 위임이나 호출로 세지 않는다."""
+        # given
+        wait = {"type": "response_item", "payload": {"type": "function_call", "name": "wait_agent", "call_id": "w1",
+                                                      "arguments": json.dumps({"timeout_ms": 20000})}}
+
+        # when
+        view = self.view_of([*native_spawn("c1", "scan", None), wait])
+
+        # then
+        self.assertEqual([(item["type"], item["class"]) for item in view["delegations"]], [("general-purpose", "other")])
+        self.assertEqual(len(view["tool_calls"]), 1)
+
+    def test_네이티브_reviewer_위임은_보고_전에_끝난_검토로_센다(self):
+        """spawn_agent로 reviewer를 띄운 뒤 최종 답이 나오면 review_before_report가 통과한다."""
+        # given
+        events = native_spawn("c1", "final_review", "reviewer") + [assistant_message("report")]
+
+        # when
+        view = self.view_of(events)
+        passed, _, _ = graders.check_review_before_report(SimpleNamespace(view=view), {})
+
+        # then
+        self.assertTrue(passed)
+
+    def test_최종_exec_안에서_검토_명령_뒤에_보고하면_위임_순서와_답변_순서가_같은_세기라_검토가_보고_전으로_센다(self):
+        """한 exec가 git diff와 완료된 검토 명령을 함께 돌리고 그다음 보고하면 final_answer_order가 정규화한 호출 수 2이고 검토가 통과한다."""
+        # given
+        script = run_command("git diff") + "\n" + run_command(ROLE_RUNNER_REVIEW)
+        items = [chunk_item(exit_code=0, output="diff\n"), chunk_item(exit_code=0, output=f"{status_line(0)}\n")]
+        events = [*exec_pair("c1", script, items), assistant_message("report")]
+
+        # when
+        view = self.view_of(events)
+        passed, detail, _ = graders.check_review_before_report(SimpleNamespace(view=view), {})
+
+        # then
+        self.assertEqual(view["final_answer_order"], 2)
+        self.assertEqual([item["order"] for item in view["delegations"]], [1])
+        self.assertTrue(passed, detail)
+
+    def test_보고_뒤에_시작한_검토_명령은_보고_전으로_세지_않는다(self):
+        """최종 답 뒤에 exec로 시작한 검토 명령은 order가 final_answer_order 이상이라 review_before_report가 실패한다."""
+        # given
+        events = [assistant_message("report"), *exec_pair("c1", run_command(ROLE_RUNNER_REVIEW),
+                                                           [chunk_item(exit_code=0, output=f"{status_line(0)}\n")])]
+
+        # when
+        view = self.view_of(events)
+        passed, _, _ = graders.check_review_before_report(SimpleNamespace(view=view), {})
+
+        # then
+        self.assertEqual(view["final_answer_order"], 0)
+        self.assertFalse(passed)
 
 
 class CodexRecordsTest(unittest.TestCase):

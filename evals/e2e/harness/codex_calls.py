@@ -8,6 +8,7 @@ from typing import Any, Iterable
 
 CALL_TYPES = frozenset({"function_call", "local_shell_call", "custom_tool_call"})
 OUTPUT_TYPES = frozenset({"function_call_output", "local_shell_call_output", "custom_tool_call_output"})
+NATIVE_AGENT_TOOL = "spawn_agent"
 SHELL_WRAPPERS = frozenset({"bash", "sh", "zsh"})
 JS_COMMAND = re.compile(r"""\bcmd\s*:\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|`((?:[^`\\]|\\.)*)`)""", re.S)
 JS_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f", "v": "\v", "0": "\0"}
@@ -72,6 +73,15 @@ def _arguments(payload: dict[str, Any]) -> dict[str, Any]:
     except ValueError:
         return {}
     return parsed if isinstance(parsed, dict) else {}
+
+
+def _native_agent_call(call_id: str, payload: dict[str, Any], result: str, is_error: bool, source: str) -> dict[str, Any]:
+    """A native subagent call (`spawn_agent`) shaped like a Claude `Agent` call, so delegation metrics see the role it names."""
+    arguments = _arguments(payload)
+    tool_input = {"subagent_type": str(arguments.get("agent_type") or "general-purpose"),
+                  "prompt": str(arguments.get("message") or ""), "task_name": arguments.get("task_name"),
+                  "model": arguments.get("model"), "reasoning_effort": arguments.get("reasoning_effort")}
+    return _call(f"codex:{call_id}", NATIVE_AGENT_TOOL, tool_input, result, is_error, source)
 
 
 def _patch_text(payload: dict[str, Any]) -> str | None:
@@ -208,7 +218,7 @@ def _joined_calls(
 
 
 def rollout_tool_calls(events: list[dict[str, Any]], role: str, rollout_name: str) -> list[dict[str, Any]]:
-    """Bash and apply_patch calls of one rollout. A script with several commands gives one call per command. When the
+    """Bash, apply_patch, and native `spawn_agent` calls of one rollout. A script with several commands gives one call per command. When the
     output items of an exec script pair one to one with its `tools.<name>(` statements, each command gets its own
     result and a later `write_stdin` poll extends the call of its session; otherwise the script's whole output is
     attached to the first of its commands."""
@@ -223,6 +233,9 @@ def rollout_tool_calls(events: list[dict[str, Any]], role: str, rollout_name: st
         call_id = str(payload.get("call_id") or payload.get("id") or f"{rollout_name}:{len(calls)}")
         done = outputs.get(call_id, {})
         text, code = output_text(done.get("output")), exit_code(done.get("output"))
+        if payload.get("type") == "function_call" and payload.get("name") == NATIVE_AGENT_TOOL:
+            calls = [*calls, _native_agent_call(call_id, payload, text, bool(code), source)]
+            continue
         patch = _patch_text(payload)
         if patch is not None:
             calls = [*calls, _call(f"codex:{call_id}", "apply_patch", {"patch": patch}, text, bool(code), source)]

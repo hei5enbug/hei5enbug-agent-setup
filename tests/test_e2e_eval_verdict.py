@@ -22,8 +22,9 @@ def sided(wall_gaps, cost_gaps, passed=True):
     return runs
 
 
-def case_of(before, after, case_id="T08"):
-    return {"id": case_id, "before": before, "after": after}
+def case_of(before, after, case_id="T08", baseline_hosts=None):
+    """A case; `baseline_hosts` names the hosts the campaign shows cannot run the before variant."""
+    return {"id": case_id, "before": before, "after": after, **({} if baseline_hosts is None else {"baseline_hosts": baseline_hosts})}
 
 
 def measure(result, name):
@@ -125,9 +126,35 @@ class GapVerdictTest(unittest.TestCase):
         self.assertEqual(result["verdict"], "fail")
 
     def test_이전_실행이_없는_사례는_이후_실행의_품질만으로_판정한다(self):
-        """given 이전 실행이 없는 사례일 때 when 판정하면 then 격차는 baseline이고 필수 검사 통과만으로 pass다."""
+        """given 캠페인이 이전 변형을 돌릴 수 없다고 보인 사례일 때 when 판정하면 then 격차는 baseline이고 필수 검사 통과만으로 pass다."""
         # given
-        case = case_of({}, sided([2.9], [2.9]))
+        case = case_of({}, sided([2.9], [2.9]), baseline_hosts=["claude", "codex"])
+
+        # when
+        result = verdict.case_verdict(case)
+
+        # then
+        self.assertEqual([item["verdict"] for item in result["measures"]], ["baseline", "baseline"])
+        self.assertEqual(result["verdict"], "pass")
+
+    def test_이전_실행이_없는_호스트가_기준선_예외로_보이지_않았으면_측정되지_않음이다(self):
+        """given 이전 codex 실행이 없고 그 호스트가 이전 변형을 못 돌린다고 보인 적이 없을 때 when 판정하면 then 격차와 품질과 사례가 not measured이다."""
+        # given
+        before = {"claude": sided([1.2], [1.2])["claude"]}
+        case = case_of(before, sided([1.2], [1.2]))
+
+        # when
+        result = verdict.case_verdict(case)
+
+        # then
+        self.assertEqual([item["verdict"] for item in result["measures"]], ["not measured", "not measured"])
+        self.assertEqual((result["quality"]["verdict"], result["verdict"]), ("not measured", "not measured"))
+
+    def test_이전_실행이_없는_호스트가_기준선_예외로_보였으면_그_호스트만_baseline이다(self):
+        """given 이전 codex 실행이 없고 그 호스트가 기준선 예외로 보였을 때 when 판정하면 then 격차는 baseline이고 사례는 pass다."""
+        # given
+        before = {"claude": sided([1.2], [1.2])["claude"]}
+        case = case_of(before, sided([1.2], [1.2]), baseline_hosts=["codex"])
 
         # when
         result = verdict.case_verdict(case)
@@ -199,7 +226,7 @@ class MissingValueExemptionTest(unittest.TestCase):
     def test_이전_실행이_없어_기준선을_세우는_사례도_이후_비용이_없으면_측정되지_않음이다(self):
         """given 이전 실행이 없고 이후 codex의 비용이 없을 때 when 사례를 판정하면 then 비용은 not measured이고 사례는 pass가 아니다."""
         # given
-        case = case_of({}, sided([1.3], [None]))
+        case = case_of({}, sided([1.3], [None]), baseline_hosts=["claude", "codex"])
 
         # when
         result = verdict.case_verdict(case)

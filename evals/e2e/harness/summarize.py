@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
-from .config import FINISHED_STATUSES, HOST_CLAUDE
+from .config import FINISHED_STATUSES, HOST_CLAUDE, HOST_CODEX
 from .matrix import campaign_dir, read_json
 
 MISSING = "-"
@@ -48,6 +48,21 @@ def run_spend(metrics: dict[str, Any] | None) -> tuple[float, float]:
     return (claude_cost(metrics) or 0.0, codex or 0.0)
 
 
+def spend_known(metrics: dict[str, Any] | None, host: str = HOST_CLAUDE) -> bool:
+    """True when the metrics hold the cost figure of the run's own host: the Claude spend on Claude Code, the Codex estimate
+    on Codex. A run without it has an unknown cost, which `run_spend` still counts as 0 in the tables."""
+    if not metrics:
+        return False
+    own = number((metrics.get("cost") or {}).get("codex_list_cost_usd_estimate")) if host == HOST_CODEX else claude_cost(metrics)
+    return own is not None
+
+
+def attempts_known(run_json: Path, rep: Any, host: str) -> bool:
+    """True when every archived earlier attempt of one run holds its cost figure."""
+    folder = run_json.parent.parent / "attempts" / f"rep{rep}"
+    return all(spend_known(read_json(item / "metrics.json", None), host) for item in sorted(folder.glob("*")) if item.is_dir())
+
+
 def attempts_spend(run_json: Path, rep: Any) -> tuple[float, float]:
     """Spend of the archived earlier attempts of one run: results/<task>/<variant>/attempts/rep<k>/<n>/metrics.json."""
     folder = run_json.parent.parent / "attempts" / f"rep{rep}"
@@ -78,8 +93,9 @@ def attempts_wall(run_json: Path, rep: Any) -> float | None:
 def load_results(run_root: Path, campaign: str) -> list[dict[str, Any]]:
     """Every run's metrics (with its status), from results/<task>/<variant>/rep<k>/metrics.json or run.json.
 
-    Each row also carries `spend_claude` and `spend_codex`: the final attempt plus every archived attempt, and `wall_total`: the
-    final attempt's wall seconds plus those of every archived attempt, None when any of them is unknown."""
+    Each row also carries `spend_claude` and `spend_codex`: the final attempt plus every archived attempt, with 0 for a missing
+    figure; `spend_known`: whether every one of those attempts holds its cost figure; and `wall_total`: the final attempt's
+    wall seconds plus those of every archived attempt, None when any of them is unknown."""
     rows: list[dict[str, Any]] = []
     base = campaign_dir(run_root, campaign)
     for run_json in sorted([*base.glob("results/*/*/rep*/run.json"), *base.glob("results/*/*/*/rep*/run.json")]):
@@ -91,6 +107,8 @@ def load_results(run_root: Path, campaign: str) -> list[dict[str, Any]]:
                      "rep": run.get("rep"), "status": run.get("status"), "has_metrics": metrics is not None,
                      "host": run.get("host") or HOST_CLAUDE,
                      "spend_claude": final[0] + archived[0], "spend_codex": final[1] + archived[1],
+                     "spend_known": spend_known(metrics, run.get("host") or HOST_CLAUDE)
+                     and attempts_known(run_json, run.get("rep"), run.get("host") or HOST_CLAUDE),
                      "wall_total": None if earlier is None or last is None else earlier + last})
     return rows
 

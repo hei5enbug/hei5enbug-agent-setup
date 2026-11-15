@@ -199,17 +199,16 @@ def final_answer(events: list[dict[str, Any]]) -> str:
 
 
 def final_answer_order(events: list[dict[str, Any]]) -> int:
-    """How many calls had started when the last assistant message began; later calls came after the answer."""
-    started, at_last_text = 0, None
-    for event in events:
-        payload = payload_of(event)
-        if event.get("type") != "response_item":
-            continue
-        if payload.get("type") in codex_calls.CALL_TYPES:
-            started += 1
-        elif payload.get("type") == "message" and payload.get("role") == "assistant" and assistant_messages([event]):
-            at_last_text = started
-    return started if at_last_text is None else at_last_text
+    """How many tool calls had started when the last assistant message began; later calls came after the answer.
+
+    Calls are counted as `rollout_tool_calls` normalizes them, one per command and one per native delegation, so the count
+    matches the `order` of a delegation."""
+    cut = None
+    for index, event in enumerate(events):
+        if event.get("type") == "response_item" and payload_of(event).get("type") == "message" and assistant_messages([event]):
+            cut = index
+    started = events if cut is None else events[:cut]
+    return len(codex_calls.rollout_tool_calls(started, "main", "main"))
 
 
 def error_text(event: dict[str, Any]) -> str:

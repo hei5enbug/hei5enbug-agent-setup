@@ -6,7 +6,7 @@ from collections import Counter
 from typing import Any
 
 from .config import INLINE_PLUGIN_SOURCE, INSTALLED_PLUGIN_KEY, MOD_MARKER, PLUGIN_NAME, STATUS_TIMED_OUT, STATUS_USAGE_LIMITED
-from .transcript import init_event, mod_marker_present, result_event
+from .transcript import AGENT_TOOLS, init_event, mod_marker_present, result_event
 from .usage import RUNNER_SOURCE_PREFIX, agent_models
 
 
@@ -72,7 +72,7 @@ def count_retries(view: dict[str, Any]) -> dict[str, int]:
                 bash += 1
             if _failed(call):
                 failed_commands.add(key)
-        elif call["name"] in ("Agent", "Task"):
+        elif call["name"] in AGENT_TOOLS:
             agent_type = str(call["input"].get("subagent_type", ""))
             if agent_type in errored_agents:
                 agent += 1

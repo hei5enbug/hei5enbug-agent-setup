@@ -10,6 +10,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,6 +26,7 @@ FIXTURES_ROOT = E2E_ROOT / "fixtures"
 sys.path.insert(0, str(E2E_ROOT))
 
 from harness import coverage_tool, graders  # noqa: E402
+from harness.process import GradingInterrupted  # noqa: E402
 
 TASK_IDS = [f"T{number:02d}" for number in range(1, 21)]
 SECRET = "demo-4f8k2q-local-only-7731"
@@ -517,6 +520,21 @@ class CustomAndPytestCheckTest(TempCase):
 
         # then
         self.assertEqual(verdict, (True, "base seen"))
+
+    def test_하네스_중단이_켜져_있으면_pytest_검사는_실패로_기록되지_않고_채점이_중단된다(self):
+        """interrupt가 켜진 채 pytest를 돌리면 테스트를 끝내고 GradingInterrupted가 채점 밖으로 나가며 검사 실패로 바뀌지 않는다."""
+        # given
+        repo, base, tasks = self.sample()
+        interrupt = threading.Event()
+        interrupt.set()
+        task = sample_task([{"id": "c", "kind": "pytest", "suite": "all", "required": True}])
+
+        # when
+        with self.assertRaises(GradingInterrupted) as caught:
+            graders.grade_run(task, repo, base, make_view(), tasks, self.root / "work", interrupt=interrupt)
+
+        # then
+        self.assertTrue(caught.exception.no_verdict)
 
     def test_pytest_검사는_실패하는_테스트가_있으면_실패한다(self):
         """실행 저장소의 테스트가 깨졌으면 all 스위트가 실패한다."""
@@ -1515,6 +1533,29 @@ class GoldenTaskTest(TempCase):
         self.assertEqual(argv, ["review", "--kind", "shared-document", "--draft", str(repo / "out/page.txt"), "--reviews", "1",
                                 "--rules", str(repo / "docs/writing-rules.md"), "--source", str(repo / "notes/source.txt"),
                                 "--budget", "1500", "--no-ticket-keys"])
+
+    def test_하네스_중단이_켜져_있으면_글_검토_스크립트를_제한_시간까지_기다리지_않고_끝낸다(self):
+        """interrupt가 켜진 채로 text_review.py 호출이 시작되면 스크립트를 끝내고 GradingInterrupted를 올린다."""
+        # given
+        tree = self.root / "harness-repo"
+        shutil.copy(TASKS_ROOT / "custom" / "text_review_shared.py", self._place(tree / "evals/e2e/tasks/custom"))
+        (self._place(tree / "scripts") / "text_review.py").write_text("import time\ntime.sleep(600)\n", encoding="utf-8")
+        repo = self._place(self.root / "grading-repo")
+        write_files(repo, {"out/page.txt": "본문\n"})
+        interrupt = threading.Event()
+        interrupt.set()
+        ctx = SimpleNamespace(tasks_root=tree / "evals/e2e/tasks", work=self._place(self.root / "work"), repo=repo,
+                              view={}, interrupt=interrupt)
+        shared = load_module(tree / "evals/e2e/tasks/custom/text_review_shared.py")
+        env = {key: value for key, value in os.environ.items() if key != "E2E_TEXT_REVIEW_STUB"}
+        started = time.monotonic()
+
+        # when
+        with mock.patch.dict(os.environ, env, clear=True), self.assertRaises(GradingInterrupted):
+            shared.check(ctx, "commit-message", repo / "out/page.txt")
+
+        # then
+        self.assertLess(time.monotonic() - started, 30)
 
     def _place(self, folder: Path) -> Path:
         folder.mkdir(parents=True, exist_ok=True)

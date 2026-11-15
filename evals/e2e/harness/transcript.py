@@ -9,7 +9,7 @@ from typing import Any, Iterable
 
 from .config import USAGE_LIMIT_PATTERN
 
-AGENT_TOOLS = frozenset({"Agent", "Task"})
+AGENT_TOOLS = frozenset({"Agent", "Task", "spawn_agent"})
 ROLE_RUNNER_CALL = re.compile(r"role_runner\.py\s+((?!-)[\w-]+)")
 ASSIGNMENT_FLAG = re.compile(r"""--assignment(?:\s+|=)("[^"]*"|'[^']*'|\S+)""")
 LEADING_CD = re.compile(r"""\A\s*cd\s+("[^"]*"|'[^']*'|\S+)\s*&&""")

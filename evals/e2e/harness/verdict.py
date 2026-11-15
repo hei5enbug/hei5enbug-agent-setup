@@ -2,7 +2,8 @@
 
 A run summary is a dict: `passed` (every required check passed), `wall_seconds`, and `cost_usd` (list price of the
 whole run). A case holds `before` and `after`, each a dict from host to the list of that host's run summaries in
-repetition order; a case whose before side has no run on a host decides quality only.
+repetition order. A case decides quality only on a host named in its `baseline_hosts`, the hosts the campaign shows cannot
+run the before variant; a host with no before run that is not named there is not measured.
 """
 
 from __future__ import annotations
@@ -73,6 +74,12 @@ def gaps(side: Mapping[str, Sequence[Mapping[str, Any]]] | None, measure: str, r
     return [host_gap(side, measure, rep) for rep in reps]
 
 
+def missing_before(case: Mapping[str, Any]) -> str | None:
+    """The first host that has no before run and is not named in the case's `baseline_hosts`, or None."""
+    exempt = set(case.get("baseline_hosts") or ())
+    return next((host for host in HOSTS if not runs_of(case.get("before"), host) and host not in exempt), None)
+
+
 def quality_verdict(case: Mapping[str, Any]) -> dict[str, Any]:
     """Every after run passes on both hosts, and a case that passed before fails on neither host. A run that was not
     measured, such as an unfinished or ungraded one, leaves the quality not measured unless another run already fails."""
@@ -89,6 +96,9 @@ def quality_verdict(case: Mapping[str, Any]) -> dict[str, Any]:
     for host in HOSTS:
         if any(is_measured(run) and not run.get("passed") for run in runs_of(after, host)):
             return {"verdict": FAIL, "reason": f"a required check fails after on {host}"}
+    absent = missing_before(case)
+    if absent:
+        return {"verdict": NOT_MEASURED, "reason": f"no before run on {absent}"}
     for host in HOSTS:
         if any(not is_measured(run) for run in runs_of(after, host)):
             return {"verdict": NOT_MEASURED, "reason": f"an after run on {host} is not measured"}
@@ -121,8 +131,11 @@ def measure_verdict(case: Mapping[str, Any], measure: str) -> dict[str, Any]:
     if any(number(run.get(measure)) is None for keyed in after_runs.values() for run in keyed.values()):
         return result(measure, NOT_MEASURED, "an after value is missing")
     before_runs = side_reps(before)
+    absent_host = missing_before(case)
+    if absent_host:
+        return result(measure, NOT_MEASURED, f"no before run on {absent_host}")
     if any(not before_runs[host] for host in HOSTS):
-        return result(measure, BASELINE, "no before run on a host")
+        return result(measure, BASELINE, "no before run on a host the campaign shows cannot run it")
     sides = {"before": before_runs, "after": after_runs}
     absent = missing_repetition(sides, [1])
     if absent:

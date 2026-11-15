@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import types
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
@@ -20,8 +21,10 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 try:
     from . import coverage_tool
+    from .process import run_cleaning_tree
 except ImportError:
     import coverage_tool  # type: ignore[no-redef]
+    from process import run_cleaning_tree  # type: ignore[no-redef]
 
 IDENTITY = {"name": "Demo Dev", "email": "dev@example.com"}
 FIXED_DATE = "2026-01-15T09:00:00+00:00"
@@ -215,6 +218,7 @@ class GradeContext:
     changes: dict[str, str] = field(default_factory=dict)
     porcelain: str = ""
     suite_results: dict[str, dict[str, Any]] = field(default_factory=dict)
+    interrupt: threading.Event | None = None
 
     @property
     def fixtures_root(self) -> Path:
@@ -292,8 +296,8 @@ class GradeContext:
 
     def execute_tests(self, command: Sequence[str], root: Path) -> dict[str, Any]:
         try:
-            completed = subprocess.run(list(command), cwd=root, env=self.test_env(root), capture_output=True,
-                                       text=True, encoding="utf-8", errors="replace", timeout=PYTEST_TIMEOUT_SECONDS)
+            completed = run_cleaning_tree(list(command), cwd=root, env=self.test_env(root), timeout=PYTEST_TIMEOUT_SECONDS,
+                                          encoding="utf-8", errors="replace", interrupt=self.interrupt)
         except subprocess.TimeoutExpired:
             counts = parse_pytest_output("")
             return {**counts, "returncode": -1, "timed_out": True, "output_tail": ""}
@@ -564,7 +568,7 @@ def pass_rate(tests: Mapping[str, Mapping[str, int]]) -> float | None:
 
 
 def grade_run(task: Mapping[str, Any], repo: Path, base_commit: str, view: Mapping[str, Any], tasks_root: Path,
-              work: Path) -> dict[str, Any]:
+              work: Path, interrupt: threading.Event | None = None) -> dict[str, Any]:
     work = Path(work).resolve()
     work.mkdir(parents=True, exist_ok=True)
     copy = work / "repo"
@@ -572,7 +576,7 @@ def grade_run(task: Mapping[str, Any], repo: Path, base_commit: str, view: Mappi
         shutil.rmtree(copy)
     shutil.copytree(Path(repo).resolve(), copy, symlinks=True)
     ctx = GradeContext(task=task, repo=copy, base=base_commit, view=view, tasks_root=Path(tasks_root).resolve(),
-                       work=work, origin=Path(repo).resolve())
+                       work=work, origin=Path(repo).resolve(), interrupt=interrupt)
     ctx.snapshot_git_facts()
     checks = [run_check(ctx, spec) for spec in task["checks"]]
     tests = summarize_tests(merge_suites(ctx.suite_results))

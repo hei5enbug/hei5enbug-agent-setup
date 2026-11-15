@@ -95,6 +95,9 @@ prompt, the same limits, and the same graders and metrics. `claude` alone is the
   in the agent environment of every run. A variant sets either variable in its `env` to override the default. The
   plugin's other hooks still run.
 - Codex has no spend flag, so only the wall-time limit of the task is enforced.
+- The harness reads the `exec` commands, `apply_patch` calls, and native `spawn_agent` calls of the rollouts as tool
+  calls. A `spawn_agent` call counts as a subagent launch of the `agent_type` it names, or of `general-purpose` when it
+  names none, and the order of a delegation and the order of the final answer count the same calls.
 - The model and effort of the session are read from the `turn_context` event of its rollout, not from the command
   line, and `env.json` records them with the Codex CLI version.
 
@@ -139,7 +142,7 @@ Run every command from the repository root. The default run root is
 | Grade again after a grader fix | `python3 evals/e2e/harness/cli.py regrade --campaign <name> [--run-ids ...]` |
 | Copy the records again, then grade | add `--recollect` to `regrade` |
 | Resume after changing a task or variant | add `--allow-changed-inputs` to `run` |
-| Check the pilot facts per run | `python3 evals/e2e/harness/cli.py pilot-check --campaign <name>` |
+| Check the pilot facts per run, on both hosts; it fails when it checks no run | `python3 evals/e2e/harness/cli.py pilot-check --campaign <name>` |
 | Print tables | `python3 evals/e2e/harness/cli.py summarize --campaign <name> [--out file.md]` |
 | Compare two variants | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | Export a revision only | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
@@ -156,7 +159,10 @@ finish, and exits with code 75.
 An interrupt of the harness, such as Ctrl-C, starts no new run, stops each running agent and every process it started
 as the wall-clock limit does, records that run as `interrupted`, and exits with code 130. A Claude Code run whose
 stream ends with an aborted result is recorded as `interrupted` too: `claude -p` writes that result when it receives
-SIGINT and then exits with code 0.
+SIGINT and then exits with code 0. An interrupt during grading ends the rubric grader and the grader's pytest runs with
+every process they started, without waiting for their time limit, and an interrupt that arrives after an agent run has
+ended starts no grading; both record the run as `interrupted`. A subprocess that a custom check starts itself, such as the
+`text_review.py` call of the text tasks, is not ended before its own time limit.
 
 The first `run` stores each variant's resolved revision and a fingerprint per input in `campaign.json`: the variant
 file, the task file, the task's prompt file, the task's fixture tree, and the hidden tests and custom checks of the
@@ -281,7 +287,8 @@ cases its issue names, on both hosts. The rule is in `harness/verdict.py`, which
 - A run passes when every required check passes. Time is the `wall_seconds` of the run plus those of its archived earlier
   attempts, and cost is the list-price spend of the whole run, including archived earlier attempts: Claude spend as the
   summary computes it plus the Codex estimate. An earlier attempt whose duration no record shows makes the time `not
-  measured`.
+  measured`, and a final or archived attempt whose metrics hold no cost figure of its host, such as a killed attempt
+  with no `metrics.json`, makes the cost `not measured`; the summary tables still count that attempt as 0.
 - Quality: every after run passes on both hosts, and a case that passed before fails on neither host. A quality
   failure fails the case whatever the time and cost gaps are.
 - Gap: for one case and measure, the larger host value divided by the smaller. Run the case once per variant and host
@@ -292,7 +299,10 @@ cases its issue names, on both hosts. The rule is in `harness/verdict.py`, which
   a run on a host or a variant is an incomplete pair and gives `not measured`.
 - A first gap before above 2 is no pass condition for that measure. The case prints an `investigate` line, and one
   issue investigates that gap unless an open issue already covers it.
-- A case or host with no before run decides quality only, and its after run becomes the baseline for later changes.
+- A host with no before run decides quality only when the campaign shows that the before variant cannot run there, and
+  its after run becomes the baseline for later changes. `record` takes a before run that `order` in `campaign.json` never
+  scheduled for that task and host as that evidence. A scheduled before run that is missing, such as one a campaign
+  stopped before reaching, gives `not measured`.
 - A missing time or cost value gives `not measured`, never a pass, also for a case with no before run and for one whose
   first gap before is above 2.
 - Improvement claim (`--claim`): a change adopted because it lowers time or cost names the claimed measures. Per case
@@ -308,6 +318,9 @@ error stays in its case as `not measured`; a task with no run at all stays too. 
 from the run's own host records: the Claude stream and command line, the Codex rollout of the main session and of every
 child session (its role from `session_meta`, a second session of one role kept as its own invocation), the role runner
 status lines, and the rubric result. An effort that no record states reads `not measured`.
+The revision of each variant is the plugin revision its own runs stored in `run.json`, not the latest one in
+`campaign.json`; runs of one variant at different revisions make `record` refuse, so measure each revision in its own
+campaign. A run that stored none falls back to the campaign's revision.
 It then judges the cases, validates the record, and writes `records/<issue number>.json`. It prints one line per case,
 the `investigate` lines, which cases need repeats, and the claim verdicts. A record holds measurements, run facts
 such as models, efforts, and issue numbers, and fictional fixture names only; validation rejects an absolute local

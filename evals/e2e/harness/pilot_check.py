@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, TextIO
 
-from . import collect, metrics, transcript
-from .config import APPROVER_TOOL, FORBIDDEN_ARGS, MOD_MARKER
+from . import codex_host, collect, metrics, transcript
+from .config import APPROVER_TOOL, FORBIDDEN_ARGS, HOST_CLAUDE, HOST_CODEX, MOD_MARKER
 from .matrix import campaign_dir, read_json
 
 REQUIRED_FLAGS = ("--plugin-dir", "--settings", "--permission-prompt-tool", "--max-budget-usd")
@@ -41,14 +41,53 @@ def check_run(result_dir: Path) -> list[tuple[str, bool, str]]:
     ]
 
 
+def codex_answered(result_dir: Path, stream: list[dict[str, Any]]) -> bool:
+    """Whether the Codex turn completed: the stream says so, or the main rollout holds `task_complete`."""
+    if codex_host.stream_state(stream)["completed"]:
+        return True
+    rollouts, _ = codex_host.label_rollouts(collect.load_rollouts(result_dir / "codex", {}))
+    return any(codex_host.payload_of(event).get("type") == "task_complete" for event in (rollouts[0]["events"] if rollouts else []))
+
+
+def check_codex_run(result_dir: Path) -> list[tuple[str, bool, str]]:
+    run = read_json(result_dir / "run.json", {})
+    expected = str((run.get("plugin") or {}).get("path", ""))
+    setup = read_json(result_dir / codex_host.SETUP_RECORD, {}) or {}
+    steps = setup.get("steps") if isinstance(setup.get("steps"), list) else []
+    installed = bool(steps) and all(step.get("returncode") == 0 for step in steps) and any(
+        expected and expected in (step.get("argv") or []) for step in steps)
+    env = read_json(result_dir / "env.json", {}) or {}
+    checks = (read_json(result_dir / "metrics.json", {}) or {}).get("plugin") or {}
+    argv = (read_json(result_dir / "command.json", {}) or {}).get("argv", [])
+    stream = transcript.read_jsonl(result_dir / "stream.jsonl")
+    return [
+        ("turn completed", codex_answered(result_dir, stream), str(run.get("status"))),
+        ("plugin installed from the exported directory", installed, expected),
+        ("plugin hooks trusted", "hook_trust" in setup and "hook_trust_error" not in setup, ""),
+        ("CODEX_HOME isolated", env.get("codex_home_isolated") is True, ""),
+        ("session model as requested", checks.get("model_as_requested") is True, ""),
+        ("command line pins the model", "-m" in argv and "exec" in argv, ""),
+    ]
+
+
+def run_files(base: Path) -> list[Path]:
+    """Every run.json of a campaign, on both hosts."""
+    return sorted([*base.glob("results/*/*/rep*/run.json"), *base.glob(f"results/*/*/{HOST_CODEX}/rep*/run.json")])
+
+
 def pilot_check(run_root: Path, campaign: str, run_ids: frozenset[str], out: TextIO) -> int:
-    failures = 0
-    for run_json in sorted(campaign_dir(run_root, campaign).glob("results/*/*/rep*/run.json")):
+    """Validate every selected run of either host; a call that validated no run fails."""
+    failures, checked = 0, 0
+    for run_json in run_files(campaign_dir(run_root, campaign)):
         run = read_json(run_json, {})
         if run_ids and run.get("run_id") not in run_ids:
             continue
+        checked += 1
         out.write(f"{run.get('run_id')}\n")
-        for name, passed, detail in check_run(run_json.parent):
+        codex = run.get("host", HOST_CLAUDE) == HOST_CODEX
+        for name, passed, detail in (check_codex_run if codex else check_run)(run_json.parent):
             failures += 0 if passed else 1
             out.write(f"  {'PASS' if passed else 'FAIL'} {name}{': ' + detail if detail and not passed else ''}\n")
-    return 1 if failures else 0
+    if not checked:
+        out.write("FAIL no run was checked: the campaign holds no run, or no run matches --run-ids\n")
+    return 1 if failures or not checked else 0

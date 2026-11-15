@@ -26,6 +26,7 @@ from harness import (  # noqa: E402
     rubric, runner, summarize, transcript, usage,
 )
 from harness.config import HarnessConfig  # noqa: E402
+from harness import pilot_check  # noqa: E402
 from harness.pilot_check import command_problems  # noqa: E402
 
 OPUS = "claude-opus-5-5"
@@ -1161,7 +1162,7 @@ class ProcessAndRunTest(unittest.TestCase):
         Path(dest).mkdir(parents=True)
         return "base123"
 
-    def grade(self, task, repo, base, view, tasks_root, work):
+    def grade(self, task, repo, base, view, tasks_root, work, interrupt=None):
         return {"checks": [], "success": True, "correctness": 1.0, "test_pass_rate": 1.0, "regressions": 0, "constraints": []}
 
     def test_제한_시간을_넘기면_SIGINT_SIGTERM을_무시해도_SIGKILL로_끝내고_timed_out이다(self):
@@ -1399,6 +1400,58 @@ class ProcessAndRunTest(unittest.TestCase):
         saved = json.loads((self.spec.result_dir / "run.json").read_text(encoding="utf-8"))
         self.assertEqual((run["status"], saved["status"], saved["interrupted"]), ("interrupted", "interrupted", False))
 
+    def rubric_task(self) -> dict[str, Any]:
+        return {**self.rubric_task_free(), "rubric": RUBRIC}
+
+    def rubric_task_free(self) -> dict[str, Any]:
+        return {**self.task, "limits": {"wall_seconds": 30, "max_budget_usd": 1}}
+
+    def test_루브릭_채점_중_하네스가_중단되면_채점_프로세스를_끝내고_채점_제한_시간을_기다리지_않는다(self):
+        """채점기가 자식을 띄운 채 오래 돌 때 interrupt가 켜지면 그 프로세스를 정리하고 interrupted로 기록하며 곧 돌려준다."""
+        # given
+        grader_pid = self.root / "grader.pid"
+        self.addCleanup(lambda: grader_pid.is_file() and self.kill_quietly(int(grader_pid.read_text(encoding="utf-8"))))
+        sleeper = "import os, sys, time; open(sys.argv[1], 'w').write(str(os.getpid())); time.sleep(25)"
+
+        def slow_primary(work_dir, assignment, result, run, repo_root):
+            return run([sys.executable, "-c", sleeper, str(grader_pid)], cwd=work_dir, capture_output=True, text=True,
+                       timeout=25, check=False)
+
+        interrupt = self.interrupt_once_exists(grader_pid)
+        begin = time.monotonic()
+
+        # when
+        with mock.patch.object(rubric, "run_primary", slow_primary):
+            run = runner.execute_run(self.spec, self.rubric_task(), self.variant, self.plugin, self.cfg, {}, interrupt=interrupt)
+
+        # then
+        saved = json.loads((self.spec.result_dir / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual((run["status"], saved["status"], saved["interrupted"]), ("interrupted", "interrupted", True))
+        self.assertLess(time.monotonic() - begin, 20)
+        self.assertFalse(pid_running(int(grader_pid.read_text(encoding="utf-8"))))
+
+    def test_하네스_중단이_에이전트_종료_직후_켜지면_채점을_시작하지_않고_interrupted로_기록한다(self):
+        """에이전트가 정상 종료한 뒤 채점 전에 interrupt가 켜지면 채점기를 부르지 않고 실행을 interrupted로 남긴다."""
+        # given
+        interrupt = threading.Event()
+        graded: list[str] = []
+        self.graders.grade_run = lambda *args, **kwargs: graded.append("called") or self.grade(*args[:6])
+        real_run_agent = runner.run_agent
+
+        def run_then_interrupt(*args, **kwargs):
+            result = real_run_agent(*args, **kwargs)
+            interrupt.set()
+            return result
+
+        # when
+        with mock.patch.object(runner, "run_agent", run_then_interrupt):
+            run = runner.execute_run(self.spec, self.rubric_task_free(), self.variant, self.plugin, self.cfg, {}, interrupt=interrupt)
+
+        # then
+        saved = json.loads((self.spec.result_dir / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual(graded, [])
+        self.assertEqual((run["status"], saved["status"], saved["interrupted"]), ("interrupted", "interrupted", True))
+
     def write_stream(self, events: list[dict[str, Any]]) -> None:
         self.spec.result_dir.mkdir(parents=True, exist_ok=True)
         text = "".join(json.dumps(event) + "\n" for event in events)
@@ -1418,7 +1471,7 @@ class ProcessAndRunTest(unittest.TestCase):
         item = {"type": "response_item", "payload": {"type": "custom_tool_call", "name": "exec", "call_id": "c1", "input": script}}
         (codex_dir / "rollout-r1.jsonl").write_text(json.dumps(item) + "\n", encoding="utf-8")
         seen: dict[str, Any] = {}
-        self.graders.grade_run = lambda task, repo, base, view, tasks_root, work: seen.update(view=view) or self.grade(task, repo, base, view, tasks_root, work)
+        self.graders.grade_run = lambda task, repo, base, view, tasks_root, work, interrupt=None: seen.update(view=view) or self.grade(task, repo, base, view, tasks_root, work)
 
         # when
         result = runner.analyze(self.spec, self.task, self.finished_run(), self.cfg)
@@ -1445,7 +1498,7 @@ class ProcessAndRunTest(unittest.TestCase):
         self.assertEqual(env["EVAL_RUN_CWD"], str(self.spec.repo))
         self.assertEqual(self.spec.repo.parent, self.spec.work_dir)
 
-    def failing_grader(self, task, repo, base, view, tasks_root, work):
+    def failing_grader(self, task, repo, base, view, tasks_root, work, interrupt=None):
         raise RuntimeError("boom")
 
     def test_채점이_실패해도_사용량_메트릭은_쓰고_grade_error를_남기고_오류를_전파한다(self):
@@ -2631,6 +2684,74 @@ class ClaudeSpendTest(unittest.TestCase):
             self.assertIn("1.500 / 1.500 (n=1)", text)
             self.assertIn("| 1.500 | 0.000 | 1.500 |", text)
             self.assertIn("| T01 | 1 | 0 | 0 | no | +2.500 |", text)
+
+
+class PilotCheckTest(unittest.TestCase):
+    PLUGIN_DIR = "/tmp/p"
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def seed_codex_run(self, task: str = "T08", setup_steps: list | None = None, isolated: bool = True) -> Path:
+        spec = matrix.make_spec(self.root, "camp", task, "baseline", 1, "codex")
+        folder = spec.result_dir
+        matrix.write_json(folder / "run.json", {"run_id": spec.run_id, "task": task, "variant": "baseline", "rep": 1,
+                                                "host": "codex", "status": "complete", "plugin": {"path": self.PLUGIN_DIR}})
+        steps = [{"argv": ["codex", "plugin", "marketplace", "add", self.PLUGIN_DIR], "returncode": 0}] if setup_steps is None else setup_steps
+        matrix.write_json(folder / "codex-setup.json", {"steps": steps, "hook_trust": {"trusted": ["a"]}})
+        matrix.write_json(folder / "env.json", {"codex_home_isolated": isolated})
+        matrix.write_json(folder / "metrics.json", {"plugin": {"model_as_requested": True}})
+        matrix.write_json(folder / "command.json", {"argv": ["codex", "exec", "--json", "-m", "gpt-6.1-sol", "--", "prompt"]})
+        (folder / "stream.jsonl").write_text(json.dumps({"type": "turn.completed"}) + "\n", encoding="utf-8")
+        return folder
+
+    def pilot(self) -> tuple[int, str]:
+        out = io.StringIO()
+        code = pilot_check.pilot_check(self.root, "camp", frozenset(), out)
+        return code, out.getvalue()
+
+    def test_Codex_결과_경로의_실행도_검사하고_통과하면_실행_번호와_통과_줄을_낸다(self):
+        """results/<과제>/<변형>/codex/rep<k>의 정상 실행은 검사 대상으로 나오고 모든 항목이 PASS이며 0을 돌려준다."""
+        # given
+        self.seed_codex_run()
+
+        # when
+        code, text = self.pilot()
+
+        # then
+        self.assertEqual(code, 0)
+        self.assertIn("T08-baseline-codex-r1", text)
+        self.assertIn("PASS", text)
+        self.assertNotIn("FAIL", text)
+
+    def test_Codex_실행의_플러그인_설치_기록이_없거나_격리가_깨졌으면_실패를_돌려준다(self):
+        """설치 단계 기록이 비었거나 CODEX_HOME 격리 표시가 없으면 해당 항목이 FAIL이고 1을 돌려준다."""
+        # given
+        self.seed_codex_run("T08", setup_steps=[])
+        self.seed_codex_run("T02", isolated=False)
+
+        # when
+        code, text = self.pilot()
+
+        # then
+        self.assertEqual(code, 1)
+        self.assertEqual(text.count("FAIL"), 2)
+
+    def test_검사한_실행이_하나도_없으면_성공이_아니라_실패를_돌려준다(self):
+        """실행 결과가 없는 캠페인이나 아무것도 고르지 못한 run id 필터는 0개를 검사했다는 줄과 함께 1을 돌려준다."""
+        # given
+        self.seed_codex_run()
+        out = io.StringIO()
+
+        # when
+        empty = pilot_check.pilot_check(self.root, "no-such-campaign", frozenset(), io.StringIO())
+        filtered = pilot_check.pilot_check(self.root, "camp", frozenset({"T99-baseline-r1"}), out)
+
+        # then
+        self.assertEqual((empty, filtered), (1, 1))
+        self.assertIn("no run", out.getvalue())
 
 
 if __name__ == "__main__":

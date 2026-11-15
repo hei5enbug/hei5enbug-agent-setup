@@ -17,6 +17,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from harness.process import run_cleaning_tree
+
 STUB_ENV = "E2E_TEXT_REVIEW_STUB"
 TIMEOUT_SECONDS = 1700
 FINDING_LIMIT = 6
@@ -39,8 +41,8 @@ def run_script(ctx, command: str, args: list[str], again: bool = False) -> tuple
         return int(entry["exit_code"]), str(entry["output"])
     script = repository_root(ctx) / "scripts" / "text_review.py"
     try:
-        completed = subprocess.run([sys.executable, str(script), command, *args], cwd=ctx.work, capture_output=True,
-                                   text=True, timeout=TIMEOUT_SECONDS)
+        completed = run_cleaning_tree([sys.executable, str(script), command, *args], cwd=ctx.work,
+                                      timeout=TIMEOUT_SECONDS, interrupt=getattr(ctx, "interrupt", None))
     except (OSError, subprocess.TimeoutExpired) as error:
         raise NoVerdict(f"text_review.py {command} did not finish: {error}") from error
     return completed.returncode, completed.stdout

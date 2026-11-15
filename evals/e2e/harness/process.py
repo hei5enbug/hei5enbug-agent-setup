@@ -13,18 +13,28 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 EXEC_FAILURE_CODE = 127
 TREE_POLL_SECONDS = 2.0
 GONE_POLL_SECONDS = 0.05
 KILL_CONFIRM_SECONDS = 5.0
 LEFTOVER_TERM_GRACE_SECONDS = 2.0
+TERMINATE_GRACE_SECONDS = 5.0
+DRAIN_SECONDS = 5.0
 ZOMBIE_STATE = "Z"
 
 #: pid -> (ppid, pgid, state)
 ProcessTable = dict[int, tuple[int, int, str]]
 TableReader = Callable[[], ProcessTable]
+
+
+class GradingInterrupted(Exception):
+    """Grading stopped because the harness was interrupted; the grader and its descendants were ended.
+
+    `no_verdict` lets a check that raises it stop grading instead of being recorded as a failed check."""
+
+    no_verdict = True
 
 
 @dataclass(frozen=True)
@@ -220,3 +230,38 @@ def run_agent(
         process.returncode, timed_out, time.monotonic() - begin, started_at, datetime.now(timezone.utc), error,
         orphans, leftovers, interrupted,
     )
+
+
+def run_cleaning_tree(
+    command: list[str], *, timeout: float, poll_seconds: float = TREE_POLL_SECONDS, input: str | None = None,
+    cwd: Path | None = None, env: Mapping[str, str] | None = None, encoding: str | None = None, errors: str | None = None,
+    interrupt: threading.Event | None = None, **_: Any,
+) -> subprocess.CompletedProcess:
+    """Run `command` capturing text output; on timeout end it and every descendant, even in other sessions, then raise.
+
+    When `interrupt` is set the same cleanup runs and GradingInterrupted is raised, without waiting for the timeout."""
+    process = subprocess.Popen(
+        command, cwd=cwd, env=None if env is None else dict(env), stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding=encoding, errors=errors, start_new_session=True,
+    )
+    tracker = DescendantTracker(process.pid)
+    deadline, pending = time.monotonic() + timeout, input
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or (interrupt is not None and interrupt.is_set()):
+            break
+        try:
+            stdout, stderr = process.communicate(pending, timeout=min(poll_seconds, remaining))
+        except subprocess.TimeoutExpired:
+            pending = None
+            tracker.refresh()
+            continue
+        return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+    terminate(process, tracker, TERMINATE_GRACE_SECONDS, TERMINATE_GRACE_SECONDS)
+    try:
+        process.communicate(timeout=DRAIN_SECONDS)
+    except subprocess.TimeoutExpired:
+        pass
+    if interrupt is not None and interrupt.is_set():
+        raise GradingInterrupted("grading stopped by a harness interrupt")
+    raise subprocess.TimeoutExpired(command, timeout)

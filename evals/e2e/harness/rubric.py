@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import re
@@ -9,7 +10,6 @@ import secrets
 import subprocess
 import sys
 import threading
-import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -17,13 +17,11 @@ from .config import (
     REPO_ROOT, RUBRIC_EFFORT, RUBRIC_FALLBACK_EFFORT, RUBRIC_FALLBACK_MODEL, RUBRIC_MODEL, RUBRIC_RETRY_EXITS,
 )
 from .matrix import read_json, write_json
-from .process import TREE_POLL_SECONDS, DescendantTracker, terminate
+from .process import GradingInterrupted, run_cleaning_tree
 
 Runner = Callable[..., subprocess.CompletedProcess]
 RUBRIC_TIMEOUT_SECONDS = 1800
 RUNNER_TIMEOUT_SECONDS = 1500
-TERMINATE_GRACE_SECONDS = 5.0
-DRAIN_SECONDS = 5.0
 JSON_OBJECT = re.compile(r"\{.*\}", re.S)
 OPAQUE_LENGTH = 16
 _SALT_LOCK = threading.Lock()
@@ -121,36 +119,6 @@ def runner_status(completed: subprocess.CompletedProcess) -> dict[str, Any]:
     return {"exit": completed.returncode, "output_tail": (str(completed.stdout or "") + str(completed.stderr or ""))[-800:]}
 
 
-def run_cleaning_tree(
-    command: list[str], *, timeout: float, poll_seconds: float = TREE_POLL_SECONDS, input: str | None = None,
-    cwd: Path | None = None, **_: Any,
-) -> subprocess.CompletedProcess:
-    """Run `command` capturing text output; on timeout end it and every descendant, even in other sessions, then raise."""
-    process = subprocess.Popen(
-        command, cwd=cwd, stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL, stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE, text=True, start_new_session=True,
-    )
-    tracker = DescendantTracker(process.pid)
-    deadline, pending = time.monotonic() + timeout, input
-    while True:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            break
-        try:
-            stdout, stderr = process.communicate(pending, timeout=min(poll_seconds, remaining))
-        except subprocess.TimeoutExpired:
-            pending = None
-            tracker.refresh()
-            continue
-        return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
-    terminate(process, tracker, TERMINATE_GRACE_SECONDS, TERMINATE_GRACE_SECONDS)
-    try:
-        process.communicate(timeout=DRAIN_SECONDS)
-    except subprocess.TimeoutExpired:
-        pass
-    raise subprocess.TimeoutExpired(command, timeout)
-
-
 def run_primary(work_dir: Path, assignment: Path, result: Path, run: Runner, repo_root: Path) -> subprocess.CompletedProcess:
     command = [
         sys.executable, str(repo_root / "scripts/role_runner.py"), "reviewer", "--model", RUBRIC_MODEL,
@@ -177,9 +145,13 @@ def _fallback_answer(completed: subprocess.CompletedProcess) -> str:
 
 def grade(
     task: dict[str, Any], artifact: str, task_prompt: str, work_dir: Path, run: Runner = run_cleaning_tree,
-    repo_root: Path = REPO_ROOT,
+    repo_root: Path = REPO_ROOT, interrupt: threading.Event | None = None,
 ) -> dict[str, Any]:
-    """Score the artifact blind. Uses the reviewer role first and the Claude fallback only after exit 3 or 4."""
+    """Score the artifact blind. Uses the reviewer role first and the Claude fallback only after exit 3 or 4.
+
+    A set `interrupt` ends the grader process and raises GradingInterrupted instead of waiting for its timeout."""
+    if interrupt is not None:
+        run = functools.partial(run, interrupt=interrupt)
     rubric = task["rubric"]
     low = rubric.get("scale", [1, 5])[0]
     if not artifact.strip():
