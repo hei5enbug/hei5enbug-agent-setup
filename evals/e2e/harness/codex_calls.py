@@ -9,6 +9,8 @@ from typing import Any, Iterable
 CALL_TYPES = frozenset({"function_call", "local_shell_call", "custom_tool_call"})
 OUTPUT_TYPES = frozenset({"function_call_output", "local_shell_call_output", "custom_tool_call_output"})
 NATIVE_AGENT_TOOL = "spawn_agent"
+FINAL_ANSWER_HEADER = re.compile(r"\AMessage Type: FINAL_ANSWER\s*\nTask name: [^\n]*\nSender: (/root/[^\n]+)\nPayload:\n?(.*)\Z", re.S)
+CHILD_ERROR_PREFIX = "Agent errored:"
 SHELL_WRAPPERS = frozenset({"bash", "sh", "zsh"})
 JS_COMMAND = re.compile(r"""\bcmd\s*:\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|`((?:[^`\\]|\\.)*)`)""", re.S)
 JS_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f", "v": "\v", "0": "\0"}
@@ -75,13 +77,51 @@ def _arguments(payload: dict[str, Any]) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
-def _native_agent_call(call_id: str, payload: dict[str, Any], result: str, is_error: bool, source: str) -> dict[str, Any]:
-    """A native subagent call (`spawn_agent`) shaped like a Claude `Agent` call, so delegation metrics see the role it names."""
+def _final_answers(events: list[dict[str, Any]]) -> list[tuple[int, str, str]]:
+    """(event index, sender path, payload) of every child final result a rollout received as an `agent_message`."""
+    found: list[tuple[int, str, str]] = []
+    for index, event in enumerate(events):
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        if event.get("type") != "response_item" or payload.get("type") != "agent_message":
+            continue
+        parts = payload.get("content") if isinstance(payload.get("content"), list) else []
+        text = "".join(str(part.get("text", "")) for part in parts if isinstance(part, dict))
+        match = FINAL_ANSWER_HEADER.match(text)
+        if match:
+            found.append((index, match.group(1), match.group(2).strip()))
+    return found
+
+
+def _child_path(arguments: dict[str, Any], acknowledgement: str) -> str:
+    """The path `/root/<task_name>` that names the child: the one the spawn acknowledgement reports, else the call's own."""
+    try:
+        reported = json.loads(acknowledgement).get("task_name")
+    except (ValueError, AttributeError):
+        reported = None
+    name = reported if isinstance(reported, str) and reported else str(arguments.get("task_name") or "")
+    return name if name.startswith("/") else f"/root/{name}"
+
+
+def _native_agent_call(
+    call_id: str, payload: dict[str, Any], acknowledgement: str, is_error: bool, source: str, final: str | None,
+) -> dict[str, Any]:
+    """A native subagent call (`spawn_agent`) shaped like a Claude `Agent` call, so delegation metrics see the role it names.
+    Its result is the child's final result; the spawn acknowledgement alone leaves the result empty, so the call is not complete."""
     arguments = _arguments(payload)
     tool_input = {"subagent_type": str(arguments.get("agent_type") or "general-purpose"),
                   "prompt": str(arguments.get("message") or ""), "task_name": arguments.get("task_name"),
                   "model": arguments.get("model"), "reasoning_effort": arguments.get("reasoning_effort")}
-    return _call(f"codex:{call_id}", NATIVE_AGENT_TOOL, tool_input, result, is_error, source)
+    spawned = _spawn_succeeded(acknowledgement)
+    failed = is_error or not spawned or (final or "").startswith(CHILD_ERROR_PREFIX)
+    return _call(f"codex:{call_id}", NATIVE_AGENT_TOOL, tool_input, final or "", failed, source)
+
+
+def _spawn_succeeded(acknowledgement: str) -> bool:
+    try:
+        body = json.loads(acknowledgement)
+    except ValueError:
+        return False
+    return isinstance(body, dict) and bool(body.get("task_name"))
 
 
 def _patch_text(payload: dict[str, Any]) -> str | None:
@@ -223,10 +263,12 @@ def rollout_tool_calls(events: list[dict[str, Any]], role: str, rollout_name: st
     result and a later `write_stdin` poll extends the call of its session; otherwise the script's whole output is
     attached to the first of its commands."""
     outputs = _outputs(events)
+    finals = _final_answers(events)
+    claimed: set[int] = set()
     source = f"codex:{role or 'unknown'}"
     calls: list[dict[str, Any]] = []
     pending: dict[str, int] = {}
-    for event in events:
+    for position, event in enumerate(events):
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
         if event.get("type") != "response_item" or payload.get("type") not in CALL_TYPES:
             continue
@@ -234,7 +276,11 @@ def rollout_tool_calls(events: list[dict[str, Any]], role: str, rollout_name: st
         done = outputs.get(call_id, {})
         text, code = output_text(done.get("output")), exit_code(done.get("output"))
         if payload.get("type") == "function_call" and payload.get("name") == NATIVE_AGENT_TOOL:
-            calls = [*calls, _native_agent_call(call_id, payload, text, bool(code), source)]
+            path = _child_path(_arguments(payload), text)
+            answer = next(((index, body) for index, sender, body in finals
+                           if index > position and sender == path and index not in claimed), None)
+            claimed = claimed | {answer[0]} if answer else claimed
+            calls = [*calls, _native_agent_call(call_id, payload, text, bool(code), source, answer[1] if answer else None)]
             continue
         patch = _patch_text(payload)
         if patch is not None:

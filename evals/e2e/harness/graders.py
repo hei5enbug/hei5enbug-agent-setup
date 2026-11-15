@@ -502,7 +502,7 @@ def check_custom(ctx: GradeContext, spec: Mapping[str, Any]) -> CheckResult:
     function = load_custom(ctx, spec.get("function", "check"))
     context = types.SimpleNamespace(repo=ctx.repo, base=ctx.base, view=ctx.view, task=ctx.task, work=ctx.work,
                                     changes=dict(ctx.changes), git=ctx.git, porcelain=ctx.porcelain,
-                                    tasks_root=ctx.tasks_root, origin=ctx.origin)
+                                    tasks_root=ctx.tasks_root, origin=ctx.origin, interrupt=ctx.interrupt)
     ok, detail, data = function(context)
     return bool(ok), str(detail), dict(data or {})
 

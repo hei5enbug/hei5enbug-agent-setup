@@ -163,6 +163,22 @@ class GapVerdictTest(unittest.TestCase):
         self.assertEqual([item["verdict"] for item in result["measures"]], ["baseline", "baseline"])
         self.assertEqual(result["verdict"], "pass")
 
+    def test_기준선_예외_호스트가_있어도_다른_호스트의_이전_값이_없으면_그_측정은_측정되지_않음이다(self):
+        """given codex가 기준선 예외이고 claude 이전 실행의 비용이 없을 때 when 판정하면 then 비용은 not measured이고 시간은 baseline이며 사례는 pass가 아니다.
+
+        잡는 회귀: 기준선 예외가 측정된 호스트의 비용 누락까지 가려 사례가 pass로 끝나던 문제."""
+        # given
+        before = {"claude": [{"passed": True, "wall_seconds": 100.0, "cost_usd": None}]}
+        case = case_of(before, sided([1.2], [1.2]), baseline_hosts=["codex"])
+
+        # when
+        result = verdict.case_verdict(case)
+
+        # then
+        self.assertEqual((measure(result, "cost_usd")["verdict"], measure(result, "wall_seconds")["verdict"]),
+                         ("not measured", "baseline"))
+        self.assertEqual(result["verdict"], "not measured")
+
     def test_여러_사례는_하나라도_실패하면_전체가_실패한다(self):
         """given 통과한 사례와 실패한 사례가 섞였을 때 when 비교하면 then 전체 판정은 fail이고 사례별 판정이 남는다."""
         # given

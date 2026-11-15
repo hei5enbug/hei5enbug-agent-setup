@@ -132,6 +132,24 @@ def run_campaign(
     return 0
 
 
+def scheduled_entries(existing: dict[str, Any], current: list[tuple[str, str, str]]) -> list[dict[str, str]]:
+    """Every (task, variant, host) any invocation of the campaign scheduled: the stored set, or for a file that predates it
+    the stored `order`, plus this invocation's runs."""
+    stored: list[tuple[str, str, str]] = []
+    if isinstance(existing.get("scheduled"), list):
+        stored = [(str(item.get("task")), str(item.get("variant")), str(item.get("host")))
+                  for item in existing["scheduled"] if isinstance(item, dict)]
+    else:
+        for run_id in existing.get("order") if isinstance(existing.get("order"), list) else []:
+            try:
+                task, variant, _, host = parse_run_id(str(run_id))
+            except ValueError:
+                continue
+            stored.append((task, variant, host))
+    merged = sorted({*stored, *current})
+    return [{"task": task, "variant": variant, "host": host} for task, variant, host in merged]
+
+
 def write_campaign_file(
     cfg: HarnessConfig, base: Any, campaign: str, tasks: list[str], variants: list[str], reps: int,
     current_inputs: dict[str, Any], changes: list[str], hosts: list[str] | None = None,
@@ -152,11 +170,13 @@ def write_campaign_file(
         "parts": {**stored.get("parts", {}), **current_inputs["parts"]},
         "fingerprint": current_inputs["fingerprint"],
     } if stored else current_inputs
+    planned = plan_runs(tasks, variants, hosts or [HOST_CLAUDE], reps)
     write_json(path, {
         **existing,
         "campaign": campaign, "tasks": tasks, "variants": variants, "reps": reps, "created": created,
         "hosts": hosts or [HOST_CLAUDE],
-        "order": [run_id_for(task, variant, rep, host) for rep, task, variant, host in plan_runs(tasks, variants, hosts or [HOST_CLAUDE], reps)],
+        "order": [run_id_for(task, variant, rep, host) for rep, task, variant, host in planned],
+        "scheduled": scheduled_entries(existing, [(task, variant, host) for _, task, variant, host in planned]),
         "harness_git_sha": head, "inputs": merged_inputs, "input_changes": history,
         "rubric_salt": existing.get("rubric_salt") or secrets.token_hex(16),
     })

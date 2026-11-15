@@ -2583,7 +2583,7 @@ class SpendSummaryTest(unittest.TestCase):
             self.assertEqual(text.count("| 6.000 | 2.000 | 8.000 |"), 2)
 
     def test_성공이_없으면_성공당_비용은_빈칸이고_끝내지_못한_실행의_지출도_더한다(self):
-        """최종이 usage_limited인 실행의 보관 시도 비용도 합계에 들어가고 성공이 0이면 '-'다."""
+        """최종이 usage_limited인 실행의 보관 시도 비용도 합계에 들어가되 그 최종 시도에는 비용 기록이 없어 불완전으로 표시되고, 성공이 0이면 성공당 비용은 '-'다."""
         # given
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -2594,7 +2594,40 @@ class SpendSummaryTest(unittest.TestCase):
             text = summarize.summarize(root, "camp")
 
             # then
-            self.assertIn("| 4.000 | 0.000 | - |", text)
+            self.assertIn("| >= 4.000 (incomplete) | >= 0.000 (incomplete) | - |", text)
+
+
+class IncompleteSpendSummaryTest(unittest.TestCase):
+    def test_보관된_시도의_비용이_없으면_총비용과_성공당_비용은_완전한_숫자가_아니라_불완전으로_표시된다(self):
+        """최종 시도 1.0 성공과 비용 기록이 없는 보관 시도가 있으면 지출 세 칸이 '>= 1.000 (incomplete)' 형태이고 1.000 | 0.000 | 1.000은 나오지 않는다.
+
+        잡는 회귀: 비용이 빠진 시도를 0으로 세고도 완전한 총비용과 성공당 비용 1.000을 그대로 찍던 문제."""
+        # given
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_rows(root, [metrics_row("T01", "A", 1, True, 1.0, 10.0)])
+            folder = matrix.make_spec(root, "camp", "T01", "A", 1).result_dir.parent / "attempts" / "rep1" / "1"
+            matrix.write_json(folder / "metrics.json", {"cost": {}})
+
+            # when
+            text = summarize.summarize(root, "camp")
+
+            # then
+            self.assertIn("| >= 1.000 (incomplete) | >= 0.000 (incomplete) | >= 1.000 (incomplete) |", text)
+            self.assertNotIn("| 1.000 | 0.000 | 1.000 |", text)
+
+    def test_모든_시도의_비용이_있으면_지출_칸에_불완전_표시가_붙지_않는다(self):
+        """비용이 모두 기록된 실행은 지출 칸이 숫자만이다."""
+        # given
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_rows(root, [metrics_row("T01", "A", 1, True, 1.0, 10.0)])
+
+            # when
+            text = summarize.summarize(root, "camp")
+
+            # then
+            self.assertNotIn("(incomplete) |", text)
 
 
 def write_metrics_only(root: Path, row: dict[str, Any], **extra: Any) -> None:

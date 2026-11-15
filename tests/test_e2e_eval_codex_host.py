@@ -651,6 +651,14 @@ def native_spawn(call_id: str, task_name: str, agent_type: str | None) -> list[d
     return [{"type": "response_item", "payload": call}, {"type": "response_item", "payload": done}]
 
 
+def final_answer(task_name: str, text: str = "Review done: no findings.") -> list[dict[str, Any]]:
+    """The message that returns a child's final result to its parent, as Codex writes it into the parent rollout."""
+    payload = {"type": "agent_message", "id": f"amsg-{task_name}", "author": f"/root/{task_name}", "recipient": "/root",
+               "content": [{"type": "input_text",
+                            "text": f"Message Type: FINAL_ANSWER\nTask name: /root\nSender: /root/{task_name}\nPayload:\n{text}"}]}
+    return [{"type": "response_item", "payload": payload}]
+
+
 class CodexNativeDelegationTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -666,9 +674,9 @@ class CodexNativeDelegationTest(unittest.TestCase):
         return codex_host.load_records(self.spec, self.run, "gpt-6.1-sol")["view"]
 
     def test_네이티브_spawn_agent_호출은_이름이_붙은_역할의_위임으로_시작_지표에_들어온다(self):
-        """spawn_agent가 worker를 띄우면 위임 하나가 구현 역할로 보이고 launches_by_type과 tool_calls에도 남는다."""
+        """spawn_agent가 worker를 띄우고 자식의 최종 결과가 돌아오면 위임 하나가 구현 역할로 보이고 launches_by_type과 tool_calls에도 남는다."""
         # given
-        events = native_spawn("c1", "edit_config", "worker") + [assistant_message("done")]
+        events = native_spawn("c1", "edit_config", "worker") + final_answer("edit_config") + [assistant_message("done")]
 
         # when
         view = self.view_of(events)
@@ -693,8 +701,22 @@ class CodexNativeDelegationTest(unittest.TestCase):
         self.assertEqual([(item["type"], item["class"]) for item in view["delegations"]], [("general-purpose", "other")])
         self.assertEqual(len(view["tool_calls"]), 1)
 
-    def test_네이티브_reviewer_위임은_보고_전에_끝난_검토로_센다(self):
-        """spawn_agent로 reviewer를 띄운 뒤 최종 답이 나오면 review_before_report가 통과한다."""
+    def test_네이티브_reviewer_위임은_자식의_최종_결과가_돌아온_뒤_보고해야_끝난_검토로_센다(self):
+        """spawn_agent로 reviewer를 띄우고 그 task_name의 최종 결과가 돌아온 뒤 최종 답이 나오면 review_before_report가 통과한다."""
+        # given
+        events = native_spawn("c1", "final_review", "reviewer") + final_answer("final_review") + [assistant_message("report")]
+
+        # when
+        view = self.view_of(events)
+        passed, _, _ = graders.check_review_before_report(SimpleNamespace(view=view), {})
+
+        # then
+        self.assertTrue(passed)
+
+    def test_네이티브_reviewer를_띄우고_결과를_받기_전에_바로_보고하면_검토가_끝나지_않은_것으로_센다(self):
+        """spawn 확인 응답만 있고 자식의 최종 결과가 없으면 delegation.completed가 거짓이고 review_before_report가 실패한다.
+
+        잡는 회귀: spawn 확인 응답을 결과로 보고 검토가 끝났다고 판정해 reviewer를 띄우자마자 보고해도 T12 검토 검사가 통과하던 문제."""
         # given
         events = native_spawn("c1", "final_review", "reviewer") + [assistant_message("report")]
 
@@ -703,7 +725,30 @@ class CodexNativeDelegationTest(unittest.TestCase):
         passed, _, _ = graders.check_review_before_report(SimpleNamespace(view=view), {})
 
         # then
-        self.assertTrue(passed)
+        self.assertEqual([item["completed"] for item in view["delegations"]], [False])
+        self.assertFalse(passed)
+
+    def test_네이티브_reviewer의_최종_결과가_다른_task_name이거나_오류면_끝난_검토로_세지_않는다(self):
+        """다른 task_name의 최종 결과, spawn 실패 응답, 'Agent errored'로 시작하는 결과는 모두 검토 완료가 아니다."""
+        cases = {
+            "다른 task_name": native_spawn("c1", "final_review", "reviewer") + final_answer("other_task"),
+            "spawn 실패": [{"type": "response_item", "payload": {
+                "type": "function_call", "name": "spawn_agent", "call_id": "c1",
+                "arguments": json.dumps({"task_name": "final_review", "agent_type": "reviewer"})}},
+                {"type": "response_item", "payload": {
+                    "type": "function_call_output", "call_id": "c1",
+                    "output": "collab spawn failed: agent thread limit reached"}}],
+            "오류 결과": native_spawn("c1", "final_review", "reviewer") + final_answer(
+                "final_review", "Agent errored: You have hit your usage limit."),
+        }
+        for name, events in cases.items():
+            with self.subTest(name):
+                # given / when
+                view = self.view_of([*events, assistant_message("report")])
+                passed, _, _ = graders.check_review_before_report(SimpleNamespace(view=view), {})
+
+                # then
+                self.assertFalse(passed)
 
     def test_최종_exec_안에서_검토_명령_뒤에_보고하면_위임_순서와_답변_순서가_같은_세기라_검토가_보고_전으로_센다(self):
         """한 exec가 git diff와 완료된 검토 명령을 함께 돌리고 그다음 보고하면 final_answer_order가 정규화한 호출 수 2이고 검토가 통과한다."""

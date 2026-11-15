@@ -97,7 +97,9 @@ prompt, the same limits, and the same graders and metrics. `claude` alone is the
 - Codex has no spend flag, so only the wall-time limit of the task is enforced.
 - The harness reads the `exec` commands, `apply_patch` calls, and native `spawn_agent` calls of the rollouts as tool
   calls. A `spawn_agent` call counts as a subagent launch of the `agent_type` it names, or of `general-purpose` when it
-  names none, and the order of a delegation and the order of the final answer count the same calls.
+  names none, and the order of a delegation and the order of the final answer count the same calls. A `spawn_agent`
+  delegation counts as completed only once the child's final result for its `task_name` has come back to the parent
+  as a `FINAL_ANSWER` message that is not an error; the spawn acknowledgement alone is not a result.
 - The model and effort of the session are read from the `turn_context` event of its rollout, not from the command
   line, and `env.json` records them with the Codex CLI version.
 
@@ -211,7 +213,7 @@ Each `metrics.json` separates measured values from estimates.
 | Role runner calls by role and exit code | Bash calls of `role_runner.py` and their status lines. |
 | Retries | A failing Bash command run again, an agent type launched again after an error, a role runner run again after a non-zero exit. |
 | Approval prompts, permission denials | `approvals.jsonl` and the result message. |
-| Spend including attempts, cost per success | Summary only: every attempt of a task, and that spend divided by the successes. |
+| Spend including attempts, cost per success | Summary only: every attempt of a task, and that spend divided by the successes. A cell whose spend leaves out an attempt that holds no cost figure reads `>= <value> (incomplete)`, never a plain total. |
 | `grade_error` | Present when grading raised. `metrics.json` still holds usage, cost, and tool counts, and `run.json` records the same error. The summary leaves such a run out of the success and correctness statistics but counts its spend. `regrade` clears the error once grading succeeds. |
 | Handoff loss | Task constraints that the main session knew but that a delegation prompt did not mention, and checks that failed because of it. |
 
@@ -288,7 +290,8 @@ cases its issue names, on both hosts. The rule is in `harness/verdict.py`, which
   attempts, and cost is the list-price spend of the whole run, including archived earlier attempts: Claude spend as the
   summary computes it plus the Codex estimate. An earlier attempt whose duration no record shows makes the time `not
   measured`, and a final or archived attempt whose metrics hold no cost figure of its host, such as a killed attempt
-  with no `metrics.json`, makes the cost `not measured`; the summary tables still count that attempt as 0.
+  with no `metrics.json`, makes the cost `not measured`; the summary tables count that attempt as 0 and mark the
+  spend and cost per success cells `>= <value> (incomplete)`.
 - Quality: every after run passes on both hosts, and a case that passed before fails on neither host. A quality
   failure fails the case whatever the time and cost gaps are.
 - Gap: for one case and measure, the larger host value divided by the smaller. Run the case once per variant and host
@@ -300,11 +303,13 @@ cases its issue names, on both hosts. The rule is in `harness/verdict.py`, which
 - A first gap before above 2 is no pass condition for that measure. The case prints an `investigate` line, and one
   issue investigates that gap unless an open issue already covers it.
 - A host with no before run decides quality only when the campaign shows that the before variant cannot run there, and
-  its after run becomes the baseline for later changes. `record` takes a before run that `order` in `campaign.json` never
-  scheduled for that task and host as that evidence. A scheduled before run that is missing, such as one a campaign
+  its after run becomes the baseline for later changes. `record` takes a before run that no invocation of the campaign ever
+  scheduled for that task and host as that evidence: `campaign.json` keeps the cumulative `scheduled` set of every
+  (task, variant, host) any invocation scheduled, and a file that stored none falls back to its `order`. A scheduled before run that is missing, such as one a campaign
   stopped before reaching, gives `not measured`.
-- A missing time or cost value gives `not measured`, never a pass, also for a case with no before run and for one whose
-  first gap before is above 2.
+- A missing time or cost value gives `not measured`, never a pass, also for a case with no before run, for one whose
+  first gap before is above 2, and for a case with a host that has no before run when a before value on the other host is
+  missing.
 - Improvement claim (`--claim`): a change adopted because it lowers time or cost names the claimed measures. Per case
   and host over five alternating runs, every after run passes, the median of each claimed measure after is below the
   lowest value before, and the median of each other measure after is not above the highest value before. One pair
@@ -320,7 +325,7 @@ child session (its role from `session_meta`, a second session of one role kept a
 status lines, and the rubric result. An effort that no record states reads `not measured`.
 The revision of each variant is the plugin revision its own runs stored in `run.json`, not the latest one in
 `campaign.json`; runs of one variant at different revisions make `record` refuse, so measure each revision in its own
-campaign. A run that stored none falls back to the campaign's revision.
+campaign. The archived earlier attempts of a run count as runs here, because their time and spend enter the record. A run that stored none falls back to the campaign's revision.
 It then judges the cases, validates the record, and writes `records/<issue number>.json`. It prints one line per case,
 the `investigate` lines, which cases need repeats, and the claim verdicts. A record holds measurements, run facts
 such as models, efforts, and issue numbers, and fictional fixture names only; validation rejects an absolute local

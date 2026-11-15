@@ -297,6 +297,15 @@ def stored_revision(run_root: Path, campaign: str, row: Mapping[str, Any]) -> st
     return str(sha) if sha else None
 
 
+def archived_revisions(run_root: Path, campaign: str, row: Mapping[str, Any]) -> list[str]:
+    """The plugin revision each archived earlier attempt of the run stored in its run.json; an attempt that stored none is left out."""
+    spec = make_spec(run_root, campaign, row["task"], row["variant"], int(row["rep"]), row["host"])
+    folder = spec.result_dir.parent / "attempts" / f"rep{spec.rep}"
+    found = [((read_json(item / "run.json", {}) or {}).get("plugin") or {}).get("sha")
+             for item in sorted(folder.glob("*")) if item.is_dir()]
+    return [str(sha) for sha in found if sha]
+
+
 def unmeasured(row: Mapping[str, Any], reason: str, revision: str | None = None) -> dict[str, Any]:
     """A run that exists but cannot be judged; it stays in its case as "not measured" instead of being dropped."""
     summary = {"rep": int(row["rep"]), "measured": False, "reason": reason, "passed": None, "wall_seconds": None, "cost_usd": None}
@@ -313,16 +322,21 @@ def campaign_runs(run_root: Path, campaign: str, variants: Sequence[str], tasks:
             continue
         host = row["host"]
         revision = stored_revision(run_root, campaign, row)
+        archived = archived_revisions(run_root, campaign, row)
+
+        def add(item: dict[str, Any], archived: list[str] = archived) -> None:
+            found.append({**item, "archived_revisions": archived})
+
         if row.get("status") not in FINISHED_STATUSES:
-            found.append(unmeasured(row, f"run status {row.get('status')}", revision))
+            add(unmeasured(row, f"run status {row.get('status')}", revision))
             continue
         if not row.get("has_metrics") or row.get("grade_error"):
-            found.append(unmeasured(row, "grading failed" if row.get("grade_error") else "no metrics", revision))
+            add(unmeasured(row, "grading failed" if row.get("grade_error") else "no metrics", revision))
             continue
         result_dir = make_spec(run_root, campaign, row["task"], row["variant"], int(row["rep"]), host).result_dir
         grade = read_json(result_dir / "grade" / "grade.json", None)
         if not isinstance(grade, Mapping) or not grade.get("checks"):
-            found.append(unmeasured(row, "no grade", revision))
+            add(unmeasured(row, "no grade", revision))
             continue
         summary = {"rep": int(row["rep"]), "passed": bool(row.get("success")), "wall_seconds": positive(row.get("wall_total")),
                    "cost_usd": run_cost(row)}
@@ -334,8 +348,8 @@ def campaign_runs(run_root: Path, campaign: str, variants: Sequence[str], tasks:
                         if check.get("id") == "text-review-clean" and (check.get("data") or {}).get("reviews")), None)
         if reviews:
             entry["reviews"] = reviews
-        found.append({"case": row["task"], "variant": row["variant"], "host": host, "summary": summary, "entry": entry,
-                      "revision": revision})
+        add({"case": row["task"], "variant": row["variant"], "host": host, "summary": summary, "entry": entry,
+             "revision": revision})
     return found
 
 
@@ -349,10 +363,14 @@ def expected_tasks(run_root: Path, campaign: str, requested: Sequence[str] | Non
 
 
 def planned_runs(run_root: Path, campaign: str) -> set[tuple[str, str, str]]:
-    """(task, variant, host) of every run the campaign scheduled, from the run ids in its campaign.json."""
-    order = (read_json(campaign_dir(run_root, campaign) / "campaign.json", {}) or {}).get("order")
-    found = set()
-    for run_id in order if isinstance(order, list) else []:
+    """(task, variant, host) of every run any invocation of the campaign scheduled: its cumulative `scheduled` set in
+    campaign.json, with the run ids of `order` for a file that stored none."""
+    stored = read_json(campaign_dir(run_root, campaign) / "campaign.json", {}) or {}
+    found: set[tuple[str, str, str]] = set()
+    for item in stored.get("scheduled") if isinstance(stored.get("scheduled"), list) else []:
+        if isinstance(item, dict) and all(isinstance(item.get(key), str) for key in ("task", "variant", "host")):
+            found.add((item["task"], item["variant"], item["host"]))
+    for run_id in stored.get("order") if isinstance(stored.get("order"), list) else []:
         try:
             task, variant, _, host = parse_run_id(str(run_id))
         except ValueError:
@@ -384,9 +402,11 @@ def build_cases(
 
 def variant_revision(run_root: Path, campaign: str, variant: str, runs: Sequence[Mapping[str, Any]] = ()) -> str:
     """The revision a variant's runs were measured at, each from its own stored plugin revision. Runs of one variant at
-    different revisions are refused, so a resume that changed the variant never labels old results with the new revision.
+    different revisions are refused, archived earlier attempts included because their time and spend enter the record, so a
+    resume that changed the variant never labels old results with the new revision.
     A run that stored none leaves the campaign's recorded revision of the variant."""
-    stored = sorted({str(run["revision"]) for run in runs if run["variant"] == variant and run.get("revision")})
+    stored = sorted({str(sha) for run in runs if run["variant"] == variant
+                     for sha in [run.get("revision"), *run.get("archived_revisions", [])] if sha})
     if len(stored) > 1:
         raise ConfigError(f"variant {variant} has runs at different revisions ({', '.join(item[:12] for item in stored)}); "
                           "measure each revision in its own campaign")

@@ -147,7 +147,10 @@ def spend_cells(rows: list[dict[str, Any]], successes: int) -> list[str]:
     claude = sum(float(r.get("spend_claude") or 0.0) for r in rows)
     codex = sum(float(r.get("spend_codex") or 0.0) for r in rows)
     per_success = (claude + codex) / successes if successes else None
-    return [fmt(claude, 3), fmt(codex, 3), fmt(per_success, 3)]
+    cells = [fmt(claude, 3), fmt(codex, 3), fmt(per_success, 3)]
+    if all(row.get("spend_known", True) for row in rows):
+        return cells
+    return [cell if cell == MISSING else f">= {cell} (incomplete)" for cell in cells]
 
 
 def stats_row(rows: list[dict[str, Any]], spend_rows: list[dict[str, Any]] | None = None) -> list[str]:
@@ -203,7 +206,8 @@ def variant_section(variant: str, rows: list[dict[str, Any]]) -> list[str]:
     notes = ("Statistics describe the final attempt of each graded run; a run whose grading failed is not graded. "
              "Spend adds every run of the task or variant, including archived earlier attempts, runs that did not "
              "finish, and runs whose grading failed; cost per success is that spend, "
-             "Claude plus Codex estimate, divided by the successes.")
+             "Claude plus Codex estimate, divided by the successes. A spend cell that reads \">= ... (incomplete)\" "
+             "leaves out an attempt that holds no cost figure, so the true spend is at least that value.")
     return lines + ["", notes, ""]
 
 

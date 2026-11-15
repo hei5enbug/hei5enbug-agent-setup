@@ -10,11 +10,13 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "evals/e2e"))
 
-from harness import cli, records, verdict  # noqa: E402
+from harness import campaign, cli, records, verdict  # noqa: E402
+from harness.config import HarnessConfig  # noqa: E402
 
 RUN_LINE = {"type": "system", "subtype": "init", "model": "claude-opus-5-5"}
 RUNNER_STATUS = {"runner": "codex", "role": "reviewer", "model": "gpt-6.1-sol", "effort": "high", "exit": 0}
@@ -292,6 +294,54 @@ class BaselineExceptionTest(unittest.TestCase):
         self.assertIn("overall: pass", out)
 
 
+    def invoke(self, variants: list[str]) -> None:
+        """One campaign invocation as `run_campaign` records it, writing campaign.json through the harness itself."""
+        cfg = HarnessConfig(run_root=self.root)
+        current = {"fingerprint": "f", "variant_shas": {}, "parts": {}}
+        with mock.patch.object(campaign.environment, "run_command", return_value="head"):
+            campaign.write_campaign_file(cfg, self.root / "camp", "camp", ["T08"], variants, 1, current, [], ["claude", "codex"])
+
+    def test_이전_변형을_예정한_적이_있으면_이후_변형만_다시_실행해도_기준선이_아니라_측정되지_않음이다(self):
+        """given 두 변형을 두 호스트에 예정했다가 이전 codex 실행 전에 멈추고 이후 변형만 이어서 실행한 캠페인 when record하면 then 사례는 not measured이다.
+
+        잡는 회귀: 이어서 실행할 때 order가 이번 선택으로 바뀌어, 예정됐지만 없는 이전 실행이 기준선 예외로 통과하던 문제."""
+        # given
+        self.invoke(["base", "changed"])
+        self.invoke(["changed"])
+
+        # when
+        code, out, _ = run_cli(self.root, "--tasks", "T08")
+
+        # then
+        self.assertEqual(code, 0)
+        by_case = self.verdicts()
+        self.assertEqual(by_case[("T08", None)], "not measured")
+        self.assertIn("overall: not measured", out)
+
+    def test_예정한_실행의_누적_집합이_없는_이전_campaign_json은_order로_기준선을_판단한다(self):
+        """given scheduled 필드 없이 order만 가진 이전 형식의 campaign.json when planned_runs를 읽으면 then order의 (작업, 변형, 호스트)를 돌려준다."""
+        # given
+        self.schedule(["T08-base-r1", "T08-changed-codex-r1"])
+
+        # when
+        found = records.planned_runs(self.root, "camp")
+
+        # then
+        self.assertEqual(found, {("T08", "base", "claude"), ("T08", "changed", "codex")})
+
+    def test_여러_번_호출한_캠페인은_예정했던_모든_실행을_누적해_담는다(self):
+        """given 서로 다른 변형 선택으로 두 번 호출한 캠페인 when campaign.json을 읽으면 then scheduled가 두 호출의 합집합이다."""
+        # given
+        self.invoke(["base", "changed"])
+
+        # when
+        self.invoke(["changed"])
+
+        # then
+        found = records.planned_runs(self.root, "camp")
+        self.assertEqual(found, {("T08", variant, host) for variant in ("base", "changed") for host in ("claude", "codex")})
+
+
 class ClaimOverallTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -439,6 +489,45 @@ class RunRevisionTest(unittest.TestCase):
         self.assertIn("aaaaaaaaaaaa", err)
         self.assertIn("bbbbbbbbbbbb", err)
         self.assertFalse((self.root / "records" / "92.json").exists())
+
+
+    def test_보관된_이전_시도가_다른_개정이면_최종_실행이_모두_같은_개정이어도_거부한다(self):
+        """given 개정 A로 측정된 시도가 보관되고 최종 실행은 모두 개정 B일 때 when record하면 then 종료 코드 1이고 두 개정을 알리며 기록 파일이 없다.
+
+        잡는 회귀: 개정 A에서 중단돼 B로 다시 돌린 시도가 A의 지출과 시간을 얹은 채 B의 기록으로 쓰이던 문제."""
+        # given
+        for host in ("claude", "codex"):
+            self.store_revision("changed", host, self.OTHER)
+        seed_attempt(self.root, "T08", "changed", "codex", 1, 1,
+                     {"status": "infra_failed", "wall_seconds": 50.0, "plugin": {"ref": "HEAD", "sha": self.OLD, "path": "/tmp/p"}},
+                     {"cost": {"claude_total_cost_usd": 0.0, "codex_list_cost_usd_estimate": 0.5}})
+
+        # when
+        code, _, err = run_cli(self.root, "--tasks", "T08")
+
+        # then
+        self.assertEqual(code, 1)
+        self.assertIn("aaaaaaaaaaaa", err)
+        self.assertIn("bbbbbbbbbbbb", err)
+        self.assertFalse((self.root / "records" / "92.json").exists())
+
+    def test_보관된_시도가_최종_실행과_같은_개정이거나_개정을_저장하지_않았으면_기록을_쓴다(self):
+        """given 보관된 시도가 같은 개정이거나 개정을 저장하지 않았을 때 when record하면 then 종료 코드 0이고 변형 개정은 최종 실행의 것이다."""
+        # given
+        for host in ("claude", "codex"):
+            self.store_revision("changed", host, self.OTHER)
+        seed_attempt(self.root, "T08", "changed", "codex", 1, 1,
+                     {"status": "infra_failed", "wall_seconds": 50.0, "plugin": {"ref": "HEAD", "sha": self.OTHER, "path": "/tmp/p"}},
+                     {"cost": {"claude_total_cost_usd": 0.0, "codex_list_cost_usd_estimate": 0.5}})
+        seed_attempt(self.root, "T08", "changed", "codex", 1, 2, {"status": "infra_failed", "wall_seconds": 5.0}, None)
+
+        # when
+        code, _, _ = run_cli(self.root, "--tasks", "T08")
+
+        # then
+        self.assertEqual(code, 0)
+        written = json.loads((self.root / "records" / "92.json").read_text(encoding="utf-8"))
+        self.assertEqual(written["variants"]["changed"], {"revision": "bbbbbbbbbbbb"})
 
 
 class AttemptCostTest(unittest.TestCase):

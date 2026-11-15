@@ -135,6 +135,8 @@ def measure_verdict(case: Mapping[str, Any], measure: str) -> dict[str, Any]:
     if absent_host:
         return result(measure, NOT_MEASURED, f"no before run on {absent_host}")
     if any(not before_runs[host] for host in HOSTS):
+        if any(number(run.get(measure)) is None for keyed in before_runs.values() for run in keyed.values()):
+            return result(measure, NOT_MEASURED, "a before value is missing")
         return result(measure, BASELINE, "no before run on a host the campaign shows cannot run it")
     sides = {"before": before_runs, "after": after_runs}
     absent = missing_repetition(sides, [1])

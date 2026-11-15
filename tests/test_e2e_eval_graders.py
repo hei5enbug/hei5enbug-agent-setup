@@ -1557,6 +1557,28 @@ class GoldenTaskTest(TempCase):
         # then
         self.assertLess(time.monotonic() - started, 30)
 
+    def test_채점_진입점의_중단_신호가_글_검토_사용자_지정_검사까지_전달된다(self):
+        """grade_run에 넘긴 interrupt가 check_custom을 거쳐 text_review.py 호출까지 닿아 제한 시간을 기다리지 않는다.
+
+        잡는 회귀: check_custom이 interrupt 없는 문맥을 만들어 T13-T20 글 검토가 SIGINT 뒤에도 1700초 제한까지 도는 문제."""
+        # given
+        task, repo, base = self.referenced("T18")
+        tree = self.root / "harness-repo"
+        shutil.copytree(TASKS_ROOT, tree / "evals/e2e/tasks")
+        (self._place(tree / "scripts") / "text_review.py").write_text("import time\ntime.sleep(8)\n", encoding="utf-8")
+        interrupt = threading.Event()
+        interrupt.set()
+        env = {key: value for key, value in os.environ.items() if key != "E2E_TEXT_REVIEW_STUB"}
+        started = time.monotonic()
+
+        # when
+        with mock.patch.dict(os.environ, env, clear=True), self.assertRaises(GradingInterrupted):
+            graders.grade_run(task, repo, base, self.good_view("T18"), tree / "evals/e2e/tasks",
+                              self.root / "work-T18", interrupt=interrupt)
+
+        # then
+        self.assertLess(time.monotonic() - started, 6)
+
     def _place(self, folder: Path) -> Path:
         folder.mkdir(parents=True, exist_ok=True)
         return folder
