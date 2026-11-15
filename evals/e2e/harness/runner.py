@@ -31,6 +31,8 @@ def decide_status(facts: dict[str, Any], limit_reason: str | None, timed_out: bo
         return STATUS_INTERRUPTED
     if limit_reason:
         return STATUS_USAGE_LIMITED
+    if metrics.extra_plugins(facts):
+        return STATUS_INFRA_FAILED
     if timed_out:
         return STATUS_TIMED_OUT
     if str(facts.get("terminal_reason") or "").startswith(ABORTED_REASON_PREFIX):
@@ -38,12 +40,17 @@ def decide_status(facts: dict[str, Any], limit_reason: str | None, timed_out: bo
     return STATUS_COMPLETE if facts["has_result"] else STATUS_INFRA_FAILED
 
 
+def contamination_error(facts: dict[str, Any]) -> str | None:
+    names = metrics.extra_plugins(facts)
+    return f"contaminated run: plugins other than the variant were loaded: {', '.join(names)}" if names else None
+
+
 def write_run_files(
     spec: RunSpec, task: dict[str, Any], variant: dict[str, Any], prompt: str, cfg: HarnessConfig, plugin: dict[str, Any],
 ) -> list[str]:
     spec.result_dir.mkdir(parents=True, exist_ok=True)
     (spec.result_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
-    write_json(spec.result_dir / "settings.json", command.run_settings(variant))
+    write_json(spec.result_dir / "settings.json", command.run_settings(variant, environment.profile_plugin_ids(environment.claude_config_dir())))
     write_json(spec.result_dir / "mcp.json", command.mcp_config(spec.result_dir / "approvals.jsonl", spec.work_dir, spec.repo))
     argv = command.build_command(cfg, task, variant, prompt, plugin["path"], spec.result_dir)
     write_json(spec.result_dir / "command.json", {"argv": argv, "cwd": str(spec.repo)})
@@ -166,7 +173,7 @@ def finish_run(
         **run, "status": decide_status(facts, limit, proc.timed_out, proc.interrupted), "returncode": proc.returncode,
         "timed_out": proc.timed_out, "interrupted": proc.interrupted, "wall_seconds": proc.wall_seconds,
         "started_at": proc.started_at.isoformat(), "ended_at": proc.ended_at.isoformat(), "session_id": facts["session_id"], "usage_limit": limit,
-        "error": proc.error, "collected": records, "orphans_killed": proc.orphans_killed,
+        "error": proc.error or contamination_error(facts), "collected": records, "orphans_killed": proc.orphans_killed,
         "leftover_killed": proc.leftover_killed,
     }
     return record_and_analyze(spec, task, finished, cfg, interrupt)

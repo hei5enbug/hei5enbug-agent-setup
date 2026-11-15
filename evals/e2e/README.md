@@ -24,16 +24,20 @@ repository README; only its unit tests are.
    ```text
    claude -p --model claude-opus-5-5 --effort high --output-format stream-json --verbose
      --include-hook-events --plugin-dir <exported plugin> --settings <run>/settings.json
-     --mcp-config <run>/mcp.json --permission-prompt-tool mcp__eval_approver__approve
+     --mcp-config <run>/mcp.json --strict-mcp-config --permission-prompt-tool mcp__eval_approver__approve
      --max-budget-usd <task limit> -- <prompt>
    ```
 
    The prompt follows `--`, so a prompt that starts with a dash, such as `--version ...`, is not read as an option.
 
-   `settings.json` turns off the installed `hei5enbug-agent-setup@hei5enbug` plugin. Every other part of the user's
-   environment stays as it is, including the default permission mode, other plugins, MCP servers, and Codex.
-   The harness removes only the `ORCA_*` variables, so a run cannot report to or message the Orca terminal that
-   started it. It never passes a bypass mode, `--bare`, or `--permission-mode`.
+   `settings.json` turns off the installed `hei5enbug-agent-setup@hei5enbug` plugin and every other plugin that the
+   profile's `plugins/installed_plugins.json` or `settings.json` lists, so only the variant loaded through `--plugin-dir`
+   runs; `--strict-mcp-config` limits MCP servers to the harness approver. The rest of the user's environment stays as
+   it is, including the default permission mode and Codex. The harness removes the `ORCA_*` variables, so a run cannot
+   report to or message the Orca terminal that started it, and `CLAUDE_CODE_PLUGIN_DIRS`, which would load further
+   plugins as `--plugin-dir` does. A run whose `system` init event lists a plugin other than the variant is recorded as
+   `infra_failed` with the extra plugin names and is not graded, and `pilot-check` fails it. It never passes a bypass
+   mode, `--bare`, or `--permission-mode`.
 4. A wall-clock limit per task stops the agent with SIGINT, then SIGTERM, then SIGKILL. The signals reach the
    agent's process group and every process it started in a session of its own, such as a role runner child, and the
    harness confirms that none is left.
@@ -177,7 +181,7 @@ task, and `scripts/text_review.py`, which grades the text tasks. A resume whose 
 A variant is a JSON file in `variants/`: `{"name", "ref", "settings", "env", "extra_args"}`. `ref` is the plugin
 revision under test. `settings` merges into the run's `--settings` file, `env` into the agent's environment, and
 `extra_args` into its command line. A variant that adds a bypass flag, `--bare`, `--permission-mode`, or a flag the
-harness sets itself is rejected. The installed plugin stays off whatever `settings` says.
+harness sets itself is rejected. The installed plugin and every plugin of the profile stay off whatever `settings` says.
 
 ## Run records
 

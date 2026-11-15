@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from .config import (
     AGENT_EFFORT, APPROVER_SERVER, APPROVER_TOOL, FORBIDDEN_ARGS, HARNESS_DIR, HOST_CLAUDE, HOSTS, INSTALLED_PLUGIN_KEY,
@@ -102,11 +102,14 @@ def merge_settings(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any
     return merged
 
 
-def run_settings(variant: dict[str, Any]) -> dict[str, Any]:
-    """Default settings plus the variant's; the installed plugin stays off whatever the variant says."""
-    merged = merge_settings({"enabledPlugins": {INSTALLED_PLUGIN_KEY: False}}, variant["settings"])
+def run_settings(variant: dict[str, Any], profile_plugins: Iterable[str] = ()) -> dict[str, Any]:
+    """Default settings plus the variant's; the installed plugin and every plugin of the profile stay off whatever the variant says.
+
+    The variant under test loads through `--plugin-dir`, so no `enabledPlugins` entry names it."""
+    off = {key: False for key in (*profile_plugins, INSTALLED_PLUGIN_KEY)}
+    merged = merge_settings({"enabledPlugins": off}, variant["settings"])
     enabled = merged.get("enabledPlugins")
-    return {**merged, "enabledPlugins": {**(enabled if isinstance(enabled, dict) else {}), INSTALLED_PLUGIN_KEY: False}}
+    return {**merged, "enabledPlugins": {**(enabled if isinstance(enabled, dict) else {}), **off}}
 
 
 def mcp_config(approval_log: Path, run_folder: Path | None = None, cwd: Path | None = None) -> dict[str, Any]:
@@ -129,7 +132,7 @@ def build_command(
         "--output-format", "stream-json", "--verbose", "--include-hook-events",
         "--plugin-dir", plugin_dir,
         "--settings", str(run_dir / "settings.json"),
-        "--mcp-config", str(run_dir / "mcp.json"),
+        "--mcp-config", str(run_dir / "mcp.json"), "--strict-mcp-config",
         "--permission-prompt-tool", APPROVER_TOOL,
         "--max-budget-usd", str(task["limits"]["max_budget_usd"]),
         *variant["extra_args"],

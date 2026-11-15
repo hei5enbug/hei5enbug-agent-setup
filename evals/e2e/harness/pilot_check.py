@@ -9,7 +9,7 @@ from . import codex_host, collect, metrics, transcript
 from .config import APPROVER_TOOL, FORBIDDEN_ARGS, HOST_CLAUDE, HOST_CODEX, MOD_MARKER
 from .matrix import campaign_dir, read_json
 
-REQUIRED_FLAGS = ("--plugin-dir", "--settings", "--permission-prompt-tool", "--max-budget-usd")
+REQUIRED_FLAGS = ("--plugin-dir", "--settings", "--permission-prompt-tool", "--max-budget-usd", "--strict-mcp-config")
 
 
 def command_problems(argv: list[str]) -> list[str]:
@@ -35,6 +35,7 @@ def check_run(result_dir: Path) -> list[tuple[str, bool, str]]:
         ("result message present", facts["has_result"], str(run.get("status"))),
         ("plugin loaded from the exported directory", plugin["loaded_from_export"], expected),
         ("installed plugin absent", plugin["installed_absent"], ""),
+        ("no plugin besides the variant", not plugin["extra_plugins"], ", ".join(plugin["extra_plugins"])),
         ("mod marker in the main transcript", plugin["mod_marker_present"], MOD_MARKER),
         ("permission mode recorded", bool(facts["permission_mode"]), str(facts["permission_mode"])),
         ("command line without bypass flags", not problems, ", ".join(problems)),

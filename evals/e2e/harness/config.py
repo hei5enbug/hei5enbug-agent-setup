@@ -25,11 +25,13 @@ MAIN_MODELS = {HOST_CLAUDE: AGENT_MODEL, HOST_CODEX: CODEX_MODEL}
 MODEL_CAP = frozenset({"claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "gpt-6.1-sol", "gpt-5.6-luna"})
 PLUGIN_NAME = "hei5enbug-agent-setup"
 INSTALLED_PLUGIN_KEY = "hei5enbug-agent-setup@hei5enbug"
+INSTALLED_PLUGINS_RECORD = "plugins/installed_plugins.json"
 INLINE_PLUGIN_SOURCE = "hei5enbug-agent-setup@inline"
 MOD_MARKER = "hei5enbug-agent-setup mod: role pinning active"
 APPROVER_SERVER = "eval_approver"
 APPROVER_TOOL = "mcp__eval_approver__approve"
 REMOVED_ENV_PREFIX = "ORCA_"
+REMOVED_ENV_NAMES = frozenset({"CLAUDE_CODE_PLUGIN_DIRS"})
 APPROVAL_GUARD_OFF_ENV = {"CLAUDE_PLUGIN_OPTION_APPROVAL_GUARD": "false", "HEI5ENBUG_APPROVAL_GUARD": "false"}
 
 DEFAULT_PARALLEL = 3

@@ -27,6 +27,13 @@ def stream_facts(events: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def extra_plugins(facts: dict[str, Any]) -> list[str]:
+    """Names of the plugins in the init event other than the variant loaded from the export."""
+    names = [str(p.get("source") or p.get("name")) for p in facts.get("plugins") or [] if isinstance(p, dict)
+             and not (p.get("name") == PLUGIN_NAME and p.get("source") == INLINE_PLUGIN_SOURCE)]
+    return sorted(names)
+
+
 def plugin_checks(
     facts: dict[str, Any], expected_path: str, transcript_events: list[dict[str, Any]], subagents: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -34,6 +41,7 @@ def plugin_checks(
     inline = [p for p in plugins if p.get("name") == PLUGIN_NAME and p.get("source") == INLINE_PLUGIN_SOURCE]
     return {
         "loaded_from_export": any(str(p.get("path")) == expected_path for p in inline),
+        "extra_plugins": extra_plugins(facts),
         "installed_absent": not any(p.get("source") == INSTALLED_PLUGIN_KEY for p in plugins),
         "mod_marker_present": mod_marker_present(transcript_events, MOD_MARKER),
         "subagent_models": agent_models(subagents),

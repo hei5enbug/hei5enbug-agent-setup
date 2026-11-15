@@ -27,16 +27,19 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
    ```text
    claude -p --model claude-opus-5-5 --effort high --output-format stream-json --verbose
      --include-hook-events --plugin-dir <exported plugin> --settings <run>/settings.json
-     --mcp-config <run>/mcp.json --permission-prompt-tool mcp__eval_approver__approve
+     --mcp-config <run>/mcp.json --strict-mcp-config --permission-prompt-tool mcp__eval_approver__approve
      --max-budget-usd <task limit> -- <prompt>
    ```
 
    프롬프트는 `--` 뒤에 오므로 `--version ...`처럼 대시로 시작하는 프롬프트도 옵션으로 읽히지 않는다.
 
-   `settings.json`은 설치된 `hei5enbug-agent-setup@hei5enbug` 플러그인을 끈다. 기본 권한 모드, 다른 플러그인,
-   MCP 서버, Codex를 포함해 사용자 환경의 나머지는 그대로 둔다. 하네스는 `ORCA_*` 변수만 지운다. 그래서 실행이
-   자신을 시작한 Orca 터미널에 상태를 알리거나 메시지를 보낼 수 없다. 우회 모드, `--bare`,
-   `--permission-mode`는 절대 넘기지 않는다.
+   `settings.json`은 설치된 `hei5enbug-agent-setup@hei5enbug` 플러그인과, 프로필의 `plugins/installed_plugins.json`이나
+   `settings.json`에 적힌 다른 모든 플러그인을 끈다. 그래서 `--plugin-dir`로 올린 변형만 돌고, `--strict-mcp-config`가
+   MCP 서버를 하네스 승인 서버로 한정한다. 기본 권한 모드와 Codex를 포함해 사용자 환경의 나머지는 그대로 둔다. 하네스는
+   `ORCA_*` 변수를 지워서 실행이 자신을 시작한 Orca 터미널에 상태를 알리거나 메시지를 보낼 수 없게 하고,
+   `--plugin-dir`처럼 플러그인을 더 올리는 `CLAUDE_CODE_PLUGIN_DIRS`도 지운다. `system` init 이벤트에 변형이 아닌
+   플러그인이 보이는 실행은 그 플러그인 이름과 함께 `infra_failed`로 기록하고 채점하지 않으며, `pilot-check`도 그
+   실행을 실패시킨다. 우회 모드, `--bare`, `--permission-mode`는 절대 넘기지 않는다.
 4. 작업마다 정한 실제 경과 시간 제한에 걸리면 에이전트에 SIGINT, SIGTERM, SIGKILL을 차례로 보낸다. 신호는
    에이전트의 프로세스 그룹과, role runner 자식처럼 에이전트가 별도 세션으로 시작한 모든 프로세스에 가고, 하네스는
    남은 프로세스가 없는지 확인한다.
@@ -166,7 +169,7 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 변형은 `variants/` 안의 JSON 파일이다: `{"name", "ref", "settings", "env", "extra_args"}`. `ref`는 시험할 플러그인
 리비전이다. `settings`는 실행의 `--settings` 파일에, `env`는 에이전트 환경에, `extra_args`는 명령줄에 합쳐진다.
 우회 플래그, `--bare`, `--permission-mode`, 또는 하네스가 직접 정하는 플래그를 넣은 변형은 거부한다. `settings`에
-무엇이 있어도 설치된 플러그인은 꺼진 채로 둔다.
+무엇이 있어도 설치된 플러그인과 프로필의 모든 플러그인은 꺼진 채로 둔다.
 
 ## 실행 기록
 

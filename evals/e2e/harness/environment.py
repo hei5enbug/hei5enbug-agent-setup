@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-from .config import REMOVED_ENV_PREFIX
+from .config import INSTALLED_PLUGINS_RECORD, REMOVED_ENV_NAMES, REMOVED_ENV_PREFIX
 
 Runner = Callable[[list[str], Path | None], str | None]
 
@@ -43,10 +43,31 @@ def file_sha256(path: Path) -> str | None:
 
 
 def child_environment(base: Mapping[str, str], extra: Mapping[str, str]) -> tuple[dict[str, str], list[str]]:
-    """Return the child env without ORCA_* variables plus the sorted names that were removed."""
-    removed = sorted(name for name in base if name.startswith(REMOVED_ENV_PREFIX))
-    kept = {name: value for name, value in base.items() if not name.startswith(REMOVED_ENV_PREFIX)}
+    """Return the child env without ORCA_* variables and the variables that load plugins, plus the sorted removed names."""
+    def dropped(name: str) -> bool:
+        return name.startswith(REMOVED_ENV_PREFIX) or name in REMOVED_ENV_NAMES
+
+    removed = sorted(name for name in base if dropped(name))
+    kept = {name: value for name, value in base.items() if not dropped(name)}
     return {**kept, **extra}, removed
+
+
+def _profile_json(path: Path) -> dict[str, Any]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as error:
+        raise ValueError(f"cannot read {path.name} of the Claude Code profile: {error}") from error
+    return data if isinstance(data, dict) else {}
+
+
+def profile_plugin_ids(config_dir: Path) -> list[str]:
+    """Every plugin id the profile installs or enables, read from its installed-plugins record and its settings file."""
+    installed = _profile_json(config_dir / INSTALLED_PLUGINS_RECORD).get("plugins")
+    enabled = _profile_json(config_dir / "settings.json").get("enabledPlugins")
+    ids = [*(installed if isinstance(installed, dict) else {}), *(enabled if isinstance(enabled, dict) else {})]
+    return sorted(set(ids))
 
 
 def _parsed(text: str | None) -> Any:
