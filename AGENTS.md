@@ -29,6 +29,12 @@
   ten, and states each criterion as a pass or fail per case, never as a rate over a large sample. An evaluation that
   fixes the model, effort, or prompt of a skill or agent may add cases that separate difficulty levels. Deterministic
   tests that cost no model tokens have no such limit. Write issue acceptance criteria under the same rule.
+- Efficiency rule (owner decision, 2026-11-15): when an evaluation chooses the most efficient of several candidates,
+  keep only candidates that pass every case; on any case, drop a candidate that is slower than the fastest passing one
+  by more than 1.5 times and by more than 60 seconds; among the rest choose the lowest list-price cost per passing
+  case; and treat costs within 10 percent or within $0.05 of each other as a tie, choosing the faster candidate.
+  Before measuring a rule, skill, agent, or hook change, check whether a deterministic script, check, test, or hook
+  can do or enforce the same thing, and measure it as a candidate when it can.
 - A change to a rule, skill, agent, hook, or route of this plugin is adopted or rejected only on a record under
   `evals/e2e/records/` that `evals/e2e/harness/cli.py record` wrote from a before and an after variant differing only
   by that change, run on both Claude Code and Codex and judged by the comparison rule in `evals/e2e/README.md`. A
@@ -152,14 +158,13 @@
   | Change | Final review |
   |---|---|
   | Trivial: a typo, wording, version, or metadata edit, a translation, or a mechanical edit its checks fully cover | None |
-  | Bounded, Claude-authored: one component with clear acceptance checks and no public contract, security, concurrency, hook, or guard change | `role_runner.py reviewer --model gpt-6.1-sol`, which runs at the runner's default `high` |
-  | Complex, Claude-authored: several components, a public contract, security, concurrency, or a hook or guard | `role_runner.py reviewer --model gpt-6-astra --effort xhigh` |
+  | Claude-authored, not trivial | `role_runner.py reviewer` with `--model gpt-6.1-sol` or `gpt-6-astra` and `--effort high` or `xhigh`, chosen per change by its scope and risk as the plugin's independent model validation describes |
   | GPT-authored, including work drafted on `gpt-6.1-sol` | `role_runner.py reviewer --model claude-opus-5-5`, or `claude-fable-5-2` with `--effort xhigh` when complex |
 
   It runs automatically once, after all work for the request is done and its checks pass, over the combined final
   diff; any earlier review needs the user's approval. Give the reviewer the final diff, requirements, and check
-  evidence. When the `gpt-6-astra` reviewer is unavailable on a Claude-authored change, use the `code_reviewer` route
-  instead. The main session verifies findings and decides acceptance; do not start a second review round. Its
+  evidence. When the chosen reviewer is unavailable on a Claude-authored change, use the other of the two
+  models. The main session verifies findings and decides acceptance; do not start a second review round. Its
   review accuracy was not measured by Frontier v4.
 
   Frontier v4 covers 23 challenging behavioral-reconstruction tasks with one attempt per model and effort.
