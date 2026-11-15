@@ -99,7 +99,8 @@ prompt, the same limits, and the same graders and metrics. `claude` alone is the
   calls. A `spawn_agent` call counts as a subagent launch of the `agent_type` it names, or of `general-purpose` when it
   names none, and the order of a delegation and the order of the final answer count the same calls. A `spawn_agent`
   delegation counts as completed only once the child's final result for its `task_name` has come back to the parent
-  as a `FINAL_ANSWER` message that is not an error; the spawn acknowledgement alone is not a result.
+  as a `FINAL_ANSWER` message that is not an error; the spawn acknowledgement alone is not a result. A review counts as
+  done before the report only when that message arrived before the last assistant message began.
 - The model and effort of the session are read from the `turn_context` event of its rollout, not from the command
   line, and `env.json` records them with the Codex CLI version.
 

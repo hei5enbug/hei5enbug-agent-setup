@@ -198,17 +198,34 @@ def final_answer(events: list[dict[str, Any]]) -> str:
     return texts[-1] if texts else ""
 
 
+def before_answer(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The events before the last assistant message began, or all events when there is none."""
+    cut = None
+    for index, event in enumerate(events):
+        if event.get("type") == "response_item" and payload_of(event).get("type") == "message" and assistant_messages([event]):
+            cut = index
+    return events if cut is None else events[:cut]
+
+
 def final_answer_order(events: list[dict[str, Any]]) -> int:
     """How many tool calls had started when the last assistant message began; later calls came after the answer.
 
     Calls are counted as `rollout_tool_calls` normalizes them, one per command and one per native delegation, so the count
     matches the `order` of a delegation."""
-    cut = None
-    for index, event in enumerate(events):
-        if event.get("type") == "response_item" and payload_of(event).get("type") == "message" and assistant_messages([event]):
-            cut = index
-    started = events if cut is None else events[:cut]
-    return len(codex_calls.rollout_tool_calls(started, "main", "main"))
+    return len(codex_calls.rollout_tool_calls(before_answer(events), "main", "main"))
+
+
+def native_completion(delegations: list[dict[str, Any]], calls: list[dict[str, Any]], answered: set[str]) -> list[dict[str, Any]]:
+    """Mark each native delegation with whether its child answered before the report; others stay as they are."""
+    native = {call["id"] for call in calls if call["name"] == codex_calls.NATIVE_AGENT_TOOL}
+    return [{**item, "completed_before_report": item["tool_use_id"] in answered} if item["tool_use_id"] in native else item
+            for item in delegations]
+
+
+def answered_before_report(events: list[dict[str, Any]]) -> set[str]:
+    """Ids of native delegations whose child's final result arrived before the last assistant message began."""
+    return {call["id"] for call in codex_calls.rollout_tool_calls(before_answer(events), "main", "main")
+            if call["name"] == codex_calls.NATIVE_AGENT_TOOL and call["result_text"].strip() and not call["is_error"]}
 
 
 def error_text(event: dict[str, Any]) -> str:
@@ -237,7 +254,8 @@ def load_records(spec: RunSpec, run: dict[str, Any], expected_model: str) -> dic
     assignments = collect.load_assignments(directory / "assignments")
     view = {
         "final_answer": final_answer(main["events"]), "assistant_texts": assistant_messages(main["events"]),
-        "tool_calls": calls, "delegations": transcript.build_delegations(main_calls, assignments),
+        "tool_calls": calls, "delegations": native_completion(transcript.build_delegations(main_calls, assignments),
+                                                              main_calls, answered_before_report(main["events"])),
         "final_answer_order": final_answer_order(main["events"]), "approvals": [], "permission_denials": [],
     }
     by_source, _ = usage.claude_requests_by_source(None, [], [], runners)

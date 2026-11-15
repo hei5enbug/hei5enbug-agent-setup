@@ -93,7 +93,8 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
 - 하네스는 rollout의 `exec` 명령, `apply_patch` 호출, 네이티브 `spawn_agent` 호출을 도구 호출로 읽는다. `spawn_agent` 호출은
   그 호출이 적은 `agent_type`의 서브에이전트 시작으로 세고, 적지 않았으면 `general-purpose`로 센다. 위임의 순서와 최종 답변의
   순서는 같은 호출들을 센다. `spawn_agent` 위임은 그 `task_name` 자식의 최종 결과가 오류가 아닌 `FINAL_ANSWER` 메시지로 부모에게
-  돌아온 뒤에야 완료로 센다. 시작 확인 응답만으로는 결과가 아니다.
+  돌아온 뒤에야 완료로 센다. 시작 확인 응답만으로는 결과가 아니다. 검토는 그 메시지가 마지막 assistant 메시지보다 먼저
+  왔을 때만 보고 전에 끝난 것으로 센다.
 - 세션의 모델과 effort는 명령줄이 아니라 rollout의 `turn_context` 이벤트에서 읽고, `env.json`에 Codex CLI 버전과 함께
   기록한다.
 

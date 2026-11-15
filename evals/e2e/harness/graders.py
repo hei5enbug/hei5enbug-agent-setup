@@ -486,7 +486,8 @@ def review_completed(delegation: Mapping[str, Any]) -> bool:
 def check_review_before_report(ctx: GradeContext, spec: Mapping[str, Any]) -> CheckResult:
     limit = ctx.view.get("final_answer_order")
     reviews = [d for d in ctx.view.get("delegations", [])
-               if d.get("class") == "review" and review_completed(d) and (limit is None or d.get("order", 0) < limit)]
+               if d.get("class") == "review" and review_completed(d) and (limit is None or d.get("order", 0) < limit)
+               and d.get("completed_before_report", True)]
     return bool(reviews), f"{len(reviews)} completed review delegation(s) before the final answer", {
         "reviews": [d.get("tool_use_id") for d in reviews]}
 

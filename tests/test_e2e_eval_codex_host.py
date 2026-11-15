@@ -728,6 +728,22 @@ class CodexNativeDelegationTest(unittest.TestCase):
         self.assertEqual([item["completed"] for item in view["delegations"]], [False])
         self.assertFalse(passed)
 
+    def test_네이티브_reviewer의_최종_결과가_보고_뒤에_도착하면_보고_전에_끝난_검토로_세지_않는다(self):
+        """spawn → 보고 → 자식의 최종 결과 순서이면 검토는 끝났어도 보고 뒤에 끝났으므로 review_before_report가 실패한다.
+
+        잡는 회귀: 롤아웃 어디에서든 나중에 온 최종 결과를 spawn 시점에 붙여, 보고 뒤에 끝난 검토로도 T12 검토 검사가 통과하던 문제."""
+        # given
+        late = native_spawn("c1", "final_review", "reviewer") + [assistant_message("report")] + final_answer("final_review")
+        early = native_spawn("c1", "final_review", "reviewer") + final_answer("final_review") + [assistant_message("report")]
+
+        # when
+        late_passed, _, _ = graders.check_review_before_report(SimpleNamespace(view=self.view_of(late)), {})
+        early_passed, _, _ = graders.check_review_before_report(SimpleNamespace(view=self.view_of(early)), {})
+
+        # then
+        self.assertFalse(late_passed)
+        self.assertTrue(early_passed)
+
     def test_네이티브_reviewer의_최종_결과가_다른_task_name이거나_오류면_끝난_검토로_세지_않는다(self):
         """다른 task_name의 최종 결과, spawn 실패 응답, 'Agent errored'로 시작하는 결과는 모두 검토 완료가 아니다."""
         cases = {
