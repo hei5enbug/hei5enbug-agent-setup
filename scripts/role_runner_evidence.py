@@ -4,9 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from role_runner_config import (
-    EXIT_EVIDENCE, SANDBOX_CONNECTED, SANDBOX_STATUS_FIELD, SYNTHETIC_MODEL, VALIDATION_PACKAGE_HOSTS, RunnerError,
-)
+from role_runner_config import EXIT_EVIDENCE, SYNTHETIC_MODEL, VALIDATION_PACKAGE_HOSTS, RunnerError
 
 
 def state_home() -> Path:
@@ -227,21 +225,13 @@ def confinement_problem(settings: dict | None, scratch: Path, validation: bool) 
 
 
 def verify_sandbox(command: list[str], init: dict | None, scratch: Path, validation: bool) -> None:
-    """Require the command's sandbox settings to confine writes to the scratch folder, and the host's init event to report
-    the folder as its working directory and the sandbox as connected; any missing or wider record exits 4."""
+    """Require the command's sandbox settings, which start the sandbox or end the run at startup, to confine writes to the
+    scratch folder, and the host's init event to name the scratch folder as the working directory; anything else exits 4."""
     problem = confinement_problem(sandbox_settings_in(command), scratch, validation)
     if problem is not None:
         raise RunnerError(EXIT_EVIDENCE, f"The Claude run was not confined to its scratch folder: {problem}")
     if init is None:
-        raise RunnerError(EXIT_EVIDENCE, "The Claude output has no system init event, so its sandbox cannot be verified")
-    version = init.get("claude_code_version")
-    if init.get(SANDBOX_STATUS_FIELD) != SANDBOX_CONNECTED:
-        raise RunnerError(
-            EXIT_EVIDENCE,
-            f"The init event of Claude Code {version} has no {SANDBOX_STATUS_FIELD} of {SANDBOX_CONNECTED!r}, "
-            "so the sandbox is not shown to be active",
-            {"init_keys": sorted(init), "claude_code_version": version},
-        )
+        raise RunnerError(EXIT_EVIDENCE, "The Claude output has no system init event, so the run is not shown to have started")
     cwd = init.get("cwd")
     if not isinstance(cwd, str) or Path(cwd).resolve() != scratch:
         raise RunnerError(EXIT_EVIDENCE, f"The init event names the working directory {cwd!r}, expected {scratch.as_posix()!r}")
@@ -254,12 +244,14 @@ def is_synthetic(entry: dict) -> bool:
 
 def verify_claude(
     result: dict, model: str, effort: str, command: list[str] | None = None, init: dict | None = None,
-    scratch: Path | None = None, validation: bool = False,
+    scratch: Path | None = None, validation: bool = False, session: str | None = None,
 ) -> dict:
     """Verify a Claude run's model and effort; a read-only run, which has a scratch folder, must also show the sandbox
-    that confines its writes to that folder."""
+    that confines its writes to that folder and the session id it was given."""
     if scratch is not None:
         verify_sandbox(command or [], init, scratch, validation)
+        if result.get("session_id") != session:
+            raise RunnerError(EXIT_EVIDENCE, f"The result names session {result.get('session_id')!r}, expected {session!r}")
     usage = result.get("modelUsage")
     if not isinstance(usage, dict) or set(usage) != {model}:
         found = sorted(usage) if isinstance(usage, dict) else usage

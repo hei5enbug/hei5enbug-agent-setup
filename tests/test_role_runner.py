@@ -51,10 +51,15 @@ if scratch is None and "--settings" in sys.argv:
         scratch = json.loads(sys.argv[sys.argv.index("--settings") + 1])["sandbox"]["filesystem"]["allowWrite"][0]
     except (ValueError, KeyError, IndexError, TypeError):
         scratch = None
+sid = "{session}"
+for flag in ("--session-id", "--resume"):
+    if name == "claude" and flag in sys.argv:
+        sid = sys.argv[sys.argv.index(flag) + 1]
+fresh = name == "claude" and "--session-id" in sys.argv
 with open(os.environ["FAKE_LOG"], "a") as log:
     log.write(json.dumps({{
-        "name": name, "argv": [item.replace(scratch, "<scratch>") if scratch else item for item in sys.argv[1:]],
-        "scratch": scratch, "stdin": stdin, "cwd": os.getcwd(),
+        "name": name, "argv": [(item.replace(scratch, "<scratch>") if scratch else item).replace(sid, "<session>") if fresh else (item.replace(scratch, "<scratch>") if scratch else item) for item in sys.argv[1:]],
+        "scratch": scratch, "session": sid, "stdin": stdin, "cwd": os.getcwd(),
         "role": os.environ.get("HEI5ENBUG_ASSIGNED_ROLE"), "pid": os.getpid(),
         "parent": os.environ.get("HEI5ENBUG_PARENT_SESSION"), "started": time.time(),
         "env": {{name: os.environ.get(name) for name in ("TMPDIR", "TMPPREFIX", "UV_CACHE_DIR", "XDG_CACHE_HOME", "PYTHONPYCACHEPREFIX", "npm_config_cache", "PIP_CACHE_DIR")}},
@@ -171,15 +176,15 @@ if name == "codex":
         rollout.write_text(earlier + "\\n".join(lines) + "\\n")
 else:
     model = config.get("model", "claude-opus-5-5")
-    touch_heartbeat("claude", "{session}")
+    touch_heartbeat("claude", sid)
     outcome = {{
         "type": "result", "is_error": config.get("is_error", False), "result": config.get("message", "claude answer"),
-        "session_id": "{session}", "modelUsage": config.get("usage", {{model: {{}}}}),
+        "session_id": config.get("result_session", sid), "modelUsage": config.get("usage", {{model: {{}}}}),
     }}
     if scratch is None:
         print(json.dumps(outcome))
     else:
-        init = {{"type": "system", "subtype": "init", "cwd": os.getcwd(), "claude_code_version": "2.1.325", "session_id": "{session}"}}
+        init = {{"type": "system", "subtype": "init", "cwd": os.getcwd(), "claude_code_version": "2.1.325", "session_id": sid}}
         if not config.get("no_sandbox_status"):
             init["sandbox_status"] = config.get("sandbox_status", "connected")
         print(json.dumps([init, outcome] if not config.get("no_init") else [outcome]))
@@ -192,7 +197,7 @@ else:
             if "effort" in entry:
                 record["effort"] = entry["effort"]
             lines.append(json.dumps(record))
-        (home / "{session}.jsonl").write_text("\\n".join(lines) + "\\n")
+        (home / (sid + ".jsonl")).write_text("\\n".join(lines) + "\\n")
 '''
 
 
@@ -334,6 +339,8 @@ class RoleRunnerTest(unittest.TestCase):
         argv = ["-p"]
         if resume is not None:
             argv += ["--resume", resume]
+        elif not writing:
+            argv += ["--session-id", "<session>"]
         argv += ["--model", model, "--effort", effort, "--output-format", "json"]
         argv += [] if writing else ["--verbose", "--disable-slash-commands"]
         argv += ["--tools", *tools, "--strict-mcp-config", "--permission-mode", "dontAsk", "--allowedTools", *allowed]
@@ -360,7 +367,8 @@ class RoleRunnerTest(unittest.TestCase):
             allowed += ["Bash"]
         if mcp:
             allowed += ["mcp__*"]
-        argv = ["-p", "--model", model, "--effort", effort, "--output-format", "json"]
+        argv = ["-p"] + ([] if writing else ["--session-id", "<session>"])
+        argv += ["--model", model, "--effort", effort, "--output-format", "json"]
         argv += [] if writing else ["--verbose", "--disable-slash-commands"]
         argv += ["--tools", *tools]
         if not mcp:
@@ -472,8 +480,8 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual("claude", logged["name"])
         self.assertEqual(
             [
-                "-p", "--model", "claude-opus-5-5", "--effort", "high", "--output-format", "json", "--verbose",
-                "--disable-slash-commands", "--tools", "Read", "Grep", "Glob", "--strict-mcp-config", "--permission-mode", "dontAsk",
+                "-p", "--session-id", "<session>", "--model", "claude-opus-5-5", "--effort", "high", "--output-format", "json",
+                "--verbose", "--disable-slash-commands", "--tools", "Read", "Grep", "Glob", "--strict-mcp-config", "--permission-mode", "dontAsk",
                 "--allowedTools", "Read", "Grep", "Glob", "--settings", self.sandbox_json(),
             ],
             logged["argv"],
@@ -1774,13 +1782,45 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertEqual(self.codex_argv(), self.logged()["argv"])
 
-    def test_읽기_전용_Claude_실행은_resume을_종료_코드_2로_거부한다(self):
-        """읽기 전용 Claude 실행은 새 scratch 폴더에서 시작하고 Claude Code는 시작한 폴더에서만 세션을 이으므로 --resume을 거부한다."""
+    def test_claude_resume은_같은_session_id와_모델과_effort로_실행하고_evidence에_남긴다(self):
+        """Claude capability를 --resume으로 이어 실행하면 claude -p --resume 인자를 쓰고 session을 evidence에 남긴다."""
         # Given
-        arguments = ["review", "--host", "codex", "--resume", SESSION, "--instructions", str(self.instructions)]
+        session = "6f1c2a9e-3b4d-4c5e-8f70-123456789abc"
+        config = {"entries": [{"model": "claude-opus-5-5", "effort": "high"}]}
+        arguments = ["review", "--host", "codex", "--resume", session, "--instructions", str(self.instructions)]
 
         # When
-        completed = self.run_runner(*arguments, config={"entries": [{"model": "claude-opus-5-5", "effort": "high"}]})
+        completed = self.run_runner(*arguments, config=config)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(self.claude_argv(effort="high", resume=session), self.logged()["argv"])
+        status = self.status(completed)
+        self.assertEqual((True, session), (status["verified"], status["evidence"]["session"]))
+
+    def test_Claude_scratch_폴더_경로는_세션_id가_정하고_resume은_같은_경로에서_시작한다(self):
+        """새 실행은 --session-id의 UUID로 시스템 임시 폴더 밑 role-runner-scratch-<uuid>에서 시작하고, 그 id로 --resume하면 같은 경로에서 시작한다."""
+        # Given
+        temp = self.system_temp()
+        config = {"entries": [{"model": "claude-opus-5-5", "effort": "high"}]}
+        base = ["review", "--host", "codex", "--instructions", str(self.instructions)]
+
+        # When
+        first = self.run_runner(*base, config=config, extra_env={"TMPDIR": str(temp)})
+        session = self.logged()["session"]
+        first_cwd = Path(self.logged()["cwd"]).resolve()
+        resumed = self.run_runner(*base, "--resume", session, config=config, extra_env={"TMPDIR": str(temp)})
+
+        # Then
+        self.assertEqual((0, 0), (first.returncode, resumed.returncode), resumed.stderr)
+        self.assertEqual(temp.resolve() / f"role-runner-scratch-{session}", first_cwd)
+        self.assertEqual(first_cwd, Path(self.logged()["cwd"]).resolve())
+        self.assertFalse(first_cwd.exists())
+
+    def test_읽기_전용_Claude_resume은_UUID가_아닌_id를_종료_코드_2로_거부한다(self):
+        """--resume이 세션 id(UUID)가 아니면 scratch 경로를 정할 수 없어 자식을 시작하지 않고 종료 코드 2이다."""
+        # When
+        completed = self.run_runner("reviewer", "--model", "claude-opus-5-5", "--resume", "../escape")
 
         # Then
         self.assertEqual(2, completed.returncode, completed.stderr)
@@ -1791,7 +1831,7 @@ class RoleRunnerTest(unittest.TestCase):
         """성공한 실행은 재개에 쓸 id를 evidence.session으로 남긴다."""
         cases = [
             (["scout"], None, THREAD),
-            (["reviewer", "--model", "claude-opus-5-5"], None, SESSION),
+            (["reviewer", "--model", "claude-opus-5-5"], None, None),
         ]
         for arguments, config, expected in cases:
             with self.subTest(arguments=arguments):
@@ -1803,7 +1843,7 @@ class RoleRunnerTest(unittest.TestCase):
 
                 # Then
                 self.assertEqual(0, completed.returncode, completed.stderr)
-                self.assertEqual(expected, self.status(completed)["evidence"]["session"])
+                self.assertEqual(expected or self.logged()["session"], self.status(completed)["evidence"]["session"])
 
     def test_verification의_effort는_실행_entry의_effort와_같아야_한다(self):
         """language의 entry effort는 high이므로 기록이 xhigh이면 종료 코드 4이고 결과를 남기지 않는다."""
@@ -2554,7 +2594,7 @@ class RoleRunnerTest(unittest.TestCase):
 
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
-        heartbeat = self.state_home / "hei5enbug-agent-setup" / "heartbeats" / f"claude-{SESSION}"
+        heartbeat = self.state_home / "hei5enbug-agent-setup" / "heartbeats" / f"claude-{self.logged()['session']}"
         self.assertTrue(heartbeat.is_file())
 
     def test_Claude는_UserPromptSubmit_하트비트만_있어도_통과한다(self):
@@ -3170,7 +3210,7 @@ class RoleRunnerTest(unittest.TestCase):
         cases = [
             ({}, [], 0),
             ({"exit": 1}, [], 3),
-            ({"no_sandbox_status": True}, [], 4),
+            ({"no_init": True}, [], 4),
             ({"sleep": 5}, ["--timeout", "1"], 3),
         ]
         for config, extra, code in cases:
@@ -3179,9 +3219,9 @@ class RoleRunnerTest(unittest.TestCase):
                     self.run_runner("reviewer", "--model", "claude-opus-5-5", *extra, config=config), code,
                 )
 
-    def test_Claude_init_이벤트가_샌드박스_연결을_보이지_않으면_종료_코드_4이고_결과를_쓰지_않는다(self):
-        """init 이벤트가 없거나 sandbox_status가 없거나 connected가 아니면 샌드박스가 켜졌다는 증거가 없어 종료 코드 4이다."""
-        cases = [{"no_init": True}, {"no_sandbox_status": True}, {"sandbox_status": "failed"}]
+    def test_Claude_init_이벤트가_없거나_다른_세션을_말하면_종료_코드_4이고_결과를_쓰지_않는다(self):
+        """init 이벤트가 없거나 결과의 session_id가 넘긴 id와 다르면 종료 코드 4이다."""
+        cases = [{"no_init": True}, {"result_session": SESSION}]
         for config in cases:
             with self.subTest(config=config):
                 # When
@@ -3190,6 +3230,24 @@ class RoleRunnerTest(unittest.TestCase):
                 # Then
                 self.assertEqual(4, completed.returncode, completed.stderr)
                 self.assertFalse(self.result.exists())
+
+    def test_Claude_sandbox_enabled와_failIfUnavailable이_둘_다_참인_설정으로_시작한_실행은_init_status_없이_통과한다(self):
+        """Claude Code 문서 failIfUnavailable: "Exit with an error at startup if sandbox.enabled is true but the sandbox cannot
+        start". 두 값이 참인 설정으로 시작해 init 이벤트를 낸 실행은 init에 샌드박스 상태 필드가 없어도 통과하고, 둘 중 하나가 거짓이면 실패한다."""
+        import role_runner_evidence as evidence
+
+        # Given
+        scratch = (self.base / "role-runner-scratch-x").resolve()
+        init = {"type": "system", "subtype": "init", "cwd": str(scratch)}
+
+        # When
+        evidence.verify_sandbox(self.seeded_command(scratch), init, scratch, False)
+
+        # Then
+        for key in ("enabled", "failIfUnavailable"):
+            with self.subTest(key=key), self.assertRaises(role_runner.RunnerError) as raised:
+                evidence.verify_sandbox(self.seeded_command(scratch, **{key: False}), init, scratch, False)
+            self.assertEqual(4, raised.exception.code)
 
     def seeded_command(self, scratch, allow=None, validation=False, **changes):
         """A claude command whose --settings is the runner's own sandbox block, with the given keys replaced."""
@@ -3248,8 +3306,8 @@ class RoleRunnerTest(unittest.TestCase):
         call = self.logged()
         self.assertEqual(
             [
-                "-p", "--model", "claude-opus-5-5", "--effort", "high", "--output-format", "json", "--verbose",
-                "--disable-slash-commands", "--tools", "Read", "Grep", "Glob", "Bash", "--strict-mcp-config",
+                "-p", "--session-id", "<session>", "--model", "claude-opus-5-5", "--effort", "high", "--output-format", "json",
+                "--verbose", "--disable-slash-commands", "--tools", "Read", "Grep", "Glob", "Bash", "--strict-mcp-config",
                 "--permission-mode", "dontAsk", "--allowedTools", "Read", "Grep", "Glob", "Bash",
                 "--settings", self.sandbox_json(True),
             ],

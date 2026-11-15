@@ -108,7 +108,7 @@ def claude_scratch_rules(run: Run, allowed: list[str]) -> list[str]:
     return [*allowed, "Bash"] if run.validation and "Bash" not in allowed else allowed
 
 
-def claude_command(run: Run, scratch: Path | None = None) -> list[str]:
+def claude_command(run: Run, scratch: Path | None = None, session: str | None = None) -> list[str]:
     if run.agent is not None or run.capability is not None:
         allowed = claude_rules(run)
         tools = claude_tools(allowed)
@@ -125,6 +125,10 @@ def claude_command(run: Run, scratch: Path | None = None) -> list[str]:
     command = ["claude", "-p"]
     if run.resume is not None:
         command += ["--resume", run.resume]
+    elif not run.writing:
+        if session is None:
+            raise ValueError("A fresh read-only Claude run needs a session id")
+        command += ["--session-id", session]
     command += ["--model", run.model, "--effort", run.effort, "--output-format", "json"]
     if not run.writing:
         command += ["--verbose", CLAUDE_SKILLS_OFF]

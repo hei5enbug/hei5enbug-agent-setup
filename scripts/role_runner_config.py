@@ -57,8 +57,6 @@ SCRATCH_VARIABLES = {
     "PIP_CACHE_DIR": "cache/pip",
 }
 VALIDATION_PACKAGE_HOSTS = ("pypi.org", "files.pythonhosted.org", "registry.npmjs.org")
-SANDBOX_STATUS_FIELD = "sandbox_status"
-SANDBOX_CONNECTED = "connected"
 VALIDATION_ROLE = "reviewer"
 REVIEWER_BAN = re.compile(
     r"Never modify files, branches, or worktrees\.\s+Never run\s+build, test, install, or network commands\."

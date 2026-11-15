@@ -26,10 +26,26 @@ def reject_overlap(scratch: Path, cwd: str, add_dirs: tuple[str, ...]) -> None:
             raise RunnerError(EXIT_RUN, f"The scratch folder {scratch} overlaps {resolved}; set TMPDIR outside the work folders")
 
 
+def create_scratch(name: str | None) -> Path:
+    """Create the scratch folder: a new random one, or the one a session name fixes, which must not exist with content."""
+    if name is None:
+        return Path(tempfile.mkdtemp(prefix=SCRATCH_PREFIX)).resolve()
+    scratch = Path(tempfile.gettempdir()).resolve() / f"{SCRATCH_PREFIX}{name}"
+    try:
+        scratch.mkdir(mode=0o700, exist_ok=True)
+    except OSError as error:
+        raise RunnerError(EXIT_RUN, f"Cannot create the scratch folder {scratch}: {error}") from error
+    if any(scratch.iterdir()):
+        raise RunnerError(EXIT_RUN, f"The scratch folder {scratch} already holds files; another run of this session may be active")
+    return scratch
+
+
 @contextmanager
-def scratch_folder(cwd: str, add_dirs: tuple[str, ...]) -> Iterator[Path]:
-    """Create a new scratch folder under the system temp folder, yield its resolved path, and remove it on every exit."""
-    scratch = Path(tempfile.mkdtemp(prefix=SCRATCH_PREFIX)).resolve()
+def scratch_folder(cwd: str, add_dirs: tuple[str, ...], name: str | None = None) -> Iterator[Path]:
+    """Create a scratch folder under the system temp folder, yield its resolved path, and remove it on every exit.
+
+    A name fixes the folder's path, so a resumed session starts from the same path as the run it continues."""
+    scratch = create_scratch(name)
     try:
         reject_overlap(scratch, cwd, add_dirs)
         for subpath in SCRATCH_VARIABLES.values():

@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
@@ -160,11 +161,12 @@ def execute_codex(args: argparse.Namespace, run: Run, prompt: str, cwd: str) -> 
 
 def claude_outcome(
     run: Run, stdout: str, command: list[str] | None = None, init: dict | None = None, scratch: Path | None = None,
+    session: str | None = None,
 ) -> tuple[dict, dict]:
     result = claude_result(stdout)
     if result.get("is_error"):
         raise RunnerError(EXIT_RUN, f"Claude reported an error: {str(result.get('result'))[:2000]}")
-    return result, verify_claude(result, run.model, run.effort, command, init, scratch, run.validation)
+    return result, verify_claude(result, run.model, run.effort, command, init, scratch, run.validation, session)
 
 
 def run_claude(args: argparse.Namespace, run: Run, prompt: str, cwd: str) -> tuple[dict, dict]:
@@ -172,10 +174,11 @@ def run_claude(args: argparse.Namespace, run: Run, prompt: str, cwd: str) -> tup
     sandbox that confines its writes to that folder, and the folder is removed on every exit."""
     if run.writing:
         return claude_outcome(run, run_child(run.target, claude_command(run), prompt, cwd, args.timeout))
-    with scratch_folder(cwd, run.add_dirs) as scratch:
-        command = claude_command(run, scratch)
+    session = run.resume or str(uuid.uuid4())
+    with scratch_folder(cwd, run.add_dirs, session) as scratch:
+        command = claude_command(run, scratch, session)
         stdout = run_child(run.target, command, prompt, scratch.as_posix(), args.timeout, scratch)
-        return claude_outcome(run, stdout, command, claude_init(stdout), scratch)
+        return claude_outcome(run, stdout, command, claude_init(stdout), scratch, session)
 
 
 def execute_claude(args: argparse.Namespace, run: Run, prompt: str, cwd: str) -> dict:
@@ -267,14 +270,18 @@ def resolve(args: argparse.Namespace) -> Run:
     )
 
 
+def is_uuid(value: str) -> bool:
+    try:
+        return str(uuid.UUID(value)) == value.lower()
+    except ValueError:
+        return False
+
+
 def plan(args: argparse.Namespace) -> Run:
     validate(args)
     run = replace(resolve(args), user_requested=args.user_requested, validation=args.validation)
-    if run.runner == "claude" and not run.writing and run.resume is not None:
-        raise UsageError(
-            "--resume is not allowed for a read-only Claude run: it starts in a new scratch folder, and Claude Code resumes "
-            "a session only from the folder that started it"
-        )
+    if run.runner == "claude" and not run.writing and run.resume is not None and not is_uuid(run.resume):
+        raise UsageError("--resume for a read-only Claude run must name the session id (a UUID) that a previous run reported")
     if run.writing and run.runner == "claude" and not run.add_dirs and run.agent is None:
         label = f"capability {run.capability}" if run.capability else f"role {run.role}"
         raise UsageError(f"The Claude path of the writing {label} needs --add-dir for each directory it may edit")
