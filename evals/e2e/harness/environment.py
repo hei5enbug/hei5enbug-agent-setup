@@ -96,6 +96,10 @@ def capture_base(claude_bin: str, repo_root: Path, run: Runner = run_command, en
     }
 
 
-def run_snapshot(base: Mapping[str, Any], plugin: Mapping[str, Any], removed_env: list[str]) -> dict[str, Any]:
+def run_snapshot(
+    base: Mapping[str, Any], plugin: Mapping[str, Any], removed_env: list[str], instruction_isolation: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """`instruction_isolation` names how a Claude Code run keeps the user's instruction files and auto memory out, and the limits that remain."""
+    isolation = {"instruction_isolation": dict(instruction_isolation)} if instruction_isolation else {}
     return {**base, "removed_env_names": removed_env, "plugin_ref": plugin.get("ref"), "plugin_sha": plugin.get("sha"),
-            "cap_transform": plugin.get("cap_transform")}
+            "cap_transform": plugin.get("cap_transform"), **isolation}

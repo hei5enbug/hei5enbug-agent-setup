@@ -10,8 +10,8 @@ from typing import Any
 
 from . import caps, codex_calls, codex_host, collect, command, environment, metrics, rubric, transcript, usage
 from .config import (
-    APPROVAL_GUARD_OFF_ENV, FINISHED_STATUSES, HOST_CODEX, STATUS_COMPLETE, STATUS_INFRA_FAILED, STATUS_INTERRUPTED,
-    STATUS_TIMED_OUT, STATUS_USAGE_LIMITED, HarnessConfig,
+    APPROVAL_GUARD_OFF_ENV, CLAUDE_INSTRUCTION_ENV, FINISHED_STATUSES, HOST_CODEX, INSTRUCTION_ISOLATION, STATUS_COMPLETE,
+    STATUS_INFRA_FAILED, STATUS_INTERRUPTED, STATUS_TIMED_OUT, STATUS_USAGE_LIMITED, HarnessConfig,
 )
 from .matrix import RunSpec, prior_attempts, read_json, write_json
 from .process import GradingInterrupted, ProcessResult, run_agent
@@ -226,6 +226,16 @@ def finish_codex_run(
     return record_and_analyze(spec, task, finished, cfg, interrupt)
 
 
+def agent_overrides(spec: RunSpec, task: dict[str, Any], variant: dict[str, Any], cfg: HarnessConfig, agent_tmp: Path) -> dict[str, str]:
+    """The variables the harness sets on the agent; a Claude Code run gets the instruction controls last, so no variant turns them off."""
+    codex = spec.host == HOST_CODEX
+    return {
+        "TMPDIR": str(agent_tmp), **command.task_environment(task, spec.repo, spec.work_dir),
+        **cfg.extra_env, **APPROVAL_GUARD_OFF_ENV, **variant["env"],
+        **(codex_host.host_env(spec.result_dir) if codex else CLAUDE_INSTRUCTION_ENV),
+    }
+
+
 def execute_run(
     spec: RunSpec, task: dict[str, Any], variant: dict[str, Any], plugin: dict[str, Any], cfg: HarnessConfig,
     base_snapshot: dict[str, Any], interrupt: threading.Event | None = None,
@@ -237,12 +247,9 @@ def execute_run(
     argv = write_codex_run_files(spec, variant, prompt, cfg, plugin) if codex else write_run_files(spec, task, variant, prompt, cfg, plugin)
     agent_tmp = spec.work_dir / AGENT_TMP_NAME
     agent_tmp.mkdir(parents=True, exist_ok=True)
-    overrides = {
-        "TMPDIR": str(agent_tmp), **command.task_environment(task, spec.repo, spec.work_dir),
-        **cfg.extra_env, **APPROVAL_GUARD_OFF_ENV, **variant["env"], **(codex_host.host_env(spec.result_dir) if codex else {}),
-    }
+    overrides = agent_overrides(spec, task, variant, cfg, agent_tmp)
     env, removed = environment.child_environment(os.environ, overrides)
-    write_json(spec.result_dir / "env.json", environment.run_snapshot(base_snapshot, plugin, removed))
+    write_json(spec.result_dir / "env.json", environment.run_snapshot(base_snapshot, plugin, removed, None if codex else INSTRUCTION_ISOLATION))
     run: dict[str, Any] = {
         "run_id": spec.run_id, "task": spec.task, "variant": spec.variant, "rep": spec.rep, "plugin": plugin,
         "attempts": prior_attempts(spec) + 1, "base_commit": None, "host": spec.host,

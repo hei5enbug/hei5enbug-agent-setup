@@ -136,6 +136,7 @@
 |---|---|---|
 | `tests/test_e2e_eval_harness.py` | 엔드투엔드 실행은 시험할 플러그인 리비전을 불러오고, 권한이나 플러그인 훅을 절대 우회하지 않으며, 사용량 한도 뒤에 이어서 실행하고, 모든 변형의 토큰, 비용, 결과를 같은 방식으로 기록한다. | `evals/e2e/README.md` |
 | `tests/test_e2e_eval_plugin_isolation.py` | Claude Code 엔드투엔드 실행은 사용자 프로필의 모든 플러그인을 끄고, 플러그인을 불러오는 변수를 지우며, MCP 서버를 하네스 승인 서버로 한정하고, init 이벤트에 변형이 아닌 플러그인이 보이면 `infra_failed`로 기록하고 `pilot-check`로 실패시킨다. | `evals/e2e/README.md` |
+| `tests/test_e2e_eval_instruction_isolation.py` | Claude Code 엔드투엔드 실행은 사용자 설정 출처를 빼고, 어떤 변형도 되돌릴 수 없는 변수로 자동 메모리를 끄며, 둘과 남은 한계를 `env.json`에 기록하고, 명령줄, `env.json`, 기록, init 이벤트에 사용자 수준 메모리나 규칙 파일 또는 자동 메모리 경로가 보이면 `pilot-check`로 실패시킨다. | `evals/e2e/README.md` |
 | `tests/test_e2e_eval_graders.py` | 골든 작업마다 채점기는 수정하지 않은 픽스처를 실패시키고 기준 해답을 통과시키며, 채점하는 저장소를 바꾸지 않는다. | `evals/e2e/README.md` (Graders) |
 | `tests/test_e2e_eval_orca_cleanup.py` | T21 작업은 가짜 Orca와 저장소 세 곳의 Git worktree를 심어 두고, 그 채점기는 수정하지 않은 실행을 실패시키고 기준 정리를 통과시키며, 푸시하지 않은 커밋이 있는 worktree나 다른 저장소의 worktree를 지우거나 티켓 폴더를 열어 두거나 원격 브랜치를 지운 정리는 실패시킨다. | `evals/e2e/README.md` (Golden tasks) |
 | `tests/test_e2e_eval_codex_host.py` | Codex 실행은 자기 `CODEX_HOME`에서 내보낸 플러그인 리비전만 불러오고, 사용자 로그인은 읽지 않고 링크만 하며, 표준 입력을 기다리지 않고, 모델·effort·시간·비용을 기록한다. 어떤 역할이든 `claude-opus-5-5`나 `gpt-6.1-sol`보다 강한 모델을 시작하는 캠페인은 거부하고, 그런 모델을 쓴 실행은 상한 위반으로 표시한다. | `evals/e2e/README.md` (Hosts) |

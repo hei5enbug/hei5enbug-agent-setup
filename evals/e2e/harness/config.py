@@ -32,6 +32,16 @@ APPROVER_SERVER = "eval_approver"
 APPROVER_TOOL = "mcp__eval_approver__approve"
 REMOVED_ENV_PREFIX = "ORCA_"
 REMOVED_ENV_NAMES = frozenset({"CLAUDE_CODE_PLUGIN_DIRS"})
+CLAUDE_SETTING_SOURCES = "project,local"
+CLAUDE_INSTRUCTION_ENV = {"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"}
+CLAUDE_INSTRUCTION_LIMITS = (
+    "managed settings and a managed CLAUDE.md of the machine still apply and have no off switch",
+    "~/.claude.json, the global config, is always read",
+)
+INSTRUCTION_ISOLATION = {
+    "setting_sources": CLAUDE_SETTING_SOURCES, "env": CLAUDE_INSTRUCTION_ENV, "known_limits": list(CLAUDE_INSTRUCTION_LIMITS),
+}
+USER_INSTRUCTION_TYPES = frozenset({"User"})
 APPROVAL_GUARD_OFF_ENV = {"CLAUDE_PLUGIN_OPTION_APPROVAL_GUARD": "false", "HEI5ENBUG_APPROVAL_GUARD": "false"}
 
 DEFAULT_PARALLEL = 3
@@ -55,7 +65,7 @@ USAGE_LIMIT_PATTERN = re.compile(r"usage limit|limit reached|hit your limit|rate
 FORBIDDEN_ARGS = frozenset({"--dangerously-skip-permissions", "--bare", "--permission-mode", "bypassPermissions"})
 RESERVED_ARGS = frozenset({
     "--model", "--effort", "--settings", "--plugin-dir", "--mcp-config", "--permission-prompt-tool", "--max-budget-usd",
-    "--output-format", "-p", "--print", "--permission-prompts", "--strict-mcp-config", "--",
+    "--output-format", "-p", "--print", "--permission-prompts", "--strict-mcp-config", "--setting-sources", "--",
 })
 
 RUBRIC_MODEL = "gpt-6.1-sol"

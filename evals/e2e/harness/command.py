@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .config import (
-    AGENT_EFFORT, APPROVER_SERVER, APPROVER_TOOL, FORBIDDEN_ARGS, HARNESS_DIR, HOST_CLAUDE, HOSTS, INSTALLED_PLUGIN_KEY,
-    MAIN_MODELS, RESERVED_ARGS, HarnessConfig,
+    AGENT_EFFORT, APPROVER_SERVER, APPROVER_TOOL, CLAUDE_SETTING_SOURCES, FORBIDDEN_ARGS, HARNESS_DIR, HOST_CLAUDE, HOSTS,
+    INSTALLED_PLUGIN_KEY, MAIN_MODELS, RESERVED_ARGS, HarnessConfig,
 )
 
 APPROVER_SCRIPT = HARNESS_DIR / "approval_mcp.py"
@@ -131,7 +131,7 @@ def build_command(
         cfg.claude_bin, "-p", "--model", main_model(variant, HOST_CLAUDE), "--effort", AGENT_EFFORT,
         "--output-format", "stream-json", "--verbose", "--include-hook-events",
         "--plugin-dir", plugin_dir,
-        "--settings", str(run_dir / "settings.json"),
+        "--settings", str(run_dir / "settings.json"), "--setting-sources", CLAUDE_SETTING_SOURCES,
         "--mcp-config", str(run_dir / "mcp.json"), "--strict-mcp-config",
         "--permission-prompt-tool", APPROVER_TOOL,
         "--max-budget-usd", str(task["limits"]["max_budget_usd"]),

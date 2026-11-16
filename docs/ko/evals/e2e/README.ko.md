@@ -27,8 +27,8 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
    ```text
    claude -p --model claude-opus-5-5 --effort high --output-format stream-json --verbose
      --include-hook-events --plugin-dir <exported plugin> --settings <run>/settings.json
-     --mcp-config <run>/mcp.json --strict-mcp-config --permission-prompt-tool mcp__eval_approver__approve
-     --max-budget-usd <task limit> -- <prompt>
+     --setting-sources project,local --mcp-config <run>/mcp.json --strict-mcp-config
+     --permission-prompt-tool mcp__eval_approver__approve --max-budget-usd <task limit> -- <prompt>
    ```
 
    프롬프트는 `--` 뒤에 오므로 `--version ...`처럼 대시로 시작하는 프롬프트도 옵션으로 읽히지 않는다.
@@ -40,6 +40,17 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
    `--plugin-dir`처럼 플러그인을 더 올리는 `CLAUDE_CODE_PLUGIN_DIRS`도 지운다. `system` init 이벤트에 변형이 아닌
    플러그인이 보이는 실행은 그 플러그인 이름과 함께 `infra_failed`로 기록하고 채점하지 않으며, `pilot-check`도 그
    실행을 실패시킨다. 출처가 `@builtin`으로 끝나는 Claude Code 내장 플러그인은 호스트의 일부라 세지 않는다. 우회 모드, `--bare`, `--permission-mode`는 절대 넘기지 않는다.
+
+   실행은 사용자 자신의 지침도 읽지 않는다. 자기 `CODEX_HOME`을 쓰는 Codex 실행이 아무것도 읽지 않는 것과 같다.
+   `--setting-sources project,local`은 `user` 출처를 빼므로 프로필의 `CLAUDE.md`, `rules/` 폴더, `settings.json`은
+   올라오지 않고, 프로젝트 자신의 `CLAUDE.md`나 `AGENTS.md`, `.claude/rules/`, `CLAUDE.local.md`는 픽스처가 정한 대로
+   올라온다. 실행 자신의 설정은 `--settings`로 들어간다. 같은 출처 스위치는 사용자의 스킬, 명령, 에이전트, 훅, 권한
+   규칙도 함께 뺀다. 환경 변수 `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`은 어떤 설정 출처도 다루지 않는 자동 메모리를 끄며,
+   마지막에 적용되므로 변형의 `env`로 다시 켤 수 없다. 이 제어는 Claude Code의 메모리, 설정, CLI 문서에서 가져왔고
+   프로필의 어떤 파일도 바꾸지 않는다. 스위치가 없는 입력 둘, 곧 기기의 관리 설정과 관리 `CLAUDE.md`, 전역
+   `~/.claude.json`은 알려진 한계로 남는다. `env.json`은 출처, 변수, 이 한계를 `instruction_isolation`에 기록한다.
+   `pilot-check`는 `user` 없는 `--setting-sources`가 명령줄에 없거나, `env.json`에 그 변수가 없거나, 기록에 `User`
+   유형의 지침 파일이 있거나(경로를 밝힌다), init 이벤트에 `memory_paths.auto`가 보이는 실행을 실패시킨다.
 4. 작업마다 정한 실제 경과 시간 제한에 걸리면 에이전트에 SIGINT, SIGTERM, SIGKILL을 차례로 보낸다. 신호는
    에이전트의 프로세스 그룹과, role runner 자식처럼 에이전트가 별도 세션으로 시작한 모든 프로세스에 가고, 하네스는
    남은 프로세스가 없는지 확인한다.
@@ -168,8 +179,9 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 
 변형은 `variants/` 안의 JSON 파일이다: `{"name", "ref", "settings", "env", "extra_args"}`. `ref`는 시험할 플러그인
 리비전이다. `settings`는 실행의 `--settings` 파일에, `env`는 에이전트 환경에, `extra_args`는 명령줄에 합쳐진다.
-우회 플래그, `--bare`, `--permission-mode`, 또는 하네스가 직접 정하는 플래그를 넣은 변형은 거부한다. `settings`에
-무엇이 있어도 설치된 플러그인과 프로필의 모든 플러그인은 꺼진 채로 둔다.
+우회 플래그, `--bare`, `--permission-mode`, 또는 `--setting-sources`처럼 하네스가 직접 정하는 플래그를 넣은 변형은
+거부한다. `settings`에 무엇이 있어도 설치된 플러그인과 프로필의 모든 플러그인은 꺼진 채로 두고, `env`에 무엇이 있어도
+사용자의 지침 파일과 자동 메모리는 들어오지 않게 한다.
 
 ## 실행 기록
 
@@ -186,7 +198,7 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 ```
 
 `env.json`에는 Claude Code와 Codex CLI 버전, 설치된 플러그인 목록, Claude와 Codex 설정 파일의 SHA-256 해시(내용은
-남기지 않음), 지운 변수의 이름, 내보내기의 상한 변환, 하네스 리비전을 기록한다. Codex 실행은 rollout이 보여 주는 CLI 버전, 모델, effort를
+남기지 않음), 지운 변수의 이름, 내보내기의 상한 변환, 하네스 리비전을 기록하고, Claude Code 실행은 `instruction_isolation`도 기록한다. Codex 실행은 rollout이 보여 주는 CLI 버전, 모델, effort를
 더한다.
 
 ## 지표

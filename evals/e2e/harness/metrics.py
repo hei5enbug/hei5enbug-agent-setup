@@ -5,14 +5,18 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-from .config import INLINE_PLUGIN_SOURCE, INSTALLED_PLUGIN_KEY, MOD_MARKER, PLUGIN_NAME, STATUS_TIMED_OUT, STATUS_USAGE_LIMITED
+from .config import (
+    INLINE_PLUGIN_SOURCE, INSTALLED_PLUGIN_KEY, MOD_MARKER, PLUGIN_NAME, STATUS_TIMED_OUT, STATUS_USAGE_LIMITED, USER_INSTRUCTION_TYPES,
+)
 from .transcript import AGENT_TOOLS, init_event, mod_marker_present, result_event
 from .usage import RUNNER_SOURCE_PREFIX, agent_models
 
 
 def stream_facts(events: list[dict[str, Any]]) -> dict[str, Any]:
     init, result = init_event(events) or {}, result_event(events) or {}
+    memory_paths = init.get("memory_paths") if isinstance(init.get("memory_paths"), dict) else {}
     return {
+        "auto_memory_path": memory_paths.get("auto") or None,
         "session_id": init.get("session_id") or result.get("session_id"),
         "permission_mode": init.get("permissionMode"),
         "model": init.get("model"),
@@ -25,6 +29,18 @@ def stream_facts(events: list[dict[str, Any]]) -> dict[str, Any]:
         "duration_api_ms": result.get("duration_api_ms"),
         "num_turns": result.get("num_turns"),
     }
+
+
+def user_instruction_files(events: list[dict[str, Any]]) -> list[str]:
+    """Paths of the user-level memory and rule files that instruction attachments of a transcript carry."""
+    paths: set[str] = set()
+    for event in events:
+        attachment = event.get("attachment")
+        files = attachment.get("files") if isinstance(attachment, dict) and attachment.get("type") == "instructions" else None
+        for item in files if isinstance(files, list) else []:
+            if isinstance(item, dict) and item.get("type") in USER_INSTRUCTION_TYPES:
+                paths.add(str(item.get("path")))
+    return sorted(paths)
 
 
 BUILTIN_SUFFIX = "@builtin"

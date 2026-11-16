@@ -9,7 +9,8 @@ from . import codex_host, collect, metrics, transcript
 from .config import APPROVER_TOOL, FORBIDDEN_ARGS, HOST_CLAUDE, HOST_CODEX, MOD_MARKER
 from .matrix import campaign_dir, read_json
 
-REQUIRED_FLAGS = ("--plugin-dir", "--settings", "--permission-prompt-tool", "--max-budget-usd", "--strict-mcp-config")
+AUTO_MEMORY_OFF_ENV = "CLAUDE_CODE_DISABLE_AUTO_MEMORY"
+REQUIRED_FLAGS = ("--plugin-dir", "--settings", "--permission-prompt-tool", "--max-budget-usd", "--strict-mcp-config", "--setting-sources")
 
 
 def command_problems(argv: list[str]) -> list[str]:
@@ -18,6 +19,9 @@ def command_problems(argv: list[str]) -> list[str]:
     problems += [f"forbidden {arg}" for arg in options if arg in FORBIDDEN_ARGS or arg.startswith("--permission-mode")]
     if APPROVER_TOOL not in options:
         problems.append("approver tool not wired")
+    sources = options[options.index("--setting-sources") + 1] if "--setting-sources" in options[:-1] else ""
+    if "user" in sources.split(","):
+        problems.append("user setting source loaded")
     return problems
 
 
@@ -31,11 +35,16 @@ def check_run(result_dir: Path) -> list[tuple[str, bool, str]]:
     plugin = metrics.plugin_checks(facts, expected, main, subagents)
     argv = (read_json(result_dir / "command.json", {}) or {}).get("argv", [])
     problems = command_problems(argv)
+    isolation = (read_json(result_dir / "env.json", {}) or {}).get("instruction_isolation") or {}
+    user_files = metrics.user_instruction_files([*main, *(event for record in subagents for event in record["events"])])
     return [
         ("result message present", facts["has_result"], str(run.get("status"))),
         ("plugin loaded from the exported directory", plugin["loaded_from_export"], expected),
         ("installed plugin absent", plugin["installed_absent"], ""),
         ("no plugin besides the variant", not plugin["extra_plugins"], ", ".join(plugin["extra_plugins"])),
+        ("no user-level memory or rule file loaded", not user_files, ", ".join(user_files)),
+        ("auto memory switched off for the run", AUTO_MEMORY_OFF_ENV in isolation.get("env", {}) and isolation["env"][AUTO_MEMORY_OFF_ENV] == "1", ""),
+        ("no auto memory path in the init event", not facts["auto_memory_path"], str(facts["auto_memory_path"])),
         ("mod marker in the main transcript", plugin["mod_marker_present"], MOD_MARKER),
         ("permission mode recorded", bool(facts["permission_mode"]), str(facts["permission_mode"])),
         ("command line without bypass flags", not problems, ", ".join(problems)),
