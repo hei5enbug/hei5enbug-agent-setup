@@ -1,7 +1,7 @@
 {
   "version": 1,
   "issue": 84,
-  "status": "pending",
+  "status": "recorded",
   "candidates": [
     {
       "model": "claude-opus-5-5",
@@ -27,6 +27,312 @@
     "T92": "opponent",
     "T93": "opponent"
   },
-  "results": [],
-  "roles": {}
+  "results": [
+    {
+      "case": "T89",
+      "model": "claude-fable-5-2",
+      "effort": "high",
+      "passed": true,
+      "host_model": "claude-fable-5-2",
+      "host_effort": "high",
+      "cost_usd": 0.503088,
+      "wall_seconds": 41.858,
+      "attempts": 1
+    },
+    {
+      "case": "T89",
+      "model": "claude-fable-5-2",
+      "effort": "xhigh",
+      "passed": true,
+      "host_model": "claude-fable-5-2",
+      "host_effort": "xhigh",
+      "cost_usd": 0.634507,
+      "wall_seconds": 60.036,
+      "attempts": 1
+    },
+    {
+      "case": "T89",
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "passed": true,
+      "host_model": "claude-opus-5-5",
+      "host_effort": "high",
+      "cost_usd": 0.14283,
+      "wall_seconds": 19.472,
+      "attempts": 1
+    },
+    {
+      "case": "T89",
+      "model": "claude-opus-5-5",
+      "effort": "xhigh",
+      "passed": true,
+      "host_model": "claude-opus-5-5",
+      "host_effort": "xhigh",
+      "cost_usd": 0.210535,
+      "wall_seconds": 36.661,
+      "attempts": 1
+    },
+    {
+      "case": "T90",
+      "model": "claude-fable-5-2",
+      "effort": "high",
+      "passed": true,
+      "host_model": "claude-fable-5-2",
+      "host_effort": "high",
+      "cost_usd": 0.531547,
+      "wall_seconds": 49.527,
+      "attempts": 1
+    },
+    {
+      "case": "T90",
+      "model": "claude-fable-5-2",
+      "effort": "xhigh",
+      "passed": true,
+      "host_model": "claude-fable-5-2",
+      "host_effort": "xhigh",
+      "cost_usd": 0.592989,
+      "wall_seconds": 63.789,
+      "attempts": 1
+    },
+    {
+      "case": "T90",
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "passed": true,
+      "host_model": "claude-opus-5-5",
+      "host_effort": "high",
+      "cost_usd": 0.224258,
+      "wall_seconds": 28.79,
+      "attempts": 1
+    },
+    {
+      "case": "T90",
+      "model": "claude-opus-5-5",
+      "effort": "xhigh",
+      "passed": true,
+      "host_model": "claude-opus-5-5",
+      "host_effort": "xhigh",
+      "cost_usd": 0.271463,
+      "wall_seconds": 50.355,
+      "attempts": 1
+    },
+    {
+      "case": "T91",
+      "model": "claude-fable-5-2",
+      "effort": "high",
+      "passed": true,
+      "host_model": "claude-fable-5-2",
+      "host_effort": "high",
+      "cost_usd": 0.394895,
+      "wall_seconds": 48.955,
+      "attempts": 1
+    },
+    {
+      "case": "T91",
+      "model": "claude-fable-5-2",
+      "effort": "xhigh",
+      "passed": true,
+      "host_model": "claude-fable-5-2",
+      "host_effort": "xhigh",
+      "cost_usd": 0.699923,
+      "wall_seconds": 108.799,
+      "attempts": 1
+    },
+    {
+      "case": "T91",
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "passed": false,
+      "host_model": "claude-opus-5-5",
+      "host_effort": "high",
+      "cost_usd": 0.179519,
+      "wall_seconds": 42.443,
+      "attempts": 1
+    },
+    {
+      "case": "T91",
+      "model": "claude-opus-5-5",
+      "effort": "xhigh",
+      "passed": false,
+      "host_model": "claude-opus-5-5",
+      "host_effort": "xhigh",
+      "cost_usd": 0.255118,
+      "wall_seconds": 77.646,
+      "attempts": 1
+    },
+    {
+      "case": "T92",
+      "model": "claude-fable-5-2",
+      "effort": "high",
+      "passed": false,
+      "host_model": "claude-fable-5-2",
+      "host_effort": "high",
+      "cost_usd": 0.659844,
+      "wall_seconds": 88.184,
+      "attempts": 1
+    },
+    {
+      "case": "T92",
+      "model": "claude-fable-5-2",
+      "effort": "xhigh",
+      "passed": false,
+      "host_model": "claude-fable-5-2",
+      "host_effort": "xhigh",
+      "cost_usd": 2.004792,
+      "wall_seconds": 284.233,
+      "attempts": 1
+    },
+    {
+      "case": "T92",
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "passed": false,
+      "host_model": "claude-opus-5-5",
+      "host_effort": "high",
+      "cost_usd": 0.297258,
+      "wall_seconds": 66.363,
+      "attempts": 1
+    },
+    {
+      "case": "T92",
+      "model": "claude-opus-5-5",
+      "effort": "xhigh",
+      "passed": false,
+      "host_model": "claude-opus-5-5",
+      "host_effort": "xhigh",
+      "cost_usd": 0.388121,
+      "wall_seconds": 109.924,
+      "attempts": 1
+    },
+    {
+      "case": "T93",
+      "model": "claude-fable-5-2",
+      "effort": "high",
+      "passed": true,
+      "host_model": "claude-fable-5-2",
+      "host_effort": "high",
+      "cost_usd": 0.605571,
+      "wall_seconds": 73.936,
+      "attempts": 1
+    },
+    {
+      "case": "T93",
+      "model": "claude-fable-5-2",
+      "effort": "xhigh",
+      "passed": false,
+      "host_model": "claude-fable-5-2",
+      "host_effort": "xhigh",
+      "cost_usd": 1.13646,
+      "wall_seconds": 167.132,
+      "attempts": 1
+    },
+    {
+      "case": "T93",
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "passed": true,
+      "host_model": "claude-opus-5-5",
+      "host_effort": "high",
+      "cost_usd": 0.252378,
+      "wall_seconds": 46.686,
+      "attempts": 1
+    },
+    {
+      "case": "T93",
+      "model": "claude-opus-5-5",
+      "effort": "xhigh",
+      "passed": false,
+      "host_model": "claude-opus-5-5",
+      "host_effort": "xhigh",
+      "cost_usd": 0.399657,
+      "wall_seconds": 109.71,
+      "attempts": 1
+    }
+  ],
+  "roles": {
+    "reviewer": {
+      "cases": [
+        "T89",
+        "T90",
+        "T91"
+      ],
+      "candidates": [
+        {
+          "model": "claude-opus-5-5",
+          "effort": "high",
+          "passes": 2,
+          "cost_usd": 0.546607,
+          "wall_seconds": 90.705
+        },
+        {
+          "model": "claude-opus-5-5",
+          "effort": "xhigh",
+          "passes": 2,
+          "cost_usd": 0.737116,
+          "wall_seconds": 164.662
+        },
+        {
+          "model": "claude-fable-5-2",
+          "effort": "high",
+          "passes": 3,
+          "cost_usd": 1.42953,
+          "wall_seconds": 140.34
+        },
+        {
+          "model": "claude-fable-5-2",
+          "effort": "xhigh",
+          "passes": 3,
+          "cost_usd": 1.927419,
+          "wall_seconds": 232.624
+        }
+      ],
+      "decision": {
+        "status": "winner",
+        "winner": {
+          "model": "claude-fable-5-2",
+          "effort": "high"
+        }
+      }
+    },
+    "opponent": {
+      "cases": [
+        "T92",
+        "T93"
+      ],
+      "candidates": [
+        {
+          "model": "claude-opus-5-5",
+          "effort": "high",
+          "passes": 1,
+          "cost_usd": 0.549636,
+          "wall_seconds": 113.049
+        },
+        {
+          "model": "claude-opus-5-5",
+          "effort": "xhigh",
+          "passes": 0,
+          "cost_usd": 0.787778,
+          "wall_seconds": 219.634
+        },
+        {
+          "model": "claude-fable-5-2",
+          "effort": "high",
+          "passes": 1,
+          "cost_usd": 1.265415,
+          "wall_seconds": 162.12
+        },
+        {
+          "model": "claude-fable-5-2",
+          "effort": "xhigh",
+          "passes": 0,
+          "cost_usd": 3.141252,
+          "wall_seconds": 451.365
+        }
+      ],
+      "decision": {
+        "status": "none",
+        "winner": null
+      }
+    }
+  }
 }

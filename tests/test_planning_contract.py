@@ -35,7 +35,7 @@ class PlanningContractTest(unittest.TestCase):
     def test_model_selection_has_one_canonical_source(self):
         validation = VALIDATION.read_text()
         mapping = (
-            re.compile(r"\| GPT \| `claude-opus-[\d-]+` or `claude-fable-[\d-]+` \| `high` or `xhigh` \|"),
+            re.compile(r"\| GPT \| `claude-fable-[\d-]+` \| `high` \|"),
             re.compile(r"\| Claude \| `gpt-[\d.]+-sol` or `gpt-[\d.]+-astra` \| `high` or `xhigh` \|"),
         )
         for row in mapping:

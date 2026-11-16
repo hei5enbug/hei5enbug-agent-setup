@@ -31,11 +31,11 @@ worker 한 명의 변경이나 중간 초안처럼 더 이른 검토는 사용�
 | 작성 모델 계열 | 검토자 | 추론 강도 |
 |---|---|---|
 | Claude | `gpt-6.1-sol` 또는 `gpt-6-astra` | `high` 또는 `xhigh` |
-| GPT | `claude-opus-5-5` 또는 `claude-fable-5-2` | `high` 또는 `xhigh` |
+| GPT | `claude-fable-5-2` | `high` |
 
-조율 세션이 범위와 위험에 따라 해당 행에서 검토자와 강도를 하나 고른다. 구성요소 하나로 범위가 한정되면 가벼운 모델
-(`gpt-6.1-sol`, `claude-opus-5-5`)을 `high`로, 여러 컴포넌트, 공개 계약, 보안, 동시성, 훅이나 가드가 관련되면 더 강한 모델
-(`gpt-6-astra`, `claude-fable-5-2`) 또는 `xhigh`를 쓴다.
+조율 세션이 범위와 위험에 따라 해당 행에서 검토자와 강도를 하나 고른다. Claude가 작성한 결과는 구성요소 하나로
+범위가 한정되면 가벼운 모델 `gpt-6.1-sol`을 `high`로, 여러 컴포넌트, 공개 계약, 보안, 동시성, 훅이나 가드가 관련되면
+더 강한 모델 `gpt-6-astra` 또는 `xhigh`를 쓴다. GPT가 작성한 결과는 항상 `claude-fable-5-2`를 `high`로 쓴다.
 
 실행 호스트가 아닌 실제 작성 모델 계열을 선택한다. 위임받은 worker가 쓴 코드는 그 worker의 모델 계열에 속한다.
 Claude Code에서 GPT가 작성해도 GPT 행을 따른다.

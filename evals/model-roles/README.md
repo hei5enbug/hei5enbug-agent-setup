@@ -134,6 +134,30 @@ available only when the user asks for it.
 Applying a decision also updates the tests that assert the replaced pin text, and, when the opponent winner's effort is
 `high`, gives the opponent registry entry its own effort so that the Codex opponent keeps `xhigh`.
 
+## Result
+
+2026-11-16. Round 1 (20 runs) was discarded: its English-only keywords and incomplete real-problem lists failed answers
+that named the planted problem, which commit 8193708 fixed, and round 2 ran fresh with 20 runs.
+
+| Role | Candidate | Passes | Cost (USD) | Wall (s) |
+|---|---|---|---|---|
+| Reviewer (3 cases) | `claude-opus-5-5` `high` | 2 | 0.55 | 91 |
+| Reviewer | `claude-opus-5-5` `xhigh` | 2 | 0.74 | 165 |
+| Reviewer | `claude-fable-5-2` `high` | 3 | 1.43 | 140 |
+| Reviewer | `claude-fable-5-2` `xhigh` | 3 | 1.93 | 233 |
+| Opponent (2 cases) | `claude-opus-5-5` `high` | 1 | 0.55 | 113 |
+| Opponent | `claude-opus-5-5` `xhigh` | 0 | 0.79 | 220 |
+| Opponent | `claude-fable-5-2` `high` | 1 | 1.27 | 162 |
+| Opponent | `claude-fable-5-2` `xhigh` | 0 | 3.14 | 451 |
+
+The reviewer winner is `claude-fable-5-2` at `high`: only the two Fable candidates passed all three cases, and `high`
+costs less than `xhigh`. The opponent role has no winner, because no candidate passed both cases, so the baseline
+`claude-fable-5-2` at `xhigh` stays.
+
+Measured limit: in round 2 the keyword matcher still counted about eight findings that restate listed problems in other
+words as outside the list, in T92 and T93. None of them changes the reviewer decision, because Opus failed T91 on opinion
+findings that no list holds, and the opponent decision is `none` either way.
+
 ## Checks without model calls
 
 ```text

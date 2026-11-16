@@ -32,11 +32,12 @@ decision.
 | Authoring model family | Reviewer | Reasoning effort |
 |---|---|---|
 | Claude | `gpt-6.1-sol` or `gpt-6-astra` | `high` or `xhigh` |
-| GPT | `claude-opus-5-5` or `claude-fable-5-2` | `high` or `xhigh` |
+| GPT | `claude-fable-5-2` | `high` |
 
-The coordinating session picks one reviewer and effort from the row by scope and risk: the lighter model
-(`gpt-6.1-sol`, `claude-opus-5-5`) at `high` for one bounded component, and the stronger model (`gpt-6-astra`,
-`claude-fable-5-2`) or `xhigh` for several components, a public contract, security, concurrency, or a hook or guard.
+The coordinating session picks one reviewer and effort from the row. For a Claude-authored result it picks by scope
+and risk: the lighter model `gpt-6.1-sol` at `high` for one bounded component, and the stronger model `gpt-6-astra` or
+`xhigh` for several components, a public contract, security, concurrency, or a hook or guard. A GPT-authored result
+always goes to `claude-fable-5-2` at `high`.
 
 Select the actual authoring model family, not the execution host. Code that a delegated worker wrote belongs to
 that worker's model family. GPT authoring in Claude Code follows the GPT row. If both families materially

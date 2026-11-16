@@ -85,7 +85,7 @@ Run one read-only final review of the combined final diff, sized to the change a
 |---|---|
 | Trivial: a typo, wording, version, or metadata edit, a translation, or a mechanical edit its checks fully cover | None |
 | Claude-authored, not trivial | `role_runner.py reviewer` with `--model gpt-6.1-sol` or `gpt-6-astra` and `--effort high` or `xhigh`, chosen per change by its scope and risk as the plugin's independent model validation describes |
-| GPT-authored, including work drafted on `gpt-6.1-sol` | `role_runner.py reviewer --model claude-opus-5-5`, or `claude-fable-5-2` with `--effort xhigh` when complex |
+| GPT-authored, including work drafted on `gpt-6.1-sol` | `role_runner.py reviewer --model claude-fable-5-2 --effort high` |
 
 - It runs automatically once, after all work for the request is done and its checks pass, over the combined final
   diff; any earlier review needs the user's approval.

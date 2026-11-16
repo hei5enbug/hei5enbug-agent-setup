@@ -86,7 +86,7 @@ class DecisionRuleTest(unittest.TestCase):
 
         # When
         decided = self.decisions(passed)
-        pins = mr_pins.pin_problems(rec.build_record(84, ROLES, outcome(passed)), REGISTRY, real_reader)
+        pins = mr_pins.pin_problems(rec.build_record(84, ROLES, outcome(passed)), BASELINE_REGISTRY, baseline_reader)
 
         # Then
         self.assertEqual({"status": "none", "winner": None}, decided["reviewer"])
@@ -309,11 +309,51 @@ def real_reader(path: str) -> str:
     return (REPO_ROOT / path).read_text(encoding="utf-8")
 
 
+BASELINE_REVIEWER_TEXT = {
+    "instructions/independent-model-validation.md": (
+        ("| GPT | `claude-fable-5-2` | `high` |", "| GPT | `claude-opus-5-5` or `claude-fable-5-2` | `high` or `xhigh` |"),
+        ("`xhigh` for several components, a public contract, security, concurrency, or a hook or guard. A GPT-authored result\n"
+         "always goes to `claude-fable-5-2` at `high`.",
+         "`xhigh` for several components, a public contract, security, concurrency, or a hook or guard. The GPT row offers\n"
+         "`claude-opus-5-5` or `claude-fable-5-2`."),
+    ),
+    "docs/instructions-and-delegation.md": (
+        ("a GPT-authored result goes to\n`claude-fable-5-2` at `high`.", "a GPT-authored result goes to\n`claude-opus-5-5` or `claude-fable-5-2`."),
+    ),
+    "docs/ko/instructions/independent-model-validation.ko.md": (
+        ("| GPT | `claude-fable-5-2` | `high` |", "| GPT | `claude-opus-5-5` 또는 `claude-fable-5-2` | `high` 또는 `xhigh` |"),
+        ("GPT가 작성한 결과는 항상 `claude-fable-5-2`를 `high`로 쓴다.", "GPT 행은 `claude-opus-5-5` 또는 `claude-fable-5-2`를 쓴다."),
+    ),
+    "docs/ko/docs/instructions-and-delegation.ko.md": (
+        ("GPT가 작성한 결과는 `claude-fable-5-2`가 `high`로 검토합니다.", "GPT가 작성한 결과는 `claude-opus-5-5` 또는 `claude-fable-5-2`가 검토합니다."),
+    ),
+    "AGENTS.md": (
+        ("`role_runner.py reviewer --model claude-fable-5-2 --effort high` |",
+         "`role_runner.py reviewer --model claude-opus-5-5`, or `claude-fable-5-2` with `--effort xhigh` when complex |"),
+    ),
+    "docs/ko/AGENTS.ko.md": (
+        ("`role_runner.py reviewer --model claude-fable-5-2 --effort high` |",
+         "`role_runner.py reviewer --model claude-opus-5-5`, 복잡하면 `--effort xhigh`와 함께 `claude-fable-5-2` |"),
+    ),
+}
+BASELINE_REGISTRY = copy.deepcopy(REGISTRY)
+BASELINE_REGISTRY["runner"]["independent_review"]["gpt"] = [rec.OPUS, rec.FABLE]
+
+
+def baseline_reader(path: str) -> str:
+    """Return a file's text as it was before the reviewer decision, so the baseline rules stay tested after it."""
+    text = real_reader(path)
+    for new, old in BASELINE_REVIEWER_TEXT.get(path, ()):
+        assert new in text, (path, new)
+        text = text.replace(new, old)
+    return text
+
+
 class PinConsistencyTest(unittest.TestCase):
     def test_기록이_대기_중이면_저장소의_핀은_기준_그대로이다(self):
         """pending 기록에서는 레지스트리와 규칙 문서가 모두 현재 핀(Fable xhigh 상대, Opus와 Fable 검토자)이고 문제가 없다."""
         # When
-        problems = mr_pins.pin_problems(rec.pending_record(84, ROLES), REGISTRY, real_reader)
+        problems = mr_pins.pin_problems(rec.pending_record(84, ROLES), BASELINE_REGISTRY, baseline_reader)
 
         # Then
         self.assertEqual([], problems)
@@ -321,14 +361,14 @@ class PinConsistencyTest(unittest.TestCase):
     def test_기록이_없는데_핀이_바뀌면_문제로_잡는다(self):
         """pending 기록에서 상대 모델을 Opus로 바꾸거나 검토자 문서에서 Fable을 빼면 각각 문제가 된다."""
         # Given
-        registry = copy.deepcopy(REGISTRY)
+        registry = copy.deepcopy(BASELINE_REGISTRY)
         registry["opponents"]["claude"]["model"] = rec.OPUS
-        fewer = lambda path: real_reader(path).replace(rec.FABLE, rec.OPUS) if path == "instructions/independent-model-validation.md" else real_reader(path)
+        fewer = lambda path: baseline_reader(path).replace(rec.FABLE, rec.OPUS) if path == "instructions/independent-model-validation.md" else baseline_reader(path)
 
         # When
         pending = rec.pending_record(84, ROLES)
-        registry_problems = mr_pins.pin_problems(pending, registry, real_reader)
-        text_problems = mr_pins.pin_problems(pending, REGISTRY, fewer)
+        registry_problems = mr_pins.pin_problems(pending, registry, baseline_reader)
+        text_problems = mr_pins.pin_problems(pending, BASELINE_REGISTRY, fewer)
 
         # Then
         self.assertEqual(["registry opponents.claude.model is 'claude-opus-5-5', expected 'claude-fable-5-2'"], registry_problems)
@@ -377,12 +417,12 @@ class PinConsistencyTest(unittest.TestCase):
         """모든 후보가 비긴 기록에서는 기준 핀이 문제없고, 상대 모델이 바뀌어 있으면 문제가 된다."""
         # Given
         record = record_of({})
-        registry = copy.deepcopy(REGISTRY)
+        registry = copy.deepcopy(BASELINE_REGISTRY)
         registry["opponents"]["claude"]["model"] = rec.OPUS
 
         # When
-        unchanged = mr_pins.pin_problems(record, REGISTRY, real_reader)
-        changed = mr_pins.pin_problems(record, registry, real_reader)
+        unchanged = mr_pins.pin_problems(record, BASELINE_REGISTRY, baseline_reader)
+        changed = mr_pins.pin_problems(record, registry, baseline_reader)
 
         # Then
         self.assertEqual([], unchanged)

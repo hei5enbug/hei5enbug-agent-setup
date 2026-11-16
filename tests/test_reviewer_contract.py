@@ -147,8 +147,8 @@ class ReviewerContractTest(unittest.TestCase):
         self.assertEqual({"claude", "gpt"}, set(table))
         self.assertEqual(registry["claude"], table["claude"])
         self.assertEqual(registry["gpt"], table["gpt"])
-        for family in table:
-            self.assertEqual([registry["effort"], registry["max_effort"]], efforts[family])
+        self.assertEqual([registry["effort"], registry["max_effort"]], efforts["claude"])
+        self.assertEqual([registry["effort"]], efforts["gpt"])
 
 
 if __name__ == "__main__":
