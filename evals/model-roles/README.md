@@ -13,7 +13,9 @@ runner its role uses, so the model and effort come from that runner's own host r
 ## Cases
 
 Each case is one repository the harness creates from `cases/<id>/` with fixed commits, and each has a fixed list of
-real problems in `cases/<id>/case.json`. The candidate sees the repository and its prompt, never `case.json`.
+real problems in `cases/<id>/case.json`: the planted problem, with the direct consequences it has at other places, and
+the other real defects of the seeded files that a reviewer can verify from them. The candidate sees the repository and
+its prompt, never `case.json`.
 
 | Case | Role | Seeded material | Planted problem |
 |---|---|---|---|
@@ -26,9 +28,11 @@ real problems in `cases/<id>/case.json`. The candidate sees the repository and i
 A candidate passes a case when both conditions hold:
 
 - Its findings name the planted problem: one finding cites a location of the planted problem, and its text names the
-  problem and its effect, by the case's keyword lists.
-- No finding falls outside the case's list of real problems. The lists hold the planted problem only, so any other
-  finding fails the case, and a failed case lists those findings in `outside` for the coordinator to read.
+  problem and its effect, by the case's keyword lists. The keyword lists are bilingual, English and Korean, because the
+  runners keep the user's language and an answer may be in either.
+- No finding falls outside the case's list of real problems. A finding at a listed non-planted real problem, by the same
+  location and keyword rule, is inside the list. Any other finding, such as an opinion at an unlisted line, fails the
+  case, and a failed case lists those findings in `outside` for the coordinator to read.
 
 A reviewer answer or a debate statement ends with one fenced `json` block of findings, each with `location`
 (`path:line` or `path:first-last`), `problem`, and `effect`. The grader reads the last block. A missing or malformed block

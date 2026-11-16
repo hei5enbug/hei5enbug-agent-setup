@@ -22,6 +22,12 @@
           "start": 14,
           "end": 15,
           "anchor": "newly generated `X-Delivery-Id`"
+        },
+        {
+          "file": "design.md",
+          "start": 13,
+          "end": 13,
+          "anchor": "After a timeout, a connection error, or a 5xx response"
         }
       ],
       "problem_any": [
@@ -29,13 +35,197 @@
         "new(?:ly generated)? (?:delivery )?id",
         "idempoten",
         "dedup",
-        "stable (?:event|delivery) id|same id|same event id"
+        "stable (?:event|delivery) id|same id|same event id",
+        "새로 (?:생성|발급|만)|매번|시도마다|재시도마다|멱등|중복 (?:제거|방지|처리)|걸러|고정 키|식별|이벤트 ?ID|event ?id|같은 ?ID|바뀌지 않",
+        "필드|알아(?:볼|낼|보)|구분|판별|반복(?:된)? 이벤트"
       ],
       "effect_any": [
         "duplicate",
         "twice|more than once|repeated|several times|again",
         "receipt|email|side effect",
-        "double"
+        "double",
+        "중복|두 번|여러 번|최대 6|영수증|메일|부작용|반복|이중|또 (?:나|처리|실행)"
+      ]
+    },
+    {
+      "id": "unhandled-responses",
+      "planted": false,
+      "summary": "only a timeout, a connection error, or a 5xx response is retried, so a 4xx such as 429 or 408, a 3xx, or a non-200 2xx response has no retry, failed state, alert, or replay and the delivery is dropped silently",
+      "locations": [
+        {
+          "file": "design.md",
+          "start": 13,
+          "end": 13,
+          "anchor": "After a timeout, a connection error, or a 5xx response"
+        },
+        {
+          "file": "design.md",
+          "start": 16,
+          "end": 16,
+          "anchor": "Stop after the last retry"
+        }
+      ],
+      "problem_any": [
+        "4xx",
+        "3xx",
+        "429",
+        "408",
+        "non-200",
+        "not 200",
+        "other (?:status|response)",
+        "undefined",
+        "not defined",
+        "no (?:handling|outcome)",
+        "neither",
+        "그 밖의|정의되지|처리가 없|결말|응답 코드"
+      ],
+      "effect_any": [
+        "dropp",
+        "silent",
+        "no alert",
+        "never (?:retried|alerted)",
+        "lost",
+        "missed",
+        "without (?:a )?(?:retry|alert)",
+        "누락|버려|조용|없이|남는다|남아"
+      ]
+    },
+    {
+      "id": "alert-per-delivery",
+      "planted": false,
+      "summary": "every failed delivery raises its own alert and nothing stops sending to a dead subscriber, so one long outage floods the operators with one alert per event",
+      "locations": [
+        {
+          "file": "design.md",
+          "start": 16,
+          "end": 16,
+          "anchor": "raise an alert that names the subscriber"
+        },
+        {
+          "file": "design.md",
+          "start": 22,
+          "end": 22,
+          "anchor": "raises one alert"
+        }
+      ],
+      "problem_any": [
+        "alert",
+        "alarm",
+        "notification",
+        "알림|경보|알람"
+      ],
+      "effect_any": [
+        "flood",
+        "storm",
+        "noise",
+        "per (?:event|delivery)",
+        "one alert per",
+        "hundreds",
+        "bur(?:y|ied)",
+        "건마다|쏟아|쌓|묻히|폭주|수백|수만큼|한 건씩"
+      ]
+    },
+    {
+      "id": "delivery-state-unspecified",
+      "planted": false,
+      "summary": "the design stores a delivery state without naming its states, the next attempt time, the worker that runs the retries, or how a restart or several instances behave, so pending retries can be lost or sent twice",
+      "locations": [
+        {
+          "file": "design.md",
+          "start": 12,
+          "end": 12,
+          "anchor": "Store each event and its delivery state"
+        }
+      ],
+      "problem_any": [
+        "state",
+        "status",
+        "next attempt",
+        "worker",
+        "scheduler",
+        "restart",
+        "instance",
+        "concurrent",
+        "transaction",
+        "상태|다음 시도|워커|재시작|인스턴스|트랜잭션|시도 횟수|동시"
+      ],
+      "effect_any": [
+        "lost",
+        "restart",
+        "duplicate",
+        "twice",
+        "stuck",
+        "dropped",
+        "no alert",
+        "miss",
+        "사라|누락|두 번|중복|동시에|대기 상태|남을 수|버려"
+      ]
+    },
+    {
+      "id": "replay-id-and-state",
+      "planted": false,
+      "summary": "the replay command and acceptance criterion 3 (exactly as stored) leave open which X-Delivery-Id a replayed delivery carries and what state it has afterwards, so replaying a delivery that the subscriber already processed repeats the event",
+      "locations": [
+        {
+          "file": "design.md",
+          "start": 17,
+          "end": 17,
+          "anchor": "Add a `replay` command"
+        },
+        {
+          "file": "design.md",
+          "start": 23,
+          "end": 23,
+          "anchor": "exactly as stored"
+        }
+      ],
+      "problem_any": [
+        "replay",
+        "exactly as stored",
+        "X-Delivery-Id",
+        "리플레이|재전송|그대로"
+      ],
+      "effect_any": [
+        "twice",
+        "duplicate",
+        "again",
+        "repeat",
+        "conflict",
+        "which (?:X-Delivery-Id|id)",
+        "unclear",
+        "undefined",
+        "두 번|중복|또 (?:나|전달|처리|실행)|충돌|맞지 않|정해지지|모호|반복"
+      ]
+    },
+    {
+      "id": "ac1-checks-arrival-only",
+      "planted": false,
+      "summary": "acceptance criterion 1 only requires that every event reaches the subscriber, so an implementation that sends the same event several times, or loses it on a restart, still passes",
+      "locations": [
+        {
+          "file": "design.md",
+          "start": 21,
+          "end": 21,
+          "anchor": "every event of that period reaches it"
+        }
+      ],
+      "problem_any": [
+        "acceptance criteri",
+        "AC ?1",
+        "criterion 1",
+        "arrival",
+        "reach",
+        "기준|도착|도달"
+      ],
+      "effect_any": [
+        "pass(?:es)?",
+        "ship",
+        "not (?:detect|caught)",
+        "duplicate",
+        "several times",
+        "six times",
+        "6 times",
+        "합격|통과|중복|여러 번|6번|출시|드러나지"
       ]
     }
   ]

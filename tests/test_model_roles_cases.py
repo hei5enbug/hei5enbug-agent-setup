@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -37,6 +38,57 @@ GOOD = {
             "a timeout after processing makes the subscriber act twice, for example a duplicate receipt email"),
     "T93": ("design.md:12", "hash(customer_id) % 8 puts acme-trading's 41 percent of the writes on one shard",
             "that hot shard takes about 492 inserts per second and exceeds the 400 a primary sustains"),
+}
+
+GOOD_KO = {
+    "T89": ("seatmap/seats.py:25", "hold_many가 점유 검사와 정원 검사를 lock을 잡기 전에 해서 검사와 쓰기 사이에 경쟁 상태가 생긴다",
+            "두 스레드가 동시에 호출하면 둘 다 통과해 같은 좌석을 덮어쓰거나 정원을 초과한다"),
+    "T90": ("pricing/api.py:17", "공개 계약인 문서화된 필드 total_cents를 제거하고 total로 바꿨다",
+            "reports/export.py가 KeyError로 실패하고 필드를 파싱하는 클라이언트가 깨진다"),
+    "T91": ("issue.md:16", "제안 2의 만료 15분은 완료 기준 2의 30초와 충돌한다",
+            "바뀐 가격이 최대 15분 동안 반영되지 않아 기준 2를 충족할 수 없다"),
+    "T92": ("design.md:14", "재시도마다 X-Delivery-Id를 새로 생성해서 구독자가 중복을 걸러낼 수 없다",
+            "처리 뒤 시간 초과가 나면 같은 이벤트가 두 번 처리되어 영수증 메일이 중복 발송된다"),
+    "T93": ("design.md:12", "acme-trading이 전체 쓰기의 41퍼센트라서 hash(customer_id) % 8이 한 샤드에 쏠림을 만든다",
+            "그 샤드는 초당 492건을 받아 primary가 버티는 400건을 초과한다"),
+}
+
+NON_PLANTED = {
+    "tests-lack-concurrent-case": ("tests/test_seats.py:25", "the hold_many tests only run from one thread in sequence and none is concurrent",
+                                   "the race passes the suite because the multi-threaded use is never tested"),
+    "export-test-fails-unrun": ("tests/test_export.py:5", "this consumer test fails with KeyError after the change",
+                                "the author ran only tests/test_api.py, so the failing regression was not caught"),
+    "format-amount-negative": ("pricing/api.py:8", "format_amount floors with // and %, so a negative amount is wrong",
+                               "-5 cents becomes -1.95 instead of -0.05"),
+    "invalidate-yet-stale": ("issue.md:9", "invalidate(sku) runs after every change yet prices stay stale for up to one minute",
+                             "the cause is not explained, so nobody knows whether to fix or remove the call"),
+    "peak-load-undefined": ("issue.md:22", "'At peak load' has no definition of the peak or how it is measured",
+                            "nobody can reproduce or judge whether criterion 1 passes"),
+    "unhandled-responses": ("design.md:13", "a 4xx such as 429, a 3xx, or a non-200 2xx response is not defined",
+                            "those deliveries are dropped silently without a retry or an alert"),
+    "alert-per-delivery": ("design.md:16", "an alert is raised for every failed delivery",
+                           "one long outage floods the operators with one alert per event"),
+    "delivery-state-unspecified": ("design.md:12", "the delivery state, the next attempt time, and the worker are not defined",
+                                   "pending retries are lost on a restart and several instances send duplicates"),
+    "replay-id-and-state": ("design.md:17", "replay and the 'exactly as stored' criterion leave open which X-Delivery-Id is used",
+                            "a replayed delivery that was already processed repeats the event twice"),
+    "ac1-checks-arrival-only": ("design.md:21", "acceptance criterion 1 only checks that every event arrives",
+                                "an implementation that sends the same event six times still passes"),
+    "ac1-ac2-conflict": ("design.md:21", "acceptance criterion 2 conflicts with criterion 1 for the largest customer",
+                         "no placement meets both criteria"),
+    "copy-plan-underspecified": ("design.md:16", "the one-time copy has no write freeze, cutover order, or rollback",
+                                 "orders written during the copy can be lost or duplicated"),
+    "ac3-checks-exactly-one-shard": ("design.md:22", "criterion 3 only requires exactly one shard, not the correct shard",
+                                     "a misplaced order passes and is missing from the customer's page"),
+    "no-resize-or-exception-path": ("design.md:12", "there is no resize procedure or exception for the fixed hash",
+                                    "changing the shard count remaps most customers and needs a full copy"),
+    "queries-beyond-list-my-orders": ("design.md:13", "only the list my orders query is covered, not a lookup by order id",
+                                      "such a lookup has no defined route and must query all 8 shards"),
+}
+
+OPINION_AT_UNLISTED_LINE = {
+    "T89": "seatmap/seats.py:42", "T90": "pricing/api.py:3", "T91": "issue.md:4",
+    "T92": "design.md:6", "T93": "design.md:5",
 }
 
 
@@ -172,11 +224,8 @@ class GradingTest(unittest.TestCase):
                 graded = mr_grading.grade(CASES[case_id], answer(finding))
 
                 # Then
-                self.assertEqual(
-                    {"pass": True, "error": None, "findings": 1, "found": sorted(p["id"] for p in CASES[case_id]["problems"]),
-                     "missed": [], "outside": []},
-                    graded,
-                )
+                self.assertEqual((True, None, 1, [], []), (graded["pass"], graded["error"], graded["findings"], graded["missed"], graded["outside"]))
+                self.assertIn(mr_grading.planted(CASES[case_id])[0], graded["found"])
 
     def test_심은_문제를_놓치면_실패한다(self):
         """지적이 없거나 다른 곳만 가리키면 심은 문제가 missed에 남아 실패한다."""
@@ -261,6 +310,53 @@ class GradingTest(unittest.TestCase):
 
         # Then
         self.assertTrue(graded["pass"])
+
+    def test_한국어로_쓴_지적도_심은_문제를_위치와_효과로_짚으면_통과한다(self):
+        """실행기가 사용자의 언어를 따르므로, 한국어 지적이 심은 문제의 위치에서 문제와 효과를 말하면 사례마다 통과한다."""
+        for case_id, finding in GOOD_KO.items():
+            with self.subTest(case=case_id):
+                # When
+                graded = mr_grading.grade(CASES[case_id], answer(finding))
+
+                # Then
+                self.assertEqual((True, [], []), (graded["pass"], graded["missed"], graded["outside"]))
+                self.assertIn(mr_grading.planted(CASES[case_id])[0], graded["found"])
+
+    def test_모든_목록_문제는_한국어_키워드를_함께_갖는다(self):
+        """심은 문제와 심지 않은 실제 문제 모두 문제 키워드와 효과 키워드에 한글 대안이 하나 이상 있다."""
+        hangul = re.compile("[가-힣]")
+        for case_id, case in CASES.items():
+            for problem in case["problems"]:
+                with self.subTest(case=case_id, problem=problem["id"]):
+                    self.assertTrue(any(hangul.search(item) for item in problem["problem_any"]))
+                    self.assertTrue(any(hangul.search(item) for item in problem["effect_any"]))
+
+    def test_심지_않은_실제_문제를_짚은_지적은_그_문제와_맞고_목록_밖이_아니다(self):
+        """목록에 더한 실제 문제 각각은 자기 위치의 지적과 맞고, 그 지적만 있는 답에서 outside가 비며 심은 문제는 missed에 남는다."""
+        listed = {problem["id"]: case_id for case_id, case in CASES.items() for problem in case["problems"] if not problem["planted"]}
+        self.assertEqual(set(listed), set(NON_PLANTED))
+        for problem_id, case_id in listed.items():
+            with self.subTest(problem=problem_id):
+                # When
+                graded = mr_grading.grade(CASES[case_id], answer(NON_PLANTED[problem_id]))
+
+                # Then
+                self.assertIn(problem_id, graded["found"])
+                self.assertEqual([], graded["outside"])
+                self.assertEqual(mr_grading.planted(CASES[case_id]), graded["missed"])
+
+    def test_목록에_없는_줄의_의견은_사례마다_계속_목록_밖이다(self):
+        """심은 문제를 짚은 답에 목록에 없는 줄의 의견 하나를 더하면 그 의견은 outside에 남고 사례는 실패한다."""
+        for case_id, place in OPINION_AT_UNLISTED_LINE.items():
+            with self.subTest(case=case_id):
+                # Given
+                opinion = (place, "the rationale for this choice is missing and a measurement would help", "readers cannot judge the benefit")
+
+                # When
+                graded = mr_grading.grade(CASES[case_id], answer(GOOD[case_id], opinion))
+
+                # Then
+                self.assertEqual((False, [{"index": 1, "location": place}]), (graded["pass"], graded["outside"]))
 
 
 if __name__ == "__main__":

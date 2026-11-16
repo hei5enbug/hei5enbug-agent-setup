@@ -24,7 +24,8 @@
         "concurren",
         "atomic",
         "thread",
-        "interleav"
+        "interleav",
+        "락|잠금|경쟁 ?상태|경합|동시|스레드|원자|atomic|인터리브"
       ],
       "effect_any": [
         "capacity",
@@ -35,7 +36,40 @@
         "exceed",
         "more than",
         "two (?:threads|callers|owners)",
-        "both (?:threads|callers|owners)"
+        "both (?:threads|callers|owners)",
+        "정원|용량|초과|덮어|겹쳐|두 (?:호출|스레드|호출자)|둘 다|같은 좌석|이중|중복 (?:점유|보유|예약)|all-or-nothing"
+      ]
+    },
+    {
+      "id": "tests-lack-concurrent-case",
+      "planted": false,
+      "summary": "the three new hold_many tests call it from one thread in sequence, so no test covers the multi-threaded use that the class promises and the author's passing run says nothing about it",
+      "locations": [
+        {
+          "file": "tests/test_seats.py",
+          "start": 25,
+          "end": 41,
+          "anchor": "def test_hold_many_holds_the_whole_group"
+        }
+      ],
+      "problem_any": [
+        "concurren",
+        "thread",
+        "at the same time",
+        "in sequence",
+        "sequential",
+        "simultaneous",
+        "parallel",
+        "동시|스레드|병렬|순차|단일"
+      ],
+      "effect_any": [
+        "not (?:be )?(?:checked|verified|tested|caught|covered)",
+        "no test",
+        "never",
+        "does not (?:show|prove)",
+        "passes? (?:the )?(?:suite|despite|with)",
+        "race",
+        "검증|잡지 못|통과|근거가 되지|놓치|누락|없(?:다|음|어)|뒷받침"
       ]
     }
   ]

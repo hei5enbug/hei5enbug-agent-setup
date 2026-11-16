@@ -31,13 +31,78 @@
         "incompatib",
         "15[- ]minute",
         "30 seconds",
-        "invalidate"
+        "invalidate",
+        "모순|충돌|상충|불일치|일치하지|양립|정면|15분|30초"
       ],
       "effect_any": [
         "cannot|can't|never|impossible|unmeet|not (?:be )?(?:met|satisf)",
         "stale",
         "up to 15",
-        "within 30"
+        "within 30",
+        "충족|만족|통과|지킬 수 없|맞출 수 없|불가능|오래된 가격|최대 15분|악화|30초 (?:안|내)|판정할 수 없|반영되지 않"
+      ]
+    },
+    {
+      "id": "invalidate-yet-stale",
+      "planted": false,
+      "summary": "the issue says the admin tool calls invalidate(sku) after every price change and yet prices stay wrong for up to one minute, a gap it never explains, and Proposal 2 deletes the call without a cause",
+      "locations": [
+        {
+          "file": "issue.md",
+          "start": 8,
+          "end": 9,
+          "anchor": "calls `invalidate(sku)` after every price change"
+        }
+      ],
+      "problem_any": [
+        "invalidat",
+        "stale",
+        "up to (?:one|1) minute",
+        "60 seconds",
+        "TTL",
+        "root cause",
+        "무효화|최대 1분|60초|원인"
+      ],
+      "effect_any": [
+        "cause",
+        "diagnos",
+        "unexplained",
+        "unstated",
+        "not (?:explained|stated|diagnosed|mentioned)",
+        "basis",
+        "why",
+        "원인|진단|근거|밝히|설명|알 수 없|판단할 수 없|범위"
+      ]
+    },
+    {
+      "id": "peak-load-undefined",
+      "planted": false,
+      "summary": "acceptance criterion 1 requires at most 5 percent database answers at peak load, but the issue defines neither the peak nor how it is measured, so its pass or fail cannot be reproduced",
+      "locations": [
+        {
+          "file": "issue.md",
+          "start": 22,
+          "end": 22,
+          "anchor": "At peak load"
+        }
+      ],
+      "problem_any": [
+        "peak load",
+        "at peak",
+        "undefined",
+        "not defined",
+        "no definition",
+        "time window",
+        "metric",
+        "피크|최대 부하|정의|측정 (?:시간|기간|범위)|지표"
+      ],
+      "effect_any": [
+        "judge",
+        "determin",
+        "verif",
+        "reproduc",
+        "pass(?:es|ed)? or fail",
+        "판정|판단|재현|검증|통과 여부|합격"
       ]
     }
   ]

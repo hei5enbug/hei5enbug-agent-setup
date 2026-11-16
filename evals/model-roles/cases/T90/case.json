@@ -33,13 +33,81 @@
       "problem_any": [
         "total_cents",
         "public contract|documented|docs/API",
-        "renam|remov|replac|chang(?:e|ed|es) (?:the )?(?:field|type|shape|response)"
+        "renam|remov|replac|chang(?:e|ed|es) (?:the )?(?:field|type|shape|response)",
+        "제거|삭제|교체|변경|바꿨|바뀌|이름|공개 (?:계약|응답)|문서화|계약"
       ],
       "effect_any": [
         "KeyError",
         "break|broke",
         "consumer|caller|client|export",
-        "incompatib|backward|major version"
+        "incompatib|backward|major version",
+        "깨|실패|호환|소비자|클라이언트|내보내기|메이저|파싱|찾지 못|어긋|불일치|모순"
+      ]
+    },
+    {
+      "id": "export-test-fails-unrun",
+      "planted": false,
+      "summary": "tests/test_export.py asserts the total_cents column and fails after the change with KeyError, but the author ran only tests/test_api.py",
+      "locations": [
+        {
+          "file": "tests/test_export.py",
+          "start": 4,
+          "end": 5,
+          "anchor": "def test_quote_row_lists_the_currency_and_total_cents"
+        }
+      ],
+      "problem_any": [
+        "KeyError",
+        "total_cents",
+        "test_export",
+        "quote_row",
+        "consumer",
+        "fail",
+        "regression",
+        "테스트|실패|소비자|회귀"
+      ],
+      "effect_any": [
+        "only (?:ran|run)",
+        "test_api",
+        "3 passed",
+        "not (?:run|ran)",
+        "never ran",
+        "full (?:test )?suite",
+        "fails?",
+        "failing",
+        "KeyError",
+        "regression",
+        "passed",
+        "전체 테스트|실행하지|검증|통과|실패|회귀|KeyError"
+      ]
+    },
+    {
+      "id": "format-amount-negative",
+      "planted": false,
+      "summary": "format_amount floors with // and %, so a negative amount in cents is written wrongly (-5 becomes -1.95) where the old integer total was right",
+      "locations": [
+        {
+          "file": "pricing/api.py",
+          "start": 6,
+          "end": 8,
+          "anchor": "{cents // 100}.{cents % 100:02d}"
+        }
+      ],
+      "problem_any": [
+        "negative",
+        "floor",
+        "//",
+        "rounds? toward",
+        "-1\\.95",
+        "음수|내림|바닥|부호"
+      ],
+      "effect_any": [
+        "wrong",
+        "incorrect",
+        "-1\\.95",
+        "misformat",
+        "not -0\\.05",
+        "잘못|틀린|다른 금액|부정확|오표기|표기"
       ]
     }
   ]
