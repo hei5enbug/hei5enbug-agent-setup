@@ -13,11 +13,11 @@
 
 | 사례 | 실행 | 통과 조건 |
 |---|---|---|
-| Codex의 검증 | 설치된 환경이 없는 시드 저장소에서 `pricing.py`를 검토하도록 맡긴 `role_runner.py reviewer --model gpt-6.1-sol --validation` | 도구 기록에 테스트 명령과 시드한 단언 실패가 있고, 검토가 `test_bulk_discount`를 지목하며, 저장소 스냅샷이 그대로다 |
-| Claude의 검증 | 환경을 설치한(`seed --with-env`) 시드 저장소에서 `role_runner.py reviewer --model claude-opus-5-5 --validation` | Codex 사례와 같은 조건 |
-| Codex의 heredoc scout | `--validation` 없이 `role_runner.py scout`에 `data/orders.csv`의 `quantity * unit_cents` 합계를 heredoc Python 명령으로 계산하도록 맡긴다 | 도구 기록에 임시 파일 때문에 실패하지 않은 heredoc Python 명령이 있고, 결과가 기대 합계를 담으며, 테스트나 설치 명령이 없고, 저장소 스냅샷이 그대로다 |
+| 5, Codex의 검증 | 설치된 환경이 없는 시드 저장소에서 `pricing.py`를 검토하도록 맡긴 `role_runner.py reviewer --model gpt-6.1-sol --validation` | 도구 기록에 테스트 명령과 시드한 단언 실패가 있고, 검토가 `test_bulk_discount`를 지목하며, 저장소 스냅샷이 그대로다 |
+| 6, Claude의 검증 | 환경을 설치한(`seed --with-env`) 시드 저장소에서 `role_runner.py reviewer --model claude-opus-5-5 --validation` | Codex 사례와 같은 조건 |
+| 7, Codex의 heredoc scout | `--validation` 없이 `role_runner.py scout`에 `data/orders.csv`의 `quantity * unit_cents` 합계를 heredoc Python 명령으로 계산하도록 맡긴다 | 도구 기록에 임시 파일 때문에 실패하지 않은 heredoc Python 명령이 있고, 결과가 기대 합계를 담으며, 테스트나 설치 명령이 없고, 저장소 스냅샷이 그대로다 |
 
-## 절차
+## 직접 하는 절차
 
 ```text
 python3 evals/role-runner-scratch/demo.py seed /tmp/work/demo-a
@@ -29,3 +29,18 @@ python3 evals/role-runner-scratch/demo.py check <validation|scout> /tmp/work/dem
 
 `check`는 `pass`와 실패 목록을 담은 JSON 한 줄을 출력하고, 실패가 남으면 1로 끝난다. 시드한 결함은 할인이 11개부터
 시작하는 것으로, docstring과 `test_bulk_discount`는 10개부터라고 말한다.
+
+## 구동 스크립트
+
+`run_cases.py`가 세 번의 실행을 수행한다. 사례마다 `<workdir>/demo-<사례>`를 시드하고(사례 6은 `--with-env`), 스냅샷을 찍고, 사례의 과제를
+쓰고, 시드한 저장소에서 `scripts/role_runner.py`를 실행하고, 실행기가 출력한 검증된 상태 줄에서 rollout 또는 transcript 경로를 읽어 `check`를
+돌린다. 사례마다 `pass`, `failures`, `records`를 담은 JSON 한 줄을 출력하고, 사례가 하나라도 실패하거나 실행기가 실행을 검증하지 못하면 1로 끝난다.
+
+```text
+python3 evals/role-runner-scratch/run_cases.py --dry-run
+python3 evals/role-runner-scratch/run_cases.py 5 6 7 --workdir /tmp/work
+```
+
+`--dry-run`은 모든 명령을 출력만 하고 아무것도 시작하지 않는다. 폴더를 만들지 않고 모델도 호출하지 않는다. 사례 번호로 사례를 고르며 기본은
+셋 모두다. `--runner`는 다른 실행기 스크립트를, `--timeout`은 실행기 자체의 옵션을 넘긴다. `tests/test_role_runner_run_cases.py`가 dry run,
+상태 줄 파싱, 가짜 실행기로 돌린 전체 순서를 시험한다.
