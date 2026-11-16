@@ -1,0 +1,42 @@
+{
+  "id": "T89",
+  "role": "reviewer",
+  "kind": "diff",
+  "title": "Missed concurrency guard in a GPT-written change",
+  "intent": "Add `SeatMap.hold_many`, which holds a group of seats for one owner all-or-nothing. `SeatMap` is used from many threads.",
+  "checks": "`python3 -m pytest -q` ran in the repository: 6 passed.",
+  "problems": [
+    {
+      "id": "check-outside-lock",
+      "planted": true,
+      "summary": "hold_many tests the held seats and the capacity before it takes the lock, so two threads can both pass the checks and then both write",
+      "locations": [
+        {
+          "file": "seatmap/seats.py",
+          "start": 24,
+          "end": 32,
+          "anchor": "if any(seat in self._held for seat in wanted)"
+        }
+      ],
+      "problem_any": [
+        "lock",
+        "race",
+        "concurren",
+        "atomic",
+        "thread",
+        "interleav"
+      ],
+      "effect_any": [
+        "capacity",
+        "over-?(?:book|sell|commit|subscri)",
+        "double",
+        "same seat",
+        "overwrit",
+        "exceed",
+        "more than",
+        "two (?:threads|callers|owners)",
+        "both (?:threads|callers|owners)"
+      ]
+    }
+  ]
+}

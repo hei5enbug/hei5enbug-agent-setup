@@ -1,0 +1,49 @@
+{
+  "id": "T93",
+  "role": "opponent",
+  "kind": "design",
+  "title": "Sharding by customer with one customer at 41 percent of the writes",
+  "intent": "Review the design proposal in `design.md`, which shards the orders table.",
+  "statement": "I read `design.md`. Sharding by customer keeps the \"list my orders\" page on one shard, the routing rule is simple, and the copy happens in a maintenance window. The load per shard fits one primary. I find no blocking issue and propose adopting the design as written.",
+  "problems": [
+    {
+      "id": "hot-shard",
+      "planted": true,
+      "summary": "one customer creates 41 percent of the writes, so its shard takes about 492 inserts per second at peak, above the 400 a primary sustains, and the one-eighth-per-shard estimate is wrong",
+      "locations": [
+        {
+          "file": "design.md",
+          "start": 7,
+          "end": 7,
+          "anchor": "acme-trading"
+        },
+        {
+          "file": "design.md",
+          "start": 12,
+          "end": 15,
+          "anchor": "hash(customer_id) % 8"
+        },
+        {
+          "file": "design.md",
+          "start": 20,
+          "end": 20,
+          "anchor": "no primary exceeds 400"
+        }
+      ],
+      "problem_any": [
+        "skew",
+        "hot",
+        "acme",
+        "41",
+        "uneven|unbalanced|imbalanc|not uniform|evenly",
+        "customer[_ ]id"
+      ],
+      "effect_any": [
+        "400",
+        "saturat|exceed|overload|bottleneck",
+        "492",
+        "hot (?:shard|spot)|one shard|single shard|that shard"
+      ]
+    }
+  ]
+}

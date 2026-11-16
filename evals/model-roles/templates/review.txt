@@ -1,0 +1,22 @@
+You are the independent reviewer. Return findings only; change nothing.
+
+Frozen intent: $intent
+
+Subject: $subject
+Repository: $repo (read it with the Read, Grep, and Glob tools)
+Author's checks: $checks
+
+$material
+
+Review checks:
+$review_checks
+
+Report only findings you are confident are real, each backed by evidence from the files. Zero findings is a valid
+result. For each finding give its location as `<path>:<line>`, with `<path>` relative to the repository and the line
+number as it is in the repository, what is wrong, and what goes wrong because of it.
+
+Finish with exactly one fenced `json` block in this shape and nothing after it:
+
+```json
+{"findings": [{"location": "<path>:<line>", "problem": "<what is wrong>", "effect": "<what goes wrong>"}]}
+```

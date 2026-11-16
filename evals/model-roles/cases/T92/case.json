@@ -1,0 +1,42 @@
+{
+  "id": "T92",
+  "role": "opponent",
+  "kind": "design",
+  "title": "Retries that resend an event under a new id",
+  "intent": "Review the design proposal in `design.md`, which adds retries to the order-event webhook.",
+  "statement": "I read `design.md`. The retry schedule covers a 31-minute outage, the delivery state is stored before the first attempt, a failed delivery raises an alert, and `replay` covers the rest. The acceptance criteria follow from the proposal. I find no blocking issue and propose adopting the design as written.",
+  "problems": [
+    {
+      "id": "new-delivery-id-per-retry",
+      "planted": true,
+      "summary": "every retry gets a new X-Delivery-Id and the subscriber has no way to detect a repeated event, so a timeout after the subscriber processed the event makes it act twice (for example a second receipt email)",
+      "locations": [
+        {
+          "file": "design.md",
+          "start": 7,
+          "end": 8,
+          "anchor": "no field for detecting a repeated event"
+        },
+        {
+          "file": "design.md",
+          "start": 14,
+          "end": 15,
+          "anchor": "newly generated `X-Delivery-Id`"
+        }
+      ],
+      "problem_any": [
+        "X-Delivery-Id",
+        "new(?:ly generated)? (?:delivery )?id",
+        "idempoten",
+        "dedup",
+        "stable (?:event|delivery) id|same id|same event id"
+      ],
+      "effect_any": [
+        "duplicate",
+        "twice|more than once|repeated|several times|again",
+        "receipt|email|side effect",
+        "double"
+      ]
+    }
+  ]
+}

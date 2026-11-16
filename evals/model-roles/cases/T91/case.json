@@ -1,0 +1,44 @@
+{
+  "id": "T91",
+  "role": "reviewer",
+  "kind": "issue",
+  "title": "Issue body whose Proposal contradicts its acceptance criteria",
+  "intent": "File this issue body as it is. It states the problem, the proposed change, and the criteria that decide whether the change is done.",
+  "checks": "No checks apply to an issue body.",
+  "problems": [
+    {
+      "id": "ttl-vs-30-seconds",
+      "planted": true,
+      "summary": "Proposal 2 lets entries leave the cache only by a 15-minute expiry, while acceptance criterion 2 requires a changed price to be visible within 30 seconds",
+      "locations": [
+        {
+          "file": "issue.md",
+          "start": 15,
+          "end": 17,
+          "anchor": "Remove the `invalidate(sku)` call"
+        },
+        {
+          "file": "issue.md",
+          "start": 23,
+          "end": 23,
+          "anchor": "within 30 seconds"
+        }
+      ],
+      "problem_any": [
+        "contradict",
+        "conflict",
+        "inconsisten",
+        "incompatib",
+        "15[- ]minute",
+        "30 seconds",
+        "invalidate"
+      ],
+      "effect_any": [
+        "cannot|can't|never|impossible|unmeet|not (?:be )?(?:met|satisf)",
+        "stale",
+        "up to 15",
+        "within 30"
+      ]
+    }
+  ]
+}

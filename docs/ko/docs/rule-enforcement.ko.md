@@ -44,6 +44,8 @@
 | `tests/test_worker_route_accept.py` | `auto` 구현 worker 경로가 Claude 세션 문맥과 매니페스트에 나타난다. | `docs/configuration.md` (Feature options) |
 | `tests/test_worker_setting.py` | worker 모델과 사고 강도는 환경 변수, 저장한 옵션, 매니페스트 기본값 순으로 정한다. | `docs/configuration.md` (Feature options) |
 | `tests/test_role_runner.py` | 역할 실행기는 역할마다 샌드박스, 모델, 사고 강도, 도구를 넘기고 실제 실행을 검증하며, 고정값을 넘는 `--model`과 `--effort`는 `--user-requested`가 있을 때만 허용한다. | `instructions/claude-agents.md`, `instructions/model-routing.md` |
+| `tests/test_model_roles_cases.py` | Claude 검토자와 상대 비교의 시드 사례 다섯 개는 각각 정해진 위치에 심은 문제 하나를 갖고, 후보에게 숨기며, 정해진 커밋과 저자 검사 문구로 시드되고, 후보 답이 심은 문제를 위치와 효과로 짚고 사례 목록 밖의 지적이 없을 때만 통과로 채점한다. | `evals/model-roles/README.md` |
+| `tests/test_model_roles_record.py` | 비교 기록은 사례와 후보마다 호스트에서 읽은 모델, effort, 비용, 시간을 담은 결과 하나를 가지며, 역할마다 통과 수가 가장 많은 후보를, 같으면 비용이 가장 낮은 후보를 핀으로 삼고 둘 다 같으면 정하지 않으며, 저장소의 핀은 기록이 승자를 정하기 전까지 기준 그대로이고 그 뒤에는 승자만 적는다. | `evals/model-roles/README.md` |
 | `hooks/mod/agents.test.ts` | mod는 역할마다 모델과 사고 강도를 고정하고, 사용자의 가장 최근 프롬프트가 직접 지정한 경우에만 다른 모델이나 사고 강도를 따른다. | `instructions/claude-agents.md`, `instructions/model-routing.md` |
 | `tests/test_verify_spawn.py` | 생성한 Codex 에이전트는 기록에 기대한 모델과 사고 강도가 있을 때만 인정한다. | `instructions/codex-agents.md` |
 | `tests/test_agent_guard.py` | Codex 내장 에이전트는 거부하고, 설치한 역할은 고정한 모델과 사고 강도로만 실행한다. | `instructions/codex-agents.md` |

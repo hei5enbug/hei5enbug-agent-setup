@@ -1,0 +1,46 @@
+{
+  "id": "T90",
+  "role": "reviewer",
+  "kind": "diff",
+  "title": "Broken public contract in a GPT-written change",
+  "intent": "Make the quote response easier to read by returning the order total as a decimal string. The quote endpoint is public, and its response is documented in `docs/API.md`.",
+  "checks": "`python3 -m pytest -q tests/test_api.py` ran in the repository: 3 passed.",
+  "problems": [
+    {
+      "id": "total-cents-removed",
+      "planted": true,
+      "summary": "quote no longer returns the documented integer field total_cents, so the consumer reports/export.py raises KeyError and external clients that parse the documented field break",
+      "locations": [
+        {
+          "file": "pricing/api.py",
+          "start": 12,
+          "end": 17,
+          "anchor": "\"total\": format_amount(total_cents)"
+        },
+        {
+          "file": "reports/export.py",
+          "start": 8,
+          "end": 8,
+          "anchor": "result['total_cents']"
+        },
+        {
+          "file": "docs/API.md",
+          "start": 9,
+          "end": 9,
+          "anchor": "`total_cents`"
+        }
+      ],
+      "problem_any": [
+        "total_cents",
+        "public contract|documented|docs/API",
+        "renam|remov|replac|chang(?:e|ed|es) (?:the )?(?:field|type|shape|response)"
+      ],
+      "effect_any": [
+        "KeyError",
+        "break|broke",
+        "consumer|caller|client|export",
+        "incompatib|backward|major version"
+      ]
+    }
+  ]
+}

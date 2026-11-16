@@ -27,6 +27,7 @@ def is_eval_fixture(path: Path) -> bool:
     return any(
         (parent.name == "files" and parent.parent.name == "evals")
         or (parent.name == "fixtures" and parent.parent.name == "e2e" and parent.parent.parent.name == "evals")
+        or (parent.name == "cases" and parent.parent.name == "model-roles" and parent.parent.parent.name == "evals")
         for parent in path.parents
     )
 
@@ -139,6 +140,18 @@ class KoreanMirrorTest(unittest.TestCase):
 
         # When
         verdicts = (is_eval_fixture(fixture), is_eval_fixture(harness_doc))
+
+        # Then
+        self.assertEqual(verdicts, (True, False))
+
+    def test_모델_역할_비교의_시드_사례_문서는_미러가_필요_없다(self):
+        """evals/model-roles/cases 아래 시드 사례의 문서는 픽스처라서 미러 원본에서 빠지고, 그 평가의 README는 빠지지 않는다."""
+        # Given
+        seeded = REPO_ROOT / "evals/model-roles/cases/T91/head/issue.md"
+        readme = REPO_ROOT / "evals/model-roles/README.md"
+
+        # When
+        verdicts = (is_eval_fixture(seeded), is_eval_fixture(readme))
 
         # Then
         self.assertEqual(verdicts, (True, False))
