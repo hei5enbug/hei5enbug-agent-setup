@@ -95,22 +95,31 @@ one result per candidate and case:
 | `wall_seconds` | First to last record of the transcript, plus earlier attempts |
 | `attempts` | Runs made for the case |
 
-`roles` holds, for `reviewer` (T89 to T91) and `opponent` (T92 and T93), each candidate's passes and total cost over its
-own cases, and the role's decision. Validation recomputes `roles` from the results and rejects any other value, a missing
+`roles` holds, for `reviewer` (T89 to T91) and `opponent` (T92 and T93), each candidate's passes, total cost, and total wall time
+over its own cases, and the role's decision. Validation recomputes `roles` from the results and rejects any other value, a missing
 or doubled result, a host model or effort that differs from the candidate, and a negative cost.
 
 ## Decision
 
-For each role, the pin is the candidate with the most passes on that role's cases. Among candidates tied on passes, the
-one with the lowest cost on those cases wins. Two candidates tied on both leave the role `tie`, which keeps the baseline
-pin until the owner decides. When Opus wins a role, the role names Opus, and Fable stays available only when the user asks
-for it. The record also holds wall time, so the owner can apply the efficiency rule of `AGENTS.md` instead when that rule,
-not this one, should choose.
+The owner's efficiency rule in `AGENTS.md` decides each role, over that role's cases only (reviewer: T89 to T91, opponent:
+T92 and T93):
+
+1. Eligible candidates passed every case of the role. When none did, the role has no winner (`none`) and keeps its
+   baseline pin.
+2. On any case, a candidate that is slower than the fastest eligible candidate on that case by more than 1.5 times and by
+   more than 60 seconds is dropped. A 1.5-times gap under 60 seconds, a gap of exactly 60 seconds, and a gap of exactly 1.5
+   times do not drop it. When this drops every eligible candidate, the role has no winner.
+3. Of the rest, the lowest list-price cost per passing case wins. Costs within 10 percent or within $0.05 of the lowest
+   tie, and the candidate with the lowest summed wall time over the role's cases wins the tie. Candidates tied on wall time
+   too leave the role `tie`.
+
+`none` and `tie` keep the baseline pin until the owner decides. When Opus wins a role, the role names Opus, and Fable stays
+available only when the user asks for it.
 
 `python3 evals/model-roles/mr_cli.py check` validates the record and compares the repository with it, through
 `tests/test_model_roles_record.py`:
 
-- While the record is pending, or a role is tied, every pin site holds the baseline: the Claude opponent is
+- While the record is pending, or a role is `tie` or `none`, every pin site holds the baseline: the Claude opponent is
   `claude-fable-5-2` at `xhigh` in `config/model-registry.json` and the tiki-taka skill, and the Claude reviewer row names
   `claude-opus-5-5` and `claude-fable-5-2` in the independent model validation rules, the delegation document, the
   final review table of `AGENTS.md`, and their Korean mirrors. No pin changes before a record exists.

@@ -2,7 +2,7 @@
 
 While the record is pending, every pin site holds the baseline pin. Once it is recorded and a role has a winner, every
 site of that role names the winner's model and effort, and no site still names the other Claude model of the
-comparison. A role the record leaves tied keeps its baseline until the owner decides.
+comparison. A role the record leaves tied, or with no eligible candidate, keeps its baseline until the owner decides.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from typing import Any, Callable, Mapping
 
-from mr_record import FABLE, OPUS, TIE, WINNER, decisions
+from mr_record import FABLE, OPUS, WINNER, decisions
 
 CLAUDE_ID = re.compile(r"claude-(?:opus|fable)-[\d-]+")
 BASELINE = {
@@ -62,7 +62,7 @@ def word(effort: str) -> re.Pattern[str]:
 
 
 def expected_models(role: str, decision: Mapping[str, Any] | None) -> set[str]:
-    if decision and decision["status"] != TIE:
+    if decision and decision["status"] == WINNER:
         return {decision["winner"]["model"]}
     return set(BASELINE[role]["models"])
 
@@ -83,7 +83,7 @@ def site_problems(role: str, read: Callable[[str], str], decision: Mapping[str, 
 
 
 def effort_problems(role: str, read: Callable[[str], str], decision: Mapping[str, Any] | None) -> list[str]:
-    if not decision or decision["status"] == TIE:
+    if not decision or decision["status"] != WINNER:
         return []
     keep, drop = decision["winner"]["effort"], {"high", "xhigh"} - {decision["winner"]["effort"]}
     problems = []

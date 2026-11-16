@@ -27,93 +27,178 @@ OPUS_HIGH, OPUS_XHIGH, FABLE_HIGH, FABLE_XHIGH = rec.CANDIDATES
 REGISTRY = json.loads((REPO_ROOT / "config" / "model-registry.json").read_text(encoding="utf-8"))
 
 
-def outcome(passed: dict, cost: dict | None = None) -> list[dict]:
-    """Results for every case and candidate: passed maps (candidate index, case) to a bool, cost maps candidate index to a case cost."""
+def outcome(passed: dict, cost: dict | None = None, wall: dict | None = None) -> list[dict]:
+    """Results for every case and candidate: passed maps (candidate index, case) to a bool; cost and wall map a candidate
+    index, or a (candidate index, case) pair, to that case's cost in dollars and wall time in seconds."""
+    def value(table: dict | None, index: int, case: str, default: float) -> float:
+        return (table or {}).get((index, case), (table or {}).get(index, default))
+
     results = []
     for index, (model, effort) in enumerate(rec.CANDIDATES):
         for case in ROLES:
             results.append({
                 "case": case, "model": model, "effort": effort, "passed": passed.get((index, case), False),
-                "host_model": model, "host_effort": effort, "cost_usd": (cost or {}).get(index, 1.0),
-                "wall_seconds": 30.0, "attempts": 1,
+                "host_model": model, "host_effort": effort, "cost_usd": value(cost, index, case, 1.0),
+                "wall_seconds": value(wall, index, case, 30.0), "attempts": 1,
             })
     return results
 
 
-def record_of(passed: dict, cost: dict | None = None) -> dict:
-    return rec.build_record(84, ROLES, outcome(passed, cost))
+def record_of(passed: dict, cost: dict | None = None, wall: dict | None = None) -> dict:
+    return rec.build_record(84, ROLES, outcome(passed, cost, wall))
 
 
 def wins(index: int, *cases: str) -> dict:
     return {(index, case): True for case in cases}
 
 
+REVIEW = ("T89", "T90", "T91")
+DEBATE = ("T92", "T93")
+
+
+def everyone_passes() -> dict:
+    return {(index, case): True for index in range(4) for case in ROLES}
+
+
 class DecisionRuleTest(unittest.TestCase):
-    def decisions(self, passed: dict, cost: dict | None = None) -> dict:
-        return rec.decisions(record_of(passed, cost))
+    def decisions(self, passed: dict, cost: dict | None = None, wall: dict | None = None) -> dict:
+        return rec.decisions(record_of(passed, cost, wall))
 
-    def test_역할은_자기_사례의_통과_수가_가장_많은_후보를_고른다(self):
-        """검토 사례에서 Opus xhigh만 셋을 통과하면 비싸도 reviewer 승자이고, 토론 사례는 따로 센다."""
+    def winner(self, decided: dict, role: str = "reviewer") -> tuple[str, str] | None:
+        found = decided[role]["winner"]
+        return (found["model"], found["effort"]) if found else None
+
+    def test_한_사례라도_실패한_후보는_싸고_빨라도_자격이_없다(self):
+        """검토 사례 하나를 실패한 후보는 가장 싸고 가장 빨라도 제외되고, 셋을 모두 통과한 비싼 후보가 이긴다."""
         # Given
-        passed = {**wins(1, "T89", "T90", "T91"), **wins(0, "T89", "T90"), **wins(2, "T92", "T93")}
-        cost = {0: 0.5, 1: 9.0, 2: 3.0, 3: 1.0}
+        passed = {**everyone_passes(), (0, "T91"): False}
 
         # When
-        decided = self.decisions(passed, cost)
+        decided = self.decisions(passed, {0: 0.1, 1: 5.0, 2: 6.0, 3: 7.0}, {0: 10.0})
 
         # Then
-        self.assertEqual({"status": "winner", "winner": {"model": rec.OPUS, "effort": "xhigh"}}, decided["reviewer"])
-        self.assertEqual({"status": "winner", "winner": {"model": rec.FABLE, "effort": "high"}}, decided["opponent"])
+        self.assertEqual(OPUS_XHIGH, self.winner(decided))
 
-    def test_통과_수가_같으면_그_사례들의_비용이_가장_낮은_후보를_고른다(self):
-        """네 후보가 같은 수를 통과하면 역할 사례의 비용 합이 가장 낮은 후보가 이기고 다른 역할의 비용은 세지 않는다."""
+    def test_사례를_모두_통과한_후보가_없으면_승자가_없고_기준_핀을_유지한다(self):
+        """역할의 어떤 후보도 모든 사례를 통과하지 못하면 none이고, 그 역할의 핀 위치는 기준 그대로여야 하며, 다른 역할의 판정은 따로 난다."""
         # Given
-        passed = {(index, case): True for index in range(4) for case in ROLES}
-        cost = {0: 4.0, 1: 3.0, 2: 2.0, 3: 5.0}
+        passed = {**wins(0, "T89", "T90"), **wins(1, "T90", "T91"), **wins(2, *DEBATE)}
 
         # When
-        decided = self.decisions(passed, cost)
+        decided = self.decisions(passed)
+        pins = mr_pins.pin_problems(rec.build_record(84, ROLES, outcome(passed)), REGISTRY, real_reader)
 
         # Then
-        self.assertEqual(rec.FABLE, decided["reviewer"]["winner"]["model"])
-        self.assertEqual("high", decided["reviewer"]["winner"]["effort"])
-        self.assertEqual(
-            round(2.0 * 3, 6),
-            next(item for item in record_of(passed, cost)["roles"]["reviewer"]["candidates"] if item["model"] == rec.FABLE and item["effort"] == "high")["cost_usd"],
-        )
+        self.assertEqual({"status": "none", "winner": None}, decided["reviewer"])
+        self.assertEqual(FABLE_HIGH, self.winner(decided, "opponent"))
+        self.assertEqual([], [item for item in pins if "independent-model-validation" in item or "AGENTS" in item])
 
-    def test_통과_수가_적은_후보는_싸도_지지_않을_수_없다(self):
-        """가장 싼 후보가 통과를 하나 덜 하면 더 많이 통과한 비싼 후보가 이긴다."""
+    def test_가장_빠른_후보보다_1_5배_넘고_60초_넘게_느리면_그_사례에서_탈락한다(self):
+        """한 사례에서 가장 빠른 후보보다 1.5배를 넘고 60초를 넘게 느린 후보는, 더 싸도 탈락한다."""
         # Given
-        passed = {**wins(0, "T89", "T90"), **wins(2, "T89", "T90", "T91")}
-        cost = {0: 0.1, 1: 5.0, 2: 8.0, 3: 5.0}
+        wall = {(0, "T89"): 170.0, (1, "T89"): 100.0, (2, "T89"): 100.0, (3, "T89"): 100.0}
+        cost = {0: 0.5, 1: 2.0, 2: 3.0, 3: 4.0}
 
         # When
-        decided = self.decisions(passed, cost)
+        decided = self.decisions(everyone_passes(), cost, wall)
 
         # Then
-        self.assertEqual({"model": rec.FABLE, "effort": "high"}, decided["reviewer"]["winner"])
+        self.assertEqual(OPUS_XHIGH, self.winner(decided))
 
-    def test_통과_수와_비용이_모두_같으면_승자를_정하지_않는다(self):
-        """모든 후보가 같은 수를 통과하고 비용도 같으면 tie이고 승자가 없다."""
+    def test_1_5배를_넘어도_60초_이하로만_느리거나_60초를_넘어도_1_5배_이하면_탈락하지_않는다(self):
+        """20초 대 50초(2.5배, 30초 차), 100초 대 160초(60초 차 정확히), 100초 대 150초(1.5배 정확히)는 탈락하지 않고 싼 후보가 이긴다."""
+        for fast, slow in ((20.0, 50.0), (100.0, 160.0), (100.0, 150.0), (400.0, 600.0)):
+            with self.subTest(fast=fast, slow=slow):
+                # Given
+                wall = {(0, "T89"): slow, (1, "T89"): fast, (2, "T89"): fast, (3, "T89"): fast}
+
+                # When
+                decided = self.decisions(everyone_passes(), {0: 0.5, 1: 2.0, 2: 3.0, 3: 4.0}, wall)
+
+                # Then
+                self.assertEqual(OPUS_HIGH, self.winner(decided))
+
+    def test_비용_차이가_10퍼센트_이내면_동률이고_더_빠른_후보가_이긴다(self):
+        """사례당 비용 10.0달러와 10.9달러는 10퍼센트 안이라 동률이고, 비싼 쪽이 더 빠르면 비싼 쪽이 이긴다."""
+        # Given
+        cost = {0: 10.0, 1: 10.9, 2: 50.0, 3: 50.0}
+        wall = {0: 60.0, 1: 40.0, 2: 40.0, 3: 40.0}
+
         # When
-        decided = self.decisions({})
+        decided = self.decisions(everyone_passes(), cost, wall)
+
+        # Then
+        self.assertEqual(OPUS_XHIGH, self.winner(decided))
+
+    def test_비용_차이가_005달러_이내면_비율이_커도_동률이고_더_빠른_후보가_이긴다(self):
+        """사례당 0.10달러와 0.14달러는 40퍼센트 차이지만 0.05달러 안이라 동률이고, 더 빠른 쪽이 이긴다."""
+        # Given
+        cost = {0: 0.10, 1: 0.14, 2: 5.0, 3: 5.0}
+        wall = {0: 60.0, 1: 40.0, 2: 40.0, 3: 40.0}
+
+        # When
+        decided = self.decisions(everyone_passes(), cost, wall)
+
+        # Then
+        self.assertEqual(OPUS_XHIGH, self.winner(decided))
+
+    def test_비용이_두_허용치_밖이면_더_느려도_싼_후보가_이긴다(self):
+        """사례당 0.10달러와 0.20달러는 10퍼센트와 0.05달러 밖이라 동률이 아니고, 더 느려도 싼 후보가 이긴다."""
+        # Given
+        cost = {0: 0.10, 1: 0.20, 2: 5.0, 3: 5.0}
+        wall = {0: 70.0, 1: 40.0, 2: 40.0, 3: 40.0}
+
+        # When
+        decided = self.decisions(everyone_passes(), cost, wall)
+
+        # Then
+        self.assertEqual(OPUS_HIGH, self.winner(decided))
+
+    def test_사례당_비용은_통과한_사례_수로_나눈_값이고_다른_역할의_비용은_세지_않는다(self):
+        """역할의 후보 비용과 시간은 그 역할의 사례만 합치고, 토론 사례의 큰 비용은 검토 판정에 들어가지 않는다."""
+        # Given
+        cost = {(0, "T92"): 90.0, (0, "T93"): 90.0, 0: 1.0, 1: 2.0, 2: 3.0, 3: 4.0}
+        record = record_of(everyone_passes(), cost)
+
+        # When
+        reviewer = {(item["model"], item["effort"]): item for item in record["roles"]["reviewer"]["candidates"]}
+
+        # Then
+        self.assertEqual(OPUS_HIGH, self.winner(rec.decisions(record)))
+        self.assertEqual((3.0, 90.0), (reviewer[OPUS_HIGH]["cost_usd"], reviewer[OPUS_HIGH]["wall_seconds"]))
+
+    def test_모든_후보가_같은_비용과_시간으로_통과하면_승자를_정하지_않는다(self):
+        """모든 후보가 사례를 다 통과하고 비용과 시간이 같으면 tie이고 승자가 없다."""
+        # When
+        decided = self.decisions(everyone_passes())
 
         # Then
         self.assertEqual({"status": "tie", "winner": None}, decided["reviewer"])
         self.assertEqual({"status": "tie", "winner": None}, decided["opponent"])
 
-    def test_Opus가_이기면_그_역할은_Opus_모델을_고른다(self):
-        """토론 사례에서 Opus high가 가장 싸게 같은 수를 통과하면 opponent 승자는 Opus이다."""
+    def test_서로_다른_사례에서_모두_탈락하면_승자가_없다(self):
+        """후보 둘이 각자 다른 사례에서 가장 빠른 후보보다 크게 느려 모두 탈락하면 none이다."""
         # Given
-        passed = {(index, case): True for index in range(4) for case in ("T92", "T93")}
+        passed = {(index, case): True for index in (0, 1) for case in ROLES}
+        wall = {(0, "T89"): 10.0, (1, "T89"): 100.0, (0, "T90"): 100.0, (1, "T90"): 10.0}
+
+        # When
+        decided = self.decisions(passed, None, wall)
+
+        # Then
+        self.assertEqual({"status": "none", "winner": None}, decided["reviewer"])
+
+    def test_Opus가_이기면_그_역할은_Opus_모델을_고른다(self):
+        """토론 사례에서 Opus high가 가장 싸게 모두 통과하면 opponent 승자는 Opus이다."""
+        # Given
+        passed = {(index, case): True for index in range(4) for case in DEBATE}
         cost = {0: 1.0, 1: 2.0, 2: 3.0, 3: 4.0}
 
         # When
         decided = self.decisions(passed, cost)
 
         # Then
-        self.assertEqual({"model": rec.OPUS, "effort": "high"}, decided["opponent"]["winner"])
+        self.assertEqual(OPUS_HIGH, self.winner(decided, "opponent"))
 
 
 class RecordFormatTest(unittest.TestCase):

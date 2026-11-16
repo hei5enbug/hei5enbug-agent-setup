@@ -1,8 +1,11 @@
-"""The record of the Fable-versus-Opus comparison, and the decision rule it applies to each role.
+"""The record of the Fable-versus-Opus comparison, and the efficiency rule it applies to each role.
 
 Four candidates run every case once. The reviewer role counts only the review cases and the opponent role only the
-debate cases. A role pins the candidate with the most passes on its cases; among candidates tied on passes, the one
-with the lowest cost on those cases; two candidates tied on both leave the role undecided for the owner.
+debate cases. A role keeps the candidates that passed every one of its cases; when none did, the role has no winner
+and keeps its baseline pin. Among the kept candidates, one that is slower than the fastest by more than 1.5 times and
+by more than 60 seconds on any case is dropped, measured against the fastest of the kept candidates on that case. Of the
+rest, the lowest cost per passing case wins; costs within 10 percent or within $0.05 of the lowest tie, and the lowest
+summed wall time over the role's cases decides the tie. Candidates tied on that too leave the role undecided, and a role where every kept candidate is dropped has no winner.
 """
 
 from __future__ import annotations
@@ -20,7 +23,12 @@ PENDING = "pending"
 RECORDED = "recorded"
 WINNER = "winner"
 TIE = "tie"
+NONE = "none"
 TOLERANCE = 1e-6
+SLOW_RATIO = 1.5
+SLOW_SECONDS = 60.0
+TIE_RATIO = 0.10
+TIE_USD = 0.05
 RESULT_KEYS = {
     "case", "model", "effort", "passed", "host_model", "host_effort", "cost_usd", "wall_seconds", "attempts",
 }
@@ -35,7 +43,7 @@ def role_cases(roles_by_case: Mapping[str, str], role: str) -> list[str]:
 
 
 def candidate_stats(results: Sequence[Mapping[str, Any]], cases: Sequence[str]) -> list[dict[str, Any]]:
-    """Return each candidate's passes and total cost over the given cases, in candidate order."""
+    """Return each candidate's passes, total cost, and total wall time over the given cases, in candidate order."""
     stats = []
     for model, effort in CANDIDATES:
         own = [
@@ -46,24 +54,55 @@ def candidate_stats(results: Sequence[Mapping[str, Any]], cases: Sequence[str]) 
             "model": model, "effort": effort,
             "passes": sum(1 for item in own if item["passed"]),
             "cost_usd": round(sum(item["cost_usd"] for item in own), 6),
+            "wall_seconds": round(sum(item["wall_seconds"] for item in own), 3),
         })
     return stats
 
 
-def decide(stats: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """Return the role's decision: the candidate with the most passes, then the lowest cost, or a tie on both."""
-    best = max(item["passes"] for item in stats)
-    top = [item for item in stats if item["passes"] == best]
-    cheapest = min(item["cost_usd"] for item in top)
-    winners = [item for item in top if item["cost_usd"] - cheapest <= TOLERANCE]
+def wall_of(results: Sequence[Mapping[str, Any]], candidate: tuple[str, str], case: str) -> float:
+    return next(
+        item["wall_seconds"] for item in results
+        if (item["model"], item["effort"]) == candidate and item["case"] == case
+    )
+
+
+def too_slow(wall: float, fastest: float) -> bool:
+    """True when a wall time is above 1.5 times the fastest and more than 60 seconds above it."""
+    return wall > SLOW_RATIO * fastest and wall - fastest > SLOW_SECONDS
+
+
+def cost_tied(cost: float, cheapest: float) -> bool:
+    """True when a cost per passing case is within 10 percent or within $0.05 of the lowest."""
+    gap = cost - cheapest
+    return gap <= TIE_RATIO * cheapest + TOLERANCE or gap <= TIE_USD + TOLERANCE
+
+
+def decide(results: Sequence[Mapping[str, Any]], cases: Sequence[str]) -> dict[str, Any]:
+    """Return the role's decision: a winner, a tie that decides nothing, or none when no candidate passed every case."""
+    stats = candidate_stats(results, cases)
+    kept = [item for item in stats if item["passes"] == len(cases)]
+    if not kept:
+        return {"status": NONE, "winner": None}
+    labels = [(item["model"], item["effort"]) for item in kept]
+    for case in cases:
+        fastest = min(wall_of(results, label, case) for label in labels)
+        kept = [
+            item for item in kept
+            if not too_slow(wall_of(results, (item["model"], item["effort"]), case), fastest)
+        ]
+    if not kept:
+        return {"status": NONE, "winner": None}
+    cheapest = min(item["cost_usd"] for item in kept) / len(cases)
+    close = [item for item in kept if cost_tied(item["cost_usd"] / len(cases), cheapest)]
+    quickest = min(item["wall_seconds"] for item in close)
+    winners = [item for item in close if item["wall_seconds"] - quickest <= TOLERANCE]
     if len(winners) != 1:
         return {"status": TIE, "winner": None}
     return {"status": WINNER, "winner": {"model": winners[0]["model"], "effort": winners[0]["effort"]}}
 
 
 def role_block(results: Sequence[Mapping[str, Any]], cases: Sequence[str]) -> dict[str, Any]:
-    stats = candidate_stats(results, cases)
-    return {"cases": list(cases), "candidates": stats, "decision": decide(stats)}
+    return {"cases": list(cases), "candidates": candidate_stats(results, cases), "decision": decide(results, cases)}
 
 
 def build_record(issue: int, roles_by_case: Mapping[str, str], results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -129,10 +168,11 @@ def _blocks_match(given: Any, wanted: Mapping[str, Any]) -> bool:
             return False
         for got, want in zip(stats, block["candidates"]):
             keys = ("model", "effort", "passes")
-            if any(got.get(key) != want[key] for key in keys) or not _number(got.get("cost_usd")):
+            if any(got.get(key) != want[key] for key in keys):
                 return False
-            if abs(got["cost_usd"] - want["cost_usd"]) > TOLERANCE:
-                return False
+            for key in ("cost_usd", "wall_seconds"):
+                if not _number(got.get(key)) or abs(got[key] - want[key]) > TOLERANCE:
+                    return False
     return True
 
 
