@@ -52,6 +52,15 @@ repository README; only its unit tests are.
    these limits under `instruction_isolation`. `pilot-check` fails a run whose command line does not name
    `--setting-sources` without `user`, whose `env.json` lacks the variable, whose transcripts carry an instruction
    file of the `User` type (it names the path), or whose init event shows `memory_paths.auto`.
+
+   Claude Code also loads `CLAUDE.md`, `CLAUDE.local.md`, `.claude/CLAUDE.md`, `AGENTS.md`, and `.claude/rules/` of
+   every directory above the working directory as project memory, whatever the sources say, so a run folder under
+   the home folder would read the profile's own rules. `settings.json` therefore carries `claudeMdExcludes` with
+   those files of each ancestor of the trial repository, by its given and its resolved path, and the repository
+   itself and below load as the fixture defines them. The memory documentation names `claudeMdExcludes` for this;
+   its `managed-only` value would also drop the fixture's own files. A variant's own `claudeMdExcludes` entries
+   stay, and the harness patterns are added. `pilot-check` also fails a run whose transcripts carry an instruction
+   file of any type outside the trial repository and the exported plugin, and names the path.
 4. A wall-clock limit per task stops the agent with SIGINT, then SIGTERM, then SIGKILL. The signals reach the
    agent's process group and every process it started in a session of its own, such as a role runner child, and the
    harness confirms that none is left.

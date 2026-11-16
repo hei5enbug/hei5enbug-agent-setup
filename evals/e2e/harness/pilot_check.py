@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, TextIO
 
@@ -11,6 +12,11 @@ from .matrix import campaign_dir, read_json
 
 AUTO_MEMORY_OFF_ENV = "CLAUDE_CODE_DISABLE_AUTO_MEMORY"
 REQUIRED_FLAGS = ("--plugin-dir", "--settings", "--permission-prompt-tool", "--max-budget-usd", "--strict-mcp-config", "--setting-sources")
+
+
+def own_roots(*paths: Any) -> list[Path]:
+    """The given folders by their given and their resolved path; a path that is empty names no folder."""
+    return [root for path in paths if path for root in (Path(os.path.abspath(str(path))), Path(str(path)).resolve())]
 
 
 def command_problems(argv: list[str]) -> list[str]:
@@ -36,13 +42,17 @@ def check_run(result_dir: Path) -> list[tuple[str, bool, str]]:
     argv = (read_json(result_dir / "command.json", {}) or {}).get("argv", [])
     problems = command_problems(argv)
     isolation = (read_json(result_dir / "env.json", {}) or {}).get("instruction_isolation") or {}
-    user_files = metrics.user_instruction_files([*main, *(event for record in subagents for event in record["events"])])
+    events = [*main, *(event for record in subagents for event in record["events"])]
+    user_files = metrics.user_instruction_files(events)
+    cwd = (read_json(result_dir / "command.json", {}) or {}).get("cwd")
+    outside = metrics.instruction_files_outside(events, own_roots(cwd, expected))
     return [
         ("result message present", facts["has_result"], str(run.get("status"))),
         ("plugin loaded from the exported directory", plugin["loaded_from_export"], expected),
         ("installed plugin absent", plugin["installed_absent"], ""),
         ("no plugin besides the variant", not plugin["extra_plugins"], ", ".join(plugin["extra_plugins"])),
         ("no user-level memory or rule file loaded", not user_files, ", ".join(user_files)),
+        ("no instruction file outside the trial repo and the exported plugin", not outside, ", ".join(outside)),
         ("auto memory switched off for the run", AUTO_MEMORY_OFF_ENV in isolation.get("env", {}) and isolation["env"][AUTO_MEMORY_OFF_ENV] == "1", ""),
         ("no auto memory path in the init event", not facts["auto_memory_path"], str(facts["auto_memory_path"])),
         ("mod marker in the main transcript", plugin["mod_marker_present"], MOD_MARKER),

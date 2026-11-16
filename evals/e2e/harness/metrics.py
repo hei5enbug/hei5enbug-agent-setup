@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from pathlib import Path
 from typing import Any
 
 from .config import (
@@ -31,16 +32,26 @@ def stream_facts(events: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def user_instruction_files(events: list[dict[str, Any]]) -> list[str]:
-    """Paths of the user-level memory and rule files that instruction attachments of a transcript carry."""
-    paths: set[str] = set()
+def instruction_files(events: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    """(path, type) of every instruction file that the instruction attachments of a transcript carry."""
+    found: set[tuple[str, str]] = set()
     for event in events:
         attachment = event.get("attachment")
         files = attachment.get("files") if isinstance(attachment, dict) and attachment.get("type") == "instructions" else None
         for item in files if isinstance(files, list) else []:
-            if isinstance(item, dict) and item.get("type") in USER_INSTRUCTION_TYPES:
-                paths.add(str(item.get("path")))
-    return sorted(paths)
+            if isinstance(item, dict):
+                found.add((str(item.get("path")), str(item.get("type"))))
+    return sorted(found)
+
+
+def user_instruction_files(events: list[dict[str, Any]]) -> list[str]:
+    """Paths of the user-level memory and rule files that instruction attachments of a transcript carry."""
+    return sorted({path for path, kind in instruction_files(events) if kind in USER_INSTRUCTION_TYPES})
+
+
+def instruction_files_outside(events: list[dict[str, Any]], roots: list[Path]) -> list[str]:
+    """Paths of instruction files, of any type, that lie under none of `roots`, such as an ancestor folder's rules."""
+    return sorted({path for path, _ in instruction_files(events) if not any(Path(path).is_relative_to(root) for root in roots)})
 
 
 BUILTIN_SUFFIX = "@builtin"

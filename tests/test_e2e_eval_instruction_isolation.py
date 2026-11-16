@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "evals/e2e"))
@@ -18,6 +20,8 @@ from harness import command, environment, matrix, metrics, pilot_check, runner  
 VARIANT_PLUGIN = {"name": "hei5enbug-agent-setup", "source": "hei5enbug-agent-setup@inline", "path": "/tmp/work/export"}
 USER_RULE = "/home/test/.claude/rules/common/coding-style.md"
 PROJECT_FILE = "/tmp/work/repo/AGENTS.md"
+TRIAL_REPO = "/tmp/work/repo"
+ANCESTOR_RULE = "/home/test/.claude/rules/common/testing.md"
 TASK = {"limits": {"wall_seconds": 60, "max_budget_usd": 7}, "env": {}}
 
 
@@ -107,6 +111,71 @@ class CommandAndEnvironmentTest(unittest.TestCase):
         self.assertNotIn("instruction_isolation", codex)
 
 
+class AncestorExcludeTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name).resolve()
+        (self.root / "real" / "work").mkdir(parents=True)
+        (self.root / "link").symlink_to(self.root / "real")
+
+    def test_작업_폴더_위의_모든_폴더가_지침_파일별로_제외되고_작업_폴더_자신은_빠진다(self):
+        """각 상위 폴더에 CLAUDE.md, CLAUDE.local.md, AGENTS.md, .claude/ 아래 파일과 rules가 있고 저장소 폴더 항목은 없다."""
+        # given
+        repo = self.root / "real" / "work" / "repo"
+
+        # when
+        patterns = command.ancestor_excludes(repo)
+
+        # then
+        for folder in (self.root / "real" / "work", self.root / "real", self.root, Path("/")):
+            base = str(folder).rstrip("/")
+            for name in ("CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md", ".claude/rules/**"):
+                self.assertIn(f"{base}/{name}", patterns)
+        self.assertFalse([item for item in patterns if item.startswith(f"{repo}/")])
+
+    def test_심볼릭_링크로_들어간_작업_폴더는_링크_경로와_실제_경로_모두의_상위를_제외한다(self):
+        """링크 경로로 준 작업 폴더의 상위 두 갈래가 모두 패턴에 들어간다."""
+        # given
+        repo = self.root / "link" / "work" / "repo"
+
+        # when
+        patterns = command.ancestor_excludes(repo)
+
+        # then
+        self.assertIn(f"{self.root}/link/work/CLAUDE.md", patterns)
+        self.assertIn(f"{self.root}/real/work/.claude/rules/**", patterns)
+
+    def test_실행_설정은_변형의_제외_목록을_지우지_않고_상위_패턴을_붙인다(self):
+        """변형이 claudeMdExcludes를 적어도 병합 뒤 그 항목과 상위 패턴이 모두 있고, 패턴이 없으면 키가 없다."""
+        # given
+        variant = command.validate_variant({"name": "v", "ref": "HEAD", "settings": {"claudeMdExcludes": ["**/own.md"]}})
+
+        # when
+        settings = command.run_settings(variant, [], ["/a/CLAUDE.md"])
+        plain = command.run_settings(command.validate_variant({"name": "v", "ref": "HEAD"}))
+
+        # then
+        self.assertEqual(settings["claudeMdExcludes"], ["**/own.md", "/a/CLAUDE.md"])
+        self.assertNotIn("claudeMdExcludes", plain)
+
+    def test_실행_폴더에_쓰는_settings_json에_상위_폴더_제외가_들어간다(self):
+        """write_run_files가 쓴 settings.json의 claudeMdExcludes에 작업 폴더 위 폴더의 규칙 폴더 패턴이 있다."""
+        # given
+        cfg = command.HarnessConfig(run_root=self.root / "runs")
+        spec = matrix.make_spec(cfg.run_root, "camp", "T13", "baseline", 1)
+        variant = command.validate_variant({"name": "baseline", "ref": "HEAD"})
+
+        # when
+        with mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": str(self.root / "profile")}):
+            runner.write_run_files(spec, TASK, variant, "prompt", cfg, {"path": "/tmp/p"})
+
+        # then
+        written = json.loads((spec.result_dir / "settings.json").read_text(encoding="utf-8"))
+        self.assertIn(f"{self.root}/runs/camp/.claude/rules/**", written["claudeMdExcludes"])
+        self.assertIn(f"{self.root}/runs/camp/work/T13-baseline-r1/CLAUDE.local.md", written["claudeMdExcludes"])
+
+
 class PilotCheckInstructionTest(unittest.TestCase):
     def seed(self, root: Path, main: list[dict[str, Any]], init: dict[str, Any], isolated: bool = True) -> Path:
         spec = matrix.make_spec(root, "camp", "T13", "baseline", 1)
@@ -117,7 +186,7 @@ class PilotCheckInstructionTest(unittest.TestCase):
         (folder / "transcripts").mkdir()
         (folder / "transcripts" / "main.jsonl").write_text("\n".join(json.dumps(event) for event in main) + "\n", encoding="utf-8")
         argv = command.build_command(command.HarnessConfig(), TASK, command.validate_variant({"name": "b", "ref": "HEAD"}), "p", "/tmp/p", folder)
-        matrix.write_json(folder / "command.json", {"argv": argv})
+        matrix.write_json(folder / "command.json", {"argv": argv, "cwd": TRIAL_REPO})
         matrix.write_json(folder / "env.json", {"instruction_isolation": runner.INSTRUCTION_ISOLATION} if isolated else {})
         return folder
 
@@ -141,6 +210,20 @@ class PilotCheckInstructionTest(unittest.TestCase):
         self.assertIn(f"FAIL no user-level memory or rule file loaded: {USER_RULE}", dirty_out)
         self.assertNotIn(PROJECT_FILE, dirty_out)
         self.assertIn("PASS no user-level memory or rule file loaded", clean_out)
+
+    def test_저장소_밖_상위_폴더의_Project_유형_규칙_파일도_실패하고_경로를_밝힌다(self):
+        """User가 아닌 Project 유형이라도 저장소와 플러그인 밖 경로면 FAIL 줄에 나오고, 저장소와 플러그인 안 파일은 PASS이다."""
+        # given
+        dirty = [instructions((ANCESTOR_RULE, "Project"), (PROJECT_FILE, "Project"))]
+        clean = [instructions((PROJECT_FILE, "Project"), ("/tmp/work/export/rules/a.md", "Project"))]
+
+        # when
+        dirty_out, clean_out = self.check(dirty, init_event()), self.check(clean, init_event())
+
+        # then
+        self.assertIn(f"FAIL no instruction file outside the trial repo and the exported plugin: {ANCESTOR_RULE}", dirty_out)
+        self.assertNotIn(PROJECT_FILE, dirty_out)
+        self.assertIn("PASS no instruction file outside the trial repo and the exported plugin", clean_out)
 
     def test_init_이벤트에_자동_메모리_경로가_있으면_실패한다(self):
         """memory_paths.auto가 있는 실행은 FAIL 줄에 그 경로가 나오고 없는 실행은 PASS이다."""

@@ -51,6 +51,14 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
    `~/.claude.json`은 알려진 한계로 남는다. `env.json`은 출처, 변수, 이 한계를 `instruction_isolation`에 기록한다.
    `pilot-check`는 `user` 없는 `--setting-sources`가 명령줄에 없거나, `env.json`에 그 변수가 없거나, 기록에 `User`
    유형의 지침 파일이 있거나(경로를 밝힌다), init 이벤트에 `memory_paths.auto`가 보이는 실행을 실패시킨다.
+
+   Claude Code는 설정 출처와 상관없이 작업 폴더 위 모든 폴더의 `CLAUDE.md`, `CLAUDE.local.md`, `.claude/CLAUDE.md`,
+   `AGENTS.md`, `.claude/rules/`도 프로젝트 메모리로 불러온다. 그래서 실행 폴더가 홈 폴더 아래에 있으면 프로필 자신의
+   규칙을 읽게 된다. 그래서 `settings.json`은 시험 저장소의 모든 상위 폴더에 있는 이 파일들을, 주어진 경로와 해석한
+   경로 양쪽으로 적은 `claudeMdExcludes`로 담고, 저장소 자신과 그 아래는 픽스처가 정한 대로 올라온다. 메모리 문서가
+   이 용도로 가리키는 것이 `claudeMdExcludes`이며, 다른 값인 `managed-only`는 픽스처 자신의 파일까지 뺀다. 변형이 적은
+   `claudeMdExcludes` 항목은 그대로 두고 하네스 패턴을 더한다. `pilot-check`는 기록에 시험 저장소와 내보낸 플러그인 밖의
+   지침 파일이 있으면 유형과 상관없이 실패시키고 그 경로를 밝힌다.
 4. 작업마다 정한 실제 경과 시간 제한에 걸리면 에이전트에 SIGINT, SIGTERM, SIGKILL을 차례로 보낸다. 신호는
    에이전트의 프로세스 그룹과, role runner 자식처럼 에이전트가 별도 세션으로 시작한 모든 프로세스에 가고, 하네스는
    남은 프로세스가 없는지 확인한다.

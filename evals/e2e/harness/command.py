@@ -9,7 +9,7 @@ from typing import Any, Iterable
 
 from .config import (
     AGENT_EFFORT, APPROVER_SERVER, APPROVER_TOOL, CLAUDE_SETTING_SOURCES, FORBIDDEN_ARGS, HARNESS_DIR, HOST_CLAUDE, HOSTS,
-    INSTALLED_PLUGIN_KEY, MAIN_MODELS, RESERVED_ARGS, HarnessConfig,
+    ANCESTOR_INSTRUCTION_FILES, INSTALLED_PLUGIN_KEY, MAIN_MODELS, RESERVED_ARGS, HarnessConfig,
 )
 
 APPROVER_SCRIPT = HARNESS_DIR / "approval_mcp.py"
@@ -102,14 +102,27 @@ def merge_settings(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any
     return merged
 
 
-def run_settings(variant: dict[str, Any], profile_plugins: Iterable[str] = ()) -> dict[str, Any]:
-    """Default settings plus the variant's; the installed plugin and every plugin of the profile stay off whatever the variant says.
+def ancestor_excludes(cwd: Path) -> list[str]:
+    """`claudeMdExcludes` patterns for every instruction file of each directory above `cwd`, by its resolved and its given path.
+
+    Claude Code loads `CLAUDE.md`, `CLAUDE.local.md`, `.claude/CLAUDE.md`, and `.claude/rules/` of every ancestor of the working
+    directory as project memory whatever `--setting-sources` says; `cwd` itself and below stay as the fixture defines them."""
+    ancestors = dict.fromkeys(str(parent) for base in (cwd.absolute(), cwd.resolve()) for parent in base.parents)
+    return [f"{folder.rstrip('/')}/{name}" for folder in ancestors for name in ANCESTOR_INSTRUCTION_FILES]
+
+
+def run_settings(variant: dict[str, Any], profile_plugins: Iterable[str] = (), ancestor_patterns: Iterable[str] = ()) -> dict[str, Any]:
+    """Default settings plus the variant's; the installed plugin and every plugin of the profile stay off whatever the variant says,
+    and the ancestor instruction files named by `ancestor_patterns` stay excluded next to any `claudeMdExcludes` of the variant.
 
     The variant under test loads through `--plugin-dir`, so no `enabledPlugins` entry names it."""
     off = {key: False for key in (*profile_plugins, INSTALLED_PLUGIN_KEY)}
     merged = merge_settings({"enabledPlugins": off}, variant["settings"])
     enabled = merged.get("enabledPlugins")
-    return {**merged, "enabledPlugins": {**(enabled if isinstance(enabled, dict) else {}), **off}}
+    own = merged.get("claudeMdExcludes")
+    excludes = list(dict.fromkeys([*(own if isinstance(own, list) else []), *ancestor_patterns]))
+    return {**merged, "enabledPlugins": {**(enabled if isinstance(enabled, dict) else {}), **off},
+            **({"claudeMdExcludes": excludes} if excludes else {})}
 
 
 def mcp_config(approval_log: Path, run_folder: Path | None = None, cwd: Path | None = None) -> dict[str, Any]:
