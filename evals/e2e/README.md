@@ -285,7 +285,11 @@ solution in `tasks/reference/` passes.
 Prompts are in Korean, as the real user writes them. The fixtures are fictional repositories with the conventions a
 real one has: a README, an `AGENTS.md` with a Korean mirror rule, tests, and Korean mirrors. T21 runs with
 `ORCA_TERMINAL_HANDLE` set and a fake `orca` first on `PATH`, built by `tasks/setup/fake_orca.py`; it keeps its state
-in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval_orca_cleanup.py`.
+in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval_orca_cleanup.py`. T81 runs with a fake
+`orca`, `claude`, and `codex` first on `PATH`, built by `tasks/setup/T81.py`, an installed copy of the plugin, and two
+seeded sessions; it keeps its state in `orca-state/` and `plugin-state/` beside the repository and its tests are in
+`tests/test_e2e_eval_refresh_reload.py`. The fake commands cannot start a real session or a detached helper's
+long wait, so the task covers only what the call log and the final answer show.
 
 | Task | Fixture | Path it exercises | Request |
 |---|---|---|---|
@@ -310,6 +314,7 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T19 | ops-notes | Shared document | Wiki draft of about 1,600 characters for a 1,500-character budget |
 | T20 | notes-cli | Final report | Small change with tests, then a report |
 | T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
+| T81 | notes-cli | Orca plugin refresh | Apply the installed plugin version to running sessions, one of which waits only on a background task, with fake `orca`, `claude`, and `codex` |
 
 ## Comparing a change on both hosts
 

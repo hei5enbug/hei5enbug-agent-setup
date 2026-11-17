@@ -1,0 +1,62 @@
+{
+  "id": "T81",
+  "title": "Apply the installed plugin version to a session that waits on a background task",
+  "category": "orca",
+  "path": "Orca plugin refresh sends the reload to a session whose turn ended with a background task running",
+  "fixture": "notes-cli",
+  "prompt_file": "prompts/T81.txt",
+  "setup": "setup/T81.py",
+  "env": {
+    "ORCA_TERMINAL_HANDLE": "term_demo_self",
+    "ORCA_USER_DATA_PATH": "{work}/orca-user",
+    "XDG_STATE_HOME": "{work}/xdg-state",
+    "FAKE_ORCA_STATE": "{work}/orca-state/state.json",
+    "FAKE_PLUGIN_STATE": "{work}/plugin-state/state.json",
+    "DISABLE_UPDATES": "1",
+    "PATH": "{work}/fake-bin:{PATH}"
+  },
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 4
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "reload-sent-to-running-session",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "reload_sent_to_running_session"
+    },
+    {
+      "id": "nothing-else-sent-to-running-session",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "nothing_else_sent_to_running_session"
+    },
+    {
+      "id": "nothing-sent-to-control-session",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "nothing_sent_to_control_session"
+    },
+    {
+      "id": "running-session-not-reported-unfinished",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "running_session_not_reported_unfinished"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}
