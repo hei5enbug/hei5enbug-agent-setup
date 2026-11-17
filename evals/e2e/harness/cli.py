@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 if __package__ in (None, ""):
     sys.path[0] = str(Path(__file__).resolve().parents[1])
 
-from harness import campaign, command, plugin_export, records, summarize  # noqa: E402
+from harness import campaign, command, plugin_export, records, rule_groups, summarize  # noqa: E402
 from harness.config import DEFAULT_PARALLEL, DEFAULT_RUN_ROOT, EXIT_FAILURE, HOST_CLAUDE, HarnessConfig  # noqa: E402
 from harness.pilot_check import pilot_check  # noqa: E402
 
@@ -57,6 +58,10 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(check)
     check.add_argument("--campaign", required=True)
     check.add_argument("--run-ids", help="comma-separated run ids; default all")
+    groups = sub.add_parser("rule-groups", help="list every rule group of the session instructions with its bytes and mapped checks")
+    add_common(groups)
+    groups.add_argument("--ref", help="read the session files from this revision; default the working tree")
+    groups.add_argument("--json", action="store_true", help="print the groups as JSON")
     record = sub.add_parser("record", help="judge a before and an after variant on both hosts and write its record")
     add_common(record)
     record.add_argument("--campaign", required=True)
@@ -122,8 +127,27 @@ def do_record(args: argparse.Namespace, cfg: HarnessConfig) -> int:
     return 0
 
 
+def do_rule_groups(args: argparse.Namespace, cfg: HarnessConfig) -> int:
+    read = rule_groups.revision_reader(cfg.repo_root, args.ref) if args.ref else rule_groups.tree_reader(cfg.repo_root)
+    try:
+        groups = rule_groups.group_map(read, rule_groups.task_rules(rule_groups.load_tasks(cfg.tasks_root)))
+    except rule_groups.RemovalError as error:
+        raise command.ConfigError(str(error)) from error
+    if args.json:
+        sys.stdout.write(json.dumps(groups, indent=2, ensure_ascii=False) + "\n")
+        return 0
+    for group in groups:
+        sys.stdout.write(f"{group['bytes']:>5}  {group['status']:<10} {group['id']}  [{', '.join(group['checks'])}]\n")
+    parts = [group for group in groups if group["kind"] != "section"]
+    sys.stdout.write(f"groups: {len(parts)} parts, {sum(group['bytes'] for group in parts)} bytes; "
+                     f"unmeasured: {sum(1 for group in parts if group['status'] == 'unmeasured')}\n")
+    return 0
+
+
 def dispatch(args: argparse.Namespace) -> int:
     cfg = config_from(args)
+    if args.action == "rule-groups":
+        return do_rule_groups(args, cfg)
     if args.action == "run":
         return do_run(args, cfg)
     if args.action == "summarize":

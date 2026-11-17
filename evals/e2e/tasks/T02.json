@@ -74,6 +74,38 @@
       "function": "files_changed"
     }
   ],
+  "rules": [
+    {
+      "check": "hidden-tests",
+      "file": "instructions/session/common.md",
+      "starts_with": "Delegate implementation that changes more than two files"
+    },
+    {
+      "check": "regressions",
+      "file": "instructions/session/common.md",
+      "starts_with": "Delegate implementation that changes more than two files"
+    },
+    {
+      "check": "new-tests",
+      "file": "instructions/session/core.md",
+      "starts_with": "Before writing or editing test code"
+    },
+    {
+      "check": "agent-tests",
+      "file": "instructions/session/core.md",
+      "starts_with": "Before writing or editing test code"
+    },
+    {
+      "check": "readme-shipping",
+      "file": "instructions/session/core.md",
+      "starts_with": "Before writing or editing any documentation file"
+    },
+    {
+      "check": "mirror-updated",
+      "file": "instructions/session/core.md",
+      "starts_with": "Before writing or editing any documentation file"
+    }
+  ],
   "constraints": [
     {
       "id": "korean-mirror",

@@ -65,6 +65,33 @@
       "function": "ran_text_review"
     }
   ],
+  "rules": [
+    {
+      "check": "hidden-tests",
+      "file": "instructions/session/common.md",
+      "starts_with": "Handle short answers, known-path lookups"
+    },
+    {
+      "check": "regressions",
+      "file": "instructions/session/common.md",
+      "starts_with": "Handle short answers, known-path lookups"
+    },
+    {
+      "check": "tests-pass",
+      "file": "instructions/session/common.md",
+      "starts_with": "Handle short answers, known-path lookups"
+    },
+    {
+      "check": "report-check",
+      "file": "instructions/session/common.md",
+      "starts_with": "Before a final report, summary, or text others read"
+    },
+    {
+      "check": "text-review-clean",
+      "file": "instructions/session/common.md",
+      "starts_with": "Before a final report, summary, or text others read"
+    }
+  ],
   "constraints": [],
   "rubric": null
 }

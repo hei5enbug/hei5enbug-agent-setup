@@ -56,7 +56,10 @@ def build_codex_command(cfg: HarnessConfig, variant: dict[str, Any], prompt: str
     ]
 
 
-def setup_commands(cfg: HarnessConfig, plugin_dir: str) -> list[list[str]]:
+def setup_commands(cfg: HarnessConfig, plugin_dir: str | None) -> list[list[str]]:
+    """The commands that install the exported plugin into the run's CODEX_HOME; none for a stock run, which loads no plugin."""
+    if not plugin_dir:
+        return []
     return [
         [cfg.codex_bin, "plugin", "marketplace", "add", plugin_dir],
         [cfg.codex_bin, "plugin", "add", f"{PLUGIN_NAME}@{marketplace_name(plugin_dir)}"],
@@ -94,14 +97,19 @@ def tail(text: str | None) -> str:
 
 
 def prepare_home(
-    cfg: HarnessConfig, result_dir: Path, plugin_dir: str, env: Mapping[str, str], source_home: Path | None = None,
+    cfg: HarnessConfig, result_dir: Path, plugin_dir: str | None, env: Mapping[str, str], source_home: Path | None = None,
     repo: Path | None = None,
 ) -> dict[str, Any]:
     """Create CODEX_HOME and the ZDOTDIR, link the credentials, install the exported plugin, and trust its hooks there.
+    A stock run, with no `plugin_dir`, installs nothing and trusts nothing.
 
     `repo` is the folder the hooks are listed for; it defaults to the result folder. Returns the record."""
     write_zprofile(result_dir / ZDOTDIR_NAME, env.get("PATH"))
     link_auth(result_dir, source_home or auth_home(os.environ))
+    if not plugin_dir:
+        record = {"steps": [], "plugin": "none", "codex_home": CODEX_HOME_NAME, "auth": "symlink"}
+        write_json(result_dir / SETUP_RECORD, record)
+        return record
     steps: list[dict[str, Any]] = []
     for argv in setup_commands(cfg, plugin_dir):
         try:

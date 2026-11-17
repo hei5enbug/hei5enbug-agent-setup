@@ -57,11 +57,12 @@ def instruction_files_outside(events: list[dict[str, Any]], roots: list[Path]) -
 BUILTIN_SUFFIX = "@builtin"
 
 
-def extra_plugins(facts: dict[str, Any]) -> list[str]:
-    """Names of the plugins in the init event other than the variant loaded from the export. A plugin built into
-    Claude Code itself, whose source ends with `@builtin`, is part of the host and not counted."""
+def extra_plugins(facts: dict[str, Any], loaded: bool = True) -> list[str]:
+    """Names of the plugins in the init event other than the variant loaded from the export; for a run that loads no plugin,
+    every plugin, the exported one included. A plugin built into Claude Code itself, whose source ends with `@builtin`, is
+    part of the host and not counted."""
     names = [str(p.get("source") or p.get("name")) for p in facts.get("plugins") or [] if isinstance(p, dict)
-             and not (p.get("name") == PLUGIN_NAME and p.get("source") == INLINE_PLUGIN_SOURCE)
+             and not (loaded and p.get("name") == PLUGIN_NAME and p.get("source") == INLINE_PLUGIN_SOURCE)
              and not str(p.get("source") or "").endswith(BUILTIN_SUFFIX)]
     return sorted(names)
 
@@ -73,7 +74,7 @@ def plugin_checks(
     inline = [p for p in plugins if p.get("name") == PLUGIN_NAME and p.get("source") == INLINE_PLUGIN_SOURCE]
     return {
         "loaded_from_export": any(str(p.get("path")) == expected_path for p in inline),
-        "extra_plugins": extra_plugins(facts),
+        "extra_plugins": extra_plugins(facts, bool(expected_path)),
         "installed_absent": not any(p.get("source") == INSTALLED_PLUGIN_KEY for p in plugins),
         "mod_marker_present": mod_marker_present(transcript_events, MOD_MARKER),
         "subagent_models": agent_models(subagents),

@@ -13,9 +13,11 @@ import tarfile
 from pathlib import Path
 from typing import Any
 
+from . import rule_groups
 from .config import MODEL_CAP, PLUGIN_NAME
 
 SHA_LENGTH = 7
+REMOVE_KEY_LENGTH = 8
 EXPORT_RECORD = "plugin-export.json"
 EXCLUDED_PATHS = ("evals", "docs/ko/evals", "tests/test_e2e_eval_*.py")
 CAP_REPLACEMENTS = {r"claude-fable-\d+(?:-\d+)*": "claude-opus-5-5", r"gpt-\d+(?:\.\d+)*-(?:astra|terra)": "gpt-6.1-sol"}
@@ -105,24 +107,40 @@ def content_digest(root: Path) -> str:
     return hasher.hexdigest()
 
 
-def export_dir(run_root: Path, sha: str) -> Path:
-    return run_root / "plugins" / sha[:SHA_LENGTH] / PLUGIN_NAME
+def remove_key(remove: list[dict[str, str]] | None) -> str:
+    """A short digest of the removed parts, so an export without them never shares a folder with the whole revision."""
+    return hashlib.sha256(json.dumps(remove, sort_keys=True).encode()).hexdigest()[:REMOVE_KEY_LENGTH] if remove else ""
 
 
-def export_plugin(repo_root: Path, run_root: Path, ref: str) -> dict[str, Any]:
+def export_dir(run_root: Path, sha: str, remove: list[dict[str, str]] | None = None) -> Path:
+    key = remove_key(remove)
+    return run_root / "plugins" / (f"{sha[:SHA_LENGTH]}-{key}" if key else sha[:SHA_LENGTH]) / PLUGIN_NAME
+
+
+def stock_plugin() -> dict[str, Any]:
+    """The plugin record of a run that loads no plugin: no revision and no folder."""
+    return {"ref": None, "sha": None, "loaded": False, "cap_transform": None}
+
+
+def export_plugin(repo_root: Path, run_root: Path, ref: str, remove: list[dict[str, str]] | None = None) -> dict[str, Any]:
     """Extract `git archive <ref>` once per sha and return {ref, sha, path}; an existing export is reused.
+
+    `remove` lists parts to leave out of the export, each a file with the first words of a bullet or a paragraph or with a
+    heading; an entry that matches nothing or more than one part fails the export. Such an export has its own folder.
 
     The evaluation folder, its Korean mirror, and its unit tests are left out, so an agent that reads the plugin source cannot see hidden
     tests or reference answers. The cap transform then replaces every model above the model cap and rejects an export that still
     names one. An export made with a different exclusion list or transform is rebuilt."""
     sha = resolve_ref(repo_root, ref)
-    target = export_dir(run_root, sha)
+    remove = list(remove or [])
+    target = export_dir(run_root, sha, remove)
     record = target.parent / EXPORT_RECORD
     if record.is_file() and target.is_dir():
         existing = json.loads(record.read_text(encoding="utf-8"))
-        if existing.get("excluded") == list(EXCLUDED_PATHS) and (existing.get("cap_transform") or {}).get("rules_digest") == cap_rules_digest():
+        if (existing.get("excluded") == list(EXCLUDED_PATHS) and (existing.get("cap_transform") or {}).get("rules_digest") == cap_rules_digest()
+                and existing.get("remove", []) == remove):
             return {**existing, "path": str(target)}
-    staging = target.parent.with_name(f".{sha[:SHA_LENGTH]}.staging")
+    staging = target.parent.with_name(f".{target.parent.name}.staging")
     shutil.rmtree(staging, ignore_errors=True)
     staging.mkdir(parents=True)
     try:
@@ -130,9 +148,13 @@ def export_plugin(repo_root: Path, run_root: Path, ref: str) -> dict[str, Any]:
         archive = _git(repo_root, "archive", "--format=tar", sha, "--", ".", *excludes)
         with tarfile.open(fileobj=io.BytesIO(archive)) as bundle:
             bundle.extractall(staging / PLUGIN_NAME, filter="data")
+        try:
+            removed = rule_groups.apply_removals(staging / PLUGIN_NAME, remove) if remove else []
+        except rule_groups.RemovalError as error:
+            raise ExportError(str(error)) from error
         transform = apply_cap_transform(staging / PLUGIN_NAME)
         info = {"ref": ref, "sha": sha, "excluded": list(EXCLUDED_PATHS), "cap_transform": transform,
-                "content_digest": content_digest(staging / PLUGIN_NAME)}
+                "content_digest": content_digest(staging / PLUGIN_NAME), **({"remove": remove, "removed": removed} if remove else {})}
         (staging / EXPORT_RECORD).write_text(json.dumps(info, indent=2) + "\n", encoding="utf-8")
         shutil.rmtree(target.parent, ignore_errors=True)
         os.replace(staging, target.parent)

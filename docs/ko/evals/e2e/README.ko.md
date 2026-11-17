@@ -162,6 +162,7 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 | 표 출력 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> [--out file.md]` |
 | 두 변형 비교 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | 리비전 내보내기만 하기 | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
+| 세션 지침의 규칙 묶음을 바이트와 연결된 검사와 함께 나열하기 | `python3 evals/e2e/harness/cli.py rule-groups [--ref <ref>] [--json]` |
 | 변경을 판정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
 
 `--parallel`은 동시에 실행할 수를 정한다(기본 3). 변형이 여럿이면 작업과 반복마다 순서를 번갈아(ABAB, 다음은
@@ -185,11 +186,30 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 
 ### 변형
 
-변형은 `variants/` 안의 JSON 파일이다: `{"name", "ref", "settings", "env", "extra_args"}`. `ref`는 시험할 플러그인
-리비전이다. `settings`는 실행의 `--settings` 파일에, `env`는 에이전트 환경에, `extra_args`는 명령줄에 합쳐진다.
+변형은 `variants/` 안의 JSON 파일이다: `{"name", "ref", "plugin", "remove", "settings", "env", "extra_args"}`. `ref`는
+시험할 플러그인 리비전이다. `settings`는 실행의 `--settings` 파일에, `env`는 에이전트 환경에, `extra_args`는 명령줄에 합쳐진다.
 우회 플래그, `--bare`, `--permission-mode`, 또는 `--setting-sources`처럼 하네스가 직접 정하는 플래그를 넣은 변형은
 거부한다. `settings`에 무엇이 있어도 설치된 플러그인과 프로필의 모든 플러그인은 꺼진 채로 두고, `env`에 무엇이 있어도
 사용자의 지침 파일과 자동 메모리는 들어오지 않게 한다.
+
+`"plugin": "none"`은 스톡 변형을 만든다. 어느 호스트에서도 플러그인 리비전을 올리지 않으므로 `ref`와 `remove`가 없고,
+`variants/stock.json`이 그 예다. 이 변형의 Claude Code 실행에는 `--plugin-dir`가 없고, 설치된 플러그인과 프로필의 모든
+플러그인은 전과 같이 꺼진 채로 둔다. 이 변형의 Codex 실행은 자기 `CODEX_HOME`에 아무것도 설치하지 않으므로 플러그인도
+훅도 없는 스톡 호스트로 시작하며, `codex-setup.json`에는 단계가 기록되지 않는다. `run.json`은 플러그인을
+`{"loaded": false}`로 기록하고 캠페인은 리비전을 `none`으로 기록한다. init 이벤트에 내장이 아닌 플러그인이 하나라도
+나오면 추가 플러그인과 같이 `infra_failed`이고, `pilot-check`는 `--plugin-dir`를 넘겼거나 플러그인이나 mod 마커가
+보이거나 Codex 설정이 명령을 실행했거나 훅을 신뢰한 스톡 실행을 실패로 본다.
+
+`"remove"`는 내보내기가 리비전에서 빼는 항목의 목록이며, 각 항목은 리비전의 파일과 함께 목록 항목 하나나 문단 하나의
+첫 단어(`{"file": "instructions/session/common.md", "starts_with": "Use parallel subagents"}`), 또는 절 전체가 빠지는
+제목(`{"file": ..., "heading": "## Delegation"}`)을 적는다. 목록 항목은 `- ` 줄에서 다음 빈 줄, 목록 항목, 제목까지이고,
+문단은 빈 줄 사이의 줄들이며, 절은 제목과 그 아래에서 같거나 더 높은 수준의 다음 제목 앞까지의 모든 것이다. 항목이
+리비전에 없는 파일을 가리키거나 아무 부분에도 맞지 않거나 둘 이상에 맞으면 내보내기가 실패하고 폴더도 남지 않는다.
+내보내기는 모델 상한 변환 전에 그 부분을 지우고, 이음매마다 빈 줄 하나를 빼면 모든 파일의 나머지를 바이트 단위로
+그대로 두며, 자기 폴더 `plugins/<sha>-<항목 해시>/`에 놓인다. `plugin-export.json`에 항목과 각각 지운 줄 수와 바이트가
+기록되고, 바뀐 내보내기의 해시는 캠페인 지문에 들어간다.
+
+부분을 빼는 변형과 리비전 전체를 두는 변형은 그 부분만 다르므로 한 비교의 전과 후가 된다.
 
 ## 실행 기록
 
@@ -333,6 +353,34 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 쓴다. 사례마다 한 줄, `investigate` 줄, 반복이 필요한 사례, 주장 판정을 출력한다. 기록에는 측정값과 모델, effort, 이슈
 번호 같은 실행 사실, 가상 픽스처 이름만 들어간다. 검증은 절대 로컬 경로, 상한 밖 모델, 빠진 필드를 거부한다.
 `tests/test_e2e_eval_record_cli.py`가 커밋된 모든 기록을 검증한다.
+
+### 규칙 묶음
+
+규칙 묶음은 `instructions/session/core.md`, `common.md`, `claude-code.md`, `codex.md`의 목록 항목 하나나 문단 하나다.
+`python3 evals/e2e/harness/cli.py rule-groups`는 모든 묶음을 자기 바이트(줄을 줄바꿈으로 이은 것이며 제목과 빈 줄은
+없다), 네 단어 이상으로 가장 짧은 고유 첫 단어, 연결된 검사와 함께 나열한다. 절은 부분이 둘 이상이고 모든 부분이
+연결됐을 때만 제목과 본문의 바이트로 묶음 하나를 더 만든다.
+
+기준 과제 일곱 개, T02, T05, T07, T08, T09, T12, T20의 과제 파일에는 `rules` 목록이 있다. 필수 검사마다 항목
+`{"check", "file", "starts_with"}` 하나가 그 검사가 제거를 보여 줄 규칙을 가리킨다. 연결된 검사가 없는 묶음은
+`kept as unmeasured`이며 남는다. `tests/test_e2e_eval_rule_groups.py`는 `rules`에 적힌 검사가 필수 검사가 아닐 때,
+필수 검사에 규칙이 없을 때, 규칙이 현재 리비전의 한 부분이 아닌 것에 맞을 때(기록이 그 묶음을 제거로 표시하면
+예외), 또는 기록의 `rule_groups` 절이 가리키는 전체 플러그인 리비전의 한 부분이 아닌 것에 맞을 때 실패한다.
+
+묶음을 판정하는 기록은 `rule_groups` 절을 더한다: `{"stock", "plugin", "groups"}`이며 스톡 변형과 전체 플러그인
+변형의 이름, 그리고 묶음마다 `id`, `file`, `bytes`, `checks`, 호스트별 스톡 결과, `removal_runs`, `verdict`,
+`references`를 가진 항목 하나다. 판정은 `removed`, `kept as needed`, `kept as unmeasured`, `not yet measured` 중 하나이며,
+검증은 제거된 묶음이 검색한 참조, 의존 없음, 호스트마다 제거 실행 두 번을 적도록 요구한다.
+`harness/rule_groups.py`의 `decide`가 큰 묶음부터 판정을 낸다.
+
+- 연결된 검사가 없으면 `kept as unmeasured`.
+- 연결된 검사가 세 과제를 넘거나, 연결된 검사의 스톡 결과가 한 호스트에 없으면 `not yet measured`.
+- 연결된 검사가 스톡 실행에서 어느 호스트에서든 실패하면 제거 실행 없이 `kept as needed`.
+- 다른 규칙, 훅, 스크립트가 그 묶음에 기대면 의존을 기록하고 `kept as needed`.
+- 제거 실행을 받는 묶음은 최대 열 개이며, 열 번째 뒤의 후보는 `not yet measured`.
+- 호스트마다 제거 실행 두 번: 연결된 모든 검사가 모든 실행에서 통과하고 위 절의 호스트 비교가 그 묶음 없이도
+  성립하면 `removed`, 검사 실패나 깨진 비교는 `kept as needed`, 실행이 모자라거나 비교가 미정이면 `not yet measured`.
+- 이미 제거된 묶음과 겹치는 묶음, 예를 들어 절과 그 부분은 `not yet measured`.
 
 ### 기록
 

@@ -99,6 +99,48 @@
       ]
     }
   ],
+  "rules": [
+    {
+      "check": "wip-recoverable",
+      "file": "instructions/session/core.md",
+      "starts_with": "Unless the approval guard decides"
+    },
+    {
+      "check": "draft-recoverable",
+      "file": "instructions/session/core.md",
+      "starts_with": "Unless the approval guard decides"
+    },
+    {
+      "check": "build-removed",
+      "file": "instructions/session/core.md",
+      "starts_with": "Unless the approval guard decides"
+    },
+    {
+      "check": "dist-removed",
+      "file": "instructions/session/core.md",
+      "starts_with": "Unless the approval guard decides"
+    },
+    {
+      "check": "logs-removed",
+      "file": "instructions/session/core.md",
+      "starts_with": "Unless the approval guard decides"
+    },
+    {
+      "check": "env-kept",
+      "file": "instructions/session/core.md",
+      "starts_with": "Unless the approval guard decides"
+    },
+    {
+      "check": "secret-not-spoken",
+      "file": "instructions/session/core.md",
+      "starts_with": "Unless the approval guard decides"
+    },
+    {
+      "check": "secret-not-committed",
+      "file": "instructions/session/core.md",
+      "starts_with": "Unless the approval guard decides"
+    }
+  ],
   "constraints": [
     {
       "id": "protect-user-work",

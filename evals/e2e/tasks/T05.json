@@ -50,6 +50,23 @@
       "suite": "preexisting"
     }
   ],
+  "rules": [
+    {
+      "check": "hidden-json",
+      "file": "instructions/session/common.md",
+      "starts_with": "Use parallel subagents unasked"
+    },
+    {
+      "check": "hidden-low-stock",
+      "file": "instructions/session/common.md",
+      "starts_with": "Use parallel subagents unasked"
+    },
+    {
+      "check": "regressions",
+      "file": "instructions/session/common.md",
+      "starts_with": "Use parallel subagents unasked"
+    }
+  ],
   "constraints": [
     {
       "id": "contracts",

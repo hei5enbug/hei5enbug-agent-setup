@@ -176,6 +176,7 @@ Run every command from the repository root. The default run root is
 | Print tables | `python3 evals/e2e/harness/cli.py summarize --campaign <name> [--out file.md]` |
 | Compare two variants | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | Export a revision only | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
+| List the rule groups of the session instructions with their bytes and mapped checks | `python3 evals/e2e/harness/cli.py rule-groups [--ref <ref>] [--json]` |
 | Judge a change and write its record | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
 
 `--parallel` sets the number of runs at once (default 3). With several variants the order alternates per task and
@@ -201,11 +202,32 @@ task, and `scripts/text_review.py`, which grades the text tasks. A resume whose 
 
 ### Variants
 
-A variant is a JSON file in `variants/`: `{"name", "ref", "settings", "env", "extra_args"}`. `ref` is the plugin
-revision under test. `settings` merges into the run's `--settings` file, `env` into the agent's environment, and
+A variant is a JSON file in `variants/`: `{"name", "ref", "plugin", "remove", "settings", "env", "extra_args"}`. `ref` is
+the plugin revision under test. `settings` merges into the run's `--settings` file, `env` into the agent's environment, and
 `extra_args` into its command line. A variant that adds a bypass flag, `--bare`, `--permission-mode`, or a flag the
 harness sets itself, such as `--setting-sources`, is rejected. The installed plugin and every plugin of the profile
 stay off whatever `settings` says, and the user's instruction files and auto memory stay out whatever `env` says.
+
+`"plugin": "none"` makes a stock variant: no plugin revision loads on either host, so it has no `ref` and no `remove`,
+and `variants/stock.json` is one. A Claude Code run of it has no `--plugin-dir`, and its installed plugin and every
+plugin of the profile stay off as before. A Codex run of it installs nothing into its own `CODEX_HOME`, so it starts
+the stock host with no plugin and no hook; `codex-setup.json` records no step. `run.json` records the plugin as
+`{"loaded": false}` and the campaign records the revision as `none`. A run whose init event lists any plugin that is not
+built in is `infra_failed`, as for an extra plugin, and `pilot-check` fails a stock run that passed `--plugin-dir`, shows
+a plugin or the mod marker, or whose Codex setup ran a command or trusted a hook.
+
+`"remove"` is a list of entries that the export leaves out of the revision, each a file of the revision with the first
+words of one bullet or paragraph (`{"file": "instructions/session/common.md", "starts_with": "Use parallel subagents"}`)
+or with a heading whose whole section goes (`{"file": ..., "heading": "## Delegation"}`). A bullet runs from its `- `
+line to the next blank line, bullet, or heading; a paragraph is the lines between blank lines; a section is a heading and
+everything below it up to the next heading of the same or a higher level. The export fails, and no folder is left,
+when an entry names a file the revision lacks, matches no part, or matches more than one. The export removes the parts
+before the model cap transform, keeps the rest of every file byte for byte except one blank line at each seam, and
+lives in its own folder, `plugins/<sha>-<digest of the entries>/`; `plugin-export.json` records the entries and the
+lines and bytes each removed, and the digest of the changed export is part of the campaign fingerprint.
+
+A variant that removes parts and the variant that keeps the whole revision differ only by those parts, so they are the
+before and after of one comparison.
 
 ## Run records
 
@@ -361,6 +383,37 @@ the `investigate` lines, which cases need repeats, and the claim verdicts. A rec
 such as models, efforts, and issue numbers, and fictional fixture names only; validation rejects an absolute local
 path, a model outside the cap, and a missing field. `tests/test_e2e_eval_record_cli.py` validates every committed
 record.
+
+### Rule groups
+
+A rule group is one bullet or paragraph of `instructions/session/core.md`, `common.md`, `claude-code.md`, or `codex.md`.
+`python3 evals/e2e/harness/cli.py rule-groups` lists every group with its own bytes (its lines joined by newlines, with no
+heading or blank line), its shortest unique first words of at least four words, and the checks mapped to it. A section is
+listed as one more group, with the bytes of its heading and body, only when it holds at least two parts and every part is
+mapped.
+
+Each of the seven baseline tasks, T02, T05, T07, T08, T09, T12, and T20, carries a `rules` list in its task file: one entry
+`{"check", "file", "starts_with"}` for each required check, naming the rule whose removal that check would show. A group
+with no mapped check is `kept as unmeasured` and stays. `tests/test_e2e_eval_rule_groups.py` fails when a check named in
+`rules` is not a required check, when a required check has no rule, and when a rule matches other than one part of the
+current revision, unless a record marks its group removed, or of the whole-plugin revision that a record's `rule_groups`
+section names.
+
+A record that decides rule groups adds a `rule_groups` section: `{"stock", "plugin", "groups"}`, the names of the stock and
+whole-plugin variants and one entry per group with `id`, `file`, `bytes`, `checks`, the stock result per host,
+`removal_runs`, `verdict`, and `references`. The verdict is one of `removed`, `kept as needed`, `kept as unmeasured`, and
+`not yet measured`, and validation requires a removed group to name the references searched, no reliance, and two removal
+runs on each host. `decide` in `harness/rule_groups.py` gives the verdict, largest group first:
+
+- No mapped check: `kept as unmeasured`.
+- Mapped checks in more than three tasks, or a mapped check with no stock result on a host: `not yet measured`.
+- A mapped check that fails in the stock run on either host: `kept as needed`, with no removal run.
+- Another rule, hook, or script relies on the group: `kept as needed`, with the reliance recorded.
+- At most ten groups take removal runs, and a candidate after the tenth is `not yet measured`.
+- Two removal runs per host: every mapped check passes in all of them and the host comparison of the section above holds
+  without the group: `removed`; a failing check or a broken comparison: `kept as needed`; fewer runs or an undecided
+  comparison: `not yet measured`.
+- A group that overlaps an already removed group, such as a section and one of its parts, is `not yet measured`.
 
 ### Records
 

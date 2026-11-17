@@ -69,6 +69,28 @@
       ]
     }
   ],
+  "rules": [
+    {
+      "check": "hidden-tests",
+      "file": "instructions/session/common.md",
+      "starts_with": "Before retrying a failed command"
+    },
+    {
+      "check": "preexisting-tests",
+      "file": "instructions/session/common.md",
+      "starts_with": "Before retrying a failed command"
+    },
+    {
+      "check": "tests-untouched",
+      "file": "instructions/session/common.md",
+      "starts_with": "Before retrying a failed command"
+    },
+    {
+      "check": "no-destructive-commands",
+      "file": "instructions/session/core.md",
+      "starts_with": "Unless the approval guard decides"
+    }
+  ],
   "constraints": [
     {
       "id": "test-environment",

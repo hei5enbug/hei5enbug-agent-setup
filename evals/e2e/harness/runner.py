@@ -26,12 +26,19 @@ def load_graders() -> Any:
     return graders
 
 
-def decide_status(facts: dict[str, Any], limit_reason: str | None, timed_out: bool, interrupted: bool = False) -> str:
+def plugin_loaded(plugin: dict[str, Any] | None) -> bool:
+    """Whether the run loaded an exported plugin; a stock run's plugin record says it loaded none."""
+    return (plugin or {}).get("loaded", True) is not False
+
+
+def decide_status(
+    facts: dict[str, Any], limit_reason: str | None, timed_out: bool, interrupted: bool = False, loaded: bool = True,
+) -> str:
     if interrupted:
         return STATUS_INTERRUPTED
     if limit_reason:
         return STATUS_USAGE_LIMITED
-    if metrics.extra_plugins(facts):
+    if metrics.extra_plugins(facts, loaded):
         return STATUS_INFRA_FAILED
     if timed_out:
         return STATUS_TIMED_OUT
@@ -40,9 +47,10 @@ def decide_status(facts: dict[str, Any], limit_reason: str | None, timed_out: bo
     return STATUS_COMPLETE if facts["has_result"] else STATUS_INFRA_FAILED
 
 
-def contamination_error(facts: dict[str, Any]) -> str | None:
-    names = metrics.extra_plugins(facts)
-    return f"contaminated run: plugins other than the variant were loaded: {', '.join(names)}" if names else None
+def contamination_error(facts: dict[str, Any], loaded: bool = True) -> str | None:
+    names = metrics.extra_plugins(facts, loaded)
+    what = "plugins other than the variant were loaded" if loaded else "a plugin was loaded in a run that loads none"
+    return f"contaminated run: {what}: {', '.join(names)}" if names else None
 
 
 def write_run_files(
@@ -53,7 +61,7 @@ def write_run_files(
     write_json(spec.result_dir / "settings.json", command.run_settings(
         variant, environment.profile_plugin_ids(environment.claude_config_dir()), command.ancestor_excludes(spec.repo)))
     write_json(spec.result_dir / "mcp.json", command.mcp_config(spec.result_dir / "approvals.jsonl", spec.work_dir, spec.repo))
-    argv = command.build_command(cfg, task, variant, prompt, plugin["path"], spec.result_dir)
+    argv = command.build_command(cfg, task, variant, prompt, plugin.get("path"), spec.result_dir)
     write_json(spec.result_dir / "command.json", {"argv": argv, "cwd": str(spec.repo)})
     return argv
 
@@ -66,7 +74,7 @@ def write_codex_run_files(
     argv = codex_host.build_codex_command(cfg, variant, prompt, spec.repo)
     write_json(spec.result_dir / "command.json", {
         "argv": argv, "cwd": str(spec.repo), "env": codex_host.host_env(spec.result_dir),
-        "setup": codex_host.setup_commands(cfg, plugin["path"]), "approval_handling": codex_host.APPROVAL_HANDLING,
+        "setup": codex_host.setup_commands(cfg, plugin.get("path")), "approval_handling": codex_host.APPROVAL_HANDLING,
     })
     return argv
 
@@ -109,7 +117,7 @@ def claude_records(spec: RunSpec, run: dict[str, Any]) -> dict[str, Any]:
     return {
         "view": view, "facts": facts, "claude_report": usage.claude_token_report(by_source),
         "codex_report": usage.codex_token_report(rollouts), "usage_source": usage_source,
-        "checks": metrics.plugin_checks(facts, run["plugin"]["path"], main_events, subagents),
+        "checks": metrics.plugin_checks(facts, run["plugin"].get("path", ""), main_events, subagents),
         "violations": caps.scan_run(stream_events=events, by_source=by_source, tool_calls=view["tool_calls"], rollouts=rollouts),
         "extra": {},
     }
@@ -171,10 +179,11 @@ def finish_run(
     records = {**records, "runner": collect.collect_runner_transcripts(calls, spec.result_dir / "transcripts" / "runner")}
     limit = transcript.usage_limit_reason(events)
     finished = {
-        **run, "status": decide_status(facts, limit, proc.timed_out, proc.interrupted), "returncode": proc.returncode,
+        **run, "status": decide_status(facts, limit, proc.timed_out, proc.interrupted, plugin_loaded(run.get("plugin"))),
+        "returncode": proc.returncode,
         "timed_out": proc.timed_out, "interrupted": proc.interrupted, "wall_seconds": proc.wall_seconds,
         "started_at": proc.started_at.isoformat(), "ended_at": proc.ended_at.isoformat(), "session_id": facts["session_id"], "usage_limit": limit,
-        "error": proc.error or contamination_error(facts), "collected": records, "orphans_killed": proc.orphans_killed,
+        "error": proc.error or contamination_error(facts, plugin_loaded(run.get("plugin"))), "collected": records, "orphans_killed": proc.orphans_killed,
         "leftover_killed": proc.leftover_killed,
     }
     return record_and_analyze(spec, task, finished, cfg, interrupt)
@@ -264,7 +273,7 @@ def execute_run(
         return failed
     if codex:
         try:
-            run["setup"] = codex_host.prepare_home(cfg, spec.result_dir, plugin["path"], env, repo=spec.repo)
+            run["setup"] = codex_host.prepare_home(cfg, spec.result_dir, plugin.get("path"), env, repo=spec.repo)
         except codex_host.CodexSetupError as error:
             failed = {**run, "status": STATUS_INFRA_FAILED, "error": f"codex setup failed: {error}"}
             write_json(spec.result_dir / "run.json", failed)

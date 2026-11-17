@@ -50,6 +50,28 @@
       "suite": "all"
     }
   ],
+  "rules": [
+    {
+      "check": "page-size-50",
+      "file": "instructions/session/common.md",
+      "starts_with": "Handle short answers, known-path lookups"
+    },
+    {
+      "check": "only-config-changed",
+      "file": "instructions/session/core.md",
+      "starts_with": "Do not add design, tests, implementation, or planning"
+    },
+    {
+      "check": "one-line-diff",
+      "file": "instructions/session/core.md",
+      "starts_with": "Do not add design, tests, implementation, or planning"
+    },
+    {
+      "check": "tests-pass",
+      "file": "instructions/session/common.md",
+      "starts_with": "Handle short answers, known-path lookups"
+    }
+  ],
   "constraints": [
     {
       "id": "config-only",

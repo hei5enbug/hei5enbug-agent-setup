@@ -42,10 +42,13 @@ def build_specs(
 
 
 def print_plan(out: TextIO, cfg: HarnessConfig, specs: list[RunSpec], tasks: dict[str, dict], variants: dict[str, dict]) -> None:
-    plugin_paths = {}
+    plugin_paths: dict[str, str | None] = {}
     for name, variant in variants.items():
+        if not command.loads_plugin(variant):
+            plugin_paths[name] = None
+            continue
         sha = plugin_export.resolve_ref(cfg.repo_root, variant["ref"])
-        plugin_paths[name] = str(plugin_export.export_dir(cfg.run_root, sha))
+        plugin_paths[name] = str(plugin_export.export_dir(cfg.run_root, sha, variant["remove"]))
     out.write(f"planned runs: {len(specs)}\n")
     for index, spec in enumerate(specs, start=1):
         task, variant = tasks[spec.task], variants[spec.variant]
@@ -58,7 +61,7 @@ def print_plan(out: TextIO, cfg: HarnessConfig, specs: list[RunSpec], tasks: dic
         argv = codex_host.build_codex_command(cfg, variant, prompt, spec.repo)
         env = " ".join(f"{name}={shlex.quote(value)}" for name, value in codex_host.host_env(spec.result_dir).items())
         setup = "".join(f"setup: {env} {shlex.join(step)}\n" for step in codex_host.setup_commands(cfg, plugin_paths[spec.variant]))
-        out.write(f"{header}{setup}{env} {shlex.join(argv)} < /dev/null\n")
+        out.write(f"{header}{setup or 'setup: none, no plugin is installed' + chr(10)}{env} {shlex.join(argv)} < /dev/null\n")
 
 
 @contextlib.contextmanager
@@ -92,7 +95,8 @@ def run_campaign(
     hosts = hosts or [HOST_CLAUDE]
     specs = build_specs(cfg, campaign, task_ids, variant_names, reps, hosts)
     base = campaign_dir(cfg.run_root, campaign)
-    plugins = {name: plugin_export.export_plugin(cfg.repo_root, cfg.run_root, variant["ref"]) for name, variant in variants.items()}
+    plugins = {name: plugin_export.export_plugin(cfg.repo_root, cfg.run_root, variant["ref"], variant["remove"])
+               if command.loads_plugin(variant) else plugin_export.stock_plugin() for name, variant in variants.items()}
     current = inputs.compute_inputs(cfg, task_ids, variant_names, plugins)
     changes = inputs.check_inputs(read_json(base / "campaign.json", {}).get("inputs"), current, allow_changed_inputs)
     write_campaign_file(cfg, base, campaign, task_ids, variant_names, reps, current, changes, hosts)

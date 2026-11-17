@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from . import codex_host, collect, summarize, transcript
+from . import codex_host, collect, rule_groups, summarize, transcript
 from .caps import MODEL_CAP as ALLOWED_MODELS
 from .caps import normalize
 from .command import ConfigError
@@ -28,6 +28,7 @@ UNKNOWN_EFFORT = "not measured"
 VERDICTS = frozenset({PASS, FAIL, REPEAT, NOT_MEASURED, INVESTIGATE, BASELINE, ACCEPT, REJECT, CONTINUE_TO_FIVE, SECOND_PAIR})
 VERDICT_SUBJECTS = frozenset({"quality", "wall_seconds", "cost_usd", "claim"})
 TOP_FIELDS = ("issue", "cases", "variants", "runs", "verdicts")
+OPTIONAL_TOP_FIELDS = ("rule_groups",)
 RUN_REQUIRED = ("case", "variant", "host", "models", "checks", "wall_seconds", "cost_usd")
 RUN_OPTIONAL = ("rep", "reviews")
 VERDICT_REQUIRED = ("case", "verdict", "step")
@@ -114,7 +115,12 @@ def validate_record(record: Any) -> list[str]:
     if not isinstance(record, Mapping):
         return ["the record is not an object"]
     problems = [f"the record lacks {field}" for field in TOP_FIELDS if field not in record]
-    problems += [f"the record has unknown field {field}" for field in record if field not in TOP_FIELDS]
+    problems += [f"the record has unknown field {field}" for field in record if field not in TOP_FIELDS + OPTIONAL_TOP_FIELDS]
+    if "rule_groups" in record:
+        problems += rule_groups.section_problems(record["rule_groups"], record["cases"] if isinstance(record.get("cases"), list) else ())
+        section = record["rule_groups"] if isinstance(record["rule_groups"], Mapping) else {}
+        problems += [f"rule_groups.{key} names a variant that is not in variants" for key in ("stock", "plugin")
+                     if isinstance(section.get(key), str) and section[key] not in (record.get("variants") or {})]
     issue = record.get("issue")
     if "issue" in record and not (isinstance(issue, int) and not isinstance(issue, bool) and issue > 0):
         problems.append("issue is not a positive integer")

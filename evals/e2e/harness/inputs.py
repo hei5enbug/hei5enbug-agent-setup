@@ -8,10 +8,11 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from . import plugin_export
-from .command import ConfigError, load_task, load_variant
+from .command import ConfigError, load_task, load_variant, loads_plugin
 from .config import HarnessConfig
 
 TREES = ("hidden", "custom")
+STOCK_SHA = "none"
 TASK_FILE = re.compile(r"T\d+\.py")
 IGNORED_PARTS = frozenset({"__pycache__", ".pytest_cache", ".git"})
 
@@ -90,7 +91,9 @@ def task_content_parts(cfg: HarnessConfig, task_id: str) -> dict[str, str]:
 
 
 def variant_sha(cfg: HarnessConfig, name: str) -> str:
-    return plugin_export.resolve_ref(cfg.repo_root, load_variant(cfg.variants_root, name)["ref"])
+    """The resolved commit of the variant's revision, or `none` for a stock variant, which loads no revision."""
+    variant = load_variant(cfg.variants_root, name)
+    return plugin_export.resolve_ref(cfg.repo_root, variant["ref"]) if loads_plugin(variant) else STOCK_SHA
 
 
 def changed_inputs(stored: Mapping[str, Any], current: Mapping[str, Any]) -> list[str]:

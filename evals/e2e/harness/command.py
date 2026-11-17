@@ -7,12 +7,15 @@ import os
 from pathlib import Path
 from typing import Any, Iterable
 
+from . import rule_groups
 from .config import (
     AGENT_EFFORT, APPROVER_SERVER, APPROVER_TOOL, CLAUDE_SETTING_SOURCES, FORBIDDEN_ARGS, HARNESS_DIR, HOST_CLAUDE, HOSTS,
     ANCESTOR_INSTRUCTION_FILES, INSTALLED_PLUGIN_KEY, MAIN_MODELS, RESERVED_ARGS, HarnessConfig,
 )
 
 APPROVER_SCRIPT = HARNESS_DIR / "approval_mcp.py"
+PLUGIN_LOADED = "loaded"
+PLUGIN_NONE = "none"
 
 
 class ConfigError(ValueError):
@@ -35,8 +38,13 @@ def is_reserved_arg(item: str) -> bool:
 
 
 def validate_variant(variant: Any, name: str = "variant") -> dict[str, Any]:
-    if not isinstance(variant, dict) or not isinstance(variant.get("name"), str) or not isinstance(variant.get("ref"), str):
-        raise ConfigError(f"{name}: a variant needs string 'name' and 'ref'")
+    plugin = variant.get("plugin", PLUGIN_LOADED) if isinstance(variant, dict) else None
+    if plugin not in (PLUGIN_LOADED, PLUGIN_NONE):
+        raise ConfigError(f"{name}: 'plugin' must be \"{PLUGIN_NONE}\" or absent")
+    stock = plugin == PLUGIN_NONE
+    ref = variant.get("ref", "" if stock else None) if isinstance(variant, dict) else None
+    if not isinstance(variant, dict) or not isinstance(variant.get("name"), str) or not isinstance(ref, str) or (not stock and not ref):
+        raise ConfigError(f"{name}: a variant needs string 'name' and 'ref', and 'ref' may be left out only with \"plugin\": \"{PLUGIN_NONE}\"")
     for key, kind in (("settings", dict), ("env", dict), ("extra_args", list)):
         if not isinstance(variant.get(key, kind()), kind):
             raise ConfigError(f"{name}: '{key}' must be a {kind.__name__}")
@@ -49,9 +57,21 @@ def validate_variant(variant: Any, name: str = "variant") -> dict[str, Any]:
     models = variant.get("models", {})
     if not isinstance(models, dict) or set(models) - set(HOSTS) or not all(isinstance(v, str) for v in models.values()):
         raise ConfigError(f"{name}: 'models' must map a host ({', '.join(HOSTS)}) to a model name")
-    return {"name": variant["name"], "ref": variant["ref"], "settings": dict(variant.get("settings", {})),
+    removal = variant.get("remove")
+    if stock and (ref or removal is not None):
+        raise ConfigError(f"{name}: a variant with \"plugin\": \"{PLUGIN_NONE}\" loads no revision, so it has no 'ref' and no 'remove'")
+    try:
+        remove = rule_groups.validate_entries(removal) if removal is not None else []
+    except rule_groups.RemovalError as error:
+        raise ConfigError(f"{name}: {error}") from error
+    return {"name": variant["name"], "ref": ref, "plugin": plugin, "remove": remove, "settings": dict(variant.get("settings", {})),
             "env": {str(k): str(v) for k, v in variant.get("env", {}).items()}, "extra_args": extra,
             "models": dict(models)}
+
+
+def loads_plugin(variant: dict[str, Any]) -> bool:
+    """Whether a run of the variant loads a plugin revision; a stock variant, `"plugin": "none"`, loads none."""
+    return variant.get("plugin", PLUGIN_LOADED) != PLUGIN_NONE
 
 
 def validate_hosts(hosts: list[str]) -> list[str]:
@@ -135,15 +155,16 @@ def mcp_config(approval_log: Path, run_folder: Path | None = None, cwd: Path | N
 
 
 def build_command(
-    cfg: HarnessConfig, task: dict[str, Any], variant: dict[str, Any], prompt: str, plugin_dir: str, run_dir: Path,
+    cfg: HarnessConfig, task: dict[str, Any], variant: dict[str, Any], prompt: str, plugin_dir: str | None, run_dir: Path,
 ) -> list[str]:
     """The full agent command. It never passes bypass or permission-mode flags: runs start in the user's default mode.
+    A stock variant, which loads no plugin, has no `plugin_dir` and no `--plugin-dir`.
 
     The prompt follows `--`, so a prompt that starts with a dash, such as `--version ...`, is not read as an option."""
     return [
         cfg.claude_bin, "-p", "--model", main_model(variant, HOST_CLAUDE), "--effort", AGENT_EFFORT,
         "--output-format", "stream-json", "--verbose", "--include-hook-events",
-        "--plugin-dir", plugin_dir,
+        *(["--plugin-dir", plugin_dir] if plugin_dir else []),
         "--settings", str(run_dir / "settings.json"), "--setting-sources", CLAUDE_SETTING_SOURCES,
         "--mcp-config", str(run_dir / "mcp.json"), "--strict-mcp-config",
         "--permission-prompt-tool", APPROVER_TOOL,

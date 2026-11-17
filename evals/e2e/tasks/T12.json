@@ -59,6 +59,23 @@
       "pattern": "cancel_item|부분 취소"
     }
   ],
+  "rules": [
+    {
+      "check": "hidden-tests",
+      "file": "instructions/session/common.md",
+      "starts_with": "Independent review is the exception"
+    },
+    {
+      "check": "regressions",
+      "file": "instructions/session/common.md",
+      "starts_with": "Independent review is the exception"
+    },
+    {
+      "check": "review",
+      "file": "instructions/session/common.md",
+      "starts_with": "Independent review is the exception"
+    }
+  ],
   "constraints": [
     {
       "id": "api-contract",
