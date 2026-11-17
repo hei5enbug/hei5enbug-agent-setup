@@ -177,6 +177,7 @@ Run every command from the repository root. The default run root is
 | Compare two variants | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | Export a revision only | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
 | Judge a change and write its record | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
+| Decide the candidate loop shapes of issue 102 and write their record | `python3 evals/e2e/harness/cli.py record-loop --campaign <name> --issue 102 --variants baseline=<variant>,a=<variant>,b=<variant>,c=<variant>[,a+b=<variant>]` |
 
 `--parallel` sets the number of runs at once (default 3). With several variants the order alternates per task and
 repetition (ABAB, then BABA), so time-of-day effects spread evenly.
@@ -349,6 +350,41 @@ checkout's `scripts/text_review.py`. It changes both files or neither, `--dry-ru
 twice changes nothing more. It is not in the shipped files; a variant that holds it is cut as one commit of the revision
 that holds the rule text.
 
+T98 to T100 measure the loop of the independent text review on one draft each, in `loop-notes`. Their prompts ask for a
+pull request description to be posted with `python3 tools/post_demo.py` after a text review that repeats until no finding
+is left and runs with `--runner tools/loop_runner.py`, a stub that raises seeded `removable` findings and logs every call
+as one JSON line in `stub-calls.log` beside the repository, so no model reviews. A review run is the set of stub calls
+that received one assignment. In T98 (mode `split`) the stub lets an odd call see the first and third seeded sentences and
+an even call the second, as two reviewers with different attention would, so one reviewer needs four runs and two need
+three. In T99 (mode `stale`) it raises one seeded sentence and then, once, a sentence no run changed. In T100 (mode
+`sequence`) it raises one seeded sentence per run. The required checks are `reviewer-attempted`, `reviewed-text-posted`
+(no seeded sentence left, the opening sentence and both bullets kept), `last-review-clean`, and `no-question`; T100 also
+requires `loop-run-by-worker`: no `text_review.py review` call in the main session and a `role_runner.py language`
+delegation. The informational checks `review-runs` and `reviewer-calls` record how many runs and calls the loop took, and
+T99's `late-sentence-kept` records whether the sentence raised only late stayed. No model grades them. They are not in
+`config/writing-surfaces.json`.
+
+`evals/e2e/candidates/102/` holds the three candidate loop shapes of issue 102 as `apply.py <checkout> --candidate a|b|c`,
+or several joined with `+`: `a` adds the worker-run loop paragraph to `instructions/shared-text.md`, `b` makes 2 the
+default of `--reviews`, and `c` adds `--history <file>` to `scripts/text_review.py` with one rule sentence. With a history
+file the script lists the sentences changed since the previous run of the draft, drops a `removable` finding in a
+sentence that no run changed and no earlier run flagged, and keeps a finding of any other type, and it records the draft
+and the flagged sentences after every run that reached the reviewer. `--dry-run` shows the diffs, an edit already there
+changes nothing, and no file changes when one anchor is missing. None of them is in the shipped files; a variant that
+holds one is cut as one commit of the baseline revision. The record of issue 102 holds the candidate whose text stays,
+and `tests/test_loop_adoption_text.py` keeps the repository equal to it.
+
+`record-loop` reads the variants of one campaign by label, writes `records/102.json`, and prints each candidate's decision.
+Each run carries `passed`, `review_runs` (the `text_review.py review` runs that reached the reviewer, counted in the main
+session, the subagents, and the Claude role runner transcripts), `main_turns` (the main session's model requests from the
+one that ran the first review to the end of the session, 0 without a review), and `main_tokens` (the main session's input,
+output, and cache tokens over the whole run). The decision is in `harness/loop_decision.py`: a candidate is adopted when,
+against the baseline on both hosts, no writing task of T13 to T20 whose `text-review-clean` passes on the baseline fails
+on it and its number of passing tasks does not fall, the claim on the list cost is accepted on T13, T15, and T20, and the
+host comparison above passes on them; otherwise it is rejected, or undecided while a run is missing or a claim has not
+reached its decision. Candidates adopted alone are then measured together as `a+b`; a combined variant that fails drops the
+candidate adopted last, and the next combination runs. `validate_record` recomputes the decisions from the runs.
+
 `tests/test_e2e_eval_graders.py` proves each task's graders: the unmodified fixture fails, and the reference
 solution in `tasks/reference/` passes.
 
@@ -398,6 +434,9 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T93 | limit-notes | Pull request description, reviewer failure | The same request with a stub that fails with `authentication failed` |
 | T94 | limit-notes | Pull request description and ticket comment, usage limit | Post two drafts after a text review whose reviewer stub reports a usage limit |
 | T97 | notes-cli | Short final report, no text review | The one-line setting change of T08, graded on whether a final report under the threshold got a text review |
+| T98 | loop-notes | Pull request description, review loop with two reviewers | Post a description after a review loop whose stub shows each reviewer a different part of the seeded sentences |
+| T99 | loop-notes | Pull request description, late finding | Post a description after a review loop whose stub raises a finding in a sentence no run changed |
+| T100 | loop-notes | Pull request description, review loop by a worker | Post a description after a review loop that a `language` worker, not the main session, runs |
 
 ## Comparing a change on both hosts
 

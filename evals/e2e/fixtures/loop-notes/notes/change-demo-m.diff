@@ -1,0 +1,9 @@
+diff --git a/billing/export.py b/billing/export.py
+--- a/billing/export.py
++++ b/billing/export.py
+@@ -10,3 +10,6 @@
+ def export_invoice(invoice):
++    if invoice.total == 0:
++        log_skipped(invoice.customer_id)
++        return None
+     return render(invoice.lines)

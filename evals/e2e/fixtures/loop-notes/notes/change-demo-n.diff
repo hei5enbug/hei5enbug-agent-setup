@@ -1,0 +1,9 @@
+diff --git a/billing/refund.py b/billing/refund.py
+--- a/billing/refund.py
++++ b/billing/refund.py
+@@ -5,3 +5,6 @@
+ def refund(charge, amount):
++    if amount > charge.amount:
++        log_rejected(charge.id, amount)
++        raise RefundTooLarge(charge.id)
+     return issue(charge, amount)

@@ -163,6 +163,7 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 | 두 변형 비교 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | 리비전 내보내기만 하기 | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
 | 변경을 판정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
+| 이슈 102의 후보 반복 방식을 결정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py record-loop --campaign <name> --issue 102 --variants baseline=<variant>,a=<variant>,b=<variant>,c=<variant>[,a+b=<variant>]` |
 
 `--parallel`은 동시에 실행할 수를 정한다(기본 3). 변형이 여럿이면 작업과 반복마다 순서를 번갈아(ABAB, 다음은
 BABA) 시간대 영향이 고르게 퍼지게 한다.
@@ -318,6 +319,33 @@ T97은 T08의 프롬프트, 픽스처, 기준 해답에 최종 보고 검사를 
 보여 주며, 두 번 적용해도 더 바뀌는 것은 없다. 출하되는 파일에는 들어 있지 않고, 후보를 담은 변형은 규칙 문구가 들어 있는 리비전에 커밋
 하나로 만든다.
 
+T98부터 T100까지는 각각 초안 하나에 대해 `loop-notes`에서 독립 글 검토의 반복을 측정한다. 프롬프트는 PR 설명을 지적이 없을
+때까지 반복하는 글 검토 뒤에 `python3 tools/post_demo.py`로 올리라고 요청하며, 그 검토는 `--runner tools/loop_runner.py`로 돈다. 이 스텁은
+심어 둔 `removable` 지적을 내고 모든 호출을 저장소 옆 `stub-calls.log`에 JSON 한 줄씩 남기므로 어떤 모델도 검토하지 않는다. 검토 실행은
+하나의 지시문을 받은 스텁 호출의 묶음이다. T98(모드 `split`)에서 스텁은 홀수 호출에는 심어 둔 첫째와 셋째 문장을, 짝수 호출에는
+둘째 문장을 보여 주어 주의가 다른 검토자 둘처럼 동작하므로, 검토자 하나는 네 번, 둘은 세 번 돌아야 끝난다. T99(모드 `stale`)에서는
+심어 둔 문장 하나를 낸 뒤 한 번, 어떤 실행도 바꾸지 않은 문장을 낸다. T100(모드 `sequence`)에서는 실행마다 심어 둔 문장 하나를 낸다. 필수
+검사는 `reviewer-attempted`, `reviewed-text-posted`(심어 둔 문장이 남지 않고 첫 문장과 두 목록 항목이 남음), `last-review-clean`,
+`no-question`이고, T100은 `loop-run-by-worker`도 요구한다. 주 세션에 `text_review.py review` 호출이 없고 `role_runner.py language`
+위임이 있어야 한다. 참고용 검사 `review-runs`와 `reviewer-calls`는 반복이 실행 몇 번과 호출 몇 번이 들었는지 기록하고, T99의
+`late-sentence-kept`는 늦게 지적된 문장이 남았는지 기록한다. 어떤 모델도 채점하지 않는다. `config/writing-surfaces.json`에는 없다.
+
+`evals/e2e/candidates/102/`에는 이슈 102의 후보 반복 방식 셋이 `apply.py <checkout> --candidate a|b|c`(또는 `+`로 이은 여럿)로 들어 있다.
+`a`는 `instructions/shared-text.md`에 작업자가 반복을 돌리는 문단을 더하고, `b`는 `--reviews`의 기본값을 2로 하며, `c`는
+`scripts/text_review.py`에 `--history <file>`과 규칙 문장 하나를 더한다. 기록 파일이 있으면 스크립트는 그 초안의 이전 실행 뒤 바뀐 문장을
+나열하고, 어떤 실행도 바꾸지 않고 앞선 실행도 지적하지 않은 문장의 `removable` 지적을 버리며, 다른 종류의 지적은 남기고, 검토자에 닿은
+실행마다 초안과 지적된 문장을 기록에 남긴다. `--dry-run`은 diff를 보여 주고, 이미 있는 수정은 다시 바꾸지 않으며, 기준 줄이 하나라도 없으면
+어느 파일도 바꾸지 않는다. 어느 것도 출하되는 파일에 들어 있지 않고, 그것을 가진 변형은 기준 개정의 커밋 하나로 만든다. 이슈 102의 기록에는
+문구가 남는 후보가 담기고, `tests/test_loop_adoption_text.py`가 저장소가 그와 같도록 지킨다.
+
+`record-loop`는 한 캠페인의 변형을 라벨로 읽어 `records/102.json`을 쓰고 후보마다 결정을 출력한다. 실행마다 `passed`, `review_runs`(검토자에
+닿은 `text_review.py review` 실행 수이며 주 세션, 서브에이전트, Claude 역할 실행기 기록에서 센다), `main_turns`(첫 검토를 돌린 요청부터 세션
+끝까지 주 세션이 보낸 모델 요청 수, 검토가 없으면 0), `main_tokens`(실행 전체의 주 세션 입력, 출력, 캐시 토큰)가 담긴다. 결정은
+`harness/loop_decision.py`에 있다. 후보는 두 호스트에서 기준선과 견줄 때 T13부터 T20까지 기준선에서 `text-review-clean`이 통과하던 글쓰기
+과제가 후보에서 실패하지 않고 통과하는 과제 수가 줄지 않으며, T13, T15, T20에서 목록 가격 비용의 개선 주장이 받아들여지고 위의 호스트 비교가
+통과하면 채택한다. 그렇지 않으면 기각하고, 실행이 없거나 주장이 아직 결정에 이르지 못했으면 미결정이다. 홀로 채택된 후보는 이어서 `a+b`처럼
+함께 측정하며, 실패한 합친 변형은 마지막에 채택한 후보를 빼고 다음 조합을 돌린다. `validate_record`가 실행에서 결정을 다시 계산한다.
+
 `tests/test_e2e_eval_graders.py`는 작업마다 채점기를 증명한다. 수정하지 않은 픽스처는 실패하고
 `tasks/reference/`의 기준 해답은 통과한다.
 
@@ -367,6 +395,9 @@ T97은 T08의 프롬프트, 픽스처, 기준 해답에 최종 보고 검사를 
 | T93 | limit-notes | 풀 리퀘스트 설명, 검토자 실패 | 스텁이 `authentication failed`로 실패하는 같은 요청 |
 | T94 | limit-notes | 풀 리퀘스트 설명과 티켓 댓글, 사용량 한도 | 검토자 스텁이 사용량 한도를 알리는 글 검토 뒤에 초안 둘을 올림 |
 | T97 | notes-cli | 짧은 최종 보고, 글 검토 없음 | T08의 한 줄 설정 변경을, 길이 기준 미만의 최종 보고가 글 검토를 받았는지로 채점 |
+| T98 | loop-notes | PR 설명, 검토자 둘의 검토 반복 | 스텁이 검토자마다 심어 둔 문장의 다른 부분을 보여 주는 검토 반복 뒤에 설명을 올림 |
+| T99 | loop-notes | PR 설명, 늦은 지적 | 스텁이 어떤 실행도 바꾸지 않은 문장에 지적을 내는 검토 반복 뒤에 설명을 올림 |
+| T100 | loop-notes | PR 설명, 작업자가 돌리는 검토 반복 | 주 세션이 아니라 `language` 작업자가 돌리는 검토 반복 뒤에 설명을 올림 |
 
 ## 두 호스트에서 변경 비교
 

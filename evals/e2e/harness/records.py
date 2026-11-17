@@ -16,6 +16,7 @@ from .caps import MODEL_CAP as ALLOWED_MODELS
 from .caps import normalize
 from .command import ConfigError
 from .config import FINISHED_STATUSES, HOST_CODEX, RUBRIC_EFFORT, RUBRIC_FALLBACK_EFFORT
+from .loop_decision import decision_problems
 from .matrix import campaign_dir, make_spec, parse_run_id, read_json
 from .verdict import (
     ACCEPT, BASELINE, CONTINUE_TO_FIVE, FAIL, HOSTS, INVESTIGATE, MEASURES, NOT_MEASURED, PASS, REJECT, REPEAT, SECOND_PAIR,
@@ -26,12 +27,14 @@ RECORDS_DIR = Path(__file__).resolve().parent.parent / "records"
 EFFORTS = frozenset({"low", "medium", "high", "xhigh", "max"})
 UNKNOWN_EFFORT = "not measured"
 VERDICTS = frozenset({PASS, FAIL, REPEAT, NOT_MEASURED, INVESTIGATE, BASELINE, ACCEPT, REJECT, CONTINUE_TO_FIVE, SECOND_PAIR})
-VERDICT_SUBJECTS = frozenset({"quality", "wall_seconds", "cost_usd", "claim"})
+VERDICT_SUBJECTS = frozenset({"quality", "wall_seconds", "cost_usd", "claim", "writing_rule"})
 TOP_FIELDS = ("issue", "cases", "variants", "runs", "verdicts")
+TOP_OPTIONAL = ("decisions",)
 RUN_REQUIRED = ("case", "variant", "host", "models", "checks", "wall_seconds", "cost_usd")
-RUN_OPTIONAL = ("rep", "reviews")
+RUN_OPTIONAL = ("rep", "reviews", "passed", "review_runs", "main_turns", "main_tokens")
+RUN_COUNTS = ("review_runs", "main_turns", "main_tokens")
 VERDICT_REQUIRED = ("case", "verdict", "step")
-VERDICT_OPTIONAL = ("measure",)
+VERDICT_OPTIONAL = ("measure", "variant")
 LOCAL_PATH = re.compile(r"(?<![\w.:/-])(?:/[\w.@+-]+){2,}|(?<![\w.])~/|\b[A-Za-z]:[\\/]|(?<![\w.:/-])/(?:Users|home|tmp|var|private|etc)\b")
 
 
@@ -90,6 +93,10 @@ def run_problems(position: str, run: Any, cases: Sequence[str], variants: Mappin
         problems.append(f"{position} wall_seconds is not a positive number or null")
     if "cost_usd" in run and run["cost_usd"] is not None and not is_number(run["cost_usd"], allow_zero=True):
         problems.append(f"{position} cost_usd is not a number or null")
+    if "passed" in run and not isinstance(run["passed"], bool):
+        problems.append(f"{position} passed is not true or false")
+    problems += [f"{position} {field} is not a count or null" for field in RUN_COUNTS
+                 if field in run and run[field] is not None and not (is_number(run[field], allow_zero=True) and float(run[field]).is_integer())]
     return problems
 
 
@@ -114,7 +121,7 @@ def validate_record(record: Any) -> list[str]:
     if not isinstance(record, Mapping):
         return ["the record is not an object"]
     problems = [f"the record lacks {field}" for field in TOP_FIELDS if field not in record]
-    problems += [f"the record has unknown field {field}" for field in record if field not in TOP_FIELDS]
+    problems += [f"the record has unknown field {field}" for field in record if field not in TOP_FIELDS + TOP_OPTIONAL]
     issue = record.get("issue")
     if "issue" in record and not (isinstance(issue, int) and not isinstance(issue, bool) and issue > 0):
         problems.append("issue is not a positive integer")
@@ -142,6 +149,8 @@ def validate_record(record: Any) -> list[str]:
         for index, item in enumerate(items):
             extra = (variants or {},) if key == "runs" else ()
             problems += check(f"{key}[{index}]", item, cases or [], *extra)
+    if "decisions" in record:
+        problems += decision_problems(record)
     if any(LOCAL_PATH.search(text) for text in strings(record)):
         problems.append("the record contains an absolute local path")
     return problems
@@ -154,7 +163,7 @@ def check_record(record: Any) -> None:
 
 
 def build_record(issue: int, cases: Sequence[str], variants: Mapping[str, str], runs: Sequence[Mapping[str, Any]],
-                 verdicts: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+                 verdicts: Sequence[Mapping[str, Any]], decisions: Sequence[Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """The record dict for one comparison; `variants` maps each variant name to its revision."""
     record = {
         "issue": issue,
@@ -164,6 +173,8 @@ def build_record(issue: int, cases: Sequence[str], variants: Mapping[str, str], 
         "verdicts": [{field: item[field] for field in (*VERDICT_REQUIRED, *VERDICT_OPTIONAL) if field in item}
                      for item in verdicts],
     }
+    if decisions is not None:
+        record["decisions"] = [dict(item) for item in decisions]
     check_record(record)
     return record
 

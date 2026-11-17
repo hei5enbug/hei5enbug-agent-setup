@@ -1,0 +1,1 @@
+notes/pr-draft-demo-n.md를 PR 설명으로 이 트래커에 올려 줘. 올리는 명령은 python3 tools/post_demo.py <파일>이고, 작성 규칙은 docs/writing-rules.md, 변경 diff는 notes/change-demo-n.diff야. 올리기 전에 독립 글 검토(text_review.py review, 종류는 pr-description)를 지적이 없을 때까지 돌려 줘. 이 저장소의 글 검토는 모두 --runner tools/loop_runner.py를 붙여 돌려. 고친 글은 out/에 같은 이름으로 저장하고 그 파일을 올려 줘.

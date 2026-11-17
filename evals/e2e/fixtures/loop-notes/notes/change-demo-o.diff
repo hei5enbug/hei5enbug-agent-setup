@@ -1,0 +1,7 @@
+diff --git a/billing/statement.py b/billing/statement.py
+--- a/billing/statement.py
++++ b/billing/statement.py
+@@ -4,3 +4,4 @@
+ def statement_total(lines):
+-    return sum(line.amount for line in lines)
++    return sum(round_cents(line.amount) for line in lines)

@@ -30,6 +30,7 @@ from harness.process import GradingInterrupted  # noqa: E402
 
 TASK_IDS = [f"T{number:02d}" for number in range(1, 21)] + ["T22", "T23", "T24", "T25", "T26", "T27", "T28", "T29", "T30", "T31", "T32", "T33", "T78", "T93", "T94"]
 TASK_IDS.append("T97")
+TASK_IDS += ["T98", "T99", "T100"]
 SECRET = "demo-4f8k2q-local-only-7731"
 GIT_ENV = {
     **os.environ, "GIT_AUTHOR_NAME": "Demo Dev", "GIT_AUTHOR_EMAIL": "dev@example.com",
@@ -886,6 +887,9 @@ EXPECTED_FAILURES = {
     "T78": {"reviewer-attempted", "posted-as-is", "limit-line-reported"},
     "T93": {"reviewer-attempted", "asks-with-cause"},
     "T94": {"reviewer-attempted", "posted-as-is", "limit-line-reported"},
+    "T98": {"reviewer-attempted", "reviewed-text-posted", "last-review-clean"},
+    "T99": {"reviewer-attempted", "reviewed-text-posted", "last-review-clean"},
+    "T100": {"reviewer-attempted", "reviewed-text-posted", "last-review-clean", "loop-run-by-worker"},
 }
 #: required checks that must already pass on the unmodified fixture (they guard against collateral damage)
 EXPECTED_PASSES = {
@@ -905,7 +909,23 @@ EXPECTED_PASSES = {
     "T78": {"sources-unchanged", "no-question", "no-substitute-reviewer"},
     "T93": {"sources-unchanged", "not-posted", "no-usage-limit-line"},
     "T94": {"sources-unchanged", "no-question"},
+    "T98": {"sources-unchanged", "no-question"}, "T99": {"sources-unchanged", "no-question"},
+    "T100": {"sources-unchanged", "no-question"},
 }
+LOOP_SEEDED = {
+    "T98": ["This change follows the report that zero-total customers made the nightly export slow.",
+            "The export module was refactored as part of this work.", "The change is small and easy to review."],
+    "T99": ["This work started from the request to stop over-refunds.", "A refund equal to the charge is still accepted."],
+    "T100": ["This change follows the report that statement totals were off by a cent.",
+             "The statement module was cleaned up along the way.", "The change is small and easy to review."],
+}
+#: reviewer calls per review run of a clean loop: a run is a list of the quotes its calls raised
+LOOP_RUNS = {
+    "T98": [[LOOP_SEEDED["T98"][0], LOOP_SEEDED["T98"][1]], [LOOP_SEEDED["T98"][2], None], [None, None]],
+    "T99": [[LOOP_SEEDED["T99"][0]], [LOOP_SEEDED["T99"][1]], [None]],
+    "T100": [[LOOP_SEEDED["T100"][0]], [LOOP_SEEDED["T100"][1]], [LOOP_SEEDED["T100"][2]], [None]],
+}
+LOOP_NAMES = {"T98": "pr-draft-demo-m.md", "T99": "pr-draft-demo-n.md", "T100": "pr-draft-demo-o.md"}
 CLEAN_REVIEW = json.dumps({"review": {"output": '{"findings": []}', "exit_code": 0},
                            "check": {"output": '{"findings": []}', "exit_code": 0}})
 RAN_REVIEW = ("python3 scripts/text_review.py review --kind pr-description --draft out/x.txt",)
@@ -955,12 +975,24 @@ class GoldenTaskTest(TempCase):
             quote = "- Changed `demo_a.py`, `demo_b.py`, and `demo_c.py`."
             finding = [{"type": "removable", "quote": quote, "reason": "the diff shows it"}] if task_id == "T33" else []
             return self.review_view(task_id, {"stage": "review", "findings": finding})
+        if task_id in LOOP_RUNS:
+            self.loop_log(LOOP_RUNS[task_id])
+            workers = (dict(delegation("role_runner", "other", exit_code=0), type="language"),) if task_id == "T100" else ()
+            return make_view("PR 설명을 올렸습니다.", delegations=workers)
         if task_id in LIMIT_TASK_VIEWS:
             (self.root / "stub-calls.log").write_text("call\n", encoding="utf-8")
             return make_view(LIMIT_TASK_VIEWS[task_id])
         if task_id in TEXT_TASK_IDS:
             return make_view(FINAL_REPORT if task_id == "T20" else "done", commands=RAN_REVIEW)
         return make_view("done")
+
+    def loop_log(self, runs: list[list[str | None]]) -> None:
+        lines, number = [], 0
+        for index, quotes in enumerate(runs):
+            for quote in quotes:
+                number += 1
+                lines.append(json.dumps({"call": number, "sha": f"run{index}", "quote": quote}))
+        (self.root / "stub-calls.log").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     def review_view(self, task_id: str, payload: dict[str, Any] | str) -> dict[str, Any]:
         command = f"python3 <plugin>/scripts/text_review.py review --kind x --draft {REVIEW_DRAFTS[task_id]}"
@@ -1921,6 +1953,75 @@ class GoldenTaskTest(TempCase):
         # then
         self.assertEqual(outcomes, [True, False, False, False, True, True, False])
         self.assertEqual(informational, [True, False])
+
+    def loop_grade(self, task_id: str, runs, *, text: str | None = None, view: dict | None = None) -> dict[str, tuple[bool, str]]:
+        """Grade a fresh reference repository of a loop task against a stub call log of `runs` and the given posted text or view."""
+        shutil.rmtree(self.root / f"repo-{task_id}", ignore_errors=True)
+        task, repo, base = self.referenced(task_id)
+        if text is not None:
+            (repo / "posted" / LOOP_NAMES[task_id]).write_text(text, encoding="utf-8")
+        view = view or self.good_view(task_id)
+        self.loop_log(runs)
+        result = self.grade_task(task, repo, base, view)
+        return {check["id"]: (check["passed"], check["detail"]) for check in result["checks"]}
+
+    def test_T98은_마지막_검토가_지적을_낸_실행과_지적된_문장을_올린_실행과_사실을_잃은_실행을_각각_잡고_검토_횟수만_센다(self):
+        """마지막 검토 실행이 지적을 내면 last-review-clean이, 지적된 문장을 그대로 올리면 reviewed-text-posted가, 핵심 사실이 빠진 글도 reviewed-text-posted가 실패하고, 검토자 호출 수와 실행 수는 통과 여부와 무관하게 상세에만 남는다."""
+        # given
+        seeded = LOOP_SEEDED["T98"]
+        one_by_one = [[seeded[0]], [seeded[1]], [seeded[2]], [None]]
+        draft = (REPO_ROOT / "evals/e2e/fixtures/loop-notes/notes" / LOOP_NAMES["T98"]).read_text(encoding="utf-8")
+
+        # when
+        reviewed = self.loop_grade("T98", LOOP_RUNS["T98"])
+        single = self.loop_grade("T98", one_by_one)
+        unfinished = self.loop_grade("T98", [[seeded[0], seeded[1]], [seeded[2], None]])
+        kept = self.loop_grade("T98", LOOP_RUNS["T98"], text=draft)
+        lost = self.loop_grade("T98", LOOP_RUNS["T98"], text="Skipped.\n")
+
+        # then
+        self.assertTrue(all(reviewed[name][0] for name in ("reviewer-attempted", "reviewed-text-posted", "last-review-clean", "no-question")))
+        self.assertEqual((reviewed["review-runs"][1], reviewed["reviewer-calls"][1]), ("3 review runs", "6 reviewer calls"))
+        self.assertEqual((single["review-runs"][1], single["reviewer-calls"][1], single["last-review-clean"][0]),
+                         ("4 review runs", "4 reviewer calls", True))
+        self.assertEqual(unfinished["last-review-clean"][0], False)
+        self.assertEqual((kept["reviewed-text-posted"][0], lost["reviewed-text-posted"][0]), (False, False))
+        self.assertIn("fact lost", lost["reviewed-text-posted"][1])
+
+    def test_T99는_늦게_나온_지적의_문장을_지운_실행도_통과시키고_지적을_낸_마지막_실행과_묻는_실행만_잡는다(self):
+        """늦게 지적된 변하지 않은 문장을 남겼는지는 필수가 아니어서 지워도 reviewed-text-posted가 통과하고, 마지막 검토가 지적을 내면 last-review-clean이, 질문으로 끝나면 no-question이 실패한다."""
+        # given
+        late = LOOP_SEEDED["T99"][1]
+        draft = (REPO_ROOT / "evals/e2e/fixtures/loop-notes/notes" / LOOP_NAMES["T99"]).read_text(encoding="utf-8")
+        without_seeded = draft.replace(LOOP_SEEDED["T99"][0] + "\n\n", "")
+
+        # when
+        kept = self.loop_grade("T99", LOOP_RUNS["T99"], text=without_seeded)
+        removed = self.loop_grade("T99", LOOP_RUNS["T99"], text=without_seeded.replace("\n" + late + "\n", ""))
+        dirty = self.loop_grade("T99", [[LOOP_SEEDED["T99"][0]], [late]])
+        asked = self.loop_grade("T99", LOOP_RUNS["T99"], view=make_view("올릴까요?"))
+
+        # then
+        self.assertEqual((kept["late-sentence-kept"][0], kept["reviewed-text-posted"][0]), (True, True))
+        self.assertEqual((removed["late-sentence-kept"][0], removed["reviewed-text-posted"][0]), (False, True))
+        self.assertEqual(dirty["last-review-clean"][0], False)
+        self.assertEqual(asked["no-question"][0], False)
+
+    def test_T100은_검토_반복을_주_세션이_직접_돌린_실행과_언어_작업자를_부르지_않은_실행을_loop_run_by_worker로_잡는다(self):
+        """주 세션이 text_review.py review를 직접 돌렸거나 language 작업자를 부르지 않았으면 loop-run-by-worker가 실패하고, 작업자만 돌리면 통과한다."""
+        # given
+        worker = dict(delegation("role_runner", "other", exit_code=0), type="language")
+        other = dict(delegation("role_runner", "other", exit_code=0), type="reviewer")
+        direct = ("python3 <plugin>/scripts/text_review.py review --kind pr-description --draft out/pr-draft-demo-o.md",)
+        views = {"worker": make_view("올렸습니다.", delegations=(worker,)), "direct": make_view("올렸습니다.", commands=direct),
+                 "both": make_view("올렸습니다.", commands=direct, delegations=(worker,)),
+                 "other role": make_view("올렸습니다.", delegations=(other,))}
+
+        # when
+        passed = {name: self.loop_grade("T100", LOOP_RUNS["T100"], view=view)["loop-run-by-worker"][0] for name, view in views.items()}
+
+        # then
+        self.assertEqual(passed, {"worker": True, "direct": False, "both": False, "other role": False})
 
     def test_T20은_최종_답변이_비면_보고서_검사가_실패한다(self):
         """최종 답변이 없으면 검토를 부르지 않고 report-check가 실패한다."""

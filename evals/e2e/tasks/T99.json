@@ -1,0 +1,80 @@
+{
+  "id": "T99",
+  "title": "Review loop with a finding in a sentence no run changed",
+  "category": "writing",
+  "path": "text review loop, a late finding in an unchanged sentence",
+  "fixture": "loop-notes",
+  "prompt_file": "prompts/T99.txt",
+  "env": {
+    "LOOP_STUB_MODE": "stale",
+    "LOOP_STUB_LOG": "{work}/stub-calls.log"
+  },
+  "limits": {
+    "wall_seconds": 1800,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "reviewer-attempted",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "reviewer_attempted"
+    },
+    {
+      "id": "reviewed-text-posted",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "reviewed_text_posted"
+    },
+    {
+      "id": "last-review-clean",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "last_review_clean"
+    },
+    {
+      "id": "no-question",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_question"
+    },
+    {
+      "id": "review-runs",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "review_runs"
+    },
+    {
+      "id": "reviewer-calls",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "reviewer_calls"
+    },
+    {
+      "id": "late-sentence-kept",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "late_sentence_kept"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**",
+        "tools/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

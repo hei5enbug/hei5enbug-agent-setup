@@ -1,4 +1,4 @@
-"""Entry point: run | summarize | regrade | export-plugin | pilot-check | record."""
+"""Entry point: run | summarize | regrade | export-plugin | pilot-check | record | record-loop."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path[0] = str(Path(__file__).resolve().parents[1])
 
-from harness import campaign, command, plugin_export, records, summarize  # noqa: E402
+from harness import campaign, command, loop_record, plugin_export, records, summarize  # noqa: E402
 from harness.config import DEFAULT_PARALLEL, DEFAULT_RUN_ROOT, EXIT_FAILURE, HOST_CLAUDE, HarnessConfig  # noqa: E402
 from harness.pilot_check import pilot_check  # noqa: E402
 
@@ -66,6 +66,12 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--claim", help="comma-separated measures the change claims to lower: wall_seconds, cost_usd")
     record.add_argument("--tasks", help="comma-separated task ids; default every task with a finished run")
     record.add_argument("--records-dir", type=Path, default=records.RECORDS_DIR)
+    loop = sub.add_parser("record-loop", help="decide the candidate loop shapes of a text review issue against the baseline and write its record")
+    add_common(loop)
+    loop.add_argument("--campaign", required=True)
+    loop.add_argument("--issue", type=int, required=True, help="issue number; the record is records/<issue>.json")
+    loop.add_argument("--variants", required=True, help="label=variant pairs: baseline, a, b, c, and combined labels such as a+c")
+    loop.add_argument("--records-dir", type=Path, default=records.RECORDS_DIR)
     return parser
 
 
@@ -122,8 +128,20 @@ def do_record(args: argparse.Namespace, cfg: HarnessConfig) -> int:
     return 0
 
 
+def do_record_loop(args: argparse.Namespace, cfg: HarnessConfig) -> int:
+    if args.issue < 1:
+        raise command.ConfigError("--issue takes a positive issue number")
+    result = loop_record.record_loop(cfg.run_root, args.campaign, args.issue, loop_record.parse_variants(args.variants))
+    path = records.write_record(result["record"], absolute(args.records_dir))
+    sys.stdout.write("".join(f"{line}\n" for line in loop_record.report_lines(result)))
+    sys.stdout.write(f"record written: {path.name}\n")
+    return 0
+
+
 def dispatch(args: argparse.Namespace) -> int:
     cfg = config_from(args)
+    if args.action == "record-loop":
+        return do_record_loop(args, cfg)
     if args.action == "run":
         return do_run(args, cfg)
     if args.action == "summarize":
