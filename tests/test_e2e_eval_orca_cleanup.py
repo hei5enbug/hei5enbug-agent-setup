@@ -226,6 +226,64 @@ class OrcaCleanupTaskTest(unittest.TestCase):
         # Then
         self.assertFalse(outcome["main-clones-and-remote-kept"])
 
+    def completions(self) -> list[dict[str, Any]]:
+        calls = [json.loads(line) for line in
+                 (self.work / "orca-state" / "calls.jsonl").read_text(encoding="utf-8").splitlines()]
+        return [call for call in calls if "completed" in call["argv"]]
+
+    def test_참조_해법은_폴더를_완료로_바꿀_때_주_클론에_커밋하지_않았거나_푸시하지_않은_변경이_없다(self):
+        """규칙은 커밋하지 않았거나 푸시하지 않은 변경이 있으면 완료를 금지하므로, 과제가 그 상태에서의 완료를 요구하지 않는다."""
+        # Regression: the reference completes the ticket folder while the main clone holds an unpushed change
+        # Given
+        self.do_task_and_cleanup()
+
+        # When
+        completions = self.completions()
+
+        # Then
+        self.assertEqual(len(completions), 1)
+        self.assertEqual(completions[0]["unfinished_main_clones"], [])
+
+    def test_커밋하지_않았거나_푸시하지_않은_채_완료하면_기록이_그_주_클론을_미완료로_잡는다(self):
+        """커밋이나 푸시를 빼고 완료한 실행은 완료 호출 기록에 demo-a가 남아 위의 검증이 실패하게 한다."""
+        # Regression: the completion record misses an unfinished main clone, so the guard above proves nothing
+        # Given
+        settings = self.repo / "config" / "settings.toml"
+        settings.write_text(settings.read_text(encoding="utf-8").replace("page_size = 20", "page_size = 50"),
+                            encoding="utf-8")
+        self.remove("docs cleanup")
+        self.remove("ABC-123 api")
+
+        # When
+        self.complete("ABC-123 demo")
+        subprocess.run(["git", "-C", str(self.repo), "-c", "user.name=Demo Dev", "-c", "user.email=dev@example.com",
+                        "commit", "-q", "-a", "-m", "chore: raise the default page size to 50"], check=True)
+        self.complete("ABC-123 demo")
+
+        # Then
+        self.assertEqual([call["unfinished_main_clones"] for call in self.completions()], [["demo-a"], ["demo-a"]])
+
+    def test_시드_원격은_모두_실행_폴더_안의_로컬_경로다(self):
+        """푸시 대상이 네트워크 주소이거나 실행 폴더 밖이면 실행이 실제 서비스에 닿을 수 있으므로 모든 클론과 워크트리의 origin이 폴더 안 경로다."""
+        # Regression: a trial pushes to a remote outside its own folder
+        # Given
+        paths = [self.repo, self.work / "demo-b", self.work / "demo-c", self.work / "demo-a-docs-cleanup",
+                 self.work / "demo-a-login-spike", self.work / "demo-b-abc-123-api",
+                 self.work / "demo-c-invoice-export"]
+
+        # When
+        urls = {path.name: subprocess.run(["git", "-C", str(path), "remote", "get-url", "origin"],
+                                          capture_output=True, text=True, check=True).stdout.strip()
+                for path in paths}
+
+        # Then
+        root = self.work.resolve()
+        for name, url in urls.items():
+            with self.subTest(name):
+                self.assertNotIn("://", url)
+                self.assertTrue(Path(url).is_absolute() and Path(url).resolve().is_relative_to(root), url)
+                self.assertTrue(Path(url).is_dir())
+
     def test_작업_환경은_실행_폴더를_가리키고_변형_환경이_이긴다(self):
         """과제 env의 {work}, {repo}, {PATH}가 실행 폴더로 풀리고 값이 없으면 빈 환경이다."""
         # Given

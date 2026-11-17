@@ -8,6 +8,11 @@ from patch_tools import replace
 
 repo = Path(sys.argv[1])
 replace(str(repo), "config/settings.toml", "page_size = 20", "page_size = 50")
+for step in (["add", "config/settings.toml"],
+             ["-c", "user.name=Demo Dev", "-c", "user.email=dev@example.com", "commit", "-q", "-m",
+              "chore: raise the default page size to 50"],
+             ["push", "-q", "origin", "main"]):
+    subprocess.run(["git", "-C", str(repo), *step], check=True, capture_output=True, text=True)
 
 work = repo.parent
 env = {**os.environ, "FAKE_ORCA_STATE": str(work / "orca-state" / "state.json")}

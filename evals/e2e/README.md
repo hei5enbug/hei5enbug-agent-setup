@@ -315,7 +315,7 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T18 | ops-notes | Chat message | Release announcement with a paragraph that restates its table |
 | T19 | ops-notes | Shared document | Wiki draft of about 1,600 characters for a 1,500-character budget |
 | T20 | notes-cli | Final report | Small change with tests, then a report |
-| T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
+| T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, committed and pushed to a local bare origin inside the run folder, with a fake `orca` and seeded Git worktrees of three repositories |
 
 ## Comparing a change on both hosts
 

@@ -175,8 +175,27 @@ def run(words: list[str], options: dict[str, str], flags: set[str], state: dict)
     return {}
 
 
+def unfinished_main_clones() -> list[str]:
+    """The ids of the repositories whose main clone holds an uncommitted change or a commit its upstream lacks."""
+    try:
+        state = load()
+    except (OSError, ValueError):
+        return []
+    found = []
+    for record in state["worktrees"]:
+        if record.get("kind") == "folder" or not record.get("isMainWorktree"):
+            continue
+        dirty = git(record["path"], "status", "--porcelain").stdout.strip()
+        ahead = git(record["path"], "rev-list", "--count", "@{upstream}..HEAD")
+        if dirty or ahead.returncode != 0 or ahead.stdout.strip() != "0":
+            found.append(record["repoId"])
+    return found
+
+
 def log(argv: list[str], ok: bool) -> None:
     entry = {"time": time.time(), "cwd": os.getcwd(), "argv": argv, "ok": ok}
+    if "--workspace-status" in argv and "completed" in argv:
+        entry["unfinished_main_clones"] = unfinished_main_clones()
     with CALLS.open("a", encoding="utf-8") as stream:
         stream.write(json.dumps(entry) + "\n")
 
