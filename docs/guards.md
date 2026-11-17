@@ -188,8 +188,9 @@ here-document body checks only such substitutions. On Codex, trust the hook in `
 ## Orca status
 
 One hook script, `scripts/orca_status_hook.py`, keeps the session's tab title and reminds it of a missing name or tab
-title. It writes nothing to Orca: no board status, no worktree comment, and no unread flag, because those went stale;
-the user sets statuses, and Orca itself notifies the user when a session asks a question. It runs only when
+title. It writes no board status, no worktree comment, and no unread flag, because those went stale; the user sets
+statuses, and Orca itself notifies the user when a session asks a question. Its one write to Orca is closing a
+never-used shell terminal at a session's first prompt, described below. It runs only when
 `ORCA_TERMINAL_HANDLE` is set, never in a subagent or an assigned worker, and any failed read of Orca, Git, or the
 transcript lets the event pass. It reads Claude Code transcripts only, because Codex records tool calls as script text.
 
@@ -202,6 +203,15 @@ does not name, such as another ticket, pull request, repository, document, or go
 A follow-up, fix, review, merge, or question on the titled work keeps the title, as does one the user set.`, about 300
 characters; a session with no kept title gets nothing. The title comes from the tool input, so it works on Codex too. The
 state lives in `$XDG_STATE_HOME/hei5enbug-agent-setup/orca-status/<session id>.json`.
+
+At the first `UserPromptSubmit` of a session, the hook lists the terminals of the session's worktree and closes each
+never-used shell terminal other than the session's own, with no model turn: a terminal in which Orca lists no agent,
+whose rendered screen holds one shell prompt line with an empty input line, and whose accumulated output holds
+nothing but prompts and a login banner. A terminal that runs a process, holds typed input, shows an earlier command, or
+has exited stays open, as does any terminal that cannot be read within a few seconds. The state file records the
+fingerprint `T1`, so a later prompt of the same session never rereads the terminals. This keeps a session that a user
+or a handoff started in a new workspace from leaving an empty shell beside it. Claude Code and Codex both run
+`UserPromptSubmit` command hooks for plugins before the prompt reaches the model, so the hook behaves alike on both.
 
 Two things still need the model, so the `Stop` hook keeps the turn going once per state with a reminder of at most two
 sentences that names the exact command and asks the model to end the turn without repeating the reply. Claude Code shows

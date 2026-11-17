@@ -1,0 +1,1 @@
+Handoff from terminal term_sender, one result wanted: the default page_size in config/settings.toml of this repository, and nothing else. Change no file. Report it with `orca orchestration send --to term_sender --from $ORCA_TERMINAL_HANDLE --subject Report --body "<report>" --type status --json`.

@@ -1,8 +1,12 @@
 """Hook that keeps the session's tab title in step with its work and reminds it of a missing name or tab title.
 
-It runs only in an Orca terminal, for the main session, and writes nothing to Orca: it only reads Orca, Git, and the
-transcript.
+It runs only in an Orca terminal, for the main session. It reads Orca, Git, and the transcript, and its one write to
+Orca is closing a never-used shell terminal at a session's first prompt.
 
+- At the first prompt of a session (UserPromptSubmit), each terminal of the session's worktree other than the session's
+  own is closed when it is a never-used shell terminal: Orca lists no agent in it, its screen shows one shell prompt
+  with an empty input line, and its output holds no command. A terminal that runs a process, holds typed input, or
+  shows an earlier command stays, as does any terminal that cannot be read in time.
 - After the session renames its own terminal tab with a literal title (PostToolUse), that title is remembered, and each
   later prompt (UserPromptSubmit) gets one context line that names it, so the session can retitle when its work moves on.
 - At Stop it keeps the turn going once per state with a one-command instruction, which Claude Code shows as Stop hook
@@ -52,6 +56,11 @@ TAB_TITLE_LINE = (
     "A follow-up, fix, review, merge, or question on the titled work keeps the title, as does one the user set."
 )
 TERMINAL_HANDLE_REFERENCES = frozenset({"$ORCA_TERMINAL_HANDLE", "${ORCA_TERMINAL_HANDLE}"})
+TIDY_FINGERPRINT = "T1"
+TIDY_TERMINAL_LIMIT = 8
+TIDY_SECONDS = 2
+PROMPT_ENDINGS = frozenset("$%#>\u276f\u279c\u03bb\u00bb\ue0b0")
+BANNER = "Last login"
 
 
 @dataclass
@@ -182,6 +191,64 @@ def orca_worktree() -> dict | None:
     except (KeyError, TypeError):
         return None
     return record if isinstance(record, dict) and isinstance(record.get("id"), str) else None
+
+
+def terminal_lines(handle: str, screen: bool) -> list[str] | None:
+    """Return the lines of a terminal's rendered screen or accumulated output, or None when they cannot be read."""
+    payload = orca_run("terminal", "read", "--terminal", handle, *(["--screen"] if screen else []))
+    try:
+        terminal = payload["result"]["terminal"]
+    except (KeyError, TypeError):
+        return None
+    tail = terminal.get("tail") if isinstance(terminal, dict) else None
+    if not isinstance(terminal, dict) or terminal.get("status", "running") != "running" or terminal.get("draft"):
+        return None
+    if isinstance(tail, str):
+        return tail.splitlines()
+    return tail if isinstance(tail, list) and all(isinstance(line, str) for line in tail) else None
+
+
+def is_prompt_line(line: str) -> bool:
+    stripped = line.rstrip()
+    return bool(stripped) and stripped[-1] in PROMPT_ENDINGS
+
+
+def never_used(handle: str) -> bool:
+    """True only when the terminal shows one shell prompt with an empty input line and its output holds no command."""
+    shown = terminal_lines(handle, screen=True)
+    if shown is None or len([line for line in shown if line.strip()]) != 1 or not is_prompt_line(
+        next(line for line in shown if line.strip())
+    ):
+        return False
+    output = terminal_lines(handle, screen=False)
+    return output is not None and all(
+        not line.strip() or is_prompt_line(line) or line.lstrip().startswith(BANNER) for line in output
+    )
+
+
+def close_never_used_terminals(worktree: dict) -> None:
+    """Close each never-used shell terminal of `worktree` other than this session's own."""
+    payload = orca_run("terminal", "list", "--worktree", f'id:{worktree["id"]}')
+    try:
+        rows = payload["result"]["terminals"]
+    except (KeyError, TypeError):
+        return
+    own = os.environ.get("ORCA_TERMINAL_HANDLE")
+    deadline = time.monotonic() + TIDY_SECONDS
+    candidates = [
+        row["handle"]
+        for row in rows
+        if isinstance(row, dict)
+        and isinstance(row.get("handle"), str)
+        and row["handle"] != own
+        and not row.get("agentIdentity")
+        and row.get("worktreeId", worktree["id"]) == worktree["id"]
+    ] if isinstance(rows, list) else []
+    for handle in candidates[:TIDY_TERMINAL_LIMIT]:
+        if time.monotonic() > deadline:
+            return
+        if never_used(handle):
+            orca_run("terminal", "close", "--terminal", handle)
 
 
 @dataclass
@@ -380,6 +447,10 @@ def handle(event: object) -> dict | None:
     if name == "PostToolUse":
         record_own_rename(event, state)
         return None
+    if state.path is not None and TIDY_FINGERPRINT not in state.fired and state.mark(TIDY_FINGERPRINT):
+        worktree = orca_worktree()
+        if worktree is not None:
+            close_never_used_terminals(worktree)
     return title_context(state)
 
 

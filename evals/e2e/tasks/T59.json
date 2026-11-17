@@ -1,0 +1,57 @@
+{
+  "id": "T59",
+  "title": "Close a handoff-owned terminal after cleanup and report",
+  "category": "orca",
+  "path": "Handoff-owned terminal: cleanup, report, then close",
+  "fixture": "notes-cli",
+  "prompt_file": "prompts/T59.txt",
+  "setup": "setup/T59.py",
+  "env": {
+    "ORCA_TERMINAL_HANDLE": "term_demo_a",
+    "FAKE_ORCA_STATE": "{work}/orca-state/state.json",
+    "PATH": "{work}/fake-bin:{PATH}"
+  },
+  "limits": {
+    "wall_seconds": 600,
+    "max_budget_usd": 3
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "cleanup-report-close-in-order",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "cleanup_report_close_in_order"
+    },
+    {
+      "id": "report-holds-result",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "report_holds_result"
+    },
+    {
+      "id": "main-clone-kept",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "main_clone_kept"
+    },
+    {
+      "id": "repo-unchanged",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 1
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

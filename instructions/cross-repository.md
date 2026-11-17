@@ -47,12 +47,12 @@ repository's worktree, also in a task that changes several repositories; the tic
    the target's workspace is the entry with that path in `orca worktree list --repo id:<repoId> --json`. Look for a
    worktree on the chosen branch in `git -C <clone> worktree list --porcelain`, then take the first case that applies:
    - The worktree has its own entry in the Orca list: check `orca terminal list --worktree id:<worktree id> --json`.
-     If an agent terminal is open there, ask the user whether to send the brief to it. Otherwise start one with
-     `orca terminal create --worktree id:<worktree id> --command <host> --json` and continue at step 5.
+     If an agent terminal is open there, ask the user whether to send the brief to it. Otherwise start the agent as
+     "Starting an agent in a terminal" says and continue at step 5.
    - The worktree has no entry of its own: it sits inside the workspace, and Orca cannot tell which of the
      workspace's terminals runs in it. Show the user the workspace's terminal titles and ask whether to send the brief
-     to one of them or to start a new terminal there with `orca terminal create --worktree id:<workspace id>
-     --title <branch> --command "cd '<worktree path>' && <host>" --json`, then continue at step 5.
+     to one of them or to start the agent there, as "Starting an agent in a terminal" says with `cd '<worktree path>'
+     && <host>` as the command and `--title <branch>` on a created terminal, then continue at step 5.
    - No worktree is on the branch: run `orca worktree create --repo id:<repoId> --name <branch> --base-branch <base>
      --agent <host> --parent-worktree <parent> --json` with the parent from "Session placement". Pass no `--prompt`.
 4. After `orca worktree create`, Orca names the new branch itself, with its configured prefix and `/` replaced. When
@@ -67,8 +67,42 @@ repository's worktree, also in a task that changes several repositories; the tic
    `wait.satisfied` is true and "Messaging another session" allows it. Wait once more with a longer timeout, and if it
    is still false, report the handoff as not started.
 6. Send the brief with `orca terminal send --terminal <handle> --text "<brief>" --enter --json`. The brief states the
-   goal, the evidence found so far with file paths, the branch and base, and the acceptance checks. The handoff is
-   done when the send reports `accepted: true`; do not wait for the work to finish.
+   goal, the evidence found so far with file paths, the branch and base, and the acceptance checks. When the handoff
+   asks for one result and a report back, the brief also follows "Handoff-owned terminal". The handoff is done when
+   the send reports `accepted: true`; do not wait for the work to finish.
+
+### Starting an agent in a terminal
+
+A never-used shell terminal is a terminal that no agent runs in, whose screen read, `orca terminal read --terminal
+<handle> --screen --json`, shows only a shell prompt with an empty input line, and whose output, read without
+`--screen`, holds no command. Never send a command to, or close, a terminal in which a process other than its shell
+runs, that holds typed input, or that shows an earlier command, however it looks otherwise.
+
+To start `<host>` in an existing worktree or workspace, first list its terminals. When one is a never-used shell
+terminal, send the command to it with `orca terminal send --terminal <handle> --text "<command>" --enter --json`
+instead of creating another. Otherwise run `orca terminal create --worktree id:<id> --command "<command>" --json`.
+A created terminal is the one that holds the agent, so no shell terminal is left beside it. Then wait for the agent at
+step 5.
+
+### Handoff-owned terminal
+
+A handoff that asks the started session for one result and a report back owns that session's terminal when the
+handoff created it or started the agent in a never-used shell terminal. In that case the brief ends with
+`This terminal belongs to the handoff; close it after your report, as "Handoff-owned terminal" in
+cross-repository.md says.`; no other brief says it.
+
+A session whose brief ends so:
+
+1. Runs "Cleanup when the task ends" in [Orca worktree status](orca-worktree-status.md) for its repository.
+2. Sends its report to the sender's terminal, which the brief names. The report names each worktree the cleanup kept
+   and the check that kept it, such as `Kept worktree feature/demo: it has an uncommitted change.`
+3. Closes its own terminal with `orca terminal close --terminal "$ORCA_TERMINAL_HANDLE" --json` as its last action,
+   provided no question or approval prompt is open and none of its background work still runs. Otherwise it leaves
+   the terminal open and says so in the report.
+
+A brief sent to a terminal that already ran an agent never ends so, and a session whose brief does not end so never
+closes its terminal. When the handoff started the session in a child worktree, the delegate never removes the worktree it runs in:
+the session that sent the handoff removes it by "Cleanup when the task ends" once the delegate's terminal is closed.
 
 ## Messaging another session
 
@@ -96,7 +130,8 @@ protected value into it; the session that needs the file reports it to the user.
 ## After the handoff
 
 - When the working repository has nothing left for the current request, recommend in one line that the user continue
-  in the target worktree's session and end this one. Never end a session yourself.
+  in the target worktree's session and end this one. Never end a session yourself, except to close the terminal of
+  a handoff-owned session as "Handoff-owned terminal" says.
 - Otherwise continue the remaining work, and read the target with `orca terminal read --terminal <handle> --json` only
   when its result is needed.
 - When the task ends, finished child worktrees of this repository and of the task's ticket are removed as "Cleanup

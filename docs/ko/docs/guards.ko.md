@@ -180,8 +180,9 @@ Codex에서는 `/hooks`에서 이 훅을 신뢰해야 합니다.
 ## Orca 상태
 
 훅 스크립트 하나인 `scripts/orca_status_hook.py`가 세션의 탭 제목을 유지하고, 이름이나 탭 제목이 없으면 세션에 알립니다.
-Orca에는 아무것도 쓰지 않습니다. 보드 상태, worktree 설명, 읽지 않음 플래그는 오래된 값이 되므로 쓰지 않으며, 상태는
-사용자가 정하고 세션이 질문하면 Orca가 스스로 사용자에게 알립니다. 이 훅은 `ORCA_TERMINAL_HANDLE`이 설정된 경우에만
+보드 상태, worktree 설명, 읽지 않음 플래그는 오래된 값이 되므로 쓰지 않으며, 상태는 사용자가 정하고 세션이 질문하면
+Orca가 스스로 사용자에게 알립니다. Orca에 쓰는 것은 세션의 첫 프롬프트에서 쓰지 않은 쉘 터미널을 닫는 것 하나뿐이며,
+아래에서 설명합니다. 이 훅은 `ORCA_TERMINAL_HANDLE`이 설정된 경우에만
 실행되고, 서브에이전트나 지정된 작업자에서는 실행되지 않으며, Orca, Git, 기록을 읽지 못하면 그 이벤트를 통과시킵니다.
 Codex는 도구 호출을 스크립트 텍스트로 기록하므로 Claude Code 기록만 읽습니다.
 
@@ -194,6 +195,14 @@ ticket, pull request, repository, document, or goal, retitle the tab before star
 merge, or question on the titled work keeps the title, as does one the user set.` 한 줄(약 300자)을 컨텍스트에 더하며,
 기억한 제목이 없는 세션에는 아무것도 더하지 않습니다. 제목은 도구 입력에서 얻으므로 Codex에서도 동작합니다. 상태는
 `$XDG_STATE_HOME/hei5enbug-agent-setup/orca-status/<session id>.json`에 둡니다.
+
+세션의 첫 `UserPromptSubmit`에서 훅은 세션 worktree의 터미널을 나열하고, 세션 자신의 터미널을 제외한 쓰지 않은 쉘
+터미널을 모델 턴 없이 닫습니다. 쓰지 않은 쉘 터미널이란 Orca가 에이전트를 나열하지 않고, 렌더링된 화면이 입력 줄이 빈
+쉘 프롬프트 한 줄뿐이며, 누적 출력에 프롬프트와 로그인 배너뿐인 터미널입니다. 프로세스가 도는 터미널, 입력이 있는
+터미널, 이전 명령이 보이는 터미널, 종료된 터미널은 그대로 두며, 몇 초 안에 읽을 수 없는 터미널도 그대로 둡니다. 상태
+파일에 지문 `T1`을 기록하므로 같은 세션의 이후 프롬프트는 터미널을 다시 읽지 않습니다. 사용자나 인수인계가 새
+workspace에서 시작한 세션 옆에 빈 쉘이 남지 않게 합니다. Claude Code와 Codex 모두 플러그인의 `UserPromptSubmit` 명령 훅을
+프롬프트가 모델에 닿기 전에 실행하므로 훅은 두 호스트에서 같게 동작합니다.
 
 두 가지는 아직 모델이 필요하므로, `Stop` 훅이 상태마다 한 번 턴을 이어 가게 하며, 정확한 명령을 알려 주고 답을 반복하지
 않고 턴을 끝내라고 요청하는 두 문장 이하의 알림을 보냅니다. Claude Code는 이 알림을 훅 오류가 아니라

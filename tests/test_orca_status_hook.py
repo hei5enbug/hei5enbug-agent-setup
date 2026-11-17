@@ -1,4 +1,4 @@
-"""Hook that writes nothing to Orca, keeps the session's tab title, and reminds it of a missing name or tab title."""
+"""Hook that keeps the session's tab title, reminds it of a missing name or tab title, and closes never-used terminals."""
 
 from __future__ import annotations
 
@@ -299,7 +299,9 @@ class NoOrcaWriteTest(HookCase):
 
         # Then
         self.assertEqual(self.writes(), [])
-        self.assertEqual([call for call in self.calls() if not call.startswith("worktree current")], [])
+        self.assertEqual(
+            [call for call in self.calls() if not call.startswith(("worktree current", "terminal list"))], []
+        )
 
     def test_이름_변경_뒤_다음_프롬프트는_탭_제목_줄을_받고_그_줄에_워크트리_코멘트가_없다(self):
         # Regression: the tab title line asks the session to refresh a worktree comment that is no longer written
@@ -349,6 +351,147 @@ class NoOrcaWriteTest(HookCase):
         self.assertIsNone(self.tool_event("Edit", {"file_path": f"{WORKTREE}/a.py"}))
         self.assertIsNone(self.submit_prompt())
         self.assertIsNone(self.stop())
+
+
+PROMPT = "user@host demo %"
+FAKE_ORCA = """#!/usr/bin/env python3
+import json, sys
+args = [a for a in sys.argv[1:] if a != "--json"]
+with open({log!r}, "a") as stream:
+    stream.write(" ".join(args) + "\\n")
+data = json.load(open({data!r}))
+command = " ".join(args[:2])
+if command == "worktree current":
+    print(json.dumps(data["worktree"]))
+elif command == "terminal list":
+    if data.get("list_fails"):
+        sys.exit(1)
+    print(json.dumps({{"ok": True, "result": {{"terminals": [t["row"] for t in data["terminals"]]}}}}))
+elif command == "terminal read":
+    if data.get("read_fails"):
+        sys.exit(1)
+    handle = args[args.index("--terminal") + 1]
+    item = next(t for t in data["terminals"] if t["row"]["handle"] == handle)
+    terminal = {{"handle": handle, "status": item.get("status", "running"),
+                 "tail": item["screen" if "--screen" in args else "stream"]}}
+    print(json.dumps({{"ok": True, "result": {{"terminal": terminal}}}}))
+else:
+    print(json.dumps({{"ok": True}}))
+"""
+
+
+def terminal(handle: str, screen: list[str], stream: list[str] | None = None, agent: str | None = None,
+             worktree: str = f"repo-id::{WORKTREE}", status: str = "running") -> dict:
+    row = {"handle": handle, "worktreeId": worktree, "title": "zsh"}
+    if agent:
+        row["agentIdentity"] = agent
+    return {"row": row, "screen": screen, "stream": screen if stream is None else stream, "status": status}
+
+
+class NeverUsedTerminalTest(HookCase):
+    def set_terminals(self, terminals: list[dict], **flags) -> None:
+        data = self.root / "terminals.json"
+        data.write_text(json.dumps({"worktree": json.loads(worktree_json()), "terminals": terminals, **flags}))
+        program = self.bin / "orca"
+        program.write_text(FAKE_ORCA.format(log=str(self.log), data=str(data)))
+        program.chmod(program.stat().st_mode | stat.S_IXUSR)
+
+    def closes(self) -> list[str]:
+        return [call.split()[-1] for call in self.calls() if call.startswith("terminal close")]
+
+    def other_calls(self) -> list[str]:
+        return [call for call in self.calls() if call.startswith(("terminal list", "terminal read", "terminal close"))]
+
+    def test_첫_프롬프트는_쓰지_않은_쉘_터미널만_닫고_나머지_터미널은_그대로_둔다(self):
+        """프롬프트뿐인 터미널만 닫히고, 입력이 있는 것, 명령을 실행한 흔적이 있는 것, 프로세스가 도는 것, 에이전트, 다른 워크트리, 끝난 터미널은 닫히지 않는다."""
+        # Regression: a terminal that holds typed input, an earlier command, or a running process is closed
+        # Given
+        self.set_terminals([
+            terminal("term_idle", [PROMPT]),
+            terminal("term_typed", [f"{PROMPT} git sta"]),
+            terminal("term_ran", [PROMPT], stream=[PROMPT, f"{PROMPT} ls -la", "a.txt", PROMPT]),
+            terminal("term_dev", [f"{PROMPT} npm run dev", "ready on port 3000"]),
+            terminal("term_blank_and_prompt", ["", PROMPT, "", ""], stream=["Last login: Mon", PROMPT]),
+            terminal("term_agent", [PROMPT], agent="claude"),
+            terminal("term_other_tree", [PROMPT], worktree="repo-id::/home/test/work/other"),
+            terminal("term_exited", [PROMPT], status="exited"),
+            terminal("term_two_lines", ["notes", PROMPT]),
+        ])
+
+        # When
+        self.submit_prompt()
+
+        # Then
+        self.assertEqual(self.closes(), ["term_idle", "term_blank_and_prompt"])
+
+    def test_세션_자신의_터미널은_에이전트가_아직_안_보여도_읽지도_닫지도_않는다(self):
+        """첫 프롬프트에는 세션 자신의 터미널이 에이전트로 표시되지 않을 수 있어도 핸들로 걸러 낸다."""
+        # Regression: the session closes the terminal it is running in
+        # Given
+        self.set_terminals([terminal("term_test", [PROMPT]), terminal("term_idle", [PROMPT])])
+
+        # When
+        self.submit_prompt()
+
+        # Then
+        self.assertEqual(self.closes(), ["term_idle"])
+        self.assertFalse([call for call in self.calls() if call.startswith("terminal read") and "term_test" in call])
+
+    def test_정리는_세션의_첫_프롬프트에서_한_번만_한다(self):
+        """두 번째 프롬프트에서는 터미널을 읽지 않으므로 그 사이 사용자가 연 터미널을 닫지 않는다."""
+        # Regression: every prompt rereads the terminals and closes one that the user opened since
+        # Given
+        self.set_terminals([terminal("term_idle", [PROMPT])])
+        self.submit_prompt()
+        self.log.unlink()
+        self.set_terminals([terminal("term_late", [PROMPT])])
+
+        # When
+        self.submit_prompt()
+
+        # Then
+        self.assertEqual(self.other_calls(), [])
+
+    def test_오르카_밖_서브에이전트_배정된_역할에서는_터미널을_읽지_않는다(self):
+        """주 세션이 아닌 곳의 프롬프트는 터미널을 읽지도 닫지도 않는다."""
+        # Regression: a worker or subagent prompt closes terminals of the main session's worktree
+        # Given
+        self.set_terminals([terminal("term_idle", [PROMPT])])
+        cases = {
+            "outside Orca": ({"ORCA_TERMINAL_HANDLE": None}, {}),
+            "assigned role": ({"HEI5ENBUG_ASSIGNED_ROLE": "worker"}, {}),
+            "subagent": ({}, {"agent_id": "agent-1"}),
+        }
+        for name, (env, extra) in cases.items():
+            with self.subTest(name=name):
+                self.state_reset()
+                self.log.unlink(missing_ok=True)
+
+                # When
+                self.submit_prompt(env, **extra)
+
+                # Then
+                self.assertEqual(self.calls(), [])
+
+    def test_터미널을_읽지_못하면_닫지_않고_탭_제목_줄은_그대로_준다(self):
+        """읽기 실패나 목록 실패는 아무것도 닫지 않고 이벤트를 통과시키며 기록된 탭 제목 줄은 사라지지 않는다."""
+        # Regression: a failed read is treated as an empty terminal, or breaks the prompt
+        # Given
+        command = 'orca terminal rename --terminal "$ORCA_TERMINAL_HANDLE" --title "ABC-123 demo" --json'
+        output = json.dumps({"ok": True, "result": {"rename": {"handle": "term_test", "title": "ABC-123 demo"}}})
+        self.tool_event("Bash", {"command": command}, {"stdout": output})
+        for flag in ("read_fails", "list_fails"):
+            with self.subTest(flag=flag):
+                self.set_terminals([terminal("term_idle", [PROMPT])], **{flag: True})
+                self.state_reset()
+                self.tool_event("Bash", {"command": command}, {"stdout": output})
+
+                # When
+                context = self.submit_prompt()["hookSpecificOutput"]["additionalContext"]
+
+                # Then
+                self.assertEqual(self.closes(), [])
+                self.assertIn("Current Orca tab title: ABC-123 demo.", context)
 
 
 class NameAndTitleRuleTest(HookCase):

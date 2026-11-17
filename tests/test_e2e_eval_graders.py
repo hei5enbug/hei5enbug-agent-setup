@@ -1600,5 +1600,255 @@ class GoldenTaskTest(TempCase):
                 self.assertEqual(passed, expected)
 
 
+HANDOFF_TASK_IDS = ("T59", "T60", "T61", "T62")
+#: required check ids that must fail on the unmodified fixture, and those that already pass, per handoff task
+HANDOFF_FAILING = {
+    "T59": {"cleanup-report-close-in-order", "report-holds-result"},
+    "T60": {"report-names-kept-worktree"},
+    "T61": {"host-command-in-shell-terminal", "brief-says-terminal-belongs"},
+    "T62": {"never-used-closed-first", "answer-names-value"},
+}
+HANDOFF_PASSING = {
+    "T59": {"main-clone-kept", "repo-unchanged"},
+    "T60": {"nothing-closed", "dirty-child-kept", "repo-unchanged"},
+    "T61": {"no-terminal-created", "repo-unchanged"},
+    "T62": {"other-terminals-untouched", "repo-unchanged"},
+}
+VALUE_ANSWER = "page_size 기본값은 20입니다."
+
+
+class HandoffTaskTest(unittest.TestCase):
+    """The handoff tasks T59 to T62 and the fake Orca terminal commands they rely on."""
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+
+    def seed(self, task_id: str) -> tuple[dict[str, Any], Path, str]:
+        task = json.loads((TASKS_ROOT / f"{task_id}.json").read_text(encoding="utf-8"))
+        self.seeded = getattr(self, "seeded", 0) + 1
+        repo = self.root / f"{task_id}-{self.seeded}" / "repo"
+        return task, repo, graders.materialize_fixture(task, FIXTURES_ROOT, TASKS_ROOT, repo)
+
+    def orca(self, repo: Path, *arguments: str, handle: str = "term_demo_a", cwd: Path | None = None) -> dict[str, Any]:
+        work = repo.parent
+        env = {**os.environ, "FAKE_ORCA_STATE": str(work / "orca-state" / "state.json"),
+               "ORCA_TERMINAL_HANDLE": handle}
+        done = subprocess.run([str(work / "fake-bin" / "orca"), *arguments, "--json"], cwd=cwd or repo, env=env,
+                              capture_output=True, text=True, check=False)
+        return json.loads(done.stdout)
+
+    def state(self, repo: Path) -> dict[str, Any]:
+        return json.loads((repo.parent / "orca-state" / "state.json").read_text(encoding="utf-8"))
+
+    def worktree_id(self, repo: Path, name: str) -> str:
+        return next(item["id"] for item in self.state(repo)["worktrees"] if item["displayName"] == name)
+
+    def report(self, repo: Path, body: str = "page_size is 20; kept worktree login-spike") -> None:
+        self.orca(repo, "orchestration", "send", "--to", "term_sender", "--from", "term_demo_a", "--subject", "Report",
+                  "--body", body, "--type", "status")
+
+    def outcome(self, task: dict, repo: Path, base: str, answer: str = "") -> dict[str, bool]:
+        result = graders.grade_run(task, repo, base, make_view(answer), TASKS_ROOT, self.root / "grade")
+        return {check["id"]: check["passed"] for check in result["checks"]}
+
+    def failed(self, task: dict, repo: Path, base: str, answer: str = "") -> set[str]:
+        return {name for name, passed in self.outcome(task, repo, base, answer).items() if not passed}
+
+    def test_핸드오프_과제는_수정하지_않으면_기대한_검사만_실패하고_참조_해법은_모두_통과한다(self):
+        """T59부터 T62까지 아무것도 하지 않은 실행은 정해진 필수 검사에서 실패하고 부수 피해 검사는 통과하며, 참조 해법은 전부 통과한다."""
+        for task_id in HANDOFF_TASK_IDS:
+            with self.subTest(task_id):
+                # given
+                task, repo, base = self.seed(task_id)
+                untouched = self.outcome(task, repo, base)
+
+                # when
+                apply_reference(task_id, repo)
+                solved = self.outcome(task, repo, base, VALUE_ANSWER)
+
+                # then
+                self.assertEqual({name for name, passed in untouched.items() if not passed}, HANDOFF_FAILING[task_id])
+                self.assertTrue(all(untouched[name] for name in HANDOFF_PASSING[task_id]), untouched)
+                self.assertEqual([name for name, passed in solved.items() if not passed], [])
+
+    def test_H는_보고_전에_터미널을_닫거나_워크트리를_지우지_않으면_실패한다(self):
+        """터미널을 보고보다 먼저 닫거나, 워크트리를 지우지 않거나, 닫은 뒤에 Orca를 더 호출하면 순서 검사가 실패한다."""
+        cases = {
+            "close before report": ("close", "report"),
+            "no removal": ("report", "close"),
+            "call after close": ("remove", "report", "close", "list"),
+        }
+        for name, steps in cases.items():
+            with self.subTest(name):
+                # given
+                task, repo, base = self.seed("T59")
+                actions = {
+                    "remove": lambda: self.orca(repo, "worktree", "rm", "--worktree",
+                                                f"id:{self.worktree_id(repo, 'docs cleanup')}", "--delete-branch"),
+                    "report": lambda: self.report(repo, "page_size is 20"),
+                    "close": lambda: self.orca(repo, "terminal", "close", "--terminal", "term_demo_a"),
+                    "list": lambda: self.orca(repo, "terminal", "list"),
+                }
+                if name == "close before report":
+                    steps = ("remove", "close", "report")
+
+                # when
+                for step in steps:
+                    actions[step]()
+
+                # then
+                self.assertIn("cleanup-report-close-in-order", self.failed(task, repo, base, VALUE_ANSWER))
+
+    def test_K는_터미널을_닫거나_더러운_워크트리를_지우면_실패한다(self):
+        """이미 에이전트가 돈 터미널을 닫으면 nothing-closed가, 커밋하지 않은 변경이 있는 워크트리를 지우면 dirty-child-kept가 실패한다."""
+        # given
+        task, repo, base = self.seed("T60")
+        self.report(repo)
+        before = self.failed(task, repo, base)
+
+        # when
+        self.orca(repo, "terminal", "close", "--terminal", "term_demo_a")
+        closed = self.failed(task, repo, base)
+        self.orca(repo, "worktree", "rm", "--worktree", f"id:{self.worktree_id(repo, 'login spike')}", "--force")
+        removed = self.failed(task, repo, base)
+
+        # then
+        self.assertEqual(before, set())
+        self.assertEqual(closed, {"nothing-closed"})
+        self.assertTrue({"nothing-closed", "dirty-child-kept"} <= removed)
+
+    def test_S는_터미널을_만들거나_프로세스가_도는_터미널에_명령을_보내거나_안내문이_없으면_실패한다(self):
+        """올바른 핸드오프에 터미널 생성이나 개발 서버 터미널로의 명령이 더해지거나 안내문이 빠지면 그 검사만 실패한다."""
+        shell = "term_demo_b_shell"
+        start = ("terminal", "send", "--terminal", shell, "--text", "claude", "--enter")
+        brief = ("terminal", "send", "--terminal", shell, "--text",
+                 "Report to term_demo_a. This terminal belongs to the handoff; close it after your report.", "--enter")
+        cases = {
+            "created terminal": ((start, brief, ("terminal", "create", "--worktree", "demo-b")),
+                                 {"no-terminal-created"}),
+            "command to a process terminal": (
+                (start, brief, ("terminal", "send", "--terminal", "term_demo_a_dev", "--text", "claude", "--enter")),
+                {"host-command-in-shell-terminal"}),
+            "no notice in the brief": (
+                (start, ("terminal", "send", "--terminal", shell, "--text", "Report to term_demo_a.", "--enter")),
+                {"brief-says-terminal-belongs"}),
+        }
+        for name, (calls, expected) in cases.items():
+            with self.subTest(name):
+                # given
+                task, repo, base = self.seed("T61")
+
+                # when
+                for call in calls:
+                    self.orca(repo, *[f"id:{self.worktree_id(repo, 'demo-b')}" if token == "demo-b" else token
+                                      for token in call])
+
+                # then
+                self.assertEqual(self.failed(task, repo, base), expected)
+
+    def test_E는_쓰지_않은_터미널을_열어_두거나_입력이_있는_터미널을_닫으면_실패한다(self):
+        """훅이 닫아야 할 터미널을 남기면 실패하고, 입력이 있는 터미널이나 세션 자신의 터미널을 닫거나 보내면 실패한다."""
+        # given
+        task, repo, base = self.seed("T62")
+        left_open = self.failed(task, repo, base, VALUE_ANSWER)
+
+        # when
+        self.orca(repo, "terminal", "close", "--terminal", "term_idle")
+        closed_idle = self.failed(task, repo, base, VALUE_ANSWER)
+        self.orca(repo, "terminal", "close", "--terminal", "term_typed")
+        closed_typed = self.failed(task, repo, base, VALUE_ANSWER)
+
+        # then
+        self.assertEqual(left_open, {"never-used-closed-first"})
+        self.assertEqual(closed_idle, set())
+        self.assertEqual(closed_typed, {"other-terminals-untouched"})
+
+    def test_E는_세션이_자기_호출을_시작한_뒤에_닫은_터미널을_첫_응답_전_닫힘으로_인정하지_않는다(self):
+        """훅은 프롬프트에서 읽기와 닫기만 하므로, 다른 Orca 호출 뒤의 닫기는 모델이 한 것이어서 실패한다."""
+        # given
+        task, repo, base = self.seed("T62")
+        self.orca(repo, "worktree", "show", "--worktree", f"id:{self.worktree_id(repo, 'demo-a')}")
+
+        # when
+        self.orca(repo, "terminal", "close", "--terminal", "term_idle")
+
+        # then
+        self.assertEqual(self.failed(task, repo, base, VALUE_ANSWER), {"never-used-closed-first"})
+
+    def test_가짜_Orca는_호스트_명령이_쉘_터미널에서만_에이전트를_시작하고_화면과_출력을_구분해_읽는다(self):
+        """terminal list는 화면 내용을 숨기고, read는 --screen이 있을 때만 화면을 주며, 프로세스가 도는 터미널은 에이전트가 되지 않는다."""
+        # given
+        _, repo, _ = self.seed("T61")
+
+        # when
+        listed = self.orca(repo, "terminal", "list", "--worktree", f"id:{self.worktree_id(repo, 'demo-b')}")
+        screen = self.orca(repo, "terminal", "read", "--terminal", "term_demo_b_shell", "--screen")
+        before = self.orca(repo, "terminal", "wait", "--terminal", "term_demo_b_shell", "--for", "tui-idle")
+        self.orca(repo, "terminal", "send", "--terminal", "term_demo_b_shell", "--text", "cd '/x' && claude",
+                  "--enter")
+        after = self.orca(repo, "terminal", "wait", "--terminal", "term_demo_b_shell", "--for", "tui-idle")
+        self.orca(repo, "terminal", "send", "--terminal", "term_demo_a_dev", "--text", "claude", "--enter")
+        dev = next(item for item in self.state(repo)["terminals"] if item["handle"] == "term_demo_a_dev")
+
+        # then
+        row = next(item for item in listed["result"]["terminals"] if item["handle"] == "term_demo_b_shell")
+        self.assertNotIn("screen", row)
+        self.assertEqual(screen["result"]["terminal"]["tail"], ["user@host demo %"])
+        self.assertEqual((before["result"]["wait"]["satisfied"], after["result"]["wait"]["satisfied"]), (False, True))
+        self.assertNotIn("agentIdentity", dev)
+
+    def test_위임_세션이_터미널을_닫은_뒤_보낸_쪽이_자식_워크트리를_지우고_위임_세션은_지우지_않는다(self):
+        """닫기 전의 삭제와 위임 세션 자신의 삭제는 문제로 잡히고, 닫은 뒤 보낸 쪽의 삭제만 문제가 없다."""
+        sys.path.insert(0, str(TASKS_ROOT / "custom"))
+        try:
+            import handoff_shared
+        finally:
+            sys.path.remove(str(TASKS_ROOT / "custom"))
+        orders = {
+            "sender removes after close": ("delegate close", "sender remove"),
+            "delegate removes its own": ("delegate close", "delegate remove"),
+            "removed before close": ("sender remove", "delegate close"),
+            "never closed": ("sender remove",),
+            "never removed": ("delegate close",),
+        }
+        expected = {
+            "sender removes after close": [],
+            "delegate removes its own": ["the delegate removed the worktree it runs in"],
+            "removed before close": ["the worktree was removed before the delegate's terminal was closed"],
+            "never closed": ["the delegate's terminal was never closed"],
+            "never removed": ["the child worktree was never removed"],
+        }
+        for name, steps in orders.items():
+            with self.subTest(name):
+                # given
+                _, repo, _ = self.seed("T59")
+                child_id = self.worktree_id(repo, "docs cleanup")
+                child_path = repo.parent / "demo-a-docs-cleanup"
+                state = self.state(repo)
+                state["terminals"].append({"handle": "term_child", "worktreeId": child_id, "title": "claude",
+                                           "agentIdentity": "claude"})
+                (repo.parent / "orca-state" / "state.json").write_text(json.dumps(state), encoding="utf-8")
+                runs = {
+                    "delegate close": lambda: self.orca(repo, "terminal", "close", "--terminal", "term_child",
+                                                        handle="term_child", cwd=child_path if child_path.exists() else repo),
+                    "sender remove": lambda: self.orca(repo, "worktree", "rm", "--worktree", f"id:{child_id}",
+                                                       "--delete-branch"),
+                    "delegate remove": lambda: self.orca(repo, "worktree", "rm", "--worktree", f"id:{child_id}",
+                                                         "--delete-branch", handle="term_child", cwd=child_path if child_path.exists() else repo),
+                }
+
+                # when
+                for step in steps:
+                    runs[step]()
+                calls = [json.loads(line) for line in
+                         (repo.parent / "orca-state" / "calls.jsonl").read_text(encoding="utf-8").splitlines()]
+                problems = handoff_shared.child_removal_problems(calls, child_id, "term_child")
+
+                # then
+                self.assertEqual(problems, expected[name])
+
+
 if __name__ == "__main__":
     unittest.main()

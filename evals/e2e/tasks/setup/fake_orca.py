@@ -19,7 +19,10 @@ CALLS = STATE.parent / "calls.jsonl"
 VALUE_OPTIONS = frozenset({
     "--repo", "--worktree", "--parent-worktree", "--terminal", "--workspace-status", "--comment", "--display-name",
     "--title", "--name", "--base-branch", "--reference", "--command", "--timeout-ms", "--for", "--text", "--limit",
+    "--to", "--from", "--subject", "--body", "--type",
 })
+HOST_COMMANDS = ("claude", "codex")
+HIDDEN_TERMINAL_FIELDS = ("screen", "stream", "process")
 
 
 class Failure(Exception):
@@ -94,14 +97,14 @@ def main_clone(state: dict, record: dict) -> dict:
     return next(item for item in state["worktrees"] if item.get("repoId") == record["repoId"] and item["isMainWorktree"])
 
 
-def remove_worktree(state: dict, record: dict, delete_branch: bool) -> dict:
+def remove_worktree(state: dict, record: dict, delete_branch: bool, force: bool = False) -> dict:
     if record.get("isMainWorktree"):
         raise Failure("main_worktree", "a repository's main clone cannot be removed")
     if any(item.get("parentWorktreeId") == record["id"] for item in state["worktrees"]):
         raise Failure("has_children", "the worktree has child worktrees")
     if record.get("kind") != "folder":
         main = main_clone(state, record)
-        result = git(main["path"], "worktree", "remove", record["path"])
+        result = git(main["path"], "worktree", "remove", *(["--force"] if force else []), record["path"])
         if result.returncode != 0:
             raise Failure("git_failed", result.stderr.strip() or "git worktree remove failed")
         branch = record.get("branch", "").removeprefix("refs/heads/")
@@ -130,6 +133,61 @@ def set_worktree(state: dict, record: dict, options: dict[str, str], flags: set[
     return {"worktree": record}
 
 
+def find_terminal(state: dict, handle: str | None) -> dict:
+    for item in state["terminals"]:
+        if item["handle"] == handle:
+            return item
+    raise Failure("terminal_not_found", f"no terminal {handle}")
+
+
+def host_command(text: str) -> str | None:
+    """Return the agent that a typed command starts, such as `claude` or `cd 'x' && codex`, or None."""
+    last = text.strip().split("&&")[-1].split()
+    return last[0] if len(last) == 1 and last[0] in HOST_COMMANDS else None
+
+
+def read_terminal(state: dict, options: dict[str, str], flags: set[str]) -> dict:
+    handle = options.get("--terminal")
+    if not any(item["handle"] == handle for item in state["terminals"]):
+        return {"text": ""}
+    item = find_terminal(state, handle)
+    shown = item.get("screen") if "--screen" in flags else item.get("stream")
+    tail = shown if isinstance(shown, list) else ([] if shown is None else shown.splitlines())
+    return {"text": "", "terminal": {"handle": handle, "status": "running", "tail": tail,
+                                     "source": "screen" if "--screen" in flags else "stream"}}
+
+
+def create_terminal(state: dict, options: dict[str, str]) -> dict:
+    target = resolve(state, options.get("--worktree"))
+    number = 1 + sum(1 for item in state["terminals"] if item["handle"].startswith("term_new_"))
+    handle = f"term_new_{number}"
+    terminal = {"handle": handle, "worktreeId": target["id"], "title": options.get("--title", "")}
+    command = options.get("--command")
+    agent = host_command(command) if command else None
+    if agent:
+        terminal["agentIdentity"] = agent
+    elif command:
+        terminal["process"] = True
+        terminal["screen"] = [f"% {command}"]
+    else:
+        terminal["screen"] = ["user@host demo %"]
+        terminal["stream"] = ["user@host demo %"]
+    state["terminals"].append(terminal)
+    return {"terminal": {"handle": handle}}
+
+
+def send_terminal(state: dict, options: dict[str, str]) -> dict:
+    terminal = find_terminal(state, options.get("--terminal"))
+    text = options.get("--text", "")
+    state.setdefault("sent", []).append({"handle": terminal["handle"], "text": text})
+    agent = host_command(text)
+    if agent and not terminal.get("agentIdentity") and not terminal.get("process"):
+        terminal["agentIdentity"] = agent
+        for field in HIDDEN_TERMINAL_FIELDS:
+            terminal.pop(field, None)
+    return {"send": {"handle": terminal["handle"], "accepted": True}}
+
+
 def run(words: list[str], options: dict[str, str], flags: set[str], state: dict) -> dict:
     command = " ".join(words[:2])
     if command == "status":
@@ -146,11 +204,24 @@ def run(words: list[str], options: dict[str, str], flags: set[str], state: dict)
     if command == "worktree set":
         return set_worktree(state, resolve(state, options.get("--worktree")), options, flags)
     if command == "worktree rm":
-        return remove_worktree(state, resolve(state, options.get("--worktree")), "--delete-branch" in flags)
+        return remove_worktree(state, resolve(state, options.get("--worktree")), "--delete-branch" in flags,
+                               "--force" in flags)
     if command == "terminal list":
         selector = options.get("--worktree")
         target = resolve(state, selector)["id"] if selector else None
-        return {"terminals": [item for item in state["terminals"] if target is None or item["worktreeId"] == target]}
+        return {"terminals": [{key: value for key, value in item.items() if key not in HIDDEN_TERMINAL_FIELDS}
+                              for item in state["terminals"] if target is None or item["worktreeId"] == target]}
+    if command == "terminal create":
+        return create_terminal(state, options)
+    if command == "terminal send":
+        return send_terminal(state, options)
+    if command == "terminal wait":
+        return {"wait": {"satisfied": bool(find_terminal(state, options.get("--terminal")).get("agentIdentity"))}}
+    if command == "orchestration send":
+        message = {"to": options.get("--to"), "from": options.get("--from"), "subject": options.get("--subject", ""),
+                   "body": options.get("--body", "")}
+        state.setdefault("messages", []).append(message)
+        return {"message": message}
     if command == "terminal close":
         before = len(state["terminals"])
         state["terminals"] = [item for item in state["terminals"] if item["handle"] != options.get("--terminal")]
@@ -161,7 +232,7 @@ def run(words: list[str], options: dict[str, str], flags: set[str], state: dict)
                 item["title"] = options.get("--title", "")
         return {"rename": {"handle": options.get("--terminal"), "title": options.get("--title", "")}}
     if command == "terminal read":
-        return {"text": ""}
+        return read_terminal(state, options, flags)
     if command == "reference find":
         key = words[2] if len(words) > 2 else ""
         return {"worktrees": [item for item in state["worktrees"]
@@ -176,7 +247,12 @@ def run(words: list[str], options: dict[str, str], flags: set[str], state: dict)
 
 
 def log(argv: list[str], ok: bool) -> None:
-    entry = {"time": time.time(), "cwd": os.getcwd(), "argv": argv, "ok": ok}
+    try:
+        cwd = os.getcwd()
+    except FileNotFoundError:
+        cwd = os.environ.get("PWD", "")
+    entry = {"time": time.time(), "cwd": cwd, "handle": os.environ.get("ORCA_TERMINAL_HANDLE"), "argv": argv,
+             "ok": ok}
     with CALLS.open("a", encoding="utf-8") as stream:
         stream.write(json.dumps(entry) + "\n")
 

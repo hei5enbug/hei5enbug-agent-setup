@@ -1,0 +1,59 @@
+{
+  "id": "T62",
+  "title": "Close the never-used shell terminal at the first prompt",
+  "category": "orca",
+  "path": "Session start: close a never-used shell terminal, keep the rest",
+  "fixture": "notes-cli",
+  "prompt_file": "prompts/T62.txt",
+  "setup": "setup/T62.py",
+  "env": {
+    "ORCA_TERMINAL_HANDLE": "term_demo_a",
+    "FAKE_ORCA_STATE": "{work}/orca-state/state.json",
+    "PATH": "{work}/fake-bin:{PATH}"
+  },
+  "limits": {
+    "wall_seconds": 600,
+    "max_budget_usd": 3
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "never-used-closed-first",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "never_used_closed_first"
+    },
+    {
+      "id": "other-terminals-untouched",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "other_terminals_untouched"
+    },
+    {
+      "id": "answer-names-value",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 1,
+      "patterns": [
+        "(?<!\\d)20(?!\\d)"
+      ]
+    },
+    {
+      "id": "repo-unchanged",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 1
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

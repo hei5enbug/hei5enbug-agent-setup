@@ -1,0 +1,57 @@
+{
+  "id": "T61",
+  "title": "Start the agent in a never-used shell terminal",
+  "category": "orca",
+  "path": "Handoff: start the agent in an existing never-used shell terminal",
+  "fixture": "notes-cli",
+  "prompt_file": "prompts/T61.txt",
+  "setup": "setup/T61.py",
+  "env": {
+    "ORCA_TERMINAL_HANDLE": "term_demo_a",
+    "FAKE_ORCA_STATE": "{work}/orca-state/state.json",
+    "PATH": "{work}/fake-bin:{PATH}"
+  },
+  "limits": {
+    "wall_seconds": 600,
+    "max_budget_usd": 3
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "host-command-in-shell-terminal",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "host_command_in_shell_terminal"
+    },
+    {
+      "id": "no-terminal-created",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "no_terminal_created"
+    },
+    {
+      "id": "brief-says-terminal-belongs",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "brief_says_terminal_belongs"
+    },
+    {
+      "id": "repo-unchanged",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 1
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

@@ -29,7 +29,9 @@ File the issue in this session, and say why in one line, when any of these holds
    - `orca terminal read --terminal <handle> --screen` shows no open question or approval prompt.
    - Its input line is empty: send `--text x`; when the line then shows only `x`, delete it with `--text $'\x7f'`.
      Otherwise delete the `x`, send nothing to that terminal, and go on to the next one.
-3. When none passes, run `orca terminal create --worktree id:<workspace id> --command <host> --json`, then
+3. When none passes, start `<host>` in the workspace as "Starting an agent in a terminal" in the
+   [cross-repository rules](../../../instructions/cross-repository.md) says: in a never-used shell terminal when the
+   workspace has one, otherwise in a created terminal. Then run
    `orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json`. When `wait.satisfied` is
    still false after one longer wait, file in this session.
 
@@ -50,7 +52,10 @@ Send one message with `orca terminal send --terminal <handle> --text "<handoff>"
 - the gap in a few lines, the owning file's path inside the plugin, and the case's identifiers from step 1;
 - the original session's transcript file, with the instruction to read every user message in it and apply the
   requirement and question rules in the delegate's own session;
-- the original terminal handle, and that the delegate reports the issue link back as in "Report back".
+- the original terminal handle, and that the delegate reports the issue link back as in "Report back";
+- when step 3 created the terminal or started the agent in a never-used shell terminal, the closing sentence that
+  "Handoff-owned terminal" in the [cross-repository rules](../../../instructions/cross-repository.md) gives, and
+  never that sentence for a terminal that already ran an agent.
 
 Include no secret and no local path other than the transcript file. The handoff is done when the send reports
 `accepted: true`; do not wait for the work. Tell the user in one line which workspace's session took the issue and that
@@ -71,4 +76,5 @@ session. After step 9, report back.
 
 Run `orca orchestration send --to <original terminal handle> --from $ORCA_TERMINAL_HANDLE --subject "Issue filed"
 --body "<issue link>" --type status --json`, where the handle is the one the handoff names. Send the link or the
-reason nothing was filed, and no draft text.
+reason nothing was filed, and no draft text. When the handoff ends with the closing sentence, first run the cleanup
+and add the kept worktrees to the body as "Handoff-owned terminal" says, and close the terminal after this send.
