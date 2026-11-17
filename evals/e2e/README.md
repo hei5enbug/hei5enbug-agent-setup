@@ -375,6 +375,20 @@ record.
 |---|---|---|
 | [#92](records/92.json) | T02, T08, and T20 before and after; T05, T07, T09, and T12 after, for the item 6 rules | Fail: T08 on Claude Code and T20 on Codex. The owner adopted the change on 2026-11-14 because no plugin file these cases load changed; #105, #86, and #106 follow up. |
 
+### Repeated review rules
+
+Issue 118 adopts the rules for a review the user asks to repeat only on a record from T104 to T106. The campaign has
+three variants: `before` is the revision without the change, `after` is the revision with the rule text alone, and `cand`
+is `after` with `candidates/118-review-round-counter.patch`, which is unapplied. The patch makes `scripts/text_review.py
+review` count, per draft file, the runs that reach the reviewer and still return findings, reset that draft's count on a
+run without findings, and print `stop` and `question` on every third such run, so the session does not count. `record`
+judges `before` against `after` for the rule text, and `after` against `cand` for the script. The patch covers only text
+review loops and leaves the rounds of independent validation through `role_runner.py reviewer` to the rule text. T104 to
+T106 loop through the seeded `tools/review.py`, which the patch does not touch, so on these tasks `cand` differs from
+`after` only by noise, and a measured gain of the script needs a task that loops `text_review.py review`.
+`tests/test_review_round_counter.py` requires that the patch applies to the branch's script and that a patched copy
+prints the stop on the third run and an unpatched copy never does.
+
 ## Known limits
 
 - Bash requests are always allowed, so a campaign must run on a machine where an agent may run any shell command.

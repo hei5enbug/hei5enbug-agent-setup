@@ -1,0 +1,87 @@
+diff --git a/scripts/text_review.py b/scripts/text_review.py
+index f909ae8..0398b9c 100644
+--- a/scripts/text_review.py
++++ b/scripts/text_review.py
+@@ -5,6 +5,7 @@ from __future__ import annotations
+ import argparse
+ import hashlib
+ import json
++import os
+ import re
+ import shutil
+ import subprocess
+@@ -24,6 +25,18 @@ RUNNER_GRACE_SECONDS = 60
+ RUNNER_TIMEOUT_STAGES = 4
+ FINAL_REPORT_KIND = "final-report"
+ EXIT_OK, EXIT_FINDINGS, EXIT_USAGE, EXIT_REVIEW_FAILED = 0, 1, 2, 3
++RUN_LIMIT = 3
++RUN_STATE_ENV = "TEXT_REVIEW_STATE_DIR"
++STOP_NOTICE = (
++    "This is the third run in a row for this draft that still returns findings. Apply this run's findings, then stop "
++    "before the next run and write nothing outward. Report the findings of each run by severity, the reviewers and the "
++    "reviewed text of each run, how many findings an earlier fix caused or left behind in another passage, how many "
++    "are in text the loop never changed, and whether any finding is high severity or contradicts a confirmed decision."
++)
++STOP_QUESTION = (
++    "Then ask the user once, with one recommendation, whether to go on unchanged, to narrow the reviewed text, the "
++    "reviewers, or the severity to fix, or to stop and write now."
++)
+ FINDING_TYPES = ("removable", "missing", "ambiguous")
+ LINE_TEXT_LIMIT = 160
+ IDENTIFIER_MAX_LENGTH = 80
+@@ -431,6 +444,37 @@ def command_check(args: argparse.Namespace) -> int:
+     return EXIT_FINDINGS if found else EXIT_OK
+ 
+ 
++def run_counter(draft_path: str) -> Path | None:
++    if draft_path == "-":
++        return None
++    folder = Path(os.environ.get(RUN_STATE_ENV) or Path(tempfile.gettempdir()) / "text-review-state")
++    return folder / f"{hashlib.sha256(str(Path(draft_path).resolve()).encode('utf-8')).hexdigest()}.json"
++
++
++def count_run(counter: Path | None, findings_remain: bool) -> int:
++    """Runs in a row that reached the reviewer and still had findings; a run without findings resets the draft."""
++    if counter is None:
++        return 0
++    try:
++        if not findings_remain:
++            counter.unlink(missing_ok=True)
++            return 0
++        try:
++            previous = int(json.loads(counter.read_text(encoding="utf-8"))["runs"])
++        except (OSError, ValueError, KeyError, TypeError):
++            previous = 0
++        counter.parent.mkdir(parents=True, exist_ok=True)
++        counter.write_text(json.dumps({"runs": previous + 1}), encoding="utf-8")
++        return previous + 1
++    except OSError:
++        return 0
++
++
++def stop_fields(runs: int) -> dict:
++    stop = {"stop": STOP_NOTICE, "question": STOP_QUESTION} if runs and runs % RUN_LIMIT == 0 else {}
++    return {"runs": runs, **stop} if runs else {}
++
++
+ def command_review(args: argparse.Namespace) -> int:
+     draft = read_input(args.draft)
+     rules = [(Path(path).name, read_input(path)) for path in args.rules]
+@@ -449,12 +493,16 @@ def command_review(args: argparse.Namespace) -> int:
+     facts = unique(fact for outcome in outcomes for fact in outcome.get("over_budget_facts", []))
+     errors = [outcome["error"] for outcome in outcomes if "error" in outcome]
+     status = {"runner": runners[0], "runners": runners}
++    counter = run_counter(args.draft)
+     if findings:
+-        emit({**base, "findings": findings, "over_budget_facts": facts, **status, **({"errors": errors} if errors else {})})
++        runs = stop_fields(count_run(counter, True))
++        emit({**base, "findings": findings, "over_budget_facts": facts, **status, **runs,
++              **({"errors": errors} if errors else {})})
+         return EXIT_FINDINGS
+     if errors:
+         emit({**base, "error": "; ".join(errors), **status})
+         return EXIT_REVIEW_FAILED
++    count_run(counter, False)
+     emit({**base, "findings": [], "over_budget_facts": facts, **status, **passed_digest(args.kind, draft)})
+     return EXIT_OK
+ 
