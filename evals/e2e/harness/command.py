@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
+import shutil
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from .config import (
-    AGENT_EFFORT, APPROVER_SERVER, APPROVER_TOOL, CLAUDE_SETTING_SOURCES, FORBIDDEN_ARGS, HARNESS_DIR, HOST_CLAUDE, HOSTS,
+    AGENT_EFFORT, APPROVER_SERVER, APPROVER_TOOL, CLAUDE_SETTING_SOURCES, FORBIDDEN_ARGS, HARNESS_DIR, HOST_CLAUDE, HOST_CODEX, HOSTS,
     ANCESTOR_INSTRUCTION_FILES, INSTALLED_PLUGIN_KEY, MAIN_MODELS, RESERVED_ARGS, HarnessConfig,
 )
 
@@ -59,6 +61,20 @@ def validate_hosts(hosts: list[str]) -> list[str]:
     if unknown or not hosts:
         raise ConfigError(f"--hosts takes {', '.join(HOSTS)}; got {', '.join(unknown) or 'nothing'}")
     return list(dict.fromkeys(hosts))
+
+
+def resolve_host_binaries(cfg: HarnessConfig, hosts: Iterable[str], which: Callable[[str], str | None] = shutil.which) -> HarnessConfig:
+    """The config with each requested host's CLI replaced by its absolute path, found on the harness's own PATH, so that a
+    task's `PATH` can never change which host binary starts. A CLI that cannot be found fails the invocation."""
+    names = {HOST_CLAUDE: "claude_bin", HOST_CODEX: "codex_bin"}
+    found: dict[str, str] = {}
+    for host in hosts:
+        configured = getattr(cfg, names[host])
+        path = which(configured)
+        if not path:
+            raise ConfigError(f"the {host} host needs the `{configured}` command, which is not on PATH or not executable")
+        found[names[host]] = os.path.abspath(path)
+    return dataclasses.replace(cfg, **found)
 
 
 def main_model(variant: dict[str, Any], host: str) -> str:
