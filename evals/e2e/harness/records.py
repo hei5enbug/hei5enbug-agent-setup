@@ -27,6 +27,7 @@ EFFORTS = frozenset({"low", "medium", "high", "xhigh", "max"})
 UNKNOWN_EFFORT = "not measured"
 VERDICTS = frozenset({PASS, FAIL, REPEAT, NOT_MEASURED, INVESTIGATE, BASELINE, ACCEPT, REJECT, CONTINUE_TO_FIVE, SECOND_PAIR})
 VERDICT_SUBJECTS = frozenset({"quality", "wall_seconds", "cost_usd", "claim"})
+LAYOUTS = {"two": "two layers", "three": "three layers"}
 TOP_FIELDS = ("issue", "cases", "variants", "runs", "verdicts")
 RUN_REQUIRED = ("case", "variant", "host", "models", "checks", "wall_seconds", "cost_usd")
 RUN_OPTIONAL = ("rep", "reviews")
@@ -132,6 +133,8 @@ def validate_record(record: Any) -> list[str]:
                 revision = entry.get("revision") if isinstance(entry, Mapping) else None
                 if not (isinstance(revision, str) and revision.strip() and not re.search(r"\s", revision)):
                     problems.append(f"variant {name} has no revision")
+                if isinstance(entry, Mapping) and "layout" in entry and entry["layout"] not in LAYOUTS.values():
+                    problems.append(f"variant {name} layout is not one of {', '.join(LAYOUTS.values())}")
     for key, check in (("runs", run_problems), ("verdicts", verdict_problems)):
         if key not in record:
             continue
@@ -154,12 +157,14 @@ def check_record(record: Any) -> None:
 
 
 def build_record(issue: int, cases: Sequence[str], variants: Mapping[str, str], runs: Sequence[Mapping[str, Any]],
-                 verdicts: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """The record dict for one comparison; `variants` maps each variant name to its revision."""
+                 verdicts: Sequence[Mapping[str, Any]], layouts: Mapping[str, str] | None = None) -> dict[str, Any]:
+    """The record dict for one comparison; `variants` maps each variant name to its revision, and `layouts` optionally to
+    the delegation layout it ran, `two layers` or `three layers`."""
     record = {
         "issue": issue,
         "cases": list(cases),
-        "variants": {name: {"revision": revision} for name, revision in variants.items()},
+        "variants": {name: {"revision": revision, **({"layout": layouts[name]} if layouts and name in layouts else {})}
+                     for name, revision in variants.items()},
         "runs": [{field: run[field] for field in (*RUN_REQUIRED, *RUN_OPTIONAL) if field in run} for run in runs],
         "verdicts": [{field: item[field] for field in (*VERDICT_REQUIRED, *VERDICT_OPTIONAL) if field in item}
                      for item in verdicts],
@@ -268,6 +273,10 @@ def run_models(result_dir: Path, host: str, metrics: Mapping[str, Any]) -> dict[
         if status and known_model(status.get("model")):
             roles.setdefault(f"{ROLE_RUNNER_PREFIX}{status.get('role') or 'unknown'}",
                              {"model": known_model(status["model"]), "effort": known_effort(status.get("effort"))})
+            workers = [known_model(model) for model in (status.get("evidence") or {}).get("worker_models") or []]
+            for number, worker in enumerate(sorted({model for model in workers if model}), start=1):
+                name = f"{ROLE_RUNNER_PREFIX}{status.get('role') or 'unknown'}/worker" + (f"#{number}" if number > 1 else "")
+                roles.setdefault(name, {"model": worker, "effort": UNKNOWN_EFFORT})
     if host == HOST_CODEX:
         roles.update(codex_children(result_dir, set(collect.rollout_roles(calls))))
     rubric = read_json(result_dir / "grade" / "rubric.json", {}) or {}
@@ -437,7 +446,7 @@ def verdict_entries(compared: Mapping[str, Any], claims: Sequence[Mapping[str, A
 
 def record_campaign(
     run_root: Path, campaign: str, issue: int, before: str, after: str, claimed: Sequence[str] = (),
-    tasks: Sequence[str] | None = None,
+    tasks: Sequence[str] | None = None, layouts: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Judge a before and an after variant on both hosts and build its record. Returns the record, the `compare` result with
     every claimed case and the overall verdict decided together with its claim, and the claim verdicts. A missing run or
@@ -453,7 +462,7 @@ def record_campaign(
     compared = with_claims(compare(cases), claims)
     revisions = {name: variant_revision(run_root, campaign, name, runs) for name in (before, after)}
     record = build_record(issue, [case["id"] for case in cases], revisions, [run["entry"] for run in runs if run["entry"]],
-                          verdict_entries(compared, claims))
+                          verdict_entries(compared, claims), layouts)
     return {"record": record, "compared": compared, "claims": claims}
 
 

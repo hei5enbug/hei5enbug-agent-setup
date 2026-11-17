@@ -325,3 +325,21 @@ Orca 배치 훅의 `orca`와 `git` 호출에는 자체 고정 제한이 없으�
 | 워크플로, 포크, 팀원이 시작하는 서브에이전트 | Claude Code | `Agent` 훅은 `Agent` 도구만 보며, 나머지에는 호스트 자체의 한도가 적용됩니다. |
 
 2026-11-17에 확인한 출처: Claude Code의 훅, 서브에이전트, CLI, 환경 변수 문서와 Codex의 훅, 서브에이전트, 설정 문서입니다.
+
+## 위임 깊이
+
+`scripts/delegation_depth.py`는 `scripts/role_runner.py`의 측정용 역할 `area-coordinator`를 쓸 때 위임 깊이를 강제합니다
+(`evals/e2e/README.md`의 "Area coordinator layer" 참고). 영역 코디네이터는 메인 세션만 시작할 수 있고, 코디네이터는
+구현 worker(`worker`와 `sonnet-worker` 에이전트, `worker` 역할, `implementation` 능력, worker 이름을 준 `agent` 모드)만
+시작할 수 있으며, 코디네이터 아래의 worker는 아무것도 시작하지 못합니다. 거부는 `Agent` 훅과 Codex 에이전트 가드에서는
+`Denied: ...`이고, 역할 실행기에서는 종료 코드 2의 사용 오류입니다. 역할 실행기는 시작하는 자식에 `HEI5ENBUG_DELEGATION_LAYER`로
+층을 표시하며, 세션 환경을 공유하는 코디네이터의 Claude Code 서브에이전트는 훅 이벤트가 담은 `agent_id`로 알아봅니다.
+코디네이터 자식에는 실행기가 `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`도 1로 두어, 코디네이터의 서브에이전트가 다시 시작하지
+못하게 하는 호스트 자체의 스위치를 씁니다. 코디네이터가 시작하지 않은 자식은 이전 규칙 그대로입니다. 코디네이터가 시작한
+worker는 다른 자식과 같이 `HEI5ENBUG_PARENT_SESSION`을 통해 메인 세션의 요청에 세고, Claude 코디네이터의 `modelUsage`에는
+자기 모델 외에 worker 에이전트의 모델이 들 수 있으며 상태 줄은 이를 `worker_models`로 보고합니다. 강제하지 않는 것: 메인
+세션의 서브에이전트가 Bash로 `role_runner.py area-coordinator`를 실행하는 경우와, Codex에서 코디네이터의 worker 스레드입니다.
+훅이 읽을 표지가 둘 다 없기 때문입니다.
+
+2026-11-17에 확인한 출처: Claude Code의 서브에이전트와 훅 문서(중첩 깊이와 `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`, 훅 입력의
+`agent_id`)와, 중첩 깊이 설정을 문서화하지 않은 Codex의 서브에이전트 문서입니다.

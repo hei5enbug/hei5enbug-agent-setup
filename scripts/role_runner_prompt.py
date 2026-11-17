@@ -5,7 +5,7 @@ from pathlib import Path
 
 import session_context
 from role_runner_config import (
-    MCP_NETWORK_RULE, NO_NETWORK_RULE, NO_RUN_RULE, READ_SHELL_RULES, ROLE_DEFINITIONS, ROLE_SENTENCES, ROLES,
+    COORDINATOR_BODY, COORDINATOR_ROLE, COORDINATOR_SENTENCE, MCP_NETWORK_RULE, NO_NETWORK_RULE, NO_RUN_RULE, READ_SHELL_RULES, ROLE_DEFINITIONS, ROLE_SENTENCES, RUNNER_ROLES,
     VALIDATION_SENTENCE, Run, validation_rule, worker_sentence,
 )
 
@@ -53,10 +53,11 @@ def compose_prompt(role: str, assignment_text: str, root: Path, scratch: str | N
     """Build the full prompt: role sentence, role definition body, worker rules for a worker, then the assignment.
 
     A validation reviewer gets the scratch-folder rule in place of the rule against build, test, install, and network commands."""
-    if role not in ROLES:
+    if role not in RUNNER_ROLES:
         raise ValueError(f"Unsupported role: {role}")
     if not validation:
-        parts = [ROLE_SENTENCES[role], role_body(role, root)]
+        coordinator = role == COORDINATOR_ROLE
+        parts = [COORDINATOR_SENTENCE if coordinator else ROLE_SENTENCES[role], COORDINATOR_BODY if coordinator else role_body(role, root)]
     else:
         body = role_body(role, root)
         if scratch is None or role != "reviewer" or NO_RUN_RULE.search(body) is None:

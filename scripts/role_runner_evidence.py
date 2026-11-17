@@ -213,7 +213,7 @@ def unsandboxed_calls(entries: list[dict]) -> int:
 
 def verify_claude(
     result: dict, model: str, effort: str, confined: bool = False, before: dict | None = None,
-    after: dict | None = None, skip_entries: int = 0,
+    after: dict | None = None, skip_entries: int = 0, extra_models: frozenset[str] = frozenset(),
 ) -> dict:
     """Verify a Claude run's model and effort. A confined run, one started with the scratch-folder sandbox, also fails when an entry the run added asks to
     run outside the sandbox, or when the working directory's git state differs after the run from before it.
@@ -221,7 +221,7 @@ def verify_claude(
     The host records no sandbox state, so these two checks stand in for a recorded write limit; the state comparison
     is skipped when the working directory is not a git work tree."""
     usage = result.get("modelUsage")
-    if not isinstance(usage, dict) or set(usage) != {model}:
+    if not isinstance(usage, dict) or model not in usage or not set(usage) <= {model} | extra_models:
         found = sorted(usage) if isinstance(usage, dict) else usage
         raise RunnerError(EXIT_EVIDENCE, f"modelUsage names {found!r}, expected only {model!r}")
     session_id = result.get("session_id")
@@ -251,6 +251,9 @@ def verify_claude(
                 {"transcript": transcript.as_posix(), "entries": len(assistants)},
             )
     evidence = {"transcript": transcript.as_posix(), "entries": len(assistants), "session": session_id}
+    workers = sorted(set(usage) - {model})
+    if workers:
+        evidence["worker_models"] = workers
     if not confined:
         return evidence
     if unsandboxed_calls(added):

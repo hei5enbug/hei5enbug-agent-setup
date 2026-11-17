@@ -1,0 +1,112 @@
+{
+  "id": "T57",
+  "title": "One feature across three areas of a service",
+  "category": "delegation",
+  "path": "large multi-area work: three areas with three tasks each, split in two layers or three",
+  "fixture": "inventory-service",
+  "prompt_file": "prompts/T57.txt",
+  "limits": {
+    "wall_seconds": 3600,
+    "max_budget_usd": 40
+  },
+  "hidden_tests": {
+    "source": "hidden/T57",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests-catalog",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_area_catalog.py"
+      ]
+    },
+    {
+      "id": "hidden-tests-storage",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_area_storage.py"
+      ]
+    },
+    {
+      "id": "hidden-tests-cli",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_area_cli.py"
+      ]
+    },
+    {
+      "id": "hidden-tests-across-areas",
+      "kind": "pytest",
+      "required": true,
+      "weight": 4,
+      "suite": "hidden",
+      "files": [
+        "test_across_areas.py"
+      ]
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "agent-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    },
+    {
+      "id": "readme-tags",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "README.md",
+      "pattern": "(?i)\\btags?\\b"
+    },
+    {
+      "id": "mirror-tags",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "docs/ko/README.ko.md",
+      "pattern": "(?i)tag|태그"
+    },
+    {
+      "id": "tests-added",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "tests_added"
+    },
+    {
+      "id": "area-coordinators-started",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "area_coordinators_started"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

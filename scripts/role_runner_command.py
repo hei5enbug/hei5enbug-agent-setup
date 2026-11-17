@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from role_runner_config import (
-    CLAUDE_INSTALL_DOMAINS, CLAUDE_SKILLS_OFF, CODEX_NETWORK_ON, CODEX_SKILLS_OFF, MCP_TOOL_RULE, READ_SHELL_RULES, SCRATCH_PROFILE, Run,
+    CLAUDE_INSTALL_DOMAINS, COORDINATOR_ROLE, CLAUDE_SKILLS_OFF, CODEX_NETWORK_ON, CODEX_SKILLS_OFF, MCP_TOOL_RULE, READ_SHELL_RULES, SCRATCH_PROFILE, Run,
 )
 
 
@@ -114,7 +114,7 @@ def claude_command(run: Run, cwd: str) -> list[str]:
     else:
         allowed = [
             "Read", "Grep", "Glob", *(["Bash"] if run.writing or run.validation else []),
-            *(edit_rules(run.add_dirs) if run.writing else []),
+            *(edit_rules(run.add_dirs) if run.writing else []), *(["Agent"] if run.role == COORDINATOR_ROLE else []),
         ]
         tools = claude_tools(allowed)
         mode = "dontAsk"

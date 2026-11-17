@@ -21,6 +21,7 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import approval_state_store as store  # noqa: E402
+import delegation_depth  # noqa: E402
 import hook_runtime  # noqa: E402
 import machine_load  # noqa: E402
 import plugin_toggles  # noqa: E402
@@ -320,10 +321,13 @@ def hook_pid() -> int:
 
 
 def pre_spawn(event: dict, host: str) -> str | None:
-    """The denial text for an agent launch the request's caps or the parallel limit refuse, else None."""
+    """The denial text for an agent launch the delegation depth, the request's caps, or the parallel limit refuse, else None."""
     if event.get("tool_name") not in AGENT_TOOLS or not isinstance(event.get("tool_input"), dict):
         return None
     key = agent_key(event["tool_input"])
+    depth = delegation_depth.launch_denial(delegation_depth.layer(event), "agent", key)
+    if depth:
+        return depth
     tool_use_id = event.get("tool_use_id")
     if HIDDEN_AGENTS.match(key) or not isinstance(tool_use_id, str):
         return None

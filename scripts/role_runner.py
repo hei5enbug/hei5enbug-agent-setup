@@ -14,6 +14,7 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import codex_hook_trust  # noqa: E402
+import delegation_depth  # noqa: E402
 import request_budget  # noqa: E402
 from role_runner_agents import agent_run, chosen_effort, default_host, runner_for  # noqa: E402
 from role_runner_child import (  # noqa: E402
@@ -21,9 +22,10 @@ from role_runner_child import (  # noqa: E402
 )
 from role_runner_command import claude_command, claude_tools, codex_command, sandbox_for  # noqa: E402
 from role_runner_config import (  # noqa: E402
-    AGENT_TARGET, CAPABILITIES, CLAUDE_HOOKS_MESSAGE, CODEX_HOOKS_MESSAGE, DEFAULT_REVIEW_MODEL, EXIT_CAPPED,
+    AGENT_TARGET, CAPABILITIES, CLAUDE_HOOKS_MESSAGE, COORDINATOR_ROLE, CODEX_HOOKS_MESSAGE, DEFAULT_REVIEW_MODEL, EXIT_CAPPED,
     EXIT_EVIDENCE, EXIT_OK, EXIT_RUN, EXIT_USAGE, MCP_NETWORK_RULE, PREFLIGHT_PROMPT, REGISTRY, REVIEW_MODEL_ENV,
-    REVIEW_MODELS, ROLE_DEFINITIONS, ROLE_ENTRY, ROLE_MODEL, ROLE_SENTENCES, ROLES, WRITING_CAPABILITIES, Run, RunnerError, UsageError, build_parser,
+    REVIEW_MODELS, ROLE_DEFINITIONS, ROLE_ENTRY, ROLE_MODEL, ROLE_SENTENCES, ROLES, RUNNER_ROLES, WRITING_CAPABILITIES, Run, RunnerError, UsageError, build_parser,
+    coordinator_entry, coordinator_worker_models,
 )
 from role_runner_evidence import (  # noqa: E402
     claude_entry_count, claude_result, codex_home, json_lines, require_heartbeat, thread_id_from, turn_count, verify_claude,
@@ -169,7 +171,8 @@ def execute(args: argparse.Namespace, run: Run, root: Path, cwd: str) -> dict:
             raise RunnerError(EXIT_RUN, f"Claude reported an error: {str(result.get('result'))[:2000]}")
         after = workspace_state(cwd) if before is not None else None
         skip = earlier if result.get("session_id") == run.resume else 0
-        evidence = verify_claude(result, run.model, run.effort, confined, before, after, skip)
+        extra = coordinator_worker_models() if run.role == COORDINATOR_ROLE else frozenset()
+        evidence = verify_claude(result, run.model, run.effort, confined, before, after, skip, extra)
         require_heartbeat("claude", evidence["session"], CLAUDE_HOOKS_MESSAGE)
         text = result.get("result")
         if not isinstance(text, str) or not text.strip():
@@ -219,7 +222,15 @@ def resolve(args: argparse.Namespace) -> Run:
     target = args.role
     if target == AGENT_TARGET:
         return agent_run(args, args.host or default_host())
-    if target in ROLES:
+    if target == COORDINATOR_ROLE:
+        entry = coordinator_entry(args.host or default_host())
+        model = args.model or entry["model"]
+        return Run(
+            target=target, role=target, capability=None, fallback=False, runner=runner_for(model), model=model,
+            effort=chosen_effort(args.effort, entry, model, args.user_requested), writing=True, add_dirs=tuple(args.add_dirs),
+            resume=args.resume, instructions=None,
+        )
+    if target in RUNNER_ROLES:
         model = args.model or (DEFAULT_REVIEW_MODEL if target == "reviewer" else ROLE_MODEL)
         return Run(
             target=target, role=target, capability=None, fallback=False, runner=runner_for(model), model=model,
@@ -247,6 +258,10 @@ def resolve(args: argparse.Namespace) -> Run:
 def plan(args: argparse.Namespace) -> Run:
     validate(args)
     run = replace(resolve(args), user_requested=args.user_requested, service_tier=args.service_tier)
+    kind, name = ("agent", args.name) if run.agent else ("runner", run.role or run.capability)
+    depth = delegation_depth.launch_denial(delegation_depth.layer(), kind, name)
+    if depth:
+        raise UsageError(depth)
     if run.writing and run.runner == "claude" and not run.add_dirs and run.agent is None:
         label = f"capability {run.capability}" if run.capability else f"role {run.role}"
         raise UsageError(f"The Claude path of the writing {label} needs --add-dir for each directory it may edit")

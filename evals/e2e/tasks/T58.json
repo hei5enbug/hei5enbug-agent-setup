@@ -1,0 +1,94 @@
+{
+  "id": "T58",
+  "title": "Three tasks in one area of a service",
+  "category": "delegation",
+  "path": "small single-area work: no area coordinator starts",
+  "fixture": "inventory-service",
+  "prompt_file": "prompts/T58.txt",
+  "limits": {
+    "wall_seconds": 2400,
+    "max_budget_usd": 20
+  },
+  "hidden_tests": {
+    "source": "hidden/T58",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 4,
+      "suite": "hidden",
+      "files": [
+        "test_backup.py"
+      ]
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "agent-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    },
+    {
+      "id": "only-storage-area-changed",
+      "kind": "only_changed",
+      "required": true,
+      "weight": 1,
+      "allow": [
+        "inventory/storage.py",
+        "tests/**",
+        "README.md",
+        "docs/ko/README.ko.md"
+      ]
+    },
+    {
+      "id": "no-area-coordinator-started",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_area_coordinator_started"
+    },
+    {
+      "id": "readme-backup",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "README.md",
+      "pattern": "(?i)backup|\\.bak"
+    },
+    {
+      "id": "mirror-backup",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "docs/ko/README.ko.md",
+      "pattern": "백업|\\.bak"
+    },
+    {
+      "id": "tests-added",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "tests_added"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

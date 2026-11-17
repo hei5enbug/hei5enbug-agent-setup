@@ -1,0 +1,55 @@
+diff --git a/config/model-registry.json b/config/model-registry.json
+index 3c7f350..3d39cf2 100644
+--- a/config/model-registry.json
++++ b/config/model-registry.json
+@@ -85,6 +85,7 @@
+     "effort": "high",
+     "max_effort": "xhigh",
+     "default_review_model": "gpt-6-astra",
++    "area_coordinator": {"claude": {"model": "claude-opus-5-5", "effort": "high"}, "codex": {"model": "gpt-6.1-sol", "effort": "high"}},
+     "independent_review": {"claude": ["gpt-6.1-sol", "gpt-6-astra"], "gpt": ["claude-opus-5-5", "claude-fable-5-2"], "effort": "high", "max_effort": "xhigh"},
+     "review_cross_family_fallback": {"model": "gpt-6-astra", "effort": "high", "max_effort": "xhigh", "via": "runner"},
+     "review_models": [
+diff --git a/docs/ko/instructions/implementation-delegation.ko.md b/docs/ko/instructions/implementation-delegation.ko.md
+index 24be191..c23b14e 100644
+--- a/docs/ko/instructions/implementation-delegation.ko.md
++++ b/docs/ko/instructions/implementation-delegation.ko.md
+@@ -45,6 +45,16 @@
+ 있으면 worker가 멈춘 뒤 담당 범위를 넘겨받는다. worker가 입력이나 출력 디렉터리를 바꾸는 동안에는 공유 빌드를
+ 실행하지 않는다.
+ 
++## 영역 코디네이터
++
++영역이 셋 이상이고 각 영역에 작업이 둘 이상이면, 메인 세션이 설계와 영역 분할을 정하고 영역마다 worktree와 브랜치를
++하나씩 만든 뒤 그 worktree에서 영역마다 영역 코디네이터를 하나씩 시작한다:
++`python3 <Source directory>/scripts/role_runner.py area-coordinator --assignment <file> --result <file> --add-dir <worktree>`.
++코디네이터는 자기 영역을 작업으로 나누어 구현 worker에게 맡기고, 영역의 검사를 검증하고, 브랜치와 검사 근거와 남은
++항목을 돌려준다. 메인 세션은 브랜치를 통합하고 영역 사이의 검사를 실행한다. 작업이 하나인 영역에는 코디네이터를 두지
++않으며 네 번째 층도 없다. 코디네이터는 메인 세션만 시작하고, 코디네이터는 구현 worker만 시작하며, 그 worker는 아무것도
++시작하지 않는다. 그 worker는 요청의 실행 상한, 재시도 상한, 병렬 한도에 함께 센다.
++
+ ## 실패와 복구
+ 
+ 실패하면 의존 작업을 보류하고 완료된 작업을 보존한다.
+diff --git a/instructions/implementation-delegation.md b/instructions/implementation-delegation.md
+index b53be49..c60c77e 100644
+--- a/instructions/implementation-delegation.md
++++ b/instructions/implementation-delegation.md
+@@ -46,6 +46,17 @@ runner's verification), shows the selected model and effort for every turn that
+ integration fixes when it owns those paths; otherwise wait for the current worker to stop before transferring
+ ownership. Never run a shared build while workers mutate its inputs or output directories.
+ 
++## Area coordinators
++
++When the work has at least three areas that each hold at least two tasks, the main session fixes the design and the
++split into areas, creates one worktree and branch per area, and starts one area coordinator per area from that
++worktree: `python3 <Source directory>/scripts/role_runner.py area-coordinator --assignment <file> --result <file>
++--add-dir <worktree>`. The coordinator splits its area into tasks, assigns them to implementation workers, verifies the
++area's checks, and returns its branch, the check evidence, and the open items. The main session integrates the branches
++and runs the checks across the areas. An area with one task gets no coordinator, and there is no fourth layer: only the
++main session starts a coordinator, a coordinator starts implementation workers only, and its workers start nothing.
++Its workers count under the request's run cap, retry cap, and parallel limit.
++
+ ## Failure and recovery
+ 
+ On failure, hold dependent tasks and preserve completed work. Diagnose and settle the correction in the main session.

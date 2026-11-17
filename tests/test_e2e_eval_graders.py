@@ -1600,5 +1600,140 @@ class GoldenTaskTest(TempCase):
                 self.assertEqual(passed, expected)
 
 
+COORDINATOR_COMMAND = (
+    "python3 /plugin/scripts/role_runner.py area-coordinator --add-dir /w/area-storage --assignment /w/a1.md --result /w/r1.md"
+)
+WORKER_COMMAND = "python3 /plugin/scripts/role_runner.py worker --add-dir /w/repo --assignment /w/a2.md --result /w/r2.md"
+COORDINATOR_STATUS = '{"role": "area-coordinator", "runner": "claude", "model": "claude-opus-5-5", "verified": true, "exit": 0}'
+
+
+class AreaCoordinatorTaskTest(TempCase):
+    """T57 (one feature across three areas) and T58 (three tasks in one area)."""
+
+    HIDDEN_BY_AREA = {
+        "catalog": "hidden-tests-catalog", "storage": "hidden-tests-storage", "cli": "hidden-tests-cli",
+    }
+
+    def materialize(self, task_id: str, label: str = "") -> tuple[dict[str, Any], Path, str]:
+        task = json.loads((TASKS_ROOT / f"{task_id}.json").read_text(encoding="utf-8"))
+        repo = self.root / f"repo-{task_id}{label}"
+        return task, repo, graders.materialize_fixture(task, FIXTURES_ROOT, TASKS_ROOT, repo)
+
+    def passed(self, task: dict, repo: Path, base: str, view: dict) -> dict[str, bool]:
+        result = graders.grade_run(task, repo, base, view, TASKS_ROOT, self.root / f"work-{repo.name}-{len(view['tool_calls'])}")
+        return {check["id"]: check["passed"] for check in result["checks"]}
+
+    @staticmethod
+    def failed_required(task: dict, outcome: dict[str, bool]) -> set[str]:
+        required = {check["id"] for check in task["checks"] if check["required"]}
+        return {name for name, ok in outcome.items() if not ok and name in required}
+
+    def tool_call(self, name: str, tool_input: dict[str, Any], result: str = "") -> dict[str, Any]:
+        return {"id": "t1", "name": name, "input": tool_input, "result_text": result, "is_error": False, "parent": None,
+                "source": "main"}
+
+    def view_with(self, *calls: dict[str, Any]) -> dict[str, Any]:
+        return {**make_view("done"), "tool_calls": list(calls)}
+
+    def test_수정하지_않은_저장소는_두_과제의_숨은_테스트_검사에서_모두_실패한다(self):
+        """T57은 영역별 숨은 테스트 셋과 영역 사이 검사가, T58은 백업 숨은 테스트가 실패하고 기존 테스트 검사는 통과한다."""
+        for task_id, expected in (
+            ("T57", {"hidden-tests-catalog", "hidden-tests-storage", "hidden-tests-cli", "hidden-tests-across-areas"}),
+            ("T58", {"hidden-tests"}),
+        ):
+            with self.subTest(task_id):
+                # given
+                task, repo, base = self.materialize(task_id)
+
+                # when
+                outcome = self.passed(task, repo, base, make_view("done"))
+
+                # then
+                self.assertEqual(self.failed_required(task, outcome), expected)
+                self.assertTrue(outcome["regressions"])
+
+    def test_참조_해법과_코디네이터가_없는_기록은_T58의_모든_필수_검사를_통과한다(self):
+        """T58의 참조 해법에 일반 worker 실행만 있는 기록은 필수 검사가 모두 통과한다."""
+        # given
+        task, repo, base = self.materialize("T58")
+        apply_reference("T58", repo)
+
+        # when
+        outcome = self.passed(task, repo, base, self.view_with(self.tool_call("Bash", {"command": WORKER_COMMAND})))
+
+        # then
+        self.assertEqual(self.failed_required(task, outcome), set())
+
+    def test_T57의_참조_해법은_코디네이터_수와_관계없이_모든_필수_검사를_통과한다(self):
+        """참조 해법은 코디네이터를 세 번 시작한 기록과 하나도 시작하지 않은 기록 모두에서 통과하고 시작 수만 다르게 센다."""
+        # given
+        task, repo, base = self.materialize("T57")
+        apply_reference("T57", repo)
+        coordinators = self.view_with(*[self.tool_call("Bash", {"command": COORDINATOR_COMMAND}) for _ in range(3)])
+
+        # when
+        plain = self.passed(task, repo, base, make_view("done"))
+        three_layers = self.passed(task, repo, base, coordinators)
+        counted = graders.grade_run(task, repo, base, coordinators, TASKS_ROOT, self.root / "work-count")
+        detail = next(check["detail"] for check in counted["checks"] if check["id"] == "area-coordinators-started")
+
+        # then
+        self.assertEqual((self.failed_required(task, plain), self.failed_required(task, three_layers)), (set(), set()))
+        self.assertEqual(detail, "3 area coordinator start(s)")
+
+    def test_T57은_한_영역을_통합하지_않은_참조_해법을_그_영역과_영역_사이_검사에서_실패시킨다(self):
+        """카탈로그, 저장, CLI 중 하나를 빼고 나머지를 적용한 결과는 빠진 영역의 숨은 테스트와 영역 사이 숨은 테스트가 실패한다."""
+        for area, own_check in self.HIDDEN_BY_AREA.items():
+            with self.subTest(area):
+                # given
+                task, repo, base = self.materialize("T57", area)
+                with mock.patch.dict(os.environ, {"T57_SKIP_AREAS": area}):
+                    apply_reference("T57", repo)
+
+                # when
+                outcome = self.passed(task, repo, base, make_view("done"))
+
+                # then
+                failed = self.failed_required(task, outcome)
+                self.assertIn(own_check, failed)
+                self.assertIn("hidden-tests-across-areas", failed)
+
+    def test_T58은_코디네이터를_시작한_기록을_어떤_모양이든_필수_검사에서_실패시킨다(self):
+        """역할 실행기 명령, 에이전트 유형, 도구 결과의 실행기 상태 줄 중 하나라도 코디네이터를 가리키면 실패한다."""
+        # given
+        task, repo, base = self.materialize("T58")
+        apply_reference("T58", repo)
+        shapes = {
+            "runner command": self.tool_call("Bash", {"command": COORDINATOR_COMMAND}),
+            "agent type": self.tool_call("Agent", {"subagent_type": "hei5enbug-agent-setup:area-coordinator"}),
+            "status line": self.tool_call("Bash", {"command": "python3 run.py"}, COORDINATOR_STATUS),
+        }
+
+        for name, call in shapes.items():
+            with self.subTest(name):
+                # when
+                outcome = self.passed(task, repo, base, self.view_with(call))
+
+                # then
+                self.assertEqual(self.failed_required(task, outcome), {"no-area-coordinator-started"})
+
+    def test_T58은_코디네이터를_읽거나_검색하기만_한_명령과_worker_실행은_코디네이터_시작으로_세지_않는다(self):
+        """코디네이터 이름이 든 검색과 읽기 명령, worker 역할 실행은 필수 검사를 통과한다."""
+        # given
+        task, repo, base = self.materialize("T58")
+        apply_reference("T58", repo)
+        calls = [
+            self.tool_call("Bash", {"command": "rg area-coordinator scripts"}),
+            self.tool_call("Read", {"file_path": "/plugin/instructions/area-coordinator.md"}),
+            self.tool_call("Bash", {"command": WORKER_COMMAND}),
+        ]
+
+        # when
+        outcome = self.passed(task, repo, base, self.view_with(*calls))
+
+        # then
+        self.assertTrue(outcome["no-area-coordinator-started"])
+
+
 if __name__ == "__main__":
     unittest.main()

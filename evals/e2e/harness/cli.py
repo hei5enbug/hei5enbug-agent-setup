@@ -65,6 +65,8 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--after", required=True, help="variant name of the after side")
     record.add_argument("--claim", help="comma-separated measures the change claims to lower: wall_seconds, cost_usd")
     record.add_argument("--tasks", help="comma-separated task ids; default every task with a finished run")
+    record.add_argument("--layouts", help="delegation layout of the before and after variant, such as two,three: "
+                        + ", ".join(records.LAYOUTS))
     record.add_argument("--records-dir", type=Path, default=records.RECORDS_DIR)
     return parser
 
@@ -113,8 +115,12 @@ def do_summarize(args: argparse.Namespace, cfg: HarnessConfig) -> int:
 def do_record(args: argparse.Namespace, cfg: HarnessConfig) -> int:
     if args.issue < 1:
         raise command.ConfigError("--issue takes a positive issue number")
+    chosen = split(args.layouts)
+    if args.layouts and (len(chosen) != 2 or any(name not in records.LAYOUTS for name in chosen)):
+        raise command.ConfigError("--layouts takes the layout of the before and the after variant: " + ", ".join(records.LAYOUTS))
+    layouts = {args.before: records.LAYOUTS[chosen[0]], args.after: records.LAYOUTS[chosen[1]]} if chosen else None
     result = records.record_campaign(
-        cfg.run_root, args.campaign, args.issue, args.before, args.after, split(args.claim), split(args.tasks) or None,
+        cfg.run_root, args.campaign, args.issue, args.before, args.after, split(args.claim), split(args.tasks) or None, layouts,
     )
     path = records.write_record(result["record"], absolute(args.records_dir))
     sys.stdout.write("".join(f"{line}\n" for line in records.report_lines(result)))

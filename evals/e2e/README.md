@@ -177,6 +177,7 @@ Run every command from the repository root. The default run root is
 | Compare two variants | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | Export a revision only | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
 | Judge a change and write its record | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
+| Record each variant's delegation layout | add `--layouts two,three` (before, after) to `record` |
 
 `--parallel` sets the number of runs at once (default 3). With several variants the order alternates per task and
 repetition (ABAB, then BABA), so time-of-day effects spread evenly.
@@ -313,6 +314,8 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T90 | notes-cli | Session-wide service tier request | One-line setting change, an independent review, and the user's plain request that GPT runs in the session use the fast tier; its graders read the `role_runner.py` commands, and its tests are in `tests/test_e2e_eval_service_tier.py` |
 | T53 | notes-cli | Request retry cap | One-line setting change, then an independent model review whose delegated route fails every time with a different error through a fake `codex` and `claude` that fail only as role runner children, under a retry cap of 2 and a run cap that is off; graders require at most three executed launches, none after a cap denial, and a final report that names the unfinished review and holds no completion phrase; its tests are in `tests/test_e2e_eval_request_cap.py` |
 | T54 | inventory-service | Eight independent read-only questions | Eight questions about eight modules, read-only, answered in parallel; graders require all eight facts and no change, and count the delegated runs without requiring any; its tests are in `tests/test_e2e_eval_request_cap.py` |
+| T57 | inventory-service | Area coordinator layer, large work | One feature, item tags, across three areas of the service (catalog, storage, command line) with three tasks in each, tests in each area and across them; hidden tests per area and across areas decide, and the informational check `area-coordinators-started` counts the coordinator starts; its tests are in `tests/test_e2e_eval_graders.py` |
+| T58 | inventory-service | Area coordinator layer, small work | Three backup tasks in the storage module; hidden tests decide, and the required check `no-area-coordinator-started` fails a run whose role runner command, agent launch, or status line starts an area coordinator; its tests are in `tests/test_e2e_eval_graders.py` |
 
 ## Comparing a change on both hosts
 
@@ -370,6 +373,18 @@ record.
 | Issue | Cases | Verdict |
 |---|---|---|
 | [#92](records/92.json) | T02, T08, and T20 before and after; T05, T07, T09, and T12 after, for the item 6 rules | Fail: T08 on Claude Code and T20 on Codex. The owner adopted the change on 2026-11-14 because no plugin file these cases load changed; #105, #86, and #106 follow up. |
+
+### Area coordinator layer
+
+Issue 99 compares two delegation layouts on T57 and T58 and adopts a third layer only on a record. The role
+`area-coordinator` of `scripts/role_runner.py` is the measurement role, and `scripts/delegation_depth.py` enforces the
+depth. The candidate rule is unapplied: `candidates/99-area-coordinators.patch` adds the section "Area coordinators" to
+`instructions/implementation-delegation.md`, its Korean mirror, and the registry entry `runner.area_coordinator`. The
+before variant is the revision without the patch, the after variant is the same revision with it, and `record
+--layouts two,three` stores each variant's layout. `harness/area_coordinator.py` reads `records/99.json`: it adopts when
+the claim on `wall_seconds` is accepted on T57 on both hosts and T58 passes, rejects when the claim is rejected or T58
+fails, and stays undecided otherwise. `tests/test_e2e_eval_area_coordinator.py` requires the section, its mirror, the
+registry entry, and the measurement role exactly as the record's decision implies.
 
 ## Known limits
 

@@ -163,6 +163,7 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 | 두 변형 비교 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | 리비전 내보내기만 하기 | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
 | 변경을 판정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
+| 각 변형의 위임 층 구성 기록 | `record`에 `--layouts two,three`(변경 전, 변경 후) 추가 |
 
 `--parallel`은 동시에 실행할 수를 정한다(기본 3). 변형이 여럿이면 작업과 반복마다 순서를 번갈아(ABAB, 다음은
 BABA) 시간대 영향이 고르게 퍼지게 한다.
@@ -335,6 +336,9 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 돌린다. 보관한 이전 시도도 시간과 지출이 기록에 들어가므로 여기서 실행으로 센다. 개정을 저장하지 않은 실행은 캠페인이 적은 개정을 쓴다. 그다음 사례를 판정하고 기록을 검증해 `records/<이슈 번호>.json`에
 쓴다. 사례마다 한 줄, `investigate` 줄, 반복이 필요한 사례, 주장 판정을 출력한다. 기록에는 측정값과 모델, effort, 이슈
 번호 같은 실행 사실, 가상 픽스처 이름만 들어간다. 검증은 절대 로컬 경로, 상한 밖 모델, 빠진 필드를 거부한다.
+| T57 | inventory-service | 영역 코디네이터 층, 큰 작업 | 서비스의 세 영역(카탈로그, 저장, 명령줄)에 걸친 하나의 기능인 품목 태그를 영역마다 작업 셋씩, 영역별 테스트와 영역 사이 테스트와 함께 만든다. 영역별·영역 사이 숨은 테스트가 판정하고, 정보용 검사 `area-coordinators-started`가 코디네이터 시작 수를 센다. 테스트는 `tests/test_e2e_eval_graders.py`에 있다 |
+| T58 | inventory-service | 영역 코디네이터 층, 작은 작업 | 저장소 모듈 하나에서 백업 작업 셋. 숨은 테스트가 판정하고, 필수 검사 `no-area-coordinator-started`는 역할 실행기 명령, 에이전트 시작, 상태 줄 중 하나로 영역 코디네이터를 시작한 실행을 실패시킨다. 테스트는 `tests/test_e2e_eval_graders.py`에 있다 |
+
 `tests/test_e2e_eval_record_cli.py`가 커밋된 모든 기록을 검증한다.
 
 ### 기록
@@ -342,6 +346,17 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 | 이슈 | 사례 | 판정 |
 |---|---|---|
 | [#92](../../../../evals/e2e/records/92.json) | T02, T08, T20은 변경 전후, T05, T07, T09, T12는 항목 6 규칙을 위해 변경 후 | 실패: Claude Code의 T08과 Codex의 T20. 이 사례들이 읽는 플러그인 파일이 바뀌지 않았으므로 소유자가 2026-11-14에 변경을 채택했다. 후속 이슈는 #105, #86, #106이다. |
+
+### 영역 코디네이터 층
+
+이슈 99는 T57과 T58에서 두 위임 구성을 비교하고 기록이 있을 때만 세 번째 층을 채택한다. `scripts/role_runner.py`의
+`area-coordinator` 역할이 측정용 역할이고 `scripts/delegation_depth.py`가 깊이를 강제한다. 후보 규칙은 적용하지 않은
+상태다. `candidates/99-area-coordinators.patch`는 `instructions/implementation-delegation.md`에 "Area coordinators" 절을,
+그 한국어 미러와 레지스트리 항목 `runner.area_coordinator`를 더한다. 변경 전 변형은 패치가 없는 리비전이고 변경 후 변형은 같은
+리비전에 패치를 얹은 것이며, `record --layouts two,three`가 각 변형의 층 구성을 저장한다. `harness/area_coordinator.py`는
+`records/99.json`을 읽어, 양쪽 호스트에서 T57의 `wall_seconds` 개선 주장이 받아들여지고 T58이 통과하면 채택하고, 주장이
+기각되거나 T58이 실패하면 기각하며, 그 밖에는 미정으로 둔다. `tests/test_e2e_eval_area_coordinator.py`는 절과 그 미러,
+레지스트리 항목, 측정용 역할이 기록의 결정과 정확히 맞게 있을 것을 요구한다.
 
 ## 알려진 한계
 

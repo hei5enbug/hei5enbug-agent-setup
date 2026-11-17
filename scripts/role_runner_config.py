@@ -6,8 +6,10 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from delegation_depth import COORDINATOR_ROLE
 
 ROLES = ("scout", "researcher", "reviewer", "worker")
+RUNNER_ROLES = (*ROLES, COORDINATOR_ROLE)
 ASSIGNED_ROLE_ENV = "HEI5ENBUG_ASSIGNED_ROLE"
 REVIEW_MODEL_ENV = "HEI5ENBUG_REVIEW_MODEL"
 PARENT_SESSION_ENV = "HEI5ENBUG_PARENT_SESSION"
@@ -60,6 +62,35 @@ def worker_sentence(network: str) -> str:
         'You are an assigned worker under the "Assigned workers" rules: start no agents, make no commit or push, '
         f"{network}, edit only the allowed paths, and end with the changed paths, check results, and blockers."
     )
+
+
+COORDINATOR_PIN_KEYS = {"claude": "claude-opus", "codex": "gpt-sol"}
+COORDINATOR_EFFORT = "high"
+COORDINATOR_SENTENCE = (
+    "You are an area coordinator under the main session, the middle layer of three: start implementation workers only "
+    "and no coordinator, make no push, use no network, edit only your worktree, and end with your branch, the check "
+    "evidence, and the open items."
+)
+COORDINATOR_BODY = (
+    "Split your area into tasks with clear ownership and assign each task to an implementation worker under the "
+    "plugin's delegation rules. Your workers start nothing. Review each worker's returned changes, run the area's "
+    "checks yourself, and commit the accepted result on the branch of your worktree. Report a missing decision to "
+    "the main session instead of settling it, and never edit a path outside your area. Return the branch, the check "
+    "evidence as each command with its result, and the open items."
+)
+
+
+def coordinator_entry(host: str) -> dict:
+    """The model and effort of the area coordinator on a host: its registered entry, else the capped main model of the host."""
+    registered = (REGISTRY["runner"].get("area_coordinator") or {}).get(host)
+    if registered:
+        return registered
+    return {"model": REGISTRY["pins"][COORDINATOR_PIN_KEYS[host]], "effort": COORDINATOR_EFFORT}
+
+
+def coordinator_worker_models() -> frozenset[str]:
+    """The Claude models of the implementation workers a Claude coordinator starts as subagents."""
+    return frozenset(entry["model"] for entry in REGISTRY["claude_agents"].values() if entry.get("role") == "worker")
 
 
 ROLE_SENTENCES = {

@@ -7,7 +7,7 @@ import tomllib
 from pathlib import Path
 
 import agent_guard
-from role_runner_config import AGENT_TARGET, REGISTRY, ROOT, WEB_TOOLS, WRITING_CAPABILITIES, Run, UsageError
+from role_runner_config import AGENT_TARGET, COORDINATOR_ROLE, REGISTRY, ROOT, WEB_TOOLS, WRITING_CAPABILITIES, Run, UsageError
 from role_runner_evidence import claude_home, codex_home
 from role_runner_prompt import without_frontmatter
 
@@ -21,7 +21,7 @@ def runner_for(model: str) -> str:
 
 
 def accepts_add_dir(target: str) -> bool:
-    return target in ("worker", AGENT_TARGET) or target in WRITING_CAPABILITIES
+    return target in ("worker", COORDINATOR_ROLE, AGENT_TARGET) or target in WRITING_CAPABILITIES
 
 
 def definition_text(path: Path) -> str:

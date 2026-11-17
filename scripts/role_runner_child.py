@@ -8,9 +8,13 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import delegation_depth
 from role_runner_config import (
     ASSIGNED_ROLE_ENV, EXIT_RUN, MCP_SERVER_NAME, PARENT_SESSION_ENV, SCRATCH_ENVIRONMENT, SCRATCH_PREFIX, RunnerError,
 )
+
+
+SUBAGENT_DEPTH_ENV = "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH"
 
 
 def new_scratch(cwd: str) -> str:
@@ -57,6 +61,11 @@ def child_environment(marker: str, scratch: str | None = None) -> dict:
     parent = parent_session(environment)
     if parent is not None:
         environment[PARENT_SESSION_ENV] = parent
+    layer = delegation_depth.child_layer(marker, os.environ)
+    if layer is not None:
+        environment[delegation_depth.LAYER_ENV] = layer
+    if layer == delegation_depth.COORDINATOR:
+        environment[SUBAGENT_DEPTH_ENV] = "1"
     return environment
 
 

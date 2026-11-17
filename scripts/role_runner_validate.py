@@ -4,16 +4,16 @@ import argparse
 from pathlib import Path
 
 from role_runner_agents import accepts_add_dir, runner_for
-from role_runner_config import AGENT_TARGET, CAPABILITIES, MAX_BATCH, REVIEW_MODELS, ROLES, UsageError
+from role_runner_config import AGENT_TARGET, CAPABILITIES, MAX_BATCH, REVIEW_MODELS, RUNNER_ROLES, UsageError
 
 
 def validate(args: argparse.Namespace) -> None:
     target = args.role
-    is_role = target in ROLES
+    is_role = target in RUNNER_ROLES
     is_agent = target == AGENT_TARGET
     if not is_role and not is_agent and target not in CAPABILITIES:
         raise UsageError(
-            f"Unknown target: {target}. Roles: {', '.join(ROLES)}. Capabilities: {', '.join(CAPABILITIES)}. Or agent."
+            f"Unknown target: {target}. Roles: {', '.join(RUNNER_ROLES)}. Capabilities: {', '.join(CAPABILITIES)}. Or agent."
         )
     validate_request(args, target)
     if args.add_dirs and not accepts_add_dir(target):

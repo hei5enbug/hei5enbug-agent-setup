@@ -352,3 +352,24 @@ Not enforced, because no hook, mod, or runner can see it on that host:
 
 Sources checked on 2026-11-17: the Claude Code hooks, subagents, CLI, and environment variable references and the Codex
 hooks, subagents, and configuration references.
+
+## Delegation depth
+
+`scripts/delegation_depth.py` enforces the depth of delegation when the measurement role `area-coordinator` of
+`scripts/role_runner.py` is used (see `evals/e2e/README.md`, "Area coordinator layer"). Only the main session may start an
+area coordinator, a coordinator may start implementation workers only (the `worker` and `sonnet-worker` agents, the
+`worker` role, the `implementation` capability, or the `agent` mode with a worker name), and a worker under a coordinator
+may start nothing. A denial is `Denied: ...` from the `Agent` hook and the Codex agent guard, and a usage error with exit
+code 2 from the role runner. The role runner marks the layer in `HEI5ENBUG_DELEGATION_LAYER` for the child it starts, and
+a Claude Code subagent of a coordinator, which shares its session environment, is recognized by the `agent_id` the hook
+event carries. For a coordinator child the runner also sets `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` to 1, the host's own
+switch that stops the coordinator's subagents from spawning. Children that no coordinator started keep their earlier
+rules. A worker a coordinator starts counts on the request of the main session through `HEI5ENBUG_PARENT_SESSION`, the
+same as any child, and a Claude coordinator's `modelUsage` may name the models of the worker agents besides its own,
+which the status line reports as `worker_models`. Not enforced: a subagent of the main session that runs
+`role_runner.py area-coordinator` through Bash, and, on Codex, a worker thread of a coordinator, because neither carries
+a marker the hook can read.
+
+Sources checked on 2026-11-17: the Claude Code subagents and hooks references (nesting depth and
+`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`, `agent_id` in the hook input) and the Codex subagents reference, which documents
+no nesting depth setting.

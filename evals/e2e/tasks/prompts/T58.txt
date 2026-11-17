@@ -1,0 +1,7 @@
+재고 서비스의 저장소 모듈(inventory/storage.py)에 백업 기능을 세 가지 넣어줘. 모두 JsonStore 안의 변경이고 이 모듈 밖은 건드리지 마.
+
+1. save()는 기존 파일이 있으면 교체하기 직전에 그 내용을 같은 폴더의 "<파일 이름>.bak"으로 복사해 둬. 기존 파일이 없으면 .bak도 만들지 않아.
+2. load()는 본 파일을 JSON 객체로 읽지 못할 때(깨졌거나 객체가 아님) "<파일 이름>.bak"이 있고 그것이 정상이면 백업의 내용을 돌려주고 JsonStore.recovered_from_backup 속성을 True로 해. 이 속성의 시작값은 False이고, 본 파일을 정상으로 읽으면 False로 둬. 백업도 못 읽으면 지금처럼 StorageError를 내.
+3. JsonStore.restore_backup() 메서드를 추가해. 백업을 본 파일로 되돌리고(원자적으로 교체) 복원한 Database를 돌려줘. 백업이 없거나 못 읽으면 "no usable backup" 가 들어간 메시지로 StorageError를 내.
+
+README에 백업 동작을 적고 한국어 미러(docs/ko/README.ko.md)도 함께 고쳐줘. 테스트도 추가해줘.
