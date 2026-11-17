@@ -32,10 +32,15 @@ instructions decides when to ask.
   header, and each option's label and description as raw characters, never as JSON unicode escapes such as `\uXXXX`,
   even when the text comes from escaped JSON. For text with multi-byte characters, such as Korean, Japanese, or
   Chinese, reread it once before sending and fix any character that differs from the word you meant.
-- When the user reports a wrong or garbled character in a question dialog, read your own tool input as stored in the
-  session transcript file first, because the conversation, such as a resumed one, can show an earlier tool input with
-  unicode escapes it did not contain. Say whether the reported character is in that stored input before naming any
-  other cause, and name the host or a plugin only when that input is correct and the shown text differs.
+- When the user reports a wrong or garbled character in a question dialog, or the conversation shows unicode escapes
+  or another form you did not intend in your own earlier question-tool input, read that input as stored in the
+  session transcript file before drawing any conclusion, because the conversation, such as a resumed or compacted
+  one, can show an earlier tool input with unicode escapes it did not contain; never judge from the display whether
+  the raw-character rule was followed. When the stored input holds the intended characters, treat the display as an
+  artifact: record no mistake in a summary, memory, or report, promise no correction, and report no defect to the
+  user, the host, or a tracker. When it holds escape text or a wrong character, say so and write the next question as
+  the raw-character rule says. Say whether the reported character is in that stored input before naming any other
+  cause, and name the host or a plugin only when that input is correct and the shown text differs.
 - Follow host formatting and a skill's own ask or stop rules.
 - Offer temporary and root-cause fixes, when both exist, with cost and impact; the user chooses.
 - Report a pending user action, such as a login, once.

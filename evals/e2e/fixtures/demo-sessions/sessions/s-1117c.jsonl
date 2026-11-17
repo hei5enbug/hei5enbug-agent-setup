@@ -1,0 +1,4 @@
+{"type": "user", "sessionId": "s-1117c", "message": {"role": "user", "content": "일본어 인사말 중에 아침 화면에 쓸 것을 고르는 질문을 만들어줘."}}
+{"type": "assistant", "sessionId": "s-1117c", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_s-1117c", "name": "AskUserQuestion", "input": {"questions": [{"question": "아침 화면에 쓸 인사말은 무엇인가요?", "header": "인사말", "multiSelect": false, "options": [{"label": "おはよう", "description": "아침에 쓰는 인사"}, {"label": "こんにちは", "description": "낮에 쓰는 인사"}]}]}}]}}
+{"type": "user", "sessionId": "s-1117c", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "toolu_s-1117c", "content": "User has answered your questions: \"아침 화면에 쓸 인사말은 무엇인가요?\"=\"おはよう\"."}]}}
+{"type": "assistant", "sessionId": "s-1117c", "message": {"role": "assistant", "content": [{"type": "text", "text": "아침 화면 인사말은 おはよう 로 정했습니다. 아직 남은 일은 인사말을 문구 목록에 넣는 것입니다."}]}}

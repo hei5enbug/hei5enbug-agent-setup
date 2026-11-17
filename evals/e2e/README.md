@@ -89,7 +89,7 @@ Calls that the permission mode or the plugin's guard allow without a prompt neve
 
 The harness cannot answer a question that the agent asks with `AskUserQuestion`. The approver lets the call through,
 and the run ends with the question unanswered. Task prompts therefore leave no decision open that would change the
-result, except the question tasks T63 and T64, which grade the dialog's input itself.
+result, except the question tasks T63, T64, and T102, which grade the dialog's input itself.
 
 ### Codex host
 
@@ -289,6 +289,15 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 at the first question dialog the agent opens and grade its input, read from `AskUserQuestion` on Claude Code and from
 `request_user_input` on Codex, in `tasks/custom/question_shared.py`; their tests are in
 `tests/test_e2e_eval_question_tasks.py`.
+T101 to T103 resume a session whose record the fixture `demo-sessions` keeps in `sessions/<id>.jsonl` in the format of a
+Claude Code transcript, and the prompt shows an earlier question-tool input of it as the conversation would, with unicode
+escapes. The harness cannot resume a session, so the record is a seeded file that the prompt names only by the session id
+and that `AGENTS.md` of the fixture places; a run finds it with its own commands. T102 ends at the first question
+dialog it opens; its graders and those of T101 and T103 are in `tasks/custom/session_display_shared.py`, and their tests
+are in `tests/test_e2e_eval_session_display_tasks.py`. `candidates/117/stored_question_input.py` is an unapplied
+candidate script that prints the stored inputs of a transcript and flags escape text; `candidates/117.json` holds the
+rule text that uses it, to be measured beside the rule text of `instructions/asking-the-user.md` and not part of the
+plugin.
 
 | Task | Fixture | Path it exercises | Request |
 |---|---|---|---|
@@ -315,6 +324,9 @@ at the first question dialog the agent opens and grade its input, read from `Ask
 | T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
 | T63 | demo-tool | Question dialog for an issue draft | Ask, with the host's question tool, whether to delete two checklist lines of an issue draft that other lines repeat, and show the checklist as a picture |
 | T64 | demo-tool | Question dialog for a table | Ask, with the host's question tool, whether to drop two columns of `demo.orders`, and show the table as a picture |
+| T101 | demo-sessions | Stored question input, no user report | Hand over a resumed session whose earlier question input is shown with unicode escapes while the stored record holds kana; the note records no mistake |
+| T102 | demo-sessions | Stored question input that holds escape text | Ask the greeting question again after the stored record shows the label as escape text; say so, then ask with raw characters |
+| T103 | demo-sessions | Stored question input, user report | A user says one kana of an earlier dialog looked wrong; read the record and say the character is in it before naming another cause |
 
 ## Comparing a change on both hosts
 

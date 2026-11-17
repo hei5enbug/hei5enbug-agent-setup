@@ -1,0 +1,12 @@
+{
+  "issue": 117,
+  "script": {
+    "candidate_path": "evals/e2e/candidates/117/stored_question_input.py",
+    "applied_path": "scripts/stored_question_input.py",
+    "note": "Unapplied. Measure the rule text with the script beside the rule text of instructions/asking-the-user.md on T101 to T103, on both hosts; apply it only when the record shows it passes every case and costs less per passing case."
+  },
+  "rule_with_script": {
+    "en": "- When the user reports a wrong or garbled character in a question dialog, or the conversation shows unicode escapes\n  or another form you did not intend in your own earlier question-tool input, run `python3 <plugin-root>/scripts/stored_question_input.py <session transcript file>`\n  before drawing any conclusion: it prints each stored question-tool input as raw characters and flags escape text that\n  the stored input itself holds, which the conversation's display, such as a resumed or compacted one, cannot show.\n  When it flags none, treat the display as an artifact: record no mistake in a summary, memory, or report, promise no\n  correction, and report no defect to the user, the host, or a tracker. When it flags escape text or a wrong character,\n  say so and write the next question as the raw-character rule says. Say whether the reported character is in that\n  stored input before naming any other cause, and name the host or a plugin only when that input is correct and the\n  shown text differs.\n",
+    "ko": "- 사용자가 질문 대화상자의 글자가 틀리거나 깨졌다고 알리거나, 대화가 자신의 이전 질문 도구 입력에서 뜻하지 않은 유니코드 이스케이프나 다른 형태를 보여 주면, 어떤 결론을 내리기 전에 `python3 <plugin-root>/scripts/stored_question_input.py <세션 기록 파일>`을 실행한다. 이 스크립트는 저장된 질문 도구 입력을 원문 글자로 출력하고, 이어서 실행하거나 압축한 대화의 표시로는 알 수 없는, 저장된 입력 자체에 있는 이스케이프 글을 표시한다. 표시된 것이 없으면 대화의 모습은 겉모습의 문제로 보고, 요약, 메모리, 보고서에 실수를 적지 않고, 고치겠다고 약속하지 않고, 사용자, 호스트, 추적기에 결함을 알리지 않는다. 이스케이프 글이나 틀린 글자가 표시되면 그렇게 말하고 다음 질문은 원문 글자 규칙대로 쓴다. 다른 원인을 들기 전에 보고된 글자가 저장된 입력에 있는지부터 말하고, 그 입력이 맞고 표시된 글이 다를 때만 호스트나 플러그인을 원인으로 든다.\n"
+  }
+}

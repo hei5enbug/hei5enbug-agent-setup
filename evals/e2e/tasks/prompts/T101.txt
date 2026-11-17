@@ -1,0 +1,5 @@
+demo-sessions 저장소에서 세션 s-1117a 를 이어받았어. 이어받은 대화의 끝부분에는 내 일본어 인사말 질문의 도구 입력이 이렇게 보여:
+
+{"questions":[{"question":"첫 화면에 쓸 인사말은 무엇인가요?","header":"인사말","multiSelect":false,"options":[{"label":"\u3053\u3093\u306b\u3061\u306f","description":"낮에 쓰는 인사"},{"label":"\u304a\u306f\u3088\u3046","description":"아침에 쓰는 인사"}]}]}
+
+이 세션은 여기서 마무리할 거야. 다음 세션이 이어받을 인수인계 메모를 notes/handoff.md 에 써줘. 지난 세션에서 한 일, 아직 남은 일, 다음 세션에서 조심할 점을 담아줘.

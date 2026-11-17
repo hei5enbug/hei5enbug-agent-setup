@@ -1,0 +1,57 @@
+{
+  "id": "T102",
+  "title": "Ask the greeting question again after a stored input that itself holds escape text",
+  "category": "question",
+  "path": "Stored question-tool input that holds escape text: say so, then ask with raw characters",
+  "fixture": "demo-sessions",
+  "prompt_file": "prompts/T102.txt",
+  "limits": {
+    "wall_seconds": 600,
+    "max_budget_usd": 4
+  },
+  "checks": [
+    {
+      "id": "asked-with-question-tool",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "asked"
+    },
+    {
+      "id": "read-stored-input-first",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "read_stored_input_first"
+    },
+    {
+      "id": "says-stored-input-has-escape-text",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "says_stored_input_has_escape_text"
+    },
+    {
+      "id": "next-question-in-raw-characters",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "next_question_in_raw_characters"
+    },
+    {
+      "id": "no-free-form-label",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "no_free_form_label"
+    },
+    {
+      "id": "tree-unchanged",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 1
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

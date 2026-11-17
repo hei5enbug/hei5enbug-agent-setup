@@ -107,8 +107,8 @@ class CommonRulesTest(unittest.TestCase):
                 self.assertIn(rule, asking)
         self.assertNotIn("allow a free-form answer", asking)
 
-    def test_질문_창_입력은_원문_글자로_쓰고_깨진_글자_신고에는_자기_입력부터_확인한다(self):
-        """구조화된 질문 도구의 입력은 유니코드 이스케이프 없이 쓰고 다시 읽으며, 깨진 글자 신고에는 자기 도구 입력을 먼저 본다."""
+    def test_질문_창_입력은_원문_글자로_쓰고_깨진_글자_신고나_이스케이프가_보일_때는_저장된_입력부터_확인한다(self):
+        """구조화된 질문 도구의 입력은 유니코드 이스케이프 없이 쓰고 다시 읽으며, 신고가 없어도 이스케이프가 보이면 저장된 입력을 먼저 본다."""
         # Given
         asking = " ".join((REPO_ROOT / "instructions/asking-the-user.md").read_text(encoding="utf-8").split())
 
@@ -117,8 +117,15 @@ class CommonRulesTest(unittest.TestCase):
             "write the question, its header, and each option's label and description as raw characters, never as JSON "
             "unicode escapes such as `\\uXXXX`,",
             "reread it once before sending and fix any character that differs from the word you meant.",
-            "When the user reports a wrong or garbled character in a question dialog, read your own tool input as "
-            "stored in the session transcript file first,",
+            "When the user reports a wrong or garbled character in a question dialog, or the conversation shows "
+            "unicode escapes or another form you did not intend in your own earlier question-tool input, read that "
+            "input as stored in the session transcript file before drawing any conclusion,",
+            "never judge from the display whether the raw-character rule was followed.",
+            "When the stored input holds the intended characters, treat the display as an artifact: record no "
+            "mistake in a summary, memory, or report, promise no correction, and report no defect to the user, the "
+            "host, or a tracker.",
+            "When it holds escape text or a wrong character, say so and write the next question as the raw-character "
+            "rule says.",
             "Say whether the reported character is in that stored input before naming any other cause, and name the "
             "host or a plugin only when that input is correct and the shown text differs.",
         )

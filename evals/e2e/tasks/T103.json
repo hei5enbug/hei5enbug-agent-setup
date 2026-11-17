@@ -1,0 +1,36 @@
+{
+  "id": "T103",
+  "title": "Explain why a character of an earlier question dialog looked wrong",
+  "category": "question",
+  "path": "User-reported wrong character: read the stored input and say whether the character is in it first",
+  "fixture": "demo-sessions",
+  "prompt_file": "prompts/T103.txt",
+  "limits": {
+    "wall_seconds": 600,
+    "max_budget_usd": 4
+  },
+  "checks": [
+    {
+      "id": "read-stored-input-first",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "read_stored_input_first"
+    },
+    {
+      "id": "says-reported-character-is-stored",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "says_reported_character_is_stored"
+    },
+    {
+      "id": "tree-unchanged",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 1
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}
