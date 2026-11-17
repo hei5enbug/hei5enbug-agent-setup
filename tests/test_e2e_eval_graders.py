@@ -1778,7 +1778,8 @@ class HandoffTaskTest(unittest.TestCase):
         self.assertEqual(self.failed(task, repo, base, VALUE_ANSWER), {"never-used-closed-first"})
 
     def test_가짜_Orca는_호스트_명령이_쉘_터미널에서만_에이전트를_시작하고_화면과_출력을_구분해_읽는다(self):
-        """terminal list는 화면 내용을 숨기고, read는 --screen이 있을 때만 화면을 주며, 프로세스가 도는 터미널은 에이전트가 되지 않는다."""
+        """list는 화면을 숨기고, read는 --screen에서만 화면을 주며, 프로세스가 도는 터미널은 에이전트가 되지 않고, 시작된 에이전트의 입력 줄은 x를 보였다 지운다."""
+        # Regression: a started agent shows an empty screen, so the session cannot confirm its input line and stops
         # given
         _, repo, _ = self.seed("T61")
 
@@ -1789,6 +1790,11 @@ class HandoffTaskTest(unittest.TestCase):
         self.orca(repo, "terminal", "send", "--terminal", "term_demo_b_shell", "--text", "cd '/x' && claude",
                   "--enter")
         after = self.orca(repo, "terminal", "wait", "--terminal", "term_demo_b_shell", "--for", "tui-idle")
+        started = self.orca(repo, "terminal", "read", "--terminal", "term_demo_b_shell", "--screen")
+        self.orca(repo, "terminal", "send", "--terminal", "term_demo_b_shell", "--text", "x")
+        typed = self.orca(repo, "terminal", "read", "--terminal", "term_demo_b_shell", "--screen")
+        self.orca(repo, "terminal", "send", "--terminal", "term_demo_b_shell", "--text", "\x7f")
+        erased = self.orca(repo, "terminal", "read", "--terminal", "term_demo_b_shell", "--screen")
         self.orca(repo, "terminal", "send", "--terminal", "term_demo_a_dev", "--text", "claude", "--enter")
         dev = next(item for item in self.state(repo)["terminals"] if item["handle"] == "term_demo_a_dev")
 
@@ -1798,6 +1804,24 @@ class HandoffTaskTest(unittest.TestCase):
         self.assertEqual(screen["result"]["terminal"]["tail"], ["user@host demo %"])
         self.assertEqual((before["result"]["wait"]["satisfied"], after["result"]["wait"]["satisfied"]), (False, True))
         self.assertNotIn("agentIdentity", dev)
+        self.assertEqual([item["result"]["terminal"]["tail"][-1] for item in (started, typed, erased)],
+                         ["> ", "> x", "> "])
+
+    def test_교차_저장소_지침은_소유한_터미널이_아닌_세션도_정리와_보고를_하고_닫기만_문장에_달아_둔다(self):
+        """K 과제가 요구하는 동작의 근거 문구가 지침에 있어서, 문장이 없는 요약을 받은 세션도 남긴 worktree를 보고에 적는다."""
+        # Regression: only a session whose brief carries the closing sentence cleans up and names the kept worktree
+        # Given
+        text = (REPO_ROOT / "instructions/cross-repository.md").read_text(encoding="utf-8")
+        section = text[text.index("### Handoff-owned terminal"):text.index("## Messaging another session")]
+
+        # When
+        flat = " ".join(section.split())
+
+        # Then
+        self.assertIn("A session that receives such a brief, whether or not it ends so:", flat)
+        self.assertIn("even when the result needs no file change", flat)
+        self.assertIn("names each worktree the cleanup kept", flat)
+        self.assertIn("Only when its brief ends with that sentence, closes its own terminal", flat)
 
     def test_위임_세션이_터미널을_닫은_뒤_보낸_쪽이_자식_워크트리를_지우고_위임_세션은_지우지_않는다(self):
         """닫기 전의 삭제와 위임 세션 자신의 삭제는 문제로 잡히고, 닫은 뒤 보낸 쪽의 삭제만 문제가 없다."""

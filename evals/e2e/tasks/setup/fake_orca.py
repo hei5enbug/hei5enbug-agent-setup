@@ -22,7 +22,7 @@ VALUE_OPTIONS = frozenset({
     "--to", "--from", "--subject", "--body", "--type",
 })
 HOST_COMMANDS = ("claude", "codex")
-HIDDEN_TERMINAL_FIELDS = ("screen", "stream", "process")
+HIDDEN_TERMINAL_FIELDS = ("screen", "stream", "process", "input")
 
 
 class Failure(Exception):
@@ -151,10 +151,16 @@ def read_terminal(state: dict, options: dict[str, str], flags: set[str]) -> dict
     if not any(item["handle"] == handle for item in state["terminals"]):
         return {"text": ""}
     item = find_terminal(state, handle)
-    shown = item.get("screen") if "--screen" in flags else item.get("stream")
+    shown = agent_screen(item) if item.get("agentIdentity") else (
+        item.get("screen") if "--screen" in flags else item.get("stream"))
     tail = shown if isinstance(shown, list) else ([] if shown is None else shown.splitlines())
     return {"text": "", "terminal": {"handle": handle, "status": "running", "tail": tail,
                                      "source": "screen" if "--screen" in flags else "stream"}}
+
+
+def agent_screen(terminal: dict) -> list[str]:
+    """The screen of a terminal that runs an agent: a title line and an input line that shows the typed text."""
+    return [f"{terminal['agentIdentity']} (fake)", f"> {terminal.get('input', '')}"]
 
 
 def create_terminal(state: dict, options: dict[str, str]) -> dict:
@@ -176,12 +182,19 @@ def create_terminal(state: dict, options: dict[str, str]) -> dict:
     return {"terminal": {"handle": handle}}
 
 
-def send_terminal(state: dict, options: dict[str, str]) -> dict:
+def send_terminal(state: dict, options: dict[str, str], flags: set[str]) -> dict:
     terminal = find_terminal(state, options.get("--terminal"))
     text = options.get("--text", "")
     state.setdefault("sent", []).append({"handle": terminal["handle"], "text": text})
     agent = host_command(text)
-    if agent and not terminal.get("agentIdentity") and not terminal.get("process"):
+    if terminal.get("agentIdentity"):
+        if text == "\x7f":
+            terminal["input"] = terminal.get("input", "")[:-1]
+        elif "--enter" in flags:
+            terminal["input"] = ""
+        else:
+            terminal["input"] = terminal.get("input", "") + text
+    elif agent and not terminal.get("process"):
         terminal["agentIdentity"] = agent
         for field in HIDDEN_TERMINAL_FIELDS:
             terminal.pop(field, None)
@@ -214,7 +227,7 @@ def run(words: list[str], options: dict[str, str], flags: set[str], state: dict)
     if command == "terminal create":
         return create_terminal(state, options)
     if command == "terminal send":
-        return send_terminal(state, options)
+        return send_terminal(state, options, flags)
     if command == "terminal wait":
         return {"wait": {"satisfied": bool(find_terminal(state, options.get("--terminal")).get("agentIdentity"))}}
     if command == "orchestration send":

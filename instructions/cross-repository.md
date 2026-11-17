@@ -86,23 +86,27 @@ step 5.
 
 ### Handoff-owned terminal
 
-A handoff that asks the started session for one result and a report back owns that session's terminal when the
-handoff created it or started the agent in a never-used shell terminal. In that case the brief ends with
+A handoff asks the started session for one result and a report back. It owns that session's terminal when it created
+the terminal or started the agent in a never-used shell terminal. Then its brief ends with
 `This terminal belongs to the handoff; close it after your report, as "Handoff-owned terminal" in
-cross-repository.md says.`; no other brief says it.
+cross-repository.md says.`; no other brief says it, and a brief sent to a terminal that already ran an agent never
+does.
 
-A session whose brief ends so:
+A session that receives such a brief, whether or not it ends so:
 
-1. Runs "Cleanup when the task ends" in [Orca worktree status](orca-worktree-status.md) for its repository.
-2. Sends its report to the sender's terminal, which the brief names. The report names each worktree the cleanup kept
-   and the check that kept it, such as `Kept worktree feature/demo: it has an uncommitted change.`
-3. Closes its own terminal with `orca terminal close --terminal "$ORCA_TERMINAL_HANDLE" --json` as its last action,
-   provided no question or approval prompt is open and none of its background work still runs. Otherwise it leaves
-   the terminal open and says so in the report.
+1. Runs "Cleanup when the task ends" in [Orca worktree status](orca-worktree-status.md) for its repository, even
+   when the result needs no file change.
+2. Sends its report to the sender's terminal, which the brief names. The report holds the result and names each
+   worktree the cleanup kept and the check that kept it, such as `Kept worktree feature/demo: it has an uncommitted
+   change.`
+3. Only when its brief ends with that sentence, closes its own terminal with
+   `orca terminal close --terminal "$ORCA_TERMINAL_HANDLE" --json` as its last action, provided no question or
+   approval prompt is open and none of its background work still runs. Otherwise it leaves the terminal open and,
+   when the brief asked for the close, says so in the report. A session whose brief does not end so never closes its
+   terminal.
 
-A brief sent to a terminal that already ran an agent never ends so, and a session whose brief does not end so never
-closes its terminal. When the handoff started the session in a child worktree, the delegate never removes the worktree it runs in:
-the session that sent the handoff removes it by "Cleanup when the task ends" once the delegate's terminal is closed.
+When the handoff started the session in a child worktree, the delegate never removes the worktree it runs in: the
+session that sent the handoff removes it by "Cleanup when the task ends" once the delegate's terminal is closed.
 
 ## Messaging another session
 

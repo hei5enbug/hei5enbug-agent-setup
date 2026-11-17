@@ -90,21 +90,23 @@
 
 ### 인수인계가 소유한 터미널
 
-인수인계가 시작된 세션에 결과 하나와 보고를 요청할 때, 인수인계가 그 세션의 터미널을 만들었거나 쓰지 않은 쉘 터미널에서
-에이전트를 시작했다면 그 터미널은 인수인계가 소유한다. 이 경우 요약은 `This terminal belongs to the handoff; close it
-after your report, as "Handoff-owned terminal" in cross-repository.md says.`로 끝나며, 다른 요약은 이 문장을 쓰지 않는다.
+인수인계는 시작된 세션에 결과 하나와 보고를 요청한다. 인수인계가 터미널을 만들었거나 쓰지 않은 쉘 터미널에서 에이전트를
+시작했다면 그 세션의 터미널은 인수인계가 소유한다. 이 경우 요약은 `This terminal belongs to the handoff; close it after
+your report, as "Handoff-owned terminal" in cross-repository.md says.`로 끝나며, 다른 요약은 이 문장을 쓰지 않고 이미
+에이전트가 실행된 터미널로 보내는 요약도 쓰지 않는다.
 
-요약이 이렇게 끝나는 세션은 다음을 한다.
+이런 요약을 받은 세션은, 요약이 이 문장으로 끝나든 아니든 다음을 한다.
 
-1. 자기 저장소에 대해 [Orca worktree 상태](orca-worktree-status.ko.md)의 "작업이 끝날 때의 정리"를 실행한다.
-2. 요약이 알려 준 보낸 쪽 터미널로 보고를 보낸다. 보고에는 정리가 남긴 각 worktree와 그것을 남긴 검사를 적는다. 예:
+1. 결과에 파일 변경이 필요 없어도 자기 저장소에 대해 [Orca worktree 상태](orca-worktree-status.ko.md)의 "작업이 끝날 때의
+   정리"를 실행한다.
+2. 요약이 알려 준 보낸 쪽 터미널로 보고를 보낸다. 보고에는 결과와, 정리가 남긴 각 worktree와 그것을 남긴 검사를 적는다. 예:
    `Kept worktree feature/demo: it has an uncommitted change.`
-3. 마지막 동작으로 `orca terminal close --terminal "$ORCA_TERMINAL_HANDLE" --json`을 실행해 자기 터미널을 닫는다. 열린 질문이나
-   승인 프롬프트가 없고 백그라운드 작업이 모두 끝났을 때만 닫는다. 그렇지 않으면 터미널을 열어 두고 보고에 그 사실을 적는다.
+3. 요약이 그 문장으로 끝날 때만, 마지막 동작으로 `orca terminal close --terminal "$ORCA_TERMINAL_HANDLE" --json`을 실행해 자기
+   터미널을 닫는다. 열린 질문이나 승인 프롬프트가 없고 백그라운드 작업이 모두 끝났을 때만 닫는다. 그렇지 않으면 터미널을 열어
+   두고, 요약이 닫기를 요청했다면 보고에 그 사실을 적는다. 요약이 그 문장으로 끝나지 않는 세션은 자기 터미널을 닫지 않는다.
 
-이미 에이전트가 실행된 터미널로 보내는 요약은 이렇게 끝나지 않으며, 요약이 이렇게 끝나지 않는 세션은 자기 터미널을
-닫지 않는다. 인수인계가 자식 worktree에서 세션을 시작했다면 위임받은 세션은 자기가 실행되는 worktree를 삭제하지 않는다.
-인수인계를 보낸 세션이 위임받은 세션의 터미널이 닫힌 뒤 "작업이 끝날 때의 정리"로 그 worktree를 삭제한다.
+인수인계가 자식 worktree에서 세션을 시작했다면 위임받은 세션은 자기가 실행되는 worktree를 삭제하지 않는다. 인수인계를 보낸
+세션이 위임받은 세션의 터미널이 닫힌 뒤 "작업이 끝날 때의 정리"로 그 worktree를 삭제한다.
 
 ## 다른 세션에 메시지 보내기
 

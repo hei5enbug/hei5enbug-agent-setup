@@ -76,5 +76,6 @@ session. After step 9, report back.
 
 Run `orca orchestration send --to <original terminal handle> --from $ORCA_TERMINAL_HANDLE --subject "Issue filed"
 --body "<issue link>" --type status --json`, where the handle is the one the handoff names. Send the link or the
-reason nothing was filed, and no draft text. When the handoff ends with the closing sentence, first run the cleanup
-and add the kept worktrees to the body as "Handoff-owned terminal" says, and close the terminal after this send.
+reason nothing was filed, and no draft text. First run the cleanup and add the kept worktrees to the body as
+"Handoff-owned terminal" says. When the handoff ends with the closing sentence, close the terminal after this send;
+otherwise leave it open.

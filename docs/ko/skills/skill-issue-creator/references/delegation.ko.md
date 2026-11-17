@@ -78,5 +78,5 @@
 `orca orchestration send --to <original terminal handle> --from $ORCA_TERMINAL_HANDLE --subject "Issue filed"
 --body "<issue link>" --type status --json`을 실행한다. 핸들은 인계 내용에 명시된 것을 쓴다.
 링크나 등록하지 않은 이유를 보내고 초안 문구는 보내지 않는다.
-인계 내용이 마무리 문장으로 끝나면 먼저 정리를 실행하고 "인수인계가 소유한 터미널"이 정한 대로 남긴 worktree를 본문에 더한 뒤,
-이 전송 다음에 터미널을 닫는다.
+먼저 정리를 실행하고 "인수인계가 소유한 터미널"이 정한 대로 남긴 worktree를 본문에 더한다. 인계 내용이 마무리 문장으로 끝나면
+이 전송 다음에 터미널을 닫고, 아니면 열어 둔다.
