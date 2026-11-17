@@ -347,8 +347,7 @@ def group_map(
     result = []
     for group in groups:
         checks = mapped.get(group["id"]) or sorted({name for member in group["members"] for name in mapped.get(member, [])})
-        result.append({key: value for key, value in group.items() if key != "lead"} | {
-            "checks": checks, "status": "pending" if checks else "unmeasured"})
+        result.append({**group, "checks": checks, "status": "pending" if checks else "unmeasured"})
     return result
 
 
@@ -378,11 +377,12 @@ def decide_group(group: Mapping[str, Any], slots_left: int) -> tuple[str, str, b
     if slots_left <= 0:
         return NOT_YET, f"more than {MAX_GROUPS} candidates came before it", False
     runs = group.get("removal") or {}
-    if any(len(runs.get(host) or []) < MAX_REMOVAL_RUNS for host in HOSTS):
-        return NOT_YET, f"fewer than {MAX_REMOVAL_RUNS} removal runs on a host", True
-    passed = all(run.get(check) is True for host in HOSTS for run in runs[host] for check in checks)
-    if not passed:
-        return NEEDED, "a mapped check fails in a removal run", True
+    every = [run for host in HOSTS for run in runs.get(host) or []]
+    if any(value is False for run in every for value in run.values()):
+        return NEEDED, "a required check fails in a removal run", True
+    if (any(len(runs.get(host) or []) < MAX_REMOVAL_RUNS for host in HOSTS)
+            or any(value is not True for run in every for value in run.values()) or any(run.get(check) is not True for run in every for check in checks)):
+        return NOT_YET, f"fewer than {MAX_REMOVAL_RUNS} complete removal runs on a host, or a removal run is missing", True
     if group.get("host_comparison") is None:
         return NOT_YET, "the host comparison is not decided", True
     if group["host_comparison"] is not True:

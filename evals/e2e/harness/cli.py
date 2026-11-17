@@ -10,7 +10,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path[0] = str(Path(__file__).resolve().parents[1])
 
-from harness import campaign, command, plugin_export, records, rule_groups, summarize  # noqa: E402
+from harness import campaign, command, plugin_export, records, rule_groups, rule_record, summarize  # noqa: E402
 from harness.config import DEFAULT_PARALLEL, DEFAULT_RUN_ROOT, EXIT_FAILURE, HOST_CLAUDE, HarnessConfig  # noqa: E402
 from harness.pilot_check import pilot_check  # noqa: E402
 
@@ -24,6 +24,7 @@ def add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--tasks-root", type=Path, default=None)
     parser.add_argument("--variants-root", type=Path, default=None)
     parser.add_argument("--fixtures-root", type=Path, default=None)
+    parser.add_argument("--repo-root", type=Path, default=None, help="the repository that holds the plugin revisions; default this one")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -70,6 +71,9 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--after", required=True, help="variant name of the after side")
     record.add_argument("--claim", help="comma-separated measures the change claims to lower: wall_seconds, cost_usd")
     record.add_argument("--tasks", help="comma-separated task ids; default every task with a finished run")
+    record.add_argument("--rule-groups", action="store_true",
+                        help="add the rule_groups section: --before is the stock variant and --after the whole plugin")
+    record.add_argument("--removal-campaigns", help="comma-separated further campaigns whose removal variants and plugin runs the section reads")
     record.add_argument("--records-dir", type=Path, default=records.RECORDS_DIR)
     return parser
 
@@ -85,6 +89,7 @@ def config_from(args: argparse.Namespace) -> HarnessConfig:
         tasks_root=absolute(args.tasks_root or base.tasks_root),
         fixtures_root=absolute(args.fixtures_root or base.fixtures_root),
         variants_root=absolute(args.variants_root or base.variants_root),
+        repo_root=absolute(args.repo_root or base.repo_root),
     )
 
 
@@ -121,8 +126,22 @@ def do_record(args: argparse.Namespace, cfg: HarnessConfig) -> int:
     result = records.record_campaign(
         cfg.run_root, args.campaign, args.issue, args.before, args.after, split(args.claim), split(args.tasks) or None,
     )
-    path = records.write_record(result["record"], absolute(args.records_dir))
+    record = result["record"]
+    if args.removal_campaigns and not args.rule_groups:
+        raise command.ConfigError("--removal-campaigns needs --rule-groups")
+    if args.rule_groups:
+        try:
+            section = rule_record.build_section(
+                cfg.run_root, args.campaign, record, args.before, args.after, split(args.removal_campaigns),
+                rule_groups.load_tasks(cfg.tasks_root), cfg.variants_root, cfg.repo_root)
+        except rule_groups.RemovalError as error:
+            raise command.ConfigError(str(error)) from error
+        record = {**record, "rule_groups": section}
+    path = records.write_record(record, absolute(args.records_dir))
     sys.stdout.write("".join(f"{line}\n" for line in records.report_lines(result)))
+    if args.rule_groups:
+        counts = {verdict: sum(1 for group in record["rule_groups"]["groups"] if group["verdict"] == verdict) for verdict in rule_groups.VERDICTS}
+        sys.stdout.write("rule groups: " + ", ".join(f"{count} {verdict}" for verdict, count in counts.items()) + "\n")
     sys.stdout.write(f"record written: {path.name}\n")
     return 0
 
@@ -134,7 +153,8 @@ def do_rule_groups(args: argparse.Namespace, cfg: HarnessConfig) -> int:
     except rule_groups.RemovalError as error:
         raise command.ConfigError(str(error)) from error
     if args.json:
-        sys.stdout.write(json.dumps(groups, indent=2, ensure_ascii=False) + "\n")
+        sys.stdout.write(json.dumps([{key: value for key, value in group.items() if key != "lead"} for group in groups],
+                                    indent=2, ensure_ascii=False) + "\n")
         return 0
     for group in groups:
         sys.stdout.write(f"{group['bytes']:>5}  {group['status']:<10} {group['id']}  [{', '.join(group['checks'])}]\n")

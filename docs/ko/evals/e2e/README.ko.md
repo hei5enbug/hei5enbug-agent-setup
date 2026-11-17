@@ -163,6 +163,7 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 | 두 변형 비교 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | 리비전 내보내기만 하기 | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
 | 세션 지침의 규칙 묶음을 바이트와 연결된 검사와 함께 나열하기 | `python3 evals/e2e/harness/cli.py rule-groups [--ref <ref>] [--json]` |
+| 규칙 묶음을 판정하고 기록 쓰기: 스톡이 전, 전체 플러그인이 후, 제거 변형은 같은 캠페인이나 다른 캠페인에서 | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue 101 --before stock --after <plugin variant> --rule-groups [--removal-campaigns <a,b>] [--tasks T02,T05,T07,T08,T09,T12,T20]` |
 | 변경을 판정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
 
 `--parallel`은 동시에 실행할 수를 정한다(기본 3). 변형이 여럿이면 작업과 반복마다 순서를 번갈아(ABAB, 다음은
@@ -369,7 +370,7 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 
 묶음을 판정하는 기록은 `rule_groups` 절을 더한다: `{"stock", "plugin", "groups"}`이며 스톡 변형과 전체 플러그인
 변형의 이름, 그리고 묶음마다 `id`, `file`, `bytes`, `checks`, 호스트별 스톡 결과, `removal_runs`, `verdict`,
-`references`를 가진 항목 하나다. 판정은 `removed`, `kept as needed`, `kept as unmeasured`, `not yet measured` 중 하나이며,
+`references`에 더해 묶음의 `tasks`, `host_comparison`, 판정을 낸 `step`을 가진 항목 하나다. 판정은 `removed`, `kept as needed`, `kept as unmeasured`, `not yet measured` 중 하나이며,
 검증은 제거된 묶음이 검색한 참조, 의존 없음, 호스트마다 제거 실행 두 번을 적도록 요구한다.
 `harness/rule_groups.py`의 `decide`가 큰 묶음부터 판정을 낸다.
 
@@ -381,6 +382,26 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 - 호스트마다 제거 실행 두 번: 연결된 모든 검사가 모든 실행에서 통과하고 위 절의 호스트 비교가 그 묶음 없이도
   성립하면 `removed`, 검사 실패나 깨진 비교는 `kept as needed`, 실행이 모자라거나 비교가 미정이면 `not yet measured`.
 - 이미 제거된 묶음과 겹치는 묶음, 예를 들어 절과 그 부분은 `not yet measured`.
+
+`record --rule-groups`는 실행 폴더에서 이 절을 쓴다. `--before`는 스톡 변형, `--after`는 전체 플러그인 변형이므로 기록 자체의
+사례, 실행, 판정이 그 비교다. 플러그인 리비전의 세션 파일 묶음과 과제의 `rules`를 읽고, 제거 변형은 캠페인과
+`--removal-campaigns`의 각 캠페인의 변형 파일에서 읽는다. `remove` 항목이 있고, 항목이 정확히 한 묶음을 가리키며,
+`ref`가 플러그인 리비전으로 풀리는 변형이 제거 변형이다. 묶음마다 다음을 가져온다.
+
+- 스톡 결과: 호스트와 연결된 검사별로, 모든 스톡 실행이 통과했으면 true, 하나라도 실패했으면 false, 그 검사를 가진
+  스톡 실행이 없으면 `null`.
+- 제거 실행: 호스트와 반복마다 묶음 과제의 모든 필수 검사. 끝나지 않았거나 채점되지 않은 실행은 `null`이므로 빠진
+  실행이 측정된 것으로 읽히지 않으며, `decide`는 호스트마다 완전한 실행 두 번을 요구한다.
+- 호스트 비교: 같은 캠페인의 플러그인 변형 실행과 제거 변형 실행을 위의 비교 규칙으로 비교한다. 묶음의 모든 과제가
+  통과해야 true이고, 같은 캠페인에서 플러그인 변형이 묶음의 모든 과제를 두 호스트에서 실행하지 않았거나 벌어진 격차가
+  아직 다섯 번의 실행을 기다리면 `null`.
+- 참조: `references.searched`는 `evals/`와 `docs/`를 뺀 플러그인 리비전의 최상위 폴더와 파일이고, `relied_on`은 묶음 자기
+  파일이 아니면서 묶음의 첫 단어, 절이면 제목 줄을 가진 파일(스크립트, 테스트, 스킬, 다른 지침 등)이다. 그런 파일이
+  있으면 `decide`가 그 묶음을 필요로 남긴다. 묶음을 인용하지 않고 가리키는 글이 있는지는 소유자가 읽어 판단할 일로 어떤
+  스크립트도 정하지 않는다.
+
+기록에는 묶음 과제가 모두 사례로 있어야 하므로 일곱 과제를 모두 실행하고, `--repo-root`는 리비전을 가진 다른 저장소를
+가리킨다.
 
 ### 기록
 

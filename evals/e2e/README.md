@@ -177,6 +177,7 @@ Run every command from the repository root. The default run root is
 | Compare two variants | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | Export a revision only | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
 | List the rule groups of the session instructions with their bytes and mapped checks | `python3 evals/e2e/harness/cli.py rule-groups [--ref <ref>] [--json]` |
+| Judge the rule groups and write their record: stock before, whole plugin after, removal variants from the same or further campaigns | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue 101 --before stock --after <plugin variant> --rule-groups [--removal-campaigns <a,b>] [--tasks T02,T05,T07,T08,T09,T12,T20]` |
 | Judge a change and write its record | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
 
 `--parallel` sets the number of runs at once (default 3). With several variants the order alternates per task and
@@ -401,7 +402,7 @@ section names.
 
 A record that decides rule groups adds a `rule_groups` section: `{"stock", "plugin", "groups"}`, the names of the stock and
 whole-plugin variants and one entry per group with `id`, `file`, `bytes`, `checks`, the stock result per host,
-`removal_runs`, `verdict`, and `references`. The verdict is one of `removed`, `kept as needed`, `kept as unmeasured`, and
+`removal_runs`, `verdict`, and `references`, plus the group's `tasks`, its `host_comparison`, and the `step` that decided it. The verdict is one of `removed`, `kept as needed`, `kept as unmeasured`, and
 `not yet measured`, and validation requires a removed group to name the references searched, no reliance, and two removal
 runs on each host. `decide` in `harness/rule_groups.py` gives the verdict, largest group first:
 
@@ -414,6 +415,28 @@ runs on each host. `decide` in `harness/rule_groups.py` gives the verdict, large
   without the group: `removed`; a failing check or a broken comparison: `kept as needed`; fewer runs or an undecided
   comparison: `not yet measured`.
 - A group that overlaps an already removed group, such as a section and one of its parts, is `not yet measured`.
+
+`record --rule-groups` writes the section from the run folders, with `--before` the stock variant and `--after` the
+whole-plugin variant, so the record's own cases, runs, and verdicts are that comparison. It reads the groups of the session
+files at the plugin revision and the tasks' `rules`, and reads the removal variants from the variant files of the campaign
+and of each campaign in `--removal-campaigns`: a variant that lists `remove` entries, whose entries must name exactly one
+group and whose `ref` must resolve to the plugin revision. For each group it takes:
+
+- Stock result: per host and mapped check, true when every stock run passed it, false when one failed, `null` when no
+  stock run holds it.
+- Removal runs: for each host and repetition, every required check of the group's tasks, `null` for a run that did not
+  finish or was not graded, so a missing run never reads as measured, and `decide` needs two complete runs per host.
+- Host comparison: the plugin variant's runs of the same campaign against the removal variant's, by the comparison rule
+  above; true only when every task of the group passes, and `null` unless the plugin variant ran every task of the group
+  on both hosts in that campaign, or when a grown gap still needs its five runs.
+- References: `references.searched` lists the top-level folders and files of the plugin revision outside `evals/` and
+  `docs/`, and `relied_on` lists the files other than the group's own that hold the group's first words, or for a section
+  its heading line, such as a script, a test, a skill, or another instruction. Any such file makes `decide` keep the group
+  as needed; whether prose that refers to a group without quoting it exists stays a reading of the owner's, which no
+  script decides.
+
+The record needs every task of the groups among its cases, so run all seven tasks, and `--repo-root` names another
+repository that holds the revisions.
 
 ### Records
 
