@@ -2,8 +2,9 @@
 """A fake `orca` command for the T81 evaluation: terminals, screens, idle waits, sends, and an empty orchestration inbox.
 
 The state file named by FAKE_ORCA_STATE holds the terminals. Every call is appended to `calls.jsonl` beside it. The
-terminals disappear `vanish_after_seconds` after the first `terminal list`, as if their tabs were closed, so the
-refresh script's detached helper ends a minute or so after the run instead of waiting out its hour. A
+terminals disappear `vanish_after_seconds` after the first call only the refresh script's `apply` step makes, as if
+their tabs were closed, so its detached helper ends a minute or so after the run instead of waiting out its hour. That
+call is an idle wait, an orchestration inbox read, or a send; listing or reading terminals never starts the countdown. A
 `/reload-plugins` sent to a Claude Code terminal appends the host's reload result to that terminal's transcript, the way
 the real session would. All data is fictional.
 """
@@ -78,9 +79,13 @@ def append_reload(item: dict) -> None:
         stream.write("".join(json.dumps(record) + "\n" for record in records))
 
 
+def starts_countdown(words: list[str]) -> bool:
+    return words[:2] in (["terminal", "wait"], ["terminal", "send"], ["orchestration", "inbox"])
+
+
 def vanished(state: dict) -> bool:
-    first = state.setdefault("first_list_at", time.time())
-    return time.time() - first > state.get("vanish_after_seconds", 75)
+    started = state.get("apply_started_at")
+    return started is not None and time.time() - started > state.get("vanish_after_seconds", 75)
 
 
 def run(words: list[str], options: dict[str, str], flags: set[str], state: dict) -> dict:
@@ -120,6 +125,8 @@ def log(argv: list[str], ok: bool) -> None:
 def main(argv: list[str]) -> int:
     words, options, flags = parse(argv)
     state = load()
+    if starts_countdown(words):
+        state.setdefault("apply_started_at", time.time())
     payload = run(words, options, flags, state)
     save(state)
     log(argv, payload["ok"])

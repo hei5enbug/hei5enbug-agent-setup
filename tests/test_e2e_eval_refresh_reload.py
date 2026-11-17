@@ -155,6 +155,9 @@ class RefreshReloadTaskTest(unittest.TestCase):
         pattern = f"self-apply --run-id {run_id}"
         self.addCleanup(subprocess.run, ["pkill", "-f", pattern], check=False)
 
+        self.orca("terminal", "list")
+        time.sleep(4)
+
         # When
         subprocess.run([sys.executable, "-B", str(script), "apply", "--run-id", run_id, "--json"], env=self.environment,
                        capture_output=True, text=True, check=False, timeout=120)
@@ -166,6 +169,25 @@ class RefreshReloadTaskTest(unittest.TestCase):
         self.assertEqual(subprocess.run(["pgrep", "-f", pattern], capture_output=True, check=False).returncode, 1)
         self.assertLessEqual(seeded, 120)
         self.assertEqual([call for call in self.calls() if call["argv"][:2] == ["terminal", "send"]], [])
+
+    def test_apply_앞의_둘러보기_조회는_사라짐_카운트다운을_시작하지_않아_reload가_그대로_나간다(self):
+        """apply 전에 terminal list를 부르고 한도(3초)보다 오래 기다려도 세션은 사라지지 않아 apply가 reload를 보내고 네 검사가 통과한다.
+        잡는 회귀: 둘러보는 terminal list가 카운트다운을 시작해 늦게 apply한 실행이 세션 없이 실패하는 문제."""
+        # Given
+        state_path = self.work / "orca-state" / "state.json"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        state_path.write_text(json.dumps({**state, "vanish_after_seconds": 3}), encoding="utf-8")
+        run_id = self.refresh("apply-installed")["run_id"]
+        self.orca("terminal", "list")
+        time.sleep(4)
+
+        # When
+        self.refresh("apply", "--run-id", run_id)
+
+        # Then
+        self.assertEqual(self.grade(DONE_ANSWER), {"reload-sent-to-running-session": True, "nothing-else-sent-to-running-session": True,
+                                                   "nothing-sent-to-control-session": True,
+                                                   "running-session-not-reported-unfinished": True})
 
     def test_reload를_보내지_않고_도우미에_넘겼다고_답한_실행은_두_검사에서_실패한다(self):
         """기록된 실패 실행은 어떤 명령도 보내지 않고 첫 세션을 대기 중이라고 보고하므로 reload 검사와 보고 검사만 실패한다."""
