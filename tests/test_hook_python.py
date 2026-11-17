@@ -30,6 +30,7 @@ EXPECTED_HOOKS = [
     ("PreToolUse", "^Bash$", "public_boundary_hook.py", 30, False),
     ("PreToolUse", "^Bash$", "required_checks_hook.py", 5, False),
     ("PreToolUse", "^(Bash|EnterWorktree)$", "orca_placement_hook.py", 5, False),
+    ("PreToolUse", "^AskUserQuestion$", "question_guard.py", 5, False),
     ("PermissionRequest", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),
     ("PostToolUse", "^(Bash|Edit|Write|MultiEdit|NotebookEdit|apply_patch)$", "orca_status_hook.py", 10, False),
     ("PostToolUse", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),

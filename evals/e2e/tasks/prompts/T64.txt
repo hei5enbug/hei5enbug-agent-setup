@@ -1,0 +1,1 @@
+demo-tool 저장소의 db/orders.sql 에 있는 demo.orders 표에서 legacy_code 와 old_status 컬럼을 지울지 질문 도구로 나한테 물어봐줘. 표가 어떻게 생겼는지 그림으로 보고 싶어. 아직 파일은 고치지 마.

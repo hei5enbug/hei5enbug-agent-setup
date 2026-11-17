@@ -80,7 +80,7 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
 확인했다. 측정 실행은 플러그인 승인 가드를 기본으로 끄므로("Codex 호스트" 참고), 이 일은 가드를 켠 변형에서만 생긴다. 권한 모드나 플러그인 가드가 질문 없이 허용한 호출은 이 도구에 오지 않으므로 세지 않는다.
 
 하네스는 에이전트가 `AskUserQuestion`으로 묻는 질문에 답할 수 없다. 승인 도구는 호출을 통과시키고, 실행은 질문에
-답을 받지 못한 채 끝난다. 그래서 작업 프롬프트는 결과를 바꿀 결정을 열어 두지 않는다.
+답을 받지 못한 채 끝난다. 그래서 작업 프롬프트는 결과를 바꿀 결정을 열어 두지 않는다. 대화상자의 입력 자체를 채점하는 질문 작업 T63과 T64는 예외다.
 
 ### Codex 호스트
 
@@ -112,7 +112,7 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
   실행의 에이전트 환경에 `CLAUDE_PLUGIN_OPTION_APPROVAL_GUARD`와 `HEI5ENBUG_APPROVAL_GUARD`를 `false`로 넣는다.
   변형은 `env`에서 두 변수 중 하나를 달리 정해 이 기본값을 덮어쓸 수 있다. 플러그인의 다른 훅은 그대로 실행된다.
 - Codex에는 지출 한도 플래그가 없으므로 작업의 경과 시간 제한만 적용한다.
-- 하네스는 rollout의 `exec` 명령, `apply_patch` 호출, 네이티브 `spawn_agent` 호출을 도구 호출로 읽는다. `spawn_agent` 호출은
+- 하네스는 rollout의 `exec` 명령, `apply_patch` 호출, 네이티브 `spawn_agent` 호출, `request_user_input` 호출을 도구 호출로 읽는다. `spawn_agent` 호출은
   그 호출이 적은 `agent_type`의 서브에이전트 시작으로 세고, 적지 않았으면 `general-purpose`로 센다. 위임의 순서와 최종 답변의
   순서는 같은 호출들을 센다. `spawn_agent` 위임은 그 `task_name` 자식의 최종 결과가 오류가 아닌 `FINAL_ANSWER` 메시지로 부모에게
   돌아온 뒤에야 완료로 센다. 시작 확인 응답만으로는 결과가 아니다. 검토는 그 메시지가 마지막 assistant 메시지보다 먼저
@@ -265,7 +265,9 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 프롬프트는 실제 사용자처럼 한국어로 쓴다. 픽스처는 실제 저장소의 관례를 갖춘 가상 저장소다. README, 한국어 미러
 규칙이 있는 `AGENTS.md`, 테스트, 한국어 미러가 있다. T21은 `ORCA_TERMINAL_HANDLE`을 설정하고 `tasks/setup/fake_orca.py`가
 만든 가짜 `orca`를 `PATH`의 맨 앞에 두고 실행하며, 상태는 저장소 옆의 `orca-state/`에 두고, 테스트는
-`tests/test_e2e_eval_orca_cleanup.py`에 있다.
+`tests/test_e2e_eval_orca_cleanup.py`에 있다. T63과 T64는 에이전트가 처음 여는 질문 대화상자에서 끝나고 그 입력을 채점한다. 입력은
+Claude Code에서는 `AskUserQuestion`에서, Codex에서는 `request_user_input`에서 읽으며 코드는 `tasks/custom/question_shared.py`에 있고,
+테스트는 `tests/test_e2e_eval_question_tasks.py`에 있다.
 
 | 작업 | 픽스처 | 확인하는 경로 | 요청 |
 |---|---|---|---|
@@ -290,6 +292,8 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 | T19 | ops-notes | 공유 문서 | 1,500자 한도에 1,600자쯤 되는 위키 초안 |
 | T20 | notes-cli | 최종 보고 | 테스트를 더한 작은 변경 후 보고 |
 | T21 | notes-cli | 작업 종료 시 Orca 정리 | 티켓의 설정 한 줄 변경, 가짜 `orca`와 저장소 세 곳의 Git worktree를 심어 둔 상태 |
+| T63 | demo-tool | 이슈 초안의 질문 대화상자 | 다른 줄이 반복하는 이슈 초안의 확인 목록 두 줄을 지울지 호스트의 질문 도구로 묻고, 확인 목록을 그림으로 보여 준다 |
+| T64 | demo-tool | 표의 질문 대화상자 | `demo.orders`의 컬럼 두 개를 지울지 호스트의 질문 도구로 묻고, 표를 그림으로 보여 준다 |
 
 ## 두 호스트에서 변경 비교
 

@@ -89,7 +89,7 @@ def test_시간이_다_된_훅은_거부_가능한_이벤트에서만_거부하�
     cases = [
         ("approval_guard.py", "PreToolUse"), ("approval_guard.py", "PermissionRequest"),
         ("orca_placement_hook.py", "PreToolUse"), ("agent_guard.py", "PreToolUse"),
-        ("datagrip_guard.py", "PreToolUse"),
+        ("datagrip_guard.py", "PreToolUse"), ("question_guard.py", "PreToolUse"),
     ]
     silent = [
         ("approval_guard.py", "PostToolUse"), ("approval_guard.py", "UserPromptSubmit"),
@@ -272,6 +272,8 @@ FAILING = [
      {"tool_name": "Bash", "tool_input": {"command": "git push origin demo-a"}}, {}),
     ("orca_placement_hook", "texts_to_check", "Orca placement hook", "PreToolUse",
      {"tool_name": "Bash", "tool_input": {"command": "orca worktree create --no-parent"}}, {}),
+    ("question_guard", "free_form_labels", "question guard", "PreToolUse",
+     {"tool_name": "AskUserQuestion", "tool_input": {"questions": [{"options": [{"label": "Other"}]}]}}, {}),
     ("agent_guard", "denial", "agent guard", "PreToolUse", {"tool_name": "Agent", "tool_input": {}},
      {"PLUGIN_ROOT": str(REPO_ROOT)}),
     ("language_guard", "handle", "language guard", "Stop", {"last_assistant_message": "done"}, {}),

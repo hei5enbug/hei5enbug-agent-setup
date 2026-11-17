@@ -9,6 +9,7 @@ from typing import Any, Iterable
 CALL_TYPES = frozenset({"function_call", "local_shell_call", "custom_tool_call"})
 OUTPUT_TYPES = frozenset({"function_call_output", "local_shell_call_output", "custom_tool_call_output"})
 NATIVE_AGENT_TOOL = "spawn_agent"
+QUESTION_TOOL = "request_user_input"
 FINAL_ANSWER_HEADER = re.compile(r"\AMessage Type: FINAL_ANSWER\s*\nTask name: [^\n]*\nSender: (/root/[^\n]+)\nPayload:\n?(.*)\Z", re.S)
 CHILD_ERROR_PREFIX = "Agent errored:"
 SHELL_WRAPPERS = frozenset({"bash", "sh", "zsh"})
@@ -258,7 +259,7 @@ def _joined_calls(
 
 
 def rollout_tool_calls(events: list[dict[str, Any]], role: str, rollout_name: str) -> list[dict[str, Any]]:
-    """Bash, apply_patch, and native `spawn_agent` calls of one rollout. A script with several commands gives one call per command. When the
+    """Bash, apply_patch, native `spawn_agent`, and `request_user_input` calls of one rollout. A script with several commands gives one call per command. When the
     output items of an exec script pair one to one with its `tools.<name>(` statements, each command gets its own
     result and a later `write_stdin` poll extends the call of its session; otherwise the script's whole output is
     attached to the first of its commands."""
@@ -281,6 +282,9 @@ def rollout_tool_calls(events: list[dict[str, Any]], role: str, rollout_name: st
                            if index > position and sender == path and index not in claimed), None)
             claimed = claimed | {answer[0]} if answer else claimed
             calls = [*calls, _native_agent_call(call_id, payload, text, bool(code), source, answer[1] if answer else None)]
+            continue
+        if payload.get("type") == "function_call" and payload.get("name") == QUESTION_TOOL:
+            calls = [*calls, _call(f"codex:{call_id}", QUESTION_TOOL, _arguments(payload), text, bool(code), source)]
             continue
         patch = _patch_text(payload)
         if patch is not None:

@@ -1,0 +1,57 @@
+{
+  "id": "T64",
+  "title": "Ask whether to drop two columns of demo.orders",
+  "category": "question",
+  "path": "Question dialog wording and diagram placement (Claude Code AskUserQuestion, Codex request_user_input)",
+  "fixture": "demo-tool",
+  "prompt_file": "prompts/T64.txt",
+  "limits": {
+    "wall_seconds": 600,
+    "max_budget_usd": 4
+  },
+  "checks": [
+    {
+      "id": "asked-with-question-tool",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "asked"
+    },
+    {
+      "id": "columns-named",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "columns_named"
+    },
+    {
+      "id": "descriptions-name-columns",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "descriptions_name_columns"
+    },
+    {
+      "id": "picture-with-column",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "picture_with_column"
+    },
+    {
+      "id": "no-free-form-label",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "no_free_form_label"
+    },
+    {
+      "id": "tree-unchanged",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 1
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

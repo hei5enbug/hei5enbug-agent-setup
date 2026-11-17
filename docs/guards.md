@@ -1,7 +1,7 @@
 # Response language, DataGrip, and public boundary guards
 
-This page explains how response-language checks, DataGrip query safeguards, and the public boundary check behave on
-each host.
+This page explains how response-language checks, DataGrip query safeguards, the public boundary check, and the
+question dialog check behave on each host.
 
 ## Response language
 
@@ -266,6 +266,25 @@ problems in them. The interpreter-script detection and the any-length mismatch r
 runs for issue #69 edited files only through `python3` heredoc scripts and sent an unreviewed 711-character report, and
 sent a 296-character report that differed from the passing draft.
 
+## Question dialog free-form option
+
+A `PreToolUse` hook on `AskUserQuestion`, `scripts/question_guard.py`, runs on Claude Code. It denies the call when any
+option's label equals, ignoring case and after a trailing parenthesized note such as "(Recommended)" is removed, one of
+"Other", "Custom", "Type your own", "Type your own answer", "Write your own", "Enter your own", "직접 입력", "직접 입력하기",
+"직접 작성", "직접 작성하기", or "기타". The reason says that the host already adds a free-form row and asks to remove
+that option. A label that only contains such a word, such as "Other files", a call without such a label, malformed
+input, and any other tool pass with no output. Claude Code adds an "Other" row to every question, but a self-made option
+has no text box, so the answer comes back as the option's label with no text. It exists because, in a Claude Code
+session on 2026-11-13, an agent added "직접 입력" to a question, the user chose it, and the answer arrived empty.
+
+Codex has no automatic check. Its `request_user_input` schema already says not to add an "Other" option or a free-text
+placeholder, and the rule in `instructions/asking-the-user.md` covers the rest. The script already reads the same
+`questions` and `options` fields from a `request_user_input` input, but no Codex hook is registered for it: the Codex
+hook documentation lists local function tools as matchable by name without naming `request_user_input`, and no probe
+of a real Codex session has shown whether the hook receives its input. The wording rule for a first-time reader, which
+names what a decision changes, each affected item in plain words, and what each option does to it, has no deterministic
+check and stays a written rule.
+
 ## Hook time limits and machine load
 
 Each hook gets half of the timeout its registration declares, counted from when its launcher started. The launcher
@@ -276,10 +295,10 @@ no work and returns the timeout result at once. A hook that runs out of time sto
 and answers on its own:
 
 - A hook whose output can deny a call or a permission request denies it: the approval guard on `PreToolUse` and
-  `PermissionRequest`, the Orca placement hook, the agent guard, and the DataGrip guard with a decision whose reason
-  names the plugin and the hook, says it could not finish because the machine is busy, and tells the agent to retry
-  after the load drops or to check which sessions are using the machine; the public boundary hooks block with exit
-  status 2 and the same text on stderr.
+  `PermissionRequest`, the Orca placement hook, the agent guard, the DataGrip guard, and the question guard with a
+  decision whose reason names the plugin and the hook, says it could not finish because the machine is busy, and tells
+  the agent to retry after the load drops or to check which sessions are using the machine; the public boundary hooks
+  block with exit status 2 and the same text on stderr.
 - Every other hook, including a `Stop` hook that would otherwise continue the turn, exits with status 0 and no output,
   so the agent's work continues.
 

@@ -1,0 +1,64 @@
+{
+  "id": "T63",
+  "title": "Ask whether to delete two repeated checklist lines of an issue draft",
+  "category": "question",
+  "path": "Question dialog wording and free-form row (Claude Code AskUserQuestion, Codex request_user_input)",
+  "fixture": "demo-tool",
+  "prompt_file": "prompts/T63.txt",
+  "limits": {
+    "wall_seconds": 600,
+    "max_budget_usd": 4
+  },
+  "checks": [
+    {
+      "id": "asked-with-question-tool",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "asked"
+    },
+    {
+      "id": "flagged-lines-named",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "flagged_lines_named"
+    },
+    {
+      "id": "plain-words",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "plain_words"
+    },
+    {
+      "id": "delete-and-keep-options",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "delete_and_keep_options"
+    },
+    {
+      "id": "picture-of-all-lines",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "picture_of_all_lines"
+    },
+    {
+      "id": "no-free-form-label",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "no_free_form_label"
+    },
+    {
+      "id": "draft-unchanged",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 1
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

@@ -89,7 +89,7 @@ Calls that the permission mode or the plugin's guard allow without a prompt neve
 
 The harness cannot answer a question that the agent asks with `AskUserQuestion`. The approver lets the call through,
 and the run ends with the question unanswered. Task prompts therefore leave no decision open that would change the
-result.
+result, except the question tasks T63 and T64, which grade the dialog's input itself.
 
 ### Codex host
 
@@ -122,8 +122,8 @@ prompt, the same limits, and the same graders and metrics. `claude` alone is the
   in the agent environment of every run. A variant sets either variable in its `env` to override the default. The
   plugin's other hooks still run.
 - Codex has no spend flag, so only the wall-time limit of the task is enforced.
-- The harness reads the `exec` commands, `apply_patch` calls, and native `spawn_agent` calls of the rollouts as tool
-  calls. A `spawn_agent` call counts as a subagent launch of the `agent_type` it names, or of `general-purpose` when it
+- The harness reads the `exec` commands, `apply_patch` calls, native `spawn_agent` calls, and `request_user_input`
+  calls of the rollouts as tool calls. A `spawn_agent` call counts as a subagent launch of the `agent_type` it names, or of `general-purpose` when it
   names none, and the order of a delegation and the order of the final answer count the same calls. A `spawn_agent`
   delegation counts as completed only once the child's final result for its `task_name` has come back to the parent
   as a `FINAL_ANSWER` message that is not an error; the spawn acknowledgement alone is not a result. A review counts as
@@ -285,7 +285,10 @@ solution in `tasks/reference/` passes.
 Prompts are in Korean, as the real user writes them. The fixtures are fictional repositories with the conventions a
 real one has: a README, an `AGENTS.md` with a Korean mirror rule, tests, and Korean mirrors. T21 runs with
 `ORCA_TERMINAL_HANDLE` set and a fake `orca` first on `PATH`, built by `tasks/setup/fake_orca.py`; it keeps its state
-in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval_orca_cleanup.py`.
+in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval_orca_cleanup.py`. T63 and T64 end
+at the first question dialog the agent opens and grade its input, read from `AskUserQuestion` on Claude Code and from
+`request_user_input` on Codex, in `tasks/custom/question_shared.py`; their tests are in
+`tests/test_e2e_eval_question_tasks.py`.
 
 | Task | Fixture | Path it exercises | Request |
 |---|---|---|---|
@@ -310,6 +313,8 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T19 | ops-notes | Shared document | Wiki draft of about 1,600 characters for a 1,500-character budget |
 | T20 | notes-cli | Final report | Small change with tests, then a report |
 | T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
+| T63 | demo-tool | Question dialog for an issue draft | Ask, with the host's question tool, whether to delete two checklist lines of an issue draft that other lines repeat, and show the checklist as a picture |
+| T64 | demo-tool | Question dialog for a table | Ask, with the host's question tool, whether to drop two columns of `demo.orders`, and show the table as a picture |
 
 ## Comparing a change on both hosts
 

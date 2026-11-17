@@ -81,6 +81,32 @@ class CommonRulesTest(unittest.TestCase):
             with self.subTest(rule=rule):
                 self.assertIn(rule, asking)
 
+    def test_질문_창은_호스트의_자유_입력_행에_맡기고_쉬운_말을_먼저_쓰며_번호만으로_가리키지_않고_그림은_도구에_맞춰_둔다(self):
+        """자유 입력 선택지를 직접 만들지 않고, 정의보다 쉬운 말을 먼저 쓰며, 번호만으로 항목을 가리키지 않고, 미리보기가 없으면 질문 글에 그림을 둔다."""
+        # Given
+        asking = " ".join((REPO_ROOT / "instructions/asking-the-user.md").read_text(encoding="utf-8").split())
+
+        # When
+        rules = (
+            "When the host's question tool adds its own free-form row, as Claude Code `AskUserQuestion` and Codex "
+            "`request_user_input` do, rely on that row and never add an option whose label asks the user to type, "
+            'such as "Other", "Custom", or "직접 입력".',
+            "When the host's tool cannot take a free-form answer, ask in the reply that ends the turn instead.",
+            "Use a plain phrase with the same meaning instead of the term, and define the term only when no such "
+            "phrase exists.",
+            "each item the choice affects, quoted or described in plain words, never only by its number or position "
+            "in a text the dialog does not show;",
+            "and what happens to each item under each option.",
+            "When the question tool has a preview field, such as Claude Code `preview`, put the diagram there; when "
+            "it has none, as on Codex, put it in the question text below the question sentence.",
+        )
+
+        # Then
+        for rule in rules:
+            with self.subTest(rule=rule):
+                self.assertIn(rule, asking)
+        self.assertNotIn("allow a free-form answer", asking)
+
     def test_질문_창_입력은_원문_글자로_쓰고_깨진_글자_신고에는_자기_입력부터_확인한다(self):
         """구조화된 질문 도구의 입력은 유니코드 이스케이프 없이 쓰고 다시 읽으며, 깨진 글자 신고에는 자기 도구 입력을 먼저 본다."""
         # Given
