@@ -1,0 +1,13 @@
+{
+  "name": "plugin-host",
+  "version": "1.3.0",
+  "userConfig": {
+    "delivery": {
+      "type": "string",
+      "title": "Delivery mode",
+      "description": "How a change is delivered: auto (the session picks per change) or manual (the session asks first).",
+      "options": ["auto", "manual"],
+      "default": "auto"
+    }
+  }
+}

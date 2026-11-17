@@ -1,0 +1,62 @@
+{
+  "id": "T70",
+  "title": "Scan every commit of an outgoing range",
+  "category": "worker-measurement",
+  "path": "security: find a value a middle commit added",
+  "fixture": "guard-kit",
+  "prompt_file": "prompts/T70.txt",
+  "limits": {
+    "wall_seconds": 1800,
+    "max_budget_usd": 12
+  },
+  "worker_case": true,
+  "worker_criteria": [
+    "security"
+  ],
+  "hidden_tests": {
+    "source": "hidden/T70",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 4,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "exact-api",
+      "text": "Use the exact names and formats the assignment gives",
+      "keywords": [
+        "scan_range",
+        "Finding",
+        "base..head"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-tests"
+      ]
+    }
+  ],
+  "rubric": null
+}

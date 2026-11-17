@@ -47,8 +47,8 @@ Any other value means `apply`. Claude Code reads the option from `/config`; Code
 Seven boolean features can be turned off, and each defaults to on. The implementation worker route, the worker models
 and efforts, the review model, the host settings mode, the minimum free memory for starting an agent session
 (`session_memory_min_mb`), the hook Python interpreter, and the plugins refreshed with this one (`refresh_plugins`)
-are string options in Claude Code. Choose `auto`, `codex`, `haiku`, `sol`, or `sonnet` for the
-route; an unset or unrecognized value uses `auto`, where the main session picks the worker per assignment. Choose
+are string options in Claude Code. Choose `auto`, `claude`, `codex`, `haiku`, `sol`, or `sonnet` for the
+route; an unset or unrecognized value uses `auto`, where the main session picks the worker per assignment. `claude` picks a Claude worker per assignment and never runs a GPT worker: a Claude worker that fails stops the delegation and reports the cause. A failed `codex` or `sol` worker continues on `sonnet-worker`. Choose
 `apply` or `report` for the host settings mode; an unset or unrecognized value uses `apply`. It decides whether
 `SessionStart` may change allowlisted Codex settings; see [Host settings](#host-settings). The review model runs skill
 review roles at `high`, or at `xhigh` under the effort rule in [model
@@ -73,7 +73,7 @@ settings.
 | Risk labels on tool calls | `risk_highlight` | Not applicable |
 | Work board for subagents | `work_board` | Not applicable |
 | Secret redaction in tool results | `secret_redaction` | Not applicable |
-| Implementation worker route | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, or `sonnet`) | Not applicable |
+| Implementation worker route | `implementation_worker` (`auto`, `claude`, `codex`, `haiku`, `sol`, or `sonnet`) | Not applicable |
 | Claude Code worker model and effort | `worker_model` (default `claude-haiku-5-5`) and `worker_effort` (default `high`) | Not applicable |
 | Codex worker model and effort | `codex_worker_model` (`gpt-5.6-luna` or `gpt-6.1-sol`, default `gpt-5.6-luna`) and `codex_worker_effort` (`high` or `xhigh`, default `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL` and `HEI5ENBUG_CODEX_WORKER_EFFORT` |
 | Review model | `review_model` (a pinned model ID, default `gpt-6-astra`) | Not applicable |

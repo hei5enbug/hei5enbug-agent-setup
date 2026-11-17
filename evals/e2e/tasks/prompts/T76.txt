@@ -1,0 +1,18 @@
+너는 할당받은 구현 worker다. 다른 에이전트를 시작하지 말고 이 작업을 직접 끝낸다.
+허용 경로: guardkit/pushes.py, tests/
+실행할 검사: python3 -m pytest -q
+허용 경로 밖을 고쳐야 하거나 정해지지 않은 결정이 필요하면 고치지 말고 막힌 점으로 보고한다. 기존 테스트는 고치지 않는다.
+끝나면 바꾼 경로, 검사 결과, 막힌 점을 보고한다.
+
+작업:
+guardkit/pushes.py 의 pushed_refs 를 `pushed_refs(command, push_default="simple", remote_push_config=False) -> list[str]` 로 고쳐 push 가 보내는 ref 를 정확히 돌려줘라.
+
+1. 셸 리다이렉션(`>`, `>>`, `2>`, `2>&1`, `&>`, `>log` 등)과 그 뒤 파일 이름은 ref 가 아니다.
+2. push 에 ref 이름도 `--all`, `--mirror`, `--tags` 도 없으면(remote 만 있거나 아무것도 없으면) `["HEAD"]` 다. 다만 push_default 가 "matching" 이거나 remote_push_config 가 True 면 `["*"]` 다(여러 브랜치가 갈 수 있다).
+3. `--all` 과 `--mirror` 는 `"*"` 를 한 번 더한다.
+4. `--tags` 는 `"refs/tags/*"` 를 더한다.
+5. refspec 은 보내는 쪽만 남긴다. `+src:dst` 와 `src:dst` 는 `src`, `HEAD:refs/heads/x` 는 `HEAD`, `:dst`(삭제)는 건너뛴다.
+6. 한 명령줄에 push 가 여럿이면 앞에서부터 합치고 같은 ref 는 한 번만 담는다.
+7. `git -C <dir> push ...` 와 `git -c <k=v> push ...` 도 push 로 읽는다. 첫 단어가 git 이 아닌 명령(`echo git push ...`)은 push 가 아니다.
+8. ref 이름이 있으면 push_default 와 remote_push_config 는 무시한다.
+- 새 동작의 테스트를 tests/ 에 추가한다.

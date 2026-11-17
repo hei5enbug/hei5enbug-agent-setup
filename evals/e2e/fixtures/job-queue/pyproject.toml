@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "job-queue"
+version = "0.2.0"
+description = "File-based job queue and session refresher"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["jobq*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

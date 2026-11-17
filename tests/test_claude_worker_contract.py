@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -23,6 +24,7 @@ WORKER = REPO_ROOT / "agents/worker.md"
 WORKER_MIRROR = REPO_ROOT / "docs/ko/agents/worker.ko.md"
 SONNET_WORKER = REPO_ROOT / "agents/sonnet-worker.md"
 SONNET_WORKER_MIRROR = REPO_ROOT / "docs/ko/agents/sonnet-worker.ko.md"
+REGISTRY = REPO_ROOT / "config/model-registry.json"
 CLAUDE_AGENTS = REPO_ROOT / "instructions/claude-agents.md"
 PLUGIN_MANIFEST = REPO_ROOT / ".claude-plugin/plugin.json"
 UNSUPPORTED_FIELDS = {
@@ -44,6 +46,12 @@ def split_definition(path: Path) -> tuple[dict, str]:
     if match is None:
         raise AssertionError(f"missing frontmatter: {path}")
     return yaml.safe_load(match[1]), match[2]
+
+
+def differing_bodies(reference: Path, candidates: list[Path]) -> list[str]:
+    """Names of the candidate definitions whose instruction body is not the reference's body."""
+    _, expected = split_definition(reference)
+    return [path.name for path in candidates if split_definition(path)[1] != expected]
 
 
 def implementation_section() -> str:
@@ -169,6 +177,34 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         self.assertIn("영어 원본: [designer.md](../../../agents/designer.md)", mirror)
         self.assertIn("비권위", mirror)
 
+    def test_agents_폴더의_모든_worker_정의는_worker와_같은_본문을_쓴다(self):
+        """agents/ 의 *worker.md 정의는 sonnet-worker와, 있으면 opus-worker까지 worker.md와 같은 본문을 가진다."""
+        # Given
+        definitions = sorted((REPO_ROOT / "agents").glob("*worker.md"))
+
+        # When
+        different = differing_bodies(WORKER, definitions)
+
+        # Then
+        self.assertIn(SONNET_WORKER, definitions)
+        self.assertEqual(different, [])
+
+    def test_본문이_다른_worker_정의는_불일치로_잡힌다(self):
+        """worker.md와 본문이 한 글자라도 다른 정의는 비교 함수가 그 이름을 돌려준다."""
+        # Given
+        text = WORKER.read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as folder:
+            same = Path(folder) / "same-worker.md"
+            changed = Path(folder) / "changed-worker.md"
+            same.write_text(text.replace("name: worker", "name: same-worker"), encoding="utf-8")
+            changed.write_text(text.replace("make no edit.", "make no edit!"), encoding="utf-8")
+
+            # When
+            different = differing_bodies(WORKER, [same, changed])
+
+        # Then
+        self.assertEqual(different, ["changed-worker.md"])
+
     def test_매니페스트는_Mod_설정과_기본_구현_worker_옵션을_선언한다(self):
         """hooks 모듈과 boolean 토글, 세 경로를 선택하는 구현 worker 문자열 옵션을 선언한다."""
         # Given
@@ -213,8 +249,8 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
             {
                 "type": "string",
                 "title": "Implementation worker",
-                "description": "Route implementation work: auto (the main session picks per task: haiku for easy work, sonnet for normal or hard work, and sol only when a Claude route fails or stops on a usage limit), codex (Codex on gpt-5.6-luna at high), haiku (the plugin worker on its Worker model and Worker effort, claude-haiku-5-5 at high by default), sol (gpt-6.1-sol at high through the role runner), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
-                "options": ["auto", "codex", "haiku", "sol", "sonnet"],
+                "description": "Route implementation work: auto (the main session picks per task: haiku for easy work, sonnet for normal or hard work, and sol only when a Claude route fails or stops on a usage limit), claude (the main session picks a Claude worker per task and never runs a GPT worker; a Claude worker that fails stops the delegation with a report), codex (Codex on gpt-5.6-luna at high; a failure continues on sonnet), haiku (the plugin worker on its Worker model and Worker effort, claude-haiku-5-5 at high by default), sol (gpt-6.1-sol at high through the role runner; a failure continues on sonnet), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
+                "options": ["auto", "claude", "codex", "haiku", "sol", "sonnet"],
                 "default": "auto",
             },
         )
@@ -274,6 +310,39 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         self.assertNotIn("alias", section)
         self.assertNotIn("model-config", section)
         self.assertIsNone(re.search(r"claude-[a-z]+-\d|gpt-\d", CLAUDE_AGENTS.read_text(encoding="utf-8")))
+
+    def test_claude_경로는_GPT_worker를_쓰지_않고_codex와_sol은_Sonnet으로_이어_가며_auto는_Sol_대체를_유지한다(self):
+        """`claude`는 GPT worker와 Sol 실행기를 쓰지 않고 실패하면 멈춰 보고하며, `codex`·`sol`은 Sonnet worker로 이어 가고, `auto`는 Sol 대체 그대로다."""
+        # Given
+        registry = json.loads(REGISTRY.read_text(encoding="utf-8"))["claude_agents"]
+        claude_rule = (
+            "When it says `claude`, choose per assignment by the same difficulty rule between "
+            "`hei5enbug-agent-setup:worker` and `hei5enbug-agent-setup:sonnet-worker`, and never run the Codex worker, "
+            "the Sol worker, or any other GPT worker; when the chosen Claude worker fails, is unavailable, or stops on "
+            "a usage limit, stop that delegation and report the cause instead of switching to a GPT worker, another "
+            "Claude worker, or any other model."
+        )
+        gpt_rule = (
+            "When it says `codex` or `sol` and the GPT worker fails, is unavailable, or stops on a usage limit, stop "
+            "it, inspect its partial diff, and continue the remaining work through "
+            "`hei5enbug-agent-setup:sonnet-worker`."
+        )
+        auto_rule = "When a Claude route fails or stops on a usage limit, use the Sol worker."
+
+        # When
+        section = implementation_section()
+
+        # Then
+        self.assertIn(claude_rule, section)
+        self.assertIn(gpt_rule, section)
+        self.assertEqual(section.count(auto_rule), 1)
+        self.assertLess(section.index("When it says `auto`"), section.index(auto_rule))
+        self.assertLess(section.index(auto_rule), section.index(claude_rule))
+        self.assertEqual(registry["hei5enbug-agent-setup:sonnet-worker"]["model"], "claude-sonnet-5-5")
+        self.assertIn(
+            "| `worker` | Inspect the partial diff, then `hei5enbug-agent-setup:sonnet-worker` |",
+            " ".join(CLAUDE_AGENTS.read_text(encoding="utf-8").split()),
+        )
 
     def test_Codex_worker는_역할_실행기로_실행하고_작업_폴더_밖_쓰기만_추가_허용한다(self):
         """Codex worker는 role_runner worker로 실행하고, 세션 폴더 밖 디렉터리는 --add-dir로만 추가한다."""
@@ -411,7 +480,7 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
             "| `researcher` | `hei5enbug-agent-setup:scout`, only when public search and fetch tools are available |",
             "| `reviewer` for a skill review role | `hei5enbug-agent-setup:reviewer` |",
             "| `reviewer` for independent validation | None. Report that independent validation was not performed. |",
-            "| `worker` | Inspect the partial diff, then `hei5enbug-agent-setup:worker` |",
+            "| `worker` | Inspect the partial diff, then `hei5enbug-agent-setup:sonnet-worker` |",
         ):
             self.assertIn(row, section)
 

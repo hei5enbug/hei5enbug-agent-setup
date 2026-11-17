@@ -1,0 +1,63 @@
+{
+  "id": "T74",
+  "title": "Move conditional rules to a reference",
+  "category": "worker-measurement",
+  "path": "several components: move rules behind one entry line",
+  "fixture": "plugin-host",
+  "prompt_file": "prompts/T74.txt",
+  "limits": {
+    "wall_seconds": 1800,
+    "max_budget_usd": 12
+  },
+  "worker_case": true,
+  "worker_criteria": [
+    "components"
+  ],
+  "hidden_tests": {
+    "source": "hidden/T74",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 4,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "exact-api",
+      "text": "Use the exact names and formats the assignment gives",
+      "keywords": [
+        "asking.md",
+        "common.md",
+        "MAX_CONTEXT_BYTES",
+        "ko"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-tests"
+      ]
+    }
+  ],
+  "rubric": null
+}

@@ -1,0 +1,63 @@
+{
+  "id": "T76",
+  "title": "Refs a push command sends",
+  "category": "worker-measurement",
+  "path": "hook or guard change: read a push command's refs correctly",
+  "fixture": "guard-kit",
+  "prompt_file": "prompts/T76.txt",
+  "limits": {
+    "wall_seconds": 1800,
+    "max_budget_usd": 12
+  },
+  "worker_case": true,
+  "worker_criteria": [
+    "hook-guard",
+    "security"
+  ],
+  "hidden_tests": {
+    "source": "hidden/T76",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 4,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "exact-api",
+      "text": "Use the exact names and formats the assignment gives",
+      "keywords": [
+        "pushed_refs",
+        "push_default",
+        "remote_push_config"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-tests"
+      ]
+    }
+  ],
+  "rubric": null
+}

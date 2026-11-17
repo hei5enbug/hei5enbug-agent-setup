@@ -13,9 +13,11 @@ import session_context  # noqa: E402
 VARIABLE = "CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER"
 DESCRIPTION = (
     "Route implementation work: auto (the main session picks per task: haiku for easy work, sonnet for normal or hard "
-    "work, and sol only when a Claude route fails or stops on a usage limit), codex (Codex on gpt-5.6-luna at high), "
-    "haiku (the plugin worker on its Worker model and Worker effort, claude-haiku-5-5 at high by default), sol "
-    "(gpt-6.1-sol at high through the role runner), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high)."
+    "work, and sol only when a Claude route fails or stops on a usage limit), claude (the main session picks a Claude "
+    "worker per task and never runs a GPT worker; a Claude worker that fails stops the delegation with a report), "
+    "codex (Codex on gpt-5.6-luna at high; a failure continues on sonnet), haiku (the plugin worker on its Worker "
+    "model and Worker effort, claude-haiku-5-5 at high by default), sol (gpt-6.1-sol at high through the role runner; "
+    "a failure continues on sonnet), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high)."
 )
 
 
@@ -39,6 +41,7 @@ def context(monkeypatch, value=None):
     (" HaIku ", "Implementation worker route: Haiku (`haiku`)."),
     ("sol", "Implementation worker route: Sol (`sol`)."),
     ("SOL", "Implementation worker route: Sol (`sol`)."),
+    (" Claude ", "Implementation worker route: Claude (`claude`)."),
 ])
 def test_세션_컨텍스트는_구현_경로_한_줄을_담는다(monkeypatch, value, line):
     text = context(monkeypatch, value)
@@ -54,14 +57,14 @@ def test_codex_세션에는_구현_경로_줄이_없다(monkeypatch):
     assert "Implementation worker route" not in text
 
 
-def test_매니페스트는_auto를_기본으로_하는_다섯_경로를_선언한다():
+def test_매니페스트는_auto를_기본으로_하는_여섯_경로를_선언한다():
     manifest = json.loads((REPO_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
     option = manifest["userConfig"]["implementation_worker"]
     assert option == {
         "type": "string",
         "title": "Implementation worker",
         "description": DESCRIPTION,
-        "options": ["auto", "codex", "haiku", "sol", "sonnet"],
+        "options": ["auto", "claude", "codex", "haiku", "sol", "sonnet"],
         "default": "auto",
     }
     assert option["description"].isascii()

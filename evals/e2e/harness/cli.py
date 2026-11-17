@@ -1,4 +1,4 @@
-"""Entry point: run | summarize | regrade | export-plugin | pilot-check | record."""
+"""Entry point: run | summarize | regrade | export-plugin | pilot-check | record | worker-results."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path[0] = str(Path(__file__).resolve().parents[1])
 
-from harness import campaign, command, plugin_export, records, summarize  # noqa: E402
+from harness import campaign, command, plugin_export, records, summarize, worker_cases  # noqa: E402
 from harness.config import DEFAULT_PARALLEL, DEFAULT_RUN_ROOT, EXIT_FAILURE, HOST_CLAUDE, HarnessConfig  # noqa: E402
 from harness.pilot_check import pilot_check  # noqa: E402
 
@@ -66,6 +66,12 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--claim", help="comma-separated measures the change claims to lower: wall_seconds, cost_usd")
     record.add_argument("--tasks", help="comma-separated task ids; default every task with a finished run")
     record.add_argument("--records-dir", type=Path, default=records.RECORDS_DIR)
+    results = sub.add_parser("worker-results", help="write the Sonnet and Opus worker-case results of a campaign")
+    add_common(results)
+    results.add_argument("--campaign", required=True)
+    results.add_argument("--sonnet-variant", default="worker-sonnet")
+    results.add_argument("--opus-variant", default="worker-opus")
+    results.add_argument("--out", type=Path, default=worker_cases.RESULTS_PATH)
     return parser
 
 
@@ -122,6 +128,17 @@ def do_record(args: argparse.Namespace, cfg: HarnessConfig) -> int:
     return 0
 
 
+def do_worker_results(args: argparse.Namespace, cfg: HarnessConfig) -> int:
+    cases = worker_cases.load_cases(cfg.tasks_root)
+    variants = {"sonnet": args.sonnet_variant, "opus": args.opus_variant}
+    runs = records.campaign_runs(cfg.run_root, args.campaign, list(variants.values()), list(cases))
+    results = worker_cases.build_results(runs, variants, cases)
+    path = worker_cases.write_results(results, absolute(args.out))
+    hard = worker_cases.hard_criteria(results, cases)
+    sys.stdout.write(f"hard work criteria: {', '.join(hard) or 'none'}\nresults written: {path.name}\n")
+    return 0
+
+
 def dispatch(args: argparse.Namespace) -> int:
     cfg = config_from(args)
     if args.action == "run":
@@ -130,6 +147,8 @@ def dispatch(args: argparse.Namespace) -> int:
         return do_summarize(args, cfg)
     if args.action == "record":
         return do_record(args, cfg)
+    if args.action == "worker-results":
+        return do_worker_results(args, cfg)
     if args.action == "regrade":
         return campaign.regrade_campaign(
             cfg, args.campaign, frozenset(split(args.run_ids)), sys.stdout, recollect=args.recollect,
@@ -147,7 +166,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return dispatch(args)
-    except (command.ConfigError, plugin_export.ExportError, records.RecordError) as error:
+    except (command.ConfigError, plugin_export.ExportError, records.RecordError, worker_cases.WorkerCaseError) as error:
         sys.stderr.write(f"error: {error}\n")
         return EXIT_FAILURE
 

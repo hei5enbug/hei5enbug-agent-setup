@@ -1,0 +1,64 @@
+{
+  "id": "T73",
+  "title": "New delivery value across the host",
+  "category": "worker-measurement",
+  "path": "several components and a public option: add strict end to end",
+  "fixture": "plugin-host",
+  "prompt_file": "prompts/T73.txt",
+  "limits": {
+    "wall_seconds": 1800,
+    "max_budget_usd": 12
+  },
+  "worker_case": true,
+  "worker_criteria": [
+    "components",
+    "public-contract"
+  ],
+  "hidden_tests": {
+    "source": "hidden/T73",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 4,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "exact-api",
+      "text": "Use the exact names and formats the assignment gives",
+      "keywords": [
+        "strict",
+        "plugin.json",
+        "routing.md",
+        "configuration"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-tests"
+      ]
+    }
+  ],
+  "rubric": null
+}

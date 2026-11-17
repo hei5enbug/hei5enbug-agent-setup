@@ -63,7 +63,7 @@ in its status line, with the same model, effort, and sandbox settings.
 | `researcher` | `hei5enbug-agent-setup:scout`, only when public search and fetch tools are available |
 | `reviewer` for a skill review role | `hei5enbug-agent-setup:reviewer` |
 | `reviewer` for independent validation | None. Report that independent validation was not performed. |
-| `worker` | Inspect the partial diff, then `hei5enbug-agent-setup:worker` |
+| `worker` | Inspect the partial diff, then `hei5enbug-agent-setup:sonnet-worker` |
 
 When the fallback is unavailable too, continue in the main conversation.
 
@@ -137,8 +137,13 @@ This section adds only the Claude Code worker integration.
   worker (see "Sol worker" below) when it says `sol`. When it says `auto`, choose per assignment: the `worker`
   agent for easy work (one cohesive change with a stated edit and checks that cover it fully) and the Sonnet worker
   for normal or hard work (a behavioral change, several files, parsing, security, or concurrency). When a Claude
-  route fails or stops on a usage limit, use the Sol worker. A user request for one route applies to that request
-  only.
+  route fails or stops on a usage limit, use the Sol worker. When it says `claude`, choose per assignment by the
+  same difficulty rule between `hei5enbug-agent-setup:worker` and `hei5enbug-agent-setup:sonnet-worker`, and never
+  run the Codex worker, the Sol worker, or any other GPT worker; when the chosen Claude worker fails, is unavailable,
+  or stops on a usage limit, stop that delegation and report the cause instead of switching to a GPT worker, another
+  Claude worker, or any other model. When it says `codex` or `sol` and the GPT worker fails, is unavailable, or stops
+  on a usage limit, stop it, inspect its partial diff, and continue the remaining work through
+  `hei5enbug-agent-setup:sonnet-worker`. A user request for one route applies to that request only.
   `hei5enbug-agent-setup:designer` still takes UI code,
   visual design, and diagram work, except the kinds the Claude Code session file assigns to the main session. Never
   use any other agent.

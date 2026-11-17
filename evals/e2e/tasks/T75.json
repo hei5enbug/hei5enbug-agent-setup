@@ -1,0 +1,62 @@
+{
+  "id": "T75",
+  "title": "Help option contract of a tool",
+  "category": "worker-measurement",
+  "path": "public contract: help, unknown option, and missing path exits",
+  "fixture": "plugin-host",
+  "prompt_file": "prompts/T75.txt",
+  "limits": {
+    "wall_seconds": 1800,
+    "max_budget_usd": 12
+  },
+  "worker_case": true,
+  "worker_criteria": [
+    "public-contract"
+  ],
+  "hidden_tests": {
+    "source": "hidden/T75",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 4,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "exact-api",
+      "text": "Use the exact names and formats the assignment gives",
+      "keywords": [
+        "--help",
+        "usage:",
+        "unknown option"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-tests"
+      ]
+    }
+  ],
+  "rubric": null
+}

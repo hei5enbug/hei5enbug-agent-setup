@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "guard-kit"
+version = "0.4.0"
+description = "Pre-tool hook checks for a command-line agent"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["guardkit*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

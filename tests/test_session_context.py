@@ -21,11 +21,13 @@ import session_context  # noqa: E402
 HOOKS = json.loads((REPO_ROOT / "hooks/hooks.json").read_text())["hooks"]
 LEGACY_EXPLORER = REPO_ROOT / "tests/fixtures/legacy-codex-explorer.toml"
 LEGACY_WORKER = REPO_ROOT / "tests/fixtures/legacy-codex-worker.toml"
+PREVIOUS_WORKER = REPO_ROOT / "tests/fixtures/previous-codex-worker.toml"
+PREVIOUS_WORKER_DIGEST = "4fa91ce1f3ad77a9451980a25451115bd1d6ac420d7239e359cab739d0f15120"
 RETIRED_EXPLORER_DIGESTS = {"bfde4fbbe2740152ad537d576612a34619a57a45adb56072e3f945610ef820af"}
 LEGACY_RESEARCHER = REPO_ROOT / "tests/fixtures/legacy-codex-researcher.toml"
 RETIRED_RESEARCHER_DIGESTS = {"940a7daace75165d8eceeece93a3c4960c42d187754738a744244059d5a0e5c1"}
 RETIRED_WORKER_DIGESTS = {"ce4488d0323832dc1563481875e7c26d693092c94865c37a4b4b89afd8274f83"}
-PINNED_EFFORT_WORKER_DIGEST = "89d72db180d2d0a16707804125af045ac5bb81baa2d751bad078747258b84d49"
+PINNED_EFFORT_WORKER_DIGEST = "24fc2b3f8fe78e5047657d13602fba9509ef814d2603683ac3f9b0412742c2e2"
 
 
 class SessionContextTest(unittest.TestCase):
@@ -1311,6 +1313,26 @@ class SessionContextTest(unittest.TestCase):
 
         # Then
         self.assertEqual(self.worker.read_bytes(), bundled)
+
+    def test_Assigned_workers_의무를_모두_말하기_전_worker_역할은_수정하지_않았을_때만_현재_파일로_바꾼다(self):
+        """모든 의무를 담기 전 출하본 worker.toml은 바이트가 같을 때만 새 번들 파일로 바꾸고, 한 글자라도 고친 파일은 그대로 둔다."""
+        # Given
+        shipped = PREVIOUS_WORKER.read_bytes()
+        self.assertEqual(hashlib.sha256(shipped).hexdigest(), PREVIOUS_WORKER_DIGEST)
+        bundled = (REPO_ROOT / "standalone-agents/codex-worker.toml").read_bytes()
+        edited = shipped + b"# edited by the user\n"
+        self.worker.parent.mkdir(parents=True)
+        self.worker.write_bytes(shipped)
+
+        # When
+        self.context(self.run_hook("codex"))
+        replaced = self.worker.read_bytes()
+        self.worker.write_bytes(edited)
+        self.context(self.run_hook("codex"))
+
+        # Then
+        self.assertEqual(replaced, bundled)
+        self.assertEqual(self.worker.read_bytes(), edited)
 
     def test_사용자가_고친_이전_버전_worker_역할은_남긴다(self):
         """이전 버전 worker.toml에 사용자가 한 글자라도 더했으면 훅은 그 파일을 바꾸지 않는다."""

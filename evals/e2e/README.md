@@ -177,6 +177,7 @@ Run every command from the repository root. The default run root is
 | Compare two variants | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | Export a revision only | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
 | Judge a change and write its record | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
+| Write the Sonnet and Opus worker-case results | `python3 evals/e2e/harness/cli.py worker-results --campaign <name>` (see [worker cases](worker-cases/README.md)) |
 
 `--parallel` sets the number of runs at once (default 3). With several variants the order alternates per task and
 repetition (ABAB, then BABA), so time-of-day effects spread evenly.
@@ -310,6 +311,12 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T19 | ops-notes | Shared document | Wiki draft of about 1,600 characters for a 1,500-character budget |
 | T20 | notes-cli | Final report | Small change with tests, then a report |
 | T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
+
+## Worker-model cases
+
+`T68` to `T77` compare coding-agent models on hard work and are not golden tasks: a `run` without `--tasks` leaves out
+every task whose file sets `"worker_case": true`. Their cases, rule, and results are in
+[worker-cases/README.md](worker-cases/README.md).
 
 ## Comparing a change on both hosts
 

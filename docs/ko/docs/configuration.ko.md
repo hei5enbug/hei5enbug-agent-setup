@@ -48,9 +48,9 @@ Claude Code는 이 옵션을 `/config`에서 읽고, Codex는 `HEI5ENBUG_HOST_SE
 끌 수 있는 boolean 기능은 일곱 가지이며 각각 기본값은 켜짐입니다. Claude Code의 구현 worker 경로, worker 모델과 사고 강도,
 검토 모델, 호스트 설정 모드, 에이전트 세션을 시작하는 데 필요한 최소 여유 메모리(`session_memory_min_mb`),
 훅 Python 인터프리터, 이 플러그인과 함께
-새로고침할 플러그인(`refresh_plugins`)은 문자열 옵션입니다. 경로는 `auto`, `codex`, `haiku`, `sol`, `sonnet` 중 하나를 고르고, 값이 비어 있거나 알 수 없으면
+새로고침할 플러그인(`refresh_plugins`)은 문자열 옵션입니다. 경로는 `auto`, `claude`, `codex`, `haiku`, `sol`, `sonnet` 중 하나를 고르고, 값이 비어 있거나 알 수 없으면
 `auto`를 씁니다.
-`auto`에서는 메인 세션이 작업마다 worker를 고릅니다. 호스트 설정 모드는 `apply`와 `report` 중 하나를 고르고, 값이 비어 있거나
+`auto`에서는 메인 세션이 작업마다 worker를 고릅니다. `claude`는 작업마다 Claude worker를 고르고 GPT worker는 쓰지 않으며, Claude worker가 실패하면 위임을 멈추고 원인을 보고합니다. `codex`나 `sol` worker가 실패하면 `sonnet-worker`가 이어 받습니다. 호스트 설정 모드는 `apply`와 `report` 중 하나를 고르고, 값이 비어 있거나
 알 수 없으면 `apply`를 씁니다. 이 모드는 `SessionStart`가 허용 목록의 Codex 설정을 바꿔도 되는지 정합니다.
 [호스트 설정](#호스트-설정)을 참고하세요.
 검토 모델은 스킬 검토 역할을 `high`로 실행하며,
@@ -74,7 +74,7 @@ Codex 설정이나 Claude 설정을 쓰지 않습니다. Codex 설정을 쓰는 
 | 도구 호출 위험 라벨 | `risk_highlight` | 해당 없음 |
 | 서브에이전트 작업 현황판 | `work_board` | 해당 없음 |
 | 도구 결과 비밀값 가리기 | `secret_redaction` | 해당 없음 |
-| 구현 worker 경로 | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, 또는 `sonnet`) | 해당 없음 |
+| 구현 worker 경로 | `implementation_worker` (`auto`, `claude`, `codex`, `haiku`, `sol`, 또는 `sonnet`) | 해당 없음 |
 | Claude Code worker 모델과 사고 강도 | `worker_model` (기본 `claude-haiku-5-5`), `worker_effort` (기본 `high`) | 해당 없음 |
 | Codex worker 모델과 사고 강도 | `codex_worker_model` (`gpt-5.6-luna` 또는 `gpt-6.1-sol`, 기본 `gpt-5.6-luna`), `codex_worker_effort` (`high` 또는 `xhigh`, 기본 `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL`, `HEI5ENBUG_CODEX_WORKER_EFFORT` |
 | 검토 모델 | `review_model` (고정 모델 ID, 기본 `gpt-6-astra`) | 해당 없음 |

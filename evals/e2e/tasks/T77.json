@@ -1,0 +1,63 @@
+{
+  "id": "T77",
+  "title": "Concurrent grant store and hook",
+  "category": "worker-measurement",
+  "path": "concurrency and a hook: lose no grant and never raise",
+  "fixture": "job-queue",
+  "prompt_file": "prompts/T77.txt",
+  "limits": {
+    "wall_seconds": 1800,
+    "max_budget_usd": 12
+  },
+  "worker_case": true,
+  "worker_criteria": [
+    "concurrency",
+    "hook-guard"
+  ],
+  "hidden_tests": {
+    "source": "hidden/T77",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 4,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "exact-api",
+      "text": "Use the exact names and formats the assignment gives",
+      "keywords": [
+        "GrantStore",
+        "GrantStoreError",
+        "JOBQ_GRANTS"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-tests"
+      ]
+    }
+  ],
+  "rubric": null
+}

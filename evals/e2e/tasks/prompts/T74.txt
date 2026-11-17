@@ -1,0 +1,14 @@
+너는 할당받은 구현 worker다. 다른 에이전트를 시작하지 말고 이 작업을 직접 끝낸다.
+허용 경로: instructions/, docs/ko/instructions/, docs/ko/README.ko.md, README.md, tests/
+실행할 검사: python3 -m pytest -q
+허용 경로 밖을 고쳐야 하거나 정해지지 않은 결정이 필요하면 고치지 말고 막힌 점으로 보고한다. 기존 테스트는 고치지 않는다.
+끝나면 바꾼 경로, 검사 결과, 막힌 점을 보고한다.
+
+작업:
+세션 컨텍스트가 커졌다. instructions/session/common.md 의 `## Asking the user` 절을 instructions/asking.md 로 옮기고 common.md 에는 항목 한 줄만 남겨라.
+
+- common.md 에 남기는 줄은 정확히 `- Before asking the user a question, read asking.md.` 이고, `## Asking the user` 제목과 그 절의 규칙 줄은 common.md 에서 뺀다. 절 앞의 두 줄은 그대로 둔다.
+- instructions/asking.md 는 제목 `# Asking the user` 로 시작하고, 옮긴 규칙 줄은 한 글자도 바꾸지 않고 같은 순서로 둔다.
+- 세션 컨텍스트는 700 바이트 이하여야 한다. MAX_CONTEXT_BYTES 상수는 건드리지 않는다.
+- AGENTS.md 의 문서 규칙대로 docs/ko/instructions/asking.ko.md 를 만들고, README.md 의 문서 지도와 그 한국어 미러(docs/ko/README.ko.md)의 표에 asking.md 를 한 줄씩 더한다.
+- 새 동작의 테스트를 tests/ 에 추가한다.

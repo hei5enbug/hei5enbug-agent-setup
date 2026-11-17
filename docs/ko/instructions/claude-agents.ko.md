@@ -62,7 +62,7 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
 | `researcher` | 공개 검색·가져오기 도구를 사용할 수 있을 때만 `hei5enbug-agent-setup:scout` |
 | 스킬 검토 역할의 `reviewer` | `hei5enbug-agent-setup:reviewer` |
 | 독립 검증의 `reviewer` | 없음. 독립 검증을 수행하지 못했다고 보고한다. |
-| `worker` | 부분 diff를 살펴본 뒤 `hei5enbug-agent-setup:worker` |
+| `worker` | 부분 diff를 살펴본 뒤 `hei5enbug-agent-setup:sonnet-worker` |
 
 대체 경로도 쓸 수 없으면 메인 대화에서 계속한다.
 
@@ -132,7 +132,12 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
   `hei5enbug-agent-setup:worker`, `sol`이면 Sol worker(아래 "Sol worker" 참조)를 쓴다.
   `auto`이면 할당마다 고른다. 쉬운 작업(수정 내용이 명시되고 검사로 전체를 확인할 수 있는 하나의 일관된 변경)은 `worker` 에이전트,
   보통이거나 어려운 작업(동작 변경, 여러 파일, 파싱, 보안 또는 동시성)은 Sonnet worker를 쓴다. Claude 경로가 실패하거나
-  사용량 한도로 중단되면 Sol worker를 쓴다. 사용자가 한 경로를 요청하면 그 요청에만 적용한다.
+  사용량 한도로 중단되면 Sol worker를 쓴다. 줄이 `claude`이면 같은 난이도 규칙으로 `hei5enbug-agent-setup:worker`와
+  `hei5enbug-agent-setup:sonnet-worker` 중에서 할당마다 고르고, Codex worker, Sol worker 등 GPT worker는 실행하지 않는다.
+  고른 Claude worker가 실패하거나 사용할 수 없거나 사용량 한도로 중단되면 GPT worker, 다른 Claude worker, 그 밖의 모델로
+  바꾸지 말고 그 위임을 멈춘 뒤 원인을 보고한다. 줄이 `codex`나 `sol`일 때 GPT worker가 실패하거나 사용할 수 없거나 사용량
+  한도로 중단되면, 그 worker를 멈추고 부분 diff를 살펴본 뒤 남은 작업을 `hei5enbug-agent-setup:sonnet-worker`로 이어 간다.
+  사용자가 한 경로를 요청하면 그 요청에만 적용한다.
   UI 코드, 시각 디자인, 다이어그램 작업은 여전히 `hei5enbug-agent-setup:designer`가 맡는다. 다만 Claude Code 세션 파일이
   메인 세션에 맡긴 종류는 예외다. 그 밖의 에이전트는 쓰지 않는다.
 - `worker` 에이전트는 세션 줄 "Worker agent model"에 적힌 모델과 사고 강도로 실행한다(기본값은 Haiku, `high`).

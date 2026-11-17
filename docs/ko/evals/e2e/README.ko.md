@@ -163,6 +163,7 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 | 두 변형 비교 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | 리비전 내보내기만 하기 | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
 | 변경을 판정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
+| Sonnet과 Opus worker 사례 결과 쓰기 | `python3 evals/e2e/harness/cli.py worker-results --campaign <name>` ([worker 사례](worker-cases/README.ko.md) 참조) |
 
 `--parallel`은 동시에 실행할 수를 정한다(기본 3). 변형이 여럿이면 작업과 반복마다 순서를 번갈아(ABAB, 다음은
 BABA) 시간대 영향이 고르게 퍼지게 한다.
@@ -290,6 +291,12 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 | T19 | ops-notes | 공유 문서 | 1,500자 한도에 1,600자쯤 되는 위키 초안 |
 | T20 | notes-cli | 최종 보고 | 테스트를 더한 작은 변경 후 보고 |
 | T21 | notes-cli | 작업 종료 시 Orca 정리 | 티켓의 설정 한 줄 변경, 가짜 `orca`와 저장소 세 곳의 Git worktree를 심어 둔 상태 |
+
+## worker 모델 사례
+
+`T68`부터 `T77`까지는 어려운 작업에서 코딩 에이전트 모델을 비교하며 골든 작업이 아니다. 과제 파일에
+`"worker_case": true`가 있는 과제는 `--tasks` 없는 `run`이 고르지 않는다. 사례, 규칙, 결과는
+[worker-cases/README.md](worker-cases/README.ko.md)에 있다.
 
 ## 두 호스트에서 변경 비교
 

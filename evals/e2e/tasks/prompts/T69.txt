@@ -1,0 +1,17 @@
+너는 할당받은 구현 worker다. 다른 에이전트를 시작하지 말고 이 작업을 직접 끝낸다.
+허용 경로: guardkit/hook.py, tests/
+실행할 검사: python3 -m pytest -q
+허용 경로 밖을 고쳐야 하거나 정해지지 않은 결정이 필요하면 고치지 말고 막힌 점으로 보고한다. 기존 테스트는 고치지 않는다.
+끝나면 바꾼 경로, 검사 결과, 막힌 점을 보고한다.
+
+작업:
+guardkit/hook.py 의 main 을 고쳐라. 훅은 제한 시간의 절반 안에 반드시 끝나야 하고 호출자에게 예외를 던지면 안 된다.
+
+- 시그니처는 `main(stdin_text, evaluate=evaluate, timeout_seconds=10.0) -> str` 이다. 기존 호출 형태도 그대로 동작해야 한다.
+- 예산은 `timeout_seconds / 2` 초다. evaluate 가 예산 안에 끝나지 않으면 기다리지 말고 `{"decision": "deny", "reason": "guardkit pre_write: timed out after 0.1s"}` 형식의 JSON 문자열을 돌려준다. 초 값은 예산을 `:g` 로 포맷한 것이다.
+- evaluate 가 예외를 던지면 deny 이고 reason 은 `guardkit pre_write: <예외 클래스 이름>: <메시지>` 다.
+- stdin_text 가 JSON 이 아니거나 JSON 객체의 `tool_input.command` 가 문자열이 아니면 evaluate 를 부르지 않고 deny 이며 reason 은 `guardkit pre_write: unreadable hook input` 이다.
+- evaluate 가 allow 면 지금처럼 빈 문자열을 돌려주고, 다른 결정은 지금처럼 `{"decision", "reason"}` JSON 이다.
+- 느리게 도는 evaluate 가 프로세스 종료를 막으면 안 된다.
+- `python3 -m guardkit.hook` 은 환경변수 GUARDKIT_HOOK_TIMEOUT(초, 숫자가 아니거나 없으면 10)을 timeout_seconds 로 넘긴다. 결과가 있으면 한 줄로 출력하고 종료 코드는 언제나 0 이다.
+- 새 동작의 테스트를 tests/ 에 추가한다.

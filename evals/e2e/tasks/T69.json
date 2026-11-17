@@ -1,0 +1,63 @@
+{
+  "id": "T69",
+  "title": "Hook finishes within half its timeout",
+  "category": "worker-measurement",
+  "path": "hook or guard change: a hook ends in time with a clear deny or silence",
+  "fixture": "guard-kit",
+  "prompt_file": "prompts/T69.txt",
+  "limits": {
+    "wall_seconds": 1800,
+    "max_budget_usd": 12
+  },
+  "worker_case": true,
+  "worker_criteria": [
+    "hook-guard",
+    "public-contract"
+  ],
+  "hidden_tests": {
+    "source": "hidden/T69",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 4,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "exact-api",
+      "text": "Use the exact names and formats the assignment gives",
+      "keywords": [
+        "timeout_seconds",
+        "guardkit pre_write",
+        "GUARDKIT_HOOK_TIMEOUT"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-tests"
+      ]
+    }
+  ],
+  "rubric": null
+}

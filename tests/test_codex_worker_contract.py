@@ -7,12 +7,39 @@ Codex session follows it; native trials cover that.
 from __future__ import annotations
 
 import re
+import tomllib
 import unittest
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CODEX_AGENTS = REPO_ROOT / "instructions/codex-agents.md"
+
+
+#: each duty of the "Assigned workers" section in implementation-delegation.md, as a pattern its text must match
+DUTIES = {
+    "edit only the allowed paths": r"edit only (?:the )?allowed paths",
+    "preserve changes made by others": r"preserve (?:other changes|changes made by others)",
+    "run only the assigned checks": r"run only (?:the )?assigned checks",
+    "never widen scope": r"(?:never|not) widen scope",
+    "start no other agent": r"start (?:another|no other) agent",
+    "report a missing decision": r"report (?:a )?missing decisions?",
+    "report a conflicting change": r"conflicting changes?",
+    "return changed paths": r"changed paths",
+    "return check results": r"check results",
+    "return blockers": r"blockers",
+}
+
+
+def missing_duties(text: str) -> list[str]:
+    """The duties whose pattern the text does not match, with whitespace and case normalized."""
+    normalized = " ".join(text.lower().split())
+    return [duty for duty, pattern in DUTIES.items() if re.search(pattern, normalized) is None]
+
+
+def worker_instructions(path: Path, inactive_branch_only: bool) -> str:
+    text = tomllib.loads(path.read_text(encoding="utf-8"))["developer_instructions"]
+    return text.split("When they do not,", 1)[1] if inactive_branch_only else text
 
 
 def implementation_section() -> str:
@@ -59,6 +86,34 @@ class CodexWorkerContractTest(unittest.TestCase):
                 )
                 self.assertNotIn("link the implementation execution rules", text)
                 self.assertIn("the plugin rules are inactive", text)
+
+    def test_Codex_worker_본문은_Assigned_workers의_모든_의무를_담는다(self):
+        """플러그인 Codex worker 역할과, 플러그인 규칙이 없을 때의 독립 worker 분기는 Assigned workers의 의무를 모두 말한다."""
+        # Given
+        plugin_role = REPO_ROOT / ".codex/agents/worker.toml"
+        standalone = REPO_ROOT / "standalone-agents/codex-worker.toml"
+
+        # When
+        missing = {
+            "plugin role": missing_duties(worker_instructions(plugin_role, False)),
+            "standalone inactive branch": missing_duties(worker_instructions(standalone, True)),
+        }
+
+        # Then
+        self.assertEqual(missing, {"plugin role": [], "standalone inactive branch": []})
+
+    def test_의무를_하나라도_빼면_누락으로_잡힌다(self):
+        """본문에서 의무 문구 하나를 지우면 그 의무 이름이 누락 목록에 나온다."""
+        # Given
+        text = worker_instructions(REPO_ROOT / "standalone-agents/codex-worker.toml", True)
+
+        # When
+        without_checks = missing_duties(text.replace("run only the assigned checks, ", ""))
+        without_blockers = missing_duties(text.replace("remaining blockers", "remaining items"))
+
+        # Then
+        self.assertEqual(without_checks, ["run only the assigned checks"])
+        self.assertEqual(without_blockers, ["return blockers"])
 
     def test_Codex_designer_정의는_design_기능의_기술_설계_문서와_허용_경로_문서_쓰기를_포함한다(self):
         """designer TOML의 설명과 지침은 design 기능의 기술 설계 문서 초안 작성과 허용 경로의 문서 파일 쓰기를 포함한다."""

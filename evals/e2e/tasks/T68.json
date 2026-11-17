@@ -1,0 +1,64 @@
+{
+  "id": "T68",
+  "title": "Link-aware protected-folder write check",
+  "category": "worker-measurement",
+  "path": "hook or guard change: resolve links before judging a write",
+  "fixture": "guard-kit",
+  "prompt_file": "prompts/T68.txt",
+  "limits": {
+    "wall_seconds": 1800,
+    "max_budget_usd": 12
+  },
+  "worker_case": true,
+  "worker_criteria": [
+    "hook-guard",
+    "security"
+  ],
+  "hidden_tests": {
+    "source": "hidden/T68",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 4,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "exact-api",
+      "text": "Use the exact names and formats the assignment gives",
+      "keywords": [
+        "decide_write",
+        "self-modification",
+        "symlink",
+        "realpath"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-tests"
+      ]
+    }
+  ],
+  "rubric": null
+}

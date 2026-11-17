@@ -1,0 +1,15 @@
+너는 할당받은 구현 worker다. 다른 에이전트를 시작하지 말고 이 작업을 직접 끝낸다.
+허용 경로: jobq/grants.py, jobq/hook.py, tests/
+실행할 검사: python3 -m pytest -q
+허용 경로 밖을 고쳐야 하거나 정해지지 않은 결정이 필요하면 고치지 말고 막힌 점으로 보고한다. 기존 테스트는 고치지 않는다.
+끝나면 바꾼 경로, 검사 결과, 막힌 점을 보고한다.
+
+작업:
+jobq 의 승인 저장소와 훅을 고쳐라.
+
+1. GrantStore: 여러 프로세스가 동시에 grant 와 revoke_session 을 해도 갱신이 사라지면 안 된다. `<path>.lock` 을 jobq.locks.FileLock 으로 잡고 그 안에서 읽고-고치고-쓴다. 파일은 임시 파일에 쓴 뒤 os.replace 로 바꿔 통째로 쓴다. has 는 락 없이 읽되 반쯤 쓴 파일을 보면 안 된다. 파일이 없으면 빈 저장소다.
+2. 파일이 JSON 객체가 아니면 새 예외 `GrantStoreError`(ValueError 의 하위, jobq.grants 에 둔다)를 has, grant, revoke_session 모두에서 던지고, 깨진 파일을 덮어쓰지 않는다.
+3. `jobq.hook.main(stdin_text, store=None)`: 입력은 `{"session", "key"}` JSON 이다. 그 세션에 key 승인이 있으면 빈 문자열을 돌려주고(allow), 없으면 지금처럼 `{"decision": "ask", "reason": "approval needed for <key>"}` JSON 이다.
+4. store 가 None 이면 환경변수 JOBQ_GRANTS 가 가리키는 파일의 GrantStore 를 쓰고, 그 변수가 없으면 승인이 하나도 없는 것으로 본다.
+5. 입력이 JSON 이 아니거나 session 이나 key 가 없으면 ask 이고 reason 은 `approval needed: unreadable hook input` 이다. 저장소를 읽다 예외가 나면(깨진 파일 포함) ask 이고 reason 은 `approval needed: grant store unreadable` 이다. 훅은 호출자에게 예외를 던지지 않는다.
+- 새 동작의 테스트를 tests/ 에 추가한다.

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import secrets
 import shlex
 import signal
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable, Iterator, TextIO
 
 from . import caps, codex_host, command, environment, inputs, plugin_export
@@ -22,8 +24,16 @@ from .runner import execute_run, regrade_run
 RunFunction = Callable[..., dict[str, Any]]
 
 
+def is_worker_case(path: Path) -> bool:
+    try:
+        return bool(json.loads(path.read_text(encoding="utf-8")).get("worker_case"))
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
 def discover_tasks(cfg: HarnessConfig) -> list[str]:
-    return sorted(path.stem for path in cfg.tasks_root.glob("T*.json"))
+    """Every golden task; the worker-model cases run only when named with --tasks."""
+    return sorted(path.stem for path in cfg.tasks_root.glob("T*.json") if not is_worker_case(path))
 
 
 def load_plan(cfg: HarnessConfig, task_ids: list[str], variant_names: list[str]) -> tuple[dict[str, dict], dict[str, dict]]:
