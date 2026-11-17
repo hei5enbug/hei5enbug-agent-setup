@@ -30,6 +30,11 @@ def scratch_permissions(run: Run) -> list[str]:
     ]
 
 
+def tier_config(run: Run) -> list[str]:
+    """The Codex override for the service tier the run asked for; a Claude run never reaches this."""
+    return ["-c", f'service_tier="{run.service_tier}"'] if run.service_tier else []
+
+
 def codex_command(run: Run, cwd: str, result: str, mcp_off: list[str]) -> list[str]:
     command = ["codex"]
     if run.role == "researcher" or run.web_tools:
@@ -40,7 +45,7 @@ def codex_command(run: Run, cwd: str, result: str, mcp_off: list[str]) -> list[s
     if run.resume is not None:
         command += [
             "exec", "resume", run.resume, "-m", run.model,
-            "-c", f'model_reasoning_effort="{run.effort}"',
+            "-c", f'model_reasoning_effort="{run.effort}"', *tier_config(run),
             *(scratch_permissions(run) if confined else ["-c", f'sandbox_mode="{sandbox}"']), *scoped,
         ]
         if run.writing and run.add_dirs:
@@ -48,7 +53,7 @@ def codex_command(run: Run, cwd: str, result: str, mcp_off: list[str]) -> list[s
             command += ["-c", f"sandbox_workspace_write.writable_roots={json.dumps(roots)}"]
         command += ["--json", "-o", result, "-"]
         return command
-    command += ["exec", "-m", run.model, "-c", f'model_reasoning_effort="{run.effort}"']
+    command += ["exec", "-m", run.model, "-c", f'model_reasoning_effort="{run.effort}"', *tier_config(run)]
     command += scratch_permissions(run) if confined else ["-s", sandbox]
     command += ["-C", cwd, *scoped]
     for directory in run.add_dirs:

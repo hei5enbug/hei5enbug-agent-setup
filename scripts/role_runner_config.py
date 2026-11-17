@@ -16,6 +16,7 @@ REGISTRY = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
 ROLE_EFFORT = REGISTRY["runner"]["effort"]
 ROLE_ENTRY = {"effort": ROLE_EFFORT, "max_effort": REGISTRY["runner"].get("max_effort")}
 MAX_BATCH = 6
+SERVICE_TIERS = ("fast",)
 CODEX_SKILLS_OFF = ("-c", "skills.max_context_tokens=1")
 CLAUDE_SKILLS_OFF = "--disable-slash-commands"
 DEFAULT_TIMEOUT = 2700
@@ -139,6 +140,7 @@ class Run:
     user_requested: bool = False
     validation: bool = False
     scratch: str | None = None
+    service_tier: str | None = None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -158,4 +160,5 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mcp", action="store_true")
     parser.add_argument("--user-requested", action="store_true", dest="user_requested")
     parser.add_argument("--validation", action="store_true")
+    parser.add_argument("--service-tier", choices=SERVICE_TIERS, dest="service_tier")
     return parser

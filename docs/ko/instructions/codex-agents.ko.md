@@ -146,6 +146,10 @@ python3 <Source directory>/scripts/role_runner.py <capability> --host codex --in
 agent guard는 고정된 쌍이 아닌 쌍으로 플러그인 역할을 생성하는 요청을 거부한다. 요청은 그 작업에만 적용한다. 요청한 모델이나
 사고 강도를 실행할 수 없으면 보고하고 사용자에게 묻는다. 대체 경로는 시작하지 않는다.
 
+이 세션의 GPT 실행에 빠른 서비스 등급을 쓰라는 요청은 [Claude Code 에이전트](claude-agents.ko.md#요청한-모델이나-사고-강도)에 적힌 대로
+세션 전체에 적용된다. 그런 요청이 있을 때만 사용자가 철회할 때까지 모든 `role_runner.py` 실행과 `text_review.py review`에
+`--service-tier fast`를 붙이고, 요청이 없으면 붙이지 않는다. 고정된 모델이나 사고 강도는 바꾸지 않는다.
+
 ## 대체
 
 모든 대체 항목은 다른 모델 계열이다. 다른 호스트의 모델이 필요한 대체 항목은 역할 실행기를 거치고, 현재 호스트에서 바로 실행할

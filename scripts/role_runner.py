@@ -245,7 +245,7 @@ def resolve(args: argparse.Namespace) -> Run:
 
 def plan(args: argparse.Namespace) -> Run:
     validate(args)
-    run = replace(resolve(args), user_requested=args.user_requested)
+    run = replace(resolve(args), user_requested=args.user_requested, service_tier=args.service_tier)
     if run.writing and run.runner == "claude" and not run.add_dirs and run.agent is None:
         label = f"capability {run.capability}" if run.capability else f"role {run.role}"
         raise UsageError(f"The Claude path of the writing {label} needs --add-dir for each directory it may edit")

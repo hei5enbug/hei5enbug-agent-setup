@@ -581,6 +581,52 @@ class ReviewTest(unittest.TestCase):
         self.assertEqual("claude-opus-5-5", argv[argv.index("--model") + 1])
         self.assertEqual("90", argv[argv.index("--timeout") + 1])
 
+    def test_service_tier_fast는_모든_검토자_실행기_인자에_전달되고_없으면_전달하지_않는다(self):
+        """--service-tier fast를 주면 실행기 인자에 같은 옵션이 들어가고, 주지 않으면 service-tier가 인자에 없다."""
+        # given
+        mode = "none"
+        # when
+        self.review(mode)
+        without = self.argv()
+        self.review("none", "--service-tier", "fast")
+        with_tier = self.argv()
+        # then
+        self.assertNotIn("--service-tier", without)
+        self.assertEqual("fast", with_tier[with_tier.index("--service-tier") + 1])
+
+    def test_reviews가_둘이면_두_검토자_실행_모두에_service_tier를_전달한다(self):
+        """--reviews 2와 --service-tier fast를 함께 주면 시작한 두 실행기 모두 --service-tier fast를 받는다."""
+        # given
+        (self.out / "argv.log").write_text("", encoding="utf-8")
+        wrapper = self.root / "log_runner.py"
+        wrapper.write_text(
+            "import json, os, subprocess, sys\n"
+            "with open(os.path.join(os.environ['FAKE_OUT'], 'argv.log'), 'a') as handle:\n"
+            "    handle.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+            f"sys.exit(subprocess.run([sys.executable, {str(self.runner)!r}, *sys.argv[1:]]).returncode)\n",
+            encoding="utf-8",
+        )
+        # when
+        result = run_script(
+            "review", "--kind", "pr-description", "--draft", str(self.draft), "--runner", str(wrapper), "--reviews", "2",
+            "--service-tier", "fast", env={"FAKE_OUT": str(self.out), "FAKE_MODE": "none"},
+        )
+        calls = [json.loads(line) for line in (self.out / "argv.log").read_text(encoding="utf-8").splitlines()]
+        # then
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(2, len(calls))
+        self.assertTrue(all(call[call.index("--service-tier") + 1] == "fast" for call in calls))
+
+    def test_service_tier에_fast_말고_다른_값을_주면_종료_코드_2이고_실행기를_시작하지_않는다(self):
+        """--service-tier slow는 사용법 오류이며 검토자 실행기를 시작하지 않는다."""
+        # given
+        arguments = ["--service-tier", "slow"]
+        # when
+        result = self.review("none", *arguments)
+        # then
+        self.assertEqual(2, result.returncode)
+        self.assertFalse((self.out / "started").exists())
+
     def test_임시_폴더는_실행_뒤에_지워진다(self):
         # given
         mode = "none"

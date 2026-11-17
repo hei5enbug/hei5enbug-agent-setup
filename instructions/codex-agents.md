@@ -154,6 +154,11 @@ runner with `--user-requested` and the `--model` or `--effort` the user named, a
 from the host record. The agent guard denies a spawn of a plugin role with a pair other than the pinned one. The
 request covers that work only. When the requested model or effort cannot run, report it and ask. Start no fallback.
 
+A request that GPT runs in this session use the fast service tier lasts for the session, as
+[Claude Code agents](claude-agents.md#requested-model-or-effort) describes: only then pass `--service-tier fast` on
+every `role_runner.py` run and every `text_review.py review` until the user withdraws it, and never without it. It does
+not change the pinned model or effort.
+
 ## Fallback
 
 Every fallback is the other model family; a fallback that needs the other host's model runs through the role runner, and

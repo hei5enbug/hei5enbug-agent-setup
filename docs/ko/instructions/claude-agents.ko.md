@@ -102,6 +102,12 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
   시작하지 않는다.
 - 실제 모델과 사고 강도는 고정 실행과 같은 방식으로, 요청한 값에 맞는지 검증한다.
 
+이 세션의 GPT 실행에 빠른 서비스 등급을 쓰라는 요청은 세션 전체에 적용되는 유일한 요청이다. 그런 요청이 있을 때만 사용자가 철회할
+때까지 이 세션의 모든 `role_runner.py` 실행과 `text_review.py review`에 `--service-tier fast`를 붙인다. `text_review.py review`는
+이 옵션을 검토자 실행에 전달한다. 그런 요청이 없으면 붙이지 않는다. 이 옵션은 Codex 실행(새 실행이든 이어 받는 실행이든)에
+`-c service_tier="fast"`를 더하고 Claude 실행에는 아무것도 더하지 않는다. 고정된 모델이나 사고 강도는 바꾸지 않으며, 실행기의 모델과
+사고 강도 검증은 그대로 남는다.
+
 ## 조사
 
 - 세션의 위임 규칙이 선택한 범위가 한정된 조사는 계획 중이든 실행 중이든 `scout` 역할로 실행한다. 각 scout에 질문 하나와

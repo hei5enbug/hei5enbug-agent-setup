@@ -1787,6 +1787,76 @@ class RoleRunnerTest(unittest.TestCase):
         status = self.status(completed)
         self.assertEqual((True, SESSION), (status["verified"], status["evidence"]["session"]))
 
+    def with_fast_tier(self, argv):
+        """The same argv with the service-tier override right after the effort override."""
+        at = argv.index('model_reasoning_effort="high"') + 1
+        return argv[:at] + ["-c", 'service_tier="fast"'] + argv[at:]
+
+    def test_service_tier_fast는_새_Codex_실행에_service_tier_설정_하나만_더한다(self):
+        """scout에 --service-tier fast를 주면 효과 설정 바로 뒤에 -c service_tier="fast"만 더해지고 나머지 인자는 그대로이다."""
+        # Given
+        arguments = ["scout", "--service-tier", "fast"]
+
+        # When
+        completed = self.run_runner(*arguments)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(self.with_fast_tier(self.codex_start_argv()), self.logged()["argv"])
+
+    def test_service_tier_fast는_Codex_resume에도_service_tier_설정을_더한다(self):
+        """--resume으로 이어 가는 Codex 실행도 exec resume 명령에 -c service_tier="fast"를 더한다."""
+        # Given
+        self.beat("codex", THREAD)
+        arguments = ["scout", "--resume", THREAD, "--service-tier", "fast"]
+
+        # When
+        completed = self.run_runner(*arguments)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(self.with_fast_tier(self.codex_resume_argv()), self.logged()["argv"])
+
+    def test_service_tier_fast는_쓰기_역할의_훅_점검_실행과_이어_받는_실행_모두에_더한다(self):
+        """worker는 훅 점검 exec와 exec resume 두 번 Codex를 시작하므로 두 명령 모두 service_tier 설정을 가진다."""
+        # Given
+        arguments = ["worker", "--service-tier", "fast"]
+
+        # When
+        completed = self.run_runner(*arguments)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        executions = self.executions()
+        self.assertEqual([["exec", "-m"], ["exec", "resume"]], [call["argv"][:2] for call in executions])
+        self.assertTrue(all('service_tier="fast"' in call["argv"] for call in executions))
+
+    def test_service_tier_fast는_Claude_실행_명령을_바꾸지_않는다(self):
+        """Claude로 실행되는 capability에 --service-tier fast를 줘도 명령은 옵션이 없을 때와 같다."""
+        # Given
+        config = {"entries": [{"model": "claude-opus-5-5", "effort": "high"}]}
+        arguments = ["review", "--host", "codex", "--instructions", str(self.instructions), "--service-tier", "fast"]
+
+        # When
+        completed = self.run_runner(*arguments, config=config)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(self.claude_argv(effort="high"), self.logged()["argv"])
+
+    def test_service_tier에_fast_말고_다른_값을_주면_허용_값을_알리고_종료_코드_2이며_자식을_시작하지_않는다(self):
+        """--service-tier slow는 허용 값 fast를 이름으로 알리는 사용법 오류이고 Codex도 시작하지 않는다."""
+        # Given
+        arguments = ["scout", "--service-tier", "slow"]
+
+        # When
+        completed = self.run_runner(*arguments)
+
+        # Then
+        self.assertEqual(2, completed.returncode)
+        self.assertIn("fast", completed.stderr + completed.stdout)
+        self.assertFalse(self.log.exists())
+
     def test_evidence의_session은_codex에서는_thread_id이고_claude에서는_session_id이다(self):
         """성공한 실행은 재개에 쓸 id를 evidence.session으로 남긴다."""
         cases = [

@@ -103,6 +103,12 @@ delegated work. It covers that work only; the next delegation without a request 
   model or route does not take, report it and ask. Start no fallback.
 - Verify the actual model and effort as for a pinned run, against the requested values.
 
+A request that GPT runs in this session use the fast service tier is the one request that lasts for the session. Only
+then add `--service-tier fast` to every `role_runner.py` run and every `text_review.py review` of that session, which
+forwards it to its reviewer runs, until the user withdraws the request. Without that request, never pass it. It adds
+`-c service_tier="fast"` to a Codex run, new or resumed, and nothing to a Claude run. It does not change the pinned model
+or effort, and the runner's model and effort checks stay.
+
 ## Investigation
 
 - For bounded investigation that the session delegation rule selects, during planning or execution, run the
