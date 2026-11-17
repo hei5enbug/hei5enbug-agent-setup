@@ -310,6 +310,7 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T19 | ops-notes | Shared document | Wiki draft of about 1,600 characters for a 1,500-character budget |
 | T20 | notes-cli | Final report | Small change with tests, then a report |
 | T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
+| T90 | notes-cli | Session-wide service tier request | One-line setting change, an independent review, and the user's plain request that GPT runs in the session use the fast tier; its graders read the `role_runner.py` commands, and its tests are in `tests/test_e2e_eval_service_tier.py` |
 
 ## Comparing a change on both hosts
 

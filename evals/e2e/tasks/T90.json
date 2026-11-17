@@ -1,0 +1,62 @@
+{
+  "id": "T90",
+  "title": "Fast service tier requested for the session's delegated runs",
+  "category": "delegation",
+  "path": "easy edit with an independent review under a session-wide service tier request",
+  "fixture": "notes-cli",
+  "prompt_file": "prompts/T90.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "page-size-50",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "config/settings.toml",
+      "pattern": "(?m)^page_size = 50$"
+    },
+    {
+      "id": "only-config-changed",
+      "kind": "only_changed",
+      "required": true,
+      "weight": 1,
+      "allow": [
+        "config/settings.toml"
+      ]
+    },
+    {
+      "id": "tests-pass",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    },
+    {
+      "id": "fast-tier-on-runner-starts",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "fast_tier_on_every_runner_start"
+    },
+    {
+      "id": "request-leaves-pins",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "request_leaves_pins"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}
