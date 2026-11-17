@@ -1,0 +1,50 @@
+{
+  "id": "T25",
+  "title": "Pull request description for notes that name the model and effort of a document review",
+  "category": "writing",
+  "path": "pr-description text",
+  "fixture": "tool-notes",
+  "prompt_file": "prompts/T25.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/pr-description.txt"
+    },
+    {
+      "id": "no-tool-mark",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_tool_mark"
+    },
+    {
+      "id": "review-facts-kept",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "review_facts_kept"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**",
+        "config/**",
+        "demo_parser/**",
+        "tests/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

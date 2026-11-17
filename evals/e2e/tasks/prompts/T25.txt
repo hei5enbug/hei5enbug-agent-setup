@@ -1,0 +1,1 @@
+feature/demo-e-skip-comments 브랜치에서 설정 파일의 빈 줄과 주석 줄을 건너뛰도록 고쳤어. 이 브랜치로 올릴 PR 설명을 써줘. 변경과 검증 내용은 notes/pr-notes-demo-e.txt에 있고, PR 작성 규칙은 docs/writing-rules.md야. 그대로 PR에 붙여넣을 거니까 out/pr-description.txt에 저장해줘. 이 글은 별도의 검토 실행에 보낼 거라서 text_review.py는 돌리지 마.

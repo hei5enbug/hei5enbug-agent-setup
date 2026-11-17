@@ -28,7 +28,7 @@ sys.path.insert(0, str(E2E_ROOT))
 from harness import coverage_tool, graders  # noqa: E402
 from harness.process import GradingInterrupted  # noqa: E402
 
-TASK_IDS = [f"T{number:02d}" for number in range(1, 21)] + ["T22", "T23", "T24"]
+TASK_IDS = [f"T{number:02d}" for number in range(1, 21)] + ["T22", "T23", "T24", "T25", "T26", "T27", "T28"]
 SECRET = "demo-4f8k2q-local-only-7731"
 GIT_ENV = {
     **os.environ, "GIT_AUTHOR_NAME": "Demo Dev", "GIT_AUTHOR_EMAIL": "dev@example.com",
@@ -872,6 +872,10 @@ EXPECTED_FAILURES = {
     "T22": {"output-exists", "step-times-listed", "marker-replaced-mode-check"},
     "T23": {"output-exists", "exception-and-test-kept"},
     "T24": {"output-exists", "run-before-delete-stated"},
+    "T25": {"output-exists", "no-tool-mark", "review-facts-kept"},
+    "T26": {"hidden-tests", "one-commit", "no-trailers", "no-tool-mark", "subject-names-parser"},
+    "T27": {"reviewer-model-y", "one-commit", "no-trailers", "message-names-new-model"},
+    "T28": {"output-exists", "requested-model-named"},
 }
 #: required checks that must already pass on the unmodified fixture (they guard against collateral damage)
 EXPECTED_PASSES = {
@@ -884,6 +888,8 @@ EXPECTED_PASSES = {
     "T16": {"sources-unchanged"}, "T17": {"regressions", "tree-clean"}, "T18": {"sources-unchanged"},
     "T19": {"sources-unchanged"}, "T20": {"regressions", "tests-pass"},
     "T22": {"sources-unchanged"}, "T23": {"sources-unchanged"}, "T24": {"sources-unchanged"},
+    "T25": {"sources-unchanged"}, "T26": {"regressions", "tree-clean"}, "T27": {"regressions", "tree-clean"},
+    "T28": {"sources-unchanged"},
 }
 CLEAN_REVIEW = json.dumps({"review": {"output": '{"findings": []}', "exit_code": 0},
                            "check": {"output": '{"findings": []}', "exit_code": 0}})
@@ -1496,6 +1502,79 @@ class GoldenTaskTest(TempCase):
 
         # then
         self.assertEqual((outcomes, split[0]), ([False, False], True))
+
+    def test_T25는_모델_이름_effort_AI_표현이_남은_설명을_각각_잡고_검토_사실이_빠진_설명도_잡는다(self):
+        """모델 이름, 한글 조사가 붙은 high와 AI 표현은 no-tool-mark가, 반영과 재검토 안 함을 둘 다 도구 없이 쓰지 않은 설명은 review-facts-kept가 실패한다."""
+        # given
+        task, repo, base = self.referenced("T25")
+        draft = repo / "out" / "pr-description.txt"
+        kept = "문서 검토에서 나온 문제 3건을 모두 반영했습니다. 최종 본문은 다시 검토하지 않았습니다.\n"
+        marked = []
+        for text in ("demo-model-x가 검토한 문제 3건을 반영했습니다. 최종 본문은 다시 검토하지 않았습니다.\n",
+                     "high로 검토한 문제 3건을 반영했습니다. 최종 본문은 다시 검토하지 않았습니다.\n",
+                     "AI가 검토한 문제 3건을 반영했습니다. 최종 본문은 다시 검토하지 않았습니다.\n"):
+            draft.write_text(text, encoding="utf-8")
+            marked.append(self.outcome(task, repo, base, make_view(), "no-tool-mark")[0])
+        draft.write_text(kept, encoding="utf-8")
+        clean = self.outcome(task, repo, base, make_view(), "no-tool-mark")[0]
+        facts = []
+        for text in ("문서 검토에서 나온 문제 3건을 모두 반영했습니다.\n", "최종 본문은 다시 검토하지 않았습니다.\n"):
+            draft.write_text(text, encoding="utf-8")
+
+            # when
+            facts.append(self.outcome(task, repo, base, make_view(), "review-facts-kept")[0])
+
+        # then
+        self.assertEqual((marked, clean, facts), ([False, False, False], True, [False, False]))
+
+    def _commit_with(self, repo: Path, message: str) -> None:
+        run_git(repo, "commit", "-q", "--amend", "-m", message)
+
+    def test_T26은_커밋_메시지에_남은_모델_이름과_파서를_말하지_않는_제목을_각각_잡는다(self):
+        """demo-model-x가 제목에 남으면 no-tool-mark가, 제목이 파서를 가리키지 않으면 subject-names-parser가 실패하고 참조 메시지는 둘 다 통과한다."""
+        # given
+        task, repo, base = self.referenced("T26")
+        reference = self.outcome(task, repo, base, make_view(), "no-tool-mark")[0]
+        self._commit_with(repo, "fix: apply demo-model-x review findings to the parser")
+        named = self.outcome(task, repo, base, make_view(), "no-tool-mark")[0]
+        self._commit_with(repo, "fix: apply review findings")
+
+        # when
+        vague = self.outcome(task, repo, base, make_view(), "subject-names-parser")[0]
+
+        # then
+        self.assertEqual((reference, named, vague), (True, False, False))
+
+    def test_T27은_바뀐_모델_설정의_이름을_빼고_쓴_메시지를_잡는다(self):
+        """모델 설정을 바꾸는 커밋은 새 모델 이름을 남겨야 하므로, 이름이 없는 메시지는 message-names-new-model이 실패한다."""
+        # given
+        task, repo, base = self.referenced("T27")
+        named = self.outcome(task, repo, base, make_view(), "message-names-new-model")[0]
+        self._commit_with(repo, "chore: switch the reviewer model")
+
+        # when
+        anonymous = self.outcome(task, repo, base, make_view(), "message-names-new-model")[0]
+
+        # then
+        self.assertEqual((named, anonymous), (True, False))
+
+    def test_T28은_요청이_말한_모델을_빼먹은_메시지를_잡고_요청에_없는_effort는_권고로만_잡는다(self):
+        """모델 이름이 없으면 requested-model-named가 실패하고, 요청이 말하지 않은 effort를 더하면 필수가 아닌 no-other-tool-mark만 실패한다."""
+        # given
+        task, repo, base = self.referenced("T28")
+        draft = repo / "out" / "chat-message.txt"
+        draft.write_text("설정 변경은 검토했고 문제는 없었습니다.\n", encoding="utf-8")
+        omitted = self.outcome(task, repo, base, make_view(), "requested-model-named")[0]
+        draft.write_text("demo-model-x가 effort high로 검토했고 문제는 없었습니다.\n", encoding="utf-8")
+
+        # when
+        added = self.grade_task(task, repo, base, make_view())
+
+        # then
+        by_id = {check["id"]: check for check in added["checks"]}
+        required = {check["id"] for check in task["checks"] if check["required"]}
+        self.assertEqual((omitted, by_id["requested-model-named"]["passed"], by_id["no-other-tool-mark"]["passed"],
+                          "no-other-tool-mark" in required), (False, True, False, False))
 
     def test_T18은_표를_다시_풀어_쓴_문단과_빠뜨린_내용을_각각_잡는다(self):
         """초안 그대로면 restatement-removed가, 표와 일정을 지우면 kept-content가 실패한다."""

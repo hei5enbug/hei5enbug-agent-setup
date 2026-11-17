@@ -41,7 +41,7 @@ UNCHANGED_PATTERNS = (
     r"그대로(?:이다|다|입니다|예요|이에요|임)",
 )
 
-REVIEWER_INSTRUCTIONS = """\
+REVIEWER_PASSES = """\
 You have no conversation context. Review the draft below, which is addressed to a reader who will decide or act on \
 it. Run two passes over the whole draft, not only a changed part. When the sources include a diff of the draft \
 itself, report text outside that diff only where the change made it wrong or redundant.
@@ -69,11 +69,29 @@ are never removable. Report nothing else, and report no finding you cannot quote
 rules take precedence: never report as removable what they require. Judge each finding for the reader named below; \
 a fact that reader has not seen, such as a change made beyond the request, is not a restatement. Report only a \
 finding a careful editor would make on any reading, not a matter of taste; a careful draft should get an empty list.
+"""
 
+ANSWER_FORMAT = """\
 Answer with one JSON object in a ```json fence and nothing after it:
 {"findings": [{"type": "removable" | "missing" | "ambiguous", "quote": "...", "reason": "..."}], \
 "over_budget_facts": ["..."]}
 An empty findings list means the draft passes.
+"""
+
+REVIEWER_INSTRUCTIONS = f"{REVIEWER_PASSES}\n{ANSWER_FORMAT}"
+
+TOOL_MARK_CUT = """\
+Tool mark item of the cut pass, for this text kind: report as removable each tool mark that says which tool did or \
+checked the work, and quote only the phrase, so the author states only the kind of check and its result. A tool mark \
+is a model name, version, or reasoning effort, an agent host, plugin, script, runner, session, or worker name, or \
+wording that says an AI or an agent did it. This item also applies inside a title, a heading, a commit subject, or \
+the opening sentence, which are otherwise never removable; quote only the phrase, never the whole element. Do not \
+report a tool that is the subject of the work, such as a model setting the diff changes or the tool a ticket is \
+about. The destination's rules keep only one tool mark, the last-line agent signature they require on a review \
+comment or reply, such as `by <agent host>`; no other signature, credit, or provenance line is excepted, even when \
+they ask for it, and this item takes precedence over the rule that the destination's rules win. When a source shows \
+that the user's request asks the text to name a tool, that mention stays, as the request names it, and every other \
+tool mark is reported.
 """
 
 FLAGGED_HEADING = "## Lines the text check flagged\n"
@@ -93,9 +111,11 @@ READERS = {
     "final-report": (
         "the user who asked for the work and has not read the diff, the logs, or the tool output. What is left for "
         "them, such as an uncommitted change, a skipped step and why it was skipped, or a failing check, is a fact "
-        "they need, and so is the regression each new test catches. A file, function, or test name they need not "
-        "open or act on, how the work went, such as earlier failures, retries, or who did each part, and a count "
-        "they did not ask for are not."
+        "they need, and so is the regression each new test catches. When independent validation ran, the one line "
+        "with the link or path of its review result, and each finding left unresolved, are facts they need too. A "
+        "file, function, or test name they need not open or act on, how the work went, such as earlier failures, "
+        "retries, who did each part, or the reviewer's model, effort, or pass count, and a count they did not ask "
+        "for are not."
     ),
     "other": "someone who reads only this text and its links.",
 }
@@ -298,7 +318,8 @@ def flagged_section(advisories: list[dict]) -> list[str]:
 
 def build_assignment(kind: str, draft: str, rules: list, sources: list, notes: list[str], budget: int | None,
                      advisories: list[dict]) -> str:
-    parts = [REVIEWER_INSTRUCTIONS, f"Text kind: {kind}\n", f"Reader: {READERS[kind]}\n"]
+    cut_item = [] if kind == FINAL_REPORT_KIND else [TOOL_MARK_CUT]
+    parts = [REVIEWER_PASSES, *cut_item, ANSWER_FORMAT, f"Text kind: {kind}\n", f"Reader: {READERS[kind]}\n"]
     parts += flagged_section(advisories)
     parts += named_files("Destination writing rules", rules)
     parts += named_files("Sources", sources)

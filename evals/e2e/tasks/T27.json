@@ -1,0 +1,71 @@
+{
+  "id": "T27",
+  "title": "Commit message for a change of the reviewer model setting",
+  "category": "writing",
+  "path": "commit-message text",
+  "fixture": "tool-notes",
+  "prompt_file": "prompts/T27.txt",
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 6
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "reviewer-model-y",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "config/review.yaml",
+      "pattern": "(?m)^reviewer_model: demo-model-y$"
+    },
+    {
+      "id": "one-commit",
+      "kind": "git_commits",
+      "required": true,
+      "weight": 2,
+      "min": 1,
+      "max": 1,
+      "subject_max": 72,
+      "subject_regex": "^(feat|fix|refactor|docs|test|chore|perf|ci): [a-z].*[^.]$"
+    },
+    {
+      "id": "no-trailers",
+      "kind": "git_commits",
+      "required": true,
+      "weight": 1,
+      "min": 1,
+      "max": 1,
+      "body_forbid": "^(co-authored-by|signed-off-by|reviewed-by|acked-by|generated with)\\b|🤖"
+    },
+    {
+      "id": "tree-clean",
+      "kind": "git_clean",
+      "required": true,
+      "weight": 1
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "message-names-new-model",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "message_names_new_model"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

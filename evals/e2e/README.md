@@ -282,6 +282,13 @@ T22 to T24 grade the draft that the agent saves for a separate review run, so th
 saved second draft by sentence patterns. They have no `text-review-clean` check and are not in
 `config/writing-surfaces.json`.
 
+T25 to T28 grade texts whose input names a tool that did or checked the work, so their prompts also tell the agent not
+to run `text_review.py`, and the checks read the saved text or the last commit message by patterns, with no
+`text-review-clean` check and no entry in `config/writing-surfaces.json`. T25 to T27 are required to pass, and the
+check `no-other-tool-mark` of T28 is advisory: T25 and T26 must leave the model name, the effort, and wording that an
+AI or an agent did it out of the text, T27 must name the model that its diff changes, and T28 must name the model its
+request asks for.
+
 `tests/test_e2e_eval_graders.py` proves each task's graders: the unmodified fixture fails, and the reference
 solution in `tasks/reference/` passes.
 
@@ -318,6 +325,10 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T22 | review-rounds | Ticket comment, first draft | Comment whose work item requires each step's time before and after and whose proposal the result replaced |
 | T23 | review-rounds | Ticket comment, second draft | Revise a draft after a finding that it dropped the work item's exception for a first run without a cache |
 | T24 | review-rounds | Ticket comment, second draft | Revise a draft after a finding that "the check deletes a loose cache" can mean before or after the cache runs |
+| T25 | tool-notes | Pull request description | Notes that say a model at a stated effort reviewed the description, found 3 problems, and the final text was not reviewed again |
+| T26 | tool-notes | Commit message | Parser fix whose notes name the reviewing model and suggest a subject that carries its name |
+| T27 | tool-notes | Commit message | Change of the `reviewer_model` setting from one demo model to another |
+| T28 | tool-notes | Chat message | Thread announcement whose request asks to say that a named model reviewed it |
 
 ## Comparing a change on both hosts
 

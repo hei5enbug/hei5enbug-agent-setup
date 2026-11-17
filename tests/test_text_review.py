@@ -112,6 +112,16 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(1, failed.returncode)
         self.assertNotIn("final_report_sha256", json.loads(failed.stdout))
 
+    def test_모델_이름과_effort는_글만_보는_점검에서_발견으로_보고하지_않는다(self):
+        """도구 표시는 패턴 점검이 아니라 규칙과 독립 검토로 거른다고 정했으므로, 모델 이름이 든 글도 점검은 통과한다."""
+        # given
+        text = "Document review by demo-model-x at effort high applied 3 findings.\n"
+        # when
+        result = self.check(text, "--kind", "pr-description")
+        # then
+        self.assertEqual(0, result.returncode, result.stdout)
+        self.assertEqual({"findings": [], "advisories": []}, json.loads(result.stdout))
+
     def test_공백이_있는_코드_조각은_식별자로_세지_않는다(self):
         # given
         text = "- Ran `git status`, `git diff`, and `git log --oneline`\n"
@@ -361,6 +371,32 @@ class ReviewTest(unittest.TestCase):
         # then
         self.assertEqual(0, result.returncode, result.stdout)
         self.assertIn("an uncommitted change", self.assignment())
+
+    def test_최종_보고를_뺀_모든_종류의_과제에만_도구_표시를_지울_거리로_보고하라는_항목이_있다(self):
+        """작성자가 모델 이름과 effort를 적은 글을 검토자가 통과시키면 안 되지만 최종 보고에는 그 항목이 없어야 하므로, 종류별 과제를 비교한다."""
+        for kind in KINDS:
+            with self.subTest(kind):
+                # given
+                self.draft.write_text(CLEAN_DRAFT, encoding="utf-8")
+                # when
+                result = self.review("none", kind=kind)
+                # then
+                self.assertEqual(0, result.returncode, result.stdout)
+                self.assertEqual(kind != "final-report", "Tool mark item of the cut pass" in self.assignment())
+
+    def test_도구_표시_항목은_제목과_첫_문장에도_적용하고_서명_한_줄만_남긴다고_적는다(self):
+        """REVIEWER_INSTRUCTIONS가 제목과 커밋 제목을 지울 수 없다고 하므로 항목이 그 예외를 풀고, 서명 한 줄 말고는 규칙이 요구해도 남기지 않는다고 적어야 한다."""
+        # given
+        self.draft.write_text(CLEAN_DRAFT, encoding="utf-8")
+        # when
+        result = self.review("none", kind="commit-message")
+        # then
+        self.assertEqual(0, result.returncode, result.stdout)
+        item = self.assignment().split("Tool mark item of the cut pass", 1)[1].split("Answer with one JSON", 1)[0]
+        for fragment in ("inside a title, a heading, a commit subject, or the opening sentence", "never the whole element",
+                         "last-line agent signature", "no other signature, credit, or provenance line is excepted",
+                         "request asks the text to name a tool"):
+            self.assertIn(" ".join(fragment.split()), " ".join(item.split()))
 
     def test_과제는_올릴_곳의_규칙이_요구하는_내용을_지울_거리로_보고하지_말라고_한다(self):
         """팀 규칙이 요구하는 검사 결과까지 지우라는 보고가 나오면 작성자가 끝없이 고치게 되므로, 과제에 규칙 우선 문장이 들어간다."""

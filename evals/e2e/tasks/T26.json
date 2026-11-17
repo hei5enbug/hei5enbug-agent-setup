@@ -1,0 +1,81 @@
+{
+  "id": "T26",
+  "title": "Commit message for a parser fix whose notes name the reviewing model",
+  "category": "writing",
+  "path": "commit-message text",
+  "fixture": "tool-notes",
+  "prompt_file": "prompts/T26.txt",
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 6
+  },
+  "hidden_tests": {
+    "source": "hidden/T26",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden"
+    },
+    {
+      "id": "one-commit",
+      "kind": "git_commits",
+      "required": true,
+      "weight": 2,
+      "min": 1,
+      "max": 1,
+      "subject_max": 72,
+      "subject_regex": "^(feat|fix|refactor|docs|test|chore|perf|ci): [a-z].*[^.]$"
+    },
+    {
+      "id": "no-trailers",
+      "kind": "git_commits",
+      "required": true,
+      "weight": 1,
+      "min": 1,
+      "max": 1,
+      "body_forbid": "^(co-authored-by|signed-off-by|reviewed-by|acked-by|generated with)\\b|🤖"
+    },
+    {
+      "id": "tree-clean",
+      "kind": "git_clean",
+      "required": true,
+      "weight": 1
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "no-tool-mark",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_tool_mark"
+    },
+    {
+      "id": "subject-names-parser",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "subject_names_parser"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

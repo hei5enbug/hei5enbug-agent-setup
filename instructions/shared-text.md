@@ -27,7 +27,19 @@ item's body and its whole comment or reply history.
    line.
    In a final report, describe each change by its behavior and each new test, in one sentence, by the regression it
    catches. Name a file, function, or test only when the user must open or act on it, and leave out how the work
-   went, such as earlier failures, retries, or who did each part, and counts the user did not ask for.
+   went, such as earlier failures, retries, or who did each part, and counts the user did not ask for. When
+   independent validation ran, the one line with the link or path of its review result, and each finding left
+   unresolved, are facts the user needs; the reviewer's model, effort, and pass count are not.
+   In a text other people read other than a reply or final report to the user in the session, leave out which tool
+   did or checked the work and state only the kind of check and its result, such as "Both code review findings were
+   applied before the deployment." A tool mark is a model name, version, or reasoning effort, an agent host, plugin,
+   script, runner, session, or worker name, or wording that says an AI or an agent did it. A tool that is the subject
+   of the work, such as a model setting the diff changes or the tool a ticket is about, stays. The last-line agent
+   signature that the destination's own rules require on a review comment or reply, such as `by <agent host>`, stays;
+   no other signature, credit, or provenance line is excepted, even when the destination's rules ask for it. In a
+   title, a heading, a commit subject, or a text's opening sentence, remove the tool mark as a phrase and keep the
+   element and the rest of its content. When the user's request asks to name a tool in a text, write in that text
+   only what the request names; every other text of the same run still leaves tool marks out.
 2. Completeness pass: compare the text with the request and its sources. Restore every decision, condition,
    prerequisite, order, and completion criterion the reader needs, and rewrite every sentence with two readings.
    When a source requires the text itself to report something, such as a measurement or a list that an acceptance

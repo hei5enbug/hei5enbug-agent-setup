@@ -1,0 +1,5 @@
+[demo-g 변경 메모]
+
+demo-model-x 검토에서 나온 지적을 반영하는 변경이다.
+지적: parse_lines가 빈 줄과 # 으로 시작하는 줄에서 ValueError를 낸다. 두 경우 모두 건너뛰어야 한다.
+커밋 제목 제안: Apply demo-model-x review findings to the parser

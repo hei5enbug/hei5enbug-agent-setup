@@ -111,7 +111,8 @@ into fix now, worth considering, note only, or rejected, each with a one-line re
 reachable caller or input path is a possibility, never fix now, until traced. Apply supported fix-now corrections
 once, and reject unsupported scope expansion. Do not run another model review after the corrections.
 
-Report the resolved reviewer model, reasoning effort, that one read-only pass ran, each finding's category and
-reason, the safety fact and its proof level for an implementation review, and any unresolved finding. When validation could not run, report the unavailable requirement and reason instead. When the user
-declined an earlier review, report only that independent validation did not run. Every one of these results belongs
-in the reply, never in the deliverable.
+When independent validation ran for the work a final report ends, the report gives one line with the link or path
+of the review result, such as the reviewer's result file or the comment that holds the findings, and states each
+finding left unresolved. It gives no reviewer model, effort, pass count, finding categories, or safety proof. When
+validation could not run or the user declined it, the report states that, and why, in one line. Every one of these
+results belongs in the reply, never in the deliverable.

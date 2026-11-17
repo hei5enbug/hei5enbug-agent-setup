@@ -1,0 +1,1 @@
+notes/review-findings-demo-g.txt의 지적을 반영해서 demo_parser를 고치고 커밋까지 해줘. 커밋 규칙은 AGENTS.md야. text_review.py는 돌리지 마.

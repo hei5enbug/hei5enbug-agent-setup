@@ -1,0 +1,1 @@
+config/review.yaml의 reviewer_model을 demo-model-y로 바꾸고 커밋까지 해줘. 커밋 규칙은 AGENTS.md야. text_review.py는 돌리지 마.
