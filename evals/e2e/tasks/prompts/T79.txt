@@ -1,0 +1,1 @@
+../demo-kit 플러그인의 release-notes 스킬(../demo-kit/skills/release-notes/SKILL.md)이 병합된 변경의 요약을 빼먹고 제목만 나열하는 문제가 있어. skill-issue-creator 스킬로 이 문제를 이슈로 등록해 줘. 내 이 작업은 계속 이어서 해야 하니까 이슈 작업은 그 플러그인 저장소 쪽 세션에 맡길 수 있으면 맡겨.

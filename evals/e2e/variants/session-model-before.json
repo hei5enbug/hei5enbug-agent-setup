@@ -1,0 +1,1 @@
+{"name": "session-model-before", "ref": "946f0e4", "settings": {}, "env": {"CLAUDE_PLUGIN_OPTION_REVIEW_MODEL": "gpt-6.1-sol", "HEI5ENBUG_REVIEW_MODEL": "gpt-6.1-sol"}, "extra_args": []}

@@ -179,5 +179,7 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
 
 ## Codex worker
 
-- 일반 할당 항목을 담은 할당을 파일로 쓰고 `worker` 역할을 실행한다.
+- 일반 할당 항목을 담은 할당을 파일로 쓰고 `worker` 역할을 실행한다. 역할은 [공통 모델 라우팅](model-routing.ko.md)의 구현 worker 행이
+  나열하는 `codex_worker_model`·`codex_worker_effort` 설정으로 실행하며, 저장된 설정이 없거나 잘못되었으면 기본값으로 실행한다. 이
+  역할에는 `--model`을 넘기지 않는다.
 - 작업이 써야 하는 세션 폴더 밖 디렉터리에만 `--add-dir <dir>`을 붙인다. 플러그인 Mod는 세션당 한 번 묻는다.

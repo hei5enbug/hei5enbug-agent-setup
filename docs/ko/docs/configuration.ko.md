@@ -64,7 +64,7 @@ Claude Code `worker` 에이전트는 `worker_model`과 `worker_effort`로 실행
 씁니다. 세션 컨텍스트는 이 값을 `Worker agent model: <model> at <effort>.` 줄로 알립니다. Codex에는 플러그인 설정 화면이 없으므로 세션 훅이
 Claude Code가 저장한 설정(`~/.claude/settings.json`의 `pluginConfigs`, 또는 `CLAUDE_CONFIG_DIR` 아래)에서 `codex_worker_model`과
 `codex_worker_effort`를 읽기 전용으로 읽습니다. 환경변수가 이 값을 덮어쓰고, 잘못된 값이면 한 줄 안내와 함께 기본값을 씁니다. 세션 컨텍스트는
-`Codex worker model: <model> at <effort>.` 줄로 알립니다. 값은 다음 Codex 세션부터 적용되며, 이 값을 읽을 때는
+`Codex worker model: <model> at <effort>.` 줄로 알립니다. Claude Code의 `codex` 구현 경로도 같은 두 설정으로 `worker` 역할을 실행합니다. 값은 다음 Codex 세션부터 적용되며, 이 값을 읽을 때는
 Codex 설정이나 Claude 설정을 쓰지 않습니다. Codex 설정을 쓰는 것은 [호스트 설정](#호스트-설정)의 허용 목록 변경뿐입니다.
 
 | 기능 | Claude Code `/config` 키 | Codex 환경변수 |
@@ -76,7 +76,7 @@ Codex 설정이나 Claude 설정을 쓰지 않습니다. Codex 설정을 쓰는 
 | 도구 결과 비밀값 가리기 | `secret_redaction` | 해당 없음 |
 | 구현 worker 경로 | `implementation_worker` (`auto`, `claude`, `codex`, `haiku`, `sol`, 또는 `sonnet`) | 해당 없음 |
 | Claude Code worker 모델과 사고 강도 | `worker_model` (기본 `claude-haiku-5-5`), `worker_effort` (기본 `high`) | 해당 없음 |
-| Codex worker 모델과 사고 강도 | `codex_worker_model` (`gpt-5.6-luna` 또는 `gpt-6.1-sol`, 기본 `gpt-5.6-luna`), `codex_worker_effort` (`high` 또는 `xhigh`, 기본 `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL`, `HEI5ENBUG_CODEX_WORKER_EFFORT` |
+| Codex worker 모델과 사고 강도 | `codex_worker_model` (`gpt-5.6-luna`, `gpt-6.1-sol`, `gpt-6.1-terra` 중 하나, 기본 `gpt-5.6-luna`), `codex_worker_effort` (`high` 또는 `xhigh`, 기본 `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL`, `HEI5ENBUG_CODEX_WORKER_EFFORT` |
 | 검토 모델 | `review_model` (고정 모델 ID, 기본 `gpt-6-astra`) | 해당 없음 |
 | 응답 언어 가드 | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip 쿼리 가드 | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |

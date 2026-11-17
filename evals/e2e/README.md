@@ -286,7 +286,9 @@ solution in `tasks/reference/` passes.
 Prompts are in Korean, as the real user writes them. The fixtures are fictional repositories with the conventions a
 real one has: a README, an `AGENTS.md` with a Korean mirror rule, tests, and Korean mirrors. T21 runs with
 `ORCA_TERMINAL_HANDLE` set and a fake `orca` first on `PATH`, built by `tasks/setup/fake_orca.py`; it keeps its state
-in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval_orca_cleanup.py`.
+in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval_orca_cleanup.py`. T79 uses the same fake
+`orca`, which also starts terminals and accepts waits and sends; its checks read the call log for the model and effort
+each session start names, and its tests are in `tests/test_e2e_eval_session_model.py`.
 
 | Task | Fixture | Path it exercises | Request |
 |---|---|---|---|
@@ -311,6 +313,7 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T19 | ops-notes | Shared document | Wiki draft of about 1,600 characters for a 1,500-character budget |
 | T20 | notes-cli | Final report | Small change with tests, then a report |
 | T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
+| T79 | notes-cli | Orca session start model | A skill issue for another plugin's repository, which the delegation rules hand to a new session there; a fake `orca` and a seeded plugin repository, and the run passes only when every session start names a model and effort and none names Fable or Astra |
 
 ## Worker-model cases
 

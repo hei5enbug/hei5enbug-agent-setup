@@ -757,6 +757,52 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(self.codex_resume_argv(sandbox="workspace-write", roots=[directory]), self.logged()["argv"])
         self.assertNotIn("--add-dir", self.logged()["argv"])
 
+    def test_worker_역할은_Codex_worker_설정의_terra와_effort로_실행하고_설정이_없으면_기본값을_쓴다(self):
+        """codex_worker_model·effort가 terra와 xhigh이면 worker 역할이 그 쌍으로 실행되고, 설정이 없으면 gpt-5.6-luna와 high다."""
+        # Given
+        directory = self.base / "shared"
+        directory.mkdir()
+        terra = {"HEI5ENBUG_CODEX_WORKER_MODEL": "gpt-6.1-terra", "HEI5ENBUG_CODEX_WORKER_EFFORT": "xhigh"}
+        cases = [(terra, "gpt-6.1-terra", "xhigh"), ({}, "gpt-5.6-luna", "high")]
+
+        for extra, model, effort in cases:
+            with self.subTest(model=model):
+                self.log.unlink(missing_ok=True)
+                self.beat("codex", THREAD)
+
+                # When
+                turn = {"model": model, "effort": effort, "sandbox_policy": {"type": "workspace-write"}}
+                completed = self.run_runner(
+                    "worker", "--resume", THREAD, "--add-dir", str(directory), config={"turns": [turn]}, extra_env=extra,
+                )
+
+                # Then
+                self.assertEqual(0, completed.returncode, completed.stderr)
+                self.assertEqual(
+                    self.codex_resume_argv(sandbox="workspace-write", roots=[directory], model=model, effort=effort),
+                    self.logged()["argv"],
+                )
+                self.assertEqual((model, effort), (self.status(completed)["model"], self.status(completed)["effort"]))
+
+    def test_worker_역할은_허용되지_않는_Codex_worker_설정이면_기본값으로_실행하고_알림을_stderr에_남긴다(self):
+        """terra를 medium으로 설정하면 effort가 목록에 없으므로 gpt-5.6-luna와 high로 실행하고 무시한 값을 stderr에 적는다."""
+        # Given
+        directory = self.base / "shared"
+        directory.mkdir()
+        invalid = {"HEI5ENBUG_CODEX_WORKER_MODEL": "gpt-6.1-terra", "HEI5ENBUG_CODEX_WORKER_EFFORT": "medium"}
+        self.beat("codex", THREAD)
+
+        # When
+        turn = {"model": "gpt-5.6-luna", "effort": "high", "sandbox_policy": {"type": "workspace-write"}}
+        completed = self.run_runner(
+            "worker", "--resume", THREAD, "--add-dir", str(directory), config={"turns": [turn]}, extra_env=invalid,
+        )
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual("gpt-5.6-luna", self.status(completed)["model"])
+        self.assertIn("Ignored codex_worker_effort", completed.stderr)
+
     def test_codex_resume에서도_turn_context의_sandbox가_다르면_종료_코드_4이다(self):
         """resume한 실행의 turn_context sandbox가 요청과 다르면 종료 코드 4이고 결과를 남기지 않는다."""
         # Given
@@ -2827,7 +2873,8 @@ class RoleRunnerTest(unittest.TestCase):
             "FAKE_LOG": str(self.log), "FAKE_CONFIG": json.dumps(config or {"model": "claude-haiku-5-5"}),
         }
         output = io.StringIO()
-        with mock.patch.dict(os.environ, environment, clear=True), mock.patch.object(role_runner, "ROLE_MODEL", "claude-haiku-5-5"):
+        pinned = mock.patch.object(role_runner, "worker_pair", return_value=("claude-haiku-5-5", "high"))
+        with mock.patch.dict(os.environ, environment, clear=True), mock.patch.object(role_runner, "ROLE_MODEL", "claude-haiku-5-5"), pinned:
             with contextlib.redirect_stdout(output), contextlib.redirect_stderr(io.StringIO()):
                 code = role_runner.main(argv)
         return code, output.getvalue()

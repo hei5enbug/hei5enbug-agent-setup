@@ -29,7 +29,10 @@ File the issue in this session, and say why in one line, when any of these holds
    - `orca terminal read --terminal <handle> --screen` shows no open question or approval prompt.
    - Its input line is empty: send `--text x`; when the line then shows only `x`, delete it with `--text $'\x7f'`.
      Otherwise delete the `x`, send nothing to that terminal, and go on to the next one.
-3. When none passes, run `orca terminal create --worktree id:<workspace id> --command <host> --json`, then
+3. When none passes, run `orca terminal create --worktree id:<workspace id> --command "<host> --model <id> --effort
+   <level>" --json`, with `<id>` and `<level>` from the row of any other session in "Session placement" of the
+   [cross-repository rules](../../../instructions/cross-repository.md), and `codex` written with `-m <id> -c
+   model_reasoning_effort="<level>"`, then
    `orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json`. When `wait.satisfied` is
    still false after one longer wait, file in this session.
 

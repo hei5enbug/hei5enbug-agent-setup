@@ -106,6 +106,50 @@ class WorkerSettingTest(unittest.TestCase):
         self.assertEqual(("gpt-6.1-sol", "xhigh"), pair)
         self.assertIsNone(notice)
 
+    def test_Codex는_저장된_terra를_high와_xhigh에서_알림_없이_쓴다(self):
+        """저장된 gpt-6.1-terra는 high와 xhigh 모두 목록과 effort 규칙을 통과해 그대로 돌려준다."""
+        for effort in ("high", "xhigh"):
+            with self.subTest(effort=effort):
+                # Given
+                self.save({"codex_worker_model": "gpt-6.1-terra", "codex_worker_effort": effort})
+
+                # When
+                pair, notice = self.resolve("codex")
+
+                # Then
+                self.assertEqual(("gpt-6.1-terra", effort), pair)
+                self.assertIsNone(notice)
+
+    def test_terra의_환경_변수_값도_같은_규칙으로_쓰고_medium이면_기본값과_알림을_돌려준다(self):
+        """환경 변수로 준 terra는 xhigh에서 그대로 쓰고, medium은 목록에 없으므로 기본값과 알림이 된다."""
+        # Given
+        base = {"HEI5ENBUG_CODEX_WORKER_MODEL": " GPT-6.1-Terra "}
+
+        # When
+        with mock.patch.dict(os.environ, {**base, "HEI5ENBUG_CODEX_WORKER_EFFORT": "xhigh"}):
+            accepted, accepted_notice = self.resolve("codex")
+        with mock.patch.dict(os.environ, {**base, "HEI5ENBUG_CODEX_WORKER_EFFORT": "medium"}):
+            rejected, rejected_notice = self.resolve("codex")
+
+        # Then
+        self.assertEqual(("gpt-6.1-terra", "xhigh"), accepted)
+        self.assertIsNone(accepted_notice)
+        self.assertEqual(CODEX_DEFAULT, rejected)
+        self.assertIn("codex_worker_effort", rejected_notice)
+
+    def test_Claude_호스트의_worker_옵션은_terra를_받지_않는다(self):
+        """terra는 Codex worker 옵션에만 추가되었으므로 Claude의 worker_model에 주면 기본값과 알림이 된다."""
+        # Given
+        env = {"CLAUDE_PLUGIN_OPTION_WORKER_MODEL": "gpt-6.1-terra", "CLAUDE_PLUGIN_OPTION_WORKER_EFFORT": "high"}
+
+        # When
+        with mock.patch.dict(os.environ, env):
+            pair, notice = self.resolve("claude")
+
+        # Then
+        self.assertEqual(CLAUDE_DEFAULT, pair)
+        self.assertIn("worker_model", notice)
+
     def test_Codex는_목록에_없는_저장_모델이면_기본값과_값을_적은_알림을_돌려준다(self):
         """저장된 모델이 매니페스트 목록에 없으면 두 키 모두 기본값으로 되돌리고 무시한 값을 알림에 적는다."""
         # Given

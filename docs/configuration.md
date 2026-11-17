@@ -62,7 +62,7 @@ value keeps the registry pin. The session context reports them as `Worker agent 
 no plugin settings UI, so its session hook reads `codex_worker_model` and `codex_worker_effort` read-only from Claude
 Code's saved settings (`pluginConfigs` in `~/.claude/settings.json`, or under `CLAUDE_CONFIG_DIR`). The environment
 variables override them, and an invalid value falls back to the defaults with a one-line notice. The session context
-reports them as `Codex worker model: <model> at <effort>.` They apply from the next Codex session, and reading them
+reports them as `Codex worker model: <model> at <effort>.` The `codex` implementation route in Claude Code runs the `worker` role on the same two settings. They apply from the next Codex session, and reading them
 never writes Codex or Claude settings. Only the allowlisted changes in [Host settings](#host-settings) write Codex
 settings.
 
@@ -75,7 +75,7 @@ settings.
 | Secret redaction in tool results | `secret_redaction` | Not applicable |
 | Implementation worker route | `implementation_worker` (`auto`, `claude`, `codex`, `haiku`, `sol`, or `sonnet`) | Not applicable |
 | Claude Code worker model and effort | `worker_model` (default `claude-haiku-5-5`) and `worker_effort` (default `high`) | Not applicable |
-| Codex worker model and effort | `codex_worker_model` (`gpt-5.6-luna` or `gpt-6.1-sol`, default `gpt-5.6-luna`) and `codex_worker_effort` (`high` or `xhigh`, default `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL` and `HEI5ENBUG_CODEX_WORKER_EFFORT` |
+| Codex worker model and effort | `codex_worker_model` (`gpt-5.6-luna`, `gpt-6.1-sol`, or `gpt-6.1-terra`, default `gpt-5.6-luna`) and `codex_worker_effort` (`high` or `xhigh`, default `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL` and `HEI5ENBUG_CODEX_WORKER_EFFORT` |
 | Review model | `review_model` (a pinned model ID, default `gpt-6-astra`) | Not applicable |
 | Response language guard | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip query guard | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |

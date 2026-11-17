@@ -32,7 +32,9 @@
    - `orca terminal read --terminal <handle> --screen`에 열린 질문이나 승인 프롬프트가 없다.
    - 입력 줄이 비어 있다. `--text x`를 보내고 줄에 `x`만 보이면 `--text $'\x7f'`로 지운다.
      그렇지 않으면 `x`를 지우고 그 터미널에는 아무것도 보내지 않은 채 다음 터미널로 넘어간다.
-3. 통과한 터미널이 없으면 `orca terminal create --worktree id:<workspace id> --command <host> --json`을 실행하고,
+3. 통과한 터미널이 없으면 `orca terminal create --worktree id:<workspace id> --command "<host> --model <id> --effort
+   <level>" --json`을 실행한다. `<id>`와 `<level>`은 [다른 저장소 규칙](../../../instructions/cross-repository.ko.md)의
+   "세션 위치"에서 그 밖의 세션 행의 값을 가져오고, `codex`는 `-m <id> -c model_reasoning_effort="<level>"`로 쓴다.
    이어서 `orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json`을 실행한다.
    한 번 더 길게 기다린 뒤에도 `wait.satisfied`가 false이면 이 세션에서 등록한다.
 

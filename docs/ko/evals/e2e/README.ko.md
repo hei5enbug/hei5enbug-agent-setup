@@ -266,7 +266,9 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 프롬프트는 실제 사용자처럼 한국어로 쓴다. 픽스처는 실제 저장소의 관례를 갖춘 가상 저장소다. README, 한국어 미러
 규칙이 있는 `AGENTS.md`, 테스트, 한국어 미러가 있다. T21은 `ORCA_TERMINAL_HANDLE`을 설정하고 `tasks/setup/fake_orca.py`가
 만든 가짜 `orca`를 `PATH`의 맨 앞에 두고 실행하며, 상태는 저장소 옆의 `orca-state/`에 두고, 테스트는
-`tests/test_e2e_eval_orca_cleanup.py`에 있다.
+`tests/test_e2e_eval_orca_cleanup.py`에 있다. T79는 같은 가짜 `orca`를 쓰며, 이 가짜 `orca`는 터미널도 시작하고
+대기와 전송도 받아들입니다. T79의 검사는 호출 기록에서 각 세션 시작이 적은 모델과 사고 강도를 읽고, 테스트는
+`tests/test_e2e_eval_session_model.py`에 있습니다.
 
 | 작업 | 픽스처 | 확인하는 경로 | 요청 |
 |---|---|---|---|
@@ -291,6 +293,7 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 | T19 | ops-notes | 공유 문서 | 1,500자 한도에 1,600자쯤 되는 위키 초안 |
 | T20 | notes-cli | 최종 보고 | 테스트를 더한 작은 변경 후 보고 |
 | T21 | notes-cli | 작업 종료 시 Orca 정리 | 티켓의 설정 한 줄 변경, 가짜 `orca`와 저장소 세 곳의 Git worktree를 심어 둔 상태 |
+| T79 | notes-cli | Orca 세션 시작 모델 | 다른 플러그인 저장소를 위한 스킬 이슈를 위임 규칙에 따라 그 저장소의 새 세션에 넘기는 작업. 가짜 `orca`와 심어 둔 플러그인 저장소를 쓰며, 모든 세션 시작이 모델과 사고 강도를 적고 Fable이나 Astra를 적지 않을 때만 통과 |
 
 ## worker 모델 사례
 

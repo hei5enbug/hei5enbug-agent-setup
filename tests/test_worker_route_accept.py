@@ -15,7 +15,7 @@ DESCRIPTION = (
     "Route implementation work: auto (the main session picks per task: haiku for easy work, sonnet for normal or hard "
     "work, and sol only when a Claude route fails or stops on a usage limit), claude (the main session picks a Claude "
     "worker per task and never runs a GPT worker; a Claude worker that fails stops the delegation with a report), "
-    "codex (Codex on gpt-5.6-luna at high; a failure continues on sonnet), haiku (the plugin worker on its Worker "
+    "codex (the plugin worker role on the Codex worker model and effort, gpt-5.6-luna at high by default; a failure continues on sonnet), haiku (the plugin worker on its Worker "
     "model and Worker effort, claude-haiku-5-5 at high by default), sol (gpt-6.1-sol at high through the role runner; "
     "a failure continues on sonnet), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high)."
 )

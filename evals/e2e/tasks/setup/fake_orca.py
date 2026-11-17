@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A fake `orca` command for the T21 evaluation: a JSON state file, real Git for removals, and a call log.
+"""A fake `orca` command for the T21 and T79 evaluations: a JSON state file, real Git for removals, and a call log.
 
 The state file named by FAKE_ORCA_STATE holds repos, worktrees (a folder workspace is a worktree record with
 `kind: folder`), and terminals. Every call is appended to `calls.jsonl` beside it. All data is fictional.
@@ -19,6 +19,8 @@ CALLS = STATE.parent / "calls.jsonl"
 VALUE_OPTIONS = frozenset({
     "--repo", "--worktree", "--parent-worktree", "--terminal", "--workspace-status", "--comment", "--display-name",
     "--title", "--name", "--base-branch", "--reference", "--command", "--timeout-ms", "--for", "--text", "--limit",
+    "--agent", "--model", "--effort", "--prompt", "--run", "--task-title", "--spec-file", "--to", "--from", "--subject",
+    "--body", "--type",
 })
 
 
@@ -151,6 +153,17 @@ def run(words: list[str], options: dict[str, str], flags: set[str], state: dict)
         selector = options.get("--worktree")
         target = resolve(state, selector)["id"] if selector else None
         return {"terminals": [item for item in state["terminals"] if target is None or item["worktreeId"] == target]}
+    if command == "terminal create":
+        worktree = resolve(state, options.get("--worktree"))
+        handle = f"term_started_{len(state['terminals']) + 1}"
+        state["terminals"].append({"handle": handle, "worktreeId": worktree["id"], "title": options.get("--title", "")})
+        return {"terminal": {"handle": handle, "worktreeId": worktree["id"]}}
+    if command == "terminal wait":
+        return {"wait": {"satisfied": True}}
+    if command == "terminal send":
+        return {"send": {"accepted": True}}
+    if command == "orchestration send":
+        return {"sent": True}
     if command == "terminal close":
         before = len(state["terminals"])
         state["terminals"] = [item for item in state["terminals"] if item["handle"] != options.get("--terminal")]

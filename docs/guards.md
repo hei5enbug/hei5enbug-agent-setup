@@ -184,6 +184,17 @@ here-document body checks only such substitutions. On Codex, trust the hook in `
   `MemAvailable` on Linux, and is read only after such a command is found. When it cannot be read within one second,
   or on another platform, the command is allowed. Set the option to `0`, `off`, `false`, or `no` to turn the rule off;
   a value that is not a non-negative integer uses 2048. On Codex, set `HEI5ENBUG_SESSION_MEMORY_MIN_MB`.
+- **Model of the session.** The same four starts are denied when they name no model, or name `claude-fable-5-2`,
+  `fable`, or `gpt-6-astra` while the user's latest prompt in the session does not name that model. The denial gives the
+  model and effort for each role, as "Session placement" in `instructions/cross-repository.md` sets them, and the
+  flags that carry them: `--model` and `--effort` for the three Orca commands and inside a `claude` command, and `-m`
+  and `-c model_reasoning_effort="<level>"` inside a `codex` command. The hook reads the latest prompt from the
+  transcript, in Claude Code or Codex format, and skips tool results, compaction summaries, and injected context; when
+  it cannot read it, Fable and Astra count as not named. The memory and placement denies take precedence when both
+  apply. A start that the user types or makes in the Orca window is not a tool call, so the hook never sees it. The
+  plugin's role runner and plugin agents are not session starts, and their pinned models stay. It exists because on
+  2026-11-17 a session handed an issue to a new Claude Code session with no model, and the host started it on
+  `claude-fable-5-2`.
 
 ## Orca status
 

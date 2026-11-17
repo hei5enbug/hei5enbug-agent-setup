@@ -29,10 +29,12 @@ workspace 아래에 두며, 다른 저장소의 worktree 아래에는 절대 두
   id:<repoId>::<clone path> --reference <issue link> --json`으로 worktree를 만들고, 다른 저장소 작업의 4단계를 적용한
   뒤 `orca worktree list`에서 브랜치를 확인하고 표시 이름을 설정한다. 그 뒤에만 worker를 시작해 브랜치가 확정되기 전에
   실행되지 않게 한다.
-  `orca orchestration worker-start --worktree path:<worktree path> --agent <host> --run <run id> --task-title
-  "<ticket key> <repository>" --spec-file <brief file> --json`을 사용하고, 다른 저장소 작업의 6단계대로 작업 요약을 쓴다.
-- 나중에 참여하는 세션은 같은 방식으로 `--agent <host>`를 붙여 worktree를 만들고, 다른 저장소 작업과 같은 방식으로
-  인수인계하며, Run을 통해 조정자에게 알린다.
+  `orca orchestration worker-start --worktree path:<worktree path> --agent <host> --model <id> --effort <level>
+  --run <run id> --task-title "<ticket key> <repository>" --spec-file <brief file> --json`을 사용하고, 다른 저장소 작업의
+  6단계대로 작업 요약을 쓴다. 구성원은 범위가 한정된 변경을 하고 Run으로 보고하므로 `<id>`와 `<level>`은
+  [다른 저장소 작업](cross-repository.ko.md)의 "세션 위치"에 있는 구현 worker 행에서 가져온다.
+- 나중에 참여하는 세션은 같은 방식으로 `--agent <host> --model <id> --effort <level>`를 붙여 worktree를 만들되 값은
+  "세션 위치"의 표에서 가져오고, 다른 저장소 작업과 같은 방식으로 인수인계하며, Run을 통해 조정자에게 알린다.
 - 다른 구성원을 기다리지 않고 자신의 부분을 끝낼 수 있을 때만 구성원을 시작한다. 다른 구성원이 아직 공유하지 않은
   계약, 스키마, API, 결정이 필요하면 worktree와 worker 모두 만들지 않는다. 상태 표에 해당 항목을 기다리는 것으로
   적고, 그 항목이 공유된 뒤에 시작한다. 그런 의존성이 없는 구성원은 함께 시작한다.

@@ -26,13 +26,28 @@ repository's worktree, also in a task that changes several repositories; the tic
 [Orca worktree groups](orca-groups.md). A plugin hook denies such a parent.
 
 - A session that edits no file runs as a new terminal: in the current worktree for the working repository, or with
-  Orca orchestration `worker-start --worktree current`, and in the target's workspace for another repository.
+  Orca orchestration `worker-start --worktree current --model <id> --effort <level>`, and in the target's workspace
+  for another repository.
 - A session that edits files gets a child worktree through steps 2 to 6 below. With Orca orchestration in the working
-  repository, use `worker-start --worktree new-child --name <branch> --base-branch <base>` and apply step 4; never
-  `new-top-level`.
+  repository, use `worker-start --worktree new-child --name <branch> --base-branch <base> --model <id> --effort
+  <level>` and apply step 4; never `new-top-level`.
 - Create a new worktree for a task in an Orca terminal with `orca worktree create ... --parent-worktree active`, never
   with the host's own worktree tool such as `EnterWorktree`, so that Orca lists it. A plugin hook denies that tool
   when it would create a worktree.
+- A session start is `orca worktree create` with `--agent`, `orca agent launch`, `orca orchestration worker-start`, or
+  `orca terminal create` whose `--command` runs `claude` or `codex`. Every one names the new session's model and
+  effort by the new session's role, unless the user's own latest prompt names a model or effort for it, which then
+  wins:
+
+  | Role of the new session | Claude Code | Codex |
+  |---|---|---|
+  | Implementation worker: a bounded change it is told to make and report back | `claude-sonnet-5-5`, `high` | the `codex_worker_model` and `codex_worker_effort` settings |
+  | Any other session: one that takes over or coordinates work, files an issue, reviews, or whose role is unclear | `claude-opus-5-5`, `high` | `gpt-6.1-sol`, `high` |
+
+  A session an agent starts never uses `claude-fable-5-2`, `fable`, or `gpt-6-astra` unless the user names that model.
+  `--model <id> --effort <level>` carries the pair on the three Orca commands and on a `claude` command. On a `codex`
+  command the pair is `-m <id> -c model_reasoning_effort="<level>"`. A plugin hook denies a start that names no model
+  or one of those two. The plugin's role runner and agents are not session starts, and keep their pinned models.
 - When the plugin denies a session start for low memory, record the handoff as waiting for memory and start it after
   another session of this task finishes or is cleaned up, never polling memory.
 - For a repository that Orca lists no workspace for, create the worktree with a parent, then run
@@ -43,18 +58,23 @@ repository's worktree, also in a task that changes several repositories; the tic
 2. Choose the branch name and base before creating anything, from the first source that covers the target: a loaded
    skill or plugin rule, the target's `AGENTS.md` or `CLAUDE.md`, then a short task-named branch on the repository's
    default base. Fetch the base from its remote first.
-3. `<host>` is `claude` on Claude Code and `codex` on Codex. `<clone>` is the target's path in `orca repo list`, and
+3. `<host>` is `claude` on Claude Code and `codex` on Codex, and `<id>` and `<level>` come from the table in
+   "Session placement": a handoff takes over work, so it takes the row of any other session. In a `--command`, write
+   `codex` with `-m <id> -c model_reasoning_effort="<level>"` for the two flags. `<clone>` is the target's path in `orca repo list`, and
    the target's workspace is the entry with that path in `orca worktree list --repo id:<repoId> --json`. Look for a
    worktree on the chosen branch in `git -C <clone> worktree list --porcelain`, then take the first case that applies:
    - The worktree has its own entry in the Orca list: check `orca terminal list --worktree id:<worktree id> --json`.
      If an agent terminal is open there, ask the user whether to send the brief to it. Otherwise start one with
-     `orca terminal create --worktree id:<worktree id> --command <host> --json` and continue at step 5.
+     `orca terminal create --worktree id:<worktree id> --command "<host> --model <id> --effort <level>" --json` and
+     continue at step 5.
    - The worktree has no entry of its own: it sits inside the workspace, and Orca cannot tell which of the
      workspace's terminals runs in it. Show the user the workspace's terminal titles and ask whether to send the brief
      to one of them or to start a new terminal there with `orca terminal create --worktree id:<workspace id>
-     --title <branch> --command "cd '<worktree path>' && <host>" --json`, then continue at step 5.
+     --title <branch> --command "cd '<worktree path>' && <host> --model <id> --effort <level>" --json`, then continue
+     at step 5.
    - No worktree is on the branch: run `orca worktree create --repo id:<repoId> --name <branch> --base-branch <base>
-     --agent <host> --parent-worktree <parent> --json` with the parent from "Session placement". Pass no `--prompt`.
+     --agent <host> --model <id> --effort <level> --parent-worktree <parent> --json` with the parent from "Session
+     placement". Pass no `--prompt`.
 4. After `orca worktree create`, Orca names the new branch itself, with its configured prefix and `/` replaced. When
    the result's `branch` differs from the chosen name and that branch does not exist yet, run
    `git -C <worktree path> branch -m <branch>`. When it already exists locally or on `origin`, run

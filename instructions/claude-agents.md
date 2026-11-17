@@ -194,6 +194,9 @@ This section adds only the Claude Code worker integration.
 
 ## Codex worker
 
-- Write the assignment, with the usual assignment fields, to a file and run the `worker` role.
+- Write the assignment, with the usual assignment fields, to a file and run the `worker` role. It runs on the
+  `codex_worker_model` and `codex_worker_effort` settings that the implementation row of
+  [shared model routing](model-routing.md) lists, and on their defaults when no setting is saved or one is invalid;
+  never pass `--model` for it.
 - Add `--add-dir <dir>` only for a directory outside the session folder that the task must write. The plugin mod
   asks once per session.
