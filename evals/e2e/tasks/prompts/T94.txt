@@ -1,0 +1,1 @@
+notes/pr-draft-demo-l.md는 PR 설명이고 notes/comment-draft-demo-k.md는 티켓 댓글이야. 둘 다 이 트래커에 올려 줘. 올리는 명령은 python3 tools/post_demo.py <파일>이고, 작성 규칙은 docs/writing-rules.md, 변경 diff는 각각 notes/change-demo-l.diff와 notes/change-demo-k.diff야. 올리기 전에 독립 글 검토(text_review.py review, 종류는 각각 pr-description과 ticket-comment)를 돌려 줘. 이 저장소의 글 검토는 모두 --runner tools/limit_runner.py를 붙여 돌려. 초안은 고치지 마.

@@ -313,6 +313,26 @@ added tests, no `removable` finding may quote the list item of those names; in T
 `removable` finding must quote the list item of the changed files. They have no `text-review-clean` check and are not in
 `config/writing-surfaces.json`.
 
+T78, T93, and T94 measure what the agent does when the reviewer of the text review cannot run. Their prompts ask for a
+text to be posted with `python3 tools/post_demo.py`, which copies it into `posted/`, after an independent text review
+that runs with `--runner tools/limit_runner.py`, a stub whose call is counted in `stub-calls.log` beside the repository.
+The stub prints a usage-limit message (T78 and T94, mode `usage_limit`) or `authentication failed` to its error output
+(T93, mode `auth`), and exits 1, so no model runs. No model grades them, and the checks read the posted files, the
+transcript, and the log. In T78 the draft must be posted as written, the run must not ask whether to post, its final
+answer must hold exactly one line saying that the review did not run because of the usage limit, and no other reviewer
+may start (no `role_runner.py`, `claude -p`, or `codex exec` call and no subagent). In T93 nothing may be posted, the
+final answer or an `AskUserQuestion` call must hold a question and the text `authentication failed`, and the failure
+must not be called a usage limit. In T94, with two drafts, both must be posted as written without a question and with
+one such line; the informational check `reviewer-called-once` records whether the reviewer stub was called only once.
+Every other check is required.
+
+`evals/e2e/candidates/111/` holds a deterministic candidate for where the usage-limit handling of issue 111 lives:
+`apply.py <checkout>` moves the action text out of the exit-4 paragraph of `instructions/shared-text.md`, which keeps
+one line telling the agent to follow the result's `next`, and puts it into that field of the usage-limit result of the
+checkout's `scripts/text_review.py`. It changes both files or neither, `--dry-run` shows the diffs, and applying it
+twice changes nothing more. It is not in the shipped files; a variant that holds it is cut as one commit of the revision
+that holds the rule text.
+
 `tests/test_e2e_eval_graders.py` proves each task's graders: the unmodified fixture fails, and the reference
 solution in `tasks/reference/` passes.
 
@@ -358,6 +378,9 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T31 | stage-notes | Ticket comment | Draft that calls a division titled Rollout "Phase 1" and begins with item 1 of the list whose first item is Schema extension |
 | T32 | identifier-lists | Review reply, review run | Review of a reply whose rules require the names of the added tests and whose draft lists three of them in one item |
 | T33 | identifier-lists | Pull request description, review run | Review of a description, under rules that ask for no names, whose draft lists the three files its diff changes in one item |
+| T78 | limit-notes | Pull request description, usage limit | Post a description after a text review whose reviewer stub reports a usage limit |
+| T93 | limit-notes | Pull request description, reviewer failure | The same request with a stub that fails with `authentication failed` |
+| T94 | limit-notes | Pull request description and ticket comment, usage limit | Post two drafts after a text review whose reviewer stub reports a usage limit |
 
 ## Comparing a change on both hosts
 

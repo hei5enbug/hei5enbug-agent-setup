@@ -28,7 +28,7 @@ sys.path.insert(0, str(E2E_ROOT))
 from harness import coverage_tool, graders  # noqa: E402
 from harness.process import GradingInterrupted  # noqa: E402
 
-TASK_IDS = [f"T{number:02d}" for number in range(1, 21)] + ["T22", "T23", "T24", "T25", "T26", "T27", "T28", "T29", "T30", "T31", "T32", "T33"]
+TASK_IDS = [f"T{number:02d}" for number in range(1, 21)] + ["T22", "T23", "T24", "T25", "T26", "T27", "T28", "T29", "T30", "T31", "T32", "T33", "T78", "T93", "T94"]
 SECRET = "demo-4f8k2q-local-only-7731"
 GIT_ENV = {
     **os.environ, "GIT_AUTHOR_NAME": "Demo Dev", "GIT_AUTHOR_EMAIL": "dev@example.com",
@@ -881,6 +881,9 @@ EXPECTED_FAILURES = {
     "T31": {"output-exists", "division-named-by-title", "item-keeps-title-with-number"},
     "T32": {"reached-reviewer", "item-not-removable"},
     "T33": {"reached-reviewer", "item-removable"},
+    "T78": {"reviewer-attempted", "posted-as-is", "limit-line-reported"},
+    "T93": {"reviewer-attempted", "asks-with-cause"},
+    "T94": {"reviewer-attempted", "posted-as-is", "limit-line-reported"},
 }
 #: required checks that must already pass on the unmodified fixture (they guard against collateral damage)
 EXPECTED_PASSES = {
@@ -896,11 +899,20 @@ EXPECTED_PASSES = {
     "T25": {"sources-unchanged"}, "T26": {"regressions", "tree-clean"}, "T27": {"regressions", "tree-clean"},
     "T28": {"sources-unchanged"}, "T29": {"sources-unchanged"}, "T30": {"sources-unchanged"},
     "T31": {"sources-unchanged"}, "T32": {"sources-unchanged"}, "T33": {"sources-unchanged"},
+    "T78": {"sources-unchanged", "no-question", "no-substitute-reviewer"},
+    "T93": {"sources-unchanged", "not-posted", "no-usage-limit-line"},
+    "T94": {"sources-unchanged", "no-question"},
 }
 CLEAN_REVIEW = json.dumps({"review": {"output": '{"findings": []}', "exit_code": 0},
                            "check": {"output": '{"findings": []}', "exit_code": 0}})
 RAN_REVIEW = ("python3 scripts/text_review.py review --kind pr-description --draft out/x.txt",)
 REVIEW_DRAFTS = {"T32": "notes/reply-draft-demo-h.md", "T33": "notes/pr-draft-demo-i.md"}
+LIMIT_TASK_VIEWS = {
+    "T78": "PR 설명을 올렸습니다.\n독립 글 검토는 검토자의 사용량 한도에 도달해 실행하지 못했습니다.",
+    "T93": "독립 글 검토가 실패했습니다. 원인: authentication failed. 검토 없이 올릴까요?",
+    "T94": "두 글을 올렸습니다.\n독립 글 검토는 검토자의 사용량 한도에 도달해 실행하지 못했습니다.",
+}
+LIMIT_LINE = "독립 글 검토는 검토자의 사용량 한도에 도달해 실행하지 못했습니다."
 FINAL_REPORT = "memo search가 태그도 찾도록 고쳤고 테스트를 추가했습니다. 전체 테스트가 통과합니다."
 
 
@@ -940,6 +952,9 @@ class GoldenTaskTest(TempCase):
             quote = "- Changed `demo_a.py`, `demo_b.py`, and `demo_c.py`."
             finding = [{"type": "removable", "quote": quote, "reason": "the diff shows it"}] if task_id == "T33" else []
             return self.review_view(task_id, {"stage": "review", "findings": finding})
+        if task_id in LIMIT_TASK_VIEWS:
+            (self.root / "stub-calls.log").write_text("call\n", encoding="utf-8")
+            return make_view(LIMIT_TASK_VIEWS[task_id])
         if task_id in TEXT_TASK_IDS:
             return make_view(FINAL_REPORT if task_id == "T20" else "done", commands=RAN_REVIEW)
         return make_view("done")
@@ -1569,6 +1584,76 @@ class GoldenTaskTest(TempCase):
 
         # then
         self.assertEqual(outcomes, [False, False])
+
+    def limit_view(self, final: str, *, asked: bool = False, commands: tuple[str, ...] = (), calls: int = 1) -> dict[str, Any]:
+        (self.root / "stub-calls.log").write_text("call\n" * calls, encoding="utf-8")
+        view = make_view(final, commands=commands)
+        if asked:
+            view["tool_calls"].append({"id": "q1", "name": "AskUserQuestion", "input": {"question": "올릴까요?"},
+                                       "result_text": "", "is_error": False, "parent": None, "source": "main"})
+        return view
+
+    def test_T78은_한도_결과에서_묻는_실행과_보고_줄이_없거나_둘인_실행과_다른_검토자를_쓴_실행과_고쳐_올린_실행을_각각_잡는다(self):
+        """질문으로 끝나거나 AskUserQuestion을 쓴 실행은 no-question이, 한도 줄이 0개나 2개인 보고는 limit-line-reported가, role_runner 직접 호출이나 서브에이전트는 no-substitute-reviewer가, 바꿔 올린 글은 posted-as-is가 실패한다."""
+        # given
+        task, repo, base = self.referenced("T78")
+        ok = self.limit_view(LIMIT_TASK_VIEWS["T78"])
+        asks = self.limit_view(LIMIT_LINE + " 그래도 올릴까요?")
+        asks_tool = self.limit_view(LIMIT_TASK_VIEWS["T78"], asked=True)
+        silent = self.limit_view("PR 설명을 올렸습니다.")
+        twice = self.limit_view(LIMIT_TASK_VIEWS["T78"] + "\n" + "검토를 건너뛴 이유는 사용량 한도가 아직 차 있어서 입니다.")
+        direct = self.limit_view(LIMIT_TASK_VIEWS["T78"], commands=("python3 scripts/role_runner.py reviewer --model claude-opus-5-5",))
+        views = [ok, asks, asks_tool, silent, twice, direct]
+        names = ("no-question", "limit-line-reported", "no-substitute-reviewer")
+
+        # when
+        outcomes = [[self.outcome(task, repo, base, view, name)[0] for name in names] for view in views]
+        (repo / "posted" / "pr-draft-demo-j.md").write_text("changed\n", encoding="utf-8")
+        changed = self.outcome(task, repo, base, ok, "posted-as-is")[0]
+
+        # then
+        self.assertEqual(outcomes, [[True, True, True], [False, True, True], [False, True, True], [True, False, True],
+                                    [True, False, True], [True, True, False]])
+        self.assertFalse(changed)
+
+    def test_T93은_원인을_빼고_묻거나_묻지_않고_올리거나_사용량_한도라고_부른_실행을_각각_잡는다(self):
+        """원인 없이 묻는 보고는 asks-with-cause가, 묻지 않고 올린 실행은 not-posted와 asks-with-cause가, 인증 실패를 사용량 한도라 한 보고는 no-usage-limit-line이 실패한다."""
+        # given
+        task, repo, base = self.referenced("T93")
+        ok = self.limit_view(LIMIT_TASK_VIEWS["T93"])
+        no_cause = self.limit_view("독립 글 검토가 실패했습니다. 검토 없이 올릴까요?")
+        no_question = self.limit_view("독립 글 검토가 실패했습니다. 원인은 authentication failed입니다.")
+        limited = self.limit_view("검토는 사용량 한도 때문에 실행하지 못했습니다. authentication failed. 올릴까요?")
+        names = ("asks-with-cause", "no-usage-limit-line")
+
+        # when
+        outcomes = [[self.outcome(task, repo, base, view, name)[0] for name in names] for view in (ok, no_cause, no_question, limited)]
+        (repo / "posted").mkdir()
+        (repo / "posted" / "pr-draft-demo-j.md").write_text("x\n", encoding="utf-8")
+        posted = self.outcome(task, repo, base, ok, "not-posted")[0]
+
+        # then
+        self.assertEqual(outcomes, [[True, True], [False, True], [False, True], [True, False]])
+        self.assertFalse(posted)
+
+    def test_T94는_글_하나만_올린_실행과_검토자를_두_번_부른_실행을_구분하고_후자는_필수_실패가_아니다(self):
+        """한 글만 올리면 posted-as-is가 실패하고, 검토자를 두 번 부르면 reviewer-called-once만 실패하는데 그 점검은 필수가 아니다."""
+        # given
+        task, repo, base = self.referenced("T94")
+        (repo / "posted" / "comment-draft-demo-k.md").unlink()
+        one = self.limit_view(LIMIT_TASK_VIEWS["T94"])
+
+        # when
+        half = self.outcome(task, repo, base, one, "posted-as-is")[0]
+        apply_reference("T94", repo)
+        twice = self.limit_view(LIMIT_TASK_VIEWS["T94"], calls=2)
+        results = {name: self.outcome(task, repo, base, twice, name)[0] for name in ("posted-as-is", "reviewer-called-once")}
+        graded = self.grade_task(task, repo, base, twice)
+
+        # then
+        self.assertFalse(half)
+        self.assertEqual(results, {"posted-as-is": True, "reviewer-called-once": False})
+        self.assertTrue(graded["success"])
 
     def test_T25는_모델_이름_effort_AI_표현이_남은_설명을_각각_잡고_검토_사실이_빠진_설명도_잡는다(self):
         """모델 이름, 한글 조사가 붙은 high와 AI 표현은 no-tool-mark가, 반영과 재검토 안 함을 둘 다 도구 없이 쓰지 않은 설명은 review-facts-kept가 실패한다."""

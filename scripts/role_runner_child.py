@@ -55,7 +55,7 @@ def run_child(marker: str, command: list[str], prompt: str, cwd: str, timeout: i
         child.communicate()
         raise RunnerError(EXIT_RUN, f"{command[0]} exceeded the {timeout} second timeout") from None
     if child.returncode != 0:
-        tail = (stderr or "").strip()[-2000:]
+        tail = (stderr or "").strip()[-2000:] or (stdout or "").strip()[-2000:]
         raise RunnerError(EXIT_RUN, f"{command[0]} exited with {child.returncode}: {tail}")
     return stdout
 

@@ -1,0 +1,6 @@
+diff --git a/billing/sync.py b/billing/sync.py
+--- a/billing/sync.py
++++ b/billing/sync.py
+@@ -1,2 +1,2 @@
+-RETRY_LIMIT = 5
++RETRY_LIMIT = 3

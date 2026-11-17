@@ -30,12 +30,12 @@ FAKE_RUNNER = textwrap.dedent(
     with open(os.path.join(out, "started"), "a") as handle:
         handle.write("1\\n")
     mode = os.environ["FAKE_MODE"]
-    if mode in ("split", "split3"):
+    if mode in ("split", "split3", "splitlimit", "splitmixed"):
         try:
             os.close(os.open(os.path.join(out, "first"), os.O_CREAT | os.O_EXCL))
-            mode = "findings" if mode == "split" else "exit3"
+            mode = {"split": "findings", "split3": "exit3"}.get(mode, "usage")
         except FileExistsError:
-            mode = "none"
+            mode = {"splitmixed": "auth"}.get(mode, "none")
     with open(os.path.join(out, "argv.json"), "w") as handle:
         json.dump(argv, handle)
     with open(os.path.join(out, "cwd.json"), "w") as handle:
@@ -54,6 +54,14 @@ FAKE_RUNNER = textwrap.dedent(
         open(value("--result"), "w").write("```json\\n{not json\\n```\\n")
     elif mode == "badtype":
         open(value("--result"), "w").write('```json\\n{"findings": [{"type": "other", "quote": "a", "reason": "b"}]}\\n```\\n')
+    if mode == "usage":
+        print(os.environ.get("FAKE_LIMIT_TEXT", "You have reached your usage limit"), file=sys.stderr if os.environ.get("FAKE_LIMIT_STDERR") else sys.stdout)
+        sys.exit(1)
+    if mode == "auth":
+        print("authentication failed", file=sys.stderr)
+        sys.exit(1)
+    if mode == "silent":
+        sys.exit(1)
     print(json.dumps({"verified": mode != "exit3", "exit": 3 if mode == "exit3" else 0}))
     sys.exit(3 if mode == "exit3" else 0)
     """
@@ -603,6 +611,64 @@ class ReviewTest(unittest.TestCase):
         self.assertIn("error", payload)
         self.assertNotIn("findings", payload)
         self.assertEqual(3, payload["runner"]["exit"])
+
+    def test_실행기가_사용량_한도_메시지를_내고_실패하면_종료_코드_4와_usage_limit_사유와_그_메시지를_낸다(self):
+        """사용량 한도를 다른 검토 실패와 같은 종료 코드 3으로 내면 글을 올릴 때마다 같은 질문을 되풀이한다."""
+        messages = [("You have reached your usage limit", ""), ("You've hit your usage limit. Try again later.", ""),
+                    ("Claude usage limit reached", "1")]
+        for text, on_stderr in messages:
+            with self.subTest(text=text, on_stderr=bool(on_stderr)):
+                # given
+                env = {"FAKE_LIMIT_TEXT": text, "FAKE_LIMIT_STDERR": on_stderr}
+                # when
+                result = run_script("review", "--kind", "pr-description", "--draft", str(self.draft), "--runner",
+                                    str(self.runner), env={"FAKE_OUT": str(self.out), "FAKE_MODE": "usage", **env})
+                # then
+                payload = json.loads(result.stdout)
+                self.assertEqual(4, result.returncode, result.stdout)
+                self.assertEqual("usage_limit", payload["reason"])
+                self.assertIn(text, payload["error"])
+                self.assertNotIn("findings", payload)
+
+    def test_사용량_한도가_아닌_실행기_실패는_종료_코드_3으로_내고_표준_오류의_원인을_담는다(self):
+        """인증 실패를 사용량 한도로 오인해 묻지 않고 올리면 안 되며, 원인이 detail에 보여야 사용자가 조치한다."""
+        # given
+        mode = "auth"
+        # when
+        result = self.review(mode)
+        # then
+        payload = json.loads(result.stdout)
+        self.assertEqual(3, result.returncode)
+        self.assertNotIn("reason", payload)
+        self.assertIn("authentication failed", payload["error"])
+
+    def test_실행기가_아무것도_출력하지_않으면_detail은_출력이_없다고_밝힌다(self):
+        """원인이 빈 채 `exited with 1:`로 끝나면 사용자가 원인을 알 수 없고, 상태 줄만 있어도 그 줄을 원인으로 되풀이하지 않는다."""
+        for mode in ("silent", "exit3"):
+            with self.subTest(mode=mode):
+                # given / when
+                result = self.review(mode)
+                # then
+                payload = json.loads(result.stdout)
+                self.assertEqual(3, result.returncode)
+                self.assertTrue(payload["error"].endswith("the runner gave no output"), payload["error"])
+
+    def test_검토가_둘이고_하나만_사용량_한도이면_종료_코드_3이다(self):
+        """한 검토가 한도가 아닌 이유로 실패하거나 깨끗하게 끝났으면 한도 결과로 건너뛰지 않고 묻는다."""
+        for mode, needle in (("splitlimit", None), ("splitmixed", "authentication failed")):
+            with self.subTest(mode=mode):
+                # given
+                out = self.root / f"out-{mode}"
+                out.mkdir()
+                # when
+                result = run_script("review", "--kind", "pr-description", "--draft", str(self.draft), "--runner",
+                                    str(self.runner), "--reviews", "2", env={"FAKE_OUT": str(out), "FAKE_MODE": mode})
+                # then
+                payload = json.loads(result.stdout)
+                self.assertEqual(3, result.returncode, result.stdout)
+                self.assertNotIn("reason", payload)
+                if needle:
+                    self.assertIn(needle, payload["error"])
 
     def test_결과_파일이_없거나_해석할_수_없으면_통과로_보지_않고_종료_코드_3을_낸다(self):
         # given

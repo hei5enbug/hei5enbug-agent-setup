@@ -1,0 +1,8 @@
+diff --git a/billing/refund.py b/billing/refund.py
+--- a/billing/refund.py
++++ b/billing/refund.py
+@@ -4,2 +4,4 @@
+ def refund(charge, amount):
++    if amount > charge.amount:
++        raise ValueError("refund exceeds the charge")
+     return charge.pay_back(amount)

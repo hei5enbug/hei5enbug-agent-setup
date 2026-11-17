@@ -2968,3 +2968,31 @@ class CodexHookAutoTrustTest(unittest.TestCase):
         # Then
         heal.assert_not_called()
         self.assertEqual(1, preflight.call_count)
+
+
+class ChildFailureDetailTest(unittest.TestCase):
+    def failure(self, script: str) -> str:
+        import role_runner_child
+
+        with self.assertRaises(role_runner.RunnerError) as caught:
+            role_runner_child.run_child("demo", [sys.executable, "-c", script], "", os.getcwd(), 30)
+        return str(caught.exception)
+
+    def test_자식이_표준_출력에만_원인을_쓰고_실패하면_그_끝부분을_오류에_담는다(self):
+        """codex가 사용량 한도 같은 원인을 표준 출력에만 쓰고 1로 끝나면 오류가 `exited with 1:`에서 끊기지 않는다."""
+        # given
+        script = "print('You have reached your usage limit'); raise SystemExit(1)"
+        # when
+        message = self.failure(script)
+        # then
+        self.assertIn("exited with 1: You have reached your usage limit", message)
+
+    def test_자식이_표준_오류에도_쓰면_표준_오류만_오류에_담는다(self):
+        """표준 오류 원인이 있으면 표준 출력의 긴 이벤트 줄이 그 앞을 가리지 않는다."""
+        # given
+        script = "import sys; print('event noise'); sys.stderr.write('authentication failed'); raise SystemExit(1)"
+        # when
+        message = self.failure(script)
+        # then
+        self.assertIn("exited with 1: authentication failed", message)
+        self.assertNotIn("event noise", message)

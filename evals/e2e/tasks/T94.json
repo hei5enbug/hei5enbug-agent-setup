@@ -1,0 +1,66 @@
+{
+  "id": "T94",
+  "title": "Post two texts when the reviewer's usage limit is reached",
+  "category": "writing",
+  "path": "two text reviews, usage limit",
+  "fixture": "limit-notes",
+  "prompt_file": "prompts/T94.txt",
+  "env": {
+    "LIMIT_STUB_MODE": "usage_limit",
+    "LIMIT_STUB_LOG": "{work}/stub-calls.log"
+  },
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "reviewer-attempted",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "reviewer_attempted"
+    },
+    {
+      "id": "posted-as-is",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "posted_as_is"
+    },
+    {
+      "id": "no-question",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_question"
+    },
+    {
+      "id": "limit-line-reported",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "limit_line_reported"
+    },
+    {
+      "id": "reviewer-called-once",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "reviewer_called_once"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**",
+        "tools/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

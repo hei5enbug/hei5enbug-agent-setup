@@ -23,7 +23,10 @@ DEFAULT_REVIEWS = 1
 RUNNER_GRACE_SECONDS = 60
 RUNNER_TIMEOUT_STAGES = 4
 FINAL_REPORT_KIND = "final-report"
-EXIT_OK, EXIT_FINDINGS, EXIT_USAGE, EXIT_REVIEW_FAILED = 0, 1, 2, 3
+EXIT_OK, EXIT_FINDINGS, EXIT_USAGE, EXIT_REVIEW_FAILED, EXIT_USAGE_LIMIT = 0, 1, 2, 3, 4
+REASON_USAGE_LIMIT = "usage_limit"
+RUNNER_DETAIL_TAIL = 500
+USAGE_LIMIT = re.compile(r"usage limit|(?:hit|reached) your (?:\w+ ){0,2}limit|\bout of (?:extra )?usage", re.IGNORECASE)
 FINDING_TYPES = ("removable", "missing", "ambiguous")
 LINE_TEXT_LIMIT = 160
 IDENTIFIER_MAX_LENGTH = 80
@@ -149,9 +152,10 @@ class TextReviewError(Exception):
 
 
 class ReviewFailure(TextReviewError):
-    def __init__(self, message: str, runner: dict) -> None:
+    def __init__(self, message: str, runner: dict, usage_limit: bool = False) -> None:
         super().__init__(message, EXIT_REVIEW_FAILED)
         self.runner = runner
+        self.usage_limit = usage_limit
 
 
 def read_input(path: str) -> str:
@@ -354,6 +358,19 @@ def parse_status(stdout: str) -> bool | None:
     return None
 
 
+def without_status_line(stdout: str) -> str:
+    lines = stdout.rstrip().splitlines()
+    if lines and parse_status(lines[-1]) is not None:
+        lines.pop()
+    return "\n".join(lines)
+
+
+def runner_failure(code: int, stderr: str, stdout: str) -> str:
+    parts = [f"{label}: {text.strip()[-RUNNER_DETAIL_TAIL:]}"
+             for label, text in (("error output", stderr), ("standard output", without_status_line(stdout))) if text.strip()]
+    return f"the runner exited with {code}: " + ("; ".join(parts) if parts else "the runner gave no output")
+
+
 def parse_result(text: str) -> dict:
     blocks = JSON_FENCE.findall(text)
     candidate = blocks[-1][1] if blocks else text
@@ -400,9 +417,10 @@ def run_reviewer(args: argparse.Namespace, assignment: str, model: str) -> dict:
         except (OSError, subprocess.TimeoutExpired) as error:
             raise TextReviewError(f"the runner did not finish: {error}", EXIT_REVIEW_FAILED) from error
         runner = {"exit": done.returncode, "verified": parse_status(done.stdout)}
+        if done.returncode != 0:
+            raise ReviewFailure(runner_failure(done.returncode, done.stderr, done.stdout), runner,
+                                USAGE_LIMIT.search(f"{done.stderr}\n{done.stdout}") is not None)
         try:
-            if done.returncode != 0:
-                raise TextReviewError(f"the runner exited with {done.returncode}: {done.stderr.strip()[-500:]}", EXIT_REVIEW_FAILED)
             if not result_file.is_file():
                 raise TextReviewError("the runner wrote no result file", EXIT_REVIEW_FAILED)
             return {**parse_result(result_file.read_text(encoding="utf-8")), "runner": runner}
@@ -486,8 +504,9 @@ def command_review(args: argparse.Namespace) -> int:
         emit({**base, "findings": findings, "over_budget_facts": facts, **status, **({"errors": errors} if errors else {})})
         return EXIT_FINDINGS
     if errors:
-        emit({**base, "error": "; ".join(errors), **status})
-        return EXIT_REVIEW_FAILED
+        limited = all(outcome.get("usage_limit") for outcome in outcomes)
+        emit({**base, **({"reason": REASON_USAGE_LIMIT} if limited else {}), "error": "; ".join(errors), **status})
+        return EXIT_USAGE_LIMIT if limited else EXIT_REVIEW_FAILED
     emit({**base, "findings": [], "over_budget_facts": facts, **status, **passed_digest(args.kind, draft)})
     return EXIT_OK
 
@@ -496,7 +515,7 @@ def review_once(args: argparse.Namespace, assignment: str, model: str) -> dict:
     try:
         return run_reviewer(args, assignment, model)
     except ReviewFailure as failure:
-        return {"error": str(failure), "runner": failure.runner}
+        return {"error": str(failure), "runner": failure.runner, "usage_limit": failure.usage_limit}
     except (TextReviewError, OSError) as failure:
         return {"error": str(failure), "runner": NO_RUNNER}
 

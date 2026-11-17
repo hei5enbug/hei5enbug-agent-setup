@@ -1,0 +1,9 @@
+diff --git a/billing/export.py b/billing/export.py
+--- a/billing/export.py
++++ b/billing/export.py
+@@ -10,3 +10,5 @@
+ def export_invoice(invoice):
+-    return render(invoice.lines)
++    if not invoice.lines:
++        return ""
++    return render(invoice.lines)

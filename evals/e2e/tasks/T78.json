@@ -1,0 +1,66 @@
+{
+  "id": "T78",
+  "title": "Post a description when the reviewer's usage limit is reached",
+  "category": "writing",
+  "path": "pr-description text review, usage limit",
+  "fixture": "limit-notes",
+  "prompt_file": "prompts/T78.txt",
+  "env": {
+    "LIMIT_STUB_MODE": "usage_limit",
+    "LIMIT_STUB_LOG": "{work}/stub-calls.log"
+  },
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "reviewer-attempted",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "reviewer_attempted"
+    },
+    {
+      "id": "posted-as-is",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "posted_as_is"
+    },
+    {
+      "id": "no-question",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_question"
+    },
+    {
+      "id": "limit-line-reported",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "limit_line_reported"
+    },
+    {
+      "id": "no-substitute-reviewer",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "no_substitute_reviewer"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**",
+        "tools/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}
