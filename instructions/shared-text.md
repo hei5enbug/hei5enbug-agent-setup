@@ -68,7 +68,8 @@ item's body and its whole comment or reply history.
 
 Before posting text to an external system, writing a file another person reads, or sending a final report, run this
 after the passes above. A final report is the reply that ends a task by reporting its result, not a short answer or a
-question. Never count a check you record about your own draft as this review.
+question. A final report under 400 characters, after trimming, needs no review and no `text_review.py` run at all; one
+of 400 characters or more needs this review. Never count a check you record about your own draft as this review.
 
 ```text
 python3 <Source directory>/scripts/text_review.py review --kind <kind> --draft <file> --rules <file>... --source <file>...

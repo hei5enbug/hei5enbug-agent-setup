@@ -235,6 +235,8 @@ Claude Code 전용 `Stop` 훅인 `scripts/final_report_hook.py`는 변경 뒤에
   `python3` 뒤에 붙은 실행도 셉니다.
 - `last_assistant_message`가 보고입니다. 앞뒤 공백을 뺀 길이가 400자 이상이고, 비어 있지 않은 마지막 줄이 `?`나
   `？`로 끝나지 않습니다.
+  `instructions/shared-text.md`의 글 규칙도 두 호스트에 같은 400자를 적으며, 둘이 다르면
+  `tests/test_final_report_threshold.py`가 실패합니다.
 
 이유는 네 문장 이내이며, 이 턴이 파일을 바꿨고 어떤 텍스트 검토도 확인하지 않은 최종 보고로 끝난다고 말하고, 플러그인의
 `instructions/shared-text.md`의 "Independent text review" 절과 `text_review.py review --kind final-report --draft <file> ...`

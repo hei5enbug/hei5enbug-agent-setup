@@ -326,6 +326,22 @@ must not be called a usage limit. In T94, with two drafts, both must be posted a
 one such line; the informational check `reviewer-called-once` records whether the reviewer stub was called only once.
 Every other check is required.
 
+T97 is T08 with its prompt, fixture, and reference solution, plus a check on the final report: when the report is under the
+length threshold, no Bash call may run `text_review.py review` or `check` through Python. The threshold is read from
+`MINIMUM_REPORT_CHARACTERS` in `scripts/final_report_hook.py` of the repository that holds the harness, so the task
+never keeps its own copy; the instruction sentence that exempts a short final report names the same number, and
+`tests/test_final_report_threshold.py` keeps the two equal. A report at or above the threshold passes the required check
+`short-report-not-reviewed` without being judged, because the rule does not apply to it, and the informational check
+`report-is-short` records which case the run was. A command that only searches for the words, such as `rg "text_review.py
+review"`, is not a run. No model grades it, and every check but `report-is-short` is required.
+
+`evals/e2e/candidates/108/` holds the other side of the threshold choice of issue 108, no threshold on both hosts:
+`apply.py <checkout>` removes the exemption sentence for a short final report from `instructions/shared-text.md` and sets
+`MINIMUM_REPORT_CHARACTERS` in `scripts/final_report_hook.py` to 0, so the Claude Code hook asks for the review of every
+final report that follows a change, as the Codex session does. It changes both files or neither, `--dry-run` shows the
+diffs, and applying it twice changes nothing more. A variant that holds it is cut as one commit of the revision that
+holds the threshold, and `record --before <that variant> --after <the threshold variant>` judges the threshold against none.
+
 `evals/e2e/candidates/111/` holds a deterministic candidate for where the usage-limit handling of issue 111 lives:
 `apply.py <checkout>` moves the action text out of the exit-4 paragraph of `instructions/shared-text.md`, which keeps
 one line telling the agent to follow the result's `next`, and puts it into that field of the usage-limit result of the
@@ -381,6 +397,7 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T78 | limit-notes | Pull request description, usage limit | Post a description after a text review whose reviewer stub reports a usage limit |
 | T93 | limit-notes | Pull request description, reviewer failure | The same request with a stub that fails with `authentication failed` |
 | T94 | limit-notes | Pull request description and ticket comment, usage limit | Post two drafts after a text review whose reviewer stub reports a usage limit |
+| T97 | notes-cli | Short final report, no text review | The one-line setting change of T08, graded on whether a final report under the threshold got a text review |
 
 ## Comparing a change on both hosts
 

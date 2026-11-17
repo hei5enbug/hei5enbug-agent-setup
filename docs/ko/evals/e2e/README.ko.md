@@ -298,6 +298,20 @@ T78, T93, T94는 글 검토의 검토자가 실행되지 못할 때 에이전트
 그대로 올리고 그런 줄을 하나만 적어야 하며, 참고용 검사 `reviewer-called-once`가 검토자 스텁이 한 번만 불렸는지 기록한다. 나머지
 검사는 모두 필수다.
 
+T97은 T08의 프롬프트, 픽스처, 기준 해답에 최종 보고 검사를 더한 작업이다. 보고가 길이 기준 미만이면 어떤 Bash 호출도 Python으로
+`text_review.py review`나 `check`를 실행하지 않아야 한다. 기준은 하네스가 든 저장소의 `scripts/final_report_hook.py`에 있는
+`MINIMUM_REPORT_CHARACTERS`에서 읽으므로 작업이 자기 사본을 두지 않고, 짧은 최종 보고를 면제하는 지침 문장도 같은 숫자를
+적으며 `tests/test_final_report_threshold.py`가 둘을 같게 지킨다. 기준 이상의 보고는 규칙이 적용되지 않으므로 판단하지 않고
+필수 검사 `short-report-not-reviewed`를 통과하며, 참고용 검사 `report-is-short`가 그 실행이 어느 경우였는지 기록한다. 그
+단어만 찾아보는 `rg "text_review.py review"` 같은 명령은 실행으로 치지 않는다. 어떤 모델도 채점하지 않으며, `report-is-short`를
+뺀 모든 검사가 필수다.
+
+`evals/e2e/candidates/108/`에는 이슈 108의 길이 기준 선택의 반대편인 두 호스트 모두 기준 없음이 들어 있다. `apply.py <checkout>`는
+`instructions/shared-text.md`에서 짧은 최종 보고의 면제 문장을 지우고 `scripts/final_report_hook.py`의
+`MINIMUM_REPORT_CHARACTERS`를 0으로 바꾸므로, Claude Code 훅도 Codex 세션처럼 변경 뒤의 모든 최종 보고에 검토를 요구한다. 두
+파일을 모두 바꾸거나 하나도 바꾸지 않고, `--dry-run`은 diff를 보여 주며, 두 번 적용해도 더 바뀌지 않는다. 이를 가진 변형은 기준을
+가진 개정의 커밋 하나로 만들고, `record --before <그 변형> --after <기준 변형>`이 기준과 기준 없음을 견준다.
+
 `evals/e2e/candidates/111/`에는 이슈 111의 사용량 한도 처리를 어디에 둘지에 대한 결정적 후보가 있다. `apply.py <checkout>`는
 `instructions/shared-text.md`의 종료 코드 4 문단에서 행동 문구를 빼고 결과의 `next`를 따르라는 한 줄만 남기며, 그 문구를 체크아웃의
 `scripts/text_review.py`가 내는 사용량 한도 결과의 그 필드에 넣는다. 두 파일을 함께 바꾸거나 둘 다 바꾸지 않고, `--dry-run`은 diff만
@@ -352,6 +366,7 @@ T78, T93, T94는 글 검토의 검토자가 실행되지 못할 때 에이전트
 | T78 | limit-notes | 풀 리퀘스트 설명, 사용량 한도 | 검토자 스텁이 사용량 한도를 알리는 글 검토 뒤에 설명을 올림 |
 | T93 | limit-notes | 풀 리퀘스트 설명, 검토자 실패 | 스텁이 `authentication failed`로 실패하는 같은 요청 |
 | T94 | limit-notes | 풀 리퀘스트 설명과 티켓 댓글, 사용량 한도 | 검토자 스텁이 사용량 한도를 알리는 글 검토 뒤에 초안 둘을 올림 |
+| T97 | notes-cli | 짧은 최종 보고, 글 검토 없음 | T08의 한 줄 설정 변경을, 길이 기준 미만의 최종 보고가 글 검토를 받았는지로 채점 |
 
 ## 두 호스트에서 변경 비교
 

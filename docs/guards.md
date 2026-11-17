@@ -244,7 +244,8 @@ draft. It continues the turn only when all of these hold:
 - The turn ran no `text_review.py review --kind final-report` and no `text_review.py check --kind final-report`, also
   after `python3`. A review of another kind, such as a document the turn wrote, does not count.
 - `last_assistant_message` is a report: at least 400 characters after stripping, with a last non-empty line that does not
-  end with `?` or `？`.
+  end with `?` or `？`. The text rules in `instructions/shared-text.md` name the same 400 characters for both hosts, and
+  `tests/test_final_report_threshold.py` fails when the two differ.
 
 The reason, at most four sentences, says that this turn changed files and ends with a final report that no text review
 checked, names the plugin's `instructions/shared-text.md` section "Independent text review" and the

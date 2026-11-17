@@ -1,0 +1,86 @@
+{
+  "id": "T97",
+  "title": "One-line configuration edit, short final report",
+  "category": "config",
+  "path": "short final report without a text review",
+  "fixture": "notes-cli",
+  "prompt_file": "prompts/T97.txt",
+  "limits": {
+    "wall_seconds": 600,
+    "max_budget_usd": 4
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "page-size-50",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "config/settings.toml",
+      "pattern": "(?m)^page_size = 50$"
+    },
+    {
+      "id": "only-config-changed",
+      "kind": "only_changed",
+      "required": true,
+      "weight": 1,
+      "allow": [
+        "config/settings.toml"
+      ]
+    },
+    {
+      "id": "one-line-diff",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "single_line_changed"
+    },
+    {
+      "id": "tests-pass",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    },
+    {
+      "id": "short-report-not-reviewed",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "short_report_not_reviewed"
+    },
+    {
+      "id": "report-is-short",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "report_is_short"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "config-only",
+      "text": "Change only config/settings.toml",
+      "keywords": [
+        "settings.toml",
+        "only",
+        "config"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "only-config-changed",
+        "one-line-diff"
+      ]
+    }
+  ],
+  "rubric": null
+}
