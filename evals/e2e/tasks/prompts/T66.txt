@@ -1,0 +1,9 @@
+창고 간 재고 이동 기능을 넣어줘. API는 이렇게 잡자.
+
+StockLedger.transfer(source: str, target: str, sku: str, quantity: int, reference: str = "transfer") -> None
+
+- source와 target이 같으면 ValidationError. 모르는 창고면 UnknownWarehouse이고 source부터 확인해. sku와 quantity는 receive와 같은 규칙으로 검증해.
+- source 창고의 그 sku 수량이 quantity보다 적으면 InsufficientStock(sku, quantity, source의 수량)을 내고 아무것도 바꾸지 마.
+- 이동하면 source에서 빼고 target에 더해. 전체 합계는 그대로여야 해.
+- 감사 로그는 두 건이야. audit.KIND_TRANSFER_OUT = "transfer_out"(warehouse는 source, delta는 -quantity)을 먼저, audit.KIND_TRANSFER_IN = "transfer_in"(warehouse는 target, delta는 +quantity)을 그다음에 남기고, 둘 다 reference는 받은 값을 그대로 써.
+- 테스트도 추가하고, 끝나면 보고해줘.

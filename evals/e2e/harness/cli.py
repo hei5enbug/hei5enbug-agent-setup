@@ -1,4 +1,4 @@
-"""Entry point: run | summarize | regrade | export-plugin | pilot-check | record."""
+"""Entry point: run | summarize | regrade | export-plugin | pilot-check | record | route-record."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path[0] = str(Path(__file__).resolve().parents[1])
 
-from harness import campaign, command, plugin_export, records, summarize  # noqa: E402
+from harness import campaign, command, plugin_export, records, route_record, summarize  # noqa: E402
 from harness.config import DEFAULT_PARALLEL, DEFAULT_RUN_ROOT, EXIT_FAILURE, HOST_CLAUDE, HarnessConfig  # noqa: E402
 from harness.pilot_check import pilot_check  # noqa: E402
 
@@ -66,6 +66,15 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--claim", help="comma-separated measures the change claims to lower: wall_seconds, cost_usd")
     record.add_argument("--tasks", help="comma-separated task ids; default every task with a finished run")
     record.add_argument("--records-dir", type=Path, default=records.RECORDS_DIR)
+    route = sub.add_parser("route-record", help="judge each route variant against the before variant, choose the route, and write the record")
+    add_common(route)
+    route.add_argument("--campaign", required=True)
+    route.add_argument("--issue", type=int, required=True, help="issue number; the record is records/<issue>.json")
+    route.add_argument("--before", required=True, help="variant name of the before side")
+    route.add_argument("--routes", required=True, help="comma-separated variants whose files each force a different route")
+    route.add_argument("--after", help="variant that carries the chosen rule without a forced route; judged against the before variant")
+    route.add_argument("--tasks", help="comma-separated task ids; default every task with a finished run")
+    route.add_argument("--records-dir", type=Path, default=records.RECORDS_DIR)
     return parser
 
 
@@ -122,6 +131,17 @@ def do_record(args: argparse.Namespace, cfg: HarnessConfig) -> int:
     return 0
 
 
+def do_route_record(args: argparse.Namespace, cfg: HarnessConfig) -> int:
+    if args.issue < 1:
+        raise command.ConfigError("--issue takes a positive issue number")
+    routes = route_record.variant_routes(cfg.variants_root, split(args.routes))
+    result = route_record.record_routes(cfg.run_root, args.campaign, args.issue, args.before, routes, split(args.tasks) or None, args.after)
+    path = records.write_record(result["record"], absolute(args.records_dir))
+    sys.stdout.write("".join(f"{line}\n" for line in route_record.report_lines(result)))
+    sys.stdout.write(f"record written: {path.name}\n")
+    return 0
+
+
 def dispatch(args: argparse.Namespace) -> int:
     cfg = config_from(args)
     if args.action == "run":
@@ -130,6 +150,8 @@ def dispatch(args: argparse.Namespace) -> int:
         return do_summarize(args, cfg)
     if args.action == "record":
         return do_record(args, cfg)
+    if args.action == "route-record":
+        return do_route_record(args, cfg)
     if args.action == "regrade":
         return campaign.regrade_campaign(
             cfg, args.campaign, frozenset(split(args.run_ids)), sys.stdout, recollect=args.recollect,

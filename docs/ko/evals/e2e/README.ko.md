@@ -163,6 +163,7 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 | 두 변형 비교 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | 리비전 내보내기만 하기 | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
 | 변경을 판정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
+| 경로 변형을 판정하고, 경로를 고르고, 기록 쓰기 | `python3 evals/e2e/harness/cli.py route-record --campaign <name> --issue <n> --before <variant> --routes <variant>,<variant> [--after <variant>] [--tasks T20,T65,T66]` |
 
 `--parallel`은 동시에 실행할 수를 정한다(기본 3). 변형이 여럿이면 작업과 반복마다 순서를 번갈아(ABAB, 다음은
 BABA) 시간대 영향이 고르게 퍼지게 한다.
@@ -190,6 +191,11 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 우회 플래그, `--bare`, `--permission-mode`, 또는 `--setting-sources`처럼 하네스가 직접 정하는 플래그를 넣은 변형은
 거부한다. `settings`에 무엇이 있어도 설치된 플러그인과 프로필의 모든 플러그인은 꺼진 채로 두고, `env`에 무엇이 있어도
 사용자의 지침 파일과 자동 메모리는 들어오지 않게 한다.
+
+변형은 `route`(`main` 또는 `delegate`)나 `expect_route`도 정할 수 있다. `route`는 두 호스트 모두에서 작업 프롬프트 끝에
+고정된 한국어 문장 하나를 붙여, 세션이 구현을 직접 하거나 구현 워커에 위임하도록 알리고 실행을 그 경로로 채점한다.
+`expect_route`는 아무것도 붙이지 않고 실행을 채점만 하며, 플러그인 문구가 이미 경로를 정한 변형에 쓴다. 둘 다
+`run.json`에 기록되므로 `regrade`도 같은 경로로 채점한다.
 
 ## 실행 기록
 
@@ -243,6 +249,12 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 `claude-opus-5-5`가 대신 채점하고, `rubric.json`에 대체 사실을 기록한다. 채점기가 1800초 뒤에도 실행 중이면 하네스가
 그 프로세스와 그것이 시작한 모든 프로세스를 멈추고, 그 실행의 채점은 `grade_error`로 실패한다.
 
+경로를 정한 변형의 실행에는 하네스가 작업의 검사에 더해 필수 검사 `route-followed`를 하나 더 붙인다. `main`에서는 실행이
+구현 위임을 끝났든 아니든 하나도 하지 않았을 때, 곧 `role_runner.py implementation` 호출도 `worker`나 `sonnet-worker`
+서브에이전트도 없을 때만 통과한다. `delegate`에서는 구현 위임이 하나 이상 끝났을 때만 통과한다. 곧 역할 실행기가 0으로
+끝났거나 에이전트 결과가 오류 없이 돌아온 경우다. 그러므로 경로가 요구한 위임을 건너뛴 실행은 실패하며, `grade.json`에
+시도한 위임과 끝난 위임이 나열된다.
+
 글쓰기 작업(T13~T20)은 완성한 글을 `scripts/text_review.py`로 채점한다. 이 스크립트는 내보낸 플러그인이 아니라
 하네스가 있는 저장소의 것을 쓰고, 스크립트 기본값과 상관없이 `--reviews 1`로 검토자 하나에 기대어
 채점한다. 필수 검사 `text-review-clean`은 종료 코드 0이면 통과한다. 1이면 채점기가 같은 글을 한 번 더 검토하고,
@@ -290,6 +302,8 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 | T19 | ops-notes | 공유 문서 | 1,500자 한도에 1,600자쯤 되는 위키 초안 |
 | T20 | notes-cli | 최종 보고 | 테스트를 더한 작은 변경 후 보고 |
 | T21 | notes-cli | 작업 종료 시 Orca 정리 | 티켓의 설정 한 줄 변경, 가짜 `orca`와 저장소 세 곳의 Git worktree를 심어 둔 상태 |
+| T65 | notes-cli | 경로 측정, 파일 다섯 개 | csv와 markdown 출력의 `memo export`, 새 모듈, 테스트, README와 한국어 미러 |
+| T66 | inventory-service | 경로 측정, 파일 세 개 | 창고 간 `StockLedger.transfer`, 감사 항목 둘, 테스트 |
 
 ## 두 호스트에서 변경 비교
 
@@ -339,6 +353,28 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 | 이슈 | 사례 | 판정 |
 |---|---|---|
 | [#92](../../../../evals/e2e/records/92.json) | T02, T08, T20은 변경 전후, T05, T07, T09, T12는 항목 6 규칙을 위해 변경 후 | 실패: Claude Code의 T08과 Codex의 T20. 이 사례들이 읽는 플러그인 파일이 바뀌지 않았으므로 소유자가 2026-11-14에 변경을 채택했다. 후속 이슈는 #105, #86, #106이다. |
+
+## 경로 측정
+
+세 개에서 다섯 개 파일을 바꾸는 변경을 메인 세션이 직접 하는 쪽과 구현 워커에 맡기는 쪽 중 어느 경로가 더 잘 끝내는지는
+T20, T65, T66에서 두 호스트로 측정한다. T65와 T66은 깔끔한 해답이 파일을 다섯 개와 세 개 바꾸도록 만들었고, 참고용 검사
+`files-in-range`가 실행이 세 개에서 다섯 개 범위를 벗어났는지 알린다. 변형 `before`(경로 없음), `route-main`,
+`route-delegate`는 플러그인 리비전 하나를 공유하고 경로 문장만 다르며 `--hosts claude,codex`로 돌린다. `route-record`는
+각 경로를 위의 비교 규칙으로 `before`와 비교해 판정한 뒤, 통과한 경로 중에서 `AGENTS.md`의 효율 규칙으로 고른다.
+
+1. 경로는 `before`와의 비교가 통과하고 그 실행이 모두 통과할 때만 남긴다. 비교가 `repeat`이거나 `not measured`이면 선택은
+   측정되지 않은 것이다.
+2. 사례는 호스트별 작업 하나이고, 사례에서 경로의 시간은 그 실행들의 중앙값이다. 어느 사례에서든 남은 가장 빠른 경로보다
+   1.5배를 넘고 60초를 넘게 느린 경로는 뺀다.
+3. 남은 경로 중 통과한 사례당 정가 비용이 가장 낮은 경로를 고른다. 그 비용은 경로의 모든 실행을 포함한다. 가장 낮은 비용과
+   10퍼센트 이내이거나 0.05달러 이내인 비용은 동률이고, 총 시간이 짧은 경로가 이긴다.
+4. 벽시계 시간이나 비용이 없거나, 실행이 없거나, 경로가 둘보다 적으면 선택은 `not measured`다. 통과한 경로가 없으면
+   `no winner`이고 이유가 기록에 남는다.
+
+기록에는 모든 실행, 사례별로 `variant`가 붙은 각 경로의 판정, `routes` 맵, 결정한 단계와 함께 `route_choice`가 들어간다.
+`--after`로 고른 규칙을 담았고 경로를 강제하지 않은 변형을 주면, 변경 뒤 모든 작업이 두 호스트에서 통과하는지가 같은
+기록에서 `before`와 비교해 판정된다. `instructions/session/common.md`의 "Delegation" 규칙 문구는 `route_choice`가 승자를
+정했을 때만 바뀐다.
 
 ## 알려진 한계
 

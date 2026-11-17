@@ -15,6 +15,13 @@ from .config import (
 APPROVER_SCRIPT = HARNESS_DIR / "approval_mcp.py"
 
 
+ROUTES = ("main", "delegate")
+ROUTE_SENTENCES = {
+    "main": "이 작업은 이 세션에서 직접 구현해. 구현을 워커나 다른 에이전트에 맡기지 마.",
+    "delegate": "이 작업의 구현은 구현 워커에 위임하고, 결과를 확인한 뒤 보고해.",
+}
+
+
 class ConfigError(ValueError):
     pass
 
@@ -46,12 +53,16 @@ def validate_variant(variant: Any, name: str = "variant") -> dict[str, Any]:
         raise ConfigError(f"{name}: extra_args may not contain {banned}")
     if variant["name"].endswith("-codex"):
         raise ConfigError(f"{name}: a variant name may not end with '-codex', which marks a Codex run id")
+    for key in ("route", "expect_route"):
+        if variant.get(key) is not None and variant[key] not in ROUTES:
+            raise ConfigError(f"{name}: '{key}' must be one of {', '.join(ROUTES)}")
     models = variant.get("models", {})
     if not isinstance(models, dict) or set(models) - set(HOSTS) or not all(isinstance(v, str) for v in models.values()):
         raise ConfigError(f"{name}: 'models' must map a host ({', '.join(HOSTS)}) to a model name")
     return {"name": variant["name"], "ref": variant["ref"], "settings": dict(variant.get("settings", {})),
             "env": {str(k): str(v) for k, v in variant.get("env", {}).items()}, "extra_args": extra,
-            "models": dict(models)}
+            "models": dict(models),
+            **{key: variant[key] for key in ("route", "expect_route") if variant.get(key)}}
 
 
 def validate_hosts(hosts: list[str]) -> list[str]:
@@ -93,6 +104,18 @@ def task_environment(task: dict[str, Any], repo: Path, work: Path) -> dict[str, 
 
 def read_prompt(tasks_root: Path, task: dict[str, Any]) -> str:
     return (tasks_root / task["prompt_file"]).read_text(encoding="utf-8").strip()
+
+
+def run_prompt(tasks_root: Path, task: dict[str, Any], variant: dict[str, Any]) -> str:
+    """The task prompt, followed by the route sentence when the variant forces a route; `expect_route` only checks the route."""
+    prompt = read_prompt(tasks_root, task)
+    route = variant.get("route")
+    return f"{prompt}\n\n{ROUTE_SENTENCES[route]}" if route else prompt
+
+
+def expected_route(variant: dict[str, Any]) -> str | None:
+    """The route the run is graded against: the forced one, else the one only expected."""
+    return variant.get("route") or variant.get("expect_route")
 
 
 def merge_settings(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any]:

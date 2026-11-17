@@ -1,0 +1,125 @@
+{
+  "id": "T65",
+  "title": "Memo export command across five files",
+  "category": "feature",
+  "path": "implementation that changes three to five files",
+  "fixture": "notes-cli",
+  "prompt_file": "prompts/T65.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 10
+  },
+  "hidden_tests": {
+    "source": "hidden/T65",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 4,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "new-tests",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "new_tests"
+    },
+    {
+      "id": "agent-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    },
+    {
+      "id": "readme-export",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "README.md",
+      "pattern": "(?i)export"
+    },
+    {
+      "id": "mirror-updated",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "docs/ko/README.ko.md",
+      "pattern": "(?i)export|내보내"
+    },
+    {
+      "id": "files-in-range",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "files_in_range"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "korean-mirror",
+      "text": "Update the Korean mirror docs/ko/README.ko.md together with README.md",
+      "keywords": [
+        "ko.md",
+        "docs/ko",
+        "mirror",
+        "미러"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "mirror-updated"
+      ]
+    },
+    {
+      "id": "exact-api",
+      "text": "Use the exact names: notes_cli/export.py, export_memos(memos, fmt), memo export --format csv|markdown --tag",
+      "keywords": [
+        "export_memos",
+        "export.py",
+        "--format"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-tests"
+      ]
+    },
+    {
+      "id": "new-tests",
+      "text": "Add tests for the new behavior under tests/",
+      "keywords": [
+        "test",
+        "테스트"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "new-tests"
+      ]
+    }
+  ],
+  "rubric": null
+}

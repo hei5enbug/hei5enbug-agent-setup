@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from . import codex_host, collect, summarize, transcript
+from . import codex_host, collect, route_choice, summarize, transcript
 from .caps import MODEL_CAP as ALLOWED_MODELS
 from .caps import normalize
 from .command import ConfigError
@@ -28,10 +28,11 @@ UNKNOWN_EFFORT = "not measured"
 VERDICTS = frozenset({PASS, FAIL, REPEAT, NOT_MEASURED, INVESTIGATE, BASELINE, ACCEPT, REJECT, CONTINUE_TO_FIVE, SECOND_PAIR})
 VERDICT_SUBJECTS = frozenset({"quality", "wall_seconds", "cost_usd", "claim"})
 TOP_FIELDS = ("issue", "cases", "variants", "runs", "verdicts")
+TOP_OPTIONAL = ("routes", "route_choice")
 RUN_REQUIRED = ("case", "variant", "host", "models", "checks", "wall_seconds", "cost_usd")
 RUN_OPTIONAL = ("rep", "reviews")
 VERDICT_REQUIRED = ("case", "verdict", "step")
-VERDICT_OPTIONAL = ("measure",)
+VERDICT_OPTIONAL = ("measure", "variant")
 LOCAL_PATH = re.compile(r"(?<![\w.:/-])(?:/[\w.@+-]+){2,}|(?<![\w.])~/|\b[A-Za-z]:[\\/]|(?<![\w.:/-])/(?:Users|home|tmp|var|private|etc)\b")
 
 
@@ -93,7 +94,7 @@ def run_problems(position: str, run: Any, cases: Sequence[str], variants: Mappin
     return problems
 
 
-def verdict_problems(position: str, item: Any, cases: Sequence[str]) -> list[str]:
+def verdict_problems(position: str, item: Any, cases: Sequence[str], variants: Mapping[str, Any] | None = None) -> list[str]:
     if not isinstance(item, Mapping):
         return [f"{position} is not an object"]
     problems = [f"{position} lacks {field}" for field in VERDICT_REQUIRED if field not in item]
@@ -106,6 +107,8 @@ def verdict_problems(position: str, item: Any, cases: Sequence[str]) -> list[str
         problems.append(f"{position} step is empty")
     if "measure" in item and item["measure"] not in VERDICT_SUBJECTS:
         problems.append(f"{position} measure is not a known subject")
+    if "variant" in item and item["variant"] not in (variants or {}):
+        problems.append(f"{position} names a variant that is not in variants")
     return problems
 
 
@@ -114,7 +117,7 @@ def validate_record(record: Any) -> list[str]:
     if not isinstance(record, Mapping):
         return ["the record is not an object"]
     problems = [f"the record lacks {field}" for field in TOP_FIELDS if field not in record]
-    problems += [f"the record has unknown field {field}" for field in record if field not in TOP_FIELDS]
+    problems += [f"the record has unknown field {field}" for field in record if field not in TOP_FIELDS + TOP_OPTIONAL]
     issue = record.get("issue")
     if "issue" in record and not (isinstance(issue, int) and not isinstance(issue, bool) and issue > 0):
         problems.append("issue is not a positive integer")
@@ -140,8 +143,11 @@ def validate_record(record: Any) -> list[str]:
             problems.append(f"{key} is not a non-empty list")
             continue
         for index, item in enumerate(items):
-            extra = (variants or {},) if key == "runs" else ()
-            problems += check(f"{key}[{index}]", item, cases or [], *extra)
+            problems += check(f"{key}[{index}]", item, cases or [], variants or {})
+    if "routes" in record:
+        problems += route_choice.validate_routes(record["routes"], variants or {})
+    if "route_choice" in record:
+        problems += route_choice.validate_choice(record["route_choice"], record["routes"] if isinstance(record.get("routes"), Mapping) else {})
     if any(LOCAL_PATH.search(text) for text in strings(record)):
         problems.append("the record contains an absolute local path")
     return problems
@@ -154,8 +160,9 @@ def check_record(record: Any) -> None:
 
 
 def build_record(issue: int, cases: Sequence[str], variants: Mapping[str, str], runs: Sequence[Mapping[str, Any]],
-                 verdicts: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """The record dict for one comparison; `variants` maps each variant name to its revision."""
+                 verdicts: Sequence[Mapping[str, Any]], extra: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """The record dict for one comparison; `variants` maps each variant name to its revision, and `extra` holds the optional
+    top-level sections (`routes`, `route_choice`)."""
     record = {
         "issue": issue,
         "cases": list(cases),
@@ -163,6 +170,7 @@ def build_record(issue: int, cases: Sequence[str], variants: Mapping[str, str], 
         "runs": [{field: run[field] for field in (*RUN_REQUIRED, *RUN_OPTIONAL) if field in run} for run in runs],
         "verdicts": [{field: item[field] for field in (*VERDICT_REQUIRED, *VERDICT_OPTIONAL) if field in item}
                      for item in verdicts],
+        **(extra or {}),
     }
     check_record(record)
     return record

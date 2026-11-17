@@ -126,7 +126,7 @@ def analyze(
         records = {**records, "extra": codex_host.host_metrics(records)}
     else:
         records = claude_records(spec, run)
-    view = records["view"]
+    view = {**records["view"], **({"route": run["route"]} if run.get("route") else {})}
     write_json(directory / "view.json", view)
     grade, rubric_result, failure = None, None, None
     if run["status"] in FINISHED_STATUSES:
@@ -243,7 +243,7 @@ def execute_run(
 ) -> dict[str, Any]:
     """Run one agent session and return the final run record (also written as run.json)."""
     shutil.rmtree(spec.work_dir, ignore_errors=True)
-    prompt = command.read_prompt(cfg.tasks_root, task)
+    prompt = command.run_prompt(cfg.tasks_root, task, variant)
     codex = spec.host == HOST_CODEX
     argv = write_codex_run_files(spec, variant, prompt, cfg, plugin) if codex else write_run_files(spec, task, variant, prompt, cfg, plugin)
     agent_tmp = spec.work_dir / AGENT_TMP_NAME
@@ -255,6 +255,7 @@ def execute_run(
         "run_id": spec.run_id, "task": spec.task, "variant": spec.variant, "rep": spec.rep, "plugin": plugin,
         "attempts": prior_attempts(spec) + 1, "base_commit": None, "host": spec.host,
         "expected_model": command.main_model(variant, spec.host),
+        **({"route": command.expected_route(variant)} if command.expected_route(variant) else {}),
     }
     try:
         run["base_commit"] = load_graders().materialize_fixture(task, cfg.fixtures_root, cfg.tasks_root, spec.repo)

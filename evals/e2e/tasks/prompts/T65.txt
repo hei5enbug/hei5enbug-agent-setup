@@ -1,0 +1,7 @@
+memo export 서브커맨드를 추가해줘.
+
+- `memo export [--format csv|markdown] [--tag TAG]`는 조건에 맞는 메모를 전부 stdout에 출력해. 기본 형식은 csv이고, --tag는 list와 같게 대소문자를 구분하지 않고 태그로 걸러.
+- 변환은 새 모듈 notes_cli/export.py의 export_memos(memos, fmt) -> str 로 만들고 CLI는 그 함수를 불러 써. fmt가 csv도 markdown도 아니면 ValueError.
+- csv: 첫 줄은 헤더 `id,title,tags,created_at`이고 메모마다 한 줄이야. tags는 `;`로 이어. csv 모듈로 만들어서 쉼표나 따옴표가 든 제목도 제대로 인용되게 해. 줄 끝은 `\n`이고 마지막 줄 뒤에도 `\n`이 있어.
+- markdown: 메모마다 `## <id>. <title>` 줄, 태그가 있으면 `Tags: a, b` 줄, 본문이 있으면 빈 줄 하나 뒤에 본문이야. 메모 사이는 빈 줄 하나이고 마지막 메모 뒤에는 줄바꿈 하나만 둬. 메모가 없으면 빈 문자열이야.
+- README와 한글 미러에도 명령 설명을 추가하고 테스트도 추가해줘. 끝나면 보고해줘.

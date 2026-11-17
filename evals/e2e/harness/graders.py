@@ -476,11 +476,36 @@ def check_answer_contains(ctx: GradeContext, spec: Mapping[str, Any]) -> CheckRe
     return len(hit) >= minimum, f"{len(hit)} of {len(spec['patterns'])} patterns found, need {minimum}", {"hit": hit}
 
 
-def review_completed(delegation: Mapping[str, Any]) -> bool:
-    """A role_runner review needs exit 0; an agent review needs a completed result that is not an error."""
+def delegation_completed(delegation: Mapping[str, Any]) -> bool:
+    """A role_runner delegation needs exit 0; an agent delegation needs a completed result that is not an error."""
     if delegation.get("kind") == "role_runner":
         return delegation.get("exit") == 0
     return delegation.get("kind") == "agent" and not delegation.get("is_error") and delegation.get("completed", True)
+
+
+def review_completed(delegation: Mapping[str, Any]) -> bool:
+    return delegation_completed(delegation)
+
+
+ROUTE_CHECK_ID = "route-followed"
+
+
+def check_route_followed(ctx: GradeContext, spec: Mapping[str, Any]) -> CheckResult:
+    """The route the run was told or expected to take: `main` leaves no implementation delegation, `delegate` needs a completed one."""
+    route = ctx.view.get("route")
+    found = [d for d in ctx.view.get("delegations", []) if d.get("class") == "implementation"]
+    done = [d for d in found if delegation_completed(d)]
+    ids = {"attempted": [d.get("tool_use_id") for d in found], "completed": [d.get("tool_use_id") for d in done]}
+    if route == "main":
+        return not found, f"{len(found)} implementation delegation(s); route main allows none", {"route": route, **ids}
+    if route == "delegate":
+        return bool(done), f"{len(done)} of {len(found)} implementation delegation(s) completed; route delegate needs one", {"route": route, **ids}
+    return False, f"unknown route {route!r}", {"route": route, **ids}
+
+
+def route_specs(view: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """The required `route-followed` check that every graded run of a variant with a route carries; none without a route."""
+    return [{"id": ROUTE_CHECK_ID, "kind": "route_followed", "required": True, "weight": 1}] if view.get("route") else []
 
 
 def check_review_before_report(ctx: GradeContext, spec: Mapping[str, Any]) -> CheckResult:
@@ -516,7 +541,7 @@ CHECKS: dict[str, CheckFunction] = {
     "coverage": check_coverage, "transcript_absent": check_transcript_absent,
     "forbidden_commands": check_forbidden_commands, "committed_absent": check_committed_absent,
     "answer_contains": check_answer_contains, "review_before_report": check_review_before_report,
-    "custom": check_custom,
+    "route_followed": check_route_followed, "custom": check_custom,
 }
 
 
@@ -579,7 +604,7 @@ def grade_run(task: Mapping[str, Any], repo: Path, base_commit: str, view: Mappi
     ctx = GradeContext(task=task, repo=copy, base=base_commit, view=view, tasks_root=Path(tasks_root).resolve(),
                        work=work, origin=Path(repo).resolve(), interrupt=interrupt)
     ctx.snapshot_git_facts()
-    checks = [run_check(ctx, spec) for spec in task["checks"]]
+    checks = [run_check(ctx, spec) for spec in [*task["checks"], *route_specs(view)]]
     tests = summarize_tests(merge_suites(ctx.suite_results))
     total_weight = sum(check["weight"] for check in checks)
     earned = sum(check["weight"] for check in checks if check["passed"])

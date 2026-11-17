@@ -1,0 +1,93 @@
+{
+  "id": "T66",
+  "title": "Stock transfer between warehouses across three files",
+  "category": "feature",
+  "path": "implementation that changes three to five files",
+  "fixture": "inventory-service",
+  "prompt_file": "prompts/T66.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 10
+  },
+  "hidden_tests": {
+    "source": "hidden/T66",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 4,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "new-tests",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "new_tests"
+    },
+    {
+      "id": "agent-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    },
+    {
+      "id": "files-in-range",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "files_in_range"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "exact-api",
+      "text": "Use the exact names: StockLedger.transfer(source, target, sku, quantity, reference), audit.KIND_TRANSFER_OUT, audit.KIND_TRANSFER_IN",
+      "keywords": [
+        "transfer",
+        "KIND_TRANSFER_OUT",
+        "stock.py"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-tests"
+      ]
+    },
+    {
+      "id": "new-tests",
+      "text": "Add tests for the new behavior under tests/",
+      "keywords": [
+        "test",
+        "테스트"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "new-tests"
+      ]
+    }
+  ],
+  "rubric": null
+}

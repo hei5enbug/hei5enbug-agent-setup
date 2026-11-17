@@ -49,7 +49,7 @@ def print_plan(out: TextIO, cfg: HarnessConfig, specs: list[RunSpec], tasks: dic
     out.write(f"planned runs: {len(specs)}\n")
     for index, spec in enumerate(specs, start=1):
         task, variant = tasks[spec.task], variants[spec.variant]
-        prompt = command.read_prompt(cfg.tasks_root, task)
+        prompt = command.run_prompt(cfg.tasks_root, task, variant)
         header = f"\n[{index}] {spec.run_id} host={spec.host} wall={task['limits']['wall_seconds']}s cwd={spec.repo}\n"
         if spec.host == HOST_CLAUDE:
             argv = command.build_command(cfg, task, variant, prompt, plugin_paths[spec.variant], spec.result_dir)

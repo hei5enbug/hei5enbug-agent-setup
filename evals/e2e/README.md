@@ -177,6 +177,7 @@ Run every command from the repository root. The default run root is
 | Compare two variants | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | Export a revision only | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
 | Judge a change and write its record | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
+| Judge route variants, choose the route, and write the record | `python3 evals/e2e/harness/cli.py route-record --campaign <name> --issue <n> --before <variant> --routes <variant>,<variant> [--after <variant>] [--tasks T20,T65,T66]` |
 
 `--parallel` sets the number of runs at once (default 3). With several variants the order alternates per task and
 repetition (ABAB, then BABA), so time-of-day effects spread evenly.
@@ -206,6 +207,11 @@ revision under test. `settings` merges into the run's `--settings` file, `env` i
 `extra_args` into its command line. A variant that adds a bypass flag, `--bare`, `--permission-mode`, or a flag the
 harness sets itself, such as `--setting-sources`, is rejected. The installed plugin and every plugin of the profile
 stay off whatever `settings` says, and the user's instruction files and auto memory stay out whatever `env` says.
+
+A variant may also name `route` (`main` or `delegate`) or `expect_route`. `route` appends one fixed Korean sentence to the
+task prompt, on both hosts, that tells the session to do the implementation itself or to delegate it to the implementation
+worker, and grades the run on it. `expect_route` appends nothing and only grades the run, for a variant whose plugin text
+already states the route. Both are written to `run.json`, so `regrade` grades the same route.
 
 ## Run records
 
@@ -262,6 +268,13 @@ with 3 or 4, `claude-opus-5-5` grades instead, and `rubric.json` records the fal
 that is still running after 1800 seconds, together with every process it started, and the run's grading then fails
 with `grade_error`.
 
+A run of a variant with a route carries one more required check, `route-followed`, that the harness adds to the task's own
+checks. On `main` it passes only when the run made no implementation delegation, whether it completed or not, that is, no
+`role_runner.py implementation` call and no `worker` or `sonnet-worker` subagent. On `delegate` it passes only when at least
+one implementation delegation completed: the role runner exited 0, or the agent result came back without an error. A run
+that skips a delegation its route requires therefore fails, and `grade.json` lists the attempted and the completed
+delegations.
+
 The text tasks (T13 to T20) grade a finished text with `scripts/text_review.py`, run from the repository that
 holds the harness, not from the exported plugin, with `--reviews 1` so the grade rests on one reviewer whatever
 the script's default. The required check `text-review-clean` passes on exit 0. On exit 1 the grader reviews the same
@@ -310,6 +323,8 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T19 | ops-notes | Shared document | Wiki draft of about 1,600 characters for a 1,500-character budget |
 | T20 | notes-cli | Final report | Small change with tests, then a report |
 | T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
+| T65 | notes-cli | Route measurement, five files | `memo export` with csv and markdown output, a new module, tests, and the README with its Korean mirror |
+| T66 | inventory-service | Route measurement, three files | `StockLedger.transfer` between warehouses with two audit entries and tests |
 
 ## Comparing a change on both hosts
 
@@ -367,6 +382,29 @@ record.
 | Issue | Cases | Verdict |
 |---|---|---|
 | [#92](records/92.json) | T02, T08, and T20 before and after; T05, T07, T09, and T12 after, for the item 6 rules | Fail: T08 on Claude Code and T20 on Codex. The owner adopted the change on 2026-11-14 because no plugin file these cases load changed; #105, #86, and #106 follow up. |
+
+## Route measurement
+
+Which route finishes a change of three to five files better, the main session doing the work itself or the implementation
+worker, is measured on T20, T65, and T66 on both hosts. T65 and T66 are built so that a clean solution changes five and
+three files; the informational check `files-in-range` reports when a run leaves the range of three to five. Run the
+variants `before` (no route), `route-main`, and `route-delegate`, which share one plugin revision and differ only by the
+route sentence, with `--hosts claude,codex`. `route-record` judges each route against `before` by the comparison rule above,
+then chooses by the efficiency rule of `AGENTS.md` among the routes that pass:
+
+1. Keep a route only when its comparison against `before` passes and every one of its runs passes. A comparison that is
+   `repeat` or `not measured` leaves the choice not measured.
+2. A case is a task on a host, and a route's time in a case is the median of its runs. Drop a route that is slower than the
+   fastest remaining route by more than 1.5 times and by more than 60 seconds in any case.
+3. Among the rest take the lowest list-price cost per passing case, which includes every run of the route. Costs within 10
+   percent, or within 0.05 dollars, of the lowest are a tie and the route with the lower total time wins.
+4. A missing wall time or cost, a missing run, or fewer than two routes leaves the choice `not measured`; no passing route
+   gives `no winner`, with the reason in the record.
+
+The record holds every run, each route's verdicts per case with its `variant`, the `routes` map, and the `route_choice` with
+the steps that decided it. With `--after`, the variant that carries the chosen rule, run without a forced route, is judged
+against `before` in the same record, so that every task passing on both hosts after the change shows in it. The rule text of
+"Delegation" in `instructions/session/common.md` changes only when `route_choice` names a winner.
 
 ## Known limits
 
