@@ -1,0 +1,61 @@
+{
+  "files": {
+    "testing": {
+      "en": "instructions/testing.md",
+      "ko": "docs/ko/instructions/testing.ko.md"
+    },
+    "execution": {
+      "en": "instructions/implementation-execution.md",
+      "ko": "docs/ko/instructions/implementation-execution.ko.md"
+    }
+  },
+  "script": {
+    "candidate": "evals/e2e/candidates/95/changed_assertions.py",
+    "installed": "scripts/changed_assertions.py"
+  },
+  "items": {
+    "restraint": {
+      "script": true,
+      "edits": [
+        {
+          "file": "testing",
+          "insert_after": {
+            "en": "- When a change adds or alters behavior, write or update its test in the same change, not as a later follow-up.\n",
+            "ko": "- 변경으로 동작을 추가하거나 바꾸면 같은 변경에서 해당 테스트를 작성하거나 갱신한다. 나중의 후속 작업으로 미루지 않는다.\n"
+          },
+          "text": {
+            "en": "- When an existing test or an assigned acceptance check fails after a change, change the implementation. Change,\n  remove, or skip an existing assertion only when the request or the assignment states the behavior change that the\n  new assertion expresses, and name that statement in the result. When the check itself looks wrong, report it to the\n  coordinator, or ask the user when you are the main session, and leave it as it is.\n",
+            "ko": "- 변경 뒤 기존 테스트나 할당된 수용 검사가 실패하면 구현을 고친다. 요청이나 할당문이 새 단언이 나타내는 동작 변경을\n  밝힌 경우에만 기존 단언을 바꾸거나 지우거나 건너뛰며, 그 진술을 결과에 명시한다. 검사 자체가 잘못으로 보이면\n  조정자에게 보고하고, 메인 세션이면 사용자에게 묻고, 그대로 둔다.\n"
+          }
+        },
+        {
+          "file": "execution",
+          "insert_after": {
+            "en": "even when the cause lies outside the task.\n",
+            "ko": "할당된 검사가 실패하면 원인이 작업 밖에 있어도 실패로 본다.\n"
+          },
+          "text": {
+            "en": "\nWhen a result changed a test file or an acceptance check that existed before the task, run\n`python3 <Source directory>/scripts/changed_assertions.py <base revision>`, which lists, without judging, the assertion\nlines removed or changed, the skip markers added, and the test functions removed in each test file that existed at that\nrevision. List each changed, removed, or skipped assertion with the stated behavior change that requires it, for your own\nwork too, and reject the result, or ask the user, when one has none.\n",
+            "ko": "\n작업 전에 있던 테스트 파일이나 수용 검사를 결과가 바꿨으면\n`python3 <Source directory>/scripts/changed_assertions.py <기준 리비전>`을 실행한다. 이 스크립트는 그 리비전에 있던 각\n테스트 파일에서 제거되거나 바뀐 단언 줄, 추가된 건너뜀 표시, 제거된 테스트 함수를 판단 없이 나열한다. 바뀌거나 제거되거나\n건너뛴 각 단언을 그것을 요구하는 명시된 동작 변경과 함께 나열하고, 자기 작업도 예외로 두지 않으며, 명시된 변경이 없는\n단언이 있으면 결과를 반려하거나 사용자에게 묻는다.\n"
+          }
+        }
+      ]
+    },
+    "boundaries": {
+      "script": false,
+      "edits": [
+        {
+          "file": "testing",
+          "insert_after": {
+            "en": "- When a change adds or alters behavior, write or update its test in the same change, not as a later follow-up.\n",
+            "ko": "- 변경으로 동작을 추가하거나 바꾸면 같은 변경에서 해당 테스트를 작성하거나 갱신한다. 나중의 후속 작업으로 미루지 않는다.\n"
+          },
+          "text": {
+            "en": "- When a change adds or alters a condition or a failure path, its tests cover each side of that condition's boundary\n  value and each new failure path.\n",
+            "ko": "- 변경이 조건이나 실패 경로를 추가하거나 바꾸면, 그 테스트는 조건의 경계값 양쪽과 새 실패 경로마다 하나씩 다룬다.\n"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from . import codex_host, collect, handoff, summarize, transcript
+from . import codex_host, collect, handoff, summarize, testing_rules, transcript
 from .caps import MODEL_CAP as ALLOWED_MODELS
 from .caps import normalize
 from .command import ConfigError
@@ -28,7 +28,7 @@ UNKNOWN_EFFORT = "not measured"
 VERDICTS = frozenset({PASS, FAIL, REPEAT, NOT_MEASURED, INVESTIGATE, BASELINE, ACCEPT, REJECT, CONTINUE_TO_FIVE, SECOND_PAIR})
 VERDICT_SUBJECTS = frozenset({"quality", "wall_seconds", "cost_usd", "claim"})
 TOP_FIELDS = ("issue", "cases", "variants", "runs", "verdicts")
-TOP_OPTIONAL = ("handoff",)
+TOP_OPTIONAL = ("handoff", "testing")
 RUN_REQUIRED = ("case", "variant", "host", "models", "checks", "wall_seconds", "cost_usd")
 RUN_OPTIONAL = ("rep", "reviews", "handoff")
 VERDICT_REQUIRED = ("case", "verdict", "step")
@@ -146,7 +146,7 @@ def validate_record(record: Any) -> list[str]:
             extra = (variants or {},) if key == "runs" else ()
             problems += check(f"{key}[{index}]", item, cases or [], *extra)
     if not problems:
-        problems += handoff.block_problems(record)
+        problems += handoff.block_problems(record) + testing_rules.block_problems(record)
     if any(LOCAL_PATH.search(text) for text in strings(record)):
         problems.append("the record contains an absolute local path")
     return problems
@@ -159,7 +159,8 @@ def check_record(record: Any) -> None:
 
 
 def build_record(issue: int, cases: Sequence[str], variants: Mapping[str, str], runs: Sequence[Mapping[str, Any]],
-                 verdicts: Sequence[Mapping[str, Any]], handoff_block: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                 verdicts: Sequence[Mapping[str, Any]], handoff_block: Mapping[str, Any] | None = None,
+                 testing_block: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The record dict for one comparison; `variants` maps each variant name to its revision."""
     record = {
         "issue": issue,
@@ -171,6 +172,8 @@ def build_record(issue: int, cases: Sequence[str], variants: Mapping[str, str], 
     }
     if handoff_block:
         record["handoff"] = dict(handoff_block)
+    if testing_block:
+        record["testing"] = dict(testing_block)
     check_record(record)
     return record
 
@@ -467,7 +470,7 @@ def record_campaign(
     revisions = {name: variant_revision(run_root, campaign, name, runs) for name in (before, after)}
     entries = [run["entry"] for run in runs if run["entry"]]
     record = build_record(issue, [case["id"] for case in cases], revisions, entries, verdict_entries(compared, claims),
-                          handoff.block(entries, before, after))
+                          handoff.block(entries, before, after), testing_rules.block(entries, before, after))
     return {"record": record, "compared": compared, "claims": claims}
 
 

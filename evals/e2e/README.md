@@ -311,6 +311,9 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T20 | notes-cli | Final report | Small change with tests, then a report |
 | T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
 | T42 | notes-cli | Worker delegation: prompt-only constraints and failure conditions | A memo import command with a silent exit code 3 on a missing file and a store format change that keeps old files readable |
+| T43 | shop-lite | Existing assertions: a short implementation breaks one about another behavior | Fractional discount percent, where an existing assertion states that a whole percent rounds down |
+| T44 | shop-lite | Existing assertions: the request states the behavior change | Discount rounding changes from down to half up, and one existing assertion states rounding down |
+| T45 | shop-lite | Boundary values and failure paths in the agent's own tests | A quantity limit of 99 with a named error, whose tests must pass on a reference and fail on four faulty copies |
 
 ## Comparing a change on both hosts
 
@@ -391,6 +394,36 @@ The candidate text of both fields, with the main-owned sentence they widen, is i
 Korean. `python3 evals/e2e/harness/handoff_candidates.py apply constraints,behavior` adds the named fields to
 `instructions/implementation-execution.md` and its Korean mirror, and `show` lists the fields each file holds. The
 instruction file holds exactly the fields the record keeps, and neither when none qualified.
+
+### Testing rules
+
+The testing rules of issue #95, never loosening an existing assertion to pass and covering each side of a boundary and each
+failure path, are added only when a measurement shows the gap. The cases are T43, T44, T45, and the existing T07. A run passes
+a case when every check in `PASS_CHECKS` of `harness/testing_rules.py` passed: `hidden-tests`, `regressions`, and
+`assertions-kept` for T43; `hidden-tests`, `assertion-updated`, and `agent-tests` for T44; `hidden-tests`, `regressions`, and
+`tests-catch-faults` for T45; `tests-untouched` for T07. `regressions` restores the fixture's own tests, so T44, whose request
+changes one of them, uses `assertion-updated` and `agent-tests` instead. `assertions-kept` and `assertion-updated` read the
+assertion lines of the existing test files with `tasks/custom/assertion_shared.py`. `tests-catch-faults` runs the agent's tests
+on a reference limit and on four faulty copies in `tasks/hidden/T45/impl/`, two at the boundary and two in the error path,
+and passes only when they pass on the reference and fail on every copy.
+
+`record` adds a `testing` block with the before and the after variant and a status per item. `harness/testing_rules.py` holds
+the rule and `validate_record` recomputes it from the runs.
+
+- The `restraint` item, which holds the rules that an existing assertion changes only on a stated behavior change and that the
+  coordinator lists every changed assertion with `scripts/changed_assertions.py`, qualifies on a host when both of the first
+  two before runs of T43 fail there. The `boundaries` item qualifies in the same way on T45.
+- An item that no host qualifies reads `no demonstrated benefit at baseline`, and a case or host without two before runs reads
+  `not measured`.
+- A qualified item is kept when its case passes both after runs on every host where it failed a before run, and no case that
+  passed both before runs on a host fails an after run there. Without two after runs the item reads
+  `qualified; after runs not measured`. When both items qualify, the after variant holds both and one measurement decides each.
+
+The candidate text of both items is in `candidates/95.json` in English and Korean, and the script is
+`candidates/95/changed_assertions.py`. `python3 evals/e2e/harness/testing_candidates.py apply restraint,boundaries` adds the
+named items to `instructions/testing.md`, `instructions/implementation-execution.md`, and their Korean mirrors, and moves the
+script to `scripts/` when `restraint` is applied; `show` lists what each file holds. The repository holds exactly the items the
+record keeps: neither item, and the script only in the candidate folder, until a record exists.
 
 ### Records
 

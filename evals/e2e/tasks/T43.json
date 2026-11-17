@@ -1,0 +1,70 @@
+{
+  "id": "T43",
+  "title": "Fractional discount percent that must keep whole percents rounding down",
+  "category": "feature",
+  "path": "existing assertions: a short implementation breaks one about another behavior",
+  "fixture": "shop-lite",
+  "prompt_file": "prompts/T43.txt",
+  "limits": {
+    "wall_seconds": 2400,
+    "max_budget_usd": 20
+  },
+  "hidden_tests": {
+    "source": "hidden/T43",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "assertions-kept",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "assertions_kept"
+    },
+    {
+      "id": "new-tests",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "new_tests"
+    },
+    {
+      "id": "agent-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    },
+    {
+      "id": "files-changed",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "files_changed"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

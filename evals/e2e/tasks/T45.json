@@ -1,0 +1,52 @@
+{
+  "id": "T45",
+  "title": "Quantity limit whose boundary and error path the agent's own tests must cover",
+  "category": "feature",
+  "path": "boundary values and failure paths in the agent's own tests",
+  "fixture": "shop-lite",
+  "prompt_file": "prompts/T45.txt",
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 10
+  },
+  "hidden_tests": {
+    "source": "hidden/T45",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_limit.py"
+      ]
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "tests-catch-faults",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "tests_catch_faults"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

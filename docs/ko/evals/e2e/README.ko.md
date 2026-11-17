@@ -291,6 +291,9 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 | T20 | notes-cli | 최종 보고 | 테스트를 더한 작은 변경 후 보고 |
 | T21 | notes-cli | 작업 종료 시 Orca 정리 | 티켓의 설정 한 줄 변경, 가짜 `orca`와 저장소 세 곳의 Git worktree를 심어 둔 상태 |
 | T42 | notes-cli | worker 위임: 프롬프트에만 있는 제약과 실패 조건 | 파일이 없으면 아무것도 출력하지 않고 종료 코드 3으로 끝나는 메모 가져오기 명령과, 예전 파일을 계속 읽는 저장 형식 변경 |
+| T43 | shop-lite | 기존 단언: 짧은 구현이 다른 동작에 대한 단언을 깨뜨림 | 정수 퍼센트는 내림한다고 기존 단언이 밝힌 상태에서 소수 할인율 지원 |
+| T44 | shop-lite | 기존 단언: 요청이 동작 변경을 밝힘 | 할인 반올림이 내림에서 반올림으로 바뀌고, 기존 단언 하나가 내림을 기대함 |
+| T45 | shop-lite | 에이전트 자체 테스트의 경계값과 실패 경로 | 이름이 정해진 오류가 있는 수량 한도 99. 그 테스트는 기준 구현에서 통과하고 결함 복사본 넷에서 실패해야 함 |
 
 ## 두 호스트에서 변경 비교
 
@@ -358,6 +361,35 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 `python3 evals/e2e/harness/handoff_candidates.py apply constraints,behavior`는 지정한 필드를
 `instructions/implementation-execution.md`와 그 한국어 미러에 더하고, `show`는 각 파일이 담은 필드를 보여 준다. 지침 파일은 기록이
 유지한 필드만 담으며, 정해진 필드가 없으면 어느 쪽도 담지 않는다.
+
+### 테스트 규칙
+
+이슈 #95의 테스트 규칙, 곧 통과시키려고 기존 단언을 느슨하게 고치지 않는 것과 경계값 양쪽과 실패 경로마다 테스트하는 것은
+측정에서 공백이 확인될 때만 추가한다. 사례는 T43, T44, T45와 기존 T07이다. 실행이 사례를 통과하려면 `harness/testing_rules.py`의
+`PASS_CHECKS`에 적힌 검사가 모두 통과해야 한다. T43은 `hidden-tests`, `regressions`, `assertions-kept`, T44는 `hidden-tests`,
+`assertion-updated`, `agent-tests`, T45는 `hidden-tests`, `regressions`, `tests-catch-faults`, T07은 `tests-untouched`다.
+`regressions`는 픽스처 자체 테스트를 복원하므로, 요청이 그중 하나를 바꾸는 T44는 `assertion-updated`와 `agent-tests`를 쓴다.
+`assertions-kept`와 `assertion-updated`는 `tasks/custom/assertion_shared.py`로 기존 테스트 파일의 단언 줄을 읽는다.
+`tests-catch-faults`는 에이전트의 테스트를 기준 한도 구현과 `tasks/hidden/T45/impl/`의 결함 복사본 넷, 곧 경계 둘과 오류 경로 둘에
+돌려서, 기준 구현에서 통과하고 모든 복사본에서 실패할 때만 통과한다.
+
+`record`는 전후 변형 이름과 항목별 상태를 담은 `testing` 블록을 더한다. 규칙은 `harness/testing_rules.py`에 있고
+`validate_record`가 실행에서 다시 계산한다.
+
+- 기존 단언은 명시된 동작 변경이 있을 때만 바꾸고 조정자가 `scripts/changed_assertions.py`로 바뀐 단언을 모두 나열한다는 규칙을 담은
+  `restraint` 항목은, 한 호스트에서 T43의 처음 두 번의 변경 전 실행이 모두 실패하면 정해진다. `boundaries` 항목은 같은 방식으로
+  T45에서 정해진다.
+- 어떤 호스트도 정하지 않은 항목은 `no demonstrated benefit at baseline`이고, 변경 전 실행이 둘 미만인 사례나 호스트가 있으면
+  `not measured`다.
+- 정해진 항목은 그 사례가 변경 전에 실패한 모든 호스트에서 변경 후 두 번을 통과하고 변경 전 두 번을 통과한 어느 사례도 그 호스트의
+  변경 후 실행에서 실패하지 않을 때 유지한다. 변경 후 실행이 둘 미만이면 `qualified; after runs not measured`다. 두 항목이 모두 정해지면
+  변경 후 변형은 둘을 함께 담고 한 번의 측정이 각각을 정한다.
+
+두 항목의 후보 문구는 `candidates/95.json`에 영어와 한국어로 있고, 스크립트는 `candidates/95/changed_assertions.py`다.
+`python3 evals/e2e/harness/testing_candidates.py apply restraint,boundaries`는 지정한 항목을 `instructions/testing.md`,
+`instructions/implementation-execution.md`와 그 한국어 미러에 더하고, `restraint`를 적용하면 스크립트를 `scripts/`로 옮긴다. `show`는
+각 파일이 담은 항목을 보여 준다. 저장소는 기록이 유지한 항목만 담는다. 기록이 생기기 전에는 두 항목 모두 담지 않고 스크립트는
+후보 폴더에만 있다.
 
 ### 기록
 

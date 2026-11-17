@@ -1,0 +1,1 @@
+shop-lite의 `line_total(unit_price: int, quantity: int) -> int`에 한 줄 수량 한도를 넣어줘. 한도는 99개야. 수량이 99를 넘으면 `shop/errors.py`에 새로 만드는 `QuantityLimitError`를 일으켜. 이 예외는 `InvalidQuantity`처럼 `ShopError`와 `ValueError`를 모두 상속하고, 메시지에는 받은 수량과 한도(99)가 둘 다 들어가야 해. 함수 시그니처는 그대로 두고, 1 미만 수량이 `InvalidQuantity`를 일으키는 지금 동작도 그대로 둬. 테스트도 추가해줘.
