@@ -1,0 +1,4 @@
+[demo-h review thread, importer/refresh.py line 21]
+
+Reviewer: Why does `refresh` hold the lock for the whole rebuild instead of only the swap at the end? And which tests
+cover it?

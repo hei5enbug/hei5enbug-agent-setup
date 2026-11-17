@@ -1,0 +1,27 @@
+diff --git a/importer/demo_a.py b/importer/demo_a.py
+--- a/importer/demo_a.py
++++ b/importer/demo_a.py
+@@ -1,3 +1,4 @@
++from importer.safe import load_one
+ 
+ def load_a():
+-    return read("a")
++    return load_one("a")
+diff --git a/importer/demo_b.py b/importer/demo_b.py
+--- a/importer/demo_b.py
++++ b/importer/demo_b.py
+@@ -1,3 +1,4 @@
++from importer.safe import load_one
+ 
+ def load_b():
+-    return read("b")
++    return load_one("b")
+diff --git a/importer/demo_c.py b/importer/demo_c.py
+--- a/importer/demo_c.py
++++ b/importer/demo_c.py
+@@ -1,3 +1,4 @@
++from importer.safe import load_one
+ 
+ def load_c():
+-    return read("c")
++    return load_one("c")

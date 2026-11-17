@@ -1,0 +1,40 @@
+{
+  "id": "T33",
+  "title": "Review of a pull request description that lists the files its diff changes",
+  "category": "writing",
+  "path": "pr-description text review",
+  "fixture": "identifier-lists",
+  "prompt_file": "prompts/T33.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "reached-reviewer",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "reached_reviewer"
+    },
+    {
+      "id": "item-removable",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "item_removable"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

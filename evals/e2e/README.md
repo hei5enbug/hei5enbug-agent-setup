@@ -289,6 +289,13 @@ check `no-other-tool-mark` of T28 is advisory: T25 and T26 must leave the model 
 AI or an agent did it out of the text, T27 must name the model that its diff changes, and T28 must name the model its
 request asks for.
 
+T32 and T33 measure the review itself, so their prompts ask the agent to run the plugin's `text_review.py review` on a
+seeded draft it must not edit. The checks read the result of that run from the transcript: the review must reach the
+reviewer (`stage` is `review`, with no `error`) on the named draft. In T32, whose rules file requires the names of the
+added tests, no `removable` finding may quote the list item of those names; in T33, whose rules ask for no names, a
+`removable` finding must quote the list item of the changed files. They have no `text-review-clean` check and are not in
+`config/writing-surfaces.json`.
+
 `tests/test_e2e_eval_graders.py` proves each task's graders: the unmodified fixture fails, and the reference
 solution in `tasks/reference/` passes.
 
@@ -329,6 +336,8 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T26 | tool-notes | Commit message | Parser fix whose notes name the reviewing model and suggest a subject that carries its name |
 | T27 | tool-notes | Commit message | Change of the `reviewer_model` setting from one demo model to another |
 | T28 | tool-notes | Chat message | Thread announcement whose request asks to say that a named model reviewed it |
+| T32 | identifier-lists | Review reply, review run | Review of a reply whose rules require the names of the added tests and whose draft lists three of them in one item |
+| T33 | identifier-lists | Pull request description, review run | Review of a description, under rules that ask for no names, whose draft lists the three files its diff changes in one item |
 
 ## Comparing a change on both hosts
 

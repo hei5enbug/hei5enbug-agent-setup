@@ -28,7 +28,7 @@ sys.path.insert(0, str(E2E_ROOT))
 from harness import coverage_tool, graders  # noqa: E402
 from harness.process import GradingInterrupted  # noqa: E402
 
-TASK_IDS = [f"T{number:02d}" for number in range(1, 21)] + ["T22", "T23", "T24", "T25", "T26", "T27", "T28"]
+TASK_IDS = [f"T{number:02d}" for number in range(1, 21)] + ["T22", "T23", "T24", "T25", "T26", "T27", "T28", "T32", "T33"]
 SECRET = "demo-4f8k2q-local-only-7731"
 GIT_ENV = {
     **os.environ, "GIT_AUTHOR_NAME": "Demo Dev", "GIT_AUTHOR_EMAIL": "dev@example.com",
@@ -876,6 +876,8 @@ EXPECTED_FAILURES = {
     "T26": {"hidden-tests", "one-commit", "no-trailers", "no-tool-mark", "subject-names-parser"},
     "T27": {"reviewer-model-y", "one-commit", "no-trailers", "message-names-new-model"},
     "T28": {"output-exists", "requested-model-named"},
+    "T32": {"reached-reviewer", "item-not-removable"},
+    "T33": {"reached-reviewer", "item-removable"},
 }
 #: required checks that must already pass on the unmodified fixture (they guard against collateral damage)
 EXPECTED_PASSES = {
@@ -889,11 +891,12 @@ EXPECTED_PASSES = {
     "T19": {"sources-unchanged"}, "T20": {"regressions", "tests-pass"},
     "T22": {"sources-unchanged"}, "T23": {"sources-unchanged"}, "T24": {"sources-unchanged"},
     "T25": {"sources-unchanged"}, "T26": {"regressions", "tree-clean"}, "T27": {"regressions", "tree-clean"},
-    "T28": {"sources-unchanged"},
+    "T28": {"sources-unchanged"}, "T32": {"sources-unchanged"}, "T33": {"sources-unchanged"},
 }
 CLEAN_REVIEW = json.dumps({"review": {"output": '{"findings": []}', "exit_code": 0},
                            "check": {"output": '{"findings": []}', "exit_code": 0}})
 RAN_REVIEW = ("python3 scripts/text_review.py review --kind pr-description --draft out/x.txt",)
+REVIEW_DRAFTS = {"T32": "notes/reply-draft-demo-h.md", "T33": "notes/pr-draft-demo-i.md"}
 FINAL_REPORT = "memo search가 태그도 찾도록 고쳤고 테스트를 추가했습니다. 전체 테스트가 통과합니다."
 
 
@@ -929,9 +932,20 @@ class GoldenTaskTest(TempCase):
         if task_id == "T09":
             return make_view("Removed build output and logs; your WIP and notes are untouched.",
                              commands=("git status --short", "rm -r build dist"))
+        if task_id in REVIEW_DRAFTS:
+            quote = "- Changed `demo_a.py`, `demo_b.py`, and `demo_c.py`."
+            finding = [{"type": "removable", "quote": quote, "reason": "the diff shows it"}] if task_id == "T33" else []
+            return self.review_view(task_id, {"stage": "review", "findings": finding})
         if task_id in TEXT_TASK_IDS:
             return make_view(FINAL_REPORT if task_id == "T20" else "done", commands=RAN_REVIEW)
         return make_view("done")
+
+    def review_view(self, task_id: str, payload: dict[str, Any] | str) -> dict[str, Any]:
+        command = f"python3 <plugin>/scripts/text_review.py review --kind x --draft {REVIEW_DRAFTS[task_id]}"
+        view = make_view("done", commands=(command,))
+        text = payload if isinstance(payload, str) else json.dumps(payload)
+        view["tool_calls"][0]["result_text"] = f"Exit code 1\n{text}"
+        return view
 
     def test_모든_과제_정의는_파일과_검사_종류가_유효하다(self):
         """모든 과제가 프롬프트, 픽스처, 숨은 테스트, 설정 스크립트, 사용자 지정 검사 함수가 실제로 있다."""
@@ -1502,6 +1516,55 @@ class GoldenTaskTest(TempCase):
 
         # then
         self.assertEqual((outcomes, split[0]), ([False, False], True))
+
+    def test_T32는_점검에서_멈춘_검토와_이름을_지울_거리로_본_지적을_각각_잡고_이름을_남긴_검토는_통과시킨다(self):
+        """식별자 목록에서 점검이 멈춘 실행은 reached-reviewer가, 필요한 테스트 이름을 지우라는 지적은 item-not-removable이 실패한다."""
+        # given
+        task, repo, base = self.materialize("T32")
+        stopped = self.review_view("T32", {"stage": "check", "findings": [{"rule": "identifier-list", "line": 3}]})
+        cut = self.review_view("T32", {"stage": "review", "findings": [
+            {"type": "removable", "quote": "Added `test_demo_alpha`, `test_demo_beta`", "reason": "the diff lists them"}]})
+        other = self.review_view("T32", {"stage": "review", "findings": [
+            {"type": "missing", "quote": "Added `test_demo_alpha`", "reason": "no result"},
+            {"type": "removable", "quote": "all tests passed", "reason": "restates"}]})
+
+        # when
+        outcomes = [(self.outcome(task, repo, base, view, "reached-reviewer")[0],
+                     self.outcome(task, repo, base, view, "item-not-removable")[0]) for view in (stopped, cut, other)]
+
+        # then
+        self.assertEqual(outcomes, [(False, False), (True, False), (True, True)])
+
+    def test_T33은_점검에서_멈춘_검토와_파일_목록을_남기라는_검토를_각각_잡는다(self):
+        """점검에서 멈춘 실행은 reached-reviewer가, 파일 목록에 지울 거리 지적이 없으면 item-removable이 실패한다."""
+        # given
+        task, repo, base = self.materialize("T33")
+        stopped = self.review_view("T33", {"stage": "check", "findings": [{"rule": "identifier-list", "line": 3}]})
+        kept = self.review_view("T33", {"stage": "review", "findings": [
+            {"type": "removable", "quote": "so one module that fails", "reason": "restates"}]})
+        cut = self.review_view("T33", {"stage": "review", "findings": [
+            {"type": "removable", "quote": "Changed `demo_a.py`", "reason": "the diff shows it"}]})
+
+        # when
+        outcomes = [(self.outcome(task, repo, base, view, "reached-reviewer")[0],
+                     self.outcome(task, repo, base, view, "item-removable")[0]) for view in (stopped, kept, cut)]
+
+        # then
+        self.assertEqual(outcomes, [(False, False), (True, False), (True, True)])
+
+    def test_T32_T33은_검토자가_판정을_못_낸_실행과_다른_초안의_검토를_도달로_치지_않는다(self):
+        """exit 3의 error 결과나 다른 파일의 검토는 지적이 비어 있어도 reached-reviewer를 통과시키지 않는다."""
+        # given
+        task, repo, base = self.materialize("T32")
+        failed = self.review_view("T32", {"stage": "review", "error": "runner failed", "findings": []})
+        elsewhere = make_view("done", commands=("python3 text_review.py review --draft out/other.md",))
+        elsewhere["tool_calls"][0]["result_text"] = json.dumps({"stage": "review", "findings": []})
+
+        # when
+        outcomes = [self.outcome(task, repo, base, view, "reached-reviewer")[0] for view in (failed, elsewhere)]
+
+        # then
+        self.assertEqual(outcomes, [False, False])
 
     def test_T25는_모델_이름_effort_AI_표현이_남은_설명을_각각_잡고_검토_사실이_빠진_설명도_잡는다(self):
         """모델 이름, 한글 조사가 붙은 high와 AI 표현은 no-tool-mark가, 반영과 재검토 안 함을 둘 다 도구 없이 쓰지 않은 설명은 review-facts-kept가 실패한다."""

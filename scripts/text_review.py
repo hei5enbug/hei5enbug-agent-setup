@@ -95,10 +95,17 @@ tool mark is reported.
 """
 
 FLAGGED_HEADING = "## Lines the text check flagged\n"
-FLAGGED_EXPLANATION = (
-    "Each line below may say only that something is unchanged. Report it as removable unless a reader would act "
-    "wrongly without it.\n"
-)
+FLAGGED_EXPLANATIONS = {
+    "unchanged-only": (
+        "Each line below may say only that something is unchanged. Report it as removable unless a reader would act "
+        "wrongly without it.\n"
+    ),
+    "identifier-list": (
+        "Each line below is a list item of three or more identifier names. Report it as removable only when its "
+        "names merely repeat what a diff or source the reader sees already lists. Never report it when the "
+        "destination's writing rules require those names, such as the commands run or the tests added.\n"
+    ),
+}
 
 READERS = {
     "pr-description": "a reviewer who sees the diff next to this text.",
@@ -286,11 +293,12 @@ def check_text(text: str, kind: str | None, no_ticket_keys: bool) -> tuple[list[
     numbered = dict(lines)
     items = collect_items(lines)
     found = repeated_check(items, numbered) + same_page_links(lines)
+    advisories = unchanged_only(lines)
     if kind not in AGENT_FACING_KINDS:
-        found += identifier_list(items, numbered)
+        advisories += identifier_list(items, numbered)
     if no_ticket_keys:
         found += ticket_key(lines)
-    return sort_items(found), sort_items(unchanged_only(lines))
+    return sort_items(found), sort_items(advisories)
 
 
 def sort_items(items: list[dict]) -> list[dict]:
@@ -312,8 +320,12 @@ def named_files(heading: str, files: list[tuple[str, str]]) -> list[str]:
 def flagged_section(advisories: list[dict]) -> list[str]:
     if not advisories:
         return []
-    lines = "\n".join(item["text"] for item in advisories)
-    return [FLAGGED_HEADING, FLAGGED_EXPLANATION, f"{fenced(lines)}\n"]
+    parts = [FLAGGED_HEADING]
+    for rule, explanation in FLAGGED_EXPLANATIONS.items():
+        lines = "\n".join(item["text"] for item in advisories if item["rule"] == rule)
+        if lines:
+            parts += [explanation, f"{fenced(lines)}\n"]
+    return parts
 
 
 def build_assignment(kind: str, draft: str, rules: list, sources: list, notes: list[str], budget: int | None,

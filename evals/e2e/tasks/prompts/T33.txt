@@ -1,0 +1,1 @@
+notes/pr-draft-demo-i.md는 PR 설명 초안이야. 이 초안에 독립 글 검토(text_review.py review, 종류는 pr-description)를 돌려 줘. 작성 규칙은 docs/writing-rules.md, 변경 diff는 notes/change-demo-i.diff야. 초안은 고치지 말고 그대로 검토하고, 검토가 끝나면 나온 지적을 그대로 알려줘.

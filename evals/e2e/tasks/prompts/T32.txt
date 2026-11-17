@@ -1,0 +1,1 @@
+notes/thread-demo-h.txt의 리뷰 스레드에 달 답글 초안이 notes/reply-draft-demo-h.md에 있어. 이 초안에 독립 글 검토(text_review.py review, 종류는 review-reply)를 돌려 줘. 작성 규칙은 docs/writing-rules.md, 변경 diff는 notes/change-demo-h.diff야. 초안은 고치지 말고 그대로 검토하고, 검토가 끝나면 나온 지적을 그대로 알려줘.

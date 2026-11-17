@@ -15,9 +15,10 @@ item's body and its whole comment or reply history.
 1. Cut pass: delete each sentence or link whose removal loses no fact the reader needs to decide or act. This covers a
    sentence that restates a linked source, an adjacent table or figure, another section, a diff the reader sees with
    the text, or what the body and history of the ticket, pull request, or thread the text goes into already told the
-   people it addresses, such as a cause or an earlier finding; a list of names such a diff shows; the rule that
-   requires a listed check, though never why a required check was not done; a statement that something does not
-   change, unless a reader would otherwise act wrongly; and a link whose target another listed link already covers.
+   people it addresses, such as a cause or an earlier finding; a list of names such a diff shows, unless the
+   destination's writing rules require those names; the rule that requires a listed check, though never why a
+   required check was not done; a statement that something does not change, unless a reader would otherwise act
+   wrongly; and a link whose target another listed link already covers.
    Merge items of one kind into one line. Keep a sentence from that history when it corrects an earlier statement or
    those readers need it for their next action, and give an addressed person who took no part in the history only the
    background they need to act.
@@ -75,8 +76,9 @@ python3 <Source directory>/scripts/text_review.py review --kind <kind> --draft <
   the diff of the whole change as `--source`, and `--rules` only for report rules the user or the project gave. For an
   existing text you changed only in part, also pass its diff as `--source`. For a text that goes into an existing
   ticket, pull request, or thread, also pass that item's body and whole history as `--source`.
-- It first checks the patterns the text alone decides and stops on them; fix each finding. It then has a reviewer with
-  no conversation context review the draft against only the rules and sources you passed.
+- It first checks the patterns the text alone decides and stops on them; fix each finding. A list item of identifier
+  names is not stopped on: the reviewer judges it against the destination's rules. It then has a reviewer with no
+  conversation context review the draft against only the rules and sources you passed.
 - Exit 0: post the reviewed text unchanged. Exit 1: apply each finding to the whole text, or pass your reason for
   keeping a flagged sentence with `--note`. When you change the text, it is an update, so run both passes over the
   whole text again and check that each sentence you added or changed matches the sources, has one meaning, and

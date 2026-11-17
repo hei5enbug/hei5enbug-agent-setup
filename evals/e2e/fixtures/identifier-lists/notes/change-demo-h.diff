@@ -1,0 +1,30 @@
+diff --git a/importer/refresh.py b/importer/refresh.py
+--- a/importer/refresh.py
++++ b/importer/refresh.py
+@@ -18,9 +18,8 @@ class Importer:
+     def refresh(self) -> None:
+-        rows = self._rebuild()
+         with self._lock:
+-            self._rows = rows
++            self._rows = self._rebuild()
+diff --git a/tests/test_refresh.py b/tests/test_refresh.py
+--- a/tests/test_refresh.py
++++ b/tests/test_refresh.py
+@@ -30,0 +31,17 @@
++def test_demo_alpha():
++    importer = Importer(["a", "b"])
++    importer.refresh()
++    assert importer.rows == ["a", "b"]
++
++
++def test_demo_beta():
++    importer = Importer(["a"])
++    importer.refresh()
++    importer.refresh()
++    assert importer.rows == ["a"]
++
++
++def test_demo_gamma():
++    importer = Importer([])
++    importer.refresh()
++    assert importer.rows == []
