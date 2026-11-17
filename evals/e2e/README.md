@@ -297,6 +297,17 @@ hook starts no process. It has no model-written Orca call to judge: the
 hook closes the never-used terminal before the session's first reply, and the check requires that close to precede
 every Orca call outside the hook's reads and closes. Their tests are in `tests/test_e2e_eval_graders.py`.
 
+T67 judges the worktree removal of `scripts/orca_status_hook.py` and its detached run `scripts/orca_cleanup_run.py`. The
+fake `orca` also makes a real Git worktree for `worktree create` and `orchestration worker-start`; a started worker
+commits, pushes its branch, reports `worker_done`, and has its terminal released at once, and `worker-list` and
+`ports` read the `dispatches` and `ports` of the state file. The task sets `HEI5ENBUG_CLEANUP_RUN_SECONDS` to 45, the
+time after which a detached run ends itself and every process it started, so no run outlives a trial by more than 45
+seconds and the 60-second wait below always covers it. The session ends its turn with a question, so the removal
+can only come from the hook's run, which starts at that turn's end in a process session of its own. The checks wait up
+to `E2E_CLEANUP_WAIT_SECONDS` (60 by default) for a successful removal, and a removal from the session's own folder
+instead of the run's folder `/` fails `removed-by-hook`, so a session that removes the worktree itself, as the written
+rule allowed before, does not pass. Its tests are in `tests/test_e2e_eval_worktree_cleanup_hook.py`.
+
 | Task | Fixture | Path it exercises | Request |
 |---|---|---|---|
 | T01 | inventory-service | Design skill | Design document for stock reservation |
@@ -324,6 +335,7 @@ every Orca call outside the hook's reads and closes. Their tests are in `tests/t
 | T60 | notes-cli | Terminal that already ran an agent | The same brief without that sentence, with a child worktree holding an uncommitted change: no terminal closed, the worktree kept and named in the report |
 | T61 | notes-cli | Agent start in a never-used shell terminal | A request to hand one result to another repository's workspace, whose only terminal is a never-used shell terminal beside a shell that runs a dev server |
 | T62 | notes-cli | First-prompt terminal cleanup | A read-only question in a worktree that also holds a never-used shell terminal and one with typed input |
+| T67 | notes-cli | Hook removal of a finished worker's worktree | A setting change, a worktree of demo-b created without an agent, and a worker started there; the turn ends with a question, and the worktree and its local branch must be removed by the hook's detached run, not by the session |
 
 ## Comparing a change on both hosts
 

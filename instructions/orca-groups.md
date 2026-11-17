@@ -77,10 +77,11 @@ together, not Orca's lineage. A single-repository task follows [cross-repository
 
 Any session of the group removes its finished worktrees when its task ends, as "Cleanup when the task ends" in
 [Orca worktree status](orca-worktree-status.md) says, whichever session started them. In addition, when a member is
-finished, the coordinator cleans it up at once by the same checks and steps, and when the coordinator itself finishes,
-it sweeps the whole group once more for a finished member it missed. This replaces "After the handoff" in
-cross-repository work for group members. For a member that worked in a main checkout, stop only its background work,
-processes, and terminal; never touch the checkout or its default branch.
+finished, the coordinator ends the member's session at once, as the paragraph below says, and the Orca status hook
+removes the member's child worktree that the coordinator created, as "After the handoff" in cross-repository work says;
+when the coordinator itself finishes, it sweeps the whole group once more for a finished member the hook left or missed,
+by the same checks and steps. For a member that worked in a main checkout, stop only its background work, processes, and
+terminal; never touch the checkout or its default branch.
 
 Before the coordinator closes a worker's terminal, have the worker stop its own background work, such as background
 shell tasks and monitors, and confirm none remain. Afterwards confirm that no terminal, process, or listener of the

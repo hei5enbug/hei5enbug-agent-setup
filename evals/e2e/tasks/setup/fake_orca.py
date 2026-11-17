@@ -2,13 +2,19 @@
 """A fake `orca` command for the T21 evaluation: a JSON state file, real Git for removals, and a call log.
 
 The state file named by FAKE_ORCA_STATE holds repos, worktrees (a folder workspace is a worktree record with
-`kind: folder`), and terminals. Every call is appended to `calls.jsonl` beside it. All data is fictional.
+`kind: folder`), terminals, and optionally `dispatches` and `ports`. Every call is appended to `calls.jsonl` beside it.
+`worktree create` and `orchestration worker-start` make a real Git worktree of the named repository, and a started
+worker commits, pushes its branch, reports `worker_done` to the caller, and has its terminal released at once. A state
+key `kill_parent_on_close` makes the next `terminal close` end its parent process after the close, and the
+environment variable FAKE_ORCA_FAIL makes every call fail. All data is
+fictional.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -19,8 +25,11 @@ CALLS = STATE.parent / "calls.jsonl"
 VALUE_OPTIONS = frozenset({
     "--repo", "--worktree", "--parent-worktree", "--terminal", "--workspace-status", "--comment", "--display-name",
     "--title", "--name", "--base-branch", "--reference", "--command", "--timeout-ms", "--for", "--text", "--limit",
-    "--to", "--from", "--subject", "--body", "--type",
+    "--to", "--from", "--subject", "--body", "--type", "--agent", "--spec", "--branch", "--cursor", "--dispatch",
+    "--task-title", "--run", "--prompt", "--model", "--effort",
 })
+AFTER_SAVE: list = []
+NEW_WORKTREES = ("new-child", "new-top-level")
 HOST_COMMANDS = ("claude", "codex")
 HIDDEN_TERMINAL_FIELDS = ("screen", "stream", "process", "input")
 
@@ -163,13 +172,12 @@ def agent_screen(terminal: dict) -> list[str]:
     return [f"{terminal['agentIdentity']} (fake)", f"> {terminal.get('input', '')}"]
 
 
-def create_terminal(state: dict, options: dict[str, str]) -> dict:
-    target = resolve(state, options.get("--worktree"))
-    number = 1 + sum(1 for item in state["terminals"] if item["handle"].startswith("term_new_"))
-    handle = f"term_new_{number}"
-    terminal = {"handle": handle, "worktreeId": target["id"], "title": options.get("--title", "")}
-    command = options.get("--command")
-    agent = host_command(command) if command else None
+def add_terminal(state: dict, worktree_id: str, title: str = "", command: str | None = None,
+                 agent: str | None = None) -> str:
+    """The one way a terminal is made: an agent terminal, a terminal that runs `command`, or an unused shell."""
+    handle = f"term_new_{1 + sum(1 for item in state['terminals'] if item['handle'].startswith('term_new_'))}"
+    terminal = {"handle": handle, "worktreeId": worktree_id, "title": title}
+    agent = agent or (host_command(command) if command else None)
     if agent:
         terminal["agentIdentity"] = agent
     elif command:
@@ -179,6 +187,72 @@ def create_terminal(state: dict, options: dict[str, str]) -> dict:
         terminal["screen"] = ["user@host demo %"]
         terminal["stream"] = ["user@host demo %"]
     state["terminals"].append(terminal)
+    return handle
+
+
+def resolve_repo(state: dict, selector: str | None) -> dict:
+    """The main clone record of the repository a `--repo` selector names, or of the current worktree's repository."""
+    if not selector:
+        return main_clone(state, current(state))
+    kind, _, value = selector.partition(":")
+    for repo in state["repos"]:
+        if (kind == "id" and repo["id"] == value) or (kind == "name" and repo["name"] == value) or (
+                kind == "path" and os.path.realpath(repo["path"]) == os.path.realpath(value)):
+            return next(item for item in state["worktrees"] if item.get("repoId") == repo["id"] and item["isMainWorktree"])
+    raise Failure("repo_not_found", f"no repository matches {selector}")
+
+
+def create_worktree(state: dict, options: dict[str, str], agent: str | None, shell_terminal: bool) -> dict:
+    main = resolve_repo(state, options.get("--repo"))
+    name = options.get("--name")
+    if not name:
+        raise Failure("name_required", "--name is required")
+    branch = options.get("--branch") or name
+    path = Path(main["path"]).parent / f"{Path(main['path']).name}-{name}"
+    result = git(main["path"], "worktree", "add", "-q", "-b", branch, str(path), options.get("--base-branch", "main"))
+    if result.returncode != 0:
+        raise Failure("git_failed", result.stderr.strip() or "git worktree add failed")
+    parent = options.get("--parent-worktree")
+    record = {
+        "id": f"{main['repoId']}::{path}", "repoId": main["repoId"], "path": str(path), "kind": "git",
+        "isMainWorktree": False, "branch": f"refs/heads/{branch}", "displayName": name, "displayNameMode": "manual",
+        "workspaceStatus": None, "comment": "", "references": [], "childWorktreeIds": [],
+        "parentWorktreeId": resolve(state, parent)["id"] if parent else main["id"],
+        "lineage": {"createdAt": int(time.time() * 1000)},
+    }
+    state["worktrees"].append(record)
+    if agent or shell_terminal:
+        add_terminal(state, record["id"], title=agent or "zsh", agent=agent)
+    return record
+
+
+def start_worker(state: dict, options: dict[str, str]) -> dict:
+    """A worker that finishes at once: it commits a file, pushes its branch, reports to the caller, and is released."""
+    target = options.get("--worktree", "current")
+    record = (create_worktree(state, options, None, False) if target in NEW_WORKTREES
+              else resolve(state, None if target == "current" else target))
+    number = 1 + len(state.setdefault("dispatches", []))
+    work = Path(record["path"])
+    (work / f"worker-{number}.txt").write_text(f"worker {number}\n", encoding="utf-8")
+    git(record["path"], "add", "-A")
+    git(record["path"], "-c", "user.name=Demo", "-c", "user.email=demo@example.com", "commit", "-q", "-m",
+        f"Worker {number} result")
+    branch = record["branch"].removeprefix("refs/heads/")
+    pushed = git(record["path"], "push", "-q", "-u", "origin", branch)
+    outcome = "succeeded" if pushed.returncode == 0 else "failed"
+    dispatch = {"dispatchId": f"ctx_{number}", "taskId": f"task_{number}", "state": outcome, "liveness": "exited",
+                "terminal": f"term_worker_{number}", "terminalState": "released", "workspace": record["id"],
+                "host": "local"}
+    state["dispatches"].append(dispatch)
+    caller = os.environ.get("ORCA_TERMINAL_HANDLE", "")
+    state.setdefault("messages", []).append({"to": caller, "from": dispatch["terminal"], "subject": "worker_done",
+                                             "body": f"{branch} pushed"})
+    return {"worker": dispatch, "worktree": record}
+
+
+def create_terminal(state: dict, options: dict[str, str]) -> dict:
+    target = resolve(state, options.get("--worktree"))
+    handle = add_terminal(state, target["id"], options.get("--title", ""), options.get("--command"))
     return {"terminal": {"handle": handle}}
 
 
@@ -208,7 +282,7 @@ def run(words: list[str], options: dict[str, str], flags: set[str], state: dict)
     if command == "repo list":
         return {"repos": state["repos"]}
     if command == "worktree list":
-        repo = options.get("--repo", "").removeprefix("id:")
+        repo = resolve_repo(state, options["--repo"])["repoId"] if options.get("--repo") else None
         return {"worktrees": [item for item in state["worktrees"] if not repo or item.get("repoId") == repo]}
     if command == "worktree current":
         return {"worktree": current(state)}
@@ -224,6 +298,12 @@ def run(words: list[str], options: dict[str, str], flags: set[str], state: dict)
         target = resolve(state, selector)["id"] if selector else None
         return {"terminals": [{key: value for key, value in item.items() if key not in HIDDEN_TERMINAL_FIELDS}
                               for item in state["terminals"] if target is None or item["worktreeId"] == target]}
+    if command == "worktree create":
+        return {"worktree": create_worktree(state, options, options.get("--agent"), True)}
+    if command == "orchestration worker-start":
+        return start_worker(state, options)
+    if command == "orchestration worker-list":
+        return {"workers": state.get("dispatches", [])}
     if command == "terminal create":
         return create_terminal(state, options)
     if command == "terminal send":
@@ -236,6 +316,8 @@ def run(words: list[str], options: dict[str, str], flags: set[str], state: dict)
         state.setdefault("messages", []).append(message)
         return {"message": message}
     if command == "terminal close":
+        if state.pop("kill_parent_on_close", False):
+            AFTER_SAVE.append(lambda: os.kill(os.getppid(), signal.SIGKILL))
         before = len(state["terminals"])
         state["terminals"] = [item for item in state["terminals"] if item["handle"] != options.get("--terminal")]
         return {"closed": before - len(state["terminals"])}
@@ -251,7 +333,9 @@ def run(words: list[str], options: dict[str, str], flags: set[str], state: dict)
         return {"worktrees": [item for item in state["worktrees"]
                               if any(key and (key in ref or ref in key) for ref in item.get("references", []))]}
     if command == "ports":
-        return {"ports": []}
+        selector = options.get("--worktree")
+        target = resolve(state, selector)["id"] if selector else None
+        return {"ports": [item for item in state.get("ports", []) if target is None or item.get("worktreeId") == target]}
     if command == "jira connection":
         return {"connected": False}
     if command == "orchestration run-list":
@@ -276,6 +360,10 @@ def main(argv: list[str]) -> int:
         log(arguments, True)
         print("fake orca: use `orca <group> <command> --json`; groups: repo, worktree, terminal, reference, ports.")
         return 0
+    if os.environ.get("FAKE_ORCA_FAIL"):
+        log(arguments, False)
+        print(json.dumps({"ok": False, "error": {"code": "runtime_unavailable", "message": "the fake runtime is down"}}))
+        return 1
     words, options, flags = parse(arguments)
     state = load()
     try:
@@ -286,7 +374,9 @@ def main(argv: list[str]) -> int:
         return 1
     save(state)
     log(arguments, True)
-    print(json.dumps({"ok": True, "result": result}))
+    print(json.dumps({"ok": True, "result": result}), flush=True)
+    for action in AFTER_SAVE:
+        action()
     return 0
 
 

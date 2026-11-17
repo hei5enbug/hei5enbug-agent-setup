@@ -275,6 +275,16 @@ T59부터 T62는 `instructions/cross-repository.md`의 인수인계 규칙과 `s
 Orca 호출로 판단할 것이 없다. 훅이 세션의 첫 응답 전에 쓰지 않은 터미널을 닫아야 하며, 검사는 그 닫기가 훅의 읽기와
 닫기가 아닌 모든 Orca 호출보다 앞서는지 확인한다. 테스트는 `tests/test_e2e_eval_graders.py`에 있다.
 
+T67은 `scripts/orca_status_hook.py`와 그 분리 실행 `scripts/orca_cleanup_run.py`의 worktree 삭제를 평가한다. 가짜 `orca`는
+`worktree create`와 `orchestration worker-start`에도 실제 Git worktree를 만들고, 시작된 worker는 즉시 커밋하고 자기
+브랜치를 푸시하고 `worker_done`을 보고하며 터미널이 해제된다. `worker-list`와 `ports`는 상태 파일의 `dispatches`와
+`ports`를 읽는다. 이 작업은 분리 실행이 스스로, 그리고 자신이 시작한 모든 프로세스와 함께 끝나는 시간인
+`HEI5ENBUG_CLEANUP_RUN_SECONDS`를 45로 정하므로, 어떤 실행도 시험보다 45초를 넘겨 살지 않고 아래의 60초 대기가 항상 이를
+덮는다. 세션이 턴을 질문으로 끝내므로 삭제는 그 턴의 끝에서 자기만의 프로세스 세션으로 시작하는 훅의 실행에서만
+나올 수 있다. 검사는 삭제가 성공할 때까지 최대 `E2E_CLEANUP_WAIT_SECONDS`(기본 60)초 기다리며, 실행의 폴더 `/`가 아니라
+세션 자신의 폴더에서 한 삭제는 `removed-by-hook`을 실패시키므로, 예전 문서 규칙대로 세션이 직접 worktree를 삭제하면
+통과하지 못한다. 테스트는 `tests/test_e2e_eval_worktree_cleanup_hook.py`에 있다.
+
 | 작업 | 픽스처 | 확인하는 경로 | 요청 |
 |---|---|---|---|
 | T01 | inventory-service | 설계 스킬 | 재고 예약 설계 문서 |
@@ -302,6 +312,7 @@ Orca 호출로 판단할 것이 없다. 훅이 세션의 첫 응답 전에 쓰�
 | T60 | notes-cli | 이미 에이전트가 돈 터미널 | 그 문장이 없는 같은 요약과, 커밋하지 않은 변경이 있는 자식 worktree. 터미널을 닫지 않고 worktree를 남기며 보고에 그 이름을 적어야 한다 |
 | T61 | notes-cli | 쓰지 않은 쉘 터미널에서 에이전트 시작 | 결과 하나를 다른 저장소의 workspace에 맡기라는 요청. 그 workspace의 터미널은 쓰지 않은 쉘 하나뿐이고, 개발 서버가 도는 쉘이 옆에 있다 |
 | T62 | notes-cli | 첫 프롬프트의 터미널 정리 | 쓰지 않은 쉘 터미널과 입력이 있는 쉘 터미널이 함께 있는 worktree에서의 읽기 전용 질문 |
+| T67 | notes-cli | 훅이 끝난 worker의 worktree를 삭제 | 설정 변경, 에이전트 없이 만든 demo-b의 worktree, 거기서 시작한 worker. 턴을 질문으로 끝내며, worktree와 로컬 브랜치는 세션이 아니라 훅의 분리 실행이 삭제해야 한다 |
 
 ## 두 호스트에서 변경 비교
 

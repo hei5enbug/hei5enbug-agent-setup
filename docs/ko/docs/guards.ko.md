@@ -181,8 +181,8 @@ Codex에서는 `/hooks`에서 이 훅을 신뢰해야 합니다.
 
 훅 스크립트 하나인 `scripts/orca_status_hook.py`가 세션의 탭 제목을 유지하고, 이름이나 탭 제목이 없으면 세션에 알립니다.
 보드 상태, worktree 설명, 읽지 않음 플래그는 오래된 값이 되므로 쓰지 않으며, 상태는 사용자가 정하고 세션이 질문하면
-Orca가 스스로 사용자에게 알립니다. Orca에 쓰는 것은 세션의 첫 프롬프트에서 쓰지 않은 쉘 터미널을 닫는 것 하나뿐이며,
-아래에서 설명합니다. 이 훅은 `ORCA_TERMINAL_HANDLE`이 설정된 경우에만
+Orca가 스스로 사용자에게 알립니다. Orca에 쓰는 것은 세션의 첫 프롬프트에서 쓰지 않은 쉘 터미널을 닫는 것과 세션이 만든
+끝난 자식 worktree를 삭제하는 것이며, 둘 다 아래에서 설명합니다. 이 훅은 `ORCA_TERMINAL_HANDLE`이 설정된 경우에만
 실행되고, 서브에이전트나 지정된 작업자에서는 실행되지 않으며, Orca, Git, 기록을 읽지 못하면 그 이벤트를 통과시킵니다.
 Codex는 도구 호출을 스크립트 텍스트로 기록하므로 Claude Code 기록만 읽습니다.
 
@@ -204,6 +204,38 @@ merge, or question on the titled work keeps the title, as does one the user set.
 파일에 지문 `T1`을 기록하므로 같은 세션의 이후 프롬프트는 터미널을 다시 읽지 않습니다. 사용자나 인수인계가 새
 workspace에서 시작한 세션 옆에 빈 쉘이 남지 않게 합니다. Claude Code와 Codex 모두 플러그인의 `UserPromptSubmit` 명령 훅을
 프롬프트가 모델에 닿기 전에 실행하므로 훅은 두 호스트에서 같게 동작합니다.
+
+훅은 세션이 만든 자식 worktree를, 거기서 일한 에이전트 세션이 끝난 뒤에 모델 턴 없이 코드로 삭제합니다. Bash 명령의
+`PostToolUse`마다 도구 입력에서만(명령의 출력은 절대 읽지 않습니다) `orca worktree create`와
+`orca orchestration worker-start --worktree new-child`가 만드는 worktree, 그리고 `worker-start`와
+`orca terminal create --command claude`가 이름이 있는 worktree에 시작하는 에이전트 세션을 상태 파일에 기록하며, 변수가 든
+저장소나 worktree 선택자는 버립니다. 만든 worktree는 `orca worktree list`가 보여 주는 이름 붙은 저장소의 주 클론이 아닌
+worktree 중 `lineage.createdAt`이 그 명령이 실행된 시간 안에 있고 세션의 앞선 명령이 차지하지 않은 하나입니다. 실행 시간은
+Claude Code `PostToolUse` 입력의 `duration_ms`이고, 시간을 보고하지 않는 Codex에서는 이벤트 앞 120초입니다. 개수가 하나가
+아니면 아무것도 기록하지도 삭제하지도 않습니다. 기록된 worktree가 삭제되거나 영구히 유지된 것이 아니고 세션의 앞선 실행이
+잠금을 쥐고 있지 않으면, `UserPromptSubmit`과 `Stop`마다 훅이 `scripts/orca_cleanup_run.py`를 자기만의 프로세스 세션으로
+시작하고 시간 제한 안에 돌아옵니다. 실행은 세션의 터미널이 닫힌 뒤에도 계속되며, 터미널과 같은 세션의 자식은 그렇지
+못합니다. worktree를 만들지 않은 세션, 앞선 실행이 아직 도는 세션, Orca가 관리하는 터미널 밖의 세션(`ORCA_USER_DATA_PATH` 없음)은
+프로세스를 시작하지 않으므로 기록된 것이 없는 프롬프트에는 비용이 없습니다. 실행은 `git fetch`나 Orca CLI가 멈춰도
+`HEI5ENBUG_CLEANUP_RUN_SECONDS`(120초) 뒤에 자신이 시작한 모든 프로세스와 함께 스스로 끝납니다. 두 호스트 모두 플러그인
+훅에 이 세 이벤트를 실행하므로(Claude Code와 Codex 훅 문서로 확인), 문서 규칙만 남는 호스트는 없습니다.
+
+실행은 worktree를 하나씩 처리합니다. 주 클론, 세션이 일하는 worktree, 자식 worktree가 있는 worktree, 실행이 같은 세션에서
+앞서 삭제한 브랜치의 worktree이면 유지합니다. `orca orchestration worker-list`가 보여 주는 그 worktree의 worker
+Dispatch가 성공하지 않았거나 읽을 수 없을 때, `git status --porcelain`이 비어 있지 않을 때, `git fetch` 뒤 브랜치에
+업스트림이 없거나 업스트림에 없는 커밋이 있을 때, 무시된 경로가 `__pycache__`, `.pytest_cache`, `node_modules`, `build`,
+`dist`, `.gradle`, `*.tsbuildinfo`가 아닐 때(실행은 그 파일을 복사하거나 삭제하지 않습니다), 열린 터미널이 에이전트
+터미널이거나(`worker_done` 뒤 유휴 상태도 포함) 쓰지 않은 쉘 터미널이 아닐 때도 유지합니다. 모두 통과해야 그 쉘 터미널을
+닫고, worktree 안에 작업 디렉터리를 둔 프로세스가 없는지와 `orca ports`에 열린 포트가 없는지 확인하고, 상태와 업스트림을
+한 번 더 확인한 뒤 `orca worktree rm --worktree id:<id> --delete-branch`를 실행합니다. 성립하지 않아서든 Orca나 Git이
+실패하거나 `HEI5ENBUG_CLEANUP_STEP_SECONDS`(30초) 안에 답하지 않아서든 확인할 수 없는 검사가 있으면 worktree를 유지하고
+상태 파일 옆의 `<session id>.cleanup.json`에 그 검사를 기록합니다. 두 단계 사이에서 멈춘 실행은 여전히 검사를 통과하는
+worktree를 남기고, 다음 프롬프트나 턴 끝이 유지된 worktree를 다시 시도합니다. 실행은 원격 브랜치를 삭제하지 않고, pull
+request를 바꾸지 않으며, 에이전트 세션이 돈 적 없는 worktree는 "작업이 끝날 때의 정리"에 맡깁니다. 실행이 끝난 뒤 첫
+이벤트에서 훅이 사용자에게 `systemMessage` 한 줄을 돌려주고(예: "Orca cleanup: removed worktree `feature/demo` of
+`demo-b`; its work is on `origin/feature/demo`, and Orca deleted the local branch. Kept `feature/spike` of `demo-c`: 1
+commit is not pushed."), 다음 `UserPromptSubmit`이 같은 내용을 세션 컨텍스트에 한 번 더합니다. 이를 위해 턴을 이어 가게 하지
+않으므로 모델 턴 비용이 없습니다.
 
 두 가지는 아직 모델이 필요하므로, `Stop` 훅이 상태마다 한 번 턴을 이어 가게 하며, 정확한 명령을 알려 주고 답을 반복하지
 않고 턴을 끝내라고 요청하는 두 문장 이하의 알림을 보냅니다. Claude Code는 이 알림을 훅 오류가 아니라

@@ -106,7 +106,8 @@ A session that receives such a brief, whether or not it ends so:
    terminal.
 
 When the handoff started the session in a child worktree, the delegate never removes the worktree it runs in: the
-session that sent the handoff removes it by "Cleanup when the task ends" once the delegate's terminal is closed.
+session that sent the handoff removes it once the delegate's terminal is closed: its Orca status hook, as "After the
+handoff" says, or else "Cleanup when the task ends".
 
 ## Messaging another session
 
@@ -151,12 +152,10 @@ protected value into it; the session that needs the file reports it to the user.
   `git status --porcelain --ignored` lists only regenerable caches such as `__pycache__`, `.pytest_cache`, or
   `node_modules`. When a check fails, offer once instead and list the ignored files; remove only what the user
   approves, and otherwise remove a worktree or branch only when the user asks.
-- A child worktree that this session started is also removed, with its terminal and local branch, when no agent
-  session runs in it any more and its work is on the remote, even before its pull request is merged. Confirm all of
-  these: `git status --porcelain` is empty; after `git fetch`, `git rev-list --count @{upstream}..HEAD` is 0, so a
-  branch with no upstream does not pass; no process has its working directory inside the worktree, for example from
-  `lsof -d cwd -Fpn`; and ignored files are only regenerable caches or build output. First copy an ignored file that
-  is not regenerable, such as a handoff note, to this session's worktree, then go on. The pull request and the remote
-  branch stay, and the reply names the branch that keeps the work. When later work needs the worktree, recreate it
-  from the remote branch with steps 3 and 4: create the worktree, then `git switch <branch>` because the branch
-  exists on `origin`. When a check fails, keep the worktree and name the check.
+- The plugin's Orca status hook removes a child worktree that this session created, with its never-used shell
+  terminals and local branch, once an agent session ran there and none is open any more, its work is on the remote
+  with nothing uncommitted, only regenerable build output is ignored, and no process or listener is left; it never
+  removes the pull request or the remote branch and keeps a worktree it cannot confirm. When later work needs a
+  removed worktree, recreate it from the remote branch with steps 3 and 4: create the worktree, then `git switch <branch>` because the branch exists on `origin`; the hook never removes
+  that worktree again, so "Cleanup when the task ends" covers it. The final report names each worktree the hook removed
+  or kept, from the hook's line, with the remote branch that holds the work or the check that kept it.
