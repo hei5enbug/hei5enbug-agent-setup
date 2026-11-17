@@ -1,6 +1,7 @@
 """Both changes on one database file: the merged result has to carry both."""
 
 from dockit.cli import main
+from dockit.features import notes, pins, visits
 from dockit.store import Store
 
 
@@ -15,18 +16,17 @@ def test_visits_pins_and_notes_live_in_the_same_file(tmp_path, capsys):
         assert main(["--db", db, *command]) == 0
     capsys.readouterr()
     store = Store(tmp_path / "db.sqlite")
-    assert (store.visit_counts(), store.pins(), store.notes("guide")) == ({"guide": 2}, ["guide"], ["keep"])
+    assert (visits.visit_counts(store), pins.pinned(store), notes.notes_of(store, "guide")) == ({"guide": 2}, ["guide"], ["keep"])
 
 
 def test_a_database_made_before_the_changes_gets_both_new_tables(tmp_path):
-    path = tmp_path / "old.sqlite"
-    store = Store(path)
+    store = Store(tmp_path / "old.sqlite")
     with store.connect() as connection:
         connection.execute("CREATE TABLE visits (slug TEXT PRIMARY KEY, count INTEGER NOT NULL)")
         connection.execute("INSERT INTO schema_migrations (name) VALUES ('create-visits')")
         connection.execute("INSERT INTO visits (slug, count) VALUES ('guide', 4)")
     assert sorted(store.migrate()) == ["create-notes", "create-pins"]
-    assert store.visit_counts() == {"guide": 4}
-    store.pin("guide")
-    store.add_note("guide", "ok")
-    assert (store.pins(), store.notes("guide")) == (["guide"], ["ok"])
+    assert visits.visit_counts(store) == {"guide": 4}
+    pins.pin(store, "guide")
+    notes.add_note(store, "guide", "ok")
+    assert (pins.pinned(store), notes.notes_of(store, "guide")) == (["guide"], ["ok"])

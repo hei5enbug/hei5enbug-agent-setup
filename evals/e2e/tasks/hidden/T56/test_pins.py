@@ -1,23 +1,24 @@
 import sqlite3
 
 from dockit.cli import main
+from dockit.features import pins
 from dockit.store import Store
 
 
 def test_pins_are_stored_sorted_and_pinning_twice_keeps_one(tmp_path):
     store = Store.open(tmp_path / "db.sqlite")
-    store.pin("guide")
-    store.pin("changelog")
-    store.pin("guide")
-    assert store.pins() == ["changelog", "guide"]
+    pins.pin(store, "guide")
+    pins.pin(store, "changelog")
+    pins.pin(store, "guide")
+    assert pins.pinned(store) == ["changelog", "guide"]
 
 
 def test_unpin_removes_a_pin_and_ignores_a_page_that_is_not_pinned(tmp_path):
     store = Store.open(tmp_path / "db.sqlite")
-    store.pin("guide")
-    store.unpin("guide")
-    store.unpin("index")
-    assert store.pins() == []
+    pins.pin(store, "guide")
+    pins.unpin(store, "guide")
+    pins.unpin(store, "index")
+    assert pins.pinned(store) == []
 
 
 def test_the_pins_migration_is_recorded_once(tmp_path):

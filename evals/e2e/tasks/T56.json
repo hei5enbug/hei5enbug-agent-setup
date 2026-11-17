@@ -75,9 +75,11 @@
       "required": true,
       "weight": 1,
       "allow": [
-        "dockit/store.py",
-        "dockit/cli.py",
+        "dockit/features/pins.py",
+        "dockit/features/notes.py",
         "tests/**",
+        "docs/features/**",
+        "docs/ko/docs/features/**",
         "README.md",
         "docs/ko/README.ko.md"
       ]
@@ -90,11 +92,11 @@
       "function": "workers_not_at_once"
     },
     {
-      "id": "readme-pin",
+      "id": "docs-pin",
       "kind": "file_contains",
       "required": false,
       "weight": 1,
-      "path": "README.md",
+      "path": "docs/features/pins.md",
       "pattern": "(?i)\\bpin\\b"
     },
     {

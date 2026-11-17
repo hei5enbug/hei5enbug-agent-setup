@@ -3,4 +3,4 @@
 1) dockit/sitemap.py: sitemap.xml에서 draft: true 페이지를 빼고, 페이지에 updated 날짜가 있으면 <url> 안의 <loc> 바로 뒤에 <lastmod>YYYY-MM-DD</lastmod>를 넣어줘. 날짜가 없는 페이지에는 lastmod를 만들지 마.
 2) dockit/search_index.py: search-index.json에서도 draft 페이지를 빼고, 항목마다 "headings"(본문의 ## 제목들을 나온 순서대로 적은 목록, 없으면 빈 목록)와 "updated"(페이지의 updated, 없으면 null)를 넣어줘.
 
-두 변경 모두 python3 -m dockit build 로 빌드하고 python3 tools/check_site.py 가 통과하는지 확인해줘. draft 페이지의 html 파일은 지금처럼 만들어져야 해. 변경마다 테스트를 추가하고 README와 한국어 미러(docs/ko/README.ko.md)도 고쳐줘.
+두 변경 모두 python3 -m dockit build 로 빌드하고 python3 tools/check_site.py 가 통과하는지 확인해줘. draft 페이지의 html 파일은 지금처럼 만들어져야 해. 변경마다 새 테스트 파일(tests/test_sitemap_drafts.py, tests/test_search_index_headings.py)에 테스트를 추가하고, 변경 설명은 README가 가리키는 docs/sitemap.md, docs/search-index.md와 그 한국어 미러(docs/ko/docs/sitemap.ko.md, search-index.ko.md)에 적어줘.

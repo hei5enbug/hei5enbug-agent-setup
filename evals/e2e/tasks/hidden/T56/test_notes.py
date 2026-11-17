@@ -1,16 +1,17 @@
 import sqlite3
 
 from dockit.cli import main
+from dockit.features import notes
 from dockit.store import Store
 
 
 def test_notes_get_increasing_ids_and_come_back_in_order(tmp_path):
     store = Store.open(tmp_path / "db.sqlite")
-    assert store.add_note("guide", "first") == 1
-    assert store.add_note("index", "elsewhere") == 2
-    assert store.add_note("guide", "second") == 3
-    assert store.notes("guide") == ["first", "second"]
-    assert store.notes("changelog") == []
+    assert notes.add_note(store, "guide", "first") == 1
+    assert notes.add_note(store, "index", "elsewhere") == 2
+    assert notes.add_note(store, "guide", "second") == 3
+    assert notes.notes_of(store, "guide") == ["first", "second"]
+    assert notes.notes_of(store, "changelog") == []
 
 
 def test_the_notes_migration_is_recorded_once(tmp_path):

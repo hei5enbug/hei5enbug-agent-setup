@@ -1,4 +1,4 @@
-"""The local database of visit counts."""
+"""The local database."""
 
 from __future__ import annotations
 
@@ -6,11 +6,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-from . import ROOT
-
-MIGRATIONS = [
-    ("create-visits", "CREATE TABLE visits (slug TEXT PRIMARY KEY, count INTEGER NOT NULL)"),
-]
+from . import ROOT, features
 
 
 def default_path() -> Path:
@@ -28,11 +24,11 @@ class Store:
         return connection
 
     def migrate(self) -> list[str]:
-        """Apply every migration that is not applied yet and return their names."""
+        """Apply every migration of every feature that is not applied yet and return their names."""
         applied = []
         with self.connect() as connection:
             done = {row[0] for row in connection.execute("SELECT name FROM schema_migrations")}
-            for name, statement in MIGRATIONS:
+            for name, statement in features.migrations():
                 if name not in done:
                     connection.execute(statement)
                     connection.execute("INSERT INTO schema_migrations (name) VALUES (?)", (name,))
@@ -44,14 +40,3 @@ class Store:
         store = cls(path)
         store.migrate()
         return store
-
-    def record_visit(self, slug: str) -> int:
-        """Add one visit to a page and return its new count."""
-        with self.connect() as connection:
-            connection.execute(
-                "INSERT INTO visits (slug, count) VALUES (?, 1) ON CONFLICT(slug) DO UPDATE SET count = count + 1", (slug,))
-            return connection.execute("SELECT count FROM visits WHERE slug = ?", (slug,)).fetchone()[0]
-
-    def visit_counts(self) -> dict[str, int]:
-        with self.connect() as connection:
-            return dict(connection.execute("SELECT slug, count FROM visits ORDER BY slug"))

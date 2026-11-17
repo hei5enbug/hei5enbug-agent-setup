@@ -6,6 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from . import features
 from .build import DEFAULT_OUT, build
 from .lockfile import Busy, held
 from .store import Store, default_path
@@ -17,18 +18,16 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     build_command = commands.add_parser("build", help="build the site")
     build_command.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    visit = commands.add_parser("visit", help="add one visit to a page")
-    visit.add_argument("slug")
-    commands.add_parser("visits", help="print the visit counts")
+    for module in features.modules():
+        if hasattr(module, "register"):
+            module.register(commands)
     return parser
 
 
 def run(args: argparse.Namespace, store: Store) -> int:
-    if args.command == "visit":
-        print(f"{args.slug} {store.record_visit(args.slug)}")
-    elif args.command == "visits":
-        for slug, count in store.visit_counts().items():
-            print(f"{slug} {count}")
+    for module in features.modules():
+        if hasattr(module, "handle") and module.handle(args, store):
+            break
     return 0
 
 

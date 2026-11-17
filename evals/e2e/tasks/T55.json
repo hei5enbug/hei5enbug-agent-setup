@@ -75,16 +75,20 @@
         "dockit/sitemap.py",
         "dockit/search_index.py",
         "tests/**",
+        "docs/sitemap.md",
+        "docs/search-index.md",
+        "docs/ko/docs/sitemap.ko.md",
+        "docs/ko/docs/search-index.ko.md",
         "README.md",
         "docs/ko/README.ko.md"
       ]
     },
     {
-      "id": "readme-lastmod",
+      "id": "docs-lastmod",
       "kind": "file_contains",
       "required": false,
       "weight": 1,
-      "path": "README.md",
+      "path": "docs/sitemap.md",
       "pattern": "(?i)lastmod"
     },
     {
@@ -92,7 +96,7 @@
       "kind": "file_contains",
       "required": false,
       "weight": 1,
-      "path": "docs/ko/README.ko.md",
+      "path": "docs/ko/docs/search-index.ko.md",
       "pattern": "(?i)headings|제목"
     },
     {

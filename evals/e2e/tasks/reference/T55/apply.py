@@ -15,10 +15,10 @@ def sitemap_change() -> None:
         lastmod = f"<lastmod>{page.updated}</lastmod>" if page.updated else ""
         lines.append(f"  <url><loc>{BASE_URL}/{page.slug}.html</loc>{lastmod}</url>")
 ''')
-    replace(repo, "README.md", "The sitemap lists every page.\n",
-            "The sitemap lists every page that is not a draft, with the page's `updated` date as `lastmod` when it has one.\n")
-    replace(repo, "docs/ko/README.ko.md", "사이트맵에는 모든 페이지가 들어갑니다.\n",
-            "사이트맵에는 초안이 아닌 모든 페이지가 들어가고, 페이지에 `updated` 날짜가 있으면 `lastmod`로 함께 들어갑니다.\n")
+    replace(repo, "docs/sitemap.md", "`sitemap.xml` lists every page.\n",
+            "`sitemap.xml` lists every page that is not a draft, with the page's `updated` date as `lastmod` when it has one.\n")
+    replace(repo, "docs/ko/docs/sitemap.ko.md", "`sitemap.xml`에는 모든 페이지가 들어갑니다.\n",
+            "`sitemap.xml`에는 초안이 아닌 모든 페이지가 들어가고, 페이지에 `updated` 날짜가 있으면 `lastmod`로 함께 들어갑니다.\n")
     write(repo, "tests/test_sitemap_drafts.py", '''from pathlib import Path
 
 from dockit import sitemap
@@ -43,10 +43,10 @@ def search_change() -> None:
         for page in pages if not page.draft
     ]
 ''')
-    replace(repo, "README.md", "The search index lists every page's URL and title.\n",
-            "The search index lists the URL, title, level-2 headings, and `updated` date of every page that is not a draft.\n")
-    replace(repo, "docs/ko/README.ko.md", "검색 색인에는 모든 페이지의 URL과 제목이 들어갑니다.\n",
-            "검색 색인에는 초안이 아닌 모든 페이지의 URL, 제목, 2단계 제목, `updated` 날짜가 들어갑니다.\n")
+    replace(repo, "docs/search-index.md", "`search-index.json` lists the URL and title of every page.\n",
+            "`search-index.json` lists the URL, title, level-2 headings, and `updated` date of every page that is not a draft.\n")
+    replace(repo, "docs/ko/docs/search-index.ko.md", "`search-index.json`에는 모든 페이지의 URL과 제목이 들어갑니다.\n",
+            "`search-index.json`에는 초안이 아닌 모든 페이지의 URL, 제목, 2단계 제목, `updated` 날짜가 들어갑니다.\n")
     write(repo, "tests/test_search_index_headings.py", '''import json
 from pathlib import Path
 

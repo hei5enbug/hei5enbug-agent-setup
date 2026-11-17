@@ -10,7 +10,7 @@
 - Write documentation in English. Every English Markdown document has a Korean mirror at
   `docs/ko/<path>.ko.md`, where `<path>` is the document's path in the repository, and the mirror is updated in
   the same change.
-- User-visible changes to the commands or to the built files are described in `README.md`.
+- User-visible changes are described in `README.md`, or in the page of `docs/` that it points to for that command, feature, or built file.
 
 ## Commits
 

@@ -422,5 +422,61 @@ class CallSpanTest(unittest.TestCase):
         self.assertEqual(quiet, [])
 
 
+class DisjointChangesTest(unittest.TestCase):
+    """The two changes of T55 and of T56 touch no common file, and the prompts say nothing about how to organize the work."""
+
+    CASES = {"T55": ("T55_SKIP_CHANGES", "search", "sitemap"), "T56": ("T56_SKIP_CHANGES", "notes", "pins")}
+
+    def changed_files(self, task_id: str, variable: str, skipped: str) -> set[str]:
+        import os
+        from unittest import mock
+
+        from harness import graders
+        from test_e2e_eval_graders import FIXTURES_ROOT, TASKS_ROOT, apply_reference
+
+        task = json.loads((TASKS_ROOT / f"{task_id}.json").read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory) / "repo"
+            graders.materialize_fixture(task, FIXTURES_ROOT, TASKS_ROOT, repo)
+            with mock.patch.dict(os.environ, {variable: skipped}):
+                apply_reference(task_id, repo)
+            listing = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all"], cwd=repo, check=True,
+                                     capture_output=True, text=True).stdout
+        return {line[3:] for line in listing.splitlines()}
+
+    def test_두_변경이_바꾸는_파일_집합은_서로_겹치지_않고_합치면_전체_해법이다(self):
+        """T55는 사이트맵과 검색 색인 변경, T56은 고정과 메모 변경 각각의 기준 해법이 바꾸는 파일이 하나도 겹치지 않고 각각 문서와 미러와 테스트를 포함한다."""
+        for task_id, (variable, left_out_first, left_out_second) in self.CASES.items():
+            with self.subTest(task_id):
+                # given
+                only_second = self.changed_files(task_id, variable, left_out_first)
+                only_first = self.changed_files(task_id, variable, left_out_second)
+                both_changes = self.changed_files(task_id, variable, "none")
+
+                # when
+                shared = only_first & only_second
+
+                # then
+                self.assertEqual(shared, set(), shared)
+                self.assertEqual(only_first | only_second, both_changes)
+                for files in (only_first, only_second):
+                    self.assertTrue(any(name.startswith("tests/") for name in files), files)
+                    self.assertTrue(any(name.startswith("docs/ko/") for name in files), files)
+                    self.assertTrue(any(name.startswith("docs/") and not name.startswith("docs/ko/") for name in files), files)
+
+    def test_과제_프롬프트는_작업_분담이나_작업_공간_배치를_알려_주지_않는다(self):
+        """T55와 T56 프롬프트에는 worker, 워커, worktree, 워크트리, 병렬, 순차, parallel, sequential, 격리 같은 말이 없다."""
+        # given
+        words = re.compile(r"worker|워커|worktree|워크트리|병렬|순차|동시|parallel|sequen|격리|isolat|위임|delegat", re.IGNORECASE)
+
+        for task_id in ("T55", "T56"):
+            with self.subTest(task_id):
+                # when
+                text = (E2E_ROOT / "tasks" / "prompts" / f"{task_id}.txt").read_text(encoding="utf-8")
+
+                # then
+                self.assertEqual(words.findall(text), [])
+
+
 if __name__ == "__main__":
     unittest.main()
