@@ -14,7 +14,7 @@ from pathlib import Path
 import language_guard
 import plugin_toggles
 
-REGISTRY = json.loads((Path(__file__).resolve().parents[1] / "config" / "model-registry.json").read_text(encoding="utf-8"))
+REGISTRY_PATH = Path(__file__).resolve().parents[1] / "config" / "model-registry.json"
 RESERVED = ("fable", "astra")
 NOT_A_PROMPT = (
     "<task-notification", "<local-command-", "<system-reminder", "<environment_context", "<user_instructions",
@@ -84,7 +84,7 @@ def latest_prompt(event: dict) -> str | None:
 
 
 def reason(problem: str) -> str:
-    pins = REGISTRY["pins"]
+    pins = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))["pins"]
     model, effort, _ = plugin_toggles.worker_setting("codex")
     return REASON.format(
         problem=problem, claude_worker=pins["claude-sonnet"], codex_worker=model, codex_effort=effort,
