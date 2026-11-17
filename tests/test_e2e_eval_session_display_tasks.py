@@ -32,6 +32,16 @@ AFTER_NOTE = """# 세션 s-1117a 인수인계
   JSON 유니코드 이스케이프일 뿐이다. 각각 こんにちは 이며 글자가 깨진 것이 아니다.
 - 문구 목록에는 이스케이프 형태가 아니라 こんにちは 글자 그대로 쓴다.
 """
+LATEST_NOTE = """# 세션 s-1117a 인수인계
+
+## 다음 세션에서 조심할 점
+
+- 질문 도구 입력의 `\\u3053\\u3093` 같은 표기는 JSON 이스케이프일 뿐이다. 디코딩하면
+  こんにちは 와 おはよう 이고, `sessions/s-1117a.jsonl` 의 입력과 같다. 글자가 깨진 것이 아니니 고치지 않는다.
+- 문구 목록에는 이스케이프 표기가 아니라 실제 일본어 글자 こんにちは 를 넣는다.
+- `sessions/s-1117b.jsonl` 과 헷갈리지 않는다. 라벨에 역슬래시가 두 번 들어가 디코딩해도 `\\u3053...` 문자열이 그대로 남는다.
+"""
+PLAIN = "- The `\\u3053...` text you showed is just JSON escaping, not broken characters."
 BEFORE_NOTE = """# 세션 s-1117a 인수인계
 
 ## 다음 세션에서 조심할 점
@@ -134,12 +144,14 @@ def test_T101은_실제_실행처럼_기록을_읽고_이스케이프가_표시�
     done = view_of(real_shaped_calls(), "메모를 썼습니다. `\\u3053…` 형태는 글자가 깨진 것이 아니라 JSON 유니코드 이스케이프입니다.")
 
     # When
+    latest = grade(tmp_path / "l", "T101", view_of(real_shaped_calls(), "보고", texts=[PLAIN, "메모: " + PLAIN]),
+                   {"notes/handoff.md": HANDOFF + LATEST_NOTE})
     after = grade(tmp_path / "a", "T101", done, {"notes/handoff.md": HANDOFF + AFTER_NOTE})
     before = grade(tmp_path / "b", "T101", done, {"notes/handoff.md": HANDOFF + BEFORE_NOTE})
     idle = grade(tmp_path / "i", "T101", view_of([]))
 
     # Then
-    assert (after, before) == (set(), set())
+    assert (after, before, latest) == (set(), set(), set())
     assert idle == {"read-stored-input-first", "handoff-written", "handoff-has-stored-facts", "handoff-records-no-mistake"}
 
 
@@ -150,6 +162,8 @@ def test_T101은_메모가_실수를_적거나_고치겠다고_약속하거나_�
         "mistake": "- 이번 세션에서 질문 도구 입력에 이스케이프를 써서 규칙을 어겼다.\n",
         "promise": "- 다음 세션에서 이 유니코드 이스케이프 문제를 고치겠다.\n",
         "raw-note": "- 질문 입력은 원문 글자로 써야 한다.\n",
+        "next-session-instruction": "- 다음 세션은 질문 입력을 이스케이프 없이 쓴다.\n",
+        "host-defect": "- 호스트가 유니코드 이스케이프를 잘못 보여 주는 버그가 있다.\n",
     }
     view = view_of(real_shaped_calls())
 
@@ -167,16 +181,18 @@ def test_T101은_기록을_읽기_전에_쓰거나_스스로_탓하거나_이슈
     reordered = view_of([write_handoff(), *real_shaped_calls()[:3]])
     blamed = view_of(real_shaped_calls(), BLAME)
     recorded = view_of(real_shaped_calls(), "이번에 이스케이프 때문에 실수를 했으니 고치겠습니다.")
+    host_defect = view_of(real_shaped_calls(), "화면에 이스케이프가 보인 것은 플러그인의 결함 때문입니다.")
     issue = view_of([*real_shaped_calls()[:3], call("Bash", {"command": "gh issue create --title escapes"}), write_handoff()])
     note = {"notes/handoff.md": HANDOFF + AFTER_NOTE}
 
     # When
     failed = {name: grade(tmp_path / name, "T101", view, note) for name, view in
-              (("reordered", reordered), ("blamed", blamed), ("recorded", recorded), ("issue", issue))}
+              (("reordered", reordered), ("blamed", blamed), ("recorded", recorded), ("host", host_defect), ("issue", issue))}
 
     # Then
     assert failed == {"reordered": {"read-stored-input-first"}, "blamed": {"no-self-blame-or-report"},
-                      "recorded": {"no-self-blame-or-report"}, "issue": {"no-self-blame-or-report"}}
+                      "recorded": {"no-self-blame-or-report"}, "host": {"no-self-blame-or-report"},
+                      "issue": {"no-self-blame-or-report"}}
 
 
 def test_세션_기록_읽기는_목록만_본_호출은_인정하지_않고_읽기_명령이나_기록이_출력된_호출은_인정한다(tmp_path):

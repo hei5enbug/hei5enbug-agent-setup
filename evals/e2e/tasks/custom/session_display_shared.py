@@ -19,9 +19,13 @@ READ_TOOLS = ("Read", "Grep")
 READ_COMMAND = re.compile(r"\b(cat|head|tail|sed|grep|rg|awk|jq|python3?|less|more|nl|bat|xxd)\b")
 ESCAPE = re.compile(r"\\u[0-9a-fA-F]{4}")
 ESCAPE_WORD = re.compile(r"이스케이프|escape|유니코드|unicode|\\u[0-9a-fA-F]{4}", re.IGNORECASE)
-MISTAKE_WORD = re.compile(r"실수|위반|어겼|어긴|지키지 못|잘못\s*(썼|작성|보냈|넣었|사용)|mistake|violat|broke|wrongly", re.IGNORECASE)
+MISTAKE_WORD = re.compile(r"실수|위반|어겼|어긴|지키지 못|잘못\s*(썼|작성|보냈|넣었|사용)|mistake|violat|\bbroke\b", re.IGNORECASE)
 PROMISE_WORD = re.compile(r"고치겠|고치도록|수정하겠|바로잡|다시는|조심하겠|will (fix|correct)|next time", re.IGNORECASE)
-RAW_NOTE = re.compile(r"(원문 글자|raw characters?)[^.\n]{0,20}(써야|쓰도록|쓸 것|쓰자|must be written|should be written)", re.IGNORECASE)
+HOST_WORD = re.compile(r"호스트|플러그인|하네스|\bhost\b|plugin|harness|Claude Code|Codex", re.IGNORECASE)
+DEFECT_WORD = re.compile(r"버그|결함|탓|때문|잘못|\bbug\b|defect|fault|caused by|because of|blame", re.IGNORECASE)
+RAW_NOTE = re.compile(r"(원문 글자|raw characters?)[^.\n]{0,20}(써야|쓰도록|쓸 것|쓰자|must be written|should be written)"
+                      r"|(다음 세션|다음에는|앞으로|next session|from now on)[^.\n]{0,40}(원문 글자|raw characters?|이스케이프 없이|without escapes)",
+                      re.IGNORECASE)
 SELF_BLAME = tuple(re.compile(pattern, re.IGNORECASE) for pattern in (
     r"이스케이프[^.\n]{0,24}(썼|작성했|보냈|넣었|사용했|내보냈)", r"(썼|작성했|보냈|넣었|사용했)[^.\n]{0,24}이스케이프",
     r"규칙을?\s*(어겼|위반|지키지 못)", r"(wrote|used|emitted|sent|produced)[^.\n]{0,30}escapes",
@@ -36,10 +40,12 @@ def sentences(text: str) -> list[str]:
 
 
 def mistake_sentences(text: str) -> list[str]:
-    """Sentences that record a mistake about escapes, promise a correction, or note to write raw characters next time.
-    A sentence that only says the display is not broken, or decodes it, holds none of these."""
+    """Sentences that record a mistake of the session about escapes, promise a correction, state the escapes as a defect of
+    the host or a plugin, or tell the next session to change how it writes. A sentence that says the shown text is only
+    escaping and the stored characters are correct holds none of these."""
     return [sentence.strip() for sentence in sentences(text)
-            if (ESCAPE_WORD.search(sentence) and (MISTAKE_WORD.search(sentence) or PROMISE_WORD.search(sentence)))
+            if (ESCAPE_WORD.search(sentence) and (MISTAKE_WORD.search(sentence) or PROMISE_WORD.search(sentence)
+                                                  or (HOST_WORD.search(sentence) and DEFECT_WORD.search(sentence))))
             or RAW_NOTE.search(sentence)]
 
 
