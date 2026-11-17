@@ -6,9 +6,12 @@ options. A question is about a decision when it holds at least one of the decisi
 gets the next unused answer of every decision it matches, and the default answer when it matches none. An answer is
 used once: a follow-up that matches a decision again gets that decision's next unused answer, and once every matching
 decision has used all its answers, the sheet's repeat answer, which says that the earlier answer stands. A request for
-approval is approved when the specification text holds every term of every required point and no term of a rejected
-option outside the heading of rejected alternatives; otherwise it gets the sentence of the first point that fails. Every exchange is appended to a log, and the log is the
-only state, so the approver process and the harness process, which answer different kinds of question, share one count.
+approval is approved when every decision of the sheet has an answer given and the specification text holds every term of
+every required point and no term of a rejected option outside the heading of rejected alternatives. Otherwise it gets the
+answer of the first decision not yet answered, and then the sentence of the first point that fails. A decision the sheet does
+not hold was settled by the default answer, so it never keeps an approval open. Every exchange is appended to a log, and the
+log is the only state, so the approver process and the harness process, which answer different kinds of question, share one
+count.
 """
 
 from __future__ import annotations
@@ -194,6 +197,10 @@ class ScriptedUser:
         approved_before = any(item.get("approval") is True for item in earlier)
         make = lambda **fields: Exchange(index=index, kind=kind, question=question, tool_use_id=tool_use_id, **fields)  # noqa: E731
         if is_approval_request(self.sheet, question):
+            unanswered = next((item for item in self.sheet["decisions"] if not any(item["id"] in earlier_item.get("used", ()) for earlier_item in earlier)), None)
+            if unanswered is not None:
+                return make(matched=(), answer=unanswered["answers"][0], approval=False, detail=f"open decision {unanswered['id']}",
+                            used=(unanswered["id"],))
             failing = first_failing_point(self.sheet, specification if specification is not None else question)
             if failing is None:
                 return make(matched=(), answer=self.sheet["approved_answer"], approval=True)

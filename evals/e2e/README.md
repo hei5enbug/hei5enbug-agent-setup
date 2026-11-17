@@ -105,15 +105,19 @@ must hold with its terms and the terms of its rejected options. `harness/scripte
   and once every decision a question matches has used all its answers, the question gets the sheet's `repeat_answer` (by
   default, that the earlier answer stands and the agent should use its recommendation for the rest), never the same text
   as a new answer.
-- A request for approval holds one of the sheet's approval terms. It is approved when the specification text holds every term
-  of every required point and no term of a rejected option outside the heading of the rejected alternatives; otherwise it
-  gets the sentence of the first point that fails. With `stop_after_approval`, a question after the approval gets no answer
+- A request for approval holds one of the sheet's approval terms. It is approved when every decision of the sheet has had
+  an answer given, the specification text holds every term of every required point, and no term of a rejected option stands
+  outside the heading of the rejected alternatives. While a decision has had no answer, the request gets that decision's first
+  answer instead (the first such decision), and then the sentence of the first point that fails. A decision the sheet does not
+  hold is settled by the default answer and never keeps an approval open. With `stop_after_approval`, a question after the approval gets no answer
   and the conversation ends there.
 - The question tool is answered by the approver in the tool's free-form field (`answers` keyed by the question text); the
   specification is the agent's text since the previous exchange plus the question. A plain-text question that ends a turn,
-  recognised by a last line that ends with a question mark, is answered by the harness through the host's resume command
-  (`claude -p --resume <session>` or `codex exec resume <thread>`), the last paragraph being the question and the whole turn
-  the specification. The turns of one run share one `stream.jsonl`, so the stream's own total cost is left empty and the
+  recognised by a last line that ends with a question mark or by a last sentence that asks the user to decide, approve,
+  confirm, or tell something (for example "알려 주세요", "정해 주세요", "승인하시겠어요", "let me know", "do you approve"), is
+  answered by the harness through the host's resume command (`claude -p --resume <session>` or `codex exec resume <thread>`).
+  A message that ends with a list is read at the sentence before the list. The question is the last paragraph, with the list
+  that follows a request, and the specification is the whole turn. The turns of one run share one `stream.jsonl`, so the stream's own total cost is left empty and the
   cost comes from the token records.
 - Every exchange, with the decisions it matched and its answer, is appended to `scripted_user.jsonl`, which is also the only
   state, so the approver process and the harness process share one count. `view.json` holds the exchanges and one ordered

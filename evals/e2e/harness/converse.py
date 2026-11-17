@@ -2,9 +2,10 @@
 is answered from the task's answer sheet through the host's resume command.
 
 A question asked through the question tool never ends a turn on Claude Code; the approver answers it (see `approval_mcp.py`).
-A turn counts as ending with a question when the last line of its final message ends with a question mark. The question that
-the sheet sees is the last paragraph of that message, and a request for approval is judged on the whole message together with
-the earlier texts of the turn. The turns of one run append to one stream file, so a run reads as one conversation.
+A turn counts as ending with a question when the last line of its final message ends with a question mark, or when its last
+sentence asks the user to decide, approve, confirm, or tell something. A message that ends with a list is read at the sentence
+before the list. The question that the sheet sees is the paragraph of that request, with the list that follows it, and a
+request for approval is judged on the whole message together with the earlier texts of the turn. The turns of one run append to one stream file, so a run reads as one conversation.
 """
 
 from __future__ import annotations
@@ -26,16 +27,43 @@ CODEX_SANDBOX_CONFIG = 'sandbox_mode="danger-full-access"'
 Runner = Callable[..., ProcessResult]
 
 
+SENTENCE_END = re.compile(r"(?<=[.!?。？])\s+")
+LIST_ITEM = re.compile(r"^\s*(?:\d+[.)]|[-*•])\s")
+REQUEST = re.compile(
+    r"알려\s?(?:주|줘)|말씀해\s?(?:주|줘)|확인해\s?(?:주|줘)|정해\s?(?:주|줘)|골라\s?(?:주|줘)|선택해\s?(?:주|줘)|답해\s?(?:주|줘)"
+    r"|승인하시겠|승인해\s?주|할까요|괜찮을까요|괜찮으신가요|let me know|please (?:confirm|tell|choose|decide|reply|answer)"
+    r"|do you approve|should i\b|would you like", re.IGNORECASE)
+
+
+def request_block(text: str) -> list[str]:
+    """The lines of a final message that carry its request: the last paragraph, or, when that paragraph is a list, the
+    paragraph before it together with the list."""
+    paragraphs = [[line for line in part.splitlines() if line.strip()] for part in re.split(r"\n\s*\n", text.strip())]
+    paragraphs = [part for part in paragraphs if part]
+    if not paragraphs:
+        return []
+    if len(paragraphs) > 1 and all(LIST_ITEM.match(line) for line in paragraphs[-1]):
+        return paragraphs[-2] + paragraphs[-1]
+    return paragraphs[-1]
+
+
 def asks_question(text: str) -> bool:
-    """Whether a final message ends with a question: its last line ends with a question mark, ignoring closing marks."""
+    """Whether a final message asks the user something: its last line ends with a question mark, ignoring closing marks, or
+    the last sentence of its request block asks the user to decide, approve, confirm, or tell something."""
     lines = [line for line in text.strip().splitlines() if line.strip()]
-    return bool(lines) and bool(QUESTION_END.search(lines[-1].strip()))
+    if not lines:
+        return False
+    if QUESTION_END.search(lines[-1].strip()):
+        return True
+    block = request_block(text)
+    heading = [line for line in block if not LIST_ITEM.match(line)]
+    sentences = [part for part in SENTENCE_END.split(" ".join(line.strip() for line in heading)) if part.strip()]
+    return bool(sentences) and bool(REQUEST.search(sentences[-1]))
 
 
 def question_of(text: str) -> str:
-    """The last paragraph of a final message, which is the question the sheet is asked."""
-    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text.strip()) if part.strip()]
-    return paragraphs[-1] if paragraphs else ""
+    """The request block of a final message, which is the question the sheet is asked."""
+    return "\n".join(request_block(text))
 
 
 def claude_final(events: Sequence[Mapping[str, Any]]) -> tuple[str, str | None]:

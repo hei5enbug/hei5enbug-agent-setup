@@ -36,6 +36,14 @@ SHEET: dict[str, Any] = {
 SPEC = "# Specification\n\nWeeks start on Sunday.\n\nExport names hold YYYYMMDD.\n"
 
 
+def settle(log: Path, sheet: dict[str, Any] | None = None) -> ScriptedUser:
+    """A scripted user on `log` that has been asked about every decision of the sheet once, so none is open."""
+    user = ScriptedUser(sheet or SHEET, log)
+    for decision in (sheet or SHEET)["decisions"]:
+        user.answer(f"About {decision['terms'][0]}?", KIND_TEXT)
+    return user
+
+
 class SheetAnswerTest(unittest.TestCase):
     def setUp(self) -> None:
         self._temp = tempfile.TemporaryDirectory()
@@ -137,7 +145,39 @@ class SheetAnswerTest(unittest.TestCase):
 
 class ApprovalJudgmentTest(unittest.TestCase):
     def ask(self, specification: str, sheet: dict[str, Any] | None = None):
-        return ScriptedUser(sheet or SHEET).answer("Do you approve this specification?", KIND_TEXT, specification)
+        with tempfile.TemporaryDirectory() as raw:
+            user = settle(Path(raw) / "log.jsonl", sheet)
+            return user.answer("Do you approve this specification?", KIND_TEXT, specification)
+
+    def test_열린_결정이_남은_채_승인을_구하면_첫_열린_결정의_답을_주고_답한_뒤_다시_구하면_승인한다(self):
+        """답하지 않은 결정이 있으면 승인하지 않고 그 결정의 첫 답으로 답하며, 그 결정을 쓴 뒤의 승인 요청은 승인한다.
+        회귀: 결정이 열린 채 명세 글만 맞으면 승인하거나, 승인 요청마다 같은 글로 막아 합의에 닿지 못했다."""
+        # given
+        with tempfile.TemporaryDirectory() as raw:
+            user = ScriptedUser(SHEET, Path(raw) / "log.jsonl")
+            user.answer("What is the first day of the week?", KIND_TEXT)
+
+            # when
+            first = user.answer("Do you approve this specification?", KIND_TEXT, SPEC)
+            second = user.answer("Do you approve this specification?", KIND_TEXT, SPEC)
+
+        # then
+        self.assertEqual((first.approval, first.answer, first.detail), (False, "Put the date in the name.", "open decision file-name"))
+        self.assertEqual((second.approval, second.answer), (True, "Approved."))
+
+    def test_시트에_없는_결정은_기본_답으로_정해져_승인을_막지_않는다(self):
+        """시트에 없는 질문은 기본 답을 받고 열린 결정으로 세지 않으므로, 시트의 결정을 모두 답한 뒤에는 승인한다."""
+        # given
+        with tempfile.TemporaryDirectory() as raw:
+            user = settle(Path(raw) / "log.jsonl")
+            raised = user.answer("Should the report be colored?", KIND_TEXT)
+
+            # when
+            verdict = user.answer("Do you approve this specification?", KIND_TEXT, SPEC)
+
+        # then
+        self.assertEqual((raised.answer, raised.matched), (DEFAULT_ANSWER, ()))
+        self.assertTrue(verdict.approval)
 
     def test_필수_용어_하나가_빠진_명세는_승인하지_않고_그_항목의_문장을_준다(self):
         """필수 항목의 용어가 하나라도 없으면 승인하지 않고 처음 어긋난 항목의 문장으로 답한다."""
@@ -188,7 +228,7 @@ class ApprovalJudgmentTest(unittest.TestCase):
         """stop_after_approval인 시트는 승인 뒤의 질문에 답을 주지 않고 끝났다고 표시한다."""
         # given
         with tempfile.TemporaryDirectory() as raw:
-            user = ScriptedUser({**SHEET, "stop_after_approval": True}, Path(raw) / "log.jsonl")
+            user = settle(Path(raw) / "log.jsonl", {**SHEET, "stop_after_approval": True})
             user.answer("approve?", KIND_TEXT, SPEC)
 
             # when
@@ -308,13 +348,14 @@ class ApproverTest(unittest.TestCase):
         # given
         shown = {"type": "assistant", "message": {"id": "m1", "content": [{"type": "text", "text": SPEC}]}}
         self.stream.write_text(json.dumps(shown) + "\n", encoding="utf-8")
+        settle(self.log, json.loads(self.sheet.read_text(encoding="utf-8")))
 
         # when
         verdict = self.call("Do you approve this specification?")
 
         # then
         self.assertEqual(verdict["updatedInput"]["answers"]["Do you approve this specification?"], "Approved.")
-        self.assertEqual(read_log(self.log)[0]["approval"], True)
+        self.assertEqual(read_log(self.log)[-1]["approval"], True)
 
     def test_글_질문이_먼저_있었으면_도구_질문은_로그의_다음_답을_받는다(self):
         """하네스가 글 질문에 첫째 답을 낸 뒤 승인기가 받는 도구 질문은 둘째 답을 받는다."""
@@ -330,6 +371,7 @@ class ApproverTest(unittest.TestCase):
     def test_승인_뒤_질문은_거부해_실행을_끝내고_다른_도구는_기존_규칙을_따른다(self):
         """승인 뒤 도구 질문은 거부되고, 시트가 있어도 Bash 같은 다른 도구는 예전처럼 허용된다."""
         # given
+        settle(self.log, json.loads(self.sheet.read_text(encoding="utf-8")))
         self.call("approve this?")
         specification_ok = ScriptedUser(json.loads(self.sheet.read_text(encoding="utf-8")), self.log)
         specification_ok.answer("approve?", KIND_TEXT, SPEC)
@@ -384,6 +426,31 @@ def turn_end(text: str) -> dict[str, Any]:
 INIT = {"type": "system", "subtype": "init", "session_id": "s1"}
 
 
+RECORDED_REQUESTS = {
+    "첫 실행 T46 step1": '예를 들어 "1은 설정 파일, 2는 번호 붙이기"처럼 답해 주시면 됩니다.',
+    "첫 실행 T49 before": "4가지 모두 추천대로 할지, 바꿀 항목이 있는지 알려 주세요.",
+    "첫 실행 T49 step1": "1번과 2번에 (a)·(b)처럼 기호로 답해 주시면, 전체 명세를 정리해 승인을 요청드리겠습니다.",
+    "첫 실행 T51 before": "어느 쪽으로 진행할지 알려주세요.",
+    "둘째 실행 T46 step1": "두 가지를 정해 주시면 명세 전체를 다시 보여 드리고 승인을 받은 뒤 바로 구현하겠습니다.",
+    "둘째 실행 T47 step1": "이 명세 그대로 승인하시겠어요? 바꿀 부분이 있으면 알려 주세요.",
+    "둘째 실행 T49 step1": "R1과 R2는 위 선택지 중 하나로 직접 골라 주셔야 확정됩니다. 그 두 가지를 정해 주시고, 나머지 명세는 그대로 승인할지 고칠 점을 말씀해 주세요.",
+    "둘째 실행 T51 before (목록으로 끝남)": (
+        "운영 환경이 이 저장소 코드와 다르게 동작한다면 그 위치를 알려 주세요. 그렇지 않다면 아래 중 하나를 골라 주세요.\n\n"
+        "1. **추천: `add`가 날짜순 위치에 넣도록 바꾸고 `list`에서는 정렬을 뺍니다.**\n2. **정렬을 그대로 둡니다.**\n3. **정렬만 뺍니다.**"),
+    "첫 실행 T51 step1 (목록으로 끝남)": (
+        "그렇지 않다면 아래 중에서 골라 주세요:\n\n1. **정렬 유지 (권장):** 코드를 바꾸지 않습니다.\n2. **저장할 때 정렬:** `store.save`가 정렬합니다."),
+}
+RECORDED_REPORTS = {
+    "둘째 실행 T46 before": "- 다른 모델(gpt-6.1-sol, xhigh)에 맡긴 읽기 전용 코드 리뷰와 이 보고서 검토는 둘 다 실행기 오류로 돌지 못했습니다.",
+    "둘째 실행 T47 before": "커밋은 하지 않았습니다.",
+    "둘째 실행 T49 before": "이 요약을 사람이 아닌 모델로 따로 검토하려 했는데, 검토 도구가 오류로 끝나 검토를 하지 못했습니다.",
+    "둘째 실행 T52 before": "이 보고서는 독립 리뷰를 받지 못했습니다. 문장 형식 자동 검사는 통과했지만, 내용을 읽는 리뷰 모델이 실행 중 오류로 끝나 판정을 내지 못했습니다.",
+    "첫 실행 T46 before": "| 다른 모델의 독립 검토 | 못 함. 검토 도구가 결과 없이 오류로 끝났습니다. |",
+    "첫 실행 T48 step1": "- **문서:** 명령의 출력이 바뀌지 않아 README 갱신 대상이 아닙니다.",
+    "결과 목록으로 끝나는 보고": "**확인한 것**\n\n- `python3 -m pytest -q`: 모두 통과했습니다.\n- 임시 데이터로 직접 실행해 봤습니다.",
+}
+
+
 class TurnLoopTest(unittest.TestCase):
     def setUp(self) -> None:
         self._temp = tempfile.TemporaryDirectory()
@@ -427,13 +494,14 @@ class TurnLoopTest(unittest.TestCase):
         # given
         final = f"{SPEC}\nDo you approve this specification?"
         turns = [[INIT, assistant(final), turn_end(final)], [assistant("Starting."), turn_end("Starting.")]]
+        settle(self.root / "scripted_user.jsonl")
 
         # when
         self.run_loop(turns)
 
         # then
         logged = read_log(self.root / "scripted_user.jsonl")
-        self.assertEqual((logged[0]["approval"], logged[0]["question"]), (True, "Do you approve this specification?"))
+        self.assertEqual((logged[-1]["approval"], logged[-1]["question"]), (True, "Do you approve this specification?"))
 
     def test_시트가_끝낸_대화와_다_쓴_시간에는_더_이어_받지_않는다(self):
         """승인 뒤 질문은 답하지 않아 한 차례로 끝나고, 시간이 다 쓰이면 질문이 남아도 이어 받지 않는다."""
@@ -441,6 +509,7 @@ class TurnLoopTest(unittest.TestCase):
         final = f"{SPEC}\nDo you approve this specification?"
         approving = [[INIT, assistant(final), turn_end(final)],
                      [assistant("What should I do next?"), turn_end("What should I do next?")]]
+        settle(self.root / "scripted_user.jsonl", {**SHEET, "stop_after_approval": True})
 
         # when
         self.run_loop(approving, stop_after_approval=True)
@@ -473,6 +542,44 @@ class TurnLoopTest(unittest.TestCase):
         """마지막 줄이 물음표로 끝나야 질문이고, 중간에 물음표가 있어도 마지막이 평서문이면 질문이 아니다."""
         # given
         texts = {"Is it Sunday?": True, "Is it Sunday? No.": False, "Which one?**": True, "a\n\nb?\n": True, "": False}
+
+        # when
+        found = {text: converse.asks_question(text) for text in texts}
+
+        # then
+        self.assertEqual(found, texts)
+
+    def test_기록된_요청_글은_모두_질문으로_세고_결과만_적은_보고는_세지_않는다(self):
+        """첫째와 둘째 실제 실행에 남은 최종 글 가운데 사용자에게 정하거나 승인하거나 알려 달라는 글은 모두 질문이고, 결과만 적은 보고는 아니다.
+        회귀: 마지막 줄이 마침표로 끝나는 요청은 질문으로 세지 않아 T47 명세 승인 요청이 답 없이 끝나 구현이 멈췄다."""
+        # given
+        asked = {name: converse.asks_question(text) for name, text in RECORDED_REQUESTS.items()}
+        stated = {name: converse.asks_question(text) for name, text in RECORDED_REPORTS.items()}
+
+        # when
+        wrong = [name for name, found in {**asked, **stated}.items() if found is not (name in RECORDED_REQUESTS)]
+
+        # then
+        self.assertEqual(wrong, [])
+
+    def test_목록으로_끝난_요청은_목록_앞_문단과_목록을_질문으로_시트에_보낸다(self):
+        """마지막 문단이 목록이면 그 앞 문단의 요청 문장과 목록이 함께 질문이고, 목록이 아니면 마지막 문단만 질문이다."""
+        # given
+        listed = RECORDED_REQUESTS["첫 실행 T51 step1 (목록으로 끝남)"]
+        plain = "앞 문단입니다.\n\n" + RECORDED_REQUESTS["둘째 실행 T47 step1"]
+
+        # when
+        asked_listed, asked_plain = converse.question_of("보고합니다.\n\n" + listed), converse.question_of(plain)
+
+        # then
+        self.assertEqual(asked_listed, listed.replace("\n\n", "\n"))
+        self.assertEqual(asked_plain, RECORDED_REQUESTS["둘째 실행 T47 step1"])
+
+    def test_영어_요청_글도_질문으로_센다(self):
+        """let me know, please confirm, should I, do you approve로 끝나는 글은 질문이고 평서문 보고는 아니다."""
+        # given
+        texts = {"Tell me which one. Let me know if that works.": True, "Please confirm the date format.": True, "Do you approve this?": True,
+                 "I changed the sort. I did not commit.": False, "Is it Sunday? No.": False}
 
         # when
         found = {text: converse.asks_question(text) for text in texts}

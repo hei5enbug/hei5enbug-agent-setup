@@ -244,9 +244,14 @@ class AgreementTaskTest(unittest.TestCase):
         good = "# Spec\n\nWeeks start on sunday.\n\nNames: export-YYYYMMDD-HHMMSS.csv\n\n## Rejected alternatives\n\n- monday start\n"
         bad = good.replace("## Rejected alternatives", "## Notes")
 
+        def ask(specification: str):
+            user = ScriptedUser(sheet, self.root / f"approval-{len(specification)}.jsonl")
+            for decision in sheet["decisions"]:
+                user.answer(decision["terms"][0], "text")
+            return user.answer("Do you approve this specification?", "text", specification)
+
         # when
-        approved = ScriptedUser(sheet).answer("Do you approve this specification?", "text", good)
-        refused = ScriptedUser(sheet).answer("Do you approve this specification?", "text", bad)
+        approved, refused = ask(good), ask(bad)
 
         # then
         self.assertTrue(approved.approval)
@@ -335,6 +340,62 @@ class AgreementTaskTest(unittest.TestCase):
         self.assertTrue(results[True]["passed"], results[True]["detail"])
         self.assertFalse(results[False]["passed"])
         self.assertEqual(results[False]["detail"], "no such line before the first edit")
+
+    def test_둘째_실행의_질문_순서와_마지막_요청으로_T46_T47_T49가_승인에_닿는다(self):
+        """T46 step1의 질문 여섯 개와 마지막 요청, T47 step1의 질문 하나와 승인 요청, T49 step1의 질문 여덟 개와 마지막 요청을 시트에 넣으면 승인에 닿는다.
+        회귀: 마침표로 끝난 요청이 질문으로 세어지지 않거나 열린 결정이 있어도 명세 글만 맞으면 승인해, 셋 모두 승인된 명세 없이 끝났다."""
+        replays = {
+            "T46": (
+                ["weekly 명령에서 '한 주'를 무슨 요일부터 셀까요? 월요일을 추천합니다.",
+                 "export 파일이 덮어써지지 않게 하려면 파일 이름을 어떻게 바꿀까요?",
+                 "주 시작 요일(week_start = sunday)을 어디에 둘까요?",
+                 "export-YYYYMMDD-HHMMSS.csv 형식에서 같은 초에 export를 두 번 하면 두 파일 이름이 같아집니다. 이때 어떻게 할까요?",
+                 "주 시작 요일(일요일)을 어느 파일에 둘까요?",
+                 "export 파일 이름은 export-YYYYMMDD-HHMMSS.csv입니다. 같은 초에 두 번 export해서 이름이 겹치면 어떻게 할까요?"],
+                "**버린 대안**\n- 주 시작을 월요일로 두기\n\n일요일(sunday)에 시작하고 export-YYYYMMDD-HHMMSS.csv로 씁니다.\n\n"
+                "두 가지를 정해 주시면 명세 전체를 다시 보여 드리고 승인을 받은 뒤 바로 구현하겠습니다."),
+            "T47": (
+                ["`delete abc`처럼 id 자리에 숫자가 아닌 값이 들어오면 어떻게 할까요?"],
+                "명세입니다.\n\n이 명세 그대로 승인하시겠어요? 바꿀 부분이 있으면 알려 주세요."),
+            "T49": (
+                ["프로젝트별 월 예산(목표 시간)을 어디에 정해 둘까요?", "예산을 넘었다는 사실을 언제 알려줄까요?",
+                 "입력할 때 경고는 어떤 조건에서 띄울까요?", "예산을 넘게 만드는 입력은 어떻게 처리할까요?",
+                 "어느 달 합계와 예산을 비교할까요?", "report에도 OVER 표시를 똑같이 적용할까요?",
+                 "다른 옵션은 추가하지 않고 줄 끝에 OVER만 붙인다면, 예산과 무엇을 비교할까요?", "OVER를 report의 합계 줄에도 붙일까요?"],
+                "필드 `budget_hours`, 초과 표시 `OVER`.\n\nR1과 R2는 위 선택지 중 하나로 직접 골라 주셔야 확정됩니다. "
+                "그 두 가지를 정해 주시고, 나머지 명세는 그대로 승인할지 고칠 점을 말씀해 주세요."),
+        }
+        for task_id, (questions, final) in replays.items():
+            with self.subTest(task_id):
+                # given
+                sheet = load_sheet(TASKS_ROOT / load_task(task_id)["sheet"])
+                user = ScriptedUser(sheet, self.root / f"replay-{task_id}.jsonl")
+                for question in questions:
+                    user.answer(question, "tool")
+                request = converse.question_of(final)
+
+                # when
+                counted = converse.asks_question(final)
+                first = user.answer(request, "text", final)
+                second = user.answer(request, "text", final)
+
+                # then
+                self.assertTrue(counted)
+                self.assertTrue(first.approval or second.approval, [first.detail, second.detail])
+                self.assertTrue(second.approval)
+
+    def test_승인을_한_번도_구하지_않은_대화는_명세_승인_검사에서_실패한다(self):
+        """질문에는 답했지만 승인을 구한 교환이 없으면 T46의 specification-approved가 실패한다."""
+        # given
+        task, repo, base = self.materialize("T46")
+        apply_reference("T46", repo)
+        view = make_view([READ, exchange(1, "Which first day of the week?", ["week-start"]), exchange(2, "Which file name?", ["export-name"]), EDIT])
+
+        # when
+        result = self.grade(task, repo, base, view)
+
+        # then
+        self.assertIn("specification-approved", self.failed(result))
 
 
 if __name__ == "__main__":
