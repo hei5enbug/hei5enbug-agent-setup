@@ -25,7 +25,7 @@ repository README; only its unit tests are.
    claude -p --model claude-opus-5-5 --effort high --output-format stream-json --verbose
      --include-hook-events --plugin-dir <exported plugin> --settings <run>/settings.json
      --setting-sources project,local --mcp-config <run>/mcp.json --strict-mcp-config
-     --permission-prompt-tool mcp__eval_approver__approve --max-budget-usd <task limit> -- <prompt>
+     --permission-prompt-tool mcp__eval_approver__approve --max-budget-usd <task limit> --session-id <uuid> -- <prompt>
    ```
 
    The prompt follows `--`, so a prompt that starts with a dash, such as `--version ...`, is not read as an option.
@@ -62,7 +62,9 @@ repository README; only its unit tests are.
    stay, and the harness patterns are added. `pilot-check` also fails a run whose transcripts carry an instruction
    file of any type outside the trial repository and the exported plugin, and names the path. It also fails a run
    whose `approvals.jsonl` holds a denied `Read`, `Grep`, or `Glob` of a path inside its own exported plugin and names
-   the path relative to the plugin, so a run that could not read the rules it was given is never recorded as evidence.
+   the path relative to the plugin, so a run that could not read the rules it was given is never recorded as evidence. It
+   likewise fails a run denied a read inside its own tool-results folder, the one `mcp.json` names, and names the path
+   relative to it; when `mcp.json` names no folder, any denied read of a `tool-results` path fails.
 4. A wall-clock limit per task stops the agent with SIGINT, then SIGTERM, then SIGKILL. The signals reach the
    agent's process group and every process it started in a session of its own, such as a role runner child, and the
    harness confirms that none is left.
@@ -85,7 +87,16 @@ message names the path and the folder. A relative path starts in the agent's wor
 `EVAL_READ_ROOT`: `Read`, `Grep`, and `Glob` (the last two checked by their `path`) may reach it, so a trial can follow a
 plugin rule that names an instruction or reference file inside the plugin, and any other tool, such as `Write` or `Edit`,
 still cannot. The same folder resolution applies, so another variant's export and a path that leaves the folder through
-`..` or a symlink stay denied. A dry run prints the value as `approver env`. Every other request is allowed. The server logs each request, allowed or
+`..` or a symlink stay denied. A dry run prints the value as `approver env`.
+The same read-only exception covers the folder where Claude Code saves the session's own large tool outputs and tells
+the session to read back, `<config dir>/projects/<project>/<session id>/tool-results/`, passed as
+`EVAL_TOOL_RESULTS_ROOT`. The harness names the session with `--session-id <uuid>`, so the session id is known before the
+start, and derives `<project>` as the documentation describes: the real working directory path with every character other
+than a letter or digit replaced by `-`. The configuration directory is `CLAUDE_CONFIG_DIR` or `~/.claude`. When that name
+exceeds 200 characters, which the documentation says Claude Code cuts and hashes without saying how, no folder is derived
+and the run is failed by `pilot-check` if it was denied a `tool-results` read. Other sessions' folders, other projects,
+transcripts, settings, memory, and credentials under the configuration directory stay denied, and a write there too.
+Every other request is allowed. The server logs each request, allowed or
 denied, with its decision to `approvals.jsonl`. The number of lines is the approval-prompt count, a friction
 metric, so a denied request still counts. An `mcp.json` without `EVAL_RUN_FOLDER` keeps the older allow-all
 behavior. A plugin hook that returns `ask` reaches this tool; the pilot confirmed this with a forced `git clean -f`.
@@ -378,7 +389,7 @@ record.
 
 - Bash requests are always allowed, so a campaign must run on a machine where an agent may run any shell command.
   The approver denies only file-tool requests that resolve outside the run's work folder, apart from the read-only
-  exception for the run's own exported plugin.
+  exception for the run's own exported plugin and its own tool-results folder.
 - The process-tree poll in `harness/process.py` can miss a detached child that starts after the last poll and before
   the agent exits, so such a child is not terminated.
 - Calls that need no prompt in the user's permission mode are not counted as approvals, so the approval count

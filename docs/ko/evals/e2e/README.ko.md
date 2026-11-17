@@ -28,7 +28,7 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
    claude -p --model claude-opus-5-5 --effort high --output-format stream-json --verbose
      --include-hook-events --plugin-dir <exported plugin> --settings <run>/settings.json
      --setting-sources project,local --mcp-config <run>/mcp.json --strict-mcp-config
-     --permission-prompt-tool mcp__eval_approver__approve --max-budget-usd <task limit> -- <prompt>
+     --permission-prompt-tool mcp__eval_approver__approve --max-budget-usd <task limit> --session-id <uuid> -- <prompt>
    ```
 
    프롬프트는 `--` 뒤에 오므로 `--version ...`처럼 대시로 시작하는 프롬프트도 옵션으로 읽히지 않는다.
@@ -60,7 +60,8 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
    `claudeMdExcludes` 항목은 그대로 두고 하네스 패턴을 더한다. `pilot-check`는 기록에 시험 저장소와 내보낸 플러그인 밖의
    지침 파일이 있으면 유형과 상관없이 실패시키고 그 경로를 밝힌다. 또한 `approvals.jsonl`에 자신이 내보낸 플러그인 안 경로에 대한
    `Read`, `Grep`, `Glob` 거부가 있는 실행도 실패시키고 플러그인 기준 상대 경로를 밝혀, 받은 규칙을 읽지 못한 실행이 증거로 기록되지
-   않게 한다.
+   않게 한다. 같은 방식으로 `mcp.json`이 가리키는 자신의 tool-results 폴더 안 읽기를 거부당한 실행도 실패시키고 그 폴더 기준
+   상대 경로를 밝히며, `mcp.json`에 폴더가 없으면 `tool-results` 경로 읽기 거부가 하나라도 있을 때 실패시킨다.
 4. 작업마다 정한 실제 경과 시간 제한에 걸리면 에이전트에 SIGINT, SIGTERM, SIGKILL을 차례로 보낸다. 신호는
    에이전트의 프로세스 그룹과, role runner 자식처럼 에이전트가 별도 세션으로 시작한 모든 프로세스에 가고, 하네스는
    남은 프로세스가 없는지 확인한다.
@@ -80,7 +81,15 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
 폴더이며, `mcp.json`이 `EVAL_READ_ROOT`로 넘긴다. `Read`, `Grep`, `Glob`(뒤의 둘은 `path`로 판단한다)은 이 폴더에 닿을 수
 있어서, 시험 세션이 플러그인 안의 지침이나 참조 파일을 읽으라는 플러그인 규칙을 따를 수 있다. `Write`, `Edit` 같은 다른
 도구는 여전히 닿을 수 없다. 경로는 같은 방식으로 풀어 보므로 다른 변형의 내보낸 플러그인과 `..`나 심볼릭 링크로 폴더를
-벗어나는 경로는 계속 거부한다. 드라이런은 이 값을 `approver env`로 출력한다. 그 밖의 요청은 허용한다. 서버는 허용한 요청과 거부한 요청을 모두 결정과 함께 `approvals.jsonl`에 기록한다.
+벗어나는 경로는 계속 거부한다. 드라이런은 이 값을 `approver env`로 출력한다.
+같은 읽기 전용 예외가 Claude Code가 세션의 큰 도구 출력을 저장해 두고 세션에 다시 읽으라고 알려 주는 폴더,
+`<설정 폴더>/projects/<project>/<세션 id>/tool-results/`에도 적용되며, 이 폴더는 `EVAL_TOOL_RESULTS_ROOT`로 넘긴다.
+하네스가 `--session-id <uuid>`로 세션을 직접 지정하므로 시작 전에 세션 id를 알고, `<project>`는 문서가 설명하는 대로
+실제 작업 디렉터리 경로의 영문자와 숫자가 아닌 모든 글자를 `-`로 바꿔 정한다. 설정 폴더는 `CLAUDE_CONFIG_DIR`이거나
+`~/.claude`이다. 이 이름이 200자를 넘으면 문서가 Claude Code가 이를 자르고 해시를 붙인다고만 하고 방법은 밝히지 않으므로
+폴더를 정하지 않으며, 그 실행이 `tool-results` 읽기를 거부당했다면 `pilot-check`가 실패시킨다. 설정 폴더 아래 다른
+세션의 폴더, 다른 프로젝트, 기록 파일, 설정, 메모리, 자격 증명은 계속 거부하고, 그곳에 쓰는 것도 거부한다. 그 밖의 요청은
+허용한다. 서버는 허용한 요청과 거부한 요청을 모두 결정과 함께 `approvals.jsonl`에 기록한다.
 줄 수가 승인 질문 수이고 마찰 지표로 쓰므로, 거부한 요청도 센다. `EVAL_RUN_FOLDER`가 없는 `mcp.json`은 예전처럼
 모든 요청을 허용한다. 플러그인 훅이 `ask`를 돌려주면 이 도구에 도달한다. 파일럿에서 강제 `git clean -f`로 이를
 확인했다. 측정 실행은 플러그인 승인 가드를 기본으로 끄므로("Codex 호스트" 참고), 이 일은 가드를 켠 변형에서만 생긴다. 권한 모드나 플러그인 가드가 질문 없이 허용한 호출은 이 도구에 오지 않으므로 세지 않는다.
@@ -349,8 +358,8 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 ## 알려진 한계
 
 - Bash 요청은 항상 허용하므로, 캠페인은 에이전트가 어떤 셸 명령이든 실행해도 되는 컴퓨터에서 돌려야 한다. 승인
-  서버가 거부하는 것은 실행의 작업 폴더 밖으로 해석되는 파일 도구 요청뿐이며, 그 실행이 내보낸 자신의 플러그인 폴더를
-  읽는 요청은 예외다.
+  서버가 거부하는 것은 실행의 작업 폴더 밖으로 해석되는 파일 도구 요청뿐이며, 그 실행이 내보낸 자신의 플러그인 폴더와
+  자신의 tool-results 폴더를 읽는 요청은 예외다.
 - `harness/process.py`의 프로세스 트리 조회는 마지막 조회 뒤 에이전트가 끝나기 전에 시작된 분리된 자식을 놓칠 수
   있고, 그런 자식은 종료되지 않는다.
 - 사용자의 권한 모드에서 질문 없이 통과한 호출은 승인으로 세지 않는다. 그래서 승인 수는 가드가 다룬 모든 호출이

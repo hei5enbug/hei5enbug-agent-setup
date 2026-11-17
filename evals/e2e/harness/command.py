@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -125,14 +126,29 @@ def run_settings(variant: dict[str, Any], profile_plugins: Iterable[str] = (), a
             **({"claudeMdExcludes": excludes} if excludes else {})}
 
 
+PROJECT_NAME_LIMIT = 200
+
+
+def tool_results_root(config_dir: Path, cwd: Path, session_id: str) -> Path | None:
+    """The folder `<config dir>/projects/<project>/<session id>/tool-results` where Claude Code saves a session's large tool
+    outputs, or None when the project name is not the plain one. `<project>` is the real working directory path with every
+    character other than a letter or digit replaced by `-`; the documentation says a longer name is cut and given a hash
+    without saying how, so no folder is derived for it."""
+    project = re.sub(r"[^A-Za-z0-9]", "-", str(cwd.resolve()))
+    return None if len(project) > PROJECT_NAME_LIMIT else config_dir / "projects" / project / session_id / "tool-results"
+
+
 def mcp_config(
     approval_log: Path, run_folder: Path | None = None, cwd: Path | None = None, read_root: Path | str | None = None,
+    results_root: Path | str | None = None,
 ) -> dict[str, Any]:
     """The approver server config; it denies file tools outside `run_folder`, except that Read, Grep, and Glob may also reach
-    `read_root`, the run's exported plugin, and it reads relative paths from `cwd`."""
+    `read_root`, the run's exported plugin, and `results_root`, the session's own tool-results folder, and it reads relative
+    paths from `cwd`."""
     folder = {"EVAL_RUN_FOLDER": str(run_folder)} if run_folder else {}
     env = {"EVAL_APPROVAL_LOG": str(approval_log), **folder, **({"EVAL_RUN_CWD": str(cwd)} if run_folder and cwd else {}),
-           **({"EVAL_READ_ROOT": str(read_root)} if run_folder and read_root else {})}
+           **({"EVAL_READ_ROOT": str(read_root)} if run_folder and read_root else {}),
+           **({"EVAL_TOOL_RESULTS_ROOT": str(results_root)} if run_folder and results_root else {})}
     return {"mcpServers": {APPROVER_SERVER: {
         "type": "stdio", "command": "python3", "args": [str(APPROVER_SCRIPT)], "env": env,
     }}}
@@ -140,6 +156,7 @@ def mcp_config(
 
 def build_command(
     cfg: HarnessConfig, task: dict[str, Any], variant: dict[str, Any], prompt: str, plugin_dir: str, run_dir: Path,
+    session_id: str | None = None,
 ) -> list[str]:
     """The full agent command. It never passes bypass or permission-mode flags: runs start in the user's default mode.
 
@@ -152,6 +169,7 @@ def build_command(
         "--mcp-config", str(run_dir / "mcp.json"), "--strict-mcp-config",
         "--permission-prompt-tool", APPROVER_TOOL,
         "--max-budget-usd", str(task["limits"]["max_budget_usd"]),
+        *(["--session-id", session_id] if session_id else []),
         *variant["extra_args"],
         "--", prompt,
     ]

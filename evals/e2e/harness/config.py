@@ -66,7 +66,7 @@ USAGE_LIMIT_PATTERN = re.compile(r"usage limit|limit reached|hit your limit|rate
 FORBIDDEN_ARGS = frozenset({"--dangerously-skip-permissions", "--bare", "--permission-mode", "bypassPermissions"})
 RESERVED_ARGS = frozenset({
     "--model", "--effort", "--settings", "--plugin-dir", "--mcp-config", "--permission-prompt-tool", "--max-budget-usd",
-    "--output-format", "-p", "--print", "--permission-prompts", "--strict-mcp-config", "--setting-sources", "--",
+    "--output-format", "-p", "--print", "--permission-prompts", "--strict-mcp-config", "--setting-sources", "--session-id", "--",
 })
 
 RUBRIC_MODEL = "gpt-6.1-sol"

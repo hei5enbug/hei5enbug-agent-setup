@@ -8,6 +8,7 @@ import secrets
 import shlex
 import signal
 import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterator, TextIO
@@ -53,8 +54,11 @@ def print_plan(out: TextIO, cfg: HarnessConfig, specs: list[RunSpec], tasks: dic
         prompt = command.read_prompt(cfg.tasks_root, task)
         header = f"\n[{index}] {spec.run_id} host={spec.host} wall={task['limits']['wall_seconds']}s cwd={spec.repo}\n"
         if spec.host == HOST_CLAUDE:
-            argv = command.build_command(cfg, task, variant, prompt, plugin_paths[spec.variant], spec.result_dir)
-            approver = command.mcp_config(spec.result_dir / "approvals.jsonl", spec.work_dir, spec.repo, plugin_paths[spec.variant])
+            session_id = str(uuid.uuid4())
+            argv = command.build_command(cfg, task, variant, prompt, plugin_paths[spec.variant], spec.result_dir, session_id)
+            approver = command.mcp_config(
+                spec.result_dir / "approvals.jsonl", spec.work_dir, spec.repo, plugin_paths[spec.variant],
+                command.tool_results_root(environment.claude_config_dir(), spec.repo, session_id))
             env = approver["mcpServers"][APPROVER_SERVER]["env"]
             out.write(f"{header}{shlex.join(argv)}\napprover env: {json.dumps(env, sort_keys=True)}\n")
             continue

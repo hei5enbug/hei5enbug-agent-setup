@@ -1,4 +1,4 @@
-"""Stdio MCP server for `--permission-prompt-tool`: stands in for the user, allowing Bash, in-folder file work, and reads of the plugin folder, logging all."""
+"""Stdio MCP server for `--permission-prompt-tool`: stands in for the user, allowing Bash, in-folder file work, and reads of the plugin and tool-results folders, logging all."""
 
 from __future__ import annotations
 
@@ -46,25 +46,27 @@ def inside(folder: str, path: str, cwd: str | None = None) -> bool:
     return os.path.commonpath([root, target]) == root
 
 
-def deny(tool_name: Any, path: str, run_folder: str, read_root: str | None = None) -> dict[str, Any]:
+def deny(tool_name: Any, path: str, run_folder: str, read_roots: tuple[str, ...] = ()) -> dict[str, Any]:
     message = f"{tool_name} path {path!r} is outside the run folder {run_folder}; only files inside the run folder may be changed"
-    if read_root:
-        message += f", and only Read, Grep, and Glob may reach the plugin folder {read_root}"
+    if read_roots:
+        message += f", and only Read, Grep, and Glob may reach {', '.join(read_roots)}"
     return {"behavior": "deny", "message": message}
 
 
 def decision(
     arguments: dict[str, Any], run_folder: str | None = None, cwd: str | None = None, read_root: str | None = None,
+    tool_results_root: str | None = None,
 ) -> dict[str, Any]:
-    """Allow a file path inside `run_folder`; a read-only tool may also reach `read_root`, the run's exported plugin."""
+    """Allow a file path inside `run_folder`; a read-only tool may also reach `read_root`, the run's exported plugin, and
+    `tool_results_root`, the folder where the session's own large tool outputs are saved."""
     tool_input = arguments.get("input")
     if run_folder:
-        reads = arguments.get("tool_name") in READ_TOOLS and bool(read_root)
+        roots = tuple(root for root in (read_root, tool_results_root) if root) if arguments.get("tool_name") in READ_TOOLS else ()
         paths = requested_paths(arguments)
         outside = next((path for path in paths if not path or not (
-            inside(run_folder, path, cwd) or (reads and inside(read_root or "", path, cwd)))), None)
+            inside(run_folder, path, cwd) or any(inside(root, path, cwd) for root in roots))), None)
         if outside is not None:
-            return deny(arguments.get("tool_name"), outside, run_folder, read_root)
+            return deny(arguments.get("tool_name"), outside, run_folder, tuple(root for root in (read_root, tool_results_root) if root))
     return {"behavior": "allow", "updatedInput": tool_input if isinstance(tool_input, dict) else {}}
 
 
@@ -79,7 +81,7 @@ def log_request(path: str | None, arguments: dict[str, Any], verdict: str) -> No
 
 def handle(
     message: dict[str, Any], log_path: str | None, run_folder: str | None = None, cwd: str | None = None,
-    read_root: str | None = None,
+    read_root: str | None = None, tool_results_root: str | None = None,
 ) -> dict[str, Any] | None:
     method = message.get("method")
     if "id" not in message:
@@ -101,7 +103,7 @@ def handle(
         if params.get("name") != TOOL_NAME or not isinstance(arguments, dict):
             reply["error"] = {"code": -32602, "message": "unknown tool or arguments"}
         else:
-            verdict = decision(arguments, run_folder, cwd, read_root)
+            verdict = decision(arguments, run_folder, cwd, read_root, tool_results_root)
             log_request(log_path, arguments, verdict["behavior"])
             reply["result"] = {"content": [{"type": "text", "text": json.dumps(verdict)}]}
     elif method == "ping":
@@ -116,6 +118,7 @@ def main() -> int:
     run_folder = os.environ.get("EVAL_RUN_FOLDER")
     cwd = os.environ.get("EVAL_RUN_CWD")
     read_root = os.environ.get("EVAL_READ_ROOT")
+    tool_results_root = os.environ.get("EVAL_TOOL_RESULTS_ROOT")
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -124,7 +127,7 @@ def main() -> int:
             message = json.loads(line)
         except ValueError:
             continue
-        reply = handle(message, log_path, run_folder, cwd, read_root) if isinstance(message, dict) else None
+        reply = handle(message, log_path, run_folder, cwd, read_root, tool_results_root) if isinstance(message, dict) else None
         if reply is not None:
             sys.stdout.write(json.dumps(reply) + "\n")
             sys.stdout.flush()

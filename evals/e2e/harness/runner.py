@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import threading
+import uuid
 from datetime import datetime
 from typing import Any
 
@@ -48,13 +49,18 @@ def contamination_error(facts: dict[str, Any]) -> str | None:
 def write_run_files(
     spec: RunSpec, task: dict[str, Any], variant: dict[str, Any], prompt: str, cfg: HarnessConfig, plugin: dict[str, Any],
 ) -> list[str]:
+    """Write the run's settings, approver config, and command; the harness names the session, so the approver knows the folder
+    that will hold the session's tool outputs."""
     spec.result_dir.mkdir(parents=True, exist_ok=True)
     (spec.result_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
+    config_dir = environment.claude_config_dir()
+    session_id = str(uuid.uuid4())
     write_json(spec.result_dir / "settings.json", command.run_settings(
-        variant, environment.profile_plugin_ids(environment.claude_config_dir()), command.ancestor_excludes(spec.repo)))
+        variant, environment.profile_plugin_ids(config_dir), command.ancestor_excludes(spec.repo)))
     write_json(spec.result_dir / "mcp.json", command.mcp_config(
-        spec.result_dir / "approvals.jsonl", spec.work_dir, spec.repo, plugin["path"]))
-    argv = command.build_command(cfg, task, variant, prompt, plugin["path"], spec.result_dir)
+        spec.result_dir / "approvals.jsonl", spec.work_dir, spec.repo, plugin["path"],
+        command.tool_results_root(config_dir, spec.repo, session_id)))
+    argv = command.build_command(cfg, task, variant, prompt, plugin["path"], spec.result_dir, session_id)
     write_json(spec.result_dir / "command.json", {"argv": argv, "cwd": str(spec.repo)})
     return argv
 
