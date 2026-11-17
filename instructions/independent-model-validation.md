@@ -51,8 +51,7 @@ Keep the main session's model and effort unchanged. Pass the reviewer's model an
 separate host runner, and verify the actual model and effort from host records, and the write limit, before
 counting the review as complete. The reviewer runs in a sandbox whose only writable path is the runner's per-run scratch
 folder, so it may run the project's tests, scripts, and calculations and install what a check needs there, but
-edits nothing else. Pass `--validation` to the runner for a GPT reviewer; the runner refuses it for a Claude
-reviewer model, whose shell it cannot yet confine to the scratch folder, and that reviewer runs without it. A
+edits nothing else. Pass `--validation` to the runner for the independent validation call. A
 silent fallback or effort cap is not a completed review. Do not enable extra billing or change authentication to
 make the review available.
 

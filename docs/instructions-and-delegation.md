@@ -134,10 +134,15 @@ runs under a permission profile that reads the whole disk and writes only a new 
 folder, which the runner creates for each run and each `--resume` invocation and removes on every exit. The child
 environment points `TMPDIR`, `UV_CACHE_DIR`, `XDG_CACHE_HOME`, `PYTHONPYCACHEPREFIX`, `npm_config_cache`, and
 `PIP_CACHE_DIR` into that folder, and the runner exits 4 unless the rollout's `permission_profile` shows that the turns
-the invocation added could write only there. `--validation`, allowed only for `reviewer` on a GPT model, lets the
+the invocation added could write only there. `--validation`, allowed only for `reviewer`, lets the
 reviewer run the project's tests, scripts, and calculations and install into the scratch folder, with network for the
-installs; the Claude path has no supported write confinement yet, so the runner exits 2 for a Claude reviewer model.
-The runner puts the role rules
+installs. A read-only Claude child gets `--settings` with `sandbox.enabled`, `sandbox.failIfUnavailable`, and
+`sandbox.allowUnsandboxedCommands: false`, with writes allowed only in the scratch folder and denied in the working
+directory, and `--validation` also gives it `Bash` and the package registry hosts in `sandbox.network.allowedDomains`.
+Claude records no sandbox state, so the runner exits 4 when the run's added transcript entries ask for a command outside
+the sandbox (`dangerouslyDisableSandbox`) or the working directory's `git status --porcelain --ignored`, `HEAD`, and
+`git diff HEAD` differ after the run; outside a git work tree it skips that comparison and reports
+`"workspace": "unchecked"`. The runner puts the role rules
 before the assignment, runs the role on its pinned model, effort, and permissions (`codex exec`, or `claude -p` for a
 Claude model), checks the host rollout or transcript record, and prints a final JSON status line. Without `--mcp`, a
 Codex child gets `-c mcp_servers.<name>.enabled=false` for every server `codex mcp list --json` names, and a Claude

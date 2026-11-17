@@ -132,9 +132,14 @@ Claude에는 `--disable-slash-commands`를 넘깁니다. 읽기 전용 Codex 자
 시스템 임시 폴더 아래의 새 scratch 폴더만 쓰는 권한 프로필로 실행합니다. 실행기는 실행마다, 그리고 `--resume` 호출마다 이
 폴더를 만들고 어떤 종료에서든 지웁니다. 자식 환경의 `TMPDIR`, `UV_CACHE_DIR`, `XDG_CACHE_HOME`, `PYTHONPYCACHEPREFIX`,
 `npm_config_cache`, `PIP_CACHE_DIR`은 그 폴더 안을 가리키며, 이번 호출이 더한 turn이 그 폴더에만 쓸 수 있었다고 rollout의
-`permission_profile`이 보여 주지 않으면 실행기는 종료 코드 4로 끝납니다. `reviewer`에만, GPT 모델일 때만 허용하는
+`permission_profile`이 보여 주지 않으면 실행기는 종료 코드 4로 끝납니다. `reviewer`에만 허용하는
 `--validation`은 검토자가 프로젝트의 테스트, 스크립트, 계산을 실행하고 scratch 폴더에 설치하게 하며 설치에는 네트워크를
-허용합니다. Claude 경로에는 지원되는 쓰기 제한이 아직 없어서 Claude 검토 모델에는 실행기가 종료 코드 2로 끝납니다.
+허용합니다. 읽기 전용 Claude 자식은 `sandbox.enabled`, `sandbox.failIfUnavailable`, `sandbox.allowUnsandboxedCommands: false`를
+담은 `--settings`를 받고, 쓰기는 scratch 폴더에만 허용하고 작업 폴더에는 금지하며, `--validation`이면 `Bash`와 패키지 레지스트리
+호스트(`sandbox.network.allowedDomains`)도 받습니다. Claude는 sandbox 상태를 기록하지 않으므로, 이번 실행이 더한 transcript
+entry가 sandbox 밖 실행(`dangerouslyDisableSandbox`)을 요청했거나 실행 뒤 작업 폴더의 `git status --porcelain --ignored`, `HEAD`,
+`git diff HEAD`가 실행 전과 다르면 실행기는 종료 코드 4로 끝납니다. git 작업 트리가 아니면 이 비교를 건너뛰고
+`"workspace": "unchecked"`를 남깁니다.
 실행기는 역할 규칙을 할당 앞에 붙이고, 고정된 모델·사고 강도·권한으로 실행하며(`codex exec`, Claude 검토 모델은 `claude -p`),
 호스트의 rollout 또는 transcript 기록을 확인한 뒤 마지막 줄에 JSON 상태를 출력합니다. `--mcp`가 없으면 Codex 자식에는
 `codex mcp list --json`이 보여 주는 서버마다 `-c mcp_servers.<name>.enabled=false`를 넘기고, Claude 자식은

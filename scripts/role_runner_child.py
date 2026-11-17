@@ -13,14 +13,19 @@ from role_runner_config import (
 )
 
 
-def new_scratch() -> str:
-    """Create a run's scratch folder under the system temp folder, with the folders its environment points to, and return its real path."""
+def new_scratch(cwd: str) -> str:
+    """Create a run's scratch folder under the system temp folder, with the folders its environment points to, and return its real path.
+
+    A folder inside the working directory is refused: the Claude sandbox denies writes there, so the run could not use it."""
     try:
         scratch = Path(tempfile.mkdtemp(prefix=SCRATCH_PREFIX)).resolve()
         for name in SCRATCH_ENVIRONMENT.values():
             (scratch / name).mkdir()
     except OSError as error:
         raise RunnerError(EXIT_RUN, f"Cannot create the scratch folder: {error}") from error
+    if scratch.is_relative_to(Path(cwd).resolve()):
+        shutil.rmtree(scratch, ignore_errors=True)
+        raise RunnerError(EXIT_RUN, f"The scratch folder would sit inside the working directory {cwd}; run from another folder")
     return str(scratch)
 
 

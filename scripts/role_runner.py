@@ -25,7 +25,8 @@ from role_runner_config import (  # noqa: E402
     ROLE_ENTRY, ROLE_MODEL, ROLE_SENTENCES, ROLES, WRITING_CAPABILITIES, Run, RunnerError, UsageError, build_parser,
 )
 from role_runner_evidence import (  # noqa: E402
-    claude_result, codex_home, json_lines, require_heartbeat, thread_id_from, turn_count, verify_claude, verify_codex,
+    claude_entry_count, claude_result, codex_home, json_lines, require_heartbeat, thread_id_from, turn_count, verify_claude,
+    verify_codex, workspace_state,
 )
 from role_runner_hooks import exchange_hooks, guard_ready, heal_hooks, hooks_for_cwd, is_guard_hook  # noqa: E402
 from role_runner_prompt import capability_sentence, compose, compose_capability_prompt, compose_prompt  # noqa: E402
@@ -158,11 +159,16 @@ def execute(args: argparse.Namespace, run: Run, root: Path, cwd: str) -> dict:
         raise RunnerError(EXIT_RUN, f"Cannot compose the prompt: {error}") from error
     discard(result_path)
     if run.runner == "claude":
-        stdout = run_child(run.target, claude_command(run), prompt, cwd, args.timeout)
+        confined = run.scratch is not None
+        before = workspace_state(cwd) if confined else None
+        earlier = claude_entry_count(run.resume) if confined and run.resume is not None else 0
+        stdout = run_child(run.target, claude_command(run, cwd), prompt, cwd, args.timeout, run.scratch)
         result = claude_result(stdout)
         if result.get("is_error"):
             raise RunnerError(EXIT_RUN, f"Claude reported an error: {str(result.get('result'))[:2000]}")
-        evidence = verify_claude(result, run.model, run.effort)
+        after = workspace_state(cwd) if before is not None else None
+        skip = earlier if result.get("session_id") == run.resume else 0
+        evidence = verify_claude(result, run.model, run.effort, confined, before, after, skip)
         require_heartbeat("claude", evidence["session"], CLAUDE_HOOKS_MESSAGE)
         text = result.get("result")
         if not isinstance(text, str) or not text.strip():
@@ -240,11 +246,6 @@ def resolve(args: argparse.Namespace) -> Run:
 def plan(args: argparse.Namespace) -> Run:
     validate(args)
     run = replace(resolve(args), user_requested=args.user_requested)
-    if run.validation and run.runner == "claude":
-        raise UsageError(
-            f"--validation cannot run on {run.model}: no supported way confines a Claude shell's writes to the scratch folder yet; "
-            "use a GPT reviewer model"
-        )
     if run.writing and run.runner == "claude" and not run.add_dirs and run.agent is None:
         label = f"capability {run.capability}" if run.capability else f"role {run.role}"
         raise UsageError(f"The Claude path of the writing {label} needs --add-dir for each directory it may edit")
@@ -258,8 +259,8 @@ def run_pair(args: argparse.Namespace, run: Run, root: Path, cwd: str, assignmen
     pair = argparse.Namespace(**{**vars(args), "assignment": assignment, "result": result})
     scratch = None
     try:
-        if not run.writing and run.runner == "codex":
-            scratch = new_scratch()
+        if not run.writing:
+            scratch = new_scratch(cwd)
             run = replace(run, scratch=scratch)
         evidence = execute(pair, run, root, cwd)
     except RunnerError as error:

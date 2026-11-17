@@ -47,6 +47,7 @@ MCP_NETWORK_RULE = "use MCP tools and network only for the external work the ass
 CODEX_NETWORK_ON = "sandbox_workspace_write.network_access=true"
 SCRATCH_PREFIX = "role-runner-scratch-"
 SCRATCH_PROFILE = "role-runner-scratch"
+CLAUDE_INSTALL_DOMAINS = ("pypi.org", "files.pythonhosted.org", "registry.npmjs.org")
 SCRATCH_ENVIRONMENT = {
     "TMPDIR": "tmp", "UV_CACHE_DIR": "uv-cache", "XDG_CACHE_HOME": "cache", "PYTHONPYCACHEPREFIX": "pycache",
     "npm_config_cache": "npm-cache", "PIP_CACHE_DIR": "pip-cache",
@@ -90,7 +91,8 @@ def validation_rule(scratch: str) -> str:
         "into it. You may run the project's tests, scripts, and calculations, and when the assignment lists check "
         "commands, rerun them. Reuse the project's existing environment read-only when one exists; install the "
         "dependencies a check needs into the scratch folder only when it is missing or does not fit the check. Use "
-        "the network only for those installs. Never edit a file outside the scratch folder, commit, push, or change "
+        "the network only for those installs. When a command fails writing elsewhere, rerun it with its temporary or "
+        "cache folder set inside the scratch folder. Never edit a file outside the scratch folder, commit, push, or change "
         "external state."
     )
 EXIT_OK = 0

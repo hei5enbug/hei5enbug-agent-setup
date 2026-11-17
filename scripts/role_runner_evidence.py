@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import subprocess
 from pathlib import Path
 
 from role_runner_config import EXIT_EVIDENCE, SYNTHETIC_MODEL, RunnerError
@@ -158,7 +160,66 @@ def is_synthetic(entry: dict) -> bool:
     return isinstance(message, dict) and message.get("model") == SYNTHETIC_MODEL
 
 
-def verify_claude(result: dict, model: str, effort: str) -> dict:
+def workspace_state(cwd: str) -> dict | None:
+    """Return the working directory's git state, or None when it is not a git work tree or git cannot answer.
+
+    The state is `git status --porcelain --ignored`, HEAD, and a hash of `git diff HEAD`, read without taking git's optional locks."""
+    environment = {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
+
+    def git(*arguments: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["git", *arguments], cwd=cwd, env=environment, capture_output=True, timeout=60, check=False,
+        )
+
+    try:
+        if git("rev-parse", "--is-inside-work-tree").stdout.strip() != b"true":
+            return None
+        status = git("status", "--porcelain", "--ignored")
+        head = git("rev-parse", "-q", "--verify", "HEAD")
+        diff = git("diff", "--no-ext-diff", "HEAD" if head.returncode == 0 else "--cached")
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if status.returncode != 0:
+        return None
+    return {
+        "status": status.stdout.decode("utf-8", "replace"), "head": head.stdout.decode().strip(),
+        "diff": hashlib.sha256(diff.stdout).hexdigest(),
+    }
+
+
+def claude_entries(transcript: Path) -> list[dict]:
+    return [entry for entry in json_lines(transcript) if entry.get("type") == "assistant"]
+
+
+def claude_entry_count(session_id: str) -> int:
+    """Return how many assistant entries a session's transcript already holds, so a resume can be checked on the entries it adds."""
+    projects = claude_home() / "projects"
+    transcripts = sorted(projects.glob(f"*/{session_id}.jsonl")) if projects.is_dir() and "/" not in session_id else []
+    return len(claude_entries(transcripts[-1])) if transcripts else 0
+
+
+def unsandboxed_calls(entries: list[dict]) -> int:
+    """Count the tool calls that asked to run outside the Claude sandbox with dangerouslyDisableSandbox."""
+    count = 0
+    for entry in entries:
+        message = entry.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        for block in content if isinstance(content, list) else []:
+            arguments = block.get("input") if isinstance(block, dict) and block.get("type") == "tool_use" else None
+            if isinstance(arguments, dict) and arguments.get("dangerouslyDisableSandbox"):
+                count += 1
+    return count
+
+
+def verify_claude(
+    result: dict, model: str, effort: str, confined: bool = False, before: dict | None = None,
+    after: dict | None = None, skip_entries: int = 0,
+) -> dict:
+    """Verify a Claude run's model and effort. A confined run, one started with the scratch-folder sandbox, also fails when an entry the run added asks to
+    run outside the sandbox, or when the working directory's git state differs after the run from before it.
+
+    The host records no sandbox state, so these two checks stand in for a recorded write limit; the state comparison
+    is skipped when the working directory is not a git work tree."""
     usage = result.get("modelUsage")
     if not isinstance(usage, dict) or set(usage) != {model}:
         found = sorted(usage) if isinstance(usage, dict) else usage
@@ -171,7 +232,8 @@ def verify_claude(result: dict, model: str, effort: str) -> dict:
     if not transcripts:
         raise RunnerError(EXIT_EVIDENCE, f"No transcript for session {session_id} under {projects}")
     transcript = transcripts[-1]
-    assistants = [entry for entry in json_lines(transcript) if entry.get("type") == "assistant"]
+    assistants = claude_entries(transcript)
+    added = assistants[skip_entries:]
     if not assistants:
         raise RunnerError(EXIT_EVIDENCE, f"No assistant entry in {transcript}", {"transcript": transcript.as_posix()})
     assistants = [entry for entry in assistants if not is_synthetic(entry)]
@@ -188,4 +250,11 @@ def verify_claude(result: dict, model: str, effort: str) -> dict:
                 f"assistant entry names {entry_model!r} with {entry.get('effort')!r}, expected {model!r} with {effort!r}",
                 {"transcript": transcript.as_posix(), "entries": len(assistants)},
             )
-    return {"transcript": transcript.as_posix(), "entries": len(assistants), "session": session_id}
+    evidence = {"transcript": transcript.as_posix(), "entries": len(assistants), "session": session_id}
+    if not confined:
+        return evidence
+    if unsandboxed_calls(added):
+        raise RunnerError(EXIT_EVIDENCE, "The run asked to run a command outside the sandbox", evidence)
+    if before is not None and before != after:
+        raise RunnerError(EXIT_EVIDENCE, "The working directory changed during the run", evidence)
+    return {**evidence, "workspace": "unchanged" if before is not None else "unchecked"}

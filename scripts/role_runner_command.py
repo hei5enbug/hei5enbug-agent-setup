@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from role_runner_config import (
-    CLAUDE_SKILLS_OFF, CODEX_NETWORK_ON, CODEX_SKILLS_OFF, MCP_TOOL_RULE, READ_SHELL_RULES, SCRATCH_PROFILE, Run,
+    CLAUDE_INSTALL_DOMAINS, CLAUDE_SKILLS_OFF, CODEX_NETWORK_ON, CODEX_SKILLS_OFF, MCP_TOOL_RULE, READ_SHELL_RULES, SCRATCH_PROFILE, Run,
 )
 
 
@@ -86,13 +86,31 @@ def claude_tools(rules: list[str]) -> list[str]:
     return names
 
 
-def claude_command(run: Run) -> list[str]:
+def claude_sandbox_settings(run: Run, cwd: str) -> str:
+    """Return the `--settings` JSON that confines a read-only Claude run's shell writes to its scratch folder.
+
+    The sandbox must start or the run exits, a blocked command cannot retry outside it, and the working directory
+    and approved directories are denied writes. A validation run may also reach the package registries for installs."""
+    denied = sorted({str(Path(directory).resolve()) for directory in (cwd, *run.add_dirs)} | {cwd, *run.add_dirs})
+    sandbox: dict = {
+        "enabled": True, "failIfUnavailable": True, "allowUnsandboxedCommands": False,
+        "filesystem": {"allowWrite": [run.scratch], "denyWrite": denied},
+    }
+    if run.validation:
+        sandbox["network"] = {"allowedDomains": list(CLAUDE_INSTALL_DOMAINS)}
+    return json.dumps({"sandbox": sandbox}, sort_keys=True, separators=(",", ":"))
+
+
+def claude_command(run: Run, cwd: str) -> list[str]:
     if run.agent is not None or run.capability is not None:
         allowed = claude_rules(run)
         tools = claude_tools(allowed)
         mode = "dontAsk"
     else:
-        allowed = ["Read", "Grep", "Glob", *(["Bash"] if run.writing else []), *(edit_rules(run.add_dirs) if run.writing else [])]
+        allowed = [
+            "Read", "Grep", "Glob", *(["Bash"] if run.writing or run.validation else []),
+            *(edit_rules(run.add_dirs) if run.writing else []),
+        ]
         tools = claude_tools(allowed)
         mode = "dontAsk"
     command = ["claude", "-p"]
@@ -101,6 +119,8 @@ def claude_command(run: Run) -> list[str]:
     command += ["--model", run.model, "--effort", run.effort, "--output-format", "json"]
     if not run.writing:
         command += [CLAUDE_SKILLS_OFF]
+    if run.scratch is not None:
+        command += ["--settings", claude_sandbox_settings(run, cwd)]
     command += ["--tools", *tools]
     if not run.mcp:
         command += ["--strict-mcp-config"]
