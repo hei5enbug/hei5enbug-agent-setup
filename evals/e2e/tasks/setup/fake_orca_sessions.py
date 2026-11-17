@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """A fake `orca` command for the T81 evaluation: terminals, screens, idle waits, sends, and an empty orchestration inbox.
 
-The state file named by FAKE_ORCA_STATE holds the terminals. Every call is appended to `calls.jsonl` beside it. A
+The state file named by FAKE_ORCA_STATE holds the terminals. Every call is appended to `calls.jsonl` beside it. The
+terminals disappear `vanish_after_seconds` after the first `terminal list`, as if their tabs were closed, so the
+refresh script's detached helper ends a minute or so after the run instead of waiting out its hour. A
 `/reload-plugins` sent to a Claude Code terminal appends the host's reload result to that terminal's transcript, the way
 the real session would. All data is fictional.
 """
@@ -76,13 +78,18 @@ def append_reload(item: dict) -> None:
         stream.write("".join(json.dumps(record) + "\n" for record in records))
 
 
+def vanished(state: dict) -> bool:
+    first = state.setdefault("first_list_at", time.time())
+    return time.time() - first > state.get("vanish_after_seconds", 75)
+
+
 def run(words: list[str], options: dict[str, str], flags: set[str], state: dict) -> dict:
     if words[:1] == ["orchestration"]:
         if words[1:2] == ["inbox"]:
             return answer({"messages": []})
         return failure("invalid_argument", "Unknown command")
     if words[:2] == ["terminal", "list"]:
-        terminals = [view(item) for item in state["terminals"]]
+        terminals = [] if vanished(state) else [view(item) for item in state["terminals"]]
         return answer({"terminals": terminals, "totalCount": len(terminals), "truncated": False})
     if words[:2] not in (["terminal", "read"], ["terminal", "wait"], ["terminal", "send"], ["terminal", "close"]):
         return failure("invalid_argument", f"Unknown command: {' '.join(words[:2])}")

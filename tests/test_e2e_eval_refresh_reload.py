@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from typing import Any
@@ -132,6 +133,39 @@ class RefreshReloadTaskTest(unittest.TestCase):
         self.assertEqual(self.grade(DONE_ANSWER), {"reload-sent-to-running-session": True, "nothing-else-sent-to-running-session": True,
                                                    "nothing-sent-to-control-session": True,
                                                    "running-session-not-reported-unfinished": True})
+
+    def test_세션이_사라지면_이전_버전_스크립트의_도우미도_제한_시간_안에_끝난다(self):
+        """origin/main의 스크립트가 첫 세션을 도우미에 넘겨도, 터미널이 사라진 뒤 도우미가 한 시간을 채우지 않고 곧 끝나며 시드의 기본 한도는 두 분 안이다.
+        잡는 회귀: 가짜 Orca가 세션을 없애지 않아 이전 버전 실행의 도우미가 실행이 끝난 뒤에도 한 시간 동안 남는 문제."""
+        # Given
+        exists = subprocess.run(["git", "-C", str(REPO_ROOT), "rev-parse", "--verify", "-q", "origin/main"], capture_output=True, check=False)
+        if exists.returncode != 0:
+            self.skipTest("origin/main is not available")
+        before = self.root / "before"
+        before.mkdir()
+        archive = subprocess.run(["git", "-C", str(REPO_ROOT), "archive", "origin/main"], capture_output=True, check=True)
+        subprocess.run(["tar", "-x", "-C", str(before)], input=archive.stdout, check=True)
+        script = before / "skills/orca-plugin-refresh/scripts/orca_plugin_refresh.py"
+        state_path = self.work / "orca-state" / "state.json"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        seeded = state["vanish_after_seconds"]
+        state_path.write_text(json.dumps({**state, "vanish_after_seconds": 3}), encoding="utf-8")
+        run_id = json.loads(subprocess.run([sys.executable, "-B", str(script), "apply-installed", "--json"], env=self.environment,
+                                           capture_output=True, text=True, check=False, timeout=120).stdout)["run_id"]
+        pattern = f"self-apply --run-id {run_id}"
+        self.addCleanup(subprocess.run, ["pkill", "-f", pattern], check=False)
+
+        # When
+        subprocess.run([sys.executable, "-B", str(script), "apply", "--run-id", run_id, "--json"], env=self.environment,
+                       capture_output=True, text=True, check=False, timeout=120)
+        deadline = time.monotonic() + 40
+        while time.monotonic() < deadline and subprocess.run(["pgrep", "-f", pattern], capture_output=True, check=False).returncode == 0:
+            time.sleep(1)
+
+        # Then
+        self.assertEqual(subprocess.run(["pgrep", "-f", pattern], capture_output=True, check=False).returncode, 1)
+        self.assertLessEqual(seeded, 120)
+        self.assertEqual([call for call in self.calls() if call["argv"][:2] == ["terminal", "send"]], [])
 
     def test_reload를_보내지_않고_도우미에_넘겼다고_답한_실행은_두_검사에서_실패한다(self):
         """기록된 실패 실행은 어떤 명령도 보내지 않고 첫 세션을 대기 중이라고 보고하므로 reload 검사와 보고 검사만 실패한다."""

@@ -22,6 +22,7 @@ PLUGIN_ID = "hei5enbug-agent-setup@hei5enbug"
 CLAUDE_HANDLE = "term_demo_a"
 CODEX_HANDLE = "term_demo_b"
 OLD_VERSION = "0.9.0"
+VANISH_AFTER_SECONDS = 75
 COPY_IGNORE = shutil.ignore_patterns(".git", "evals", "docs", "tests", "__pycache__", ".venv", "node_modules", ".pytest_cache")
 
 
@@ -108,7 +109,7 @@ def main(repo_argument: str) -> None:
     state_dir, plugin_dir = work / "orca-state", work / "plugin-state"
     state_dir.mkdir()
     plugin_dir.mkdir()
-    (state_dir / "state.json").write_text(json.dumps({"terminals": [
+    (state_dir / "state.json").write_text(json.dumps({"vanish_after_seconds": VANISH_AFTER_SECONDS, "terminals": [
         terminal(CLAUDE_HANDLE, "claude", "demo-a", claude_log, claude_screen, False, work),
         terminal(CODEX_HANDLE, "codex", "demo-b", codex_log, codex_screen, True, work)]}, indent=2), encoding="utf-8")
     (plugin_dir / "state.json").write_text(json.dumps({
