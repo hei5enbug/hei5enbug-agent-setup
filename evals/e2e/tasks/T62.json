@@ -9,7 +9,8 @@
   "env": {
     "ORCA_TERMINAL_HANDLE": "term_demo_a",
     "FAKE_ORCA_STATE": "{work}/orca-state/state.json",
-    "PATH": "{work}/fake-bin:{PATH}"
+    "PATH": "{work}/fake-bin:{PATH}",
+    "ORCA_USER_DATA_PATH": "{work}/orca-user-data"
   },
   "limits": {
     "wall_seconds": 600,

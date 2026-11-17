@@ -271,7 +271,7 @@ T59부터 T62는 `instructions/cross-repository.md`의 인수인계 규칙과 `s
 평가한다. 같은 가짜 `orca`를 쓰되, 화면과 출력을 가진 터미널 기록에 대한 `terminal create`, `send`, `wait`,
 `read --screen`과 보고를 저장하는 `orchestration send`를 더했다. `tasks/setup/handoff_common.py`가 상태를 심고
 `tasks/custom/handoff_shared.py`가 호출 기록을 읽는다. 호출 기록에는 호출마다 인자, 폴더, 호출한 터미널 핸들이 있어 검사가
-순서를 판단할 수 있다. T59와 T60의 요약은 작업 프롬프트이므로 평가 대상 세션이 위임받은 세션 역할을 한다. T62에는 모델이 쓴
+순서를 판단할 수 있다. T59와 T60의 요약은 작업 프롬프트이므로 평가 대상 세션이 위임받은 세션 역할을 한다. T62는 `ORCA_USER_DATA_PATH`를 설정하며, 이것이 없으면 훅은 프로세스를 시작하지 않는다. T62에는 모델이 쓴
 Orca 호출로 판단할 것이 없다. 훅이 세션의 첫 응답 전에 쓰지 않은 터미널을 닫아야 하며, 검사는 그 닫기가 훅의 읽기와
 닫기가 아닌 모든 Orca 호출보다 앞서는지 확인한다. 테스트는 `tests/test_e2e_eval_graders.py`에 있다.
 

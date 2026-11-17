@@ -6,7 +6,8 @@ Orca is closing a never-used shell terminal at a session's first prompt.
 - At the first prompt of a session (UserPromptSubmit), each terminal of the session's worktree other than the session's
   own is closed when it is a never-used shell terminal: Orca lists no agent in it, its screen shows one shell prompt
   with an empty input line, and its output holds no command. A terminal that runs a process, holds typed input, or
-  shows an earlier command stays, as does any terminal that cannot be read in time.
+  shows an earlier command stays, as does any terminal that cannot be read in time. The hook starts no process for
+  this unless `ORCA_USER_DATA_PATH`, which Orca sets in every terminal it manages, is set.
 - After the session renames its own terminal tab with a literal title (PostToolUse), that title is remembered, and each
   later prompt (UserPromptSubmit) gets one context line that names it, so the session can retitle when its work moves on.
 - At Stop it keeps the turn going once per state with a one-command instruction, which Claude Code shows as Stop hook
@@ -57,6 +58,7 @@ TAB_TITLE_LINE = (
 )
 TERMINAL_HANDLE_REFERENCES = frozenset({"$ORCA_TERMINAL_HANDLE", "${ORCA_TERMINAL_HANDLE}"})
 TIDY_FINGERPRINT = "T1"
+ORCA_TERMINAL_MARKER = "ORCA_USER_DATA_PATH"
 TIDY_TERMINAL_LIMIT = 8
 TIDY_SECONDS = 2
 PROMPT_ENDINGS = frozenset("$%#>\u276f\u279c\u03bb\u00bb\ue0b0")
@@ -447,7 +449,12 @@ def handle(event: object) -> dict | None:
     if name == "PostToolUse":
         record_own_rename(event, state)
         return None
-    if state.path is not None and TIDY_FINGERPRINT not in state.fired and state.mark(TIDY_FINGERPRINT):
+    if (
+        os.environ.get(ORCA_TERMINAL_MARKER)
+        and state.path is not None
+        and TIDY_FINGERPRINT not in state.fired
+        and state.mark(TIDY_FINGERPRINT)
+    ):
         worktree = orca_worktree()
         if worktree is not None:
             close_never_used_terminals(worktree)

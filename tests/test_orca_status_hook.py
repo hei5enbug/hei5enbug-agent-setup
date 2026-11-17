@@ -299,9 +299,7 @@ class NoOrcaWriteTest(HookCase):
 
         # Then
         self.assertEqual(self.writes(), [])
-        self.assertEqual(
-            [call for call in self.calls() if not call.startswith(("worktree current", "terminal list"))], []
-        )
+        self.assertEqual([call for call in self.calls() if not call.startswith("worktree current")], [])
 
     def test_이름_변경_뒤_다음_프롬프트는_탭_제목_줄을_받고_그_줄에_워크트리_코멘트가_없다(self):
         # Regression: the tab title line asks the session to refresh a worktree comment that is no longer written
@@ -396,6 +394,9 @@ class NeverUsedTerminalTest(HookCase):
         program.write_text(FAKE_ORCA.format(log=str(self.log), data=str(data)))
         program.chmod(program.stat().st_mode | stat.S_IXUSR)
 
+    def submit_prompt(self, env: dict | None = None, **event) -> dict | None:
+        return super().submit_prompt({"ORCA_USER_DATA_PATH": str(self.root / "orca-user-data"), **(env or {})}, **event)
+
     def closes(self) -> list[str]:
         return [call.split()[-1] for call in self.calls() if call.startswith("terminal close")]
 
@@ -453,12 +454,13 @@ class NeverUsedTerminalTest(HookCase):
         self.assertEqual(self.other_calls(), [])
 
     def test_오르카_밖_서브에이전트_배정된_역할에서는_터미널을_읽지_않는다(self):
-        """주 세션이 아닌 곳의 프롬프트는 터미널을 읽지도 닫지도 않는다."""
+        """주 세션이 아닌 곳이나 Orca가 사용자 데이터 경로를 주지 않은 환경의 프롬프트는 프로세스를 시작하지도, 터미널을 읽거나 닫지도 않는다."""
         # Regression: a worker or subagent prompt closes terminals of the main session's worktree
         # Given
         self.set_terminals([terminal("term_idle", [PROMPT])])
         cases = {
             "outside Orca": ({"ORCA_TERMINAL_HANDLE": None}, {}),
+            "no Orca user data path": ({"ORCA_USER_DATA_PATH": None}, {}),
             "assigned role": ({"HEI5ENBUG_ASSIGNED_ROLE": "worker"}, {}),
             "subagent": ({}, {"agent_id": "agent-1"}),
         }

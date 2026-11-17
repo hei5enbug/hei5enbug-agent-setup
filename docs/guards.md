@@ -208,7 +208,9 @@ At the first `UserPromptSubmit` of a session, the hook lists the terminals of th
 never-used shell terminal other than the session's own, with no model turn: a terminal in which Orca lists no agent,
 whose rendered screen holds one shell prompt line with an empty input line, and whose accumulated output holds
 nothing but prompts and a login banner. A terminal that runs a process, holds typed input, shows an earlier command, or
-has exited stays open, as does any terminal that cannot be read within a few seconds. The state file records the
+has exited stays open, as does any terminal that cannot be read within a few seconds. The hook starts no process
+for this unless `ORCA_USER_DATA_PATH`, which Orca sets in every terminal it manages, is set, so a hook run in a bare
+environment stays silent and process-free. The state file records the
 fingerprint `T1`, so a later prompt of the same session never rereads the terminals. This keeps a session that a user
 or a handoff started in a new workspace from leaving an empty shell beside it. Claude Code and Codex both run
 `UserPromptSubmit` command hooks for plugins before the prompt reaches the model, so the hook behaves alike on both.
