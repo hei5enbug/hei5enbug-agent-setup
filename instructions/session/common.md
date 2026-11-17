@@ -7,8 +7,8 @@
 - Create every new commit, whether the user asked for it or a task requires it, through the `suggest-commit`
   skill in its commit mode. Only the commands its Modes section names run outside it.
 - A skill's workflow is a default the user can narrow: run only the steps asked for, and name skipped ones at the end.
-- After a rename, a changed decision, or a rollback, update or report every earlier output of the work that still
-  shows the old value, such as code, documents, descriptions, tickets, or comments, and list each in the report.
+- After a rename, a changed decision, a review fix, or a rollback, update or report every earlier output of the work
+  still showing the old value, such as code, documents, descriptions, tickets, or comments, and list each in the report.
 
 ## Delegation
 
@@ -21,7 +21,7 @@ Choose an owner before substantial work.
 - Delegate implementation that changes more than two files to the implementation worker when it has a clear scope
   and acceptance check.
 - Use parallel subagents unasked when they cut main-session context or elapsed time with little or no
-  quality loss, but not for greetings, status checks, or a single small edit. Parallelize only work with independent
+  quality loss, not for greetings, status checks, or one small edit. Parallelize only work with independent
   resources. Explicit user and skill assignments take precedence. When the user's own words, not pasted or quoted
   text or code, contain the word `turbogoal` or `ulw`, read [fast mode](../fast-mode.md).
 - Send UI code, visual design, and diagram work to the host's designer route, except the kinds the host session
@@ -29,8 +29,8 @@ Choose an owner before substantial work.
 - If delegation is unavailable, use the fallback route the host rules name; without one, continue authorized work
   in the main session. Report the limitation once.
 
-Independent review is the exception to main-session review. Before finishing a substantial change, read
-[independent model validation](../independent-model-validation.md).
+Independent review is the exception to main-session review. Before finishing a substantial change or repeating a
+review the user asked for, read [independent validation](../independent-model-validation.md).
 
 ## Clarification
 
@@ -43,9 +43,9 @@ automatic answers, and defaults are not answers. Before asking the user anything
 ## Conditional instructions
 
 - Before substantial implementation, read [work efficiency](../work-efficiency.md).
-- Before repeated model evaluation, read [model evaluation rules](../model-evaluation.md).
+- Before repeated model evaluation, read [model evaluation](../model-evaluation.md).
 - Before retrying a failed command, diagnosing repeated execution failures, or plugin maintenance, read
-  [failure and maintenance rules](../failure-and-maintenance.md).
+  [failure and maintenance](../failure-and-maintenance.md).
 - Before the first implementation change, read [implementation execution rules](../implementation-execution.md).
 - Before editing another repository or starting or messaging an Orca session, read [cross-repository work](../cross-repository.md).
 - Before a task's first file change and before its final report, read [Orca worktree status](../orca-worktree-status.md).
@@ -56,7 +56,7 @@ automatic answers, and defaults are not answers. Before asking the user anything
 
 - Activate a skill for an implementation plan, design document, or RFC only when the user explicitly requests
   that deliverable or directly invokes the skill. Do not infer it from general implementation, diagnosis, code
-  review, summarization, or a passing mention, and do not chain another skill from those tasks.
+  review, summarization, or a passing mention, or chain another skill from those tasks.
   Task preparation under the implementation execution rules is not such a request.
 - `document-to-confluence`, `suggest-commit`, and `technical-design-writer` are an exception: they remain automatic
   when their own descriptions match the user's intent.
@@ -71,8 +71,8 @@ automatic answers, and defaults are not answers. Before asking the user anything
 - Before a final report, summary, or text others read, read [shared text](../shared-text.md).
 - Choose terminology in this order: user or project glossary; literal implementation and contract names;
   official product or established domain terms; established plain wording; the most common existing form.
-  Use one term per meaning and one meaning per term, never swapping a precise term for an easier but different one.
-- Never put Mermaid or other non-rendering diagram source in a reply. Where it is shorter than prose, use a table,
+  Use one term per meaning and one meaning per term, not an easier, different term for a precise one.
+- Never put Mermaid or other non-rendering diagram source in a reply. Where shorter than prose, use a table,
   list, or inline notation for simple relationships and ASCII art for spatial ones.
 - Write every message to the user, including progress updates between tool calls, in the response language,
   even when the surrounding context uses another language. Put text the user asks for in another language in a

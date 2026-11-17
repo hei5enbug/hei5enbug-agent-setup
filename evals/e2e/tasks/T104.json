@@ -1,0 +1,73 @@
+{
+  "id": "T104",
+  "title": "Review loop that does not converge stops after three rounds",
+  "category": "writing",
+  "path": "repeated review: three-round stop and report",
+  "fixture": "ops-notes",
+  "prompt_file": "prompts/T104.txt",
+  "setup": "setup/T104.py",
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 10
+  },
+  "checks": [
+    {
+      "id": "ran-exactly-three-times",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "ran_exactly_three_times"
+    },
+    {
+      "id": "third-round-findings-fixed",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "third_findings_fixed"
+    },
+    {
+      "id": "earlier-findings-fixed",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "earlier_findings_fixed"
+    },
+    {
+      "id": "review-script-untouched",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "script_untouched"
+    },
+    {
+      "id": "guide-not-gutted",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "guide_not_gutted"
+    },
+    {
+      "id": "counts-and-severity-reported",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "counts_reported"
+    },
+    {
+      "id": "none-high-reported",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "none_high_reported"
+    },
+    {
+      "id": "stop-question-with-recommendation",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "stop_question_with_recommendation"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

@@ -1,0 +1,52 @@
+{
+  "id": "T105",
+  "title": "Review loop that converges after a rise finishes without a stop",
+  "category": "writing",
+  "path": "repeated review: no stop when a round returns no findings",
+  "fixture": "ops-notes",
+  "prompt_file": "prompts/T105.txt",
+  "setup": "setup/T105.py",
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 10
+  },
+  "checks": [
+    {
+      "id": "ran-exactly-three-times",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "ran_exactly_three_times"
+    },
+    {
+      "id": "last-run-clean",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "last_run_clean"
+    },
+    {
+      "id": "every-flagged-sentence-fixed",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "flagged_sentences_fixed"
+    },
+    {
+      "id": "review-script-untouched",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "script_untouched"
+    },
+    {
+      "id": "no-stop-question",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_stop_question"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

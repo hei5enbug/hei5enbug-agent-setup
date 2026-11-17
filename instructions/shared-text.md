@@ -72,7 +72,9 @@ python3 <Source directory>/scripts/text_review.py review --kind <kind> --draft <
 - When a finding can be resolved only by a decision the user must make, such as a scope or a fact the sources do not
   settle, apply the run's other findings, post nothing, and ask about that finding.
 - Count only runs that reach the reviewer. When the fourth such run for one draft still returns findings, post
-  nothing, show the user the remaining findings, and ask.
+  nothing, show the user the remaining findings, and ask. When the user answers to go on, the loop follows
+  [Repeated review on request](independent-model-validation.md#repeated-review-on-request), counting rounds from that
+  answer.
 - For a final report, at each of these stops send the revised report instead of asking, with no line about the
   review, once `text_review.py check --kind final-report <file>` returns no findings for it. Write a finding that needs
   the user's decision into the report as one question.

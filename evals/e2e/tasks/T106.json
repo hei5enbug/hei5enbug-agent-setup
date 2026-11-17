@@ -1,0 +1,45 @@
+{
+  "id": "T106",
+  "title": "A review fix reaches every file that states the same point",
+  "category": "writing",
+  "path": "repeated review: fix spreads and matches a confirmed decision",
+  "fixture": "ops-notes",
+  "prompt_file": "prompts/T106.txt",
+  "setup": "setup/T106.py",
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 10
+  },
+  "checks": [
+    {
+      "id": "every-file-states-three",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "every_file_states_three"
+    },
+    {
+      "id": "second-run-clean",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "second_run_clean"
+    },
+    {
+      "id": "ran-twice",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "ran_twice"
+    },
+    {
+      "id": "decision-and-script-untouched",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "decision_and_script_untouched"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

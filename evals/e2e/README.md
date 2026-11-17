@@ -286,6 +286,10 @@ Prompts are in Korean, as the real user writes them. The fixtures are fictional 
 real one has: a README, an `AGENTS.md` with a Korean mirror rule, tests, and Korean mirrors. T21 runs with
 `ORCA_TERMINAL_HANDLE` set and a fake `orca` first on `PATH`, built by `tasks/setup/fake_orca.py`; it keeps its state
 in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval_orca_cleanup.py`.
+T104 to T106 run a repeated review on the `ops-notes` fixture: their setup scripts write the documents and a seeded
+reviewer, `tools/review.py`, which answers from a scenario file and keeps its run count, cursor, and answer log in
+`review-state/` beside the repository, the way T21 keeps its calls. Their tests are in
+`tests/test_e2e_eval_repeated_review.py`.
 
 | Task | Fixture | Path it exercises | Request |
 |---|---|---|---|
@@ -310,6 +314,9 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T19 | ops-notes | Shared document | Wiki draft of about 1,600 characters for a 1,500-character budget |
 | T20 | notes-cli | Final report | Small change with tests, then a report |
 | T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
+| T104 | ops-notes | Repeated review that does not converge | Fix `docs/guide.md` until the seeded review reports no findings, while it returns 5, 4, 6, and more new low-severity findings: pass on exactly three runs, the third run's findings fixed, and a reply with the counts, no high finding, a question to go on, narrow, or write now, and a recommendation |
+| T105 | ops-notes | Repeated review that converges after a rise | The same request, with 2, 3, and then 0 findings: pass on three runs, every flagged sentence fixed, and no stop or question |
+| T106 | ops-notes | A review fix that reaches every passage | Three documents state a retry limit of 5 and `docs/decisions.md` sets 3; the first run flags only `docs/setup.md`: pass when all three state 3 before the second run, which returns no findings |
 
 ## Comparing a change on both hosts
 
