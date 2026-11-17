@@ -163,12 +163,14 @@ def codex_texts(result_dir: Path) -> list[str]:
 
 def attach(
     view: Mapping[str, Any], result_dir: Path, host: str, main_events: Sequence[Mapping[str, Any]], *, scripted: bool = False,
+    repo: Path | str | None = None,
 ) -> dict[str, Any]:
     """The view plus `conversation`, the exchanges of the scripted user and the ordered timeline, when the run kept a log or
     its task has a scripted user. A scripted run in which the agent asked nothing still gets the timeline, so a check can see
-    its edits. `main_events` are the stream events of a Claude Code run, or the events of the main rollout of a Codex run."""
+    its edits. With `repo`, a call counts as an edit only when it changes a path inside that repository. `main_events` are the
+    stream events of a Claude Code run, or the events of the main rollout of a Codex run."""
     exchanges = read_log(result_dir / LOG_NAME)
     if not exchanges and not scripted:
         return dict(view)
     build = codex_timeline if host == HOST_CODEX else claude_timeline
-    return {**view, "conversation": {"exchanges": exchanges, "timeline": build(main_events, exchanges)}}
+    return {**view, "conversation": {"exchanges": exchanges, "timeline": build(main_events, exchanges, None if repo is None else str(repo))}}

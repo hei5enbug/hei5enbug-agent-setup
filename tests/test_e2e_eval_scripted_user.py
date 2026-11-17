@@ -19,7 +19,7 @@ sys.path.insert(0, str(E2E_ROOT))
 from harness import approval_mcp, command, converse, metrics, pilot_check, timeline  # noqa: E402
 from harness.process import ProcessResult  # noqa: E402
 from harness.scripted_user import (  # noqa: E402
-    DEFAULT_ANSWER, KIND_TEXT, KIND_TOOL, REPEAT_ANSWER, ScriptedUser, SheetError, load_sheet, read_log, sheet_leaks, validate_sheet,
+    DEFAULT_ANSWER, KIND_TEXT, KIND_TOOL, REJECTED_HEADINGS, REPEAT_ANSWER, ScriptedUser, SheetError, load_sheet, read_log, sheet_leaks, validate_sheet,
     without_rejected_section,
 )
 
@@ -223,6 +223,25 @@ class ApprovalJudgmentTest(unittest.TestCase):
         # then
         self.assertNotIn("Monday again", kept)
         self.assertIn("Monday plan", kept)
+
+    def test_기각한_대안은_굵은_라벨과_라벨_붙은_목록으로_적어도_기각한_절로_센다(self):
+        """제목이 아니어도 굵은 라벨이나 라벨 붙은 목록 항목 아래의 목록과 그 문단은 기각한 대안이고, 다음 굵은 라벨이나 빈 줄 뒤 본문에서 끝난다.
+        회귀: 마크다운 제목만 기각한 절로 보아, `**버린 대안**` 아래에 월요일을 적은 명세가 승인되지 않았다."""
+        # given
+        bold = "일요일에 시작합니다.\n\n**버린 대안**\n- 월요일 시작\n- **일련번호**: 안 씁니다\n\n**가정**: 현지 시각을 씁니다.\n"
+        labeled = "일요일에 시작합니다.\n- 기각한 대안: 월요일 시작\n  - 더 있음\n\n본문 월요일 남음\n"
+        english = "Sunday.\n\nRejected alternatives:\n1. Monday start\n\nPlan.\n"
+
+        # when
+        kept = [without_rejected_section(text, list(REJECTED_HEADINGS)) for text in (bold, labeled, english)]
+
+        # then
+        self.assertNotIn("월요일", kept[0])
+        self.assertIn("현지 시각", kept[0])
+        self.assertNotIn("월요일 시작", kept[1])
+        self.assertIn("본문 월요일 남음", kept[1])
+        self.assertNotIn("Monday", kept[2])
+        self.assertIn("Plan.", kept[2])
 
     def test_승인_뒤_멈추는_시트는_다음_질문에_답하지_않고_대화를_끝낸다(self):
         """stop_after_approval인 시트는 승인 뒤의 질문에 답을 주지 않고 끝났다고 표시한다."""
@@ -642,6 +661,55 @@ class TimelineTest(unittest.TestCase):
         # then
         self.assertEqual([item["type"] for item in items], ["call", "text", "exchange", "call"])
         self.assertEqual(timeline.first_edit(items), 3)
+
+    def test_저장소_밖_쓰기는_편집이_아니고_저장소_안_쓰기는_편집이다(self):
+        """T49 둘째 실행 before에 기록된 `/tmp` 쓰기 명령 둘은 편집이 아니고, 저장소 안으로 쓰는 셸 명령·도구 호출은 편집이다.
+        회귀: 임시 폴더에 요청과 초안을 쓴 명령이 편집으로 세어, 저장소가 그대로인데도 파일 편집 없음 검사가 실패했다."""
+        # given
+        repo = "/work/repo"
+        recorded = [
+            "mkdir -p /tmp/t49review && cd /tmp/t49review && cat > request.md <<'EOF'\n저장소 규칙 -> 요약\n- 설정은 config/settings.toml\nEOF\n"
+            "cat > draft.md <<'EOF'\n명세입니다.\nEOF",
+            "cd /tmp/t49review && python3 - <<'EOF'\np='draft.md'; s=open(p).read()\n"
+            "s=s.replace(\"- `config/settings.toml`에 적습니다.\", \"- 설정 파일에 적습니다.\")\nopen(p,'w').write(s)\nEOF\n"
+            "python3 /plugin/scripts/text_review.py review --draft draft.md",
+            "D=$(mktemp -d) && cd /work/repo && git diff > $D/diff.txt && printf x > $D/req.txt",
+        ]
+        inside = [
+            "printf x > notes.txt", "cat > /work/repo/out/a.txt <<'EOF'\nx\nEOF", "sed -i '' s/a/b/ timesheet/cli.py",
+            "cd /tmp/work && cp a.py /work/repo/timesheet/a.py", "rm timesheet/old.py",
+            "python3 - <<'EOF'\nfrom pathlib import Path\np = Path(\"timesheet/cli.py\")\np.write_text(p.read_text())\nEOF",
+            "git apply /tmp/fix.patch",
+        ]
+
+        # when
+        outside_verdict = [timeline.is_edit_call({"name": "Bash", "input": {"command": command}}, repo) for command in recorded]
+        inside_verdict = [timeline.is_edit_call({"name": "Bash", "input": {"command": command}}, repo) for command in inside]
+        tools = [timeline.is_edit_call({"name": name, "input": {"file_path": path}}, repo) for name, path in (
+            ("Write", "/tmp/notes.md"), ("Edit", "/work/repo/timesheet/cli.py"), ("Edit", "timesheet/cli.py"), ("NotebookEdit", "/home/test/n.ipynb"))]
+
+        # then
+        self.assertEqual(outside_verdict, [False, False, False])
+        self.assertEqual(inside_verdict, [True] * len(inside))
+        self.assertEqual(tools, [False, True, True, False])
+
+    def test_저장소를_알면_타임라인은_호출마다_저장소_안_편집인지_적어_검사가_따른다(self):
+        """저장소를 넘긴 타임라인은 각 호출에 edit를 적고, first_edit와 is_edit_call이 그 값을 따른다. 저장소를 모르면 예전처럼 쓰기 전부를 센다."""
+        # given
+        def use(identifier: str, command: str) -> dict[str, Any]:
+            return {"type": "assistant", "message": {"id": identifier, "content": [
+                {"type": "tool_use", "id": identifier, "name": "Bash", "input": {"command": command}}]}}
+
+        events = [use("a", "cd /tmp/review && cat > draft.md <<'EOF'\nx\nEOF"), use("b", "printf x > timesheet/notes.txt")]
+
+        # when
+        scoped = timeline.claude_timeline(events, [], "/work/repo")
+        unscoped = timeline.claude_timeline(events, [])
+
+        # then
+        self.assertEqual([item["edit"] for item in scoped], [False, True])
+        self.assertEqual(timeline.first_edit(scoped), 1)
+        self.assertEqual(timeline.first_edit(unscoped), 0)
 
     def test_편집_호출_판별은_읽기_명령과_널_리다이렉션을_편집으로_세지_않는다(self):
         """git diff, 테스트 실행, 2>&1, > /dev/null은 편집이 아니고 sed -i, tee, 파이썬 쓰기는 편집이다."""

@@ -397,6 +397,59 @@ class AgreementTaskTest(unittest.TestCase):
         # then
         self.assertIn("specification-approved", self.failed(result))
 
+    def test_임시_폴더에만_쓴_실행은_파일_편집_없음_검사를_통과하고_저장소_안_쓰기는_실패한다(self):
+        """T49에서 /tmp에 요청과 초안을 쓴 명령은 편집이 아니고, 같은 실행에 저장소 안 쓰기가 더해지면 편집이다.
+        회귀: 저장소가 그대로인데도 임시 폴더 쓰기가 편집으로 세어 T49 파일 편집 없음 검사가 실패했다."""
+        # given
+        task, repo, base = self.materialize("T49")
+
+        def stream(commands: list[str]) -> list[dict[str, Any]]:
+            return [{"type": "assistant", "parent_tool_use_id": None, "message": {"id": f"m{i}", "content": [
+                {"type": "tool_use", "id": f"t{i}", "name": "Bash", "input": {"command": command}}]}} for i, command in enumerate(commands)]
+
+        temporary = ["mkdir -p /tmp/t49review && cd /tmp/t49review && cat > request.md <<'EOF'\nx\nEOF"]
+        written = temporary + [f"printf x > {repo}/timesheet/notes.txt"]
+        verdicts = {}
+        for name, commands in (("temporary", temporary), ("written", written)):
+            with tempfile.TemporaryDirectory() as folder:
+                view = converse.attach({"final_answer": "done", "assistant_texts": [], "tool_calls": [], "delegations": [], "approvals": [],
+                                        "permission_denials": []}, Path(folder), "claude", stream(commands), scripted=True, repo=repo)
+            verdicts[name] = {check["id"]: check for check in self.grade(task, repo, base, view)["checks"]}["no-file-edit"]
+
+        # then
+        self.assertTrue(verdicts["temporary"]["passed"], verdicts["temporary"]["detail"])
+        self.assertFalse(verdicts["written"]["passed"])
+
+    def test_일정한_기각한_대안_형식과_이름_없는_경우를_가린다(self):
+        """T46 시트는 굵은 라벨과 라벨 붙은 목록으로 적은 기각한 대안을 승인하고, 기각한 대안을 어디에도 라벨로 적지 않은 월요일은 승인하지 않는다.
+        회귀: 제목만 기각한 절로 보아 `**버린 대안**`에 월요일을 적은 명세가 week-start-sunday 때문에 승인되지 않았다."""
+        # given
+        sheet = load_sheet(TASKS_ROOT / load_task("T46")["sheet"])
+        base = "일요일(sunday)에 시작하고 export-YYYYMMDD-HHMMSS.csv로 씁니다.\n\n"
+        forms = {
+            "bold label": base + "**버린 대안**\n- 주 시작을 monday로 두기\n\n**가정**: 현지 시각입니다.\n",
+            "labeled list": base + "- 기각한 대안: monday 시작\n",
+            "heading": base + "## 기각한 대안\n\n- monday 시작\n",
+            "no rejected label": base + "- 선택지: monday 시작 또는 sunday 시작\n",
+            "label without the alternative": base + "**버린 대안**\n- 없음\n\n주 시작은 monday일 수도 있습니다.\n",
+            "nothing named": base,
+        }
+
+        def ask(name: str, text: str):
+            user = ScriptedUser(sheet, self.root / f"form-{name.replace(' ', '-')}.jsonl")
+            for decision in sheet["decisions"]:
+                user.answer(decision["terms"][0], "text")
+            return user.answer("Do you approve this specification?", "text", text)
+
+        # when
+        verdicts = {name: ask(name, text) for name, text in forms.items()}
+
+        # then
+        self.assertEqual({name: verdict.approval for name, verdict in verdicts.items()},
+                         {"bold label": True, "labeled list": True, "heading": True, "no rejected label": False,
+                          "label without the alternative": False, "nothing named": True})
+        self.assertEqual(verdicts["no rejected label"].detail, "week-start-sunday")
+
 
 if __name__ == "__main__":
     unittest.main()

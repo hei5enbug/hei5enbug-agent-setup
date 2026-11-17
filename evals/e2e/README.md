@@ -107,7 +107,7 @@ must hold with its terms and the terms of its rejected options. `harness/scripte
   as a new answer.
 - A request for approval holds one of the sheet's approval terms. It is approved when every decision of the sheet has had
   an answer given, the specification text holds every term of every required point, and no term of a rejected option stands
-  outside the heading of the rejected alternatives. While a decision has had no answer, the request gets that decision's first
+  outside the rejected alternatives, which may be written under a heading, after a bold label, or in a labeled list. While a decision has had no answer, the request gets that decision's first
   answer instead (the first such decision), and then the sentence of the first point that fails. A decision the sheet does not
   hold is settled by the default answer and never keeps an approval open. With `stop_after_approval`, a question after the approval gets no answer
   and the conversation ends there.
@@ -123,7 +123,7 @@ must hold with its terms and the terms of its rejected options. `harness/scripte
   state, so the approver process and the harness process share one count. `view.json` holds the exchanges and one ordered
   timeline of the agent's texts, its calls, and the exchanges as `conversation`; a grader decides "before the approval" and
   "between two answers" on it. A task with a sheet keeps the timeline even when the agent asked nothing, so a check of "no file
-  edit" sees the edits of such a run. A shell command counts as a file edit when it writes, moves, or removes a file.
+  edit" sees the edits of such a run. A call counts as a file edit only when it changes a path inside the run's repository: an editing tool by the path it is given, and a shell command that writes, moves, or removes a file there. A write to a temporary folder or another path outside the repository is not an edit, and a path the harness cannot resolve counts as inside.
 
 Limits: `codex exec resume` must accept the options the harness passes it (checked with its `--help` before the first Codex
 run of such a task), the approver reads the agent's text from `stream.jsonl` while the agent writes it, and a question that is

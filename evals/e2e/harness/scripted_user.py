@@ -28,7 +28,7 @@ DEFAULT_ANSWER = "Use your recommendation."
 REPEAT_ANSWER = "My earlier answer on that stands. Use your recommendation for the rest."
 APPROVED_ANSWER = "Approved."
 APPROVAL_TERMS = ("approve", "approval", "승인")
-REJECTED_HEADINGS = ("rejected alternatives", "기각한 대안")
+REJECTED_HEADINGS = ("rejected alternatives", "alternatives rejected", "기각한 대안", "버린 대안", "채택하지 않은 대안", "제외한 대안")
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 KIND_TOOL = "tool"
 KIND_TEXT = "text"
@@ -112,19 +112,49 @@ def load_sheet(path: Path) -> dict[str, Any]:
         raise SheetError(f"cannot read the answer sheet: {error}") from error
 
 
+LABEL_MARKS = re.compile(r"^[\s>*_`#\-•\d.)]+")
+LIST_LINE = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s")
+
+
+def labels_rejected(line: str, names: Sequence[str]) -> bool:
+    """Whether a line that is not a heading opens a list of rejected alternatives: its text, after list marks and emphasis,
+    starts with one of the names, as in a bold label or a labeled list."""
+    return lowered_start(LABEL_MARKS.sub("", line), names)
+
+
+def lowered_start(text: str, names: Sequence[str]) -> bool:
+    return any(text.lower().startswith(name) for name in lowered(names))
+
+
 def without_rejected_section(text: str, headings: Sequence[str]) -> str:
-    """The specification text without the sections whose heading names the rejected alternatives; a section lasts until
-    the next heading of the same or a higher level."""
+    """The specification text without the rejected alternatives, in any visible form. A heading that names them lasts until
+    the next heading of the same or a higher level. A label line, such as a bold label or a labeled list item, lasts with the
+    list items and indented lines that follow it, and with its own paragraph; a heading, a bold label, or the first plain line
+    after a blank line ends it."""
     keep: list[str] = []
     skipping: int | None = None
+    labelled, after_blank = False, False
     for line in text.splitlines():
         match = HEADING.match(line)
+        if labelled and match is None:
+            if not line.strip():
+                after_blank = True
+                keep.append(line)
+                continue
+            if LIST_LINE.match(line) or line[:1].isspace() or (not after_blank and not line.lstrip().startswith(("**", "__"))):
+                continue
+            labelled, after_blank = False, False
+        elif labelled:
+            labelled, after_blank = False, False
         if match:
             level = len(match.group(1))
             if skipping is not None and level <= skipping:
                 skipping = None
             if skipping is None and any(name in match.group(2).lower() for name in lowered(headings)):
                 skipping = level
+        elif skipping is None and labels_rejected(line, headings):
+            labelled, after_blank = True, False
+            continue
         if skipping is None:
             keep.append(line)
     return "\n".join(keep)
