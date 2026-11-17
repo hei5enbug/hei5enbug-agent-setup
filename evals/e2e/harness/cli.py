@@ -115,6 +115,7 @@ def do_record(args: argparse.Namespace, cfg: HarnessConfig) -> int:
         raise command.ConfigError("--issue takes a positive issue number")
     result = records.record_campaign(
         cfg.run_root, args.campaign, args.issue, args.before, args.after, split(args.claim), split(args.tasks) or None,
+        cfg.tasks_root,
     )
     path = records.write_record(result["record"], absolute(args.records_dir))
     sys.stdout.write("".join(f"{line}\n" for line in records.report_lines(result)))

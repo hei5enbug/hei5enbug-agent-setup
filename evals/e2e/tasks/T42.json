@@ -1,0 +1,200 @@
+{
+  "id": "T42",
+  "title": "Memo import with a silent failure exit and old store files",
+  "category": "feature",
+  "path": "worker delegation: constraints and failure conditions only the prompt states",
+  "fixture": "notes-cli",
+  "prompt_file": "prompts/T42.txt",
+  "limits": {
+    "wall_seconds": 2400,
+    "max_budget_usd": 20
+  },
+  "hidden_tests": {
+    "source": "hidden/T42",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-import",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_import_basic.py"
+      ]
+    },
+    {
+      "id": "hidden-format",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "hidden",
+      "files": [
+        "test_store_format.py"
+      ]
+    },
+    {
+      "id": "hidden-exit-code",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "hidden",
+      "files": [
+        "test_import_exit_code.py"
+      ]
+    },
+    {
+      "id": "hidden-silent",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "hidden",
+      "files": [
+        "test_import_silent.py"
+      ]
+    },
+    {
+      "id": "hidden-old-file",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "hidden",
+      "files": [
+        "test_old_store_files.py"
+      ]
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "new-tests",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "new_tests"
+    },
+    {
+      "id": "agent-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    },
+    {
+      "id": "readme-import",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "README.md",
+      "pattern": "(?i)memo import"
+    },
+    {
+      "id": "mirror-updated",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "docs/ko/README.ko.md",
+      "pattern": "(?i)memo import|가져오"
+    },
+    {
+      "id": "files-changed",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "files_changed"
+    }
+  ],
+  "handoff": {
+    "pass_checks": [
+      "hidden-exit-code",
+      "hidden-silent",
+      "hidden-old-file"
+    ]
+  },
+  "constraints": [
+    {
+      "id": "missing-file-exit-code",
+      "field": "behavior",
+      "text": "On a missing input file exit with code 3",
+      "keywords": [
+        "code 3",
+        "exit 3",
+        "코드 3"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-exit-code"
+      ]
+    },
+    {
+      "id": "missing-file-silent",
+      "field": "behavior",
+      "text": "On a missing input file print nothing, on stdout and on stderr, and leave the store alone",
+      "keywords": [
+        "print nothing",
+        "prints nothing",
+        "no output",
+        "아무것도",
+        "출력하지"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-silent"
+      ]
+    },
+    {
+      "id": "store-format",
+      "field": "behavior",
+      "text": "Write the store as {\"version\": 2, \"memos\": [...]}",
+      "keywords": [
+        "\"version\": 2",
+        "\"version\":2",
+        "version: 2",
+        "version 2"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-format"
+      ]
+    },
+    {
+      "id": "old-files-readable",
+      "field": "constraints",
+      "text": "Keep reading files the previous version wrote, a plain list of memos",
+      "keywords": [
+        "previous version",
+        "older version",
+        "old version",
+        "earlier version",
+        "예전 버전",
+        "이전 버전"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-old-file"
+      ]
+    }
+  ],
+  "rubric": null
+}

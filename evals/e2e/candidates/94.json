@@ -1,0 +1,30 @@
+{
+  "files": {
+    "en": "instructions/implementation-execution.md",
+    "ko": "docs/ko/instructions/implementation-execution.ko.md"
+  },
+  "insert_after": {
+    "en": "- Task ID and the concrete result\n",
+    "ko": "- 작업 ID와 구체적인 결과\n"
+  },
+  "fields": {
+    "constraints": {
+      "en": "- The constraints and decisions the task must keep, each quoted in the user's words or referenced by file and line when\n  a file states it, never paraphrased or summarized; for example, `Keep: 'the export must stay one CSV file per day'\n  (the user's first message)`\n",
+      "ko": "- 작업이 지켜야 하는 제약과 결정. 각각 사용자의 말을 그대로 인용하거나 파일이 정하면 파일과 줄로 가리키며, 바꿔 말하거나\n  요약하지 않는다. 예: `Keep: 'the export must stay one CSV file per day' (사용자의 첫 메시지)`\n"
+    },
+    "behavior": {
+      "en": "- The expected behavior after the change, and what must happen on each failure that the request or the code names; for\n  example, `When the archive server refuses the upload, keep the local file and exit with code 2`\n",
+      "ko": "- 변경 뒤의 기대 동작과, 요청이나 코드가 정한 각 실패에서 일어나야 하는 일. 예: `When the archive server refuses the\n  upload, keep the local file and exit with code 2`\n"
+    }
+  },
+  "main_owned": {
+    "old": {
+      "en": "For main-owned work, keep these fields compact and retain the main session's current model and effort.\nWorker model checks and readiness calls apply only when delegating; do not perform them for direct work.",
+      "ko": "메인 담당 작업은 이 항목을 간결하게 기록하고 메인 세션의 현재 모델과 사고 강도를 유지한다. 작업자 모델 확인과\n준비 확인 호출은 위임할 때만 적용하며, 직접 작업에서는 수행하지 않는다."
+    },
+    "new": {
+      "en": "For main-owned work, keep these fields compact, never drop a constraint or failure condition the request states, and\nretain the main session's current model and effort. Worker model checks and readiness calls apply only when delegating;\ndo not perform them for direct work.",
+      "ko": "메인 담당 작업은 이 항목을 간결하게 기록하되 요청이 밝힌 제약과 실패 조건은 하나도 빠뜨리지 않고, 메인 세션의 현재\n모델과 사고 강도를 유지한다. 작업자 모델 확인과 준비 확인 호출은 위임할 때만 적용하며, 직접 작업에서는 수행하지 않는다."
+    }
+  }
+}

@@ -310,6 +310,7 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T19 | ops-notes | Shared document | Wiki draft of about 1,600 characters for a 1,500-character budget |
 | T20 | notes-cli | Final report | Small change with tests, then a report |
 | T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
+| T42 | notes-cli | Worker delegation: prompt-only constraints and failure conditions | A memo import command with a silent exit code 3 on a missing file and a store format change that keeps old files readable |
 
 ## Comparing a change on both hosts
 
@@ -361,6 +362,35 @@ the `investigate` lines, which cases need repeats, and the claim verdicts. A rec
 such as models, efforts, and issue numbers, and fictional fixture names only; validation rejects an absolute local
 path, a model outside the cap, and a missing field. `tests/test_e2e_eval_record_cli.py` validates every committed
 record.
+
+### Handoff fields
+
+The assignment fields of issue #94, the constraints and decisions to keep and the expected behavior with its failure
+conditions, are added only when a measurement shows the loss. A task file seeds them: each entry of `constraints` that
+has a `field`, either `constraints` or `behavior`, is a seeded item with its `id`, its marker strings in `keywords`, the
+delegation classes in `applies_to`, and the `check_ids` that fail when it is ignored. `handoff.pass_checks` names the
+checks that decide whether a run of the case passed. T02 seeds the `constraints` field, T05 the `behavior` field, and T42
+both.
+
+For a task with seeded items, `record` adds a `handoff` entry to every run: `passed`, and per item the mapped checks that
+failed, the number of delegation prompts of the item's classes, and the marker strings those prompts hold and lack. It
+also adds a `handoff` block that names the before and the after variant and gives each field a status, the cases and
+hosts that qualified it, and the reasons it was not kept. `harness/handoff.py` holds the rule, and `validate_record`
+recomputes the block from the runs, so a hand-edited status is rejected.
+
+- A run qualifies a field when, for one of its items, a mapped check failed, the run delegated, and no delegation prompt
+  holds a marker string of that item. A missing marker with every mapped check passing, a present marker, and a run that
+  delegated nothing qualify no field.
+- A field qualifies when both of the first two before runs of a case on a host qualify it. A field that no case and host
+  qualifies reads `no demonstrated benefit at baseline`; a case or host without two before runs reads `not measured`.
+- A qualified field is kept when every case that qualified it passes both after runs on every host where that case failed a
+  before run, and no case that passed both before runs on a host fails an after run there. Without two after runs the
+  field reads `qualified; after runs not measured`.
+
+The candidate text of both fields, with the main-owned sentence they widen, is in `candidates/94.json` in English and
+Korean. `python3 evals/e2e/harness/handoff_candidates.py apply constraints,behavior` adds the named fields to
+`instructions/implementation-execution.md` and its Korean mirror, and `show` lists the fields each file holds. The
+instruction file holds exactly the fields the record keeps, and neither when none qualified.
 
 ### Records
 

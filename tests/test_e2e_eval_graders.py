@@ -28,7 +28,7 @@ sys.path.insert(0, str(E2E_ROOT))
 from harness import coverage_tool, graders  # noqa: E402
 from harness.process import GradingInterrupted  # noqa: E402
 
-TASK_IDS = [f"T{number:02d}" for number in range(1, 21)]
+TASK_IDS = [f"T{number:02d}" for number in range(1, 21)] + ["T42"]
 SECRET = "demo-4f8k2q-local-only-7731"
 GIT_ENV = {
     **os.environ, "GIT_AUTHOR_NAME": "Demo Dev", "GIT_AUTHOR_EMAIL": "dev@example.com",
@@ -869,6 +869,8 @@ EXPECTED_FAILURES = {
     "T18": {"output-exists", "restatement-removed", "kept-content", "text-review-clean"},
     "T19": {"output-exists", "restart-fact-kept", "unneeded-sentence-removed", "text-review-clean"},
     "T20": {"hidden-tests", "report-check", "text-review-clean"},
+    "T42": {"hidden-import", "hidden-format", "hidden-exit-code", "hidden-silent", "hidden-old-file", "new-tests",
+            "readme-import", "mirror-updated"},
 }
 #: required checks that must already pass on the unmodified fixture (they guard against collateral damage)
 EXPECTED_PASSES = {
@@ -879,7 +881,7 @@ EXPECTED_PASSES = {
     "T10": {"no-changes"}, "T11": {"regressions", "tree-clean"}, "T12": {"regressions"},
     "T13": {"sources-unchanged"}, "T14": {"only-out-changed"}, "T15": {"sources-unchanged"},
     "T16": {"sources-unchanged"}, "T17": {"regressions", "tree-clean"}, "T18": {"sources-unchanged"},
-    "T19": {"sources-unchanged"}, "T20": {"regressions", "tests-pass"},
+    "T19": {"sources-unchanged"}, "T20": {"regressions", "tests-pass"}, "T42": {"regressions"},
 }
 CLEAN_REVIEW = json.dumps({"review": {"output": '{"findings": []}', "exit_code": 0},
                            "check": {"output": '{"findings": []}', "exit_code": 0}})
@@ -1059,6 +1061,89 @@ class GoldenTaskTest(TempCase):
         self.assertEqual(by_id["exact-api"]["missing_in"], ["w1"])
         self.assertEqual(by_id["exact-api"]["traced_failures"], ["hidden-tests"])
         self.assertEqual(by_id["korean-mirror"]["traced_failures"], ["mirror-updated"])
+
+    def t42_outcome(self, edits: tuple[tuple[str, str, str], ...] = ()) -> dict[str, bool]:
+        """Grade the T42 reference with each (file, old, new) text replaced, as a run that ignored one seeded item would leave it."""
+        task, repo, base = self.materialize("T42")
+        apply_reference("T42", repo)
+        for relative, old, new in edits:
+            path = repo / relative
+            text = path.read_text(encoding="utf-8")
+            self.assertEqual(text.count(old), 1, relative)
+            path.write_text(text.replace(old, new), encoding="utf-8")
+        result = self.grade_task(task, repo, base, make_view("done"))
+        return {check["id"]: check["passed"] for check in result["checks"]}
+
+    def test_T42는_누락_파일의_종료_코드를_무시한_해법을_hidden_exit_code에서_거른다(self):
+        """given 누락 파일에서 종료 코드 1과 stderr 메시지를 쓰는 참조 when 채점하면 then 종료 코드와 침묵 검사만 실패하고 가져오기와 옛 파일 검사는 통과한다."""
+        # given
+        edits = (("notes_cli/cli.py", "    except ImportFileMissing:\n        return EXIT_IMPORT_FILE_MISSING\n",
+                  '    except ImportFileMissing as exc:\n        print(f"error: {exc.args[0]}", file=err)\n        return 1\n'),)
+
+        # when
+        outcome = self.t42_outcome(edits)
+
+        # then
+        self.assertEqual((outcome["hidden-exit-code"], outcome["hidden-silent"]), (False, False))
+        self.assertEqual((outcome["hidden-import"], outcome["hidden-old-file"], outcome["hidden-format"]), (True, True, True))
+
+    def test_T42는_종료_코드만_맞추고_메시지를_찍는_해법을_hidden_silent에서만_거른다(self):
+        """given 종료 코드 3은 맞지만 stderr에 메시지를 찍는 참조 when 채점하면 then 침묵 검사만 실패한다."""
+        # given
+        edits = (("notes_cli/cli.py", "    except ImportFileMissing:\n        return EXIT_IMPORT_FILE_MISSING\n",
+                  '    except ImportFileMissing as exc:\n        print(f"error: {exc.args[0]}", file=err)\n        return 3\n'),)
+
+        # when
+        outcome = self.t42_outcome(edits)
+
+        # then
+        self.assertEqual((outcome["hidden-exit-code"], outcome["hidden-silent"]), (True, False))
+
+    def test_T42는_예전_배열_파일을_못_읽는_해법을_hidden_old_file에서만_거른다(self):
+        """given 새 형식 객체만 읽는 참조 when 채점하면 then 옛 파일 검사만 실패하고 종료 코드, 침묵, 형식 검사는 통과한다."""
+        # given
+        edits = (("notes_cli/storage.py", '    entries = raw["memos"] if isinstance(raw, dict) else raw\n',
+                  '    entries = raw["memos"]\n'),)
+
+        # when
+        outcome = self.t42_outcome(edits)
+
+        # then
+        self.assertFalse(outcome["hidden-old-file"])
+        self.assertEqual((outcome["hidden-exit-code"], outcome["hidden-silent"], outcome["hidden-format"]), (True, True, True))
+
+    def test_T42는_저장_형식을_바꾸지_않은_해법을_hidden_format에서만_거른다(self):
+        """given 가져오기는 되지만 저장 형식을 예전 배열로 두는 참조 when 채점하면 then 형식 검사만 실패한다."""
+        # given
+        edits = (("notes_cli/storage.py", '        document = {"version": STORE_VERSION, "memos": [memo_to_dict(memo) for memo in memos]}\n',
+                  '        document = [memo_to_dict(memo) for memo in memos]\n'),)
+
+        # when
+        outcome = self.t42_outcome(edits)
+
+        # then
+        self.assertEqual((outcome["hidden-format"], outcome["hidden-old-file"], outcome["hidden-import"]), (False, True, True))
+
+    def test_T42는_표지_문자열이_빠진_구현_위임만_씨앗_항목_누락으로_추적한다(self):
+        """given 같은 실패한 저장소에 표지가 없는 위임과 모든 표지가 있는 위임 when 채점하면 then 앞의 것만 네 항목이 누락이고 실패 검사에 연결된다."""
+        # given
+        task, repo, base = self.materialize("T42")
+        bare = make_view(delegations=(delegation("agent", "implementation", "add memo import to notes-cli", ident="w1"),))
+        full = make_view(delegations=(delegation(
+            "agent", "implementation",
+            'Add memo import. A missing FILE must end with exit code 3 and print nothing. Write {"version": 2, "memos": [...]} '
+            "and keep reading files the previous version wrote.", ident="w2"),))
+
+        # when
+        lost = {item["id"]: item for item in self.grade_task(task, repo, base, bare)["constraints"]}
+        kept = {item["id"]: item for item in self.grade_task(task, repo, base, full)["constraints"]}
+
+        # then
+        self.assertEqual({name: (item["missing_in"], item["traced_failures"]) for name, item in lost.items()}, {
+            "missing-file-exit-code": (["w1"], ["hidden-exit-code"]), "missing-file-silent": (["w1"], ["hidden-silent"]),
+            "store-format": (["w1"], ["hidden-format"]), "old-files-readable": (["w1"], ["hidden-old-file"])})
+        self.assertEqual({name: (item["missing_in"], item["traced_failures"]) for name, item in kept.items()},
+                         {name: ([], []) for name in kept})
 
     def test_T01_비목표_검사는_not_goals_문장도_비목표로_인정한다(self):
         """설계 스킬이 목표 절 안에 쓰는 'are not goals' 목록도 비목표로 보고, 목표만 있는 문서는 거른다."""

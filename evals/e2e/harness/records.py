@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from . import codex_host, collect, summarize, transcript
+from . import codex_host, collect, handoff, summarize, transcript
 from .caps import MODEL_CAP as ALLOWED_MODELS
 from .caps import normalize
 from .command import ConfigError
@@ -28,8 +28,9 @@ UNKNOWN_EFFORT = "not measured"
 VERDICTS = frozenset({PASS, FAIL, REPEAT, NOT_MEASURED, INVESTIGATE, BASELINE, ACCEPT, REJECT, CONTINUE_TO_FIVE, SECOND_PAIR})
 VERDICT_SUBJECTS = frozenset({"quality", "wall_seconds", "cost_usd", "claim"})
 TOP_FIELDS = ("issue", "cases", "variants", "runs", "verdicts")
+TOP_OPTIONAL = ("handoff",)
 RUN_REQUIRED = ("case", "variant", "host", "models", "checks", "wall_seconds", "cost_usd")
-RUN_OPTIONAL = ("rep", "reviews")
+RUN_OPTIONAL = ("rep", "reviews", "handoff")
 VERDICT_REQUIRED = ("case", "verdict", "step")
 VERDICT_OPTIONAL = ("measure",)
 LOCAL_PATH = re.compile(r"(?<![\w.:/-])(?:/[\w.@+-]+){2,}|(?<![\w.])~/|\b[A-Za-z]:[\\/]|(?<![\w.:/-])/(?:Users|home|tmp|var|private|etc)\b")
@@ -70,6 +71,8 @@ def run_problems(position: str, run: Any, cases: Sequence[str], variants: Mappin
         problems.append(f"{position} names a variant that is not in variants")
     if "host" in run and run["host"] not in HOSTS:
         problems.append(f"{position} host is not one of {', '.join(HOSTS)}")
+    if "handoff" in run:
+        problems += handoff.entry_problems(f"{position}.handoff", run["handoff"])
     if "rep" in run and not (isinstance(run["rep"], int) and not isinstance(run["rep"], bool) and run["rep"] >= 1):
         problems.append(f"{position} rep is not a positive integer")
     if "models" in run:
@@ -114,7 +117,7 @@ def validate_record(record: Any) -> list[str]:
     if not isinstance(record, Mapping):
         return ["the record is not an object"]
     problems = [f"the record lacks {field}" for field in TOP_FIELDS if field not in record]
-    problems += [f"the record has unknown field {field}" for field in record if field not in TOP_FIELDS]
+    problems += [f"the record has unknown field {field}" for field in record if field not in TOP_FIELDS + TOP_OPTIONAL]
     issue = record.get("issue")
     if "issue" in record and not (isinstance(issue, int) and not isinstance(issue, bool) and issue > 0):
         problems.append("issue is not a positive integer")
@@ -142,6 +145,8 @@ def validate_record(record: Any) -> list[str]:
         for index, item in enumerate(items):
             extra = (variants or {},) if key == "runs" else ()
             problems += check(f"{key}[{index}]", item, cases or [], *extra)
+    if not problems:
+        problems += handoff.block_problems(record)
     if any(LOCAL_PATH.search(text) for text in strings(record)):
         problems.append("the record contains an absolute local path")
     return problems
@@ -154,7 +159,7 @@ def check_record(record: Any) -> None:
 
 
 def build_record(issue: int, cases: Sequence[str], variants: Mapping[str, str], runs: Sequence[Mapping[str, Any]],
-                 verdicts: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+                 verdicts: Sequence[Mapping[str, Any]], handoff_block: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The record dict for one comparison; `variants` maps each variant name to its revision."""
     record = {
         "issue": issue,
@@ -164,6 +169,8 @@ def build_record(issue: int, cases: Sequence[str], variants: Mapping[str, str], 
         "verdicts": [{field: item[field] for field in (*VERDICT_REQUIRED, *VERDICT_OPTIONAL) if field in item}
                      for item in verdicts],
     }
+    if handoff_block:
+        record["handoff"] = dict(handoff_block)
     check_record(record)
     return record
 
@@ -313,9 +320,11 @@ def unmeasured(row: Mapping[str, Any], reason: str, revision: str | None = None)
             "revision": revision}
 
 
-def campaign_runs(run_root: Path, campaign: str, variants: Sequence[str], tasks: Sequence[str] | None) -> list[dict[str, Any]]:
+def campaign_runs(run_root: Path, campaign: str, variants: Sequence[str], tasks: Sequence[str] | None,
+                  tasks_root: Path | None = None) -> list[dict[str, Any]]:
     """Every run of the named variants on either host: a finished, graded run with its summary and record entry, and any
-    other run, whether unfinished, without metrics, ungraded, or with a grading error, as a "not measured" summary."""
+    other run, whether unfinished, without metrics, ungraded, or with a grading error, as a "not measured" summary. With
+    `tasks_root`, the entry of a run of a task with seeded handoff items also carries their facts."""
     found = []
     for row in summarize.load_results(run_root, campaign):
         if row["variant"] not in variants or (tasks and row["task"] not in tasks) or row["host"] not in HOSTS:
@@ -344,6 +353,10 @@ def campaign_runs(run_root: Path, campaign: str, variants: Sequence[str], tasks:
         entry = {"case": row["task"], "variant": row["variant"], "host": host, "rep": int(row["rep"]),
                  "models": run_models(result_dir, host, row), "checks": checks,
                  "wall_seconds": summary["wall_seconds"], "cost_usd": summary["cost_usd"]}
+        task = read_json(tasks_root / f"{row['task']}.json", {}) if tasks_root else {}
+        facts = handoff.run_handoff(task or {}, (read_json(result_dir / "view.json", {}) or {}).get("delegations") or [], checks)
+        if facts:
+            entry["handoff"] = facts
         reviews = next((check["data"]["reviews"] for check in grade["checks"]
                         if check.get("id") == "text-review-clean" and (check.get("data") or {}).get("reviews")), None)
         if reviews:
@@ -437,7 +450,7 @@ def verdict_entries(compared: Mapping[str, Any], claims: Sequence[Mapping[str, A
 
 def record_campaign(
     run_root: Path, campaign: str, issue: int, before: str, after: str, claimed: Sequence[str] = (),
-    tasks: Sequence[str] | None = None,
+    tasks: Sequence[str] | None = None, tasks_root: Path | None = None,
 ) -> dict[str, Any]:
     """Judge a before and an after variant on both hosts and build its record. Returns the record, the `compare` result with
     every claimed case and the overall verdict decided together with its claim, and the claim verdicts. A missing run or
@@ -445,15 +458,16 @@ def record_campaign(
     unknown = [measure for measure in claimed if measure not in MEASURES]
     if unknown or before == after:
         raise ConfigError("--claim takes " + ", ".join(MEASURES) + "; --before and --after name two different variants")
-    runs = campaign_runs(run_root, campaign, (before, after), tasks)
+    runs = campaign_runs(run_root, campaign, (before, after), tasks, tasks_root)
     cases = build_cases(runs, before, after, expected_tasks(run_root, campaign, tasks, runs), planned_runs(run_root, campaign))
     if not cases or not any(run["entry"] for run in runs):
         raise ConfigError(f"campaign {campaign} holds no finished graded run of {before} or {after}")
     claims = [claim_verdict(case, claimed) for case in cases] if claimed else []
     compared = with_claims(compare(cases), claims)
     revisions = {name: variant_revision(run_root, campaign, name, runs) for name in (before, after)}
-    record = build_record(issue, [case["id"] for case in cases], revisions, [run["entry"] for run in runs if run["entry"]],
-                          verdict_entries(compared, claims))
+    entries = [run["entry"] for run in runs if run["entry"]]
+    record = build_record(issue, [case["id"] for case in cases], revisions, entries, verdict_entries(compared, claims),
+                          handoff.block(entries, before, after))
     return {"record": record, "compared": compared, "claims": claims}
 
 

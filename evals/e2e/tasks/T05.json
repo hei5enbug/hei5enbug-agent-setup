@@ -50,12 +50,33 @@
       "suite": "preexisting"
     }
   ],
+  "handoff": {
+    "pass_checks": [
+      "hidden-json",
+      "hidden-low-stock"
+    ]
+  },
   "constraints": [
     {
-      "id": "contracts",
-      "text": "Follow the given contracts: report --format json shape and INVENTORY_LOW_STOCK / Config.low_stock_threshold",
+      "id": "json-format-contract",
+      "field": "behavior",
+      "text": "report --format json prints one JSON object with valuation, low_stock, and orders",
       "keywords": [
         "--format",
+        "valuation"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-json"
+      ]
+    },
+    {
+      "id": "low-stock-contract",
+      "field": "behavior",
+      "text": "INVENTORY_LOW_STOCK sets Config.low_stock_threshold, a bad value raises ConfigError, and report follows it",
+      "keywords": [
         "INVENTORY_LOW_STOCK",
         "low_stock_threshold"
       ],
@@ -63,7 +84,6 @@
         "implementation"
       ],
       "check_ids": [
-        "hidden-json",
         "hidden-low-stock"
       ]
     }
