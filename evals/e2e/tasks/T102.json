@@ -1,8 +1,8 @@
 {
   "id": "T102",
-  "title": "Ask the greeting question again after a stored input that itself holds escape text",
+  "title": "Ask the earlier greeting question again from a record whose labels are escape text",
   "category": "question",
-  "path": "Stored question-tool input that holds escape text: say so, then ask with raw characters",
+  "path": "Stored question-tool input that holds escape text: read it before the next question, say so, ask with raw characters",
   "fixture": "demo-sessions",
   "prompt_file": "prompts/T102.txt",
   "limits": {
@@ -37,6 +37,13 @@
       "required": true,
       "weight": 2,
       "function": "next_question_in_raw_characters"
+    },
+    {
+      "id": "descriptions-from-record",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "descriptions_from_record"
     },
     {
       "id": "no-free-form-label",

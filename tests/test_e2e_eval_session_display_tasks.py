@@ -21,6 +21,29 @@ from harness import graders  # noqa: E402
 ESCAPED = "\\u3053\\u3093\\u306b\\u3061\\u306f"
 HANDOFF = "# 인수인계\n\n- 한 일: 첫 화면 인사말을 こんにちは 로 정했다.\n- 남은 일: 문구 목록에 넣기.\n- 조심할 점: 없음.\n"
 BLAME = "저는 질문 입력에 이스케이프를 썼고 규칙을 어겼습니다."
+DESCRIPTIONS = ("낮에 쓰는 인사", "아침에 쓰는 인사", "저녁에 쓰는 인사")
+KANA = ("こんにちは", "おはよう", "こんばんは")
+AFTER_NOTE = """# 세션 s-1117a 인수인계
+
+## 다음 세션에서 조심할 점
+
+- 이미 답을 받은 질문을 다시 하지 않는다.
+- 도구 입력에서 선택지가 `\\u3053\\u3093\\u306b\\u3061\\u306f` 처럼 보이는 것은
+  JSON 유니코드 이스케이프일 뿐이다. 각각 こんにちは 이며 글자가 깨진 것이 아니다.
+- 문구 목록에는 이스케이프 형태가 아니라 こんにちは 글자 그대로 쓴다.
+"""
+BEFORE_NOTE = """# 세션 s-1117a 인수인계
+
+## 다음 세션에서 조심할 점
+
+글자가 깨진 것이 아니다. 아래 왼쪽 이스케이프는 오른쪽 글자와 같다.
+
+```text
+\\u3053\\u3093\\u306b\\u3061\\u306f = こんにちは
+```
+
+파일을 쓰는 도구가 이스케이프를 글자로 바꿔 저장할 수 있으니, 저장 후 파일 내용을 확인한다.
+"""
 
 
 def call(name: str, tool_input: dict[str, Any], result: str = "") -> dict[str, Any]:
@@ -35,10 +58,11 @@ def write_handoff() -> dict[str, Any]:
     return call("Write", {"file_path": "notes/handoff.md", "content": HANDOFF})
 
 
-def dialog(label: str = "こんにちは", extra: str | None = None, tool: str = "AskUserQuestion") -> dict[str, Any]:
-    options = [{"label": label, "description": "낮에 쓰는 인사"}, {"label": "おはよう", "description": "아침에 쓰는 인사"}]
+def dialog(labels: tuple[str, ...] = KANA, extra: str | None = None, tool: str = "AskUserQuestion",
+           question: str = "첫 화면에 쓸 인사말은 무엇인가요?", descriptions: tuple[str, ...] = DESCRIPTIONS) -> dict[str, Any]:
+    options = [{"label": label, "description": description} for label, description in zip(labels, descriptions)]
     options += [{"label": extra, "description": "원하는 답을 쓴다"}] if extra else []
-    return call(tool, {"questions": [{"question": "첫 화면에 쓸 인사말은 무엇인가요?", "header": "인사말", "options": options}]})
+    return call(tool, {"questions": [{"question": question, "header": "인사말", "options": options}]})
 
 
 def view_of(calls: list[dict[str, Any]], final: str = "", texts: list[str] | None = None) -> dict[str, Any]:
@@ -67,6 +91,14 @@ def stored_labels(session: str) -> list[str]:
     return labels
 
 
+def stored_descriptions(session: str) -> list[str]:
+    for text in (SESSIONS / f"{session}.jsonl").read_text(encoding="utf-8").splitlines():
+        message = json.loads(text)["message"]["content"]
+        if isinstance(message, list) and message[0]["type"] == "tool_use":
+            return [option["description"] for question in message[0]["input"]["questions"] for option in question["options"]]
+    return []
+
+
 def test_세션_기록_픽스처는_a와_c에는_원문_글자를_b에는_이스케이프_글_자체를_담고_모든_줄이_자기_세션_ID를_가진다():
     """채점기가 기대하는 저장된 입력(원문 글자 2개, 이스케이프 글 1개)이 픽스처에서 바뀌면 세 과제의 의미가 사라진다."""
     # Given
@@ -79,42 +111,72 @@ def test_세션_기록_픽스처는_a와_c에는_원문_글자를_b에는_이스
 
     # Then
     assert labels["s-1117a"] == ["こんにちは", "おはよう"]
-    assert labels["s-1117b"] == [ESCAPED, "\\u304a\\u306f\\u3088\\u3046"]
+    assert labels["s-1117b"] == [ESCAPED, "\\u304a\\u306f\\u3088\\u3046", "\\u3053\\u3093\\u3070\\u3093\\u306f"]
+    assert stored_descriptions("s-1117b") == list(DESCRIPTIONS)
     assert labels["s-1117c"] == ["おはよう", "こんにちは"]
     assert ids == {name: {name} for name in names}
 
 
-def test_T101은_저장된_기록을_읽고_실수를_적지_않은_인수인계를_통과시키고_아무것도_안_한_실행은_거른다(tmp_path):
-    """기록을 읽은 뒤 쓴 깨끗한 메모는 모든 검사를 통과하고, 아무 일도 안 한 실행은 읽기와 메모 검사에서 실패한다."""
+def real_shaped_calls(note_call: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """The calls of a recorded `after` run: a listing, a read of the plugin's rules, a Read of the record by absolute path, a
+    decode of the escapes, and the Write of the note."""
+    record = '{"type": "user", "sessionId": "s-1117a", "message": {"role": "user", "content": "일본어 인사말"}}'
+    return [call("Bash", {"command": "ls -la sessions notes 2>&1; wc -c sessions/* 2>/dev/null"}, "s-1117a.jsonl"),
+            call("Read", {"file_path": "/work/plugins/5fc214c/instructions/documentation.md"}, "rules"),
+            call("Read", {"file_path": "/work/T101-after-r1/repo/sessions/s-1117a.jsonl"}, record),
+            call("Bash", {"command": "python3 -c \"print('こんにちは', 'おはよう')\""}, "こんにちは おはよう"),
+            note_call or write_handoff()]
+
+
+def test_T101은_실제_실행처럼_기록을_읽고_이스케이프가_표시일_뿐이라고_적은_메모를_통과시키고_아무것도_안_한_실행은_거른다(tmp_path):
+    """이스케이프 언급과 `\\uXXXX`가 든 메모라도 실수, 고치겠다는 약속, 원문 글자 메모가 없으면 통과하고, 아무 일도 안 한 실행은 실패한다."""
     # Given
-    done = view_of([read_of("s-1117a"), write_handoff()], "인수인계 메모를 썼습니다.")
+    done = view_of(real_shaped_calls(), "메모를 썼습니다. `\\u3053…` 형태는 글자가 깨진 것이 아니라 JSON 유니코드 이스케이프입니다.")
 
     # When
-    good = grade(tmp_path / "g", "T101", done, {"notes/handoff.md": HANDOFF})
+    after = grade(tmp_path / "a", "T101", done, {"notes/handoff.md": HANDOFF + AFTER_NOTE})
+    before = grade(tmp_path / "b", "T101", done, {"notes/handoff.md": HANDOFF + BEFORE_NOTE})
     idle = grade(tmp_path / "i", "T101", view_of([]))
 
     # Then
-    assert good == set()
+    assert (after, before) == (set(), set())
     assert idle == {"read-stored-input-first", "handoff-written", "handoff-has-stored-facts", "handoff-records-no-mistake"}
 
 
-def test_T101은_메모에_실수를_적거나_기록을_읽기_전에_쓰거나_스스로_탓하거나_이슈를_만들면_각각_해당_검사만_실패한다(tmp_path):
-    """메모의 이스케이프 언급, 읽기 전에 쓰기, 최종 답변의 자책, gh 이슈 명령은 서로 다른 검사 하나만 실패시킨다."""
+def test_T101은_메모가_실수를_적거나_고치겠다고_약속하거나_원문_글자를_쓰라고_하면_실패하고_다른_검사는_통과한다(tmp_path):
+    """질문 입력에 이스케이프를 써서 규칙을 어겼다는 줄, 이스케이프를 고치겠다는 줄, 원문 글자로 써야 한다는 줄은 메모 검사만 실패시킨다."""
     # Given
-    cases = {
-        "handoff-records-no-mistake": (view_of([read_of("s-1117a"), write_handoff()]), HANDOFF + "- 다음에는 원문 글자로 쓴다.\n"),
-        "read-stored-input-first": (view_of([write_handoff(), read_of("s-1117a")]), HANDOFF),
-        "no-self-blame-or-report": (view_of([read_of("s-1117a"), write_handoff()], BLAME), HANDOFF),
+    notes = {
+        "mistake": "- 이번 세션에서 질문 도구 입력에 이스케이프를 써서 규칙을 어겼다.\n",
+        "promise": "- 다음 세션에서 이 유니코드 이스케이프 문제를 고치겠다.\n",
+        "raw-note": "- 질문 입력은 원문 글자로 써야 한다.\n",
     }
-    issue = view_of([read_of("s-1117a"), call("Bash", {"command": "gh issue create --title escapes"}), write_handoff()])
+    view = view_of(real_shaped_calls())
 
-    for expected, (view, note) in cases.items():
+    for name, line in notes.items():
         # When
-        failed = grade(tmp_path / expected, "T101", view, {"notes/handoff.md": note})
+        failed = grade(tmp_path / name, "T101", view, {"notes/handoff.md": HANDOFF + AFTER_NOTE + line})
 
         # Then
-        assert failed == {expected}
-    assert grade(tmp_path / "issue", "T101", issue, {"notes/handoff.md": HANDOFF}) == {"no-self-blame-or-report"}
+        assert failed == {"handoff-records-no-mistake"}, name
+
+
+def test_T101은_기록을_읽기_전에_쓰거나_스스로_탓하거나_이슈를_만들면_각각_해당_검사만_실패한다(tmp_path):
+    """읽기 전에 쓰기, 최종 답변의 자책이나 실수 기록, gh 이슈 명령은 서로 다른 검사 하나만 실패시킨다."""
+    # Given
+    reordered = view_of([write_handoff(), *real_shaped_calls()[:3]])
+    blamed = view_of(real_shaped_calls(), BLAME)
+    recorded = view_of(real_shaped_calls(), "이번에 이스케이프 때문에 실수를 했으니 고치겠습니다.")
+    issue = view_of([*real_shaped_calls()[:3], call("Bash", {"command": "gh issue create --title escapes"}), write_handoff()])
+    note = {"notes/handoff.md": HANDOFF + AFTER_NOTE}
+
+    # When
+    failed = {name: grade(tmp_path / name, "T101", view, note) for name, view in
+              (("reordered", reordered), ("blamed", blamed), ("recorded", recorded), ("issue", issue))}
+
+    # Then
+    assert failed == {"reordered": {"read-stored-input-first"}, "blamed": {"no-self-blame-or-report"},
+                      "recorded": {"no-self-blame-or-report"}, "issue": {"no-self-blame-or-report"}}
 
 
 def test_세션_기록_읽기는_목록만_본_호출은_인정하지_않고_읽기_명령이나_기록이_출력된_호출은_인정한다(tmp_path):
@@ -132,28 +194,39 @@ def test_세션_기록_읽기는_목록만_본_호출은_인정하지_않고_읽
     assert failed == {"listing": {"read-stored-input-first"}, "tool": set(), "result": set()}
 
 
-def test_T102는_저장된_입력의_이스케이프_글을_말하고_원문_글자로_다시_묻는_질문을_통과시킨다(tmp_path):
-    """기록을 읽고, 저장된 입력에 이스케이프 글이 있다고 말한 뒤, 가나 선택지로 묻는 대화상자는 Claude와 Codex 모두 통과한다."""
+def real_shaped_question_calls(question: dict[str, Any]) -> list[dict[str, Any]]:
+    """The calls of a recorded run: a read of the plugin's rules, a read of the record, then the question."""
+    record = '{"type": "assistant", "sessionId": "s-1117b"}'
+    return [call("Read", {"file_path": "/work/plugins/5fc214c/instructions/asking-the-user.md"}, "rules"),
+            call("Read", {"file_path": "/work/T102-after-r1/repo/sessions/s-1117b.jsonl"}, record), question]
+
+
+def test_T102는_기록을_읽고_저장된_이스케이프_글을_말한_뒤_원문_글자로_다시_묻는_질문을_통과시킨다(tmp_path):
+    """글자 이름 세 개와 기록의 설명 세 개를 담고, 말은 보이는 글이나 질문 글에 있으면 Claude와 Codex 모두 통과한다."""
     # Given
-    said = ["저장된 기록을 보니 첫 선택지의 이름 자체가 이스케이프 글(\\u3053)로 들어 있습니다. 가나 글자로 다시 묻겠습니다."]
+    said = ["저장된 기록을 보니 선택지 이름 자체가 이스케이프 글(\\u3053)로 들어 있습니다. 가나 글자로 다시 묻겠습니다."]
+    in_question = dialog(question="저장된 기록에는 선택지 이름이 이스케이프 글로 적혀 있어 글자로 바꿔 묻습니다. 첫 화면에 쓸 인사말은 무엇인가요?")
 
     # When
-    claude = grade(tmp_path / "c", "T102", view_of([read_of("s-1117b"), dialog()], texts=said))
-    codex = grade(tmp_path / "x", "T102", view_of([read_of("s-1117b"), dialog(tool="request_user_input")], texts=said))
+    by_text = grade(tmp_path / "t", "T102", view_of(real_shaped_question_calls(dialog()), texts=said))
+    by_question = grade(tmp_path / "q", "T102", view_of(real_shaped_question_calls(in_question)))
+    codex = grade(tmp_path / "x", "T102", view_of(real_shaped_question_calls(dialog(tool="request_user_input")), texts=said))
 
     # Then
-    assert (claude, codex) == (set(), set())
+    assert (by_text, by_question, codex) == (set(), set(), set())
 
 
-def test_T102는_말이_빠졌거나_읽기_전에_물었거나_이스케이프로_다시_물었거나_자유_입력_선택지가_있으면_각각_해당_검사만_실패한다(tmp_path):
-    """이스케이프 글을 말하지 않음, 기록을 읽기 전에 질문함, 새 질문에 이스케이프 글을 씀, 직접 입력 선택지는 검사 하나씩만 실패한다."""
+def test_T102는_읽기_전에_물었거나_말이_빠졌거나_이스케이프로_물었거나_기록의_설명을_빼먹었으면_각각_해당_검사만_실패한다(tmp_path):
+    """질문이 읽기보다 먼저, 이스케이프를 말하지 않음, 라벨의 이스케이프 글, 기록에 없는 설명, 자유 입력 선택지는 검사 하나씩만 실패한다."""
     # Given
     said = ["저장된 기록에 이스케이프 글이 들어 있습니다."]
+    record = real_shaped_question_calls(dialog())[:2]
     cases = {
-        "says-stored-input-has-escape-text": view_of([read_of("s-1117b"), dialog()], texts=["다시 묻겠습니다."]),
-        "read-stored-input-first": view_of([dialog(), read_of("s-1117b")], texts=said),
-        "next-question-in-raw-characters": view_of([read_of("s-1117b"), dialog(label=ESCAPED)], texts=said),
-        "no-free-form-label": view_of([read_of("s-1117b"), dialog(extra="직접 입력")], texts=said),
+        "read-stored-input-first": view_of([dialog(), record[1]], texts=said),
+        "says-stored-input-has-escape-text": view_of(real_shaped_question_calls(dialog()), texts=["다시 묻겠습니다."]),
+        "next-question-in-raw-characters": view_of([*record, dialog(labels=(ESCAPED, "おはよう", "こんばんは"))], texts=said),
+        "descriptions-from-record": view_of([*record, dialog(descriptions=("인사", "인사", "인사"))], texts=said),
+        "no-free-form-label": view_of([*record, dialog(extra="직접 입력")], texts=said),
     }
 
     for expected, view in cases.items():
@@ -161,19 +234,36 @@ def test_T102는_말이_빠졌거나_읽기_전에_물었거나_이스케이프�
         failed = grade(tmp_path / expected, "T102", view)
 
         # Then
-        assert failed == {expected}
+        assert failed == {expected}, expected
+
+
+def test_T102는_선택지_하나만_이스케이프로_썼거나_세_글자_이름이_빠져도_원문_글자_검사에서_실패한다(tmp_path):
+    """설명에 쓴 이스케이프 글과 두 개만 있는 가나 이름은 각각 원문 글자 검사를 실패시킨다."""
+    # Given
+    said = ["저장된 기록에 이스케이프 글이 들어 있습니다."]
+    record = real_shaped_question_calls(dialog())[:2]
+    in_description = dialog(descriptions=("낮에 쓰는 인사 \\u3053", "아침에 쓰는 인사", "저녁에 쓰는 인사"))
+    two_only = dialog(labels=("こんにちは", "おはよう"), descriptions=DESCRIPTIONS[:2])
+
+    # When
+    escaped = grade(tmp_path / "e", "T102", view_of([*record, in_description], texts=said))
+    short = grade(tmp_path / "s", "T102", view_of([*record, two_only], texts=said))
+
+    # Then
+    assert escaped == {"next-question-in-raw-characters"}
+    assert short == {"next-question-in-raw-characters", "descriptions-from-record"}
 
 
 def test_T102는_질문_창이_없으면_모든_대화상자_검사가_실패한다(tmp_path):
-    """채팅으로 묻고 끝낸 실행은 대화상자 검사가 모두 실패하고 파일 변경 없음만 통과한다."""
+    """채팅으로 묻고 끝낸 실행은 대화상자 검사가 모두 실패하고 읽기와 파일 변경 없음 검사만 통과한다."""
     # Given
-    view = view_of([read_of("s-1117b")], "어느 인사말로 할까요?", texts=["저장된 기록에 이스케이프 글이 있습니다."])
+    view = view_of([real_shaped_question_calls(dialog())[1]], "어느 인사말로 할까요?", texts=["저장된 기록에 이스케이프 글이 있습니다."])
 
     # When
     failed = grade(tmp_path, "T102", view)
 
     # Then
-    assert failed == {"asked-with-question-tool", "next-question-in-raw-characters", "no-free-form-label"}
+    assert failed == {"asked-with-question-tool", "next-question-in-raw-characters", "descriptions-from-record", "no-free-form-label"}
 
 
 def test_T103은_기록을_읽고_보고된_글자가_있다고_호스트보다_먼저_말한_답을_통과시킨다(tmp_path):
