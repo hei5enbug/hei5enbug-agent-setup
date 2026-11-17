@@ -177,6 +177,44 @@ class CommonRulesTest(unittest.TestCase):
             with self.subTest(rule=rule):
                 self.assertIn(rule, fast)
 
+    def test_요청을_넘는_문서와_계획을_더하지_말라는_한_문장은_옛_문장보다_길지_않고_상세_규칙은_조건부_참조에_있다(self):
+        """세션 문맥에는 새 한 문장만 옛 문장보다 짧거나 같게 싣고, 명확한 요청의 문서 수정 범위는 문서 규칙과 작업 준비 절에 둔다."""
+        # Given
+        sentence = "Add no design, tests, implementation, docs, or plans beyond the request."
+        replaced = "Do not add design, tests, implementation, or planning beyond the request."
+        documentation = " ".join((REPO_ROOT / "instructions/documentation.md").read_text(encoding="utf-8").split())
+        execution = (REPO_ROOT / "instructions/implementation-execution.md").read_text(encoding="utf-8")
+        preparation = " ".join(execution.split("## Task preparation", 1)[1].split("\n## ", 1)[0].split())
+
+        # When
+        found = contexts()
+
+        # Then
+        for host, context in found.items():
+            with self.subTest(host=host):
+                self.assertIn(sentence, context)
+                self.assertNotIn(replaced, context)
+        self.assertLessEqual(len(sentence.encode()), len(replaced.encode()))
+        for rule in (
+            "When the request is clear, edit a document only where existing text that the change made false needs "
+            "correcting, and where a repository rule requires text for something the change adds, such as a new "
+            "command or option.",
+            "add no text about it.",
+            "asked to add a `--json` flag",
+            "asked to change the default of an existing flag that the README describes without its default, change "
+            "only the default.",
+        ):
+            with self.subTest(documentation=rule):
+                self.assertIn(rule, documentation)
+        for rule in (
+            "When the request is clear, make the change it asks for and only these follow-on edits: existing text "
+            "that the change made false, and text that a repository rule requires for something the change adds, "
+            "such as a new command or option.",
+            "Add no other design, tests, implementation, documentation, or planning that the request did not ask for.",
+        ):
+            with self.subTest(preparation=rule):
+                self.assertIn(rule, preparation)
+
 
 if __name__ == "__main__":
     unittest.main()

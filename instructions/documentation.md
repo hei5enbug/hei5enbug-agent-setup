@@ -27,6 +27,12 @@ HTML that will later be published elsewhere:
 - When correcting a material claim, reconcile the statements that depend on it within the authorized scope,
   and report conflicts outside that scope without editing them.
 - Embed an image or diagram that the reader needs instead of telling the reader to open a file path.
+- When the request is clear, edit a document only where existing text that the change made false needs correcting,
+  and where a repository rule requires text for something the change adds, such as a new command or option. When
+  existing text describes the changed item without stating the value or behavior being changed, so that it stays
+  true after the change, add no text about it. Example: asked to add a `--json` flag in a repository whose rules
+  list every flag in the README, add the README line for `--json`; asked to change the default of an existing flag
+  that the README describes without its default, change only the default.
 
 For ordinary documentation, apply these writing mechanics directly:
 

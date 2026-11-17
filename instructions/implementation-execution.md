@@ -30,6 +30,10 @@ result-changing ambiguity, not a sign that it is out of scope: ask one question 
 include now, defer within the same ticket, split into a new ticket, or drop, and change nothing until the user
 answers. When the user explicitly narrows the scope, ask nothing and record each excluded item with its destination.
 
+When the request is clear, make the change it asks for and only these follow-on edits: existing text that the
+change made false, and text that a repository rule requires for something the change adds, such as a new command or
+option. Add no other design, tests, implementation, documentation, or planning that the request did not ask for.
+
 This preparation is not a requested implementation plan. It runs no planning or design skill, no six-stage
 planning workflow, and no independent validation.
 
