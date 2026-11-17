@@ -297,6 +297,15 @@ stage beside it, and put no number beside the title of another stage. T30 must k
 item limit, which are quantities. T31 must name a division that its draft calls `Phase 1` by its title `Rollout`, keep
 item 1 with its title and number, and let no number name both the division and an item.
 
+`evals/e2e/candidates/88/` holds a deterministic candidate for the rule that T29 to T31 measure: an advisory that
+`text_review.py check` raises for a line that names a stage, phase, division, or item by a number with no title beside it,
+such as "step 0" or "steps 3 to 8". `apply.py <checkout>` adds it to that checkout's `scripts/text_review.py` and
+`--dry-run` shows the diff; applying it twice changes nothing more. It is not in the shipped script, and a third
+variant that holds it without the rule text is cut as one commit of the base revision. A pattern decides the bare
+number in the drafts of T29 and T31. It cannot decide a title with the number of another stage or a changed order (T29),
+a changed or dropped quantity (T30), or one number naming a division and an item (T31), because each needs the
+procedure or the draft before the edit. It covers English keywords only.
+
 T32 and T33 measure the review itself, so their prompts ask the agent to run the plugin's `text_review.py review` on a
 seeded draft it must not edit. The checks read the result of that run from the transcript: the review must reach the
 reviewer (`stage` is `review`, with no `error`) on the named draft. In T32, whose rules file requires the names of the
