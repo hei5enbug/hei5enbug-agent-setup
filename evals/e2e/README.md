@@ -287,6 +287,15 @@ real one has: a README, an `AGENTS.md` with a Korean mirror rule, tests, and Kor
 `ORCA_TERMINAL_HANDLE` set and a fake `orca` first on `PATH`, built by `tasks/setup/fake_orca.py`; it keeps its state
 in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval_orca_cleanup.py`.
 
+T59 to T62 judge the handoff rules of `instructions/cross-repository.md` and the first-prompt terminal cleanup of
+`scripts/orca_status_hook.py`. They use the same fake `orca`, extended with `terminal create`, `send`, `wait`, and
+`read --screen` over terminal records that carry a screen and an output, and with `orchestration send`, which stores
+the report. `tasks/setup/handoff_common.py` seeds them and `tasks/custom/handoff_shared.py` reads the call log, which
+holds each call's arguments, folder, and caller terminal handle, so a check can judge order. The brief of T59 and T60
+is the task prompt, so the session under test plays the delegate. T62 has no model-written Orca call to judge: the
+hook closes the never-used terminal before the session's first reply, and the check requires that close to precede
+every Orca call outside the hook's reads and closes. Their tests are in `tests/test_e2e_eval_graders.py`.
+
 | Task | Fixture | Path it exercises | Request |
 |---|---|---|---|
 | T01 | inventory-service | Design skill | Design document for stock reservation |
@@ -310,6 +319,10 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T19 | ops-notes | Shared document | Wiki draft of about 1,600 characters for a 1,500-character budget |
 | T20 | notes-cli | Final report | Small change with tests, then a report |
 | T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
+| T59 | notes-cli | Handoff-owned terminal | A brief for one result that says its terminal belongs to the handoff; one finished child worktree must be removed, then the report sent, then the own terminal closed |
+| T60 | notes-cli | Terminal that already ran an agent | The same brief without that sentence, with a child worktree holding an uncommitted change: no terminal closed, the worktree kept and named in the report |
+| T61 | notes-cli | Agent start in a never-used shell terminal | A request to hand one result to another repository's workspace, whose only terminal is a never-used shell terminal beside a shell that runs a dev server |
+| T62 | notes-cli | First-prompt terminal cleanup | A read-only question in a worktree that also holds a never-used shell terminal and one with typed input |
 
 ## Comparing a change on both hosts
 
