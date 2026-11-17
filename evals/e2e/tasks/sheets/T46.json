@@ -57,5 +57,6 @@
       ],
       "sentence": "명세에 export 파일 이름 형식 `export-YYYYMMDD-HHMMSS.csv`가 없어요."
     }
-  ]
+  ],
+  "repeat_answer": "그 부분은 앞에서 답한 그대로예요. 나머지는 추천대로 해 주세요."
 }

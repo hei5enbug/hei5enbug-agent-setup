@@ -3,12 +3,12 @@
 The sheet lists each decision with an identifier, the terms that identify a question about it, and its answers in order,
 and lists each point an approved specification must hold with the terms that show it and the terms of its rejected
 options. A question is about a decision when it holds at least one of the decision's terms, compared without case. It
-gets the answer of every decision it matches, and the default answer when it matches none. For a decision with several
-answers, the first question that matches it gets the first answer, the next gets the second, and the last answer repeats
-from then on. A request for approval is approved when the specification text holds every term of every required point
-and no term of a rejected option outside the heading of rejected alternatives; otherwise it gets the sentence of the
-first point that fails. Every exchange is appended to a log, and the log is the only state, so the approver process
-and the harness process, which answer different kinds of question, share one count.
+gets the next unused answer of every decision it matches, and the default answer when it matches none. An answer is
+used once: a follow-up that matches a decision again gets that decision's next unused answer, and once every matching
+decision has used all its answers, the sheet's repeat answer, which says that the earlier answer stands. A request for
+approval is approved when the specification text holds every term of every required point and no term of a rejected
+option outside the heading of rejected alternatives; otherwise it gets the sentence of the first point that fails. Every exchange is appended to a log, and the log is the
+only state, so the approver process and the harness process, which answer different kinds of question, share one count.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 DEFAULT_ANSWER = "Use your recommendation."
+REPEAT_ANSWER = "My earlier answer on that stands. Use your recommendation for the rest."
 APPROVED_ANSWER = "Approved."
 APPROVAL_TERMS = ("approve", "approval", "승인")
 REJECTED_HEADINGS = ("rejected alternatives", "기각한 대안")
@@ -48,6 +49,7 @@ class Exchange:
     tool_use_id: str | None = None
     detail: str = ""
     stream_offset: int = 0
+    used: tuple[str, ...] = ()
 
 
 def lowered(texts: Sequence[str]) -> list[str]:
@@ -93,6 +95,7 @@ def validate_sheet(sheet: Any) -> dict[str, Any]:
         "approval_terms": strings_of(sheet.get("approval_terms", list(APPROVAL_TERMS)), "approval_terms"),
         "rejected_headings": strings_of(sheet.get("rejected_headings", list(REJECTED_HEADINGS)), "rejected_headings"),
         "default_answer": str(sheet.get("default_answer") or DEFAULT_ANSWER),
+        "repeat_answer": str(sheet.get("repeat_answer") or REPEAT_ANSWER),
         "approved_answer": str(sheet.get("approved_answer") or APPROVED_ANSWER),
         "stop_after_approval": bool(sheet.get("stop_after_approval", False)),
         "max_answers": int(sheet.get("max_answers", 30)),
@@ -203,11 +206,14 @@ class ScriptedUser:
         matched = [item for item in self.sheet["decisions"] if any(term in lowered_question for term in lowered(item["terms"]))]
         if not matched:
             return make(matched=(), answer=self.sheet["default_answer"])
-        answers = []
+        answers, used = [], []
         for item in matched:
-            asked = sum(1 for earlier_item in earlier if item["id"] in earlier_item.get("matched", ()))
-            answers.append(item["answers"][min(asked, len(item["answers"]) - 1)])
-        return make(matched=tuple(item["id"] for item in matched), answer="\n".join(answers))
+            given = sum(1 for earlier_item in earlier if item["id"] in earlier_item.get("used", ()))
+            if given < len(item["answers"]):
+                answers.append(item["answers"][given])
+                used.append(item["id"])
+        return make(matched=tuple(item["id"] for item in matched), answer="\n".join(answers) or self.sheet["repeat_answer"],
+                    used=tuple(used))
 
 
 def sheet_leaks(folder: Path, sheet_path: Path) -> list[str]:

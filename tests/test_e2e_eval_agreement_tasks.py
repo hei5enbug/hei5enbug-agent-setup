@@ -19,7 +19,7 @@ TASKS_ROOT = E2E_ROOT / "tasks"
 FIXTURES_ROOT = E2E_ROOT / "fixtures"
 sys.path.insert(0, str(E2E_ROOT))
 
-from harness import graders  # noqa: E402
+from harness import converse, graders  # noqa: E402
 from harness.scripted_user import ScriptedUser, load_sheet, sheet_leaks  # noqa: E402
 
 TASK_IDS = ["T46", "T47", "T48", "T49", "T50", "T51", "T52"]
@@ -264,6 +264,77 @@ class AgreementTaskTest(unittest.TestCase):
 
         # then
         self.assertEqual(completed.returncode, 0, completed.stdout[-800:])
+
+    def test_실제_실행에서_나온_질문_순서는_다_쓴_답을_새_답으로_되풀이하지_않고_합의에_닿을_수_있다(self):
+        """첫 실제 Claude Code 실행의 질문 순서를 시트에 그대로 넣으면 같은 글이 두 번 돌아오지 않고 각 답은 한 번씩만 쓰인다.
+        회귀: T46의 셋째 질문은 일요일 답을, T49의 다섯째와 여섯째 질문은 앞의 답을 새 답처럼 다시 받아 승인에 닿지 못했다."""
+        sequences = {
+            "T46": [
+                "주간 요약 `weekly --on DATE`에서 '주'를 어떻게 나눌까요? 월요일 시작이면, 일요일 시작이면",
+                "export 파일이 늘 out/export.csv 하나에 덮어써지는 문제를 어떻게 풀까요?",
+                "주 시작 요일을 일요일로 정하는 `week_start = sunday`를 어디에 둘까요? 설정 파일 config/settings.toml에 넣기를 추천합니다.",
+                "export 파일 이름을 export-YYYYMMDD-HHMMSS.csv로 할 때, 같은 초 안에 export를 두 번 실행하면 이름이 겹칩니다.",
+            ],
+            "T49": [
+                "프로젝트별 월 예산은 어디에 적어 두게 할까요? 설정 파일을 권장합니다.",
+                "예산을 넘었다는 것을 어떻게 알려 줄까요? 두 방식을 모두 제공하는 것을 권장합니다.",
+                "확인 명령에서 어느 달을 볼지 어떻게 지정할까요?",
+                "예산 값은 어떤 단위로 적을까요? 분을 권장합니다.",
+                "그래서 월 예산과 그대로 비교하면 OVER가 붙습니다. OVER를 어떤 합계로 판단할까요?",
+                "설정 파일에 budget_hours를 어떤 모양으로 적을까요?",
+            ],
+            "T50": [
+                "lock 파일을 빼기 전에 확인이 필요합니다. lock을 빼면 add 두 개를 동시에 실행할 때 항목 하나가 사라질 수 있습니다.",
+                "lock을 빼면 add 두 개가 동시에 실행될 때 항목 하나가 사라질 수 있습니다. 어떻게 할까요?",
+                "정말 동시에 실행하는 일이 없나요?",
+            ],
+            "T51": [
+                "store는 항목을 추가된 순서대로 저장하고 있어서, list에서 정렬을 빼면 출력이 날짜순이 아니게 됩니다. 어떻게 할까요?",
+                "다시 확인했지만 store는 저장할 때 정렬하지 않습니다. 그래도 정렬을 뺄까요?",
+                "그러면 정렬은 어디서 하나요?",
+            ],
+        }
+        repeated_from = {"T46": [2, 3], "T49": [4, 5], "T50": [2], "T51": [2]}
+        for task_id, questions in sequences.items():
+            with self.subTest(task_id):
+                # given
+                sheet = load_sheet(TASKS_ROOT / load_task(task_id)["sheet"])
+                user = ScriptedUser(sheet, self.root / f"{task_id}.jsonl")
+
+                # when
+                answers = [user.answer(question, "text").answer for question in questions]
+
+                # then
+                canned = [answer for decision in sheet["decisions"] for answer in decision["answers"]]
+                used = [answer for answer in answers if answer in canned]
+                self.assertEqual(len(used), len(set(used)), answers)
+                self.assertEqual([answers[position] for position in repeated_from[task_id]], [sheet["repeat_answer"]] * len(repeated_from[task_id]))
+
+    def test_질문이_없던_실행도_시트가_있으면_타임라인이_남아_T52_검사가_실제_편집을_본다(self):
+        """질문 없이 Edit만 한 실행의 view로 T52를 채점하면 편집을 찾고, 앞에서 읽은 방식을 말했는지에 따라 통과와 실패가 갈린다.
+        회귀: 교환이 없으면 conversation이 빠져 편집이 없다는 이유로 실패했다."""
+        # given
+        task, repo, base = self.materialize("T52")
+        apply_reference("T52", repo)
+        edit = {"type": "tool_use", "id": "toolu_1", "name": "Edit", "caller": {"type": "direct"}, "input": {"file_path": "timesheet/cli.py"}}
+
+        def stream(said: bool) -> list[dict[str, Any]]:
+            texts = [{"type": "assistant", "parent_tool_use_id": None, "message": {"id": "m0", "content": [
+                {"type": "text", "text": "I read --since as an ISO YYYY-MM-DD date."}]}}] if said else []
+            return texts + [{"type": "assistant", "parent_tool_use_id": None, "message": {"id": "m1", "content": [edit]}}]
+
+        # when
+        results = {}
+        for said in (True, False):
+            with tempfile.TemporaryDirectory() as folder:
+                view = converse.attach({"final_answer": "done", "assistant_texts": [], "tool_calls": [], "delegations": [], "approvals": [],
+                                        "permission_denials": []}, Path(folder), "claude", stream(said), scripted=True)
+            results[said] = {check["id"]: check for check in self.grade(task, repo, base, view)["checks"]}["reading-stated-before-edit"]
+
+        # then
+        self.assertTrue(results[True]["passed"], results[True]["detail"])
+        self.assertFalse(results[False]["passed"])
+        self.assertEqual(results[False]["detail"], "no such line before the first edit")
 
 
 if __name__ == "__main__":

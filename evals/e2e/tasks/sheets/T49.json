@@ -48,5 +48,6 @@
       "sentence": "명세에 초과 표시 `OVER`가 없어요."
     }
   ],
-  "stop_after_approval": true
+  "stop_after_approval": true,
+  "repeat_answer": "그 부분은 앞에서 답한 그대로예요. 나머지는 추천대로 해 주세요."
 }

@@ -100,8 +100,11 @@ identifier, the terms that identify a question about it, and its answers in orde
 must hold with its terms and the terms of its rejected options. `harness/scripted_user.py` applies it:
 
 - A question is about a decision when it holds at least one of the decision's terms, compared without case. It gets the
-  answer of every decision it matches, and "use your recommendation" when it matches none. For a decision with several
-  answers, the first question that matches it gets the first answer, the next the second, and the last answer repeats.
+  next unused answer of every decision it matches, and "use your recommendation" when it matches none. An answer is used
+  once: the first question that matches a decision gets its first answer, a follow-up that matches it again gets the next,
+  and once every decision a question matches has used all its answers, the question gets the sheet's `repeat_answer` (by
+  default, that the earlier answer stands and the agent should use its recommendation for the rest), never the same text
+  as a new answer.
 - A request for approval holds one of the sheet's approval terms. It is approved when the specification text holds every term
   of every required point and no term of a rejected option outside the heading of the rejected alternatives; otherwise it
   gets the sentence of the first point that fails. With `stop_after_approval`, a question after the approval gets no answer
@@ -115,7 +118,8 @@ must hold with its terms and the terms of its rejected options. `harness/scripte
 - Every exchange, with the decisions it matched and its answer, is appended to `scripted_user.jsonl`, which is also the only
   state, so the approver process and the harness process share one count. `view.json` holds the exchanges and one ordered
   timeline of the agent's texts, its calls, and the exchanges as `conversation`; a grader decides "before the approval" and
-  "between two answers" on it. A shell command counts as a file edit when it writes, moves, or removes a file.
+  "between two answers" on it. A task with a sheet keeps the timeline even when the agent asked nothing, so a check of "no file
+  edit" sees the edits of such a run. A shell command counts as a file edit when it writes, moves, or removes a file.
 
 Limits: `codex exec resume` must accept the options the harness passes it (checked with its `--help` before the first Codex
 run of such a task), the approver reads the agent's text from `stream.jsonl` while the agent writes it, and a question that is
@@ -372,7 +376,7 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T48 | timesheet-cli | Agreement, case C | A requested cache that repeats the one the fixture already has: one question naming it |
 | T49 | timesheet-cli | Agreement, case D | A requirements agreement asked for by name on a one-deliverable idea: approved, then a stop without a file edit |
 | T50 | timesheet-cli | Agreement, case E | A requested method that breaks an unmentioned behavior; the first answer only repeats the instruction |
-| T51 | timesheet-cli | Agreement, case F | A requested method that rests on a statement the fixture disproves; a false first answer, then an outside constraint |
+| T51 | timesheet-cli | Agreement, case F | A requested method that rests on a statement about production data that the repository neither shows nor can settle; a false first answer, then an outside constraint |
 | T52 | timesheet-cli | Agreement, case G | An unstated date format that the fixture's conventions settle: the reading said in one line, no question |
 
 ## Comparing a change on both hosts

@@ -132,7 +132,7 @@ def analyze(
         records = claude_records(spec, run)
     main_events = records["rollouts"][0]["events"] if spec.host == HOST_CODEX and records["rollouts"] else (
         transcript.read_jsonl(directory / "stream.jsonl"))
-    view = converse.attach(records["view"], directory, spec.host, main_events)
+    view = converse.attach(records["view"], directory, spec.host, main_events, scripted=command.task_sheet(cfg.tasks_root, task) is not None)
     write_json(directory / "view.json", view)
     grade, rubric_result, failure = None, None, None
     if run["status"] in FINISHED_STATUSES:

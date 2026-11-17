@@ -19,7 +19,7 @@ sys.path.insert(0, str(E2E_ROOT))
 from harness import approval_mcp, command, converse, metrics, pilot_check, timeline  # noqa: E402
 from harness.process import ProcessResult  # noqa: E402
 from harness.scripted_user import (  # noqa: E402
-    DEFAULT_ANSWER, KIND_TEXT, KIND_TOOL, ScriptedUser, SheetError, load_sheet, read_log, sheet_leaks, validate_sheet,
+    DEFAULT_ANSWER, KIND_TEXT, KIND_TOOL, REPEAT_ANSWER, ScriptedUser, SheetError, load_sheet, read_log, sheet_leaks, validate_sheet,
     without_rejected_section,
 )
 
@@ -79,8 +79,9 @@ class SheetAnswerTest(unittest.TestCase):
         # then
         self.assertEqual((exchange.answer, exchange.matched), (DEFAULT_ANSWER, ()))
 
-    def test_답이_둘인_결정은_처음_둘째_다시_둘째_순서로_답한다(self):
-        """답이 둘인 결정은 일치하는 첫 질문에 첫째 답을, 다음에 둘째 답을, 셋째 질문에도 둘째 답을 준다."""
+    def test_답이_둘인_결정은_처음_둘째_순서로_답하고_다_쓴_뒤에는_앞의_답이_그대로라고_답한다(self):
+        """답이 둘인 결정은 첫 질문에 첫째 답, 다음에 둘째 답을 주고, 셋째 질문은 둘째 답을 다시 받지 않고 시트의 반복 답을 받는다.
+        회귀: 마지막 답을 되풀이하면 후속 질문에 같은 글이 돌아와 에이전트가 새 답으로 오해해 명세 합의가 끝나지 않았다."""
         # given
         question = "How should the file name look?"
 
@@ -88,7 +89,35 @@ class SheetAnswerTest(unittest.TestCase):
         answers = [self.user.answer(question).answer for _ in range(3)]
 
         # then
-        self.assertEqual(answers, ["Put the date in the name.", "Date and time, I said.", "Date and time, I said."])
+        self.assertEqual(answers, ["Put the date in the name.", "Date and time, I said.", REPEAT_ANSWER])
+
+    def test_한_번만_답하는_결정도_다시_일치한_후속_질문에는_같은_답을_되풀이하지_않는다(self):
+        """답이 하나인 결정에 일치하는 둘째 질문은 첫 답이 아니라 반복 답을 받고, 일치한 결정은 로그에 남는다.
+        회귀: 후속 질문이 같은 낱말을 가졌다는 이유만으로 첫 답이 새 답처럼 돌아왔다."""
+        # given
+        first = self.user.answer("What is the first day of the week?")
+
+        # when
+        follow_up = self.user.answer("Where should the first day be set?")
+
+        # then
+        self.assertEqual((first.answer, follow_up.answer), ("Weeks start on Sunday.", REPEAT_ANSWER))
+        self.assertEqual(follow_up.matched, ("week-start",))
+
+    def test_다_쓴_결정과_쓰지_않은_결정이_함께_일치하면_쓰지_않은_답만_받는다(self):
+        """다 쓴 결정의 답은 빠지고 아직 남은 결정의 답만 합쳐지며, 시트의 반복 답이 있으면 그 글을 쓴다."""
+        # given
+        sheet = {**SHEET, "repeat_answer": "That stands."}
+        user = ScriptedUser(sheet, self.log)
+        user.answer("What is the first day of the week?")
+
+        # when
+        mixed = user.answer("Is the first day fine, and which file name?")
+        exhausted = user.answer("And the first day again?")
+
+        # then
+        self.assertEqual(mixed.answer, "Put the date in the name.")
+        self.assertEqual(exhausted.answer, "That stands.")
 
     def test_로그에는_모든_교환이_일치한_식별자와_함께_남고_순서_상태는_로그에서_이어진다(self):
         """다른 프로세스가 같은 로그로 이어 받아도 답 순서가 이어지고, 로그에는 질문과 일치 식별자가 남는다."""
@@ -519,6 +548,25 @@ class TimelineTest(unittest.TestCase):
         # then
         self.assertEqual([found[text] for text in reads], [False] * 4)
         self.assertEqual([found[text] for text in writes], [True] * 4)
+
+    def test_시트가_있는_실행은_질문이_없어도_타임라인을_남겨_실제_Edit_호출을_본다(self):
+        """로그가 없어도 시트가 있는 과제의 view에는 타임라인이 있고, 실제 stream의 Edit 이벤트 모양에서 첫 편집을 찾는다.
+        회귀: 질문이 없던 실행은 conversation이 통째로 빠져 Edit 5번이 있어도 편집이 없다고 채점됐다."""
+        # given
+        edit = {"type": "tool_use", "id": "toolu_1", "name": "Edit", "caller": {"type": "direct"},
+                "input": {"replace_all": False, "file_path": "timesheet/cli.py", "old_string": "a", "new_string": "b"}}
+        events = [INIT, {"type": "assistant", "parent_tool_use_id": None, "message": {"id": "m1", "role": "assistant", "content": [edit]}},
+                  turn_end("Done.")]
+        with tempfile.TemporaryDirectory() as folder:
+            # when
+            scripted = converse.attach({"final_answer": "Done."}, Path(folder), "claude", events, scripted=True)
+            plain = converse.attach({"final_answer": "Done."}, Path(folder), "claude", events)
+
+        # then
+        held = scripted["conversation"]
+        self.assertEqual(held["exchanges"], [])
+        self.assertEqual(timeline.first_edit(held["timeline"]), 0)
+        self.assertNotIn("conversation", plain)
 
 
 if __name__ == "__main__":
