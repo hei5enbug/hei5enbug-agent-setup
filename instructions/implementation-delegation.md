@@ -15,6 +15,10 @@ workspace, and that it must preserve their changes. A repository execution plan 
 Each worker prompt carries only its own task and the context that task requires. Point to files and line ranges
 instead of pasting their content.
 
+When a worker task names a skill, the assignment states the skill's name and tells the worker to load it with the
+host's skill mechanism before the work the skill covers and to follow it instead of doing that work by hand. An
+assignment that names no skill adds nothing about skills.
+
 ## Scheduling
 
 Track each task as `pending`, `running`, `done`, or `blocked` with the host's existing task facility or the
@@ -44,6 +48,12 @@ when the host record, or the enforcement the host's agent rules name (such as th
 runner's verification), shows the selected model and effort for every turn that edited it. The main session may make
 integration fixes when it owns those paths; otherwise wait for the current worker to stop before transferring
 ownership. Never run a shared build while workers mutate its inputs or output directories.
+
+When the assignment named a skill, also check, as for the model and effort, that the worker's host record shows the
+load of each named skill, where the host keeps one: run
+`python3 <Source directory>/scripts/verify_skill_load.py --skill <name> --record <host record> --result <result file>`
+with a `--skill` for each name. Exit 4 means the record shows no load, or the result's `Skills loaded:` line omits a
+name; handle it as a failed acceptance check and do not accept the result.
 
 ## Failure and recovery
 
@@ -92,5 +102,8 @@ An assigned worker executes its task directly and never acts as a coordinator.
 - Never widen scope, choose a new design, or change model or effort. Report a missing decision or a conflicting
   change to the coordinator instead of resolving it.
 - Run only the assigned checks, with the isolation flags the assignment gives.
+- When the assignment names a skill, load it first with the host's skill mechanism and follow it. If it cannot be
+  loaded, stop, make no edit the skill covers, and report the missing skill as a blocker. List each skill loaded on a
+  `Skills loaded:` line of the result.
 - For a readiness-only assignment, make no edit and report readiness.
 - Return the changed paths, check results, and remaining blockers.

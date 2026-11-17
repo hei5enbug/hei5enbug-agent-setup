@@ -45,6 +45,7 @@
 | `tests/test_worker_setting.py` | worker 모델과 사고 강도는 환경 변수, 저장한 옵션, 매니페스트 기본값 순으로 정한다. | `docs/configuration.md` (Feature options) |
 | `tests/test_role_runner.py` | 역할 실행기는 역할마다 샌드박스, 모델, 사고 강도, 도구를 넘기고 실제 실행을 검증하며, 고정값을 넘는 `--model`과 `--effort`는 `--user-requested`가 있을 때만 허용한다. | `instructions/claude-agents.md`, `instructions/model-routing.md` |
 | `hooks/mod/agents.test.ts` | mod는 역할마다 모델과 사고 강도를 고정하고, 사용자의 가장 최근 프롬프트가 직접 지정한 경우에만 다른 모델이나 사고 강도를 따른다. | `instructions/claude-agents.md`, `instructions/model-routing.md` |
+| `tests/test_skill_load_rule.py` | worker 할당이 이름을 붙인 skill은 할당 필드에 적히고, worker가 가장 먼저 로드해 `Skills loaded:` 줄에 나열하며, 없으면 건너뛰지 않고 멈추고, 조정자가 `scripts/verify_skill_load.py`로 worker의 호스트 기록과 대조해 확인한다. Codex worker 역할은 이 의무를 적고 Claude worker 정의는 공유 규칙을 가리킨다. | `instructions/implementation-delegation.md` (Worker assignments, Review and integration, Assigned workers), `instructions/implementation-execution.md` (Assignment fields) |
 | `tests/test_verify_spawn.py` | 생성한 Codex 에이전트는 기록에 기대한 모델과 사고 강도가 있을 때만 인정한다. | `instructions/codex-agents.md` |
 | `tests/test_agent_guard.py` | Codex 내장 에이전트는 거부하고, 설치한 역할은 고정한 모델과 사고 강도로만 실행한다. | `instructions/codex-agents.md` |
 | `tests/test_runtime_regressions.py` | 역할 파일을 동시에 만들 때도 사용자 파일을 보존한다. | `docs/instructions-and-delegation.md` (Agent registration) |

@@ -45,6 +45,7 @@ Each assignment states:
 
 - Task ID and the concrete result
 - Allowed edit paths and protected paths
+- The skill the task names, if any, which the worker loads first and lists as loaded in its result
 - Prerequisites and shared-resource exclusions
 - Verification and completion evidence; a read-only result starts with the status and path coverage that the
   scout definition sets

@@ -4,5 +4,6 @@ sandbox_mode = "workspace-write"
 developer_instructions = """
 Execute the implementation task the coordinating main session assigned to you.
 When your session instructions or assignment carry the "Assigned workers" rules, follow them together with your assignment, and report a missing required assignment field to the coordinator instead of editing.
+When the assignment names a skill, load it first with the host's skill mechanism and follow it; if it cannot be loaded, stop, make no edit the skill covers, and report the missing skill as a blocker. List each skill loaded on a `Skills loaded:` line of the result.
 When they do not, the plugin rules are inactive: complete the task as written, edit only what it requires, preserve changes made by others, start no other agent, and return the changed paths, check results, and remaining blockers.
 """

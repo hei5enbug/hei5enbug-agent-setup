@@ -1312,6 +1312,20 @@ class SessionContextTest(unittest.TestCase):
         # Then
         self.assertEqual(self.worker.read_bytes(), bundled)
 
+    def test_v2_24_2가_배포한_worker_역할도_수정하지_않았을_때만_현재_파일로_바꾼다(self):
+        """skill 로드 의무를 넣기 전 번들 worker.toml을 그대로 둔 설치본은 새 번들 파일로 바뀌어 의무가 설치본에도 닿는다."""
+        # Given
+        shipped = (REPO_ROOT / "tests/fixtures/codex-worker-v2.24.2.toml").read_bytes()
+        bundled = (REPO_ROOT / "standalone-agents/codex-worker.toml").read_bytes()
+        self.worker.parent.mkdir(parents=True)
+        self.worker.write_bytes(shipped)
+
+        # When
+        self.context(self.run_hook("codex"))
+
+        # Then
+        self.assertEqual(self.worker.read_bytes(), bundled)
+
     def test_사용자가_고친_이전_버전_worker_역할은_남긴다(self):
         """이전 버전 worker.toml에 사용자가 한 글자라도 더했으면 훅은 그 파일을 바꾸지 않는다."""
         # Given
@@ -1326,10 +1340,7 @@ class SessionContextTest(unittest.TestCase):
         self.assertEqual(self.worker.read_bytes(), edited)
 
     def pinned_effort_worker(self) -> bytes:
-        bundled = (REPO_ROOT / "standalone-agents/codex-worker.toml").read_text(encoding="utf-8")
-        line = 'model_reasoning_effort = "xhigh"\n'
-        head, tail = bundled.split("\n", 2)[:2], bundled.split("\n", 2)[2]
-        return ("\n".join(head) + "\n" + line + tail).encode("utf-8")
+        return (REPO_ROOT / "tests/fixtures/pinned-effort-codex-worker.toml").read_bytes()
 
     def test_effort를_고정하던_worker_역할은_수정하지_않았을_때만_바꾸고_고친_파일은_남긴다(self):
         """spawn 값을 덮어쓰던 effort 줄이 있는 worker.toml은 바이트가 같을 때만 현재 파일로 바꾸고, 고친 파일은 그대로 둔다."""
