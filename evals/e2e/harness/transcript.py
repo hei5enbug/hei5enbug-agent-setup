@@ -16,6 +16,7 @@ LEADING_CD = re.compile(r"""\A\s*cd\s+("[^"]*"|'[^']*'|\S+)\s*&&""")
 HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1\n(.*?)\n\s*\2(?=\s|$)", re.S)
 EXIT_CODE_PREFIX = re.compile(r"^Exit code (\d+)")
 EXIT_MARKER = re.compile(r"\bexit=(\d+)")
+BACKGROUND_COMMAND = re.compile(r"(?m)(?<![&|>\d])&\s*(?:;|$)|\bxargs\s+(?:\S+\s+)*-P\s*\d|\bparallel\b")
 AGENT_CLASSES = {
     "worker": "implementation", "sonnet-worker": "implementation", "scout": "investigation",
     "researcher": "investigation", "explore": "investigation", "reviewer": "review", "designer": "design",
@@ -189,6 +190,30 @@ def build_tool_calls(events: list[dict[str, Any]], subagents: list[dict[str, Any
     return list(calls.values())
 
 
+def runs_in_background(tool_input: dict[str, Any]) -> bool:
+    """Whether a launch returns at once and runs on: the background flag of an agent call, or a shell command that puts a
+    job in the background or runs jobs in parallel."""
+    return bool(tool_input.get("run_in_background")) or bool(BACKGROUND_COMMAND.search(str(tool_input.get("command") or "")))
+
+
+def call_spans(events: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Where each main-session tool call began and returned in the stream: the event positions of its `tool_use` and its
+    `tool_result`. A launch that runs in the background has no return, so a later launch overlaps it."""
+    spans: dict[str, dict[str, Any]] = {}
+    for position, event in enumerate(events):
+        if event.get("parent_tool_use_id") is not None:
+            continue
+        for block in content_blocks(event):
+            if event.get("type") == "assistant" and block.get("type") == "tool_use":
+                spans.setdefault(str(block.get("id")), {
+                    "began": position, "returned": None, "background": runs_in_background(block.get("input") or {})})
+            elif event.get("type") == "user" and block.get("type") == "tool_result":
+                span = spans.get(str(block.get("tool_use_id")))
+                if span is not None and span["returned"] is None:
+                    span["returned"] = position
+    return {call_id: {**span, "returned": None if span["background"] else span["returned"]} for call_id, span in spans.items()}
+
+
 def build_delegations(calls: list[dict[str, Any]], assignments: dict[str, str]) -> list[dict[str, Any]]:
     delegations: list[dict[str, Any]] = []
     claimed: set[str] = set()
@@ -269,6 +294,7 @@ def build_view(
         "tool_calls": calls,
         "delegations": build_delegations(calls, assignments or {}),
         "final_answer_order": final_answer_order(events),
+        "spans": call_spans(events),
         "approvals": list(approvals or []),
         "permission_denials": list(denials) if isinstance(denials, list) else [],
     }

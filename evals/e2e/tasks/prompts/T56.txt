@@ -1,0 +1,6 @@
+docs-kit에 기능 두 가지를 넣어줘. 둘 다 로컬 데이터베이스(DOCKIT_DB 환경변수가 가리키는 파일)에 새 테이블을 만들고, 마이그레이션은 dockit/store.py의 MIGRATIONS에 이름을 붙여 더해.
+
+1) 페이지 고정: Store.pin(slug), Store.unpin(slug), Store.pins() -> slug 목록(알파벳순). 같은 페이지를 두 번 pin 해도 하나만 남아. 마이그레이션 이름은 "create-pins". CLI: `pin SLUG`는 "Pinned SLUG", `unpin SLUG`는 "Unpinned SLUG"를 출력하고(고정하지 않은 페이지도 오류 없이), `pins`는 고정한 slug를 한 줄에 하나씩 출력해.
+2) 메모: Store.add_note(slug, text) -> 메모 id(데이터베이스 전체에서 1부터 하나씩 늘어나), Store.notes(slug) -> 저장한 순서의 text 목록. 마이그레이션 이름은 "create-notes". CLI: `note SLUG TEXT`는 "Saved note N for SLUG"(N은 메모 id)를 출력하고, `notes SLUG`는 그 페이지의 메모를 저장한 순서로 한 줄에 "K: TEXT"(K는 그 페이지에서의 순번, 1부터)로 출력해.
+
+기능마다 테스트를 추가하고 README와 한국어 미러(docs/ko/README.ko.md)도 고쳐줘.

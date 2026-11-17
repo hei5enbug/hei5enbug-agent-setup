@@ -1735,5 +1735,201 @@ class AreaCoordinatorTaskTest(TempCase):
         self.assertTrue(outcome["no-area-coordinator-started"])
 
 
+def stream_use(message: str, call_id: str, name: str, tool_input: dict[str, Any]) -> dict[str, Any]:
+    return {"type": "assistant", "message": {"id": message, "content": [
+        {"type": "tool_use", "id": call_id, "name": name, "input": tool_input}]}}
+
+
+def stream_result(call_id: str, text: str = "done") -> dict[str, Any]:
+    return {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": call_id, "content": text}]}}
+
+
+WORKER_AGENT = {"subagent_type": "hei5enbug-agent-setup:worker", "prompt": "edit"}
+RUNNER_PREFIX = "python3 /plugin/scripts/role_runner.py worker --assignment /w/a{n}.md --result /w/r{n}.md --add-dir /w/repo"
+
+
+def codex_rollout(*items: tuple[str, str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """Main rollout events from (kind, call id, detail) items: `spawn` and `final` for a native agent, `exec` and `out` for a command."""
+    events: list[dict[str, Any]] = []
+    for kind, call_id, detail in items:
+        if kind == "spawn":
+            payload = {"type": "function_call", "name": "spawn_agent", "call_id": call_id,
+                       "arguments": json.dumps({"agent_type": "worker", "message": "edit", "task_name": detail["task"]})}
+        elif kind == "ack":
+            payload = {"type": "function_call_output", "call_id": call_id, "output": json.dumps({"task_name": detail["task"]})}
+        elif kind == "final":
+            text = f"Message Type: FINAL_ANSWER\nTask name: {detail['task']}\nSender: /root/{detail['task']}\nPayload:\nok"
+            payload = {"type": "agent_message", "content": [{"text": text}]}
+        elif kind == "exec":
+            payload = {"type": "function_call", "name": "exec_command", "call_id": call_id,
+                       "arguments": json.dumps({"cmd": detail["cmd"]})}
+        else:
+            payload = {"type": "function_call_output", "call_id": call_id, "output": detail.get("output", "ok")}
+        events.append({"type": "response_item", "payload": payload})
+    return events
+
+
+class WorktreeTaskTest(TempCase):
+    """T55 (two changes whose builds share one output folder) and T56 (two changes to one database file)."""
+
+    def materialize(self, task_id: str, label: str = "") -> tuple[dict[str, Any], Path, str]:
+        task = json.loads((TASKS_ROOT / f"{task_id}.json").read_text(encoding="utf-8"))
+        repo = self.root / f"repo-{task_id}{label}"
+        return task, repo, graders.materialize_fixture(task, FIXTURES_ROOT, TASKS_ROOT, repo)
+
+    def passed(self, task: dict, repo: Path, base: str, view: dict) -> dict[str, bool]:
+        result = graders.grade_run(task, repo, base, view, TASKS_ROOT, self.root / f"work-{repo.name}-{len(view['tool_calls'])}")
+        return {check["id"]: check["passed"] for check in result["checks"]}
+
+    @staticmethod
+    def failed_required(task: dict, outcome: dict[str, bool]) -> set[str]:
+        required = {check["id"] for check in task["checks"] if check["required"]}
+        return {name for name, ok in outcome.items() if not ok and name in required}
+
+    def view_of(self, events: list[dict[str, Any]]) -> dict[str, Any]:
+        from harness import transcript
+        return {**transcript.build_view(events), "final_answer": "done"}
+
+    def codex_view(self, events: list[dict[str, Any]]) -> dict[str, Any]:
+        from harness import codex_calls
+        calls = [{**call, "source": "main"} for call in codex_calls.rollout_tool_calls(events, "main", "main")]
+        return {**make_view("done"), "tool_calls": calls, "spans": codex_calls.call_spans(events)}
+
+    def test_수정하지_않은_저장소는_두_과제의_숨은_테스트_검사에서_모두_실패한다(self):
+        """T55는 변경별 숨은 테스트와 통합 검사가, T56은 기능별 숨은 테스트와 한 데이터베이스 검사가 실패하고 기존 테스트는 통과한다."""
+        for task_id, expected in (
+            ("T55", {"hidden-tests-sitemap", "hidden-tests-search-index", "hidden-tests-integration"}),
+            ("T56", {"hidden-tests-pins", "hidden-tests-notes", "hidden-tests-one-database"}),
+        ):
+            with self.subTest(task_id):
+                # given
+                task, repo, base = self.materialize(task_id)
+
+                # when
+                outcome = self.passed(task, repo, base, make_view("done"))
+
+                # then
+                self.assertEqual(self.failed_required(task, outcome), expected)
+                self.assertTrue(outcome["regressions"])
+
+    def test_참조_해법은_두_과제의_모든_필수_검사를_통과한다(self):
+        """두 변경을 모두 합친 참조 해법은 숨은 테스트, 기존 테스트, 변경 범위, 동시 실행 검사를 모두 통과한다."""
+        for task_id in ("T55", "T56"):
+            with self.subTest(task_id):
+                # given
+                task, repo, base = self.materialize(task_id)
+                apply_reference(task_id, repo)
+
+                # when
+                outcome = self.passed(task, repo, base, make_view("done"))
+
+                # then
+                self.assertEqual(self.failed_required(task, outcome), set())
+
+    def test_T55는_한_변경을_합치지_않은_결과를_그_변경과_통합_검사에서_실패시킨다(self):
+        """사이트맵 변경이나 검색 색인 변경 하나를 빼고 합친 결과는 빠진 변경의 숨은 테스트와 통합 숨은 테스트가 실패한다."""
+        for skipped, own_check in (("sitemap", "hidden-tests-sitemap"), ("search", "hidden-tests-search-index")):
+            with self.subTest(skipped):
+                # given
+                task, repo, base = self.materialize("T55", skipped)
+                with mock.patch.dict(os.environ, {"T55_SKIP_CHANGES": skipped}):
+                    apply_reference("T55", repo)
+
+                # when
+                outcome = self.passed(task, repo, base, make_view("done"))
+
+                # then
+                self.assertEqual(self.failed_required(task, outcome), {own_check, "hidden-tests-integration"})
+
+    def test_T56은_한_기능을_합치지_않은_결과를_그_기능과_한_데이터베이스_검사에서_실패시킨다(self):
+        """고정 기능이나 메모 기능 하나를 빼고 합친 결과는 빠진 기능의 숨은 테스트와 한 데이터베이스 숨은 테스트가 실패한다."""
+        for skipped, own_check in (("pins", "hidden-tests-pins"), ("notes", "hidden-tests-notes")):
+            with self.subTest(skipped):
+                # given
+                task, repo, base = self.materialize("T56", skipped)
+                with mock.patch.dict(os.environ, {"T56_SKIP_CHANGES": skipped}):
+                    apply_reference("T56", repo)
+
+                # when
+                outcome = self.passed(task, repo, base, make_view("done"))
+
+                # then
+                failed = self.failed_required(task, outcome) - {"regressions", "agent-tests"}
+                self.assertEqual(failed, {own_check, "hidden-tests-one-database"})
+
+    def test_T56은_두_worker가_함께_돈_기록을_어떤_모양이든_필수_검사에서_실패시킨다(self):
+        """한 메시지의 병렬 에이전트 호출, 백그라운드 에이전트, 한 명령의 두 runner 병렬 시작, Codex의 겹친 spawn은 모두 실패한다."""
+        # given
+        task, repo, base = self.materialize("T56")
+        apply_reference("T56", repo)
+        parallel_message = [stream_use("m1", "a", "Agent", WORKER_AGENT), stream_use("m1", "b", "Agent", WORKER_AGENT),
+                            stream_result("a"), stream_result("b")]
+        background = [stream_use("m1", "a", "Agent", {**WORKER_AGENT, "run_in_background": True}), stream_result("a", "started"),
+                      stream_use("m2", "b", "Agent", WORKER_AGENT), stream_result("b")]
+        one_command = [stream_use("m1", "a", "Bash", {"command": RUNNER_PREFIX.format(n=1) + " &\n" + RUNNER_PREFIX.format(n=2) + " &\nwait"}),
+                       stream_result("a")]
+        two_runner_calls = [stream_use("m1", "a", "Bash", {"command": RUNNER_PREFIX.format(n=1)}),
+                            stream_use("m1", "b", "Bash", {"command": RUNNER_PREFIX.format(n=2)}), stream_result("a"), stream_result("b")]
+        shapes = {"parallel message": self.view_of(parallel_message), "background agent": self.view_of(background),
+                  "one command": self.view_of(one_command), "two runner calls": self.view_of(two_runner_calls),
+                  "codex overlapping spawns": self.codex_view(codex_rollout(
+                      ("spawn", "s1", {"task": "one"}), ("ack", "s1", {"task": "one"}), ("spawn", "s2", {"task": "two"}),
+                      ("ack", "s2", {"task": "two"}), ("final", "", {"task": "one"}), ("final", "", {"task": "two"})))}
+
+        for name, view in shapes.items():
+            with self.subTest(name):
+                # when
+                outcome = self.passed(task, repo, base, view)
+
+                # then
+                self.assertEqual(self.failed_required(task, outcome), {"workers-not-at-once"})
+
+    def test_T56은_worker를_차례로_돌린_기록과_worker_없이_끝낸_기록을_통과시킨다(self):
+        """첫 worker의 결과를 받은 뒤 둘째를 시작한 기록은 Claude Code와 Codex 모두에서 필수 검사를 통과한다."""
+        # given
+        task, repo, base = self.materialize("T56")
+        apply_reference("T56", repo)
+        in_turn = [stream_use("m1", "a", "Agent", WORKER_AGENT), stream_result("a"), stream_use("m2", "b", "Agent", WORKER_AGENT),
+                   stream_result("b")]
+        runners = [stream_use("m1", "a", "Bash", {"command": RUNNER_PREFIX.format(n=1)}), stream_result("a"),
+                   stream_use("m2", "b", "Bash", {"command": RUNNER_PREFIX.format(n=2)}), stream_result("b")]
+        codex = codex_rollout(("spawn", "s1", {"task": "one"}), ("ack", "s1", {"task": "one"}), ("final", "", {"task": "one"}),
+                              ("spawn", "s2", {"task": "two"}), ("ack", "s2", {"task": "two"}), ("final", "", {"task": "two"}))
+        views = {"agents": self.view_of(in_turn), "runners": self.view_of(runners), "codex": self.codex_view(codex),
+                 "no workers": make_view("done")}
+
+        for name, view in views.items():
+            with self.subTest(name):
+                # when
+                outcome = self.passed(task, repo, base, view)
+
+                # then
+                self.assertTrue(outcome["workers-not-at-once"])
+
+    def test_T55는_동시_실행이나_워크트리를_필수_조건으로_삼지_않고_센다(self):
+        """워크트리를 만들고 병렬로 돌린 기록과 순서대로 돌린 기록 모두 필수 검사를 통과하고 선택 검사만 개수를 다르게 적는다."""
+        # given
+        task, repo, base = self.materialize("T55")
+        apply_reference("T55", repo)
+        isolated = [stream_use("m0", "w", "Bash", {"command": "git worktree add ../a -b a && git worktree add ../b -b b"}),
+                    stream_result("w"), stream_use("m1", "a", "Agent", WORKER_AGENT), stream_use("m1", "b", "Agent", WORKER_AGENT),
+                    stream_result("a"), stream_result("b")]
+        sequential = [stream_use("m1", "a", "Agent", WORKER_AGENT), stream_result("a"), stream_use("m2", "b", "Agent", WORKER_AGENT),
+                      stream_result("b")]
+
+        # when
+        results = {name: graders.grade_run(task, repo, base, self.view_of(events), TASKS_ROOT, self.root / f"work-{name}")
+                   for name, events in (("isolated", isolated), ("sequential", sequential))}
+
+        # then
+        for name, result in results.items():
+            outcome = {check["id"]: check for check in result["checks"]}
+            self.assertEqual(self.failed_required(task, {key: value["passed"] for key, value in outcome.items()}), set(), name)
+        facts = {name: next(c for c in result["checks"] if c["id"] == "isolated-worktrees-created")["data"]
+                 for name, result in results.items()}
+        self.assertEqual((facts["isolated"]["worktrees"], facts["isolated"]["concurrent"]), (2, 1))
+        self.assertEqual((facts["sequential"]["worktrees"], facts["sequential"]["concurrent"]), (0, 0))
+
+
 if __name__ == "__main__":
     unittest.main()

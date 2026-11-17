@@ -256,7 +256,8 @@ def load_records(spec: RunSpec, run: dict[str, Any], expected_model: str) -> dic
         "final_answer": final_answer(main["events"]), "assistant_texts": assistant_messages(main["events"]),
         "tool_calls": calls, "delegations": native_completion(transcript.build_delegations(main_calls, assignments),
                                                               main_calls, answered_before_report(main["events"])),
-        "final_answer_order": final_answer_order(main["events"]), "approvals": [], "permission_denials": [],
+        "final_answer_order": final_answer_order(main["events"]), "spans": codex_calls.call_spans(main["events"]),
+        "approvals": [], "permission_denials": [],
     }
     by_source, _ = usage.claude_requests_by_source(None, [], [], runners)
     state = stream_state(stream)

@@ -164,6 +164,7 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 | 리비전 내보내기만 하기 | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
 | 변경을 판정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
 | 각 변형의 위임 층 구성 기록 | `record`에 `--layouts two,three`(변경 전, 변경 후) 추가 |
+| 각 변형의 작업 공간 배치 기록 | `record`에 `--workspaces sequential,isolated`(변경 전, 변경 후) 추가 |
 
 `--parallel`은 동시에 실행할 수를 정한다(기본 3). 변형이 여럿이면 작업과 반복마다 순서를 번갈아(ABAB, 다음은
 BABA) 시간대 영향이 고르게 퍼지게 한다.
@@ -338,6 +339,8 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 번호 같은 실행 사실, 가상 픽스처 이름만 들어간다. 검증은 절대 로컬 경로, 상한 밖 모델, 빠진 필드를 거부한다.
 | T57 | inventory-service | 영역 코디네이터 층, 큰 작업 | 서비스의 세 영역(카탈로그, 저장, 명령줄)에 걸친 하나의 기능인 품목 태그를 영역마다 작업 셋씩, 영역별 테스트와 영역 사이 테스트와 함께 만든다. 영역별·영역 사이 숨은 테스트가 판정하고, 정보용 검사 `area-coordinators-started`가 코디네이터 시작 수를 센다. 테스트는 `tests/test_e2e_eval_graders.py`에 있다 |
 | T58 | inventory-service | 영역 코디네이터 층, 작은 작업 | 저장소 모듈 하나에서 백업 작업 셋. 숨은 테스트가 판정하고, 필수 검사 `no-area-coordinator-started`는 역할 실행기 명령, 에이전트 시작, 상태 줄 중 하나로 영역 코디네이터를 시작한 실행을 실패시킨다. 테스트는 `tests/test_e2e_eval_graders.py`에 있다 |
+| T55 | docs-kit | worker마다 worktree, 공유 빌드 결과물 | 서로 다른 소스 파일의 변경 둘(`sitemap.xml`과 `search-index.json`)을 같은 빌드가 하나의 `build/` 폴더에 쓴다. 빌드는 다른 빌드가 폴더를 쓰는 동안 실행을 거부하고, 사이트 검사는 그 폴더를 읽는다. 변경별 숨은 테스트와 병합한 빌드의 숨은 테스트가 판정하고, 정보용 검사 `isolated-worktrees-created`가 만든 worktree 수와 worker가 동시에 돈 경우의 수를 센다. 테스트는 `tests/test_e2e_eval_graders.py`에 있다 |
+| T56 | docs-kit | 공유 데이터베이스 파일, worker 순차 실행 | 기능마다 로컬 데이터베이스 파일 하나에 테이블을 더하는 변경 둘. 그 파일은 `DOCKIT_DB`로 작업 트리 밖에 두고 테스트 실행이 실행 내내 잡고 있다. 숨은 테스트가 판정하고, 필수 검사 `workers-not-at-once`는 worker 시작 둘이 동시에 돈 실행을 실패시킨다. 테스트는 `tests/test_e2e_eval_graders.py`와 `tests/test_e2e_eval_worktree_layout.py`에 있다 |
 
 `tests/test_e2e_eval_record_cli.py`가 커밋된 모든 기록을 검증한다.
 
@@ -358,6 +361,20 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 기각되거나 T58이 실패하면 기각하며, 그 밖에는 미정으로 둔다. `tests/test_e2e_eval_area_coordinator.py`는 절과 그 미러,
 레지스트리 항목, 측정용 역할이 기록의 결정과 정확히 맞게 있을 것을 요구한다.
 
+### worker마다 worktree
+
+이슈 98은 T55에서 worker를 순차로 돌리는 구성과 worker마다 worktree를 두고 병렬로 돌리는 구성을 비교하고, 기록이 있을 때만
+후자를 채택한다. 변경 전 변형은 후보 패치가 없는 리비전이고 변경 후 변형은 같은 리비전에
+`candidates/98-worktree-per-worker.patch`를 얹은 것이다. 이 패치는 `instructions/implementation-delegation.md`의
+"Scheduling"과 그 한국어 미러에 규칙을 더하며, `record --workspaces sequential,isolated`가 각 변형의 배치를 저장한다.
+기록 `records/98.json`은 T55의 모든 실행을 호스트, 배치, 검사, 통합 검사가 통과할 때까지의 실행 경과 시간, 비용과 함께
+담고, 주장을 결정한 단계와 T56, T05의 실행도 담는다. `harness/isolated_worktrees.py`가 그것을 읽는다. 양쪽 호스트에서
+T55의 `wall_seconds` 개선 주장이 받아들여지고(그래서 변경 후 비용 중앙값이 변경 전 최고 비용을 넘지 않고) T56과 T05가
+통과하면 채택하고, 주장이 기각되거나 T56 또는 T05가 실패하면 기각하며, 그 밖에는 미정으로 둔다. 뷰의 `spans`, 즉 메인
+세션의 각 호출이 시작하고 돌아온 이벤트 위치로 `tasks/custom/worker_concurrency.py`가 동시에 돈 worker 시작을 찾는다.
+한 메시지의 병렬 호출, 백그라운드 실행, `&`나 `xargs -P`로 한 명령이 여러 개를 시작한 경우다.
+`tests/test_e2e_eval_worktree_layout.py`는 규칙과 그 미러와 호스트 비교가 기록의 결정과 정확히 맞는지 요구한다.
+
 ## 알려진 한계
 
 - Bash 요청은 항상 허용하므로, 캠페인은 에이전트가 어떤 셸 명령이든 실행해도 되는 컴퓨터에서 돌려야 한다. 승인
@@ -376,3 +393,6 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 - Codex 실행에는 지출 한도가 없다. `codex exec`에 예산 플래그가 없으므로, 폭주한 Codex 실행은 작업의 경과 시간
   제한에서만 끝난다.
 - Claude 서브에이전트의 effort는 하네스가 복사하는 기록에 없으므로 기록에는 `not measured`로 나온다.
+- 호스트 기록에 반환이 없는 worker 시작, 예를 들어 백그라운드 에이전트는 세션이 끝날 때까지 돌고 있는 것으로 센다. 그래서
+  T56의 `workers-not-at-once` 검사는 메인 세션이 먼저 기다렸더라도 뒤의 시작을 실패시킨다. 여러 worker를 `await`로
+  차례로 시작하는 Codex exec 스크립트는 함께 시작한 것으로 센다.

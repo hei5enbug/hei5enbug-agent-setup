@@ -1,0 +1,115 @@
+{
+  "id": "T55",
+  "title": "Two changes whose builds share one output folder",
+  "category": "delegation",
+  "path": "parallel workers with a shared build output directory: one worktree per worker or in sequence",
+  "fixture": "docs-kit",
+  "prompt_file": "prompts/T55.txt",
+  "limits": {
+    "wall_seconds": 3000,
+    "max_budget_usd": 30
+  },
+  "hidden_tests": {
+    "source": "hidden/T55",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests-sitemap",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_sitemap_change.py"
+      ]
+    },
+    {
+      "id": "hidden-tests-search-index",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_search_index_change.py"
+      ]
+    },
+    {
+      "id": "hidden-tests-integration",
+      "kind": "pytest",
+      "required": true,
+      "weight": 4,
+      "suite": "hidden",
+      "files": [
+        "test_site_integration.py"
+      ]
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "agent-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    },
+    {
+      "id": "only-expected-changed",
+      "kind": "only_changed",
+      "required": true,
+      "weight": 1,
+      "allow": [
+        "dockit/sitemap.py",
+        "dockit/search_index.py",
+        "tests/**",
+        "README.md",
+        "docs/ko/README.ko.md"
+      ]
+    },
+    {
+      "id": "readme-lastmod",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "README.md",
+      "pattern": "(?i)lastmod"
+    },
+    {
+      "id": "mirror-headings",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "docs/ko/README.ko.md",
+      "pattern": "(?i)headings|제목"
+    },
+    {
+      "id": "tests-added",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "tests_added"
+    },
+    {
+      "id": "isolated-worktrees-created",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "isolated_worktrees_created"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

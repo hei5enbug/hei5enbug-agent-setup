@@ -1,0 +1,110 @@
+{
+  "id": "T56",
+  "title": "Two changes to one local database file",
+  "category": "delegation",
+  "path": "tasks that share a database outside the working tree stay sequential",
+  "fixture": "docs-kit",
+  "prompt_file": "prompts/T56.txt",
+  "env": {
+    "DOCKIT_DB": "{work}/shared/dockit.db"
+  },
+  "limits": {
+    "wall_seconds": 3000,
+    "max_budget_usd": 30
+  },
+  "hidden_tests": {
+    "source": "hidden/T56",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests-pins",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_pins.py"
+      ]
+    },
+    {
+      "id": "hidden-tests-notes",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_notes.py"
+      ]
+    },
+    {
+      "id": "hidden-tests-one-database",
+      "kind": "pytest",
+      "required": true,
+      "weight": 4,
+      "suite": "hidden",
+      "files": [
+        "test_one_database.py"
+      ]
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "agent-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    },
+    {
+      "id": "only-expected-changed",
+      "kind": "only_changed",
+      "required": true,
+      "weight": 1,
+      "allow": [
+        "dockit/store.py",
+        "dockit/cli.py",
+        "tests/**",
+        "README.md",
+        "docs/ko/README.ko.md"
+      ]
+    },
+    {
+      "id": "workers-not-at-once",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "workers_not_at_once"
+    },
+    {
+      "id": "readme-pin",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "README.md",
+      "pattern": "(?i)\\bpin\\b"
+    },
+    {
+      "id": "tests-added",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "tests_added"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

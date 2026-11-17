@@ -6,6 +6,8 @@ import json
 import re
 from typing import Any, Iterable
 
+from .transcript import BACKGROUND_COMMAND
+
 CALL_TYPES = frozenset({"function_call", "local_shell_call", "custom_tool_call"})
 OUTPUT_TYPES = frozenset({"function_call_output", "local_shell_call_output", "custom_tool_call_output"})
 NATIVE_AGENT_TOOL = "spawn_agent"
@@ -17,6 +19,7 @@ JS_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f", "v": "\v", 
 TOOL_STATEMENT = re.compile(r"\btools\.(\w+)\s*\(")
 SESSION_ARGUMENT = re.compile(r"\bsession_id\s*:\s*(\d+)")
 SCRIPT_HEADER = "Script "
+
 ESCAPE = re.compile(r"\\(?:u\{([0-9a-fA-F]+)\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|(.))", re.S)
 
 
@@ -294,6 +297,59 @@ def rollout_tool_calls(events: list[dict[str, Any]], role: str, rollout_name: st
         else:
             calls = _joined_calls(payload, call_id, text, code, source, calls)
     return calls
+
+
+def _chunks(output: Any) -> list[dict[str, Any]]:
+    """The JSON chunks (session id, exit code) an output holds: the output itself, or the items after an exec script header."""
+    items = exec_items(output)
+    texts = items if items is not None else [output_text(output)]
+    return [chunk for chunk in (chunk_of(text) for text in texts) if chunk]
+
+
+def _session_ends(events: list[dict[str, Any]], start: int, session: Any) -> int | None:
+    """The position of the first later output whose chunk names `session` and carries an exit code."""
+    for position in range(start + 1, len(events)):
+        payload = events[position].get("payload") if isinstance(events[position].get("payload"), dict) else {}
+        if events[position].get("type") != "response_item" or payload.get("type") not in OUTPUT_TYPES:
+            continue
+        if any(chunk.get("session_id") == session and chunk_code(chunk) is not None for chunk in _chunks(payload.get("output"))):
+            return position
+    return None
+
+
+def call_spans(events: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Where each call of the main rollout began and returned, as event positions, keyed `codex:<call id>`. A command returns
+    with its output, or with the exit of the session it left running; a native `spawn_agent` returns with the child's final
+    result; a job in the background or a session that never ended has no return."""
+    finals = _final_answers(events)
+    claimed: set[int] = set()
+    output_at: dict[str, tuple[int, Any]] = {}
+    for position, event in enumerate(events):
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        if event.get("type") == "response_item" and payload.get("type") in OUTPUT_TYPES and payload.get("call_id"):
+            output_at.setdefault(str(payload["call_id"]), (position, payload.get("output")))
+    spans: dict[str, dict[str, Any]] = {}
+    for position, event in enumerate(events):
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        if event.get("type") != "response_item" or payload.get("type") not in CALL_TYPES:
+            continue
+        call_id = str(payload.get("call_id") or payload.get("id") or "")
+        if not call_id:
+            continue
+        returned, output = output_at.get(call_id, (None, None))
+        background = False
+        if payload.get("type") == "function_call" and payload.get("name") == NATIVE_AGENT_TOOL:
+            path = _child_path(_arguments(payload), output_text(output))
+            answer = next(((index, body) for index, sender, body in finals if index > position and sender == path and index not in claimed), None)
+            claimed = claimed | {answer[0]} if answer else claimed
+            returned = answer[0] if answer else None
+        else:
+            background = any(BACKGROUND_COMMAND.search(command) for command in commands_of(payload))
+            for chunk in _chunks(output):
+                if chunk.get("session_id") is not None and chunk_code(chunk) is None:
+                    returned = _session_ends(events, returned if returned is not None else position, chunk["session_id"])
+        spans[f"codex:{call_id}"] = {"began": position, "returned": None if background else returned, "background": background}
+    return spans
 
 
 def codex_tool_calls(rollouts: list[dict[str, Any]]) -> list[dict[str, Any]]:

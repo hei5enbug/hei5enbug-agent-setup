@@ -67,6 +67,8 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--tasks", help="comma-separated task ids; default every task with a finished run")
     record.add_argument("--layouts", help="delegation layout of the before and after variant, such as two,three: "
                         + ", ".join(records.LAYOUTS))
+    record.add_argument("--workspaces", help="workspace layout of the before and after variant, such as sequential,isolated: "
+                        + ", ".join(records.WORKSPACES))
     record.add_argument("--records-dir", type=Path, default=records.RECORDS_DIR)
     return parser
 
@@ -119,8 +121,14 @@ def do_record(args: argparse.Namespace, cfg: HarnessConfig) -> int:
     if args.layouts and (len(chosen) != 2 or any(name not in records.LAYOUTS for name in chosen)):
         raise command.ConfigError("--layouts takes the layout of the before and the after variant: " + ", ".join(records.LAYOUTS))
     layouts = {args.before: records.LAYOUTS[chosen[0]], args.after: records.LAYOUTS[chosen[1]]} if chosen else None
+    picked = split(args.workspaces)
+    if args.workspaces and (len(picked) != 2 or any(name not in records.WORKSPACES for name in picked)):
+        raise command.ConfigError("--workspaces takes the workspace layout of the before and the after variant: "
+                                  + ", ".join(records.WORKSPACES))
+    workspaces = {args.before: records.WORKSPACES[picked[0]], args.after: records.WORKSPACES[picked[1]]} if picked else None
     result = records.record_campaign(
         cfg.run_root, args.campaign, args.issue, args.before, args.after, split(args.claim), split(args.tasks) or None, layouts,
+        workspaces,
     )
     path = records.write_record(result["record"], absolute(args.records_dir))
     sys.stdout.write("".join(f"{line}\n" for line in records.report_lines(result)))

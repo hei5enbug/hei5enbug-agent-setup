@@ -178,6 +178,7 @@ Run every command from the repository root. The default run root is
 | Export a revision only | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
 | Judge a change and write its record | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
 | Record each variant's delegation layout | add `--layouts two,three` (before, after) to `record` |
+| Record each variant's workspace layout | add `--workspaces sequential,isolated` (before, after) to `record` |
 
 `--parallel` sets the number of runs at once (default 3). With several variants the order alternates per task and
 repetition (ABAB, then BABA), so time-of-day effects spread evenly.
@@ -316,6 +317,8 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T54 | inventory-service | Eight independent read-only questions | Eight questions about eight modules, read-only, answered in parallel; graders require all eight facts and no change, and count the delegated runs without requiring any; its tests are in `tests/test_e2e_eval_request_cap.py` |
 | T57 | inventory-service | Area coordinator layer, large work | One feature, item tags, across three areas of the service (catalog, storage, command line) with three tasks in each, tests in each area and across them; hidden tests per area and across areas decide, and the informational check `area-coordinators-started` counts the coordinator starts; its tests are in `tests/test_e2e_eval_graders.py` |
 | T58 | inventory-service | Area coordinator layer, small work | Three backup tasks in the storage module; hidden tests decide, and the required check `no-area-coordinator-started` fails a run whose role runner command, agent launch, or status line starts an area coordinator; its tests are in `tests/test_e2e_eval_graders.py` |
+| T55 | docs-kit | Worktree per worker, shared build output | Two changes in different source files (`sitemap.xml` and `search-index.json`) that the same build writes into one `build/` folder, with a build that refuses to run while another uses the folder and a site check that reads it; hidden tests per change and for the merged build decide, and the informational check `isolated-worktrees-created` counts the worktrees created and the cases of workers at once; its tests are in `tests/test_e2e_eval_graders.py` |
+| T56 | docs-kit | Shared database file, workers in sequence | Two changes that each add a table to one local database file, which `DOCKIT_DB` puts outside the working tree and which a test run holds for its whole length; hidden tests decide, and the required check `workers-not-at-once` fails a run in which two worker launches ran at once; its tests are in `tests/test_e2e_eval_graders.py` and `tests/test_e2e_eval_worktree_layout.py` |
 
 ## Comparing a change on both hosts
 
@@ -386,6 +389,22 @@ the claim on `wall_seconds` is accepted on T57 on both hosts and T58 passes, rej
 fails, and stays undecided otherwise. `tests/test_e2e_eval_area_coordinator.py` requires the section, its mirror, the
 registry entry, and the measurement role exactly as the record's decision implies.
 
+### Worktree per worker
+
+Issue 98 compares workers run in sequence with one worktree per worker run in parallel on T55 and adopts the second
+only on a record. The before variant is the revision without the candidate patch and the after variant is the same
+revision with `candidates/98-worktree-per-worker.patch`, which adds the rule to "Scheduling" in
+`instructions/implementation-delegation.md` and its Korean mirror; `record --workspaces sequential,isolated` stores each
+variant's layout. The record `records/98.json` holds every run of T55 with host, layout, checks, the wall time of the run
+until its integration checks pass, and cost, the step at which the claim was decided, and the runs of T56 and T05.
+`harness/isolated_worktrees.py` reads it: it adopts when the claim on `wall_seconds` is accepted on T55 on both hosts, so
+the median cost after is not above the highest cost before, and T56 and T05 pass; it rejects when the claim is rejected or
+T56 or T05 fails; and it stays undecided otherwise. The `spans` of a view, the event positions where each main-session
+call began and returned, let `tasks/custom/worker_concurrency.py` find worker launches that ran at once: parallel in one
+message, one that runs in the background, or several started by one command with `&` or `xargs -P`.
+`tests/test_e2e_eval_worktree_layout.py` requires the rule, its mirror, and the host comparison exactly as the record's
+decision implies.
+
 ## Known limits
 
 - Bash requests are always allowed, so a campaign must run on a machine where an agent may run any shell command.
@@ -404,3 +423,6 @@ registry entry, and the measurement role exactly as the record's decision implie
 - A Codex run has no spend limit, because `codex exec` has no budget flag; a runaway Codex run ends only at the wall
   time of its task.
 - The effort of a Claude subagent is not in the records the harness copies, so a record shows it as `not measured`.
+- A worker launch whose host record shows no return, such as a background agent, counts as running until the end of the
+  session, so the `workers-not-at-once` check of T56 fails a later launch even when the main session waited for it first.
+  A Codex exec script that starts several workers one after another with `await` counts them as started together.
