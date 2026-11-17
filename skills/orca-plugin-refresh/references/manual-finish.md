@@ -9,7 +9,9 @@ session in the current request, and never for a `blocked` or `deferred` session.
 Run every check that the script runs. If one fails, send nothing and tell the user which check failed.
 
 1. The turn record is idle: the transcript named by the session marker ends its newest turn, and no background task,
-   subagent, or scheduled wakeup owes a notification.
+   subagent, or scheduled wakeup owes a notification. For a session that needs only `/reload-plugins`, such an owed
+   notification does not fail this check, because the reload keeps the process and its tasks; it still fails when
+   `/compact` or `/clear` is to be sent or the session is to be resumed.
 2. The screen shows no open question or approval prompt.
 3. The input line holds nothing typed. A grey suggestion counts as empty: type `x` once and delete it with one
    backspace only when the draft shows exactly that `x`; typed text extends instead of being replaced. Never delete

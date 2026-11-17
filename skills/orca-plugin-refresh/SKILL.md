@@ -143,7 +143,10 @@ Before updating Codex plugins or reporting their hook-trust warnings, read `refe
    record cannot. When a session reports idle, the helper confirms it again after three seconds, checks that the
    installed plugin still matches the run and that the session has not already loaded the new instructions, and
    only then sends the remaining actions. A session deferred for another reason, such as an unreadable input line,
-   is checked again on every poll. A deferred session that is not ready within one hour of the handoff stays
+   is checked again on every poll. A Claude Code session's reload stays owed until its transcript after the handoff
+   holds a successful reload or its marker was rewritten after the handoff with source `startup` or `resume`; a marker
+   rewritten by a compaction or a clear never settles it, whatever root it names, because only a new process loads
+   every installed plugin. A deferred session that is not ready within one hour of the handoff stays
    unsent, as `not_idle_before_deadline` or with its last reason.
    A session whose terminal closes is skipped at once as `terminal_gone`, and its wait ends. The status shows each
    session's final result as soon as it is reached, so `status` reports progress while the helper runs.
@@ -194,7 +197,10 @@ result is not ok when this plugin has a host error or any companion has the stat
   undecided record needs `tui-idle` too; a Claude Code transcript whose newest turn has ended with no background
   task, subagent, or scheduled wakeup owing a notification, also anywhere earlier in the file, or that ends with a
   finished slash command and either nothing active before it or, when the file is unchanged for 300 seconds, an
-  earlier turn with no end record, means idle, even when no record follows the handoff, a turn
+  earlier turn with no end record, means idle, even when no record follows the handoff, except that a turn ended
+  with only a background task, subagent, or wakeup owing a notification means idle only while the session's remaining
+  actions are just `/reload-plugins`, which keeps the process and its tasks; with `/compact` or `/clear` still to send,
+  or for `resume`, which ends them, it is not ready. A turn
   in progress means busy, and a Codex rollout's last complete line decides the same way. When the record is missing,
   partial, or not decisive, Orca's `tui-idle` decides. A short race remains.
 - Orca delivers an orchestration mail notice by typing it into an idle agent's input line and pressing Enter,
