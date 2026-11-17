@@ -218,6 +218,7 @@ class SessionContextTest(unittest.TestCase):
         home = self.base / "normal home"
         self.write_json(home / ".claude/settings.json", {
             "permissions": {"defaultMode": "acceptEdits", "ask": ["Read(*)"]},
+            "cleanupPeriodDays": 3650,
         })
         codex_home = self.base / "normal Codex home"
         (codex_home / "config.toml").parent.mkdir(parents=True, exist_ok=True)

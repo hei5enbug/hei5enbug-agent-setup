@@ -19,6 +19,12 @@ python3 <plugin root>/scripts/host_settings.py apply [--host claude|codex] [--js
 `check`는 읽기이며 아무것도 쓰지 않습니다. 문제마다 한 줄을 보고합니다.
 
 - Claude Code: `defaultMode`가 `dontAsk`인 경우와 Bash나 MCP 도구에 적용되는 `permissions.ask` 규칙(최대 세 개 표시).
+- Claude Code: 실제 적용되는 `cleanupPeriodDays`가 설정되지 않았거나 3650보다 작은 경우. Claude Code는 그 일수(설정이 없으면 30일)보다
+  오래된 세션 대화 기록을 삭제하므로, 압축 이전의 세부 내용을 세션 파일에서 더 이상 찾을 수 없게 됩니다. 정수로 설정한 첫 번째 값이
+  적용되며, 순서는 관리형 `managed-settings.json`(Claude Code 설정 문서가 정한 플랫폼별 경로), `.claude/settings.local.json`,
+  `.claude/settings.json`, `CLAUDE_CONFIG_DIR` 또는 `~/.claude`의 `settings.json`입니다. 읽을 수 없거나 올바른 JSON이 아닌 파일은
+  건너뜁니다. MDM, 레지스트리, `managed-settings.d`, claude.ai 콘솔로 전달되는 관리형 설정은 읽지 않습니다. 안내는 값 3650과 함께
+  `cleanupPeriodDays`를 알려 줄 뿐 어떤 설정도 바꾸지 않습니다. Codex는 rollout 파일을 삭제하지 않으므로 아무것도 보고하지 않습니다.
 - `~/.codex/config.toml`에 `[features] plugin_hooks`가 `true`가 아닌 경우(양쪽 호스트).
 - Codex만: 플러그인 훅이 확인되지 않은 경우(heartbeat 해시 불일치), `config.toml`이 올바른 TOML이 아닌 경우,
   `rules/hei5enbug.rules`가 없거나 읽을 수 없거나 구버전이거나 플러그인 소유가 아닌 경우, MCP 서버에 `prompt` 승인 모드가 없는 경우,

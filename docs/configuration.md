@@ -16,6 +16,13 @@ Both commands also take `--claude-dir`, `--codex-home`, and `--codex-bin`. The h
 command. `check` is a read and writes nothing. It reports one line per problem:
 
 - Claude Code: `defaultMode` is `dontAsk`, and `permissions.ask` rules that match Bash or MCP tools, up to three named.
+- Claude Code: the effective `cleanupPeriodDays` is unset or below 3650. Claude Code deletes session transcripts older
+  than that many days, 30 when unset, so a detail from before a compaction can no longer be looked up in its session
+  file. The first integer wins among the managed `managed-settings.json` (its path for the platform, as the Claude Code
+  settings page lists it), `.claude/settings.local.json`, `.claude/settings.json`, and `settings.json` in
+  `CLAUDE_CONFIG_DIR` or `~/.claude`. A file that cannot be read or is not valid JSON is skipped. Managed settings
+  delivered by MDM, the registry, `managed-settings.d`, or the claude.ai console are not read. The notice names
+  `cleanupPeriodDays` with the value 3650 and changes no setting. Codex deletes no rollout files, so it reports nothing.
 - `[features] plugin_hooks` is not `true` in `~/.codex/config.toml`, on either host.
 - Codex only: the plugin hooks are unconfirmed (the heartbeat hash differs), `config.toml` is not valid TOML,
   `rules/hei5enbug.rules` is missing, unreadable, outdated, or not plugin-owned, MCP servers lack the `prompt` approval

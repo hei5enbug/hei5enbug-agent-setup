@@ -1,6 +1,7 @@
 """Check, and on Codex fix, the host settings that cause extra approval prompts or stop the approval guard.
 
-`check` reports problems and writes nothing. `apply` changes only the allowlist below and only on the Codex host:
+`check` reports problems and writes nothing. On Claude Code it also reports a `cleanupPeriodDays` below 3650 days.
+`apply` changes only the allowlist below and only on the Codex host:
 `[features] plugin_hooks` through `codex features enable`, and, while CODEX_NATIVE_APPROVAL is on, the plugin-owned
 `rules/hei5enbug.rules` and, while the approval_guard toggle is on, `default_tools_approval_mode = "prompt"` on every
 `[mcp_servers.<name>]` table plus each existing per-tool `approval_mode` line.
@@ -33,6 +34,8 @@ CODEX_NATIVE_APPROVAL = True
 GUARD_SERVERS = ("datagrip", "tabularis")
 RULES_NAME = "hei5enbug.rules"
 MAX_LINE = 119
+RETENTION_DAYS = 3650
+DEFAULT_CLEANUP_DAYS = 30
 ASK_RULES_MESSAGE = "these Claude Code ask rules override the guard's allow"
 PROMPT_MODE = "default_tools_approval_mode"
 READ_ONLY_WORDS = {
@@ -64,6 +67,35 @@ def resolve_project(value=None) -> Path:
     return Path(value or os.environ.get("CLAUDE_PROJECT_DIR") or Path.cwd())
 
 
+def default_managed_settings() -> Path:
+    """The platform's `managed-settings.json` that the Claude Code settings page lists."""
+    if sys.platform == "darwin":
+        return Path("/Library/Application Support/ClaudeCode/managed-settings.json")
+    if sys.platform.startswith("win"):
+        return Path(r"C:\Program Files\ClaudeCode\managed-settings.json")
+    return Path("/etc/claude-code/managed-settings.json")
+
+
+def _cleanup_period_days(path: Path) -> int | None:
+    try:
+        settings = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    days = settings.get("cleanupPeriodDays") if isinstance(settings, dict) else None
+    return days if isinstance(days, int) and not isinstance(days, bool) else None
+
+
+def _retention_problems(paths: list[Path]) -> list[Problem]:
+    """Report when the first integer `cleanupPeriodDays` in `paths`, else the default, deletes transcripts too early."""
+    days = next((value for value in map(_cleanup_period_days, paths) if value is not None), DEFAULT_CLEANUP_DAYS)
+    if days >= RETENTION_DAYS:
+        return []
+    return [Problem(
+        "claude-transcript-retention",
+        f"Claude Code deletes session transcripts after {days} days; set cleanupPeriodDays to {RETENTION_DAYS} to keep them.",
+    )]
+
+
 def _claude_permissions(path: Path) -> dict:
     try:
         settings = json.loads(path.read_text(encoding="utf-8"))
@@ -91,7 +123,7 @@ def _short_name(name: str) -> str:
     return name if len(name) <= 19 else name[:16] + "..."
 
 
-def _claude_problems(claude_dir: Path, project: Path) -> list[Problem]:
+def _claude_problems(claude_dir: Path, project: Path, managed_settings: Path) -> list[Problem]:
     permissions = [
         _claude_permissions(path)
         for path in (
@@ -107,6 +139,12 @@ def _claude_problems(claude_dir: Path, project: Path) -> list[Problem]:
     rules = [rule for item in permissions for rule in _claude_ask_rules(item)][:3]
     if rules:
         problems.append(Problem("claude-ask-rules", ASK_RULES_MESSAGE + ": " + ", ".join(_short_name(r) for r in rules) + "."))
+    problems.extend(_retention_problems([
+        managed_settings,
+        project / ".claude" / "settings.local.json",
+        project / ".claude" / "settings.json",
+        claude_dir / "settings.json",
+    ]))
     return problems
 
 
@@ -373,10 +411,14 @@ def _codex_problems(host: str, codex_home: Path) -> list[Problem]:
     return problems
 
 
-def check(host: str, claude_dir=None, codex_home=None, project=None) -> list[Problem]:
+def check(host: str, claude_dir=None, codex_home=None, project=None, managed_settings=None) -> list[Problem]:
     """Return the problems found for `host`; write nothing."""
     if host == "claude":
-        problems = _claude_problems(resolve_claude_dir(claude_dir), resolve_project(project))
+        problems = _claude_problems(
+            resolve_claude_dir(claude_dir),
+            resolve_project(project),
+            Path(managed_settings) if managed_settings else default_managed_settings(),
+        )
     else:
         problems = []
     return problems + _codex_problems(host, resolve_codex_home(codex_home))

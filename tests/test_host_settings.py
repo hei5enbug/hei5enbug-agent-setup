@@ -20,6 +20,8 @@ import approval_state  # noqa: E402
 import host_settings  # noqa: E402
 import plugin_toggles  # noqa: E402
 
+ORIGINAL_DEFAULT_MANAGED = host_settings.default_managed_settings
+
 FAKE_CODEX = """#!{python}
 import os, sys
 from pathlib import Path
@@ -104,6 +106,10 @@ class HostSettingsTestCase(unittest.TestCase):
         native = mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", False)
         native.start()
         self.addCleanup(native.stop)
+        self.managed = self.write_json(self.base / "managed" / "managed-settings.json", {"cleanupPeriodDays": 3650})
+        managed = mock.patch.object(host_settings, "default_managed_settings", return_value=self.managed)
+        managed.start()
+        self.addCleanup(managed.stop)
         self.confirm_hooks()
 
     def confirm_hooks(self, digest=None):
@@ -126,11 +132,15 @@ class HostSettingsTestCase(unittest.TestCase):
         path.chmod(0o755)
         return str(path)
 
-    def check(self, host="codex"):
-        return host_settings.check(host, self.claude, self.codex, self.project)
+    def check(self, host="codex", **kwargs):
+        return host_settings.check(host, self.claude, self.codex, self.project, **kwargs)
 
     def ids(self, host="codex"):
         return [problem.id for problem in self.check(host)]
+
+    def retention(self, host="claude", managed=None):
+        problems = self.check(host, managed_settings=managed or self.base / "none" / "managed-settings.json")
+        return [problem for problem in problems if problem.id == "claude-transcript-retention"]
 
     def apply(self, host="codex", **kwargs):
         return host_settings.apply(host, self.claude, self.codex, **kwargs)
@@ -388,6 +398,150 @@ class RulesTextTest(unittest.TestCase):
             'prefix_rule(pattern=["/opt/plugin root/scripts/approve_wrapper.sh"], decision="prompt", '
             'justification="hei5enbug: approve writes once for this session")',
         )
+
+
+class RetentionTest(HostSettingsTestCase):
+    def setUp(self):
+        super().setUp()
+        self.user = self.claude / "settings.json"
+        self.shared = self.project / ".claude" / "settings.json"
+        self.local = self.project / ".claude" / "settings.local.json"
+
+    def test_어느_파일도_cleanupPeriodDays를_정하지_않으면_30일_삭제와_3650을_알린다(self):
+        """설정이 없으면 보존 문제 한 건이 나오고 문장에 30과 3650이 들어 있으며 한 줄은 120자 미만이다."""
+        # when
+        problems = self.retention()
+
+        # then
+        self.assertEqual(len(problems), 1)
+        self.assertIn("30", problems[0].text)
+        self.assertIn("3650", problems[0].text)
+        self.assertLess(len(problems[0].text), 120)
+
+    def test_프로젝트_로컬이_사용자_설정보다_우선해_30일이면_보고한다(self):
+        """사용자 파일이 3650이어도 프로젝트 로컬 파일의 30이 실제 값이라 30일로 보고한다."""
+        # given
+        self.write_json(self.user, {"cleanupPeriodDays": 3650})
+        self.write_json(self.local, {"cleanupPeriodDays": 30})
+
+        # when
+        problems = self.retention()
+
+        # then
+        self.assertEqual(len(problems), 1)
+        self.assertIn("30 days", problems[0].text)
+
+    def test_사용자_파일만_3650이면_보고하지_않는다(self):
+        """다른 파일이 정하지 않고 사용자 파일이 3650이면 보존 문제가 없다."""
+        # given
+        self.write_json(self.user, {"cleanupPeriodDays": 3650})
+
+        # when
+        problems = self.retention()
+
+        # then
+        self.assertEqual(problems, [])
+
+    def test_관리형_설정이_프로젝트_로컬보다_우선해_4000이면_보고하지_않는다(self):
+        """관리형 파일의 4000이 프로젝트 로컬 파일의 30을 이긴다."""
+        # given
+        managed = self.write_json(self.base / "other" / "managed-settings.json", {"cleanupPeriodDays": 4000})
+        self.write_json(self.local, {"cleanupPeriodDays": 30})
+
+        # when
+        problems = self.retention(managed=managed)
+
+        # then
+        self.assertEqual(problems, [])
+
+    def test_공유_프로젝트_3650이_있고_사용자_파일이_JSON이_아니면_건너뛰고_보고하지_않는다(self):
+        """읽을 수 없는 사용자 파일은 건너뛰며 예외 없이 공유 프로젝트 값을 쓴다."""
+        # given
+        self.write_json(self.shared, {"cleanupPeriodDays": 3650})
+        self.write(self.user, "{not json")
+
+        # when
+        problems = self.retention()
+
+        # then
+        self.assertEqual(problems, [])
+
+    def test_정수가_아닌_값은_정한_것으로_세지_않고_다음_파일로_넘어간다(self):
+        """문자열, 불리언, 실수는 건너뛰어 낮은 우선순위의 정수가 쓰이고, 정수가 없으면 기본 30일이다."""
+        # given
+        self.write_json(self.local, {"cleanupPeriodDays": True})
+        self.write_json(self.shared, {"cleanupPeriodDays": "3650"})
+        self.write_json(self.user, {"cleanupPeriodDays": 3650.5})
+
+        # when
+        unset = self.retention()
+        self.write_json(self.user, {"cleanupPeriodDays": 3650})
+        fallthrough = self.retention()
+
+        # then
+        self.assertEqual(len(unset), 1)
+        self.assertIn("30 days", unset[0].text)
+        self.assertEqual(fallthrough, [])
+
+    def test_관리형_파일이_JSON이_아니면_건너뛰고_낮은_우선순위를_쓴다(self):
+        """깨진 관리형 파일은 건너뛰고 사용자 파일의 3650으로 판단한다."""
+        # given
+        managed = self.write(self.base / "bad" / "managed-settings.json", "[")
+        self.write_json(self.user, {"cleanupPeriodDays": 3650})
+
+        # when
+        problems = self.retention(managed=managed)
+
+        # then
+        self.assertEqual(problems, [])
+
+    def test_Codex_호스트는_보존_문제를_보고하지_않는다(self):
+        """어느 파일도 정하지 않은 상태에서 Codex 점검에는 보존 문제가 없다."""
+        # when
+        problems = self.retention(host="codex")
+
+        # then
+        self.assertEqual(problems, [])
+
+    def test_apply는_어느_호스트에서도_Claude_설정_파일을_바꾸지_않는다(self):
+        """claude와 codex 호스트의 apply 뒤에도 Claude Code 설정 파일의 바이트가 그대로다."""
+        # given
+        self.write_json(self.user, {"cleanupPeriodDays": 30})
+        self.write_json(self.shared, {"cleanupPeriodDays": 30})
+        self.write_json(self.local, {"cleanupPeriodDays": 30})
+        self.write(self.codex / "config.toml", CONFIG)
+        files = (self.user, self.shared, self.local, self.managed)
+        before = [path.read_bytes() for path in files]
+
+        # when
+        self.apply("claude", codex_bin=self.fake_codex())
+        self.apply("codex", codex_bin=self.fake_codex())
+
+        # then
+        self.assertEqual([path.read_bytes() for path in files], before)
+
+    def test_관리형_설정_경로는_플랫폼별_문서_위치다(self):
+        """macOS, Linux, Windows의 기본 관리형 파일 경로가 Claude Code 문서의 위치와 같다."""
+        # given
+        expected = {
+            "darwin": "/Library/Application Support/ClaudeCode/managed-settings.json",
+            "linux": "/etc/claude-code/managed-settings.json",
+            "win32": "ClaudeCode",
+        }
+        paths = {}
+
+        # when
+        for platform in expected:
+            with mock.patch.object(host_settings, "default_managed_settings", ORIGINAL_DEFAULT_MANAGED), mock.patch.object(
+                host_settings.sys, "platform", platform
+            ):
+                paths[platform] = str(host_settings.default_managed_settings())
+
+        # then
+        self.assertEqual(paths["darwin"], expected["darwin"])
+        self.assertEqual(paths["linux"], expected["linux"])
+        self.assertIn("Program Files", paths["win32"])
+        self.assertTrue(paths["win32"].endswith("managed-settings.json"))
 
 
 class ApplyTest(HostSettingsTestCase):
