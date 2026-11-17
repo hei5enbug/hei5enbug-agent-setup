@@ -287,8 +287,9 @@ Prompts are in Korean, as the real user writes them. The fixtures are fictional 
 real one has: a README, an `AGENTS.md` with a Korean mirror rule, tests, and Korean mirrors. T21 runs with
 `ORCA_TERMINAL_HANDLE` set and a fake `orca` first on `PATH`, built by `tasks/setup/fake_orca.py`; it keeps its state
 in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval_orca_cleanup.py`. T79 uses the same fake
-`orca`, which also starts terminals and accepts waits and sends; its checks read the call log for the model and effort
-each session start names, and its tests are in `tests/test_e2e_eval_session_model.py`.
+`orca`, which also starts terminals, shows and edits a started terminal's input line, and accepts waits and sends, and a fake
+`gh` that answers only from seeded repositories and refuses and logs anything else, so the trial reaches no real service;
+its checks read the call log for the model and effort each session start names, and its tests are in `tests/test_e2e_eval_session_model.py`.
 
 | Task | Fixture | Path it exercises | Request |
 |---|---|---|---|

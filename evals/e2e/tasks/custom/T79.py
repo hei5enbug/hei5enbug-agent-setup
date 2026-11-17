@@ -116,3 +116,11 @@ def repositories_untouched(ctx):
         if head.stdout.strip() != baseline[name] or dirty.stdout.strip():
             problems.append(name)
     return not problems, "untouched" if not problems else f"changed: {problems}", {"problems": problems}
+
+
+def external_calls_answered_from_seed(ctx):
+    path = work_of(ctx) / "gh-state" / "calls.jsonl"
+    calls = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()] if path.is_file() else []
+    refused = [" ".join(call["argv"]) for call in calls if not call["answered"]]
+    return not refused, "every call had a seeded answer" if not refused else f"no seeded answer for: {refused[:2]}", {
+        "calls": len(calls), "refused": refused}

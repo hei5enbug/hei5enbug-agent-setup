@@ -2,8 +2,8 @@
 
 `demo-kit` is a fictional plugin repository that declares its tracker and has no agent terminal in its workspace, so
 a session that files an issue for it must start one. The work folder also holds the original session's marker and
-transcript file, which the delegation rules read, a fake `orca` on `fake-bin/`, and `orca-state/` with the state file
-and the call log.
+transcript file, which the delegation rules read, a fake `orca` and a fake `gh` on `fake-bin/`, `orca-state/` with the
+state file and the call log, and `gh-state/` with the seeded repositories and its call log.
 """
 
 from __future__ import annotations
@@ -66,9 +66,11 @@ def main(repo_argument: str) -> None:
 
     binary = work / "fake-bin"
     binary.mkdir()
-    program = binary / "orca"
-    shutil.copy(Path(__file__).with_name("fake_orca.py"), program)
-    program.chmod(program.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    for name, source in (("orca", "fake_orca.py"), ("gh", "fake_gh.py")):
+        program = binary / name
+        shutil.copy(Path(__file__).with_name(source), program)
+        program.chmod(program.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    write(work / "gh-state" / "seed.json", json.dumps({"repos": {"example-org/demo-kit": {"issues": []}}}, indent=2))
 
 
 if __name__ == "__main__":

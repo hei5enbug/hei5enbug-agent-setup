@@ -132,6 +132,23 @@ def set_worktree(state: dict, record: dict, options: dict[str, str], flags: set[
     return {"worktree": record}
 
 
+def find_terminal(state: dict, handle: str | None) -> dict | None:
+    return next((item for item in state["terminals"] if item["handle"] == handle), None)
+
+
+def send_text(state: dict, options: dict[str, str], enter: bool) -> dict:
+    """Type into a started terminal's input line: text is appended, DEL deletes one character, Enter submits."""
+    item = find_terminal(state, options.get("--terminal"))
+    if item is None or "input" not in item:
+        return {"send": {"accepted": True}}
+    for char in options.get("--text", ""):
+        item["input"] = item["input"][:-1] if char == "\x7f" else item["input"] + char
+    if enter:
+        item["messages"].append(item["input"])
+        item["input"] = ""
+    return {"send": {"accepted": True}}
+
+
 def run(words: list[str], options: dict[str, str], flags: set[str], state: dict) -> dict:
     command = " ".join(words[:2])
     if command == "status":
@@ -156,12 +173,13 @@ def run(words: list[str], options: dict[str, str], flags: set[str], state: dict)
     if command == "terminal create":
         worktree = resolve(state, options.get("--worktree"))
         handle = f"term_started_{len(state['terminals']) + 1}"
-        state["terminals"].append({"handle": handle, "worktreeId": worktree["id"], "title": options.get("--title", "")})
+        state["terminals"].append({"handle": handle, "worktreeId": worktree["id"], "title": options.get("--title", ""),
+                                   "input": "", "messages": []})
         return {"terminal": {"handle": handle, "worktreeId": worktree["id"]}}
     if command == "terminal wait":
         return {"wait": {"satisfied": True}}
     if command == "terminal send":
-        return {"send": {"accepted": True}}
+        return send_text(state, options, "--enter" in flags)
     if command == "orchestration send":
         return {"sent": True}
     if command == "terminal close":
@@ -174,7 +192,8 @@ def run(words: list[str], options: dict[str, str], flags: set[str], state: dict)
                 item["title"] = options.get("--title", "")
         return {"rename": {"handle": options.get("--terminal"), "title": options.get("--title", "")}}
     if command == "terminal read":
-        return {"text": ""}
+        item = find_terminal(state, options.get("--terminal"))
+        return {"text": "" if item is None or "input" not in item else f"> {item['input']}"}
     if command == "reference find":
         key = words[2] if len(words) > 2 else ""
         return {"worktrees": [item for item in state["worktrees"]

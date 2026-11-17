@@ -10,7 +10,8 @@
     "ORCA_TERMINAL_HANDLE": "term_demo_a",
     "ORCA_USER_DATA_PATH": "{work}/orca-user-data",
     "FAKE_ORCA_STATE": "{work}/orca-state/state.json",
-    "PATH": "{work}/fake-bin:{PATH}"
+    "PATH": "{work}/fake-bin:{PATH}",
+    "FAKE_GH_STATE": "{work}/gh-state/seed.json"
   },
   "limits": {
     "wall_seconds": 900,
@@ -51,6 +52,13 @@
       "required": true,
       "weight": 1,
       "function": "repositories_untouched"
+    },
+    {
+      "id": "external-calls-answered-from-seed",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "external_calls_answered_from_seed"
     }
   ],
   "constraints": [],

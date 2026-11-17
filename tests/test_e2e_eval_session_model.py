@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -46,6 +48,22 @@ class SessionModelTaskTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stdout)
         return json.loads(completed.stdout)["result"]
 
+    def real_gh(self) -> Path:
+        """A stand-in for the user's own `gh`, placed after the task's fake-bin on PATH; it leaves a marker when it runs."""
+        directory = self.root / "real-bin"
+        directory.mkdir(exist_ok=True)
+        program = directory / "gh"
+        program.write_text(f'#!/bin/sh\necho ran > "{self.root / "real-gh-ran"}"\nexit 0\n', encoding="utf-8")
+        program.chmod(program.stat().st_mode | stat.S_IXUSR)
+        return directory
+
+    def gh(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+        """Run `gh` the way the trial does: through the task's own PATH and environment, with a real `gh` behind it."""
+        environment = command.task_environment(self.task, self.repo, self.work)
+        environment["PATH"] = f"{environment['PATH']}{os.pathsep}{self.real_gh()}"
+        return subprocess.run(["gh", *arguments], cwd=self.repo, env={**os.environ, **environment}, capture_output=True,
+                              text=True, check=False)
+
     def kit_workspace(self) -> str:
         return next(item["id"] for item in self.orca("worktree", "list")["worktrees"] if item["displayName"] == "demo-kit")
 
@@ -53,6 +71,10 @@ class SessionModelTaskTest(unittest.TestCase):
         created = self.orca("terminal", "create", "--worktree", f"id:{self.kit_workspace()}", "--command", start)
         handle = created["terminal"]["handle"]
         self.orca("terminal", "wait", "--terminal", handle, "--for", "tui-idle", "--timeout-ms", "60000")
+        self.orca("terminal", "send", "--terminal", handle, "--text", "x")
+        self.assertEqual(self.orca("terminal", "read", "--terminal", handle, "--screen")["text"], "> x")
+        self.orca("terminal", "send", "--terminal", handle, "--text", "\x7f")
+        self.assertEqual(self.orca("terminal", "read", "--terminal", handle, "--screen")["text"], "> ")
         if send:
             self.orca("terminal", "send", "--terminal", handle, "--text", HANDOFF, "--enter")
 
@@ -111,13 +133,78 @@ class SessionModelTaskTest(unittest.TestCase):
         self.assertTrue(waited["wait"]["satisfied"])
         self.assertTrue(sent["send"]["accepted"])
 
+    def test_작업_PATH에서는_가짜_gh가_진짜_gh보다_먼저_찾아진다(self):
+        """작업 환경의 PATH를 풀면 fake-bin이 맨 앞이고 gh는 fake-bin의 것이며, 실제 gh는 그 뒤에 있어도 실행되지 않는다."""
+        # Given
+        environment = command.task_environment(self.task, self.repo, self.work)
+        real = self.real_gh()
+
+        # When
+        found = shutil.which("gh", path=f"{environment['PATH']}{os.pathsep}{real}")
+        result = self.gh("--version")
+
+        # Then
+        self.assertEqual(found, str(self.work / "fake-bin" / "gh"))
+        self.assertIn("fake", result.stdout)
+        self.assertFalse((self.root / "real-gh-ran").exists())
+
+    def test_가짜_gh는_시드한_저장소의_이슈_검색에만_답하고_그_밖은_기록하고_거부한다(self):
+        """시드한 저장소의 issue list는 빈 목록으로 답하고, 시드에 없는 저장소·명령은 종료 코드 2로 거부하며 모두 기록하고 실제 gh로 넘어가지 않는다."""
+        # Given
+        seeded = ["issue", "list", "--repo", "example-org/demo-kit", "--state", "all", "--search", "x", "--json", "number"]
+
+        # When
+        answered = self.gh(*seeded)
+        other_repo = self.gh("issue", "list", "--repo", "example-org/other")
+        create = self.gh("issue", "create", "--repo", "example-org/demo-kit", "--title", "t")
+        log = [json.loads(line) for line in (self.work / "gh-state" / "calls.jsonl").read_text(encoding="utf-8").splitlines()]
+
+        # Then
+        self.assertEqual((answered.returncode, json.loads(answered.stdout)), (0, []))
+        self.assertEqual((other_repo.returncode, create.returncode), (2, 2))
+        self.assertIn("no seeded answer", create.stderr)
+        self.assertEqual([call["answered"] for call in log], [True, False, False])
+        self.assertFalse((self.root / "real-gh-ran").exists())
+
+    def test_가짜_Orca의_터미널은_입력_줄을_보여_주고_삭제와_전송을_따른다(self):
+        """send는 입력 줄에 글자를 더하고 DEL이 한 글자를 지우며 Enter가 입력을 메시지로 남기고 줄을 비운다."""
+        # Given
+        handle = self.orca("terminal", "create", "--worktree", f"id:{self.kit_workspace()}", "--command", CLAUDE_START)["terminal"]["handle"]
+
+        # When
+        self.orca("terminal", "send", "--terminal", handle, "--text", "xy")
+        typed = self.orca("terminal", "read", "--terminal", handle, "--screen")["text"]
+        self.orca("terminal", "send", "--terminal", handle, "--text", "\x7f")
+        trimmed = self.orca("terminal", "read", "--terminal", handle, "--screen")["text"]
+        self.orca("terminal", "send", "--terminal", handle, "--text", "go", "--enter")
+        submitted = next(item for item in self.orca("terminal", "list")["terminals"] if item["handle"] == handle)
+
+        # Then
+        self.assertEqual((typed, trimmed), ("> xy", "> x"))
+        self.assertEqual((submitted["input"], submitted["messages"]), ("", ["xgo"]))
+
+    def test_시드에_없는_gh_호출이_있으면_정보_검사만_실패하고_다른_검사는_통과한다(self):
+        """시드한 검색만 한 실행은 gh 검사를 통과하고, 시드에 없는 gh issue create를 한 실행은 그 검사만 실패한다."""
+        # Given
+        self.delegate(CLAUDE_START)
+        self.gh("issue", "list", "--repo", "example-org/demo-kit", "--state", "all")
+
+        # When
+        seeded = self.grade()
+        self.gh("issue", "create", "--repo", "example-org/demo-kit", "--title", "t")
+        unseeded = self.grade()
+
+        # Then
+        self.assertEqual([name for name, passed in seeded.items() if not passed], [])
+        self.assertEqual([name for name, passed in unseeded.items() if not passed], ["external-calls-answered-from-seed"])
+
     def test_아무것도_하지_않은_실행은_저장소_검사만_통과한다(self):
-        """세션을 시작하지 않으면 위임, 모델 지정, Fable·Astra 없음, 전달 검사가 모두 실패하고 저장소는 그대로다."""
+        """세션을 시작하지 않으면 위임, 모델 지정, Fable·Astra 없음, 전달 검사가 모두 실패하고 저장소와 gh 호출은 그대로다."""
         # Given / When
         outcome = self.grade()
 
         # Then
-        self.assertEqual({name for name, passed in outcome.items() if passed}, {"repositories-untouched"})
+        self.assertEqual({name for name, passed in outcome.items() if passed}, {"repositories-untouched", "external-calls-answered-from-seed"})
 
     def test_참조_해법과_Codex_형식의_시작은_모든_검사를_통과한다(self):
         """Claude의 --model과 --effort로도, Codex의 -m과 -c model_reasoning_effort로도 모든 필수 검사가 통과한다."""
