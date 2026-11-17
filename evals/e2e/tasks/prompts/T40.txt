@@ -1,0 +1,1 @@
+orders-svc에 `python3 -m orders import FILE.csv` 명령을 추가해줘. CSV 헤더는 `order_id,customer_id,placed_at,sku,unit_price_cents,quantity`이고, 한 행이 줄 하나짜리 주문 하나야. 가져온 주문의 상태는 `placed`야. 실패한 뒤에 같은 파일을 다시 돌리거나 같은 파일을 동시에 두 번 돌릴 수 있으니, 몇 번을 돌려도 결과가 같아야 해. 성공하면 종료 코드 0이야. README와 테스트도 고쳐줘.

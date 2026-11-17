@@ -1,0 +1,62 @@
+{
+  "id": "T40",
+  "title": "Import command that can be retried and run twice at once",
+  "category": "feature",
+  "path": "rule g: repeated and concurrent runs",
+  "fixture": "orders-svc",
+  "prompt_file": "prompts/T40.txt",
+  "limits": {
+    "wall_seconds": 1800,
+    "max_budget_usd": 12
+  },
+  "hidden_tests": {
+    "source": "hidden/orders-svc",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-import",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "hidden",
+      "files": [
+        "test_t40_retry.py"
+      ]
+    },
+    {
+      "id": "hidden-concurrent",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_t40_concurrent.py"
+      ]
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "agent-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

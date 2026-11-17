@@ -1,0 +1,70 @@
+{
+  "id": "T38",
+  "title": "Build on a function whose docstring promises sorted output",
+  "category": "feature",
+  "path": "rule e: a fact read in the code, not in a comment",
+  "fixture": "orders-svc",
+  "prompt_file": "prompts/T38.txt",
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 10
+  },
+  "hidden_tests": {
+    "source": "hidden/orders-svc",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_t38_oldest_open.py"
+      ]
+    },
+    {
+      "id": "report-names-function",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 1,
+      "patterns": [
+        "open_orders"
+      ]
+    },
+    {
+      "id": "report-notes-mismatch",
+      "kind": "answer_contains",
+      "required": false,
+      "weight": 1,
+      "patterns": [
+        "docstring|독스트링|sorted|정렬|오래된"
+      ]
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "agent-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from . import codex_host, collect, handoff, summarize, testing_rules, transcript
+from . import codex_host, collect, handoff, implementation_rules, summarize, testing_rules, transcript
 from .caps import MODEL_CAP as ALLOWED_MODELS
 from .caps import normalize
 from .command import ConfigError
@@ -28,7 +28,7 @@ UNKNOWN_EFFORT = "not measured"
 VERDICTS = frozenset({PASS, FAIL, REPEAT, NOT_MEASURED, INVESTIGATE, BASELINE, ACCEPT, REJECT, CONTINUE_TO_FIVE, SECOND_PAIR})
 VERDICT_SUBJECTS = frozenset({"quality", "wall_seconds", "cost_usd", "claim"})
 TOP_FIELDS = ("issue", "cases", "variants", "runs", "verdicts")
-TOP_OPTIONAL = ("handoff", "testing")
+TOP_OPTIONAL = ("handoff", "testing", "implementation")
 RUN_REQUIRED = ("case", "variant", "host", "models", "checks", "wall_seconds", "cost_usd")
 RUN_OPTIONAL = ("rep", "reviews", "handoff")
 VERDICT_REQUIRED = ("case", "verdict", "step")
@@ -146,7 +146,8 @@ def validate_record(record: Any) -> list[str]:
             extra = (variants or {},) if key == "runs" else ()
             problems += check(f"{key}[{index}]", item, cases or [], *extra)
     if not problems:
-        problems += handoff.block_problems(record) + testing_rules.block_problems(record)
+        problems += (handoff.block_problems(record) + testing_rules.block_problems(record)
+                     + implementation_rules.block_problems(record))
     if any(LOCAL_PATH.search(text) for text in strings(record)):
         problems.append("the record contains an absolute local path")
     return problems
@@ -160,7 +161,8 @@ def check_record(record: Any) -> None:
 
 def build_record(issue: int, cases: Sequence[str], variants: Mapping[str, str], runs: Sequence[Mapping[str, Any]],
                  verdicts: Sequence[Mapping[str, Any]], handoff_block: Mapping[str, Any] | None = None,
-                 testing_block: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                 testing_block: Mapping[str, Any] | None = None,
+                 implementation_block: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The record dict for one comparison; `variants` maps each variant name to its revision."""
     record = {
         "issue": issue,
@@ -174,6 +176,8 @@ def build_record(issue: int, cases: Sequence[str], variants: Mapping[str, str], 
         record["handoff"] = dict(handoff_block)
     if testing_block:
         record["testing"] = dict(testing_block)
+    if implementation_block:
+        record["implementation"] = dict(implementation_block)
     check_record(record)
     return record
 
@@ -453,7 +457,7 @@ def verdict_entries(compared: Mapping[str, Any], claims: Sequence[Mapping[str, A
 
 def record_campaign(
     run_root: Path, campaign: str, issue: int, before: str, after: str, claimed: Sequence[str] = (),
-    tasks: Sequence[str] | None = None, tasks_root: Path | None = None,
+    tasks: Sequence[str] | None = None, tasks_root: Path | None = None, reworded: str | None = None,
 ) -> dict[str, Any]:
     """Judge a before and an after variant on both hosts and build its record. Returns the record, the `compare` result with
     every claimed case and the overall verdict decided together with its claim, and the claim verdicts. A missing run or
@@ -461,16 +465,20 @@ def record_campaign(
     unknown = [measure for measure in claimed if measure not in MEASURES]
     if unknown or before == after:
         raise ConfigError("--claim takes " + ", ".join(MEASURES) + "; --before and --after name two different variants")
-    runs = campaign_runs(run_root, campaign, (before, after), tasks, tasks_root)
+    if reworded in (before, after):
+        raise ConfigError("--reworded names a third variant")
+    names = (before, after, *([reworded] if reworded else []))
+    runs = campaign_runs(run_root, campaign, names, tasks, tasks_root)
     cases = build_cases(runs, before, after, expected_tasks(run_root, campaign, tasks, runs), planned_runs(run_root, campaign))
     if not cases or not any(run["entry"] for run in runs):
         raise ConfigError(f"campaign {campaign} holds no finished graded run of {before} or {after}")
     claims = [claim_verdict(case, claimed) for case in cases] if claimed else []
     compared = with_claims(compare(cases), claims)
-    revisions = {name: variant_revision(run_root, campaign, name, runs) for name in (before, after)}
+    revisions = {name: variant_revision(run_root, campaign, name, runs) for name in names}
     entries = [run["entry"] for run in runs if run["entry"]]
     record = build_record(issue, [case["id"] for case in cases], revisions, entries, verdict_entries(compared, claims),
-                          handoff.block(entries, before, after), testing_rules.block(entries, before, after))
+                          handoff.block(entries, before, after), testing_rules.block(entries, before, after),
+                          implementation_rules.block(entries, before, after, reworded))
     return {"record": record, "compared": compared, "claims": claims}
 
 

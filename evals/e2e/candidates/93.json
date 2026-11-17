@@ -1,0 +1,141 @@
+{
+  "files": {
+    "rules": {
+      "en": "instructions/implementation-rules.md",
+      "ko": "docs/ko/instructions/implementation-rules.ko.md"
+    },
+    "execution": {
+      "en": "instructions/implementation-execution.md",
+      "ko": "docs/ko/instructions/implementation-execution.ko.md"
+    },
+    "delegation": {
+      "en": "instructions/implementation-delegation.md",
+      "ko": "docs/ko/instructions/implementation-delegation.ko.md"
+    }
+  },
+  "document": {
+    "title": {
+      "en": "# Implementation rules",
+      "ko": "# 구현 규칙"
+    },
+    "source_note": {
+      "en": "",
+      "ko": "> 영어 원본: [implementation-rules.md](../../../instructions/implementation-rules.md)\n> 이 문서는 사람을 위한 비권위 한국어 번역본이다. 에이전트 실행 시 읽거나 사용하지 않는다.\n"
+    },
+    "intro": {
+      "en": "Apply these rules to every implementation, in the main session and in an assigned worker, from the first edit.\n",
+      "ko": "이 규칙은 메인 세션과 할당받은 worker를 가리지 않고 모든 구현에 첫 수정부터 적용한다.\n"
+    },
+    "sections": {
+      "every": {
+        "en": "## Every implementation",
+        "ko": "## 모든 구현"
+      },
+      "condition": {
+        "en": "## Under a stated condition",
+        "ko": "## 명시한 조건에서"
+      }
+    }
+  },
+  "rules": {
+    "a": {
+      "task": "T34",
+      "section": "every",
+      "text": {
+        "en": "- Meet the request with the fewest new parts: add no layer, stored state, option, flag, or dependency that no stated\n  requirement needs.\n",
+        "ko": "- 요청을 가장 적은 새 부품으로 충족한다. 명시된 요구사항이 필요로 하지 않는 계층, 저장 상태, 옵션, 플래그, 의존성을 추가하지\n  않는다.\n"
+      }
+    },
+    "b": {
+      "task": "T35",
+      "section": "every",
+      "text": {
+        "en": "- Before adding a function, constant, rule, or stored value, search for an existing one that does or holds the same\n  thing, and use or extend it. Keep one source for each rule, state, and value.\n",
+        "ko": "- 함수, 상수, 규칙, 저장 값을 추가하기 전에 같은 일을 하거나 같은 값을 담은 기존 것을 찾아 쓰거나 확장한다. 규칙, 상태, 값마다\n  출처를 하나만 둔다.\n"
+      }
+    },
+    "c": {
+      "task": "T36",
+      "section": "every",
+      "text": {
+        "en": "- Add no exception handler, default value, or fallback that lets a failed operation look successful. Handle a failure\n  only where the request, the assignment, or the surrounding code states what must happen on it; otherwise let it\n  surface.\n",
+        "ko": "- 실패한 동작을 성공한 것처럼 보이게 하는 예외 처리, 기본값, 대체 경로를 추가하지 않는다. 실패는 요청, 할당, 주변 코드가 그때 해야\n  할 일을 밝힌 곳에서만 처리하고, 그렇지 않으면 그대로 드러나게 둔다.\n"
+      }
+    },
+    "d": {
+      "task": "T37",
+      "section": "every",
+      "text": {
+        "en": "- Before changing what a function accepts or returns, a schema, a stored format, or a setting, find its callers and\n  consumers, and keep each one working or change it in the same task. Report one that lies outside the allowed paths.\n",
+        "ko": "- 함수가 받거나 돌려주는 것, 스키마, 저장 형식, 설정을 바꾸기 전에 그 호출자와 소비자를 찾아 각각 계속 동작하게 하거나 같은 작업에서\n  함께 바꾼다. 허용 경로 밖에 있는 것은 보고한다.\n"
+      }
+    },
+    "e": {
+      "task": "T38",
+      "section": "every",
+      "text": {
+        "en": "- Rely on a fact only after reading it in the code, the data, a contract, or official documentation, or after running\n  it. When a comment, a name, or a document disagrees with the code, take the code as the current behavior, report the\n  difference, and change neither to match the other unless the task asks for it.\n",
+        "ko": "- 코드, 데이터, 계약, 공식 문서에서 읽었거나 실행해 본 사실에만 기댄다. 주석, 이름, 문서가 코드와 다르면 코드를 현재 동작으로 보고\n  차이를 보고하며, 작업이 요구하지 않는 한 어느 쪽도 다른 쪽에 맞춰 바꾸지 않는다.\n"
+      }
+    },
+    "f": {
+      "task": "T39",
+      "section": "condition",
+      "text": {
+        "en": "- When the task fixes a reported defect, find the rule the code breaks and every reachable path that breaks it, and fix\n  it where that rule is broken, which can be the caller. When a check can reproduce the defect, add the failing check\n  before the fix.\n",
+        "ko": "- 작업이 보고된 결함을 고치는 것이면, 코드가 어기는 규칙과 그 규칙을 어기는 도달 가능한 모든 경로를 찾아 규칙이 깨지는 곳에서 고친다.\n  그곳이 호출자일 수도 있다. 검사로 결함을 재현할 수 있으면 고치기 전에 실패하는 검사를 먼저 더한다.\n"
+      }
+    },
+    "g": {
+      "task": "T40",
+      "section": "condition",
+      "text": {
+        "en": "- When an operation can be retried, run twice, or run at the same time as itself, make a repeated run leave the same\n  result, guard its shared state against concurrent runs, and test the repeated run, and the concurrent run where a\n  deterministic test can force it.\n",
+        "ko": "- 동작이 재시도되거나 두 번 실행되거나 자기 자신과 동시에 실행될 수 있으면, 반복 실행이 같은 결과를 남기게 하고 공유 상태를 동시\n  실행으로부터 지키며, 반복 실행을 테스트하고 결정적인 테스트로 강제할 수 있으면 동시 실행도 테스트한다.\n"
+      }
+    },
+    "h": {
+      "task": "T41",
+      "section": "condition",
+      "text": {
+        "en": "- When a behavior depends on a real engine, service, or browser, check it there or on an environment the repository\n  names as equivalent; otherwise report it as unverified with the check that would settle it.\n",
+        "ko": "- 동작이 실제 엔진, 서비스, 브라우저에 달려 있으면 거기서, 또는 저장소가 동등하다고 밝힌 환경에서 확인한다. 아니면 확인하지 못했다고\n  보고하고 그것을 가릴 검사를 함께 적는다.\n"
+      }
+    }
+  },
+  "entries": {
+    "execution": {
+      "insert_after": {
+        "en": "Keep these fields with the existing assignment.\n",
+        "ko": "적용해 필수 결과, 선택 후속 작업, 종료 조건과 검사 근거 재사용을 정한다. 이 항목은 기존 할당에 기록한다.\n"
+      },
+      "text": {
+        "en": "\nBefore the first implementation edit, read [implementation rules](implementation-rules.md).\n",
+        "ko": "\n첫 구현 수정 전에 [구현 규칙](implementation-rules.ko.md)을 읽는다.\n"
+      }
+    },
+    "delegation": {
+      "insert_after": {
+        "en": "  `Skills loaded:` line of the result.\n",
+        "ko": "  `Skills loaded:` 줄에 각각 적는다.\n"
+      },
+      "text": {
+        "en": "- Before the first edit, read [implementation rules](implementation-rules.md).\n",
+        "ko": "- 첫 수정 전에 [구현 규칙](implementation-rules.ko.md)을 읽는다.\n"
+      }
+    }
+  },
+  "scan": {
+    "candidate": "evals/e2e/candidates/93/change_scan.py",
+    "installed": "scripts/change_scan.py",
+    "file": "execution",
+    "insert_after": {
+      "en": "Do not commit or push while one is not done unless the user agrees after seeing that list.\n",
+      "ko": "동의하지 않는 한 미완료 검사가 있는 상태에서 커밋하거나 푸시하지 않는다.\n"
+    },
+    "text": {
+      "en": "\nWhen the result changed what a function accepts or returns, a schema, or a stored format, or added a failure handler, run\n`python3 <Source directory>/scripts/change_scan.py <base revision>`, which lists, without judging, each changed contract with\nits callers in files the change did not touch, each literal the change added that another file also holds, and each handler the\nchange added that neither re-raises nor reports. Resolve each listed item or report it as outside the allowed paths.\n",
+      "ko": "\n결과가 함수가 받거나 돌려주는 것, 스키마, 저장 형식을 바꿨거나 실패 처리기를 더했으면\n`python3 <Source directory>/scripts/change_scan.py <기준 리비전>`을 실행한다. 이 스크립트는 판단 없이, 바뀐 각 계약과 변경이\n건드리지 않은 파일의 호출자, 변경이 더했고 다른 파일에도 있는 각 리터럴, 변경이 더했고 다시 던지지도 보고하지도 않는 각\n처리기를 나열한다. 나열된 각 항목을 해결하거나 허용 경로 밖이라고 보고한다.\n"
+    }
+  }
+}

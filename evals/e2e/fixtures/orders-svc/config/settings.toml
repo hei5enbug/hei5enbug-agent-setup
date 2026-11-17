@@ -1,0 +1,5 @@
+[orders]
+max_lines = 20
+
+[discounts]
+max_percent = 30

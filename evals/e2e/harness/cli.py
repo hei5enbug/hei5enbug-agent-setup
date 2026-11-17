@@ -63,6 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--issue", type=int, required=True, help="issue number; the record is records/<issue>.json")
     record.add_argument("--before", required=True, help="variant name of the before side")
     record.add_argument("--after", required=True, help="variant name of the after side")
+    record.add_argument("--reworded", help="variant name of the reworded rules of issue 93, run after a rule's task still failed")
     record.add_argument("--claim", help="comma-separated measures the change claims to lower: wall_seconds, cost_usd")
     record.add_argument("--tasks", help="comma-separated task ids; default every task with a finished run")
     record.add_argument("--records-dir", type=Path, default=records.RECORDS_DIR)
@@ -115,7 +116,7 @@ def do_record(args: argparse.Namespace, cfg: HarnessConfig) -> int:
         raise command.ConfigError("--issue takes a positive issue number")
     result = records.record_campaign(
         cfg.run_root, args.campaign, args.issue, args.before, args.after, split(args.claim), split(args.tasks) or None,
-        cfg.tasks_root,
+        cfg.tasks_root, args.reworded,
     )
     path = records.write_record(result["record"], absolute(args.records_dir))
     sys.stdout.write("".join(f"{line}\n" for line in records.report_lines(result)))

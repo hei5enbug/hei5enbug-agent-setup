@@ -1,0 +1,59 @@
+{
+  "id": "T39",
+  "title": "Defect reported through one command that a second command reaches too",
+  "category": "bugfix",
+  "path": "rule f: root cause and every reachable path",
+  "fixture": "orders-svc",
+  "prompt_file": "prompts/T39.txt",
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 10
+  },
+  "hidden_tests": {
+    "source": "hidden/orders-svc",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_t39_final_orders.py"
+      ]
+    },
+    {
+      "id": "test-fails-on-base",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "fails_on_base"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "agent-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

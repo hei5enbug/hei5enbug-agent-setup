@@ -1,0 +1,1 @@
+`orders.lookup.find_customer`가 지금은 `(name, tier)` 튜플을 돌려주는데, 대신 `customer_id`, `name`, `tier` 필드를 가진 `Customer` 데이터클래스(`orders/lookup.py`에 정의)를 돌려주게 바꿔줘. 알 수 없는 고객은 계속 `None`이야. 다 바꾼 뒤 전체 테스트가 통과하는지 확인하고 알려줘.

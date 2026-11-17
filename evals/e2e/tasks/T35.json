@@ -1,0 +1,52 @@
+{
+  "id": "T35",
+  "title": "A second report that needs the tax rate the first report uses",
+  "category": "feature",
+  "path": "rule b: one source for a value",
+  "fixture": "orders-svc",
+  "prompt_file": "prompts/T35.txt",
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 10
+  },
+  "hidden_tests": {
+    "source": "hidden/orders-svc",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_t35_second_report.py"
+      ]
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "agent-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

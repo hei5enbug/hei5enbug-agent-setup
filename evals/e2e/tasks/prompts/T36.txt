@@ -1,0 +1,1 @@
+orders-svc에 `python3 -m orders export` 명령을 추가해줘. 모든 주문을 열 이름과 값 그대로 담은 JSON 목록으로 만들어, `orders.storage`의 `default_client()`가 돌려주는 저장소 클라이언트에 키 `orders.json`으로 저장해. README와 테스트도 고쳐줘.

@@ -176,7 +176,7 @@ Run every command from the repository root. The default run root is
 | Print tables | `python3 evals/e2e/harness/cli.py summarize --campaign <name> [--out file.md]` |
 | Compare two variants | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | Export a revision only | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
-| Judge a change and write its record | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
+| Judge a change and write its record | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--reworded <variant>] [--claim wall_seconds,cost_usd] [--tasks T08]` |
 
 `--parallel` sets the number of runs at once (default 3). With several variants the order alternates per task and
 repetition (ABAB, then BABA), so time-of-day effects spread evenly.
@@ -310,6 +310,14 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T19 | ops-notes | Shared document | Wiki draft of about 1,600 characters for a 1,500-character budget |
 | T20 | notes-cli | Final report | Small change with tests, then a report |
 | T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
+| T34 | orders-svc | Implementation rule a: the fewest new parts | A per-customer discount limit that fits in the service, one setting, and its test; no new file, dependency, or setting key |
+| T35 | orders-svc | Implementation rule b: one source for a value | A second report that needs the tax rate the first report uses |
+| T36 | orders-svc | Implementation rule c: no hidden failure | An export step that calls a storage client that can fail |
+| T37 | orders-svc | Implementation rule d: callers and consumers | A lookup function that returns an object instead of a tuple, with a second caller in another module and a snapshot file the previous version stored |
+| T38 | orders-svc | Implementation rule e: facts read in the code | A command that builds on a function whose docstring promises sorted output that the code does not give |
+| T39 | orders-svc | Implementation rule f: root cause | A defect reported through one command that a second command reaches through the same rule |
+| T40 | orders-svc | Implementation rule g: repeated and concurrent runs | An import command that is retried and run twice at once behind a barrier |
+| T41 | orders-svc | Implementation rule h: real-engine verification | A date format that the README says depends on the database engine, with a local engine check |
 | T42 | notes-cli | Worker delegation: prompt-only constraints and failure conditions | A memo import command with a silent exit code 3 on a missing file and a store format change that keeps old files readable |
 | T43 | shop-lite | Existing assertions: a short implementation breaks one about another behavior | Fractional discount percent, where an existing assertion states that a whole percent rounds down |
 | T44 | shop-lite | Existing assertions: the request states the behavior change | Discount rounding changes from down to half up, and one existing assertion states rounding down |
@@ -424,6 +432,45 @@ The candidate text of both items is in `candidates/95.json` in English and Korea
 named items to `instructions/testing.md`, `instructions/implementation-execution.md`, and their Korean mirrors, and moves the
 script to `scripts/` when `restraint` is applied; `show` lists what each file holds. The repository holds exactly the items the
 record keeps: neither item, and the script only in the candidate folder, until a record exists.
+
+### Implementation rules
+
+The implementation rules of issue #93, one conditional rules file that the main session and an assigned implementer read before the
+first edit, are added only for a rule whose seeded task fails at baseline. Eight rules each have one task on the `orders-svc`
+fixture, whose hidden tests share the folder `tasks/hidden/orders-svc/`: rule a T34, b T35, c T36, d T37, e T38, f T39, g T40, and
+h T41. A run passes a task when every check in `PASS_CHECKS` of `harness/implementation_rules.py` passed: `hidden-tests`,
+`manifest-unchanged`, `no-extra-files`, and `no-extra-setting-keys` for T34; `hidden-tests` for T35, T36, and T37; `hidden-tests` and
+`report-names-function` for T38; `hidden-tests`, `test-fails-on-base`, and `agent-tests` for T39; `hidden-import` and
+`hidden-concurrent` for T40; `hidden-tests` and `engine-check-after-edit` for T41. The T40 test holds two threads at a barrier right
+after each `SELECT`, so a run that checks before it inserts is forced to check at the same moment. `engine-check-after-edit` reads
+the transcript order of the edits of `orders/dates.py` and of `scripts/check_engine.py`. `test-fails-on-base` runs the result's tests
+on the base source of the changed code.
+
+`record` adds an `implementation` block with the before, the after, and the reworded variant, the qualifying rules, and a status per
+rule. `harness/implementation_rules.py` holds the rule and `validate_record` recomputes it from the runs.
+
+- A rule qualifies on a host when both of the first two before runs of its task fail there. A rule that qualifies on no host reads
+  `no demonstrated benefit at baseline`, and a task with fewer than two before runs on a host makes every rule `not measured`.
+- The after variant holds exactly the qualifying rules and runs each qualifying rule's task twice per host and every other task once
+  per host. Without those runs a qualifying rule reads `qualified; after runs not measured`.
+- A qualifying rule is kept when its task passes both after runs on every host where it qualified and no task that passed both before
+  runs on a host fails an after run there. A regression leaves every qualifying rule out, because the after variant holds them all.
+- A qualifying rule whose own task still fails reads `qualified; task still fails: reword once`. The reworded variant, named with
+  `record --reworded`, runs the same way for those rules alone; the rule is kept when its task passes both reworded runs and no
+  task regresses, and is `not kept` otherwise.
+
+The candidate text of the eight rules, the two entry lines that send an implementer to the rules file, and the change-scan line are in
+`candidates/93.json` in English and Korean. `python3 evals/e2e/harness/implementation_candidates.py apply a,c` writes
+`instructions/implementation-rules.md` and its Korean mirror with exactly those rules and adds the entry lines to
+`instructions/implementation-execution.md` and `instructions/implementation-delegation.md` and their mirrors; `apply ''` removes all
+of it, and `show` lists what the repository holds. The repository holds exactly the rules the record keeps: with none kept, neither
+file and neither entry line exists, and until a record exists that is the case. Reword a rule by editing its text in `93.json` and
+applying it to the reworded variant.
+
+The script `candidates/93/change_scan.py` is a deterministic candidate for rules b, c, and d. It lists, without judging, the changed
+contracts with their callers in files the change did not touch, the literals the change added that the working tree holds in another
+place, and the failure handlers the change added that never re-raise. `apply scan` adds its line to the execution instructions and
+moves the script to `scripts/`. It is measured beside the rule text, in its own variant, and no decision rule covers it yet.
 
 ### Records
 

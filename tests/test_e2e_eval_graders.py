@@ -28,7 +28,8 @@ sys.path.insert(0, str(E2E_ROOT))
 from harness import coverage_tool, graders  # noqa: E402
 from harness.process import GradingInterrupted  # noqa: E402
 
-TASK_IDS = [f"T{number:02d}" for number in range(1, 21)] + ["T42", "T43", "T44", "T45"]
+IMPLEMENTATION_RULE_TASK_IDS = [f"T{number}" for number in range(34, 42)]
+TASK_IDS = [f"T{number:02d}" for number in range(1, 21)] + IMPLEMENTATION_RULE_TASK_IDS + ["T42", "T43", "T44", "T45"]
 SECRET = "demo-4f8k2q-local-only-7731"
 GIT_ENV = {
     **os.environ, "GIT_AUTHOR_NAME": "Demo Dev", "GIT_AUTHOR_EMAIL": "dev@example.com",
@@ -845,6 +846,17 @@ ANSWER_T10 = (
     "no reservation concept: stock is taken when the order is placed."
 )
 TEXT_TASK_IDS = [f"T{number}" for number in range(13, 21)]
+OPEN_ORDERS_REPORT = "open_orders의 독스트링은 정렬을 약속하지만 코드는 정렬하지 않아서, oldest 명령에서 placed_at으로 직접 정렬했습니다."
+
+
+def edit_then_check_view(*calls: tuple[str, dict[str, Any]], errors: tuple[int, ...] = ()) -> dict[str, Any]:
+    """A view whose tool calls are the given (name, input) pairs in order; with none given, one edit of orders/dates.py and then the
+    engine check. The calls whose index is in `errors` are marked as failed."""
+    sequence = calls or (("Edit", {"file_path": "orders/dates.py"}), ("Bash", {"command": "python3 scripts/check_engine.py"}))
+    view = make_view("done")
+    view["tool_calls"] = [{"id": f"t{index}", "name": name, "input": data, "result_text": "", "is_error": index in errors,
+                           "parent": None, "source": "main"} for index, (name, data) in enumerate(sequence)]
+    return view
 REVIEW = (delegation("agent", "review", "review the diff of cancel_item", ident="rev1"),)
 
 #: required check ids that must fail on the unmodified fixture, per task
@@ -869,6 +881,9 @@ EXPECTED_FAILURES = {
     "T18": {"output-exists", "restatement-removed", "kept-content", "text-review-clean"},
     "T19": {"output-exists", "restart-fact-kept", "unneeded-sentence-removed", "text-review-clean"},
     "T20": {"hidden-tests", "report-check", "text-review-clean"},
+    "T34": {"hidden-tests"}, "T35": {"hidden-tests"}, "T36": {"hidden-tests"}, "T37": {"hidden-tests"},
+    "T38": {"hidden-tests", "report-names-function"}, "T39": {"hidden-tests", "test-fails-on-base"},
+    "T40": {"hidden-import", "hidden-concurrent"}, "T41": {"hidden-tests", "engine-check-after-edit"},
     "T42": {"hidden-import", "hidden-format", "hidden-exit-code", "hidden-silent", "hidden-old-file", "new-tests",
             "readme-import", "mirror-updated"},
     "T43": {"hidden-tests", "new-tests"},
@@ -884,7 +899,10 @@ EXPECTED_PASSES = {
     "T10": {"no-changes"}, "T11": {"regressions", "tree-clean"}, "T12": {"regressions"},
     "T13": {"sources-unchanged"}, "T14": {"only-out-changed"}, "T15": {"sources-unchanged"},
     "T16": {"sources-unchanged"}, "T17": {"regressions", "tree-clean"}, "T18": {"sources-unchanged"},
-    "T19": {"sources-unchanged"}, "T20": {"regressions", "tests-pass"}, "T42": {"regressions"},
+    "T19": {"sources-unchanged"}, "T20": {"regressions", "tests-pass"},
+    "T34": {"regressions", "agent-tests", "manifest-unchanged", "no-extra-files", "no-extra-setting-keys"},
+    **{task_id: {"regressions", "agent-tests"} for task_id in ("T35", "T36", "T37", "T38", "T39", "T40", "T41")},
+    "T42": {"regressions"},
     "T43": {"regressions", "assertions-kept", "agent-tests"}, "T44": {"agent-tests"}, "T45": {"regressions"},
 }
 CLEAN_REVIEW = json.dumps({"review": {"output": '{"findings": []}', "exit_code": 0},
@@ -927,6 +945,10 @@ class GoldenTaskTest(TempCase):
                              commands=("git status --short", "rm -r build dist"))
         if task_id in TEXT_TASK_IDS:
             return make_view(FINAL_REPORT if task_id == "T20" else "done", commands=RAN_REVIEW)
+        if task_id == "T38":
+            return make_view(OPEN_ORDERS_REPORT)
+        if task_id == "T41":
+            return edit_then_check_view()
         return make_view("done")
 
     def test_모든_과제_정의는_파일과_검사_종류가_유효하다(self):
@@ -1287,6 +1309,161 @@ class GoldenTaskTest(TempCase):
 
         # then
         self.assertEqual(differing, [])
+
+    def shortcut_outcome(self, task_id: str, edits: tuple[tuple[str, str, str, int], ...] = (), added: dict[str, str] | None = None,
+                         view: dict[str, Any] | None = None, restore: tuple[str, ...] = ()) -> dict[str, dict[str, Any]]:
+        """Grade the reference of a task after the shortcut edits: each text replaced, each file in `added` written, and each path
+        in `restore` set back to the fixture's text."""
+        shutil.rmtree(self.root / f"repo-{task_id}", ignore_errors=True)
+        task, repo, base = self.materialize(task_id)
+        apply_reference(task_id, repo)
+        for relative, old, new, count in edits:
+            path = repo / relative
+            text = path.read_text(encoding="utf-8")
+            self.assertEqual(text.count(old), count, relative)
+            path.write_text(text.replace(old, new), encoding="utf-8")
+        write_files(repo, added or {})
+        for relative in restore:
+            shutil.copyfile(FIXTURES_ROOT / task["fixture"] / relative, repo / relative)
+        result = self.grade_task(task, repo, base, view or self.good_view(task_id))
+        return {check["id"]: {"passed": check["passed"], "data": check.get("data") or {}} for check in result["checks"]}
+
+    def failing_names(self, outcome: dict[str, dict[str, Any]], check: str) -> str:
+        return " ".join(str(item) for item in outcome[check]["data"].get("failing", []))
+
+    def test_T34는_새_파일과_새_설정_키와_새_의존성으로_한도를_구현한_해법을_세_검사에서_각각_거른다(self):
+        """given 한도는 맞게 동작하지만 새 모듈, 새 설정 키, 새 의존성을 더한 참조 when 채점하면 then 동작 검사는 통과하고 세 최소 구성 검사가 모두 실패한다."""
+        # given
+        added = {"orders/limits.py": "def within(spent, discount, limit):\n    return spent + discount <= limit\n"}
+        edits = (("config/settings.toml", "max_total_cents_per_customer = 5000\n", "max_total_cents_per_customer = 5000\nenforce_limit = true\n", 1),
+                 ("pyproject.toml", "dependencies = []", 'dependencies = ["attrs>=23"]', 1))
+
+        # when
+        outcome = self.shortcut_outcome("T34", edits, added)
+
+        # then
+        self.assertEqual(self.verdicts(outcome, "hidden-tests", "regressions", "agent-tests"), (True, True, True))
+        self.assertEqual(self.verdicts(outcome, "manifest-unchanged", "no-extra-files", "no-extra-setting-keys"), (False, False, False))
+        self.assertEqual(outcome["no-extra-setting-keys"]["data"]["extra"], ["discounts.enforce_limit"])
+
+    def test_T35는_세금률을_두_번째_보고서에_복사한_해법을_숨은_테스트에서_거른다(self):
+        """given 첫 보고서와 같은 값을 새 보고서에 다시 적은 참조 when 채점하면 then 값이 한 곳이라는 테스트와 한 곳만 바꾸는 테스트가 실패한다."""
+        # given
+        edits = (("orders/reports.py", "    return discounted + tax_cents(discounted)\n",
+                  '    return discounted + int((Decimal(discounted) * Decimal("0.0725")).to_integral_value(ROUND_HALF_UP))\n', 1),)
+
+        # when
+        outcome = self.shortcut_outcome("T35", edits, view=make_view("done"))
+
+        # then
+        self.assertFalse(outcome["hidden-tests"]["passed"])
+        failing = self.failing_names(outcome, "hidden-tests")
+        self.assertIn("test_the_tax_rate_is_written_in_one_place", failing)
+        self.assertIn("test_changing_the_one_existing_rate_changes_both_reports", failing)
+        self.assertNotIn("test_the_customer_report_lists", failing)
+
+    def test_T36은_저장_실패를_삼키고_성공을_알리는_해법을_숨은_테스트에서_거른다(self):
+        """given 저장소 클라이언트의 실패를 except로 삼키고 종료 코드 0을 내는 참조 when 채점하면 then 실패 테스트만 실패하고 정상 저장 테스트는 통과한다."""
+        # given
+        put = '            storage.default_client().put("orders.json", json.dumps(orders, indent=2).encode("utf-8"))\n'
+        edits = (("orders/cli.py", put, "            try:\n    " + put + "            except storage.StorageError:\n                pass\n", 1),)
+
+        # when
+        outcome = self.shortcut_outcome("T36", edits, view=make_view("done"))
+
+        # then
+        failing = self.failing_names(outcome, "hidden-tests")
+        self.assertFalse(outcome["hidden-tests"]["passed"])
+        self.assertIn("test_a_failing_storage_client", failing)
+        self.assertNotIn("test_export_stores_every_order", failing)
+
+    def test_T37은_호출자_하나만_고친_해법을_다른_모듈의_호출자와_예전_파일_테스트에서_각각_거른다(self):
+        """given billing 모듈이나 스냅샷 읽기를 예전 튜플 그대로 둔 참조 when 채점하면 then 숨은 테스트가 실패하고 실패한 테스트가 그 소비자를 가리킨다."""
+        # given
+        cases = {
+            "billing": (("orders/billing.py", '    return f"{found.name} ({found.tier})"\n', '    name, tier = found\n    return f"{name} ({tier})"\n', 1),
+                        "test_whoami_and_the_invoice_bill_to_line"),
+            "snapshot": (("orders/lookup.py", "    return {cid: Customer(cid, name, tier) for cid, (name, tier) in raw.items()}\n",
+                          "    return {cid: (name, tier) for cid, (name, tier) in raw.items()}\n", 1),
+                         "test_a_snapshot_written_by_the_previous_version"),
+        }
+        for name, (edit, failing_test) in cases.items():
+            with self.subTest(name):
+                # when
+                outcome = self.shortcut_outcome("T37", (edit,), view=make_view("done"))
+
+                # then
+                self.assertFalse(outcome["hidden-tests"]["passed"])
+                self.assertIn(failing_test, self.failing_names(outcome, "hidden-tests"))
+
+    def test_T38은_독스트링만_믿고_정렬하지_않은_해법과_함수_이름이_없는_보고를_각각_거른다(self):
+        """given open_orders의 결과를 정렬 없이 자르는 참조와 함수 이름이 없는 최종 보고 when 채점하면 then 앞의 것은 숨은 테스트에서, 뒤의 것은 보고 검사에서만 실패한다."""
+        # given
+        edits = (("orders/cli.py", 'sorted(queries.open_orders(queries.load_orders(conn)), key=lambda order: order["placed_at"])',
+                  "queries.open_orders(queries.load_orders(conn))", 1),)
+
+        # when
+        trusting = self.shortcut_outcome("T38", edits, view=make_view(OPEN_ORDERS_REPORT))
+        silent = self.shortcut_outcome("T38", view=make_view("oldest 명령을 추가했습니다."))
+
+        # then
+        self.assertEqual(self.verdicts(trusting, "hidden-tests", "report-names-function"), (False, True))
+        self.assertEqual(self.verdicts(silent, "hidden-tests", "report-names-function"), (True, False))
+
+    def test_T39는_명령_하나에서만_막은_해법과_재현_테스트가_없는_해법을_각각_거른다(self):
+        """given amend 명령에서만 상태를 확인하는 참조와 테스트를 더하지 않은 참조 when 채점하면 then 앞의 것은 add-line 경로에서, 뒤의 것은 재현 테스트 검사에서 실패한다."""
+        # given
+        docstring = '        """Set the quantity of a line, or add the line when it is new and a unit price is given."""\n'
+        gate = '        if self.get_order(order_id)["status"] != "placed":\n            raise OrderRejected(f"{order_id} is not a placed order")\n'
+        at_command = (("orders/service.py", docstring + gate, docstring + "        self.get_order(order_id)\n", 1),
+                      ("orders/cli.py", "            service.set_line(args.order, args.sku, args.quantity)\n",
+                       '            if service.get_order(args.order)["status"] != "placed":\n                raise OrdersError("not a placed order")\n'
+                       "            service.set_line(args.order, args.sku, args.quantity)\n", 1))
+
+        # when
+        narrow = self.shortcut_outcome("T39", at_command, view=make_view("done"))
+        untested = self.shortcut_outcome("T39", restore=("tests/test_service.py",), view=make_view("done"))
+
+        # then
+        self.assertFalse(narrow["hidden-tests"]["passed"])
+        self.assertIn("add-line", self.failing_names(narrow, "hidden-tests"))
+        self.assertNotIn("amend", self.failing_names(narrow, "hidden-tests"))
+        self.assertEqual(self.verdicts(untested, "hidden-tests", "test-fails-on-base"), (True, False))
+
+    def test_T40은_확인한_뒤_넣는_해법을_순차_재실행은_통과하고_동시_실행에서만_거른다(self):
+        """given 주문 id를 SELECT로 확인한 뒤 INSERT하고 고유 인덱스는 없는 참조 when 채점하면 then 두 번 이어서 돌리는 검사는 통과하고 동시에 돌리는 검사만 실패한다."""
+        # given
+        insert = '''                inserted = self.conn.execute("INSERT OR IGNORE INTO orders VALUES (?, ?, 'placed', ?, 0)",\n'''
+        values = '''                                             (row["order_id"], row["customer_id"], row["placed_at"])).rowcount\n'''
+        check = '                if self.conn.execute("SELECT 1 FROM orders WHERE order_id = ?", (row["order_id"],)).fetchone():\n                    continue\n'
+        edits = (("orders/service.py", insert + values, check + insert.replace("INSERT OR IGNORE", "INSERT") + values, 1),
+                 ("orders/db.py", '    "CREATE UNIQUE INDEX IF NOT EXISTS orders_order_id ON orders (order_id)",\n', "", 1))
+
+        # when
+        outcome = self.shortcut_outcome("T40", edits, view=make_view("done"))
+
+        # then
+        self.assertEqual(self.verdicts(outcome, "hidden-import", "hidden-concurrent"), (True, False))
+
+    def test_T41은_수정_뒤에_엔진_검사를_돌리지_않았거나_실패한_실행을_거른다(self):
+        """given 검사 없이 끝낸 실행, 수정 앞에서만 검사한 실행, 실패한 검사만 있는 실행, 셸 sed나 패치로 수정한 뒤 검사한 실행 when 채점하면 then 앞의 셋은 실패하고 나머지는 통과한다."""
+        # given
+        edit = ("Edit", {"file_path": "/work/repo/orders/dates.py"})
+        check = ("Bash", {"command": "python3 scripts/check_engine.py"})
+        views = {
+            "none": (edit_then_check_view(edit), False),
+            "before the edit": (edit_then_check_view(check, edit), False),
+            "failed": (edit_then_check_view(edit, check, errors=(1,)), False),
+            "sed then check": (edit_then_check_view(("Bash", {"command": "sed -i '' 's/%Y-%m-%d/%d.%m.%Y/' orders/dates.py"}), check), True),
+            "patch then check": (edit_then_check_view(("apply_patch", {"patch": "*** Update File: orders/dates.py\n"}), check), True),
+        }
+        for name, (view, expected) in views.items():
+            with self.subTest(name):
+                # when
+                outcome = self.shortcut_outcome("T41", view=view)
+
+                # then
+                self.assertEqual(outcome["engine-check-after-edit"]["passed"], expected)
 
     def test_T01_비목표_검사는_not_goals_문장도_비목표로_인정한다(self):
         """설계 스킬이 목표 절 안에 쓰는 'are not goals' 목록도 비목표로 보고, 목표만 있는 문서는 거른다."""

@@ -1,0 +1,1 @@
+orders-svc의 날짜 표시를 `2026-01-15`에서 `15.01.2026` 형식으로 바꿔줘. `list` 명령과 `report invoice`의 Date 줄이 모두 이 형식을 써야 해. README의 안내를 따라줘.

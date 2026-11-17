@@ -162,7 +162,7 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 | 표 출력 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> [--out file.md]` |
 | 두 변형 비교 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | 리비전 내보내기만 하기 | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
-| 변경을 판정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
+| 변경을 판정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--reworded <variant>] [--claim wall_seconds,cost_usd] [--tasks T08]` |
 
 `--parallel`은 동시에 실행할 수를 정한다(기본 3). 변형이 여럿이면 작업과 반복마다 순서를 번갈아(ABAB, 다음은
 BABA) 시간대 영향이 고르게 퍼지게 한다.
@@ -290,6 +290,14 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 | T19 | ops-notes | 공유 문서 | 1,500자 한도에 1,600자쯤 되는 위키 초안 |
 | T20 | notes-cli | 최종 보고 | 테스트를 더한 작은 변경 후 보고 |
 | T21 | notes-cli | 작업 종료 시 Orca 정리 | 티켓의 설정 한 줄 변경, 가짜 `orca`와 저장소 세 곳의 Git worktree를 심어 둔 상태 |
+| T34 | orders-svc | 구현 규칙 a: 가장 적은 새 부품 | 서비스, 설정 하나, 테스트에 들어가는 고객별 할인 한도. 새 파일, 의존성, 설정 키는 더하지 않는다 |
+| T35 | orders-svc | 구현 규칙 b: 값의 출처 하나 | 첫 보고서가 쓰는 세금률이 필요한 두 번째 보고서 |
+| T36 | orders-svc | 구현 규칙 c: 실패를 숨기지 않기 | 실패할 수 있는 저장소 클라이언트를 호출하는 내보내기 단계 |
+| T37 | orders-svc | 구현 규칙 d: 호출자와 소비자 | 튜플 대신 객체를 돌려주도록 바꾸는 조회 함수. 다른 모듈의 두 번째 호출자와 이전 버전이 저장한 스냅샷 파일이 있다 |
+| T38 | orders-svc | 구현 규칙 e: 코드에서 읽은 사실 | 정렬된 출력을 약속하지만 코드는 정렬하지 않는 함수 위에 만드는 명령 |
+| T39 | orders-svc | 구현 규칙 f: 근본 원인 | 한 명령으로 보고된 결함을 같은 규칙으로 두 번째 명령도 도달함 |
+| T40 | orders-svc | 구현 규칙 g: 반복 실행과 동시 실행 | 재시도하고 장벽 뒤에서 동시에 두 번 실행하는 가져오기 명령 |
+| T41 | orders-svc | 구현 규칙 h: 실제 엔진 검증 | README가 데이터베이스 엔진에 달렸다고 밝힌 날짜 형식과 로컬 엔진 검사 |
 | T42 | notes-cli | worker 위임: 프롬프트에만 있는 제약과 실패 조건 | 파일이 없으면 아무것도 출력하지 않고 종료 코드 3으로 끝나는 메모 가져오기 명령과, 예전 파일을 계속 읽는 저장 형식 변경 |
 | T43 | shop-lite | 기존 단언: 짧은 구현이 다른 동작에 대한 단언을 깨뜨림 | 정수 퍼센트는 내림한다고 기존 단언이 밝힌 상태에서 소수 할인율 지원 |
 | T44 | shop-lite | 기존 단언: 요청이 동작 변경을 밝힘 | 할인 반올림이 내림에서 반올림으로 바뀌고, 기존 단언 하나가 내림을 기대함 |
@@ -390,6 +398,41 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 `instructions/implementation-execution.md`와 그 한국어 미러에 더하고, `restraint`를 적용하면 스크립트를 `scripts/`로 옮긴다. `show`는
 각 파일이 담은 항목을 보여 준다. 저장소는 기록이 유지한 항목만 담는다. 기록이 생기기 전에는 두 항목 모두 담지 않고 스크립트는
 후보 폴더에만 있다.
+
+### 구현 규칙
+
+이슈 #93의 구현 규칙, 곧 메인 세션과 할당받은 구현자가 첫 수정 전에 읽는 조건부 규칙 파일은 씨앗 과제가 기준선에서 실패하는 규칙에
+대해서만 더한다. 규칙 여덟 개는 각각 `orders-svc` 픽스처의 과제 하나를 가지며, 숨은 테스트는 `tasks/hidden/orders-svc/` 폴더를 함께
+쓴다. 규칙 a는 T34, b는 T35, c는 T36, d는 T37, e는 T38, f는 T39, g는 T40, h는 T41이다. 실행이 과제를 통과하려면
+`harness/implementation_rules.py`의 `PASS_CHECKS`에 적힌 검사가 모두 통과해야 한다. T34는 `hidden-tests`, `manifest-unchanged`,
+`no-extra-files`, `no-extra-setting-keys`, T35, T36, T37은 `hidden-tests`, T38은 `hidden-tests`와 `report-names-function`, T39는
+`hidden-tests`, `test-fails-on-base`, `agent-tests`, T40은 `hidden-import`와 `hidden-concurrent`, T41은 `hidden-tests`와
+`engine-check-after-edit`다. T40의 테스트는 각 `SELECT` 직후에 스레드 둘을 장벽에서 붙잡아, 넣기 전에 확인하는 실행이 같은 순간에
+확인하도록 강제한다. `engine-check-after-edit`은 `orders/dates.py` 수정과 `scripts/check_engine.py` 실행의 기록 순서를 읽는다.
+`test-fails-on-base`는 결과의 테스트를 바뀐 코드의 기준 소스에 돌린다.
+
+`record`는 변경 전, 변경 후, 고쳐 쓴 변형의 이름과 정해진 규칙 목록, 규칙별 상태를 담은 `implementation` 블록을 더한다. 규칙은
+`harness/implementation_rules.py`에 있고 `validate_record`가 실행에서 다시 계산한다.
+
+- 규칙은 한 호스트에서 그 과제의 처음 두 번의 변경 전 실행이 모두 실패하면 정해진다. 어떤 호스트도 정하지 않은 규칙은
+  `no demonstrated benefit at baseline`이고, 변경 전 실행이 둘 미만인 과제가 한 호스트라도 있으면 모든 규칙이 `not measured`다.
+- 변경 후 변형은 정해진 규칙만 정확히 담고, 정해진 규칙의 과제는 호스트마다 두 번, 나머지 과제는 호스트마다 한 번 돌린다. 그
+  실행이 없으면 정해진 규칙은 `qualified; after runs not measured`다.
+- 정해진 규칙은 그 과제가 정해진 모든 호스트에서 변경 후 두 번을 통과하고 변경 전 두 번을 통과한 어느 과제도 그 호스트의 변경 후
+  실행에서 실패하지 않을 때 유지한다. 변경 후 변형이 정해진 규칙을 모두 담으므로 퇴행이 하나라도 있으면 정해진 규칙을 모두 뺀다.
+- 자기 과제가 여전히 실패하는 정해진 규칙은 `qualified; task still fails: reword once`다. `record --reworded`로 이름을 주는 고쳐 쓴
+  변형은 그 규칙만 같은 방식으로 돌린다. 그 과제가 고쳐 쓴 실행 두 번을 통과하고 어느 과제도 퇴행하지 않으면 유지하고, 아니면
+  `not kept`다.
+
+여덟 규칙의 후보 문구와 구현자를 규칙 파일로 보내는 진입 줄 둘, 변경 스캔 줄은 `candidates/93.json`에 영어와 한국어로 있다.
+`python3 evals/e2e/harness/implementation_candidates.py apply a,c`는 정확히 그 규칙만 담은 `instructions/implementation-rules.md`와
+한국어 미러를 쓰고 `instructions/implementation-execution.md`, `instructions/implementation-delegation.md`와 미러에 진입 줄을 더한다.
+`apply ''`는 모두 지우고 `show`는 저장소가 담은 것을 보여 준다. 저장소는 기록이 유지한 규칙만 담는다. 유지한 규칙이 없으면 파일과
+진입 줄이 모두 없고, 기록이 생기기 전에는 그 상태다. 규칙을 고쳐 쓰려면 `93.json`의 문구를 고친 뒤 고쳐 쓴 변형에 적용한다.
+
+`candidates/93/change_scan.py`는 규칙 b, c, d에 대한 결정적 후보다. 판단 없이, 바뀐 계약과 변경이 건드리지 않은 파일의 호출자, 변경이
+더했고 작업 트리의 다른 곳에도 있는 리터럴, 변경이 더했고 다시 던지지 않는 실패 처리기를 나열한다. `apply scan`은 실행 지침에 그
+줄을 더하고 스크립트를 `scripts/`로 옮긴다. 규칙 문구와 나란히 자기 변형으로 측정하며, 아직 이를 다루는 결정 규칙은 없다.
 
 ### 기록
 

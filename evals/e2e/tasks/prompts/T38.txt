@@ -1,0 +1,1 @@
+orders-svc에 `python3 -m orders oldest N` 명령을 추가해줘. 처리 중(`placed`)인 주문 중 가장 오래된 N개의 id를 오래된 것부터 한 줄에 하나씩 찍어. `orders/queries.py`의 `open_orders`를 써서 만들어줘. README와 테스트도 고쳐줘.

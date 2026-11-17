@@ -1,0 +1,1 @@
+orders-svc에 고객 명세서 보고서를 추가해줘. `python3 -m orders report customer CUSTOMER`는 그 고객의 주문마다 `ORDER_ID: 합계` 한 줄을 주문 순서대로 찍고, 마지막 줄에 `Total: 전체 합계`를 찍어. 주문별 합계는 `report invoice`의 Total과 같은 세금 포함 금액이어야 해. README와 테스트도 고쳐줘.

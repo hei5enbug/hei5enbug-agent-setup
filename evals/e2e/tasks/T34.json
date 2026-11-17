@@ -1,0 +1,75 @@
+{
+  "id": "T34",
+  "title": "Per-customer discount limit that needs no new part",
+  "category": "feature",
+  "path": "rule a: the fewest new parts",
+  "fixture": "orders-svc",
+  "prompt_file": "prompts/T34.txt",
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 10
+  },
+  "hidden_tests": {
+    "source": "hidden/orders-svc",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_t34_discount_limit.py"
+      ]
+    },
+    {
+      "id": "manifest-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "pyproject.toml"
+      ]
+    },
+    {
+      "id": "no-extra-files",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "no_added_files"
+    },
+    {
+      "id": "no-extra-setting-keys",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "no_extra_setting_keys"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "agent-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}
