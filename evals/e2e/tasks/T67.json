@@ -9,6 +9,7 @@
   "env": {
     "ORCA_TERMINAL_HANDLE": "term_demo_a",
     "FAKE_ORCA_STATE": "{work}/orca-state/state.json",
+    "ORCA_USER_DATA_PATH": "{work}/orca-user-data",
     "PATH": "{work}/fake-bin:{PATH}",
     "HEI5ENBUG_CLEANUP_RUN_SECONDS": "45"
   },

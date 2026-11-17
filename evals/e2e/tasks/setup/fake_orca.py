@@ -304,6 +304,15 @@ def run(words: list[str], options: dict[str, str], flags: set[str], state: dict)
         return start_worker(state, options)
     if command == "orchestration worker-list":
         return {"workers": state.get("dispatches", [])}
+    if command in ("orchestration worker-show", "orchestration worker-release", "orchestration worker-read"):
+        dispatch = next((item for item in state.get("dispatches", []) if item["dispatchId"] == options.get("--dispatch")),
+                        None)
+        if dispatch is None:
+            raise Failure("dispatch_not_found", f"no dispatch {options.get('--dispatch')}")
+        return {"worker": dispatch, "text": ""}
+    if command in ("orchestration check", "orchestration inbox"):
+        handle = os.environ.get("ORCA_TERMINAL_HANDLE")
+        return {"messages": [item for item in state.get("messages", []) if item.get("to") == handle]}
     if command == "terminal create":
         return create_terminal(state, options)
     if command == "terminal send":

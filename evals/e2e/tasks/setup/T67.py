@@ -8,4 +8,4 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from handoff_common import build  # noqa: E402
 
 if __name__ == "__main__":
-    build(sys.argv[1])
+    (build(sys.argv[1])["work"] / "orca-user-data").mkdir()

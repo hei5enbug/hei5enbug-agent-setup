@@ -278,7 +278,7 @@ Orca 호출로 판단할 것이 없다. 훅이 세션의 첫 응답 전에 쓰�
 T67은 `scripts/orca_status_hook.py`와 그 분리 실행 `scripts/orca_cleanup_run.py`의 worktree 삭제를 평가한다. 가짜 `orca`는
 `worktree create`와 `orchestration worker-start`에도 실제 Git worktree를 만들고, 시작된 worker는 즉시 커밋하고 자기
 브랜치를 푸시하고 `worker_done`을 보고하며 터미널이 해제된다. `worker-list`와 `ports`는 상태 파일의 `dispatches`와
-`ports`를 읽는다. 이 작업은 분리 실행이 스스로, 그리고 자신이 시작한 모든 프로세스와 함께 끝나는 시간인
+`ports`를 읽는다. 이 작업은 하네스가 시험에서 지우고 훅의 실행이 요구하는 `ORCA_USER_DATA_PATH`를 정하며, 분리 실행이 스스로, 그리고 자신이 시작한 모든 프로세스와 함께 끝나는 시간인
 `HEI5ENBUG_CLEANUP_RUN_SECONDS`를 45로 정하므로, 어떤 실행도 시험보다 45초를 넘겨 살지 않고 아래의 60초 대기가 항상 이를
 덮는다. 세션이 턴을 질문으로 끝내므로 삭제는 그 턴의 끝에서 자기만의 프로세스 세션으로 시작하는 훅의 실행에서만
 나올 수 있다. 검사는 삭제가 성공할 때까지 최대 `E2E_CLEANUP_WAIT_SECONDS`(기본 60)초 기다리며, 실행의 폴더 `/`가 아니라

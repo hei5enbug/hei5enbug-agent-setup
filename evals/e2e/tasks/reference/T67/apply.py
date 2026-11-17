@@ -10,7 +10,7 @@ from handoff_tools import orca
 repo = sys.argv[1]
 hook = Path(__file__).resolve().parents[5] / "scripts" / "orca_status_hook.py"
 work = Path(repo).parent
-ENV = {**os.environ, "ORCA_TERMINAL_HANDLE": "term_demo_a", "FAKE_ORCA_STATE": str(work / "orca-state" / "state.json"),
+ENV = {**os.environ, "ORCA_TERMINAL_HANDLE": "term_demo_a", "ORCA_USER_DATA_PATH": str(work / "orca-user-data"), "FAKE_ORCA_STATE": str(work / "orca-state" / "state.json"),
        "PATH": f"{work / 'fake-bin'}:{os.environ['PATH']}"}
 
 

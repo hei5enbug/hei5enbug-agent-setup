@@ -18,7 +18,7 @@ TASKS_ROOT = E2E_ROOT / "tasks"
 FIXTURES_ROOT = E2E_ROOT / "fixtures"
 sys.path.insert(0, str(E2E_ROOT))
 
-from harness import graders  # noqa: E402
+from harness import command, graders  # noqa: E402
 
 QUESTION = "이어서 할 일이 있을까요?"
 BRANCH = "feature/ABC-123"
@@ -102,6 +102,32 @@ class WorktreeCleanupHookTaskTest(unittest.TestCase):
 
         # then
         self.assertEqual(failed, {"worker-pushed-branch", "remote-and-clones-kept"})
+
+    def test_과제_환경은_Orca_사용자_데이터_경로를_정하고_그_폴더를_만든다(self):
+        """하네스가 ORCA_* 변수를 지우므로 훅의 실행 조건인 ORCA_USER_DATA_PATH를 과제가 정하고, 폴더는 설정이 만든다."""
+        # given
+        environment = command.task_environment(self.task, self.repo, self.work)
+
+        # when
+        path = Path(environment["ORCA_USER_DATA_PATH"])
+
+        # then
+        self.assertEqual(path, self.work / "orca-user-data")
+        self.assertTrue(path.is_dir())
+        self.assertEqual(environment["HEI5ENBUG_CLEANUP_RUN_SECONDS"], "45")
+
+    def test_가짜_Orca는_worker_보고와_Dispatch를_세션이_읽는_명령으로_답한다(self):
+        """worker를 시작한 뒤 orchestration check는 worker_done 메시지를, worker-show는 성공한 Dispatch를 돌려준다."""
+        # given
+        self.create_and_run_worker()
+
+        # when
+        checked = self.orca("orchestration", "check")["result"]["messages"]
+        shown = self.orca("orchestration", "worker-show", "--dispatch", "ctx_1")["result"]["worker"]
+
+        # then
+        self.assertEqual([item["subject"] for item in checked], ["worker_done"])
+        self.assertEqual(shown["state"], "succeeded")
 
     def test_질문으로_끝내지_않고_보고서로_끝내면_실패한다(self):
         """턴을 최종 보고서로 끝내면 ends-with-question이 실패한다."""

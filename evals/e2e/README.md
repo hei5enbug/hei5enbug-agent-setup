@@ -300,7 +300,8 @@ every Orca call outside the hook's reads and closes. Their tests are in `tests/t
 T67 judges the worktree removal of `scripts/orca_status_hook.py` and its detached run `scripts/orca_cleanup_run.py`. The
 fake `orca` also makes a real Git worktree for `worktree create` and `orchestration worker-start`; a started worker
 commits, pushes its branch, reports `worker_done`, and has its terminal released at once, and `worker-list` and
-`ports` read the `dispatches` and `ports` of the state file. The task sets `HEI5ENBUG_CLEANUP_RUN_SECONDS` to 45, the
+`ports` read the `dispatches` and `ports` of the state file. The task sets `ORCA_USER_DATA_PATH`, which the harness removes from a trial and the hook's run requires, and
+`HEI5ENBUG_CLEANUP_RUN_SECONDS` to 45, the
 time after which a detached run ends itself and every process it started, so no run outlives a trial by more than 45
 seconds and the 60-second wait below always covers it. The session ends its turn with a question, so the removal
 can only come from the hook's run, which starts at that turn's end in a process session of its own. The checks wait up
