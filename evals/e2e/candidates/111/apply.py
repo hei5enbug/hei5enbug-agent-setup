@@ -10,16 +10,17 @@ from pathlib import Path
 MARKER = "USAGE_LIMIT_NEXT"
 NEXT = (
     "Treat the review as skipped: post without asking and without another reviewer, never a Claude one when you are "
-    "Claude, and say in one line of the report that the independent text review did not run because the reviewer's "
-    "usage limit was reached. For a final report, put that line in the draft and run `text_review.py check --kind "
-    "final-report` on it. Once it happened in the session, you may skip the reviewer for the session's other texts "
-    "and treat each the same way."
+    "Claude, and say, in one line of the report and nowhere else in it, that the independent text review did not run "
+    "because the reviewer's usage limit was reached. For a final report, put that line in the draft and run "
+    "`text_review.py check --kind final-report` on it. Once it happened in the session, you may skip the reviewer for "
+    "the session's other texts and treat each the same way."
 )
 RULE_PARAGRAPH = """- Exit 4, with `reason` `usage_limit`, means the reviewer's usage limit is reached. Treat the review as skipped: post
-  without asking and without another reviewer, never a Claude one when you are Claude, and say in one line of the
-  report that the independent text review did not run because the reviewer's usage limit was reached. For a final
-  report, put that line in the draft and run `text_review.py check --kind final-report` on it. Once it happened in
-  the session, you may skip the reviewer for the session's other texts and treat each the same way.
+  without asking and without another reviewer, never a Claude one when you are Claude, and say, in one line of the
+  report and nowhere else in it, that the independent text review did not run because the reviewer's usage limit was
+  reached. For a final report, put that line in the draft and run `text_review.py check --kind final-report` on it.
+  Once it happened in the session, you may skip the reviewer for the session's other texts and treat each the same
+  way.
 """
 RULE_LINE = "- Exit 4 means the reviewer's usage limit is reached. Follow the result's `next`.\n"
 SCRIPT_EDITS = (

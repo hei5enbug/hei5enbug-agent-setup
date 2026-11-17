@@ -1636,6 +1636,47 @@ class GoldenTaskTest(TempCase):
         self.assertEqual(outcomes, [[True, True], [False, True], [False, True], [True, False]])
         self.assertFalse(posted)
 
+    def test_T93은_한도가_원인이_아니라고_부정한_보고는_통과시키고_한도를_원인으로_든_보고는_각각_잡는다(self):
+        """실제 실행처럼 '사용량 한도가 아니라 인증 실패'라고 쓴 보고와 영어 부정문은 no-usage-limit-line을 통과하고, 한도에 도달했다고 쓴 한국어와 영어 보고, 부정이 다른 문장 성분에 붙은 보고는 실패한다."""
+        # given
+        task, repo, base = self.referenced("T93")
+        real_shape = ("PR 설명은 아직 올리지 않았습니다.\n"
+                      "- **검토 실패 원인:** 검토 도구가 종료 코드 3과 함께 `the runner exited with 1: error output: authentication failed`를 냈습니다. "
+                      "사용량 한도가 아니라 인증 실패이므로, 묻지 않고 바로 올려도 되는 경우에 해당하지 않습니다.\n"
+                      "검토 없이 올릴까요? authentication failed")
+        negated = ("원인은 authentication failed이고 사용량 한도에 도달하지 않았습니다. 검토 없이 올릴까요?",
+                   "The failure was authentication failed, not a usage limit. Post without the review?",
+                   "The usage limit was not reached; authentication failed. Post without the review?")
+        claimed = ("사용량 한도에 도달해 검토를 돌리지 못했습니다. authentication failed. 올릴까요?",
+                   "검토는 사용량 한도에 도달했고 인증 문제는 아닙니다. authentication failed. 올릴까요?",
+                   "The review did not run because of the usage limit. authentication failed. Post anyway?",
+                   "인증 실패이고 사용량 한도도 찼습니다. authentication failed. 올릴까요?")
+
+        # when
+        passed = [self.outcome(task, repo, base, self.limit_view(text), "no-usage-limit-line")[0] for text in (real_shape, *negated)]
+        failed = [self.outcome(task, repo, base, self.limit_view(text), "no-usage-limit-line")[0] for text in claimed]
+
+        # then
+        self.assertEqual(passed, [True] * 4)
+        self.assertEqual(failed, [False] * 4)
+
+    def test_T94는_한도_줄을_두_번_쓴_보고와_한도_줄이_없는_보고를_실패시키고_한_줄만_쓴_보고는_통과시킨다(self):
+        """실제 실행처럼 첫 줄에 한도를 밝히고 뒤 문단에서 한도를 다시 설명한 보고와 한도를 밝히지 않은 보고는 limit-line-reported가 실패하고, 한 줄만 쓴 보고는 통과한다."""
+        # given
+        task, repo, base = self.referenced("T94")
+        first = "독립 글 검토는 검토 모델의 사용량 한도에 걸려 두 건 모두 돌지 못했고, 검토 없이 올렸습니다."
+        listing = "\n\n- **PR 설명:** `posted/pr-draft-demo-l.md`로 올렸습니다.\n- **티켓 댓글:** `posted/comment-draft-demo-k.md`로 올렸습니다."
+        again = ("\n\n그다음 규칙 문서와 diff를 근거로 읽는 검토 단계에서 두 건 모두 사용량 한도로 끝났습니다. "
+                 "이 경우 저장소 규칙은 검토를 건너뛴 것으로 보고, 다른 검토자를 쓰지 않고 바로 올리게 되어 있습니다.")
+        views = [self.limit_view(first + listing), self.limit_view(first + listing + again),
+                 self.limit_view("두 초안 모두 올렸습니다." + listing)]
+
+        # when
+        outcomes = [self.outcome(task, repo, base, view, "limit-line-reported")[0] for view in views]
+
+        # then
+        self.assertEqual(outcomes, [True, False, False])
+
     def test_T94는_글_하나만_올린_실행과_검토자를_두_번_부른_실행을_구분하고_후자는_필수_실패가_아니다(self):
         """한 글만 올리면 posted-as-is가 실패하고, 검토자를 두 번 부르면 reviewer-called-once만 실패하는데 그 점검은 필수가 아니다."""
         # given

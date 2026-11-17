@@ -33,5 +33,5 @@ def asks_with_cause(ctx):
 
 
 def no_usage_limit_line(ctx):
-    lines = shared(ctx).limit_lines(ctx.view)
+    lines = shared(ctx).claims_limit(ctx.view)
     return not lines, f"the run called the failure a usage limit: {lines}" if lines else "the failure is not called a usage limit", {}
