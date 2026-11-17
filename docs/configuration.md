@@ -46,7 +46,8 @@ Any other value means `apply`. Claude Code reads the option from `/config`; Code
 
 Seven boolean features can be turned off, and each defaults to on. The implementation worker route, the worker models
 and efforts, the review model, the host settings mode, the minimum free memory for starting an agent session
-(`session_memory_min_mb`), the hook Python interpreter, and the plugins refreshed with this one (`refresh_plugins`)
+(`session_memory_min_mb`), the delegated runs and retries one request may start (`request_run_cap`,
+`request_retry_cap`), the hook Python interpreter, and the plugins refreshed with this one (`refresh_plugins`)
 are string options in Claude Code. Choose `auto`, `codex`, `haiku`, `sol`, or `sonnet` for the
 route; an unset or unrecognized value uses `auto`, where the main session picks the worker per assignment. Choose
 `apply` or `report` for the host settings mode; an unset or unrecognized value uses `apply`. It decides whether
@@ -84,6 +85,8 @@ settings.
 | Orca worktrees for other repositories | `orca_worktree` | `HEI5ENBUG_ORCA_WORKTREE` |
 | Host settings mode | `host_settings` (`apply` or `report`, default `apply`) | `HEI5ENBUG_HOST_SETTINGS` |
 | Minimum free memory to start an agent session | `session_memory_min_mb` (MB, default `2048`; `0`, `off`, `false`, or `no` turns the gate off; see [Orca session start](guards.md#orca-session-start)) | `HEI5ENBUG_SESSION_MEMORY_MIN_MB` |
+| Delegated runs per request | `request_run_cap` (default `20`; `0` turns the cap off; an invalid value uses `20`; see [Request budget](guards.md#request-budget-for-delegated-runs)) | `HEI5ENBUG_REQUEST_RUN_CAP` |
+| Retries per request | `request_retry_cap` (default `3`; `0` turns the cap off; an invalid value uses `3`; see [Request budget](guards.md#request-budget-for-delegated-runs)) | `HEI5ENBUG_REQUEST_RETRY_CAP` |
 | Hook Python interpreter | `python` (an absolute path, default empty) | `HEI5ENBUG_PYTHON` |
 | Plugins refreshed with this one | `refresh_plugins` (comma-separated `plugin@marketplace` IDs, default empty) | `HEI5ENBUG_REFRESH_PLUGINS` |
 | Subagent permission block in `~/.codex/AGENTS.md` | Not applicable | `HEI5ENBUG_SUBAGENT_POLICY` |

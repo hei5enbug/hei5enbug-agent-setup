@@ -45,6 +45,11 @@ DECLARED_TIMEOUTS = {
     ("language_guard.py", "PostToolUse"): 5,
     ("final_report_hook.py", "Stop"): 5,
     ("agent_guard.py", "PreToolUse"): 5,
+    ("request_budget.py", "PreToolUse"): 5,
+    ("request_budget.py", "PostToolUseFailure"): 5,
+    ("request_budget.py", "UserPromptSubmit"): 5,
+    ("request_budget.py", "SubagentStart"): 5,
+    ("request_budget.py", "SubagentStop"): 5,
     (PROJECT_HOOK, "PreToolUse"): 30,
 }
 # The hook scripts whose output can deny a call or a permission request, with the style of the denial: a JSON

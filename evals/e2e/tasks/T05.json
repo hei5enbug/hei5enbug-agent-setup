@@ -48,6 +48,16 @@
       "required": true,
       "weight": 2,
       "suite": "preexisting"
+    },
+    {
+      "id": "no-launch-denied",
+      "kind": "transcript_absent",
+      "required": true,
+      "weight": 1,
+      "scope": [
+        "tool_results"
+      ],
+      "pattern": "Denied: this request reached its cap|Denied: \\d+ runs are running on this machine"
     }
   ],
   "constraints": [

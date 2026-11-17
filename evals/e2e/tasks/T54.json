@@ -1,0 +1,54 @@
+{
+  "id": "T54",
+  "title": "Eight independent read-only questions",
+  "category": "delegation",
+  "path": "parallel read-only investigation under the computed parallel limit",
+  "fixture": "inventory-service",
+  "prompt_file": "prompts/T54.txt",
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 12
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "no-changes",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 2
+    },
+    {
+      "id": "answer-covers-all-questions",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 4,
+      "min": 8,
+      "patterns": [
+        "inventory\\.json",
+        "0\\.01",
+        "SCHEMA_VERSION[^\\n]{0,40}\\b1\\b|스키마[^\\n]{0,40}\\b1\\b",
+        "sku[^\\n]{0,30}name[^\\n]{0,30}price",
+        "placed[^\\n]{0,40}shipped[^\\n]{0,40}cancelled",
+        "(?:LOW_STOCK_THRESHOLD|기준|임계)[^\\n]{0,60}\\b5\\b",
+        "1[,_]?000[,_]?000",
+        "receive[^\\n]{0,40}adjust[^\\n]{0,40}allocate[^\\n]{0,40}release"
+      ]
+    },
+    {
+      "id": "delegated-runs-counted",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "delegated_runs_counted"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

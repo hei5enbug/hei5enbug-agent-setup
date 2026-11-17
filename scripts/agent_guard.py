@@ -10,6 +10,7 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import hook_runtime  # noqa: E402
+import request_budget  # noqa: E402
 from approval_state import recorded_worker_pair  # noqa: E402
 from plugin_toggles import detect_host, enabled, valid_worker_pair, worker_setting  # noqa: E402
 
@@ -262,9 +263,9 @@ def main() -> int:
         return 0
     if not isinstance(event, dict) or event.get("hook_event_name") != "PreToolUse":
         return 0
-    if detect_host() != "codex" or not enabled("agent_guard"):
+    if detect_host() != "codex":
         return 0
-    reason = denial(event)
+    reason = (denial(event) if enabled("agent_guard") else None) or request_budget.pre_spawn(event, "codex")
     if reason:
         output = {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason}
         print(json.dumps({"hookSpecificOutput": output}))

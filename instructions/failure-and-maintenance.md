@@ -4,7 +4,9 @@ Classify a failure before retrying. Missing executables or hook files, denied ca
 boundaries, and known quota exhaustion require changed conditions or an authorized working path, not an
 unchanged retry. An apparently transient error permits at most one unchanged retry. After another failure,
 diagnose it and obtain evidence of a changed input, environment, or service state before trying again.
-Service access still follows its existing per-path fallback rules. After two fixes that share one assumption fail
+Service access still follows its existing per-path fallback rules. A denial that says the request reached its cap of
+delegated runs or retries ends every launch of that request, through an agent or the role runner, with no fallback: let
+running work finish, then report the request as stopped, with what is done and what remains, never as done. After two fixes that share one assumption fail
 the same check, state that assumption in one sentence and test it directly before writing a third fix.
 
 If a plugin hook path is missing, stop actions that depend on it and report the exact blocker. Never remove

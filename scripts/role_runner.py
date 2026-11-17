@@ -14,15 +14,16 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import codex_hook_trust  # noqa: E402
+import request_budget  # noqa: E402
 from role_runner_agents import agent_run, chosen_effort, default_host, runner_for  # noqa: E402
 from role_runner_child import (  # noqa: E402
     child_environment, codex_mcp_off, kill_group, new_scratch, remove_scratch, run_child,
 )
 from role_runner_command import claude_command, claude_tools, codex_command, sandbox_for  # noqa: E402
 from role_runner_config import (  # noqa: E402
-    AGENT_TARGET, CAPABILITIES, CLAUDE_HOOKS_MESSAGE, CODEX_HOOKS_MESSAGE, DEFAULT_REVIEW_MODEL, EXIT_EVIDENCE, EXIT_OK,
-    EXIT_RUN, EXIT_USAGE, MCP_NETWORK_RULE, PREFLIGHT_PROMPT, REGISTRY, REVIEW_MODEL_ENV, REVIEW_MODELS, ROLE_DEFINITIONS,
-    ROLE_ENTRY, ROLE_MODEL, ROLE_SENTENCES, ROLES, WRITING_CAPABILITIES, Run, RunnerError, UsageError, build_parser,
+    AGENT_TARGET, CAPABILITIES, CLAUDE_HOOKS_MESSAGE, CODEX_HOOKS_MESSAGE, DEFAULT_REVIEW_MODEL, EXIT_CAPPED,
+    EXIT_EVIDENCE, EXIT_OK, EXIT_RUN, EXIT_USAGE, MCP_NETWORK_RULE, PREFLIGHT_PROMPT, REGISTRY, REVIEW_MODEL_ENV,
+    REVIEW_MODELS, ROLE_DEFINITIONS, ROLE_ENTRY, ROLE_MODEL, ROLE_SENTENCES, ROLES, WRITING_CAPABILITIES, Run, RunnerError, UsageError, build_parser,
 )
 from role_runner_evidence import (  # noqa: E402
     claude_entry_count, claude_result, codex_home, json_lines, require_heartbeat, thread_id_from, turn_count, verify_claude,
@@ -255,14 +256,25 @@ def plan(args: argparse.Namespace) -> Run:
 
 
 def run_pair(args: argparse.Namespace, run: Run, root: Path, cwd: str, assignment: str, result: str) -> tuple[int, str, str | None]:
-    """Run one assignment and result pair as a single run would, and return its exit code, status line, and error text."""
+    """Run one assignment and result pair as a single run would, and return its exit code, status line, and error text.
+
+    The pair waits while the parallel limit holds it and does not start when the request's caps are reached.
+    """
     pair = argparse.Namespace(**{**vars(args), "assignment": assignment, "result": result})
+    owner = request_budget.environment_owner()
+    run_id = f"runner:{os.getpid()}:{threading.get_ident()}"
+    denial = request_budget.acquire(owner, run.agent or run.role or run.capability or run.target, run_id)
+    if denial is not None:
+        return EXIT_CAPPED, status(run, False, {"error": denial, "capped": True}, EXIT_CAPPED), denial
     scratch = None
+    failed = True
     try:
         if not run.writing:
             scratch = new_scratch(cwd)
             run = replace(run, scratch=scratch)
         evidence = execute(pair, run, root, cwd)
+        failed = False
+        return EXIT_OK, status(run, True, evidence, EXIT_OK), None
     except RunnerError as error:
         return error.code, status(run, False, error.evidence, error.code), str(error)
     except OSError as error:
@@ -270,7 +282,7 @@ def run_pair(args: argparse.Namespace, run: Run, root: Path, cwd: str, assignmen
         return EXIT_RUN, status(run, False, {"error": message}, EXIT_RUN), message
     finally:
         remove_scratch(scratch)
-    return EXIT_OK, status(run, True, evidence, EXIT_OK), None
+        request_budget.finish(owner, run_id, failed)
 
 
 def main(argv: list[str] | None = None) -> int:

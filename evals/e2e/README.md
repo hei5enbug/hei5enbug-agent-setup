@@ -311,6 +311,8 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T20 | notes-cli | Final report | Small change with tests, then a report |
 | T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
 | T90 | notes-cli | Session-wide service tier request | One-line setting change, an independent review, and the user's plain request that GPT runs in the session use the fast tier; its graders read the `role_runner.py` commands, and its tests are in `tests/test_e2e_eval_service_tier.py` |
+| T53 | notes-cli | Request retry cap | One-line setting change, then an independent model review whose delegated route fails every time with a different error through a fake `codex` and `claude` that fail only as role runner children, under a retry cap of 2 and a run cap that is off; graders require at most three executed launches, none after a cap denial, and a final report that names the unfinished review and holds no completion phrase; its tests are in `tests/test_e2e_eval_request_cap.py` |
+| T54 | inventory-service | Eight independent read-only questions | Eight questions about eight modules, read-only, answered in parallel; graders require all eight facts and no change, and count the delegated runs without requiring any; its tests are in `tests/test_e2e_eval_request_cap.py` |
 
 ## Comparing a change on both hosts
 

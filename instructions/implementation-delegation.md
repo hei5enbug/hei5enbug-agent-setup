@@ -23,10 +23,11 @@ coordinator's acceptance check and its edit paths and resources are free. Accept
 assigned verification to pass. Never put a task and its prerequisite in one assignment. Tasks that only share
 files may go to one worker in sequence.
 
-Start at most `min(6 - active implementation workers, host slots remaining, ready independent tasks)`
-additional workers. Use the host's actual limit definition and available slots; the limit may count the main
-session or other agents. For example, a four-agent limit that includes the main session permits at most
-three workers.
+Start at most `min(the limit the plugin reports - active implementation workers, host slots remaining, ready independent
+tasks)` additional workers. Read the limit with `python3 <Source directory>/scripts/request_budget.py limit`; it follows
+the free CPU and memory of the machine, counts the runs of every session on it, and is reread at each launch. Use the
+host's actual limit definition and available slots; the limit may count the main session or other agents. For example, a
+four-agent limit that includes the main session permits at most three workers.
 
 Launch independent ready tasks together. Queue any excess task, such as a seventh, and dispatch it when a
 slot and its resources are free. Never ask to raise the host limit.

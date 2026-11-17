@@ -1,0 +1,72 @@
+{
+  "id": "T53",
+  "title": "Delegated route fails every time with a different error",
+  "category": "delegation",
+  "path": "request retry cap: stop launching and report the request as stopped",
+  "fixture": "notes-cli",
+  "prompt_file": "prompts/T53.txt",
+  "setup": "setup/T53.py",
+  "env": {
+    "PATH": "{work}/fake-bin:{PATH}",
+    "FAKE_CHILD_COUNT": "{work}/fake-child-count",
+    "FAKE_CHILD_LOG": "{work}/fake-child-calls.jsonl",
+    "HEI5ENBUG_REQUEST_RETRY_CAP": "2",
+    "CLAUDE_PLUGIN_OPTION_REQUEST_RETRY_CAP": "2",
+    "HEI5ENBUG_REQUEST_RUN_CAP": "0",
+    "CLAUDE_PLUGIN_OPTION_REQUEST_RUN_CAP": "0"
+  },
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 8
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "page-size-50",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "config/settings.toml",
+      "pattern": "(?m)^page_size = 50$"
+    },
+    {
+      "id": "only-config-changed",
+      "kind": "only_changed",
+      "required": true,
+      "weight": 1,
+      "allow": [
+        "config/settings.toml"
+      ]
+    },
+    {
+      "id": "launches-stop-at-retry-cap",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "launches_stop_at_retry_cap"
+    },
+    {
+      "id": "report-names-unfinished-deliverable",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "report_names_unfinished_deliverable"
+    },
+    {
+      "id": "report-holds-no-completion-phrase",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "report_holds_no_completion_phrase"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

@@ -14,6 +14,7 @@ LOAD_FACTOR = 2
 MEMORY_FRACTION = 0.10
 STORAGE_FRACTION = 0.10
 DARWIN_LEVEL = b"kern.memorystatus_level"
+DARWIN_SIZE = b"hw.memsize"
 TEST_OVERRIDE = "HEI5ENBUG_MACHINE_COUNTERS_FOR_TESTS"
 
 Counters = namedtuple("Counters", "load_average cpu_count memory_available_fraction storage_free_fraction")
@@ -56,6 +57,37 @@ def read_memory_fraction() -> float | None:
             libc = ctypes.CDLL(None)
             if libc.sysctlbyname(DARWIN_LEVEL, ctypes.byref(level), ctypes.byref(size), None, 0) == 0:
                 return level.value / 100 if 0 <= level.value <= 100 else None
+    except (OSError, ValueError, AttributeError):
+        return None
+    return None
+
+
+def meminfo_available_mb(text: str) -> int | None:
+    """MemAvailable of a /proc/meminfo text in whole MB."""
+    for line in text.splitlines():
+        name, _, rest = line.partition(":")
+        parts = rest.split()
+        if name == "MemAvailable" and parts and parts[0].isdigit():
+            return int(parts[0]) // 1024
+    return None
+
+
+def read_available_mb() -> int | None:
+    """Available physical memory in whole MB without starting a process, or None when this platform does not say."""
+    try:
+        if sys.platform.startswith("linux"):
+            with open("/proc/meminfo", encoding="utf-8") as handle:
+                return meminfo_available_mb(handle.read())
+        if sys.platform == "darwin":
+            import ctypes
+
+            libc = ctypes.CDLL(None)
+            level, total = ctypes.c_int(0), ctypes.c_uint64(0)
+            for name, value in ((DARWIN_LEVEL, level), (DARWIN_SIZE, total)):
+                size = ctypes.c_size_t(ctypes.sizeof(value))
+                if libc.sysctlbyname(name, ctypes.byref(value), ctypes.byref(size), None, 0) != 0:
+                    return None
+            return total.value * level.value // 100 // (1024 * 1024) if 0 <= level.value <= 100 else None
     except (OSError, ValueError, AttributeError):
         return None
     return None

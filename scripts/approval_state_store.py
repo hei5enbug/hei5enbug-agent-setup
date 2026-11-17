@@ -34,7 +34,23 @@ def session_key(value):
 def _empty() -> dict:
     return {"approved": [], "approved_at": {}, "once": [], "pending": {}, "inflight": [], "hooks_warning_shown": False,
             "request_counts": {}, "asked": [], "grants": {},
-            "machine_load_shown": False}
+            "machine_load_shown": False, "delegated": fresh_delegated()}
+
+
+def fresh_delegated() -> dict:
+    """The per-request count of delegated runs and retries, and the agent types whose last run ended in an error."""
+    return {"runs": 0, "retries": 0, "failed": []}
+
+
+def _delegated(value) -> dict:
+    if not isinstance(value, dict):
+        return fresh_delegated()
+    runs, retries, failed = value.get("runs"), value.get("retries"), value.get("failed")
+    return {
+        "runs": runs if type(runs) is int and runs >= 0 else 0,
+        "retries": retries if type(retries) is int and retries >= 0 else 0,
+        "failed": sorted({key for key in failed if isinstance(key, str)}) if isinstance(failed, list) else [],
+    }
 
 
 def _grants(value) -> dict:
@@ -96,6 +112,7 @@ def _read(path: Path) -> dict:
         "request_counts": counts,
         "asked": asked,
         "machine_load_shown": data.get("machine_load_shown") is True,
+        "delegated": _delegated(data.get("delegated")),
     }
 
 

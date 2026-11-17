@@ -18,13 +18,16 @@ CODEX_ONLY_HOOKS = [
     ("PermissionRequest", "^mcp__datagrip__execute_sql_query$", "datagrip_guard.py", 10, False),
 ]
 CLAUDE_ONLY_HOOKS = [
+    ("PreToolUse", "^(Agent|Task)$", "request_budget.py", 5, False),
     ("PostToolUse", None, "language_guard.py", 5, False),
     ("UserPromptSubmit", None, "session_context.py", 5, False),
     ("Stop", None, "final_report_hook.py", 5, False),
+    ("PostToolUseFailure", "^(Agent|Task)$", "request_budget.py", 5, False),
 ]
 EXPECTED_HOOKS = [
     ("SessionStart", None, "session_context.py", 10, False),
     ("SubagentStart", None, "session_context.py", 10, False),
+    ("SubagentStart", None, "request_budget.py", 5, False),
     ("PreToolUse", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),
     ("PreToolUse", "^mcp__datagrip__execute_sql_query$", "datagrip_guard.py", 10, False),
     ("PreToolUse", "^Bash$", "public_boundary_hook.py", 30, False),
@@ -36,8 +39,10 @@ EXPECTED_HOOKS = [
     ("PostToolUseFailure", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),
     ("UserPromptSubmit", None, "approval_guard.py", 5, False),
     ("UserPromptSubmit", None, "orca_status_hook.py", 10, False),
+    ("UserPromptSubmit", None, "request_budget.py", 5, False),
     ("Stop", None, "language_guard.py", 5, False),
     ("Stop", None, "orca_status_hook.py", 10, False),
+    ("SubagentStop", None, "request_budget.py", 5, False),
 ]
 
 

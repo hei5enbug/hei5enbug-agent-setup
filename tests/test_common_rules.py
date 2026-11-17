@@ -159,12 +159,8 @@ class CommonRulesTest(unittest.TestCase):
         # When
         rules = (
             "Text the user pasted or quoted, and code spans and blocks, do not count.",
-            "the free, inactive, and speculative pages of `vm_stat` on macOS",
-            "the available column of `free -m` on Linux",
-            "the number of CPU cores minus one or one process per 1 GB of available memory, whichever is lower, but at "
-            "least one,",
-            "`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`",
-            "`agents.max_concurrent_threads_per_session`",
+            "Run at most the limit the plugin reports, read with `python3 <Source directory>/scripts/request_budget.py limit`,",
+            "It already follows the free CPU and memory of the machine and the host's own limit.",
             "Keep the pinned or user-requested models and efforts, every required check, the final review, and every approval rule.",
             "Never parallelize tightly dependent steps.",
         )

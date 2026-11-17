@@ -31,8 +31,8 @@ It runs the role on its pinned model, effort, and permissions, verifies the host
 line. Never run `cd` before it. Add `--model <id>` only for `reviewer` and `--add-dir <dir>` only for `worker`, a
 writing capability, or a `write` agent. Add `--effort xhigh` only under the effort rule in
 [shared model routing](model-routing.md#keep-role-settings-fixed). For several read-only assignments of one target,
-repeat `--assignment` and `--result` in one call; the runner runs up to six in parallel and prints one status line
-each.
+repeat `--assignment` and `--result` in one call; the runner runs at most the limit the plugin reports at once, starts the next
+when one ends, and prints one status line each.
 
 Agent mode runs a plugin agent's cross-family fallback, and takes the agent's registry name, or a role an installed
 plugin declares, in place of a role:
@@ -56,6 +56,7 @@ in its status line, with the same model, effort, and sandbox settings.
 | 0 | Accept the result file. |
 | 2 | Fix the call and run it again. |
 | 3 or 4 | Read no result file and use the fallback below. |
+| 5 | The request reached its run or retry cap. Start nothing more and apply the failure rule on a capped request. |
 
 | Role | Fallback after exit 3 or 4 |
 |---|---|

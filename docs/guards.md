@@ -1,7 +1,7 @@
 # Response language, DataGrip, and public boundary guards
 
-This page explains how response-language checks, DataGrip query safeguards, and the public boundary check behave on
-each host.
+This page explains how response-language checks, DataGrip query safeguards, the public boundary check, and the request
+budget for delegated runs behave on each host.
 
 ## Response language
 
@@ -303,3 +303,52 @@ the next prompt where one holds shows it again. The counters come from the opera
 macOS), and a counter that cannot be read counts as no shortage. It exists because, on a machine with a load average of
 60 to 69 on 10 logical cores, Codex sessions showed `hook timed out after 5s` before many commands and the timed-out
 checks did not apply.
+
+## Request budget for delegated runs
+
+`scripts/request_budget.py` counts, per user request, the delegated runs and the retries, and computes how many runs may
+run at once. A request runs from one user prompt to the next, and the next prompt sets both counts to zero, through a
+`UserPromptSubmit` hook on both hosts. A delegated run is an `Agent` or `spawn_agent` launch of an agent type the plugin
+does not hide, or one assignment and result pair of a `role_runner.py` call. A retry is a launch of an agent type or a
+role runner role after a run of the same one ended in an error: on Claude Code a failed `Agent` call
+(`PostToolUseFailure`), in the role runner a non-zero exit. The count sits in the session state file of the session that
+received the user's prompt. The role runner passes that session to every child through `HEI5ENBUG_PARENT_SESSION`, so a
+launch by a child counts on the same request.
+
+Three launch paths share the one count: a `PreToolUse` hook on the `Agent` tool in Claude Code, the agent guard hook in
+Codex after its own checks, and the role runner for each pair. When a request reaches `request_run_cap` runs or
+`request_retry_cap` retries (see [configuration](configuration.md#feature-options)), its next launch is denied with one
+message: the cap and the count, that running work may finish, and that the session must report the request as stopped,
+with what is done and what remains, never as done. The role runner ends such a pair with exit code 5 and starts no
+child; it is no fallback case. `0` turns a cap off. The defaults, 20 runs and 3 retries, come from the distribution of
+the 30 days before 2026-11-17 in `evals/request-budget/distribution.json`, produced by
+`evals/request-budget/count_requests.py` from the Claude Code and Codex session records: the smallest multiple of ten
+above the largest run count (18), and the largest retry count (2) plus one. The record holds only the number of requests
+per count. Role runner children, Codex subagent threads, and sessions that ran in a temporary folder are not requests,
+so a run a child started counts for no request there.
+
+The parallel limit is the lowest of the logical CPU count minus one, one run per whole GiB of available memory, and the
+host's own limit (`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`, 20 by default, on Claude Code and
+`agents.max_concurrent_threads_per_session` in the Codex configuration, left out when unset), and at least one. It is
+one when the load average is at least twice the logical CPU count or available memory is below 10 percent. A CPU count
+or memory reading that cannot be taken leaves its term out and caps the result at six. Until the measured case that
+raises it passes, the limit is also at most six (`PARALLEL_CEILING`). `python3 scripts/request_budget.py limit` prints
+the limit and the counts. The limit counts the runs of every session on this machine, kept in one file under the state
+folder with the process id of each, and a run whose process is gone is dropped; a session with no running run of its own
+may always start one. A launch that would exceed the limit is denied with a message to start it after one of this
+session's running runs ends, and the role runner waits for the limit instead and starts the next pair when one ends.
+Every reading comes from the operating system without a child process.
+
+Not enforced, because no hook, mod, or runner can see it on that host:
+
+| Dimension | Host | Why |
+|---|---|---|
+| Spend of a whole request | Claude Code | `--max-budget-usd` exists only in print mode and is fixed at launch, not per user request; no hook event carries cost. |
+| Spend of a whole request | Codex | `codex exec` has no spend flag, and its hooks carry token counts per model request only. |
+| Elapsed time of a whole request | Both | No hook runs on a timer or can interrupt a running turn; the `Interrupt` hook of Codex runs only after the user interrupts. |
+| Retries of a Codex subagent that errors after it started | Codex | The documented `SubagentStop` and `PostToolUse` inputs carry no error status for it, so only role runner failures count there. |
+| Retries of a Claude Code subagent that errors after it started | Claude Code | The documented `SubagentStop` input carries no error status; only a failed `Agent` call counts. |
+| Subagents that a workflow, a fork, or a teammate starts | Claude Code | The `Agent` hook sees only the `Agent` tool; the host's own limits apply to the others. |
+
+Sources checked on 2026-11-17: the Claude Code hooks, subagents, CLI, and environment variable references and the Codex
+hooks, subagents, and configuration references.

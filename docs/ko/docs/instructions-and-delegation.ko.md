@@ -126,8 +126,8 @@ Claude Code에서는 `scripts/role_runner.py`가 scout, researcher, reviewer, Co
 실행기에서 실행하며
 `--effort <level>`은 모델의 사고 강도 규칙이 허용하는 모든 수준을 쓸 수 있습니다. 실행기가 실행할 수 없는 모델이나 모델이
 허용하지 않는 사고 강도는 대체 실행 없이 종료 코드 2로 끝나고, 상태 줄에 `"user_requested": true`가 추가됩니다. `--assignment`와 `--result`를
-반복하면 같은 대상의 읽기 전용 할당을 최대 여섯 개 병렬로 실행하고 각각 상태 줄을 출력하며, 실행기는 그중 가장 높은 종료 코드로
-끝납니다. 읽기 전용 자식은 호스트의 스킬 목록 없이 실행합니다. Codex에는 `-c skills.max_context_tokens=1`을,
+반복하면 같은 대상의 읽기 전용 할당을 호출당 최대 여섯 개까지 실행하되 플러그인이 알려 주는 한도까지만 동시에
+실행하고 각각 상태 줄을 출력하며, 실행기는 그중 가장 높은 종료 코드로 끝납니다. 읽기 전용 자식은 호스트의 스킬 목록 없이 실행합니다. Codex에는 `-c skills.max_context_tokens=1`을,
 Claude에는 `--disable-slash-commands`를 넘깁니다. 읽기 전용 Codex 자식은 디스크 전체를 읽고
 시스템 임시 폴더 아래의 새 scratch 폴더만 쓰는 권한 프로필로 실행합니다. 실행기는 실행마다, 그리고 `--resume` 호출마다 이
 폴더를 만들고 어떤 종료에서든 지웁니다. 자식 환경의 `TMPDIR`, `UV_CACHE_DIR`, `XDG_CACHE_HOME`, `PYTHONPYCACHEPREFIX`,

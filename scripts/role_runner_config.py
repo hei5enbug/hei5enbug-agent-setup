@@ -100,6 +100,7 @@ EXIT_OK = 0
 EXIT_USAGE = 2
 EXIT_RUN = 3
 EXIT_EVIDENCE = 4
+EXIT_CAPPED = 5
 
 
 class RunnerError(Exception):

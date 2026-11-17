@@ -21,6 +21,15 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" request_budget.py",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -139,6 +148,15 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" request_budget.py",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "Stop": [
@@ -157,6 +175,17 @@
             "type": "command",
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" orca_status_hook.py",
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" request_budget.py",
+            "timeout": 5
           }
         ]
       }

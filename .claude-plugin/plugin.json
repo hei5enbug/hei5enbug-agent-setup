@@ -142,6 +142,18 @@
       "description": "Megabytes of available memory the plugin keeps free: a command that starts another agent session through Orca is denied below this value so the agent queues the session until another one finishes. 0, off, false, or no turns the check off; an invalid value uses 2048. Unknown memory never denies.",
       "default": "2048"
     },
+    "request_run_cap": {
+      "type": "string",
+      "title": "Delegated runs per request",
+      "description": "Most delegated runs, meaning agent launches plus role runner runs, one user request may start; the next launch is denied and the session must report the request as stopped. 0 turns the cap off; an invalid value uses 20.",
+      "default": "20"
+    },
+    "request_retry_cap": {
+      "type": "string",
+      "title": "Retries per request",
+      "description": "Most retries, meaning a launch of the same agent type or role after an error, one user request may start; the next launch is denied and the session must report the request as stopped. 0 turns the cap off; an invalid value uses 3.",
+      "default": "3"
+    },
     "python": {
       "type": "string",
       "title": "Hook Python interpreter",

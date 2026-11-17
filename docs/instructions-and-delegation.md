@@ -127,8 +127,8 @@ status line. `--effort <level>` raises a run within its entry's range, whose low
 role, capability, and agent mode, a capability entry that is not `via: runner` runs through the runner on its own model,
 and `--effort <level>` may be any level the model's effort rule allows; a model the runner cannot run or an effort the
 model does not allow exits 2 with no fallback run, and the status line gains `"user_requested": true`. Repeating
-`--assignment` and `--result` runs up to six read-only assignments of one target in parallel, with one status line each,
-and the runner exits with the highest of their exit codes. A read-only child runs without the host's skill catalog:
+`--assignment` and `--result` runs read-only assignments of one target, up to six per call, at most the limit the
+plugin reports at once with one status line each, and the runner exits with the highest of their exit codes. A read-only child runs without the host's skill catalog:
 Codex gets `-c skills.max_context_tokens=1`, and Claude gets `--disable-slash-commands`. A read-only Codex child
 runs under a permission profile that reads the whole disk and writes only a new scratch folder under the system temp
 folder, which the runner creates for each run and each `--resume` invocation and removes on every exit. The child
