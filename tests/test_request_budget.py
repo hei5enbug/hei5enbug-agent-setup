@@ -401,19 +401,22 @@ class RunningLimitTest(BudgetCase):
         self.assertTrue(verdict.allowed)
         self.assertEqual([entry["id"] for entry in budget.read_runs()], ["alive", "next"])
 
-    def test_에이전트_ID를_받은_실행은_서브에이전트_종료_훅으로_끝나고_재시도_표시를_남기지_않는다(self):
-        """시작 때 받은 도구 호출 ID의 실행이 에이전트 ID로 이어져 종료 훅에서 사라진다."""
+    def test_서브에이전트_종료_훅은_같은_종류의_가장_오래된_에이전트_실행을_끝내고_실행기_실행은_건드리지_않는다(self):
+        """scout 둘과 실행기 하나가 도는 중 scout 종료 훅 하나는 먼저 시작한 scout만 지우고, 모르는 종류의 종료는 가장 오래된 에이전트를 지운다."""
         # Given
         self.admit("scout", run_id="toolu-1")
-        budget.handle({"hook_event_name": "SubagentStart", "session_id": SESSION, "agent_id": "agent-1", "agent_type": "scout"}, "claude")
-        claimed = [entry.get("agent_id") for entry in budget.read_runs()]
+        self.admit("worker", run_id="toolu-2")
+        self.admit("scout", run_id="runner:1")
+        stop = {"hook_event_name": "SubagentStop", "session_id": SESSION, "agent_type": "scout"}
 
         # When
-        budget.handle({"hook_event_name": "SubagentStop", "session_id": SESSION, "agent_id": "agent-1"}, "claude")
+        budget.handle(stop, "claude")
+        after_scout = [entry["id"] for entry in budget.read_runs()]
+        budget.handle({**stop, "agent_type": "unknown"}, "claude")
 
         # Then
-        self.assertEqual(claimed, ["agent-1"])
-        self.assertEqual(budget.read_runs(), [])
+        self.assertEqual(after_scout, ["toolu-2", "runner:1"])
+        self.assertEqual([entry["id"] for entry in budget.read_runs()], ["runner:1"])
         self.assertEqual(self.delegated()["failed"], [])
 
 

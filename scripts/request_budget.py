@@ -262,33 +262,31 @@ def admit(
     return mutate(owner, change) or Verdict()
 
 
-def claim(owner: tuple[str, str] | None, agent_id: str, key: str) -> None:
-    """Give the owner's oldest running entry that has no agent id, preferably of this key, the id the host assigned."""
-    if owner is None or not agent_id:
-        return
-
-    def change(data):
-        entries = read_runs()
-        pending = [entry for entry in entries if (entry["host"], entry["session"]) == owner and "agent_id" not in entry]
-        chosen = next((entry for entry in pending if entry.get("key") == key), pending[0] if pending else None)
-        if chosen is not None:
-            chosen["agent_id"] = agent_id
-        write_runs(entries)
-
-    mutate(owner, change)
-
-
 def finish(owner: tuple[str, str] | None, run_id: str, failed: bool = False) -> None:
-    """Drop the run with this launch id or agent id, and remember its key when it ended in an error."""
+    """Drop the run with this launch id, and remember its key when it ended in an error."""
     if owner is None or not run_id:
         return
 
     def change(data):
         entries = read_runs()
-        ended = [entry for entry in entries if run_id in (entry["id"], entry.get("agent_id"))]
+        ended = [entry for entry in entries if entry["id"] == run_id]
         if failed and ended:
             record_failure(data["delegated"], ended[0]["key"])
         write_runs([entry for entry in entries if entry not in ended])
+
+    mutate(owner, change)
+
+
+def finish_agent(owner: tuple[str, str] | None, agent_type: str) -> None:
+    """Drop the owner's oldest running agent of this type, else its oldest running agent: a stop hook names no launch id."""
+    if owner is None:
+        return
+
+    def change(data):
+        entries = read_runs()
+        agents = [entry for entry in entries if (entry["host"], entry["session"]) == owner and not entry["id"].startswith("runner:")]
+        chosen = next((entry for entry in agents if entry.get("key") == agent_type), agents[0] if agents else None)
+        write_runs([entry for entry in entries if entry is not chosen])
 
     mutate(owner, change)
 
@@ -354,10 +352,8 @@ def handle(event: dict, host: str) -> dict | None:
     elif name == "PostToolUseFailure":
         if event.get("tool_name") in AGENT_TOOLS and isinstance(event.get("tool_use_id"), str):
             finish(owner, event["tool_use_id"], failed=True)
-    elif name == "SubagentStart":
-        claim(owner, str(event.get("agent_id") or ""), str(event.get("agent_type") or ""))
     elif name == "SubagentStop":
-        finish(owner, str(event.get("agent_id") or ""))
+        finish_agent(owner, str(event.get("agent_type") or ""))
     return None
 
 

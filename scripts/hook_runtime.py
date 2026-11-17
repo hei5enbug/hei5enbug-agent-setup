@@ -48,7 +48,6 @@ DECLARED_TIMEOUTS = {
     ("request_budget.py", "PreToolUse"): 5,
     ("request_budget.py", "PostToolUseFailure"): 5,
     ("request_budget.py", "UserPromptSubmit"): 5,
-    ("request_budget.py", "SubagentStart"): 5,
     ("request_budget.py", "SubagentStop"): 5,
     (PROJECT_HOOK, "PreToolUse"): 30,
 }
