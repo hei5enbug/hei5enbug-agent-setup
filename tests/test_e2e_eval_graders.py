@@ -1331,6 +1331,21 @@ class GoldenTaskTest(TempCase):
     def failing_names(self, outcome: dict[str, dict[str, Any]], check: str) -> str:
         return " ".join(str(item) for item in outcome[check]["data"].get("failing", []))
 
+    def test_T34_프롬프트는_한도_값과_고칠_파일_범위를_밝혀_세션이_사용자에게_되물을_일이_없다(self):
+        """given T34의 프롬프트와 참조 해법이 설정 파일에 넣는 한도 when 둘을 견주면 then 프롬프트가 같은 값을 밝히고 README를 고칠지도 밝힌다."""
+        # given
+        prompt = (TASKS_ROOT / "prompts/T34.txt").read_text(encoding="utf-8")
+        task, repo, base = self.materialize("T34")
+        apply_reference("T34", repo)
+
+        # when
+        stated = re.search(r"max_total_cents_per_customer = (\d+)", (repo / "config/settings.toml").read_text(encoding="utf-8"))
+
+        # then
+        self.assertIsNotNone(stated)
+        self.assertIn(stated.group(1), prompt)
+        self.assertRegex(prompt, r"README는 .*고치지 않아도")
+
     def test_T34는_새_파일과_새_설정_키와_새_의존성으로_한도를_구현한_해법을_세_검사에서_각각_거른다(self):
         """given 한도는 맞게 동작하지만 새 모듈, 새 설정 키, 새 의존성을 더한 참조 when 채점하면 then 동작 검사는 통과하고 세 최소 구성 검사가 모두 실패한다."""
         # given
