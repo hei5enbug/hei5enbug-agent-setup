@@ -703,6 +703,26 @@ class MaterializeTest(TempCase):
         expected = int(datetime(2026, 1, 15, 9, tzinfo=timezone.utc).timestamp())
         self.assertEqual(shown.strip(), f"Demo Dev <dev@example.com> {expected}")
 
+    def test_설정_스크립트는_내보낸_플러그인_폴더를_환경_변수로_받는다(self):
+        """플러그인 폴더를 넘기면 설정 스크립트가 E2E_PLUGIN_DIR로 그 경로를 읽고, 넘기지 않으면 그 변수가 없다.
+        잡는 회귀: 설정 스크립트가 시험 중인 변형의 플러그인을 알 방법이 없어 하네스 체크아웃의 코드를 대신 심는 문제."""
+        # given
+        fixture = self.root / "fixtures" / "sample"
+        write_files(fixture, SAMPLE_FILES)
+        tasks = self.root / "tasks"
+        write_files(tasks, {"setup/TX.py": (
+            "import os, sys\nfrom pathlib import Path\n"
+            "Path(sys.argv[1]).parent.joinpath('seen.txt').write_text(os.environ.get('E2E_PLUGIN_DIR', 'unset'))\n")})
+        task = sample_task([], setup="setup/TX.py")
+
+        # when
+        graders.materialize_fixture(task, self.root / "fixtures", tasks, self.root / "with" / "repo", "/plugins/variant-under-test")
+        graders.materialize_fixture(task, self.root / "fixtures", tasks, self.root / "without" / "repo")
+
+        # then
+        self.assertEqual((self.root / "with" / "seen.txt").read_text(), "/plugins/variant-under-test")
+        self.assertEqual((self.root / "without" / "seen.txt").read_text(), "unset")
+
     def test_설정_스크립트가_만든_상태는_기준_커밋_뒤에_남는다(self):
         """setup 스크립트의 커밋은 기준이 되고 커밋하지 않은 변경은 작업 트리에 남는다."""
         # given

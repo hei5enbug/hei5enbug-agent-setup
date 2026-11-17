@@ -3,13 +3,15 @@
 Everything lives in the run's work folder, the parent of `repo`: an installed copy of the plugin, an older plugin folder
 a session loaded, one Claude Code session whose last turn ended while a background command still owes its notification,
 one idle Codex session, the session markers, a fake `orca` and fake `claude` and `codex` on `fake-bin/`, and the state
-folders `orca-state/`, `plugin-state/`, and `orca-user/`.
+folders `orca-state/`, `plugin-state/`, and `orca-user/`. The installed copy is made from the variant's exported plugin
+folder, `E2E_PLUGIN_DIR`, so the session runs the code under test; without it the harness checkout stands in.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shutil
 import stat
 import sys
@@ -17,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-PLUGIN_ROOT = HERE.parents[3]
+PLUGIN_ROOT = Path(os.environ.get("E2E_PLUGIN_DIR") or HERE.parents[3])
 PLUGIN_ID = "hei5enbug-agent-setup@hei5enbug"
 CLAUDE_HANDLE = "term_demo_a"
 CODEX_HANDLE = "term_demo_b"

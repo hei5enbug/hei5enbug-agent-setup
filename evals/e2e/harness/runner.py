@@ -257,7 +257,7 @@ def execute_run(
         "expected_model": command.main_model(variant, spec.host),
     }
     try:
-        run["base_commit"] = load_graders().materialize_fixture(task, cfg.fixtures_root, cfg.tasks_root, spec.repo)
+        run["base_commit"] = load_graders().materialize_fixture(task, cfg.fixtures_root, cfg.tasks_root, spec.repo, plugin["path"])
     except Exception as error:  # noqa: BLE001 - any failure to build the work repo is an infrastructure failure
         failed = {**run, "status": STATUS_INFRA_FAILED, "error": f"materialize failed: {error}"}
         write_json(spec.result_dir / "run.json", failed)

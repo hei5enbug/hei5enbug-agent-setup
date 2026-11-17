@@ -189,6 +189,73 @@ class RefreshReloadTaskTest(unittest.TestCase):
                                                    "nothing-sent-to-control-session": True,
                                                    "running-session-not-reported-unfinished": True})
 
+    def export_origin_main(self) -> Path:
+        """The plugin as `origin/main` holds it, in a temp folder; skips when that ref is missing or already holds the change."""
+        exists = subprocess.run(["git", "-C", str(REPO_ROOT), "rev-parse", "--verify", "-q", "origin/main"], capture_output=True, check=False)
+        if exists.returncode != 0:
+            self.skipTest("origin/main is not available")
+        before = self.root / "origin-main-plugin"
+        before.mkdir()
+        archive = subprocess.run(["git", "-C", str(REPO_ROOT), "archive", "origin/main"], capture_output=True, check=True)
+        subprocess.run(["tar", "-x", "-C", str(before)], input=archive.stdout, check=True)
+        if "NEW_PROCESS_SOURCES" in (before / "skills/orca-plugin-refresh/scripts/refresh_follow.py").read_text(encoding="utf-8"):
+            self.skipTest("origin/main already holds the change")
+        return before
+
+    def session_flow(self, name: str, plugin_dir: Path, answer: str) -> tuple[list[tuple[str, str]], dict[str, bool]]:
+        """Seed T81 from a plugin folder, run what a session runs from that plugin (apply-installed, then the continuation
+        script its output names, apply), wait for the helper to end, and return the sends and the graded checks."""
+        repo = self.root / name / "repo"
+        base = graders.materialize_fixture(self.task, FIXTURES_ROOT, TASKS_ROOT, repo, plugin_dir)
+        work = repo.parent
+        environment = {**os.environ, **command.task_environment(self.task, repo, work)}
+        for key in ("ORCA_CLI_COMMAND", "ORCA_DEV_REPO_ROOT", "CLAUDE_CODE_ENTRYPOINT", "CODEX_HOME"):
+            environment.pop(key, None)
+        state_path = work / "orca-state" / "state.json"
+        state_path.write_text(json.dumps({**json.loads(state_path.read_text(encoding="utf-8")), "vanish_after_seconds": 3}), encoding="utf-8")
+
+        def run(script: str, *arguments: str) -> dict[str, Any]:
+            done = subprocess.run([sys.executable, "-B", script, *arguments, "--json"], env=environment, capture_output=True,
+                                  text=True, check=False, timeout=120)
+            return json.loads(done.stdout)
+
+        installed = run(str(plugin_dir / "skills/orca-plugin-refresh/scripts/orca_plugin_refresh.py"), "apply-installed")
+        pattern = f"self-apply --run-id {installed['run_id']}"
+        self.addCleanup(subprocess.run, ["pkill", "-f", pattern], check=False)
+        run(installed["script"], "apply", "--run-id", installed["run_id"])
+        deadline = time.monotonic() + 40
+        while time.monotonic() < deadline and subprocess.run(["pgrep", "-f", pattern], capture_output=True, check=False).returncode == 0:
+            time.sleep(1)
+        self.assertEqual(subprocess.run(["pgrep", "-f", pattern], capture_output=True, check=False).returncode, 1)
+        calls = work / "orca-state" / "calls.jsonl"
+        sends = [(call["argv"][call["argv"].index("--terminal") + 1], call["argv"][call["argv"].index("--text") + 1])
+                 for call in (json.loads(line) for line in calls.read_text(encoding="utf-8").splitlines())
+                 if call["argv"][:2] == ["terminal", "send"]]
+        graded = graders.grade_run(self.task, repo, base, make_view(answer), TASKS_ROOT, self.root / f"{name}-grade")
+        return sends, {check["id"]: check["passed"] for check in graded["checks"]}
+
+    def test_이전_버전_플러그인으로_심은_세션은_옛_스크립트를_돌려_reload를_보내지_않는다(self):
+        """origin/main 플러그인으로 시드하고 세션이 도는 흐름(apply-installed, 그 출력의 이어갈 스크립트, apply)을 돌리면 첫 세션에 아무것도 보내지 않고 reload 검사가 실패하며, 도우미도 한도 안에 끝난다.
+        잡는 회귀: 시드한 설치 사본이 시험 중인 변형이 아닌 하네스 체크아웃의 코드여서 before 변형도 새 apply를 돌려 두 변형이 구분되지 않는 문제."""
+        # Given
+        before = self.export_origin_main()
+
+        # When
+        sends, results = self.session_flow("before", before, DEFERRED_ANSWER)
+
+        # Then
+        self.assertEqual([send for send in sends if send[0] == FIRST], [])
+        self.assertFalse(results["reload-sent-to-running-session"])
+
+    def test_새_버전_플러그인으로_심은_세션은_이어갈_스크립트로_reload를_보내고_네_검사를_통과한다(self):
+        """이 체크아웃 플러그인으로 시드하고 같은 흐름을 돌리면 첫 세션에 reload만 보내고 네 필수 검사가 모두 통과한다."""
+        # Given / When
+        sends, results = self.session_flow("after", REPO_ROOT, DONE_ANSWER)
+
+        # Then
+        self.assertEqual([send for send in sends if send[0] == FIRST], [(FIRST, "/reload-plugins")])
+        self.assertTrue(all(results.values()), results)
+
     def test_reload를_보내지_않고_도우미에_넘겼다고_답한_실행은_두_검사에서_실패한다(self):
         """기록된 실패 실행은 어떤 명령도 보내지 않고 첫 세션을 대기 중이라고 보고하므로 reload 검사와 보고 검사만 실패한다."""
         # Given

@@ -18,7 +18,9 @@ repository README; only its unit tests are.
    fixed fictional identity and date, and runs the task's setup script when it has one. A setup script may build
    more state beside the repository, in `<run root>/<campaign>/work/<run id>/`, and a task's `env` map gives the agent
    environment values in which `{repo}`, `{work}`, and `{PATH}` stand for the repository, that folder, and the current
-   `PATH`. The variant's `env` and the configuration's `extra_env` still win over it.
+   `PATH`. The variant's `env` and the configuration's `extra_env` still win over it. A setup script finds the exported
+   plugin folder of the variant under test in its `E2E_PLUGIN_DIR` environment variable, so a task that seeds an
+   installed copy of the plugin builds it from the code under test, not from the harness checkout.
 3. It starts the agent in that folder:
 
    ```text

@@ -1159,7 +1159,8 @@ class ProcessAndRunTest(unittest.TestCase):
         patch.start()
         self.addCleanup(patch.stop)
 
-    def materialize(self, task, fixtures_root, tasks_root, dest):
+    def materialize(self, task, fixtures_root, tasks_root, dest, plugin_dir=None):
+        self.plugin_dirs = [*getattr(self, "plugin_dirs", []), plugin_dir]
         Path(dest).mkdir(parents=True)
         return "base123"
 
@@ -1286,6 +1287,18 @@ class ProcessAndRunTest(unittest.TestCase):
         self.assertEqual((run["status"], run["timed_out"]), ("timed_out", True))
         data = json.loads((self.spec.result_dir / "metrics.json").read_text(encoding="utf-8"))
         self.assertTrue(data["timed_out"])
+
+    def test_작업_저장소를_만들_때_내보낸_플러그인_폴더를_설정_스크립트에_넘긴다(self):
+        """실행은 변형의 내보낸 플러그인 폴더를 materialize_fixture에 넘긴다.
+        잡는 회귀: 실행기가 플러그인 폴더를 넘기지 않아 설정 스크립트가 시험 중인 코드 대신 하네스 체크아웃을 쓰는 문제."""
+        # given
+        cfg = HarnessConfig(**{**self.cfg.__dict__, "tasks_root": self.cfg.tasks_root})
+
+        # when
+        runner.execute_run(self.spec, {**self.task, "limits": {"wall_seconds": 30, "max_budget_usd": 2}}, self.variant, self.plugin, cfg, {})
+
+        # then
+        self.assertEqual(self.plugin_dirs, ["/tmp/p"])
 
     def test_정상_실행은_complete이고_자식_환경에는_ORCA_변수가_없다(self):
         """실행은 complete로 끝나고, 가짜 claude가 본 환경 변수 이름에 ORCA_*가 없으며 필수 플래그가 전달된다."""
