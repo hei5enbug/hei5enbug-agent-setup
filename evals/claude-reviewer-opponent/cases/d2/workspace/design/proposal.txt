@@ -1,0 +1,20 @@
+Design: tenant rate limits for the demo-gateway API
+
+Requirements
+R1. Each tenant has a limit of requests per minute, stored in the config service under `tenants/<id>/limit`.
+R2. When an operator changes a tenant's limit, the new limit applies to that tenant within 60 seconds, without
+    restarting the gateway.
+R3. A request over the limit gets HTTP 429 with a `Retry-After` header.
+R4. The check adds no more than 1 ms at the 99th percentile.
+
+Design
+1. At process start, the gateway reads every tenant's limit from the config service once and keeps the values in
+   the dictionary `LIMITS`, which the request path reads without any I/O.
+2. The request path counts requests per tenant per minute in a local token bucket whose capacity is
+   `LIMITS[tenant]`, refilled continuously.
+3. A request that finds the bucket empty gets HTTP 429 with `Retry-After` set to the seconds until the next token.
+4. A tenant that is not in `LIMITS` uses the default limit of 600 requests per minute.
+
+Tests
+A test builds `LIMITS` with two tenants and checks that the second request in a burst over the limit gets 429
+with a `Retry-After` header.

@@ -1,0 +1,22 @@
+Design: idempotent handling of payment-provider webhooks in demo-pay
+
+Goal
+The payment provider can send the same webhook event more than once. The handler must apply each event exactly
+once, so a retry never credits an account twice.
+
+Context
+- demo-pay runs as 3 replicas behind a round-robin load balancer. The provider's retry of an event may reach a
+  different replica than the first delivery.
+- Each webhook carries a unique `event_id`.
+- The service already uses the primary database `demo_pay_db`, which has a table `accounts`.
+
+Design
+1. On receipt, the handler checks `event_id` against an in-process set `seen_events` kept in the worker's memory.
+2. If `event_id` is in the set, the handler answers 200 and does nothing else.
+3. Otherwise the handler credits the account in one database transaction, adds `event_id` to the set, and
+   answers 200.
+4. The set keeps the most recent 100000 event ids; older ids are dropped first.
+5. A metric `webhook_duplicates_total` counts the events that step 2 dropped.
+
+Tests
+Unit tests send the same `event_id` twice to one handler instance and assert that the account is credited once.

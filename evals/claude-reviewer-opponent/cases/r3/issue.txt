@@ -1,0 +1,30 @@
+Title: demo-notify: retry failed webhook deliveries
+
+## Summary
+
+When a customer's webhook endpoint fails, `demo-notify` drops the event after one attempt. Customers lose events
+during short outages of their own servers.
+
+## Observations
+
+- `deliver()` in `demo_notify/sender.py` sends one HTTP POST and logs the failure; it never tries again.
+- Support received four reports last month of missing events that the customer's endpoint would have accepted
+  a few minutes later.
+
+## Proposal
+
+1. When a delivery fails with a network error or an HTTP 5xx status, schedule up to 3 more attempts for the
+   same event.
+2. Wait a fixed 10 seconds before each retry.
+3. After the third retry fails, mark the event `failed` and stop. A `failed` event is never sent again.
+4. Do not retry HTTP 4xx responses; mark the event `failed` at once.
+5. Record each attempt (time, status code or error) in the existing `delivery_log` table.
+
+## Acceptance criteria
+
+1. A delivery that fails with a network error or a 5xx status is attempted again, and a later success marks the event `delivered`.
+2. A failing delivery is retried without a limit on the number of attempts, and the wait between attempts
+   doubles each time, so the endpoint is not flooded.
+3. A 4xx response is not retried and marks the event `failed` at once.
+4. Every attempt appears in `delivery_log` with its time and its status code or error.
+5. The sender's existing tests still pass, and each rule above has a test.

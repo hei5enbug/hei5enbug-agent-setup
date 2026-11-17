@@ -145,3 +145,4 @@
 | `tests/test_e2e_eval_record_cli.py` | `cli.py record`는 판정이 비교 규칙과 같은 기록을 쓰고, 빠진 값은 측정 안 됨으로 알리며, 커밋된 기록은 모두 검증을 통과한다. | `evals/e2e/README.md` (Records) |
 | `tests/test_evaluation_rules.py` | `AGENTS.md`는 플러그인 변경을 측정 기록으로만 채택하거나 제외하고, `instructions/model-evaluation.md`는 시간, 비용, 한 가지만 바꾸기, 호스트 격차, 남겨 둔 사례 규칙을 유지한다. | `AGENTS.md`, `instructions/model-evaluation.md` |
 | `tests/test_korean_writing_eval.py` | 한국어 글쓰기 평가는 글쓰기 규칙을 실행 시점에 `instructions/shared-text.md`에서 읽고, 필수 사실이 있는 고정된 작업 다섯 개를 유지하며, 채점자에게 작성자의 모델 이름을 보이지 않고, 시드 검사에서 빠진 사실과 번역투를 잡고, 승자에게 모든 채점자의 과반이 필요하도록 결정 규칙을 적용한다. | `evals/korean-writing/README.md` |
+| `tests/test_reviewer_opponent_eval.py` | Claude 검토자·상대역 평가는 고정된 문제 목록이 있는 검토 사례 셋과 토론 사례 둘을 유지하고, 네 후보를 각각 후보 자신의 모델과 사고 강도로 reviewer 실행기와 tiki-taka 실행기 사본에서 실행하며, 역할의 승자를 검증되고 채점되고 가격이 매겨진 실행에서만 통과 수와 비용 순으로 정한다. | `evals/claude-reviewer-opponent/README.md` |

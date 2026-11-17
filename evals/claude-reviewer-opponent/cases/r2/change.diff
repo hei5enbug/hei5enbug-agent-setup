@@ -1,0 +1,48 @@
+diff --git a/demo_export/report.py b/demo_export/report.py
+index 9707bae..8980989 100644
+--- a/demo_export/report.py
++++ b/demo_export/report.py
+@@ -9,12 +9,16 @@ from collections.abc import Iterable, Mapping
+ COLUMNS = ("id", "name", "total")
+ 
+ 
+-def export_report(rows: Iterable[Mapping[str, object]], *, fmt: str = "csv") -> str:
+-    if fmt != "csv":
+-        raise ValueError(f"unsupported format: {fmt}")
++def render_csv(rows: Iterable[Mapping[str, object]]) -> bytes:
+     out = io.StringIO()
+     writer = csv.writer(out, lineterminator="\n")
+     writer.writerow(COLUMNS)
+     for row in rows:
+         writer.writerow([row[column] for column in COLUMNS])
+-    return out.getvalue()
++    return out.getvalue().encode("utf-8")
++
++
++def export_report(rows: Iterable[Mapping[str, object]], *, fmt: str = "csv") -> bytes:
++    if fmt != "csv":
++        raise ValueError(f"unsupported format: {fmt}")
++    return render_csv(rows)
+diff --git a/tests/test_report.py b/tests/test_report.py
+index 6ac6d0e..f4d91b0 100644
+--- a/tests/test_report.py
++++ b/tests/test_report.py
+@@ -1,12 +1,17 @@
+ import unittest
+ 
+ from demo_export import export_report
++from demo_export.report import render_csv
+ 
+ 
+ class ExportReportTest(unittest.TestCase):
+     def test_csv_has_header_and_rows(self):
+         rows = [{"id": 1, "name": "a", "total": 5}]
+-        self.assertEqual(export_report(rows), "id,name,total\n1,a,5\n")
++        self.assertEqual(render_csv(rows), b"id,name,total\n1,a,5\n")
++
++    def test_export_report_delegates_to_render_csv(self):
++        rows = [{"id": 1, "name": "a", "total": 5}]
++        self.assertEqual(export_report(rows), render_csv(rows))
+ 
+     def test_unknown_format_is_rejected(self):
+         with self.assertRaises(ValueError):

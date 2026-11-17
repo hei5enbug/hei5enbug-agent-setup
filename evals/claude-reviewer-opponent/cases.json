@@ -1,0 +1,94 @@
+{
+  "candidates": [
+    {"id": "opus-high", "model": "claude-opus-5-5", "effort": "high"},
+    {"id": "opus-xhigh", "model": "claude-opus-5-5", "effort": "xhigh"},
+    {"id": "fable-high", "model": "claude-fable-5-2", "effort": "high"},
+    {"id": "fable-xhigh", "model": "claude-fable-5-2", "effort": "xhigh"}
+  ],
+  "cases": [
+    {
+      "id": "r1",
+      "role": "review",
+      "title": "GPT-written diff with a missed concurrency guard",
+      "kind": "implementation",
+      "intent": "Add JobStore.claim_next and a drain helper so that four worker threads can drain one JobStore. Each job must be claimed by exactly one worker. Handler errors are out of scope: handlers are trusted not to raise.",
+      "evidence": "The current folder holds the repository after the change. Check results: the 3 tests in tests/test_store.py pass.",
+      "draft_file": "change.diff",
+      "real_problems": [
+        {
+          "id": "r1-p1",
+          "text": "demo_jobs/store.py, JobStore.claim_next reads and updates self._jobs and the job state without holding self._lock, although add, complete and count hold it. Two worker threads can both see the same pending job and both claim it, so the job is handled twice and the exactly-one-worker requirement fails; iterating _jobs while add() mutates it can also raise RuntimeError."
+        }
+      ],
+      "accepted_related": [
+        "No test starts concurrent claimers and asserts that each job is claimed once, so the drain test cannot catch the missing lock."
+      ]
+    },
+    {
+      "id": "r2",
+      "role": "review",
+      "title": "GPT-written diff that breaks a public contract",
+      "kind": "implementation",
+      "intent": "Refactor demo_export.report by moving CSV rendering into a helper. The public behavior of export_report must not change; docs/api.txt is its contract and no documentation change is part of this change.",
+      "evidence": "The current folder holds the repository after the change. Check results: the 3 tests in tests/test_report.py pass.",
+      "draft_file": "change.diff",
+      "real_problems": [
+        {
+          "id": "r2-p1",
+          "text": "demo_export/report.py, export_report now returns bytes instead of str. docs/api.txt documents a str result that callers may write to a text stream, and demo_export/cli.py passes the result to sys.stdout.write, which raises TypeError, so the public contract and its in-repository consumer break."
+        }
+      ],
+      "accepted_related": [
+        "The changed test no longer asserts the str result of export_report, so the suite does not catch the break.",
+        "docs/api.txt still says str and was not updated."
+      ]
+    },
+    {
+      "id": "r3",
+      "role": "review",
+      "title": "Issue body whose Proposal contradicts its acceptance criteria",
+      "kind": "issue body",
+      "intent": "An agent must be able to implement this issue without asking questions. The owning file is demo_notify/sender.py.",
+      "evidence": "The current folder holds demo_notify/sender.py, the file that the issue describes.",
+      "draft_file": "issue.txt",
+      "real_problems": [
+        {
+          "id": "r3-p1",
+          "text": "Proposal items 1 to 3 limit a delivery to 3 retries at a fixed 10 second wait and mark the event failed afterwards, while acceptance criterion 2 requires retries without a limit and a wait that doubles each time. An implementer cannot satisfy both."
+        }
+      ],
+      "accepted_related": []
+    },
+    {
+      "id": "d1",
+      "role": "debate",
+      "title": "Idempotency design with process-local state in a replicated service",
+      "start": "design/proposal.txt",
+      "real_problems": [
+        {
+          "id": "d1-p1",
+          "text": "Design steps 1 to 4 keep the seen event ids in a per-process in-memory set, while the Context says demo-pay runs 3 replicas behind a round-robin balancer and a retry may reach another replica. A duplicate delivered to a different replica (or after a restart, or after eviction from the 100000-id set) is not recognized, so the account is credited twice and the exactly-once goal fails. The dedup state must be shared and durable, for example a unique constraint on event_id in the same database transaction."
+        }
+      ],
+      "accepted_related": [
+        "The only test sends the duplicate to one handler instance, so it cannot catch the cross-replica duplicate.",
+        "Checking the set before the transaction and adding after it is not atomic, so two concurrent deliveries can both pass the check."
+      ]
+    },
+    {
+      "id": "d2",
+      "role": "debate",
+      "title": "Rate-limit design that loads limits once against a 60 second change requirement",
+      "start": "design/proposal.txt",
+      "real_problems": [
+        {
+          "id": "d2-p1",
+          "text": "Design step 1 reads every limit once at process start into LIMITS and nothing refreshes it, so requirement R2 (a changed limit applies within 60 seconds without a restart) fails; a tenant created later also falls to the default of step 4 until restart. The design needs a periodic refresh or a change subscription."
+        }
+      ],
+      "accepted_related": [
+        "The only test builds LIMITS by hand and never changes a limit, so it cannot catch the R2 failure."
+      ]
+    }
+  ]
+}

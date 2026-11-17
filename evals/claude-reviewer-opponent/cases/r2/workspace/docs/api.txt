@@ -1,0 +1,7 @@
+demo_export public API
+
+export_report(rows, *, fmt="csv") -> str
+    Render rows (mappings with the keys id, name, total) as a report and return it as text.
+    fmt: only "csv" is supported; any other value raises ValueError.
+    The returned text starts with the header line "id,name,total" and ends with a newline.
+    Callers may write the result directly to a text stream.
