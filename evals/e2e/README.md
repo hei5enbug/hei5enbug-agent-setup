@@ -60,7 +60,9 @@ repository README; only its unit tests are.
    itself and below load as the fixture defines them. The memory documentation names `claudeMdExcludes` for this;
    its `managed-only` value would also drop the fixture's own files. A variant's own `claudeMdExcludes` entries
    stay, and the harness patterns are added. `pilot-check` also fails a run whose transcripts carry an instruction
-   file of any type outside the trial repository and the exported plugin, and names the path.
+   file of any type outside the trial repository and the exported plugin, and names the path. It also fails a run
+   whose `approvals.jsonl` holds a denied `Read`, `Grep`, or `Glob` of a path inside its own exported plugin and names
+   the path relative to the plugin, so a run that could not read the rules it was given is never recorded as evidence.
 4. A wall-clock limit per task stops the agent with SIGINT, then SIGTERM, then SIGKILL. The signals reach the
    agent's process group and every process it started in a session of its own, such as a role runner child, and the
    harness confirms that none is left.
@@ -79,7 +81,11 @@ The user answers permission prompts in real use. The harness stands in for the u
 request (`Write`, `Edit`, `MultiEdit`, `NotebookEdit`, or any request with a `file_path` or `notebook_path`) whose
 path resolves outside the run's work folder, `work/<run id>/`, after `..` and symlinks are resolved. The denial
 message names the path and the folder. A relative path starts in the agent's working directory,
-`work/<run id>/repo/`. Every other request is allowed. The server logs each request, allowed or
+`work/<run id>/repo/`. The exception is the run's own exported plugin folder, which `mcp.json` passes as
+`EVAL_READ_ROOT`: `Read`, `Grep`, and `Glob` (the last two checked by their `path`) may reach it, so a trial can follow a
+plugin rule that names an instruction or reference file inside the plugin, and any other tool, such as `Write` or `Edit`,
+still cannot. The same folder resolution applies, so another variant's export and a path that leaves the folder through
+`..` or a symlink stay denied. A dry run prints the value as `approver env`. Every other request is allowed. The server logs each request, allowed or
 denied, with its decision to `approvals.jsonl`. The number of lines is the approval-prompt count, a friction
 metric, so a denied request still counts. An `mcp.json` without `EVAL_RUN_FOLDER` keeps the older allow-all
 behavior. A plugin hook that returns `ask` reaches this tool; the pilot confirmed this with a forced `git clean -f`.
@@ -371,7 +377,8 @@ record.
 ## Known limits
 
 - Bash requests are always allowed, so a campaign must run on a machine where an agent may run any shell command.
-  The approver denies only file-tool requests that resolve outside the run's work folder.
+  The approver denies only file-tool requests that resolve outside the run's work folder, apart from the read-only
+  exception for the run's own exported plugin.
 - The process-tree poll in `harness/process.py` can miss a detached child that starts after the last poll and before
   the agent exits, so such a child is not terminated.
 - Calls that need no prompt in the user's permission mode are not counted as approvals, so the approval count

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from . import codex_host, collect, metrics, transcript
+from .approval_mcp import READ_TOOLS, requested_paths
 from .config import APPROVER_TOOL, FORBIDDEN_ARGS, HOST_CLAUDE, HOST_CODEX, MOD_MARKER
 from .matrix import campaign_dir, read_json
 
@@ -17,6 +18,21 @@ REQUIRED_FLAGS = ("--plugin-dir", "--settings", "--permission-prompt-tool", "--m
 def own_roots(*paths: Any) -> list[Path]:
     """The given folders by their given and their resolved path; a path that is empty names no folder."""
     return [root for path in paths if path for root in (Path(os.path.abspath(str(path))), Path(str(path)).resolve())]
+
+
+def denied_plugin_reads(approvals: list[dict[str, Any]], plugin_path: str) -> list[str]:
+    """The paths, relative to the exported plugin, of every read-only file request the approver denied inside it."""
+    roots = own_roots(plugin_path)
+    found: list[str] = []
+    for record in approvals:
+        if record.get("decision") != "deny" or record.get("tool_name") not in READ_TOOLS:
+            continue
+        for path in requested_paths({"tool_name": record.get("tool_name"), "input": record.get("input")}):
+            target = Path(os.path.abspath(path)) if os.path.isabs(path) else None
+            relative = next((target.relative_to(root).as_posix() for root in roots if target and target.is_relative_to(root)), None)
+            if relative is not None and relative not in found:
+                found.append(relative)
+    return found
 
 
 def command_problems(argv: list[str]) -> list[str]:
@@ -46,6 +62,7 @@ def check_run(result_dir: Path) -> list[tuple[str, bool, str]]:
     user_files = metrics.user_instruction_files(events)
     cwd = (read_json(result_dir / "command.json", {}) or {}).get("cwd")
     outside = metrics.instruction_files_outside(events, own_roots(cwd, expected))
+    unread = denied_plugin_reads(transcript.read_jsonl(result_dir / "approvals.jsonl"), expected) if expected else []
     return [
         ("result message present", facts["has_result"], str(run.get("status"))),
         ("plugin loaded from the exported directory", plugin["loaded_from_export"], expected),
@@ -53,6 +70,7 @@ def check_run(result_dir: Path) -> list[tuple[str, bool, str]]:
         ("no plugin besides the variant", not plugin["extra_plugins"], ", ".join(plugin["extra_plugins"])),
         ("no user-level memory or rule file loaded", not user_files, ", ".join(user_files)),
         ("no instruction file outside the trial repo and the exported plugin", not outside, ", ".join(outside)),
+        ("no denied read inside the exported plugin", not unread, ", ".join(unread)),
         ("auto memory switched off for the run", AUTO_MEMORY_OFF_ENV in isolation.get("env", {}) and isolation["env"][AUTO_MEMORY_OFF_ENV] == "1", ""),
         ("no auto memory path in the init event", not facts["auto_memory_path"], str(facts["auto_memory_path"])),
         ("mod marker in the main transcript", plugin["mod_marker_present"], MOD_MARKER),

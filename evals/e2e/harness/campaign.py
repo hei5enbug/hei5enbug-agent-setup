@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import secrets
 import shlex
 import signal
@@ -12,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Iterator, TextIO
 
 from . import caps, codex_host, command, environment, inputs, plugin_export
-from .config import EXIT_INTERRUPTED, EXIT_USAGE_LIMIT, HOST_CLAUDE, STATUS_RUNNING, STATUS_USAGE_LIMITED, HarnessConfig
+from .config import APPROVER_SERVER, EXIT_INTERRUPTED, EXIT_USAGE_LIMIT, HOST_CLAUDE, STATUS_RUNNING, STATUS_USAGE_LIMITED, HarnessConfig
 from .matrix import (
     CampaignState, RunSpec, campaign_dir, make_spec, move_aside, parse_run_id, plan_runs, read_json, run_id_for, runs_to_start,
     write_json,
@@ -53,7 +54,9 @@ def print_plan(out: TextIO, cfg: HarnessConfig, specs: list[RunSpec], tasks: dic
         header = f"\n[{index}] {spec.run_id} host={spec.host} wall={task['limits']['wall_seconds']}s cwd={spec.repo}\n"
         if spec.host == HOST_CLAUDE:
             argv = command.build_command(cfg, task, variant, prompt, plugin_paths[spec.variant], spec.result_dir)
-            out.write(f"{header}{shlex.join(argv)}\n")
+            approver = command.mcp_config(spec.result_dir / "approvals.jsonl", spec.work_dir, spec.repo, plugin_paths[spec.variant])
+            env = approver["mcpServers"][APPROVER_SERVER]["env"]
+            out.write(f"{header}{shlex.join(argv)}\napprover env: {json.dumps(env, sort_keys=True)}\n")
             continue
         argv = codex_host.build_codex_command(cfg, variant, prompt, spec.repo)
         env = " ".join(f"{name}={shlex.quote(value)}" for name, value in codex_host.host_env(spec.result_dir).items())

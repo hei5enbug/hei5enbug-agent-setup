@@ -125,10 +125,14 @@ def run_settings(variant: dict[str, Any], profile_plugins: Iterable[str] = (), a
             **({"claudeMdExcludes": excludes} if excludes else {})}
 
 
-def mcp_config(approval_log: Path, run_folder: Path | None = None, cwd: Path | None = None) -> dict[str, Any]:
-    """The approver server config; it denies file tools outside `run_folder` and reads relative paths from `cwd`."""
+def mcp_config(
+    approval_log: Path, run_folder: Path | None = None, cwd: Path | None = None, read_root: Path | str | None = None,
+) -> dict[str, Any]:
+    """The approver server config; it denies file tools outside `run_folder`, except that Read, Grep, and Glob may also reach
+    `read_root`, the run's exported plugin, and it reads relative paths from `cwd`."""
     folder = {"EVAL_RUN_FOLDER": str(run_folder)} if run_folder else {}
-    env = {"EVAL_APPROVAL_LOG": str(approval_log), **folder, **({"EVAL_RUN_CWD": str(cwd)} if run_folder and cwd else {})}
+    env = {"EVAL_APPROVAL_LOG": str(approval_log), **folder, **({"EVAL_RUN_CWD": str(cwd)} if run_folder and cwd else {}),
+           **({"EVAL_READ_ROOT": str(read_root)} if run_folder and read_root else {})}
     return {"mcpServers": {APPROVER_SERVER: {
         "type": "stdio", "command": "python3", "args": [str(APPROVER_SCRIPT)], "env": env,
     }}}
