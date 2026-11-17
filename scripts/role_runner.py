@@ -15,7 +15,9 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import codex_hook_trust  # noqa: E402
 from role_runner_agents import agent_run, chosen_effort, default_host, runner_for  # noqa: E402
-from role_runner_child import child_environment, codex_mcp_off, kill_group, run_child  # noqa: E402
+from role_runner_child import (  # noqa: E402
+    child_environment, codex_mcp_off, kill_group, new_scratch, remove_scratch, run_child,
+)
 from role_runner_command import claude_command, claude_tools, codex_command, sandbox_for  # noqa: E402
 from role_runner_config import (  # noqa: E402
     AGENT_TARGET, CAPABILITIES, CLAUDE_HOOKS_MESSAGE, CODEX_HOOKS_MESSAGE, DEFAULT_REVIEW_MODEL, EXIT_EVIDENCE, EXIT_OK,
@@ -23,7 +25,7 @@ from role_runner_config import (  # noqa: E402
     ROLE_ENTRY, ROLE_MODEL, ROLE_SENTENCES, ROLES, WRITING_CAPABILITIES, Run, RunnerError, UsageError, build_parser,
 )
 from role_runner_evidence import (  # noqa: E402
-    claude_result, codex_home, json_lines, require_heartbeat, thread_id_from, verify_claude, verify_codex,
+    claude_result, codex_home, json_lines, require_heartbeat, thread_id_from, turn_count, verify_claude, verify_codex,
 )
 from role_runner_hooks import exchange_hooks, guard_ready, heal_hooks, hooks_for_cwd, is_guard_hook  # noqa: E402
 from role_runner_prompt import capability_sentence, compose, compose_capability_prompt, compose_prompt  # noqa: E402
@@ -136,8 +138,9 @@ def execute_codex(args: argparse.Namespace, run: Run, prompt: str, cwd: str) -> 
         require_hooks_ready(run.target, mcp_off, cwd, args.timeout)
         if run.resume is not None:
             require_heartbeat("codex", run.resume, CODEX_HOOKS_MESSAGE)
-    stdout = run_child(run.target, codex_command(run, cwd, args.result, mcp_off), prompt, cwd, args.timeout)
-    evidence = verify_codex(stdout, run.model, run.effort, sandbox)
+    earlier = turn_count(run.resume) if run.resume is not None else 0
+    stdout = run_child(run.target, codex_command(run, cwd, args.result, mcp_off), prompt, cwd, args.timeout, run.scratch)
+    evidence = verify_codex(stdout, run.model, run.effort, sandbox, run.scratch, earlier)
     if not run.writing and evidence["tool_calls"]:
         require_heartbeat("codex", evidence["session"], CODEX_HOOKS_MESSAGE)
     result_path = Path(args.result)
@@ -214,7 +217,7 @@ def resolve(args: argparse.Namespace) -> Run:
         return Run(
             target=target, role=target, capability=None, fallback=False, runner=runner_for(model), model=model,
             effort=chosen_effort(args.effort, ROLE_ENTRY, model, args.user_requested), writing=target == "worker", add_dirs=tuple(args.add_dirs),
-            resume=args.resume, instructions=None,
+            resume=args.resume, instructions=None, validation=args.validation,
         )
     host = args.host or default_host()
     primary = capability_model(target, host)
@@ -237,6 +240,11 @@ def resolve(args: argparse.Namespace) -> Run:
 def plan(args: argparse.Namespace) -> Run:
     validate(args)
     run = replace(resolve(args), user_requested=args.user_requested)
+    if run.validation and run.runner == "claude":
+        raise UsageError(
+            f"--validation cannot run on {run.model}: no supported way confines a Claude shell's writes to the scratch folder yet; "
+            "use a GPT reviewer model"
+        )
     if run.writing and run.runner == "claude" and not run.add_dirs and run.agent is None:
         label = f"capability {run.capability}" if run.capability else f"role {run.role}"
         raise UsageError(f"The Claude path of the writing {label} needs --add-dir for each directory it may edit")
@@ -248,13 +256,19 @@ def plan(args: argparse.Namespace) -> Run:
 def run_pair(args: argparse.Namespace, run: Run, root: Path, cwd: str, assignment: str, result: str) -> tuple[int, str, str | None]:
     """Run one assignment and result pair as a single run would, and return its exit code, status line, and error text."""
     pair = argparse.Namespace(**{**vars(args), "assignment": assignment, "result": result})
+    scratch = None
     try:
+        if not run.writing and run.runner == "codex":
+            scratch = new_scratch()
+            run = replace(run, scratch=scratch)
         evidence = execute(pair, run, root, cwd)
     except RunnerError as error:
         return error.code, status(run, False, error.evidence, error.code), str(error)
     except OSError as error:
         message = f"Cannot handle the result file: {error}"
         return EXIT_RUN, status(run, False, {"error": message}, EXIT_RUN), message
+    finally:
+        remove_scratch(scratch)
     return EXIT_OK, status(run, True, evidence, EXIT_OK), None
 
 

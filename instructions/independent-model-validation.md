@@ -48,12 +48,17 @@ substitute another model tier or a lower reasoning effort than this selection. T
 the draft, repository, or external state.
 
 Keep the main session's model and effort unchanged. Pass the reviewer's model and effort explicitly to a
-separate host runner, enforce read-only tools or sandbox, and verify the actual model and effort from host
-records before counting the review as complete. A silent fallback or effort cap is not a completed review.
-Do not enable extra billing or change authentication to make the review available.
+separate host runner, and verify the actual model and effort from host records, and the write limit, before
+counting the review as complete. The reviewer runs in a sandbox whose only writable path is the runner's per-run scratch
+folder, so it may run the project's tests, scripts, and calculations and install what a check needs there, but
+edits nothing else. Pass `--validation` to the runner for a GPT reviewer; the runner refuses it for a Claude
+reviewer model, whose shell it cannot yet confine to the scratch folder, and that reviewer runs without it. A
+silent fallback or effort cap is not a completed review. Do not enable extra billing or change authentication to
+make the review available.
 
 For an implementation review, provide the accepted scope, complete change diff, relevant source paths,
-acceptance criteria, and check results instead of the conversation history. Also provide the callers and consumers
+acceptance criteria, and check results instead of the conversation history, including the check commands you ran
+with their results so the reviewer can rerun them. Also provide the callers and consumers
 of each changed function, contract, schema, or setting that the author found, and baseline measurements, such as a
 previous run time, when the change can affect them. Include necessary untracked files; a tracked-only diff can omit
 the implementation. Return concise findings with severity and evidence, and name
@@ -99,7 +104,7 @@ reviewer, or repeat validation after finalization. A failed or unavailable revie
 second model call. A declined earlier review authorizes no substitute independent review. Routine author
 inspection and required tests still run; never label them independent validation.
 
-If the required model, effort, read-only execution, or model runner is unavailable, do not substitute
+If the required model, effort, write-limited execution, or model runner is unavailable, do not substitute
 another configuration or present author inspection as independent review. A role runner exit code 3 or 4
 means the same. Finish work that does not depend on the reviewer and report that independent validation was
 not performed and why.

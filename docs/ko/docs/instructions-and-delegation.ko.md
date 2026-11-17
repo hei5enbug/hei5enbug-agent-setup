@@ -128,7 +128,13 @@ Claude Code에서는 `scripts/role_runner.py`가 scout, researcher, reviewer, Co
 허용하지 않는 사고 강도는 대체 실행 없이 종료 코드 2로 끝나고, 상태 줄에 `"user_requested": true`가 추가됩니다. `--assignment`와 `--result`를
 반복하면 같은 대상의 읽기 전용 할당을 최대 여섯 개 병렬로 실행하고 각각 상태 줄을 출력하며, 실행기는 그중 가장 높은 종료 코드로
 끝납니다. 읽기 전용 자식은 호스트의 스킬 목록 없이 실행합니다. Codex에는 `-c skills.max_context_tokens=1`을,
-Claude에는 `--disable-slash-commands`를 넘깁니다.
+Claude에는 `--disable-slash-commands`를 넘깁니다. 읽기 전용 Codex 자식은 디스크 전체를 읽고
+시스템 임시 폴더 아래의 새 scratch 폴더만 쓰는 권한 프로필로 실행합니다. 실행기는 실행마다, 그리고 `--resume` 호출마다 이
+폴더를 만들고 어떤 종료에서든 지웁니다. 자식 환경의 `TMPDIR`, `UV_CACHE_DIR`, `XDG_CACHE_HOME`, `PYTHONPYCACHEPREFIX`,
+`npm_config_cache`, `PIP_CACHE_DIR`은 그 폴더 안을 가리키며, 이번 호출이 더한 turn이 그 폴더에만 쓸 수 있었다고 rollout의
+`permission_profile`이 보여 주지 않으면 실행기는 종료 코드 4로 끝납니다. `reviewer`에만, GPT 모델일 때만 허용하는
+`--validation`은 검토자가 프로젝트의 테스트, 스크립트, 계산을 실행하고 scratch 폴더에 설치하게 하며 설치에는 네트워크를
+허용합니다. Claude 경로에는 지원되는 쓰기 제한이 아직 없어서 Claude 검토 모델에는 실행기가 종료 코드 2로 끝납니다.
 실행기는 역할 규칙을 할당 앞에 붙이고, 고정된 모델·사고 강도·권한으로 실행하며(`codex exec`, Claude 검토 모델은 `claude -p`),
 호스트의 rollout 또는 transcript 기록을 확인한 뒤 마지막 줄에 JSON 상태를 출력합니다. `--mcp`가 없으면 Codex 자식에는
 `codex mcp list --json`이 보여 주는 서버마다 `-c mcp_servers.<name>.enabled=false`를 넘기고, Claude 자식은
@@ -147,7 +153,7 @@ rollout에 도구 호출이 기록되어 있으면 `heartbeats/codex-<thread_id>
 `/hooks`에서 다시 신뢰하기 전까지 `auto_trust`에 이유를 담아 종료 코드 4로 끝납니다. Claude는 플러그인 훅에 신뢰 절차를 적용하지
 않으므로 자식의 `heartbeats/claude-<session_id>.UserPromptSubmit` 또는 기존 일반 하트비트를 요구합니다.
 필수 하트비트가 없으면 종료 코드 4입니다. 종료 코드 0은 결과가 검증되었다는
-뜻이고, 2는 고쳐야 할 사용 오류, 3은 역할을 실행하지 못했다는 뜻, 4는 필수 훅 증거가 없거나 기록된 모델, 사고 강도, 샌드박스가 달라 결과를
+뜻이고, 2는 고쳐야 할 사용 오류, 3은 역할을 실행하지 못했다는 뜻, 4는 필수 훅 증거가 없거나 기록된 모델, 사고 강도, 쓰기 제한이 달라 결과를
 폐기했다는 뜻입니다. 3이나 4이면 메인 세션이 해당 역할의 플러그인 에이전트 대체 경로를 씁니다. 독립 검증에는 대체 경로가
 없으며, 수행하지 못했다고 보고합니다. `via`가 `agent`인 기능 항목은 실행기가 실행하지 않고 종료 코드 2로 끝나므로, 메인
 세션이 그 항목에는 에이전트 경로를 씁니다.

@@ -63,29 +63,71 @@ def count_tool_calls(rollout: Path) -> int:
     return count
 
 
-def verify_codex(stdout: str, model: str, effort: str, sandbox: str) -> dict:
-    thread_id = thread_id_from(stdout)
-    if thread_id is None:
-        raise RunnerError(EXIT_EVIDENCE, "No thread.started event with a thread_id in the Codex output")
+def rollout_for(thread_id: str) -> tuple[Path, list[Path]]:
     sessions = codex_home() / "sessions"
     rollouts = sorted(sessions.glob(f"**/rollout-*{thread_id}.jsonl")) if sessions.is_dir() else []
-    if not rollouts:
-        raise RunnerError(EXIT_EVIDENCE, f"No rollout file for thread {thread_id} under {sessions}")
-    rollout = rollouts[-1]
+    return sessions, rollouts
+
+
+def turn_contexts(rollout: Path) -> list[dict]:
     turns = []
     for entry in json_lines(rollout):
         if entry.get("type") == "turn_context":
             payload = entry.get("payload")
             turns.append(payload if isinstance(payload, dict) else {})
+    return turns
+
+
+def turn_count(thread_id: str) -> int:
+    """Return how many turns a thread's rollout already records, so a resume can be checked on the turns it adds."""
+    _, rollouts = rollout_for(thread_id)
+    return len(turn_contexts(rollouts[-1])) if rollouts else 0
+
+
+def write_limit_problem(turn: dict, scratch: str) -> str | None:
+    """Return why a turn's permission profile does not limit writes to the scratch folder, or None when it does."""
+    profile = turn.get("permission_profile")
+    system = profile.get("file_system") if isinstance(profile, dict) else None
+    if not isinstance(system, dict) or system.get("type") != "restricted" or not isinstance(system.get("entries"), list):
+        return "turn_context records no restricted file system, so no write limit is shown"
+    wanted = Path(scratch).resolve()
+    limited = False
+    for entry in system["entries"]:
+        if not isinstance(entry, dict) or entry.get("access") != "write":
+            continue
+        target = entry.get("path")
+        named = target.get("path") if isinstance(target, dict) and target.get("type") == "path" else None
+        if not isinstance(named, str) or Path(named).resolve() != wanted:
+            return f"turn_context allows writes to {json.dumps(target)}, expected only {wanted}"
+        limited = True
+    return None if limited else f"turn_context allows no write to the scratch folder {wanted}"
+
+
+def verify_codex(stdout: str, model: str, effort: str, sandbox: str, scratch: str | None = None, skip_turns: int = 0) -> dict:
+    """Verify a Codex run's model, effort, and write limit. A run with a scratch folder must write only there on the
+    turns it added after skip_turns; any other run must record the requested sandbox type."""
+    thread_id = thread_id_from(stdout)
+    if thread_id is None:
+        raise RunnerError(EXIT_EVIDENCE, "No thread.started event with a thread_id in the Codex output")
+    sessions, rollouts = rollout_for(thread_id)
+    if not rollouts:
+        raise RunnerError(EXIT_EVIDENCE, f"No rollout file for thread {thread_id} under {sessions}")
+    rollout = rollouts[-1]
+    turns = turn_contexts(rollout)
     if not turns:
         raise RunnerError(EXIT_EVIDENCE, f"No turn_context entry in {rollout}", {"rollout": rollout.as_posix()})
-    for turn in turns:
+    for index, turn in enumerate(turns):
         if turn.get("model") != model or turn.get("effort") != effort:
             raise RunnerError(
                 EXIT_EVIDENCE,
                 f"turn_context names {turn.get('model')!r} with {turn.get('effort')!r}, expected {model!r} with {effort!r}",
                 {"rollout": rollout.as_posix(), "turns": len(turns)},
             )
+        if scratch is not None:
+            problem = write_limit_problem(turn, scratch) if index >= skip_turns else None
+            if problem is not None:
+                raise RunnerError(EXIT_EVIDENCE, problem, {"rollout": rollout.as_posix(), "turns": len(turns)})
+            continue
         policy = turn.get("sandbox_policy")
         sandbox_type = policy.get("type") if isinstance(policy, dict) else None
         if sandbox_type != sandbox:
@@ -94,6 +136,8 @@ def verify_codex(stdout: str, model: str, effort: str, sandbox: str) -> dict:
                 f"turn_context names sandbox {sandbox_type!r}, expected {sandbox!r}",
                 {"rollout": rollout.as_posix(), "turns": len(turns)},
             )
+    if scratch is not None and skip_turns >= len(turns):
+        raise RunnerError(EXIT_EVIDENCE, f"The run added no turn_context entry to {rollout}", {"rollout": rollout.as_posix()})
     return {"rollout": rollout.as_posix(), "turns": len(turns), "session": thread_id, "tool_calls": count_tool_calls(rollout)}
 
 

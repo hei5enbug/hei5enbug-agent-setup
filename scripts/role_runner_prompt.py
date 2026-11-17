@@ -5,7 +5,8 @@ from pathlib import Path
 
 import session_context
 from role_runner_config import (
-    MCP_NETWORK_RULE, NO_NETWORK_RULE, READ_SHELL_RULES, ROLE_DEFINITIONS, ROLE_SENTENCES, ROLES, Run, worker_sentence,
+    MCP_NETWORK_RULE, NO_NETWORK_RULE, NO_RUN_RULE, READ_SHELL_RULES, ROLE_DEFINITIONS, ROLE_SENTENCES, ROLES,
+    VALIDATION_SENTENCE, Run, validation_rule, worker_sentence,
 )
 
 
@@ -48,11 +49,19 @@ def capability_sentence(capability: str, mcp: bool = False) -> str:
     )
 
 
-def compose_prompt(role: str, assignment_text: str, root: Path) -> str:
-    """Build the full prompt: role sentence, role definition body, worker rules for a worker, then the assignment."""
+def compose_prompt(role: str, assignment_text: str, root: Path, scratch: str | None = None, validation: bool = False) -> str:
+    """Build the full prompt: role sentence, role definition body, worker rules for a worker, then the assignment.
+
+    A validation reviewer gets the scratch-folder rule in place of the rule against build, test, install, and network commands."""
     if role not in ROLES:
         raise ValueError(f"Unsupported role: {role}")
-    parts = [ROLE_SENTENCES[role], role_body(role, root)]
+    if not validation:
+        parts = [ROLE_SENTENCES[role], role_body(role, root)]
+    else:
+        body = role_body(role, root)
+        if scratch is None or role != "reviewer" or NO_RUN_RULE.search(body) is None:
+            raise ValueError("A validation prompt needs the reviewer role, its rule against running commands, and a scratch folder")
+        parts = [VALIDATION_SENTENCE, NO_RUN_RULE.sub(lambda _: validation_rule(scratch), body)]
     if role == "worker":
         parts.append(session_context.assigned_workers_section(root))
     parts.append("## Assignment\n\n" + assignment_text.strip())
@@ -91,7 +100,7 @@ def compose(run: Run, args: argparse.Namespace, root: Path) -> str:
     if run.agent is not None:
         return compose_agent_prompt(run.body, assignment_text, root, run.mcp, limited_shell)
     if run.capability is None:
-        return compose_prompt(run.role, assignment_text, root)
+        return compose_prompt(run.role, assignment_text, root, run.scratch, run.validation)
     instructions = run.instructions.read_text(encoding="utf-8")
     body = without_frontmatter(instructions, run.instructions.as_posix())
     return compose_capability_prompt(run.capability, body, assignment_text, root, run.mcp, limited_shell)

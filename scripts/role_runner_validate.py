@@ -18,6 +18,8 @@ def validate(args: argparse.Namespace) -> None:
     validate_request(args, target)
     if args.add_dirs and not accepts_add_dir(target):
         raise UsageError("--add-dir is allowed only for the worker role, writing capabilities, and agent mode")
+    if args.validation and target != "reviewer":
+        raise UsageError("--validation is allowed only for the reviewer role")
     if args.timeout <= 0:
         raise UsageError("--timeout must be a positive number of seconds")
     if is_role and args.fallback:

@@ -4,6 +4,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -37,7 +38,7 @@ def allowed_rules(argv: list[str]) -> list[str]:
     return argv[start:end]
 
 FAKE_EXECUTABLE = '''#!{python}
-import json, os, sys, time
+import json, os, re, sys, time
 from pathlib import Path
 
 name = Path(sys.argv[0]).name
@@ -49,6 +50,9 @@ with open(os.environ["FAKE_LOG"], "a") as log:
         "name": name, "argv": sys.argv[1:], "stdin": stdin, "cwd": os.getcwd(),
         "role": os.environ.get("HEI5ENBUG_ASSIGNED_ROLE"), "pid": os.getpid(),
         "parent": os.environ.get("HEI5ENBUG_PARENT_SESSION"), "started": time.time(),
+        "environ": {{key: os.environ.get(key) for key in (
+            "TMPDIR", "UV_CACHE_DIR", "XDG_CACHE_HOME", "PYTHONPYCACHEPREFIX", "npm_config_cache", "PIP_CACHE_DIR")}},
+        "scratch_exists": os.path.isdir(os.environ.get("TMPDIR") or "/nonexistent"),
     }}) + "\\n")
 
 
@@ -130,11 +134,13 @@ if name == "codex":
     argv = sys.argv[1:]
     sandbox = argv[argv.index("-s") + 1] if "-s" in argv else next(
         (item.split("=", 1)[1].strip('"') for item in argv if item.startswith("sandbox_mode=")), None)
+    scratch = next((match.group(1) for item in argv for match in [re.search(r'"(/[^"]*)"="write"', item)] if match), None)
     if "-o" in argv and not any(needle in stdin for needle in config.get("no_answer_when", [])):
         Path(argv[argv.index("-o") + 1]).write_text(config.get("message", "codex answer"))
     if not config.get("no_thread"):
-        print(json.dumps({{"type": "thread.started", "thread_id": config.get("thread", "{thread}")}}))
-        touch_heartbeat("codex", config.get("thread", "{thread}"))
+        thread_id = config.get("thread", "{thread}") + ("-" + str(os.getpid()) if config.get("unique_thread") else "")
+        print(json.dumps({{"type": "thread.started", "thread_id": thread_id}}))
+        touch_heartbeat("codex", thread_id)
     print(json.dumps({{"type": "turn.completed"}}))
     if not config.get("no_rollout"):
         home = Path(os.environ["CODEX_HOME"]) / "sessions" / "2026" / "10" / "12"
@@ -145,9 +151,16 @@ if name == "codex":
         lines.append(json.dumps({{"type": "response_item", "payload": {{"type": "web_search_call"}}}}))
         for turn in config.get("turns", [{{"model": "gpt-5.6-luna", "effort": "high"}}]):
             turn = dict(turn)
+            if scratch is not None:
+                writes = [scratch, *config.get("extra_writes", [])]
+                entries = [{{"access": "read", "path": {{"type": "special", "value": {{"kind": "root"}}}}}}]
+                entries += [{{"access": "write", "path": {{"type": "path", "path": path}}}} for path in writes]
+                profile = {{"type": "managed", "file_system": {{"type": "restricted", "entries": entries}}, "network": "restricted"}}
+                turn.setdefault("permission_profile", None if config.get("no_profile") else profile)
+                turn.setdefault("sandbox_policy", {{"type": "workspace-write"}})
             turn.setdefault("sandbox_policy", {{"type": sandbox}})
             lines.append(json.dumps({{"type": "turn_context", "payload": turn}}))
-        (home / "rollout-2026-10-12T00-00-00-{thread}.jsonl").write_text("\\n".join(lines) + "\\n")
+        (home / ("rollout-2026-10-12T00-00-00-" + (thread_id if config.get("unique_thread") else "{thread}") + ".jsonl")).write_text("\\n".join(lines) + "\\n")
 else:
     model = config.get("model", "claude-opus-5-5")
     touch_heartbeat("claude", "{session}")
@@ -220,8 +233,24 @@ class RoleRunnerTest(unittest.TestCase):
         heartbeat.with_name(heartbeat.name + "." + event).touch()
 
     def calls(self):
-        """Every logged child call in order, including the MCP listing and the hook readiness call."""
-        return [json.loads(line) for line in self.log.read_text().splitlines()]
+        """Every logged child call in order, including the MCP listing and the hook readiness call.
+
+        The run's scratch folder differs on every run, so its path in the arguments reads `<scratch>` and call["scratch"] keeps it."""
+        calls = [json.loads(line) for line in self.log.read_text().splitlines()]
+        for call in calls:
+            found = [match.group(1) for item in call["argv"] for match in [re.search(r'"(/[^"]*)"="write"', item)] if match]
+            call["scratch"] = found[0] if found else None
+            if found:
+                call["argv"] = [item.replace(found[0], "<scratch>") for item in call["argv"]]
+        return calls
+
+    def scratch_flags(self, validation=False):
+        """The overrides of a read-only Codex run: a profile that reads the disk and writes only the run's scratch folder."""
+        network = ',network={enabled=true,domains={"*"="allow"}}' if validation else ""
+        return [
+            "-c", 'default_permissions="role-runner-scratch"',
+            "-c", f'permissions.role-runner-scratch={{filesystem={{":root"="read","<scratch>"="write"}}{network}}}',
+        ]
 
     def logged(self):
         """The last child call: the assignment run, or the failing call when an earlier step stopped the runner."""
@@ -238,7 +267,7 @@ class RoleRunnerTest(unittest.TestCase):
     def status(self, completed):
         return json.loads(completed.stdout.strip().splitlines()[-1])
 
-    def codex_argv(self, *, search=False, sandbox="read-only", model="gpt-5.6-luna", effort="high", add_dirs=(), mcp_off=True, output=None):
+    def codex_argv(self, *, search=False, sandbox="read-only", model="gpt-5.6-luna", effort="high", add_dirs=(), mcp_off=True, output=None, validation=False):
         """The assignment run of a Codex child: the scoped exec resume of the preflight thread when it writes, else one fresh exec."""
         if sandbox == "workspace-write":
             return self.codex_resume_argv(
@@ -246,12 +275,15 @@ class RoleRunnerTest(unittest.TestCase):
             )
         return self.codex_start_argv(
             search=search, sandbox=sandbox, model=model, effort=effort, add_dirs=add_dirs, mcp_off=mcp_off, output=output,
+            validation=validation,
         )
 
-    def codex_start_argv(self, *, search=False, sandbox="read-only", model="gpt-5.6-luna", effort="high", add_dirs=(), mcp_off=True, output=None):
+    def codex_start_argv(self, *, search=False, sandbox="read-only", model="gpt-5.6-luna", effort="high", add_dirs=(), mcp_off=True, output=None, validation=False):
         """The fresh exec of a Codex child: the assignment of a read-only run, or the hook preflight of a writing run."""
         argv = ["--search"] if search else []
-        argv += ["exec", "-m", model, "-c", f'model_reasoning_effort="{effort}"', "-s", sandbox, "-C", str(self.workspace)]
+        argv += ["exec", "-m", model, "-c", f'model_reasoning_effort="{effort}"']
+        argv += self.scratch_flags(validation) if sandbox == "read-only" else ["-s", sandbox]
+        argv += ["-C", str(self.workspace)]
         argv += self.mcp_off_flags(mcp_off)
         argv += self.skills_off_flags(sandbox)
         for directory in add_dirs:
@@ -269,7 +301,8 @@ class RoleRunnerTest(unittest.TestCase):
 
     def codex_resume_argv(self, *, search=False, sandbox="read-only", model="gpt-5.6-luna", effort="high", roots=(), mcp_off=True, output=None, thread=THREAD):
         argv = ["--search"] if search else []
-        argv += ["exec", "resume", thread, "-m", model, "-c", f'model_reasoning_effort="{effort}"', "-c", f'sandbox_mode="{sandbox}"']
+        argv += ["exec", "resume", thread, "-m", model, "-c", f'model_reasoning_effort="{effort}"']
+        argv += self.scratch_flags() if sandbox == "read-only" else ["-c", f'sandbox_mode="{sandbox}"']
         argv += self.mcp_off_flags(mcp_off)
         argv += self.skills_off_flags(sandbox)
         if roots:
@@ -453,7 +486,7 @@ class RoleRunnerTest(unittest.TestCase):
             configs = [argv[index + 1] for index, item in enumerate(argv) if item in ("-c", "--config")]
             allowed = (
                 "model_reasoning_effort=", "sandbox_mode=", "mcp_servers.", "sandbox_workspace_write.writable_roots=",
-                "skills.max_context_tokens=",
+                "skills.max_context_tokens=", "default_permissions=", "permissions.role-runner-scratch=",
             )
             self.assertTrue(all(item.startswith(allowed) for item in configs), configs)
             self.assertTrue(all("workspace-write" in item or "read-only" in item for item in configs if item.startswith("sandbox_mode=")))
@@ -676,10 +709,19 @@ class RoleRunnerTest(unittest.TestCase):
         # Then
         self.assertEqual(4, completed.returncode)
 
+    def workspace_write_turn(self):
+        """A turn_context whose profile can write the working directory, as a workspace-write sandbox records it."""
+        entries = [
+            {"access": "read", "path": {"type": "special", "value": {"kind": "root"}}},
+            {"access": "write", "path": {"type": "path", "path": str(self.workspace)}},
+        ]
+        profile = {"type": "managed", "file_system": {"type": "restricted", "entries": entries}, "network": "restricted"}
+        return {"model": "gpt-5.6-luna", "effort": "high", "sandbox_policy": {"type": "workspace-write"}, "permission_profile": profile}
+
     def test_turn_context의_sandbox가_요청과_다르면_종료_코드_4이고_결과를_폐기한다(self):
-        """scout은 read-only로 실행하므로 turn_context가 workspace-write이면 종료 코드 4이고 결과를 남기지 않는다."""
+        """scout은 scratch 폴더만 쓰도록 실행하므로 turn_context가 작업 폴더를 쓸 수 있으면 종료 코드 4이고 결과를 남기지 않는다."""
         # Given
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "high", "sandbox_policy": {"type": "workspace-write"}}]}
+        config = {"turns": [self.workspace_write_turn()]}
 
         # When
         completed = self.run_runner("scout", config=config)
@@ -689,10 +731,11 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertFalse(self.result.exists())
 
     def test_turn_context에_sandbox_정보가_없으면_종료_코드_4이다(self):
-        """sandbox_policy가 null이거나 type이 없으면 요청한 sandbox를 확인할 수 없어 종료 코드 4이다."""
+        """permission_profile이 null이거나 file_system이 없으면 쓰기 제한을 확인할 수 없어 종료 코드 4이다."""
         cases = [
-            {"model": "gpt-5.6-luna", "effort": "high", "sandbox_policy": None},
-            {"model": "gpt-5.6-luna", "effort": "high", "sandbox_policy": {}},
+            {"model": "gpt-5.6-luna", "effort": "high", "sandbox_policy": None, "permission_profile": None},
+            {"model": "gpt-5.6-luna", "effort": "high", "sandbox_policy": {}, "permission_profile": {}},
+            {"model": "gpt-5.6-luna", "effort": "high", "permission_profile": {"type": "disabled"}},
         ]
         for turn in cases:
             with self.subTest(turn=turn):
@@ -758,9 +801,9 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertNotIn("--add-dir", self.logged()["argv"])
 
     def test_codex_resume에서도_turn_context의_sandbox가_다르면_종료_코드_4이다(self):
-        """resume한 실행의 turn_context sandbox가 요청과 다르면 종료 코드 4이고 결과를 남기지 않는다."""
+        """resume한 실행의 turn_context가 작업 폴더를 쓸 수 있으면 종료 코드 4이고 결과를 남기지 않는다."""
         # Given
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "high", "sandbox_policy": {"type": "workspace-write"}}]}
+        config = {"turns": [self.workspace_write_turn()]}
         self.beat("codex", THREAD)
 
         # When
@@ -2643,7 +2686,7 @@ class RoleRunnerTest(unittest.TestCase):
         pairs = self.pair_args("A", "B")
 
         # When
-        completed = self.run_runner("scout", *pairs, assignment=False, result=False, config={"sleep": 0.5})
+        completed = self.run_runner("scout", *pairs, assignment=False, result=False, config={"sleep": 0.5, "unique_thread": True})
 
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
@@ -2867,6 +2910,179 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(2, code)
         self.assertFalse(self.log.exists())
         self.assertEqual(2, json.loads(output.strip().splitlines()[-1])["exit"])
+
+    def scratch_turn(self, *writes):
+        """A turn_context whose permission profile reads the disk and writes only the given paths."""
+        entries = [{"access": "read", "path": {"type": "special", "value": {"kind": "root"}}}]
+        entries += [{"access": "write", "path": {"type": "path", "path": path}} for path in writes]
+        profile = {"type": "managed", "file_system": {"type": "restricted", "entries": entries}, "network": "restricted"}
+        return {"model": "gpt-6.1-sol", "effort": "high", "sandbox_policy": {"type": "workspace-write"}, "permission_profile": profile}
+
+    def seed_rollout(self, turns, thread="seeded-thread"):
+        """Plant a Codex rollout of the given turn_context payloads and return the stdout that names its thread."""
+        directory = self.codex_home / "sessions" / "2026" / "11" / "17"
+        directory.mkdir(parents=True, exist_ok=True)
+        lines = [json.dumps({"type": "turn_context", "payload": turn}) for turn in turns]
+        (directory / f"rollout-2026-11-17T00-00-00-{thread}.jsonl").write_text("\n".join(lines) + "\n")
+        return json.dumps({"type": "thread.started", "thread_id": thread}) + "\n"
+
+    def verify_seeded(self, turns, scratch, skip_turns=0):
+        import role_runner_evidence
+
+        stdout = self.seed_rollout(turns)
+        with mock.patch.dict(os.environ, {"CODEX_HOME": str(self.codex_home)}):
+            return role_runner_evidence.verify_codex(stdout, "gpt-6.1-sol", "high", "read-only", scratch, skip_turns)
+
+    def test_읽기_전용_codex_실행은_시스템_임시_폴더_아래_scratch_하나만_쓰고_환경이_그_안을_가리킨다(self):
+        """읽기 전용 Codex 실행은 작업 폴더 밖의 새 scratch 폴더 하나만 쓰기 대상으로 삼고, 여섯 변수 모두 그 안의 경로를 가리킨다."""
+        # Given
+        system_temp = self.base / "system-temp"
+        system_temp.mkdir()
+
+        # When
+        completed = self.run_runner("scout", extra_env={"TMPDIR": str(system_temp)})
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        execution = self.logged()
+        scratch = Path(self.seed_scratch(execution))
+        self.assertEqual(system_temp.resolve(), scratch.parent)
+        self.assertTrue(scratch.name.startswith("role-runner-scratch-"))
+        self.assertFalse(scratch.is_relative_to(self.workspace))
+        self.assertEqual(
+            {"TMPDIR", "UV_CACHE_DIR", "XDG_CACHE_HOME", "PYTHONPYCACHEPREFIX", "npm_config_cache", "PIP_CACHE_DIR"},
+            set(execution["environ"]),
+        )
+        for variable, value in execution["environ"].items():
+            self.assertTrue(Path(value).is_relative_to(scratch), (variable, value))
+        self.assertTrue(execution["scratch_exists"])
+
+    def seed_scratch(self, call):
+        """The scratch folder a logged call's environment names: the parent of its TMPDIR."""
+        return str(Path(call["environ"]["TMPDIR"]).parent)
+
+    def test_쓰기_실행은_scratch_폴더도_환경_변경도_없이_그대로_실행된다(self):
+        """add-dir를 받는 쓰기 실행은 scratch 폴더를 만들지 않고 자식 환경의 임시 폴더와 캐시 변수를 건드리지 않는다."""
+        # Given
+        directory = "/tmp/work/demo-a"
+
+        # When
+        completed = self.run_runner("worker", "--add-dir", directory)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        for call in self.executions():
+            self.assertEqual({None}, set(call["environ"].values()))
+            self.assertIsNone(call["scratch"])
+            self.assertFalse(any("default_permissions" in item for item in call["argv"]))
+
+    def test_scratch_폴더는_성공_종료_코드_3_종료_코드_4_시간_초과_뒤에_모두_없어진다(self):
+        """실행이 성공해도, 자식이 실패해도(3), 검증이 실패해도(4), 시간이 초과돼도 scratch 폴더가 남지 않는다."""
+        cases = {
+            "success": ({}, [], 0),
+            "child failure": ({"exit": 7}, [], 3),
+            "evidence failure": ({"no_profile": True}, [], 4),
+            "timeout": ({"sleep": 30}, ["--timeout", "2"], 3),
+        }
+        for label, (config, extra, code) in cases.items():
+            with self.subTest(label):
+                # Given
+                self.log.unlink(missing_ok=True)
+
+                # When
+                completed = self.run_runner("scout", *extra, config=config)
+
+                # Then
+                self.assertEqual(code, completed.returncode, completed.stderr)
+                scratch = Path(self.seed_scratch(self.logged()))
+                self.assertTrue(scratch.name.startswith("role-runner-scratch-"))
+                self.assertFalse(scratch.exists())
+
+    def test_verify_codex는_쓰기_대상이_scratch_폴더뿐인_기록만_통과시킨다(self):
+        """쓰기 대상이 scratch 폴더뿐이면 통과하고, 작업 폴더도 쓸 수 있거나 쓰기 제한 기록이 없으면 종료 코드 4이다."""
+        scratch = str(self.base / "scratch-now")
+        failing = {
+            "extra write": [self.scratch_turn(scratch, "/tmp/work/demo-a")],
+            "no write limit": [{"model": "gpt-6.1-sol", "effort": "high", "permission_profile": None}],
+            "no write at all": [self.scratch_turn()],
+            "root write": [{**self.scratch_turn(scratch), "permission_profile": {"type": "managed", "file_system": {
+                "type": "restricted", "entries": [{"access": "write", "path": {"type": "special", "value": {"kind": "root"}}}]}}}],
+        }
+        # Given / When / Then
+        self.assertEqual(1, self.verify_seeded([self.scratch_turn(scratch)], scratch)["turns"])
+        for label, turns in failing.items():
+            with self.subTest(label):
+                with self.assertRaises(role_runner.RunnerError) as caught:
+                    self.verify_seeded(turns, scratch)
+                self.assertEqual(role_runner.EXIT_EVIDENCE, caught.exception.code)
+
+    def test_verify_codex는_resume이_더한_turn만_새_scratch_폴더로_검사한다(self):
+        """이어 받은 세션의 앞선 turn이 다른 scratch 폴더를 가리켜도, 이번 실행이 더한 turn이 새 폴더만 쓰면 통과한다."""
+        # Given
+        earlier = self.scratch_turn(str(self.base / "scratch-old"))
+        added = self.scratch_turn(str(self.base / "scratch-new"))
+
+        # When
+        evidence = self.verify_seeded([earlier, added], str(self.base / "scratch-new"), skip_turns=1)
+
+        # Then
+        self.assertEqual(2, evidence["turns"])
+        with self.assertRaises(role_runner.RunnerError):
+            self.verify_seeded([earlier, added], str(self.base / "scratch-new"), skip_turns=0)
+
+    def test_resume한_읽기_전용_실행은_이어_받기_전_turn_수를_세어_이번_turn만_검사한다(self):
+        """runner는 resume 전에 세션의 turn 수를 세어 두므로, 앞선 turn이 옛 scratch 폴더를 가리켜도 종료 코드 0이다."""
+        # Given
+        self.beat("codex", THREAD)
+        directory = self.codex_home / "sessions" / "2026" / "10" / "12"
+        directory.mkdir(parents=True)
+        earlier = {**self.scratch_turn(str(self.base / "scratch-old")), "model": "gpt-5.6-luna"}
+        (directory / f"rollout-2026-10-12T00-00-00-{THREAD}.jsonl").write_text(
+            json.dumps({"type": "turn_context", "payload": earlier}) + "\n"
+        )
+        config = {"turns": [earlier, {"model": "gpt-5.6-luna", "effort": "high"}]}
+
+        # When
+        completed = self.run_runner("scout", "--resume", THREAD, config=config)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+
+    def test_validation은_reviewer_역할에만_허용되고_Claude_모델에서는_종료_코드_2이다(self):
+        """scout과 Claude 모델의 reviewer에 --validation을 주면 자식을 시작하지 않고 종료 코드 2이다."""
+        cases = {"scout": ["scout", "--validation"], "claude reviewer": ["reviewer", "--validation", "--model", "claude-opus-5-5"]}
+        for label, arguments in cases.items():
+            with self.subTest(label):
+                # When
+                completed = self.run_runner(*arguments)
+
+                # Then
+                self.assertEqual(2, completed.returncode, completed.stderr)
+                self.assertFalse(self.log.exists())
+
+    def test_validation_프롬프트는_실행과_scratch_설치를_허용하고_바깥_편집은_계속_금지한다(self):
+        """--validation 없는 reviewer 프롬프트는 빌드·테스트·설치·네트워크 금지를 유지하고, 있는 프롬프트는 테스트와 scratch 설치와 설치용 네트워크를 허용한다."""
+        # Given
+        config = {"turns": [{"model": "gpt-6-astra", "effort": "high"}]}
+
+        # When
+        self.run_runner("reviewer", config=config)
+        plain = " ".join(self.logged()["stdin"].split())
+        self.log.unlink()
+        completed = self.run_runner("reviewer", "--validation", config=config)
+        validation = " ".join(self.logged()["stdin"].split())
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertIn("Never run build, test, install, or network commands.", plain)
+        self.assertNotIn("scratch folder", plain)
+        self.assertNotIn("Never run build, test, install, or network commands.", validation)
+        self.assertIn("You may run the project's tests, scripts, and calculations", validation)
+        self.assertIn("install the dependencies a check needs into the scratch folder", validation)
+        self.assertIn("Use the network only for those installs", validation)
+        self.assertIn("Never edit a file outside the scratch folder, commit, push, or change external state", validation)
+        self.assertIn(self.seed_scratch(self.logged()), validation)
+        self.assertEqual(self.codex_argv(model="gpt-6-astra", validation=True), self.logged()["argv"])
 
 
 if __name__ == "__main__":

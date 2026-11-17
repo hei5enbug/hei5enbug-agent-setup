@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from role_runner_config import (
-    CLAUDE_SKILLS_OFF, CODEX_NETWORK_ON, CODEX_SKILLS_OFF, MCP_TOOL_RULE, READ_SHELL_RULES, Run,
+    CLAUDE_SKILLS_OFF, CODEX_NETWORK_ON, CODEX_SKILLS_OFF, MCP_TOOL_RULE, READ_SHELL_RULES, SCRATCH_PROFILE, Run,
 )
 
 
@@ -19,25 +19,38 @@ def scoped_codex_config(run: Run, mcp_off: list[str]) -> list[str]:
     return ["-c", CODEX_NETWORK_ON] if run.writing else []
 
 
+def scratch_permissions(run: Run) -> list[str]:
+    """Return the overrides for a permission profile that reads the whole disk and writes only the run's scratch folder.
+
+    A validation run also gets network access, which only its scratch-folder installs use."""
+    table = f'{{":root"="read",{json.dumps(run.scratch)}="write"}}'
+    network = ',network={enabled=true,domains={"*"="allow"}}' if run.validation else ""
+    return [
+        "-c", f'default_permissions="{SCRATCH_PROFILE}"', "-c", f"permissions.{SCRATCH_PROFILE}={{filesystem={table}{network}}}",
+    ]
+
+
 def codex_command(run: Run, cwd: str, result: str, mcp_off: list[str]) -> list[str]:
     command = ["codex"]
     if run.role == "researcher" or run.web_tools:
         command.append("--search")
     sandbox = sandbox_for(run)
+    confined = run.scratch is not None
     scoped = scoped_codex_config(run, mcp_off) + ([] if run.writing else list(CODEX_SKILLS_OFF))
     if run.resume is not None:
         command += [
             "exec", "resume", run.resume, "-m", run.model,
-            "-c", f'model_reasoning_effort="{run.effort}"', "-c", f'sandbox_mode="{sandbox}"', *scoped,
+            "-c", f'model_reasoning_effort="{run.effort}"',
+            *(scratch_permissions(run) if confined else ["-c", f'sandbox_mode="{sandbox}"']), *scoped,
         ]
         if run.writing and run.add_dirs:
             roots = [str(Path(directory).resolve()) for directory in run.add_dirs]
             command += ["-c", f"sandbox_workspace_write.writable_roots={json.dumps(roots)}"]
         command += ["--json", "-o", result, "-"]
         return command
-    command += [
-        "exec", "-m", run.model, "-c", f'model_reasoning_effort="{run.effort}"', "-s", sandbox, "-C", cwd, *scoped,
-    ]
+    command += ["exec", "-m", run.model, "-c", f'model_reasoning_effort="{run.effort}"']
+    command += scratch_permissions(run) if confined else ["-s", sandbox]
+    command += ["-C", cwd, *scoped]
     for directory in run.add_dirs:
         command += ["--add-dir", directory]
     command += ["--json", "-o", result, "-"]

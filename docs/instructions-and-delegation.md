@@ -129,7 +129,15 @@ and `--effort <level>` may be any level the model's effort rule allows; a model 
 model does not allow exits 2 with no fallback run, and the status line gains `"user_requested": true`. Repeating
 `--assignment` and `--result` runs up to six read-only assignments of one target in parallel, with one status line each,
 and the runner exits with the highest of their exit codes. A read-only child runs without the host's skill catalog:
-Codex gets `-c skills.max_context_tokens=1`, and Claude gets `--disable-slash-commands`. The runner puts the role rules
+Codex gets `-c skills.max_context_tokens=1`, and Claude gets `--disable-slash-commands`. A read-only Codex child
+runs under a permission profile that reads the whole disk and writes only a new scratch folder under the system temp
+folder, which the runner creates for each run and each `--resume` invocation and removes on every exit. The child
+environment points `TMPDIR`, `UV_CACHE_DIR`, `XDG_CACHE_HOME`, `PYTHONPYCACHEPREFIX`, `npm_config_cache`, and
+`PIP_CACHE_DIR` into that folder, and the runner exits 4 unless the rollout's `permission_profile` shows that the turns
+the invocation added could write only there. `--validation`, allowed only for `reviewer` on a GPT model, lets the
+reviewer run the project's tests, scripts, and calculations and install into the scratch folder, with network for the
+installs; the Claude path has no supported write confinement yet, so the runner exits 2 for a Claude reviewer model.
+The runner puts the role rules
 before the assignment, runs the role on its pinned model, effort, and permissions (`codex exec`, or `claude -p` for a
 Claude model), checks the host rollout or transcript record, and prints a final JSON status line. Without `--mcp`, a
 Codex child gets `-c mcp_servers.<name>.enabled=false` for every server `codex mcp list --json` names, and a Claude
@@ -149,7 +157,7 @@ in `auto_trust` until you trust them again in `/hooks`. Claude children require
 `heartbeats/claude-<session_id>.UserPromptSubmit` or the existing plain heartbeat, since Claude does not gate plugin
 hooks by trust. A missing required heartbeat exits 4. Exit code 0 means the result is verified, 2 a usage error to fix,
 3 that the role could not run, and 4 that the required hook evidence was missing or the recorded model, effort, or
-sandbox did not match, so the result is discarded. On 3 or 4 the main session uses the role's plugin agent fallback.
+write limit did not match, so the result is discarded. On 3 or 4 the main session uses the role's plugin agent fallback.
 Independent validation has no fallback: the main session reports that it was not performed. A capability entry whose
 `via` is `agent` is not run by the runner, which exits 2, so the main session uses the agent route for it.
 

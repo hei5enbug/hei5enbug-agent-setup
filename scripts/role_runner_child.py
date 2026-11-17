@@ -2,10 +2,31 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import signal
 import subprocess
+import tempfile
+from pathlib import Path
 
-from role_runner_config import ASSIGNED_ROLE_ENV, EXIT_RUN, MCP_SERVER_NAME, PARENT_SESSION_ENV, RunnerError
+from role_runner_config import (
+    ASSIGNED_ROLE_ENV, EXIT_RUN, MCP_SERVER_NAME, PARENT_SESSION_ENV, SCRATCH_ENVIRONMENT, SCRATCH_PREFIX, RunnerError,
+)
+
+
+def new_scratch() -> str:
+    """Create a run's scratch folder under the system temp folder, with the folders its environment points to, and return its real path."""
+    try:
+        scratch = Path(tempfile.mkdtemp(prefix=SCRATCH_PREFIX)).resolve()
+        for name in SCRATCH_ENVIRONMENT.values():
+            (scratch / name).mkdir()
+    except OSError as error:
+        raise RunnerError(EXIT_RUN, f"Cannot create the scratch folder: {error}") from error
+    return str(scratch)
+
+
+def remove_scratch(scratch: str | None) -> None:
+    if scratch is not None:
+        shutil.rmtree(scratch, ignore_errors=True)
 
 
 def parent_session(environ) -> str | None:
@@ -22,9 +43,12 @@ def parent_session(environ) -> str | None:
     return None
 
 
-def child_environment(marker: str) -> dict:
+def child_environment(marker: str, scratch: str | None = None) -> dict:
     environment = dict(os.environ)
     environment[ASSIGNED_ROLE_ENV] = marker
+    if scratch is not None:
+        for variable, name in SCRATCH_ENVIRONMENT.items():
+            environment[variable] = str(Path(scratch) / name)
     parent = parent_session(environment)
     if parent is not None:
         environment[PARENT_SESSION_ENV] = parent
@@ -39,8 +63,8 @@ def kill_group(pid: int) -> None:
         pass
 
 
-def run_child(marker: str, command: list[str], prompt: str, cwd: str, timeout: int) -> str:
-    environment = child_environment(marker)
+def run_child(marker: str, command: list[str], prompt: str, cwd: str, timeout: int, scratch: str | None = None) -> str:
+    environment = child_environment(marker, scratch)
     try:
         child = subprocess.Popen(
             command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
