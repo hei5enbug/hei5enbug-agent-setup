@@ -1,0 +1,54 @@
+{
+  "id": "T29",
+  "title": "Ticket comment that refers to the stages of a numbered procedure",
+  "category": "writing",
+  "path": "ticket-comment text",
+  "fixture": "stage-notes",
+  "prompt_file": "prompts/T29.txt",
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 6
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/ticket-comment-demo-j.txt"
+    },
+    {
+      "id": "stages-named-in-order",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "stages_named_in_order"
+    },
+    {
+      "id": "no-stage-by-number-alone",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_stage_by_number_alone"
+    },
+    {
+      "id": "titles-match-numbers",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "titles_match_numbers"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

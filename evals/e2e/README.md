@@ -289,6 +289,14 @@ check `no-other-tool-mark` of T28 is advisory: T25 and T26 must leave the model 
 AI or an agent did it out of the text, T27 must name the model that its diff changes, and T28 must name the model its
 request asks for.
 
+T29 to T31 grade texts that refer to a stage or a division of a procedure or plan, so their prompts also tell the
+agent not to run `text_review.py`, and the checks read the saved text by patterns, with no `text-review-clean` check and
+no entry in `config/writing-surfaces.json`. No model grades them, and every check is required. T29 must name stages 0
+and 3 to 8 of a nine-stage procedure by their titles in order, leave no stage named by a number with no title of that
+stage beside it, and put no number beside the title of another stage. T30 must keep the values of a depth limit and an
+item limit, which are quantities. T31 must name a division that its draft calls `Phase 1` by its title `Rollout`, keep
+item 1 with its title and number, and let no number name both the division and an item.
+
 T32 and T33 measure the review itself, so their prompts ask the agent to run the plugin's `text_review.py review` on a
 seeded draft it must not edit. The checks read the result of that run from the transcript: the review must reach the
 reviewer (`stage` is `review`, with no `error`) on the named draft. In T32, whose rules file requires the names of the
@@ -336,6 +344,9 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T26 | tool-notes | Commit message | Parser fix whose notes name the reviewing model and suggest a subject that carries its name |
 | T27 | tool-notes | Commit message | Change of the `reviewer_model` setting from one demo model to another |
 | T28 | tool-notes | Chat message | Thread announcement whose request asks to say that a named model reviewed it |
+| T29 | stage-notes | Ticket comment | Draft that says "Run step 0 first, then steps 3 to 8 in order." for a procedure whose stages carry titles |
+| T30 | stage-notes | Review reply | Draft that states a depth limit of 2 levels and an item limit of 3 |
+| T31 | stage-notes | Ticket comment | Draft that calls a division titled Rollout "Phase 1" and begins with item 1 of the list whose first item is Schema extension |
 | T32 | identifier-lists | Review reply, review run | Review of a reply whose rules require the names of the added tests and whose draft lists three of them in one item |
 | T33 | identifier-lists | Pull request description, review run | Review of a description, under rules that ask for no names, whose draft lists the three files its diff changes in one item |
 

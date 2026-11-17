@@ -1,0 +1,1 @@
+demo-k 리뷰 스레드에 달 답글 초안이 notes/reply-draft-demo-k.txt에 있어. 형식 규칙은 docs/format-rules-demo-k.md야. 이 초안을 다듬어서 그대로 붙여넣을 수 있게 out/review-reply-demo-k.txt에 저장해줘. 작성 규칙은 docs/writing-rules.md야. 이 글은 별도의 채점에 보낼 거라서 text_review.py는 돌리지 마.

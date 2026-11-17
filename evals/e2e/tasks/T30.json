@@ -1,0 +1,40 @@
+{
+  "id": "T30",
+  "title": "Review reply that states a depth limit and an item limit",
+  "category": "writing",
+  "path": "review-reply text",
+  "fixture": "stage-notes",
+  "prompt_file": "prompts/T30.txt",
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 6
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/review-reply-demo-k.txt"
+    },
+    {
+      "id": "limits-kept",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "limits_kept"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

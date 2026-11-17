@@ -1,0 +1,54 @@
+{
+  "id": "T31",
+  "title": "Ticket comment that calls a division Phase 1 beside a numbered list",
+  "category": "writing",
+  "path": "ticket-comment text",
+  "fixture": "stage-notes",
+  "prompt_file": "prompts/T31.txt",
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 6
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/ticket-comment-demo-l.txt"
+    },
+    {
+      "id": "division-named-by-title",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "division_named_by_title"
+    },
+    {
+      "id": "item-keeps-title-with-number",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "item_keeps_title_with_number"
+    },
+    {
+      "id": "no-number-names-two-things",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_number_names_two_things"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

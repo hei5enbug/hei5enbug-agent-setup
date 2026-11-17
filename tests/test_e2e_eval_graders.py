@@ -28,7 +28,7 @@ sys.path.insert(0, str(E2E_ROOT))
 from harness import coverage_tool, graders  # noqa: E402
 from harness.process import GradingInterrupted  # noqa: E402
 
-TASK_IDS = [f"T{number:02d}" for number in range(1, 21)] + ["T22", "T23", "T24", "T25", "T26", "T27", "T28", "T32", "T33"]
+TASK_IDS = [f"T{number:02d}" for number in range(1, 21)] + ["T22", "T23", "T24", "T25", "T26", "T27", "T28", "T29", "T30", "T31", "T32", "T33"]
 SECRET = "demo-4f8k2q-local-only-7731"
 GIT_ENV = {
     **os.environ, "GIT_AUTHOR_NAME": "Demo Dev", "GIT_AUTHOR_EMAIL": "dev@example.com",
@@ -876,6 +876,9 @@ EXPECTED_FAILURES = {
     "T26": {"hidden-tests", "one-commit", "no-trailers", "no-tool-mark", "subject-names-parser"},
     "T27": {"reviewer-model-y", "one-commit", "no-trailers", "message-names-new-model"},
     "T28": {"output-exists", "requested-model-named"},
+    "T29": {"output-exists", "stages-named-in-order", "no-stage-by-number-alone"},
+    "T30": {"output-exists", "limits-kept"},
+    "T31": {"output-exists", "division-named-by-title", "item-keeps-title-with-number"},
     "T32": {"reached-reviewer", "item-not-removable"},
     "T33": {"reached-reviewer", "item-removable"},
 }
@@ -891,7 +894,8 @@ EXPECTED_PASSES = {
     "T19": {"sources-unchanged"}, "T20": {"regressions", "tests-pass"},
     "T22": {"sources-unchanged"}, "T23": {"sources-unchanged"}, "T24": {"sources-unchanged"},
     "T25": {"sources-unchanged"}, "T26": {"regressions", "tree-clean"}, "T27": {"regressions", "tree-clean"},
-    "T28": {"sources-unchanged"}, "T32": {"sources-unchanged"}, "T33": {"sources-unchanged"},
+    "T28": {"sources-unchanged"}, "T29": {"sources-unchanged"}, "T30": {"sources-unchanged"},
+    "T31": {"sources-unchanged"}, "T32": {"sources-unchanged"}, "T33": {"sources-unchanged"},
 }
 CLEAN_REVIEW = json.dumps({"review": {"output": '{"findings": []}', "exit_code": 0},
                            "check": {"output": '{"findings": []}', "exit_code": 0}})
@@ -1638,6 +1642,75 @@ class GoldenTaskTest(TempCase):
         required = {check["id"] for check in task["checks"] if check["required"]}
         self.assertEqual((omitted, by_id["requested-model-named"]["passed"], by_id["no-other-tool-mark"]["passed"],
                           "no-other-tool-mark" in required), (False, True, False, False))
+
+    def written(self, task_id: str, name: str, *texts: str) -> list[dict[str, bool]]:
+        """Grade the task once per text saved as `out/<name>` and return each run's passed flag per check id."""
+        task, repo, base = self.materialize(task_id)
+        (repo / "out").mkdir()
+        runs = []
+        for text in texts:
+            (repo / "out" / name).write_text(text, encoding="utf-8")
+            result = self.grade_task(task, repo, base, make_view())
+            runs.append({check["id"]: check["passed"] for check in result["checks"]})
+        return runs
+
+    def test_T29는_번호만_쓴_단계와_제목이_다른_번호와_바뀐_순서를_각각_잡고_제목_옆_번호는_통과시킨다(self):
+        """초안 그대로(step 0, steps 3 to 8)는 두 검사가 실패하고, 번호만 남긴 한 단계, 다른 단계의 번호를 붙인 제목, 순서가 바뀐 제목은 각각 해당 검사가 실패하며, 제목 옆 번호는 모두 통과한다."""
+        # given
+        name = "ticket-comment-demo-j.txt"
+        texts = (
+            "Run step 0 first, then steps 3 to 8 in order.\n",
+            "Run step 0 (Check and build) first, then Compare, Enable reads, Enable writes, Watch, Remove old path, and step 8.\n",
+            "Run 0 Check and build first, then 4 Compare, 3 Enable reads, 5 Enable writes, 6 Watch, 7 Remove old path, and 8 Confirm.\n",
+            "Run 0 Check and build first, then 4 Enable reads, 3 Compare, 5 Enable writes, 6 Watch, 7 Remove old path, and 8 Confirm.\n",
+            "Run Check and build (step 0) first, then Compare (step 3), Enable reads (step 4), Enable writes (step 5), "
+            "Watch (step 6), Remove old path (step 7), and Confirm (step 8) in order.\n",
+            "Run Check and build first, then Compare, Enable reads, Enable writes, Watch, Remove old path, and Confirm in order.\n",
+        )
+
+        # when
+        runs = self.written("T29", name, *texts)
+
+        # then
+        flags = [(run["stages-named-in-order"], run["no-stage-by-number-alone"], run["titles-match-numbers"]) for run in runs]
+        self.assertEqual(flags, [(False, False, True), (False, False, True), (True, True, False), (False, True, True),
+                                 (True, True, True), (True, True, True)])
+
+    def test_T30은_깊이와_개수_제한의_값을_바꾸거나_뺀_답글을_잡는다(self):
+        """제한의 숫자는 수량이라 그대로 남아야 하므로, 값을 바꾼 답글과 숫자를 뺀 답글은 limits-kept가 실패하고 말로 풀어 쓴 숫자는 통과한다."""
+        # given
+        name = "review-reply-demo-k.txt"
+        texts = (
+            "Keep nesting at a depth of at most 3 levels and list at most 3 items.\n",
+            "Keep nesting shallow and list only a few items.\n",
+            "Keep nesting at a depth of at most two levels and list at most three items.\n",
+            "Keep nesting at a depth of at most 2 levels and list at most 3 items.\n",
+        )
+
+        # when
+        runs = self.written("T30", name, *texts)
+
+        # then
+        self.assertEqual([run["limits-kept"] for run in runs], [False, False, True, True])
+
+    def test_T31은_구획을_Phase_1로만_부른_글과_한_번호를_둘에_쓴_글과_번호를_뺀_항목을_각각_잡는다(self):
+        """Phase 1만 쓰면 division-named-by-title이, Rollout 옆에 Phase 1을 붙이고 항목 1도 쓰면 no-number-names-two-things가, 항목 번호를 빼면 item-keeps-title-with-number가 실패한다."""
+        # given
+        name = "ticket-comment-demo-l.txt"
+        texts = (
+            "Phase 1 starts once the review passes. Begin with 1 Schema extension.\n",
+            "Rollout (Phase 1) starts once the review passes. Begin with 1 Schema extension.\n",
+            "Rollout starts once the review passes. Begin with Schema extension.\n",
+            "Rollout (Phase 2) starts once the review passes. Begin with item 1 (Schema extension).\n",
+        )
+
+        # when
+        runs = self.written("T31", name, *texts)
+
+        # then
+        flags = [(run["division-named-by-title"], run["item-keeps-title-with-number"], run["no-number-names-two-things"])
+                 for run in runs]
+        self.assertEqual(flags, [(False, True, False), (True, True, False), (True, False, True), (True, True, True)])
 
     def test_T18은_표를_다시_풀어_쓴_문단과_빠뜨린_내용을_각각_잡는다(self):
         """초안 그대로면 restatement-removed가, 표와 일정을 지우면 kept-content가 실패한다."""

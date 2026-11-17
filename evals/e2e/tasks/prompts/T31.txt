@@ -1,0 +1,1 @@
+demo-l 티켓에 달 코멘트 초안이 notes/comment-draft-demo-l.txt에 있어. 계획은 docs/plan-demo-l.md야. 이 초안을 다듬어서 그대로 붙여넣을 수 있게 out/ticket-comment-demo-l.txt에 저장해줘. 작성 규칙은 docs/writing-rules.md야. 이 글은 별도의 채점에 보낼 거라서 text_review.py는 돌리지 마.
