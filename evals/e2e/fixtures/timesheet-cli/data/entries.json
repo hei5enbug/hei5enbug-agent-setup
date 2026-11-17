@@ -1,0 +1,5 @@
+[
+  {"id": 1, "date": "2026-11-10", "project": "alpha", "minutes": 90},
+  {"id": 2, "date": "2026-11-03", "project": "beta", "minutes": 30},
+  {"id": 3, "date": "2026-11-12", "project": "alpha", "minutes": 45}
+]

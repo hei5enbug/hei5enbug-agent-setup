@@ -9,8 +9,8 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path[0] = str(Path(__file__).resolve().parents[1])
 
-from harness import campaign, command, plugin_export, records, summarize  # noqa: E402
-from harness.config import DEFAULT_PARALLEL, DEFAULT_RUN_ROOT, EXIT_FAILURE, HOST_CLAUDE, HarnessConfig  # noqa: E402
+from harness import agreement_candidate, agreement_decision, agreement_record, campaign, command, plugin_export, records, summarize  # noqa: E402
+from harness.config import DEFAULT_PARALLEL, DEFAULT_RUN_ROOT, EXIT_FAILURE, HOST_CLAUDE, HOSTS, REPO_ROOT, HarnessConfig  # noqa: E402
 from harness.pilot_check import pilot_check  # noqa: E402
 
 
@@ -66,6 +66,21 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--claim", help="comma-separated measures the change claims to lower: wall_seconds, cost_usd")
     record.add_argument("--tasks", help="comma-separated task ids; default every task with a finished run")
     record.add_argument("--records-dir", type=Path, default=records.RECORDS_DIR)
+    build = sub.add_parser("build-candidates", help="write one git ref per drafter step of the requirements agreement candidate")
+    add_common(build)
+    build.add_argument("--base", required=True, help="the revision the candidates are built on, the before variant's revision")
+    build.add_argument("--steps", help="comma-separated steps; default every step: " + ", ".join(agreement_candidate.STEPS))
+    agreement = sub.add_parser("record-agreement", help="judge the drafter steps on both hosts and write the requirements agreement record")
+    add_common(agreement)
+    agreement.add_argument("--campaign", required=True)
+    agreement.add_argument("--issue", type=int, required=True)
+    agreement.add_argument("--before", required=True, help="variant name of the before side")
+    agreement.add_argument("--steps", required=True, help="step=variant pairs, such as step1=agreement-step1,step2=agreement-step2")
+    agreement.add_argument("--tasks", help="comma-separated task ids; default every task with a finished run")
+    agreement.add_argument("--records-dir", type=Path, default=records.RECORDS_DIR)
+    adopt = sub.add_parser("adopt-agreement", help="write the adopted candidate into the working tree when the record adopts it")
+    add_common(adopt)
+    adopt.add_argument("--record", type=Path, required=True)
     return parser
 
 
@@ -122,8 +137,47 @@ def do_record(args: argparse.Namespace, cfg: HarnessConfig) -> int:
     return 0
 
 
+def do_build_candidates(args: argparse.Namespace) -> int:
+    names = split(args.steps) or list(agreement_candidate.STEPS)
+    unknown = [name for name in names if name not in agreement_candidate.STEPS]
+    if unknown:
+        raise command.ConfigError(f"--steps takes {', '.join(agreement_candidate.STEPS)}; got {', '.join(unknown)}")
+    for name, sha in agreement_candidate.build_refs(REPO_ROOT, args.base, names).items():
+        sys.stdout.write(f"{agreement_candidate.REF_PREFIX}{name} {sha}\n")
+    return 0
+
+
+def do_record_agreement(args: argparse.Namespace, cfg: HarnessConfig) -> int:
+    pairs = [item.split("=", 1) for item in split(args.steps)]
+    if args.issue < 1 or any(len(pair) != 2 for pair in pairs):
+        raise command.ConfigError("--issue takes a positive issue number and --steps takes step=variant pairs")
+    result = agreement_record.record_agreement(
+        cfg.run_root, args.campaign, args.issue, args.before, dict(pairs), split(args.tasks) or None)
+    path = records.write_record(result["record"], absolute(args.records_dir))
+    sys.stdout.write("".join(f"{line}\n" for line in agreement_record.report_lines(result)))
+    sys.stdout.write(f"record written: {path.name}\n")
+    return 0
+
+
+def do_adopt_agreement(args: argparse.Namespace) -> int:
+    import json
+
+    section = json.loads(absolute(args.record).read_text(encoding="utf-8")).get("agreement") or {}
+    if agreement_decision.agreement_problems(section) or section.get("state") != agreement_decision.ADOPTED:
+        raise command.ConfigError("the record does not adopt the agreement; nothing was written")
+    touched = agreement_candidate.adopt(REPO_ROOT, {host: section["registered"][host] for host in HOSTS})
+    sys.stdout.write("".join(f"{path}\n" for path in touched))
+    return 0
+
+
 def dispatch(args: argparse.Namespace) -> int:
     cfg = config_from(args)
+    if args.action == "build-candidates":
+        return do_build_candidates(args)
+    if args.action == "record-agreement":
+        return do_record_agreement(args, cfg)
+    if args.action == "adopt-agreement":
+        return do_adopt_agreement(args)
     if args.action == "run":
         return do_run(args, cfg)
     if args.action == "summarize":
@@ -147,7 +201,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return dispatch(args)
-    except (command.ConfigError, plugin_export.ExportError, records.RecordError) as error:
+    except (command.ConfigError, plugin_export.ExportError, records.RecordError, agreement_candidate.CandidateError) as error:
         sys.stderr.write(f"error: {error}\n")
         return EXIT_FAILURE
 

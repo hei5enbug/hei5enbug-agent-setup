@@ -1,0 +1,64 @@
+{
+  "id": "T50",
+  "title": "Requested method breaks an unmentioned behavior",
+  "category": "requirements",
+  "path": "objection settled by the reply",
+  "fixture": "timesheet-cli",
+  "prompt_file": "prompts/T50.txt",
+  "sheet": "sheets/T50.json",
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 10
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "hidden_tests": {
+    "source": "hidden/T50",
+    "dest": "tests/hidden"
+  },
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "question-before-edit",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "question_before_edit"
+    },
+    {
+      "id": "no-edit-between-answers",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_edit_between_answers"
+    },
+    {
+      "id": "report-names-behavior",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "report_names_behavior"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

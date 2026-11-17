@@ -87,9 +87,39 @@ Measurement runs turn the plugin's approval guard off by default (see "Codex hos
 that turns it on.
 Calls that the permission mode or the plugin's guard allow without a prompt never reach it, so they are not counted.
 
-The harness cannot answer a question that the agent asks with `AskUserQuestion`. The approver lets the call through,
-and the run ends with the question unanswered. Task prompts therefore leave no decision open that would change the
-result.
+A task without an answer sheet cannot answer a question that the agent asks with `AskUserQuestion`: the approver lets
+the call through, and the run ends with the question unanswered. Such a task's prompt therefore leaves no decision open
+that would change the result. A task with a `sheet` has a scripted user, described next.
+
+### Scripted user
+
+A task whose file names a `sheet` runs with a user that is a script with no model, on both hosts and for every variant. The
+sheet, `tasks/sheets/<task>.json`, lives in the evaluation tree, which the export leaves out, and is never copied into the
+agent's folders; `pilot-check` fails a run whose work folder holds a copy by name or by content. It lists each decision with an
+identifier, the terms that identify a question about it, and its answers in order, and each point an approved specification
+must hold with its terms and the terms of its rejected options. `harness/scripted_user.py` applies it:
+
+- A question is about a decision when it holds at least one of the decision's terms, compared without case. It gets the
+  answer of every decision it matches, and "use your recommendation" when it matches none. For a decision with several
+  answers, the first question that matches it gets the first answer, the next the second, and the last answer repeats.
+- A request for approval holds one of the sheet's approval terms. It is approved when the specification text holds every term
+  of every required point and no term of a rejected option outside the heading of the rejected alternatives; otherwise it
+  gets the sentence of the first point that fails. With `stop_after_approval`, a question after the approval gets no answer
+  and the conversation ends there.
+- The question tool is answered by the approver in the tool's free-form field (`answers` keyed by the question text); the
+  specification is the agent's text since the previous exchange plus the question. A plain-text question that ends a turn,
+  recognised by a last line that ends with a question mark, is answered by the harness through the host's resume command
+  (`claude -p --resume <session>` or `codex exec resume <thread>`), the last paragraph being the question and the whole turn
+  the specification. The turns of one run share one `stream.jsonl`, so the stream's own total cost is left empty and the
+  cost comes from the token records.
+- Every exchange, with the decisions it matched and its answer, is appended to `scripted_user.jsonl`, which is also the only
+  state, so the approver process and the harness process share one count. `view.json` holds the exchanges and one ordered
+  timeline of the agent's texts, its calls, and the exchanges as `conversation`; a grader decides "before the approval" and
+  "between two answers" on it. A shell command counts as a file edit when it writes, moves, or removes a file.
+
+Limits: `codex exec resume` must accept the options the harness passes it (checked with its `--help` before the first Codex
+run of such a task), the approver reads the agent's text from `stream.jsonl` while the agent writes it, and a question that is
+not about a decision gets the default answer.
 
 ### Codex host
 
@@ -157,6 +187,13 @@ and their count), `plugin-export.json` holds it with a digest of the transformed
 campaign's input fingerprint, so a resume on a differently transformed export stops. A revision that an earlier harness
 exported without the transform is exported again.
 
+One exception to the cap exists, for the `claude-fable-5-2` drafter step of the requirements agreement and for that step only.
+A variant with `"cap_exception": "claude-fable-5-2"` (no other model is accepted) keeps that id in
+`agents/spec-drafter.md` and `instructions/requirements-agreement.md` of its export and nowhere else, and the run scan excuses
+it only for the `spec-drafter` subagent and the `reviewer` role runner that runs the drafter on Codex; the same model in the
+main session, in another role, or without the variant key is still a violation. A record accepts that model only for such a
+drafter role. The step's cases, run count, pass condition, and record are not set by this exception.
+
 ## Commands
 
 Run every command from the repository root. The default run root is
@@ -176,6 +213,9 @@ Run every command from the repository root. The default run root is
 | Print tables | `python3 evals/e2e/harness/cli.py summarize --campaign <name> [--out file.md]` |
 | Compare two variants | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | Export a revision only | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
+| Write one git ref per drafter step of the requirements agreement candidate | `python3 evals/e2e/harness/cli.py build-candidates --base <ref> [--steps step1,step2]` |
+| Judge the drafter steps on both hosts and write the agreement record | `python3 evals/e2e/harness/cli.py record-agreement --campaign <name> --issue 96 --before agreement-before --steps step1=agreement-step1,step2=agreement-step2` |
+| Write the adopted agreement into the working tree, only when the record adopts it | `python3 evals/e2e/harness/cli.py adopt-agreement --record evals/e2e/records/96.json` |
 | Judge a change and write its record | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
 
 `--parallel` sets the number of runs at once (default 3). With several variants the order alternates per task and
@@ -201,11 +241,28 @@ task, and `scripts/text_review.py`, which grades the text tasks. A resume whose 
 
 ### Variants
 
-A variant is a JSON file in `variants/`: `{"name", "ref", "settings", "env", "extra_args"}`. `ref` is the plugin
+A variant is a JSON file in `variants/`: `{"name", "ref", "settings", "env", "extra_args"}`, and, for the fable drafter step only, `cap_exception`. `ref` is the plugin
 revision under test. `settings` merges into the run's `--settings` file, `env` into the agent's environment, and
 `extra_args` into its command line. A variant that adds a bypass flag, `--bare`, `--permission-mode`, or a flag the
 harness sets itself, such as `--setting-sources`, is rejected. The installed plugin and every plugin of the profile
 stay off whatever `settings` says, and the user's instruction files and auto memory stay out whatever `env` says.
+
+### Requirements agreement measurement
+
+Cases A to G are tasks T46 to T52, on one fictional fixture, `timesheet-cli`. The rule file `requirements-agreement.md`, the
+`spec-drafter` agent, and every edit to an existing file are a candidate in `candidates/agreement/` that is not part of the
+plugin: `build-candidates` writes one git ref per drafter step on top of a base revision (`refs/e2e/agreement-<step>`), and the
+variants `agreement-step1`, `agreement-step2`, `agreement-step3-high`, and `agreement-step3-xhigh` name those refs, while
+`agreement-before` names the base. The steps run per host from the cheapest up: step 1 the main session, step 2 an agent on
+`claude-opus-5-5` at `xhigh`, step 3 the same agent on `claude-fable-5-2` at `high` and at `xhigh` only when `high` does not
+pass. A step passes on a host when cases A to D pass two counted runs there and cases E to G passed two counted runs with
+step 1; a run that ended on a harness or infrastructure error is run again and not counted. `harness/agreement_decision.py`
+applies the rule, `record-agreement` writes the `agreement` section of `records/96.json` (every counted run per step, host, and
+case, the drafter's model and effort from the host records, the registered step per host, and the adoption state), and the
+host comparison below runs on the before runs, the registered step for A to D, and step 1 for E to G. Only
+`adopt-agreement` puts the candidate into the plugin, and only for an adopted record; it also retires the interview skill. The
+pass condition of A to D for the fable step is an argument of `decide`, not a fixed rule. The effort of a Claude subagent is
+not in the host records, so the record shows the drafter's effort as `not measured` there and the variant names it.
 
 ## Run records
 
@@ -310,6 +367,13 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T19 | ops-notes | Shared document | Wiki draft of about 1,600 characters for a 1,500-character budget |
 | T20 | notes-cli | Final report | Small change with tests, then a report |
 | T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
+| T46 | timesheet-cli | Agreement, case A | Two deliverables and two open decisions; the sheet's week start contradicts the likely assumption |
+| T47 | timesheet-cli | Agreement, case B | Two deliverables with every decision stated: no agreement step and no question |
+| T48 | timesheet-cli | Agreement, case C | A requested cache that repeats the one the fixture already has: one question naming it |
+| T49 | timesheet-cli | Agreement, case D | A requirements agreement asked for by name on a one-deliverable idea: approved, then a stop without a file edit |
+| T50 | timesheet-cli | Agreement, case E | A requested method that breaks an unmentioned behavior; the first answer only repeats the instruction |
+| T51 | timesheet-cli | Agreement, case F | A requested method that rests on a statement the fixture disproves; a false first answer, then an outside constraint |
+| T52 | timesheet-cli | Agreement, case G | An unstated date format that the fixture's conventions settle: the reading said in one line, no question |
 
 ## Comparing a change on both hosts
 

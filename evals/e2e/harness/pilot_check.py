@@ -7,8 +7,9 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from . import codex_host, collect, metrics, transcript
-from .config import APPROVER_TOOL, FORBIDDEN_ARGS, HOST_CLAUDE, HOST_CODEX, MOD_MARKER
+from .config import APPROVER_TOOL, FORBIDDEN_ARGS, HOST_CLAUDE, HOST_CODEX, MOD_MARKER, TASKS_ROOT
 from .matrix import campaign_dir, read_json
+from .scripted_user import sheet_leaks
 
 AUTO_MEMORY_OFF_ENV = "CLAUDE_CODE_DISABLE_AUTO_MEMORY"
 REQUIRED_FLAGS = ("--plugin-dir", "--settings", "--permission-prompt-tool", "--max-budget-usd", "--strict-mcp-config", "--setting-sources")
@@ -95,17 +96,27 @@ def run_files(base: Path) -> list[Path]:
     return sorted([*base.glob("results/*/*/rep*/run.json"), *base.glob(f"results/*/*/{HOST_CODEX}/rep*/run.json")])
 
 
+def check_sheet(base: Path, run: dict[str, Any], tasks_root: Path = TASKS_ROOT) -> list[tuple[str, bool, str]]:
+    """For a task with an answer sheet: the run's work folder holds no copy of the sheet. A task without one adds no check."""
+    task = read_json(tasks_root / f"{run.get('task')}.json", {}) or {}
+    if not task.get("sheet"):
+        return []
+    leaks = sheet_leaks(base / "work" / str(run.get("run_id")), tasks_root / task["sheet"])
+    return [("answer sheet not copied into the agent's folder", not leaks, ", ".join(leaks))]
+
+
 def pilot_check(run_root: Path, campaign: str, run_ids: frozenset[str], out: TextIO) -> int:
     """Validate every selected run of either host; a call that validated no run fails."""
     failures, checked = 0, 0
-    for run_json in run_files(campaign_dir(run_root, campaign)):
+    base = campaign_dir(run_root, campaign)
+    for run_json in run_files(base):
         run = read_json(run_json, {})
         if run_ids and run.get("run_id") not in run_ids:
             continue
         checked += 1
         out.write(f"{run.get('run_id')}\n")
         codex = run.get("host", HOST_CLAUDE) == HOST_CODEX
-        for name, passed, detail in (check_codex_run if codex else check_run)(run_json.parent):
+        for name, passed, detail in [*(check_codex_run if codex else check_run)(run_json.parent), *check_sheet(base, run)]:
             failures += 0 if passed else 1
             out.write(f"  {'PASS' if passed else 'FAIL'} {name}{': ' + detail if detail and not passed else ''}\n")
     if not checked:

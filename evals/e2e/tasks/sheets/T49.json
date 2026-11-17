@@ -1,0 +1,52 @@
+{
+  "decisions": [
+    {
+      "id": "budget-unit",
+      "terms": [
+        "unit",
+        "hours",
+        "minutes",
+        "단위",
+        "시간 단위",
+        "분 단위"
+      ],
+      "answers": [
+        "목표는 시간 단위로 적어요. 필드 이름은 `budget_hours`로 해요."
+      ]
+    },
+    {
+      "id": "over-budget",
+      "terms": [
+        "over",
+        "exceed",
+        "warn",
+        "block",
+        "넘으면",
+        "초과",
+        "알려",
+        "경고",
+        "막"
+      ],
+      "answers": [
+        "넘어도 기록은 막지 않아요. `totals` 줄 끝에 `OVER`만 붙여 주세요."
+      ]
+    }
+  ],
+  "points": [
+    {
+      "id": "field",
+      "terms": [
+        "budget_hours"
+      ],
+      "sentence": "명세에 목표 필드 `budget_hours`가 없어요."
+    },
+    {
+      "id": "marker",
+      "terms": [
+        "OVER"
+      ],
+      "sentence": "명세에 초과 표시 `OVER`가 없어요."
+    }
+  ],
+  "stop_after_approval": true
+}

@@ -1,0 +1,6 @@
+timesheet에 두 가지 추가해줘.
+
+1) `list --project NAME`: 프로젝트 이름이 NAME과 정확히 같은(대소문자 구분) 항목만 보여줘. 하나도 없으면 아무것도 찍지 않고 종료 코드 0이야. `--on`과 같이 쓰면 둘 다 맞는 항목만 보여줘.
+2) `delete ID`: 그 id의 항목을 지우고 `deleted ID` 한 줄을 찍어줘. id가 없으면 stderr에 `no such entry: ID`를 찍고 종료 코드 1이야.
+
+README와 한국어 미러도 같이 고쳐줘.

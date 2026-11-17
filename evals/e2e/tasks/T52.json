@@ -1,0 +1,57 @@
+{
+  "id": "T52",
+  "title": "Unstated date format settled by the conventions",
+  "category": "requirements",
+  "path": "reading stated in one line",
+  "fixture": "timesheet-cli",
+  "prompt_file": "prompts/T52.txt",
+  "sheet": "sheets/T52.json",
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 8
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "hidden_tests": {
+    "source": "hidden/T52",
+    "dest": "tests/hidden"
+  },
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "no-question",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_question"
+    },
+    {
+      "id": "reading-stated-before-edit",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "reading_stated_before_edit"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

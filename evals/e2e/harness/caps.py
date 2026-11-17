@@ -8,7 +8,7 @@ from typing import Any, Iterable
 
 from . import plugin_export, rubric
 from .command import ConfigError, main_model
-from .config import HOST_CLAUDE, HOST_CODEX, HOSTS, MODEL_CAP, HarnessConfig
+from .config import CAP_EXCEPTION_ROLES, HOST_CLAUDE, HOST_CODEX, HOSTS, MODEL_CAP, HarnessConfig
 from .transcript import result_event, role_runner_status
 
 OPTION_PREFIXES = {HOST_CLAUDE: "CLAUDE_PLUGIN_OPTION_", HOST_CODEX: "HEI5ENBUG_"}
@@ -88,29 +88,36 @@ def check_campaign(cfg: HarnessConfig, variants: Iterable[dict[str, Any]]) -> No
         raise ConfigError("model cap: " + "; ".join(problems))
 
 
-def _note(found: dict[tuple[str, str], None], model: Any, role: str) -> None:
+def excepted(exception: str | None, model: Any, role: str) -> bool:
+    """The drafter step's cap exception: the one model it names, answering as the drafter or as the role runner that runs it."""
+    return bool(exception) and normalize(model) == exception and any(name in role for name in CAP_EXCEPTION_ROLES)
+
+
+def _note(found: dict[tuple[str, str], None], model: Any, role: str, exception: str | None = None) -> None:
     text = str(model or "")
-    if text not in IGNORED_MODELS and not within_cap(text):
+    if text not in IGNORED_MODELS and not within_cap(text) and not excepted(exception, text, role):
         found.setdefault((normalize(text), role), None)
 
 
 def scan_run(
     *, stream_events: list[dict[str, Any]], by_source: dict[str, list[dict[str, Any]]], tool_calls: list[dict[str, Any]],
-    rollouts: list[dict[str, Any]],
+    rollouts: list[dict[str, Any]], exception: str | None = None,
 ) -> list[dict[str, str]]:
     """Every model outside the cap that answered in a run, with the role: Claude stream and transcripts, the role runner
-    status lines, and the `turn_context` of each Codex rollout. An empty list means none did."""
+    status lines, and the `turn_context` of each Codex rollout. An empty list means none did. `exception` is the model the
+    drafter step may run; it is excused only for the drafter roles, and not in the stream's own usage summary, which names no role."""
     found: dict[tuple[str, str], None] = {}
     result = result_event(stream_events) or {}
     for model in (result.get("modelUsage") or {}) if isinstance(result.get("modelUsage"), dict) else ():
-        _note(found, model, "main session or subagent (stream modelUsage)")
+        if not (exception and normalize(model) == exception):
+            _note(found, model, "main session or subagent (stream modelUsage)")
     for source, requests in by_source.items():
         for request in requests:
-            _note(found, request.get("model"), source)
+            _note(found, request.get("model"), source, exception)
     for call in tool_calls:
         status = role_runner_status(str(call.get("result_text", "")))
         if status:
-            _note(found, status.get("model"), f"role_runner:{status.get('role') or 'unknown'}")
+            _note(found, status.get("model"), f"role_runner:{status.get('role') or 'unknown'}", exception)
     for rollout in rollouts:
         for event in rollout.get("events", []):
             payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}

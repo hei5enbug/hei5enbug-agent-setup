@@ -79,8 +79,35 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
 모든 요청을 허용한다. 플러그인 훅이 `ask`를 돌려주면 이 도구에 도달한다. 파일럿에서 강제 `git clean -f`로 이를
 확인했다. 측정 실행은 플러그인 승인 가드를 기본으로 끄므로("Codex 호스트" 참고), 이 일은 가드를 켠 변형에서만 생긴다. 권한 모드나 플러그인 가드가 질문 없이 허용한 호출은 이 도구에 오지 않으므로 세지 않는다.
 
-하네스는 에이전트가 `AskUserQuestion`으로 묻는 질문에 답할 수 없다. 승인 도구는 호출을 통과시키고, 실행은 질문에
-답을 받지 못한 채 끝난다. 그래서 작업 프롬프트는 결과를 바꿀 결정을 열어 두지 않는다.
+답안 시트가 없는 작업은 에이전트가 `AskUserQuestion`으로 묻는 질문에 답할 수 없다. 승인 도구는 호출을 통과시키고, 실행은
+질문에 답을 받지 못한 채 끝난다. 그래서 그런 작업의 프롬프트는 결과를 바꿀 결정을 열어 두지 않는다. `sheet`가 있는 작업에는
+다음에 설명하는 스크립트 사용자가 있다.
+
+### 스크립트 사용자
+
+작업 파일에 `sheet`가 있으면, 그 작업은 모델이 없는 스크립트인 사용자와 함께 두 호스트와 모든 변형에서 실행된다. 시트
+`tasks/sheets/<작업>.json`은 내보내기가 빼는 평가 폴더에 있고, 에이전트의 폴더에는 복사되지 않는다. 작업 폴더에 이름이나
+내용이 같은 사본이 있으면 `pilot-check`가 그 실행을 실패시킨다. 시트에는 결정마다 식별자, 그 결정에 관한 질문을 알아보는
+용어, 순서대로 낼 답이 있고, 승인된 명세가 담아야 할 점마다 용어와 기각한 선택지의 용어가 있다. `harness/scripted_user.py`가
+이를 적용한다.
+
+- 질문에 어떤 결정의 용어가 하나라도 대소문자 구분 없이 들어 있으면 그 결정에 관한 질문이다. 질문은 일치한 모든 결정의
+  답을 받고, 하나도 일치하지 않으면 "추천을 따르세요"를 받는다. 답이 여럿인 결정은 처음 일치한 질문이 첫째 답, 다음
+  질문이 둘째 답을 받고, 마지막 답이 반복된다.
+- 승인 요청에는 시트의 승인 용어가 하나 들어 있다. 명세 글이 필수인 모든 점의 모든 용어를 담고, 기각한 선택지의 용어가
+  기각한 대안 제목 밖에 없으면 승인한다. 아니면 처음 어긋난 점의 문장을 답으로 받는다. `stop_after_approval`이면 승인 뒤
+  질문에는 답하지 않고 대화가 거기서 끝난다.
+- 질문 도구는 승인 도구가 도구의 자유 입력 칸(질문 문장을 키로 한 `answers`)에 답한다. 명세는 앞선 교환 뒤 에이전트의 글과
+  그 질문이다. 차례를 끝내는 글 질문은 마지막 줄이 물음표로 끝나는 것으로 알아보며, 하네스가 호스트의 이어 받기 명령
+  (`claude -p --resume <세션>` 또는 `codex exec resume <스레드>`)으로 답한다. 질문은 마지막 문단이고 명세는 그 차례 전체다. 한
+  실행의 차례들은 `stream.jsonl` 하나를 공유하므로 스트림 자체의 총비용은 비워 두고 비용은 토큰 기록에서 구한다.
+- 모든 교환은 일치한 결정과 답과 함께 `scripted_user.jsonl`에 덧붙고, 이 로그가 유일한 상태라서 승인 도구 프로세스와 하네스
+  프로세스가 하나의 개수를 공유한다. `view.json`에는 교환과, 에이전트의 글, 호출, 교환을 한 줄로 세운 타임라인이
+  `conversation`으로 들어 있고, 채점기는 "승인 전"과 "두 답 사이"를 이것으로 판정한다. 셸 명령이 파일을 쓰거나 옮기거나
+  지우면 파일 편집으로 센다.
+
+한계: `codex exec resume`가 하네스가 넘기는 옵션을 받아야 한다(이런 작업의 첫 Codex 실행 전에 `--help`로 확인한다). 승인
+도구는 에이전트가 `stream.jsonl`에 쓰는 글을 쓰는 동안 읽고, 결정에 관한 것이 아닌 질문은 기본 답을 받는다.
 
 ### Codex 호스트
 
@@ -143,6 +170,12 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 모델 ID, 그 개수)이 남고, `plugin-export.json`에는 변환된 내보내기의 다이제스트와 함께 들어가며, 그 다이제스트는 캠페인
 입력 지문의 일부라서 변환이 다른 내보내기로 이어서 실행하면 멈춘다. 변환 없이 이전 하네스가 내보낸 개정은 다시 내보낸다.
 
+모델 상한에는 예외가 하나 있고, 요구사항 합의의 `claude-fable-5-2` 드래프터 단계에만 적용한다. 변형에
+`"cap_exception": "claude-fable-5-2"`가 있으면(다른 모델 이름은 받지 않는다) 그 내보내기의 `agents/spec-drafter.md`와
+`instructions/requirements-agreement.md`에서만 그 ID를 남기고, 실행 검사는 `spec-drafter` 하위 에이전트와 Codex에서 드래프터를
+돌리는 `reviewer` 역할 실행기에서만 이를 눈감아 준다. 메인 세션, 다른 역할, 변형 키가 없는 실행의 같은 모델은 여전히
+위반이다. 기록은 그 모델을 그런 드래프터 역할에만 받는다. 이 예외는 그 단계의 사례, 실행 횟수, 통과 조건, 기록을 정하지 않는다.
+
 ## 명령
 
 모든 명령은 저장소 루트에서 실행한다. 기본 run root는 `~/.local/state/hei5enbug-agent-setup/harness-eval/runs`이고,
@@ -162,6 +195,9 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 | 표 출력 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> [--out file.md]` |
 | 두 변형 비교 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | 리비전 내보내기만 하기 | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
+| 요구사항 합의 후보를 드래프터 단계마다 git ref 하나로 쓰기 | `python3 evals/e2e/harness/cli.py build-candidates --base <ref> [--steps step1,step2]` |
+| 드래프터 단계를 두 호스트에서 판정하고 합의 기록 쓰기 | `python3 evals/e2e/harness/cli.py record-agreement --campaign <name> --issue 96 --before agreement-before --steps step1=agreement-step1,step2=agreement-step2` |
+| 기록이 도입할 때만 도입한 합의를 작업 트리에 쓰기 | `python3 evals/e2e/harness/cli.py adopt-agreement --record evals/e2e/records/96.json` |
 | 변경을 판정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
 
 `--parallel`은 동시에 실행할 수를 정한다(기본 3). 변형이 여럿이면 작업과 반복마다 순서를 번갈아(ABAB, 다음은
@@ -185,11 +221,26 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 
 ### 변형
 
-변형은 `variants/` 안의 JSON 파일이다: `{"name", "ref", "settings", "env", "extra_args"}`. `ref`는 시험할 플러그인
+변형은 `variants/` 안의 JSON 파일이다: `{"name", "ref", "settings", "env", "extra_args"}`와, fable 드래프터 단계에만 `cap_exception`. `ref`는 시험할 플러그인
 리비전이다. `settings`는 실행의 `--settings` 파일에, `env`는 에이전트 환경에, `extra_args`는 명령줄에 합쳐진다.
 우회 플래그, `--bare`, `--permission-mode`, 또는 `--setting-sources`처럼 하네스가 직접 정하는 플래그를 넣은 변형은
 거부한다. `settings`에 무엇이 있어도 설치된 플러그인과 프로필의 모든 플러그인은 꺼진 채로 두고, `env`에 무엇이 있어도
 사용자의 지침 파일과 자동 메모리는 들어오지 않게 한다.
+
+### 요구사항 합의 측정
+
+사례 A부터 G는 가상 픽스처 `timesheet-cli` 하나에 있는 작업 T46부터 T52다. 규칙 파일 `requirements-agreement.md`, `spec-drafter`
+에이전트, 기존 파일의 모든 수정은 플러그인의 일부가 아닌 `candidates/agreement/`의 후보다. `build-candidates`가 기준 리비전 위에
+드래프터 단계마다 git ref 하나(`refs/e2e/agreement-<단계>`)를 쓰고, 변형 `agreement-step1`, `agreement-step2`,
+`agreement-step3-high`, `agreement-step3-xhigh`가 그 ref를 가리키며 `agreement-before`는 기준을 가리킨다. 단계는 호스트마다 가장
+싼 것부터 올라간다. 1단계는 메인 세션, 2단계는 `claude-opus-5-5` `xhigh`의 에이전트, 3단계는 같은 에이전트를 `claude-fable-5-2`
+`high`로, `high`가 통과하지 못할 때만 `xhigh`로 돌린다. 단계는 호스트에서 A부터 D가 거기서 세어진 실행 두 번씩 통과하고 E부터
+G가 1단계로 세어진 실행 두 번씩 통과했을 때 통과한다. 하네스나 인프라 오류로 끝난 실행은 다시 돌리고 세지 않는다.
+`harness/agreement_decision.py`가 규칙을 적용하고, `record-agreement`가 `records/96.json`의 `agreement` 구역(단계, 호스트, 사례별로
+세어진 모든 실행, 호스트 기록에서 읽은 드래프터의 모델과 사고 강도, 호스트별 등록 단계, 도입 상태)을 쓰며, 아래의 호스트 비교는
+기준 실행, A~D에는 등록한 단계, E~G에는 1단계로 한다. 후보를 플러그인에 넣는 것은 `adopt-agreement`뿐이고 도입한 기록에만
+하며, 인터뷰 스킬도 함께 폐기한다. fable 단계의 A~D 통과 조건은 고정 규칙이 아니라 `decide`의 인자다. Claude 하위 에이전트의
+사고 강도는 하네스가 복사하는 기록에 없으므로 기록의 드래프터 사고 강도는 거기서 `not measured`이고, 변형이 그것을 정한다.
 
 ## 실행 기록
 
@@ -290,6 +341,13 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 | T19 | ops-notes | 공유 문서 | 1,500자 한도에 1,600자쯤 되는 위키 초안 |
 | T20 | notes-cli | 최종 보고 | 테스트를 더한 작은 변경 후 보고 |
 | T21 | notes-cli | 작업 종료 시 Orca 정리 | 티켓의 설정 한 줄 변경, 가짜 `orca`와 저장소 세 곳의 Git worktree를 심어 둔 상태 |
+| T46 | timesheet-cli | 합의, 사례 A | 산출물 둘과 열린 결정 둘. 시트의 주 시작이 가장 그럴듯한 가정과 어긋난다 |
+| T47 | timesheet-cli | 합의, 사례 B | 모든 결정이 적힌 산출물 둘: 합의 단계도 질문도 없다 |
+| T48 | timesheet-cli | 합의, 사례 C | 픽스처에 이미 있는 캐시를 되풀이하는 캐시 요청: 그것을 이름으로 말하는 질문 하나 |
+| T49 | timesheet-cli | 합의, 사례 D | 산출물 하나짜리 아이디어에 이름으로 요청한 요구사항 합의: 승인 뒤 파일 편집 없이 멈춘다 |
+| T50 | timesheet-cli | 합의, 사례 E | 언급하지 않은 동작을 깨는 요청 방법. 첫 답은 지시를 되풀이할 뿐이다 |
+| T51 | timesheet-cli | 합의, 사례 F | 픽스처가 반증하는 진술에 기댄 요청 방법. 틀린 첫 답, 이어서 바깥 제약 |
+| T52 | timesheet-cli | 합의, 사례 G | 픽스처의 관례가 정하는, 적히지 않은 날짜 형식: 한 줄로 해석을 밝히고 묻지 않는다 |
 
 ## 두 호스트에서 변경 비교
 

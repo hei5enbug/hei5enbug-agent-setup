@@ -1,0 +1,58 @@
+{
+  "id": "T47",
+  "title": "Two deliverables with every decision stated",
+  "category": "requirements",
+  "path": "no agreement step",
+  "fixture": "timesheet-cli",
+  "prompt_file": "prompts/T47.txt",
+  "sheet": "sheets/T47.json",
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 10
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "hidden_tests": {
+    "source": "hidden/T47",
+    "dest": "tests/hidden"
+  },
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "no-agreement-no-question",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_agreement_no_question"
+    },
+    {
+      "id": "docs-updated",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "README.md",
+      "pattern": "delete ID"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

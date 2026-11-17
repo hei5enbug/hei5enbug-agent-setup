@@ -13,7 +13,7 @@ import tarfile
 from pathlib import Path
 from typing import Any
 
-from .config import MODEL_CAP, PLUGIN_NAME
+from .config import CAP_EXCEPTION_FILES, CAP_EXCEPTION_MODEL, MODEL_CAP, PLUGIN_NAME
 
 SHA_LENGTH = 7
 EXPORT_RECORD = "plugin-export.json"
@@ -42,8 +42,9 @@ def resolve_ref(repo_root: Path, ref: str) -> str:
     return _git(repo_root, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").decode().strip()
 
 
-def cap_rules_digest() -> str:
-    rules = {"replacements": CAP_REPLACEMENTS, "paths": CAP_PATHS, "suffixes": CAP_SUFFIXES}
+def cap_rules_digest(exception: str | None = None) -> str:
+    rules = {"replacements": CAP_REPLACEMENTS, "paths": CAP_PATHS, "suffixes": CAP_SUFFIXES,
+             **({"exception": [exception, *CAP_EXCEPTION_FILES]} if exception else {})}
     return hashlib.sha256(json.dumps(rules, sort_keys=True).encode()).hexdigest()
 
 
@@ -69,18 +70,28 @@ def read_text(path: Path) -> str | None:
         return None
 
 
-def apply_cap_transform(root: Path) -> dict[str, Any]:
+def kept_by_exception(relative: str, model: str, exception: str | None) -> bool:
+    """Whether the cap exception leaves `model` in this file: only the exception model, only in the drafter step's own files."""
+    return bool(exception) and exception == CAP_EXCEPTION_MODEL and model == exception and relative in CAP_EXCEPTION_FILES
+
+
+def apply_cap_transform(root: Path, exception: str | None = None) -> dict[str, Any]:
     """Replace each model above the cap by its in-cap stand-in in every exported revision, the same for every variant,
-    then scan again and reject the export when any model outside the cap is left. Returns what was replaced."""
+    then scan again and reject the export when any model outside the cap is left. Returns what was replaced.
+
+    `exception` names the one model that the drafter step of the requirements agreement may keep, and only in the files
+    `CAP_EXCEPTION_FILES` lists; every other file is transformed as before."""
     replaced: dict[str, int] = {}
     for path in cap_files(root):
         text = read_text(path)
         if text is None:
             continue
-        def swap(match: re.Match[str]) -> str:
+        relative = path.relative_to(root).as_posix()
+
+        def swap(match: re.Match[str], relative: str = relative) -> str:
             model = match.group(0)
             target = stand_in(model)
-            if target is None:
+            if target is None or kept_by_exception(relative, model, exception):
                 return model
             replaced[model] = replaced.get(model, 0) + 1
             return target
@@ -88,13 +99,14 @@ def apply_cap_transform(root: Path) -> dict[str, Any]:
         if swapped != text:
             path.write_text(swapped, encoding="utf-8")
     left = sorted({(path.relative_to(root).as_posix(), model) for path in cap_files(root)
-                   for model in MODEL_TOKEN.findall(read_text(path) or "") if model not in MODEL_CAP})
+                   for model in MODEL_TOKEN.findall(read_text(path) or "")
+                   if model not in MODEL_CAP and not kept_by_exception(path.relative_to(root).as_posix(), model, exception)})
     if left:
         cap = ", ".join(sorted(MODEL_CAP))
         raise ExportError("model cap: " + "; ".join(
             f"plugin export: role defined in {path} would run {model}, which is outside the model cap ({cap})" for path, model in left))
     return {"replacements": dict(CAP_REPLACEMENTS), "replaced": dict(sorted(replaced.items())), "count": sum(replaced.values()),
-            "rules_digest": cap_rules_digest()}
+            "rules_digest": cap_rules_digest(exception), **({"exception": exception} if exception else {})}
 
 
 def content_digest(root: Path) -> str:
@@ -109,7 +121,7 @@ def export_dir(run_root: Path, sha: str) -> Path:
     return run_root / "plugins" / sha[:SHA_LENGTH] / PLUGIN_NAME
 
 
-def export_plugin(repo_root: Path, run_root: Path, ref: str) -> dict[str, Any]:
+def export_plugin(repo_root: Path, run_root: Path, ref: str, exception: str | None = None) -> dict[str, Any]:
     """Extract `git archive <ref>` once per sha and return {ref, sha, path}; an existing export is reused.
 
     The evaluation folder, its Korean mirror, and its unit tests are left out, so an agent that reads the plugin source cannot see hidden
@@ -120,7 +132,7 @@ def export_plugin(repo_root: Path, run_root: Path, ref: str) -> dict[str, Any]:
     record = target.parent / EXPORT_RECORD
     if record.is_file() and target.is_dir():
         existing = json.loads(record.read_text(encoding="utf-8"))
-        if existing.get("excluded") == list(EXCLUDED_PATHS) and (existing.get("cap_transform") or {}).get("rules_digest") == cap_rules_digest():
+        if existing.get("excluded") == list(EXCLUDED_PATHS) and (existing.get("cap_transform") or {}).get("rules_digest") == cap_rules_digest(exception):
             return {**existing, "path": str(target)}
     staging = target.parent.with_name(f".{sha[:SHA_LENGTH]}.staging")
     shutil.rmtree(staging, ignore_errors=True)
@@ -130,7 +142,7 @@ def export_plugin(repo_root: Path, run_root: Path, ref: str) -> dict[str, Any]:
         archive = _git(repo_root, "archive", "--format=tar", sha, "--", ".", *excludes)
         with tarfile.open(fileobj=io.BytesIO(archive)) as bundle:
             bundle.extractall(staging / PLUGIN_NAME, filter="data")
-        transform = apply_cap_transform(staging / PLUGIN_NAME)
+        transform = apply_cap_transform(staging / PLUGIN_NAME, exception)
         info = {"ref": ref, "sha": sha, "excluded": list(EXCLUDED_PATHS), "cap_transform": transform,
                 "content_digest": content_digest(staging / PLUGIN_NAME)}
         (staging / EXPORT_RECORD).write_text(json.dumps(info, indent=2) + "\n", encoding="utf-8")

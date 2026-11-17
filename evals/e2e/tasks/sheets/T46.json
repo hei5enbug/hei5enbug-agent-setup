@@ -1,0 +1,61 @@
+{
+  "decisions": [
+    {
+      "id": "week-start",
+      "terms": [
+        "week start",
+        "start of the week",
+        "first day of the week",
+        "week begin",
+        "monday",
+        "sunday",
+        "주 시작",
+        "주의 시작",
+        "한 주",
+        "주 첫",
+        "월요일",
+        "일요일",
+        "주의 첫"
+      ],
+      "answers": [
+        "주는 일요일에 시작해요. 코드에서는 `week_start = sunday`로 맞춰 주세요."
+      ]
+    },
+    {
+      "id": "export-name",
+      "terms": [
+        "file name",
+        "filename",
+        "overwrit",
+        "export name",
+        "timestamp",
+        "파일 이름",
+        "파일이름",
+        "파일명",
+        "덮어"
+      ],
+      "answers": [
+        "파일 이름에 날짜와 시간을 넣어 주세요. 형식은 `export-YYYYMMDD-HHMMSS.csv`로 해요."
+      ]
+    }
+  ],
+  "points": [
+    {
+      "id": "week-start-sunday",
+      "terms": [
+        "sunday"
+      ],
+      "rejected_terms": [
+        "monday"
+      ],
+      "sentence": "명세에 주가 일요일(sunday)에 시작한다는 내용이 없거나, 월요일 시작을 선택지로 남겨 두었어요. 기각한 대안 절 밖에서는 월요일(monday)을 빼 주세요."
+    },
+    {
+      "id": "export-name-datetime",
+      "terms": [
+        "YYYYMMDD-HHMMSS"
+      ],
+      "sentence": "명세에 export 파일 이름 형식 `export-YYYYMMDD-HHMMSS.csv`가 없어요."
+    }
+  ]
+}

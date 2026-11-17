@@ -1,0 +1,46 @@
+"""The spec-drafter agent pins the model and effort that the requirements agreement measurement registered."""
+
+from __future__ import annotations
+
+import json
+import unittest
+from pathlib import Path
+
+import yaml
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+AGENT = REPO_ROOT / "agents" / "spec-drafter.md"
+REGISTRY = json.loads((REPO_ROOT / "config" / "model-registry.json").read_text(encoding="utf-8"))
+NAME = "hei5enbug-agent-setup:spec-drafter"
+
+
+class SpecDrafterPinTest(unittest.TestCase):
+    def definition(self) -> dict:
+        return yaml.safe_load(AGENT.read_text(encoding="utf-8").split("---", 2)[1])
+
+    def test_드래프터_정의는_측정이_정한_모델과_사고_강도를_고정하고_레지스트리와_같다(self):
+        """spec-drafter 정의의 model과 effort는 측정에서 등록한 {{model}}, {{effort}}이고 레지스트리 항목과 같다."""
+        # given
+        meta = self.definition()
+        entry = REGISTRY["claude_agents"][NAME]
+
+        # when
+        pinned = (meta["model"], meta["effort"])
+
+        # then
+        self.assertEqual(pinned, ("{{model}}", "{{effort}}"))
+        self.assertEqual(pinned, (entry["model"], entry["effort"]))
+        self.assertIn(meta["model"], REGISTRY["pins"].values())
+
+    def test_드래프터는_읽기_도구만_쓰고_질문이나_위임을_하지_못한다(self):
+        """spec-drafter는 Read, Grep, Glob만 쓰고 Agent, Edit, Write, NotebookEdit, Bash를 금지한다."""
+        # given
+        meta = self.definition()
+
+        # when
+        allowed = {item.strip() for item in meta["tools"].split(",")}
+        denied = {item.strip() for item in meta["disallowedTools"].split(",")}
+
+        # then
+        self.assertEqual(allowed, {"Read", "Grep", "Glob"})
+        self.assertTrue({"Agent", "Edit", "Write", "NotebookEdit", "Bash"} <= denied)

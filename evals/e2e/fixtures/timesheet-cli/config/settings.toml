@@ -1,0 +1,2 @@
+data_file = "data/entries.json"
+export_dir = "out"

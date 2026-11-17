@@ -8,7 +8,7 @@ import threading
 from datetime import datetime
 from typing import Any
 
-from . import caps, codex_calls, codex_host, collect, command, environment, metrics, rubric, transcript, usage
+from . import caps, codex_calls, codex_host, collect, command, converse, environment, metrics, rubric, transcript, usage
 from .config import (
     APPROVAL_GUARD_OFF_ENV, CLAUDE_INSTRUCTION_ENV, FINISHED_STATUSES, HOST_CODEX, INSTRUCTION_ISOLATION, STATUS_COMPLETE,
     STATUS_INFRA_FAILED, STATUS_INTERRUPTED, STATUS_TIMED_OUT, STATUS_USAGE_LIMITED, HarnessConfig,
@@ -52,7 +52,10 @@ def write_run_files(
     (spec.result_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
     write_json(spec.result_dir / "settings.json", command.run_settings(
         variant, environment.profile_plugin_ids(environment.claude_config_dir()), command.ancestor_excludes(spec.repo)))
-    write_json(spec.result_dir / "mcp.json", command.mcp_config(spec.result_dir / "approvals.jsonl", spec.work_dir, spec.repo))
+    sheet = command.task_sheet(cfg.tasks_root, task)
+    write_json(spec.result_dir / "mcp.json", command.mcp_config(
+        spec.result_dir / "approvals.jsonl", spec.work_dir, spec.repo, sheet, spec.result_dir / converse.LOG_NAME,
+        spec.result_dir / "stream.jsonl"))
     argv = command.build_command(cfg, task, variant, prompt, plugin["path"], spec.result_dir)
     write_json(spec.result_dir / "command.json", {"argv": argv, "cwd": str(spec.repo)})
     return argv
@@ -110,7 +113,8 @@ def claude_records(spec: RunSpec, run: dict[str, Any]) -> dict[str, Any]:
         "view": view, "facts": facts, "claude_report": usage.claude_token_report(by_source),
         "codex_report": usage.codex_token_report(rollouts), "usage_source": usage_source,
         "checks": metrics.plugin_checks(facts, run["plugin"]["path"], main_events, subagents),
-        "violations": caps.scan_run(stream_events=events, by_source=by_source, tool_calls=view["tool_calls"], rollouts=rollouts),
+        "violations": caps.scan_run(stream_events=events, by_source=by_source, tool_calls=view["tool_calls"], rollouts=rollouts,
+                                    exception=run.get("cap_exception")),
         "extra": {},
     }
 
@@ -126,7 +130,9 @@ def analyze(
         records = {**records, "extra": codex_host.host_metrics(records)}
     else:
         records = claude_records(spec, run)
-    view = records["view"]
+    main_events = records["rollouts"][0]["events"] if spec.host == HOST_CODEX and records["rollouts"] else (
+        transcript.read_jsonl(directory / "stream.jsonl"))
+    view = converse.attach(records["view"], directory, spec.host, main_events)
     write_json(directory / "view.json", view)
     grade, rubric_result, failure = None, None, None
     if run["status"] in FINISHED_STATUSES:
@@ -254,7 +260,7 @@ def execute_run(
     run: dict[str, Any] = {
         "run_id": spec.run_id, "task": spec.task, "variant": spec.variant, "rep": spec.rep, "plugin": plugin,
         "attempts": prior_attempts(spec) + 1, "base_commit": None, "host": spec.host,
-        "expected_model": command.main_model(variant, spec.host),
+        "expected_model": command.main_model(variant, spec.host), **({"cap_exception": variant["cap_exception"]} if variant.get("cap_exception") else {}),
     }
     try:
         run["base_commit"] = load_graders().materialize_fixture(task, cfg.fixtures_root, cfg.tasks_root, spec.repo)
@@ -269,10 +275,18 @@ def execute_run(
             failed = {**run, "status": STATUS_INFRA_FAILED, "error": f"codex setup failed: {error}"}
             write_json(spec.result_dir / "run.json", failed)
             return failed
-    proc = run_agent(
-        argv, spec.repo, env, spec.result_dir / "stream.jsonl", spec.result_dir / "stderr.txt",
-        float(task["limits"]["wall_seconds"]), cfg.sigint_grace, cfg.sigterm_grace, interrupt=interrupt,
-    )
+    sheet = command.task_sheet(cfg.tasks_root, task)
+    if sheet is None:
+        proc = run_agent(
+            argv, spec.repo, env, spec.result_dir / "stream.jsonl", spec.result_dir / "stderr.txt",
+            float(task["limits"]["wall_seconds"]), cfg.sigint_grace, cfg.sigterm_grace, interrupt=interrupt,
+        )
+    else:
+        proc = converse.run_turns(
+            argv, host=spec.host, cwd=spec.repo, env=env, result_dir=spec.result_dir, sheet_path=sheet,
+            wall_seconds=float(task["limits"]["wall_seconds"]), sigint_grace=cfg.sigint_grace, sigterm_grace=cfg.sigterm_grace,
+            interrupt=interrupt,
+        )
     if codex:
         return finish_codex_run(spec, task, run, proc, cfg, interrupt)
     return finish_run(spec, task, run, proc, cfg, interrupt)

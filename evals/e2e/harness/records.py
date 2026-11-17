@@ -12,10 +12,13 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from . import codex_host, collect, summarize, transcript
+from .agreement_decision import agreement_problems
 from .caps import MODEL_CAP as ALLOWED_MODELS
 from .caps import normalize
 from .command import ConfigError
-from .config import FINISHED_STATUSES, HOST_CODEX, RUBRIC_EFFORT, RUBRIC_FALLBACK_EFFORT
+from .config import (
+    CAP_EXCEPTION_MODEL, CAP_EXCEPTION_ROLES, FINISHED_STATUSES, HOST_CODEX, RUBRIC_EFFORT, RUBRIC_FALLBACK_EFFORT,
+)
 from .matrix import campaign_dir, make_spec, parse_run_id, read_json
 from .verdict import (
     ACCEPT, BASELINE, CONTINUE_TO_FIVE, FAIL, HOSTS, INVESTIGATE, MEASURES, NOT_MEASURED, PASS, REJECT, REPEAT, SECOND_PAIR,
@@ -28,6 +31,7 @@ UNKNOWN_EFFORT = "not measured"
 VERDICTS = frozenset({PASS, FAIL, REPEAT, NOT_MEASURED, INVESTIGATE, BASELINE, ACCEPT, REJECT, CONTINUE_TO_FIVE, SECOND_PAIR})
 VERDICT_SUBJECTS = frozenset({"quality", "wall_seconds", "cost_usd", "claim"})
 TOP_FIELDS = ("issue", "cases", "variants", "runs", "verdicts")
+TOP_OPTIONAL = ("agreement",)
 RUN_REQUIRED = ("case", "variant", "host", "models", "checks", "wall_seconds", "cost_usd")
 RUN_OPTIONAL = ("rep", "reviews")
 VERDICT_REQUIRED = ("case", "verdict", "step")
@@ -78,7 +82,9 @@ def run_problems(position: str, run: Any, cases: Sequence[str], variants: Mappin
             problems.append(f"{position} models names no role")
         else:
             for role, entry in models.items():
-                if not isinstance(entry, Mapping) or entry.get("model") not in ALLOWED_MODELS:
+                excepted = isinstance(entry, Mapping) and entry.get("model") == CAP_EXCEPTION_MODEL and any(
+                    name in str(role) for name in CAP_EXCEPTION_ROLES)
+                if not isinstance(entry, Mapping) or (entry.get("model") not in ALLOWED_MODELS and not excepted):
                     problems.append(f"{position} role {role} uses a model outside the allowed models")
                 elif entry.get("effort") not in EFFORTS and entry.get("effort") != UNKNOWN_EFFORT:
                     problems.append(f"{position} role {role} has an unknown effort")
@@ -114,7 +120,9 @@ def validate_record(record: Any) -> list[str]:
     if not isinstance(record, Mapping):
         return ["the record is not an object"]
     problems = [f"the record lacks {field}" for field in TOP_FIELDS if field not in record]
-    problems += [f"the record has unknown field {field}" for field in record if field not in TOP_FIELDS]
+    problems += [f"the record has unknown field {field}" for field in record if field not in TOP_FIELDS + TOP_OPTIONAL]
+    if "agreement" in record:
+        problems += agreement_problems(record["agreement"])
     issue = record.get("issue")
     if "issue" in record and not (isinstance(issue, int) and not isinstance(issue, bool) and issue > 0):
         problems.append("issue is not a positive integer")
@@ -154,8 +162,8 @@ def check_record(record: Any) -> None:
 
 
 def build_record(issue: int, cases: Sequence[str], variants: Mapping[str, str], runs: Sequence[Mapping[str, Any]],
-                 verdicts: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """The record dict for one comparison; `variants` maps each variant name to its revision."""
+                 verdicts: Sequence[Mapping[str, Any]], extra: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """The record dict for one comparison; `variants` maps each variant name to its revision. `extra` adds optional sections."""
     record = {
         "issue": issue,
         "cases": list(cases),
@@ -163,6 +171,7 @@ def build_record(issue: int, cases: Sequence[str], variants: Mapping[str, str], 
         "runs": [{field: run[field] for field in (*RUN_REQUIRED, *RUN_OPTIONAL) if field in run} for run in runs],
         "verdicts": [{field: item[field] for field in (*VERDICT_REQUIRED, *VERDICT_OPTIONAL) if field in item}
                      for item in verdicts],
+        **(extra or {}),
     }
     check_record(record)
     return record

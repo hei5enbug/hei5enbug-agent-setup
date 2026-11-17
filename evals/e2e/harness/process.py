@@ -202,11 +202,12 @@ def _wait_tracking(
 def run_agent(
     command: Sequence[str], cwd: Path, env: Mapping[str, str], stream_path: Path, stderr_path: Path,
     wall_seconds: float, sigint_grace: float, sigterm_grace: float, poll_seconds: float = TREE_POLL_SECONDS,
-    interrupt: threading.Event | None = None,
+    interrupt: threading.Event | None = None, append: bool = False,
 ) -> ProcessResult:
     started_at, begin = datetime.now(timezone.utc), time.monotonic()
     stream_path.parent.mkdir(parents=True, exist_ok=True)
-    with stream_path.open("wb") as stream, stderr_path.open("wb") as errors:
+    mode = "ab" if append else "wb"
+    with stream_path.open(mode) as stream, stderr_path.open(mode) as errors:
         try:
             process = subprocess.Popen(
                 list(command), cwd=cwd, env=dict(env), stdin=subprocess.DEVNULL, stdout=stream, stderr=errors,

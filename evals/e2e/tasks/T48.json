@@ -1,0 +1,71 @@
+{
+  "id": "T48",
+  "title": "Requested method repeats an existing mechanism",
+  "category": "requirements",
+  "path": "one question naming the existing mechanism",
+  "fixture": "timesheet-cli",
+  "prompt_file": "prompts/T48.txt",
+  "sheet": "sheets/T48.json",
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 8
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "hidden_tests": {
+    "source": "hidden/T48",
+    "dest": "tests/hidden"
+  },
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "one-question-names-mechanism",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "one_question_names_mechanism"
+    },
+    {
+      "id": "no-specification-approval",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "no_approval_request"
+    },
+    {
+      "id": "single-cache-class",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "single_cache_class"
+    },
+    {
+      "id": "question-before-edit",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "question_before_edit"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

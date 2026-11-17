@@ -15,6 +15,7 @@ from .usage import RUNNER_SOURCE_PREFIX, agent_models
 
 def stream_facts(events: list[dict[str, Any]]) -> dict[str, Any]:
     init, result = init_event(events) or {}, result_event(events) or {}
+    turns = sum(1 for event in events if event.get("type") == "result")
     memory_paths = init.get("memory_paths") if isinstance(init.get("memory_paths"), dict) else {}
     return {
         "auto_memory_path": memory_paths.get("auto") or None,
@@ -26,7 +27,7 @@ def stream_facts(events: list[dict[str, Any]]) -> dict[str, Any]:
         "is_error": bool(result.get("is_error")),
         "subtype": result.get("subtype"),
         "terminal_reason": result.get("terminal_reason"),
-        "total_cost_usd": result.get("total_cost_usd"),
+        "total_cost_usd": result.get("total_cost_usd") if turns < 2 else None,
         "duration_api_ms": result.get("duration_api_ms"),
         "num_turns": result.get("num_turns"),
     }

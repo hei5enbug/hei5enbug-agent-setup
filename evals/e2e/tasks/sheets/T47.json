@@ -1,0 +1,14 @@
+{
+  "decisions": [
+    {
+      "id": "unexpected-question",
+      "terms": [
+        "?",
+        "？"
+      ],
+      "answers": [
+        "추천대로 해 주세요."
+      ]
+    }
+  ]
+}

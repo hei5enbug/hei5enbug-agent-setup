@@ -1,0 +1,65 @@
+{
+  "id": "T46",
+  "title": "Two deliverables with two open decisions",
+  "category": "requirements",
+  "path": "agreement before the first change",
+  "fixture": "timesheet-cli",
+  "prompt_file": "prompts/T46.txt",
+  "sheet": "sheets/T46.json",
+  "limits": {
+    "wall_seconds": 2400,
+    "max_budget_usd": 15
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "hidden_tests": {
+    "source": "hidden/T46",
+    "dest": "tests/hidden"
+  },
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "specification-approved",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "approved_specification"
+    },
+    {
+      "id": "no-edit-before-approval",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_edit_before_approval"
+    },
+    {
+      "id": "docs-updated",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "README.md",
+      "pattern": "weekly"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

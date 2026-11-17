@@ -9,7 +9,7 @@ from typing import Any, Iterable
 
 from .config import (
     AGENT_EFFORT, APPROVER_SERVER, APPROVER_TOOL, CLAUDE_SETTING_SOURCES, FORBIDDEN_ARGS, HARNESS_DIR, HOST_CLAUDE, HOSTS,
-    ANCESTOR_INSTRUCTION_FILES, INSTALLED_PLUGIN_KEY, MAIN_MODELS, RESERVED_ARGS, HarnessConfig,
+    ANCESTOR_INSTRUCTION_FILES, CAP_EXCEPTION_MODEL, INSTALLED_PLUGIN_KEY, MAIN_MODELS, RESERVED_ARGS, HarnessConfig,
 )
 
 APPROVER_SCRIPT = HARNESS_DIR / "approval_mcp.py"
@@ -49,9 +49,12 @@ def validate_variant(variant: Any, name: str = "variant") -> dict[str, Any]:
     models = variant.get("models", {})
     if not isinstance(models, dict) or set(models) - set(HOSTS) or not all(isinstance(v, str) for v in models.values()):
         raise ConfigError(f"{name}: 'models' must map a host ({', '.join(HOSTS)}) to a model name")
+    exception = variant.get("cap_exception")
+    if exception is not None and exception != CAP_EXCEPTION_MODEL:
+        raise ConfigError(f"{name}: 'cap_exception' may only name {CAP_EXCEPTION_MODEL}")
     return {"name": variant["name"], "ref": variant["ref"], "settings": dict(variant.get("settings", {})),
             "env": {str(k): str(v) for k, v in variant.get("env", {}).items()}, "extra_args": extra,
-            "models": dict(models)}
+            "models": dict(models), **({"cap_exception": exception} if exception else {})}
 
 
 def validate_hosts(hosts: list[str]) -> list[str]:
@@ -91,6 +94,11 @@ def task_environment(task: dict[str, Any], repo: Path, work: Path) -> dict[str, 
     return result
 
 
+def task_sheet(tasks_root: Path, task: dict[str, Any]) -> Path | None:
+    """The answer sheet of a task, kept in the evaluation tree and never copied into the run's folders, or None."""
+    return (tasks_root / task["sheet"]).resolve() if task.get("sheet") else None
+
+
 def read_prompt(tasks_root: Path, task: dict[str, Any]) -> str:
     return (tasks_root / task["prompt_file"]).read_text(encoding="utf-8").strip()
 
@@ -125,10 +133,16 @@ def run_settings(variant: dict[str, Any], profile_plugins: Iterable[str] = (), a
             **({"claudeMdExcludes": excludes} if excludes else {})}
 
 
-def mcp_config(approval_log: Path, run_folder: Path | None = None, cwd: Path | None = None) -> dict[str, Any]:
-    """The approver server config; it denies file tools outside `run_folder` and reads relative paths from `cwd`."""
+def mcp_config(
+    approval_log: Path, run_folder: Path | None = None, cwd: Path | None = None, sheet: Path | None = None,
+    scripted_log: Path | None = None, stream: Path | None = None,
+) -> dict[str, Any]:
+    """The approver server config; it denies file tools outside `run_folder` and reads relative paths from `cwd`. With a
+    `sheet` it also answers a question asked through the question tool from that answer sheet and logs the exchange to
+    `scripted_log`, reading the specification the agent showed from `stream`."""
     folder = {"EVAL_RUN_FOLDER": str(run_folder)} if run_folder else {}
-    env = {"EVAL_APPROVAL_LOG": str(approval_log), **folder, **({"EVAL_RUN_CWD": str(cwd)} if run_folder and cwd else {})}
+    scripted = {"EVAL_SHEET": str(sheet), "EVAL_SCRIPTED_LOG": str(scripted_log), "EVAL_STREAM": str(stream)} if sheet else {}
+    env = {"EVAL_APPROVAL_LOG": str(approval_log), **folder, **({"EVAL_RUN_CWD": str(cwd)} if run_folder and cwd else {}), **scripted}
     return {"mcpServers": {APPROVER_SERVER: {
         "type": "stdio", "command": "python3", "args": [str(APPROVER_SCRIPT)], "env": env,
     }}}

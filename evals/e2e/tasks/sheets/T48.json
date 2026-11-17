@@ -1,0 +1,16 @@
+{
+  "decisions": [
+    {
+      "id": "cache-choice",
+      "terms": [
+        "cache",
+        "캐시",
+        "ttlcache",
+        "load_cached"
+      ],
+      "answers": [
+        "이미 있는 `load_cached`를 totals에서 쓰는 쪽으로 해 주세요. 새 캐시는 만들지 마세요."
+      ]
+    }
+  ]
+}

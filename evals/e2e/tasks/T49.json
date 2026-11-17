@@ -1,0 +1,52 @@
+{
+  "id": "T49",
+  "title": "Requirements agreement asked for by name",
+  "category": "requirements",
+  "path": "agreement for one idea, then stop",
+  "fixture": "timesheet-cli",
+  "prompt_file": "prompts/T49.txt",
+  "sheet": "sheets/T49.json",
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 6
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "specification-approved",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "approved_specification"
+    },
+    {
+      "id": "stops-and-asks-next",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "stops_and_asks_next"
+    },
+    {
+      "id": "no-file-edit",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "no_file_edit"
+    },
+    {
+      "id": "repo-unchanged",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 1
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

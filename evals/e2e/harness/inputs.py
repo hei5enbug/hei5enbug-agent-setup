@@ -85,6 +85,7 @@ def task_content_parts(cfg: HarnessConfig, task_id: str) -> dict[str, str]:
     return {
         f"prompt:{task_id}": file_digest(cfg.tasks_root / task["prompt_file"]),
         **({f"setup:{task_id}": file_digest(cfg.tasks_root / task["setup"])} if task.get("setup") else {}),
+        **({f"sheet:{task_id}": file_digest(cfg.tasks_root / task["sheet"])} if task.get("sheet") else {}),
         f"fixture:{task['fixture']}": tree_digest(cfg.fixtures_root / task["fixture"]),
     }
 

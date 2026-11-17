@@ -269,7 +269,8 @@ def load_records(spec: RunSpec, run: dict[str, Any], expected_model: str) -> dic
         "mod_marker_present": None, "subagent_models": {}, "permission_mode": session["approval_policy"],
         "sandbox": session["sandbox"], "model_as_requested": session["model"] == expected_model,
     }
-    violations = caps.scan_run(stream_events=[], by_source=by_source, tool_calls=calls, rollouts=rollouts)
+    violations = caps.scan_run(stream_events=[], by_source=by_source, tool_calls=calls, rollouts=rollouts,
+                               exception=run.get("cap_exception"))
     return {"view": view, "facts": facts, "claude_report": usage.claude_token_report(by_source),
             "codex_report": usage.codex_token_report(rollouts), "checks": checks, "usage_source": "rollouts",
             "violations": violations, "session": session, "rollouts": rollouts}

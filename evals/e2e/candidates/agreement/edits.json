@@ -1,0 +1,145 @@
+{
+ "groups": {
+  "rules": "always, with the first candidate and on adoption",
+  "agent": "with a drafter step 2 or 3",
+  "retire": "only on adoption, once the measurement passes on both hosts"
+ },
+ "retire_paths": [
+  "skills/deep-interview",
+  "docs/ko/skills/deep-interview"
+ ],
+ "edits": [
+  {
+   "group": "rules",
+   "path": "instructions/session/common.md",
+   "old": "- Activate a skill for an implementation plan, design document, or RFC only when the user explicitly requests\n  that deliverable or directly invokes the skill. Do not infer it from general implementation, diagnosis, code\n  review, summarization, or a passing mention, and do not chain another skill from those tasks.\n  Task preparation under the implementation execution rules is not such a request.\n- `document-to-confluence`, `suggest-commit`, and `technical-design-writer` are an exception: they remain automatic\n  when their own descriptions match the user's intent.\n",
+   "new": "- Start a plan, design, or RFC skill only when the user explicitly requests that deliverable or invokes it.\n  Never infer it from implementation, diagnosis, code review, summarization, or a passing mention, or chain another\n  skill from those tasks.\n  Task preparation under the implementation execution rules is not such a request.\n  Exception: [requirements agreement](../requirements-agreement.md).\n- `document-to-confluence`, `suggest-commit`, and `technical-design-writer` are an exception: they remain automatic\n  when their descriptions match the user's intent.\n"
+  },
+  {
+   "group": "rules",
+   "path": "docs/ko/instructions/session/common.ko.md",
+   "old": "- 사용자가 구현 계획, 설계 문서 또는 RFC를 명시적으로 요청하거나 스킬을 직접 호출했을 때만 관련 스킬을 실행한다.\n  일반 구현, 진단, 코드 리뷰, 요약 또는 단순 언급만으로 실행하거나 다른 스킬을 연쇄 호출하지 않는다.\n  구현 실행 규칙에 따른 작업 준비는 이런 요청에 해당하지 않는다.\n- `document-to-confluence`, `suggest-commit`, `technical-design-writer`는 예외로, 스킬 설명이 사용자 의도와\n  일치하면 계속 자동으로 실행된다.\n",
+   "new": "- 사용자가 계획, 설계, RFC 스킬이 만드는 산출물을 명시적으로 요청하거나 스킬을 호출했을 때만 그 스킬을 시작한다.\n  구현, 진단, 코드 리뷰, 요약 또는 단순 언급만으로 시작하거나 다른 스킬을 연쇄 호출하지 않는다.\n  구현 실행 규칙에 따른 작업 준비는 이런 요청에 해당하지 않는다.\n  예외: [요구사항 합의](../requirements-agreement.ko.md).\n- `document-to-confluence`, `suggest-commit`, `technical-design-writer`는 예외로, 스킬 설명이 사용자 의도와\n  일치하면 계속 자동으로 실행된다.\n"
+  },
+  {
+   "group": "rules",
+   "path": "instructions/implementation-execution.md",
+   "old": "This preparation is not a requested implementation plan. It runs no planning or design skill, no six-stage\nplanning workflow, and no independent validation.\n",
+   "new": "Before the first implementation change, read [requirements agreement](requirements-agreement.md) when, after a bounded\nread of the repository, the request has at least two deliverables that can be verified separately and an unresolved\ndecision whose options lead to materially different accepted results, and when the user asks for a requirements\ninterview or agreement by name. Read it too before a change that depends on a point you hold evidence against.\n\nUnder the condition that a request does not start the agreement and the evidence shows that the requested method cannot\nreach the stated goal, or that an existing mechanism of the repository or a supported feature of its tools reaches it\nwith less change, state that evidence and ask which to use before the first change. Under the condition that a decision\nchanges requirements, policy, recurring cost, or compatibility, ask it; decide every other implementation choice and\nstate it with its basis.\n\nUnder the condition that a request does not start the agreement and you settled, from the evidence, a part of the\nrequirement or the method that the request leaves unstated, write that reading in one line before the first change and\ncontinue without waiting for a reply. Under the condition that two readings would change the result and the evidence\ndoes not choose between them, ask under the clarification rules instead. Under the condition that the request states\nevery such part, write no such line.\n\nThis preparation is not a requested implementation plan. It runs no planning or design skill, no six-stage\nplanning workflow, and no independent validation.\n"
+  },
+  {
+   "group": "rules",
+   "path": "docs/ko/instructions/implementation-execution.ko.md",
+   "old": "이 준비는 사용자가 요청한 구현 계획이 아니다. 계획이나 설계 스킬, 6단계 계획 절차, 독립 검증을 실행하지 않는다.\n",
+   "new": "첫 구현 변경 전에, 저장소를 한정된 범위로 읽은 결과 요청에 따로 검증할 수 있는 산출물이 둘 이상이고 선택지에 따라 받아들일\n결과가 크게 달라지는 미결 결정이 있으면, 그리고 사용자가 요구사항 인터뷰나 합의를 이름으로 요청하면\n[요구사항 합의](requirements-agreement.ko.md)를 읽는다. 근거로 반대할 점이 있는 사항에 기대는 변경 전에도 읽는다.\n\n요청이 합의를 시작하지 않고, 근거가 요청한 방법으로는 밝힌 목표에 이를 수 없거나 저장소의 기존 메커니즘이나 도구가 지원하는\n기능이 더 적은 변경으로 이를 수 있음을 보이면, 그 근거를 밝히고 첫 변경 전에 어느 쪽을 쓸지 묻는다. 결정이 요구사항, 정책,\n반복 비용, 호환성을 바꾸면 묻는다. 그 밖의 구현 선택은 스스로 정하고 근거와 함께 밝힌다.\n\n요청이 합의를 시작하지 않고, 요청이 말하지 않은 요구사항이나 방법의 한 부분을 근거로 확정했으면, 첫 변경 전에 그 해석을 한 줄로\n적고 답을 기다리지 않고 계속한다. 두 해석이 결과를 바꾸는데 근거가 가르지 못하면 확인 질문 규칙에 따라 대신 묻는다. 요청이 그런\n부분을 모두 밝혔으면 그런 줄을 쓰지 않는다.\n\n이 준비는 사용자가 요청한 구현 계획이 아니다. 계획이나 설계 스킬, 6단계 계획 절차, 독립 검증을 실행하지 않는다.\n"
+  },
+  {
+   "group": "rules",
+   "path": "skills/skill-issue-creator/SKILL.md",
+   "old": "  none left out, in one call of the host's question UI, such as `AskUserQuestion`. Draft only after the answers.\n",
+   "new": "  none left out, in one call of the host's question UI, such as `AskUserQuestion`. Draft only after the answers.\n  Read [objections and replies](../../instructions/requirements-agreement.md#objections-and-replies) for what a\n  disagreement is and which reply settles it; when it is missing, report it and pause this step.\n"
+  },
+  {
+   "group": "rules",
+   "path": "docs/ko/skills/skill-issue-creator/SKILL.ko.md",
+   "old": "  `AskUserQuestion` 같은 호스트의 질문 UI를 한 번 호출해 모두 묻는다. 답변을 받은 뒤에만 초안을 쓴다.\n",
+   "new": "  `AskUserQuestion` 같은 호스트의 질문 UI를 한 번 호출해 모두 묻는다. 답변을 받은 뒤에만 초안을 쓴다.\n  무엇이 의견 불일치이고 어떤 답이 그것을 푸는지는 [반대와 답](../../instructions/requirements-agreement.ko.md#반대와-답)을 읽는다.\n  그 파일이 없으면 그 사실을 알리고 이 단계를 멈춘다.\n"
+  },
+  {
+   "group": "agent",
+   "path": ".claude-plugin/plugin.json",
+   "old": "    \"./agents/reviewer.md\"\n  ],",
+   "new": "    \"./agents/reviewer.md\",\n    \"./agents/spec-drafter.md\"\n  ],"
+  },
+  {
+   "group": "agent",
+   "path": ".claude-plugin/plugin.json",
+   "old": "Run the scout, worker, sonnet-worker, designer, and reviewer agents",
+   "new": "Run the scout, worker, sonnet-worker, designer, reviewer, and spec-drafter agents"
+  },
+  {
+   "group": "agent",
+   "path": "tests/test_claude_worker_contract.py",
+   "old": "                \"./agents/reviewer.md\",\n            ],",
+   "new": "                \"./agents/reviewer.md\",\n                \"./agents/spec-drafter.md\",\n            ],"
+  },
+  {
+   "group": "retire",
+   "path": "README.md",
+   "old": "| [`deep-interview`](skills/deep-interview/SKILL.md) | Clarify requirements through a scored Socratic interview. [한국어](docs/ko/skills/deep-interview/SKILL.ko.md) |\n",
+   "new": ""
+  },
+  {
+   "group": "retire",
+   "path": "docs/ko/README.ko.md",
+   "old": "| [`deep-interview`](../../skills/deep-interview/SKILL.md) | 모호함을 점수로 평가하는 소크라테스식 인터뷰로 요구사항을 명확히 합니다. [한국어](skills/deep-interview/SKILL.ko.md) |\n",
+   "new": ""
+  },
+  {
+   "group": "retire",
+   "path": "docs/development.md",
+   "old": "    ├── deep-interview/\n",
+   "new": ""
+  },
+  {
+   "group": "retire",
+   "path": "docs/ko/docs/development.ko.md",
+   "old": "    ├── deep-interview/\n",
+   "new": ""
+  },
+  {
+   "group": "retire",
+   "path": "docs/rule-enforcement.md",
+   "old": "| `skills/deep-interview/tests/test_interview_eval_fixtures.py` | Interview eval cases keep their state flow and input files. | `skills/deep-interview/SKILL.md` |\n",
+   "new": ""
+  },
+  {
+   "group": "retire",
+   "path": "docs/ko/docs/rule-enforcement.ko.md",
+   "old": "| `skills/deep-interview/tests/test_interview_eval_fixtures.py` | 인터뷰 평가 사례는 상태 흐름과 입력 파일을 유지한다. | `skills/deep-interview/SKILL.md` |\n",
+   "new": ""
+  },
+  {
+   "group": "retire",
+   "path": "tests/test_korean_mirrors.py",
+   "old": "fixture = REPO_ROOT / \"skills/deep-interview/evals/files/billing-service/README.md\"",
+   "new": "fixture = REPO_ROOT / \"skills/session-retro/evals/files/repos/demo-plugin/README.md\""
+  },
+  {
+   "group": "retire",
+   "path": "tests/test_korean_mirrors.py",
+   "old": "operator_guide = REPO_ROOT / \"skills/deep-interview/evals/operator-guides/brownfield-ten-rounds.md\"",
+   "new": "operator_guide = REPO_ROOT / \"skills/decision-navigator/evals/operator-guides/frontier-concurrency.md\""
+  },
+  {
+   "group": "retire",
+   "path": "tests/test_approval_recorded_replay.py",
+   "old": "for s in decision-navigator deep-interview flowchart-design",
+   "new": "for s in decision-navigator flowchart-design"
+  },
+  {
+   "group": "agent",
+   "path": "docs/rule-enforcement.md",
+   "old": "| `tests/test_reviewer_contract.py` |",
+   "new": "| `tests/test_spec_drafter_pin.py` | The spec-drafter agent pins the registered model and effort, reads with `Read`, `Grep`, and `Glob` only, and cannot delegate or edit. | `agents/spec-drafter.md`, `instructions/requirements-agreement.md` |\n| `tests/test_reviewer_contract.py` |"
+  },
+  {
+   "group": "agent",
+   "path": "docs/ko/docs/rule-enforcement.ko.md",
+   "old": "| `tests/test_reviewer_contract.py` |",
+   "new": "| `tests/test_spec_drafter_pin.py` | spec-drafter 에이전트는 등록한 모델과 사고 강도를 고정하고, `Read`, `Grep`, `Glob`만으로 읽으며, 위임하거나 수정하지 못한다. | `agents/spec-drafter.md`, `instructions/requirements-agreement.md` |\n| `tests/test_reviewer_contract.py` |"
+  },
+  {
+   "group": "agent",
+   "path": "tests/test_reviewer_contract.py",
+   "old": "        self.assertEqual(len(agents), 5)\n",
+   "new": "        self.assertEqual(len(agents), 6)\n"
+  },
+  {
+   "group": "agent",
+   "path": "tests/test_model_pins.py",
+   "old": "                \"reviewer.md\": PINS[\"claude-opus\"],\n            },\n            models,",
+   "new": "                \"reviewer.md\": PINS[\"claude-opus\"],\n                \"spec-drafter.md\": PINS[\"{{pin_key}}\"],\n            },\n            models,"
+  }
+ ]
+}

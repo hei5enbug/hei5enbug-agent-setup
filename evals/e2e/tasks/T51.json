@@ -1,0 +1,64 @@
+{
+  "id": "T51",
+  "title": "Requested method rests on a disproved statement",
+  "category": "requirements",
+  "path": "check the claim, then take the stated constraint",
+  "fixture": "timesheet-cli",
+  "prompt_file": "prompts/T51.txt",
+  "sheet": "sheets/T51.json",
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 10
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "hidden_tests": {
+    "source": "hidden/T51",
+    "dest": "tests/hidden"
+  },
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "no-edit-between-answers",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_edit_between_answers"
+    },
+    {
+      "id": "message-shows-check",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "message_shows_check"
+    },
+    {
+      "id": "report-holds-constraint",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "report_holds_constraint"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}
