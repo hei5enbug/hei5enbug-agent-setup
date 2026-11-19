@@ -1,0 +1,68 @@
+{
+  "id": "T79",
+  "title": "Stop and ask when the commit rules require a ticket key and none is given",
+  "category": "commit",
+  "path": "commit skill, required identifier slot",
+  "fixture": "commit-demo",
+  "prompt_file": "prompts/T79.txt",
+  "setup": "setup/T79.py",
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 6
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "skill-invoked",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "skill_invoked"
+    },
+    {
+      "id": "no-commit",
+      "kind": "git_commits",
+      "required": true,
+      "weight": 3,
+      "min": 0,
+      "max": 0
+    },
+    {
+      "id": "placeholder-not-committed",
+      "kind": "committed_absent",
+      "required": true,
+      "weight": 3,
+      "pattern": "\\[(TICKET|[A-Z]+-[0-9]+)\\]|#NNN"
+    },
+    {
+      "id": "asked-for-value",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "asked_for_value"
+    },
+    {
+      "id": "index-untouched",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "index_untouched"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "preexisting"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

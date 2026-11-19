@@ -1,4 +1,4 @@
-"""Custom checks for T17: the commit message passes the commit-message check and the independent review."""
+"""Custom checks for T17: the commit message passes the checks and the review, and the commit skill ran."""
 
 from __future__ import annotations
 
@@ -12,6 +12,13 @@ def shared(ctx):
     module = types.ModuleType("text_review_shared")
     exec(compile(path.read_text(encoding="utf-8"), str(path), "exec"), module.__dict__)  # no bytecode cache
     return module
+
+
+def skill_invoked(ctx):
+    path = Path(ctx.tasks_root) / "custom" / "commit_shared.py"
+    module = types.ModuleType("commit_shared")
+    exec(compile(path.read_text(encoding="utf-8"), str(path), "exec"), module.__dict__)  # no bytecode cache
+    return module.skill_invoked(ctx)
 
 
 def message_check(ctx):

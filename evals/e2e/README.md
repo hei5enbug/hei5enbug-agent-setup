@@ -327,6 +327,8 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T19 | ops-notes | Shared document | Wiki draft of about 1,600 characters for a 1,500-character budget |
 | T20 | notes-cli | Final report | Small change with tests, then a report |
 | T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
+| T78 | commit-demo | Commit skill, staged-only scope | Korean-subject history, one staged change beside an unstaged edit and an untracked `.env` |
+| T79 | commit-demo | Commit skill, required identifier | Commit rules that require a ticket key, and a request that names none |
 
 The ids T89 to T93 belong to the comparison of Claude reviewer and opponent models in
 [`evals/model-roles`](../model-roles/README.md). Those cases run through the role runners instead of this harness, so

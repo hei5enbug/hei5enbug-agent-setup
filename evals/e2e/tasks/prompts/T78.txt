@@ -1,0 +1,1 @@
+먼저 src/demo.py에 스테이징해 둔 변경이 `python3 -m pytest -q`를 깨지 않는지 확인하고, 스테이징된 변경만 커밋해줘. README.md와 .env는 건드리지 마.

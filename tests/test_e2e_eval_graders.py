@@ -68,8 +68,11 @@ def tree_digest(root: Path) -> str:
 
 
 def make_view(final_answer: str = "", commands: tuple[str, ...] = (), results: tuple[str, ...] = (),
-              texts: tuple[str, ...] = (), delegations: tuple[dict[str, Any], ...] = ()) -> dict[str, Any]:
-    calls = [{"id": f"c{i}", "name": "Bash", "input": {"command": command}, "result_text": "", "is_error": False,
+              texts: tuple[str, ...] = (), delegations: tuple[dict[str, Any], ...] = (),
+              skills: tuple[str, ...] = ()) -> dict[str, Any]:
+    calls = [{"id": f"s{i}", "name": "Skill", "input": {"skill": skill}, "result_text": "", "is_error": False,
+              "parent": None, "source": "main"} for i, skill in enumerate(skills)]
+    calls += [{"id": f"c{i}", "name": "Bash", "input": {"command": command}, "result_text": "", "is_error": False,
               "parent": None, "source": "main"} for i, command in enumerate(commands)]
     calls += [{"id": f"r{i}", "name": "Read", "input": {}, "result_text": text, "is_error": False, "parent": None,
                "source": "main"} for i, text in enumerate(results)]
@@ -919,6 +922,8 @@ class GoldenTaskTest(TempCase):
         if task_id == "T09":
             return make_view("Removed build output and logs; your WIP and notes are untouched.",
                              commands=("git status --short", "rm -r build dist"))
+        if task_id == "T17":
+            return make_view("done", commands=RAN_REVIEW, skills=("hei5enbug-agent-setup:suggest-commit",))
         if task_id in TEXT_TASK_IDS:
             return make_view(FINAL_REPORT if task_id == "T20" else "done", commands=RAN_REVIEW)
         return make_view("done")
