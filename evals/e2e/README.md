@@ -157,6 +157,17 @@ and their count), `plugin-export.json` holds it with a digest of the transformed
 campaign's input fingerprint, so a resume on a differently transformed export stops. A revision that an earlier harness
 exported without the transform is exported again.
 
+### Claude-only review stand-in
+
+The final report hook asks for a `text_review.py review`, and that script calls the `gpt-6.1-sol` reviewer by default.
+A run with no GPT reviewer available adds `--claude-review-stand-in` to `run` (or `export-plugin`). The export then
+replaces the one `gpt-6.1-sol` literal in `scripts/text_review.py` with `claude-sonnet-5-5`, the same for every variant,
+and rejects a revision where the literal is missing or appears more than once. Instructions, hooks, and commands stay
+as in real use. The option is off by default, and its export lives in its own `plugins/<sha>-claude-review/` folder.
+`env.json` records `review_stand_in` (the model, the file, and the replaced literal), the export digest carries it into
+the input fingerprint, and a record marks each run that used it with `review_stand_in`. The reviewer is then Claude,
+not independent of a Claude author, so compare only runs that used the same setting.
+
 ## Commands
 
 Run every command from the repository root. The default run root is

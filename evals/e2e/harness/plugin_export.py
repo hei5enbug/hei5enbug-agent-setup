@@ -21,6 +21,10 @@ EXCLUDED_PATHS = ("evals", "docs/ko/evals", "tests/test_e2e_eval_*.py")
 CAP_REPLACEMENTS = {r"claude-fable-\d+(?:-\d+)*": "claude-opus-5-5", r"gpt-\d+(?:\.\d+)*-(?:astra|terra)": "gpt-6.1-sol"}
 CAP_PATHS = ("config/model-registry.json", "agents", ".codex", "skills", "instructions")
 CAP_SUFFIXES = (".md", ".json", ".toml", ".yaml", ".yml", ".txt")
+REVIEW_SCRIPT = "scripts/text_review.py"
+REVIEW_MODEL_LITERAL = "gpt-6.1-sol"
+REVIEW_STAND_IN_MODEL = "claude-sonnet-5-5"
+REVIEW_STAND_IN_SUFFIX = "-claude-review"
 MODEL_TOKEN = re.compile(r"\b(?:claude-(?:opus|sonnet|haiku|fable)-\d+(?:-\d+)*|gpt-\d+(?:\.\d+)*(?:-[a-z]+)?)")
 
 
@@ -97,6 +101,20 @@ def apply_cap_transform(root: Path) -> dict[str, Any]:
             "rules_digest": cap_rules_digest()}
 
 
+def apply_review_stand_in(root: Path) -> dict[str, str]:
+    """Replace the reviewer model literal of the exported text review script by the Claude stand-in, the same for every variant.
+    The literal must appear exactly once; any other count rejects the export. Returns what was replaced."""
+    path = root / REVIEW_SCRIPT
+    text = read_text(path)
+    if text is None:
+        raise ExportError(f"review stand-in: {REVIEW_SCRIPT} is missing from the export")
+    count = text.count(REVIEW_MODEL_LITERAL)
+    if count != 1:
+        raise ExportError(f"review stand-in: {REVIEW_SCRIPT} names {REVIEW_MODEL_LITERAL} {count} times, expected exactly once")
+    path.write_text(text.replace(REVIEW_MODEL_LITERAL, REVIEW_STAND_IN_MODEL), encoding="utf-8")
+    return {"model": REVIEW_STAND_IN_MODEL, "file": REVIEW_SCRIPT, "replaced": REVIEW_MODEL_LITERAL}
+
+
 def content_digest(root: Path) -> str:
     """Digest of every file name and content of the transformed export."""
     hasher = hashlib.sha256()
@@ -105,24 +123,27 @@ def content_digest(root: Path) -> str:
     return hasher.hexdigest()
 
 
-def export_dir(run_root: Path, sha: str) -> Path:
-    return run_root / "plugins" / sha[:SHA_LENGTH] / PLUGIN_NAME
+def export_dir(run_root: Path, sha: str, review_stand_in: bool = False) -> Path:
+    suffix = REVIEW_STAND_IN_SUFFIX if review_stand_in else ""
+    return run_root / "plugins" / f"{sha[:SHA_LENGTH]}{suffix}" / PLUGIN_NAME
 
 
-def export_plugin(repo_root: Path, run_root: Path, ref: str) -> dict[str, Any]:
+def export_plugin(repo_root: Path, run_root: Path, ref: str, review_stand_in: bool = False) -> dict[str, Any]:
     """Extract `git archive <ref>` once per sha and return {ref, sha, path}; an existing export is reused.
 
     The evaluation folder, its Korean mirror, and its unit tests are left out, so an agent that reads the plugin source cannot see hidden
     tests or reference answers. The cap transform then replaces every model above the model cap and rejects an export that still
-    names one. An export made with a different exclusion list or transform is rebuilt."""
+    names one. With `review_stand_in`, the export also gets the reviewer model stand-in and lives in its own folder.
+    An export made with a different exclusion list or transform is rebuilt."""
     sha = resolve_ref(repo_root, ref)
-    target = export_dir(run_root, sha)
+    target = export_dir(run_root, sha, review_stand_in)
     record = target.parent / EXPORT_RECORD
     if record.is_file() and target.is_dir():
         existing = json.loads(record.read_text(encoding="utf-8"))
-        if existing.get("excluded") == list(EXCLUDED_PATHS) and (existing.get("cap_transform") or {}).get("rules_digest") == cap_rules_digest():
+        if (existing.get("excluded") == list(EXCLUDED_PATHS) and (existing.get("cap_transform") or {}).get("rules_digest") == cap_rules_digest()
+                and bool(existing.get("review_stand_in")) == review_stand_in):
             return {**existing, "path": str(target)}
-    staging = target.parent.with_name(f".{sha[:SHA_LENGTH]}.staging")
+    staging = target.parent.with_name(f".{target.parent.name}.staging")
     shutil.rmtree(staging, ignore_errors=True)
     staging.mkdir(parents=True)
     try:
@@ -131,7 +152,8 @@ def export_plugin(repo_root: Path, run_root: Path, ref: str) -> dict[str, Any]:
         with tarfile.open(fileobj=io.BytesIO(archive)) as bundle:
             bundle.extractall(staging / PLUGIN_NAME, filter="data")
         transform = apply_cap_transform(staging / PLUGIN_NAME)
-        info = {"ref": ref, "sha": sha, "excluded": list(EXCLUDED_PATHS), "cap_transform": transform,
+        stand_in = apply_review_stand_in(staging / PLUGIN_NAME) if review_stand_in else None
+        info = {"ref": ref, "sha": sha, "excluded": list(EXCLUDED_PATHS), "cap_transform": transform, "review_stand_in": stand_in,
                 "content_digest": content_digest(staging / PLUGIN_NAME)}
         (staging / EXPORT_RECORD).write_text(json.dumps(info, indent=2) + "\n", encoding="utf-8")
         shutil.rmtree(target.parent, ignore_errors=True)

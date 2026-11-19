@@ -92,3 +92,4 @@ class HarnessConfig:
     sigterm_grace: float = SIGTERM_GRACE_SECONDS
     result_idle_seconds: float = RESULT_IDLE_SECONDS
     extra_env: dict[str, str] = field(default_factory=dict)
+    review_stand_in: bool = False

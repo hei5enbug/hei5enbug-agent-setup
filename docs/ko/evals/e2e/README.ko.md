@@ -143,6 +143,16 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 모델 ID, 그 개수)이 남고, `plugin-export.json`에는 변환된 내보내기의 다이제스트와 함께 들어가며, 그 다이제스트는 캠페인
 입력 지문의 일부라서 변환이 다른 내보내기로 이어서 실행하면 멈춘다. 변환 없이 이전 하네스가 내보낸 개정은 다시 내보낸다.
 
+### Claude 전용 리뷰 대역
+
+최종 보고 훅은 `text_review.py review`를 요청하고, 이 스크립트는 기본으로 `gpt-6.1-sol` 리뷰어를 부른다. GPT 리뷰어를 쓸 수
+없는 실행은 `run`(또는 `export-plugin`)에 `--claude-review-stand-in`을 붙인다. 그러면 내보내기에서 `scripts/text_review.py`의
+`gpt-6.1-sol` 글자 하나가 `claude-sonnet-5-5`로 바뀌며, 변형과 상관없이 똑같이 적용된다. 그 글자가 없거나 두 번 이상 나오는
+개정은 거부한다. 지침, 훅, 명령은 실제 사용 때와 같다. 옵션은 기본으로 꺼져 있고, 내보낸 사본은 별도의
+`plugins/<sha>-claude-review/` 폴더에 둔다. `env.json`에 `review_stand_in`(모델, 파일, 바뀐 글자)이 남고, 내보내기 다이제스트를
+통해 입력 지문에 들어가며, 기록은 이 옵션을 쓴 실행마다 `review_stand_in`을 표시한다. 이때 리뷰어는 Claude라서 Claude 작성자와
+독립적이지 않으므로 같은 설정을 쓴 실행끼리만 비교한다.
+
 ## 명령
 
 모든 명령은 저장소 루트에서 실행한다. 기본 run root는 `~/.local/state/hei5enbug-agent-setup/harness-eval/runs`이고,

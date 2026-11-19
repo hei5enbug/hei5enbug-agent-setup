@@ -29,7 +29,7 @@ VERDICTS = frozenset({PASS, FAIL, REPEAT, NOT_MEASURED, INVESTIGATE, BASELINE, A
 VERDICT_SUBJECTS = frozenset({"quality", "wall_seconds", "cost_usd", "claim"})
 TOP_FIELDS = ("issue", "cases", "variants", "runs", "verdicts")
 RUN_REQUIRED = ("case", "variant", "host", "models", "checks", "wall_seconds", "cost_usd")
-RUN_OPTIONAL = ("rep", "reviews")
+RUN_OPTIONAL = ("rep", "reviews", "review_stand_in")
 VERDICT_REQUIRED = ("case", "verdict", "step")
 VERDICT_OPTIONAL = ("measure",)
 LOCAL_PATH = re.compile(r"(?<![\w.:/-])(?:/[\w.@+-]+){2,}|(?<![\w.])~/|\b[A-Za-z]:[\\/]|(?<![\w.:/-])/(?:Users|home|tmp|var|private|etc)\b")
@@ -82,6 +82,8 @@ def run_problems(position: str, run: Any, cases: Sequence[str], variants: Mappin
                     problems.append(f"{position} role {role} uses a model outside the allowed models")
                 elif entry.get("effort") not in EFFORTS and entry.get("effort") != UNKNOWN_EFFORT:
                     problems.append(f"{position} role {role} has an unknown effort")
+    if "review_stand_in" in run and run["review_stand_in"] not in ALLOWED_MODELS:
+        problems.append(f"{position} review_stand_in is not an allowed model")
     if "checks" in run:
         checks = run["checks"]
         if not isinstance(checks, Mapping) or not checks or not all(isinstance(v, bool) for v in checks.values()):
@@ -348,6 +350,9 @@ def campaign_runs(run_root: Path, campaign: str, variants: Sequence[str], tasks:
                         if check.get("id") == "text-review-clean" and (check.get("data") or {}).get("reviews")), None)
         if reviews:
             entry["reviews"] = reviews
+        stand_in = ((read_json(result_dir / "env.json", {}) or {}).get("review_stand_in") or {}).get("model")
+        if stand_in:
+            entry["review_stand_in"] = stand_in
         add({"case": row["task"], "variant": row["variant"], "host": host, "summary": summary, "entry": entry,
              "revision": revision})
     return found

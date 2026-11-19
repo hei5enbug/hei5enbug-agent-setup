@@ -149,5 +149,6 @@
 | `tests/test_e2e_eval_verdict.py` | 변경은 변경 전에 통과한 사례가 변경 후 실패하지 않고, 호스트별 시간·비용 격차가 1회 먼저·5회 규칙으로 늘지 않을 때만 두 호스트 비교를 통과한다. 개선 주장은 두 호스트에서 번갈아 돈 5회로만 받아들인다. | `evals/e2e/README.md` (Comparison rule) |
 | `tests/test_e2e_eval_records.py` | 측정 기록은 실행마다 호스트, 역할별 모델과 effort, 검사, 시간, 비용, 판정을 담고, 로컬 절대 경로나 상한을 넘는 모델은 담지 않는다. | `evals/e2e/README.md` (Records) |
 | `tests/test_e2e_eval_record_cli.py` | `cli.py record`는 판정이 비교 규칙과 같은 기록을 쓰고, 빠진 값은 측정 안 됨으로 알리며, 커밋된 기록은 모두 검증을 통과한다. | `evals/e2e/README.md` (Records) |
+| `tests/test_e2e_eval_review_stand_in.py` | Claude 전용 옵션이 꺼져 있으면 플러그인 내보내기는 바뀌지 않고, 켜져 있으면 `scripts/text_review.py`의 리뷰어 모델 글자 하나만 변형과 상관없이 똑같이 `claude-sonnet-5-5`로 바뀌며, `env.json`과 기록에 그 사실이 남는다. | `evals/e2e/README.md` (Claude-only review stand-in) |
 | `tests/test_evaluation_rules.py` | `AGENTS.md`는 플러그인 변경을 측정 기록으로만 채택하거나 제외하고, `instructions/model-evaluation.md`는 시간, 비용, 한 가지만 바꾸기, 호스트 격차, 남겨 둔 사례 규칙을 유지한다. | `AGENTS.md`, `instructions/model-evaluation.md` |
 | `tests/test_korean_writing_eval.py` | 한국어 글쓰기 평가는 글쓰기 규칙을 실행 시점에 `instructions/shared-text.md`에서 읽고, 필수 사실이 있는 고정된 작업 다섯 개를 유지하며, 채점자에게 작성자의 모델 이름을 보이지 않고, 시드 검사에서 빠진 사실과 번역투를 잡고, 승자에게 모든 채점자의 과반이 필요하도록 결정 규칙을 적용한다. | `evals/korean-writing/README.md` |

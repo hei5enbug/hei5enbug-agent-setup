@@ -25,11 +25,17 @@ def add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--fixtures-root", type=Path, default=None)
 
 
+def add_review_stand_in(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--claude-review-stand-in", action="store_true",
+                        help="export the plugin with the text reviewer model replaced by claude-sonnet-5-5, for Claude-only runs")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="e2e-harness", description=__doc__)
     sub = parser.add_subparsers(dest="action", required=True)
     run = sub.add_parser("run", help="run or resume a campaign")
     add_common(run)
+    add_review_stand_in(run)
     run.add_argument("--campaign", default="default")
     run.add_argument("--tasks", help="comma-separated task ids; default all")
     run.add_argument("--variants", default="baseline", help="comma-separated variant names")
@@ -52,6 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
     regrade.add_argument("--recollect", action="store_true", help="copy the host records again before grading")
     export = sub.add_parser("export-plugin", help="export a plugin revision")
     add_common(export)
+    add_review_stand_in(export)
     export.add_argument("--ref", required=True)
     check = sub.add_parser("pilot-check", help="validate finished runs")
     add_common(check)
@@ -80,6 +87,7 @@ def config_from(args: argparse.Namespace) -> HarnessConfig:
         tasks_root=absolute(args.tasks_root or base.tasks_root),
         fixtures_root=absolute(args.fixtures_root or base.fixtures_root),
         variants_root=absolute(args.variants_root or base.variants_root),
+        review_stand_in=bool(getattr(args, "claude_review_stand_in", False)),
     )
 
 
@@ -135,10 +143,12 @@ def dispatch(args: argparse.Namespace) -> int:
             cfg, args.campaign, frozenset(split(args.run_ids)), sys.stdout, recollect=args.recollect,
         )
     if args.action == "export-plugin":
-        info = plugin_export.export_plugin(cfg.repo_root, cfg.run_root, args.ref)
+        info = plugin_export.export_plugin(cfg.repo_root, cfg.run_root, args.ref, review_stand_in=cfg.review_stand_in)
         sys.stdout.write(f"{info['ref']} {info['sha']} {info['path']}\n")
         transform = info.get("cap_transform") or {}
         sys.stdout.write(f"cap transform: replaced {transform.get('count', 0)} model ids {transform.get('replaced', {})}\n")
+        if info.get("review_stand_in"):
+            sys.stdout.write(f"review stand-in: {info['review_stand_in']['model']}\n")
         return 0
     return pilot_check(cfg.run_root, args.campaign, frozenset(split(args.run_ids)), sys.stdout)
 

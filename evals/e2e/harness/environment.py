@@ -102,4 +102,4 @@ def run_snapshot(
     """`instruction_isolation` names how a Claude Code run keeps the user's instruction files and auto memory out, and the limits that remain."""
     isolation = {"instruction_isolation": dict(instruction_isolation)} if instruction_isolation else {}
     return {**base, "removed_env_names": removed_env, "plugin_ref": plugin.get("ref"), "plugin_sha": plugin.get("sha"),
-            "cap_transform": plugin.get("cap_transform"), **isolation}
+            "cap_transform": plugin.get("cap_transform"), "review_stand_in": plugin.get("review_stand_in"), **isolation}
