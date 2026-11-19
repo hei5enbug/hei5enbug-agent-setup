@@ -40,6 +40,9 @@ def run_script(ctx, command: str, args: list[str], again: bool = False) -> tuple
         entry = seeded[f"{command}_again"] if again and f"{command}_again" in seeded else seeded[command]
         return int(entry["exit_code"]), str(entry["output"])
     script = repository_root(ctx) / "scripts" / "text_review.py"
+    review_model = getattr(ctx, "review_model", None)
+    if command == "review" and review_model:
+        args = [*args, "--model", review_model]
     try:
         completed = run_cleaning_tree([sys.executable, str(script), command, *args], cwd=ctx.work,
                                       timeout=TIMEOUT_SECONDS, interrupt=getattr(ctx, "interrupt", None))

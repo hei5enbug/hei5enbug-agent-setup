@@ -84,6 +84,9 @@ def grade_run(
     grade_dir = spec.result_dir / "grade"
     grade_dir.mkdir(parents=True, exist_ok=True)
     extra = {} if interrupt is None else {"interrupt": interrupt}
+    review_model = ((run.get("plugin") or {}).get("review_stand_in") or {}).get("model")
+    if review_model:
+        extra["review_model"] = review_model
     grade = graders.grade_run(task, spec.repo, run["base_commit"], view, cfg.tasks_root, grade_dir / "work", **extra)
     write_json(grade_dir / "grade.json", grade)
     if not task.get("rubric"):

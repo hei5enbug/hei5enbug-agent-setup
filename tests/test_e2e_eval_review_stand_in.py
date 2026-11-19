@@ -2,19 +2,23 @@
 
 from __future__ import annotations
 
+import importlib.util as importlib_util
 import io
 import json
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "evals/e2e"))
 
-from harness import campaign, cli, environment, plugin_export, records  # noqa: E402
+from harness import campaign, cli, environment, graders, plugin_export, records, runner  # noqa: E402
 from harness.config import HarnessConfig  # noqa: E402
 
 LITERAL = "gpt-6.1-sol"
@@ -178,6 +182,111 @@ class OptionFlowTest(unittest.TestCase):
         # then
         self.assertEqual(with_option["review_stand_in"], stand_in)
         self.assertIsNone(without["review_stand_in"])
+        self.assertEqual((with_option["grader_review_model"], without["grader_review_model"]), (STAND_IN, None))
+
+
+TASKS_ROOT = REPO_ROOT / "evals/e2e/tasks"
+
+
+class GraderModelTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def reviewed_argv(self, review_model) -> list[str]:
+        tree = Path(tempfile.mkdtemp(dir=self.root)) / "harness-repo"
+        (tree / "evals/e2e/tasks/custom").mkdir(parents=True)
+        (tree / "scripts").mkdir()
+        shutil.copy(TASKS_ROOT / "custom" / "text_review_shared.py", tree / "evals/e2e/tasks/custom")
+        (tree / "scripts/text_review.py").write_text(
+            "import json, pathlib, sys\n"
+            "pathlib.Path(__file__).with_name('argv.json').write_text(json.dumps(sys.argv[1:]))\n"
+            "print(json.dumps({'findings': []}))\n", encoding="utf-8")
+        draft = self.root / "page.txt"
+        draft.write_text("text\n", encoding="utf-8")
+        (self.root / "work").mkdir(exist_ok=True)
+        ctx = SimpleNamespace(tasks_root=tree / "evals/e2e/tasks", work=self.root / "work", repo=self.root, view={},
+                              **({"review_model": review_model} if review_model is not None else {}))
+        spec = importlib_util.spec_from_file_location("shared", tree / "evals/e2e/tasks/custom/text_review_shared.py")
+        shared = importlib_util.module_from_spec(spec)
+        spec.loader.exec_module(shared)
+        env = {key: value for key, value in os.environ.items() if key != "E2E_TEXT_REVIEW_STUB"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            shared.review(ctx, "final-report", draft)
+            return json.loads((tree / "scripts/argv.json").read_text(encoding="utf-8"))
+
+    def test_스탠드인이_켜지면_글_채점기의_리뷰가_model_옵션으로_Claude_모델을_받고_꺼지면_기본을_쓴다(self):
+        """given 리뷰 모델이 있거나 없는 채점 맥락 when 글 채점기가 review를 부르면 then 켜진 쪽만 --model claude-sonnet-5-5가 붙는다."""
+        # when
+        on = self.reviewed_argv(STAND_IN)
+        off = self.reviewed_argv(None)
+
+        # then
+        self.assertEqual(on[-2:], ["--model", STAND_IN])
+        self.assertNotIn("--model", off)
+
+    def test_글_채점기의_check는_모델_옵션을_받지_않는다(self):
+        """given 리뷰 모델이 있는 채점 맥락 when 채점기가 check를 부르면 then 인자에 --model이 없다."""
+        # given
+        tree = self.root / "harness-repo"
+        (tree / "evals/e2e/tasks/custom").mkdir(parents=True)
+        (tree / "scripts").mkdir()
+        shutil.copy(TASKS_ROOT / "custom" / "text_review_shared.py", tree / "evals/e2e/tasks/custom")
+        (tree / "scripts/text_review.py").write_text(
+            "import json, pathlib, sys\npathlib.Path(__file__).with_name('argv.json').write_text(json.dumps(sys.argv[1:]))\n", encoding="utf-8")
+        (self.root / "work").mkdir()
+        draft = self.root / "page.txt"
+        draft.write_text("text\n", encoding="utf-8")
+        ctx = SimpleNamespace(tasks_root=tree / "evals/e2e/tasks", work=self.root / "work", repo=self.root, view={}, review_model=STAND_IN)
+        spec = importlib_util.spec_from_file_location("shared", tree / "evals/e2e/tasks/custom/text_review_shared.py")
+        shared = importlib_util.module_from_spec(spec)
+        spec.loader.exec_module(shared)
+        env = {key: value for key, value in os.environ.items() if key != "E2E_TEXT_REVIEW_STUB"}
+
+        # when
+        with mock.patch.dict(os.environ, env, clear=True):
+            shared.check(ctx, "final-report", draft)
+
+        # then
+        self.assertNotIn("--model", json.loads((tree / "scripts/argv.json").read_text(encoding="utf-8")))
+
+    def test_실행_기록의_스탠드인_모델이_채점_진입점으로_넘어가고_없으면_넘기지_않는다(self):
+        """given 스탠드인이 있는 run.json과 없는 run.json when 실행을 채점하면 then 앞의 것만 review_model이 graders.grade_run에 간다."""
+        # given
+        seen: list[dict] = []
+        fake = SimpleNamespace(grade_run=lambda *args, **kwargs: seen.append(kwargs) or {"checks": []})
+        spec = SimpleNamespace(result_dir=self.root / "result", base_dir=self.root, run_id="r", repo=self.root)
+        stand_in = {"model": STAND_IN, "file": "scripts/text_review.py", "replaced": LITERAL}
+
+        # when
+        for plugin in ({"review_stand_in": stand_in}, {"review_stand_in": None}, {}):
+            runner.grade_run(spec, {"checks": []}, {"base_commit": "b", "plugin": plugin}, HarnessConfig(), fake, {})
+
+        # then
+        self.assertEqual([item.get("review_model") for item in seen], [STAND_IN, None, None])
+
+    def test_채점_맥락의_review_model이_사용자_지정_검사의_ctx로_전달된다(self):
+        """given review_model이 있는 채점 진입점 when 사용자 지정 검사를 돌리면 then 검사가 받은 ctx에 그 모델이 있다."""
+        # given
+        tasks = self.root / "tasks"
+        (tasks / "custom").mkdir(parents=True)
+        (tasks / "custom/TX.py").write_text("def check(ctx):\n    return True, 'seen', {'model': ctx.review_model}\n", encoding="utf-8")
+        repo = self.root / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+        subprocess.run(["git", "-c", "user.name=D", "-c", "user.email=d@example.com", "-c", "commit.gpgsign=false", "commit", "-q",
+                        "--allow-empty", "-m", "init"], cwd=repo, check=True)
+        base = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
+        task = {"id": "TX", "checks": [{"id": "c", "kind": "custom", "required": True, "weight": 1}]}
+
+        # when
+        graded = graders.grade_run(task, repo, base, {}, tasks, self.root / "work", review_model=STAND_IN)
+        plain = graders.grade_run(task, repo, base, {}, tasks, self.root / "work2")
+
+        # then
+        self.assertEqual(graded["checks"][0]["data"], {"model": STAND_IN})
+        self.assertEqual(plain["checks"][0]["data"], {"model": None})
 
 
 class RecordStandInTest(unittest.TestCase):

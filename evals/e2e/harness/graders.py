@@ -219,6 +219,7 @@ class GradeContext:
     porcelain: str = ""
     suite_results: dict[str, dict[str, Any]] = field(default_factory=dict)
     interrupt: threading.Event | None = None
+    review_model: str | None = None
 
     @property
     def fixtures_root(self) -> Path:
@@ -503,7 +504,8 @@ def check_custom(ctx: GradeContext, spec: Mapping[str, Any]) -> CheckResult:
     function = load_custom(ctx, spec.get("function", "check"))
     context = types.SimpleNamespace(repo=ctx.repo, base=ctx.base, view=ctx.view, task=ctx.task, work=ctx.work,
                                     changes=dict(ctx.changes), git=ctx.git, porcelain=ctx.porcelain,
-                                    tasks_root=ctx.tasks_root, origin=ctx.origin, interrupt=ctx.interrupt)
+                                    tasks_root=ctx.tasks_root, origin=ctx.origin, interrupt=ctx.interrupt,
+                                    review_model=ctx.review_model)
     ok, detail, data = function(context)
     return bool(ok), str(detail), dict(data or {})
 
@@ -569,7 +571,7 @@ def pass_rate(tests: Mapping[str, Mapping[str, int]]) -> float | None:
 
 
 def grade_run(task: Mapping[str, Any], repo: Path, base_commit: str, view: Mapping[str, Any], tasks_root: Path,
-              work: Path, interrupt: threading.Event | None = None) -> dict[str, Any]:
+              work: Path, interrupt: threading.Event | None = None, review_model: str | None = None) -> dict[str, Any]:
     work = Path(work).resolve()
     work.mkdir(parents=True, exist_ok=True)
     copy = work / "repo"
@@ -577,7 +579,7 @@ def grade_run(task: Mapping[str, Any], repo: Path, base_commit: str, view: Mappi
         shutil.rmtree(copy)
     shutil.copytree(Path(repo).resolve(), copy, symlinks=True)
     ctx = GradeContext(task=task, repo=copy, base=base_commit, view=view, tasks_root=Path(tasks_root).resolve(),
-                       work=work, origin=Path(repo).resolve(), interrupt=interrupt)
+                       work=work, origin=Path(repo).resolve(), interrupt=interrupt, review_model=review_model)
     ctx.snapshot_git_facts()
     checks = [run_check(ctx, spec) for spec in task["checks"]]
     tests = summarize_tests(merge_suites(ctx.suite_results))
