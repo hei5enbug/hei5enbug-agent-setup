@@ -23,7 +23,9 @@ DEFAULT_REVIEWS = 1
 RUNNER_GRACE_SECONDS = 60
 RUNNER_TIMEOUT_STAGES = 4
 FINAL_REPORT_KIND = "final-report"
-EXIT_OK, EXIT_FINDINGS, EXIT_USAGE, EXIT_REVIEW_FAILED = 0, 1, 2, 3
+EXIT_OK, EXIT_FINDINGS, EXIT_USAGE, EXIT_REVIEW_FAILED, EXIT_USAGE_LIMIT = 0, 1, 2, 3, 4
+USAGE_LIMIT_REASON = "usage_limit"
+FAILURE_TAIL_LIMIT = 500
 FINDING_TYPES = ("removable", "missing", "ambiguous")
 LINE_TEXT_LIMIT = 160
 IDENTIFIER_MAX_LENGTH = 80
@@ -113,6 +115,7 @@ LABEL = re.compile(r"^([^:：]{1,%d}?)\s*[:：](?!//)" % LABEL_MAX_LENGTH)
 BACKTICK_RUN = re.compile(r"`+")
 NO_RUNNER = {"exit": None, "verified": None}
 JSON_FENCE = re.compile(r"(`{3,})json[ \t]*\n(.*?)\n\1", re.DOTALL)
+USAGE_LIMIT_OUTPUT = re.compile(r"usage[\s_-]?limit", re.IGNORECASE)
 
 
 class TextReviewError(Exception):
@@ -122,9 +125,10 @@ class TextReviewError(Exception):
 
 
 class ReviewFailure(TextReviewError):
-    def __init__(self, message: str, runner: dict) -> None:
+    def __init__(self, message: str, runner: dict, reason: str | None = None) -> None:
         super().__init__(message, EXIT_REVIEW_FAILED)
         self.runner = runner
+        self.reason = reason
 
 
 def read_input(path: str) -> str:
@@ -352,6 +356,12 @@ def prepare_folder(work: Path, assignment: str) -> tuple[Path, Path]:
     return assignment_file, work / "result.md"
 
 
+def failure_cause(done: subprocess.CompletedProcess) -> str:
+    """Return the last part of the runner's error output and standard output, or say that it gave none."""
+    parts = [text.strip()[-FAILURE_TAIL_LIMIT:] for text in (done.stderr, done.stdout) if text and text.strip()]
+    return " | ".join(parts) if parts else "the runner gave no output"
+
+
 def run_reviewer(args: argparse.Namespace, assignment: str, model: str) -> dict:
     try:
         work = Path(tempfile.mkdtemp(prefix="text-review-"))
@@ -369,10 +379,14 @@ def run_reviewer(args: argparse.Namespace, assignment: str, model: str) -> dict:
         runner = {"exit": done.returncode, "verified": parse_status(done.stdout)}
         try:
             if done.returncode != 0:
-                raise TextReviewError(f"the runner exited with {done.returncode}: {done.stderr.strip()[-500:]}", EXIT_REVIEW_FAILED)
+                cause = failure_cause(done)
+                reason = USAGE_LIMIT_REASON if USAGE_LIMIT_OUTPUT.search(cause) else None
+                raise ReviewFailure(f"the runner exited with {done.returncode}: {cause}", runner, reason)
             if not result_file.is_file():
                 raise TextReviewError("the runner wrote no result file", EXIT_REVIEW_FAILED)
             return {**parse_result(result_file.read_text(encoding="utf-8")), "runner": runner}
+        except ReviewFailure:
+            raise
         except (TextReviewError, OSError, UnicodeDecodeError) as error:
             raise ReviewFailure(str(error), runner) from error
     finally:
@@ -448,10 +462,14 @@ def command_review(args: argparse.Namespace) -> int:
     findings = unique(item for outcome in outcomes for item in outcome.get("findings", []))
     facts = unique(fact for outcome in outcomes for fact in outcome.get("over_budget_facts", []))
     errors = [outcome["error"] for outcome in outcomes if "error" in outcome]
+    limited = bool(errors) and all(outcome.get("reason") == USAGE_LIMIT_REASON for outcome in outcomes if "error" in outcome)
     status = {"runner": runners[0], "runners": runners}
     if findings:
         emit({**base, "findings": findings, "over_budget_facts": facts, **status, **({"errors": errors} if errors else {})})
         return EXIT_FINDINGS
+    if limited:
+        emit({**base, "reason": USAGE_LIMIT_REASON, "error": "; ".join(errors), **status})
+        return EXIT_USAGE_LIMIT
     if errors:
         emit({**base, "error": "; ".join(errors), **status})
         return EXIT_REVIEW_FAILED
@@ -463,7 +481,7 @@ def review_once(args: argparse.Namespace, assignment: str, model: str) -> dict:
     try:
         return run_reviewer(args, assignment, model)
     except ReviewFailure as failure:
-        return {"error": str(failure), "runner": failure.runner}
+        return {"error": str(failure), "runner": failure.runner, **({"reason": failure.reason} if failure.reason else {})}
     except (TextReviewError, OSError) as failure:
         return {"error": str(failure), "runner": NO_RUNNER}
 

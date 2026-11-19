@@ -76,7 +76,12 @@ python3 <Source directory>/scripts/text_review.py review --kind <kind> --draft <
 - For a final report, at each of these stops send the revised report instead of asking, with no line about the
   review, once `text_review.py check --kind final-report <file>` returns no findings for it. Write a finding that needs
   the user's decision into the report as one question.
-- Exit 3 means the reviewer gave no verdict. Say that the review did not run, and ask before posting externally.
+- Exit 3 means the reviewer gave no verdict. Say that the review did not run, show the cause in the result's `error`
+  in your question, and ask before posting externally.
+- Exit 4 means the reviewer's usage limit is reached. Post without asking and without another reviewer, never a Claude
+  reviewer for a Claude author, and say in one line in the final report that the independent text review did not run
+  because the reviewer's usage limit was reached. You may skip the review call for each later text of the same session
+  and treat it the same way.
 
 ## Line breaks
 
