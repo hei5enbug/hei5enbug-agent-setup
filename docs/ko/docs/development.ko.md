@@ -22,6 +22,7 @@ hei5enbug-agent-setup/
 │   ├── claude-code-mod.md
 │   ├── configuration.md
 │   ├── development.md
+│   ├── dev-rules/          # AGENTS.md의 트리거 줄이 가리키는 저장소 개발 규칙
 │   ├── guards.md
 │   ├── instructions-and-delegation.md
 │   ├── rule-enforcement.md

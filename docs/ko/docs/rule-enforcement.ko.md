@@ -16,8 +16,8 @@
 | 집행자 | 집행하는 규칙 | 규칙 위치 |
 |---|---|---|
 | `tests/test_public_boundary.py`, `tests/test_public_boundary_hooks.py`, `tests/test_public_boundary_hooks_more.py`, `tests/test_public_boundary_plugin.py`, `tests/test_public_boundary_plugin_scope.py`, `skills/skill-issue-creator/tests/test_scan_draft.py`, `.githooks/public_boundary.py` | 추적 파일, 커밋 메시지, 태그, GitHub 글에 로컬 경로, 실명, 비밀 값, 비공개 내용이 없다. 플러그인 수준 훅(`hooks/hooks.json`, `scripts/public_boundary_hook.py`)은 어느 프로젝트의 세션에서든 설치된 플러그인이 선언한 공개 GitHub 저장소에 대한 해당 쓰기를 차단하고, `HEI5ENBUG_PUBLIC_BOUNDARY_WORDS`와 설치된 각 플러그인의 `public-boundary.json`에서 비공개 단어를 읽으며, 목록을 찾지 못할 때마다 그 사실을 알린다. 프로젝트 에이전트 훅(`.claude/settings.json`, `.codex/hooks.json`)과 Git 훅(`.githooks/`)은 체크아웃에서 커밋, push, 태그, GitHub 쓰기를 실행하기 전에 막고, CI는 push 뒤에 저장소 테스트를 마지막 방어선으로 실행한다. 보호 섹션은 바뀌지 않은 채 마지막에 있다. | `AGENTS.md` (Public boundary) |
-| `tests/test_release_version.py` | 기준 태그 이후 계획 버전은 하나이고(더 낮은 단계의 다음 버전을 나중에 더 높은 단계로 다시 고른 경우는 제외), 모든 매니페스트에서 같으며, 기준보다 낮지 않고, 버전만 바꾸는 커밋이 없다. Codex 설치 예시는 main이나 미출시 계획 버전 대신 최신 릴리스 태그를 사용한다. | `AGENTS.md` (릴리스 기준) |
-| `tests/test_model_pins.py` | 런타임 파일은 고정한 전체 모델 ID로만 모델을 부르고, 고정값은 14일 안에 다시 확인한다. | `AGENTS.md` (모델 고정) |
+| `tests/test_release_version.py` | 기준 태그 이후 계획 버전은 하나이고(더 낮은 단계의 다음 버전을 나중에 더 높은 단계로 다시 고른 경우는 제외), 모든 매니페스트에서 같으며, 기준보다 낮지 않고, 버전만 바꾸는 커밋이 없다. Codex 설치 예시는 main이나 미출시 계획 버전 대신 최신 릴리스 태그를 사용한다. | `docs/dev-rules/release.md` (릴리스 기준) |
+| `tests/test_model_pins.py` | 런타임 파일은 고정한 전체 모델 ID로만 모델을 부르고, 고정값은 14일 안에 다시 확인한다. | `AGENTS.md`, `docs/dev-rules/model-pins.md` (모델 고정) |
 | `tests/test_korean_mirrors.py` | 사람이 읽는 영어 Markdown 파일마다 실행 폴더 밖에 원본을 링크한 비권위 한국어 미러가 있다. | `AGENTS.md` (한국어 미러) |
 | `tests/test_instruction_duplication.py` | 공유 규칙은 정본 파일 하나에만 있고, 호스트 파일과 저장소 파일은 core나 common 규칙을 복사하지 않는다. | `AGENTS.md` (단일 정본) |
 | `tests/test_subtest_parameters.py`, `conftest.py` | `subTest` 키워드 값은 pytest-xdist가 컨트롤러로 보낼 수 있는 단순한 값이므로, 직렬 실행이 통과하면 `python3 -m pytest -n auto`도 통과한다. | 이 문서 |
@@ -35,7 +35,7 @@
 | `tests/test_service_rules.py` | 호스팅 서비스는 검색이나 단건 조회, 작은 페이지로 읽는다. | `instructions/services.md` |
 | `tests/test_markdown_line_breaks.py` | 줄바꿈을 유지해야 하는 Markdown 글에서 문단과 목록 항목 안의 소프트 줄바꿈, 문단을 끝내는 줄바꿈, 길이 제한을 넘고 문장이 둘 이상인 본문 줄을 코드 펜스, 바깥 세로선 유무와 관계없는 표, 제목 밖에서 검사한다. | `instructions/shared-text.md` (줄바꿈) |
 | `tests/test_text_review.py` | `scripts/text_review.py`의 `check`는 펜스 코드 밖에서 목록 항목 하나의 식별자 코드 조각 세 개 이상(이슈 본문 제외), 요청 시 티켓 키, 같은 점검을 적은 목록 항목 둘, 한 페이지를 조각 유무만 달리해 가리키는 링크 둘을 0이 아닌 종료 코드로 보고한다. `review`는 `check`를 먼저 실행하고, `check`에 발견이 있으면 검토자를 시작하지 않고, 바뀌지 않는다고만 말하는 문장은 발견이 아니라 검토자가 판단하는 권고로 보고하며, 실행기가 실패하거나 답을 해석할 수 없으면 통과로 보지 않고 종료 코드 3을 낸다. | `instructions/shared-text.md` |
-| `tests/test_writing_surfaces.py` | `config/writing-surfaces.json`은 `scripts/text_review.py`가 검토하는 글 종류를 `other`만 빼고 모두 나열하고, 목록이 가리키는 규칙 파일과 작성 파일이 모두 있으며, 종류마다 평가 작업에 필수 `text-review-clean` 검사가 있다. | `AGENTS.md` |
+| `tests/test_writing_surfaces.py` | `config/writing-surfaces.json`은 `scripts/text_review.py`가 검토하는 글 종류를 `other`만 빼고 모두 나열하고, 목록이 가리키는 규칙 파일과 작성 파일이 모두 있으며, 종류마다 평가 작업에 필수 `text-review-clean` 검사가 있다. | `docs/dev-rules/evaluation.md` |
 | `tests/test_planning_contract.py` | 계획과 설계 절차는 분리되고, 모델 선택의 출처는 하나이며, 독립 검증은 마지막 단계에서 자동으로 1회 실행하고 더 이른 검토는 승인이 필요하며, 읽기 전용 1회다. | `instructions/implementation-planning.md`, `instructions/independent-model-validation.md` |
 | `tests/test_delegation_contract.py` | 호스트는 위임 계약을 받고, 수정하지 않은 이전 역할 파일은 교체하되 사용자가 고친 파일은 둔다. | `instructions/session/common.md`, `instructions/implementation-delegation.md` |
 | `tests/test_claude_worker_contract.py` | Claude Code worker와 에이전트 정의는 선언한 도구, 모델, 어댑터 규칙을 유지한다. | `agents/`, `instructions/claude-agents.md` |

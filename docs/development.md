@@ -19,6 +19,7 @@ hei5enbug-agent-setup/
 │   ├── claude-code-mod.md
 │   ├── configuration.md
 │   ├── development.md
+│   ├── dev-rules/          # repository development rules that AGENTS.md trigger lines point to
 │   ├── guards.md
 │   ├── instructions-and-delegation.md
 │   ├── rule-enforcement.md

@@ -17,6 +17,7 @@ COMMON = REPO_ROOT / "instructions/session/common.md"
 ROUTING = REPO_ROOT / "instructions/model-routing.md"
 VALIDATION = REPO_ROOT / "instructions/independent-model-validation.md"
 AGENTS = REPO_ROOT / "AGENTS.md"
+RELEASE_RULES = REPO_ROOT / "docs/dev-rules/release.md"
 CLAUDE_AGENTS = REPO_ROOT / "instructions/claude-agents.md"
 CODEX_AGENTS = REPO_ROOT / "instructions/codex-agents.md"
 DELEGATION = REPO_ROOT / "instructions/implementation-delegation.md"
@@ -140,10 +141,12 @@ class AgentsFileStaysADeltaTest(unittest.TestCase):
             "Maintain a complete, meaning-equivalent Korean",
             "Do not duplicate code, schemas, test fixtures",
             "skills/skill-builder/SKILL.md",
-            "Install only a tagged release",
         ):
             with self.subTest(rule=rule):
                 self.assertIn(rule, text)
+
+    def test_release_rules_keep_the_tagged_install_rule(self):
+        self.assertIn("Install only a tagged release", RELEASE_RULES.read_text(encoding="utf-8"))
 
     def test_agents_points_at_the_session_instructions_for_the_shared_rules(self):
         self.assertIn("instructions/session/common.md", AGENTS.read_text(encoding="utf-8"))

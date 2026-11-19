@@ -35,7 +35,14 @@ RUNTIME_LOOKUP = re.compile(
     re.IGNORECASE,
 )
 EXCLUDED_DIR = re.compile(r"(^|/)(tests|evals)/")
-DEV_ONLY = {"AGENTS.md", "docs/ko/AGENTS.ko.md"}
+DEV_ONLY = {
+    "AGENTS.md",
+    "docs/ko/AGENTS.ko.md",
+    "docs/dev-rules/delegation.md",
+    "docs/ko/docs/dev-rules/delegation.ko.md",
+    "docs/dev-rules/model-pins.md",
+    "docs/ko/docs/dev-rules/model-pins.ko.md",
+}
 TEXT_SUFFIXES = {".md", ".json", ".toml", ".py", ".mjs", ".js", ".sh", ".yml", ".yaml", ".html", ".txt"}
 
 
