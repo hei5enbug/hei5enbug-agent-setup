@@ -106,13 +106,13 @@ def _host_settings_error(error: Exception) -> None:
 
 
 def session_start_notices(host: str, project: Path | None = None) -> list[str]:
-    """Return notices from the host settings: what `apply` changed on Codex, then at most three remaining problems."""
+    """Return notices from the host settings: what `apply` changed, then at most three remaining problems."""
     notices = []
     try:
         import host_settings
         import plugin_toggles
 
-        if host == "codex" and plugin_toggles.host_settings_mode() == "apply":
+        if plugin_toggles.host_settings_mode() == "apply":
             try:
                 changes = host_settings.apply(host).changes
             except Exception as error:

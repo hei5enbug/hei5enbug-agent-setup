@@ -1,9 +1,11 @@
-"""Check, and on Codex fix, the host settings that cause extra approval prompts or stop the approval guard.
+"""Check, and fix, the host settings that cause extra approval prompts, stop the approval guard, or let built-in agents run.
 
-`check` reports problems and writes nothing. `apply` changes only the allowlist below and only on the Codex host:
+`check` reports problems and writes nothing. `apply` changes only the allowlist below. On the Codex host:
 `[features] plugin_hooks` through `codex features enable`, and, while CODEX_NATIVE_APPROVAL is on, the plugin-owned
 `rules/hei5enbug.rules` and, while the approval_guard toggle is on, `default_tools_approval_mode = "prompt"` on every
-`[mcp_servers.<name>]` table plus each existing per-tool `approval_mode` line.
+`[mcp_servers.<name>]` table plus each existing per-tool `approval_mode` line. On the Claude Code host, while the
+agent_guard toggle is on: the four `Agent(<built-in>)` entries missing from `permissions.deny` in the user settings file,
+appended after the existing entries.
 Each changed file is first copied to `<file>.bak-hei5enbug-<YYYYMMDD>`. Other `rules/*.rules` are only reported, and
 `rules/hei5enbug.rules` is never written when it is a symbolic link or lacks the plugin-owned header line.
 """
@@ -42,6 +44,8 @@ READ_ONLY_WORDS = {
     "git": {"status", "log", "diff", "show"},
 }
 CODEX_COMMAND_TIMEOUT_SECONDS = 10
+BUILT_IN_AGENT_DENIES = ("Agent(general-purpose)", "Agent(Explore)", "Agent(Plan)", "Agent(claude)")
+DEFAULT_JSON_INDENT = 2
 
 Problem = namedtuple("Problem", "id text")
 Change = namedtuple("Change", "label text")
@@ -87,6 +91,12 @@ def _claude_ask_rules(permissions: dict) -> list[str]:
     ]
 
 
+def _missing_agent_denies(permissions: dict) -> list[str]:
+    deny = permissions.get("deny")
+    present = {rule for rule in deny if isinstance(rule, str)} if isinstance(deny, list) else set()
+    return [rule for rule in BUILT_IN_AGENT_DENIES if rule not in present]
+
+
 def _short_name(name: str) -> str:
     return name if len(name) <= 19 else name[:16] + "..."
 
@@ -107,6 +117,12 @@ def _claude_problems(claude_dir: Path, project: Path) -> list[Problem]:
     rules = [rule for item in permissions for rule in _claude_ask_rules(item)][:3]
     if rules:
         problems.append(Problem("claude-ask-rules", ASK_RULES_MESSAGE + ": " + ", ".join(_short_name(r) for r in rules) + "."))
+    missing = _missing_agent_denies(permissions[0]) if plugin_toggles.enabled("agent_guard") else []
+    if missing:
+        problems.append(Problem(
+            "claude-agent-deny",
+            _line("Claude Code user settings lack permissions.deny " + ", ".join(missing) + "; run host_settings.py apply."),
+        ))
     return problems
 
 
@@ -576,11 +592,59 @@ def _apply_rules_file(rules_path: Path, plugin_root, result: Result) -> None:
     result.changes.append(Change(f"rules/{RULES_NAME}", f"{verb} rules/{RULES_NAME}" + ("" if current is None else " (backup saved)")))
 
 
+def _json_indent(text: str) -> int | str:
+    match = re.search(r"^([ \t]+)\S", text, re.MULTILINE)
+    return match.group(1) if match else DEFAULT_JSON_INDENT
+
+
+def _with_agent_denies(settings: dict, missing: list[str]) -> dict:
+    permissions = settings.get("permissions") if isinstance(settings.get("permissions"), dict) else {}
+    deny = permissions.get("deny") if isinstance(permissions.get("deny"), list) else []
+    return {**settings, "permissions": {**permissions, "deny": [*deny, *missing]}}
+
+
+def _apply_agent_denies(settings_path: Path, result: Result) -> None:
+    if not plugin_toggles.enabled("agent_guard"):
+        return
+    try:
+        original = settings_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        original = None
+    except (OSError, UnicodeDecodeError):
+        result.notes.append(f"{settings_path.name} is unreadable; wrote nothing there.")
+        return
+    try:
+        settings = {} if original is None else json.loads(original)
+    except ValueError:
+        settings = None
+    if not isinstance(settings, dict):
+        result.notes.append(f"{settings_path.name} is not a JSON object; wrote nothing there.")
+        return
+    permissions = settings.get("permissions", {})
+    deny = permissions.get("deny", []) if isinstance(permissions, dict) else None
+    if not isinstance(permissions, dict) or not isinstance(deny, list):
+        result.notes.append(f"{settings_path.name} permissions.deny is not a list; wrote nothing there.")
+        return
+    missing = _missing_agent_denies(permissions)
+    if not missing:
+        return
+    updated = _with_agent_denies(settings, missing)
+    indent = _json_indent(original or "")
+    text = json.dumps(updated, indent=indent, ensure_ascii=False) + "\n"
+    if original is not None:
+        _backup(settings_path)
+    _write(settings_path, text.encode("utf-8"))
+    result.changes.append(Change(
+        "claude agent deny rules",
+        f"added {', '.join(missing)} to permissions.deny in {settings_path.name}" + ("" if original is None else " (backup saved)"),
+    ))
+
+
 def apply(host: str, claude_dir=None, codex_home=None, codex_bin: str = "codex", plugin_root=ROOT) -> Result:
-    """Fix the allowlisted Codex settings; on any other host change nothing."""
+    """Fix the allowlisted settings of `host`: the Claude Code agent deny rules, or the Codex features, rules, and MCP modes."""
     result = Result([], [])
     if host != "codex":
-        result.notes.append("Claude Code host: host_settings.py changes no settings; it only reports them.")
+        _apply_agent_denies(resolve_claude_dir(claude_dir) / "settings.json", result)
         return result
     home = resolve_codex_home(codex_home)
     config_path = home / "config.toml"

@@ -24,7 +24,7 @@ Codex가 제공하는 `PLUGIN_ROOT`가 설치 디렉터리를 가리키면 로�
 
 | 시점 | 동작 |
 |---|---|
-| 세션 시작·재개 | `SessionStart`가 설치된 지침 파일을 전달한다. 필요하면 `host_settings.py check`가 찾은 문제를 한 줄짜리 안내로 추가한다. 최대 세 개를 보여 주고 나머지는 개수로 알린다. 예를 들면 Claude의 `defaultMode`가 `dontAsk`이거나, `permissions.ask` 규칙이 Bash·MCP 도구에 적용되거나, 기존 Codex 설정에 `[features] plugin_hooks = true`가 없는 경우다(Codex 설정은 양쪽 호스트에서 확인). `host_settings` 옵션이 `apply`인 Codex에서는 먼저 `apply`를 실행하며, 이는 허용 목록의 Codex 설정을 바꿀 수 있다([호스트 설정](configuration.ko.md#호스트-설정) 참고). 바꾼 내용은 안내 한 줄로 알린다. 안내는 컨텍스트 한도 안에 들어가야 한다. Orca 터미널에서는 플러그인 디렉터리와 지침 요약값을 담은 표식도 남긴다. |
+| 세션 시작·재개 | `SessionStart`가 설치된 지침 파일을 전달한다. 필요하면 `host_settings.py check`가 찾은 문제를 한 줄짜리 안내로 추가한다. 최대 세 개를 보여 주고 나머지는 개수로 알린다. 예를 들면 Claude의 `defaultMode`가 `dontAsk`이거나, `permissions.ask` 규칙이 Bash·MCP 도구에 적용되거나, 내장 에이전트에 대한 Claude `permissions.deny` 항목이 빠졌거나, 기존 Codex 설정에 `[features] plugin_hooks = true`가 없는 경우다(Codex 설정은 양쪽 호스트에서 확인). `host_settings` 옵션이 `apply`이면 먼저 `apply`를 실행하며, 이는 허용 목록의 호스트 설정, 곧 Codex 설정과 Claude Code의 사용자 설정에 있는 `Agent(...)` 거부 항목을 바꿀 수 있다([호스트 설정](configuration.ko.md#호스트-설정) 참고). 바꾼 내용은 안내 한 줄로 알린다. 안내는 컨텍스트 한도 안에 들어가야 한다. Orca 터미널에서는 플러그인 디렉터리와 지침 요약값을 담은 표식도 남긴다. |
 | 세션 초기화·컨텍스트 압축 | `SessionStart`가 지침을 다시 전달한다. |
 | 서브에이전트 시작 | `SubagentStart`가 짧은 역할 컨텍스트를 전달한다. `core.md`와, 구현 에이전트에는 "Assigned workers" 규칙을 더한다. |
 | 역할 실행기의 자식 세션 시작 | `core.md`만 받는다. 역할 규칙은 실행기가 할당 앞에 붙인다. |
@@ -224,7 +224,8 @@ Codex 내장 `worker`를 대신하고, `scout`는 내장 `explorer`를 건드리
 수정을 거부하지 않고 일반 구현 worker로 동작합니다.
 
 두 호스트 모두 내장 서브에이전트를 막습니다. Claude Code에서는 mod가 내장 `general-purpose`, `Explore`, `Plan`,
-`claude` 에이전트를 에이전트 목록에서 숨기고(`agent.offer`), 이들과 모든 fork를 거부합니다(`agent.spawn`). 목적이 좁은
+`claude` 에이전트를 에이전트 목록에서 숨기고(`agent.offer`), 이들과 모든 fork를 거부합니다(`agent.spawn`). 세션 시작은 사용자 설정의 `permissions.deny`에도 `Agent(general-purpose)`, `Agent(Explore)`, `Agent(Plan)`, `Agent(claude)`를
+추가하므로([호스트 설정](configuration.ko.md#호스트-설정) 참고) mod가 로드되지 않은 세션에서도 거부가 유지됩니다. 목적이 좁은
 내장 종류인 `claude-code-guide`와 `statusline-setup`은 플러그인 에이전트, 사용자·프로젝트·CLI·관리 설정이 제공하는 정의와
 함께 통과합니다. Codex에서는 `PreToolUse` 훅인 `scripts/agent_guard.py`가 기존 동작을 그대로 유지합니다. 종류를 비운 호출,
 `default`, `explorer`, 역할 파일이 없는 모든 종류를 거부하며, 플러그인 역할이 생기기 전의 내장

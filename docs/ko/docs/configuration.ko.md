@@ -7,8 +7,8 @@
 
 ## 호스트 설정
 
-일부 호스트 설정은 승인 프롬프트를 늘리거나 가드가 실행되지 못하게 합니다. `scripts/host_settings.py`는 이를 점검하고,
-Codex에서만 짧은 허용 목록을 고칩니다.
+일부 호스트 설정은 승인 프롬프트를 늘리거나, 가드가 실행되지 못하게 하거나, 내장 서브에이전트가 실행되게 합니다.
+`scripts/host_settings.py`는 이를 점검하고 호스트마다 짧은 허용 목록을 고칩니다.
 
 ```bash
 python3 <plugin root>/scripts/host_settings.py check [--host claude|codex] [--json]
@@ -19,6 +19,8 @@ python3 <plugin root>/scripts/host_settings.py apply [--host claude|codex] [--js
 `check`는 읽기이며 아무것도 쓰지 않습니다. 문제마다 한 줄을 보고합니다.
 
 - Claude Code: `defaultMode`가 `dontAsk`인 경우와 Bash나 MCP 도구에 적용되는 `permissions.ask` 규칙(최대 세 개 표시).
+- Claude Code: `agent_guard`가 켜져 있는데 사용자 설정 파일의 `permissions.deny`에 `Agent(general-purpose)`, `Agent(Explore)`,
+  `Agent(Plan)`, `Agent(claude)` 중 하나가 없는 경우.
 - `~/.codex/config.toml`에 `[features] plugin_hooks`가 `true`가 아닌 경우(양쪽 호스트).
 - Codex만: 플러그인 훅이 확인되지 않은 경우(heartbeat 해시 불일치), `config.toml`이 올바른 TOML이 아닌 경우,
   `rules/hei5enbug.rules`가 없거나 읽을 수 없거나 구버전이거나 플러그인 소유가 아닌 경우, MCP 서버에 `prompt` 승인 모드가 없는 경우,
@@ -26,20 +28,27 @@ python3 <plugin root>/scripts/host_settings.py apply [--host claude|codex] [--js
 - Codex만: 사용자 소유 `rules/*.rules` 파일에서 `kubectl get`, `helm list`, `az show`, `git status` 같은 읽기 접두에 대한
   `prompt`·`forbidden` 규칙.
 
-`apply`는 이 허용 목록만, 그것도 Codex에서만 바꿉니다. Claude Code에서는 아무것도 바꾸지 않고 그 사실만 알립니다.
+`apply`는 이 허용 목록만 바꿉니다.
 
-- `[features] plugin_hooks`: `codex features list`에 보이면 `codex features enable plugin_hooks`로 켭니다. 그 명령이 없으면
+- Claude Code: `agent_guard`가 켜져 있는 동안 `Agent(general-purpose)`, `Agent(Explore)`, `Agent(Plan)`, `Agent(claude)` 중 빠진 항목을
+  사용자 설정 파일(`~/.claude/settings.json`, 또는 `CLAUDE_CONFIG_DIR` 아래)의 기존 `permissions.deny` 항목 뒤에 덧붙입니다. 파일이나 키가
+  없으면 만듭니다. 파일의 다른 내용은 지우거나 순서를 바꾸거나 다시 쓰지 않으며, JSON은 파일이 쓰던 들여쓰기로 저장합니다. 파일이 JSON 객체가
+  아니거나 `permissions.deny`가 목록이 아니면 아무것도 쓰지 않고 그렇게 알립니다. 이 규칙은 Claude Code가 직접 적용하므로 mod가 로드되지
+  않은 세션에서도, 플러그인이 쓴 뒤라면 유효합니다. 에이전트 종류를 생략한 호출을 막는지는 Claude Code가 문서화하지 않았으므로 이 문서는
+  그에 대해 아무 주장도 하지 않습니다.
+
+- Codex: `[features] plugin_hooks`: `codex features list`에 보이면 `codex features enable plugin_hooks`로 켭니다. 그 명령이 없으면
   직접 설정하라고 알립니다.
-- 플러그인 소유 파일 `~/.codex/rules/hei5enbug.rules`: 플러그인 버전의 텍스트로 만들거나 갱신합니다. [승인 가드](approval-guard.ko.md#승인-가드)가
+- Codex: 플러그인 소유 파일 `~/.codex/rules/hei5enbug.rules`: 플러그인 버전의 텍스트로 만들거나 갱신합니다. [승인 가드](approval-guard.ko.md#승인-가드)가
   쓰는 래퍼 스크립트에 대한 `prompt` 규칙을 담고 있습니다. 그 경로가 심볼릭 링크이거나 기존 파일에 플러그인 소유 헤더
   줄이 없으면 `apply`는 알리기만 하고 아무것도 쓰지 않습니다.
-- `approval_guard`가 켜져 있는 동안 모든 `[mcp_servers.<name>]` 표의 `default_tools_approval_mode = "prompt"`와, 이미 다른
+- Codex: `approval_guard`가 켜져 있는 동안 모든 `[mcp_servers.<name>]` 표의 `default_tools_approval_mode = "prompt"`와, 이미 다른
   모드를 지정한 도구별 표의 `approval_mode = "prompt"`. 그 줄만 고치며, 결과가 의도대로 파싱되지 않으면 아무것도 쓰지 않습니다.
 
-`apply`는 파일을 바꾸기 전에 `<file>.bak-hei5enbug-<YYYYMMDD>`로 복사해 두며, 하루에 한 번만 만듭니다. 바꾼 항목마다 한 줄을
-출력하고, 두 번째 실행은 아무것도 바꾸지 않습니다. 사용자 소유 규칙 파일, Claude Code 설정, 훅 신뢰는 절대 고치지 않습니다.
+`apply`는 기존 파일을 바꾸기 전에 `<file>.bak-hei5enbug-<YYYYMMDD>`로 복사해 두며, 하루에 한 번만 만듭니다. 바꾼 항목마다 한 줄을
+출력하고, 두 번째 실행은 아무것도 바꾸지 않습니다. 사용자 소유 규칙 파일, 그 밖의 Claude Code 설정, 훅 신뢰는 절대 고치지 않습니다.
 
-세션 시작 시 훅이 하는 일은 `host_settings` 옵션이 정합니다. `apply`(기본값)는 Codex에서 먼저 `apply`를 실행해 바꾼 내용을 알리는
+세션 시작 시 훅이 하는 일은 `host_settings` 옵션이 정합니다. `apply`(기본값)는 두 호스트 모두에서 먼저 `apply`를 실행해 바꾼 내용을 알리는
 안내 한 줄을 추가하고, 이어서 `check`가 찾은 나머지 문제를 보고합니다. `report`는 보고만 합니다. 다른 값은 `apply`로 취급합니다.
 Claude Code는 이 옵션을 `/config`에서 읽고, Codex는 `HEI5ENBUG_HOST_SETTINGS`에서 읽습니다.
 
@@ -51,7 +60,7 @@ Claude Code는 이 옵션을 `/config`에서 읽고, Codex는 `HEI5ENBUG_HOST_SE
 새로고침할 플러그인(`refresh_plugins`)은 문자열 옵션입니다. 경로는 `auto`, `codex`, `haiku`, `sol`, `sonnet` 중 하나를 고르고, 값이 비어 있거나 알 수 없으면
 `auto`를 씁니다.
 `auto`에서는 메인 세션이 작업마다 worker를 고릅니다. 호스트 설정 모드는 `apply`와 `report` 중 하나를 고르고, 값이 비어 있거나
-알 수 없으면 `apply`를 씁니다. 이 모드는 `SessionStart`가 허용 목록의 Codex 설정을 바꿔도 되는지 정합니다.
+알 수 없으면 `apply`를 씁니다. 이 모드는 `SessionStart`가 허용 목록의 호스트 설정을 바꿔도 되는지 정합니다.
 [호스트 설정](#호스트-설정)을 참고하세요.
 검토 모델은 스킬 검토 역할을 `high`로 실행하며,
 [모델 라우팅](../../../instructions/model-routing.md#keep-role-settings-fixed)의 사고 강도 규칙에 따라 `xhigh`로 실행합니다. 독립 검증은 이 설정을
@@ -65,7 +74,7 @@ Claude Code `worker` 에이전트는 `worker_model`과 `worker_effort`로 실행
 Claude Code가 저장한 설정(`~/.claude/settings.json`의 `pluginConfigs`, 또는 `CLAUDE_CONFIG_DIR` 아래)에서 `codex_worker_model`과
 `codex_worker_effort`를 읽기 전용으로 읽습니다. 환경변수가 이 값을 덮어쓰고, 잘못된 값이면 한 줄 안내와 함께 기본값을 씁니다. 세션 컨텍스트는
 `Codex worker model: <model> at <effort>.` 줄로 알립니다. 값은 다음 Codex 세션부터 적용되며, 이 값을 읽을 때는
-Codex 설정이나 Claude 설정을 쓰지 않습니다. Codex 설정을 쓰는 것은 [호스트 설정](#호스트-설정)의 허용 목록 변경뿐입니다.
+Codex 설정이나 Claude 설정을 쓰지 않습니다. 설정을 쓰는 것은 [호스트 설정](#호스트-설정)의 허용 목록 변경뿐입니다.
 
 | 기능 | Claude Code `/config` 키 | Codex 환경변수 |
 |---|---|---|

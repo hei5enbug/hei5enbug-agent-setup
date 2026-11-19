@@ -96,6 +96,7 @@ class HostSettingsTestCase(unittest.TestCase):
                 ("HEI5ENBUG_", "CLAUDE_PLUGIN_OPTION_")
             ):
                 del os.environ[name]
+        os.environ["CLAUDE_PLUGIN_OPTION_AGENT_GUARD"] = "false"
         self.hooks = self.base / "hooks.json"
         self.hooks.write_text('{"hooks": {}}\n', encoding="utf-8")
         hooks = mock.patch.object(approval_state, "HOOKS_PATH", self.hooks)
@@ -391,8 +392,8 @@ class RulesTextTest(unittest.TestCase):
 
 
 class ApplyTest(HostSettingsTestCase):
-    def test_Claude_호스트의_apply는_아무것도_바꾸지_않고_그렇다고_알린다(self):
-        """Claude 호스트에서는 설정 파일이 있어도 변경 없이 알림만 반환한다."""
+    def test_Claude_호스트의_apply는_agent_guard가_꺼져_있으면_아무것도_바꾸지_않는다(self):
+        """Claude 호스트에서 agent_guard 토글이 꺼져 있으면 설정 파일이 있어도 변경 없이 빈 결과를 반환한다."""
         # given
         self.write_json(self.claude / "settings.json", {"permissions": {"defaultMode": "dontAsk"}})
         self.write(self.codex / "config.toml", CONFIG)
@@ -406,7 +407,7 @@ class ApplyTest(HostSettingsTestCase):
 
         # then
         self.assertEqual(result.changes, [])
-        self.assertIn("Claude Code host", result.notes[0])
+        self.assertEqual(result.notes, [])
         after = snapshot(self.base)
         after.pop("bin/codex")
         self.assertEqual(after, before)
@@ -805,8 +806,8 @@ class CommandLineTest(HostSettingsTestCase):
                 # then
                 self.assertEqual(code, 2)
 
-    def test_apply_출력은_변경마다_한_줄이고_Claude_호스트는_무변경을_알린다(self):
-        """Codex는 변경 한 줄씩 출력하고 두 번째 실행은 출력이 없으며, Claude 호스트는 변경 없음을 알린다."""
+    def test_apply_출력은_변경마다_한_줄이고_agent_guard가_꺼진_Claude_호스트는_출력이_없다(self):
+        """Codex는 변경 한 줄씩 출력하고 두 번째 실행은 출력이 없으며, agent_guard가 꺼진 Claude 호스트도 출력이 없다."""
         # given
         self.write(self.codex / "config.toml", CONFIG)
         args = ("apply", "--host", "codex", "--codex-home", str(self.codex), "--codex-bin", self.fake_codex())
@@ -821,7 +822,7 @@ class CommandLineTest(HostSettingsTestCase):
         self.assertEqual(len(first[1].splitlines()), 1)
         self.assertEqual(second, (0, "", ""))
         self.assertEqual(claude[0], 0)
-        self.assertIn("changes no settings", claude[1])
+        self.assertEqual(claude[1], "")
 
     def test_입출력_실패는_종료_코드_1이다(self):
         """설정 파일 쓰기가 실패하면 파이썬 오류 대신 한 줄과 종료 코드 1을 낸다."""

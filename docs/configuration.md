@@ -4,8 +4,8 @@ This page explains plugin options, host-setting checks, and the settings the plu
 
 ## Host settings
 
-Some host settings add approval prompts or stop the guard from running. `scripts/host_settings.py` checks them and, on
-Codex only, fixes a short allowlist:
+Some host settings add approval prompts, stop the guard from running, or let built-in subagents run.
+`scripts/host_settings.py` checks them and fixes a short allowlist on each host:
 
 ```bash
 python3 <plugin root>/scripts/host_settings.py check [--host claude|codex] [--json]
@@ -16,6 +16,8 @@ Both commands also take `--claude-dir`, `--codex-home`, and `--codex-bin`. The h
 command. `check` is a read and writes nothing. It reports one line per problem:
 
 - Claude Code: `defaultMode` is `dontAsk`, and `permissions.ask` rules that match Bash or MCP tools, up to three named.
+- Claude Code: the user settings file lacks one of `Agent(general-purpose)`, `Agent(Explore)`, `Agent(Plan)`, or
+  `Agent(claude)` in `permissions.deny`, while `agent_guard` is on.
 - `[features] plugin_hooks` is not `true` in `~/.codex/config.toml`, on either host.
 - Codex only: the plugin hooks are unconfirmed (the heartbeat hash differs), `config.toml` is not valid TOML,
   `rules/hei5enbug.rules` is missing, unreadable, outdated, or not plugin-owned, MCP servers lack the `prompt` approval
@@ -24,22 +26,30 @@ command. `check` is a read and writes nothing. It reports one line per problem:
 - Codex only: a `prompt` or `forbidden` rule in your own `rules/*.rules` files for a read prefix such as `kubectl get`,
   `helm list`, `az show`, or `git status`.
 
-`apply` changes only this allowlist, and only on Codex. On Claude Code it changes nothing and reports that.
+`apply` changes only this allowlist.
 
-- `[features] plugin_hooks`, through `codex features enable plugin_hooks` when `codex features list` shows it. Without
+- Claude Code: the missing entries among `Agent(general-purpose)`, `Agent(Explore)`, `Agent(Plan)`, and `Agent(claude)`,
+  appended after the existing `permissions.deny` entries of the user settings file (`~/.claude/settings.json`, or under
+  `CLAUDE_CONFIG_DIR`), while `agent_guard` is on. A missing file or key is created. Nothing else in the file is removed,
+  reordered, or rewritten, except that the JSON is saved with the file's own indent. `apply` writes nothing when the file
+  is not a JSON object or `permissions.deny` is not a list, and says so. Claude Code itself enforces
+  the rules, so they also hold in a session where the mod did not load, once a session with the plugin has written them.
+  Claude Code does not document whether a call that omits the agent type is caught, so this page makes no claim about it.
+- Codex: `[features] plugin_hooks`, through `codex features enable plugin_hooks` when `codex features list` shows it. Without
   that command, `apply` says to set it by hand.
-- The plugin-owned `~/.codex/rules/hei5enbug.rules`, created or updated to the text of the plugin version. It holds the
+- Codex: the plugin-owned `~/.codex/rules/hei5enbug.rules`, created or updated to the text of the plugin version. It holds the
   `prompt` rule for the wrapper script used by [Approval guard](approval-guard.md#approval-guard). `apply` only reports,
   and writes nothing, when that path is a symbolic link or an existing file lacks the plugin-owned header line.
-- `default_tools_approval_mode = "prompt"` on every `[mcp_servers.<name>]` table, and `approval_mode = "prompt"` on each
+- Codex: `default_tools_approval_mode = "prompt"` on every `[mcp_servers.<name>]` table, and `approval_mode = "prompt"` on each
   per-tool table that already sets another mode, while `approval_guard` is on. It edits only those lines and writes
   nothing when the result would not parse as intended.
 
-Before it changes a file, `apply` copies it to `<file>.bak-hei5enbug-<YYYYMMDD>`, once per day. It prints one line per
-change, and a second run changes nothing. It never edits your own rules files, Claude Code settings, or hook trust.
+Before it changes an existing file, `apply` copies it to `<file>.bak-hei5enbug-<YYYYMMDD>`, once per day. It prints one
+line per change, and a second run changes nothing. It never edits your own rules files, other Claude Code settings, or
+hook trust.
 
-At session start, the `host_settings` option decides what the hook does. `apply` (the default) runs `apply` on Codex
-first and adds one notice naming what changed, then reports the remaining problems from `check`. `report` only reports.
+At session start, the `host_settings` option decides what the hook does. `apply` (the default) runs `apply` first, on
+both hosts, and adds one notice naming what changed, then reports the remaining problems from `check`. `report` only reports.
 Any other value means `apply`. Claude Code reads the option from `/config`; Codex reads `HEI5ENBUG_HOST_SETTINGS`.
 
 ## Feature options
@@ -50,7 +60,7 @@ and efforts, the review model, the host settings mode, the minimum free memory f
 are string options in Claude Code. Choose `auto`, `codex`, `haiku`, `sol`, or `sonnet` for the
 route; an unset or unrecognized value uses `auto`, where the main session picks the worker per assignment. Choose
 `apply` or `report` for the host settings mode; an unset or unrecognized value uses `apply`. It decides whether
-`SessionStart` may change allowlisted Codex settings; see [Host settings](#host-settings). The review model runs skill
+`SessionStart` may change allowlisted host settings; see [Host settings](#host-settings). The review model runs skill
 review roles at `high`, or at `xhigh` under the effort rule in [model
 routing](../instructions/model-routing.md#keep-role-settings-fixed); independent validation does not use it. Choose one
 of the seven pinned model IDs; an unset or unrecognized value uses `gpt-6-astra`. Set plugin options in `/config` or
@@ -63,8 +73,7 @@ no plugin settings UI, so its session hook reads `codex_worker_model` and `codex
 Code's saved settings (`pluginConfigs` in `~/.claude/settings.json`, or under `CLAUDE_CONFIG_DIR`). The environment
 variables override them, and an invalid value falls back to the defaults with a one-line notice. The session context
 reports them as `Codex worker model: <model> at <effort>.` They apply from the next Codex session, and reading them
-never writes Codex or Claude settings. Only the allowlisted changes in [Host settings](#host-settings) write Codex
-settings.
+never writes Codex or Claude settings. Only the allowlisted changes in [Host settings](#host-settings) write settings.
 
 | Feature | Claude Code `/config` key | Codex environment variable |
 |---|---|---|

@@ -20,7 +20,7 @@ script. No user or project instruction file is copied, linked, or overwritten.
 
 | When | Behavior |
 |---|---|
-| Session starts or resumes | `SessionStart` supplies the installed instruction files and adds one-line notices from `host_settings.py check` when needed: up to three problems, then a count of the rest. Examples are Claude `defaultMode` `dontAsk`, Claude `permissions.ask` rules that match Bash or MCP tools, or an existing Codex config without `[features] plugin_hooks = true` (checked on both hosts). On Codex with the `host_settings` option on `apply`, it first runs `apply`, which may change allowlisted Codex settings (see [Host settings](configuration.md#host-settings)) and adds one notice naming what it changed. Notices must fit the context limit. In an Orca terminal it also writes a marker with the plugin directory and an instructions digest. |
+| Session starts or resumes | `SessionStart` supplies the installed instruction files and adds one-line notices from `host_settings.py check` when needed: up to three problems, then a count of the rest. Examples are Claude `defaultMode` `dontAsk`, Claude `permissions.ask` rules that match Bash or MCP tools, missing Claude `permissions.deny` entries for the built-in agents, or an existing Codex config without `[features] plugin_hooks = true` (checked on both hosts). With the `host_settings` option on `apply`, it first runs `apply`, which may change allowlisted host settings: Codex settings, and on Claude Code the `Agent(...)` deny entries of the user settings (see [Host settings](configuration.md#host-settings)) and adds one notice naming what it changed. Notices must fit the context limit. In an Orca terminal it also writes a marker with the plugin directory and an instructions digest. |
 | Session clears or compacts | `SessionStart` supplies them again. |
 | A subagent starts | `SubagentStart` supplies a short role context: `core.md`, plus the "Assigned workers" rules for implementation agents. |
 | A role runner child session starts | It receives `core.md` only; the runner puts the role rules before the assignment. |
@@ -229,6 +229,8 @@ implementation worker instead of refusing to edit.
 
 Built-in subagents stay out on both hosts. On Claude Code the mod hides the built-in `general-purpose`, `Explore`,
 `Plan`, and `claude` agents from the agent list (`agent.offer`) and denies them and every fork (`agent.spawn`). The
+session start also adds `Agent(general-purpose)`, `Agent(Explore)`, `Agent(Plan)`, and `Agent(claude)` to `permissions.deny` in
+the user settings (see [Host settings](configuration.md#host-settings)), so the denial holds where the mod did not load. The
 narrow-purpose built-ins `claude-code-guide` and `statusline-setup` pass, as do plugin agents and definitions from any
 user, project, CLI, or managed source. On Codex the `PreToolUse` hook `scripts/agent_guard.py` keeps its existing
 behavior: it denies an omitted type, `default`, `explorer`, and every type without a role file, including the built-in

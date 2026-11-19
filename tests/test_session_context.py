@@ -33,6 +33,9 @@ class SessionContextTest(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name).resolve()
+        environment = mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_OPTION_AGENT_GUARD": "false"})
+        environment.start()
+        self.addCleanup(environment.stop)
         self.root = self.base / "plugin space (한글) $x"
         self.root.mkdir()
         agents = self.root / "AGENTS.md"
@@ -60,6 +63,8 @@ class SessionContextTest(unittest.TestCase):
             "CLAUDE_PLUGIN_ROOT": str(self.root),
             "CODEX_HOME": str(self.codex_home),
             "XDG_STATE_HOME": str(self.base / "state"),
+            "HOME": str(self.base / "default home"),
+            "CLAUDE_PLUGIN_OPTION_AGENT_GUARD": "false",
         }
         if host == "codex":
             env["PLUGIN_ROOT"] = str(self.root)
@@ -301,7 +306,7 @@ class SessionContextTest(unittest.TestCase):
         self.assertEqual(list(codex_home.glob("config.toml.bak-*")), [])
 
     def test_Claude_세션_시작은_apply_옵션이어도_Codex_설정을_바꾸지_않는다(self):
-        """Claude 호스트에서는 apply 옵션이어도 아무 파일도 고치지 않고 문제만 알린다."""
+        """Claude 호스트에서는 apply 옵션이어도 Codex 파일은 고치지 않고 문제만 알린다."""
         # given
         self.use_short_root()
         self.install_fake_codex()
@@ -315,9 +320,68 @@ class SessionContextTest(unittest.TestCase):
 
         # then
         self.assertIn("Codex runs no approval guard until [features] plugin_hooks = true.", context)
-        self.assertNotIn("changed host settings", context)
         self.assertEqual(config.read_text(encoding="utf-8"), before)
         self.assertEqual(list(codex_home.glob("config.toml.bak-*")), [])
+
+    def test_Claude_세션_시작은_apply_옵션이면_사용자_설정에_Agent_거부_규칙을_더하고_알린다(self):
+        """apply 모드의 Claude 세션 시작은 네 항목을 더하고 한 줄로 알리며, 다음 시작은 알리지 않는다."""
+        # given
+        self.use_short_root()
+        config = self.base / "claude config"
+        settings = config / "settings.json"
+        self.write_json(settings, {"permissions": {"deny": ["Read(.env)"]}})
+        extra = {"CLAUDE_CONFIG_DIR": str(config), "CLAUDE_PLUGIN_OPTION_HOST_SETTINGS": "apply",
+                 "CLAUDE_PLUGIN_OPTION_AGENT_GUARD": "true"}
+
+        # when
+        first = self.context(self.run_hook("claude", extra_env=extra))
+        second = self.context(self.run_hook("claude", extra_env=extra))
+
+        # then
+        self.assertIn("Notice: hei5enbug changed host settings: claude agent deny rules;", first)
+        self.assertNotIn("changed host settings", second)
+        self.assertNotIn("permissions.deny", second)
+        deny = json.loads(settings.read_text(encoding="utf-8"))["permissions"]["deny"]
+        self.assertEqual(deny, ["Read(.env)", "Agent(general-purpose)", "Agent(Explore)", "Agent(Plan)", "Agent(claude)"])
+        self.assertEqual(len(list(config.glob("settings.json.bak-hei5enbug-*"))), 1)
+
+    def test_Claude_세션_시작은_report_옵션이면_쓰지_않고_빠진_규칙만_알린다(self):
+        """report 모드에서는 설정 파일을 바꾸지 않고 claude-agent-deny 문제만 알린다."""
+        # given
+        self.use_short_root()
+        config = self.base / "claude config"
+        settings = config / "settings.json"
+        self.write_json(settings, {"permissions": {"deny": []}})
+        before = settings.read_bytes()
+
+        # when
+        context = self.context(self.run_hook(
+            "claude", extra_env={"CLAUDE_CONFIG_DIR": str(config), "CLAUDE_PLUGIN_OPTION_HOST_SETTINGS": "report",
+                                 "CLAUDE_PLUGIN_OPTION_AGENT_GUARD": "true"},
+        ))
+
+        # then
+        self.assertIn("Notice: Claude Code user settings lack permissions.deny Agent(general-purpose)", context)
+        self.assertNotIn("changed host settings", context)
+        self.assertEqual(settings.read_bytes(), before)
+
+    def test_Claude_세션_시작은_agent_guard가_꺼지면_규칙을_더하지_않는다(self):
+        """agent_guard 토글이 off이면 apply 모드여도 설정을 쓰지 않고 알리지도 않는다."""
+        # given
+        self.use_short_root()
+        config = self.base / "claude config"
+        settings = config / "settings.json"
+        self.write_json(settings, {"permissions": {"deny": []}})
+        before = settings.read_bytes()
+
+        # when
+        context = self.context(self.run_hook("claude", extra_env={
+            "CLAUDE_CONFIG_DIR": str(config), "CLAUDE_PLUGIN_OPTION_AGENT_GUARD": "false",
+        }))
+
+        # then
+        self.assertNotIn("permissions.deny", context)
+        self.assertEqual(settings.read_bytes(), before)
 
     def test_하위_에이전트_시작은_호스트_설정을_점검하거나_고치지_않는다(self):
         """SubagentStart 컨텍스트에는 설정 notice가 없고 설정 파일도 바뀌지 않는다."""
@@ -1687,6 +1751,7 @@ class CodexAutoSettingsTest(unittest.TestCase):
             "PLUGIN_DATA": str(self.data),
             "FAKE_CODEX_LOG": str(self.log),
             "FAKE_CODEX_LIST": str(self.listing),
+            "HOME": str(self.base / "default home"),
         }
         if host == "codex":
             env["PLUGIN_ROOT"] = str(self.root)
