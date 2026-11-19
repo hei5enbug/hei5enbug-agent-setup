@@ -14,6 +14,7 @@ const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const STORE_KEY = "roles";
 const REQUEST_KEY = "requests";
 const USER_PROMPT_ORIGINS = ["composer", "bridge", "sdk"];
+const UNSTAMPED_ORIGIN = "unclassified";
 const NO_REQUEST = { models: [], efforts: [] };
 const MARKER = "hei5enbug-agent-setup mod: role pinning active";
 const markerSession = atom({ plugin: "hei5enbug-agent-setup", key: "roleMarkerSession" }, null);
@@ -80,6 +81,10 @@ function saveRequest($, request) {
 
 function isUserPrompt(e) {
   return e.agentId === undefined && e.isMeta !== true && (e.origin === undefined || USER_PROMPT_ORIGINS.includes(e.origin.kind));
+}
+
+function isUnstampedPrompt(e) {
+  return e.agentId === undefined && e.isMeta !== true && e.origin?.kind === UNSTAMPED_ORIGIN;
 }
 
 async function recordRequest($, e) {
@@ -257,6 +262,7 @@ export function registerRolePinning(on, options) {
 
   on("prompt.submit", async ($, e, next) => {
     if (isUserPrompt(e)) await recordRequest($, e);
+    else if (isUnstampedPrompt(e)) await saveRequest($, NO_REQUEST);
     if (e.agentId !== undefined) return next(e);
     const sessionId = await $.session.id();
     if ((await read($, markerSession)) === sessionId) return next(e);

@@ -1535,6 +1535,53 @@ test("하위 에이전트 프롬프트와 사용자 입력이 아닌 프롬프�
   expect(received).toEqual([PINNED, OPUS]);
 });
 
+test("sonnet-worker에 opus를 넘겨도 사용자의 마지막 프롬프트가 opus를 말하지 않으면 고정 모델로 시작하고 말하면 opus로 시작한다", async ($, on) => {
+  // given
+  environment(on, undefined, requestWorld());
+  const received = requestSinks(on);
+
+  // when
+  await $.prompt.submit({ text: "fix the parser", origin: { kind: "composer" } });
+  await $.agent.spawn(spawnInput(SONNET_WORKER, { model: "opus", tool_use_id: "toolu_plain" }));
+  await $.prompt.submit({ text: "use opus for this", origin: { kind: "composer" } });
+  await $.agent.spawn(spawnInput(SONNET_WORKER, { model: "opus", tool_use_id: "toolu_named" }));
+
+  // then
+  expect(received).toEqual([PINNED, OPUS]);
+});
+
+test("모델을 말한 프롬프트 뒤에 출처 표시가 없는 사용자 프롬프트가 오면 이전 요청을 지운다", async ($, on) => {
+  // given
+  environment(on, undefined, requestWorld());
+  const received = requestSinks(on);
+  await $.prompt.submit({ text: "use opus for this", origin: { kind: "composer" } });
+  await $.agent.spawn(spawnInput(SONNET_WORKER, { model: "opus", tool_use_id: "toolu_named" }));
+
+  // when
+  await $.prompt.submit({ text: "fix the parser", origin: { kind: "unclassified" } });
+  await $.agent.spawn(spawnInput(SONNET_WORKER, { model: "opus", tool_use_id: "toolu_after" }));
+
+  // then
+  expect(received).toEqual([OPUS, PINNED]);
+});
+
+test("출처 표시가 없는 프롬프트는 모델을 말해도 요청을 만들지 않고 메타 프롬프트와 하위 에이전트 프롬프트는 요청을 지우지 않는다", async ($, on) => {
+  // given
+  environment(on, undefined, requestWorld());
+  const received = requestSinks(on);
+  await $.prompt.submit({ text: "use opus for this", origin: { kind: "composer" } });
+
+  // when
+  await $.prompt.submit({ text: "idle notice", origin: { kind: "unclassified" }, isMeta: true });
+  await $.prompt.submit({ text: "sub", origin: { kind: "unclassified" }, agentId: AGENT_ID });
+  await $.agent.spawn(spawnInput(SONNET_WORKER, { model: "opus", tool_use_id: "toolu_kept" }));
+  await $.prompt.submit({ text: "opus max", origin: { kind: "unclassified" } });
+  await $.agent.spawn(spawnInput(SONNET_WORKER, { model: "opus", tool_use_id: "toolu_created" }));
+
+  // then
+  expect(received).toEqual([OPUS, PINNED]);
+});
+
 test("요청한 모델과 다른 모델로 응답하면 고정 실패로 기록하고 이후 요청을 거절한다", async ($, on) => {
   // given
   const data = environment(on, undefined, requestWorld());
