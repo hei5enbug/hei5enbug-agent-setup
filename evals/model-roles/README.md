@@ -2,7 +2,7 @@
 
 This evaluation decides which Claude model and effort three roles pin: the tiki-taka Claude opponent, the stronger
 Claude reviewer of GPT-authored work in the independent model validation rules, and the complex GPT-authored row of the
-final review table in `AGENTS.md`. Four candidates run five seeded cases once each: `claude-opus-5-5` and
+final review table in `docs/dev-rules/delegation.md`. Four candidates run five seeded cases once each: `claude-opus-5-5` and
 `claude-fable-5-2`, each at `high` and `xhigh`. Starting a candidate run is the only step that costs model calls;
 seeding, grading, evidence reading, the record, and the pin check cost none, and `tests/test_model_roles_cases.py` and
 `tests/test_model_roles_record.py` test them.
@@ -105,7 +105,7 @@ or doubled result, a host model or effort that differs from the candidate, and a
 
 ## Decision
 
-The owner's efficiency rule in `AGENTS.md` decides each role, over that role's cases only (reviewer: T89 to T91, opponent:
+The owner's efficiency rule in `docs/dev-rules/evaluation.md` decides each role, over that role's cases only (reviewer: T89 to T91, opponent:
 T92 and T93):
 
 1. Eligible candidates passed every case of the role. When none did, the role has no winner (`none`) and keeps its
@@ -126,7 +126,7 @@ available only when the user asks for it.
 - While the record is pending, or a role is `tie` or `none`, every pin site holds the baseline: the Claude opponent is
   `claude-fable-5-2` at `xhigh` in `config/model-registry.json` and the tiki-taka skill, and the Claude reviewer row names
   `claude-opus-5-5` and `claude-fable-5-2` in the independent model validation rules, the delegation document, the
-  final review table of `AGENTS.md`, and their Korean mirrors. No pin changes before a record exists.
+  final review table of `docs/dev-rules/delegation.md`, and their Korean mirrors. No pin changes before a record exists.
 - When a role has a winner, each of its sites names the winner's model and no other Claude model of the comparison, the
   registry holds the winner's model and effort, and the reviewer table rows name the winner's effort alone. The test
   fails until every site agrees, and an anchor that no longer finds its line names the file to fix.

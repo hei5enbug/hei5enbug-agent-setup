@@ -91,7 +91,7 @@ class DecisionRuleTest(unittest.TestCase):
         # Then
         self.assertEqual({"status": "none", "winner": None}, decided["reviewer"])
         self.assertEqual(FABLE_HIGH, self.winner(decided, "opponent"))
-        self.assertEqual([], [item for item in pins if "independent-model-validation" in item or "AGENTS" in item])
+        self.assertEqual([], [item for item in pins if "independent-model-validation" in item or "dev-rules/delegation" in item])
 
     def test_가장_빠른_후보보다_1_5배_넘고_60초_넘게_느리면_그_사례에서_탈락한다(self):
         """한 사례에서 가장 빠른 후보보다 1.5배를 넘고 60초를 넘게 느린 후보는, 더 싸도 탈락한다."""
@@ -285,7 +285,7 @@ class RecordFormatTest(unittest.TestCase):
 
 PIN_LINES = {
     "instructions/independent-model-validation.md": ("| GPT |", "| GPT | `{model}` | `{effort}` |"),
-    "AGENTS.md": ("| GPT-authored", "  | GPT-authored, including work drafted on `gpt-6.1-sol` | `role_runner.py reviewer --model {model} --effort {effort}` |"),
+    "docs/dev-rules/delegation.md": ("| GPT-authored", "| GPT-authored, including work drafted on `gpt-6.1-sol` | `role_runner.py reviewer --model {model} --effort {effort}` |"),
     "skills/tiki-taka/SKILL.md": ("- Fix a Claude opponent", "- Fix a Claude opponent to `{model}` with `{effort}` reasoning effort."),
     "docs/ko/skills/tiki-taka/SKILL.ko.md": ("- Claude 상대는", "- Claude 상대는 {model}, 사고 강도 {effort}로 고정하라."),
 }
@@ -327,11 +327,11 @@ BASELINE_REVIEWER_TEXT = {
     "docs/ko/docs/instructions-and-delegation.ko.md": (
         ("GPT가 작성한 결과는 `claude-fable-5-2`가 `high`로 검토합니다.", "GPT가 작성한 결과는 `claude-opus-5-5` 또는 `claude-fable-5-2`가 검토합니다."),
     ),
-    "AGENTS.md": (
+    "docs/dev-rules/delegation.md": (
         ("`role_runner.py reviewer --model claude-fable-5-2 --effort high` |",
          "`role_runner.py reviewer --model claude-opus-5-5`, or `claude-fable-5-2` with `--effort xhigh` when complex |"),
     ),
-    "docs/ko/AGENTS.ko.md": (
+    "docs/ko/docs/dev-rules/delegation.ko.md": (
         ("`role_runner.py reviewer --model claude-fable-5-2 --effort high` |",
          "`role_runner.py reviewer --model claude-opus-5-5`, 복잡하면 `--effort xhigh`와 함께 `claude-fable-5-2` |"),
     ),

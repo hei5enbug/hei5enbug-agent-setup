@@ -30,15 +30,15 @@ SITES = {
         ("docs/ko/instructions/independent-model-validation.ko.md", r"^조율 세션이 범위와 위험에 따라"),
         ("docs/instructions-and-delegation.md", r"a GPT-authored result goes to"),
         ("docs/ko/docs/instructions-and-delegation.ko.md", r"GPT가 작성한 결과는"),
-        ("AGENTS.md", r"^\s*\| GPT-authored"),
-        ("docs/ko/AGENTS.ko.md", r"^\s*\| GPT 작성"),
+        ("docs/dev-rules/delegation.md", r"^\s*\| GPT-authored"),
+        ("docs/ko/docs/dev-rules/delegation.ko.md", r"^\s*\| GPT 작성"),
     ),
 }
 EFFORT_LINES = {
     "opponent": SITES["opponent"],
     "reviewer": (
         ("instructions/independent-model-validation.md", r"^\| GPT \|"),
-        ("AGENTS.md", r"^\s*\| GPT-authored"),
+        ("docs/dev-rules/delegation.md", r"^\s*\| GPT-authored"),
     ),
 }
 

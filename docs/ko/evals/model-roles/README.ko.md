@@ -4,7 +4,7 @@
 > 이 문서는 사람을 위한 비권위 한국어 번역본이다. 에이전트 실행 시 읽거나 사용하지 않는다.
 
 이 평가는 세 역할이 고정하는 Claude 모델과 사고 강도를 정한다. 세 역할은 tiki-taka의 Claude 상대, 독립 모델 검증 규칙에서 GPT가
-작성한 작업을 검토하는 더 강한 Claude 검토자, `AGENTS.md` 최종 검토 표에서 복잡한 GPT 작성 변경의 행이다. 후보 네 개가 시드한 사례
+작성한 작업을 검토하는 더 강한 Claude 검토자, `docs/dev-rules/delegation.md` 최종 검토 표에서 복잡한 GPT 작성 변경의 행이다. 후보 네 개가 시드한 사례
 다섯 개를 한 번씩 실행한다. 후보는 `claude-opus-5-5`와 `claude-fable-5-2`이며 각각 `high`와 `xhigh`로 돌린다. 모델 호출 비용이 드는
 단계는 후보 실행을 시작하는 것뿐이다. 시드, 채점, 증거 읽기, 기록, 핀 검사는 비용이 들지 않으며 `tests/test_model_roles_cases.py`와
 `tests/test_model_roles_record.py`가 이를 시험한다.
@@ -99,7 +99,7 @@ bash $WORK/plugin-opus/skills/tiki-taka/run-opponent.sh --opponent claude --stat
 
 ## 결정
 
-`AGENTS.md`의 소유자 효율 규칙이 역할마다, 그 역할의 사례만 놓고 결정한다(reviewer는 T89부터 T91, opponent는 T92와 T93).
+`docs/dev-rules/evaluation.md`의 소유자 효율 규칙이 역할마다, 그 역할의 사례만 놓고 결정한다(reviewer는 T89부터 T91, opponent는 T92와 T93).
 
 1. 자격이 있는 후보는 역할의 모든 사례를 통과한 후보다. 하나도 없으면 그 역할은 승자가 없고(`none`) 기준 핀을 유지한다.
 2. 어느 사례에서든 그 사례에서 자격 있는 후보 중 가장 빠른 후보보다 1.5배를 넘고 60초를 넘게 느린 후보는 탈락한다. 1.5배를 넘어도
@@ -113,7 +113,7 @@ bash $WORK/plugin-opus/skills/tiki-taka/run-opponent.sh --opponent claude --stat
 `python3 evals/model-roles/mr_cli.py check`는 기록을 검증하고 저장소를 기록과 비교하며, `tests/test_model_roles_record.py`도 같은 비교를 한다.
 
 - 기록이 대기 중이거나 역할이 `tie`나 `none`이면 모든 핀 위치가 기준을 유지한다. 기준은 `config/model-registry.json`과 tiki-taka 스킬에서 Claude 상대가
-  `claude-fable-5-2`와 `xhigh`이고, 독립 모델 검증 규칙, 위임 문서, `AGENTS.md` 최종 검토 표, 그 한국어 미러에서 Claude 검토자 행이
+  `claude-fable-5-2`와 `xhigh`이고, 독립 모델 검증 규칙, 위임 문서, `docs/dev-rules/delegation.md` 최종 검토 표, 그 한국어 미러에서 Claude 검토자 행이
   `claude-opus-5-5`와 `claude-fable-5-2`를 적는 것이다. 기록이 생기기 전에는 핀이 바뀌지 않는다.
 - 역할에 승자가 있으면 그 역할의 각 위치가 승자의 모델만 적고 비교의 다른 Claude 모델은 적지 않으며, 레지스트리가 승자의 모델과 사고 강도를
   담고, 검토 표 행이 승자의 사고 강도만 적는다. 모든 위치가 맞을 때까지 테스트가 실패하고, 줄을 더 찾지 못하는 앵커는 고칠 파일을 알려 준다.
