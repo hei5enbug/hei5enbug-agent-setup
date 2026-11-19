@@ -901,6 +901,16 @@ class CommandLineTest(unittest.TestCase):
         env = config["mcpServers"]["eval_approver"]["env"]
         self.assertEqual(env["EVAL_RUN_CWD"], "/tmp/work/run-1/repo")
 
+    def test_승인_MCP_설정은_읽기_루트를_실행_폴더가_있을_때만_환경으로_넘긴다(self):
+        """읽기 루트는 os.pathsep로 이어 EVAL_READ_ROOTS에 넣고, 실행 폴더가 없으면 넣지 않는다."""
+        # given / when
+        with_folder = command.mcp_config(Path("/tmp/run/approvals.jsonl"), Path("/tmp/work/run-1"), None, ("/tmp/p", "/tmp/q"))
+        without_folder = command.mcp_config(Path("/tmp/run/approvals.jsonl"), None, None, ("/tmp/p",))
+
+        # then
+        self.assertEqual(with_folder["mcpServers"]["eval_approver"]["env"]["EVAL_READ_ROOTS"], os.pathsep.join(["/tmp/p", "/tmp/q"]))
+        self.assertNotIn("EVAL_READ_ROOTS", without_folder["mcpServers"]["eval_approver"]["env"])
+
     def test_자식_환경에서_ORCA_변수만_빠지고_이름이_기록된다(self):
         """ORCA_로 시작하는 변수는 제거되고 제거된 이름 목록이 돌아온다."""
         # given
@@ -998,6 +1008,58 @@ class ApprovalDecisionTest(unittest.TestCase):
 
         # then
         self.assertEqual([item["behavior"] for item in results], ["deny", "deny"])
+
+    def decide_with_roots(self, tool_name: str, tool_input: dict[str, Any]) -> dict[str, Any]:
+        return approval_mcp.decision({"tool_name": tool_name, "input": tool_input}, str(self.folder), None, (str(self.base / "plugin"),))
+
+    def test_읽기_도구는_읽기_루트_안의_경로를_허용한다(self):
+        """내보낸 플러그인 폴더 같은 읽기 루트 안의 Read는 실행 폴더 밖이어도 allow다."""
+        # given
+        (self.base / "plugin").mkdir()
+        tool_input = {"file_path": str(self.base / "plugin" / "instructions" / "x.md")}
+
+        # when
+        result = self.decide_with_roots("Read", tool_input)
+
+        # then
+        self.assertEqual(result, {"behavior": "allow", "updatedInput": tool_input})
+
+    def test_파일_도구는_읽기_루트_안이어도_거부한다(self):
+        """Write와 Edit는 읽기 루트가 아니라 실행 폴더 안에서만 허용한다."""
+        # given
+        (self.base / "plugin").mkdir()
+        tool_input = {"file_path": str(self.base / "plugin" / "x.md")}
+
+        # when
+        results = (self.decide_with_roots("Write", tool_input), self.decide_with_roots("Edit", tool_input))
+
+        # then
+        self.assertEqual([item["behavior"] for item in results], ["deny", "deny"])
+
+    def test_읽기_루트를_상위_경로로_벗어난_읽기는_거부한다(self):
+        """읽기 루트 안에서 시작해도 ..로 밖에 닿으면 deny다."""
+        # given
+        (self.base / "plugin").mkdir()
+        tool_input = {"file_path": str(self.base / "plugin" / ".." / "outside" / "s.txt")}
+
+        # when
+        result = self.decide_with_roots("Read", tool_input)
+
+        # then
+        self.assertEqual(result["behavior"], "deny")
+
+    def test_읽기_루트_안_심볼릭_링크가_밖을_가리키면_읽기를_거부한다(self):
+        """realpath로 풀어 보므로 링크를 통한 읽기 탈출도 deny다."""
+        # given
+        (self.base / "plugin").mkdir()
+        link = self.base / "plugin" / "link"
+        link.symlink_to(self.base / "outside", target_is_directory=True)
+
+        # when
+        result = self.decide_with_roots("Read", {"file_path": str(link / "s.txt")})
+
+        # then
+        self.assertEqual(result["behavior"], "deny")
 
     def test_Bash_요청은_경로와_상관없이_허용한다(self):
         """명령에 폴더 밖 경로가 있어도 Bash는 allow다."""
@@ -1497,6 +1559,18 @@ class ProcessAndRunTest(unittest.TestCase):
         self.assertEqual(env["EVAL_RUN_FOLDER"], str(self.spec.work_dir))
         self.assertEqual(env["EVAL_RUN_CWD"], str(self.spec.repo))
         self.assertEqual(self.spec.repo.parent, self.spec.work_dir)
+
+    def test_실행_파일을_쓸_때_승인_서버의_읽기_루트에_플러그인_폴더를_넣는다(self):
+        """mcp.json의 EVAL_READ_ROOTS는 변형이 불러오는 내보낸 플러그인 경로다."""
+        # given
+        prompt = command.read_prompt(self.cfg.tasks_root, self.task)
+
+        # when
+        runner.write_run_files(self.spec, self.task, self.variant, prompt, self.cfg, self.plugin)
+
+        # then
+        config = json.loads((self.spec.result_dir / "mcp.json").read_text(encoding="utf-8"))
+        self.assertEqual(config["mcpServers"]["eval_approver"]["env"]["EVAL_READ_ROOTS"], self.plugin["path"])
 
     def failing_grader(self, task, repo, base, view, tasks_root, work, interrupt=None):
         raise RuntimeError("boom")

@@ -79,7 +79,7 @@ The user answers permission prompts in real use. The harness stands in for the u
 request (`Write`, `Edit`, `MultiEdit`, `NotebookEdit`, or any request with a `file_path` or `notebook_path`) whose
 path resolves outside the run's work folder, `work/<run id>/`, after `..` and symlinks are resolved. The denial
 message names the path and the folder. A relative path starts in the agent's working directory,
-`work/<run id>/repo/`. Every other request is allowed. The server logs each request, allowed or
+`work/<run id>/repo/`. A request that is not a file tool, such as `Read`, may also lie inside the exported plugin folder the run loads, so the run can read its own conditional instruction files; no write outside the run folder is allowed. Every other request is allowed. The server logs each request, allowed or
 denied, with its decision to `approvals.jsonl`. The number of lines is the approval-prompt count, a friction
 metric, so a denied request still counts. An `mcp.json` without `EVAL_RUN_FOLDER` keeps the older allow-all
 behavior. A plugin hook that returns `ask` reaches this tool; the pilot confirmed this with a forced `git clean -f`.

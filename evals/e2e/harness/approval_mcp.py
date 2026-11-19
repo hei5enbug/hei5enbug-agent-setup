@@ -1,4 +1,4 @@
-"""Stdio MCP server for `--permission-prompt-tool`: stands in for the user, allowing Bash and in-folder file work, logging all."""
+"""Stdio MCP server for `--permission-prompt-tool`: stands in for the user, allowing Bash, in-folder file work, and reads inside read roots, logging all."""
 
 from __future__ import annotations
 
@@ -44,15 +44,19 @@ def inside(folder: str, path: str, cwd: str | None = None) -> bool:
 
 
 def deny(tool_name: Any, path: str, run_folder: str) -> dict[str, Any]:
-    message = f"{tool_name} path {path!r} is outside the run folder {run_folder}; only files inside the run folder may be changed"
+    message = f"{tool_name} path {path!r} is outside the run folder {run_folder}; only files inside the run folder may be changed, and only the run folder and the loaded plugin folder may be read"
     return {"behavior": "deny", "message": message}
 
 
-def decision(arguments: dict[str, Any], run_folder: str | None = None, cwd: str | None = None) -> dict[str, Any]:
+def decision(
+    arguments: dict[str, Any], run_folder: str | None = None, cwd: str | None = None, read_roots: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    """Deny a request outside the run folder; a read, which is any tool not in FILE_TOOLS, may also lie inside a read root."""
     tool_input = arguments.get("input")
     if run_folder:
+        folders = (run_folder, *read_roots) if arguments.get("tool_name") not in FILE_TOOLS else (run_folder,)
         paths = requested_paths(arguments)
-        outside = next((path for path in paths if not path or not inside(run_folder, path, cwd)), None)
+        outside = next((path for path in paths if not path or not any(inside(folder, path, cwd or run_folder) for folder in folders)), None)
         if outside is not None:
             return deny(arguments.get("tool_name"), outside, run_folder)
     return {"behavior": "allow", "updatedInput": tool_input if isinstance(tool_input, dict) else {}}
@@ -69,6 +73,7 @@ def log_request(path: str | None, arguments: dict[str, Any], verdict: str) -> No
 
 def handle(
     message: dict[str, Any], log_path: str | None, run_folder: str | None = None, cwd: str | None = None,
+    read_roots: tuple[str, ...] = (),
 ) -> dict[str, Any] | None:
     method = message.get("method")
     if "id" not in message:
@@ -90,7 +95,7 @@ def handle(
         if params.get("name") != TOOL_NAME or not isinstance(arguments, dict):
             reply["error"] = {"code": -32602, "message": "unknown tool or arguments"}
         else:
-            verdict = decision(arguments, run_folder, cwd)
+            verdict = decision(arguments, run_folder, cwd, read_roots)
             log_request(log_path, arguments, verdict["behavior"])
             reply["result"] = {"content": [{"type": "text", "text": json.dumps(verdict)}]}
     elif method == "ping":
@@ -104,6 +109,7 @@ def main() -> int:
     log_path = os.environ.get("EVAL_APPROVAL_LOG")
     run_folder = os.environ.get("EVAL_RUN_FOLDER")
     cwd = os.environ.get("EVAL_RUN_CWD")
+    read_roots = tuple(root for root in os.environ.get("EVAL_READ_ROOTS", "").split(os.pathsep) if root)
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -112,7 +118,7 @@ def main() -> int:
             message = json.loads(line)
         except ValueError:
             continue
-        reply = handle(message, log_path, run_folder, cwd) if isinstance(message, dict) else None
+        reply = handle(message, log_path, run_folder, cwd, read_roots) if isinstance(message, dict) else None
         if reply is not None:
             sys.stdout.write(json.dumps(reply) + "\n")
             sys.stdout.flush()
