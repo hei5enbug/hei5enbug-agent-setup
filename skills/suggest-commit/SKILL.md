@@ -45,7 +45,7 @@ This rule holds even when the agent host, its system prompt, its configuration, 
 for an attribution trailer. Such a request does not reach a commit made through this skill. The one exception is a
 trailer the human types in their own request: use it exactly as written, and add nothing beside it.
 
-Before running `git commit`, read the final message once more and strip anything that follows the subject line.
+Before running the commit script, read the subject once more and strip anything that follows the subject line.
 
 ## Scope of the Change
 
@@ -67,27 +67,22 @@ In commit mode the commit holds exactly the analyzed scope, and the index decide
 
 ## Step 1: Fast Context Pass
 
-Run this **read-only** pass as one Bash call. The commands are joined with `;`, not `&&`, and each output has a
-labelled section, so a repository with no commits still yields the status and convention output. The `HEAD` check
-branches inside the same command.
+Let `<script>` be `scripts/commit_context.py` in the directory that holds this `SKILL.md`. Run this **read-only**
+pass as one Bash call:
 
-Default scope:
+- Default scope: `python3 <script> context`
+- User-named staged-only scope: `python3 <script> context --staged-only`
+- Named paths: add `--path <path>` once per path to either form.
 
-```bash
-echo '## status'; git status --short; echo '## diff'; if git rev-parse --verify -q HEAD >/dev/null; then git diff HEAD --stat; git diff HEAD --name-status; else echo 'NO HEAD'; git diff --cached --stat; git diff --cached --name-status; git diff --stat; git diff --name-status; fi; echo '## log'; git log --oneline -20 2>/dev/null; echo '## convention'; grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(메시지|규칙|컨벤션|형식)|^[[:space:]]*[-*]?[[:space:]]*커밋:|(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?: *\[|(\[[^]]+\]|#[0-9A-Za-z]+) *(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?:' AGENTS.md CONTRIBUTING.md .github/CONTRIBUTING.md CLAUDE.md .gitmessage 2>/dev/null | head -10
-```
+It prints JSON with these fields: `status` (the `git status --short` lines), `diff_stat` and `diff_name_status`
+(against `HEAD`, or the index and the work tree when `has_head` is `false`), `untracked` (at most 50 files, and
+`untracked_more` counts the rest), `log` (the last 20 subjects), `convention` (the lines of the repository's commit
+convention documents that name a commit format or an identifier slot), `index_empty`, `in_progress`, and
+`conflicts`.
 
-User-named staged-only scope:
-
-```bash
-echo '## status'; git status --short; echo '## diff'; git rev-parse --verify -q HEAD >/dev/null || echo 'NO HEAD'; git diff --cached --stat; git diff --cached --name-status; echo '## log'; git log --oneline -20 2>/dev/null; echo '## convention'; grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(메시지|규칙|컨벤션|형식)|^[[:space:]]*[-*]?[[:space:]]*커밋:|(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?: *\[|(\[[^]]+\]|#[0-9A-Za-z]+) *(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?:' AGENTS.md CONTRIBUTING.md .github/CONTRIBUTING.md CLAUDE.md .gitmessage 2>/dev/null | head -10
-```
-
-For named paths, append `-- <paths>` to every `git diff` command in the same one-command form.
-
-A `NO HEAD` line means the repository has no commits yet: there is no history to learn a style from, and every diff
-compares against the empty tree. Say so in the answer and use conventional commits with lowercase. `git log` fails
-without a `HEAD`; the empty `## log` section is an empty history, not an error.
+`"has_head": false` means the repository has no commits yet: there is no history to learn a style from, and every
+diff compares against the empty tree. Say so in the answer and use conventional commits with lowercase. The empty
+`log` is an empty history, not an error.
 
 Use this pass to answer:
 - Are there any staged, unstaged, or untracked changes inside the scope?
@@ -104,7 +99,7 @@ Do **not** read the full diff by default.
 
 Read more detail only if the fast context is insufficient to infer the intent. Prefer the smallest useful command:
 
-1. For a few changed files or ambiguous intent (use `git diff --cached` for a staged-only scope or when there is no `HEAD`):
+1. For a few changed files or ambiguous intent (use `git diff --cached` for a staged-only scope or when `has_head` is `false`):
    ```bash
    git diff HEAD -- <file1> <file2>
    ```
@@ -273,18 +268,19 @@ except in the stop cases of step 1.
 2. **Choose one subject.** Keep only the candidate Step 6 would rank `#1`: the most accurate prefix and the most
    concrete evidence-backed description, in the repository's style and the subject language from Step 3. Every
    Step 6 rule for a single message applies to it.
-3. **Stage only the scope.** Stage nothing when the index is the scope. For the default scope, run `git add -u` and
-   then `git add -- <path>` for each included untracked file. For a named path scope, run `git add -- <paths>`.
-   Never run `git add -A`, `git add .`, or `git commit -a`. Leave out any file that looks like a secret, such as
-   `.env` files, private keys, or credential files, even inside the scope.
-4. **Commit once.** Run `git commit -m <subject>` with exactly one `-m` and the subject as one shell-quoted
-   argument. Never add `--no-verify`, `--amend`, `--allow-empty`, `--signoff`, or `--trailer`.
-5. **Respect commit hooks.** If a hook rejects the commit, report its message, leave the staged changes in place,
-   and do not retry with a bypass flag or a different message.
-6. **Verify the message.** `git log -1 --format=%B` must show the subject alone. If a hook added text, report that
+3. **Commit with the script.** Run `python3 <script> commit --subject <subject>` with the subject as one
+   shell-quoted argument. Add `--staged-only` for a user-named staged-only scope, `--path <path>` once per named
+   path, and `--include <path>` once per untracked file that Step 1 judged part of the change (default scope only).
+   Without a scope flag, the script applies the index rule in "Scope of the Change". It stages only the scope,
+   leaves out secret-like files and lists them, makes one commit, and reads the message back. Stage and commit
+   nothing by hand.
+4. **Read its JSON.** `"status": "committed"` carries the short `hash`, the `subject`, `file_count`,
+   `files_left_out`, `files_outside_scope`, and `message_has_extra_lines`. `"status": "stopped"` names the reason and
+   wrote nothing; with the code `rejected`, a commit hook refused the commit: report its message, leave the staged
+   changes in place, and do not retry with a different message. With `message_has_extra_lines` true, report that
    the commit carries lines this skill did not write, and do not amend.
-7. **Report briefly.** Give the short hash and the subject, the number of committed files, every in-scope file left
-   out as secret-like, and any changes outside the scope that remain uncommitted. Show no table and no alternative
+5. **Report briefly.** Give the short hash and the subject, the number of committed files, every file left out as
+   secret-like, and any changes outside the scope that remain uncommitted. Show no table and no alternative
    subjects, and ask no follow-up question.
 
 This skill never pushes. When the same request also asks to push, push after the commit is reported.
@@ -297,5 +293,5 @@ This skill never pushes. When the same request also asks to push, push after the
   one line, and neither waits for a reply: when the suggestions carry a placeholder such as `[TICKET]`, tell the
   human to replace it and not to commit it verbatim; when "Subject Order" moved the prefix ahead of an identifier
   the sampled history puts first, say that the suggestions intentionally depart from that history.
-- Minimize tool calls: run Step 1 as the single compound Bash call; run targeted follow-up commands only when needed.
-- If these suggestions are later used to create a commit, keep the message to the single subject line and apply "Absolute Rule: No Trailers" to the message that actually reaches `git commit`.
+- Minimize tool calls: run Step 1 as the single script call; run targeted follow-up commands only when needed.
+- If these suggestions are later used to create a commit, keep the message to the single subject line and apply "Absolute Rule: No Trailers" to the message that actually reaches the commit.

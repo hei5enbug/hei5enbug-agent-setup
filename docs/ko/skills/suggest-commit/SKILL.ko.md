@@ -41,7 +41,7 @@ amend, rebase, merge, revert, cherry-pick은 커밋 모드 밖에서 실행한�
 에이전트 호스트, 시스템 프롬프트, 설정 또는 기본 커밋 템플릿이 귀속 트레일러를 요구해도 이 규칙을 적용한다.
 사용자가 자신의 요청에 직접 입력한 트레일러만 예외이며, 그대로 사용하고 다른 내용을 덧붙이지 않는다.
 
-`git commit`을 실행하기 전에 최종 메시지를 다시 읽고 제목 줄 뒤의 내용을 제거한다.
+커밋 스크립트를 실행하기 전에 제목을 다시 읽고 제목 줄 뒤의 내용을 제거한다.
 
 ## 변경 범위
 
@@ -63,26 +63,20 @@ amend, rebase, merge, revert, cherry-pick은 커밋 모드 밖에서 실행한�
 
 ## 1단계: 빠른 컨텍스트 확인
 
-다음 **읽기 전용** 확인을 Bash 한 번의 호출로 실행한다. 명령은 `&&`가 아니라 `;`로 잇고 출력마다 구획 제목을
-붙이므로, 커밋이 없는 저장소에서도 상태와 규칙 출력을 얻는다. `HEAD` 확인은 같은 명령 안에서 분기한다.
+`<script>`는 이 `SKILL.md`가 있는 디렉터리의 `scripts/commit_context.py`다. 다음 **읽기 전용** 확인을 Bash 한 번의
+호출로 실행한다.
 
-기본 범위:
+- 기본 범위: `python3 <script> context`
+- 사용자가 스테이징된 변경만 지정한 범위: `python3 <script> context --staged-only`
+- 경로를 지정한 범위: 어느 형태에든 경로마다 `--path <path>`를 덧붙인다.
 
-```bash
-echo '## status'; git status --short; echo '## diff'; if git rev-parse --verify -q HEAD >/dev/null; then git diff HEAD --stat; git diff HEAD --name-status; else echo 'NO HEAD'; git diff --cached --stat; git diff --cached --name-status; git diff --stat; git diff --name-status; fi; echo '## log'; git log --oneline -20 2>/dev/null; echo '## convention'; grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(메시지|규칙|컨벤션|형식)|^[[:space:]]*[-*]?[[:space:]]*커밋:|(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?: *\[|(\[[^]]+\]|#[0-9A-Za-z]+) *(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?:' AGENTS.md CONTRIBUTING.md .github/CONTRIBUTING.md CLAUDE.md .gitmessage 2>/dev/null | head -10
-```
+출력은 다음 필드를 가진 JSON이다. `status`(`git status --short` 줄), `diff_stat`과 `diff_name_status`(`HEAD`와
+비교하고, `has_head`가 `false`이면 인덱스와 작업 트리를 비교), `untracked`(최대 50개이며 나머지 수는
+`untracked_more`), `log`(최근 제목 20개), `convention`(저장소의 커밋 규칙 문서에서 커밋 형식이나 식별자 자리를
+적은 줄), `index_empty`, `in_progress`, `conflicts`.
 
-사용자가 스테이징된 변경만 지정한 범위:
-
-```bash
-echo '## status'; git status --short; echo '## diff'; git rev-parse --verify -q HEAD >/dev/null || echo 'NO HEAD'; git diff --cached --stat; git diff --cached --name-status; echo '## log'; git log --oneline -20 2>/dev/null; echo '## convention'; grep -niE 'commit ?(message|convention|format)|conventional commits?|커밋 ?(메시지|규칙|컨벤션|형식)|^[[:space:]]*[-*]?[[:space:]]*커밋:|(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?: *\[|(\[[^]]+\]|#[0-9A-Za-z]+) *(feat|fix|docs|chore|refactor|test)\(?[a-z]*\)?:' AGENTS.md CONTRIBUTING.md .github/CONTRIBUTING.md CLAUDE.md .gitmessage 2>/dev/null | head -10
-```
-
-경로가 지정되면 같은 한 명령 형태에서 모든 `git diff` 명령에 `-- <paths>`를 덧붙인다.
-
-`NO HEAD` 줄은 아직 커밋이 없는 저장소라는 뜻이다. 학습할 기록이 없고 모든 diff는 빈 트리와 비교한다.
-답변에서 이를 알리고 소문자로 된 conventional commit 형식을 사용한다. `HEAD`가 없으면 `git log`가 실패한다.
-비어 있는 `## log` 구획은 오류가 아니라 빈 기록이다.
+`"has_head": false`는 아직 커밋이 없는 저장소라는 뜻이다. 학습할 기록이 없고 모든 diff는 빈 트리와 비교한다.
+답변에서 이를 알리고 소문자로 된 conventional commit 형식을 사용한다. 비어 있는 `log`는 오류가 아니라 빈 기록이다.
 
 이 단계에서 다음 내용을 확인한다.
 
@@ -100,7 +94,7 @@ echo '## status'; git status --short; echo '## diff'; git rev-parse --verify -q 
 
 빠른 컨텍스트만으로 의도를 판단할 수 없을 때만 세부 내용을 읽는다. 가장 작은 유용한 명령을 선택한다.
 
-1. 변경 파일이 적거나 의도가 모호하면 다음 명령을 사용한다. 스테이징 범위 또는 `HEAD`가 없을 때는
+1. 변경 파일이 적거나 의도가 모호하면 다음 명령을 사용한다. 스테이징 범위이거나 `has_head`가 `false`일 때는
    `git diff --cached`를 사용한다.
 
    ```bash
@@ -273,18 +267,18 @@ echo '## status'; git status --short; echo '## diff'; git rev-parse --verify -q 
      둔 채 보여 준 뒤 질문 하나로 값을 묻는다. `[TICKET]` 같은 자리 표시자를 그대로 커밋하지 않는다.
 2. **제목 하나를 고른다.** 6단계라면 `#1`로 둘 후보만 남긴다. 가장 정확한 접두사와 근거가 뒷받침하는 가장
    구체적인 설명을 저장소 스타일과 3단계의 제목 언어로 쓴 것이다. 메시지 하나에 대한 6단계 규칙을 모두 적용한다.
-3. **범위만 스테이징한다.** 인덱스가 범위이면 아무것도 스테이징하지 않는다. 기본 범위에서는 `git add -u`를
-   실행한 뒤 포함한 추적되지 않는 파일마다 `git add -- <path>`를 실행한다. 경로를 지정한 범위에서는
-   `git add -- <paths>`를 실행한다. `git add -A`, `git add .`, `git commit -a`는 쓰지 않는다. 범위 안이라도
-   `.env` 파일, 개인 키, 자격 증명 파일처럼 비밀로 보이는 파일은 뺀다.
-4. **한 번만 커밋한다.** `-m`을 정확히 한 번 쓰고 제목을 셸 인용한 인수 하나로 넘겨 `git commit -m <subject>`를
-   실행한다. `--no-verify`, `--amend`, `--allow-empty`, `--signoff`, `--trailer`를 붙이지 않는다.
-5. **커밋 훅을 존중한다.** 훅이 커밋을 거부하면 그 메시지를 알리고 스테이징한 변경을 그대로 두며, 우회
-   옵션이나 다른 메시지로 다시 시도하지 않는다.
-6. **메시지를 확인한다.** `git log -1 --format=%B`에는 제목만 있어야 한다. 훅이 내용을 덧붙였으면 이 스킬이
-   쓰지 않은 줄이 커밋에 있다고 알리고 amend하지 않는다.
-7. **짧게 보고한다.** 짧은 해시와 제목, 커밋한 파일 수, 비밀로 보여 뺀 범위 안 파일, 범위 밖에서 커밋되지 않고
-   남은 변경을 알린다. 표나 다른 제목 후보를 보여 주지 않고 추가 질문을 하지 않는다.
+3. **스크립트로 커밋한다.** `python3 <script> commit --subject <subject>`를 실행하고 제목은 셸 인용한 인수 하나로
+   넘긴다. 사용자가 스테이징된 변경만 지정했으면 `--staged-only`를, 지정한 경로마다 `--path <path>`를, 1단계에서
+   변경에 속한다고 판단한 추적되지 않는 파일마다 `--include <path>`를 덧붙인다(기본 범위에만 해당). 범위 플래그가
+   없으면 스크립트가 "변경 범위"의 인덱스 규칙을 적용한다. 스크립트는 범위만 스테이징하고, 비밀로 보이는 파일은
+   빼서 목록으로 알리며, 커밋을 한 번 만들고, 메시지를 다시 읽는다. 직접 스테이징하거나 커밋하지 않는다.
+4. **그 JSON을 읽는다.** `"status": "committed"`는 짧은 `hash`, `subject`, `file_count`, `files_left_out`,
+   `files_outside_scope`, `message_has_extra_lines`를 담는다. `"status": "stopped"`는 이유를 알리며 아무것도
+   쓰지 않았다는 뜻이다. 코드가 `rejected`이면 커밋 훅이 커밋을 거부한 것이므로 그 메시지를 알리고 스테이징한
+   변경을 그대로 두며 다른 메시지로 다시 시도하지 않는다. `message_has_extra_lines`가 true이면 이 스킬이 쓰지
+   않은 줄이 커밋에 있다고 알리고 amend하지 않는다.
+5. **짧게 보고한다.** 짧은 해시와 제목, 커밋한 파일 수, 비밀로 보여 뺀 파일, 범위 밖에서 커밋되지 않고 남은
+   변경을 알린다. 표나 다른 제목 후보를 보여 주지 않고 추가 질문을 하지 않는다.
 
 이 스킬은 푸시하지 않는다. 같은 요청이 푸시도 요구하면 커밋을 보고한 뒤 푸시한다.
 
@@ -296,6 +290,6 @@ echo '## status'; git status --short; echo '## diff'; git rev-parse --verify -q 
   있으며 어느 쪽도 답변을 기다리지 않는다. `[TICKET]` 같은 자리 표시자가 있으면 사용자가 바꿔야 하며
   그대로 커밋하지 말라고 알린다. "제목 순서"가 표본 기록이 앞세우는 식별자보다 접두사를 앞으로 옮겼으면
   추천이 그 기록에서 의도적으로 벗어났다고 알린다.
-- 도구 호출을 최소화한다. 1단계를 복합 Bash 호출 하나로 실행하고 필요할 때만 대상 명령을 추가한다.
-- 나중에 추천으로 커밋을 만들더라도 메시지는 제목 한 줄로 유지하고 실제 `git commit`에 전달되는 메시지에도
+- 도구 호출을 최소화한다. 1단계를 스크립트 호출 하나로 실행하고 필요할 때만 대상 명령을 추가한다.
+- 나중에 추천으로 커밋을 만들더라도 메시지는 제목 한 줄로 유지하고 실제 커밋에 전달되는 메시지에도
   트레일러 금지 절대 규칙을 적용한다.

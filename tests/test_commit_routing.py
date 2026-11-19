@@ -67,8 +67,8 @@ class CommitRoutingTest(unittest.TestCase):
         self.assertIn("single most appropriate subject", description)
         self.assertLessEqual(len(description), 1024)
 
-    def test_커밋_모드는_범위만_한_번_커밋하고_우회하지_않는다(self):
-        """커밋 모드는 범위만 스테이징해 한 번 커밋하고 훅 우회, amend, 푸시를 하지 않는다."""
+    def test_커밋_모드는_스크립트로_범위만_한_번_커밋하고_푸시하지_않는다(self):
+        """커밋 모드는 스테이징과 커밋을 스크립트에 맡기고, 훅이 거절하면 다시 시도하지 않으며, 푸시하지 않는다."""
         # Given
         text = SKILL.read_text(encoding="utf-8")
 
@@ -80,10 +80,10 @@ class CommitRoutingTest(unittest.TestCase):
         self.assertIn("With no named scope and a non-empty index, the staged changes are the scope", scope)
         for rule in (
             "Never commit a placeholder such as `[TICKET]`.",
-            "Never run `git add -A`, `git add .`, or `git commit -a`.",
-            "with exactly one `-m`",
-            "Never add `--no-verify`, `--amend`, `--allow-empty`, `--signoff`, or `--trailer`.",
-            "`git log -1 --format=%B` must show the subject alone.",
+            "python3 <script> commit --subject <subject>",
+            "Stage and commit nothing by hand.",
+            "do not retry with a different message",
+            "do not amend",
             "Show no table and no alternative subjects, and ask no follow-up question.",
             "This skill never pushes.",
         ):
