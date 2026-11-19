@@ -38,9 +38,21 @@
   can do or enforce the same thing, and measure it as a candidate when it can.
 - A change to a rule, skill, agent, hook, or route of this plugin is adopted or rejected only on a record under
   `evals/e2e/records/` that `evals/e2e/harness/cli.py record` wrote from a before and an after variant differing only
-  by that change, run on both Claude Code and Codex and judged by the comparison rule in `evals/e2e/README.md`. A
-  candidate with no record stays open as undecided: never close or drop it, and never call an existing rule
-  sufficient, on a judgment alone.
+  by that change, run on both Claude Code and Codex and judged by the comparison rule in `evals/e2e/README.md`, except
+  as the owner decisions of 2026-11-19 below allow. A candidate with no record stays open as undecided: never close or
+  drop it, and never call an existing rule sufficient, on a judgment alone.
+- Owner decisions, 2026-11-19, for measuring and adopting changes:
+  - Run the regression cases of several changes to one area once, on the bundle of those changes, and split them per
+    change only when the bundle fails. Run the cases that show each change's own effect per change.
+  - For text people read, scripts check the form requirements, and the owner decides expression quality by a blind
+    A/B comparison of the before and after texts. A case passes only when the owner judges the after text the same or
+    better.
+  - Adopt a change that alters no text a model reads, such as an instruction, a skill, or an agent definition, on
+    deterministic tests and one real run, without a record.
+  - While the owner excludes Codex and GPT models, adopt on a Claude Code record alone and list each Codex run it still
+    owes in the change report. Run each text review once on `claude-sonnet-5-5` or `claude-opus-5-5` through `--model`,
+    without changing the pinned review model, and skip it only where a skip rule the owner approved allows. Defer the
+    final review until a GPT reviewer is available.
 - Keep on an always-loaded surface, meaning a skill description, a `SKILL.md` body, or a session instruction file,
   only the rules that every run of that surface needs. Move a rule needed only under a condition to a reference
   file, and leave one entry line on the surface in the form "Before <action>, read <reference>." Reading that
@@ -65,7 +77,8 @@
   hold its rules, the skills and instructions that write it, and its writing task in `evals/e2e`. Before changing
   how a listed file writes such text, or `scripts/text_review.py`, run those tasks on the baseline and the changed
   revision, and accept the change only when no task whose `text-review-clean` check passes on the baseline fails on
-  the changed one and the number of passing tasks does not fall.
+  the changed one and the number of passing tasks does not fall. Under the owner decisions of 2026-11-19 above, the
+  owner's comparison takes the place of the `text-review-clean` check.
 - [Rule enforcement](docs/rule-enforcement.md) pairs each written rule with the check that enforces it. When a user
   correction repeats a written rule that no check enforces, raise it a level in the same change as that file
   describes and update its row. Remove a written rule once its check makes the mistake impossible.
