@@ -42,8 +42,8 @@
   - For text people read, scripts check the form requirements, and the owner decides expression quality by a blind
     A/B comparison of the before and after texts. A case passes only when the owner judges the after text the same
     or better.
-  - Adopt a change that alters no text a model reads (an instruction, a skill, or an agent definition) on
-    deterministic tests and one real run, without a record.
+  - Adopt a change to a rule, skill, agent, hook, or route that alters no text a model reads, such as a script a
+    skill bundles or a hook's code, on deterministic tests and one real run, without a record.
   - Only while the owner excludes Codex and GPT models: adopt on a Claude Code record alone and list each Codex run
     it still owes in the change report; run each text review once, on `claude-sonnet-5-5` or `claude-opus-5-5` chosen
     per run through the text review script's model option, without changing the pinned review model; skip a review
