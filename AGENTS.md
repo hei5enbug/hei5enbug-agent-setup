@@ -38,9 +38,9 @@
   can do or enforce the same thing, and measure it as a candidate when it can.
 - A change to a rule, skill, agent, hook, or route of this plugin is adopted or rejected only on a record under
   `evals/e2e/records/` that `evals/e2e/harness/cli.py record` wrote from a before and an after variant differing only
-  by that change, run on both Claude Code and Codex and judged by the comparison rule in `evals/e2e/README.md`, except
-  as the owner decisions of 2026-11-19 below allow. A candidate with no record stays open as undecided: never close or
-  drop it, and never call an existing rule sufficient, on a judgment alone.
+  by that change, run on both Claude Code and Codex and judged by the comparison rule in `evals/e2e/README.md`. A
+  candidate with no record stays open as undecided: never close or drop it, and never call an existing rule
+  sufficient, on a judgment alone. The owner decisions of 2026-11-19 below are the exceptions to this whole bullet.
 - Owner decisions, 2026-11-19, for measuring and adopting changes:
   - Run the regression cases of several changes to one area once, on the bundle of those changes, and split them per
     change only when the bundle fails. Run the cases that show each change's own effect per change.
@@ -49,10 +49,11 @@
     better.
   - Adopt a change that alters no text a model reads, such as an instruction, a skill, or an agent definition, on
     deterministic tests and one real run, without a record.
-  - While the owner excludes Codex and GPT models, adopt on a Claude Code record alone and list each Codex run it still
-    owes in the change report. Run each text review once on `claude-sonnet-5-5` or `claude-opus-5-5` through `--model`,
-    without changing the pinned review model, and skip it only where a skip rule the owner approved allows. Defer the
-    final review until a GPT reviewer is available.
+  - Only while the owner excludes Codex and GPT models: adopt on a Claude Code record alone and list each Codex run it
+    still owes in the change report; run each text review once, on `claude-sonnet-5-5` or `claude-opus-5-5` chosen per
+    run through the model option of the text review script, without changing the pinned review model; skip a review
+    only where a skip rule the owner approved allows, and skip none before the owner approves one; and defer the final
+    review until a GPT reviewer is available.
 - Keep on an always-loaded surface, meaning a skill description, a `SKILL.md` body, or a session instruction file,
   only the rules that every run of that surface needs. Move a rule needed only under a condition to a reference
   file, and leave one entry line on the surface in the form "Before <action>, read <reference>." Reading that
