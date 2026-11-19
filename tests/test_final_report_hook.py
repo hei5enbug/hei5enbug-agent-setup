@@ -58,6 +58,17 @@ def result(tool_id: str, content) -> str:
     return entry("user", {"role": "user", "content": [block]})
 
 
+VARIABLE_REVIEW = (
+    "S=/tmp/work/scripts/text_review.py; K=final-report; "
+    'python3 "$S" review --kind "$K" --draft /tmp/work/r.md'
+)
+
+
+def review_output(draft: str, kind: str = "final-report", stage: str | None = "review") -> str:
+    fields = {"stage": stage, "kind": kind, "model": "demo", "findings": [], "final_report_sha256": report_digest(draft)}
+    return json.dumps({key: value for key, value in fields.items() if value is not None}) + "\nexit=0"
+
+
 class FinalReportHookTest(unittest.TestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
@@ -436,6 +447,79 @@ class FinalReportHookTest(unittest.TestCase):
         self.assert_passes(self.run_hook(transcript_path="/tmp/work/missing.jsonl"))
         self.assert_passes(self.run_hook(transcript_path=None))
         self.write("{broken", prompt(), assistant(edit()))
+        self.assert_blocks(self.run_hook())
+
+    def test_셸_변수로_실행한_최종_보고_검토도_결과로_알아보고_통과한다(self):
+        # Given
+        self.reviewed_turn((VARIABLE_REVIEW, "r1", review_output(REPORT)))
+        # When / Then
+        self.assert_passes(self.run_hook())
+
+    def test_셸_변수로_실행한_검토의_해시가_보낸_보고와_다르면_막는다(self):
+        # Given
+        self.reviewed_turn((VARIABLE_REVIEW, "r1", review_output(REPORT + "Reviewed text.")))
+        # When
+        output = self.assert_blocks(self.run_hook())
+        # Then
+        self.assertIn("differs from the draft", output["reason"])
+
+    def test_다른_종류의_검토_결과만_있으면_막는다(self):
+        # Given
+        self.reviewed_turn((VARIABLE_REVIEW, "r1", review_output(REPORT, kind="commit-message")))
+        # When
+        output = self.assert_blocks(self.run_hook())
+        # Then
+        self.assertIn("no text review checked", output["reason"])
+
+    def test_검토_단계_표시가_없는_해시_결과만_있으면_막는다(self):
+        # Given
+        self.reviewed_turn((VARIABLE_REVIEW, "r1", review_output(REPORT, stage=None)))
+        # When
+        output = self.assert_blocks(self.run_hook())
+        # Then
+        self.assertIn("no text review checked", output["reason"])
+
+    def test_검토가_아닌_단계의_결과는_세지_않는다(self):
+        # Given
+        self.reviewed_turn((VARIABLE_REVIEW, "r1", review_output(REPORT, stage="check")))
+        # When / Then
+        self.assert_blocks(self.run_hook())
+
+    def test_검토_결과_앞뒤에_다른_출력이_있어도_읽는다(self):
+        # Given
+        noisy = "warming up {not json}\n" + review_output(REPORT) + "\ndone"
+        self.reviewed_turn((VARIABLE_REVIEW, "r1", noisy))
+        # When / Then
+        self.assert_passes(self.run_hook())
+        self.assert_blocks(self.run_hook(last_assistant_message=REPORT + "More."))
+
+    def test_텍스트_블록_목록_결과의_검토도_읽는다(self):
+        # Given
+        self.reviewed_turn((VARIABLE_REVIEW, "r1", [{"type": "text", "text": review_output(REPORT)}]))
+        # When / Then
+        self.assert_passes(self.run_hook())
+
+    def test_변수로_실행한_검토가_둘이면_나중_해시를_쓴다(self):
+        # Given
+        first, second = REPORT + "First.", REPORT + "Second."
+        self.reviewed_turn((VARIABLE_REVIEW, "r1", review_output(first)), (VARIABLE_REVIEW, "r2", review_output(second)))
+        # When / Then
+        self.assert_passes(self.run_hook(last_assistant_message=second))
+        self.assert_blocks(self.run_hook(last_assistant_message=first))
+
+    def test_이전_턴의_변수_검토_결과는_이번_턴에_쓰지_않는다(self):
+        # Given
+        self.write(
+            prompt("first"), assistant(bash(VARIABLE_REVIEW, "r1")), result("r1", review_output(REPORT)),
+            prompt("second"), assistant(edit()),
+        )
+        # When / Then
+        self.assert_blocks(self.run_hook())
+
+    def test_도구_사용_없이_글에_적힌_검토_결과는_세지_않는다(self):
+        # Given
+        self.write(prompt(), assistant(edit()), result("unknown", review_output(REPORT)))
+        # When / Then
         self.assert_blocks(self.run_hook())
 
 

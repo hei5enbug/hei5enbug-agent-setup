@@ -242,7 +242,10 @@ draft. It continues the turn only when all of these hold:
   also after `python3`, with `worker`, `implementation`, `designer`, `language`, `writer`, or `agent` as its first
   positional argument.
 - The turn ran no `text_review.py review --kind final-report` and no `text_review.py check --kind final-report`, also
-  after `python3`. A review of another kind, such as a document the turn wrote, does not count.
+  after `python3`, and no Bash result of the turn holds a review result with `"stage": "review"`, `"kind":
+  "final-report"`, and a `final_report_sha256` digest, so a review run through a shell variable still counts and
+  supplies its digest. A review of another kind, such as a document the turn wrote, and a digest without `"stage":
+  "review"` do not count.
 - `last_assistant_message` is a report: at least 400 characters after stripping, with a last non-empty line that does not
   end with `?` or `？`.
 

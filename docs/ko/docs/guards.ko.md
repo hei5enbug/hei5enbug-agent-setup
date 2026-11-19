@@ -231,8 +231,9 @@ Claude Code 전용 `Stop` 훅인 `scripts/final_report_hook.py`는 변경 뒤에
   (`python3` 뒤에 붙은 경우도 포함해) 실행하면서 첫 위치 인자가 `worker`, `implementation`, `designer`, `language`,
   `writer`, `agent`인 Bash 명령이 그렇습니다.
 - 그 턴이 `text_review.py review --kind final-report`와 `text_review.py check --kind final-report`를 하나도 실행하지
-  않았습니다. 그 턴이 쓴 문서처럼 다른 종류의 글을 검토한 것은 치지 않습니다.
-  `python3` 뒤에 붙은 실행도 셉니다.
+  않았고(`python3` 뒤에 붙은 실행도 셉니다), 그 턴의 Bash 결과 중 `"stage": "review"`, `"kind": "final-report"`,
+  `final_report_sha256` 해시를 가진 검토 결과가 하나도 없습니다. 그래서 셸 변수로 실행한 검토도 센 뒤 그 해시를 씁니다.
+  그 턴이 쓴 문서처럼 다른 종류의 글을 검토한 것과 `"stage": "review"`가 없는 해시는 치지 않습니다.
 - `last_assistant_message`가 보고입니다. 앞뒤 공백을 뺀 길이가 400자 이상이고, 비어 있지 않은 마지막 줄이 `?`나
   `？`로 끝나지 않습니다.
 

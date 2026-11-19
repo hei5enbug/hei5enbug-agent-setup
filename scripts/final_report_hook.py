@@ -1,7 +1,8 @@
 """Stop hook that makes the independent text review run before a final report that follows a change.
 
 It continues the turn once, as Stop hook feedback, when the main session ends a turn that changed files with a report
-that no `text_review.py` review checked, or that differs from the draft the last passing review checked. Any
+that no `text_review.py` review checked, or that differs from the draft the last passing review checked. A review
+counts when its command names the script and kind, or when a Bash result holds its final-report review result. Any
 unreadable input lets the stop pass.
 """
 
@@ -35,7 +36,8 @@ ASSISTANT_ENTRY = re.compile(rb'"type": ?"assistant"')
 USER_ENTRY = re.compile(rb'"type": ?"user"')
 TOOL_RESULT_BLOCK = re.compile(rb'"type": ?"tool_result"')
 DIGEST_KEY = "final_report_sha256"
-DIGEST_VALUE = re.compile(rf'"{DIGEST_KEY}":\s*"([0-9a-f]{{64}})"')
+DIGEST_HEX = re.compile(r"[0-9a-f]{64}")
+DIGEST_VALUE = re.compile(rf'"{DIGEST_KEY}":\s*"({DIGEST_HEX.pattern})"')
 WRITE_PREFILTER = re.compile(r">|\btee\b|\s-[A-Za-z]*i|--in-place")
 HEREDOC_START = re.compile(r"(?<!<)<<(?!<)-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
 OPERATOR_CHARS = frozenset(";&|<>")
@@ -65,6 +67,7 @@ class TurnFacts:
     changed_files: bool = False
     reviewed: bool = False
     review_ids: frozenset[str] = frozenset()
+    bash_ids: frozenset[str] = frozenset()
     digest: str | None = None
     told: frozenset[str] = frozenset()
 
@@ -319,9 +322,11 @@ def block_facts(block: dict, facts: TurnFacts) -> TurnFacts:
     if name == "Bash" and isinstance(command, str):
         runs = REVIEW_SCRIPT in command and runs_review(command)
         tool_id = block.get("id")
-        ids = facts.review_ids | {tool_id} if runs and isinstance(tool_id, str) else facts.review_ids
+        has_id = isinstance(tool_id, str)
+        ids = facts.review_ids | {tool_id} if runs and has_id else facts.review_ids
         return replace(
             facts,
+            bash_ids=facts.bash_ids | {tool_id} if has_id else facts.bash_ids,
             changed_files=facts.changed_files
             or ("commit" in command and runs_commit(command))
             or writes_file(command)
@@ -343,15 +348,43 @@ def result_text(content: object) -> str:
     )
 
 
+def review_result_digest(text: str) -> str | None:
+    """Return the digest of the last final-report review result printed in a Bash result, or None."""
+    decoder = json.JSONDecoder()
+    digest = None
+    index = text.find("{")
+    while index != -1:
+        try:
+            value, end = decoder.raw_decode(text, index)
+        except ValueError:
+            index = text.find("{", index + 1)
+            continue
+        if (
+            isinstance(value, dict)
+            and value.get("stage") == "review"
+            and value.get("kind") == FINAL_REPORT_KIND
+            and isinstance(value.get(DIGEST_KEY), str)
+            and DIGEST_HEX.fullmatch(value[DIGEST_KEY])
+        ):
+            digest = value[DIGEST_KEY]
+        index = text.find("{", end)
+    return digest
+
+
 def result_facts(content: object, facts: TurnFacts) -> TurnFacts:
     for block in content if isinstance(content, list) else []:
         if not isinstance(block, dict) or block.get("type") != "tool_result":
             continue
-        if block.get("tool_use_id") not in facts.review_ids:
-            continue
-        digests = DIGEST_VALUE.findall(result_text(block.get("content")))
-        if digests:
-            facts = replace(facts, digest=digests[-1])
+        tool_id = block.get("tool_use_id")
+        text = result_text(block.get("content"))
+        if tool_id in facts.review_ids:
+            digests = DIGEST_VALUE.findall(text)
+            if digests:
+                facts = replace(facts, digest=digests[-1])
+        elif tool_id in facts.bash_ids and DIGEST_KEY in text:
+            digest = review_result_digest(text)
+            if digest:
+                facts = replace(facts, reviewed=True, digest=digest)
     return facts
 
 
