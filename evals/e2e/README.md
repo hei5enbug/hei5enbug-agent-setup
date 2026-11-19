@@ -186,6 +186,10 @@ infrastructure reason, hit a usage limit, or was interrupted is started again, a
 move to `attempts/rep<k>/<n>/`. When a run reports a usage limit, the harness starts no new run, lets running ones
 finish, and exits with code 75.
 
+A Claude Code run that printed its final `result`, has no background task left, and writes no stream line for
+`result_idle_seconds` (default 60) is ended like a timeout but recorded as `complete` with `ended_after_result: true` and
+the time of that result as its `wall_seconds`; a later stream line restarts the wait, and Codex runs are not affected.
+
 An interrupt of the harness, such as Ctrl-C, starts no new run, stops each running agent and every process it started
 as the wall-clock limit does, records that run as `interrupted`, and exits with code 130. A Claude Code run whose
 stream ends with an aborted result is recorded as `interrupted` too: `claude -p` writes that result when it receives

@@ -137,6 +137,7 @@
 | 집행자 | 집행하는 규칙 | 규칙 위치 |
 |---|---|---|
 | `tests/test_e2e_eval_harness.py` | 엔드투엔드 실행은 시험할 플러그인 리비전을 불러오고, 권한이나 플러그인 훅을 절대 우회하지 않으며, 사용량 한도 뒤에 이어서 실행하고, 모든 변형의 토큰, 비용, 결과를 같은 방식으로 기록한다. | `evals/e2e/README.md` |
+| `tests/test_e2e_eval_result_idle.py` | 최종 결과를 출력했고 남은 백그라운드 작업이 없는 Claude Code 엔드투엔드 실행이 조용해지면 `result_idle_seconds` 뒤에 끝내고 그 결과가 나온 시각으로 완료 기록하며, 백그라운드 작업이 남았거나 결과 뒤에 새 턴이 시작됐거나 Codex 호스트인 실행은 경과 시간 제한으로만 끝낸다. | `evals/e2e/README.md` |
 | `tests/test_e2e_eval_plugin_isolation.py` | Claude Code 엔드투엔드 실행은 사용자 프로필의 모든 플러그인을 끄고, 플러그인을 불러오는 변수를 지우며, MCP 서버를 하네스 승인 서버로 한정하고, init 이벤트에 변형이 아닌 플러그인이 보이면 `infra_failed`로 기록하고 `pilot-check`로 실패시킨다. | `evals/e2e/README.md` |
 | `tests/test_e2e_eval_instruction_isolation.py` | Claude Code 엔드투엔드 실행은 사용자 설정 출처를 빼고, 어떤 변형도 되돌릴 수 없는 변수로 자동 메모리를 끄며, 둘과 남은 한계를 `env.json`에 기록하고, 명령줄, `env.json`, 기록, init 이벤트에 사용자 수준 메모리나 규칙 파일 또는 자동 메모리 경로가 보이면 `pilot-check`로 실패시키고, 시험 저장소 위 모든 폴더의 지침 파일을 제외하며 저장소와 내보낸 플러그인 밖의 지침 파일은 실패시킨다. | `evals/e2e/README.md` |
 | `tests/test_e2e_eval_graders.py` | 골든 작업마다 채점기는 수정하지 않은 픽스처를 실패시키고 기준 해답을 통과시키며, 채점하는 저장소를 바꾸지 않는다. | `evals/e2e/README.md` (Graders) |

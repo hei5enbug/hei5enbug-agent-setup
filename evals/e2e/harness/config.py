@@ -48,6 +48,7 @@ APPROVAL_GUARD_OFF_ENV = {"CLAUDE_PLUGIN_OPTION_APPROVAL_GUARD": "false", "HEI5E
 DEFAULT_PARALLEL = 3
 SIGINT_GRACE_SECONDS = 20.0
 SIGTERM_GRACE_SECONDS = 10.0
+RESULT_IDLE_SECONDS = 60.0
 EXIT_USAGE_LIMIT = 75
 EXIT_INTERRUPTED = 130
 EXIT_FAILURE = 1
@@ -89,4 +90,5 @@ class HarnessConfig:
     codex_bin: str = "codex"
     sigint_grace: float = SIGINT_GRACE_SECONDS
     sigterm_grace: float = SIGTERM_GRACE_SECONDS
+    result_idle_seconds: float = RESULT_IDLE_SECONDS
     extra_env: dict[str, str] = field(default_factory=dict)

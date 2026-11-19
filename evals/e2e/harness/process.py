@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
+from .result_idle import ResultIdleWatch
+
 EXEC_FAILURE_CODE = 127
 TREE_POLL_SECONDS = 2.0
 GONE_POLL_SECONDS = 0.05
@@ -48,6 +50,7 @@ class ProcessResult:
     orphans_killed: int = 0
     leftover_killed: int = 0
     interrupted: bool = False
+    ended_after_result: bool = False
 
 
 def read_process_table() -> ProcessTable:
@@ -185,10 +188,10 @@ def reap_leftovers(process: subprocess.Popen, tracker: DescendantTracker) -> int
 
 def _wait_tracking(
     process: subprocess.Popen, tracker: DescendantTracker, seconds: float, poll: float,
-    interrupt: threading.Event | None = None,
+    interrupt: threading.Event | None = None, idle_watch: ResultIdleWatch | None = None,
 ) -> bool:
-    """Wait for the agent to exit within `seconds` and until `interrupt` is set, refreshing the descendant
-    snapshot every `poll` seconds; True only when the agent exited."""
+    """Wait for the agent to exit within `seconds`, until `interrupt` is set, and until `idle_watch` says to stop,
+    refreshing the descendant snapshot every `poll` seconds; True only when the agent exited."""
     deadline = time.monotonic() + seconds
     while True:
         remaining = deadline - time.monotonic()
@@ -197,13 +200,17 @@ def _wait_tracking(
         if _wait(process, min(poll, remaining)):
             return True
         tracker.refresh()
+        if idle_watch is not None and idle_watch.should_stop():
+            return process.poll() is not None
 
 
 def run_agent(
     command: Sequence[str], cwd: Path, env: Mapping[str, str], stream_path: Path, stderr_path: Path,
     wall_seconds: float, sigint_grace: float, sigterm_grace: float, poll_seconds: float = TREE_POLL_SECONDS,
-    interrupt: threading.Event | None = None,
+    interrupt: threading.Event | None = None, result_idle_seconds: float | None = None,
 ) -> ProcessResult:
+    """Run the agent; with `result_idle_seconds`, end it after its final `result` once no background task is pending
+    and no stream line has arrived for that long, and report the time of that result as its wall time."""
     started_at, begin = datetime.now(timezone.utc), time.monotonic()
     stream_path.parent.mkdir(parents=True, exist_ok=True)
     with stream_path.open("wb") as stream, stderr_path.open("wb") as errors:
@@ -216,9 +223,11 @@ def run_agent(
             return ProcessResult(EXEC_FAILURE_CODE, False, 0.0, started_at, datetime.now(timezone.utc), f"cannot start: {error}")
         tracker = DescendantTracker(process.pid)
         tracker.refresh()
-        stopped = not _wait_tracking(process, tracker, wall_seconds, poll_seconds, interrupt)
+        watch = None if result_idle_seconds is None else ResultIdleWatch(stream_path, result_idle_seconds, begin)
+        stopped = not _wait_tracking(process, tracker, wall_seconds, poll_seconds, interrupt, watch)
         interrupted = stopped and interrupt is not None and interrupt.is_set()
-        timed_out = stopped and not interrupted
+        ended_after_result = stopped and not interrupted and watch is not None and watch.triggered
+        timed_out = stopped and not interrupted and not ended_after_result
         orphans, leftovers, survivors = 0, 0, []
         if stopped:
             orphans, survivors = terminate(process, tracker, sigint_grace, sigterm_grace)
@@ -226,9 +235,10 @@ def run_agent(
             leftovers = reap_leftovers(process, tracker)
             survivors = sorted(tracker.alive())
     error = f"processes survived SIGKILL: {survivors}" if survivors else None
+    wall = watch.answer_seconds if ended_after_result and watch is not None else time.monotonic() - begin
     return ProcessResult(
-        process.returncode, timed_out, time.monotonic() - begin, started_at, datetime.now(timezone.utc), error,
-        orphans, leftovers, interrupted,
+        process.returncode, timed_out, wall, started_at, datetime.now(timezone.utc), error,
+        orphans, leftovers, interrupted, ended_after_result,
     )
 
 

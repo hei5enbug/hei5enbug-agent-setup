@@ -26,7 +26,9 @@ def load_graders() -> Any:
     return graders
 
 
-def decide_status(facts: dict[str, Any], limit_reason: str | None, timed_out: bool, interrupted: bool = False) -> str:
+def decide_status(
+    facts: dict[str, Any], limit_reason: str | None, timed_out: bool, interrupted: bool = False, ended_after_result: bool = False,
+) -> str:
     if interrupted:
         return STATUS_INTERRUPTED
     if limit_reason:
@@ -35,7 +37,7 @@ def decide_status(facts: dict[str, Any], limit_reason: str | None, timed_out: bo
         return STATUS_INFRA_FAILED
     if timed_out:
         return STATUS_TIMED_OUT
-    if str(facts.get("terminal_reason") or "").startswith(ABORTED_REASON_PREFIX):
+    if not ended_after_result and str(facts.get("terminal_reason") or "").startswith(ABORTED_REASON_PREFIX):
         return STATUS_INTERRUPTED
     return STATUS_COMPLETE if facts["has_result"] else STATUS_INFRA_FAILED
 
@@ -172,8 +174,9 @@ def finish_run(
     records = {**records, "runner": collect.collect_runner_transcripts(calls, spec.result_dir / "transcripts" / "runner")}
     limit = transcript.usage_limit_reason(events)
     finished = {
-        **run, "status": decide_status(facts, limit, proc.timed_out, proc.interrupted), "returncode": proc.returncode,
-        "timed_out": proc.timed_out, "interrupted": proc.interrupted, "wall_seconds": proc.wall_seconds,
+        **run, "status": decide_status(facts, limit, proc.timed_out, proc.interrupted, proc.ended_after_result),
+        "returncode": proc.returncode, "timed_out": proc.timed_out, "interrupted": proc.interrupted,
+        "ended_after_result": proc.ended_after_result, "wall_seconds": proc.wall_seconds,
         "started_at": proc.started_at.isoformat(), "ended_at": proc.ended_at.isoformat(), "session_id": facts["session_id"], "usage_limit": limit,
         "error": proc.error or contamination_error(facts), "collected": records, "orphans_killed": proc.orphans_killed,
         "leftover_killed": proc.leftover_killed,
@@ -273,6 +276,7 @@ def execute_run(
     proc = run_agent(
         argv, spec.repo, env, spec.result_dir / "stream.jsonl", spec.result_dir / "stderr.txt",
         float(task["limits"]["wall_seconds"]), cfg.sigint_grace, cfg.sigterm_grace, interrupt=interrupt,
+        result_idle_seconds=None if codex else cfg.result_idle_seconds,
     )
     if codex:
         return finish_codex_run(spec, task, run, proc, cfg, interrupt)
