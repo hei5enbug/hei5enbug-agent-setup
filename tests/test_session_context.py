@@ -223,6 +223,7 @@ class SessionContextTest(unittest.TestCase):
         home = self.base / "normal home"
         self.write_json(home / ".claude/settings.json", {
             "permissions": {"defaultMode": "acceptEdits", "ask": ["Read(*)"]},
+            "cleanupPeriodDays": 3650,
         })
         codex_home = self.base / "normal Codex home"
         (codex_home / "config.toml").parent.mkdir(parents=True, exist_ok=True)
@@ -236,6 +237,24 @@ class SessionContextTest(unittest.TestCase):
         # Then
         for context in (claude, codex):
             self.assertNotIn("Notice:", context)
+
+    def test_보관_기간이_정해지지_않으면_Claude_세션_시작에_한_줄_notice를_넣는다(self):
+        """cleanupPeriodDays가 없으면 Claude 컨텍스트에 보관 notice가 한 번 들어가고 Codex에는 들어가지 않는다."""
+        # Given
+        home = self.base / "unset home"
+        self.write_json(home / ".claude/settings.json", {"permissions": {"defaultMode": "acceptEdits"}})
+        codex_home = self.base / "unset Codex home"
+        (codex_home / "config.toml").parent.mkdir(parents=True, exist_ok=True)
+        (codex_home / "config.toml").write_text("[features]\nplugin_hooks = true\n", encoding="utf-8")
+
+        # When
+        claude = self.context(self.run_hook("claude", extra_env={"HOME": str(home)}))
+        self.context(self.run_hook("codex", extra_env={"CODEX_HOME": str(codex_home)}))
+        codex = self.context(self.run_hook("codex", extra_env={"CODEX_HOME": str(codex_home)}))
+
+        # Then
+        self.assertEqual(claude.count("Notice: Claude Code deletes session transcripts after 30 days"), 1)
+        self.assertNotIn("transcripts", codex)
 
     def install_fake_codex(self):
         """Put a fake codex CLI first on PATH that lists plugin_hooks and flips it to true on enable."""

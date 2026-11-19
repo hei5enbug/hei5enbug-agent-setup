@@ -46,6 +46,15 @@ READ_ONLY_WORDS = {
 CODEX_COMMAND_TIMEOUT_SECONDS = 10
 BUILT_IN_AGENT_DENIES = ("Agent(general-purpose)", "Agent(Explore)", "Agent(Plan)", "Agent(claude)")
 DEFAULT_JSON_INDENT = 2
+RETENTION_ID = "claude-transcript-retention"
+RETENTION_KEY = "cleanupPeriodDays"
+RETENTION_DEFAULT_DAYS = 30
+RETENTION_KEEP_DAYS = 3650
+MANAGED_SETTINGS_PATHS = {
+    "darwin": "/Library/Application Support/ClaudeCode/managed-settings.json",
+    "win32": "C:\\Program Files\\ClaudeCode\\managed-settings.json",
+}
+MANAGED_SETTINGS_DEFAULT = "/etc/claude-code/managed-settings.json"
 
 Problem = namedtuple("Problem", "id text")
 Change = namedtuple("Change", "label text")
@@ -68,12 +77,21 @@ def resolve_project(value=None) -> Path:
     return Path(value or os.environ.get("CLAUDE_PROJECT_DIR") or Path.cwd())
 
 
-def _claude_permissions(path: Path) -> dict:
+def resolve_managed_settings(value=None) -> Path:
+    return Path(value or MANAGED_SETTINGS_PATHS.get(sys.platform, MANAGED_SETTINGS_DEFAULT))
+
+
+def _claude_settings(path: Path) -> dict:
     try:
         settings = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
-    permissions = settings.get("permissions") if isinstance(settings, dict) else None
+    return settings if isinstance(settings, dict) else {}
+
+
+def _claude_permissions(path: Path) -> dict:
+    settings = _claude_settings(path)
+    permissions = settings.get("permissions")
     return permissions if isinstance(permissions, dict) else {}
 
 
@@ -101,7 +119,24 @@ def _short_name(name: str) -> str:
     return name if len(name) <= 19 else name[:16] + "..."
 
 
-def _claude_problems(claude_dir: Path, project: Path) -> list[Problem]:
+def _retention_problem(claude_dir: Path, project: Path, managed: Path) -> Problem | None:
+    """Report when no settings file raises `cleanupPeriodDays` to 3650: managed, local, shared, then user, first integer wins."""
+    paths = (
+        managed,
+        project / ".claude" / "settings.local.json",
+        project / ".claude" / "settings.json",
+        claude_dir / "settings.json",
+    )
+    values = (_claude_settings(path).get(RETENTION_KEY) for path in paths)
+    days = next((value for value in values if isinstance(value, int) and not isinstance(value, bool)), None)
+    if days is not None and days >= RETENTION_KEEP_DAYS:
+        return None
+    shown = RETENTION_DEFAULT_DAYS if days is None else days
+    return Problem(RETENTION_ID, _line(
+        f"Claude Code deletes session transcripts after {shown} days; set {RETENTION_KEY} to {RETENTION_KEEP_DAYS} to keep them."))
+
+
+def _claude_problems(claude_dir: Path, project: Path, managed: Path) -> list[Problem]:
     permissions = [
         _claude_permissions(path)
         for path in (
@@ -123,7 +158,8 @@ def _claude_problems(claude_dir: Path, project: Path) -> list[Problem]:
             "claude-agent-deny",
             _line("Claude Code user settings lack permissions.deny " + ", ".join(missing) + "; run host_settings.py apply."),
         ))
-    return problems
+    retention = _retention_problem(claude_dir, project, managed)
+    return problems + ([retention] if retention else [])
 
 
 def _read_config(path: Path) -> tuple[dict | None, str | None]:
@@ -389,10 +425,11 @@ def _codex_problems(host: str, codex_home: Path) -> list[Problem]:
     return problems
 
 
-def check(host: str, claude_dir=None, codex_home=None, project=None) -> list[Problem]:
+def check(host: str, claude_dir=None, codex_home=None, project=None, managed_settings=None) -> list[Problem]:
     """Return the problems found for `host`; write nothing."""
     if host == "claude":
-        problems = _claude_problems(resolve_claude_dir(claude_dir), resolve_project(project))
+        problems = _claude_problems(
+            resolve_claude_dir(claude_dir), resolve_project(project), resolve_managed_settings(managed_settings))
     else:
         problems = []
     return problems + _codex_problems(host, resolve_codex_home(codex_home))

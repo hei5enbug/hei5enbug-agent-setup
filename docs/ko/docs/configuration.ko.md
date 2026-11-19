@@ -21,6 +21,8 @@ python3 <plugin root>/scripts/host_settings.py apply [--host claude|codex] [--js
 - Claude Code: `defaultMode`가 `dontAsk`인 경우와 Bash나 MCP 도구에 적용되는 `permissions.ask` 규칙(최대 세 개 표시).
 - Claude Code: `agent_guard`가 켜져 있는데 사용자 설정 파일의 `permissions.deny`에 `Agent(general-purpose)`, `Agent(Explore)`,
   `Agent(Plan)`, `Agent(claude)` 중 하나가 없는 경우.
+- Claude Code: 유효한 `cleanupPeriodDays`가 3650보다 작거나 없어서 Claude Code가 그 일수(없으면 30일) 뒤에 세션 기록을 삭제하는 경우.
+  관리형, 프로젝트 로컬, 프로젝트 공유, 사용자 설정 파일 중 정수를 정한 첫 파일의 값을 쓴다. 두 명령 모두 이 설정을 쓰지 않는다.
 - `~/.codex/config.toml`에 `[features] plugin_hooks`가 `true`가 아닌 경우(양쪽 호스트).
 - Codex만: 플러그인 훅이 확인되지 않은 경우(heartbeat 해시 불일치), `config.toml`이 올바른 TOML이 아닌 경우,
   `rules/hei5enbug.rules`가 없거나 읽을 수 없거나 구버전이거나 플러그인 소유가 아닌 경우, MCP 서버에 `prompt` 승인 모드가 없는 경우,

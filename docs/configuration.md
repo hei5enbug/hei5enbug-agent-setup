@@ -18,6 +18,9 @@ command. `check` is a read and writes nothing. It reports one line per problem:
 - Claude Code: `defaultMode` is `dontAsk`, and `permissions.ask` rules that match Bash or MCP tools, up to three named.
 - Claude Code: the user settings file lacks one of `Agent(general-purpose)`, `Agent(Explore)`, `Agent(Plan)`, or
   `Agent(claude)` in `permissions.deny`, while `agent_guard` is on.
+- Claude Code: the effective `cleanupPeriodDays` is below 3650 or unset, so Claude Code deletes session transcripts after
+  that many days (30 when unset). The first of the managed, project local, project shared, and user settings files that
+  sets an integer wins. Neither command writes that setting.
 - `[features] plugin_hooks` is not `true` in `~/.codex/config.toml`, on either host.
 - Codex only: the plugin hooks are unconfirmed (the heartbeat hash differs), `config.toml` is not valid TOML,
   `rules/hei5enbug.rules` is missing, unreadable, outdated, or not plugin-owned, MCP servers lack the `prompt` approval
