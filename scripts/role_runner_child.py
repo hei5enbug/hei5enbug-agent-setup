@@ -9,6 +9,8 @@ from pathlib import Path
 from role_runner_config import ASSIGNED_ROLE_ENV, EXIT_RUN, MCP_SERVER_NAME, PARENT_SESSION_ENV, RunnerError
 from role_runner_scratch import scratch_environment
 
+STDOUT_TAIL_LIMIT = 500
+
 
 def parent_session(environ) -> str | None:
     """Return the session the approval guard treats as the child's parent: the inherited value, else this session's own."""
@@ -58,7 +60,9 @@ def run_child(marker: str, command: list[str], prompt: str, cwd: str, timeout: i
         raise RunnerError(EXIT_RUN, f"{command[0]} exceeded the {timeout} second timeout") from None
     if child.returncode != 0:
         tail = (stderr or "").strip()[-2000:]
-        raise RunnerError(EXIT_RUN, f"{command[0]} exited with {child.returncode}: {tail}")
+        output = (stdout or "").strip()[-STDOUT_TAIL_LIMIT:]
+        detail = f"{tail} | stdout: {output}" if tail and output else tail or output
+        raise RunnerError(EXIT_RUN, f"{command[0]} exited with {child.returncode}: {detail}")
     return stdout
 
 

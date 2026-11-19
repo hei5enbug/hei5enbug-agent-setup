@@ -149,6 +149,17 @@ class FakeCodexRunnerTest(FailureTestCase):
         self.assertIn(USAGE_LIMIT_MESSAGE, payload["error"])
         self.assertEqual(1, sum(call[:1] == ["exec"] for call in self.calls()))
 
+    def test_가짜_codex가_표준_출력으로_사용량_한도를_내도_실제_러너를_거쳐_종료_코드_4와_그_메시지를_낸다(self):
+        # given
+        stream = "stdout"
+        # when
+        result = self.codex_review(stream=stream)
+        # then
+        payload = json.loads(result.stdout)
+        self.assertEqual(EXIT_USAGE_LIMIT, result.returncode)
+        self.assertEqual("usage_limit", payload["reason"])
+        self.assertIn(USAGE_LIMIT_MESSAGE, payload["error"])
+
     def test_가짜_codex가_인증_실패를_내면_실제_러너를_거쳐도_종료_코드_3과_그_원인을_낸다(self):
         # given
         message = "authentication failed"
