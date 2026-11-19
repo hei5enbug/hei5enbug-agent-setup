@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "mini",
+    "baseUrl": ".",
+    "paths": { "mini/jsx-runtime": ["src/mini/jsx-runtime.ts"], "mini/jsx-dev-runtime": ["src/mini/jsx-runtime.ts"] }
+  },
+  "include": ["src"]
+}

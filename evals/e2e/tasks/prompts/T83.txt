@@ -1,0 +1,1 @@
+src/Profile.tsx 의 프로필 화면을 두 칸 레이아웃으로 바꿔줘. 왼쪽 칸(data-testid="col-left")에는 이름 카드와 About 카드를, 오른쪽 칸(data-testid="col-right")에는 Activity 카드를 넣어줘. 폭이 좁은 폰 화면(375px)에서는 두 칸이 위아래로 쌓이고 가로 스크롤이 생기면 안 돼.

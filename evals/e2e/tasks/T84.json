@@ -1,0 +1,75 @@
+{
+  "id": "T84",
+  "title": "Plan cards in one row",
+  "fixture": "demo-app",
+  "category": "ui",
+  "path": "UI routing: named values with the mobile breakpoint left open go to the designer",
+  "prompt_file": "prompts/T84.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 15
+  },
+  "checks": [
+    {
+      "id": "named-values-1280",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "named_values_1280"
+    },
+    {
+      "id": "cards-visible-375",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "cards_visible_375"
+    },
+    {
+      "id": "no-overflow-1280",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "no_overflow_1280"
+    },
+    {
+      "id": "no-overflow-375",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_overflow_375"
+    },
+    {
+      "id": "plans-kept",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "plans_kept"
+    },
+    {
+      "id": "only-allowed-files-changed",
+      "kind": "only_changed",
+      "required": true,
+      "weight": 2,
+      "allow": [
+        "src/Plans.tsx",
+        "src/styles.css"
+      ]
+    },
+    {
+      "id": "renders",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "renders"
+    },
+    {
+      "id": "routing-designer",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "routing"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

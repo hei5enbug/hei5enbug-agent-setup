@@ -1,0 +1,1 @@
+src/Plans.tsx 와 src/styles.css 에서 요금제 카드 세 장을 데스크톱에서 한 줄로 배치해줘. 카드를 감싸는 요소에는 data-testid="plan-row", 각 카드에는 data-testid="plan-card" 를 달고, 카드 폭은 320px, 카드 사이 간격은 24px 로 해줘. 폰 화면에서도 화면이 깨지지 않게만 해줘. 이 두 파일 밖은 건드리지 마.

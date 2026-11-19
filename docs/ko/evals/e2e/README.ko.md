@@ -271,6 +271,16 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 사용자 정의 검사는 `ctx.origin`, 즉 채점 사본의 원본으로 실행의 원래 폴더를 읽으므로, T21 같은 작업은 설정 스크립트가
 저장소 옆에 만든 Git worktree와 가짜 Orca 상태를 검사할 수 있다.
 
+UI 작업(T82~T84)은 `harness/render.py`로 `demo-app` 픽스처의 화면을 그린다. `bun build`가 픽스처 자체의 JSX
+런타임과 함께 화면을 묶고, 헤드리스 Chrome이 그 폭과 정확히 같은 iframe 안에서 폭마다(1280px와 375px) 한 번씩
+불러온다. Chrome 헤드리스 창은 500px보다 좁아지지 않기 때문이다. 사용자 정의 검사는 `ctx.render(module)`로
+레이아웃(`data-testid`별 요소 상자, 페이지 폭, 가장자리를 넘은 요소)을 읽고, 스크린샷은 소유자의 블라인드 비교를
+위해 `grade/work/screens/`에 남는다. `bun`과 Chrome은 `PATH`, macOS 응용 프로그램 경로, `E2E_BUN_BIN`과
+`E2E_CHROME_BIN`으로 찾으며, 하나라도 없으면 검사가 `no_verdict`를 일으켜 실행이 `grade_error`로 기록되고
+`regrade`가 다시 시도한다. 라우팅 검사는 필수가 아니므로, 변형이 사례를 다른 곳으로 보내도 숨은 검사 결과는
+비교할 수 있다. `tests/test_e2e_eval_ui_tasks.py`가 이를 증명하며, `bun`이나 Chrome이 없으면 렌더링 테스트를
+건너뛴다.
+
 `tests/test_e2e_eval_graders.py`는 작업마다 채점기를 증명한다. 수정하지 않은 픽스처는 실패하고
 `tasks/reference/`의 기준 해답은 통과한다.
 
@@ -306,6 +316,9 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 | T21 | notes-cli | 작업 종료 시 Orca 정리 | 티켓의 설정 한 줄 변경, 가짜 `orca`와 저장소 세 곳의 Git worktree를 심어 둔 상태 |
 | T78 | commit-demo | 커밋 스킬, 스테이징만 범위 | 한국어 제목 기록, 스테이징한 변경 하나와 스테이징하지 않은 수정, 추적되지 않는 `.env` |
 | T79 | commit-demo | 커밋 스킬, 필수 식별자 | 티켓 키를 요구하는 커밋 규칙과 키를 말하지 않은 요청 |
+| T82 | demo-app | UI 라우팅, 완전한 명세 | 설정 패널의 이름 붙은 줄 네 곳 수정, 구현 워커로 라우팅 |
+| T83 | demo-app | UI 라우팅, 레이아웃 요청 | 375px에서 쌓이는 두 칸 프로필 화면, 디자이너로 라우팅 |
+| T84 | demo-app | UI 라우팅, 열린 중단점 | 폭 320px, 간격 24px 요금제 카드를 한 줄로, 모바일 중단점은 열어 둠, 디자이너로 라우팅 |
 
 T89부터 T93까지의 ID는 [`evals/model-roles`](../../../../evals/model-roles/README.md)의 Claude 검토자와 상대 모델 비교가 씁니다.
 그 사례는 이 하네스가 아니라 역할 실행기로 실행하므로 여기에는 과제 파일이 없습니다.

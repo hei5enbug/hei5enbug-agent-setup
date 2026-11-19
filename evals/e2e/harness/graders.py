@@ -20,10 +20,11 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 try:
-    from . import coverage_tool
+    from . import coverage_tool, render
     from .process import run_cleaning_tree
 except ImportError:
     import coverage_tool  # type: ignore[no-redef]
+    import render  # type: ignore[no-redef]
     from process import run_cleaning_tree  # type: ignore[no-redef]
 
 IDENTITY = {"name": "Demo Dev", "email": "dev@example.com"}
@@ -218,6 +219,7 @@ class GradeContext:
     changes: dict[str, str] = field(default_factory=dict)
     porcelain: str = ""
     suite_results: dict[str, dict[str, Any]] = field(default_factory=dict)
+    renders: dict[tuple[str, tuple[int, ...]], dict[str, Any]] = field(default_factory=dict)
     interrupt: threading.Event | None = None
     review_model: str | None = None
 
@@ -255,6 +257,13 @@ class GradeContext:
         shutil.copytree(self.repo, target, symlinks=True,
                         ignore=shutil.ignore_patterns(".git", "__pycache__", ".pytest_cache", "*.pyc"))
         return target
+
+    def render(self, module: str, widths: Sequence[int] = render.DEFAULT_WIDTHS) -> dict[str, Any]:
+        """Render a screen of the graded copy once per module and widths; screenshots land in `work/screens/`."""
+        key = (module, tuple(widths))
+        if key not in self.renders:
+            self.renders[key] = render.render_component(self.repo, module, self.work, widths, self.interrupt)
+        return self.renders[key]
 
     def hidden_spec(self) -> Mapping[str, str] | None:
         return self.task.get("hidden_tests")
@@ -505,7 +514,7 @@ def check_custom(ctx: GradeContext, spec: Mapping[str, Any]) -> CheckResult:
     context = types.SimpleNamespace(repo=ctx.repo, base=ctx.base, view=ctx.view, task=ctx.task, work=ctx.work,
                                     changes=dict(ctx.changes), git=ctx.git, porcelain=ctx.porcelain,
                                     tasks_root=ctx.tasks_root, origin=ctx.origin, interrupt=ctx.interrupt,
-                                    review_model=ctx.review_model)
+                                    review_model=ctx.review_model, render=ctx.render)
     ok, detail, data = function(context)
     return bool(ok), str(detail), dict(data or {})
 

@@ -1,0 +1,75 @@
+{
+  "id": "T83",
+  "title": "Two-column profile screen",
+  "fixture": "demo-app",
+  "category": "ui",
+  "path": "UI routing: a layout request goes to the designer",
+  "prompt_file": "prompts/T83.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 15
+  },
+  "checks": [
+    {
+      "id": "columns-side-by-side-1280",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "columns_side_by_side_1280"
+    },
+    {
+      "id": "columns-stack-375",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "columns_stack_375"
+    },
+    {
+      "id": "no-overflow-1280",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "no_overflow_1280"
+    },
+    {
+      "id": "no-overflow-375",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_overflow_375"
+    },
+    {
+      "id": "content-kept",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "content_kept"
+    },
+    {
+      "id": "only-allowed-files-changed",
+      "kind": "only_changed",
+      "required": true,
+      "weight": 2,
+      "allow": [
+        "src/Profile.tsx",
+        "src/**/*.css"
+      ]
+    },
+    {
+      "id": "renders",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "renders"
+    },
+    {
+      "id": "routing-designer",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "routing"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}
