@@ -297,7 +297,7 @@ On Claude Code, the registrations of the approval guard (`PreToolUse` and `Permi
 the public boundary hook set `"onFailure": "block"` (Claude Code 2.1.295 or later). A hook that cannot start, exits with
 a code other than 0 or 2, times out, or prints invalid output then blocks the call, or denies the permission request,
 instead of letting it run. Every other registration keeps the default, so a reminder, status, language, session, or
-`Stop` hook that fails never blocks work.
+`Stop` hook that fails never blocks work. Codex 0.170.0 lists a hook file that sets the field without a warning.
 
 At each user prompt, the `UserPromptSubmit` pass of the approval guard adds one line to the prompt context when the
 1-minute load average is at least twice the logical CPU count, available memory is below 10% of physical memory, or

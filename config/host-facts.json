@@ -235,6 +235,22 @@
       ]
     },
     {
+      "id": "codex-accepts-onfailure-field",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "Codex 0.170.0 loads a hook file whose command handler sets the Claude Code field `onFailure` and lists the hook without a warning or error.",
+      "doc_url": "local evidence: `codex app-server` `hooks/list` on 0.170.0 for a user hooks.json handler with \"onFailure\": \"block\" returned the hook with `warnings: []` and `errors: []`",
+      "quote": "\"warnings\": [], \"errors\": []",
+      "min_version": "0.170.0",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/guards.md",
+          "contains": "Codex 0.170.0 lists a hook file that sets the field"
+        }
+      ]
+    },
+    {
       "id": "claude-omitted-subagent-type",
       "host": "claude",
       "kind": "host-fact",
