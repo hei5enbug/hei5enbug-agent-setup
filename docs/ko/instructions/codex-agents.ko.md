@@ -58,11 +58,15 @@
 
 위임한 구현은 [구현 위임 규칙](implementation-delegation.ko.md)에 따라 조정한다. 이 섹션은 Codex worker 연동만 덧붙인다.
 
-- 구현은 `claude-sonnet-5-5`를 실행하는 `implementation` 기능 실행기에 위임한다:
-  `python3 <Source directory>/scripts/role_runner.py implementation --host codex --instructions <Source directory>/agents/worker.md --add-dir <dir> --assignment <file> --result <file>`.
-  허용 경로가 있는 폴더에서 실행한다. 종료 코드 3 또는 4로 끝나면 부분 diff를 살펴본 뒤 플러그인 `worker` 역할을
-  대체 경로로 쓴다. 역할 파일은 모델을 지정하지 않으므로 생성할 때마다 세션 줄 "Codex worker model"의 모델과 사고 강도를
-  명시적으로 전달한다.
+- 구현은 세션 줄 "Codex worker model"의 모델로 플러그인 `worker` 역할에 위임한다. `auto`는
+  [난이도별 GPT worker 모델](model-routing.ko.md#난이도별-gpt-worker-모델)에 따라 할당마다 고른다는 뜻이고, GPT 모델 이름은 그 모델을 쓴다는 뜻이다.
+  고른 모델과 그 줄의 사고 강도를 생성할 때마다 명시적으로 전달한다. 역할 파일은 둘 다 지정하지 않기 때문이다. 에이전트 가드는 그 모델만, 그
+  사고 강도부터 `xhigh`까지 허용한다.
+- 줄이 `claude-sonnet-5-5`이면 Claude 경로를 먼저 쓴다:
+  `python3 <Source directory>/scripts/role_runner.py implementation --host codex --fallback --instructions <Source directory>/agents/worker.md --add-dir <dir> --assignment <file> --result <file>`.
+  허용 경로가 있는 폴더에서 실행한다. 종료 코드 3 또는 4로 끝나면 부분 diff를 살펴본 뒤 위와 같이 난이도별로 `worker` 역할을 생성한다.
+- 생성한 `worker`가 검증에 실패하거나 사용량 한도로 중단되면 부분 diff를 살펴본 뒤 같은 실행기 명령을 실행한다. 이 명령은 교차 계열 대체로
+  `claude-sonnet-5-5`를 실행한다.
 - 전체 기록 fork는 부모의 모델과 사고 강도를 물려받고 재정의를 거부한다. worker를 이 방식으로 생성하지 않는다.
   `fork_turns`를 `"none"`이나 양의 정수로 두거나 `fork_context`를 끄고, 범위를 한정한 작업 맥락은 할당에 담는다.
 - 실행에서 처음 생성하기 전에 설정 계층의 `model`, `model_reasoning_effort`, 관련 `[agents]` 기본값 항목만 살펴본다.
@@ -121,7 +125,7 @@ python3 <Source directory>/scripts/verify_spawn.py --parent "$CODEX_THREAD_ID" -
 
 - `via: runner`: 아래 기능 실행기를 실행한다.
 - `via: agent`: 항목의 `agent` 필드에 적힌 에이전트를 항목의 `model`과 `effort`를 명시해 띄운다. `implementation`
-  기능의 `worker`는 항목 대신 세션 줄 "Codex worker model"의 모델과 effort를 전달한다. 그다음
+  기능의 `worker`는 항목 대신 구현 절이 정한 모델과 effort를 전달한다. 그다음
   위의 생성된 역할 검증 절에 따라 검증한다.
 - 그 경로가 실패하면 기능의 대체 항목을 한 번 쓰고, 그래도 안 되면 메인 세션에서 계속한다.
 

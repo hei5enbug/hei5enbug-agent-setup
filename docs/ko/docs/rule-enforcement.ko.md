@@ -52,7 +52,7 @@
 | `tests/test_model_roles_record.py` | 비교 기록은 사례와 후보마다 호스트에서 읽은 모델, effort, 비용, 시간을 담은 결과 하나를 가지며, 역할마다 효율 규칙(모든 사례를 통과한 후보만, 한 사례에서 1.5배와 60초를 모두 넘게 느리면 탈락, 통과한 사례당 비용이 가장 낮은 후보, 10퍼센트나 0.05달러 이내의 동률은 더 빠른 쪽, 자격 있는 후보가 없으면 승자 없음)을 적용하며, 저장소의 핀은 기록이 승자를 정하기 전까지 기준 그대로이고 그 뒤에는 승자만 적는다. | `evals/model-roles/README.md` |
 | `hooks/mod/agents.test.ts` | mod는 역할마다 모델과 사고 강도를 고정하고, 사용자의 가장 최근 프롬프트가 직접 지정한 경우에만 다른 모델이나 사고 강도를 따르며, 출처 표시가 없는 이후 사용자 프롬프트는 이전 요청을 지운다. 또한 Agent 호출 자체의 `effort`는 역할의 고정 사고 강도 이하일 때만 따르고, 재개를 포함한 모든 요청에 유지하며, 더 높은 값은 무시한다. | `instructions/claude-agents.md`, `instructions/model-routing.md` |
 | `tests/test_verify_spawn.py` | 생성한 Codex 에이전트는 기록에 기대한 모델과 사고 강도가 있을 때만 인정한다. | `instructions/codex-agents.md` |
-| `tests/test_agent_guard.py` | Codex 내장 에이전트는 거부하고, 설치한 역할은 고정한 모델과 사고 강도로만 실행한다. | `instructions/codex-agents.md` |
+| `tests/test_agent_guard.py` | Codex 내장 에이전트는 거부하고, 설치한 역할은 고정한 모델과 사고 강도로만 실행한다. worker 설정 `auto`는 정확히 Luna와 Sol만 허용하고, 고정 값은 그 모델만 허용한다. | `instructions/codex-agents.md` |
 | `tests/test_runtime_regressions.py` | 역할 파일을 동시에 만들 때도 사용자 파일을 보존한다. | `docs/instructions-and-delegation.md` (Agent registration) |
 | `tests/test_codex_usage.py`, `tests/test_codex_usage_accept.py` | Codex 주간 사용률을 안전하게 파싱하고, 모르면 `null`로 보고한다. | `scripts/codex_usage.py`, `hooks/mod/board.js` |
 | `tests/test_language_guard.py` | 사용자에게 보내는 답변과 진행 안내는 응답 언어를 쓴다. | `instructions/session/common.md`, `docs/guards.md` (Response language) |

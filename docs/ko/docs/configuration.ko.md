@@ -86,7 +86,7 @@ Codex 설정이나 Claude 설정을 쓰지 않습니다. 설정을 쓰는 것은
 | 도구 결과 비밀값 가리기 | `secret_redaction` | 해당 없음 |
 | 구현 worker 경로 | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, 또는 `sonnet`) | 해당 없음 |
 | Claude Code worker 모델과 사고 강도 | `worker_model` (기본 `claude-haiku-5-5`), `worker_effort` (기본 `high`) | 해당 없음 |
-| Codex worker 모델과 사고 강도 | `codex_worker_model` (쉬운 작업은 `gpt-6-luna`, 어려운 작업은 `gpt-6.2-sol`, 기본 `gpt-6-luna`), `codex_worker_effort` (`high` 또는 `xhigh`, 기본 `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL`, `HEI5ENBUG_CODEX_WORKER_EFFORT` |
+| Codex worker 모델과 사고 강도 | `codex_worker_model` (`auto`, `gpt-6-luna`, `gpt-6.2-sol`, 또는 `claude-sonnet-5-5`, 기본 `auto`), `codex_worker_effort` (`high` 또는 `xhigh`, 기본 `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL`, `HEI5ENBUG_CODEX_WORKER_EFFORT` |
 | 검토 모델 | `review_model` (고정 모델 ID, 기본 `gpt-6-astra`) | 해당 없음 |
 | 응답 언어 가드 | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip 쿼리 가드 | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
@@ -126,6 +126,22 @@ Codex 설정이나 Claude 설정을 쓰지 않습니다. 설정을 쓰는 것은
 런처 환경이 일치하지 않으면 mod는 고정 GPT 요청을 공급자에 보내기 전에 거부합니다. 이 거부에는 토글이 없습니다.
 세션 지침과 운영 규칙도 저장소 간 작업 규칙을 불러오는 `orca_worktree` 줄을 제외하면 토글이 없으며,
 끄려면 플러그인 자체를 비활성화합니다.
+
+## 구현 worker 설정
+
+각 호스트는 구현 worker의 기본값을 자기 플러그인 옵션에 두며, 사용자는 언제든 바꿀 수 있습니다. Claude Code는 `/config`나
+`claude plugin configure`로 설정하고, Codex는 같은 옵션을 Claude Code가 저장한 설정에서 읽으며 환경변수로 덮어쓸 수 있습니다. 변경은 다음
+세션부터 적용됩니다.
+
+| 호스트 | 옵션 | 값 | 기본값 | 효과 |
+|---|---|---|---|---|
+| Claude Code | `implementation_worker` | `auto`, `haiku`, `sonnet`, `codex`, `sol` | `auto` | `auto`: 메인 세션이 할당마다 고르며, 쉬운 작업은 `haiku`, 보통이거나 어려운 작업은 `sonnet`을 씁니다. 고정 값은 그 경로를 강제합니다. `codex`와 `sol`은 역할 실행기로 GPT worker를 실행합니다. 쉬운 작업은 `gpt-6-luna`, 어려운 작업은 `gpt-6.2-sol`인 GPT worker는 Claude 경로가 실패하거나 사용량 한도로 중단되었을 때의 대체이기도 합니다. |
+| Codex | `codex_worker_model` | `auto`, `gpt-6-luna`, `gpt-6.2-sol`, `claude-sonnet-5-5` | `auto` | `auto`: 메인 세션이 할당마다 고르며, 쉬운 작업은 `gpt-6-luna`, 어렵거나 확신이 없는 작업은 `gpt-6.2-sol`을 쓰고 에이전트 가드는 정확히 이 두 모델만 허용합니다. 고정 GPT 값은 그 모델만 허용합니다. `claude-sonnet-5-5`는 역할 실행기로 Claude Sonnet 경로를 먼저 실행하고 GPT worker를 그 대체로 씁니다. Claude Sonnet은 GPT worker가 실패하거나 사용량 한도로 중단되었을 때의 대체이기도 합니다. |
+| Codex | `codex_worker_effort` | `high`, `xhigh` | `high` | worker 생성이 쓸 수 있는 가장 낮은 사고 강도이며, 각 생성은 `xhigh`도 쓸 수 있습니다. |
+
+이 설정이 생기기 전에는 Codex 구현 worker가 역할 실행기로 Claude Sonnet을 실행했고 GPT worker는 그 대체일 뿐이었습니다. `gpt-6-luna` 또는
+`gpt-6.2-sol`을 저장한 Codex 사용자는 그 모델이 고정 worker로 유지되며, 이제 첫 번째 경로입니다. 아무것도 저장하지 않았거나 인식되지 않는 값을 저장한
+사용자는 `auto`를 받습니다. 이전의 Claude 경로를 원하는 사용자는 `claude-sonnet-5-5`로 설정합니다.
 
 ## Codex 자동 설정
 

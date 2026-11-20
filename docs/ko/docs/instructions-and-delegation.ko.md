@@ -102,7 +102,7 @@ UI 코드, 시각 디자인, 다이어그램 작업은 대신 호스트의 desig
 
 | 호스트 | 구현 에이전트 | 모델과 사고 강도 |
 |---|---|---|
-| Codex | Claude를 실행하는 `role_runner.py implementation --host codex`; 대체는 rollout 기록으로 검증한 플러그인 `worker` 역할 | `claude-sonnet-5-5`, `high`(최대 `xhigh`); 대체는 `codex_worker_model`, `codex_worker_effort`(기본 `gpt-6-luna`, `high`) |
+| Codex | rollout 기록으로 검증한 플러그인 `worker` 역할. `codex_worker_model`이 `auto`(기본)이면 메인 세션이 할당마다 고르고, `claude-sonnet-5-5`이면 `role_runner.py implementation --host codex --fallback`을 먼저 실행합니다. GPT worker가 실패하거나 사용량 한도로 중단되면 같은 실행기 명령이 대체입니다 | `codex_worker_model`(기본 `auto`: 쉬운 작업은 `gpt-6-luna`, 어렵거나 확신이 없는 작업은 `gpt-6.2-sol`), `codex_worker_effort`(기본 `high`, 최대 `xhigh`); 대체는 `claude-sonnet-5-5`, `high`(최대 `xhigh`) |
 | Claude Code | `implementation_worker`가 `auto`(기본)이면 메인 세션이 작업마다 고릅니다. 쉬운 작업은 `hei5enbug-agent-setup:worker`, 보통·어려운 작업은 `hei5enbug-agent-setup:sonnet-worker`이며, Claude 경로가 실패하거나 사용량 한도로 중단되면 난이도별 GPT worker 모델로 `role_runner.py implementation --fallback`을 씁니다. 고정 설정은 `sonnet`, `sol`(`gpt-6.2-sol`), `codex`(`role_runner.py worker`, 난이도별 모델), `haiku`(대체 경로는 `role_runner.py agent --name hei5enbug-agent-setup:worker --fallback`)를 강제합니다 | `worker_model`, `worker_effort`(기본 `claude-haiku-5-5`, `high`)(쉬움); `claude-sonnet-5-5`, `high`(보통·어려움); 쉬운 작업은 `gpt-6-luna`, 어려운 작업은 `gpt-6.2-sol`, `high`(최대 `xhigh`)(대체와 `codex`); `gpt-6.2-sol`, `high`(최대 `xhigh`)(`sol`) |
 | Codex, designer | rollout 기록으로 검증한 플러그인 `designer` 역할, 대체는 `role_runner.py agent --name designer --fallback` | `gpt-6-astra`, `high`(최대 `xhigh`); 대체 `claude-opus-5-5`, `high`(최대 `xhigh`) |
 | Claude Code, designer | 서브에이전트 기록이나 mod의 역할 고정으로 검증한 `hei5enbug-agent-setup:designer`, 대체는 `role_runner.py design` | `claude-opus-5-5`, `xhigh`, 기존 UI를 바꾸는 작업은 호출별 `effort`로 `high`; 대체 `gpt-6-astra`, `high`(최대 `xhigh`) |
@@ -221,7 +221,7 @@ Codex 서브에이전트 문서는 사용자 지정 에이전트 파일의 위�
 모델 키가 없으며, 스킬 지침은 대체 경로에서 모델과 사고 강도를 명시합니다. 플러그인 `worker`는
 Codex 내장 `worker`를 대신하고, `scout`는 내장 `explorer`를 건드리지 않습니다. 직접 고친 파일은 절대 덮어쓰지 않으며,
 다음 Codex 세션부터 적용됩니다. 고친 파일은 바뀌지 않으므로 모델은 지정하지 않고, Codex 지침이 생성할 때마다
-고정 모델을 넘깁니다. `worker` 역할 파일은 사고 강도도 지정하지 않으므로 생성할 때 `codex_worker_model`과
+고정 모델을 넘깁니다. `worker` 역할 파일은 사고 강도도 지정하지 않으므로 생성할 때 `codex_worker_model`에서 고른 모델과
 `codex_worker_effort` 설정을 넘깁니다. 다른 쌍을 고정한 채 고친 역할 파일이 우선하며, 에이전트 가드는 맞지 않는 생성을 거부합니다.
 훅은 이전 버전이 만든 `explorer.toml`과 `researcher.toml`을 지우고 `worker.toml`, `scout.toml`,
 `designer.toml`, `reviewer.toml`을 바꾸지만, 그 버전에서 배포한
