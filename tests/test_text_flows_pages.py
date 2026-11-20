@@ -1,5 +1,6 @@
 """Offline tests of the text flow comparison pages: neutral labels, a separate key file, and the form summary."""
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -54,6 +55,40 @@ class PagesTest(unittest.TestCase):
         for task, labels in key.items():
             self.assertEqual(sorted(labels.values()), ["F1", "F2", "F3"])
         self.assertEqual(json.loads((out / "key.json").read_text()), key)
+
+    def test_글은_고정_버전_마크다운_렌더러로_그리고_원문은_마크다운_블록에_둔다(self):
+        root, out, made = self.build()
+        text = (out / made["pages"][0]).read_text(encoding="utf-8")
+        self.assertIn("https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js", text)
+        self.assertIn("gfm: true, breaks: true", text)
+        blocks = re.findall(r'<script type="text/markdown">(.*?)</script>', text, flags=re.DOTALL)
+        self.assertEqual(len(blocks), 3)
+        self.assertTrue(all(" text from " in block for block in blocks))
+
+    def test_마크다운_원문의_스크립트_종료_표기는_블록을_닫지_않도록_보호된다(self):
+        text = tf_pages.page("T13", {"A": "x </script><script>alert(1)</script> <!-- y", "B": "plain"})
+        blocks = re.findall(r'<script type="text/markdown">(.*?)</script>', text, flags=re.DOTALL)
+        self.assertEqual(len(blocks), 2)
+        self.assertIn("<\\/script>", blocks[0])
+        self.assertEqual(text.count("</script>"), 4)
+        self.assertIn("replace(/<\\\\\\/script/gi", text)
+
+    def test_렌더러를_못_불러오면_일반_텍스트가_그대로_남고_원문_HTML은_이스케이프된다(self):
+        text = tf_pages.page("T13", {"A": "<b>bold</b> & more", "B": "plain"})
+        self.assertIn('<pre class="plain">&lt;b&gt;bold&lt;/b&gt; &amp; more</pre>', text)
+        self.assertIn("if (!window.marked) return;", text)
+        self.assertIn("renderer: { html: escapeHtml }", text)
+
+    def test_페이지는_테마_토큰과_다크_모드와_폰_너비를_갖추고_답변_버튼은_한_줄을_낸다(self):
+        text = tf_pages.page("T13", {"A": "a", "B": "b"})
+        self.assertIn('name="viewport" content="width=device-width, initial-scale=1"', text)
+        self.assertIn("@media (prefers-color-scheme: dark)", text)
+        self.assertIn('[data-theme="dark"]', text)
+        self.assertIn("var(--bg)", text)
+        self.assertIn("overflow-x:auto", text)
+        self.assertIn(">Show my answer</button>", text)
+        self.assertNotIn("Show my ranking", text)
+        self.assertIn("'T13 ' + rows.join(' ')", text)
 
     def test_같은_시드는_같은_순서를_낸다(self):
         self.assertEqual(tf_pages.labels_for("T13", ["F1", "F2", "F3"], "s"), tf_pages.labels_for("T13", ["F3", "F1", "F2"], "s"))

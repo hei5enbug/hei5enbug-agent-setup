@@ -156,7 +156,7 @@
 | `tests/test_gpt_roles_hard.py` | 더 어려운 worker 사례 W4~W6과 researcher 사례 R2, R3는 모델 호출 없이 시드와 흔한 얕은 수정을 모두 실패시키고, 기준 해답은 통과시키며, 그럴듯한 틀린 조사 답을 거부한다. | `evals/gpt-roles/README.md` |
 | `tests/test_e2e_eval_p3_tooling.py` | 하네스는 `gpt-6.2-sol`과 `gpt-6-luna`를 장문맥 요율까지 정가로 계산하고, 둘을 모델 상한 안에 두며, 작업이 `PATH` 앞에 가짜 `codex`를 두기 전에 `codex`를 절대 경로로 확정한다. | `evals/e2e/README.md` (모델 상한) |
 | `tests/test_e2e_eval_measure_lock.py` | 실제 `cli.py run`은 기계 전체 `measure.lock` 하나를 쥐며, 두 번째 실행은 점유자의 pid와 명령을 알리는 별도 종료 코드로 곧바로 끝나고, 잠금은 종료와 충돌 때 풀리며, `--wait-lock`은 기다리고, 드라이런은 잠금을 무시한다. | `evals/e2e/README.md` (측정 잠금) |
-| `tests/test_text_flows_pages.py` | 텍스트 흐름 비교 페이지는 흐름마다 중립 라벨을 붙이고, 키를 별도 파일에 두며, 실행마다 형식 검사와 비용을 요약한다. | `evals/text-flows/README.md` |
+| `tests/test_text_flows_pages.py` | 텍스트 흐름 비교 페이지는 흐름마다 중립 라벨을 붙이고, 키를 별도 파일에 두며, 고정 버전 렌더러로 글마다 마크다운을 렌더링하고 실패하면 일반 텍스트로 대체하며, 실행마다 형식 검사와 비용을 요약한다. | `evals/text-flows/README.md` |
 | `tests/test_e2e_eval_codex_host.py` | Codex 실행은 자기 `CODEX_HOME`에서 내보낸 플러그인 리비전만 불러오고, 사용자 로그인은 읽지 않고 링크만 하며, 표준 입력을 기다리지 않고, 모델·effort·시간·비용을 기록한다. 어떤 역할이든 `claude-opus-5-5`나 `gpt-6.1-sol`보다 강한 모델을 시작하는 캠페인은 거부하고, 그런 모델을 쓴 실행은 상한 위반으로 표시한다. | `evals/e2e/README.md` (Hosts) |
 | `tests/test_e2e_eval_verdict.py` | 변경은 변경 전에 통과한 사례가 변경 후 실패하지 않고, 호스트별 시간·비용 격차가 1회 먼저·5회 규칙으로 늘지 않을 때만 두 호스트 비교를 통과한다. 개선 주장은 두 호스트에서 번갈아 돈 5회로만 받아들인다. | `evals/e2e/README.md` (Comparison rule) |
 | `tests/test_e2e_eval_records.py` | 측정 기록은 실행마다 호스트, 역할별 모델과 effort, 검사, 시간, 비용, 판정을 담고, 로컬 절대 경로나 상한을 넘는 모델은 담지 않는다. | `evals/e2e/README.md` (Records) |

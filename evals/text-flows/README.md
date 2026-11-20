@@ -21,6 +21,9 @@ A flow differs from F1 only by one text edit of `instructions/shared-text.md` or
    check does not pass that text kind.
 2. Quality: the owner ranks the texts of each kind blind. `tf_pages.py` writes one page per kind with neutral labels in an order
    fixed per kind by a seed, and `key.json` beside the pages names the flow of each label. The pages never name a flow.
+   Each page renders every text as Markdown with `marked@12.0.2` (GitHub-flavored, line breaks kept) from the raw text in a
+   `text/markdown` block, shows the plain text when the renderer fails to load, and prints a one-line answer to copy under
+   "Show my answer".
    A flow that the owner ranks below F1 on any kind is never chosen.
 3. Among the flows that pass the form checks and are not ranked below F1, the lowest list-price cost per passing text wins, and
    within 10 percent or $0.05 the faster flow wins (`docs/dev-rules/evaluation.md`).

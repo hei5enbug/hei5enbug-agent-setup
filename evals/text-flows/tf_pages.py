@@ -13,6 +13,7 @@ import argparse
 import html
 import json
 import random
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -86,39 +87,77 @@ def labels_for(task: str, flows: list[str], seed: str) -> dict[str, str]:
     return {chr(ord("A") + index): flow for index, flow in enumerate(order)}
 
 
-PAGE = """<!doctype html>
+MARKED_URL = "https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"
+MARKED_SRI = "sha384-/TQbtLCAerC3jgaim+N78RZSDYV7ryeoBCVqTuzRrFec2akfBkHS7ACQ3PQhvMVi"
+
+PAGE = r"""<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{title} ranking</title>
+<title>@@TITLE@@ ranking</title>
 <style>
-:root {{ --bg:#fff; --fg:#1b1b1f; --card:#f4f4f6; --line:#d5d5dc; }}
-@media (prefers-color-scheme: dark) {{ :root:not([data-theme="light"]) {{ --bg:#16161a; --fg:#ececf1; --card:#202026; --line:#3a3a44; }} }}
-:root[data-theme="dark"] {{ --bg:#16161a; --fg:#ececf1; --card:#202026; --line:#3a3a44; }}
-body {{ background:var(--bg); color:var(--fg); font:16px/1.6 system-ui, sans-serif; margin:0; padding:16px; max-width:860px; }}
-section {{ background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 16px; margin:16px 0; }}
-pre {{ white-space:pre-wrap; word-break:break-word; margin:0; font:inherit; }}
-label {{ font-weight:600; }} select, button {{ font:inherit; padding:4px 8px; }} output {{ display:block; margin-top:8px; white-space:pre-wrap; }}
+:root { --bg:#fff; --fg:#1b1b1f; --card:#f4f4f6; --line:#d5d5dc; --code:#e8e8ee; --link:#1a56c4; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#16161a; --fg:#ececf1; --card:#202026; --line:#3a3a44; --code:#2c2c34; --link:#8ab4ff; } }
+:root[data-theme="dark"] { --bg:#16161a; --fg:#ececf1; --card:#202026; --line:#3a3a44; --code:#2c2c34; --link:#8ab4ff; }
+body { background:var(--bg); color:var(--fg); font:16px/1.6 system-ui, sans-serif; margin:0 auto; padding:16px; max-width:860px; overflow-wrap:anywhere; }
+section { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 16px; margin:16px 0; }
+.md > :first-child { margin-top:0; } .md > :last-child { margin-bottom:0; }
+.md a { color:var(--link); } .md img { max-width:100%; }
+.md pre { white-space:pre-wrap; word-break:break-word; overflow-x:auto; margin:0; font:inherit; }
+.md pre code { background:none; padding:0; }
+.md code { background:var(--code); padding:0 4px; border-radius:4px; font-size:.92em; }
+.md pre:not(.plain) { background:var(--code); padding:8px 12px; border-radius:6px; font:.92em/1.5 ui-monospace, monospace; }
+.md table { border-collapse:collapse; display:block; overflow-x:auto; max-width:100%; }
+.md th, .md td { border:1px solid var(--line); padding:4px 8px; }
+.md blockquote { margin:8px 0; padding-left:12px; border-left:3px solid var(--line); }
+label { font-weight:600; } select, button { font:inherit; padding:4px 8px; }
+output { display:block; margin-top:8px; white-space:pre-wrap; user-select:all; }
 </style></head><body>
-<h1>{title}</h1>
+<h1>@@TITLE@@</h1>
 <p>Rank the texts from best to worst for the reader. Equal texts may share a rank. Nothing on this page names how a text was made.</p>
-{sections}
-<button type="button" onclick="done()">Show my ranking</button>
+@@SECTIONS@@
+<button type="button" onclick="done()">Show my answer</button>
 <output id="out"></output>
+<script src="@@MARKED_URL@@" integrity="@@MARKED_SRI@@" crossorigin="anonymous"></script>
 <script>
-function done() {{
+function escapeHtml(text) {
+  return text.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function renderTexts() {
+  if (!window.marked) return;
+  marked.use({ gfm: true, breaks: true, renderer: { html: escapeHtml } });
+  document.querySelectorAll('section.text').forEach(section => {
+    const raw = section.querySelector('script[type="text/markdown"]').textContent.replace(/<\\\/script/gi, '</script').replace(/<\\!--/g, '<!--');
+    try { section.querySelector('.md').innerHTML = marked.parse(raw); } catch (error) { /* the plain text stays */ }
+  });
+}
+function done() {
   const rows = [...document.querySelectorAll('select')].map(s => s.dataset.label + '=' + s.value);
-  document.getElementById('out').textContent = '{task} ' + rows.join(' ');
-}}
+  document.getElementById('out').textContent = '@@TASK@@ ' + rows.join(' ');
+}
+renderTexts();
 </script>
 </body></html>
 """
-SECTION = """<section><h2>Text {label}</h2><pre>{text}</pre>
-<p><label>Rank of {label} <select data-label="{label}">{options}</select></label></p></section>"""
+SECTION = """<section class="text"><h2>Text @@LABEL@@</h2><div class="md"><pre class="plain">@@PLAIN@@</pre></div><script type="text/markdown">@@RAW@@</script>
+<p><label>Rank of @@LABEL@@ <select data-label="@@LABEL@@">@@OPTIONS@@</select></label></p></section>"""
+
+
+def fill(template: str, values: dict[str, str]) -> str:
+    for name, value in values.items():
+        template = template.replace(f"@@{name}@@", value)
+    return template
+
+
+def protect_raw(text: str) -> str:
+    """Keep the Markdown source intact inside a script block: the page script restores these two sequences."""
+    return re.sub(r"</script", r"<\\/script", re.sub(r"<!--", r"<\\!--", text), flags=re.IGNORECASE)
 
 
 def page(task: str, texts: dict[str, str]) -> str:
     options = "".join(f"<option>{rank}</option>" for rank in range(1, len(texts) + 1))
-    sections = "\n".join(SECTION.format(label=label, text=html.escape(text), options=options) for label, text in sorted(texts.items()))
-    return PAGE.format(title=KINDS[task][0], task=task, sections=sections)
+    sections = "\n".join(
+        fill(SECTION, {"LABEL": label, "PLAIN": html.escape(text), "RAW": protect_raw(text), "OPTIONS": options})
+        for label, text in sorted(texts.items()))
+    return fill(PAGE, {"TITLE": KINDS[task][0], "TASK": task, "SECTIONS": sections, "MARKED_URL": MARKED_URL, "MARKED_SRI": MARKED_SRI})
 
 
 def build(root: Path, campaign: str, flows: dict[str, tuple[str, str]], out: Path, seed: str = DEFAULT_SEED) -> dict[str, Any]:
