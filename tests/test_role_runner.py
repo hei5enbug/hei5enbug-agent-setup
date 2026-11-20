@@ -19,9 +19,10 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 sys.path.insert(0, str(REPO_ROOT / "tests"))
 import role_runner  # noqa: E402
 import session_context  # noqa: E402
-from test_model_pins import PINS  # noqa: E402
+from test_model_pins import PINS, REGISTRY  # noqa: E402
 
 RUNNER = REPO_ROOT / "scripts" / "role_runner.py"
+LANGUAGE_CODEX_MODEL = REGISTRY["capabilities"]["language"]["claude"]["primary"]["model"]
 THREAD = "019e0000-aaaa-bbbb-cccc-000000000001"
 SESSION = "11111111-2222-3333-4444-555555555555"
 SHELL_RULES = [
@@ -1123,9 +1124,9 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(("claude", "claude-opus-5-5", "high"), (status["runner"], status["model"], status["effort"]))
 
     def test_쓰기_capability의_codex_실행은_workspace_write와_entry_effort를_쓴다(self):
-        """language를 Claude 호스트에서 실행하면 Sol high를 workspace-write codex exec로 실행한다."""
+        """language를 Claude 호스트에서 실행하면 고정된 모델 high를 workspace-write codex exec로 실행한다."""
         # Given
-        config = {"turns": [{"model": "gpt-6.1-sol", "effort": "high"}]}
+        config = {"turns": [{"model": LANGUAGE_CODEX_MODEL, "effort": "high"}]}
         arguments = ["language", "--host", "claude", "--instructions", str(self.instructions)]
 
         # When
@@ -1134,7 +1135,7 @@ class RoleRunnerTest(unittest.TestCase):
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertEqual(
-            self.codex_argv(model="gpt-6.1-sol", effort="high", sandbox="workspace-write"),
+            self.codex_argv(model=LANGUAGE_CODEX_MODEL, effort="high", sandbox="workspace-write"),
             self.logged()["argv"],
         )
 
@@ -1173,9 +1174,9 @@ class RoleRunnerTest(unittest.TestCase):
                 self.claude_argv(writing=True, add_dirs=[directory]),
             ),
             (
-                ["language", "--host", "claude"], {"turns": [{"model": "gpt-6.1-sol", "effort": "high"}]},
+                ["language", "--host", "claude"], {"turns": [{"model": LANGUAGE_CODEX_MODEL, "effort": "high"}]},
                 self.codex_argv(
-                    model="gpt-6.1-sol", effort="high", sandbox="workspace-write", add_dirs=[directory],
+                    model=LANGUAGE_CODEX_MODEL, effort="high", sandbox="workspace-write", add_dirs=[directory],
                 ),
             ),
         ]
@@ -1662,7 +1663,7 @@ class RoleRunnerTest(unittest.TestCase):
         claude_case = ["design", "--host", "codex", "--fallback", "--mcp", "--add-dir", directory, "--instructions", str(self.instructions)]
 
         # When
-        codex_completed = self.run_runner(*codex_case, config={"turns": [{"model": "gpt-6.1-sol", "effort": "high"}]})
+        codex_completed = self.run_runner(*codex_case, config={"turns": [{"model": LANGUAGE_CODEX_MODEL, "effort": "high"}]})
         codex_argv = self.logged()["argv"]
         claude_completed = self.run_runner(*claude_case)
 
@@ -1670,7 +1671,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(0, codex_completed.returncode, codex_completed.stderr)
         self.assertEqual(
             [
-                "exec", "resume", THREAD, "-m", "gpt-6.1-sol", "-c", 'model_reasoning_effort="high"',
+                "exec", "resume", THREAD, "-m", LANGUAGE_CODEX_MODEL, "-c", 'model_reasoning_effort="high"',
                 "-c", 'sandbox_mode="workspace-write"', "-c", "sandbox_workspace_write.network_access=true",
                 "--json", "-o", str(self.result), "-",
             ],
@@ -2087,7 +2088,7 @@ class RoleRunnerTest(unittest.TestCase):
         """--mcp를 준 Codex 실행은 MCP 서버를 끄지 않으므로 목록을 조회하지 않는다."""
         # Given
         arguments = ["language", "--host", "claude", "--mcp", "--instructions", str(self.instructions)]
-        config = {"turns": [{"model": "gpt-6.1-sol", "effort": "high"}]}
+        config = {"turns": [{"model": LANGUAGE_CODEX_MODEL, "effort": "high"}]}
 
         # When
         completed = self.run_runner(*arguments, config=config)
@@ -2463,7 +2464,7 @@ class RoleRunnerTest(unittest.TestCase):
         """worker, 쓰기 capability, --resume한 worker는 codex app-server를 부르지 않으므로 app-server가 실패해도 통과한다."""
         # Given
         self.beat("codex", THREAD)
-        config = {"hooks_exit": 5, "turns": [{"model": "gpt-6.1-sol", "effort": "high"}]}
+        config = {"hooks_exit": 5, "turns": [{"model": LANGUAGE_CODEX_MODEL, "effort": "high"}]}
         cases = {
             "worker": ["worker", "--add-dir", str(self.base)],
             "resumed worker": ["worker", "--add-dir", str(self.base), "--resume", THREAD],
