@@ -152,6 +152,10 @@
 | `tests/test_e2e_eval_orca_cleanup.py` | T21 작업은 가짜 Orca와 저장소 세 곳의 Git worktree를 심어 두고, 그 채점기는 수정하지 않은 실행을 실패시키고 기준 정리를 통과시키며, 푸시하지 않은 커밋이 있는 worktree나 다른 저장소의 worktree를 지우거나 티켓 폴더를 열어 두거나 원격 브랜치를 지운 정리는 실패시킨다. | `evals/e2e/README.md` (Golden tasks) |
 | `tests/test_e2e_eval_suggest_commit.py` | suggest-commit 작업 T78, T79와 T17의 스킬 호출 검사는 수정하지 않은 실행, 전체 트리 커밋, 트레일러, 잘못된 언어의 제목, 자리표시자 티켓 키, 스킬을 한 번도 쓰지 않은 실행을 실패시키고 기준 실행을 통과시킨다. | `evals/e2e/README.md` (Golden tasks) |
 | `tests/test_e2e_eval_reviewer_failure_cases.py` | 리뷰어 실패 사례 T102와 T109는 실제 `gh pr create` 호출만 게시로 세고, 질문은 호스트 고유의 신호(Claude Code는 `AskUserQuestion` 호출, Codex는 물음표가 든 최종 답 문단)로만 세며, 리뷰 호출은 `text_review.py` 실행이나 둘째 검토자만 세고, `--help` 호출과 스크립트 이름만 들어 있는 글은 세지 않는다. | `evals/e2e/README.md` (Golden tasks) |
+| `tests/test_gpt_roles.py` | GPT 역할 비교는 결과 파일만으로 소유자의 효율 규칙과 교체 규칙에 따라 역할마다 결정하고, Codex rollout을 정가로 계산하며, rollout이 후보와 다른 모델을 가리키는 실행을 거부한다. | `evals/gpt-roles/README.md` |
+| `tests/test_gpt_roles_hard.py` | 더 어려운 worker 사례 W4~W6과 researcher 사례 R2, R3는 모델 호출 없이 시드와 흔한 얕은 수정을 모두 실패시키고, 기준 해답은 통과시키며, 그럴듯한 틀린 조사 답을 거부한다. | `evals/gpt-roles/README.md` |
+| `tests/test_e2e_eval_p3_tooling.py` | 하네스는 `gpt-6.2-sol`과 `gpt-6-luna`를 장문맥 요율까지 정가로 계산하고, 둘을 모델 상한 안에 두며, 작업이 `PATH` 앞에 가짜 `codex`를 두기 전에 `codex`를 절대 경로로 확정한다. | `evals/e2e/README.md` (모델 상한) |
+| `tests/test_text_flows_pages.py` | 텍스트 흐름 비교 페이지는 흐름마다 중립 라벨을 붙이고, 키를 별도 파일에 두며, 실행마다 형식 검사와 비용을 요약한다. | `evals/text-flows/README.md` |
 | `tests/test_e2e_eval_codex_host.py` | Codex 실행은 자기 `CODEX_HOME`에서 내보낸 플러그인 리비전만 불러오고, 사용자 로그인은 읽지 않고 링크만 하며, 표준 입력을 기다리지 않고, 모델·effort·시간·비용을 기록한다. 어떤 역할이든 `claude-opus-5-5`나 `gpt-6.1-sol`보다 강한 모델을 시작하는 캠페인은 거부하고, 그런 모델을 쓴 실행은 상한 위반으로 표시한다. | `evals/e2e/README.md` (Hosts) |
 | `tests/test_e2e_eval_verdict.py` | 변경은 변경 전에 통과한 사례가 변경 후 실패하지 않고, 호스트별 시간·비용 격차가 1회 먼저·5회 규칙으로 늘지 않을 때만 두 호스트 비교를 통과한다. 개선 주장은 두 호스트에서 번갈아 돈 5회로만 받아들인다. | `evals/e2e/README.md` (Comparison rule) |
 | `tests/test_e2e_eval_records.py` | 측정 기록은 실행마다 호스트, 역할별 모델과 effort, 검사, 시간, 비용, 판정을 담고, 로컬 절대 경로나 상한을 넘는 모델은 담지 않는다. | `evals/e2e/README.md` (Records) |

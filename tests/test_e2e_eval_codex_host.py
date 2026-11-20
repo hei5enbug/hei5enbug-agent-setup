@@ -208,7 +208,7 @@ class ModelCapTest(unittest.TestCase):
         # then
         self.assertIn("main session (Claude Code)", message)
         self.assertIn("claude-fable-5-2", message)
-        self.assertIn("model cap (claude-haiku-5-5, claude-opus-5-5, claude-sonnet-5-5, gpt-5.6-luna, gpt-6.1-sol)", message)
+        self.assertIn("model cap (claude-haiku-5-5, claude-opus-5-5, claude-sonnet-5-5, gpt-5.6-luna, gpt-6-luna, gpt-6.1-sol, gpt-6.2-sol)", message)
 
     def test_Codex_메인_모델이_상한_밖이면_역할과_상한을_알리고_거부한다(self):
         """gpt-6-astra를 Codex 메인으로 한 변형은 거부된다."""

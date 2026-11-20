@@ -22,7 +22,7 @@ from harness import pricing, usage  # noqa: E402
 SOL_CANDIDATES = ("gpt-6.1-sol", "gpt-6.2-sol", "gpt-6.1-terra", "gpt-6-luna")
 LUNA_CANDIDATES = ("gpt-5.6-luna", "gpt-6-luna")
 ALL_CANDIDATES = tuple(dict.fromkeys(SOL_CANDIDATES + LUNA_CANDIDATES))
-EXTRA_RUNNER_MODELS = ("gpt-6.2-sol", "gpt-6-luna")
+EXTRA_RUNNER_MODELS = ALL_CANDIDATES
 RESULT_KEYS = ("role", "case", "model", "effort", "rep", "passed", "failures", "cost_usd", "wall_seconds", "rollout")
 
 

@@ -21,7 +21,7 @@ only that role's cases.
 | `researcher` | R1; harder R2, R3 | new: one web search question; R2 and R3 need several exact facts from official documentation and an official URL | `role_runner.py researcher` |
 
 The role runner starts only the models its registry lists, so every run uses a copy of the plugin that `git archive` exports
-and whose `runner.review_models` also lists `gpt-6.2-sol` and `gpt-6-luna`. The repository's registry is not changed.
+and whose `runner.review_models` also lists every candidate. The repository's registry is not changed.
 
 ## Run
 

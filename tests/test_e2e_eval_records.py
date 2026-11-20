@@ -146,7 +146,7 @@ class RecordValidatorTest(unittest.TestCase):
         registry = json.loads((REPO_ROOT / "config/model-registry.json").read_text(encoding="utf-8"))
 
         # when / then
-        self.assertLessEqual(records.ALLOWED_MODELS, set(registry["pins"].values()))
+        self.assertLessEqual(records.ALLOWED_MODELS - {"gpt-5.6-luna"}, set(registry["pins"].values()))
         self.assertLessEqual(records.EFFORTS, set(registry["efforts"]))
         self.assertNotIn("claude-fable-5-2", records.ALLOWED_MODELS)
         self.assertNotIn("gpt-6-astra", records.ALLOWED_MODELS)

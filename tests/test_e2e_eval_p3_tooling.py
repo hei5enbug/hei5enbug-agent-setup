@@ -28,23 +28,13 @@ class CodexPricesTest(unittest.TestCase):
         self.assertAlmostEqual(pricing.codex_cost("gpt-6-luna", big), 0.81)
 
 
-class CapCandidatesTest(unittest.TestCase):
-    def cap_with(self, value):
-        env = {key: val for key, val in os.environ.items() if key != "HARNESS_ALLOW_CANDIDATES"}
-        if value is not None:
-            env["HARNESS_ALLOW_CANDIDATES"] = value
-        code = "import sys; sys.path.insert(0, %r); from harness import config; print(sorted(config.MODEL_CAP))" % str(ROOT / "evals" / "e2e")
-        return subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, check=True).stdout
+class ModelCapTest(unittest.TestCase):
+    def test_상한은_GPT_worker와_Luna_고정_모델을_포함한다(self):
+        """2026-11-20 결정으로 gpt-6.2-sol과 gpt-6-luna가 고정 모델이므로 상한 안에 있다."""
+        from harness import config
 
-    def test_환경_변수가_없으면_상한은_그대로다(self):
-        self.assertNotIn("gpt-6.2-sol", self.cap_with(None))
-        self.assertNotIn("gpt-6-luna", self.cap_with("0"))
-
-    def test_환경_변수가_1이면_비교_후보가_상한에_들어온다(self):
-        shown = self.cap_with("1")
-        self.assertIn("gpt-6.2-sol", shown)
-        self.assertIn("gpt-6-luna", shown)
-        self.assertIn("gpt-6.1-sol", shown)
+        for model in ("gpt-6.2-sol", "gpt-6-luna", "gpt-6.1-sol"):
+            self.assertIn(model, config.MODEL_CAP)
 
 
 class CodexBinTest(unittest.TestCase):

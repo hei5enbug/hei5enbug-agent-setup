@@ -126,8 +126,8 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 
 ### 모델 상한
 
-측정에서는 어떤 역할도 `claude-opus-5-5`나 `gpt-6.1-sol`보다 강한 모델을 시작하면 안 된다. 허용 모델은
-`harness/config.py`의 `MODEL_CAP`이고, `harness/records.py`도 같은 집합으로 기록을 검증한다. 하네스를 `HARNESS_ALLOW_CANDIDATES=1`로 시작하면 비교 후보 `gpt-6.2-sol`과 `gpt-6-luna`가 추가된다(2026-11-20 소유자 결정). 설정하지 않으면 집합은 그대로다. `run`은 캠페인이 시작되기
+측정에서는 어떤 역할도 `claude-opus-5-5`, `gpt-6.1-sol`, `gpt-6.2-sol`보다 강한 모델을 시작하면 안 된다. 허용 모델은
+`harness/config.py`의 `MODEL_CAP`이고, `harness/records.py`도 같은 집합으로 기록을 검증한다. 집합에는 GPT worker와 Luna 계열의 고정 모델인 `gpt-6.2-sol`과 `gpt-6-luna`(2026-11-20 소유자 결정)가 들어 있고, 기준 개정의 플러그인이 아직 기본값으로 쓰는 `gpt-5.6-luna`도 남아 있다. `run`은 캠페인이 시작되기
 전에, `--dry-run`에서도, 캠페인을 거부하고 메시지에 역할과 모델을 적는다. 변형이 정한 메인 모델, 변형이 정한 플러그인 모델
 옵션, 변형이 `review_model`처럼 상한 밖의 기본값을 그대로 둔 플러그인 모델 옵션, 루브릭 채점기가 대상이다.
 `review_model`을 기본값으로 두는 변형은 `env`에서 `CLAUDE_PLUGIN_OPTION_REVIEW_MODEL`과 `HEI5ENBUG_REVIEW_MODEL`을

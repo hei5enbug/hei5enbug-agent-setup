@@ -138,8 +138,8 @@ Results of a Codex run sit below `results/<task>/<variant>/codex/rep<k>/`, and i
 
 ### Model cap
 
-No role of a measurement may start a model stronger than `claude-opus-5-5` or `gpt-6.1-sol`. The allowed models are
-`MODEL_CAP` in `harness/config.py`, and `harness/records.py` validates records against the same set. Starting the harness with `HARNESS_ALLOW_CANDIDATES=1` adds the comparison candidates `gpt-6.2-sol` and `gpt-6-luna` (owner decision of 2026-11-20); without it the set is unchanged. `run` rejects a
+No role of a measurement may start a model stronger than `claude-opus-5-5`, `gpt-6.1-sol`, or `gpt-6.2-sol`. The allowed models are
+`MODEL_CAP` in `harness/config.py`, and `harness/records.py` validates records against the same set. It includes `gpt-6.2-sol` and `gpt-6-luna` (owner decision of 2026-11-20), the pins of the GPT worker and the Luna family, and keeps `gpt-5.6-luna`, which the baseline revision's plugin still defaults to. `run` rejects a
 campaign before it starts, also with `--dry-run`, and the message names the role and the model. This covers a main
 model a variant sets, a plugin model option a variant sets, a plugin model option such as `review_model` that the
 variant leaves at a default outside the cap, and the rubric grader. A variant that leaves `review_model` at its
