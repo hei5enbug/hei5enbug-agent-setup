@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 from role_runner_config import EXIT_EVIDENCE, SYNTHETIC_MODEL, VALIDATION_PACKAGE_HOSTS, RunnerError
@@ -52,13 +53,22 @@ def json_lines(path: Path):
             yield entry
 
 
+def only_web_search(payload: dict) -> bool:
+    """Whether a code-mode exec call runs nothing but web search tools, so no shell call exists for a guard to see."""
+    code = payload.get("input")
+    if payload.get("name") != "exec" or not isinstance(code, str) or "tools[" in code:
+        return False
+    names = re.findall(r"\btools\.(\w+)", code)
+    return bool(names) and all(name.startswith("web__") for name in names)
+
+
 def count_tool_calls(rollout: Path) -> int:
     """Count the rollout entries that record a tool call, not counting web searches."""
     count = 0
     for entry in json_lines(rollout):
         payload = entry.get("payload")
         kind = payload.get("type") if isinstance(payload, dict) else None
-        if isinstance(kind, str) and kind.endswith("_call") and kind != "web_search_call":
+        if isinstance(kind, str) and kind.endswith("_call") and kind != "web_search_call" and not only_web_search(payload):
             count += 1
     return count
 

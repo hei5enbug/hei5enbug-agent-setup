@@ -157,7 +157,9 @@ if name == "codex":
         home = Path(os.environ["CODEX_HOME"]) / "sessions" / "2026" / "10" / "12"
         home.mkdir(parents=True, exist_ok=True)
         lines = [json.dumps({{"type": "session_meta", "payload": {{"id": "x"}}}})]
-        if not config.get("no_tool_calls"):
+        if config.get("exec_input"):
+            lines.append(json.dumps({{"type": "response_item", "payload": {{"type": "custom_tool_call", "name": "exec", "input": config["exec_input"]}}}}))
+        elif not config.get("no_tool_calls"):
             lines.append(json.dumps({{"type": "response_item", "payload": {{"type": "function_call", "name": "exec"}}}}))
         lines.append(json.dumps({{"type": "response_item", "payload": {{"type": "web_search_call"}}}}))
         for turn in config.get("turns", [{{"model": "gpt-5.6-luna", "effort": "high"}}]):
@@ -2344,6 +2346,29 @@ class RoleRunnerTest(unittest.TestCase):
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertEqual(0, self.status(completed)["evidence"]["tool_calls"])
+
+    def test_웹_검색만_실행하는_exec_호출은_도구_호출로_세지_않는다(self):
+        """코드 모드 exec가 tools.web__run만 부르면 셸 호출이 없어 가드 하트비트가 없어도 통과하고 tool_calls는 0이다."""
+        # Given
+        config = {"no_heartbeat": True, "exec_input": "const r = await tools.web__run({search_query:[{q:'x'}]}); text(r)"}
+
+        # When
+        completed = self.run_runner("researcher", config=config)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(0, self.status(completed)["evidence"]["tool_calls"])
+
+    def test_셸_도구를_함께_부르는_exec_호출은_하트비트가_없으면_결과를_버린다(self):
+        """exec가 tools.web__run과 tools.exec_command를 함께 부르면 도구 호출 1건으로 세어 PreToolUse 하트비트가 없을 때 종료 코드 4를 낸다."""
+        # Given
+        config = {"no_heartbeat": True, "exec_input": "await tools.web__run({}); await tools.exec_command({cmd:'ls'})"}
+
+        # When
+        completed = self.run_runner("researcher", config=config)
+
+        # Then
+        self.assertEqual(4, completed.returncode, completed.stderr)
 
     def test_Codex는_일반_하트비트만_있으면_도구를_쓴_결과를_버린다(self):
         """일반 하트비트만 있고 PreToolUse 증거가 없으면 도구를 쓴 실행의 결과를 버리고 종료 코드 4를 낸다."""
