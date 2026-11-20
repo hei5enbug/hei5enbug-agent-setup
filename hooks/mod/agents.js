@@ -182,6 +182,12 @@ async function workerCallPin($, registry, policy, e) {
   return { pin: { model, effort: effortAllowed(registry, model, policy.pin.effort) ? policy.pin.effort : policy.fallbackEffort } };
 }
 
+async function resumedPin($, e) {
+  const agentId = e.resume?.agentId;
+  const earlier = typeof agentId === "string" ? await findByAgent($, agentId) : undefined;
+  return earlier === undefined ? undefined : { model: earlier.model, effort: earlier.effort };
+}
+
 async function pinSpawn($, e, next, unrecorded, options) {
   const table = await claudeRolePins($);
   const reason = table.denials.get(e.subagentType) ?? prefixReason(table, e.subagentType);
@@ -194,10 +200,11 @@ async function pinSpawn($, e, next, unrecorded, options) {
     return { deny: fallbackDenial($.plugin.root, e.subagentType, declared.access) };
   }
   const registry = await modelRegistry($);
-  const requested = requestedPin(registry, e.model, await sessionRequest($), declared.primary);
+  const kept = await resumedPin($, e);
+  const requested = kept === undefined ? requestedPin(registry, e.model, await sessionRequest($), declared.primary) : undefined;
   const called = requested === undefined && policy !== undefined ? await workerCallPin($, registry, policy, e) : {};
   if (called.deny !== undefined) return { deny: called.deny };
-  const pin = requested ?? called.pin ?? declared.primary;
+  const pin = kept ?? requested ?? called.pin ?? declared.primary;
   const callEffort = callEffortFor(registry, callEfforts.get(e.tool_use_id), pin);
   const result = await next({ ...e, model: pin.model });
   if (result.deny !== undefined || result.agentId === undefined) return result;

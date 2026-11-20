@@ -1241,6 +1241,29 @@ test("재개한 worker 실행은 호스트가 모델을 유지하므로 다른 �
   expect(resumed.deny).toBeUndefined();
 });
 
+test("auto 설정에서 sonnet으로 시작한 worker를 재개하면 정책 기본값 대신 시작 때의 sonnet으로 시작하고 기록도 그대로 둔다", async ($, on) => {
+  // given
+  const data = environment(on);
+  const received = [];
+  on("agent.spawn", (_$, e) => {
+    received.push(e.model);
+    return { model: PINNED, agentId: e.resume?.agentId ?? "agent-1" };
+  });
+  const seen = [];
+  stepSink(on, seen, PINNED);
+  await $.agent.spawn(spawnInput(WORKER, { model: "sonnet", tool_use_id: "toolu_start" }));
+
+  // when
+  const resumed = await $.agent.spawn(spawnInput(WORKER, { resume: { agentId: "agent-1" }, tool_use_id: "toolu_resume" }));
+  await step($, { agentId: "agent-1" });
+
+  // then
+  expect(received).toEqual([PINNED, undefined]);
+  expect(resumed.deny).toBeUndefined();
+  expect(data.roles[SESSION].at(-1)).toEqual(expect.objectContaining({ agentId: "agent-1", model: PINNED, effort: "high", toolUseId: "toolu_resume" }));
+  expect(seen).toEqual([{ model: PINNED, effort: "high", agentId: "agent-1" }]);
+});
+
 test("worker 호출이 고른 모델의 고정 effort보다 낮은 effort를 넘기면 그 값으로 시작하고 기록한다", { options: { worker_effort: "medium" } }, async ($, on) => {
   // given
   const data = environment(on);
