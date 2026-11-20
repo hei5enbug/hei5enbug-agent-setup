@@ -1,0 +1,81 @@
+{
+  "id": "F82",
+  "title": "Specified edit to the settings panel (explicit hand-off to the implementation worker)",
+  "fixture": "demo-app",
+  "category": "ui",
+  "path": "Codex worker route forced by the request: UI routing: a complete specification goes to the implementation worker",
+  "prompt_file": "prompts/F82.txt",
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 15
+  },
+  "checks": [
+    {
+      "id": "spacing-16",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "spacing_16"
+    },
+    {
+      "id": "label-full-name",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "label_full_name"
+    },
+    {
+      "id": "label-email-alerts",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "label_email_alerts"
+    },
+    {
+      "id": "variant-secondary",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "variant_secondary"
+    },
+    {
+      "id": "nothing-else-changed",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "nothing_else_changed"
+    },
+    {
+      "id": "only-allowed-files-changed",
+      "kind": "only_changed",
+      "required": true,
+      "weight": 2,
+      "allow": [
+        "src/SettingsPanel.tsx"
+      ]
+    },
+    {
+      "id": "renders",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "renders"
+    },
+    {
+      "id": "worker-delegated",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "worker_delegated"
+    },
+    {
+      "id": "worker-route",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "worker_route"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

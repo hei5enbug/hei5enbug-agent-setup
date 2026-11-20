@@ -24,6 +24,9 @@ CODEX_HOME_NAME = "codex-home"
 ZDOTDIR_NAME = "zdotdir"
 ZPROFILE_NAME = ".zprofile"
 SETUP_RECORD = "codex-setup.json"
+AGENTS_DIR_NAME = "agents"
+ROLE_SOURCE_DIR = "standalone-agents"
+ROLE_SOURCE_PREFIX = "codex-"
 DEFAULT_MARKETPLACE = "hei5enbug"
 SETUP_TIMEOUT_SECONDS = 180.0
 SETUP_TAIL = 400
@@ -89,6 +92,24 @@ def write_zprofile(zdotdir: Path, path: str | None) -> None:
         (zdotdir / ZPROFILE_NAME).write_text(f"export PATH={shlex.quote(path)}\n", encoding="utf-8")
 
 
+def install_role_files(result_dir: Path, plugin_dir: str) -> list[str]:
+    """Write the plugin's bundled Codex role files into the run's CODEX_HOME before the main session starts.
+
+    The plugin's session hook writes the same files, but only for the next session, so the first session of a run would
+    list no `agent_type` in its `spawn_agent` tool. A file that exists stays. Returns the installed role names."""
+    agents = result_dir / CODEX_HOME_NAME / AGENTS_DIR_NAME
+    installed = []
+    for source in sorted((Path(plugin_dir) / ROLE_SOURCE_DIR).glob(f"{ROLE_SOURCE_PREFIX}*.toml")):
+        name = source.name[len(ROLE_SOURCE_PREFIX):-len(".toml")]
+        target = agents / f"{name}.toml"
+        if target.exists():
+            continue
+        agents.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+        installed.append(name)
+    return installed
+
+
 def tail(text: str | None) -> str:
     return (text or "")[-SETUP_TAIL:]
 
@@ -113,12 +134,13 @@ def prepare_home(
         if done.returncode != 0:
             write_json(result_dir / SETUP_RECORD, {"steps": steps})
             raise CodexSetupError(f"{' '.join(argv[1:4])} exited {done.returncode}: {tail(done.stderr).strip()}")
+    roles = install_role_files(result_dir, plugin_dir)
     try:
         trusted = codex_trust.trust_plugin_hooks(cfg.codex_bin, env, str(repo or result_dir))
     except codex_trust.HookTrustError as error:
         write_json(result_dir / SETUP_RECORD, {"steps": steps, "hook_trust_error": str(error)})
         raise CodexSetupError(f"trusting the plugin's hooks failed: {error}") from error
-    record = {"steps": steps, "hook_trust": {"trusted": trusted}, "codex_home": CODEX_HOME_NAME, "auth": "symlink",
+    record = {"steps": steps, "hook_trust": {"trusted": trusted}, "roles": roles, "codex_home": CODEX_HOME_NAME, "auth": "symlink",
               "marketplace": marketplace_name(plugin_dir)}
     write_json(result_dir / SETUP_RECORD, record)
     return record
