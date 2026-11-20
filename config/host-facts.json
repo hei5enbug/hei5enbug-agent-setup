@@ -1,0 +1,590 @@
+{
+  "comment": "Registry of host-capability statements. Add a line here after verifying the statement against the official page; tests/test_host_facts.py fails on an unregistered limitation phrase and on a verified_on older than 30 days.",
+  "claims": [
+    {
+      "id": "codex-hooks-feature-key",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "Hooks are on by default, `[features] hooks = false` turns them off, and `plugin_hooks` no longer exists.",
+      "doc_url": "https://learn.chatgpt.com/docs/hooks.md",
+      "quote": "Hooks are enabled by default. To turn them off in `config.toml`, set: [features] hooks = false ... Use `hooks` as the feature key. `codex_hooks` still works as a deprecated alias. Local evidence: `codex features list` on 0.170.0 prints `plugin_hooks removed false` and `hooks stable true`.",
+      "removed_in": "0.170.0 (plugin_hooks)",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "scripts/host_settings.py",
+          "contains": "def _hooks_turned_off"
+        },
+        {
+          "file": "docs/configuration.md",
+          "contains": "`plugin_hooks` was removed in Codex 0.170.0"
+        }
+      ]
+    },
+    {
+      "id": "codex-pretooluse-cannot-ask",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "A Codex `PreToolUse` hook cannot return `ask`, so the native approval window carries the approval.",
+      "doc_url": "https://learn.chatgpt.com/docs/hooks.md",
+      "quote": "`permissionDecision: \"ask\"`, legacy `decision: \"approve\"`, `continue: false`, `stopReason`, and `suppressOutput` are parsed but not supported yet.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/approval-guard.md",
+          "contains": "On Codex, `PreToolUse` cannot ask"
+        }
+      ]
+    },
+    {
+      "id": "codex-noninteractive-approval",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "A Codex run that cannot surface a fresh approval, such as `codex exec`, fails an action that needs new approval.",
+      "doc_url": "https://learn.chatgpt.com/docs/agent-configuration/subagents.md",
+      "quote": "In non-interactive flows, or whenever a run can't surface a fresh approval, an action that needs new approval fails and Codex surfaces the error back to the parent workflow.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/approval-guard.md",
+          "contains": "sessions that cannot show a window"
+        }
+      ]
+    },
+    {
+      "id": "codex-prefix-rule-prompt",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "A `prefix_rule` with `decision = \"prompt\"` makes Codex prompt before each matching command; `forbidden` > `prompt` > `allow`.",
+      "doc_url": "https://learn.chatgpt.com/docs/agent-configuration/rules.md",
+      "quote": "`prompt`: Prompt before each matching invocation. ... Codex applies the most restrictive decision when more than one rule matches (`forbidden` > `prompt` > `allow`).",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/approval-guard.md",
+          "contains": "`decision=\"prompt\"` for the wrapper's path"
+        }
+      ]
+    },
+    {
+      "id": "codex-mcp-default-approval-mode",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "`mcp_servers.<id>.default_tools_approval_mode` accepts `auto | prompt | writes | approve`, and `tools.<tool>.approval_mode` overrides it per tool.",
+      "doc_url": "https://learn.chatgpt.com/docs/config-file/config-reference.md",
+      "quote": "mcp_servers.<id>.default_tools_approval_mode: auto | prompt | writes | approve. Default approval behavior for MCP tools on this server unless a per-tool override exists.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/configuration.md",
+          "contains": "`default_tools_approval_mode = \"prompt\"` on every"
+        }
+      ]
+    },
+    {
+      "id": "codex-custom-agent-sandbox",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "A custom agent file cannot override the parent session's sandbox, approval policy, provider, or MCP servers.",
+      "doc_url": "https://learn.chatgpt.com/docs/agent-configuration/subagents.md",
+      "quote": "Other session settings, including `sandbox_mode`, `approval_policy`, `model_provider`, and `mcp_servers`, don't override the parent configuration when placed in a custom agent file.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/instructions-and-delegation.md",
+          "contains": "Codex documents that a custom agent"
+        }
+      ]
+    },
+    {
+      "id": "codex-custom-agent-locations",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "Custom agents are TOML files under `~/.codex/agents/` or `.codex/agents/`; no plugin component for agents is documented.",
+      "doc_url": "https://learn.chatgpt.com/docs/agent-configuration/subagents.md",
+      "quote": "To define your own custom agents, add standalone TOML files under `~/.codex/agents/` for personal agents or `.codex/agents/` for project-scoped agents.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/instructions-and-delegation.md",
+          "contains": "The Codex subagent documentation names"
+        }
+      ]
+    },
+    {
+      "id": "codex-custom-agent-model-precedence",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "A model or effort set in a custom agent file takes precedence over the spawn value.",
+      "doc_url": "https://learn.chatgpt.com/docs/agent-configuration/subagents.md",
+      "quote": "If a custom agent file sets `model` or `model_reasoning_effort`, the value in the file takes precedence.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "instructions/codex-agents.md",
+          "contains": "That file may override spawn values"
+        }
+      ]
+    },
+    {
+      "id": "codex-spawn-needs-request",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "Codex spawns agents after a direct request or an applicable project or skill instruction.",
+      "doc_url": "https://learn.chatgpt.com/docs/agent-configuration/subagents.md",
+      "quote": "Current local Codex releases spawn agents after a direct request or applicable project or skill instruction.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "instructions/codex-agents.md",
+          "contains": "Codex spawns sub-agents only when"
+        }
+      ]
+    },
+    {
+      "id": "codex-max-concurrent-threads",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "`agents.max_concurrent_threads_per_session` caps concurrently open spawned-agent threads, excluding the primary thread.",
+      "doc_url": "https://learn.chatgpt.com/docs/agent-configuration/subagents.md",
+      "quote": "Cap concurrently open spawned-agent threads, excluding the primary.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "instructions/codex-agents.md",
+          "contains": "agents.max_concurrent_threads_per_session"
+        }
+      ]
+    },
+    {
+      "id": "codex-plugin-hooks-trust",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "Codex requires review and trust of plugin hooks, and a new review after a plugin update changes a bundled script.",
+      "doc_url": "https://learn.chatgpt.com/docs/hooks.md",
+      "quote": "Plugin hooks use the same event schema as other hooks. Review and trust them before they run. ... If a plugin update changes a bundled script, Codex requires a new review even if the hook definition stays the same.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/approval-guard.md",
+          "contains": "A Codex hook that is not trusted"
+        }
+      ]
+    },
+    {
+      "id": "codex-background-hook-delivery",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "A Codex background hook's output reaches the next model request of an active turn and cannot block or approve.",
+      "doc_url": "https://learn.chatgpt.com/docs/hooks.md",
+      "quote": "If a turn is active, Codex waits for the current model request and tool calls to finish, then makes the output available to the next model request in that turn. ... Background hooks can't block, approve, rewrite, or otherwise control the operation that triggered them.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/guards.md",
+          "contains": "Codex runs it in the background and adds its output"
+        }
+      ]
+    },
+    {
+      "id": "codex-default-mode-request-user-input",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "`default_mode_request_user_input` exists in 0.170.0 as an under-development feature; the Codex documentation does not cover it.",
+      "doc_url": "local evidence: `codex features list` (codex-cli 0.170.0)",
+      "quote": "default_mode_request_user_input  under development  true",
+      "min_version": "0.170.0",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/configuration.md",
+          "contains": "lists it as under development"
+        }
+      ]
+    },
+    {
+      "id": "claude-engines-field",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "`engines[\"claude-code\"]` in plugin.json declares a semver range of supported Claude Code versions, for 2.1.323 and later; 2.0.15 through 2.1.75 reject a manifest that has it.",
+      "doc_url": "https://code.claude.com/docs/en/plugins-reference.md",
+      "quote": "The Claude Code versions that the plugin works on, as a semver range under the `claude-code` key ... Requires Claude Code v2.1.323 or later. To keep the plugin working on v2.0.15 through v2.1.75, omit `engines`.",
+      "min_version": "2.1.323",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/claude-code-mod.md",
+          "contains": "`engines[\"claude-code\"]` as `>=2.1.307`"
+        }
+      ]
+    },
+    {
+      "id": "claude-onfailure-block",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "`onFailure: \"block\"` on a command, http, or mcp_tool hook blocks the action when the hook cannot start, exits other than 0 or 2, times out, or prints invalid output.",
+      "doc_url": "https://code.claude.com/docs/en/hooks.md",
+      "quote": "To block the action instead, set `\"onFailure\": \"block\"` on a `command`, `http`, or `mcp_tool` hook. Requires Claude Code v2.1.295 or later. ... Can't start / Exit code other than 0 or 2 / Timeout / Invalid output.",
+      "min_version": "2.1.295",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/guards.md",
+          "contains": "set `\"onFailure\": \"block\"`"
+        }
+      ]
+    },
+    {
+      "id": "claude-omitted-subagent-type",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "An Agent call that omits `subagent_type` fails with `subagent_type is required` when the session has no `general-purpose` subagent to fall back on.",
+      "doc_url": "https://code.claude.com/docs/en/sub-agents.md",
+      "quote": "An Agent tool call that omits `subagent_type` fails with `subagent_type is required` when the session has no `general-purpose` subagent to fall back on.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/configuration.md",
+          "contains": "Claude Code documents that a call that omits `subagent_type`"
+        }
+      ]
+    },
+    {
+      "id": "claude-agent-deny-format",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "A `permissions.deny` entry `Agent(subagent-name)` prevents Claude from using that subagent.",
+      "doc_url": "https://code.claude.com/docs/en/sub-agents.md",
+      "quote": "You can prevent Claude from using specific subagents by adding them to the `deny` array in your settings. Use the format `Agent(subagent-name)`.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "scripts/host_settings.py",
+          "contains": "BUILT_IN_AGENT_DENIES"
+        }
+      ]
+    },
+    {
+      "id": "claude-async-hook-delivery",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "A Claude Code async hook's `additionalContext` reaches Claude on the next conversation turn.",
+      "doc_url": "https://code.claude.com/docs/en/hooks.md",
+      "quote": "After the background process exits, Claude Code delivers the `additionalContext` and `systemMessage` fields from the hook's JSON response to Claude on the next conversation turn.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/guards.md",
+          "contains": "reaches Claude on the"
+        }
+      ]
+    },
+    {
+      "id": "claude-subagent-nesting",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "By default a Claude Code subagent can spawn subagents up to three layers below the main conversation; omitting `Agent` from `tools` or listing it in `disallowedTools` prevents it.",
+      "doc_url": "https://code.claude.com/docs/en/sub-agents.md",
+      "quote": "By default, a subagent can spawn subagents of its own, up to three layers below the main conversation. ... To keep one subagent from spawning while nesting is on ... omit `Agent` from its `tools` list or add it to `disallowedTools`.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/instructions-and-delegation.md",
+          "contains": "`disallowedTools: Agent`"
+        }
+      ]
+    },
+    {
+      "id": "claude-subagent-no-ask-user-question",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "`AskUserQuestion` is removed from every subagent's tool list, so a subagent cannot ask the user.",
+      "doc_url": "https://code.claude.com/docs/en/sub-agents.md",
+      "quote": "The first removes a short list of tools from every subagent. ... * `AskUserQuestion`",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "skills/deep-interview/references/ask-ui.md",
+          "contains": "`AskUserQuestion` is main-session only"
+        }
+      ]
+    },
+    {
+      "id": "claude-per-invocation-model-order",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "A per-invocation `model` parameter (alias only) overrides the subagent definition's `model` field.",
+      "doc_url": "https://code.claude.com/docs/en/sub-agents.md",
+      "quote": "1. The per-invocation `model` parameter ... On an Agent tool call, the parameter takes a model alias, not a full model ID or `inherit`. 2. The `model` field in the subagent's definition",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "instructions/claude-agents.md",
+          "contains": "Never pass a per-invocation model"
+        }
+      ]
+    },
+    {
+      "id": "claude-max-concurrent-subagents",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` caps running subagents in a session (default 20).",
+      "doc_url": "https://code.claude.com/docs/en/env-vars.md",
+      "quote": "How many subagents can be running in one session before the Agent tool refuses to spawn another (default: 20). ... Requires Claude Code v2.1.217 or later",
+      "min_version": "2.1.217",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "instructions/claude-agents.md",
+          "contains": "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"
+        },
+        {
+          "file": "instructions/fast-mode.md",
+          "contains": "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"
+        }
+      ]
+    },
+    {
+      "id": "claude-ultracode-keyword",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "The `ultracode` keyword in a prompt starts a workflow for that task.",
+      "doc_url": "https://code.claude.com/docs/en/workflows.md",
+      "quote": "To run a single task as a workflow without changing the session's effort level, include the keyword `ultracode` in your prompt.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "instructions/fast-mode.md",
+          "contains": "`ultracode` keyword"
+        }
+      ]
+    },
+    {
+      "id": "claude-cleanup-period-default",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "`cleanupPeriodDays` defaults to 30 and must be at least 1; 0 fails validation.",
+      "doc_url": "https://code.claude.com/docs/en/settings-reference.md",
+      "quote": "Default: 30. ... Setting `0` fails validation, so pick a large value such as `3650` for long retention.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/configuration.md",
+          "contains": "(30 when unset)"
+        }
+      ]
+    },
+    {
+      "id": "claude-settings-hook-trust",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "Claude Code documents a workspace-trust check for hooks from settings files; none is documented for plugin hooks.",
+      "doc_url": "https://code.claude.com/docs/en/hooks.md",
+      "quote": "Claude Code checks workspace trust before it runs any hook from a settings file.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/instructions-and-delegation.md",
+          "contains": "documents a trust"
+        }
+      ]
+    },
+    {
+      "id": "claude-mod-guard-skipped-hooks",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "Where the built-in guard `cc-plugin-sec-default` loads, a user's mod hooks on `classic.<Event>`, `prompt.context`, and other listed events never run.",
+      "doc_url": "https://code.claude.com/docs/en/plugins/mods/admin.md",
+      "quote": "Where the built-in guard loads, a hook that a user's mod registers on one of these events never runs ... classic.<Event>, prompt.compose, prompt.section, prompt.context, ...",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/claude-code-mod.md",
+          "contains": "skips those hooks in every mod a user installs"
+        }
+      ]
+    },
+    {
+      "id": "claude-same-version-update",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "Users keep their cached copy of a plugin until its version string changes.",
+      "doc_url": "https://code.claude.com/docs/en/plugins/host-marketplace.md",
+      "quote": "Bump `version` on each release: users stay on their cached copy until the string changes.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "skills/orca-plugin-refresh/SKILL.md",
+          "contains": "these files reach Claude Code only after a version bump"
+        }
+      ]
+    },
+    {
+      "id": "claude-skill-frontmatter-keys",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "The documented skill frontmatter keys are name, description, when_to_use, argument-hint, arguments, disable-model-invocation, user-invocable, allowed-tools, disallowed-tools, model, effort, context, agent, background, hooks, paths, shell, metadata, license, and compatibility.",
+      "doc_url": "https://code.claude.com/docs/en/skills.md",
+      "quote": "Field names use lowercase words separated by hyphens, except `when_to_use`. (Frontmatter reference table)",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "skills/skill-builder/scripts/quick_validate.py",
+          "contains": "ALLOWED_PROPERTIES = frozenset"
+        }
+      ]
+    },
+    {
+      "id": "plugin-host-scoped-guards",
+      "host": "both",
+      "kind": "plugin-design",
+      "reason": "Names which host this plugin's own guard, hook file, or session file covers; says nothing about what the host can do.",
+      "lines": [
+        {
+          "file": "README.md",
+          "contains": "Which Claude-only guards and views run"
+        },
+        {
+          "file": "docs/claude-code-mod.md",
+          "contains": "holds the Claude-only guards"
+        },
+        {
+          "file": "docs/instructions-and-delegation.md",
+          "contains": "holds the Claude Code-only"
+        },
+        {
+          "file": "docs/instructions-and-delegation.md",
+          "contains": "holds the Codex-only agent guard"
+        },
+        {
+          "file": "instructions/session/claude-code.md",
+          "contains": "# Claude Code only"
+        },
+        {
+          "file": "instructions/session/codex.md",
+          "contains": "# Codex only"
+        },
+        {
+          "file": "docs/configuration.md",
+          "contains": "- Codex only: the plugin hooks are unconfirmed"
+        },
+        {
+          "file": "docs/configuration.md",
+          "contains": "- Codex only: a `prompt` or `forbidden` rule"
+        }
+      ]
+    },
+    {
+      "id": "plugin-test-descriptions",
+      "host": "both",
+      "kind": "plugin-design",
+      "reason": "Rule-enforcement rows and the AGENTS.md rule describe what a test or a check covers, including which sessions the plugin's own guard covers and which statements must be registered.",
+      "lines": [
+        {
+          "file": "docs/rule-enforcement.md",
+          "contains": "`tests/test_final_report_hook.py`"
+        },
+        {
+          "file": "docs/rule-enforcement.md",
+          "contains": "`tests/test_approval_grants.py`"
+        },
+        {
+          "file": "docs/rule-enforcement.md",
+          "contains": "`tests/test_host_facts.py`"
+        },
+        {
+          "file": "AGENTS.md",
+          "contains": "Code or Codex can or cannot do or how a host feature behaves"
+        }
+      ]
+    },
+    {
+      "id": "plugin-grant-needs-transcript",
+      "host": "claude",
+      "kind": "plugin-design",
+      "reason": "The plugin's skill-grant check reads the main session's Claude Code transcript, which this plugin has no equivalent of on Codex.",
+      "lines": [
+        {
+          "file": "scripts/approval_state_grants.py",
+          "contains": "The grant works only on Claude Code"
+        },
+        {
+          "file": "scripts/approval_state_grants.py",
+          "contains": "A skill grant works on Claude Code only"
+        }
+      ]
+    },
+    {
+      "id": "plugin-codex-model-family-policy",
+      "host": "codex",
+      "kind": "plugin-design",
+      "reason": "The agent guard keeps Codex spawns on the plugin's pinned GPT models; this is the plugin's policy.",
+      "lines": [
+        {
+          "file": "scripts/agent_guard.py",
+          "contains": "cannot be spawned in Codex"
+        }
+      ]
+    },
+    {
+      "id": "plugin-runtime-error-messages",
+      "host": "codex",
+      "kind": "plugin-design",
+      "reason": "Failure messages of the plugin's own scripts when a local command or its output is unusable.",
+      "lines": [
+        {
+          "file": "scripts/codex_hook_trust.py",
+          "contains": "cannot start codex app-server"
+        },
+        {
+          "file": "scripts/role_runner_child.py",
+          "contains": "Cannot list the Codex MCP servers"
+        },
+        {
+          "file": "scripts/role_runner_child.py",
+          "contains": "The Codex MCP server list is not JSON"
+        },
+        {
+          "file": "scripts/role_runner_child.py",
+          "contains": "The Codex MCP server list is not a list"
+        },
+        {
+          "file": "scripts/role_runner_child.py",
+          "contains": "cannot be turned off safely"
+        },
+        {
+          "file": "skills/orca-plugin-refresh/scripts/refresh_codex_release.py",
+          "contains": "contains an unsupported or missing file"
+        },
+        {
+          "file": "skills/orca-plugin-refresh/scripts/refresh_codex_release.py",
+          "contains": "the hook command is unsupported\""
+        },
+        {
+          "file": "skills/orca-plugin-refresh/SKILL.md",
+          "contains": "when the Codex sessions cannot be read"
+        },
+        {
+          "file": "skills/orca-plugin-refresh/scripts/refresh_host_record.py",
+          "contains": "None (cannot decide)"
+        }
+      ]
+    },
+    {
+      "id": "plugin-evidence-and-session-wording",
+      "host": "both",
+      "kind": "plugin-design",
+      "reason": "Wording about this plugin's evidence rule or its own debate-session identifiers, not a host capability.",
+      "lines": [
+        {
+          "file": "skills/skill-builder/references/execution-methods.md",
+          "contains": "treat a run without that evidence as unverified"
+        },
+        {
+          "file": "skills/tiki-taka/SKILL.md",
+          "contains": "later debates cannot mix with it"
+        }
+      ]
+    }
+  ]
+}

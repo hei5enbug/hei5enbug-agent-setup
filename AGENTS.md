@@ -13,10 +13,13 @@
   agreement leaves only one interpretation, apply it and state the basis. Until a decision only the user can make is
   resolved, edit no file and change no external state; continue only read-only investigation that does not
   presuppose the answer.
-- Before changing hooks, agents, skills, settings, or plugin structure, check the current official Claude Code and
-  Codex documentation for that area, including features such as mods, hook events, settings, and agent options.
-  Prefer a supported feature that covers the need over custom code, and state which features you checked and why
-  you chose the approach.
+- Before changing hooks, agents, skills, settings, or plugin structure, or before stating or relying on what Claude
+  Code or Codex can or cannot do or how a host feature behaves, check the current official Claude Code and Codex
+  documentation and the installed version for that area, including features such as mods, hook events, settings, and
+  agent options. Prefer a supported feature that covers the need over custom code, and state which features you
+  checked and why you chose the approach. Register each host-capability statement with its page, quote, and
+  verification date in `config/host-facts.json`; `tests/test_host_facts.py` rejects an unregistered limitation phrase
+  and an entry older than 30 days.
 - Every change must improve, or at least preserve, both the recurring token and context cost of normal use and the
   quality of its output. When they conflict, quality wins (owner, 2026-10-27): choose the option with the higher
   measured quality, never adopt one that lowers quality to save tokens, and record any added cost with its
