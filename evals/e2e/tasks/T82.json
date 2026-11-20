@@ -62,11 +62,18 @@
       "function": "renders"
     },
     {
-      "id": "routing-sonnet-worker",
+      "id": "routing-worker",
       "kind": "custom",
       "required": false,
       "weight": 1,
       "function": "routing"
+    },
+    {
+      "id": "worker-model-haiku",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "worker_model_haiku"
     }
   ],
   "constraints": [],

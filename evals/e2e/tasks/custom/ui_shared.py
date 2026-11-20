@@ -15,12 +15,12 @@ def bare(agent_type: str) -> str:
 
 
 def routing(ctx, expected: str):
-    """expected is "sonnet-worker" or "designer"; the main session's own delegations decide."""
+    """expected is "worker" (the plugin's single implementation agent) or "designer"; the main session's own delegations decide."""
     found = [d for d in ctx.view.get("delegations", []) if d.get("completed", True) and not d.get("is_error")]
     types = [bare(d.get("type", "")) for d in found]
     classes = [d.get("class") for d in found]
-    if expected == "sonnet-worker":
-        ok = "sonnet-worker" in types and "design" not in classes
+    if expected == "worker":
+        ok = "worker" in types and "design" not in classes
     else:
         ok = "design" in classes
     return ok, f"expected {expected}; completed delegations: {types or 'none'}", {"delegations": types}
@@ -77,3 +77,18 @@ def side_by_side(left, right) -> bool:
 
 def stacked(upper, lower) -> bool:
     return lower["top"] >= upper["bottom"] - OVERFLOW_TOLERANCE_PX
+
+
+WORKER_DEFAULT_MODEL = "haiku"
+AGENT_CALLS = ("Agent", "Task")
+
+
+def worker_model(ctx, family: str):
+    """Every `worker` Agent call ran on the `family` model: the call's own `model`, or the agent's default when it passes none.
+
+    The model each worker actually ran is in the host records, which `record` copies into the record; this check reads
+    only what the main session asked for."""
+    asked = [str((call.get("input") or {}).get("model") or WORKER_DEFAULT_MODEL).lower() for call in ctx.view.get("tool_calls", [])
+             if call.get("name") in AGENT_CALLS and bare((call.get("input") or {}).get("subagent_type", "")) == "worker"]
+    ok = bool(asked) and all(family in model for model in asked)
+    return ok, f"expected the worker on {family}; the calls asked for: {asked or 'no worker call'}", {"asked": asked}
