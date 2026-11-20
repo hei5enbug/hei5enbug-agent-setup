@@ -12,7 +12,10 @@ REPO_ROOT = E2E_ROOT.parents[1]
 TASKS_ROOT = E2E_ROOT / "tasks"
 FIXTURES_ROOT = E2E_ROOT / "fixtures"
 VARIANTS_ROOT = E2E_ROOT / "variants"
-DEFAULT_RUN_ROOT = Path.home() / ".local/state/hei5enbug-agent-setup/harness-eval/runs"
+STATE_ROOT = Path.home() / ".local/state/hei5enbug-agent-setup"
+DEFAULT_RUN_ROOT = STATE_ROOT / "harness-eval/runs"
+MEASURE_LOCK = STATE_ROOT / "measure.lock"
+MEASURE_LOCK_HOLDER_ENV = "HEI5ENBUG_MEASURE_LOCK_HOLDER_PID"
 
 HOST_CLAUDE = "claude"
 HOST_CODEX = "codex"
@@ -52,6 +55,7 @@ RESULT_IDLE_SECONDS = 60.0
 EXIT_USAGE_LIMIT = 75
 EXIT_INTERRUPTED = 130
 EXIT_FAILURE = 1
+EXIT_LOCK_HELD = 11
 
 STATUS_PENDING = "pending"
 STATUS_RUNNING = "running"

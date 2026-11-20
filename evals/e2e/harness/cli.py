@@ -10,8 +10,10 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path[0] = str(Path(__file__).resolve().parents[1])
 
-from harness import campaign, command, plugin_export, records, summarize  # noqa: E402
-from harness.config import DEFAULT_PARALLEL, DEFAULT_RUN_ROOT, EXIT_FAILURE, HOST_CLAUDE, HarnessConfig  # noqa: E402
+from harness import campaign, command, measure_lock, plugin_export, records, summarize  # noqa: E402
+from harness.config import (  # noqa: E402
+    DEFAULT_PARALLEL, DEFAULT_RUN_ROOT, EXIT_FAILURE, EXIT_LOCK_HELD, HOST_CLAUDE, MEASURE_LOCK, HarnessConfig,
+)
 from harness.pilot_check import pilot_check  # noqa: E402
 
 
@@ -45,6 +47,9 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--parallel", type=int, default=DEFAULT_PARALLEL)
     run.add_argument("--only-rerun", help="comma-separated run ids to rerun even when complete")
     run.add_argument("--dry-run", action="store_true")
+    run.add_argument("--wait-lock", type=float, default=0.0, metavar="SECONDS",
+                     help="wait up to this long for the machine-wide measurement lock instead of exiting at once")
+    run.add_argument("--lock-file", type=Path, default=MEASURE_LOCK, help="measurement lock file; the default is shared by every campaign")
     run.add_argument("--allow-changed-inputs", action="store_true",
                      help="resume although a variant ref, task, hidden test, or custom check changed since the campaign began")
     summary = sub.add_parser("summarize", help="print campaign tables")
@@ -103,10 +108,11 @@ def do_run(args: argparse.Namespace, cfg: HarnessConfig) -> int:
         tasks, variants = campaign.load_plan(cfg, task_ids, variant_names)
         campaign.print_plan(sys.stdout, cfg, campaign.build_specs(cfg, args.campaign, task_ids, variant_names, args.reps, hosts), tasks, variants)
         return 0
-    return campaign.run_campaign(
-        cfg, args.campaign, task_ids, variant_names, args.reps, args.parallel, frozenset(split(args.only_rerun)), sys.stdout,
-        allow_changed_inputs=args.allow_changed_inputs, hosts=hosts,
-    )
+    with measure_lock.hold(args.command_line, absolute(args.lock_file), args.wait_lock):
+        return campaign.run_campaign(
+            cfg, args.campaign, task_ids, variant_names, args.reps, args.parallel, frozenset(split(args.only_rerun)), sys.stdout,
+            allow_changed_inputs=args.allow_changed_inputs, hosts=hosts,
+        )
 
 
 def do_summarize(args: argparse.Namespace, cfg: HarnessConfig) -> int:
@@ -156,9 +162,14 @@ def dispatch(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    args = build_parser().parse_args(arguments)
+    args.command_line = "cli.py " + " ".join(arguments)
     try:
         return dispatch(args)
+    except measure_lock.MeasureLockHeld as error:
+        sys.stderr.write(f"error: {error}\n")
+        return EXIT_LOCK_HELD
     except (command.ConfigError, plugin_export.ExportError, records.RecordError) as error:
         sys.stderr.write(f"error: {error}\n")
         return EXIT_FAILURE

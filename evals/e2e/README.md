@@ -218,6 +218,18 @@ file, the task file, the task's prompt file, the task's fixture tree, and the hi
 task, and `scripts/text_review.py`, which grades the text tasks. A resume whose inputs differ stops, unless
 `--allow-changed-inputs` is given; then the harness records the change in `campaign.json`.
 
+### Measurement lock
+
+Two measurements that run at once contaminate each other's wall time. A real `run` (not `--dry-run`, `summarize`,
+`regrade`, or `record`) therefore holds one machine-wide exclusive lock, `measure.lock` in
+`~/.local/state/hei5enbug-agent-setup/`, for its whole run, taken with `flock`. The lock file holds the holder's pid,
+command, and start time. When another process holds the lock, `run` prints that holder to stderr and exits at once with
+code 11, which no failure, usage limit (75), or interrupt (130) uses. `--wait-lock SECONDS` waits that long for the
+lock instead. The kernel drops the lock when the process ends, including by a crash or a kill, so a stale lock never
+stays. An out-of-repo campaign runner that starts `run` units takes the same lock for its own whole run and sets
+`HEI5ENBUG_MEASURE_LOCK_HOLDER_PID` to its pid, so the `run` units it starts pass through; every other process stays
+refused. `--lock-file` replaces the path for tests.
+
 ### Variants
 
 A variant is a JSON file in `variants/`: `{"name", "ref", "settings", "env", "extra_args"}`. `ref` is the plugin

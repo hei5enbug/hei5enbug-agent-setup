@@ -198,6 +198,17 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 프롬프트 파일, 작업의 픽스처 트리, 작업의 숨은 테스트와 사용자 정의 검사, 글쓰기 작업을 채점하는 `scripts/text_review.py`다. 입력이 달라진 상태로 재개하면 멈춘다.
 `--allow-changed-inputs`를 주면 멈추지 않고 그 변경을 `campaign.json`에 기록한다.
 
+### 측정 잠금
+
+두 측정이 동시에 돌면 서로의 경과 시간을 오염시킨다. 그래서 실제 `run`(`--dry-run`, `summarize`, `regrade`,
+`record`는 제외)은 실행 내내 `~/.local/state/hei5enbug-agent-setup/`의 `measure.lock`이라는 기계 전체 배타 잠금을
+`flock`으로 쥔다. 잠금 파일에는 점유자의 pid, 명령, 시작 시각이 들어 있다. 다른 프로세스가 잠금을 쥐고 있으면 `run`은
+그 점유자를 stderr에 출력하고 곧바로 종료 코드 11로 끝난다. 이 코드는 실패, 사용량 한도(75), 중단(130)이 쓰지 않는
+값이다. `--wait-lock SECONDS`를 주면 그만큼 잠금을 기다린다. 프로세스가 충돌이나 강제 종료로 끝나도 커널이 잠금을
+풀기 때문에 낡은 잠금은 남지 않는다. `run` 단위를 시작하는 저장소 밖 캠페인 러너는 자기 실행 내내 같은 잠금을 쥐고
+`HEI5ENBUG_MEASURE_LOCK_HOLDER_PID`를 자기 pid로 설정하므로, 러너가 시작하는 `run` 단위는 통과하고 그 밖의
+프로세스는 계속 거절된다. `--lock-file`은 테스트용으로 경로를 바꾼다.
+
 ### 변형
 
 변형은 `variants/` 안의 JSON 파일이다: `{"name", "ref", "settings", "env", "extra_args"}`. `ref`는 시험할 플러그인
