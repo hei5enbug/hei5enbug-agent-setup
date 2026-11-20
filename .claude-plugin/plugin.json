@@ -9,6 +9,9 @@
   },
   "homepage": "https://github.com/hei5enbug/hei5enbug-agent-setup",
   "repository": "https://github.com/hei5enbug/hei5enbug-agent-setup",
+  "engines": {
+    "claude-code": ">=2.1.307"
+  },
   "keywords": [
     "agent-skills",
     "codex",

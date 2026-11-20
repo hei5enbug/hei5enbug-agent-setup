@@ -6,8 +6,9 @@ On Claude Code, `config/claude-mod.json` loads the mod `hooks/mod/register.js`, 
 built-in subagent block, role pinning, the GPT refusal, and the zsh equals-word block. The [Approval
 guard](approval-guard.md#approval-guard) holds approvals on both hosts. The mod is verified on Claude Code 2.1.307 and
 later, the oldest version whose `claude plugin test` run passes. That run fails on 2.1.306 and earlier, and 2.1.292 also
-refuses to load a hook module that passes `$` into a function imported from another file. The plugin manifest has no
-field that declares a minimum Claude Code version. When the mod does not load, such as on an older Claude Code, with
+refuses to load a hook module that passes `$` into a function imported from another file. The Claude manifest declares
+`engines["claude-code"]` as `>=2.1.307`. The plugins reference documents that field for Claude Code 2.1.323 and later
+and says only 2.0.15 through 2.1.75 reject a manifest that has it, below the minimum above. When the mod does not load, such as on an older Claude Code, with
 `disableAllHooks`, or under a managed policy, these guards are absent and the host's normal permission flow applies.
 
 The zsh equals-word block applies when the Bash tool runs zsh: `CLAUDE_CODE_SHELL` names a zsh binary or, when it does
