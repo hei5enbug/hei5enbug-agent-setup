@@ -18,16 +18,16 @@ def pager(start: str, count: str) -> str:
     return swap(text, "    return total // size or 1\n", count)
 
 
-PAGER_FIXED = pager("    start = (max(page, 1) - 1) * size\n", "    return max(1, -(-total // size))\n")
-PAGER_NO_CLAMP = pager("    start = (page - 1) * size\n", "    return max(1, -(-total // size))\n")
-PAGER_PLUS_ONE = pager("    start = (max(page, 1) - 1) * size\n", "    return total // size + 1\n")
-API_FIXED = swap(swap(hard.API_SOURCE, "import DEFAULT_PAGE, DEFAULT_SIZE, page_count", "import DEFAULT_PAGE, DEFAULT_SIZE, MAX_SIZE, page_count"),
-                 "    size = _positive_int(size, DEFAULT_SIZE)\n", "    size = min(_positive_int(size, DEFAULT_SIZE), MAX_SIZE)\n")
-API_FIXED = swap(API_FIXED, "if page <= pages else None", "if page < pages else None")
-API_NEXT_ONLY = swap(hard.API_SOURCE, "if page <= pages else None", "if page < pages else None")
-API_INLINE = swap(swap(API_FIXED, "    start, stop = page_slice(page, size)\n    pages = page_count(len(products), size)\n",
-                       "    start, stop = (page - 1) * size, page * size\n    pages = max(1, -(-len(products) // size))\n"),
-                  "from shop.pager import DEFAULT_PAGE, DEFAULT_SIZE, MAX_SIZE, page_count, page_slice", "from shop.pager import DEFAULT_PAGE, DEFAULT_SIZE, MAX_SIZE")
+CEIL = "    return max(1, -(-total // size))\n"
+PAGER_FIXED = swap(hard.PAGER_SOURCE, "    return total // size or 1\n", CEIL)
+PAGER_ONE_BASED = pager("    start = (page - 1) * size\n", CEIL)
+PAGER_PLUS_ONE = swap(hard.PAGER_SOURCE, "    return total // size or 1\n", "    return total // size + 1\n")
+API_CLAMPED = swap(swap(swap(hard.API_SOURCE, "import DEFAULT_PAGE, DEFAULT_SIZE, page_count", "import DEFAULT_PAGE, DEFAULT_SIZE, MAX_SIZE, page_count"),
+                        "    size = _positive_int(size, DEFAULT_SIZE)\n", "    size = min(_positive_int(size, DEFAULT_SIZE), MAX_SIZE)\n"),
+                   "if page <= pages else None", "if page < pages else None")
+API_FIXED = swap(API_CLAMPED, "page_slice(page, size)", "page_slice(page - 1, size)")
+API_PAGE_ONLY = swap(hard.API_SOURCE, "page_slice(page, size)", "page_slice(page - 1, size)")
+EXPORT_COMPENSATED = swap(hard.EXPORT_SOURCE_W4, "page_slice(page, size)", "page_slice(page + 1, size)")
 
 LOCKED_TAKE = swap(swap(swap(hard.BUCKET_SOURCE, "import time\n", "import threading\nimport time\n"),
                         "        self._stamp = clock()\n", "        self._stamp = clock()\n        self._lock = threading.Lock()\n"),
@@ -40,8 +40,12 @@ LIMITER_WITH_LOCK = swap(LIMITER_LOCK_IMPORT, "        self._buckets = {}\n", " 
 LIMITER_BUCKET_LOCKED = swap(LIMITER_WITH_LOCK,
                              "        if key not in self._buckets:\n            self._buckets[key] = self._factory()\n        return self._buckets[key]\n",
                              "        with self._lock:\n            if key not in self._buckets:\n                self._buckets[key] = self._factory()\n            return self._buckets[key]\n")
-LIMITER_FIXED = swap(LIMITER_BUCKET_LOCKED, "        return {key: bucket.remaining() for key, bucket in self._buckets.items()}\n",
+LIMITER_PLAIN_LOCK = swap(LIMITER_BUCKET_LOCKED, "        return {key: bucket.remaining() for key, bucket in self._buckets.items()}\n",
                      "        with self._lock:\n            items = list(self._buckets.items())\n        return {key: bucket.remaining() for key, bucket in items}\n")
+LIMITER_FIXED = LIMITER_PLAIN_LOCK.replace("threading.Lock()", "threading.RLock()")
+METRICS_LOCKED = swap(swap(swap(hard.METRICS_SOURCE, "class Counter", "import threading\n\n\nclass Counter"),
+                           "        self.count = 0\n", "        self.count = 0\n        self._lock = threading.Lock()\n"),
+                      "        self.count += 1\n", "        with self._lock:\n            self.count += 1\n")
 LIMITER_SETDEFAULT = swap(hard.LIMITER_SOURCE, "        if key not in self._buckets:\n            self._buckets[key] = self._factory()\n        return self._buckets[key]\n",
                           "        return self._buckets.setdefault(key, self._factory())\n")
 LIMITER_ALLOW_LOCKED = swap(swap(LIMITER_WITH_LOCK, "    def allow(self, key, n=1):\n        return self.bucket(key).take(n)\n",
@@ -99,29 +103,45 @@ SETTINGS_VIA_MODULE = ("from config.resolve import ENV_PREFIX, parse_env, resolv
 CLI_VIA_MODULE = CLI_FIXED.replace("from config.settings import resolve", "from config.resolve import resolve")
 EXPORT_VIA_MODULE = EXPORT_FIXED.replace("from config.settings import ENV_PREFIX, resolve", "from config.resolve import ENV_PREFIX, resolve")
 
+DIFF_FIXED = '''from config.defaults import DEFAULTS
+from config.settings import resolve
+
+
+def sources(file_values, env, cli=None):
+    """{name: source} for every setting, where source is cli, env, file, or default. It follows the same precedence as get_setting."""
+    return {name: resolve(name, file_values, env, cli)[1] for name in DEFAULTS}
+'''
+DIFF_VIA_MODULE = DIFF_FIXED.replace("from config.settings import resolve", "from config.resolve import resolve")
+
 SOLUTIONS = {
     "W4": {"shop/pager.py": PAGER_FIXED, "shop/api.py": API_FIXED},
     "W5": {"ratelimit/bucket.py": BUCKET_FIXED, "ratelimit/limiter.py": LIMITER_FIXED},
-    "W6": {"config/settings.py": SETTINGS_FIXED, "config/cli.py": CLI_FIXED, "config/export.py": EXPORT_FIXED},
+    "W6": {"config/settings.py": SETTINGS_FIXED, "config/cli.py": CLI_FIXED, "config/export.py": EXPORT_FIXED, "config/diff.py": DIFF_FIXED},
 }
 # Each shallow fix is a plausible reading of the assignment that stops early. The note names the requirement it misses.
 SHALLOW = {
     "W4": {
-        "pager only": ({"shop/pager.py": PAGER_NO_CLAMP}, "api still echoes an oversized size and reports a next page on the last page"),
-        "api only": ({"shop/api.py": API_INLINE}, "pager functions stay wrong when called on their own"),
+        "pager made one-based": ({"shop/pager.py": PAGER_ONE_BASED, "shop/api.py": API_CLAMPED}, "export and the pager's own contract count from 0"),
+        "pager one-based and export compensated": ({"shop/pager.py": PAGER_ONE_BASED, "shop/api.py": API_CLAMPED, "shop/export.py": EXPORT_COMPENSATED},
+                                                   "the pager's documented zero-based contract changed"),
+        "api shift only": ({"shop/api.py": API_PAGE_ONLY}, "page count, reported size, and next page stay wrong"),
         "ceiling written as floor plus one": ({"shop/pager.py": PAGER_PLUS_ONE, "shop/api.py": API_FIXED}, "an exact multiple gets an extra page"),
-        "pager and the next page only": ({"shop/pager.py": PAGER_FIXED, "shop/api.py": API_NEXT_ONLY}, "an oversized size is still reported as asked"),
     },
     "W5": {
         "lock in take and a setdefault": ({"ratelimit/bucket.py": LOCKED_TAKE, "ratelimit/limiter.py": LIMITER_SETDEFAULT}, "factory runs more than once and remaining is unlocked"),
-        "lock only in the limiter": ({"ratelimit/limiter.py": LIMITER_ALLOW_LOCKED}, "a bucket shared on its own is still unsafe"),
+        "lock only in the limiter": ({"ratelimit/limiter.py": LIMITER_ALLOW_LOCKED}, "a bucket shared on its own is still unsafe, and a factory reading the limiter deadlocks"),
         "locks everywhere except stats": ({"ratelimit/bucket.py": BUCKET_FIXED, "ratelimit/limiter.py": LIMITER_BUCKET_LOCKED}, "stats iterates the dict while keys are added"),
+        "plain lock around the factory": ({"ratelimit/bucket.py": BUCKET_FIXED, "ratelimit/limiter.py": LIMITER_PLAIN_LOCK}, "a factory that reads the limiter deadlocks"),
+        "also a lock in the single-thread counter": ({"ratelimit/bucket.py": BUCKET_FIXED, "ratelimit/limiter.py": LIMITER_FIXED, "ratelimit/metrics.py": METRICS_LOCKED},
+                                                     "a file that must stay as it is changed"),
     },
     "W6": {
-        "get_setting only": ({"config/settings.py": SETTINGS_IN_PLACE}, "describe and to_env_lines keep ignoring falsy values"),
+        "get_setting only": ({"config/settings.py": SETTINGS_IN_PLACE}, "describe, to_env_lines, and sources keep ignoring falsy values"),
         "is not None for every source": ({"config/settings.py": SETTINGS_ENV_TOO, "config/cli.py": CLI_IN_PLACE}, "an empty environment text must count as unset"),
-        "settings and describe only": ({"config/settings.py": SETTINGS_IN_PLACE, "config/cli.py": CLI_IN_PLACE}, "to_env_lines keeps ignoring falsy values"),
+        "every resolver except sources": ({"config/settings.py": SETTINGS_FIXED, "config/cli.py": CLI_FIXED, "config/export.py": EXPORT_FIXED}, "sources keeps ignoring falsy values"),
         "shared helper in a new module": ({"config/resolve.py": RESOLVE_MODULE, "config/settings.py": SETTINGS_VIA_MODULE, "config/cli.py": CLI_VIA_MODULE,
-                                           "config/export.py": EXPORT_VIA_MODULE}, "adds a module and changes four files"),
+                                           "config/export.py": EXPORT_VIA_MODULE, "config/diff.py": DIFF_VIA_MODULE}, "adds a module and changes five files"),
+        "falsy values accepted by validation": ({"config/settings.py": SETTINGS_FIXED, "config/cli.py": CLI_FIXED, "config/export.py": EXPORT_FIXED, "config/diff.py": DIFF_FIXED,
+                                                 "config/validate.py": "def check(file_values):\n    return None\n"}, "validation of 0 must stay and a fifth file changed"),
     },
 }

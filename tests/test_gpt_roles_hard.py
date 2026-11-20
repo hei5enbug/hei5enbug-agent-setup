@@ -40,9 +40,9 @@ class HardWorkerCalibrationTest(unittest.TestCase):
             repo, base = self.seed(case_id, refs.SOLUTIONS[case_id])
             self.assertEqual(gr_worker_cases.failures(case_id, repo, base), [], case_id)
 
-    def test_흔한_얕은_수정은_사례마다_둘_이상_모두_실패한다(self):
+    def test_흔한_얕은_수정은_사례마다_넷_이상_모두_실패한다(self):
         for case_id in HARD:
-            self.assertGreaterEqual(len(refs.SHALLOW[case_id]), 2, case_id)
+            self.assertGreaterEqual(len(refs.SHALLOW[case_id]), 4, case_id)
             for name, (files, missed) in refs.SHALLOW[case_id].items():
                 repo, base = self.seed(case_id, files)
                 self.assertTrue(gr_worker_cases.failures(case_id, repo, base), f"{case_id} shallow fix passed: {name} ({missed})")
@@ -53,10 +53,12 @@ class HardWorkerCalibrationTest(unittest.TestCase):
             for name, (files, _) in refs.SHALLOW[case_id].items():
                 repo, base = self.seed(case_id, files)
                 reasons[(case_id, name)] = " | ".join(gr_worker_cases.failures(case_id, repo, base))
-        self.assertIn("hidden tests fail", reasons[("W4", "pager only")])
+        self.assertIn("visible tests fail", reasons[("W4", "pager made one-based")])
+        self.assertIn("hidden tests fail", reasons[("W4", "api shift only")])
+        self.assertIn("visible tests fail", reasons[("W5", "plain lock around the factory")])
         self.assertIn("hidden tests fail", reasons[("W5", "locks everywhere except stats")])
         self.assertIn("visible tests fail", reasons[("W6", "is not None for every source")])
-        self.assertIn("cap is 3", reasons[("W6", "shared helper in a new module")])
+        self.assertIn("cap is 4", reasons[("W6", "shared helper in a new module")])
         self.assertIn("a new file outside tests/", reasons[("W6", "shared helper in a new module")])
 
     def test_상한은_테스트_폴더를_세지_않는다(self):
