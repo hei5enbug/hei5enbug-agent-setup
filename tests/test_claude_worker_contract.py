@@ -213,7 +213,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
             {
                 "type": "string",
                 "title": "Implementation worker",
-                "description": "Route implementation work: auto (the main session picks per task: haiku for easy work, sonnet for normal or hard work, and sol only when a Claude route fails or stops on a usage limit), codex (Codex on gpt-5.6-luna at high), haiku (the plugin worker on its Worker model and Worker effort, claude-haiku-5-5 at high by default), sol (gpt-6.1-sol at high through the role runner), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
+                "description": "Route implementation work: auto (the main session picks per task: haiku for easy work, sonnet for normal or hard work, and a GPT worker, gpt-6-luna for easy work or gpt-6.2-sol for hard work, only when a Claude route fails or stops on a usage limit), codex (a GPT worker through the role runner at high, gpt-6-luna for easy work or gpt-6.2-sol for hard work), haiku (the plugin worker on its Worker model and Worker effort, claude-haiku-5-5 at high by default), sol (gpt-6.2-sol at high through the role runner), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
                 "options": ["auto", "codex", "haiku", "sol", "sonnet"],
                 "default": "auto",
             },
@@ -284,7 +284,7 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         """Codex worker는 role_runner worker로 실행하고, 세션 폴더 밖 디렉터리는 --add-dir로만 추가한다."""
         # Given
         expected = (
-            "Write the assignment, with the usual assignment fields, to a file and run the `worker` role.",
+            "Write the assignment, with the usual assignment fields, to a file and run the `worker` role of the role runner with `--model` set by [GPT worker model by difficulty](model-routing.md#gpt-worker-model-by-difficulty).",
             "Add `--add-dir <dir>` only for a directory outside the session folder that the task must write.",
             "The plugin mod asks once per session.",
         )
@@ -405,7 +405,7 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         self.assertIn("where `<Source directory>` is the line in the session context", section)
         self.assertIn("Never run `cd` before it.", section)
         self.assertIn(
-            "Add `--model <id>` only for `reviewer` and `--add-dir <dir>` only for `worker`, a writing capability, or a `write` agent.",
+            "Add `--model <id>` only for `reviewer` and for a GPT worker's model choice, and `--add-dir <dir>` only for `worker`, a writing capability, or a `write` agent.",
             section,
         )
         for row in (

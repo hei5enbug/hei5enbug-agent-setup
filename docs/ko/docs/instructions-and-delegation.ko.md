@@ -102,14 +102,14 @@ UI 코드, 시각 디자인, 다이어그램 작업은 대신 호스트의 desig
 
 | 호스트 | 구현 에이전트 | 모델과 사고 강도 |
 |---|---|---|
-| Codex | Claude를 실행하는 `role_runner.py implementation --host codex`; 대체는 rollout 기록으로 검증한 플러그인 `worker` 역할 | `claude-sonnet-5-5`, `high`(최대 `xhigh`); 대체는 `codex_worker_model`, `codex_worker_effort`(기본 `gpt-5.6-luna`, `high`) |
-| Claude Code | `implementation_worker`가 `auto`(기본)이면 메인 세션이 작업마다 고릅니다. 쉬운 작업은 `hei5enbug-agent-setup:worker`, 보통·어려운 작업은 `hei5enbug-agent-setup:sonnet-worker`이며, Claude 경로가 실패하거나 사용량 한도로 중단되면 `role_runner.py implementation --fallback`을 씁니다. 고정 설정은 `sonnet`, `sol`, `codex`(`role_runner.py worker`), `haiku`(대체 경로는 `role_runner.py agent --name hei5enbug-agent-setup:worker --fallback`)를 강제합니다 | `worker_model`, `worker_effort`(기본 `claude-haiku-5-5`, `high`)(쉬움); `claude-sonnet-5-5`, `high`(보통·어려움); `gpt-6.1-sol`, `high`(최대 `xhigh`)(대체); `gpt-5.6-luna`, `high`(최대 `xhigh`)(`codex`) |
+| Codex | Claude를 실행하는 `role_runner.py implementation --host codex`; 대체는 rollout 기록으로 검증한 플러그인 `worker` 역할 | `claude-sonnet-5-5`, `high`(최대 `xhigh`); 대체는 `codex_worker_model`, `codex_worker_effort`(기본 `gpt-6-luna`, `high`) |
+| Claude Code | `implementation_worker`가 `auto`(기본)이면 메인 세션이 작업마다 고릅니다. 쉬운 작업은 `hei5enbug-agent-setup:worker`, 보통·어려운 작업은 `hei5enbug-agent-setup:sonnet-worker`이며, Claude 경로가 실패하거나 사용량 한도로 중단되면 난이도별 GPT worker 모델로 `role_runner.py implementation --fallback`을 씁니다. 고정 설정은 `sonnet`, `sol`(`gpt-6.2-sol`), `codex`(`role_runner.py worker`, 난이도별 모델), `haiku`(대체 경로는 `role_runner.py agent --name hei5enbug-agent-setup:worker --fallback`)를 강제합니다 | `worker_model`, `worker_effort`(기본 `claude-haiku-5-5`, `high`)(쉬움); `claude-sonnet-5-5`, `high`(보통·어려움); 쉬운 작업은 `gpt-6-luna`, 어려운 작업은 `gpt-6.2-sol`, `high`(최대 `xhigh`)(대체와 `codex`); `gpt-6.2-sol`, `high`(최대 `xhigh`)(`sol`) |
 | Codex, designer | rollout 기록으로 검증한 플러그인 `designer` 역할, 대체는 `role_runner.py agent --name designer --fallback` | `gpt-6-astra`, `high`(최대 `xhigh`); 대체 `claude-opus-5-5`, `high`(최대 `xhigh`) |
 | Claude Code, designer | 서브에이전트 기록이나 mod의 역할 고정으로 검증한 `hei5enbug-agent-setup:designer`, 대체는 `role_runner.py design` | `claude-opus-5-5`, `xhigh`, 기존 UI를 바꾸는 작업은 호출별 `effort`로 `high`; 대체 `gpt-6-astra`, `high`(최대 `xhigh`) |
-| Codex, 로컬 scout | rollout 기록으로 검증한 플러그인 `scout` 역할 | `gpt-5.6-luna`, `high`(최대 `xhigh`) |
-| Claude Code, 로컬 scout | `role_runner.py scout`, 대체 시 `hei5enbug-agent-setup:scout` | `gpt-5.6-luna`, `high`(최대 `xhigh`); 대체 시 `claude-sonnet-5-5`, `medium` |
-| Codex, 공개 researcher | 웹 검색만 쓰고 셸 네트워크는 쓰지 않는 `role_runner.py researcher`, 세션 기록으로 검증 | `gpt-5.6-luna`, `high`(최대 `xhigh`) |
-| Claude Code, 공개 researcher | 웹 검색만 쓰고 셸 네트워크는 쓰지 않는 `role_runner.py researcher`, 대체 시 웹 검색과 가져오기 도구를 가진 `hei5enbug-agent-setup:scout` | `gpt-5.6-luna`, `high`(최대 `xhigh`); 대체 시 `claude-sonnet-5-5`, `medium` |
+| Codex, 로컬 scout | rollout 기록으로 검증한 플러그인 `scout` 역할 | `gpt-6-luna`, `high`(최대 `xhigh`) |
+| Claude Code, 로컬 scout | `role_runner.py scout`, 대체 시 `hei5enbug-agent-setup:scout` | `gpt-6-luna`, `high`(최대 `xhigh`); 대체 시 `claude-sonnet-5-5`, `medium` |
+| Codex, 공개 researcher | 웹 검색만 쓰고 셸 네트워크는 쓰지 않는 `role_runner.py researcher`, 세션 기록으로 검증 | `gpt-6-luna`, `high`(최대 `xhigh`) |
+| Claude Code, 공개 researcher | 웹 검색만 쓰고 셸 네트워크는 쓰지 않는 `role_runner.py researcher`, 대체 시 웹 검색과 가져오기 도구를 가진 `hei5enbug-agent-setup:scout` | `gpt-6-luna`, `high`(최대 `xhigh`); 대체 시 `claude-sonnet-5-5`, `medium` |
 | Codex, 스킬 검토 | `role_runner.py review`; 대체는 rollout 기록으로 검증한 플러그인 `reviewer` | `claude-opus-5-5`, `high`(최대 `xhigh`); 대체 `gpt-6.1-terra`, `high`(최대 `xhigh`) |
 | Claude Code, 스킬 검토 | `review_model` 설정을 쓰는 `role_runner.py reviewer`; 대체는 `hei5enbug-agent-setup:reviewer` | `review_model`(기본 `gpt-6-astra`), `high`(최대 `xhigh`); 대체 `claude-opus-5-5`, `high` |
 | Skill Builder 시험 실행 및 기타 비검토 참여자 | Skill Builder 어댑터에 따른 호스트의 상위 모델 | Codex: `gpt-6.1-sol`, `xhigh`; Claude Code: `claude-opus-5-5`, `high` |
@@ -119,7 +119,7 @@ Claude Code에서는 `scripts/role_runner.py`가 scout, researcher, reviewer, Co
 플러그인 에이전트의 다른 모델 계열 대체 항목을 실행합니다. 메인 세션은 할당을 파일로 쓰고 세션 폴더에서
 `python3 <plugin>/scripts/role_runner.py <role-or-capability>` 또는
 `python3 <plugin>/scripts/role_runner.py agent --name <name> --fallback` 을
-`--assignment <file> --result <file>`과 함께 실행합니다. `reviewer`에는 `--model <id>`, `worker`, 쓰기 기능, 쓰기 접근 에이전트에는
+`--assignment <file> --result <file>`과 함께 실행합니다. `reviewer`와 난이도별 GPT worker 모델에는 `--model <id>`, `worker`, 쓰기 기능, 쓰기 접근 에이전트에는
 `--add-dir <dir>`, MCP 도구나 네트워크가 필요한 기능이나 에이전트에는 `--mcp`, 기능의 호스트 항목을 고르려면 `--host claude|codex`,
 대체 항목에는 `--fallback`, 실행을 이어 가려면 상태 줄의 `evidence.session`으로 `--resume <session_id>`를 더할 수 있습니다.
 `--effort <level>`은 항목에 지정된 범위 안에서 사고 강도를 높이며, 하한이 기본값입니다. `--user-requested`는 사용자가 그

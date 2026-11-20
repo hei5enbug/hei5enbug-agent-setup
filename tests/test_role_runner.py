@@ -163,7 +163,7 @@ if name == "codex":
         elif not config.get("no_tool_calls"):
             lines.append(json.dumps({{"type": "response_item", "payload": {{"type": "function_call", "name": "exec"}}}}))
         lines.append(json.dumps({{"type": "response_item", "payload": {{"type": "web_search_call"}}}}))
-        for turn in config.get("turns", [{{"model": "gpt-5.6-luna", "effort": "high"}}]):
+        for turn in config.get("turns", [{{"model": "gpt-6-luna", "effort": "high"}}]):
             turn = dict(turn)
             if scratch is None:
                 turn.setdefault("sandbox_policy", {{"type": sandbox}})
@@ -274,7 +274,7 @@ class RoleRunnerTest(unittest.TestCase):
     def status(self, completed):
         return json.loads(completed.stdout.strip().splitlines()[-1])
 
-    def codex_argv(self, *, search=False, sandbox="read-only", model="gpt-5.6-luna", effort="high", add_dirs=(), mcp_off=True, output=None, validation=False):
+    def codex_argv(self, *, search=False, sandbox="read-only", model="gpt-6-luna", effort="high", add_dirs=(), mcp_off=True, output=None, validation=False):
         """The assignment run of a Codex child: the scoped exec resume of the preflight thread when it writes, else one fresh exec."""
         if sandbox == "workspace-write":
             return self.codex_resume_argv(
@@ -306,7 +306,7 @@ class RoleRunnerTest(unittest.TestCase):
             return ["-c", 'default_permissions="role-runner-scratch"', "-c", f"permissions.role-runner-scratch={table}", "--skip-git-repo-check"]
         return ["-c", f'sandbox_mode="{sandbox}"'] if resume else ["-s", sandbox]
 
-    def codex_start_argv(self, *, search=False, sandbox="read-only", model="gpt-5.6-luna", effort="high", add_dirs=(), mcp_off=True, output=None, validation=False):
+    def codex_start_argv(self, *, search=False, sandbox="read-only", model="gpt-6-luna", effort="high", add_dirs=(), mcp_off=True, output=None, validation=False):
         """The fresh exec of a Codex child: the assignment of a read-only run, or the hook preflight of a writing run."""
         argv = ["--search"] if search else []
         argv += ["exec", "-m", model, "-c", f'model_reasoning_effort="{effort}"', *self.sandbox_flags(sandbox, validation), "-C", str(self.workspace)]
@@ -325,7 +325,7 @@ class RoleRunnerTest(unittest.TestCase):
         """The override that drops the host skill catalog, which only a read-only Codex run sends."""
         return ["-c", "skills.max_context_tokens=1"] if sandbox == "read-only" else []
 
-    def codex_resume_argv(self, *, search=False, sandbox="read-only", model="gpt-5.6-luna", effort="high", roots=(), mcp_off=True, output=None, thread=THREAD, validation=False):
+    def codex_resume_argv(self, *, search=False, sandbox="read-only", model="gpt-6-luna", effort="high", roots=(), mcp_off=True, output=None, thread=THREAD, validation=False):
         argv = ["--search"] if search else []
         argv += ["exec", "resume", thread, "-m", model, "-c", f'model_reasoning_effort="{effort}"', *self.sandbox_flags(sandbox, validation, resume=True)]
         argv += self.mcp_off_flags(mcp_off)
@@ -411,7 +411,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual("codex answer", self.result.read_text())
         status = self.status(completed)
         self.assertEqual(
-            {"role": "scout", "runner": "codex", "model": "gpt-5.6-luna", "effort": "high", "verified": True, "exit": 0},
+            {"role": "scout", "runner": "codex", "model": "gpt-6-luna", "effort": "high", "verified": True, "exit": 0},
             {key: status[key] for key in ("role", "runner", "model", "effort", "verified", "exit")},
         )
         self.assertEqual(1, status["evidence"]["turns"])
@@ -443,6 +443,52 @@ class RoleRunnerTest(unittest.TestCase):
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertEqual(self.codex_argv(sandbox="workspace-write", add_dirs=directories), self.logged()["argv"])
+
+    def test_worker는_난이도에_따라_고른_worker_모델_두_개만__model_옵션으로_받는다(self):
+        """worker 역할은 기본 gpt-6-luna 외에 레지스트리의 worker 모델 gpt-6.2-sol을 --model로 받아 그 모델로 실행하고 검증한다."""
+        # Given
+        config = {"turns": [{"model": "gpt-6.2-sol", "effort": "high"}]}
+
+        # When
+        completed = self.run_runner("worker", "--model", "gpt-6.2-sol", config=config)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(self.codex_argv(model="gpt-6.2-sol", sandbox="workspace-write"), self.logged()["argv"])
+        status = self.status(completed)
+        self.assertEqual(("gpt-6.2-sol", True), (status["model"], status["verified"]))
+
+    def test_implementation_대체는_난이도에_따라_gpt_6_luna로_실행할_수_있다(self):
+        """Claude 호스트의 implementation 대체에 --model gpt-6-luna를 주면 레지스트리의 gpt-6.2-sol 대신 gpt-6-luna로 실행한다."""
+        # Given
+        directory = str(self.base / "approved")
+        config = {"turns": [{"model": "gpt-6-luna", "effort": "high"}]}
+        arguments = ["implementation", "--host", "claude", "--fallback", "--model", "gpt-6-luna", "--add-dir", directory,
+                     "--instructions", str(self.instructions)]
+
+        # When
+        completed = self.run_runner(*arguments, config=config)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(self.codex_argv(model="gpt-6-luna", sandbox="workspace-write", add_dirs=[directory]), self.logged()["argv"])
+
+    def test_worker_모델_선택은_worker_대상에만_열려_있다(self):
+        """gpt-6.2-sol은 worker, implementation, worker 에이전트에서만 --model이 되고 scout, reviewer, 다른 모델은 종료 코드 2이다."""
+        # Given
+        cases = [
+            ["scout", "--model", "gpt-6.2-sol"],
+            ["reviewer", "--model", "gpt-6.2-sol"],
+            ["researcher", "--model", "gpt-6.2-sol"],
+            ["worker", "--model", "gpt-6.1-terra"],
+            ["agent", "--name", "hei5enbug-agent-setup:scout", "--fallback", "--model", "gpt-6.2-sol"],
+        ]
+
+        # When
+        codes = [self.run_runner(*arguments).returncode for arguments in cases]
+
+        # Then
+        self.assertEqual([2] * len(cases), codes)
 
     def test_reviewer는_기본_모델로_gpt_6_astra를_쓴다(self):
         """reviewer에 --model이 없으면 gpt-6-astra로 codex exec를 실행한다."""
@@ -630,9 +676,9 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertIn("designer", str(caught.exception))
 
     def test_스크립트의_모델_ID는_모델_고정값_여덟_개와_같다(self):
-        """검토 모델 목록은 PINS의 여덟 ID와 정확히 같다."""
+        """검토 모델 목록은 PINS에서 GPT worker 전용 고정값을 뺀 여덟 ID와 정확히 같다."""
         # Given
-        pins = set(PINS.values())
+        pins = set(PINS.values()) - {PINS["gpt-sol-worker"]}
 
         # When
         listed = set(role_runner.REVIEW_MODELS)
@@ -660,7 +706,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_rollout의_effort가_다르면_종료_코드_4이다(self):
         """turn_context effort가 high가 아니면 종료 코드 4를 반환한다."""
         # Given
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "xhigh"}]}
+        config = {"turns": [{"model": "gpt-6-luna", "effort": "xhigh"}]}
 
         # When
         completed = self.run_runner("scout", config=config)
@@ -672,8 +718,8 @@ class RoleRunnerTest(unittest.TestCase):
     def test_turn_context_하나라도_다르면_종료_코드_4이다(self):
         """여러 turn_context 중 하나만 달라도 종료 코드 4를 반환한다."""
         # Given
-        good = {"model": "gpt-5.6-luna", "effort": "high"}
-        config = {"turns": [good, good, {"model": "gpt-5.6-luna"}]}
+        good = {"model": "gpt-6-luna", "effort": "high"}
+        config = {"turns": [good, good, {"model": "gpt-6-luna"}]}
 
         # When
         completed = self.run_runner("scout", config=config)
@@ -684,7 +730,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_모든_turn_context가_맞으면_여러_개여도_통과한다(self):
         """turn_context가 여러 개여도 모두 기대값이면 검증된다."""
         # Given
-        good = {"model": "gpt-5.6-luna", "effort": "high"}
+        good = {"model": "gpt-6-luna", "effort": "high"}
         config = {"turns": [good, good, good]}
 
         # When
@@ -736,7 +782,7 @@ class RoleRunnerTest(unittest.TestCase):
         other = self.codex_home / "sessions" / "2026" / "10" / "12"
         other.mkdir(parents=True)
         (other / "rollout-2026-10-12T00-00-00-other-thread.jsonl").write_text(
-            json.dumps({"type": "turn_context", "payload": {"model": "gpt-5.6-luna", "effort": "high"}}) + "\n"
+            json.dumps({"type": "turn_context", "payload": {"model": "gpt-6-luna", "effort": "high"}}) + "\n"
         )
         config = {"no_rollout": True}
 
@@ -749,7 +795,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_turn_context의_쓰기_가능_경로가_scratch_외에_더_있으면_종료_코드_4이고_결과를_폐기한다(self):
         """scout은 scratch 폴더만 쓸 수 있어야 하므로 turn_context가 작업 폴더도 쓸 수 있으면 종료 코드 4이고 결과를 남기지 않는다."""
         # Given
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "high", "permission_profile": self.profile(writable=["/tmp/work/demo-a"])}]}
+        config = {"turns": [{"model": "gpt-6-luna", "effort": "high", "permission_profile": self.profile(writable=["/tmp/work/demo-a"])}]}
 
         # When
         completed = self.run_runner("scout", config=config)
@@ -761,11 +807,11 @@ class RoleRunnerTest(unittest.TestCase):
     def test_turn_context에_쓰기_제한_정보가_없으면_종료_코드_4이다(self):
         """permission_profile이 없거나 비었거나 제한 없는 종류면 쓰기 제한을 확인할 수 없어 종료 코드 4이다."""
         cases = [
-            {"model": "gpt-5.6-luna", "effort": "high", "permission_profile": None},
-            {"model": "gpt-5.6-luna", "effort": "high", "permission_profile": {}},
-            {"model": "gpt-5.6-luna", "effort": "high", "permission_profile": {"type": "disabled"}},
-            {"model": "gpt-5.6-luna", "effort": "high", "permission_profile": {"type": "managed", "file_system": {"type": "unrestricted"}}},
-            {"model": "gpt-5.6-luna", "effort": "high", "sandbox_policy": {"type": "read-only"}, "permission_profile": None},
+            {"model": "gpt-6-luna", "effort": "high", "permission_profile": None},
+            {"model": "gpt-6-luna", "effort": "high", "permission_profile": {}},
+            {"model": "gpt-6-luna", "effort": "high", "permission_profile": {"type": "disabled"}},
+            {"model": "gpt-6-luna", "effort": "high", "permission_profile": {"type": "managed", "file_system": {"type": "unrestricted"}}},
+            {"model": "gpt-6-luna", "effort": "high", "sandbox_policy": {"type": "read-only"}, "permission_profile": None},
         ]
         for turn in cases:
             with self.subTest(turn=turn):
@@ -782,7 +828,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_쓰기_역할의_turn_context는_workspace_write이면_통과한다(self):
         """worker는 workspace-write로 실행하므로 그 sandbox를 가진 turn_context는 검증을 통과한다."""
         # Given
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "high", "sandbox_policy": {"type": "workspace-write"}}]}
+        config = {"turns": [{"model": "gpt-6-luna", "effort": "high", "sandbox_policy": {"type": "workspace-write"}}]}
 
         # When
         completed = self.run_runner("worker", config=config)
@@ -833,7 +879,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_codex_resume에서도_turn_context의_쓰기_가능_경로가_scratch_외에_더_있으면_종료_코드_4이다(self):
         """resume한 실행의 turn_context가 scratch 외의 경로도 쓸 수 있으면 종료 코드 4이고 결과를 남기지 않는다."""
         # Given
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "high", "permission_profile": self.profile(writable=["/tmp/work/demo-a"])}]}
+        config = {"turns": [{"model": "gpt-6-luna", "effort": "high", "permission_profile": self.profile(writable=["/tmp/work/demo-a"])}]}
         self.beat("codex", THREAD)
 
         # When
@@ -980,8 +1026,8 @@ class RoleRunnerTest(unittest.TestCase):
         # Given
         cases = [
             dict(arguments=["planner"]),
-            dict(arguments=["scout", "--model", "gpt-5.6-luna"]),
-            dict(arguments=["worker", "--model", "gpt-5.6-luna"]),
+            dict(arguments=["scout", "--model", "gpt-6-luna"]),
+            dict(arguments=["worker", "--model", "gpt-6.1-sol"]),
             dict(arguments=["reviewer", "--add-dir", str(self.base)]),
             dict(arguments=["scout", "--add-dir", str(self.base)]),
             dict(arguments=["reviewer", "--model", "gpt-5.4"]),
@@ -1100,7 +1146,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(self.codex_argv(), self.logged()["argv"])
         status = self.status(completed)
         self.assertEqual(
-            ("investigation", None, False, "codex", "gpt-5.6-luna", "high", True),
+            ("investigation", None, False, "codex", "gpt-6-luna", "high", True),
             (
                 status["capability"], status["role"], status["fallback"], status["runner"], status["model"],
                 status["effort"], status["verified"],
@@ -1229,7 +1275,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_user_requested는_via가_agent인_primary를_entry의_모델과_요청한_effort로_실행기에서_실행한다(self):
         """Codex investigation의 primary는 via agent이지만 --user-requested --effort xhigh는 entry의 모델 luna와 xhigh로 실행하고 기록으로 검증한다."""
         # Given
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "xhigh"}]}
+        config = {"turns": [{"model": "gpt-6-luna", "effort": "xhigh"}]}
         arguments = ["investigation", "--host", "codex", "--user-requested", "--effort", "xhigh", "--instructions", str(self.instructions)]
 
         # When
@@ -1237,10 +1283,10 @@ class RoleRunnerTest(unittest.TestCase):
 
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
-        self.assertEqual(self.codex_argv(model="gpt-5.6-luna", effort="xhigh"), self.logged()["argv"])
+        self.assertEqual(self.codex_argv(model="gpt-6-luna", effort="xhigh"), self.logged()["argv"])
         status = self.status(completed)
         self.assertEqual(
-            ("codex", "gpt-5.6-luna", "xhigh", True, True, 0),
+            ("codex", "gpt-6-luna", "xhigh", True, True, 0),
             (status["runner"], status["model"], status["effort"], status["verified"], status["user_requested"], status["exit"]),
         )
 
@@ -1274,7 +1320,7 @@ class RoleRunnerTest(unittest.TestCase):
         """Claude 호스트의 scout 에이전트 대체는 frontmatter를 뺀 정의 본문과 Assigned workers 절을 담고, 웹 도구를 나열해 --search를 붙인다."""
         # Given
         arguments = ["agent", "--name", "hei5enbug-agent-setup:scout", "--fallback"]
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "high"}]}
+        config = {"turns": [{"model": "gpt-6-luna", "effort": "high"}]}
 
         # When
         completed = self.run_runner(*arguments, config=config)
@@ -1290,7 +1336,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertTrue(prompt.endswith("## Assignment\n\nFind the answer.\nSECOND LINE\n"))
         status = self.status(completed)
         self.assertEqual(
-            ("hei5enbug-agent-setup:scout", True, "codex", "gpt-5.6-luna", "high"),
+            ("hei5enbug-agent-setup:scout", True, "codex", "gpt-6-luna", "high"),
             (status["agent"], status["fallback"], status["runner"], status["model"], status["effort"]),
         )
 
@@ -1299,7 +1345,7 @@ class RoleRunnerTest(unittest.TestCase):
         # Given
         directory = str(self.base / "approved")
         arguments = ["agent", "--name", "hei5enbug-agent-setup:sonnet-worker", "--fallback", "--add-dir", directory]
-        config = {"turns": [{"model": "gpt-6.1-sol", "effort": "high"}]}
+        config = {"turns": [{"model": "gpt-6.2-sol", "effort": "high"}]}
 
         # When
         completed = self.run_runner(*arguments, config=config)
@@ -1307,7 +1353,7 @@ class RoleRunnerTest(unittest.TestCase):
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertEqual(
-            self.codex_argv(model="gpt-6.1-sol", sandbox="workspace-write", add_dirs=[directory]), self.logged()["argv"],
+            self.codex_argv(model="gpt-6.2-sol", sandbox="workspace-write", add_dirs=[directory]), self.logged()["argv"],
         )
 
     def test_agent의_쓰기_에이전트는_add_dir이_없으면_자식을_띄우지_않고_종료_코드_2이다(self):
@@ -1362,7 +1408,7 @@ class RoleRunnerTest(unittest.TestCase):
         # Given
         directory = str(self.base / "approved")
         arguments = ["agent", "--name", "hei5enbug-agent-setup:sonnet-worker", "--fallback", "--add-dir", directory, "--mcp"]
-        config = {"turns": [{"model": "gpt-6.1-sol", "effort": "high"}]}
+        config = {"turns": [{"model": "gpt-6.2-sol", "effort": "high"}]}
 
         # When
         completed = self.run_runner(*arguments, config=config)
@@ -1370,7 +1416,7 @@ class RoleRunnerTest(unittest.TestCase):
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
         expected = [
-            "exec", "resume", THREAD, "-m", "gpt-6.1-sol", "-c", 'model_reasoning_effort="high"',
+            "exec", "resume", THREAD, "-m", "gpt-6.2-sol", "-c", 'model_reasoning_effort="high"',
             "-c", 'sandbox_mode="workspace-write"', "-c", "sandbox_workspace_write.network_access=true",
             "-c", f"sandbox_workspace_write.writable_roots={json.dumps([directory])}",
             "--json", "-o", str(self.result), "-",
@@ -1398,7 +1444,7 @@ class RoleRunnerTest(unittest.TestCase):
         """scout 에이전트를 --resume으로 이어도 exec resume에 mcp_servers 끄기 설정과 --search를 유지한다."""
         # Given
         arguments = ["agent", "--name", "hei5enbug-agent-setup:scout", "--fallback", "--resume", THREAD]
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "high"}]}
+        config = {"turns": [{"model": "gpt-6-luna", "effort": "high"}]}
         self.beat("codex", THREAD)
 
         # When
@@ -1414,11 +1460,11 @@ class RoleRunnerTest(unittest.TestCase):
         self.use_declared_claude_plugin({
             "example-plugin:scout": {
                 "model": "claude-sonnet-5-5", "effort": "medium",
-                "fallback": {"model": "gpt-5.6-luna", "effort": "high"},
+                "fallback": {"model": "gpt-6-luna", "effort": "high"},
             },
         })
         arguments = ["agent", "--name", "example-plugin:scout", "--fallback"]
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "high"}]}
+        config = {"turns": [{"model": "gpt-6-luna", "effort": "high"}]}
 
         # When
         completed = self.run_runner(*arguments, config=config)
@@ -1435,7 +1481,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.write(
             self.codex_home / "plugins/cache/market/example/1.0.0/.codex-plugin/model-roles.json",
             json.dumps({"version": 1, "agents": {"example_worker": {
-                "model": "gpt-5.6-luna", "effort": "xhigh",
+                "model": "gpt-6-luna", "effort": "xhigh",
                 "fallback": {"model": "claude-sonnet-5-5", "effort": "medium"},
             }}}),
         )
@@ -1499,7 +1545,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.write(
             self.codex_home / "plugins/cache/market/example/1.0.0/.codex-plugin/model-roles.json",
             json.dumps({"version": 1, "agents": {"example_worker": {
-                "model": "gpt-5.6-luna", "effort": "xhigh", "fallback": {"model": "claude-sonnet-5-5", "effort": "medium"},
+                "model": "gpt-6-luna", "effort": "xhigh", "fallback": {"model": "claude-sonnet-5-5", "effort": "medium"},
             }}}),
         )
         cases = [
@@ -1640,7 +1686,7 @@ class RoleRunnerTest(unittest.TestCase):
         cases = [
             (["reviewer", "--model", "gpt-5.4"], "gpt-5.4"),
             (["scout", "--model", "opus"], "opus"),
-            (["scout", "--model", "gpt-5.6-luna", "--effort", "max"], "max"),
+            (["scout", "--model", "gpt-6-luna", "--effort", "max"], "max"),
             (["reviewer", "--effort", "turbo"], "turbo"),
             (["researcher", "--model", "claude-opus-5-5"], "researcher"),
         ]
@@ -2676,7 +2722,7 @@ class RoleRunnerTest(unittest.TestCase):
         """scout에 --effort xhigh를 주면 codex exec이 xhigh로 실행되고 상태 줄이 xhigh와 검증 성공을 보고한다."""
         # Given
         arguments = ["scout", "--effort", "xhigh"]
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "xhigh"}]}
+        config = {"turns": [{"model": "gpt-6-luna", "effort": "xhigh"}]}
 
         # When
         completed = self.run_runner(*arguments, config=config)
@@ -2704,7 +2750,7 @@ class RoleRunnerTest(unittest.TestCase):
         """agent 모드는 대체 항목의 범위를 쓰므로 scout의 Luna 대체에 --effort xhigh를 넘길 수 있다."""
         # Given
         arguments = ["agent", "--name", "hei5enbug-agent-setup:scout", "--fallback", "--effort", "xhigh"]
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "xhigh"}]}
+        config = {"turns": [{"model": "gpt-6-luna", "effort": "xhigh"}]}
 
         # When
         completed = self.run_runner(*arguments, config=config)
@@ -3009,7 +3055,7 @@ class RoleRunnerTest(unittest.TestCase):
         """Plant the rollout of an earlier invocation whose one turn could write only the folder it names."""
         rollout = self.codex_home / "sessions" / "2026" / "10" / "12" / f"rollout-2026-10-12T00-00-00-{THREAD}.jsonl"
         rollout.parent.mkdir(parents=True, exist_ok=True)
-        turn = {"model": "gpt-5.6-luna", "effort": "high", "permission_profile": self.profile(writable=[folder])}
+        turn = {"model": "gpt-6-luna", "effort": "high", "permission_profile": self.profile(writable=[folder])}
         rollout.write_text(json.dumps({"type": "turn_context", "payload": turn}) + "\n")
 
     def test_읽기_전용_codex_실행은_시스템_임시_폴더_밑_scratch_하나만_쓰도록_명령과_환경을_만든다(self):
@@ -3078,7 +3124,7 @@ class RoleRunnerTest(unittest.TestCase):
         """worker의 쓰기 실행은 명령이 그대로여서 --skip-git-repo-check가 없다."""
         # When
         completed = self.run_runner("worker", "--add-dir", "/tmp/work/demo-a", config={"turns": [{
-            "model": "gpt-5.6-luna", "effort": "high", "sandbox_policy": {"type": "workspace-write"},
+            "model": "gpt-6-luna", "effort": "high", "sandbox_policy": {"type": "workspace-write"},
         }]})
 
         # Then
@@ -3093,7 +3139,7 @@ class RoleRunnerTest(unittest.TestCase):
 
         # When
         completed = self.run_runner("worker", "--add-dir", directory, config={"turns": [{
-            "model": "gpt-5.6-luna", "effort": "high", "sandbox_policy": {"type": "workspace-write"},
+            "model": "gpt-6-luna", "effort": "high", "sandbox_policy": {"type": "workspace-write"},
         }]})
 
         # Then
@@ -3119,7 +3165,7 @@ class RoleRunnerTest(unittest.TestCase):
 
     def test_scratch_폴더는_증거_검증이_실패해_종료_코드_4일_때도_없어진다(self):
         """자식은 성공했지만 쓰기 제한 검증이 실패해 종료 코드 4여도 scratch 폴더가 남지 않는다."""
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "high", "permission_profile": self.profile(writable=["/tmp/work/demo-a"])}]}
+        config = {"turns": [{"model": "gpt-6-luna", "effort": "high", "permission_profile": self.profile(writable=["/tmp/work/demo-a"])}]}
         self.assert_scratch_removed(self.run_runner("scout", config=config), 4)
 
     def test_scratch_폴더는_시간_초과_뒤에도_없어진다(self):
@@ -3132,7 +3178,7 @@ class RoleRunnerTest(unittest.TestCase):
         profile = self.profile(special=["slash_tmp"])
 
         # When
-        completed = self.run_runner("scout", config={"turns": [{"model": "gpt-5.6-luna", "effort": "high", "permission_profile": profile}]})
+        completed = self.run_runner("scout", config={"turns": [{"model": "gpt-6-luna", "effort": "high", "permission_profile": profile}]})
 
         # Then
         self.assertEqual(4, completed.returncode)
@@ -3144,7 +3190,7 @@ class RoleRunnerTest(unittest.TestCase):
         profile = self.profile(writable=["/tmp/work/other-scratch"])
 
         # When
-        completed = self.run_runner("scout", config={"turns": [{"model": "gpt-5.6-luna", "effort": "high", "permission_profile": profile}]})
+        completed = self.run_runner("scout", config={"turns": [{"model": "gpt-6-luna", "effort": "high", "permission_profile": profile}]})
 
         # Then
         self.assertEqual(4, completed.returncode)
@@ -3167,7 +3213,7 @@ class RoleRunnerTest(unittest.TestCase):
         # Given
         self.plant_earlier_turn("/tmp/role-runner-scratch-old")
         self.beat("codex", THREAD)
-        config = {"turns": [{"model": "gpt-5.6-luna", "effort": "high", "permission_profile": self.profile(writable=["/tmp/work/demo-a"])}]}
+        config = {"turns": [{"model": "gpt-6-luna", "effort": "high", "permission_profile": self.profile(writable=["/tmp/work/demo-a"])}]}
 
         # When
         completed = self.run_runner("scout", "--resume", THREAD, config=config)

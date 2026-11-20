@@ -1,6 +1,6 @@
 name = "worker"
 description = "Coordinator-assigned implementation task only. Handles bounded repository implementation or debugging and returns changed paths, checks, and blockers. Never coordinates, designs, or widens scope."
-model = "gpt-6.1-sol"
+model = "gpt-6.2-sol"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 developer_instructions = """

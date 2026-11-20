@@ -29,7 +29,7 @@ python3 <Source directory>/scripts/role_runner.py <scout|researcher|reviewer|wor
 ```
 
 실행기는 역할을 고정된 모델, 사고 강도, 권한으로 실행하고 호스트 기록을 검증한 뒤 JSON 한 줄로 끝난다. 앞에 `cd`를
-실행하지 않는다. `--model <id>`는 `reviewer`에만, `--add-dir <dir>`은 `worker`, 쓰기 기능, `write` 에이전트에만 붙인다.
+실행하지 않는다. `--model <id>`는 `reviewer`와 GPT worker의 모델 선택에만, `--add-dir <dir>`은 `worker`, 쓰기 기능, `write` 에이전트에만 붙인다.
 `--effort xhigh`는 [공유 모델 라우팅](model-routing.ko.md#역할-설정-유지)의 사고 강도 규칙에 따라서만 붙인다.
 같은 대상의 읽기 전용 할당이 여럿이면 한 번의 호출에서 `--assignment`와 `--result`를 반복한다. 실행기는 최대 여섯 개를
 병렬로 실행하고 각각 상태 줄을 출력한다.
@@ -173,10 +173,12 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
 - 일반 할당 항목을 담은 할당을 파일로 쓰고, 허용된 경로가 있는 폴더에서
   `python3 <Source directory>/scripts/role_runner.py implementation --fallback --instructions
   <Source directory>/agents/worker.md --assignment <file> --result <file>`을 실행한다. 공유 모델 라우팅의 기능별 표가
-  Claude Code 대체 항목으로 지정한 모델을 실행하며, 해당 폴더에 쓰기 권한을 부여한다.
+  Claude Code 대체 항목으로 지정한 모델을 실행하며, 해당 폴더에 쓰기 권한을 부여한다. `auto`의 대체에는
+  [난이도별 GPT worker 모델](model-routing.ko.md#난이도별-gpt-worker-모델)의 선택으로 `--model`을 붙이고, `sol` 경로에는
+  붙이지 않는다.
 - 작업이 써야 하는 해당 폴더 밖 디렉터리에만 `--add-dir <dir>`을 붙인다. 승인 가드는 세션 쓰기 승인을 한 번 묻는다.
 
 ## Codex worker
 
-- 일반 할당 항목을 담은 할당을 파일로 쓰고 `worker` 역할을 실행한다.
+- 일반 할당 항목을 담은 할당을 파일로 쓰고 역할 실행기의 `worker` 역할을 실행하며, `--model`은 [난이도별 GPT worker 모델](model-routing.ko.md#난이도별-gpt-worker-모델)로 정한다.
 - 작업이 써야 하는 세션 폴더 밖 디렉터리에만 `--add-dir <dir>`을 붙인다. 플러그인 Mod는 세션당 한 번 묻는다.

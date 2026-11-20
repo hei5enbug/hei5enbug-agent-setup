@@ -62,7 +62,7 @@
     "implementation_worker": {
       "type": "string",
       "title": "Implementation worker",
-      "description": "Route implementation work: auto (the main session picks per task: haiku for easy work, sonnet for normal or hard work, and sol only when a Claude route fails or stops on a usage limit), codex (Codex on gpt-5.6-luna at high), haiku (the plugin worker on its Worker model and Worker effort, claude-haiku-5-5 at high by default), sol (gpt-6.1-sol at high through the role runner), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
+      "description": "Route implementation work: auto (the main session picks per task: haiku for easy work, sonnet for normal or hard work, and a GPT worker, gpt-6-luna for easy work or gpt-6.2-sol for hard work, only when a Claude route fails or stops on a usage limit), codex (a GPT worker through the role runner at high, gpt-6-luna for easy work or gpt-6.2-sol for hard work), haiku (the plugin worker on its Worker model and Worker effort, claude-haiku-5-5 at high by default), sol (gpt-6.2-sol at high through the role runner), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
       "options": ["auto", "codex", "haiku", "sol", "sonnet"],
       "default": "auto"
     },
@@ -83,9 +83,9 @@
     "codex_worker_model": {
       "type": "string",
       "title": "Codex worker model",
-      "description": "Model of the plugin worker role in Codex. Codex reads it at session start, so it takes effect from the next Codex session. HEI5ENBUG_CODEX_WORKER_MODEL overrides it.",
-      "options": ["gpt-5.6-luna", "gpt-6.1-sol"],
-      "default": "gpt-5.6-luna"
+      "description": "Model of the plugin worker role in Codex: gpt-6-luna for easy work, gpt-6.2-sol for hard work. Codex reads it at session start, so it takes effect from the next Codex session. HEI5ENBUG_CODEX_WORKER_MODEL overrides it.",
+      "options": ["gpt-6-luna", "gpt-6.2-sol"],
+      "default": "gpt-6-luna"
     },
     "codex_worker_effort": {
       "type": "string",
@@ -98,7 +98,7 @@
       "type": "string",
       "title": "Review model",
       "description": "Model that runs independent validation and skill review roles at xhigh. GPT models run through codex exec and Claude models through claude -p.",
-      "options": ["claude-fable-5-2", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "gpt-6-astra", "gpt-5.6-luna", "gpt-6.1-sol", "gpt-6.1-terra"],
+      "options": ["claude-fable-5-2", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "gpt-6-astra", "gpt-6-luna", "gpt-6.1-sol", "gpt-6.1-terra"],
       "default": "gpt-6-astra"
     },
     "language_guard": {

@@ -1047,7 +1047,7 @@ class SessionContextTest(unittest.TestCase):
         configured = json.loads((REPO_ROOT / ".claude-plugin/plugin.json").read_text())["userConfig"]["review_model"]
 
         # Then
-        self.assertEqual(set(session_context.REVIEW_MODELS), set(pins.PINS.values()))
+        self.assertEqual(set(session_context.REVIEW_MODELS), set(pins.PINS.values()) - {pins.PINS["gpt-sol-worker"]})
         self.assertEqual(session_context.REVIEW_MODELS, role_runner.REVIEW_MODELS)
         self.assertEqual(configured["options"], list(session_context.REVIEW_MODELS))
         self.assertEqual(configured["default"], session_context.DEFAULT_REVIEW_MODEL)
@@ -1508,7 +1508,7 @@ class SessionContextTest(unittest.TestCase):
         # Given
         config = self.base / "claude config"
         self.write_json(config / "settings.json", {"pluginConfigs": {"hei5enbug-agent-setup@hei5enbug": {"options": {
-            "codex_worker_model": "gpt-6.1-sol", "codex_worker_effort": "high"}}}})
+            "codex_worker_model": "gpt-6.2-sol", "codex_worker_effort": "high"}}}})
         env = {"CLAUDE_CONFIG_DIR": str(config)}
 
         # When
@@ -1516,17 +1516,17 @@ class SessionContextTest(unittest.TestCase):
         overridden = self.context(self.run_hook("codex", extra_env={**env, "HEI5ENBUG_CODEX_WORKER_EFFORT": "xhigh"}))
 
         # Then
-        self.assertIn("Codex worker model: `gpt-6.1-sol` at `high`.\n", saved)
-        self.assertIn("Codex worker model: `gpt-6.1-sol` at `xhigh`.\n", overridden)
+        self.assertIn("Codex worker model: `gpt-6.2-sol` at `high`.\n", saved)
+        self.assertIn("Codex worker model: `gpt-6.2-sol` at `xhigh`.\n", overridden)
         self.assertNotIn("Worker agent model", saved)
         self.assertLess(len(saved.encode("utf-8")), 9000)
 
     def test_Codex_세션_시작은_알린_worker_쌍을_그_세션_기록으로_남긴다(self):
-        """세션 id가 있으면 알린 gpt-6.1-sol과 high를 상태 폴더의 worker-settings 기록에 남기고 Claude 설정 파일은 쓰지 않는다."""
+        """세션 id가 있으면 알린 gpt-6.2-sol과 high를 상태 폴더의 worker-settings 기록에 남기고 Claude 설정 파일은 쓰지 않는다."""
         # Given
         config = self.base / "claude config"
         self.write_json(config / "settings.json", {"pluginConfigs": {"hei5enbug-agent-setup@hei5enbug": {"options": {
-            "codex_worker_model": "gpt-6.1-sol", "codex_worker_effort": "high"}}}})
+            "codex_worker_model": "gpt-6.2-sol", "codex_worker_effort": "high"}}}})
         before = (config / "settings.json").read_bytes()
         payload = json.dumps({"hook_event_name": "SessionStart", "source": "startup", "session_id": "session-one"})
 
@@ -1535,8 +1535,8 @@ class SessionContextTest(unittest.TestCase):
 
         # Then
         record = self.base / "state" / "hei5enbug-agent-setup" / "worker-settings" / "codex-session-one.json"
-        self.assertIn("Codex worker model: `gpt-6.1-sol` at `high`.\n", self.context(result))
-        self.assertEqual({"model": "gpt-6.1-sol", "effort": "high"}, json.loads(record.read_text(encoding="utf-8")))
+        self.assertIn("Codex worker model: `gpt-6.2-sol` at `high`.\n", self.context(result))
+        self.assertEqual({"model": "gpt-6.2-sol", "effort": "high"}, json.loads(record.read_text(encoding="utf-8")))
         self.assertEqual(before, (config / "settings.json").read_bytes())
 
     def test_Codex_세션_시작은_상태_폴더에_쓸_수_없어도_컨텍스트를_정상_출력한다(self):
@@ -1550,10 +1550,10 @@ class SessionContextTest(unittest.TestCase):
         result = self.run_hook("codex", payload=payload, extra_env={"XDG_STATE_HOME": str(blocked)})
 
         # Then
-        self.assertIn("Codex worker model: `gpt-5.6-luna` at `high`.\n", self.context(result))
+        self.assertIn("Codex worker model: `gpt-6-luna` at `high`.\n", self.context(result))
 
     def test_Codex_세션은_설정이_없으면_기본_Codex_worker_모델을_알린다(self):
-        """저장된 설정이 없으면 매니페스트 기본값 gpt-5.6-luna와 high를 알리고 알림은 붙지 않는다."""
+        """저장된 설정이 없으면 매니페스트 기본값 gpt-6-luna와 high를 알리고 알림은 붙지 않는다."""
         # Given
         env = {"CLAUDE_CONFIG_DIR": str(self.base / "empty claude config")}
 
@@ -1561,7 +1561,7 @@ class SessionContextTest(unittest.TestCase):
         context = self.context(self.run_hook("codex", extra_env=env))
 
         # Then
-        self.assertIn("Codex worker model: `gpt-5.6-luna` at `high`.\n", context)
+        self.assertIn("Codex worker model: `gpt-6-luna` at `high`.\n", context)
 
     def test_claude_session_never_retires_a_codex_agent(self):
         explorer = self.codex_home / "agents" / "explorer.toml"

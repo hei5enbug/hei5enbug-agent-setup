@@ -28,7 +28,7 @@ python3 <Source directory>/scripts/role_runner.py <scout|researcher|reviewer|wor
 ```
 
 It runs the role on its pinned model, effort, and permissions, verifies the host record, and ends with one JSON
-line. Never run `cd` before it. Add `--model <id>` only for `reviewer` and `--add-dir <dir>` only for `worker`, a
+line. Never run `cd` before it. Add `--model <id>` only for `reviewer` and for a GPT worker's model choice, and `--add-dir <dir>` only for `worker`, a
 writing capability, or a `write` agent. Add `--effort xhigh` only under the effort rule in
 [shared model routing](model-routing.md#keep-role-settings-fixed). For several read-only assignments of one target,
 repeat `--assignment` and `--result` in one call; the runner runs up to six in parallel and prints one status line
@@ -187,12 +187,14 @@ This section adds only the Claude Code worker integration.
   `python3 <Source directory>/scripts/role_runner.py implementation --fallback --instructions
   <Source directory>/agents/worker.md --assignment <file> --result <file>` from the folder that holds the allowed
   paths. It runs the model that the capability table in shared model routing lists as the Claude Code fallback,
-  with write access to that folder.
+  with write access to that folder. For the `auto` fallback, add `--model` with the choice of
+  [GPT worker model by difficulty](model-routing.md#gpt-worker-model-by-difficulty); the `sol` route adds none.
 - Add `--add-dir <dir>` only for a directory outside that folder that the task must write. The approval guard asks
   for the session write approval once.
 
 ## Codex worker
 
-- Write the assignment, with the usual assignment fields, to a file and run the `worker` role.
+- Write the assignment, with the usual assignment fields, to a file and run the `worker` role of the role runner with
+  `--model` set by [GPT worker model by difficulty](model-routing.md#gpt-worker-model-by-difficulty).
 - Add `--add-dir <dir>` only for a directory outside the session folder that the task must write. The plugin mod
   asks once per session.

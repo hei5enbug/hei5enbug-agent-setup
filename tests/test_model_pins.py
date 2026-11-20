@@ -61,6 +61,11 @@ def runtime_files() -> list[Path]:
     ]
 
 
+def family_pins(family: str) -> list[str]:
+    """The pinned IDs of a family: its own pin and any `<family>-<purpose>` pin, such as the GPT Sol worker."""
+    return [model for name, model in PINS.items() if name == family or name.startswith(f"{family}-")]
+
+
 def lines_of(path: Path):
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         yield f"{path.relative_to(REPO_ROOT)}:{number}", line
@@ -178,8 +183,8 @@ class ModelPinTest(unittest.TestCase):
             for where, line in lines_of(path):
                 for match in MODEL_ID.finditer(line):
                     family = f"claude-{match['claude']}" if match["claude"] else f"gpt-{match['gpt']}"
-                    if PINS.get(family) != match["id"]:
-                        stale.append(f"{where}: {match['id']} (pin: {PINS.get(family, 'none')})")
+                    if match["id"] not in family_pins(family):
+                        stale.append(f"{where}: {match['id']} (pin: {family_pins(family) or 'none'})")
 
         # Then
         self.assertEqual([], stale)
@@ -344,7 +349,7 @@ class ModelPinTest(unittest.TestCase):
         self.assertEqual(expected_capability_rows(), rows)
 
     def test_Codex_구현_기본은_Sonnet_실행기이고_대체는_worker_에이전트다(self):
-        """Codex의 implementation 기본 항목은 claude-sonnet-5-5 실행기이고 대체는 gpt-5.6-luna worker 에이전트이며 둘은 서로 다른 계열이다."""
+        """Codex의 implementation 기본 항목은 claude-sonnet-5-5 실행기이고 대체는 gpt-6-luna worker 에이전트이며 둘은 서로 다른 계열이다."""
         # Given
         slots = REGISTRY["capabilities"]["implementation"]["codex"]
 

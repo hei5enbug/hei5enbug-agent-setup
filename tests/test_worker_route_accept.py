@@ -12,10 +12,12 @@ import session_context  # noqa: E402
 
 VARIABLE = "CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER"
 DESCRIPTION = (
-    "Route implementation work: auto (the main session picks per task: haiku for easy work, sonnet for normal or hard "
-    "work, and sol only when a Claude route fails or stops on a usage limit), codex (Codex on gpt-5.6-luna at high), "
-    "haiku (the plugin worker on its Worker model and Worker effort, claude-haiku-5-5 at high by default), sol "
-    "(gpt-6.1-sol at high through the role runner), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high)."
+    "Route implementation work: auto (the main session picks per task: haiku for easy work, sonnet for normal or "
+    "hard work, and a GPT worker, gpt-6-luna for easy work or gpt-6.2-sol for hard work, only when a Claude route "
+    "fails or stops on a usage limit), codex (a GPT worker through the role runner at high, gpt-6-luna for easy "
+    "work or gpt-6.2-sol for hard work), haiku (the plugin worker on its Worker model and Worker effort, "
+    "claude-haiku-5-5 at high by default), sol (gpt-6.2-sol at high through the role runner), or sonnet (the "
+    "plugin sonnet-worker on claude-sonnet-5-5 at high)."
 )
 
 

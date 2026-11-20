@@ -11,8 +11,8 @@ For repository implementation, use a Claude Code plugin worker subagent by defau
 
 | Role | Primary name | Model / effort | Fallback name | Model / effort |
 |---|---|---|---|---|
-| Bounded implementation and debugging, easy work | `haiku_worker` | `claude-haiku-5-5` / `xhigh` | `worker` | `gpt-6.1-sol` / `high` |
-| Bounded local, read-only evidence | `scout` | `gpt-5.6-luna` / `xhigh` | `haiku_scout` | `claude-haiku-5-5` / `xhigh` |
+| Bounded implementation and debugging, easy work | `haiku_worker` | `claude-haiku-5-5` / `xhigh` | `worker` | `gpt-6.2-sol` / `high` |
+| Bounded local, read-only evidence | `scout` | `gpt-6-luna` / `xhigh` | `haiku_scout` | `claude-haiku-5-5` / `xhigh` |
 | Mechanical documentation edits with approved content | `writer` | `gpt-6.1-sol` / `high` | `haiku_writer` | `claude-haiku-5-5` / `xhigh` |
 | One read-only final review, when the final review table below chooses `gpt-6.1-terra` at `high` | `code_reviewer` | `gpt-6.1-terra` / `high` | `opus_code_reviewer` | `claude-opus-5-5` / `high` |
 
@@ -38,8 +38,10 @@ runnable acceptance checks. It chooses the worker by difficulty and usage:
 |---|---|
 | Easy: one cohesive change with a stated edit and checks that cover it fully | `haiku_worker`: the `hei5enbug-agent-setup:worker` subagent while the session line "Worker agent model" shows `claude-haiku-5-5` at `xhigh`; otherwise `sonnet_worker` |
 | Normal or hard: a behavioral change, several files, parsing, security, or concurrency | `sonnet_worker`: the `hei5enbug-agent-setup:sonnet-worker` subagent (`claude-sonnet-5-5` / `high`) |
-| Claude usage limit reached or a Claude worker unavailable | `worker` (`gpt-6.1-sol` / `high`): in Claude Code, `role_runner.py implementation --fallback --instructions <worker role definition>` run from the folder that holds the allowed paths; in Codex, the `worker` role |
+| Claude usage limit reached or a Claude worker unavailable | `worker` (`gpt-6.2-sol` / `high`): in Claude Code, `role_runner.py implementation --fallback --instructions <worker role definition>` run from the folder that holds the allowed paths; in Codex, the `worker` role |
 
+- The GPT `worker` is a fallback, and this repository's work is normal or hard, so `.codex/agents/worker.toml` pins
+  `gpt-6.2-sol`. The plugin's GPT workers follow [GPT worker model by difficulty](../../instructions/model-routing.md#gpt-worker-model-by-difficulty).
 - Spawn these plugin subagents instead of `claude -p` processes.
 - Follow the existing readiness and actual host-record checks before relying on a worker's result. A worker reports
   new causes or missing decisions to the main session instead of widening scope.
@@ -107,8 +109,8 @@ These records explain the routes above; they are not rules.
   See the [Haiku comparison](https://vulcanbench.com/benchmarks/swe-v4-haiku55-vs-frontier.html),
   [Luna comparison](https://vulcanbench.com/benchmarks/swe-v4-gpt55-luna-v35.html), and
   [VulcanBench methodology](https://vulcanbench.com/methodology.html).
-- The `scout` pin `gpt-5.6-luna`/`xhigh` follows the user's explicit selection; earlier local comparisons do not
-  establish its quality.
+- The `scout` pin `gpt-6-luna`/`xhigh` follows the owner's 2026-11-20 decision (4 of 4 cases against 2 of 4 for
+  `gpt-5.6-luna`, in `evals/model-roles/gpt-roles-record.json`).
 - 2026-10-17, `writer`: a blind comparison of three mirror-edit assignments moved `writer` to `gpt-6.1-sol`/`high`.
   Sol passed 17 of 18 expectations with one needed fix and fewer tokens; Luna passed 9 of 18 with 19 fixes.
 - 2026-10-17, implementation: three real approval-guard tasks (classification, session state, a mod) ran once each on

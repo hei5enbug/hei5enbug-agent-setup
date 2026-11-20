@@ -115,7 +115,7 @@ class ImplementationWorkerScopeTest(unittest.TestCase):
         self.assertEqual(rows["Claude Code"][:2], ["`claude-opus-5-5`", "`high`"])
         self.assertIn("Other hosts", rows)
         for copied in (
-            "gpt-5.6-luna",
+            "gpt-6-luna",
             "claude-sonnet-5-5",
             "latest production",
             "implementation-execution.md",

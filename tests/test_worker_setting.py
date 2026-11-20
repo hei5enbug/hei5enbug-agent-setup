@@ -14,7 +14,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import plugin_toggles  # noqa: E402
 
 PLUGIN_KEY = "hei5enbug-agent-setup@hei5enbug"
-CODEX_DEFAULT = ("gpt-5.6-luna", "high")
+CODEX_DEFAULT = ("gpt-6-luna", "high")
 CLAUDE_DEFAULT = ("claude-haiku-5-5", "high")
 
 
@@ -43,7 +43,7 @@ class WorkerSettingTest(unittest.TestCase):
         return (model, effort), notice
 
     def test_Codex는_저장된_설정이_없으면_매니페스트_기본값을_알림_없이_쓴다(self):
-        """settings.json이 없어도 기본 gpt-5.6-luna와 high를 돌려주고 알림은 없다."""
+        """settings.json이 없어도 기본 gpt-6-luna와 high를 돌려주고 알림은 없다."""
         # Given
         settings = self.config / "settings.json"
 
@@ -56,15 +56,15 @@ class WorkerSettingTest(unittest.TestCase):
         self.assertIsNone(notice)
 
     def test_Codex는_저장된_옵션의_모델과_effort를_쓴다(self):
-        """pluginConfigs의 hei5enbug-agent-setup@ 항목에 저장된 gpt-6.1-sol과 high를 돌려준다."""
+        """pluginConfigs의 hei5enbug-agent-setup@ 항목에 저장된 gpt-6.2-sol과 high를 돌려준다."""
         # Given
-        self.save({"codex_worker_model": "gpt-6.1-sol", "codex_worker_effort": "high", "agent_guard": True})
+        self.save({"codex_worker_model": "gpt-6.2-sol", "codex_worker_effort": "high", "agent_guard": True})
 
         # When
         pair, notice = self.resolve("codex")
 
         # Then
-        self.assertEqual(("gpt-6.1-sol", "high"), pair)
+        self.assertEqual(("gpt-6.2-sol", "high"), pair)
         self.assertIsNone(notice)
 
     def test_Codex는_마켓플레이스_이름이_달라도_플러그인_접두사가_같으면_저장값을_쓴다(self):
@@ -76,34 +76,34 @@ class WorkerSettingTest(unittest.TestCase):
         pair, notice = self.resolve("codex")
 
         # Then
-        self.assertEqual(("gpt-5.6-luna", "high"), pair)
+        self.assertEqual(("gpt-6-luna", "high"), pair)
         self.assertIsNone(notice)
 
     def test_Codex는_환경_변수가_저장된_값보다_우선한다(self):
         """HEI5ENBUG_CODEX_WORKER_MODEL이 있으면 저장된 모델을 덮고, 없는 키는 저장된 값을 쓴다."""
         # Given
-        self.save({"codex_worker_model": "gpt-6.1-sol", "codex_worker_effort": "high"})
+        self.save({"codex_worker_model": "gpt-6.2-sol", "codex_worker_effort": "high"})
 
         # When
-        with mock.patch.dict(os.environ, {"HEI5ENBUG_CODEX_WORKER_MODEL": " GPT-5.6-Luna "}):
+        with mock.patch.dict(os.environ, {"HEI5ENBUG_CODEX_WORKER_MODEL": " GPT-6-Luna "}):
             pair, notice = self.resolve("codex")
 
         # Then
-        self.assertEqual(("gpt-5.6-luna", "high"), pair)
+        self.assertEqual(("gpt-6-luna", "high"), pair)
         self.assertIsNone(notice)
 
     def test_Codex는_두_환경_변수가_있으면_설정_파일을_읽지_않는다(self):
         """두 키가 모두 환경 변수로 오면 깨진 settings.json이 있어도 알림 없이 그 값을 쓴다."""
         # Given
         (self.config / "settings.json").write_text("{broken", encoding="utf-8")
-        env = {"HEI5ENBUG_CODEX_WORKER_MODEL": "gpt-6.1-sol", "HEI5ENBUG_CODEX_WORKER_EFFORT": "xhigh"}
+        env = {"HEI5ENBUG_CODEX_WORKER_MODEL": "gpt-6.2-sol", "HEI5ENBUG_CODEX_WORKER_EFFORT": "xhigh"}
 
         # When
         with mock.patch.dict(os.environ, env):
             pair, notice = self.resolve("codex")
 
         # Then
-        self.assertEqual(("gpt-6.1-sol", "xhigh"), pair)
+        self.assertEqual(("gpt-6.2-sol", "xhigh"), pair)
         self.assertIsNone(notice)
 
     def test_Codex는_목록에_없는_저장_모델이면_기본값과_값을_적은_알림을_돌려준다(self):
@@ -169,11 +169,11 @@ class WorkerSettingTest(unittest.TestCase):
         (self.config / "settings.json").write_text("{broken", encoding="utf-8")
 
         # When
-        with mock.patch.dict(os.environ, {"HEI5ENBUG_CODEX_WORKER_MODEL": "gpt-6.1-sol"}):
+        with mock.patch.dict(os.environ, {"HEI5ENBUG_CODEX_WORKER_MODEL": "gpt-6.2-sol"}):
             pair, notice = self.resolve("codex")
 
         # Then
-        self.assertEqual(("gpt-6.1-sol", "high"), pair)
+        self.assertEqual(("gpt-6.2-sol", "high"), pair)
         self.assertIn("Ignored the saved worker settings", notice)
 
     def test_Claude는_역할_고정이_꺼져_있으면_설정값_대신_기본값과_알림을_돌려준다(self):
@@ -199,7 +199,7 @@ class WorkerSettingTest(unittest.TestCase):
         env = {
             "CLAUDE_PLUGIN_OPTION_ROLE_PINNING": "false",
             "HEI5ENBUG_ROLE_PINNING": "false",
-            "HEI5ENBUG_CODEX_WORKER_MODEL": "gpt-6.1-sol",
+            "HEI5ENBUG_CODEX_WORKER_MODEL": "gpt-6.2-sol",
             "HEI5ENBUG_CODEX_WORKER_EFFORT": "high",
         }
 
@@ -208,13 +208,13 @@ class WorkerSettingTest(unittest.TestCase):
             pair, notice = self.resolve("codex")
 
         # Then
-        self.assertEqual(("gpt-6.1-sol", "high"), pair)
+        self.assertEqual(("gpt-6.2-sol", "high"), pair)
         self.assertIsNone(notice)
 
     def test_설정_조회는_설정_파일을_쓰지_않는다(self):
         """저장된 값을 읽은 뒤에도 settings.json의 바이트가 그대로이고 새 파일이 생기지 않는다."""
         # Given
-        self.save({"codex_worker_model": "gpt-6.1-sol"})
+        self.save({"codex_worker_model": "gpt-6.2-sol"})
         path = self.config / "settings.json"
         before = path.read_bytes()
 
@@ -269,10 +269,10 @@ class WorkerSettingTest(unittest.TestCase):
     def test_effort_규칙이_허용하지_않는_쌍은_기본값과_알림을_돌려준다(self):
         """레지스트리 effort_rules가 막는 모델과 effort 조합은 두 키 모두 기본값으로 되돌린다."""
         # Given
-        rules = {"gpt-6.1-sol": ["high"]}
+        rules = {"gpt-6.2-sol": ["high"]}
         registry = json.loads((REPO_ROOT / "config" / "model-registry.json").read_text(encoding="utf-8"))
         registry["effort_rules"] = {**registry["effort_rules"], **rules}
-        env = {"HEI5ENBUG_CODEX_WORKER_MODEL": "gpt-6.1-sol", "HEI5ENBUG_CODEX_WORKER_EFFORT": "xhigh"}
+        env = {"HEI5ENBUG_CODEX_WORKER_MODEL": "gpt-6.2-sol", "HEI5ENBUG_CODEX_WORKER_EFFORT": "xhigh"}
         original = Path.read_text
 
         def read_text(path, *args, **kwargs):

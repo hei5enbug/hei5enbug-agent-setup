@@ -4,7 +4,9 @@ import argparse
 from pathlib import Path
 
 from role_runner_agents import accepts_add_dir, runner_for
-from role_runner_config import AGENT_TARGET, CAPABILITIES, MAX_BATCH, REVIEW_MODELS, ROLES, VALIDATION_ROLE, UsageError
+from role_runner_config import (
+    AGENT_TARGET, CAPABILITIES, MAX_BATCH, REVIEW_MODELS, ROLES, VALIDATION_ROLE, WORKER_AGENTS, WORKER_MODELS, UsageError,
+)
 
 
 def validate(args: argparse.Namespace) -> None:
@@ -45,11 +47,20 @@ def validate(args: argparse.Namespace) -> None:
     validate_pairs(args)
 
 
+def is_worker_choice(args: argparse.Namespace, target: str) -> bool:
+    """Whether --model is the difficulty choice of a GPT worker run: one of the registry's worker models for a worker target."""
+    if args.model not in WORKER_MODELS:
+        return False
+    return target in ("worker", "implementation") or (target == AGENT_TARGET and args.name in WORKER_AGENTS)
+
+
 def validate_request(args: argparse.Namespace, target: str) -> None:
     """Check --model and --user-requested: only a user request opens --model to every target and any listed model."""
     if args.user_requested and args.model is None and args.effort is None:
         raise UsageError("--user-requested needs the --model or --effort the user named")
     if args.model is None:
+        return
+    if is_worker_choice(args, target):
         return
     if target != "reviewer" and not args.user_requested:
         raise UsageError("--model is allowed only for the reviewer role, or with --user-requested for a model the user named")
