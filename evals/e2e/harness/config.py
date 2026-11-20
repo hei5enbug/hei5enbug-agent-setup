@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,7 +23,10 @@ AGENT_EFFORT = "high"
 CODEX_MODEL = "gpt-6.1-sol"
 CODEX_EFFORT = "high"
 MAIN_MODELS = {HOST_CLAUDE: AGENT_MODEL, HOST_CODEX: CODEX_MODEL}
-MODEL_CAP = frozenset({"claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "gpt-6.1-sol", "gpt-5.6-luna"})
+MODEL_CAP_BASE = frozenset({"claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "gpt-6.1-sol", "gpt-5.6-luna"})
+CAP_CANDIDATES_ENV = "HARNESS_ALLOW_CANDIDATES"
+CAP_CANDIDATES = frozenset({"gpt-6.2-sol", "gpt-6-luna"})
+MODEL_CAP = MODEL_CAP_BASE | (CAP_CANDIDATES if os.environ.get(CAP_CANDIDATES_ENV) == "1" else frozenset())
 PLUGIN_NAME = "hei5enbug-agent-setup"
 INSTALLED_PLUGIN_KEY = "hei5enbug-agent-setup@hei5enbug"
 INSTALLED_PLUGINS_RECORD = "plugins/installed_plugins.json"
