@@ -19,9 +19,9 @@
 | `text_review` | TR1, TR2 | 신규: 결함 하나를 심은 초안 | `text_review.py review --model` |
 | `opponent` | T92, T93 | `evals/model-roles` 사례, `xhigh` | `run-opponent.sh --opponent codex` |
 | `language` | t1, t3, t5 | `evals/korean-writing` 작업, Claude 채점기 하나 | `kw_run.py` |
-| `worker` | W1, W2, W3 | 신규: 숨은 테스트가 있는 시드 저장소 | `role_runner.py worker` |
+| `worker` | W1, W2, W3, 더 어려운 W4, W5, W6 | 신규: 숨은 테스트가 있는 시드 저장소. W4부터 W6은 각각 docstring에만 적힌 요구, 바뀌는 소스 파일 수 상한, 얕은 수정을 떨어뜨리는 숨은 테스트를 가진다 | `role_runner.py worker` |
 | `scout` | S7, SC1, SC2, SC3 | scratch 사례 7과 T103~T105의 scout-demo 질문 | `role_runner.py scout` |
-| `researcher` | R1 | 신규: 웹 검색 질문 하나 | `role_runner.py researcher` |
+| `researcher` | R1, 더 어려운 R2, R3 | 신규: 웹 검색 질문 하나. R2와 R3은 공식 문서의 정확한 사실 여러 개와 공식 주소가 필요하다 | `role_runner.py researcher` |
 
 역할 실행기는 레지스트리에 적힌 모델만 시작하므로, 모든 실행은 `git archive`로 내보낸 플러그인 사본을 쓰고, 그 사본의
 `runner.review_models`에는 `gpt-6.2-sol`과 `gpt-6-luna`도 적혀 있다. 저장소의 레지스트리는 바꾸지 않는다.

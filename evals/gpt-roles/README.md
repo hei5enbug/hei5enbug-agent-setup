@@ -16,9 +16,9 @@ only that role's cases.
 | `text_review` | TR1, TR2 | new: a draft with one planted defect | `text_review.py review --model` |
 | `opponent` | T92, T93 | `evals/model-roles` cases, at `xhigh` | `run-opponent.sh --opponent codex` |
 | `language` | t1, t3, t5 | `evals/korean-writing` tasks, one Claude grader | `kw_run.py` |
-| `worker` | W1, W2, W3 | new: seeded repositories with hidden tests | `role_runner.py worker` |
+| `worker` | W1, W2, W3; harder W4, W5, W6 | new: seeded repositories with hidden tests; W4 to W6 each have a requirement only a docstring states, a cap on changed source files, and hidden tests that fail a shallow fix | `role_runner.py worker` |
 | `scout` | S7, SC1, SC2, SC3 | scratch case 7 and the scout-demo questions of T103 to T105 | `role_runner.py scout` |
-| `researcher` | R1 | new: one web search question | `role_runner.py researcher` |
+| `researcher` | R1; harder R2, R3 | new: one web search question; R2 and R3 need several exact facts from official documentation and an official URL | `role_runner.py researcher` |
 
 The role runner starts only the models its registry lists, so every run uses a copy of the plugin that `git archive` exports
 and whose `runner.review_models` also lists `gpt-6.2-sol` and `gpt-6-luna`. The repository's registry is not changed.
