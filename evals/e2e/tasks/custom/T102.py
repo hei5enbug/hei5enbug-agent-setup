@@ -7,7 +7,7 @@ USAGE_LIMIT_LINE = r"(?i)usage limit|사용량 ?한도|사용 ?한도"
 
 
 def gh_lines(ctx):
-    log = Path(ctx.work) / "gh-calls.log"
+    log = Path(ctx.origin).parent / "gh-calls.log"
     return [line for line in log.read_text(encoding="utf-8").splitlines() if line.strip()] if log.is_file() else []
 
 
