@@ -3,6 +3,8 @@
 import re
 from pathlib import Path
 
+USAGE_LIMIT_LINE = r"(?i)usage limit|사용량 ?한도|사용 ?한도"
+
 
 def gh_lines(ctx):
     log = Path(ctx.work) / "gh-calls.log"
@@ -21,7 +23,7 @@ def no_question(ctx):
 
 def usage_limit_stated(ctx):
     answer = str(ctx.view.get("final_answer", ""))
-    hits = [line for line in answer.splitlines() if re.search(r"(?i)usage limit", line)]
+    hits = [line for line in answer.splitlines() if re.search(USAGE_LIMIT_LINE, line)]
     return len(hits) == 1, f"{len(hits)} line(s) name the usage limit", {"lines": hits[:2]}
 
 
