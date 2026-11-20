@@ -1,0 +1,1 @@
+In config/settings.toml change the default page_size from 20 to 50. Write a pull request description of a title line and two sentences to pr.md, and post it with `gh pr create --title "Raise the default page size" --body-file pr.md`. Follow the plugin's rules for text that people read.

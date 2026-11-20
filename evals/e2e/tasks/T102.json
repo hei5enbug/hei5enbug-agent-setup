@@ -1,0 +1,58 @@
+{
+  "id": "T102",
+  "title": "Post with a fake gh while the reviewer's usage limit is reached",
+  "category": "r4-real-run",
+  "path": "#111 usage-limit result",
+  "fixture": "notes-cli",
+  "prompt_file": "prompts/T102.txt",
+  "setup": "setup/T102.py",
+  "env": {
+    "PATH": "{work}/fake-bin:{PATH}",
+    "FAKE_CODEX_LOG": "{work}/codex-calls.log",
+    "FAKE_GH_LOG": "{work}/gh-calls.log"
+  },
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 5
+  },
+  "checks": [
+    {
+      "id": "page-size-50",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "config/settings.toml",
+      "pattern": "(?m)^page_size = 50$"
+    },
+    {
+      "id": "posted-once",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "posted_once"
+    },
+    {
+      "id": "no-question-asked",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "no_question"
+    },
+    {
+      "id": "usage-limit-stated-once",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "usage_limit_stated"
+    },
+    {
+      "id": "no-second-reviewer",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "no_second_reviewer"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}
