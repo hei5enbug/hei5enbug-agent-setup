@@ -190,6 +190,38 @@ class VerifySpawnTest(unittest.TestCase):
                 self.assertFalse(status["verified"])
                 self.assertIn("sandbox", status["error"])
 
+    def write_parent(self, sandbox: str) -> None:
+        self.write_rollout(f"rollout-2026-10-15T09-00-00-{PARENT}.jsonl",
+                           [{"type": "session_meta", "payload": {"id": PARENT}}, turn("gpt-6.1-sol", "high", sandbox)])
+
+    def test_sandbox를_넘기지_않으면_자식은_부모가_쓴_sandbox를_이어받은_것으로_검증된다(self):
+        """역할 파일의 sandbox_mode와 상관없이 부모가 danger-full-access이면 같은 sandbox로 실행된 자식은 통과한다."""
+        # Given
+        self.write_parent("danger-full-access")
+        self.write_rollout("rollout-2026-10-15T10-00-00-child.jsonl", [spawn_meta(), turn("gpt-6-luna", "high", "danger-full-access")])
+
+        # When
+        code, status = self.verify(model="gpt-6-luna", effort="high")
+
+        # Then
+        self.assertEqual((0, True, None), (code, status["verified"], status["error"]))
+
+    def test_자식의_sandbox가_부모와_다르면_종료_코드_4이고_모델이_틀리면_부모와_같아도_4이다(self):
+        """상속하지 않은 sandbox와 틀린 모델은 계속 실패한다."""
+        # Given
+        self.write_parent("danger-full-access")
+        self.write_rollout("rollout-2026-10-15T10-00-00-child.jsonl", [spawn_meta(), turn("gpt-6-luna", "high", "read-only")])
+
+        # When
+        different = self.verify(model="gpt-6-luna", effort="high")
+        self.write_rollout("rollout-2026-10-15T10-00-00-child.jsonl",
+                           [spawn_meta(), turn("gpt-6.1-sol", "high", "danger-full-access")])
+        wrong_model = self.verify(model="gpt-6-luna", effort="high")
+
+        # Then
+        self.assertEqual((different[0], "sandbox" in different[1]["error"], wrong_model[0], "gpt-6.1-sol" in wrong_model[1]["error"]),
+                         (4, True, 4, True))
+
     def test_허용되지_않은_sandbox_값은_종료_코드_2이다(self):
         """--sandbox는 read-only 또는 workspace-write만 받고 그 밖의 값은 사용 오류로 종료 코드 2이다."""
         # Given

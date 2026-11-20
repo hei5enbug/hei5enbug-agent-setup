@@ -104,15 +104,15 @@ python3 <Source directory>/scripts/role_runner.py agent --name designer --fallba
 ## 생성된 역할 검증
 
 생성된 역할의 결과는 rollout이 검증된 뒤에만 인정한다. 역할이 끝나면 세션 폴더에서 다음을 실행한다. `<Source directory>`는
-세션 컨텍스트의 그 줄이고, `<task_name>`, 모델, 사고 강도는 `spawn_agent`에 넘긴 값이며, `<sandbox_mode>`는 역할 TOML의 `sandbox_mode` 값이다.
+세션 컨텍스트의 그 줄이고, `<task_name>`, 모델, 사고 강도는 `spawn_agent`에 넘긴 값이다. 스크립트는 자식이 이 세션에서 물려받은 샌드박스를 받아들이는데, 역할 파일의 `sandbox_mode`가 그것을 바꾸지 않기 때문이며, 모델과 사고 강도는 엄격하게 검사한다.
 
 ```text
-python3 <Source directory>/scripts/verify_spawn.py --parent "$CODEX_THREAD_ID" --agent-path /root/<task_name> --model <model> --effort <effort> --sandbox <sandbox_mode>
+python3 <Source directory>/scripts/verify_spawn.py --parent "$CODEX_THREAD_ID" --agent-path /root/<task_name> --model <model> --effort <effort>
 ```
 
 - 종료 코드 0은 rollout이 검증되었다는 뜻이다. 결과를 쓴다.
 - 종료 코드 2는 호출이 잘못되었다는 뜻이다. 고쳐서 다시 실행한다.
-- 종료 코드 4는 rollout이 없거나 다른 모델, 사고 강도, 샌드박스를 가리킨다는 뜻이다. 같은 역할을 다른 쌍으로 다시 생성하지
+- 종료 코드 4는 rollout이 없거나 다른 모델이나 사고 강도, 또는 이 세션과 다른 샌드박스를 가리킨다는 뜻이다. 같은 역할을 다른 쌍으로 다시 생성하지
   않는다. 에이전트 가드가 Codex에서 대체 쌍을 거부하기 때문이다. 아래 '대체' 절에 따라 역할의 대체를 역할 실행기로 실행하거나
   메인 세션에서 계속한다.
 

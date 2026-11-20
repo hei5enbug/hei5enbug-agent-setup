@@ -221,7 +221,7 @@ session hook copies `standalone-agents/codex-scout.toml`, `codex-worker.toml`, `
 `codex-reviewer.toml` to matching `~/.codex/agents/<role>.toml` files when absent. They define four roles that also
 exist on Claude Code. Their `sandbox_mode` keys state the intended sandbox, but Codex documents that a custom agent
 file cannot override the parent session's sandbox, so `verify_spawn.py` compares the sandbox the spawn ran with against
-that key, and a spawn that inherited another sandbox fails verification. No role file sets a reasoning effort, so each spawn passes one. The Codex
+the parent session's own sandbox and not against that key; model and effort stay strict. No role file sets a reasoning effort, so each spawn passes one. The Codex
 `reviewer` role has no model key; the skill instructions pass its model and effort explicitly when it is the fallback.
 The plugin `worker` replaces the built-in Codex `worker`, and `scout` leaves the built-in `explorer` untouched. A file
 you edited is never overwritten, and the agents become available in the next Codex session. Because an edited copy never

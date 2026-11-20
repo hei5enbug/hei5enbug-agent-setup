@@ -79,7 +79,23 @@ def turn_contexts(rollout: Path) -> list[dict]:
     ]
 
 
+def sandbox_type(turn: dict) -> str | None:
+    policy = turn.get("sandbox_policy")
+    kind = policy.get("type") if isinstance(policy, dict) else None
+    return kind if isinstance(kind, str) else None
+
+
+def parent_sandbox(parent: str) -> str | None:
+    """The sandbox the parent session ran with: its last turn_context. A custom agent file cannot override it, so a child
+    inherits it whatever the role file's `sandbox_mode` says."""
+    sessions = role_runner.codex_home() / "sessions"
+    rollouts = sorted(sessions.glob(f"**/rollout-*-{parent}.jsonl")) if sessions.is_dir() else []
+    turns = turn_contexts(rollouts[-1]) if rollouts else []
+    return sandbox_type(turns[-1]) if turns else None
+
+
 def verify(parent: str, agent_path: str, model: str, effort: str, sandbox: str | None = None) -> dict:
+    """Check the child's model and effort strictly. Its sandbox must equal `sandbox` when one is given, else the parent's when the parent's rollout is found."""
     rollouts = rollouts_for(parent, agent_path)
     if not rollouts:
         return report(False, None, 0, f"No rollout for agent path {agent_path} under parent {parent}")
@@ -87,17 +103,15 @@ def verify(parent: str, agent_path: str, model: str, effort: str, sandbox: str |
     turns = turn_contexts(rollout)
     if not turns:
         return report(False, rollout, 0, f"No turn_context entry in {rollout}")
+    expected = sandbox or parent_sandbox(parent)
     for turn in turns:
         if turn.get("model") != model or turn.get("effort") != effort:
             return report(
                 False, rollout, len(turns),
                 f"turn_context names {turn.get('model')!r} with {turn.get('effort')!r}, expected {model!r} with {effort!r}",
             )
-        if sandbox is not None:
-            policy = turn.get("sandbox_policy")
-            sandbox_type = policy.get("type") if isinstance(policy, dict) else None
-            if sandbox_type != sandbox:
-                return report(False, rollout, len(turns), f"turn_context names sandbox {sandbox_type!r}, expected {sandbox!r}")
+        if expected is not None and sandbox_type(turn) != expected:
+            return report(False, rollout, len(turns), f"turn_context names sandbox {sandbox_type(turn)!r}, expected {expected!r}")
     return report(True, rollout, len(turns), None)
 
 

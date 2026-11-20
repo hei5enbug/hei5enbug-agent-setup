@@ -215,8 +215,8 @@ Codex 서브에이전트 문서는 사용자 지정 에이전트 파일의 위�
 대신 세션 훅이 `standalone-agents/codex-scout.toml`, `codex-worker.toml`, `codex-designer.toml`,
 `codex-reviewer.toml`을 대응하는 `~/.codex/agents/<role>.toml`이 없을 때만 복사합니다.
 네 파일은 Claude Code에도 있는 역할을 정의합니다. 파일의 `sandbox_mode` 키는 의도한 샌드박스를 적지만, Codex는 사용자 지정 에이전트 파일이
-부모 세션의 샌드박스를 바꿀 수 없다고 문서화하므로 `verify_spawn.py`는 생성이 실제로 실행된 샌드박스를 그 키와 비교하며, 다른 샌드박스를 물려받은 생성은
-검증에 실패합니다. 역할 파일은 사고 강도를 지정하지 않으므로
+부모 세션의 샌드박스를 바꿀 수 없다고 문서화하므로 `verify_spawn.py`는 생성이 실제로 실행된 샌드박스를 그 키가 아니라 부모 세션의 샌드박스와 비교하며, 모델과 사고 강도는
+엄격하게 검사합니다. 역할 파일은 사고 강도를 지정하지 않으므로
 생성할 때마다 넘깁니다. Codex `reviewer` 역할에는
 모델 키가 없으며, 스킬 지침은 대체 경로에서 모델과 사고 강도를 명시합니다. 플러그인 `worker`는
 Codex 내장 `worker`를 대신하고, `scout`는 내장 `explorer`를 건드리지 않습니다. 직접 고친 파일은 절대 덮어쓰지 않으며,

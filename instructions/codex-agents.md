@@ -114,15 +114,16 @@ python3 <Source directory>/scripts/role_runner.py agent --name designer --fallba
 
 Accept a spawned role's result only after its rollout verifies. When the role finishes, run this from the session
 folder, where `<Source directory>` is the line in the session context, and pass the `task_name`, model, and effort
-you gave `spawn_agent`, plus the role's `sandbox_mode` from its TOML:
+you gave `spawn_agent`. The script accepts the sandbox the child inherited from this session, because a role file's
+`sandbox_mode` does not override it, and checks model and effort strictly:
 
 ```text
-python3 <Source directory>/scripts/verify_spawn.py --parent "$CODEX_THREAD_ID" --agent-path /root/<task_name> --model <model> --effort <effort> --sandbox <sandbox_mode>
+python3 <Source directory>/scripts/verify_spawn.py --parent "$CODEX_THREAD_ID" --agent-path /root/<task_name> --model <model> --effort <effort>
 ```
 
 - Exit 0 verifies the rollout. Use the result.
 - Exit 2 means the call was wrong. Fix it and run it again.
-- Exit 4 means the rollout is missing or names another model, effort, or sandbox. Do not respawn it with another pair,
+- Exit 4 means the rollout is missing or names another model or effort, or a sandbox other than this session's. Do not respawn it with another pair,
   because the agent guard denies a fallback pair in Codex. Run the role's fallback through the runner as the Fallback
   section below describes, or continue in the main session.
 

@@ -146,9 +146,9 @@ class CodexWorkerContractTest(unittest.TestCase):
         self.assertNotIn("sessions directory", section)
         self.assertIn("python3 <Source directory>/scripts/verify_spawn.py --parent \"$CODEX_THREAD_ID\"", verification)
         self.assertIn("--agent-path /root/<task_name>", verification)
-        self.assertIn("--sandbox <sandbox_mode>", verification)
+        self.assertNotIn("--sandbox", verification)
         self.assertIn("Exit 0 verifies the rollout.", verification)
-        self.assertIn("Exit 4 means the rollout is missing or names another model, effort, or sandbox.", verification)
+        self.assertIn("Exit 4 means the rollout is missing or names another model or effort, or a sandbox other than this session's.", verification)
         self.assertIn("Do not respawn it with another pair, because the agent guard denies a fallback pair in Codex.", verification)
         self.assertIn("or continue in the main session", verification)
 
