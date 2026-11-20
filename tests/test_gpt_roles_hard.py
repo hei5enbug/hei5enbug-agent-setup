@@ -82,7 +82,7 @@ class HardWorkerCalibrationTest(unittest.TestCase):
 
 class HardResearcherCasesTest(unittest.TestCase):
     SEARCH = '{"type":"web_search_call"}'
-    R2_GOOD = ("Type stripping is enabled by default from Node.js v23.6.0 and was backported to v22.18.0; disable it with --no-strip-types. "
+    R2_GOOD = ("Type stripping is enabled by default from Node.js v23.6.0 and was backported to v22.18.0; --experimental-transform-types was added in v22.7.0. "
                "https://nodejs.org/docs/latest/api/typescript.html")
     R3_GOOD = ("PostgreSQL 15 added the MERGE command. PostgreSQL 17 lets MERGE use a RETURNING clause, and merge_action() names the action. "
                "https://www.postgresql.org/docs/release/17.0/")
@@ -93,9 +93,9 @@ class HardResearcherCasesTest(unittest.TestCase):
 
     def test_그럴듯한_오답은_거부한다(self):
         wrong_r2 = [
-            "Enabled by default in v23.0.0, backported to v22.7.0, disabled with --no-experimental-strip-types. https://nodejs.org/api/typescript.html",
-            "Enabled by default in v23.6.0 and backported to v22.6.0; disable it with --no-strip-types. https://nodejs.org/api/typescript.html",
-            "Enabled by default in v23.6.0 and v22.18.0; disable it with --disable-types. https://nodejs.org/api/typescript.html",
+            "Enabled by default in v23.0.0, backported to v22.7.0; --experimental-transform-types was added in v22.6.0. https://nodejs.org/api/typescript.html",
+            "Enabled by default in v23.6.0 and backported to v22.6.0; --experimental-transform-types was added in v22.7.0. https://nodejs.org/api/typescript.html",
+            "Enabled by default in v23.6.0 and v22.18.0; --experimental-transform-types was added in v22.6.0, with type stripping. https://nodejs.org/api/typescript.html",
         ]
         wrong_r3 = [
             "PostgreSQL 15 added MERGE, PostgreSQL 16 added RETURNING, and merge_action() names the action. https://www.postgresql.org/docs/release/16.0/",
@@ -106,6 +106,11 @@ class HardResearcherCasesTest(unittest.TestCase):
             self.assertTrue(gr_cases.researcher_failures(answer, self.SEARCH, "R2"), answer)
         for answer in wrong_r3:
             self.assertTrue(gr_cases.researcher_failures(answer, self.SEARCH, "R3"), answer)
+
+    def test_문장_끝_마침표가_붙은_버전도_인정한다(self):
+        probe_answer = ("- **(a) Major version that added `MERGE`: PostgreSQL 15.** x\n- **(b) First major version with RETURNING: PostgreSQL 17.**\n"
+                        "- **(c) Function name: `merge_action()`.** https://www.postgresql.org/docs/17/functions-merge-support.html")
+        self.assertEqual(gr_cases.researcher_failures(probe_answer, self.SEARCH, "R3"), [])
 
     def test_공식_주소와_검색_호출이_없으면_실패다(self):
         self.assertIn("no URL of the official site", gr_cases.researcher_failures(self.R2_GOOD.replace("https://nodejs.org", "https://example.com"), self.SEARCH, "R2"))
