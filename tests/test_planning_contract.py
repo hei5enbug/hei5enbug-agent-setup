@@ -36,13 +36,13 @@ class PlanningContractTest(unittest.TestCase):
         validation = VALIDATION.read_text()
         mapping = (
             re.compile(r"\| GPT \| `claude-fable-[\d-]+` \| `high` \|"),
-            re.compile(r"\| Claude \| `gpt-[\d.]+-sol` or `gpt-[\d.]+-astra` \| `high` or `xhigh` \|"),
+            re.compile(r"\| Claude \| `gpt-[\d.]+-(?:sol|terra)` or `gpt-[\d.]+-astra` \| `high` or `xhigh` \|"),
         )
         for row in mapping:
             self.assertRegex(validation, row)
         for path in (IMPLEMENTATION, DESIGN):
             text = path.read_text()
-            self.assertIsNone(re.search(r"claude-fable-|gpt-[\d.]+-sol|Claude Fable|GPT Sol", text))
+            self.assertIsNone(re.search(r"claude-fable-|gpt-[\d.]+-(?:sol|terra)|Claude Fable|GPT (?:Sol|Terra)", text))
 
         signatures = (
             "exactly one reviewer that the mapping below selects",
