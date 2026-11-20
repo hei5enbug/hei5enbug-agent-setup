@@ -62,11 +62,17 @@ resume; in the last case, apply its effective-settings checks first. Other dispa
 Coordinate delegated implementation under [implementation delegation rules](implementation-delegation.md).
 This section adds only the Codex worker integration.
 
-- Delegate implementation to the `implementation` capability runner, which runs `claude-sonnet-5-5`:
-  `python3 <Source directory>/scripts/role_runner.py implementation --host codex --instructions <Source directory>/agents/worker.md --add-dir <dir> --assignment <file> --result <file>`,
-  run from the folder that holds the allowed paths. When it exits 3 or 4, inspect the partial diff and use the plugin
-  `worker` role as the fallback. Its role file sets no model, so pass the model and effort from the session line
-  "Codex worker model" explicitly on every spawn.
+- Delegate implementation to the plugin `worker` role, by the model in the session line "Codex worker model": `auto`
+  means choose per assignment by [GPT worker model by difficulty](model-routing.md#gpt-worker-model-by-difficulty),
+  and a GPT model name means that model. Pass the chosen model and the effort from that line explicitly
+  on every spawn, because the role file sets neither. The agent guard allows only those models, each at that effort
+  or higher up to `xhigh`.
+- The line `claude-sonnet-5-5` selects the Claude route first:
+  `python3 <Source directory>/scripts/role_runner.py implementation --host codex --fallback --instructions <Source directory>/agents/worker.md --add-dir <dir> --assignment <file> --result <file>`,
+  run from the folder that holds the allowed paths. When it exits 3 or 4, inspect the partial diff and spawn the
+  `worker` role by difficulty as above.
+- When the spawned `worker` fails verification or stops on a usage limit, inspect the partial diff and run the same
+  runner command, which runs `claude-sonnet-5-5` as the cross-family fallback.
 - Full-history forks inherit the parent model and effort and reject overrides. Never spawn a worker that way;
   set `fork_turns` to `"none"` or a positive integer, or leave `fork_context` off, and put the bounded task
   context in the assignment.
@@ -128,8 +134,8 @@ Fallback section below apply.
 
 - `via: runner`: run the capability runner described below.
 - `via: agent`: spawn the agent named in the entry's `agent` field, passing the entry's `model` and `effort`
-  explicitly. For the `implementation` capability's `worker`, pass the model and effort from the session line
-  "Codex worker model" instead. Then verify it under Spawned role verification above.
+  explicitly. For the `implementation` capability's `worker`, pass the model and effort the Implementation section
+  names instead. Then verify it under Spawned role verification above.
 - If that route fails, use the capability's fallback entry once, then continue in the main session.
 
 ## Capability runner

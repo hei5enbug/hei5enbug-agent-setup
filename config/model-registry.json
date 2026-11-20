@@ -33,8 +33,8 @@
         "fallback": {"model": "gpt-6.2-sol", "effort": "high", "max_effort": "xhigh", "via": "runner"}
       },
       "codex": {
-        "primary": {"model": "claude-sonnet-5-5", "effort": "high", "max_effort": "xhigh", "via": "runner"},
-        "fallback": {"model": "gpt-6-luna", "effort": "high", "max_effort": "xhigh", "via": "agent", "agent": "worker", "pin": "primary"}
+        "primary": {"model": "gpt-6-luna", "effort": "high", "max_effort": "xhigh", "via": "agent", "agent": "worker", "pin": "primary"},
+        "fallback": {"model": "claude-sonnet-5-5", "effort": "high", "max_effort": "xhigh", "via": "runner"}
       }
     },
     "design": {

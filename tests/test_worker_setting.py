@@ -14,7 +14,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import plugin_toggles  # noqa: E402
 
 PLUGIN_KEY = "hei5enbug-agent-setup@hei5enbug"
-CODEX_DEFAULT = ("gpt-6-luna", "high")
+CODEX_DEFAULT = ("auto", "high")
 CLAUDE_DEFAULT = ("claude-haiku-5-5", "high")
 
 
@@ -76,8 +76,22 @@ class WorkerSettingTest(unittest.TestCase):
         pair, notice = self.resolve("codex")
 
         # Then
-        self.assertEqual(("gpt-6-luna", "high"), pair)
+        self.assertEqual(("auto", "high"), pair)
         self.assertIsNone(notice)
+
+    def test_Codex는_고정_모델과_auto와_Sonnet_경로를_저장값으로_받는다(self):
+        """저장된 gpt-6-luna와 gpt-6.2-sol은 고정 모델로, auto와 claude-sonnet-5-5는 그대로 돌려주고, 알림은 없다."""
+        # Given
+        saved = ("gpt-6-luna", "gpt-6.2-sol", "auto", "claude-sonnet-5-5")
+
+        # When
+        results = []
+        for model in saved:
+            self.save({"codex_worker_model": model, "codex_worker_effort": "xhigh"})
+            results.append(self.resolve("codex"))
+
+        # Then
+        self.assertEqual([((model, "xhigh"), None) for model in saved], results)
 
     def test_Codex는_환경_변수가_저장된_값보다_우선한다(self):
         """HEI5ENBUG_CODEX_WORKER_MODEL이 있으면 저장된 모델을 덮고, 없는 키는 저장된 값을 쓴다."""

@@ -1198,6 +1198,21 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertEqual(self.claude_argv(writing=True, add_dirs=[directory]), self.logged()["argv"])
 
+    def test_Codex_implementation_대체는_Sonnet_high를_실행기로_실행한다(self):
+        """Codex 호스트의 implementation --fallback은 claude-sonnet-5-5를 high로 쓰기 허용 디렉터리 규칙과 함께 실행하고 기록으로 검증한다."""
+        # Given
+        directory = str(self.base / "approved")
+        arguments = ["implementation", "--host", "codex", "--fallback", "--add-dir", directory, "--instructions", str(self.instructions)]
+
+        # When
+        completed = self.run_runner(*arguments, config={"model": "claude-sonnet-5-5"})
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(self.claude_argv(model="claude-sonnet-5-5", writing=True, add_dirs=[directory]), self.logged()["argv"])
+        status = self.status(completed)
+        self.assertEqual((True, "implementation", "claude-sonnet-5-5"), (status["fallback"], status["capability"], status["model"]))
+
     def test_Claude_쓰기_capability는_add_dir_없이는_실행하지_않고_종료_코드_2이다(self):
         """design의 Codex 호스트 fallback인 Claude 경로는 편집할 디렉터리 --add-dir이 없으면 자식을 띄우지 않고 종료 코드 2이다."""
         # Given
@@ -1256,8 +1271,8 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual((True, "design", "gpt-6-astra"), (status["fallback"], status["capability"], status["model"]))
 
     def test_via가_agent인_entry는_실행하지_않고_종료_코드_2이다(self):
-        """primary entry가 via agent이면 실행기는 자식을 띄우지 않고 via 값을 알리며 종료 코드 2를 반환한다."""
-        cases = [["implementation", "--host", "claude"], ["design", "--host", "codex"]]
+        """Codex implementation을 포함해 primary entry가 via agent이면 실행기는 자식을 띄우지 않고 via 값을 알리며 종료 코드 2를 반환한다."""
+        cases = [["implementation", "--host", "claude"], ["implementation", "--host", "codex"], ["design", "--host", "codex"]]
         for target in cases:
             with self.subTest(target=target):
                 # Given
@@ -2921,7 +2936,7 @@ class RoleRunnerTest(unittest.TestCase):
         crossed = [two[0], two[1], two[2], two[0]]
         cases = {
             "worker": (["worker", "--add-dir", approved, *two], "read-only"),
-            "writing capability": (["implementation", "--host", "codex", "--add-dir", approved, *instructions, *two], "read-only"),
+            "writing capability": (["implementation", "--host", "codex", "--fallback", "--add-dir", approved, *instructions, *two], "read-only"),
             "writing agent": (["agent", "--name", "hei5enbug-agent-setup:worker", "--fallback", "--add-dir", approved, *two], "read-only"),
             "unequal counts": (["scout", "--assignment", two[1], "--assignment", two[5], "--result", two[3]], "equal numbers"),
             "seven pairs": (["scout", *self.pair_args(*"ABCDEFG")], "At most 6"),

@@ -308,6 +308,7 @@ class AgentGuardTest(unittest.TestCase):
         """luna와 high로 시작한 세션에서 저장값을 gpt-6.2-sol과 high로 바꿔도 그 세션은 luna와 high를 허용하고 sol과 high를 거부한다."""
         # Given
         self.write(self.codex_home / "agents" / "worker.toml", (REPO_ROOT / "standalone-agents/codex-worker.toml").read_text())
+        self.save_worker_options({"codex_worker_model": "gpt-6-luna", "codex_worker_effort": "high"})
         self.start_codex_session("session-one")
         self.save_worker_options({"codex_worker_model": "gpt-6.2-sol", "codex_worker_effort": "high"})
 
@@ -318,6 +319,93 @@ class AgentGuardTest(unittest.TestCase):
         # Then
         self.assertIsNone(announced)
         self.assertEqual("deny", changed)
+
+    def worker_decisions(self, models, efforts, **extra_env):
+        return {
+            (model, effort): self.decide(
+                "codex", {"agent_type": "worker", "model": model, "reasoning_effort": effort}, **extra_env
+            )
+            for model in models
+            for effort in efforts
+        }
+
+    def test_Codex_worker는_auto이면_luna와_sol만_각자_high와_xhigh로_허용하고_그_밖은_거부한다(self):
+        """저장값이 없거나 auto이면 gpt-6-luna와 gpt-6.2-sol만 high와 xhigh로 허용하고, 다른 모델과 medium, max는 거부한다."""
+        # Given
+        self.write(self.codex_home / "agents" / "worker.toml", (REPO_ROOT / "standalone-agents/codex-worker.toml").read_text())
+        models = ("gpt-6-luna", "gpt-6.2-sol", "gpt-6.1-sol", "gpt-6-astra", "claude-sonnet-5-5", "gpt-4.1-mini")
+        efforts = ("medium", "high", "xhigh", "max")
+
+        # When
+        unset = self.worker_decisions(models, efforts)
+        self.save_worker_options({"codex_worker_model": "auto", "codex_worker_effort": "high"})
+        saved = self.worker_decisions(models, efforts)
+
+        # Then
+        expected = {
+            (model, effort): None if model in ("gpt-6-luna", "gpt-6.2-sol") and effort in ("high", "xhigh") else "deny"
+            for model in models
+            for effort in efforts
+        }
+        self.assertEqual(expected, unset)
+        self.assertEqual(expected, saved)
+
+    def test_Codex_worker는_auto에서도_설정한_effort부터만_허용한다(self):
+        """auto와 xhigh 설정이면 두 모델 모두 xhigh만 허용하고 high는 거부한다."""
+        # Given
+        self.write(self.codex_home / "agents" / "worker.toml", (REPO_ROOT / "standalone-agents/codex-worker.toml").read_text())
+        self.save_worker_options({"codex_worker_model": "auto", "codex_worker_effort": "xhigh"})
+
+        # When
+        decisions = self.worker_decisions(("gpt-6-luna", "gpt-6.2-sol"), ("high", "xhigh"))
+
+        # Then
+        self.assertEqual(
+            {("gpt-6-luna", "high"): "deny", ("gpt-6-luna", "xhigh"): None,
+             ("gpt-6.2-sol", "high"): "deny", ("gpt-6.2-sol", "xhigh"): None},
+            decisions,
+        )
+
+    def test_Codex_worker는_고정_모델이면_그_모델만_허용한다(self):
+        """gpt-6-luna 고정이면 gpt-6.2-sol을, gpt-6.2-sol 고정이면 gpt-6-luna를 거부한다."""
+        # Given
+        self.write(self.codex_home / "agents" / "worker.toml", (REPO_ROOT / "standalone-agents/codex-worker.toml").read_text())
+
+        # When
+        allowed = {}
+        for fixed in ("gpt-6-luna", "gpt-6.2-sol"):
+            self.save_worker_options({"codex_worker_model": fixed, "codex_worker_effort": "high"})
+            decisions = self.worker_decisions(("gpt-6-luna", "gpt-6.2-sol"), ("high",))
+            allowed[fixed] = sorted(model for (model, _), decision in decisions.items() if decision is None)
+
+        # Then
+        self.assertEqual({"gpt-6-luna": ["gpt-6-luna"], "gpt-6.2-sol": ["gpt-6.2-sol"]}, allowed)
+
+    def test_Codex_worker는_Sonnet_경로_설정이면_GPT_대체_worker_두_모델만_허용하고_Claude_모델은_거부한다(self):
+        """claude-sonnet-5-5 설정은 Sonnet을 실행기로 돌리므로 worker 스폰은 대체용 두 GPT 모델만 허용하고 Sonnet 스폰은 거부한다."""
+        # Given
+        self.write(self.codex_home / "agents" / "worker.toml", (REPO_ROOT / "standalone-agents/codex-worker.toml").read_text())
+        self.save_worker_options({"codex_worker_model": "claude-sonnet-5-5", "codex_worker_effort": "high"})
+
+        # When
+        decisions = self.worker_decisions(("gpt-6-luna", "gpt-6.2-sol", "claude-sonnet-5-5"), ("high",))
+
+        # Then
+        self.assertEqual(
+            {("gpt-6-luna", "high"): None, ("gpt-6.2-sol", "high"): None, ("claude-sonnet-5-5", "high"): "deny"},
+            decisions,
+        )
+
+    def test_Claude에서는_worker_설정_값과_무관하게_훅이_출력하지_않는다(self):
+        """Codex worker 설정이 auto여도 Claude 호스트의 에이전트 호출에는 훅 출력이 없다."""
+        # Given
+        self.save_worker_options({"codex_worker_model": "auto", "codex_worker_effort": "high"})
+
+        # When
+        decision = self.decide("claude", {"subagent_type": "hei5enbug-agent-setup:worker", "model": "gpt-6.2-sol"})
+
+        # Then
+        self.assertIsNone(decision)
 
     def test_Codex_worker는_세션_기록이_없으면_현재_저장값을_따른다(self):
         """이 세션 id의 기록이 없으면 저장된 gpt-6.2-sol과 high를 허용하고 기본 쌍은 거부한다."""

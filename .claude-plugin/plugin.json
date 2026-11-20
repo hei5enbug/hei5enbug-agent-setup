@@ -83,9 +83,9 @@
     "codex_worker_model": {
       "type": "string",
       "title": "Codex worker model",
-      "description": "Model of the plugin worker role in Codex: gpt-6-luna for easy work, gpt-6.2-sol for hard work. Codex reads it at session start, so it takes effect from the next Codex session. HEI5ENBUG_CODEX_WORKER_MODEL overrides it.",
-      "options": ["gpt-6-luna", "gpt-6.2-sol"],
-      "default": "gpt-6-luna"
+      "description": "Model of the implementation worker in Codex: auto (the main session picks per assignment, gpt-6-luna for easy work or gpt-6.2-sol for hard or unsure work), gpt-6-luna or gpt-6.2-sol (that model only), or claude-sonnet-5-5 (the Claude Sonnet route through the role runner, with the GPT worker as its fallback). Codex reads it at session start, so it takes effect from the next Codex session. HEI5ENBUG_CODEX_WORKER_MODEL overrides it.",
+      "options": ["auto", "gpt-6-luna", "gpt-6.2-sol", "claude-sonnet-5-5"],
+      "default": "auto"
     },
     "codex_worker_effort": {
       "type": "string",

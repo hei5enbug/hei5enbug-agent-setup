@@ -142,8 +142,8 @@ def expected_capability_rows() -> list[list[str]]:
             name,
             capability_cell(hosts["claude"]["primary"]),
             capability_cell(hosts["claude"]["fallback"]),
-            capability_cell(hosts["codex"]["primary"]),
-            capability_cell(hosts["codex"]["fallback"], configurable=name == "implementation"),
+            capability_cell(hosts["codex"]["primary"], configurable=name == "implementation"),
+            capability_cell(hosts["codex"]["fallback"]),
         ]
         for name, hosts in REGISTRY["capabilities"].items()
     ]
@@ -254,7 +254,7 @@ class ModelPinTest(unittest.TestCase):
             ),
             "codex-worker.toml": (
                 "worker", None,
-                'pass the model and effort from the session line "Codex worker model" explicitly on every spawn.',
+                'Pass the chosen model and the effort from that line explicitly on every spawn, because the role file sets neither.',
             ),
             "codex-designer.toml": (
                 "designer", None,
@@ -348,8 +348,8 @@ class ModelPinTest(unittest.TestCase):
         # Then
         self.assertEqual(expected_capability_rows(), rows)
 
-    def test_Codex_구현_기본은_Sonnet_실행기이고_대체는_worker_에이전트다(self):
-        """Codex의 implementation 기본 항목은 claude-sonnet-5-5 실행기이고 대체는 gpt-6-luna worker 에이전트이며 둘은 서로 다른 계열이다."""
+    def test_Codex_구현_기본은_worker_에이전트이고_대체는_Sonnet_실행기다(self):
+        """Codex의 implementation 기본 항목은 gpt-6-luna worker 에이전트이고 대체는 claude-sonnet-5-5 실행기이며 둘은 서로 다른 계열이다."""
         # Given
         slots = REGISTRY["capabilities"]["implementation"]["codex"]
 
@@ -358,11 +358,12 @@ class ModelPinTest(unittest.TestCase):
 
         # Then
         self.assertEqual(
-            {"model": PINS["claude-sonnet"], "effort": "high", "max_effort": "xhigh", "via": "runner"}, primary,
+            {"model": PINS["gpt-luna"], "effort": "high", "max_effort": "xhigh", "via": "agent", "agent": "worker", "pin": "primary"},
+            primary,
         )
-        self.assertEqual((PINS["gpt-luna"], "agent", "worker", "primary"), (
-            fallback["model"], fallback["via"], fallback["agent"], fallback["pin"],
-        ))
+        self.assertEqual(
+            {"model": PINS["claude-sonnet"], "effort": "high", "max_effort": "xhigh", "via": "runner"}, fallback,
+        )
         self.assertNotEqual(model_family(primary["model"]), model_family(fallback["model"]))
 
     def test_사고_강도_범위는_지정_항목에만_있고_하한은_high이며_상한은_xhigh이다(self):
@@ -495,7 +496,7 @@ class ModelPinTest(unittest.TestCase):
         self.assertEqual(["runner"] * len(fallbacks), vias)
 
     def test_worker_옵션_목록은_레지스트리_고정값과_effort만_담고_기본_쌍은_규칙을_지킨다(self):
-        """매니페스트의 worker 옵션 네 개는 레지스트리 고정 모델과 effort만 나열하고, 각 호스트의 기본 쌍은 effort_rules가 허용한다."""
+        """매니페스트의 worker 옵션 네 개는 레지스트리 고정 모델(Codex 모델 옵션은 auto 포함)과 effort만 나열하고, 각 호스트의 기본 쌍은 effort_rules가 허용한다."""
         # Given
         options = json.loads((REPO_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["userConfig"]
         efforts = set(REGISTRY["efforts"])
@@ -504,7 +505,10 @@ class ModelPinTest(unittest.TestCase):
 
         # When
         outside = {
-            key: [value for value in options[key]["options"] if value not in (models if key.endswith("model") else efforts)]
+            key: [
+                value for value in options[key]["options"]
+                if value not in ((models | {"auto"} if key == "codex_worker_model" else models) if key.endswith("model") else efforts)
+            ]
             for key in (name for pair in pairs.values() for name in pair)
         }
         defaults = {host: (options[model]["default"], options[effort]["default"]) for host, (model, effort) in pairs.items()}
