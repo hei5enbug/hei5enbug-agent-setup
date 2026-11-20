@@ -65,7 +65,7 @@
 | `tests/test_hook_python.py` | 훅은 설정한 Python 인터프리터를 고르고, 없으면 `python3`으로 대체한다. | `docs/configuration.md` (Feature options) |
 | `tests/test_hook_interpreter_cache.py` | 설정한 인터프리터가 없으면 런처는 백그라운드에서 한 번 알아낸 절대 경로 인터프리터 캐시를 쓴다. 캐시는 현재 사용자 소유이고 그룹이나 다른 사용자가 쓸 수 없으며 실행 가능하고 `PATH`의 첫 `python3`에서 알아낸 것일 때만 쓴다. 캐시가 없거나 낡았거나 알아내기에 실패해도 훅은 늦어지지 않고, 실패한 알아내기는 1분에 한 번만 다시 한다. | `docs/configuration.md` (Feature options) |
 | `tests/test_hook_runtime.py` | 등록된 모든 훅은 선언 제한의 절반 안에 끝난다. 호출을 막을 수 있는 훅은 플러그인과 훅 이름, 다시 해 볼 방법을 담은 메시지로 막고, 나머지 훅은 종료 코드 0과 출력 없이 끝난다. 내부 오류는 traceback 없이 플러그인과 훅 이름, 건너뛰거나 막은 것, 다음 행동을 담은 메시지를 낸다. | `docs/guards.md` (Hook time limits and machine load) |
-| `tests/test_hook_on_failure.py` | Claude Code에서 승인 가드의 `PreToolUse`·`PermissionRequest` 등록, DataGrip 가드, 공개 경계 훅은 `onFailure`를 `block`으로 두어 실패 시 막고, 다른 훅 등록은 그렇게 하지 않는다. | `docs/guards.md`(훅 제한 시간과 기계 부하) |
+| `tests/test_hook_on_failure.py` | Claude Code에서 승인 가드의 `PreToolUse`·`PermissionRequest` 등록, DataGrip 가드, 공개 경계 훅은 `onFailure`를 `block`으로 두어 실패 시 막고, 다른 훅 등록은 그렇게 하지 않는다. | `docs/guards.md` (Hook time limits and machine load) |
 | `tests/test_machine_load.py` | 부하 평균이 논리 CPU 수의 두 배 이상이거나 사용 가능한 메모리나 남은 저장 공간이 10% 미만이면, 프롬프트에 컴퓨터 부하 줄을 넘어설 때마다 한 번 더한다. | `docs/guards.md` (Hook time limits and machine load) |
 | `tests/test_hook_no_child_process.py` | 모든 도구 호출이나 프롬프트마다 도는 훅은 판단에 필요 없는 입력에서 자식 프로세스를 띄우거나 연결하지 않는다. | `docs/guards.md` (Hook time limits and machine load) |
 | `tests/test_codex_hook_trust.py` | 플러그인은 신뢰가 풀린 자기 Codex 훅만, HEAD를 공식 원격이 지금 `main`이나 `v*` 태그로 광고하거나 `main`에 포함하는 깨끗한 공식 checkout에서만 다시 신뢰하고 `hooks/list`로 확인한다. | `docs/instructions-and-delegation.md` (Automatic instructions, Situation-based delegation) |
