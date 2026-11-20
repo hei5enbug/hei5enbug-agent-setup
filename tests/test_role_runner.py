@@ -300,7 +300,7 @@ class RoleRunnerTest(unittest.TestCase):
         if sandbox == "read-only":
             table = f'{{extends=":read-only", filesystem={{{json.dumps("<scratch>")}="write"}}'
             table += ", network={enabled=true}}" if validation else "}"
-            return ["-c", 'default_permissions="role-runner-scratch"', "-c", f"permissions.role-runner-scratch={table}"]
+            return ["-c", 'default_permissions="role-runner-scratch"', "-c", f"permissions.role-runner-scratch={table}", "--skip-git-repo-check"]
         return ["-c", f'sandbox_mode="{sandbox}"'] if resume else ["-s", sandbox]
 
     def codex_start_argv(self, *, search=False, sandbox="read-only", model="gpt-5.6-luna", effort="high", add_dirs=(), mcp_off=True, output=None, validation=False):
@@ -3020,6 +3020,45 @@ class RoleRunnerTest(unittest.TestCase):
         call = self.executions()[-1]
         self.assertEqual(self.codex_resume_argv(), call["argv"])
         self.assertTrue(call["scratch"])
+
+    def test_읽기_전용_codex_실행은_git_저장소가_아닌_폴더에서도_시작하도록_exec에_skip_git_repo_check를_준다(self):
+        """scout와 researcher의 새 실행은 쓰기 가능한 경로가 scratch 폴더뿐이므로 exec에 --skip-git-repo-check를 한 번 준다."""
+        for role in ("scout", "researcher"):
+            with self.subTest(role=role):
+                # When
+                completed = self.run_runner(role)
+
+                # Then
+                self.assertEqual(0, completed.returncode, completed.stderr)
+                argv = self.executions()[-1]["argv"]
+                self.assertEqual(1, argv.count("--skip-git-repo-check"))
+                self.assertGreater(argv.index("--skip-git-repo-check"), argv.index("exec"))
+
+    def test_읽기_전용_codex_resume도_exec_resume에_skip_git_repo_check를_준다(self):
+        """resume한 읽기 전용 실행도 git 저장소가 아닌 폴더에서 시작하도록 exec resume 뒤에 --skip-git-repo-check를 한 번 준다."""
+        # Given
+        self.beat("codex", THREAD)
+
+        # When
+        completed = self.run_runner("researcher", "--resume", THREAD)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        argv = self.executions()[-1]["argv"]
+        self.assertEqual(1, argv.count("--skip-git-repo-check"))
+        self.assertGreater(argv.index("--skip-git-repo-check"), argv.index("resume"))
+
+    def test_쓰기_codex_실행은_skip_git_repo_check를_주지_않는다(self):
+        """worker의 쓰기 실행은 명령이 그대로여서 --skip-git-repo-check가 없다."""
+        # When
+        completed = self.run_runner("worker", "--add-dir", "/tmp/work/demo-a", config={"turns": [{
+            "model": "gpt-5.6-luna", "effort": "high", "sandbox_policy": {"type": "workspace-write"},
+        }]})
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        for call in self.executions():
+            self.assertNotIn("--skip-git-repo-check", call["argv"])
 
     def test_쓰기_실행은_scratch_폴더와_환경_변수를_만들지_않고_명령이_그대로이다(self):
         """worker에 --add-dir을 주면 명령은 기존과 같고 scratch 폴더도 임시 폴더 변수도 없다."""

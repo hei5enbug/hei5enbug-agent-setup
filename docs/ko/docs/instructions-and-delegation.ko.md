@@ -129,7 +129,8 @@ Claude Code에서는 `scripts/role_runner.py`가 scout, researcher, reviewer, Co
 허용하지 않는 사고 강도는 대체 실행 없이 종료 코드 2로 끝나고, 상태 줄에 `"user_requested": true`가 추가됩니다. `--assignment`와 `--result`를
 반복하면 같은 대상의 읽기 전용 할당을 최대 여섯 개 병렬로 실행하고 각각 상태 줄을 출력하며, 실행기는 그중 가장 높은 종료 코드로
 끝납니다. 읽기 전용 자식은 호스트의 스킬 목록 없이 실행합니다. Codex에는 `-c skills.max_context_tokens=1`을,
-Claude에는 `--disable-slash-commands`를 넘깁니다.
+Claude에는 `--disable-slash-commands`를 넘깁니다. 읽기 전용 Codex 자식에는 쓸 수 있는 경로가 scratch 폴더뿐이므로
+`exec`와 `exec resume`에 `--skip-git-repo-check`도 넘겨 Git 저장소가 아닌 폴더에서도 시작하며, 쓰기 자식에는 넘기지 않습니다.
 실행기는 역할 규칙을 할당 앞에 붙이고, 고정된 모델·사고 강도·권한으로 실행하며(`codex exec`, Claude 검토 모델은 `claude -p`),
 호스트의 rollout 또는 transcript 기록을 확인한 뒤 마지막 줄에 JSON 상태를 출력합니다. `--mcp`가 없으면 Codex 자식에는
 `codex mcp list --json`이 보여 주는 서버마다 `-c mcp_servers.<name>.enabled=false`를 넘기고, Claude 자식은

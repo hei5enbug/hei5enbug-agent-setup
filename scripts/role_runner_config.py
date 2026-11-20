@@ -47,6 +47,7 @@ MCP_NETWORK_RULE = "use MCP tools and network only for the external work the ass
 CODEX_NETWORK_ON = "sandbox_workspace_write.network_access=true"
 SCRATCH_PREFIX = "role-runner-scratch-"
 SCRATCH_PROFILE = "role-runner-scratch"
+SKIP_GIT_REPO_CHECK = "--skip-git-repo-check"
 SCRATCH_VARIABLES = {
     "TMPDIR": "tmp",
     "TMPPREFIX": "tmp/zsh",

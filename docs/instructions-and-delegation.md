@@ -130,7 +130,9 @@ and `--effort <level>` may be any level the model's effort rule allows; a model 
 model does not allow exits 2 with no fallback run, and the status line gains `"user_requested": true`. Repeating
 `--assignment` and `--result` runs up to six read-only assignments of one target in parallel, with one status line each,
 and the runner exits with the highest of their exit codes. A read-only child runs without the host's skill catalog:
-Codex gets `-c skills.max_context_tokens=1`, and Claude gets `--disable-slash-commands`. The runner puts the role rules
+Codex gets `-c skills.max_context_tokens=1`, and Claude gets `--disable-slash-commands`. A read-only Codex child also gets
+`--skip-git-repo-check` on `exec` and `exec resume`, because its only writable path is the scratch folder, so it starts in
+a folder that is not a Git repository; a writing child does not. The runner puts the role rules
 before the assignment, runs the role on its pinned model, effort, and permissions (`codex exec`, or `claude -p` for a
 Claude model), checks the host rollout or transcript record, and prints a final JSON status line. Without `--mcp`, a
 Codex child gets `-c mcp_servers.<name>.enabled=false` for every server `codex mcp list --json` names, and a Claude

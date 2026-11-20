@@ -5,7 +5,7 @@ from pathlib import Path
 
 from role_runner_config import (
     CLAUDE_SKILLS_OFF, CODEX_NETWORK_ON, CODEX_SKILLS_OFF, MCP_TOOL_RULE, READ_SHELL_RULES, SCRATCH_PROFILE,
-    VALIDATION_PACKAGE_HOSTS, Run,
+    SKIP_GIT_REPO_CHECK, VALIDATION_PACKAGE_HOSTS, Run,
 )
 
 
@@ -41,11 +41,12 @@ def codex_command(run: Run, cwd: str, result: str, mcp_off: list[str], scratch: 
     if run.role == "researcher" or run.web_tools:
         command.append("--search")
     scoped = scoped_codex_config(run, mcp_off) + ([] if run.writing else list(CODEX_SKILLS_OFF))
+    outside_repo = [] if run.writing else [SKIP_GIT_REPO_CHECK]
     if run.resume is not None:
         command += [
             "exec", "resume", run.resume, "-m", run.model,
             "-c", f'model_reasoning_effort="{run.effort}"',
-            *sandbox_config(run, scratch), *scoped,
+            *sandbox_config(run, scratch), *outside_repo, *scoped,
         ]
         if run.writing and run.add_dirs:
             roots = [str(Path(directory).resolve()) for directory in run.add_dirs]
@@ -54,7 +55,7 @@ def codex_command(run: Run, cwd: str, result: str, mcp_off: list[str], scratch: 
         return command
     command += [
         "exec", "-m", run.model, "-c", f'model_reasoning_effort="{run.effort}"',
-        *(["-s", sandbox_for(run)] if run.writing else sandbox_config(run, scratch)), "-C", cwd, *scoped,
+        *(["-s", sandbox_for(run)] if run.writing else sandbox_config(run, scratch)), *outside_repo, "-C", cwd, *scoped,
     ]
     for directory in run.add_dirs:
         command += ["--add-dir", directory]
