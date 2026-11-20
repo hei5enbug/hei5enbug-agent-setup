@@ -86,7 +86,8 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
 
 `--hosts claude,codex`는 같은 내보낸 리비전, 같은 픽스처 사본, 같은 프롬프트, 같은 제한, 같은 채점기와 지표로 작업을
 두 호스트에서 각각 실행한다. 기본값은 `claude`만이다. Codex 실행은 `gpt-6.1-sol`을 `high`로 `codex exec`에 시작하며
-설정은 다음과 같다.
+설정은 다음과 같다. 하네스는 작업의 `env`를 적용하기 전에 자신의 `PATH`로 `codex`를 절대 경로로 확정하므로, 에이전트의 `PATH` 맨 앞에
+가짜 `codex`를 두는 작업(T102, T109)은 플러그인의 role runner가 부르는 대상만 바꾸고 호스트는 바꾸지 않는다.
 
 - 실행마다 `<run>/codex-home/`에 자기만의 `CODEX_HOME`을 두므로 사용자 자신의 Codex에 설치된 플러그인이나 설정이
   들어오지 않는다. `auth.json`은 사용자 자격 증명 파일로 가는 심볼릭 링크이고, 하네스는 그 파일을 읽거나 복사하거나
@@ -235,7 +236,7 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 | `claude_list_cost_usd` | `harness/pricing.py`의 공식 Claude 정가(2026-10-25 확인)로 계산한 토큰 비용. 메인 세션, 서브에이전트, 별도 Claude role runner 프로세스를 포함한다. |
 | `claude_runner_list_cost_usd` | 별도 Claude role runner 프로세스만의 정가 비용. 스트림의 총비용에는 이 비용이 빠져 있다. |
 | 요약의 Claude 지출 | `claude_total_cost_usd`에 `claude_runner_list_cost_usd`를 더한 값. 스트림에 총비용이 없으면 `claude_list_cost_usd`만 쓴다. 서브에이전트는 이미 총비용 안에 있고, 어떤 프로세스도 두 번 세지 않는다. |
-| `codex_list_cost_usd_estimate` | OpenAI API 정가(2026-10-25 확인)로 계산한 Codex 토큰 비용. Codex는 토큰당 과금하지 않는 ChatGPT 요금제로 실행하므로 추정값이다. |
+| `codex_list_cost_usd_estimate` | OpenAI API 정가(2026-11-20 확인, `gpt-6.2-sol`과 `gpt-6-luna` 포함)로 계산한 Codex 토큰 비용. Codex는 토큰당 과금하지 않는 ChatGPT 요금제로 실행하므로 추정값이다. |
 | 경과 시간, 턴, 도구별 호출, 유형별 서브에이전트 실행 | 하네스 시계와 스트림. Codex 도구 호출은 따로 센다. |
 | 역할과 종료 코드별 role runner 호출 | `role_runner.py` Bash 호출과 그 상태 줄. |
 | 재시도 | 실패한 Bash 명령의 재실행, 오류 뒤 같은 에이전트 유형의 재실행, 0이 아닌 종료 뒤 role runner 재실행. |

@@ -135,7 +135,7 @@ class DryRunHostsTest(unittest.TestCase):
         # then
         lines = out.splitlines()
         claude = next(line for line in lines if line.startswith("claude -p"))
-        codex = next(line for line in lines if " codex exec " in line)
+        codex = next(line for line in lines if "codex exec " in line)
         self.assertIn("--model claude-opus-5-5 --effort high", claude)
         self.assertIn("-m gpt-6.1-sol", codex)
         self.assertIn("model_reasoning_effort=\"high\"", codex)

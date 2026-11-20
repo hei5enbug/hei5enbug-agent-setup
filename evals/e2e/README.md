@@ -95,7 +95,9 @@ result.
 
 `--hosts claude,codex` runs each task on both hosts from the same exported revision, the same fixture copy, the same
 prompt, the same limits, and the same graders and metrics. `claude` alone is the default. A Codex run starts
-`codex exec` with `gpt-6.1-sol` at `high`, with this setup:
+`codex exec` with `gpt-6.1-sol` at `high`, with this setup. The harness resolves `codex` to an absolute path from its own
+`PATH` before the task's `env` is applied, so a task that puts a fake `codex` first on the agent's `PATH` (T102, T109) changes
+only what the plugin's own role runner calls, never the host:
 
 - Each run has its own `CODEX_HOME` in `<run>/codex-home/`, so no installed plugin or setting of the user's own
   Codex reaches it. `auth.json` is a symlink to the user's credential file, and the harness never reads, copies, or
@@ -255,7 +257,7 @@ Each `metrics.json` separates measured values from estimates.
 | `claude_list_cost_usd` | Tokens priced with `harness/pricing.py` (official Claude list prices, checked 2026-10-25). It includes the main session, subagents, and separate Claude role runner processes. |
 | `claude_runner_list_cost_usd` | The list cost of the separate Claude role runner processes alone. The stream's total cost leaves them out. |
 | Claude spend in the summary | `claude_total_cost_usd` plus `claude_runner_list_cost_usd`; `claude_list_cost_usd` alone when the stream has no total. Subagents are already inside the total, and no process is counted twice. |
-| `codex_list_cost_usd_estimate` | Codex tokens at OpenAI API list prices (checked 2026-10-25). It is an estimate: Codex runs on a ChatGPT plan, which is not billed per token. |
+| `codex_list_cost_usd_estimate` | Codex tokens at OpenAI API list prices (checked 2026-11-20, including `gpt-6.2-sol` and `gpt-6-luna`). It is an estimate: Codex runs on a ChatGPT plan, which is not billed per token. |
 | Wall time, turns, tool calls by tool, subagent launches by type | Harness clock and the stream; Codex tool calls are counted under their own key. |
 | Role runner calls by role and exit code | Bash calls of `role_runner.py` and their status lines. |
 | Retries | A failing Bash command run again, an agent type launched again after an error, a role runner run again after a non-zero exit. |
