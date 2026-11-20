@@ -74,7 +74,7 @@ capabilities are `investigation`, `implementation`, `design`, `language`, and `r
 Fallback section below apply.
 
 - `via: runner`: run the capability through the role runner above, with `--instructions <file>`.
-- `via: agent`: spawn the agent named in the entry's `agent` field. The entry's `pin` names the agent pin it uses.
+- `via: agent`: spawn the agent named in the entry's `agent` field. The entry's `pin` names the agent pin it uses; `call` means the entry's model is passed as the Agent call's `model`.
   After a failed run, the next spawn of that agent is denied once, and the denial names the runner fallback command.
 - If that route fails, use the capability's fallback entry once, then continue in the main conversation.
 
@@ -94,8 +94,8 @@ delegated work. It covers that work only; the next delegation without a request 
 - Plugin agent: set the Agent call's `model` to the alias of the requested model (`opus`, `sonnet`, `haiku`, or
   `fable`). Pass a requested `effort` on the same call as a `model`. For an effort-only request, pass the alias of the
   role's pinned model together with the effort. That pin is the role's `model` under `claude_agents` in
-  `config/model-registry.json` in the source directory (for `worker`, the session line "Worker agent model"; for another
-  plugin's agent, its `.claude-plugin/model-roles.json`). The mod then pins the requested model and effort only when
+  `config/model-registry.json` in the source directory (for `worker`, the model of the route under "Implementation"; for
+  another plugin's agent, its `.claude-plugin/model-roles.json`). The mod then pins the requested model and effort only when
   the user's own latest prompt names them, and fails a run that answers on another model.
 - Role runner: add `--user-requested` with `--model <id>` or `--effort <level>` for the values the user named. It
   lifts the `reviewer`-only and `xhigh` limits for those values only.
@@ -131,28 +131,24 @@ delegated work. It covers that work only; the next delegation without a request 
 Coordinate delegated implementation under [implementation delegation rules](implementation-delegation.md).
 This section adds only the Claude Code worker integration.
 
-- Delegated implementation follows the route in the session line "Implementation worker route". Use
-  `hei5enbug-agent-setup:sonnet-worker` for the Sonnet worker when the line says `sonnet`, the Codex worker (see
-  "Codex worker" below) when it says `codex`, `hei5enbug-agent-setup:worker` when it says `haiku`, and the Sol
-  worker (see "Sol worker" below) when it says `sol`. When it says `auto`, choose per assignment: the `worker`
-  agent for easy work (one cohesive change with a stated edit and checks that cover it fully) and the Sonnet worker
-  for normal or hard work (a behavioral change, several files, parsing, security, or concurrency). When a Claude
-  route fails or stops on a usage limit, use the Sol worker. A user request for one route applies to that request
-  only.
-  `hei5enbug-agent-setup:designer` still takes UI code,
+- Delegated implementation follows the route in the session line "Implementation worker route". For `haiku`,
+  `sonnet`, or `opus`, spawn `hei5enbug-agent-setup:worker` with that model as the call's `model`, the Codex worker
+  (see "Codex worker" below) for `codex`, and the Sol worker (see "Sol worker" below) for `sol`. For `auto`, spawn
+  `worker` with the `model` that [Worker model by difficulty](model-routing.md#worker-model-by-difficulty) gives.
+  When a Claude route fails or stops on a usage limit, use the Sol worker. A user request for one route applies to
+  that request only. `hei5enbug-agent-setup:designer` still takes UI code,
   visual design, and diagram work, except the kinds the Claude Code session file assigns to the main session. Never
   use any other agent.
-- The `worker` agent runs on the model and effort in the session line "Worker agent model" (Haiku at `high` by
-  default).
-- Never pass a per-invocation model to a plugin agent on an invocation or resume, because that overrides its
+- The `worker` agent runs at the effort in the session line "Worker agent effort" (`high` by default), on the model
+  of the call, or on the route's model when the call passes none. The mod denies a `model` the route does not allow.
+- Never pass a per-invocation model to any other plugin agent on an invocation or resume, because that overrides its
   definition, which pins the model and effort that shared model routing lists. The only exception is the user's own
-  request under "Requested model or effort".
+  request under "Requested model or effort", which also applies to `worker`.
 - Pass `effort: "high"` on the designer call for a change to existing UI; pass no effort for a new screen or
   component, which keeps `xhigh`. A per-invocation `effort` on any plugin agent call is allowed only at or below the
   role's pinned effort; never raise it. The mod keeps it for every request of that agent and records it as
   `call_effort`. Check the run against that effort.
-- The bullets below apply whenever a plugin agent runs: a runner fallback, the `worker` or Sonnet worker, and the
-  designer.
+- The bullets below apply whenever a plugin agent runs: a runner fallback, the `worker`, and the designer.
 - When the session context has the line `hei5enbug-agent-setup mod: role pinning active`, the registered plugin mod's
   `prompt.submit` hook, which adds it to the first prompt of each conversation, confirms role pinning is active. The mod pins each role's model and effort on every subagent
   request, from the registry and from installed plugins' declared `model-roles.json` files. It fails a run whose
@@ -188,13 +184,13 @@ This section adds only the Claude Code worker integration.
   <Source directory>/agents/worker.md --assignment <file> --result <file>` from the folder that holds the allowed
   paths. It runs the model that the capability table in shared model routing lists as the Claude Code fallback,
   with write access to that folder. For the `auto` fallback, add `--model` with the choice of
-  [GPT worker model by difficulty](model-routing.md#gpt-worker-model-by-difficulty); the `sol` route adds none.
+  [Worker model by difficulty](model-routing.md#worker-model-by-difficulty); the `sol` route adds none.
 - Add `--add-dir <dir>` only for a directory outside that folder that the task must write. The approval guard asks
   for the session write approval once.
 
 ## Codex worker
 
 - Write the assignment, with the usual assignment fields, to a file and run the `worker` role of the role runner with
-  `--model` set by [GPT worker model by difficulty](model-routing.md#gpt-worker-model-by-difficulty).
+  `--model` set by [Worker model by difficulty](model-routing.md#worker-model-by-difficulty).
 - Add `--add-dir <dir>` only for a directory outside the session folder that the task must write. The plugin mod
   asks once per session.

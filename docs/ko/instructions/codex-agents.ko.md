@@ -59,7 +59,7 @@
 위임한 구현은 [구현 위임 규칙](implementation-delegation.ko.md)에 따라 조정한다. 이 섹션은 Codex worker 연동만 덧붙인다.
 
 - 구현은 세션 줄 "Codex worker model"의 모델로 플러그인 `worker` 역할에 위임한다. `auto`는
-  [난이도별 GPT worker 모델](model-routing.ko.md#난이도별-gpt-worker-모델)에 따라 할당마다 고른다는 뜻이고, GPT 모델 이름은 그 모델을 쓴다는 뜻이다.
+  [난이도별 worker 모델](model-routing.ko.md#난이도별-gpt-worker-모델)에 따라 할당마다 고른다는 뜻이고, GPT 모델 이름은 그 모델을 쓴다는 뜻이다.
   고른 모델과 그 줄의 사고 강도를 생성할 때마다 명시적으로 전달한다. 역할 파일은 둘 다 지정하지 않기 때문이다. 에이전트 가드는 그 모델만, 그
   사고 강도부터 `xhigh`까지 허용한다.
 - 줄이 `claude-sonnet-5-5`이면 Claude 경로를 먼저 쓴다:

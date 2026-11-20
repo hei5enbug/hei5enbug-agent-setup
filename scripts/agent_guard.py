@@ -179,10 +179,10 @@ def pinned_pairs(name: str, home: Path, session=None) -> tuple[list[dict] | None
     """
     if name == "worker":
         recorded = recorded_worker_pair("codex", session)
-        if recorded is not None and valid_worker_pair("codex", *recorded):
+        if recorded is not None and valid_worker_pair(*recorded):
             setting, effort = recorded
         else:
-            setting, effort, _ = worker_setting("codex")
+            setting, effort, _ = worker_setting()
         pairs = []
         for model in worker_models(setting):
             entry = {**REGISTRY["codex_agents"][name], "model": model, "effort": effort}

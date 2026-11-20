@@ -12,12 +12,11 @@ import session_context  # noqa: E402
 
 VARIABLE = "CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER"
 DESCRIPTION = (
-    "Route implementation work: auto (the main session picks per task: haiku for easy work, sonnet for normal or "
-    "hard work, and a GPT worker, gpt-6-luna for easy work or gpt-6.2-sol for hard work, only when a Claude route "
-    "fails or stops on a usage limit), codex (a GPT worker through the role runner at high, gpt-6-luna for easy "
-    "work or gpt-6.2-sol for hard work), haiku (the plugin worker on its Worker model and Worker effort, "
-    "claude-haiku-5-5 at high by default), sol (gpt-6.2-sol at high through the role runner), or sonnet (the "
-    "plugin sonnet-worker on claude-sonnet-5-5 at high)."
+    "Route implementation work: auto (the main session picks per task: the plugin worker on haiku for easy work "
+    "or sonnet for normal or hard work, and a GPT worker, gpt-6-luna for easy work or gpt-6.2-sol for hard work, "
+    "only when a Claude route fails or stops on a usage limit), haiku, sonnet, or opus (the plugin worker on that "
+    "model only), codex (a GPT worker through the role runner at high, gpt-6-luna for easy work or gpt-6.2-sol "
+    "for hard work), or sol (gpt-6.2-sol at high through the role runner)."
 )
 
 
@@ -56,14 +55,14 @@ def test_codex_세션에는_구현_경로_줄이_없다(monkeypatch):
     assert "Implementation worker route" not in text
 
 
-def test_매니페스트는_auto를_기본으로_하는_다섯_경로를_선언한다():
+def test_매니페스트는_auto를_기본으로_하는_여섯_경로를_선언한다():
     manifest = json.loads((REPO_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
     option = manifest["userConfig"]["implementation_worker"]
     assert option == {
         "type": "string",
         "title": "Implementation worker",
         "description": DESCRIPTION,
-        "options": ["auto", "codex", "haiku", "sol", "sonnet"],
+        "options": ["auto", "codex", "haiku", "sol", "sonnet", "opus"],
         "default": "auto",
     }
     assert option["description"].isascii()

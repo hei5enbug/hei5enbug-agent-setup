@@ -63,7 +63,7 @@ Coordinate delegated implementation under [implementation delegation rules](impl
 This section adds only the Codex worker integration.
 
 - Delegate implementation to the plugin `worker` role, by the model in the session line "Codex worker model": `auto`
-  means choose per assignment by [GPT worker model by difficulty](model-routing.md#gpt-worker-model-by-difficulty),
+  means choose per assignment by [Worker model by difficulty](model-routing.md#worker-model-by-difficulty),
   and a GPT model name means that model. Pass the chosen model and the effort from that line explicitly
   on every spawn, because the role file sets neither. The agent guard allows only those models, each at that effort
   or higher up to `xhigh`.

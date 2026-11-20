@@ -1,5 +1,5 @@
 import { atom, read, update } from "claude-code";
-import { callEffortFor, claudeRolePins, configuredWorkerPin, modelRegistry, requestedPin, userRequest } from "./registry.js";
+import { callEffortFor, claudeModelId, claudeRolePins, effortAllowed, modelRegistry, requestedPin, userRequest, workerPolicy } from "./registry.js";
 
 const WORKER_AGENT = "hei5enbug-agent-setup:worker";
 const HIDDEN_AGENTS = /^(general-purpose|explore|plan|claude)$/i;
@@ -169,20 +169,35 @@ async function carriedCallEffort($, registry, agentId, pin) {
   return earlier?.model === pin.model ? callEffortFor(registry, earlier.call_effort, pin) : undefined;
 }
 
+function workerModelDenial(registry, policy, asked) {
+  const aliases = policy.models.map((id) => Object.entries(registry.pins).find(([key, value]) => value === id && key.startsWith("claude-"))?.[0].slice(7) ?? id);
+  return `hei5enbug-agent-setup denied model ${JSON.stringify(asked)} for ${WORKER_AGENT}: the implementation_worker setting allows only ${aliases.join(" or ")}. Pass one of them as the Agent call's model.`;
+}
+
+async function workerCallPin($, registry, policy, e) {
+  const asked = e.resume === undefined && typeof e.model === "string" ? e.model : undefined;
+  if (asked === undefined) return {};
+  const model = claudeModelId(registry, asked);
+  if (model === undefined || !policy.models.includes(model)) return { deny: workerModelDenial(registry, policy, asked) };
+  return { pin: { model, effort: effortAllowed(registry, model, policy.pin.effort) ? policy.pin.effort : policy.fallbackEffort } };
+}
+
 async function pinSpawn($, e, next, unrecorded, options) {
   const table = await claudeRolePins($);
   const reason = table.denials.get(e.subagentType) ?? prefixReason(table, e.subagentType);
   if (reason !== undefined) return { deny: unpinnedDenial(e.subagentType, reason) };
   const pinned = table.pins.get(e.subagentType);
   if (pinned === undefined) return next(e);
-  const configured = e.subagentType === WORKER_AGENT ? await configuredWorkerPin($, options) : undefined;
-  const declared = configured === undefined ? pinned : { ...pinned, primary: configured };
+  const policy = e.subagentType === WORKER_AGENT ? await workerPolicy($, options) : undefined;
+  const declared = policy === undefined ? pinned : { ...pinned, primary: policy.pin };
   if (await consumeRetryNotice($, e.subagentType)) {
     return { deny: fallbackDenial($.plugin.root, e.subagentType, declared.access) };
   }
   const registry = await modelRegistry($);
   const requested = requestedPin(registry, e.model, await sessionRequest($), declared.primary);
-  const pin = requested ?? declared.primary;
+  const called = requested === undefined && policy !== undefined ? await workerCallPin($, registry, policy, e) : {};
+  if (called.deny !== undefined) return { deny: called.deny };
+  const pin = requested ?? called.pin ?? declared.primary;
   const callEffort = callEffortFor(registry, callEfforts.get(e.tool_use_id), pin);
   const result = await next({ ...e, model: pin.model });
   if (result.deny !== undefined || result.agentId === undefined) return result;

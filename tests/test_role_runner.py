@@ -1356,10 +1356,10 @@ class RoleRunnerTest(unittest.TestCase):
         )
 
     def test_agent는_쓰기_에이전트의_gpt_대체에_승인된_add_dir과_workspace_write를_넘긴다(self):
-        """sonnet-worker의 gpt 대체는 workspace-write codex exec에 승인된 add-dir만 넘기고 MCP 설정을 끈다."""
+        """worker의 gpt 대체는 workspace-write codex exec에 승인된 add-dir만 넘기고 MCP 설정을 끈다."""
         # Given
         directory = str(self.base / "approved")
-        arguments = ["agent", "--name", "hei5enbug-agent-setup:sonnet-worker", "--fallback", "--add-dir", directory]
+        arguments = ["agent", "--name", "hei5enbug-agent-setup:worker", "--fallback", "--add-dir", directory]
         config = {"turns": [{"model": "gpt-6.2-sol", "effort": "high"}]}
 
         # When
@@ -1374,7 +1374,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_agent의_쓰기_에이전트는_add_dir이_없으면_자식을_띄우지_않고_종료_코드_2이다(self):
         """쓰기 접근 에이전트는 편집할 디렉터리 --add-dir이 없으면 자식을 띄우지 않고 종료 코드 2이다."""
         # Given
-        arguments = ["agent", "--name", "hei5enbug-agent-setup:sonnet-worker", "--fallback"]
+        arguments = ["agent", "--name", "hei5enbug-agent-setup:worker", "--fallback"]
 
         # When
         completed = self.run_runner(*arguments)
@@ -1422,7 +1422,7 @@ class RoleRunnerTest(unittest.TestCase):
         """--mcp를 주면 쓰기 에이전트의 codex exec는 사용자의 MCP 설정을 남기고 network_access를 켠다."""
         # Given
         directory = str(self.base / "approved")
-        arguments = ["agent", "--name", "hei5enbug-agent-setup:sonnet-worker", "--fallback", "--add-dir", directory, "--mcp"]
+        arguments = ["agent", "--name", "hei5enbug-agent-setup:worker", "--fallback", "--add-dir", directory, "--mcp"]
         config = {"turns": [{"model": "gpt-6.2-sol", "effort": "high"}]}
 
         # When

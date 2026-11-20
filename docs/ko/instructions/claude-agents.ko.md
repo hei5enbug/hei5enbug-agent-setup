@@ -74,7 +74,7 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
 [기능별 고정값 표](model-routing.ko.md#기능별-고정값)에서 Claude Code 쪽 해당 기능 항목을 찾는다.
 
 - `via: runner`: `--instructions <file>`을 붙여 위의 역할 실행기로 기능을 실행한다.
-- `via: agent`: 항목의 `agent` 필드에 적힌 에이전트를 띄운다. `pin`은 그 항목이 쓰는 에이전트 고정값을 가리킨다.
+- `via: agent`: 항목의 `agent` 필드에 적힌 에이전트를 띄운다. `pin`은 그 항목이 쓰는 에이전트 고정값을 가리키며, `call`이면 항목의 모델을 Agent 호출의 `model`로 넘긴다는 뜻이다.
   실행이 실패하면 그 에이전트의 다음 시작은 한 번 거부되며, 거부 이유에 역할 실행기의 대체 명령이 적힌다.
 - 그 경로가 실패하면 기능의 대체 항목을 한 번 쓰고, 그래도 안 되면 메인 대화에서 계속한다.
 
@@ -92,7 +92,7 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
 
 - 플러그인 에이전트: Agent 호출의 `model`에 요청한 모델의 별칭(`opus`, `sonnet`, `haiku`, `fable`)을 넣는다. 요청한 `effort`는
   같은 호출에서 `model`과 함께 넘긴다. 사고 강도만 요청받았다면 역할의 고정 모델 별칭을 그 강도와 함께 넘긴다. 고정 모델은 소스
-  디렉터리의 `config/model-registry.json`에서 `claude_agents` 아래 역할의 `model`이다(`worker`는 세션 줄 "Worker agent model", 다른
+  디렉터리의 `config/model-registry.json`에서 `claude_agents` 아래 역할의 `model`이다(`worker`는 "구현" 절의 경로 모델, 다른
   플러그인의 에이전트는 그 플러그인의 `.claude-plugin/model-roles.json`). 그러면 mod는 사용자의 가장 최근 프롬프트가 직접 그 값을 지정한 경우에만 요청한
   모델과 사고 강도를 고정하고, 다른 모델로 응답한 실행은 실패로 처리한다.
 - 역할 실행기: 사용자가 지정한 값에 `--user-requested`와 `--model <id>` 또는 `--effort <level>`을 붙인다. 이 값에 한해
@@ -127,22 +127,22 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
 
 위임한 구현은 [구현 위임 규칙](implementation-delegation.ko.md)에 따라 조정한다. 이 섹션은 Claude Code worker 연동만 덧붙인다.
 
-- 위임한 구현은 세션 줄 "Implementation worker route"에 지정된 경로를 따른다. 줄이 `sonnet`이면 Sonnet worker인
-  `hei5enbug-agent-setup:sonnet-worker`, `codex`이면 Codex worker(아래 "Codex worker" 참조), `haiku`이면
-  `hei5enbug-agent-setup:worker`, `sol`이면 Sol worker(아래 "Sol worker" 참조)를 쓴다.
-  `auto`이면 할당마다 고른다. 쉬운 작업(수정 내용이 명시되고 검사로 전체를 확인할 수 있는 하나의 일관된 변경)은 `worker` 에이전트,
-  보통이거나 어려운 작업(동작 변경, 여러 파일, 파싱, 보안 또는 동시성)은 Sonnet worker를 쓴다. Claude 경로가 실패하거나
-  사용량 한도로 중단되면 Sol worker를 쓴다. 사용자가 한 경로를 요청하면 그 요청에만 적용한다.
+- 위임한 구현은 세션 줄 "Implementation worker route"에 지정된 경로를 따른다. 줄이 `haiku`, `sonnet`, `opus`이면
+  `hei5enbug-agent-setup:worker`를 띄우고 그 모델을 호출의 `model`로 넘긴다. `codex`이면 Codex worker(아래 "Codex worker" 참조),
+  `sol`이면 Sol worker(아래 "Sol worker" 참조)를 쓴다. `auto`이면 `worker`를 띄우되 `model`은
+  [난이도별 worker 모델](model-routing.ko.md#난이도별-worker-모델)이 정한 값을 쓴다.
+  Claude 경로가 실패하거나 사용량 한도로 중단되면 Sol worker를 쓴다. 사용자가 한 경로를 요청하면 그 요청에만 적용한다.
   UI 코드, 시각 디자인, 다이어그램 작업은 여전히 `hei5enbug-agent-setup:designer`가 맡는다. 다만 Claude Code 세션 파일이
   메인 세션에 맡긴 종류는 예외다. 그 밖의 에이전트는 쓰지 않는다.
-- `worker` 에이전트는 세션 줄 "Worker agent model"에 적힌 모델과 사고 강도로 실행한다(기본값은 Haiku, `high`).
-- 호출 단위 모델은 정의보다 우선하므로 플러그인 에이전트를 호출하거나 재개할 때 넘기지 않는다. 정의에는 공유 모델
-  라우팅이 정리한 모델과 사고 강도가 고정되어 있다. 유일한 예외는 "요청한 모델이나 사고 강도" 절의 사용자 요청이다.
+- `worker` 에이전트는 세션 줄 "Worker agent effort"에 적힌 사고 강도(기본값 `high`)로, 호출이 넘긴 모델로 실행하며 호출이
+  모델을 넘기지 않으면 경로의 모델로 실행한다. mod는 경로가 허용하지 않는 `model`을 거부한다.
+- 호출 단위 모델은 정의보다 우선하므로 다른 플러그인 에이전트를 호출하거나 재개할 때 넘기지 않는다. 정의에는 공유 모델
+  라우팅이 정리한 모델과 사고 강도가 고정되어 있다. 유일한 예외는 "요청한 모델이나 사고 강도" 절의 사용자 요청이며, `worker`에도 적용한다.
 - 기존 UI를 바꾸는 작업은 designer 호출에 `effort: "high"`를 넘기고, 새 화면이나 컴포넌트는 `xhigh`를 유지하도록 effort를
   넘기지 않는다. 플러그인 에이전트 호출의 호출 단위 `effort`는 역할의 고정 사고 강도 이하일 때만 허용하며, 고정값보다
   높이지 않는다. mod는 그 값을 해당 에이전트의 모든 요청에 유지하고 `call_effort`로 기록한다. 실행은 그 사고 강도에 맞는지
   확인한다.
-- 아래 항목은 플러그인 에이전트가 실행될 때마다 적용한다. 실행기의 대체 경로, `worker`와 Sonnet worker, designer가 해당한다.
+- 아래 항목은 플러그인 에이전트가 실행될 때마다 적용한다. 실행기의 대체 경로, `worker`, designer가 해당한다.
 - 세션 컨텍스트에 `hei5enbug-agent-setup mod: role pinning active` 줄이 있으면 대화마다 첫 프롬프트에 이 줄을 붙이는
   등록된 플러그인 mod의 `prompt.submit` 훅이 역할 고정 활성 상태를 확인한 것이다. mod는 서브에이전트 요청마다 레지스트리와 설치된 플러그인이 선언한
   `model-roles.json`에서 각 역할의 모델과 사고 강도를 고정한다. 다른 모델이 응답했거나 모델 증거가 없는 실행은 실패로 처리되어
@@ -174,11 +174,11 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
   `python3 <Source directory>/scripts/role_runner.py implementation --fallback --instructions
   <Source directory>/agents/worker.md --assignment <file> --result <file>`을 실행한다. 공유 모델 라우팅의 기능별 표가
   Claude Code 대체 항목으로 지정한 모델을 실행하며, 해당 폴더에 쓰기 권한을 부여한다. `auto`의 대체에는
-  [난이도별 GPT worker 모델](model-routing.ko.md#난이도별-gpt-worker-모델)의 선택으로 `--model`을 붙이고, `sol` 경로에는
+  [난이도별 worker 모델](model-routing.ko.md#난이도별-gpt-worker-모델)의 선택으로 `--model`을 붙이고, `sol` 경로에는
   붙이지 않는다.
 - 작업이 써야 하는 해당 폴더 밖 디렉터리에만 `--add-dir <dir>`을 붙인다. 승인 가드는 세션 쓰기 승인을 한 번 묻는다.
 
 ## Codex worker
 
-- 일반 할당 항목을 담은 할당을 파일로 쓰고 역할 실행기의 `worker` 역할을 실행하며, `--model`은 [난이도별 GPT worker 모델](model-routing.ko.md#난이도별-gpt-worker-모델)로 정한다.
+- 일반 할당 항목을 담은 할당을 파일로 쓰고 역할 실행기의 `worker` 역할을 실행하며, `--model`은 [난이도별 worker 모델](model-routing.ko.md#난이도별-gpt-worker-모델)로 정한다.
 - 작업이 써야 하는 세션 폴더 밖 디렉터리에만 `--add-dir <dir>`을 붙인다. 플러그인 Mod는 세션당 한 번 묻는다.

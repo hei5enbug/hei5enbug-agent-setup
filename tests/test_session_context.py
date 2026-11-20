@@ -538,7 +538,6 @@ class SessionContextTest(unittest.TestCase):
         agents = {
             "claude": (
                 "hei5enbug-agent-setup:worker",
-                "hei5enbug-agent-setup:sonnet-worker",
                 "hei5enbug-agent-setup:designer",
             ),
             "codex": ("worker", "designer"),
@@ -871,8 +870,21 @@ class SessionContextTest(unittest.TestCase):
         self.assertEqual(context.count("Implementation worker route:"), 1)
         self.assertLess(len(context.encode("utf-8")), 9000)
 
-    def test_sonnet_옵션은_sonnet_worker_경로를_알린다(self):
-        """대소문자와 앞뒤 공백을 정규화한 sonnet 옵션은 sonnet-worker 경로 한 줄을 담는다."""
+    def test_opus_옵션은_Opus_경로를_알린다(self):
+        """대소문자와 앞뒤 공백을 정규화한 opus 옵션은 Opus 경로 한 줄을 담는다."""
+        # Given
+        extra_env = {"CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER": " OpUs "}
+
+        # When
+        context = self.context(self.run_hook("claude", extra_env=extra_env))
+
+        # Then
+        self.assertIn("Implementation worker route: Opus (`opus`).", context)
+        self.assertEqual(context.count("Implementation worker route:"), 1)
+        self.assertLess(len(context.encode("utf-8")), 9000)
+
+    def test_sonnet_옵션은_Sonnet_경로를_알린다(self):
+        """대소문자와 앞뒤 공백을 정규화한 sonnet 옵션은 Sonnet 경로 한 줄을 담는다."""
         # Given
         extra_env = {"CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER": " SoNnEt "}
 
@@ -1429,8 +1441,8 @@ class SessionContextTest(unittest.TestCase):
         self.assertEqual(bundled, replaced)
         self.assertEqual(edited, self.worker.read_bytes())
 
-    def test_Claude_세션은_worker_모델과_effort_옵션을_알린다(self):
-        """Claude 세션 컨텍스트는 구현 경로 줄 다음에 옵션으로 고른 worker 모델과 effort 줄을 담는다."""
+    def test_Claude_세션은_worker_effort_옵션을_알린다(self):
+        """Claude 세션 컨텍스트는 구현 경로 줄 다음에 옵션으로 고른 worker effort 줄을 담고, 더는 선언하지 않는 worker_model은 무시한다."""
         # Given
         extra_env = {
             "CLAUDE_PLUGIN_OPTION_WORKER_MODEL": "claude-sonnet-5-5",
@@ -1441,34 +1453,30 @@ class SessionContextTest(unittest.TestCase):
         context = self.context(self.run_hook("claude", extra_env=extra_env))
 
         # Then
-        self.assertIn(
-            "Implementation worker route: Auto (`auto`).\nWorker agent model: `claude-sonnet-5-5` at `xhigh`.\n", context
-        )
+        self.assertIn("Implementation worker route: Auto (`auto`).\nWorker agent effort: `xhigh`.\n", context)
+        self.assertNotIn("Worker agent model", context)
         self.assertLess(len(context.encode("utf-8")), 9000)
 
-    def test_Claude_세션은_옵션이_없으면_기본_worker_모델을_알리고_잘못된_값은_알림으로_적는다(self):
-        """옵션이 없으면 매니페스트 기본값을 알리고, 목록에 없는 모델은 기본값으로 되돌려 괄호 알림에 값을 적는다."""
+    def test_Claude_세션은_옵션이_없으면_기본_worker_effort를_알리고_잘못된_값은_알림으로_적는다(self):
+        """옵션이 없으면 매니페스트 기본값을 알리고, 목록에 없는 effort는 기본값으로 되돌려 괄호 알림에 값을 적는다."""
         # Given
         self.use_short_root()
-        invalid = {"CLAUDE_PLUGIN_OPTION_WORKER_MODEL": "claude-unknown-9"}
+        invalid = {"CLAUDE_PLUGIN_OPTION_WORKER_EFFORT": "ultra"}
 
         # When
         default = self.context(self.run_hook("claude"))
         ignored = self.context(self.run_hook("claude", extra_env=invalid))
 
         # Then
-        self.assertIn("Worker agent model: `claude-haiku-5-5` at `high`.\n", default)
-        self.assertIn("Worker agent model: `claude-haiku-5-5` at `high`. (Ignored worker_model 'claude-unknown-9'", ignored)
+        self.assertIn("Worker agent effort: `high`.\n", default)
+        self.assertIn("Worker agent effort: `high`. (Ignored worker_effort 'ultra'", ignored)
         self.assertLess(len(ignored.encode("utf-8")), 9000)
 
-    def test_Claude_세션은_역할_고정이_꺼져_있으면_설정값_대신_기본_모델과_알림을_알린다(self):
-        """role_pinning이 꺼지면 설정한 opus와 xhigh는 적용되지 않으므로 기본 쌍과 역할 고정 알림을 적고, 켜져 있으면 설정한 쌍을 적는다."""
+    def test_Claude_세션은_역할_고정이_꺼져_있으면_설정값_대신_기본_effort와_알림을_알린다(self):
+        """role_pinning이 꺼지면 설정한 xhigh는 적용되지 않으므로 기본 effort와 역할 고정 알림을 적고, 켜져 있으면 설정한 effort를 적는다."""
         # Given
         self.use_short_root()
-        configured = {
-            "CLAUDE_PLUGIN_OPTION_WORKER_MODEL": "claude-opus-5-5",
-            "CLAUDE_PLUGIN_OPTION_WORKER_EFFORT": "xhigh",
-        }
+        configured = {"CLAUDE_PLUGIN_OPTION_WORKER_EFFORT": "xhigh"}
 
         # When
         off = self.context(self.run_hook("claude", extra_env={**configured, "CLAUDE_PLUGIN_OPTION_ROLE_PINNING": "false"}))
@@ -1476,17 +1484,15 @@ class SessionContextTest(unittest.TestCase):
 
         # Then
         self.assertIn(
-            "Worker agent model: `claude-haiku-5-5` at `high`. "
-            "(role pinning is off, so the worker runs on its definition's model)\n",
-            off,
+            "Worker agent effort: `high`. (role pinning is off, so the worker runs on its definition's effort)\n", off
         )
-        self.assertIn("Worker agent model: `claude-opus-5-5` at `xhigh`.\n", on)
+        self.assertIn("Worker agent effort: `xhigh`.\n", on)
 
     def test_알림이_컨텍스트_한도를_넘기게_하면_알림만_빼고_세션_지침은_그대로_불러온다(self):
         """알림 때문에 한도를 넘으면 알림 괄호만 생략하고 지침 로드는 실패하지 않는다."""
         # Given
         environment = {
-            "CLAUDE_PLUGIN_OPTION_WORKER_MODEL": "x" * 40,
+            "CLAUDE_PLUGIN_OPTION_WORKER_EFFORT": "x" * 40,
             "CLAUDE_CONFIG_DIR": str(self.base / "claude config"),
         }
         with mock.patch.dict(os.environ, environment):
@@ -1499,8 +1505,8 @@ class SessionContextTest(unittest.TestCase):
                 context = session_context.render_context(self.root, "claude")
 
         # Then
-        self.assertIn("(Ignored worker_model", full)
-        self.assertIn("Worker agent model: `claude-haiku-5-5` at `high`.\n", context)
+        self.assertIn("(Ignored worker_effort", full)
+        self.assertIn("Worker agent effort: `high`.\n", context)
         self.assertLessEqual(len(context.encode("utf-8")), limit)
 
     def test_Codex_세션은_저장된_옵션의_Codex_worker_모델을_알린다(self):

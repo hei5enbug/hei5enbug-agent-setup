@@ -126,7 +126,7 @@ def model_family(model: str) -> str:
 def capability_cell(entry: dict, configurable: bool = False) -> str:
     suffix = " (runner)" if entry["via"] == "runner" else ""
     if entry["via"] == "agent":
-        suffix = f" (`{entry['agent'].split(':')[-1]}`)"
+        suffix = f" (`{entry['agent'].split(':')[-1]}`" + (", per-call `model`)" if entry.get("pin") == "call" else ")")
     pair = f"`{entry['model']}` / `{entry['effort']}`"
     if "max_effort" in entry:
         pair += f" (up to `{entry['max_effort']}`)"
@@ -235,7 +235,6 @@ class ModelPinTest(unittest.TestCase):
             {
                 "scout.md": PINS["claude-sonnet"],
                 "worker.md": PINS["claude-haiku"],
-                "sonnet-worker.md": PINS["claude-sonnet"],
                 "designer.md": PINS["claude-opus"],
                 "reviewer.md": PINS["claude-opus"],
             },
@@ -422,7 +421,7 @@ class ModelPinTest(unittest.TestCase):
         self.assertEqual([], problems)
 
     def test_agent로_실행하는_기능_항목은_가리킨_pin의_모델과_effort와_같다(self):
-        """via가 agent인 기능 항목은 같은 호스트의 에이전트를 가리키고, pin이 고른 모델과 effort가 항목과 같다."""
+        """via가 agent인 기능 항목은 같은 호스트의 에이전트를 가리키고, pin이 고른 모델과 effort가 항목과 같다. pin이 call이면 모델은 에이전트의 call_models 안에 있고 effort만 같다."""
         # Given
         agents = {"claude": REGISTRY["claude_agents"], "codex": REGISTRY["codex_agents"]}
         entries = [
@@ -441,6 +440,8 @@ class ModelPinTest(unittest.TestCase):
                 problems.append(f"{where}: unknown agent {entry.get('agent')!r}")
                 continue
             pin = {"primary": agent, "fallback": agent.get("fallback")}.get(entry.get("pin"))
+            if entry.get("pin") == "call" and entry["model"] in agent.get("call_models", []):
+                pin = {"model": entry["model"], "effort": agent["effort"]}
             if pin is None or (pin["model"], pin["effort"]) != (entry["model"], entry["effort"]):
                 problems.append(f"{where}: {entry.get('agent')} {entry.get('pin')} does not match")
 
@@ -496,34 +497,53 @@ class ModelPinTest(unittest.TestCase):
         self.assertEqual(["runner"] * len(fallbacks), vias)
 
     def test_worker_옵션_목록은_레지스트리_고정값과_effort만_담고_기본_쌍은_규칙을_지킨다(self):
-        """매니페스트의 worker 옵션 네 개는 레지스트리 고정 모델(Codex 모델 옵션은 auto 포함)과 effort만 나열하고, 각 호스트의 기본 쌍은 effort_rules가 허용한다."""
+        """매니페스트의 worker 옵션은 레지스트리 고정 모델(Codex 모델 옵션은 auto 포함)과 effort만 나열하고, Claude 경로 옵션의 모델 별칭은 레지스트리 고정 별칭이며, 기본 쌍은 effort_rules가 허용한다."""
         # Given
         options = json.loads((REPO_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["userConfig"]
         efforts = set(REGISTRY["efforts"])
         models = set(PINS.values())
-        pairs = {"claude": ("worker_model", "worker_effort"), "codex": ("codex_worker_model", "codex_worker_effort")}
+        aliases = {key.split("-", 1)[1] for key in PINS if key.startswith("claude-")}
+        routes = {"auto", "codex", "sol"}
 
         # When
-        outside = {
-            key: [
-                value for value in options[key]["options"]
-                if value not in ((models | {"auto"} if key == "codex_worker_model" else models) if key.endswith("model") else efforts)
-            ]
-            for key in (name for pair in pairs.values() for name in pair)
+        outside_models = [value for value in options["codex_worker_model"]["options"] if value not in models | {"auto"}]
+        outside_efforts = [
+            value for key in ("worker_effort", "codex_worker_effort") for value in options[key]["options"] if value not in efforts
+        ]
+        outside_routes = [value for value in options["implementation_worker"]["options"] if value not in aliases | routes]
+        defaults = {
+            "claude": (options["implementation_worker"]["default"], options["worker_effort"]["default"]),
+            "codex": (options["codex_worker_model"]["default"], options["codex_worker_effort"]["default"]),
         }
-        defaults = {host: (options[model]["default"], options[effort]["default"]) for host, (model, effort) in pairs.items()}
 
         # Then
-        self.assertEqual({key: [] for key in outside}, outside)
+        self.assertEqual(([], [], []), (outside_models, outside_efforts, outside_routes))
+        self.assertNotIn("worker_model", options)
+        self.assertIn("opus", options["implementation_worker"]["options"])
         for host, (model, effort) in defaults.items():
             with self.subTest(host=host):
-                self.assertIn(model, options[pairs[host][0]]["options"])
-                self.assertIn(effort, options[pairs[host][1]]["options"])
                 self.assertIn(effort, REGISTRY["effort_rules"].get(model, efforts))
         for model in options["codex_worker_model"]["options"]:
             for effort in options["codex_worker_effort"]["options"]:
                 with self.subTest(model=model, effort=effort):
                     self.assertIn(effort, REGISTRY["effort_rules"].get(model, efforts))
+
+    def test_call_models는_고정_Claude_모델이고_에이전트_정의_모델을_포함한다(self):
+        """call_models는 호출이 넘길 수 있는 고정 Claude 모델 목록이며 에이전트 정의의 모델과 레지스트리 항목의 모델을 포함한다."""
+        # Given
+        agents = {name: entry for name, entry in REGISTRY["claude_agents"].items() if "call_models" in entry}
+
+        # When
+        problems = [
+            name for name, entry in agents.items()
+            if not set(entry["call_models"]) <= set(PINS.values())
+            or not all(model.startswith("claude-") for model in entry["call_models"])
+            or entry["model"] not in entry["call_models"]
+        ]
+
+        # Then
+        self.assertEqual(["hei5enbug-agent-setup:worker"], sorted(agents))
+        self.assertEqual([], problems)
 
     def test_토론_상대는_대체_항목이_없다(self):
         """tiki-taka 상대 항목은 fallback이 없어서 상대가 실패하면 토론이 멈춘다."""

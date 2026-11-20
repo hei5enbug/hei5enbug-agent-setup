@@ -47,19 +47,29 @@ async function pluginManifest($) {
   return manifests.get(path);
 }
 
-export async function configuredWorkerPin($, options) {
-  const model = options?.worker_model;
-  const effort = options?.worker_effort;
-  if (typeof model !== "string" || typeof effort !== "string") return undefined;
+const WORKER_AGENT = "hei5enbug-agent-setup:worker";
+const FIXED_WORKER_ALIASES = ["haiku", "sonnet", "opus"];
+
+async function configuredWorkerEffort($, registry, effort, model) {
+  if (typeof effort !== "string") return undefined;
   try {
     const { userConfig } = await pluginManifest($);
-    if (!userConfig.worker_model.options.includes(model) || !userConfig.worker_effort.options.includes(effort)) return undefined;
-    const allowed = (await modelRegistry($)).effort_rules?.[model];
-    if (Array.isArray(allowed) && !allowed.includes(effort)) return undefined;
-    return { model, effort };
+    if (!userConfig.worker_effort.options.includes(effort)) return undefined;
+    const allowed = registry.effort_rules?.[model];
+    return Array.isArray(allowed) && !allowed.includes(effort) ? undefined : effort;
   } catch {
     return undefined;
   }
+}
+
+export async function workerPolicy($, options) {
+  const registry = await modelRegistry($);
+  const entry = registry.claude_agents[WORKER_AGENT];
+  const setting = typeof options?.implementation_worker === "string" ? options.implementation_worker.trim().toLowerCase() : "auto";
+  const fixed = FIXED_WORKER_ALIASES.includes(setting) ? claudeModelId(registry, setting) : undefined;
+  const model = fixed ?? entry.model;
+  const effort = (await configuredWorkerEffort($, registry, options?.worker_effort, model)) ?? entry.effort;
+  return { models: fixed === undefined ? (entry.call_models ?? [entry.model]) : [fixed], pin: { model, effort }, fallbackEffort: entry.effort };
 }
 
 export async function claudeConfigDir($) {
@@ -238,7 +248,7 @@ export function userRequest(registry, text) {
   return { models, efforts };
 }
 
-function effortAllowed(registry, model, effort) {
+export function effortAllowed(registry, model, effort) {
   const allowed = registry.effort_rules?.[model];
   return (registry.efforts ?? []).includes(effort) && (!Array.isArray(allowed) || allowed.includes(effort));
 }

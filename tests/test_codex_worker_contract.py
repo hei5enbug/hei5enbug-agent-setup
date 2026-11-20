@@ -27,7 +27,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         expected = (
             "[implementation delegation rules](implementation-delegation.md)",
             "Delegate implementation to the plugin `worker` role, by the model in the session line \"Codex worker model\": "
-            "`auto` means choose per assignment by [GPT worker model by difficulty](model-routing.md#gpt-worker-model-by-difficulty)",
+            "`auto` means choose per assignment by [Worker model by difficulty](model-routing.md#worker-model-by-difficulty)",
             "Pass the chosen model and the effort from that line explicitly on every spawn, because the role file sets neither.",
             "The line `claude-sonnet-5-5` selects the Claude route first:",
             "implementation --host codex --fallback --instructions <Source directory>/agents/worker.md --add-dir <dir> "

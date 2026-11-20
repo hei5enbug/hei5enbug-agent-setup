@@ -28,7 +28,6 @@ INSTRUCTIONS_VARIABLE = "$I"
 IMPLEMENTATION_AGENTS = {
     "claude": {
         "hei5enbug-agent-setup:worker",
-        "hei5enbug-agent-setup:sonnet-worker",
         "hei5enbug-agent-setup:designer",
     },
     "codex": {"worker", "designer"},
@@ -150,13 +149,12 @@ def append_session_notices(context: str, notices: list[str], limit: int) -> str:
     return context
 
 
-def render_claude_settings(worker: str | None = None) -> str:
+def render_claude_settings(effort: str | None = None, notice: str | None = None) -> str:
     import plugin_toggles
 
-    if worker is None:
-        model, effort, notice = plugin_toggles.worker_setting("claude")
-        suffix = f" ({notice})" if notice else ""
-        worker = f"`{model}` at `{effort}`.{suffix}"
+    if effort is None:
+        effort, notice = plugin_toggles.claude_worker_effort()
+    suffix = f" ({notice})" if notice else ""
     option = plugin_toggles.option_value("implementation_worker")
     route = {
         "auto": "Auto (`auto`)",
@@ -164,13 +162,14 @@ def render_claude_settings(worker: str | None = None) -> str:
         "haiku": "Haiku (`haiku`)",
         "sol": "Sol (`sol`)",
         "sonnet": "Sonnet (`sonnet`)",
+        "opus": "Opus (`opus`)",
     }.get(option, "Auto (`auto`)")
     review = plugin_toggles.option_value("review_model")
     if review not in REVIEW_MODELS:
         review = DEFAULT_REVIEW_MODEL
     return (
         f"Implementation worker route: {route}.\n"
-        f"Worker agent model: {worker}\n"
+        f"Worker agent effort: `{effort}`.{suffix}\n"
         f"Review model: `{review}`.\n"
     )
 
@@ -208,15 +207,19 @@ def render_context(root: Path, host: str, kind: str = "main") -> str:
         + "\n"
     )
     if kind == "main":
-        model, effort, notice = plugin_toggles.worker_setting(host)
-        suffix = f" ({notice})" if notice else ""
-        worker = f"`{model}` at `{effort}`.{suffix}"
         if host == "codex":
             import language_guard
 
-            context += f"\nCodex worker model: {worker}\nResponse language: {language_guard.codex_language()}.\n"
+            model, effort, notice = plugin_toggles.worker_setting()
+            suffix = f" ({notice})" if notice else ""
+            context += (
+                f"\nCodex worker model: `{model}` at `{effort}`.{suffix}\n"
+                f"Response language: {language_guard.codex_language()}.\n"
+            )
         else:
-            context += "\n" + render_claude_settings(worker)
+            effort, notice = plugin_toggles.claude_worker_effort()
+            suffix = f" ({notice})" if notice else ""
+            context += "\n" + render_claude_settings(effort, notice)
         if suffix and len(context.encode("utf-8")) > limit:
             context = context.replace(suffix, "", 1)
     if len(context.encode("utf-8")) > limit:
@@ -569,7 +572,7 @@ def record_codex_worker(session) -> None:
     import approval_state
     import plugin_toggles
 
-    model, effort, _ = plugin_toggles.worker_setting("codex")
+    model, effort, _ = plugin_toggles.worker_setting()
     approval_state.record_worker_pair("codex", session, model, effort)
 
 
