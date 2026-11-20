@@ -1,0 +1,241 @@
+{
+  "issue": 121,
+  "cases": [
+    "T17",
+    "T78",
+    "T79"
+  ],
+  "variants": {
+    "base": {
+      "revision": "4405edad6f28"
+    },
+    "a121-script": {
+      "revision": "6480caac0832"
+    }
+  },
+  "runs": [
+    {
+      "case": "T17",
+      "variant": "a121-script",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "one-commit": true,
+        "no-trailers": true,
+        "tree-clean": true,
+        "regressions": true,
+        "message-check": true,
+        "text-review-clean": true,
+        "ran-text-review": false,
+        "skill-invoked": true
+      },
+      "wall_seconds": 25.355103248730302,
+      "cost_usd": 0.2483402,
+      "rep": 1,
+      "review_stand_in": "claude-sonnet-5-5"
+    },
+    {
+      "case": "T17",
+      "variant": "base",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "one-commit": true,
+        "no-trailers": true,
+        "tree-clean": true,
+        "regressions": true,
+        "message-check": true,
+        "text-review-clean": true,
+        "ran-text-review": true,
+        "skill-invoked": true
+      },
+      "wall_seconds": 136.08806245960295,
+      "cost_usd": 0.4774262,
+      "rep": 1,
+      "review_stand_in": "claude-sonnet-5-5"
+    },
+    {
+      "case": "T78",
+      "variant": "a121-script",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "skill-invoked": true,
+        "one-commit": true,
+        "no-trailers": true,
+        "subject-only": true,
+        "only-staged-committed": true,
+        "readme-kept": true,
+        "env-kept": true,
+        "secret-not-committed": true,
+        "no-broad-staging": true,
+        "regressions": true
+      },
+      "wall_seconds": 24.76360816694796,
+      "cost_usd": 0.2231882,
+      "rep": 1,
+      "review_stand_in": "claude-sonnet-5-5"
+    },
+    {
+      "case": "T78",
+      "variant": "base",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "skill-invoked": true,
+        "one-commit": true,
+        "no-trailers": true,
+        "subject-only": true,
+        "only-staged-committed": true,
+        "readme-kept": true,
+        "env-kept": true,
+        "secret-not-committed": true,
+        "no-broad-staging": true,
+        "regressions": true
+      },
+      "wall_seconds": 97.87864616513252,
+      "cost_usd": 0.41600120000000007,
+      "rep": 1,
+      "review_stand_in": "claude-sonnet-5-5"
+    },
+    {
+      "case": "T79",
+      "variant": "a121-script",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "skill-invoked": true,
+        "no-commit": true,
+        "placeholder-not-committed": true,
+        "asked-for-value": true,
+        "index-untouched": true,
+        "regressions": true
+      },
+      "wall_seconds": 12.944378500804305,
+      "cost_usd": 0.17881780000000003,
+      "rep": 1,
+      "review_stand_in": "claude-sonnet-5-5"
+    },
+    {
+      "case": "T79",
+      "variant": "base",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "skill-invoked": true,
+        "no-commit": true,
+        "placeholder-not-committed": true,
+        "asked-for-value": true,
+        "index-untouched": true,
+        "regressions": true
+      },
+      "wall_seconds": 14.980607291683555,
+      "cost_usd": 0.19445199999999999,
+      "rep": 1,
+      "review_stand_in": "claude-sonnet-5-5"
+    }
+  ],
+  "verdicts": [
+    {
+      "case": "T17",
+      "verdict": "not measured",
+      "step": "no after run on codex",
+      "measure": "quality"
+    },
+    {
+      "case": "T17",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T17",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T17",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T78",
+      "verdict": "not measured",
+      "step": "no after run on codex",
+      "measure": "quality"
+    },
+    {
+      "case": "T78",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T78",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T78",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T79",
+      "verdict": "not measured",
+      "step": "no after run on codex",
+      "measure": "quality"
+    },
+    {
+      "case": "T79",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T79",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T79",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    }
+  ]
+}
