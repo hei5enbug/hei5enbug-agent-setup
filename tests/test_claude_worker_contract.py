@@ -213,7 +213,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
             {
                 "type": "string",
                 "title": "Implementation worker",
-                "description": "Route implementation work: auto (the main session picks per task: haiku for easy work, sonnet for normal or hard work, and sol only when a Claude route fails or stops on a usage limit), codex (Codex on gpt-6-luna at high), haiku (the plugin worker on its Worker model and Worker effort, claude-haiku-5-5 at high by default), sol (gpt-6-luna at high through the role runner), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
+                "description": "Route implementation work: auto (the main session picks per task: haiku for easy work, sonnet for normal or hard work, and sol only when a Claude route fails or stops on a usage limit), codex (Codex on gpt-5.6-luna at high), haiku (the plugin worker on its Worker model and Worker effort, claude-haiku-5-5 at high by default), sol (gpt-6.1-sol at high through the role runner), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
                 "options": ["auto", "codex", "haiku", "sol", "sonnet"],
                 "default": "auto",
             },

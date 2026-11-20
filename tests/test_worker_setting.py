@@ -14,7 +14,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import plugin_toggles  # noqa: E402
 
 PLUGIN_KEY = "hei5enbug-agent-setup@hei5enbug"
-CODEX_DEFAULT = ("gpt-6-luna", "high")
+CODEX_DEFAULT = ("gpt-5.6-luna", "high")
 CLAUDE_DEFAULT = ("claude-haiku-5-5", "high")
 
 
@@ -43,7 +43,7 @@ class WorkerSettingTest(unittest.TestCase):
         return (model, effort), notice
 
     def test_Codex는_저장된_설정이_없으면_매니페스트_기본값을_알림_없이_쓴다(self):
-        """settings.json이 없어도 기본 gpt-6-luna와 high를 돌려주고 알림은 없다."""
+        """settings.json이 없어도 기본 gpt-5.6-luna와 high를 돌려주고 알림은 없다."""
         # Given
         settings = self.config / "settings.json"
 
@@ -76,7 +76,7 @@ class WorkerSettingTest(unittest.TestCase):
         pair, notice = self.resolve("codex")
 
         # Then
-        self.assertEqual(("gpt-6-luna", "high"), pair)
+        self.assertEqual(("gpt-5.6-luna", "high"), pair)
         self.assertIsNone(notice)
 
     def test_Codex는_환경_변수가_저장된_값보다_우선한다(self):
@@ -85,11 +85,11 @@ class WorkerSettingTest(unittest.TestCase):
         self.save({"codex_worker_model": "gpt-6.1-sol", "codex_worker_effort": "high"})
 
         # When
-        with mock.patch.dict(os.environ, {"HEI5ENBUG_CODEX_WORKER_MODEL": " GPT-6-Luna "}):
+        with mock.patch.dict(os.environ, {"HEI5ENBUG_CODEX_WORKER_MODEL": " GPT-5.6-Luna "}):
             pair, notice = self.resolve("codex")
 
         # Then
-        self.assertEqual(("gpt-6-luna", "high"), pair)
+        self.assertEqual(("gpt-5.6-luna", "high"), pair)
         self.assertIsNone(notice)
 
     def test_Codex는_두_환경_변수가_있으면_설정_파일을_읽지_않는다(self):

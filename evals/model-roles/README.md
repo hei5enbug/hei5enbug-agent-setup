@@ -170,9 +170,9 @@ and the same efficiency rule. It is not validated by `mr_cli.py` and is no part 
 |---|---|---|
 | reviewer | T89 to T91, S5 | `gpt-6.1-terra`: 4 of 4 for 0.061 USD and 68 s, against `gpt-6.2-sol` 4 of 4 for 0.265 USD; `gpt-6.1-sol` fails S5 |
 | opponent | T92, T93 | `gpt-6.1-sol` stays: it is the only candidate that passes both |
-| worker | W1 to W3 | `gpt-6-luna`: every candidate passes, and it costs 0.020 USD against 0.101 USD for `gpt-6.1-terra` |
-| scout, researcher | S7, SC1 to SC3, R1 | `gpt-6-luna`: 4 of 4 and 1 of 1, against 2 of 4 and 1 of 1 for `gpt-5.6-luna`, at lower cost |
-| language | t1, t3, t5 | `gpt-6.1-terra` wins the efficiency rule; not applied until the owner's blind comparison of its drafts |
+| worker | W1 to W3 | `gpt-6-luna` is cheapest (0.020 USD against 0.101 USD for `gpt-6.1-terra`), but every candidate passes, so the owner holds the change for harder cases |
+| scout, researcher | S7, SC1 to SC3, R1 | `gpt-6-luna` scores 4 of 4 and 1 of 1 against 2 of 4 and 1 of 1 for `gpt-5.6-luna`, at lower cost; held with the worker, because the family pin allows one Luna release and R1 does not discriminate |
+| language | t1, t3, t5 | `gpt-6.1-terra` wins the efficiency rule and the owner's blind comparison (t1 and t3 terra better, t5 split); applied |
 | text_review | TR1, TR2 | All four candidates fail TR1, which holds a second real defect (the column-list sentence is a list of names that the diff shows). On TR2 alone `gpt-6.1-terra` wins; not applied |
 
 `gpt-6.2-sol` does not replace `gpt-6.1-sol` everywhere: it fails the opponent cases T92 and T93 and the language cases

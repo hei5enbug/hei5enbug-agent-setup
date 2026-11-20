@@ -21,7 +21,7 @@ resume; in the last case, apply its effective-settings checks first. Other dispa
 
 - Use the `scout` agent for bounded, read-only investigation whenever the session delegation rule selects it,
   during planning or execution.
-- Pass `gpt-6-luna` and `high` explicitly on every spawn, or `xhigh` under the effort rule in
+- Pass `gpt-5.6-luna` and `high` explicitly on every spawn, or `xhigh` under the effort rule in
   [shared model routing](model-routing.md#keep-role-settings-fixed). Its bundled role file sets no model, so the
   spawn value applies.
 - Before relying on its result, verify it under the spawned role verification section below.
@@ -32,7 +32,7 @@ resume; in the last case, apply its effective-settings checks first. Other dispa
   investigate in the main session.
 - For bounded public research, run the `researcher` role of the role runner when web search is available:
   `python3 <Source directory>/scripts/role_runner.py researcher --assignment <file> --result <file>`. It uses
-  `gpt-6-luna` at `high` through web search and verifies it from the session record. Otherwise, continue in the
+  `gpt-5.6-luna` at `high` through web search and verifies it from the session record. Otherwise, continue in the
   main session.
 
 ## Skill workers

@@ -1129,15 +1129,18 @@
   },
   "worker": {
    "model": "gpt-6-luna",
-   "applied": true
+   "applied": false,
+   "note": "held by the owner 2026-11-20: W1-W3 and R1 do not discriminate (every model passed); harder cases are being built. gpt-6-luna cannot be applied to scout alone because the family pin and the agent guard allow one Luna release"
   },
   "scout": {
    "model": "gpt-6-luna",
-   "applied": true
+   "applied": false,
+   "note": "held by the owner 2026-11-20: W1-W3 and R1 do not discriminate (every model passed); harder cases are being built. gpt-6-luna cannot be applied to scout alone because the family pin and the agent guard allow one Luna release"
   },
   "researcher": {
    "model": "gpt-6-luna",
-   "applied": true
+   "applied": false,
+   "note": "held by the owner 2026-11-20: W1-W3 and R1 do not discriminate (every model passed); harder cases are being built. gpt-6-luna cannot be applied to scout alone because the family pin and the agent guard allow one Luna release"
   },
   "opponent": {
    "model": "gpt-6.1-sol",
@@ -1146,13 +1149,13 @@
   },
   "language": {
    "model": "gpt-6.1-terra",
-   "applied": false,
-   "note": "owner blind comparison of its drafts against the current ones is owed"
+   "applied": true,
+   "note": "owner blind A/B 2026-11-20: t1 terra better, t3 terra better, t5 split (sentences terra, line breaks and format sol)"
   },
   "text_review": {
-   "model": "gpt-6.1-terra",
+   "model": "gpt-6.1-sol",
    "applied": false,
-   "note": "decided on TR2 alone (one case); the change of the review model needs the owner"
+   "note": "unchanged; the owner is confirming a Sonnet-review flow. On TR2 alone terra won"
   }
  }
 }

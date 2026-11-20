@@ -11,9 +11,8 @@ These repository development rules extend `AGENTS.md`. Apply them before changin
 2. When a family has a newer release, update `pins` in `config/model-registry.json` and every reference in the same
    change until `tests/test_model_pins.py` passes.
 
-GPT Luna stays at the user-selected `gpt-6-luna`, `high` by default and `xhigh` under the effort rule (user selection
-2026-11-20, which replaced `gpt-5.6-luna` after a comparison), until the user explicitly changes that selection. `gpt-sol`
-and `gpt-terra` change only by a recorded role comparison under the owner's 2026-11-20 replacement rules, so a newer Sol
-release is not adopted by step 2 alone.
+GPT Luna stays at the user-selected `gpt-5.6-luna`, `high` by default and `xhigh` under the effort rule (user selection
+2026-10-20), until the user explicitly changes that selection. `gpt-sol` and `gpt-terra` change only by a recorded role
+comparison under the owner's 2026-11-20 replacement rules, so a newer Sol release is not adopted by step 2 alone.
 
 Runtime files name models only by these full IDs; never add an alias or a runtime lookup of the newest release.

@@ -156,9 +156,9 @@ Fable 대 Opus 기록과는 별개다.
 |---|---|---|
 | reviewer | T89~T91, S5 | `gpt-6.1-terra`: 4개 중 4개 통과, 0.061 USD, 68초. `gpt-6.2-sol`은 4개 중 4개, 0.265 USD이며 `gpt-6.1-sol`은 S5에서 실패한다 |
 | opponent | T92, T93 | `gpt-6.1-sol` 유지: 두 사례를 모두 통과한 유일한 후보다 |
-| worker | W1~W3 | `gpt-6-luna`: 모든 후보가 통과하고 비용은 0.020 USD로 `gpt-6.1-terra`의 0.101 USD보다 낮다 |
-| scout, researcher | S7, SC1~SC3, R1 | `gpt-6-luna`: 4개 중 4개와 1개 중 1개 통과로, `gpt-5.6-luna`의 4개 중 2개와 1개 중 1개보다 낫고 비용도 낮다 |
-| language | t1, t3, t5 | `gpt-6.1-terra`가 효율 규칙을 이기지만, 소유자가 초안을 블라인드로 비교하기 전에는 적용하지 않는다 |
+| worker | W1~W3 | `gpt-6-luna`가 가장 싸지만(0.020 USD, `gpt-6.1-terra`는 0.101 USD) 모든 후보가 통과해, 소유자가 더 어려운 사례가 나올 때까지 변경을 보류한다 |
+| scout, researcher | S7, SC1~SC3, R1 | `gpt-6-luna`는 4개 중 4개와 1개 중 1개 통과로 `gpt-5.6-luna`의 4개 중 2개와 1개 중 1개보다 낫고 비용도 낮지만, 고정값이 Luna 릴리스 하나만 허용하고 R1이 변별하지 못해 worker와 함께 보류한다 |
+| language | t1, t3, t5 | `gpt-6.1-terra`가 효율 규칙과 소유자의 블라인드 비교(t1, t3은 terra가 낫고 t5는 갈림)를 이겨 적용했다 |
 | text_review | TR1, TR2 | 네 후보 모두 TR1에서 실패한다. TR1에는 실제 결함이 하나 더 있다(열 목록 문장은 diff가 보여 주는 이름의 목록이다). TR2만으로는 `gpt-6.1-terra`가 이기지만 적용하지 않는다 |
 
 `gpt-6.2-sol`은 `gpt-6.1-sol`을 모든 곳에서 대체하지 못한다. `gpt-6.1-sol`이 통과하는 상대 사례 T92, T93과 language 사례
