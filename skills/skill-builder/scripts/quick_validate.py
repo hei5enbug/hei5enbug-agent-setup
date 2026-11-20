@@ -18,6 +18,11 @@ PYYAML_INSTALL_HINT = (
     "python3 -m pip install pyyaml"
 )
 CHECK_TIMEOUT_SECONDS = 60
+ALLOWED_PROPERTIES = frozenset({
+    'name', 'description', 'when_to_use', 'argument-hint', 'arguments', 'disable-model-invocation',
+    'user-invocable', 'allowed-tools', 'disallowed-tools', 'model', 'effort', 'context', 'agent',
+    'background', 'hooks', 'paths', 'shell', 'metadata', 'license', 'compatibility',
+})
 # Returncode recorded when a bundled check is killed for running too long.
 CHECK_TIMEOUT_RETURNCODE = None
 
@@ -106,9 +111,6 @@ def validate_skill(skill_path):
         frontmatter = parse_frontmatter(frontmatter_text)
     except ValueError as exc:
         return False, str(exc)
-
-    # Define allowed properties
-    ALLOWED_PROPERTIES = {'name', 'description', 'license', 'allowed-tools', 'metadata', 'compatibility'}
 
     # Check for unexpected properties (excluding nested keys under metadata)
     unexpected_keys = set(frontmatter.keys()) - ALLOWED_PROPERTIES

@@ -37,6 +37,19 @@ class ValidateSkillTest(unittest.TestCase):
         self.assertFalse(valid)
         self.assertIn("Unexpected key", message)
 
+    def test_documented_claude_code_frontmatter_keys_are_accepted(self):
+        """Claude Code 스킬 문서의 frontmatter 키(model, effort, context, agent, hooks 등)는 허용한다."""
+        # Given
+        skill = write_skill(
+            self.root,
+            "name: demo\ndescription: Example\nmodel: claude-sonnet-5-5\neffort: high\ncontext: fork\nagent: scout\n"
+            "disallowed-tools: AskUserQuestion\nwhen_to_use: Example\nhooks: {}\npaths: src/**",
+        )
+        # When
+        valid, message = qv.validate_skill(skill)
+        # Then
+        self.assertTrue(valid, message)
+
     def test_falsey_compatibility_values_are_rejected(self):
         """비어 보이는 값이라도 compatibility는 문자열이어야 한다."""
         for value in ("false", "0", "[]", "{}", "null"):
