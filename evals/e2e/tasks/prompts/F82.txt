@@ -1,0 +1,8 @@
+src/SettingsPanel.tsx 를 아래 네 곳만 고쳐줘. 줄 번호는 지금 파일 기준이야.
+- 7번 줄: form 의 gap 값 12 를 16 으로
+- 9번 줄: 라벨 "Display name" 을 "Full name" 으로
+- 17번 줄: 라벨 "Notifications" 를 "Email alerts" 로
+- 27번 줄: Cancel 버튼의 variant "ghost" 를 이미 있는 "secondary" 로
+이 파일의 다른 줄과 다른 파일은 건드리지 마. 확인은 git diff 로 위 네 줄만 바뀌었는지 보면 돼.
+
+구현은 직접 하지 말고 구현 워커 에이전트에게 맡겨서 진행해줘. 결과 확인은 네가 해.
