@@ -1,5 +1,5 @@
 import { atom, read, update } from "claude-code";
-import { claudeRolePins, configuredWorkerPin, modelRegistry, requestedPin, userRequest } from "./registry.js";
+import { callEffortFor, claudeRolePins, configuredWorkerPin, modelRegistry, requestedPin, userRequest } from "./registry.js";
 
 const WORKER_AGENT = "hei5enbug-agent-setup:worker";
 const HIDDEN_AGENTS = /^(general-purpose|explore|plan|claude)$/i;
@@ -26,6 +26,7 @@ const RESULT_WARNING =
   "Warning: this subagent ran on a model other than its pinned model. Do not accept its result; redo the work through another allowed path.";
 
 let storeQueue = Promise.resolve();
+const callEfforts = new Map();
 
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -163,6 +164,11 @@ export function registerAgentGuard(on) {
   on("agent.spawn", { subagentType: HIDDEN_AGENTS }, () => ({ deny: BUILT_IN_DENIAL })).catch(($, e, next) => next(e));
 }
 
+async function carriedCallEffort($, registry, agentId, pin) {
+  const earlier = await findByAgent($, agentId);
+  return earlier?.model === pin.model ? callEffortFor(registry, earlier.call_effort, pin) : undefined;
+}
+
 async function pinSpawn($, e, next, unrecorded, options) {
   const table = await claudeRolePins($);
   const reason = table.denials.get(e.subagentType) ?? prefixReason(table, e.subagentType);
@@ -174,17 +180,21 @@ async function pinSpawn($, e, next, unrecorded, options) {
   if (await consumeRetryNotice($, e.subagentType)) {
     return { deny: fallbackDenial($.plugin.root, e.subagentType, declared.access) };
   }
-  const requested = requestedPin(await modelRegistry($), e.model, await sessionRequest($), declared.primary);
+  const registry = await modelRegistry($);
+  const requested = requestedPin(registry, e.model, await sessionRequest($), declared.primary);
   const pin = requested ?? declared.primary;
+  const callEffort = callEffortFor(registry, callEfforts.get(e.tool_use_id), pin);
   const result = await next({ ...e, model: pin.model });
   if (result.deny !== undefined || result.agentId === undefined) return result;
+  const carried = callEffort ?? (await carriedCallEffort($, registry, result.agentId, pin));
   try {
     await recordRole($, {
       agentId: result.agentId,
       agent: e.subagentType,
       role: declared.role,
       model: pin.model,
-      effort: pin.effort,
+      effort: carried ?? pin.effort,
+      ...(carried === undefined ? {} : { call_effort: carried }),
       ...(requested === undefined ? {} : { requested: true }),
       toolUseId: e.tool_use_id,
     });
@@ -237,7 +247,13 @@ export function registerRolePinning(on, options) {
       return entry?.mismatch === true ? { deny: TOOL_DENIAL } : next(e);
     }
     if (e.tool !== "Agent") return next(e);
-    const result = await next(e);
+    if (typeof e.effort === "string") callEfforts.set(e.tool_use_id, e.effort);
+    let result;
+    try {
+      result = await next(e);
+    } finally {
+      callEfforts.delete(e.tool_use_id);
+    }
     if (result.deny !== undefined) return result;
     const entry = await findByToolUse($, e.tool_use_id);
     if (result.isError === true) {

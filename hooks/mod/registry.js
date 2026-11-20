@@ -254,3 +254,12 @@ export function requestedPin(registry, callModel, request, declared) {
   const effort = named !== undefined && effortAllowed(registry, model, named) ? named : declared.effort;
   return effortAllowed(registry, model, effort) ? { model, effort } : undefined;
 }
+
+export function callEffortFor(registry, callEffort, pin) {
+  if (typeof callEffort !== "string") return undefined;
+  const efforts = registry.efforts ?? [];
+  const asked = efforts.indexOf(callEffort);
+  const pinned = efforts.indexOf(pin.effort);
+  if (asked < 0 || pinned < 0 || asked > pinned) return undefined;
+  return effortAllowed(registry, pin.model, callEffort) ? callEffort : undefined;
+}

@@ -147,6 +147,10 @@ This section adds only the Claude Code worker integration.
 - Never pass a per-invocation model to a plugin agent on an invocation or resume, because that overrides its
   definition, which pins the model and effort that shared model routing lists. The only exception is the user's own
   request under "Requested model or effort".
+- Pass `effort: "high"` on the designer call for a change to existing UI; pass no effort for a new screen or
+  component, which keeps `xhigh`. A per-invocation `effort` on any plugin agent call is allowed only at or below the
+  role's pinned effort; never raise it. The mod keeps it for every request of that agent and records it as
+  `call_effort`. Check the run against that effort.
 - The bullets below apply whenever a plugin agent runs: a runner fallback, the `worker` or Sonnet worker, and the
   designer.
 - When the session context has the line `hei5enbug-agent-setup mod: role pinning active`, the registered plugin mod's

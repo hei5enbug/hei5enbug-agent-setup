@@ -138,6 +138,10 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
 - `worker` 에이전트는 세션 줄 "Worker agent model"에 적힌 모델과 사고 강도로 실행한다(기본값은 Haiku, `high`).
 - 호출 단위 모델은 정의보다 우선하므로 플러그인 에이전트를 호출하거나 재개할 때 넘기지 않는다. 정의에는 공유 모델
   라우팅이 정리한 모델과 사고 강도가 고정되어 있다. 유일한 예외는 "요청한 모델이나 사고 강도" 절의 사용자 요청이다.
+- 기존 UI를 바꾸는 작업은 designer 호출에 `effort: "high"`를 넘기고, 새 화면이나 컴포넌트는 `xhigh`를 유지하도록 effort를
+  넘기지 않는다. 플러그인 에이전트 호출의 호출 단위 `effort`는 역할의 고정 사고 강도 이하일 때만 허용하며, 고정값보다
+  높이지 않는다. mod는 그 값을 해당 에이전트의 모든 요청에 유지하고 `call_effort`로 기록한다. 실행은 그 사고 강도에 맞는지
+  확인한다.
 - 아래 항목은 플러그인 에이전트가 실행될 때마다 적용한다. 실행기의 대체 경로, `worker`와 Sonnet worker, designer가 해당한다.
 - 세션 컨텍스트에 `hei5enbug-agent-setup mod: role pinning active` 줄이 있으면 대화마다 첫 프롬프트에 이 줄을 붙이는
   등록된 플러그인 mod의 `prompt.submit` 훅이 역할 고정 활성 상태를 확인한 것이다. mod는 서브에이전트 요청마다 레지스트리와 설치된 플러그인이 선언한

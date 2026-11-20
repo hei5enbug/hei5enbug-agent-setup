@@ -261,6 +261,11 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
             "Never use any other agent.",
             "Never pass a per-invocation model to a plugin agent on an invocation or resume, because that overrides "
             "its definition",
+            'Pass `effort: "high"` on the designer call for a change to existing UI; pass no effort for a new screen or '
+            "component, which keeps `xhigh`.",
+            "A per-invocation `effort` on any plugin agent call is allowed only at or below the role's pinned effort; "
+            "never raise it.",
+            "records it as `call_effort`.",
             "The bullets below apply whenever a plugin agent runs: a runner fallback, the `worker` or Sonnet worker, "
             "and the designer.",
         )

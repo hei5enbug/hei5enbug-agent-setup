@@ -1610,3 +1610,152 @@ test("role_pinning 옵션이 꺼지면 프롬프트 요청도 기록하지 않�
   // then
   expect(data.requests).toBeUndefined();
 });
+
+const launches = new WeakMap();
+
+function callSink(on) {
+  const received = [];
+  const state = { entered: () => {}, gate: Promise.resolve() };
+  on("agent.spawn", (_$, e) => {
+    received.push(e.model);
+    return { model: e.model, agentId: "agent-call" };
+  });
+  on("prompt.submit", (_$, e) => ({ text: e.text }));
+  on("tool.call", async () => {
+    state.entered();
+    await state.gate;
+    return { result: { status: "async_launched", agentId: "agent-call", content: [{ type: "text", text: "시작" }], prompt: "작업" }, text: "시작" };
+  });
+  launches.set(received, state);
+  return received;
+}
+
+async function agentCall($, received, input) {
+  const state = launches.get(received);
+  let release;
+  const inside = new Promise((resolve) => (state.entered = resolve));
+  state.gate = new Promise((resolve) => (release = resolve));
+  const call = { tool: "Agent", prompt: "작업", description: "작업", tool_use_id: "toolu_call", ...input };
+  const pending = $.tool.call(call);
+  await inside;
+  const spawn = await $.agent.spawn(spawnInput(call.subagent_type, { tool_use_id: call.tool_use_id, model: call.model }));
+  release();
+  await pending;
+  return spawn;
+}
+
+test("호출이 역할 고정 effort보다 낮은 effort를 넘기면 그 값으로 시작하고 기록해 모든 요청에 쓴다", async ($, on) => {
+  // given
+  const data = environment(on);
+  const sink = callSink(on);
+  const seen = [];
+  stepSink(on, seen, "claude-opus-5-5");
+
+  // when
+  await agentCall($, sink, { subagent_type: DESIGNER, effort: "high", tool_use_id: "toolu_low" });
+  await step($, { agentId: "agent-call", effort: "xhigh" });
+  await step($, { agentId: "agent-call", index: 1, effort: "xhigh" });
+
+  // then
+  expect(data.roles[SESSION]).toEqual([
+    { agentId: "agent-call", agent: DESIGNER, role: "designer", model: "claude-opus-5-5", effort: "high", call_effort: "high", toolUseId: "toolu_low", time: NOW },
+  ]);
+  expect(seen.map((item) => item.effort)).toEqual(["high", "high"]);
+});
+
+test("호출이 역할 고정 effort와 같은 effort를 넘기면 받아들여 기록한다", async ($, on) => {
+  // given
+  const data = environment(on);
+  const sink = callSink(on);
+
+  // when
+  await agentCall($, sink, { subagent_type: DESIGNER, effort: "xhigh" });
+
+  // then
+  expect(data.roles[SESSION][0]).toEqual(expect.objectContaining({ effort: "xhigh", call_effort: "xhigh" }));
+});
+
+test("호출이 역할 고정 effort보다 높은 effort를 넘기면 무시하고 고정값으로 시작해 모든 요청에 쓴다", async ($, on) => {
+  // given
+  const data = environment(on);
+  const sink = callSink(on);
+  const seen = [];
+  stepSink(on, seen, PINNED);
+
+  // when
+  await agentCall($, sink, { subagent_type: SCOUT, effort: "high" });
+  await step($, { agentId: "agent-call", effort: "low" });
+
+  // then
+  expect(data.roles[SESSION][0]).toEqual(expect.objectContaining({ agent: SCOUT, effort: "medium" }));
+  expect(data.roles[SESSION][0].call_effort).toBeUndefined();
+  expect(seen).toEqual([{ model: PINNED, effort: "medium", agentId: "agent-call" }]);
+});
+
+test("모르는 effort나 문자열이 아닌 effort를 호출이 넘기면 무시한다", async ($, on) => {
+  // given
+  const data = environment(on);
+  const sink = callSink(on);
+
+  // when
+  await agentCall($, sink, { subagent_type: DESIGNER, effort: "ultra" });
+  await agentCall($, sink, { subagent_type: DESIGNER, effort: 3, tool_use_id: "toolu_num" });
+
+  // then
+  expect(data.roles[SESSION].map((item) => [item.effort, item.call_effort])).toEqual([["xhigh", undefined]]);
+});
+
+test("호출이 다른 모델을 넘겨도 모델은 역할 고정 모델로 두고 낮은 effort만 받아들인다", async ($, on) => {
+  // given
+  const data = environment(on);
+  const received = callSink(on);
+  const sink = received;
+
+  // when
+  await agentCall($, sink, { subagent_type: DESIGNER, model: "haiku", effort: "high" });
+
+  // then
+  expect(received).toEqual(["claude-opus-5-5"]);
+  expect(data.roles[SESSION][0]).toEqual(expect.objectContaining({ model: "claude-opus-5-5", effort: "high", call_effort: "high" }));
+  expect(data.roles[SESSION][0].requested).toBeUndefined();
+});
+
+test("같은 에이전트를 effort 없이 다시 시작해도 기록된 호출 effort를 유지한다", async ($, on) => {
+  // given
+  const data = environment(on);
+  const sink = callSink(on);
+  await agentCall($, sink, { subagent_type: DESIGNER, effort: "high", tool_use_id: "toolu_first" });
+
+  // when
+  await $.agent.spawn(spawnInput(DESIGNER, { tool_use_id: "toolu_resume" }));
+
+  // then
+  expect(data.roles[SESSION].map((item) => [item.effort, item.call_effort, item.toolUseId])).toEqual([["high", "high", "toolu_resume"]]);
+});
+
+test("끝난 호출의 effort는 다음 호출에 남지 않는다", async ($, on) => {
+  // given
+  const data = environment(on);
+  const sink = callSink(on);
+  await agentCall($, sink, { subagent_type: DESIGNER, effort: "high", tool_use_id: "toolu_first" });
+
+  // when
+  const second = await $.agent.spawn(spawnInput(SCOUT, { tool_use_id: "toolu_first" }));
+
+  // then
+  expect(second.model).toBe(PINNED);
+  expect(data.roles[SESSION].at(-1)).toEqual(expect.objectContaining({ agent: SCOUT, effort: "medium" }));
+});
+
+test("사용자가 요청한 effort도 호출이 그보다 낮은 effort를 넘길 때만 낮춘다", async ($, on) => {
+  // given
+  const data = environment(on, undefined, requestWorld());
+  const sink = callSink(on);
+  await $.prompt.submit({ text: "scout를 sonnet max로 돌려줘" });
+
+  // when
+  await agentCall($, sink, { subagent_type: SCOUT, model: "sonnet", effort: "high" });
+
+  // then
+  expect(data.roles[SESSION][0]).toEqual(expect.objectContaining({ effort: "high", call_effort: "high", requested: true }));
+});
