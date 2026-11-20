@@ -31,7 +31,7 @@ Codex가 제공하는 `PLUGIN_ROOT`가 설치 디렉터리를 가리키면 로�
 | 도구 호출 종료 | 진행 상황 안내가 다른 언어로 쓰였으면 `PostToolUse`가 언어 알림을 추가한다. |
 | 답변 종료 | 답변이 응답 언어로 쓰이지 않았으면 `Stop`이 다시 쓰도록 요청한다. |
 | Claude Code에서 사용자가 프롬프트 제출 | `UserPromptSubmit`이 메인 세션의 "Implementation worker route", "Worker agent model", "Review model" 줄을 세션 시작 시 기록한 줄과 비교하고, `/config` 변경으로 달라졌으면 새 줄을 한 번 제공한다. |
-| DataGrip 쿼리 실행 직전 | `PreToolUse`가 두 호스트에서 `execute_sql_query` 실행 전에 DataGrip 쿼리 가드를 실행하고, `PermissionRequest`는 Codex에서만 실행한다. |
+| DataGrip 쿼리 실행 직전 | `PreToolUse`가 두 호스트에서 `execute_sql_query` 실행 전에 DataGrip 쿼리 가드를 실행하고, `PermissionRequest`는 `hooks/codex-hooks.json`이 등록한 Codex에서만 실행한다. |
 | Bash, MCP 또는 대상 파일 도구 호출 실행 | `PreToolUse`가 상태 파일 보호와 민감 읽기 검사를 포함한 승인 가드를 실행한다. `PermissionRequest`는 Claude Code에서 호스트 프롬프트를 흡수하고 Codex에서는 승인된 뒤 네이티브 창을 건너뛰며, `PostToolUse`와 `PostToolUseFailure`는 승인을 기록한다. 양쪽 호스트의 `UserPromptSubmit`은 승인 요청 횟수를 초기화하고 사용자 승인을 기록하며 즉시 재시도 컨텍스트를 제공한다. |
 | 조건에 맞는 작업 시작 | 에이전트가 `instructions/`의 필수 참조를 읽는다. |
 | 플러그인 업데이트 설치 | 새 세션이 설치된 버전을 읽는다. 저장소에 푸시하는 것만으로는 반영되지 않는다. |
@@ -87,7 +87,8 @@ Windows 실행과 실제 모델의 지침 준수 여부는 테스트 범위에 �
 할당 항목과 수용을 정의합니다. [구현 위임 규칙](../instructions/implementation-delegation.ko.md)은 작업자 소유권,
 충돌 없는 일정, 복구와 할당받은 worker 규칙을 정의하며, 구현을 위임하기 전에 읽습니다. 직접 작업은 메인의 현재
 모델과 사고 강도를 유지합니다. 위임할 때는 작업 범위, 필요한 맥락, 허용·보호 경로, 선행 조건, 수용 검사와 호스트의
-고정 설정만 전달합니다. 작업자는 하위 에이전트를 만들 수 없습니다.
+고정 설정만 전달합니다. 플러그인의 Claude Code 작업자 에이전트는 `disallowedTools: Agent`를 두고 할당받은 작업자 규칙은 다른 에이전트를
+시작하지 못하게 하므로 작업자는 하위 에이전트를 만들지 않습니다. Claude Code 자체는 기본으로 최대 세 겹의 중첩 서브에이전트를 허용합니다.
 
 UI 코드, 시각 디자인, 다이어그램 작업은 대신 호스트의 designer 경로로 보냅니다. 다만 호스트 세션 파일이 메인 세션에
 맡긴 종류는 예외입니다. Claude Code에서는 메인 세션이 문서 안의 ASCII와 Mermaid 다이어그램을 그리고, 기존 SVG
@@ -141,11 +142,11 @@ rollout에 도구 호출이 기록되어 있으면 `heartbeats/codex-<thread_id>
 실행은 먼저 “Run the shell command `true` exactly once, then reply with OK only.”를 보내고, 할당을 보내기 전에 그
 하트비트를 요구합니다. 그래서 어떤 쓰기든 실행되기 전에 가드가 도구 호출을 한 번 검사한 상태가 됩니다. 일반 파일이나
 `UserPromptSubmit`·`SessionStart` 하트비트로는 두 검사 모두 통과하지 못합니다. Codex의 신뢰는 플러그인 파일 내용도
-포함합니다. Codex CLI 0.164.0에서 `README.md`를 포함한 플러그인 파일 하나만 고쳐도 모든 플러그인 훅이 `modified`가
+포함합니다. Codex CLI 0.164.0(0.170.0에서는 다시 확인하지 않음)에서 `README.md`를 포함한 플러그인 파일 하나만 고쳐도 모든 플러그인 훅이 `modified`가
 되었으므로, 플러그인을 업데이트할 때마다 Codex는 훅을 건너뜁니다. 그러면 실행기는 위에서 설명한 대로 검증된 공식 설치본에서
 이 플러그인의 훅을 다시 신뢰하고 다시 확인하거나 사전 점검을 한 번 더 합니다. 이것이 허용되지 않거나 실패하면
-`/hooks`에서 다시 신뢰하기 전까지 `auto_trust`에 이유를 담아 종료 코드 4로 끝납니다. Claude는 플러그인 훅에 신뢰 절차를 적용하지
-않으므로 자식의 `heartbeats/claude-<session_id>.UserPromptSubmit` 또는 기존 일반 하트비트를 요구합니다.
+`/hooks`에서 다시 신뢰하기 전까지 `auto_trust`에 이유를 담아 종료 코드 4로 끝납니다. Claude Code는 설정 파일의 훅에만 신뢰 확인을 문서화하고 플러그인 훅에는 문서화하지
+않았으므로 자식의 `heartbeats/claude-<session_id>.UserPromptSubmit` 또는 기존 일반 하트비트를 요구합니다.
 필수 하트비트가 없으면 종료 코드 4입니다. 종료 코드 0은 결과가 검증되었다는
 뜻이고, 2는 고쳐야 할 사용 오류, 3은 역할을 실행하지 못했다는 뜻, 4는 필수 훅 증거가 없거나 기록된 모델, 사고 강도, 샌드박스가 달라 결과를
 폐기했다는 뜻입니다. 3이나 4이면 메인 세션이 해당 역할의 플러그인 에이전트 대체 경로를 씁니다. 독립 검증에는 대체 경로가
@@ -208,10 +209,13 @@ Codex는 사용자의 직접 요청 또는 적용되는 `AGENTS.md`·스킬 지�
 직접 복사할 필요가 없습니다. 매니페스트에는 영어 정의 다섯 개만 있으므로 `docs/ko/`의 한국어 번역본은
 서브에이전트로 등록되지 않습니다.
 
-Codex는 `~/.codex/agents/`와 `.codex/agents/`에서만 서브에이전트를 찾으므로 플러그인이 등록할 수 없습니다.
+Codex 서브에이전트 문서는 사용자 지정 에이전트 파일의 위치로 `~/.codex/agents/`와 `.codex/agents/`만 들고 에이전트용 플러그인 구성 요소는
+나열하지 않으므로 플러그인은 에이전트를 등록하지 않습니다.
 대신 세션 훅이 `standalone-agents/codex-scout.toml`, `codex-worker.toml`, `codex-designer.toml`,
 `codex-reviewer.toml`을 대응하는 `~/.codex/agents/<role>.toml`이 없을 때만 복사합니다.
-네 파일은 Claude Code에도 있는 역할을 정의하며 샌드박스를 고정합니다. 역할 파일은 사고 강도를 지정하지 않으므로
+네 파일은 Claude Code에도 있는 역할을 정의합니다. 파일의 `sandbox_mode` 키는 의도한 샌드박스를 적지만, Codex는 사용자 지정 에이전트 파일이
+부모 세션의 샌드박스를 바꿀 수 없다고 문서화하므로 `verify_spawn.py`는 생성이 실제로 실행된 샌드박스를 그 키와 비교하며, 다른 샌드박스를 물려받은 생성은
+검증에 실패합니다. 역할 파일은 사고 강도를 지정하지 않으므로
 생성할 때마다 넘깁니다. Codex `reviewer` 역할에는
 모델 키가 없으며, 스킬 지침은 대체 경로에서 모델과 사고 강도를 명시합니다. 플러그인 `worker`는
 Codex 내장 `worker`를 대신하고, `scout`는 내장 `explorer`를 건드리지 않습니다. 직접 고친 파일은 절대 덮어쓰지 않으며,

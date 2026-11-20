@@ -27,7 +27,7 @@ script. No user or project instruction file is copied, linked, or overwritten.
 | A tool call finishes | `PostToolUse` adds a language reminder after a progress update in another language. |
 | A reply ends | `Stop` asks for a rewrite when the reply is not in the response language. |
 | A user submits a prompt on Claude Code | `UserPromptSubmit` compares the main session's "Implementation worker route", "Worker agent model", and "Review model" lines with the ones recorded at session start, and supplies the new lines once when a `/config` change altered them. |
-| A DataGrip query is about to run | `PreToolUse` runs the DataGrip query guard before `execute_sql_query` on both hosts; `PermissionRequest` runs it on Codex only. |
+| A DataGrip query is about to run | `PreToolUse` runs the DataGrip query guard before `execute_sql_query` on both hosts; `PermissionRequest` runs it only where `hooks/codex-hooks.json` registers it, on Codex. |
 | A Bash, MCP, or covered file tool call runs | `PreToolUse` runs the approval guard, including file-state protection and sensitive reads. `PermissionRequest` absorbs host prompts on Claude Code and skips Codex's native window once approved; `PostToolUse` and `PostToolUseFailure` record approvals. `UserPromptSubmit` resets the approval request counts, records user approval, and supplies immediate-retry context on both hosts. |
 | A matching task begins | The agent reads the required reference under `instructions/`. |
 | A plugin update is installed | A new session reads that installed version. A repository push alone changes nothing locally. |
@@ -84,8 +84,9 @@ assignment fields, and acceptance for all implementation, including main-owned w
 [instructions/implementation-delegation.md](../instructions/implementation-delegation.md) defines worker ownership,
 conflict-free scheduling, recovery, and assigned-worker rules; read it before delegating implementation. Direct work
 uses the main session's current model and effort. A delegated task carries only its scope, relevant context,
-allowed/protected paths, prerequisites, acceptance checks, and the host's pinned settings. Workers cannot start nested
-agents.
+allowed/protected paths, prerequisites, acceptance checks, and the host's pinned settings. The plugin's Claude Code
+worker agents set `disallowedTools: Agent`, and the assigned-worker rules forbid starting another agent, so workers
+start no nested agents; Claude Code itself allows nested subagents up to three layers by default.
 
 UI code, visual design, and diagram work goes to the host's designer route instead, except the kinds the host session
 file assigns to the main session. On Claude Code, the main session draws ASCII and Mermaid diagrams in documents, edits
@@ -142,12 +143,12 @@ it requires `heartbeats/codex-<thread_id>.PreToolUse` whenever the rollout recor
 write first sends “Run the shell command `true` exactly once, then reply with OK only.” and requires that heartbeat
 before it sends the assignment, so the guard has checked a tool call before any write can run. A plain,
 `UserPromptSubmit`, or `SessionStart` heartbeat satisfies neither check. Codex trust also covers the plugin's files:
-with Codex CLI 0.164.0, an edit to any plugin file, even `README.md`, marked every plugin hook `modified`, so after each
+with Codex CLI 0.164.0 (not rechecked on 0.170.0), an edit to any plugin file, even `README.md`, marked every plugin hook `modified`, so after each
 plugin update Codex skips the hooks. The runner then re-trusts this plugin's hooks from a verified official copy, as
 described above, and checks again or preflights once more; when that is not allowed or fails, it exits 4 with the reason
 in `auto_trust` until you trust them again in `/hooks`. Claude children require
-`heartbeats/claude-<session_id>.UserPromptSubmit` or the existing plain heartbeat, since Claude does not gate plugin
-hooks by trust. A missing required heartbeat exits 4. Exit code 0 means the result is verified, 2 a usage error to fix,
+`heartbeats/claude-<session_id>.UserPromptSubmit` or the existing plain heartbeat, since Claude Code documents a trust
+check only for hooks from settings files and none for plugin hooks. A missing required heartbeat exits 4. Exit code 0 means the result is verified, 2 a usage error to fix,
 3 that the role could not run, and 4 that the required hook evidence was missing or the recorded model, effort, or
 sandbox did not match, so the result is discarded. On 3 or 4 the main session uses the role's plugin agent fallback.
 Independent validation has no fallback: the main session reports that it was not performed. A capability entry whose
@@ -212,10 +213,13 @@ The `agents/` directory ships with the Claude Code plugin, so installing the bun
 `hei5enbug-agent-setup:designer`, and `hei5enbug-agent-setup:reviewer` subagents. No manual copy is needed. The manifest
 lists only these five English definitions, so the Korean mirrors in `docs/ko/` are not registered.
 
-Codex discovers subagents only in `~/.codex/agents/` and `.codex/agents/`, so a plugin cannot register one. Instead, the
+The Codex subagent documentation names `~/.codex/agents/` and `.codex/agents/` as the places for custom agent files and
+lists no plugin component for agents, so the plugin does not register them. Instead, the
 session hook copies `standalone-agents/codex-scout.toml`, `codex-worker.toml`, `codex-designer.toml`, and
 `codex-reviewer.toml` to matching `~/.codex/agents/<role>.toml` files when absent. They define four roles that also
-exist on Claude Code, with a fixed sandbox; no role file sets a reasoning effort, so each spawn passes one. The Codex
+exist on Claude Code. Their `sandbox_mode` keys state the intended sandbox, but Codex documents that a custom agent
+file cannot override the parent session's sandbox, so `verify_spawn.py` compares the sandbox the spawn ran with against
+that key, and a spawn that inherited another sandbox fails verification. No role file sets a reasoning effort, so each spawn passes one. The Codex
 `reviewer` role has no model key; the skill instructions pass its model and effort explicitly when it is the fallback.
 The plugin `worker` replaces the built-in Codex `worker`, and `scout` leaves the built-in `explorer` untouched. A file
 you edited is never overwritten, and the agents become available in the next Codex session. Because an edited copy never

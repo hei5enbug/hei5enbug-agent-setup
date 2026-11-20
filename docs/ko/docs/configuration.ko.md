@@ -138,7 +138,7 @@ When hei5enbug-agent-setup is active, use subagents according to its situation-b
 <!-- /hei5enbug:subagents -->
 ```
 
-또한 `codex features list`에서 `default_mode_request_user_input` 기능이 꺼져 있으면 켜므로, Default 모드에서도
+또한 `codex features list`에서 `default_mode_request_user_input` 기능이 꺼져 있으면 켜므로(Codex 0.170.0은 이 기능을 개발 중으로 나열하며 Codex 문서는 다루지 않습니다), Default 모드에서도
 `request_user_input`을 쓸 수 있습니다. blocking을 강제하거나 클라이언트의 자동 응답 처리를 끄는 기능은 아닙니다.
 필수 결정에는 [확인 질문 규칙](../instructions/session/common.ko.md#확인-질문)을 따르고, 연결이 중단되면
 [연결 복구](../instructions/connection-recovery.ko.md)를 적용합니다.

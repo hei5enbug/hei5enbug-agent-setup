@@ -18,13 +18,13 @@ Code shows that request as `Stop hook feedback`, not as a hook error, and Codex 
 Delegated child sessions are not checked: a session with `HEI5ENBUG_ASSIGNED_ROLE` or `HEI5ENBUG_PARENT_SESSION` set,
 such as a role runner child, returns its answer to the coordinating session, which replies to the user. A `PostToolUse`
 hook adds a reminder after a progress update in another language, before the model's next request in the same turn.
-Claude Code runs it synchronously, because it adds a background hook's output to the same turn only when the hook
-finishes before the next model request. Codex runs it in the background and adds its output to the next model request
-of the turn. Put text the user asks for in another language in a code block or block quote.
+Claude Code runs it synchronously; its documentation says a background hook's `additionalContext` reaches Claude on the
+next conversation turn. Codex runs it in the background and adds its output to the next model request of the turn. Put text the user asks for in another language in a code block or block quote.
 
 ## DataGrip query guard
 
-A `PreToolUse` hook on both hosts and a `PermissionRequest` hook on Codex only, both `scripts/datagrip_guard.py`, run
+A `PreToolUse` hook on both hosts and a `PermissionRequest` hook that only `hooks/codex-hooks.json` registers, both
+`scripts/datagrip_guard.py`, run
 before the DataGrip MCP tool `execute_sql_query`. The guard reads the connection from `.idea/dataSources.xml` in the
 DataGrip project that `projectPath` names. PostgreSQL and SQL Server reads on non-production, recognized connections run
 without approval, and PostgreSQL reads run inside a read-only transaction with `SET LOCAL statement_timeout = '60s';`. A
@@ -215,7 +215,7 @@ cannot report a tab title, so the hook judges the title only by the session's ow
 
 ## Final report review
 
-`scripts/final_report_hook.py`, a `Stop` hook on Claude Code only, keeps the turn going once when a final report that
+`scripts/final_report_hook.py`, a `Stop` hook that only `hooks/claude-hooks.json` registers, keeps the turn going once when a final report that
 follows a change was never checked by the independent text review in `instructions/shared-text.md`. It returns its
 reason as `hookSpecificOutput.additionalContext`, which Claude Code shows as `Stop hook feedback`, not as a hook error.
 It gives each of its two reasons at most once per turn: it finds its own earlier feedback in the current turn of the

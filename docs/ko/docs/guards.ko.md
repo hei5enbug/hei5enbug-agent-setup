@@ -19,13 +19,12 @@ Claude Code는 이 요청을 훅 오류가 아니라 `Stop hook feedback`으로 
 받습니다. 위임된 자식 세션은 검사하지 않습니다. 역할 실행기의 자식처럼 `HEI5ENBUG_ASSIGNED_ROLE`이나
 `HEI5ENBUG_PARENT_SESSION`이 설정된 세션은 조정 세션에 답변을 돌려주고, 조정 세션이 사용자에게 응답합니다.
 다른 언어로 쓴 진행 상황 안내가 나오면 `PostToolUse` 훅이 같은 턴에서 모델의 다음 요청 전에 알림을 추가합니다.
-Claude Code는 백그라운드 훅이 다음 모델 요청 전에 끝날 때만 그 출력을 같은 턴에 추가하므로 이 훅을 동기로
-실행합니다. Codex는 이 훅을 백그라운드로 실행하고, 출력을 그 턴의 다음 모델 요청에 추가합니다. 사용자가 다른 언어로
+Claude Code는 이 훅을 동기로 실행하며, 문서에 따르면 백그라운드 훅의 `additionalContext`는 다음 대화 턴에 Claude에게 전달됩니다. Codex는 이 훅을 백그라운드로 실행하고, 출력을 그 턴의 다음 모델 요청에 추가합니다. 사용자가 다른 언어로
 요청한 글은 코드 블록이나 인용 블록에 넣습니다.
 
 ## DataGrip 쿼리 가드
 
-두 호스트의 `PreToolUse` 훅과 Codex 전용 `PermissionRequest` 훅인 `scripts/datagrip_guard.py`는
+두 호스트의 `PreToolUse` 훅과 `hooks/codex-hooks.json`만 등록하는 `PermissionRequest` 훅인 `scripts/datagrip_guard.py`는
 DataGrip MCP 도구 `execute_sql_query` 실행 전에 동작합니다.
 가드는 `projectPath`가 가리키는 DataGrip 프로젝트의 `.idea/dataSources.xml`에서 연결 정보를 읽습니다.
 운영이 아니고 확인된 연결에서는 PostgreSQL과 SQL Server의 읽기 쿼리를 승인 없이 실행합니다. PostgreSQL 읽기는 읽기 전용 트랜잭션에서
@@ -206,7 +205,7 @@ worktree에는 `orca worktree set --display-name`을 알립니다. `orca worktre
 
 ## 최종 보고 검토
 
-Claude Code 전용 `Stop` 훅인 `scripts/final_report_hook.py`는 변경 뒤에 나가는 최종 보고를
+`hooks/claude-hooks.json`만 등록하는 `Stop` 훅인 `scripts/final_report_hook.py`는 변경 뒤에 나가는 최종 보고를
 `instructions/shared-text.md`의 독립 텍스트 검토가 확인하지 않았을 때 턴을 한 번 이어 가게 합니다. 이유는
 `hookSpecificOutput.additionalContext`로 돌려주며, Claude Code는 이를 훅 오류가 아니라 `Stop hook feedback`으로
 표시합니다. 두 가지 이유를 각각 한 턴에 한 번까지만 보냅니다. `stop_hook_active`가 true인 멈춤을 모두 건너뛰는 대신, 세션

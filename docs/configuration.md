@@ -146,7 +146,8 @@ When hei5enbug-agent-setup is active, use subagents according to its situation-b
 <!-- /hei5enbug:subagents -->
 ```
 
-It also enables the `default_mode_request_user_input` feature when `codex features list` shows it off, so
+It also enables the `default_mode_request_user_input` feature when `codex features list` shows it off (Codex 0.170.0
+lists it as under development and the Codex documentation does not cover it), so
 `request_user_input` is available in Default mode. This does not enforce blocking or disable client-side automatic
 resolution. Required decisions follow the [clarification rule](../instructions/session/common.md#clarification); after
 an interrupted connection, use [connection recovery](../instructions/connection-recovery.md). Setting
