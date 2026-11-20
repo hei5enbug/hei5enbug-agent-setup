@@ -30,7 +30,8 @@
           {
             "type": "command",
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" approval_guard.py",
-            "timeout": 10
+            "timeout": 10,
+            "onFailure": "block"
           }
         ]
       },
@@ -40,7 +41,8 @@
           {
             "type": "command",
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" datagrip_guard.py",
-            "timeout": 10
+            "timeout": 10,
+            "onFailure": "block"
           }
         ]
       },
@@ -50,7 +52,8 @@
           {
             "type": "command",
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" public_boundary_hook.py",
-            "timeout": 30
+            "timeout": 30,
+            "onFailure": "block"
           }
         ]
       },
@@ -82,7 +85,8 @@
           {
             "type": "command",
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" approval_guard.py",
-            "timeout": 10
+            "timeout": 10,
+            "onFailure": "block"
           }
         ]
       }

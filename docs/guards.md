@@ -293,6 +293,12 @@ unrelated input still ends silently. A hook that runs on every tool call or prom
 network call except what its decision needs for that input, such as `orca` only for an `orca` command; the one
 background interpreter resolution in [configuration](configuration.md) is the only exception.
 
+On Claude Code, the registrations of the approval guard (`PreToolUse` and `PermissionRequest`), the DataGrip guard, and
+the public boundary hook set `"onFailure": "block"` (Claude Code 2.1.295 or later). A hook that cannot start, exits with
+a code other than 0 or 2, times out, or prints invalid output then blocks the call, or denies the permission request,
+instead of letting it run. Every other registration keeps the default, so a reminder, status, language, session, or
+`Stop` hook that fails never blocks work.
+
 At each user prompt, the `UserPromptSubmit` pass of the approval guard adds one line to the prompt context when the
 1-minute load average is at least twice the logical CPU count, available memory is below 10% of physical memory, or
 the free space of the volume that holds the working directory is below 10%. The line names each short resource with its
