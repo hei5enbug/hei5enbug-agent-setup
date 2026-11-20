@@ -2194,12 +2194,10 @@ class TestHooksRegistration:
     def test_datagrip_guard_entry_exists_with_matcher_command_and_timeout(self, event_name, hooks_file):
         """PreToolUse는 공용 hooks.json에, PermissionRequest는 Codex 전용 codex-hooks.json에 DataGrip 쿼리 도구만 잡는 matcher로 등록돼 있다."""
         # given
-        expected = {
-            "matcher": "^mcp__datagrip__execute_sql_query$",
-            "hooks": [
-                {"type": "command", "command": 'sh "${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh" datagrip_guard.py', "timeout": 10}
-            ],
-        }
+        handler = {"type": "command", "command": 'sh "${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh" datagrip_guard.py', "timeout": 10}
+        if hooks_file == "hooks.json":
+            handler["onFailure"] = "block"
+        expected = {"matcher": "^mcp__datagrip__execute_sql_query$", "hooks": [handler]}
         # when
         groups = json.loads((REPO_ROOT / "hooks" / hooks_file).read_text())["hooks"][event_name]
         # then
