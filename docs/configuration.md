@@ -72,8 +72,9 @@ of the seven pinned model IDs; an unset or unrecognized value uses `gpt-6-astra`
 with `claude plugin configure`. On Codex, set environment variables before starting the session. A value of `false`,
 `0`, `off`, or `no`, in any letter case, turns a boolean feature off.
 
-The Claude Code `worker` agent runs on `worker_model` and `worker_effort`; the mod spawns it on them, and an invalid
-value keeps the registry pin. The session context reports them as `Worker agent model: <model> at <effort>.` Codex has
+The Claude Code `worker` agent runs at `worker_effort`, on the model the main session passes per call under
+`implementation_worker`; the mod enforces both, and an invalid effort keeps the registry pin. The session context
+reports the effort as `Worker agent effort: <effort>.` Codex has
 no plugin settings UI, so its session hook reads `codex_worker_model` and `codex_worker_effort` read-only from Claude
 Code's saved settings (`pluginConfigs` in `~/.claude/settings.json`, or under `CLAUDE_CONFIG_DIR`). The environment
 variables override them, and an invalid value falls back to the defaults with a one-line notice. The session context
@@ -87,8 +88,8 @@ never writes Codex or Claude settings. Only the allowlisted changes in [Host set
 | Risk labels on tool calls | `risk_highlight` | Not applicable |
 | Work board for subagents | `work_board` | Not applicable |
 | Secret redaction in tool results | `secret_redaction` | Not applicable |
-| Implementation worker route | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, or `sonnet`) | Not applicable |
-| Claude Code worker model and effort | `worker_model` (default `claude-haiku-5-5`) and `worker_effort` (default `high`) | Not applicable |
+| Implementation worker route | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, `sonnet`, or `opus`) | Not applicable |
+| Claude Code worker effort | `worker_effort` (default `high`) | Not applicable |
 | Codex worker model and effort | `codex_worker_model` (`auto`, `gpt-6-luna`, `gpt-6.2-sol`, or `claude-sonnet-5-5`, default `auto`) and `codex_worker_effort` (`high` or `xhigh`, default `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL` and `HEI5ENBUG_CODEX_WORKER_EFFORT` |
 | Review model | `review_model` (a pinned model ID, default `gpt-6-astra`) | Not applicable |
 | Response language guard | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
@@ -143,7 +144,7 @@ settings and lets an environment variable override it. A change applies from the
 
 | Host | Option | Values | Default | Effect |
 |---|---|---|---|---|
-| Claude Code | `implementation_worker` | `auto`, `haiku`, `sonnet`, `codex`, `sol` | `auto` | `auto`: the main session picks per assignment, `haiku` for easy work and `sonnet` for normal or hard work. A fixed value forces that route. `codex` and `sol` run a GPT worker through the role runner. A GPT worker, `gpt-6-luna` for easy work or `gpt-6.2-sol` for hard work, is also the fallback when a Claude route fails or stops on a usage limit. |
+| Claude Code | `implementation_worker` | `auto`, `haiku`, `sonnet`, `opus`, `codex`, `sol` | `auto` | `auto`: the main session picks the `worker` agent's model per assignment, `haiku` for easy work and `sonnet` for normal or hard work, and the mod denies any other model. `haiku`, `sonnet`, and `opus` run the `worker` agent on that model only. `codex` and `sol` run a GPT worker through the role runner. A GPT worker, `gpt-6-luna` for easy work or `gpt-6.2-sol` for hard work, is also the fallback when a Claude route fails or stops on a usage limit. |
 | Codex | `codex_worker_model` | `auto`, `gpt-6-luna`, `gpt-6.2-sol`, `claude-sonnet-5-5` | `auto` | `auto`: the main session picks per assignment, `gpt-6-luna` for easy work and `gpt-6.2-sol` for hard or unsure work, and the agent guard allows exactly those two models. A fixed GPT value allows only that model. `claude-sonnet-5-5` runs the Claude Sonnet route first through the role runner, and the GPT worker is its fallback. Claude Sonnet is also the fallback when the GPT worker fails or stops on a usage limit. |
 | Codex | `codex_worker_effort` | `high`, `xhigh` | `high` | The lowest effort a worker spawn may use; each spawn may also use `xhigh`. |
 
@@ -151,6 +152,11 @@ Before this setting, the Codex implementation worker ran Claude Sonnet through t
 was only its fallback. A Codex user who saved `gpt-6-luna` or `gpt-6.2-sol` keeps that model as a fixed worker, now the
 first route. A user who saved nothing, or an unrecognized value, gets `auto`. A user who wants the earlier Claude route
 sets `claude-sonnet-5-5`.
+
+Claude Code no longer has the `worker_model` and `sonnet-worker` pair: one `worker` agent runs on the model the main
+session passes per call, and the plugin ignores a saved `worker_model`. A user who saved nothing, or `claude-haiku-5-5`,
+keeps the old behavior under `auto`. A user who saved `claude-sonnet-5-5` or `claude-opus-5-5` there sets
+`implementation_worker` to `sonnet` or `opus`; a saved `claude-fable-5-2` has no equivalent.
 
 ## Codex automatic settings
 

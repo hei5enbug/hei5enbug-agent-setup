@@ -19,8 +19,8 @@
 | 승인된 내용을 반영하는 기계적인 문서 편집 | `writer` | `gpt-6.1-sol` / `high` | `haiku_writer` | `claude-haiku-5-5` / `xhigh` |
 | 아래 최종 검토 표가 `gpt-6.1-terra` `high`를 고를 때 한 번 읽기 전용으로 최종 검토 | `code_reviewer` | `gpt-6.1-terra` / `high` | `opus_code_reviewer` | `claude-opus-5-5` / `high` |
 
-- `haiku_worker`와 `sonnet_worker`는 플러그인의 `hei5enbug-agent-setup:worker`와
-  `hei5enbug-agent-setup:sonnet-worker` 서브에이전트를 가리킨다. 나머지 `haiku_*` 이름과 `opus_code_reviewer`는 별도
+- `haiku_worker`와 `sonnet_worker`는 플러그인의 `hei5enbug-agent-setup:worker` 서브에이전트를
+  `model: haiku`와 `model: sonnet`으로 부른 것을 가리킨다. 나머지 `haiku_*` 이름과 `opus_code_reviewer`는 별도
   Claude Code CLI 프로세스에 붙이는 과제 이름이며, 등록된 `--agent` 이름이 아니다. `worker`, `scout`, `writer`,
   `code_reviewer`는 Codex 프로젝트 역할이며 새 Codex 세션부터 적용된다.
 - 쉬운 작업은 범위가 정해진 로컬 읽기 전용 근거 조사에 `scout`을, 코디네이터가 승인한 기계적인 Markdown 및 미러 편집에
@@ -38,12 +38,12 @@
 
 | 작업 | 작업자 |
 |---|---|
-| 쉬움: 편집 내용이 정해져 있고 검사가 모두 확인하는 응집된 변경 하나 | `haiku_worker`: 세션 줄 "Worker agent model"이 `claude-haiku-5-5`의 `xhigh`를 보일 때 `hei5enbug-agent-setup:worker` 서브에이전트, 그렇지 않으면 `sonnet_worker` |
-| 보통 또는 어려움: 동작 변경, 여러 파일, 파싱, 보안, 동시성 | `sonnet_worker`: `hei5enbug-agent-setup:sonnet-worker` 서브에이전트(`claude-sonnet-5-5` / `high`) |
+| 쉬움: 편집 내용이 정해져 있고 검사가 모두 확인하는 응집된 변경 하나 | `haiku_worker`: `hei5enbug-agent-setup:worker` 서브에이전트를 `model: haiku`로 부른다(`claude-haiku-5-5`, 사고 강도는 세션 줄 "Worker agent effort") |
+| 보통 또는 어려움: 동작 변경, 여러 파일, 파싱, 보안, 동시성 | `sonnet_worker`: `hei5enbug-agent-setup:worker` 서브에이전트를 `model: sonnet`으로 부른다(`claude-sonnet-5-5`, 사고 강도는 세션 줄 "Worker agent effort") |
 | Claude 사용 한도에 걸리거나 Claude worker를 사용할 수 없음 | `worker`(`gpt-6.2-sol` / `high`): Claude Code에서는 허용 경로가 든 폴더에서 `role_runner.py implementation --fallback --instructions <worker 역할 정의>`를 실행하고, Codex에서는 `worker` 역할을 쓴다 |
 
 - GPT `worker`는 대체 경로이고 이 저장소의 작업은 보통이거나 어려우므로 `.codex/agents/worker.toml`은 `gpt-6.2-sol`로
-  고정한다. 플러그인의 GPT worker는 [난이도별 GPT worker 모델](../../../../instructions/model-routing.md#gpt-worker-model-by-difficulty)을 따른다.
+  고정한다. 플러그인의 GPT worker는 [난이도별 worker 모델](../../../../instructions/model-routing.md#worker-model-by-difficulty)을 따른다.
 - `claude -p` 프로세스 대신 이 플러그인 서브에이전트를 띄운다.
 - 작업자의 결과를 사용하기 전에 기존 준비 확인과 실제 호스트 기록 검사를 따른다. 작업자는 범위를 넓히는 대신 새 원인이나
   누락된 결정을 메인 세션에 보고한다.
@@ -121,5 +121,5 @@ CLI로 재개할 때는 언제나 모델과 추론 강도를 다시 적용하고
 - 2026-10-20: 사용자는 구현은 Claude에, 조사와 최종 검토는 GPT에 유지하도록 보통·어려운 작업을 Sonnet으로 옮겼으며,
   Sol은 대체 경로가 되었다.
 - 2026-10-22: auto 모드 분류기는 승인 가드를 고치는 `claude -p` 작업자를 자기 수정으로 막았고, `dontAsk`는 가드가 묻는
-  명령에서 작업자를 멈췄다. 반면 `sonnet-worker` 서브에이전트는 같은 종류의 변경을 막힘 없이 했고, 서브에이전트 기록에
+  명령에서 작업자를 멈췄다. 반면 Sonnet `worker` 서브에이전트는 같은 종류의 변경을 막힘 없이 했고, 서브에이전트 기록에
   `claude-sonnet-5-5`의 `high`가 남았다.

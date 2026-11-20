@@ -70,8 +70,8 @@ Claude Code는 이 옵션을 `/config`에서 읽고, Codex는 `HEI5ENBUG_HOST_SE
 알 수 없으면 `gpt-6-astra`를 씁니다. 플러그인 옵션은 `/config`나 `claude plugin configure`에서 설정합니다. Codex에서는 세션 시작 전에 환경변수를
 설정합니다. boolean 기능은 값이 `false`, `0`, `off`, `no`(대소문자 무시)이면 꺼집니다.
 
-Claude Code `worker` 에이전트는 `worker_model`과 `worker_effort`로 실행됩니다. mod가 이 값으로 worker를 생성하며, 잘못된 값이면 레지스트리 고정값을
-씁니다. 세션 컨텍스트는 이 값을 `Worker agent model: <model> at <effort>.` 줄로 알립니다. Codex에는 플러그인 설정 화면이 없으므로 세션 훅이
+Claude Code `worker` 에이전트는 `worker_effort`의 사고 강도로, `implementation_worker` 아래에서 메인 세션이 호출마다 넘기는 모델로 실행됩니다.
+mod가 둘을 강제하며, 잘못된 사고 강도이면 레지스트리 고정값을 씁니다. 세션 컨텍스트는 사고 강도를 `Worker agent effort: <effort>.` 줄로 알립니다. Codex에는 플러그인 설정 화면이 없으므로 세션 훅이
 Claude Code가 저장한 설정(`~/.claude/settings.json`의 `pluginConfigs`, 또는 `CLAUDE_CONFIG_DIR` 아래)에서 `codex_worker_model`과
 `codex_worker_effort`를 읽기 전용으로 읽습니다. 환경변수가 이 값을 덮어쓰고, 잘못된 값이면 한 줄 안내와 함께 기본값을 씁니다. 세션 컨텍스트는
 `Codex worker model: <model> at <effort>.` 줄로 알립니다. 값은 다음 Codex 세션부터 적용되며, 이 값을 읽을 때는
@@ -84,8 +84,8 @@ Codex 설정이나 Claude 설정을 쓰지 않습니다. 설정을 쓰는 것은
 | 도구 호출 위험 라벨 | `risk_highlight` | 해당 없음 |
 | 서브에이전트 작업 현황판 | `work_board` | 해당 없음 |
 | 도구 결과 비밀값 가리기 | `secret_redaction` | 해당 없음 |
-| 구현 worker 경로 | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, 또는 `sonnet`) | 해당 없음 |
-| Claude Code worker 모델과 사고 강도 | `worker_model` (기본 `claude-haiku-5-5`), `worker_effort` (기본 `high`) | 해당 없음 |
+| 구현 worker 경로 | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, `sonnet`, 또는 `opus`) | 해당 없음 |
+| Claude Code worker 사고 강도 | `worker_effort` (기본 `high`) | 해당 없음 |
 | Codex worker 모델과 사고 강도 | `codex_worker_model` (`auto`, `gpt-6-luna`, `gpt-6.2-sol`, 또는 `claude-sonnet-5-5`, 기본 `auto`), `codex_worker_effort` (`high` 또는 `xhigh`, 기본 `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL`, `HEI5ENBUG_CODEX_WORKER_EFFORT` |
 | 검토 모델 | `review_model` (고정 모델 ID, 기본 `gpt-6-astra`) | 해당 없음 |
 | 응답 언어 가드 | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
@@ -135,13 +135,18 @@ Codex 설정이나 Claude 설정을 쓰지 않습니다. 설정을 쓰는 것은
 
 | 호스트 | 옵션 | 값 | 기본값 | 효과 |
 |---|---|---|---|---|
-| Claude Code | `implementation_worker` | `auto`, `haiku`, `sonnet`, `codex`, `sol` | `auto` | `auto`: 메인 세션이 할당마다 고르며, 쉬운 작업은 `haiku`, 보통이거나 어려운 작업은 `sonnet`을 씁니다. 고정 값은 그 경로를 강제합니다. `codex`와 `sol`은 역할 실행기로 GPT worker를 실행합니다. 쉬운 작업은 `gpt-6-luna`, 어려운 작업은 `gpt-6.2-sol`인 GPT worker는 Claude 경로가 실패하거나 사용량 한도로 중단되었을 때의 대체이기도 합니다. |
+| Claude Code | `implementation_worker` | `auto`, `haiku`, `sonnet`, `opus`, `codex`, `sol` | `auto` | `auto`: 메인 세션이 할당마다 `worker` 에이전트의 모델을 고르며, 쉬운 작업은 `haiku`, 보통이거나 어려운 작업은 `sonnet`을 쓰고 mod는 그 밖의 모델을 거부합니다. `haiku`, `sonnet`, `opus`는 그 모델만 쓰는 `worker` 에이전트를 실행합니다. `codex`와 `sol`은 역할 실행기로 GPT worker를 실행합니다. 쉬운 작업은 `gpt-6-luna`, 어려운 작업은 `gpt-6.2-sol`인 GPT worker는 Claude 경로가 실패하거나 사용량 한도로 중단되었을 때의 대체이기도 합니다. |
 | Codex | `codex_worker_model` | `auto`, `gpt-6-luna`, `gpt-6.2-sol`, `claude-sonnet-5-5` | `auto` | `auto`: 메인 세션이 할당마다 고르며, 쉬운 작업은 `gpt-6-luna`, 어렵거나 확신이 없는 작업은 `gpt-6.2-sol`을 쓰고 에이전트 가드는 정확히 이 두 모델만 허용합니다. 고정 GPT 값은 그 모델만 허용합니다. `claude-sonnet-5-5`는 역할 실행기로 Claude Sonnet 경로를 먼저 실행하고 GPT worker를 그 대체로 씁니다. Claude Sonnet은 GPT worker가 실패하거나 사용량 한도로 중단되었을 때의 대체이기도 합니다. |
 | Codex | `codex_worker_effort` | `high`, `xhigh` | `high` | worker 생성이 쓸 수 있는 가장 낮은 사고 강도이며, 각 생성은 `xhigh`도 쓸 수 있습니다. |
 
 이 설정이 생기기 전에는 Codex 구현 worker가 역할 실행기로 Claude Sonnet을 실행했고 GPT worker는 그 대체일 뿐이었습니다. `gpt-6-luna` 또는
 `gpt-6.2-sol`을 저장한 Codex 사용자는 그 모델이 고정 worker로 유지되며, 이제 첫 번째 경로입니다. 아무것도 저장하지 않았거나 인식되지 않는 값을 저장한
 사용자는 `auto`를 받습니다. 이전의 Claude 경로를 원하는 사용자는 `claude-sonnet-5-5`로 설정합니다.
+
+Claude Code에는 더 이상 `worker_model`과 `sonnet-worker` 쌍이 없습니다. `worker` 에이전트 하나가 메인 세션이 호출마다 넘기는 모델로 실행되며, 플러그인은 저장된
+`worker_model`을 무시합니다. 아무것도 저장하지 않았거나 `claude-haiku-5-5`를 저장한 사용자는 `auto`에서 이전 동작을 유지합니다. 거기에
+`claude-sonnet-5-5`나 `claude-opus-5-5`를 저장했던 사용자는 `implementation_worker`를 `sonnet`이나 `opus`로 설정합니다. 저장된 `claude-fable-5-2`와
+같은 설정은 없습니다.
 
 ## Codex 자동 설정
 

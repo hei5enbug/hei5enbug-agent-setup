@@ -26,7 +26,7 @@ script. No user or project instruction file is copied, linked, or overwritten.
 | A role runner child session starts | It receives `core.md` only; the runner puts the role rules before the assignment. |
 | A tool call finishes | `PostToolUse` adds a language reminder after a progress update in another language. |
 | A reply ends | `Stop` asks for a rewrite when the reply is not in the response language. |
-| A user submits a prompt on Claude Code | `UserPromptSubmit` compares the main session's "Implementation worker route", "Worker agent model", and "Review model" lines with the ones recorded at session start, and supplies the new lines once when a `/config` change altered them. |
+| A user submits a prompt on Claude Code | `UserPromptSubmit` compares the main session's "Implementation worker route", "Worker agent effort", and "Review model" lines with the ones recorded at session start, and supplies the new lines once when a `/config` change altered them. |
 | A DataGrip query is about to run | `PreToolUse` runs the DataGrip query guard before `execute_sql_query` on both hosts; `PermissionRequest` runs it only where `hooks/codex-hooks.json` registers it, on Codex. |
 | A Bash, MCP, or covered file tool call runs | `PreToolUse` runs the approval guard, including file-state protection and sensitive reads. `PermissionRequest` absorbs host prompts on Claude Code and skips Codex's native window once approved; `PostToolUse` and `PostToolUseFailure` record approvals. `UserPromptSubmit` resets the approval request counts, records user approval, and supplies immediate-retry context on both hosts. |
 | A matching task begins | The agent reads the required reference under `instructions/`. |
@@ -103,7 +103,7 @@ through the role runner, and one the current host can run in-host uses the named
 | Host | Implementation agent | Model and effort |
 |---|---|---|
 | Codex | Plugin `worker` role, verified from its rollout record; with `codex_worker_model` `auto` (default) the main session picks per assignment, and with `claude-sonnet-5-5` `role_runner.py implementation --host codex --fallback` runs first; fallback after the GPT worker fails or stops on a usage limit: the same runner command | `codex_worker_model` (default `auto`: `gpt-6-luna` for easy work, `gpt-6.2-sol` for hard or unsure work) and `codex_worker_effort` (default `high`, up to `xhigh`); fallback `claude-sonnet-5-5`, `high` (up to `xhigh`) |
-| Claude Code | With `implementation_worker` `auto` (default), the main session picks per assignment: `hei5enbug-agent-setup:worker` for easy work and `hei5enbug-agent-setup:sonnet-worker` for normal or hard work; `role_runner.py implementation --fallback`, with the GPT worker model by difficulty, when a Claude route fails or stops on a usage limit. A fixed setting forces `sonnet`, `sol` (`gpt-6.2-sol`), `codex` (`role_runner.py worker`, model by difficulty), or `haiku` (fallback `role_runner.py agent --name hei5enbug-agent-setup:worker --fallback`) | `worker_model` and `worker_effort` (default `claude-haiku-5-5`, `high`) (easy); `claude-sonnet-5-5`, `high` (normal or hard); `gpt-6-luna` for easy work or `gpt-6.2-sol` for hard work, `high` (up to `xhigh`) (fallback and `codex`); `gpt-6.2-sol`, `high` (up to `xhigh`) (`sol`) |
+| Claude Code | With `implementation_worker` `auto` (default), the main session spawns `hei5enbug-agent-setup:worker` with `model: haiku` for easy work or `model: sonnet` for normal or hard work; `role_runner.py implementation --fallback`, with the worker model by difficulty, when a Claude route fails or stops on a usage limit. A fixed setting forces `haiku`, `sonnet`, or `opus` (the `worker` agent on that model only), `sol` (`gpt-6.2-sol`), or `codex` (`role_runner.py worker`, model by difficulty) | `claude-haiku-5-5` (easy) or `claude-sonnet-5-5` (normal or hard), each at `worker_effort` (default `high`); `gpt-6-luna` for easy work or `gpt-6.2-sol` for hard work, `high` (up to `xhigh`) (fallback and `codex`); `gpt-6.2-sol`, `high` (up to `xhigh`) (`sol`) |
 | Codex, designer | Plugin `designer` role with the pinned model, verified from its rollout record; fallback `role_runner.py agent --name designer --fallback` | `gpt-6-astra`, `high` (up to `xhigh`); fallback `claude-opus-5-5`, `high` (up to `xhigh`) |
 | Claude Code, designer | `hei5enbug-agent-setup:designer`, verified from its subagent record or the mod's role pinning; fallback `role_runner.py design` | `claude-opus-5-5`, `xhigh`, or `high` by per-call `effort` for a change to existing UI; fallback `gpt-6-astra`, `high` (up to `xhigh`) |
 | Codex, local scout | Plugin `scout` role, verified from its rollout record | `gpt-6-luna`, `high` (up to `xhigh`) |
@@ -211,9 +211,9 @@ equivalence still requires human or model review.
 ## Agent registration
 
 The `agents/` directory ships with the Claude Code plugin, so installing the bundle adds the
-`hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:worker`, `hei5enbug-agent-setup:sonnet-worker`,
-`hei5enbug-agent-setup:designer`, and `hei5enbug-agent-setup:reviewer` subagents. No manual copy is needed. The manifest
-lists only these five English definitions, so the Korean mirrors in `docs/ko/` are not registered.
+`hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:worker`, `hei5enbug-agent-setup:designer`, and
+`hei5enbug-agent-setup:reviewer` subagents. No manual copy is needed. The manifest
+lists only these four English definitions, so the Korean mirrors in `docs/ko/` are not registered.
 
 The Codex subagent documentation names `~/.codex/agents/` and `.codex/agents/` as the places for custom agent files and
 lists no plugin component for agents, so the plugin does not register them. Instead, the

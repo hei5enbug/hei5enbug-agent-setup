@@ -30,7 +30,7 @@ Codex가 제공하는 `PLUGIN_ROOT`가 설치 디렉터리를 가리키면 로�
 | 역할 실행기의 자식 세션 시작 | `core.md`만 받는다. 역할 규칙은 실행기가 할당 앞에 붙인다. |
 | 도구 호출 종료 | 진행 상황 안내가 다른 언어로 쓰였으면 `PostToolUse`가 언어 알림을 추가한다. |
 | 답변 종료 | 답변이 응답 언어로 쓰이지 않았으면 `Stop`이 다시 쓰도록 요청한다. |
-| Claude Code에서 사용자가 프롬프트 제출 | `UserPromptSubmit`이 메인 세션의 "Implementation worker route", "Worker agent model", "Review model" 줄을 세션 시작 시 기록한 줄과 비교하고, `/config` 변경으로 달라졌으면 새 줄을 한 번 제공한다. |
+| Claude Code에서 사용자가 프롬프트 제출 | `UserPromptSubmit`이 메인 세션의 "Implementation worker route", "Worker agent effort", "Review model" 줄을 세션 시작 시 기록한 줄과 비교하고, `/config` 변경으로 달라졌으면 새 줄을 한 번 제공한다. |
 | DataGrip 쿼리 실행 직전 | `PreToolUse`가 두 호스트에서 `execute_sql_query` 실행 전에 DataGrip 쿼리 가드를 실행하고, `PermissionRequest`는 `hooks/codex-hooks.json`이 등록한 Codex에서만 실행한다. |
 | Bash, MCP 또는 대상 파일 도구 호출 실행 | `PreToolUse`가 상태 파일 보호와 민감 읽기 검사를 포함한 승인 가드를 실행한다. `PermissionRequest`는 Claude Code에서 호스트 프롬프트를 흡수하고 Codex에서는 승인된 뒤 네이티브 창을 건너뛰며, `PostToolUse`와 `PostToolUseFailure`는 승인을 기록한다. 양쪽 호스트의 `UserPromptSubmit`은 승인 요청 횟수를 초기화하고 사용자 승인을 기록하며 즉시 재시도 컨텍스트를 제공한다. |
 | 조건에 맞는 작업 시작 | 에이전트가 `instructions/`의 필수 참조를 읽는다. |
@@ -103,7 +103,7 @@ UI 코드, 시각 디자인, 다이어그램 작업은 대신 호스트의 desig
 | 호스트 | 구현 에이전트 | 모델과 사고 강도 |
 |---|---|---|
 | Codex | rollout 기록으로 검증한 플러그인 `worker` 역할. `codex_worker_model`이 `auto`(기본)이면 메인 세션이 할당마다 고르고, `claude-sonnet-5-5`이면 `role_runner.py implementation --host codex --fallback`을 먼저 실행합니다. GPT worker가 실패하거나 사용량 한도로 중단되면 같은 실행기 명령이 대체입니다 | `codex_worker_model`(기본 `auto`: 쉬운 작업은 `gpt-6-luna`, 어렵거나 확신이 없는 작업은 `gpt-6.2-sol`), `codex_worker_effort`(기본 `high`, 최대 `xhigh`); 대체는 `claude-sonnet-5-5`, `high`(최대 `xhigh`) |
-| Claude Code | `implementation_worker`가 `auto`(기본)이면 메인 세션이 작업마다 고릅니다. 쉬운 작업은 `hei5enbug-agent-setup:worker`, 보통·어려운 작업은 `hei5enbug-agent-setup:sonnet-worker`이며, Claude 경로가 실패하거나 사용량 한도로 중단되면 난이도별 GPT worker 모델로 `role_runner.py implementation --fallback`을 씁니다. 고정 설정은 `sonnet`, `sol`(`gpt-6.2-sol`), `codex`(`role_runner.py worker`, 난이도별 모델), `haiku`(대체 경로는 `role_runner.py agent --name hei5enbug-agent-setup:worker --fallback`)를 강제합니다 | `worker_model`, `worker_effort`(기본 `claude-haiku-5-5`, `high`)(쉬움); `claude-sonnet-5-5`, `high`(보통·어려움); 쉬운 작업은 `gpt-6-luna`, 어려운 작업은 `gpt-6.2-sol`, `high`(최대 `xhigh`)(대체와 `codex`); `gpt-6.2-sol`, `high`(최대 `xhigh`)(`sol`) |
+| Claude Code | `implementation_worker`가 `auto`(기본)이면 메인 세션이 작업마다 고릅니다. 쉬운 작업은 `hei5enbug-agent-setup:worker`를 `model: haiku`로, 보통·어려운 작업은 `model: sonnet`으로 띄우며, Claude 경로가 실패하거나 사용량 한도로 중단되면 난이도별 worker 모델로 `role_runner.py implementation --fallback`을 씁니다. 고정 설정은 `haiku`, `sonnet`, `opus`(그 모델만 쓰는 `worker` 에이전트), `sol`(`gpt-6.2-sol`), `codex`(`role_runner.py worker`, 난이도별 모델)를 강제합니다 | `claude-haiku-5-5`(쉬움) 또는 `claude-sonnet-5-5`(보통·어려움), 각각 `worker_effort`(기본 `high`); 쉬운 작업은 `gpt-6-luna`, 어려운 작업은 `gpt-6.2-sol`, `high`(최대 `xhigh`)(대체와 `codex`); `gpt-6.2-sol`, `high`(최대 `xhigh`)(`sol`) |
 | Codex, designer | rollout 기록으로 검증한 플러그인 `designer` 역할, 대체는 `role_runner.py agent --name designer --fallback` | `gpt-6-astra`, `high`(최대 `xhigh`); 대체 `claude-opus-5-5`, `high`(최대 `xhigh`) |
 | Claude Code, designer | 서브에이전트 기록이나 mod의 역할 고정으로 검증한 `hei5enbug-agent-setup:designer`, 대체는 `role_runner.py design` | `claude-opus-5-5`, `xhigh`, 기존 UI를 바꾸는 작업은 호출별 `effort`로 `high`; 대체 `gpt-6-astra`, `high`(최대 `xhigh`) |
 | Codex, 로컬 scout | rollout 기록으로 검증한 플러그인 `scout` 역할 | `gpt-6-luna`, `high`(최대 `xhigh`) |
@@ -119,7 +119,7 @@ Claude Code에서는 `scripts/role_runner.py`가 scout, researcher, reviewer, Co
 플러그인 에이전트의 다른 모델 계열 대체 항목을 실행합니다. 메인 세션은 할당을 파일로 쓰고 세션 폴더에서
 `python3 <plugin>/scripts/role_runner.py <role-or-capability>` 또는
 `python3 <plugin>/scripts/role_runner.py agent --name <name> --fallback` 을
-`--assignment <file> --result <file>`과 함께 실행합니다. `reviewer`와 난이도별 GPT worker 모델에는 `--model <id>`, `worker`, 쓰기 기능, 쓰기 접근 에이전트에는
+`--assignment <file> --result <file>`과 함께 실행합니다. `reviewer`와 난이도별 worker 모델에는 `--model <id>`, `worker`, 쓰기 기능, 쓰기 접근 에이전트에는
 `--add-dir <dir>`, MCP 도구나 네트워크가 필요한 기능이나 에이전트에는 `--mcp`, 기능의 호스트 항목을 고르려면 `--host claude|codex`,
 대체 항목에는 `--fallback`, 실행을 이어 가려면 상태 줄의 `evidence.session`으로 `--resume <session_id>`를 더할 수 있습니다.
 `--effort <level>`은 항목에 지정된 범위 안에서 사고 강도를 높이며, 하한이 기본값입니다. `--user-requested`는 사용자가 그
@@ -205,9 +205,9 @@ Codex는 사용자의 직접 요청 또는 적용되는 `AGENTS.md`·스킬 지�
 ## 에이전트 등록
 
 `agents/` 디렉터리는 Claude Code 플러그인에 함께 배포되므로, 번들을 설치하면
-`hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:worker`, `hei5enbug-agent-setup:sonnet-worker`,
+`hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:worker`,
 `hei5enbug-agent-setup:designer`, `hei5enbug-agent-setup:reviewer`가 추가됩니다.
-직접 복사할 필요가 없습니다. 매니페스트에는 영어 정의 다섯 개만 있으므로 `docs/ko/`의 한국어 번역본은
+직접 복사할 필요가 없습니다. 매니페스트에는 영어 정의 네 개만 있으므로 `docs/ko/`의 한국어 번역본은
 서브에이전트로 등록되지 않습니다.
 
 Codex 서브에이전트 문서는 사용자 지정 에이전트 파일의 위치로 `~/.codex/agents/`와 `.codex/agents/`만 들고 에이전트용 플러그인 구성 요소는

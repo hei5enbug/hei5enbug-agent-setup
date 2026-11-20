@@ -19,9 +19,8 @@ starts with `=` becomes a command path, so `echo =====` fails before the rest of
 such as `export` or a keyword such as `if` only where a command may start, so `printf '%s\n' export x==foo` is allowed.
 
 Role pinning pins each plugin role's model and effort on every request: `scout` uses `claude-sonnet-5-5` with `medium`,
-`worker` uses `worker_model` with `worker_effort` (default `claude-haiku-5-5` with `high`), `sonnet-worker` uses
-`claude-sonnet-5-5` with `high`, `designer` uses `claude-opus-5-5` with `xhigh`, and `reviewer` uses `claude-opus-5-5`
-with `high`. A subagent that answers on another model is stopped: its later requests end with a refusal, its tool calls
+`worker` uses the model of the Agent call with `worker_effort` (default `high`), `designer` uses `claude-opus-5-5` with
+`xhigh`, and `reviewer` uses `claude-opus-5-5` with `high`. A subagent that answers on another model is stopped: its later requests end with a refusal, its tool calls
 are denied, and its result is replaced with a warning. The one exception is a model or effort the user names in their
 own latest main-session prompt for delegated work: the mod runs an Agent call that carries that model on it, or an Agent
 call that carries the role's own pinned model when only an effort is named, with the named effort when exactly one is
@@ -32,6 +31,11 @@ existing UI. The mod reads it from the Agent tool call, because the spawn event 
 that effort only when it is a known effort at or below the role's pinned effort. It keeps the effort for every request of
 that agent, including after a resume, and records it as `call_effort` without setting `requested`. The call's model is
 still forced to the pin, and an effort above the pin is ignored; raising it still needs the user's own prompt.
+The `worker` agent is the one role whose call model the mod honors without a user request: under `implementation_worker`
+`auto` it accepts `haiku` or `sonnet` (the registry's `call_models`), under `haiku`, `sonnet`, or `opus` only that model,
+which a call that passes none also gets, and it denies any other model with a message naming the allowed ones. The
+effort rules above apply to the chosen model, and the mod keeps a resumed run on the model it started with, because
+the host ignores a hook's model on a resume.
 Only when role pinning is active, the registered mod `prompt.submit` hook adds the line `hei5enbug-agent-setup mod: role
 pinning active` as context to the first main-session prompt of each conversation, again after `/clear` or `/resume`.
 This line lets the main session send assignments directly and skip per-delegation settings and subagent record checks.

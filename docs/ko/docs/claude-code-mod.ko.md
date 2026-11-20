@@ -22,8 +22,7 @@ zsh 등호 단어 차단은 Bash 도구가 zsh를 실행할 때 적용됩니다.
 `printf '%s\n' export x==foo`는 허용합니다.
 
 역할 고정은 플러그인 역할마다 모델과 사고 강도를 모든 요청에 고정합니다. `scout`는 `claude-sonnet-5-5`와 `medium`,
-`worker`는 `worker_model`과 `worker_effort` (기본 `claude-haiku-5-5`와 `high`), `sonnet-worker`는 `claude-sonnet-5-5` 와
-`high`, `designer` 는
+`worker`는 Agent 호출의 모델과 `worker_effort` (기본 `high`), `designer`는
 `claude-opus-5-5`와 `xhigh`, `reviewer`는 `claude-opus-5-5`와 `high`를 씁니다.
 다른 모델로 응답한 서브에이전트는 중단됩니다. 이후 요청은 거부되고 도구 호출은 막히며 결과는 경고로 바뀝니다.
 유일한 예외는 사용자가 메인 세션의 가장 최근 프롬프트에서 위임 작업에 직접 지정한 모델이나 사고 강도입니다. mod는 그 모델을 넘긴
@@ -35,6 +34,10 @@ Agent 호출을 지정한 모델로 실행하고, 사고 강도만 지정된 경
 사고 강도 이하일 때만 그 강도로 에이전트를 실행합니다. 그 강도는 재개 이후를 포함해 그 에이전트의 모든 요청에 유지하며,
 `requested`는 설정하지 않고 `call_effort`로 기록합니다. 호출이 넘긴 모델은 계속 고정 모델로 강제하고, 고정값보다 높은
 사고 강도는 무시합니다. 더 높이려면 여전히 사용자의 직접 프롬프트가 필요합니다.
+`worker` 에이전트는 사용자 요청 없이도 호출의 모델을 따르는 유일한 역할입니다. `implementation_worker`가 `auto`이면 `haiku`나 `sonnet`(레지스트리의
+`call_models`)을 받고, `haiku`, `sonnet`, `opus`이면 그 모델만 받으며 모델을 넘기지 않은 호출도 그 모델을 씁니다. 그 밖의 모델은 허용되는 모델을
+밝힌 메시지로 거부합니다. 위의 사고 강도 규칙은 고른 모델에 적용하고, 호스트가 재개에서 훅이 정한 모델을 무시하므로 mod는 재개한 실행을 처음 시작한 모델로
+유지합니다.
 역할 고정이 활성화된 경우에만 등록된 mod `prompt.submit` 훅이 대화마다 메인 세션의 첫 프롬프트에
 `hei5enbug-agent-setup mod: role pinning active` 줄을 컨텍스트로 붙이고, `/clear`나 `/resume` 뒤에도 다시 붙입니다.
 이 줄이 있으면 메인 세션은 작업 지시를 바로 보내고 위임마다 설정과 서브에이전트 기록을 확인하지 않아도 됩니다.
