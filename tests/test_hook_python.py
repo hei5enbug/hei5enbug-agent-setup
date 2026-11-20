@@ -434,3 +434,16 @@ def test_실제_훅_스크립트는_캐시_접두_실행과_기존_실행의_출
     assert cached.stdout == plain.stdout
     assert list((state / "hei5enbug-agent-setup" / "pycache").rglob("*.pyc"))
     assert not list(real_plugin.rglob("__pycache__"))
+
+
+def test_실행할_python이_없으면_훅_이름과_해결_방법을_한_줄로_stderr에_쓰고_1로_끝난다(plugin, tmp_path):
+    # given
+    (tmp_path / "bin" / "python3").unlink()
+    environment = {"PATH": str(tmp_path / "bin"), "HOME": str(tmp_path / "home"), "XDG_STATE_HOME": str(tmp_path / "state")}
+    # when
+    result = subprocess.run(["/bin/sh", str(plugin / "hook_python.sh"), "sample.py"], input="", text=True, capture_output=True,
+                            env=environment, timeout=30, cwd=plugin.parents[1])
+    # then
+    lines = result.stderr.splitlines()
+    assert result.returncode == 1
+    assert len(lines) == 1 and "sample.py" in lines[0] and "python3 was not found" in lines[0] and "disable" in lines[0], result.stderr

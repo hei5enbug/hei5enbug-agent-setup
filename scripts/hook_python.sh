@@ -20,6 +20,10 @@ if [ -z "$script" ] || [ ! -f "$dir/$script" ]; then
 fi
 shift
 hook_select_interpreter
+if ! command -v "$interpreter" >/dev/null 2>&1; then
+  echo "hei5enbug-agent-setup could not run $script: $interpreter was not found, so the check did not run. Install Python 3, set the Hook Python interpreter option to its absolute path, or disable the plugin's guard." >&2
+  exit 1
+fi
 case $state in
   /*)
     exec "$interpreter" -X "pycache_prefix=$state/hei5enbug-agent-setup/pycache" -c 'import os, sys
