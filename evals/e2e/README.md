@@ -294,14 +294,16 @@ reviews the agent runs are counted in its cost; the grader's own reviews are not
 A custom check reads the original run folder through `ctx.origin`, the graded copy's source, so a task such as T21
 can inspect the Git worktrees and the fake Orca state that its setup script built beside the repository.
 
-The UI tasks (T82 to T84) render a screen of the `demo-app` fixture with `harness/render.py`: `bun build` bundles the
+The UI tasks (T82 to T84 and T112) render a screen of the `demo-app` fixture with `harness/render.py`: `bun build` bundles the
 screen with the fixture's own JSX runtime, and headless Chrome loads it once per width (1280 and 375 px) inside an
 iframe of exactly that width, because Chrome's headless window is never narrower than 500 px. A custom check reads
 the layout through `ctx.render(module)` (element boxes by `data-testid`, page width, elements past the edge), and
 the screenshots stay in `grade/work/screens/` for the owner's blind comparison. `bun` and Chrome are found on `PATH`,
 at the macOS application path, or through `E2E_BUN_BIN` and `E2E_CHROME_BIN`; when either is missing the check
 raises `no_verdict`, so the run records `grade_error` and `regrade` retries it. The routing checks are not
-required, so the hidden-check result of a run stays comparable when a variant routes the case elsewhere.
+required, so the hidden-check result of a run stays comparable when a variant routes the case elsewhere. T83 and T84
+also require that the designer ran at `high`, and T112 that it ran at `xhigh`; the check reads the efforts that the
+designer's subagent record shows for its turns, which the transcript view keeps beside the Agent call's own `effort`.
 `tests/test_e2e_eval_ui_tasks.py` proves them, and skips the rendering tests when `bun` or Chrome is absent.
 
 `tests/test_e2e_eval_graders.py` proves each task's graders: the unmodified fixture fails, and the reference
@@ -342,6 +344,7 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T82 | demo-app | UI routing, complete specification | Four named-line edits to a settings panel; routes to the implementation worker |
 | T83 | demo-app | UI routing, layout request | Two-column profile screen that stacks at 375 px; routes to the designer |
 | T84 | demo-app | UI routing, open breakpoint | Plan cards 320 px wide and 24 px apart in one row, mobile breakpoint left open; routes to the designer |
+| T112 | demo-app | UI routing, new screen | A new invoices screen of three rows built from scratch, fitting at 1280 and 375 px; routes to the designer at its pinned `xhigh` |
 
 The ids T89 to T93 belong to the comparison of Claude reviewer and opponent models in
 [`evals/model-roles`](../model-roles/README.md). Those cases run through the role runners instead of this harness, so

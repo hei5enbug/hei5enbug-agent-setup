@@ -61,3 +61,7 @@ def renders(ctx):
 
 def routing(ctx):
     return shared(ctx).routing(ctx, "designer")
+
+
+def designer_high(ctx):
+    return shared(ctx).designer_effort(ctx, "high")

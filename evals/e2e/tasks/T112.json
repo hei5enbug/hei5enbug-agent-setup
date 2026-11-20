@@ -1,0 +1,82 @@
+{
+  "id": "T112",
+  "title": "New invoices screen",
+  "fixture": "demo-app",
+  "category": "ui",
+  "path": "UI routing: a new screen goes to the designer at its pinned effort",
+  "prompt_file": "prompts/T112.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 15
+  },
+  "checks": [
+    {
+      "id": "invoices-listed",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "invoices_listed"
+    },
+    {
+      "id": "rows-stacked-1280",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "rows_stacked_1280"
+    },
+    {
+      "id": "rows-visible-375",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "rows_visible_375"
+    },
+    {
+      "id": "no-overflow-1280",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "no_overflow_1280"
+    },
+    {
+      "id": "no-overflow-375",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_overflow_375"
+    },
+    {
+      "id": "only-allowed-files-changed",
+      "kind": "only_changed",
+      "required": true,
+      "weight": 2,
+      "allow": [
+        "src/Invoices.tsx",
+        "src/styles.css"
+      ]
+    },
+    {
+      "id": "renders",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "renders"
+    },
+    {
+      "id": "effort-designer-xhigh",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "designer_xhigh"
+    },
+    {
+      "id": "routing-designer",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "routing"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

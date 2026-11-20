@@ -26,6 +26,15 @@ def routing(ctx, expected: str):
     return ok, f"expected {expected}; completed delegations: {types or 'none'}", {"delegations": types}
 
 
+def designer_effort(ctx, expected: str):
+    """Every completed designer delegation ran at `expected`, judged by the efforts its own record shows; one must exist."""
+    found = [d for d in ctx.view.get("delegations", []) if d.get("class") == "design" and d.get("completed", True) and not d.get("is_error")]
+    shown = [d.get("efforts") or [] for d in found]
+    ok = bool(found) and all(efforts == [expected] for efforts in shown)
+    return ok, f"expected the designer at {expected}; recorded efforts: {shown or 'no designer delegation'}", {
+        "efforts": shown, "call_efforts": [d.get("call_effort") for d in found]}
+
+
 def render_of(ctx, module: str):
     return ctx.render(module, (1280, 375))
 

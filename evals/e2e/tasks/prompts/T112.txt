@@ -1,0 +1,1 @@
+src/Invoices.tsx 에 새 화면을 처음부터 만들어줘. 기본 export 는 Invoices 컴포넌트로 하고, 제목은 "Invoices" 로 해줘. 청구서 세 건을 목록으로 보여줘: March invoice $120.00 Paid, April invoice $120.00 Paid, May invoice $135.00 Due. 목록을 감싸는 요소에는 data-testid="invoice-list", 각 청구서에는 data-testid="invoice-row" 를 달고, 각 행에 이름, 금액, 상태가 보이게 해줘. 폰 화면(375px)에서도 가로 스크롤이 생기면 안 돼. 스타일은 src/styles.css 에 더해줘. 이 두 파일 밖은 건드리지 마.

@@ -63,6 +63,13 @@
       "function": "renders"
     },
     {
+      "id": "effort-designer-high",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "designer_high"
+    },
+    {
       "id": "routing-designer",
       "kind": "custom",
       "required": false,

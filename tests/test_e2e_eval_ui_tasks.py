@@ -1,4 +1,4 @@
-"""Unit tests for the headless render step and the three UI tasks T82 to T84 of the end-to-end evaluation.
+"""Unit tests for the headless render step and the four UI tasks T82 to T84 and T112 of the end-to-end evaluation.
 
 Each task's checks are proved offline: the unmodified fixture fails, the reference solution passes, and the deliberately
 broken inputs the design names fail exactly the check they should. Tests that render need bun and Chrome and skip
@@ -24,9 +24,9 @@ TASKS_ROOT = E2E_ROOT / "tasks"
 FIXTURES_ROOT = E2E_ROOT / "fixtures"
 sys.path.insert(0, str(E2E_ROOT))
 
-from harness import graders, render  # noqa: E402
+from harness import graders, render, transcript  # noqa: E402
 
-UI_TASKS = ("T82", "T83", "T84")
+UI_TASKS = ("T82", "T83", "T84", "T112")
 TOOLS_MISSING = render.find_tool(render.BUN_ENV, ("bun",)) is None or render.find_tool(
     render.CHROME_ENV, render.CHROME_NAMES, render.CHROME_FALLBACKS) is None
 NEEDS_RENDER = unittest.skipIf(TOOLS_MISSING, "bun or Chrome is not installed")
@@ -34,9 +34,9 @@ PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 SETTINGS = "src/SettingsPanel.tsx"
 
 
-def delegation(agent_type: str, kind_class: str) -> dict[str, Any]:
+def delegation(agent_type: str, kind_class: str, efforts: list[str] | None = None) -> dict[str, Any]:
     return {"kind": "agent", "type": agent_type, "class": kind_class, "prompt": "", "exit": None, "tool_use_id": "t1",
-            "order": 0, "is_error": False, "completed": True}
+            "order": 0, "is_error": False, "completed": True, "call_effort": None, "efforts": efforts or []}
 
 
 def view_with(*delegations: dict[str, Any]) -> dict[str, Any]:
@@ -44,6 +44,8 @@ def view_with(*delegations: dict[str, Any]) -> dict[str, Any]:
 
 
 DESIGNER = view_with(delegation("hei5enbug-agent-setup:designer", "design"))
+DESIGNER_HIGH = view_with(delegation("hei5enbug-agent-setup:designer", "design", ["high"]))
+DESIGNER_XHIGH = view_with(delegation("hei5enbug-agent-setup:designer", "design", ["xhigh"]))
 SONNET_WORKER = view_with(delegation("hei5enbug-agent-setup:sonnet-worker", "implementation"))
 NO_DELEGATION = view_with()
 
@@ -73,7 +75,7 @@ class UiTaskCase(unittest.TestCase):
         work = self.root / f"work-{repo.name}"
         copy = work / "repo"
         shutil.copytree(repo, copy, symlinks=True)
-        ctx = graders.GradeContext(task=task, repo=copy, base=base, view=view or NO_DELEGATION, tasks_root=TASKS_ROOT,
+        ctx = graders.GradeContext(task=task, repo=copy, base=base, view=view or DESIGNER_HIGH, tasks_root=TASKS_ROOT,
                                    work=work, origin=repo)
         ctx.snapshot_git_facts()
         return {spec["id"]: graders.run_check(ctx, spec) for spec in task["checks"]}
@@ -167,6 +169,74 @@ class RoutingCheckTest(UiTaskCase):
         self.assertFalse(self.routing("T83", failed))
 
 
+class EffortCheckTest(UiTaskCase):
+    """The designer effort checks read the efforts a subagent record shows, so they need no render."""
+
+    def effort_passes(self, task_id: str, view: dict[str, Any]) -> bool:
+        repo, base = self.repo_for(task_id)
+        task = self.load(task_id)
+        work = self.root / "effort-work"
+        if work.exists():
+            shutil.rmtree(work)
+        shutil.copytree(repo, work / "repo", symlinks=True)
+        ctx = graders.GradeContext(task=task, repo=work / "repo", base=base, view=view, tasks_root=TASKS_ROOT, work=work)
+        spec = next(check for check in task["checks"] if check["id"].startswith("effort-designer-"))
+        self.assertTrue(spec["required"])
+        return graders.run_check(ctx, spec)["passed"]
+
+    def test_T83와_T84은_디자이너가_high로_돌았을_때만_필수_effort_검사가_통과한다(self):
+        for task_id in ("T83", "T84"):
+            with self.subTest(task_id):
+                self.assertTrue(self.effort_passes(task_id, DESIGNER_HIGH))
+                self.assertFalse(self.effort_passes(task_id, DESIGNER_XHIGH))
+                self.assertFalse(self.effort_passes(task_id, DESIGNER))
+                self.assertFalse(self.effort_passes(task_id, SONNET_WORKER))
+                self.assertFalse(self.effort_passes(task_id, NO_DELEGATION))
+
+    def test_T112은_디자이너가_xhigh로_돌았을_때만_필수_effort_검사가_통과한다(self):
+        self.assertTrue(self.effort_passes("T112", DESIGNER_XHIGH))
+        self.assertFalse(self.effort_passes("T112", DESIGNER_HIGH))
+        self.assertFalse(self.effort_passes("T112", DESIGNER))
+        self.assertFalse(self.effort_passes("T112", NO_DELEGATION))
+
+    def test_디자이너가_둘이고_하나라도_다른_effort면_실패하고_오류로_끝난_위임은_세지_않는다(self):
+        mixed = view_with(delegation("hei5enbug-agent-setup:designer", "design", ["high"]),
+                          delegation("hei5enbug-agent-setup:designer", "design", ["xhigh"]))
+        switched = view_with(delegation("hei5enbug-agent-setup:designer", "design", ["high", "xhigh"]))
+        failed = view_with({**delegation("hei5enbug-agent-setup:designer", "design", ["xhigh"]), "is_error": True},
+                           delegation("hei5enbug-agent-setup:designer", "design", ["high"]))
+        self.assertFalse(self.effort_passes("T83", mixed))
+        self.assertFalse(self.effort_passes("T83", switched))
+        self.assertTrue(self.effort_passes("T83", failed))
+
+
+class DelegationEffortTest(unittest.TestCase):
+    def view(self, call_input: dict[str, Any], record_events: list[dict[str, Any]], meta_effort: str | None = None) -> dict[str, Any]:
+        events = [
+            {"type": "assistant", "message": {"id": "m1", "content": [
+                {"type": "tool_use", "id": "tu-design", "name": "Agent", "input": {"subagent_type": "hei5enbug-agent-setup:designer",
+                                                                                   "prompt": "x", **call_input}}]}},
+            {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "tu-design", "content": "done"}]}},
+        ]
+        meta = {"agentType": "hei5enbug-agent-setup:designer", "toolUseId": "tu-design", **({"effort": meta_effort} if meta_effort else {})}
+        return transcript.build_view(events, [{"meta": meta, "events": record_events}])
+
+    def test_위임은_호출의_effort와_서브에이전트_기록의_effort를_따로_담는다(self):
+        events = [{"type": "assistant", "effort": "high", "message": {"id": "a", "content": []}},
+                  {"type": "assistant", "effort": "high", "message": {"id": "b", "content": []}}]
+        found = self.view({"effort": "high"}, events)["delegations"][0]
+        self.assertEqual((found["call_effort"], found["efforts"]), ("high", ["high"]))
+
+    def test_호출이_effort를_넘기지_않으면_기록의_effort만_남고_기록이_없으면_메타를_쓴다(self):
+        events = [{"type": "assistant", "effort": "xhigh", "message": {"id": "a", "content": []}}]
+        plain = self.view({}, events, meta_effort="high")["delegations"][0]
+        meta_only = self.view({}, [{"type": "user"}], meta_effort="high")["delegations"][0]
+        bare = self.view({}, [{"type": "user"}])["delegations"][0]
+        self.assertEqual((plain["call_effort"], plain["efforts"]), (None, ["xhigh"]))
+        self.assertEqual(meta_only["efforts"], ["high"])
+        self.assertEqual(bare["efforts"], [])
+
+
 class SettingsPanelTest(UiTaskCase):
     """T82 line checks need no render, so these run without bun and Chrome."""
 
@@ -234,7 +304,7 @@ class RenderedTaskTest(UiTaskCase):
 
     def test_T83_참조_해법은_모든_필수_검사를_통과한다(self):
         repo, base = self.repo_for("T83", reference=True)
-        found = self.results("T83", repo, base, DESIGNER)
+        found = self.results("T83", repo, base, DESIGNER_HIGH)
         self.assertEqual(self.failed_required(found), set(), {k: v["detail"] for k, v in found.items() if not v["passed"]})
         self.assertTrue(found["routing-designer"]["passed"])
 
@@ -266,7 +336,7 @@ class RenderedTaskTest(UiTaskCase):
 
     def test_T84_참조_해법은_모든_필수_검사를_통과한다(self):
         repo, base = self.repo_for("T84", reference=True)
-        found = self.results("T84", repo, base, DESIGNER)
+        found = self.results("T84", repo, base, DESIGNER_HIGH)
         self.assertEqual(self.failed_required(found), set(), {k: v["detail"] for k, v in found.items() if not v["passed"]})
         self.assertTrue(found["routing-designer"]["passed"])
 
@@ -287,6 +357,40 @@ class RenderedTaskTest(UiTaskCase):
         repo, base = self.repo_for("T84", reference=True)
         self.edit(repo, "src/components/Button.tsx", '"ghost"', '"ghost" | "link"')
         self.assertEqual(self.failed_required(self.results("T84", repo, base)), {"only-allowed-files-changed"})
+
+    def test_수정하지_않은_저장소는_T112의_화면_검사에서_실패한다(self):
+        repo, base = self.repo_for("T112")
+        found = self.results("T112", repo, base, DESIGNER_XHIGH)
+        self.assertEqual(self.failed_required(found), {"invoices-listed", "rows-stacked-1280", "rows-visible-375", "renders",
+                                                       "no-overflow-1280", "no-overflow-375"})
+
+    def test_T112_참조_해법은_모든_필수_검사를_통과한다(self):
+        repo, base = self.repo_for("T112", reference=True)
+        found = self.results("T112", repo, base, DESIGNER_XHIGH)
+        self.assertEqual(self.failed_required(found), set(), {k: v["detail"] for k, v in found.items() if not v["passed"]})
+        self.assertTrue(found["routing-designer"]["passed"])
+
+    def test_T112_effort가_high면_다른_검사가_모두_통과해도_effort_검사만_실패한다(self):
+        repo, base = self.repo_for("T112", reference=True)
+        found = self.results("T112", repo, base, DESIGNER_HIGH)
+        self.assertEqual(self.failed_required(found), {"effort-designer-xhigh"})
+
+    def test_T112_고정_폭_행은_375px에서_넘쳐_보임_검사와_넘침_검사가_실패한다(self):
+        repo, base = self.repo_for("T112", reference=True)
+        self.append(repo, "src/styles.css", "\n.invoice-row {\n  width: 500px;\n}\n")
+        found = self.results("T112", repo, base, DESIGNER_XHIGH)
+        self.assertEqual(self.failed_required(found), {"rows-visible-375", "no-overflow-375"})
+
+    def test_T112_행이_하나_모자라면_목록_검사가_실패한다(self):
+        repo, base = self.repo_for("T112", reference=True)
+        self.edit(repo, "src/Invoices.tsx", '{ name: "May invoice", amount: "$135.00", status: "Due" },', "")
+        found = self.results("T112", repo, base, DESIGNER_XHIGH)
+        self.assertIn("invoices-listed", self.failed_required(found))
+
+    def test_T112_지정하지_않은_파일을_고치면_변경_범위_검사가_실패한다(self):
+        repo, base = self.repo_for("T112", reference=True)
+        self.edit(repo, "src/components/Button.tsx", '"ghost"', '"ghost" | "link"')
+        self.assertEqual(self.failed_required(self.results("T112", repo, base, DESIGNER_XHIGH)), {"only-allowed-files-changed"})
 
     def test_T82_참조_해법은_화면이_그려지고_스크린샷이_PNG로_남는다(self):
         repo, base = self.repo_for("T82", reference=True)

@@ -199,8 +199,24 @@ def build_tool_calls(events: list[dict[str, Any]], subagents: list[dict[str, Any
     return list(calls.values())
 
 
-def build_delegations(calls: list[dict[str, Any]], assignments: dict[str, str]) -> list[dict[str, Any]]:
+def record_efforts(subagents: list[dict[str, Any]]) -> dict[str, list[str]]:
+    """Efforts a subagent record shows by launching tool call id: those of its assistant turns, else the one in its meta."""
+    efforts: dict[str, list[str]] = {}
+    for record in subagents:
+        meta = record.get("meta") or {}
+        if not meta.get("toolUseId"):
+            continue
+        seen = {str(event["effort"]) for event in record.get("events", []) if event.get("type") == "assistant" and event.get("effort")}
+        if not seen and meta.get("effort"):
+            seen = {str(meta["effort"])}
+        efforts[str(meta["toolUseId"])] = sorted(seen)
+    return efforts
+
+
+def build_delegations(calls: list[dict[str, Any]], assignments: dict[str, str],
+                      efforts: dict[str, list[str]] | None = None) -> list[dict[str, Any]]:
     delegations: list[dict[str, Any]] = []
+    shown = efforts or {}
     claimed: set[str] = set()
     for order, call in enumerate(calls):
         if call["source"] != "main":
@@ -211,6 +227,7 @@ def build_delegations(calls: list[dict[str, Any]], assignments: dict[str, str]) 
                 "kind": "agent", "type": agent_type, "class": classify_agent(agent_type),
                 "prompt": str(call["input"].get("prompt") or ""), "exit": None, "tool_use_id": call["id"], "order": order,
                 "is_error": bool(call["is_error"]), "completed": bool(call["result_text"].strip()) and not call["is_error"],
+                "call_effort": call["input"].get("effort"), "efforts": list(shown.get(call["id"], [])),
             })
         elif call["name"] == "Bash":
             command = str(call["input"].get("command") or "")
@@ -290,7 +307,7 @@ def build_view(
         "final_answer": final if isinstance(final, str) else "",
         "assistant_texts": assistant_texts(events),
         "tool_calls": calls,
-        "delegations": build_delegations(calls, assignments or {}),
+        "delegations": build_delegations(calls, assignments or {}, record_efforts(records)),
         "final_answer_order": final_answer_order(events),
         "approvals": list(approvals or []),
         "permission_denials": list(denials) if isinstance(denials, list) else [],
