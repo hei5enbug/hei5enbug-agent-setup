@@ -37,8 +37,7 @@ def host_settings_mode() -> str:
     return "report" if option_value("host_settings") == "report" else "apply"
 
 
-def worker_option_keys(host: str) -> tuple[str, str]:
-    return ("codex_worker_model", "codex_worker_effort") if host == "codex" else ("worker_model", "worker_effort")
+CODEX_WORKER_KEYS = ("codex_worker_model", "codex_worker_effort")
 
 
 def saved_options(keys: tuple[str, ...]) -> tuple[dict, str | None]:
@@ -64,11 +63,11 @@ def saved_options(keys: tuple[str, ...]) -> tuple[dict, str | None]:
     return {}, None
 
 
-def valid_worker_pair(host: str, model: object, effort: object) -> bool:
-    """Whether the pair is in the manifest option lists and allowed by the registry effort rules."""
+def valid_worker_pair(model: object, effort: object) -> bool:
+    """Whether the Codex pair is in the manifest option lists and allowed by the registry effort rules."""
     manifest = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["userConfig"]
     registry = json.loads((ROOT / "config" / "model-registry.json").read_text(encoding="utf-8"))
-    model_key, effort_key = worker_option_keys(host)
+    model_key, effort_key = CODEX_WORKER_KEYS
     return (
         model in manifest[model_key]["options"]
         and effort in manifest[effort_key]["options"]
@@ -76,26 +75,23 @@ def valid_worker_pair(host: str, model: object, effort: object) -> bool:
     )
 
 
-def worker_setting(host: str) -> tuple[str, str, str | None]:
-    """Resolve the worker model and effort for `host` from the manifest, with an optional notice for an ignored value.
+def worker_setting() -> tuple[str, str, str | None]:
+    """Resolve the Codex worker model and effort from the manifest, with an optional notice for an ignored value.
 
-    Codex reads each key from its HEI5ENBUG_ variable and otherwise from the saved Claude plugin options.
-    On Claude the configured pair applies only through role pinning, so with it off the manifest defaults stand.
+    Each key comes from its HEI5ENBUG_ variable and otherwise from the saved Claude plugin options.
     An invalid value or pair resets both keys to the manifest defaults; a broken settings file ignores only the saved keys.
     """
     manifest = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["userConfig"]
     registry = json.loads((ROOT / "config" / "model-registry.json").read_text(encoding="utf-8"))
-    keys = worker_option_keys(host)
+    keys = CODEX_WORKER_KEYS
     defaults = tuple(manifest[key]["default"] for key in keys)
-    if host != "codex" and os.environ.get(variable_name("role_pinning", host), "").strip().casefold() in OFF_VALUES:
-        return *defaults, "role pinning is off, so the worker runs on its definition's model"
     values: dict = {}
     for key in keys:
-        text = os.environ.get(variable_name(key, host), "").strip().lower()
+        text = os.environ.get(variable_name(key, "codex"), "").strip().lower()
         if text:
             values[key] = text
     problem = None
-    if host == "codex" and len(values) < len(keys):
+    if len(values) < len(keys):
         saved, problem = saved_options(keys)
         for key in keys:
             if key not in values and key in saved:
@@ -108,3 +104,17 @@ def worker_setting(host: str) -> tuple[str, str, str | None]:
     if pair[1] not in registry["effort_rules"].get(pair[0], [pair[1]]):
         return *defaults, f"Ignored {keys[0]} {pair[0]} at {pair[1]}, which is not allowed; using defaults."
     return pair[0], pair[1], note
+
+
+def claude_worker_effort() -> tuple[str, str | None]:
+    """Resolve the Claude worker agent's effort from the manifest, with an optional notice for an ignored value.
+
+    The effort applies only through role pinning, so with it off the manifest default stands.
+    """
+    manifest = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["userConfig"]["worker_effort"]
+    if os.environ.get(variable_name("role_pinning", "claude"), "").strip().casefold() in OFF_VALUES:
+        return manifest["default"], "role pinning is off, so the worker runs on its definition's effort"
+    value = os.environ.get(variable_name("worker_effort", "claude"), "").strip().lower() or manifest["default"]
+    if value not in manifest["options"]:
+        return manifest["default"], f"Ignored worker_effort {ascii(value)[:40]}; using the default."
+    return value, None

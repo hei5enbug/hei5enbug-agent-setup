@@ -118,7 +118,7 @@ test("캐시 적중률은 cache_read를 cache_read, cache_creation, input의 합
 
 test("서로 다른 두 하위 에이전트가 같은 파일을 고치면 파일을 빨갛게 표시하고 그 파일마다 토스트를 한 번 띄운다", async ($, on) => {
   // given
-  const { toasts } = boardWorld(on, { agents: [agent("a1"), agent("a2", "running", "hei5enbug-agent-setup:sonnet-worker")] });
+  const { toasts } = boardWorld(on, { agents: [agent("a1"), agent("a2", "running", "hei5enbug-agent-setup:designer")] });
   await $.tool.call({ tool: "Edit", file_path: `${CWD}/src/app.ts`, old_string: "a", new_string: "b", agentId: "a1" });
   await $.tool.call({ tool: "Write", file_path: `${CWD}/src/only-a1.ts`, content: "x", agentId: "a1" });
 
@@ -129,7 +129,7 @@ test("서로 다른 두 하위 에이전트가 같은 파일을 고치면 파일
   const band = await texts($, BAND);
 
   // then
-  expect(toasts).toEqual(["Edit conflict: src/app.ts (hei5enbug-agent-setup:worker, hei5enbug-agent-setup:sonnet-worker)"]);
+  expect(toasts).toEqual(["Edit conflict: src/app.ts (hei5enbug-agent-setup:worker, hei5enbug-agent-setup:designer)"]);
   expect(pane.filter((item) => item.text.includes("(conflict)")).map((item) => [item.text, item.props.color])).toEqual([
     ["  src/app.ts (conflict)", "error"],
     ["  src/app.ts (conflict)", "error"],

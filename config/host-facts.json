@@ -341,6 +341,51 @@
       ]
     },
     {
+      "id": "claude-agent-call-model-per-call",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "A Claude Code Agent call can pass a per-call `model` alias (sonnet, opus, haiku, fable) that ranks first, ahead of the subagent definition's `model`, so one plugin agent can run on a different model per call.",
+      "doc_url": "https://code.claude.com/docs/en/sub-agents.md",
+      "quote": "The per-invocation `model` parameter, which Claude can pass when it starts the subagent. On an Agent tool call, the parameter takes a model alias, not a full model ID or `inherit`. ... Model alias: `sonnet`, `opus`, `haiku`, or `fable`. Local evidence: Claude Code 2.1.329.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "instructions/model-routing.md",
+          "contains": "pass the choice as the `model` of the `hei5enbug-agent-setup:worker` agent call"
+        }
+      ]
+    },
+    {
+      "id": "claude-mod-spawn-model-replaces-call",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "A mod's `agent.spawn` hook can choose the model of a starting subagent in place of the per-call model, and can deny the spawn; on a resumed run the host ignores the hook's model and keeps the model the run started with.",
+      "doc_url": "https://code.claude.com/docs/en/plugins/mods/reference.md",
+      "quote": "`next({ ...e, model })` to choose the model of one that is starting, or `{ deny: reason }` ... If an installed mod sets a model in its `agent.spawn` hook, Claude Code uses that model in place of the per-invocation parameter (sub-agents page). Local evidence: the mod test engine on Claude Code 2.1.329 reports \"`model` was ignored: a hook can only refuse a resumed agent's run\".",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/claude-code-mod.md",
+          "contains": "the host ignores a hook's model on a resume"
+        }
+      ]
+    },
+    {
+      "id": "codex-spawn-model-per-spawn",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "A Codex spawn can request its own model and reasoning effort, which override the default subagent model, unless the custom agent file sets one.",
+      "doc_url": "https://learn.chatgpt.com/docs/agent-configuration/subagents.md",
+      "quote": "request a specific model or reasoning effort in your prompt ... Explicit spawn values override `agents.default_subagent_model` and `agents.default_subagent_reasoning_effort`. ... If a custom agent file sets `model` or `model_reasoning_effort`, the value in the file takes precedence. Local evidence: codex-cli 0.171.0.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "instructions/codex-agents.md",
+          "contains": "Pass the chosen model and the effort from that line explicitly"
+        }
+      ]
+    },
+    {
       "id": "claude-max-concurrent-subagents",
       "host": "claude",
       "kind": "host-fact",

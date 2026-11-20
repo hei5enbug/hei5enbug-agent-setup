@@ -17,7 +17,7 @@ HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1\n(.*?)\n\s*\2(?=\s|$)", re.S)
 EXIT_CODE_PREFIX = re.compile(r"^Exit code (\d+)")
 EXIT_MARKER = re.compile(r"\bexit=(\d+)")
 AGENT_CLASSES = {
-    "worker": "implementation", "sonnet-worker": "implementation", "scout": "investigation",
+    "worker": "implementation", "scout": "investigation",
     "researcher": "investigation", "explore": "investigation", "reviewer": "review", "designer": "design",
 }
 ROLE_CLASSES = {

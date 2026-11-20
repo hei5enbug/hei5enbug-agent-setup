@@ -24,8 +24,7 @@ SOL_ROWS = {
     "text_review": ["scripts/text_review.py REVIEW_MODELS"],
     "language": ["capabilities.language.claude.primary.model", "capabilities.language.codex.primary.model"],
     "opponent": ["opponents.codex.model"],
-    "worker": ["capabilities.implementation.claude.fallback.model", "claude_agents.hei5enbug-agent-setup:worker.fallback.model",
-               "claude_agents.hei5enbug-agent-setup:sonnet-worker.fallback.model"],
+    "worker": ["capabilities.implementation.claude.fallback.model", "claude_agents.hei5enbug-agent-setup:worker.fallback.model"],
 }
 LUNA_ROWS = {
     "scout": ["capabilities.investigation.claude.primary.model", "capabilities.investigation.codex.primary.model",

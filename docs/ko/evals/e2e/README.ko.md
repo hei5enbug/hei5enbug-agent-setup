@@ -100,6 +100,10 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
 - 설치 뒤 하네스가 `codex app-server`로 그 실행의 `CODEX_HOME`에서 내보낸 플러그인의 훅을 신뢰 처리한다. 그래야
   신뢰 우회 플래그 없이 도는 role runner 자신의 Codex 자식이 훅을 검증할 수 있다. 신뢰되지 않은 채 남는 훅이 있으면
   설정이 실패하고 실행은 `infra_failed`가 된다. `codex-setup.json`에 신뢰한 훅 키가 기록된다.
+- 하네스는 또한 플러그인에 들어 있는 역할 파일(`standalone-agents/codex-<역할>.toml`)을 메인 세션이 시작되기 전에 그
+  실행의 `CODEX_HOME/agents/`에 써 둔다. 플러그인의 세션 훅이 다음 세션을 위해 쓰는 것과 같은 파일이다. 이 파일이 없으면
+  첫 세션의 `spawn_agent` 도구가 `agent_type`을 나열하지 않아 `worker` 같은 역할을 지정할 수 없다. 이미 있는 파일은
+  그대로 두고, `codex-setup.json`에 설치한 역할이 기록된다.
 - 표준 입력은 `/dev/null`이고 `ZDOTDIR`에는 사용자의 zsh 시작 파일이 없다. 그래서 Codex가 시작하는 셸은 그 파일들을
   읽지 않는다. 이 폴더의 유일한 파일은 실행의 `PATH`를 export하는 `.zprofile`이다. macOS에서는 `/etc/zprofile`이
   `path_helper`를 실행해 시스템 폴더를 앞으로 옮기므로, 이 파일이 없으면 Codex 셸의 `python3`이 오래된 시스템
@@ -380,6 +384,14 @@ T89부터 T93까지의 ID는 [`evals/model-roles`](../../../../evals/model-roles
 쓴다. 사례마다 한 줄, `investigate` 줄, 반복이 필요한 사례, 주장 판정을 출력한다. 기록에는 측정값과 모델, effort, 이슈
 번호 같은 실행 사실, 가상 픽스처 이름만 들어간다. 검증은 절대 로컬 경로, 상한 밖 모델, 빠진 필드를 거부한다.
 `tests/test_e2e_eval_record_cli.py`가 커밋된 모든 기록을 검증한다.
+
+### 훅 사실
+
+`record --hook-facts`는 기록의 각 실행에 참고용 `hooks` 객체를 더한다. 어느 호스트의 기록도 훅 시간을 재지 않으므로 시간은
+재생으로 얻는다. 기록된 도구 호출마다 실행이 내보낸 플러그인에서 맞는 PreToolUse와 PostToolUse 훅에 측정 실행과 같은 환경으로
+다시 보내고, 각 훅 프로세스의 경과 시간을 잰다(`replayed_hooks`, `replay_total_seconds`, `replay_slowest`). 거부는 재생이
+내린 결정(`replay_denials`)과, Claude Code에서는 스트림의 훅 응답(`stream_denials`와 그 개수)에서 가져온다. 이 사실은 훅만
+설명하며 어떤 판정에도 들어가지 않는다. 코드는 `harness/hook_facts.py`에 있다.
 
 ### 기록
 

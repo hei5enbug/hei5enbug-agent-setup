@@ -110,6 +110,10 @@ only what the plugin's own role runner calls, never the host:
 - After the install, the harness trusts the exported plugin's hooks in the run's `CODEX_HOME` through `codex
   app-server`, so a role runner's own Codex child, which runs without the bypass flag, can verify them. A hook that
   stays untrusted fails the setup and the run is `infra_failed`. `codex-setup.json` lists the trusted hook keys.
+- The harness also writes the plugin's bundled role files (`standalone-agents/codex-<role>.toml`) into the run's
+  `CODEX_HOME/agents/` before the main session starts, as the plugin's session hook would for the next session. Without
+  them the first session's `spawn_agent` tool lists no `agent_type`, so a role such as `worker` cannot be named. A file
+  that already exists stays, and `codex-setup.json` lists the installed roles.
 - Stdin is `/dev/null`, and `ZDOTDIR` is a folder with no user zsh startup files, so the shell Codex starts reads none
   of them. Its only file is a `.zprofile` that exports the run's `PATH`: on macOS `/etc/zprofile` runs `path_helper`,
   which moves the system folders to the front, so without it `python3` in a Codex shell resolves to an old system
@@ -414,6 +418,15 @@ the `investigate` lines, which cases need repeats, and the claim verdicts. A rec
 such as models, efforts, and issue numbers, and fictional fixture names only; validation rejects an absolute local
 path, a model outside the cap, and a missing field. `tests/test_e2e_eval_record_cli.py` validates every committed
 record.
+
+### Hook facts
+
+`record --hook-facts` adds an informational `hooks` object to each run of the record. Neither host's records time a hook, so
+the time is a replay: every recorded tool call is sent again to the matching PreToolUse and PostToolUse hooks of the run's
+exported plugin with the environment of a measurement run, and the wall time of each hook process is measured
+(`replayed_hooks`, `replay_total_seconds`, `replay_slowest`). Denials come from the replay's own decisions
+(`replay_denials`) and, on Claude Code, from the hook responses in the stream (`stream_denials`, with their counts). The
+facts describe the hooks alone and enter no verdict. `harness/hook_facts.py` holds the code.
 
 ### Records
 

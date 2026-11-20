@@ -21,16 +21,20 @@ def implementation_section() -> str:
 
 
 class CodexWorkerContractTest(unittest.TestCase):
-    def test_위임한_구현은_공유_위임_규칙과_플러그인_worker를_사용한다(self):
-        """Codex에서 구현을 위임할 때는 Sonnet 실행기를 먼저 쓰고, 실행기가 실패하면 플러그인 worker에 모델과 effort를 명시적으로 넘긴다."""
+    def test_위임한_구현은_공유_위임_규칙과_플러그인_worker를_먼저_쓰고_Sonnet_실행기로_대체한다(self):
+        """Codex에서 구현을 위임할 때는 worker를 설정의 모델로 띄우고(auto면 난이도별), 실패하거나 한도에 걸리면 Sonnet 실행기를 대체로 쓴다."""
         # Given
         expected = (
             "[implementation delegation rules](implementation-delegation.md)",
-            "Delegate implementation to the `implementation` capability runner, which runs `claude-sonnet-5-5`:",
-            "implementation --host codex --instructions <Source directory>/agents/worker.md --add-dir <dir> "
+            "Delegate implementation to the plugin `worker` role, by the model in the session line \"Codex worker model\": "
+            "`auto` means choose per assignment by [Worker model by difficulty](model-routing.md#worker-model-by-difficulty)",
+            "Pass the chosen model and the effort from that line explicitly on every spawn, because the role file sets neither.",
+            "The line `claude-sonnet-5-5` selects the Claude route first:",
+            "implementation --host codex --fallback --instructions <Source directory>/agents/worker.md --add-dir <dir> "
             "--assignment <file> --result <file>",
-            "When it exits 3 or 4, inspect the partial diff and use the plugin `worker` role as the fallback.",
-            "pass the model and effort from the session line \"Codex worker model\" explicitly on every spawn",
+            "When it exits 3 or 4, inspect the partial diff and spawn the `worker` role by difficulty as above.",
+            "When the spawned `worker` fails verification or stops on a usage limit, inspect the partial diff and run the "
+            "same runner command, which runs `claude-sonnet-5-5` as the cross-family fallback.",
         )
 
         # When
@@ -90,7 +94,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         )
         for lookup in ("developers.openai.com", "learn.chatgpt.com", "model selector"):
             self.assertNotIn(lookup, section)
-        self.assertEqual({"gpt-6-luna", "gpt-6-astra", "gpt-6.1-terra"}, set(re.findall(r"gpt-[\w.-]+", text)))
+        self.assertEqual({"gpt-6-luna", "gpt-6-astra", "gpt-6.1-terra"}, set(re.findall(r"gpt-[\w.-]+", re.sub(r"\]\([^)]*\)", "]", text))))
 
     def test_전체_기록_fork로는_worker를_만들지_않는다(self):
         """전체 기록 fork는 재정의를 거부하므로 범위를 한정한 맥락으로 worker를 생성한다."""

@@ -14,8 +14,8 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import plugin_toggles  # noqa: E402
 
 PLUGIN_KEY = "hei5enbug-agent-setup@hei5enbug"
-CODEX_DEFAULT = ("gpt-6-luna", "high")
-CLAUDE_DEFAULT = ("claude-haiku-5-5", "high")
+CODEX_DEFAULT = ("auto", "high")
+CLAUDE_DEFAULT = "high"
 
 
 class WorkerSettingTest(unittest.TestCase):
@@ -38,8 +38,8 @@ class WorkerSettingTest(unittest.TestCase):
             json.dumps({"pluginConfigs": {key: {"options": options}}}), encoding="utf-8"
         )
 
-    def resolve(self, host):
-        model, effort, notice = plugin_toggles.worker_setting(host)
+    def resolve(self):
+        model, effort, notice = plugin_toggles.worker_setting()
         return (model, effort), notice
 
     def test_Codex는_저장된_설정이_없으면_매니페스트_기본값을_알림_없이_쓴다(self):
@@ -48,7 +48,7 @@ class WorkerSettingTest(unittest.TestCase):
         settings = self.config / "settings.json"
 
         # When
-        pair, notice = self.resolve("codex")
+        pair, notice = self.resolve()
 
         # Then
         self.assertFalse(settings.exists())
@@ -61,7 +61,7 @@ class WorkerSettingTest(unittest.TestCase):
         self.save({"codex_worker_model": "gpt-6.2-sol", "codex_worker_effort": "high", "agent_guard": True})
 
         # When
-        pair, notice = self.resolve("codex")
+        pair, notice = self.resolve()
 
         # Then
         self.assertEqual(("gpt-6.2-sol", "high"), pair)
@@ -73,11 +73,25 @@ class WorkerSettingTest(unittest.TestCase):
         self.save({"codex_worker_effort": "high"}, key="hei5enbug-agent-setup@other-market")
 
         # When
-        pair, notice = self.resolve("codex")
+        pair, notice = self.resolve()
 
         # Then
-        self.assertEqual(("gpt-6-luna", "high"), pair)
+        self.assertEqual(("auto", "high"), pair)
         self.assertIsNone(notice)
+
+    def test_Codex는_고정_모델과_auto와_Sonnet_경로를_저장값으로_받는다(self):
+        """저장된 gpt-6-luna와 gpt-6.2-sol은 고정 모델로, auto와 claude-sonnet-5-5는 그대로 돌려주고, 알림은 없다."""
+        # Given
+        saved = ("gpt-6-luna", "gpt-6.2-sol", "auto", "claude-sonnet-5-5")
+
+        # When
+        results = []
+        for model in saved:
+            self.save({"codex_worker_model": model, "codex_worker_effort": "xhigh"})
+            results.append(self.resolve())
+
+        # Then
+        self.assertEqual([((model, "xhigh"), None) for model in saved], results)
 
     def test_Codex는_환경_변수가_저장된_값보다_우선한다(self):
         """HEI5ENBUG_CODEX_WORKER_MODEL이 있으면 저장된 모델을 덮고, 없는 키는 저장된 값을 쓴다."""
@@ -86,7 +100,7 @@ class WorkerSettingTest(unittest.TestCase):
 
         # When
         with mock.patch.dict(os.environ, {"HEI5ENBUG_CODEX_WORKER_MODEL": " GPT-6-Luna "}):
-            pair, notice = self.resolve("codex")
+            pair, notice = self.resolve()
 
         # Then
         self.assertEqual(("gpt-6-luna", "high"), pair)
@@ -100,7 +114,7 @@ class WorkerSettingTest(unittest.TestCase):
 
         # When
         with mock.patch.dict(os.environ, env):
-            pair, notice = self.resolve("codex")
+            pair, notice = self.resolve()
 
         # Then
         self.assertEqual(("gpt-6.2-sol", "xhigh"), pair)
@@ -112,7 +126,7 @@ class WorkerSettingTest(unittest.TestCase):
         self.save({"codex_worker_model": "gpt-4.1-mini", "codex_worker_effort": "high"})
 
         # When
-        pair, notice = self.resolve("codex")
+        pair, notice = self.resolve()
 
         # Then
         self.assertEqual(CODEX_DEFAULT, pair)
@@ -129,7 +143,7 @@ class WorkerSettingTest(unittest.TestCase):
                 self.save(options)
 
                 # When
-                pair, notice = self.resolve("codex")
+                pair, notice = self.resolve()
 
                 # Then
                 self.assertEqual(CODEX_DEFAULT, pair)
@@ -145,7 +159,7 @@ class WorkerSettingTest(unittest.TestCase):
                 (self.config / "settings.json").write_text(text, encoding="utf-8")
 
                 # When
-                pair, notice = self.resolve("codex")
+                pair, notice = self.resolve()
 
                 # Then
                 self.assertEqual(CODEX_DEFAULT, pair)
@@ -157,7 +171,7 @@ class WorkerSettingTest(unittest.TestCase):
         (self.config / "settings.json").mkdir()
 
         # When
-        pair, notice = self.resolve("codex")
+        pair, notice = self.resolve()
 
         # Then
         self.assertEqual(CODEX_DEFAULT, pair)
@@ -170,27 +184,26 @@ class WorkerSettingTest(unittest.TestCase):
 
         # When
         with mock.patch.dict(os.environ, {"HEI5ENBUG_CODEX_WORKER_MODEL": "gpt-6.2-sol"}):
-            pair, notice = self.resolve("codex")
+            pair, notice = self.resolve()
 
         # Then
         self.assertEqual(("gpt-6.2-sol", "high"), pair)
         self.assertIn("Ignored the saved worker settings", notice)
 
     def test_Claude는_역할_고정이_꺼져_있으면_설정값_대신_기본값과_알림을_돌려준다(self):
-        """role_pinning이 꺼지면 설정한 쌍은 적용되지 않으므로 기본값과 역할 고정 알림을 돌려준다."""
+        """role_pinning이 꺼지면 설정한 effort는 적용되지 않으므로 기본값과 역할 고정 알림을 돌려준다."""
         # Given
         env = {
             "CLAUDE_PLUGIN_OPTION_ROLE_PINNING": "false",
-            "CLAUDE_PLUGIN_OPTION_WORKER_MODEL": "claude-opus-5-5",
             "CLAUDE_PLUGIN_OPTION_WORKER_EFFORT": "xhigh",
         }
 
         # When
         with mock.patch.dict(os.environ, env):
-            pair, notice = self.resolve("claude")
+            effort, notice = plugin_toggles.claude_worker_effort()
 
         # Then
-        self.assertEqual(CLAUDE_DEFAULT, pair)
+        self.assertEqual(CLAUDE_DEFAULT, effort)
         self.assertIn("role pinning is off", notice)
 
     def test_Codex는_역할_고정_옵션과_무관하게_설정값을_쓴다(self):
@@ -205,7 +218,7 @@ class WorkerSettingTest(unittest.TestCase):
 
         # When
         with mock.patch.dict(os.environ, env):
-            pair, notice = self.resolve("codex")
+            pair, notice = self.resolve()
 
         # Then
         self.assertEqual(("gpt-6.2-sol", "high"), pair)
@@ -219,50 +232,50 @@ class WorkerSettingTest(unittest.TestCase):
         before = path.read_bytes()
 
         # When
-        self.resolve("codex")
+        self.resolve()
 
         # Then
         self.assertEqual(before, path.read_bytes())
         self.assertEqual([path], list(self.config.iterdir()))
 
-    def test_Claude는_옵션_환경_변수의_값을_쓴다(self):
-        """CLAUDE_PLUGIN_OPTION_WORKER_MODEL과 WORKER_EFFORT를 돌려주고 저장된 파일은 읽지 않는다."""
+    def test_Claude는_옵션_환경_변수의_effort를_쓰고_저장된_파일은_읽지_않는다(self):
+        """CLAUDE_PLUGIN_OPTION_WORKER_EFFORT를 돌려주고 저장된 파일은 읽지 않으며, 더는 선언하지 않는 worker_model은 무시한다."""
         # Given
-        self.save({"worker_model": "claude-opus-5-5"})
-        env = {"CLAUDE_PLUGIN_OPTION_WORKER_MODEL": "claude-sonnet-5-5", "CLAUDE_PLUGIN_OPTION_WORKER_EFFORT": "max"}
+        self.save({"worker_effort": "low", "worker_model": "claude-opus-5-5"})
+        env = {"CLAUDE_PLUGIN_OPTION_WORKER_MODEL": "claude-opus-5-5", "CLAUDE_PLUGIN_OPTION_WORKER_EFFORT": "max"}
 
         # When
         with mock.patch.dict(os.environ, env):
-            pair, notice = self.resolve("claude")
+            effort, notice = plugin_toggles.claude_worker_effort()
 
         # Then
-        self.assertEqual(("claude-sonnet-5-5", "max"), pair)
+        self.assertEqual("max", effort)
         self.assertIsNone(notice)
 
     def test_Claude는_옵션이_없으면_기본값을_알림_없이_쓴다(self):
-        """환경 변수가 없거나 비어 있으면 claude-haiku-5-5와 high를 돌려준다."""
+        """환경 변수가 없거나 비어 있으면 high를 돌려준다."""
         # Given
-        env = {"CLAUDE_PLUGIN_OPTION_WORKER_MODEL": "", "CLAUDE_PLUGIN_OPTION_WORKER_EFFORT": " "}
+        env = {"CLAUDE_PLUGIN_OPTION_WORKER_EFFORT": " "}
 
         # When
         with mock.patch.dict(os.environ, env):
-            pair, notice = self.resolve("claude")
+            effort, notice = plugin_toggles.claude_worker_effort()
 
         # Then
-        self.assertEqual(CLAUDE_DEFAULT, pair)
+        self.assertEqual(CLAUDE_DEFAULT, effort)
         self.assertIsNone(notice)
 
-    def test_Claude는_목록에_없는_값이면_기본값과_알림을_돌려준다(self):
+    def test_Claude는_목록에_없는_effort이면_기본값과_알림을_돌려준다(self):
         """목록에 없는 effort는 기본값으로 되돌리고 무시한 값을 알림에 적는다."""
         # Given
-        env = {"CLAUDE_PLUGIN_OPTION_WORKER_MODEL": "claude-opus-5-5", "CLAUDE_PLUGIN_OPTION_WORKER_EFFORT": "ultra"}
+        env = {"CLAUDE_PLUGIN_OPTION_WORKER_EFFORT": "ultra"}
 
         # When
         with mock.patch.dict(os.environ, env):
-            pair, notice = self.resolve("claude")
+            effort, notice = plugin_toggles.claude_worker_effort()
 
         # Then
-        self.assertEqual(CLAUDE_DEFAULT, pair)
+        self.assertEqual(CLAUDE_DEFAULT, effort)
         self.assertIn("worker_effort", notice)
         self.assertIn("ultra", notice)
 
@@ -280,7 +293,7 @@ class WorkerSettingTest(unittest.TestCase):
 
         # When
         with mock.patch.dict(os.environ, env), mock.patch.object(Path, "read_text", read_text):
-            pair, notice = self.resolve("codex")
+            pair, notice = self.resolve()
 
         # Then
         self.assertEqual(CODEX_DEFAULT, pair)

@@ -41,7 +41,7 @@ Use these production settings unless a separately approved comparison qualifies 
 | Role | Codex | Claude Code |
 |---|---|---|
 | Local scout | `gpt-6-luna`, `high` (up to `xhigh`) | `role_runner.py scout` with `gpt-6-luna`, `high` (up to `xhigh`), read-only; fallback `scout` with `claude-sonnet-5-5`, `medium` |
-| Implementation worker | `role_runner.py implementation --host codex` with `claude-sonnet-5-5`, `high` (up to `xhigh`); fallback the `worker` role with the `codex_worker_model` and `codex_worker_effort` settings (`gpt-6-luna` or `gpt-6.2-sol`; `high` or `xhigh`; default `gpt-6-luna`, `high`) | With `implementation_worker` set to `auto` (default), the main session picks per assignment: `worker` with the `worker_model` and `worker_effort` settings (default `claude-haiku-5-5`, `high`) for easy work and `sonnet-worker` with `claude-sonnet-5-5`, `high` for normal or hard work; `role_runner.py implementation --fallback` with the GPT worker model by difficulty, `high` when a Claude route fails or stops on a usage limit. A fixed setting forces one route: `sonnet`, `sol` (`role_runner.py implementation --fallback` with `gpt-6.2-sol`), `codex` (`role_runner.py worker` with the GPT worker model by difficulty), or `haiku` (fallback `role_runner.py agent --name hei5enbug-agent-setup:worker --fallback` with the GPT worker model by difficulty) |
+| Implementation worker | The `worker` role with the `codex_worker_model` and `codex_worker_effort` settings (default `auto`, `high`; `high` or `xhigh`). `auto` lets the main session pick per assignment, `gpt-6-luna` for easy work and `gpt-6.2-sol` for hard or unsure work; `gpt-6-luna` or `gpt-6.2-sol` allows only that model; `claude-sonnet-5-5` runs `role_runner.py implementation --host codex --fallback` first, with the `worker` role as its fallback. Fallback after the GPT worker fails or stops on a usage limit: `role_runner.py implementation --host codex --fallback` with `claude-sonnet-5-5`, `high` (up to `xhigh`) | With `implementation_worker` set to `auto` (default), the main session picks per assignment the `worker` agent's model by [difficulty](model-routing.md#worker-model-by-difficulty): `haiku` for easy work and `sonnet` for normal or hard work, at the `worker_effort` setting (default `high`); `role_runner.py implementation --fallback` with the GPT worker model by difficulty, `high` when a Claude route fails or stops on a usage limit. A fixed setting forces one route: `haiku`, `sonnet`, or `opus` (the `worker` agent on that model only), `sol` (`role_runner.py implementation --fallback` with `gpt-6.2-sol`), or `codex` (`role_runner.py worker` with the GPT worker model by difficulty) |
 | Public researcher | `role_runner.py researcher` with `gpt-6-luna`, `high` (up to `xhigh`), web search | `role_runner.py researcher` with `gpt-6-luna`, `high` (up to `xhigh`), web search; fallback `scout` with `claude-sonnet-5-5`, `medium`, which has web search and fetch tools |
 | Designer (`design` capability) | `designer` role with `gpt-6-astra`, `high` (up to `xhigh`); fallback `role_runner.py agent --name designer --fallback` with `claude-opus-5-5`, `high` (up to `xhigh`) | `designer` agent with `claude-opus-5-5`, `xhigh` (`high` by per-call `effort` for a change to existing UI); fallback `role_runner.py design` with `gpt-6-astra`, `high` (up to `xhigh`) |
 | Skill Builder trial execution and other non-review participants | `gpt-6.1-sol`, `xhigh` | `claude-opus-5-5`, `high` |
@@ -57,15 +57,22 @@ For public research, check that the host exposes the required public search and 
 researcher role resolves to its pinned model and effort. If either condition fails, the main session continues
 under the existing service-access rules.
 
-## GPT worker model by difficulty
+## Worker model by difficulty
 
-A GPT worker's model is chosen per assignment, as the Claude Code `auto` route chooses between its Claude workers. Use
-`gpt-6-luna` for easy work, meaning one cohesive change with a stated edit and checks that cover it fully. Use
-`gpt-6.2-sol` for hard work: several modules, a public contract to keep, requirements stated only in existing tests,
-docstrings, or another module, or concurrency. When unsure, use `gpt-6.2-sol`. Pass the choice as the runner's
-`--model`, which accepts only these two for the `worker` role, the `implementation` capability, and a worker agent's
-fallback. The Codex `worker` role has no per-assignment choice: it runs the `codex_worker_model` setting for the
-session. The `implementation` fallback entries of the capability table name the hard-work model.
+The main session chooses a worker's model per assignment on both hosts, within the `implementation_worker` and
+`codex_worker_model` settings. Easy work is one cohesive change with a stated edit and checks that cover it fully: use
+`haiku` in Claude Code and `gpt-6-luna` in Codex or from a GPT worker. Hard work is a behavioral change, several
+modules or files, a public contract to keep, requirements stated only in existing tests, docstrings, or another module,
+parsing, security, or concurrency: use `sonnet` in Claude Code and `gpt-6.2-sol` elsewhere. When unsure, use the
+hard-work model.
+
+- Claude Code: pass the choice as the `model` of the `hei5enbug-agent-setup:worker` agent call. With
+  `implementation_worker` `auto`, the mod allows only `haiku` or `sonnet`; a fixed `haiku`, `sonnet`, or `opus` allows
+  only that model, which the call may omit; the mod denies every other model.
+- GPT worker: pass the choice as the runner's `--model`, which accepts only the two GPT models for the `worker` role,
+  the `implementation` capability, and a worker agent's fallback, or as the model of a Codex `worker` spawn. The
+  Codex `codex_worker_model` setting `auto` allows exactly these two models per spawn, each at `codex_worker_effort` or
+  higher up to `xhigh`; a fixed value allows only that model, and the agent guard denies every other model and effort.
 
 ## Skill review and execution
 
@@ -112,7 +119,7 @@ The runner's mechanics are in [Claude Code agents](claude-agents.md#role-runner)
 | Capability | Claude Code primary | Claude Code fallback | Codex primary | Codex fallback |
 |---|---|---|---|---|
 | investigation | `gpt-6-luna` / `high` (up to `xhigh`) (runner) | `claude-sonnet-5-5` / `medium` (`scout`) | `gpt-6-luna` / `high` (up to `xhigh`) (`scout`) | `claude-sonnet-5-5` / `medium` (runner) |
-| implementation | `claude-sonnet-5-5` / `high` (`sonnet-worker`) | `gpt-6.2-sol` / `high` (up to `xhigh`) (runner) | `claude-sonnet-5-5` / `high` (up to `xhigh`) (runner) | Codex worker model setting, registry pair `gpt-6-luna` / `high` (up to `xhigh`) (`worker`) |
+| implementation | `claude-sonnet-5-5` / `high` (`worker`, per-call `model`) | `gpt-6.2-sol` / `high` (up to `xhigh`) (runner) | Codex worker model setting, registry pair `gpt-6-luna` / `high` (up to `xhigh`) (`worker`) | `claude-sonnet-5-5` / `high` (up to `xhigh`) (runner) |
 | design | `claude-opus-5-5` / `xhigh` (`designer`) | `gpt-6-astra` / `high` (up to `xhigh`) (runner) | `gpt-6-astra` / `high` (up to `xhigh`) (`designer`) | `claude-opus-5-5` / `high` (up to `xhigh`) (runner) |
 | language | `gpt-6.1-terra` / `high` (up to `xhigh`) (runner) | `claude-opus-5-5` / `high` (up to `xhigh`) (runner) | `gpt-6.1-terra` / `high` (up to `xhigh`) (runner) | `claude-opus-5-5` / `high` (up to `xhigh`) (runner) |
 | review | `gpt-6-astra` / `high` (up to `xhigh`) (runner) | `claude-opus-5-5` / `high` (`reviewer`) | `claude-opus-5-5` / `high` (up to `xhigh`) (runner) | `gpt-6.1-terra` / `high` (up to `xhigh`) (`reviewer`) |

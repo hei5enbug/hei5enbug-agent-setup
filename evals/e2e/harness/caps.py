@@ -14,6 +14,7 @@ from .transcript import result_event, role_runner_status
 OPTION_PREFIXES = {HOST_CLAUDE: "CLAUDE_PLUGIN_OPTION_", HOST_CODEX: "HEI5ENBUG_"}
 HOST_LABELS = {HOST_CLAUDE: "Claude Code", HOST_CODEX: "Codex"}
 MODEL_OPTION_SUFFIX = "_model"
+AUTO_VALUE = "auto"
 MANIFEST_PATH = ".claude-plugin/plugin.json"
 IGNORED_MODELS = frozenset({"", "unknown", "<synthetic>", "None"})
 BRACKET_SUFFIX = re.compile(r"\[[^\]]*\]$")
@@ -37,14 +38,17 @@ def violation_message(owner: str, role: str, model: str) -> str:
 
 
 def manifest_defaults(cfg: HarnessConfig, ref: str) -> dict[str, str]:
-    """Default value of each model option (a key ending in `_model`) in the plugin manifest of `ref`."""
+    """Default value of each model option (a key ending in `_model`) in the plugin manifest of `ref`.
+
+    The `auto` default names no model: the main session picks one of the registry worker models, which the cap covers.
+    """
     try:
         sha = plugin_export.resolve_ref(cfg.repo_root, ref)
         config = json.loads(plugin_export._git(cfg.repo_root, "show", f"{sha}:{MANIFEST_PATH}"))["userConfig"]
     except (plugin_export.ExportError, ValueError, KeyError, TypeError):
         return {}
     return {key: str(spec.get("default") or "") for key, spec in config.items()
-            if key.endswith(MODEL_OPTION_SUFFIX) and isinstance(spec, dict) and spec.get("default")}
+            if key.endswith(MODEL_OPTION_SUFFIX) and isinstance(spec, dict) and spec.get("default") not in (None, "", AUTO_VALUE)}
 
 
 def option_names(prefix: str, key: str) -> list[str]:

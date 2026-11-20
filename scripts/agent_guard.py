@@ -25,6 +25,9 @@ LUNA_MODEL = REGISTRY["pins"]["gpt-luna"]
 LUNA_EFFORTS = tuple(REGISTRY["effort_rules"][LUNA_MODEL])
 LUNA_EFFORT_TEXT = " or ".join(f"`{effort}`" for effort in LUNA_EFFORTS)
 LUNA_DENIAL = f"GPT Luna assignments must use `{LUNA_MODEL}` with {LUNA_EFFORT_TEXT}."
+AUTO_WORKER = "auto"
+CLAUDE_WORKER_ROUTE = REGISTRY["pins"]["claude-sonnet"]
+GPT_WORKER_MODELS = tuple(REGISTRY["runner"]["worker_models"])
 
 
 def toml_name(text: str) -> str | None:
@@ -164,6 +167,11 @@ def allowed_efforts(entry: dict) -> list[str]:
     return [level for level in levels[lowest : highest + 1] if rule is None or level in rule]
 
 
+def worker_models(setting: str) -> tuple[str, ...]:
+    """Return the GPT models a worker spawn may use: both for `auto` and the Sonnet route (its fallback), else the configured one."""
+    return GPT_WORKER_MODELS if setting in (AUTO_WORKER, CLAUDE_WORKER_ROUTE) else (setting,)
+
+
 def pinned_pairs(name: str, home: Path, session=None) -> tuple[list[dict] | None, str | None]:
     """Return the pairs a Codex role may be spawned with: its primary model at each allowed effort, since a fallback is cross-family.
 
@@ -171,12 +179,15 @@ def pinned_pairs(name: str, home: Path, session=None) -> tuple[list[dict] | None
     """
     if name == "worker":
         recorded = recorded_worker_pair("codex", session)
-        if recorded is not None and valid_worker_pair("codex", *recorded):
-            model, effort = recorded
+        if recorded is not None and valid_worker_pair(*recorded):
+            setting, effort = recorded
         else:
-            model, effort, _ = worker_setting("codex")
-        entry = {**REGISTRY["codex_agents"][name], "model": model, "effort": effort}
-        return [{**entry, "effort": level} for level in allowed_efforts(entry)], None
+            setting, effort, _ = worker_setting()
+        pairs = []
+        for model in worker_models(setting):
+            entry = {**REGISTRY["codex_agents"][name], "model": model, "effort": effort}
+            pairs.extend({**entry, "effort": level} for level in allowed_efforts(entry))
+        return pairs, None
     if name in REGISTRY["codex_agents"]:
         entry = REGISTRY["codex_agents"][name]
         return [{**entry, "effort": effort} for effort in allowed_efforts(entry)], None

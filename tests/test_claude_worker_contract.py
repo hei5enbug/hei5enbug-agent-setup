@@ -21,8 +21,6 @@ import session_context  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKER = REPO_ROOT / "agents/worker.md"
 WORKER_MIRROR = REPO_ROOT / "docs/ko/agents/worker.ko.md"
-SONNET_WORKER = REPO_ROOT / "agents/sonnet-worker.md"
-SONNET_WORKER_MIRROR = REPO_ROOT / "docs/ko/agents/sonnet-worker.ko.md"
 CLAUDE_AGENTS = REPO_ROOT / "instructions/claude-agents.md"
 PLUGIN_MANIFEST = REPO_ROOT / ".claude-plugin/plugin.json"
 UNSUPPORTED_FIELDS = {
@@ -95,19 +93,19 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         self.assertNotIn("min(6", normalized)
         self.assertIsNone(re.search(r"claude-sonnet-\d", body))
 
-    def test_sonnet_worker는_worker와_같은_본문에_Sonnet_모델을_고정한다(self):
-        """sonnet-worker는 worker와 같은 본문을 쓰고 고정된 Sonnet 전체 ID와 high를 선언한다."""
+    def test_sonnet_worker_정의는_없고_worker_하나가_호출_단위_모델을_받는다(self):
+        """worker 하나만 남고, 호출이 모델을 넘기지 않을 때 쓰는 정의의 Haiku 전체 ID와 high를 선언한다."""
         # Given
-        worker_metadata, worker_body = split_definition(WORKER)
+        metadata, _ = split_definition(WORKER)
 
         # When
-        metadata, body = split_definition(SONNET_WORKER)
+        names = sorted(path.name for path in (REPO_ROOT / "agents").glob("*worker*"))
 
         # Then
-        self.assertEqual(metadata["name"], "sonnet-worker")
-        self.assertEqual(metadata["model"], "claude-sonnet-5-5")
-        self.assertEqual(metadata["effort"], worker_metadata["effort"])
-        self.assertEqual(body, worker_body)
+        self.assertEqual(["worker.md"], names)
+        self.assertEqual(metadata["name"], "worker")
+        self.assertEqual(metadata["model"], "claude-haiku-5-5")
+        self.assertEqual(metadata["effort"], "high")
         self.assertEqual(UNSUPPORTED_FIELDS & set(metadata), set())
 
     def test_플러그인은_영어_정의만_에이전트로_등록하고_한국어_미러는_제외한다(self):
@@ -125,7 +123,6 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
             [
                 "./agents/scout.md",
                 "./agents/worker.md",
-                "./agents/sonnet-worker.md",
                 "./agents/designer.md",
                 "./agents/reviewer.md",
             ],
@@ -135,9 +132,6 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         mirror = WORKER_MIRROR.read_text(encoding="utf-8")
         self.assertIn("영어 원본: [worker.md](../../../agents/worker.md)", mirror)
         self.assertIn("비권위", mirror)
-        sonnet_mirror = SONNET_WORKER_MIRROR.read_text(encoding="utf-8")
-        self.assertIn("영어 원본: [sonnet-worker.md](../../../agents/sonnet-worker.md)", sonnet_mirror)
-        self.assertIn("비권위", sonnet_mirror)
         reviewer_mirror = (REPO_ROOT / "docs/ko/agents/reviewer.ko.md").read_text(encoding="utf-8")
         self.assertIn("영어 원본: [reviewer.md](../../../agents/reviewer.md)", reviewer_mirror)
         self.assertIn("비권위", reviewer_mirror)
@@ -192,7 +186,6 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
                 "work_board",
                 "secret_redaction",
                 "implementation_worker",
-                "worker_model",
                 "worker_effort",
                 "codex_worker_model",
                 "codex_worker_effort",
@@ -213,15 +206,15 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
             {
                 "type": "string",
                 "title": "Implementation worker",
-                "description": "Route implementation work: auto (the main session picks per task: haiku for easy work, sonnet for normal or hard work, and a GPT worker, gpt-6-luna for easy work or gpt-6.2-sol for hard work, only when a Claude route fails or stops on a usage limit), codex (a GPT worker through the role runner at high, gpt-6-luna for easy work or gpt-6.2-sol for hard work), haiku (the plugin worker on its Worker model and Worker effort, claude-haiku-5-5 at high by default), sol (gpt-6.2-sol at high through the role runner), or sonnet (the plugin sonnet-worker on claude-sonnet-5-5 at high).",
-                "options": ["auto", "codex", "haiku", "sol", "sonnet"],
+                "description": "Route implementation work: auto (the main session picks per task: the plugin worker on haiku for easy work or sonnet for normal or hard work, and a GPT worker, gpt-6-luna for easy work or gpt-6.2-sol for hard work, only when a Claude route fails or stops on a usage limit), haiku, sonnet, or opus (the plugin worker on that model only), codex (a GPT worker through the role runner at high, gpt-6-luna for easy work or gpt-6.2-sol for hard work), or sol (gpt-6.2-sol at high through the role runner).",
+                "options": ["auto", "codex", "haiku", "sol", "sonnet", "opus"],
                 "default": "auto",
             },
         )
         self.assertEqual(options["review_model"]["type"], "string")
         self.assertEqual(options["review_model"]["default"], "gpt-6-astra")
         self.assertEqual(set(options["review_model"]["options"]), set(session_context.REVIEW_MODELS))
-        self.assertIn("sonnet-worker", options["role_pinning"]["description"])
+        self.assertNotIn("sonnet-worker", options["role_pinning"]["description"])
         self.assertEqual(
             options["approval_guard"]["description"],
             "Run covered CLI, script, database, and MCP reads without approval; ask once per session for all writes, including production changes and git pushes, and once per session for sensitive reads such as .env files; ask every time for force pushes, discarding uncommitted work, recursive deletion outside the session or temporary folders, destructive database statements, remote infrastructure deletion, package publishing, and docker or curl deletion; deny secret-printing commands and approval-state edits.",
@@ -232,7 +225,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         )
         for key, option in options.items():
             with self.subTest(key=key):
-                if key in {"implementation_worker", "worker_model", "worker_effort", "codex_worker_model", "codex_worker_effort", "review_model", "host_settings", "session_memory_min_mb", "python", "refresh_plugins", "approval_scope"}:
+                if key in {"implementation_worker", "worker_effort", "codex_worker_model", "codex_worker_effort", "review_model", "host_settings", "session_memory_min_mb", "python", "refresh_plugins", "approval_scope"}:
                     self.assertTrue(option["title"].isascii() and option["description"].isascii())
                     continue
                 self.assertEqual(option["type"], "boolean")
@@ -242,32 +235,31 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
 
 class ClaudeWorkerAdapterTest(unittest.TestCase):
     def test_구현은_세션_경로_줄을_따르고_플러그인_agent에_고정_모델을_쓴다(self):
-        """Claude에서 구현 위임은 세션의 worker 경로 줄을 따르고, 플러그인 agent에는 호출 단위 모델을 넘기지 않는다."""
+        """Claude에서 구현 위임은 세션의 worker 경로 줄을 따르고, worker 호출에만 난이도별 모델을 넘기고 다른 플러그인 agent에는 넘기지 않는다."""
         # Given
         expected = (
             "[implementation delegation rules](implementation-delegation.md)",
-            'Delegated implementation follows the route in the session line "Implementation worker route". Use '
-            '`hei5enbug-agent-setup:sonnet-worker` for the Sonnet worker when the line says `sonnet`, the Codex '
-            'worker (see "Codex worker" below) when it says `codex`, `hei5enbug-agent-setup:worker` when it says '
-            '`haiku`, and the Sol worker (see "Sol worker" below) when it says `sol`.',
-            'The `worker` agent runs on the model and effort in the session line "Worker agent model" (Haiku at '
-            '`high` by default).',
-            "When it says `auto`, choose per assignment: the `worker` agent for easy work",
-            "and the Sonnet worker for normal or hard work",
+            'Delegated implementation follows the route in the session line "Implementation worker route". For '
+            "`haiku`, `sonnet`, or `opus`, spawn `hei5enbug-agent-setup:worker` with that model as the call's `model`, "
+            'the Codex worker (see "Codex worker" below) for `codex`, and the Sol worker (see "Sol worker" below) for '
+            "`sol`.",
+            "For `auto`, spawn `worker` with the `model` that [Worker model by difficulty]"
+            "(model-routing.md#worker-model-by-difficulty) gives.",
             "When a Claude route fails or stops on a usage limit, use the Sol worker.",
             "A user request for one route applies to that request only.",
             "`hei5enbug-agent-setup:designer` still takes UI code, visual design, and diagram work, except the kinds "
             "the Claude Code session file assigns to the main session.",
             "Never use any other agent.",
-            "Never pass a per-invocation model to a plugin agent on an invocation or resume, because that overrides "
-            "its definition",
+            'The `worker` agent runs at the effort in the session line "Worker agent effort" (`high` by default)',
+            "The mod denies a `model` the route does not allow.",
+            "Never pass a per-invocation model to any other plugin agent on an invocation or resume, because that "
+            "overrides its definition",
             'Pass `effort: "high"` on the designer call for a change to existing UI; pass no effort for a new screen or '
             "component, which keeps `xhigh`.",
             "A per-invocation `effort` on any plugin agent call is allowed only at or below the role's pinned effort; "
             "never raise it.",
             "records it as `call_effort`.",
-            "The bullets below apply whenever a plugin agent runs: a runner fallback, the `worker` or Sonnet worker, "
-            "and the designer.",
+            "The bullets below apply whenever a plugin agent runs: a runner fallback, the `worker`, and the designer.",
         )
 
         # When
@@ -284,7 +276,7 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
         """Codex worker는 role_runner worker로 실행하고, 세션 폴더 밖 디렉터리는 --add-dir로만 추가한다."""
         # Given
         expected = (
-            "Write the assignment, with the usual assignment fields, to a file and run the `worker` role of the role runner with `--model` set by [GPT worker model by difficulty](model-routing.md#gpt-worker-model-by-difficulty).",
+            "Write the assignment, with the usual assignment fields, to a file and run the `worker` role of the role runner with `--model` set by [Worker model by difficulty](model-routing.md#worker-model-by-difficulty).",
             "Add `--add-dir <dir>` only for a directory outside the session folder that the task must write.",
             "The plugin mod asks once per session.",
         )

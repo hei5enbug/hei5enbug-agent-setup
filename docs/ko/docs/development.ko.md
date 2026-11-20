@@ -83,7 +83,6 @@ hei5enbug-agent-setup/
 │   ├── designer.md
 │   ├── reviewer.md
 │   ├── scout.md
-│   ├── sonnet-worker.md
 │   └── worker.md
 ├── standalone-agents/
 │   ├── codex-designer.toml

@@ -46,7 +46,7 @@ def view_with(*delegations: dict[str, Any]) -> dict[str, Any]:
 DESIGNER = view_with(delegation("hei5enbug-agent-setup:designer", "design"))
 DESIGNER_HIGH = view_with(delegation("hei5enbug-agent-setup:designer", "design", ["high"]))
 DESIGNER_XHIGH = view_with(delegation("hei5enbug-agent-setup:designer", "design", ["xhigh"]))
-SONNET_WORKER = view_with(delegation("hei5enbug-agent-setup:sonnet-worker", "implementation"))
+SONNET_WORKER = view_with(delegation("hei5enbug-agent-setup:worker", "implementation"))
 NO_DELEGATION = view_with()
 
 
@@ -122,7 +122,7 @@ class TaskDefinitionTest(UiTaskCase):
             with self.subTest(task_id):
                 routing = [check for check in self.load(task_id)["checks"] if check["id"].startswith("routing-")]
                 self.assertEqual([(check["id"], check["required"]) for check in routing],
-                                 [(f"routing-{'sonnet-worker' if task_id == 'T82' else 'designer'}", False)])
+                                 [(f"routing-{'worker' if task_id == 'T82' else 'designer'}", False)])
 
     def test_프롬프트가_고정한_줄_번호와_값이_픽스처의_실제_줄과_맞는다(self):
         """T82 프롬프트의 7 9 17 27번 줄은 픽스처 SettingsPanel.tsx에서 바꿀 값을 정확히 담고 있다."""
@@ -147,13 +147,35 @@ class RoutingCheckTest(UiTaskCase):
         spec = next(check for check in task["checks"] if check["id"].startswith("routing-"))
         return graders.run_check(ctx, spec)["passed"]
 
-    def test_T82은_sonnet_worker로_보냈을_때만_라우팅이_통과한다(self):
+    def test_T82은_worker로_보냈을_때만_라우팅이_통과한다(self):
         self.assertTrue(self.routing("T82", SONNET_WORKER))
         self.assertFalse(self.routing("T82", DESIGNER))
         self.assertFalse(self.routing("T82", NO_DELEGATION))
 
-    def test_T82은_디자이너와_sonnet_worker를_함께_쓰면_라우팅_실패다(self):
-        both = view_with(delegation("hei5enbug-agent-setup:sonnet-worker", "implementation"),
+    def test_T82_worker_모델_검사는_호출이_요청한_모델_또는_에이전트_기본값으로_판정한다(self):
+        """model을 넘기지 않은 worker 호출은 기본값 haiku이고, sonnet을 넘기면 실패하며, worker 호출이 없으면 실패한다."""
+        def call(model: str | None) -> dict[str, Any]:
+            return {"id": "a1", "name": "Agent", "source": "main", "is_error": False, "parent": None, "result_text": "",
+                    "input": {"subagent_type": "hei5enbug-agent-setup:worker", **({"model": model} if model else {})}}
+
+        def passes(view: dict[str, Any]) -> bool:
+            repo, base = self.repo_for("T82")
+            task = self.load("T82")
+            work = self.root / "model-work"
+            if work.exists():
+                shutil.rmtree(work)
+            shutil.copytree(repo, work / "repo", symlinks=True)
+            ctx = graders.GradeContext(task=task, repo=work / "repo", base=base, view=view, tasks_root=TASKS_ROOT, work=work)
+            spec = next(check for check in task["checks"] if check["id"] == "worker-model-haiku")
+            return graders.run_check(ctx, spec)["passed"]
+
+        self.assertEqual(
+            (passes({**NO_DELEGATION, "tool_calls": [call(None)]}), passes({**NO_DELEGATION, "tool_calls": [call("haiku")]}),
+             passes({**NO_DELEGATION, "tool_calls": [call("claude-sonnet-5-5")]}), passes(NO_DELEGATION)),
+            (True, True, False, False))
+
+    def test_T82은_디자이너와_worker를_함께_쓰면_라우팅_실패다(self):
+        both = view_with(delegation("hei5enbug-agent-setup:worker", "implementation"),
                          delegation("hei5enbug-agent-setup:designer", "design"))
         self.assertFalse(self.routing("T82", both))
 
@@ -263,7 +285,7 @@ class SettingsPanelTest(UiTaskCase):
         repo, base = self.repo_for("T82", reference=True)
         found = self.line_results(repo, base)
         self.assertEqual(self.failed_required(found), set(), {k: v["detail"] for k, v in found.items() if not v["passed"]})
-        self.assertTrue(found["routing-sonnet-worker"]["passed"])
+        self.assertTrue(found["routing-worker"]["passed"])
 
     def test_설계가_정한_잘못된_입력_다른_줄을_하나_더_고치면_그_줄_검사만_실패한다(self):
         repo, base = self.repo_for("T82", reference=True)

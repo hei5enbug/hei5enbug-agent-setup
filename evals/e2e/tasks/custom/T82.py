@@ -67,4 +67,8 @@ def renders(ctx):
 
 
 def routing(ctx):
-    return shared(ctx).routing(ctx, "sonnet-worker")
+    return shared(ctx).routing(ctx, "worker")
+
+
+def worker_model_haiku(ctx):
+    return shared(ctx).worker_model(ctx, "haiku")

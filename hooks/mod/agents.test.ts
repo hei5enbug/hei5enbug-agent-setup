@@ -3,7 +3,6 @@ import { enabled } from "./register.js";
 import { resetClaudeRolePins } from "./registry.js";
 
 const WORKER = "hei5enbug-agent-setup:worker";
-const SONNET_WORKER = "hei5enbug-agent-setup:sonnet-worker";
 const SCOUT = "hei5enbug-agent-setup:scout";
 const DESIGNER = "hei5enbug-agent-setup:designer";
 const REVIEWER = "hei5enbug-agent-setup:reviewer";
@@ -22,8 +21,7 @@ const REGISTRY = JSON.stringify({
   pins: { "claude-sonnet": PINNED, "claude-haiku": WORKER_PINNED, "claude-opus": "claude-opus-5-5", "gpt-luna": "gpt-5.6-luna" },
   efforts: ["low", "medium", "high", "xhigh", "max"],
   claude_agents: {
-    "hei5enbug-agent-setup:worker": { role: "worker", model: WORKER_PINNED, effort: "high", access: "write" },
-    "hei5enbug-agent-setup:sonnet-worker": { role: "worker", model: PINNED, effort: "high", access: "write" },
+    "hei5enbug-agent-setup:worker": { role: "worker", model: WORKER_PINNED, effort: "high", access: "write", call_models: [WORKER_PINNED, PINNED] },
     "hei5enbug-agent-setup:scout": { role: "scout", model: PINNED, effort: "medium", access: "read", fallback: { model: WORKER_PINNED, effort: "medium" } },
     "hei5enbug-agent-setup:designer": { role: "designer", model: "claude-opus-5-5", effort: "xhigh", access: "write" },
     "hei5enbug-agent-setup:reviewer": { role: "reviewer", model: "claude-opus-5-5", effort: "high", access: "read" },
@@ -32,7 +30,6 @@ const REGISTRY = JSON.stringify({
 });
 const MANIFEST = JSON.stringify({
   userConfig: {
-    worker_model: { options: ["claude-fable-5-2", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"] },
     worker_effort: { options: ["low", "medium", "high", "xhigh", "max"] },
   },
 });
@@ -252,7 +249,7 @@ test("고정 역할을 시작하면 모델을 고정해 넘기고 에이전트 �
 
   // when
   const results = [];
-  for (const [index, type] of [WORKER, SONNET_WORKER, SCOUT, DESIGNER, REVIEWER].entries()) {
+  for (const [index, type] of [WORKER, SCOUT, DESIGNER, REVIEWER].entries()) {
     results.push(await $.agent.spawn(spawnInput(type, { model: "haiku", tool_use_id: `toolu_${index}` })));
   }
 
@@ -260,17 +257,15 @@ test("고정 역할을 시작하면 모델을 고정해 넘기고 에이전트 �
   expect(received.map((item) => item.model)).toEqual([
     WORKER_PINNED,
     PINNED,
-    PINNED,
     "claude-opus-5-5",
     "claude-opus-5-5",
   ]);
-  expect(results.map((result) => result.agentId)).toEqual(["agent-1", "agent-2", "agent-3", "agent-4", "agent-5"]);
+  expect(results.map((result) => result.agentId)).toEqual(["agent-1", "agent-2", "agent-3", "agent-4"]);
   expect(data.roles[SESSION]).toEqual([
     { agentId: "agent-1", agent: WORKER, role: "worker", model: WORKER_PINNED, effort: "high", toolUseId: "toolu_0", time: NOW },
-    { agentId: "agent-2", agent: SONNET_WORKER, role: "worker", model: PINNED, effort: "high", toolUseId: "toolu_1", time: NOW },
-    { agentId: "agent-3", agent: SCOUT, role: "scout", model: PINNED, effort: "medium", toolUseId: "toolu_2", time: NOW },
-    { agentId: "agent-4", agent: DESIGNER, role: "designer", model: "claude-opus-5-5", effort: "xhigh", toolUseId: "toolu_3", time: NOW },
-    { agentId: "agent-5", agent: REVIEWER, role: "reviewer", model: "claude-opus-5-5", effort: "high", toolUseId: "toolu_4", time: NOW },
+    { agentId: "agent-2", agent: SCOUT, role: "scout", model: PINNED, effort: "medium", toolUseId: "toolu_1", time: NOW },
+    { agentId: "agent-3", agent: DESIGNER, role: "designer", model: "claude-opus-5-5", effort: "xhigh", toolUseId: "toolu_2", time: NOW },
+    { agentId: "agent-4", agent: REVIEWER, role: "reviewer", model: "claude-opus-5-5", effort: "high", toolUseId: "toolu_3", time: NOW },
   ]);
 });
 
@@ -567,17 +562,17 @@ test("쓰기 접근 에이전트의 대체 안내는 --add-dir과 --mcp 지침�
     return { model: e.model, agentId: `agent-${spawned}` };
   });
   stepSink(on, [], "claude-opus-5-5");
-  await $.agent.spawn(spawnInput(SONNET_WORKER, { tool_use_id: "toolu_writer" }));
+  await $.agent.spawn(spawnInput(WORKER, { tool_use_id: "toolu_writer" }));
   await step($, { agentId: "agent-1" });
   await $.agent.spawn(spawnInput(SCOUT, { tool_use_id: "toolu_reader" }));
   await step($, { agentId: "agent-2" });
 
   // when
-  const writer = await $.agent.spawn(spawnInput(SONNET_WORKER, { tool_use_id: "toolu_writer_2" }));
+  const writer = await $.agent.spawn(spawnInput(WORKER, { tool_use_id: "toolu_writer_2" }));
   const reader = await $.agent.spawn(spawnInput(SCOUT, { tool_use_id: "toolu_reader_2" }));
 
   // then
-  expect(writer.deny).toContain(`--name ${SONNET_WORKER} --fallback`);
+  expect(writer.deny).toContain(`--name ${WORKER} --fallback`);
   expect(writer.deny).toContain("--add-dir <dir>");
   expect(writer.deny).toContain("--mcp");
   expect(reader.deny).toContain(`--name ${SCOUT} --fallback`);
@@ -1112,141 +1107,219 @@ test("서브에이전트의 마지막 턴이 오류로 끝나면 그 실행을 �
   expect(data.roles[SESSION].find((item) => item.agentId === "agent-2").mismatch).toBeUndefined();
 });
 
-test("worker는 /config에서 고른 모델과 effort로 시작하고 기록과 요청에 같은 값을 쓴다", { options: { worker_model: "claude-opus-5-5", worker_effort: "xhigh" } }, async ($, on) => {
-  // given
-  const data = environment(on);
+function workerSink(on) {
   const received = [];
   on("agent.spawn", (_$, e) => {
     received.push(e.model);
-    return { model: e.model, agentId: "agent-worker" };
+    return { model: e.model, agentId: `agent-${received.length}` };
   });
+  return received;
+}
+
+test("worker는 호출이 넘긴 haiku와 sonnet으로 시작하고 기록과 요청에 같은 모델과 worker_effort를 쓴다", { options: { worker_effort: "xhigh" } }, async ($, on) => {
+  // given
+  const data = environment(on);
+  const received = workerSink(on);
   const seen = [];
-  stepSink(on, seen, "claude-opus-5-5");
+  stepSink(on, seen, PINNED);
 
   // when
-  const spawn = await $.agent.spawn(spawnInput(WORKER, { model: "haiku", tool_use_id: "toolu_worker" }));
-  const turn = await step($, { agentId: "agent-worker", model: "claude-sonnet-5-5", effort: "low" });
+  const easy = await $.agent.spawn(spawnInput(WORKER, { model: "haiku", tool_use_id: "toolu_easy" }));
+  const hard = await $.agent.spawn(spawnInput(WORKER, { model: "sonnet", tool_use_id: "toolu_hard" }));
+  const turn = await step($, { agentId: "agent-2", model: "claude-haiku-5-5", effort: "low" });
 
   // then
-  expect(received).toEqual(["claude-opus-5-5"]);
-  expect(spawn.agentId).toBe("agent-worker");
-  expect(data.roles[SESSION]).toEqual([
-    { agentId: "agent-worker", agent: WORKER, role: "worker", model: "claude-opus-5-5", effort: "xhigh", toolUseId: "toolu_worker", time: NOW },
+  expect(received).toEqual([WORKER_PINNED, PINNED]);
+  expect([easy.deny, hard.deny]).toEqual([undefined, undefined]);
+  expect(data.roles[SESSION].map((item) => [item.model, item.effort, item.toolUseId])).toEqual([
+    [WORKER_PINNED, "xhigh", "toolu_easy"],
+    [PINNED, "xhigh", "toolu_hard"],
   ]);
-  expect(seen).toEqual([{ model: "claude-opus-5-5", effort: "xhigh", agentId: "agent-worker" }]);
+  expect(seen).toEqual([{ model: PINNED, effort: "xhigh", agentId: "agent-2" }]);
   expect(turn.result.stopReason).toBe("end_turn");
-  expect(data.roles[SESSION][0].mismatch).toBeUndefined();
 });
 
-test("worker 옵션이 없으면 레지스트리의 고정값으로 시작한다", async ($, on) => {
+test("모델을 넘기지 않은 worker 호출은 레지스트리 고정값으로 시작한다", async ($, on) => {
   // given
   const data = environment(on);
-  const received = [];
-  on("agent.spawn", (_$, e) => {
-    received.push(e.model);
-    return { model: e.model, agentId: "agent-worker" };
-  });
+  const received = workerSink(on);
 
   // when
   await $.agent.spawn(spawnInput(WORKER, { tool_use_id: "toolu_worker" }));
 
   // then
   expect(received).toEqual([WORKER_PINNED]);
-  expect(data.roles[SESSION][0].model).toBe(WORKER_PINNED);
-  expect(data.roles[SESSION][0].effort).toBe("high");
+  expect([data.roles[SESSION][0].model, data.roles[SESSION][0].effort]).toEqual([WORKER_PINNED, "high"]);
 });
 
-const INVALID_WORKER_OPTIONS = [
-  { worker_model: "gpt-6.1-sol", worker_effort: "high" },
-  { worker_model: "claude-unknown-9", worker_effort: "high" },
-  { worker_model: 5, worker_effort: "high" },
-];
-
-for (const options of INVALID_WORKER_OPTIONS) {
-  test(`worker 옵션 ${JSON.stringify(options)}이 유효하지 않으면 거부하지 않고 레지스트리의 고정값으로 시작한다`, { options }, async ($, on) => {
+for (const setting of [undefined, "auto", "codex", "sol", "unknown"]) {
+  test(`implementation_worker가 ${setting}이면 worker는 opus, fable, GPT 모델과 알 수 없는 모델 호출을 거부한다`, { options: { implementation_worker: setting } }, async ($, on) => {
     // given
     const data = environment(on);
-    const received = [];
-    on("agent.spawn", (_$, e) => {
-      received.push(e.model);
-      return { model: e.model, agentId: "agent-worker" };
-    });
+    const received = workerSink(on);
+
+    // when
+    const denied = [];
+    for (const model of ["opus", "fable", "gpt-luna", "claude-opus-5-5", "nonsense"]) {
+      denied.push(await $.agent.spawn(spawnInput(WORKER, { model, tool_use_id: `toolu_${model}` })));
+    }
+
+    // then
+    expect(received).toEqual([]);
+    for (const result of denied) {
+      expect(result.agentId).toBeUndefined();
+      expect(result.deny).toContain("allows only haiku or sonnet");
+    }
+    expect(data.roles).toBeUndefined();
+  });
+}
+
+for (const [setting, fixed, other] of [["haiku", WORKER_PINNED, "sonnet"], ["sonnet", PINNED, "haiku"], ["opus", "claude-opus-5-5", "sonnet"]]) {
+  test(`implementation_worker가 ${setting}이면 worker는 그 모델만 받고 모델을 생략하면 그 모델로 시작한다`, { options: { implementation_worker: setting } }, async ($, on) => {
+    // given
+    const data = environment(on);
+    const received = workerSink(on);
+    const seen = [];
+    stepSink(on, seen, fixed);
+
+    // when
+    const omitted = await $.agent.spawn(spawnInput(WORKER, { tool_use_id: "toolu_omitted" }));
+    const named = await $.agent.spawn(spawnInput(WORKER, { model: setting, tool_use_id: "toolu_named" }));
+    const denied = await $.agent.spawn(spawnInput(WORKER, { model: other, tool_use_id: "toolu_other" }));
+    await step($, { agentId: "agent-1", model: "claude-fable-5-2" });
+
+    // then
+    expect(received).toEqual([fixed, fixed]);
+    expect([omitted.deny, named.deny]).toEqual([undefined, undefined]);
+    expect(denied.deny).toContain(`allows only ${setting}`);
+    expect(data.roles[SESSION].map((item) => [item.model, item.effort])).toEqual([[fixed, "high"], [fixed, "high"]]);
+    expect(seen).toEqual([{ model: fixed, effort: "high", agentId: "agent-1" }]);
+  });
+}
+
+test("worker가 고정 모델과 다른 모델로 응답하면 고정 실패로 기록하고 이후 요청을 거절한다", { options: { implementation_worker: "opus" } }, async ($, on) => {
+  // given
+  const data = environment(on);
+  workerSink(on);
+  stepSink(on, [], PINNED);
+  await $.agent.spawn(spawnInput(WORKER));
+
+  // when
+  await step($, { agentId: "agent-1" });
+  const second = await step($, { agentId: "agent-1", index: 1 });
+
+  // then
+  expect(data.roles[SESSION][0]).toEqual(expect.objectContaining({ model: "claude-opus-5-5", mismatch: true }));
+  expect(second.result.stopReason).toBe("refusal");
+});
+
+test("사용자가 모델을 직접 말하면 auto 설정에서도 worker가 그 모델로 시작한다", async ($, on) => {
+  // given
+  const data = environment(on, undefined, requestWorld());
+  const received = workerSink(on);
+  on("prompt.submit", (_$, e) => ({ text: e.text }));
+  await $.prompt.submit({ text: "use opus for this", origin: { kind: "composer" } });
+
+  // when
+  const spawn = await $.agent.spawn(spawnInput(WORKER, { model: "opus" }));
+
+  // then
+  expect(spawn.deny).toBeUndefined();
+  expect(received).toEqual(["claude-opus-5-5"]);
+  expect(data.roles[SESSION][0]).toEqual(expect.objectContaining({ model: "claude-opus-5-5", requested: true }));
+});
+
+test("재개한 worker 실행은 호스트가 모델을 유지하므로 다른 모델 이름이 실려도 거부하지 않는다", async ($, on) => {
+  // given
+  environment(on);
+  on("agent.spawn", (_$, e) => ({ model: e.model, agentId: e.resume.agentId }));
+
+  // when
+  const resumed = await $.agent.spawn(spawnInput(WORKER, { model: "opus", resume: { agentId: "agent-old" }, tool_use_id: "toolu_r1" }));
+
+  // then
+  expect(resumed.deny).toBeUndefined();
+});
+
+test("worker 호출이 고른 모델의 고정 effort보다 낮은 effort를 넘기면 그 값으로 시작하고 기록한다", { options: { worker_effort: "medium" } }, async ($, on) => {
+  // given
+  const data = environment(on);
+  const sink = callSink(on);
+
+  // when
+  await agentCall($, sink, { subagent_type: WORKER, model: "sonnet", effort: "low" });
+
+  // then
+  expect(data.roles[SESSION].map((item) => [item.model, item.effort, item.call_effort])).toEqual([[PINNED, "low", "low"]]);
+});
+
+test("worker 호출이 고른 모델의 고정 effort보다 높은 effort를 넘기면 무시하고 고정 effort로 시작한다", { options: { worker_effort: "medium" } }, async ($, on) => {
+  // given
+  const data = environment(on);
+  const sink = callSink(on);
+
+  // when
+  await agentCall($, sink, { subagent_type: WORKER, model: "sonnet", effort: "high" });
+
+  // then
+  expect(data.roles[SESSION].map((item) => [item.model, item.effort, item.call_effort])).toEqual([[PINNED, "medium", undefined]]);
+});
+
+const INVALID_WORKER_EFFORTS = ["ultra", 5, "max"];
+
+for (const worker_effort of INVALID_WORKER_EFFORTS) {
+  test(`worker_effort ${JSON.stringify(worker_effort)}가 유효하지 않거나 규칙이 금지하면 레지스트리의 고정 effort로 시작한다`, { options: { implementation_worker: "opus", worker_effort } }, async ($, on) => {
+    // given
+    const registry = JSON.parse(REGISTRY);
+    registry.effort_rules["claude-opus-5-5"] = ["high", "xhigh"];
+    const data = environment(on, undefined, { registry: JSON.stringify(registry) });
+    workerSink(on);
 
     // when
     const spawn = await $.agent.spawn(spawnInput(WORKER, { tool_use_id: "toolu_worker" }));
 
     // then
     expect(spawn.deny).toBeUndefined();
-    expect(received).toEqual([WORKER_PINNED]);
-    expect(data.roles[SESSION][0].model).toBe(WORKER_PINNED);
-    expect(data.roles[SESSION][0].effort).toBe("high");
+    expect([data.roles[SESSION][0].model, data.roles[SESSION][0].effort]).toEqual(["claude-opus-5-5", "high"]);
   });
 }
 
 const UNUSABLE_MANIFESTS = {
   "없는": null,
   "JSON이 아닌": "{not json",
-  "선택지가 줄어든": JSON.stringify({ userConfig: { worker_model: { options: ["claude-haiku-5-5"] }, worker_effort: { options: ["high"] } } }),
+  "선택지가 줄어든": JSON.stringify({ userConfig: { worker_effort: { options: ["high"] } } }),
   "userConfig가 없는": JSON.stringify({ name: "hei5enbug-agent-setup" }),
 };
 
 for (const [label, manifest] of Object.entries(UNUSABLE_MANIFESTS)) {
-  test(`${label} 매니페스트면 worker는 거부하지 않고 레지스트리의 고정값으로 시작한다`, { options: { worker_model: "claude-opus-5-5", worker_effort: "xhigh" } }, async ($, on) => {
+  test(`${label} 매니페스트면 worker는 거부하지 않고 레지스트리의 고정 effort로 시작한다`, { options: { implementation_worker: "sonnet", worker_effort: "xhigh" } }, async ($, on) => {
     // given
     const data = environment(on, undefined, { manifest });
-    const received = [];
-    on("agent.spawn", (_$, e) => {
-      received.push(e.model);
-      return { model: e.model, agentId: "agent-worker" };
-    });
+    const received = workerSink(on);
 
     // when
     const spawn = await $.agent.spawn(spawnInput(WORKER, { tool_use_id: "toolu_worker" }));
 
     // then
     expect(spawn.deny).toBeUndefined();
-    expect(received).toEqual([WORKER_PINNED]);
-    expect([data.roles[SESSION][0].model, data.roles[SESSION][0].effort]).toEqual([WORKER_PINNED, "high"]);
+    expect(received).toEqual([PINNED]);
+    expect([data.roles[SESSION][0].model, data.roles[SESSION][0].effort]).toEqual([PINNED, "high"]);
   });
 }
 
-test("레지스트리의 effort 규칙이 금지한 조합이면 worker는 레지스트리의 고정값으로 시작한다", { options: { worker_model: "claude-opus-5-5", worker_effort: "max" } }, async ($, on) => {
-  // given
-  const registry = JSON.parse(REGISTRY);
-  registry.effort_rules["claude-opus-5-5"] = ["high", "xhigh"];
-  environment(on, undefined, { registry: JSON.stringify(registry) });
-  const received = [];
-  on("agent.spawn", (_$, e) => {
-    received.push(e.model);
-    return { model: e.model, agentId: "agent-worker" };
-  });
-
-  // when
-  const spawn = await $.agent.spawn(spawnInput(WORKER));
-
-  // then
-  expect(spawn.deny).toBeUndefined();
-  expect(received).toEqual([WORKER_PINNED]);
-});
-
-test("sonnet-worker와 다른 역할은 worker 옵션을 무시한다", { options: { worker_model: "claude-opus-5-5", worker_effort: "xhigh" } }, async ($, on) => {
+test("다른 역할은 implementation_worker와 worker_effort를 무시한다", { options: { implementation_worker: "opus", worker_effort: "xhigh" } }, async ($, on) => {
   // given
   const data = environment(on);
-  const received = [];
-  on("agent.spawn", (_$, e) => {
-    received.push(e.model);
-    return { model: e.model, agentId: `agent-${received.length}` };
-  });
+  const received = workerSink(on);
 
   // when
-  for (const [index, type] of [SONNET_WORKER, SCOUT, REVIEWER].entries()) {
-    await $.agent.spawn(spawnInput(type, { tool_use_id: `toolu_${index}` }));
+  for (const [index, type] of [SCOUT, REVIEWER].entries()) {
+    await $.agent.spawn(spawnInput(type, { model: "haiku", tool_use_id: `toolu_${index}` }));
   }
 
   // then
-  expect(received).toEqual([PINNED, PINNED, "claude-opus-5-5"]);
+  expect(received).toEqual([PINNED, "claude-opus-5-5"]);
   expect(data.roles[SESSION].map((item) => [item.model, item.effort])).toEqual([
-    [PINNED, "high"],
     [PINNED, "medium"],
     ["claude-opus-5-5", "high"],
   ]);
@@ -1313,14 +1386,14 @@ test("사용자가 말하지 않은 모델을 호출이 넘기면 무시하고 �
   // given
   const data = environment(on, undefined, requestWorld());
   const received = requestSinks(on);
-  await $.prompt.submit({ text: "워커로 구현해줘. sonnet 말고 다른 건 쓰지 마." });
+  await $.prompt.submit({ text: "스카우트로 조사해줘. sonnet 말고 다른 건 쓰지 마." });
 
   // when
-  await $.agent.spawn(spawnInput(WORKER, { model: "opus" }));
-  await $.agent.spawn(spawnInput(WORKER, { model: "fable", tool_use_id: "toolu_two" }));
+  await $.agent.spawn(spawnInput(SCOUT, { model: "opus" }));
+  await $.agent.spawn(spawnInput(SCOUT, { model: "fable", tool_use_id: "toolu_two" }));
 
   // then
-  expect(received).toEqual([WORKER_PINNED, WORKER_PINNED]);
+  expect(received).toEqual([PINNED, PINNED]);
   expect(data.roles[SESSION].every((item) => item.requested === undefined)).toBe(true);
 });
 
@@ -1535,16 +1608,16 @@ test("하위 에이전트 프롬프트와 사용자 입력이 아닌 프롬프�
   expect(received).toEqual([PINNED, OPUS]);
 });
 
-test("sonnet-worker에 opus를 넘겨도 사용자의 마지막 프롬프트가 opus를 말하지 않으면 고정 모델로 시작하고 말하면 opus로 시작한다", async ($, on) => {
+test("scout에 opus를 넘겨도 사용자의 마지막 프롬프트가 opus를 말하지 않으면 고정 모델로 시작하고 말하면 opus로 시작한다", async ($, on) => {
   // given
   environment(on, undefined, requestWorld());
   const received = requestSinks(on);
 
   // when
   await $.prompt.submit({ text: "fix the parser", origin: { kind: "composer" } });
-  await $.agent.spawn(spawnInput(SONNET_WORKER, { model: "opus", tool_use_id: "toolu_plain" }));
+  await $.agent.spawn(spawnInput(SCOUT, { model: "opus", tool_use_id: "toolu_plain" }));
   await $.prompt.submit({ text: "use opus for this", origin: { kind: "composer" } });
-  await $.agent.spawn(spawnInput(SONNET_WORKER, { model: "opus", tool_use_id: "toolu_named" }));
+  await $.agent.spawn(spawnInput(SCOUT, { model: "opus", tool_use_id: "toolu_named" }));
 
   // then
   expect(received).toEqual([PINNED, OPUS]);
@@ -1555,11 +1628,11 @@ test("모델을 말한 프롬프트 뒤에 출처 표시가 없는 사용자 프
   environment(on, undefined, requestWorld());
   const received = requestSinks(on);
   await $.prompt.submit({ text: "use opus for this", origin: { kind: "composer" } });
-  await $.agent.spawn(spawnInput(SONNET_WORKER, { model: "opus", tool_use_id: "toolu_named" }));
+  await $.agent.spawn(spawnInput(SCOUT, { model: "opus", tool_use_id: "toolu_named" }));
 
   // when
   await $.prompt.submit({ text: "fix the parser", origin: { kind: "unclassified" } });
-  await $.agent.spawn(spawnInput(SONNET_WORKER, { model: "opus", tool_use_id: "toolu_after" }));
+  await $.agent.spawn(spawnInput(SCOUT, { model: "opus", tool_use_id: "toolu_after" }));
 
   // then
   expect(received).toEqual([OPUS, PINNED]);
@@ -1574,9 +1647,9 @@ test("출처 표시가 없는 프롬프트는 모델을 말해도 요청을 만�
   // when
   await $.prompt.submit({ text: "idle notice", origin: { kind: "unclassified" }, isMeta: true });
   await $.prompt.submit({ text: "sub", origin: { kind: "unclassified" }, agentId: AGENT_ID });
-  await $.agent.spawn(spawnInput(SONNET_WORKER, { model: "opus", tool_use_id: "toolu_kept" }));
+  await $.agent.spawn(spawnInput(SCOUT, { model: "opus", tool_use_id: "toolu_kept" }));
   await $.prompt.submit({ text: "opus max", origin: { kind: "unclassified" } });
-  await $.agent.spawn(spawnInput(SONNET_WORKER, { model: "opus", tool_use_id: "toolu_created" }));
+  await $.agent.spawn(spawnInput(SCOUT, { model: "opus", tool_use_id: "toolu_created" }));
 
   // then
   expect(received).toEqual([OPUS, PINNED]);
