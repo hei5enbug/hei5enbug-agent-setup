@@ -309,6 +309,23 @@ print(json.dumps({"role": role, "model": model, "effort": effort, "verified": Tr
 '''
 
 
+class DryCheckTest(unittest.TestCase):
+    def test_모든_사례는_모델_호출_없이_시드되고_명령을_출력한다(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plugin = gr_core.plugin_copy(Path(tmp) / "plugin")
+            for case_id, case in gr_cases.CASES.items():
+                found = gr_run.dry_check(case_id, "gpt-6.2-sol", plugin)
+                self.assertEqual(found["case"], case_id)
+                self.assertEqual(found["effort"], case.effort)
+                self.assertTrue(found["command"])
+
+    def test_러너가_모르는_모델은_오류다(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plugin = gr_core.plugin_copy(Path(tmp) / "plugin", extra_models=())
+            with self.assertRaises(gr_run.CaseError):
+                gr_run.dry_check("W1", "gpt-6.2-sol", plugin)
+
+
 class WholeRunTest(unittest.TestCase):
     def test_가짜_러너로_작업자_사례_한_번을_끝까지_돌리고_결과_파일을_쓴다(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -183,6 +183,34 @@ RUNNERS = {"mr-review": run_reviewer_case, "scratch-validation": run_reviewer_ca
            "text-review": run_text_review_case, "opponent": run_opponent_case}
 
 
+def dry_check(case_id: str, model: str, plugin: Path) -> dict[str, Any]:
+    """Check a unit without a model call: the plugin copy lists the model, and the case seeds in a throwaway folder. Returns the
+    command the run would start."""
+    case = gr_cases.CASES[case_id]
+    listed = json.loads((plugin / "config" / "model-registry.json").read_text(encoding="utf-8"))["runner"]["review_models"]
+    if model not in listed and case.kind != "opponent":
+        raise CaseError(f"the plugin copy's role runner does not list {model}")
+    with tempfile.TemporaryDirectory(prefix="gr-dry-") as tmp:
+        work = Path(tmp)
+        if case.kind in ("mr-review", "opponent"):
+            gr_cases.mr_cases.seed(case.id, work)
+        elif case.kind == "scratch-validation" or (case.kind == "scratch-scout"):
+            gr_cases.load_demo().seed(work / "repo", False)
+        elif case.kind == "scout-demo":
+            gr_cases.seed_scout_demo(work / "repo")
+        elif case.kind == "worker":
+            (work / "repo").mkdir()
+            gr_worker_cases.seed(case.id, work / "repo")
+        elif case.kind == "text-review":
+            gr_text_cases.seed(case.id, work)
+        role = {"mr-review": "reviewer", "scratch-validation": "reviewer"}.get(case.kind, case.role)
+        command = (["bash", "run-opponent.sh", "--opponent", "codex"] if case.kind == "opponent"
+                   else ["text_review.py", "review", "--model", model] if case.kind == "text-review"
+                   else runner_argv(plugin, role, model, case.effort, Path("assignment.md"), Path("result.md"),
+                                    ("--validation",) if case.kind == "scratch-validation" else (), role not in ("reviewer",)))
+    return {"case": case_id, "model": model, "effort": case.effort, "command": " ".join(command)}
+
+
 def execute(case_id: str, model: str, out: Path, rep: int, plugin: Path) -> dict[str, Any]:
     """Run one case on one model and write its result file; a run that cannot be graded raises CaseError and writes none."""
     case = gr_cases.CASES[case_id]

@@ -49,6 +49,13 @@ def command_run(args: argparse.Namespace) -> int:
     plugin = out / "plugin"
     if not (plugin / "scripts" / "role_runner.py").is_file():
         gr_core.plugin_copy(plugin, args.ref)
+    if args.dry_run:
+        try:
+            print(json.dumps(gr_run.dry_check(args.case, args.model, plugin)))
+        except gr_run.CaseError as error:
+            print(json.dumps({"case": args.case, "model": args.model, "error": str(error)}))
+            return EXIT_UNGRADED
+        return 0
     try:
         result = gr_run.execute(args.case, args.model, out, args.rep, plugin)
     except gr_run.CaseError as error:
@@ -88,6 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--out", required=True)
     run.add_argument("--rep", type=int, default=1)
     run.add_argument("--ref", default="HEAD", help="revision exported for the plugin copy")
+    run.add_argument("--dry-run", action="store_true", help="seed the case in a throwaway folder and print the command; no model call")
     run.set_defaults(handler=command_run)
     for name, handler in (("language-results", command_language_results), ("decide", command_decide), ("ties", command_ties)):
         sub = commands.add_parser(name)
