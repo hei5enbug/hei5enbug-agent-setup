@@ -407,6 +407,15 @@ such as models, efforts, and issue numbers, and fictional fixture names only; va
 path, a model outside the cap, and a missing field. `tests/test_e2e_eval_record_cli.py` validates every committed
 record.
 
+### Hook facts
+
+`record --hook-facts` adds an informational `hooks` object to each run of the record. Neither host's records time a hook, so
+the time is a replay: every recorded tool call is sent again to the matching PreToolUse and PostToolUse hooks of the run's
+exported plugin with the environment of a measurement run, and the wall time of each hook process is measured
+(`replayed_hooks`, `replay_total_seconds`, `replay_slowest`). Denials come from the replay's own decisions
+(`replay_denials`) and, on Claude Code, from the hook responses in the stream (`stream_denials`, with their counts). The
+facts describe the hooks alone and enter no verdict. `harness/hook_facts.py` holds the code.
+
 ### Records
 
 | Issue | Cases | Verdict |

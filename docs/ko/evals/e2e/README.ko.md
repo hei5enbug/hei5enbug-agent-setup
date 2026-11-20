@@ -374,6 +374,14 @@ T89부터 T93까지의 ID는 [`evals/model-roles`](../../../../evals/model-roles
 번호 같은 실행 사실, 가상 픽스처 이름만 들어간다. 검증은 절대 로컬 경로, 상한 밖 모델, 빠진 필드를 거부한다.
 `tests/test_e2e_eval_record_cli.py`가 커밋된 모든 기록을 검증한다.
 
+### 훅 사실
+
+`record --hook-facts`는 기록의 각 실행에 참고용 `hooks` 객체를 더한다. 어느 호스트의 기록도 훅 시간을 재지 않으므로 시간은
+재생으로 얻는다. 기록된 도구 호출마다 실행이 내보낸 플러그인에서 맞는 PreToolUse와 PostToolUse 훅에 측정 실행과 같은 환경으로
+다시 보내고, 각 훅 프로세스의 경과 시간을 잰다(`replayed_hooks`, `replay_total_seconds`, `replay_slowest`). 거부는 재생이
+내린 결정(`replay_denials`)과, Claude Code에서는 스트림의 훅 응답(`stream_denials`와 그 개수)에서 가져온다. 이 사실은 훅만
+설명하며 어떤 판정에도 들어가지 않는다. 코드는 `harness/hook_facts.py`에 있다.
+
 ### 기록
 
 | 이슈 | 사례 | 판정 |

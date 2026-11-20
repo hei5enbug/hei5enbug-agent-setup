@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from . import codex_host, collect, summarize, transcript
+from . import codex_host, collect, hook_facts, summarize, transcript
 from .caps import MODEL_CAP as ALLOWED_MODELS
 from .caps import normalize
 from .command import ConfigError
@@ -29,7 +29,7 @@ VERDICTS = frozenset({PASS, FAIL, REPEAT, NOT_MEASURED, INVESTIGATE, BASELINE, A
 VERDICT_SUBJECTS = frozenset({"quality", "wall_seconds", "cost_usd", "claim"})
 TOP_FIELDS = ("issue", "cases", "variants", "runs", "verdicts")
 RUN_REQUIRED = ("case", "variant", "host", "models", "checks", "wall_seconds", "cost_usd")
-RUN_OPTIONAL = ("rep", "reviews", "review_stand_in")
+RUN_OPTIONAL = ("rep", "reviews", "review_stand_in", "hooks")
 VERDICT_REQUIRED = ("case", "verdict", "step")
 VERDICT_OPTIONAL = ("measure",)
 LOCAL_PATH = re.compile(r"(?<![\w.:/-])(?:/[\w.@+-]+){2,}|(?<![\w.])~/|\b[A-Za-z]:[\\/]|(?<![\w.:/-])/(?:Users|home|tmp|var|private|etc)\b")
@@ -84,6 +84,8 @@ def run_problems(position: str, run: Any, cases: Sequence[str], variants: Mappin
                     problems.append(f"{position} role {role} has an unknown effort")
     if "review_stand_in" in run and run["review_stand_in"] not in ALLOWED_MODELS:
         problems.append(f"{position} review_stand_in is not an allowed model")
+    if "hooks" in run and not isinstance(run["hooks"], Mapping):
+        problems.append(f"{position} hooks is not an object")
     if "checks" in run:
         checks = run["checks"]
         if not isinstance(checks, Mapping) or not checks or not all(isinstance(v, bool) for v in checks.values()):
@@ -308,6 +310,14 @@ def archived_revisions(run_root: Path, campaign: str, row: Mapping[str, Any]) ->
     return [str(sha) for sha in found if sha]
 
 
+def run_hook_facts(spec: Any) -> dict[str, Any]:
+    """The informational hook facts of one run; an object with a `skipped` reason when its plugin export, view, or repository is gone."""
+    plugin_dir = Path(str(((read_json(spec.result_dir / "run.json", {}) or {}).get("plugin") or {}).get("path") or ""))
+    if not (plugin_dir.is_dir() and (spec.result_dir / "view.json").is_file() and Path(spec.repo).is_dir()):
+        return {"skipped": "the exported plugin, the view, or the repository folder is missing"}
+    return hook_facts.run_facts(spec.result_dir, spec.host, plugin_dir, Path(spec.repo))
+
+
 def unmeasured(row: Mapping[str, Any], reason: str, revision: str | None = None) -> dict[str, Any]:
     """A run that exists but cannot be judged; it stays in its case as "not measured" instead of being dropped."""
     summary = {"rep": int(row["rep"]), "measured": False, "reason": reason, "passed": None, "wall_seconds": None, "cost_usd": None}
@@ -315,7 +325,8 @@ def unmeasured(row: Mapping[str, Any], reason: str, revision: str | None = None)
             "revision": revision}
 
 
-def campaign_runs(run_root: Path, campaign: str, variants: Sequence[str], tasks: Sequence[str] | None) -> list[dict[str, Any]]:
+def campaign_runs(run_root: Path, campaign: str, variants: Sequence[str], tasks: Sequence[str] | None,
+                  with_hooks: bool = False) -> list[dict[str, Any]]:
     """Every run of the named variants on either host: a finished, graded run with its summary and record entry, and any
     other run, whether unfinished, without metrics, ungraded, or with a grading error, as a "not measured" summary."""
     found = []
@@ -353,6 +364,8 @@ def campaign_runs(run_root: Path, campaign: str, variants: Sequence[str], tasks:
         stand_in = ((read_json(result_dir / "env.json", {}) or {}).get("review_stand_in") or {}).get("model")
         if stand_in:
             entry["review_stand_in"] = stand_in
+        if with_hooks:
+            entry["hooks"] = run_hook_facts(make_spec(run_root, campaign, row["task"], row["variant"], int(row["rep"]), host))
         add({"case": row["task"], "variant": row["variant"], "host": host, "summary": summary, "entry": entry,
              "revision": revision})
     return found
@@ -442,7 +455,7 @@ def verdict_entries(compared: Mapping[str, Any], claims: Sequence[Mapping[str, A
 
 def record_campaign(
     run_root: Path, campaign: str, issue: int, before: str, after: str, claimed: Sequence[str] = (),
-    tasks: Sequence[str] | None = None,
+    tasks: Sequence[str] | None = None, with_hooks: bool = False,
 ) -> dict[str, Any]:
     """Judge a before and an after variant on both hosts and build its record. Returns the record, the `compare` result with
     every claimed case and the overall verdict decided together with its claim, and the claim verdicts. A missing run or
@@ -450,7 +463,7 @@ def record_campaign(
     unknown = [measure for measure in claimed if measure not in MEASURES]
     if unknown or before == after:
         raise ConfigError("--claim takes " + ", ".join(MEASURES) + "; --before and --after name two different variants")
-    runs = campaign_runs(run_root, campaign, (before, after), tasks)
+    runs = campaign_runs(run_root, campaign, (before, after), tasks, with_hooks)
     cases = build_cases(runs, before, after, expected_tasks(run_root, campaign, tasks, runs), planned_runs(run_root, campaign))
     if not cases or not any(run["entry"] for run in runs):
         raise ConfigError(f"campaign {campaign} holds no finished graded run of {before} or {after}")
