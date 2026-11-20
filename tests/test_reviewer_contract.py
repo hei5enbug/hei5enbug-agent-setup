@@ -122,12 +122,12 @@ class ReviewerContractTest(unittest.TestCase):
             "fallback `reviewer` with `claude-opus-5-5`, `high`",
             routing_text,
         )
-        self.assertIn("fallback `reviewer` with `gpt-6.1-sol`, `high` (up to `xhigh`)", routing_text)
+        self.assertIn("fallback `reviewer` with `gpt-6.1-terra`, `high` (up to `xhigh`)", routing_text)
         self.assertIn("Skill Builder trial execution and other non-review participants", routing_text)
         self.assertIn("role_runner.py review --host codex --instructions <role file>", codex_review)
         self.assertNotIn("modelUsage", codex_review)
         self.assertIn("On runner exit 3 or 4, spawn the plugin `reviewer` role", codex_review)
-        self.assertIn("with `gpt-6.1-sol` and `high` passed explicitly, or `xhigh` under the effort rule", codex_review)
+        self.assertIn("with `gpt-6.1-terra` and `high` passed explicitly, or `xhigh` under the effort rule", codex_review)
         self.assertIn("The reviewer returns findings only.", routing_text)
         self.assertIn("reviews the same material once and makes the final decision", routing_text)
         self.assertEqual(routing_text.count("Do not run another review round."), 1)

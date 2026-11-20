@@ -210,7 +210,7 @@ def test_중요_변경의_독립_검토는_개별_승인과_실제_설정_확인
     assert "completed implementation changes" in text
     assert "runs only when the user approves it for that deliverable" in text
     assert "exactly one reviewer that the mapping below selects" in text
-    assert "| Claude | `gpt-6.1-sol` or `gpt-6-astra` | `high` or `xhigh` |" in text
+    assert "| Claude | `gpt-6.1-terra` or `gpt-6-astra` | `high` or `xhigh` |" in text
     assert "| GPT | `claude-fable-5-2` | `high` |" in text
     assert "the `review_model` setting" not in text
     assert "Code that a delegated worker wrote belongs to that worker's model family." in text

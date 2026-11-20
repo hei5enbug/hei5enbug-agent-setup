@@ -51,7 +51,7 @@ Skill Builder 자체와 그 스킬로 만든 스킬을 개선할 때 적용하�
 
 | 실행 호스트 | 시험 실행 및 기타 비검토 참여자 | 사고 강도 | 검토 경로 |
 |---|---|---|---|
-| Codex | `gpt-6.1-sol` | `xhigh` | `claude -p`와 `claude-opus-5-5`, `high`; 대체는 `gpt-6.1-sol`, `xhigh` `reviewer` |
+| Codex | `gpt-6.1-sol` | `xhigh` | `claude -p`와 `claude-opus-5-5`, `high`; 대체는 `gpt-6.1-terra`, `xhigh` `reviewer` |
 | Claude Code | `claude-opus-5-5` | `high` | 세션 줄 "Review model"의 모델(기본 `gpt-6-astra`)과 `xhigh`로 `role_runner.py reviewer`; 대체는 `claude-opus-5-5`, `high` `reviewer` |
 | 다른 호스트 | 사용 가능한 상위 모델 | 적합한 최고 지원 강도 | 검증된 교차 계열 검토 경로와 문서화된 대체를 사용한다. 없으면 검토를 사용할 수 없다고 표시한다. |
 

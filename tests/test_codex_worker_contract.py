@@ -84,13 +84,13 @@ class CodexWorkerContractTest(unittest.TestCase):
 
         # Then
         self.assertIn(
-            "Pass `gpt-5.6-luna` and `high` explicitly on every spawn, or `xhigh` under the effort rule in "
+            "Pass `gpt-6-luna` and `high` explicitly on every spawn, or `xhigh` under the effort rule in "
             "[shared model routing](model-routing.md#keep-role-settings-fixed).",
             " ".join(text.split()),
         )
         for lookup in ("developers.openai.com", "learn.chatgpt.com", "model selector"):
             self.assertNotIn(lookup, section)
-        self.assertEqual({"gpt-5.6-luna", "gpt-6-astra", "gpt-6.1-sol"}, set(re.findall(r"gpt-[\w.-]+", text)))
+        self.assertEqual({"gpt-6-luna", "gpt-6-astra", "gpt-6.1-terra"}, set(re.findall(r"gpt-[\w.-]+", text)))
 
     def test_전체_기록_fork로는_worker를_만들지_않는다(self):
         """전체 기록 fork는 재정의를 거부하므로 범위를 한정한 맥락으로 worker를 생성한다."""
@@ -247,7 +247,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         # Then
         self.assertIn("Read [shared model routing](model-routing.md) before dispatching", normalized)
         self.assertIn("For bounded public research, run the `researcher` role of the role runner when web search is available:", investigation)
-        self.assertIn("It uses `gpt-5.6-luna` at `high` through web search and verifies it from the session record.", investigation)
+        self.assertIn("It uses `gpt-6-luna` at `high` through web search and verifies it from the session record.", investigation)
         self.assertIn("verify it under the spawned role verification section below", investigation)
         self.assertNotIn("rollout record", investigation)
         self.assertIn(
@@ -325,7 +325,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         )
         self.assertIn("Accept the result file only on exit 0; the runner verifies the model from the host record.", skill_workers)
         self.assertIn(
-            "On runner exit 3 or 4, spawn the plugin `reviewer` role with `gpt-6.1-sol` and `high` passed explicitly, "
+            "On runner exit 3 or 4, spawn the plugin `reviewer` role with `gpt-6.1-terra` and `high` passed explicitly, "
             "or `xhigh` under the effort rule in [shared model routing](model-routing.md#keep-role-settings-fixed)",
             skill_workers,
         )

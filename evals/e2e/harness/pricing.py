@@ -23,12 +23,14 @@ CODEX_PRICES: dict[str, dict[str, float]] = {
     "gpt-6-astra": {"input": 10.0, "cached": 1.0, "write": 12.5, "output": 50.0},
     "gpt-6.1-sol": {"input": 2.0, "cached": 0.10, "write": 2.5, "output": 10.0},
     "gpt-5.6-luna": {"input": 0.20, "cached": 0.02, "write": 0.25, "output": 1.20},
+    "gpt-6-luna": {"input": 0.10, "cached": 0.01, "write": 0.125, "output": 0.50},
     "gpt-6.1-terra": {"input": 1.0, "cached": 0.05, "write": 1.25, "output": 5.0},
 }
 CODEX_LONG_PRICES: dict[str, dict[str, float]] = {
     "gpt-6-astra": {"input": 20.0, "cached": 2.0, "write": 25.0, "output": 75.0},
     "gpt-6.1-sol": {"input": 4.0, "cached": 0.20, "write": 5.0, "output": 15.0},
     "gpt-5.6-luna": {"input": 0.40, "cached": 0.04, "write": 0.50, "output": 1.80},
+    "gpt-6-luna": {"input": 0.20, "cached": 0.02, "write": 0.25, "output": 0.75},
     "gpt-6.1-terra": {"input": 2.0, "cached": 0.10, "write": 2.5, "output": 7.5},
 }
 

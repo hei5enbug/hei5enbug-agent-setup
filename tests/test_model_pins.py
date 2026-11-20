@@ -258,7 +258,7 @@ class ModelPinTest(unittest.TestCase):
             ),
             "codex-reviewer.toml": (
                 "reviewer", None,
-                f"spawn the plugin `reviewer` role with `{PINS['gpt-sol']}` and `high` passed explicitly, or `xhigh` under "
+                f"spawn the plugin `reviewer` role with `{PINS['gpt-terra']}` and `high` passed explicitly, or `xhigh` under "
                 "the effort rule in [shared model routing](model-routing.md#keep-role-settings-fixed).",
             ),
         }

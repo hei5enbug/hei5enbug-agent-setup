@@ -44,7 +44,7 @@ class VerifySpawnTest(unittest.TestCase):
         (folder / name).write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
 
     def verify(
-        self, *, parent: str = PARENT, agent_path: str = AGENT_PATH, model: str = "gpt-5.6-luna", effort: str = "xhigh",
+        self, *, parent: str = PARENT, agent_path: str = AGENT_PATH, model: str = "gpt-6-luna", effort: str = "xhigh",
         omit: str | None = None, sandbox: str | None = None,
     ):
         arguments = {"--parent": parent, "--agent-path": agent_path, "--model": model, "--effort": effort}
@@ -61,7 +61,7 @@ class VerifySpawnTest(unittest.TestCase):
     def test_부모와_agent_path가_맞고_모든_turn_context가_기대값이면_검증된다(self):
         """session_meta의 thread_spawn이 부모와 경로에 맞고 turn_context 두 개가 모두 기대 모델과 effort이면 종료 코드 0이다."""
         # Given
-        self.write_rollout("rollout-2026-10-15T10-00-00-child.jsonl", [spawn_meta(), turn("gpt-5.6-luna", "xhigh"), turn("gpt-5.6-luna", "xhigh")])
+        self.write_rollout("rollout-2026-10-15T10-00-00-child.jsonl", [spawn_meta(), turn("gpt-6-luna", "xhigh"), turn("gpt-6-luna", "xhigh")])
 
         # When
         code, status = self.verify()
@@ -87,7 +87,7 @@ class VerifySpawnTest(unittest.TestCase):
     def test_turn_context의_effort가_다르면_종료_코드_4이다(self):
         """여러 turn_context 중 하나만 effort가 달라도 종료 코드 4이다."""
         # Given
-        self.write_rollout("rollout-2026-10-15T10-00-00-child.jsonl", [spawn_meta(), turn("gpt-5.6-luna", "xhigh"), turn("gpt-5.6-luna", "high")])
+        self.write_rollout("rollout-2026-10-15T10-00-00-child.jsonl", [spawn_meta(), turn("gpt-6-luna", "xhigh"), turn("gpt-6-luna", "high")])
 
         # When
         code, status = self.verify()
@@ -111,8 +111,8 @@ class VerifySpawnTest(unittest.TestCase):
     def test_다른_부모나_다른_agent_path의_rollout은_증거로_쓰지_않는다(self):
         """부모 스레드나 agent_path가 맞지 않는 rollout만 있으면 종료 코드 4이다."""
         # Given
-        self.write_rollout("rollout-2026-10-15T10-00-00-other-parent.jsonl", [spawn_meta(parent="other-parent"), turn("gpt-5.6-luna", "xhigh")])
-        self.write_rollout("rollout-2026-10-15T10-00-00-other-path.jsonl", [spawn_meta(agent_path="/root/other"), turn("gpt-5.6-luna", "xhigh")])
+        self.write_rollout("rollout-2026-10-15T10-00-00-other-parent.jsonl", [spawn_meta(parent="other-parent"), turn("gpt-6-luna", "xhigh")])
+        self.write_rollout("rollout-2026-10-15T10-00-00-other-path.jsonl", [spawn_meta(agent_path="/root/other"), turn("gpt-6-luna", "xhigh")])
 
         # When
         code_parent, status_parent = self.verify()
@@ -127,7 +127,7 @@ class VerifySpawnTest(unittest.TestCase):
     def test_session_meta가_첫_줄이_아니면_spawn된_rollout으로_보지_않는다(self):
         """thread_spawn 정보가 첫 줄의 session_meta에 없으면 그 rollout은 맞는 spawn 증거가 아니다."""
         # Given
-        self.write_rollout("rollout-2026-10-15T10-00-00-late.jsonl", [turn("gpt-5.6-luna", "xhigh"), spawn_meta()])
+        self.write_rollout("rollout-2026-10-15T10-00-00-late.jsonl", [turn("gpt-6-luna", "xhigh"), spawn_meta()])
 
         # When
         code, status = self.verify()
@@ -162,7 +162,7 @@ class VerifySpawnTest(unittest.TestCase):
     def test_sandbox를_넘기면_모든_turn_context의_sandbox가_같아야_검증된다(self):
         """--sandbox를 주면 모든 turn_context의 sandbox_policy.type이 그 값과 같을 때만 종료 코드 0이다."""
         # Given
-        self.write_rollout("rollout-2026-10-15T10-00-00-child.jsonl", [spawn_meta(), turn("gpt-5.6-luna", "xhigh", "read-only")])
+        self.write_rollout("rollout-2026-10-15T10-00-00-child.jsonl", [spawn_meta(), turn("gpt-6-luna", "xhigh", "read-only")])
 
         # When
         code, status = self.verify(sandbox="read-only")
@@ -174,8 +174,8 @@ class VerifySpawnTest(unittest.TestCase):
     def test_sandbox가_다르거나_없는_turn_context가_있으면_종료_코드_4이다(self):
         """sandbox_policy.type이 요청과 다르거나 빠진 turn_context가 하나라도 있으면 종료 코드 4이다."""
         cases = [
-            ([spawn_meta(), turn("gpt-5.6-luna", "xhigh", "workspace-write")], "workspace-write"),
-            ([spawn_meta(), turn("gpt-5.6-luna", "xhigh", "read-only"), turn("gpt-5.6-luna", "xhigh")], "read-only"),
+            ([spawn_meta(), turn("gpt-6-luna", "xhigh", "workspace-write")], "workspace-write"),
+            ([spawn_meta(), turn("gpt-6-luna", "xhigh", "read-only"), turn("gpt-6-luna", "xhigh")], "read-only"),
         ]
         for index, (lines, sandbox) in enumerate(cases):
             with self.subTest(index=index):
@@ -193,7 +193,7 @@ class VerifySpawnTest(unittest.TestCase):
     def test_허용되지_않은_sandbox_값은_종료_코드_2이다(self):
         """--sandbox는 read-only 또는 workspace-write만 받고 그 밖의 값은 사용 오류로 종료 코드 2이다."""
         # Given
-        self.write_rollout("rollout-2026-10-15T10-00-00-child.jsonl", [spawn_meta(), turn("gpt-5.6-luna", "xhigh", "read-only")])
+        self.write_rollout("rollout-2026-10-15T10-00-00-child.jsonl", [spawn_meta(), turn("gpt-6-luna", "xhigh", "read-only")])
 
         # When
         code, status = self.verify(sandbox="danger-full-access")

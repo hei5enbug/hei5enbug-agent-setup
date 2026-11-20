@@ -58,7 +58,7 @@ not run another review round.
 
 | Executing host | Trial and other non-review participants | Effort | Review route |
 |---|---|---|---|
-| Codex | `gpt-6.1-sol` | `xhigh` | `claude -p` with `claude-opus-5-5`, `high`; fallback `reviewer` with `gpt-6.1-sol`, `xhigh` |
+| Codex | `gpt-6.1-sol` | `xhigh` | `claude -p` with `claude-opus-5-5`, `high`; fallback `reviewer` with `gpt-6.1-terra`, `xhigh` |
 | Claude Code | `claude-opus-5-5` | `high` | `role_runner.py reviewer` with the model in the session line "Review model" (default `gpt-6-astra`), `xhigh`; fallback `reviewer` with `claude-opus-5-5`, `high` |
 | Other hosts | Available upper model | Highest suitable supported effort | Use a verified cross-family reviewer route and its documented fallback; otherwise mark review unavailable. |
 

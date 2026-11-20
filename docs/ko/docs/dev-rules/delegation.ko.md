@@ -14,10 +14,10 @@
 
 | 역할 | 기본 이름 | 모델 / 추론 강도 | fallback 이름 | 모델 / 추론 강도 |
 |---|---|---|---|---|
-| 범위가 정해진 구현 및 디버깅(쉬운 작업) | `haiku_worker` | `claude-haiku-5-5` / `xhigh` | `worker` | `gpt-6.1-sol` / `high` |
-| 범위가 정해진 로컬 읽기 전용 근거 조사 | `scout` | `gpt-5.6-luna` / `xhigh` | `haiku_scout` | `claude-haiku-5-5` / `xhigh` |
+| 범위가 정해진 구현 및 디버깅(쉬운 작업) | `haiku_worker` | `claude-haiku-5-5` / `xhigh` | `worker` | `gpt-6-luna` / `high` |
+| 범위가 정해진 로컬 읽기 전용 근거 조사 | `scout` | `gpt-6-luna` / `xhigh` | `haiku_scout` | `claude-haiku-5-5` / `xhigh` |
 | 승인된 내용을 반영하는 기계적인 문서 편집 | `writer` | `gpt-6.1-sol` / `high` | `haiku_writer` | `claude-haiku-5-5` / `xhigh` |
-| 아래 최종 검토 표가 `gpt-6.1-sol` `high`를 고를 때 한 번 읽기 전용으로 최종 검토 | `code_reviewer` | `gpt-6.1-sol` / `high` | `opus_code_reviewer` | `claude-opus-5-5` / `high` |
+| 아래 최종 검토 표가 `gpt-6.1-terra` `high`를 고를 때 한 번 읽기 전용으로 최종 검토 | `code_reviewer` | `gpt-6.1-terra` / `high` | `opus_code_reviewer` | `claude-opus-5-5` / `high` |
 
 - `haiku_worker`와 `sonnet_worker`는 플러그인의 `hei5enbug-agent-setup:worker`와
   `hei5enbug-agent-setup:sonnet-worker` 서브에이전트를 가리킨다. 나머지 `haiku_*` 이름과 `opus_code_reviewer`는 별도
@@ -40,7 +40,7 @@
 |---|---|
 | 쉬움: 편집 내용이 정해져 있고 검사가 모두 확인하는 응집된 변경 하나 | `haiku_worker`: 세션 줄 "Worker agent model"이 `claude-haiku-5-5`의 `xhigh`를 보일 때 `hei5enbug-agent-setup:worker` 서브에이전트, 그렇지 않으면 `sonnet_worker` |
 | 보통 또는 어려움: 동작 변경, 여러 파일, 파싱, 보안, 동시성 | `sonnet_worker`: `hei5enbug-agent-setup:sonnet-worker` 서브에이전트(`claude-sonnet-5-5` / `high`) |
-| Claude 사용 한도에 걸리거나 Claude worker를 사용할 수 없음 | `worker`(`gpt-6.1-sol` / `high`): Claude Code에서는 허용 경로가 든 폴더에서 `role_runner.py implementation --fallback --instructions <worker 역할 정의>`를 실행하고, Codex에서는 `worker` 역할을 쓴다 |
+| Claude 사용 한도에 걸리거나 Claude worker를 사용할 수 없음 | `worker`(`gpt-6-luna` / `high`): Claude Code에서는 허용 경로가 든 폴더에서 `role_runner.py implementation --fallback --instructions <worker 역할 정의>`를 실행하고, Codex에서는 `worker` 역할을 쓴다 |
 
 - `claude -p` 프로세스 대신 이 플러그인 서브에이전트를 띄운다.
 - 작업자의 결과를 사용하기 전에 기존 준비 확인과 실제 호스트 기록 검사를 따른다. 작업자는 범위를 넓히는 대신 새 원인이나
@@ -83,7 +83,7 @@ CLI로 재개할 때는 언제나 모델과 추론 강도를 다시 적용하고
 | 변경 | 최종 검토 |
 |---|---|
 | 사소함: 오타, 문구, 버전, 메타데이터 수정, 번역, 또는 검사가 모두 확인하는 기계적 수정 | 없음 |
-| 사소하지 않음, Claude 작성 | `role_runner.py reviewer`에 `--model gpt-6.1-sol`이나 `gpt-6-astra`, `--effort high`나 `xhigh`를 붙이며, 플러그인의 독립 모델 검증 규칙에 따라 변경마다 범위와 위험에 맞게 고른다 |
+| 사소하지 않음, Claude 작성 | `role_runner.py reviewer`에 `--model gpt-6.1-terra`이나 `gpt-6-astra`, `--effort high`나 `xhigh`를 붙이며, 플러그인의 독립 모델 검증 규칙에 따라 변경마다 범위와 위험에 맞게 고른다 |
 | GPT 작성(`gpt-6.1-sol`로 작성한 작업 포함) | `role_runner.py reviewer --model claude-fable-5-2 --effort high` |
 
 - 이 검토는 요청의 모든 작업이 끝나고 검사를 통과한 뒤 합쳐진 최종 diff를 대상으로 자동으로 한 번 실행한다. 더 이른
@@ -105,7 +105,7 @@ CLI로 재개할 때는 언제나 모델과 추론 강도를 다시 적용하고
   [Haiku 비교](https://vulcanbench.com/benchmarks/swe-v4-haiku55-vs-frontier.html),
   [Luna 비교](https://vulcanbench.com/benchmarks/swe-v4-gpt55-luna-v35.html),
   [VulcanBench 방법론](https://vulcanbench.com/methodology.html)을 참조한다.
-- `scout`의 `gpt-5.6-luna`/`xhigh` 고정값은 사용자가 명시적으로 선택한 값이며, 이전 로컬 비교가 그 품질을 입증하는
+- `scout`의 `gpt-6-luna`/`xhigh` 고정값은 사용자가 명시적으로 선택한 값이며, 이전 로컬 비교가 그 품질을 입증하는
   것은 아니다.
 - 2026-10-17, `writer`: 미러 편집 과제 세 개를 블라인드로 비교한 뒤 `writer`를 `gpt-6.1-sol`/`high`로 바꿨다. Sol은
   기대 항목 18개 중 17개를 통과하고 고칠 곳이 한 곳이며 토큰도 적었고, Luna는 9개를 통과하고 고칠 곳이 19곳이었다.

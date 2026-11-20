@@ -102,15 +102,15 @@ through the role runner, and one the current host can run in-host uses the named
 
 | Host | Implementation agent | Model and effort |
 |---|---|---|
-| Codex | `role_runner.py implementation --host codex`, which runs Claude; fallback plugin `worker` role, verified from its rollout record | `claude-sonnet-5-5`, `high` (up to `xhigh`); fallback `codex_worker_model` and `codex_worker_effort` (default `gpt-5.6-luna`, `high`) |
-| Claude Code | With `implementation_worker` `auto` (default), the main session picks per assignment: `hei5enbug-agent-setup:worker` for easy work and `hei5enbug-agent-setup:sonnet-worker` for normal or hard work; `role_runner.py implementation --fallback` when a Claude route fails or stops on a usage limit. A fixed setting forces `sonnet`, `sol`, `codex` (`role_runner.py worker`), or `haiku` (fallback `role_runner.py agent --name hei5enbug-agent-setup:worker --fallback`) | `worker_model` and `worker_effort` (default `claude-haiku-5-5`, `high`) (easy); `claude-sonnet-5-5`, `high` (normal or hard); `gpt-6.1-sol`, `high` (up to `xhigh`) (fallback); `gpt-5.6-luna`, `high` (up to `xhigh`) (`codex`) |
+| Codex | `role_runner.py implementation --host codex`, which runs Claude; fallback plugin `worker` role, verified from its rollout record | `claude-sonnet-5-5`, `high` (up to `xhigh`); fallback `codex_worker_model` and `codex_worker_effort` (default `gpt-6-luna`, `high`) |
+| Claude Code | With `implementation_worker` `auto` (default), the main session picks per assignment: `hei5enbug-agent-setup:worker` for easy work and `hei5enbug-agent-setup:sonnet-worker` for normal or hard work; `role_runner.py implementation --fallback` when a Claude route fails or stops on a usage limit. A fixed setting forces `sonnet`, `sol`, `codex` (`role_runner.py worker`), or `haiku` (fallback `role_runner.py agent --name hei5enbug-agent-setup:worker --fallback`) | `worker_model` and `worker_effort` (default `claude-haiku-5-5`, `high`) (easy); `claude-sonnet-5-5`, `high` (normal or hard); `gpt-6-luna`, `high` (up to `xhigh`) (fallback); `gpt-6-luna`, `high` (up to `xhigh`) (`codex`) |
 | Codex, designer | Plugin `designer` role with the pinned model, verified from its rollout record; fallback `role_runner.py agent --name designer --fallback` | `gpt-6-astra`, `high` (up to `xhigh`); fallback `claude-opus-5-5`, `high` (up to `xhigh`) |
 | Claude Code, designer | `hei5enbug-agent-setup:designer`, verified from its subagent record or the mod's role pinning; fallback `role_runner.py design` | `claude-opus-5-5`, `xhigh`; fallback `gpt-6-astra`, `high` (up to `xhigh`) |
-| Codex, local scout | Plugin `scout` role, verified from its rollout record | `gpt-5.6-luna`, `high` (up to `xhigh`) |
-| Claude Code, local scout | `role_runner.py scout`; fallback `hei5enbug-agent-setup:scout` | `gpt-5.6-luna`, `high` (up to `xhigh`); fallback `claude-sonnet-5-5`, `medium` |
-| Codex, public researcher | `role_runner.py researcher`, which uses web search and no shell network, verified from its session record | `gpt-5.6-luna`, `high` (up to `xhigh`) |
-| Claude Code, public researcher | `role_runner.py researcher`, which uses web search and no shell network; fallback `hei5enbug-agent-setup:scout`, which has web search and fetch tools | `gpt-5.6-luna`, `high` (up to `xhigh`); fallback `claude-sonnet-5-5`, `medium` |
-| Codex, skill review | `role_runner.py review`; fallback plugin `reviewer`, verified from its rollout record | `claude-opus-5-5`, `high` (up to `xhigh`); fallback `gpt-6.1-sol`, `high` (up to `xhigh`) |
+| Codex, local scout | Plugin `scout` role, verified from its rollout record | `gpt-6-luna`, `high` (up to `xhigh`) |
+| Claude Code, local scout | `role_runner.py scout`; fallback `hei5enbug-agent-setup:scout` | `gpt-6-luna`, `high` (up to `xhigh`); fallback `claude-sonnet-5-5`, `medium` |
+| Codex, public researcher | `role_runner.py researcher`, which uses web search and no shell network, verified from its session record | `gpt-6-luna`, `high` (up to `xhigh`) |
+| Claude Code, public researcher | `role_runner.py researcher`, which uses web search and no shell network; fallback `hei5enbug-agent-setup:scout`, which has web search and fetch tools | `gpt-6-luna`, `high` (up to `xhigh`); fallback `claude-sonnet-5-5`, `medium` |
+| Codex, skill review | `role_runner.py review`; fallback plugin `reviewer`, verified from its rollout record | `claude-opus-5-5`, `high` (up to `xhigh`); fallback `gpt-6.1-terra`, `high` (up to `xhigh`) |
 | Claude Code, skill review | `role_runner.py reviewer` with the `review_model` setting; fallback `hei5enbug-agent-setup:reviewer` | `review_model` (default `gpt-6-astra`), `high` (up to `xhigh`); fallback `claude-opus-5-5`, `high` |
 | Skill Builder trial execution and other non-review participants | Host's upper model from the Skill Builder adapter | Codex: `gpt-6.1-sol`, `xhigh`; Claude Code: `claude-opus-5-5`, `high` |
 
@@ -163,7 +163,7 @@ acceptance checks. It never silently substitutes a worker model.
 
 In its final stage, when no other work remains for the request, the main session runs one independent review of the
 combined result under [independent model validation](../instructions/independent-model-validation.md), automatically and
-without a question. A Claude-authored result goes to `gpt-6.1-sol` or `gpt-6-astra`, and a GPT-authored result goes to
+without a question. A Claude-authored result goes to `gpt-6.1-terra` or `gpt-6-astra`, and a GPT-authored result goes to
 `claude-fable-5-2` at `high`. For a Claude-authored result the main session picks the lighter model at `high` for one
 bounded component, and the stronger model or `xhigh` for several components, a public contract, security, concurrency,
 or a hook or guard.
