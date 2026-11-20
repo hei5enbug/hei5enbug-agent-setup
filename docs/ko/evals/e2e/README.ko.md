@@ -86,7 +86,8 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
 
 `--hosts claude,codex`는 같은 내보낸 리비전, 같은 픽스처 사본, 같은 프롬프트, 같은 제한, 같은 채점기와 지표로 작업을
 두 호스트에서 각각 실행한다. 기본값은 `claude`만이다. Codex 실행은 `gpt-6.1-sol`을 `high`로 `codex exec`에 시작하며
-설정은 다음과 같다.
+설정은 다음과 같다. 하네스는 작업의 `env`를 적용하기 전에 자신의 `PATH`로 `codex`를 절대 경로로 확정하므로, 에이전트의 `PATH` 맨 앞에
+가짜 `codex`를 두는 작업(T102, T109)은 플러그인의 role runner가 부르는 대상만 바꾸고 호스트는 바꾸지 않는다.
 
 - 실행마다 `<run>/codex-home/`에 자기만의 `CODEX_HOME`을 두므로 사용자 자신의 Codex에 설치된 플러그인이나 설정이
   들어오지 않는다. `auth.json`은 사용자 자격 증명 파일로 가는 심볼릭 링크이고, 하네스는 그 파일을 읽거나 복사하거나
@@ -126,7 +127,7 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 ### 모델 상한
 
 측정에서는 어떤 역할도 `claude-opus-5-5`나 `gpt-6.1-sol`보다 강한 모델을 시작하면 안 된다. 허용 모델은
-`harness/config.py`의 `MODEL_CAP`이고, `harness/records.py`도 같은 집합으로 기록을 검증한다. `run`은 캠페인이 시작되기
+`harness/config.py`의 `MODEL_CAP`이고, `harness/records.py`도 같은 집합으로 기록을 검증한다. 하네스를 `HARNESS_ALLOW_CANDIDATES=1`로 시작하면 비교 후보 `gpt-6.2-sol`과 `gpt-6-luna`가 추가된다(2026-11-20 소유자 결정). 설정하지 않으면 집합은 그대로다. `run`은 캠페인이 시작되기
 전에, `--dry-run`에서도, 캠페인을 거부하고 메시지에 역할과 모델을 적는다. 변형이 정한 메인 모델, 변형이 정한 플러그인 모델
 옵션, 변형이 `review_model`처럼 상한 밖의 기본값을 그대로 둔 플러그인 모델 옵션, 루브릭 채점기가 대상이다.
 `review_model`을 기본값으로 두는 변형은 `env`에서 `CLAUDE_PLUGIN_OPTION_REVIEW_MODEL`과 `HEI5ENBUG_REVIEW_MODEL`을
@@ -235,7 +236,7 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 | `claude_list_cost_usd` | `harness/pricing.py`의 공식 Claude 정가(2026-10-25 확인)로 계산한 토큰 비용. 메인 세션, 서브에이전트, 별도 Claude role runner 프로세스를 포함한다. |
 | `claude_runner_list_cost_usd` | 별도 Claude role runner 프로세스만의 정가 비용. 스트림의 총비용에는 이 비용이 빠져 있다. |
 | 요약의 Claude 지출 | `claude_total_cost_usd`에 `claude_runner_list_cost_usd`를 더한 값. 스트림에 총비용이 없으면 `claude_list_cost_usd`만 쓴다. 서브에이전트는 이미 총비용 안에 있고, 어떤 프로세스도 두 번 세지 않는다. |
-| `codex_list_cost_usd_estimate` | OpenAI API 정가(2026-10-25 확인)로 계산한 Codex 토큰 비용. Codex는 토큰당 과금하지 않는 ChatGPT 요금제로 실행하므로 추정값이다. |
+| `codex_list_cost_usd_estimate` | OpenAI API 정가(2026-11-20 확인, `gpt-6.2-sol`과 `gpt-6-luna` 포함)로 계산한 Codex 토큰 비용. Codex는 토큰당 과금하지 않는 ChatGPT 요금제로 실행하므로 추정값이다. |
 | 경과 시간, 턴, 도구별 호출, 유형별 서브에이전트 실행 | 하네스 시계와 스트림. Codex 도구 호출은 따로 센다. |
 | 역할과 종료 코드별 role runner 호출 | `role_runner.py` Bash 호출과 그 상태 줄. |
 | 재시도 | 실패한 Bash 명령의 재실행, 오류 뒤 같은 에이전트 유형의 재실행, 0이 아닌 종료 뒤 role runner 재실행. |

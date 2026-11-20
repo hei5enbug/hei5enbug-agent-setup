@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 from pathlib import Path
 
@@ -88,6 +89,7 @@ def config_from(args: argparse.Namespace) -> HarnessConfig:
         fixtures_root=absolute(args.fixtures_root or base.fixtures_root),
         variants_root=absolute(args.variants_root or base.variants_root),
         review_stand_in=bool(getattr(args, "claude_review_stand_in", False)),
+        codex_bin=shutil.which(base.codex_bin) or base.codex_bin,
     )
 
 
