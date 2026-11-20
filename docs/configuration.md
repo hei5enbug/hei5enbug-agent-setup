@@ -179,3 +179,24 @@ an interrupted connection, use [connection recovery](../instructions/connection-
 yourself stays on. A failed step is retried at the next session start and never stops the session instructions from
 loading. Hosts, hook trust, and available tools still govern execution. See the official [Codex subagent
 contract](https://learn.chatgpt.com/docs/agent-configuration/subagents).
+
+## When a guard blocks every tool call
+
+On Claude Code, the approval guard, the DataGrip query guard, and the public boundary hook block a call when they fail.
+A hook that cannot start, times out, exits with a code other than 0 or 2, or prints invalid output blocks each call it
+covers. The transcript shows `failed; blocking because onFailure is "block"` (or `timed out` after a timeout)
+followed by the hook's error output. Find the cause in that line and apply its fix:
+
+| What you see | Cause | Fix |
+|---|---|---|
+| `could not run <hook>: python3 was not found` | No Python 3 on the PATH that hooks get, such as a session started from an app with a narrow PATH | Install Python 3 and restart the session, or set the Hook Python interpreter option to an absolute path |
+| `failed` with `No such file or directory` or `Cannot find module` | A hook script is missing from the plugin folder, such as after an update while the session still runs the old version | Restart the session, or reinstall the plugin, then retry |
+| `timed out` | The hook ran past its time limit, usually under heavy machine load | Close heavy jobs or wait for the load to drop, then retry |
+| `failed` followed by a Python traceback | A bug in the hook, or an interpreter that cannot run it | Set the Hook Python interpreter option to Python 3.12 or later and retry; if the traceback stays, report it with its text |
+
+When the cause is not clear and the work cannot wait, turn off the guard's feature option in
+[Feature options](#feature-options) until the cause is fixed. The guard then stops protecting calls, so turn it back
+on afterward.
+
+On Codex, `onFailure` has no effect: a PreToolUse hook that fails is reported, and the tool call continues.
+Read the hook error in the transcript there instead of expecting a block.

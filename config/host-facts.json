@@ -646,6 +646,37 @@
           "contains": "later debates cannot mix with it"
         }
       ]
+    },
+    {
+      "id": "claude-onfailure-block-message",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "On Claude Code, a failed `onFailure: \"block\"` hook shows `failed; blocking because onFailure is \"block\"` (or `timed out` after a timeout) followed by the hook's own error output.",
+      "doc_url": "https://code.claude.com/docs/en/hooks.md",
+      "quote": "Claude Code blocks the call, and the error includes `failed; blocking because onFailure is \"block\"` followed by node's own error output. After a timeout, the message says `timed out` instead of `failed`.",
+      "min_version": "2.1.295",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/configuration.md",
+          "contains": "failed; blocking because onFailure is \"block\""
+        }
+      ]
+    },
+    {
+      "id": "codex-no-onfailure-tool-continues",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "On Codex, `onFailure` has no effect: a PreToolUse hook that fails is reported and the tool call continues.",
+      "doc_url": "https://learn.chatgpt.com/docs/hooks",
+      "quote": "PreToolUse: \"Codex marks the hook run as failed, reports the error, and continues the tool call.\" The page does not mention an onFailure field.",
+      "verified_on": "2026-11-20",
+      "lines": [
+        {
+          "file": "docs/configuration.md",
+          "contains": "On Codex, `onFailure` has no effect"
+        }
+      ]
     }
   ]
 }

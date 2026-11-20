@@ -168,3 +168,22 @@ When hei5enbug-agent-setup is active, use subagents according to its situation-b
 둡니다. 실패한 단계는 다음 세션 시작 때 다시 시도하며, 세션 지침 로드를 막지 않습니다. 실제 실행에는 호스트 규칙, 훅 신뢰와
 사용 가능한 도구가 계속 적용됩니다.
 [공식 Codex 서브에이전트 계약](https://learn.chatgpt.com/docs/agent-configuration/subagents)을 참고하세요.
+
+## 가드가 모든 도구 호출을 막을 때
+
+Claude Code에서는 승인 가드, DataGrip 쿼리 가드, 공개 경계 훅이 실패하면 호출을 막습니다. 시작하지 못하거나, 제한 시간을 넘기거나,
+0이나 2가 아닌 코드로 끝나거나, 잘못된 출력을 내는 훅은 그 훅이 맡은 호출마다 차단합니다. 기록에는
+`failed; blocking because onFailure is "block"`(제한 시간을 넘기면 `timed out`)과 훅의 오류 출력이 함께 나옵니다.
+이 줄에서 원인을 찾고 아래 해결 방법을 적용하세요.
+
+| 보이는 내용 | 원인 | 해결 방법 |
+|---|---|---|
+| `could not run <hook>: python3 was not found` | 훅이 받는 PATH에 Python 3가 없음. 좁은 PATH를 가진 앱에서 세션을 시작한 경우 | Python 3를 설치하고 세션을 다시 시작하거나, Hook Python interpreter 옵션에 절대 경로를 지정 |
+| `No such file or directory` 또는 `Cannot find module`과 함께 `failed` | 플러그인 폴더에 훅 스크립트가 없음. 업데이트 뒤 이전 버전을 쓰는 세션이 남아 있는 경우 | 세션을 다시 시작하거나 플러그인을 다시 설치한 뒤 재시도 |
+| `timed out` | 훅이 제한 시간을 넘김. 대개 기계 부하가 높을 때 | 무거운 작업을 닫거나 부하가 내려갈 때까지 기다린 뒤 재시도 |
+| Python 추적(traceback)과 함께 `failed` | 훅의 버그이거나 훅을 실행할 수 없는 인터프리터 | Hook Python interpreter 옵션을 Python 3.12 이상으로 지정하고 재시도. 추적이 계속되면 그 내용과 함께 보고 |
+
+원인이 분명하지 않고 작업을 미룰 수 없으면, 원인을 고칠 때까지 [기능 옵션](#기능-옵션)에서 해당 가드의 기능 옵션을 끄세요.
+그동안 가드는 호출을 보호하지 않으므로 나중에 다시 켜야 합니다.
+
+Codex에서는 `onFailure`가 효과가 없습니다. 실패한 PreToolUse 훅은 보고되고 도구 호출은 계속 진행됩니다. 그곳에서는 막힘을 기대하지 말고 기록의 훅 오류를 읽으세요.
