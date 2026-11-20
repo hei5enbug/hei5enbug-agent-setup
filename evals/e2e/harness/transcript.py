@@ -10,7 +10,7 @@ from typing import Any, Iterable
 from .config import USAGE_LIMIT_PATTERN
 
 AGENT_TOOLS = frozenset({"Agent", "Task", "spawn_agent"})
-ROLE_RUNNER_CALL = re.compile(r"role_runner\.py\s+((?!-)[\w-]+)")
+ROLE_RUNNER_CALL = re.compile(r"""role_runner\.py["']?\s+((?!-)[\w-]+)""")
 ASSIGNMENT_FLAG = re.compile(r"""--assignment(?:\s+|=)("[^"]*"|'[^']*'|\S+)""")
 LEADING_CD = re.compile(r"""\A\s*cd\s+("[^"]*"|'[^']*'|\S+)\s*&&""")
 HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1\n(.*?)\n\s*\2(?=\s|$)", re.S)
@@ -69,16 +69,26 @@ def classify_role(role: str) -> str:
 
 
 def role_runner_status(text: str) -> dict[str, Any] | None:
-    """Return the JSON status line role_runner printed in a Bash result, when present."""
+    """Return the JSON status line role_runner printed in a Bash result, when present. A Codex code-mode result joins its output
+    chunks without a line break, so the status object can follow other objects on one line."""
+    decoder = json.JSONDecoder()
     for line in reversed(text.splitlines()):
         line = line.strip()
-        if line.startswith("{") and '"runner"' in line and '"role"' in line:
+        if '"runner"' not in line or '"role"' not in line:
+            continue
+        found = None
+        start = line.find("{")
+        while start != -1:
             try:
-                parsed = json.loads(line)
+                parsed, end = decoder.raw_decode(line, start)
             except ValueError:
+                start = line.find("{", start + 1)
                 continue
-            if isinstance(parsed, dict):
-                return parsed
+            if isinstance(parsed, dict) and "runner" in parsed and "role" in parsed:
+                found = parsed
+            start = line.find("{", end)
+        if found is not None:
+            return found
     return None
 
 
@@ -214,7 +224,20 @@ def build_delegations(calls: list[dict[str, Any]], assignments: dict[str, str]) 
                     "prompt": assignment_text(command, assignments), "exit": code, "tool_use_id": call["id"],
                     "order": order, "is_error": bool(call["is_error"]), "completed": code == 0,
                 })
+            elif call["id"] not in claimed and (named := printed_runner_delegation(call, order)):
+                delegations.append(named)
     return delegations
+
+
+def printed_runner_delegation(call: dict[str, Any], order: int) -> dict[str, Any] | None:
+    """A delegation named only by the status line role_runner printed, for a command that cannot be read as text, such as a Codex
+    code-mode call that builds its command from variables."""
+    status = role_runner_status(call["result_text"])
+    if status is None or not isinstance(status.get("exit"), int) or not isinstance(status.get("role"), str):
+        return None
+    role = status["role"]
+    return {"kind": "role_runner", "type": role, "class": classify_role(role), "prompt": "", "exit": int(status["exit"]),
+            "tool_use_id": call["id"], "order": order, "is_error": bool(call["is_error"]), "completed": status["exit"] == 0}
 
 
 def assistant_texts(events: list[dict[str, Any]]) -> list[str]:

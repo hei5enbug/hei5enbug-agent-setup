@@ -2210,6 +2210,65 @@ class DelegationExitTest(unittest.TestCase):
         # then
         self.assertEqual(view["delegations"][0]["exit"], 0)
 
+    def test_다른_출력과_한_줄에_이어_붙은_상태_줄도_exit를_가져온다(self):
+        """Codex 코드 모드 결과는 출력 조각을 줄바꿈 없이 이어 붙이므로 상태 줄이 다른 객체 뒤에 온다."""
+        # given
+        joined = '{"i":0,"status":"fulfilled","value":{"session_id":7,"output":""}}' + status_line("reviewer", 0) + "\n"
+        events = self.runner_events(joined, [])
+
+        # when
+        view = transcript.build_view(events)
+
+        # then
+        self.assertEqual((view["delegations"][0]["exit"], view["delegations"][0]["completed"]), (0, True))
+
+    def test_스크립트_경로가_따옴표로_닫힌_role_runner_호출도_위임이다(self):
+        """python3 '<경로>/role_runner.py' reviewer 형태도 역할을 읽는다."""
+        # given
+        command = "python3 '/tmp/plugin/scripts/role_runner.py' reviewer --model gpt-6.1-sol --assignment /tmp/work/a.md"
+        events = [assistant("a", tool_use("t1", "Bash", {"command": command})), tool_result("t1", status_line("reviewer", 0))]
+
+        # when
+        view = transcript.build_view(events)
+
+        # then
+        self.assertEqual([(d["type"], d["class"], d["exit"]) for d in view["delegations"]], [("reviewer", "review", 0)])
+
+    def test_명령을_읽을_수_없어도_상태_줄이_있으면_그_역할의_위임으로_센다(self):
+        """변수로 조립한 명령은 보기 명령에서 잘리므로, 상태 줄만으로 review 위임과 exit를 기록한다."""
+        # given
+        events = [assistant("a", tool_use("t1", "Bash", {"command": "python3 - <<'PY'\nfrom pathlib import Path\nimport subprocess\np = Path('"})),
+                  tool_result("t1", status_line("reviewer", 0))]
+
+        # when
+        view = transcript.build_view(events)
+
+        # then
+        self.assertEqual([(d["type"], d["class"], d["exit"], d["completed"]) for d in view["delegations"]], [("reviewer", "review", 0, True)])
+
+    def test_역할이_없는_인자_오류_상태_줄은_위임이_아니다(self):
+        """role_runner가 인자 오류로 role 없이 낸 상태 줄은 읽을 수 없는 명령의 위임으로 세지 않는다."""
+        # given
+        error = json.dumps({"role": None, "runner": None, "verified": False, "evidence": {"error": "arguments are required"}, "exit": 2})
+        events = [assistant("a", tool_use("t1", "Bash", {"command": "cat inventory/stock.py; cat '"})), tool_result("t1", error)]
+
+        # when
+        view = transcript.build_view(events)
+
+        # then
+        self.assertEqual(view["delegations"], [])
+
+    def test_상태_줄이_없는_읽을_수_없는_명령은_위임이_아니다(self):
+        """상태 줄이 없으면 명령이 잘렸어도 위임을 만들지 않는다."""
+        # given
+        events = [assistant("a", tool_use("t1", "Bash", {"command": "python3 - <<'PY'\np = Path('"})), tool_result("t1", "done")]
+
+        # when
+        view = transcript.build_view(events)
+
+        # then
+        self.assertEqual(view["delegations"], [])
+
     def test_다른_역할의_상태_줄은_가져오지_않는다(self):
         """worker 상태 줄은 reviewer 위임의 exit가 아니다."""
         # given
