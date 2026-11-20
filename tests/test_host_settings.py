@@ -20,19 +20,6 @@ import approval_state  # noqa: E402
 import host_settings  # noqa: E402
 import plugin_toggles  # noqa: E402
 
-FAKE_CODEX = """#!{python}
-import os, sys
-from pathlib import Path
-
-home = Path(os.environ["CODEX_HOME"])
-with (home / "codex-calls.log").open("a") as log:
-    log.write(" ".join(sys.argv[1:]) + "\\n")
-if sys.argv[1:3] == ["features", "list"]:
-    print("{listed}")
-elif sys.argv[1:3] == ["features", "enable"]:
-    config = home / "config.toml"
-    config.write_text(config.read_text().replace("plugin_hooks = false", "plugin_hooks = true"))
-"""
 USER_RULES = """# user rules
 prefix_rule(pattern=["helm", "list"], decision="allow")
 prefix_rule(pattern=["kubectl", "get"], decision="prompt", justification="decision = \\"forbidden\\" in text")
@@ -53,7 +40,7 @@ CONFIG = """# user config
 approval_policy = "on-request"
 
 [features]
-plugin_hooks = false
+hooks = true
 other_feature = true
 
 [mcp_servers.datagrip]
@@ -126,12 +113,6 @@ class HostSettingsTestCase(unittest.TestCase):
 
     def write_json(self, path: Path, value) -> Path:
         return self.write(path, json.dumps(value))
-
-    def fake_codex(self, listed="plugin_hooks  stable  false") -> str:
-        path = self.bin / "codex"
-        path.write_text(FAKE_CODEX.format(python=sys.executable, listed=listed), encoding="utf-8")
-        path.chmod(0o755)
-        return str(path)
 
     def check(self, host="codex"):
         return host_settings.check(host, self.claude, self.codex, self.project)
@@ -241,7 +222,7 @@ class RetentionTest(HostSettingsTestCase):
         # when
         codex = self.retention("codex")
         host_settings.apply("claude", self.claude, self.codex)
-        host_settings.apply("codex", self.claude, self.codex, codex_bin=self.fake_codex())
+        host_settings.apply("codex", self.claude, self.codex)
 
         # then
         self.assertEqual(codex, [])
@@ -331,13 +312,16 @@ class CheckTest(HostSettingsTestCase):
         # then
         self.assertEqual(problems, [])
 
-    def test_Codex_plugin_hooks가_true가_아니면_Claude와_Codex_호스트_모두_보고한다(self):
-        """plugin_hooks가 false이거나 features 표가 없으면 보고하고, true이거나 설정 파일이 없으면 보고하지 않는다."""
+    def test_Codex_hooks가_꺼져_있을_때만_Claude와_Codex_호스트_모두_보고한다(self):
+        """features.hooks(또는 폐기된 별칭 codex_hooks)가 false일 때만 보고하고, 키가 없거나 true이거나 설정 파일이 없으면 보고하지 않는다."""
         for text, expected in [
-            ("[features]\nplugin_hooks = false\n", ["codex-plugin-hooks"]),
-            ("[features]\nother = true\n", ["codex-plugin-hooks"]),
-            ("approval_policy = \"never\"\n", ["codex-plugin-hooks"]),
-            ("[features]\nplugin_hooks = true\n", []),
+            ("[features]\nhooks = false\n", ["codex-hooks-off"]),
+            ("[features]\ncodex_hooks = false\n", ["codex-hooks-off"]),
+            ("[features]\nhooks = true\ncodex_hooks = false\n", []),
+            ("[features]\nplugin_hooks = false\n", []),
+            ("[features]\nother = true\n", []),
+            ("approval_policy = \"never\"\n", []),
+            ("[features]\nhooks = true\n", []),
         ]:
             for host in ("claude", "codex"):
                 with self.subTest(text=text, host=host):
@@ -355,7 +339,7 @@ class CheckTest(HostSettingsTestCase):
     def test_Codex_설정이_TOML이_아니면_Codex_호스트만_보고한다(self):
         """읽을 수 없는 config.toml은 Codex 호스트에서만 한 줄로 보고한다."""
         # given
-        self.write(self.codex / "config.toml", "[features\nplugin_hooks = true\n")
+        self.write(self.codex / "config.toml", "[features\nhooks = true\n")
 
         # when
         codex = self.ids("codex")
@@ -390,7 +374,7 @@ class CheckTest(HostSettingsTestCase):
     def test_규칙_파일과_MCP_모드는_네이티브_승인이_켜졌을_때만_점검한다(self):
         """없는 규칙 파일, 구버전 규칙 파일, prompt가 아닌 MCP 모드는 기능이 켜졌을 때만 보고한다."""
         # given
-        self.write(self.codex / "config.toml", CONFIG.replace("plugin_hooks = false", "plugin_hooks = true"))
+        self.write(self.codex / "config.toml", CONFIG)
         rules = self.codex / "rules" / host_settings.RULES_NAME
 
         for flag, expected_missing in ((False, []), (True, ["codex-rules-file", "codex-mcp-mode"])):
@@ -419,7 +403,7 @@ class CheckTest(HostSettingsTestCase):
         """가드가 분류하는 서버의 default_tools_approval_mode가 prompt이고 규칙 파일이 최신이면 문제가 없다."""
         # given
         self.write(self.codex / "config.toml",
-                   '[features]\nplugin_hooks = true\n[mcp_servers.datagrip]\ndefault_tools_approval_mode = "prompt"\n'
+                   '[features]\nhooks = true\n[mcp_servers.datagrip]\ndefault_tools_approval_mode = "prompt"\n'
                    '[mcp_servers.tabularis]\ncommand = "x"\n')
         self.write(self.codex / "rules" / host_settings.RULES_NAME, host_settings.rules_text(host_settings.ROOT))
 
@@ -456,7 +440,7 @@ class CheckTest(HostSettingsTestCase):
     def test_네이티브_승인이_꺼져_있으면_가드_서버의_prompt_도구를_보고한다(self):
         """기능이 꺼져 있을 때만 가드 서버 도구의 approval_mode prompt를 이름과 함께 보고한다."""
         # given
-        self.write(self.codex / "config.toml", CONFIG.replace("plugin_hooks = false", "plugin_hooks = true"))
+        self.write(self.codex / "config.toml", CONFIG)
 
         for flag, expected in ((False, ["codex-mcp-tool-prompt"]), (True, [])):
             with self.subTest(flag=flag), mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", flag):
@@ -530,69 +514,39 @@ class ApplyTest(HostSettingsTestCase):
         # when
         for flag in (False, True):
             with mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", flag):
-                result = self.apply("claude", codex_bin=self.fake_codex())
+                result = self.apply("claude")
 
         # then
         self.assertEqual(result.changes, [])
         self.assertEqual(result.notes, [])
         after = snapshot(self.base)
-        after.pop("bin/codex")
         self.assertEqual(after, before)
 
-    def test_plugin_hooks는_codex_features_목록에_있을_때만_그_CLI로_켜고_백업한다(self):
-        """features list에 plugin_hooks가 있으면 CLI로 켜고 백업을 남기며, 두 번째 실행은 아무것도 바꾸지 않는다."""
+    def test_apply는_features_표를_바꾸지_않고_codex_CLI도_부르지_않는다(self):
+        """hooks가 false여도 apply는 [features]를 그대로 두고, 제거된 plugin_hooks를 켜지 않으며, codex 프로그램을 실행하지 않는다."""
         # given
-        self.write(self.codex / "config.toml", CONFIG)
-        original = (self.codex / "config.toml").read_bytes()
-        codex = self.fake_codex()
+        text = CONFIG.replace("hooks = true", "hooks = false")
+        self.write(self.codex / "config.toml", text)
 
         # when
-        first = self.apply(codex_bin=codex)
-        after_first = snapshot(self.codex)
-        second = self.apply(codex_bin=codex)
+        with mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", False):
+            result = self.apply()
 
         # then
-        self.assertEqual([change.label for change in first.changes], ["plugin_hooks"])
-        self.assertEqual(second.changes, [])
-        self.assertEqual(snapshot(self.codex), after_first)
-        backups = self.backups("config.toml")
-        self.assertEqual(len(backups), 1)
-        self.assertRegex(backups[0], r"^config\.toml\.bak-hei5enbug-\d{8}$")
-        self.assertEqual((self.codex / backups[0]).read_bytes(), original)
-        self.assertEqual(
-            (self.codex / "config.toml").read_text(),
-            CONFIG.replace("plugin_hooks = false", "plugin_hooks = true"),
-        )
-        calls = (self.codex / "codex-calls.log").read_text().splitlines()
-        self.assertEqual(calls, ["features list", "features enable plugin_hooks"])
-
-    def test_features_목록에_plugin_hooks가_없거나_CLI가_없으면_보고만_한다(self):
-        """CLI 목록에 기능이 없거나 CLI를 실행할 수 없으면 설정 파일과 백업을 만들지 않고 알린다."""
-        # given
-        self.write(self.codex / "config.toml", CONFIG)
-        before = snapshot(self.codex)
-
-        for codex in (self.fake_codex(listed="other_feature  stable  false"), str(self.bin / "missing-codex")):
-            with self.subTest(codex=codex):
-                # when
-                result = self.apply(codex_bin=codex)
-
-                # then
-                self.assertEqual(result.changes, [])
-                self.assertIn("plugin_hooks", result.notes[0])
-                after = snapshot(self.codex)
-                after.pop("codex-calls.log", None)
-                self.assertEqual(after, before)
+        self.assertEqual(result.changes, [])
+        self.assertEqual((self.codex / "config.toml").read_text(), text)
+        self.assertEqual(self.backups("config.toml"), [])
+        self.assertFalse((self.codex / "codex-calls.log").exists())
 
     def test_기능이_꺼져_있으면_규칙_파일과_MCP_모드를_건드리지_않는다(self):
-        """네이티브 승인이 꺼져 있으면 apply는 plugin_hooks 외에는 아무것도 쓰지 않는다."""
+        """네이티브 승인이 꺼져 있으면 apply는 아무것도 쓰지 않는다."""
         # given
-        self.write(self.codex / "config.toml", CONFIG.replace("plugin_hooks = false", "plugin_hooks = true"))
+        self.write(self.codex / "config.toml", CONFIG)
         before = snapshot(self.codex)
 
         # when
         with mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", False):
-            result = self.apply(codex_bin=self.fake_codex())
+            result = self.apply()
 
         # then
         self.assertEqual(result.changes, [])
@@ -602,15 +556,14 @@ class ApplyTest(HostSettingsTestCase):
     def test_기능이_켜져_있으면_규칙_파일과_MCP_모드를_허용_목록_안에서만_바꾼다(self):
         """규칙 파일을 만들고 모든 MCP 서버 표의 키 한 줄만 바꾸며, 나머지 줄은 그대로이고 두 번째 실행은 무변경이다."""
         # given
-        enabled = CONFIG.replace("plugin_hooks = false", "plugin_hooks = true")
+        enabled = CONFIG
         self.write(self.codex / "config.toml", enabled)
-        codex = self.fake_codex()
 
         with mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", True):
             # when
-            first = self.apply(codex_bin=codex)
+            first = self.apply()
             after_first = snapshot(self.codex)
-            second = self.apply(codex_bin=codex)
+            second = self.apply()
 
         # then
         self.assertEqual([c.label for c in first.changes], [f"rules/{host_settings.RULES_NAME}", "mcp datagrip", "mcp other"])
@@ -636,7 +589,7 @@ class ApplyTest(HostSettingsTestCase):
         """모드 키가 없는 datagrip과 tabularis 표에 한 줄씩 넣고 다른 서버와 줄은 그대로 둔다."""
         # given
         text = (
-            '[features]\nplugin_hooks = true\n\n[mcp_servers."datagrip"] # note\ncommand = "a"\n\n'
+            '[features]\nhooks = true\n\n[mcp_servers."datagrip"] # note\ncommand = "a"\n\n'
             "[mcp_servers.tabularis]\r\ncommand = 'b'\r\n\r\n[mcp_servers.keep]\ncommand = \"c\"\n"
         )
         self.write(self.codex / "config.toml", text)
@@ -644,7 +597,7 @@ class ApplyTest(HostSettingsTestCase):
 
         # when
         with mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", True):
-            result = self.apply(codex_bin=self.fake_codex())
+            result = self.apply()
 
         # then
         self.assertEqual(
@@ -662,13 +615,13 @@ class ApplyTest(HostSettingsTestCase):
     def test_이미_있는_규칙_파일이_다르면_백업_후_갱신하고_같은_날_백업은_덮지_않는다(self):
         """구버전 규칙 파일은 백업한 뒤 새 내용으로 바꾸고, 같은 날 백업이 이미 있으면 그대로 둔다."""
         # given
-        self.write(self.codex / "config.toml", "[features]\nplugin_hooks = true\n")
+        self.write(self.codex / "config.toml", "[features]\nhooks = true\n")
         rules = self.write(self.codex / "rules" / host_settings.RULES_NAME, host_settings.OWNER_MARK + ": old rules\n")
         existing = self.write(self.codex / "rules" / f"{host_settings.RULES_NAME}.bak-hei5enbug-{host_settings._today()}", "first backup\n")
 
         # when
         with mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", True):
-            result = self.apply(codex_bin=self.fake_codex())
+            result = self.apply()
 
         # then
         self.assertEqual([c.label for c in result.changes], [f"rules/{host_settings.RULES_NAME}"])
@@ -678,12 +631,12 @@ class ApplyTest(HostSettingsTestCase):
     def test_소유_표시가_없는_hei5enbug_규칙_파일은_덮어쓰지_않고_알린다(self):
         """사용자가 만든 hei5enbug.rules는 소유 표시가 없으면 apply가 쓰지도 백업하지도 않는다."""
         # given
-        self.write(self.codex / "config.toml", "[features]\nplugin_hooks = true\n")
+        self.write(self.codex / "config.toml", "[features]\nhooks = true\n")
         rules = self.write(self.codex / "rules" / host_settings.RULES_NAME, USER_RULES)
 
         # when
         with mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", True):
-            result = self.apply(codex_bin=self.fake_codex())
+            result = self.apply()
             problems = self.check()
 
         # then
@@ -696,14 +649,14 @@ class ApplyTest(HostSettingsTestCase):
     def test_규칙_파일이_심볼릭_링크이면_따라가지_않고_대상을_그대로_둔다(self):
         """hei5enbug.rules가 default.rules를 가리켜도 apply는 링크도 대상도 쓰지 않는다."""
         # given
-        self.write(self.codex / "config.toml", "[features]\nplugin_hooks = true\n")
+        self.write(self.codex / "config.toml", "[features]\nhooks = true\n")
         target = self.write(self.codex / "rules" / "default.rules", USER_RULES)
         link = self.codex / "rules" / host_settings.RULES_NAME
         link.symlink_to(target)
 
         # when
         with mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", True):
-            result = self.apply(codex_bin=self.fake_codex())
+            result = self.apply()
 
         # then
         self.assertTrue(link.is_symlink())
@@ -715,14 +668,14 @@ class ApplyTest(HostSettingsTestCase):
     def test_끊어진_심볼릭_링크도_따라가_만들지_않는다(self):
         """없는 대상을 가리키는 hei5enbug.rules 링크도 apply가 대상 파일을 새로 만들지 않는다."""
         # given
-        self.write(self.codex / "config.toml", "[features]\nplugin_hooks = true\n")
+        self.write(self.codex / "config.toml", "[features]\nhooks = true\n")
         (self.codex / "rules").mkdir(parents=True, exist_ok=True)
         missing = self.codex / "rules" / "elsewhere.rules"
         (self.codex / "rules" / host_settings.RULES_NAME).symlink_to(missing)
 
         # when
         with mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", True):
-            result = self.apply(codex_bin=self.fake_codex())
+            result = self.apply()
 
         # then
         self.assertFalse(missing.exists())
@@ -731,12 +684,12 @@ class ApplyTest(HostSettingsTestCase):
     def test_다른_규칙_파일은_apply가_건드리지_않는다(self):
         """사용자 소유 rules 파일은 문제가 있어도 apply 뒤에 바이트까지 그대로다."""
         # given
-        self.write(self.codex / "config.toml", "[features]\nplugin_hooks = true\n")
+        self.write(self.codex / "config.toml", "[features]\nhooks = true\n")
         rules = self.write(self.codex / "rules" / "default.rules", USER_RULES)
 
         # when
         with mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", True):
-            self.apply(codex_bin=self.fake_codex())
+            self.apply()
 
         # then
         self.assertEqual(rules.read_text(), USER_RULES)
@@ -745,13 +698,13 @@ class ApplyTest(HostSettingsTestCase):
     def test_config_toml이_파싱되지_않으면_아무것도_쓰지_않고_알린다(self):
         """TOML 오류가 있으면 config.toml을 쓰거나 백업하지 않는다. 규칙 파일 쓰기는 별개로 한다."""
         # given
-        broken = "[features\nplugin_hooks = false\n[mcp_servers.datagrip]\n"
+        broken = "[features\nhooks = false\n[mcp_servers.datagrip]\n"
         self.write(self.codex / "config.toml", broken)
 
         for flag in (False, True):
             with self.subTest(flag=flag), mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", flag):
                 # when
-                result = self.apply(codex_bin=self.fake_codex())
+                result = self.apply()
 
                 # then
                 self.assertEqual([c.label for c in result.changes], [f"rules/{host_settings.RULES_NAME}"] if flag else [])
@@ -763,12 +716,12 @@ class ApplyTest(HostSettingsTestCase):
     def test_줄_편집이_TOML을_깨면_아무것도_쓰지_않는다(self):
         """여러 줄 문자열 값을 첫 줄만 바꾸면 파싱이 달라지므로 쓰지 않고 알린다."""
         # given
-        text = '[features]\nplugin_hooks = true\n[mcp_servers.datagrip]\ndefault_tools_approval_mode = """\napprove"""\n'
+        text = '[features]\nhooks = true\n[mcp_servers.datagrip]\ndefault_tools_approval_mode = """\napprove"""\n'
         self.write(self.codex / "config.toml", text)
 
         # when
         with mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", True):
-            result = self.apply(codex_bin=self.fake_codex())
+            result = self.apply()
 
         # then
         self.assertEqual([c.label for c in result.changes], [f"rules/{host_settings.RULES_NAME}"])
@@ -779,12 +732,12 @@ class ApplyTest(HostSettingsTestCase):
     def test_평범한_표_머리글이_없는_서버는_쓰지_않고_알린다(self):
         """인라인 표로 선언된 서버는 줄 편집이 불가능하므로 쓰지 않고 알리며, 서버를 추가하지도 않는다."""
         # given
-        text = '[features]\nplugin_hooks = true\n[mcp_servers]\ndatagrip = { command = "x" }\n'
+        text = '[features]\nhooks = true\n[mcp_servers]\ndatagrip = { command = "x" }\n'
         self.write(self.codex / "config.toml", text)
 
         # when
         with mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", True):
-            result = self.apply(codex_bin=self.fake_codex())
+            result = self.apply()
 
         # then
         self.assertTrue(any("plain table header" in note for note in result.notes))
@@ -793,12 +746,12 @@ class ApplyTest(HostSettingsTestCase):
     def test_서버_표가_없으면_서버를_만들지_않는다(self):
         """MCP 서버 표가 없는 설정에는 규칙 파일만 만들고 config.toml은 그대로 둔다."""
         # given
-        text = '[features]\nplugin_hooks = true\n[other]\ncommand = "x"\n'
+        text = '[features]\nhooks = true\n[other]\ncommand = "x"\n'
         self.write(self.codex / "config.toml", text)
 
         # when
         with mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", True):
-            result = self.apply(codex_bin=self.fake_codex())
+            result = self.apply()
 
         # then
         self.assertEqual([c.label for c in result.changes], [f"rules/{host_settings.RULES_NAME}"])
@@ -816,19 +769,18 @@ class ApplyTest(HostSettingsTestCase):
         """모든 서버의 도구 표 approval_mode 줄만 바꾸고 다른 도구 표는 그대로이며 두 번째 실행은 무변경이다."""
         # given
         text = (
-            '[features]\nplugin_hooks = true\n\n[mcp_servers.alpha]\ncommand = "a"\ndefault_tools_approval_mode = "prompt"\n\n'
+            '[features]\nhooks = true\n\n[mcp_servers.alpha]\ncommand = "a"\ndefault_tools_approval_mode = "prompt"\n\n'
             '[mcp_servers.alpha.tools.read_it]\napproval_mode = "approve"\n\n'
             '[mcp_servers.alpha.tools.keep_it]\nenabled = true\n\n'
             '[mcp_servers."beta"]\ncommand = "b"\n\n[mcp_servers."beta".tools."write-it"]\n  approval_mode = "auto"  # mine\n'
         )
         self.write(self.codex / "config.toml", text)
-        codex = self.fake_codex()
 
         with mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", True):
             # when
-            first = self.apply(codex_bin=codex)
+            first = self.apply()
             after_first = snapshot(self.codex)
-            second = self.apply(codex_bin=codex)
+            second = self.apply()
 
         # then
         self.assertEqual(
@@ -849,13 +801,13 @@ class ApplyTest(HostSettingsTestCase):
     def test_approval_guard가_꺼져_있으면_MCP_모드를_건드리지_않고_점검이_이유를_보고한다(self):
         """토글이 꺼지면 apply는 규칙 파일만 쓰고 config.toml을 그대로 두며, check는 건너뛴 이유를 보고한다."""
         # given
-        text = CONFIG.replace("plugin_hooks = false", "plugin_hooks = true")
+        text = CONFIG
         self.write(self.codex / "config.toml", text)
         name = plugin_toggles.variable_name("approval_guard", plugin_toggles.detect_host())
 
         with mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", True), mock.patch.dict(os.environ, {name: "off"}):
             # when
-            result = self.apply(codex_bin=self.fake_codex())
+            result = self.apply()
             problems = {p.id: p.text for p in self.check()}
 
         # then
@@ -869,7 +821,7 @@ class ApplyTest(HostSettingsTestCase):
         """가드 서버가 아니어도 default 모드나 도구 모드가 prompt가 아니면 한 줄로 보고한다."""
         # given
         self.write(self.codex / "config.toml",
-                   '[features]\nplugin_hooks = true\n[mcp_servers.a]\ncommand = "x"\n[mcp_servers.b]\ncommand = "x"\n'
+                   '[features]\nhooks = true\n[mcp_servers.a]\ncommand = "x"\n[mcp_servers.b]\ncommand = "x"\n'
                    '[mcp_servers.c]\ncommand = "x"\n[mcp_servers.d]\ncommand = "x"\n'
                    '[mcp_servers.e]\ndefault_tools_approval_mode = "prompt"\n[mcp_servers.e.tools.t]\napproval_mode = "approve"\n')
         self.write(self.codex / "rules" / host_settings.RULES_NAME, host_settings.rules_text(host_settings.ROOT))
@@ -912,7 +864,7 @@ class CommandLineTest(HostSettingsTestCase):
     def test_check_json은_호스트와_문제_목록을_출력한다(self):
         """--json은 호스트와 문제 id와 메시지를 한 객체로 출력한다."""
         # given
-        self.write(self.codex / "config.toml", "[features]\nplugin_hooks = false\n")
+        self.write(self.codex / "config.toml", "[features]\nhooks = false\n")
 
         # when
         code, out, _ = self.run_main("check", "--host", "codex", "--codex-home", str(self.codex), "--json")
@@ -921,7 +873,7 @@ class CommandLineTest(HostSettingsTestCase):
         payload = json.loads(out)
         self.assertEqual(code, 0)
         self.assertEqual(payload["host"], "codex")
-        self.assertEqual([p["id"] for p in payload["problems"]], ["codex-plugin-hooks"])
+        self.assertEqual([p["id"] for p in payload["problems"]], ["codex-hooks-off"])
 
     def test_잘못된_인자는_종료_코드_2이다(self):
         """알 수 없는 명령, 호스트, 옵션과 명령 누락은 종료 코드 2이다."""
@@ -937,16 +889,17 @@ class CommandLineTest(HostSettingsTestCase):
         """Codex는 변경 한 줄씩 출력하고 두 번째 실행은 출력이 없으며, agent_guard가 꺼진 Claude 호스트도 출력이 없다."""
         # given
         self.write(self.codex / "config.toml", CONFIG)
-        args = ("apply", "--host", "codex", "--codex-home", str(self.codex), "--codex-bin", self.fake_codex())
+        args = ("apply", "--host", "codex", "--codex-home", str(self.codex))
 
         # when
-        first = self.run_main(*args)
-        second = self.run_main(*args)
+        with mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", True):
+            first = self.run_main(*args)
+            second = self.run_main(*args)
         claude = self.run_main("apply", "--host", "claude", "--codex-home", str(self.codex))
 
         # then
         self.assertEqual(first[0], 0)
-        self.assertEqual(len(first[1].splitlines()), 1)
+        self.assertEqual(len(first[1].splitlines()), 3)
         self.assertEqual(second, (0, "", ""))
         self.assertEqual(claude[0], 0)
         self.assertEqual(claude[1], "")
@@ -954,7 +907,7 @@ class CommandLineTest(HostSettingsTestCase):
     def test_입출력_실패는_종료_코드_1이다(self):
         """설정 파일 쓰기가 실패하면 파이썬 오류 대신 한 줄과 종료 코드 1을 낸다."""
         # given
-        self.write(self.codex / "config.toml", "[features]\nplugin_hooks = true\n")
+        self.write(self.codex / "config.toml", "[features]\nhooks = true\n")
 
         # when
         with mock.patch.object(host_settings, "CODEX_NATIVE_APPROVAL", True), mock.patch.object(
@@ -969,7 +922,7 @@ class CommandLineTest(HostSettingsTestCase):
     def test_스크립트로_직접_실행해도_check가_동작한다(self):
         """python3 scripts/host_settings.py check를 격리된 환경에서 실행하면 문제를 출력한다."""
         # given
-        self.write(self.codex / "config.toml", "[features]\nplugin_hooks = false\n")
+        self.write(self.codex / "config.toml", "[features]\nhooks = false\n")
         env = {"PATH": os.environ["PATH"], "HOME": str(self.base / "home"), "XDG_STATE_HOME": str(self.state)}
 
         # when
@@ -981,7 +934,7 @@ class CommandLineTest(HostSettingsTestCase):
 
         # then
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("plugin_hooks = true", result.stdout)
+        self.assertIn("[features] hooks = false", result.stdout)
 
 
 if __name__ == "__main__":

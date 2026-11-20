@@ -24,7 +24,7 @@ Codex가 제공하는 `PLUGIN_ROOT`가 설치 디렉터리를 가리키면 로�
 
 | 시점 | 동작 |
 |---|---|
-| 세션 시작·재개 | `SessionStart`가 설치된 지침 파일을 전달한다. 필요하면 `host_settings.py check`가 찾은 문제를 한 줄짜리 안내로 추가한다. 최대 세 개를 보여 주고 나머지는 개수로 알린다. 예를 들면 Claude의 `defaultMode`가 `dontAsk`이거나, `permissions.ask` 규칙이 Bash·MCP 도구에 적용되거나, 내장 에이전트에 대한 Claude `permissions.deny` 항목이 빠졌거나, 기존 Codex 설정에 `[features] plugin_hooks = true`가 없는 경우다(Codex 설정은 양쪽 호스트에서 확인). `host_settings` 옵션이 `apply`이면 먼저 `apply`를 실행하며, 이는 허용 목록의 호스트 설정, 곧 Codex 설정과 Claude Code의 사용자 설정에 있는 `Agent(...)` 거부 항목을 바꿀 수 있다([호스트 설정](configuration.ko.md#호스트-설정) 참고). 바꾼 내용은 안내 한 줄로 알린다. 안내는 컨텍스트 한도 안에 들어가야 한다. Orca 터미널에서는 플러그인 디렉터리와 지침 요약값을 담은 표식도 남긴다. |
+| 세션 시작·재개 | `SessionStart`가 설치된 지침 파일을 전달한다. 필요하면 `host_settings.py check`가 찾은 문제를 한 줄짜리 안내로 추가한다. 최대 세 개를 보여 주고 나머지는 개수로 알린다. 예를 들면 Claude의 `defaultMode`가 `dontAsk`이거나, `permissions.ask` 규칙이 Bash·MCP 도구에 적용되거나, 내장 에이전트에 대한 Claude `permissions.deny` 항목이 빠졌거나, 기존 Codex 설정에 `[features] hooks = false`가 있는 경우다(Codex 설정은 양쪽 호스트에서 확인). `host_settings` 옵션이 `apply`이면 먼저 `apply`를 실행하며, 이는 허용 목록의 호스트 설정, 곧 Codex 설정과 Claude Code의 사용자 설정에 있는 `Agent(...)` 거부 항목을 바꿀 수 있다([호스트 설정](configuration.ko.md#호스트-설정) 참고). 바꾼 내용은 안내 한 줄로 알린다. 안내는 컨텍스트 한도 안에 들어가야 한다. Orca 터미널에서는 플러그인 디렉터리와 지침 요약값을 담은 표식도 남긴다. |
 | 세션 초기화·컨텍스트 압축 | `SessionStart`가 지침을 다시 전달한다. |
 | 서브에이전트 시작 | `SubagentStart`가 짧은 역할 컨텍스트를 전달한다. `core.md`와, 구현 에이전트에는 "Assigned workers" 규칙을 더한다. |
 | 역할 실행기의 자식 세션 시작 | `core.md`만 받는다. 역할 규칙은 실행기가 할당 앞에 붙인다. |

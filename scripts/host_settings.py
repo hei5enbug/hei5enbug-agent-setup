@@ -1,10 +1,9 @@
 """Check, and fix, the host settings that cause extra approval prompts, stop the approval guard, or let built-in agents run.
 
-`check` reports problems and writes nothing. `apply` changes only the allowlist below. On the Codex host:
-`[features] plugin_hooks` through `codex features enable`, and, while CODEX_NATIVE_APPROVAL is on, the plugin-owned
-`rules/hei5enbug.rules` and, while the approval_guard toggle is on, `default_tools_approval_mode = "prompt"` on every
-`[mcp_servers.<name>]` table plus each existing per-tool `approval_mode` line. On the Claude Code host, while the
-agent_guard toggle is on: the four `Agent(<built-in>)` entries missing from `permissions.deny` in the user settings file,
+`check` reports problems and writes nothing. `apply` changes only the allowlist below. On the Codex host, while
+CODEX_NATIVE_APPROVAL is on: the plugin-owned `rules/hei5enbug.rules` and, while the approval_guard toggle is on,
+`default_tools_approval_mode = "prompt"` on every `[mcp_servers.<name>]` table plus each existing per-tool
+`approval_mode` line. On the Claude Code host, while the agent_guard toggle is on: the four `Agent(<built-in>)` entries missing from `permissions.deny` in the user settings file,
 appended after the existing entries.
 Each changed file is first copied to `<file>.bak-hei5enbug-<YYYYMMDD>`. Other `rules/*.rules` are only reported, and
 `rules/hei5enbug.rules` is never written when it is a symbolic link or lacks the plugin-owned header line.
@@ -43,7 +42,6 @@ READ_ONLY_WORDS = {
     "az": {"list", "show"},
     "git": {"status", "log", "diff", "show"},
 }
-CODEX_COMMAND_TIMEOUT_SECONDS = 10
 BUILT_IN_AGENT_DENIES = ("Agent(general-purpose)", "Agent(Explore)", "Agent(Plan)", "Agent(claude)")
 DEFAULT_JSON_INDENT = 2
 RETENTION_ID = "claude-transcript-retention"
@@ -177,9 +175,10 @@ def _read_config(path: Path) -> tuple[dict | None, str | None]:
     return config, None
 
 
-def _plugin_hooks_enabled(config: dict) -> bool:
+def _hooks_turned_off(config: dict) -> bool:
+    """True when `[features] hooks = false` (or the deprecated alias `codex_hooks = false`) turns Codex hooks off."""
     features = config.get("features")
-    return isinstance(features, dict) and features.get("plugin_hooks") is True
+    return isinstance(features, dict) and features.get("hooks", features.get("codex_hooks")) is False
 
 
 def _servers(config: dict) -> dict[str, dict]:
@@ -376,8 +375,8 @@ def _confirmed_hook_problem() -> Problem | None:
 def _codex_problems(host: str, codex_home: Path) -> list[Problem]:
     problems = []
     config, state = _read_config(codex_home / "config.toml")
-    if state is None and not _plugin_hooks_enabled(config):
-        problems.append(Problem("codex-plugin-hooks", "Codex runs no approval guard until [features] plugin_hooks = true."))
+    if state is None and _hooks_turned_off(config):
+        problems.append(Problem("codex-hooks-off", "Codex runs no approval guard while [features] hooks = false."))
     if host != "codex":
         return problems
     if state == "invalid":
@@ -466,39 +465,6 @@ def _write(path: Path, data: bytes) -> None:
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
-
-
-def _run_codex(codex_bin: str, codex_home: Path, *arguments: str) -> str | None:
-    try:
-        result = subprocess.run(
-            [codex_bin, *arguments],
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            timeout=CODEX_COMMAND_TIMEOUT_SECONDS,
-            check=False,
-            env={**os.environ, "CODEX_HOME": str(codex_home)},
-        )
-    except (OSError, subprocess.SubprocessError, ValueError):
-        return None
-    return result.stdout if result.returncode == 0 else None
-
-
-def _enable_plugin_hooks(config_path: Path, codex_home: Path, codex_bin: str, result: Result) -> None:
-    listing = _run_codex(codex_bin, codex_home, "features", "list")
-    if listing is None or not any(line.split()[:1] == ["plugin_hooks"] for line in listing.splitlines()):
-        result.notes.append("codex features list does not show plugin_hooks; set [features] plugin_hooks = true by hand.")
-        return
-    before = config_path.read_bytes()
-    created = _backup(config_path)
-    _run_codex(codex_bin, codex_home, "features", "enable", "plugin_hooks")
-    config, _ = _read_config(config_path)
-    if config is not None and _plugin_hooks_enabled(config):
-        result.changes.append(Change("plugin_hooks", f"enabled [features] plugin_hooks in {config_path.name} (backup saved)"))
-        return
-    if created is not None and config_path.read_bytes() == before:
-        created.unlink(missing_ok=True)
-    result.notes.append("codex features enable plugin_hooks did not take effect; set it by hand.")
 
 
 TABLE_HEADER = re.compile(r"^[ \t]*\[(?!\[)(.*?)\][ \t]*(?:#.*)?\r?\n?$")
@@ -677,19 +643,17 @@ def _apply_agent_denies(settings_path: Path, result: Result) -> None:
     ))
 
 
-def apply(host: str, claude_dir=None, codex_home=None, codex_bin: str = "codex", plugin_root=ROOT) -> Result:
-    """Fix the allowlisted settings of `host`: the Claude Code agent deny rules, or the Codex features, rules, and MCP modes."""
+def apply(host: str, claude_dir=None, codex_home=None, plugin_root=ROOT) -> Result:
+    """Fix the allowlisted settings of `host`: the Claude Code agent deny rules, or the Codex rules file and MCP approval modes."""
     result = Result([], [])
     if host != "codex":
         _apply_agent_denies(resolve_claude_dir(claude_dir) / "settings.json", result)
         return result
     home = resolve_codex_home(codex_home)
     config_path = home / "config.toml"
-    config, state = _read_config(config_path)
+    _, state = _read_config(config_path)
     if state == "invalid":
         result.notes.append(f"{config_path.name} is not valid TOML; wrote nothing there.")
-    elif config is not None and not _plugin_hooks_enabled(config):
-        _enable_plugin_hooks(config_path, home, codex_bin, result)
     if CODEX_NATIVE_APPROVAL:
         _apply_rules_file(home / "rules" / RULES_NAME, plugin_root, result)
         if state != "invalid":
@@ -703,7 +667,6 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--host", choices=("claude", "codex"))
     parser.add_argument("--claude-dir")
     parser.add_argument("--codex-home")
-    parser.add_argument("--codex-bin", default="codex")
     parser.add_argument("--json", action="store_true")
     return parser
 
@@ -725,7 +688,7 @@ def main(argv: list[str] | None = None) -> int:
                 for problem in problems:
                     print(problem.text)
         else:
-            result = apply(host, arguments.claude_dir, arguments.codex_home, arguments.codex_bin)
+            result = apply(host, arguments.claude_dir, arguments.codex_home)
             if arguments.json:
                 print(json.dumps({
                     "host": host,

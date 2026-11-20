@@ -155,7 +155,7 @@ class AgentDenyTest(HostSettingsTestCase):
         before = self.settings.read_bytes()
 
         # when
-        result = self.apply("codex", codex_bin=self.fake_codex())
+        result = self.apply("codex")
 
         # then
         self.assertEqual(self.settings.read_bytes(), before)

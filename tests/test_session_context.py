@@ -182,14 +182,14 @@ class SessionContextTest(unittest.TestCase):
                 self.assertEqual(any("defaultMode dontAsk" in notice for notice in notices), expected)
                 self.assertTrue(all(f"Bash(rule{index}:*)" in "\n".join(notices) for index in range(3)))
 
-    def test_두_호스트의_세션_시작은_Codex_plugin_hooks가_true가_아니면_알린다(self):
-        """Codex 설정의 plugin_hooks가 true가 아니면 Claude와 Codex 세션 모두 approval guard가 Codex에서 실행되지 않는다고 알린다."""
+    def test_두_호스트의_세션_시작은_Codex_hooks가_false이면_알린다(self):
+        """Codex 설정의 features.hooks가 false이면 Claude와 Codex 세션 모두 approval guard가 Codex에서 실행되지 않는다고 알린다."""
         # Given
         self.use_short_root()
         codex_home = self.base / "temporary Codex home"
         (codex_home / "config.toml").parent.mkdir(parents=True, exist_ok=True)
         (codex_home / "config.toml").write_text(
-            '[features]\nplugin_hooks = false\nignored = "do not print"\n', encoding="utf-8",
+            '[features]\nhooks = false\nignored = "do not print"\n', encoding="utf-8",
         )
 
         # When
@@ -200,7 +200,7 @@ class SessionContextTest(unittest.TestCase):
 
         # Then
         for context in contexts:
-            self.assertIn("Notice: Codex runs no approval guard until [features] plugin_hooks = true.", context)
+            self.assertIn("Notice: Codex runs no approval guard while [features] hooks = false.", context)
             self.assertNotIn("do not print", context)
 
     def test_한도를_넘는_notice는_줄이거나_빼고_세션_지침은_그대로_둔다(self):
@@ -227,7 +227,7 @@ class SessionContextTest(unittest.TestCase):
         })
         codex_home = self.base / "normal Codex home"
         (codex_home / "config.toml").parent.mkdir(parents=True, exist_ok=True)
-        (codex_home / "config.toml").write_text("[features]\nplugin_hooks = true\n", encoding="utf-8")
+        (codex_home / "config.toml").write_text("[features]\nhooks = true\n", encoding="utf-8")
 
         # When
         claude = self.context(self.run_hook("claude", extra_env={"HOME": str(home)}))
@@ -245,7 +245,7 @@ class SessionContextTest(unittest.TestCase):
         self.write_json(home / ".claude/settings.json", {"permissions": {"defaultMode": "acceptEdits"}})
         codex_home = self.base / "unset Codex home"
         (codex_home / "config.toml").parent.mkdir(parents=True, exist_ok=True)
-        (codex_home / "config.toml").write_text("[features]\nplugin_hooks = true\n", encoding="utf-8")
+        (codex_home / "config.toml").write_text("[features]\nhooks = true\n", encoding="utf-8")
 
         # When
         claude = self.context(self.run_hook("claude", extra_env={"HOME": str(home)}))
@@ -257,17 +257,12 @@ class SessionContextTest(unittest.TestCase):
         self.assertNotIn("transcripts", codex)
 
     def install_fake_codex(self):
-        """Put a fake codex CLI first on PATH that lists plugin_hooks and flips it to true on enable."""
+        """Put a fake codex CLI first on PATH that lists no feature and fails every other command."""
         script = self.bin / "codex"
         script.write_text(
             f"#!{sys.executable}\n"
-            "import os, sys\n"
-            "from pathlib import Path\n"
-            "if sys.argv[1:3] == ['features', 'list']:\n"
-            "    print('plugin_hooks  stable  false')\n"
-            "elif sys.argv[1:3] == ['features', 'enable']:\n"
-            "    config = Path(os.environ['CODEX_HOME']) / 'config.toml'\n"
-            "    config.write_text(config.read_text().replace('plugin_hooks = false', 'plugin_hooks = true'))\n",
+            "import sys\n"
+            "sys.exit(0 if sys.argv[1:3] == ['features', 'list'] else 1)\n",
             encoding="utf-8",
         )
         script.chmod(0o755)
@@ -276,11 +271,11 @@ class SessionContextTest(unittest.TestCase):
         codex_home = self.base / name
         config = codex_home / "config.toml"
         config.parent.mkdir(parents=True, exist_ok=True)
-        config.write_text("[features]\nplugin_hooks = false\nother = 1\n", encoding="utf-8")
+        config.write_text("[features]\nhooks = false\nother = 1\n", encoding="utf-8")
         return codex_home, config
 
     def test_Codex_세션_시작은_apply_옵션이면_허용_목록_설정을_고치고_한_줄로_알린다(self):
-        """기본값 apply에서는 plugin_hooks를 백업 후 켜고 변경 알림 한 줄만 남기며, 옵션이 없거나 알 수 없는 값이어도 같다."""
+        """기본값 apply에서는 규칙 파일만 만들고 변경 알림 한 줄을 남기며 [features]는 건드리지 않고, 옵션이 없거나 알 수 없는 값이어도 같다."""
         for option in (None, "apply", "unknown value"):
             with self.subTest(option=option):
                 # given
@@ -297,16 +292,15 @@ class SessionContextTest(unittest.TestCase):
 
                 # then
                 self.assertIn(
-                    "Notice: hei5enbug changed host settings: plugin_hooks, rules/hei5enbug.rules; "
+                    "Notice: hei5enbug changed host settings: rules/hei5enbug.rules; "
                     "backups saved next to each file.", context,
                 )
-                self.assertNotIn("Codex runs no approval guard", context)
-                self.assertIn("plugin_hooks = true", config.read_text(encoding="utf-8"))
-                backups = list(codex_home.glob("config.toml.bak-hei5enbug-*"))
-                self.assertEqual([path.read_text(encoding="utf-8") for path in backups], [original])
+                self.assertIn("Codex runs no approval guard while [features] hooks = false.", context)
+                self.assertEqual(config.read_text(encoding="utf-8"), original)
+                self.assertEqual(list(codex_home.glob("config.toml.bak-hei5enbug-*")), [])
 
     def test_Codex_세션_시작은_report_옵션이면_설정을_바꾸지_않고_보고만_한다(self):
-        """report 옵션에서는 설정과 백업이 그대로이고 plugin_hooks 문제가 알림으로 남는다."""
+        """report 옵션에서는 설정과 백업이 그대로이고 hooks 문제가 알림으로 남는다."""
         # given
         self.use_short_root()
         self.install_fake_codex()
@@ -319,7 +313,7 @@ class SessionContextTest(unittest.TestCase):
         ))
 
         # then
-        self.assertIn("Notice: Codex runs no approval guard until [features] plugin_hooks = true.", context)
+        self.assertIn("Notice: Codex runs no approval guard while [features] hooks = false.", context)
         self.assertNotIn("changed host settings", context)
         self.assertEqual(config.read_text(encoding="utf-8"), before)
         self.assertEqual(list(codex_home.glob("config.toml.bak-*")), [])
@@ -338,7 +332,7 @@ class SessionContextTest(unittest.TestCase):
         ))
 
         # then
-        self.assertIn("Codex runs no approval guard until [features] plugin_hooks = true.", context)
+        self.assertIn("Codex runs no approval guard while [features] hooks = false.", context)
         self.assertEqual(config.read_text(encoding="utf-8"), before)
         self.assertEqual(list(codex_home.glob("config.toml.bak-*")), [])
 
@@ -433,7 +427,7 @@ class SessionContextTest(unittest.TestCase):
         codex_home = self.base / "native Codex home"
         config = codex_home / "config.toml"
         config.parent.mkdir(parents=True)
-        config.write_text("[features]\nplugin_hooks = true\n[mcp_servers.datagrip]\ncommand = 'x'\n", encoding="utf-8")
+        config.write_text("[features]\nhooks = true\n[mcp_servers.datagrip]\ncommand = 'x'\n", encoding="utf-8")
         environment = {
             "CODEX_HOME": str(codex_home),
             "PLUGIN_ROOT": str(REPO_ROOT),

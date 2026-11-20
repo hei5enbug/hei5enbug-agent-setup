@@ -15,7 +15,7 @@ python3 <plugin root>/scripts/host_settings.py check [--host claude|codex] [--js
 python3 <plugin root>/scripts/host_settings.py apply [--host claude|codex] [--json]
 ```
 
-두 명령 모두 `--claude-dir`, `--codex-home`, `--codex-bin`도 받습니다. 호스트는 기본적으로 명령을 실행하는 호스트입니다.
+두 명령 모두 `--claude-dir`, `--codex-home`도 받습니다. 호스트는 기본적으로 명령을 실행하는 호스트입니다.
 `check`는 읽기이며 아무것도 쓰지 않습니다. 문제마다 한 줄을 보고합니다.
 
 - Claude Code: `defaultMode`가 `dontAsk`인 경우와 Bash나 MCP 도구에 적용되는 `permissions.ask` 규칙(최대 세 개 표시).
@@ -23,7 +23,8 @@ python3 <plugin root>/scripts/host_settings.py apply [--host claude|codex] [--js
   `Agent(Plan)`, `Agent(claude)` 중 하나가 없는 경우.
 - Claude Code: 유효한 `cleanupPeriodDays`가 3650보다 작거나 없어서 Claude Code가 그 일수(없으면 30일) 뒤에 세션 기록을 삭제하는 경우.
   관리형, 프로젝트 로컬, 프로젝트 공유, 사용자 설정 파일 중 정수를 정한 첫 파일의 값을 쓴다. 두 명령 모두 이 설정을 쓰지 않는다.
-- `~/.codex/config.toml`에 `[features] plugin_hooks`가 `true`가 아닌 경우(양쪽 호스트).
+- `~/.codex/config.toml`에 `[features] hooks = false`(또는 폐기된 별칭 `codex_hooks = false`)가 있는 경우(양쪽 호스트).
+  Codex는 훅을 기본으로 켜므로 키가 없는 것은 문제가 아닙니다. `plugin_hooks`는 Codex 0.170.0에서 제거되어 확인도 쓰기도 하지 않습니다.
 - Codex만: 플러그인 훅이 확인되지 않은 경우(heartbeat 해시 불일치), `config.toml`이 올바른 TOML이 아닌 경우,
   `rules/hei5enbug.rules`가 없거나 읽을 수 없거나 구버전이거나 플러그인 소유가 아닌 경우, MCP 서버에 `prompt` 승인 모드가 없는 경우,
   `approval_guard`가 꺼져 있어 모드 단계를 건너뛴 경우, 가드가 다루는 MCP 도구에 읽기에도 묻는 도구별 `prompt`가 있는 경우.
@@ -36,11 +37,9 @@ python3 <plugin root>/scripts/host_settings.py apply [--host claude|codex] [--js
   사용자 설정 파일(`~/.claude/settings.json`, 또는 `CLAUDE_CONFIG_DIR` 아래)의 기존 `permissions.deny` 항목 뒤에 덧붙입니다. 파일이나 키가
   없으면 만듭니다. 파일의 다른 내용은 지우거나 순서를 바꾸거나 다시 쓰지 않으며, JSON은 파일이 쓰던 들여쓰기로 저장합니다. 파일이 JSON 객체가
   아니거나 `permissions.deny`가 목록이 아니면 아무것도 쓰지 않고 그렇게 알립니다. 이 규칙은 Claude Code가 직접 적용하므로 mod가 로드되지
-  않은 세션에서도, 플러그인이 쓴 뒤라면 유효합니다. 에이전트 종류를 생략한 호출을 막는지는 Claude Code가 문서화하지 않았으므로 이 문서는
-  그에 대해 아무 주장도 하지 않습니다.
-
-- Codex: `[features] plugin_hooks`: `codex features list`에 보이면 `codex features enable plugin_hooks`로 켭니다. 그 명령이 없으면
-  직접 설정하라고 알립니다.
+  않은 세션에서도, 플러그인이 쓴 뒤라면 유효합니다. Claude Code는 `subagent_type`을 생략한 호출이, 세션에 대체할 `general-purpose`
+  서브에이전트가 없으면 `subagent_type is required`로 실패한다고 문서화합니다. `Agent(general-purpose)`에 대한 `permissions.deny`
+  항목이 "없음"으로 치는지는 문서화하지 않았으므로 이 문서는 그에 대해 아무 주장도 하지 않습니다.
 - Codex: 플러그인 소유 파일 `~/.codex/rules/hei5enbug.rules`: 플러그인 버전의 텍스트로 만들거나 갱신합니다. [승인 가드](approval-guard.ko.md#승인-가드)가
   쓰는 래퍼 스크립트에 대한 `prompt` 규칙을 담고 있습니다. 그 경로가 심볼릭 링크이거나 기존 파일에 플러그인 소유 헤더
   줄이 없으면 `apply`는 알리기만 하고 아무것도 쓰지 않습니다.

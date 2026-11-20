@@ -12,7 +12,7 @@ python3 <plugin root>/scripts/host_settings.py check [--host claude|codex] [--js
 python3 <plugin root>/scripts/host_settings.py apply [--host claude|codex] [--json]
 ```
 
-Both commands also take `--claude-dir`, `--codex-home`, and `--codex-bin`. The host defaults to the one that runs the
+Both commands also take `--claude-dir` and `--codex-home`. The host defaults to the one that runs the
 command. `check` is a read and writes nothing. It reports one line per problem:
 
 - Claude Code: `defaultMode` is `dontAsk`, and `permissions.ask` rules that match Bash or MCP tools, up to three named.
@@ -21,7 +21,9 @@ command. `check` is a read and writes nothing. It reports one line per problem:
 - Claude Code: the effective `cleanupPeriodDays` is below 3650 or unset, so Claude Code deletes session transcripts after
   that many days (30 when unset). The first of the managed, project local, project shared, and user settings files that
   sets an integer wins. Neither command writes that setting.
-- `[features] plugin_hooks` is not `true` in `~/.codex/config.toml`, on either host.
+- `[features] hooks = false` (or the deprecated alias `codex_hooks = false`) in `~/.codex/config.toml`, on either host.
+  Codex enables hooks by default, so a missing key is no problem; `plugin_hooks` was removed in Codex 0.170.0 and is
+  neither checked nor written.
 - Codex only: the plugin hooks are unconfirmed (the heartbeat hash differs), `config.toml` is not valid TOML,
   `rules/hei5enbug.rules` is missing, unreadable, outdated, or not plugin-owned, MCP servers lack the `prompt` approval
   mode, the mode step is skipped because `approval_guard` is off, or guard-covered MCP tools carry a per-tool `prompt`
@@ -37,9 +39,9 @@ command. `check` is a read and writes nothing. It reports one line per problem:
   reordered, or rewritten, except that the JSON is saved with the file's own indent. `apply` writes nothing when the file
   is not a JSON object or `permissions.deny` is not a list, and says so. Claude Code itself enforces
   the rules, so they also hold in a session where the mod did not load, once a session with the plugin has written them.
-  Claude Code does not document whether a call that omits the agent type is caught, so this page makes no claim about it.
-- Codex: `[features] plugin_hooks`, through `codex features enable plugin_hooks` when `codex features list` shows it. Without
-  that command, `apply` says to set it by hand.
+  Claude Code documents that a call that omits `subagent_type` fails with `subagent_type is required` when the session
+  has no `general-purpose` subagent to fall back on. It does not document whether a `permissions.deny` entry for
+  `Agent(general-purpose)` counts as having none, so this page makes no claim about that.
 - Codex: the plugin-owned `~/.codex/rules/hei5enbug.rules`, created or updated to the text of the plugin version. It holds the
   `prompt` rule for the wrapper script used by [Approval guard](approval-guard.md#approval-guard). `apply` only reports,
   and writes nothing, when that path is a symbolic link or an existing file lacks the plugin-owned header line.
