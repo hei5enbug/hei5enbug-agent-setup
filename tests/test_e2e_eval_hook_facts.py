@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "evals/e2e"))
@@ -82,6 +84,37 @@ class HookFactsTest(unittest.TestCase):
         good = records.run_problems("runs[0]", {**run, "hooks": {"replayed_hooks": 1}}, ["T1"], {"a": {}})
         bad = records.run_problems("runs[0]", {**run, "hooks": 3}, ["T1"], {"a": {}})
         self.assertEqual((good, bad), ([], ["runs[0] hooks is not an object"]))
+
+    def test_Codex_재생의_worker_생성은_Codex로_평가되고_agent_type_worker로_읽힌다(self):
+        """Codex 재생의 spawn_agent는 agent_type과 message로 가드에 가고, worker 짝이 아닌 모델은 worker 이름으로 거부된다."""
+        # given
+        codex_home = self.root / "codex-home"
+        (codex_home / "agents").mkdir(parents=True)
+        (codex_home / "agents" / "worker.toml").write_text('name = "worker"\n', encoding="utf-8")
+        calls = [{"name": "spawn_agent", "id": "1", "input": {"subagent_type": "worker", "prompt": "작업", "task_name": "w1",
+                                                              "model": "claude-opus-5-5", "reasoning_effort": "high"}}]
+        env = {"CODEX_HOME": str(codex_home), "HEI5ENBUG_CODEX_WORKER_MODEL": "auto", "HEI5ENBUG_CODEX_WORKER_EFFORT": "high"}
+
+        # when
+        facts = hook_facts.replay(REPO_ROOT, "codex", calls, self.root, env)
+
+        # then
+        self.assertEqual([(d["hook"], d["tool"]) for d in facts["replay_denials"]], [("PreToolUse:agent_guard.py", "Agent")])
+        self.assertIn("`worker` assignments must use", facts["replay_denials"][0]["reason"])
+
+    def test_호스트_환경은_Codex에만_PLUGIN_ROOT를_두고_Claude에서는_상속된_값을_지운다(self):
+        """Codex 재생은 PLUGIN_ROOT와 CLAUDE_PLUGIN_ROOT를 함께 주고, Claude Code 재생은 상속된 PLUGIN_ROOT를 남기지 않는다."""
+        # given
+        inherited = {"PLUGIN_ROOT": "/inherited"}
+
+        # when
+        with mock.patch.dict(os.environ, inherited):
+            codex = hook_facts.host_environment(self.root, "codex", None)
+            claude = hook_facts.host_environment(self.root, "claude", None)
+
+        # then
+        self.assertEqual((codex["PLUGIN_ROOT"], codex["CLAUDE_PLUGIN_ROOT"]), (str(self.root), str(self.root)))
+        self.assertEqual((claude.get("PLUGIN_ROOT"), claude["CLAUDE_PLUGIN_ROOT"]), (None, str(self.root)))
 
 
 if __name__ == "__main__":

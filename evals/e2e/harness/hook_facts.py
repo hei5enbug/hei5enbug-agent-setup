@@ -19,6 +19,7 @@ from typing import Any, Mapping, Sequence
 HOOK_FILES = {"claude": ("hooks.json", "claude-hooks.json"), "codex": ("hooks.json", "codex-hooks.json")}
 TIMED_EVENTS = ("PreToolUse", "PostToolUse")
 TOOL_ALIASES = {"spawn_agent": "Agent"}
+CODEX_SPAWN_FIELDS = {"subagent_type": "agent_type", "prompt": "message"}
 HOOK_TIMEOUT_SECONDS = 30.0
 REASON_LIMIT = 200
 ABSOLUTE_PATH = re.compile(r"(?<![\w.:/-])(?:/[\w.@+-]+){2,}")
@@ -66,16 +67,33 @@ def decision_reason(output: str) -> str | None:
     return None
 
 
+def host_environment(plugin_dir: Path, host: str, extra_env: Mapping[str, str] | None) -> dict[str, str]:
+    """The environment a host's hook launch gives: Codex sets PLUGIN_ROOT and CLAUDE_PLUGIN_ROOT, Claude Code only the latter."""
+    env = {**os.environ, **MEASUREMENT_ENV, "CLAUDE_PLUGIN_ROOT": str(plugin_dir), **(extra_env or {})}
+    env.pop("PLUGIN_ROOT", None)
+    if host == "codex":
+        env["PLUGIN_ROOT"] = str(plugin_dir)
+    return env
+
+
+def hook_input(host: str, name: str, tool_input: Mapping[str, Any]) -> dict[str, Any]:
+    """The tool input a host's PreToolUse payload carries: a recorded Codex spawn uses Codex's own argument names."""
+    if host != "codex" or name != "spawn_agent":
+        return dict(tool_input)
+    return {CODEX_SPAWN_FIELDS.get(key, key): value for key, value in tool_input.items()}
+
+
 def replay(plugin_dir: Path, host: str, calls: Sequence[Mapping[str, Any]], cwd: Path, extra_env: Mapping[str, str] | None = None
            ) -> dict[str, Any]:
     """Send each recorded call to the matching hooks and return the hook count, total and slowest seconds, and denials."""
-    env = {**os.environ, **MEASUREMENT_ENV, "CLAUDE_PLUGIN_ROOT": str(plugin_dir), **(extra_env or {})}
+    env = host_environment(plugin_dir, host, extra_env)
     hooks = plugin_hooks(plugin_dir, host)
     runs, denials = [], []
     for call in calls:
         tool = TOOL_ALIASES.get(str(call.get("name")), str(call.get("name")))
         for hook in (h for h in hooks if matches(h, tool)):
-            payload = {"hook_event_name": hook["event"], "tool_name": tool, "tool_input": call.get("input") or {},
+            payload = {"hook_event_name": hook["event"], "tool_name": tool,
+                       "tool_input": hook_input(host, str(call.get("name")), call.get("input") or {}),
                        "tool_use_id": str(call.get("id") or ""), "cwd": str(cwd), "session_id": "replay"}
             started = time.perf_counter()
             try:
