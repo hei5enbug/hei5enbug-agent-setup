@@ -1,0 +1,473 @@
+{
+  "issue": 133,
+  "cases": [
+    "F02",
+    "F82",
+    "T02",
+    "T82"
+  ],
+  "variants": {
+    "before": {
+      "revision": "93f7b27c3c16"
+    },
+    "after2": {
+      "revision": "5a155bdbded5"
+    }
+  },
+  "runs": [
+    {
+      "case": "F02",
+      "variant": "after2",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "claude-sonnet-5-5",
+          "effort": "high"
+        },
+        "codex_child:worker": {
+          "model": "gpt-6.2-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#5": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "new-tests": true,
+        "agent-tests": true,
+        "readme-shipping": true,
+        "mirror-updated": true,
+        "files-changed": true,
+        "worker-delegated": true,
+        "worker-route": true
+      },
+      "wall_seconds": 1187.3440292477608,
+      "cost_usd": 2.1708478999999996,
+      "rep": 1,
+      "hooks": {
+        "replayed_hooks": 401,
+        "replay_total_seconds": 22.416,
+        "replay_slowest_seconds": 0.084,
+        "replay_slowest": "PreToolUse:Bash:approval_guard.py",
+        "replay_denials": []
+      }
+    },
+    {
+      "case": "F82",
+      "variant": "after2",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "claude-sonnet-5-5",
+          "effort": "high"
+        },
+        "codex_child:worker": {
+          "model": "gpt-6-luna",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "spacing-16": true,
+        "label-full-name": true,
+        "label-email-alerts": true,
+        "variant-secondary": true,
+        "nothing-else-changed": true,
+        "only-allowed-files-changed": true,
+        "renders": true,
+        "worker-delegated": true,
+        "worker-route": true
+      },
+      "wall_seconds": 140.42943320982158,
+      "cost_usd": 0.30698144000000005,
+      "rep": 1,
+      "hooks": {
+        "replayed_hooks": 142,
+        "replay_total_seconds": 8.033,
+        "replay_slowest_seconds": 0.081,
+        "replay_slowest": "PreToolUse:Bash:approval_guard.py",
+        "replay_denials": []
+      }
+    },
+    {
+      "case": "T02",
+      "variant": "after2",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "subagent:hei5enbug-agent-setup:worker": {
+          "model": "claude-sonnet-5-5",
+          "effort": "not measured"
+        },
+        "role_runner:reviewer": {
+          "model": "gpt-6.1-sol",
+          "effort": "xhigh"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "new-tests": true,
+        "agent-tests": true,
+        "readme-shipping": true,
+        "mirror-updated": true,
+        "files-changed": true
+      },
+      "wall_seconds": 1100.3765089605004,
+      "cost_usd": 3.311004200000001,
+      "rep": 1,
+      "hooks": {
+        "replayed_hooks": 622,
+        "replay_total_seconds": 35.761,
+        "replay_slowest_seconds": 0.084,
+        "replay_slowest": "PreToolUse:Bash:approval_guard.py",
+        "replay_denials": [],
+        "stream_hook_responses": 446,
+        "stream_hook_failures": 0,
+        "stream_denials": []
+      }
+    },
+    {
+      "case": "T02",
+      "variant": "before",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "claude-sonnet-5-5",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#5": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#6": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#7": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "new-tests": true,
+        "agent-tests": true,
+        "readme-shipping": true,
+        "mirror-updated": true,
+        "files-changed": true
+      },
+      "wall_seconds": 850.2542865816504,
+      "cost_usd": 2.7625653000000003,
+      "rep": 1,
+      "hooks": {
+        "replayed_hooks": 287,
+        "replay_total_seconds": 17.208,
+        "replay_slowest_seconds": 0.181,
+        "replay_slowest": "PostToolUse:Bash:approval_guard.py",
+        "replay_denials": []
+      }
+    },
+    {
+      "case": "T02",
+      "variant": "before",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "subagent:hei5enbug-agent-setup:sonnet-worker": {
+          "model": "claude-sonnet-5-5",
+          "effort": "not measured"
+        },
+        "role_runner:reviewer": {
+          "model": "gpt-6.1-sol",
+          "effort": "xhigh"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "new-tests": true,
+        "agent-tests": true,
+        "readme-shipping": true,
+        "mirror-updated": true,
+        "files-changed": true
+      },
+      "wall_seconds": 733.2785071674734,
+      "cost_usd": 2.5251475999999995,
+      "rep": 1,
+      "hooks": {
+        "replayed_hooks": 338,
+        "replay_total_seconds": 19.58,
+        "replay_slowest_seconds": 0.099,
+        "replay_slowest": "PreToolUse:Bash:approval_guard.py",
+        "replay_denials": [],
+        "stream_hook_responses": 322,
+        "stream_hook_failures": 0,
+        "stream_denials": []
+      }
+    },
+    {
+      "case": "T82",
+      "variant": "after2",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "spacing-16": true,
+        "label-full-name": true,
+        "label-email-alerts": true,
+        "variant-secondary": true,
+        "nothing-else-changed": true,
+        "only-allowed-files-changed": true,
+        "renders": true,
+        "routing-worker": false,
+        "worker-model-haiku": false
+      },
+      "wall_seconds": 27.384423084557056,
+      "cost_usd": 0.2805078,
+      "rep": 1,
+      "hooks": {
+        "replayed_hooks": 42,
+        "replay_total_seconds": 2.629,
+        "replay_slowest_seconds": 0.079,
+        "replay_slowest": "PreToolUse:Edit:approval_guard.py",
+        "replay_denials": [],
+        "stream_hook_responses": 58,
+        "stream_hook_failures": 0,
+        "stream_denials": []
+      }
+    },
+    {
+      "case": "T82",
+      "variant": "before",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "spacing-16": true,
+        "label-full-name": true,
+        "label-email-alerts": true,
+        "variant-secondary": true,
+        "nothing-else-changed": true,
+        "only-allowed-files-changed": true,
+        "renders": true,
+        "routing-sonnet-worker": false
+      },
+      "wall_seconds": 27.68744500167668,
+      "cost_usd": 0.03952359999999999,
+      "rep": 1,
+      "hooks": {
+        "replayed_hooks": 28,
+        "replay_total_seconds": 1.593,
+        "replay_slowest_seconds": 0.08,
+        "replay_slowest": "PreToolUse:Bash:approval_guard.py",
+        "replay_denials": []
+      }
+    },
+    {
+      "case": "T82",
+      "variant": "before",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "subagent:hei5enbug-agent-setup:worker": {
+          "model": "claude-haiku-5-5",
+          "effort": "not measured"
+        }
+      },
+      "checks": {
+        "spacing-16": true,
+        "label-full-name": true,
+        "label-email-alerts": true,
+        "variant-secondary": true,
+        "nothing-else-changed": true,
+        "only-allowed-files-changed": true,
+        "renders": true,
+        "routing-sonnet-worker": false
+      },
+      "wall_seconds": 99.47147387638688,
+      "cost_usd": 0.470322665,
+      "rep": 1,
+      "hooks": {
+        "replayed_hooks": 95,
+        "replay_total_seconds": 5.651,
+        "replay_slowest_seconds": 0.081,
+        "replay_slowest": "PostToolUse:Read:approval_guard.py",
+        "replay_denials": [],
+        "stream_hook_responses": 105,
+        "stream_hook_failures": 0,
+        "stream_denials": []
+      }
+    }
+  ],
+  "verdicts": [
+    {
+      "case": "F02",
+      "verdict": "not measured",
+      "step": "no after run on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "F02",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "F02",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "F02",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "F82",
+      "verdict": "not measured",
+      "step": "no after run on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "F82",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "F82",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "F82",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T02",
+      "verdict": "not measured",
+      "step": "no after run on codex",
+      "measure": "quality"
+    },
+    {
+      "case": "T02",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T02",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T02",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T82",
+      "verdict": "not measured",
+      "step": "no after run on codex",
+      "measure": "quality"
+    },
+    {
+      "case": "T82",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T82",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T82",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    }
+  ]
+}
