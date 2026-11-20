@@ -158,6 +158,26 @@ Measured limit: in round 2 the keyword matcher still counted about eight finding
 words as outside the list, in T92 and T93. None of them changes the reviewer decision, because Opus failed T91 on opinion
 findings that no list holds, and the opponent decision is `none` either way.
 
+## GPT role comparison (2026-11-20)
+
+`gpt-roles-record.json` records a second comparison that decides which GPT model each role pins: `gpt-6.1-sol`,
+`gpt-6.2-sol`, `gpt-6.1-terra`, and `gpt-6-luna` for the roles on `gpt-6.1-sol`, and `gpt-6-luna` against `gpt-5.6-luna`
+for scout, researcher, and worker. It uses the same result fields as `record.json` plus the `role`, with one result per
+role, case, and candidate (several reps count as passed only when every rep passed, at their mean cost and wall time),
+and the same efficiency rule. It is not validated by `mr_cli.py` and is no part of the Fable-versus-Opus record above.
+
+| Role | Cases | Decision |
+|---|---|---|
+| reviewer | T89 to T91, S5 | `gpt-6.1-terra`: 4 of 4 for 0.061 USD and 68 s, against `gpt-6.2-sol` 4 of 4 for 0.265 USD; `gpt-6.1-sol` fails S5 |
+| opponent | T92, T93 | `gpt-6.1-sol` stays: it is the only candidate that passes both |
+| worker | W1 to W3 | `gpt-6-luna`: every candidate passes, and it costs 0.020 USD against 0.101 USD for `gpt-6.1-terra` |
+| scout, researcher | S7, SC1 to SC3, R1 | `gpt-6-luna`: 4 of 4 and 1 of 1, against 2 of 4 and 1 of 1 for `gpt-5.6-luna`, at lower cost |
+| language | t1, t3, t5 | `gpt-6.1-terra` wins the efficiency rule; not applied until the owner's blind comparison of its drafts |
+| text_review | TR1, TR2 | All four candidates fail TR1, which holds a second real defect (the column-list sentence is a list of names that the diff shows). On TR2 alone `gpt-6.1-terra` wins; not applied |
+
+`gpt-6.2-sol` does not replace `gpt-6.1-sol` everywhere: it fails the opponent cases T92 and T93 and the language cases
+t1 and t5 that `gpt-6.1-sol` passes, and its cost over all sol-role cases (1.009 USD against 1.031 USD) is inside the tie band.
+
 ## Checks without model calls
 
 ```text

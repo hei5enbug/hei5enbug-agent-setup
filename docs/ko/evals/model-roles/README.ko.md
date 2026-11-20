@@ -144,6 +144,26 @@ bash $WORK/plugin-opus/skills/tiki-taka/run-opponent.sh --opponent claude --stat
 Opus가 목록에 없는 의견 발견 때문에 T91에서 실패했으므로 이 중 어느 것도 검토자 결정을 바꾸지 않고, 토론 상대
 결정은 어느 쪽이든 `none`이다.
 
+## GPT 역할 비교 (2026-11-20)
+
+`gpt-roles-record.json`은 각 역할이 고정하는 GPT 모델을 정하는 두 번째 비교를 기록한다. `gpt-6.1-sol`에 있던 역할은
+`gpt-6.1-sol`, `gpt-6.2-sol`, `gpt-6.1-terra`, `gpt-6-luna`를 비교했고, scout, researcher, worker는 `gpt-6-luna`와
+`gpt-5.6-luna`를 비교했다. 결과 필드는 `record.json`과 같고 `role`이 더해지며, 역할, 사례, 후보마다 결과 하나를 둔다(반복이
+여럿이면 모두 통과해야 통과이고 비용과 시간은 평균이다). 효율 규칙도 같다. `mr_cli.py`는 이 파일을 검증하지 않으며, 위의
+Fable 대 Opus 기록과는 별개다.
+
+| 역할 | 사례 | 결정 |
+|---|---|---|
+| reviewer | T89~T91, S5 | `gpt-6.1-terra`: 4개 중 4개 통과, 0.061 USD, 68초. `gpt-6.2-sol`은 4개 중 4개, 0.265 USD이며 `gpt-6.1-sol`은 S5에서 실패한다 |
+| opponent | T92, T93 | `gpt-6.1-sol` 유지: 두 사례를 모두 통과한 유일한 후보다 |
+| worker | W1~W3 | `gpt-6-luna`: 모든 후보가 통과하고 비용은 0.020 USD로 `gpt-6.1-terra`의 0.101 USD보다 낮다 |
+| scout, researcher | S7, SC1~SC3, R1 | `gpt-6-luna`: 4개 중 4개와 1개 중 1개 통과로, `gpt-5.6-luna`의 4개 중 2개와 1개 중 1개보다 낫고 비용도 낮다 |
+| language | t1, t3, t5 | `gpt-6.1-terra`가 효율 규칙을 이기지만, 소유자가 초안을 블라인드로 비교하기 전에는 적용하지 않는다 |
+| text_review | TR1, TR2 | 네 후보 모두 TR1에서 실패한다. TR1에는 실제 결함이 하나 더 있다(열 목록 문장은 diff가 보여 주는 이름의 목록이다). TR2만으로는 `gpt-6.1-terra`가 이기지만 적용하지 않는다 |
+
+`gpt-6.2-sol`은 `gpt-6.1-sol`을 모든 곳에서 대체하지 못한다. `gpt-6.1-sol`이 통과하는 상대 사례 T92, T93과 language 사례
+t1, t5에서 실패하고, 모든 sol 역할 사례의 비용(1.009 USD 대 1.031 USD)은 동률 범위 안이다.
+
 ## 모델 호출 없는 검사
 
 ```text

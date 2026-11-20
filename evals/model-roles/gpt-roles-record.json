@@ -1,0 +1,1158 @@
+{
+ "version": 1,
+ "kind": "gpt-role-comparison",
+ "date": "2026-11-20",
+ "status": "recorded",
+ "candidates": [
+  {
+   "model": "gpt-6.1-sol"
+  },
+  {
+   "model": "gpt-6.2-sol"
+  },
+  {
+   "model": "gpt-6.1-terra"
+  },
+  {
+   "model": "gpt-6-luna"
+  },
+  {
+   "model": "gpt-5.6-luna"
+  }
+ ],
+ "cases": {
+  "S5": "reviewer",
+  "T89": "reviewer",
+  "T90": "reviewer",
+  "T91": "reviewer",
+  "TR1": "text_review",
+  "TR2": "text_review",
+  "T92": "opponent",
+  "T93": "opponent",
+  "t1": "language",
+  "t3": "language",
+  "t5": "language",
+  "W1": "worker",
+  "W2": "worker",
+  "W3": "worker",
+  "S7": "scout",
+  "SC1": "scout",
+  "SC2": "scout",
+  "SC3": "scout",
+  "R1": "researcher"
+ },
+ "results": [
+  {
+   "role": "language",
+   "case": "t1",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": false,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.001932,
+   "wall_seconds": 8.429,
+   "attempts": 1
+  },
+  {
+   "role": "language",
+   "case": "t1",
+   "model": "gpt-6.1-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-sol",
+   "host_effort": "high",
+   "cost_usd": 0.027334,
+   "wall_seconds": 10.56,
+   "attempts": 1
+  },
+  {
+   "role": "language",
+   "case": "t1",
+   "model": "gpt-6.1-terra",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-terra",
+   "host_effort": "high",
+   "cost_usd": 0.012713,
+   "wall_seconds": 6.236,
+   "attempts": 1
+  },
+  {
+   "role": "language",
+   "case": "t1",
+   "model": "gpt-6.2-sol",
+   "effort": "high",
+   "passed": false,
+   "host_model": "gpt-6.2-sol",
+   "host_effort": "high",
+   "cost_usd": 0.031798,
+   "wall_seconds": 15.55,
+   "attempts": 1
+  },
+  {
+   "role": "language",
+   "case": "t3",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.002138,
+   "wall_seconds": 17.662,
+   "attempts": 1
+  },
+  {
+   "role": "language",
+   "case": "t3",
+   "model": "gpt-6.1-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-sol",
+   "host_effort": "high",
+   "cost_usd": 0.033068,
+   "wall_seconds": 25.975,
+   "attempts": 1
+  },
+  {
+   "role": "language",
+   "case": "t3",
+   "model": "gpt-6.1-terra",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-terra",
+   "host_effort": "high",
+   "cost_usd": 0.013355,
+   "wall_seconds": 8.839,
+   "attempts": 1
+  },
+  {
+   "role": "language",
+   "case": "t3",
+   "model": "gpt-6.2-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.2-sol",
+   "host_effort": "high",
+   "cost_usd": 0.033182,
+   "wall_seconds": 18.133,
+   "attempts": 1
+  },
+  {
+   "role": "language",
+   "case": "t5",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": false,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.000642,
+   "wall_seconds": 12.488,
+   "attempts": 1
+  },
+  {
+   "role": "language",
+   "case": "t5",
+   "model": "gpt-6.1-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-sol",
+   "host_effort": "high",
+   "cost_usd": 0.031188,
+   "wall_seconds": 17.889,
+   "attempts": 1
+  },
+  {
+   "role": "language",
+   "case": "t5",
+   "model": "gpt-6.1-terra",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-terra",
+   "host_effort": "high",
+   "cost_usd": 0.01291,
+   "wall_seconds": 6.726,
+   "attempts": 1
+  },
+  {
+   "role": "language",
+   "case": "t5",
+   "model": "gpt-6.2-sol",
+   "effort": "high",
+   "passed": false,
+   "host_model": "gpt-6.2-sol",
+   "host_effort": "high",
+   "cost_usd": 0.044774,
+   "wall_seconds": 19.056,
+   "attempts": 1
+  },
+  {
+   "role": "opponent",
+   "case": "T92",
+   "model": "gpt-6-luna",
+   "effort": "xhigh",
+   "passed": true,
+   "host_model": "gpt-6-luna",
+   "host_effort": "xhigh",
+   "cost_usd": 0.007381,
+   "wall_seconds": 111.715,
+   "attempts": 1
+  },
+  {
+   "role": "opponent",
+   "case": "T92",
+   "model": "gpt-6.1-sol",
+   "effort": "xhigh",
+   "passed": true,
+   "host_model": "gpt-6.1-sol",
+   "host_effort": "xhigh",
+   "cost_usd": 0.106692,
+   "wall_seconds": 66.592,
+   "attempts": 1
+  },
+  {
+   "role": "opponent",
+   "case": "T92",
+   "model": "gpt-6.1-terra",
+   "effort": "xhigh",
+   "passed": false,
+   "host_model": "gpt-6.1-terra",
+   "host_effort": "xhigh",
+   "cost_usd": 0.039857,
+   "wall_seconds": 43.076,
+   "attempts": 1
+  },
+  {
+   "role": "opponent",
+   "case": "T92",
+   "model": "gpt-6.2-sol",
+   "effort": "xhigh",
+   "passed": false,
+   "host_model": "gpt-6.2-sol",
+   "host_effort": "xhigh",
+   "cost_usd": 0.156747,
+   "wall_seconds": 175.609,
+   "attempts": 1
+  },
+  {
+   "role": "opponent",
+   "case": "T93",
+   "model": "gpt-6-luna",
+   "effort": "xhigh",
+   "passed": false,
+   "host_model": "gpt-6-luna",
+   "host_effort": "xhigh",
+   "cost_usd": 0.008084,
+   "wall_seconds": 139.555,
+   "attempts": 1
+  },
+  {
+   "role": "opponent",
+   "case": "T93",
+   "model": "gpt-6.1-sol",
+   "effort": "xhigh",
+   "passed": true,
+   "host_model": "gpt-6.1-sol",
+   "host_effort": "xhigh",
+   "cost_usd": 0.118895,
+   "wall_seconds": 83.662,
+   "attempts": 1
+  },
+  {
+   "role": "opponent",
+   "case": "T93",
+   "model": "gpt-6.1-terra",
+   "effort": "xhigh",
+   "passed": true,
+   "host_model": "gpt-6.1-terra",
+   "host_effort": "xhigh",
+   "cost_usd": 0.01543,
+   "wall_seconds": 28.562,
+   "attempts": 1
+  },
+  {
+   "role": "opponent",
+   "case": "T93",
+   "model": "gpt-6.2-sol",
+   "effort": "xhigh",
+   "passed": false,
+   "host_model": "gpt-6.2-sol",
+   "host_effort": "xhigh",
+   "cost_usd": 0.11231,
+   "wall_seconds": 90.205,
+   "attempts": 1
+  },
+  {
+   "role": "researcher",
+   "case": "R1",
+   "model": "gpt-5.6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-5.6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.004279,
+   "wall_seconds": 28.491,
+   "attempts": 2
+  },
+  {
+   "role": "researcher",
+   "case": "R1",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.001891,
+   "wall_seconds": 18.8,
+   "attempts": 2
+  },
+  {
+   "role": "reviewer",
+   "case": "S5",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": false,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.005142,
+   "wall_seconds": 76.728,
+   "attempts": 1
+  },
+  {
+   "role": "reviewer",
+   "case": "S5",
+   "model": "gpt-6.1-sol",
+   "effort": "high",
+   "passed": false,
+   "host_model": "gpt-6.1-sol",
+   "host_effort": "high",
+   "cost_usd": 0.070162,
+   "wall_seconds": 42.421,
+   "attempts": 1
+  },
+  {
+   "role": "reviewer",
+   "case": "S5",
+   "model": "gpt-6.1-terra",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-terra",
+   "host_effort": "high",
+   "cost_usd": 0.010338,
+   "wall_seconds": 20.989,
+   "attempts": 1
+  },
+  {
+   "role": "reviewer",
+   "case": "S5",
+   "model": "gpt-6.2-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.2-sol",
+   "host_effort": "high",
+   "cost_usd": 0.066633,
+   "wall_seconds": 39.961,
+   "attempts": 1
+  },
+  {
+   "role": "reviewer",
+   "case": "T89",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.006025,
+   "wall_seconds": 47.315,
+   "attempts": 1
+  },
+  {
+   "role": "reviewer",
+   "case": "T89",
+   "model": "gpt-6.1-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-sol",
+   "host_effort": "high",
+   "cost_usd": 0.065267,
+   "wall_seconds": 28.731,
+   "attempts": 1
+  },
+  {
+   "role": "reviewer",
+   "case": "T89",
+   "model": "gpt-6.1-terra",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-terra",
+   "host_effort": "high",
+   "cost_usd": 0.021157,
+   "wall_seconds": 12.153,
+   "attempts": 1
+  },
+  {
+   "role": "reviewer",
+   "case": "T89",
+   "model": "gpt-6.2-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.2-sol",
+   "host_effort": "high",
+   "cost_usd": 0.060773,
+   "wall_seconds": 24.535,
+   "attempts": 1
+  },
+  {
+   "role": "reviewer",
+   "case": "T90",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.00294,
+   "wall_seconds": 30.024,
+   "attempts": 1
+  },
+  {
+   "role": "reviewer",
+   "case": "T90",
+   "model": "gpt-6.1-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-sol",
+   "host_effort": "high",
+   "cost_usd": 0.102415,
+   "wall_seconds": 22.972,
+   "attempts": 1
+  },
+  {
+   "role": "reviewer",
+   "case": "T90",
+   "model": "gpt-6.1-terra",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-terra",
+   "host_effort": "high",
+   "cost_usd": 0.023031,
+   "wall_seconds": 23.228,
+   "attempts": 1
+  },
+  {
+   "role": "reviewer",
+   "case": "T90",
+   "model": "gpt-6.2-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.2-sol",
+   "host_effort": "high",
+   "cost_usd": 0.08508,
+   "wall_seconds": 31.037,
+   "attempts": 1
+  },
+  {
+   "role": "reviewer",
+   "case": "T91",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.005083,
+   "wall_seconds": 37.659,
+   "attempts": 1
+  },
+  {
+   "role": "reviewer",
+   "case": "T91",
+   "model": "gpt-6.1-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-sol",
+   "host_effort": "high",
+   "cost_usd": 0.068528,
+   "wall_seconds": 23.687,
+   "attempts": 1
+  },
+  {
+   "role": "reviewer",
+   "case": "T91",
+   "model": "gpt-6.1-terra",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-terra",
+   "host_effort": "high",
+   "cost_usd": 0.006731,
+   "wall_seconds": 11.154,
+   "attempts": 1
+  },
+  {
+   "role": "reviewer",
+   "case": "T91",
+   "model": "gpt-6.2-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.2-sol",
+   "host_effort": "high",
+   "cost_usd": 0.052939,
+   "wall_seconds": 22.089,
+   "attempts": 1
+  },
+  {
+   "role": "scout",
+   "case": "S7",
+   "model": "gpt-5.6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-5.6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.003116,
+   "wall_seconds": 18.811,
+   "attempts": 2
+  },
+  {
+   "role": "scout",
+   "case": "S7",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.002072,
+   "wall_seconds": 17.489,
+   "attempts": 2
+  },
+  {
+   "role": "scout",
+   "case": "SC1",
+   "model": "gpt-5.6-luna",
+   "effort": "high",
+   "passed": false,
+   "host_model": "gpt-5.6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.004464,
+   "wall_seconds": 22.598,
+   "attempts": 2
+  },
+  {
+   "role": "scout",
+   "case": "SC1",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.002024,
+   "wall_seconds": 15.078,
+   "attempts": 2
+  },
+  {
+   "role": "scout",
+   "case": "SC2",
+   "model": "gpt-5.6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-5.6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.002575,
+   "wall_seconds": 12.71,
+   "attempts": 2
+  },
+  {
+   "role": "scout",
+   "case": "SC2",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.001898,
+   "wall_seconds": 10.631,
+   "attempts": 2
+  },
+  {
+   "role": "scout",
+   "case": "SC3",
+   "model": "gpt-5.6-luna",
+   "effort": "high",
+   "passed": false,
+   "host_model": "gpt-5.6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.004195,
+   "wall_seconds": 20.967,
+   "attempts": 2
+  },
+  {
+   "role": "scout",
+   "case": "SC3",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.00144,
+   "wall_seconds": 13.63,
+   "attempts": 2
+  },
+  {
+   "role": "text_review",
+   "case": "TR1",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": false,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.0,
+   "wall_seconds": 21.0,
+   "attempts": 1
+  },
+  {
+   "role": "text_review",
+   "case": "TR1",
+   "model": "gpt-6.1-sol",
+   "effort": "high",
+   "passed": false,
+   "host_model": "gpt-6.1-sol",
+   "host_effort": "high",
+   "cost_usd": 0.02538,
+   "wall_seconds": 28.768,
+   "attempts": 1
+  },
+  {
+   "role": "text_review",
+   "case": "TR1",
+   "model": "gpt-6.1-terra",
+   "effort": "high",
+   "passed": false,
+   "host_model": "gpt-6.1-terra",
+   "host_effort": "high",
+   "cost_usd": 0.022957,
+   "wall_seconds": 18.015,
+   "attempts": 1
+  },
+  {
+   "role": "text_review",
+   "case": "TR1",
+   "model": "gpt-6.2-sol",
+   "effort": "high",
+   "passed": false,
+   "host_model": "gpt-6.2-sol",
+   "host_effort": "high",
+   "cost_usd": 0.045158,
+   "wall_seconds": 22.707,
+   "attempts": 1
+  },
+  {
+   "role": "text_review",
+   "case": "TR2",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": false,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.0,
+   "wall_seconds": 0.0,
+   "attempts": 1
+  },
+  {
+   "role": "text_review",
+   "case": "TR2",
+   "model": "gpt-6.1-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-sol",
+   "host_effort": "high",
+   "cost_usd": 0.02369,
+   "wall_seconds": 26.698,
+   "attempts": 1
+  },
+  {
+   "role": "text_review",
+   "case": "TR2",
+   "model": "gpt-6.1-terra",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-terra",
+   "host_effort": "high",
+   "cost_usd": 0.018221,
+   "wall_seconds": 9.556,
+   "attempts": 1
+  },
+  {
+   "role": "text_review",
+   "case": "TR2",
+   "model": "gpt-6.2-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.2-sol",
+   "host_effort": "high",
+   "cost_usd": 0.044516,
+   "wall_seconds": 23.28,
+   "attempts": 1
+  },
+  {
+   "role": "worker",
+   "case": "W1",
+   "model": "gpt-5.6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-5.6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.016722,
+   "wall_seconds": 81.804,
+   "attempts": 2
+  },
+  {
+   "role": "worker",
+   "case": "W1",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.00684,
+   "wall_seconds": 59.689,
+   "attempts": 2
+  },
+  {
+   "role": "worker",
+   "case": "W1",
+   "model": "gpt-6.1-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-sol",
+   "host_effort": "high",
+   "cost_usd": 0.086851,
+   "wall_seconds": 48.402,
+   "attempts": 1
+  },
+  {
+   "role": "worker",
+   "case": "W1",
+   "model": "gpt-6.1-terra",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-terra",
+   "host_effort": "high",
+   "cost_usd": 0.02565,
+   "wall_seconds": 31.213,
+   "attempts": 1
+  },
+  {
+   "role": "worker",
+   "case": "W1",
+   "model": "gpt-6.2-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.2-sol",
+   "host_effort": "high",
+   "cost_usd": 0.090914,
+   "wall_seconds": 42.502,
+   "attempts": 1
+  },
+  {
+   "role": "worker",
+   "case": "W2",
+   "model": "gpt-5.6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-5.6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.014282,
+   "wall_seconds": 87.219,
+   "attempts": 2
+  },
+  {
+   "role": "worker",
+   "case": "W2",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.008471,
+   "wall_seconds": 74.02,
+   "attempts": 2
+  },
+  {
+   "role": "worker",
+   "case": "W2",
+   "model": "gpt-6.1-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-sol",
+   "host_effort": "high",
+   "cost_usd": 0.149082,
+   "wall_seconds": 66.048,
+   "attempts": 1
+  },
+  {
+   "role": "worker",
+   "case": "W2",
+   "model": "gpt-6.1-terra",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-terra",
+   "host_effort": "high",
+   "cost_usd": 0.047524,
+   "wall_seconds": 41.162,
+   "attempts": 1
+  },
+  {
+   "role": "worker",
+   "case": "W2",
+   "model": "gpt-6.2-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.2-sol",
+   "host_effort": "high",
+   "cost_usd": 0.092995,
+   "wall_seconds": 50.542,
+   "attempts": 1
+  },
+  {
+   "role": "worker",
+   "case": "W3",
+   "model": "gpt-5.6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-5.6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.012558,
+   "wall_seconds": 70.602,
+   "attempts": 2
+  },
+  {
+   "role": "worker",
+   "case": "W3",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.004671,
+   "wall_seconds": 49.023,
+   "attempts": 2
+  },
+  {
+   "role": "worker",
+   "case": "W3",
+   "model": "gpt-6.1-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-sol",
+   "host_effort": "high",
+   "cost_usd": 0.12196,
+   "wall_seconds": 43.497,
+   "attempts": 1
+  },
+  {
+   "role": "worker",
+   "case": "W3",
+   "model": "gpt-6.1-terra",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-terra",
+   "host_effort": "high",
+   "cost_usd": 0.027846,
+   "wall_seconds": 34.294,
+   "attempts": 1
+  },
+  {
+   "role": "worker",
+   "case": "W3",
+   "model": "gpt-6.2-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.2-sol",
+   "host_effort": "high",
+   "cost_usd": 0.09113,
+   "wall_seconds": 43.178,
+   "attempts": 1
+  }
+ ],
+ "roles": {
+  "reviewer": {
+   "cases": [
+    "S5",
+    "T89",
+    "T90",
+    "T91"
+   ],
+   "candidates": [
+    {
+     "model": "gpt-6-luna",
+     "passes": 3,
+     "cost_usd": 0.01919,
+     "wall_seconds": 191.726
+    },
+    {
+     "model": "gpt-6.1-sol",
+     "passes": 3,
+     "cost_usd": 0.306372,
+     "wall_seconds": 117.811
+    },
+    {
+     "model": "gpt-6.1-terra",
+     "passes": 4,
+     "cost_usd": 0.061257,
+     "wall_seconds": 67.524
+    },
+    {
+     "model": "gpt-6.2-sol",
+     "passes": 4,
+     "cost_usd": 0.265425,
+     "wall_seconds": 117.622
+    }
+   ],
+   "efficiency_rule": {
+    "status": "winner",
+    "winner": "gpt-6.1-terra"
+   }
+  },
+  "text_review": {
+   "cases": [
+    "TR1",
+    "TR2"
+   ],
+   "candidates": [
+    {
+     "model": "gpt-6-luna",
+     "passes": 0,
+     "cost_usd": 0.0,
+     "wall_seconds": 21.0
+    },
+    {
+     "model": "gpt-6.1-sol",
+     "passes": 1,
+     "cost_usd": 0.04907,
+     "wall_seconds": 55.466
+    },
+    {
+     "model": "gpt-6.1-terra",
+     "passes": 1,
+     "cost_usd": 0.041178,
+     "wall_seconds": 27.571
+    },
+    {
+     "model": "gpt-6.2-sol",
+     "passes": 1,
+     "cost_usd": 0.089674,
+     "wall_seconds": 45.987
+    }
+   ],
+   "efficiency_rule": {
+    "status": "none",
+    "winner": null
+   },
+   "note": "TR1 has a second real defect (the column-list sentence, a list of names the diff shows), so it fails every candidate that follows the reviewer contract. Decision on TR2 alone: gpt-6.1-terra, resting on one case; not applied."
+  },
+  "opponent": {
+   "cases": [
+    "T92",
+    "T93"
+   ],
+   "candidates": [
+    {
+     "model": "gpt-6-luna",
+     "passes": 1,
+     "cost_usd": 0.015465,
+     "wall_seconds": 251.27
+    },
+    {
+     "model": "gpt-6.1-sol",
+     "passes": 2,
+     "cost_usd": 0.225587,
+     "wall_seconds": 150.254
+    },
+    {
+     "model": "gpt-6.1-terra",
+     "passes": 1,
+     "cost_usd": 0.055287,
+     "wall_seconds": 71.638
+    },
+    {
+     "model": "gpt-6.2-sol",
+     "passes": 0,
+     "cost_usd": 0.269057,
+     "wall_seconds": 265.814
+    }
+   ],
+   "efficiency_rule": {
+    "status": "winner",
+    "winner": "gpt-6.1-sol"
+   }
+  },
+  "language": {
+   "cases": [
+    "t1",
+    "t3",
+    "t5"
+   ],
+   "candidates": [
+    {
+     "model": "gpt-6-luna",
+     "passes": 1,
+     "cost_usd": 0.004712,
+     "wall_seconds": 38.579
+    },
+    {
+     "model": "gpt-6.1-sol",
+     "passes": 3,
+     "cost_usd": 0.09159,
+     "wall_seconds": 54.424
+    },
+    {
+     "model": "gpt-6.1-terra",
+     "passes": 3,
+     "cost_usd": 0.038978,
+     "wall_seconds": 21.801
+    },
+    {
+     "model": "gpt-6.2-sol",
+     "passes": 1,
+     "cost_usd": 0.109754,
+     "wall_seconds": 52.739
+    }
+   ],
+   "efficiency_rule": {
+    "status": "winner",
+    "winner": "gpt-6.1-terra"
+   }
+  },
+  "worker": {
+   "cases": [
+    "W1",
+    "W2",
+    "W3"
+   ],
+   "candidates": [
+    {
+     "model": "gpt-5.6-luna",
+     "passes": 3,
+     "cost_usd": 0.043562,
+     "wall_seconds": 239.625
+    },
+    {
+     "model": "gpt-6-luna",
+     "passes": 3,
+     "cost_usd": 0.019983,
+     "wall_seconds": 182.732
+    },
+    {
+     "model": "gpt-6.1-sol",
+     "passes": 3,
+     "cost_usd": 0.357893,
+     "wall_seconds": 157.947
+    },
+    {
+     "model": "gpt-6.1-terra",
+     "passes": 3,
+     "cost_usd": 0.10102,
+     "wall_seconds": 106.669
+    },
+    {
+     "model": "gpt-6.2-sol",
+     "passes": 3,
+     "cost_usd": 0.275039,
+     "wall_seconds": 136.222
+    }
+   ],
+   "efficiency_rule": {
+    "status": "winner",
+    "winner": "gpt-6-luna"
+   }
+  },
+  "scout": {
+   "cases": [
+    "S7",
+    "SC1",
+    "SC2",
+    "SC3"
+   ],
+   "candidates": [
+    {
+     "model": "gpt-5.6-luna",
+     "passes": 2,
+     "cost_usd": 0.014349,
+     "wall_seconds": 75.087
+    },
+    {
+     "model": "gpt-6-luna",
+     "passes": 4,
+     "cost_usd": 0.007433,
+     "wall_seconds": 56.826
+    }
+   ],
+   "efficiency_rule": {
+    "status": "winner",
+    "winner": "gpt-6-luna"
+   }
+  },
+  "researcher": {
+   "cases": [
+    "R1"
+   ],
+   "candidates": [
+    {
+     "model": "gpt-5.6-luna",
+     "passes": 1,
+     "cost_usd": 0.004279,
+     "wall_seconds": 28.491
+    },
+    {
+     "model": "gpt-6-luna",
+     "passes": 1,
+     "cost_usd": 0.001891,
+     "wall_seconds": 18.8
+    }
+   ],
+   "efficiency_rule": {
+    "status": "winner",
+    "winner": "gpt-6-luna"
+   }
+  }
+ },
+ "replace_all_with_6_2_sol": false,
+ "replace_all_blockers": [
+  "language: gpt-6.2-sol fails t1, t5, which gpt-6.1-sol passes",
+  "opponent: gpt-6.2-sol fails T92, T93, which gpt-6.1-sol passes"
+ ],
+ "cost_all_sol_role_cases": {
+  "gpt-6.1-sol": 1.0305,
+  "gpt-6.2-sol": 1.0089
+ },
+ "decisions": {
+  "reviewer": {
+   "model": "gpt-6.1-terra",
+   "applied": true
+  },
+  "worker": {
+   "model": "gpt-6-luna",
+   "applied": true
+  },
+  "scout": {
+   "model": "gpt-6-luna",
+   "applied": true
+  },
+  "researcher": {
+   "model": "gpt-6-luna",
+   "applied": true
+  },
+  "opponent": {
+   "model": "gpt-6.1-sol",
+   "applied": true,
+   "note": "only eligible candidate; baseline kept"
+  },
+  "language": {
+   "model": "gpt-6.1-terra",
+   "applied": false,
+   "note": "owner blind comparison of its drafts against the current ones is owed"
+  },
+  "text_review": {
+   "model": "gpt-6.1-terra",
+   "applied": false,
+   "note": "decided on TR2 alone (one case); the change of the review model needs the owner"
+  }
+ }
+}
