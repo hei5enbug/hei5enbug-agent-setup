@@ -1,0 +1,123 @@
+{
+  "issue": 103,
+  "cases": [
+    "T12"
+  ],
+  "variants": {
+    "c103-before": {
+      "revision": "7deffe7ed153"
+    },
+    "c103-after": {
+      "revision": "72090c5a963c"
+    }
+  },
+  "runs": [
+    {
+      "case": "T12",
+      "variant": "c103-after",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "claude-sonnet-5-5",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "review": true,
+        "readme-cancel-item": true,
+        "mirror-updated": true
+      },
+      "wall_seconds": 671.4430187512189,
+      "cost_usd": 1.2193060999999998,
+      "rep": 1
+    },
+    {
+      "case": "T12",
+      "variant": "c103-before",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "gpt-6.1-sol",
+          "effort": "xhigh"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "review": true,
+        "readme-cancel-item": true,
+        "mirror-updated": true
+      },
+      "wall_seconds": 679.8460076674819,
+      "cost_usd": 0.8363476000000001,
+      "rep": 1
+    }
+  ],
+  "verdicts": [
+    {
+      "case": "T12",
+      "verdict": "not measured",
+      "step": "no after run on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "T12",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T12",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T12",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    }
+  ]
+}

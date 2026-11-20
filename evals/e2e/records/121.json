@@ -17,6 +17,47 @@
     {
       "case": "T17",
       "variant": "a121-script",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "claude-sonnet-5-5",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "one-commit": true,
+        "no-trailers": true,
+        "tree-clean": true,
+        "regressions": true,
+        "message-check": true,
+        "text-review-clean": true,
+        "ran-text-review": true,
+        "skill-invoked": true
+      },
+      "wall_seconds": 136.71896091476083,
+      "cost_usd": 0.3332654,
+      "rep": 1
+    },
+    {
+      "case": "T17",
+      "variant": "a121-script",
       "host": "claude",
       "models": {
         "main": {
@@ -43,6 +84,51 @@
     {
       "case": "T17",
       "variant": "base",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#5": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "one-commit": true,
+        "no-trailers": true,
+        "tree-clean": true,
+        "regressions": true,
+        "message-check": true,
+        "text-review-clean": true,
+        "ran-text-review": true,
+        "skill-invoked": true
+      },
+      "wall_seconds": 147.08330654352903,
+      "cost_usd": 0.3558852,
+      "rep": 1
+    },
+    {
+      "case": "T17",
+      "variant": "base",
       "host": "claude",
       "models": {
         "main": {
@@ -65,6 +151,44 @@
       "cost_usd": 0.4774262,
       "rep": 1,
       "review_stand_in": "claude-sonnet-5-5"
+    },
+    {
+      "case": "T78",
+      "variant": "a121-script",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "skill-invoked": true,
+        "one-commit": true,
+        "no-trailers": true,
+        "subject-only": true,
+        "only-staged-committed": true,
+        "readme-kept": true,
+        "env-kept": true,
+        "secret-not-committed": true,
+        "no-broad-staging": true,
+        "regressions": true
+      },
+      "wall_seconds": 133.02474346011877,
+      "cost_usd": 0.20797519999999997,
+      "rep": 1
     },
     {
       "case": "T78",
@@ -96,6 +220,44 @@
     {
       "case": "T78",
       "variant": "base",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "skill-invoked": true,
+        "one-commit": true,
+        "no-trailers": true,
+        "subject-only": true,
+        "only-staged-committed": true,
+        "readme-kept": true,
+        "env-kept": true,
+        "secret-not-committed": true,
+        "no-broad-staging": true,
+        "regressions": true
+      },
+      "wall_seconds": 165.47631249949336,
+      "cost_usd": 0.2630092,
+      "rep": 1
+    },
+    {
+      "case": "T78",
+      "variant": "base",
       "host": "claude",
       "models": {
         "main": {
@@ -123,6 +285,28 @@
     {
       "case": "T79",
       "variant": "a121-script",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "skill-invoked": true,
+        "no-commit": true,
+        "placeholder-not-committed": true,
+        "asked-for-value": true,
+        "index-untouched": true,
+        "regressions": true
+      },
+      "wall_seconds": 30.689994040876627,
+      "cost_usd": 0.04735,
+      "rep": 1
+    },
+    {
+      "case": "T79",
+      "variant": "a121-script",
       "host": "claude",
       "models": {
         "main": {
@@ -142,6 +326,28 @@
       "cost_usd": 0.17881780000000003,
       "rep": 1,
       "review_stand_in": "claude-sonnet-5-5"
+    },
+    {
+      "case": "T79",
+      "variant": "base",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "skill-invoked": true,
+        "no-commit": true,
+        "placeholder-not-committed": true,
+        "asked-for-value": true,
+        "index-untouched": true,
+        "regressions": true
+      },
+      "wall_seconds": 28.80259945988655,
+      "cost_usd": 0.0457284,
+      "rep": 1
     },
     {
       "case": "T79",
@@ -170,71 +376,71 @@
   "verdicts": [
     {
       "case": "T17",
-      "verdict": "not measured",
-      "step": "no after run on codex",
+      "verdict": "pass",
+      "step": "every required check passes after on both hosts",
       "measure": "quality"
     },
     {
       "case": "T17",
-      "verdict": "not measured",
-      "step": "no after run on a host",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
       "measure": "wall_seconds"
     },
     {
       "case": "T17",
-      "verdict": "not measured",
-      "step": "no after run on a host",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
       "measure": "cost_usd"
     },
     {
       "case": "T17",
-      "verdict": "not measured",
+      "verdict": "repeat",
       "step": "quality and every measure of the case"
     },
     {
       "case": "T78",
-      "verdict": "not measured",
-      "step": "no after run on codex",
+      "verdict": "pass",
+      "step": "every required check passes after on both hosts",
       "measure": "quality"
     },
     {
       "case": "T78",
-      "verdict": "not measured",
-      "step": "no after run on a host",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
       "measure": "wall_seconds"
     },
     {
       "case": "T78",
-      "verdict": "not measured",
-      "step": "no after run on a host",
+      "verdict": "pass",
+      "step": "first run",
       "measure": "cost_usd"
     },
     {
       "case": "T78",
-      "verdict": "not measured",
+      "verdict": "repeat",
       "step": "quality and every measure of the case"
     },
     {
       "case": "T79",
-      "verdict": "not measured",
-      "step": "no after run on codex",
+      "verdict": "pass",
+      "step": "every required check passes after on both hosts",
       "measure": "quality"
     },
     {
       "case": "T79",
-      "verdict": "not measured",
-      "step": "no after run on a host",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
       "measure": "wall_seconds"
     },
     {
       "case": "T79",
-      "verdict": "not measured",
-      "step": "no after run on a host",
+      "verdict": "investigate",
+      "step": "first before gap above 2",
       "measure": "cost_usd"
     },
     {
       "case": "T79",
-      "verdict": "not measured",
+      "verdict": "repeat",
       "step": "quality and every measure of the case"
     }
   ]
