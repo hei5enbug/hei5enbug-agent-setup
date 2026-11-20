@@ -170,10 +170,14 @@ and the same efficiency rule. It is not validated by `mr_cli.py` and is no part 
 |---|---|---|
 | reviewer | T89 to T91, S5 | `gpt-6.1-terra`: 4 of 4 for 0.061 USD and 68 s, against `gpt-6.2-sol` 4 of 4 for 0.265 USD; `gpt-6.1-sol` fails S5 |
 | opponent | T92, T93 | `gpt-6.1-sol` stays: it is the only candidate that passes both |
-| worker | W1 to W3 | `gpt-6-luna` is cheapest (0.020 USD against 0.101 USD for `gpt-6.1-terra`), but every candidate passes, so the owner holds the change for harder cases |
-| scout, researcher | S7, SC1 to SC3, R1 | `gpt-6-luna` scores 4 of 4 and 1 of 1 against 2 of 4 and 1 of 1 for `gpt-5.6-luna`, at lower cost; held with the worker, because the family pin allows one Luna release and R1 does not discriminate |
+| worker | W1 to W6 | W1 to W3 pass on every candidate, and W4 (2 reps) alone separates them: `gpt-6.2-sol` 2 of 2, `gpt-6.1-terra` 1, `gpt-6-luna` 1, `gpt-6.1-sol` 0, `gpt-5.6-luna` 0; W5 and W6 pass on all. By the efficiency rule only `gpt-6.2-sol` passes every case, so the main session chooses by difficulty: `gpt-6-luna` for easy work and `gpt-6.2-sol` for hard work (owner decision of 2026-11-20); applied |
+| scout, researcher | S7, SC1 to SC3, R1 to R3 | `gpt-6-luna` scores 4 of 4 on scout against 2 of 4 for `gpt-5.6-luna`, and both pass R1 to R3, at lower cost and time for `gpt-6-luna`; the Luna family pin moves to `gpt-6-luna` (owner decision of 2026-11-20); applied |
 | language | t1, t3, t5 | `gpt-6.1-terra` wins the efficiency rule and the owner's blind comparison (t1 and t3 terra better, t5 split); applied |
 | text_review | TR1, TR2 | All four candidates fail TR1, which holds a second real defect (the column-list sentence is a list of names that the diff shows). On TR2 alone `gpt-6.1-terra` wins; not applied |
+
+The harder cases W4 to W6, R2, and R3 ran on 2026-11-20 as `p3b` (`gpt-6.2-sol` costs 0.676 USD over the six worker cases
+against 0.751 USD for `gpt-6.1-sol`; `gpt-6-luna` 0.044 USD). The record keeps one result per role, case, and candidate
+with the reps as `attempts`, and `luna_family_pin`, `gpt_sol_worker_pin`, and `p3b` state what the decisions applied.
 
 `gpt-6.2-sol` does not replace `gpt-6.1-sol` everywhere: it fails the opponent cases T92 and T93 and the language cases
 t1 and t5 that `gpt-6.1-sol` passes, and its cost over all sol-role cases (1.009 USD against 1.031 USD) is inside the tie band.

@@ -39,7 +39,12 @@
   "SC1": "scout",
   "SC2": "scout",
   "SC3": "scout",
-  "R1": "researcher"
+  "R1": "researcher",
+  "W4": "worker",
+  "W5": "worker",
+  "W6": "worker",
+  "R2": "researcher",
+  "R3": "researcher"
  },
  "results": [
   {
@@ -305,6 +310,54 @@
    "cost_usd": 0.001891,
    "wall_seconds": 18.8,
    "attempts": 2
+  },
+  {
+   "role": "researcher",
+   "case": "R2",
+   "model": "gpt-5.6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-5.6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.006432,
+   "wall_seconds": 32.146,
+   "attempts": 1
+  },
+  {
+   "role": "researcher",
+   "case": "R2",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.004109,
+   "wall_seconds": 32.581,
+   "attempts": 1
+  },
+  {
+   "role": "researcher",
+   "case": "R3",
+   "model": "gpt-5.6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-5.6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.015239,
+   "wall_seconds": 55.134,
+   "attempts": 1
+  },
+  {
+   "role": "researcher",
+   "case": "R3",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.002329,
+   "wall_seconds": 27.47,
+   "attempts": 1
   },
   {
    "role": "reviewer",
@@ -869,6 +922,186 @@
    "cost_usd": 0.09113,
    "wall_seconds": 43.178,
    "attempts": 1
+  },
+  {
+   "role": "worker",
+   "case": "W4",
+   "model": "gpt-5.6-luna",
+   "effort": "high",
+   "passed": false,
+   "host_model": "gpt-5.6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.014509,
+   "wall_seconds": 89.34,
+   "attempts": 2
+  },
+  {
+   "role": "worker",
+   "case": "W4",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": false,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.006611,
+   "wall_seconds": 66.65,
+   "attempts": 2
+  },
+  {
+   "role": "worker",
+   "case": "W4",
+   "model": "gpt-6.1-sol",
+   "effort": "high",
+   "passed": false,
+   "host_model": "gpt-6.1-sol",
+   "host_effort": "high",
+   "cost_usd": 0.100803,
+   "wall_seconds": 83.489,
+   "attempts": 2
+  },
+  {
+   "role": "worker",
+   "case": "W4",
+   "model": "gpt-6.1-terra",
+   "effort": "high",
+   "passed": false,
+   "host_model": "gpt-6.1-terra",
+   "host_effort": "high",
+   "cost_usd": 0.037048,
+   "wall_seconds": 49.472,
+   "attempts": 2
+  },
+  {
+   "role": "worker",
+   "case": "W4",
+   "model": "gpt-6.2-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.2-sol",
+   "host_effort": "high",
+   "cost_usd": 0.114464,
+   "wall_seconds": 66.06,
+   "attempts": 2
+  },
+  {
+   "role": "worker",
+   "case": "W5",
+   "model": "gpt-5.6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-5.6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.014615,
+   "wall_seconds": 84.721,
+   "attempts": 1
+  },
+  {
+   "role": "worker",
+   "case": "W5",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.010532,
+   "wall_seconds": 145.608,
+   "attempts": 1
+  },
+  {
+   "role": "worker",
+   "case": "W5",
+   "model": "gpt-6.1-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-sol",
+   "host_effort": "high",
+   "cost_usd": 0.139238,
+   "wall_seconds": 101.552,
+   "attempts": 1
+  },
+  {
+   "role": "worker",
+   "case": "W5",
+   "model": "gpt-6.1-terra",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-terra",
+   "host_effort": "high",
+   "cost_usd": 0.054492,
+   "wall_seconds": 67.169,
+   "attempts": 1
+  },
+  {
+   "role": "worker",
+   "case": "W5",
+   "model": "gpt-6.2-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.2-sol",
+   "host_effort": "high",
+   "cost_usd": 0.12894,
+   "wall_seconds": 102.494,
+   "attempts": 1
+  },
+  {
+   "role": "worker",
+   "case": "W6",
+   "model": "gpt-5.6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-5.6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.01919,
+   "wall_seconds": 132.302,
+   "attempts": 1
+  },
+  {
+   "role": "worker",
+   "case": "W6",
+   "model": "gpt-6-luna",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6-luna",
+   "host_effort": "high",
+   "cost_usd": 0.006708,
+   "wall_seconds": 70.043,
+   "attempts": 1
+  },
+  {
+   "role": "worker",
+   "case": "W6",
+   "model": "gpt-6.1-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-sol",
+   "host_effort": "high",
+   "cost_usd": 0.153239,
+   "wall_seconds": 91.713,
+   "attempts": 1
+  },
+  {
+   "role": "worker",
+   "case": "W6",
+   "model": "gpt-6.1-terra",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.1-terra",
+   "host_effort": "high",
+   "cost_usd": 0.048355,
+   "wall_seconds": 51.798,
+   "attempts": 1
+  },
+  {
+   "role": "worker",
+   "case": "W6",
+   "model": "gpt-6.2-sol",
+   "effort": "high",
+   "passed": true,
+   "host_model": "gpt-6.2-sol",
+   "host_effort": "high",
+   "cost_usd": 0.15763,
+   "wall_seconds": 102.908,
+   "attempts": 1
   }
  ],
  "roles": {
@@ -1024,44 +1257,48 @@
    "cases": [
     "W1",
     "W2",
-    "W3"
+    "W3",
+    "W4",
+    "W5",
+    "W6"
    ],
    "candidates": [
     {
-     "model": "gpt-5.6-luna",
-     "passes": 3,
-     "cost_usd": 0.043562,
-     "wall_seconds": 239.625
-    },
-    {
-     "model": "gpt-6-luna",
-     "passes": 3,
-     "cost_usd": 0.019983,
-     "wall_seconds": 182.732
-    },
-    {
      "model": "gpt-6.1-sol",
-     "passes": 3,
-     "cost_usd": 0.357893,
-     "wall_seconds": 157.947
-    },
-    {
-     "model": "gpt-6.1-terra",
-     "passes": 3,
-     "cost_usd": 0.10102,
-     "wall_seconds": 106.669
+     "passes": 5,
+     "cost_usd": 0.751173,
+     "wall_seconds": 434.701
     },
     {
      "model": "gpt-6.2-sol",
-     "passes": 3,
-     "cost_usd": 0.275039,
-     "wall_seconds": 136.222
+     "passes": 6,
+     "cost_usd": 0.676073,
+     "wall_seconds": 407.684
+    },
+    {
+     "model": "gpt-6.1-terra",
+     "passes": 5,
+     "cost_usd": 0.240915,
+     "wall_seconds": 275.108
+    },
+    {
+     "model": "gpt-6-luna",
+     "passes": 5,
+     "cost_usd": 0.043833,
+     "wall_seconds": 465.033
+    },
+    {
+     "model": "gpt-5.6-luna",
+     "passes": 5,
+     "cost_usd": 0.091876,
+     "wall_seconds": 545.988
     }
    ],
    "efficiency_rule": {
     "status": "winner",
-    "winner": "gpt-6-luna"
-   }
+    "winner": "gpt-6.2-sol"
+   },
+   "note": "W1 to W3 pass on every candidate; W4 (2 reps) alone separates them: gpt-6.2-sol 2 of 2, gpt-6.1-terra 1, gpt-6-luna 1, gpt-6.1-sol 0, gpt-5.6-luna 0. By the efficiency rule over all six cases only gpt-6.2-sol passes every case, so hard work goes to gpt-6.2-sol; easy work, where every candidate passes, goes to the cheapest, gpt-6-luna."
   },
   "scout": {
    "cases": [
@@ -1091,26 +1328,29 @@
   },
   "researcher": {
    "cases": [
-    "R1"
+    "R1",
+    "R2",
+    "R3"
    ],
    "candidates": [
     {
      "model": "gpt-5.6-luna",
-     "passes": 1,
-     "cost_usd": 0.004279,
-     "wall_seconds": 28.491
+     "passes": 3,
+     "cost_usd": 0.02595,
+     "wall_seconds": 115.771
     },
     {
      "model": "gpt-6-luna",
-     "passes": 1,
-     "cost_usd": 0.001891,
-     "wall_seconds": 18.8
+     "passes": 3,
+     "cost_usd": 0.008329,
+     "wall_seconds": 78.851
     }
    ],
    "efficiency_rule": {
     "status": "winner",
     "winner": "gpt-6-luna"
-   }
+   },
+   "note": "R1 to R3 pass on both Luna releases; gpt-6-luna is cheaper and faster."
   }
  },
  "replace_all_with_6_2_sol": false,
@@ -1128,19 +1368,19 @@
    "applied": true
   },
   "worker": {
-   "model": "gpt-6-luna",
-   "applied": false,
-   "note": "held by the owner 2026-11-20: W1-W3 and R1 do not discriminate (every model passed); harder cases are being built. gpt-6-luna cannot be applied to scout alone because the family pin and the agent guard allow one Luna release"
+   "model": "gpt-6-luna for easy work, gpt-6.2-sol for hard work",
+   "applied": true,
+   "note": "owner decision 2026-11-20: the main session chooses by difficulty at assignment time, like the Claude auto route (haiku easy, sonnet normal or hard). Easy: one cohesive change with a stated edit and checks that cover it fully. Hard: several modules, a public contract to keep, requirements stated only in existing tests, docstrings or another module, or concurrency. Applied to the auto fallback, the sol and codex routes, codex_worker_model, the Codex worker role, the registry, and the delegation dev rows."
   },
   "scout": {
    "model": "gpt-6-luna",
-   "applied": false,
-   "note": "held by the owner 2026-11-20: W1-W3 and R1 do not discriminate (every model passed); harder cases are being built. gpt-6-luna cannot be applied to scout alone because the family pin and the agent guard allow one Luna release"
+   "applied": true,
+   "note": "owner decision 2026-11-20: 4 of 4 against 2 of 4 for gpt-5.6-luna; the Luna family pin moves to gpt-6-luna"
   },
   "researcher": {
    "model": "gpt-6-luna",
-   "applied": false,
-   "note": "held by the owner 2026-11-20: W1-W3 and R1 do not discriminate (every model passed); harder cases are being built. gpt-6-luna cannot be applied to scout alone because the family pin and the agent guard allow one Luna release"
+   "applied": true,
+   "note": "owner decision 2026-11-20: R1 to R3 pass on both releases, gpt-6-luna is cheaper and faster; follows the Luna family pin"
   },
   "opponent": {
    "model": "gpt-6.1-sol",
@@ -1157,5 +1397,25 @@
    "applied": false,
    "note": "unchanged; the owner is confirming a Sonnet-review flow. On TR2 alone terra won"
   }
+ },
+ "luna_family_pin": "gpt-6-luna",
+ "gpt_sol_worker_pin": "gpt-6.2-sol",
+ "p3b": {
+  "date": "2026-11-20",
+  "cases": [
+   "W4",
+   "W5",
+   "W6",
+   "R2",
+   "R3"
+  ],
+  "reps": {
+   "W4": 2,
+   "W5": 1,
+   "W6": 1,
+   "R2": 1,
+   "R3": 1
+  },
+  "note": "W5 and W6 pass on all five candidates in one rep; R2 and R3 ran on the two Luna releases only."
  }
 }
