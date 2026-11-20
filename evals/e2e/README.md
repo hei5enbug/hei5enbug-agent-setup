@@ -110,6 +110,10 @@ only what the plugin's own role runner calls, never the host:
 - After the install, the harness trusts the exported plugin's hooks in the run's `CODEX_HOME` through `codex
   app-server`, so a role runner's own Codex child, which runs without the bypass flag, can verify them. A hook that
   stays untrusted fails the setup and the run is `infra_failed`. `codex-setup.json` lists the trusted hook keys.
+- The harness also writes the plugin's bundled role files (`standalone-agents/codex-<role>.toml`) into the run's
+  `CODEX_HOME/agents/` before the main session starts, as the plugin's session hook would for the next session. Without
+  them the first session's `spawn_agent` tool lists no `agent_type`, so a role such as `worker` cannot be named. A file
+  that already exists stays, and `codex-setup.json` lists the installed roles.
 - Stdin is `/dev/null`, and `ZDOTDIR` is a folder with no user zsh startup files, so the shell Codex starts reads none
   of them. Its only file is a `.zprofile` that exports the run's `PATH`: on macOS `/etc/zprofile` runs `path_helper`,
   which moves the system folders to the front, so without it `python3` in a Codex shell resolves to an old system

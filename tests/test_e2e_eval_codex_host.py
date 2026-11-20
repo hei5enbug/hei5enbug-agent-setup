@@ -482,6 +482,52 @@ class CodexShellPathTest(PreparedHomeCase):
         self.assertTrue(lines[0].startswith("export PATH="))
 
 
+class CodexRoleFilesTest(PreparedHomeCase):
+    def bundle(self, **files: str) -> None:
+        folder = Path(self.plugin_dir) / "standalone-agents"
+        folder.mkdir(parents=True, exist_ok=True)
+        for name, content in files.items():
+            (folder / f"codex-{name}.toml").write_text(content, encoding="utf-8")
+
+    def test_준비한_홈은_첫_세션이_시작하기_전에_플러그인의_역할_파일을_갖는다(self):
+        """내보낸 플러그인의 codex-<역할>.toml이 CODEX_HOME/agents/<역할>.toml로 복사되고 기록에 역할 이름이 남는다."""
+        # given
+        self.bundle(scout='name = "scout"\n', worker='name = "worker"\n')
+
+        # when
+        self.prepare(FakeAppServer([demo_hook("start", "trusted")]))
+
+        # then
+        agents = self.result_dir / "codex-home" / "agents"
+        self.assertEqual(
+            ({path.name: path.read_text(encoding="utf-8") for path in agents.iterdir()}, self.setup_record()["roles"]),
+            ({"scout.toml": 'name = "scout"\n', "worker.toml": 'name = "worker"\n'}, ["scout", "worker"]))
+
+    def test_이미_있는_역할_파일은_덮어쓰지_않는다(self):
+        """플러그인 훅과 같이 있는 파일은 그대로 두고, 없는 역할만 설치한다."""
+        # given
+        self.bundle(scout='name = "bundled"\n', worker='name = "worker"\n')
+        agents = self.result_dir / "codex-home" / "agents"
+        agents.mkdir(parents=True)
+        (agents / "scout.toml").write_text('name = "mine"\n', encoding="utf-8")
+
+        # when
+        self.prepare(FakeAppServer([demo_hook("start", "trusted")]))
+
+        # then
+        self.assertEqual(((agents / "scout.toml").read_text(encoding="utf-8"), self.setup_record()["roles"]),
+                         ('name = "mine"\n', ["worker"]))
+
+    def test_역할_파일이_없는_플러그인이면_agents_폴더를_만들지_않는다(self):
+        """standalone-agents가 없는 내보내기도 설정에 성공하고 빈 역할 목록을 기록한다."""
+        # when
+        self.prepare(FakeAppServer([demo_hook("start", "trusted")]))
+
+        # then
+        self.assertEqual((self.result_dir / "codex-home" / "agents").exists(), False)
+        self.assertEqual(self.setup_record()["roles"], [])
+
+
 class CodexHookTrustTest(PreparedHomeCase):
     def test_이_플러그인의_untrusted와_modified_훅에만_신뢰_쓰기를_하고_기록한다(self):
         """신뢰 쓰기는 이 플러그인의 untrusted와 modified 훅마다 한 번이고, 이미 trusted인 훅과 다른 플러그인의 훅에는 없다."""
