@@ -104,10 +104,10 @@ def run_researcher_case(case: gr_cases.Case, model: str, work: Path, plugin: Pat
     repo = work / "repo"
     repo.mkdir(parents=True)
     assignment, result = work / "assignment.md", work / "result.md"
-    assignment.write_text(gr_cases.RESEARCH_ASSIGNMENT, encoding="utf-8")
+    assignment.write_text(gr_cases.researcher_assignment(case.id), encoding="utf-8")
     status, wall = run_and_verify(runner_argv(plugin, "researcher", model, case.effort, assignment, result, user_requested=True), repo, model, case.effort)
     rollout = rollout_of(status)
-    failures = gr_cases.researcher_failures(result.read_text(encoding="utf-8"), rollout.read_text(encoding="utf-8", errors="replace"))
+    failures = gr_cases.researcher_failures(result.read_text(encoding="utf-8"), rollout.read_text(encoding="utf-8", errors="replace"), case.id)
     return finish(case, model, rep, failures, gr_core.rollout_cost(rollout, model), wall, rollout.as_posix())
 
 

@@ -260,6 +260,7 @@ class TextAndScoutCasesTest(unittest.TestCase):
     def test_연구자_채점기(self):
         good = "RFC 2119, 1997, Key words for use in RFCs to Indicate Requirement Levels, https://www.rfc-editor.org/rfc/rfc2119"
         self.assertEqual(gr_cases.researcher_failures(good, '{"type":"web_search_call"}'), [])
+        self.assertEqual(gr_cases.researcher_failures(good, 'await tools.web__run({search_query:[{q:"x"}]})'), [])
         self.assertTrue(gr_cases.researcher_failures(good, "no search"))
 
     def test_세_정찰_사례와_두_새_사례는_결정적_검사로_시드된다(self):

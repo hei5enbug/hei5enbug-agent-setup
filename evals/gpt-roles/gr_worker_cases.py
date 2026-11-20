@@ -8,7 +8,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import gr_worker_hard_cases
+
 PYTEST = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"]
+PYTEST_TIMEOUT = 180
 
 SLUG_SOURCE = '''def slugify(text):
     """Lowercase `text`, replace each run of non-alphanumeric characters with one hyphen, and strip hyphens at both ends."""
@@ -119,6 +122,8 @@ CASES = {
     },
 }
 
+CASES.update(gr_worker_hard_cases.CASES)
+
 
 def git(repo: Path, *arguments: str) -> str:
     return subprocess.run(["git", "-C", str(repo), *arguments], capture_output=True, text=True, check=True).stdout
@@ -146,22 +151,47 @@ def allowed(path: str, rules: tuple[str, ...]) -> bool:
     return any(path == rule or (rule.endswith("/") and path.startswith(rule)) for rule in rules)
 
 
-def failures(case_id: str, repo: Path, base: str) -> list[str]:
-    """The reasons a worker run fails the case; the hidden tests are copied in only now."""
-    case, found = CASES[case_id], []
+def run_pytest(repo: Path, folder: str) -> tuple[bool, str]:
+    """Run one test folder; a run that hangs, such as a deadlock, counts as a failure instead of blocking the grader."""
+    try:
+        done = subprocess.run([*PYTEST, folder], cwd=repo, capture_output=True, text=True, timeout=PYTEST_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return False, f"timed out after {PYTEST_TIMEOUT} seconds"
+    lines = done.stdout.strip().splitlines()
+    return done.returncode == 0, lines[-1] if lines else ""
+
+
+def structure_failures(case: dict, repo: Path, base: str) -> list[str]:
+    """The checks of commits, allowed paths, the cap on changed source files, and new modules."""
+    found, paths = [], changed_paths(repo, base)
     if git(repo, "rev-parse", "HEAD").strip() != base:
         found.append("a commit was made")
-    outside = [path for path in changed_paths(repo, base) if not allowed(path, case["allowed"])]
+    outside = [path for path in paths if not allowed(path, case["allowed"])]
     if outside:
         found.append(f"paths outside the allowed ones changed: {', '.join(outside)}")
-    visible = subprocess.run([*PYTEST, "tests"], cwd=repo, capture_output=True, text=True)
-    if visible.returncode != 0:
+    source = [path for path in paths if not path.startswith("tests/")]
+    if case.get("max_source_files") and len(source) > case["max_source_files"]:
+        found.append(f"{len(source)} files outside tests/ changed, the cap is {case['max_source_files']}: {', '.join(source)}")
+    if case.get("no_new_files"):
+        fresh = [path for path in git(repo, "ls-files", "--others", "--exclude-standard").splitlines()
+                 if not path.startswith("tests/") and "__pycache__" not in path and not path.endswith(".pyc")]
+        if fresh:
+            found.append(f"a new file outside tests/ was added: {', '.join(fresh)}")
+    return found
+
+
+def failures(case_id: str, repo: Path, base: str) -> list[str]:
+    """The reasons a worker run fails the case; the hidden tests are copied in only now."""
+    case = CASES[case_id]
+    found = structure_failures(case, repo, base)
+    visible_ok, _ = run_pytest(repo, "tests")
+    if not visible_ok:
         found.append("the visible tests fail")
     for relative, text in case["hidden"].items():
         path = repo / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
-    hidden = subprocess.run([*PYTEST, "tests_hidden"], cwd=repo, capture_output=True, text=True)
-    if hidden.returncode != 0:
-        found.append("the hidden tests fail: " + hidden.stdout.strip().splitlines()[-1] if hidden.stdout.strip() else "the hidden tests fail")
+    hidden_ok, last = run_pytest(repo, "tests_hidden")
+    if not hidden_ok:
+        found.append(f"the hidden tests fail: {last}" if last else "the hidden tests fail")
     return found

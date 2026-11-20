@@ -12,6 +12,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+import gr_research_cases
 import gr_text_cases
 import gr_worker_cases
 
@@ -47,6 +48,11 @@ CASES = {case.id: case for case in (
     Case("SC1", "scout", "scout-demo", NEW, note="question of T103 on the scout-demo fixture"),
     Case("SC2", "scout", "scout-demo", NEW, note="question of T104"), Case("SC3", "scout", "scout-demo", NEW, note="question of T105"),
     Case("R1", "researcher", "researcher", NEW),
+    Case("W4", "worker", "worker", NEW, note="harder: pagination across two modules"),
+    Case("W5", "worker", "worker", NEW, note="harder: thread races in two modules"),
+    Case("W6", "worker", "worker", NEW, note="harder: one precedence rule in three modules"),
+    Case("R2", "researcher", "researcher", NEW, note="harder: several exact facts"),
+    Case("R3", "researcher", "researcher", NEW, note="harder: several exact facts"),
 )}
 ROLE_CASES = {role: [case.id for case in CASES.values() if case.role == role] for role in ("reviewer", "text_review", "opponent", "worker", "scout", "researcher")}
 
@@ -103,7 +109,9 @@ def scout_failures(case_id: str, answer: str) -> list[str]:
     return found
 
 
-def researcher_failures(answer: str, records: str) -> list[str]:
+def researcher_failures(answer: str, records: str, case_id: str = "R1") -> list[str]:
+    if case_id != "R1":
+        return gr_research_cases.failures(case_id, answer, records)
     found = []
     if "1997" not in answer:
         found.append("the year 1997 is missing")
@@ -111,7 +119,7 @@ def researcher_failures(answer: str, records: str) -> list[str]:
         found.append("the exact title is missing")
     if not re.search(r"https?://\S+", answer):
         found.append("no URL")
-    if "web_search" not in records:
+    if not re.search(r"web_search|web\.search|tools\.web__run", records):
         found.append("the rollout shows no web search call")
     return found
 
@@ -124,6 +132,10 @@ def mr_failures(case_id: str, answer: str) -> tuple[list[str], dict]:
     reasons += [f"missed {item}" for item in grade.get("missed", [])]
     reasons += [f"finding outside the list at {item['location']}" for item in grade.get("outside", [])]
     return reasons, grade
+
+
+def researcher_assignment(case_id: str) -> str:
+    return RESEARCH_ASSIGNMENT if case_id == "R1" else gr_research_cases.ASSIGNMENTS[case_id]
 
 
 def worker_assignment(case_id: str) -> str:
