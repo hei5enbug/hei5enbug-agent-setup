@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parent
 CASES_ROOT = ROOT / "cases"
 TEMPLATES_ROOT = ROOT / "templates"
 VALIDATION_DOC = ROOT.parents[1] / "instructions" / "independent-model-validation.md"
-ROLES = ("reviewer", "opponent")
+ROLES = ("reviewer",)
 GIT_ENVIRONMENT = {
     "GIT_AUTHOR_NAME": "demo", "GIT_AUTHOR_EMAIL": "demo@example.com",
     "GIT_COMMITTER_NAME": "demo", "GIT_COMMITTER_EMAIL": "demo@example.com",
@@ -99,10 +99,7 @@ def material(case: Mapping[str, Any], repo: Path) -> str:
 
 
 def prompt_for(case: Mapping[str, Any], repo: Path) -> str:
-    """Return the prompt text for the case: the reviewer assignment, or the opponent's first-call prompt."""
-    if case["role"] == "opponent":
-        template = Template((TEMPLATES_ROOT / "debate.txt").read_text(encoding="utf-8"))
-        return template.substitute(intent=case["intent"], statement=case["statement"], repo=repo)
+    """Return the prompt text for the case: the reviewer assignment."""
     template = Template((TEMPLATES_ROOT / "review.txt").read_text(encoding="utf-8"))
     return template.substitute(
         intent=case["intent"], subject=SUBJECTS[case["kind"]], repo=repo, checks=case["checks"],

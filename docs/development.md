@@ -88,8 +88,6 @@ hei5enbug-agent-setup/
 │   └── codex-worker.toml
 └── skills/
     ├── aside-browser-tasks/
-    ├── decision-navigator/
-    ├── deep-interview/
     ├── flowchart-design/
     ├── docs-rewrite/
     ├── document-to-confluence/
@@ -101,8 +99,7 @@ hei5enbug-agent-setup/
     ├── skill-builder/
     ├── skill-issue-creator/
     ├── suggest-commit/
-    ├── technical-design-writer/
-    └── tiki-taka/
+    └── technical-design-writer/
 ```
 
 Each plugin skill folder holds its own `SKILL.md` plus any references or scripts it needs. The plugin manifests package

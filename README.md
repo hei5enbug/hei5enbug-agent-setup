@@ -78,8 +78,6 @@ See [configuration](docs/configuration.md) for defaults and [updates](docs/updat
 | Skill | Purpose |
 |---|---|
 | [`aside-browser-tasks`](skills/aside-browser-tasks/SKILL.md) | Finish browser tasks through your logged-in Aside Browser when other tools cannot. [한국어](docs/ko/skills/aside-browser-tasks/SKILL.ko.md) |
-| [`decision-navigator`](skills/decision-navigator/SKILL.md) | Resolve decision tickets until an implementation route is clear. [한국어](docs/ko/skills/decision-navigator/SKILL.ko.md) |
-| [`deep-interview`](skills/deep-interview/SKILL.md) | Clarify requirements through a scored Socratic interview. [한국어](docs/ko/skills/deep-interview/SKILL.ko.md) |
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | Create and repair flow diagrams with a shared design standard. [한국어](docs/ko/skills/flowchart-design/SKILL.ko.md) |
 | [`docs-rewrite`](skills/docs-rewrite/SKILL.md) | Make existing prose natural while preserving its meaning, including awkward Korean. [한국어](docs/ko/skills/docs-rewrite/SKILL.ko.md) |
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Publish documents to Confluence and synchronize revisions while preserving web edits and comments. [한국어](docs/ko/skills/document-to-confluence/SKILL.ko.md) |
@@ -92,7 +90,6 @@ See [configuration](docs/configuration.md) for defaults and [updates](docs/updat
 | [`orca-plugin-refresh`](skills/orca-plugin-refresh/SKILL.md) | Update plugins and apply them to running Orca sessions, resuming sessions on an older Claude Code release. [한국어](docs/ko/skills/orca-plugin-refresh/SKILL.ko.md) |
 | [`suggest-commit`](skills/suggest-commit/SKILL.md) | Suggest five repository-style commit messages, or commit when asked. [한국어](docs/ko/skills/suggest-commit/SKILL.ko.md) |
 | [`technical-design-writer`](skills/technical-design-writer/SKILL.md) | Write and review technical design documents and RFCs, separate from implementation planning. [한국어](docs/ko/skills/technical-design-writer/SKILL.ko.md) |
-| [`tiki-taka`](skills/tiki-taka/SKILL.md) | Resolve issues through a bounded Claude/Codex debate. [한국어](docs/ko/skills/tiki-taka/SKILL.ko.md) |
 
 Each linked skill defines its full workflow, invocation conditions, and limits.
 

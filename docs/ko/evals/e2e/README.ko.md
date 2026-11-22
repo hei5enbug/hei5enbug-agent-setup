@@ -339,8 +339,8 @@ UI 작업(T82~T84, T112)은 `harness/render.py`로 `demo-app` 픽스처의 화�
 | T84 | demo-app | UI 라우팅, 열린 중단점 | 폭 320px, 간격 24px 요금제 카드를 한 줄로, 모바일 중단점은 열어 둠, 디자이너로 라우팅 |
 | T112 | demo-app | UI 라우팅, 새 화면 | 처음부터 만드는 청구서 세 줄 화면, 1280px와 375px에서 맞아야 하며 고정된 `xhigh`의 디자이너로 라우팅 |
 
-T89부터 T93까지의 ID는 [`evals/model-roles`](../../../../evals/model-roles/README.md)의 Claude 검토자와 상대 모델 비교가 씁니다.
-그 사례는 이 하네스가 아니라 역할 실행기로 실행하므로 여기에는 과제 파일이 없습니다.
+T89부터 T91까지의 ID는 [`evals/model-roles`](../../../../evals/model-roles/README.md)의 Claude 검토자 모델 비교가 씁니다.
+그 상대 ID인 T92와 T93은 해당 스킬이 제거되면서 끝났습니다. 그 사례는 이 하네스가 아니라 역할 실행기로 실행하므로 여기에는 과제 파일이 없습니다.
 
 ## 두 호스트에서 변경 비교
 

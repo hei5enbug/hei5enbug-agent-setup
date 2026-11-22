@@ -22,7 +22,7 @@ import mr_evidence  # noqa: E402
 import mr_pins  # noqa: E402
 import mr_record as rec  # noqa: E402
 
-ROLES = mr_cases.roles_by_case(mr_cases.load_cases())
+ROLES = mr_cli.recorded_roles()
 OPUS_HIGH, OPUS_XHIGH, FABLE_HIGH, FABLE_XHIGH = rec.CANDIDATES
 REGISTRY = json.loads((REPO_ROOT / "config" / "model-registry.json").read_text(encoding="utf-8"))
 
@@ -286,8 +286,6 @@ class RecordFormatTest(unittest.TestCase):
 PIN_LINES = {
     "instructions/independent-model-validation.md": ("| GPT |", "| GPT | `{model}` | `{effort}` |"),
     "docs/dev-rules/delegation.md": ("| GPT-authored", "| GPT-authored, including work drafted on `gpt-6.1-sol` | `role_runner.py reviewer --model {model} --effort {effort}` |"),
-    "skills/tiki-taka/SKILL.md": ("- Fix a Claude opponent", "- Fix a Claude opponent to `{model}` with `{effort}` reasoning effort."),
-    "docs/ko/skills/tiki-taka/SKILL.ko.md": ("- Claude 상대는", "- Claude 상대는 {model}, 사고 강도 {effort}로 고정하라."),
 }
 
 
@@ -351,7 +349,7 @@ def baseline_reader(path: str) -> str:
 
 class PinConsistencyTest(unittest.TestCase):
     def test_기록이_대기_중이면_저장소의_핀은_기준_그대로이다(self):
-        """pending 기록에서는 레지스트리와 규칙 문서가 모두 현재 핀(Fable xhigh 상대, Opus와 Fable 검토자)이고 문제가 없다."""
+        """pending 기록에서는 레지스트리와 규칙 문서가 모두 기준 핀(Opus와 Fable 검토자)이고 문제가 없다."""
         # When
         problems = mr_pins.pin_problems(rec.pending_record(84, ROLES), BASELINE_REGISTRY, baseline_reader)
 
@@ -359,10 +357,10 @@ class PinConsistencyTest(unittest.TestCase):
         self.assertEqual([], problems)
 
     def test_기록이_없는데_핀이_바뀌면_문제로_잡는다(self):
-        """pending 기록에서 상대 모델을 Opus로 바꾸거나 검토자 문서에서 Fable을 빼면 각각 문제가 된다."""
+        """pending 기록에서 레지스트리의 검토자 목록을 바꾸거나 검토자 문서에서 Fable을 빼면 각각 문제가 된다."""
         # Given
         registry = copy.deepcopy(BASELINE_REGISTRY)
-        registry["opponents"]["claude"]["model"] = rec.OPUS
+        registry["runner"]["independent_review"]["gpt"] = [rec.FABLE]
         fewer = lambda path: baseline_reader(path).replace(rec.FABLE, rec.OPUS) if path == "instructions/independent-model-validation.md" else baseline_reader(path)
 
         # When
@@ -371,7 +369,7 @@ class PinConsistencyTest(unittest.TestCase):
         text_problems = mr_pins.pin_problems(pending, BASELINE_REGISTRY, fewer)
 
         # Then
-        self.assertEqual(["registry opponents.claude.model is 'claude-opus-5-5', expected 'claude-fable-5-2'"], registry_problems)
+        self.assertEqual(["registry runner.independent_review.gpt is not ['claude-opus-5-5', 'claude-fable-5-2']"], registry_problems)
         self.assertEqual(
             ["instructions/independent-model-validation.md: the pin site names ['claude-opus-5-5'], "
              "expected ['claude-fable-5-2', 'claude-opus-5-5']"] * 2,
@@ -379,13 +377,11 @@ class PinConsistencyTest(unittest.TestCase):
         )
 
     def test_승자가_정해진_기록이면_모든_핀_위치가_승자만_이름해야_한다(self):
-        """Opus가 두 역할을 이긴 기록에서는 현재 저장소가 문제를 돌려주고, 핀을 승자로 바꾼 저장소는 문제가 없다."""
+        """Opus가 검토자 역할을 이긴 기록에서는 현재 저장소가 문제를 돌려주고, 핀을 승자로 바꾼 저장소는 문제가 없다."""
         # Given
-        passed = {**wins(0, "T89", "T90", "T91", "T92", "T93")}
+        passed = {**wins(0, "T89", "T90", "T91")}
         record = record_of(passed, {0: 0.5, 1: 1.0, 2: 1.0, 3: 1.0})
         registry = copy.deepcopy(REGISTRY)
-        registry["opponents"]["claude"]["model"] = rec.OPUS
-        registry["opponents"]["effort"] = "high"
         registry["runner"]["independent_review"]["gpt"] = [rec.OPUS]
 
         # When
@@ -414,11 +410,11 @@ class PinConsistencyTest(unittest.TestCase):
         self.assertIn("instructions/independent-model-validation.md", problems[0])
 
     def test_동률인_역할은_기준_핀을_유지한다(self):
-        """모든 후보가 비긴 기록에서는 기준 핀이 문제없고, 상대 모델이 바뀌어 있으면 문제가 된다."""
+        """모든 후보가 비긴 기록에서는 기준 핀이 문제없고, 검토자 목록이 바뀌어 있으면 문제가 된다."""
         # Given
         record = record_of({})
         registry = copy.deepcopy(BASELINE_REGISTRY)
-        registry["opponents"]["claude"]["model"] = rec.OPUS
+        registry["runner"]["independent_review"]["gpt"] = [rec.FABLE]
 
         # When
         unchanged = mr_pins.pin_problems(record, BASELINE_REGISTRY, baseline_reader)
@@ -426,18 +422,18 @@ class PinConsistencyTest(unittest.TestCase):
 
         # Then
         self.assertEqual([], unchanged)
-        self.assertEqual(["registry opponents.claude.model is 'claude-opus-5-5', expected 'claude-fable-5-2'"], changed)
+        self.assertEqual(["registry runner.independent_review.gpt is not ['claude-opus-5-5', 'claude-fable-5-2']"], changed)
 
     def test_규칙_문서의_문구가_바뀌어_위치를_못_찾으면_알린다(self):
         """핀 위치의 앵커 문구를 찾지 못하면 어디를 고쳐야 하는지 알리는 문제를 돌려준다."""
         # Given
-        broken = lambda path: real_reader(path).replace("Fix a Claude opponent to", "Use a Claude opponent of")
+        broken = lambda path: real_reader(path).replace("The coordinating session picks one reviewer", "A coordinating session picks one reviewer")
 
         # When
         problems = mr_pins.pin_problems(rec.pending_record(84, ROLES), REGISTRY, broken)
 
         # Then
-        self.assertTrue(any("skills/tiki-taka/SKILL.md: no line matches" in item for item in problems), problems)
+        self.assertTrue(any("instructions/independent-model-validation.md: no line matches" in item for item in problems), problems)
 
 
 def write_transcript(home: Path, session: str, entries: list[dict]) -> None:
@@ -524,21 +520,6 @@ class EvidenceTest(unittest.TestCase):
         with self.assertRaises(mr_evidence.EvidenceError):
             mr_evidence.status_session("no json here")
 
-    def test_상대_상태_폴더에서_세션_모델_강도를_읽는다(self):
-        """상태 폴더의 session-id, active-model, active-effort를 읽고 하나라도 없으면 오류이다."""
-        # Given
-        for name, value in (("session-id", "s7"), ("active-model", rec.FABLE), ("active-effort", "xhigh")):
-            (self.home / name).write_text(value + "\n", encoding="utf-8")
-
-        # When
-        found = mr_evidence.state_session(self.home)
-        (self.home / "active-effort").unlink()
-
-        # Then
-        self.assertEqual({"session": "s7", "model": rec.FABLE, "effort": "xhigh"}, found)
-        with self.assertRaises(mr_evidence.EvidenceError):
-            mr_evidence.state_session(self.home)
-
 
 class CommandTest(unittest.TestCase):
     def test_후보의_모델과_강도가_기록과_다르면_결과를_쓰지_않는다(self):
@@ -597,31 +578,6 @@ class CommandTest(unittest.TestCase):
             self.assertEqual((0, 1), (complete, short))
             self.assertEqual("recorded", json.loads((base / "ok.json").read_text(encoding="utf-8"))["status"])
             self.assertFalse((base / "bad.json").exists())
-
-    def test_상대_실행기_사본은_후보의_모델과_강도를_실행기_설정으로_보여준다(self):
-        """사본의 실행기는 모델만 바꾸고, --fast가 없으면 xhigh, 있으면 high를 설정으로 보여준다. 사본은 저장소를 건드리지 않는다."""
-        with tempfile.TemporaryDirectory() as temp:
-            # Given
-            out = Path(temp) / "plugin"
-            before = real_reader("config/model-registry.json")
-            with patch.object(sys, "argv", ["mr_cli.py", "opponent-plugin", "--model", rec.OPUS, "--out", str(out)]):
-                code = mr_cli.main()
-            script = out / "skills" / "tiki-taka" / "run-opponent.sh"
-
-            # When
-            shown = {
-                flag: subprocess.run(
-                    ["bash", str(script), "--opponent", "claude", "--show-config", *flag],
-                    capture_output=True, text=True, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
-                ).stdout.strip()
-                for flag in ((), ("--fast",))
-            }
-
-            # Then
-            self.assertEqual(0, code)
-            self.assertEqual({(): f"opponent=claude model={rec.OPUS} effort=xhigh",
-                              ("--fast",): f"opponent=claude model={rec.OPUS} effort=high"}, shown)
-            self.assertEqual(before, real_reader("config/model-registry.json"))
 
     def test_저장소의_기록과_핀은_check를_통과한다(self):
         """저장소의 record.json과 핀 위치는 check 명령을 통과한다. 기록이 대기 중이면 핀은 바뀌지 않은 상태여야 한다."""

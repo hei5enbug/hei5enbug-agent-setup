@@ -1,8 +1,9 @@
-"""Check that the repository's pins for the two roles match the comparison record.
+"""Check that the repository's reviewer pins match the comparison record.
 
 While the record is pending, every pin site holds the baseline pin. Once it is recorded and a role has a winner, every
 site of that role names the winner's model and effort, and no site still names the other Claude model of the
 comparison. A role the record leaves tied, or with no eligible candidate, keeps its baseline until the owner decides.
+The record also holds the opponent role of an ended comparison; no pin follows it.
 """
 
 from __future__ import annotations
@@ -14,15 +15,9 @@ from mr_record import FABLE, OPUS, WINNER, decisions
 
 CLAUDE_ID = re.compile(r"claude-(?:opus|fable)-[\d-]+")
 BASELINE = {
-    "opponent": {"models": {FABLE}, "claude_effort": "xhigh"},
     "reviewer": {"models": {OPUS, FABLE}, "independent_review": [OPUS, FABLE]},
 }
-FAST_EFFORT = "high"
 SITES = {
-    "opponent": (
-        ("skills/tiki-taka/SKILL.md", r"Fix a Claude opponent to"),
-        ("docs/ko/skills/tiki-taka/SKILL.ko.md", r"Claude 상대는"),
-    ),
     "reviewer": (
         ("instructions/independent-model-validation.md", r"^\| GPT \|"),
         ("instructions/independent-model-validation.md", r"^The coordinating session picks one reviewer"),
@@ -35,7 +30,6 @@ SITES = {
     ),
 }
 EFFORT_LINES = {
-    "opponent": SITES["opponent"],
     "reviewer": (
         ("instructions/independent-model-validation.md", r"^\| GPT \|"),
         ("docs/dev-rules/delegation.md", r"^\s*\| GPT-authored"),
@@ -98,19 +92,6 @@ def effort_problems(role: str, read: Callable[[str], str], decision: Mapping[str
 
 def registry_problems(registry: Mapping[str, Any], decisions: Mapping[str, Any]) -> list[str]:
     problems = []
-    opponents = registry["opponents"]
-    claude = opponents["claude"]
-    opponent = decisions.get("opponent")
-    if opponent and opponent["status"] == WINNER:
-        want_model, want_effort = opponent["winner"]["model"], opponent["winner"]["effort"]
-    else:
-        want_model, want_effort = FABLE, BASELINE["opponent"]["claude_effort"]
-    if claude["model"] != want_model:
-        problems.append(f"registry opponents.claude.model is {claude['model']!r}, expected {want_model!r}")
-    if claude.get("effort", opponents["effort"]) != want_effort:
-        problems.append(f"registry opponents effort for Claude is not {want_effort!r}")
-    if opponents["fast_effort"] != FAST_EFFORT:
-        problems.append("registry opponents.fast_effort changed")
     reviewer = decisions.get("reviewer")
     want_list = (
         [reviewer["winner"]["model"]] if reviewer and reviewer["status"] == WINNER
@@ -119,7 +100,6 @@ def registry_problems(registry: Mapping[str, Any], decisions: Mapping[str, Any])
     if registry["runner"]["independent_review"]["gpt"] != want_list:
         problems.append(f"registry runner.independent_review.gpt is not {want_list!r}")
     return problems
-
 
 
 def pin_problems(

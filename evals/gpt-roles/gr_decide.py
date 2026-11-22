@@ -15,7 +15,7 @@ LUNA_BASELINE, LUNA_NEW = "gpt-5.6-luna", "gpt-6-luna"
 SOL_CANDIDATES = (SOL_BASELINE, SOL_NEW, "gpt-6.1-terra", LUNA_NEW)
 LUNA_CANDIDATES = (LUNA_BASELINE, LUNA_NEW)
 
-SOL_ROLES = ("reviewer", "text_review", "language", "opponent", "worker")
+SOL_ROLES = ("reviewer", "text_review", "language", "worker")
 LUNA_ROLES = ("scout", "researcher", "worker")
 
 SOL_ROWS = {
@@ -23,7 +23,6 @@ SOL_ROWS = {
                  "claude_agents.hei5enbug-agent-setup:reviewer.fallback.model", "runner.independent_review.claude[0]"],
     "text_review": ["scripts/text_review.py REVIEW_MODELS"],
     "language": ["capabilities.language.claude.primary.model", "capabilities.language.codex.primary.model"],
-    "opponent": ["opponents.codex.model"],
     "worker": ["capabilities.implementation.claude.fallback.model", "claude_agents.hei5enbug-agent-setup:worker.fallback.model"],
 }
 LUNA_ROWS = {

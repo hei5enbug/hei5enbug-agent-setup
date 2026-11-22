@@ -1,5 +1,5 @@
 """The case table of the GPT role comparison: which existing case or new case each role runs, how it is seeded, what the
-assignment is, and how a result is graded. Reused: model-roles T89 to T93, role-runner-scratch cases 5 and 7, and the scout-demo
+assignment is, and how a result is graded. Reused: model-roles T89 to T91, role-runner-scratch cases 5 and 7, and the scout-demo
 fixture of T103 to T105. New: TR1, TR2, W1 to W3, SC1 to SC3 (graders written for the role runner), and R1."""
 
 from __future__ import annotations
@@ -42,7 +42,6 @@ CASES = {case.id: case for case in (
     Case("T89", "reviewer", "mr-review", EXISTING), Case("T90", "reviewer", "mr-review", EXISTING),
     Case("T91", "reviewer", "mr-review", EXISTING), Case("S5", "reviewer", "scratch-validation", EXISTING, note="role-runner-scratch case 5"),
     Case("TR1", "text_review", "text-review", NEW), Case("TR2", "text_review", "text-review", NEW),
-    Case("T92", "opponent", "opponent", EXISTING, effort="xhigh"), Case("T93", "opponent", "opponent", EXISTING, effort="xhigh"),
     Case("W1", "worker", "worker", NEW), Case("W2", "worker", "worker", NEW), Case("W3", "worker", "worker", NEW),
     Case("S7", "scout", "scratch-scout", EXISTING, note="role-runner-scratch case 7"),
     Case("SC1", "scout", "scout-demo", NEW, note="question of T103 on the scout-demo fixture"),
@@ -54,7 +53,7 @@ CASES = {case.id: case for case in (
     Case("R2", "researcher", "researcher", NEW, note="harder: several exact facts"),
     Case("R3", "researcher", "researcher", NEW, note="harder: several exact facts"),
 )}
-ROLE_CASES = {role: [case.id for case in CASES.values() if case.role == role] for role in ("reviewer", "text_review", "opponent", "worker", "scout", "researcher")}
+ROLE_CASES = {role: [case.id for case in CASES.values() if case.role == role] for role in ("reviewer", "text_review", "worker", "scout", "researcher")}
 
 REVIEW_ASSIGNMENT = (
     "Review pricing.py in the current repository for correctness against its docstring. "

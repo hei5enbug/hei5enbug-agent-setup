@@ -17,7 +17,6 @@
 |---|---|---|---|
 | `reviewer` | T89, T90, T91, S5 | `evals/model-roles` 사례와 scratch 사례 5 | `role_runner.py reviewer` |
 | `text_review` | TR1, TR2 | 신규: 결함 하나를 심은 초안 | `text_review.py review --model` |
-| `opponent` | T92, T93 | `evals/model-roles` 사례, `xhigh` | `run-opponent.sh --opponent codex` |
 | `language` | t1, t3, t5 | `evals/korean-writing` 작업, Claude 채점기 하나 | `kw_run.py` |
 | `worker` | W1, W2, W3, 더 어려운 W4, W5, W6 | 신규: 숨은 테스트가 있는 시드 저장소. W4부터 W6은 각각 docstring에만 적힌 요구, 바뀌는 소스 파일 수 상한, 얕은 수정을 떨어뜨리는 숨은 테스트를 가진다 | `role_runner.py worker` |
 | `scout` | S7, SC1, SC2, SC3 | scratch 사례 7과 T103~T105의 scout-demo 질문 | `role_runner.py scout` |

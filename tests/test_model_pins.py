@@ -545,17 +545,6 @@ class ModelPinTest(unittest.TestCase):
         self.assertEqual(["hei5enbug-agent-setup:worker"], sorted(agents))
         self.assertEqual([], problems)
 
-    def test_토론_상대는_대체_항목이_없다(self):
-        """tiki-taka 상대 항목은 fallback이 없어서 상대가 실패하면 토론이 멈춘다."""
-        # Given
-        opponents = REGISTRY["opponents"]
-
-        # When
-        with_fallback = [name for name, entry in opponents.items() if isinstance(entry, dict) and "fallback" in entry]
-
-        # Then
-        self.assertEqual([], with_fallback)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -17,6 +17,6 @@ GPT Luna는 소유자가 명시적으로 바꿀 때까지 `gpt-6-luna`를 유지
 `xhigh`를 쓴다(2026-10-20 사용자의 `gpt-5.6-luna` 선택을 대체한 2026-11-20 소유자 결정). `gpt-sol`과 `gpt-terra`는
 2026-11-20 소유자의 교체 규칙에 따른 역할별 비교 기록으로만 바꾸므로, 2단계만으로 더 새로운 Sol 릴리스를 채택하지 않는다.
 `gpt-sol-worker`(`gpt-6.2-sol`)는 두 번째 Sol 고정값으로, GPT 구현 worker가 어려운 작업에 쓰는 모델이고,
-`gpt-sol`(`gpt-6.1-sol`)은 opponent와 `text_review`에 남는다.
+`gpt-sol`(`gpt-6.1-sol`)은 `text_review`에 남는다.
 
 실행 파일은 모델을 이 전체 ID로만 적는다. 별칭이나 실행 시점의 최신 릴리스 조회는 추가하지 않는다.

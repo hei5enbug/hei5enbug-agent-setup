@@ -34,10 +34,6 @@ GOOD = {
             "reports/export.py raises KeyError and clients parsing the documented field break"),
     "T91": ("issue.md:16", "Proposal 2 contradicts acceptance criterion 2: entries only expire after 15 minutes",
             "a changed price can stay stale for up to 15 minutes, so the 30 seconds cannot be met"),
-    "T92": ("design.md:14", "every retry gets a newly generated X-Delivery-Id and the subscriber cannot deduplicate",
-            "a timeout after processing makes the subscriber act twice, for example a duplicate receipt email"),
-    "T93": ("design.md:12", "hash(customer_id) % 8 puts acme-trading's 41 percent of the writes on one shard",
-            "that hot shard takes about 492 inserts per second and exceeds the 400 a primary sustains"),
 }
 
 GOOD_KO = {
@@ -47,10 +43,6 @@ GOOD_KO = {
             "reports/export.py가 KeyError로 실패하고 필드를 파싱하는 클라이언트가 깨진다"),
     "T91": ("issue.md:16", "제안 2의 만료 15분은 완료 기준 2의 30초와 충돌한다",
             "바뀐 가격이 최대 15분 동안 반영되지 않아 기준 2를 충족할 수 없다"),
-    "T92": ("design.md:14", "재시도마다 X-Delivery-Id를 새로 생성해서 구독자가 중복을 걸러낼 수 없다",
-            "처리 뒤 시간 초과가 나면 같은 이벤트가 두 번 처리되어 영수증 메일이 중복 발송된다"),
-    "T93": ("design.md:12", "acme-trading이 전체 쓰기의 41퍼센트라서 hash(customer_id) % 8이 한 샤드에 쏠림을 만든다",
-            "그 샤드는 초당 492건을 받아 primary가 버티는 400건을 초과한다"),
 }
 
 NON_PLANTED = {
@@ -64,43 +56,22 @@ NON_PLANTED = {
                              "the cause is not explained, so nobody knows whether to fix or remove the call"),
     "peak-load-undefined": ("issue.md:22", "'At peak load' has no definition of the peak or how it is measured",
                             "nobody can reproduce or judge whether criterion 1 passes"),
-    "unhandled-responses": ("design.md:13", "a 4xx such as 429, a 3xx, or a non-200 2xx response is not defined",
-                            "those deliveries are dropped silently without a retry or an alert"),
-    "alert-per-delivery": ("design.md:16", "an alert is raised for every failed delivery",
-                           "one long outage floods the operators with one alert per event"),
-    "delivery-state-unspecified": ("design.md:12", "the delivery state, the next attempt time, and the worker are not defined",
-                                   "pending retries are lost on a restart and several instances send duplicates"),
-    "replay-id-and-state": ("design.md:17", "replay and the 'exactly as stored' criterion leave open which X-Delivery-Id is used",
-                            "a replayed delivery that was already processed repeats the event twice"),
-    "ac1-checks-arrival-only": ("design.md:21", "acceptance criterion 1 only checks that every event arrives",
-                                "an implementation that sends the same event six times still passes"),
-    "ac1-ac2-conflict": ("design.md:21", "acceptance criterion 2 conflicts with criterion 1 for the largest customer",
-                         "no placement meets both criteria"),
-    "copy-plan-underspecified": ("design.md:16", "the one-time copy has no write freeze, cutover order, or rollback",
-                                 "orders written during the copy can be lost or duplicated"),
-    "ac3-checks-exactly-one-shard": ("design.md:22", "criterion 3 only requires exactly one shard, not the correct shard",
-                                     "a misplaced order passes and is missing from the customer's page"),
-    "no-resize-or-exception-path": ("design.md:12", "there is no resize procedure or exception for the fixed hash",
-                                    "changing the shard count remaps most customers and needs a full copy"),
-    "queries-beyond-list-my-orders": ("design.md:13", "only the list my orders query is covered, not a lookup by order id",
-                                      "such a lookup has no defined route and must query all 8 shards"),
 }
 
 OPINION_AT_UNLISTED_LINE = {
     "T89": "seatmap/seats.py:42", "T90": "pricing/api.py:3", "T91": "issue.md:4",
-    "T92": "design.md:6", "T93": "design.md:5",
 }
 
 
 class CaseDataTest(unittest.TestCase):
-    def test_사례는_T89부터_T93까지이고_검토_셋_토론_둘이다(self):
-        """사례는 T89부터 T93까지 다섯 개이며 검토 사례 셋과 토론 사례 둘로 나뉜다."""
+    def test_사례는_T89부터_T91까지의_검토_사례_셋이다(self):
+        """사례는 T89부터 T91까지 세 개이며 모두 검토 사례이다."""
         # When
         roles = mr_cases.roles_by_case(CASES)
 
         # Then
-        self.assertEqual(["T89", "T90", "T91", "T92", "T93"], list(roles))
-        self.assertEqual(["reviewer"] * 3 + ["opponent"] * 2, list(roles.values()))
+        self.assertEqual(["T89", "T90", "T91"], list(roles))
+        self.assertEqual(["reviewer"] * 3, list(roles.values()))
 
     def test_모든_사례는_심은_문제_하나와_맞는_위치_근거를_갖는다(self):
         """각 사례는 심은 문제 하나를 갖고, 그 위치 범위 안에 근거 문구가 실제로 있다."""
@@ -153,13 +124,13 @@ class SeedingTest(unittest.TestCase):
         ).stdout.splitlines()
 
     def test_diff_사례는_기준_커밋과_변경_커밋을_만들고_나머지는_커밋_하나다(self):
-        """T89와 T90은 기준과 변경의 두 커밋, T91부터 T93은 커밋 하나로 시드된다."""
+        """T89와 T90은 기준과 변경의 두 커밋, T91은 커밋 하나로 시드된다."""
         with tempfile.TemporaryDirectory() as temp:
             # When
             counts = {case_id: len(self.commits(self.seeded(case_id, temp)["repo"])) for case_id in CASES}
 
             # Then
-            self.assertEqual({"T89": 2, "T90": 2, "T91": 1, "T92": 1, "T93": 1}, counts)
+            self.assertEqual({"T89": 2, "T90": 2, "T91": 1}, counts)
 
     def test_이미_내용이_있는_폴더에는_시드하지_않는다(self):
         """비어 있지 않은 repo 폴더에 시드하면 FileExistsError로 멈춘다."""

@@ -91,8 +91,6 @@ hei5enbug-agent-setup/
 │   └── codex-worker.toml
 └── skills/
     ├── aside-browser-tasks/
-    ├── decision-navigator/
-    ├── deep-interview/
     ├── flowchart-design/
     ├── docs-rewrite/
     ├── document-to-confluence/
@@ -104,8 +102,7 @@ hei5enbug-agent-setup/
     ├── skill-builder/
     ├── skill-issue-creator/
     ├── suggest-commit/
-    ├── technical-design-writer/
-    └── tiki-taka/
+    └── technical-design-writer/
 ```
 
 각 플러그인 스킬 폴더는 자신의 `SKILL.md`와 필요한 참조 문서·스크립트를 담고 있습니다.

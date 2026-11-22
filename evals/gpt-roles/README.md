@@ -14,7 +14,6 @@ only that role's cases.
 |---|---|---|---|
 | `reviewer` | T89, T90, T91, S5 | `evals/model-roles` cases and scratch case 5 | `role_runner.py reviewer` |
 | `text_review` | TR1, TR2 | new: a draft with one planted defect | `text_review.py review --model` |
-| `opponent` | T92, T93 | `evals/model-roles` cases, at `xhigh` | `run-opponent.sh --opponent codex` |
 | `language` | t1, t3, t5 | `evals/korean-writing` tasks, one Claude grader | `kw_run.py` |
 | `worker` | W1, W2, W3; harder W4, W5, W6 | new: seeded repositories with hidden tests; W4 to W6 each have a requirement only a docstring states, a cap on changed source files, and hidden tests that fail a shallow fix | `role_runner.py worker` |
 | `scout` | S7, SC1, SC2, SC3 | scratch case 7 and the scout-demo questions of T103 to T105 | `role_runner.py scout` |

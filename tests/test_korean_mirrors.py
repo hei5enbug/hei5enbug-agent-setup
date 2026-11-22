@@ -19,7 +19,7 @@ NON_ENGLISH_DOCUMENTS = {
 NON_ENGLISH_READMES = {
     REPO_ROOT / "docs/ko/README.ko.md",
 }
-EXCLUDED_DIRECTORIES = {".git", ".pytest_cache", ".decision-navigator"}
+EXCLUDED_DIRECTORIES = {".git", ".pytest_cache"}
 LINK_PATTERN = re.compile(r"\]\(([^)]+)\)")
 
 
@@ -118,19 +118,19 @@ class KoreanMirrorTest(unittest.TestCase):
         self.assertTrue(NON_ENGLISH_READMES.isdisjoint(sources))
         self.assertTrue(excluded_sources.isdisjoint(sources))
 
-    def test_평가_입력에는_미러가_필요_없고_운영_안내서는_필요하다(self):
+    def test_평가_입력에는_미러가_필요_없고_스킬_문서는_필요하다(self):
         # Given
-        fixture = REPO_ROOT / "skills/deep-interview/evals/files/billing-service/README.md"
-        operator_guide = REPO_ROOT / "skills/deep-interview/evals/operator-guides/brownfield-ten-rounds.md"
+        fixture = REPO_ROOT / "skills/document-to-confluence/evals/files/markdown-case/repository/README.md"
+        skill_document = REPO_ROOT / "skills/document-to-confluence/SKILL.md"
 
         # When
         sources = set(english_sources())
 
         # Then
         self.assertTrue(fixture.is_file())
-        self.assertTrue(operator_guide.is_file())
+        self.assertTrue(skill_document.is_file())
         self.assertNotIn(fixture, sources)
-        self.assertIn(operator_guide, sources)
+        self.assertIn(skill_document, sources)
 
     def test_e2e_평가_픽스처_저장소의_markdown은_미러가_필요_없다(self):
         """evals/e2e/fixtures 아래 가상 저장소의 문서는 픽스처라서 미러 원본에서 빠진다."""

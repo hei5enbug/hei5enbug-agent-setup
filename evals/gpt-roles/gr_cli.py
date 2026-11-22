@@ -27,7 +27,7 @@ import gr_run  # noqa: E402
 
 EXIT_UNGRADED = 3
 ROLE_CANDIDATES = {
-    "reviewer": gr_core.SOL_CANDIDATES, "text_review": gr_core.SOL_CANDIDATES, "opponent": gr_core.SOL_CANDIDATES,
+    "reviewer": gr_core.SOL_CANDIDATES, "text_review": gr_core.SOL_CANDIDATES,
     "language": gr_core.SOL_CANDIDATES, "worker": gr_core.ALL_CANDIDATES, "scout": gr_core.LUNA_CANDIDATES,
     "researcher": gr_core.LUNA_CANDIDATES,
 }

@@ -79,8 +79,6 @@ Claude Code의 `/config`에서 옵션을 고르거나 Codex를 시작하기 전�
 | 스킬 | 용도 |
 |---|---|
 | [`aside-browser-tasks`](../../skills/aside-browser-tasks/SKILL.md) | 다른 도구로 끝내지 못하는 브라우저 작업을 로그인된 Aside Browser로 수행합니다. [한국어](skills/aside-browser-tasks/SKILL.ko.md) |
-| [`decision-navigator`](../../skills/decision-navigator/SKILL.md) | 구현 경로가 분명해질 때까지 의사 결정 티켓을 해결합니다. [한국어](skills/decision-navigator/SKILL.ko.md) |
-| [`deep-interview`](../../skills/deep-interview/SKILL.md) | 모호함을 점수로 평가하는 소크라테스식 인터뷰로 요구사항을 명확히 합니다. [한국어](skills/deep-interview/SKILL.ko.md) |
 | [`flowchart-design`](../../skills/flowchart-design/SKILL.md) | 공통 디자인 기준으로 플로우차트를 만들고 고칩니다. [한국어](skills/flowchart-design/SKILL.ko.md) |
 | [`docs-rewrite`](../../skills/docs-rewrite/SKILL.md) | 의미를 보존하면서 어색한 한국어를 포함한 기존 글을 자연스럽게 고칩니다. [한국어](skills/docs-rewrite/SKILL.ko.md) |
 | [`document-to-confluence`](../../skills/document-to-confluence/SKILL.md) | 문서를 Confluence에 게시하고 웹 편집과 댓글을 보존하면서 원본 변경을 반영합니다. [한국어](skills/document-to-confluence/SKILL.ko.md) |
@@ -93,7 +91,6 @@ Claude Code의 `/config`에서 옵션을 고르거나 Codex를 시작하기 전�
 | [`orca-plugin-refresh`](../../skills/orca-plugin-refresh/SKILL.md) | 플러그인을 업데이트해 실행 중인 Orca 세션에 적용하고, 오래된 Claude Code 릴리스의 세션은 재개합니다. [한국어](skills/orca-plugin-refresh/SKILL.ko.md) |
 | [`suggest-commit`](../../skills/suggest-commit/SKILL.md) | 저장소 스타일에 맞는 커밋 메시지 5개를 추천하거나 요청 시 커밋합니다. [한국어](skills/suggest-commit/SKILL.ko.md) |
 | [`technical-design-writer`](../../skills/technical-design-writer/SKILL.md) | 구현 계획과 구분해 기술 설계 문서와 RFC를 작성하고 검토합니다. [한국어](skills/technical-design-writer/SKILL.ko.md) |
-| [`tiki-taka`](../../skills/tiki-taka/SKILL.md) | 횟수가 제한된 Claude/Codex 토론으로 쟁점을 해결합니다. [한국어](skills/tiki-taka/SKILL.ko.md) |
 
 각 스킬의 전체 절차, 실행 조건, 제한은 링크한 스킬 문서에 있습니다.
 

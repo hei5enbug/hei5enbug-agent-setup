@@ -364,8 +364,9 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T84 | demo-app | UI routing, open breakpoint | Plan cards 320 px wide and 24 px apart in one row, mobile breakpoint left open; routes to the designer |
 | T112 | demo-app | UI routing, new screen | A new invoices screen of three rows built from scratch, fitting at 1280 and 375 px; routes to the designer at its pinned `xhigh` |
 
-The ids T89 to T93 belong to the comparison of Claude reviewer and opponent models in
-[`evals/model-roles`](../model-roles/README.md). Those cases run through the role runners instead of this harness, so
+The ids T89 to T91 belong to the comparison of Claude reviewer models in
+[`evals/model-roles`](../model-roles/README.md); its opponent ids T92 and T93 ended with the removal of their skill.
+Those cases run through the role runners instead of this harness, so
 they have no task file here.
 
 ## Comparing a change on both hosts

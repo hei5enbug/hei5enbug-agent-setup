@@ -311,21 +311,6 @@
       ]
     },
     {
-      "id": "claude-subagent-no-ask-user-question",
-      "host": "claude",
-      "kind": "host-fact",
-      "statement": "`AskUserQuestion` is removed from every subagent's tool list, so a subagent cannot ask the user.",
-      "doc_url": "https://code.claude.com/docs/en/sub-agents.md",
-      "quote": "The first removes a short list of tools from every subagent. ... * `AskUserQuestion`",
-      "verified_on": "2026-11-20",
-      "lines": [
-        {
-          "file": "skills/deep-interview/references/ask-ui.md",
-          "contains": "`AskUserQuestion` is main-session only"
-        }
-      ]
-    },
-    {
       "id": "claude-per-invocation-model-order",
       "host": "claude",
       "kind": "host-fact",
@@ -635,15 +620,11 @@
       "id": "plugin-evidence-and-session-wording",
       "host": "both",
       "kind": "plugin-design",
-      "reason": "Wording about this plugin's evidence rule or its own debate-session identifiers, not a host capability.",
+      "reason": "Wording about this plugin's evidence rule, not a host capability.",
       "lines": [
         {
           "file": "skills/skill-builder/references/execution-methods.md",
           "contains": "treat a run without that evidence as unverified"
-        },
-        {
-          "file": "skills/tiki-taka/SKILL.md",
-          "contains": "later debates cannot mix with it"
         }
       ]
     },

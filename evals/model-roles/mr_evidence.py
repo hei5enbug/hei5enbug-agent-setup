@@ -94,14 +94,3 @@ def status_session(status_line: str) -> dict[str, str]:
     if not isinstance(session, str):
         raise EvidenceError("the status line names no session")
     return {"session": session, "model": str(status.get("model")), "effort": str(status.get("effort"))}
-
-
-def state_session(state_dir: Path) -> dict[str, str]:
-    """Read the session, model, and effort an opponent state folder kept; read it before `--finish` removes it."""
-    values = {}
-    for key, name in (("session", "session-id"), ("model", "active-model"), ("effort", "active-effort")):
-        path = state_dir / name
-        if not path.is_file():
-            raise EvidenceError(f"{path} is missing")
-        values[key] = path.read_text(encoding="utf-8").strip()
-    return values

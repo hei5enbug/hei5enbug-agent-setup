@@ -1,7 +1,8 @@
 """The record of the Fable-versus-Opus comparison, and the efficiency rule it applies to each role.
 
 Four candidates run every case once. The reviewer role counts only the review cases and the opponent role only the
-debate cases. A role keeps the candidates that passed every one of its cases; when none did, the role has no winner
+debate cases, which ended with their skill's removal: their fixtures are gone, so `RETIRED_CASES` names them for the
+stored record. A role keeps the candidates that passed every one of its cases; when none did, the role has no winner
 and keeps its baseline pin. Among the kept candidates, one that is slower than the fastest by more than 1.5 times and
 by more than 60 seconds on any case is dropped, measured against the fastest of the kept candidates on that case. Of the
 rest, the lowest cost per passing case wins; costs within 10 percent or within $0.05 of the lowest tie, and the lowest
@@ -19,6 +20,7 @@ CANDIDATES = (
     (OPUS, "high"), (OPUS, "xhigh"), (FABLE, "high"), (FABLE, "xhigh"),
 )
 ROLES = ("reviewer", "opponent")
+RETIRED_CASES = {"T92": "opponent", "T93": "opponent"}
 PENDING = "pending"
 RECORDED = "recorded"
 WINNER = "winner"

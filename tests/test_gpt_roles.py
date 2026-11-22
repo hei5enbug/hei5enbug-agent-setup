@@ -86,7 +86,6 @@ class SolReplacementTest(unittest.TestCase):
     def test_6_2_sol이_모든_사례를_통과하고_비용이_밴드_밖으로_싸면_전부_바꾼다(self):
         plan = gr_decide.registry_plan(sol_rows(0.50))
         self.assertTrue(plan["sol"]["replace_all_with_6_2_sol"])
-        self.assertEqual(plan["changes"]["opponents.codex.model"], "gpt-6.2-sol")
         self.assertEqual(plan["changes"]["scripts/text_review.py REVIEW_MODELS"], "gpt-6.2-sol")
 
     def test_한_역할에서_6_1_sol이_통과하는_사례를_6_2_sol이_못하면_바꾸지_않는다(self):
@@ -95,7 +94,6 @@ class SolReplacementTest(unittest.TestCase):
             row("language", "A", "gpt-6.2-sol", passed=False, cost=0.5)]
         plan = gr_decide.registry_plan(rows)
         self.assertFalse(plan["sol"]["replace_all_with_6_2_sol"])
-        self.assertNotIn("opponents.codex.model", plan["changes"])
 
     def test_비용이_밴드_안이면_바꾸지_않는다(self):
         self.assertFalse(gr_decide.registry_plan(sol_rows(0.95))["sol"]["replace_all_with_6_2_sol"])
@@ -110,7 +108,6 @@ class SolReplacementTest(unittest.TestCase):
         plan = gr_decide.registry_plan(rows)
         self.assertEqual(plan["sol"]["single_role_winners"], {"reviewer": "gpt-6.1-terra"})
         self.assertEqual(plan["changes"]["codex_agents.reviewer.model"], "gpt-6.1-terra")
-        self.assertNotIn("opponents.codex.model", plan["changes"])
 
 
 class LunaReplacementTest(unittest.TestCase):
@@ -324,7 +321,7 @@ class DryCheckTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             plugin = gr_core.plugin_copy(Path(tmp) / "plugin", extra_models=())
             with self.assertRaises(gr_run.CaseError):
-                gr_run.dry_check("W1", "gpt-6.2-sol", plugin)
+                gr_run.dry_check("W1", "gpt-5.6-luna", plugin)
 
 
 class WholeRunTest(unittest.TestCase):

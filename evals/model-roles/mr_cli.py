@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -22,7 +21,6 @@ import mr_record  # noqa: E402
 REPO_ROOT = HERE.parents[1]
 RECORD_PATH = HERE / "record.json"
 ISSUE = 84
-OPPONENT_COPY_PATHS = ("skills/tiki-taka/run-opponent.sh", "skills/tiki-taka/scripts", "config/model-registry.json")
 
 
 def parse_candidate(value: str) -> tuple[str, str]:
@@ -32,10 +30,13 @@ def parse_candidate(value: str) -> tuple[str, str]:
     return model, effort
 
 
+def recorded_roles() -> dict[str, str]:
+    """Return the role of every case the stored record holds: the live cases and the retired ones."""
+    return {**mr_cases.roles_by_case(mr_cases.load_cases()), **mr_record.RETIRED_CASES}
+
+
 def run_source(args: argparse.Namespace) -> dict[str, str]:
-    if args.status_line:
-        return mr_evidence.status_session(Path(args.status_line).read_text(encoding="utf-8"))
-    return mr_evidence.state_session(Path(args.state_dir))
+    return mr_evidence.status_session(Path(args.status_line).read_text(encoding="utf-8"))
 
 
 def result_entry(
@@ -83,7 +84,7 @@ def command_result(args: argparse.Namespace) -> int:
 
 
 def command_build(args: argparse.Namespace) -> int:
-    roles = mr_cases.roles_by_case(mr_cases.load_cases())
+    roles = recorded_roles()
     results = [json.loads(Path(path).read_text(encoding="utf-8")) for path in args.results]
     record = mr_record.build_record(ISSUE, roles, results)
     problems = mr_record.record_problems(record, roles)
@@ -95,7 +96,7 @@ def command_build(args: argparse.Namespace) -> int:
 
 
 def command_check(args: argparse.Namespace) -> int:
-    roles = mr_cases.roles_by_case(mr_cases.load_cases())
+    roles = recorded_roles()
     record = json.loads(RECORD_PATH.read_text(encoding="utf-8"))
     registry = json.loads((REPO_ROOT / "config" / "model-registry.json").read_text(encoding="utf-8"))
     problems = mr_record.record_problems(record, roles)
@@ -106,23 +107,6 @@ def command_check(args: argparse.Namespace) -> int:
     for role, decision in mr_record.decisions(record).items():
         print(f"{role}: {decision['status']} {decision['winner'] or ''}")
     return 1 if problems else 0
-
-
-def command_opponent_plugin(args: argparse.Namespace) -> int:
-    out = Path(args.out)
-    for relative in OPPONENT_COPY_PATHS:
-        source, target = REPO_ROOT / relative, out / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if source.is_dir():
-            shutil.copytree(source, target, ignore=shutil.ignore_patterns("__pycache__"))
-        else:
-            shutil.copy2(source, target)
-    registry_path = out / "config" / "model-registry.json"
-    registry = json.loads(registry_path.read_text(encoding="utf-8"))
-    registry["opponents"]["claude"]["model"] = args.model
-    registry_path.write_text(json.dumps(registry, indent=2) + "\n", encoding="utf-8")
-    print(out.resolve())
-    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -137,9 +121,7 @@ def build_parser() -> argparse.ArgumentParser:
     for name, helptext in (("evidence", "print a run's host-verified model, effort, cost, and wall time"),
                            ("result", "grade an answer and write its record entry")):
         sub = commands.add_parser(name, help=helptext)
-        source = sub.add_mutually_exclusive_group(required=True)
-        source.add_argument("--status-line", help="file holding the role runner status line (reviewer cases)")
-        source.add_argument("--state-dir", help="the opponent state folder, read before --finish (debate cases)")
+        sub.add_argument("--status-line", required=True, help="file holding the role runner status line")
         if name == "result":
             sub.add_argument("case", choices=sorted(mr_cases.load_cases()))
             sub.add_argument("--candidate", required=True, type=parse_candidate, help="model/effort")
@@ -152,15 +134,12 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--results", nargs="+", required=True)
     build.add_argument("--out", default=str(RECORD_PATH))
     commands.add_parser("check", help="validate record.json and the repository's pins against it")
-    plugin = commands.add_parser("opponent-plugin", help="copy the opponent runner with another Claude opponent model")
-    plugin.add_argument("--model", required=True, choices=sorted({model for model, _ in mr_record.CANDIDATES}))
-    plugin.add_argument("--out", required=True)
     return parser
 
 
 COMMANDS = {
     "seed": command_seed, "grade": command_grade, "evidence": command_evidence, "result": command_result,
-    "build": command_build, "check": command_check, "opponent-plugin": command_opponent_plugin,
+    "build": command_build, "check": command_check,
 }
 
 

@@ -1,4 +1,4 @@
-"""Run one case with one candidate model through the role runner, the text review script, or the tiki-taka opponent script, and
+"""Run one case with one candidate model through the role runner or the text review script, and
 write one result file. Starting a run is the only step that costs model calls."""
 
 from __future__ import annotations
@@ -17,7 +17,6 @@ import gr_core
 import gr_text_cases
 import gr_worker_cases
 
-OPPONENT_COPY_PATHS = ("skills/tiki-taka/run-opponent.sh", "skills/tiki-taka/scripts", "config/model-registry.json")
 RUNNER_TIMEOUT = 1500
 
 
@@ -137,50 +136,9 @@ def run_text_review_case(case: gr_cases.Case, model: str, work: Path, plugin: Pa
     return finish(case, model, rep, gr_text_cases.failures(case.id, output), gr_core.rollout_cost(rollouts[0], model), wall, rollouts[0].as_posix(), {"findings": output.get("findings")})
 
 
-def opponent_plugin(plugin: Path, model: str, dest: Path) -> Path:
-    for relative in OPPONENT_COPY_PATHS:
-        source, target = plugin / relative, dest / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if source.is_dir():
-            shutil.copytree(source, target, ignore=shutil.ignore_patterns("__pycache__"))
-        else:
-            shutil.copy2(source, target)
-    path = dest / "config" / "model-registry.json"
-    registry = json.loads(path.read_text(encoding="utf-8"))
-    registry["opponents"]["codex"]["model"] = model
-    path.write_text(json.dumps(registry, indent=2) + "\n", encoding="utf-8")
-    return dest
-
-
-def codex_rollout(session: str) -> Path:
-    found = sorted((Path.home() / ".codex" / "sessions").glob(f"**/rollout-*{session}.jsonl"))
-    if not found:
-        raise CaseError(f"no Codex rollout for session {session}")
-    return found[-1]
-
-
-def run_opponent_case(case: gr_cases.Case, model: str, work: Path, plugin: Path, rep: int) -> dict[str, Any]:
-    paths = gr_cases.mr_cases.seed(case.id, work)
-    copy = opponent_plugin(plugin, model, work / "opponent-plugin")
-    state = Path(tempfile.mkdtemp(prefix="gr-opponent-"))
-    script = copy / "skills" / "tiki-taka" / "run-opponent.sh"
-    argv = ["bash", str(script), "--opponent", "codex", "--state-dir", str(state), "--repo", paths["repo"], "--max-exchanges", "1"]
-    try:
-        done, wall = gr_core.run_timed(argv, Path(paths["repo"]), stdin=Path(paths["prompt"]).read_text(encoding="utf-8"))
-        session_file = state / "session-id"
-        if done.returncode != 0 or not session_file.is_file():
-            raise CaseError(f"run-opponent.sh exited {done.returncode}: {done.stderr.strip()[-300:]}")
-        rollout = codex_rollout(session_file.read_text(encoding="utf-8").strip())
-        failures, grade = gr_cases.mr_failures(case.id, done.stdout)
-        return finish(case, model, rep, failures, gr_core.rollout_cost(rollout, model), wall, rollout.as_posix(), {"grade": grade})
-    finally:
-        gr_core.run_timed(["bash", str(script), "--opponent", "codex", "--state-dir", str(state), "--finish"], work)
-        shutil.rmtree(state, ignore_errors=True)
-
-
 RUNNERS = {"mr-review": run_reviewer_case, "scratch-validation": run_reviewer_case, "scratch-scout": run_scout_case,
            "scout-demo": run_scout_case, "researcher": run_researcher_case, "worker": run_worker_case,
-           "text-review": run_text_review_case, "opponent": run_opponent_case}
+           "text-review": run_text_review_case}
 
 
 def dry_check(case_id: str, model: str, plugin: Path) -> dict[str, Any]:
@@ -188,11 +146,11 @@ def dry_check(case_id: str, model: str, plugin: Path) -> dict[str, Any]:
     command the run would start."""
     case = gr_cases.CASES[case_id]
     listed = json.loads((plugin / "config" / "model-registry.json").read_text(encoding="utf-8"))["runner"]["review_models"]
-    if model not in listed and case.kind != "opponent":
+    if model not in listed:
         raise CaseError(f"the plugin copy's role runner does not list {model}")
     with tempfile.TemporaryDirectory(prefix="gr-dry-") as tmp:
         work = Path(tmp)
-        if case.kind in ("mr-review", "opponent"):
+        if case.kind == "mr-review":
             gr_cases.mr_cases.seed(case.id, work)
         elif case.kind == "scratch-validation" or (case.kind == "scratch-scout"):
             gr_cases.load_demo().seed(work / "repo", False)
@@ -204,8 +162,7 @@ def dry_check(case_id: str, model: str, plugin: Path) -> dict[str, Any]:
         elif case.kind == "text-review":
             gr_text_cases.seed(case.id, work)
         role = {"mr-review": "reviewer", "scratch-validation": "reviewer"}.get(case.kind, case.role)
-        command = (["bash", "run-opponent.sh", "--opponent", "codex"] if case.kind == "opponent"
-                   else ["text_review.py", "review", "--model", model] if case.kind == "text-review"
+        command = (["text_review.py", "review", "--model", model] if case.kind == "text-review"
                    else runner_argv(plugin, role, model, case.effort, Path("assignment.md"), Path("result.md"),
                                     ("--validation",) if case.kind == "scratch-validation" else (), role not in ("reviewer",)))
     return {"case": case_id, "model": model, "effort": case.effort, "command": " ".join(command)}

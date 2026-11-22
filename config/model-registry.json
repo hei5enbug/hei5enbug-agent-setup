@@ -98,11 +98,5 @@
       "gpt-6.2-sol",
       "gpt-6.1-terra"
     ]
-  },
-  "opponents": {
-    "codex": {"model": "gpt-6.1-sol"},
-    "claude": {"model": "claude-fable-5-2"},
-    "effort": "xhigh",
-    "fast_effort": "high"
   }
 }

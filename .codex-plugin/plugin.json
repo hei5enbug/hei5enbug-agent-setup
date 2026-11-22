@@ -1,6 +1,6 @@
 {
   "name": "hei5enbug-agent-setup",
-  "version": "2.25.1",
+  "version": "2.26.0",
   "description": "Portable agent skills for repeatable engineering and documentation workflows.",
   "author": {
     "name": "hei5enbug",
@@ -19,7 +19,7 @@
   "interface": {
     "displayName": "Hei5enbug Agent Skills",
     "shortDescription": "Reusable engineering and documentation skills.",
-    "longDescription": "A portable collection of skills for interviewing, design, documentation, reviews, configuration, and agent workflows.",
+    "longDescription": "A portable collection of skills for design, documentation, reviews, configuration, and agent workflows.",
     "developerName": "hei5enbug",
     "category": "Productivity",
     "capabilities": [
