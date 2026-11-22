@@ -174,7 +174,7 @@ class CampaignTest(unittest.TestCase):
     def run_campaign(self, favourite, graders):
         writers = ["gpt-6.1-sol", "claude-opus-5-5"]
         specs = {"gpt-6.1-sol": "codex:gpt-6.1-sol", "claude-opus-5-5": "claude:claude-opus-5-5",
-                 "gpt-6-astra": "codex:gpt-6-astra"}
+                 "gpt-6.2-astra": "codex:gpt-6.2-astra"}
         self.keys = {}
         for task in ("t1", "t2"):
             for run in (1, 2):
@@ -190,7 +190,7 @@ class CampaignTest(unittest.TestCase):
     def test_두_계열_채점자가_같은_후보를_과반으로_고르면_승자다(self):
         """모든 채점자가 한 후보를 모든 작업 실행에서 1위로 고르고 사실 오류가 없으면 그 후보가 이긴다."""
         # Given
-        graders = ["gpt-6-astra", "claude-opus-5-5"]
+        graders = ["gpt-6.2-astra", "claude-opus-5-5"]
 
         # When
         summary = self.run_campaign("claude-opus-5-5", graders)
@@ -203,7 +203,7 @@ class CampaignTest(unittest.TestCase):
     def test_한_계열_채점자만_채점하면_결론이_나지_않는다(self):
         """한 계열의 채점자만 남으면 그 채점자가 모두 같은 후보를 골라도 판정은 inconclusive다."""
         # Given
-        graders = ["gpt-6-astra"]
+        graders = ["gpt-6.2-astra"]
 
         # When
         summary = self.run_campaign("claude-opus-5-5", graders)
@@ -214,7 +214,7 @@ class CampaignTest(unittest.TestCase):
     def test_한_채점자만_고르면_결론이_나지_않는다(self):
         """한 후보를 1위로 고르는 채점자가 한 명뿐이면 판정은 inconclusive다."""
         # Given
-        graders = ["gpt-6-astra", "claude-opus-5-5"]
+        graders = ["gpt-6.2-astra", "claude-opus-5-5"]
         real = self.fake_model
 
         def mixed(favourite):

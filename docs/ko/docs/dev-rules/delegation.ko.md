@@ -85,7 +85,7 @@ CLI로 재개할 때는 언제나 모델과 추론 강도를 다시 적용하고
 | 변경 | 최종 검토 |
 |---|---|
 | 사소함: 오타, 문구, 버전, 메타데이터 수정, 번역, 또는 검사가 모두 확인하는 기계적 수정 | 없음 |
-| 사소하지 않음, Claude 작성 | `role_runner.py reviewer`에 `--model gpt-6.1-terra`이나 `gpt-6-astra`, `--effort high`나 `xhigh`를 붙이며, 플러그인의 독립 모델 검증 규칙에 따라 변경마다 범위와 위험에 맞게 고른다 |
+| 사소하지 않음, Claude 작성 | `role_runner.py reviewer`에 `--model gpt-6.1-terra`이나 `gpt-6.2-astra`, `--effort high`나 `xhigh`를 붙이며, 플러그인의 독립 모델 검증 규칙에 따라 변경마다 범위와 위험에 맞게 고른다 |
 | GPT 작성(`gpt-6.1-sol`로 작성한 작업 포함) | `role_runner.py reviewer --model claude-fable-5-2 --effort high` |
 
 - 이 검토는 요청의 모든 작업이 끝나고 검사를 통과한 뒤 합쳐진 최종 diff를 대상으로 자동으로 한 번 실행한다. 더 이른

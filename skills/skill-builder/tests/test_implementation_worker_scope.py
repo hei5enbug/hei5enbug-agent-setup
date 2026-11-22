@@ -98,7 +98,7 @@ class ImplementationWorkerScopeTest(unittest.TestCase):
 
         # Then
         self.assertIn("only when the plugin session supplies its path and invocation contract", normalized)
-        self.assertIn("In standalone use, run `codex exec` with `gpt-6-astra`, `xhigh`, and a read-only sandbox", normalized)
+        self.assertIn("In standalone use, run `codex exec` with `gpt-6.2-astra`, `xhigh`, and a read-only sandbox", normalized)
         self.assertIn("verify the model and effort in its rollout `turn_context`", normalized)
         self.assertIn("The table's reviewer fallback still applies.", normalized)
 
@@ -137,7 +137,7 @@ class ImplementationWorkerScopeTest(unittest.TestCase):
         self.assertIn("claude -p", routes["Codex"][2])
         self.assertIn("reviewer", routes["Codex"][2])
         self.assertIn("role_runner.py reviewer", routes["Claude Code"][2])
-        self.assertIn('the model in the session line "Review model" (default `gpt-6-astra`), `xhigh`', routes["Claude Code"][2])
+        self.assertIn('the model in the session line "Review model" (default `gpt-6.2-astra`), `xhigh`', routes["Claude Code"][2])
         self.assertIn("fallback `reviewer` with `claude-opus-5-5`, `high`", routes["Claude Code"][2])
         self.assertNotIn("codex exec", routes["Claude Code"][2])
         self.assertIn("host's review route in the table below first", section)

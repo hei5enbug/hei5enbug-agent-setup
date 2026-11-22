@@ -1013,13 +1013,13 @@ class SessionContextTest(unittest.TestCase):
             self.assertNotIn("Role pinning", context)
 
     def test_Claude_세션은_검토_모델_설정값_한_줄을_담는다(self):
-        """review_model 옵션이 비면 기본 gpt-6-astra, 정규화한 허용 ID면 그 값을 한 줄로 담는다."""
+        """review_model 옵션이 비면 기본 gpt-6.2-astra, 정규화한 허용 ID면 그 값을 한 줄로 담는다."""
         # Given
         cases = {
-            None: "gpt-6-astra",
-            "": "gpt-6-astra",
+            None: "gpt-6.2-astra",
+            "": "gpt-6.2-astra",
             " Claude-Opus-5-5 ": "claude-opus-5-5",
-            "gpt-6.1-sol": "gpt-6.1-sol",
+            "gpt-6.2-sol": "gpt-6.2-sol",
         }
 
         for option, expected in cases.items():
@@ -1035,7 +1035,7 @@ class SessionContextTest(unittest.TestCase):
                 self.assertLess(len(context.encode("utf-8")), session_context.MAX_CONTEXT_BYTES)
 
     def test_허용_목록에_없는_검토_모델은_기본값으로_바꾼다(self):
-        """알 수 없는 review_model 값은 기본 gpt-6-astra 한 줄로 안전하게 바뀐다."""
+        """알 수 없는 review_model 값은 기본 gpt-6.2-astra 한 줄로 안전하게 바뀐다."""
         # Given
         extra_env = {"CLAUDE_PLUGIN_OPTION_REVIEW_MODEL": "gpt-9-unknown"}
 
@@ -1043,7 +1043,7 @@ class SessionContextTest(unittest.TestCase):
         context = self.context(self.run_hook("claude", extra_env=extra_env))
 
         # Then
-        self.assertIn("Review model: `gpt-6-astra`.", context)
+        self.assertIn("Review model: `gpt-6.2-astra`.", context)
         self.assertNotIn("gpt-9-unknown", context)
 
     def test_검토_모델_선택지는_모델_고정값_일곱_개와_같다(self):
@@ -1059,7 +1059,7 @@ class SessionContextTest(unittest.TestCase):
         configured = json.loads((REPO_ROOT / ".claude-plugin/plugin.json").read_text())["userConfig"]["review_model"]
 
         # Then
-        self.assertEqual(set(session_context.REVIEW_MODELS), set(pins.PINS.values()) - {pins.PINS["gpt-sol-worker"]})
+        self.assertEqual(set(session_context.REVIEW_MODELS), set(pins.PINS.values()) - {pins.PINS["gpt-sol"]})
         self.assertEqual(session_context.REVIEW_MODELS, role_runner.REVIEW_MODELS)
         self.assertEqual(configured["options"], list(session_context.REVIEW_MODELS))
         self.assertEqual(configured["default"], session_context.DEFAULT_REVIEW_MODEL)

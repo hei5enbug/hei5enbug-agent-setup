@@ -74,7 +74,7 @@ class VerifySpawnTest(unittest.TestCase):
     def test_turn_context의_모델이_다르면_종료_코드_4이다(self):
         """turn_context 모델이 기대와 다르면 검증되지 않고 종료 코드 4이다."""
         # Given
-        self.write_rollout("rollout-2026-10-15T10-00-00-child.jsonl", [spawn_meta(), turn("gpt-6-astra", "xhigh")])
+        self.write_rollout("rollout-2026-10-15T10-00-00-child.jsonl", [spawn_meta(), turn("gpt-6.2-astra", "xhigh")])
 
         # When
         code, status = self.verify()
@@ -82,7 +82,7 @@ class VerifySpawnTest(unittest.TestCase):
         # Then
         self.assertEqual(4, code)
         self.assertFalse(status["verified"])
-        self.assertIn("gpt-6-astra", status["error"])
+        self.assertIn("gpt-6.2-astra", status["error"])
 
     def test_turn_context의_effort가_다르면_종료_코드_4이다(self):
         """여러 turn_context 중 하나만 effort가 달라도 종료 코드 4이다."""
@@ -139,7 +139,7 @@ class VerifySpawnTest(unittest.TestCase):
     def test_같은_경로로_다시_spawn되면_가장_최근_rollout으로_검증한다(self):
         """같은 agent 경로의 가장 최근 rollout이 결과를 정한다. 이전의 어긋난 rollout과 무관하게 최근 rollout이 기대값이면 통과한다."""
         # Given
-        self.write_rollout("rollout-2026-10-15T10-00-00-first.jsonl", [spawn_meta(), turn("gpt-6-astra", "xhigh")])
+        self.write_rollout("rollout-2026-10-15T10-00-00-first.jsonl", [spawn_meta(), turn("gpt-6.2-astra", "xhigh")])
         self.write_rollout("rollout-2026-10-15T11-00-00-second.jsonl", [spawn_meta(), turn("gpt-6.1-sol", "high")])
 
         # When

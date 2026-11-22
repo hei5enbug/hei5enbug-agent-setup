@@ -104,14 +104,14 @@ UI 코드, 시각 디자인, 다이어그램 작업은 대신 호스트의 desig
 |---|---|---|
 | Codex | rollout 기록으로 검증한 플러그인 `worker` 역할. `codex_worker_model`이 `auto`(기본)이면 메인 세션이 할당마다 고르고, `claude-sonnet-5-5`이면 `role_runner.py implementation --host codex --fallback`을 먼저 실행합니다. GPT worker가 실패하거나 사용량 한도로 중단되면 같은 실행기 명령이 대체입니다 | `codex_worker_model`(기본 `auto`: 쉬운 작업은 `gpt-6-luna`, 어렵거나 확신이 없는 작업은 `gpt-6.2-sol`), `codex_worker_effort`(기본 `high`, 최대 `xhigh`); 대체는 `claude-sonnet-5-5`, `high`(최대 `xhigh`) |
 | Claude Code | `implementation_worker`가 `auto`(기본)이면 메인 세션이 작업마다 고릅니다. 쉬운 작업은 `hei5enbug-agent-setup:worker`를 `model: haiku`로, 보통·어려운 작업은 `model: sonnet`으로 띄우며, Claude 경로가 실패하거나 사용량 한도로 중단되면 난이도별 worker 모델로 `role_runner.py implementation --fallback`을 씁니다. 고정 설정은 `haiku`, `sonnet`, `opus`(그 모델만 쓰는 `worker` 에이전트), `sol`(`gpt-6.2-sol`), `codex`(`role_runner.py worker`, 난이도별 모델)를 강제합니다 | `claude-haiku-5-5`(쉬움) 또는 `claude-sonnet-5-5`(보통·어려움), 각각 `worker_effort`(기본 `high`); 쉬운 작업은 `gpt-6-luna`, 어려운 작업은 `gpt-6.2-sol`, `high`(최대 `xhigh`)(대체와 `codex`); `gpt-6.2-sol`, `high`(최대 `xhigh`)(`sol`) |
-| Codex, designer | rollout 기록으로 검증한 플러그인 `designer` 역할, 대체는 `role_runner.py agent --name designer --fallback` | `gpt-6-astra`, `high`(최대 `xhigh`); 대체 `claude-opus-5-5`, `high`(최대 `xhigh`) |
-| Claude Code, designer | 서브에이전트 기록이나 mod의 역할 고정으로 검증한 `hei5enbug-agent-setup:designer`, 대체는 `role_runner.py design` | `claude-opus-5-5`, `xhigh`, 기존 UI를 바꾸는 작업은 호출별 `effort`로 `high`; 대체 `gpt-6-astra`, `high`(최대 `xhigh`) |
+| Codex, designer | rollout 기록으로 검증한 플러그인 `designer` 역할, 대체는 `role_runner.py agent --name designer --fallback` | `gpt-6.2-astra`, `high`(최대 `xhigh`); 대체 `claude-opus-5-5`, `high`(최대 `xhigh`) |
+| Claude Code, designer | 서브에이전트 기록이나 mod의 역할 고정으로 검증한 `hei5enbug-agent-setup:designer`, 대체는 `role_runner.py design` | `claude-opus-5-5`, `xhigh`, 기존 UI를 바꾸는 작업은 호출별 `effort`로 `high`; 대체 `gpt-6.2-astra`, `high`(최대 `xhigh`) |
 | Codex, 로컬 scout | rollout 기록으로 검증한 플러그인 `scout` 역할 | `gpt-6-luna`, `high`(최대 `xhigh`) |
 | Claude Code, 로컬 scout | `role_runner.py scout`, 대체 시 `hei5enbug-agent-setup:scout` | `gpt-6-luna`, `high`(최대 `xhigh`); 대체 시 `claude-sonnet-5-5`, `medium` |
 | Codex, 공개 researcher | 웹 검색만 쓰고 셸 네트워크는 쓰지 않는 `role_runner.py researcher`, 세션 기록으로 검증 | `gpt-6-luna`, `high`(최대 `xhigh`) |
 | Claude Code, 공개 researcher | 웹 검색만 쓰고 셸 네트워크는 쓰지 않는 `role_runner.py researcher`, 대체 시 웹 검색과 가져오기 도구를 가진 `hei5enbug-agent-setup:scout` | `gpt-6-luna`, `high`(최대 `xhigh`); 대체 시 `claude-sonnet-5-5`, `medium` |
 | Codex, 스킬 검토 | `role_runner.py review`; 대체는 rollout 기록으로 검증한 플러그인 `reviewer` | `claude-opus-5-5`, `high`(최대 `xhigh`); 대체 `gpt-6.1-terra`, `high`(최대 `xhigh`) |
-| Claude Code, 스킬 검토 | `review_model` 설정을 쓰는 `role_runner.py reviewer`; 대체는 `hei5enbug-agent-setup:reviewer` | `review_model`(기본 `gpt-6-astra`), `high`(최대 `xhigh`); 대체 `claude-opus-5-5`, `high` |
+| Claude Code, 스킬 검토 | `review_model` 설정을 쓰는 `role_runner.py reviewer`; 대체는 `hei5enbug-agent-setup:reviewer` | `review_model`(기본 `gpt-6.2-astra`), `high`(최대 `xhigh`); 대체 `claude-opus-5-5`, `high` |
 | Skill Builder 시험 실행 및 기타 비검토 참여자 | Skill Builder 어댑터에 따른 호스트의 상위 모델 | Codex: `gpt-6.1-sol`, `xhigh`; Claude Code: `claude-opus-5-5`, `high` |
 
 Claude Code에서는 `scripts/role_runner.py`가 scout, researcher, reviewer, Codex worker 역할을 실행하고, `--instructions <file>`이
@@ -159,7 +159,7 @@ rollout에 도구 호출이 기록되어 있으면 `heartbeats/codex-<thread_id>
 이어갑니다. 부분 결과, 사용자 설정, 권한과 수용 검사는 유지하고 작업자 모델을 몰래 바꾸지 않습니다.
 
 요청의 마지막 단계에서 남은 작업이 없으면 메인 세션이 [독립 모델 검증](../../../instructions/independent-model-validation.md)에 따라
-합쳐진 결과를 독립 검토 한 번으로 질문 없이 자동 실행합니다. Claude가 작성한 결과는 `gpt-6.1-terra` 또는 `gpt-6-astra`가,
+합쳐진 결과를 독립 검토 한 번으로 질문 없이 자동 실행합니다. Claude가 작성한 결과는 `gpt-6.1-terra` 또는 `gpt-6.2-astra`가,
 GPT가 작성한 결과는 `claude-fable-5-2`가 `high`로 검토합니다. Claude가 작성한 결과는 메인 세션이 구성요소 하나로 한정되면
 가벼운 모델을 `high`로, 여러 컴포넌트, 공개 계약, 보안, 동시성, 훅이나 가드가 관련되면 더 강한 모델 또는 `xhigh`로 고릅니다.
 worker 한 명의 변경 같은 더 이른 검토는 해당 산출물에 대한 사용자의 승인이 필요하며 거절하면 다시 묻지 않습니다.

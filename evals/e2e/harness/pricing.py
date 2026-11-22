@@ -20,6 +20,7 @@ CLAUDE_LONG_PRICES: dict[str, dict[str, float]] = {
 }
 
 CODEX_PRICES: dict[str, dict[str, float]] = {
+    "gpt-6.2-astra": {"input": 8.0, "cached": 0.40, "write": 10.0, "output": 40.0},
     "gpt-6-astra": {"input": 10.0, "cached": 1.0, "write": 12.5, "output": 50.0},
     "gpt-6.1-sol": {"input": 2.0, "cached": 0.10, "write": 2.5, "output": 10.0},
     "gpt-5.6-luna": {"input": 0.20, "cached": 0.02, "write": 0.25, "output": 1.20},
@@ -28,6 +29,7 @@ CODEX_PRICES: dict[str, dict[str, float]] = {
     "gpt-6.2-sol": {"input": 2.0, "cached": 0.10, "write": 2.5, "output": 10.0},
 }
 CODEX_LONG_PRICES: dict[str, dict[str, float]] = {
+    "gpt-6.2-astra": {"input": 16.0, "cached": 0.80, "write": 20.0, "output": 60.0},
     "gpt-6-astra": {"input": 20.0, "cached": 2.0, "write": 25.0, "output": 75.0},
     "gpt-6.1-sol": {"input": 4.0, "cached": 0.20, "write": 5.0, "output": 15.0},
     "gpt-5.6-luna": {"input": 0.40, "cached": 0.04, "write": 0.50, "output": 1.80},

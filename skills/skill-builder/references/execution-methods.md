@@ -59,11 +59,11 @@ not run another review round.
 | Executing host | Trial and other non-review participants | Effort | Review route |
 |---|---|---|---|
 | Codex | `gpt-6.1-sol` | `xhigh` | `claude -p` with `claude-opus-5-5`, `high`; fallback `reviewer` with `gpt-6.1-terra`, `xhigh` |
-| Claude Code | `claude-opus-5-5` | `high` | `role_runner.py reviewer` with the model in the session line "Review model" (default `gpt-6-astra`), `xhigh`; fallback `reviewer` with `claude-opus-5-5`, `high` |
+| Claude Code | `claude-opus-5-5` | `high` | `role_runner.py reviewer` with the model in the session line "Review model" (default `gpt-6.2-astra`), `xhigh`; fallback `reviewer` with `claude-opus-5-5`, `high` |
 | Other hosts | Available upper model | Highest suitable supported effort | Use a verified cross-family reviewer route and its documented fallback; otherwise mark review unavailable. |
 
 On Claude Code, use `role_runner.py` only when the plugin session supplies its path and invocation contract.
-In standalone use, run `codex exec` with `gpt-6-astra`, `xhigh`, and a read-only sandbox instead; verify the
+In standalone use, run `codex exec` with `gpt-6.2-astra`, `xhigh`, and a read-only sandbox instead; verify the
 model and effort in its rollout `turn_context` before accepting the result. The table's reviewer fallback still applies.
 
 Trial execution and other non-review participants stay on the host's model family at its upper model. Review roles use

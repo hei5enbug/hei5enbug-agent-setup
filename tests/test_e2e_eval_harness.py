@@ -33,7 +33,7 @@ OPUS = "claude-opus-5-5"
 SONNET = "claude-sonnet-5-5"
 HAIKU = "claude-haiku-5-5"
 SCOUT = "demo-plugin:scout"
-WITHIN_CAP_ENV = {"CLAUDE_PLUGIN_OPTION_REVIEW_MODEL": "gpt-6.1-sol", "HEI5ENBUG_REVIEW_MODEL": "gpt-6.1-sol"}
+WITHIN_CAP_ENV = {"CLAUDE_PLUGIN_OPTION_REVIEW_MODEL": "gpt-6.2-sol", "HEI5ENBUG_REVIEW_MODEL": "gpt-6.2-sol"}
 
 
 def claude_usage(i: int = 2, o: int = 10, read: int = 0, w1h: int = 0, w5m: int = 0) -> dict[str, Any]:
@@ -1786,10 +1786,10 @@ class PluginExportTest(unittest.TestCase):
     def test_상한_위_모델은_내보낸_폴더에서_상한_안_모델로_바뀌고_바뀐_모델과_수가_기록에_남는다(self):
         """given 레지스트리, 에이전트, Codex 역할, 스킬, 지침에 fable, astra, terra가 적힌 ref일 때 when 내보내면 then 모두 opus와 sol로 바뀌고 기록에 바뀐 모델과 개수가 남는다."""
         # given
-        files = {"config/model-registry.json": '{"a": "claude-fable-5-2", "b": "gpt-6-astra", "c": "gpt-6.1-terra", "d": "gpt-6.1-sol"}',
-                 "agents/x.md": "---\nmodel: claude-fable-5-2\n---\n", ".codex/agents/y.toml": 'model = "gpt-6-astra"\n',
-                 "skills/s/SKILL.md": "uses gpt-6-astra and claude-opus-5-5.", "instructions/i.md": "review with claude-fable-5-2.",
-                 "docs/note.md": "gpt-6-astra stays outside the transformed paths"}
+        files = {"config/model-registry.json": '{"a": "claude-fable-5-2", "b": "gpt-6.2-astra", "c": "gpt-6.1-terra", "d": "gpt-6.1-sol"}',
+                 "agents/x.md": "---\nmodel: claude-fable-5-2\n---\n", ".codex/agents/y.toml": 'model = "gpt-6.2-astra"\n',
+                 "skills/s/SKILL.md": "uses gpt-6.2-astra and claude-opus-5-5.", "instructions/i.md": "review with claude-fable-5-2.",
+                 "docs/note.md": "gpt-6.2-astra stays outside the transformed paths"}
         with tempfile.TemporaryDirectory() as tmp:
             repo = self.make_repo(tmp, files)
 
@@ -1803,10 +1803,10 @@ class PluginExportTest(unittest.TestCase):
             self.assertEqual(registry, '{"a": "claude-opus-5-5", "b": "gpt-6.1-sol", "c": "gpt-6.1-sol", "d": "gpt-6.1-sol"}')
             self.assertEqual([plugin_export.MODEL_TOKEN.findall(text) for text in texts],
                              [["claude-opus-5-5"], ["gpt-6.1-sol"], ["gpt-6.1-sol", "claude-opus-5-5"], ["claude-opus-5-5"]])
-            self.assertEqual(exported["cap_transform"]["replaced"], {"claude-fable-5-2": 3, "gpt-6-astra": 3, "gpt-6.1-terra": 1})
+            self.assertEqual(exported["cap_transform"]["replaced"], {"claude-fable-5-2": 3, "gpt-6.2-astra": 3, "gpt-6.1-terra": 1})
             self.assertEqual(exported["cap_transform"]["count"], 7)
             self.assertRegex(exported["content_digest"], r"^[0-9a-f]{64}$")
-            self.assertIn("gpt-6-astra", (root / "docs/note.md").read_text(encoding="utf-8"))
+            self.assertIn("gpt-6.2-astra", (root / "docs/note.md").read_text(encoding="utf-8"))
 
     def test_예전_개정의_같은_계열_상한_위_모델도_바뀐다(self):
         """given 예전 fable과 다른 astra 번호가 적힌 ref일 때 when 내보내면 then 같은 계열의 상한 안 모델로 바뀌고 바뀐 ID별 개수가 남는다."""
@@ -1826,7 +1826,7 @@ class PluginExportTest(unittest.TestCase):
         """given 바꿀 수 없는 상한 밖 모델 이름이 지침에 있는 ref일 때 when 내보내면 then 그 파일과 모델과 상한을 적은 오류가 나고 내보낸 폴더가 생기지 않는다."""
         # given
         with tempfile.TemporaryDirectory() as tmp:
-            repo = self.make_repo(tmp, {"instructions/i.md": "ask gpt-7-nova and gpt-6-astra", "a.txt": "x"})
+            repo = self.make_repo(tmp, {"instructions/i.md": "ask gpt-7-nova and gpt-6.2-astra", "a.txt": "x"})
 
             # when / then
             with self.assertRaises(plugin_export.ExportError) as caught:
@@ -1869,7 +1869,7 @@ class PluginExportTest(unittest.TestCase):
     def test_변환_내용은_실행의_env_json과_캠페인_입력_지문에_반영된다(self):
         """given 변환 기록과 내용 지문이 든 내보내기 정보일 때 when 실행 스냅샷과 입력 지문을 만들면 then env 스냅샷에 변환이 있고 내용 지문이 다르면 입력 지문도 다르다."""
         # given
-        transform = {"replaced": {"gpt-6-astra": 2}, "count": 2}
+        transform = {"replaced": {"gpt-6.2-astra": 2}, "count": 2}
         export = {"ref": "HEAD", "sha": "abc", "path": "/tmp/p", "cap_transform": transform, "content_digest": "d1"}
 
         # when

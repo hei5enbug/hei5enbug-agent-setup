@@ -94,7 +94,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         )
         for lookup in ("developers.openai.com", "learn.chatgpt.com", "model selector"):
             self.assertNotIn(lookup, section)
-        self.assertEqual({"gpt-6-luna", "gpt-6-astra", "gpt-6.1-terra"}, set(re.findall(r"gpt-[\w.-]+", re.sub(r"\]\([^)]*\)", "]", text))))
+        self.assertEqual({"gpt-6-luna", "gpt-6.2-astra", "gpt-6.1-terra"}, set(re.findall(r"gpt-[\w.-]+", re.sub(r"\]\([^)]*\)", "]", text))))
 
     def test_전체_기록_fork로는_worker를_만들지_않는다(self):
         """전체 기록 fork는 재정의를 거부하므로 범위를 한정한 맥락으로 worker를 생성한다."""
@@ -208,7 +208,7 @@ class CodexWorkerContractTest(unittest.TestCase):
         # Given
         text = CODEX_AGENTS.read_text(encoding="utf-8")
         expected = (
-            "The primary is the plugin `designer` role with `gpt-6-astra` and `high` passed explicitly on the spawn, or "
+            "The primary is the plugin `designer` role with `gpt-6.2-astra` and `high` passed explicitly on the spawn, or "
             "`xhigh` under the effort rule in [shared model routing](model-routing.md#keep-role-settings-fixed);",
             "verify it under the spawned role verification section below.",
             "run the fallback once through the role runner from the repository root:",

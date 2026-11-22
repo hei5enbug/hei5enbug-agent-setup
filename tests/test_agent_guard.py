@@ -92,7 +92,7 @@ class AgentGuardTest(unittest.TestCase):
         pinned = {
             "scout": ("gpt-6-luna", "high"),
             "worker": ("gpt-6-luna", "high"),
-            "designer": ("gpt-6-astra", "high"),
+            "designer": ("gpt-6.2-astra", "high"),
             "reviewer": ("gpt-6.1-terra", "high"),
         }
 
@@ -158,7 +158,7 @@ class AgentGuardTest(unittest.TestCase):
     def test_Codex_scout_designer_reviewer는_high와_xhigh를_허용하고_그_밖의_effort는_거부한다(self):
         """레지스트리의 범위가 있는 세 역할은 자기 모델의 high와 xhigh 스폰을 허용하고 medium과 max는 거부한다."""
         # Given
-        roles = {"scout": "gpt-6-luna", "designer": "gpt-6-astra", "reviewer": "gpt-6.1-terra"}
+        roles = {"scout": "gpt-6-luna", "designer": "gpt-6.2-astra", "reviewer": "gpt-6.1-terra"}
         for name in roles:
             self.write(self.codex_home / "agents" / f"{name}.toml", f'name = "{name}"\n')
         efforts = ["high", "xhigh", "medium", "max"]
@@ -333,7 +333,7 @@ class AgentGuardTest(unittest.TestCase):
         """저장값이 없거나 auto이면 gpt-6-luna와 gpt-6.2-sol만 high와 xhigh로 허용하고, 다른 모델과 medium, max는 거부한다."""
         # Given
         self.write(self.codex_home / "agents" / "worker.toml", (REPO_ROOT / "standalone-agents/codex-worker.toml").read_text())
-        models = ("gpt-6-luna", "gpt-6.2-sol", "gpt-6.1-sol", "gpt-6-astra", "claude-sonnet-5-5", "gpt-4.1-mini")
+        models = ("gpt-6-luna", "gpt-6.2-sol", "gpt-6.1-sol", "gpt-6.2-astra", "claude-sonnet-5-5", "gpt-4.1-mini")
         efforts = ("medium", "high", "xhigh", "max")
 
         # When

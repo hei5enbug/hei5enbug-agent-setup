@@ -68,7 +68,7 @@ route; an unset or unrecognized value uses `auto`, where the main session picks 
 `SessionStart` may change allowlisted host settings; see [Host settings](#host-settings). The review model runs skill
 review roles at `high`, or at `xhigh` under the effort rule in [model
 routing](../instructions/model-routing.md#keep-role-settings-fixed); independent validation does not use it. Choose one
-of the seven pinned model IDs; an unset or unrecognized value uses `gpt-6-astra`. Set plugin options in `/config` or
+of the eight listed model IDs, the newest of each model family; an unset or unrecognized value uses `gpt-6.2-astra`. Set plugin options in `/config` or
 with `claude plugin configure`. On Codex, set environment variables before starting the session. A value of `false`,
 `0`, `off`, or `no`, in any letter case, turns a boolean feature off.
 
@@ -91,7 +91,7 @@ never writes Codex or Claude settings. Only the allowlisted changes in [Host set
 | Implementation worker route | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, `sonnet`, or `opus`) | Not applicable |
 | Claude Code worker effort | `worker_effort` (default `high`) | Not applicable |
 | Codex worker model and effort | `codex_worker_model` (`auto`, `gpt-6-luna`, `gpt-6.2-sol`, or `claude-sonnet-5-5`, default `auto`) and `codex_worker_effort` (`high` or `xhigh`, default `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL` and `HEI5ENBUG_CODEX_WORKER_EFFORT` |
-| Review model | `review_model` (a pinned model ID, default `gpt-6-astra`) | Not applicable |
+| Review model | `review_model` (a pinned model ID, default `gpt-6.2-astra`) | Not applicable |
 | Response language guard | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip query guard | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
 | Approval guard | `approval_guard` | `HEI5ENBUG_APPROVAL_GUARD` |

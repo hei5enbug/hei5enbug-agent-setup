@@ -31,11 +31,11 @@ decision.
 
 | Authoring model family | Reviewer | Reasoning effort |
 |---|---|---|
-| Claude | `gpt-6.1-terra` or `gpt-6-astra` | `high` or `xhigh` |
+| Claude | `gpt-6.1-terra` or `gpt-6.2-astra` | `high` or `xhigh` |
 | GPT | `claude-fable-5-2` | `high` |
 
 The coordinating session picks one reviewer and effort from the row. For a Claude-authored result it picks by scope
-and risk: the lighter model `gpt-6.1-terra` at `high` for one bounded component, and the stronger model `gpt-6-astra` or
+and risk: the lighter model `gpt-6.1-terra` at `high` for one bounded component, and the stronger model `gpt-6.2-astra` or
 `xhigh` for several components, a public contract, security, concurrency, or a hook or guard. A GPT-authored result
 always goes to `claude-fable-5-2` at `high`.
 

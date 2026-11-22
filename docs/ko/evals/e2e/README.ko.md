@@ -140,7 +140,7 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 
 플러그인의 고정 경로, 예를 들어 레지스트리의 설계와 대체 경로는 상한 위 모델을 이름으로 적고, 위 검사는 이를 보지
 못한다. 그래서 내보낸 모든 플러그인 개정은, 변형과 상관없이 똑같이, 상한 변환을 거친다. 내보낸 사본에서만
-모든 `claude-fable-*` ID(`claude-fable-5-2` 등)는 `claude-opus-5-5`로, 모든 `gpt-*-astra`와 `gpt-*-terra` ID(`gpt-6-astra`,
+모든 `claude-fable-*` ID(`claude-fable-5-2` 등)는 `claude-opus-5-5`로, 모든 `gpt-*-astra`와 `gpt-*-terra` ID(`gpt-6.2-astra`,
 `gpt-6.1-terra` 등)는 `gpt-6.1-sol`로 바뀐다. 대상은
 `config/model-registry.json`, `agents/`, `.codex/`, `skills/`, `instructions/`의 텍스트 파일이다(git의 개정은 그대로
 둔다). 하네스는 그 파일을 다시 훑어 상한 밖 모델이 남아 있으면 캠페인을 거부하고, 메시지에 파일과 상한을 적는다.

@@ -155,7 +155,7 @@ rollouts; a model outside the cap that answered in the run sets `success` to fal
 Fixed routes of the plugin, such as the registry's design and fallback routes, name models above the cap, and the checks
 above cannot see them. So every exported plugin revision, the same for every variant, goes through a cap transform: in
 the export only, every `claude-fable-*` id (such as `claude-fable-5-2`) becomes `claude-opus-5-5`, and every
-`gpt-*-astra` and `gpt-*-terra` id (such as `gpt-6-astra` and `gpt-6.1-terra`) becomes `gpt-6.1-sol`, in `config/model-registry.json`, `agents/`, `.codex/`, `skills/`, and `instructions/` text files
+`gpt-*-astra` and `gpt-*-terra` id (such as `gpt-6.2-astra` and `gpt-6.1-terra`) becomes `gpt-6.1-sol`, in `config/model-registry.json`, `agents/`, `.codex/`, `skills/`, and `instructions/` text files
 (the revisions in git stay untouched). The harness then scans those files again and rejects the campaign when
 any model outside the cap remains, with a message that names the file and the cap. The transform is `apply_cap_transform` in
 `harness/plugin_export.py`. Each run's `env.json` records `cap_transform` (the replacements, which model ids were replaced,

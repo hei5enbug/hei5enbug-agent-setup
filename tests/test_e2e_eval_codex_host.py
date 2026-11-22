@@ -26,7 +26,7 @@ from harness import (  # noqa: E402
 )
 from harness.config import HarnessConfig  # noqa: E402
 
-WITHIN_CAP_ENV = {"CLAUDE_PLUGIN_OPTION_REVIEW_MODEL": "gpt-6.1-sol", "HEI5ENBUG_REVIEW_MODEL": "gpt-6.1-sol"}
+WITHIN_CAP_ENV = {"CLAUDE_PLUGIN_OPTION_REVIEW_MODEL": "gpt-6.2-sol", "HEI5ENBUG_REVIEW_MODEL": "gpt-6.2-sol"}
 AUTH_SENTINEL = "SENTINEL-NEVER-READ"
 
 FAKE_CODEX = """#!{python}
@@ -211,24 +211,24 @@ class ModelCapTest(unittest.TestCase):
         self.assertIn("model cap (claude-haiku-5-5, claude-opus-5-5, claude-sonnet-5-5, gpt-5.6-luna, gpt-6-luna, gpt-6.1-sol, gpt-6.2-sol)", message)
 
     def test_Codex_메인_모델이_상한_밖이면_역할과_상한을_알리고_거부한다(self):
-        """gpt-6-astra를 Codex 메인으로 한 변형은 거부된다."""
+        """gpt-6.2-astra를 Codex 메인으로 한 변형은 거부된다."""
         # given / when
-        message = self.reject({"env": WITHIN_CAP_ENV, "models": {"codex": "gpt-6-astra"}})
+        message = self.reject({"env": WITHIN_CAP_ENV, "models": {"codex": "gpt-6.2-astra"}})
 
         # then
         self.assertIn("main session (Codex)", message)
-        self.assertIn("gpt-6-astra", message)
+        self.assertIn("gpt-6.2-astra", message)
         self.assertIn("model cap", message)
 
     def test_review_model을_기본값으로_두면_두_호스트_모두_역할과_상한을_알리고_거부한다(self):
-        """매니페스트 기본값 gpt-6-astra를 그대로 두는 변형은 Claude Code와 Codex 양쪽 review 역할로 거부된다."""
+        """매니페스트 기본값 gpt-6.2-astra를 그대로 두는 변형은 Claude Code와 Codex 양쪽 review 역할로 거부된다."""
         # given / when
         message = self.reject({})
 
         # then
         self.assertIn("role review (Claude Code", message)
         self.assertIn("role review (Codex", message)
-        self.assertIn("gpt-6-astra", message)
+        self.assertIn("gpt-6.2-astra", message)
         self.assertIn("model cap", message)
 
     def test_review_model을_한쪽_호스트에만_상한_안으로_정하면_다른_호스트는_거부한다(self):
@@ -241,9 +241,9 @@ class ModelCapTest(unittest.TestCase):
         self.assertNotIn("role review (Claude Code", message)
 
     def test_변형이_환경_변수로_상한_밖_모델을_정하면_그_옵션_역할로_거부한다(self):
-        """review_model을 gpt-6-astra로 명시한 변형도 거부된다."""
+        """review_model을 gpt-6.2-astra로 명시한 변형도 거부된다."""
         # given / when
-        message = self.reject({"env": {**WITHIN_CAP_ENV, "HEI5ENBUG_REVIEW_MODEL": "gpt-6-astra"}})
+        message = self.reject({"env": {**WITHIN_CAP_ENV, "HEI5ENBUG_REVIEW_MODEL": "gpt-6.2-astra"}})
 
         # then
         self.assertIn("review (Codex, option HEI5ENBUG_REVIEW_MODEL)", message)
@@ -254,14 +254,14 @@ class ModelCapTest(unittest.TestCase):
         variants = write_variants(self.root, {"probe": {"env": WITHIN_CAP_ENV}})
 
         # when
-        with mock.patch.object(rubric, "RUBRIC_MODEL", "gpt-6-astra"):
+        with mock.patch.object(rubric, "RUBRIC_MODEL", "gpt-6.2-astra"):
             code, _, err = run_cli("run", "--campaign", "demo", "--tasks", "T08", "--dry-run", "--variants", "probe",
                                    "--run-root", str(self.root / "runs"), "--variants-root", str(variants))
 
         # then
         self.assertEqual(code, 1)
         self.assertIn("rubric grader", err)
-        self.assertIn("gpt-6-astra", err)
+        self.assertIn("gpt-6.2-astra", err)
 
     def test_저장소의_기본_변형과_루브릭_모델은_상한_안이다(self):
         """커밋된 baseline 변형과 루브릭 채점 모델은 검사를 통과한다."""
@@ -284,7 +284,7 @@ class FakeCodexRunTest(unittest.TestCase):
         self.user_home = self.root / "user-codex"
         self.user_home.mkdir()
         (self.user_home / "auth.json").write_text(AUTH_SENTINEL, encoding="utf-8")
-        (self.user_home / "config.toml").write_text("model = 'gpt-6-astra'\n", encoding="utf-8")
+        (self.user_home / "config.toml").write_text("model = 'gpt-6.2-astra'\n", encoding="utf-8")
         self.fake = self.root / "fake_codex"
         self.fake.write_text(FAKE_CODEX.format(python=sys.executable), encoding="utf-8")
         self.fake.chmod(self.fake.stat().st_mode | stat.S_IEXEC)
@@ -391,7 +391,7 @@ class FakeCodexRunTest(unittest.TestCase):
         # then
         names = {item.name for item in (self.spec.result_dir / "codex-home").iterdir()}
         self.assertNotIn("config.toml", names)
-        self.assertEqual((self.user_home / "config.toml").read_text(encoding="utf-8"), "model = 'gpt-6-astra'\n")
+        self.assertEqual((self.user_home / "config.toml").read_text(encoding="utf-8"), "model = 'gpt-6.2-astra'\n")
 
     def test_자격_증명_파일이_없으면_에이전트를_시작하지_않고_infra_failed로_기록한다(self):
         """auth.json이 없으면 codex를 한 번도 부르지 않고 설정 실패를 기록한다."""
@@ -889,17 +889,17 @@ class CodexRecordsTest(unittest.TestCase):
         self.assertEqual(view["final_answer"], "최종 보고")
 
     def test_상한_밖_모델이_롤아웃에_답했으면_실행을_실패로_표시하고_모델과_역할을_남긴다(self):
-        """자식 롤아웃의 turn_context가 gpt-6-astra이면 채점이 통과여도 success=false와 cap_violation이 metrics.json과 run.json에 남는다."""
+        """자식 롤아웃의 turn_context가 gpt-6.2-astra이면 채점이 통과여도 success=false와 cap_violation이 metrics.json과 run.json에 남는다."""
         # given
         write_rollout(self.spec.result_dir / "codex", "rollout-main.jsonl", rollout_rows())
         write_rollout(self.spec.result_dir / "codex", "rollout-child.jsonl",
-                      rollout_rows(model="gpt-6-astra", start="2026-11-13T01:05:00Z"))
+                      rollout_rows(model="gpt-6.2-astra", start="2026-11-13T01:05:00Z"))
 
         # when
         updated = runner.regrade_run(self.spec, self.task, self.cfg, self.graders)
 
         # then
-        expected = [{"model": "gpt-6-astra", "role": "codex:unknown"}]
+        expected = [{"model": "gpt-6.2-astra", "role": "codex:unknown"}]
         self.assertFalse(self.metrics()["success"])
         self.assertEqual(self.metrics()["cap_violation"], expected)
         self.assertEqual(updated["cap_violation"], expected)
@@ -932,7 +932,7 @@ class CodexRecordsTest(unittest.TestCase):
     def test_역할_러너_상태_줄과_Claude_스트림_모델도_상한_밖이면_위반으로_잡는다(self):
         """role_runner 상태 줄의 model과 결과 메시지 modelUsage의 모델이 상한 밖이면 각 역할 이름과 함께 돌려준다."""
         # given
-        status = json.dumps({"role": "reviewer", "runner": "codex", "model": "gpt-6-astra", "exit": 0})
+        status = json.dumps({"role": "reviewer", "runner": "codex", "model": "gpt-6.2-astra", "exit": 0})
         calls = [{"result_text": f"/tmp/x\n{status}"}]
         stream = [{"type": "result", "modelUsage": {"claude-opus-5-5": {}, "claude-fable-5-2[1m]": {}}}]
 
@@ -941,7 +941,7 @@ class CodexRecordsTest(unittest.TestCase):
 
         # then
         self.assertEqual(found, [{"model": "claude-fable-5-2", "role": "main session or subagent (stream modelUsage)"},
-                                 {"model": "gpt-6-astra", "role": "role_runner:reviewer"}])
+                                 {"model": "gpt-6.2-astra", "role": "role_runner:reviewer"}])
 
 
 if __name__ == "__main__":

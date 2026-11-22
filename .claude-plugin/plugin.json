@@ -1,7 +1,7 @@
 {
   "name": "hei5enbug-agent-setup",
   "displayName": "Hei5enbug Agent Skills",
-  "version": "2.25.0",
+  "version": "2.25.1",
   "description": "Portable agent skills for repeatable engineering and documentation workflows.",
   "author": {
     "name": "hei5enbug",
@@ -90,8 +90,8 @@
       "type": "string",
       "title": "Review model",
       "description": "Model that runs independent validation and skill review roles at xhigh. GPT models run through codex exec and Claude models through claude -p.",
-      "options": ["claude-fable-5-2", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "gpt-6-astra", "gpt-6-luna", "gpt-6.1-sol", "gpt-6.1-terra"],
-      "default": "gpt-6-astra"
+      "options": ["claude-fable-5-2", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "gpt-6.2-astra", "gpt-6-luna", "gpt-6.2-sol", "gpt-6.1-terra"],
+      "default": "gpt-6.2-astra"
     },
     "language_guard": {
       "type": "boolean",

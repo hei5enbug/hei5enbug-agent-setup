@@ -66,8 +66,8 @@ Claude Code는 이 옵션을 `/config`에서 읽고, Codex는 `HEI5ENBUG_HOST_SE
 검토 모델은 스킬 검토 역할을 `high`로 실행하며,
 [모델 라우팅](../../../instructions/model-routing.md#keep-role-settings-fixed)의 사고 강도 규칙에 따라 `xhigh`로 실행합니다. 독립 검증은 이 설정을
 쓰지 않습니다.
-고정된 일곱 모델 ID 중 하나를 고릅니다. 값이 비어 있거나
-알 수 없으면 `gpt-6-astra`를 씁니다. 플러그인 옵션은 `/config`나 `claude plugin configure`에서 설정합니다. Codex에서는 세션 시작 전에 환경변수를
+모델 계열마다 최신인 목록의 여덟 모델 ID 중 하나를 고릅니다. 값이 비어 있거나
+알 수 없으면 `gpt-6.2-astra`를 씁니다. 플러그인 옵션은 `/config`나 `claude plugin configure`에서 설정합니다. Codex에서는 세션 시작 전에 환경변수를
 설정합니다. boolean 기능은 값이 `false`, `0`, `off`, `no`(대소문자 무시)이면 꺼집니다.
 
 Claude Code `worker` 에이전트는 `worker_effort`의 사고 강도로, `implementation_worker` 아래에서 메인 세션이 호출마다 넘기는 모델로 실행됩니다.
@@ -87,7 +87,7 @@ Codex 설정이나 Claude 설정을 쓰지 않습니다. 설정을 쓰는 것은
 | 구현 worker 경로 | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, `sonnet`, 또는 `opus`) | 해당 없음 |
 | Claude Code worker 사고 강도 | `worker_effort` (기본 `high`) | 해당 없음 |
 | Codex worker 모델과 사고 강도 | `codex_worker_model` (`auto`, `gpt-6-luna`, `gpt-6.2-sol`, 또는 `claude-sonnet-5-5`, 기본 `auto`), `codex_worker_effort` (`high` 또는 `xhigh`, 기본 `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL`, `HEI5ENBUG_CODEX_WORKER_EFFORT` |
-| 검토 모델 | `review_model` (고정 모델 ID, 기본 `gpt-6-astra`) | 해당 없음 |
+| 검토 모델 | `review_model` (고정 모델 ID, 기본 `gpt-6.2-astra`) | 해당 없음 |
 | 응답 언어 가드 | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip 쿼리 가드 | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
 | 승인 가드 | `approval_guard` | `HEI5ENBUG_APPROVAL_GUARD` |

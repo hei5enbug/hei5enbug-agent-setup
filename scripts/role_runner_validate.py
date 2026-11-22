@@ -5,7 +5,7 @@ from pathlib import Path
 
 from role_runner_agents import accepts_add_dir, runner_for
 from role_runner_config import (
-    AGENT_TARGET, CAPABILITIES, MAX_BATCH, REVIEW_MODELS, ROLES, VALIDATION_ROLE, WORKER_AGENTS, WORKER_MODELS, UsageError,
+    AGENT_TARGET, CAPABILITIES, MAX_BATCH, REVIEWER_MODELS, ROLES, VALIDATION_ROLE, WORKER_AGENTS, WORKER_MODELS, UsageError,
 )
 
 
@@ -64,12 +64,12 @@ def validate_request(args: argparse.Namespace, target: str) -> None:
         return
     if target != "reviewer" and not args.user_requested:
         raise UsageError("--model is allowed only for the reviewer role, or with --user-requested for a model the user named")
-    if args.model not in REVIEW_MODELS:
+    if args.model not in REVIEWER_MODELS:
         if args.user_requested:
             raise UsageError(
-                f"--model {args.model} is not a model this runner can run ({', '.join(REVIEW_MODELS)}); no fallback ran"
+                f"--model {args.model} is not a model this runner can run ({', '.join(REVIEWER_MODELS)}); no fallback ran"
             )
-        raise UsageError(f"--model must be one of: {', '.join(REVIEW_MODELS)}")
+        raise UsageError(f"--model must be one of: {', '.join(REVIEWER_MODELS)}")
     if target == "researcher" and runner_for(args.model) == "claude":
         raise UsageError(f"--model {args.model} cannot run the researcher role, which needs web search; no fallback ran")
 

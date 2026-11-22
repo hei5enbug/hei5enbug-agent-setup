@@ -99,7 +99,7 @@ This section adds only the Codex worker integration.
 
 For the `design` capability (UI code, visual design, diagrams or images, and technical design document drafting), use
 its `codex` entry in the [capability table](model-routing.md#capability-pins). The primary is the plugin `designer` role
-with `gpt-6-astra` and `high` passed explicitly on the spawn, or `xhigh` under the effort rule in
+with `gpt-6.2-astra` and `high` passed explicitly on the spawn, or `xhigh` under the effort rule in
 [shared model routing](model-routing.md#keep-role-settings-fixed); verify it under the spawned role verification
 section below. When that route fails, run the fallback once through the role runner from the repository root:
 

@@ -41,7 +41,7 @@ python3 evals/korean-writing/kw_run.py aggregate --out <folder>
 
 `--writer <host>:<model id>`와 `--grader <host>:<model id>`는 기본값을 바꾸며 모델마다 한 번씩 반복한다. host는
 `codex` 또는 `claude`다. 기본값은 후보 네 개 `codex:gpt-6.1-sol`, `claude:claude-opus-5-5`,
-`codex:gpt-6.1-terra`, `claude:claude-fable-5-2`와 채점자 둘 `codex:gpt-6-astra`, `claude:claude-opus-5-5`다. 이미
+`codex:gpt-6.1-terra`, `claude:claude-fable-5-2`와 채점자 둘 `codex:gpt-6.2-astra`, `claude:claude-opus-5-5`다. 이미
 있는 출력 폴더는 이어서 실행하며, 끝난 초안과 채점은 다시 실행하지 않는다.
 
 | 설정 | 값 |

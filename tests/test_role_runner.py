@@ -18,6 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 sys.path.insert(0, str(REPO_ROOT / "tests"))
 import role_runner  # noqa: E402
+import role_runner_config  # noqa: E402
 import session_context  # noqa: E402
 from test_model_pins import PINS, REGISTRY  # noqa: E402
 
@@ -474,14 +475,14 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(self.codex_argv(model="gpt-6-luna", sandbox="workspace-write", add_dirs=[directory]), self.logged()["argv"])
 
     def test_worker_모델_선택은_worker_대상에만_열려_있다(self):
-        """gpt-6.2-sol은 worker, implementation, worker 에이전트에서만 --model이 되고 scout, reviewer, 다른 모델은 종료 코드 2이다."""
+        """worker, implementation, worker 에이전트는 worker 모델만 --model로 받고, 검토 목록과 gpt-sol 고정값 밖 모델 gpt-5.6-luna은 scout, reviewer, researcher, agent에서 종료 코드 2이다."""
         # Given
         cases = [
-            ["scout", "--model", "gpt-6.2-sol"],
-            ["reviewer", "--model", "gpt-6.2-sol"],
-            ["researcher", "--model", "gpt-6.2-sol"],
+            ["scout", "--model", "gpt-5.6-luna"],
+            ["reviewer", "--model", "gpt-5.6-luna"],
+            ["researcher", "--model", "gpt-5.6-luna"],
             ["worker", "--model", "gpt-6.1-terra"],
-            ["agent", "--name", "hei5enbug-agent-setup:scout", "--fallback", "--model", "gpt-6.2-sol"],
+            ["agent", "--name", "hei5enbug-agent-setup:scout", "--fallback", "--model", "gpt-5.6-luna"],
         ]
 
         # When
@@ -491,29 +492,51 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual([2] * len(cases), codes)
 
     def test_reviewer는_기본_모델로_gpt_6_astra를_쓴다(self):
-        """reviewer에 --model이 없으면 gpt-6-astra로 codex exec를 실행한다."""
+        """reviewer에 --model이 없으면 gpt-6.2-astra로 codex exec를 실행한다."""
         # Given
-        config = {"turns": [{"model": "gpt-6-astra", "effort": "high"}]}
+        config = {"turns": [{"model": "gpt-6.2-astra", "effort": "high"}]}
 
         # When
         completed = self.run_runner("reviewer", config=config)
 
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
-        self.assertEqual(self.codex_argv(model="gpt-6-astra"), self.logged()["argv"])
-        self.assertEqual("gpt-6-astra", self.status(completed)["model"])
+        self.assertEqual(self.codex_argv(model="gpt-6.2-astra"), self.logged()["argv"])
+        self.assertEqual("gpt-6.2-astra", self.status(completed)["model"])
 
     def test_reviewer는_GPT_모델을_지정하면_scout와_같은_방식으로_실행된다(self):
         """reviewer에 GPT 모델 ID를 주면 그 모델로 읽기 전용 codex exec를 실행한다."""
         # Given
-        config = {"turns": [{"model": "gpt-6.1-sol", "effort": "high"}]}
+        config = {"turns": [{"model": "gpt-6.2-sol", "effort": "high"}]}
 
         # When
-        completed = self.run_runner("reviewer", "--model", "gpt-6.1-sol", config=config)
+        completed = self.run_runner("reviewer", "--model", "gpt-6.2-sol", config=config)
 
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
-        self.assertEqual(self.codex_argv(model="gpt-6.1-sol"), self.logged()["argv"])
+        self.assertEqual(self.codex_argv(model="gpt-6.2-sol"), self.logged()["argv"])
+
+    def test_reviewer는_gpt_sol_고정값을_모델로_받지만_review_model_설정은_받지_않는다(self):
+        """reviewer --model은 review_models에 gpt-sol 고정값을 더한 목록을 받고, HEI5ENBUG_REVIEW_MODEL 설정은 review_models만 받는다."""
+        # Given
+        sol = PINS["gpt-sol"]
+        self.assertNotIn(sol, role_runner.REVIEW_MODELS)
+        self.assertEqual(role_runner_config.REVIEWER_MODELS, (*role_runner.REVIEW_MODELS, sol))
+        config = {"turns": [{"model": sol, "effort": "high"}]}
+
+        # When
+        accepted = self.run_runner("reviewer", "--model", sol, config=config)
+        accepted_argv = self.logged()["argv"]
+        review_default = self.run_runner(
+            "review", "--host", "claude", "--instructions", str(self.instructions),
+            config={"turns": [{"model": "gpt-6.2-astra", "effort": "high"}]}, extra_env={"HEI5ENBUG_REVIEW_MODEL": sol},
+        )
+
+        # Then
+        self.assertEqual(0, accepted.returncode, accepted.stderr)
+        self.assertEqual(self.codex_argv(model=sol), accepted_argv)
+        self.assertEqual(0, review_default.returncode, review_default.stderr)
+        self.assertEqual(self.codex_argv(model="gpt-6.2-astra"), self.logged()["argv"])
 
     def test_reviewer는_Claude_모델을_지정하면_claude_p로_실행하고_프롬프트를_표준_입력으로_받는다(self):
         """reviewer에 Claude 모델 ID를 주면 읽기 전용 claude -p 인자로 실행하고 결과 글을 저장한다."""
@@ -547,7 +570,7 @@ class RoleRunnerTest(unittest.TestCase):
             (["scout"], None),
             (["researcher"], None),
             (["worker", "--add-dir", str(self.base)], None),
-            (["reviewer"], {"turns": [{"model": "gpt-6-astra", "effort": "high"}]}),
+            (["reviewer"], {"turns": [{"model": "gpt-6.2-astra", "effort": "high"}]}),
             (["reviewer", "--model", "claude-opus-5-5"], None),
         ]
 
@@ -676,9 +699,9 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertIn("designer", str(caught.exception))
 
     def test_스크립트의_모델_ID는_모델_고정값_여덟_개와_같다(self):
-        """검토 모델 목록은 PINS에서 GPT worker 전용 고정값을 뺀 여덟 ID와 정확히 같다."""
+        """검토 모델 목록은 PINS에서 GPT 상대 검토자 전용 고정값을 뺀 여덟 ID와 정확히 같다."""
         # Given
-        pins = set(PINS.values()) - {PINS["gpt-sol-worker"]}
+        pins = set(PINS.values()) - {PINS["gpt-sol"]}
 
         # When
         listed = set(role_runner.REVIEW_MODELS)
@@ -692,7 +715,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_rollout의_모델이_다르면_종료_코드_4이고_결과를_폐기한다(self):
         """turn_context 모델이 기대와 다르면 종료 코드 4를 반환하고 결과 파일을 남기지 않는다."""
         # Given
-        config = {"turns": [{"model": "gpt-6-astra", "effort": "high"}]}
+        config = {"turns": [{"model": "gpt-6.2-astra", "effort": "high"}]}
 
         # When
         completed = self.run_runner("scout", config=config)
@@ -1256,7 +1279,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_fallback은_capability의_fallback_entry를_고른다(self):
         """design의 Claude 호스트 fallback은 Astra high를 workspace-write codex exec로 실행하고 fallback을 true로 보고한다."""
         # Given
-        config = {"turns": [{"model": "gpt-6-astra", "effort": "high"}]}
+        config = {"turns": [{"model": "gpt-6.2-astra", "effort": "high"}]}
         arguments = ["design", "--host", "claude", "--fallback", "--instructions", str(self.instructions)]
 
         # When
@@ -1265,10 +1288,10 @@ class RoleRunnerTest(unittest.TestCase):
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertEqual(
-            self.codex_argv(model="gpt-6-astra", sandbox="workspace-write"), self.logged()["argv"],
+            self.codex_argv(model="gpt-6.2-astra", sandbox="workspace-write"), self.logged()["argv"],
         )
         status = self.status(completed)
-        self.assertEqual((True, "design", "gpt-6-astra"), (status["fallback"], status["capability"], status["model"]))
+        self.assertEqual((True, "design", "gpt-6.2-astra"), (status["fallback"], status["capability"], status["model"]))
 
     def test_via가_agent인_entry는_실행하지_않고_종료_코드_2이다(self):
         """Codex implementation을 포함해 primary entry가 via agent이면 실행기는 자식을 띄우지 않고 via 값을 알리며 종료 코드 2를 반환한다."""
@@ -1659,7 +1682,7 @@ class RoleRunnerTest(unittest.TestCase):
         approved = str(self.base / "approved")
         cases = [
             (["scout", "--model", "claude-opus-5-5"], "claude", "claude-opus-5-5"),
-            (["researcher", "--model", "gpt-6.1-sol"], "codex", "gpt-6.1-sol"),
+            (["researcher", "--model", "gpt-6.2-sol"], "codex", "gpt-6.2-sol"),
             (["worker", "--model", "claude-haiku-5-5", "--add-dir", approved], "claude", "claude-haiku-5-5"),
             (["implementation", "--host", "claude", "--model", "claude-opus-5-5", "--add-dir", approved,
               "--instructions", str(self.instructions)], "claude", "claude-opus-5-5"),
@@ -1684,15 +1707,15 @@ class RoleRunnerTest(unittest.TestCase):
     def test_user_requested는_max_effort_상한_없이_모델이_허용하는_effort를_codex_실행에_넘긴다(self):
         """Codex 모델에 max를 요청하면 effort 규칙이 허용하는 한 model_reasoning_effort로 넘기고 기록으로 검증한다."""
         # Given
-        config = {"turns": [{"model": "gpt-6.1-sol", "effort": "max"}]}
-        arguments = ["scout", "--user-requested", "--model", "gpt-6.1-sol", "--effort", "max"]
+        config = {"turns": [{"model": "gpt-6.2-sol", "effort": "max"}]}
+        arguments = ["scout", "--user-requested", "--model", "gpt-6.2-sol", "--effort", "max"]
 
         # When
         completed = self.run_runner(*arguments, config=config)
 
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
-        self.assertEqual(self.codex_argv(model="gpt-6.1-sol", effort="max"), self.logged()["argv"])
+        self.assertEqual(self.codex_argv(model="gpt-6.2-sol", effort="max"), self.logged()["argv"])
         self.assertEqual(("max", True), (self.status(completed)["effort"], self.status(completed)["verified"]))
 
     def test_user_requested는_실행할_수_없는_모델과_모델이_허용하지_않는_effort를_이름과_함께_거부한다(self):
@@ -1800,8 +1823,8 @@ class RoleRunnerTest(unittest.TestCase):
         """review의 Claude primary는 환경 변수가 review_models의 값이면 그 모델로, 아니면 entry 모델로 실행한다."""
         cases = [
             ({"HEI5ENBUG_REVIEW_MODEL": "claude-haiku-5-5"}, {"model": "claude-haiku-5-5"}, self.claude_argv(model="claude-haiku-5-5")),
-            ({"HEI5ENBUG_REVIEW_MODEL": "gpt-5.4"}, {"turns": [{"model": "gpt-6-astra", "effort": "high"}]}, self.codex_argv(model="gpt-6-astra")),
-            ({}, {"turns": [{"model": "gpt-6-astra", "effort": "high"}]}, self.codex_argv(model="gpt-6-astra")),
+            ({"HEI5ENBUG_REVIEW_MODEL": "gpt-5.4"}, {"turns": [{"model": "gpt-6.2-astra", "effort": "high"}]}, self.codex_argv(model="gpt-6.2-astra")),
+            ({}, {"turns": [{"model": "gpt-6.2-astra", "effort": "high"}]}, self.codex_argv(model="gpt-6.2-astra")),
         ]
         for extra_env, config, expected in cases:
             with self.subTest(extra_env=extra_env):
@@ -1818,14 +1841,14 @@ class RoleRunnerTest(unittest.TestCase):
     def test_host를_생략하면_CODEX_THREAD_ID가_있을_때만_codex_entry를_고른다(self):
         """CODEX_THREAD_ID가 없으면 claude 호스트, 있으면 codex 호스트의 entry를 고른다."""
         cases = [
-            ({}, None, self.codex_argv(model="gpt-6-astra")),
+            ({}, None, self.codex_argv(model="gpt-6.2-astra")),
             ({"CODEX_THREAD_ID": "thread"}, {"entries": [{"model": "claude-opus-5-5", "effort": "high"}]}, self.claude_argv(effort="high")),
         ]
         for extra_env, config, expected in cases:
             with self.subTest(extra_env=extra_env):
                 # Given
                 arguments = ["review", "--instructions", str(self.instructions)]
-                config = config or {"turns": [{"model": "gpt-6-astra", "effort": "high"}]}
+                config = config or {"turns": [{"model": "gpt-6.2-astra", "effort": "high"}]}
 
                 # When
                 completed = self.run_runner(*arguments, config=config, extra_env=extra_env)
@@ -2007,20 +2030,20 @@ class RoleRunnerTest(unittest.TestCase):
                 self.assertNotIn(other, prompt)
 
     def test_review의_Claude_primary가_Claude이면_대체는_gpt_astra_high_실행기다(self):
-        """review의 Claude primary가 HEI5ENBUG_REVIEW_MODEL로 Claude 모델이 되면 대체는 레지스트리의 Claude 에이전트 대신 gpt-6-astra high 실행기다."""
+        """review의 Claude primary가 HEI5ENBUG_REVIEW_MODEL로 Claude 모델이 되면 대체는 레지스트리의 Claude 에이전트 대신 gpt-6.2-astra high 실행기다."""
         # Given
         arguments = ["review", "--host", "claude", "--fallback", "--instructions", str(self.instructions)]
-        config = {"turns": [{"model": "gpt-6-astra", "effort": "high"}]}
+        config = {"turns": [{"model": "gpt-6.2-astra", "effort": "high"}]}
 
         # When
         completed = self.run_runner(*arguments, config=config, extra_env={"HEI5ENBUG_REVIEW_MODEL": "claude-opus-5-5"})
 
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
-        self.assertEqual(self.codex_argv(model="gpt-6-astra", effort="high"), self.logged()["argv"])
+        self.assertEqual(self.codex_argv(model="gpt-6.2-astra", effort="high"), self.logged()["argv"])
         status = self.status(completed)
         self.assertEqual(
-            (True, "codex", "gpt-6-astra", "high"),
+            (True, "codex", "gpt-6.2-astra", "high"),
             (status["fallback"], status["runner"], status["model"], status["effort"]),
         )
 
@@ -3257,7 +3280,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_validation_없는_reviewer_프롬프트는_빌드_테스트_설치_네트워크_금지를_담고_네트워크가_없다(self):
         """--validation 없이는 기존 금지 문장이 프롬프트에 있고 권한 프로필에 네트워크 설정이 없다."""
         # When
-        completed = self.run_runner("reviewer", config={"turns": [{"model": "gpt-6-astra", "effort": "high"}]})
+        completed = self.run_runner("reviewer", config={"turns": [{"model": "gpt-6.2-astra", "effort": "high"}]})
 
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
@@ -3265,13 +3288,13 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertIn("build, test, install, or network commands", " ".join(call["stdin"].split()))
         self.assertIn("use no network", call["stdin"])
         self.assertNotIn("Validation mode", call["stdin"])
-        self.assertEqual(self.codex_argv(model="gpt-6-astra"), call["argv"])
+        self.assertEqual(self.codex_argv(model="gpt-6.2-astra"), call["argv"])
         self.assertNotIn("validation", self.status(completed))
 
     def test_validation_reviewer_프롬프트는_테스트와_scratch_설치를_허용하고_바깥_수정을_금지한다(self):
         """--validation이면 프롬프트가 테스트, scratch 설치, 설치용 네트워크를 허용하고 scratch 밖 수정을 금지하며 권한 프로필에 네트워크가 켜진다."""
         # When
-        completed = self.run_runner("reviewer", "--validation", config={"turns": [{"model": "gpt-6-astra", "effort": "high"}]})
+        completed = self.run_runner("reviewer", "--validation", config={"turns": [{"model": "gpt-6.2-astra", "effort": "high"}]})
 
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
@@ -3284,7 +3307,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertIn("Edit no file outside the scratch folder", prompt)
         self.assertNotIn("Never run build, test, install, or network commands", prompt)
         self.assertNotIn("use no network", prompt)
-        self.assertEqual(self.codex_argv(model="gpt-6-astra", validation=True), call["argv"])
+        self.assertEqual(self.codex_argv(model="gpt-6.2-astra", validation=True), call["argv"])
         self.assertTrue(self.status(completed)["validation"])
 
     def test_읽기_전용_Claude_실행은_scratch_폴더에서_시작하고_샌드박스_설정으로_쓰기를_가둔다(self):

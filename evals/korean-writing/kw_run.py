@@ -22,7 +22,7 @@ from kw_prompts import DEFAULT_SEED, load_cases  # noqa: E402
 from kw_seeded import run_seeded  # noqa: E402
 
 DEFAULT_WRITERS = ["codex:gpt-6.1-sol", "claude:claude-opus-5-5", "codex:gpt-6.1-terra", "claude:claude-fable-5-2"]
-DEFAULT_GRADERS = ["codex:gpt-6-astra", "claude:claude-opus-5-5"]
+DEFAULT_GRADERS = ["codex:gpt-6.2-astra", "claude:claude-opus-5-5"]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -32,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--writer", action="append", metavar="HOST:MODEL",
                         help="writer as codex:<model id> or claude:<model id>; repeat; default: the four candidates")
     parser.add_argument("--grader", action="append", metavar="HOST:MODEL",
-                        help="grader, same form; repeat; default: codex:gpt-6-astra and claude:claude-opus-5-5")
+                        help="grader, same form; repeat; default: codex:gpt-6.2-astra and claude:claude-opus-5-5")
     parser.add_argument("--tasks", help="comma-separated task ids; default: all")
     parser.add_argument("--runs", type=int, default=5, help="runs per task and writer (default 5)")
     parser.add_argument("--parallel", type=int, default=4)

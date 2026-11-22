@@ -212,7 +212,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
             },
         )
         self.assertEqual(options["review_model"]["type"], "string")
-        self.assertEqual(options["review_model"]["default"], "gpt-6-astra")
+        self.assertEqual(options["review_model"]["default"], "gpt-6.2-astra")
         self.assertEqual(set(options["review_model"]["options"]), set(session_context.REVIEW_MODELS))
         self.assertNotIn("sonnet-worker", options["role_pinning"]["description"])
         self.assertEqual(

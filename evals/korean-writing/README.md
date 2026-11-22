@@ -38,7 +38,7 @@ python3 evals/korean-writing/kw_run.py aggregate --out <folder>
 
 `--writer <host>:<model id>` and `--grader <host>:<model id>` replace the defaults and repeat once per model; the host
 is `codex` or `claude`. The defaults are the four candidates `codex:gpt-6.1-sol`, `claude:claude-opus-5-5`,
-`codex:gpt-6.1-terra`, and `claude:claude-fable-5-2`, and the two graders `codex:gpt-6-astra` and
+`codex:gpt-6.1-terra`, and `claude:claude-fable-5-2`, and the two graders `codex:gpt-6.2-astra` and
 `claude:claude-opus-5-5`. An existing output folder is resumed: finished drafts and grades are not run again.
 
 | Setting | Value |

@@ -118,7 +118,7 @@ class ReviewerContractTest(unittest.TestCase):
         self.assertIn('with `--model` set to the model in the session line "Review model"', claude_review)
         self.assertIn("| `reviewer` for a skill review role | `hei5enbug-agent-setup:reviewer` |", claude_table)
         self.assertIn(
-            "`role_runner.py reviewer` with the `review_model` setting (default `gpt-6-astra`), `high` (up to `xhigh`); "
+            "`role_runner.py reviewer` with the `review_model` setting (default `gpt-6.2-astra`), `high` (up to `xhigh`); "
             "fallback `reviewer` with `claude-opus-5-5`, `high`",
             routing_text,
         )

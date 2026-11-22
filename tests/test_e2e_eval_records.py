@@ -94,7 +94,7 @@ class RecordValidatorTest(unittest.TestCase):
         """given 상한을 넘는 모델이나 알 수 없는 호스트일 때 when 검증하면 then 그 역할과 필드를 이유로 거부한다."""
         # given
         stronger = copy.deepcopy(complete())
-        stronger["runs"][1]["models"]["review"] = {"model": "gpt-6-astra", "effort": "high"}
+        stronger["runs"][1]["models"]["review"] = {"model": "gpt-6.2-astra", "effort": "high"}
         unknown = copy.deepcopy(complete())
         unknown["runs"][0]["host"] = "gemini"
 
@@ -149,7 +149,7 @@ class RecordValidatorTest(unittest.TestCase):
         self.assertLessEqual(records.ALLOWED_MODELS - {"gpt-5.6-luna"}, set(registry["pins"].values()))
         self.assertLessEqual(records.EFFORTS, set(registry["efforts"]))
         self.assertNotIn("claude-fable-5-2", records.ALLOWED_MODELS)
-        self.assertNotIn("gpt-6-astra", records.ALLOWED_MODELS)
+        self.assertNotIn("gpt-6.2-astra", records.ALLOWED_MODELS)
 
 
 if __name__ == "__main__":

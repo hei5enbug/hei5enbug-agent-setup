@@ -22,6 +22,7 @@ DEFAULT_TIMEOUT = 2700
 DEFAULT_REVIEW_MODEL = REGISTRY["runner"]["default_review_model"]
 ROLE_MODEL = REGISTRY["runner"]["role_model"]
 REVIEW_MODELS = tuple(REGISTRY["runner"]["review_models"])
+REVIEWER_MODELS = tuple(dict.fromkeys((*REVIEW_MODELS, REGISTRY["pins"]["gpt-sol"])))
 WORKER_MODELS = tuple(REGISTRY["runner"]["worker_models"])
 WORKER_AGENTS = frozenset(
     name for table in (REGISTRY["claude_agents"], REGISTRY["codex_agents"]) for name, entry in table.items()
