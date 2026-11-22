@@ -4,10 +4,10 @@
 > 이 문서는 사람을 위한 비권위 한국어 번역본이다. 에이전트 실행 시 읽거나 사용하지 않는다.
 
 Orca에서 실행 중인 모든 Claude Code와 Codex 에이전트 세션을 상태(사용자 대기, 멈춤, 완료, 작업 중)별 표로 보여 주고,
-한 번의 승인을 받아 조치한다. 멈춘 세션에는 지시를 보내고, 유휴 세션은 재개 메모를 남기고 종료해 메모리를 확보하며,
+한 번의 승인을 받아 조치한다. 멈춘 세션은 재촉하고, 유휴 세션은 종료해 메모리를 확보하며,
 완료된 세션의 변경 사항이 없는 worktree를 제거하거나, 탭 이름을 현재 작업으로 바꾼다. 사용자가 Orca에서 실행 중인
 에이전트 세션을 보거나 분류하거나 정리해 달라고 할 때, 자기를 기다리거나 멈춘 세션을 찾아 달라고 할 때, 그 세션이
-쓰는 메모리를 확보해 달라고 할 때 사용한다. 예를 들면 "세션 정리해줘", "대기 중인 세션 보여줘", "free memory used by
+쓰는 메모리를 확보해 달라고 할 때 사용한다. 예를 들면 "세션 정리해줘", "free memory used by
 my agent sessions" 같은 요청이다. 플러그인이 메모리 부족으로 시작을 거부하면서 이 스킬을 제안한 뒤 사용자가 동의한
 경우에도 사용한다. 플러그인 업데이트와 세션 다시 불러오기(`orca-plugin-refresh`), 디스크 정리(`local-data-cleanup`),
 worktree 생성에는 사용하지 않는다.
@@ -111,31 +111,30 @@ worktree를 터미널이 있든 없든 담고(`terminal_handles`가 비어 있�
   이름을 지워 Orca가 다시 자동 이름을 보여 주게 한다. 그다음 `orca worktree list --json`으로 그 worktree를 다시 읽고,
   해당 항목이 `displayNameMode: automatic`을 보일 때만 복원됐다고 보고한다. 아니면 항목이 보이는 모드를 보고한다.
   그 질문에서 사용자가 승인하지 않았다면 절대 실행하지 않는다.
-- `clean up`: 먼저 다음 조건을 모두 확인한다. 하나라도 실패하면 실행하는 대신 사용자에게 묻는다.
-  - worktree가 메인 worktree가 아니고, 하위 worktree가 없고, 현재 세션의 worktree가 아니다.
-  - `orca terminal list --worktree "id:<worktree_id>" --json`에 이 세션의 터미널만 있고, 개요의 다른 행에 같은
-    `worktree_id`가 없어서 그 체크아웃을 쓰는 다른 세션이나 셸이 없다.
-  - 화면에 유휴 프롬프트가 보이고, 열린 질문이 없고, 감시 작업, 백그라운드 작업, 실행 중인 서브에이전트가 없다.
-  - `git -C <path> status --porcelain`이 비어 있고, 무시된 파일은 다시 만들 수 있는 캐시뿐이다.
-  - 브랜치의 커밋이 기준 브랜치에 있다(`git -C <path> merge-base --is-ancestor HEAD <base ref>`; squash 병합은
-    통과하지 못하므로 묻는다).
+- `clean up`: `<ref>`는 저장소의 기준 브랜치이며 작업이 요구하는 대로 고른다. 4단계의 질문 전에 한 번, 그리고 승인된 후보마다
+  에이전트가 종료된 뒤 다시 실행한다.
 
-  그다음 `sleep`처럼 에이전트를 종료하고 셸 프롬프트를 확인한다. 그곳에서 아직 실행 중인 것을 찾는다.
-  `orca ports --worktree "id:<worktree_id>" --json`과, 터미널 자체의 셸을 제외하고 작업 디렉터리가 그 경로 안에
-  있는 프로세스(예: `lsof -d cwd -Fpn`로 확인)를 본다. 남은 것이 있으면 터미널과 worktree를 그대로 두고 보고한다.
-  없으면 `orca terminal close --terminal <handle> --json`과
-  `orca worktree rm --worktree "id:<worktree_id>" --delete-branch --json`을 실행한다. `finished`가 아닌 세션에는
-  절대 실행하지 않는다.
+  ```text
+  python3 scripts/cleanup_checks.py --worktree-id <worktree_id> --base-ref <ref> [--no-agent]
+  python3 scripts/cleanup_checks.py --worktree-id <worktree_id> --base-ref <ref> [--no-agent] --after-exit
+  ```
 
-  `worktrees_without_agent` 행에는 에이전트 세션이 없으므로 종료 명령을 보내지 않고 `finished` 분류도 필요 없다.
-  같은 검사를 하되 다음이 다르다. `terminal_handles`의 모든 터미널이 아무것도 실행하지 않는 유휴 셸 프롬프트를
-  보이고, 개요의 다른 행에 같은 `worktree_id`가 없다. `terminal_handles`가 비어 있으면 터미널 검사와 닫기 단계를
-  건너뛰고 나머지 검사는 모두 유지한다. `git -C <path> fetch` 뒤
-  `git -C <path> rev-list --count @{upstream}..HEAD`가 0이면 기준 브랜치 검사 대신 이 조건으로 통과한다. 업스트림이
-  없는 브랜치는 통과하지 못한다. 인수인계 메모처럼 다시 만들 수 없는 무시된 파일은 먼저 현재 세션의 worktree로 복사한
-  뒤 계속한다. 그다음 위와 같이 실행 중인 프로세스를 찾고, `terminal_handles`의 각 터미널을 `orca terminal close`로
-  닫고, 같은 `orca worktree rm`을 실행하고, 작업을 보관하는 원격 브랜치를 보고한다. 검사에 실패한 행은 그대로 두고,
-  그 행에 실패한 검사를 명시한다.
+  `worktrees_without_agent` 행에는 `--no-agent`를 전달한다. 각 실행은 `checks`에 검사마다 `pass`, `fail`, `unreadable`과
+  읽은 값을 담고 `ignored`에 무시된 파일을 담은 JSON 객체 하나를 출력한다. `squash_possible`을 뺀 모든 검사가 통과하면
+  `0`, 하나라도 실패하면 `1`, 실패는 없고 읽지 못한 검사가 있으면 `3`으로 종료한다. `fail`이나 `unreadable` 검사가
+  있으면 아래 squash 경우를 빼고 그 세션을 건너뛰고, 어떤 검사가 왜 그런지 말하며, 돌아가며 다시 시도하지 않는다.
+  `ignored`는 직접 판단한다. 다시 만들 수 있는 캐시만 통과하고, 인수인계 메모처럼 그렇지 않은 무시된 파일은 먼저 현재
+  세션의 worktree로 복사한다. 화면도 읽는다. 유휴 프롬프트가 보이고, 열린 질문이 없고, 감시 작업, 백그라운드 작업, 실행
+  중인 서브에이전트가 없어야 한다. `worktrees_without_agent` 행은 `terminal_handles`의 모든 터미널이 아무것도 실행하지 않는
+  유휴 셸 프롬프트를 보여야 하고, 터미널이 없으면 화면 검사와 닫기 단계를 건너뛴다.
+
+  `base_merged`가 `fail`이고 `squash_possible`이 `pass`이면 계속할지 사용자에게 묻고 승인했을 때만 진행한다. 그 밖의
+  `fail`은 worktree를 그대로 둔다. 승인 뒤 `sleep`처럼 에이전트를 종료하고 셸 프롬프트를 확인한 다음(`worktrees_without_agent`
+  행에는 에이전트가 없으므로 종료 명령을 보내지 않는다) `--after-exit` 호출을 실행한다. 두 실행의 모든 검사가 통과했을
+  때만(또는 squash 경우를 승인했을 때만) 각 터미널을 `orca terminal close --terminal <handle> --json`으로 닫고
+  `orca worktree rm --worktree "id:<worktree_id>" --delete-branch --json`을 실행한다. 그렇지 않으면 터미널과 worktree를
+  그대로 두고 실패한 검사를 보고한다. `finished`가 아닌 세션은 절대 정리하지 않는다. `worktrees_without_agent` 행은
+  작업을 보관하는 원격 브랜치를 보고한다.
 
 종료 명령:
 

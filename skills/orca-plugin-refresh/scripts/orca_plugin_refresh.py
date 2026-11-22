@@ -473,6 +473,26 @@ def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spa
     return {"ok": all(entry["status"] in {"done", "queued_after_turn", "deferred"} for entry in sessions), "run_id": run_id, "summary": summary, "sessions": [public(entry) for entry in sessions]}
 
 
+def error_result(error: RefreshError) -> dict:
+    return {"ok": False, "error": {"code": error.code, "message": error.message}}
+
+
+def command_refresh(also: Sequence[str], installed: bool, mode: str) -> dict:
+    """One update (or apply-installed), then apply and orphans on its run id; apply and orphans never run when every host failed."""
+    update = command_apply_installed(also) if installed else command_update(also)
+    output: dict = {"ok": update["ok"], "update": update}
+    if all("error" in host for host in update["hosts"].values()):
+        return output
+    for name, step in (("apply", lambda: command_apply(update["run_id"], mode, [], DEFAULT_APPLY_SECONDS)),
+                       ("orphans", lambda: run_orphans(update["run_id"]))):
+        try:
+            output[name] = step()
+        except RefreshError as error:
+            output[name] = error_result(error)
+    output["ok"] = update["ok"] and output["apply"]["ok"]
+    return output
+
+
 def lock_guard() -> AbstractContextManager:
     return exclusive("sessions")
 
@@ -586,6 +606,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         sub = commands.add_parser(name)
         sub.add_argument("--also", action="append", default=[], metavar="PLUGIN@MARKETPLACE")
         sub.add_argument("--json", action="store_true")
+    refresh = commands.add_parser("refresh")
+    refresh.add_argument("--also", action="append", default=[], metavar="PLUGIN@MARKETPLACE")
+    refresh.add_argument("--installed", action="store_true")
+    refresh.add_argument("--compact", choices=("auto", "always", "never"), default="auto")
+    refresh.add_argument("--json", action="store_true")
     for name in ("plan", "apply"):
         sub = commands.add_parser(name)
         sub.add_argument("--run-id", required=True)
@@ -622,6 +647,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return command_self_apply(args.run_id)
         if args.command == "update":
             output = command_update(args.also)
+        elif args.command == "refresh":
+            output = command_refresh(args.also, args.installed, args.compact)
         elif args.command == "apply-installed":
             output = command_apply_installed(args.also)
         elif args.command == "plan":

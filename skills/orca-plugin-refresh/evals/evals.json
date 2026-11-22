@@ -7,9 +7,9 @@
       "expected_output": "The agent runs the update, reports each host's version change and warnings, then applies the run to the Orca sessions without asking for confirmation.",
       "files": [],
       "expectations": [
-        "The agent invokes `update --json` and does not pass `--offline`, which the script no longer accepts.",
+        "The agent invokes `refresh --json` and does not pass `--offline`, which the script no longer accepts.",
         "Each host's version change and every warning are reported.",
-        "When a host updated successfully, `apply --run-id <run_id> --json` runs without asking the user to confirm.",
+        "When a host updated successfully, the `apply` section of the `refresh` result is reported without asking the user to confirm.",
         "No command is sent to an Orca terminal by hand, and no session is exited or restarted."
       ]
     },
@@ -40,20 +40,20 @@
       "expected_output": "The agent passes the named plugin as a companion, reports every companion status and warning per host, and applies the run to the sessions.",
       "files": [],
       "expectations": [
-        "The agent runs `update --also example-plugin@example-market --json` with the plugin ID exactly as the user gave it.",
+        "The agent runs `refresh --also example-plugin@example-market --json` with the plugin ID exactly as the user gave it.",
         "Every entry in `hosts.<host>.plugins` is reported with its status and versions, including any warning or error.",
         "A `local_source` status is explained as a plugin that loads from a local folder and was not installed.",
-        "A companion `error` does not stop `apply`; `apply --run-id <run_id> --json` still runs.",
+        "A companion `error` does not stop `apply`; the `refresh` result still holds an `apply` section.",
         "The agent does not invent a plugin ID the user did not name."
       ]
     },
     {
       "id": 5,
       "prompt": "I updated the plugin outside this skill. Apply the installed version to my Orca sessions.",
-      "expected_output": "The agent runs apply-installed to snapshot the installed roots, then applies its run ID and reports every session.",
+      "expected_output": "The agent runs `refresh --installed` to snapshot the installed roots and apply its run, and reports every session.",
       "files": [],
       "expectations": [
-        "`apply-installed --json` runs before `apply --run-id <run_id> --json`.",
+        "`refresh --installed --json` runs once and no separate `apply` or `orphans` command is written out.",
         "The agent does not run marketplace or install commands.",
         "Apply gets a shell timeout of at least 600 seconds and reports each session's terminal suffix, host, worktree, status, and detail."
       ]
@@ -65,7 +65,7 @@
       "files": [],
       "expectations": [
         "The agent does not repeat the update on its own while the Codex turn is still running.",
-        "The Codex root, the deferral code, and the `update --json` recovery command are reported.",
+        "The Codex root, the deferral code, and the recovery command are reported.",
         "The agent tells the user to run the update again after the Codex turn ends.",
         "The Codex sessions are not applied while that host has an update error; the Claude Code host can proceed."
       ]
@@ -73,10 +73,10 @@
     {
       "id": 7,
       "prompt": "I updated the plugin outside this skill. Apply the installed version to my Orca sessions. In this simulation, `apply` reports one Codex session as `deferred` with detail `busy` and this session as `queued_after_turn`; later the helper's status prompt arrives, and `status` lists that Codex session in `not_refreshed` with `not_idle_before_deadline`.",
-      "expected_output": "The agent runs apply-installed and apply without asking the user to confirm, reports the first results including the deferred session, and ends the turn instead of waiting or retrying. When the helper's prompt arrives, it runs the status command once and reports every session, naming the Codex session that was not refreshed and why.",
+      "expected_output": "The agent runs `refresh --installed` without asking the user to confirm, reports the first results including the deferred session, and ends the turn instead of waiting or retrying. When the helper's prompt arrives, it runs the status command once and reports every session, naming the Codex session that was not refreshed and why.",
       "files": [],
       "expectations": [
-        "The agent does not ask the user for confirmation before running `apply`.",
+        "The agent does not ask the user for confirmation before the apply step.",
         "After `apply` reports `deferred` and `queued_after_turn`, the agent reports those statuses and ends the turn without polling, rerunning `apply`, or sending commands to Orca terminals by hand.",
         "When the helper prompt arrives, the agent runs the status command and reports the Codex session from `not_refreshed` with `not_idle_before_deadline`.",
         "The agent does not exit, restart, or force-reload any session."

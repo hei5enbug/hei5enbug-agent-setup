@@ -24,7 +24,7 @@
 | 단계 | 담당 |
 |---|---|
 | 1. 대상 확정 | 메인 세션 |
-| 2. 세션 목록 | `investigation` |
+| 2. 세션 목록 | 메인 세션 |
 | 3. 근거 수집 | `investigation` |
 | 4. 원본 대조 | 메인 세션 |
 | 5–7. 개선 표, 남은 결정 질문, 요청 시 계획 | 메인 세션 |
@@ -49,7 +49,7 @@
 
 ### 2. 세션 목록
 
-이 `SKILL.md`가 있는 디렉터리를 기준으로 경로를 해석해 함께 들어 있는 스크립트를 실행한다.
+메인 세션에서, 이 `SKILL.md`가 있는 디렉터리를 기준으로 경로를 해석해 함께 들어 있는 스크립트를 실행한다.
 
 ```text
 python3 scripts/list_sessions.py (--date <YYYY-MM-DD> | --since <YYYY-MM-DDTHH:MM> [--until <YYYY-MM-DDTHH:MM>]) (--cwd <repository path> | --all-cwd) [--tz <zone>] [--claude-dir <dir>] [--codex-dir <dir>]
@@ -58,7 +58,9 @@ python3 scripts/list_sessions.py (--date <YYYY-MM-DD> | --since <YYYY-MM-DDTHH:M
 스크립트는 `sessions`와 `skipped`가 든 JSON 객체 하나를 출력한다. 탐색을 마치면 0, 잘못된 인자면 2, 세션 폴더가 있지만
 목록을 읽지 못하면 1로 끝난다. 범위는 반열린 구간이라 `--since`는 포함하고 `--until`은 포함하지 않으며, 둘 다 `--tz`
 기준이다. `--all-cwd`를 쓰면 각 세션이 자신의 `cwd`를 담으므로, `cwd`로 세션을 묶어 폴더별로 검토한다.
-`--claude-dir`이나 `--codex-dir`은 사용자가 다른 세션 폴더를 지정할 때만 넘긴다. `skipped` 항목은 모두 보고한다.
+`--claude-dir`이나 `--codex-dir`은 사용자가 다른 세션 폴더를 지정할 때만 넘긴다. `skipped` 항목은 모두 보고한다. 1이나 2로 끝나면
+종료 코드와 스크립트의 메시지를 보고하고, 3단계 전에 실행 전체를 멈추며, 다시 시도하려고 작업자를 시작하지 않는다. 사용자가 인자나 폴더를
+고친 뒤 스킬을 다시 시작한다.
 
 검토할 세션을 고른다.
 

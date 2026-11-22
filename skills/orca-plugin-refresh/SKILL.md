@@ -46,18 +46,19 @@ Let `<script>` be `scripts/orca_plugin_refresh.py` in the directory that holds t
 
 Before updating Codex plugins or reporting their hook-trust warnings, read `references/codex-releases.md`.
 
-1. **Choose the install path.** To install a new version, run `python3 <script> update --json`. To refresh other
-   plugins with it, pass each ID the user named as `--also <plugin@marketplace>`; the flag is repeatable and
-   works on `apply-installed` too. Without `--also`, the script uses the `HEI5ENBUG_REFRESH_PLUGINS` environment
+1. **Choose the install path.** To install a new version, run `python3 <script> refresh --json` once: it runs the
+   update, then step 3's `apply` and step 7's `orphans` on the returned run id, and prints one JSON object with the
+   sections `update`, `apply`, and `orphans`. To refresh other plugins with it, pass each ID the user named as `--also <plugin@marketplace>`; the flag is repeatable and
+   works with `--installed` too. Without `--also`, the script uses the `HEI5ENBUG_REFRESH_PLUGINS` environment
    variable (comma-separated IDs), then the saved `refresh_plugins` plugin option. The first non-empty source wins.
    Never invent an ID. An invalid ID returns `plugin_id_invalid` with its position and runs nothing; ask the user
    for the corrected ID. The script drops duplicates and this plugin's own ID and keeps at most 10 companions;
    `companions_dropped` reports any extras. If installation was already completed outside this skill, or the user
-   asks to apply the installed version, run `python3 <script> apply-installed --json`; it reads installed roots
+   asks to apply the installed version, run `python3 <script> refresh --installed --json`; it reads installed roots
    and runs no plugin marketplace or install commands. Both commands first run `claude update` once, so sessions
    compare against the newest Claude Code release, unless `DISABLE_UPDATES` turns updates off or `claude` is not
    on `PATH`; run them with a shell timeout of at least 600 seconds.
-2. **Handle the update result.** Report each host's version change, then every plugin in
+2. **Handle the update result.** From the `update` section, report each host's version change, then every plugin in
    `hosts.<host>.plugins` with its status, versions, and warnings:
    - `updated` or `current`: the version changed or stayed, and the install validated.
    - `not_installed`: not installed and enabled exactly once on that host; nothing ran.
@@ -90,10 +91,10 @@ Before updating Codex plugins or reporting their hook-trust warnings, read `refe
      Report the reason.
    - `claude_home_project_record`: a session ran in the home folder, so Claude Code listed the user install a second
      time as a home-folder project install of the same copy. The script treated them as one install; nothing to do.
-3. **Apply to the sessions.** When this plugin's host update succeeded, or `apply-installed` returned that host
-   without an error, run `python3 <script> apply --run-id <run_id> --json` in the foreground with a shell timeout
-   of at least 600 seconds. Do not ask the user to confirm this step; the script's checks decide which sessions
-   receive commands. For about 20 seconds the script sends a command only to an idle session whose input line is
+3. **Apply to the sessions.** When this plugin's host update succeeded, or the installed-only run returned that host
+   without an error, `refresh` runs `apply` itself, in the foreground within the shell timeout of step 1, and its
+   `apply` section holds the result; when every host has an error, the output holds only `update`. Do not ask the
+   user to confirm this step; the script's checks decide which sessions receive commands. For about 20 seconds the script sends a command only to an idle session whose input line is
    empty or cleared of typed text, then keeps confirming the commands already sent and restoring any text it can
    restore exactly. It hands every session that is still busy or not ready to one detached helper as `deferred`
    instead of waiting. An `already_running` error means another run is sending at this moment; wait for it, then run `apply` again. A host with an update error stays blocked while successful hosts
@@ -143,7 +144,10 @@ Before updating Codex plugins or reporting their hook-trust warnings, read `refe
    record cannot. When a session reports idle, the helper confirms it again after three seconds, checks that the
    installed plugin still matches the run and that the session has not already loaded the new instructions, and
    only then sends the remaining actions. A session deferred for another reason, such as an unreadable input line,
-   is checked again on every poll. A deferred session that is not ready within one hour of the handoff stays
+   is checked again on every poll. A Claude Code session's reload stays owed until its transcript after the handoff
+   holds a successful reload or its marker was rewritten after the handoff with source `startup` or `resume`; a marker
+   rewritten by a compaction or a clear never settles it, whatever root it names, because only a new process loads
+   every installed plugin. A deferred session that is not ready within one hour of the handoff stays
    unsent, as `not_idle_before_deadline` or with its last reason.
    A session whose terminal closes is skipped at once as `terminal_gone`, and its wait ends. The status shows each
    session's final result as soon as it is reached, so `status` reports progress while the helper runs.
@@ -159,7 +163,7 @@ Before updating Codex plugins or reporting their hook-trust warnings, read `refe
    `codex_plugin_folder_replaced`, or `host_release_outdated` with the failed check in `resume_check`) and ask which the user approves; fixing one ends
    it and resumes the same conversation.
    Before running `resume`, read `references/resume.md`, and run it only for the approved terminals.
-7. **Offer to close orphaned terminals.** Run `python3 <script> orphans --run-id <run_id> --json`, show each orphaned
+7. **Offer to close orphaned terminals.** From the `orphans` section, show each orphaned
    agent terminal with host, worktree, and idle time, and name the `failed_check` of each one not recommended. Ask the
    user once which `recommended` terminals to close. Before running `close`, read `references/orphaned-terminals.md`,
    and run it only for the approved terminals.
@@ -175,60 +179,7 @@ for one the user approved in this request; and never pass `--force` on your own.
 
 The script exits with `0` when every session is `done`, `deferred`, or `queued_after_turn`, or when the update or
 `apply-installed` result is ok. It exits with `2` otherwise, and on a usage error. An update or `apply-installed`
-result is not ok when this plugin has a host error or any companion has the status `error`.
+result is not ok when this plugin has a host error or any companion has the status `error`. `refresh` exits `0` only when its
+update result is ok and every session is `done`, `deferred`, or `queued_after_turn`.
 
-## Safety and limits
-
-- Commands are argument lists, never a shell. Each host updates a marketplace at most once per run, then the
-  plugin: Claude Code runs `claude plugin marketplace update` and `claude plugin update`, and Codex runs
-  `codex plugin marketplace upgrade` and `codex plugin add`. `update` and `apply-installed` also run `claude update`
-  once first.
-- Before reporting an install as successful, the script checks the installed manifest name and version and every
-  hook target that points into the plugin directory. For this plugin it also checks every required hook target,
-  the Claude Code mod files, and the instruction digest. A failed plugin does not hide another plugin's or host's
-  successful result.
-- The Codex gate reads only Codex rollout files modified in the last 30 minutes and counts a session as idle
-  only when its last complete line ends a turn. A partial or unreadable last line defers. It reads no prompt text.
-- A command goes only to a connected, writable, idle terminal whose input line is empty or was cleared as below.
-  The host's own turn record decides idle or busy first and is read again right before each send, where an
-  undecided record needs `tui-idle` too; a Claude Code transcript whose newest turn has ended with no background
-  task, subagent, or scheduled wakeup owing a notification, also anywhere earlier in the file, or that ends with a
-  finished slash command and either nothing active before it or, when the file is unchanged for 300 seconds, an
-  earlier turn with no end record, means idle, even when no record follows the handoff, a turn
-  in progress means busy, and a Codex rollout's last complete line decides the same way. When the record is missing,
-  partial, or not decisive, Orca's `tui-idle` decides. A short race remains.
-- Orca delivers an orchestration mail notice by typing it into an idle agent's input line and pressing Enter,
-  which submits whatever is already on the line. Before it probes, sends, or types held input back, the script
-  reads Orca's orchestration inbox and leaves a session alone while mail Orca will announce to it is unread or the
-  inbox cannot be read. Held input is typed back after two minutes even then, so it is not lost. Mail that arrives
-  during the probe or the send itself remains a race.
-- Orca hides the Claude Code input line from the screen and reports it as a draft, which also carries Claude
-  Code's grey prompt suggestion. When a draft stays unchanged for five seconds, the script types one character
-  and deletes it only when the draft shows exactly that character: a suggestion is replaced and typed text is
-  extended, and both come back unchanged. When the probe shows typed text of one line without a paste or image
-  placeholder or a leading `-`, the script keeps it only in memory, clears it with backspaces, sends the commands,
-  and types it back without Enter once the last action is confirmed or fails, or before the session is handed to
-  the helper, completing a line that a failed clear left partly cleared; a crash between the clear and the restore
-  loses it. Input that cannot be restored exactly is cleared the same way before the refresh is applied, the
-  report says `cleared`, and the cleared input is not kept anywhere.
-  When a check is interrupted but the draft then returns to its earlier state or empties, no character of the
-  script's remains, so it checks again later, up to three more times. The script checks the draft again just before
-  each send.
-- `/clear` runs only after Claude Code refuses to compact and the transcript, read again right before the send,
-  holds no prompt.
-- Each result is confirmed from transcript records appended after the send, or from a marker rewritten after it,
-  and from the screen only when no transcript is available.
-- One lock covers every process that sends commands. The detached helper holds it only while it sends to a session
-  and confirms the command, never while it waits for a session to become idle, so `apply` can run meanwhile.
-- Each run starts at most one helper. Sessions a later `apply` defers join the running helper. It ends every Orca wait it started before it exits, and its deferred
-  sessions and this session wait at most one hour.
-- When the Orca idle wait fails for a session, the helper checks that session by polling until its deadline.
-- `/compact` summarizes the conversation, so it runs only for sessions whose instructions are stale.
-- A Codex session that was compacted loads the new instructions at its next turn; the report says so.
-- Only Orca-managed terminals are reached. Codex sessions outside Orca still count in the install gate when they
-  wrote a rollout file in the last 30 minutes.
-- Manual updates outside this workflow and another process deleting a loaded plugin directory remain outside
-  this skill's enforcement boundary.
-- Run state lives under `~/.local/state/hei5enbug-agent-setup/orca-plugin-refresh/`, or under
-  `$XDG_STATE_HOME` when it is set, and markers live under Orca's user-data directory. Neither stores prompts
-  or transcripts.
+Before explaining to the user why the script skipped, deferred, or failed a session, and before a manual finish, read `references/safety-and-limits.md`.

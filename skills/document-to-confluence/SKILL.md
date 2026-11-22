@@ -284,8 +284,8 @@ When republishing:
 3. Apply the requested update mode without silently deleting Confluence-only content.
 4. Preserve stable attachment names and macro identifiers when their semantic content remains.
 5. Re-run extraction when the source format or exporter changes because block boundaries may change.
-6. When the page has inline comment markers, convert, restore, and check them as "Inline comment markers" in
-   `references/confluence-body.md` describes.
+6. When the page has inline comment markers, convert, restore, and check them as
+   `references/confluence-inline-comments.md` describes.
 
 ## Rules for every source
 

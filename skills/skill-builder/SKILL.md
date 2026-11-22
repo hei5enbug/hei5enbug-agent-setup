@@ -142,24 +142,7 @@ skill-name/
 Keep host-specific manifests when the target requires them. Do not duplicate the core workflow across adapters.
 Do not create a product-specific manifest merely because the current agent host supports one; add it only for a requested target or preserve it when updating an existing package.
 
-### Multiple target hosts
-
-When a skill must run on more than one host, keep one canonical skill body as the single source of
-truth. Never fork a per-host copy and maintain the copies separately; forks drift apart almost
-immediately.
-
-- Keep behavior rules, quality criteria, terminology, output contracts, and review checklists in
-  the shared body.
-- Put only genuine host differences in an adapter: trigger and discovery metadata, tool names,
-  script invocation, host-required metadata, and workflows that use a host-only capability.
-- Evaluate every target host against the same eval corpus and acceptance criteria so results stay
-  comparable.
-- Attribute a failure before editing. When all hosts fail a case, fix the shared rule. When one
-  host fails, first check whether the shared rule is ambiguous and clarify it. Add an adapter rule
-  only when the clarified shared rule still fails on that host. Rerun the corpus on every host
-  after either change.
-- Do not weaken or pad shared rules to a lowest common denominator because one host follows them
-  poorly. Contain that host's gap in its adapter.
+Before writing a skill for more than one host, read `references/multiple-hosts.md`.
 
 ### Translated mirrors
 
@@ -260,64 +243,9 @@ Tell the agent how to select the relevant reference so it does not load every va
 The skill must match the user's stated intent. Do not create malware, exploit workflows, covert data access, misleading behavior, or unexpected external side effects.
 Make material writes and external actions visible in the instructions.
 
-### Writing patterns
+Before applying writing patterns while drafting, read `references/writing-patterns.md`.
 
-Use imperative instructions and explain the reasoning behind important constraints. Prefer adaptable principles over repeated all-caps mandates.
-
-A rule that constrains form must name every surface it governs, or be stated independently of surface.
-
-For exact output contracts, provide a template:
-
-```markdown
-## Report structure
-Use this exact structure:
-# [Title]
-## Executive summary
-## Key findings
-## Recommendations
-```
-
-Use examples when they resolve ambiguity:
-
-```markdown
-## Commit message format
-Input: Added user authentication with JWT tokens
-Output: feat(auth): implement JWT-based authentication
-```
-
-## Test cases
-
-Create 2–3 realistic prompts for the first iteration.
-Vary the input types the skill will actually meet rather than testing one shape repeatedly.
-When output behavior is inferred from examples, history, documentation, or other context, include a contrastive pair:
-hold the task and primary input constant, change one decisive context signal, and assert that the intended output
-dimension changes while unrelated dimensions remain stable. Trace every critical inferred dimension from "Capture
-intent" to at least one case or assertion.
-When the user reports an intermittent or model-specific defect, use the reported configuration when it matches the
-required evaluation model adapter and repeat the affected old/new pair 2–3 times within a frozen trial budget. One
-passing baseline run does not disprove the report. If the exact configuration is unavailable or conflicts with the
-required adapter, mark that validation unverified instead of substituting settings. Do not repeat unrelated cases.
-As the set grows, include at least one case where the correct behavior is minimal or no change at
-all. An overaggressive skill rewrites acceptable input and fails this case.
-Share them for confirmation when user judgment is needed; if the user has already authorized execution and the expected behavior is clear, proceed and report the chosen cases.
-
-Save cases to `evals/evals.json` when filesystem access is available:
-
-```json
-{
-  "skill_name": "example-skill",
-  "evals": [
-    {
-      "id": 1,
-      "prompt": "A realistic user task",
-      "expected_output": "A concise description of success",
-      "files": []
-    }
-  ]
-}
-```
-
-Read `references/schemas.md` when assertions or benchmark artifacts are needed.
+Before writing test cases, read `references/test-cases.md`.
 
 ## Running and evaluating test cases
 
@@ -448,7 +376,7 @@ When file-based feedback is available, read `feedback.json`. Check its `status` 
 5. When multiple runs repeat a contextual judgment, improve the skill's decision procedure and examples instead of converting the judgment into a script.
 6. Keep portable behavior in the core and isolate host-specific mechanics in adapters.
    For a multi-host skill, decide where a fix belongs with the failure-attribution rule in
-   "Multiple target hosts".
+   `references/multiple-hosts.md`.
 
 After revising behavior, rerun the affected cases in a new iteration.
 Compare against the original or previous version according to the user's decision.

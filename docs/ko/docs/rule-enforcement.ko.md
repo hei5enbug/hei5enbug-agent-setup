@@ -24,6 +24,8 @@
 | `tests/test_subtest_parameters.py`, `conftest.py` | `subTest` 키워드 값은 pytest-xdist가 컨트롤러로 보낼 수 있는 단순한 값이므로, 직렬 실행이 통과하면 `python3 -m pytest -n auto`도 통과한다. | 이 문서 |
 | `tests/test_rule_enforcement.py` | 이 표가 모든 테스트 파일을 적는다. | 이 문서 |
 | `tests/test_file_size_limit.py` | `scripts/`와 `skills/*/scripts/` 아래 Python 파일은 800줄 이하로 유지한다. | 이 파일 (소유자 규칙: 파일당 800줄 이하) |
+| `tests/test_skill_description_length.py` | 스킬 설명이 700자를 넘으면 그 스킬 이름과 함께 실패한다. | `AGENTS.md` (항상 로드하는 표면) |
+| `tests/test_skill_conditional_references.py` | 항상 읽는 스킬 본문에서 조건부 참조로 옮긴 구간은 각각 제목과 제목으로 시작하는 본문을 갖고, 떠난 파일에 입구 줄이 정확히 하나 있으며, 모든 실행에 필요한 구간은 제자리에 남는다. | `AGENTS.md` (항상 로드하는 표면) |
 
 ## 세션 지침과 위임
 
@@ -113,6 +115,7 @@
 | `skills/skill-builder/tests/test_implementation_worker_scope.py`, `skills/skill-builder/tests/test_model_runner.py` | 평가 모델 어댑터와 실행기는 범위와 프로세스 계약을 지킨다. | `skills/skill-builder/references/execution-methods.md` |
 | `skills/skill-builder/tests/test_package_skill.py`, `skills/skill-builder/tests/test_viewer.py` | 패키징은 파일 경계를 지키고, 평가 뷰어는 HTML을 이스케이프하며 피드백을 저장한다. | `skills/skill-builder/SKILL.md` |
 | `skills/session-retro/tests/test_list_sessions.py`, `skills/session-retro/tests/test_condense_records.py`, `skills/session-retro/tests/test_skill_surface.py` | 세션 목록은 하루·시간 범위 경계, 모든 폴더 목록, 호스트 필터, 출력 형식, 오류 처리를 지키고, 기록 압축은 모든 사용자 입력과 오류를 원래 줄 번호와 함께 길이 제한 안에서 남기며, 스킬은 압축 절차를 참조 파일에 둔다. | `skills/session-retro/SKILL.md`, `skills/session-retro/references/condensing.md` |
+| `skills/session-retro/tests/test_phase_placement.py` | 세션 목록 단계는 메인 세션이 맡고 근거 수집만 `investigation`이 맡으며, 목록 스크립트가 실패하면 작업자를 시작하기 전에 실행을 멈춘다. | `skills/session-retro/SKILL.md` |
 | `skills/document-to-confluence/tests/test_column_widths.py`, `skills/document-to-confluence/tests/test_image_size.py`, `skills/document-to-confluence/tests/test_text_parity.py`, `skills/document-to-confluence/tests/test_validate_body.py` | 변환한 페이지는 열 너비, 이미지 크기, 텍스트 일치를 지키고 로컬 경로를 담지 않는다. | `skills/document-to-confluence/SKILL.md` |
 | `skills/document-to-confluence/tests/test_render_diagrams.mjs` | 다이어그램 캡처는 유효하고 겹치지 않는 파일 이름을 쓰고, 요청이 없으면 브라우저 샌드박스를 켜 두며, 항상 브라우저를 닫는다. | `skills/document-to-confluence/references/diagrams.md` (Naming and browser flags) |
 | `skills/document-to-confluence/tests/test_storage_body.py`, `skills/document-to-confluence/tests/test_comment_markers.py` | 인라인 댓글이 있는 페이지는 목차 매크로, 캡션이 있는 이미지, 열 너비, 빈 문단, 단일 줄바꿈, 페이지 내부 링크를 Confluence가 저장하는 형태로 유지한 채 storage 형식으로 저장한다. 매핑되지 않은 구문이 있으면 변환을 멈추며, 모든 댓글 마커는 매크로 매개변수 밖의 원래 위치에 복원하거나 추측하지 않고 보고하고, 저장 뒤에 확인한다. | `skills/document-to-confluence/references/confluence-body.md` (Inline comment markers) |
@@ -121,6 +124,8 @@
 | `skills/orca-plugin-refresh/tests/test_refresh_claude_update.py` | 갱신은 계획 전에 `claude update`를 한 번 실행하고, `DISABLE_UPDATES`가 업데이트를 끄거나 `claude`가 없으면 건너뛰며, 전후 릴리스를 보고해 이전 릴리스의 세션을 오래된 것으로 보고, 실패한 업데이트는 플러그인 결과를 바꾸지 않는 경고로 보고한다. | `skills/orca-plugin-refresh/SKILL.md` |
 | `skills/orca-plugin-refresh/tests/test_refresh_resume.py` | 갱신은 플러그인 로드 오류가 있는 reload를 실패로 보고한다. 세션 종료와 재개는 승인된 유휴 세션에 대한 `resume` 또는 모든 재개 검사를 통과한 이전 Claude Code 릴리스의 유휴 세션에 대한 `apply`로만 하며, 늦어진 종료로 프로세스가 끝나면 재개 명령줄을 보낸다. | `skills/orca-plugin-refresh/SKILL.md` |
 | `skills/orca-plugin-refresh/tests/test_refresh_mail_pending.py` | 갱신은 Orca가 세션의 터미널 앞으로 읽지 않은 오케스트레이션 메일을 갖고 있거나 받은 메일함을 읽을 수 없는 동안 확인용 문자를 입력하지 않고 명령도 보내지 않으며, 메일이 읽힌 뒤에 진행한다. | `skills/orca-plugin-refresh/SKILL.md` |
+| `skills/orca-plugin-refresh/tests/test_refresh_reload_background.py` | 갱신은 끝난 턴이 백그라운드 작업만 기다리는 Claude Code 세션에 남은 동작이 reload뿐일 때 `/reload-plugins`를 보내고, 압축이 아직 필요하면 아무것도 보내지 않는다. reload는 넘긴 뒤 기록에 성공한 reload가 있거나 표식이 source `startup`이나 `resume`으로 다시 쓰일 때까지 남으며, 압축이 다시 쓴 표식은 이를 끝내지 못한다. | `skills/orca-plugin-refresh/SKILL.md`, `skills/orca-plugin-refresh/references/manual-finish.md` |
+| `skills/orca-plugin-refresh/tests/test_refresh_combined.py` | `refresh`는 업데이트(또는 apply-installed) 뒤 그 run id로 `apply`와 `orphans`를 이어 실행하고, 모든 호스트가 실패하면 업데이트 뒤에서 멈추며, `apply`가 실패해도 `orphans`를 실행하고, `SKILL.md` 1단계는 `refresh`를 이름으로 부르며 `apply`나 `orphans`를 손으로 실행하는 단계가 없다. | `skills/orca-plugin-refresh/SKILL.md` |
 | `skills/orca-plugin-refresh/tests/test_refresh_probe_host_manual.py` | 갱신은 자신이 입력한 확인용 문자를 지우거나 그 정확한 위치를 보고하고, 화면만으로 판단할 수 없으면 프로세스로 Claude Code 세션을 식별하며, 에이전트가 수동으로 완료한 작업을 `record-manual`로 기록한다. | `skills/orca-plugin-refresh/SKILL.md` |
 | `skills/orca-plugin-refresh/tests/test_refresh_handoff_compact.py` | 갱신은 인계 뒤에도 transcript 끝부분으로 세션의 유휴 여부를 판단하고, 메시지가 너무 적어 거절된 compact는 안내와 함께 완료로 보고한다. | `skills/orca-plugin-refresh/SKILL.md` |
 | `skills/orca-plugin-refresh/tests/test_refresh_compact_dialog.py` | 갱신은 /compact 에이전트 보기 대화상자에서 실행 선택지만 확인하고, 다른 열린 대화상자에는 입력하지 않는다. | `skills/orca-plugin-refresh/SKILL.md` |
@@ -129,6 +134,7 @@
 | `skills/orca-plugin-refresh/tests/test_refresh_review_fixes.py` | 갱신은 `/exit` 직전에 준비 상태를 다시 확인하고, 읽을 수 없는 프로세스 상태를 종료로 보지 않으며, 열린 /compact 대화상자에 제한 시간을 두고, `closed`를 도우미 결과를 덮어쓰지 않고 합쳐 저장하며, 넘겨받은 항목마다 compact 모드를 지키고, 재실행 때 빈 인자를 보존한다. | `skills/orca-plugin-refresh/SKILL.md` |
 | `skills/local-data-cleanup/tests/test_survey_kinds.py`, `skills/local-data-cleanup/tests/test_survey_checks.py`, `skills/local-data-cleanup/tests/test_merge_delete.py` | 조사는 읽기 전용으로 남고 안전하지 않은 후보를 보고 전용이나 보호 항목으로 바꾸며, 삭제는 두 판정이 모두 허용하고 사용자가 고른 항목만 지운다. | `skills/local-data-cleanup/SKILL.md` |
 | `skills/session-triage/tests/test_session_overview.py` | 세션 개요는 Orca 조회 세 개를 각각 한 번만 실행하고, pane 키로 세션에 터미널 핸들과 메모리를 연결하며, 현재 세션을 표시하고, 연결되지 않은 값은 경고와 함께 null로 보고하고, 필수 조회가 실패하면 종료 코드 2로 끝낸다. | `skills/session-triage/SKILL.md` |
+| `skills/session-triage/tests/test_cleanup_checks.py` | 정리 검사 스크립트는 worktree의 검사마다 읽은 값과 함께 `pass`, `fail`, `unreadable`을 보고하고, 그에 따라 종료 코드 0, 1, 3을 내며, squash 병합은 참고 정보로만 다루고, `SKILL.md`는 여섯 명령을 풀어쓰지 않고 이 스크립트를 두 번 호출한다. | `skills/session-triage/SKILL.md` |
 | `skills/mistake-enforcer/tests/test_rule_misses.py` | 규칙 누락 점검은 기간 안의 메인 세션 기록만 대상으로 훅 알림, 중지 피드백, 거부, 사용자 교정과 최종 보고의 미완료 항목을 규칙별로 집계하고, 어떤 규칙에도 연결되지 않은 훅 메시지를 나열한다. | `skills/mistake-enforcer/references/rule-audit.md` |
 | `skills/suggest-commit/tests/test_commit_context.py` | 커밋 스크립트는 문맥 확인 결과를 JSON으로 출력하고, 분석한 범위만 스테이징하며, 우회, amend, 빈 커밋, 서명, 트레일러, 전체 스테이징 옵션 없이 `git commit -m`을 한 번만 실행하고, 비밀 파일처럼 보이는 파일은 빼고 목록으로 알리며, 변경 없음, 진행 중인 리베이스, 해결하지 않은 충돌, 지정한 경로 밖의 스테이징 변경, 잘못된 제목에서는 쓰기 전에 멈춘다. 커밋을 거절하는 훅이 있어도 스테이징은 그대로 두고 다시 시도하지 않으며, `HEAD`가 없는 저장소에서도 동작한다. | `skills/suggest-commit/SKILL.md` (Commit Mode) |
 | `skills/skill-issue-creator/tests/test_find_tracker.py` | 트래커 탐색은 플러그인 루트를 찾아 `issue-target.json`을 검증하고, 선언이 없거나 잘못되면 트래커를 추측하지 않고 그 상태를 보고한다. | `skills/skill-issue-creator/SKILL.md` |
@@ -156,6 +162,7 @@
 | `tests/test_e2e_eval_p3_tooling.py` | 하네스는 `gpt-6.2-sol`과 `gpt-6-luna`를 장문맥 요율까지 정가로 계산하고, 둘을 모델 상한 안에 두며, 작업이 `PATH` 앞에 가짜 `codex`를 두기 전에 `codex`를 절대 경로로 확정한다. | `evals/e2e/README.md` (모델 상한) |
 | `tests/test_e2e_eval_measure_lock.py` | 실제 `cli.py run`은 기계 전체 `measure.lock` 하나를 쥐며, 두 번째 실행은 점유자의 pid와 명령을 알리는 별도 종료 코드로 곧바로 끝나고, 잠금은 종료와 충돌 때 풀리며, `--wait-lock`은 기다리고, 드라이런은 잠금을 무시한다. | `evals/e2e/README.md` (측정 잠금) |
 | `tests/test_text_flows_pages.py` | 텍스트 흐름 비교 페이지는 흐름마다 중립 라벨을 붙이고, 키를 별도 파일에 두며, 고정 버전 렌더러로 글마다 마크다운을 렌더링하고 실패하면 일반 텍스트로 대체하며, 실행마다 형식 검사와 비용을 요약한다. | `evals/text-flows/README.md` |
+| `tests/test_e2e_eval_refresh_reload.py` | T81 작업은 가짜 Orca 뒤에 끝난 차례가 백그라운드 작업만 기다리는 Claude Code 세션과 유휴 Codex 세션을 심어 두고, 그 채점기는 첫 세션에만 reload를 보내는 실제 새로고침 스크립트 실행을 통과시키며, 아무것도 보내지 않고 그 세션을 대기 중이라고 보고하거나, reload보다 더 보내거나, 다른 세션을 건드린 실행은 실패시킨다. | `evals/e2e/README.md` (Golden tasks) |
 | `tests/test_e2e_eval_codex_host.py` | Codex 실행은 자기 `CODEX_HOME`에서 내보낸 플러그인 리비전만 불러오고, 사용자 로그인은 읽지 않고 링크만 하며, 표준 입력을 기다리지 않고, 모델·effort·시간·비용을 기록한다. 어떤 역할이든 `claude-opus-5-5`나 `gpt-6.1-sol`보다 강한 모델을 시작하는 캠페인은 거부하고, 그런 모델을 쓴 실행은 상한 위반으로 표시한다. | `evals/e2e/README.md` (Hosts) |
 | `tests/test_e2e_eval_verdict.py` | 변경은 변경 전에 통과한 사례가 변경 후 실패하지 않고, 호스트별 시간·비용 격차가 1회 먼저·5회 규칙으로 늘지 않을 때만 두 호스트 비교를 통과한다. 개선 주장은 두 호스트에서 번갈아 돈 5회로만 받아들인다. | `evals/e2e/README.md` (Comparison rule) |
 | `tests/test_e2e_eval_records.py` | 측정 기록은 실행마다 호스트, 역할별 모델과 effort, 검사, 시간, 비용, 판정을 담고, 로컬 절대 경로나 상한을 넘는 모델은 담지 않는다. | `evals/e2e/README.md` (Records) |

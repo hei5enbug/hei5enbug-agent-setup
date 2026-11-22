@@ -8,6 +8,7 @@
 
 ## 나열
 
+`refresh`가 이미 `orphans`를 실행했으며 그 `orphans` 절이 이 목록이다. 다시 나열하려면
 `python3 <script> orphans --run-id <run_id> --json`을 실행한다. 고아 Claude Code 또는 Codex 터미널을 모두
 `host`, `worktree`, `idle_seconds`(transcript 또는 rollout이 마지막으로 기록된 뒤 지난 시간)와 함께 나열한다.
 아무것도 닫지 않는다. Claude Code에서는 회색 프롬프트 제안과 입력한 글을 구분하려고 글자 하나를 입력했다가 지울 수 있다.

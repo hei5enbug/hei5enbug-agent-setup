@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import shutil
 import signal
 import stat
 import subprocess
@@ -22,7 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "evals/e2e"))
 
 from harness import (  # noqa: E402
-    approval_mcp, campaign, cli, codex_calls, collect, command, environment, inputs, matrix, metrics, plugin_export, pricing, process,
+    approval_mcp, campaign, cli, codex_calls, codex_host, collect, command, environment, inputs, matrix, metrics, plugin_export, pricing, process,
     rubric, runner, summarize, transcript, usage,
 )
 from harness.config import HarnessConfig  # noqa: E402
@@ -1220,7 +1221,8 @@ class ProcessAndRunTest(unittest.TestCase):
         patch.start()
         self.addCleanup(patch.stop)
 
-    def materialize(self, task, fixtures_root, tasks_root, dest):
+    def materialize(self, task, fixtures_root, tasks_root, dest, plugin_dir=None):
+        self.plugin_dirs = [*getattr(self, "plugin_dirs", []), plugin_dir]
         Path(dest).mkdir(parents=True)
         return "base123"
 
@@ -1347,6 +1349,18 @@ class ProcessAndRunTest(unittest.TestCase):
         self.assertEqual((run["status"], run["timed_out"]), ("timed_out", True))
         data = json.loads((self.spec.result_dir / "metrics.json").read_text(encoding="utf-8"))
         self.assertTrue(data["timed_out"])
+
+    def test_작업_저장소를_만들_때_내보낸_플러그인_폴더를_설정_스크립트에_넘긴다(self):
+        """실행은 변형의 내보낸 플러그인 폴더를 materialize_fixture에 넘긴다.
+        잡는 회귀: 실행기가 플러그인 폴더를 넘기지 않아 설정 스크립트가 시험 중인 코드 대신 하네스 체크아웃을 쓰는 문제."""
+        # given
+        cfg = HarnessConfig(**{**self.cfg.__dict__, "tasks_root": self.cfg.tasks_root})
+
+        # when
+        runner.execute_run(self.spec, {**self.task, "limits": {"wall_seconds": 30, "max_budget_usd": 2}}, self.variant, self.plugin, cfg, {})
+
+        # then
+        self.assertEqual(self.plugin_dirs, ["/tmp/p"])
 
     def test_정상_실행은_complete이고_자식_환경에는_ORCA_변수가_없다(self):
         """실행은 complete로 끝나고, 가짜 claude가 본 환경 변수 이름에 ORCA_*가 없으며 필수 플래그가 전달된다."""
@@ -2850,6 +2864,49 @@ class ClaudeSpendTest(unittest.TestCase):
             self.assertIn("1.500 / 1.500 (n=1)", text)
             self.assertIn("| 1.500 | 0.000 | 1.500 |", text)
             self.assertIn("| T01 | 1 | 0 | 0 | no | +2.500 |", text)
+
+
+class HostBinaryResolutionTest(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.real, self.fake = self.root / "real-bin", self.root / "fake-bin"
+        for folder in (self.real, self.fake):
+            folder.mkdir()
+            for name in ("claude", "codex"):
+                (folder / name).write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                (folder / name).chmod(0o755)
+        self.task = {"limits": {"wall_seconds": 60, "max_budget_usd": 7}, "env": {"PATH": f"{self.fake}:{{PATH}}"}}
+        self.variant = command.validate_variant({"name": "baseline", "ref": "HEAD", "settings": {}, "env": {}, "extra_args": []})
+
+    def started(self, argv: list[str]) -> str | None:
+        """The file that starting argv[0] runs once the task's environment is applied to the harness's own."""
+        task_path = command.task_environment(self.task, Path("/tmp/r"), Path("/tmp/w"))["PATH"]
+        return shutil.which(argv[0], path=task_path)
+
+    def test_과제_PATH가_가짜_명령을_앞에_두어도_두_호스트는_미리_찾은_절대_경로로_시작한다(self):
+        """given 과제 환경이 가짜 claude와 codex 폴더를 PATH 앞에 두면 when 하네스 환경에서 먼저 경로를 찾은 설정으로 명령을 만들 때 then 두 호스트 모두 진짜 파일을 시작한다.
+        잡는 회귀: 호스트 CLI를 이름만으로 시작해 과제 PATH의 가짜 claude나 codex가 대신 실행되어 실행이 비어 있는 스트림으로 infra_failed가 되는 문제."""
+        # given
+        with mock.patch.dict(os.environ, {"PATH": str(self.real)}):
+            cfg = command.resolve_host_binaries(HarnessConfig(), ["claude", "codex"])
+            self.task["env"]["PATH"] = f"{self.fake}:{os.environ['PATH']}"
+
+            # when
+            claude = command.build_command(cfg, self.task, self.variant, "prompt", "/tmp/p", Path("/tmp/run"))
+            codex = codex_host.build_codex_command(cfg, self.variant, "prompt", Path("/tmp/repo"))
+
+            # then
+            self.assertEqual((self.started(claude), self.started(codex)), (str(self.real / "claude"), str(self.real / "codex")))
+
+    def test_찾지_못한_호스트_명령은_모호한_실패_대신_설정_오류로_멈춘다(self):
+        """given PATH에 codex가 없을 때 when codex 호스트를 풀면 then ConfigError가 어느 명령이 없는지 알려 준다."""
+        # given
+        with mock.patch.dict(os.environ, {"PATH": str(self.root / "empty")}):
+            # when / then
+            with self.assertRaisesRegex(command.ConfigError, "codex"):
+                command.resolve_host_binaries(HarnessConfig(), ["codex"])
 
 
 class PilotCheckTest(unittest.TestCase):

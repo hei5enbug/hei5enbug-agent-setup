@@ -94,9 +94,18 @@ def read_marker(handle: str) -> dict | None:
     return payload if isinstance(payload, dict) else None
 
 
-def host_record(entry: dict) -> str | None:
-    """`idle` or `busy` from the host's own turn record named by the session marker; None when it cannot decide."""
-    return record_state(entry["host"], (read_marker(entry["handle"]) or {}).get("transcript_path"))
+def host_record(entry: dict, actions: list[str] | None = None) -> str | None:
+    """`idle` or `busy` from the host's own turn record named by the session marker; None when it cannot decide.
+
+    A Claude Code turn that ended while a background task, subagent, or wakeup still owes a notification counts as `idle`
+    only when `actions` (default: the entry's remaining ones) is just the reload, which keeps the process and its tasks;
+    any other action, or none, leaves it undecided.
+    """
+    verdict = record_state(entry["host"], (read_marker(entry["handle"]) or {}).get("transcript_path"), detailed=True)
+    if verdict != "owing":
+        return verdict
+    remaining = entry.get("actions") if actions is None else actions
+    return "idle" if entry["host"] == "claude" and remaining == ["reload"] else None
 
 
 def compact_reason(host: str, marker: dict | None, target: dict, mode: str) -> str | None:

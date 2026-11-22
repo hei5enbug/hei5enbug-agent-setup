@@ -21,7 +21,8 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
    날짜로 커밋한 뒤, 작업에 설정 스크립트가 있으면 실행한다. 설정 스크립트는 저장소 옆의
    `<run root>/<campaign>/work/<run id>/`에 상태를 더 만들 수 있고, 작업의 `env` 맵은 에이전트 환경 값을 준다. 그 값에서
    `{repo}`, `{work}`, `{PATH}`는 각각 저장소, 그 폴더, 현재 `PATH`를 뜻한다. 변형의 `env`와 설정의 `extra_env`가 여전히
-   이 값보다 우선한다.
+   이 값보다 우선한다. 설정 스크립트는 시험 중인 변형의 내보낸 플러그인 폴더를 환경 변수 `E2E_PLUGIN_DIR`에서 찾으므로,
+   설치된 플러그인 사본을 심어 두는 작업은 하네스 체크아웃이 아니라 시험 중인 코드로 그 사본을 만든다.
 3. 그 폴더에서 에이전트를 시작한다.
 
    ```text
@@ -307,7 +308,10 @@ UI 작업(T82~T84, T112)은 `harness/render.py`로 `demo-app` 픽스처의 화�
 프롬프트는 실제 사용자처럼 한국어로 쓴다. 픽스처는 실제 저장소의 관례를 갖춘 가상 저장소다. README, 한국어 미러
 규칙이 있는 `AGENTS.md`, 테스트, 한국어 미러가 있다. T21은 `ORCA_TERMINAL_HANDLE`을 설정하고 `tasks/setup/fake_orca.py`가
 만든 가짜 `orca`를 `PATH`의 맨 앞에 두고 실행하며, 상태는 저장소 옆의 `orca-state/`에 두고, 테스트는
-`tests/test_e2e_eval_orca_cleanup.py`에 있다.
+`tests/test_e2e_eval_orca_cleanup.py`에 있다. T81은 `tasks/setup/T81.py`가 만든 가짜 `orca`, `claude`, `codex`를 `PATH`의 맨
+앞에 두고, 설치된 플러그인 사본과 심어 둔 세션 둘과 함께 실행하며, 상태는 저장소 옆의 `orca-state/`와 `plugin-state/`에
+두고, 테스트는 `tests/test_e2e_eval_refresh_reload.py`에 있다. 가짜 명령은 실제 세션도, 분리된 도우미의 긴 대기도 시작하지
+못하므로 이 작업은 호출 로그와 최종 답변이 보여 주는 것만 다룬다.
 
 | 작업 | 픽스처 | 확인하는 경로 | 요청 |
 |---|---|---|---|
@@ -332,6 +336,7 @@ UI 작업(T82~T84, T112)은 `harness/render.py`로 `demo-app` 픽스처의 화�
 | T19 | ops-notes | 공유 문서 | 1,500자 한도에 1,600자쯤 되는 위키 초안 |
 | T20 | notes-cli | 최종 보고 | 테스트를 더한 작은 변경 후 보고 |
 | T21 | notes-cli | 작업 종료 시 Orca 정리 | 티켓의 설정 한 줄 변경, 가짜 `orca`와 저장소 세 곳의 Git worktree를 심어 둔 상태 |
+| T81 | notes-cli | Orca 플러그인 새로고침 | 설치된 플러그인 버전을 실행 중인 세션들에 반영, 그중 하나는 백그라운드 작업만 기다리며, 가짜 `orca`, `claude`, `codex` 사용 |
 | T78 | commit-demo | 커밋 스킬, 스테이징만 범위 | 한국어 제목 기록, 스테이징한 변경 하나와 스테이징하지 않은 수정, 추적되지 않는 `.env` |
 | T79 | commit-demo | 커밋 스킬, 필수 식별자 | 티켓 키를 요구하는 커밋 규칙과 키를 말하지 않은 요청 |
 | T82 | demo-app | UI 라우팅, 완전한 명세 | 설정 패널의 이름 붙은 줄 네 곳 수정, 구현 워커로 라우팅 |

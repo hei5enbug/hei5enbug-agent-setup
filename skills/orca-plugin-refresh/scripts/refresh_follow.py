@@ -154,6 +154,32 @@ def compact_owed(entry: dict, marker: dict | None) -> bool:
     return not (marker and marker.get("source") in ("compact", "clear") and written >= entry.get("deferred_at", float("inf")))
 
 
+NEW_PROCESS_SOURCES = ("startup", "resume")
+
+
+def after_handoff_actions(entry: dict, marker: dict | None, target: dict) -> list[str]:
+    """The entry's actions minus those a marker rewritten after the handoff settles. A reload is settled only by a new
+    process (source `startup` or `resume`), whatever digest or root the marker holds; every other action is settled by a
+    marker that passes the automatic compaction check and is not owed a compaction after a resume."""
+    written = parse_time((marker or {}).get("written_at")) or 0.0
+    if not marker or written < entry.get("deferred_at", float("inf")):
+        return list(entry["actions"])
+    new_process = entry["host"] == "claude" and marker.get("source") in NEW_PROCESS_SOURCES
+    settled = compact_reason(entry["host"], marker, target, "auto") is None and not compact_owed(entry, marker)
+    return [action for action in entry["actions"] if not (new_process if action == "reload" else settled)]
+
+
+def current_actions(entry: dict, state: dict) -> list[str]:
+    """The actions the entry still needs once `still_needed` would apply its rules, without changing the entry."""
+    target = state["hosts"][entry["host"]]
+    marker = driver.read_marker(entry["handle"])
+    actions = after_handoff_actions(entry, marker, target)
+    mode = entry.get("compact_mode") or state.get("compact_mode", "auto")
+    if "compact" in actions and not compact_owed(entry, marker) and compact_reason(entry["host"], marker, target, mode) is None:
+        actions.remove("compact")
+    return actions
+
+
 def still_needed(entry: dict, state: dict, cache: dict[str, tuple[float, bool]]) -> None:
     """Before a deferred send, stop on a changed install and drop actions the session no longer needs."""
     host = entry["host"]
@@ -161,15 +187,7 @@ def still_needed(entry: dict, state: dict, cache: dict[str, tuple[float, bool]])
     if not install_current(host, target, cache):
         entry.update(status="skipped", detail="install_changed", actions=[])
         return
-    marker = driver.read_marker(entry["handle"])
-    written = parse_time((marker or {}).get("written_at")) or 0.0
-    owed = compact_owed(entry, marker)
-    if marker and written >= entry.get("deferred_at", float("inf")) and compact_reason(host, marker, target, "auto") is None and not owed:
-        entry.update(status="done", detail="already_current", actions=[])
-        return
-    if ("compact" in entry["actions"] and not owed
-            and compact_reason(host, marker, target, entry.get("compact_mode") or state.get("compact_mode", "auto")) is None):
-        entry["actions"].remove("compact")
+    entry["actions"] = current_actions(entry, state)
     if not entry["actions"]:
         entry.update(status="done", detail="already_current")
 
@@ -193,10 +211,7 @@ def applied_by_session(entry: dict, state: dict, cache: dict[str, tuple[float, b
     if host == "claude" and "reload" in entry["actions"] and reloaded_since_handoff(entry):
         entry["actions"].remove("reload")
         entry["reloaded_by_session"] = True
-    marker = driver.read_marker(entry["handle"])
-    written = parse_time((marker or {}).get("written_at")) or 0.0
-    if marker and written >= entry.get("deferred_at", float("inf")) and compact_reason(host, marker, target, "auto") is None:
-        entry["actions"] = [action for action in entry["actions"] if action == "compact" and compact_owed(entry, marker)]
+    entry["actions"] = after_handoff_actions(entry, driver.read_marker(entry["handle"]), target)
     if not entry["actions"]:
         waiters.cancel(entry["handle"])
         entry.update(status="done", detail="applied_by_session" if entry.get("reloaded_by_session") else "already_current")
@@ -268,7 +283,8 @@ def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[flo
                         continue
                     handle = entry["handle"]
                     if handle not in waiters.failed and entry.get("detail") in WAITING_DETAILS:
-                        record = host_record(entry)
+                        needed = current_actions(entry, state)
+                        record = host_record(entry, needed)
                         idle = waiters.take(handle)
                         if record == "busy" or (record is None and idle is None):
                             waiters.start(handle, entry["deadline"])
@@ -277,7 +293,7 @@ def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[flo
                         if record is None and not idle:
                             continue
                         sleep(IDLE_CONFIRM_SECONDS)
-                        if record == "idle" and host_record(entry) != "idle":
+                        if record == "idle" and host_record(entry, needed) != "idle":
                             continue
                     still_needed(entry, state, cache)
                     if entry["status"] != "pending":
