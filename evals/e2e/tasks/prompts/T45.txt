@@ -1,0 +1,8 @@
+shop-desk에 `top-customers [--limit N]` 명령을 추가해줘.
+
+- 순금액(소계에서 할인을 뺀 금액)의 합이 큰 고객부터 한 줄에 한 명씩 `customer <id>: <금액>`으로 출력해. 금액은 `12.34` 형식이야.
+- `--limit N`이 있으면 N명까지만 출력하고, 없으면 3명이야.
+- 기존 `shop.reports.customers_by_spend`를 쓸 수 있으면 써줘.
+- 테스트는 tests/test_cli.py에 추가해줘.
+
+README에도 반영해줘.

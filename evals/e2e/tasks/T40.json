@@ -1,0 +1,66 @@
+{
+  "id": "T40",
+  "title": "Pickup quantity limit whose own tests must catch seeded faulty copies",
+  "category": "feature",
+  "path": "boundary and failure-path tests: the agent's tests run against a reference and four faulty copies",
+  "fixture": "parcel-desk",
+  "prompt_file": "prompts/T40.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 10
+  },
+  "hidden_tests": {
+    "source": "hidden/T40",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-limit",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_pickup_limit.py"
+      ]
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "own-tests-kill-faults",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "own_tests_kill_faults"
+    },
+    {
+      "id": "new-tests",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "new_tests"
+    }
+  ],
+  "rule_test": {
+    "item": "boundary-coverage",
+    "pass_checks": [
+      "hidden-limit",
+      "regressions",
+      "own-tests-kill-faults"
+    ]
+  },
+  "rubric": null
+}

@@ -1,0 +1,77 @@
+{
+  "id": "T51",
+  "title": "Rate cache that repeats the rate lookup's own cache",
+  "category": "agreement",
+  "path": "one question that names the existing mechanism; no specification approval",
+  "fixture": "tally-desk",
+  "prompt_file": "prompts/T51.txt",
+  "limits": {
+    "wall_seconds": 2400,
+    "max_budget_usd": 20
+  },
+  "hidden_tests": {
+    "source": "hidden/T51",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-rate-reads",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_rate_reads.py"
+      ]
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "one-question-names-mechanism",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "one_question"
+    },
+    {
+      "id": "no-approval-request",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "no_approval_request"
+    },
+    {
+      "id": "reuses-existing-cache",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "reuses_cache"
+    }
+  ],
+  "user": {
+    "sheet": "answers/T51.json"
+  },
+  "agreement": {
+    "pass_checks": [
+      "hidden-rate-reads",
+      "regressions",
+      "one-question-names-mechanism",
+      "no-approval-request",
+      "reuses-existing-cache"
+    ]
+  },
+  "rubric": null
+}

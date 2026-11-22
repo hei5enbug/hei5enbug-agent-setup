@@ -1,0 +1,6 @@
+[
+  {"id": "boundary-rejects-limit", "file": "parcel/pickup.py", "old": "parcel_count > PICKUP_LIMIT:", "new": "parcel_count >= PICKUP_LIMIT:"},
+  {"id": "boundary-allows-one-more", "file": "parcel/pickup.py", "old": "parcel_count > PICKUP_LIMIT:", "new": "parcel_count > PICKUP_LIMIT + 1:"},
+  {"id": "error-wrong-class", "file": "parcel/pickup.py", "old": "raise PickupLimitError(", "new": "raise ValidationError("},
+  {"id": "error-wrong-count", "file": "parcel/pickup.py", "old": "got {parcel_count}\")", "new": "got {PICKUP_LIMIT}\")"}
+]

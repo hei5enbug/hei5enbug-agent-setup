@@ -1,0 +1,66 @@
+{
+  "id": "T48",
+  "title": "Date formatting that depends on the database engine",
+  "category": "bugfix",
+  "path": "real environment: the engine check must run after the last edit of the formatting code",
+  "fixture": "shop-desk",
+  "prompt_file": "prompts/T48.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 10
+  },
+  "hidden_tests": {
+    "source": "hidden/T48",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-week-label",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_week_label.py"
+      ]
+    },
+    {
+      "id": "engine-check-after-edit",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "engine_check_after_edit"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "new-tests",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "new_tests"
+    }
+  ],
+  "code_rule": {
+    "rule": "real-environment",
+    "pass_checks": [
+      "hidden-week-label",
+      "engine-check-after-edit",
+      "regressions"
+    ]
+  },
+  "rubric": null
+}

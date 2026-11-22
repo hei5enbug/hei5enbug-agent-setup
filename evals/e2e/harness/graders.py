@@ -502,6 +502,20 @@ def check_review_before_report(ctx: GradeContext, spec: Mapping[str, Any]) -> Ch
         "reviews": [d.get("tool_use_id") for d in reviews]}
 
 
+def check_delegation_report(ctx: GradeContext, spec: Mapping[str, Any]) -> CheckResult:
+    """Report, never fail: a change over `over` files (default 2) with no completed implementation delegation is a skip."""
+    over = int(spec.get("over", 2))
+    changed = sorted(ctx.changes)
+    delegations = [d for d in ctx.view.get("delegations", []) if d.get("class") == "implementation"]
+    completed = [d.get("tool_use_id") for d in delegations if review_completed(d)]
+    skipped = len(changed) > over and not completed
+    detail = (f"{len(changed)} changed file(s), {len(completed)} completed implementation delegation(s)"
+              + ("; delegation skipped" if skipped else ""))
+    return True, detail, {"changed_files": changed, "changed_count": len(changed), "limit": over,
+                          "implementation_delegations": len(delegations), "completed_delegations": len(completed),
+                          "skipped": skipped}
+
+
 def load_custom(ctx: GradeContext, function: str) -> Callable[[Any], CheckResult]:
     path = ctx.tasks_root / "custom" / f"{ctx.task['id']}.py"
     module = types.ModuleType(f"e2e_custom_{ctx.task['id']}")
@@ -514,7 +528,10 @@ def check_custom(ctx: GradeContext, spec: Mapping[str, Any]) -> CheckResult:
     context = types.SimpleNamespace(repo=ctx.repo, base=ctx.base, view=ctx.view, task=ctx.task, work=ctx.work,
                                     changes=dict(ctx.changes), git=ctx.git, porcelain=ctx.porcelain,
                                     tasks_root=ctx.tasks_root, origin=ctx.origin, interrupt=ctx.interrupt,
-                                    review_model=ctx.review_model, render=ctx.render)
+                                    review_model=ctx.review_model, render=ctx.render,
+                                    suite_copy=ctx.suite_copy, execute_tests=ctx.execute_tests,
+                                    test_command=[sys.executable if part == "python3" else part
+                                                  for part in ctx.task.get("test_command") or []])
     ok, detail, data = function(context)
     return bool(ok), str(detail), dict(data or {})
 
@@ -527,7 +544,7 @@ CHECKS: dict[str, CheckFunction] = {
     "coverage": check_coverage, "transcript_absent": check_transcript_absent,
     "forbidden_commands": check_forbidden_commands, "committed_absent": check_committed_absent,
     "answer_contains": check_answer_contains, "review_before_report": check_review_before_report,
-    "custom": check_custom,
+    "delegation_report": check_delegation_report, "custom": check_custom,
 }
 
 

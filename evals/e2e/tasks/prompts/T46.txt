@@ -1,0 +1,1 @@
+`shop place 1 ab-100:2`가 `unknown SKU: ab-100`으로 실패한다는 보고가 들어왔어. 고쳐줘.

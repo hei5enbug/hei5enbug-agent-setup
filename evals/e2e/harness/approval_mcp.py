@@ -8,6 +8,9 @@ import sys
 import time
 from typing import Any
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import scripted_user  # noqa: E402
+
 TOOL_NAME = "approve"
 SERVER_INFO = {"name": "eval-approver", "version": "1.0.0"}
 DEFAULT_PROTOCOL = "2025-06-18"
@@ -62,6 +65,33 @@ def decision(
     return {"behavior": "allow", "updatedInput": tool_input if isinstance(tool_input, dict) else {}}
 
 
+def stream_events(path: str | None) -> list[dict[str, Any]]:
+    if not path:
+        return []
+    events = []
+    try:
+        with open(path, encoding="utf-8", errors="replace") as stream:
+            for line in stream:
+                try:
+                    item = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(item, dict):
+                    events.append(item)
+    except OSError:
+        pass
+    return events
+
+
+def user_decision(arguments: dict[str, Any], user: dict[str, Any], cwd: str | None) -> dict[str, Any]:
+    """Answer an `AskUserQuestion` call from the answer sheet; the text a request for approval is judged on is the assistant
+    text of the stream since the previous question."""
+    tool_use_id = arguments.get("tool_use_id")
+    specification = scripted_user.assistant_text_since_last_question(stream_events(user.get("stream")), tool_use_id)
+    return scripted_user.answer_tool_input(
+        user["sheet"], arguments.get("input") or {}, user.get("log"), specification or None, cwd, tool_use_id)
+
+
 def log_request(path: str | None, arguments: dict[str, Any], verdict: str) -> None:
     if not path:
         return
@@ -74,6 +104,7 @@ def log_request(path: str | None, arguments: dict[str, Any], verdict: str) -> No
 def handle(
     message: dict[str, Any], log_path: str | None, run_folder: str | None = None, cwd: str | None = None,
     read_roots: tuple[str, ...] = (),
+    user: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     method = message.get("method")
     if "id" not in message:
@@ -95,7 +126,8 @@ def handle(
         if params.get("name") != TOOL_NAME or not isinstance(arguments, dict):
             reply["error"] = {"code": -32602, "message": "unknown tool or arguments"}
         else:
-            verdict = decision(arguments, run_folder, cwd, read_roots)
+            asks = user is not None and arguments.get("tool_name") == scripted_user.QUESTION_TOOL
+            verdict = user_decision(arguments, user, cwd) if asks else decision(arguments, run_folder, cwd, read_roots)
             log_request(log_path, arguments, verdict["behavior"])
             reply["result"] = {"content": [{"type": "text", "text": json.dumps(verdict)}]}
     elif method == "ping":
@@ -110,6 +142,9 @@ def main() -> int:
     run_folder = os.environ.get("EVAL_RUN_FOLDER")
     cwd = os.environ.get("EVAL_RUN_CWD")
     read_roots = tuple(root for root in os.environ.get("EVAL_READ_ROOTS", "").split(os.pathsep) if root)
+    sheet_path = os.environ.get("EVAL_ANSWER_SHEET")
+    user = ({"sheet": scripted_user.load_sheet(sheet_path), "log": os.environ.get("EVAL_USER_LOG"),
+             "stream": os.environ.get("EVAL_STREAM")} if sheet_path else None)
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -118,7 +153,7 @@ def main() -> int:
             message = json.loads(line)
         except ValueError:
             continue
-        reply = handle(message, log_path, run_folder, cwd, read_roots) if isinstance(message, dict) else None
+        reply = handle(message, log_path, run_folder, cwd, read_roots, user) if isinstance(message, dict) else None
         if reply is not None:
             sys.stdout.write(json.dumps(reply) + "\n")
             sys.stdout.flush()

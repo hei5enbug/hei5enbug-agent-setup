@@ -57,6 +57,13 @@
       "weight": 1,
       "path": "docs/ko/README.ko.md",
       "pattern": "cancel_item|부분 취소"
+    },
+    {
+      "id": "delegation-report",
+      "kind": "delegation_report",
+      "required": false,
+      "weight": 0,
+      "over": 2
     }
   ],
   "constraints": [

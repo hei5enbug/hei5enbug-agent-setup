@@ -1,0 +1,92 @@
+{
+  "id": "T44",
+  "title": "A lookup function that returns a different type",
+  "category": "refactor",
+  "path": "callers and consumers: a second caller in another module and a file stored by the previous version",
+  "fixture": "shop-desk",
+  "prompt_file": "prompts/T44.txt",
+  "limits": {
+    "wall_seconds": 2400,
+    "max_budget_usd": 20
+  },
+  "hidden_tests": {
+    "source": "hidden/T44",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-customer",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_customer_card.py"
+      ]
+    },
+    {
+      "id": "hidden-callers",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_callers.py"
+      ]
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "new-tests",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "new_tests"
+    },
+    {
+      "id": "readme-updated",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "README.md",
+      "pattern": "(?i)email|이메일"
+    },
+    {
+      "id": "mirror-updated",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "docs/ko/README.ko.md",
+      "pattern": "(?i)email|이메일"
+    },
+    {
+      "id": "files-changed",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "files_changed"
+    }
+  ],
+  "code_rule": {
+    "rule": "callers-and-consumers",
+    "pass_checks": [
+      "hidden-customer",
+      "hidden-callers",
+      "regressions"
+    ]
+  },
+  "rubric": null
+}

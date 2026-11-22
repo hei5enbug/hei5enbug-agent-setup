@@ -77,6 +77,7 @@
   "constraints": [
     {
       "id": "korean-mirror",
+      "field": "constraints",
       "text": "Update the Korean mirror docs/ko/README.ko.md together with README.md",
       "keywords": [
         "ko.md",
@@ -93,6 +94,7 @@
     },
     {
       "id": "exact-api",
+      "field": "constraints",
       "text": "Use the exact names: ShippingPolicy, quote, Config.shipping_policy, create_order(..., shipping=)",
       "keywords": [
         "ShippingPolicy",
@@ -109,6 +111,7 @@
     },
     {
       "id": "new-tests",
+      "field": "constraints",
       "text": "Add tests for the new behavior under tests/",
       "keywords": [
         "test",
@@ -122,5 +125,23 @@
       ]
     }
   ],
+  "handoff": {
+    "pass_checks": [
+      "hidden-tests",
+      "new-tests",
+      "mirror-updated"
+    ]
+  },
+  "code_rule": {
+    "rule": null,
+    "pass_checks": [
+      "hidden-tests",
+      "regressions",
+      "new-tests",
+      "agent-tests",
+      "readme-shipping",
+      "mirror-updated"
+    ]
+  },
   "rubric": null
 }

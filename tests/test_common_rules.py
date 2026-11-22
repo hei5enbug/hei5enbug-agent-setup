@@ -41,6 +41,29 @@ class CommonRulesTest(unittest.TestCase):
         # When / Then
         self.assert_in_every_context(*phrases)
 
+    def test_명확한_요청은_요청만_하고_문서_규칙과_작업_준비_규칙이_후속_수정을_둘로_한정한다(self):
+        """코어는 대체한 문장을 두 호스트 문맥에서 빼고 더 짧게 쓰며, 후속 수정 규칙은 문서 지침과 작업 준비에 있다."""
+        # Given
+        replaced = "Do not add design, tests, implementation, or planning beyond the request."
+        sentence = "Add no design, tests, implementation, docs, or plans beyond the request."
+        documentation = " ".join((REPO_ROOT / "instructions/documentation.md").read_text(encoding="utf-8").split())
+        execution = (REPO_ROOT / "instructions/implementation-execution.md").read_text(encoding="utf-8")
+        preparation = " ".join(execution.split("## Task preparation", 1)[1].split("## Assignment fields", 1)[0].split())
+
+        # When
+        measured = (len(sentence.encode("utf-8")), len(replaced.encode("utf-8")))
+
+        # Then
+        self.assert_in_every_context(sentence)
+        for host, context in contexts().items():
+            with self.subTest(host=host):
+                self.assertNotIn(replaced, context)
+        self.assertLessEqual(*measured)
+        self.assertIn("existing text that the change made false needs correcting", documentation)
+        self.assertIn("a repository rule requires text for something the change adds", documentation)
+        self.assertIn("existing text that the change made false, and text that a repository rule requires", preparation)
+        self.assertIn("add no text about it", documentation)
+
     def test_일정이나_다음_실행을_기다리기_전에_지금_안전하게_확인할_방법을_먼저_찾는다(self):
         """세션 문맥은 기다리기 전에 직접 확인하고 묻기 참조를 읽게 하며, 참조는 지금 확인할 방법과 기다릴 때 밝힐 내용을 정한다."""
         # Given

@@ -59,6 +59,16 @@ def build_codex_command(cfg: HarnessConfig, variant: dict[str, Any], prompt: str
     ]
 
 
+def build_codex_resume(cfg: HarnessConfig, variant: dict[str, Any], session_id: str, reply: str) -> list[str]:
+    """The command that resumes a Codex session with a scripted user's reply. `exec resume` takes no `-s` or `-C`: the sandbox
+    is set with `-c` and the working folder is the process folder."""
+    return [
+        cfg.codex_bin, "exec", "resume", "--json", "-m", main_model(variant, HOST_CODEX), "-c",
+        f'model_reasoning_effort="{CODEX_EFFORT}"', "-c", 'sandbox_mode="danger-full-access"',
+        "--dangerously-bypass-hook-trust", session_id, reply,
+    ]
+
+
 def setup_commands(cfg: HarnessConfig, plugin_dir: str) -> list[list[str]]:
     return [
         [cfg.codex_bin, "plugin", "marketplace", "add", plugin_dir],

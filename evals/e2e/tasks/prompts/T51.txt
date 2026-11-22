@@ -1,0 +1,1 @@
+`tally cost TEAM`이 부를 때마다 data/rates.json을 다시 읽어서 느려. 요율을 한 시간 동안 보관하는 캐시를 새로 만들어서 `cost`에 붙여줘.

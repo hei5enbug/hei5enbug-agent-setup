@@ -1,0 +1,91 @@
+{
+  "id": "T45",
+  "title": "A command built on a function whose docstring promises sorted output",
+  "category": "feature",
+  "path": "evidence first: a docstring that the code does not keep, and a final report that names the function",
+  "fixture": "shop-desk",
+  "prompt_file": "prompts/T45.txt",
+  "limits": {
+    "wall_seconds": 2400,
+    "max_budget_usd": 20
+  },
+  "hidden_tests": {
+    "source": "hidden/T45",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-top-customers",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_top_customers.py"
+      ]
+    },
+    {
+      "id": "reported-docstring-gap",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 2,
+      "patterns": [
+        "customers_by_spend"
+      ]
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "new-tests",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "new_tests"
+    },
+    {
+      "id": "readme-updated",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "README.md",
+      "pattern": "top-customers"
+    },
+    {
+      "id": "mirror-updated",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "docs/ko/README.ko.md",
+      "pattern": "top-customers"
+    },
+    {
+      "id": "files-changed",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "files_changed"
+    }
+  ],
+  "code_rule": {
+    "rule": "evidence-first",
+    "pass_checks": [
+      "hidden-top-customers",
+      "reported-docstring-gap",
+      "regressions"
+    ]
+  },
+  "rubric": null
+}

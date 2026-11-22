@@ -1,0 +1,8 @@
+notes-cli에 메모 가져오기를 넣어줘. 규칙은 이래.
+
+- `memo import FILE` 명령을 추가해. FILE에 든 메모를 지금 저장소 끝에 붙여. 가져온 메모는 id를 새로 매기는데, 저장소의 현재 최대 id 다음부터 FILE에 있는 순서대로 1씩 늘려. title, body, tags, created_at은 그대로 둬. 성공하면 stdout에 "Imported N memos" 한 줄만 찍고 종료 코드 0이야.
+- FILE이 없으면 exit code 3으로 끝내고, stdout이랑 stderr에 아무것도 찍지 마.
+- 저장 파일 형식을 바꿔줘. 지금은 메모 리스트 그대로인데, 앞으로는 {"version": 2, "memos": [...]} 객체로 써.
+- 이전 버전이 쓴 파일(메모 리스트 그대로인 형식)도 계속 읽혀야 해. 저장소 파일도, import 하는 FILE도 둘 다. 읽은 뒤 저장하면 새 형식으로 써지는 건 괜찮아.
+
+README에 import 사용법 추가하고, 테스트도 추가해줘.

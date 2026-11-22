@@ -498,6 +498,20 @@ class RetriesAndMetricsTest(unittest.TestCase):
         self.assertEqual(result["role_runner_calls"], {"reviewer": {"0": 1}})
         self.assertEqual(result["subagent_launches_by_type"], {SCOUT: 1})
 
+    def test_위임_건너뜀은_채점의_delegation_report_체크에서_metrics로_옮긴다(self):
+        """delegation_report 체크가 있으면 metrics.delegation에 변경 수와 skipped가 담기고 없으면 None이다."""
+        # given
+        data = {"changed_count": 4, "limit": 2, "completed_delegations": 0, "skipped": True, "changed_files": ["a"]}
+        with_check = {"checks": [{"kind": "pytest", "data": {}}, {"kind": "delegation_report", "data": data}]}
+
+        # when
+        reported = metrics.delegation_summary(with_check)
+        absent = metrics.delegation_summary({"checks": [{"kind": "pytest", "data": {}}]})
+
+        # then
+        self.assertEqual(reported, {"changed_count": 4, "limit": 2, "completed_delegations": 0, "skipped": True})
+        self.assertIsNone(absent)
+
     def test_인계_누락은_채점_결과의_제약_누락과_추적된_실패로_센다(self):
         """grade의 constraints에서 누락 위임 수와 추적된 실패 체크 ID를 모은다."""
         # given

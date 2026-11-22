@@ -125,13 +125,25 @@ def run_settings(variant: dict[str, Any], profile_plugins: Iterable[str] = (), a
             **({"claudeMdExcludes": excludes} if excludes else {})}
 
 
+def user_env(task: dict[str, Any], tasks_root: Path, result_dir: Path) -> dict[str, str]:
+    """The scripted user's files for the approver server: the task's answer sheet, the exchange log, and the agent stream."""
+    sheet = (task.get("user") or {}).get("sheet")
+    if not sheet:
+        return {}
+    return {"EVAL_ANSWER_SHEET": str(tasks_root / sheet), "EVAL_USER_LOG": str(result_dir / "user-log.jsonl"),
+            "EVAL_STREAM": str(result_dir / "stream.jsonl")}
+
+
 def mcp_config(
     approval_log: Path, run_folder: Path | None = None, cwd: Path | None = None, read_roots: tuple[str, ...] = (),
+    user: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """The approver server config; it denies file tools outside `run_folder`, allows reads inside `read_roots`, and reads relative paths from `cwd`."""
+    """The approver server config; it denies file tools outside `run_folder`, allows reads inside `read_roots`, and reads relative paths from `cwd`.
+    With `user` it answers `AskUserQuestion` calls from the task's answer sheet."""
     folder = {"EVAL_RUN_FOLDER": str(run_folder)} if run_folder else {}
     roots = {"EVAL_READ_ROOTS": os.pathsep.join(read_roots)} if run_folder and read_roots else {}
-    env = {"EVAL_APPROVAL_LOG": str(approval_log), **folder, **({"EVAL_RUN_CWD": str(cwd)} if run_folder and cwd else {}), **roots}
+    env = {"EVAL_APPROVAL_LOG": str(approval_log), **folder, **({"EVAL_RUN_CWD": str(cwd)} if run_folder and cwd else {}), **roots,
+           **(user or {})}
     return {"mcpServers": {APPROVER_SERVER: {
         "type": "stdio", "command": "python3", "args": [str(APPROVER_SCRIPT)], "env": env,
     }}}
