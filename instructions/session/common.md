@@ -49,7 +49,7 @@ automatic answers, and defaults are not answers. Before asking the user anything
 - Before the first implementation change, read [implementation execution rules](../implementation-execution.md).
 - Before editing another repository or starting or messaging an Orca session, read [cross-repository work](../cross-repository.md).
 - Before a task's first file change and before its final report, read [Orca worktree status](../orca-worktree-status.md).
-- Before ending work in which a user correction or a costly investigation is likely to recur, read
+- Before ending work with a repeated correction, a stated-rule breach, or a multi-step investigation's decision, read
   [repository guidance](../repository-guidance.md).
 
 ## Planning and design routing

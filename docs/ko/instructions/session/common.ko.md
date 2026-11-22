@@ -49,8 +49,8 @@
 - 다른 저장소를 변경하거나 Orca 세션을 시작하거나 Orca 세션에 메시지를 보내기 전에
   [다른 저장소 작업](../cross-repository.ko.md)을 읽는다.
 - 작업의 첫 파일 변경 전과 최종 보고 전에 [Orca worktree 상태](../orca-worktree-status.ko.md)를 읽는다.
-- 사용자의 교정이나 비용이 큰 조사가 다시 일어날 것 같은 작업을 끝내기 전에 [저장소 지침](../repository-guidance.ko.md)을
-  읽는다.
+- 반복된 교정, 이미 적힌 규칙을 어긴 교정, 여러 단계의 조사가 내린 결정이 있는 작업을 끝내기 전에
+  [저장소 지침](../repository-guidance.ko.md)을 읽는다.
 
 ## 계획과 설계 작업
 

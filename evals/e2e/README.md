@@ -363,6 +363,9 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T83 | demo-app | UI routing, layout request | Two-column profile screen that stacks at 375 px; routes to the designer |
 | T84 | demo-app | UI routing, open breakpoint | Plan cards 320 px wide and 24 px apart in one row, mobile breakpoint left open; routes to the designer |
 | T112 | demo-app | UI routing, new screen | A new invoices screen of three rows built from scratch, fitting at 1280 and 375 px; routes to the designer at its pinned `xhigh` |
+| T120 | tally-demo | Repository guidance, repeated correction | Wrap-up after the same naming correction came twice; a check candidate for that one class is shown, proven on a seeded earlier commit, and not written |
+| T121 | tally-demo | Repository guidance, investigation decision | Decide between two queue libraries after a three-step investigation; an ADR draft of at most 30 lines and its entry line are shown, not written |
+| T122 | tally-demo | Repository guidance, no trigger | One first-time unstated correction with no investigation; no recording recommendation and no `mistake-enforcer` run |
 
 The ids T89 to T91 belong to the comparison of Claude reviewer models in
 [`evals/model-roles`](../model-roles/README.md); its opponent ids T92 and T93 ended with the removal of their skill.

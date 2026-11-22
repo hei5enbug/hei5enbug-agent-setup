@@ -128,28 +128,46 @@ class CommonRulesTest(unittest.TestCase):
         )
         self.assertIn(default_run, builder)
 
-    def test_반복될_교정과_조사는_승인을_받아_작업별로_읽히는_짧은_저장소_지침이나_ADR로_남긴다(self):
-        """세션 문맥은 작업을 끝내기 전에 저장소 지침 참조를 읽게 하고, 참조는 승인, 검사 우선, 진입 줄, 짧은 ADR, 교체를 정한다."""
+    def test_반복된_교정과_결정에_이른_조사는_승인_전_초안만_보이고_검사_가능한_실수는_단일_유형_모드로_넘긴다(self):
+        """세션 문맥은 반복된 교정이나 결정에 이른 조사에서만 저장소 지침을 읽게 하고, 참조는 반복 정의, 단일 유형 모드 호출, 승인 전 초안, 짧은 ADR, 교체를 정한다."""
         # Given
         guidance = " ".join((REPO_ROOT / "instructions/repository-guidance.md").read_text(encoding="utf-8").split())
+        skill = " ".join((REPO_ROOT / "skills/mistake-enforcer/SKILL.md").read_text(encoding="utf-8").split())
 
         # When
         rules = (
-            "recommend recording it in one line, and change no file until the user approves",
-            "recommend the `mistake-enforcer` skill instead of a written rule",
+            "Change no repository file until the user approves.",
+            "Keep drafts and proofs only in the session's temporary folder.",
+            "the same correction came twice in the session, the user says it repeats an earlier one, or it concerns a "
+            "rule the repository already states",
+            "run the `mistake-enforcer` skill in its single-class mode on that one mistake class without being asked",
+            "show the check candidate with the instance it fails on",
+            "draft the written rule under the placement rules below",
+            "draft the ADR described below and its entry line, show both, and write them only after the user approves",
+            "When neither case applies, record nothing and recommend nothing.",
             "Keep in that file only rules that every task needs.",
             '"Before <task>, read <file>."',
             "a short ADR of at most 30 lines",
             "Replace or delete an outdated entry instead of appending to it.",
         )
+        skill_rules = (
+            "or when a session instruction starts it on one repeated correction.",
+            "## Single-class mode",
+            "Group no evidence from the rest of the repository",
+            "otherwise a fixture built from the instance quoted in the session",
+        )
 
         # Then
         self.assert_in_every_context(
-            "Before ending work in which a user correction or a costly investigation is likely to recur, read"
+            "Before ending work with a repeated correction, a stated-rule breach, or a multi-step investigation's "
+            "decision, read"
         )
         for rule in rules:
             with self.subTest(rule=rule):
                 self.assertIn(rule, guidance)
+        for rule in skill_rules:
+            with self.subTest(rule=rule):
+                self.assertIn(rule, skill)
 
     def test_사용자가_직접_쓴_turbogoal이나_ulw는_빠른_모드를_켜고_품질과_승인_규칙은_그대로_둔다(self):
         """세션 문맥은 붙여 넣거나 인용한 글이 아닌 사용자 글의 키워드에만 빠른 모드 참조를 읽게 하고, 참조는 로컬 상한과 유지할 규칙을 정한다."""

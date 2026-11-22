@@ -1,0 +1,1 @@
+tally/report.py에 네가 memo_chars라고 이름 붙인 함수가 있었는데 내가 note_chars로 고치라고 했고, 고쳐서 커밋까지 끝났어. 같은 교정이 이번이 두 번째야. 처음에는 memo_count를 note_count로 고치게 했잖아. `python3 -m pytest -q`가 통과하는지 확인하고 작업을 마무리해줘.

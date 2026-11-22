@@ -1,0 +1,67 @@
+{
+  "id": "T120",
+  "title": "Wrap up after the same naming correction came twice",
+  "category": "guidance",
+  "path": "#134 repeated correction: single-class check candidate with a past-commit proof",
+  "fixture": "tally-demo",
+  "prompt_file": "prompts/T120.txt",
+  "setup": "setup/T120.py",
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 8
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "enforcer-ran",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "enforcer_ran"
+    },
+    {
+      "id": "repo-untouched",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "repository_untouched"
+    },
+    {
+      "id": "candidate-shown",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "candidate_shown"
+    },
+    {
+      "id": "past-instance-named",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "past_instance_named"
+    },
+    {
+      "id": "proof-ran-on-export",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "proof_ran_on_export"
+    },
+    {
+      "id": "tests-pass",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

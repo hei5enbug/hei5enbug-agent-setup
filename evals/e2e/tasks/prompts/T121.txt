@@ -1,0 +1,1 @@
+큐 라이브러리 alpha와 beta를 둘 다 쓰고 있는데 하나만 남기려고 해. 코드는 바꾸지 말고, 호출 지점과 scripts/bench_queues.py 결과, docs/libs.md의 유지보수 현황을 조사해서 어느 쪽을 남길지 결정해줘.
