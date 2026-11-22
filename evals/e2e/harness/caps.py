@@ -62,7 +62,7 @@ def check_variant(cfg: HarnessConfig, variant: dict[str, Any]) -> list[str]:
         model = main_model(variant, host)
         if not within_cap(model):
             problems.append(violation_message(owner, f"main session ({HOST_LABELS[host]})", model))
-    defaults = manifest_defaults(cfg, variant["ref"])
+    defaults = {} if variant.get("plugin") == plugin_export.STOCK_PLUGIN else manifest_defaults(cfg, variant["ref"])
     env = variant["env"]
     for host, prefix in OPTION_PREFIXES.items():
         set_here = {name: value for name, value in env.items()

@@ -1,4 +1,4 @@
-"""Entry point: run | summarize | regrade | export-plugin | pilot-check | record."""
+"""Entry point: run | summarize | regrade | export-plugin | pilot-check | record | rules."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path[0] = str(Path(__file__).resolve().parents[1])
 
-from harness import campaign, command, measure_lock, plugin_export, records, summarize  # noqa: E402
+from harness import campaign, command, measure_lock, plugin_export, records, rules_cli, summarize  # noqa: E402
 from harness.config import (  # noqa: E402
     DEFAULT_PARALLEL, DEFAULT_RUN_ROOT, EXIT_FAILURE, EXIT_LOCK_HELD, HOST_CLAUDE, MEASURE_LOCK, HarnessConfig,
 )
@@ -70,6 +70,9 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(check)
     check.add_argument("--campaign", required=True)
     check.add_argument("--run-ids", help="comma-separated run ids; default all")
+    rules = sub.add_parser("rules", help="list the rule groups of the always-loaded session instructions with their bytes")
+    add_common(rules)
+    rules_cli.add_arguments(rules)
     record = sub.add_parser("record", help="judge a before and an after variant on both hosts and write its record")
     add_common(record)
     record.add_argument("--campaign", required=True)
@@ -149,6 +152,8 @@ def dispatch(args: argparse.Namespace) -> int:
         return do_summarize(args, cfg)
     if args.action == "record":
         return do_record(args, cfg)
+    if args.action == "rules":
+        return rules_cli.run(args, cfg, sys.stdout)
     if args.action == "regrade":
         return campaign.regrade_campaign(
             cfg, args.campaign, frozenset(split(args.run_ids)), sys.stdout, recollect=args.recollect,

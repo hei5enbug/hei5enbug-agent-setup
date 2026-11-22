@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from . import codex_host, collect, hook_facts, summarize, transcript
+from . import codex_host, collect, hook_facts, plugin_export, summarize, transcript
 from .caps import MODEL_CAP as ALLOWED_MODELS
 from .caps import normalize
 from .command import ConfigError
@@ -297,23 +297,23 @@ def positive(value: Any) -> float | None:
 def stored_revision(run_root: Path, campaign: str, row: Mapping[str, Any]) -> str | None:
     """The plugin revision the run itself stored in its run.json, or None when it stored none."""
     result_dir = make_spec(run_root, campaign, row["task"], row["variant"], int(row["rep"]), row["host"]).result_dir
-    sha = ((read_json(result_dir / "run.json", {}) or {}).get("plugin") or {}).get("sha")
-    return str(sha) if sha else None
+    return plugin_export.revision_of((read_json(result_dir / "run.json", {}) or {}).get("plugin"))
 
 
 def archived_revisions(run_root: Path, campaign: str, row: Mapping[str, Any]) -> list[str]:
     """The plugin revision each archived earlier attempt of the run stored in its run.json; an attempt that stored none is left out."""
     spec = make_spec(run_root, campaign, row["task"], row["variant"], int(row["rep"]), row["host"])
     folder = spec.result_dir.parent / "attempts" / f"rep{spec.rep}"
-    found = [((read_json(item / "run.json", {}) or {}).get("plugin") or {}).get("sha")
+    found = [plugin_export.revision_of((read_json(item / "run.json", {}) or {}).get("plugin"))
              for item in sorted(folder.glob("*")) if item.is_dir()]
-    return [str(sha) for sha in found if sha]
+    return [revision for revision in found if revision]
 
 
 def run_hook_facts(spec: Any) -> dict[str, Any]:
     """The informational hook facts of one run; an object with a `skipped` reason when its plugin export, view, or repository is gone."""
-    plugin_dir = Path(str(((read_json(spec.result_dir / "run.json", {}) or {}).get("plugin") or {}).get("path") or ""))
-    if not (plugin_dir.is_dir() and (spec.result_dir / "view.json").is_file() and Path(spec.repo).is_dir()):
+    path = ((read_json(spec.result_dir / "run.json", {}) or {}).get("plugin") or {}).get("path")
+    plugin_dir = Path(str(path or ""))
+    if not (path and plugin_dir.is_dir() and (spec.result_dir / "view.json").is_file() and Path(spec.repo).is_dir()):
         return {"skipped": "the exported plugin, the view, or the repository folder is missing"}
     return hook_facts.run_facts(spec.result_dir, spec.host, plugin_dir, Path(spec.repo))
 
@@ -426,12 +426,12 @@ def variant_revision(run_root: Path, campaign: str, variant: str, runs: Sequence
     stored = sorted({str(sha) for run in runs if run["variant"] == variant
                      for sha in [run.get("revision"), *run.get("archived_revisions", [])] if sha})
     if len(stored) > 1:
-        raise ConfigError(f"variant {variant} has runs at different revisions ({', '.join(item[:12] for item in stored)}); "
+        raise ConfigError(f"variant {variant} has runs at different revisions ({', '.join(plugin_export.short_revision(item) for item in stored)}); "
                           "measure each revision in its own campaign")
     if stored:
-        return stored[0][:12]
+        return plugin_export.short_revision(stored[0])
     shas = ((read_json(campaign_dir(run_root, campaign) / "campaign.json", {}) or {}).get("inputs") or {}).get("variant_shas") or {}
-    revision = str(shas.get(variant) or "")[:12]
+    revision = plugin_export.short_revision(str(shas.get(variant) or ""))
     if not revision:
         raise ConfigError(f"campaign {campaign} stores no revision for variant {variant}")
     return revision

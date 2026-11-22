@@ -59,7 +59,10 @@ def build_codex_command(cfg: HarnessConfig, variant: dict[str, Any], prompt: str
     ]
 
 
-def setup_commands(cfg: HarnessConfig, plugin_dir: str) -> list[list[str]]:
+def setup_commands(cfg: HarnessConfig, plugin_dir: str | None) -> list[list[str]]:
+    """The two commands that install the exported plugin; none for a run that loads no plugin."""
+    if plugin_dir is None:
+        return []
     return [
         [cfg.codex_bin, "plugin", "marketplace", "add", plugin_dir],
         [cfg.codex_bin, "plugin", "add", f"{PLUGIN_NAME}@{marketplace_name(plugin_dir)}"],
@@ -115,14 +118,19 @@ def tail(text: str | None) -> str:
 
 
 def prepare_home(
-    cfg: HarnessConfig, result_dir: Path, plugin_dir: str, env: Mapping[str, str], source_home: Path | None = None,
+    cfg: HarnessConfig, result_dir: Path, plugin_dir: str | None, env: Mapping[str, str], source_home: Path | None = None,
     repo: Path | None = None,
 ) -> dict[str, Any]:
     """Create CODEX_HOME and the ZDOTDIR, link the credentials, install the exported plugin, and trust its hooks there.
+    A run with no plugin directory installs nothing and trusts no hook.
 
     `repo` is the folder the hooks are listed for; it defaults to the result folder. Returns the record."""
     write_zprofile(result_dir / ZDOTDIR_NAME, env.get("PATH"))
     link_auth(result_dir, source_home or auth_home(os.environ))
+    if plugin_dir is None:
+        record = {"steps": [], "plugin": "none", "codex_home": CODEX_HOME_NAME, "auth": "symlink"}
+        write_json(result_dir / SETUP_RECORD, record)
+        return record
     steps: list[dict[str, Any]] = []
     for argv in setup_commands(cfg, plugin_dir):
         try:
@@ -288,6 +296,7 @@ def load_records(spec: RunSpec, run: dict[str, Any], expected_model: str) -> dic
              "num_turns": len(usage.codex_requests(main["events"])) or None, "usage_limit": state["usage_limit"]}
     checks = {
         "loaded_from_export": bool((read_json(directory / SETUP_RECORD, {}) or {}).get("steps")), "installed_absent": True,
+        "stock": bool((run.get("plugin") or {}).get("stock")),
         "mod_marker_present": None, "subagent_models": {}, "permission_mode": session["approval_policy"],
         "sandbox": session["sandbox"], "model_as_requested": session["model"] == expected_model,
     }

@@ -177,6 +177,7 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 | 표 출력 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> [--out file.md]` |
 | 두 변형 비교 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | 리비전 내보내기만 하기 | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
+| 세션 지침의 규칙 그룹을 바이트와 함께 나열 | `python3 evals/e2e/harness/cli.py rules [--json] [--min-bytes 200]` |
 | 변경을 판정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
 
 `--parallel`은 동시에 실행할 수를 정한다(기본 3). 변형이 여럿이면 작업과 반복마다 순서를 번갈아(ABAB, 다음은
@@ -215,11 +216,32 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 
 ### 변형
 
-변형은 `variants/` 안의 JSON 파일이다: `{"name", "ref", "settings", "env", "extra_args"}`. `ref`는 시험할 플러그인
-리비전이다. `settings`는 실행의 `--settings` 파일에, `env`는 에이전트 환경에, `extra_args`는 명령줄에 합쳐진다.
-우회 플래그, `--bare`, `--permission-mode`, 또는 `--setting-sources`처럼 하네스가 직접 정하는 플래그를 넣은 변형은
-거부한다. `settings`에 무엇이 있어도 설치된 플러그인과 프로필의 모든 플러그인은 꺼진 채로 두고, `env`에 무엇이 있어도
-사용자의 지침 파일과 자동 메모리는 들어오지 않게 한다.
+변형은 `variants/` 안의 JSON 파일이다: `{"name", "ref", "plugin", "remove", "settings", "env", "extra_args"}`. `ref`는
+시험할 플러그인 리비전이다. `settings`는 실행의 `--settings` 파일에, `env`는 에이전트 환경에, `extra_args`는 명령줄에
+합쳐진다. 우회 플래그, `--bare`, `--permission-mode`, 또는 `--setting-sources`처럼 하네스가 직접 정하는 플래그를 넣은
+변형은 거부한다. `settings`에 무엇이 있어도 설치된 플러그인과 프로필의 모든 플러그인은 꺼진 채로 두고, `env`에 무엇이
+있어도 사용자의 지침 파일과 자동 메모리는 들어오지 않게 한다.
+
+- `"plugin": "none"`은 플러그인 리비전을 하나도 불러오지 않고 호스트를 실행하는 스톡 변형이다(`variants/stock.json`).
+  `ref`와 `remove`는 받지 않는다. Claude Code 명령에는 `--plugin-dir`이 없고, 설정은 여전히 설치된 플러그인과 프로필의
+  모든 플러그인을 끈다. Codex 실행은 인증 링크만 있는 자체 `CODEX_HOME`을 받는다. 마켓플레이스를 추가하지 않고,
+  플러그인을 설치하지 않고, 훅을 신뢰하지 않으므로 `codex-setup.json`의 `steps`는 비어 있고 `"plugin": "none"`이
+  적힌다. 아무것도 내보내지 않으며, `variant_shas`와 기록의 리비전은 `none`으로 나온다. `pilot-check`는
+  `--plugin-dir`을 넘겼거나, 이 플러그인 이름의 플러그인을 불러왔거나, 설치한 스톡 실행을 실패시킨다. 스톡 실행이 여전히
+  불러오는 것은 호스트 자체의 것이다. 호스트에 내장된 지침과 도구다.
+- `"remove"`는 내보내기가 플러그인 리비전에서 잘라낼 부분의 목록이다. 항목은 불릿이나 문단을 첫 단어로 고르는
+  `{"file", "start"}`, 또는 구역 전체를 `"## Delegation"` 같은 제목 줄로 고르는 `{"file", "heading"}`이다. 모든 항목은
+  내보낸 파일을 기준으로 맞춰 보며 정확히 한 부분과 맞아야 한다. 아무것도 맞지 않거나 둘 이상과 맞거나, 없는 파일을
+  가리키거나, 다른 항목과 겹치는 항목은 파일과 단어를 밝힌 메시지로 내보내기를 실패시킨다. `plugin-export.json`은 잘라낸
+  부분과 그 바이트를 나열한다. 부분을 잘라낸 내보내기는 `plugins/<sha>-<digest>/`라는 자기 폴더를 가지며, 그 내용
+  다이제스트는 캠페인 입력 지문에 들어간다. 기록은 이런 변형의 리비전을 `<sha>-<digest>`로 적으므로, `record --before
+  <전체 플러그인> --after <remove가 있는 변형>`은 아래 비교 규칙으로 두 호스트에서 둘을 비교하고 두 변형이 같은 리비전
+  표기를 공유하지 않는다.
+
+`cli.py rules`는 `instructions/session/core.md`, `common.md`, `claude-code.md`, `codex.md`의 불릿과 문단을 각각 규칙
+그룹으로 큰 것부터 나열한다. 각 그룹의 바이트, 그 그룹을 불러오는 호스트(`worker`는 구현 작업자도 불러오는 core 텍스트),
+`remove` 항목의 `start` 단어를 보여 준다. `--json`은 같은 내용을 각 `remove` 항목을 변형에 붙여 넣을 수 있게 출력한다.
+합계는 렌더링된 세션 컨텍스트가 아니라 컨텍스트별 파일 바이트다. 이 목록은 후보를 고르지 않는다.
 
 ## 실행 기록
 

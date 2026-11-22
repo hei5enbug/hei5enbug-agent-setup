@@ -90,7 +90,10 @@ def task_content_parts(cfg: HarnessConfig, task_id: str) -> dict[str, str]:
 
 
 def variant_sha(cfg: HarnessConfig, name: str) -> str:
-    return plugin_export.resolve_ref(cfg.repo_root, load_variant(cfg.variants_root, name)["ref"])
+    variant = load_variant(cfg.variants_root, name)
+    if variant.get("plugin") == plugin_export.STOCK_PLUGIN:
+        return plugin_export.STOCK_PLUGIN
+    return plugin_export.revision_label(plugin_export.resolve_ref(cfg.repo_root, variant["ref"]), variant["remove"])
 
 
 def changed_inputs(stored: Mapping[str, Any], current: Mapping[str, Any]) -> list[str]:
