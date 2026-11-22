@@ -1,0 +1,66 @@
+{
+  "id": "T113",
+  "title": "Hand a skill issue to a new session of the plugin's repository, with its model and effort named",
+  "category": "orca",
+  "path": "Orca session start model by role",
+  "fixture": "notes-cli",
+  "prompt_file": "prompts/T113.txt",
+  "setup": "setup/T113.py",
+  "env": {
+    "ORCA_TERMINAL_HANDLE": "term_demo_a",
+    "ORCA_USER_DATA_PATH": "{work}/orca-user-data",
+    "FAKE_ORCA_STATE": "{work}/orca-state/state.json",
+    "PATH": "{work}/fake-bin:{PATH}",
+    "FAKE_GH_STATE": "{work}/gh-state/seed.json"
+  },
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 6
+  },
+  "checks": [
+    {
+      "id": "delegated-through-a-new-terminal",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "delegated_through_a_new_terminal"
+    },
+    {
+      "id": "every-start-names-model-and-effort",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "every_start_names_model_and_effort"
+    },
+    {
+      "id": "no-fable-or-astra-start",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_fable_or_astra_start"
+    },
+    {
+      "id": "handoff-sent-to-the-new-terminal",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "handoff_sent_to_the_new_terminal"
+    },
+    {
+      "id": "repositories-untouched",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "repositories_untouched"
+    },
+    {
+      "id": "external-calls-answered-from-seed",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "external_calls_answered_from_seed"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

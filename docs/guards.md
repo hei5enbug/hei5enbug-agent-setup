@@ -174,6 +174,17 @@ here-document body checks only such substitutions. On Codex, trust the hook in `
   reason names `orca terminal rename` for labeling the session. An empty name, which restores Orca's automatic name,
   an unlisted target, and an unreadable Orca are allowed. It exists because on 2026-11-06 a session pinned a ticket
   name on its repository's main clone, which a written rule already forbade.
+- **Model of the session.** The same four starts are denied when they name no model, or name `claude-fable-5-2`,
+  `fable`, or `gpt-6.2-astra` while the user's latest prompt in the session does not name that model. The denial gives
+  the model and effort for each role, as "Session placement" in `instructions/cross-repository.md` sets them, and the
+  flags that carry them: `--model` and `--effort` for the three Orca commands and inside a `claude` command, and `-m`
+  and `-c model_reasoning_effort="<level>"` inside a `codex` command. The hook reads the latest prompt from the
+  transcript, in Claude Code or Codex format, and skips tool results, compaction summaries, and injected context; when
+  it cannot read it, Fable and Astra count as not named. The memory and placement denies take precedence when both
+  apply. A start that the user types or makes in the Orca window is not a tool call, so the hook never sees it. The
+  plugin's role runner and plugin agents are not session starts, and their pinned models stay. It exists because on
+  2026-11-17 a session handed an issue to a new Claude Code session with no model, and the host started it on
+  `claude-fable-5-2`.
 - **Low memory.** A command that starts an agent session through Orca is denied when the available memory is below the
   `session_memory_min_mb` option, 2048 MB by default, so the agent queues the session and starts it after another one
   finishes instead of pushing the machine into swap. It covers `orca worktree create` with `--agent`,
@@ -188,10 +199,19 @@ here-document body checks only such substitutions. On Codex, trust the hook in `
 ## Orca status
 
 One hook script, `scripts/orca_status_hook.py`, keeps the session's tab title and reminds it of a missing name or tab
-title. It writes nothing to Orca: no board status, no worktree comment, and no unread flag, because those went stale;
-the user sets statuses, and Orca itself notifies the user when a session asks a question. It runs only when
-`ORCA_TERMINAL_HANDLE` is set, never in a subagent or an assigned worker, and any failed read of Orca, Git, or the
+title. It writes no board status, no worktree comment, and no unread flag to Orca, because those went stale; the user
+sets statuses, and Orca itself notifies the user when a session asks a question. Its writes to Orca are the closing of
+never-used shell terminals and the removal of a finished child worktree the session created, both described below. It
+runs only when `ORCA_TERMINAL_HANDLE` is set, never in a subagent or an assigned worker, and any failed read of Orca, Git, or the
 transcript lets the event pass. It reads Claude Code transcripts only, because Codex records tool calls as script text.
+
+At a session's first `UserPromptSubmit`, once per session and with no model turn, the hook also lists the terminals of
+the worktree that holds the session's own terminal and closes each never-used shell terminal other than that one
+(`scripts/orca_terminal_cleanup.py`). A terminal qualifies only when it runs no agent, its screen read shows a single
+shell prompt with an empty input line, its output read holds nothing but prompts, and it reports no draft. A terminal
+that runs a process, holds typed input, or shows an earlier command is left alone, and so is every terminal when the
+session's own terminal is not listed or a read fails. The hook sends no input to any terminal. Both hosts document
+`UserPromptSubmit` as running before the prompt reaches the model, so the terminal is gone before the first reply.
 
 The hook keeps the session's tab title. After a `PostToolUse` of a Bash command whose `orca terminal rename` names this
 terminal, as `"$ORCA_TERMINAL_HANDLE"` or its value, and whose `--title` or `--title=` is a literal with no `$` or
@@ -202,6 +222,40 @@ does not name, such as another ticket, pull request, repository, document, or go
 A follow-up, fix, review, merge, or question on the titled work keeps the title, as does one the user set.`, about 300
 characters; a session with no kept title gets nothing. The title comes from the tool input, so it works on Codex too. The
 state lives in `$XDG_STATE_HOME/hei5enbug-agent-setup/orca-status/<session id>.json`.
+
+The hook removes a child worktree that the session created once the agent session that worked there has ended, in code,
+with no model turn. At each `PostToolUse` of a Bash command it records in the state file, from the tool input and never
+from the command's output, the worktrees that `orca worktree create` and `orca orchestration worker-start --worktree
+new-child` create, and the agent sessions that `worker-start` and `orca terminal create --command claude` start in a
+named worktree; a repository or worktree selector that holds a variable is dropped. The created worktree is the one
+non-main worktree of the named repository that `orca worktree list` shows with `lineage.createdAt` inside the command's
+run, which is the `duration_ms` of the Claude Code `PostToolUse` input, or the 120 seconds before the event on Codex,
+which reports no duration, and that no earlier command of the session claimed; any other count records nothing and
+removes nothing. At each `UserPromptSubmit` and `Stop`, when a recorded worktree is neither removed nor kept for good and
+no earlier run of the session still holds its lock, the hook starts `scripts/orca_cleanup_run.py` in a process session of
+its own and returns within its time limit; the run goes on after the session's terminal closes, which a child in the
+terminal's own session would not survive. A session that created no worktree, one whose run still runs, or one outside a terminal Orca manages (no
+`ORCA_USER_DATA_PATH`) starts no process, so a prompt with nothing recorded costs nothing. The run ends itself, with every
+process it started, after `HEI5ENBUG_CLEANUP_RUN_SECONDS` (120 seconds), also when `git fetch` or the Orca CLI hangs. Both hosts run these three events for plugin hooks, as checked in the Claude Code and Codex hook references, so
+no host keeps only the written rule.
+
+The run decides a never-used shell terminal by the same rule as the first-prompt close above. It takes one worktree at a time. It keeps the worktree when it is a main clone, the worktree the session works in,
+a worktree with a child worktree, or one on a branch whose worktree the run removed earlier in the session; when a worker
+Dispatch that `orca orchestration worker-list` shows for it did not succeed or cannot be read; when `git status
+--porcelain` is not empty; when, after `git fetch`, the branch has no upstream or a commit missing there; when an ignored
+path is not one of `__pycache__`, `.pytest_cache`, `node_modules`, `build`, `dist`, `.gradle`, and `*.tsbuildinfo`, which
+the run never copies or deletes; and when an open terminal is an agent terminal, also an idle one after `worker_done`, or
+is not a never-used shell terminal. Only then does it close those shell terminals, confirm that no process has its working
+directory inside the worktree and that `orca ports` lists no listener, check the state and the upstream once more, and
+run `orca worktree rm --worktree id:<id> --delete-branch`. A check that cannot be confirmed, because it does not hold or
+because Orca or Git fails or does not answer within `HEI5ENBUG_CLEANUP_STEP_SECONDS` (30 seconds), keeps the worktree and
+records that check in `<session id>.cleanup.json` beside the state file; a run that stops between two steps leaves a
+worktree that still passes, and the next prompt or turn end tries a kept worktree again. The run never deletes a remote
+branch, never changes a pull request, and leaves a worktree in which no agent session ran to "Cleanup when the task ends".
+At the first event after a run ends the hook returns one `systemMessage` line for the user, for example "Orca cleanup:
+removed worktree `feature/demo` of `demo-b`; its work is on `origin/feature/demo`, and Orca deleted the local branch.
+Kept `feature/spike` of `demo-c`: 1 commit is not pushed.", and the next `UserPromptSubmit` adds the same facts once to the
+session's context; it never keeps a turn going for this, so it costs no model turn.
 
 Two things still need the model, so the `Stop` hook keeps the turn going once per state with a reminder of at most two
 sentences that names the exact command and asks the model to end the turn without repeating the reply. Claude Code shows

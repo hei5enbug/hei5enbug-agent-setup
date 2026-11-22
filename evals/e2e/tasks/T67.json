@@ -1,0 +1,77 @@
+{
+  "id": "T67",
+  "title": "Remove the finished worker's worktree through the hook while the session keeps working",
+  "category": "orca",
+  "path": "Orca status hook: detached removal of a finished child worktree the session created",
+  "fixture": "notes-cli",
+  "prompt_file": "prompts/T67.txt",
+  "setup": "setup/T67.py",
+  "env": {
+    "ORCA_TERMINAL_HANDLE": "term_demo_a",
+    "FAKE_ORCA_STATE": "{work}/orca-state/state.json",
+    "ORCA_USER_DATA_PATH": "{work}/orca-user-data",
+    "PATH": "{work}/fake-bin:{PATH}",
+    "HEI5ENBUG_CLEANUP_RUN_SECONDS": "45"
+  },
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 6
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "page-size-50",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "config/settings.toml",
+      "pattern": "(?m)^page_size = 50$"
+    },
+    {
+      "id": "tests-pass",
+      "kind": "pytest",
+      "required": true,
+      "weight": 1,
+      "suite": "all"
+    },
+    {
+      "id": "worker-pushed-branch",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "worker_pushed_branch"
+    },
+    {
+      "id": "removed-by-hook",
+      "kind": "custom",
+      "required": true,
+      "weight": 4,
+      "function": "removed_by_hook"
+    },
+    {
+      "id": "remote-and-clones-kept",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "remote_and_clones_kept"
+    },
+    {
+      "id": "ends-with-question",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 1,
+      "patterns": [
+        "(?s)\\?\\s*$"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

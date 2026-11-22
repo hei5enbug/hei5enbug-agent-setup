@@ -1,8 +1,20 @@
 """Hook that keeps the session's tab title in step with its work and reminds it of a missing name or tab title.
 
-It runs only in an Orca terminal, for the main session, and writes nothing to Orca: it only reads Orca, Git, and the
-transcript.
+It runs only in an Orca terminal, for the main session. It reads Orca, Git, and the transcript. It writes to Orca in two
+ways only, both in code with no model turn: it closes never-used shell terminals as the first item below says, and a
+detached run removes a finished child worktree that the session created (`orca_cleanup_run.py`).
 
+- At the session's first prompt (UserPromptSubmit), it closes each never-used shell terminal of the session's worktree
+  other than the session's own, through `orca_terminal_cleanup.py`.
+- After a session's Bash command that creates a worktree (`orca worktree create`, `orca orchestration worker-start`) or
+  starts an agent in one (`orca terminal create`, `orca orchestration worker-start`), the command is recorded from the
+  tool input (PostToolUse). At a prompt and at the end of a turn (UserPromptSubmit, Stop), when a recorded worktree is
+  neither removed nor kept for good and no run is active, the hook starts the detached run in a process session of its
+  own, so it returns within its time limit and the run survives the closing of the session's terminal. At the first
+  event after a run ends the user gets one line (`systemMessage`) naming each removed and kept worktree, and the next
+  prompt adds the same facts once to the session's context. The run starts only when `ORCA_USER_DATA_PATH`, which Orca
+  sets in every terminal it manages, is set and a recorded worktree is still to be checked, so a prompt or turn end
+  with nothing recorded starts no process.
 - After the session renames its own terminal tab with a literal title (PostToolUse), that title is remembered, and each
   later prompt (UserPromptSubmit) gets one context line that names it, so the session can retitle when its work moves on.
 - At Stop it keeps the turn going once per state with a one-command instruction, which Claude Code shows as Stop hook
@@ -35,6 +47,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import approval_state_store  # noqa: E402
 import hook_runtime  # noqa: E402
 import language_guard  # noqa: E402
+import orca_cleanup_state  # noqa: E402
+from orca_cleanup_state import has_option, option_values  # noqa: E402
+import orca_terminal_cleanup  # noqa: E402
 from orca_placement_hook import orca_arguments  # noqa: E402
 from required_checks_hook import git_subcommand, segments_of  # noqa: E402
 
@@ -42,6 +57,7 @@ EDIT_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit", "apply_pat
 NOT_A_PROMPT = ("<task-notification", "<local-command-", "<system-reminder")
 READ_TIMEOUT_SECONDS = 3
 STATE_SUBDIRECTORY = "orca-status"
+UNUSED_TERMINALS = "unused-terminals"
 PATCH_PATH = re.compile(r"^\*\*\* (?:Update|Add) File: (.+)$", re.MULTILINE)
 ASSISTANT_ENTRY = re.compile(rb'"type": ?"assistant"')
 USER_ENTRY = re.compile(rb'"type": ?"user"')
@@ -52,6 +68,7 @@ TAB_TITLE_LINE = (
     "A follow-up, fix, review, merge, or question on the titled work keeps the title, as does one the user set."
 )
 TERMINAL_HANDLE_REFERENCES = frozenset({"$ORCA_TERMINAL_HANDLE", "${ORCA_TERMINAL_HANDLE}"})
+ORCA_TERMINAL_MARKER = "ORCA_USER_DATA_PATH"
 
 
 @dataclass
@@ -81,10 +98,6 @@ def is_real_prompt(entry: dict, message: dict) -> bool:
     else:
         return False
     return not text.lstrip().startswith(NOT_A_PROMPT)
-
-
-def has_option(arguments: list[str], *names: str) -> bool:
-    return any(token in names or token.startswith(tuple(f"{name}=" for name in names)) for token in arguments)
 
 
 def command_signals(command: str, turn: Turn) -> None:
@@ -156,14 +169,14 @@ def read_turns(path: str, cwd: str = "/") -> list[Turn]:
     return turns
 
 
-def orca_run(*arguments: str) -> dict | None:
+def orca_run(*arguments: str, timeout: float = READ_TIMEOUT_SECONDS) -> dict | None:
     """Run an `orca` command with `--json`; return its parsed result, or None when it failed or took too long."""
     try:
         result = subprocess.run(
             ["orca", *arguments, "--json"],
             capture_output=True,
             text=True,
-            timeout=READ_TIMEOUT_SECONDS,
+            timeout=timeout,
             check=False,
         )
         payload = json.loads(result.stdout)
@@ -186,11 +199,17 @@ def orca_worktree() -> dict | None:
 
 @dataclass
 class State:
-    """One session's memory: fired fingerprints and its tab title."""
+    """One session's memory: fired fingerprints, its tab title, and the worktrees it created."""
 
     path: Path | None
     fired: set[str] = field(default_factory=set)
     tab_title: str | None = None
+    creates: list[dict] = field(default_factory=list)
+    agents: list[dict] = field(default_factory=list)
+    cwd: str | None = None
+    seq: int = 0
+    shown_user: int = 0
+    shown_context: int = 0
 
     @classmethod
     def load(cls, session_id: object) -> State:
@@ -208,6 +227,15 @@ class State:
         state.fired = {item for item in fired if isinstance(item, str)} if isinstance(fired, list) else set()
         if isinstance(data.get("tab_title"), str):
             state.tab_title = data["tab_title"]
+        for name in ("creates", "agents"):
+            if isinstance(data.get(name), list):
+                setattr(state, name, [item for item in data[name] if isinstance(item, dict)])
+        if isinstance(data.get("cwd"), str):
+            state.cwd = data["cwd"]
+        for name in ("seq", "shown_user", "shown_context"):
+            value = data.get(name)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                setattr(state, name, int(value))
         return state
 
     def save(self) -> bool:
@@ -217,6 +245,12 @@ class State:
         data = {
             "fired": sorted(self.fired),
             "tab_title": self.tab_title,
+            "creates": self.creates,
+            "agents": self.agents,
+            "cwd": self.cwd,
+            "seq": self.seq,
+            "shown_user": self.shown_user,
+            "shown_context": self.shown_context,
         }
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -242,17 +276,6 @@ def response_text(event: dict) -> str:
     if isinstance(response, dict):
         return "\n".join(str(response.get(name) or "") for name in ("stdout", "output") if response.get(name))
     return response if isinstance(response, str) else ""
-
-
-def option_values(arguments: list[str], name: str) -> list[str]:
-    """Return the value of each `name` option in `arguments`, written as `name value` or `name=value`."""
-    values = []
-    for index, token in enumerate(arguments):
-        if token == name and index + 1 < len(arguments):
-            values.append(arguments[index + 1])
-        elif token.startswith(f"{name}="):
-            values.append(token[len(name) + 1 :])
-    return values
 
 
 def literal_rename_title(command: str) -> str | None:
@@ -353,6 +376,82 @@ def record_own_rename(event: dict, state: State) -> None:
         record_title(command, state, response_text(event))
 
 
+def close_unused_terminals(state: State) -> None:
+    """At the session's first prompt, close the never-used shell terminals of its worktree, in code, once."""
+    if state.path is None or UNUSED_TERMINALS in state.fired or not state.mark(UNUSED_TERMINALS):
+        return
+    handle = os.environ.get("ORCA_TERMINAL_HANDLE")
+    if handle:
+        orca_terminal_cleanup.close_unused(orca_run, handle)
+
+
+def record_creations(event: dict, state: State) -> None:
+    """Remember the worktrees and agent sessions a Bash command of this session creates, from its tool input."""
+    tool_input = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
+    command = tool_input.get("command")
+    if event.get("tool_name") != "Bash" or not isinstance(command, str) or "orca" not in command:
+        return
+    creates, agents = orca_cleanup_state.parse_command(command)
+    if not creates and not agents:
+        return
+    start, end = orca_cleanup_state.window_of(time.time(), event.get("duration_ms"))
+    for item in creates:
+        state.seq += 1
+        state.creates.append({**item, "seq": state.seq, "start": start, "end": end})
+    state.agents.extend(agents)
+    state.creates = state.creates[-orca_cleanup_state.MAX_RECORDS :]
+    state.agents = state.agents[-orca_cleanup_state.MAX_RECORDS :]
+    if isinstance(event.get("cwd"), str):
+        state.cwd = event["cwd"]
+    state.save()
+
+
+def cleanup_step(name: str, event: dict, state: State) -> tuple[str | None, str | None]:
+    """Start the detached run when a created worktree is due, and return the user line and the context line to show.
+
+    Nothing starts and nothing is shown for a session that created no worktree, or while a run is active; the lines
+    name each worktree the last run removed or kept, the user line at the first event after it and the context line at
+    the next prompt.
+    """
+    if state.path is None or not state.creates:
+        return None, None
+    cwd = event.get("cwd")
+    if isinstance(cwd, str) and cwd != state.cwd:
+        state.cwd = cwd
+        state.save()
+    results = orca_cleanup_state.read_results(orca_cleanup_state.result_path(state.path))
+    if (
+        name in ("Stop", "UserPromptSubmit")
+        and os.environ.get(ORCA_TERMINAL_MARKER)
+        and orca_cleanup_state.needs_run(state.creates, len(state.agents), results)
+    ):
+        orca_cleanup_state.start_run(state.path)
+    if orca_cleanup_state.run_active(state.path):
+        return None, None
+    user = orca_cleanup_state.unseen_notices(results, state.shown_user)
+    context = orca_cleanup_state.unseen_notices(results, state.shown_context) if name == "UserPromptSubmit" else []
+    if user:
+        state.shown_user = max(item["seq"] for item in user)
+    if context:
+        state.shown_context = max(item["seq"] for item in context)
+    if user or context:
+        state.save()
+    return (
+        orca_cleanup_state.notice_line(user) if user else None,
+        orca_cleanup_state.notice_line(context) if context else None,
+    )
+
+
+def with_notices(output: dict | None, name: str, user: str | None, context: str | None) -> dict | None:
+    if user:
+        output = {**(output or {}), "systemMessage": user}
+    if context:
+        specific = dict((output or {}).get("hookSpecificOutput") or {"hookEventName": name})
+        specific["additionalContext"] = "\n".join(filter(None, [specific.get("additionalContext"), context]))
+        output = {**(output or {}), "hookSpecificOutput": specific}
+    return output
+
+
 def handle_stop(event: dict, state: State) -> dict | None:
     if event.get("stop_hook_active") is True or not isinstance(event.get("transcript_path"), str):
         return None
@@ -376,11 +475,16 @@ def handle(event: object) -> dict | None:
         return None
     state = State.load(event.get("session_id"))
     if name == "Stop":
-        return handle_stop(event, state)
-    if name == "PostToolUse":
+        output = handle_stop(event, state)
+    elif name == "PostToolUse":
         record_own_rename(event, state)
-        return None
-    return title_context(state)
+        record_creations(event, state)
+        output = None
+    else:
+        close_unused_terminals(state)
+        output = title_context(state)
+    user, context = cleanup_step(name, event, state)
+    return with_notices(output, name, user, context)
 
 
 def main() -> int:

@@ -15,6 +15,9 @@ and `active` or `current` through `orca worktree current` in the event's directo
 name and stays allowed. An unreadable Orca, an unlisted target, or a selector that matches both a main clone and
 another worktree lets the command pass. The input is parsed only when its raw text contains orca and a word one of
 those rules needs, or EnterWorktree.
+
+A session start that names no model, or names Fable or Astra while the user's latest prompt does not name that
+model, is denied with the model and effort to use by role; `orca_session_model.py` holds that rule.
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ import sys
 from dataclasses import dataclass
 
 import hook_runtime
+import orca_session_model
 import plugin_toggles
 import session_memory
 from required_checks_hook import ASSIGNMENT, WRAPPERS, command_of, segments_of
@@ -135,6 +139,28 @@ def starts_agent_session(tokens: list[str]) -> bool:
         command = option_after(arguments, "--command")
         return bool(command) and any(runs_agent_program(words) for words in segments_of(command))
     return False
+
+
+def agent_command_model(words: list[str]) -> str | None:
+    """Return the model a `claude` or `codex` command line names with `--model`, `-m`, or `-c model=`, or None."""
+    model = option_after(words, "--model") or option_after(words, "-m")
+    if model is not None:
+        return model
+    for flag, value in zip(words, words[1:]):
+        if flag in ("-c", "--config") and value.startswith("model="):
+            return value[len("model=") :].strip("\"'") or None
+    return None
+
+
+def started_models(tokens: list[str]) -> list[str | None]:
+    """Return the model each agent session this command starts names, None for a session that names none."""
+    if not starts_agent_session(tokens):
+        return []
+    arguments = orca_arguments(tokens) or []
+    if [token for token in arguments if not token.startswith("-")][:2] != ["terminal", "create"]:
+        return [option_after(arguments, "--model")]
+    command = option_after(arguments, "--command") or ""
+    return [agent_command_model(words) for words in segments_of(command) if runs_agent_program(words)]
 
 
 def runs_agent_program(tokens: list[str]) -> bool:
@@ -455,6 +481,14 @@ def texts_to_check(command: str) -> list[str]:
     return checked
 
 
+def event_of(raw: str) -> dict:
+    try:
+        event = json.loads(raw)
+    except ValueError:
+        return {}
+    return event if isinstance(event, dict) else {}
+
+
 def event_cwd(raw: str) -> str:
     try:
         value = json.loads(raw).get("cwd")
@@ -499,6 +533,8 @@ def main() -> int:
         reason = next((r for r in (completed_denial(tokens, cwd) for tokens in segments) if r), None)
     if reason is None and any(main_clone_rename_denial(tokens, cwd) for tokens in segments):
         reason = MAIN_CLONE_REASON
+    if reason is None:
+        reason = orca_session_model.denial([model for tokens in segments for model in started_models(tokens)], event_of(raw))
     if reason:
         deny(reason)
     return 0

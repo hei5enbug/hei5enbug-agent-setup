@@ -25,11 +25,14 @@ together, not Orca's lineage. A single-repository task follows [cross-repository
   workspace, `orca worktree create --repo id:<repoId> --name <branch> --base-branch <base> --parent-worktree
   id:<repoId>::<clone path> --reference <issue link> --json`, apply step 4 of cross-repository work, confirm the branch
   in `orca worktree list`, and set the display name. Only then start the worker, so it never runs before its branch is
-  final: `orca orchestration worker-start --worktree path:<worktree path> --agent <host> --run <run id> --task-title
-  "<ticket key> <repository>" --spec-file <brief file> --json`, with the brief written as step 6 of cross-repository
-  work does.
-- A later session that joins creates its worktree the same way with `--agent <host>`, hands off as cross-repository
-  work does, and tells the coordinator through the Run.
+  final: `orca orchestration worker-start --worktree path:<worktree path> --agent <host> --model <id> --effort <level>
+  --run <run id> --task-title "<ticket key> <repository>" --spec-file <brief file> --json`, with the brief written as
+  step 6 of cross-repository work does. A member makes a bounded change and reports through the Run, so `<id>` and
+  `<level>` come from the implementation worker row of "Session placement" in
+  [cross-repository work](cross-repository.md).
+- A later session that joins creates its worktree the same way with `--agent <host> --model <id> --effort <level>`
+  from the table in "Session placement", hands off as cross-repository work does, and tells the coordinator through
+  the Run.
 - Start a member only when it can finish its part without waiting on another member. When its part needs a contract,
   schema, API, or decision that another member has not shared yet, create neither its worktree nor its worker: list it
   in the status table as waiting on that item, and start it once the item is shared. Start members without such a
@@ -77,10 +80,11 @@ together, not Orca's lineage. A single-repository task follows [cross-repository
 
 Any session of the group removes its finished worktrees when its task ends, as "Cleanup when the task ends" in
 [Orca worktree status](orca-worktree-status.md) says, whichever session started them. In addition, when a member is
-finished, the coordinator cleans it up at once by the same checks and steps, and when the coordinator itself finishes,
-it sweeps the whole group once more for a finished member it missed. This replaces "After the handoff" in
-cross-repository work for group members. For a member that worked in a main checkout, stop only its background work,
-processes, and terminal; never touch the checkout or its default branch.
+finished, the coordinator ends the member's session at once, as the paragraph below says, and the Orca status hook
+removes the member's child worktree that the coordinator created, as "After the handoff" in cross-repository work says;
+when the coordinator itself finishes, it sweeps the whole group once more for a finished member the hook left or missed,
+by the same checks and steps. For a member that worked in a main checkout, stop only its background work, processes, and
+terminal; never touch the checkout or its default branch.
 
 Before the coordinator closes a worker's terminal, have the worker stop its own background work, such as background
 shell tasks and monitors, and confirm none remain. Afterwards confirm that no terminal, process, or listener of the

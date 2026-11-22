@@ -29,13 +29,27 @@
 [Orca worktree 그룹](orca-groups.ko.md)대로 티켓으로 묶는다. 플러그인 훅은 그런 부모를 거부한다.
 
 - 파일을 전혀 수정하지 않는 세션은 새 터미널로 실행한다. 작업 저장소에서는 현재 worktree에서 실행하거나 Orca
-  orchestration의 `worker-start --worktree current`로 실행하고, 다른 저장소에서는 대상의 workspace에서 실행한다.
+  orchestration의 `worker-start --worktree current --model <id> --effort <level>`로 실행하고, 다른 저장소에서는
+  대상의 workspace에서 실행한다.
 - 파일을 수정하는 세션은 아래 2~6단계로 하위 worktree를 만든다. 작업 저장소에서 Orca orchestration을 쓰면
-  `worker-start --worktree new-child --name <branch> --base-branch <base>`를 사용하고 4단계를 적용한다.
-  `new-top-level`은 사용하지 않는다.
+  `worker-start --worktree new-child --name <branch> --base-branch <base> --model <id> --effort <level>`를 사용하고
+  4단계를 적용한다. `new-top-level`은 사용하지 않는다.
 - Orca 터미널에서 작업용 새 worktree는 `orca worktree create ... --parent-worktree active`로 만들고, `EnterWorktree` 같은
   호스트 자체 worktree 도구로는 만들지 않는다. 그래야 Orca가 목록에 보여 준다. 플러그인 훅은 그 도구가 worktree를
   만들려 할 때 거부한다.
+- 세션 시작은 `--agent`를 붙인 `orca worktree create`, `orca agent launch`, `orca orchestration worker-start`, 그리고
+  `--command`가 `claude`나 `codex`를 실행하는 `orca terminal create`다. 모두 새 세션의 역할에 따라 새 세션의 모델과
+  effort를 적어야 하며, 사용자의 최신 프롬프트가 그 세션의 모델이나 effort를 정했다면 그것이 우선한다.
+
+  | 새 세션의 역할 | Claude Code | Codex |
+  |---|---|---|
+  | 구현 worker: 맡은 한정된 변경을 하고 보고하는 세션 | `claude-sonnet-5-5`, `high` | `codex_worker_model`과 `codex_worker_effort` 설정. `auto`나 `claude-sonnet-5-5`이면 [난이도별 worker 모델](model-routing.ko.md#worker-model-by-difficulty)이 정하는 모델 |
+  | 그 밖의 세션: 일을 넘겨받거나 조정하고, 이슈를 등록하고, 검토하거나, 역할이 불분명한 세션 | `claude-opus-5-5`, `high` | 레지스트리의 `gpt-sol` 핀, `high` |
+
+  에이전트가 시작하는 세션은 사용자가 그 모델을 정하지 않는 한 `claude-fable-5-2`, `fable`, `gpt-6.2-astra`를 쓰지
+  않는다. `--model <id> --effort <level>`이 Orca 명령 세 가지와 `claude` 명령에서 그 쌍을 전달한다. `codex`
+  명령에서는 `-m <id> -c model_reasoning_effort="<level>"`이다. 플러그인 훅은 모델을 적지 않았거나 그 둘을 적은
+  시작을 거부한다. 플러그인의 역할 실행기와 에이전트는 세션 시작이 아니며 고정된 모델을 유지한다.
 - 플러그인이 메모리 부족으로 세션 시작을 거부하면 인수인계를 메모리 대기 상태로 기록하고, 이 작업의 다른 세션이
   끝나거나 정리된 뒤에 시작한다. 메모리를 폴링하지 않는다.
 - Orca가 해당 저장소의 workspace를 나열하지 않으면 부모를 지정해 worktree를 만든 뒤
@@ -47,19 +61,23 @@
 2. 무언가를 만들기 전에 대상에 적용되는 첫 번째 출처를 기준으로 브랜치 이름과 기준 브랜치를 정한다.
    이미 읽은 스킬 또는 플러그인 규칙, 대상의 `AGENTS.md` 또는 `CLAUDE.md` 순서로 확인하고, 없으면 저장소의
    기본 기준 브랜치에서 작업 이름을 딴 짧은 브랜치를 사용한다. 먼저 원격에서 기준 브랜치를 fetch한다.
-3. `<host>`는 Claude Code에서는 `claude`, Codex에서는 `codex`다. `<clone>`은 `orca repo list`에 있는 대상의
+3. `<host>`는 Claude Code에서는 `claude`, Codex에서는 `codex`이고, `<id>`와 `<level>`은 "세션 위치"의 표에서
+   가져온다. 인수인계는 일을 넘겨받게 하는 것이므로 그 밖의 세션 행을 쓴다. `<host command>`는
+   `<host> --model <id> --effort <level>`이고, Codex에서는 `codex -m <id> -c model_reasoning_effort="<level>"`이다.
+   `<clone>`은 `orca repo list`에 있는 대상의
    경로이고, 대상의 workspace는 `orca worktree list --repo id:<repoId> --json`에서 그 경로를 가진 항목이다.
    `git -C <clone> worktree list --porcelain`에서 선택한 브랜치의 worktree를 찾은 뒤, 아래에서 처음 맞는 경우를 따른다.
    - 그 worktree가 Orca 목록에 자기 항목을 가지고 있다: `orca terminal list --worktree id:<worktree id> --json`으로
      확인한다. 그곳에 에이전트 터미널이 열려 있으면 사용자에게 그 터미널로 작업 요약을 보낼지 묻는다. 없으면
-     `orca terminal create --worktree id:<worktree id> --command <host> --json`으로 시작하고 5단계로 진행한다.
+     "터미널에서 에이전트 시작"에 따라 `--worktree id:<worktree id>`로 에이전트를 시작하고 5단계로 진행한다.
    - 그 worktree가 자기 항목이 없다: workspace 안에 있는 worktree이고, Orca는 workspace의 터미널 중 어느 것이
      그 안에서 실행 중인지 구분하지 못한다. 사용자에게 workspace의 터미널 제목을 보여 주고, 그중 하나로 작업 요약을
-     보낼지, 아니면 그 worktree용 새 터미널을 `orca terminal create --worktree id:<workspace id>
-     --title <branch> --command "cd '<worktree path>' && <host>" --json`으로 시작할지 묻고, 이후 5단계로 진행한다.
+     보낼지, 그곳의 쓴 적 없는 셸 터미널에 "터미널에서 에이전트 시작"에 따라 `cd '<worktree path>' && <host command>`를
+     보내 사용할지, 아니면 새 터미널을 `orca terminal create --worktree id:<workspace id>
+     --title <branch> --command "cd '<worktree path>' && <host command>" --json`으로 시작할지 묻고, 이후 5단계로 진행한다.
    - 해당 브랜치의 worktree가 없다: "세션 위치"에서 정한 부모를 사용해
      `orca worktree create --repo id:<repoId> --name <branch> --base-branch <base>
-     --agent <host> --parent-worktree <parent> --json`을 실행한다.
+     --agent <host> --model <id> --effort <level> --parent-worktree <parent> --json`을 실행한다.
      `--prompt`는 전달하지 않는다.
 4. `orca worktree create` 뒤에는 Orca가 설정된 접두사를 붙이고 `/`를 대체해 새 브랜치 이름을 직접 정한다. 결과의
    `branch`가 정한 이름과 다르고 정한 이름의 브랜치가 아직 없으면 `git -C <worktree path> branch -m <branch>`를
@@ -72,8 +90,35 @@
    `wait.satisfied`가 true이고 "다른 세션에 메시지 보내기"가 허용할 때만 보낸다. 더 긴 시간 제한으로 한 번 더
    기다리고, 여전히 false이면 인수인계가 시작되지 않았다고 보고한다.
 6. `orca terminal send --terminal <handle> --text "<brief>" --enter --json`으로 작업 요약을 보낸다.
-   요약에는 목표, 파일 경로를 포함해 지금까지 찾은 근거, 브랜치와 기준 브랜치, 수용 검사를 명시한다.
+   요약에는 목표, 파일 경로를 포함해 지금까지 찾은 근거, 브랜치와 기준 브랜치, 수용 검사를 명시하고, 결과 하나를
+   요청할 때는 보고할 이 세션의 터미널 핸들도 적고 "결과 하나를 위한 인수인계"대로 끝맺는다.
    전송 결과가 `accepted: true`이면 인수인계가 끝난 것이다. 작업 완료를 기다리지 않는다.
+
+## 터미널에서 에이전트 시작
+
+쓴 적 없는 셸 터미널은 에이전트가 실행되지 않고, `orca terminal read --terminal <handle> --screen`이 입력줄이 빈
+셸 프롬프트만 보여 주며, `--screen` 없이 읽은 출력에 명령이 없는 터미널이다. 이 읽기 결과로 판단하고, 글자를 보내서
+확인하지 않는다. worktree나 workspace에 그런 터미널이 있으면 새 터미널을 만들지 않고
+`orca terminal send --terminal <handle> --text "<host command>" --enter --json`으로 호스트 명령을 그 터미널에 보내고
+5단계에서 그 핸들을 사용한다. 없으면 `orca terminal create --worktree id:<id> --command "<host command>" --json`을
+실행한다. 셸 외의
+프로세스가 실행 중이거나, 입력해 둔 글이 있거나, 이전 명령이 보이는 터미널에는 명령을 보내거나 터미널을 닫지 않는다.
+훅이 세션의 첫 프롬프트에서 그 옆의 쓴 적 없는 셸 터미널을 닫는다.
+
+## 결과 하나를 위한 인수인계
+
+결과 하나와 보고를 요청하는 인수인계는 작업 요약에 그렇게 적는다. 인수인계가 그 세션의 터미널을 만들었거나 쓴 적 없는
+셸 터미널에서 에이전트를 시작했다면 작업 요약은 "This terminal belongs to the handoff; close it after your report."로
+끝난다. 이미 에이전트를 실행한 적 있는 터미널로 보낸 작업 요약에는 이 문장이 없고, 그 터미널은 닫지 않는다.
+
+작업 요약이 그 문장으로 끝나는 세션은 자기 저장소에 대해 [Orca worktree 상태](orca-worktree-status.md)의 "작업이
+끝날 때 정리"를 실행한 뒤, 정리가 남긴 각 worktree와 남긴 검사를 적은 보고를 보내고, 마지막 동작으로
+`orca terminal close --terminal "$ORCA_TERMINAL_HANDLE" --json`으로 자기 터미널을 닫는다. 열린 질문이나 승인 프롬프트가
+없고 백그라운드 작업이 모두 끝났을 때만 닫으며, 아니면 터미널을 열어 두고 보고에 그렇게 적는다.
+
+인수인계가 그 세션을 자식 worktree에서 시작했다면, 인수인계를 보낸 세션이 위임받은 세션의 터미널이 닫힌 뒤 그
+정리 절차대로 그 worktree를 제거하며, 그 세션이 worktree를 만들었다면 "인수인계 뒤"의 Orca 상태 훅이 제거한다.
+위임받은 세션은 자신이 실행 중인 worktree를 제거하지 않는다.
 
 ## 다른 세션에 메시지 보내기
 
@@ -100,7 +145,8 @@ Orca CLI나 런타임을 사용할 수 없으면 일반 Git worktree를 사용�
 ## 인수인계 후
 
 - 현재 요청에 대해 작업 저장소에서 할 일이 남지 않으면, 대상 worktree의 세션에서 계속하고 이 세션은
-  종료하라고 사용자에게 한 줄로 권한다. 세션을 직접 종료하지 않는다.
+  종료하라고 사용자에게 한 줄로 권한다. 세션을 직접 종료하지 않는다. 다만 위임받은 세션은 "결과 하나를 위한
+  인수인계"에 따라 자기 터미널을 닫는다.
 - 할 일이 남았으면 계속 진행하고, 대상의 결과가 필요할 때만 `orca terminal read --terminal <handle> --json`으로
   읽는다.
 - 작업이 끝나면 이 저장소와 작업 티켓의 완료된 자식 worktree를, 어느 세션이 시작했든,
@@ -115,11 +161,9 @@ Orca CLI나 런타임을 사용할 수 없으면 일반 Git worktree를 사용�
   기준 브랜치에 들어 있는지, `git status --porcelain --ignored`에 `__pycache__`, `.pytest_cache`, `node_modules`처럼
   다시 만들 수 있는 캐시만 나열되는지 확인한다. 검사에 실패하면 대신 한 번 제안하고 무시된 파일을 나열한다.
   사용자가 승인한 것만 삭제하며, 그 밖의 경우에는 사용자가 요청할 때만 worktree나 브랜치를 삭제한다.
-- 이 세션이 시작한 하위 worktree는 더 이상 그 안에서 실행되는 에이전트 세션이 없고 작업이 원격에 있으면, pull request가
-  아직 병합되지 않았어도 그 터미널과 로컬 브랜치와 함께 삭제한다. 다음을 모두 확인한다. `git status --porcelain`이
-  비어 있고, `git fetch` 뒤 `git rev-list --count @{upstream}..HEAD`가 0이어서 업스트림이 없는 브랜치는 통과하지
-  못하며, 작업 디렉터리가 worktree 안에 있는 프로세스가 없고(예: `lsof -d cwd -Fpn`으로 확인), 무시된 파일은 다시 만들
-  수 있는 캐시나 빌드 산출물뿐이다. 인수인계 메모처럼 다시 만들 수 없는 무시된 파일은 먼저 이 세션의 worktree로 복사한
-  뒤 계속한다. pull request와 원격 브랜치는 남으며, 답변에 작업을 보관하는 브랜치 이름을 명시한다. 나중 작업에 이
-  worktree가 필요하면 3단계와 4단계로 원격 브랜치에서 다시 만든다. worktree를 만든 뒤 브랜치가 `origin`에 있으므로
-  `git switch <branch>`를 실행한다. 검사에 실패하면 worktree를 유지하고 실패한 검사를 명시한다.
+- 플러그인의 Orca 상태 훅이 이 세션이 만든 자식 worktree를, 거기서 에이전트 세션이 돌았고 열린 세션이 더 없으며 작업이
+  커밋하지 않은 변경 없이 원격에 있고, 다시 만들 수 있는 빌드 산출물만 무시되며, 남은 프로세스나 리스너가 없으면, 쓰지 않은 쉘
+  터미널과 로컬 브랜치와 함께 삭제한다. pull request와 원격 브랜치는 지우지 않으며 확인할 수 없는 worktree는 유지한다. 나중 작업에 삭제된 worktree가 필요하면 3단계와 4단계로 원격
+  브랜치에서 다시 만든다. worktree를 만든 뒤 브랜치가 `origin`에 있으므로 `git switch <branch>`를 실행한다. 훅은 그
+  worktree를 다시 삭제하지 않으므로 "작업이 끝날 때의 정리"가 맡는다. 최종 보고에는 훅이 삭제하거나 유지한 worktree를 훅의
+  한 줄에서 가져와 각각 작업을 보관하는 원격 브랜치나 유지한 검사와 함께 명시한다.

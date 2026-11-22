@@ -1,0 +1,49 @@
+{
+  "id": "T32",
+  "title": "Handoff delegate in a terminal that already ran an agent keeps its terminal and a dirty worktree",
+  "category": "orca",
+  "path": "Handoff brief sent to a terminal that already ran an agent",
+  "fixture": "notes-cli",
+  "prompt_file": "prompts/T32.txt",
+  "setup": "setup/T32.py",
+  "env": {
+    "ORCA_TERMINAL_HANDLE": "term_demo_a",
+    "FAKE_ORCA_STATE": "{work}/orca-state/state.json",
+    "PATH": "{work}/fake-bin:{PATH}"
+  },
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 6
+  },
+  "checks": [
+    {
+      "id": "no-terminal-closed",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_terminal_closed"
+    },
+    {
+      "id": "dirty-child-kept",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "dirty_child_kept"
+    },
+    {
+      "id": "report-names-kept-worktree",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "report_names_kept_worktree"
+    },
+    {
+      "id": "no-file-changes",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 1
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

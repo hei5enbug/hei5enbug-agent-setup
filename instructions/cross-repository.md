@@ -26,13 +26,28 @@ repository's worktree, also in a task that changes several repositories; the tic
 [Orca worktree groups](orca-groups.md). A plugin hook denies such a parent.
 
 - A session that edits no file runs as a new terminal: in the current worktree for the working repository, or with
-  Orca orchestration `worker-start --worktree current`, and in the target's workspace for another repository.
+  Orca orchestration `worker-start --worktree current --model <id> --effort <level>`, and in the target's workspace for
+  another repository.
 - A session that edits files gets a child worktree through steps 2 to 6 below. With Orca orchestration in the working
-  repository, use `worker-start --worktree new-child --name <branch> --base-branch <base>` and apply step 4; never
-  `new-top-level`.
+  repository, use `worker-start --worktree new-child --name <branch> --base-branch <base> --model <id> --effort
+  <level>` and apply step 4; never `new-top-level`.
 - Create a new worktree for a task in an Orca terminal with `orca worktree create ... --parent-worktree active`, never
   with the host's own worktree tool such as `EnterWorktree`, so that Orca lists it. A plugin hook denies that tool
   when it would create a worktree.
+- A session start is `orca worktree create` with `--agent`, `orca agent launch`, `orca orchestration worker-start`, or
+  `orca terminal create` whose `--command` runs `claude` or `codex`. Every one names the new session's model and
+  effort by the new session's role, unless the user's own latest prompt names a model or effort for it, which then
+  wins:
+
+  | Role of the new session | Claude Code | Codex |
+  |---|---|---|
+  | Implementation worker: a bounded change it is told to make and report back | `claude-sonnet-5-5`, `high` | the `codex_worker_model` and `codex_worker_effort` settings; with `auto` or `claude-sonnet-5-5`, the model that [Worker model by difficulty](model-routing.md#worker-model-by-difficulty) gives |
+  | Any other session: one that takes over or coordinates work, files an issue, reviews, or whose role is unclear | `claude-opus-5-5`, `high` | the registry `gpt-sol` pin, `high` |
+
+  A session an agent starts never uses `claude-fable-5-2`, `fable`, or `gpt-6.2-astra` unless the user names that
+  model. `--model <id> --effort <level>` carries the pair on the three Orca commands and on a `claude` command. On a
+  `codex` command the pair is `-m <id> -c model_reasoning_effort="<level>"`. A plugin hook denies a start that names no
+  model or one of those two. The plugin's role runner and agents are not session starts, and keep their pinned models.
 - When the plugin denies a session start for low memory, record the handoff as waiting for memory and start it after
   another session of this task finishes or is cleaned up, never polling memory.
 - For a repository that Orca lists no workspace for, create the worktree with a parent, then run
@@ -43,18 +58,22 @@ repository's worktree, also in a task that changes several repositories; the tic
 2. Choose the branch name and base before creating anything, from the first source that covers the target: a loaded
    skill or plugin rule, the target's `AGENTS.md` or `CLAUDE.md`, then a short task-named branch on the repository's
    default base. Fetch the base from its remote first.
-3. `<host>` is `claude` on Claude Code and `codex` on Codex. `<clone>` is the target's path in `orca repo list`, and
+3. `<host>` is `claude` on Claude Code and `codex` on Codex, and `<id>` and `<level>` come from the table in
+   "Session placement": a handoff takes over work, so it takes the row of any other session. `<host command>` is
+   `<host> --model <id> --effort <level>`, and on Codex `codex -m <id> -c model_reasoning_effort="<level>"`. `<clone>` is the target's path in `orca repo list`, and
    the target's workspace is the entry with that path in `orca worktree list --repo id:<repoId> --json`. Look for a
    worktree on the chosen branch in `git -C <clone> worktree list --porcelain`, then take the first case that applies:
    - The worktree has its own entry in the Orca list: check `orca terminal list --worktree id:<worktree id> --json`.
-     If an agent terminal is open there, ask the user whether to send the brief to it. Otherwise start one with
-     `orca terminal create --worktree id:<worktree id> --command <host> --json` and continue at step 5.
+     If an agent terminal is open there, ask the user whether to send the brief to it. Otherwise start the agent as
+     "Starting an agent in a terminal" says, with `--worktree id:<worktree id>`, and continue at step 5.
    - The worktree has no entry of its own: it sits inside the workspace, and Orca cannot tell which of the
      workspace's terminals runs in it. Show the user the workspace's terminal titles and ask whether to send the brief
-     to one of them or to start a new terminal there with `orca terminal create --worktree id:<workspace id>
-     --title <branch> --command "cd '<worktree path>' && <host>" --json`, then continue at step 5.
+     to one of them, to use a never-used shell terminal there by sending it `cd '<worktree path>' && <host command>` as
+     "Starting an agent in a terminal" says, or to start a new terminal with `orca terminal create --worktree
+     id:<workspace id> --title <branch> --command "cd '<worktree path>' && <host command>" --json`, then continue at step 5.
    - No worktree is on the branch: run `orca worktree create --repo id:<repoId> --name <branch> --base-branch <base>
-     --agent <host> --parent-worktree <parent> --json` with the parent from "Session placement". Pass no `--prompt`.
+     --agent <host> --model <id> --effort <level> --parent-worktree <parent> --json` with the parent from "Session
+     placement". Pass no `--prompt`.
 4. After `orca worktree create`, Orca names the new branch itself, with its configured prefix and `/` replaced. When
    the result's `branch` differs from the chosen name and that branch does not exist yet, run
    `git -C <worktree path> branch -m <branch>`. When it already exists locally or on `origin`, run
@@ -67,8 +86,37 @@ repository's worktree, also in a task that changes several repositories; the tic
    `wait.satisfied` is true and "Messaging another session" allows it. Wait once more with a longer timeout, and if it
    is still false, report the handoff as not started.
 6. Send the brief with `orca terminal send --terminal <handle> --text "<brief>" --enter --json`. The brief states the
-   goal, the evidence found so far with file paths, the branch and base, and the acceptance checks. The handoff is
+   goal, the evidence found so far with file paths, the branch and base, and the acceptance checks; for one result
+   it also names this session's terminal handle to report to, and ends as "Handoff for one result" says. The handoff is
    done when the send reports `accepted: true`; do not wait for the work to finish.
+
+## Starting an agent in a terminal
+
+A never-used shell terminal is a terminal that no agent runs in, whose `orca terminal read --terminal <handle> --screen`
+shows only a shell prompt with an empty input line, and whose output, read without `--screen`, holds no command. Judge
+it from those reads, never by sending text. When the worktree or workspace has one, send the host command to it with
+`orca terminal send --terminal <handle> --text "<host command>" --enter --json` instead of creating another terminal,
+and use that handle in step 5; otherwise run `orca terminal create --worktree id:<id> --command "<host command>"
+--json`. Never send a
+command to, or close, a terminal in which a process other than its shell runs, that holds typed input, or that shows
+an earlier command. A hook closes the never-used shell terminals beside a session at its first prompt.
+
+## Handoff for one result
+
+A handoff that asks the started session for one result and a report back says so in its brief. When the handoff
+created that session's terminal, or started the agent in a never-used shell terminal, the brief ends with "This
+terminal belongs to the handoff; close it after your report." A brief sent to a terminal that already ran an agent
+has no such sentence, and that terminal is never closed.
+
+A session whose brief ends with that sentence runs "Cleanup when the task ends" in [Orca worktree
+status](orca-worktree-status.md) for its repository, then sends its report, which names each worktree the cleanup
+kept and the check that kept it, then closes its own terminal as its last action with
+`orca terminal close --terminal "$ORCA_TERMINAL_HANDLE" --json`, provided no question or approval prompt is open and
+none of its background work still runs. Otherwise it leaves the terminal open and says so in the report.
+
+When the handoff started that session in a child worktree, the session that sent the handoff removes the worktree as
+that cleanup says once the delegate's terminal is closed, and the Orca status hook of "After the handoff" does so when
+that session created it. A delegate never removes the worktree it runs in.
 
 ## Messaging another session
 
@@ -96,7 +144,8 @@ protected value into it; the session that needs the file reports it to the user.
 ## After the handoff
 
 - When the working repository has nothing left for the current request, recommend in one line that the user continue
-  in the target worktree's session and end this one. Never end a session yourself.
+  in the target worktree's session and end this one. Never end a session yourself, except that a delegate closes its
+  own terminal as "Handoff for one result" says.
 - Otherwise continue the remaining work, and read the target with `orca terminal read --terminal <handle> --json` only
   when its result is needed.
 - When the task ends, finished child worktrees of this repository and of the task's ticket are removed as "Cleanup
@@ -112,12 +161,11 @@ protected value into it; the session that needs the file reports it to the user.
   `git status --porcelain --ignored` lists only regenerable caches such as `__pycache__`, `.pytest_cache`, or
   `node_modules`. When a check fails, offer once instead and list the ignored files; remove only what the user
   approves, and otherwise remove a worktree or branch only when the user asks.
-- A child worktree that this session started is also removed, with its terminal and local branch, when no agent
-  session runs in it any more and its work is on the remote, even before its pull request is merged. Confirm all of
-  these: `git status --porcelain` is empty; after `git fetch`, `git rev-list --count @{upstream}..HEAD` is 0, so a
-  branch with no upstream does not pass; no process has its working directory inside the worktree, for example from
-  `lsof -d cwd -Fpn`; and ignored files are only regenerable caches or build output. First copy an ignored file that
-  is not regenerable, such as a handoff note, to this session's worktree, then go on. The pull request and the remote
-  branch stay, and the reply names the branch that keeps the work. When later work needs the worktree, recreate it
-  from the remote branch with steps 3 and 4: create the worktree, then `git switch <branch>` because the branch
-  exists on `origin`. When a check fails, keep the worktree and name the check.
+- The plugin's Orca status hook removes a child worktree that this session created, with its never-used shell
+  terminals and local branch, once an agent session ran there and none is open any more, its work is on the remote with
+  nothing uncommitted, only regenerable build output is ignored, and no process or listener is left. It never removes
+  the pull request or the remote branch, and it keeps a worktree it cannot confirm. When later work needs a removed
+  worktree, recreate it from the remote branch with steps 3 and 4: create the worktree, then `git switch <branch>`
+  because the branch exists on `origin`; the hook never removes that worktree again, so "Cleanup when the task ends"
+  covers it. The final report names each worktree the hook removed or kept, from the hook's line, with the remote branch
+  that holds the work or the check that kept it.

@@ -295,6 +295,19 @@ class AgentGuardTest(unittest.TestCase):
         self.assertIsNone(configured)
         self.assertEqual("deny", previous)
 
+    def test_Codex_worker는_gpt_6_1_terra를_고정하면_그_모델의_high와_xhigh만_허용한다(self):
+        """저장된 gpt-6.1-terra와 high로는 terra의 high와 xhigh를 허용하고, 기본 gpt-6-luna는 거부한다."""
+        # Given
+        self.write(self.codex_home / "agents" / "worker.toml", (REPO_ROOT / "standalone-agents/codex-worker.toml").read_text())
+        self.save_worker_options({"codex_worker_model": "gpt-6.1-terra", "codex_worker_effort": "high"})
+
+        # When
+        decisions = [self.decide("codex", {"agent_type": "worker", "model": model, "reasoning_effort": effort})
+                     for model, effort in (("gpt-6.1-terra", "high"), ("gpt-6.1-terra", "xhigh"), ("gpt-6-luna", "high"))]
+
+        # Then
+        self.assertEqual([None, None, "deny"], decisions)
+
     def start_codex_session(self, session_id: str, **extra_env: str) -> None:
         env = {"PATH": os.environ.get("PATH", ""), "CLAUDE_CONFIG_DIR": str(self.claude_home),
                "CODEX_HOME": str(self.codex_home), "XDG_STATE_HOME": str(self.state),

@@ -5,6 +5,7 @@ from __future__ import annotations
 import atexit
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -138,7 +139,7 @@ class OrcaPlacementHookTest(unittest.TestCase):
             bash_event("orca worktree set --worktree id:demo-repo::/tmp/work --no-parent --json"),
             bash_event('echo "orca worktree create --no-parent"'),
             bash_event("cat > /tmp/work/note.md <<'EOF'\norca worktree create --no-parent\n`orca worktree create --no-parent`\nEOF"),
-            bash_event("orca orchestration worker-start --worktree new-child --name x --agent claude --json"),
+            bash_event("orca orchestration worker-start --worktree new-child --name x --agent claude --model claude-sonnet-5-5 --effort high --json"),
             '{"tool_input": {"command": "orca worktree create --no-parent"',
         ]
 
@@ -164,6 +165,17 @@ START_COMMANDS = {
     "terminal create with a cd prefix": "orca terminal create --worktree id:demo --title x --command \"cd '/tmp/work' && claude\" --json",
     # Regression: single quotes inside an unquoted here-document do not stop the substitution from running
     "substitution in an unquoted here-document": "cat > /tmp/work/x.md <<EOF\n'$(orca agent launch --agent claude --json)'\nEOF",
+}
+MODELED_START_COMMANDS = {
+    "worktree create with --agent": "orca worktree create --repo id:demo-repo --name x --parent-worktree active --agent claude --model claude-opus-5-5 --effort high --json",
+    "worktree create with --agent=": "orca worktree create --repo id:demo-repo --name x --parent-worktree active --agent=codex --model=gpt-6.1-sol --effort=high --json",
+    "worker-start": "orca orchestration worker-start --spec-file s.md --worktree new-child --name x --model claude-sonnet-5-5 --effort high --json",
+    "agent launch": "orca agent launch --worktree active --agent claude --model claude-opus-5-5 --effort high --json",
+    "terminal create running claude": "orca terminal create --worktree active --command '/usr/local/bin/claude --model claude-opus-5-5 --effort high --resume' --json",
+    "terminal create running codex": "orca-dev terminal create --worktree active --command=\"codex -m gpt-6.1-sol -c model_reasoning_effort=high\" --json",
+    "start inside a substitution": 'handle="$(orca agent launch --worktree active --agent codex --model gpt-6.1-sol --effort high --json)"',
+    "terminal create with a cd prefix": "orca terminal create --worktree id:demo --title x --command \"cd '/tmp/work' && claude --model claude-opus-5-5 --effort high\" --json",
+    "substitution in an unquoted here-document": "cat > /tmp/work/x.md <<EOF\n'$(orca agent launch --agent claude --model claude-opus-5-5 --effort high --json)'\nEOF",
 }
 NOT_START_COMMANDS = [
     "orca worktree set --worktree id:demo-repo::/tmp/work --agent claude --json",
@@ -209,7 +221,7 @@ class SessionMemoryGateTest(unittest.TestCase):
 
     def test_메모리가_기준_이상이면_에이전트_시작_명령을_허용한다(self):
         # Regression: a gate that denies with enough memory blocks every start
-        for name, command in START_COMMANDS.items():
+        for name, command in MODELED_START_COMMANDS.items():
             for memory_mb in ("2048", "4096"):
                 with self.subTest(name=name, memory_mb=memory_mb):
                     # When
@@ -220,7 +232,7 @@ class SessionMemoryGateTest(unittest.TestCase):
 
     def test_메모리를_알_수_없으면_차단하지_않는다(self):
         # Regression: an unreadable memory source denies every start on an unsupported platform
-        for name, command in START_COMMANDS.items():
+        for name, command in MODELED_START_COMMANDS.items():
             with self.subTest(name=name):
                 # When
                 result = run_hook(bash_event(command), memory_mb=None)
@@ -230,7 +242,7 @@ class SessionMemoryGateTest(unittest.TestCase):
 
     def test_옵션이_0이나_off이면_메모리가_부족해도_허용한다(self):
         # Regression: the off switch is ignored and the user cannot start sessions
-        command = START_COMMANDS["agent launch"]
+        command = MODELED_START_COMMANDS["agent launch"]
         for option in ("0", "off", "OFF", "false", "no"):
             with self.subTest(option=option):
                 # When
@@ -241,7 +253,7 @@ class SessionMemoryGateTest(unittest.TestCase):
 
     def test_옵션_값이_기준이_되고_잘못된_값은_기본_2048을_쓴다(self):
         # Regression: a custom threshold is ignored, or an invalid value turns the gate off
-        command = START_COMMANDS["agent launch"]
+        command = MODELED_START_COMMANDS["agent launch"]
         cases = [("512", "600", None), ("512", "500", 512), ("not-a-number", "1500", 2048), ("-5", "1500", 2048),
                  ("1.5", "1500", 2048), ("", "1500", 2048)]
         for option, memory_mb, denied_threshold in cases:
@@ -457,9 +469,9 @@ class ParentRepositoryGateTest(unittest.TestCase):
             "orca worktree create --repo id:repo-b --name x --parent-worktree id:repo-b::/home/test/repo-b --json",
             f"orca worktree create --repo path:{self.root / 'a'} --name x --parent-worktree path:{self.linked} --json",
             "orca worktree create --repo id:repo-a --name x --json",
-            "orca orchestration worker-start --worktree new-child --agent claude --spec x --json",
-            "orca orchestration worker-start --worktree current --repo id:repo-b --agent claude --spec x",
-            "orca orchestration worker-start --worktree new-child --repo id:repo-a --agent claude --spec x --json",
+            "orca orchestration worker-start --worktree new-child --agent claude --model claude-opus-5-5 --effort high --spec x --json",
+            "orca orchestration worker-start --worktree current --repo id:repo-b --agent claude --model claude-opus-5-5 --effort high --spec x",
+            "orca orchestration worker-start --worktree new-child --repo id:repo-a --agent claude --model claude-opus-5-5 --effort high --spec x --json",
             "orca worktree set --worktree id:repo-a::/home/test/repo-a --parent-worktree active --json",
             "orca worktree set --worktree active --comment hello --json",
         ]
@@ -646,6 +658,200 @@ class EnterWorktreeGateTest(unittest.TestCase):
 
         # When / Then
         self.assertEqual([group["matcher"] for group in groups], ["^(Bash|EnterWorktree)$"])
+
+
+class SessionModelRuleTest(unittest.TestCase):
+    """A session an agent starts names a model, and Fable or Astra only when the user's latest prompt names it."""
+
+    def setUp(self):
+        self.base = Path(tempfile.mkdtemp(prefix="orca-model-"))
+        self.addCleanup(shutil.rmtree, self.base, True)
+
+    def transcript(self, *entries: dict) -> str:
+        path = self.base / f"transcript-{len(list(self.base.iterdir()))}.jsonl"
+        path.write_text("".join(json.dumps(entry) + "\n" for entry in entries), encoding="utf-8")
+        return str(path)
+
+    def claude_prompt(self, text: str, **flags) -> dict:
+        return {"type": "user", "message": {"role": "user", "content": text}, **flags}
+
+    def run_start(self, command: str, transcript: str | None = None) -> subprocess.CompletedProcess[str]:
+        event = {"tool_name": "Bash", "tool_input": {"command": command}}
+        if transcript is not None:
+            event["transcript_path"] = transcript
+        return run_hook(json.dumps(event))
+
+    def reason_of(self, result: subprocess.CompletedProcess[str]) -> str | None:
+        self.assertEqual(result.returncode, 0, result.stderr)
+        if not result.stdout:
+            return None
+        output = json.loads(result.stdout)["hookSpecificOutput"]
+        self.assertEqual(output["permissionDecision"], "deny")
+        return output["permissionDecisionReason"]
+
+    def test_모델을_적지_않은_시작은_차단하고_역할별_모델과_그_명령의_플래그를_알려준다(self):
+        """M1부터 M3: 세 오르카 명령과 claude 명령 안의 시작이 모델 없이 오면 차단하고, 사유가 역할별 모델과 플래그를 적는다."""
+        # Given
+        transcript = self.transcript(self.claude_prompt("handle the issue"))
+        cases = {
+            "M1": "orca agent launch --agent claude --worktree id:demo --json",
+            "M2": "orca orchestration worker-start --agent codex --spec-file brief.md --json",
+            "M3": "orca terminal create --worktree id:demo --command claude --json",
+        }
+
+        for name, command in cases.items():
+            with self.subTest(case=name):
+                # When
+                reason = self.reason_of(self.run_start(command, transcript))
+
+                # Then
+                self.assertIn("names no model", reason)
+                for needle in ("claude-opus-5-5", "claude-sonnet-5-5", "gpt-6.1-sol", "--model", "--effort",
+                               "Inside an `orca terminal create", "-c model_reasoning_effort="):
+                    self.assertIn(needle, reason)
+
+    def test_Fable이나_Astra를_적은_시작은_사용자가_그_모델을_적지_않으면_차단하고_적으면_허용한다(self):
+        """M4부터 M6: 최신 프롬프트에 Fable이 없으면 차단하고 있으면 허용하며, 대화 기록을 읽을 수 없으면 Astra도 차단한다."""
+        # Given
+        fable = "orca worktree create --repo id:demo --name ABC-123 --agent claude --model claude-fable-5-2 --effort high --json"
+        astra = "orca agent launch --agent codex --worktree id:demo --model gpt-6-astra --effort high --json"
+        plain = self.transcript(self.claude_prompt("work on ABC-123"))
+        named = self.transcript(self.claude_prompt("Use Fable for it"))
+
+        # When
+        denied = self.reason_of(self.run_start(fable, plain))
+        allowed = self.reason_of(self.run_start(fable, named))
+        unreadable = self.reason_of(self.run_start(astra, str(self.base / "missing.jsonl")))
+        no_transcript = self.reason_of(self.run_start(astra))
+        other_family = self.reason_of(self.run_start(astra, named))
+
+        # Then
+        self.assertIn("`claude-fable-5-2`", denied)
+        self.assertIsNone(allowed)
+        self.assertIn("`gpt-6-astra`", unreadable)
+        self.assertIn("`gpt-6-astra`", no_transcript)
+        self.assertIn("`gpt-6-astra`", other_family)
+
+    def test_모델과_effort를_적은_시작과_시작이_아닌_명령은_허용한다(self):
+        """M7과 M8: Opus와 Sol로 정한 시작은 허용하고, 에이전트를 시작하지 않는 오르카 명령은 전과 같이 허용한다."""
+        # Given
+        commands = [
+            "orca agent launch --agent claude --worktree id:demo --model claude-opus-5-5 --effort high --json",
+            'orca terminal create --command "codex -m gpt-6.1-sol -c model_reasoning_effort=\\"high\\""',
+            'orca terminal create --command "claude --effort high --model=claude-sonnet-5-5"',
+            'orca terminal create --command "codex -c model=gpt-6.1-sol -c model_reasoning_effort=\\"high\\""',
+            'orca terminal create --worktree id:demo --command "npm test" --json',
+            "orca worktree create --repo id:demo --name ABC-123 --json",
+        ]
+
+        for command in commands:
+            with self.subTest(command=command):
+                # When
+                reason = self.reason_of(self.run_start(command, self.transcript(self.claude_prompt("go"))))
+
+                # Then
+                self.assertIsNone(reason)
+
+    def test_터미널_명령_안의_Astra와_모델_없는_codex_시작도_차단한다(self):
+        """terminal create의 codex 명령이 -c model로 Astra를 주거나 모델을 주지 않으면 차단하고, claude와 codex를 함께 이으면 모델 없는 쪽을 찾는다."""
+        # Given
+        transcript = self.transcript(self.claude_prompt("go"))
+        cases = {
+            "astra by config": ('orca terminal create --command "codex -c model=gpt-6-astra"', "`gpt-6-astra`"),
+            "codex without a model": ('orca terminal create --command "codex -c model_reasoning_effort=high"', "names no model"),
+            "second command names none": (
+                'orca terminal create --command "claude --model claude-opus-5-5 --effort high && codex"', "names no model",
+            ),
+        }
+
+        for name, (command, expected) in cases.items():
+            with self.subTest(case=name):
+                # When
+                reason = self.reason_of(self.run_start(command, transcript))
+
+                # Then
+                self.assertIn(expected, reason)
+
+    def test_사용자의_최신_프롬프트만_보고_도구_결과와_요약과_Codex_주입_메시지는_프롬프트로_세지_않는다(self):
+        """이전 프롬프트의 Fable은 효력이 없고, 도구 결과·압축 요약·Codex 주입 메시지의 Fable은 건너뛰며, Codex 기록의 최신 프롬프트도 읽는다."""
+        # Given
+        command = "orca agent launch --agent claude --worktree id:demo --model fable --effort high --json"
+        earlier = self.transcript(
+            self.claude_prompt("use Fable for the first task"), self.claude_prompt("now do the second task"),
+        )
+        skipped = self.transcript(
+            self.claude_prompt("use Fable for it"),
+            {"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "content": "Fable"}]}},
+            self.claude_prompt("This session is being continued; Fable was named", isCompactSummary=True),
+        )
+        codex_user = lambda text: {"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": text}]}}
+        codex_named = self.transcript(
+            codex_user("go"), codex_user("use Fable for it"), codex_user("<environment_context>Fable</environment_context>"),
+        )
+        codex_unnamed = self.transcript(codex_user("use Fable for it"), codex_user("now the second task"))
+
+        # When
+        results = [self.reason_of(self.run_start(command, path)) for path in (earlier, skipped, codex_named, codex_unnamed)]
+
+        # Then
+        self.assertIn("`fable`", results[0])
+        self.assertIsNone(results[1])
+        self.assertIsNone(results[2])
+        self.assertIn("`fable`", results[3])
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+START_SOURCES = (
+    "instructions/cross-repository.md", "instructions/orca-groups.md", "skills/skill-issue-creator/references/delegation.md",
+)
+START_SPAN = re.compile(r"^(?:orca )?(?:worktree create|agent launch|orchestration worker-start|worker-start|terminal create)\b")
+
+
+def unflagged_starts(text: str) -> list[str]:
+    """Return each code span in the text that shows an agent session start without a model and an effort flag."""
+    spans = [" ".join(span.split()) for span in re.findall(r"`([^`]+)`", text)]
+    starts = []
+    for span in spans:
+        if not START_SPAN.match(span) or "--" not in span:
+            continue
+        if "worktree create" in span and "--agent" not in span:
+            continue
+        if "terminal create" in span and not re.search(r"--command\b.*(?:<host>|\bclaude\b|\bcodex\b)", span):
+            continue
+        if "--model" not in span or "--effort" not in span:
+            starts.append(span)
+    return starts
+
+
+class SessionStartFlagsTest(unittest.TestCase):
+    def test_세_파일이_보여_주는_모든_세션_시작은_모델과_effort_플래그를_가진다(self):
+        """cross-repository, orca-groups, delegation이 보여 주는 세션 시작 명령에서 --model이나 --effort가 빠지면 실패한다."""
+        for name in START_SOURCES:
+            with self.subTest(file=name):
+                # Given
+                text = (REPO_ROOT / name).read_text(encoding="utf-8")
+
+                # When
+                missing = unflagged_starts(text)
+
+                # Then
+                self.assertEqual([], missing)
+
+    def test_플래그_검사기는_모델이_빠진_시작만_찾고_시작이_아닌_명령은_넘긴다(self):
+        """검사기가 모델 없는 세 형태를 찾고, 에이전트 없는 worktree create와 셸 터미널 생성은 넘기는지 확인한다."""
+        # Given
+        text = (
+            "`orca terminal create --command <host> --json` `worker-start --worktree new-child` "
+            "`orca worktree create --repo id:x --agent <host> --json` `orca worktree create --repo id:x --json` "
+            "`orca terminal create --command zsh --json` "
+            "`orca agent launch --agent claude --model claude-opus-5-5 --effort high`"
+        )
+
+        # When
+        missing = unflagged_starts(text)
+
+        # Then
+        self.assertEqual(3, len(missing))
 
 
 if __name__ == "__main__":

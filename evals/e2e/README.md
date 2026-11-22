@@ -329,10 +329,28 @@ solution in `tasks/reference/` passes.
 
 ## Golden tasks
 
-Prompts are in Korean, as the real user writes them. The fixtures are fictional repositories with the conventions a
+Prompts are in Korean, as the real user writes them; the T31 and T32 prompts are English briefs, as one agent session
+writes them to another. The fixtures are fictional repositories with the conventions a
 real one has: a README, an `AGENTS.md` with a Korean mirror rule, tests, and Korean mirrors. T21 runs with
 `ORCA_TERMINAL_HANDLE` set and a fake `orca` first on `PATH`, built by `tasks/setup/fake_orca.py`; it keeps its state
-in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval_orca_cleanup.py`.
+in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval_orca_cleanup.py`. T31 to T34 use the
+same fake with agent and shell terminals and the messages sent between sessions, seeded by
+`tasks/setup/handoff_common.py`; their graders read the fake's ordered call log, which records each call's caller, and
+their tests are in `tests/test_e2e_eval_handoff.py`.
+
+T113 uses the same fake `orca`, which also starts terminals, shows and edits a started agent terminal's input line, and accepts waits and sends, and a fake `gh` that answers only from seeded repositories and refuses and logs anything else, so the trial reaches no real service; its checks read the call log for the model and effort each session start names, and its tests are in `tests/test_e2e_eval_session_model.py`.
+
+T67 judges the worktree removal of `scripts/orca_status_hook.py` and its detached run `scripts/orca_cleanup_run.py`. The
+fake `orca` also makes a real Git worktree for `worktree create` and `orchestration worker-start`; a started worker
+commits, pushes its branch, reports `worker_done`, and has its terminal released at once, and `worker-list` and
+`ports` read the `dispatches` and `ports` of the state file. The task sets `ORCA_USER_DATA_PATH`, which the harness removes from a trial and the hook's run requires, and
+`HEI5ENBUG_CLEANUP_RUN_SECONDS` to 45, the
+time after which a detached run ends itself and every process it started, so no run outlives a trial by more than 45
+seconds and the 60-second wait below always covers it. The session ends its turn with a question, so the removal
+can only come from the hook's run, which starts at that turn's end in a process session of its own. The checks wait up
+to `E2E_CLEANUP_WAIT_SECONDS` (60 by default) for a successful removal, and a removal from the session's own folder
+instead of the run's folder `/` fails `removed-by-hook`, so a session that removes the worktree itself, as the written
+rule allowed before, does not pass. Its tests are in `tests/test_e2e_eval_worktree_cleanup_hook.py`.
 
 | Task | Fixture | Path it exercises | Request |
 |---|---|---|---|
@@ -357,12 +375,18 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T19 | ops-notes | Shared document | Wiki draft of about 1,600 characters for a 1,500-character budget |
 | T20 | notes-cli | Final report | Small change with tests, then a report |
 | T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
+| T31 | notes-cli | Handoff terminal that belongs to the handoff | A brief for one result: clean up a finished child worktree, report, then close the session's own terminal |
+| T32 | notes-cli | Handoff brief to a terminal that already ran an agent | The same brief without the closing sentence, with a child worktree that holds an uncommitted change: close nothing, name the kept worktree |
+| T33 | notes-cli | Agent start in a never-used shell terminal | Hand one result to a workspace whose only terminal is a never-used shell: send the host command there and create no terminal |
+| T34 | notes-cli | First-prompt terminal cleanup | Read one setting while the plugin's hook closes the never-used shell terminal and leaves the one with typed input |
+| T67 | notes-cli | Hook removal of a finished worker's worktree | A setting change, a worktree of demo-b created without an agent, and a worker started there; the turn ends with a question, and the worktree and its local branch must be removed by the hook's detached run, not by the session |
 | T78 | commit-demo | Commit skill, staged-only scope | Korean-subject history, one staged change beside an unstaged edit and an untracked `.env` |
 | T79 | commit-demo | Commit skill, required identifier | Commit rules that require a ticket key, and a request that names none |
 | T82 | demo-app | UI routing, complete specification | Four named-line edits to a settings panel; routes to the implementation worker |
 | T83 | demo-app | UI routing, layout request | Two-column profile screen that stacks at 375 px; routes to the designer |
 | T84 | demo-app | UI routing, open breakpoint | Plan cards 320 px wide and 24 px apart in one row, mobile breakpoint left open; routes to the designer |
 | T112 | demo-app | UI routing, new screen | A new invoices screen of three rows built from scratch, fitting at 1280 and 375 px; routes to the designer at its pinned `xhigh` |
+| T113 | notes-cli | Orca session start model | A skill issue for another plugin's repository, which the delegation rules hand to a new session there; a fake `orca` and a seeded plugin repository, and the run passes only when every session start names a model and effort and none names Fable or Astra |
 
 The ids T89 to T91 belong to the comparison of Claude reviewer models in
 [`evals/model-roles`](../model-roles/README.md); its opponent ids T92 and T93 ended with the removal of their skill.
