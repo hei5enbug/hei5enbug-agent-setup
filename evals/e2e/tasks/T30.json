@@ -1,0 +1,47 @@
+{
+  "id": "T30",
+  "title": "Pull request description whose draft lists three files its diff shows",
+  "category": "writing",
+  "path": "pr-description text",
+  "fixture": "identifier-lists",
+  "prompt_file": "prompts/T30.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/pr-description.txt"
+    },
+    {
+      "id": "first-review-cuts-file-list",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "first_review_cuts_file_list"
+    },
+    {
+      "id": "file-list-cut",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "file_list_cut"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

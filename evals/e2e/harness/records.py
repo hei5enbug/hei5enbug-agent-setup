@@ -29,7 +29,14 @@ VERDICTS = frozenset({PASS, FAIL, REPEAT, NOT_MEASURED, INVESTIGATE, BASELINE, A
 VERDICT_SUBJECTS = frozenset({"quality", "wall_seconds", "cost_usd", "claim"})
 TOP_FIELDS = ("issue", "cases", "variants", "runs", "verdicts")
 RUN_REQUIRED = ("case", "variant", "host", "models", "checks", "wall_seconds", "cost_usd")
-RUN_OPTIONAL = ("rep", "reviews", "review_stand_in", "hooks")
+RUN_OPTIONAL = ("rep", "reviews", "review_stand_in", "hooks", "passed", "loop")
+TOP_OPTIONAL = ("candidates",)
+LOOP_COUNTS = ("reviewer_runs", "main_turns")
+LOOP_TOKENS = ("main_tokens", "main_tokens_loop")
+LOOP_FIELDS = LOOP_COUNTS + LOOP_TOKENS + ("check_stops",)
+CANDIDATE_VERDICTS = frozenset({"adopt", "reject", "undecided"})
+CANDIDATE_REQUIRED = ("candidate", "variant", "verdict", "step")
+CANDIDATE_OPTIONAL = ("dropped",)
 VERDICT_REQUIRED = ("case", "verdict", "step")
 VERDICT_OPTIONAL = ("measure",)
 LOCAL_PATH = re.compile(r"(?<![\w.:/-])(?:/[\w.@+-]+){2,}|(?<![\w.])~/|\b[A-Za-z]:[\\/]|(?<![\w.:/-])/(?:Users|home|tmp|var|private|etc)\b")
@@ -90,10 +97,49 @@ def run_problems(position: str, run: Any, cases: Sequence[str], variants: Mappin
         checks = run["checks"]
         if not isinstance(checks, Mapping) or not checks or not all(isinstance(v, bool) for v in checks.values()):
             problems.append(f"{position} checks must map each check to pass or fail")
+    if "passed" in run and not isinstance(run["passed"], bool):
+        problems.append(f"{position} passed is not true or false")
+    if "loop" in run:
+        problems += loop_problems(position, run["loop"])
     if "wall_seconds" in run and run["wall_seconds"] is not None and not is_number(run["wall_seconds"]):
         problems.append(f"{position} wall_seconds is not a positive number or null")
     if "cost_usd" in run and run["cost_usd"] is not None and not is_number(run["cost_usd"], allow_zero=True):
         problems.append(f"{position} cost_usd is not a number or null")
+    return problems
+
+
+def count_ok(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def loop_problems(position: str, loop: Any) -> list[str]:
+    """The measures of one run of the text review loop: review runs and main-session turns as counts, tokens by kind."""
+    if not isinstance(loop, Mapping):
+        return [f"{position} loop is not an object"]
+    problems = [f"{position} loop lacks {field}" for field in LOOP_COUNTS + ("main_tokens",) if field not in loop]
+    problems += [f"{position} loop has unknown field {field}" for field in loop if field not in LOOP_FIELDS]
+    problems += [f"{position} loop {field} is not a count" for field in (*LOOP_COUNTS, "check_stops") if field in loop and not count_ok(loop[field])]
+    for field in LOOP_TOKENS:
+        tokens = loop.get(field)
+        if field in loop and not (isinstance(tokens, Mapping) and tokens and all(count_ok(value) for value in tokens.values())):
+            problems.append(f"{position} loop {field} is not a count per token kind")
+    return problems
+
+
+def candidate_problems(position: str, item: Any, variants: Mapping[str, Any]) -> list[str]:
+    if not isinstance(item, Mapping):
+        return [f"{position} is not an object"]
+    problems = [f"{position} lacks {field}" for field in CANDIDATE_REQUIRED if field not in item]
+    problems += [f"{position} has unknown field {field}" for field in item if field not in CANDIDATE_REQUIRED + CANDIDATE_OPTIONAL]
+    if "variant" in item and item["variant"] not in variants:
+        problems.append(f"{position} names a variant that is not in variants")
+    if "verdict" in item and item["verdict"] not in CANDIDATE_VERDICTS:
+        problems.append(f"{position} verdict is not adopt, reject, or undecided")
+    for field in ("candidate", "step"):
+        if field in item and not (isinstance(item[field], str) and item[field].strip()):
+            problems.append(f"{position} {field} is empty")
+    if "dropped" in item and not (isinstance(item["dropped"], list) and all(isinstance(name, str) and name for name in item["dropped"])):
+        problems.append(f"{position} dropped is not a list of candidate names")
     return problems
 
 
@@ -118,7 +164,7 @@ def validate_record(record: Any) -> list[str]:
     if not isinstance(record, Mapping):
         return ["the record is not an object"]
     problems = [f"the record lacks {field}" for field in TOP_FIELDS if field not in record]
-    problems += [f"the record has unknown field {field}" for field in record if field not in TOP_FIELDS]
+    problems += [f"the record has unknown field {field}" for field in record if field not in TOP_FIELDS + TOP_OPTIONAL]
     issue = record.get("issue")
     if "issue" in record and not (isinstance(issue, int) and not isinstance(issue, bool) and issue > 0):
         problems.append("issue is not a positive integer")
@@ -146,6 +192,13 @@ def validate_record(record: Any) -> list[str]:
         for index, item in enumerate(items):
             extra = (variants or {},) if key == "runs" else ()
             problems += check(f"{key}[{index}]", item, cases or [], *extra)
+    if "candidates" in record:
+        items = record["candidates"]
+        if not isinstance(items, list) or not items:
+            problems.append("candidates is not a non-empty list")
+        else:
+            for index, item in enumerate(items):
+                problems += candidate_problems(f"candidates[{index}]", item, variants if isinstance(variants, Mapping) else {})
     if any(LOCAL_PATH.search(text) for text in strings(record)):
         problems.append("the record contains an absolute local path")
     return problems
@@ -158,7 +211,7 @@ def check_record(record: Any) -> None:
 
 
 def build_record(issue: int, cases: Sequence[str], variants: Mapping[str, str], runs: Sequence[Mapping[str, Any]],
-                 verdicts: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+                 verdicts: Sequence[Mapping[str, Any]], candidates: Sequence[Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """The record dict for one comparison; `variants` maps each variant name to its revision."""
     record = {
         "issue": issue,
@@ -167,6 +220,7 @@ def build_record(issue: int, cases: Sequence[str], variants: Mapping[str, str], 
         "runs": [{field: run[field] for field in (*RUN_REQUIRED, *RUN_OPTIONAL) if field in run} for run in runs],
         "verdicts": [{field: item[field] for field in (*VERDICT_REQUIRED, *VERDICT_OPTIONAL) if field in item}
                      for item in verdicts],
+        **({"candidates": [dict(item) for item in candidates]} if candidates else {}),
     }
     check_record(record)
     return record
@@ -318,6 +372,11 @@ def run_hook_facts(spec: Any) -> dict[str, Any]:
     return hook_facts.run_facts(spec.result_dir, spec.host, plugin_dir, Path(spec.repo))
 
 
+def loop_entry(figures: Mapping[str, Any]) -> dict[str, Any]:
+    """The loop measures a record keeps from a run's `review_loop` figures: review runs, main-session turns, and tokens."""
+    return {field: figures[field] for field in LOOP_FIELDS if field in figures}
+
+
 def unmeasured(row: Mapping[str, Any], reason: str, revision: str | None = None) -> dict[str, Any]:
     """A run that exists but cannot be judged; it stays in its case as "not measured" instead of being dropped."""
     summary = {"rep": int(row["rep"]), "measured": False, "reason": reason, "passed": None, "wall_seconds": None, "cost_usd": None}
@@ -357,6 +416,9 @@ def campaign_runs(run_root: Path, campaign: str, variants: Sequence[str], tasks:
         entry = {"case": row["task"], "variant": row["variant"], "host": host, "rep": int(row["rep"]),
                  "models": run_models(result_dir, host, row), "checks": checks,
                  "wall_seconds": summary["wall_seconds"], "cost_usd": summary["cost_usd"]}
+        entry["passed"] = summary["passed"]
+        if isinstance(row.get("review_loop"), Mapping):
+            entry["loop"] = loop_entry(row["review_loop"])
         reviews = next((check["data"]["reviews"] for check in grade["checks"]
                         if check.get("id") == "text-review-clean" and (check.get("data") or {}).get("reviews")), None)
         if reviews:

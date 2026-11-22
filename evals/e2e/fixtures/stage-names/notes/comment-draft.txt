@@ -1,0 +1,3 @@
+Draft of the comment for the rollout ticket.
+
+Run step 0 first, then steps 3 to 8 in order. Keep nesting at a depth of at most 2 levels and list at most 3 items in each progress update.

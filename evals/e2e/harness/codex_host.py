@@ -13,7 +13,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Mapping
 
-from . import caps, codex_calls, codex_trust, collect, environment, transcript, usage
+from . import caps, codex_calls, codex_trust, collect, environment, loop_metrics, transcript, usage
 from .command import main_model
 from .config import CODEX_EFFORT, HOST_CODEX, PLUGIN_NAME, USAGE_LIMIT_PATTERN, HarnessConfig
 from .matrix import RunSpec, read_json, write_json
@@ -294,6 +294,7 @@ def load_records(spec: RunSpec, run: dict[str, Any], expected_model: str) -> dic
     violations = caps.scan_run(stream_events=[], by_source=by_source, tool_calls=calls, rollouts=rollouts)
     return {"view": view, "facts": facts, "claude_report": usage.claude_token_report(by_source),
             "codex_report": usage.codex_token_report(rollouts), "checks": checks, "usage_source": "rollouts",
+            "review_loop": loop_metrics.review_loop(calls, main["events"], HOST_CODEX),
             "violations": violations, "session": session, "rollouts": rollouts}
 
 

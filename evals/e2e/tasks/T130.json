@@ -1,0 +1,73 @@
+{
+  "id": "T130",
+  "title": "Repeated review that never converges",
+  "category": "review-loop",
+  "path": "repeated review stops every three rounds",
+  "fixture": "ops-notes",
+  "prompt_file": "prompts/T130.txt",
+  "setup": "setup/review_loop_guide.py",
+  "env": {
+    "REVIEW_STATE_DIR": "{work}/review-state",
+    "REVIEW_SCENARIO": "diverge"
+  },
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 6
+  },
+  "checks": [
+    {
+      "id": "ran-exactly-three-times",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "ran_exactly_three_times"
+    },
+    {
+      "id": "third-run-findings-fixed",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "third_run_findings_fixed"
+    },
+    {
+      "id": "report-gives-counts",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "report_gives_counts"
+    },
+    {
+      "id": "report-asks-how-to-go-on",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "report_asks_how_to_go_on"
+    },
+    {
+      "id": "report-recommends-one-option",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "report_recommends_one_option"
+    },
+    {
+      "id": "report-says-none-is-high",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "report_says_none_is_high"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "tools/**",
+        "notes/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

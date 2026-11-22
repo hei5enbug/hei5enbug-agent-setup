@@ -8,7 +8,7 @@ import threading
 from datetime import datetime
 from typing import Any
 
-from . import caps, codex_calls, codex_host, collect, command, environment, metrics, rubric, transcript, usage
+from . import caps, codex_calls, codex_host, collect, command, environment, loop_metrics, metrics, rubric, transcript, usage
 from .config import (
     APPROVAL_GUARD_OFF_ENV, CLAUDE_INSTRUCTION_ENV, FINISHED_STATUSES, HOST_CODEX, INSTRUCTION_ISOLATION, STATUS_COMPLETE,
     STATUS_INFRA_FAILED, STATUS_INTERRUPTED, STATUS_TIMED_OUT, STATUS_USAGE_LIMITED, HarnessConfig,
@@ -115,6 +115,7 @@ def claude_records(spec: RunSpec, run: dict[str, Any]) -> dict[str, Any]:
     return {
         "view": view, "facts": facts, "claude_report": usage.claude_token_report(by_source),
         "codex_report": usage.codex_token_report(rollouts), "usage_source": usage_source,
+        "review_loop": loop_metrics.review_loop(view["tool_calls"], main_events or events, "claude"),
         "checks": metrics.plugin_checks(facts, run["plugin"]["path"], main_events, subagents),
         "violations": caps.scan_run(stream_events=events, by_source=by_source, tool_calls=view["tool_calls"], rollouts=rollouts),
         "extra": {},
@@ -143,7 +144,7 @@ def analyze(
     result = metrics.build_metrics(
         run=run, task=task, view=view, facts=records["facts"], claude_report=records["claude_report"],
         codex_report=records["codex_report"], grade=grade, rubric=rubric_result, checks=records["checks"],
-        usage_source=records["usage_source"],
+        usage_source=records["usage_source"], review_loop=records.get("review_loop"),
     )
     result = {**result, "host": spec.host, **records["extra"]}
     if records["violations"]:

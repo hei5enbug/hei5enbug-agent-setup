@@ -32,3 +32,7 @@ A flow differs from F1 only by one text edit of `instructions/shared-text.md` or
 python3 evals/text-flows/tf_pages.py --run-root <root> --campaign <name> \
   --flows F1=f1:claude,F2=f2:claude,F3=f3:codex,F4=f4:claude,F5=f5:claude --out <folder>
 ```
+
+`--tasks T13,T14,T17` adds the other writing tasks (T14, T16 to T19, T22, T25 to T30, T65, and T66) to the pages; a commit
+message task shows the last commit message of the run's repository. The pages of a before and an after revision of one
+change use two flows, for example `F1=h-text-before:claude,F2=h-text-after:claude`.

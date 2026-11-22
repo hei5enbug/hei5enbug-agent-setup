@@ -1,6 +1,7 @@
 """Offline tests of the text flow comparison pages: neutral labels, a separate key file, and the form summary."""
 import json
 import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -24,7 +25,7 @@ def seed_run(root: Path, task: str, variant: str, host: str, text: str, form_ok=
         "claude_list_cost_usd": 0.5, "claude_runner_list_cost_usd": 0.1, "codex_list_cost_usd_estimate": 0.2}}), encoding="utf-8")
     (directory / "view.json").write_text(json.dumps({"final_answer": text}), encoding="utf-8")
     repo = tf_pages.work_repo(root, "p3", task, variant, host)
-    relative = tf_pages.KINDS[task][1]
+    relative = tf_pages.ALL_KINDS[task][1]
     if relative:
         (repo / relative).parent.mkdir(parents=True, exist_ok=True)
         (repo / relative).write_text(text, encoding="utf-8")
@@ -114,6 +115,26 @@ class PagesTest(unittest.TestCase):
         self.assertEqual(tf_pages.parse_flows("F1=f1:claude,F3=f3:codex"), {"F1": ("f1", "claude"), "F3": ("f3", "codex")})
         with self.assertRaises(ValueError):
             tf_pages.parse_flows("F1=f1")
+
+    def test_tasks_옵션은_추가_글쓰기_과제의_페이지를_만들고_커밋_메시지는_저장소_마지막_커밋에서_읽는다(self):
+        """T13 T15 T20 밖의 글쓰기 과제를 비교하지 못하면 묶음 전체의 글 품질을 눈으로 가릴 수 없으므로, 파일 과제와 커밋 과제 모두 페이지가 생긴다."""
+        # given
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root, out = Path(tmp.name) / "runs", Path(tmp.name) / "out"
+        for flow, (variant, host) in FLOWS.items():
+            seed_run(root, "T14", variant, host, f"reply from {flow}")
+            directory = tf_pages.run_dir(root, "p3", "T17", variant, host)
+            (directory / "grade").mkdir(parents=True)
+            repo = tf_pages.work_repo(root, "p3", "T17", variant, host)
+            repo.mkdir(parents=True)
+            for command in (["init", "-q"], ["-c", "user.name=a", "-c", "user.email=a@example.com", "commit", "-q", "--allow-empty", "-m", f"subject from {flow}"]):
+                subprocess.run(["git", "-C", str(repo), *command], check=True, capture_output=True)
+        # when
+        made = tf_pages.build(root, "p3", FLOWS, out, tasks=("T14", "T17"))
+        # then
+        self.assertEqual(made["pages"], ["t14-ranking.html", "t17-ranking.html"])
+        self.assertIn("subject from F1", (out / "t17-ranking.html").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

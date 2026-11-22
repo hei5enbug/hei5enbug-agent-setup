@@ -1,0 +1,5 @@
+Work item DEMO: speed up the nightly export.
+Acceptance: the comment states that the nightly export now finishes within 20 minutes, names the new config key
+`export.window`, and says how to roll back (set `export.window` to `off`).
+Background: a cleanup step deletes export files older than seven days at the start of each night, before the export
+starts.

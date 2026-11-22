@@ -1,0 +1,53 @@
+{
+  "id": "T132",
+  "title": "Fix that must reach every passage and match a decision",
+  "category": "review-loop",
+  "path": "a review fix reaches every passage that states its point",
+  "fixture": "ops-notes",
+  "prompt_file": "prompts/T132.txt",
+  "setup": "setup/review_loop_spread.py",
+  "env": {
+    "REVIEW_STATE_DIR": "{work}/review-state",
+    "REVIEW_SCENARIO": "spread"
+  },
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 6
+  },
+  "checks": [
+    {
+      "id": "ran-exactly-twice",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "ran_exactly_twice"
+    },
+    {
+      "id": "second-run-clean",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "second_run_clean"
+    },
+    {
+      "id": "all-files-state-the-decision",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "all_files_state_the_decision"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "tools/**",
+        "notes/**",
+        "docs/decisions.md"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

@@ -1,0 +1,2 @@
+The nightly export now finishes within 20 minutes. The new config key is `export.window`. To roll back, set `export.window` to `off`.
+The cleanup step deletes export files older than seven days before the export starts.

@@ -106,9 +106,9 @@ class CommonRulesTest(unittest.TestCase):
         """이름 변경, 결정 변경, 되돌리기 뒤에는 작업이 만들거나 올린 산출물의 옛 값을 고치거나 알리고 최종 보고에 적는다."""
         # Given
         rule = (
-            "After a rename, a changed decision, or a rollback, update or report every earlier output of the work that "
-            "still shows the old value, such as code, documents, descriptions, tickets, or comments, and list each in "
-            "the report."
+            "After a rename, a changed decision, a review fix, or a rollback, update or report every output that still "
+            "shows the old value, such as code, documents, descriptions, tickets, or comments, and list each in the "
+            "report."
         )
 
         # When / Then

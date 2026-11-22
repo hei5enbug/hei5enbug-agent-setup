@@ -7,8 +7,8 @@
 - Create every new commit, whether the user asked for it or a task requires it, through the `suggest-commit`
   skill in its commit mode. Only the commands its Modes section names run outside it.
 - A skill's workflow is a default the user can narrow: run only the steps asked for, and name skipped ones at the end.
-- After a rename, a changed decision, or a rollback, update or report every earlier output of the work that still
-  shows the old value, such as code, documents, descriptions, tickets, or comments, and list each in the report.
+- After a rename, a changed decision, a review fix, or a rollback, update or report every output that still shows the
+  old value, such as code, documents, descriptions, tickets, or comments, and list each in the report.
 
 ## Delegation
 
@@ -29,7 +29,7 @@ Choose an owner before substantial work.
 - If delegation is unavailable, use the fallback route the host rules name; without one, continue authorized work
   in the main session. Report the limitation once.
 
-Independent review is the exception to main-session review. Before finishing a substantial change, read
+Independent review is the exception to main-session review. Before finishing a substantial change or repeating a review, read
 [independent model validation](../independent-model-validation.md).
 
 ## Clarification

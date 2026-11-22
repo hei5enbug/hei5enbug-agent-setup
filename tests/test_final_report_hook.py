@@ -13,6 +13,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 SCRIPT = SCRIPTS / "final_report_hook.py"
 sys.path.insert(0, str(SCRIPTS))
+from final_report_hook import MINIMUM_REPORT_CHARACTERS  # noqa: E402
 from text_review import report_digest  # noqa: E402
 
 REPORT = "The change is done and the checks pass. " * 12
@@ -236,9 +237,14 @@ class FinalReportHookTest(unittest.TestCase):
         self.write(prompt(), assistant(edit()))
         self.assert_passes(self.run_hook(last_assistant_message=REPORT + "\nShould I continue?"))
 
-    def test_짧은_답이면_통과한다(self):
+    @unittest.skipUnless(MINIMUM_REPORT_CHARACTERS > 0, "the hook has no length threshold")
+    def test_기준보다_한_글자_짧은_보고는_통과한다(self):
         self.write(prompt(), assistant(edit()))
-        self.assert_passes(self.run_hook(last_assistant_message="Done."))
+        self.assert_passes(self.run_hook(last_assistant_message="x" * (MINIMUM_REPORT_CHARACTERS - 1)))
+
+    def test_기준_길이의_보고는_막는다(self):
+        self.write(prompt(), assistant(edit()))
+        self.assert_blocks(self.run_hook(last_assistant_message="x" * max(MINIMUM_REPORT_CHARACTERS, 1)))
 
     def test_진행_중인_백그라운드_작업이_있으면_통과한다(self):
         self.write(prompt(), assistant(edit()))
@@ -365,7 +371,8 @@ class FinalReportHookTest(unittest.TestCase):
         self.assert_passes(self.run_hook(last_assistant_message="Should I push the change?"))
         self.assert_passes(self.run_hook(last_assistant_message="변경을 푸시할까요？"))
 
-    def test_검토가_없으면_짧은_보고는_통과한다(self):
+    @unittest.skipUnless(MINIMUM_REPORT_CHARACTERS > 0, "the hook has no length threshold")
+    def test_검토가_없으면_기준보다_짧은_보고는_통과한다(self):
         self.write(prompt(), assistant(bash("python3 -c \"open('out/x.txt','w').write('x')\"")))
         self.assert_passes(self.run_hook(last_assistant_message="Done, the file is written."))
 

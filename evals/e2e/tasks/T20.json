@@ -63,6 +63,13 @@
       "required": false,
       "weight": 1,
       "function": "ran_text_review"
+    },
+    {
+      "id": "reviewer-not-named",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "reviewer_not_named"
     }
   ],
   "constraints": [],

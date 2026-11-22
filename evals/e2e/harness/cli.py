@@ -1,4 +1,4 @@
-"""Entry point: run | summarize | regrade | export-plugin | pilot-check | record."""
+"""Entry point: run | summarize | regrade | export-plugin | pilot-check | record | loop-record | build-combined."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path[0] = str(Path(__file__).resolve().parents[1])
 
-from harness import campaign, command, measure_lock, plugin_export, records, summarize  # noqa: E402
+from harness import campaign, combined_build, command, loop_record, measure_lock, plugin_export, records, summarize  # noqa: E402
 from harness.config import (  # noqa: E402
     DEFAULT_PARALLEL, DEFAULT_RUN_ROOT, EXIT_FAILURE, EXIT_LOCK_HELD, HOST_CLAUDE, MEASURE_LOCK, HarnessConfig,
 )
@@ -81,6 +81,23 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--hook-facts", action="store_true",
                         help="add the informational hook time and denials of each run, replayed from its recorded tool calls")
     record.add_argument("--records-dir", type=Path, default=records.RECORDS_DIR)
+    loop = sub.add_parser("loop-record", help="judge the loop-shape candidates against the baseline and write their record")
+    add_common(loop)
+    loop.add_argument("--campaign", required=True)
+    loop.add_argument("--issue", type=int, required=True, help="issue number; the record is records/<issue>.json")
+    loop.add_argument("--baseline", required=True, help="variant name of the baseline")
+    loop.add_argument("--candidate", action="append", default=[], metavar="NAME=VARIANT",
+                      help="a candidate and its variant, in the order they are adopted; repeat for each")
+    loop.add_argument("--combined", help="variant name of the revision that holds every adopted candidate")
+    loop.add_argument("--tasks", help="comma-separated task ids; default every task with a finished run")
+    loop.add_argument("--records-dir", type=Path, default=records.RECORDS_DIR)
+    build = sub.add_parser("build-combined", help="merge the adopted loop-shape candidates onto the baseline in a scratch worktree")
+    add_common(build)
+    build.add_argument("--base", required=True, help="the baseline branch the candidates descend from")
+    build.add_argument("--candidate", action="append", default=[], metavar="BRANCH",
+                       help="an adopted candidate branch, in adoption order; repeat for each, two or more")
+    build.add_argument("--worktree", type=Path, help="scratch worktree folder; default <run-root>/combined/<base>+<candidates>")
+    build.add_argument("--dry-run", action="store_true", help="print the commands and create nothing")
     return parser
 
 
@@ -141,6 +158,30 @@ def do_record(args: argparse.Namespace, cfg: HarnessConfig) -> int:
     return 0
 
 
+def named_candidates(items: list[str]) -> dict[str, str]:
+    pairs = [item.partition("=") for item in items]
+    if not pairs or any(not name or not sep or not variant for name, sep, variant in pairs) or len({p[0] for p in pairs}) != len(pairs):
+        raise command.ConfigError("--candidate takes NAME=VARIANT, once per candidate, at least once")
+    return {name: variant for name, _, variant in pairs}
+
+
+def do_loop_record(args: argparse.Namespace, cfg: HarnessConfig) -> int:
+    if args.issue < 1:
+        raise command.ConfigError("--issue takes a positive issue number")
+    result = loop_record.record_loop(cfg.run_root, args.campaign, args.issue, args.baseline, named_candidates(args.candidate),
+                                     args.combined, split(args.tasks) or None)
+    path = records.write_record(result["record"], absolute(args.records_dir))
+    sys.stdout.write("".join(f"{line}\n" for line in result["lines"]))
+    sys.stdout.write(f"record written: {path.name}\n")
+    return 0
+
+
+def do_build_combined(args: argparse.Namespace, cfg: HarnessConfig) -> int:
+    worktree = absolute(args.worktree) if args.worktree else combined_build.default_worktree(cfg.run_root, args.base, args.candidate)
+    combined_build.build_combined(cfg.repo_root, args.base, args.candidate, worktree, args.dry_run, sys.stdout)
+    return 0
+
+
 def dispatch(args: argparse.Namespace) -> int:
     cfg = config_from(args)
     if args.action == "run":
@@ -149,6 +190,10 @@ def dispatch(args: argparse.Namespace) -> int:
         return do_summarize(args, cfg)
     if args.action == "record":
         return do_record(args, cfg)
+    if args.action == "loop-record":
+        return do_loop_record(args, cfg)
+    if args.action == "build-combined":
+        return do_build_combined(args, cfg)
     if args.action == "regrade":
         return campaign.regrade_campaign(
             cfg, args.campaign, frozenset(split(args.run_ids)), sys.stdout, recollect=args.recollect,

@@ -1,0 +1,1 @@
+notes/change-note-parser.txt의 변경을 parser에 적용하고, 테스트를 돌린 뒤 커밋까지 해줘.

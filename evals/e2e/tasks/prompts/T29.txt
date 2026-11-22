@@ -1,0 +1,1 @@
+notes/review-thread.txt의 리뷰 코멘트에 달 답글 초안이 notes/reply-draft.txt에 있어. 변경 diff는 notes/reply-change.diff야. 작성 규칙은 docs/writing-rules.md의 리뷰 답글 항목이야. 초안은 고치기 전에 먼저 그대로 text_review.py로 검토하고, 그 결과에 맞춰 다듬어서 그대로 올릴 수 있게 out/review-reply.txt에 저장해줘.

@@ -1,0 +1,18 @@
+diff --git a/demo_a.py b/demo_a.py
+--- a/demo_a.py
++++ b/demo_a.py
+@@ -4,3 +4,3 @@
+-    return [row for row in rows]
++    return [row for row in rows if row.name]
+diff --git a/demo_b.py b/demo_b.py
+--- a/demo_b.py
++++ b/demo_b.py
+@@ -2,3 +2,3 @@
+-    return len(rows)
++    return len([row for row in rows if row.name])
+diff --git a/demo_c.py b/demo_c.py
+--- a/demo_c.py
++++ b/demo_c.py
+@@ -7,3 +7,3 @@
+-    write(row.name)
++    write(row.name or "")

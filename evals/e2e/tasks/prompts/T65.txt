@@ -1,0 +1,1 @@
+notes/comment-draft.txt는 롤아웃 티켓에 달 댓글 초안이야. 절차는 notes/rollout-procedure.txt에 있어. 다듬어서 댓글로 올릴 수 있게 out/ticket-comment.txt에 저장해줘. 작성 규칙은 docs/writing-rules.md의 티켓 댓글 항목이야.

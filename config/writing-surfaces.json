@@ -42,7 +42,7 @@
     },
     "final-report": {
       "rules": ["instructions/shared-text.md", "instructions/session/common.md"],
-      "writers": ["instructions/session/common.md"],
+      "writers": ["instructions/session/common.md", "instructions/independent-model-validation.md"],
       "eval_task": "T20"
     }
   }
