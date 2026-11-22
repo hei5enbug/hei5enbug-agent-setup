@@ -58,6 +58,25 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 
 파서가 없으면 PostgreSQL은 더 엄격한 텍스트 검사로 대체합니다. 이 검사는 승인을 더 자주 요청할 수 있지만, 승인 없이 쓰기가 실행되는 일은 여전히 없습니다.
 
+## 질문 대화상자 가드
+
+`hooks/hooks.json`에 `^(AskUserQuestion|request_user_input)$` matcher로 한 번 등록된 `PreToolUse` 훅
+`scripts/question_guard.py`가 질문 대화상자가 열리기 전에 검사합니다. 선택지 이름에서 "(Recommended)" 같은 뒤쪽
+괄호 설명과 뒤쪽 문장 부호를 뺀 값이 "Other", "Custom", "Type your own", "Type your own answer",
+"Write your own", "Enter your own", "직접 입력", "직접 작성", "기타", "자유 입력" 중 하나와 대소문자 구분 없이 같으면
+호출을 거부합니다. 거부 이유는 호스트가 이미 자유 입력 줄을 더한다고 알리고 그 선택지를 지우라고 안내합니다.
+"Other files"처럼 그런 낱말을 포함만 한 이름과, 그 밖의 모든 이벤트, 도구, 입력 모양은 통과합니다.
+
+Claude Code는 `AskUserQuestion`에 `PreToolUse`를 일으키고 JSON 거부 결정을 받아들입니다. Codex의 훅 문서에는 질문 도구가
+나열되어 있지 않으므로, Codex `PreToolUse` 훅이 `request_user_input`을 받는지는 `evals/e2e`의 `probe-question-hook` 명령으로
+가립니다. 이 명령은 모델 호출이 한 번 들고 소유자가 시작할 때만 돕니다. 그때까지 공용 등록은 해롭지 않은데, 호스트가 부르지
+않는 훅은 아무것도 실행하지 않기 때문입니다. 프로브가 전달되지 않음을 보이면 Codex에는 자동 검사가 없고, 문장 규칙과 "Other"
+선택지를 금지하는 Codex 도구 스키마가 그것을 덮습니다.
+
+질문이 바뀌는 대상을 쉬운 말로 밝히는지처럼 훅이 판단할 수 없는 것은 `instructions/asking-the-user.md`의 문장 규칙으로
+남습니다. 2026-11-13 세션에서 에이전트가 입력 칸이 없는 자기만의 "직접 입력" 선택지를 더했고, 그 선택은 이름만 돌려주었기
+때문에 이 가드가 있습니다.
+
 ## 공개 경계 검사
 
 두 호스트 모두 `approval_guard` 옵션의 활성화 여부와 관계없이 모든 프로젝트에서 `Bash`의 `PreToolUse` 훅이
@@ -262,7 +281,7 @@ worktree에는 `orca worktree set --display-name`을 알립니다. `orca worktre
 시간 초과 결과를 바로 돌려줍니다. 시간이 다 된 훅은 하던 일을 멈추고, 출력하려던 내용을 버리고, 스스로 답합니다.
 
 - 출력이 호출이나 권한 요청을 거부할 수 있는 훅은 거부합니다. 대상은 `PreToolUse`와 `PermissionRequest`의 승인 가드, Orca 배치 훅,
-  에이전트 가드, DataGrip 가드이며, 이유에 플러그인과 훅의 이름을 밝히고, 기기가 바빠서 끝내지 못했다고 말하고, 부하가 내려간 뒤 다시 시도하거나
+  에이전트 가드, 질문 가드, DataGrip 가드이며, 이유에 플러그인과 훅의 이름을 밝히고, 기기가 바빠서 끝내지 못했다고 말하고, 부하가 내려간 뒤 다시 시도하거나
   어느 세션이 기기를 쓰는지 확인하라고 안내하는 결정을 냅니다. 공개 경계 훅은 종료 코드 2와 같은 문장을 stderr에 내어 막습니다.
 - 그 밖의 모든 훅은, 그렇지 않았다면 턴을 이어 가게 했을 `Stop` 훅도 포함해, 종료 코드 0과 출력 없음으로 끝나므로 에이전트의 작업이 이어집니다.
 

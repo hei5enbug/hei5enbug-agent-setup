@@ -158,6 +158,30 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 통해 입력 지문에 들어가며, `env.json`에는 `grader_review_model`도 남는데, 글 채점기가 스크립트의 `--model` 옵션으로 같은 모델로 리뷰하기 때문이다(꺼져 있으면 스크립트 기본값을 쓴다). 기록은 이 옵션을 쓴 실행마다 `review_stand_in`을 표시한다. 이때 리뷰어는 Claude라서 Claude 작성자와
 독립적이지 않으므로 같은 설정을 쓴 실행끼리만 비교한다.
 
+### Codex 질문 훅 프로브
+
+`probe-question-hook`은 Codex `PreToolUse` 훅이 `request_user_input` 호출을 받는지 가린다. 공식 Codex 훅 문서는 이
+이벤트가 다루는 도구(셸 명령, `apply_patch`, MCP와 그 밖의 함수 도구)를 적지만 `request_user_input`은 적지 않는다.
+그래서 이 확인 없이는 #104의 질문 가드를 Codex에 등록할 수 없다. 프로브는 Codex 실행과 같은 방식으로 격리된
+`CODEX_HOME`(인증 파일 심볼릭 링크, `.zprofile`만 있는 ZDOTDIR)을 만들지만 플러그인은 설치하지 않는다. `hooks.json`에는
+훅이 둘 있다. 가드 훅은 플러그인과 같은 매처 `^(AskUserQuestion|request_user_input)$`를 쓰고, 받은 이벤트를 기록한 뒤
+기준 문자열이 든 이유로 호출을 거부한다. 대조 훅은 모든 도구에 맞고 기록만 하므로, 가드 훅만 조용한 경우와 훅이 아예
+돌지 않는 경우를 구별한다. 그다음 `low` effort의 `codex exec` 세션 하나가 모델에게 `request_user_input`을 한 번
+부르게 한다. 모델 호출이 한 번 들고, 사용자가 시작할 때만 돈다.
+
+`--dry-run`은 파일과 명령을 출력하고 아무것도 시작하지 않는다. 실제 실행은 시도 폴더(`--dir`이 새 폴더를 주지 않으면
+`<run-root>/probes/question-hook-<UTC 시각>`)에 `hook-log.jsonl`, `stream.jsonl`, `evidence.json`을 쓴다.
+
+| 판정 | 뜻 | 종료 코드 |
+|---|---|---|
+| `delivered-and-denied` | 가드 훅이 `request_user_input`을 받았고, 롤아웃의 도구 출력에 기준 문자열이 보인다. Codex에 검사를 등록한다. | 0 |
+| `delivered` | 가드 훅은 받았지만 롤아웃에 거부가 보이지 않는다. 등록 전에 롤아웃을 읽는다. | 0 |
+| `not-delivered` | 모델이 도구를 불렀는데 다른 도구만(대조 훅) 기록됐거나 아무 훅도 기록하지 않았다. Codex에는 자동 검사가 없다. | 0 |
+| `hooks-inactive` | 모델이 도구를 불렀는데 어떤 훅도 아무것도 기록하지 않았다. 결론 없음. 훅 신뢰를 확인하고 다시 실행한다. | 3 |
+| `not-called` | 모델이 `request_user_input`을 부르지 않았다. 결론 없음. 다시 실행하거나 도구가 제공되는지 확인한다. | 3 |
+
+증거에는 훅이 받은 이벤트와 `tool_input`의 키, 타입 이름에 훅이 들어간 롤아웃 이벤트도 함께 담긴다.
+
 ## 명령
 
 모든 명령은 저장소 루트에서 실행한다. 기본 run root는 `~/.local/state/hei5enbug-agent-setup/harness-eval/runs`이고,
@@ -178,6 +202,7 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 | 두 변형 비교 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | 리비전 내보내기만 하기 | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
 | 변경을 판정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
+| Codex 훅이 `request_user_input`을 받는지 프로브한다. `--dry-run`은 아무것도 시작하지 않는다 | `python3 evals/e2e/harness/cli.py probe-question-hook [--dry-run] [--dir <folder>] [--effort low]` |
 
 `--parallel`은 동시에 실행할 수를 정한다(기본 3). 변형이 여럿이면 작업과 반복마다 순서를 번갈아(ABAB, 다음은
 BABA) 시간대 영향이 고르게 퍼지게 한다.
@@ -332,15 +357,33 @@ UI 작업(T82~T84, T112)은 `harness/render.py`로 `demo-app` 픽스처의 화�
 | T19 | ops-notes | 공유 문서 | 1,500자 한도에 1,600자쯤 되는 위키 초안 |
 | T20 | notes-cli | 최종 보고 | 테스트를 더한 작은 변경 후 보고 |
 | T21 | notes-cli | 작업 종료 시 Orca 정리 | 티켓의 설정 한 줄 변경, 가짜 `orca`와 저장소 세 곳의 Git worktree를 심어 둔 상태 |
+| T76 | notes-cli | 질문 대화상자 문구 | 이슈 초안의 다섯 줄 완료 체크리스트 중 다른 줄과 겹치는 두 줄을 지울지 묻기. 사용자는 그림으로 보고 싶다고 했다 |
+| T77 | notes-cli | 질문 대화상자 문구 | `demo.orders`에서 안 쓰는 두 열을 지울지 묻기. 사용자는 테이블을 그림으로 보고 싶다고 했다 |
 | T78 | commit-demo | 커밋 스킬, 스테이징만 범위 | 한국어 제목 기록, 스테이징한 변경 하나와 스테이징하지 않은 수정, 추적되지 않는 `.env` |
 | T79 | commit-demo | 커밋 스킬, 필수 식별자 | 티켓 키를 요구하는 커밋 규칙과 키를 말하지 않은 요청 |
 | T82 | demo-app | UI 라우팅, 완전한 명세 | 설정 패널의 이름 붙은 줄 네 곳 수정, 구현 워커로 라우팅 |
 | T83 | demo-app | UI 라우팅, 레이아웃 요청 | 375px에서 쌓이는 두 칸 프로필 화면, 디자이너로 라우팅 |
 | T84 | demo-app | UI 라우팅, 열린 중단점 | 폭 320px, 간격 24px 요금제 카드를 한 줄로, 모바일 중단점은 열어 둠, 디자이너로 라우팅 |
 | T112 | demo-app | UI 라우팅, 새 화면 | 처음부터 만드는 청구서 세 줄 화면, 1280px와 375px에서 맞아야 하며 고정된 `xhigh`의 디자이너로 라우팅 |
+| T140 | notes-cli | 저장된 질문 입력 | 이어 실행한 세션을 요약하기. 앞선 질문 입력이 대화에는 `\uXXXX` 이스케이프로 보이지만 저장된 기록에는 가나가 들어 있다 |
+| T141 | notes-cli | 저장된 질문 입력 | 같은 상황에서 저장된 기록 자체에 이스케이프 글이 있고, 질문을 다시 하기 |
 
 T89부터 T91까지의 ID는 [`evals/model-roles`](../../../../evals/model-roles/README.md)의 Claude 검토자 모델 비교가 씁니다.
 그 상대 ID인 T92와 T93은 해당 스킬이 제거되면서 끝났습니다. 그 사례는 이 하네스가 아니라 역할 실행기로 실행하므로 여기에는 과제 파일이 없습니다.
+
+T76과 T77은 실행이 마지막으로 보여 준 질문 대화상자를 채점합니다. Claude Code는 `AskUserQuestion`, Codex는 `request_user_input`
+호출이며, 직접 만든 자유 입력 선택지 때문에 플러그인의 질문 가드가 거부한 호출은 세지 않습니다. 두 과제 모두 "Other"나 "직접 입력"
+같은 자유 입력 선택지가 있는 대화상자는 실패시킵니다. T76은 또 지적된 두 줄의 핵심 낱말이 있고 "acceptance criteria", "regression",
+"criterion", "reviewer"와 그 한국어 대응어가 없을 것, 설명이 각각 지적된 두 줄을 핵심 낱말이나 대화상자가 붙인 이름표로 부르는 삭제
+선택지와 유지 선택지가 있을 것, 다섯 줄이 모두 든 그림이 있을 것을 요구합니다. 그림은 Claude Code에서는 선택지의 `preview`, Codex에서는
+질문 본문의 첫 줄 아래에 있어야 합니다. T77은 두 열 이름이 대화상자, 모든 선택지 설명, 그림의 그려진 줄에 있을 것을 요구합니다.
+설정 스크립트가 심는 글은 모두 가상이며, `files-untouched`는 실행을 실패시키지 않고 에이전트가 파일을 고쳤는지만 기록합니다.
+
+T140과 T141는 저장된 기록의 경로를 알려 주고, 실행이 무엇을 읽고 무엇을 말했는지를 채점합니다. T140은 실행이 기록을 읽을 것, 그리고
+모델이 이스케이프를 썼다거나 원문 글자 규칙을 어겼다고 말하거나, 결함 보고 초안을 쓰거나, 다음번에 원문 글자로 쓰겠다는 메모를 남기는 줄이
+없을 것을 요구하며, 그것을 부정하는 줄은 세지 않습니다. T141는 실행이 기록을 읽고, 저장된 입력에 이스케이프 글이 있다고 말하고,
+가나 원문에 `\uXXXX` 꼴이 없는 다음 질문을 대화상자에서, 대화상자가 없는 호스트에서는 최종 답변에서 할 것을 요구합니다. 둘 다 가상
+파일 `session/demo-session.jsonl`을 씁니다.
 
 ## 두 호스트에서 변경 비교
 

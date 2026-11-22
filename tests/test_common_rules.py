@@ -62,8 +62,8 @@ class CommonRulesTest(unittest.TestCase):
             with self.subTest(step=step):
                 self.assertIn(step, asking)
 
-    def test_질문_창의_문구도_답변_규칙을_따르고_사용자가_쓰지_않은_용어는_풀어_쓰거나_같은_곳에서_정의한다(self):
-        """질문, 머리말, 선택지 이름과 설명은 그 창만 보는 사람이 읽을 수 있게 쓰고, 사용자가 쓰지 않은 용어와 식별자는 바꾸거나 정의한다."""
+    def test_질문_창의_문구도_답변_규칙을_따르고_사용자가_쓰지_않은_용어는_같은_뜻의_쉬운_말로_바꾸고_없을_때만_정의한다(self):
+        """질문, 머리말, 선택지 이름과 설명은 그 창만 보는 사람이 읽을 수 있게 쓰고, 사용자가 쓰지 않은 용어와 식별자는 쉬운 말을 먼저 쓰고 없을 때만 정의한다."""
         # Given
         asking = " ".join((REPO_ROOT / "instructions/asking-the-user.md").read_text(encoding="utf-8").split())
 
@@ -72,11 +72,56 @@ class CommonRulesTest(unittest.TestCase):
             "Word the question, its header, and each option's label and description by the reply rules in the common "
             "session instructions, for a reader who sees only that dialog.",
             "When a term, abbreviation, internal component name, or code identifier that the user has not used in the "
-            "conversation would appear there, replace it with plain words or define it in the same text,",
+            "conversation would appear there, use a plain phrase with the same meaning when one exists,",
+            "and define the term in the same text only when no such phrase exists.",
         )
 
         # Then
         self.assert_in_every_context("Before asking the user anything or proposing to wait, read")
+        for rule in rules:
+            with self.subTest(rule=rule):
+                self.assertIn(rule, asking)
+
+    def test_질문_창은_결정_대상과_항목을_쉬운_말로_밝히고_번호만으로_부르지_않으며_진행_과정을_뺀다(self):
+        """질문 창을 보는 사람이 결정 대상, 영향받는 항목, 선택지별 결과를 알 수 있게 쓰고, 번호나 위치로만 항목을 부르거나 진행 과정을 되풀이하지 않는다."""
+        # Given
+        asking = " ".join((REPO_ROOT / "instructions/asking-the-user.md").read_text(encoding="utf-8").split())
+
+        # When
+        rules = (
+            "what the decision is about, from one line that names the thing it changes;",
+            "each item the choice affects, quoted or described in plain words, never only by its number or position in "
+            "a text the dialog does not show;",
+            "and what happens to each item under each option.",
+            "Keep the question to one sentence and put details in the option descriptions or the diagram.",
+            "Leave out how you reached the question, such as a reviewer's findings or earlier attempts, unless it "
+            "changes which option is right.",
+        )
+
+        # Then
+        for rule in rules:
+            with self.subTest(rule=rule):
+                self.assertIn(rule, asking)
+
+    def test_질문_도구가_자유_입력_줄을_더하는_호스트에서는_직접_입력_선택지를_만들지_않고_그림은_미리보기나_질문_본문에_둔다(self):
+        """호스트가 자유 입력 줄을 더하면 그 줄에 맡기고 직접 입력 선택지를 더하지 않으며, 그림은 미리보기 칸이 있으면 거기에 없으면 질문 문장 아래에 둔다."""
+        # Given
+        asking = " ".join((REPO_ROOT / "instructions/asking-the-user.md").read_text(encoding="utf-8").split())
+
+        # When
+        rules = (
+            "Under the condition that the host's question tool adds its own free-form row, as Claude Code "
+            "`AskUserQuestion` and Codex `request_user_input` do, rely on that row and never add an option whose label "
+            'asks the user to type, such as "Other", "Custom", or "직접 입력",',
+            "Under the condition that the host's tool cannot take a free-form answer, ask in the reply that ends the "
+            "turn instead.",
+            "Add an ASCII diagram only when it clarifies the choice.",
+            "Under the condition that a diagram helps and the host's question tool has a preview field, such as Claude "
+            "Code `preview`, put it there; under the condition that the tool has none, as on Codex, put it in the "
+            "question text below the question sentence.",
+        )
+
+        # Then
         for rule in rules:
             with self.subTest(rule=rule):
                 self.assertIn(rule, asking)
@@ -95,6 +140,29 @@ class CommonRulesTest(unittest.TestCase):
             "stored in the session transcript file first,",
             "Say whether the reported character is in that stored input before naming any other cause, and name the "
             "host or a plugin only when that input is correct and the shown text differs.",
+        )
+
+        # Then
+        for rule in rules:
+            with self.subTest(rule=rule):
+                self.assertIn(rule, asking)
+
+    def test_질문_창_입력이_대화에서_이스케이프로_보여도_저장된_입력을_읽기_전에는_실수나_결함으로_다루지_않는다(self):
+        """사용자 신고가 없어도 대화가 이전 질문 입력을 이스케이프로 보여 주면 저장된 입력을 먼저 읽고, 의도한 글자가 있으면 기록, 약속, 보고를 하지 않는다."""
+        # Given
+        asking = " ".join((REPO_ROOT / "instructions/asking-the-user.md").read_text(encoding="utf-8").split())
+
+        # When
+        rules = (
+            "Under the condition that the conversation shows unicode escapes, or another form you did not intend, in an "
+            "earlier question tool input of the session and no user reported it, read that input as stored in the "
+            "session transcript file before drawing any conclusion, and never judge from the conversation's display "
+            "whether the raw-character rule was followed.",
+            "Under the condition that the stored input holds the intended characters, treat the display as an artifact: "
+            "record no mistake in a summary, a memory, or a report, promise no correction, and report no defect to the "
+            "user, the host, or a tracker.",
+            "Under the condition that the stored input itself holds escape text or a wrong character, say so and write "
+            "the next question as raw characters.",
         )
 
         # Then

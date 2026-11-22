@@ -60,6 +60,27 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 Without it, PostgreSQL falls back to a stricter text check that may ask more often but still never lets a write run
 without approval.
 
+## Question dialog guard
+
+A `PreToolUse` hook, `scripts/question_guard.py`, registered once in `hooks/hooks.json` with the matcher
+`^(AskUserQuestion|request_user_input)$`, checks a question dialog before it opens. It denies the call when any
+option's label, after trailing parenthesized notes such as "(Recommended)" and trailing punctuation are removed,
+equals one of "Other", "Custom", "Type your own", "Type your own answer", "Write your own", "Enter your own",
+"직접 입력", "직접 작성", "기타", or "자유 입력", compared without case. The reason says that the host already adds a
+free-form row and tells the agent to remove that option. A label that only contains such a word, such as "Other
+files", passes, and so does every other event, tool, or input shape.
+
+Claude Code fires `PreToolUse` for `AskUserQuestion` and accepts the JSON deny decision. The Codex hooks page lists
+no question tool, so whether a Codex `PreToolUse` hook receives `request_user_input` is settled by the
+`probe-question-hook` command of `evals/e2e`, which costs one model call and runs only when the owner starts it. The
+shared registration is harmless until then, because a hook the host never calls runs nothing. When the probe shows
+no delivery, Codex has no automatic check, and the written rule and the Codex tool schema, which forbids an "Other"
+option, cover it.
+
+What the hook cannot decide, such as whether the question names what it changes in plain words, stays a written rule in
+`instructions/asking-the-user.md`. It exists because, in a 2026-11-13 session, an agent added its own "직접 입력"
+option, which has no text box and returned only its label.
+
 ## Public boundary check
 
 A `PreToolUse` hook on `Bash` calls `scripts/public_boundary_hook.py` in every project on both hosts, with the
@@ -279,7 +300,7 @@ no work and returns the timeout result at once. A hook that runs out of time sto
 and answers on its own:
 
 - A hook whose output can deny a call or a permission request denies it: the approval guard on `PreToolUse` and
-  `PermissionRequest`, the Orca placement hook, the agent guard, and the DataGrip guard with a decision whose reason
+  `PermissionRequest`, the Orca placement hook, the agent guard, the question guard, and the DataGrip guard with a decision whose reason
   names the plugin and the hook, says it could not finish because the machine is busy, and tells the agent to retry
   after the load drops or to check which sessions are using the machine; the public boundary hooks block with exit
   status 2 and the same text on stderr.

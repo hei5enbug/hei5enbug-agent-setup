@@ -1,0 +1,1 @@
+db/demo_orders.sql은 demo.orders 테이블 정의야. legacy_code와 old_status 두 열은 아무도 안 읽는 것 같아. 이 두 열을 지울지는 네가 정하지 말고 나한테 물어봐. 나는 테이블을 그림으로 보면 이해가 빨라. 파일은 고치지 마.
