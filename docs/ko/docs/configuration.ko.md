@@ -84,7 +84,7 @@ Codex 설정이나 Claude 설정을 쓰지 않습니다. 설정을 쓰는 것은
 | 도구 호출 위험 라벨 | `risk_highlight` | 해당 없음 |
 | 서브에이전트 작업 현황판 | `work_board` | 해당 없음 |
 | 도구 결과 비밀값 가리기 | `secret_redaction` | 해당 없음 |
-| 구현 worker 경로 | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, `sonnet`, 또는 `opus`) | 해당 없음 |
+| 구현 worker 경로 | `implementation_worker` (`auto`, `claude`, `codex`, `haiku`, `sol`, `sonnet`, 또는 `opus`) | 해당 없음 |
 | Claude Code worker 사고 강도 | `worker_effort` (기본 `high`) | 해당 없음 |
 | Codex worker 모델과 사고 강도 | `codex_worker_model` (`auto`, `gpt-6-luna`, `gpt-6.2-sol`, 또는 `claude-sonnet-5-5`, 기본 `auto`), `codex_worker_effort` (`high` 또는 `xhigh`, 기본 `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL`, `HEI5ENBUG_CODEX_WORKER_EFFORT` |
 | 검토 모델 | `review_model` (고정 모델 ID, 기본 `gpt-6.2-astra`) | 해당 없음 |
@@ -135,9 +135,9 @@ Codex 설정이나 Claude 설정을 쓰지 않습니다. 설정을 쓰는 것은
 
 | 호스트 | 옵션 | 값 | 기본값 | 효과 |
 |---|---|---|---|---|
-| Claude Code | `implementation_worker` | `auto`, `haiku`, `sonnet`, `opus`, `codex`, `sol` | `auto` | `auto`: 메인 세션이 할당마다 `worker` 에이전트의 모델을 고르며, 쉬운 작업은 `haiku`, 보통이거나 어려운 작업은 `sonnet`을 쓰고 mod는 그 밖의 모델을 거부합니다. `haiku`, `sonnet`, `opus`는 그 모델만 쓰는 `worker` 에이전트를 실행합니다. `codex`와 `sol`은 역할 실행기로 GPT worker를 실행합니다. 쉬운 작업은 `gpt-6-luna`, 어려운 작업은 `gpt-6.2-sol`인 GPT worker는 Claude 경로가 실패하거나 사용량 한도로 중단되었을 때의 대체이기도 합니다. |
-| Codex | `codex_worker_model` | `auto`, `gpt-6-luna`, `gpt-6.2-sol`, `claude-sonnet-5-5` | `auto` | `auto`: 메인 세션이 할당마다 고르며, 쉬운 작업은 `gpt-6-luna`, 어렵거나 확신이 없는 작업은 `gpt-6.2-sol`을 쓰고 에이전트 가드는 정확히 이 두 모델만 허용합니다. 고정 GPT 값은 그 모델만 허용합니다. `claude-sonnet-5-5`는 역할 실행기로 Claude Sonnet 경로를 먼저 실행하고 GPT worker를 그 대체로 씁니다. Claude Sonnet은 GPT worker가 실패하거나 사용량 한도로 중단되었을 때의 대체이기도 합니다. |
-| Codex | `codex_worker_effort` | `high`, `xhigh` | `high` | worker 생성이 쓸 수 있는 가장 낮은 사고 강도이며, 각 생성은 `xhigh`도 쓸 수 있습니다. |
+| Claude Code | `implementation_worker` | `auto`, `claude`, `haiku`, `sonnet`, `opus`, `codex`, `sol` | `auto` | `auto`: 메인 세션이 할당마다 `worker` 에이전트의 모델을 고르며, 쉬운 작업은 `haiku`, 보통이거나 어려운 작업은 `sonnet`을 쓰고 mod는 그 밖의 모델을 거부합니다. `claude`는 `auto`처럼 모델을 고르되 GPT worker는 절대 실행하지 않으며, Claude 실패는 위임을 멈추고 원인을 보고합니다. `haiku`, `sonnet`, `opus`는 그 모델만 쓰는 `worker` 에이전트를 실행합니다. `codex`는 아래 Codex worker 모델·사고 강도 설정으로 역할 실행기를 통해 GPT worker를 실행하고, `sol`은 `gpt-6.2-sol`을 실행합니다. 실패한 `codex`나 `sol` worker는 `claude-sonnet-5-5`로 이어 갑니다. 쉬운 작업은 `gpt-6-luna`, 어려운 작업은 `gpt-6.2-sol`인 GPT worker는 Claude 경로가 실패하거나 사용량 한도로 중단되었을 때의 대체이기도 합니다. |
+| Codex | `codex_worker_model` | `auto`, `gpt-6-luna`, `gpt-6.2-sol`, `gpt-6.1-terra`, `claude-sonnet-5-5` | `auto` | `auto`: 메인 세션이 할당마다 고르며, 쉬운 작업은 `gpt-6-luna`, 어렵거나 확신이 없는 작업은 `gpt-6.2-sol`을 쓰고 에이전트 가드는 정확히 이 두 모델만 허용합니다. 고정 GPT 값은 `gpt-6.1-terra`일 수도 있으며 그 모델만 허용하고, Claude Code의 `codex` 경로도 이를 씁니다. `claude-sonnet-5-5`는 역할 실행기로 Claude Sonnet 경로를 먼저 실행하고 GPT worker를 그 대체로 씁니다. Claude Sonnet은 GPT worker가 실패하거나 사용량 한도로 중단되었을 때의 대체이기도 합니다. |
+| Codex | `codex_worker_effort` | `high`, `xhigh` | `high` | Codex와 Claude Code의 `codex` 경로에서 worker 생성이 쓸 수 있는 가장 낮은 사고 강도이며, 각 생성은 `xhigh`도 쓸 수 있습니다. |
 
 이 설정이 생기기 전에는 Codex 구현 worker가 역할 실행기로 Claude Sonnet을 실행했고 GPT worker는 그 대체일 뿐이었습니다. `gpt-6-luna` 또는
 `gpt-6.2-sol`을 저장한 Codex 사용자는 그 모델이 고정 worker로 유지되며, 이제 첫 번째 경로입니다. 아무것도 저장하지 않았거나 인식되지 않는 값을 저장한

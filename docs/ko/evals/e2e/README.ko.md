@@ -338,6 +338,12 @@ UI 작업(T82~T84, T112)은 `harness/render.py`로 `demo-app` 픽스처의 화�
 | T83 | demo-app | UI 라우팅, 레이아웃 요청 | 375px에서 쌓이는 두 칸 프로필 화면, 디자이너로 라우팅 |
 | T84 | demo-app | UI 라우팅, 열린 중단점 | 폭 320px, 간격 24px 요금제 카드를 한 줄로, 모바일 중단점은 열어 둠, 디자이너로 라우팅 |
 | T112 | demo-app | UI 라우팅, 새 화면 | 처음부터 만드는 청구서 세 줄 화면, 1280px와 375px에서 맞아야 하며 고정된 `xhigh`의 디자이너로 라우팅 |
+| T150 | scout-demo | scout 결과 계약, 함수 하나 | 구분자가 없을 때 `parse_pair`가 일으키는 오류. 보고는 `pass`로 시작하고 경로와 줄 번호로 함수를 인용하며 답을 direct로 표시 |
+| T151 | scout-demo | scout 결과 계약, 없는 경로 | 존재하지 않는 `demo-lib/docs/missing.md`에 대한 질문. 보고는 `blocked`로 시작하고 경로를 밝히며 내용에 대한 결론을 내지 않음 |
+| T152 | scout-demo | scout 결과 계약, 일부 증거 | 두 파일에 걸친 구분자와 최대 줄 길이 중 길이가 없는 경우. 보고는 `issues`로 시작하고 길이를 unknown으로 표시하며 수정 제안을 하지 않음 |
+| T153 | inventory-service | 어려운 작업의 worker 모델, 위임 강제 | 앱과 CLI에 걸친 데이터 파일 하나의 프로세스 간 잠금(동시성, 공개 계약, 여러 구성요소)을 요청으로 구현 worker에게 맡김. worker의 모델은 변형의 `implementation_worker` 경로가 정함 |
+| T154 | skill-review-demo | skill 검토 역할, 채점기 | 기대 항목 셋 중 하나를 놓친 `release-notes` 실행을 Skill Builder로 채점함. 채점은 정확히 그 항목만 실패로 표시하고 출력을 인용하며, 검토 경로 실행이 있어야 함 |
+| T155 | skill-review-demo | skill 검토 역할, 비교기 | 글머리표 다섯 개 한도를 어긴 출력과 지킨 출력을 Skill Builder로 블라인드 비교함. 비교는 지킨 출력을 고르고 그 한도를 밝히며, 검토 경로 실행이 있어야 함 |
 
 T89부터 T91까지의 ID는 [`evals/model-roles`](../../../../evals/model-roles/README.md)의 Claude 검토자 모델 비교가 씁니다.
 그 상대 ID인 T92와 T93은 해당 스킬이 제거되면서 끝났습니다. 그 사례는 이 하네스가 아니라 역할 실행기로 실행하므로 여기에는 과제 파일이 없습니다.

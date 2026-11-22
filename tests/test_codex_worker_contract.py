@@ -7,12 +7,36 @@ Codex session follows it; native trials cover that.
 from __future__ import annotations
 
 import re
+import tomllib
 import unittest
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CODEX_AGENTS = REPO_ROOT / "instructions/codex-agents.md"
+CODEX_WORKER_ROLES = {
+    "plugin role": REPO_ROOT / ".codex/agents/worker.toml",
+    "standalone worker": REPO_ROOT / "standalone-agents/codex-worker.toml",
+}
+WORKER_DUTIES = {
+    "edit only the allowed paths": r"edit only (the )?allowed paths",
+    "preserve changes made by others": r"preserve (other changes|changes made by (others|other workers))",
+    "run only the assigned checks": r"run only (the )?assigned checks",
+    "never widen scope": r"(do not|never) widen scope",
+    "start no other agent": r"start (no )?(other|another) agent",
+    "report a missing decision or a conflict": r"report (a )?missing decisions? (and|or) (a )?conflicting changes?",
+    "return paths, check results, and blockers": r"return (the )?changed paths, check results,? and (remaining )?blockers",
+}
+
+
+def role_instructions(path: Path) -> str:
+    return " ".join(tomllib.loads(path.read_text(encoding="utf-8"))["developer_instructions"].split())
+
+
+def missing_duties(text: str) -> list[str]:
+    """Return the worker duties of the assigned-workers rules that the text does not state."""
+    lowered = text.lower()
+    return [duty for duty, pattern in WORKER_DUTIES.items() if re.search(pattern, lowered) is None]
 
 
 def implementation_section() -> str:
@@ -63,6 +87,36 @@ class CodexWorkerContractTest(unittest.TestCase):
                 )
                 self.assertNotIn("link the implementation execution rules", text)
                 self.assertIn("the plugin rules are inactive", text)
+
+    def test_Codex_plugin_role과_standalone_worker는_Assigned_workers의_모든_의무를_적는다(self):
+        """두 Codex worker 정의는 허용 경로만 편집, 변경 보존, 할당된 검사만 실행, 범위 확대 금지, 다른 에이전트 금지, 결정 누락·충돌 보고, 결과 반환을 모두 적는다."""
+        for label, path in CODEX_WORKER_ROLES.items():
+            with self.subTest(label=label):
+                # Given
+                text = role_instructions(path)
+                if label == "standalone worker":
+                    text = text.split("When they do not", 1)[1]
+
+                # When
+                missing = missing_duties(text)
+
+                # Then
+                self.assertEqual([], missing)
+
+    def test_의무_하나를_뺀_worker_정의는_의무_검사에서_실패한다(self):
+        """각 의무의 문장을 지우면 missing_duties가 그 의무를 정확히 하나 돌려준다."""
+        for label, path in CODEX_WORKER_ROLES.items():
+            text = role_instructions(path)
+            for duty, pattern in WORKER_DUTIES.items():
+                with self.subTest(label=label, duty=duty):
+                    # Given
+                    dropped = re.sub(pattern, "", text, flags=re.IGNORECASE)
+
+                    # When
+                    missing = missing_duties(dropped)
+
+                    # Then
+                    self.assertEqual([duty], missing)
 
     def test_Codex_designer_정의는_design_기능의_기술_설계_문서와_허용_경로_문서_쓰기를_포함한다(self):
         """designer TOML의 설명과 지침은 design 기능의 기술 설계 문서 초안 작성과 허용 경로의 문서 파일 쓰기를 포함한다."""

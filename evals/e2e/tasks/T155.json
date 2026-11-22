@@ -1,0 +1,52 @@
+{
+  "id": "T155",
+  "title": "Skill Builder blind comparison goes through the review route and names the broken rule",
+  "category": "skill",
+  "path": "skill review roles: comparator on the review route, and the model of that route",
+  "fixture": "skill-review-demo",
+  "prompt_file": "prompts/T155.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "comparison-saved",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "comparison_saved"
+    },
+    {
+      "id": "prefers-the-compliant-output",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "prefers_compliant_output"
+    },
+    {
+      "id": "names-the-broken-rule",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "names_broken_rule"
+    },
+    {
+      "id": "review-route-ran",
+      "kind": "review_before_report",
+      "required": true,
+      "weight": 3
+    },
+    {
+      "id": "outputs-untouched",
+      "kind": "only_changed",
+      "required": false,
+      "weight": 1,
+      "allow": [
+        "release-notes-workspace/blind-1/comparison.json"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

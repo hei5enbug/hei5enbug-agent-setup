@@ -32,7 +32,7 @@ that effort only when it is a known effort at or below the role's pinned effort.
 that agent, including after a resume, and records it as `call_effort` without setting `requested`. The call's model is
 still forced to the pin, and an effort above the pin is ignored; raising it still needs the user's own prompt.
 The `worker` agent is the one role whose call model the mod honors without a user request: under `implementation_worker`
-`auto` it accepts `haiku` or `sonnet` (the registry's `call_models`), under `haiku`, `sonnet`, or `opus` only that model,
+`auto` or `claude` it accepts `haiku` or `sonnet` (the registry's `call_models`), under `haiku`, `sonnet`, or `opus` only that model,
 which a call that passes none also gets, and it denies any other model with a message naming the allowed ones. The
 effort rules above apply to the chosen model, and the mod keeps a resumed run on the model it started with, because
 the host ignores a hook's model on a resume.

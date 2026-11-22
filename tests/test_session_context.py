@@ -21,6 +21,7 @@ import session_context  # noqa: E402
 HOOKS = json.loads((REPO_ROOT / "hooks/hooks.json").read_text())["hooks"]
 LEGACY_EXPLORER = REPO_ROOT / "tests/fixtures/legacy-codex-explorer.toml"
 LEGACY_WORKER = REPO_ROOT / "tests/fixtures/legacy-codex-worker.toml"
+PREVIOUS_WORKER = REPO_ROOT / "tests/fixtures/previous-codex-worker.toml"
 RETIRED_EXPLORER_DIGESTS = {"bfde4fbbe2740152ad537d576612a34619a57a45adb56072e3f945610ef820af"}
 LEGACY_RESEARCHER = REPO_ROOT / "tests/fixtures/legacy-codex-researcher.toml"
 RETIRED_RESEARCHER_DIGESTS = {"940a7daace75165d8eceeece93a3c4960c42d187754738a744244059d5a0e5c1"}
@@ -709,6 +710,11 @@ class SessionContextTest(unittest.TestCase):
         """이전 버전 worker와 designer 파일의 해시는 교체 대상이고 현재 번들 파일은 교체 대상이 아니다."""
         # Given
         retired = session_context.RETIRED_CODEX_AGENTS
+        self.assertEqual(
+            "4fa91ce1f3ad77a9451980a25451115bd1d6ac420d7239e359cab739d0f15120",
+            hashlib.sha256(PREVIOUS_WORKER.read_bytes()).hexdigest(),
+        )
+        self.assertIn("4fa91ce1f3ad77a9451980a25451115bd1d6ac420d7239e359cab739d0f15120", retired["worker"])
         expected = {
             "worker": "249b194b8c9e0cea3ff687298e58cee99ca6c330f79e04162029a60e2ecfeff0",
             "designer": "c8c525a3a7fdfb5adbff1cf7474d24dfba35527eb070f4a5206c164b248d43ed",
@@ -1415,7 +1421,7 @@ class SessionContextTest(unittest.TestCase):
         self.assertEqual(self.worker.read_bytes(), edited)
 
     def pinned_effort_worker(self) -> bytes:
-        bundled = (REPO_ROOT / "standalone-agents/codex-worker.toml").read_text(encoding="utf-8")
+        bundled = PREVIOUS_WORKER.read_text(encoding="utf-8")
         line = 'model_reasoning_effort = "xhigh"\n'
         head, tail = bundled.split("\n", 2)[:2], bundled.split("\n", 2)[2]
         return ("\n".join(head) + "\n" + line + tail).encode("utf-8")

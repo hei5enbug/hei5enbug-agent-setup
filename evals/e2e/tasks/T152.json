@@ -1,0 +1,57 @@
+{
+  "id": "T152",
+  "title": "Scout marks an absent fact unknown and proposes no fix",
+  "category": "scout",
+  "path": "scout agent result contract",
+  "fixture": "scout-demo",
+  "prompt_file": "prompts/T152.txt",
+  "limits": {
+    "wall_seconds": 600,
+    "max_budget_usd": 3
+  },
+  "checks": [
+    {
+      "id": "scout-ran-once",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "scout_ran_once"
+    },
+    {
+      "id": "starts-issues",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "starts_issues"
+    },
+    {
+      "id": "labels-absent-fact-unknown",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "labels_unknown"
+    },
+    {
+      "id": "states-known-delimiters",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "states_delimiters"
+    },
+    {
+      "id": "no-proposed-fix",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "no_proposed_fix"
+    },
+    {
+      "id": "repository-unchanged",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 1
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

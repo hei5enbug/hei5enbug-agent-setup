@@ -61,8 +61,8 @@
     "implementation_worker": {
       "type": "string",
       "title": "Implementation worker",
-      "description": "Route implementation work: auto (the main session picks per task: the plugin worker on haiku for easy work or sonnet for normal or hard work, and a GPT worker, gpt-6-luna for easy work or gpt-6.2-sol for hard work, only when a Claude route fails or stops on a usage limit), haiku, sonnet, or opus (the plugin worker on that model only), codex (a GPT worker through the role runner at high, gpt-6-luna for easy work or gpt-6.2-sol for hard work), or sol (gpt-6.2-sol at high through the role runner).",
-      "options": ["auto", "codex", "haiku", "sol", "sonnet", "opus"],
+      "description": "Route implementation work: auto (the main session picks per task: the plugin worker on haiku for easy work or sonnet for normal or hard work, and a GPT worker, gpt-6-luna for easy work or gpt-6.2-sol for hard work, only when a Claude route fails or stops on a usage limit), claude (the same pick between haiku and sonnet, never a GPT worker: a Claude failure stops the delegation and reports the cause), haiku, sonnet, or opus (the plugin worker on that model only), codex (a GPT worker through the role runner at the Codex worker model and effort settings, auto picking gpt-6-luna for easy work or gpt-6.2-sol for hard work), or sol (gpt-6.2-sol at high through the role runner). A failed codex or sol worker continues on claude-sonnet-5-5.",
+      "options": ["auto", "claude", "codex", "haiku", "sol", "sonnet", "opus"],
       "default": "auto"
     },
     "worker_effort": {
@@ -75,14 +75,14 @@
     "codex_worker_model": {
       "type": "string",
       "title": "Codex worker model",
-      "description": "Model of the implementation worker in Codex: auto (the main session picks per assignment, gpt-6-luna for easy work or gpt-6.2-sol for hard or unsure work), gpt-6-luna or gpt-6.2-sol (that model only), or claude-sonnet-5-5 (the Claude Sonnet route through the role runner, with the GPT worker as its fallback). Codex reads it at session start, so it takes effect from the next Codex session. HEI5ENBUG_CODEX_WORKER_MODEL overrides it.",
-      "options": ["auto", "gpt-6-luna", "gpt-6.2-sol", "claude-sonnet-5-5"],
+      "description": "Model of the implementation worker in Codex: auto (the main session picks per assignment, gpt-6-luna for easy work or gpt-6.2-sol for hard or unsure work), gpt-6-luna, gpt-6.2-sol, or gpt-6.1-terra (that model only), or claude-sonnet-5-5 (the Claude Sonnet route through the role runner, with the GPT worker as its fallback). It also sets the model of the codex route in Claude Code. Codex reads it at session start, so it takes effect from the next Codex session. HEI5ENBUG_CODEX_WORKER_MODEL overrides it.",
+      "options": ["auto", "gpt-6-luna", "gpt-6.2-sol", "gpt-6.1-terra", "claude-sonnet-5-5"],
       "default": "auto"
     },
     "codex_worker_effort": {
       "type": "string",
       "title": "Codex worker effort",
-      "description": "Reasoning effort of the plugin worker role in Codex, from the next Codex session. HEI5ENBUG_CODEX_WORKER_EFFORT overrides it.",
+      "description": "Reasoning effort of the plugin worker role in Codex and of the codex route in Claude Code, from the next Codex session. HEI5ENBUG_CODEX_WORKER_EFFORT overrides it.",
       "options": ["high", "xhigh"],
       "default": "high"
     },

@@ -1,0 +1,50 @@
+{
+  "id": "T150",
+  "title": "Scout answers a question that sits in one function, with its path and line numbers",
+  "category": "scout",
+  "path": "scout agent result contract",
+  "fixture": "scout-demo",
+  "prompt_file": "prompts/T150.txt",
+  "limits": {
+    "wall_seconds": 600,
+    "max_budget_usd": 3
+  },
+  "checks": [
+    {
+      "id": "scout-ran-once",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "scout_ran_once"
+    },
+    {
+      "id": "starts-pass",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "starts_pass"
+    },
+    {
+      "id": "quotes-with-path-and-lines",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "quotes_function"
+    },
+    {
+      "id": "labels-direct",
+      "kind": "custom",
+      "required": true,
+      "weight": 1,
+      "function": "labels_direct"
+    },
+    {
+      "id": "repository-unchanged",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 1
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

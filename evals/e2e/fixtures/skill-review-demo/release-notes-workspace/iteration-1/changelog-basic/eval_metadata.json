@@ -1,0 +1,10 @@
+{
+  "eval_id": 1,
+  "eval_name": "changelog-basic",
+  "prompt": "Write release notes for version 2.4.0 from these merged changes: add CSV export to the report page; speed up the search index by caching; fix the date shown on the invoice header; remove the --legacy flag from the import command (breaking); update the Korean translations.",
+  "assertions": [
+    "The output starts with the heading `# Release notes 2.4.0`.",
+    "The output lists at most 5 changes, one line each, as bullets.",
+    "The output ends with an Upgrade steps section that names the removal of the --legacy flag."
+  ]
+}

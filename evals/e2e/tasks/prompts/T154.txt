@@ -1,0 +1,1 @@
+release-notes-workspace/iteration-1/changelog-basic 폴더의 with_skill 실행 결과를 skill-builder 스킬의 채점 절차로 채점해줘. 기대 항목은 그 폴더의 eval_metadata.json에 있어. 채점 결과는 with_skill 폴더의 grading.json으로 저장해줘.

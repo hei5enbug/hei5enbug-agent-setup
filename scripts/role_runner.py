@@ -15,6 +15,7 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import codex_hook_trust  # noqa: E402
+import plugin_toggles  # noqa: E402
 from role_runner_agents import agent_run, chosen_effort, default_host, runner_for  # noqa: E402
 from role_runner_child import child_environment, codex_mcp_off, kill_group, run_child  # noqa: E402
 from role_runner_command import claude_command, claude_tools, codex_command, sandbox_for  # noqa: E402
@@ -241,15 +242,30 @@ def capability_fallback(target: str, host: str, primary: str) -> dict:
     return CAPABILITIES[target][host]["fallback"]
 
 
+def role_model_and_entry(args: argparse.Namespace, target: str) -> tuple[str, dict]:
+    """Return a role's model and effort entry. The worker role takes the codex_worker_model and codex_worker_effort
+    settings: a fixed GPT model when no model is named, and the effort as the lower bound; an invalid setting falls back
+    to the defaults with a notice on stderr."""
+    if target == "reviewer":
+        return args.model or DEFAULT_REVIEW_MODEL, ROLE_ENTRY
+    if target != "worker":
+        return args.model or ROLE_MODEL, ROLE_ENTRY
+    setting, effort, notice = plugin_toggles.worker_setting()
+    if notice:
+        print(f"role_runner: {notice}", file=sys.stderr)
+    fixed = plugin_toggles.fixed_worker_model(setting)
+    return args.model or fixed or ROLE_MODEL, {**ROLE_ENTRY, "effort": effort}
+
+
 def resolve(args: argparse.Namespace) -> Run:
     target = args.role
     if target == AGENT_TARGET:
         return agent_run(args, args.host or default_host())
     if target in ROLES:
-        model = args.model or (DEFAULT_REVIEW_MODEL if target == "reviewer" else ROLE_MODEL)
+        model, entry = role_model_and_entry(args, target)
         return Run(
             target=target, role=target, capability=None, fallback=False, runner=runner_for(model), model=model,
-            effort=chosen_effort(args.effort, ROLE_ENTRY, model, args.user_requested), writing=target == "worker", add_dirs=tuple(args.add_dirs),
+            effort=chosen_effort(args.effort, entry, model, args.user_requested), writing=target == "worker", add_dirs=tuple(args.add_dirs),
             resume=args.resume, instructions=None,
         )
     host = args.host or default_host()

@@ -158,6 +158,7 @@ def render_claude_settings(effort: str | None = None, notice: str | None = None)
     option = plugin_toggles.option_value("implementation_worker")
     route = {
         "auto": "Auto (`auto`)",
+        "claude": "Claude (`claude`)",
         "codex": "Codex (`codex`)",
         "haiku": "Haiku (`haiku`)",
         "sol": "Sol (`sol`)",
@@ -320,6 +321,7 @@ RETIRED_CODEX_AGENTS = {
         "ce4488d0323832dc1563481875e7c26d693092c94865c37a4b4b89afd8274f83",
         "249b194b8c9e0cea3ff687298e58cee99ca6c330f79e04162029a60e2ecfeff0",
         "89d72db180d2d0a16707804125af045ac5bb81baa2d751bad078747258b84d49",
+        "4fa91ce1f3ad77a9451980a25451115bd1d6ac420d7239e359cab739d0f15120",
     },
     "designer": {
         "c8c525a3a7fdfb5adbff1cf7474d24dfba35527eb070f4a5206c164b248d43ed",

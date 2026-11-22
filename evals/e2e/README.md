@@ -363,6 +363,12 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T83 | demo-app | UI routing, layout request | Two-column profile screen that stacks at 375 px; routes to the designer |
 | T84 | demo-app | UI routing, open breakpoint | Plan cards 320 px wide and 24 px apart in one row, mobile breakpoint left open; routes to the designer |
 | T112 | demo-app | UI routing, new screen | A new invoices screen of three rows built from scratch, fitting at 1280 and 375 px; routes to the designer at its pinned `xhigh` |
+| T150 | scout-demo | Scout result contract, one function | The error `parse_pair` raises when no delimiter is present; the report starts with `pass`, quotes the function with path and line numbers, and labels the answer direct |
+| T151 | scout-demo | Scout result contract, missing path | A question on `demo-lib/docs/missing.md`, which does not exist; the report starts with `blocked`, names the path, and states no conclusion about its content |
+| T152 | scout-demo | Scout result contract, partial evidence | Delimiters and a maximum line length across two files where the length is absent; the report starts with `issues`, labels the length unknown, and proposes no fix |
+| T153 | inventory-service | Worker model on hard work, forced delegation | Cross-process locking of one data file across the app and the CLI (concurrency, a public contract, several components), handed to the implementation worker by the request; the worker's model comes from the variant's `implementation_worker` route |
+| T154 | skill-review-demo | Skill review role, grader | A `release-notes` run that misses one of three expectations, graded through Skill Builder; the grading marks exactly that expectation failed with a quote of the output, and a review-route run exists |
+| T155 | skill-review-demo | Skill review role, comparator | Two release-notes outputs where one breaks the stated limit of five bullets, compared blind through Skill Builder; the comparison prefers the other output, names the limit, and a review-route run exists |
 
 The ids T89 to T91 belong to the comparison of Claude reviewer models in
 [`evals/model-roles`](../model-roles/README.md); its opponent ids T92 and T93 ended with the removal of their skill.

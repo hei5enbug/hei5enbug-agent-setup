@@ -1,0 +1,50 @@
+{
+  "id": "T151",
+  "title": "Scout reports a missing assigned path as blocked",
+  "category": "scout",
+  "path": "scout agent result contract",
+  "fixture": "scout-demo",
+  "prompt_file": "prompts/T151.txt",
+  "limits": {
+    "wall_seconds": 600,
+    "max_budget_usd": 3
+  },
+  "checks": [
+    {
+      "id": "scout-ran-once",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "scout_ran_once"
+    },
+    {
+      "id": "starts-blocked",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "starts_blocked"
+    },
+    {
+      "id": "names-the-path",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "names_missing_path"
+    },
+    {
+      "id": "no-conclusion-about-content",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_content_claim"
+    },
+    {
+      "id": "repository-unchanged",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 1
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

@@ -1,0 +1,1 @@
+Delegate this to the `hei5enbug-agent-setup:scout` agent as one assignment, then show me the scout's result unchanged. Scope: demo-lib/src/tokens.py and demo-lib/docs/overview.md only. Question: which delimiters does the library accept, and what maximum line length does it allow?

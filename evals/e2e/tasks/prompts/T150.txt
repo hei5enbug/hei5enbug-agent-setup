@@ -1,0 +1,1 @@
+Delegate this to the `hei5enbug-agent-setup:scout` agent as one assignment, then show me the scout's result unchanged. Scope: demo-lib/src/parser.py only. Question: what does `parse_pair` raise when the text holds none of the delimiters, and what message does it carry?
