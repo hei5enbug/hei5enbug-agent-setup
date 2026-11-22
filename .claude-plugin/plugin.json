@@ -23,6 +23,7 @@
   "types": "./hooks/mod/types.d.ts",
   "agents": [
     "./agents/scout.md",
+    "./agents/browser-reader.md",
     "./agents/worker.md",
     "./agents/designer.md",
     "./agents/reviewer.md"

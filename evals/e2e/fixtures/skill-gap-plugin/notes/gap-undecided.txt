@@ -1,0 +1,14 @@
+Gap notes (weekly-report, written 2026-03-02)
+
+What happened: In the report for ABC-123 (branch report-empty-sections, review PR 45), three of the five team
+sections had no items. The overview printed each of them as a heading followed by `(none)`, and the reader had to
+scroll past three empty blocks to reach the two that mattered.
+
+What the user had to correct: the user asked to remove the empty blocks and the skill did, but only after the
+correction, and it was not clear what the rule should be.
+
+Wanted rule: an empty section must not appear as a heading with `(none)`.
+
+Not decided yet: whether the heading of an empty section is dropped completely, or kept with one fixed line such as
+"No change this week". Both would work for the weekly report. The monthly report has the same layout, so the same
+rule may belong in the shared writing rules instead of the weekly-report skill. The user has not chosen.

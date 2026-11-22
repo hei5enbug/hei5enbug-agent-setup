@@ -234,6 +234,7 @@ class ModelPinTest(unittest.TestCase):
         self.assertEqual(
             {
                 "scout.md": PINS["claude-sonnet"],
+                "browser-reader.md": PINS["claude-haiku"],
                 "worker.md": PINS["claude-haiku"],
                 "designer.md": PINS["claude-opus"],
                 "reviewer.md": PINS["claude-opus"],

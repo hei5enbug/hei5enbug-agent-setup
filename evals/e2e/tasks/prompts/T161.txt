@@ -1,0 +1,1 @@
+docs/design/cache-expiry.ko.md 설계 문서 검토해줘. technical-design-writer 스킬로 검토하고, 파일은 고치지 말고 발견한 문제만 위치와 함께 정리해줘.

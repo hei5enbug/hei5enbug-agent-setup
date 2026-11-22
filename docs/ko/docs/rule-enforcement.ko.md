@@ -133,6 +133,12 @@
 | `skills/suggest-commit/tests/test_commit_context.py` | 커밋 스크립트는 문맥 확인 결과를 JSON으로 출력하고, 분석한 범위만 스테이징하며, 우회, amend, 빈 커밋, 서명, 트레일러, 전체 스테이징 옵션 없이 `git commit -m`을 한 번만 실행하고, 비밀 파일처럼 보이는 파일은 빼고 목록으로 알리며, 변경 없음, 진행 중인 리베이스, 해결하지 않은 충돌, 지정한 경로 밖의 스테이징 변경, 잘못된 제목에서는 쓰기 전에 멈춘다. 커밋을 거절하는 훅이 있어도 스테이징은 그대로 두고 다시 시도하지 않으며, `HEAD`가 없는 저장소에서도 동작한다. | `skills/suggest-commit/SKILL.md` (Commit Mode) |
 | `skills/skill-issue-creator/tests/test_find_tracker.py` | 트래커 탐색은 플러그인 루트를 찾아 `issue-target.json`을 검증하고, 선언이 없거나 잘못되면 트래커를 추측하지 않고 그 상태를 보고한다. | `skills/skill-issue-creator/SKILL.md` |
 | `skills/skill-issue-creator/tests/test_fake_gh.py` | 평가용 가짜 `gh`는 평가 사례가 만든 이슈와 댓글을 보관하고, 요청한 이슈와 그 렌더링된 본문을 돌려주며, 댓글을 ID로 읽고 고친다. 그래서 사례가 스킬의 다시 읽기 확인을 검사할 수 있다. | `skills/skill-issue-creator/references/update-in-place.md`, `skills/skill-issue-creator/evals/` |
+| `skills/skill-issue-creator/tests/test_check_filed.py` | 올린 이슈를 다시 읽는 검사는 제목이나 태그의 불일치, 빠졌거나 순서가 어긋난 절 제목, 본문에 남은 날 마크업과 이스케이프된 엔티티를 보고하고, 실행할 수 없는 검사는 통과가 아니라 검증 불가로 보고한다. | `skills/skill-issue-creator/SKILL.md` |
+| `skills/technical-design-writer/tests/test_check_format.py` | 설계 문서 형식 검사는 표 행, 코드, URL이나 인라인 코드가 든 줄을 뺀 120자 초과 산문 줄, 3단계보다 깊은 제목, `--template`이 없을 때 500줄 초과, 코드 밖 줄 끝 공백, 제목, 표, 코드 블록, 목록 앞뒤의 빈 줄 누락만 위반으로 보고하고, 30자를 넘는 한국어 제목은 위반이 아니라 후보로 나열한다. | `skills/technical-design-writer/SKILL.md` (Tool boundary) |
+| `tests/test_e2e_eval_skill_issue_filing.py` | 답을 미리 준 이슈 작성 작업 T110과 T111은 질문에서 멈춘 실행, 두 번 올린 실행, 본문 계약을 어긴 실행, 답을 빠뜨린 실행, 이미 다루는 이슈를 덮어쓴 실행을 실패시키고, 올리고 다시 읽은 실행은 통과시킨다. 쓴 뒤 `check_filed.py`를 돌렸는지는 참고용 검사로 남는다. | `evals/e2e/README.md` (Golden tasks) |
+| `tests/test_e2e_eval_aside_lookup.py` | T160 작업은 가짜 `aside`를 심어 두고, 그 채점기는 빈 실행, 가짜의 도구 실행 기록이 섞인 답, 스크린샷을 찍거나 저장소를 바꾼 조회를 실패시키고, 상태와 출처로 답한 조회는 메인 세션이 했든 `browser-reader`가 했든 통과시킨다. | `evals/e2e/README.md` (Golden tasks) |
+| `tests/test_e2e_eval_design_review.py` | T161 작업은 긴 줄, 네 번째 제목 수준, 줄 끝 공백을 심은 한국어 설계 문서를 두고, 그 채점기는 빈 실행과 파일을 고친 검토를 실패시키며 검토가 어느 번역투 참조를 읽었는지 기록한다. | `evals/e2e/README.md` (Golden tasks) |
+| `tests/test_browser_reader_contract.py` | `browser-reader` 에이전트는 도구가 정확히 `Bash`와 `Read`이고 `Agent`, `Edit`, `Write`, `NotebookEdit`을 금지하며, 레지스트리 항목은 같은 모델과 effort에 읽기 접근이다. | `agents/browser-reader.md` |
 | `tests/test_issue_target.py` | 이 플러그인 루트의 `issue-target.json`은 공개 GitHub 트래커를 선언한다. | `docs/development.md` (Issue tracker declaration) |
 | `skills/skill-builder/scripts/quick_validate.py`를 모든 스킬에 실행 | 모든 스킬 폴더가 검증을 통과한다. | `README.md` (Development checks) |
 
@@ -156,6 +162,7 @@
 | `tests/test_e2e_eval_p3_tooling.py` | 하네스는 `gpt-6.2-sol`과 `gpt-6-luna`를 장문맥 요율까지 정가로 계산하고, 둘을 모델 상한 안에 두며, 작업이 `PATH` 앞에 가짜 `codex`를 두기 전에 `codex`를 절대 경로로 확정한다. | `evals/e2e/README.md` (모델 상한) |
 | `tests/test_e2e_eval_measure_lock.py` | 실제 `cli.py run`은 기계 전체 `measure.lock` 하나를 쥐며, 두 번째 실행은 점유자의 pid와 명령을 알리는 별도 종료 코드로 곧바로 끝나고, 잠금은 종료와 충돌 때 풀리며, `--wait-lock`은 기다리고, 드라이런은 잠금을 무시한다. | `evals/e2e/README.md` (측정 잠금) |
 | `tests/test_text_flows_pages.py` | 텍스트 흐름 비교 페이지는 흐름마다 중립 라벨을 붙이고, 키를 별도 파일에 두며, 고정 버전 렌더러로 글마다 마크다운을 렌더링하고 실패하면 일반 텍스트로 대체하며, 실행마다 형식 검사와 비용을 요약한다. | `evals/text-flows/README.md` |
+| `tests/test_e2e_eval_skill_issue_cases.py` | T80과 T81 작업은 상태를 보관하는 가짜 `gh` 트래커를 심어 두고, 그 채점기는 빈 실행, 정해지지 않은 Proposal 선택을 혼자 정해 이슈를 쓴 실행, 열린 이슈가 이미 다루는 갭에 두 번째 이슈를 만든 실행, 이슈 본문 계약을 어긴 본문, 갭을 다루는 이슈를 덮어쓴 실행을 실패시키고 기준 실행은 통과시킨다. | `evals/e2e/README.md` (Golden tasks) |
 | `tests/test_e2e_eval_codex_host.py` | Codex 실행은 자기 `CODEX_HOME`에서 내보낸 플러그인 리비전만 불러오고, 사용자 로그인은 읽지 않고 링크만 하며, 표준 입력을 기다리지 않고, 모델·effort·시간·비용을 기록한다. 어떤 역할이든 `claude-opus-5-5`나 `gpt-6.1-sol`보다 강한 모델을 시작하는 캠페인은 거부하고, 그런 모델을 쓴 실행은 상한 위반으로 표시한다. | `evals/e2e/README.md` (Hosts) |
 | `tests/test_e2e_eval_verdict.py` | 변경은 변경 전에 통과한 사례가 변경 후 실패하지 않고, 호스트별 시간·비용 격차가 1회 먼저·5회 규칙으로 늘지 않을 때만 두 호스트 비교를 통과한다. 개선 주장은 두 호스트에서 번갈아 돈 5회로만 받아들인다. | `evals/e2e/README.md` (Comparison rule) |
 | `tests/test_e2e_eval_records.py` | 측정 기록은 실행마다 호스트, 역할별 모델과 effort, 검사, 시간, 비용, 판정을 담고, 로컬 절대 경로나 상한을 넘는 모델은 담지 않는다. | `evals/e2e/README.md` (Records) |

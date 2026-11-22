@@ -332,7 +332,17 @@ solution in `tasks/reference/` passes.
 Prompts are in Korean, as the real user writes them. The fixtures are fictional repositories with the conventions a
 real one has: a README, an `AGENTS.md` with a Korean mirror rule, tests, and Korean mirrors. T21 runs with
 `ORCA_TERMINAL_HANDLE` set and a fake `orca` first on `PATH`, built by `tasks/setup/fake_orca.py`; it keeps its state
-in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval_orca_cleanup.py`.
+in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval_orca_cleanup.py`. T80 and T81 run in
+the fictional plugin repository `skill-gap-plugin` with the stateful `gh` stub that `skills/skill-issue-creator/evals/`
+ships, first on `PATH` and seeded by `tasks/setup/gh_stub_common.py`; its log and kept issues sit in `gh.log` and
+`gh-state/` beside the repository, and their tests are in `tests/test_e2e_eval_skill_issue_cases.py`. Because the
+harness cannot answer a question, T80 passes when the undecided choice is asked and the tracker is not written. T110 and T111 give the
+answers in the prompt so the run reaches the write and the read-back; their informational check `check-filed-ran-after-write`
+shows whether the run read the filed issue back with `check_filed.py`. T160 puts a fake `aside` first on `PATH`
+(`tasks/setup/fake_aside.py`; its call log is `aside.log`, and `FAKE_ASIDE_MODE=fail` makes `aside exec` fail), and its
+informational checks show whether the lookup went to the `browser-reader` agent. T161 reviews a Korean design document, and its
+informational checks show which translationese reference the review read and whether it ran `check_format.py`; their tests are
+`tests/test_e2e_eval_skill_issue_filing.py`, `tests/test_e2e_eval_aside_lookup.py`, and `tests/test_e2e_eval_design_review.py`.
 
 | Task | Fixture | Path it exercises | Request |
 |---|---|---|---|
@@ -363,6 +373,12 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T83 | demo-app | UI routing, layout request | Two-column profile screen that stacks at 375 px; routes to the designer |
 | T84 | demo-app | UI routing, open breakpoint | Plan cards 320 px wide and 24 px apart in one row, mobile breakpoint left open; routes to the designer |
 | T112 | demo-app | UI routing, new screen | A new invoices screen of three rows built from scratch, fitting at 1280 and 375 px; routes to the designer at its pinned `xhigh` |
+| T80 | skill-gap-plugin | Issue filing, questions first | A gap note with one undecided Proposal choice, filed through `skill-issue-creator` |
+| T81 | skill-gap-plugin | Issue filing, duplicate search | A gap note that an open issue of the same account already covers |
+| T110 | skill-gap-plugin | Issue filing, answers given up front | T80 with both undecided choices answered in the prompt, so the run files the issue and reads it back |
+| T111 | skill-gap-plugin | Issue filing, covered gap with the answer given | T81 with the answer given in the prompt, so the run merges it into the open issue and reads it back |
+| T160 | notes-cli | Aside lookup, read only | A ticket status looked up through a stub `aside` that prints tool-trace noise; the answer must carry the status and the source only |
+| T161 | design-review-demo | Design review, Korean | A review of a Korean design document seeded with a long line, a fourth-level heading, a trailing space, and one translationese phrase |
 
 The ids T89 to T91 belong to the comparison of Claude reviewer models in
 [`evals/model-roles`](../model-roles/README.md); its opponent ids T92 and T93 ended with the removal of their skill.

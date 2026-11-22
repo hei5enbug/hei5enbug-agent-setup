@@ -307,7 +307,16 @@ UI 작업(T82~T84, T112)은 `harness/render.py`로 `demo-app` 픽스처의 화�
 프롬프트는 실제 사용자처럼 한국어로 쓴다. 픽스처는 실제 저장소의 관례를 갖춘 가상 저장소다. README, 한국어 미러
 규칙이 있는 `AGENTS.md`, 테스트, 한국어 미러가 있다. T21은 `ORCA_TERMINAL_HANDLE`을 설정하고 `tasks/setup/fake_orca.py`가
 만든 가짜 `orca`를 `PATH`의 맨 앞에 두고 실행하며, 상태는 저장소 옆의 `orca-state/`에 두고, 테스트는
-`tests/test_e2e_eval_orca_cleanup.py`에 있다.
+`tests/test_e2e_eval_orca_cleanup.py`에 있다. T80과 T81은 가상 플러그인 저장소 `skill-gap-plugin`에서, `skills/skill-issue-creator/evals/`가
+제공하는 상태 보관형 `gh` 대역을 `PATH`의 맨 앞에 두고 실행한다. 대역은 `tasks/setup/gh_stub_common.py`가 심고, 로그와
+보관한 이슈는 저장소 옆의 `gh.log`와 `gh-state/`에 있으며, 테스트는 `tests/test_e2e_eval_skill_issue_cases.py`에 있다. 하네스는
+질문에 답할 수 없으므로 T80은 정해지지 않은 선택을 묻고 트래커에 쓰지 않으면 통과한다.
+T110과 T111은 답을 프롬프트에 주어 실행이 쓰기와 다시 읽기까지 가게 하며, 선택 검사 `check-filed-ran-after-write`는
+실행이 올린 이슈를 `check_filed.py`로 다시 읽었는지 보여 준다. T160은 가짜 `aside`를 `PATH` 앞에 두며
+(`tasks/setup/fake_aside.py`, 호출 기록은 `aside.log`, `FAKE_ASIDE_MODE=fail`이면 `aside exec`이 실패한다),
+선택 검사는 조회가 `browser-reader` 에이전트로 갔는지 보여 준다. T161은 한국어 설계 문서를 검토하며, 선택 검사는 검토가 어느
+번역투 참조를 읽었고 `check_format.py`를 실행했는지 보여 준다. 이들의 테스트는
+`tests/test_e2e_eval_skill_issue_filing.py`, `tests/test_e2e_eval_aside_lookup.py`, `tests/test_e2e_eval_design_review.py`다.
 
 | 작업 | 픽스처 | 확인하는 경로 | 요청 |
 |---|---|---|---|
@@ -338,6 +347,12 @@ UI 작업(T82~T84, T112)은 `harness/render.py`로 `demo-app` 픽스처의 화�
 | T83 | demo-app | UI 라우팅, 레이아웃 요청 | 375px에서 쌓이는 두 칸 프로필 화면, 디자이너로 라우팅 |
 | T84 | demo-app | UI 라우팅, 열린 중단점 | 폭 320px, 간격 24px 요금제 카드를 한 줄로, 모바일 중단점은 열어 둠, 디자이너로 라우팅 |
 | T112 | demo-app | UI 라우팅, 새 화면 | 처음부터 만드는 청구서 세 줄 화면, 1280px와 375px에서 맞아야 하며 고정된 `xhigh`의 디자이너로 라우팅 |
+| T80 | skill-gap-plugin | 이슈 작성, 질문 먼저 | 정해지지 않은 Proposal 선택이 하나 있는 갭 메모를 `skill-issue-creator`로 올리기 |
+| T81 | skill-gap-plugin | 이슈 작성, 중복 검색 | 같은 계정의 열린 이슈가 이미 다루는 갭 메모 |
+| T110 | skill-gap-plugin | 이슈 작성, 답을 미리 준 경우 | T80의 정해지지 않은 선택 둘에 대한 답을 프롬프트에 주어, 이슈를 올리고 다시 읽는 데까지 가는 사례 |
+| T111 | skill-gap-plugin | 이슈 작성, 답을 준 이미 다룬 갭 | T81에 답을 프롬프트에 주어, 열린 이슈에 합치고 다시 읽는 데까지 가는 사례 |
+| T160 | notes-cli | Aside 조회, 읽기 전용 | 도구 실행 기록을 길게 출력하는 가짜 `aside`로 티켓 상태를 조회하며, 답에는 상태와 출처만 있어야 한다 |
+| T161 | design-review-demo | 설계 문서 검토, 한국어 | 긴 줄, 네 번째 제목 수준, 줄 끝 공백, 번역투 표현 하나를 심은 한국어 설계 문서의 검토 |
 
 T89부터 T91까지의 ID는 [`evals/model-roles`](../../../../evals/model-roles/README.md)의 Claude 검토자 모델 비교가 씁니다.
 그 상대 ID인 T92와 T93은 해당 스킬이 제거되면서 끝났습니다. 그 사례는 이 하네스가 아니라 역할 실행기로 실행하므로 여기에는 과제 파일이 없습니다.

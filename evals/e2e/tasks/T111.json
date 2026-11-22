@@ -1,0 +1,93 @@
+{
+  "id": "T111",
+  "title": "Covered gap with its open choice answered up front",
+  "category": "skill",
+  "path": "skill-issue-creator update in place of the covering issue, draft handoff, and step 8 read-back after the question is answered",
+  "fixture": "skill-gap-plugin",
+  "prompt_file": "prompts/T111.txt",
+  "setup": "setup/T81.py",
+  "env": {
+    "FAKE_GH_LOG": "{work}/gh.log",
+    "FAKE_GH_STATE": "{work}/gh-state",
+    "PATH": "{work}/fake-bin:{PATH}"
+  },
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "skill-invoked",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "skill_invoked"
+    },
+    {
+      "id": "no-blocking-question",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "no_blocking_question"
+    },
+    {
+      "id": "duplicate-search-ran",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "duplicate_search_ran"
+    },
+    {
+      "id": "no-new-issue",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_new_issue"
+    },
+    {
+      "id": "duplicate-reported",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 3,
+      "patterns": [
+        "#12\\b|issues/12\\b"
+      ]
+    },
+    {
+      "id": "covering-issue-intact",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "covering_issue_intact"
+    },
+    {
+      "id": "answer-merged",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "answer_merged"
+    },
+    {
+      "id": "read-back-after-write",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "read_back_after_write"
+    },
+    {
+      "id": "repo-unchanged",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 1
+    },
+    {
+      "id": "check-filed-ran-after-write",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "check_filed_ran_after_write"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

@@ -1,0 +1,65 @@
+{
+  "id": "T81",
+  "title": "Gap that an open issue already covers",
+  "category": "skill",
+  "path": "skill-issue-creator step 5 duplicate search",
+  "fixture": "skill-gap-plugin",
+  "prompt_file": "prompts/T81.txt",
+  "setup": "setup/T81.py",
+  "env": {
+    "FAKE_GH_LOG": "{work}/gh.log",
+    "FAKE_GH_STATE": "{work}/gh-state",
+    "PATH": "{work}/fake-bin:{PATH}"
+  },
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "skill-invoked",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "skill_invoked"
+    },
+    {
+      "id": "duplicate-search-ran",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "duplicate_search_ran"
+    },
+    {
+      "id": "no-new-issue",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_new_issue"
+    },
+    {
+      "id": "duplicate-reported",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 3,
+      "patterns": [
+        "#12\\b|issues/12\\b"
+      ]
+    },
+    {
+      "id": "covering-issue-intact",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "covering_issue_intact"
+    },
+    {
+      "id": "repo-unchanged",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 1
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

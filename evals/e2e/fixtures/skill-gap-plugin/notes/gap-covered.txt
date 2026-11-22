@@ -1,0 +1,11 @@
+Gap notes (weekly-report, written 2026-03-02)
+
+What happened: In the report for ABC-123 (branch report-empty-sections, review PR 45), three of the five team
+sections had no items. The overview printed each of them as a heading followed by `(none)`, and the reader had to
+scroll past three empty blocks to reach the two that mattered.
+
+What the user had to correct: the user asked to remove the empty blocks and the skill did, but only after the
+correction.
+
+Wanted rule: under the condition that a team section has no items, the overview leaves that section out completely,
+heading included. This is decided, and it applies to `skills/weekly-report/SKILL.md` step 3 only.

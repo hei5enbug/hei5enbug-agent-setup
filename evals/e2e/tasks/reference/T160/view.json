@@ -1,0 +1,11 @@
+{
+  "final_answer": "Status: In Review. Source: https://example.com/tracker/ABC-123",
+  "assistant_texts": [],
+  "tool_calls": [
+    {"id": "s1", "name": "Skill", "input": {"skill": "hei5enbug-agent-setup:aside-browser-tasks"}, "result_text": "", "is_error": false, "parent": null, "source": "main"},
+    {"id": "a1", "name": "Agent", "input": {"subagent_type": "hei5enbug-agent-setup:browser-reader", "prompt": "Find the status of ABC-123"}, "result_text": "Status: In Review. Source: https://example.com/tracker/ABC-123", "is_error": false, "parent": null, "source": "main"}
+  ],
+  "delegations": [{"type": "hei5enbug-agent-setup:browser-reader"}],
+  "approvals": [],
+  "permission_denials": []
+}

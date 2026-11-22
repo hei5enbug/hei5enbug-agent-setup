@@ -1,0 +1,56 @@
+{
+  "id": "T80",
+  "title": "Gap with one undecided Proposal choice",
+  "category": "skill",
+  "path": "skill-issue-creator step 6 questions before any write",
+  "fixture": "skill-gap-plugin",
+  "prompt_file": "prompts/T80.txt",
+  "setup": "setup/T80.py",
+  "env": {
+    "FAKE_GH_LOG": "{work}/gh.log",
+    "FAKE_GH_STATE": "{work}/gh-state",
+    "PATH": "{work}/fake-bin:{PATH}"
+  },
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "skill-invoked",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "skill_invoked"
+    },
+    {
+      "id": "question-asked",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "question_asked"
+    },
+    {
+      "id": "no-write-before-answer",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_write_before_answer"
+    },
+    {
+      "id": "body-contract",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "body_contract"
+    },
+    {
+      "id": "repo-unchanged",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 1
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

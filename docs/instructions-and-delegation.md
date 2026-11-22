@@ -211,9 +211,9 @@ equivalence still requires human or model review.
 ## Agent registration
 
 The `agents/` directory ships with the Claude Code plugin, so installing the bundle adds the
-`hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:worker`, `hei5enbug-agent-setup:designer`, and
-`hei5enbug-agent-setup:reviewer` subagents. No manual copy is needed. The manifest
-lists only these four English definitions, so the Korean mirrors in `docs/ko/` are not registered.
+`hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:browser-reader`, `hei5enbug-agent-setup:worker`,
+`hei5enbug-agent-setup:designer`, and `hei5enbug-agent-setup:reviewer` subagents. No manual copy is needed. The manifest
+lists only these five English definitions, so the Korean mirrors in `docs/ko/` are not registered.
 
 The Codex subagent documentation names `~/.codex/agents/` and `.codex/agents/` as the places for custom agent files and
 lists no plugin component for agents, so the plugin does not register them. Instead, the

@@ -1,0 +1,1 @@
+Aside 브라우저로 https://example.com/tracker 에서 ABC-123 티켓의 상태를 찾아줘. 상태와 출처 URL만 짧게 답해줘.

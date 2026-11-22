@@ -1,0 +1,86 @@
+{
+  "id": "T110",
+  "title": "Gap with its undecided choices answered up front",
+  "category": "skill",
+  "path": "skill-issue-creator draft handoff, write, and step 8 read-back after the questions are answered",
+  "fixture": "skill-gap-plugin",
+  "prompt_file": "prompts/T110.txt",
+  "setup": "setup/T80.py",
+  "env": {
+    "FAKE_GH_LOG": "{work}/gh.log",
+    "FAKE_GH_STATE": "{work}/gh-state",
+    "PATH": "{work}/fake-bin:{PATH}"
+  },
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "skill-invoked",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "skill_invoked"
+    },
+    {
+      "id": "no-blocking-question",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "no_blocking_question"
+    },
+    {
+      "id": "filed-once",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "filed_once"
+    },
+    {
+      "id": "body-contract",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "body_contract"
+    },
+    {
+      "id": "answers-carried",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "answers_carried"
+    },
+    {
+      "id": "issue-reported",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 2,
+      "patterns": [
+        "#20\\d\\b|issues/20\\d\\b"
+      ]
+    },
+    {
+      "id": "read-back-after-write",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "read_back_after_write"
+    },
+    {
+      "id": "repo-unchanged",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 1
+    },
+    {
+      "id": "check-filed-ran-after-write",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "check_filed_ran_after_write"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

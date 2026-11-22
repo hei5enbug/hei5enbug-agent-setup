@@ -122,6 +122,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
             listed,
             [
                 "./agents/scout.md",
+                "./agents/browser-reader.md",
                 "./agents/worker.md",
                 "./agents/designer.md",
                 "./agents/reviewer.md",
