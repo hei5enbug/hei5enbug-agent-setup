@@ -568,7 +568,7 @@ def test_hooks_register_the_failure_event_like_post_tool_use():
     hooks = json.loads((Path(guard.__file__).resolve().parents[1] / "hooks/hooks.json").read_text())["hooks"]
     # when
     post = [entry for entry in hooks["PostToolUse"] if "approval_guard.py" in entry["hooks"][0]["command"]]
-    failure = hooks.get("PostToolUseFailure", [])
+    failure = [entry for entry in hooks.get("PostToolUseFailure", []) if "approval_guard.py" in entry["hooks"][0]["command"]]
     # then
     assert len(post) == 1 and len(failure) == 1
     assert failure[0]["matcher"] == post[0]["matcher"]

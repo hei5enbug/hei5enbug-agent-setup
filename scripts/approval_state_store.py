@@ -34,7 +34,22 @@ def session_key(value):
 def _empty() -> dict:
     return {"approved": [], "approved_at": {}, "once": [], "pending": {}, "inflight": [], "hooks_warning_shown": False,
             "request_counts": {}, "asked": [], "grants": {},
-            "machine_load_shown": False}
+            "machine_load_shown": False, "request_budget": _empty_budget()}
+
+
+def _empty_budget() -> dict:
+    return {"runs": 0, "retries": 0, "last": {}}
+
+
+def _budget(value) -> dict:
+    """The per-request launch counts of a state file: delegated runs, retries, and each agent's last outcome."""
+    if not isinstance(value, dict):
+        return _empty_budget()
+    count = lambda name: value[name] if type(value.get(name)) is int and value[name] >= 0 else 0
+    last = value.get("last")
+    last = {key: state for key, state in last.items() if isinstance(key, str) and state in ("running", "ok", "error")} \
+        if isinstance(last, dict) else {}
+    return {"runs": count("runs"), "retries": count("retries"), "last": last}
 
 
 def _grants(value) -> dict:
@@ -96,6 +111,7 @@ def _read(path: Path) -> dict:
         "request_counts": counts,
         "asked": asked,
         "machine_load_shown": data.get("machine_load_shown") is True,
+        "request_budget": _budget(data.get("request_budget")),
     }
 
 

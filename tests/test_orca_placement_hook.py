@@ -5,6 +5,7 @@ from __future__ import annotations
 import atexit
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -645,7 +646,9 @@ class EnterWorktreeGateTest(unittest.TestCase):
         ]
 
         # When / Then
-        self.assertEqual([group["matcher"] for group in groups], ["^(Bash|EnterWorktree)$"])
+        self.assertEqual([group["matcher"] for group in groups], ["^EnterWorktree$"])
+        self.assertTrue(all(re.fullmatch(group["matcher"], "EnterWorktree") for group in groups))
+        self.assertFalse(any(re.fullmatch(group["matcher"], "Bash") for group in groups))
 
 
 if __name__ == "__main__":

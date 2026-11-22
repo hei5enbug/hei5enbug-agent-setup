@@ -33,8 +33,8 @@ answers. When the user explicitly narrows the scope, ask nothing and record each
 This preparation is not a requested implementation plan. It runs no planning or design skill, no six-stage
 planning workflow, and no independent validation.
 
-Prepare the fewest tasks that give clear ownership. One cohesive task uses one owner. Six workers are an
-upper bound, not a target; never split work or batch unrelated reads merely to fill slots.
+Prepare the fewest tasks that give clear ownership. One cohesive task uses one owner. The limit the plugin
+reports is an upper bound, not a target; never split work or batch unrelated reads merely to fill slots.
 
 At any point, ask the user before assigning a change to a tracked file outside the request or the accepted plan,
 such as a shared file that no task may edit. Wait for the answer, and make no such change without approval.

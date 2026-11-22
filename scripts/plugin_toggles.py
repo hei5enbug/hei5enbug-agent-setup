@@ -63,6 +63,26 @@ def saved_options(keys: tuple[str, ...]) -> tuple[dict, str | None]:
     return {}, None
 
 
+SERVICE_TIER_KEY = "codex_service_tier"
+
+
+def service_tier_setting() -> str | None:
+    """Return the Codex service tier the `codex_service_tier` option selects, or None for the default tier.
+
+    HEI5ENBUG_CODEX_SERVICE_TIER overrides the saved Claude plugin option; "fast" is the only tier, and "default" or no value
+    means none. Any other value raises ValueError naming the allowed values.
+    """
+    value = os.environ.get(variable_name(SERVICE_TIER_KEY, "codex"), "").strip().lower()
+    if not value:
+        saved, _ = saved_options((SERVICE_TIER_KEY,))
+        value = str(saved.get(SERVICE_TIER_KEY, "")).strip().lower()
+    if value in ("", "default"):
+        return None
+    if value != "fast":
+        raise ValueError(f"codex_service_tier {ascii(value)[:40]} is not allowed; use default or fast")
+    return value
+
+
 def valid_worker_pair(model: object, effort: object) -> bool:
     """Whether the Codex pair is in the manifest option lists and allowed by the registry effort rules."""
     manifest = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["userConfig"]

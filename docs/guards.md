@@ -269,6 +269,46 @@ problems in them. The interpreter-script detection and the any-length mismatch r
 runs for issue #69 edited files only through `python3` heredoc scripts and sent an unreviewed 711-character report, and
 sent a 296-character report that differed from the passing draft.
 
+## Request caps and parallel limit
+
+One hook script, `scripts/request_budget_hook.py`, and the role runner count the agents a user request starts and keep
+them within a limit that follows the machine. A request runs from one user prompt to the next, or from one turn of the main session to the next: a turn that ends starts a
+new request, so an automatic continuation, such as `/goal` or a Stop hook, gets its own count and the caps bound one
+continuation. The count lives in the
+approval state file of the session that received the prompt, so a plugin agent launch (`PreToolUse` on `Agent`, also
+`Task` and Codex `spawn_agent`), a role runner run, and a run that a role runner child starts, which sees the parent
+through `HEI5ENBUG_PARENT_SESSION`, all add to one count. A prompt, and the `Stop` event of the main session, reset it. `PostToolUse`, `PostToolUseFailure`, and
+`SubagentStop` record how a launch ended. On Codex, trust the hook in `/hooks`.
+
+- **Caps.** `request_run_cap` limits delegated runs, meaning plugin agent launches plus role runner child runs, and
+  `request_retry_cap` limits retries, meaning a launch of the same agent type, or a role runner run of the same role,
+  after an error or a non-zero exit. A launch that would pass a cap is denied with a message that starts with `Request cap
+  reached`, names the cap and the count, says that running work may finish, and says the session must report the request
+  as stopped, with what is done and what remains, never as done. A run cap of 10 allows the tenth run and denies the
+  eleventh. Two launches at once are admitted one after the other. The defaults, 40 runs and 5 retries, come from
+  `config/request-distribution.json`, the distribution of the 30 days before 2026-11-22: 1,967 requests, 304 with a
+  delegated run, at most 39 runs and 4 retries in one request, so the run cap is the smallest multiple of ten above 39 and
+  the retry cap is 4 plus one. It holds counts only, no session content. `0`, `off`, `false`, or `no` turns a cap off. A
+  record with no delegated run would ship both caps as `0`.
+- **Parallel limit.** The limit is the lowest of the logical CPU count minus one, one run per whole GiB of available
+  memory, and the host's own limit, and at least one. Claude Code's own limit is `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`
+  (20 by default); on Codex it is `agents.max_concurrent_threads_per_session` in `config.toml` when set, and unknown
+  otherwise. A load average of at least twice the CPU count, or less than 10 percent of memory available, makes it one.
+  A CPU count or available memory that cannot be read leaves out that term and caps the result at six. Runs of every
+  session on this machine count, kept in `runs/running.json` under the plugin's state folder; a run counts from its launch
+  to its end, an entry whose process is gone is dropped, and so is one older than 2,700 seconds. A launch that would pass
+  the limit is denied with a message that starts with `Parallel limit reached` and says to start it after one of this
+  session's running runs ends, never to poll; a session with no running run of its own may always start one. The role
+  runner takes any number of pairs, runs at most the limit at once, and starts the next pair when one ends. The user
+  prompt context reports the limit, and `python3 scripts/parallel_limit.py` prints it. The shipped maximum in
+  `config/parallel-limit.json` is six until the case T36 of the record `evals/e2e/records/97.json` accepts the computed
+  limit on both hosts, and `HEI5ENBUG_PARALLEL_LIMIT_MAX` overrides it for an evaluation (`0` removes it).
+- **Not enforced.** Spend and elapsed time of a whole request. Neither host documents a hook that reports the spend of a
+  request, and the elapsed time is visible only when a tool call happens, so the plugin cannot stop running work at a time
+  budget. Codex `PostToolUse` does not say how a `spawn_agent` run ended, so a retry there is counted only when the
+  response carries an error. The record is read from Claude Code transcripts and Codex rollouts of this machine, which hold
+  launches of subagents only in the main session's file.
+
 ## Hook time limits and machine load
 
 Each hook gets half of the timeout its registration declares, counted from when its launcher started. The launcher
@@ -286,6 +326,16 @@ and answers on its own:
 - Every other hook, including a `Stop` hook that would otherwise continue the turn, exits with status 0 and no output,
   so the agent's work continues.
 
+The three `PreToolUse` checks on `Bash`, the public boundary hook, the required checks hook, and the Orca placement
+hook, run in one process, `scripts/bash_pretool_checks.py`, registered with a 40-second timeout, the sum of their own.
+It runs them in that order on the same input, each within half of the timeout it declares, counted from its own start
+except for the first, which counts from the launcher start. The first deny ends the run and is returned with the name
+of the check that denied. A check that raises or runs out of its budget answers as it does alone, and the remaining
+checks still run; a failure that does not block reaches the user as a system message. The reminder and notice text of
+the checks that pass is merged into one answer. The Orca placement hook keeps its own registration for `EnterWorktree`,
+and `scripts/hook_python.sh` exits 0 for `orca_status_hook.py` before choosing an interpreter when
+`ORCA_TERMINAL_HANDLE` is unset or empty.
+
 The `orca` and `git` calls of the Orca placement hook have no fixed limit of their own, so a stalled call ends in that
 denial. A failure that reaches the agent or the user, such as a non-zero exit, text on stderr, or a denial, names the
 plugin and the hook, says what was skipped or blocked, and gives the next step, without a traceback. Malformed or
@@ -294,7 +344,7 @@ network call except what its decision needs for that input, such as `orca` only 
 background interpreter resolution in [configuration](configuration.md) is the only exception.
 
 On Claude Code, the registrations of the approval guard (`PreToolUse` and `PermissionRequest`), the DataGrip guard, and
-the public boundary hook set `"onFailure": "block"` (Claude Code 2.1.295 or later). A hook that cannot start, exits with
+the Bash dispatcher that runs the public boundary check set `"onFailure": "block"` (Claude Code 2.1.295 or later). A hook that cannot start, exits with
 a code other than 0 or 2, times out, or prints invalid output then blocks the call, or denies the permission request,
 instead of letting it run. Every other registration keeps the default, so a reminder, status, language, session, or
 `Stop` hook that fails never blocks work. Codex 0.170.0 lists a hook file that sets the field without a warning.

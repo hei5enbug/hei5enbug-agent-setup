@@ -20,6 +20,7 @@ KINDS = (
 REVIEW_MODELS = {kind: "gpt-6.1-sol" for kind in KINDS}
 DEFAULT_TIMEOUT = 600
 DEFAULT_REVIEWS = 1
+SERVICE_TIERS = ("fast",)
 RUNNER_GRACE_SECONDS = 60
 RUNNER_TIMEOUT_STAGES = 4
 FINAL_REPORT_KIND = "final-report"
@@ -370,7 +371,8 @@ def run_reviewer(args: argparse.Namespace, assignment: str, model: str) -> dict:
     try:
         assignment_file, result_file = prepare_folder(work, assignment)
         command = [sys.executable, str(Path(args.runner).resolve()), "reviewer", "--model", model, "--timeout", str(args.timeout),
-                   "--assignment", str(assignment_file), "--result", str(result_file)]
+                   "--assignment", str(assignment_file), "--result", str(result_file),
+                   *(["--service-tier", args.service_tier] if args.service_tier else [])]
         try:
             done = subprocess.run(command, cwd=work, capture_output=True, text=True,
                                   timeout=args.timeout * RUNNER_TIMEOUT_STAGES + RUNNER_GRACE_SECONDS)
@@ -416,6 +418,7 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument("--budget", type=positive)
     review.add_argument("--no-ticket-keys", action="store_true")
     review.add_argument("--model")
+    review.add_argument("--service-tier", choices=SERVICE_TIERS, dest="service_tier")
     review.add_argument("--timeout", type=positive, default=DEFAULT_TIMEOUT)
     review.add_argument("--reviews", type=positive, default=DEFAULT_REVIEWS)
     review.add_argument("--runner", default=str(Path(__file__).resolve().with_name("role_runner.py")))

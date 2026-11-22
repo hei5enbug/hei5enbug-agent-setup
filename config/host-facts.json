@@ -2,6 +2,36 @@
   "comment": "Registry of host-capability statements. Add a line here after verifying the statement against the official page; tests/test_host_facts.py fails on an unregistered limitation phrase and on a verified_on older than 30 days.",
   "claims": [
     {
+      "id": "claude-stop-fires-each-turn",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "On Claude Code the Stop event fires after every turn, so a goal or Stop hook continuation follows a Stop event and no prompt.",
+      "doc_url": "https://code.claude.com/docs/en/goal.md",
+      "quote": "`/goal` and a Stop hook both fire after every turn.",
+      "verified_on": "2026-11-23",
+      "lines": [
+        {
+          "file": "docs/guards.md",
+          "contains": "A prompt, and the `Stop` event of the main session, reset it."
+        }
+      ]
+    },
+    {
+      "id": "codex-service-tier-key",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "Codex config has a `service_tier` key, and `fast` is a value of it.",
+      "doc_url": "https://learn.chatgpt.com/docs/config-file/config-reference",
+      "quote": "Preferred service tier for new turns. Use `fast` or another tier advertised by the active model; ... `fast` maps to the request value `priority`.",
+      "verified_on": "2026-11-23",
+      "lines": [
+        {
+          "file": "docs/configuration.md",
+          "contains": "service_tier=\"fast\""
+        }
+      ]
+    },
+    {
       "id": "codex-hooks-feature-key",
       "host": "codex",
       "kind": "host-fact",
@@ -382,10 +412,6 @@
       "lines": [
         {
           "file": "instructions/claude-agents.md",
-          "contains": "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"
-        },
-        {
-          "file": "instructions/fast-mode.md",
           "contains": "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"
         }
       ]

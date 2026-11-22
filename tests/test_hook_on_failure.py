@@ -11,7 +11,7 @@ FAIL_CLOSED = {
     ("PreToolUse", "approval_guard.py"),
     ("PermissionRequest", "approval_guard.py"),
     ("PreToolUse", "datagrip_guard.py"),
-    ("PreToolUse", "public_boundary_hook.py"),
+    ("PreToolUse", "bash_pretool_checks.py"),
 }
 
 

@@ -19,6 +19,9 @@ if [ -z "$script" ] || [ ! -f "$dir/$script" ]; then
   exit 1
 fi
 shift
+if [ "$script" = orca_status_hook.py ] && [ -z "${ORCA_TERMINAL_HANDLE:-}" ]; then
+  exit 0
+fi
 hook_select_interpreter
 if ! command -v "$interpreter" >/dev/null 2>&1; then
   echo "hei5enbug-agent-setup could not run $script: $interpreter was not found, so the check did not run. Install Python 3, set the Hook Python interpreter option to its absolute path, or disable the plugin's guard." >&2

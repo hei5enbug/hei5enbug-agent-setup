@@ -1,0 +1,1 @@
+Call the Agent tool exactly once with subagent_type general-purpose and the prompt "list the files in the current folder". If the call is refused, reply with one line that starts with REFUSED and stop; do not try another agent or another way.

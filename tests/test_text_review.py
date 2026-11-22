@@ -581,6 +581,19 @@ class ReviewTest(unittest.TestCase):
         self.assertEqual("claude-opus-5-5", argv[argv.index("--model") + 1])
         self.assertEqual("90", argv[argv.index("--timeout") + 1])
 
+    def test_service_tier는_주었을_때만_모든_검토자_실행기_인자에_전달된다(self):
+        # when
+        self.review("none", "--reviews", "2", "--service-tier", "fast")
+        with_tier = self.argv()
+        self.review("none")
+        without_tier = self.argv()
+        slow = self.review("none", "--service-tier", "slow")
+        # then
+        self.assertEqual("fast", with_tier[with_tier.index("--service-tier") + 1])
+        self.assertNotIn("--service-tier", without_tier)
+        self.assertEqual(2, slow.returncode)
+        self.assertIn("fast", slow.stderr)
+
     def test_임시_폴더는_실행_뒤에_지워진다(self):
         # given
         mode = "none"

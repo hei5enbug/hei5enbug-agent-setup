@@ -873,6 +873,116 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(self.codex_resume_argv(), self.logged()["argv"])
         self.assertEqual(THREAD, self.status(completed)["evidence"]["session"])
 
+    def with_service_tier(self, argv, tier="fast"):
+        """The argument list with the service tier override placed right after the reasoning effort override."""
+        effort = next(index for index, item in enumerate(argv) if item.startswith("model_reasoning_effort="))
+        return [*argv[: effort + 1], "-c", f'service_tier="{tier}"', *argv[effort + 1 :]]
+
+    def test_service_tier_fast는_새_codex_실행에_service_tier_설정을_더한다(self):
+        """--service-tier fast를 주면 읽기 전용 Codex 실행은 effort 설정 뒤에 -c service_tier="fast"를 받고 상태 줄에 티어가 남는다."""
+        # When
+        completed = self.run_runner("scout", "--service-tier", "fast")
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(self.with_service_tier(self.codex_argv()), self.logged()["argv"])
+        self.assertEqual("fast", self.status(completed)["service_tier"])
+
+    def test_service_tier_fast는_codex_resume과_쓰기_실행의_사전_점검에도_service_tier_설정을_더한다(self):
+        """이어 가기 한 번과 쓰기 역할의 사전 점검 exec와 resume까지 Codex 실행 세 번이 모두 같은 설정을 받는다."""
+        # Given
+        directory = self.base / "shared"
+        directory.mkdir()
+        self.beat("codex", THREAD)
+
+        # When
+        resumed = self.run_runner("scout", "--resume", THREAD, "--service-tier", "fast")
+        resumed_argv = self.logged()["argv"]
+        writing = self.run_runner("worker", "--add-dir", str(directory), "--service-tier", "fast")
+
+        # Then
+        self.assertEqual(0, resumed.returncode, resumed.stderr)
+        self.assertEqual(self.with_service_tier(self.codex_resume_argv()), resumed_argv)
+        self.assertEqual(0, writing.returncode, writing.stderr)
+        tiered = [call["argv"] for call in self.executions() if 'service_tier="fast"' in call["argv"]]
+        self.assertEqual(3, len(tiered))
+        self.assertEqual(self.with_service_tier(self.codex_resume_argv(sandbox="workspace-write", roots=[directory])), self.logged()["argv"])
+
+    def test_service_tier_없이는_codex_명령에_service_tier가_없다(self):
+        """옵션이 없으면 새 실행도 이어 가기도 service_tier 설정이 없고 상태 줄에 티어 항목이 없다."""
+        # Given
+        self.beat("codex", THREAD)
+
+        # When
+        fresh = self.run_runner("scout")
+        fresh_calls = self.executions()
+        resumed = self.run_runner("scout", "--resume", THREAD)
+
+        # Then
+        self.assertEqual((0, 0), (fresh.returncode, resumed.returncode))
+        self.assertFalse(any(item.startswith("service_tier=") for call in [*fresh_calls, self.logged()] for item in call["argv"]))
+        self.assertNotIn("service_tier", self.status(fresh))
+
+    def test_service_tier_fast는_claude_실행의_명령을_바꾸지_않는다(self):
+        """Claude 모델 실행은 옵션이 있어도 없을 때와 같은 인자로 실행되고 service_tier를 받지 않는다."""
+        # Given
+        config = {"entries": [{"model": "claude-opus-5-5", "effort": "high"}]}
+        arguments = ["reviewer", "--model", "claude-opus-5-5"]
+
+        # When
+        completed = self.run_runner(*arguments, "--service-tier", "fast", config=config)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(self.claude_argv(writing=False)[:6], self.logged()["argv"][:6])
+        self.assertFalse(any("service_tier" in item for item in self.logged()["argv"]))
+
+    def test_service_tier는_fast_외의_값을_허용하는_값을_알리며_종료_코드_2로_거부한다(self):
+        """--service-tier slow는 자식을 띄우지 않고 종료 코드 2이며 허용되는 값 fast를 이름으로 알린다."""
+        # When
+        completed = self.run_runner("scout", "--service-tier", "slow")
+
+        # Then
+        self.assertEqual(2, completed.returncode)
+        self.assertIn("fast", completed.stderr)
+        self.assertIn("slow", completed.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_codex_service_tier_설정은_옵션_없이_Codex_실행에만_티어를_더한다(self):
+        """환경 변수와 저장된 옵션이 fast이면 옵션 없는 Codex 실행이 티어를 받고, default는 아무것도 더하지 않으며, Claude 실행은 그대로다."""
+        # Given
+        saved = self.claude_home / "settings.json"
+        saved.parent.mkdir(parents=True, exist_ok=True)
+        saved.write_text(json.dumps({"pluginConfigs": {"hei5enbug-agent-setup@demo": {"options": {"codex_service_tier": "fast"}}}}))
+        config = {"entries": [{"model": "claude-opus-5-5", "effort": "high"}]}
+
+        # When
+        from_saved = self.run_runner("scout")
+        saved_argv = self.logged()["argv"]
+        overridden = self.run_runner("scout", extra_env={"HEI5ENBUG_CODEX_SERVICE_TIER": "default"})
+        override_argv = self.logged()["argv"]
+        from_env = self.run_runner("scout", extra_env={"HEI5ENBUG_CODEX_SERVICE_TIER": "fast"})
+        claude = self.run_runner("reviewer", "--model", "claude-opus-5-5", config=config)
+
+        # Then
+        self.assertEqual(self.with_service_tier(self.codex_argv()), saved_argv)
+        self.assertEqual("fast", self.status(from_saved)["service_tier"])
+        self.assertEqual(self.codex_argv(), override_argv)
+        self.assertNotIn("service_tier", self.status(overridden))
+        self.assertEqual("fast", self.status(from_env)["service_tier"])
+        self.assertFalse(any("service_tier" in item for item in self.logged()["argv"]))
+        self.assertNotIn("service_tier", self.status(claude))
+
+    def test_허용되지_않는_codex_service_tier_설정은_자식을_띄우지_않고_종료_코드_2로_알린다(self):
+        """환경 변수 값이 fast도 default도 아니면 종료 코드 2이고 허용 값을 알리며 Codex를 시작하지 않는다."""
+        # When
+        completed = self.run_runner("scout", extra_env={"HEI5ENBUG_CODEX_SERVICE_TIER": "slow"})
+
+        # Then
+        self.assertEqual(2, completed.returncode)
+        self.assertIn("default or fast", completed.stderr)
+        self.assertFalse(self.log.exists())
+
     def test_codex_resume의_researcher는_최상위_search_플래그를_유지한다(self):
         """researcher를 --resume으로 이어도 --search는 exec resume 앞에 그대로 붙는다."""
         self.beat("codex", THREAD)
@@ -2872,6 +2982,57 @@ class RoleRunnerTest(unittest.TestCase):
         prompts = [call["stdin"] for call in executions]
         self.assertEqual({"A", "B"}, {name for name in "AB" if any(f"ASSIGN_{name}" in prompt for prompt in prompts)})
 
+    BUDGET_ENV = {
+        "HEI5ENBUG_PARENT_SESSION": "claude:budget-session", "HEI5ENBUG_PARALLEL_LIMIT_MAX": "0",
+        "HEI5ENBUG_MACHINE_COUNTERS_FOR_TESTS": "0.5,12,0.5,0.5", "HEI5ENBUG_AVAILABLE_MEMORY_MB_FOR_TESTS": "20480",
+        "CLAUDE_PLUGIN_OPTION_REQUEST_RETRY_CAP": "0",
+    }
+
+    def test_쌍이_일곱이어도_모두_받아_각각_실행한다(self):
+        """쌍을 일곱 주면 사용법 오류 없이 자식 일곱이 실행되고 종료 코드는 0이다."""
+        # Given
+        pairs = self.pair_args(*"ABCDEFG")
+
+        # When
+        completed = self.run_runner("scout", *pairs, assignment=False, result=False, config={"thread_per_run": True})
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(7, len(self.executions()))
+
+    def test_요청_한도를_넘는_쌍은_자식_없이_종료_코드_5와_멈춤_메시지로_끝난다(self):
+        """요청당 실행 한도가 1이면 둘째 쌍은 자식을 띄우지 않고 종료 코드 5, 한도 메시지, cap 증거로 끝난다."""
+        # Given
+        pairs = self.pair_args("A", "B")
+        env = {**self.BUDGET_ENV, "CLAUDE_PLUGIN_OPTION_REQUEST_RUN_CAP": "1"}
+
+        # When
+        completed = self.run_runner("scout", *pairs, assignment=False, result=False, extra_env=env)
+
+        # Then
+        lines = self.status_lines(completed)
+        self.assertEqual(5, completed.returncode, completed.stderr)
+        self.assertEqual(sorted([0, 5]), sorted(line["exit"] for line in lines))
+        denied = next(line for line in lines if line["exit"] == 5)
+        self.assertTrue(denied["evidence"]["cap"])
+        self.assertIn("Request cap reached", completed.stderr)
+        self.assertEqual(1, len(self.executions()))
+
+    def test_병렬_한도가_1이면_쌍을_하나씩_차례로_실행한다(self):
+        """가용 메모리가 1GiB라 한도가 1이면 세 쌍의 자식은 겹치지 않고 하나가 끝난 뒤 다음이 시작된다."""
+        # Given
+        pairs = self.pair_args("A", "B", "C")
+        env = {**self.BUDGET_ENV, "HEI5ENBUG_AVAILABLE_MEMORY_MB_FOR_TESTS": "1024", "CLAUDE_PLUGIN_OPTION_REQUEST_RUN_CAP": "0"}
+
+        # When
+        completed = self.run_runner("scout", *pairs, assignment=False, result=False, config={"sleep": 0.5}, extra_env=env)
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        starts = sorted(call["started"] for call in self.executions())
+        self.assertEqual(3, len(starts))
+        self.assertGreaterEqual(min(b - a for a, b in zip(starts, starts[1:])), 0.4)
+
     def test_배치의_종료_코드는_쌍_가운데_가장_큰_값이고_상태_줄은_입력_순서다(self):
         """첫 쌍이 실행 오류(3), 둘째 쌍이 답변 없음(4)이면 종료 코드는 4이고 상태 줄은 입력 순서로 3, 4이다."""
         # Given
@@ -2949,7 +3110,7 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(2, len(self.status_lines(completed)))
 
     def test_쓰기_대상과_잘못된_쌍은_자식을_띄우기_전에_종료_코드_2이다(self):
-        """쓰기 대상, 개수 불일치, 일곱 쌍, 결과 중복, 결과와 같은 assignment, 쌍 둘과 --resume은 자식 없이 종료 코드 2이다."""
+        """쓰기 대상, 개수 불일치, 결과 중복, 결과와 같은 assignment, 쌍 둘과 --resume은 자식 없이 종료 코드 2이다."""
         # Given
         approved = str(self.base / "approved")
         instructions = ["--instructions", str(self.instructions)]
@@ -2962,7 +3123,6 @@ class RoleRunnerTest(unittest.TestCase):
             "writing capability": (["implementation", "--host", "codex", "--fallback", "--add-dir", approved, *instructions, *two], "read-only"),
             "writing agent": (["agent", "--name", "hei5enbug-agent-setup:worker", "--fallback", "--add-dir", approved, *two], "read-only"),
             "unequal counts": (["scout", "--assignment", two[1], "--assignment", two[5], "--result", two[3]], "equal numbers"),
-            "seven pairs": (["scout", *self.pair_args(*"ABCDEFG")], "At most 6"),
             "duplicate result": (["scout", *duplicate], "different file"),
             "assignment equals result": (["scout", "--assignment", two[1], "--result", two[3], "--assignment", two[3], "--result", shared], "different files"),
             "resume": (["scout", "--resume", THREAD, *two], "--resume"),

@@ -15,10 +15,10 @@ REGISTRY_PATH = Path(__file__).resolve().parents[1] / "config" / "model-registry
 REGISTRY = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
 ROLE_EFFORT = REGISTRY["runner"]["effort"]
 ROLE_ENTRY = {"effort": ROLE_EFFORT, "max_effort": REGISTRY["runner"].get("max_effort")}
-MAX_BATCH = 6
 CODEX_SKILLS_OFF = ("-c", "skills.max_context_tokens=1")
 CLAUDE_SKILLS_OFF = "--disable-slash-commands"
 DEFAULT_TIMEOUT = 2700
+SERVICE_TIERS = ("fast",)
 DEFAULT_REVIEW_MODEL = REGISTRY["runner"]["default_review_model"]
 ROLE_MODEL = REGISTRY["runner"]["role_model"]
 REVIEW_MODELS = tuple(REGISTRY["runner"]["review_models"])
@@ -117,6 +117,7 @@ EXIT_OK = 0
 EXIT_USAGE = 2
 EXIT_RUN = 3
 EXIT_EVIDENCE = 4
+EXIT_CAP = 5
 
 
 class RunnerError(Exception):
@@ -156,6 +157,7 @@ class Run:
     mcp: bool = False
     user_requested: bool = False
     validation: bool = False
+    service_tier: str | None = None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -175,4 +177,5 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mcp", action="store_true")
     parser.add_argument("--user-requested", action="store_true", dest="user_requested")
     parser.add_argument("--validation", action="store_true")
+    parser.add_argument("--service-tier", choices=SERVICE_TIERS, dest="service_tier")
     return parser

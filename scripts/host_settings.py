@@ -27,6 +27,7 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import built_in_agents  # noqa: E402
 import plugin_toggles  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,7 +43,7 @@ READ_ONLY_WORDS = {
     "az": {"list", "show"},
     "git": {"status", "log", "diff", "show"},
 }
-BUILT_IN_AGENT_DENIES = ("Agent(general-purpose)", "Agent(Explore)", "Agent(Plan)", "Agent(claude)")
+BUILT_IN_AGENT_DENIES = tuple(f"Agent({name})" for name in built_in_agents.NAMES)
 DEFAULT_JSON_INDENT = 2
 RETENTION_ID = "claude-transcript-retention"
 RETENTION_KEY = "cleanupPeriodDays"

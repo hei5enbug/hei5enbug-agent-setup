@@ -1,0 +1,10 @@
+inventory-service 코드를 읽기만 하고 파일은 수정하지 마. 아래 여덟 가지는 서로 관련이 없으니 각각 답해줘.
+
+1) inventory.money.quantize 는 어떤 반올림 방식을 써?
+2) inventory.pricing 의 수량 할인은 몇 개부터 몇 퍼센트야?
+3) SKU 는 최대 몇 글자까지 되고, 한 번에 다룰 수 있는 수량의 최댓값은 얼마야?
+4) inventory.importer 가 재고 CSV 에 요구하는 컬럼은 뭐고, quantity 가 0 인 행은 어떻게 처리해?
+5) inventory.audit 에 기록되는 이동 종류(kind)는 어떤 것들이야?
+6) inventory.clock.utcnow 는 어떤 시각을 돌려줘?
+7) inventory.serialization 의 SCHEMA_VERSION 은 얼마야?
+8) inventory.formatting.render_low_stock 은 부족한 품목이 하나도 없을 때 어떤 줄을 출력해?

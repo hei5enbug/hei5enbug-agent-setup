@@ -55,8 +55,10 @@ def test_선언된_시간표는_모든_훅_파일의_등록_timeout과_일치한
     # when
     mismatched = [(script, event) for script, event, timeout in found
                   if hook_runtime.DECLARED_TIMEOUTS.get((script, event)) != timeout]
+    merged = {(script, "PreToolUse") for script in ("public_boundary_hook.py", "required_checks_hook.py")}
     unregistered = [key for key in hook_runtime.DECLARED_TIMEOUTS
-                    if key[0] != hook_runtime.PROJECT_HOOK and (key[0], key[1]) not in {(s, e) for s, e, _ in found}]
+                    if key[0] != hook_runtime.PROJECT_HOOK and key not in merged
+                    and (key[0], key[1]) not in {(s, e) for s, e, _ in found}]
     # then
     assert mismatched == []
     assert unregistered == []

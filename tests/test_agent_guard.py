@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -51,19 +52,51 @@ class AgentGuardTest(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
 
-    def test_Claude에서는_어떤_에이전트_호출도_출력하지_않는다(self):
-        """Claude의 내장 에이전트 차단은 Mod가 맡으므로 훅 스크립트는 내장·플러그인·사용자 에이전트와 빈 종류 모두에 출력이 없다."""
+    def test_Claude에서는_내장_에이전트와_종류를_비운_호출을_거부하고_나머지는_통과시킨다(self):
+        """Mod 없이 이 훅만 있어도 general-purpose, Explore, Plan, claude(대소문자 무시)와 종류가 없는 새 호출은 거부하고 plugin scout 등은 통과한다."""
         # Given
-        names = ("general-purpose", "Explore", "Plan", "claude", "fork", "claude-code-guide",
-                 "hei5enbug-agent-setup:scout", "reviewer")
+        denied_names = ("general-purpose", "Explore", "plan", "CLAUDE")
+        allowed_names = ("fork", "claude-code-guide", "hei5enbug-agent-setup:scout", "reviewer")
 
         # When
-        decisions = {name: self.decide("claude", {"subagent_type": name, "prompt": "x"}) for name in names}
-        omitted = self.decide("claude", {"prompt": "x"})
+        denied = {name: self.output("claude", {"subagent_type": name, "prompt": "x"}) for name in denied_names}
+        omitted = self.output("claude", {"prompt": "x"})
+        empty = self.output("claude", {"subagent_type": "", "prompt": "x"})
+        allowed = {name: self.decide("claude", {"subagent_type": name, "prompt": "x"}) for name in allowed_names}
 
         # Then
-        self.assertEqual({name: None for name in names}, decisions)
-        self.assertIsNone(omitted)
+        for output in (*denied.values(), omitted, empty):
+            self.assertEqual("deny", output["permissionDecision"])
+            self.assertIn("built-in agent is disabled while hei5enbug-agent-setup is installed", output["permissionDecisionReason"])
+        self.assertEqual({name: None for name in allowed_names}, allowed)
+
+    def test_Claude에서_종류가_없어도_이어_가는_호출과_꺼진_agent_guard는_거부하지_않는다(self):
+        """resume이 있는 호출은 이전 시작에서 이미 검사했으므로 통과하고, agent_guard가 꺼지면 내장 에이전트도 출력이 없다."""
+        # When
+        resumed = self.decide("claude", {"prompt": "x", "resume": "agent-old"})
+        off = self.decide("claude", {"subagent_type": "general-purpose"}, CLAUDE_PLUGIN_OPTION_AGENT_GUARD="false")
+        non_object = self.decide("claude", "general-purpose")
+
+        # Then
+        self.assertEqual((None, None, None), (resumed, off, non_object))
+
+    def test_거부_이름_목록은_훅과_Mod와_사용자_설정_규칙이_같다(self):
+        """훅이 읽는 목록, Mod의 HIDDEN_AGENTS 정규식, 사용자 설정에 쓰는 Agent 거부 규칙이 한 이름 집합에서 벗어나면 실패한다."""
+        # Given
+        mod = (REPO_ROOT / "hooks/mod/agents.js").read_text(encoding="utf-8")
+        pattern = re.search(r"const HIDDEN_AGENTS = /\^\(([^)]*)\)\$/i;", mod)
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        import built_in_agents
+        import host_settings
+
+        # When
+        mod_names = {name.casefold() for name in pattern.group(1).split("|")}
+        hook_names = {name.casefold() for name in built_in_agents.NAMES}
+        rule_names = {rule.removeprefix("Agent(").removesuffix(")").casefold() for rule in host_settings.BUILT_IN_AGENT_DENIES}
+
+        # Then
+        self.assertEqual(mod_names, hook_names)
+        self.assertEqual(mod_names, rule_names)
 
     def test_Codex_내장_에이전트와_종류를_비운_호출은_거부한다(self):
         """default로 실행되는 빈 종류, default, explorer, 역할 파일이 없는 worker는 거부한다."""
@@ -632,8 +665,8 @@ class AgentGuardTest(unittest.TestCase):
         self.assertIsNone(other_event)
         self.assertIsNone(no_input)
 
-    def test_Codex의_Agent_호출_전에_가드_훅이_실행된다(self):
-        """Codex 전용 hooks/codex-hooks.json의 PreToolUse 훅이 Agent 매처로 가드를 실행한다."""
+    def test_두_호스트_전용_훅_파일이_각자_Agent_호출_전에_가드를_실행한다(self):
+        """Codex 전용 파일은 Agent|Task, Claude 전용 파일은 ^(Agent|Task)$ 매처로 같은 스크립트를 한 번씩 실행하고 공용 hooks.json에는 없다."""
         # When
         entries = [
             (group["matcher"], hook["command"])
@@ -642,8 +675,15 @@ class AgentGuardTest(unittest.TestCase):
             if "agent_guard.py" in hook["command"]
         ]
 
+        claude_groups = json.loads((REPO_ROOT / "hooks/claude-hooks.json").read_text(encoding="utf-8"))["hooks"]["PreToolUse"]
+        claude_entries = [(group["matcher"], hook["command"]) for group in claude_groups for hook in group["hooks"]]
+        shared = (REPO_ROOT / "hooks/hooks.json").read_text(encoding="utf-8")
+
         # Then
-        self.assertEqual([("Agent|Task", 'sh "${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh" agent_guard.py')], entries)
+        command = 'sh "${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh" agent_guard.py'
+        self.assertEqual([("Agent|Task", command)], entries)
+        self.assertEqual([("^(Agent|Task)$", command)], claude_entries)
+        self.assertNotIn("agent_guard.py", shared)
 
 
 if __name__ == "__main__":

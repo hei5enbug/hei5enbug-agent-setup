@@ -1644,7 +1644,7 @@ class RegistrationTest(LanguageGuardCase):
         self.assertEqual(
             names,
             {"SessionStart", "SubagentStart", "PreToolUse", "PermissionRequest", "PostToolUse", "PostToolUseFailure",
-             "UserPromptSubmit", "Stop"},
+             "UserPromptSubmit", "Stop", "SubagentStop"},
         )
         self.assertEqual(HOOKS["SessionStart"], session)
         self.assertEqual(HOOKS["SubagentStart"], subagent)
