@@ -24,7 +24,9 @@ COMMIT = "git:commit-message"
 EXTRA_KINDS = {
     "T14": ("Review reply", "out/review-reply.txt"), "T16": ("Ticket comment", "out/ticket-comment.txt"),
     "T17": ("Commit message", COMMIT), "T18": ("Chat message", "out/chat-message.txt"), "T19": ("Wiki page", "out/wiki-page.txt"),
-    "T22": ("Ticket comment, first draft", "out/comment-draft.txt"), "T25": ("PR description, tool marks", "out/pr-description.txt"),
+    "T22": ("Ticket comment, first draft", "out/comment-draft.txt"),
+    "T23": ("Ticket comment, revised draft", "out/comment-draft.txt"), "T24": ("Ticket comment, revised draft", "out/comment-draft.txt"),
+    "T25": ("PR description, tool marks", "out/pr-description.txt"),
     "T26": ("Commit message, tool marks", COMMIT), "T27": ("Commit message, model setting", COMMIT),
     "T28": ("Chat message, named model", "out/chat-message.txt"), "T29": ("Review reply, test names", "out/review-reply.txt"),
     "T30": ("PR description, file names", "out/pr-description.txt"), "T65": ("Ticket comment, stage titles", "out/ticket-comment.txt"),

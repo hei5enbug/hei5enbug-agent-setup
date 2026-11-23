@@ -1688,6 +1688,38 @@ class GoldenTaskTest(TempCase):
         self.assertEqual([results["kept_list"][name] for name in first], [True, False])
         self.assertEqual([results["no_behavior"][name] for name in first], [True, False])
 
+    def test_T30의_첫_검토는_도움말_호출을_건너뛰고_Codex의_감싼_출력_안의_결과_줄을_읽는다(self):
+        """`review --help`가 먼저 와도 첫 검토로 세지 않고, 결과 줄이 감싼 JSON의 output 필드 안에 있어도 읽으므로, 실제 첫 검토의 단계가 판정에 쓰인다."""
+        # given
+        cut = "Rows with an empty name are skipped.\n"
+        removable = [{"type": "removable", "quote": "Changed `demo_a.py`, `demo_b.py`", "reason": "y"}]
+        line = json.dumps({"stage": "review", "kind": "pr-description", "findings": removable}) + "\n"
+        stopped_line = json.dumps({"stage": "check", "findings": [{"rule": "identifier-list"}]}) + "\n"
+        review = "python3 scripts/text_review.py review --kind pr-description --draft notes/pr-draft.txt"
+
+        def view(results: tuple[str, ...], commands: tuple[str, ...]) -> dict[str, Any]:
+            made = make_view("done", commands=commands)
+            for call, text in zip(made["tool_calls"], results):
+                call["result_text"] = text
+            return made
+
+        wrapped = json.dumps({"i": 0, "status": "fulfilled", "value": {"exit_code": 0, "output": line}})
+        wrapped_stop = json.dumps({"i": 1, "result": {"exit_code": 1, "output": stopped_line}})
+        help_call = "python3 scripts/text_review.py review --help"
+
+        # when
+        results = {name: self.identifier_outcomes("T30", "pr-description.txt", cut, made) for name, made in (
+            ("help_first", view(("usage: text_review.py review [-h]\n", line), (help_call, review))),
+            ("wrapped", view((wrapped,), (review,))),
+            ("wrapped_stopped", view((wrapped_stop,), (review,))),
+            ("help_only", view(("usage: text_review.py review [-h]\n",), (help_call,))))}
+
+        # then
+        self.assertTrue(results["help_first"]["first-review-cuts-file-list"])
+        self.assertTrue(results["wrapped"]["first-review-cuts-file-list"])
+        self.assertFalse(results["wrapped_stopped"]["first-review-cuts-file-list"])
+        self.assertFalse(results["help_only"]["first-review-cuts-file-list"])
+
     def test_T29와_T30의_초안은_점검에서_멈추지_않고_식별자_목록_권고만_낸다(self):
         """픽스처의 두 초안이 새 점검에서 종료 코드 0이고 식별자 목록 권고가 있으므로, 검토자에게 닿는지가 과제의 판단 대상이다."""
         for name, kind in (("reply-draft.txt", "review-reply"), ("pr-draft.txt", "pr-description")):

@@ -136,6 +136,21 @@ class PagesTest(unittest.TestCase):
         self.assertEqual(made["pages"], ["t14-ranking.html", "t17-ranking.html"])
         self.assertIn("subject from F1", (out / "t17-ranking.html").read_text(encoding="utf-8"))
 
+    def test_T23과_T24의_수정_초안도_tasks_옵션으로_페이지가_생긴다(self):
+        """T23과 T24의 수정 초안을 비교 대상으로 등록하지 않으면 #81의 세 과제 중 둘을 눈으로 가릴 수 없으므로, 두 과제 모두 페이지가 생기고 두 번째 초안 파일을 읽는다."""
+        # given
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root, out = Path(tmp.name) / "runs", Path(tmp.name) / "out"
+        for task in ("T23", "T24"):
+            for flow, (variant, host) in FLOWS.items():
+                seed_run(root, task, variant, host, f"{task} draft from {flow}")
+        # when
+        made = tf_pages.build(root, "p3", FLOWS, out, tasks=("T23", "T24"))
+        # then
+        self.assertEqual(made["pages"], ["t23-ranking.html", "t24-ranking.html"])
+        self.assertIn("T24 draft from F3", (out / "t24-ranking.html").read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()
