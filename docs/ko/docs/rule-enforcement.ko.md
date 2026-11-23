@@ -204,7 +204,7 @@
 | `tests/test_request_distribution.py` | 시드한 세션 기록이 사용자 요청마다 위임 실행과 재시도를 주고, 요청은 다음 프롬프트에서 끝나며, 커밋한 분포는 개수만 담고 실행 한도는 가장 큰 개수 위의 가장 작은 10의 배수, 재시도 한도는 가장 큰 개수에 1을 더한 값이다. | `scripts/request_distribution.py` |
 | `tests/test_parallel_limit.py` | 병렬 한도는 CPU 수 빼기 1, 가용 메모리의 정수 GiB, 호스트 한도 중 가장 낮은 값이고 최소 1이며, 부하나 메모리 부족이면 1이고, 계수기를 읽을 수 없으면 6으로 자른다. 실행이 없는 세션은 언제나 하나를 시작할 수 있다. | `scripts/parallel_limit.py` |
 | `tests/test_parallel_limit_record.py` | 병렬 한도의 출하 상한은 `evals/e2e/records/97.json`에서 T36의 주장이 수락되지 않았을 때에 한해 6이다. | `evals/e2e/README.md` (요청 한도와 병렬 한도) |
-| `tests/test_request_budget.py` | 요청마다 하나의 개수가 프롬프트를 받은 세션 아래에 쌓여 모든 계층이 함께 쓴다. 실행 한도는 열 번째를 허용하고 열한 번째를 거부하며, 재시도 한도는 오류 뒤 시작을 멈추고, 동시에 온 시작은 정확히 하나만 통과하며, 한도 0은 아무것도 거부하지 않는다. | `scripts/request_budget.py` |
+| `tests/test_request_budget.py` | 요청마다 하나의 개수가 프롬프트를 받은 세션 아래에 쌓여 모든 계층이 함께 쓴다. 실행 한도는 열 번째를 허용하고 열한 번째를 거부하며, 재시도 한도는 오류 뒤 시작을 멈추고 시작한 세션의 호스트 변수에서 읽으며, 동시에 온 시작은 정확히 하나만 통과하며, 한도 0은 아무것도 거부하지 않는다. | `scripts/request_budget.py` |
 | `tests/test_request_budget_hook.py` | 훅은 프롬프트와 주 세션의 `Stop`마다 개수를 초기화해 목표 연속의 시작이 턴을 넘어 쌓이지 않게 하고(하위 에이전트나 역할 실행기 자식의 멈춤에서는 초기화하지 않는다) 한도를 알리며, 한도나 병렬 한도를 넘는 시작을 중단 메시지와 함께 거부하고, 시작이 어떻게 끝났는지 기록하며, 자식 세션을 부모 아래에서 센다. | `scripts/request_budget.py` |
 | `tests/test_request_budget_registration.py` | 요청 한도 옵션은 커밋한 분포의 기본값으로 출하되고, 요청 예산 훅은 두 호스트의 에이전트 도구 이벤트에 등록되며, 위임·역할 실행기·빠른 모드 지시문은 고정된 6 대신 플러그인이 알리는 한도를 가리킨다. | `docs/guards.md` (요청 한도와 병렬 한도) |
 | `tests/test_e2e_eval_limit_tasks.py` | T35는 재시도 한도에서 시작이 거부되고 그 뒤 시작이 없고 보고가 완료 문구 없이 미완 산출물을 밝힐 때만 통과한다. T36은 답 여덟 개와 변경 없음을 채점하고, T05는 시작이 거부되면 실패한다. | `evals/e2e/README.md` (요청 한도와 병렬 한도) |

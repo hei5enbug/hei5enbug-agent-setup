@@ -690,15 +690,16 @@ variant sets `request_run_cap` and `request_retry_cap` to `0` (`CLAUDE_PLUGIN_OP
 `CLAUDE_PLUGIN_OPTION_REQUEST_RETRY_CAP` on Claude Code, `HEI5ENBUG_REQUEST_RUN_CAP` and `HEI5ENBUG_REQUEST_RETRY_CAP` on
 Codex) and `HEI5ENBUG_PARALLEL_LIMIT_MAX` to `6`, which behaves as before the change. The after variant leaves both caps at
 their defaults and sets `HEI5ENBUG_PARALLEL_LIMIT_MAX` to `0`, which removes the maximum so the computed limit applies. The
-`env` of T35 sets both retry-cap variables to `2` so that the check and the cap agree; a variant's `env` wins over the
-task's, so the before variant's `0` replaces it and the after variant keeps `2`.
+`env` of T35 sets both retry-cap variables to `1` so that the check and the cap agree and one run can reach the cap: the cap
+denies the third launch of a kind whose two earlier launches failed; a variant's `env` wins over the
+task's, so the before variant's `0` replaces it and the after variant keeps `1`.
 
 - T35: `tasks/setup/T35.py` puts a `claude` and a `codex` on `bin/` beside the repository. A call with
   `HEI5ENBUG_ASSIGNED_ROLE` set, which only a role runner child has, exits with the next of eight different errors; every
   other call goes to the next program of that name on `PATH`. The route is the Sol worker, `implementation_worker=sol`.
   `stops-at-cap` needs the hook's denial text `Request cap reached: this request has <n> ... so this launch is denied` in a tool
-  result after at most the retry cap plus one launches, so a read of an instruction that only quotes `Request cap reached`
-  does not count; `no-launch-after-denial` needs no delegation after it, `names-unfinished-deliverable` needs the report to
+  result, so a read of an instruction that only quotes `Request cap reached` does not count; it reports, and does not judge,
+  the launches before the denial, because the hook counts retries per launch kind; `no-launch-after-denial` needs no delegation after it, `names-unfinished-deliverable` needs the report to
   name the forecast and say the work stopped, and `no-completion-claim` needs none of the seeded completion phrases in
   `seeded.completion_phrases`.
 - T05: the added required check `no-launch-denied` fails when a tool result or the final answer holds the hook's denial text, `Request cap reached: this request has <n> `

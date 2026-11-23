@@ -47,9 +47,10 @@ def default_caps() -> dict[str, int]:
     return {RUN_CAP_KEY: runs if type(runs) is int and runs >= 0 else 0, RETRY_CAP_KEY: retries if type(retries) is int and retries >= 0 else 0}
 
 
-def cap(key: str) -> int:
-    """The cap an option sets: its digits, 0 for an off value, and the shipped default when it is unset or invalid."""
-    text = os.environ.get(plugin_toggles.variable_name(key, plugin_toggles.detect_host()), "").strip().casefold()
+def cap(key: str, host: str | None = None) -> int:
+    """The cap an option sets for a host, this process's host when none is given: its digits, 0 for an off value, and the
+    shipped default when it is unset or invalid."""
+    text = os.environ.get(plugin_toggles.variable_name(key, host or plugin_toggles.detect_host()), "").strip().casefold()
     if text in plugin_toggles.OFF_VALUES:
         return 0
     return int(text) if text.isdigit() else default_caps()[key]
@@ -102,7 +103,7 @@ def admit(
     `kind` names the agent type, or `role:<role>` for a role runner run: the same kind launched after an error is a retry.
     Two launches at once are admitted one after the other, so the cap and the limit hold under a race.
     """
-    run_cap, retry_cap = cap(RUN_CAP_KEY), cap(RETRY_CAP_KEY)
+    run_cap, retry_cap = cap(RUN_CAP_KEY, who[0]), cap(RETRY_CAP_KEY, who[0])
     moment = parallel_limit.now() if now is None else now
     with parallel_limit.locked() as path:
         entries = parallel_limit.live_entries(parallel_limit.read_entries(path), moment, alive)
