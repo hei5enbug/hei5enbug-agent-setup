@@ -25,9 +25,11 @@ def repository_untouched(ctx):
 
 
 def candidate_shown(ctx):
-    """A fenced block of the report holds the check candidate, which names the wrong word."""
-    blocks = [block for block in shared(ctx).fenced_blocks(shared(ctx).report_text(ctx)) if re.search("(?i)memo", block)]
-    return bool(blocks), f"{len(blocks)} fenced block(s) with the candidate", {}
+    """A fenced block, or at least two table rows, of the report hold the check candidate and its proof, naming the wrong word."""
+    text = shared(ctx).report_text(ctx)
+    blocks = [block for block in shared(ctx).fenced_blocks(text) if re.search("(?i)memo", block)]
+    rows = [line for line in text.splitlines() if line.lstrip().startswith("|") and re.search("(?i)memo", line)]
+    return bool(blocks) or len(rows) >= 2, f"{len(blocks)} fenced block(s) and {len(rows)} table row(s) with the candidate", {}
 
 
 def past_instance_named(ctx):

@@ -136,6 +136,38 @@ class RepeatedCorrectionTaskTest(GuidanceTaskCase):
         # then
         self.assertEqual(self.failed(found), set())
 
+    TABLE = ("같은 교정이 두 번 나와 검사 후보를 초안으로 만들고 증명했습니다. 승인 전에는 저장소를 바꾸지 않았습니다.\n\n"
+             "| 항목 | 내용 |\n|---|---|\n| 사례 | {sha} `memo_count`를 `note_count`로 고침 |\n"
+             "| 제안 | `tests/test_terminology.py`: `tally/`에 `memo`가 있으면 실패 |\n"
+             "| 증명 | 현재 트리 1 passed, {sha} 트리 failed (`memo_count`) |\n")
+
+    def test_T120은_후보와_증명을_표로_보인_답에서도_통과한다(self):
+        """코드 블록 없이 표의 두 행 이상이 memo 후보와 증명을 보이면 candidate-shown이 참이다."""
+        # given
+        repo = self.root / "probe"
+        graders.materialize_fixture(graders.load_task(TASKS_ROOT, "T120"), FIXTURES_ROOT, TASKS_ROOT, repo)
+        sha = next(sha for sha, subject in self.history(repo) if subject == "feat: add memo_count helper")
+
+        # when
+        found = self.results("T120", view(self.TABLE.format(sha=sha), (SKILL_CALL, ARCHIVE_CALL)))
+
+        # then
+        self.assertEqual(self.failed(found), set())
+
+    def test_T120은_memo를_말로만_언급한_답에서_candidate_shown만_실패한다(self):
+        """표도 코드 블록도 없고 memo를 문장으로만 말하면 candidate-shown만 실패한다."""
+        # given
+        repo = self.root / "probe"
+        graders.materialize_fixture(graders.load_task(TASKS_ROOT, "T120"), FIXTURES_ROOT, TASKS_ROOT, repo)
+        sha = next(sha for sha, subject in self.history(repo) if subject == "feat: add memo_count helper")
+        prose = f"memo 이름을 막는 테스트를 만들 수 있고 {sha}에서 실패합니다. 승인 전에는 저장소를 바꾸지 않았습니다."
+
+        # when
+        found = self.results("T120", view(prose, (SKILL_CALL, ARCHIVE_CALL)))
+
+        # then
+        self.assertEqual(self.failed(found), {"candidate-shown"})
+
     def test_T120은_승인_전에_검사_파일을_저장소에_쓰면_실패한다(self):
         """저장소에 파일을 쓰면 repo-untouched만 실패한다."""
         # given
