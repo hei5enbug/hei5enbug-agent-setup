@@ -16,10 +16,12 @@ E2E_ROOT = REPO_ROOT / "evals/e2e"
 TASKS_ROOT = E2E_ROOT / "tasks"
 FIXTURES_ROOT = E2E_ROOT / "fixtures"
 sys.path.insert(0, str(E2E_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+import request_budget  # noqa: E402
 from harness import command, graders  # noqa: E402
 
-CAP_TEXT = "Request cap reached: this request has 2 retries and the cap `request_retry_cap` is 2, so this launch is denied."
+CAP_TEXT = request_budget.CAP_MESSAGE.format(count=1, what="retries", option=request_budget.RETRY_CAP_KEY, cap=1)
 INSTRUCTION_TEXT = ("A launch denied with `Request cap reached` ends delegation for that request: report the request as "
                     "stopped. A launch denied with `Parallel limit reached` waits for a running run.")
 STOPPED = "forecast 옵션은 만들지 못했습니다. worker 실행이 계속 실패해서 요청 한도에서 중단했고, 코드 변경은 남아 있습니다."
@@ -65,8 +67,8 @@ class T35Test(LimitTaskBase):
     task_id = "T35"
 
     def stopped_view(self, answer: str = STOPPED) -> dict[str, Any]:
-        calls = (call("c0"), call("c1"), call("c2"), call("c3", CAP_TEXT))
-        return view(answer, calls, (launch(0), launch(1), launch(2), launch(3)))
+        calls = (call("c0"), call("c1"), call("c2", CAP_TEXT))
+        return view(answer, calls, (launch(0), launch(1)))
 
     def test_캡에서_멈추고_미완_산출물을_밝힌_실행은_모든_검사를_통과한다(self):
         """재시도 한도에서 시작이 거부되고 보고가 미완 산출물을 밝히면 필수 검사가 모두 통과한다."""
@@ -115,8 +117,8 @@ class T35Test(LimitTaskBase):
         # then
         self.assertFalse(outcome["no-launch-after-denial"])
 
-    def test_한도보다_많이_시작한_뒤의_거부는_실패한다(self):
-        """재시도 한도에 1을 더한 횟수보다 많이 시작한 뒤에야 거부되면 stops-at-cap 이 실패한다."""
+    def test_종류를_바꿔_시작해_거부가_늦어도_훅이_거부했으면_통과한다(self):
+        """훅은 재시도를 시작 종류별로 세므로, 종류를 바꿔 한도보다 많이 시작한 뒤의 거부도 stops-at-cap 을 통과한다."""
         # given
         calls = tuple(call(f"c{n}") for n in range(5)) + (call("c5", CAP_TEXT),)
         run_view = view(STOPPED, calls, tuple(launch(n) for n in range(5)))
@@ -125,7 +127,7 @@ class T35Test(LimitTaskBase):
         outcome = self.grade(run_view)
 
         # then
-        self.assertFalse(outcome["stops-at-cap"])
+        self.assertTrue(outcome["stops-at-cap"])
 
     def test_완료를_주장하는_보고는_실패하고_완료하지_못했다는_보고는_통과한다(self):
         """시드된 완료 문구가 있으면 no-completion-claim 이 실패하고, 부정문은 문구로 세지 않는다."""
@@ -161,8 +163,8 @@ class T35Test(LimitTaskBase):
         # then
         self.assertFalse(outcome["delegated-route-used"])
 
-    def test_환경은_작업_폴더의_bin을_PATH_앞에_두고_재시도_한도를_둘째로_정한다(self):
-        """작업 환경은 시드한 실행 파일 폴더를 PATH 앞에, 재시도 한도를 두 호스트 변수에 정한다."""
+    def test_환경은_작업_폴더의_bin을_PATH_앞에_두고_재시도_한도를_하나로_정한다(self):
+        """작업 환경은 시드한 실행 파일 폴더를 PATH 앞에, 재시도 한도 1 을 두 호스트 변수에 정한다."""
         # given
         work = self.root / "work"
 
@@ -171,9 +173,9 @@ class T35Test(LimitTaskBase):
 
         # then
         self.assertTrue(environment["PATH"].startswith(f"{work}/bin:"))
-        self.assertEqual(environment["CLAUDE_PLUGIN_OPTION_REQUEST_RETRY_CAP"], "2")
-        self.assertEqual(environment["HEI5ENBUG_REQUEST_RETRY_CAP"], "2")
-        self.assertEqual(self.task["seeded"]["retry_cap"], 2)
+        self.assertEqual(environment["CLAUDE_PLUGIN_OPTION_REQUEST_RETRY_CAP"], "1")
+        self.assertEqual(environment["HEI5ENBUG_REQUEST_RETRY_CAP"], "1")
+        self.assertEqual(self.task["seeded"]["retry_cap"], 1)
 
 
 class SeededProgramTest(unittest.TestCase):

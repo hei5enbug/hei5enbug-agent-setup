@@ -211,6 +211,23 @@ def test_오류_뒤에는_재시도_한도에서_시작이_멈춘다(monkeypatch
     assert budget.counts(ME)["retries"] == 2
 
 
+def test_Codex_세션의_실행기는_PLUGIN_ROOT가_없어도_Codex_변수로_재시도_한도를_정한다(monkeypatch):
+    """PLUGIN_ROOT 가 없는 셸에서 부른 Codex 세션의 시작도 HEI5ENBUG_REQUEST_RETRY_CAP 1 로 셋째 시작이 거부된다."""
+    # given
+    codex = ("codex", "thread-me")
+    monkeypatch.setenv("HEI5ENBUG_REQUEST_RUN_CAP", "0")
+    monkeypatch.setenv("HEI5ENBUG_REQUEST_RETRY_CAP", "1")
+    for number in range(2):
+        assert start(codex, f"c{number}") is None
+        budget.finish(codex, "agent", f"c{number}", ok=False)
+
+    # when
+    denial = start(codex, "c2")
+
+    # then
+    assert denial is not None and denial.startswith(budget.CAP_MARKER)
+
+
 def test_성공_뒤의_시작은_재시도가_아니다(monkeypatch):
     """성공으로 끝난 시작 뒤의 같은 유형 시작은 재시도 수를 올리지 않는다."""
     # given

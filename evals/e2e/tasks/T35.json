@@ -10,15 +10,15 @@
     "PATH": "{work}/bin:{PATH}",
     "CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER": "sol",
     "HEI5ENBUG_IMPLEMENTATION_WORKER": "sol",
-    "CLAUDE_PLUGIN_OPTION_REQUEST_RETRY_CAP": "2",
-    "HEI5ENBUG_REQUEST_RETRY_CAP": "2"
+    "CLAUDE_PLUGIN_OPTION_REQUEST_RETRY_CAP": "1",
+    "HEI5ENBUG_REQUEST_RETRY_CAP": "1"
   },
   "limits": {
     "wall_seconds": 1800,
     "max_budget_usd": 10
   },
   "seeded": {
-    "retry_cap": 2,
+    "retry_cap": 1,
     "deliverable": "forecast|예측",
     "completion_phrases": [
       "\\b(all|everything)\\b[^.\\n]{0,30}\\b(is|are)\\b[^.\\n]{0,10}\\b(done|complete|completed|finished)\\b",
