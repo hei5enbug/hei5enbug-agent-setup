@@ -104,6 +104,7 @@ def do_run(args: argparse.Namespace, cfg: HarnessConfig) -> int:
     task_ids = split(args.tasks) or campaign.discover_tasks(cfg)
     variant_names = split(args.variants)
     hosts = command.validate_hosts(split(args.hosts))
+    cfg = command.resolve_host_binaries(cfg, hosts)
     if not task_ids or not variant_names or args.reps < 1:
         raise command.ConfigError("need at least one task, one variant, and reps >= 1")
     if args.dry_run:

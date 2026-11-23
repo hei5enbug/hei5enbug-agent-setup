@@ -5,7 +5,8 @@ only at the end of a run, and run `close` only for the terminals the user approv
 
 ## List
 
-Run `python3 <script> orphans --run-id <run_id> --json`. It lists every orphaned Claude Code or Codex terminal with
+`refresh` already ran `orphans`; its `orphans` section is this list. To list again, run
+`python3 <script> orphans --run-id <run_id> --json`. It lists every orphaned Claude Code or Codex terminal with
 `host`, `worktree`, and `idle_seconds`, the time since its transcript or rollout was last written. It closes nothing.
 For Claude Code it may type one character and delete it to tell a grey prompt suggestion from typed text.
 

@@ -18,7 +18,9 @@ repository README; only its unit tests are.
    fixed fictional identity and date, and runs the task's setup script when it has one. A setup script may build
    more state beside the repository, in `<run root>/<campaign>/work/<run id>/`, and a task's `env` map gives the agent
    environment values in which `{repo}`, `{work}`, and `{PATH}` stand for the repository, that folder, and the current
-   `PATH`. The variant's `env` and the configuration's `extra_env` still win over it.
+   `PATH`. The variant's `env` and the configuration's `extra_env` still win over it. A setup script finds the exported
+   plugin folder of the variant under test in its `E2E_PLUGIN_DIR` environment variable, so a task that seeds an
+   installed copy of the plugin builds it from the code under test, not from the harness checkout.
 3. It starts the agent in that folder:
 
    ```text
@@ -332,7 +334,11 @@ solution in `tasks/reference/` passes.
 Prompts are in Korean, as the real user writes them. The fixtures are fictional repositories with the conventions a
 real one has: a README, an `AGENTS.md` with a Korean mirror rule, tests, and Korean mirrors. T21 runs with
 `ORCA_TERMINAL_HANDLE` set and a fake `orca` first on `PATH`, built by `tasks/setup/fake_orca.py`; it keeps its state
-in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval_orca_cleanup.py`.
+in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval_orca_cleanup.py`. T81 runs with a fake
+`orca`, `claude`, and `codex` first on `PATH`, built by `tasks/setup/T81.py`, an installed copy of the plugin, and two
+seeded sessions; it keeps its state in `orca-state/` and `plugin-state/` beside the repository and its tests are in
+`tests/test_e2e_eval_refresh_reload.py`. The fake commands cannot start a real session or a detached helper's
+long wait, so the task covers only what the call log and the final answer show.
 
 | Task | Fixture | Path it exercises | Request |
 |---|---|---|---|
@@ -357,6 +363,7 @@ in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval
 | T19 | ops-notes | Shared document | Wiki draft of about 1,600 characters for a 1,500-character budget |
 | T20 | notes-cli | Final report | Small change with tests, then a report |
 | T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
+| T81 | notes-cli | Orca plugin refresh | Apply the installed plugin version to running sessions, one of which waits only on a background task, with fake `orca`, `claude`, and `codex` |
 | T78 | commit-demo | Commit skill, staged-only scope | Korean-subject history, one staged change beside an unstaged edit and an untracked `.env` |
 | T79 | commit-demo | Commit skill, required identifier | Commit rules that require a ticket key, and a request that names none |
 | T82 | demo-app | UI routing, complete specification | Four named-line edits to a settings panel; routes to the implementation worker |

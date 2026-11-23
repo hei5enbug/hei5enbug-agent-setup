@@ -2,12 +2,12 @@
 name: session-triage
 description: >-
   Table every Claude Code and Codex agent session running in Orca by state (waiting for the user, stalled,
-  finished, working) and, after one approval, act on them: send a stalled one an instruction, exit an idle one to
-  free memory with a resume note, remove a finished session's clean worktree, or rename a tab to its current task.
-  Use when the user asks to see, sort out, or clean up running Orca agent sessions, find ones waiting on them or
-  stalled, or free the memory they use, such as "세션 정리해줘", "대기 중인 세션 보여줘", or "free memory used by
-  my agent sessions", or agrees after a plugin memory-gate denial suggested it. Not for updating plugins and
-  reloading sessions (orca-plugin-refresh), disk cleanup (local-data-cleanup), or creating worktrees.
+  finished, working) and, after one approval, act on them: nudge a stalled one, exit an idle one to free memory,
+  remove a finished session's clean worktree, or rename a tab to its current task. Use when the user asks to see,
+  sort out, or clean up running Orca agent sessions, find ones waiting on them or stalled, or free the memory they
+  use, such as "세션 정리해줘" or "free memory used by my agent sessions", or agrees after a plugin memory-gate denial
+  suggested it. Not for updating plugins and reloading sessions (orca-plugin-refresh), disk cleanup
+  (local-data-cleanup), or creating worktrees.
 compatibility: >-
   Needs Python 3.12 or later and the `orca` CLI reaching a running Orca (`ORCA_CLI_COMMAND` overrides the
   executable). `git` is needed only for clean-up checks.
@@ -112,30 +112,32 @@ delete the `x`, skip that session, and say the user's text is there. Recheck the
   pinned name so Orca shows its automatic name again. Then read the worktree back with `orca worktree list --json` and
   report it restored only when its entry shows `displayNameMode: automatic`; otherwise report the mode it shows. Never
   run it without the user's approval in that question.
-- `clean up`: first confirm all of these, and ask the user instead when any fails:
-  - the worktree is not a main worktree, has no children, and is not the current session's worktree;
-  - `orca terminal list --worktree "id:<worktree_id>" --json` shows only this session's terminal, and no other row
-    of the overview has the same `worktree_id`, so no other session or shell uses that checkout;
-  - the screen shows an idle prompt with no open question and no monitors, background tasks, or running subagents;
-  - `git -C <path> status --porcelain` is empty, with ignored files only regenerable caches;
-  - the branch's commits are in the base branch (`git -C <path> merge-base --is-ancestor HEAD <base ref>`; a squash
-    merge does not pass, so ask).
+- `clean up`: `<ref>` is the base branch of the repository, chosen as the work requires. Run it before step 4's question,
+  and again for each approved candidate after its agent has exited:
 
-  Then exit the agent as `sleep` does and confirm the shell prompt. Look for anything still running there:
-  `orca ports --worktree "id:<worktree_id>" --json`, and processes other than the terminal's own shell whose working
-  directory is inside the path, such as from `lsof -d cwd -Fpn`. When something remains, keep the terminal and worktree and report it. Otherwise run
-  `orca terminal close --terminal <handle> --json` and
-  `orca worktree rm --worktree "id:<worktree_id>" --delete-branch --json`. Never a session that is not `finished`.
+  ```text
+  python3 scripts/cleanup_checks.py --worktree-id <worktree_id> --base-ref <ref> [--no-agent]
+  python3 scripts/cleanup_checks.py --worktree-id <worktree_id> --base-ref <ref> [--no-agent] --after-exit
+  ```
 
-  A `worktrees_without_agent` row has no agent session, so no exit command is sent and no `finished` class is needed.
-  Run the same checks, with these changes. Every terminal in `terminal_handles` shows an idle shell prompt with nothing
-  running, and no other row of the overview has the same `worktree_id`; when `terminal_handles` is empty, skip the
-  terminal checks and the close step and keep every other check. The branch passes the base-branch check instead when,
-  after `git -C <path> fetch`, `git -C <path> rev-list --count @{upstream}..HEAD` is 0; a branch with no upstream fails
-  it. Copy an ignored file that is not regenerable, such as a handoff note, to the current session's worktree first,
-  then go on. Then look for running processes as above, close each terminal in `terminal_handles` with
-  `orca terminal close`, run the same `orca worktree rm`, and report the remote branch that keeps the work. A row that
-  fails a check is kept, and its line names the failed check.
+  Pass `--no-agent` for a `worktrees_without_agent` row. Each prints one JSON object whose `checks` hold `pass`, `fail`,
+  or `unreadable` with the value read, and `ignored`, the ignored files; it exits 0 when every check except
+  `squash_possible` passes, 1 when one fails, and 3 when none fails but one is unreadable. A `fail` or `unreadable`
+  check skips that session, except the squash case below; say which check and why, and do not retry around it. Judge `ignored` yourself: only
+  regenerable caches pass, and copy any other ignored file, such as a handoff note, to the current session's worktree
+  first. Also read the screen: it must show an idle prompt with no open question and no
+  monitors, background tasks, or running subagents; for a `worktrees_without_agent` row, every terminal in
+  `terminal_handles` shows an idle shell prompt with nothing running, and with none, skip the screen check and the close
+  step.
+
+  When `base_merged` is `fail` and `squash_possible` is `pass`, ask the user whether to continue and go on only on
+  approval; any other `fail` keeps the worktree. After approval, exit the agent as `sleep` does and confirm the shell
+  prompt (a `worktrees_without_agent` row has no agent, so send no exit command), then run the `--after-exit` call. Only
+  when every check of both runs passes (or the squash case was approved), close each terminal with
+  `orca terminal close --terminal <handle> --json` and run
+  `orca worktree rm --worktree "id:<worktree_id>" --delete-branch --json`; otherwise keep the terminal and the
+  worktree and report the failed check. Never clean up a session that is not `finished`. For a
+  `worktrees_without_agent` row, report the remote branch that keeps the work.
 
 Exit commands:
 

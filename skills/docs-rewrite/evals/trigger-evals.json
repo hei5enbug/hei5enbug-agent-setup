@@ -1,0 +1,11 @@
+[
+  {"query": "이 문단 자연스럽게 다듬어줘", "should_trigger": true},
+  {"query": "polish this PR description", "should_trigger": true},
+  {"query": "아래 답변 AI 티 나는 문장 좀 사람이 쓴 것처럼 고쳐줘", "should_trigger": true},
+  {"query": "번역투 제거해서 읽기 쉽게 문장 정리해줘", "should_trigger": true},
+  {"query": "make this review comment read better, keep the meaning exactly", "should_trigger": true},
+  {"query": "translate this into English", "should_trigger": false},
+  {"query": "summarize this document", "should_trigger": false},
+  {"query": "이 주제로 블로그 글 새로 하나 써줘", "should_trigger": false},
+  {"query": "이 문서 내용이 사실과 맞는지 확인해줘", "should_trigger": false}
+]

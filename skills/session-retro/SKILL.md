@@ -27,7 +27,7 @@ main, asks the user, and accepts the result.
 | Phase | Owner |
 |---|---|
 | 1. Fix the target | main |
-| 2. List the sessions | `investigation` |
+| 2. List the sessions | main |
 | 3. Gather evidence | `investigation` |
 | 4. Verify against the sources | main |
 | 5–7. Improvement table, decision questions, and any requested plan | main |
@@ -54,7 +54,7 @@ repository" while several repositories are in view, state the reading you chose.
 
 ### 2. List the sessions
 
-Run the bundled script, resolving its path from the directory that holds this `SKILL.md`:
+Run the bundled script in the main session, resolving its path from the directory that holds this `SKILL.md`:
 
 ```text
 python3 scripts/list_sessions.py (--date <YYYY-MM-DD> | --since <YYYY-MM-DDTHH:MM> [--until <YYYY-MM-DDTHH:MM>]) (--cwd <repository path> | --all-cwd) [--tz <zone>] [--claude-dir <dir>] [--codex-dir <dir>]
@@ -64,7 +64,9 @@ It prints one JSON object with `sessions` and `skipped`, and exits with 0 when t
 invalid argument, and 1 when a session folder exists but cannot be listed. A range is half-open: `--since`
 is included, `--until` is not, both in `--tz`. With `--all-cwd`, each session carries its `cwd`; group the
 sessions by it and review each folder's sessions. Pass `--claude-dir` or `--codex-dir` only when the user
-names other session folders. Report every `skipped` entry.
+names other session folders. Report every `skipped` entry. When it exits with 1 or 2, report the exit code and its
+message, stop the whole run before step 3, and start no worker to retry; the user fixes the arguments or the folder and
+starts the skill again.
 
 Choose the sessions to review:
 

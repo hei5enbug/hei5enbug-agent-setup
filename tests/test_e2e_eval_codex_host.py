@@ -120,6 +120,14 @@ class DryRunHostsTest(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         self.variants = write_variants(self.root, {"baseline": {"env": WITHIN_CAP_ENV}})
+        self.bin = self.root / "host-bin"
+        self.bin.mkdir()
+        for name in ("claude", "codex"):
+            (self.bin / name).write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            (self.bin / name).chmod(0o755)
+        patcher = mock.patch.dict(os.environ, {"PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}"})
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def plan(self, hosts: str) -> str:
         code, out, err = run_cli("run", "--campaign", "demo", "--hosts", hosts, "--tasks", "T08", "--dry-run",
@@ -134,8 +142,8 @@ class DryRunHostsTest(unittest.TestCase):
 
         # then
         lines = out.splitlines()
-        claude = next(line for line in lines if line.startswith("claude -p"))
-        codex = next(line for line in lines if "codex exec " in line)
+        claude = next(line for line in lines if line.startswith(f"{self.bin}/claude -p"))
+        codex = next(line for line in lines if f" {self.bin}/codex exec " in line or line.startswith(f"{self.bin}/codex exec "))
         self.assertIn("--model claude-opus-5-5 --effort high", claude)
         self.assertIn("-m gpt-6.1-sol", codex)
         self.assertIn("model_reasoning_effort=\"high\"", codex)
@@ -308,7 +316,7 @@ class FakeCodexRunTest(unittest.TestCase):
         patch_env.start()
         self.addCleanup(patch_env.stop)
         os.environ.pop("HARNESS_CODEX_AUTH_HOME", None)
-        graders = SimpleNamespace(materialize_fixture=lambda task, fixtures, tasks_root, dest: (Path(dest).mkdir(parents=True), "base1")[1],
+        graders = SimpleNamespace(materialize_fixture=lambda task, fixtures, tasks_root, dest, plugin_dir=None: (Path(dest).mkdir(parents=True), "base1")[1],
                                   grade_run=lambda *args: {"checks": [], "success": True, "correctness": 1.0,
                                                            "test_pass_rate": 1.0, "regressions": 0, "constraints": []})
         patch_graders = mock.patch.object(runner, "load_graders", return_value=graders)

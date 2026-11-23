@@ -18,5 +18,8 @@
   {"query": "my mac is out of memory, which apps are using the most RAM?", "should_trigger": false},
   {"query": "git worktree prune 해서 깨진 워크트리 정리해줘", "should_trigger": false},
   {"query": "tmux 세션 목록 보여주고 안 쓰는 건 kill 해줘", "should_trigger": false},
-  {"query": "이 대화에서 지금까지 한 작업을 요약해줘", "should_trigger": false}
+  {"query": "이 대화에서 지금까지 한 작업을 요약해줘", "should_trigger": false},
+  {"query": "대기 중인 세션 보여줘", "should_trigger": true},
+  {"query": "free memory used by my agent sessions", "should_trigger": true},
+  {"query": "update the plugin and reload my sessions", "should_trigger": false}
 ]

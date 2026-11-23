@@ -109,8 +109,14 @@ def is_noise(path: str) -> bool:
     return any(part in NOISE_PARTS for part in parts) or path.endswith(".pyc")
 
 
-def materialize_fixture(task: Mapping[str, Any], fixtures_root: Path, tasks_root: Path, dest: Path) -> str:
-    """Copy the task's fixture into `dest`, commit it as the base, run the setup script, and return HEAD."""
+PLUGIN_DIR_VARIABLE = "E2E_PLUGIN_DIR"
+
+
+def materialize_fixture(task: Mapping[str, Any], fixtures_root: Path, tasks_root: Path, dest: Path,
+                        plugin_dir: str | Path | None = None) -> str:
+    """Copy the task's fixture into `dest`, commit it as the base, run the setup script, and return HEAD.
+
+    `plugin_dir`, the run's exported plugin folder, reaches the setup script as `E2E_PLUGIN_DIR`."""
     source = Path(fixtures_root).resolve() / task["fixture"]
     target = Path(dest).resolve()
     target.mkdir(parents=True, exist_ok=True)
@@ -127,7 +133,8 @@ def materialize_fixture(task: Mapping[str, Any], fixtures_root: Path, tasks_root
     setup = task.get("setup")
     if setup:
         completed = subprocess.run([sys.executable, str(Path(tasks_root).resolve() / setup), str(target)], cwd=target,
-                                   env={**git_environment(env)}, capture_output=True, text=True)
+                                   env={**git_environment(env), **({PLUGIN_DIR_VARIABLE: str(plugin_dir)} if plugin_dir else {})},
+                                   capture_output=True, text=True)
         if completed.returncode != 0:
             raise RuntimeError(f"setup {setup} failed: {completed.stderr.strip() or completed.stdout.strip()}")
     return git(target, "rev-parse", "HEAD").strip()

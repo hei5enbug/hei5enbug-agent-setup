@@ -267,7 +267,7 @@ Confluence 도구를 선택하거나 호출하기 전에 상위 Confluence 지�
 3. Confluence 전용 콘텐츠를 몰래 삭제하지 않고 요청한 갱신 방식을 적용한다.
 4. 의미 콘텐츠가 유지되면 안정적인 첨부 파일 이름과 매크로 식별자를 보존한다.
 5. 원본 형식이나 내보내기 도구가 바뀌면 블록 경계가 달라질 수 있으므로 추출을 다시 실행한다.
-6. 페이지에 인라인 댓글 마커가 있으면 `references/confluence-body.md`의 "Inline comment markers" 절에서
+6. 페이지에 인라인 댓글 마커가 있으면 `references/confluence-inline-comments.md`에서
    설명한 대로 변환하고 복원하고 확인한다.
 
 ## 모든 원본의 규칙

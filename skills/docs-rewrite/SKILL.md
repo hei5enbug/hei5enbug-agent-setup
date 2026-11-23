@@ -1,15 +1,12 @@
 ---
 name: docs-rewrite
 description: >-
-  Rewrite existing text so it reads naturally while its meaning stays exactly the same. Use when a
-  document, message, review comment, commit message, PR description, chat reply, or file is supplied
-  and the request is to polish, tidy, smooth, restructure for readability, fix awkward wording, or
-  remove AI-sounding and translated-sounding Korean, including "다듬어줘", "자연스럽게 고쳐줘",
-  "읽기 쉽게", "가독성 개선", "문장 정리", "말이 이상해", "AI 티 제거", "사람이 쓴 것처럼 윤문",
-  "번역투 제거", "ChatGPT 문체 수정", "한국어 휴머나이징", "장르·강도 조정", "polish this",
-  "make it read better", "reword". Also use on an agent draft before it is posted or committed. Do
-  not use to write new text, to translate, to summarize, to expand with added explanation, or to
-  check whether the content is correct, and never promise that a detector will be defeated.
+  Rewrite existing text so it reads naturally while its meaning stays exactly the same. Use when a document,
+  message, review comment, commit message, PR description, chat reply, or file is supplied and the request is to
+  polish, tidy, restructure for readability, fix awkward wording, or remove AI-sounding or translated-sounding
+  Korean, such as "다듬어줘", "자연스럽게 고쳐줘", "AI 티 제거", "번역투 제거", "polish this", or "reword". Also use on an agent draft
+  before it is posted or committed. Do not use to write new text, translate, summarize, expand, or check whether
+  the content is correct.
 metadata:
   version: "1.0.0"
 compatibility: >-
