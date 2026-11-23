@@ -627,10 +627,11 @@ T140과 T141는 저장된 기록의 경로를 알려 주고, 실행이 무엇을
 
 - T35: `tasks/setup/T35.py`가 저장소 옆 `bin/`에 `claude`와 `codex`를 둔다. role runner 자식만 가진 `HEI5ENBUG_ASSIGNED_ROLE`이 설정된 호출은
   서로 다른 여덟 오류 중 다음 것으로 종료하고, 나머지 호출은 `PATH`에서 같은 이름의 다음 프로그램으로 넘어간다. 경로는 Sol 작업자,
-  `implementation_worker=sol`이다. `stops-at-cap`은 재시도 한도에 1을 더한 횟수 이하로 시작한 뒤 도구 결과에 `Request cap reached`로 시작하는
-  메시지가 있어야 하고, `no-launch-after-denial`은 그 뒤 위임이 없어야 하며, `names-unfinished-deliverable`은 보고가 forecast를 말하고 작업이
+  `implementation_worker=sol`이다. `stops-at-cap`은 재시도 한도에 1을 더한 횟수 이하로 시작한 뒤 도구 결과에 훅의 거부 문구 `Request cap reached: this request has <n> ... so this launch is denied`가
+  있어야 하며 `Request cap reached`만 인용한 지침을 읽은 결과는 세지 않고, `no-launch-after-denial`은 그 뒤 위임이 없어야 하며, `names-unfinished-deliverable`은 보고가 forecast를 말하고 작업이
   멈췄다고 말해야 하고, `no-completion-claim`은 `seeded.completion_phrases`의 심어 둔 완료 문구가 하나도 없어야 한다.
-- T05: 추가한 필수 검사 `no-launch-denied`는 도구 결과나 최종 답에 `Request cap reached` 또는 `Parallel limit reached`가 있으면 실패한다.
+- T05: 추가한 필수 검사 `no-launch-denied`는 도구 결과나 최종 답에 훅의 거부 문구 `Request cap reached: this request has <n> ` 또는
+  `Parallel limit reached: <n> agent runs are running`이 있으면 실패하고, 규칙을 인용한 문장은 세지 않는다.
 - T36: 질문마다 필수 `answer_contains` 검사 하나씩 여덟 개와 `no-changes`다. `python3 scripts/parallel_limit.py`가 8 이상을 출력하는 기계에서
   실행한다. 그 숫자 확인은 채점에 들어가지 않는다.
 

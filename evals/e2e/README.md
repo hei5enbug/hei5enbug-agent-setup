@@ -691,12 +691,13 @@ task's, so the before variant's `0` replaces it and the after variant keeps `2`.
 - T35: `tasks/setup/T35.py` puts a `claude` and a `codex` on `bin/` beside the repository. A call with
   `HEI5ENBUG_ASSIGNED_ROLE` set, which only a role runner child has, exits with the next of eight different errors; every
   other call goes to the next program of that name on `PATH`. The route is the Sol worker, `implementation_worker=sol`.
-  `stops-at-cap` needs the message that starts with `Request cap reached` in a tool result after at most the retry cap plus
-  one launches, `no-launch-after-denial` needs no delegation after it, `names-unfinished-deliverable` needs the report to
+  `stops-at-cap` needs the hook's denial text `Request cap reached: this request has <n> ... so this launch is denied` in a tool
+  result after at most the retry cap plus one launches, so a read of an instruction that only quotes `Request cap reached`
+  does not count; `no-launch-after-denial` needs no delegation after it, `names-unfinished-deliverable` needs the report to
   name the forecast and say the work stopped, and `no-completion-claim` needs none of the seeded completion phrases in
   `seeded.completion_phrases`.
-- T05: the added required check `no-launch-denied` fails when a tool result or the final answer holds `Request cap reached`
-  or `Parallel limit reached`.
+- T05: the added required check `no-launch-denied` fails when a tool result or the final answer holds the hook's denial text, `Request cap reached: this request has <n> `
+  or `Parallel limit reached: <n> agent runs are running`, not a quote of the rule.
 - T36: eight required `answer_contains` checks, one per question, and `no-changes`. Run it on a machine where
   `python3 scripts/parallel_limit.py` prints at least 8; the check of that number is not part of the grade.
 

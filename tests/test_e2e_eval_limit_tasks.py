@@ -20,6 +20,8 @@ sys.path.insert(0, str(E2E_ROOT))
 from harness import command, graders  # noqa: E402
 
 CAP_TEXT = "Request cap reached: this request has 2 retries and the cap `request_retry_cap` is 2, so this launch is denied."
+INSTRUCTION_TEXT = ("A launch denied with `Request cap reached` ends delegation for that request: report the request as "
+                    "stopped. A launch denied with `Parallel limit reached` waits for a running run.")
 STOPPED = "forecast 옵션은 만들지 못했습니다. worker 실행이 계속 실패해서 요청 한도에서 중단했고, 코드 변경은 남아 있습니다."
 FULL_ANSWERS = (
     "1) ROUND_HALF_UP 으로 센트 단위까지 반올림합니다. 2) 10개부터 5%, 50개부터 10%, 100개부터 15%입니다. "
@@ -89,6 +91,17 @@ class T35Test(LimitTaskBase):
         # then
         self.assertFalse(outcome["stops-at-cap"])
         self.assertFalse(outcome["no-launch-after-denial"])
+
+    def test_지침_문장을_인용한_도구_결과는_거부로_세지_않는다(self):
+        """지침 파일을 읽은 결과가 한도 문구를 인용해도 거부가 아니므로 stops-at-cap 과 no-launch-after-denial 이 실패한다."""
+        # given
+        run_view = view(STOPPED, (call("c0", INSTRUCTION_TEXT), call("c1")), (launch(1),))
+
+        # when
+        outcome = self.grade(run_view)
+
+        # then
+        self.assertEqual((False, False), (outcome["stops-at-cap"], outcome["no-launch-after-denial"]))
 
     def test_거부_뒤에_시작이_있으면_실패한다(self):
         """거부된 호출보다 뒤에 시작한 위임이 있으면 no-launch-after-denial 이 실패한다."""
@@ -267,6 +280,19 @@ class T05DenialCheckTest(LimitTaskBase):
 
         # when
         results = [self.grade(item)["no-launch-denied"] for item in (clean, denied)]
+
+        # then
+        self.assertEqual(results, [True, False])
+
+    def test_지침_문장을_인용한_도구_결과와_답은_거부로_세지_않는다(self):
+        """지침 문장을 인용한 읽기 결과와 답은 통과하고, 병렬 한도 거부 메시지는 실패한다."""
+        # given
+        quoted = view("지침에 `Request cap reached` 가 있습니다.", (call("a", INSTRUCTION_TEXT),))
+        limit = view("done", (call("a", "Parallel limit reached: 6 agent runs are running on this machine and the "
+                                         "parallel limit is 6. Do not poll."),))
+
+        # when
+        results = [self.grade(item)["no-launch-denied"] for item in (quoted, limit)]
 
         # then
         self.assertEqual(results, [True, False])
