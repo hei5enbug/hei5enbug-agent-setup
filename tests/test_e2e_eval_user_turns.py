@@ -97,6 +97,25 @@ class ConversationTest(unittest.TestCase):
         self.assertIn("gpt-6.1-sol", argv)
         self.assertNotIn("-s", argv)
 
+    def test_Codex는_질문_뒤에_설명_문장이_이어져도_질문으로_읽고_이어_간다(self):
+        """Codex 답의 마지막 줄이 문장이어도 앞 줄이 물음표로 끝나면 exec resume 으로 이어 가고, Claude Code 는 마지막 줄 규칙을 그대로 쓴다.
+        잡는 회귀: 마지막 줄만 보아 질문을 놓치고 교환 없이 끝나는 Codex 실행."""
+        # given
+        text = "Which week day starts a week?\n\nThe repository does not say, so I need to confirm."
+        codex = FakeAgent([codex_turn(text), codex_turn("Done.")])
+        claude = FakeAgent([claude_turn(text)])
+
+        # when
+        self.drive(codex, "codex", lambda session, reply: ["codex", "exec", "resume", session, reply])
+        calls = len(codex.calls)
+        self.log.unlink()
+        (self.root / "stream.jsonl").unlink()
+        self.drive(claude, "claude")
+
+        # then
+        self.assertEqual((calls, len(claude.calls)), (2, 1))
+        self.assertEqual(codex.calls[1]["argv"][-2:], ["t-1", "Weeks start on Sunday."])
+
     def test_질문이_아닌_턴으로_끝나면_더_잇지_않고_기록도_없다(self):
         # given
         agent = FakeAgent([claude_turn("All done.")])

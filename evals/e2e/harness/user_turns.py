@@ -77,6 +77,12 @@ def turn_failed(events: Sequence[Mapping[str, Any]], host: str) -> bool:
     return not result or bool(result.get("is_error"))
 
 
+def asks_question(answer: str, host: str) -> bool:
+    """Whether a turn's final text asks the user. Claude Code ends a turn with its question; a Codex answer often adds a
+    sentence of reasons after it, so any question line counts there."""
+    return scripted_user.has_question_line(answer) if host == HOST_CODEX else scripted_user.ends_with_question(answer)
+
+
 def merge(results: Sequence[ProcessResult]) -> ProcessResult:
     """One result for the whole conversation: the first start, the last end, the summed time, the last exit code."""
     first, last = results[0], results[-1]
@@ -107,7 +113,7 @@ def run_conversation(
         answer = final_text(events, host)
         session = session_id(events, host) or session_id(new_events(stream_path, 0)[0], host)
         asked = scripted_user.load_log(log_path)
-        if not session or not scripted_user.ends_with_question(answer) or len(asked) >= sheet.max_exchanges:
+        if not session or not asks_question(answer, host) or len(asked) >= sheet.max_exchanges:
             break
         specification = "\n\n".join(turn_texts(events, host)) or answer
         exchange = scripted_user.respond(sheet, answer, scripted_user.KIND_TEXT, specification,

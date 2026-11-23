@@ -95,6 +95,17 @@ class AnswerTest(unittest.TestCase):
         self.assertTrue(su.has_term("It is SUNDAY", "sunday|일요일"))
         self.assertFalse(su.has_term("It is Monday", "sunday|일요일"))
 
+    def test_용어는_영문자와_숫자_경계에서만_일치한다(self):
+        """`week` 는 weekly 나 weekday 안에서 일치하지 않고 단어로 있을 때만 일치하며, 한글 용어는 조사가 붙어도 일치한다.
+        잡는 회귀: 팀 목록 질문의 tally weekly 가 week 용어에 걸려 주 시작 답을 받는 문제."""
+        # given / when / then
+        self.assertFalse(su.has_word("Should tally weekly list every team?", "week"))
+        self.assertFalse(su.has_word("weekdays only", "week"))
+        self.assertTrue(su.has_word("Which day does a week start on?", "week"))
+        self.assertTrue(su.has_word("Do weeks start on Sunday, or a Week-start?", "week"))
+        self.assertTrue(su.has_word("한 주는 언제 시작하나요", "한 주"))
+        self.assertEqual(su.respond(SHEET, "Should tally weekly list every team?", su.KIND_TEXT).reply, "use your recommendation")
+
 
 class ApprovalTest(unittest.TestCase):
     def test_필수_용어를_모두_가진_명세는_승인되고_승인_문장을_받는다(self):
@@ -183,6 +194,17 @@ class QuestionShapeTest(unittest.TestCase):
                                ("Done. Should I also? Details follow.", False), ("", False), ("All good.", False)):
             with self.subTest(text):
                 self.assertEqual(su.ends_with_question(text), expected)
+
+
+class QuestionLineTest(unittest.TestCase):
+    def test_마지막_줄이_질문이_아니어도_본문에_물음표로_끝나는_줄이_있으면_질문_줄이_있다(self):
+        """질문 뒤에 근거 문장이 이어지는 Codex 답은 질문으로 읽고, 코드 블록 안의 물음표와 문장 중간의 물음표는 질문으로 세지 않는다."""
+        for text, expected in (("한 주는 월요일부터로 할까요?\n\n저장소에 기준이 없어 확인이 필요합니다.", True),
+                               ("Which one?\n\nDetails follow.", True), ("어느 쪽이 좋을까요？\n설명", True),
+                               ("All good.", False), ("", False), ("Done. Should I also? Details follow.", False),
+                               ("Run:\n```\nls | grep a?\n```\nDone.", False)):
+            with self.subTest(text):
+                self.assertEqual(su.has_question_line(text), expected)
 
 
 class LogTest(unittest.TestCase):

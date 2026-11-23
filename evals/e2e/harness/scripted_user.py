@@ -4,7 +4,9 @@ It answers a question asked through the question tool (`AskUserQuestion`), in th
 question that ends a turn. A task names its answer sheet in `user.sheet`; the sheet lives under `tasks/answers/`, which is not
 part of the agent's folder or of the exported plugin.
 
-A term may give alternatives separated by `|`, such as `sunday|일요일`; it is found when any alternative is.
+A term may give alternatives separated by `|`, such as `sunday|일요일`; it is found when any alternative is. A decision's
+term is found only as a whole word, so `week` matches `week` and `weeks` but not `weekly`; a Hangul term still matches inside
+a longer word, because a particle follows it.
 
 The sheet lists each decision (`id`, `terms`, `answer`) and each point an approved specification must hold (`id`, `terms`,
 `rejected_terms`, `sentence`). A question is about a decision when it contains at least one of that decision's terms, compared
@@ -40,6 +42,8 @@ TRAILING_MARKUP = "*_`\"')]> \t"
 HEADING_LINE = re.compile(r"^\s{0,3}#{1,6}\s")
 LABEL_LINE = re.compile(r"^\s*(?:\*\*[^*\n]{1,80}\*\*|__[^_\n]{1,80}__|[^\s:][^:\n]{0,60}:)\s*$")
 NOISE_PARTS = ("__pycache__", ".pytest_cache")
+FENCE = "```"
+WORD_CHARS = "A-Za-z0-9_"
 
 
 class SheetError(ValueError):
@@ -143,8 +147,21 @@ def contains_any(haystack: str, terms: Sequence[str]) -> bool:
     return any(has_term(haystack, term) for term in terms)
 
 
+def has_word(haystack: str, term: str) -> bool:
+    """Like `has_term`, but an alternative that starts or ends with a letter or digit must not touch another one there;
+    a plural `s` or `es` may follow."""
+    for alternative in (part.strip() for part in term.split("|")):
+        if not alternative:
+            continue
+        before = rf"(?<![{WORD_CHARS}])" if re.match(rf"[{WORD_CHARS}]", alternative) else ""
+        after = rf"(?:e?s)?(?![{WORD_CHARS}])" if re.search(rf"[{WORD_CHARS}]$", alternative) else ""
+        if re.search(before + re.escape(alternative) + after, haystack, re.IGNORECASE):
+            return True
+    return False
+
+
 def matched_decisions(sheet: Sheet, question: str) -> list[Decision]:
-    return [decision for decision in sheet.decisions if contains_any(question, decision.terms)]
+    return [decision for decision in sheet.decisions if any(has_word(question, term) for term in decision.terms)]
 
 
 def is_approval_request(sheet: Sheet, question: str) -> bool:
@@ -202,6 +219,17 @@ def ends_with_question(final_text: str) -> bool:
     """True when the last line of a turn's final text ends with a question mark, ignoring closing markup."""
     lines = [line for line in final_text.splitlines() if line.strip()]
     return bool(lines) and lines[-1].rstrip(TRAILING_MARKUP).endswith(QUESTION_ENDINGS)
+
+
+def has_question_line(final_text: str) -> bool:
+    """True when any line of a turn's final text outside a code block ends with a question mark, ignoring closing markup."""
+    fenced = False
+    for line in final_text.splitlines():
+        if line.strip().startswith(FENCE):
+            fenced = not fenced
+        elif not fenced and line.strip() and line.rstrip(TRAILING_MARKUP).endswith(QUESTION_ENDINGS):
+            return True
+    return False
 
 
 def tool_question_text(question: Mapping[str, Any]) -> str:
