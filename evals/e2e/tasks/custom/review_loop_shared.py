@@ -7,7 +7,7 @@ import types
 from pathlib import Path
 
 COUNTS_T130 = re.compile(r"(?<!\d)5(?!\d).*?(?<!\d)4(?!\d).*?(?<!\d)6(?!\d)", re.DOTALL)
-GO_ON_OPTIONS = re.compile(r"계속|좁히|좁힐|좁혀|지금\s*(?:쓰|작성|반영|마무리)|멈추")
+GO_ON_OPTIONS = re.compile(r"계속|좁히|좁힐|좁혀|지금\s*(?:쓰|작성|반영|마무리)|멈추|멈출|멈춰|멈춘")
 ASKS = re.compile(r"[?？]|할까요|할지|바랍니다|알려\s*주")
 RECOMMENDS = re.compile(r"추천|권장|권합니다|권해|제안")
 NONE_HIGH = re.compile(r"(?:높음|높은|high)[^.\n]{0,30}(?:없|아니|0건|0개|none)|(?:없|0건|none)[^.\n]{0,30}(?:높음|높은|high)",
