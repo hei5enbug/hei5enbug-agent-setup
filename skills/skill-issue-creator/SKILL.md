@@ -216,13 +216,12 @@ On another tracker, create the issue with the path the declaration options choos
 
 ### 8. Verify
 
-Read the created issue back and confirm its title, every tag, section order, and absence of raw markup. On GitHub, run
-`python3 scripts/check_filed.py github --repo <location> --number <number> --title "<title>" --label "<label>"`,
-resolving the path as in step 3 and repeating `--label` for each tag. On another tracker, read the item back with
-the same path, pass its body on stdin to `python3 scripts/check_filed.py body --format <markdown|html|jira|plain>`,
-and for `html` also run the declaration options' rendered check. The script prints one JSON result and exits with 0
-when every check passes, 1 when any fails, 3 when none fails but one could not run, and 2 on a usage error. On a
-public tracker, search the Proposal and Acceptance criteria for the case's identifiers again.
+Read the created issue back and confirm its title, every tag, and section order. On GitHub, run
+`gh issue view <number> --repo <location> --json number,title,labels,body,url`, and fetch the rendered body with
+`gh api repos/<location>/issues/<number> -H "Accept: application/vnd.github.html+json" --jq .body_html`. The
+rendered body must show no raw markup, such as a literal `##`, `**`, or `\n`. On another tracker, read it back with
+the same path, and for `html` also run the declaration options' rendered check. On a public tracker, search the
+Proposal and Acceptance criteria for the case's identifiers again.
 
 When a check fails, fix what this skill wrote directly, following [update in place](references/update-in-place.md).
 When a check cannot run, report it as unverified.

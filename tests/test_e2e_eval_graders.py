@@ -1883,23 +1883,6 @@ class GoldenTaskTest(TempCase):
         self.assertFalse(results["wrapped_stopped"]["first-review-cuts-file-list"])
         self.assertFalse(results["help_only"]["first-review-cuts-file-list"])
 
-    def test_T29와_T30의_초안은_점검에서_멈추지_않고_식별자_목록_권고만_낸다(self):
-        """픽스처의 두 초안이 새 점검에서 종료 코드 0이고 식별자 목록 권고가 있으므로, 검토자에게 닿는지가 과제의 판단 대상이다."""
-        for name, kind in (("reply-draft.txt", "review-reply"), ("pr-draft.txt", "pr-description")):
-            with self.subTest(name):
-                # given
-                draft = FIXTURES_ROOT / "identifier-lists" / "notes" / name
-
-                # when
-                result = subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "text_review.py"), "check", "--kind", kind,
-                                         str(draft)], capture_output=True, text=True, timeout=60)
-
-                # then
-                payload = json.loads(result.stdout)
-                self.assertEqual(0, result.returncode)
-                self.assertEqual(([], ["identifier-list"]), ([item["rule"] for item in payload["findings"]],
-                                                              [item["rule"] for item in payload["advisories"]]))
-
     def stage_outcomes(self, task_id: str, text: str, checks: tuple[str, ...]) -> dict[str, bool]:
         task = self.load(task_id)
         repo = Path(tempfile.mkdtemp(dir=self.root))

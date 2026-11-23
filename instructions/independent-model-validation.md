@@ -100,8 +100,7 @@ For a technical design document or RFC, also check:
 ## Execution boundary
 
 This is one validation pass, not a debate. Do not ask the reviewer to revise its answer, invoke another
-reviewer, or repeat validation after finalization, except a repeat the user asks for, which follows "Repeated
-review on request". A failed or unavailable reviewer does not authorize a
+reviewer, or repeat validation after finalization. A failed or unavailable reviewer does not authorize a
 second model call. A declined earlier review authorizes no substitute independent review. Routine author
 inspection and required tests still run; never label them independent validation.
 
@@ -115,42 +114,9 @@ not performed and why.
 The authoring session checks every finding against the frozen scope and authoritative evidence and sorts it
 into fix now, worth considering, note only, or rejected, each with a one-line reason. A finding without a traced
 reachable caller or input path is a possibility, never fix now, until traced. Apply supported fix-now corrections
-once, and reject unsupported scope expansion. Do not run another model review after the corrections, except a
-repeat the user asks for.
-
-Outside the text review, when the session applies findings, it compares each corrected passage with the confirmed
-decisions and the authoritative evidence before the next round or the write, and corrects one that departs from
-them. When a worker applies findings, its assignment gives the point, the reason, and the evidence of each finding
-and asks the worker to change every passage in its allowed paths that states the same point and to compare each
-change with that evidence; it never limits the worker to a list of sentences.
+once, and reject unsupported scope expansion. Do not run another model review after the corrections.
 
 Report the result in the reply, never in the deliverable. When the review ran, give one line with the link or path
 of the review result, such as the reviewer's result file or the comment that holds the findings, and state each
 finding left unresolved; give no reviewer model, effort, pass count, finding categories, or safety proof. When
 validation could not run or the user declined it, state that, and why, in one line.
-
-## Repeated review on request
-
-Follow this section for a review that the user asks to repeat and fix until a round returns no findings, and when the
-user answers the stop of a review by asking to go on, including the independent text review.
-
-- Before the first round, tell the user in one line that the loop stops and reports after every three rounds that
-  still return findings. Ask nothing then.
-- A round that returns no findings ends the loop, and the work goes on at once. A rise or fall in the count never
-  stops the loop by itself.
-- Every round keeps the first round's reviewers and reviewed set. Change a reviewer, the reviewed set, or the severity
-  to fix only after the user chooses it at a stop.
-- Inside the loop, the stops of "Independent text review" in [shared text](shared-text.md) for a repeated finding and
-  for a finding only the user can decide still apply.
-- When the third round counted from the request, or from the user's latest answer to go on, still returns findings,
-  apply that round's findings under "Finalization", then stop before the next round and write nothing outward.
-  Report so that the user can tell the findings per round by severity, the reviewers and the reviewed set of each
-  round, how many findings an earlier round's fix caused or left behind in another passage, how many are in text the
-  loop never changed, and whether any finding is high severity or contradicts a confirmed decision. Then ask once,
-  with one recommendation, whether to go on unchanged, to narrow the reviewed set, the reviewers, or the severity to
-  fix, or to stop and write now. When the user chooses to write now, the work's report states that the last round's
-  fixes were not reviewed.
-
-Example report: "Rounds 1 to 3 returned 9, 7, and 8 findings from the same two reviewers, none high and none against
-a decision; 6 of round 3's findings were copies that a round-2 fix missed, and I fixed all 8. I recommend one more
-pass over the two pages to be published, fixing medium or higher."

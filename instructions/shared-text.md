@@ -15,10 +15,9 @@ item's body and its whole comment or reply history.
 1. Cut pass: delete each sentence or link whose removal loses no fact the reader needs to decide or act. This covers a
    sentence that restates a linked source, an adjacent table or figure, another section, a diff the reader sees with
    the text, or what the body and history of the ticket, pull request, or thread the text goes into already told the
-   people it addresses, such as a cause or an earlier finding; a list of names such a diff shows, unless the
-   destination's writing rules require those names; the rule that requires a listed check, though never why a
-   required check was not done; a statement that something does not change, unless a reader would otherwise act
-   wrongly; and a link whose target another listed link already covers.
+   people it addresses, such as a cause or an earlier finding; a list of names such a diff shows; the rule that
+   requires a listed check, though never why a required check was not done; a statement that something does not
+   change, unless a reader would otherwise act wrongly; and a link whose target another listed link already covers.
    Merge items of one kind into one line. Keep a sentence from that history when it corrects an earlier statement or
    those readers need it for their next action, and give an addressed person who took no part in the history only the
    background they need to act.
@@ -43,14 +42,6 @@ item's body and its whole comment or reply history.
    every other text of the same run still leaves tool marks out.
 2. Completeness pass: compare the text with the request and its sources. Restore every decision, condition,
    prerequisite, order, and completion criterion the reader needs, and rewrite every sentence with two readings.
-   When the text refers to a stage, phase, or division of a procedure or plan, name it by its title; a number may
-   stand beside the title but never alone, so write "0 Check and build", not "step 0". Keep a number that states a
-   quantity or a value, such as a depth limit, a count, or a version. When a numbered list orders the stages of a
-   procedure, give each item its title with its number, and when a division and one of its items would share a
-   number, name the division by its title so that no number names two things.
-   When a source requires the text itself to report something, such as a measurement or a list that an acceptance
-   criterion says the report includes, or the result departs from what a source proposed or decided, list each such
-   item and each departure before drafting, and confirm that the draft carries each one before its first review run.
    Before the text states a fact as unverified or unknown, or leaves it as a condition to check later, settle it with
    a check that the current permissions and approvals allow, such as reading a file, a read-only command, one minimal
    call, or a dry run, when the check is read-only or reversible, needs no new approval, and is small in time and cost
@@ -82,12 +73,10 @@ python3 <Source directory>/scripts/text_review.py review --kind <kind> --draft <
   existing text you changed only in part, also pass its diff as `--source`. For a text that goes into an existing
   ticket, pull request, or thread, also pass that item's body and whole history as `--source`.
 - It first checks the patterns the text alone decides and stops on them; fix each finding. It then has a reviewer with
-  no conversation context review the draft against only the rules and sources you passed. A list item of identifier
-  names is not stopped on: the reviewer judges it against the destination's writing rules.
+  no conversation context review the draft against only the rules and sources you passed.
 - Exit 0: post the reviewed text unchanged. Exit 1: apply each finding to the whole text, or pass your reason for
-  keeping a flagged sentence with `--note`. When you change the text, check that each sentence you added or changed
-  matches the sources, has one meaning, and restates no source, then run the review again without asking. Post only
-  after a run returns no findings.
+  keeping a flagged sentence with `--note`, and run it again without asking. Post only after a run returns no
+  findings.
 - Compare each finding with the findings of the earlier runs of the same draft. It repeats when an earlier run raised
   the same problem in the same sentence or point, whether you applied that finding or answered it with `--note`; a
   different problem in a sentence that an earlier finding changed or a note kept is new. When a finding repeats, stop,
@@ -95,8 +84,7 @@ python3 <Source directory>/scripts/text_review.py review --kind <kind> --draft <
 - When a finding can be resolved only by a decision the user must make, such as a scope or a fact the sources do not
   settle, apply the run's other findings, post nothing, and ask about that finding.
 - Count only runs that reach the reviewer. When the fourth such run for one draft still returns findings, post
-  nothing, show the user the remaining findings, and ask. When the user answers to go on, follow "Repeated review on
-  request" in [independent model validation](independent-model-validation.md), counting rounds from that answer.
+  nothing, show the user the remaining findings, and ask.
 - For a final report, at each of these stops send the revised report instead of asking, with no line about the
   review, once `text_review.py check --kind final-report <file>` returns no findings for it. Write a finding that needs
   the user's decision into the report as one question.

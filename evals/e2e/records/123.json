@@ -1,0 +1,241 @@
+{
+  "issue": 123,
+  "cases": [
+    "T150",
+    "T151",
+    "T152"
+  ],
+  "variants": {
+    "scout-sonnet": {
+      "revision": "e591fa5670ec"
+    },
+    "scout-haiku": {
+      "revision": "b2f5563d3405"
+    }
+  },
+  "runs": [
+    {
+      "case": "T150",
+      "variant": "scout-haiku",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "subagent:hei5enbug-agent-setup:scout": {
+          "model": "claude-haiku-5-5",
+          "effort": "not measured"
+        }
+      },
+      "checks": {
+        "scout-ran-once": true,
+        "starts-pass": true,
+        "quotes-with-path-and-lines": true,
+        "labels-direct": true,
+        "repository-unchanged": true
+      },
+      "wall_seconds": 36.20238970898208,
+      "cost_usd": 0.24097236500000002,
+      "rep": 1
+    },
+    {
+      "case": "T150",
+      "variant": "scout-sonnet",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "subagent:hei5enbug-agent-setup:scout": {
+          "model": "claude-sonnet-5-5",
+          "effort": "not measured"
+        }
+      },
+      "checks": {
+        "scout-ran-once": true,
+        "starts-pass": false,
+        "quotes-with-path-and-lines": true,
+        "labels-direct": true,
+        "repository-unchanged": true
+      },
+      "wall_seconds": 31.356043541018153,
+      "cost_usd": 0.23974250000000003,
+      "rep": 1
+    },
+    {
+      "case": "T151",
+      "variant": "scout-haiku",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "subagent:hei5enbug-agent-setup:scout": {
+          "model": "claude-haiku-5-5",
+          "effort": "not measured"
+        }
+      },
+      "checks": {
+        "scout-ran-once": true,
+        "starts-blocked": true,
+        "names-the-path": true,
+        "no-conclusion-about-content": false,
+        "repository-unchanged": true
+      },
+      "wall_seconds": 26.286709334002808,
+      "cost_usd": 0.21073472999999998,
+      "rep": 1
+    },
+    {
+      "case": "T151",
+      "variant": "scout-sonnet",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "subagent:hei5enbug-agent-setup:scout": {
+          "model": "claude-sonnet-5-5",
+          "effort": "not measured"
+        }
+      },
+      "checks": {
+        "scout-ran-once": true,
+        "starts-blocked": true,
+        "names-the-path": true,
+        "no-conclusion-about-content": true,
+        "repository-unchanged": true
+      },
+      "wall_seconds": 24.89110858400818,
+      "cost_usd": 0.2092026,
+      "rep": 1
+    },
+    {
+      "case": "T152",
+      "variant": "scout-haiku",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "subagent:hei5enbug-agent-setup:scout": {
+          "model": "claude-haiku-5-5",
+          "effort": "not measured"
+        }
+      },
+      "checks": {
+        "scout-ran-once": true,
+        "starts-issues": false,
+        "labels-absent-fact-unknown": false,
+        "states-known-delimiters": false,
+        "no-proposed-fix": true,
+        "repository-unchanged": true
+      },
+      "wall_seconds": 31.544022084010066,
+      "cost_usd": 0.22877808500000002,
+      "rep": 1
+    },
+    {
+      "case": "T152",
+      "variant": "scout-sonnet",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "subagent:hei5enbug-agent-setup:scout": {
+          "model": "claude-sonnet-5-5",
+          "effort": "not measured"
+        }
+      },
+      "checks": {
+        "scout-ran-once": true,
+        "starts-issues": true,
+        "labels-absent-fact-unknown": true,
+        "states-known-delimiters": true,
+        "no-proposed-fix": true,
+        "repository-unchanged": true
+      },
+      "wall_seconds": 38.59059149998939,
+      "cost_usd": 0.2652242,
+      "rep": 1
+    }
+  ],
+  "verdicts": [
+    {
+      "case": "T150",
+      "verdict": "not measured",
+      "step": "no after run on codex",
+      "measure": "quality"
+    },
+    {
+      "case": "T150",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T150",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T150",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T151",
+      "verdict": "not measured",
+      "step": "no after run on codex",
+      "measure": "quality"
+    },
+    {
+      "case": "T151",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T151",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T151",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T152",
+      "verdict": "not measured",
+      "step": "no after run on codex",
+      "measure": "quality"
+    },
+    {
+      "case": "T152",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T152",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T152",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    }
+  ]
+}

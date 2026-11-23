@@ -5,8 +5,8 @@ description: >-
   commits, reverts, review comments, and user corrections into mistake classes, picks the highest
   enforcement level that works, and proves each proposed check fails on a real past instance. Use only
   when the user explicitly asks to turn repeated mistakes into checks, to audit which written rules agents
-  miss most, or invokes the skill by name, or when a session instruction starts it on one repeated
-  correction. Do not start it for a single bug fix, a code review, or a session summary.
+  miss most, or invokes the skill by name. Do not start it for a single bug fix, a code review, or a session
+  summary.
 compatibility: >-
   Needs Git and filesystem access to the target repository. Reading pull request review comments needs the
   hosting service's command-line tool; without it the skill uses the other sources and says so.
@@ -29,21 +29,6 @@ works.
 - Never create a worktree or branch, check out another commit, or change the index. Export a past tree with
   `git archive` into the temporary folder instead.
 - Quote only the few words a finding needs, and never copy a credential, token, or personal data.
-
-## Single-class mode
-
-An explicit request or a call by name runs the full workflow below. When a session instruction starts the skill on
-one repeated correction, run this instead of steps 1, 2, and 5; the boundaries stay.
-
-1. Take the one mistake class and its instances from the session: the quoted corrections and the commits that show
-   the mistake, when there are any. The repeat that instruction names replaces the two-instance rule of step 2. Group
-   no evidence from the rest of the repository and read no other session records.
-2. Choose the level as in step 3. At the instruction level, state the judgment it leaves to the agent, draft no check,
-   and run no proof.
-3. Prove the check as in step 4, on the current tree and on one past instance: a past commit when one exists,
-   otherwise a fixture built from the instance quoted in the session, recorded as fixture-based.
-4. Show the class, its instances, the level with the reason no higher level works, the check, and the proof, and ask
-   once whether to apply it. Apply it as in step 6 only after the user accepts.
 
 ## Workflow
 

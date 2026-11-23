@@ -1,0 +1,529 @@
+{
+  "issue": 122,
+  "cases": [
+    "T110",
+    "T111",
+    "T15"
+  ],
+  "variants": {
+    "p4-before": {
+      "revision": "a0c5a70b9913"
+    },
+    "a122": {
+      "revision": "0a84f350fdcb"
+    }
+  },
+  "runs": [
+    {
+      "case": "T110",
+      "variant": "a122",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#5": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#6": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "skill-invoked": true,
+        "no-blocking-question": true,
+        "filed-once": true,
+        "body-contract": true,
+        "answers-carried": true,
+        "issue-reported": true,
+        "read-back-after-write": true,
+        "repo-unchanged": true,
+        "check-filed-ran-after-write": true
+      },
+      "wall_seconds": 526.6156712080119,
+      "cost_usd": 0.719694,
+      "rep": 1
+    },
+    {
+      "case": "T110",
+      "variant": "a122",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "gpt-6.1-sol",
+          "effort": "xhigh"
+        }
+      },
+      "checks": {
+        "skill-invoked": true,
+        "no-blocking-question": true,
+        "filed-once": true,
+        "body-contract": false,
+        "answers-carried": true,
+        "issue-reported": true,
+        "read-back-after-write": true,
+        "repo-unchanged": true,
+        "check-filed-ran-after-write": true
+      },
+      "wall_seconds": 824.9979289999756,
+      "cost_usd": 1.8583180000000001,
+      "rep": 1
+    },
+    {
+      "case": "T110",
+      "variant": "p4-before",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#5": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#6": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#7": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#8": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "skill-invoked": false,
+        "no-blocking-question": true,
+        "filed-once": true,
+        "body-contract": true,
+        "answers-carried": true,
+        "issue-reported": true,
+        "read-back-after-write": true,
+        "repo-unchanged": true,
+        "check-filed-ran-after-write": false
+      },
+      "wall_seconds": 679.3458784170216,
+      "cost_usd": 1.2223350000000002,
+      "rep": 1
+    },
+    {
+      "case": "T110",
+      "variant": "p4-before",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "gpt-6.1-sol",
+          "effort": "xhigh"
+        }
+      },
+      "checks": {
+        "skill-invoked": true,
+        "no-blocking-question": true,
+        "filed-once": true,
+        "body-contract": false,
+        "answers-carried": false,
+        "issue-reported": true,
+        "read-back-after-write": true,
+        "repo-unchanged": true,
+        "check-filed-ran-after-write": false
+      },
+      "wall_seconds": 733.9555212499981,
+      "cost_usd": 2.1152004,
+      "rep": 1
+    },
+    {
+      "case": "T111",
+      "variant": "a122",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#5": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#6": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "skill-invoked": false,
+        "no-blocking-question": true,
+        "duplicate-search-ran": true,
+        "no-new-issue": true,
+        "duplicate-reported": true,
+        "covering-issue-intact": true,
+        "answer-merged": true,
+        "read-back-after-write": true,
+        "repo-unchanged": true,
+        "check-filed-ran-after-write": false
+      },
+      "wall_seconds": 608.5261557079793,
+      "cost_usd": 0.7484368,
+      "rep": 1
+    },
+    {
+      "case": "T111",
+      "variant": "a122",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "skill-invoked": true,
+        "no-blocking-question": true,
+        "duplicate-search-ran": true,
+        "no-new-issue": true,
+        "duplicate-reported": true,
+        "covering-issue-intact": true,
+        "answer-merged": true,
+        "read-back-after-write": true,
+        "repo-unchanged": true,
+        "check-filed-ran-after-write": true
+      },
+      "wall_seconds": 603.9373921249935,
+      "cost_usd": 1.5355730000000003,
+      "rep": 1
+    },
+    {
+      "case": "T111",
+      "variant": "p4-before",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#5": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#6": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "skill-invoked": true,
+        "no-blocking-question": true,
+        "duplicate-search-ran": true,
+        "no-new-issue": true,
+        "duplicate-reported": true,
+        "covering-issue-intact": true,
+        "answer-merged": true,
+        "read-back-after-write": true,
+        "repo-unchanged": true,
+        "check-filed-ran-after-write": false
+      },
+      "wall_seconds": 509.36952891599503,
+      "cost_usd": 0.7032888000000002,
+      "rep": 1
+    },
+    {
+      "case": "T111",
+      "variant": "p4-before",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "skill-invoked": true,
+        "no-blocking-question": true,
+        "duplicate-search-ran": true,
+        "no-new-issue": true,
+        "duplicate-reported": true,
+        "covering-issue-intact": true,
+        "answer-merged": true,
+        "read-back-after-write": true,
+        "repo-unchanged": true,
+        "check-filed-ran-after-write": false
+      },
+      "wall_seconds": 427.2073934999935,
+      "cost_usd": 1.0545962000000002,
+      "rep": 1
+    },
+    {
+      "case": "T15",
+      "variant": "a122",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "setup-link-removed": true,
+        "guide-link-kept": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 63.15002441700199,
+      "cost_usd": 0.1438344,
+      "rep": 1
+    },
+    {
+      "case": "T15",
+      "variant": "a122",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "setup-link-removed": true,
+        "guide-link-kept": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 133.3216810419981,
+      "cost_usd": 0.40261759999999996,
+      "rep": 1
+    },
+    {
+      "case": "T15",
+      "variant": "p4-before",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "setup-link-removed": true,
+        "guide-link-kept": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 123.41015050001442,
+      "cost_usd": 0.25873199999999996,
+      "rep": 1
+    },
+    {
+      "case": "T15",
+      "variant": "p4-before",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "setup-link-removed": true,
+        "guide-link-kept": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 126.42189295799471,
+      "cost_usd": 0.381438,
+      "rep": 1
+    }
+  ],
+  "verdicts": [
+    {
+      "case": "T110",
+      "verdict": "fail",
+      "step": "a required check fails after on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "T110",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T110",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T110",
+      "verdict": "fail",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T111",
+      "verdict": "fail",
+      "step": "passed before and fails after on codex",
+      "measure": "quality"
+    },
+    {
+      "case": "T111",
+      "verdict": "pass",
+      "step": "first run",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T111",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T111",
+      "verdict": "fail",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T15",
+      "verdict": "pass",
+      "step": "every required check passes after on both hosts",
+      "measure": "quality"
+    },
+    {
+      "case": "T15",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T15",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T15",
+      "verdict": "repeat",
+      "step": "quality and every measure of the case"
+    }
+  ]
+}

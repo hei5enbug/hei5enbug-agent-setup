@@ -1,0 +1,409 @@
+{
+  "issue": 125,
+  "cases": [
+    "T16",
+    "T160",
+    "T18"
+  ],
+  "variants": {
+    "p4-before": {
+      "revision": "a0c5a70b9913"
+    },
+    "a125-haiku": {
+      "revision": "d1f1c35a6efe"
+    }
+  },
+  "runs": [
+    {
+      "case": "T16",
+      "variant": "a125-haiku",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "third-criterion": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 117.63182604202302,
+      "cost_usd": 0.2505272,
+      "rep": 1
+    },
+    {
+      "case": "T16",
+      "variant": "a125-haiku",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "third-criterion": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 146.19039791700197,
+      "cost_usd": 0.45438500000000004,
+      "rep": 1
+    },
+    {
+      "case": "T16",
+      "variant": "p4-before",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "third-criterion": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 114.02460974999121,
+      "cost_usd": 0.27731320000000004,
+      "rep": 1
+    },
+    {
+      "case": "T16",
+      "variant": "p4-before",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "third-criterion": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 126.04817133300821,
+      "cost_usd": 0.4059172,
+      "rep": 1
+    },
+    {
+      "case": "T160",
+      "variant": "a125-haiku",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "skill-invoked": true,
+        "aside-ran": true,
+        "status-and-source": true,
+        "no-trace-in-answer": true,
+        "read-only": true,
+        "repo-unchanged": true,
+        "browser-reader-used": false,
+        "main-ran-no-aside": false
+      },
+      "wall_seconds": 19.912695709004765,
+      "cost_usd": 0.0854488,
+      "rep": 1
+    },
+    {
+      "case": "T160",
+      "variant": "a125-haiku",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "subagent:hei5enbug-agent-setup:browser-reader": {
+          "model": "claude-haiku-5-5",
+          "effort": "not measured"
+        }
+      },
+      "checks": {
+        "skill-invoked": true,
+        "aside-ran": true,
+        "status-and-source": true,
+        "no-trace-in-answer": true,
+        "read-only": true,
+        "repo-unchanged": true,
+        "browser-reader-used": true,
+        "main-ran-no-aside": true
+      },
+      "wall_seconds": 27.718549957993673,
+      "cost_usd": 0.24698272000000004,
+      "rep": 1
+    },
+    {
+      "case": "T160",
+      "variant": "p4-before",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "skill-invoked": true,
+        "aside-ran": true,
+        "status-and-source": true,
+        "no-trace-in-answer": true,
+        "read-only": true,
+        "repo-unchanged": true,
+        "browser-reader-used": false,
+        "main-ran-no-aside": false
+      },
+      "wall_seconds": 19.187294208008097,
+      "cost_usd": 0.0390412,
+      "rep": 1
+    },
+    {
+      "case": "T160",
+      "variant": "p4-before",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "skill-invoked": true,
+        "aside-ran": true,
+        "status-and-source": true,
+        "no-trace-in-answer": true,
+        "read-only": true,
+        "repo-unchanged": true,
+        "browser-reader-used": false,
+        "main-ran-no-aside": false
+      },
+      "wall_seconds": 19.043652041989844,
+      "cost_usd": 0.1906048,
+      "rep": 1
+    },
+    {
+      "case": "T18",
+      "variant": "a125-haiku",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "restatement-removed": true,
+        "kept-content": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 127.34931854199385,
+      "cost_usd": 0.300496,
+      "rep": 1
+    },
+    {
+      "case": "T18",
+      "variant": "a125-haiku",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "restatement-removed": true,
+        "kept-content": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 145.5297148330137,
+      "cost_usd": 0.4416228,
+      "rep": 1
+    },
+    {
+      "case": "T18",
+      "variant": "p4-before",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "restatement-removed": true,
+        "kept-content": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 113.03486787498696,
+      "cost_usd": 0.2474768,
+      "rep": 1
+    },
+    {
+      "case": "T18",
+      "variant": "p4-before",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "restatement-removed": true,
+        "kept-content": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 146.9544505829981,
+      "cost_usd": 0.45013119999999995,
+      "rep": 1
+    }
+  ],
+  "verdicts": [
+    {
+      "case": "T16",
+      "verdict": "pass",
+      "step": "every required check passes after on both hosts",
+      "measure": "quality"
+    },
+    {
+      "case": "T16",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T16",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T16",
+      "verdict": "repeat",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T160",
+      "verdict": "pass",
+      "step": "every required check passes after on both hosts",
+      "measure": "quality"
+    },
+    {
+      "case": "T160",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T160",
+      "verdict": "investigate",
+      "step": "first before gap above 2",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T160",
+      "verdict": "repeat",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T18",
+      "verdict": "pass",
+      "step": "every required check passes after on both hosts",
+      "measure": "quality"
+    },
+    {
+      "case": "T18",
+      "verdict": "pass",
+      "step": "first run",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T18",
+      "verdict": "pass",
+      "step": "first run",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T18",
+      "verdict": "pass",
+      "step": "quality and every measure of the case"
+    }
+  ]
+}
