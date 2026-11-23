@@ -100,7 +100,8 @@ The sheet is not in the agent's folder or in the exported plugin. It lists each 
 point an approved specification must hold (`id`, `terms`, `rejected_terms`, `sentence`); a term may give alternatives with `|`,
 such as `sunday|일요일`, and terms are compared without case.
 
-- A question is about a decision when it contains at least one of that decision's terms. It gets the answer of every decision it
+- A question is about a decision when it contains at least one of that decision's terms as a whole word (`week` matches
+  `weeks`, not `weekly`; a Hangul term matches inside a longer word). It gets the answer of every decision it
   matches, in sheet order, and the sheet's fallback, "use your recommendation", when it matches none. A question asked through
   `AskUserQuestion` is matched on its text, its header, and its option labels; the approver server answers it in the tool's
   free-form answer for each question.
@@ -111,7 +112,8 @@ such as `sunday|일요일`, and terms are compared without case.
   alternatives`, `기각한 대안`); its section ends at the next heading or label line. The specification text is the question for a
   plain-text question's whole turn, and the assistant text since the previous question for a tool question, read from the
   stream, which can miss text the stream has not yet written.
-- A turn that ends with a question in plain text (its last line ends with `?`) is answered by resuming the session: `claude -p
+- A turn that ends with a question in plain text (its last line ends with `?`; for Codex, any line outside a code block that
+  ends with `?`, because a Codex answer often adds reasons after the question) is answered by resuming the session: `claude -p
   --resume <session>` with the same flags, or `codex exec resume <thread>` with the model, effort, and sandbox set by `-c`, because
   `exec resume` takes no `-s` or `-C`. Every turn appends to the same stream, and the wall-clock limit covers all of them. The run
   stops when a turn ends without a question, at the sheet's `max_exchanges`, or, when the sheet sets `answer_after_approval` to

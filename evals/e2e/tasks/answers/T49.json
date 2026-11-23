@@ -1,6 +1,6 @@
 {
   "decisions": [
-    {"id": "week-start", "terms": ["week", "monday", "sunday", "주", "요일"],
+    {"id": "week-start", "terms": ["week", "monday", "sunday", "한 주", "주 시작", "주의 시작", "요일"],
      "answer": "A week starts on Sunday and ends on Saturday. 한 주는 일요일에 시작해서 토요일에 끝납니다."},
     {"id": "archive-name", "terms": ["file name", "filename", "overwrite", "name", "이름", "파일명", "덮어"],
      "answer": "Name each copy entries-YYYYMMDD-HHMM.json, with the date and time from tally.clock.now(). 날짜와 시각은 tally.clock.now()에서 가져옵니다."}
