@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import types
 from pathlib import Path
 
 SKILL = "aside-browser-tasks"
@@ -23,9 +24,10 @@ def is_main(call) -> bool:
 
 
 def skill_invoked(ctx):
-    calls = [call for call in ctx.view.get("tool_calls", []) if call.get("name") == "Skill"
-             and str((call.get("input") or {}).get("skill", "")).endswith(SKILL)]
-    return bool(calls), f"{len(calls)} call(s) of the {SKILL} skill", {}
+    path = Path(ctx.tasks_root) / "custom" / "skill_use_shared.py"
+    module = types.ModuleType("skill_use_shared")
+    exec(compile(path.read_text(encoding="utf-8"), str(path), "exec"), module.__dict__)  # no bytecode cache
+    return module.skill_invoked(ctx, SKILL)
 
 
 def aside_ran(ctx):
