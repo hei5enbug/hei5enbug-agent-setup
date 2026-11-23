@@ -7,7 +7,7 @@ import types
 from pathlib import Path
 
 COVERED_NUMBER = 12
-KEPT_RULE = re.compile(r"(?is)leave\s+that\s+(?:team\s+)?section\s+out\b[^.\n]{0,80}\bheading\b[^.\n]{0,40}\bincluded")
+KEPT_RULE = re.compile(r"(?is)(?:leave\s+that\s+(?:team\s+)?section\s+out|\b(?:omit|drop|remove|skip)\s+that\s+(?:team\s+)?section)\b[^.\n]{0,160}\bheading\b")
 ALL_EMPTY = re.compile(r"(?is)\b(?:every|all|each)\b[^.\n]{0,120}\b(?:empty|no items|without items)\b|\bno (?:team )?sections? (?:has|have|contains?) (?:any )?items")
 ONE_LINE = re.compile(r"(?is)\b(?:single|one)\b[^.\n]{0,24}\b(?:line|sentence|message|notice)\b|one-line|single-line")
 
