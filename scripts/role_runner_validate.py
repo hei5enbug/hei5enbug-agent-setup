@@ -5,7 +5,7 @@ from pathlib import Path
 
 from role_runner_agents import accepts_add_dir, runner_for
 from role_runner_config import (
-    AGENT_TARGET, CAPABILITIES, MAX_BATCH, REVIEWER_MODELS, ROLES, VALIDATION_ROLE, WORKER_AGENTS, WORKER_MODELS, UsageError,
+    AGENT_TARGET, CAPABILITIES, REVIEWER_MODELS, ROLES, VALIDATION_ROLE, WORKER_AGENTS, WORKER_MODELS, UsageError,
 )
 
 
@@ -79,8 +79,6 @@ def validate_pairs(args: argparse.Namespace) -> None:
     assignments, results = args.assignment, args.result
     if len(assignments) != len(results):
         raise UsageError("--assignment and --result must come in equal numbers")
-    if len(assignments) > MAX_BATCH:
-        raise UsageError(f"At most {MAX_BATCH} assignment and result pairs are allowed in one call")
     if len(assignments) > 1 and args.resume is not None:
         raise UsageError("--resume is allowed only with one assignment and result pair")
     resolved_results = [Path(result).resolve() for result in results]

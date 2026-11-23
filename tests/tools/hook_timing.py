@@ -73,6 +73,9 @@ def seed(script: str, event: str, work: Path) -> dict:
             "projectPath": str(work), "connectionId": "11111111-1111-4111-8111-111111111111", "queryText": "SELECT 1"}}
     if script in ("public_boundary_hook.py", "public_boundary.py agent-hook"):
         return {**base, **bash}
+    if script == "bash_pretool_checks.py":
+        return {**base, "tool_name": "Bash", "tool_input": {
+            "command": "git push origin demo-a && orca worktree set --worktree path:/tmp/work/demo --display-name demo-title"}}
     if script == "required_checks_hook.py":
         return {**base, "tool_name": "Bash", "tool_input": {"command": "git push origin demo-a"}}
     if script == "orca_placement_hook.py":

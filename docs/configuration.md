@@ -61,7 +61,7 @@ Any other value means `apply`. Claude Code reads the option from `/config`; Code
 
 Seven boolean features can be turned off, and each defaults to on. The implementation worker route, the worker models
 and efforts, the review model, the host settings mode, the minimum free memory for starting an agent session
-(`session_memory_min_mb`), the hook Python interpreter, and the plugins refreshed with this one (`refresh_plugins`)
+(`session_memory_min_mb`), the request caps (`request_run_cap` and `request_retry_cap`), the hook Python interpreter, and the plugins refreshed with this one (`refresh_plugins`)
 are string options in Claude Code. Choose `auto`, `codex`, `haiku`, `sol`, or `sonnet` for the
 route; an unset or unrecognized value uses `auto`, where the main session picks the worker per assignment. Choose
 `apply` or `report` for the host settings mode; an unset or unrecognized value uses `apply`. It decides whether
@@ -91,6 +91,7 @@ never writes Codex or Claude settings. Only the allowlisted changes in [Host set
 | Implementation worker route | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, `sonnet`, or `opus`) | Not applicable |
 | Claude Code worker effort | `worker_effort` (default `high`) | Not applicable |
 | Codex worker model and effort | `codex_worker_model` (`auto`, `gpt-6-luna`, `gpt-6.2-sol`, or `claude-sonnet-5-5`, default `auto`) and `codex_worker_effort` (`high` or `xhigh`, default `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL` and `HEI5ENBUG_CODEX_WORKER_EFFORT` |
+| Codex service tier | `codex_service_tier` (`default` or `fast`, default `default`) | `HEI5ENBUG_CODEX_SERVICE_TIER` |
 | Review model | `review_model` (a pinned model ID, default `gpt-6.2-astra`) | Not applicable |
 | Response language guard | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip query guard | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
@@ -99,10 +100,18 @@ never writes Codex or Claude settings. Only the allowlisted changes in [Host set
 | Orca worktrees for other repositories | `orca_worktree` | `HEI5ENBUG_ORCA_WORKTREE` |
 | Host settings mode | `host_settings` (`apply` or `report`, default `apply`) | `HEI5ENBUG_HOST_SETTINGS` |
 | Minimum free memory to start an agent session | `session_memory_min_mb` (MB, default `2048`; `0`, `off`, `false`, or `no` turns the gate off; see [Orca session start](guards.md#orca-session-start)) | `HEI5ENBUG_SESSION_MEMORY_MIN_MB` |
+| Delegated runs per request | `request_run_cap` (default `40`; `0`, `off`, `false`, or `no` turns the cap off; see [Request caps and parallel limit](guards.md#request-caps-and-parallel-limit)) | `HEI5ENBUG_REQUEST_RUN_CAP` |
+| Retries per request | `request_retry_cap` (default `5`; `0`, `off`, `false`, or `no` turns the cap off) | `HEI5ENBUG_REQUEST_RETRY_CAP` |
 | Hook Python interpreter | `python` (an absolute path, default empty) | `HEI5ENBUG_PYTHON` |
 | Plugins refreshed with this one | `refresh_plugins` (comma-separated `plugin@marketplace` IDs, default empty) | `HEI5ENBUG_REFRESH_PLUGINS` |
 | Subagent permission block in `~/.codex/AGENTS.md` | Not applicable | `HEI5ENBUG_SUBAGENT_POLICY` |
 | Question tool flag | Not applicable | `HEI5ENBUG_CODEX_ASK_TOOL` |
+
+The Codex service tier `fast` adds `-c service_tier="fast"` to every Codex run that `role_runner.py` starts, a new run
+or a resume, and to the reviewer runs of `text_review.py review`; the option `--service-tier fast` of both scripts sets
+it for one call, and the option or the environment variable `HEI5ENBUG_CODEX_SERVICE_TIER` overrides the saved
+setting. A Claude run is unchanged, and the pinned model and effort and their verification stay as they are. Any other
+value is a usage error that names the allowed values.
 
 The hook Python interpreter is the absolute path of a Python 3.12 or later interpreter. Install `pglast` into it to run
 the SQL guard's parser. Every hook starts through `scripts/hook_python.sh`, which runs its script with this interpreter.
@@ -182,7 +191,7 @@ contract](https://learn.chatgpt.com/docs/agent-configuration/subagents).
 
 ## When a guard blocks every tool call
 
-On Claude Code, the approval guard, the DataGrip query guard, and the public boundary hook block a call when they fail.
+On Claude Code, the approval guard, the DataGrip query guard, and the Bash dispatcher that runs the public boundary check block a call when they fail.
 A hook that cannot start, times out, exits with a code other than 0 or 2, or prints invalid output blocks each call it
 covers. The transcript shows `failed; blocking because onFailure is "block"` (or `timed out` after a timeout)
 followed by the hook's error output. Find the cause in that line and apply its fix:

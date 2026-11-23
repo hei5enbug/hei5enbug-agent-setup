@@ -16,6 +16,7 @@ import signal
 import struct
 import sys
 import time
+from dataclasses import dataclass
 
 PLUGIN = "hei5enbug-agent-setup"
 STARTED_AT = "HEI5ENBUG_HOOK_STARTED_AT"
@@ -37,6 +38,7 @@ DECLARED_TIMEOUTS = {
     ("datagrip_guard.py", "PermissionRequest"): 10,
     ("public_boundary_hook.py", "PreToolUse"): 30,
     ("required_checks_hook.py", "PreToolUse"): 5,
+    ("bash_pretool_checks.py", "PreToolUse"): 40,
     ("orca_placement_hook.py", "PreToolUse"): 5,
     ("orca_status_hook.py", "PostToolUse"): 10,
     ("orca_status_hook.py", "UserPromptSubmit"): 10,
@@ -45,6 +47,12 @@ DECLARED_TIMEOUTS = {
     ("language_guard.py", "PostToolUse"): 5,
     ("final_report_hook.py", "Stop"): 5,
     ("agent_guard.py", "PreToolUse"): 5,
+    ("request_budget_hook.py", "PreToolUse"): 10,
+    ("request_budget_hook.py", "PostToolUse"): 5,
+    ("request_budget_hook.py", "PostToolUseFailure"): 5,
+    ("request_budget_hook.py", "UserPromptSubmit"): 5,
+    ("request_budget_hook.py", "SubagentStop"): 5,
+    ("request_budget_hook.py", "Stop"): 5,
     (PROJECT_HOOK, "PreToolUse"): 30,
 }
 # The hook scripts whose output can deny a call or a permission request, with the style of the denial: a JSON
@@ -54,6 +62,7 @@ DENY_STYLES = {
     "datagrip_guard.py": "json",
     "orca_placement_hook.py": "json",
     "agent_guard.py": "json",
+    "request_budget_hook.py": "json",
     "public_boundary_hook.py": "exit",
     PROJECT_HOOK: "exit",
 }
@@ -63,9 +72,11 @@ TITLES = {
     "datagrip_guard.py": "DataGrip guard",
     "orca_placement_hook.py": "Orca placement hook",
     "agent_guard.py": "agent guard",
+    "request_budget_hook.py": "request budget hook",
     "public_boundary_hook.py": "public boundary hook",
     PROJECT_HOOK: "public boundary project hook",
     "required_checks_hook.py": "required checks hook",
+    "bash_pretool_checks.py": "Bash checks dispatcher",
     "orca_status_hook.py": "Orca status hook",
     "language_guard.py": "language guard",
     "final_report_hook.py": "final report hook",
@@ -76,9 +87,11 @@ SKIPPED = {
     "datagrip_guard.py": "skipped the query check",
     "orca_placement_hook.py": "skipped the Orca placement check",
     "agent_guard.py": "skipped the subagent check",
+    "request_budget_hook.py": "skipped the request cap and parallel limit check",
     "public_boundary_hook.py": "skipped the public boundary check",
     PROJECT_HOOK: "skipped the public boundary check",
     "required_checks_hook.py": "skipped the reminder about required checks",
+    "bash_pretool_checks.py": "skipped its checks",
     "orca_status_hook.py": "skipped the Orca status update",
     "language_guard.py": "skipped the language check",
     "final_report_hook.py": "skipped the final report check",
@@ -335,3 +348,57 @@ def _emit(script: str, event: object, budget: float, real_out, real_err) -> int:
         real_err.write(error_text)
         real_err.flush()
     return code
+
+
+@dataclass(frozen=True)
+class CheckResult:
+    """What one hook check answered when it ran inside another hook: its output, error output, and exit status."""
+
+    stdout: str
+    stderr: str
+    code: int
+
+
+def run_budgeted(script: str, main, raw: bytes, event: object, budget: float, start: float) -> CheckResult:
+    """Run `main` as hook `script` on `raw` for at most `budget` seconds counted from `start`, holding its output.
+
+    The result is what the script would have answered as a process of its own: its output and exit status, the
+    one-line error report with status 1 when it raised, and its timeout answer when it ran out of its budget.
+    """
+    global _deadline
+    deadline = start + budget
+    left = deadline - time.time()
+    if left <= 0:
+        return CheckResult(*timeout_result(script, event, budget))
+    real = sys.stdin, sys.stdout, sys.stderr
+    sys.stdin = io.TextIOWrapper(io.BytesIO(raw), encoding="utf-8", errors="replace")
+    out, err = _stream(), _stream()
+    sys.stdout, sys.stderr = out, err
+    _deadline = deadline
+    code = 0
+    try:
+        try:
+            signal.signal(signal.SIGALRM, _on_alarm)
+            signal.setitimer(signal.ITIMER_REAL, left)
+        except (ValueError, OSError):
+            raise HookTimeout from None
+        try:
+            code = main()
+        except SystemExit as error:
+            code = _exit_code(error)
+        except Exception as error:
+            report_error(script, error)
+            code = 1
+        _disarm()
+    except HookTimeout:
+        _disarm()
+        sys.stdin, sys.stdout, sys.stderr = real
+        return CheckResult(*timeout_result(script, event, budget))
+    finally:
+        sys.stdin, sys.stdout, sys.stderr = real
+        _deadline = None
+    out.flush()
+    err.flush()
+    return CheckResult(
+        out.buffer.getvalue().decode("utf-8", "replace"), err.buffer.getvalue().decode("utf-8", "replace"),
+        code if isinstance(code, int) else 0)

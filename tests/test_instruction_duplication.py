@@ -61,9 +61,9 @@ COMMON_OWNED = (
 
 # Scheduling policy the shared implementation delegation reference owns outright.
 EXECUTION_OWNED = (
-    "min(6 - active implementation workers, host slots remaining, ready independent tasks)",
+    "min(the limit the plugin reports - active implementation workers, ready independent tasks)",
     "Disjoint files alone do not prove independence.",
-    "Queue any excess task, such as a seventh,",
+    "Queue any excess task and dispatch it",
     "Fallback never bypasses a missing user decision, permission restriction, or failed acceptance check.",
 )
 LEGACY_SCHEDULING = ("Run at most 6",)

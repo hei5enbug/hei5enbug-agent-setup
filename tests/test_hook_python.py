@@ -18,6 +18,7 @@ CODEX_ONLY_HOOKS = [
     ("PermissionRequest", "^mcp__datagrip__execute_sql_query$", "datagrip_guard.py", 10, False),
 ]
 CLAUDE_ONLY_HOOKS = [
+    ("PreToolUse", "^(Agent|Task)$", "agent_guard.py", 5, False),
     ("PostToolUse", None, "language_guard.py", 5, False),
     ("UserPromptSubmit", None, "session_context.py", 5, False),
     ("Stop", None, "final_report_hook.py", 5, False),
@@ -27,17 +28,22 @@ EXPECTED_HOOKS = [
     ("SubagentStart", None, "session_context.py", 10, False),
     ("PreToolUse", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),
     ("PreToolUse", "^mcp__datagrip__execute_sql_query$", "datagrip_guard.py", 10, False),
-    ("PreToolUse", "^Bash$", "public_boundary_hook.py", 30, False),
-    ("PreToolUse", "^Bash$", "required_checks_hook.py", 5, False),
-    ("PreToolUse", "^(Bash|EnterWorktree)$", "orca_placement_hook.py", 5, False),
+    ("PreToolUse", "^Bash$", "bash_pretool_checks.py", 40, False),
+    ("PreToolUse", "^EnterWorktree$", "orca_placement_hook.py", 5, False),
+    ("PreToolUse", "Agent|Task", "request_budget_hook.py", 10, False),
     ("PermissionRequest", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),
     ("PostToolUse", "^(Bash|Edit|Write|MultiEdit|NotebookEdit|apply_patch)$", "orca_status_hook.py", 10, False),
     ("PostToolUse", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),
+    ("PostToolUse", "Agent|Task", "request_budget_hook.py", 5, False),
     ("PostToolUseFailure", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),
+    ("PostToolUseFailure", "Agent|Task", "request_budget_hook.py", 5, False),
     ("UserPromptSubmit", None, "approval_guard.py", 5, False),
     ("UserPromptSubmit", None, "orca_status_hook.py", 10, False),
+    ("UserPromptSubmit", None, "request_budget_hook.py", 5, False),
+    ("Stop", None, "request_budget_hook.py", 5, False),
     ("Stop", None, "language_guard.py", 5, False),
     ("Stop", None, "orca_status_hook.py", 10, False),
+    ("SubagentStop", None, "request_budget_hook.py", 5, False),
 ]
 
 
@@ -447,3 +453,38 @@ def test_실행할_python이_없으면_훅_이름과_해결_방법을_한_줄로
     lines = result.stderr.splitlines()
     assert result.returncode == 1
     assert len(lines) == 1 and "sample.py" in lines[0] and "python3 was not found" in lines[0] and "disable" in lines[0], result.stderr
+
+
+@pytest.mark.parametrize("environment", [{}, {"ORCA_TERMINAL_HANDLE": ""}])
+def test_Orca_터미널이_아니면_Orca_상태_훅은_파이썬을_시작하지_않고_0으로_끝난다(plugin, tmp_path, environment):
+    # given
+    (plugin / "orca_status_hook.py").write_text("", encoding="utf-8")
+    started = tmp_path / "started"
+    marker = fake_interpreter(tmp_path / "bin" / "python3", "path-python3")
+    marker.write_text(f'#!/bin/sh\necho started >> "{started}"\nexit 7\n', encoding="utf-8")
+    # when
+    result = launch(plugin, "orca_status_hook.py", stdin="{}", **environment)
+    # then
+    assert (result.returncode, result.stdout, result.stderr) == (0, "", "")
+    assert not started.exists()
+
+
+def test_Orca_터미널이면_Orca_상태_훅_스크립트를_인터프리터로_실행한다(plugin):
+    # given
+    (plugin / "orca_status_hook.py").write_text("", encoding="utf-8")
+    # when
+    result = launch(plugin, "orca_status_hook.py", "one", ORCA_TERMINAL_HANDLE="term_demo-a")
+    # then
+    assert result.returncode == 0
+    assert result.stdout.splitlines()[0] == f"path-python3 {plugin / 'orca_status_hook.py'} one"
+
+
+def test_Orca_터미널이_아니어도_다른_훅은_그대로_실행하고_없는_Orca_상태_훅_파일은_오류로_남는다(plugin):
+    # given
+    environment = {"ORCA_TERMINAL_HANDLE": ""}
+    # when
+    other = launch(plugin, "sample.py", **environment)
+    missing = launch(plugin, "orca_status_hook.py", **environment)
+    # then
+    assert other.returncode == 0 and other.stdout.splitlines()[0].startswith("path-python3 ")
+    assert missing.returncode == 1 and "did not run a hook" in missing.stderr

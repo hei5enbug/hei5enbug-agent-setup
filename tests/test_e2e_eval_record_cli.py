@@ -158,6 +158,22 @@ class RecordCommandTest(unittest.TestCase):
         self.assertEqual(claim["verdict"], "continue to five")
         self.assertIn("repeat: T08 claim: continue to five", out)
 
+    def test_개선_주장은_claim_cases가_정한_사례에만_적용된다(self):
+        """given 두 사례 when --claim-cases T08로 record하면 then 주장 판정은 T08에만 있고, 기록에 없는 사례나 --claim 없는 지정은 거부한다."""
+        # given
+        seed_campaign(self.root)
+
+        # when
+        code, _, _ = run_cli(self.root, "--tasks", "T08,T02", "--claim", "wall_seconds", "--claim-cases", "T08")
+        unknown = run_cli(self.root, "--tasks", "T08", "--claim", "wall_seconds", "--claim-cases", "T99")
+        without_claim = run_cli(self.root, "--tasks", "T08", "--claim-cases", "T08")
+
+        # then
+        written = json.loads((self.root / "records" / "92.json").read_text(encoding="utf-8")) if code == 0 else {}
+        claimed = [item["case"] for item in written.get("verdicts", []) if item.get("measure") == "claim"]
+        self.assertEqual((code, claimed), (0, ["T08"]))
+        self.assertEqual((unknown[0], without_claim[0]), (1, 1))
+
     def test_허용_밖_모델이_기록에_있으면_기록을_쓰지_않고_실패한다(self):
         """given 호스트 기록의 주 모델이 상한 밖인 실행 when record를 실행하면 then 종료 코드 1이고 기록 파일이 없다."""
         # given

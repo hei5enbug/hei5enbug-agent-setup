@@ -48,6 +48,17 @@
       "required": true,
       "weight": 2,
       "suite": "preexisting"
+    },
+    {
+      "id": "no-launch-denied",
+      "kind": "transcript_absent",
+      "required": true,
+      "weight": 2,
+      "pattern": "Request cap reached|Parallel limit reached",
+      "scope": [
+        "tool_results",
+        "final_answer"
+      ]
     }
   ],
   "constraints": [

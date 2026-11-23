@@ -77,6 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--before", required=True, help="variant name of the before side")
     record.add_argument("--after", required=True, help="variant name of the after side")
     record.add_argument("--claim", help="comma-separated measures the change claims to lower: wall_seconds, cost_usd")
+    record.add_argument("--claim-cases", help="comma-separated cases the claim applies to; every case without it")
     record.add_argument("--tasks", help="comma-separated task ids; default every task with a finished run")
     record.add_argument("--hook-facts", action="store_true",
                         help="add the informational hook time and denials of each run, replayed from its recorded tool calls")
@@ -134,7 +135,7 @@ def do_record(args: argparse.Namespace, cfg: HarnessConfig) -> int:
         raise command.ConfigError("--issue takes a positive issue number")
     result = records.record_campaign(
         cfg.run_root, args.campaign, args.issue, args.before, args.after, split(args.claim), split(args.tasks) or None,
-        args.hook_facts,
+        args.hook_facts, split(args.claim_cases) or None,
     )
     path = records.write_record(result["record"], absolute(args.records_dir))
     sys.stdout.write("".join(f"{line}\n" for line in records.report_lines(result)))

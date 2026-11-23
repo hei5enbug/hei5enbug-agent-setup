@@ -1,0 +1,41 @@
+{
+  "largest_retries": 4,
+  "largest_runs": 39,
+  "requests": 1967,
+  "requests_with_delegated_run": 304,
+  "retries_per_request": {
+    "0": 1947,
+    "1": 16,
+    "2": 1,
+    "3": 1,
+    "4": 2
+  },
+  "retry_cap_default": 5,
+  "run_cap_default": 40,
+  "runs_per_request": {
+    "0": 1663,
+    "1": 119,
+    "10": 9,
+    "11": 1,
+    "12": 5,
+    "14": 1,
+    "15": 1,
+    "19": 1,
+    "2": 42,
+    "20": 1,
+    "23": 1,
+    "25": 1,
+    "3": 45,
+    "30": 1,
+    "39": 1,
+    "4": 24,
+    "5": 13,
+    "6": 13,
+    "7": 8,
+    "8": 9,
+    "9": 8
+  },
+  "sessions_with_requests": 159,
+  "through": "2026-11-22",
+  "window_days": 30
+}

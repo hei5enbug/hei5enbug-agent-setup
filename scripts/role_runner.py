@@ -15,14 +15,16 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import codex_hook_trust  # noqa: E402
+from plugin_toggles import service_tier_setting  # noqa: E402
 from role_runner_agents import agent_run, chosen_effort, default_host, runner_for  # noqa: E402
 from role_runner_child import child_environment, codex_mcp_off, kill_group, run_child  # noqa: E402
 from role_runner_command import claude_command, claude_tools, codex_command, sandbox_for  # noqa: E402
 from role_runner_config import (  # noqa: E402
     AGENT_TARGET, CAPABILITIES, CLAUDE_HOOKS_MESSAGE, CODEX_HOOKS_MESSAGE, DEFAULT_REVIEW_MODEL, EXIT_EVIDENCE, EXIT_OK,
-    EXIT_RUN, EXIT_USAGE, MCP_NETWORK_RULE, PREFLIGHT_PROMPT, REGISTRY, REVIEW_MODEL_ENV, REVIEW_MODELS, ROLE_DEFINITIONS,
+    EXIT_CAP, EXIT_RUN, EXIT_USAGE, MCP_NETWORK_RULE, PREFLIGHT_PROMPT, REGISTRY, REVIEW_MODEL_ENV, REVIEW_MODELS, ROLE_DEFINITIONS,
     ROLE_ENTRY, ROLE_MODEL, ROLE_SENTENCES, ROLES, WRITING_CAPABILITIES, Run, RunnerError, UsageError, build_parser,
 )
+from role_runner_budget import Gate  # noqa: E402
 from role_runner_evidence import (  # noqa: E402
     claude_init, claude_result, codex_home, json_lines, require_heartbeat, thread_id_from, turns_before, verify_claude, verify_codex,
 )
@@ -221,6 +223,7 @@ def status(run: Run | None, verified: bool, evidence: dict, code: int) -> str:
             "verified": verified, "evidence": evidence, "exit": code,
             **({"user_requested": True} if run and run.user_requested else {}),
             **({"validation": True} if run and run.validation else {}),
+            **({"service_tier": run.service_tier} if run and run.service_tier else {}),
         },
         ensure_ascii=False,
     )
@@ -277,9 +280,22 @@ def is_uuid(value: str) -> bool:
         return False
 
 
+def chosen_service_tier(args: argparse.Namespace, run: Run) -> str | None:
+    """The service tier of a Codex run: the option when given, else the `codex_service_tier` setting; a Claude run has none."""
+    if run.runner != "codex":
+        return None
+    if args.service_tier:
+        return args.service_tier
+    try:
+        return service_tier_setting()
+    except ValueError as error:
+        raise UsageError(str(error)) from error
+
+
 def plan(args: argparse.Namespace) -> Run:
     validate(args)
     run = replace(resolve(args), user_requested=args.user_requested, validation=args.validation)
+    run = replace(run, service_tier=chosen_service_tier(args, run))
     if run.runner == "claude" and not run.writing and run.resume is not None and not is_uuid(run.resume):
         raise UsageError("--resume for a read-only Claude run must name the session id (a UUID) that a previous run reported")
     if run.writing and run.runner == "claude" and not run.add_dirs and run.agent is None:
@@ -303,6 +319,20 @@ def run_pair(args: argparse.Namespace, run: Run, root: Path, cwd: str, assignmen
     return EXIT_OK, status(run, True, evidence, EXIT_OK), None
 
 
+def run_gated(gate: Gate, args: argparse.Namespace, run: Run, root: Path, cwd: str, index: int, assignment: str, result: str):
+    """Run one pair once the request budget admits it; a denied pair ends with the cap exit code and the denial."""
+    run_id = f"runner-{os.getpid()}-{index}"
+    reason = gate.acquire(run_id)
+    if reason is not None:
+        return EXIT_CAP, status(run, False, {"error": reason, "cap": True}, EXIT_CAP), reason
+    outcome = (EXIT_RUN, "", None)
+    try:
+        outcome = run_pair(args, run, root, cwd, assignment, result)
+        return outcome
+    finally:
+        gate.release(run_id, outcome[0] == EXIT_OK)
+
+
 def main(argv: list[str] | None = None) -> int:
     root = Path(__file__).resolve().parents[1]
     try:
@@ -314,11 +344,12 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_USAGE
     cwd = os.getcwd()
     pairs = list(zip(args.assignment, args.result))
+    gate = Gate(run)
     if len(pairs) == 1:
-        outcomes = [run_pair(args, run, root, cwd, *pairs[0])]
+        outcomes = [run_gated(gate, args, run, root, cwd, 0, *pairs[0])]
     else:
         with ThreadPoolExecutor(max_workers=len(pairs)) as pool:
-            outcomes = list(pool.map(lambda pair: run_pair(args, run, root, cwd, *pair), pairs))
+            outcomes = list(pool.map(lambda item: run_gated(gate, args, run, root, cwd, item[0], *item[1]), enumerate(pairs)))
     for _, line, error in outcomes:
         if error is not None:
             print(f"role_runner: {error}", file=sys.stderr)

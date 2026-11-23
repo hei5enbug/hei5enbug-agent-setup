@@ -197,7 +197,7 @@ Run every command from the repository root. The default run root is
 | Print tables | `python3 evals/e2e/harness/cli.py summarize --campaign <name> [--out file.md]` |
 | Compare two variants | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | Export a revision only | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
-| Judge a change and write its record | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
+| Judge a change and write its record | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd [--claim-cases T36]] [--tasks T08]` |
 
 `--parallel` sets the number of runs at once (default 3). With several variants the order alternates per task and
 repetition (ABAB, then BABA), so time-of-day effects spread evenly.
@@ -364,11 +364,14 @@ long wait, so the task covers only what the call log and the final answer show.
 | T20 | notes-cli | Final report | Small change with tests, then a report |
 | T21 | notes-cli | Orca cleanup at task end | One-line setting change for a ticket, with a fake `orca` and seeded Git worktrees of three repositories |
 | T81 | notes-cli | Orca plugin refresh | Apply the installed plugin version to running sessions, one of which waits only on a background task, with fake `orca`, `claude`, and `codex` |
+| T35 | inventory-service | Delegated route that fails every time | A `--forecast` report option that the prompt hands to a role runner worker, with a seeded `claude` and `codex` that fail every child run with a different error; the launches must stop at the retry cap |
+| T36 | inventory-service | Eight independent read-only questions | One question each about money, pricing, validators, importer, audit, clock, serialization, and formatting; wall time is the claimed measure |
 | T78 | commit-demo | Commit skill, staged-only scope | Korean-subject history, one staged change beside an unstaged edit and an untracked `.env` |
 | T79 | commit-demo | Commit skill, required identifier | Commit rules that require a ticket key, and a request that names none |
 | T82 | demo-app | UI routing, complete specification | Four named-line edits to a settings panel; routes to the implementation worker |
 | T83 | demo-app | UI routing, layout request | Two-column profile screen that stacks at 375 px; routes to the designer |
 | T84 | demo-app | UI routing, open breakpoint | Plan cards 320 px wide and 24 px apart in one row, mobile breakpoint left open; routes to the designer |
+| T101 | notes-cli | Built-in agent request is refused | One request for a `general-purpose` agent; the plugin must refuse it, no such agent may do any work, and nothing is changed |
 | T112 | demo-app | UI routing, new screen | A new invoices screen of three rows built from scratch, fitting at 1280 and 375 px; routes to the designer at its pinned `xhigh` |
 
 The ids T89 to T91 belong to the comparison of Claude reviewer models in
@@ -410,7 +413,7 @@ cases its issue names, on both hosts. The rule is in `harness/verdict.py`, which
   lowest value before, and the median of each other measure after is not above the highest value before. One pair
   runs first, and a second pair runs when the first fails; the claim is rejected when the second fails too. A claim that
   is rejected makes its case and the overall verdict `reject`, and one that has not reached its decision leaves them at
-  `continue to five` or `second pair`, never `pass`.
+  `continue to five` or `second pair`, never `pass`. `--claim-cases` applies the claim to the named cases only.
 
 `record` reads the runs of both variants on both hosts from a campaign and builds one case per requested task, or per
 task the campaign ran when `--tasks` is absent. A run that is unfinished, has no metrics, has no grade, or has a grading
@@ -435,6 +438,34 @@ exported plugin with the environment of a measurement run, and the wall time of 
 (`replayed_hooks`, `replay_total_seconds`, `replay_slowest`). Denials come from the replay's own decisions
 (`replay_denials`) and, on Claude Code, from the hook responses in the stream (`stream_denials`, with their counts). The
 facts describe the hooks alone and enter no verdict. `harness/hook_facts.py` holds the code.
+
+### Request caps and the parallel limit
+
+The cases of the request-budget rules are T35 (a route that fails every time), T05 (two independent changes), and T36
+(eight independent read-only questions). One revision carries both variants, and they differ only by `env`. The before
+variant sets `request_run_cap` and `request_retry_cap` to `0` (`CLAUDE_PLUGIN_OPTION_REQUEST_RUN_CAP` and
+`CLAUDE_PLUGIN_OPTION_REQUEST_RETRY_CAP` on Claude Code, `HEI5ENBUG_REQUEST_RUN_CAP` and `HEI5ENBUG_REQUEST_RETRY_CAP` on
+Codex) and `HEI5ENBUG_PARALLEL_LIMIT_MAX` to `6`, which behaves as before the change. The after variant leaves both caps at
+their defaults and sets `HEI5ENBUG_PARALLEL_LIMIT_MAX` to `0`, which removes the maximum so the computed limit applies. The
+`env` of T35 sets both retry-cap variables to `2` so that the check and the cap agree; a variant's `env` wins over the
+task's, so the before variant's `0` replaces it and the after variant keeps `2`.
+
+- T35: `tasks/setup/T35.py` puts a `claude` and a `codex` on `bin/` beside the repository. A call with
+  `HEI5ENBUG_ASSIGNED_ROLE` set, which only a role runner child has, exits with the next of eight different errors; every
+  other call goes to the next program of that name on `PATH`. The route is the Sol worker, `implementation_worker=sol`.
+  `stops-at-cap` needs the message that starts with `Request cap reached` in a tool result after at most the retry cap plus
+  one launches, `no-launch-after-denial` needs no delegation after it, `names-unfinished-deliverable` needs the report to
+  name the forecast and say the work stopped, and `no-completion-claim` needs none of the seeded completion phrases in
+  `seeded.completion_phrases`.
+- T05: the added required check `no-launch-denied` fails when a tool result or the final answer holds `Request cap reached`
+  or `Parallel limit reached`.
+- T36: eight required `answer_contains` checks, one per question, and `no-changes`. Run it on a machine where
+  `python3 scripts/parallel_limit.py` prints at least 8; the check of that number is not part of the grade.
+
+`record --issue 97 --tasks T35,T05,T36 --claim wall_seconds --claim-cases T36` writes one record: quality and the host
+comparison for the three cases, and the improvement claim of "Comparing a change on both hosts" for T36 only.
+`tests/test_parallel_limit_record.py` reads `records/97.json`: the shipped maximum in `config/parallel-limit.json` is `6`
+unless the claim of T36 is `accept`, and then it is `null`.
 
 ### Records
 

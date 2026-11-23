@@ -23,13 +23,13 @@ coordinator's acceptance check and its edit paths and resources are free. Accept
 assigned verification to pass. Never put a task and its prerequisite in one assignment. Tasks that only share
 files may go to one worker in sequence.
 
-Start at most `min(6 - active implementation workers, host slots remaining, ready independent tasks)`
-additional workers. Use the host's actual limit definition and available slots; the limit may count the main
-session or other agents. For example, a four-agent limit that includes the main session permits at most
-three workers.
+Start at most `min(the limit the plugin reports - active implementation workers, ready independent tasks)`
+additional workers. The plugin reports the limit at each user prompt. It counts every agent run on this
+machine, takes the host's own limit into account, and denies a launch past it; start that launch after one of
+this session's running runs ends, and never poll.
 
-Launch independent ready tasks together. Queue any excess task, such as a seventh, and dispatch it when a
-slot and its resources are free. Never ask to raise the host limit.
+Launch independent ready tasks together. Queue any excess task and dispatch it when a slot and its resources
+are free. Never ask to raise the host limit.
 
 Never overlap conflicting ownership. Shared files, lockfiles, generated outputs, databases, ports, or build
 directories make tasks sequential unless the plan supplies independent resources for each task. Disjoint

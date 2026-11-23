@@ -189,6 +189,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
                 "worker_effort",
                 "codex_worker_model",
                 "codex_worker_effort",
+                "codex_service_tier",
                 "review_model",
                 "language_guard",
                 "datagrip_guard",
@@ -197,6 +198,8 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
                 "orca_worktree",
                 "host_settings",
                 "session_memory_min_mb",
+                "request_run_cap",
+                "request_retry_cap",
                 "python",
                 "refresh_plugins",
             ],
@@ -225,7 +228,7 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
         )
         for key, option in options.items():
             with self.subTest(key=key):
-                if key in {"implementation_worker", "worker_effort", "codex_worker_model", "codex_worker_effort", "review_model", "host_settings", "session_memory_min_mb", "python", "refresh_plugins", "approval_scope"}:
+                if key in {"implementation_worker", "worker_effort", "codex_worker_model", "codex_worker_effort", "codex_service_tier", "review_model", "host_settings", "session_memory_min_mb", "request_run_cap", "request_retry_cap", "python", "refresh_plugins", "approval_scope"}:
                     self.assertTrue(option["title"].isascii() and option["description"].isascii())
                     continue
                 self.assertEqual(option["type"], "boolean")

@@ -1,0 +1,123 @@
+{
+  "id": "T36",
+  "title": "Eight independent read-only questions about one repository",
+  "category": "investigation",
+  "path": "parallel read-only delegation: wall time is the claimed measure",
+  "fixture": "inventory-service",
+  "prompt_file": "prompts/T36.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 10
+  },
+  "checks": [
+    {
+      "id": "no-changes",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 2
+    },
+    {
+      "id": "q1-rounding",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 2,
+      "patterns": [
+        "ROUND_HALF_UP|half[- ]?up|4사5입|반올림"
+      ]
+    },
+    {
+      "id": "q2-discount-tiers",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 2,
+      "patterns": [
+        "(?<!\\d)10(?!\\d)[^\\n]{0,40}5\\s*%|5\\s*%[^\\n]{0,40}(?<!\\d)10(?!\\d)|0\\.05",
+        "(?<!\\d)50(?!\\d)[^\\n]{0,40}10\\s*%|10\\s*%[^\\n]{0,40}(?<!\\d)50(?!\\d)|0\\.10",
+        "(?<!\\d)100(?!\\d)[^\\n]{0,40}15\\s*%|15\\s*%[^\\n]{0,40}(?<!\\d)100(?!\\d)|0\\.15"
+      ]
+    },
+    {
+      "id": "q3-limits",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 2,
+      "patterns": [
+        "(?<!\\d)32(?!\\d)",
+        "1,?000,?000|1_000_000|백만"
+      ]
+    },
+    {
+      "id": "q4-importer",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 2,
+      "patterns": [
+        "sku",
+        "warehouse",
+        "quantity",
+        "quantity is zero|zero|0[^\\n]{0,30}(건너|스킵|skip|제외)"
+      ]
+    },
+    {
+      "id": "q5-audit-kinds",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 2,
+      "patterns": [
+        "receive",
+        "adjust",
+        "allocate",
+        "release"
+      ]
+    },
+    {
+      "id": "q6-clock",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 2,
+      "patterns": [
+        "UTC|utc",
+        "timezone|tz|aware|시간대|tzinfo"
+      ]
+    },
+    {
+      "id": "q7-schema",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 2,
+      "patterns": [
+        "SCHEMA_VERSION[^\\n]{0,40}(?<!\\d)1(?!\\d)|버전[^\\n]{0,20}(?<!\\d)1(?!\\d)"
+      ]
+    },
+    {
+      "id": "q8-low-stock-empty",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 2,
+      "patterns": [
+        "Low stock \\(below",
+        "\\bnone\\b|없음"
+      ]
+    }
+  ],
+  "constraints": [
+    {
+      "id": "read-only",
+      "text": "Do not modify any file",
+      "keywords": [
+        "read-only",
+        "do not modify",
+        "수정하지",
+        "읽기만"
+      ],
+      "applies_to": [
+        "implementation",
+        "investigation"
+      ],
+      "check_ids": [
+        "no-changes"
+      ]
+    }
+  ],
+  "rubric": null
+}

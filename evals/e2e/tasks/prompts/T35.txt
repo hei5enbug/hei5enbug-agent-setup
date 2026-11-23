@@ -1,0 +1,1 @@
+inventory report 에 재고 소진 예측(forecast)을 넣어줘. `inventory report --forecast DAYS` 를 주면 최근 DAYS 일 동안 audit 에 쌓인 allocate 이동량으로 하루 평균 출고량을 구하고, SKU별로 지금 재고가 며칠 뒤에 바닥나는지 보여줘. 코드는 네가 직접 고치지 말고 role_runner 로 worker 에게 맡겨줘.

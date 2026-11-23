@@ -56,7 +56,7 @@ Claude Code는 이 옵션을 `/config`에서 읽고, Codex는 `HEI5ENBUG_HOST_SE
 ## 기능 옵션
 
 끌 수 있는 boolean 기능은 일곱 가지이며 각각 기본값은 켜짐입니다. Claude Code의 구현 worker 경로, worker 모델과 사고 강도,
-검토 모델, 호스트 설정 모드, 에이전트 세션을 시작하는 데 필요한 최소 여유 메모리(`session_memory_min_mb`),
+검토 모델, 호스트 설정 모드, 에이전트 세션을 시작하는 데 필요한 최소 여유 메모리(`session_memory_min_mb`), 요청 한도(`request_run_cap`, `request_retry_cap`),
 훅 Python 인터프리터, 이 플러그인과 함께
 새로고침할 플러그인(`refresh_plugins`)은 문자열 옵션입니다. 경로는 `auto`, `codex`, `haiku`, `sol`, `sonnet` 중 하나를 고르고, 값이 비어 있거나 알 수 없으면
 `auto`를 씁니다.
@@ -87,6 +87,7 @@ Codex 설정이나 Claude 설정을 쓰지 않습니다. 설정을 쓰는 것은
 | 구현 worker 경로 | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, `sonnet`, 또는 `opus`) | 해당 없음 |
 | Claude Code worker 사고 강도 | `worker_effort` (기본 `high`) | 해당 없음 |
 | Codex worker 모델과 사고 강도 | `codex_worker_model` (`auto`, `gpt-6-luna`, `gpt-6.2-sol`, 또는 `claude-sonnet-5-5`, 기본 `auto`), `codex_worker_effort` (`high` 또는 `xhigh`, 기본 `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL`, `HEI5ENBUG_CODEX_WORKER_EFFORT` |
+| Codex 서비스 티어 | `codex_service_tier` (`default` 또는 `fast`, 기본 `default`) | `HEI5ENBUG_CODEX_SERVICE_TIER` |
 | 검토 모델 | `review_model` (고정 모델 ID, 기본 `gpt-6.2-astra`) | 해당 없음 |
 | 응답 언어 가드 | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
 | DataGrip 쿼리 가드 | `datagrip_guard` | `HEI5ENBUG_DATAGRIP_GUARD` |
@@ -95,10 +96,17 @@ Codex 설정이나 Claude 설정을 쓰지 않습니다. 설정을 쓰는 것은
 | 다른 저장소에 Orca 워크트리 사용 | `orca_worktree` | `HEI5ENBUG_ORCA_WORKTREE` |
 | 호스트 설정 모드 | `host_settings` (`apply` 또는 `report`, 기본 `apply`) | `HEI5ENBUG_HOST_SETTINGS` |
 | 에이전트 세션을 시작하는 데 필요한 최소 여유 메모리 | `session_memory_min_mb` (MB, 기본값 `2048`; `0`, `off`, `false`, `no`이면 차단 규칙을 끔; [Orca 세션 시작](guards.ko.md#orca-세션-시작) 참고) | `HEI5ENBUG_SESSION_MEMORY_MIN_MB` |
+| 요청당 위임 실행 수 | `request_run_cap` (기본값 `40`; `0`, `off`, `false`, `no`이면 한도를 끔; [요청 한도와 병렬 한도](guards.ko.md#요청-한도와-병렬-한도) 참고) | `HEI5ENBUG_REQUEST_RUN_CAP` |
+| 요청당 재시도 수 | `request_retry_cap` (기본값 `5`; `0`, `off`, `false`, `no`이면 한도를 끔) | `HEI5ENBUG_REQUEST_RETRY_CAP` |
 | 훅 Python 인터프리터 | `python` (절대 경로, 기본값 빈 문자열) | `HEI5ENBUG_PYTHON` |
 | 이 플러그인과 함께 새로고침할 플러그인 | `refresh_plugins` (쉼표로 구분한 `plugin@marketplace` ID, 기본값 빈 문자열) | `HEI5ENBUG_REFRESH_PLUGINS` |
 | `~/.codex/AGENTS.md`의 서브에이전트 허용 블록 | 해당 없음 | `HEI5ENBUG_SUBAGENT_POLICY` |
 | 질문 기능 플래그 | 해당 없음 | `HEI5ENBUG_CODEX_ASK_TOOL` |
+
+Codex 서비스 티어 `fast`는 `role_runner.py`가 시작하는 모든 Codex 실행(새 실행이나 이어 하기)과 `text_review.py review`의
+검토 실행에 `-c service_tier="fast"`를 더합니다. 두 스크립트의 `--service-tier fast` 옵션은 한 번의 호출에만 적용되며, 이 옵션이나
+환경 변수 `HEI5ENBUG_CODEX_SERVICE_TIER`가 저장된 설정보다 우선합니다. Claude 실행은 그대로이고, 고정된 모델과
+노력 수준과 그 검증도 그대로입니다. 그 밖의 값은 허용 값을 알려 주는 사용법 오류입니다.
 
 훅 Python 인터프리터는 Python 3.12 이상 인터프리터의 절대 경로입니다. SQL 가드의 파서를 쓰려면 그 인터프리터에 `pglast`를 설치합니다.
 모든 훅은 `scripts/hook_python.sh`를 거쳐 시작하며, 이 런처가 해당 인터프리터로 스크립트를 실행합니다. Claude Code의 `python` 옵션을 먼저 보고
@@ -171,7 +179,7 @@ When hei5enbug-agent-setup is active, use subagents according to its situation-b
 
 ## 가드가 모든 도구 호출을 막을 때
 
-Claude Code에서는 승인 가드, DataGrip 쿼리 가드, 공개 경계 훅이 실패하면 호출을 막습니다. 시작하지 못하거나, 제한 시간을 넘기거나,
+Claude Code에서는 승인 가드, DataGrip 쿼리 가드, 공개 경계 검사를 실행하는 Bash 디스패처가 실패하면 호출을 막습니다. 시작하지 못하거나, 제한 시간을 넘기거나,
 0이나 2가 아닌 코드로 끝나거나, 잘못된 출력을 내는 훅은 그 훅이 맡은 호출마다 차단합니다. 기록에는
 `failed; blocking because onFailure is "block"`(제한 시간을 넘기면 `timed out`)과 훅의 오류 출력이 함께 나옵니다.
 이 줄에서 원인을 찾고 아래 해결 방법을 적용하세요.

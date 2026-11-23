@@ -455,7 +455,7 @@ def verdict_entries(compared: Mapping[str, Any], claims: Sequence[Mapping[str, A
 
 def record_campaign(
     run_root: Path, campaign: str, issue: int, before: str, after: str, claimed: Sequence[str] = (),
-    tasks: Sequence[str] | None = None, with_hooks: bool = False,
+    tasks: Sequence[str] | None = None, with_hooks: bool = False, claim_cases: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """Judge a before and an after variant on both hosts and build its record. Returns the record, the `compare` result with
     every claimed case and the overall verdict decided together with its claim, and the claim verdicts. A missing run or
@@ -463,11 +463,16 @@ def record_campaign(
     unknown = [measure for measure in claimed if measure not in MEASURES]
     if unknown or before == after:
         raise ConfigError("--claim takes " + ", ".join(MEASURES) + "; --before and --after name two different variants")
+    if claim_cases and not claimed:
+        raise ConfigError("--claim-cases applies only with --claim")
     runs = campaign_runs(run_root, campaign, (before, after), tasks, with_hooks)
     cases = build_cases(runs, before, after, expected_tasks(run_root, campaign, tasks, runs), planned_runs(run_root, campaign))
     if not cases or not any(run["entry"] for run in runs):
         raise ConfigError(f"campaign {campaign} holds no finished graded run of {before} or {after}")
-    claims = [claim_verdict(case, claimed) for case in cases] if claimed else []
+    unclaimed = [name for name in claim_cases or () if name not in {case["id"] for case in cases}]
+    if unclaimed:
+        raise ConfigError(f"--claim-cases names cases the record does not hold: {', '.join(unclaimed)}")
+    claims = [claim_verdict(case, claimed) for case in cases if not claim_cases or case["id"] in claim_cases] if claimed else []
     compared = with_claims(compare(cases), claims)
     revisions = {name: variant_revision(run_root, campaign, name, runs) for name in (before, after)}
     record = build_record(issue, [case["id"] for case in cases], revisions, [run["entry"] for run in runs if run["entry"]],

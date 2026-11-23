@@ -20,6 +20,11 @@ def scoped_codex_config(run: Run, mcp_off: list[str]) -> list[str]:
     return ["-c", CODEX_NETWORK_ON] if run.writing else []
 
 
+def service_tier_config(run: Run) -> list[str]:
+    """The Codex override for the requested service tier, or nothing when none was requested."""
+    return ["-c", f'service_tier="{run.service_tier}"'] if run.service_tier else []
+
+
 def scratch_profile_config(scratch: Path, network: bool) -> list[str]:
     """Return the Codex overrides that select a permission profile whose only writable path is the scratch folder."""
     table = f'{{extends=":read-only", filesystem={{{json.dumps(scratch.as_posix())}="write"}}'
@@ -45,7 +50,7 @@ def codex_command(run: Run, cwd: str, result: str, mcp_off: list[str], scratch: 
     if run.resume is not None:
         command += [
             "exec", "resume", run.resume, "-m", run.model,
-            "-c", f'model_reasoning_effort="{run.effort}"',
+            "-c", f'model_reasoning_effort="{run.effort}"', *service_tier_config(run),
             *sandbox_config(run, scratch), *outside_repo, *scoped,
         ]
         if run.writing and run.add_dirs:
@@ -54,7 +59,7 @@ def codex_command(run: Run, cwd: str, result: str, mcp_off: list[str], scratch: 
         command += ["--json", "-o", result, "-"]
         return command
     command += [
-        "exec", "-m", run.model, "-c", f'model_reasoning_effort="{run.effort}"',
+        "exec", "-m", run.model, "-c", f'model_reasoning_effort="{run.effort}"', *service_tier_config(run),
         *(["-s", sandbox_for(run)] if run.writing else sandbox_config(run, scratch)), *outside_repo, "-C", cwd, *scoped,
     ]
     for directory in run.add_dirs:

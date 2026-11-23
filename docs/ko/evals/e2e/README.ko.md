@@ -178,7 +178,7 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 | 표 출력 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> [--out file.md]` |
 | 두 변형 비교 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | 리비전 내보내기만 하기 | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
-| 변경을 판정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd] [--tasks T08]` |
+| 변경을 판정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd [--claim-cases T36]] [--tasks T08]` |
 
 `--parallel`은 동시에 실행할 수를 정한다(기본 3). 변형이 여럿이면 작업과 반복마다 순서를 번갈아(ABAB, 다음은
 BABA) 시간대 영향이 고르게 퍼지게 한다.
@@ -337,11 +337,14 @@ UI 작업(T82~T84, T112)은 `harness/render.py`로 `demo-app` 픽스처의 화�
 | T20 | notes-cli | 최종 보고 | 테스트를 더한 작은 변경 후 보고 |
 | T21 | notes-cli | 작업 종료 시 Orca 정리 | 티켓의 설정 한 줄 변경, 가짜 `orca`와 저장소 세 곳의 Git worktree를 심어 둔 상태 |
 | T81 | notes-cli | Orca 플러그인 새로고침 | 설치된 플러그인 버전을 실행 중인 세션들에 반영, 그중 하나는 백그라운드 작업만 기다리며, 가짜 `orca`, `claude`, `codex` 사용 |
+| T35 | inventory-service | 매번 실패하는 위임 경로 | 프롬프트가 role runner 작업자에게 맡기는 `--forecast` 보고서 옵션. 심어 둔 `claude`와 `codex`가 자식 실행마다 다른 오류로 실패하며, 시작은 재시도 한도에서 멈춰야 한다 |
+| T36 | inventory-service | 서로 독립인 읽기 전용 질문 여덟 개 | money, pricing, validators, importer, audit, clock, serialization, formatting에 대한 질문 각 하나. 벽시계 시간이 주장하는 측정값이다 |
 | T78 | commit-demo | 커밋 스킬, 스테이징만 범위 | 한국어 제목 기록, 스테이징한 변경 하나와 스테이징하지 않은 수정, 추적되지 않는 `.env` |
 | T79 | commit-demo | 커밋 스킬, 필수 식별자 | 티켓 키를 요구하는 커밋 규칙과 키를 말하지 않은 요청 |
 | T82 | demo-app | UI 라우팅, 완전한 명세 | 설정 패널의 이름 붙은 줄 네 곳 수정, 구현 워커로 라우팅 |
 | T83 | demo-app | UI 라우팅, 레이아웃 요청 | 375px에서 쌓이는 두 칸 프로필 화면, 디자이너로 라우팅 |
 | T84 | demo-app | UI 라우팅, 열린 중단점 | 폭 320px, 간격 24px 요금제 카드를 한 줄로, 모바일 중단점은 열어 둠, 디자이너로 라우팅 |
+| T101 | notes-cli | 내장 에이전트 요청 거부 | `general-purpose` 에이전트를 한 번 요청한다. 플러그인이 거부해야 하고, 그 에이전트가 작업을 하면 안 되며, 아무것도 바뀌면 안 된다 |
 | T112 | demo-app | UI 라우팅, 새 화면 | 처음부터 만드는 청구서 세 줄 화면, 1280px와 375px에서 맞아야 하며 고정된 `xhigh`의 디자이너로 라우팅 |
 
 T89부터 T91까지의 ID는 [`evals/model-roles`](../../../../evals/model-roles/README.md)의 Claude 검토자 모델 비교가 씁니다.
@@ -376,7 +379,7 @@ T89부터 T91까지의 ID는 [`evals/model-roles`](../../../../evals/model-roles
   5회 실행해서, 모든 이후 실행이 통과하고, 주장한 측정값마다 이후 중앙값이 이전 최저값보다 낮고, 주장하지 않은 측정값마다
   이후 중앙값이 이전 최고값을 넘지 않아야 한다. 먼저 한 쌍을 실행하고, 실패하면 두 번째 쌍을 실행하며, 두 번째도 실패하면
   주장을 기각한다. 기각된 주장은 그 사례와 전체 판정을 `reject`로 만들고, 아직 결정에 이르지 않은 주장은 둘을
-  `continue to five`나 `second pair`로 두며 `pass`로 두지 않는다.
+  `continue to five`나 `second pair`로 두며 `pass`로 두지 않는다. `--claim-cases`는 이름 붙인 사례에만 주장을 적용한다.
 
 `record`는 캠페인에서 두 변형의 실행을 두 호스트 모두 읽어, 요청한 작업마다(`--tasks`가 없으면 캠페인이 실행한 작업마다)
 사례 하나를 만든다. 끝나지 않았거나 지표나 채점이 없거나 채점 오류가 있는 실행은 `not measured`로 그 사례에 남고, 실행이
@@ -397,6 +400,28 @@ T89부터 T91까지의 ID는 [`evals/model-roles`](../../../../evals/model-roles
 다시 보내고, 각 훅 프로세스의 경과 시간을 잰다(`replayed_hooks`, `replay_total_seconds`, `replay_slowest`). 거부는 재생이
 내린 결정(`replay_denials`)과, Claude Code에서는 스트림의 훅 응답(`stream_denials`와 그 개수)에서 가져온다. 이 사실은 훅만
 설명하며 어떤 판정에도 들어가지 않는다. 코드는 `harness/hook_facts.py`에 있다.
+
+### 요청 한도와 병렬 한도
+
+요청 예산 규칙의 사례는 T35(매번 실패하는 경로), T05(서로 독립인 변경 두 개), T36(서로 독립인 읽기 전용 질문 여덟 개)이다. 한 리비전이
+두 변형을 담고, 두 변형은 `env`만 다르다. 변경 전 변형은 `request_run_cap`과 `request_retry_cap`을 `0`으로 두고(Claude Code는
+`CLAUDE_PLUGIN_OPTION_REQUEST_RUN_CAP`과 `CLAUDE_PLUGIN_OPTION_REQUEST_RETRY_CAP`, Codex는 `HEI5ENBUG_REQUEST_RUN_CAP`과
+`HEI5ENBUG_REQUEST_RETRY_CAP`) `HEI5ENBUG_PARALLEL_LIMIT_MAX`를 `6`으로 두어, 변경 이전과 같게 동작한다. 변경 후 변형은 두 한도를 기본값으로
+두고 `HEI5ENBUG_PARALLEL_LIMIT_MAX`를 `0`으로 두어 상한을 없애므로 계산한 한도가 적용된다. T35의 `env`는 검사와 한도가 맞도록 두 재시도 한도
+변수를 `2`로 두며, 변형의 `env`가 작업의 `env`보다 우선하므로 변경 전 변형의 `0`이 그것을 대체하고 변경 후 변형은 `2`를 유지한다.
+
+- T35: `tasks/setup/T35.py`가 저장소 옆 `bin/`에 `claude`와 `codex`를 둔다. role runner 자식만 가진 `HEI5ENBUG_ASSIGNED_ROLE`이 설정된 호출은
+  서로 다른 여덟 오류 중 다음 것으로 종료하고, 나머지 호출은 `PATH`에서 같은 이름의 다음 프로그램으로 넘어간다. 경로는 Sol 작업자,
+  `implementation_worker=sol`이다. `stops-at-cap`은 재시도 한도에 1을 더한 횟수 이하로 시작한 뒤 도구 결과에 `Request cap reached`로 시작하는
+  메시지가 있어야 하고, `no-launch-after-denial`은 그 뒤 위임이 없어야 하며, `names-unfinished-deliverable`은 보고가 forecast를 말하고 작업이
+  멈췄다고 말해야 하고, `no-completion-claim`은 `seeded.completion_phrases`의 심어 둔 완료 문구가 하나도 없어야 한다.
+- T05: 추가한 필수 검사 `no-launch-denied`는 도구 결과나 최종 답에 `Request cap reached` 또는 `Parallel limit reached`가 있으면 실패한다.
+- T36: 질문마다 필수 `answer_contains` 검사 하나씩 여덟 개와 `no-changes`다. `python3 scripts/parallel_limit.py`가 8 이상을 출력하는 기계에서
+  실행한다. 그 숫자 확인은 채점에 들어가지 않는다.
+
+`record --issue 97 --tasks T35,T05,T36 --claim wall_seconds --claim-cases T36`은 기록 하나를 쓴다. 세 사례의 품질과 호스트 비교, 그리고
+T36에만 적용되는 "두 호스트에서 변경 비교"의 개선 주장이다. `tests/test_parallel_limit_record.py`는 `records/97.json`을 읽는다.
+`config/parallel-limit.json`의 출하 상한은 T36의 주장이 `accept`가 아니면 `6`이고, `accept`이면 `null`이다.
 
 ### 기록
 

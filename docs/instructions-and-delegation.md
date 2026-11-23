@@ -236,7 +236,12 @@ implementation worker instead of refusing to edit.
 Built-in subagents stay out on both hosts. On Claude Code the mod hides the built-in `general-purpose`, `Explore`,
 `Plan`, and `claude` agents from the agent list (`agent.offer`) and denies them and every fork (`agent.spawn`). The
 session start also adds `Agent(general-purpose)`, `Agent(Explore)`, `Agent(Plan)`, and `Agent(claude)` to `permissions.deny` in
-the user settings (see [Host settings](configuration.md#host-settings)), so the denial holds where the mod did not load. The
+the user settings (see [Host settings](configuration.md#host-settings)), so the denial holds where the mod did not load, and
+the `PreToolUse` hook `scripts/agent_guard.py`, registered for `Agent|Task` in `hooks/claude-hooks.json`, denies the same
+four names and a call with no type that does not resume an earlier agent, in a session where the mod did not load but the
+plugin's hooks did. All three read the names from `scripts/built_in_agents.py`, and `tests/test_agent_guard.py` fails when
+the mod's `HIDDEN_AGENTS` list differs. A plugin that fails to load, as after an update removes its cache folder while a
+session runs, loads none of the three; only rules already written to the user settings still apply. The
 narrow-purpose built-ins `claude-code-guide` and `statusline-setup` pass, as do plugin agents and definitions from any
 user, project, CLI, or managed source. On Codex the `PreToolUse` hook `scripts/agent_guard.py` keeps its existing
 behavior: it denies an omitted type, `default`, `explorer`, and every type without a role file, including the built-in

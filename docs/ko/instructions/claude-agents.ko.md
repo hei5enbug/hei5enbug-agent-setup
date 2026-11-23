@@ -31,8 +31,8 @@ python3 <Source directory>/scripts/role_runner.py <scout|researcher|reviewer|wor
 실행기는 역할을 고정된 모델, 사고 강도, 권한으로 실행하고 호스트 기록을 검증한 뒤 JSON 한 줄로 끝난다. 앞에 `cd`를
 실행하지 않는다. `--model <id>`는 `reviewer`와 GPT worker의 모델 선택에만, `--add-dir <dir>`은 `worker`, 쓰기 기능, `write` 에이전트에만 붙인다.
 `--effort xhigh`는 [공유 모델 라우팅](model-routing.ko.md#역할-설정-유지)의 사고 강도 규칙에 따라서만 붙인다.
-같은 대상의 읽기 전용 할당이 여럿이면 한 번의 호출에서 `--assignment`와 `--result`를 반복한다. 실행기는 최대 여섯 개를
-병렬로 실행하고 각각 상태 줄을 출력한다.
+같은 대상의 읽기 전용 할당이 여럿이면 한 번의 호출에서 `--assignment`와 `--result`를 반복한다. 실행기는 플러그인이 알리는 한도만큼만
+동시에 실행하고 하나가 끝나면 다음을 시작하며 각각 상태 줄을 출력한다.
 
 에이전트 모드는 플러그인 에이전트의 다른 모델 계열 대체 항목을 실행하며, 역할 대신 에이전트의 레지스트리 이름이나 설치된 플러그인이
 선언한 역할 이름을 받는다.

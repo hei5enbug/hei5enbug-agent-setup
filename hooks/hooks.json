@@ -51,29 +51,29 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" public_boundary_hook.py",
-            "timeout": 30,
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" bash_pretool_checks.py",
+            "timeout": 40,
             "onFailure": "block"
           }
         ]
       },
       {
-        "matcher": "^Bash$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" required_checks_hook.py",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "^(Bash|EnterWorktree)$",
+        "matcher": "^EnterWorktree$",
         "hooks": [
           {
             "type": "command",
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" orca_placement_hook.py",
             "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" request_budget_hook.py",
+            "timeout": 10
           }
         ]
       }
@@ -111,6 +111,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" request_budget_hook.py",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUseFailure": [
@@ -121,6 +131,16 @@
             "type": "command",
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" approval_guard.py",
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" request_budget_hook.py",
+            "timeout": 5
           }
         ]
       }
@@ -143,9 +163,27 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" request_budget_hook.py",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" request_budget_hook.py",
+            "timeout": 5
+          }
+        ]
+      },
       {
         "hooks": [
           {
@@ -161,6 +199,17 @@
             "type": "command",
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" orca_status_hook.py",
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" request_budget_hook.py",
+            "timeout": 5
           }
         ]
       }

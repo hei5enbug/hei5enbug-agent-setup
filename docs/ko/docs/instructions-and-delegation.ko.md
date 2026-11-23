@@ -230,7 +230,11 @@ Codex 내장 `worker`를 대신하고, `scout`는 내장 `explorer`를 건드리
 
 두 호스트 모두 내장 서브에이전트를 막습니다. Claude Code에서는 mod가 내장 `general-purpose`, `Explore`, `Plan`,
 `claude` 에이전트를 에이전트 목록에서 숨기고(`agent.offer`), 이들과 모든 fork를 거부합니다(`agent.spawn`). 세션 시작은 사용자 설정의 `permissions.deny`에도 `Agent(general-purpose)`, `Agent(Explore)`, `Agent(Plan)`, `Agent(claude)`를
-추가하므로([호스트 설정](configuration.ko.md#호스트-설정) 참고) mod가 로드되지 않은 세션에서도 거부가 유지됩니다. 목적이 좁은
+추가하므로([호스트 설정](configuration.ko.md#호스트-설정) 참고) mod가 로드되지 않은 세션에서도 거부가 유지되고, `hooks/claude-hooks.json`이
+`Agent|Task`에 등록한 `PreToolUse` 훅 `scripts/agent_guard.py`는 mod는 로드되지 않았지만 플러그인 훅은 로드된 세션에서 같은 네 이름과, 이전 에이전트를 이어
+가지 않는 종류 없는 호출을 거부합니다. 세 곳 모두 `scripts/built_in_agents.py`에서 이름을 읽고, mod의 `HIDDEN_AGENTS` 목록과 다르면
+`tests/test_agent_guard.py`가 실패합니다. 업데이트가 세션 실행 중에 캐시 폴더를 지우는 것처럼 플러그인이 로드에 실패하면 세 곳 모두 로드되지 않으며,
+이미 사용자 설정에 쓴 규칙만 계속 적용됩니다. 목적이 좁은
 내장 종류인 `claude-code-guide`와 `statusline-setup`은 플러그인 에이전트, 사용자·프로젝트·CLI·관리 설정이 제공하는 정의와
 함께 통과합니다. Codex에서는 `PreToolUse` 훅인 `scripts/agent_guard.py`가 기존 동작을 그대로 유지합니다. 종류를 비운 호출,
 `default`, `explorer`, 역할 파일이 없는 모든 종류를 거부하며, 플러그인 역할이 생기기 전의 내장

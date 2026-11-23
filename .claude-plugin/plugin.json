@@ -86,6 +86,13 @@
       "options": ["high", "xhigh"],
       "default": "high"
     },
+    "codex_service_tier": {
+      "type": "string",
+      "title": "Codex service tier",
+      "description": "Service tier of the Codex runs that the role runner and the text review start: default (none set) or fast (service_tier=\"fast\"). It does not change the pinned model or effort. HEI5ENBUG_CODEX_SERVICE_TIER overrides it for one session.",
+      "options": ["default", "fast"],
+      "default": "default"
+    },
     "review_model": {
       "type": "string",
       "title": "Review model",
@@ -136,6 +143,18 @@
       "title": "Minimum free memory to start an agent session",
       "description": "Megabytes of available memory the plugin keeps free: a command that starts another agent session through Orca is denied below this value so the agent queues the session until another one finishes. 0, off, false, or no turns the check off; an invalid value uses 2048. Unknown memory never denies.",
       "default": "2048"
+    },
+    "request_run_cap": {
+      "type": "string",
+      "title": "Delegated runs per request",
+      "description": "Most delegated runs, meaning plugin agent launches and role runner child runs, that one user request may start. A launch past it is denied and the session reports the request as stopped. 0, off, false, or no turns the cap off; an invalid value uses the default.",
+      "default": "40"
+    },
+    "request_retry_cap": {
+      "type": "string",
+      "title": "Retries per request",
+      "description": "Most retries that one user request may start, meaning a launch of the same agent type or role runner role after an error or a non-zero exit. A launch past it is denied and the session reports the request as stopped. 0, off, false, or no turns the cap off; an invalid value uses the default.",
+      "default": "5"
     },
     "python": {
       "type": "string",

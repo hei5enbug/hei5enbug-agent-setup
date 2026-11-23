@@ -9,6 +9,7 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import built_in_agents  # noqa: E402
 import hook_runtime  # noqa: E402
 from approval_state import recorded_worker_pair  # noqa: E402
 from plugin_toggles import detect_host, enabled, valid_worker_pair, worker_setting  # noqa: E402
@@ -266,6 +267,13 @@ def denial(event: dict) -> str | None:
     )
 
 
+def claude_denial(event: dict) -> str | None:
+    tool_input = event.get("tool_input")
+    if isinstance(tool_input, dict) and built_in_agents.is_denied(tool_input):
+        return built_in_agents.DENIAL
+    return None
+
+
 def main() -> int:
     try:
         event = json.load(sys.stdin)
@@ -273,9 +281,9 @@ def main() -> int:
         return 0
     if not isinstance(event, dict) or event.get("hook_event_name") != "PreToolUse":
         return 0
-    if detect_host() != "codex" or not enabled("agent_guard"):
+    if not enabled("agent_guard"):
         return 0
-    reason = denial(event)
+    reason = denial(event) if detect_host() == "codex" else claude_denial(event)
     if reason:
         output = {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason}
         print(json.dumps({"hookSpecificOutput": output}))
