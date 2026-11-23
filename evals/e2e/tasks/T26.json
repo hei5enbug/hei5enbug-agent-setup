@@ -61,7 +61,7 @@
     {
       "id": "subject-names-parser",
       "kind": "custom",
-      "required": true,
+      "required": false,
       "weight": 3,
       "function": "subject_names_parser"
     },
