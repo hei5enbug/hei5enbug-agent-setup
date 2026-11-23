@@ -42,10 +42,8 @@ def build_specs(
 
 
 def print_plan(out: TextIO, cfg: HarnessConfig, specs: list[RunSpec], tasks: dict[str, dict], variants: dict[str, dict]) -> None:
-    plugin_paths = {}
-    for name, variant in variants.items():
-        sha = plugin_export.resolve_ref(cfg.repo_root, variant["ref"])
-        plugin_paths[name] = str(plugin_export.export_dir(cfg.run_root, sha, cfg.review_stand_in))
+    plugin_paths = {name: plugin_export.planned_path(cfg.repo_root, cfg.run_root, variant, cfg.review_stand_in)
+                    for name, variant in variants.items()}
     out.write(f"planned runs: {len(specs)}\n")
     for index, spec in enumerate(specs, start=1):
         task, variant = tasks[spec.task], variants[spec.variant]
@@ -92,7 +90,8 @@ def run_campaign(
     hosts = hosts or [HOST_CLAUDE]
     specs = build_specs(cfg, campaign, task_ids, variant_names, reps, hosts)
     base = campaign_dir(cfg.run_root, campaign)
-    plugins = {name: plugin_export.export_plugin(cfg.repo_root, cfg.run_root, variant["ref"], review_stand_in=cfg.review_stand_in) for name, variant in variants.items()}
+    plugins = {name: plugin_export.export_for_variant(cfg.repo_root, cfg.run_root, variant, cfg.review_stand_in)
+               for name, variant in variants.items()}
     current = inputs.compute_inputs(cfg, task_ids, variant_names, plugins)
     changes = inputs.check_inputs(read_json(base / "campaign.json", {}).get("inputs"), current, allow_changed_inputs)
     write_campaign_file(cfg, base, campaign, task_ids, variant_names, reps, current, changes, hosts)

@@ -67,12 +67,15 @@ def extra_plugins(facts: dict[str, Any]) -> list[str]:
 
 
 def plugin_checks(
-    facts: dict[str, Any], expected_path: str, transcript_events: list[dict[str, Any]], subagents: list[dict[str, Any]],
+    facts: dict[str, Any], expected_path: str | None, transcript_events: list[dict[str, Any]], subagents: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    """The plugin facts of a Claude Code run; `expected_path` is None for a stock run, which must load no plugin of this name."""
     plugins = facts.get("plugins") or []
     inline = [p for p in plugins if p.get("name") == PLUGIN_NAME and p.get("source") == INLINE_PLUGIN_SOURCE]
     return {
-        "loaded_from_export": any(str(p.get("path")) == expected_path for p in inline),
+        "loaded_from_export": expected_path is not None and any(str(p.get("path")) == expected_path for p in inline),
+        "stock": expected_path is None,
+        "stock_clean": expected_path is None and not any(p.get("name") == PLUGIN_NAME for p in plugins),
         "extra_plugins": extra_plugins(facts),
         "installed_absent": not any(p.get("source") == INSTALLED_PLUGIN_KEY for p in plugins),
         "mod_marker_present": mod_marker_present(transcript_events, MOD_MARKER),

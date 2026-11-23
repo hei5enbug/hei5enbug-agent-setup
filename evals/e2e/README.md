@@ -252,6 +252,7 @@ Run every command from the repository root. The default run root is
 | Print tables | `python3 evals/e2e/harness/cli.py summarize --campaign <name> [--out file.md]` |
 | Compare two variants | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | Export a revision only | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
+| List the rule groups of the session instructions with their bytes | `python3 evals/e2e/harness/cli.py rules [--json] [--min-bytes 200]` |
 | Judge the loop-shape candidates and write their record | `python3 evals/e2e/harness/cli.py loop-record --campaign <name> --issue <n> --baseline <variant> --candidate a=<variant> [--candidate b=<variant>] [--combined <variant>] [--tasks T13,T14]` |
 | Build the combined revision of adopted loop-shape candidates and print its SHA | `python3 evals/e2e/harness/cli.py build-combined --base <baseline branch> --candidate <branch> --candidate <branch> [--worktree <folder>] [--dry-run]` |
 | Judge a change and write its record | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd [--claim-cases T36]] [--tasks T08]` |
@@ -296,11 +297,35 @@ refused. `--lock-file` replaces the path for tests.
 
 ### Variants
 
-A variant is a JSON file in `variants/`: `{"name", "ref", "settings", "env", "extra_args"}`. `ref` is the plugin
-revision under test. `settings` merges into the run's `--settings` file, `env` into the agent's environment, and
-`extra_args` into its command line. A variant that adds a bypass flag, `--bare`, `--permission-mode`, or a flag the
-harness sets itself, such as `--setting-sources`, is rejected. The installed plugin and every plugin of the profile
-stay off whatever `settings` says, and the user's instruction files and auto memory stay out whatever `env` says.
+A variant is a JSON file in `variants/`: `{"name", "ref", "plugin", "remove", "settings", "env", "extra_args"}`. `ref`
+is the plugin revision under test. `settings` merges into the run's `--settings` file, `env` into the agent's
+environment, and `extra_args` into its command line. A variant that adds a bypass flag, `--bare`,
+`--permission-mode`, or a flag the harness sets itself, such as `--setting-sources`, is rejected. The installed plugin
+and every plugin of the profile stay off whatever `settings` says, and the user's instruction files and auto memory
+stay out whatever `env` says.
+
+- `"plugin": "none"` runs the host with no plugin revision loaded, the stock variant (`variants/stock.json`). It takes
+  no `ref` and no `remove`. The Claude Code command has no `--plugin-dir`, and the settings still turn off the
+  installed plugin and every plugin of the profile. The Codex run gets its own `CODEX_HOME` with the credential link
+  and nothing else: no marketplace is added, no plugin is installed, and no hook is trusted, so `codex-setup.json`
+  shows an empty `steps` list and `"plugin": "none"`. Nothing is exported, `variant_shas` and the record's revision
+  read `none`, and `pilot-check` fails a stock run that passed `--plugin-dir`, loaded a plugin of the plugin's name,
+  or installed one. What a stock run still loads is the host's own: its built-in instructions and tools.
+- `"remove"` is a list of parts that the export cuts out of the plugin revision, each `{"file", "start"}` for a bullet
+  or a paragraph by its first words, or `{"file", "heading"}` for a whole section by its heading line, such as
+  `"## Delegation"`. Every entry is matched against the file as exported and must match exactly one part: an entry that
+  matches nothing or more than one part, names a missing file, or overlaps another entry fails the export with a
+  message that names the file and the words. `plugin-export.json` lists the removed parts with their bytes. An export
+  with parts removed has its own folder, `plugins/<sha>-<digest>/`, and its content digest is part of the campaign's
+  input fingerprint. A record names such a variant's revision `<sha>-<digest>`, so `record --before <whole plugin>
+  --after <variant with remove>` compares the two on both hosts under the comparison rule below, and the two never
+  share a revision label.
+
+`cli.py rules` lists every bullet and paragraph of `instructions/session/core.md`, `common.md`, `claude-code.md`, and
+`codex.md` as a rule group, largest first, with its bytes, the hosts that load it (`worker` marks the core text an
+implementation worker also loads), and the `start` words of its `remove` entry; `--json` prints the same with each
+`remove` entry ready to paste into a variant. The totals are file bytes per context, not the rendered session context.
+The list chooses no candidate.
 
 ## Run records
 

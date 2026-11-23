@@ -58,7 +58,7 @@ def write_run_files(
     write_json(spec.result_dir / "settings.json", command.run_settings(
         variant, environment.profile_plugin_ids(environment.claude_config_dir()), command.ancestor_excludes(spec.repo)))
     write_json(spec.result_dir / "mcp.json", command.mcp_config(
-        spec.result_dir / "approvals.jsonl", spec.work_dir, spec.repo, (plugin["path"],),
+        spec.result_dir / "approvals.jsonl", spec.work_dir, spec.repo, (plugin["path"],) if plugin["path"] else (),
         command.user_env(task, cfg.tasks_root, spec.result_dir)))
     argv = command.build_command(cfg, task, variant, prompt, plugin["path"], spec.result_dir)
     write_json(spec.result_dir / "command.json", {"argv": argv, "cwd": str(spec.repo)})

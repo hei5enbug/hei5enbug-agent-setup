@@ -1,4 +1,4 @@
-"""Entry point: run | summarize | regrade | export-plugin | pilot-check | record | probe-question-hook | loop-record | build-combined."""
+"""Entry point: run | summarize | regrade | export-plugin | pilot-check | record | probe-question-hook | loop-record | build-combined | rules."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ if __package__ in (None, ""):
     sys.path[0] = str(Path(__file__).resolve().parents[1])
 
 from harness import (  # noqa: E402
-    campaign, combined_build, command, loop_record, measure_lock, plugin_export, question_probe, records, summarize,
+    campaign, combined_build, command, loop_record, measure_lock, plugin_export, question_probe, records, rules_cli, summarize,
 )
 from harness.config import (  # noqa: E402
     CODEX_MODEL, DEFAULT_PARALLEL, DEFAULT_RUN_ROOT, EXIT_FAILURE, EXIT_LOCK_HELD, HOST_CLAUDE, MEASURE_LOCK,
@@ -73,6 +73,9 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(check)
     check.add_argument("--campaign", required=True)
     check.add_argument("--run-ids", help="comma-separated run ids; default all")
+    rules = sub.add_parser("rules", help="list the rule groups of the always-loaded session instructions with their bytes")
+    add_common(rules)
+    rules_cli.add_arguments(rules)
     record = sub.add_parser("record", help="judge a before and an after variant on both hosts and write its record")
     add_common(record)
     record.add_argument("--campaign", required=True)
@@ -211,6 +214,8 @@ def dispatch(args: argparse.Namespace) -> int:
         return do_loop_record(args, cfg)
     if args.action == "build-combined":
         return do_build_combined(args, cfg)
+    if args.action == "rules":
+        return rules_cli.run(args, cfg, sys.stdout)
     if args.action == "regrade":
         return campaign.regrade_campaign(
             cfg, args.campaign, frozenset(split(args.run_ids)), sys.stdout, recollect=args.recollect,

@@ -11,7 +11,8 @@ from .config import APPROVER_TOOL, FORBIDDEN_ARGS, HOST_CLAUDE, HOST_CODEX, MOD_
 from .matrix import campaign_dir, read_json
 
 AUTO_MEMORY_OFF_ENV = "CLAUDE_CODE_DISABLE_AUTO_MEMORY"
-REQUIRED_FLAGS = ("--plugin-dir", "--settings", "--permission-prompt-tool", "--max-budget-usd", "--strict-mcp-config", "--setting-sources")
+STOCK_FLAG = "--plugin-dir"
+REQUIRED_FLAGS = (STOCK_FLAG, "--settings", "--permission-prompt-tool", "--max-budget-usd", "--strict-mcp-config", "--setting-sources")
 
 
 def own_roots(*paths: Any) -> list[Path]:
@@ -19,9 +20,12 @@ def own_roots(*paths: Any) -> list[Path]:
     return [root for path in paths if path for root in (Path(os.path.abspath(str(path))), Path(str(path)).resolve())]
 
 
-def command_problems(argv: list[str]) -> list[str]:
+def command_problems(argv: list[str], stock: bool = False) -> list[str]:
+    """Problems of a Claude Code command line; a stock run must carry no `--plugin-dir`."""
     options = argv[:len(argv) - 1 - argv[::-1].index("--")] if "--" in argv else argv
-    problems = [f"missing {flag}" for flag in REQUIRED_FLAGS if flag not in options]
+    problems = [f"missing {flag}" for flag in REQUIRED_FLAGS if flag not in options and not (stock and flag == STOCK_FLAG)]
+    if stock and STOCK_FLAG in options:
+        problems.append(f"stock run passes {STOCK_FLAG}")
     problems += [f"forbidden {arg}" for arg in options if arg in FORBIDDEN_ARGS or arg.startswith("--permission-mode")]
     if APPROVER_TOOL not in options:
         problems.append("approver tool not wired")
@@ -37,10 +41,11 @@ def check_run(result_dir: Path) -> list[tuple[str, bool, str]]:
     facts = metrics.stream_facts(events)
     main = transcript.read_jsonl(result_dir / "transcripts" / "main.jsonl")
     subagents = collect.load_subagents(result_dir / "transcripts" / "subagents")
-    expected = str((run.get("plugin") or {}).get("path", ""))
-    plugin = metrics.plugin_checks(facts, expected, main, subagents)
+    stock = bool((run.get("plugin") or {}).get("stock"))
+    expected = str((run.get("plugin") or {}).get("path") or "")
+    plugin = metrics.plugin_checks(facts, None if stock else expected, main, subagents)
     argv = (read_json(result_dir / "command.json", {}) or {}).get("argv", [])
-    problems = command_problems(argv)
+    problems = command_problems(argv, stock)
     isolation = (read_json(result_dir / "env.json", {}) or {}).get("instruction_isolation") or {}
     events = [*main, *(event for record in subagents for event in record["events"])]
     user_files = metrics.user_instruction_files(events)
@@ -48,14 +53,15 @@ def check_run(result_dir: Path) -> list[tuple[str, bool, str]]:
     outside = metrics.instruction_files_outside(events, own_roots(cwd, expected))
     return [
         ("result message present", facts["has_result"], str(run.get("status"))),
-        ("plugin loaded from the exported directory", plugin["loaded_from_export"], expected),
+        *([("no plugin loaded (stock run)", plugin["stock_clean"], "")] if stock else
+          [("plugin loaded from the exported directory", plugin["loaded_from_export"], expected)]),
         ("installed plugin absent", plugin["installed_absent"], ""),
         ("no plugin besides the variant", not plugin["extra_plugins"], ", ".join(plugin["extra_plugins"])),
         ("no user-level memory or rule file loaded", not user_files, ", ".join(user_files)),
         ("no instruction file outside the trial repo and the exported plugin", not outside, ", ".join(outside)),
         ("auto memory switched off for the run", AUTO_MEMORY_OFF_ENV in isolation.get("env", {}) and isolation["env"][AUTO_MEMORY_OFF_ENV] == "1", ""),
         ("no auto memory path in the init event", not facts["auto_memory_path"], str(facts["auto_memory_path"])),
-        ("mod marker in the main transcript", plugin["mod_marker_present"], MOD_MARKER),
+        *([] if stock else [("mod marker in the main transcript", plugin["mod_marker_present"], MOD_MARKER)]),
         ("permission mode recorded", bool(facts["permission_mode"]), str(facts["permission_mode"])),
         ("command line without bypass flags", not problems, ", ".join(problems)),
     ]
@@ -71,7 +77,8 @@ def codex_answered(result_dir: Path, stream: list[dict[str, Any]]) -> bool:
 
 def check_codex_run(result_dir: Path) -> list[tuple[str, bool, str]]:
     run = read_json(result_dir / "run.json", {})
-    expected = str((run.get("plugin") or {}).get("path", ""))
+    stock = bool((run.get("plugin") or {}).get("stock"))
+    expected = str((run.get("plugin") or {}).get("path") or "")
     setup = read_json(result_dir / codex_host.SETUP_RECORD, {}) or {}
     steps = setup.get("steps") if isinstance(setup.get("steps"), list) else []
     installed = bool(steps) and all(step.get("returncode") == 0 for step in steps) and any(
@@ -82,8 +89,9 @@ def check_codex_run(result_dir: Path) -> list[tuple[str, bool, str]]:
     stream = transcript.read_jsonl(result_dir / "stream.jsonl")
     return [
         ("turn completed", codex_answered(result_dir, stream), str(run.get("status"))),
-        ("plugin installed from the exported directory", installed, expected),
-        ("plugin hooks trusted", "hook_trust" in setup and "hook_trust_error" not in setup, ""),
+        *([("no plugin installed (stock run)", not steps and "hook_trust" not in setup, "")] if stock else
+          [("plugin installed from the exported directory", installed, expected),
+           ("plugin hooks trusted", "hook_trust" in setup and "hook_trust_error" not in setup, "")]),
         ("CODEX_HOME isolated", env.get("codex_home_isolated") is True, ""),
         ("session model as requested", checks.get("model_as_requested") is True, ""),
         ("command line pins the model", "-m" in argv and "exec" in argv, ""),

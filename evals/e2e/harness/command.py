@@ -9,6 +9,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
+from . import plugin_export
 from .config import (
     AGENT_EFFORT, APPROVER_SERVER, APPROVER_TOOL, CLAUDE_SETTING_SOURCES, FORBIDDEN_ARGS, HARNESS_DIR, HOST_CLAUDE, HOST_CODEX, HOSTS,
     ANCESTOR_INSTRUCTION_FILES, INSTALLED_PLUGIN_KEY, MAIN_MODELS, RESERVED_ARGS, HarnessConfig,
@@ -36,9 +37,22 @@ def is_reserved_arg(item: str) -> bool:
     return flag in FORBIDDEN_ARGS or flag in RESERVED_ARGS or item.startswith("--permission-mode")
 
 
+def is_stock(variant: dict[str, Any]) -> bool:
+    """True for a variant that runs the host with no plugin loaded."""
+    return variant.get("plugin") == plugin_export.STOCK_PLUGIN
+
+
 def validate_variant(variant: Any, name: str = "variant") -> dict[str, Any]:
-    if not isinstance(variant, dict) or not isinstance(variant.get("name"), str) or not isinstance(variant.get("ref"), str):
-        raise ConfigError(f"{name}: a variant needs string 'name' and 'ref'")
+    if not isinstance(variant, dict) or not isinstance(variant.get("name"), str):
+        raise ConfigError(f"{name}: a variant needs a string 'name'")
+    plugin = variant.get("plugin", "revision")
+    if plugin not in ("revision", plugin_export.STOCK_PLUGIN):
+        raise ConfigError(f"{name}: 'plugin' is {plugin_export.STOCK_PLUGIN!r} or absent")
+    stock = plugin == plugin_export.STOCK_PLUGIN
+    if not stock and not isinstance(variant.get("ref"), str):
+        raise ConfigError(f"{name}: a variant needs a string 'ref' unless its 'plugin' is {plugin_export.STOCK_PLUGIN!r}")
+    if stock and (variant.get("ref") or variant.get("remove")):
+        raise ConfigError(f"{name}: a variant with 'plugin' {plugin_export.STOCK_PLUGIN!r} loads no revision, so it takes no 'ref' or 'remove'")
     for key, kind in (("settings", dict), ("env", dict), ("extra_args", list)):
         if not isinstance(variant.get(key, kind()), kind):
             raise ConfigError(f"{name}: '{key}' must be a {kind.__name__}")
@@ -51,7 +65,12 @@ def validate_variant(variant: Any, name: str = "variant") -> dict[str, Any]:
     models = variant.get("models", {})
     if not isinstance(models, dict) or set(models) - set(HOSTS) or not all(isinstance(v, str) for v in models.values()):
         raise ConfigError(f"{name}: 'models' must map a host ({', '.join(HOSTS)}) to a model name")
-    return {"name": variant["name"], "ref": variant["ref"], "settings": dict(variant.get("settings", {})),
+    try:
+        removals = plugin_export.normalize_removals(variant.get("remove", []))
+    except plugin_export.ExportError as error:
+        raise ConfigError(f"{name}: {error}") from error
+    return {"name": variant["name"], "ref": variant.get("ref") or "", "plugin": plugin, "remove": removals,
+            "settings": dict(variant.get("settings", {})),
             "env": {str(k): str(v) for k, v in variant.get("env", {}).items()}, "extra_args": extra,
             "models": dict(models)}
 
@@ -166,15 +185,16 @@ def mcp_config(
 
 
 def build_command(
-    cfg: HarnessConfig, task: dict[str, Any], variant: dict[str, Any], prompt: str, plugin_dir: str, run_dir: Path,
+    cfg: HarnessConfig, task: dict[str, Any], variant: dict[str, Any], prompt: str, plugin_dir: str | None, run_dir: Path,
 ) -> list[str]:
     """The full agent command. It never passes bypass or permission-mode flags: runs start in the user's default mode.
+    A variant with no plugin gets no `--plugin-dir`.
 
     The prompt follows `--`, so a prompt that starts with a dash, such as `--version ...`, is not read as an option."""
     return [
         cfg.claude_bin, "-p", "--model", main_model(variant, HOST_CLAUDE), "--effort", AGENT_EFFORT,
         "--output-format", "stream-json", "--verbose", "--include-hook-events",
-        "--plugin-dir", plugin_dir,
+        *(["--plugin-dir", plugin_dir] if plugin_dir and not is_stock(variant) else []),
         "--settings", str(run_dir / "settings.json"), "--setting-sources", CLAUDE_SETTING_SOURCES,
         "--mcp-config", str(run_dir / "mcp.json"), "--strict-mcp-config",
         "--permission-prompt-tool", APPROVER_TOOL,
