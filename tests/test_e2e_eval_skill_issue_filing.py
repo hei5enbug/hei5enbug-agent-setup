@@ -111,6 +111,21 @@ class AnsweredUndecidedChoiceTest(FilingTaskCase):
         self.assertEqual((True,), self.optional_results(passed))
         self.assertTrue(passed["success"], passed)
 
+    def test_스킬_문서를_셸로_읽은_Codex_실행은_skill_invoked를_통과하고_목록만_본_실행은_실패한다(self) -> None:
+        """Skill 도구 호출이 없어도 cat으로 SKILL.md를 읽으면 skill-invoked가 참이고, 파일 목록만 본 실행은 거짓이다."""
+        # given
+        self.file_issue()
+        path = "/home/test/.codex/plugins/cache/demo/demo-plugin/1.0.0/skills/skill-issue-creator/SKILL.md"
+        rest = self.filed_calls(False)[1:]
+        answer = "Filed issue #200: https://github.com/demo-org/demo-plugin/issues/200"
+
+        # when
+        read = self.grade(self.view([bash("r1", f"cat {path}"), *rest], answer))["skill-invoked"]
+        listed = self.grade(self.view([bash("r1", "rg --files -g 'SKILL.md'"), *rest], answer))["skill-invoked"]
+
+        # then
+        self.assertEqual((True, False), (read, listed))
+
     def test_check_filed가_쓰기_전에_돈_실행은_순서_검사에서_실패한다(self) -> None:
         """쓰기 전에 check_filed를 돌린 실행은 check-filed-ran-after-write가 거짓이다."""
         # given
@@ -288,6 +303,50 @@ class AnsweredCoveredGapTest(FilingTaskCase):
 
         # then
         self.assertTrue(passed["covering-issue-intact"], passed)
+
+    def test_스킬_문서를_셸로_읽은_Codex_실행은_skill_invoked를_통과한다(self) -> None:
+        """T111에서도 cat으로 SKILL.md를 읽은 실행은 skill-invoked가 참이다."""
+        # given
+        self.update()
+        path = "/home/test/.codex/plugins/cache/demo/demo-plugin/1.0.0/skills/skill-issue-creator/SKILL.md"
+        view = self.view([bash("r1", f"cat {path}"), *self.updated_calls(False)[1:]], "Updated #12 issues/12")
+
+        # when
+        passed = self.grade(view)
+
+        # then
+        self.assertTrue(passed["skill-invoked"], passed)
+
+    def test_원래_규칙을_heading_포함_없이_다른_낱말로_다시_쓴_수정은_원본_유지_검사를_통과한다(self) -> None:
+        """no heading, 또는 omit과 including its heading으로 같은 규칙을 쓴 Proposal은 covering-issue-intact가 참이다."""
+        # given
+        rewrites = ("leave that section out of the overview completely: no heading, no `(none)`",
+                    "omit that section from the overview completely, including its heading and any `(none)` placeholder")
+        results = []
+
+        # when
+        for rewrite in rewrites:
+            self.update()
+            body = self.original().replace("leave that section out of the overview, heading included", rewrite)
+            self.stub("issue", "edit", "12", "--repo", REPO, "--body-file", "-", stdin=body + MERGE_NOTE)
+            results.append(self.grade(self.view(self.updated_calls(False), "Updated #12 issues/12"))["covering-issue-intact"])
+
+        # then
+        self.assertEqual([True, True], results)
+
+    def test_Proposal을_모든_제목을_출력하라는_반대_규칙으로_바꾼_수정은_원본_유지_검사에서_실패한다(self) -> None:
+        """원래 규칙을 빼고 heading과 (none)을 계속 쓰라는 Proposal은 covering-issue-intact가 거짓이다."""
+        # given
+        self.update()
+        body = self.original().replace("leave that section out of the overview, heading included",
+                                       "keep printing every section with its heading and write `(none)` under an empty one")
+        self.stub("issue", "edit", "12", "--repo", REPO, "--body-file", "-", stdin=body + MERGE_NOTE)
+
+        # when
+        passed = self.grade(self.view(self.updated_calls(False), "Updated #12 issues/12"))
+
+        # then
+        self.assertFalse(passed["covering-issue-intact"], passed)
 
     def test_한_명령에서_고친_뒤_check_filed를_이어_돌린_실행은_쓴_뒤_실행으로_센다(self) -> None:
         """gh issue edit 뒤에 같은 Bash 호출 안에서 check_filed.py가 있으면 check-filed-ran-after-write가 참이다."""
