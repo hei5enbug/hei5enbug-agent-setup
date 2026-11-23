@@ -35,14 +35,6 @@ instructions decides when to ask.
   session transcript file first, because the conversation, such as a resumed one, can show an earlier tool input with
   unicode escapes it did not contain. Say whether the reported character is in that stored input before naming any
   other cause, and name the host or a plugin only when that input is correct and the shown text differs.
-- Under the condition that the conversation shows unicode escapes, or another form you did not intend, in an earlier
-  question tool input of the session and no user reported it, read that input as stored in the session transcript
-  file before drawing any conclusion, and never judge from the conversation's display whether the raw-character rule
-  was followed. Under the condition that the stored input holds the intended characters, treat the display as an
-  artifact: record no mistake in a summary, a memory, or a report, promise no correction, and report no defect to the
-  user, the host, or a tracker. Under the condition that the stored input itself holds escape text or a wrong
-  character, say so and write the next question as raw characters. Example: a Japanese question input appears with
-  escapes after a session resume, and the stored input holds the kana, so nothing is recorded or reported.
 - Follow host formatting and a skill's own ask or stop rules.
 - Offer temporary and root-cause fixes, when both exist, with cost and impact; the user chooses.
 - Report a pending user action, such as a login, once.

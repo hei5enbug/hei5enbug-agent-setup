@@ -170,29 +170,6 @@ class CommonRulesTest(unittest.TestCase):
             with self.subTest(rule=rule):
                 self.assertIn(rule, asking)
 
-    def test_질문_창_입력이_대화에서_이스케이프로_보여도_저장된_입력을_읽기_전에는_실수나_결함으로_다루지_않는다(self):
-        """사용자 신고가 없어도 대화가 이전 질문 입력을 이스케이프로 보여 주면 저장된 입력을 먼저 읽고, 의도한 글자가 있으면 기록, 약속, 보고를 하지 않는다."""
-        # Given
-        asking = " ".join((REPO_ROOT / "instructions/asking-the-user.md").read_text(encoding="utf-8").split())
-
-        # When
-        rules = (
-            "Under the condition that the conversation shows unicode escapes, or another form you did not intend, in an "
-            "earlier question tool input of the session and no user reported it, read that input as stored in the "
-            "session transcript file before drawing any conclusion, and never judge from the conversation's display "
-            "whether the raw-character rule was followed.",
-            "Under the condition that the stored input holds the intended characters, treat the display as an artifact: "
-            "record no mistake in a summary, a memory, or a report, promise no correction, and report no defect to the "
-            "user, the host, or a tracker.",
-            "Under the condition that the stored input itself holds escape text or a wrong character, say so and write "
-            "the next question as raw characters.",
-        )
-
-        # Then
-        for rule in rules:
-            with self.subTest(rule=rule):
-                self.assertIn(rule, asking)
-
     def test_이름_결정_배포가_바뀌면_이미_만든_산출물의_옛_값을_찾아_고치고_보고한다(self):
         """이름 변경, 결정 변경, 되돌리기 뒤에는 작업이 만들거나 올린 산출물의 옛 값을 고치거나 알리고 최종 보고에 적는다."""
         # Given

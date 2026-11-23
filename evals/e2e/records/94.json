@@ -1,0 +1,225 @@
+{
+  "issue": 94,
+  "cases": [
+    "T37"
+  ],
+  "variants": {
+    "p4h-before": {
+      "revision": "a0c5a70b9913"
+    },
+    "p4h-after": {
+      "revision": "589c174ecfb4"
+    }
+  },
+  "runs": [
+    {
+      "case": "T37",
+      "variant": "p4h-after",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "codex_child:worker": {
+          "model": "gpt-6.2-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#5": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#6": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#7": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-exit-code": true,
+        "hidden-empty-output": true,
+        "hidden-old-file": true,
+        "hidden-import": true,
+        "regressions": true,
+        "new-tests": true,
+        "readme-import": true,
+        "mirror-updated": true,
+        "files-changed": true
+      },
+      "wall_seconds": 714.3553942499857,
+      "cost_usd": 1.7523840000000002,
+      "rep": 1
+    },
+    {
+      "case": "T37",
+      "variant": "p4h-after",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "subagent:hei5enbug-agent-setup:worker": {
+          "model": "claude-sonnet-5-5",
+          "effort": "not measured"
+        },
+        "role_runner:reviewer": {
+          "model": "gpt-6.1-sol",
+          "effort": "xhigh"
+        }
+      },
+      "checks": {
+        "hidden-exit-code": true,
+        "hidden-empty-output": true,
+        "hidden-old-file": true,
+        "hidden-import": true,
+        "regressions": true,
+        "new-tests": true,
+        "readme-import": true,
+        "mirror-updated": true,
+        "files-changed": true
+      },
+      "wall_seconds": 634.0260550410021,
+      "cost_usd": 1.9423065000000002,
+      "rep": 1
+    },
+    {
+      "case": "T37",
+      "variant": "p4h-before",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "codex_child:worker": {
+          "model": "gpt-6.2-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#5": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#6": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-exit-code": true,
+        "hidden-empty-output": true,
+        "hidden-old-file": true,
+        "hidden-import": true,
+        "regressions": true,
+        "new-tests": true,
+        "readme-import": true,
+        "mirror-updated": true,
+        "files-changed": true
+      },
+      "wall_seconds": 811.6877011669858,
+      "cost_usd": 1.8205272,
+      "rep": 1
+    },
+    {
+      "case": "T37",
+      "variant": "p4h-before",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "subagent:hei5enbug-agent-setup:worker": {
+          "model": "claude-sonnet-5-5",
+          "effort": "not measured"
+        },
+        "role_runner:reviewer": {
+          "model": "gpt-6.1-sol",
+          "effort": "xhigh"
+        }
+      },
+      "checks": {
+        "hidden-exit-code": true,
+        "hidden-empty-output": true,
+        "hidden-old-file": true,
+        "hidden-import": true,
+        "regressions": true,
+        "new-tests": true,
+        "readme-import": true,
+        "mirror-updated": true,
+        "files-changed": true
+      },
+      "wall_seconds": 472.2458909159759,
+      "cost_usd": 1.7975068999999997,
+      "rep": 1
+    }
+  ],
+  "verdicts": [
+    {
+      "case": "T37",
+      "verdict": "pass",
+      "step": "every required check passes after on both hosts",
+      "measure": "quality"
+    },
+    {
+      "case": "T37",
+      "verdict": "pass",
+      "step": "first run",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T37",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T37",
+      "verdict": "repeat",
+      "step": "quality and every measure of the case"
+    }
+  ]
+}
