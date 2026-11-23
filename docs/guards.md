@@ -71,11 +71,10 @@ free-form row and tells the agent to remove that option. A label that only conta
 files", passes, and so does every other event, tool, or input shape.
 
 Claude Code fires `PreToolUse` for `AskUserQuestion` and accepts the JSON deny decision. The Codex hooks page lists
-no question tool, so whether a Codex `PreToolUse` hook receives `request_user_input` is settled by the
-`probe-question-hook` command of `evals/e2e`, which costs one model call and runs only when the owner starts it. The
-shared registration is harmless until then, because a hook the host never calls runs nothing. When the probe shows
-no delivery, Codex has no automatic check, and the written rule and the Codex tool schema, which forbids an "Other"
-option, cover it.
+no question tool. The `probe-question-hook` command of `evals/e2e` settled it on 2026-11-23 with Codex 0.171.0 and
+`features.default_mode_request_user_input=true`: a Codex `PreToolUse` hook receives `request_user_input` with its
+`tool_input.questions`, and a deny decision stops the call and returns the reason to the model. The guard therefore
+checks a question dialog on both hosts. The probe cost one model call and ran because the owner started it.
 
 What the hook cannot decide, such as whether the question names what it changes in plain words, stays a written rule in
 `instructions/asking-the-user.md`. It exists because, in a 2026-11-13 session, an agent added its own "직접 입력"

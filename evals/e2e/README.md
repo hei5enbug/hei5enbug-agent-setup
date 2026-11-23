@@ -128,6 +128,9 @@ only what the plugin's own role runner calls, never the host:
   in the agent environment of every run. A variant sets either variable in its `env` to override the default. The
   plugin's other hooks still run.
 - Codex has no spend flag, so only the wall-time limit of the task is enforced.
+- A task that grades a question dialog declares `"needs_question_tool": true` (T76, T77). Its Codex command then adds
+  `-c features.default_mode_request_user_input=true`, the setting the question hook probe needed before `codex exec`
+  offered `request_user_input`. No other task gets it, so the tools of every other Codex run stay as they were.
 - The harness reads the `exec` commands, `apply_patch` calls, and native `spawn_agent` calls of the rollouts as tool
   calls. A `spawn_agent` call counts as a subagent launch of the `agent_type` it names, or of `general-purpose` when it
   names none, and the order of a delegation and the order of the final answer count the same calls. A `spawn_agent`

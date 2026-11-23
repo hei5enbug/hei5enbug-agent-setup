@@ -117,6 +117,9 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
   실행의 에이전트 환경에 `CLAUDE_PLUGIN_OPTION_APPROVAL_GUARD`와 `HEI5ENBUG_APPROVAL_GUARD`를 `false`로 넣는다.
   변형은 `env`에서 두 변수 중 하나를 달리 정해 이 기본값을 덮어쓸 수 있다. 플러그인의 다른 훅은 그대로 실행된다.
 - Codex에는 지출 한도 플래그가 없으므로 작업의 경과 시간 제한만 적용한다.
+- 질문 대화상자를 채점하는 작업(T76, T77)은 `"needs_question_tool": true`를 적는다. 그러면 Codex 명령에
+  `-c features.default_mode_request_user_input=true`가 더해진다. 질문 훅 조사에서 `codex exec`가 `request_user_input`을 내놓으려면
+  필요했던 설정이다. 다른 작업에는 붙지 않으므로 나머지 Codex 실행의 도구는 그대로다.
 - 하네스는 rollout의 `exec` 명령, `apply_patch` 호출, 네이티브 `spawn_agent` 호출을 도구 호출로 읽는다. `spawn_agent` 호출은
   그 호출이 적은 `agent_type`의 서브에이전트 시작으로 세고, 적지 않았으면 `general-purpose`로 센다. 위임의 순서와 최종 답변의
   순서는 같은 호출들을 센다. `spawn_agent` 위임은 그 `task_name` 자식의 최종 결과가 오류가 아닌 `FINAL_ANSWER` 메시지로 부모에게

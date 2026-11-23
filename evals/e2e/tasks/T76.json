@@ -3,6 +3,7 @@
   "title": "Ask whether to delete two repeating checklist lines of an issue draft",
   "category": "question",
   "path": "question dialog",
+  "needs_question_tool": true,
   "fixture": "notes-cli",
   "prompt_file": "prompts/T76.txt",
   "setup": "setup/T76.py",
