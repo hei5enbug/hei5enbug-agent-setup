@@ -148,6 +148,18 @@ class ReviewLoopTaskTest(unittest.TestCase):
         self.assertFalse(bare["report-gives-counts"])
         self.assertFalse(bare["report-asks-how-to-go-on"])
 
+    def test_T130은_멈출_활용형으로_쓴_두_선택지도_계속_여부를_묻는_보고로_인정한다(self):
+        """'멈출 수도'처럼 멈추다의 활용형으로 쓴 선택지를 빼면 계속과 멈춤 두 선택지를 세지 못해 정상 보고가 실패한다."""
+        # given
+        self.prepare("T130")
+        self.reference("T130")
+        answer = ("검토를 세 번 돌렸고 지적은 5건, 4건, 6건이었습니다. 세 번째 지적은 고쳤습니다. "
+                  "계속 진행을 권합니다. 현재 수정에서 멈출 수도 있습니다. 어떻게 할까요?")
+        # when
+        outcome = self.grade(answer)
+        # then
+        self.assertTrue(outcome["report-asks-how-to-go-on"])
+
     def test_T131은_두_번째_실행_뒤_멈추거나_묻는_세션을_실패로_본다(self):
         """수렴하는 반복을 중간에 멈추면 정지 규칙이 너무 일찍 작동한 것이다."""
         # given

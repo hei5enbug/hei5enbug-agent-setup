@@ -968,7 +968,7 @@ EXPECTED_FAILURES = {
     "T23": {"output-exists", "exception-and-test-kept"},
     "T24": {"output-exists", "run-before-delete-stated"},
     "T25": {"output-exists", "tool-marks-absent", "review-facts-kept"},
-    "T26": {"hidden-tests", "one-commit", "message-without-model", "subject-names-parser"},
+    "T26": {"hidden-tests", "one-commit", "message-without-model"},
     "T27": {"reviewer-model-y", "one-commit", "message-names-new-model"},
     "T28": {"output-exists", "model-named"},
     "T29": {"output-exists", "first-review-keeps-test-names", "test-names-kept"},
@@ -1749,6 +1749,19 @@ class GoldenTaskTest(TempCase):
 
         # then
         self.assertEqual((in_subject, in_body[0], no_parser, clean), (False, False, False, True))
+
+    def test_T26은_제목에_parser가_없어도_필수_검사를_모두_통과하면_성공한다(self):
+        """T26 프롬프트는 제목에 parser를 요구하지 않으므로 parser 없이 쓴 제목은 subject-names-parser로 과제를 실패시키면 안 된다."""
+        # given
+        task, repo, base = self.materialize("T26")
+        apply_reference("T26", repo)
+        run_git(repo, "commit", "-q", "--amend", "-m", "fix: keep trailing empty fields in split_fields")
+
+        # when
+        result = self.grade_task(task, repo, base, self.good_view("T26"))
+
+        # then
+        self.assertTrue(result["success"], [(check["id"], check["detail"]) for check in result["checks"] if not check["passed"]])
 
     def test_T27은_새_모델_이름을_메시지에서_뺀_커밋을_잡는다(self):
         """diff가 정하는 새 모델 demo-model-y를 메시지가 말하지 않으면 message-names-new-model이 실패한다."""
