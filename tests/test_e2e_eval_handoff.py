@@ -566,6 +566,20 @@ class TaskDefinitionTest(unittest.TestCase):
                 self.assertEqual(task["env"]["ORCA_TERMINAL_HANDLE"], OWN)
                 self.assertTrue(all(check["required"] for check in task["checks"]))
 
+    def test_T31_프롬프트는_파일_변경을_금지하는_말로_정리를_막지_않고_정리를_시키지도_않는다(self):
+        """T31 프롬프트는 파일 내용을 고치지 말라고만 하고, 정리를 금지하거나 지시하는 말(no file, worktree, remove, clean)이 없다.
+        잡는 회귀: `Change no file`을 읽은 모델이 규칙이 시키는 끝난 자식 worktree 정리를 하지 않고 남기는 문제."""
+        # Given
+        prompt = (TASKS_ROOT / "prompts" / "T31.txt").read_text(encoding="utf-8").lower()
+
+        # When
+        found = [word for word in ("no file", "worktree", "remove", "clean", "delete") if word in prompt]
+
+        # Then
+        self.assertEqual(found, [])
+        self.assertIn("contents of any file", prompt)
+        self.assertIn("close it after your report", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()
