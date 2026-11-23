@@ -275,7 +275,9 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 
 변형은 `variants/` 안의 JSON 파일이다: `{"name", "ref", "plugin", "remove", "settings", "env", "extra_args"}`. `ref`는
 시험할 플러그인 리비전이다. `settings`는 실행의 `--settings` 파일에, `env`는 에이전트 환경에, `extra_args`는 명령줄에
-합쳐진다. 우회 플래그, `--bare`, `--permission-mode`, 또는 `--setting-sources`처럼 하네스가 직접 정하는 플래그를 넣은
+합쳐진다. Claude Code 실행에서는 `env`의 `CLAUDE_PLUGIN_OPTION_<KEY>`마다 그 파일의 `pluginConfigs`에 있는 로드된
+플러그인의 옵션 `<key>`(소문자)도 함께 정해진다. 다만 `settings`가 그 옵션을 이미 적었으면 `settings` 값이 이긴다.
+우회 플래그, `--bare`, `--permission-mode`, 또는 `--setting-sources`처럼 하네스가 직접 정하는 플래그를 넣은
 변형은 거부한다. `settings`에 무엇이 있어도 설치된 플러그인과 프로필의 모든 플러그인은 꺼진 채로 두고, `env`에 무엇이
 있어도 사용자의 지침 파일과 자동 메모리는 들어오지 않게 한다.
 

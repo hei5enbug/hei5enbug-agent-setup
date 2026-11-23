@@ -888,6 +888,47 @@ class CommandLineTest(unittest.TestCase):
         self.assertEqual(settings["enabledPlugins"], {"hei5enbug-agent-setup@hei5enbug": False, "other@x": True})
         self.assertEqual(settings["model"], "m")
 
+    def test_변형_env의_플러그인_옵션은_pluginConfigs의_옵션이_된다(self):
+        """CLAUDE_PLUGIN_OPTION_<KEY>는 매니페스트 이름의 @inline 항목 options에 소문자 키로 들어간다."""
+        # given
+        variant = command.validate_variant({"name": "v", "ref": "HEAD", "env": {
+            "CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER": "opus", "HEI5ENBUG_REVIEW_MODEL": "gpt-6.2-sol"}})
+
+        # when
+        settings = command.run_settings(variant, plugin_dir=REPO_ROOT)
+
+        # then
+        self.assertEqual(settings["pluginConfigs"]["hei5enbug-agent-setup@inline"]["options"], {"implementation_worker": "opus"})
+
+    def test_변형_settings의_같은_옵션은_env_값보다_우선한다(self):
+        """변형 settings가 같은 옵션 키를 이미 적었으면 env의 값 대신 그 값이 남고, 다른 옵션은 그대로 들어간다."""
+        # given
+        variant = command.validate_variant({"name": "v", "ref": "HEAD", "env": {
+            "CLAUDE_PLUGIN_OPTION_IMPLEMENTATION_WORKER": "opus", "CLAUDE_PLUGIN_OPTION_WORKER_EFFORT": "high"},
+            "settings": {"pluginConfigs": {"hei5enbug-agent-setup@inline": {"options": {"implementation_worker": "sonnet"}}}}})
+
+        # when
+        settings = command.run_settings(variant, plugin_dir=REPO_ROOT)
+
+        # then
+        self.assertEqual(settings["pluginConfigs"]["hei5enbug-agent-setup@inline"]["options"],
+                         {"implementation_worker": "sonnet", "worker_effort": "high"})
+
+    def test_플러그인_이름은_실행하는_매니페스트에서_읽는다(self):
+        """매니페스트 name이 다르면 pluginConfigs 키도 그 이름으로 만들어진다."""
+        # given
+        variant = command.validate_variant({"name": "v", "ref": "HEAD", "env": {"CLAUDE_PLUGIN_OPTION_LANGUAGE": "ko"}})
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = Path(tmp, ".claude-plugin")
+            manifest.mkdir()
+            (manifest / "plugin.json").write_text(json.dumps({"name": "renamed-plugin"}), encoding="utf-8")
+
+            # when
+            settings = command.run_settings(variant, plugin_dir=Path(tmp))
+
+        # then
+        self.assertEqual(settings["pluginConfigs"], {"renamed-plugin@inline": {"options": {"language": "ko"}}})
+
     def test_승인_MCP_설정은_로그_경로를_환경으로_넘긴다(self):
         """mcp.json은 eval_approver 서버와 EVAL_APPROVAL_LOG 경로를 가진다."""
         # given / when

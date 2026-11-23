@@ -304,7 +304,9 @@ refused. `--lock-file` replaces the path for tests.
 
 A variant is a JSON file in `variants/`: `{"name", "ref", "plugin", "remove", "settings", "env", "extra_args"}`. `ref`
 is the plugin revision under test. `settings` merges into the run's `--settings` file, `env` into the agent's
-environment, and `extra_args` into its command line. A variant that adds a bypass flag, `--bare`,
+environment, and `extra_args` into its command line. In a Claude Code run, each `CLAUDE_PLUGIN_OPTION_<KEY>` in `env`
+also sets option `<key>` (lowercased) of the loaded plugin under `pluginConfigs` in that file, unless `settings` already
+sets that option; `settings` wins. A variant that adds a bypass flag, `--bare`,
 `--permission-mode`, or a flag the harness sets itself, such as `--setting-sources`, is rejected. The installed plugin
 and every plugin of the profile stay off whatever `settings` says, and the user's instruction files and auto memory
 stay out whatever `env` says.

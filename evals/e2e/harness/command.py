@@ -11,8 +11,8 @@ from typing import Any, Callable, Iterable
 
 from . import plugin_export
 from .config import (
-    AGENT_EFFORT, APPROVER_SERVER, APPROVER_TOOL, CLAUDE_SETTING_SOURCES, FORBIDDEN_ARGS, HARNESS_DIR, HOST_CLAUDE, HOST_CODEX, HOSTS,
-    ANCESTOR_INSTRUCTION_FILES, INSTALLED_PLUGIN_KEY, MAIN_MODELS, RESERVED_ARGS, HarnessConfig,
+    AGENT_EFFORT, APPROVER_SERVER, APPROVER_TOOL, CLAUDE_OPTION_PREFIX, CLAUDE_SETTING_SOURCES, FORBIDDEN_ARGS, HARNESS_DIR, HOST_CLAUDE, HOST_CODEX, HOSTS,
+    ANCESTOR_INSTRUCTION_FILES, INSTALLED_PLUGIN_KEY, MAIN_MODELS, PLUGIN_MANIFEST_PATH, RESERVED_ARGS, HarnessConfig,
 )
 
 APPROVER_SCRIPT = HARNESS_DIR / "approval_mcp.py"
@@ -146,18 +146,52 @@ def ancestor_excludes(cwd: Path) -> list[str]:
     return [f"{folder.rstrip('/')}/{name}" for folder in ancestors for name in ANCESTOR_INSTRUCTION_FILES]
 
 
-def run_settings(variant: dict[str, Any], profile_plugins: Iterable[str] = (), ancestor_patterns: Iterable[str] = ()) -> dict[str, Any]:
+def plugin_option_values(env: dict[str, str]) -> dict[str, str]:
+    """The plugin options that a variant's env sets, keyed by their lowercased names."""
+    return {key[len(CLAUDE_OPTION_PREFIX):].lower(): value for key, value in env.items()
+            if key.startswith(CLAUDE_OPTION_PREFIX) and len(key) > len(CLAUDE_OPTION_PREFIX)}
+
+
+def manifest_plugin_name(plugin_dir: Path) -> str:
+    """The `name` of the plugin manifest in `plugin_dir`, which is the plugin the run loads through `--plugin-dir`."""
+    try:
+        manifest = json.loads((plugin_dir / PLUGIN_MANIFEST_PATH).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise ConfigError(f"cannot read the plugin manifest in {plugin_dir}: {error}") from error
+    name = manifest.get("name") if isinstance(manifest, dict) else None
+    if not isinstance(name, str) or not name:
+        raise ConfigError(f"the plugin manifest in {plugin_dir} needs a string 'name'")
+    return name
+
+
+def with_plugin_options(settings: dict[str, Any], plugin_name: str, options: dict[str, str]) -> dict[str, Any]:
+    """Settings whose `pluginConfigs` entry of the inline plugin holds `options`; a key the settings already set keeps its value."""
+    configs = settings["pluginConfigs"] if isinstance(settings.get("pluginConfigs"), dict) else {}
+    source = f"{plugin_name}@inline"
+    entry = configs[source] if isinstance(configs.get(source), dict) else {}
+    kept = entry["options"] if isinstance(entry.get("options"), dict) else {}
+    return {**settings, "pluginConfigs": {**configs, source: {**entry, "options": {**options, **kept}}}}
+
+
+def run_settings(
+    variant: dict[str, Any], profile_plugins: Iterable[str] = (), ancestor_patterns: Iterable[str] = (), plugin_dir: str | None = None,
+) -> dict[str, Any]:
     """Default settings plus the variant's; the installed plugin and every plugin of the profile stay off whatever the variant says,
     and the ancestor instruction files named by `ancestor_patterns` stay excluded next to any `claudeMdExcludes` of the variant.
 
-    The variant under test loads through `--plugin-dir`, so no `enabledPlugins` entry names it."""
+    The variant under test loads through `--plugin-dir`, so no `enabledPlugins` entry names it. Each `CLAUDE_PLUGIN_OPTION_<KEY>`
+    of the variant's env becomes an option of the plugin manifest in `plugin_dir`, unless the variant's settings set that option."""
     off = {key: False for key in (*profile_plugins, INSTALLED_PLUGIN_KEY)}
     merged = merge_settings({"enabledPlugins": off}, variant["settings"])
     enabled = merged.get("enabledPlugins")
     own = merged.get("claudeMdExcludes")
     excludes = list(dict.fromkeys([*(own if isinstance(own, list) else []), *ancestor_patterns]))
-    return {**merged, "enabledPlugins": {**(enabled if isinstance(enabled, dict) else {}), **off},
-            **({"claudeMdExcludes": excludes} if excludes else {})}
+    settings = {**merged, "enabledPlugins": {**(enabled if isinstance(enabled, dict) else {}), **off},
+                **({"claudeMdExcludes": excludes} if excludes else {})}
+    options = plugin_option_values(variant["env"])
+    if options and plugin_dir is not None:
+        settings = with_plugin_options(settings, manifest_plugin_name(Path(plugin_dir)), options)
+    return settings
 
 
 def user_env(task: dict[str, Any], tasks_root: Path, result_dir: Path) -> dict[str, str]:

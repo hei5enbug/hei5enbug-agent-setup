@@ -8,14 +8,13 @@ from typing import Any, Iterable
 
 from . import plugin_export, rubric
 from .command import ConfigError, main_model
-from .config import HOST_CLAUDE, HOST_CODEX, HOSTS, MODEL_CAP, HarnessConfig
+from .config import CLAUDE_OPTION_PREFIX, HOST_CLAUDE, HOST_CODEX, HOSTS, MODEL_CAP, PLUGIN_MANIFEST_PATH, HarnessConfig
 from .transcript import result_event, role_runner_status
 
-OPTION_PREFIXES = {HOST_CLAUDE: "CLAUDE_PLUGIN_OPTION_", HOST_CODEX: "HEI5ENBUG_"}
+OPTION_PREFIXES = {HOST_CLAUDE: CLAUDE_OPTION_PREFIX, HOST_CODEX: "HEI5ENBUG_"}
 HOST_LABELS = {HOST_CLAUDE: "Claude Code", HOST_CODEX: "Codex"}
 MODEL_OPTION_SUFFIX = "_model"
 AUTO_VALUE = "auto"
-MANIFEST_PATH = ".claude-plugin/plugin.json"
 IGNORED_MODELS = frozenset({"", "unknown", "<synthetic>", "None"})
 BRACKET_SUFFIX = re.compile(r"\[[^\]]*\]$")
 DATE_SUFFIX = re.compile(r"-\d{8}$")
@@ -44,7 +43,7 @@ def manifest_defaults(cfg: HarnessConfig, ref: str) -> dict[str, str]:
     """
     try:
         sha = plugin_export.resolve_ref(cfg.repo_root, ref)
-        config = json.loads(plugin_export._git(cfg.repo_root, "show", f"{sha}:{MANIFEST_PATH}"))["userConfig"]
+        config = json.loads(plugin_export._git(cfg.repo_root, "show", f"{sha}:{PLUGIN_MANIFEST_PATH}"))["userConfig"]
     except (plugin_export.ExportError, ValueError, KeyError, TypeError):
         return {}
     return {key: str(spec.get("default") or "") for key, spec in config.items()
