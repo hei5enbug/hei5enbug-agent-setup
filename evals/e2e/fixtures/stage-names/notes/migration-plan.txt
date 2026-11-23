@@ -1,0 +1,10 @@
+Migration plan for the demo-orders table split
+
+Phase 1: Rollout
+  1. Schema extension
+  2. Backfill
+  3. Reads cutover
+
+Phase 2: Cleanup
+  1. Old path removal
+  2. Final confirmation

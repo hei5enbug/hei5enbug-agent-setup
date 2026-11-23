@@ -1,0 +1,3 @@
+The export now skips rows with an empty name instead of failing on them.
+
+- Changed `demo_a.py`, `demo_b.py`, and `demo_c.py`.

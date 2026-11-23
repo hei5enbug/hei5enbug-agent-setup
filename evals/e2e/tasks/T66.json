@@ -1,0 +1,54 @@
+{
+  "id": "T66",
+  "title": "Chat message draft that calls a division by its number and an item by a number that division also uses",
+  "category": "writing",
+  "path": "chat-message text",
+  "fixture": "stage-names",
+  "prompt_file": "prompts/T66.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/chat-message.txt"
+    },
+    {
+      "id": "division-named",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "division_named"
+    },
+    {
+      "id": "item-keeps-title-and-number",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "item_keeps_title_and_number"
+    },
+    {
+      "id": "no-number-alone",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_number_alone"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

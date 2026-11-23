@@ -183,7 +183,7 @@ def runner_list_cost(claude_report: dict[str, Any]) -> float:
 def build_metrics(
     *, run: dict[str, Any], task: dict[str, Any], view: dict[str, Any], facts: dict[str, Any],
     claude_report: dict[str, Any], codex_report: dict[str, Any], grade: dict[str, Any] | None,
-    rubric: dict[str, Any] | None, checks: dict[str, Any], usage_source: str,
+    rubric: dict[str, Any] | None, checks: dict[str, Any], usage_source: str, review_loop: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     grade = grade or {}
     return {
@@ -205,7 +205,8 @@ def build_metrics(
         "tool_calls_by_tool": tool_counts(view), "subagent_launches_by_type": launches_by_type(view),
         "role_runner_calls": runner_calls(view), "retries": count_retries(view),
         "approval_prompts": len(view["approvals"]), "permission_denials": len(view["permission_denials"]),
-        "handoff": handoff(grade), "delegation": delegation_summary(grade), "attempts": run.get("attempts", 1),
+        "handoff": handoff(grade), "delegation": delegation_summary(grade), "review_loop": review_loop,
+        "attempts": run.get("attempts", 1),
         "timed_out": run["status"] == STATUS_TIMED_OUT or bool(run.get("timed_out")),
         "usage_limited": run["status"] == STATUS_USAGE_LIMITED, "plugin": checks,
     }

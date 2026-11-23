@@ -1,0 +1,3 @@
+The nightly export now finishes within 20 minutes. The new config key is `export.window`.
+The nightly export now finishes within 20 minutes.
+The cleanup step removes the old export files after it runs.

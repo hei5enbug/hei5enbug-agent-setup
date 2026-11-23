@@ -19,6 +19,7 @@ KINDS = (
     "chat-message", "shared-document", "final-report", "other",
 )
 DEFAULT_MODEL = "gpt-6.1-sol"
+TOOL_MARK_HEADING = "## Cut item: tool marks"
 
 FAKE_RUNNER = textwrap.dedent(
     """
@@ -86,14 +87,16 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(0, result.returncode)
         self.assertEqual({"findings": [], "advisories": []}, json.loads(result.stdout))
 
-    def test_목록_항목_하나에_식별자_코드_세_개_이상이면_identifier_list로_보고한다(self):
+    def test_목록_항목_하나에_식별자_코드_세_개_이상이면_발견이_아니라_identifier_list_권고로_보고한다(self):
+        """올릴 곳의 규칙이 그 이름을 요구하는 줄에서 점검이 멈추면 검토자가 판단할 수 없으므로, 종료 코드 0인 권고로 검토자에게 넘긴다."""
         # given
-        text = "intro\n- Added `user_id`, `user_name`, and `user_email` columns\n- Added `one` and `two`\n"
+        text = "intro\n- Added `demo_a`, `demo_b`, and `demo_c` columns\n- Added `one` and `two`\n"
         # when
-        result = self.check(text)
+        result = self.check(text, "--kind", "pr-description")
         # then
-        self.assertEqual(1, result.returncode)
-        self.assertEqual([("identifier-list", 2)], rules_of(result))
+        self.assertEqual(0, result.returncode)
+        self.assertEqual([], rules_of(result))
+        self.assertEqual([("identifier-list", 2)], rules_of(result, "advisories"))
 
     def test_최종_보고가_통과하면_정규화한_해시를_내고_다른_종류와_실패한_점검에는_내지_않는다(self):
         # given
@@ -103,7 +106,8 @@ class CheckTest(unittest.TestCase):
         passed = self.check(text, "--kind", "final-report")
         padded_result = self.check(padded, "--kind", "final-report")
         other = self.check(text, "--kind", "pr-description")
-        failed = self.check("- Added `user_id`, `user_name`, and `user_email` columns\n", "--kind", "final-report")
+        failed = self.check("- Ran `a`\n- Ran `a`\n", "--kind", "final-report")
+        listed = self.check("- Added `demo_a`, `demo_b`, and `demo_c` columns\n", "--kind", "final-report")
         # then
         digest = json.loads(passed.stdout)["final_report_sha256"]
         self.assertRegex(digest, r"^[0-9a-f]{64}$")
@@ -111,6 +115,9 @@ class CheckTest(unittest.TestCase):
         self.assertNotIn("final_report_sha256", json.loads(other.stdout))
         self.assertEqual(1, failed.returncode)
         self.assertNotIn("final_report_sha256", json.loads(failed.stdout))
+        self.assertEqual(0, listed.returncode)
+        self.assertRegex(json.loads(listed.stdout)["final_report_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual([("identifier-list", 1)], rules_of(listed, "advisories"))
 
     def test_공백이_있는_코드_조각은_식별자로_세지_않는다(self):
         # given
@@ -127,16 +134,18 @@ class CheckTest(unittest.TestCase):
         result = self.check(text)
         # then
         self.assertEqual(0, result.returncode)
+        self.assertEqual({"findings": [], "advisories": []}, json.loads(result.stdout))
 
-    def test_issue_body_종류에는_identifier_list를_적용하지_않는다(self):
+    def test_issue_body_종류에는_identifier_list의_발견도_권고도_없다(self):
         # given
         text = "- Touch `a_1`, `b_2`, and `c_3`\n"
         # when
         issue = self.check(text, "--kind", "issue-body")
         pull_request = self.check(text, "--kind", "pr-description")
         # then
+        self.assertEqual({"findings": [], "advisories": []}, json.loads(issue.stdout))
         self.assertEqual(0, issue.returncode)
-        self.assertEqual([("identifier-list", 1)], rules_of(pull_request))
+        self.assertEqual([("identifier-list", 1)], rules_of(pull_request, "advisories"))
 
     def test_펜스_코드_블록_안의_내용은_모든_규칙에서_제외한다(self):
         # given
@@ -384,17 +393,98 @@ class ReviewTest(unittest.TestCase):
                 self.assertEqual(0, result.returncode, result.stdout)
                 self.assertIn(phrase, self.assignment())
 
-    def test_점검_발견이_있으면_검토자_실행기를_시작하지_않고_종료_코드_1을_낸다(self):
+    def test_최종_보고를_뺀_모든_종류의_과제에만_도구_표시_항목이_들어간다(self):
+        """최종 보고에 이 항목이 들어가면 독립 검증 한 줄까지 지우라는 보고가 나오고, 다른 종류에서 빠지면 모델 이름이 남으므로, 최종 보고만 뺀 모든 종류의 과제에 항목이 있다."""
+        for kind in KINDS:
+            with self.subTest(kind):
+                # given
+                self.draft.write_text(CLEAN_DRAFT, encoding="utf-8")
+                # when
+                result = self.review("none", kind=kind)
+                # then
+                self.assertEqual(0, result.returncode, result.stdout)
+                self.assertEqual(kind != "final-report", TOOL_MARK_HEADING in self.assignment())
+
+    def test_도구_표시_항목은_제목과_첫_문장의_표시도_지우라고_하고_서명_한_줄만_남긴다(self):
+        """검토자가 제목이나 커밋 제목의 모델 이름을 못 지우는 글로 보면 규칙이 무력해지므로, 항목이 그 예외를 뒤집고 목적어가 되는 도구와 서명 줄만 남긴다."""
         # given
-        self.draft.write_text("- `a_1`, `b_2`, `c_3`\n", encoding="utf-8")
+        self.draft.write_text(CLEAN_DRAFT, encoding="utf-8")
+        # when
+        result = self.review("none", kind="commit-message")
+        # then
+        self.assertEqual(0, result.returncode, result.stdout)
+        item = self.assignment().split(TOOL_MARK_HEADING)[1].split("\n## ")[0]
+        for phrase in ("a model name, version, or reasoning effort", "a title, a heading, a commit subject", "subject of the work",
+                       "last-line agent signature", "only the signature line", "request"):
+            self.assertIn(phrase, item)
+
+    def test_최종_보고의_독자에게는_검토_결과를_가리키는_한_줄과_남은_지적이_필요한_사실로_적힌다(self):
+        """검토자가 결과 한 줄이나 남은 지적을 지우라고 하면 사용자가 검토 결과를 찾지 못하므로, 최종 보고의 독자 문장이 둘을 필요하다고 적는다."""
+        # given
+        self.draft.write_text(CLEAN_DRAFT, encoding="utf-8")
+        # when
+        result = self.review("none", kind="final-report")
+        # then
+        self.assertEqual(0, result.returncode, result.stdout)
+        reader = self.assignment().split("Reader: ")[1].split("\n")[0]
+        self.assertIn("link or path of an independent review's result", reader)
+        self.assertIn("each finding left unresolved", reader)
+
+    def test_repeated_check_ticket_key_same_page_links_발견이_있으면_검토자_실행기를_시작하지_않고_종료_코드_1을_낸다(self):
+        drafts = {
+            "repeated-check": ("- Ran `a`\n- Ran `a`\n", ()),
+            "ticket-key": ("Fixes ABC-123.\n", ("--no-ticket-keys",)),
+            "same-page-links": ("See https://example.com/a and https://example.com/a#b.\n", ()),
+        }
+        for rule, (text, flags) in drafts.items():
+            with self.subTest(rule=rule):
+                # given
+                self.draft.write_text(text, encoding="utf-8")
+                # when
+                result = self.review("none", *flags)
+                # then
+                self.assertEqual(1, result.returncode)
+                payload = json.loads(result.stdout)
+                self.assertEqual("check", payload["stage"])
+                self.assertEqual(rule, payload["findings"][0]["rule"])
+                self.assertFalse((self.out / "started").exists())
+
+    def test_식별자_목록_줄은_점검에서_멈추지_않고_검토자_과제에_자기_설명과_함께_들어간다(self):
+        """올릴 곳의 규칙이 이름을 요구하는 줄은 검토자만 판단할 수 있으므로, 과제에 표시한 줄과 identifier-list 설명만 넣어 검토자를 실행한다."""
+        # given
+        line = "- Added `demo_a`, `demo_b`, and `demo_c` columns."
+        self.draft.write_text(line + "\n", encoding="utf-8")
         # when
         result = self.review("none")
         # then
-        self.assertEqual(1, result.returncode)
-        payload = json.loads(result.stdout)
-        self.assertEqual("check", payload["stage"])
-        self.assertEqual("identifier-list", payload["findings"][0]["rule"])
-        self.assertFalse((self.out / "started").exists())
+        self.assertEqual(0, result.returncode, result.stdout)
+        self.assertTrue((self.out / "started").exists())
+        text = self.assignment()
+        self.assertIn("## Lines the text check flagged", text)
+        self.assertIn(f"```\n{line}\n```", text)
+        self.assertIn("names three or more identifiers", text)
+        self.assertIn("Never report it when the destination's writing rules require those names", text)
+        self.assertNotIn("may say only that something is unchanged", text)
+
+    def test_표시한_줄이_한_규칙의_것이면_그_규칙의_설명만_과제에_들어간다(self):
+        # given
+        self.draft.write_text("The cache does not change.\n", encoding="utf-8")
+        # when
+        self.review("none")
+        # then
+        text = self.assignment()
+        self.assertIn("may say only that something is unchanged", text)
+        self.assertNotIn("names three or more identifiers", text)
+
+    def test_표시한_줄이_두_규칙의_것이면_두_설명이_모두_들어간다(self):
+        # given
+        self.draft.write_text("- Added `demo_a`, `demo_b`, and `demo_c`.\n\nThe cache does not change.\n", encoding="utf-8")
+        # when
+        self.review("none")
+        # then
+        text = self.assignment()
+        self.assertIn("may say only that something is unchanged", text)
+        self.assertIn("names three or more identifiers", text)
 
     def test_바뀌지_않는다는_문장은_점검에서_멈추지_않고_검토자_과제에_표시한_줄로_들어간다(self):
         """권고가 점검 단계에서 검토자에게 닿기 전에 멈추면 검토자와 메모가 판단할 수 없으므로, 과제에 표시한 줄 구역을 넣어 검토자를 실행한다."""
@@ -614,6 +704,37 @@ class ReviewTest(unittest.TestCase):
         self.assertEqual(2, no_draft.returncode)
         self.assertEqual(2, bad_budget.returncode)
         self.assertEqual(2, unreadable_rules.returncode)
+
+
+class ToolMarkRulesTest(unittest.TestCase):
+    def read(self, relative):
+        return " ".join((REPO_ROOT / relative).read_text(encoding="utf-8").split())
+
+    def test_마무리_규칙은_검토_결과를_한_줄로_가리키고_검토자_정보_나열은_더_이상_없다(self):
+        """보고에 검토자 모델과 강도를 적게 하는 문장이 남으면 도구 표시 규칙과 충돌하므로, 마무리에는 한 줄 규칙만 있고 나열 문장은 없다."""
+        # given
+        text = self.read("instructions/independent-model-validation.md")
+        # when
+        finalization = text.split("## Finalization")[1]
+        # then
+        self.assertIn("one line with the link or path of the review result", finalization)
+        self.assertIn("each finding left unresolved", finalization)
+        self.assertIn("no reviewer model, effort, pass count, finding categories, or safety proof", finalization)
+        self.assertNotIn("Report the resolved reviewer model", text)
+        self.assertNotIn("the safety fact and its proof level for an implementation review", finalization)
+        self.assertIn("sorts it into fix now, worth considering, note only, or rejected", finalization)
+
+    def test_공유_글_규칙은_검토_결과_한_줄과_남은_지적을_필요한_사실로_적고_도구_표시를_뺀다(self):
+        """공유 글 규칙에 이 두 규칙이 없으면 검토자와 작성자가 서로 다른 기준을 쓰므로, 삭제 항목에 도구 표시와 필요한 사실이 들어간다."""
+        # given
+        text = self.read("instructions/shared-text.md")
+        # when
+        cut_pass = text.split("1. Cut pass:")[1].split("2. Completeness pass:")[0]
+        # then
+        self.assertIn("A tool mark is a model name, version, or reasoning effort", cut_pass)
+        self.assertIn("last-line agent signature", cut_pass)
+        self.assertIn("the link or path of its review result", cut_pass)
+        self.assertIn("each finding left unresolved", cut_pass)
 
 
 if __name__ == "__main__":

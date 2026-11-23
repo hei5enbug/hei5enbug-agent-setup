@@ -1,0 +1,54 @@
+{
+  "id": "T25",
+  "title": "Pull request description whose notes name the model that reviewed the document",
+  "category": "writing",
+  "path": "pr-description text",
+  "fixture": "tool-marks",
+  "prompt_file": "prompts/T25.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/pr-description.txt"
+    },
+    {
+      "id": "tool-marks-absent",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "tool_marks_absent"
+    },
+    {
+      "id": "review-facts-kept",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "review_facts_kept"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**"
+      ]
+    },
+    {
+      "id": "ran-text-review",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "ran_text_review"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

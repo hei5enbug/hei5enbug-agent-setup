@@ -1,0 +1,5 @@
+[parser 변경 메모]
+
+요청: parser가 줄 끝의 빈 필드를 버리는 문제를 고친다. "a,b," 는 ["a", "b", ""]가 되어야 한다.
+배경: demo-model-x가 parser를 검토해 이 문제를 지적했고, 이 변경은 그 지적을 반영한다.
+제안된 커밋 제목: Apply demo-model-x review findings to the parser

@@ -1,0 +1,54 @@
+{
+  "id": "T65",
+  "title": "Ticket comment draft that refers to procedure stages by number alone",
+  "category": "writing",
+  "path": "ticket-comment text",
+  "fixture": "stage-names",
+  "prompt_file": "prompts/T65.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/ticket-comment.txt"
+    },
+    {
+      "id": "stages-named-in-order",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "stages_named_in_order"
+    },
+    {
+      "id": "no-stage-by-number-alone",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "no_stage_by_number_alone"
+    },
+    {
+      "id": "limits-kept",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "limits_kept"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

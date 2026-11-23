@@ -34,3 +34,7 @@
 python3 evals/text-flows/tf_pages.py --run-root <root> --campaign <name> \
   --flows F1=f1:claude,F2=f2:claude,F3=f3:codex,F4=f4:claude,F5=f5:claude --out <folder>
 ```
+
+`--tasks T13,T14,T17`는 다른 글쓰기 과제(T14, T16~T19, T22, T25~T30, T65, T66)를 페이지에 더한다. 커밋 메시지 과제는 실행한
+저장소의 마지막 커밋 메시지를 보여 준다. 한 변경의 이전 개정과 이후 개정 페이지는 흐름 둘로 만들며, 예를 들면
+`F1=h-text-before:claude,F2=h-text-after:claude`이다.

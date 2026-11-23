@@ -252,6 +252,8 @@ Run every command from the repository root. The default run root is
 | Print tables | `python3 evals/e2e/harness/cli.py summarize --campaign <name> [--out file.md]` |
 | Compare two variants | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | Export a revision only | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
+| Judge the loop-shape candidates and write their record | `python3 evals/e2e/harness/cli.py loop-record --campaign <name> --issue <n> --baseline <variant> --candidate a=<variant> [--candidate b=<variant>] [--combined <variant>] [--tasks T13,T14]` |
+| Build the combined revision of adopted loop-shape candidates and print its SHA | `python3 evals/e2e/harness/cli.py build-combined --base <baseline branch> --candidate <branch> --candidate <branch> [--worktree <folder>] [--dry-run]` |
 | Judge a change and write its record | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd [--claim-cases T36]] [--tasks T08]` |
 | Probe whether a Codex hook receives `request_user_input`; `--dry-run` starts nothing | `python3 evals/e2e/harness/cli.py probe-question-hook [--dry-run] [--dir <folder>] [--effort low]` |
 
@@ -335,6 +337,7 @@ Each `metrics.json` separates measured values from estimates.
 | Wall time, turns, tool calls by tool, subagent launches by type | Harness clock and the stream; Codex tool calls are counted under their own key. |
 | Role runner calls by role and exit code | Bash calls of `role_runner.py` and their status lines. |
 | Retries | A failing Bash command run again, an agent type launched again after an error, a role runner run again after a non-zero exit. |
+| `review_loop` | The independent text review loop of a run. `reviewer_runs` counts the `text_review.py review` calls of every session whose result shows the reviewer stage, and `check_stops` those that stopped at the deterministic check. `main_turns` counts the main session's model requests from the first request that issues `text_review.py review` or `role_runner.py language` to the end of the run, the post included; `main_tokens` are the tokens of the whole main session and `main_tokens_loop` those of the requests counted in `main_turns`. A run that never reviews has `loop_started` false and `main_turns` 0. |
 | Approval prompts, permission denials | `approvals.jsonl` and the result message. |
 | Spend including attempts, cost per success | Summary only: every attempt of a task, and that spend divided by the successes. A cell whose spend leaves out an attempt that holds no cost figure reads `>= <value> (incomplete)`, never a plain total. |
 | `grade_error` | Present when grading raised. `metrics.json` still holds usage, cost, and tool counts, and `run.json` records the same error. The summary leaves such a run out of the success and correctness statistics but counts its spend. `regrade` clears the error once grading succeeds. |
@@ -384,6 +387,41 @@ required, so the hidden-check result of a run stays comparable when a variant ro
 also require that the designer ran at `high`, and T112 that it ran at `xhigh`; the check reads the efforts that the
 designer's subagent record shows for its turns, which the transcript view keeps beside the Agent call's own `effort`.
 `tests/test_e2e_eval_ui_tasks.py` proves them, and skips the rendering tests when `bun` or Chrome is absent.
+
+T130 to T132 run the scripted review of `tasks/setup/review_loop_script.py` through `tools/review.py`; its run log sits in
+`review-state/` beside the repository, where the checks read how often it ran, and `tests/test_e2e_eval_review_loops.py`
+proves them. They have no text-review check and are not in `config/writing-surfaces.json`.
+
+T22 to T24 grade the draft that the agent saves for a separate review run, so their prompts tell the agent not to run
+`text_review.py`. T23 and T24 supply the first draft and the finding the first run returned, and the checks read the
+saved second draft by sentence patterns. They have no `text-review-clean` check and are not in
+`config/writing-surfaces.json`.
+
+T25 to T28 grade, by sentence patterns, whether a text leaves out the tool that did or checked the work: a pull
+request description and a commit message whose notes name a reviewing model, a commit message whose diff changes a
+model setting, and a thread message whose request asks to name the model. The agent runs under the normal rules,
+`text_review.py` included. They have no `text-review-clean` check and are not in `config/writing-surfaces.json`. T20
+also records the informational check `reviewer-not-named`, which fails when the final report names a reviewer model
+or an effort.
+
+T29 and T30 grade the first `text_review.py review` run of the agent, which the prompt tells it to run on the draft
+before changing it. The `identifier-lists` fixture holds a review reply draft and a pull request description draft,
+each with one list item of three identifier code spans, and the rules of each place. In T29 the rules require the
+names of the added tests, and the check `first-review-keeps-test-names` passes when that run reached the reviewer with
+kind `review-reply` and no `removable` finding quotes a test name; `test-names-kept` requires the three names in the
+saved reply. In T30 no rule asks for names and the diff shows the three files, and `first-review-cuts-file-list`
+passes when that run reached the reviewer with kind `pr-description` and a `removable` finding quotes a file name;
+`file-list-cut` requires the saved description to state the behavior change and to name no line with all three files.
+A run that stops at the check stage fails the first check. They have no `text-review-clean` check and are not in
+`config/writing-surfaces.json`.
+
+T65 and T66 grade, by sentence patterns, whether a text names a stage of a procedure or a division of a plan by its
+title instead of its number alone. The `stage-names` fixture holds a nine-stage rollout procedure and a plan with a
+division called Rollout. T65 is a ticket comment whose draft says "step 0" and "steps 3 to 8" and also states a nesting
+depth of 2 levels and a limit of 3 items, which must keep their numbers. T66 is a chat message whose draft calls the
+division "Phase 1" and its first item "1", which is the plan's Schema extension. A number counts as named when its
+title stands right beside it. The agent runs under the normal rules, `text_review.py` included. They have no
+`text-review-clean` check and are not in `config/writing-surfaces.json`.
 
 `tests/test_e2e_eval_graders.py` proves each task's graders: the unmodified fixture fails, and the reference
 solution in `tasks/reference/` passes.
@@ -464,6 +502,17 @@ informational checks show which translationese reference the review read and whe
 | T67 | notes-cli | Hook removal of a finished worker's worktree | A setting change, a worktree of demo-b created without an agent, and a worker started there; the turn ends with a question, and the worktree and its local branch must be removed by the hook's detached run, not by the session |
 | T76 | notes-cli | Question dialog wording | Ask whether to delete two lines of an issue draft's five-line done-checklist that repeat other lines, for a user who asked to see it as a picture |
 | T77 | notes-cli | Question dialog wording | Ask whether to drop two unused columns of `demo.orders`, for a user who asked to see the table as a picture |
+| T22 | review-rounds | Ticket comment, first draft | Comment whose work item requires each step's time before and after and whose proposal the result replaced |
+| T23 | review-rounds | Ticket comment, second draft | Revise a draft after a finding that it dropped the work item's exception for a first run without a cache |
+| T24 | review-rounds | Ticket comment, second draft | Revise a draft after a finding that "the check deletes a loose cache" can mean before or after the cache runs |
+| T25 | tool-marks | Pull request description | Notes say a document review by a named model at a stated effort found 3 problems, all applied, and the final text was not reviewed again |
+| T26 | tool-marks | Commit message | Parser fix whose change note suggests a subject that names the reviewing model |
+| T27 | tool-marks | Commit message | One-line change of a reviewer model setting from `demo-model-x` to `demo-model-y` |
+| T28 | tool-marks | Chat message | Thread message that the request tells to say a named model reviewed the document |
+| T29 | identifier-lists | Review reply | Draft whose rules require the names of the added tests and whose item names three added tests |
+| T30 | identifier-lists | Pull request description | Draft whose diff shows three changed files and whose item lists the three files, under rules that ask for no names |
+| T65 | stage-names | Ticket comment | Draft that runs "step 0" and "steps 3 to 8" of a nine-stage procedure and states a depth of 2 levels and 3 items |
+| T66 | stage-names | Chat message | Status draft that calls a division "Phase 1" and its first item "1", which are Rollout and Schema extension in the plan |
 | T78 | commit-demo | Commit skill, staged-only scope | Korean-subject history, one staged change beside an unstaged edit and an untracked `.env` |
 | T79 | commit-demo | Commit skill, required identifier | Commit rules that require a ticket key, and a request that names none |
 | T82 | demo-app | UI routing, complete specification | Four named-line edits to a settings panel; routes to the implementation worker |
@@ -505,6 +554,9 @@ informational checks show which translationese reference the review read and whe
 | T153 | inventory-service | Worker model on hard work, forced delegation | Cross-process locking of one data file across the app and the CLI (concurrency, a public contract, several components), handed to the implementation worker by the request; the worker's model comes from the variant's `implementation_worker` route |
 | T154 | skill-review-demo | Skill review role, grader | A `release-notes` run that misses one of three expectations, graded through Skill Builder; the grading marks exactly that expectation failed with a quote of the output, and a review-route run exists |
 | T155 | skill-review-demo | Skill review role, comparator | Two release-notes outputs where one breaks the stated limit of five bullets, compared blind through Skill Builder; the comparison prefers the other output, names the limit, and a review-route run exists |
+| T130 | ops-notes | Repeated review, no convergence | Fix `docs/guide.md` until a scripted `tools/review.py` reports nothing; it returns 5, 4, 6, and more new low findings |
+| T131 | ops-notes | Repeated review, convergence | The same request; the scripted review returns 2, 3, then 0 findings |
+| T132 | ops-notes | Repeated review, fix must spread | Three documents state a retry limit of 5 that `docs/decisions.md` sets to 3; the first run flags only one |
 
 T62 measures the worker rule that loads a named skill. Its setup script commits `CHANGELOG.md` and the skill under both
 `.claude/skills/` and `.agents/skills/`, and the prompt names the skill. The required check `skill-loaded` passes when a
@@ -627,6 +679,45 @@ task's, so the before variant's `0` replaces it and the after variant keeps `2`.
 comparison for the three cases, and the improvement claim of "Comparing a change on both hosts" for T36 only.
 `tests/test_parallel_limit_record.py` reads `records/97.json`: the shipped maximum in `config/parallel-limit.json` is `6`
 unless the claim of T36 is `accept`, and then it is `null`.
+
+### Loop-shape candidates
+
+Issue 102 compares changes to the shape of the independent text review loop on the writing tasks T13 to T20: (a) a worker
+of the `language` capability runs the loop, (b) every run passes `--reviews 2`, (c) a run after the first drops a
+`removable` finding outside the sentences changed since the previous run, and (d) the reviewer assignment asks for every
+problem found in the run instead of an empty list for a careful draft. `variants/loop-baseline.json` and
+`variants/loop-a.json` to `loop-d.json` name the revisions, the branches `p4-h-text` and `p4-h-text-102-a` to
+`p4-h-text-102-d`. Run
+the campaign from a checkout of the baseline revision: the text tasks grade with that checkout's `scripts/text_review.py`,
+while the agent runs the `scripts/text_review.py` of its exported variant.
+
+`loop-record` reads both hosts' runs of the baseline and of each `--candidate`, in the order they are adopted, and writes
+`records/<issue number>.json` with every run's `loop` measures (`review_loop` of `metrics.json`) and `passed`, and a
+`candidates` list with the verdict of each candidate and the step that decided it. `harness/loop_verdict.py` holds the
+steps. A candidate is adopted only when all three hold; the first failing one rejects it, and an unfinished one leaves it
+`undecided`:
+
+- Writing rule: on each host, over the first run of T13 to T20, no task whose `text-review-clean` check passed on the
+  baseline fails on the candidate, and the number of passing tasks does not fall.
+- Improvement claim: on T13, T15, and T20 the claim of the comparison rule above is accepted on both hosts with `cost_usd`
+  as the claimed measure.
+- Host comparison: on T13, T15, and T20 the case verdict of the comparison rule above passes.
+
+Two or more adopted candidates are then run together as `--combined` against the baseline in the same three steps; a
+combined revision that is rejected drops the candidate adopted last (`dropped` in its entry), and the combined revision of
+the rest runs again.
+
+`build-combined` creates that combined revision: it adds a detached scratch worktree at `--base` (default folder
+`<run-root>/combined/<base>+<candidates>`), merges each `--candidate` branch in the order given with `git merge --no-ff`, and
+prints the SHA of the resulting commit as its only output line (progress goes to stderr). The merge commits have a fixed
+identity and date, so the same inputs give the same SHA. It needs two or more distinct candidates that each descend from
+the base. A candidate that conflicts aborts that merge, removes the scratch worktree, and fails with the candidate and the
+conflicting files; an existing worktree folder is never overwritten. `--dry-run` prints the commands and creates nothing.
+Put the printed SHA in `ref` of the `loop-combined` variant file. Nothing but the worktree's detached HEAD refers to the
+commit, so run `git branch <name> <sha>` before removing the worktree with `git worktree remove`, or the commit can be
+collected by Git. `tests/test_e2e_eval_loop_record.py` finds the text of each candidate in the repository only when the
+record adopts it: `role_runner.py language` in `instructions/shared-text.md` for (a), `DEFAULT_REVIEWS = 2` for (b), and the
+changed-sentence section of `scripts/text_review.py` with its sentence in `instructions/shared-text.md` for (c).
 
 ### Records
 

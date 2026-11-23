@@ -1,0 +1,1 @@
+notes/pr-draft.txt는 PR 설명 초안이야. 변경 diff는 notes/pr-diff.diff야. 작성 규칙은 docs/writing-rules.md의 PR 설명 항목이야. 초안은 고치기 전에 먼저 그대로 text_review.py로 검토하고, 그 결과에 맞춰 다듬어서 그대로 올릴 수 있게 out/pr-description.txt에 저장해줘.

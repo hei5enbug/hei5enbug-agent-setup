@@ -1,0 +1,3 @@
+Draft of the status message for the team chat.
+
+Phase 1 is in progress. Item 1 is merged and waits for the release; items 2 and 3 are next.

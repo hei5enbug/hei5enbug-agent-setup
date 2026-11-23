@@ -1,0 +1,78 @@
+{
+  "id": "T26",
+  "title": "Commit message whose notes suggest a subject that names the reviewing model",
+  "category": "writing",
+  "path": "commit-message text",
+  "fixture": "tool-marks",
+  "prompt_file": "prompts/T26.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "hidden_tests": {
+    "source": "hidden/T26",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden"
+    },
+    {
+      "id": "one-commit",
+      "kind": "git_commits",
+      "required": true,
+      "weight": 2,
+      "min": 1,
+      "max": 1,
+      "subject_max": 72
+    },
+    {
+      "id": "tree-clean",
+      "kind": "git_clean",
+      "required": true,
+      "weight": 1
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "message-without-model",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "message_without_model"
+    },
+    {
+      "id": "subject-names-parser",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "subject_names_parser"
+    },
+    {
+      "id": "ran-text-review",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "ran_text_review"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

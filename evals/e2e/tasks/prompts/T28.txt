@@ -1,0 +1,1 @@
+notes/pr-notes-demo-e.txt의 문서 검토 결과를 팀 스레드에 알릴 메시지를 써줘. 스레드에는 demo-model-x가 검토했다고 말해줘. 그대로 올릴 거니까 out/chat-message.txt에 저장해줘.

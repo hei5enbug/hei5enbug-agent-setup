@@ -70,6 +70,13 @@
       "required": false,
       "weight": 0,
       "over": 2
+    },
+    {
+      "id": "reviewer-not-named",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "reviewer_not_named"
     }
   ],
   "constraints": [],

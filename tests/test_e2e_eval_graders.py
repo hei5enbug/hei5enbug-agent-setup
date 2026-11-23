@@ -1,4 +1,4 @@
-"""Unit tests for the end-to-end evaluation graders, the line coverage tool, and the twenty golden tasks."""
+"""Unit tests for the end-to-end evaluation graders, the line coverage tool, and the golden tasks."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ sys.path.insert(0, str(E2E_ROOT))
 from harness import coverage_tool, graders  # noqa: E402
 from harness.process import GradingInterrupted  # noqa: E402
 
-TASK_IDS = [f"T{number:02d}" for number in range(1, 21)] + ["T62"]
+TASK_IDS = [f"T{number:02d}" for number in range(1, 21)] + ["T22", "T23", "T24", "T25", "T26", "T27", "T28", "T29", "T30", "T62", "T65", "T66"]
 SECRET = "demo-4f8k2q-local-only-7731"
 GIT_ENV = {
     **os.environ, "GIT_AUTHOR_NAME": "Demo Dev", "GIT_AUTHOR_EMAIL": "dev@example.com",
@@ -78,6 +78,14 @@ def make_view(final_answer: str = "", commands: tuple[str, ...] = (), results: t
                "source": "main"} for i, text in enumerate(results)]
     return {"final_answer": final_answer, "assistant_texts": list(texts), "tool_calls": calls,
             "delegations": list(delegations), "approvals": [], "permission_denials": []}
+
+
+def review_view(kind: str, findings: list[dict], stage: str = "review", exit_code: int = 0) -> dict[str, Any]:
+    """A view whose first Bash call ran text_review.py review and printed one JSON line."""
+    payload = {"stage": stage, "findings": findings, **({"kind": kind} if stage == "review" else {})}
+    view = make_view("done", commands=("python3 scripts/text_review.py review --kind x --draft notes/d.txt",))
+    view["tool_calls"][0]["result_text"] = f"Exit code {exit_code}\n" + json.dumps(payload)
+    return view
 
 
 def delegation(kind: str, klass: str, prompt: str = "", exit_code: int | None = None, ident: str = "d1") -> dict:
@@ -956,6 +964,17 @@ EXPECTED_FAILURES = {
     "T19": {"output-exists", "restart-fact-kept", "unneeded-sentence-removed", "text-review-clean"},
     "T20": {"hidden-tests", "report-check", "text-review-clean"},
     "T62": {"hidden-tests", "readme-count", "mirror-updated", "changelog-entry", "skill-loaded"},
+    "T22": {"output-exists", "step-times-listed", "marker-replaced-mode-check"},
+    "T23": {"output-exists", "exception-and-test-kept"},
+    "T24": {"output-exists", "run-before-delete-stated"},
+    "T25": {"output-exists", "tool-marks-absent", "review-facts-kept"},
+    "T26": {"hidden-tests", "one-commit", "message-without-model", "subject-names-parser"},
+    "T27": {"reviewer-model-y", "one-commit", "message-names-new-model"},
+    "T28": {"output-exists", "model-named"},
+    "T29": {"output-exists", "first-review-keeps-test-names", "test-names-kept"},
+    "T30": {"output-exists", "first-review-cuts-file-list", "file-list-cut"},
+    "T65": {"output-exists", "stages-named-in-order", "no-stage-by-number-alone", "limits-kept"},
+    "T66": {"output-exists", "division-named", "item-keeps-title-and-number", "no-number-alone"},
 }
 #: required checks that must already pass on the unmodified fixture (they guard against collateral damage)
 EXPECTED_PASSES = {
@@ -968,6 +987,11 @@ EXPECTED_PASSES = {
     "T16": {"sources-unchanged"}, "T17": {"regressions", "tree-clean"}, "T18": {"sources-unchanged"},
     "T19": {"sources-unchanged"}, "T20": {"regressions", "tests-pass"},
     "T62": {"regressions"},
+    "T22": {"sources-unchanged"}, "T23": {"sources-unchanged"}, "T24": {"sources-unchanged"},
+    "T25": {"sources-unchanged"}, "T26": {"regressions", "tree-clean"},
+    "T27": {"regressions", "tree-clean", "only-config-changed"}, "T28": {"sources-unchanged"},
+    "T29": {"sources-unchanged"}, "T30": {"sources-unchanged"},
+    "T65": {"sources-unchanged"}, "T66": {"sources-unchanged"},
 }
 CLEAN_REVIEW = json.dumps({"review": {"output": '{"findings": []}', "exit_code": 0},
                            "check": {"output": '{"findings": []}', "exit_code": 0}})
@@ -1011,12 +1035,16 @@ class GoldenTaskTest(TempCase):
                              commands=("git status --short", "rm -r build dist"))
         if task_id == "T17":
             return make_view("done", commands=RAN_REVIEW, skills=("hei5enbug-agent-setup:suggest-commit",))
-        if task_id in TEXT_TASK_IDS:
+        if task_id in ("T29", "T30"):
+            kind = "review-reply" if task_id == "T29" else "pr-description"
+            quote = "- Changed `demo_a.py`, `demo_b.py`, and `demo_c.py`." if task_id == "T30" else "- Ran x"
+            return review_view(kind, [{"type": "removable", "quote": quote, "reason": "y"}] if task_id == "T30" else [])
+        if task_id in TEXT_TASK_IDS or task_id in ("T25", "T26"):
             return make_view(FINAL_REPORT if task_id == "T20" else "done", commands=RAN_REVIEW)
         return make_view("done")
 
     def test_모든_과제_정의는_파일과_검사_종류가_유효하다(self):
-        """스무 과제 모두 프롬프트, 픽스처, 숨은 테스트, 설정 스크립트, 사용자 지정 검사 함수가 실제로 있다."""
+        """모든 과제가 프롬프트, 픽스처, 숨은 테스트, 설정 스크립트, 사용자 지정 검사 함수가 실제로 있다."""
         for task_id in TASK_IDS:
             with self.subTest(task_id):
                 # given
@@ -1584,6 +1612,332 @@ class GoldenTaskTest(TempCase):
 
         # then
         self.assertFalse(passed)
+
+    def test_T22는_단계별_시간이나_표식_파일_설명이_빠진_초안을_각각_잡는다(self):
+        """요약만 옮긴 초안은 step-times-listed가, 시간만 적은 초안은 marker-replaced-mode-check가 실패한다."""
+        # given
+        task, repo, base = self.materialize("T22")
+        (repo / "out").mkdir()
+        draft = repo / "out" / "comment-draft.txt"
+        draft.write_text("전체적으로 빨라졌고 표식 파일을 쓰도록 바꿨습니다. 모드 확인은 하지 않았습니다.\n", encoding="utf-8")
+        summary_only = self.outcome(task, repo, base, make_view(), "step-times-listed")
+        draft.write_text("가져오기 42초에서 18초, 변환 55초에서 31초, 내보내기 27초에서 12초입니다.\n", encoding="utf-8")
+
+        # when
+        times_only = self.outcome(task, repo, base, make_view(), "marker-replaced-mode-check")
+
+        # then
+        self.assertEqual((summary_only[0], times_only[0]), (False, False))
+
+    def test_T22는_모드_확인과_표식_파일을_이웃한_두_문장에_나눠_쓴_초안을_통과시키고_멀리_떨어진_언급은_잡는다(self):
+        """모드 확인을 빼고 표식 파일로 바꿨다는 내용이 이웃한 두 문장에 나뉘면 통과하고, 사이에 다른 문장이 끼면 실패한다."""
+        # given
+        task, repo, base = self.materialize("T22")
+        (repo / "out").mkdir()
+        draft = repo / "out" / "comment-draft.txt"
+        draft.write_text("제안과 달리 입력 파일의 모드는 확인하지 않습니다. 대신 단계 완료 시 표식 파일을 씁니다.\n", encoding="utf-8")
+        adjacent = self.outcome(task, repo, base, make_view(), "marker-replaced-mode-check")
+        draft.write_text("입력 파일의 모드는 확인하지 않습니다. 결과는 같습니다. 단계가 끝나면 표식 파일을 씁니다.\n", encoding="utf-8")
+
+        # when
+        apart = self.outcome(task, repo, base, make_view(), "marker-replaced-mode-check")
+
+        # then
+        self.assertEqual((adjacent[0], apart[0]), (True, False))
+
+    def test_T23은_예외를_다시_빠뜨리거나_기준을_통째로_되풀이한_초안을_각각_잡는다(self):
+        """예외 없는 한정 문장은 no-unqualified-limit-claim이, 기준 전체를 한 문장에 되풀이하면 criterion-not-restated가 실패한다."""
+        # given
+        task, repo, base = self.materialize("T23")
+        (repo / "out").mkdir()
+        draft = repo / "out" / "comment-draft.txt"
+        draft.write_text("각 단계는 제한 시간 안에 끝납니다. 캐시 없는 첫 실행은 테스트가 다룹니다.\n", encoding="utf-8")
+        unqualified = self.outcome(task, repo, base, make_view(), "no-unqualified-limit-claim")
+        draft.write_text("각 단계는 제한 시간 안에 끝나지만 캐시 없는 첫 실행은 예외이고 테스트가 다룹니다.\n", encoding="utf-8")
+
+        # when
+        restated = self.outcome(task, repo, base, make_view(), "criterion-not-restated")
+
+        # then
+        self.assertEqual((unqualified[0], restated[0]), (False, False))
+
+    def test_T23은_예외만_있고_테스트_설명이_없으면_exception_and_test_kept가_실패한다(self):
+        """테스트가 이 경우를 다룬다는 말이 없으면 예외를 적어도 실패한다."""
+        # given
+        task, repo, base = self.materialize("T23")
+        (repo / "out").mkdir()
+        (repo / "out" / "comment-draft.txt").write_text("캐시 없는 첫 실행은 가져오기가 95초였습니다.\n", encoding="utf-8")
+
+        # when
+        passed, _ = self.outcome(task, repo, base, make_view(), "exception-and-test-kept")
+
+        # then
+        self.assertFalse(passed)
+
+    def test_T24는_순서가_모호하거나_반대인_문장을_잡고_분리된_두_문장은_통과시킨다(self):
+        """원래의 모호한 문장과 실행 전에 삭제한다는 문장은 실패하고, 한 번 실행된 뒤 삭제한다는 두 문장은 통과한다."""
+        # given
+        task, repo, base = self.materialize("T24")
+        (repo / "out").mkdir()
+        draft = repo / "out" / "comment-draft.txt"
+        outcomes = []
+        for text in ("검사가 느슨한 캐시를 삭제합니다.\n", "캐시가 실행되기 전에 한 번 삭제합니다.\n"):
+            draft.write_text(text, encoding="utf-8")
+            outcomes.append(self.outcome(task, repo, base, make_view(), "run-before-delete-stated")[0])
+        draft.write_text("느슨한 캐시는 한 번 실행됩니다. 그 뒤 검사가 삭제합니다.\n", encoding="utf-8")
+
+        # when
+        split = self.outcome(task, repo, base, make_view(), "run-before-delete-stated")
+
+        # then
+        self.assertEqual((outcomes, split[0]), ([False, False], True))
+
+    def write_out(self, repo: Path, name: str, text: str) -> None:
+        (repo / "out").mkdir(exist_ok=True)
+        (repo / "out" / name).write_text(text, encoding="utf-8")
+
+    def test_T25는_모델_이름_추론_강도_AI_표현을_각각_잡고_검토_사실이_빠진_설명도_잡는다(self):
+        """모델 이름, 추론 강도, 에이전트가 검토했다는 표현이 남으면 tool-marks-absent가, 반영 사실이나 다시 검토하지 않은 사실이 빠지면 review-facts-kept가 실패한다."""
+        # given
+        task, repo, base = self.materialize("T25")
+        kept = "검토 지적 3개를 모두 반영했습니다. 반영한 뒤의 최종 문서는 다시 검토하지 않았습니다."
+        marked = {
+            "model": f"demo-model-x가 {kept}", "effort": f"추론 강도 high로 검토했습니다. {kept}",
+            "agent": f"에이전트가 검토했습니다. {kept}",
+        }
+        outcomes = {}
+        for name, text in marked.items():
+            self.write_out(repo, "pr-description.txt", text + "\n")
+            outcomes[name] = self.outcome(task, repo, base, make_view(), "tool-marks-absent")[0]
+        self.write_out(repo, "pr-description.txt", "문서 검토 지적을 모두 반영했습니다.\n")
+        no_gap = self.outcome(task, repo, base, make_view(), "review-facts-kept")[0]
+        self.write_out(repo, "pr-description.txt", "링크 검사를 돌렸습니다.\n")
+
+        # when
+        no_review = self.outcome(task, repo, base, make_view(), "review-facts-kept")[0]
+
+        # then
+        self.assertEqual((outcomes, no_gap, no_review), ({"model": False, "effort": False, "agent": False}, False, False))
+
+    def test_T25는_도구_표시_없이_두_검토_사실을_적으면_통과한다(self):
+        """모델 이름 없이 검토 지적을 반영했고 최종 문서를 다시 검토하지 않았다고 적은 설명은 두 검사를 통과한다."""
+        # given
+        task, repo, base = self.materialize("T25")
+        self.write_out(repo, "pr-description.txt", "문서 검토에서 나온 문제 3개를 모두 반영했습니다.\n반영 후 최종 문서는 다시 검토하지 않았습니다.\n")
+
+        # when
+        result = self.grade_task(task, repo, base, make_view())
+
+        # then
+        outcome = {check["id"]: check["passed"] for check in result["checks"]}
+        self.assertEqual((outcome["tool-marks-absent"], outcome["review-facts-kept"]), (True, True))
+
+    def test_T26은_제안된_제목을_그대로_쓴_커밋이나_본문에_모델을_적은_커밋을_잡는다(self):
+        """제목이나 본문에 demo-model-x가 있으면 message-without-model이, 제목이 parser를 말하지 않으면 subject-names-parser가 실패한다."""
+        # given
+        task, repo, base = self.materialize("T26")
+        apply_reference("T26", repo)
+        run_git(repo, "commit", "-q", "--amend", "-m", "feat: apply demo-model-x review findings to the parser")
+        in_subject = self.outcome(task, repo, base, make_view(), "message-without-model")[0]
+        run_git(repo, "commit", "-q", "--amend", "-m", "fix: keep the trailing field\n\nFound by demo-model-x.")
+        in_body = self.outcome(task, repo, base, make_view(), "message-without-model")
+        no_parser = self.outcome(task, repo, base, make_view(), "subject-names-parser")[0]
+        run_git(repo, "commit", "-q", "--amend", "-m", "fix: keep the trailing empty field in the parser")
+
+        # when
+        clean = self.outcome(task, repo, base, make_view(), "message-without-model")[0]
+
+        # then
+        self.assertEqual((in_subject, in_body[0], no_parser, clean), (False, False, False, True))
+
+    def test_T27은_새_모델_이름을_메시지에서_뺀_커밋을_잡는다(self):
+        """diff가 정하는 새 모델 demo-model-y를 메시지가 말하지 않으면 message-names-new-model이 실패한다."""
+        # given
+        task, repo, base = self.materialize("T27")
+        apply_reference("T27", repo)
+        run_git(repo, "commit", "-q", "--amend", "-m", "chore: switch the reviewer model")
+        without = self.outcome(task, repo, base, make_view(), "message-names-new-model")[0]
+        run_git(repo, "commit", "-q", "--amend", "-m", "chore: switch the reviewer model to demo-model-y")
+
+        # when
+        named = self.outcome(task, repo, base, make_view(), "message-names-new-model")[0]
+
+        # then
+        self.assertEqual((without, named), (False, True))
+
+    def test_T28은_요청이_말하라고_한_모델_이름을_뺀_메시지를_잡는다(self):
+        """요청이 모델 이름을 적으라고 했는데 메시지에서 빼면 model-named가 실패한다."""
+        # given
+        task, repo, base = self.materialize("T28")
+        self.write_out(repo, "chat-message.txt", "문서 검토를 마쳤고 지적을 모두 반영했습니다.\n")
+
+        # when
+        without = self.outcome(task, repo, base, make_view(), "model-named")[0]
+        self.write_out(repo, "chat-message.txt", "demo-model-x가 검토했고 지적을 모두 반영했습니다.\n")
+        named = self.outcome(task, repo, base, make_view(), "model-named")[0]
+
+        # then
+        self.assertEqual((without, named), (False, True))
+
+    def identifier_outcomes(self, task_id: str, name: str, text: str | None, view: dict) -> dict[str, bool]:
+        task = self.load(task_id)
+        repo = Path(tempfile.mkdtemp(dir=self.root))
+        base = graders.materialize_fixture(task, FIXTURES_ROOT, TASKS_ROOT, repo)
+        if text is not None:
+            self.write_out(repo, name, text)
+        result = graders.grade_run(task, repo, base, view, TASKS_ROOT, Path(tempfile.mkdtemp(dir=self.root)))
+        return {check["id"]: check["passed"] for check in result["checks"]}
+
+    def test_T29는_점검에서_멈춘_첫_검토와_필수_이름을_지울_거리로_본_검토와_이름을_뺀_답글을_각각_잡는다(self):
+        """첫 검토가 점검 단계에서 멈추거나 시험 이름을 removable로 보고하면 first-review-keeps-test-names가, 답글에서 이름이 빠지면 test-names-kept가 실패한다."""
+        # given
+        full = "- Added `test_demo_alpha`, `test_demo_beta`, and `test_demo_gamma`.\n"
+        removable = [{"type": "removable", "quote": "Added `test_demo_alpha`", "reason": "y"}]
+        missing = [{"type": "missing", "quote": "Added tests", "reason": "y"}]
+        first = ("first-review-keeps-test-names", "test-names-kept")
+
+        # when
+        results = {name: self.identifier_outcomes("T29", "review-reply.txt", text, view) for name, text, view in (
+            ("kept", full, review_view("review-reply", [])),
+            ("stopped", full, review_view("review-reply", [], stage="check", exit_code=1)),
+            ("removable", full, review_view("review-reply", removable, exit_code=1)),
+            ("other_finding", full, review_view("review-reply", missing, exit_code=1)),
+            ("wrong_kind", full, review_view("issue-body", [])),
+            ("never_ran", full, make_view("done")),
+            ("names_dropped", "Added three tests.\n", review_view("review-reply", [])))}
+
+        # then
+        self.assertEqual([results["kept"][name] for name in first], [True, True])
+        self.assertFalse(results["stopped"]["first-review-keeps-test-names"])
+        self.assertFalse(results["removable"]["first-review-keeps-test-names"])
+        self.assertTrue(results["other_finding"]["first-review-keeps-test-names"])
+        self.assertFalse(results["wrong_kind"]["first-review-keeps-test-names"])
+        self.assertFalse(results["never_ran"]["first-review-keeps-test-names"])
+        self.assertEqual([results["names_dropped"][name] for name in first], [True, False])
+
+    def test_T30은_점검에서_멈춘_첫_검토와_파일_목록을_남긴_설명과_행동_변화를_뺀_설명을_각각_잡는다(self):
+        """첫 검토가 점검에서 멈추거나 파일 목록을 removable로 보고하지 않으면 first-review-cuts-file-list가, 목록이 남거나 행동 변화가 빠지면 file-list-cut이 실패한다."""
+        # given
+        listed = "Rows with an empty name are skipped.\n\n- Changed `demo_a.py`, `demo_b.py`, and `demo_c.py`.\n"
+        cut = "Rows with an empty name are skipped.\n"
+        removable = [{"type": "removable", "quote": "Changed `demo_a.py`, `demo_b.py`", "reason": "y"}]
+        first = ("first-review-cuts-file-list", "file-list-cut")
+
+        # when
+        results = {name: self.identifier_outcomes("T30", "pr-description.txt", text, view) for name, text, view in (
+            ("cut", cut, review_view("pr-description", removable, exit_code=1)),
+            ("stopped", cut, review_view("pr-description", [], stage="check", exit_code=1)),
+            ("not_reported", cut, review_view("pr-description", [])),
+            ("kept_list", listed, review_view("pr-description", removable, exit_code=1)),
+            ("no_behavior", "Updated the export.\n", review_view("pr-description", removable, exit_code=1)))}
+
+        # then
+        self.assertEqual([results["cut"][name] for name in first], [True, True])
+        self.assertEqual([results["stopped"][name] for name in first], [False, True])
+        self.assertEqual([results["not_reported"][name] for name in first], [False, True])
+        self.assertEqual([results["kept_list"][name] for name in first], [True, False])
+        self.assertEqual([results["no_behavior"][name] for name in first], [True, False])
+
+    def test_T29와_T30의_초안은_점검에서_멈추지_않고_식별자_목록_권고만_낸다(self):
+        """픽스처의 두 초안이 새 점검에서 종료 코드 0이고 식별자 목록 권고가 있으므로, 검토자에게 닿는지가 과제의 판단 대상이다."""
+        for name, kind in (("reply-draft.txt", "review-reply"), ("pr-draft.txt", "pr-description")):
+            with self.subTest(name):
+                # given
+                draft = FIXTURES_ROOT / "identifier-lists" / "notes" / name
+
+                # when
+                result = subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "text_review.py"), "check", "--kind", kind,
+                                         str(draft)], capture_output=True, text=True, timeout=60)
+
+                # then
+                payload = json.loads(result.stdout)
+                self.assertEqual(0, result.returncode)
+                self.assertEqual(([], ["identifier-list"]), ([item["rule"] for item in payload["findings"]],
+                                                              [item["rule"] for item in payload["advisories"]]))
+
+    def stage_outcomes(self, task_id: str, text: str, checks: tuple[str, ...]) -> dict[str, bool]:
+        task = self.load(task_id)
+        repo = Path(tempfile.mkdtemp(dir=self.root))
+        base = graders.materialize_fixture(task, FIXTURES_ROOT, TASKS_ROOT, repo)
+        name = "ticket-comment.txt" if task_id == "T65" else "chat-message.txt"
+        self.write_out(repo, name, text)
+        result = graders.grade_run(task, repo, base, make_view(), TASKS_ROOT, Path(tempfile.mkdtemp(dir=self.root)))
+        return {check["id"]: check["passed"] for check in result["checks"] if check["id"] in checks}
+
+    def test_T65는_번호만으로_부른_단계와_제목이_틀리거나_순서가_바뀐_단계를_잡는다(self):
+        """"step 0"과 "steps 3 to 8"처럼 번호만 쓰거나, 단계에 다른 단계의 제목을 붙이거나, 순서를 바꾸면 해당 검사가 실패하고, 번호 옆에 제목을 둔 글은 통과한다."""
+        # given
+        limits = "Keep nesting at a depth of at most 2 levels and list at most 3 items."
+        checks = ("stages-named-in-order", "no-stage-by-number-alone", "limits-kept")
+        titled = "Run 0 Check and build first, then 3 Compare, 4 Enable reads, 5 Enable writes, 6 Watch, 7 Remove old path, and 8 Confirm in order. " + limits
+        by_number = "Run step 0 first, then steps 3 to 8 in order. " + limits
+        wrong_title = titled.replace("3 Compare", "3 Load data")
+        reordered = titled.replace("0 Check and build first, then 3 Compare", "3 Compare first, then 0 Check and build")
+        number_beside_range = titled.replace("then 3 Compare, 4 Enable reads", "then 3 to 4 Compare, Enable reads")
+
+        # when
+        outcomes = {name: self.stage_outcomes("T65", text, checks) for name, text in (
+            ("titled", titled), ("by_number", by_number), ("wrong_title", wrong_title), ("reordered", reordered),
+            ("number_beside_range", number_beside_range))}
+
+        # then
+        self.assertEqual(outcomes["titled"], {"stages-named-in-order": True, "no-stage-by-number-alone": True, "limits-kept": True})
+        self.assertEqual([outcomes["by_number"][name] for name in checks], [False, False, True])
+        self.assertFalse(outcomes["wrong_title"]["no-stage-by-number-alone"])
+        self.assertFalse(outcomes["reordered"]["stages-named-in-order"])
+        self.assertFalse(outcomes["number_beside_range"]["no-stage-by-number-alone"])
+
+    def test_T65는_깊이와_개수의_숫자를_지우거나_바꾸면_실패하고_수량_옆_숫자는_단계로_보지_않는다(self):
+        """"2 levels"와 "3 items"의 숫자가 사라지거나 바뀌면 limits-kept가 실패하고, 같은 숫자를 단계 번호로 오인하지 않는다."""
+        # given
+        titled = "Run 0 Check and build first, then 3 Compare, 4 Enable reads, 5 Enable writes, 6 Watch, 7 Remove old path, and 8 Confirm in order. "
+        kept = titled + "Keep nesting at a depth of at most 2 levels and list at most 3 items."
+        removed = titled + "Keep nesting shallow and the lists short."
+        changed = titled + "Keep nesting at a depth of at most 3 levels and list at most 2 items."
+
+        # when
+        results = [self.stage_outcomes("T65", text, ("limits-kept", "no-stage-by-number-alone"))
+                   for text in (kept, removed, changed)]
+
+        # then
+        self.assertEqual(results[0], {"limits-kept": True, "no-stage-by-number-alone": True})
+        self.assertEqual([result["limits-kept"] for result in results[1:]], [False, False])
+
+    def test_T66은_번호만으로_부른_구간과_제목_없는_항목과_한_번호가_두_대상을_가리키는_글을_잡는다(self):
+        """"Phase 1"만 쓰거나, 항목 1이 제목이나 번호를 잃거나, 번호만 남은 항목이 있으면 해당 검사가 실패하고, 구간 제목과 항목 제목 옆 번호를 쓴 글은 통과한다."""
+        # given
+        checks = ("division-named", "item-keeps-title-and-number", "no-number-alone")
+        titled = "Rollout is in progress. 1 Schema extension is merged and waits for the release; 2 Backfill and 3 Reads cutover are next."
+        beside = "Phase 1 (Rollout) is in progress. Item 1 (Schema extension) is merged; items 2 (Backfill) and 3 (Reads cutover) are next."
+        by_number = "Phase 1 is in progress. Item 1 is merged and waits for the release; items 2 and 3 are next."
+        no_number = "Rollout is in progress. Schema extension is merged and waits for the release."
+        phase_alone = "Phase 1 is in progress. 1 Schema extension is merged and waits for the release."
+
+        # when
+        outcomes = {name: self.stage_outcomes("T66", text, checks) for name, text in (
+            ("titled", titled), ("beside", beside), ("by_number", by_number), ("no_number", no_number),
+            ("phase_alone", phase_alone))}
+
+        # then
+        self.assertEqual(outcomes["titled"], dict.fromkeys(checks, True))
+        self.assertEqual(outcomes["beside"], dict.fromkeys(checks, True))
+        self.assertEqual([outcomes["by_number"][name] for name in checks], [False, False, False])
+        self.assertEqual(outcomes["no_number"]["item-keeps-title-and-number"], False)
+        self.assertEqual([outcomes["phase_alone"][name] for name in checks], [False, True, False])
+
+    def test_T20은_최종_보고가_검토_모델이나_강도를_적으면_reviewer_not_named가_실패한다(self):
+        """모델 ID나 강도를 적은 보고는 실패하고, 검토 결과 한 줄만 적은 보고는 통과한다."""
+        # given
+        task, repo, base = self.materialize("T20")
+        named = "독립 검토(gpt-6.1-sol, high)가 지적 없이 끝났습니다."
+        effort = "독립 검토를 high 추론 강도로 한 번 읽기 전용으로 돌렸습니다."
+        line = "검토 결과: .review/memo-search.md, 남은 지적은 없습니다."
+
+        # when
+        results = [self.outcome(task, repo, base, make_view(text), "reviewer-not-named")[0] for text in (named, effort, line)]
+
+        # then
+        self.assertEqual(results, [False, False, True])
 
     def test_T18은_표를_다시_풀어_쓴_문단과_빠뜨린_내용을_각각_잡는다(self):
         """초안 그대로면 restatement-removed가, 표와 일정을 지우면 kept-content가 실패한다."""

@@ -60,7 +60,10 @@ another listed link already covers; an offer to do more if the reader wants, or 
 the author made; and items of one kind that should be one line.
 
 Completeness pass: report each decision, condition, prerequisite, order, or completion criterion that the sources or \
-the request require and the draft lacks, and each sentence with two readings.
+the request require and the draft lacks, and each sentence with two readings. Also report each stage, phase, or \
+division of a procedure or plan that the draft refers to by its number alone, such as "step 0", without its title \
+beside the number, and each number that names two things. A number that states a quantity or a value, such as a \
+depth limit, a count, or a version, is not one.
 
 When a length budget is given and the draft exceeds it, also list each fact that cutting to the budget would lose. An \
 author's note gives the author's reason for keeping a sentence that an earlier run flagged; accept or reject each \
@@ -79,11 +82,43 @@ Answer with one JSON object in a ```json fence and nothing after it:
 An empty findings list means the draft passes.
 """
 
-FLAGGED_HEADING = "## Lines the text check flagged\n"
-FLAGGED_EXPLANATION = (
-    "Each line below may say only that something is unchanged. Report it as removable unless a reader would act "
-    "wrongly without it.\n"
+TOOL_MARK_HEADING = "## Cut item: tool marks\n"
+TOOL_MARK_ITEM = """\
+Also report as removable each tool mark that says which tool did or checked the work. The text states only the kind \
+of check and its result. A tool mark is a model name, version, or reasoning effort; an agent host; a plugin, script, \
+runner, session, or worker name; or wording that says an AI or an agent did it. Report it also inside a title, a \
+heading, a commit subject, or an opening sentence, which the cut pass above otherwise never removes, and quote only \
+the phrase there. These are not tool marks: a tool that is the subject of the work, such as a model setting that the \
+diff changes or the tool a ticket is about, and a last-line agent signature such as `by <agent host>` that the \
+destination's rules require on a review comment or reply. The destination's rules keep only the signature line: \
+report any other signature, credit, or provenance line even when they ask for it. When the request in the sources \
+asks the text to name a tool, a tool mark that the request names is not removable.
+"""
+
+STAGE_REFERENCES = (
+    re.compile(r"\b(?i:steps?|stages?|phases?)\s+\d+(?![\dA-Za-z_])(?!\s*[:：(–—-])(?!\s+[A-Z\"“`*])"),
+    re.compile(r"(?<![\w.])\d+\s*단계(?!\s*[:：(–—-])"),
+    re.compile(r"단계\s*\d+(?!\d)"),
 )
+STAGE_QUANTITY_BEFORE = re.compile(r"(?:최대|최소|깊이|수준)\s*$")
+STAGE_QUANTITY_AFTER = re.compile(r"\s*(?:이내|이하|이상|미만|초과)")
+
+FLAGGED_HEADING = "## Lines the text check flagged\n"
+FLAGGED_EXPLANATIONS = {
+    "unchanged-only": (
+        "Each line below may say only that something is unchanged. Report it as removable unless a reader would act "
+        "wrongly without it.\n"
+    ),
+    "identifier-list": (
+        "Each line below is a list item that names three or more identifiers. Report it as removable when its names "
+        "only repeat what a diff or source the reader sees already lists. Never report it when the destination's "
+        "writing rules require those names, such as the commands run or the tests added.\n"
+    ),
+    "stage-number-alone": (
+        "Each line below may refer to a stage, phase, or division of a procedure or plan by its number alone. Report "
+        "it as ambiguous unless its title stands beside the number or the number states a quantity or a value.\n"
+    ),
+}
 
 READERS = {
     "pr-description": "a reviewer who sees the diff next to this text.",
@@ -98,7 +133,9 @@ READERS = {
         "them, such as an uncommitted change, a skipped step and why it was skipped, or a failing check, is a fact "
         "they need, and so is the regression each new test catches. A file, function, or test name they need not "
         "open or act on, how the work went, such as earlier failures, retries, or who did each part, and a count "
-        "they did not ask for are not."
+        "they did not ask for are not. When independent validation ran, the one line that gives the link or path of "
+        "an independent review's result, and each finding left unresolved, are facts they need; the reviewer model, "
+        "effort, pass count, finding categories, and safety proof are not."
     ),
     "other": "someone who reads only this text and its links.",
 }
@@ -239,6 +276,16 @@ def unchanged_only(lines: list[tuple[int, str]]) -> list[dict]:
             if any(pattern.search(without_code(line)) for pattern in patterns)]
 
 
+def stage_number_alone(lines: list[tuple[int, str]]) -> list[dict]:
+    found = []
+    for number, line in lines:
+        plain = without_code(line)
+        if any(not (STAGE_QUANTITY_BEFORE.search(plain[:match.start()]) or STAGE_QUANTITY_AFTER.match(plain, match.end()))
+               for pattern in STAGE_REFERENCES for match in pattern.finditer(plain)):
+            found.append(finding("stage-number-alone", number, line))
+    return found
+
+
 def links_of(line: str) -> list[tuple[int, str]]:
     plain = without_code(line)
     found = [(match.start(1), match.group(1)) for match in LINK_TARGET.finditer(plain)]
@@ -271,11 +318,12 @@ def check_text(text: str, kind: str | None, no_ticket_keys: bool) -> tuple[list[
     numbered = dict(lines)
     items = collect_items(lines)
     found = repeated_check(items, numbered) + same_page_links(lines)
+    advisories = unchanged_only(lines) + stage_number_alone(lines)
     if kind not in AGENT_FACING_KINDS:
-        found += identifier_list(items, numbered)
+        advisories += identifier_list(items, numbered)
     if no_ticket_keys:
         found += ticket_key(lines)
-    return sort_items(found), sort_items(unchanged_only(lines))
+    return sort_items(found), sort_items(advisories)
 
 
 def sort_items(items: list[dict]) -> list[dict]:
@@ -297,13 +345,20 @@ def named_files(heading: str, files: list[tuple[str, str]]) -> list[str]:
 def flagged_section(advisories: list[dict]) -> list[str]:
     if not advisories:
         return []
-    lines = "\n".join(item["text"] for item in advisories)
-    return [FLAGGED_HEADING, FLAGGED_EXPLANATION, f"{fenced(lines)}\n"]
+    parts = [FLAGGED_HEADING]
+    for rule, explanation in FLAGGED_EXPLANATIONS.items():
+        lines = "\n".join(item["text"] for item in advisories if item["rule"] == rule)
+        if lines:
+            parts += [explanation, f"{fenced(lines)}\n"]
+    return parts
 
 
 def build_assignment(kind: str, draft: str, rules: list, sources: list, notes: list[str], budget: int | None,
                      advisories: list[dict]) -> str:
-    parts = [REVIEWER_INSTRUCTIONS, f"Text kind: {kind}\n", f"Reader: {READERS[kind]}\n"]
+    parts = [REVIEWER_INSTRUCTIONS]
+    if kind != FINAL_REPORT_KIND:
+        parts += [TOOL_MARK_HEADING, TOOL_MARK_ITEM]
+    parts += [f"Text kind: {kind}\n", f"Reader: {READERS[kind]}\n"]
     parts += flagged_section(advisories)
     parts += named_files("Destination writing rules", rules)
     parts += named_files("Sources", sources)

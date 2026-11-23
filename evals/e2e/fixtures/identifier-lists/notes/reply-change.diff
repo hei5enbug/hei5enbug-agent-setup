@@ -1,0 +1,14 @@
+diff --git a/tests/test_export.py b/tests/test_export.py
+--- a/tests/test_export.py
++++ b/tests/test_export.py
+@@ -10,0 +11,15 @@
++def test_demo_alpha():
++    assert export_orders([]) == "id,total\n"
++
++
++def test_demo_beta():
++    assert export_orders([Order(1, 30)]) == "id,total\n1,30\n"
++
++
++def test_demo_gamma():
++    assert export_orders([Order(2, 40, cancelled=True)]) == "id,total\n"

@@ -14,11 +14,23 @@ import html
 import json
 import random
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 KINDS = {"T13": ("PR description", "out/pr-description.txt"), "T15": ("Issue body", "out/issue-body.txt"), "T20": ("Final report", None)}
+COMMIT = "git:commit-message"
+EXTRA_KINDS = {
+    "T14": ("Review reply", "out/review-reply.txt"), "T16": ("Ticket comment", "out/ticket-comment.txt"),
+    "T17": ("Commit message", COMMIT), "T18": ("Chat message", "out/chat-message.txt"), "T19": ("Wiki page", "out/wiki-page.txt"),
+    "T22": ("Ticket comment, first draft", "out/comment-draft.txt"), "T25": ("PR description, tool marks", "out/pr-description.txt"),
+    "T26": ("Commit message, tool marks", COMMIT), "T27": ("Commit message, model setting", COMMIT),
+    "T28": ("Chat message, named model", "out/chat-message.txt"), "T29": ("Review reply, test names", "out/review-reply.txt"),
+    "T30": ("PR description, file names", "out/pr-description.txt"), "T65": ("Ticket comment, stage titles", "out/ticket-comment.txt"),
+    "T66": ("Chat message, division title", "out/chat-message.txt"),
+}
+ALL_KINDS = {**KINDS, **EXTRA_KINDS}
 MODEL_REVIEW_CHECKS = ("text-review-clean", "ran-text-review")
 DEFAULT_SEED = "text-flows-2026-11"
 
@@ -41,7 +53,11 @@ def read_json(path: Path) -> Any:
 
 
 def text_of(root: Path, campaign: str, task: str, variant: str, host: str) -> str | None:
-    relative = KINDS[task][1]
+    relative = ALL_KINDS[task][1]
+    if relative == COMMIT:
+        done = subprocess.run(["git", "-C", str(work_repo(root, campaign, task, variant, host)), "log", "-1", "--format=%B"],
+                              capture_output=True, text=True, check=False)
+        return done.stdout.strip() if done.returncode == 0 and done.stdout.strip() else None
     if relative is None:
         view = read_json(run_dir(root, campaign, task, variant, host) / "view.json") or {}
         text = str(view.get("final_answer", "")).strip()
@@ -157,14 +173,15 @@ def page(task: str, texts: dict[str, str]) -> str:
     sections = "\n".join(
         fill(SECTION, {"LABEL": label, "PLAIN": html.escape(text), "RAW": protect_raw(text), "OPTIONS": options})
         for label, text in sorted(texts.items()))
-    return fill(PAGE, {"TITLE": KINDS[task][0], "TASK": task, "SECTIONS": sections, "MARKED_URL": MARKED_URL, "MARKED_SRI": MARKED_SRI})
+    return fill(PAGE, {"TITLE": ALL_KINDS[task][0], "TASK": task, "SECTIONS": sections, "MARKED_URL": MARKED_URL, "MARKED_SRI": MARKED_SRI})
 
 
-def build(root: Path, campaign: str, flows: dict[str, tuple[str, str]], out: Path, seed: str = DEFAULT_SEED) -> dict[str, Any]:
+def build(root: Path, campaign: str, flows: dict[str, tuple[str, str]], out: Path, seed: str = DEFAULT_SEED,
+          tasks: tuple[str, ...] | None = None) -> dict[str, Any]:
     out.mkdir(parents=True, exist_ok=True)
     key: dict[str, dict[str, str]] = {}
     summary: dict[str, dict[str, Any]] = {}
-    for task in KINDS:
+    for task in tasks or KINDS:
         texts = {flow: text_of(root, campaign, task, *flows[flow]) for flow in flows}
         summary[task] = {flow: form_summary(root, campaign, task, *flows[flow]) for flow in flows}
         present = [flow for flow, text in texts.items() if text]
@@ -185,8 +202,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--flows", required=True, help="F1=<variant>:<claude|codex>,...")
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--seed", default=DEFAULT_SEED)
+    parser.add_argument("--tasks", help="comma-separated writing tasks; default T13,T15,T20, and any of " + ",".join(EXTRA_KINDS))
     args = parser.parse_args(argv)
-    print(json.dumps(build(args.run_root, args.campaign, parse_flows(args.flows), args.out, args.seed)))
+    tasks = tuple(item for item in (args.tasks or "").split(",") if item) or None
+    unknown = [task for task in tasks or () if task not in ALL_KINDS]
+    if unknown:
+        parser.error(f"unknown writing task {unknown}")
+    print(json.dumps(build(args.run_root, args.campaign, parse_flows(args.flows), args.out, args.seed, tasks)))
     return 0
 
 

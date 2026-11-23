@@ -1,0 +1,40 @@
+{
+  "id": "T28",
+  "title": "Thread message that the request tells to name the reviewing model",
+  "category": "writing",
+  "path": "chat-message text",
+  "fixture": "tool-marks",
+  "prompt_file": "prompts/T28.txt",
+  "limits": {
+    "wall_seconds": 1200,
+    "max_budget_usd": 8
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/chat-message.txt"
+    },
+    {
+      "id": "model-named",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "model_named"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "docs/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

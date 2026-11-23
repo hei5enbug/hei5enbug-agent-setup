@@ -1,0 +1,3 @@
+# Review settings
+reviewer_model: demo-model-x
+max_findings: 20

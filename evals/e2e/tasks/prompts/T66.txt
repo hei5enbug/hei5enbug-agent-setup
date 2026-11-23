@@ -1,0 +1,1 @@
+notes/status-draft.txt는 팀 채팅에 올릴 진행 상황 초안이야. 계획은 notes/migration-plan.txt에 있어. 다듬어서 그대로 올릴 수 있게 out/chat-message.txt에 저장해줘. 작성 규칙은 docs/writing-rules.md의 채팅 메시지 항목이야.

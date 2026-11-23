@@ -226,6 +226,8 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 | 표 출력 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> [--out file.md]` |
 | 두 변형 비교 | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | 리비전 내보내기만 하기 | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
+| 루프 모양 후보를 판정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py loop-record --campaign <name> --issue <n> --baseline <variant> --candidate a=<variant> [--candidate b=<variant>] [--combined <variant>] [--tasks T13,T14]` |
+| 채택한 루프 모양 후보를 합친 개정을 만들고 SHA 출력 | `python3 evals/e2e/harness/cli.py build-combined --base <기준 브랜치> --candidate <브랜치> --candidate <브랜치> [--worktree <폴더>] [--dry-run]` |
 | 변경을 판정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd [--claim-cases T36]] [--tasks T08]` |
 | Codex 훅이 `request_user_input`을 받는지 프로브한다. `--dry-run`은 아무것도 시작하지 않는다 | `python3 evals/e2e/harness/cli.py probe-question-hook [--dry-run] [--dir <folder>] [--effort low]` |
 
@@ -305,6 +307,7 @@ Ctrl-C 같은 하네스 중단은 새 실행을 시작하지 않고, 실행 중�
 | 경과 시간, 턴, 도구별 호출, 유형별 서브에이전트 실행 | 하네스 시계와 스트림. Codex 도구 호출은 따로 센다. |
 | 역할과 종료 코드별 role runner 호출 | `role_runner.py` Bash 호출과 그 상태 줄. |
 | 재시도 | 실패한 Bash 명령의 재실행, 오류 뒤 같은 에이전트 유형의 재실행, 0이 아닌 종료 뒤 role runner 재실행. |
+| `review_loop` | 실행에서 독립 글 검토 루프의 수치. `reviewer_runs`는 모든 세션의 `text_review.py review` 호출 중 결과가 검토자 단계를 보인 것의 수이고, `check_stops`는 결정적 점검에서 멈춘 것의 수다. `main_turns`는 `text_review.py review`나 `role_runner.py language`를 낸 첫 요청부터 실행 끝까지, 게시까지 포함한 메인 세션의 모델 요청 수다. `main_tokens`는 메인 세션 전체의 토큰이고 `main_tokens_loop`는 `main_turns`로 센 요청들의 토큰이다. 검토를 한 번도 하지 않은 실행은 `loop_started`가 거짓이고 `main_turns`가 0이다. |
 | 승인 질문, 권한 거부 | `approvals.jsonl`과 결과 메시지. |
 | 시도 포함 지출, 성공당 비용 | 요약에만 있다. 작업의 모든 시도를 합친 지출과, 그 지출을 성공 수로 나눈 값. 비용 값이 없는 시도를 뺀 지출의 칸은 완전한 합계가 아니라 `>= <값> (incomplete)`로 적는다. |
 | `grade_error` | 채점이 예외를 냈을 때만 있다. `metrics.json`에는 사용량, 비용, 도구 호출 수가 그대로 남고 `run.json`에도 같은 오류를 적는다. 요약은 이런 실행을 성공과 정확도 통계에서 빼고 지출에는 더한다. 채점이 성공하면 `regrade`가 오류를 지운다. |
@@ -351,6 +354,37 @@ UI 작업(T82~T84, T112)은 `harness/render.py`로 `demo-app` 픽스처의 화�
 기록이 보여 주는 턴별 사고 강도를 읽는다. 변환된 대화 기록 뷰는 이 값을 Agent 호출 자체의 `effort` 옆에 둔다.
 `tests/test_e2e_eval_ui_tasks.py`가 이를 증명하며, `bun`이나 Chrome이 없으면 렌더링 테스트를
 건너뛴다.
+
+T130~T132는 `tasks/setup/review_loop_script.py`의 스크립트 검토를 `tools/review.py`로 실행하며, 그 실행 기록은 저장소 옆
+`review-state/`에 남고 검사는 거기서 몇 번 실행됐는지 읽는다. `tests/test_e2e_eval_review_loops.py`가 이를 증명한다. 이 과제에는
+글 검토 검사가 없고 `config/writing-surfaces.json`에도 들어 있지 않다.
+
+T22~T24는 에이전트가 별도의 검토 실행에 보내려고 저장한 초안을 채점하므로, 프롬프트가 `text_review.py`를 돌리지
+말라고 한다. T23과 T24는 첫 초안과 첫 실행이 낸 지적을 함께 주고, 검사는 저장된 두 번째 초안을 문장 패턴으로
+읽는다. 이 작업에는 `text-review-clean` 검사가 없고 `config/writing-surfaces.json`에도 들어 있지 않다.
+
+T25~T28은 글이 작업을 했거나 확인한 도구를 빼는지를 문장 패턴으로 채점한다. 메모가 검토한 모델을 밝히는 풀 리퀘스트
+설명과 커밋 메시지, diff가 모델 설정을 바꾸는 커밋 메시지, 요청이 모델 이름을 밝히라고 하는 스레드 메시지가 대상이다.
+에이전트는 `text_review.py`를 포함해 평소 규칙대로 실행한다. 이 작업에는 `text-review-clean` 검사가 없고
+`config/writing-surfaces.json`에도 들어 있지 않다. T20은 최종 보고가 검토 모델이나 강도를 적으면 실패하는 정보 검사
+`reviewer-not-named`도 기록한다.
+
+T29와 T30은 에이전트가 초안을 고치기 전에 먼저 돌리라고 프롬프트가 지시한 첫 `text_review.py review` 실행을 채점한다.
+`identifier-lists` 픽스처에는 식별자 코드 조각 세 개가 든 목록 항목이 하나씩 있는 리뷰 답글 초안과 풀 리퀘스트 설명
+초안, 그리고 각 게시 위치의 규칙이 있다. T29는 규칙이 추가한 테스트의 이름을 요구하고, 그 실행이 종류 `review-reply`로
+검토자에게 닿았고 `removable` 지적이 시험 이름을 인용하지 않으면 `first-review-keeps-test-names`가 통과한다.
+`test-names-kept`는 저장한 답글에 세 이름이 모두 있어야 통과한다. T30은 이름을 요구하는 규칙이 없고 diff가 세 파일을
+보여 주며, 그 실행이 종류 `pr-description`으로 검토자에게 닿았고 `removable` 지적이 파일 이름을 인용하면
+`first-review-cuts-file-list`가 통과한다. `file-list-cut`은 저장한 설명이 행동 변화를 밝히고 세 파일을 모두 적은 줄이
+없어야 통과한다. 점검 단계에서 멈춘 실행은 첫 검사에서 실패한다. 이 작업에는 `text-review-clean` 검사가 없고
+`config/writing-surfaces.json`에도 들어 있지 않다.
+
+T65와 T66은 글이 절차의 단계나 계획의 구분을 번호만이 아니라 제목으로 부르는지를 문장 패턴으로 채점한다.
+`stage-names` 픽스처에는 아홉 단계의 롤아웃 절차와 Rollout이라는 구분이 든 계획이 있다. T65는 초안이 "step 0"과
+"steps 3 to 8"이라고 쓰고, 중첩 깊이 2단계와 항목 3개라는 한도도 적은 티켓 댓글이며, 두 한도는 숫자를 지켜야 한다.
+T66은 초안이 구분을 "Phase 1", 그 첫 항목을 "1"이라고 부르는 채팅 메시지이고, 계획에서 이 둘은 Rollout과 Schema
+extension이다. 제목이 번호 바로 옆에 있으면 번호가 이름을 얻은 것으로 본다. 에이전트는 `text_review.py`를 포함해 평소
+규칙대로 실행한다. 이 작업에는 `text-review-clean` 검사가 없고 `config/writing-surfaces.json`에도 들어 있지 않다.
 
 `tests/test_e2e_eval_graders.py`는 작업마다 채점기를 증명한다. 수정하지 않은 픽스처는 실패하고
 `tasks/reference/`의 기준 해답은 통과한다.
@@ -425,6 +459,17 @@ T110과 T111은 답을 프롬프트에 주어 실행이 쓰기와 다시 읽기�
 | T67 | notes-cli | 훅이 끝난 worker의 worktree를 삭제 | 설정 변경, 에이전트 없이 만든 demo-b의 worktree, 거기서 시작한 worker. 턴을 질문으로 끝내며, worktree와 로컬 브랜치는 세션이 아니라 훅의 분리 실행이 삭제해야 한다 |
 | T76 | notes-cli | 질문 대화상자 문구 | 이슈 초안의 다섯 줄 완료 체크리스트 중 다른 줄과 겹치는 두 줄을 지울지 묻기. 사용자는 그림으로 보고 싶다고 했다 |
 | T77 | notes-cli | 질문 대화상자 문구 | `demo.orders`에서 안 쓰는 두 열을 지울지 묻기. 사용자는 테이블을 그림으로 보고 싶다고 했다 |
+| T22 | review-rounds | 티켓 코멘트, 첫 초안 | 작업 항목이 단계별 변경 전후 시간을 요구하고 결과가 제안을 다른 방식으로 바꾼 코멘트 |
+| T23 | review-rounds | 티켓 코멘트, 두 번째 초안 | 캐시 없는 첫 실행이라는 작업 항목의 예외를 빠뜨렸다는 지적 뒤의 초안 수정 |
+| T24 | review-rounds | 티켓 코멘트, 두 번째 초안 | "검사가 느슨한 캐시를 삭제한다"가 캐시 실행 전인지 뒤인지 두 가지로 읽힌다는 지적 뒤의 초안 수정 |
+| T25 | tool-marks | 풀 리퀘스트 설명 | 메모가, 이름이 있는 모델이 정해진 강도로 문서를 검토해 문제 3개를 찾았고 모두 반영했으며 최종 문서는 다시 검토하지 않았다고 말함 |
+| T26 | tool-marks | 커밋 메시지 | 변경 메모가 검토한 모델 이름을 넣은 제목을 제안하는 parser 수정 |
+| T27 | tool-marks | 커밋 메시지 | 검토 모델 설정을 `demo-model-x`에서 `demo-model-y`로 바꾸는 한 줄 변경 |
+| T28 | tool-marks | 채팅 메시지 | 이름이 있는 모델이 문서를 검토했다고 말하라고 요청이 지시한 스레드 메시지 |
+| T29 | identifier-lists | 리뷰 답글 | 규칙이 추가한 테스트의 이름을 요구하고 항목이 추가한 테스트 셋의 이름을 적은 초안 |
+| T30 | identifier-lists | 풀 리퀘스트 설명 | diff가 바뀐 파일 셋을 보여 주고 항목이 그 셋을 나열한 초안이며, 규칙은 이름을 요구하지 않음 |
+| T65 | stage-names | 티켓 댓글 | 아홉 단계 절차의 "step 0"과 "steps 3 to 8"을 실행하라고 쓰고 깊이 2단계와 항목 3개를 적은 초안 |
+| T66 | stage-names | 채팅 메시지 | 구분을 "Phase 1", 첫 항목을 "1"이라고 부른 진행 상황 초안이며, 계획에서 둘은 Rollout과 Schema extension임 |
 | T78 | commit-demo | 커밋 스킬, 스테이징만 범위 | 한국어 제목 기록, 스테이징한 변경 하나와 스테이징하지 않은 수정, 추적되지 않는 `.env` |
 | T79 | commit-demo | 커밋 스킬, 필수 식별자 | 티켓 키를 요구하는 커밋 규칙과 키를 말하지 않은 요청 |
 | T82 | demo-app | UI 라우팅, 완전한 명세 | 설정 패널의 이름 붙은 줄 네 곳 수정, 구현 워커로 라우팅 |
@@ -466,6 +511,9 @@ T110과 T111은 답을 프롬프트에 주어 실행이 쓰기와 다시 읽기�
 | T153 | inventory-service | 어려운 작업의 worker 모델, 위임 강제 | 앱과 CLI에 걸친 데이터 파일 하나의 프로세스 간 잠금(동시성, 공개 계약, 여러 구성요소)을 요청으로 구현 worker에게 맡김. worker의 모델은 변형의 `implementation_worker` 경로가 정함 |
 | T154 | skill-review-demo | skill 검토 역할, 채점기 | 기대 항목 셋 중 하나를 놓친 `release-notes` 실행을 Skill Builder로 채점함. 채점은 정확히 그 항목만 실패로 표시하고 출력을 인용하며, 검토 경로 실행이 있어야 함 |
 | T155 | skill-review-demo | skill 검토 역할, 비교기 | 글머리표 다섯 개 한도를 어긴 출력과 지킨 출력을 Skill Builder로 블라인드 비교함. 비교는 지킨 출력을 고르고 그 한도를 밝히며, 검토 경로 실행이 있어야 함 |
+| T130 | ops-notes | 반복 검토, 수렴하지 않음 | 스크립트로 짠 `tools/review.py`가 지적을 내지 않을 때까지 `docs/guide.md`를 고침. 지적이 5건, 4건, 6건, 그 뒤로도 새 낮은 심각도로 나옴 |
+| T131 | ops-notes | 반복 검토, 수렴 | 같은 요청이며 스크립트 검토가 2건, 3건, 0건을 냄 |
+| T132 | ops-notes | 반복 검토, 수정이 퍼져야 함 | 문서 세 곳이 재시도 한도를 5로 적었고 `docs/decisions.md`는 3으로 정했으며, 첫 실행은 한 곳만 짚음 |
 
 T62는 지목한 스킬을 불러오는 worker 규칙을 측정합니다. 설정 스크립트가 `CHANGELOG.md`와 스킬을 `.claude/skills/`와
 `.agents/skills/` 양쪽에 커밋하고, 프롬프트가 그 스킬을 지목합니다. 필수 검사 `skill-loaded`는 worker가 스킬을 불러왔을 때
@@ -567,6 +615,40 @@ T140과 T141는 저장된 기록의 경로를 알려 주고, 실행이 무엇을
 `record --issue 97 --tasks T35,T05,T36 --claim wall_seconds --claim-cases T36`은 기록 하나를 쓴다. 세 사례의 품질과 호스트 비교, 그리고
 T36에만 적용되는 "두 호스트에서 변경 비교"의 개선 주장이다. `tests/test_parallel_limit_record.py`는 `records/97.json`을 읽는다.
 `config/parallel-limit.json`의 출하 상한은 T36의 주장이 `accept`가 아니면 `6`이고, `accept`이면 `null`이다.
+
+### 루프 모양 후보
+
+이슈 102는 글쓰기 작업 T13~T20에서 독립 글 검토 루프의 모양을 바꾸는 변경을 비교한다. (a) `language` 능력의 작업자가
+루프를 돌린다. (b) 모든 실행이 `--reviews 2`를 넘긴다. (c) 첫 실행 뒤의 실행은 직전 실행 이후 바뀐 문장 밖의
+`removable` 지적을 버린다. (d) 검토자 배정서가 깐깐한 초안에는 빈 목록을 내라는 말 대신 이번 실행에서 찾은 문제를 모두
+내라고 요청한다. `variants/loop-baseline.json`과 `variants/loop-a.json`~`loop-d.json`이 개정, 곧 브랜치
+`p4-h-text`와 `p4-h-text-102-a`~`p4-h-text-102-d`를 가리킨다. 캠페인은 기준선 개정의 체크아웃에서 돌린다. 글 작업은 그
+체크아웃의 `scripts/text_review.py`로 채점하고, 에이전트는 내보낸 변형의 `scripts/text_review.py`를 실행한다.
+
+`loop-record`는 기준선과 각 `--candidate`(채택하는 순서대로)의 두 호스트 실행을 읽어, 실행마다 `loop` 수치(`metrics.json`의
+`review_loop`)와 `passed`, 후보마다 판정과 판정한 단계를 적은 `candidates` 목록을 `records/<이슈 번호>.json`에 쓴다. 단계는
+`harness/loop_verdict.py`에 있다. 후보는 셋이 모두 성립할 때만 채택하고, 처음 실패한 단계가 거부하며, 끝나지 않은
+단계가 있으면 `undecided`로 둔다.
+
+- 글쓰기 규칙: 각 호스트에서 T13~T20의 첫 실행에서, 기준선에서 `text-review-clean`이 통과한 작업이 후보에서 실패하지 않고
+  통과하는 작업 수가 줄지 않는다.
+- 개선 주장: T13, T15, T20에서 위 비교 규칙의 주장이 `cost_usd`를 주장한 측정으로 두 호스트 모두에서 받아들여진다.
+- 호스트 비교: T13, T15, T20에서 위 비교 규칙의 사례 판정이 통과한다.
+
+채택한 후보가 둘 이상이면 이어서 `--combined`로 모두 담은 개정을 같은 세 단계로 기준선과 비교한다. 거부된 합친 개정은
+마지막에 채택한 후보를 뺀다(그 항목의 `dropped`). 남은 후보를 합친 개정은 다시 돌린다.
+
+`build-combined`가 그 합친 개정을 만든다. `--base`에서 분리된 임시 worktree를 추가하고(기본 폴더
+`<run-root>/combined/<base>+<후보들>`), 주어진 순서대로 각 `--candidate` 브랜치를 `git merge --no-ff`로 합친 뒤, 결과
+커밋의 SHA를 유일한 출력 줄로 출력한다(진행 상황은 stderr). 병합 커밋의 작성자와 날짜가 고정이라 같은 입력은 같은 SHA를
+낸다. 서로 다른 후보가 둘 이상이어야 하고 각 후보가 기준 브랜치의 자손이어야 한다. 충돌하는 후보가 있으면 그 병합을
+중단하고 임시 worktree를 지운 뒤, 후보와 충돌한 파일을 밝히며 실패한다. 이미 있는 worktree 폴더는 덮어쓰지 않는다.
+`--dry-run`은 명령만 출력하고 아무것도 만들지 않는다. 출력된 SHA를 `loop-combined` 변형 파일의 `ref`에 넣는다. worktree의
+분리된 HEAD 말고는 그 커밋을 가리키는 것이 없으므로, `git worktree remove`로 지우기 전에 `git branch <이름> <sha>`를 실행해야
+하며, 그러지 않으면 Git이 그 커밋을 수거할 수 있다.
+`tests/test_e2e_eval_loop_record.py`는 기록이 채택한 후보의 글만 저장소에서 찾는다. (a)는 `instructions/shared-text.md`의
+`role_runner.py language`, (b)는 `DEFAULT_REVIEWS = 2`, (c)는 `scripts/text_review.py`의 바뀐 문장 구역과
+`instructions/shared-text.md`의 그 문장이다.
 
 ### 기록
 

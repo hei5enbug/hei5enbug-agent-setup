@@ -1,0 +1,13 @@
+Rollout procedure for the demo-orders table split
+
+The stages run in this order. Each stage starts when the one before it is done.
+
+0 Check and build: confirm the backup and build the migration package.
+1 Add columns: add the new columns next to the old ones.
+2 Load data: copy the existing rows into the new columns.
+3 Compare: compare the old and new columns and list every difference.
+4 Enable reads: switch reads to the new columns.
+5 Enable writes: switch writes to the new columns.
+6 Watch: watch error rates and lag for one full day.
+7 Remove old path: delete the old columns and the code that used them.
+8 Confirm: confirm the totals with the finance team and close the ticket.
