@@ -71,6 +71,7 @@
   },
   "claude_agents": {
     "hei5enbug-agent-setup:scout": {"role": "scout", "model": "claude-sonnet-5-5", "effort": "medium", "access": "read", "fallback": {"model": "gpt-6-luna", "effort": "high", "max_effort": "xhigh", "via": "runner"}},
+    "hei5enbug-agent-setup:browser-reader": {"role": "browser-reader", "model": "claude-haiku-5-5", "effort": "medium", "access": "read", "fallback": {"model": "gpt-6-luna", "effort": "high", "max_effort": "xhigh", "via": "runner"}},
     "hei5enbug-agent-setup:worker": {"role": "worker", "model": "claude-haiku-5-5", "effort": "high", "access": "write", "call_models": ["claude-haiku-5-5", "claude-sonnet-5-5"], "fallback": {"model": "gpt-6.2-sol", "effort": "high", "max_effort": "xhigh", "via": "runner"}},
     "hei5enbug-agent-setup:designer": {"role": "designer", "model": "claude-opus-5-5", "effort": "xhigh", "access": "write", "fallback": {"model": "gpt-6.2-astra", "effort": "high", "max_effort": "xhigh", "via": "runner"}},
     "hei5enbug-agent-setup:reviewer": {"role": "reviewer", "model": "claude-opus-5-5", "effort": "high", "access": "read", "fallback": {"model": "gpt-6.1-terra", "effort": "high", "max_effort": "xhigh", "via": "runner"}}

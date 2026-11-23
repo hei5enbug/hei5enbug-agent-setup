@@ -1,0 +1,1 @@
+notes/gap-undecided.txt에 정리한 내용을 skill-issue-creator로 이슈 하나로 올려줘. 메모에서 정해지지 않았던 두 가지는 내가 정했어. 빈 섹션은 제목까지 통째로 생략하고 고정 문구는 쓰지 않아. 규칙은 공통 작성 규칙 파일 instructions/shared-writing.md에 두고, 월간 보고서에도 같은 규칙이 적용되게 해줘. 더 정할 것은 없으니 질문 없이 끝까지 진행해줘.

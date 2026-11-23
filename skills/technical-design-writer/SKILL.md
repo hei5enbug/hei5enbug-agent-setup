@@ -48,7 +48,7 @@ canonical independent model validation rules. If either required reference is un
 missing and stop the affected mode instead of reconstructing its rules.
 
 `references/korean-writing.md` reads one sibling file. Resolved from this skill's own directory,
-`../docs-rewrite/references/patterns.md` supplies the translationese signal table. When that file
+`../docs-rewrite/references/translationese.md` supplies the translationese signal table. When that file
 is absent, apply the rest of `korean-writing.md` and report that the signal list was unavailable.
 This skill invokes no other skill and depends on no other skill's scripts.
 
@@ -202,6 +202,11 @@ Use mechanical tools only for exact conditions. Search can locate candidates but
 Render diagrams and execute examples when possible. Create a validator only when every reported failure is a
 real violation and every supported violation fails. Keep contextual precision, style, and applicability as model
 or human judgment.
+
+Before the completion gate, when a design document is written or reviewed, run
+`python3 scripts/check_format.py <document>` from this skill's directory, adding `--template` when the document is a
+supplied template or generated contract. Fix each reported violation. Judge each listed candidate, a Korean heading
+over 30 characters, by the Structure rule. Exit 0 means no violation, 1 a violation, and 2 a usage error.
 
 ## Completion gate
 

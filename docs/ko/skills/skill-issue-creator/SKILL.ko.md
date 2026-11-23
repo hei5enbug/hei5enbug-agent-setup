@@ -212,12 +212,12 @@ EOF
 
 ### 8. 검증
 
-만든 이슈를 다시 읽어 제목, 모든 태그, 절 순서를 확인한다.
-GitHub에서는 `gh issue view <number> --repo <location> --json number,title,labels,body,url`을 실행한다.
-렌더링된 본문은 다음 명령으로 가져온다.
-`gh api repos/<location>/issues/<number> -H "Accept: application/vnd.github.html+json" --jq .body_html`.
-렌더링된 본문에 `##`, `**`, `\n` 같은 마크업이 그대로 드러나면 안 된다.
-다른 트래커에서는 같은 경로로 다시 읽고, `html`이면 선언 옵션의 렌더링 검사도 실행한다.
+만든 이슈를 다시 읽어 제목, 모든 태그, 절 순서, 날 마크업이 없는지를 확인한다.
+GitHub에서는 `python3 scripts/check_filed.py github --repo <location> --number <number> --title "<title>" --label "<label>"`을 실행한다.
+경로는 3단계처럼 구하고, 태그마다 `--label`을 반복한다.
+다른 트래커에서는 같은 경로로 항목을 다시 읽고, 그 본문을 표준 입력으로 `python3 scripts/check_filed.py body --format <markdown|html|jira|plain>`에 넘긴다.
+`html`이면 선언 옵션의 렌더링 검사도 실행한다.
+스크립트는 JSON 결과 하나를 출력하고, 모든 검사가 통과하면 0, 하나라도 실패하면 1, 실패는 없지만 실행하지 못한 검사가 있으면 3, 사용법 오류면 2로 끝난다.
 공개 트래커에서는 Proposal과 Acceptance criteria에서 사례의 식별자를 다시 검색한다.
 
 검사가 실패하면 [기존 이슈 갱신](references/update-in-place.ko.md)에 따라 이 스킬이 쓴 것을 직접 수정한다.

@@ -1,0 +1,1 @@
+notes/gap-covered.txt에 정리한 내용을 skill-issue-creator로 이슈로 올려줘.

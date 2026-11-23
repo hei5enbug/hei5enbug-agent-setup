@@ -81,7 +81,7 @@ class ReviewerContractTest(unittest.TestCase):
 
         # Then
         self.assertEqual(agents.count("./agents/reviewer.md"), 1)
-        self.assertEqual(len(agents), 4)
+        self.assertEqual(len(agents), 5)
         self.assertIn("reviewer", manifest["userConfig"]["role_pinning"]["description"])
         self.assertIn("영어 원본: [reviewer.md](../../../agents/reviewer.md)", mirror)
         self.assertIn("비권위", mirror)

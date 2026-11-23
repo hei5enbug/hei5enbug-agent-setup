@@ -1,0 +1,79 @@
+{
+  "id": "T160",
+  "title": "Read-only fact lookup through the Aside browser",
+  "category": "skill",
+  "path": "aside-browser-tasks read-only lookup, handed to browser-reader where it exists",
+  "fixture": "notes-cli",
+  "prompt_file": "prompts/T160.txt",
+  "setup": "setup/T160.py",
+  "env": {
+    "FAKE_ASIDE_LOG": "{work}/aside.log",
+    "PATH": "{work}/fake-bin:{PATH}"
+  },
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 4
+  },
+  "checks": [
+    {
+      "id": "skill-invoked",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "skill_invoked"
+    },
+    {
+      "id": "aside-ran",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "aside_ran"
+    },
+    {
+      "id": "status-and-source",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 3,
+      "patterns": [
+        "In Review",
+        "https://example\\.com/tracker"
+      ]
+    },
+    {
+      "id": "no-trace-in-answer",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "no_trace_in_answer"
+    },
+    {
+      "id": "read-only",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "read_only"
+    },
+    {
+      "id": "repo-unchanged",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 1
+    },
+    {
+      "id": "browser-reader-used",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "browser_reader_used"
+    },
+    {
+      "id": "main-ran-no-aside",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "main_ran_no_aside"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

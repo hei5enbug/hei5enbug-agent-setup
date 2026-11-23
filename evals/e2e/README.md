@@ -419,6 +419,18 @@ seeded sessions; it keeps its state in `orca-state/` and `plugin-state/` beside 
 `tests/test_e2e_eval_refresh_reload.py`. The fake commands cannot start a real session or a detached helper's
 long wait, so the task covers only what the call log and the final answer show.
 
+T180 and T181 run in
+the fictional plugin repository `skill-gap-plugin` with the stateful `gh` stub that `skills/skill-issue-creator/evals/`
+ships, first on `PATH` and seeded by `tasks/setup/gh_stub_common.py`; its log and kept issues sit in `gh.log` and
+`gh-state/` beside the repository, and their tests are in `tests/test_e2e_eval_skill_issue_cases.py`. Because the
+harness cannot answer a question, T180 passes when the undecided choice is asked and the tracker is not written. T110 and T111 give the
+answers in the prompt so the run reaches the write and the read-back; their informational check `check-filed-ran-after-write`
+shows whether the run read the filed issue back with `check_filed.py`. T160 puts a fake `aside` first on `PATH`
+(`tasks/setup/fake_aside.py`; its call log is `aside.log`, and `FAKE_ASIDE_MODE=fail` makes `aside exec` fail), and its
+informational checks show whether the lookup went to the `browser-reader` agent. T161 reviews a Korean design document, and its
+informational checks show which translationese reference the review read and whether it ran `check_format.py`; their tests are
+`tests/test_e2e_eval_skill_issue_filing.py`, `tests/test_e2e_eval_aside_lookup.py`, and `tests/test_e2e_eval_design_review.py`.
+
 | Task | Fixture | Path it exercises | Request |
 |---|---|---|---|
 | T01 | inventory-service | Design skill | Design document for stock reservation |
@@ -478,6 +490,12 @@ long wait, so the task covers only what the call log and the final answer show.
 | T51 | tally-desk | One question | A new rate cache that repeats `rate_for`'s `ttl_cached` cache; exactly one question, which names it |
 | T140 | notes-cli | Stored question input | Summarize a resumed session whose earlier question input shows as `\uXXXX` escapes in the conversation while the stored transcript holds the kana |
 | T141 | notes-cli | Stored question input | The same, with escape text in the stored transcript itself, then ask the question again |
+| T180 | skill-gap-plugin | Issue filing, questions first | A gap note with one undecided Proposal choice, filed through `skill-issue-creator` |
+| T181 | skill-gap-plugin | Issue filing, duplicate search | A gap note that an open issue of the same account already covers |
+| T110 | skill-gap-plugin | Issue filing, answers given up front | T180 with both undecided choices answered in the prompt, so the run files the issue and reads it back |
+| T111 | skill-gap-plugin | Issue filing, covered gap with the answer given | T181 with the answer given in the prompt, so the run merges it into the open issue and reads it back |
+| T160 | notes-cli | Aside lookup, read only | A ticket status looked up through a stub `aside` that prints tool-trace noise; the answer must carry the status and the source only |
+| T161 | design-review-demo | Design review, Korean | A review of a Korean design document seeded with a long line, a fourth-level heading, a trailing space, and one translationese phrase |
 
 T62 measures the worker rule that loads a named skill. Its setup script commits `CHANGELOG.md` and the skill under both
 `.claude/skills/` and `.agents/skills/`, and the prompt names the skill. The required check `skill-loaded` passes when a

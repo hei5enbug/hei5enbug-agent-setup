@@ -381,6 +381,17 @@ T81은 `tasks/setup/T81.py`가 만든 가짜 `orca`, `claude`, `codex`를 `PATH`
 두고, 테스트는 `tests/test_e2e_eval_refresh_reload.py`에 있다. 가짜 명령은 실제 세션도, 분리된 도우미의 긴 대기도 시작하지
 못하므로 이 작업은 호출 로그와 최종 답변이 보여 주는 것만 다룬다.
 
+T180과 T181은 가상 플러그인 저장소 `skill-gap-plugin`에서, `skills/skill-issue-creator/evals/`가
+제공하는 상태 보관형 `gh` 대역을 `PATH`의 맨 앞에 두고 실행한다. 대역은 `tasks/setup/gh_stub_common.py`가 심고, 로그와
+보관한 이슈는 저장소 옆의 `gh.log`와 `gh-state/`에 있으며, 테스트는 `tests/test_e2e_eval_skill_issue_cases.py`에 있다. 하네스는
+질문에 답할 수 없으므로 T180은 정해지지 않은 선택을 묻고 트래커에 쓰지 않으면 통과한다.
+T110과 T111은 답을 프롬프트에 주어 실행이 쓰기와 다시 읽기까지 가게 하며, 선택 검사 `check-filed-ran-after-write`는
+실행이 올린 이슈를 `check_filed.py`로 다시 읽었는지 보여 준다. T160은 가짜 `aside`를 `PATH` 앞에 두며
+(`tasks/setup/fake_aside.py`, 호출 기록은 `aside.log`, `FAKE_ASIDE_MODE=fail`이면 `aside exec`이 실패한다),
+선택 검사는 조회가 `browser-reader` 에이전트로 갔는지 보여 준다. T161은 한국어 설계 문서를 검토하며, 선택 검사는 검토가 어느
+번역투 참조를 읽었고 `check_format.py`를 실행했는지 보여 준다. 이들의 테스트는
+`tests/test_e2e_eval_skill_issue_filing.py`, `tests/test_e2e_eval_aside_lookup.py`, `tests/test_e2e_eval_design_review.py`다.
+
 | 작업 | 픽스처 | 확인하는 경로 | 요청 |
 |---|---|---|---|
 | T01 | inventory-service | 설계 스킬 | 재고 예약 설계 문서 |
@@ -440,6 +451,12 @@ T81은 `tasks/setup/T81.py`가 만든 가짜 `orca`, `claude`, `codex`를 `PATH`
 | T51 | tally-desk | 질문 하나 | `rate_for`의 `ttl_cached` 캐시를 되풀이하는 새 요율 캐시. 질문은 정확히 하나이고 그 캐시를 짚어야 한다 |
 | T140 | notes-cli | 저장된 질문 입력 | 이어 실행한 세션을 요약하기. 앞선 질문 입력이 대화에는 `\uXXXX` 이스케이프로 보이지만 저장된 기록에는 가나가 들어 있다 |
 | T141 | notes-cli | 저장된 질문 입력 | 같은 상황에서 저장된 기록 자체에 이스케이프 글이 있고, 질문을 다시 하기 |
+| T180 | skill-gap-plugin | 이슈 작성, 질문 먼저 | 정해지지 않은 Proposal 선택이 하나 있는 갭 메모를 `skill-issue-creator`로 올리기 |
+| T181 | skill-gap-plugin | 이슈 작성, 중복 검색 | 같은 계정의 열린 이슈가 이미 다루는 갭 메모 |
+| T110 | skill-gap-plugin | 이슈 작성, 답을 미리 준 경우 | T180의 정해지지 않은 선택 둘에 대한 답을 프롬프트에 주어, 이슈를 올리고 다시 읽는 데까지 가는 사례 |
+| T111 | skill-gap-plugin | 이슈 작성, 답을 준 이미 다룬 갭 | T181에 답을 프롬프트에 주어, 열린 이슈에 합치고 다시 읽는 데까지 가는 사례 |
+| T160 | notes-cli | Aside 조회, 읽기 전용 | 도구 실행 기록을 길게 출력하는 가짜 `aside`로 티켓 상태를 조회하며, 답에는 상태와 출처만 있어야 한다 |
+| T161 | design-review-demo | 설계 문서 검토, 한국어 | 긴 줄, 네 번째 제목 수준, 줄 끝 공백, 번역투 표현 하나를 심은 한국어 설계 문서의 검토 |
 
 T62는 지목한 스킬을 불러오는 worker 규칙을 측정합니다. 설정 스크립트가 `CHANGELOG.md`와 스킬을 `.claude/skills/`와
 `.agents/skills/` 양쪽에 커밋하고, 프롬프트가 그 스킬을 지목합니다. 필수 검사 `skill-loaded`는 worker가 스킬을 불러왔을 때

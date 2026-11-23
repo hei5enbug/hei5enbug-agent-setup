@@ -51,6 +51,10 @@ Measured on 2026-10-28 with CLI 1.26.1023:
   It runs Aside's own model, so ask it for source URLs and verify any fact the result depends on.
 - Use the REPL whenever you must see the page yourself, such as a visual check.
 - Never read raw `aside exec` output into the context; use the recipe below.
+- Under the condition that the `browser-reader` agent exists and the task is a read-only lookup of facts, through the
+  agent recipe or a REPL `fetch` or snapshot, whose result is text, hand it to `browser-reader` with the question, the
+  route, and the fields to return; report a failure it returns as a failure, not as an answer. Keep a screenshot, a
+  visual or layout judgment, a write, and any question to the user in the main session.
 
 ## Writes
 

@@ -205,9 +205,9 @@ Codex는 사용자의 직접 요청 또는 적용되는 `AGENTS.md`·스킬 지�
 ## 에이전트 등록
 
 `agents/` 디렉터리는 Claude Code 플러그인에 함께 배포되므로, 번들을 설치하면
-`hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:worker`,
+`hei5enbug-agent-setup:scout`, `hei5enbug-agent-setup:browser-reader`, `hei5enbug-agent-setup:worker`,
 `hei5enbug-agent-setup:designer`, `hei5enbug-agent-setup:reviewer`가 추가됩니다.
-직접 복사할 필요가 없습니다. 매니페스트에는 영어 정의 네 개만 있으므로 `docs/ko/`의 한국어 번역본은
+직접 복사할 필요가 없습니다. 매니페스트에는 영어 정의 다섯 개만 있으므로 `docs/ko/`의 한국어 번역본은
 서브에이전트로 등록되지 않습니다.
 
 Codex 서브에이전트 문서는 사용자 지정 에이전트 파일의 위치로 `~/.codex/agents/`와 `.codex/agents/`만 들고 에이전트용 플러그인 구성 요소는
