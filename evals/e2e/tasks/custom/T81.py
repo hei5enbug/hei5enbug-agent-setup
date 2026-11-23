@@ -9,6 +9,13 @@ from pathlib import Path
 FIRST, CONTROL = "term_demo_a", "term_demo_b"
 RELOAD = "/reload-plugins"
 UNFINISHED = re.compile(r"skipped|not[ _]idle|deferred|건너뛰|건너뜀|미뤄|미룸|보류|대기 중|바빠|바쁜|쉬지 않|한가하지 않", re.IGNORECASE)
+SELF_UPDATE = re.compile(r"자체 업데이트|self[- ]?update|DISABLE_UPDATES|호스트 업데이트|host update|업데이트 기능", re.IGNORECASE)
+SENTENCE_END = re.compile(r"(?<=[.!?。])\s+")
+
+
+def unfinished_sentences(line: str) -> list[str]:
+    """The sentences of a line that report the session as unfinished; a sentence about the host's own update is left out."""
+    return [part for part in SENTENCE_END.split(line) if UNFINISHED.search(part) and not SELF_UPDATE.search(part)]
 
 
 def calls_of(ctx) -> list[dict]:
@@ -49,5 +56,5 @@ def nothing_sent_to_control_session(ctx):
 
 def running_session_not_reported_unfinished(ctx):
     lines = [line for line in ctx.view.get("final_answer", "").splitlines() if re.search(r"demo[_-]a", line, re.IGNORECASE)]
-    bad = [line for line in lines if UNFINISHED.search(line)]
+    bad = [line for line in lines if unfinished_sentences(line)]
     return not bad, "not reported as skipped or not idle" if not bad else f"reported as unfinished: {bad[:2]}", {"lines": bad}

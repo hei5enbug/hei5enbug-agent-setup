@@ -24,6 +24,9 @@ from harness import command, graders  # noqa: E402
 
 DONE_ANSWER = "term_demo_a(Claude Code) 세션은 /reload-plugins가 반영됐습니다. term_demo_b(Codex) 세션은 Codex 플러그인을 읽지 못해 건드리지 않았습니다."
 DEFERRED_ANSWER = "term_demo_a 세션은 아직 쉬지 않아 도우미에 넘겨 대기 중입니다. term_demo_b는 건드리지 않았습니다."
+SELF_UPDATE_ANSWER = ("- **demo-a:** 설치된 버전은 2.26.0입니다. 지침은 바뀌지 않아서 `/compact`는 하지 않았습니다. "
+                      "`DISABLE_UPDATES` 설정 때문에 Claude Code 자체 업데이트는 건너뛰었습니다.\n"
+                      "- demo-a: Claude Code self-update was skipped because updates are disabled.")
 FIRST, CONTROL = "term_demo_a", "term_demo_b"
 
 
@@ -133,6 +136,18 @@ class RefreshReloadTaskTest(unittest.TestCase):
         self.assertEqual(self.grade(DONE_ANSWER), {"reload-sent-to-running-session": True, "nothing-else-sent-to-running-session": True,
                                                    "nothing-sent-to-control-session": True,
                                                    "running-session-not-reported-unfinished": True})
+
+    def test_Claude_Code_자체_업데이트를_건너뛰었다는_줄은_세션_미완료로_세지_않고_세션을_미룬_줄은_센다(self):
+        """demo-a 줄에 자체 업데이트 건너뜀이 있어도 통과하고, 같은 줄에 세션 반영을 미뤘다는 말이 있으면 실패한다.
+        잡는 회귀: 자체 업데이트 건너뜀의 `건너뛰`를 세션을 새로 고치지 못했다는 보고로 읽는 판정."""
+        # Given
+        mixed = SELF_UPDATE_ANSWER + "\ndemo-a 세션은 반영을 건너뛰었습니다."
+
+        # When
+        outcomes = [self.grade(answer)["running-session-not-reported-unfinished"] for answer in (SELF_UPDATE_ANSWER, mixed, DEFERRED_ANSWER)]
+
+        # Then
+        self.assertEqual(outcomes, [True, False, False])
 
     def test_refresh_명령_한_번이_같은_결과를_내고_apply와_orphans_절을_함께_담는다(self):
         """refresh --installed 한 번이 시드 상태에서 apply-installed와 apply를 이은 것과 같이 첫 세션에만 reload를 보내고 orphans 절도 낸다.
