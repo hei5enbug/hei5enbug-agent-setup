@@ -29,9 +29,12 @@ workspace 아래에 두며, 다른 저장소의 worktree 아래에는 절대 두
   id:<repoId>::<clone path> --reference <issue link> --json`으로 worktree를 만들고, 다른 저장소 작업의 4단계를 적용한
   뒤 `orca worktree list`에서 브랜치를 확인하고 표시 이름을 설정한다. 그 뒤에만 worker를 시작해 브랜치가 확정되기 전에
   실행되지 않게 한다.
-  `orca orchestration worker-start --worktree path:<worktree path> --agent <host> --run <run id> --task-title
-  "<ticket key> <repository>" --spec-file <brief file> --json`을 사용하고, 다른 저장소 작업의 6단계대로 작업 요약을 쓴다.
-- 나중에 참여하는 세션은 같은 방식으로 `--agent <host>`를 붙여 worktree를 만들고, 다른 저장소 작업과 같은 방식으로
+  `orca orchestration worker-start --worktree path:<worktree path> --agent <host> --model <id> --effort <level>
+  --run <run id> --task-title "<ticket key> <repository>" --spec-file <brief file> --json`을 사용하고, 다른 저장소
+  작업의 6단계대로 작업 요약을 쓴다. 구성원은 한정된 변경을 하고 Run으로 보고하므로 `<id>`와 `<level>`은
+  [다른 저장소 작업](cross-repository.ko.md)의 "세션 위치"에 있는 구현 worker 행에서 가져온다.
+- 나중에 참여하는 세션은 같은 방식으로 "세션 위치"의 표에서 가져온 `--agent <host> --model <id> --effort <level>`을
+  붙여 worktree를 만들고, 다른 저장소 작업과 같은 방식으로
   인수인계하며, Run을 통해 조정자에게 알린다.
 - 다른 구성원을 기다리지 않고 자신의 부분을 끝낼 수 있을 때만 구성원을 시작한다. 다른 구성원이 아직 공유하지 않은
   계약, 스키마, API, 결정이 필요하면 worktree와 worker 모두 만들지 않는다. 상태 표에 해당 항목을 기다리는 것으로
@@ -79,9 +82,10 @@ workspace 아래에 두며, 다른 저장소의 worktree 아래에는 절대 두
 
 그룹의 모든 세션은 작업이 끝날 때 완료된 worktree를, 어느 세션이 시작했든,
 [Orca worktree 상태](orca-worktree-status.ko.md)의 "작업이 끝날 때의 정리"대로 삭제한다. 이에 더해 구성원이 완료되면
-조정자가 같은 검사와 절차로 즉시 정리하고, 조정자 자신이 끝날 때도 전체 그룹에서 놓친 완료된 구성원이 있는지 한 번 더
-확인한다. 그룹 구성원에게는 이 절차가 다른 저장소 작업의 "인수인계 후"를 대신한다. 주 체크아웃에서 작업한 구성원은
-백그라운드 작업, 프로세스, 터미널만 중단하거나 닫는다. 체크아웃과 기본 브랜치는 절대 건드리지 않는다.
+조정자가 아래 문단대로 그 구성원의 세션을 즉시 끝내고, 조정자가 만든 구성원의 자식 worktree는 다른 저장소 작업의 "인수인계
+후"가 정한 대로 Orca 상태 훅이 삭제한다. 조정자 자신이 끝날 때는 전체 그룹에서 훅이 남겼거나 놓친 완료된 구성원이 있는지
+같은 검사와 절차로 한 번 더 확인한다. 주 체크아웃에서 작업한 구성원은 백그라운드 작업, 프로세스, 터미널만 중단하거나
+닫는다. 체크아웃과 기본 브랜치는 절대 건드리지 않는다.
 
 조정자가 worker의 터미널을 닫기 전에, worker가 백그라운드 셸 작업이나 모니터 같은 자신의 백그라운드 작업을 중단하게
 하고 남은 작업이 없음을 확인한다. 이후 구성원의 터미널, 프로세스, 리스너가 남지 않았는지 확인하고, 닫거나 중단한 항목을

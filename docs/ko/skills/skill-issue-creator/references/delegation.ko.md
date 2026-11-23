@@ -32,8 +32,11 @@
    - `orca terminal read --terminal <handle> --screen`에 열린 질문이나 승인 프롬프트가 없다.
    - 입력 줄이 비어 있다. `--text x`를 보내고 줄에 `x`만 보이면 `--text $'\x7f'`로 지운다.
      그렇지 않으면 `x`를 지우고 그 터미널에는 아무것도 보내지 않은 채 다음 터미널로 넘어간다.
-3. 통과한 터미널이 없으면 `orca terminal create --worktree id:<workspace id> --command <host> --json`을 실행하고,
-   이어서 `orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json`을 실행한다.
+3. 통과한 터미널이 없으면 [교차 저장소 규칙](../../../instructions/cross-repository.ko.md)의 "터미널에서 에이전트
+   시작"에 따라 `--worktree id:<workspace id>`로 에이전트를 시작한다. 작업 공간에 쓴 적 없는 셸 터미널이 있으면 그
+   터미널에서, 없으면 새 터미널에서 시작한다. 그 `<host command>`의 `<id>`와 `<level>`은 그곳 "세션 위치"에서 그 밖의
+   세션 행의 값이다. 이어서
+   `orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json`을 실행한다.
    한 번 더 길게 기다린 뒤에도 `wait.satisfied`가 false이면 이 세션에서 등록한다.
 
 다른 세션의 프롬프트에 답하지 않는다.
@@ -55,6 +58,8 @@
 - 몇 줄로 정리한 빈틈, 플러그인 내부의 담당 파일 경로, 1단계에서 모은 사례의 식별자
 - 원래 세션의 대화 기록 파일과, 그 안의 사용자 메시지를 모두 읽고 위임받은 세션에서 요구 사항 및 질문 규칙을 적용하라는 지시
 - 원래 터미널 핸들과, "결과 회신"에 따라 이슈 링크를 돌려보내라는 지시
+- 위임받은 세션을 "위임받을 세션 찾기" 3단계에서 시작했을 때만, 교차 저장소 규칙의 "결과 하나를 위한 인수인계"의 마무리
+  문장. 이미 에이전트를 실행한 적 있는 터미널에는 보내지 않는다.
 
 비밀 정보는 넣지 않고, 대화 기록 파일 외의 로컬 경로도 넣지 않는다.
 전송이 `accepted: true`를 보고하면 인계가 끝난 것이다. 작업이 끝날 때까지 기다리지 않는다.
@@ -74,4 +79,5 @@
 
 `orca orchestration send --to <original terminal handle> --from $ORCA_TERMINAL_HANDLE --subject "Issue filed"
 --body "<issue link>" --type status --json`을 실행한다. 핸들은 인계 내용에 명시된 것을 쓴다.
-링크나 등록하지 않은 이유를 보내고 초안 문구는 보내지 않는다.
+링크나 등록하지 않은 이유를 보내고 초안 문구는 보내지 않는다. 인계 내용에 마무리 문장이 있으면 "결과 하나를 위한
+인수인계"에 따라 정리, 남긴 worktree 보고, 위임받은 세션 자신의 터미널 닫기를 수행한다.

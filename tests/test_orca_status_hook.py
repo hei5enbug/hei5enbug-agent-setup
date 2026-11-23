@@ -299,7 +299,8 @@ class NoOrcaWriteTest(HookCase):
 
         # Then
         self.assertEqual(self.writes(), [])
-        self.assertEqual([call for call in self.calls() if not call.startswith("worktree current")], [])
+        self.assertEqual([call for call in self.calls()
+                          if not call.startswith(("worktree current", "terminal list"))], [])
 
     def test_이름_변경_뒤_다음_프롬프트는_탭_제목_줄을_받고_그_줄에_워크트리_코멘트가_없다(self):
         # Regression: the tab title line asks the session to refresh a worktree comment that is no longer written

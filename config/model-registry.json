@@ -14,7 +14,8 @@
   "user_selected_pins": ["gpt-luna"],
   "efforts": ["low", "medium", "high", "xhigh", "max"],
   "effort_rules": {
-    "gpt-6-luna": ["high", "xhigh"]
+    "gpt-6-luna": ["high", "xhigh"],
+    "gpt-6.1-terra": ["high", "xhigh"]
   },
   "capabilities": {
     "investigation": {

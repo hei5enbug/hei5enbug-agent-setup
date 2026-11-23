@@ -76,5 +76,7 @@ def test_Bash_입력_ls_tmp_work은_어떤_훅도_실행_파일을_부르거나_
     # then
     assert result.returncode in (0, 1), result.stderr
     assert "Traceback" not in result.stderr
-    assert calls.read_text() == ""
+    first_prompt_listing = "orca terminal list --json\n" if (script, event) == (
+        "orca_status_hook.py", "UserPromptSubmit") else ""
+    assert calls.read_text() == first_prompt_listing
     assert net.read_text() == ""

@@ -90,7 +90,7 @@ never writes Codex or Claude settings. Only the allowlisted changes in [Host set
 | Secret redaction in tool results | `secret_redaction` | Not applicable |
 | Implementation worker route | `implementation_worker` (`auto`, `codex`, `haiku`, `sol`, `sonnet`, or `opus`) | Not applicable |
 | Claude Code worker effort | `worker_effort` (default `high`) | Not applicable |
-| Codex worker model and effort | `codex_worker_model` (`auto`, `gpt-6-luna`, `gpt-6.2-sol`, or `claude-sonnet-5-5`, default `auto`) and `codex_worker_effort` (`high` or `xhigh`, default `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL` and `HEI5ENBUG_CODEX_WORKER_EFFORT` |
+| Codex worker model and effort | `codex_worker_model` (`auto`, `gpt-6-luna`, `gpt-6.2-sol`, `gpt-6.1-terra`, or `claude-sonnet-5-5`, default `auto`) and `codex_worker_effort` (`high` or `xhigh`, default `high`) | `HEI5ENBUG_CODEX_WORKER_MODEL` and `HEI5ENBUG_CODEX_WORKER_EFFORT` |
 | Codex service tier | `codex_service_tier` (`default` or `fast`, default `default`) | `HEI5ENBUG_CODEX_SERVICE_TIER` |
 | Review model | `review_model` (a pinned model ID, default `gpt-6.2-astra`) | Not applicable |
 | Response language guard | `language_guard` | `HEI5ENBUG_LANGUAGE_GUARD` |
@@ -154,7 +154,7 @@ settings and lets an environment variable override it. A change applies from the
 | Host | Option | Values | Default | Effect |
 |---|---|---|---|---|
 | Claude Code | `implementation_worker` | `auto`, `haiku`, `sonnet`, `opus`, `codex`, `sol` | `auto` | `auto`: the main session picks the `worker` agent's model per assignment, `haiku` for easy work and `sonnet` for normal or hard work, and the mod denies any other model. `haiku`, `sonnet`, and `opus` run the `worker` agent on that model only. `codex` and `sol` run a GPT worker through the role runner. A GPT worker, `gpt-6-luna` for easy work or `gpt-6.2-sol` for hard work, is also the fallback when a Claude route fails or stops on a usage limit. |
-| Codex | `codex_worker_model` | `auto`, `gpt-6-luna`, `gpt-6.2-sol`, `claude-sonnet-5-5` | `auto` | `auto`: the main session picks per assignment, `gpt-6-luna` for easy work and `gpt-6.2-sol` for hard or unsure work, and the agent guard allows exactly those two models. A fixed GPT value allows only that model. `claude-sonnet-5-5` runs the Claude Sonnet route first through the role runner, and the GPT worker is its fallback. Claude Sonnet is also the fallback when the GPT worker fails or stops on a usage limit. |
+| Codex | `codex_worker_model` | `auto`, `gpt-6-luna`, `gpt-6.2-sol`, `gpt-6.1-terra`, `claude-sonnet-5-5` | `auto` | `auto`: the main session picks per assignment, `gpt-6-luna` for easy work and `gpt-6.2-sol` for hard or unsure work, and the agent guard allows exactly those two models. A fixed GPT value allows only that model; `gpt-6.1-terra` runs at `high` or `xhigh` only. The same setting names the model of an Orca worker session that an agent starts, with `auto` and `claude-sonnet-5-5` resolved by that difficulty rule. `claude-sonnet-5-5` runs the Claude Sonnet route first through the role runner, and the GPT worker is its fallback. Claude Sonnet is also the fallback when the GPT worker fails or stops on a usage limit. |
 | Codex | `codex_worker_effort` | `high`, `xhigh` | `high` | The lowest effort a worker spawn may use; each spawn may also use `xhigh`. |
 
 Before this setting, the Codex implementation worker ran Claude Sonnet through the role runner, and the GPT worker

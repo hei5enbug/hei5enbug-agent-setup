@@ -305,10 +305,26 @@ UI 작업(T82~T84, T112)은 `harness/render.py`로 `demo-app` 픽스처의 화�
 
 ## 골든 작업
 
-프롬프트는 실제 사용자처럼 한국어로 쓴다. 픽스처는 실제 저장소의 관례를 갖춘 가상 저장소다. README, 한국어 미러
+프롬프트는 실제 사용자처럼 한국어로 쓰며, T31과 T32의 프롬프트는 한 에이전트 세션이 다른 세션에 쓰는 영어 작업 요약이다. 픽스처는 실제 저장소의 관례를 갖춘 가상 저장소다. README, 한국어 미러
 규칙이 있는 `AGENTS.md`, 테스트, 한국어 미러가 있다. T21은 `ORCA_TERMINAL_HANDLE`을 설정하고 `tasks/setup/fake_orca.py`가
 만든 가짜 `orca`를 `PATH`의 맨 앞에 두고 실행하며, 상태는 저장소 옆의 `orca-state/`에 두고, 테스트는
-`tests/test_e2e_eval_orca_cleanup.py`에 있다. T81은 `tasks/setup/T81.py`가 만든 가짜 `orca`, `claude`, `codex`를 `PATH`의 맨
+`tests/test_e2e_eval_orca_cleanup.py`에 있다. T31~T34는 같은 가짜 `orca`에 에이전트와 셸 터미널, 세션 사이에 보낸 메시지를
+더해 `tasks/setup/handoff_common.py`로 심어 두며, 채점기는 호출자를 함께 기록한 가짜의 순서 있는 호출 기록을 읽고 테스트는
+`tests/test_e2e_eval_handoff.py`에 있다.
+
+T113은 같은 가짜 `orca`를 쓰며, 이 가짜는 터미널도 시작하고, 시작한 에이전트 터미널의 입력줄을 보여 주고 고치며, 대기와 전송을 받아들인다. 또 시드한 저장소에서만 답하고 그 밖은 거부하며 기록하는 가짜 `gh`를 써서 시험이 실제 서비스에 닿지 않는다. 검사는 호출 기록에서 각 세션 시작이 적은 모델과 effort를 읽으며, 그 테스트는 `tests/test_e2e_eval_session_model.py`에 있다.
+
+T67은 `scripts/orca_status_hook.py`와 그 분리 실행 `scripts/orca_cleanup_run.py`의 worktree 삭제를 평가한다. 가짜 `orca`는
+`worktree create`와 `orchestration worker-start`에도 실제 Git worktree를 만들고, 시작된 worker는 즉시 커밋하고 자기
+브랜치를 푸시하고 `worker_done`을 보고하며 터미널이 해제된다. `worker-list`와 `ports`는 상태 파일의 `dispatches`와
+`ports`를 읽는다. 이 작업은 하네스가 시험에서 지우고 훅의 실행이 요구하는 `ORCA_USER_DATA_PATH`를 정하며, 분리 실행이 스스로, 그리고 자신이 시작한 모든 프로세스와 함께 끝나는 시간인
+`HEI5ENBUG_CLEANUP_RUN_SECONDS`를 45로 정하므로, 어떤 실행도 시험보다 45초를 넘겨 살지 않고 아래의 60초 대기가 항상 이를
+덮는다. 세션이 턴을 질문으로 끝내므로 삭제는 그 턴의 끝에서 자기만의 프로세스 세션으로 시작하는 훅의 실행에서만
+나올 수 있다. 검사는 삭제가 성공할 때까지 최대 `E2E_CLEANUP_WAIT_SECONDS`(기본 60)초 기다리며, 실행의 폴더 `/`가 아니라
+세션 자신의 폴더에서 한 삭제는 `removed-by-hook`을 실패시키므로, 예전 문서 규칙대로 세션이 직접 worktree를 삭제하면
+통과하지 못한다. 테스트는 `tests/test_e2e_eval_worktree_cleanup_hook.py`에 있다.
+
+T81은 `tasks/setup/T81.py`가 만든 가짜 `orca`, `claude`, `codex`를 `PATH`의 맨
 앞에 두고, 설치된 플러그인 사본과 심어 둔 세션 둘과 함께 실행하며, 상태는 저장소 옆의 `orca-state/`와 `plugin-state/`에
 두고, 테스트는 `tests/test_e2e_eval_refresh_reload.py`에 있다. 가짜 명령은 실제 세션도, 분리된 도우미의 긴 대기도 시작하지
 못하므로 이 작업은 호출 로그와 최종 답변이 보여 주는 것만 다룬다.
@@ -339,6 +355,11 @@ UI 작업(T82~T84, T112)은 `harness/render.py`로 `demo-app` 픽스처의 화�
 | T81 | notes-cli | Orca 플러그인 새로고침 | 설치된 플러그인 버전을 실행 중인 세션들에 반영, 그중 하나는 백그라운드 작업만 기다리며, 가짜 `orca`, `claude`, `codex` 사용 |
 | T35 | inventory-service | 매번 실패하는 위임 경로 | 프롬프트가 role runner 작업자에게 맡기는 `--forecast` 보고서 옵션. 심어 둔 `claude`와 `codex`가 자식 실행마다 다른 오류로 실패하며, 시작은 재시도 한도에서 멈춰야 한다 |
 | T36 | inventory-service | 서로 독립인 읽기 전용 질문 여덟 개 | money, pricing, validators, importer, audit, clock, serialization, formatting에 대한 질문 각 하나. 벽시계 시간이 주장하는 측정값이다 |
+| T31 | notes-cli | 인수인계에 속한 터미널 | 결과 하나를 요청하는 작업 요약: 끝난 자식 worktree 정리, 보고, 그 뒤 세션 자신의 터미널 닫기 |
+| T32 | notes-cli | 이미 에이전트를 실행한 터미널로 온 작업 요약 | 마무리 문장이 없는 같은 작업 요약과 커밋하지 않은 변경이 있는 자식 worktree: 아무것도 닫지 않고 남긴 worktree를 이름으로 보고 |
+| T33 | notes-cli | 쓴 적 없는 셸 터미널에서 에이전트 시작 | 터미널이 쓴 적 없는 셸 하나뿐인 작업공간에 결과 하나를 맡김: 호스트 명령을 그 터미널에 보내고 터미널을 만들지 않음 |
+| T34 | notes-cli | 첫 프롬프트의 터미널 정리 | 설정 하나를 읽는 동안 플러그인 훅이 쓴 적 없는 셸 터미널을 닫고 입력이 있는 터미널은 남김 |
+| T67 | notes-cli | 훅이 끝난 worker의 worktree를 삭제 | 설정 변경, 에이전트 없이 만든 demo-b의 worktree, 거기서 시작한 worker. 턴을 질문으로 끝내며, worktree와 로컬 브랜치는 세션이 아니라 훅의 분리 실행이 삭제해야 한다 |
 | T78 | commit-demo | 커밋 스킬, 스테이징만 범위 | 한국어 제목 기록, 스테이징한 변경 하나와 스테이징하지 않은 수정, 추적되지 않는 `.env` |
 | T79 | commit-demo | 커밋 스킬, 필수 식별자 | 티켓 키를 요구하는 커밋 규칙과 키를 말하지 않은 요청 |
 | T82 | demo-app | UI 라우팅, 완전한 명세 | 설정 패널의 이름 붙은 줄 네 곳 수정, 구현 워커로 라우팅 |
@@ -346,6 +367,7 @@ UI 작업(T82~T84, T112)은 `harness/render.py`로 `demo-app` 픽스처의 화�
 | T84 | demo-app | UI 라우팅, 열린 중단점 | 폭 320px, 간격 24px 요금제 카드를 한 줄로, 모바일 중단점은 열어 둠, 디자이너로 라우팅 |
 | T101 | notes-cli | 내장 에이전트 요청 거부 | `general-purpose` 에이전트를 한 번 요청한다. 플러그인이 거부해야 하고, 그 에이전트가 작업을 하면 안 되며, 아무것도 바뀌면 안 된다 |
 | T112 | demo-app | UI 라우팅, 새 화면 | 처음부터 만드는 청구서 세 줄 화면, 1280px와 375px에서 맞아야 하며 고정된 `xhigh`의 디자이너로 라우팅 |
+| T113 | notes-cli | Orca 세션 시작 모델 | 다른 플러그인 저장소의 스킬 이슈를 위임 규칙에 따라 그곳의 새 세션에 맡김. 가짜 `orca`와 시드한 플러그인 저장소를 쓰며, 모든 세션 시작이 모델과 effort를 적고 Fable이나 Astra를 적지 않아야 통과 |
 
 T89부터 T91까지의 ID는 [`evals/model-roles`](../../../../evals/model-roles/README.md)의 Claude 검토자 모델 비교가 씁니다.
 그 상대 ID인 T92와 T93은 해당 스킬이 제거되면서 끝났습니다. 그 사례는 이 하네스가 아니라 역할 실행기로 실행하므로 여기에는 과제 파일이 없습니다.

@@ -93,6 +93,21 @@ class WorkerSettingTest(unittest.TestCase):
         # Then
         self.assertEqual([((model, "xhigh"), None) for model in saved], results)
 
+    def test_gpt_6_1_terra는_high와_xhigh에서만_고정_모델로_받고_medium이면_기본값과_알림을_돌려준다(self):
+        """저장된 gpt-6.1-terra는 high와 xhigh에서 알림 없이 돌려주고, medium은 허용되지 않아 기본값과 알림을 돌려준다."""
+        # Given / When
+        accepted = []
+        for effort in ("high", "xhigh"):
+            self.save({"codex_worker_model": "gpt-6.1-terra", "codex_worker_effort": effort})
+            accepted.append(self.resolve())
+        self.save({"codex_worker_model": "gpt-6.1-terra", "codex_worker_effort": "medium"})
+        refused, notice = self.resolve()
+
+        # Then
+        self.assertEqual([((("gpt-6.1-terra", effort)), None) for effort in ("high", "xhigh")], accepted)
+        self.assertEqual(CODEX_DEFAULT, refused)
+        self.assertIsNotNone(notice)
+
     def test_Codex는_환경_변수가_저장된_값보다_우선한다(self):
         """HEI5ENBUG_CODEX_WORKER_MODEL이 있으면 저장된 모델을 덮고, 없는 키는 저장된 값을 쓴다."""
         # Given
