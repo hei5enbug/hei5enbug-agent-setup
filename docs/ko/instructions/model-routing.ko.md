@@ -41,7 +41,7 @@ GPT Luna는 `gpt-6-luna`와 `high` 또는 `xhigh`로만 명시적으로 고정�
 | 역할 | Codex | Claude Code |
 |---|---|---|
 | 로컬 scout | `gpt-6-luna`, `high`(최대 `xhigh`) | 읽기 전용 `role_runner.py scout`로 `gpt-6-luna`, `high`(최대 `xhigh`). 대체 경로는 `scout`(`claude-sonnet-5-5`, `medium`) |
-| 구현 worker | `codex_worker_model`·`codex_worker_effort` 설정(기본값 `auto`, `high`; `high` 또는 `xhigh`)의 `worker` 역할. `auto`이면 메인 세션이 할당마다 고르며, 쉬운 작업은 `gpt-6-luna`, 어렵거나 확신이 없는 작업은 `gpt-6.2-sol`을 쓴다. `gpt-6-luna`, `gpt-6.2-sol`, `gpt-6.1-terra`(`high` 또는 `xhigh`)는 그 모델만 허용한다. `claude-sonnet-5-5`는 `role_runner.py implementation --host codex --fallback`을 먼저 실행하고 `worker` 역할을 그 대체로 쓴다. GPT worker가 실패하거나 사용량 한도로 중단되었을 때의 대체: `claude-sonnet-5-5`, `high`(최대 `xhigh`)로 `role_runner.py implementation --host codex --fallback` | `implementation_worker`가 `auto`(기본값)이면 메인 세션이 할당마다 `worker` 에이전트의 모델을 [난이도](model-routing.ko.md#난이도별-worker-모델)로 고른다. 쉬운 작업은 `haiku`, 보통이거나 어려운 작업은 `sonnet`이며, 사고 강도는 `worker_effort` 설정(기본값 `high`)이다. Claude 경로가 실패하거나 사용량 한도로 중단되면 `role_runner.py implementation --fallback`과 난이도별 worker 모델, `high`를 쓴다. 고정 설정은 한 경로를 강제한다: `haiku`, `sonnet`, `opus`(그 모델만 쓰는 `worker` 에이전트), `sol`(`role_runner.py implementation --fallback`과 `gpt-6.2-sol`), `codex`(`role_runner.py worker`와 난이도별 worker 모델) |
+| 구현 worker | `codex_worker_model`·`codex_worker_effort` 설정(기본값 `auto`, `high`; `high` 또는 `xhigh`)의 `worker` 역할. `auto`이면 메인 세션이 할당마다 고르며, 쉬운 작업은 `gpt-6-luna`, 어렵거나 확신이 없는 작업은 `gpt-6.2-sol`을 쓴다. `gpt-6-luna`, `gpt-6.2-sol`, `gpt-6.1-terra`(`high` 또는 `xhigh`)는 그 모델만 허용한다. `claude-sonnet-5-5`는 `role_runner.py implementation --host codex --fallback`을 먼저 실행하고 `worker` 역할을 그 대체로 쓴다. GPT worker가 실패하거나 사용량 한도로 중단되었을 때의 대체: `claude-sonnet-5-5`, `high`(최대 `xhigh`)로 `role_runner.py implementation --host codex --fallback` | `implementation_worker`가 `auto`(기본값)이면 메인 세션이 할당마다 `worker` 에이전트의 모델을 [난이도](model-routing.ko.md#난이도별-worker-모델)로 고른다. 쉬운 작업은 `haiku`, 보통이거나 어려운 작업은 `sonnet`이며, 사고 강도는 `worker_effort` 설정(기본값 `high`)이다. Claude 경로가 실패하거나 사용량 한도로 중단되면 `role_runner.py implementation --fallback`과 난이도별 worker 모델, `high`를 쓴다. 고정 설정은 한 경로를 강제한다: `claude`(같은 선택, GPT worker는 쓰지 않음), `haiku`, `sonnet`, `opus`(그 모델만 쓰는 `worker` 에이전트), `sol`(`role_runner.py implementation --fallback`과 `gpt-6.2-sol`), `codex`(`role_runner.py worker`와 난이도별 worker 모델) |
 | 공개 researcher | 웹 검색을 쓰는 `role_runner.py researcher`로 `gpt-6-luna`, `high`(최대 `xhigh`) | 웹 검색을 쓰는 `role_runner.py researcher`로 `gpt-6-luna`, `high`(최대 `xhigh`). 대체 경로는 웹 검색과 가져오기 도구를 가진 `scout`(`claude-sonnet-5-5`, `medium`) |
 | Designer(`design` 기능) | `designer` 역할로 `gpt-6.2-astra`, `high`(최대 `xhigh`). 대체 경로는 `role_runner.py agent --name designer --fallback`으로 `claude-opus-5-5`, `high`(최대 `xhigh`) | `designer` 에이전트로 `claude-opus-5-5`, `xhigh`(기존 UI를 바꾸는 작업은 호출별 `effort`로 `high`). 대체 경로는 `role_runner.py design`으로 `gpt-6.2-astra`, `high`(최대 `xhigh`) |
 | Skill Builder 시험 실행 및 기타 비검토 참여자 | `gpt-6.1-sol`, `xhigh` | `claude-opus-5-5`, `high` |
@@ -64,13 +64,13 @@ worker에서 `gpt-6-luna`를 쓴다. 어려운 작업, 곧 동작 변경, 여러
 다른 모듈에만 적힌 요구, 파싱, 보안, 동시성에는 Claude Code에서 `sonnet`, 그 밖에서 `gpt-6.2-sol`을 쓴다. 확신이 없으면 어려운
 작업의 모델을 쓴다.
 
-- Claude Code: 고른 모델을 `hei5enbug-agent-setup:worker` 에이전트 호출의 `model`로 넘긴다. `implementation_worker`가 `auto`이면
+- Claude Code: 고른 모델을 `hei5enbug-agent-setup:worker` 에이전트 호출의 `model`로 넘긴다. `implementation_worker`가 `auto`나 `claude`이면
   mod는 `haiku`나 `sonnet`만 허용하고, 고정 값 `haiku`, `sonnet`, `opus`이면 그 모델만 허용하며 호출은 모델을 생략할 수 있다. 그 밖의
   모델은 mod가 거부한다.
 - GPT worker: 고른 모델은 실행기의 `--model`로 넘기며, 실행기는 `worker` 역할, `implementation` 기능, worker 에이전트의 대체에만 두 GPT
   모델을 받거나, Codex `worker` 생성의 모델로 쓴다. Codex `codex_worker_model` 설정이 `auto`이면 생성마다 정확히 이 두 모델만 허용하며 각각
-  `codex_worker_effort` 이상 `xhigh`까지의 사고 강도를 쓴다. 고정 값은 그 모델만 허용하고, 에이전트 가드는 그 밖의 모든 모델과 사고 강도를
-  거부한다.
+  `codex_worker_effort` 이상 `xhigh`까지의 사고 강도를 쓴다. 고정 값은 `gpt-6.1-terra`일 수도 있으며 그 모델만 허용하고, 에이전트 가드는 그 밖의 모든 모델과 사고 강도를
+  거부한다. Claude Code에서는 `codex` 경로의 `worker` 역할이 같은 두 설정을 읽고 고정 값이 아닌 `--model`을 거부한다.
 
 ## 스킬 검토와 실행
 

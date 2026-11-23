@@ -499,6 +499,12 @@ informational checks show which translationese reference the review read and whe
 | T120 | tally-demo | Repository guidance, repeated correction | Wrap-up after the same naming correction came twice; a check candidate for that one class is shown, proven on a seeded earlier commit, and not written |
 | T121 | tally-demo | Repository guidance, investigation decision | Decide between two queue libraries after a three-step investigation; an ADR draft of at most 30 lines and its entry line are shown, not written |
 | T122 | tally-demo | Repository guidance, no trigger | One first-time unstated correction with no investigation; no recording recommendation and no `mistake-enforcer` run |
+| T150 | scout-demo | Scout result contract, one function | The error `parse_pair` raises when no delimiter is present; the report starts with `pass`, quotes the function with path and line numbers, and labels the answer direct |
+| T151 | scout-demo | Scout result contract, missing path | A question on `demo-lib/docs/missing.md`, which does not exist; the report starts with `blocked`, names the path, and states no conclusion about its content |
+| T152 | scout-demo | Scout result contract, partial evidence | Delimiters and a maximum line length across two files where the length is absent; the report starts with `issues`, labels the length unknown, and proposes no fix |
+| T153 | inventory-service | Worker model on hard work, forced delegation | Cross-process locking of one data file across the app and the CLI (concurrency, a public contract, several components), handed to the implementation worker by the request; the worker's model comes from the variant's `implementation_worker` route |
+| T154 | skill-review-demo | Skill review role, grader | A `release-notes` run that misses one of three expectations, graded through Skill Builder; the grading marks exactly that expectation failed with a quote of the output, and a review-route run exists |
+| T155 | skill-review-demo | Skill review role, comparator | Two release-notes outputs where one breaks the stated limit of five bullets, compared blind through Skill Builder; the comparison prefers the other output, names the limit, and a review-route run exists |
 
 T62 measures the worker rule that loads a named skill. Its setup script commits `CHANGELOG.md` and the skill under both
 `.claude/skills/` and `.agents/skills/`, and the prompt names the skill. The required check `skill-loaded` passes when a

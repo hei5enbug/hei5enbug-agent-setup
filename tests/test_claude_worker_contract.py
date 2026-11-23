@@ -210,8 +210,8 @@ class ClaudeWorkerDefinitionTest(unittest.TestCase):
             {
                 "type": "string",
                 "title": "Implementation worker",
-                "description": "Route implementation work: auto (the main session picks per task: the plugin worker on haiku for easy work or sonnet for normal or hard work, and a GPT worker, gpt-6-luna for easy work or gpt-6.2-sol for hard work, only when a Claude route fails or stops on a usage limit), haiku, sonnet, or opus (the plugin worker on that model only), codex (a GPT worker through the role runner at high, gpt-6-luna for easy work or gpt-6.2-sol for hard work), or sol (gpt-6.2-sol at high through the role runner).",
-                "options": ["auto", "codex", "haiku", "sol", "sonnet", "opus"],
+                "description": "Route implementation work: auto (the main session picks per task: the plugin worker on haiku for easy work or sonnet for normal or hard work, and a GPT worker, gpt-6-luna for easy work or gpt-6.2-sol for hard work, only when a Claude route fails or stops on a usage limit), claude (the same pick between haiku and sonnet, never a GPT worker: a Claude failure stops the delegation and reports the cause), haiku, sonnet, or opus (the plugin worker on that model only), codex (a GPT worker through the role runner at the Codex worker model and effort settings, auto picking gpt-6-luna for easy work or gpt-6.2-sol for hard work), or sol (gpt-6.2-sol at high through the role runner). A failed codex or sol worker continues on claude-sonnet-5-5.",
+                "options": ["auto", "claude", "codex", "haiku", "sol", "sonnet", "opus"],
                 "default": "auto",
             },
         )
@@ -249,7 +249,11 @@ class ClaudeWorkerAdapterTest(unittest.TestCase):
             "`sol`.",
             "For `auto`, spawn `worker` with the `model` that [Worker model by difficulty]"
             "(model-routing.md#worker-model-by-difficulty) gives.",
-            "When a Claude route fails or stops on a usage limit, use the Sol worker.",
+            "When a Claude route fails or stops on a usage limit, `auto` uses the Sol worker.",
+            "For `claude`, which picks the model as `auto` does, stop that delegation and report the cause: never run a "
+            "GPT worker or the Sol worker, and never switch to another model.",
+            "When the Codex or Sol worker fails or stops on a usage limit, inspect its partial diff and continue the "
+            "remaining work with `worker` on `sonnet`.",
             "A user request for one route applies to that request only.",
             "`hei5enbug-agent-setup:designer` still takes UI code, visual design, and diagram work, except the kinds "
             "the Claude Code session file assigns to the main session.",

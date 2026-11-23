@@ -126,6 +126,11 @@ def worker_setting() -> tuple[str, str, str | None]:
     return pair[0], pair[1], note
 
 
+def fixed_worker_model(setting: str) -> str | None:
+    """The GPT model a fixed `codex_worker_model` value names, or None for `auto` and the Claude Sonnet value."""
+    return setting if setting.startswith("gpt-") else None
+
+
 def claude_worker_effort() -> tuple[str, str | None]:
     """Resolve the Claude worker agent's effort from the manifest, with an optional notice for an ignored value.
 

@@ -135,8 +135,11 @@ This section adds only the Claude Code worker integration.
   `sonnet`, or `opus`, spawn `hei5enbug-agent-setup:worker` with that model as the call's `model`, the Codex worker
   (see "Codex worker" below) for `codex`, and the Sol worker (see "Sol worker" below) for `sol`. For `auto`, spawn
   `worker` with the `model` that [Worker model by difficulty](model-routing.md#worker-model-by-difficulty) gives.
-  When a Claude route fails or stops on a usage limit, use the Sol worker. A user request for one route applies to
-  that request only. `hei5enbug-agent-setup:designer` still takes UI code,
+  When a Claude route fails or stops on a usage limit, `auto` uses the Sol worker. For `claude`, which picks the
+  model as `auto` does, stop that delegation and report the cause: never run a GPT worker or the Sol worker, and
+  never switch to another model. When the Codex or Sol worker fails or stops on a usage limit, inspect its partial
+  diff and continue the remaining work with `worker` on `sonnet`. A user request for one route applies to that
+  request only. `hei5enbug-agent-setup:designer` still takes UI code,
   visual design, and diagram work, except the kinds the Claude Code session file assigns to the main session. Never
   use any other agent.
 - The `worker` agent runs at the effort in the session line "Worker agent effort" (`high` by default), on the model
@@ -191,6 +194,7 @@ This section adds only the Claude Code worker integration.
 ## Codex worker
 
 - Write the assignment, with the usual assignment fields, to a file and run the `worker` role of the role runner with
-  `--model` set by [Worker model by difficulty](model-routing.md#worker-model-by-difficulty).
+  `--model` set by [Worker model by difficulty](model-routing.md#worker-model-by-difficulty). When the
+  `codex_worker_model` setting names one GPT model, the runner uses it and rejects another `--model`, so pass none.
 - Add `--add-dir <dir>` only for a directory outside the session folder that the task must write. The plugin mod
   asks once per session.

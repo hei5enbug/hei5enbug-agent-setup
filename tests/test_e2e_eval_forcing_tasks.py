@@ -1,4 +1,4 @@
-"""Unit tests for the forced-delegation tasks F02 and F82 of the end-to-end evaluation.
+"""Unit tests for the forced-delegation tasks F02, F82, and T153 of the end-to-end evaluation.
 
 Offline proof: the unmodified fixture fails, the reference solution with a completed implementation delegation passes, and
 the same solution without one fails only the delegation check.
@@ -108,6 +108,20 @@ class ForcingTaskTest(ForcingTaskCase):
         spawn = found["data"]["spawns"][0]
         self.assertEqual((found["passed"], spawn["model"], spawn["effort"], spawn["agent_type"], spawn["result"]),
                          (True, "gpt-6.2-sol", "high", "worker", "denied by the guard: example"))
+
+    def test_T153은_수정하지_않은_저장소와_위임_없는_해법에서_실패하고_위임이_끝난_해법에서_통과한다(self):
+        """원본은 숨은 테스트와 위임 검사에서, 위임 없는 참조 해법은 위임 검사에서만 실패하고, 위임이 끝난 참조 해법은 모든 필수 검사를 통과한다."""
+        base = self.failed_required(self.results("T153", False, view_with(DELEGATION)))
+        no_delegation = self.failed_required(self.results("T153", True, view_with()))
+        passed = self.failed_required(self.results("T153", True, view_with(DELEGATION)))
+        self.assertTrue({"hidden-tests", "readme-lock-timeout"} <= base)
+        self.assertEqual((no_delegation, passed), ({"worker-delegated"}, set()))
+
+    def test_T153_프롬프트는_T57_요구사항_뒤에_구현_워커_위임_요청_한_문장을_더한다(self):
+        """T153 프롬프트는 구현 워커 위임 요청 문장으로 끝나고 위임 요청 없이 같은 요구사항을 담는다."""
+        text = (TASKS_ROOT / "prompts" / "T153.txt").read_text(encoding="utf-8")
+        self.assertIn(WORKER_PROMPT, text)
+        self.assertIn("INVENTORY_LOCK_TIMEOUT", text)
 
     @unittest.skipIf(TOOLS_MISSING, "bun or Chrome is not installed")
     def test_F82는_원본과_위임_없는_해법에서_실패하고_위임_있는_해법에서_통과한다(self):

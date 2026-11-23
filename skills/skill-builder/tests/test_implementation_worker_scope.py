@@ -190,6 +190,22 @@ class ImplementationWorkerScopeTest(unittest.TestCase):
         self.assertIn("Ordinary method comparisons keep model and effort fixed on both sides.", routing)
         self.assertIn("A specifically approved model or effort comparison may vary only its one frozen candidate setting", routing)
 
+    def test_채점과_블라인드_비교는_검토_경로를_쓰고_둘_다_실패했을_때만_대화_안에서_채점한다(self):
+        """SKILL.md는 채점과 블라인드 비교를 검토 경로로 보내고, 대화 안 채점은 그 경로와 대체가 모두 실패했거나 경로가 없을 때로 제한한다."""
+        # Given
+        skill = " ".join(SKILL.read_text(encoding="utf-8").split())
+
+        # When
+        routed = 'grade each run through the review route in "Evaluation model adapters" of `references/execution-methods.md`'
+        limited = "Grade inline only when that route and its fallback both failed or the host has none, and say so in the report."
+        blind = "Give outputs, through the same review route, to an independent judge"
+
+        # Then
+        self.assertIn(routed, skill)
+        self.assertIn(limited, skill)
+        self.assertIn(blind, skill)
+        self.assertNotIn("or grading inline otherwise", skill)
+
 
 if __name__ == "__main__":
     unittest.main()

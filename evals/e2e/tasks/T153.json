@@ -1,0 +1,106 @@
+{
+  "id": "T153",
+  "title": "Concurrent writers on one data file (explicit hand-off to the implementation worker)",
+  "category": "feature",
+  "path": "Worker model comparison on hard work: concurrency across layers, with the worker route forced by the request",
+  "fixture": "inventory-service",
+  "prompt_file": "prompts/T153.txt",
+  "limits": {
+    "wall_seconds": 2400,
+    "max_budget_usd": 20
+  },
+  "hidden_tests": {
+    "source": "hidden/T153",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 5,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "readme-lock-timeout",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "README.md",
+      "pattern": "INVENTORY_LOCK_TIMEOUT"
+    },
+    {
+      "id": "mirror-updated",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "docs/ko/README.ko.md",
+      "pattern": "INVENTORY_LOCK_TIMEOUT"
+    },
+    {
+      "id": "worker-delegated",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "worker_delegated"
+    },
+    {
+      "id": "worker-route",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "worker_route"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "exact-api",
+      "text": "Use the exact names: transaction, LockTimeout, Config.lock_timeout, INVENTORY_LOCK_TIMEOUT, <data file>.lock",
+      "keywords": [
+        "transaction",
+        "LockTimeout",
+        "lock_timeout",
+        "INVENTORY_LOCK_TIMEOUT",
+        ".lock"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "hidden-tests"
+      ]
+    },
+    {
+      "id": "korean-mirror",
+      "text": "Update the Korean mirror docs/ko/README.ko.md together with README.md",
+      "keywords": [
+        "ko.md",
+        "docs/ko",
+        "mirror",
+        "미러"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "mirror-updated"
+      ]
+    }
+  ],
+  "rubric": null
+}

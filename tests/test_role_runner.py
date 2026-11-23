@@ -459,6 +459,47 @@ class RoleRunnerTest(unittest.TestCase):
         status = self.status(completed)
         self.assertEqual(("gpt-6.2-sol", True), (status["model"], status["verified"]))
 
+    def test_worker는_codex_worker_model이_고정이면_그_모델과_effort로_실행한다(self):
+        """고정된 codex_worker_model gpt-6.1-terra와 xhigh 설정은 --model 없이 그 쌍으로 실행되고, 같은 --model도 받는다."""
+        # Given
+        extra_env = {"HEI5ENBUG_CODEX_WORKER_MODEL": "gpt-6.1-terra", "HEI5ENBUG_CODEX_WORKER_EFFORT": "xhigh"}
+        config = {"turns": [{"model": "gpt-6.1-terra", "effort": "xhigh"}]}
+
+        # When
+        implicit = self.run_runner("worker", config=config, extra_env=extra_env)
+        explicit = self.run_runner("worker", "--model", "gpt-6.1-terra", config=config, extra_env=extra_env)
+
+        # Then
+        self.assertEqual((0, 0), (implicit.returncode, explicit.returncode), implicit.stderr + explicit.stderr)
+        self.assertEqual(self.codex_argv(model="gpt-6.1-terra", effort="xhigh", sandbox="workspace-write"), self.logged()["argv"])
+        self.assertEqual(("gpt-6.1-terra", "xhigh", True), tuple(self.status(explicit)[key] for key in ("model", "effort", "verified")))
+
+    def test_worker는_codex_worker_model이_고정이면_다른_model을_종료_코드_2로_거부한다(self):
+        """고정된 codex_worker_model gpt-6.1-terra에서 난이도로 고른 gpt-6.2-sol을 --model로 주면 종료 코드 2이고 자식을 시작하지 않는다."""
+        # Given
+        extra_env = {"HEI5ENBUG_CODEX_WORKER_MODEL": "gpt-6.1-terra"}
+
+        # When
+        completed = self.run_runner("worker", "--model", "gpt-6.2-sol", extra_env=extra_env)
+
+        # Then
+        self.assertEqual(2, completed.returncode)
+        self.assertIn("codex_worker_model", completed.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_worker는_codex_worker_model이_auto면_난이도_모델을_받고_모델이_없으면_기본_luna로_실행한다(self):
+        """auto 설정에서는 --model gpt-6.2-sol을 받고, --model이 없으면 레지스트리 기본 gpt-6-luna로 실행한다."""
+        # Given
+        extra_env = {"HEI5ENBUG_CODEX_WORKER_MODEL": "auto"}
+
+        # When
+        hard = self.run_runner("worker", "--model", "gpt-6.2-sol", config={"turns": [{"model": "gpt-6.2-sol", "effort": "high"}]}, extra_env=extra_env)
+        easy = self.run_runner("worker", config={"turns": [{"model": "gpt-6-luna", "effort": "high"}]}, extra_env=extra_env)
+
+        # Then
+        self.assertEqual((0, 0), (hard.returncode, easy.returncode), hard.stderr + easy.stderr)
+        self.assertEqual("gpt-6-luna", self.status(easy)["model"])
+
     def test_implementation_대체는_난이도에_따라_gpt_6_luna로_실행할_수_있다(self):
         """Claude 호스트의 implementation 대체에 --model gpt-6-luna를 주면 레지스트리의 gpt-6.2-sol 대신 gpt-6-luna로 실행한다."""
         # Given

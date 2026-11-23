@@ -1,0 +1,1 @@
+Delegate this to the `hei5enbug-agent-setup:scout` agent as one assignment, then show me the scout's result unchanged. Scope: demo-lib/docs/missing.md only. Question: which deployment steps does that file list?

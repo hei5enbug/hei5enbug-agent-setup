@@ -460,6 +460,12 @@ T110과 T111은 답을 프롬프트에 주어 실행이 쓰기와 다시 읽기�
 | T120 | tally-demo | 저장소 지침, 반복된 교정 | 같은 이름 교정이 두 번 나온 뒤 마무리, 그 유형 하나의 검사 후보를 보이고 시드된 앞선 커밋에서 증명하되 쓰지 않음 |
 | T121 | tally-demo | 저장소 지침, 조사 뒤 결정 | 세 단계 조사 뒤 두 큐 라이브러리 중 하나를 결정, 30줄 이하 ADR 초안과 진입 줄을 보이되 쓰지 않음 |
 | T122 | tally-demo | 저장소 지침, 해당 없음 | 한 번뿐인 저장소에 없는 교정과 조사 없음, 기록 추천도 `mistake-enforcer` 실행도 없음 |
+| T150 | scout-demo | scout 결과 계약, 함수 하나 | 구분자가 없을 때 `parse_pair`가 일으키는 오류. 보고는 `pass`로 시작하고 경로와 줄 번호로 함수를 인용하며 답을 direct로 표시 |
+| T151 | scout-demo | scout 결과 계약, 없는 경로 | 존재하지 않는 `demo-lib/docs/missing.md`에 대한 질문. 보고는 `blocked`로 시작하고 경로를 밝히며 내용에 대한 결론을 내지 않음 |
+| T152 | scout-demo | scout 결과 계약, 일부 증거 | 두 파일에 걸친 구분자와 최대 줄 길이 중 길이가 없는 경우. 보고는 `issues`로 시작하고 길이를 unknown으로 표시하며 수정 제안을 하지 않음 |
+| T153 | inventory-service | 어려운 작업의 worker 모델, 위임 강제 | 앱과 CLI에 걸친 데이터 파일 하나의 프로세스 간 잠금(동시성, 공개 계약, 여러 구성요소)을 요청으로 구현 worker에게 맡김. worker의 모델은 변형의 `implementation_worker` 경로가 정함 |
+| T154 | skill-review-demo | skill 검토 역할, 채점기 | 기대 항목 셋 중 하나를 놓친 `release-notes` 실행을 Skill Builder로 채점함. 채점은 정확히 그 항목만 실패로 표시하고 출력을 인용하며, 검토 경로 실행이 있어야 함 |
+| T155 | skill-review-demo | skill 검토 역할, 비교기 | 글머리표 다섯 개 한도를 어긴 출력과 지킨 출력을 Skill Builder로 블라인드 비교함. 비교는 지킨 출력을 고르고 그 한도를 밝히며, 검토 경로 실행이 있어야 함 |
 
 T62는 지목한 스킬을 불러오는 worker 규칙을 측정합니다. 설정 스크립트가 `CHANGELOG.md`와 스킬을 `.claude/skills/`와
 `.agents/skills/` 양쪽에 커밋하고, 프롬프트가 그 스킬을 지목합니다. 필수 검사 `skill-loaded`는 worker가 스킬을 불러왔을 때

@@ -67,6 +67,38 @@ class WorkerSettingTest(unittest.TestCase):
         self.assertEqual(("gpt-6.2-sol", "high"), pair)
         self.assertIsNone(notice)
 
+    def test_Codex는_terra와_xhigh_쌍을_알림_없이_돌려준다(self):
+        """저장된 gpt-6.1-terra와 xhigh는 목록에 있으므로 그대로 돌려준다."""
+        # Given
+        self.save({"codex_worker_model": "gpt-6.1-terra", "codex_worker_effort": "xhigh"})
+
+        # When
+        pair, notice = self.resolve()
+
+        # Then
+        self.assertEqual(("gpt-6.1-terra", "xhigh"), pair)
+        self.assertIsNone(notice)
+
+    def test_Codex는_terra와_목록_밖_medium_쌍이면_기본값과_알림을_돌려준다(self):
+        """terra에 목록 밖 effort medium을 저장하면 두 키 모두 기본값으로 되돌리고 알림을 남긴다."""
+        # Given
+        self.save({"codex_worker_model": "gpt-6.1-terra", "codex_worker_effort": "medium"})
+
+        # When
+        pair, notice = self.resolve()
+
+        # Then
+        self.assertEqual(CODEX_DEFAULT, pair)
+        self.assertIn("medium", notice)
+
+    def test_고정_모델_값은_GPT_모델만_돌려주고_auto와_Claude_값은_None이다(self):
+        """fixed_worker_model은 gpt-로 시작하는 고정 값만 모델로 돌려준다."""
+        # When
+        values = {setting: plugin_toggles.fixed_worker_model(setting) for setting in ("auto", "gpt-6-luna", "gpt-6.1-terra", "claude-sonnet-5-5")}
+
+        # Then
+        self.assertEqual({"auto": None, "gpt-6-luna": "gpt-6-luna", "gpt-6.1-terra": "gpt-6.1-terra", "claude-sonnet-5-5": None}, values)
+
     def test_Codex는_마켓플레이스_이름이_달라도_플러그인_접두사가_같으면_저장값을_쓴다(self):
         """키가 hei5enbug-agent-setup@로 시작하면 마켓플레이스 이름과 무관하게 읽는다."""
         # Given
