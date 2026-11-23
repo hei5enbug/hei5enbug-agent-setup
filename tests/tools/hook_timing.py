@@ -92,6 +92,10 @@ def seed(script: str, event: str, work: Path) -> dict:
     if script == "final_report_hook.py":
         return {**base, "last_assistant_message": REPORT, "stop_hook_active": False,
                 "transcript_path": str(work / "session.jsonl")}
+    if script == "question_guard.py":
+        return {**base, "tool_name": "AskUserQuestion", "tool_input": {"questions": [{
+            "question": "Delete the demo file?", "header": "Delete", "multiSelect": False,
+            "options": [{"label": "Delete", "description": "Remove it"}, {"label": "Other", "description": "Type"}]}]}}
     if script == "agent_guard.py":
         return {**base, "tool_name": "Agent", "tool_input": {"agent_type": "default"}}
     return base

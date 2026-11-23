@@ -208,6 +208,31 @@ the input fingerprint, and a record marks each run that used it with `review_sta
 option off they keep the script's default. The reviewer is then Claude,
 not independent of a Claude author, so compare only runs that used the same setting.
 
+### Codex question hook probe
+
+`probe-question-hook` settles whether a Codex `PreToolUse` hook receives a `request_user_input` call. The official Codex
+hooks page lists the tools that event covers (shell commands, `apply_patch`, MCP and other function tools) and does not
+name `request_user_input`, so the question guard of #104 cannot be registered on Codex without this check. The probe
+builds an isolated `CODEX_HOME` like a Codex run (credential symlink, `.zprofile` ZDOTDIR) but installs no plugin. Its
+`hooks.json` holds two hooks. The guard hook has the plugin's matcher `^(AskUserQuestion|request_user_input)$`, logs the
+event it receives, and denies the call with a sentinel reason. The control hook matches every tool and only logs, so a
+silent guard hook can be told apart from hooks that do not run at all. One `codex exec` session at `low` effort then
+asks the model to call `request_user_input` once. It makes one model call and runs only when the user starts it.
+
+`--dry-run` prints the files and commands and starts nothing. A real run writes `hook-log.jsonl`, `stream.jsonl`, and
+`evidence.json` into the trial folder (`<run-root>/probes/question-hook-<UTC time>` unless `--dir` names a new one):
+
+| Verdict | Meaning | Exit |
+|---|---|---|
+| `delivered-and-denied` | The guard hook received `request_user_input`, and the rollout shows the sentinel in the tool output. Register the check on Codex. | 0 |
+| `delivered` | The guard hook received it, but the rollout does not show the denial. Read the rollout before registering. | 0 |
+| `not-delivered` | The model called the tool, and only the control hook, or no hook, logged other tools. Codex gets no automatic check. | 0 |
+| `hooks-inactive` | The model called the tool, and no hook logged anything. Inconclusive; check hook trust and rerun. | 3 |
+| `not-called` | The model never called `request_user_input`. Inconclusive; rerun or check the tool is offered. | 3 |
+
+The evidence also lists the keys of the event and of `tool_input` that the hook received, and the rollout events whose
+type names a hook.
+
 ## Commands
 
 Run every command from the repository root. The default run root is
@@ -228,6 +253,7 @@ Run every command from the repository root. The default run root is
 | Compare two variants | `python3 evals/e2e/harness/cli.py summarize --campaign <name> --compare baseline,<other>` |
 | Export a revision only | `python3 evals/e2e/harness/cli.py export-plugin --ref <ref>` |
 | Judge a change and write its record | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd [--claim-cases T36]] [--tasks T08]` |
+| Probe whether a Codex hook receives `request_user_input`; `--dry-run` starts nothing | `python3 evals/e2e/harness/cli.py probe-question-hook [--dry-run] [--dir <folder>] [--effort low]` |
 
 `--parallel` sets the number of runs at once (default 3). With several variants the order alternates per task and
 repetition (ABAB, then BABA), so time-of-day effects spread evenly.
@@ -424,6 +450,8 @@ long wait, so the task covers only what the call log and the final answer show.
 | T33 | notes-cli | Agent start in a never-used shell terminal | Hand one result to a workspace whose only terminal is a never-used shell: send the host command there and create no terminal |
 | T34 | notes-cli | First-prompt terminal cleanup | Read one setting while the plugin's hook closes the never-used shell terminal and leaves the one with typed input |
 | T67 | notes-cli | Hook removal of a finished worker's worktree | A setting change, a worktree of demo-b created without an agent, and a worker started there; the turn ends with a question, and the worktree and its local branch must be removed by the hook's detached run, not by the session |
+| T76 | notes-cli | Question dialog wording | Ask whether to delete two lines of an issue draft's five-line done-checklist that repeat other lines, for a user who asked to see it as a picture |
+| T77 | notes-cli | Question dialog wording | Ask whether to drop two unused columns of `demo.orders`, for a user who asked to see the table as a picture |
 | T78 | commit-demo | Commit skill, staged-only scope | Korean-subject history, one staged change beside an unstaged edit and an untracked `.env` |
 | T79 | commit-demo | Commit skill, required identifier | Commit rules that require a ticket key, and a request that names none |
 | T82 | demo-app | UI routing, complete specification | Four named-line edits to a settings panel; routes to the implementation worker |
@@ -448,6 +476,8 @@ long wait, so the task covers only what the call log and the final answer show.
 | T49 | tally-desk | Requirements agreement | `weekly DATE` and `archive OUT_DIR` with two open decisions; the sheet's week start, Sunday, contradicts the likely Monday |
 | T50 | tally-desk | No agreement | `busiest DATE` and `archive OUT_DIR` with every decision stated in the prompt; no question may be asked |
 | T51 | tally-desk | One question | A new rate cache that repeats `rate_for`'s `ttl_cached` cache; exactly one question, which names it |
+| T140 | notes-cli | Stored question input | Summarize a resumed session whose earlier question input shows as `\uXXXX` escapes in the conversation while the stored transcript holds the kana |
+| T141 | notes-cli | Stored question input | The same, with escape text in the stored transcript itself, then ask the question again |
 
 T62 measures the worker rule that loads a named skill. Its setup script commits `CHANGELOG.md` and the skill under both
 `.claude/skills/` and `.agents/skills/`, and the prompt names the skill. The required check `skill-loaded` passes when a
@@ -465,6 +495,23 @@ The ids T89 to T91 belong to the comparison of Claude reviewer models in
 [`evals/model-roles`](../model-roles/README.md); its opponent ids T92 and T93 ended with the removal of their skill.
 Those cases run through the role runners instead of this harness, so
 they have no task file here.
+
+T76 and T77 grade the last question dialog a run showed, from `AskUserQuestion` on Claude Code and `request_user_input`
+on Codex; a call that the plugin's question guard denied for a self-made free-form option is not counted. Both fail a
+dialog that holds a free-form option such as "Other" or "직접 입력". T76 also requires the key words of both flagged
+lines and none of "acceptance criteria", "regression", "criterion", "reviewer", or their Korean equivalents; a delete
+option and a keep option whose descriptions each name both flagged lines by key word or by a label that the dialog
+gave them; and a diagram with all five lines, in an option's `preview` on Claude Code and below the first line of the
+question text on Codex. T77 requires both column names in the dialog, in every option description, and in a drawn line
+of the diagram. The only text the setup scripts seed is fictional, and `files-untouched` records, without failing the
+run, whether the agent edited a file.
+
+T140 and T141 give the stored transcript path and grade what the run read and said. T140 requires that the run read the
+transcript and that no line says the model wrote escapes or broke the raw-character rule, drafts a defect report, or
+notes to write raw characters next time; a line that denies it does not count. T141 requires that the run read the
+transcript, say the stored input holds escape text, and ask the next question with the raw kana and no `\uXXXX`
+sequence, in the dialog or, on a host without one, in the final answer. Both use the fictional file
+`session/demo-session.jsonl`.
 
 ## Comparing a change on both hosts
 

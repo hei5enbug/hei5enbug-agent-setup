@@ -1,4 +1,4 @@
-"""Entry point: run | summarize | regrade | export-plugin | pilot-check | record."""
+"""Entry point: run | summarize | regrade | export-plugin | pilot-check | record | probe-question-hook."""
 
 from __future__ import annotations
 
@@ -10,9 +10,10 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path[0] = str(Path(__file__).resolve().parents[1])
 
-from harness import campaign, command, measure_lock, plugin_export, records, summarize  # noqa: E402
+from harness import campaign, command, measure_lock, plugin_export, question_probe, records, summarize  # noqa: E402
 from harness.config import (  # noqa: E402
-    DEFAULT_PARALLEL, DEFAULT_RUN_ROOT, EXIT_FAILURE, EXIT_LOCK_HELD, HOST_CLAUDE, MEASURE_LOCK, HarnessConfig,
+    CODEX_MODEL, DEFAULT_PARALLEL, DEFAULT_RUN_ROOT, EXIT_FAILURE, EXIT_LOCK_HELD, HOST_CLAUDE, MEASURE_LOCK,
+    HarnessConfig,
 )
 from harness.pilot_check import pilot_check  # noqa: E402
 
@@ -82,6 +83,13 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--hook-facts", action="store_true",
                         help="add the informational hook time and denials of each run, replayed from its recorded tool calls")
     record.add_argument("--records-dir", type=Path, default=records.RECORDS_DIR)
+    probe = sub.add_parser("probe-question-hook", help="probe whether a Codex PreToolUse hook receives request_user_input")
+    add_common(probe)
+    probe.add_argument("--dir", type=Path, help="trial folder; default <run-root>/probes/question-hook-<UTC time>")
+    probe.add_argument("--model", default=CODEX_MODEL)
+    probe.add_argument("--effort", default=question_probe.DEFAULT_EFFORT)
+    probe.add_argument("--timeout", type=float, default=question_probe.DEFAULT_TIMEOUT_SECONDS)
+    probe.add_argument("--dry-run", action="store_true", help="print the files and commands and start nothing")
     return parser
 
 
@@ -143,6 +151,11 @@ def do_record(args: argparse.Namespace, cfg: HarnessConfig) -> int:
     return 0
 
 
+def do_probe(args: argparse.Namespace, cfg: HarnessConfig) -> int:
+    trial = absolute(args.dir) if args.dir else question_probe.default_trial(cfg.run_root)
+    return question_probe.probe(trial, cfg.codex_bin, args.model, args.effort, args.timeout, args.dry_run, sys.stdout)
+
+
 def dispatch(args: argparse.Namespace) -> int:
     cfg = config_from(args)
     if args.action == "run":
@@ -151,6 +164,8 @@ def dispatch(args: argparse.Namespace) -> int:
         return do_summarize(args, cfg)
     if args.action == "record":
         return do_record(args, cfg)
+    if args.action == "probe-question-hook":
+        return do_probe(args, cfg)
     if args.action == "regrade":
         return campaign.regrade_campaign(
             cfg, args.campaign, frozenset(split(args.run_ids)), sys.stdout, recollect=args.recollect,

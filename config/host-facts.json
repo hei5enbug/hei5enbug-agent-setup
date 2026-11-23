@@ -684,6 +684,36 @@
           "contains": "On Codex, `onFailure` has no effect"
         }
       ]
+    },
+    {
+      "id": "claude-pretooluse-askuserquestion",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "Claude Code fires `PreToolUse` for `AskUserQuestion`, whose `tool_input` holds `questions`, each with `question`, `header`, `options` of `label` and `description`, and `multiSelect`.",
+      "doc_url": "https://code.claude.com/docs/en/hooks",
+      "quote": "Matches on tool names other than `EndConversation`: built-in tools such as `Bash`, ... `AskUserQuestion`, and `ExitPlanMode` ... Asks the user one to four multiple-choice questions. `questions` | array | [{\"question\": \"Which framework?\", \"header\": \"Framework\", \"options\": [{\"label\": \"React\", \"description\": \"Component library\"}, ...], \"multiSelect\": false}]",
+      "verified_on": "2026-11-23",
+      "lines": [
+        {
+          "file": "docs/guards.md",
+          "contains": "Claude Code fires `PreToolUse` for `AskUserQuestion`"
+        }
+      ]
+    },
+    {
+      "id": "codex-hooks-no-question-tool",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "The Codex hooks page lists no question tool among the tools `PreToolUse` covers, and does not name `request_user_input`.",
+      "doc_url": "https://learn.chatgpt.com/docs/hooks.md",
+      "quote": "PreToolUse and PostToolUse can observe more than shell and MCP calls. ... Shell commands and unified exec (`exec_command`) ... `apply_patch` file edits ... MCP tools ... Other local function tools, matched by function name, such as `update_plan`. The page never names `request_user_input`.",
+      "verified_on": "2026-11-23",
+      "lines": [
+        {
+          "file": "docs/guards.md",
+          "contains": "The Codex hooks page lists"
+        }
+      ]
     }
   ]
 }
