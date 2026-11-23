@@ -714,6 +714,22 @@
           "contains": "The Codex hooks page lists"
         }
       ]
+    },
+    {
+      "id": "codex-pretooluse-request-user-input",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "A Codex `PreToolUse` hook receives a `request_user_input` call with `tool_input.questions` and can deny it, so the question dialog guard works on Codex.",
+      "doc_url": "local evidence: probe-question-hook run on 2026-11-23 with codex-cli 0.171.0 (`<run-root>/probes/question-hook-20261123T041628Z/evidence.json`)",
+      "quote": "verdict delivered-and-denied; question_calls 1; denial_in_rollout true; guard_tool_names [request_user_input]; received_tool_input_keys [questions]; the model answered that the request_user_input tool call was refused. The run used `-c features.default_mode_request_user_input=true`.",
+      "min_version": "0.171.0",
+      "verified_on": "2026-11-23",
+      "lines": [
+        {
+          "file": "docs/guards.md",
+          "contains": "a Codex `PreToolUse` hook receives `request_user_input`"
+        }
+      ]
     }
   ]
 }

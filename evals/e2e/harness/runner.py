@@ -66,11 +66,11 @@ def write_run_files(
 
 
 def write_codex_run_files(
-    spec: RunSpec, variant: dict[str, Any], prompt: str, cfg: HarnessConfig, plugin: dict[str, Any],
+    spec: RunSpec, task: dict[str, Any], variant: dict[str, Any], prompt: str, cfg: HarnessConfig, plugin: dict[str, Any],
 ) -> list[str]:
     spec.result_dir.mkdir(parents=True, exist_ok=True)
     (spec.result_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
-    argv = codex_host.build_codex_command(cfg, variant, prompt, spec.repo)
+    argv = codex_host.build_codex_command(cfg, variant, prompt, spec.repo, bool(task.get("needs_question_tool")))
     write_json(spec.result_dir / "command.json", {
         "argv": argv, "cwd": str(spec.repo), "env": codex_host.host_env(spec.result_dir),
         "setup": codex_host.setup_commands(cfg, plugin["path"]), "approval_handling": codex_host.APPROVAL_HANDLING,
@@ -257,7 +257,7 @@ def execute_run(
     shutil.rmtree(spec.work_dir, ignore_errors=True)
     prompt = command.read_prompt(cfg.tasks_root, task)
     codex = spec.host == HOST_CODEX
-    argv = write_codex_run_files(spec, variant, prompt, cfg, plugin) if codex else write_run_files(spec, task, variant, prompt, cfg, plugin)
+    argv = write_codex_run_files(spec, task, variant, prompt, cfg, plugin) if codex else write_run_files(spec, task, variant, prompt, cfg, plugin)
     agent_tmp = spec.work_dir / AGENT_TMP_NAME
     agent_tmp.mkdir(parents=True, exist_ok=True)
     overrides = agent_overrides(spec, task, variant, cfg, agent_tmp)

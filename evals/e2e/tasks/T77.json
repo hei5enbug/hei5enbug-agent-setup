@@ -3,6 +3,7 @@
   "title": "Ask whether to drop two unused columns of a table",
   "category": "question",
   "path": "question dialog",
+  "needs_question_tool": true,
   "fixture": "notes-cli",
   "prompt_file": "prompts/T77.txt",
   "setup": "setup/T77.py",

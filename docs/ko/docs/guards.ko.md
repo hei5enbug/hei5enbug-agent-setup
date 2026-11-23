@@ -68,10 +68,10 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 "Other files"처럼 그런 낱말을 포함만 한 이름과, 그 밖의 모든 이벤트, 도구, 입력 모양은 통과합니다.
 
 Claude Code는 `AskUserQuestion`에 `PreToolUse`를 일으키고 JSON 거부 결정을 받아들입니다. Codex의 훅 문서에는 질문 도구가
-나열되어 있지 않으므로, Codex `PreToolUse` 훅이 `request_user_input`을 받는지는 `evals/e2e`의 `probe-question-hook` 명령으로
-가립니다. 이 명령은 모델 호출이 한 번 들고 소유자가 시작할 때만 돕니다. 그때까지 공용 등록은 해롭지 않은데, 호스트가 부르지
-않는 훅은 아무것도 실행하지 않기 때문입니다. 프로브가 전달되지 않음을 보이면 Codex에는 자동 검사가 없고, 문장 규칙과 "Other"
-선택지를 금지하는 Codex 도구 스키마가 그것을 덮습니다.
+나열되어 있지 않습니다. `evals/e2e`의 `probe-question-hook` 명령이 2026-11-23에 Codex 0.171.0과
+`features.default_mode_request_user_input=true`로 이를 가렸습니다. Codex `PreToolUse` 훅은 `tool_input.questions`가 든
+`request_user_input`을 받고, 거부 결정은 호출을 멈추고 그 이유를 모델에 돌려줍니다. 그래서 이 가드는 두 호스트 모두에서 질문
+대화상자를 검사합니다. 프로브는 모델 호출이 한 번 들었고 소유자가 시작해서 돌았습니다.
 
 질문이 바뀌는 대상을 쉬운 말로 밝히는지처럼 훅이 판단할 수 없는 것은 `instructions/asking-the-user.md`의 문장 규칙으로
 남습니다. 2026-11-13 세션에서 에이전트가 입력 칸이 없는 자기만의 "직접 입력" 선택지를 더했고, 그 선택은 이름만 돌려주었기

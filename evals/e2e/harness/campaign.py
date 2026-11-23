@@ -53,7 +53,7 @@ def print_plan(out: TextIO, cfg: HarnessConfig, specs: list[RunSpec], tasks: dic
             argv = command.build_command(cfg, task, variant, prompt, plugin_paths[spec.variant], spec.result_dir)
             out.write(f"{header}{shlex.join(argv)}\n")
             continue
-        argv = codex_host.build_codex_command(cfg, variant, prompt, spec.repo)
+        argv = codex_host.build_codex_command(cfg, variant, prompt, spec.repo, bool(task.get("needs_question_tool")))
         env = " ".join(f"{name}={shlex.quote(value)}" for name, value in codex_host.host_env(spec.result_dir).items())
         setup = "".join(f"setup: {env} {shlex.join(step)}\n" for step in codex_host.setup_commands(cfg, plugin_paths[spec.variant]))
         out.write(f"{header}{setup}{env} {shlex.join(argv)} < /dev/null\n")

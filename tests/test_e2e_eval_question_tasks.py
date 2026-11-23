@@ -93,6 +93,15 @@ class QuestionTaskTest(unittest.TestCase):
                                   and f"def {c['function']}(" not in source], [])
                 self.assertEqual([word for word in banned for text in texts if word in text.lower()], [])
 
+    def test_질문_대화상자를_채점하는_T76과_T77만_Codex_질문_도구_기능을_요구한다(self):
+        """T76과 T77은 needs_question_tool 을 밝히고, 질문 도구가 필요 없는 T140 T141 T102 는 밝히지 않는다."""
+        # given / when
+        declared = {task_id: bool(json.loads((TASKS_ROOT / f"{task_id}.json").read_text(encoding="utf-8")).get("needs_question_tool"))
+                    for task_id in ("T76", "T77", "T140", "T141", "T102")}
+
+        # then
+        self.assertEqual(declared, {"T76": True, "T77": True, "T140": False, "T141": False, "T102": False})
+
     def test_T76은_다섯_줄_체크리스트와_두_번_달린_의견을_심고_파일을_고치지_않으면_변경이_없다(self):
         """T76 설정은 다섯 줄 체크리스트와 의견 파일을 만들고, 좋은 질문을 낸 뒤 변경이 없으면 `files-untouched`가 통과한다."""
         # Given

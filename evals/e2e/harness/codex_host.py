@@ -30,6 +30,7 @@ ROLE_SOURCE_PREFIX = "codex-"
 DEFAULT_MARKETPLACE = "hei5enbug"
 SETUP_TIMEOUT_SECONDS = 180.0
 SETUP_TAIL = 400
+QUESTION_TOOL_FEATURE = "features.default_mode_request_user_input=true"
 APPROVAL_HANDLING = (
     "codex exec runs with approval_policy never and the danger-full-access sandbox, the same as the owner's Codex "
     "setting, so the plugin's Claude routes reach the network and the Claude config folder; no approver stands in, "
@@ -51,10 +52,16 @@ def marketplace_name(plugin_dir: str) -> str:
     return str(data.get("name") or DEFAULT_MARKETPLACE) if isinstance(data, dict) else DEFAULT_MARKETPLACE
 
 
-def build_codex_command(cfg: HarnessConfig, variant: dict[str, Any], prompt: str, repo: Path) -> list[str]:
-    """The agent command. The prompt follows `--`, so a prompt that starts with a dash is not read as an option."""
+def build_codex_command(
+    cfg: HarnessConfig, variant: dict[str, Any], prompt: str, repo: Path, question_tool: bool = False,
+) -> list[str]:
+    """The agent command. The prompt follows `--`, so a prompt that starts with a dash is not read as an option.
+
+    `question_tool` turns on the feature that offers `request_user_input` in `codex exec`; only a task that grades a question
+    dialog sets it, so every other run keeps the tools it had."""
     return [
         cfg.codex_bin, "exec", "--json", "-m", main_model(variant, HOST_CODEX), "-c", f'model_reasoning_effort="{CODEX_EFFORT}"',
+        *(["-c", QUESTION_TOOL_FEATURE] if question_tool else []),
         "--dangerously-bypass-hook-trust", "-s", "danger-full-access", "-C", str(repo), "--", prompt,
     ]
 
