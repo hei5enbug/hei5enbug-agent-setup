@@ -127,3 +127,20 @@ class AsideLookupTaskTest(cases.SkillIssueTaskCase):
 
         # then
         self.assertFalse(passed["repo-unchanged"])
+
+    def test_스킬_문서를_셸로_읽은_Codex_실행은_skill_invoked를_통과한다(self) -> None:
+        """Skill 도구 호출이 없어도 cat으로 SKILL.md를 읽으면 skill-invoked가 참이고, 목록만 본 실행은 거짓이다."""
+        # given
+        self.script("T160/apply.py")
+        path = "/home/test/.codex/plugins/cache/demo/demo-plugin/1.0.0/skills/aside-browser-tasks/SKILL.md"
+        rest = [call for call in self.reference_view()["tool_calls"] if call["name"] != "Skill"]
+
+        def shell(command: str) -> dict[str, Any]:
+            return {**MAIN_ASIDE, "input": {"command": command}}
+
+        # when
+        read = self.grade(view([shell(f"cat {path}"), *rest], ANSWER, 1))["skill-invoked"]
+        listed = self.grade(view([shell("rg --files -g 'SKILL.md'"), *rest], ANSWER, 1))["skill-invoked"]
+
+        # then
+        self.assertEqual((True, False), (read, listed))

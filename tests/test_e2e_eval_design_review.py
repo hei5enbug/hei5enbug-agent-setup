@@ -13,6 +13,14 @@ PATTERNS_READ = {"id": "r2", "name": "Read", "input": {"file_path": "skills/docs
                  "result_text": "", "is_error": False, "parent": None, "source": "main"}
 
 
+SKILL_PATH = "/home/test/.codex/plugins/cache/demo/demo-plugin/1.0.0/skills/technical-design-writer/SKILL.md"
+
+
+def shell_call(command: str) -> dict[str, Any]:
+    return {"id": "c1", "name": "Bash", "input": {"command": command}, "result_text": "", "is_error": False,
+            "parent": None, "source": "main"}
+
+
 class DesignReviewTaskTest(cases.SkillIssueTaskCase):
     task_id = "T161"
 
@@ -91,3 +99,30 @@ class DesignReviewTaskTest(cases.SkillIssueTaskCase):
 
         # then
         self.assertFalse(passed["repo-unchanged"])
+
+    def test_스킬_문서를_셸로_읽은_Codex_실행은_skill_invoked를_통과한다(self) -> None:
+        """Skill 도구 호출이 없어도 cat, sed, rg로 SKILL.md를 읽으면 skill-invoked가 참이다."""
+        # given
+        rest = [call for call in self.reference()["tool_calls"] if call["name"] != "Skill"]
+        commands = [f"cat {SKILL_PATH}", f"sed -n '1,120p' {SKILL_PATH}", f"rg -n review {SKILL_PATH}"]
+
+        # when
+        passed = [self.grade({**self.reference(), "tool_calls": [shell_call(command), *rest]})["skill-invoked"]
+                  for command in commands]
+
+        # then
+        self.assertEqual([True, True, True], passed)
+
+    def test_스킬_문서를_읽지_않고_목록만_본_실행은_skill_invoked에서_실패한다(self) -> None:
+        """SKILL.md를 이름으로 찾기만 하거나 다른 스킬의 SKILL.md를 읽으면 skill-invoked가 거짓이다."""
+        # given
+        rest = [call for call in self.reference()["tool_calls"] if call["name"] != "Skill"]
+        commands = ["pwd && rg --files -g AGENTS.md -g 'SKILL.md'", f"ls {SKILL_PATH}",
+                    "cat /home/test/skills/docs-rewrite/SKILL.md"]
+
+        # when
+        passed = [self.grade({**self.reference(), "tool_calls": [shell_call(command), *rest]})["skill-invoked"]
+                  for command in commands]
+
+        # then
+        self.assertEqual([False, False, False], passed)
