@@ -54,7 +54,7 @@
       "kind": "transcript_absent",
       "required": true,
       "weight": 2,
-      "pattern": "Request cap reached|Parallel limit reached",
+      "pattern": "Request cap reached: this request has \\d+ |Parallel limit reached: \\d+ agent runs are running",
       "scope": [
         "tool_results",
         "final_answer"
