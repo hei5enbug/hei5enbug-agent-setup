@@ -59,11 +59,19 @@
         "tool_results",
         "final_answer"
       ]
+    },
+    {
+      "id": "delegation-report",
+      "kind": "delegation_report",
+      "required": false,
+      "weight": 0,
+      "over": 2
     }
   ],
   "constraints": [
     {
       "id": "contracts",
+      "field": "constraints",
       "text": "Follow the given contracts: report --format json shape and INVENTORY_LOW_STOCK / Config.low_stock_threshold",
       "keywords": [
         "--format",
@@ -79,5 +87,11 @@
       ]
     }
   ],
+  "handoff": {
+    "pass_checks": [
+      "hidden-json",
+      "hidden-low-stock"
+    ]
+  },
   "rubric": null
 }

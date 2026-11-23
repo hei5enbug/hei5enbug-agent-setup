@@ -56,10 +56,10 @@ automatic answers, and defaults are not answers. Before asking the user anything
 
 - Activate a skill for an implementation plan, design document, or RFC only when the user explicitly requests
   that deliverable or directly invokes the skill. Do not infer it from general implementation, diagnosis, code
-  review, summarization, or a passing mention, and do not chain another skill from those tasks.
-  Task preparation under the implementation execution rules is not such a request.
-- `document-to-confluence`, `suggest-commit`, and `technical-design-writer` are an exception: they remain automatic
-  when their own descriptions match the user's intent.
+  review, summarization, or a passing mention, and chain no other skill from them.
+  Task preparation and [requirements agreement](../requirements-agreement.md) are not such requests.
+- `document-to-confluence`, `suggest-commit`, and `technical-design-writer` are exceptions: they stay automatic
+  when their descriptions match the user's intent.
 - Before creating or revising an implementation plan the user requested, read
   [implementation planning](../implementation-planning.md).
 

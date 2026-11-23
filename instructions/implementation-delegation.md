@@ -15,6 +15,10 @@ workspace, and that it must preserve their changes. A repository execution plan 
 Each worker prompt carries only its own task and the context that task requires. Point to files and line ranges
 instead of pasting their content.
 
+When a worker's task names a skill, its assignment states the skill name and tells the worker to load it with the
+host's skill mechanism before the work the skill covers and to follow it instead of doing that work by hand. An
+assignment that names no skill says nothing about skills.
+
 ## Scheduling
 
 Track each task as `pending`, `running`, `done`, or `blocked` with the host's existing task facility or the
@@ -44,6 +48,12 @@ when the host record, or the enforcement the host's agent rules name (such as th
 runner's verification), shows the selected model and effort for every turn that edited it. The main session may make
 integration fixes when it owns those paths; otherwise wait for the current worker to stop before transferring
 ownership. Never run a shared build while workers mutate its inputs or output directories.
+
+For an assignment that named a skill, also check the worker's host record for the load of each named skill, as for
+the model and effort. Where the host keeps a record, run
+`python3 <Source directory>/scripts/skill_load_check.py --record <host record> --result <result file> --skill <name>`
+with one `--skill` for each name. A result whose record shows no load of a named skill, or whose result lists none,
+is not accepted: handle it as a failed acceptance check.
 
 ## Failure and recovery
 
@@ -93,4 +103,8 @@ An assigned worker executes its task directly and never acts as a coordinator.
   change to the coordinator instead of resolving it.
 - Run only the assigned checks, with the isolation flags the assignment gives.
 - For a readiness-only assignment, make no edit and report readiness.
+- When the assignment names a skill, load it first with the host's skill mechanism, follow it instead of doing its
+  work by hand, and list each skill you loaded in the result. When it cannot be loaded, stop, make no edit that
+  the skill covers, and report the missing skill to the coordinator as a blocker.
+- Before your first edit, read [implementation rules](implementation-rules.md).
 - Return the changed paths, check results, and remaining blockers.

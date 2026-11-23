@@ -1,0 +1,1 @@
+memo count 명령을 추가해줘. 저장된 메모 수를 숫자만 한 줄로 출력하고, --tag TAG를 주면 그 태그가 붙은 메모만 센다. README와 한글 미러도 같이 고치고, 변경 이력은 changelog-entry 스킬로 CHANGELOG.md에 남겨줘.

@@ -8,7 +8,7 @@ import threading
 from datetime import datetime
 from typing import Any
 
-from . import caps, codex_calls, codex_host, collect, command, environment, metrics, rubric, transcript, usage
+from . import caps, codex_calls, codex_host, collect, command, environment, metrics, rubric, scripted_user, transcript, usage, user_turns
 from .config import (
     APPROVAL_GUARD_OFF_ENV, CLAUDE_INSTRUCTION_ENV, FINISHED_STATUSES, HOST_CODEX, INSTRUCTION_ISOLATION, STATUS_COMPLETE,
     STATUS_INFRA_FAILED, STATUS_INTERRUPTED, STATUS_TIMED_OUT, STATUS_USAGE_LIMITED, HarnessConfig,
@@ -55,7 +55,8 @@ def write_run_files(
     write_json(spec.result_dir / "settings.json", command.run_settings(
         variant, environment.profile_plugin_ids(environment.claude_config_dir()), command.ancestor_excludes(spec.repo)))
     write_json(spec.result_dir / "mcp.json", command.mcp_config(
-        spec.result_dir / "approvals.jsonl", spec.work_dir, spec.repo, (plugin["path"],)))
+        spec.result_dir / "approvals.jsonl", spec.work_dir, spec.repo, (plugin["path"],),
+        command.user_env(task, cfg.tasks_root, spec.result_dir)))
     argv = command.build_command(cfg, task, variant, prompt, plugin["path"], spec.result_dir)
     write_json(spec.result_dir / "command.json", {"argv": argv, "cwd": str(spec.repo)})
     return argv
@@ -132,7 +133,7 @@ def analyze(
         records = {**records, "extra": codex_host.host_metrics(records)}
     else:
         records = claude_records(spec, run)
-    view = records["view"]
+    view = {**records["view"], "user_exchanges": scripted_user.load_log(directory / scripted_user.LOG_NAME)}
     write_json(directory / "view.json", view)
     grade, rubric_result, failure = None, None, None
     if run["status"] in FINISHED_STATUSES:
@@ -276,11 +277,23 @@ def execute_run(
             failed = {**run, "status": STATUS_INFRA_FAILED, "error": f"codex setup failed: {error}"}
             write_json(spec.result_dir / "run.json", failed)
             return failed
-    proc = run_agent(
-        argv, spec.repo, env, spec.result_dir / "stream.jsonl", spec.result_dir / "stderr.txt",
-        float(task["limits"]["wall_seconds"]), cfg.sigint_grace, cfg.sigterm_grace, interrupt=interrupt,
-        result_idle_seconds=None if codex else cfg.result_idle_seconds,
-    )
+    sheet = (task.get("user") or {}).get("sheet")
+    if sheet:
+        resume = (lambda session, reply: codex_host.build_codex_resume(cfg, variant, session, reply)) if codex \
+            else user_turns.claude_resume(argv)
+        proc = user_turns.run_conversation(
+            first_argv=argv, resume_argv=resume, host=spec.host, cwd=spec.repo, env=env, stream_path=spec.result_dir / "stream.jsonl",
+            stderr_path=spec.result_dir / "stderr.txt", wall_seconds=float(task["limits"]["wall_seconds"]),
+            sigint_grace=cfg.sigint_grace, sigterm_grace=cfg.sigterm_grace,
+            sheet=scripted_user.load_sheet(cfg.tasks_root / sheet), log_path=spec.result_dir / scripted_user.LOG_NAME,
+            interrupt=interrupt,
+        )
+    else:
+        proc = run_agent(
+            argv, spec.repo, env, spec.result_dir / "stream.jsonl", spec.result_dir / "stderr.txt",
+            float(task["limits"]["wall_seconds"]), cfg.sigint_grace, cfg.sigterm_grace, interrupt=interrupt,
+            result_idle_seconds=None if codex else cfg.result_idle_seconds,
+        )
     if codex:
         return finish_codex_run(spec, task, run, proc, cfg, interrupt)
     return finish_run(spec, task, run, proc, cfg, interrupt)

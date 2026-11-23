@@ -89,9 +89,39 @@ Measurement runs turn the plugin's approval guard off by default (see "Codex hos
 that turns it on.
 Calls that the permission mode or the plugin's guard allow without a prompt never reach it, so they are not counted.
 
-The harness cannot answer a question that the agent asks with `AskUserQuestion`. The approver lets the call through,
-and the run ends with the question unanswered. Task prompts therefore leave no decision open that would change the
-result.
+Without an answer sheet the harness cannot answer a question that the agent asks with `AskUserQuestion`: the approver
+lets the call through, and the run ends with the question unanswered. Task prompts therefore leave no decision open that
+would change the result, except in a task that names an answer sheet (see "Scripted user").
+
+### Scripted user
+
+A task with `user.sheet` (a file under `tasks/answers/`) gets a user that is a script with no model, `harness/scripted_user.py`.
+The sheet is not in the agent's folder or in the exported plugin. It lists each decision (`id`, `terms`, `answer`) and each
+point an approved specification must hold (`id`, `terms`, `rejected_terms`, `sentence`); a term may give alternatives with `|`,
+such as `sunday|일요일`, and terms are compared without case.
+
+- A question is about a decision when it contains at least one of that decision's terms. It gets the answer of every decision it
+  matches, in sheet order, and the sheet's fallback, "use your recommendation", when it matches none. A question asked through
+  `AskUserQuestion` is matched on its text, its header, and its option labels; the approver server answers it in the tool's
+  free-form answer for each question.
+- A question that contains an approval term (`approve`, `approval`, `승인` unless the sheet lists others) is a request for
+  approval. It is approved with the sheet's approval sentence when the specification text holds every term of every required
+  point and no rejected term outside the heading of rejected alternatives; otherwise it gets the sentence of the first point that
+  fails. A heading is a markdown heading, a bold line, or a label line that starts with a heading from the sheet (`Rejected
+  alternatives`, `기각한 대안`); its section ends at the next heading or label line. The specification text is the question for a
+  plain-text question's whole turn, and the assistant text since the previous question for a tool question, read from the
+  stream, which can miss text the stream has not yet written.
+- A turn that ends with a question in plain text (its last line ends with `?`) is answered by resuming the session: `claude -p
+  --resume <session>` with the same flags, or `codex exec resume <thread>` with the model, effort, and sandbox set by `-c`, because
+  `exec resume` takes no `-s` or `-C`. Every turn appends to the same stream, and the wall-clock limit covers all of them. The run
+  stops when a turn ends without a question, at the sheet's `max_exchanges`, or, when the sheet sets `answer_after_approval` to
+  false, at the first question after an approval, which is logged without a reply.
+- `user-log.jsonl` in the run's result folder logs every exchange: its kind (`tool` or `text`), question, matched identifiers,
+  reply, whether it asked for approval and was approved, the specification an approval was judged on, and the paths the agent had
+  edited and the commit count at that moment. `view.json` carries it as `user_exchanges` for the graders.
+
+The `exec resume` command and the `AskUserQuestion` round trip need a first paid pilot run on each host before a measurement
+relies on them.
 
 ### Codex host
 
@@ -283,13 +313,16 @@ Each `metrics.json` separates measured values from estimates.
 | Spend including attempts, cost per success | Summary only: every attempt of a task, and that spend divided by the successes. A cell whose spend leaves out an attempt that holds no cost figure reads `>= <value> (incomplete)`, never a plain total. |
 | `grade_error` | Present when grading raised. `metrics.json` still holds usage, cost, and tool counts, and `run.json` records the same error. The summary leaves such a run out of the success and correctness statistics but counts its spend. `regrade` clears the error once grading succeeds. |
 | Handoff loss | Task constraints that the main session knew but that a delegation prompt did not mention, and checks that failed because of it. |
+| `delegation` | Present when the task has a `delegation_report` check: the changed-file count, its limit, the completed implementation delegations, and `skipped`. `skipped` is true when more files changed than the limit and no implementation delegation completed. |
 
 ## Graders
 
 The graders in `harness/graders.py` check the final repository against its base commit. Check kinds include the
 pre-existing tests (the fixture's own test files, restored over any edits), hidden tests, changed-path limits, text
 checks, commit checks, line coverage, and forbidden commands or leaked values in the transcript. A task's custom
-checks live in `tasks/custom/`.
+checks live in `tasks/custom/`. The `delegation_report` check never fails and carries no weight: it records the
+changed-file count and whether a change over its limit (`over`, default 2) went without a completed implementation
+delegation. T05, T12, and T20 carry it.
 
 The rubric grade covers only what a script cannot judge: design quality for T01 and answer quality for T10. The
 assignment holds the task prompt, the rubric, and the artifact, but no variant name, revision, or model name. It runs
@@ -399,6 +432,34 @@ long wait, so the task covers only what the call log and the final answer show.
 | T101 | notes-cli | Built-in agent request is refused | One request for a `general-purpose` agent; the plugin must refuse it, no such agent may do any work, and nothing is changed |
 | T112 | demo-app | UI routing, new screen | A new invoices screen of three rows built from scratch, fitting at 1280 and 375 px; routes to the designer at its pinned `xhigh` |
 | T113 | notes-cli | Orca session start model | A skill issue for another plugin's repository, which the delegation rules hand to a new session there; a fake `orca` and a seeded plugin repository, and the run passes only when every session start names a model and effort and none names Fable or Astra |
+| T37 | notes-cli | Worker delegation with a failure condition and a compatibility decision | `memo import FILE` that exits with code 3 and prints nothing on a missing file, and a new file format that keeps reading the old one |
+| T38 | parcel-desk | Existing assertions beside a new behavior | Zone C billed in 250 g steps, where changing the shared step constant breaks the existing assertions about the other zones; edits in three or more files |
+| T39 | parcel-desk | A stated behavior change that one assertion follows | `round_cents` changes from rounding down to rounding half up, and one existing test asserts rounding down |
+| T40 | parcel-desk | Boundary and failure-path tests | A 40-parcel limit on `pickup_fee_cents` with a named error; the agent's own tests must pass on a reference and fail on four seeded faulty copies |
+| T41 | shop-desk | Fewest new parts | A per-customer discount limit that the prompt confines to three named code files and one setting key; edits in three or more files |
+| T42 | shop-desk | Reuse of an existing value | A `statement` command whose tax must follow the rate that `sales` uses, changed through `SHOP_TAX_PERCENT`; edits in three or more files |
+| T43 | shop-desk | Explicit failure | An `export-orders` command that calls `StorageClient.upload`; the hidden test makes the client fail; edits in three or more files |
+| T44 | shop-desk | Callers and consumers | `lookup_customer` returns a `Customer` instead of a dict; a second caller in another module and a file stored by the previous version must keep working; edits in three or more files |
+| T45 | shop-desk | Evidence before assumption | A `top-customers` command built on `customers_by_spend`, whose docstring promises sorted output that the code does not give; the final report must name the function; edits in three or more files |
+| T46 | shop-desk | Root cause of a reported defect | `shop place 1 ab-100:2` fails on a lowercase SKU; the broken rule lives in `catalog.price_cents`, which the `price` command and `place_order` also use |
+| T47 | shop-desk | Repeat safety | An `import-orders` command that is rerun after a failure; a hidden test holds a first run after its read until a second run has finished, and starts four runs together; edits in three or more files |
+| T48 | shop-desk | Real environment | Week labels that count from Sunday, which the README says the reporting database (SQLite) also computes, with `scripts/engine_check.py` as the local engine check |
+| T62 | notes-cli | Worker delegation: named skill | A `memo count` command, with a changelog line that only the repository skill `changelog-entry` describes |
+| T49 | tally-desk | Requirements agreement | `weekly DATE` and `archive OUT_DIR` with two open decisions; the sheet's week start, Sunday, contradicts the likely Monday |
+| T50 | tally-desk | No agreement | `busiest DATE` and `archive OUT_DIR` with every decision stated in the prompt; no question may be asked |
+| T51 | tally-desk | One question | A new rate cache that repeats `rate_for`'s `ttl_cached` cache; exactly one question, which names it |
+
+T62 measures the worker rule that loads a named skill. Its setup script commits `CHANGELOG.md` and the skill under both
+`.claude/skills/` and `.agents/skills/`, and the prompt names the skill. The required check `skill-loaded` passes when a
+worker loaded the skill (a `Skill` call on Claude Code, a read of its `SKILL.md` on Codex), or, when the run delegated no
+implementation, when the main session did; `changelog-entry` passes only for a line in the skill's format, which hand work
+cannot guess; the informational check `result-lists-skill` reads whether a worker result names the skill.
+`scripts/skill_load_check.py` applies the same load rule to a host record, and `tests/test_worker_named_skill.py` seeds it.
+
+T37 to T48 carry a marking that names what each case measures, and no harness code reads it: `handoff` on T37 and the
+`field` of its constraints (an assignment field), `rule_test` on T38 to T40 and T07 (a testing rule item), and
+`code_rule` on T41 to T48 and T02 and T08 (an implementation rule), and `agreement` on T49 to T51 (the requirements
+agreement). Each lists the required checks that decide the case.
 
 The ids T89 to T91 belong to the comparison of Claude reviewer models in
 [`evals/model-roles`](../model-roles/README.md); its opponent ids T92 and T93 ended with the removal of their skill.

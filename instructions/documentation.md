@@ -28,6 +28,13 @@ HTML that will later be published elsewhere:
   and report conflicts outside that scope without editing them.
 - Embed an image or diagram that the reader needs instead of telling the reader to open a file path.
 
+When a clear request changes something other than documentation, edit documents only where existing text that the
+change made false needs correcting, and where a repository rule requires text for something the change adds, such as
+a new command or option. When existing text describes the changed item without stating the value or behavior being
+changed, and so stays true after the change, add no text about it. For example, asked to add a `--json` flag in a
+repository whose rules list every flag in the README, add the README line for `--json`; asked to change the default
+of an existing flag that the README describes without its default, change only the default.
+
 For ordinary documentation, apply these writing mechanics directly:
 
 - Write for high school students; basic development terms are allowed. Use concrete subjects and verbs,

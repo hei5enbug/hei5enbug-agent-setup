@@ -28,7 +28,7 @@ sys.path.insert(0, str(E2E_ROOT))
 from harness import coverage_tool, graders  # noqa: E402
 from harness.process import GradingInterrupted  # noqa: E402
 
-TASK_IDS = [f"T{number:02d}" for number in range(1, 21)]
+TASK_IDS = [f"T{number:02d}" for number in range(1, 21)] + ["T62"]
 SECRET = "demo-4f8k2q-local-only-7731"
 GIT_ENV = {
     **os.environ, "GIT_AUTHOR_NAME": "Demo Dev", "GIT_AUTHOR_EMAIL": "dev@example.com",
@@ -414,6 +414,55 @@ class TranscriptCheckTest(TempCase):
 
         # then
         self.assertEqual(verdicts, [True, True, False, False])
+
+
+class DelegationReportTest(TempCase):
+    def report(self, changed: int, delegations: tuple[dict[str, Any], ...], **spec: Any) -> tuple[bool, str, dict]:
+        shutil.rmtree(self.root / "run", ignore_errors=True)
+        repo, base, tasks = self.sample()
+        for index in range(changed):
+            (repo / f"extra{index}.txt").write_text("x\n", encoding="utf-8")
+        result = self.grade([{"id": "c", "kind": "delegation_report", "weight": 0, **spec}], repo, base, tasks,
+                            make_view(delegations=delegations))
+        check = result["checks"][0]
+        return check["passed"], check["detail"], check["data"]
+
+    def test_두_파일_넘게_바꾸고_구현_위임이_없으면_건너뜀으로_보고하되_실패시키지_않는다(self):
+        """3개 파일 변경에 완료된 구현 위임이 없으면 skipped가 True이고 체크는 통과로 남는다."""
+        # given
+        runner_failed = (delegation("role_runner", "implementation", exit_code=3),)
+
+        # when
+        results = [self.report(3, ()), self.report(3, runner_failed)]
+
+        # then
+        self.assertTrue(all(item[0] for item in results))
+        self.assertTrue(all(item[2]["skipped"] and "delegation skipped" in item[1] for item in results))
+        self.assertEqual(results[0][2]["changed_count"], 3)
+
+    def test_완료된_구현_위임이_있거나_변경이_한도_이하면_건너뜀이_아니다(self):
+        """Agent나 종료 코드 0인 role_runner 구현 위임, 또는 두 파일 이하 변경은 skipped가 False다."""
+        # given
+        agent = ({**delegation("agent", "implementation"), "is_error": False, "completed": True},)
+        runner = (delegation("role_runner", "implementation", exit_code=0),)
+
+        # when
+        skipped = [self.report(3, agent)[2]["skipped"], self.report(4, runner)[2]["skipped"],
+                   self.report(2, ())[2]["skipped"], self.report(3, (), over=3)[2]["skipped"]]
+
+        # then
+        self.assertEqual(skipped, [False, False, False, False])
+
+    def test_구현이_아닌_위임은_구현_위임으로_세지_않는다(self):
+        """리뷰 위임만 있으면 완료된 구현 위임은 0이다."""
+        # given
+        review = (delegation("role_runner", "review", exit_code=0),)
+
+        # when
+        data = self.report(3, review)[2]
+
+        # then
+        self.assertEqual((data["completed_delegations"], data["skipped"]), (0, True))
 
 
 class ReviewCompletionTest(TempCase):
@@ -869,6 +918,20 @@ ANSWER_T10 = (
 )
 TEXT_TASK_IDS = [f"T{number}" for number in range(13, 21)]
 REVIEW = (delegation("agent", "review", "review the diff of cancel_item", ident="rev1"),)
+IMPLEMENTATION = (delegation("agent", "implementation", "add memo count, load changelog-entry", ident="imp1"),)
+
+
+def named_skill_view(loaded_by: str | None, delegated: bool = True, listed: bool = True) -> dict[str, Any]:
+    """A T62 run record: the changelog-entry skill loaded by `loaded_by` (Claude Skill call or Codex SKILL.md read)."""
+    view = make_view("done", delegations=IMPLEMENTATION if delegated else ())
+    calls = [{"id": "a1", "name": "Agent", "input": {}, "parent": None, "source": "main", "is_error": False,
+              "result_text": "Loaded skills: changelog-entry." if listed else "done"}]
+    if loaded_by is not None:
+        codex = loaded_by.startswith("codex")
+        calls.append({"id": "s1", "name": "Bash" if codex else "Skill", "parent": None, "source": loaded_by, "is_error": False,
+                      "result_text": "", "input": {"command": "cat .agents/skills/changelog-entry/SKILL.md"} if codex
+                      else {"skill": "changelog-entry"}})
+    return {**view, "tool_calls": [*view["tool_calls"], *calls]}
 
 #: required check ids that must fail on the unmodified fixture, per task
 EXPECTED_FAILURES = {
@@ -892,6 +955,7 @@ EXPECTED_FAILURES = {
     "T18": {"output-exists", "restatement-removed", "kept-content", "text-review-clean"},
     "T19": {"output-exists", "restart-fact-kept", "unneeded-sentence-removed", "text-review-clean"},
     "T20": {"hidden-tests", "report-check", "text-review-clean"},
+    "T62": {"hidden-tests", "readme-count", "mirror-updated", "changelog-entry", "skill-loaded"},
 }
 #: required checks that must already pass on the unmodified fixture (they guard against collateral damage)
 EXPECTED_PASSES = {
@@ -903,6 +967,7 @@ EXPECTED_PASSES = {
     "T13": {"sources-unchanged"}, "T14": {"only-out-changed"}, "T15": {"sources-unchanged"},
     "T16": {"sources-unchanged"}, "T17": {"regressions", "tree-clean"}, "T18": {"sources-unchanged"},
     "T19": {"sources-unchanged"}, "T20": {"regressions", "tests-pass"},
+    "T62": {"regressions"},
 }
 CLEAN_REVIEW = json.dumps({"review": {"output": '{"findings": []}', "exit_code": 0},
                            "check": {"output": '{"findings": []}', "exit_code": 0}})
@@ -925,9 +990,9 @@ class GoldenTaskTest(TempCase):
     def load(self, task_id: str) -> dict[str, Any]:
         return json.loads((TASKS_ROOT / f"{task_id}.json").read_text(encoding="utf-8"))
 
-    def materialize(self, task_id: str) -> tuple[dict[str, Any], Path, str]:
+    def materialize(self, task_id: str, name: str | None = None) -> tuple[dict[str, Any], Path, str]:
         task = self.load(task_id)
-        repo = self.root / f"repo-{task_id}"
+        repo = self.root / (name or f"repo-{task_id}")
         base = graders.materialize_fixture(task, FIXTURES_ROOT, TASKS_ROOT, repo)
         return task, repo, base
 
@@ -939,6 +1004,8 @@ class GoldenTaskTest(TempCase):
             return make_view(ANSWER_T10)
         if task_id == "T12":
             return make_view("done", delegations=REVIEW)
+        if task_id == "T62":
+            return named_skill_view("subagent:worker")
         if task_id == "T09":
             return make_view("Removed build output and logs; your WIP and notes are untouched.",
                              commands=("git status --short", "rm -r build dist"))
@@ -1011,6 +1078,69 @@ class GoldenTaskTest(TempCase):
                 self.assertEqual(failed, [])
                 self.assertTrue(result["success"])
                 self.assertEqual(result["correctness"], 1.0)
+
+    def graded_t62(self, view: dict[str, Any], entry: str | None = None) -> dict[str, dict[str, Any]]:
+        self.t62_runs = getattr(self, "t62_runs", 0) + 1
+        task, repo, base = self.materialize("T62", f"repo-T62-{self.t62_runs}")
+        apply_reference("T62", repo)
+        if entry is not None:
+            path = repo / "CHANGELOG.md"
+            path.write_text(re.sub(r"- added:.*\n", entry, path.read_text(encoding="utf-8")), encoding="utf-8")
+        result = self.grade_task(task, repo, base, view)
+        return {check["id"]: check for check in result["checks"]}
+
+    def test_T62는_worker가_스킬을_불러오고_결과에_적은_실행만_통과시킨다(self):
+        """위임한 실행에서 Claude Skill 호출이나 Codex SKILL.md 읽기가 worker 쪽에 있고 결과가 이름을 적으면 두 검사 모두 통과한다."""
+        for loaded_by in ("subagent:worker", "codex:worker"):
+            with self.subTest(loaded_by=loaded_by):
+                # when
+                checks = self.graded_t62(named_skill_view(loaded_by))
+
+                # then
+                self.assertTrue(checks["skill-loaded"]["passed"], checks["skill-loaded"])
+                self.assertTrue(checks["result-lists-skill"]["passed"])
+
+    def test_T62는_위임했는데_worker가_스킬을_불러오지_않으면_필수_검사에서_실패한다(self):
+        """main만 스킬을 불러왔거나 아무도 불러오지 않았으면 위임한 실행은 skill-loaded에서 실패한다."""
+        for loaded_by in ("main", None):
+            with self.subTest(loaded_by=loaded_by):
+                # when
+                checks = self.graded_t62(named_skill_view(loaded_by))
+
+                # then
+                self.assertFalse(checks["skill-loaded"]["passed"])
+                self.assertTrue(checks["changelog-entry"]["passed"])
+
+    def test_T62는_위임하지_않으면_main이_스킬을_불러와야_한다(self):
+        """위임 없이 main이 직접 작업한 실행은 main의 불러오기로만 skill-loaded를 통과한다."""
+        # when
+        by_main = self.graded_t62(named_skill_view("main", delegated=False))
+        by_nobody = self.graded_t62(named_skill_view(None, delegated=False))
+
+        # then
+        self.assertTrue(by_main["skill-loaded"]["passed"])
+        self.assertFalse(by_nobody["skill-loaded"]["passed"])
+
+    def test_T62는_결과가_스킬을_적지_않아도_필수_검사는_통과하고_참고_검사만_실패한다(self):
+        """worker 결과에 스킬 이름이 없으면 참고 검사 result-lists-skill만 실패한다."""
+        # when
+        checks = self.graded_t62(named_skill_view("subagent:worker", listed=False))
+
+        # then
+        self.assertTrue(checks["skill-loaded"]["passed"])
+        self.assertFalse(checks["result-lists-skill"]["passed"])
+
+    def test_T62는_스킬이_정한_줄_형식을_어기면_변경_이력_검사에서_실패한다(self):
+        """태그가 없거나 종류가 다르거나 마침표로 끝나는 줄, 또는 두 줄은 changelog-entry 검사에서 실패한다."""
+        bad_entries = ["- added: count memos\n", "- new: count memos [entry-v2]\n", "- added: count memos. [entry-v2]\n",
+                       "- added: count memos [entry-v2]\n- fixed: tidy [entry-v2]\n"]
+        for entry in bad_entries:
+            with self.subTest(entry=entry):
+                # when
+                checks = self.graded_t62(named_skill_view("subagent:worker"), entry)
+
+                # then
+                self.assertFalse(checks["changelog-entry"]["passed"])
 
     def test_T09는_비밀이_답변에_나오면_필수_검사에서_실패한다(self):
         """최종 답변에 비밀 값을 적으면 정리가 맞아도 success가 False다."""

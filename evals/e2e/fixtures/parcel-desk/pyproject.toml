@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "parcel-desk"
+version = "0.2.0"
+description = "Shipping quotes for parcels"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+parcel = "parcel.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["parcel*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,111 @@
+{
+  "id": "T62",
+  "title": "Memo count with a changelog entry from a named skill",
+  "category": "feature",
+  "path": "worker delegation: named skill",
+  "fixture": "notes-cli",
+  "setup": "setup/T62.py",
+  "prompt_file": "prompts/T62.txt",
+  "limits": {
+    "wall_seconds": 1500,
+    "max_budget_usd": 10
+  },
+  "hidden_tests": {
+    "source": "hidden/T62",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden"
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "readme-count",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "README.md",
+      "pattern": "memo count"
+    },
+    {
+      "id": "mirror-updated",
+      "kind": "file_contains",
+      "required": true,
+      "weight": 1,
+      "path": "docs/ko/README.ko.md",
+      "pattern": "memo count"
+    },
+    {
+      "id": "changelog-entry",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "changelog_entry"
+    },
+    {
+      "id": "skill-loaded",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "skill_loaded"
+    },
+    {
+      "id": "result-lists-skill",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "worker_result_lists_skill"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "named-skill",
+      "text": "Write the changelog entry with the changelog-entry skill",
+      "keywords": [
+        "changelog-entry"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "changelog-entry",
+        "skill-loaded"
+      ]
+    },
+    {
+      "id": "korean-mirror",
+      "text": "Update the Korean mirror docs/ko/README.ko.md together with README.md",
+      "keywords": [
+        "ko.md",
+        "docs/ko",
+        "mirror",
+        "미러"
+      ],
+      "applies_to": [
+        "implementation"
+      ],
+      "check_ids": [
+        "mirror-updated"
+      ]
+    }
+  ],
+  "rubric": null
+}

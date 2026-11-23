@@ -1,0 +1,7 @@
+`shop.customers.lookup_customer`가 dict 대신 `shop.models.Customer` 데이터클래스(필드는 `id`, `name`, `tier`, `email=None` 순서)를 돌려주게 바꿔줘.
+
+- `email`은 저장된 고객 데이터의 선택 항목(`email` 키)이고, 없으면 None이야.
+- `shop lookup`은 `이름 (등급)` 줄 아래에 이메일이 있을 때만 `email: <주소>` 줄을 더 출력해.
+- 테스트는 tests/test_customers.py에 추가해줘.
+
+README에도 반영해줘.

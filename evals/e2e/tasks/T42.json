@@ -1,0 +1,81 @@
+{
+  "id": "T42",
+  "title": "A second report that needs the tax rate of the first",
+  "category": "feature",
+  "path": "reuse: the one existing rate must drive both reports",
+  "fixture": "shop-desk",
+  "prompt_file": "prompts/T42.txt",
+  "limits": {
+    "wall_seconds": 2400,
+    "max_budget_usd": 20
+  },
+  "hidden_tests": {
+    "source": "hidden/T42",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tax-rate",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_statement.py"
+      ]
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "new-tests",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "new_tests"
+    },
+    {
+      "id": "readme-updated",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "README.md",
+      "pattern": "statement"
+    },
+    {
+      "id": "mirror-updated",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "docs/ko/README.ko.md",
+      "pattern": "statement"
+    },
+    {
+      "id": "files-changed",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "files_changed"
+    }
+  ],
+  "code_rule": {
+    "rule": "reuse-existing",
+    "pass_checks": [
+      "hidden-tax-rate",
+      "regressions"
+    ]
+  },
+  "rubric": null
+}

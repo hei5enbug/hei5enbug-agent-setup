@@ -105,5 +105,11 @@
       ]
     }
   ],
+  "rule_test": {
+    "item": null,
+    "pass_checks": [
+      "tests-untouched"
+    ]
+  },
   "rubric": null
 }

@@ -14,6 +14,15 @@ in a worker assignment. A worker assignment names, for each test it asks for, th
   instead.
 - When a change adds or alters behavior, write or update its test in the same change, not as a later follow-up.
 
+## Existing tests and boundaries
+
+- When an existing test or an assigned acceptance check fails after your change, change the implementation. Change,
+  remove, or skip an existing assertion only when the request or the assignment states the behavior change that the
+  new assertion expresses, and name that statement in your result. When the check itself looks wrong, leave it as it
+  is and report it to the coordinator, or ask the user when you are the main session.
+- When a change adds or alters a condition or a failure path, test each side of the condition's boundary value and
+  each new failure path.
+
 ## Test properties
 
 - Fast: when a behavior can be checked without a container, a full application context, or the network, test it at

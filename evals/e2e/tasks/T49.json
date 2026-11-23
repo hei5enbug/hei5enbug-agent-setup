@@ -1,0 +1,96 @@
+{
+  "id": "T49",
+  "title": "Weekly summary and archive copy with two open decisions",
+  "category": "agreement",
+  "path": "requirements agreement: two deliverables, two open decisions, one answer that contradicts the likely assumption",
+  "fixture": "tally-desk",
+  "prompt_file": "prompts/T49.txt",
+  "limits": {
+    "wall_seconds": 2400,
+    "max_budget_usd": 20
+  },
+  "hidden_tests": {
+    "source": "hidden/T49",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-weekly",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_weekly.py"
+      ]
+    },
+    {
+      "id": "hidden-archive",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden",
+      "files": [
+        "test_archive.py"
+      ]
+    },
+    {
+      "id": "regressions",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "preexisting"
+    },
+    {
+      "id": "no-edit-before-approval",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "approved_before_edit"
+    },
+    {
+      "id": "approved-holds-answers",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "approved_holds_answers"
+    },
+    {
+      "id": "readme-updated",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "README.md",
+      "pattern": "weekly"
+    },
+    {
+      "id": "mirror-updated",
+      "kind": "file_contains",
+      "required": false,
+      "weight": 1,
+      "path": "docs/ko/README.ko.md",
+      "pattern": "weekly"
+    }
+  ],
+  "user": {
+    "sheet": "answers/T49.json"
+  },
+  "agreement": {
+    "pass_checks": [
+      "hidden-weekly",
+      "hidden-archive",
+      "regressions",
+      "no-edit-before-approval",
+      "approved-holds-answers"
+    ]
+  },
+  "rubric": null
+}

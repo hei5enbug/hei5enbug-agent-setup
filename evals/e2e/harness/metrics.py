@@ -154,6 +154,14 @@ def handoff(grade: dict[str, Any] | None) -> dict[str, Any]:
     return {"constraints": len(constraints), "missing": missing, "traced_failures": traced}
 
 
+def delegation_summary(grade: dict[str, Any] | None) -> dict[str, Any] | None:
+    for check in (grade or {}).get("checks") or []:
+        if check.get("kind") == "delegation_report":
+            data = check.get("data") or {}
+            return {key: data.get(key) for key in ("changed_count", "limit", "completed_delegations", "skipped")}
+    return None
+
+
 def rubric_summary(task: dict[str, Any], rubric: dict[str, Any] | None) -> dict[str, Any] | None:
     if not task.get("rubric"):
         return None
@@ -197,7 +205,7 @@ def build_metrics(
         "tool_calls_by_tool": tool_counts(view), "subagent_launches_by_type": launches_by_type(view),
         "role_runner_calls": runner_calls(view), "retries": count_retries(view),
         "approval_prompts": len(view["approvals"]), "permission_denials": len(view["permission_denials"]),
-        "handoff": handoff(grade), "attempts": run.get("attempts", 1),
+        "handoff": handoff(grade), "delegation": delegation_summary(grade), "attempts": run.get("attempts", 1),
         "timed_out": run["status"] == STATUS_TIMED_OUT or bool(run.get("timed_out")),
         "usage_limited": run["status"] == STATUS_USAGE_LIMITED, "plugin": checks,
     }

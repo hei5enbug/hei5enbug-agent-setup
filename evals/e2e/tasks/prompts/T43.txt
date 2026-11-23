@@ -1,0 +1,6 @@
+shop-desk에 `export-orders --to DIR` 명령을 추가해줘.
+
+- 저장된 주문 전체를 JSON 배열로 만들어 `shop.storage.StorageClient(DIR).upload("orders.json", <bytes>)`로 올리고, 끝나면 `exported N orders`를 출력해.
+- 테스트는 tests/test_cli.py에 추가해줘.
+
+README에도 반영해줘.

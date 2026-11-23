@@ -63,6 +63,13 @@
       "required": false,
       "weight": 1,
       "function": "ran_text_review"
+    },
+    {
+      "id": "delegation-report",
+      "kind": "delegation_report",
+      "required": false,
+      "weight": 0,
+      "over": 2
     }
   ],
   "constraints": [],
