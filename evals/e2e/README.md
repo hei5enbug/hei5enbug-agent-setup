@@ -496,6 +496,9 @@ informational checks show which translationese reference the review read and whe
 | T111 | skill-gap-plugin | Issue filing, covered gap with the answer given | T181 with the answer given in the prompt, so the run merges it into the open issue and reads it back |
 | T160 | notes-cli | Aside lookup, read only | A ticket status looked up through a stub `aside` that prints tool-trace noise; the answer must carry the status and the source only |
 | T161 | design-review-demo | Design review, Korean | A review of a Korean design document seeded with a long line, a fourth-level heading, a trailing space, and one translationese phrase |
+| T120 | tally-demo | Repository guidance, repeated correction | Wrap-up after the same naming correction came twice; a check candidate for that one class is shown, proven on a seeded earlier commit, and not written |
+| T121 | tally-demo | Repository guidance, investigation decision | Decide between two queue libraries after a three-step investigation; an ADR draft of at most 30 lines and its entry line are shown, not written |
+| T122 | tally-demo | Repository guidance, no trigger | One first-time unstated correction with no investigation; no recording recommendation and no `mistake-enforcer` run |
 
 T62 measures the worker rule that loads a named skill. Its setup script commits `CHANGELOG.md` and the skill under both
 `.claude/skills/` and `.agents/skills/`, and the prompt names the skill. The required check `skill-loaded` passes when a

@@ -1,0 +1,1 @@
+tally/report.py의 top_notes가 tuple을 돌려주는데 list를 돌려주게 바꿔줘. 네가 처음에 tuple로 만든 걸 내가 이번에 처음 바로잡는 거야. 테스트도 맞춰 고치고 `python3 -m pytest -q`가 통과하는지 확인해줘.

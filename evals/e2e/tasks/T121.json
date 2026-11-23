@@ -1,0 +1,69 @@
+{
+  "id": "T121",
+  "title": "Decide between two queue libraries after a three-step investigation",
+  "category": "guidance",
+  "path": "#134 investigation decision: ADR draft and entry line shown, nothing written",
+  "fixture": "tally-demo",
+  "prompt_file": "prompts/T121.txt",
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 6
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "repo-untouched",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "repository_untouched"
+    },
+    {
+      "id": "adr-draft-shown",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "adr_draft_shown"
+    },
+    {
+      "id": "adr-at-most-30-lines",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "adr_at_most_30_lines"
+    },
+    {
+      "id": "entry-line-shown",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "entry_line_shown"
+    },
+    {
+      "id": "names-both-libraries",
+      "kind": "answer_contains",
+      "required": true,
+      "weight": 1,
+      "patterns": [
+        "alpha",
+        "beta"
+      ]
+    },
+    {
+      "id": "enforcer-not-run",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "enforcer_not_run"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

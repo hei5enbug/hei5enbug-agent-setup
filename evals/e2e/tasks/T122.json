@@ -1,0 +1,69 @@
+{
+  "id": "T122",
+  "title": "Return a list instead of a tuple after one first-time correction",
+  "category": "guidance",
+  "path": "#134 no trigger: one unstated correction, no investigation, no recording recommendation",
+  "fixture": "tally-demo",
+  "prompt_file": "prompts/T122.txt",
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 6
+  },
+  "hidden_tests": {
+    "source": "hidden/T122",
+    "dest": "tests/hidden"
+  },
+  "test_command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "checks": [
+    {
+      "id": "hidden-tests",
+      "kind": "pytest",
+      "required": true,
+      "weight": 3,
+      "suite": "hidden"
+    },
+    {
+      "id": "tests-pass",
+      "kind": "pytest",
+      "required": true,
+      "weight": 2,
+      "suite": "all"
+    },
+    {
+      "id": "only-report-and-tests",
+      "kind": "only_changed",
+      "required": true,
+      "weight": 2,
+      "allow": [
+        "tally/report.py",
+        "tests/**"
+      ]
+    },
+    {
+      "id": "enforcer-not-run",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "enforcer_not_run"
+    },
+    {
+      "id": "no-recording-recommendation",
+      "kind": "transcript_absent",
+      "required": true,
+      "weight": 3,
+      "scope": [
+        "final_answer"
+      ],
+      "pattern": "(?i)mistake-enforcer|\\bADR\\b|docs/adr|recommend recording|규칙으로 (?:기록|남|추가)|지침(?:에|으로) (?:기록|남|추가|적)|(?:AGENTS|CLAUDE)\\.md에 (?:추가|기록|남|적)|(?:기록|남겨|적어)\\s?(?:둘까요|둘지|할까요)"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}
