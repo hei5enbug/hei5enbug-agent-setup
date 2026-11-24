@@ -2014,6 +2014,20 @@ class GoldenTaskTest(TempCase):
         # then
         self.assertFalse(passed)
 
+    def test_T19는_재시작_사실을_영어로_옮겨도_통과한다(self):
+        """막는 회귀: 페이지를 영어로 다시 쓴 실행이 "Restart demo-api"를 남겨도 restart-fact-kept가 실패하던 일."""
+        # given
+        task, repo, base = self.referenced("T19")
+        page = repo / "out" / "wiki-page.txt"
+        page.write_text(re.sub(r"[^\n]*재시작[^\n]*\n", "1. Restart demo-api.\n", page.read_text(encoding="utf-8")),
+                        encoding="utf-8")
+
+        # when
+        passed, _ = self.outcome(task, repo, base, make_view(), "restart-fact-kept")
+
+        # then
+        self.assertTrue(passed)
+
     def test_T17은_커밋이_없으면_메시지를_검토하지_않고_실패한다(self):
         """커밋 없이 설정만 바꾸면 message-check와 text-review-clean이 예외 없이 실패한다."""
         # given

@@ -16,7 +16,7 @@ def shared(ctx):
 
 OUT = "out/wiki-page.txt"
 BUDGET = 1500
-RESTART_FACT = re.compile(r"demo-api[^\n.]{0,30}재시작")
+RESTART_FACT = re.compile(r"demo-api[^\n.]{0,30}재시작|(?i:\brestart[ \t]+demo-api\b)")
 UNNEEDED = re.compile(r"demo-api는 demo-flag[^\n.]{0,20}읽지")
 
 
