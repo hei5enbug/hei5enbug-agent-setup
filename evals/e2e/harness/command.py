@@ -9,7 +9,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from . import plugin_export
+from . import environment, plugin_export
 from .config import (
     AGENT_EFFORT, APPROVER_SERVER, APPROVER_TOOL, CLAUDE_OPTION_PREFIX, CLAUDE_SETTING_SOURCES, FORBIDDEN_ARGS, HARNESS_DIR, HOST_CLAUDE, HOST_CODEX, HOSTS,
     ANCESTOR_INSTRUCTION_FILES, INSTALLED_PLUGIN_KEY, MAIN_MODELS, PLUGIN_MANIFEST_PATH, RESERVED_ARGS, HarnessConfig,
@@ -56,6 +56,10 @@ def validate_variant(variant: Any, name: str = "variant") -> dict[str, Any]:
     for key, kind in (("settings", dict), ("env", dict), ("extra_args", list)):
         if not isinstance(variant.get(key, kind()), kind):
             raise ConfigError(f"{name}: '{key}' must be a {kind.__name__}")
+    env = {str(key): str(value) for key, value in variant.get("env", {}).items()}
+    removed_env = sorted(key for key in env if environment.is_removed_env_name(key))
+    if removed_env:
+        raise ConfigError(f"{name}: env may not set variables removed for isolation: {removed_env}")
     extra = [str(item) for item in variant.get("extra_args", [])]
     banned = sorted(item for item in extra if is_reserved_arg(item))
     if banned:
@@ -71,7 +75,7 @@ def validate_variant(variant: Any, name: str = "variant") -> dict[str, Any]:
         raise ConfigError(f"{name}: {error}") from error
     return {"name": variant["name"], "ref": variant.get("ref") or "", "plugin": plugin, "remove": removals,
             "settings": dict(variant.get("settings", {})),
-            "env": {str(k): str(v) for k, v in variant.get("env", {}).items()}, "extra_args": extra,
+            "env": env, "extra_args": extra,
             "models": dict(models)}
 
 

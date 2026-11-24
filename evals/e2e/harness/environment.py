@@ -42,13 +42,14 @@ def file_sha256(path: Path) -> str | None:
         return None
 
 
+def is_removed_env_name(name: str) -> bool:
+    return name.startswith(REMOVED_ENV_PREFIX) or name in REMOVED_ENV_NAMES
+
+
 def child_environment(base: Mapping[str, str], extra: Mapping[str, str]) -> tuple[dict[str, str], list[str]]:
     """Return the child env without ORCA_* variables and the variables that load plugins, plus the sorted removed names."""
-    def dropped(name: str) -> bool:
-        return name.startswith(REMOVED_ENV_PREFIX) or name in REMOVED_ENV_NAMES
-
-    removed = sorted(name for name in base if dropped(name))
-    kept = {name: value for name, value in base.items() if not dropped(name)}
+    removed = sorted(name for name in base if is_removed_env_name(name))
+    kept = {name: value for name, value in base.items() if not is_removed_env_name(name)}
     return {**kept, **extra}, removed
 
 

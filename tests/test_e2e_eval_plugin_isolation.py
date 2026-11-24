@@ -91,6 +91,23 @@ class ProfilePluginsOffTest(unittest.TestCase):
         self.assertEqual(removed, ["CLAUDE_CODE_PLUGIN_DIRS", "ORCA_X"])
         self.assertEqual(env, {"PATH": "/bin"})
 
+    def test_격리_대상_환경_변수를_지정한_변형은_로드할_수_없다(self):
+        """격리 대상 변수를 env에 지정하면 변형을 읽을 때 변수 이름과 함께 오류를 낸다."""
+        variants_root = Path(self.tmp.name)
+        for name in ("CLAUDE_CODE_PLUGIN_DIRS", "ORCA_X"):
+            with self.subTest(name=name):
+                # given
+                variant = {"name": "bad", "ref": "HEAD", "env": {name: "/tmp/demo-viewer"}}
+                (variants_root / "bad.json").write_text(json.dumps(variant), encoding="utf-8")
+
+                # when
+                with self.assertRaises(command.ConfigError) as error:
+                    command.load_variant(variants_root, "bad")
+
+                # then
+                self.assertIn("bad: env", str(error.exception))
+                self.assertIn(name, str(error.exception))
+
     def test_명령줄은_승인_서버_밖의_MCP_서버를_읽지_않는다(self):
         """--strict-mcp-config가 --mcp-config 뒤에 들어가고 pilot-check가 문제를 찾지 못한다."""
         # given
