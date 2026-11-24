@@ -18,8 +18,8 @@ Choose an owner before substantial work.
   and integration fixes in the main session.
 - Delegate investigation of more than three files or a long log as independent questions run together; do not
   repeat it yourself.
-- Delegate implementation that changes more than two files to the implementation worker when it has a clear scope
-  and acceptance check.
+- Always delegate implementation that changes more than two files to the implementation worker on every host, never
+  in the main session.
 - Use parallel subagents unasked when they cut main-session context or elapsed time with little or no
   quality loss, but not for greetings, status checks, or a single small edit. Parallelize only work with independent
   resources. Explicit user and skill assignments take precedence. When the user's own words, not pasted or quoted

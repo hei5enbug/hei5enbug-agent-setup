@@ -21,7 +21,7 @@ def test_두_호스트는_가벼운_위임_기준과_검토_연결만_항상_받
     # Given
     expected = [
         "tightly dependent work, implementation that changes at most two files, and integration fixes in the main session",
-        "Delegate implementation that changes more than two files to the implementation worker",
+        "Always delegate implementation that changes more than two files to the implementation worker on every host",
         "except the kinds the host session file assigns to the main session",
         "Delegate investigation of more than three files or a long log as independent questions run together",
         "Parallelize only work with independent resources",
