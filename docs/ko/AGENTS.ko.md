@@ -50,6 +50,7 @@
   `config/writing-surfaces.json`에 나열된 규칙 파일, 스킬, 지침이 사람이 읽는 글을 쓰는 방식이나
   `scripts/text_review.py`를 바꾸기 전, `language`
   기능이나 `scripts/text_review.py`의 모델을 바꾸기 전에 `docs/dev-rules/evaluation.md`를 읽는다.
+- 여러 이슈에 걸친 개선 작업을 계획하기 전에 `docs/dev-rules/improvement-goals.md`를 읽는다.
 - 항상 로드되는 표면, 즉 스킬 description, `SKILL.md` 본문, 세션 지침 파일에는 그 표면을 쓰는 모든 실행에 필요한
   규칙만 둔다. 특정 조건에서만 필요한 규칙은 참조 파일로 옮기고, 표면에는 "<동작> 전에 <참조>를 읽는다." 형태의
   한 줄 항목만 남긴다. 그 참조를 읽는 일과 참조가 없을 때 멈추는 일은 세션 코어의 조건부 지침 규칙을 따른다.

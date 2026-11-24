@@ -56,6 +56,7 @@
   measured candidates, changing how a rules file, skill, or instruction listed in `config/writing-surfaces.json` writes
   text people read or changing `scripts/text_review.py`, or changing the model of the `language` capability or of `scripts/text_review.py`, read
   `docs/dev-rules/evaluation.md`.
+- Before planning improvement work that spans several issues, read `docs/dev-rules/improvement-goals.md`.
 - Keep on an always-loaded surface, meaning a skill description, a `SKILL.md` body, or a session instruction file,
   only the rules that every run of that surface needs. Move a rule needed only under a condition to a reference file,
   and leave one entry line on the surface in the form "Before <action>, read <reference>." Reading that reference and
