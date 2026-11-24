@@ -87,14 +87,16 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(0, result.returncode)
         self.assertEqual({"findings": [], "advisories": []}, json.loads(result.stdout))
 
-    def test_목록_항목_하나에_식별자_코드_세_개_이상이면_identifier_list로_보고한다(self):
+    def test_목록_항목_하나에_식별자_코드_세_개_이상이면_발견이_아니라_identifier_list_권고로_보고한다(self):
+        """올릴 곳의 규칙이 그 이름을 요구하는 줄에서 점검이 멈추면 검토자가 판단할 수 없으므로, 종료 코드 0인 권고로 검토자에게 넘긴다."""
         # given
-        text = "intro\n- Added `user_id`, `user_name`, and `user_email` columns\n- Added `one` and `two`\n"
+        text = "intro\n- Added `demo_a`, `demo_b`, and `demo_c` columns\n- Added `one` and `two`\n"
         # when
-        result = self.check(text)
+        result = self.check(text, "--kind", "pr-description")
         # then
-        self.assertEqual(1, result.returncode)
-        self.assertEqual([("identifier-list", 2)], rules_of(result))
+        self.assertEqual(0, result.returncode)
+        self.assertEqual([], rules_of(result))
+        self.assertEqual([("identifier-list", 2)], rules_of(result, "advisories"))
 
     def test_최종_보고가_통과하면_정규화한_해시를_내고_다른_종류와_실패한_점검에는_내지_않는다(self):
         # given
@@ -104,7 +106,8 @@ class CheckTest(unittest.TestCase):
         passed = self.check(text, "--kind", "final-report")
         padded_result = self.check(padded, "--kind", "final-report")
         other = self.check(text, "--kind", "pr-description")
-        failed = self.check("- Added `user_id`, `user_name`, and `user_email` columns\n", "--kind", "final-report")
+        failed = self.check("- Ran `a`\n- Ran `a`\n", "--kind", "final-report")
+        listed = self.check("- Added `demo_a`, `demo_b`, and `demo_c` columns\n", "--kind", "final-report")
         # then
         digest = json.loads(passed.stdout)["final_report_sha256"]
         self.assertRegex(digest, r"^[0-9a-f]{64}$")
@@ -112,6 +115,9 @@ class CheckTest(unittest.TestCase):
         self.assertNotIn("final_report_sha256", json.loads(other.stdout))
         self.assertEqual(1, failed.returncode)
         self.assertNotIn("final_report_sha256", json.loads(failed.stdout))
+        self.assertEqual(0, listed.returncode)
+        self.assertRegex(json.loads(listed.stdout)["final_report_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual([("identifier-list", 1)], rules_of(listed, "advisories"))
 
     def test_공백이_있는_코드_조각은_식별자로_세지_않는다(self):
         # given
@@ -130,15 +136,16 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(0, result.returncode)
         self.assertEqual({"findings": [], "advisories": []}, json.loads(result.stdout))
 
-    def test_issue_body_종류에는_identifier_list를_적용하지_않는다(self):
+    def test_issue_body_종류에는_identifier_list의_발견도_권고도_없다(self):
         # given
         text = "- Touch `a_1`, `b_2`, and `c_3`\n"
         # when
         issue = self.check(text, "--kind", "issue-body")
         pull_request = self.check(text, "--kind", "pr-description")
         # then
+        self.assertEqual({"findings": [], "advisories": []}, json.loads(issue.stdout))
         self.assertEqual(0, issue.returncode)
-        self.assertEqual([("identifier-list", 1)], rules_of(pull_request))
+        self.assertEqual([("identifier-list", 1)], rules_of(pull_request, "advisories"))
 
     def test_펜스_코드_블록_안의_내용은_모든_규칙에서_제외한다(self):
         # given
@@ -423,17 +430,66 @@ class ReviewTest(unittest.TestCase):
         self.assertIn("link or path of an independent review's result", reader)
         self.assertIn("each finding left unresolved", reader)
 
-    def test_점검_발견이_있으면_검토자_실행기를_시작하지_않고_종료_코드_1을_낸다(self):
+    def test_repeated_check_ticket_key_same_page_links_발견이_있으면_검토자_실행기를_시작하지_않고_종료_코드_1을_낸다(self):
+        drafts = {
+            "repeated-check": ("- Ran `a`\n- Ran `a`\n", ()),
+            "ticket-key": ("Fixes ABC-123.\n", ("--no-ticket-keys",)),
+            "same-page-links": ("See https://example.com/a and https://example.com/a#b.\n", ()),
+        }
+        for rule, (text, flags) in drafts.items():
+            with self.subTest(rule=rule):
+                # given
+                self.draft.write_text(text, encoding="utf-8")
+                # when
+                result = self.review("none", *flags)
+                # then
+                self.assertEqual(1, result.returncode)
+                payload = json.loads(result.stdout)
+                self.assertEqual("check", payload["stage"])
+                self.assertEqual(rule, payload["findings"][0]["rule"])
+                self.assertFalse((self.out / "started").exists())
+
+    def test_식별자_목록_줄은_점검에서_멈추지_않고_검토자_과제에_자기_설명과_함께_들어간다(self):
+        """올릴 곳의 규칙이 이름을 요구하는 줄은 검토자만 판단할 수 있으므로, 과제에 표시한 줄과 identifier-list 설명만 넣어 검토자를 실행한다."""
         # given
-        self.draft.write_text("- `a_1`, `b_2`, `c_3`\n", encoding="utf-8")
+        fixture = REPO_ROOT / "evals" / "e2e" / "fixtures" / "identifier-lists"
+        draft = (fixture / "notes" / "reply-draft.txt").read_text(encoding="utf-8")
+        rules = fixture / "docs" / "writing-rules.md"
+        line = "- Added `test_demo_alpha`, `test_demo_beta`, and `test_demo_gamma`."
+        self.draft.write_text(draft, encoding="utf-8")
         # when
-        result = self.review("none")
+        result = self.review("none", "--rules", str(rules), kind="review-reply")
         # then
-        self.assertEqual(1, result.returncode)
-        payload = json.loads(result.stdout)
-        self.assertEqual("check", payload["stage"])
-        self.assertEqual("identifier-list", payload["findings"][0]["rule"])
-        self.assertFalse((self.out / "started").exists())
+        self.assertEqual(0, result.returncode, result.stdout)
+        self.assertEqual("review", json.loads(result.stdout)["stage"])
+        self.assertTrue((self.out / "started").exists())
+        text = self.assignment()
+        self.assertIn("## Lines the text check flagged", text)
+        self.assertIn(f"```\n{line}\n```", text)
+        self.assertIn("names three or more identifiers", text)
+        self.assertIn("Never report it when the destination's writing rules require those names", text)
+        self.assertIn("every added or changed test", text)
+        self.assertNotIn("may say only that something is unchanged", text)
+
+    def test_표시한_줄이_한_규칙의_것이면_그_규칙의_설명만_과제에_들어간다(self):
+        # given
+        self.draft.write_text("The cache does not change.\n", encoding="utf-8")
+        # when
+        self.review("none")
+        # then
+        text = self.assignment()
+        self.assertIn("may say only that something is unchanged", text)
+        self.assertNotIn("names three or more identifiers", text)
+
+    def test_표시한_줄이_두_규칙의_것이면_두_설명이_모두_들어간다(self):
+        # given
+        self.draft.write_text("- Added `demo_a`, `demo_b`, and `demo_c`.\n\nThe cache does not change.\n", encoding="utf-8")
+        # when
+        self.review("none")
+        # then
+        text = self.assignment()
+        self.assertIn("may say only that something is unchanged", text)
+        self.assertIn("names three or more identifiers", text)
 
     def test_바뀌지_않는다는_문장은_점검에서_멈추지_않고_검토자_과제에_표시한_줄로_들어간다(self):
         """권고가 점검 단계에서 검토자에게 닿기 전에 멈추면 검토자와 메모가 판단할 수 없으므로, 과제에 표시한 줄 구역을 넣어 검토자를 실행한다."""
