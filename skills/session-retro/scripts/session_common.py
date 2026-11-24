@@ -18,6 +18,8 @@ ZONEINFO_MARKER = "zoneinfo/"
 UNREADABLE_LINE = (ValueError, OverflowError, RecursionError)
 ZONE_LOOKUP_ERRORS = (ZoneInfoNotFoundError, ValueError, OSError)
 LOCAL_COMMAND_PREFIXES = ("<command-", "<local-command-")
+ZULU_SUFFIX = "Z"
+UTC_OFFSET = "+00:00"
 
 
 class InputError(Exception):
@@ -114,6 +116,8 @@ def decode_record(line: bytes) -> tuple[dict[str, Any], datetime | None]:
         return record, None
     if not isinstance(stamp, str):
         raise ValueError("timestamp is not text")
+    if stamp.endswith(ZULU_SUFFIX):
+        stamp = stamp[: -len(ZULU_SUFFIX)] + UTC_OFFSET
     when = datetime.fromisoformat(stamp)
     if when.tzinfo is None:
         when = when.replace(tzinfo=timezone.utc)
