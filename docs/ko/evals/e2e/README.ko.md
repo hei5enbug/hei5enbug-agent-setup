@@ -569,12 +569,12 @@ T36에만 적용되는 "두 호스트에서 변경 비교"의 개선 주장이�
 
 ### 루프 모양 후보
 
-이슈 102는 글쓰기 작업 T13~T20에서 독립 글 검토 루프의 모양을 바꾸는 변경을 비교한다. (a) `language` 능력의 작업자가
+이슈 102는 글쓰기 작업 T13~T20에서 독립 글 검토 루프의 모양을 바꾸는 변경을 비교했다. (a) `language` 능력의 작업자가
 루프를 돌린다. (b) 모든 실행이 `--reviews 2`를 넘긴다. (c) 첫 실행 뒤의 실행은 직전 실행 이후 바뀐 문장 밖의
 `removable` 지적을 버린다. (d) 검토자 배정서가 깐깐한 초안에는 빈 목록을 내라는 말 대신 이번 실행에서 찾은 문제를 모두
-내라고 요청한다. `variants/loop-baseline.json`과 `variants/loop-a.json`~`loop-d.json`이 개정, 곧 브랜치
-`p4-h-text`와 `p4-h-text-102-a`~`p4-h-text-102-d`를 가리킨다. 캠페인은 기준선 개정의 체크아웃에서 돌린다. 글 작업은 그
-체크아웃의 `scripts/text_review.py`로 채점하고, 에이전트는 내보낸 변형의 `scripts/text_review.py`를 실행한다.
+내라고 요청한다. [이슈 102 기록](../../../../evals/e2e/records/102.json)에 캠페인에 사용한 변형과 개정이 나와 있다.
+루프 모양을 비교하는 캠페인은 기준선 개정의 체크아웃에서 돌린다. 글 작업은 그 체크아웃의 `scripts/text_review.py`로
+채점하고, 에이전트는 내보낸 변형의 `scripts/text_review.py`를 실행한다.
 
 `loop-record`는 기준선과 각 `--candidate`(채택하는 순서대로)의 두 호스트 실행을 읽어, 실행마다 `loop` 수치(`metrics.json`의
 `review_loop`)와 `passed`, 후보마다 판정과 판정한 단계를 적은 `candidates` 목록을 `records/<이슈 번호>.json`에 쓴다. 단계는

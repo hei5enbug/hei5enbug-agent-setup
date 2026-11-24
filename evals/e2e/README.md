@@ -631,14 +631,13 @@ unless the claim of T36 is `accept`, and then it is `null`.
 
 ### Loop-shape candidates
 
-Issue 102 compares changes to the shape of the independent text review loop on the writing tasks T13 to T20: (a) a worker
+Issue 102 compared changes to the shape of the independent text review loop on the writing tasks T13 to T20: (a) a worker
 of the `language` capability runs the loop, (b) every run passes `--reviews 2`, (c) a run after the first drops a
 `removable` finding outside the sentences changed since the previous run, and (d) the reviewer assignment asks for every
-problem found in the run instead of an empty list for a careful draft. `variants/loop-baseline.json` and
-`variants/loop-a.json` to `loop-d.json` name the revisions, the branches `p4-h-text` and `p4-h-text-102-a` to
-`p4-h-text-102-d`. Run
-the campaign from a checkout of the baseline revision: the text tasks grade with that checkout's `scripts/text_review.py`,
-while the agent runs the `scripts/text_review.py` of its exported variant.
+problem found in the run instead of an empty list for a careful draft. The [issue 102 record](records/102.json)
+lists the variants and revisions used in the campaign. Run a loop-shape campaign from a checkout of the baseline
+revision. The text tasks grade with that checkout's `scripts/text_review.py`, while the agent runs the
+`scripts/text_review.py` of its exported variant.
 
 `loop-record` reads both hosts' runs of the baseline and of each `--candidate`, in the order they are adopted, and writes
 `records/<issue number>.json` with every run's `loop` measures (`review_loop` of `metrics.json`) and `passed`, and a
