@@ -8,13 +8,17 @@ from pathlib import Path
 from typing import Any, Iterable
 
 sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from evals.e2e.harness import codex_calls  # noqa: E402
 
 EXIT_ACCEPTED = 0
 EXIT_REJECTED = 1
 EXIT_USAGE = 2
 EXIT_EVIDENCE = 4
-CODEX_CALL_TYPES = frozenset({"function_call", "local_shell_call", "custom_tool_call"})
 SKILL_FILE = re.compile(r"([A-Za-z0-9][\w.-]*)/SKILL\.md")
+SHELL_READ = re.compile(r"(?:^|[;&|\n])\s*(?:[^\s;&|]+/)?(?:cat|sed|head|tail|nl|bat|awk|grep|rg|less|more)\s+([^;&|\n]+)")
+SHELL_EXIT = re.compile(r"\A(?:Chunk ID: [^\n]*\n)?(?:Wall time: [^\n]*\n)?Process exited with code (\d+)\b")
 
 
 class UsageError(Exception):
@@ -45,35 +49,78 @@ def read_entries(paths: Iterable[Path]) -> list[dict[str, Any]]:
     return entries
 
 
-def claude_loads(entry: dict[str, Any]) -> set[str]:
-    """Skills a Claude Code transcript entry loads with the Skill tool."""
-    message = entry.get("message")
-    content = message.get("content") if isinstance(message, dict) else None
-    if entry.get("type") != "assistant" or not isinstance(content, list):
-        return set()
-    loaded = set()
-    for block in content:
-        if isinstance(block, dict) and block.get("type") == "tool_use" and block.get("name") == "Skill":
-            skill = (block.get("input") or {}).get("skill")
-            if isinstance(skill, str) and skill:
-                loaded.add(bare(skill))
-    return loaded
-
-
-def codex_loads(entry: dict[str, Any]) -> set[str]:
-    """Skills a Codex rollout entry loads by reading `<skill>/SKILL.md` in a tool call."""
-    payload = entry.get("payload")
-    if entry.get("type") != "response_item" or not isinstance(payload, dict) or payload.get("type") not in CODEX_CALL_TYPES:
-        return set()
-    text = json.dumps([payload.get(key) for key in ("arguments", "input", "action")], ensure_ascii=False)
-    return set(SKILL_FILE.findall(text))
-
-
-def loaded_skills(entries: Iterable[dict[str, Any]]) -> set[str]:
-    loaded: set[str] = set()
+def claude_loads(entries: list[dict[str, Any]]) -> set[str]:
+    calls: dict[str, str] = {}
+    results: set[str] = set()
     for entry in entries:
-        loaded |= claude_loads(entry) | codex_loads(entry)
+        message = entry.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            kind = entry.get("type"), block.get("type")
+            if kind == ("user", "tool_result") and not block.get("is_error"):
+                if isinstance(tool_use_id := block.get("tool_use_id"), str):
+                    results.add(tool_use_id)
+            if kind != ("assistant", "tool_use") or block.get("name") != "Skill":
+                continue
+            tool_input = block.get("input")
+            skill = tool_input.get("skill") if isinstance(tool_input, dict) else None
+            call_id = block.get("id")
+            if isinstance(call_id, str) and isinstance(skill, str) and skill:
+                calls[call_id] = bare(skill)
+    return {skill for call_id, skill in calls.items() if call_id in results}
+
+
+def successful_commands(call: dict[str, Any], result: dict[str, Any]) -> list[str]:
+    commands = codex_calls.commands_of(call)
+    if not commands or result.get("is_error"):
+        return []
+    output = result.get("output")
+    if call["type"] == "custom_tool_call":
+        statements = codex_calls.tool_statements(call["input"])
+        items = codex_calls.exec_items(output)
+        if items is None or len(items) != len(statements):
+            return []
+        chunks = [codex_calls.chunk_of(item) for (name, _), item in zip(statements, items) if name == "exec_command"]
+        if len(chunks) != len(commands):
+            return []
+        return [command for command, chunk in zip(commands, chunks) if codex_calls.chunk_code(chunk) == 0]
+    code = codex_calls.exit_code(output)
+    if code is None:
+        status = SHELL_EXIT.match(codex_calls.output_text(output))
+        code = int(status[1]) if status else None
+    return commands if code == 0 else []
+
+
+def codex_loads(entries: list[dict[str, Any]]) -> set[str]:
+    outputs = {}
+    calls = []
+    for entry in entries:
+        item = entry.get("payload")
+        if entry.get("type") != "response_item" or not isinstance(item, dict):
+            continue
+        kind = item.get("type")
+        if kind in codex_calls.OUTPUT_TYPES and isinstance(call_id := item.get("call_id"), str):
+            outputs.setdefault(call_id, item)
+        elif kind in codex_calls.CALL_TYPES:
+            calls.append(item)
+    loaded: set[str] = set()
+    for call in calls:
+        call_id = call.get("call_id") or call.get("id")
+        result = outputs.get(call_id, {}) if isinstance(call_id, str) else {}
+        if result.get("type") != call["type"] + "_output":
+            continue
+        for command in successful_commands(call, result):
+            for arguments in SHELL_READ.findall(command):
+                loaded.update(SKILL_FILE.findall(arguments))
     return loaded
+
+
+def loaded_skills(entries: list[dict[str, Any]]) -> set[str]:
+    return claude_loads(entries) | codex_loads(entries)
 
 
 def result_lists(result: str, skill: str) -> bool:

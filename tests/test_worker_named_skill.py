@@ -27,8 +27,13 @@ def section(text: str, heading: str) -> str:
 
 
 def claude_call(name: str, **tool_input: str) -> dict:
-    block = {"type": "tool_use", "id": "toolu_1", "name": name, "input": tool_input}
+    block = {"type": "tool_use", "id": f"toolu_{name}", "name": name, "input": tool_input}
     return {"type": "assistant", "message": {"role": "assistant", "content": [block]}}
+
+
+def claude_skill_result(is_error: bool = False) -> dict:
+    block = {"type": "tool_result", "tool_use_id": "toolu_Skill", "is_error": is_error, "content": "Skill response"}
+    return {"type": "user", "message": {"role": "user", "content": [block]}}
 
 
 def codex_call(payload_type: str, **fields: object) -> dict:
@@ -36,13 +41,31 @@ def codex_call(payload_type: str, **fields: object) -> dict:
 
 
 BASH_ONLY = [claude_call("Bash", command="python3 -m pytest -q"), claude_call("Edit", file_path="a.py")]
-SKILL_LOADED = [*BASH_ONLY, claude_call("Skill", skill="demo-skill")]
-SKILL_LOADED_WITH_PLUGIN = [claude_call("Skill", skill="demo-plugin:demo-skill")]
+SKILL_LOADED = [*BASH_ONLY, claude_call("Skill", skill="demo-skill"), claude_skill_result()]
+SKILL_LOADED_WITH_PLUGIN = [claude_call("Skill", skill="demo-plugin:demo-skill"), claude_skill_result()]
 CODEX_SHELL_ONLY = [codex_call("function_call", name="exec_command", arguments=json.dumps({"cmd": "ls -la"}))]
-CODEX_SKILL_READ = [codex_call(
-    "function_call", name="exec_command",
-    arguments=json.dumps({"cmd": "cat /home/test/.agents/skills/demo-skill/SKILL.md"}),
-)]
+SKILL_PATH = "/home/test/.agents/skills/demo-skill/SKILL.md"
+
+
+def codex_shell(command: str, call_id: str, exit_code: int) -> list[dict]:
+    return [
+        codex_call("function_call", name="exec_command", call_id=call_id, arguments=json.dumps({"cmd": command})),
+        codex_call("function_call_output", call_id=call_id,
+                   output=json.dumps({"metadata": {"exit_code": exit_code}, "output": "Shell response"})),
+    ]
+
+
+def codex_exec(exit_code: int) -> list[dict]:
+    return [
+        codex_call("custom_tool_call", name="exec", call_id="exec",
+                   input=f'text(await tools.exec_command({{cmd:"cat {SKILL_PATH}"}}));\n'
+                         'text(await tools.exec_command({cmd:"ls"}));'),
+        codex_call("custom_tool_call_output", call_id="exec", output=[
+            {"type": "input_text", "text": "Script completed\nOutput:\n"},
+            {"type": "input_text", "text": json.dumps({"exit_code": exit_code, "output": "Shell response"})},
+            {"type": "input_text", "text": json.dumps({"exit_code": 0, "output": "Other response"})},
+        ]),
+    ]
 
 
 def test_위임_규칙은_스킬_이름을_적고_불러오게_하며_스킬이_없으면_아무것도_더하지_않는다():
@@ -135,7 +158,9 @@ def test_불러오기_기록이_있어도_결과가_스킬을_적지_않으면_�
     assert report["not_listed"] == ["demo-skill"]
 
 
-@pytest.mark.parametrize("entries", [SKILL_LOADED, SKILL_LOADED_WITH_PLUGIN, CODEX_SKILL_READ], ids=["claude", "plugin", "codex"])
+@pytest.mark.parametrize("entries", [
+    SKILL_LOADED, SKILL_LOADED_WITH_PLUGIN, codex_shell(f"cat {SKILL_PATH}", "skill", 0), codex_exec(0),
+], ids=["claude", "plugin", "codex", "codex-exec"])
 def test_불러오기_기록과_결과_목록이_모두_있으면_인정한다(entries):
     """Claude Skill 호출, 플러그인 접두사 호출, Codex SKILL.md 읽기 중 무엇이든 결과가 이름을 적으면 인정한다."""
     # When
@@ -143,6 +168,25 @@ def test_불러오기_기록과_결과_목록이_모두_있으면_인정한다(e
 
     # Then
     assert report["accepted"] is True
+
+
+@pytest.mark.parametrize("entries", [
+    [claude_call("Skill", skill="demo-skill"), claude_skill_result(is_error=True)],
+    [*codex_shell(f"cat {SKILL_PATH}", "skill", 1), *codex_shell("ls", "other", 0)],
+    codex_exec(1),
+    codex_shell(f"cat {SKILL_PATH}", "skill", 0)[:1],
+    codex_shell(f"echo {SKILL_PATH}", "mention", 0),
+    [codex_call("message", role="assistant", content=[{"type": "output_text", "text": SKILL_PATH}])],
+], ids=["claude-error", "codex-error", "codex-exec-error", "pending", "shell-mention", "text-mention"])
+def test_실패한_호출이나_경로_언급은_스킬_불러오기로_세지_않는다(entries):
+    """파일을 읽는 데 실패하거나 경로만 언급하면 결과에 이름이 있어도 인정하지 않는다."""
+    # given
+    result = "Could not load demo-skill: missing file."
+    # when
+    report = check.evaluate(entries, result, ["demo-skill"])
+    # then
+    assert report["accepted"] is False
+    assert report["not_loaded"] == ["demo-skill"]
 
 
 def test_Codex_기록에_스킬_읽기가_없으면_인정하지_않는다():
@@ -157,7 +201,8 @@ def test_Codex_기록에_스킬_읽기가_없으면_인정하지_않는다():
 def test_이름이_비슷한_다른_스킬의_불러오기는_세지_않는다():
     """demo-skill-extra를 불러온 기록과 그 이름만 적은 결과는 demo-skill의 불러오기와 목록으로 세지 않는다."""
     # When
-    report = check.evaluate([claude_call("Skill", skill="demo-skill-extra")], "Loaded skills: demo-skill-extra.", ["demo-skill"])
+    report = check.evaluate([claude_call("Skill", skill="demo-skill-extra"), claude_skill_result()],
+                            "Loaded skills: demo-skill-extra.", ["demo-skill"])
 
     # Then
     assert report["accepted"] is False
