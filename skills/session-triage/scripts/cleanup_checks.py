@@ -151,9 +151,9 @@ def no_ports(runner: overview.Runner, command: list[str], worktree_id: str) -> d
     return result(UNREADABLE, "orca ports could not be read") if ports is None else verdict(not ports, ports)
 
 
-def candidate(data: dict, worktree_id: str, no_agent: bool) -> tuple[dict | None, list[dict]]:
+def candidate(data: dict, worktree_id: str, no_agent: bool, after_exit: bool) -> tuple[dict | None, list[dict]]:
     rows = [row for row in data["sessions"] if row["worktree_id"] == worktree_id]
-    if no_agent:
+    if no_agent or (after_exit and not rows):
         idle = [row for row in data["worktrees_without_agent"] if row["worktree_id"] == worktree_id]
         return (idle[0] if idle else None), rows
     return (rows[0] if rows else None), rows
@@ -166,17 +166,17 @@ def terminal_checks(runner: overview.Runner, command: list[str], data: dict, row
         checks["no_shared_worktree"] = verdict(not sessions, [session["terminal_handle"] for session in sessions])
         return checks
     handles = orca_list(runner, command, ["terminal", "list", "--worktree", f"id:{row['worktree_id']}"], "terminals")
-    own = row["terminal_handle"]
-    if handles is None or own is None:
+    own = row.get("terminal_handles", [row.get("terminal_handle")])
+    if handles is None or None in own:
         checks["only_terminal"] = result(UNREADABLE, "terminal handles could not be read")
     else:
         found = [item.get("handle") for item in handles if isinstance(item, dict)]
-        checks["only_terminal"] = verdict(found == [own] and len(sessions) == 1, found)
+        checks["only_terminal"] = verdict(found == own and len(own) == 1 and len(sessions) <= 1, found)
     return checks
 
 
 def run_checks(runner: overview.Runner, command: list[str], data: dict, worktree_id: str, ref: str, no_agent: bool, after_exit: bool) -> dict:
-    row, sessions = candidate(data, worktree_id, no_agent)
+    row, sessions = candidate(data, worktree_id, no_agent, after_exit)
     if row is None:
         raise overview.OverviewError(f"worktree {worktree_id} is not a {'worktree without an agent' if no_agent else 'session worktree'} in the overview")
     path = row["path"]

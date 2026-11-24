@@ -139,12 +139,14 @@ class CleanupChecksCase(unittest.TestCase):
         self.rig.ps = "500 1 -zsh\n"
         # when
         first_code, first = self.rig.run()
+        self.rig.agent_row = False
         second_code, second = self.rig.run("--after-exit")
         # then
         self.assertEqual((0, 0), (first_code, second_code))
         self.assertEqual({"not_main", "no_children", "not_current", "only_terminal", "status_clean", "base_merged"},
                          {name for name, status in statuses(first).items() if status == "pass"})
         self.assertEqual({"no_ports", "no_processes"}, set(statuses(second)) - set(statuses(first)))
+        self.assertEqual(first["checks"], {name: second["checks"][name] for name in first["checks"]})
         self.assertEqual(["pass", "pass"], [statuses(second)["no_ports"], statuses(second)["no_processes"]])
 
     def test_수정한_추적_파일이_있으면_status_clean만_fail이고_나머지_항목도_보고한다(self) -> None:
