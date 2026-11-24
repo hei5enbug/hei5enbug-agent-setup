@@ -6,10 +6,12 @@
   ],
   "variants": {
     "h-text-before": {
-      "revision": "a0c5a70b9913"
+      "revision": "a0c5a70b9913",
+      "campaign": "text-91"
     },
     "h-text-after": {
-      "revision": "c21c2b2549d1"
+      "revision": "c21c2b2549d1",
+      "campaign": "text-91"
     }
   },
   "runs": [

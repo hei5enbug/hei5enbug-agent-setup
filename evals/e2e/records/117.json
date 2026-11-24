@@ -7,10 +7,12 @@
   ],
   "variants": {
     "h-ask-before": {
-      "revision": "a0c5a70b9913"
+      "revision": "a0c5a70b9913",
+      "campaign": "ask-bundle"
     },
     "h-ask-after": {
-      "revision": "7f726f7882b0"
+      "revision": "7f726f7882b0",
+      "campaign": "ask-bundle"
     }
   },
   "runs": [

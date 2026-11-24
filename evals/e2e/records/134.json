@@ -7,10 +7,12 @@
   ],
   "variants": {
     "before-134": {
-      "revision": "a0c5a70b9913"
+      "revision": "a0c5a70b9913",
+      "campaign": "guide-134"
     },
     "after-134": {
-      "revision": "cfcc1bb231a6"
+      "revision": "cfcc1bb231a6",
+      "campaign": "guide-134"
     }
   },
   "runs": [

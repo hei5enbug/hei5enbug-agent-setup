@@ -1,0 +1,279 @@
+{
+  "issue": 126,
+  "cases": [
+    "T154",
+    "T155"
+  ],
+  "variants": {
+    "before-126": {
+      "revision": "a0c5a70b9913",
+      "campaign": "model-126"
+    },
+    "after-126": {
+      "revision": "e591fa5670ec",
+      "campaign": "model-126"
+    }
+  },
+  "runs": [
+    {
+      "case": "T154",
+      "variant": "after-126",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "grading-saved": true,
+        "marks-only-the-missed-expectation": true,
+        "evidence-quotes-the-output": true,
+        "review-route-ran": true,
+        "outputs-untouched": true
+      },
+      "wall_seconds": 136.85379575000843,
+      "cost_usd": 0.4834794,
+      "rep": 1
+    },
+    {
+      "case": "T154",
+      "variant": "after-126",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "grading-saved": true,
+        "marks-only-the-missed-expectation": true,
+        "evidence-quotes-the-output": true,
+        "review-route-ran": true,
+        "outputs-untouched": true
+      },
+      "wall_seconds": 251.43988245801302,
+      "cost_usd": 1.0914602,
+      "rep": 1
+    },
+    {
+      "case": "T154",
+      "variant": "before-126",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "grading-saved": true,
+        "marks-only-the-missed-expectation": true,
+        "evidence-quotes-the-output": true,
+        "review-route-ran": true,
+        "outputs-untouched": true
+      },
+      "wall_seconds": 137.2245041669812,
+      "cost_usd": 0.5178316,
+      "rep": 1
+    },
+    {
+      "case": "T154",
+      "variant": "before-126",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "grading-saved": true,
+        "marks-only-the-missed-expectation": true,
+        "evidence-quotes-the-output": true,
+        "review-route-ran": false,
+        "outputs-untouched": true
+      },
+      "wall_seconds": 209.44818641600432,
+      "cost_usd": 0.6918478,
+      "rep": 1
+    },
+    {
+      "case": "T155",
+      "variant": "after-126",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "comparison-saved": true,
+        "prefers-the-compliant-output": true,
+        "names-the-broken-rule": false,
+        "review-route-ran": true,
+        "outputs-untouched": true
+      },
+      "wall_seconds": 123.33352429201477,
+      "cost_usd": 0.3964764,
+      "rep": 1
+    },
+    {
+      "case": "T155",
+      "variant": "after-126",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "comparison-saved": true,
+        "prefers-the-compliant-output": true,
+        "names-the-broken-rule": true,
+        "review-route-ran": true,
+        "outputs-untouched": true
+      },
+      "wall_seconds": 258.61585520900553,
+      "cost_usd": 1.0988414,
+      "rep": 1
+    },
+    {
+      "case": "T155",
+      "variant": "before-126",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "comparison-saved": true,
+        "prefers-the-compliant-output": true,
+        "names-the-broken-rule": true,
+        "review-route-ran": true,
+        "outputs-untouched": true
+      },
+      "wall_seconds": 175.733219250018,
+      "cost_usd": 0.4982798,
+      "rep": 1
+    },
+    {
+      "case": "T155",
+      "variant": "before-126",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "comparison-saved": true,
+        "prefers-the-compliant-output": true,
+        "names-the-broken-rule": true,
+        "review-route-ran": true,
+        "outputs-untouched": true
+      },
+      "wall_seconds": 340.41398354200646,
+      "cost_usd": 1.4735402,
+      "rep": 1
+    }
+  ],
+  "verdicts": [
+    {
+      "case": "T154",
+      "verdict": "pass",
+      "step": "every required check passes after on both hosts",
+      "measure": "quality"
+    },
+    {
+      "case": "T154",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T154",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T154",
+      "verdict": "repeat",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T155",
+      "verdict": "fail",
+      "step": "passed before and fails after on codex",
+      "measure": "quality"
+    },
+    {
+      "case": "T155",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T155",
+      "verdict": "investigate",
+      "step": "first before gap above 2",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T155",
+      "verdict": "fail",
+      "step": "quality and every measure of the case"
+    }
+  ]
+}

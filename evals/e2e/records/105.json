@@ -1,0 +1,380 @@
+{
+  "issue": 105,
+  "cases": [
+    "T08",
+    "T20"
+  ],
+  "variants": {
+    "p4h-before": {
+      "revision": "a0c5a70b9913",
+      "campaign": "impl-105"
+    },
+    "p4h-after": {
+      "revision": "589c174ecfb4",
+      "campaign": "impl-105"
+    }
+  },
+  "runs": [
+    {
+      "case": "T08",
+      "variant": "p4h-after",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "only-config-changed": true,
+        "one-line-diff": true,
+        "tests-pass": true
+      },
+      "wall_seconds": 46.598056707996875,
+      "cost_usd": 0.1102028,
+      "rep": 1
+    },
+    {
+      "case": "T08",
+      "variant": "p4h-after",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "only-config-changed": true,
+        "one-line-diff": true,
+        "tests-pass": true
+      },
+      "wall_seconds": 53.13617662500474,
+      "cost_usd": 0.3307046,
+      "rep": 1
+    },
+    {
+      "case": "T08",
+      "variant": "p4h-before",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "only-config-changed": true,
+        "one-line-diff": true,
+        "tests-pass": true
+      },
+      "wall_seconds": 68.21566483401693,
+      "cost_usd": 0.11283200000000002,
+      "rep": 1
+    },
+    {
+      "case": "T08",
+      "variant": "p4h-before",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "only-config-changed": true,
+        "one-line-diff": true,
+        "tests-pass": true
+      },
+      "wall_seconds": 16.349736375006614,
+      "cost_usd": 0.17637519999999998,
+      "rep": 1
+    },
+    {
+      "case": "T20",
+      "variant": "p4h-after",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "codex_child:worker": {
+          "model": "gpt-6.2-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "tests-pass": true,
+        "report-check": true,
+        "text-review-clean": false,
+        "ran-text-review": true,
+        "delegation-report": true
+      },
+      "wall_seconds": 504.1631564160052,
+      "cost_usd": 1.1227036,
+      "rep": 1,
+      "reviews": [
+        {
+          "findings": [
+            {
+              "type": "removable",
+              "quote": "Claude Opus 5.5(`high`)의 쓰기 제한 검토를 한 차례 통과했습니다.",
+              "reason": "direct: 검토 주체·설정·횟수와 작업 과정은 사용자가 결과를 판단하거나 다음 행동을 하는 데 필요하지 않습니다."
+            },
+            {
+              "type": "removable",
+              "quote": "검색은 조회와 필터링만 수행하고, 파일 쓰기는 추가·삭제에서만 호출됨을 코드로 확인했습니다.",
+              "reason": "direct: 변경되지 않은 파일 쓰기 동작과 확인 과정을 설명합니다. 이를 생략하면 사용자가 잘못 행동할 근거는 제시되지 않았습니다."
+            },
+            {
+              "type": "removable",
+              "quote": "검토 메모는 참고 사항으로 분류했습니다.",
+              "reason": "direct: 내부 검토 분류이며, 사용자에게 필요한 제외 항목과 그 이유는 바로 다음 문장이 설명합니다."
+            }
+          ]
+        },
+        {
+          "findings": [
+            {
+              "type": "removable",
+              "quote": "Claude Opus 5.5(`high`)의 쓰기 제한 검토를 한 차례 통과했습니다.",
+              "reason": "direct: 검토에 사용한 모델·설정·횟수는 작업 과정이며, 사용자가 결과를 판단하거나 후속 조치하는 데 필요하지 않습니다."
+            },
+            {
+              "type": "removable",
+              "quote": "검색은 조회와 필터링만 수행하고, 파일 쓰기는 추가·삭제에서만 호출됨을 코드로 확인했습니다.",
+              "reason": "direct: 요청한 태그 검색 기능이나 남은 조치와 연결되지 않는 기존 동작 설명이므로 삭제할 수 있습니다."
+            },
+            {
+              "type": "removable",
+              "quote": "검토 메모는 참고 사항으로 분류했습니다.",
+              "reason": "direct: 검토 메모의 분류 과정만 설명합니다. 다음 문장이 제외한 문제와 그 이유를 구체적으로 전달하므로 삭제해도 필요한 사실이 남습니다."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case": "T20",
+      "variant": "p4h-after",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "subagent:hei5enbug-agent-setup:worker": {
+          "model": "claude-sonnet-5-5",
+          "effort": "not measured"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "tests-pass": true,
+        "report-check": true,
+        "text-review-clean": true,
+        "ran-text-review": true,
+        "delegation-report": true
+      },
+      "wall_seconds": 143.12812858299003,
+      "cost_usd": 0.7345122,
+      "rep": 1
+    },
+    {
+      "case": "T20",
+      "variant": "p4h-before",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "codex_child:worker": {
+          "model": "gpt-6.2-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "tests-pass": true,
+        "report-check": true,
+        "text-review-clean": false,
+        "ran-text-review": false,
+        "delegation-report": true
+      },
+      "wall_seconds": 323.1888809579832,
+      "cost_usd": 0.8449308,
+      "rep": 1,
+      "reviews": [
+        {
+          "findings": [
+            {
+              "type": "removable",
+              "quote": "`claude-opus-5-5`의 `high` 설정으로 쓰기를 제한한 독립 검토를 한 차례 완료했습니다.",
+              "reason": "direct: 검토 모델, 설정, 방식과 횟수는 작업 과정이며 사용자의 판단이나 후속 조치에 필요하지 않습니다."
+            },
+            {
+              "type": "removable",
+              "quote": "수정이 필요한 문제는 없었습니다.",
+              "reason": "direct: 요청하지 않은 독립 검토의 결론으로, 사용자에게 남은 조치나 완료 여부를 판단하는 데 필요한 정보를 추가하지 않습니다."
+            },
+            {
+              "type": "removable",
+              "quote": "JSON을 직접 수정해 문자열이 아닌 태그를 넣으면 검색이 `AttributeError`로 종료된다는 지적은 정상 CLI 입력으로 만들 수 없는 데이터여서 참고 사항으로 분류했습니다.",
+              "reason": "direct: 초안 스스로 정상 CLI 입력으로 만들 수 없고 수정할 문제로 남기지 않았다고 설명하는 검토 메모입니다. 요청된 검색 동작, 테스트 결과 또는 사용자에게 필요한 후속 조치를 설명하는 데 필요하지 않습니다."
+            }
+          ]
+        },
+        {
+          "findings": [
+            {
+              "type": "removable",
+              "quote": "25개",
+              "reason": "direct: 테스트 통과 사실은 필요하지만, 요청하지 않은 테스트 개수는 삭제해도 됩니다."
+            },
+            {
+              "type": "removable",
+              "quote": "`claude-opus-5-5`의 `high` 설정으로 쓰기를 제한한 독립 검토를 한 차례 완료했습니다.",
+              "reason": "direct: 검토 모델, 설정, 방식과 횟수는 작업 과정이며 사용자의 판단이나 후속 행동에 필요하지 않습니다."
+            },
+            {
+              "type": "removable",
+              "quote": "수정이 필요한 문제는 없었습니다.",
+              "reason": "direct: 앞 문장의 내부 검토 결과로, 별도로 전달해야 할 변경이나 남은 조치가 없습니다."
+            },
+            {
+              "type": "removable",
+              "quote": "JSON을 직접 수정해 문자열이 아닌 태그를 넣으면 검색이 `AttributeError`로 종료된다는 지적은 정상 CLI 입력으로 만들 수 없는 데이터여서 참고 사항으로 분류했습니다.",
+              "reason": "direct: 초안 스스로 정상 CLI 입력으로 만들 수 없는 데이터에 관한 참고 사항으로 한정하며, 사용자에게 필요한 후속 조치 없이 내부 검토의 분류 경위를 설명합니다."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case": "T20",
+      "variant": "p4h-before",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "subagent:hei5enbug-agent-setup:worker": {
+          "model": "claude-sonnet-5-5",
+          "effort": "not measured"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "tests-pass": true,
+        "report-check": true,
+        "text-review-clean": true,
+        "ran-text-review": true,
+        "delegation-report": true
+      },
+      "wall_seconds": 177.34764883300522,
+      "cost_usd": 0.7851022,
+      "rep": 1
+    }
+  ],
+  "verdicts": [
+    {
+      "case": "T08",
+      "verdict": "pass",
+      "step": "every required check passes after on both hosts",
+      "measure": "quality"
+    },
+    {
+      "case": "T08",
+      "verdict": "investigate",
+      "step": "first before gap above 2",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T08",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T08",
+      "verdict": "repeat",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T20",
+      "verdict": "fail",
+      "step": "a required check fails after on codex",
+      "measure": "quality"
+    },
+    {
+      "case": "T20",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T20",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T20",
+      "verdict": "fail",
+      "step": "quality and every measure of the case"
+    }
+  ]
+}

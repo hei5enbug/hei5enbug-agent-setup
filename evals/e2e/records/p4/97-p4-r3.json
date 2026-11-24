@@ -1,0 +1,297 @@
+{
+  "issue": 97,
+  "cases": [
+    "T35",
+    "T36"
+  ],
+  "variants": {
+    "r97-before": {
+      "revision": "9c90b253d441",
+      "campaign": "code-97"
+    },
+    "r97-after": {
+      "revision": "9c90b253d441",
+      "campaign": "code-97"
+    }
+  },
+  "runs": [
+    {
+      "case": "T35",
+      "variant": "r97-after",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:worker": {
+          "model": "gpt-6.2-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "claude-sonnet-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "delegated-route-used": true,
+        "stops-at-cap": true,
+        "no-launch-after-denial": true,
+        "names-unfinished-deliverable": true,
+        "no-completion-claim": true,
+        "repo-untouched": true
+      },
+      "wall_seconds": 146.10497695801314,
+      "cost_usd": 0.21767120000000004,
+      "rep": 1
+    },
+    {
+      "case": "T35",
+      "variant": "r97-after",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "gpt-6.2-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "delegated-route-used": true,
+        "stops-at-cap": true,
+        "no-launch-after-denial": true,
+        "names-unfinished-deliverable": true,
+        "no-completion-claim": true,
+        "repo-untouched": true
+      },
+      "wall_seconds": 169.27441612500115,
+      "cost_usd": 1.1364678000000001,
+      "rep": 1
+    },
+    {
+      "case": "T35",
+      "variant": "r97-before",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:worker": {
+          "model": "gpt-6.2-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "claude-sonnet-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "delegated-route-used": true,
+        "stops-at-cap": true,
+        "no-launch-after-denial": true,
+        "names-unfinished-deliverable": true,
+        "no-completion-claim": true,
+        "repo-untouched": true
+      },
+      "wall_seconds": 123.79532029098482,
+      "cost_usd": 0.19798160000000004,
+      "rep": 1
+    },
+    {
+      "case": "T35",
+      "variant": "r97-before",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "gpt-6.2-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "delegated-route-used": true,
+        "stops-at-cap": true,
+        "no-launch-after-denial": true,
+        "names-unfinished-deliverable": true,
+        "no-completion-claim": true,
+        "repo-untouched": true
+      },
+      "wall_seconds": 183.39312175000669,
+      "cost_usd": 1.2866536000000002,
+      "rep": 1
+    },
+    {
+      "case": "T36",
+      "variant": "r97-after",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "no-changes": true,
+        "q1-rounding": true,
+        "q2-discount-tiers": true,
+        "q3-limits": true,
+        "q4-importer": true,
+        "q5-audit-kinds": true,
+        "q6-clock": true,
+        "q7-schema": true,
+        "q8-low-stock-empty": true
+      },
+      "wall_seconds": 43.21817633300088,
+      "cost_usd": 0.0770936,
+      "rep": 1
+    },
+    {
+      "case": "T36",
+      "variant": "r97-after",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "no-changes": true,
+        "q1-rounding": true,
+        "q2-discount-tiers": true,
+        "q3-limits": true,
+        "q4-importer": true,
+        "q5-audit-kinds": true,
+        "q6-clock": true,
+        "q7-schema": false,
+        "q8-low-stock-empty": true
+      },
+      "wall_seconds": 27.21430712498841,
+      "cost_usd": 0.250654,
+      "rep": 1
+    },
+    {
+      "case": "T36",
+      "variant": "r97-before",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:scout": {
+          "model": "gpt-6-luna",
+          "effort": "high"
+        },
+        "codex_child:scout#2": {
+          "model": "gpt-6-luna",
+          "effort": "high"
+        },
+        "codex_child:scout#3": {
+          "model": "gpt-6-luna",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "no-changes": true,
+        "q1-rounding": true,
+        "q2-discount-tiers": true,
+        "q3-limits": true,
+        "q4-importer": true,
+        "q5-audit-kinds": true,
+        "q6-clock": true,
+        "q7-schema": true,
+        "q8-low-stock-empty": true
+      },
+      "wall_seconds": 68.83959208297892,
+      "cost_usd": 0.15138612,
+      "rep": 1
+    },
+    {
+      "case": "T36",
+      "variant": "r97-before",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "no-changes": true,
+        "q1-rounding": true,
+        "q2-discount-tiers": true,
+        "q3-limits": true,
+        "q4-importer": true,
+        "q5-audit-kinds": true,
+        "q6-clock": true,
+        "q7-schema": false,
+        "q8-low-stock-empty": true
+      },
+      "wall_seconds": 29.098448583012214,
+      "cost_usd": 0.2638186,
+      "rep": 1
+    }
+  ],
+  "verdicts": [
+    {
+      "case": "T35",
+      "verdict": "pass",
+      "step": "every required check passes after on both hosts",
+      "measure": "quality"
+    },
+    {
+      "case": "T35",
+      "verdict": "pass",
+      "step": "first run",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T35",
+      "verdict": "investigate",
+      "step": "first before gap above 2",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T35",
+      "verdict": "pass",
+      "step": "quality, every measure, and the claim of the case"
+    },
+    {
+      "case": "T36",
+      "verdict": "fail",
+      "step": "a required check fails after on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "T36",
+      "verdict": "investigate",
+      "step": "first before gap above 2",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T36",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T36",
+      "verdict": "fail",
+      "step": "quality, every measure, and the claim of the case"
+    },
+    {
+      "case": "T36",
+      "verdict": "second pair",
+      "step": "wall_seconds; claude: first pair is not lower, codex: first pair is lower",
+      "measure": "claim"
+    }
+  ]
+}

@@ -1,0 +1,215 @@
+{
+  "issue": 133,
+  "cases": [
+    "F02",
+    "F82"
+  ],
+  "variants": {
+    "before-133": {
+      "revision": "93f7b27c3c16",
+      "campaign": "model-133"
+    },
+    "after-133": {
+      "revision": "a0c5a70b9913",
+      "campaign": "model-133"
+    }
+  },
+  "runs": [
+    {
+      "case": "F02",
+      "variant": "after-133",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:worker": {
+          "model": "gpt-6.2-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#5": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "new-tests": true,
+        "agent-tests": true,
+        "readme-shipping": true,
+        "mirror-updated": true,
+        "files-changed": true,
+        "worker-delegated": true,
+        "worker-route": true
+      },
+      "wall_seconds": 635.5061125420034,
+      "cost_usd": 1.0865219999999998,
+      "rep": 1
+    },
+    {
+      "case": "F02",
+      "variant": "before-133",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "claude-sonnet-5-5",
+          "effort": "high"
+        },
+        "codex_child:worker": {
+          "model": "gpt-6-luna",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": false,
+        "regressions": true,
+        "new-tests": false,
+        "agent-tests": true,
+        "readme-shipping": false,
+        "mirror-updated": false,
+        "files-changed": false,
+        "worker-delegated": true,
+        "worker-route": true
+      },
+      "wall_seconds": 179.6834420840023,
+      "cost_usd": 0.5229647,
+      "rep": 1
+    },
+    {
+      "case": "F82",
+      "variant": "after-133",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:worker": {
+          "model": "gpt-6-luna",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "spacing-16": true,
+        "label-full-name": true,
+        "label-email-alerts": true,
+        "variant-secondary": true,
+        "nothing-else-changed": true,
+        "only-allowed-files-changed": true,
+        "renders": true,
+        "worker-delegated": true,
+        "worker-route": true
+      },
+      "wall_seconds": 83.95921891700709,
+      "cost_usd": 0.21940572000000003,
+      "rep": 1
+    },
+    {
+      "case": "F82",
+      "variant": "before-133",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "claude-sonnet-5-5",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "spacing-16": true,
+        "label-full-name": true,
+        "label-email-alerts": true,
+        "variant-secondary": true,
+        "nothing-else-changed": true,
+        "only-allowed-files-changed": true,
+        "renders": true,
+        "worker-delegated": true,
+        "worker-route": true
+      },
+      "wall_seconds": 69.02380958400317,
+      "cost_usd": 0.1560083,
+      "rep": 1
+    }
+  ],
+  "verdicts": [
+    {
+      "case": "F02",
+      "verdict": "not measured",
+      "step": "no after run on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "F02",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "F02",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "F02",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "F82",
+      "verdict": "not measured",
+      "step": "no after run on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "F82",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "F82",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "F82",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    }
+  ]
+}

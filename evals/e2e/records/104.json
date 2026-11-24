@@ -1,0 +1,363 @@
+{
+  "issue": 104,
+  "cases": [
+    "T102",
+    "T76",
+    "T77"
+  ],
+  "variants": {
+    "h-ask-before": {
+      "revision": "a0c5a70b9913",
+      "campaign": "ask-bundle"
+    },
+    "h-ask-after": {
+      "revision": "7f726f7882b0",
+      "campaign": "ask-bundle"
+    }
+  },
+  "runs": [
+    {
+      "case": "T102",
+      "variant": "h-ask-after",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "posted-once": true,
+        "no-question-asked": true,
+        "usage-limit-stated-once": true,
+        "no-second-reviewer": true
+      },
+      "wall_seconds": 108.81348808298935,
+      "cost_usd": 0.2761024,
+      "rep": 1
+    },
+    {
+      "case": "T102",
+      "variant": "h-ask-after",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "posted-once": true,
+        "no-question-asked": true,
+        "usage-limit-stated-once": true,
+        "no-second-reviewer": false
+      },
+      "wall_seconds": 92.52800962500623,
+      "cost_usd": 0.5996817999999998,
+      "rep": 1
+    },
+    {
+      "case": "T102",
+      "variant": "h-ask-before",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "posted-once": true,
+        "no-question-asked": true,
+        "usage-limit-stated-once": false,
+        "no-second-reviewer": true
+      },
+      "wall_seconds": 127.97284349999973,
+      "cost_usd": 0.3488388,
+      "rep": 1
+    },
+    {
+      "case": "T102",
+      "variant": "h-ask-before",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "posted-once": true,
+        "no-question-asked": true,
+        "usage-limit-stated-once": true,
+        "no-second-reviewer": true
+      },
+      "wall_seconds": 78.88261770800455,
+      "cost_usd": 0.5404638,
+      "rep": 1
+    },
+    {
+      "case": "T76",
+      "variant": "h-ask-after",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "dialog-opened": false,
+        "names-both-flagged-lines": false,
+        "uses-no-internal-terms": true,
+        "delete-and-keep-options-name-both-lines": false,
+        "diagram-shows-all-five-lines": false,
+        "no-free-form-option": false,
+        "files-untouched": true
+      },
+      "wall_seconds": 23.111876458016923,
+      "cost_usd": 0.06851,
+      "rep": 1
+    },
+    {
+      "case": "T76",
+      "variant": "h-ask-after",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "dialog-opened": true,
+        "names-both-flagged-lines": true,
+        "uses-no-internal-terms": false,
+        "delete-and-keep-options-name-both-lines": false,
+        "diagram-shows-all-five-lines": true,
+        "no-free-form-option": true,
+        "files-untouched": true
+      },
+      "wall_seconds": 41.61254474997986,
+      "cost_usd": 0.2549956,
+      "rep": 1
+    },
+    {
+      "case": "T76",
+      "variant": "h-ask-before",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "dialog-opened": false,
+        "names-both-flagged-lines": false,
+        "uses-no-internal-terms": true,
+        "delete-and-keep-options-name-both-lines": false,
+        "diagram-shows-all-five-lines": false,
+        "no-free-form-option": false,
+        "files-untouched": true
+      },
+      "wall_seconds": 24.47041879198514,
+      "cost_usd": 0.0445768,
+      "rep": 1
+    },
+    {
+      "case": "T76",
+      "variant": "h-ask-before",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "dialog-opened": true,
+        "names-both-flagged-lines": true,
+        "uses-no-internal-terms": false,
+        "delete-and-keep-options-name-both-lines": false,
+        "diagram-shows-all-five-lines": true,
+        "no-free-form-option": true,
+        "files-untouched": true
+      },
+      "wall_seconds": 35.981499499990605,
+      "cost_usd": 0.2134606,
+      "rep": 1
+    },
+    {
+      "case": "T77",
+      "variant": "h-ask-after",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "dialog-opened": false,
+        "names-both-columns": false,
+        "options-name-both-columns": false,
+        "diagram-shows-columns": false,
+        "no-free-form-option": false,
+        "files-untouched": true
+      },
+      "wall_seconds": 21.304046415985795,
+      "cost_usd": 0.043578000000000006,
+      "rep": 1
+    },
+    {
+      "case": "T77",
+      "variant": "h-ask-after",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "dialog-opened": true,
+        "names-both-columns": true,
+        "options-name-both-columns": false,
+        "diagram-shows-columns": true,
+        "no-free-form-option": true,
+        "files-untouched": true
+      },
+      "wall_seconds": 28.38629970900365,
+      "cost_usd": 0.2407262,
+      "rep": 1
+    },
+    {
+      "case": "T77",
+      "variant": "h-ask-before",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "dialog-opened": false,
+        "names-both-columns": false,
+        "options-name-both-columns": false,
+        "diagram-shows-columns": false,
+        "no-free-form-option": false,
+        "files-untouched": true
+      },
+      "wall_seconds": 22.738264209008776,
+      "cost_usd": 0.057300000000000004,
+      "rep": 1
+    },
+    {
+      "case": "T77",
+      "variant": "h-ask-before",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "dialog-opened": true,
+        "names-both-columns": true,
+        "options-name-both-columns": false,
+        "diagram-shows-columns": false,
+        "no-free-form-option": true,
+        "files-untouched": true
+      },
+      "wall_seconds": 31.066519208980026,
+      "cost_usd": 0.2029222,
+      "rep": 1
+    }
+  ],
+  "verdicts": [
+    {
+      "case": "T102",
+      "verdict": "fail",
+      "step": "passed before and fails after on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "T102",
+      "verdict": "pass",
+      "step": "first run",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T102",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T102",
+      "verdict": "fail",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T76",
+      "verdict": "fail",
+      "step": "a required check fails after on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "T76",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T76",
+      "verdict": "investigate",
+      "step": "first before gap above 2",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T76",
+      "verdict": "fail",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T77",
+      "verdict": "fail",
+      "step": "a required check fails after on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "T77",
+      "verdict": "pass",
+      "step": "first run",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T77",
+      "verdict": "investigate",
+      "step": "first before gap above 2",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T77",
+      "verdict": "fail",
+      "step": "quality and every measure of the case"
+    }
+  ]
+}

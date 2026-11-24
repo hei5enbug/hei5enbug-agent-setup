@@ -1,0 +1,1611 @@
+{
+  "issue": 102,
+  "cases": [
+    "T13",
+    "T15",
+    "T20"
+  ],
+  "variants": {
+    "loop-baseline": {
+      "revision": "c21c2b2549d1",
+      "campaign": "text-102"
+    },
+    "loop-a": {
+      "revision": "fd9b4156754e",
+      "campaign": "text-102"
+    },
+    "loop-c": {
+      "revision": "1d278751e344",
+      "campaign": "text-102"
+    },
+    "loop-d": {
+      "revision": "dea2c2061642",
+      "campaign": "text-102"
+    }
+  },
+  "runs": [
+    {
+      "case": "T13",
+      "variant": "loop-a",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "ticket-key-absent": true,
+        "no-column-list": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 191.04419724998297,
+      "cost_usd": 0.28366,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 1,
+        "main_turns": 12,
+        "main_tokens": {
+          "input": 32593,
+          "output": 5101,
+          "cache_read": 671872,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 3887,
+          "output": 2805,
+          "cache_read": 535552,
+          "cache_write": 0
+        },
+        "check_stops": 1
+      }
+    },
+    {
+      "case": "T13",
+      "variant": "loop-a",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "ticket-key-absent": true,
+        "no-column-list": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 496.227938541997,
+      "cost_usd": 1.0447670000000002,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 9,
+        "main_turns": 14,
+        "main_tokens": {
+          "input": 42,
+          "output": 11976,
+          "cache_read": 885863,
+          "cache_write": 43901
+        },
+        "main_tokens_loop": {
+          "input": 30,
+          "output": 8417,
+          "cache_read": 702342,
+          "cache_write": 18975
+        },
+        "check_stops": 1
+      }
+    },
+    {
+      "case": "T13",
+      "variant": "loop-baseline",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "ticket-key-absent": true,
+        "no-column-list": true,
+        "sources-unchanged": true,
+        "text-review-clean": false,
+        "ran-text-review": true
+      },
+      "wall_seconds": 170.7059581669746,
+      "cost_usd": 0.30207,
+      "rep": 1,
+      "reviews": [
+        {
+          "findings": [
+            {
+              "type": "removable",
+              "quote": "(latest result in the local check log)",
+              "reason": "Direct: The reported passing result is sufficient; this parenthetical adds no information needed to review the change."
+            },
+            {
+              "type": "removable",
+              "quote": "(rerun on this branch)",
+              "reason": "Supported: The validation entry already reports the check and its result. This parenthetical adds no necessary review information."
+            }
+          ]
+        },
+        {
+          "findings": [
+            {
+              "type": "removable",
+              "quote": "(latest result in the local check log)",
+              "reason": "Direct: “passed” supplies the required latest check result; this parenthetical adds no information needed to review the change."
+            },
+            {
+              "type": "removable",
+              "quote": "(rerun on this branch)",
+              "reason": "Direct: the validation entry already reports the check and its result. This parenthetical adds no necessary review information, and the supplied log does not identify a branch or a full-suite rerun."
+            }
+          ]
+        }
+      ],
+      "passed": false,
+      "loop": {
+        "reviewer_runs": 3,
+        "main_turns": 14,
+        "main_tokens": {
+          "input": 61398,
+          "output": 4134,
+          "cache_read": 607360,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 16288,
+          "output": 2521,
+          "cache_read": 535680,
+          "cache_write": 0
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T13",
+      "variant": "loop-baseline",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "ticket-key-absent": true,
+        "no-column-list": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 612.422168582998,
+      "cost_usd": 0.6889798,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 4,
+        "main_turns": 8,
+        "main_tokens": {
+          "input": 28,
+          "output": 9281,
+          "cache_read": 415887,
+          "cache_write": 30695
+        },
+        "main_tokens_loop": {
+          "input": 20,
+          "output": 6350,
+          "cache_read": 310890,
+          "cache_write": 11070
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T13",
+      "variant": "loop-c",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "ticket-key-absent": true,
+        "no-column-list": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 208.15867583299405,
+      "cost_usd": 0.41031640000000014,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 2,
+        "main_turns": 18,
+        "main_tokens": {
+          "input": 48450,
+          "output": 4900,
+          "cache_read": 924160,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 5551,
+          "output": 3216,
+          "cache_read": 837120,
+          "cache_write": 0
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T13",
+      "variant": "loop-c",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "ticket-key-absent": true,
+        "no-column-list": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 270.5064670839929,
+      "cost_usd": 0.6829868000000001,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 5,
+        "main_turns": 10,
+        "main_tokens": {
+          "input": 34,
+          "output": 10162,
+          "cache_read": 558964,
+          "cache_write": 32491
+        },
+        "main_tokens_loop": {
+          "input": 24,
+          "output": 6613,
+          "cache_read": 418793,
+          "cache_write": 9600
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T13",
+      "variant": "loop-d",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "ticket-key-absent": true,
+        "no-column-list": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 345.7032555839978,
+      "cost_usd": 0.3758516,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 3,
+        "main_turns": 24,
+        "main_tokens": {
+          "input": 33346,
+          "output": 6479,
+          "cache_read": 1117056,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 9389,
+          "output": 4889,
+          "cache_read": 1030272,
+          "cache_write": 0
+        },
+        "check_stops": 1
+      }
+    },
+    {
+      "case": "T13",
+      "variant": "loop-d",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "ticket-key-absent": true,
+        "no-column-list": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 383.0766290409956,
+      "cost_usd": 0.7332063999999999,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 5,
+        "main_turns": 9,
+        "main_tokens": {
+          "input": 30,
+          "output": 11060,
+          "cache_read": 518762,
+          "cache_write": 34499
+        },
+        "main_tokens_loop": {
+          "input": 20,
+          "output": 6708,
+          "cache_read": 378830,
+          "cache_write": 13273
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T15",
+      "variant": "loop-a",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "setup-link-removed": true,
+        "guide-link-kept": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 184.1603507079999,
+      "cost_usd": 0.23532720000000001,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 1,
+        "main_turns": 15,
+        "main_tokens": {
+          "input": 35426,
+          "output": 3384,
+          "cache_read": 539776,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 7722,
+          "output": 2750,
+          "cache_read": 494976,
+          "cache_write": 0
+        },
+        "check_stops": 2
+      }
+    },
+    {
+      "case": "T15",
+      "variant": "loop-a",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "setup-link-removed": true,
+        "guide-link-kept": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 1200.8467263340135,
+      "cost_usd": 0.740774,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 4,
+        "main_turns": 10,
+        "main_tokens": {
+          "input": 34,
+          "output": 10289,
+          "cache_read": 625118,
+          "cache_write": 34969
+        },
+        "main_tokens_loop": {
+          "input": 22,
+          "output": 5744,
+          "cache_read": 441254,
+          "cache_write": 9044
+        },
+        "check_stops": 1
+      }
+    },
+    {
+      "case": "T15",
+      "variant": "loop-baseline",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "setup-link-removed": true,
+        "guide-link-kept": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 67.52435183298076,
+      "cost_usd": 0.1590412,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 1,
+        "main_turns": 5,
+        "main_tokens": {
+          "input": 37399,
+          "output": 2212,
+          "cache_read": 159232,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 19633,
+          "output": 1638,
+          "cache_read": 133632,
+          "cache_write": 0
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T15",
+      "variant": "loop-baseline",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "setup-link-removed": true,
+        "guide-link-kept": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 1200.7761369159853,
+      "cost_usd": 0.3432942,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 3,
+        "main_turns": 7,
+        "main_tokens": {
+          "input": 22,
+          "output": 3818,
+          "cache_read": 273249,
+          "cache_write": 21208
+        },
+        "main_tokens_loop": {
+          "input": 18,
+          "output": 2637,
+          "cache_read": 233076,
+          "cache_write": 4963
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T15",
+      "variant": "loop-c",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "setup-link-removed": true,
+        "guide-link-kept": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 118.26880320798955,
+      "cost_usd": 0.1056652,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 1,
+        "main_turns": 5,
+        "main_tokens": {
+          "input": 24208,
+          "output": 1560,
+          "cache_read": 200192,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 4651,
+          "output": 793,
+          "cache_read": 149760,
+          "cache_write": 0
+        },
+        "check_stops": 1
+      }
+    },
+    {
+      "case": "T15",
+      "variant": "loop-c",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "setup-link-removed": true,
+        "guide-link-kept": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 27.640203208022285,
+      "cost_usd": 0.2029824,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 1,
+        "main_turns": 2,
+        "main_tokens": {
+          "input": 8,
+          "output": 1616,
+          "cache_read": 102548,
+          "cache_write": 17396
+        },
+        "main_tokens_loop": {
+          "input": 4,
+          "output": 697,
+          "cache_read": 62463,
+          "cache_write": 1123
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T15",
+      "variant": "loop-d",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "setup-link-removed": true,
+        "guide-link-kept": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 293.81167466699844,
+      "cost_usd": 0.23375,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 1,
+        "main_turns": 19,
+        "main_tokens": {
+          "input": 62610,
+          "output": 3024,
+          "cache_read": 666880,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 48817,
+          "output": 2373,
+          "cache_read": 610688,
+          "cache_write": 0
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T15",
+      "variant": "loop-d",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "setup-link-removed": true,
+        "guide-link-kept": true,
+        "sources-unchanged": true,
+        "text-review-clean": true,
+        "ran-text-review": true
+      },
+      "wall_seconds": 632.2668230830168,
+      "cost_usd": 0.36176139999999996,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 3,
+        "main_turns": 5,
+        "main_tokens": {
+          "input": 16,
+          "output": 4121,
+          "cache_read": 202765,
+          "cache_write": 21678
+        },
+        "main_tokens_loop": {
+          "input": 12,
+          "output": 3090,
+          "cache_read": 162678,
+          "cache_write": 5477
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T20",
+      "variant": "loop-a",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:worker": {
+          "model": "gpt-6.2-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "tests-pass": true,
+        "report-check": true,
+        "text-review-clean": true,
+        "ran-text-review": true,
+        "reviewer-not-named": true
+      },
+      "wall_seconds": 1458.8354502490256,
+      "cost_usd": 0.4546024000000002,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 0,
+        "main_turns": 7,
+        "main_tokens": {
+          "input": 44818,
+          "output": 7385,
+          "cache_read": 1113856,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 3593,
+          "output": 2454,
+          "cache_read": 358016,
+          "cache_write": 0
+        },
+        "check_stops": 1
+      }
+    },
+    {
+      "case": "T20",
+      "variant": "loop-a",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "tests-pass": true,
+        "report-check": true,
+        "text-review-clean": false,
+        "ran-text-review": true,
+        "reviewer-not-named": true
+      },
+      "wall_seconds": 1200.7680239159963,
+      "cost_usd": 0.5569740000000001,
+      "rep": 1,
+      "reviews": [
+        {
+          "findings": [
+            {
+              "type": "missing",
+              "quote": "memo search가 제목과 본문뿐 아니라 태그도 찾게 해줘. 검색어가 태그 이름에 포함되면 찾고, 대소문자는 구분하지 마.",
+              "reason": "[direct] change.patch에 구현된 완료 결과가 보고서에 없습니다. 태그 이름의 일부로도 검색되며 대소문자를 구분하지 않는다고 알려야 합니다."
+            },
+            {
+              "type": "missing",
+              "quote": "테스트도 추가하고, 끝나면 보고해줘.",
+              "reason": "[direct] change.patch에 추가된 테스트와 그 테스트가 확인하는 동작이 빠졌습니다. 태그 부분 일치, 대소문자 무시, 여러 태그 검색, 불일치 시 제외를 검증하는 테스트를 추가했다고 알려야 합니다."
+            }
+          ]
+        },
+        {
+          "findings": [
+            {
+              "type": "missing",
+              "quote": "검색어가 태그 이름에 포함되면 찾고, 대소문자는 구분하지 마.",
+              "reason": "[direct] 초안에는 요청한 기능의 구현 결과가 없습니다. change.patch가 보여 주는 태그 이름의 부분 문자열 검색과 대소문자 무시 동작을 보고해야 합니다."
+            },
+            {
+              "type": "missing",
+              "quote": "def test_matches_finds_part_of_a_tag_ignoring_case():",
+              "reason": "[direct] 초안에는 추가한 테스트가 잡는 회귀가 없습니다. 태그의 일부만 입력하거나 대소문자가 달라도 검색되고, 일치하지 않는 검색어는 제외되는지 확인하는 테스트를 추가했다는 사실이 필요합니다."
+            }
+          ]
+        }
+      ],
+      "passed": false,
+      "loop": {
+        "reviewer_runs": 0,
+        "main_turns": 7,
+        "main_tokens": {
+          "input": 30,
+          "output": 7613,
+          "cache_read": 555010,
+          "cache_write": 36699
+        },
+        "main_tokens_loop": {
+          "input": 16,
+          "output": 3564,
+          "cache_read": 330753,
+          "cache_write": 10217
+        },
+        "check_stops": 2
+      }
+    },
+    {
+      "case": "T20",
+      "variant": "loop-baseline",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "codex_child:worker": {
+          "model": "gpt-6.2-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "tests-pass": true,
+        "report-check": true,
+        "text-review-clean": true,
+        "ran-text-review": true,
+        "reviewer-not-named": true
+      },
+      "wall_seconds": 603.9071785419947,
+      "cost_usd": 0.8856658000000002,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 3,
+        "main_turns": 28,
+        "main_tokens": {
+          "input": 70154,
+          "output": 10016,
+          "cache_read": 1924352,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 10623,
+          "output": 6833,
+          "cache_read": 1519232,
+          "cache_write": 0
+        },
+        "check_stops": 1
+      }
+    },
+    {
+      "case": "T20",
+      "variant": "loop-baseline",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "tests-pass": true,
+        "report-check": true,
+        "text-review-clean": false,
+        "ran-text-review": true,
+        "reviewer-not-named": false
+      },
+      "wall_seconds": 655.8422048329958,
+      "cost_usd": 0.4726044,
+      "rep": 1,
+      "reviews": [
+        {
+          "findings": [
+            {
+              "type": "removable",
+              "quote": "태그 검색이 빠지거나 대소문자를 구분하게 바뀌면 이 테스트가 실패합니다.",
+              "reason": "direct: 바로 앞 문장이 테스트가 태그 부분 검색과 대소문자 무시를 확인한다고 설명하므로, 같은 검증 내용을 반복합니다."
+            },
+            {
+              "type": "ambiguous",
+              "quote": "이 보고서의 독립 검토는 실행되지 않았습니다. 검토 모델(`gpt-6.1-sol`)이 600초 제한 시간을 넘겨 결과를 내지 못했습니다.",
+              "reason": "direct: 첫 문장은 검토를 시작하지 않았다는 뜻으로 읽히지만, 다음 문장은 시작한 검토가 시간 초과로 끝났다는 뜻입니다. 독립 검토를 시도했으나 완료하지 못했다고 명시해야 합니다."
+            }
+          ]
+        },
+        {
+          "findings": [
+            {
+              "type": "removable",
+              "quote": "예를 들어 `Travel` 태그를 붙인 메모(태그는 `travel`로 저장됨)를 `memo search RAV`로 찾을 수 있습니다.",
+              "reason": "direct: 앞 문장의 부분 일치·대소문자 무시 동작을 반복하는 예시이며, 사용자가 결정하거나 행동하는 데 필요하지 않습니다."
+            },
+            {
+              "type": "removable",
+              "quote": "태그 검색이 빠지거나 대소문자를 구분하게 바뀌면 이 테스트가 실패합니다.",
+              "reason": "direct: 바로 앞 문장에서 이 테스트가 잡는 태그 부분 일치·대소문자 구분 회귀를 이미 설명했습니다."
+            },
+            {
+              "type": "removable",
+              "quote": "(`gpt-6.1-sol`)",
+              "reason": "direct: 독립 검토의 모델명은 독자에게 불필요합니다. 검토 결과를 받지 못한 이유인 시간 초과는 남겨야 합니다."
+            },
+            {
+              "type": "ambiguous",
+              "quote": "이 보고서의 독립 검토는 실행되지 않았습니다. 검토 모델(`gpt-6.1-sol`)이 600초 제한 시간을 넘겨 결과를 내지 못했습니다.",
+              "reason": "direct: 첫 문장은 검토를 시작하지 않았다는 뜻이고, 다음 문장은 실행했지만 완료하지 못했다는 뜻입니다. 시간 초과로 독립 검토를 완료하지 못했다고 명확히 써야 합니다."
+            }
+          ]
+        }
+      ],
+      "passed": false,
+      "loop": {
+        "reviewer_runs": 0,
+        "main_turns": 5,
+        "main_tokens": {
+          "input": 24,
+          "output": 5810,
+          "cache_read": 440102,
+          "cache_write": 33536
+        },
+        "main_tokens_loop": {
+          "input": 10,
+          "output": 1993,
+          "cache_read": 228073,
+          "cache_write": 7112
+        },
+        "check_stops": 1
+      }
+    },
+    {
+      "case": "T20",
+      "variant": "loop-c",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:worker": {
+          "model": "gpt-6.2-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "tests-pass": true,
+        "report-check": true,
+        "text-review-clean": true,
+        "ran-text-review": false,
+        "reviewer-not-named": true
+      },
+      "wall_seconds": 1405.4944852090266,
+      "cost_usd": 0.3812388,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 0,
+        "main_turns": 0,
+        "main_tokens": {
+          "input": 46984,
+          "output": 5959,
+          "cache_read": 1058176,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 0,
+          "output": 0,
+          "cache_read": 0,
+          "cache_write": 0
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T20",
+      "variant": "loop-c",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "tests-pass": true,
+        "report-check": true,
+        "text-review-clean": false,
+        "ran-text-review": true,
+        "reviewer-not-named": true
+      },
+      "wall_seconds": 1200.7944027080084,
+      "cost_usd": 0.4070233999999999,
+      "rep": 1,
+      "reviews": [
+        {
+          "findings": [
+            {
+              "type": "removable",
+              "quote": "지금 다시 검토를 돌리고 있습니다.",
+              "reason": "[direct] 재검토 진행 과정만 설명하며, 사용자가 결정하거나 행동하는 데 필요한 결과를 제공하지 않습니다."
+            },
+            {
+              "type": "missing",
+              "quote": "or any(needle in tag.casefold() for tag in self.tags)",
+              "reason": "[direct] 요청한 변경 결과가 빠졌습니다. 기존 제목·본문 검색에 더해 태그 이름의 일부도 대소문자 구분 없이 검색한다는 사실을 보고해야 합니다."
+            },
+            {
+              "type": "missing",
+              "quote": "def test_search_finds_part_of_tag_ignoring_case(tmp_path):",
+              "reason": "[direct] 추가한 테스트와 그 테스트가 방지하는 회귀에 대한 보고가 없습니다. 태그가 travel인 메모를 TRAV로 찾고 관련 없는 메모는 제외하는 검증을 추가했다는 사실이 필요합니다."
+            }
+          ]
+        },
+        {
+          "findings": [
+            {
+              "type": "removable",
+              "quote": "지금 다시 검토를 돌리고 있습니다.",
+              "reason": "[direct] 검토 진행 과정을 설명할 뿐, 사용자가 요청한 변경 결과나 검증 결과를 알려 주지 않습니다."
+            },
+            {
+              "type": "missing",
+              "quote": "검색어가 태그 이름에 포함되면 찾고, 대소문자는 구분하지 마.",
+              "reason": "[supported] 패치에 구현된 태그 이름의 부분 문자열 검색과 대소문자 무시 동작을 최종 보고에 밝혀야 합니다."
+            },
+            {
+              "type": "missing",
+              "quote": "test_search_finds_part_of_tag_ignoring_case",
+              "reason": "[supported] 테스트를 추가했다는 결과와, 소문자 태그 travel을 대문자 부분 검색어 TRAV로 찾는 회귀 사례를 보고해야 합니다. 제공된 소스에는 테스트 실행 결과가 없어 통과 여부는 확인할 수 없습니다."
+            }
+          ]
+        }
+      ],
+      "passed": false,
+      "loop": {
+        "reviewer_runs": 0,
+        "main_turns": 6,
+        "main_tokens": {
+          "input": 20,
+          "output": 4523,
+          "cache_read": 343223,
+          "cache_write": 28813
+        },
+        "main_tokens_loop": {
+          "input": 12,
+          "output": 2007,
+          "cache_read": 242613,
+          "cache_write": 8204
+        },
+        "check_stops": 2
+      }
+    },
+    {
+      "case": "T20",
+      "variant": "loop-d",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "codex_child:worker": {
+          "model": "gpt-6-luna",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "tests-pass": true,
+        "report-check": true,
+        "text-review-clean": false,
+        "ran-text-review": true,
+        "reviewer-not-named": true
+      },
+      "wall_seconds": 930.7945342079911,
+      "cost_usd": 0.7870589400000001,
+      "rep": 1,
+      "reviews": [
+        {
+          "findings": [
+            {
+              "type": "removable",
+              "quote": "지적된 테스트 누락을 보완했습니다.",
+              "reason": "direct: 앞 문장에 추가한 테스트 범위가 나와 있으므로, 보완 경위는 삭제해도 됩니다. 독립 검토 결과 링크는 유지합니다."
+            }
+          ]
+        },
+        {
+          "findings": [
+            {
+              "type": "removable",
+              "quote": "지적된 테스트 누락을 보완했습니다.",
+              "reason": "direct: 검토 중 누락을 보완한 경과이며, 추가한 테스트는 앞 문장에 이미 설명되어 있습니다. 독립 검토 결과 링크는 유지해야 합니다."
+            }
+          ]
+        }
+      ],
+      "passed": false,
+      "loop": {
+        "reviewer_runs": 1,
+        "main_turns": 32,
+        "main_tokens": {
+          "input": 60038,
+          "output": 7072,
+          "cache_read": 1896448,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 15832,
+          "output": 5219,
+          "cache_read": 1732480,
+          "cache_write": 0
+        },
+        "check_stops": 1
+      }
+    },
+    {
+      "case": "T20",
+      "variant": "loop-d",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "tests-pass": true,
+        "report-check": true,
+        "text-review-clean": false,
+        "ran-text-review": true,
+        "reviewer-not-named": true
+      },
+      "wall_seconds": 1200.7699248330027,
+      "cost_usd": 0.48991339999999994,
+      "rep": 1,
+      "reviews": [
+        {
+          "findings": [
+            {
+              "type": "removable",
+              "quote": "끝나면 최종 보고를 드리겠습니다.",
+              "reason": "direct: 향후 보고를 약속할 뿐, 사용자가 알아야 할 작업 결과를 전달하지 않습니다."
+            },
+            {
+              "type": "missing",
+              "quote": "memo search가 제목과 본문뿐 아니라 태그도 찾게 해줘.",
+              "reason": "direct: 최종 보고에 구현 결과가 빠져 있습니다. change.patch에 나타난 대로 제목·본문에 더해 태그 이름도 부분 일치로 검색하며 대소문자를 구분하지 않는다고 알려야 합니다."
+            },
+            {
+              "type": "missing",
+              "quote": "테스트도 추가하고, 끝나면 보고해줘.",
+              "reason": "direct: 추가한 테스트와 그 회귀 방지 범위가 빠져 있습니다. change.patch의 테스트는 태그 이름의 부분 일치, 대소문자 무시, 불일치 검색어의 제외를 확인합니다."
+            }
+          ]
+        },
+        {
+          "findings": [
+            {
+              "type": "removable",
+              "quote": "끝나면 최종 보고를 드리겠습니다.",
+              "reason": "direct: 첫 문장의 진행 상황에 최종 보고 예고만 덧붙이며, 작업 결과나 사용자가 할 일을 제공하지 않습니다."
+            },
+            {
+              "type": "missing",
+              "quote": "검색어가 태그 이름에 포함되면 찾고, 대소문자는 구분하지 마.",
+              "reason": "direct: 요청과 change.patch가 보여 주는 완료 결과가 빠져 있습니다. 제목·본문에 더해 태그도 대소문자 구분 없이 부분 문자열로 검색하도록 변경했다는 사실을 보고해야 합니다."
+            },
+            {
+              "type": "missing",
+              "quote": "assert results == (True, True, False)",
+              "reason": "direct: change.patch에 추가된 테스트와 그 검증 내용이 빠져 있습니다. 태그의 부분 문자열 및 대소문자가 다른 검색어는 일치하고, 포함되지 않은 검색어는 일치하지 않는지 확인하는 테스트를 추가했다는 사실이 필요합니다."
+            }
+          ]
+        }
+      ],
+      "passed": false,
+      "loop": {
+        "reviewer_runs": 0,
+        "main_turns": 6,
+        "main_tokens": {
+          "input": 26,
+          "output": 5131,
+          "cache_read": 454333,
+          "cache_write": 33937
+        },
+        "main_tokens_loop": {
+          "input": 14,
+          "output": 1931,
+          "cache_read": 272820,
+          "cache_write": 8004
+        },
+        "check_stops": 2
+      }
+    }
+  ],
+  "verdicts": [
+    {
+      "case": "T13",
+      "verdict": "pass",
+      "step": "a: every required check passes after on both hosts",
+      "measure": "quality"
+    },
+    {
+      "case": "T13",
+      "verdict": "investigate",
+      "step": "a: first before gap above 2",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T13",
+      "verdict": "investigate",
+      "step": "a: first before gap above 2",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T13",
+      "verdict": "second pair",
+      "step": "a: quality, every measure, and the claim of the case"
+    },
+    {
+      "case": "T15",
+      "verdict": "pass",
+      "step": "a: every required check passes after on both hosts",
+      "measure": "quality"
+    },
+    {
+      "case": "T15",
+      "verdict": "investigate",
+      "step": "a: first before gap above 2",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T15",
+      "verdict": "investigate",
+      "step": "a: first before gap above 2",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T15",
+      "verdict": "second pair",
+      "step": "a: quality, every measure, and the claim of the case"
+    },
+    {
+      "case": "T20",
+      "verdict": "fail",
+      "step": "a: a required check fails after on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "T20",
+      "verdict": "repeat",
+      "step": "a: gap grew on the first run; run four more per variant and host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T20",
+      "verdict": "pass",
+      "step": "a: first run",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T20",
+      "verdict": "fail",
+      "step": "a: quality, every measure, and the claim of the case"
+    },
+    {
+      "case": "T13",
+      "verdict": "second pair",
+      "step": "a: cost_usd; claude: first pair is not lower, codex: first pair is lower",
+      "measure": "claim"
+    },
+    {
+      "case": "T15",
+      "verdict": "second pair",
+      "step": "a: cost_usd; claude: first pair is not lower, codex: first pair is not lower",
+      "measure": "claim"
+    },
+    {
+      "case": "T20",
+      "verdict": "second pair",
+      "step": "a: cost_usd; claude: first pair is not lower, codex: first pair is lower",
+      "measure": "claim"
+    },
+    {
+      "case": "T13",
+      "verdict": "pass",
+      "step": "c: every required check passes after on both hosts",
+      "measure": "quality"
+    },
+    {
+      "case": "T13",
+      "verdict": "investigate",
+      "step": "c: first before gap above 2",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T13",
+      "verdict": "investigate",
+      "step": "c: first before gap above 2",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T13",
+      "verdict": "second pair",
+      "step": "c: quality, every measure, and the claim of the case"
+    },
+    {
+      "case": "T15",
+      "verdict": "pass",
+      "step": "c: every required check passes after on both hosts",
+      "measure": "quality"
+    },
+    {
+      "case": "T15",
+      "verdict": "investigate",
+      "step": "c: first before gap above 2",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T15",
+      "verdict": "investigate",
+      "step": "c: first before gap above 2",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T15",
+      "verdict": "continue to five",
+      "step": "c: quality, every measure, and the claim of the case"
+    },
+    {
+      "case": "T20",
+      "verdict": "fail",
+      "step": "c: a required check fails after on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "T20",
+      "verdict": "repeat",
+      "step": "c: gap grew on the first run; run four more per variant and host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T20",
+      "verdict": "pass",
+      "step": "c: first run",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T20",
+      "verdict": "fail",
+      "step": "c: quality, every measure, and the claim of the case"
+    },
+    {
+      "case": "T13",
+      "verdict": "second pair",
+      "step": "c: cost_usd; claude: first pair is lower, codex: first pair is not lower",
+      "measure": "claim"
+    },
+    {
+      "case": "T15",
+      "verdict": "continue to five",
+      "step": "c: cost_usd; claude: first pair is lower, codex: first pair is lower",
+      "measure": "claim"
+    },
+    {
+      "case": "T20",
+      "verdict": "second pair",
+      "step": "c: cost_usd; claude: first pair is not lower, codex: first pair is lower",
+      "measure": "claim"
+    },
+    {
+      "case": "T13",
+      "verdict": "pass",
+      "step": "d: every required check passes after on both hosts",
+      "measure": "quality"
+    },
+    {
+      "case": "T13",
+      "verdict": "investigate",
+      "step": "d: first before gap above 2",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T13",
+      "verdict": "investigate",
+      "step": "d: first before gap above 2",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T13",
+      "verdict": "second pair",
+      "step": "d: quality, every measure, and the claim of the case"
+    },
+    {
+      "case": "T15",
+      "verdict": "pass",
+      "step": "d: every required check passes after on both hosts",
+      "measure": "quality"
+    },
+    {
+      "case": "T15",
+      "verdict": "investigate",
+      "step": "d: first before gap above 2",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T15",
+      "verdict": "investigate",
+      "step": "d: first before gap above 2",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T15",
+      "verdict": "second pair",
+      "step": "d: quality, every measure, and the claim of the case"
+    },
+    {
+      "case": "T20",
+      "verdict": "fail",
+      "step": "d: passed before and fails after on codex",
+      "measure": "quality"
+    },
+    {
+      "case": "T20",
+      "verdict": "repeat",
+      "step": "d: gap grew on the first run; run four more per variant and host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T20",
+      "verdict": "pass",
+      "step": "d: first run",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T20",
+      "verdict": "fail",
+      "step": "d: quality, every measure, and the claim of the case"
+    },
+    {
+      "case": "T13",
+      "verdict": "second pair",
+      "step": "d: cost_usd; claude: first pair is not lower, codex: first pair is not lower",
+      "measure": "claim"
+    },
+    {
+      "case": "T15",
+      "verdict": "second pair",
+      "step": "d: cost_usd; claude: first pair is not lower, codex: first pair is not lower",
+      "measure": "claim"
+    },
+    {
+      "case": "T20",
+      "verdict": "second pair",
+      "step": "d: cost_usd; claude: first pair is not lower, codex: first pair is not lower",
+      "measure": "claim"
+    }
+  ],
+  "candidates": [
+    {
+      "candidate": "a",
+      "variant": "loop-a",
+      "verdict": "reject",
+      "step": "host comparison: T20 fail"
+    },
+    {
+      "candidate": "c",
+      "variant": "loop-c",
+      "verdict": "reject",
+      "step": "host comparison: T20 fail"
+    },
+    {
+      "candidate": "d",
+      "variant": "loop-d",
+      "verdict": "reject",
+      "step": "writing rule: text-review-clean passed on the baseline and fails on the candidate: T20 on codex"
+    }
+  ]
+}

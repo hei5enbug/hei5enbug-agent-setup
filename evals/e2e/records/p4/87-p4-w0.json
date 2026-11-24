@@ -1,0 +1,97 @@
+{
+  "issue": 87,
+  "cases": [
+    "T153"
+  ],
+  "variants": {
+    "w-sonnet": {
+      "revision": "e591fa5670ec",
+      "campaign": "model-87-w0"
+    },
+    "w-opus": {
+      "revision": "e591fa5670ec",
+      "campaign": "model-87-w0"
+    }
+  },
+  "runs": [
+    {
+      "case": "T153",
+      "variant": "w-opus",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": false,
+        "regressions": true,
+        "readme-lock-timeout": false,
+        "mirror-updated": false,
+        "worker-delegated": false,
+        "worker-route": true
+      },
+      "wall_seconds": 393.77253454201855,
+      "cost_usd": 1.5039619999999994,
+      "rep": 1,
+      "passed": false
+    },
+    {
+      "case": "T153",
+      "variant": "w-sonnet",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "subagent:hei5enbug-agent-setup:worker": {
+          "model": "claude-sonnet-5-5",
+          "effort": "not measured"
+        },
+        "role_runner:reviewer": {
+          "model": "gpt-6.1-sol",
+          "effort": "xhigh"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "readme-lock-timeout": true,
+        "mirror-updated": true,
+        "worker-delegated": true,
+        "worker-route": true
+      },
+      "wall_seconds": 1504.2345078329963,
+      "cost_usd": 3.8095350000000003,
+      "rep": 1,
+      "passed": true
+    }
+  ],
+  "verdicts": [
+    {
+      "case": "T153",
+      "verdict": "not measured",
+      "step": "no after run on codex",
+      "measure": "quality"
+    },
+    {
+      "case": "T153",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T153",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T153",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    }
+  ]
+}

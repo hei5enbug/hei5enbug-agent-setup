@@ -7,10 +7,12 @@
   ],
   "variants": {
     "p4-before": {
-      "revision": "a0c5a70b9913"
+      "revision": "a0c5a70b9913",
+      "campaign": "skill-b-125"
     },
     "a125-haiku": {
-      "revision": "d1f1c35a6efe"
+      "revision": "d1f1c35a6efe",
+      "campaign": "skill-b-125"
     }
   },
   "runs": [

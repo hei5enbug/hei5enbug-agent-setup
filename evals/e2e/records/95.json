@@ -6,10 +6,12 @@
   ],
   "variants": {
     "p4h-before": {
-      "revision": "a0c5a70b9913"
+      "revision": "a0c5a70b9913",
+      "campaign": "impl-95"
     },
     "p4h-after": {
-      "revision": "589c174ecfb4"
+      "revision": "589c174ecfb4",
+      "campaign": "impl-95"
     }
   },
   "runs": [

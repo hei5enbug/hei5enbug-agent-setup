@@ -1,0 +1,243 @@
+{
+  "issue": 133,
+  "cases": [
+    "F02",
+    "F82"
+  ],
+  "variants": {
+    "before-133": {
+      "revision": "93f7b27c3c16",
+      "campaign": "model-133-own"
+    },
+    "after-133-own": {
+      "revision": "8c91250a7cf5",
+      "campaign": "model-133-own"
+    }
+  },
+  "runs": [
+    {
+      "case": "F02",
+      "variant": "after-133-own",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "claude-sonnet-5-5",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:worker": {
+          "model": "gpt-6.2-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#5": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#6": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#7": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "new-tests": true,
+        "agent-tests": true,
+        "readme-shipping": true,
+        "mirror-updated": true,
+        "files-changed": true,
+        "worker-delegated": true,
+        "worker-route": true
+      },
+      "wall_seconds": 1001.4058281669859,
+      "cost_usd": 2.2336235999999996,
+      "rep": 1
+    },
+    {
+      "case": "F02",
+      "variant": "before-133",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "claude-sonnet-5-5",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "gpt-6.1-sol",
+          "effort": "xhigh"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "new-tests": true,
+        "agent-tests": true,
+        "readme-shipping": true,
+        "mirror-updated": true,
+        "files-changed": true,
+        "worker-delegated": true,
+        "worker-route": true
+      },
+      "wall_seconds": 791.0456873330113,
+      "cost_usd": 1.9819014999999998,
+      "rep": 1
+    },
+    {
+      "case": "F82",
+      "variant": "after-133-own",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "claude-sonnet-5-5",
+          "effort": "high"
+        },
+        "codex_child:worker": {
+          "model": "gpt-6-luna",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "spacing-16": true,
+        "label-full-name": true,
+        "label-email-alerts": true,
+        "variant-secondary": true,
+        "nothing-else-changed": true,
+        "only-allowed-files-changed": true,
+        "renders": true,
+        "worker-delegated": true,
+        "worker-route": true
+      },
+      "wall_seconds": 98.31132387497928,
+      "cost_usd": 0.25133164,
+      "rep": 1
+    },
+    {
+      "case": "F82",
+      "variant": "before-133",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:unknown": {
+          "model": "claude-sonnet-5-5",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "spacing-16": true,
+        "label-full-name": true,
+        "label-email-alerts": true,
+        "variant-secondary": true,
+        "nothing-else-changed": true,
+        "only-allowed-files-changed": true,
+        "renders": true,
+        "worker-delegated": false,
+        "worker-route": true
+      },
+      "wall_seconds": 70.73231600000872,
+      "cost_usd": 0.19735960000000002,
+      "rep": 1
+    }
+  ],
+  "verdicts": [
+    {
+      "case": "F02",
+      "verdict": "not measured",
+      "step": "no after run on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "F02",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "F02",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "F02",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "F82",
+      "verdict": "not measured",
+      "step": "no after run on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "F82",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "F82",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "F82",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    }
+  ]
+}

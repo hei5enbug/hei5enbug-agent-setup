@@ -7,10 +7,12 @@
   ],
   "variants": {
     "scout-sonnet": {
-      "revision": "e591fa5670ec"
+      "revision": "e591fa5670ec",
+      "campaign": "model-123"
     },
     "scout-haiku": {
-      "revision": "b2f5563d3405"
+      "revision": "b2f5563d3405",
+      "campaign": "model-123"
     }
   },
   "runs": [

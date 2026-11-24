@@ -1,0 +1,123 @@
+{
+  "issue": 116,
+  "cases": [
+    "T81"
+  ],
+  "variants": {
+    "before": {
+      "revision": "a0c5a70b9913",
+      "campaign": "skill-a-116"
+    },
+    "after": {
+      "revision": "1d612001c0b9",
+      "campaign": "skill-a-116"
+    }
+  },
+  "runs": [
+    {
+      "case": "T81",
+      "variant": "after",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "reload-sent-to-running-session": true,
+        "nothing-else-sent-to-running-session": true,
+        "nothing-sent-to-control-session": true,
+        "running-session-not-reported-unfinished": true
+      },
+      "wall_seconds": 151.57670258299913,
+      "cost_usd": 0.21428840000000002,
+      "rep": 1
+    },
+    {
+      "case": "T81",
+      "variant": "after",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "reload-sent-to-running-session": true,
+        "nothing-else-sent-to-running-session": true,
+        "nothing-sent-to-control-session": true,
+        "running-session-not-reported-unfinished": true
+      },
+      "wall_seconds": 36.19078945799265,
+      "cost_usd": 0.3493462,
+      "rep": 1
+    },
+    {
+      "case": "T81",
+      "variant": "before",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "reload-sent-to-running-session": false,
+        "nothing-else-sent-to-running-session": true,
+        "nothing-sent-to-control-session": true,
+        "running-session-not-reported-unfinished": false
+      },
+      "wall_seconds": 126.57720691600116,
+      "cost_usd": 0.2542504,
+      "rep": 1
+    },
+    {
+      "case": "T81",
+      "variant": "before",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "reload-sent-to-running-session": false,
+        "nothing-else-sent-to-running-session": true,
+        "nothing-sent-to-control-session": true,
+        "running-session-not-reported-unfinished": false
+      },
+      "wall_seconds": 42.6246478749963,
+      "cost_usd": 0.2573308,
+      "rep": 1
+    }
+  ],
+  "verdicts": [
+    {
+      "case": "T81",
+      "verdict": "pass",
+      "step": "every required check passes after on both hosts",
+      "measure": "quality"
+    },
+    {
+      "case": "T81",
+      "verdict": "investigate",
+      "step": "first before gap above 2",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T81",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T81",
+      "verdict": "repeat",
+      "step": "quality and every measure of the case"
+    }
+  ]
+}

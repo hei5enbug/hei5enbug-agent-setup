@@ -1,0 +1,279 @@
+{
+  "issue": 113,
+  "cases": [
+    "T113",
+    "T21"
+  ],
+  "variants": {
+    "b-orca": {
+      "revision": "a0c5a70b9913",
+      "campaign": "orca-bundle"
+    },
+    "a-orca": {
+      "revision": "f227b96b303f",
+      "campaign": "orca-bundle"
+    }
+  },
+  "runs": [
+    {
+      "case": "T113",
+      "variant": "a-orca",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "delegated-through-a-new-terminal": true,
+        "every-start-names-model-and-effort": true,
+        "no-fable-or-astra-start": true,
+        "handoff-sent-to-the-new-terminal": true,
+        "repositories-untouched": true,
+        "external-calls-answered-from-seed": true
+      },
+      "wall_seconds": 113.09802962499089,
+      "cost_usd": 0.16152080000000002,
+      "rep": 1
+    },
+    {
+      "case": "T113",
+      "variant": "a-orca",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "delegated-through-a-new-terminal": true,
+        "every-start-names-model-and-effort": true,
+        "no-fable-or-astra-start": true,
+        "handoff-sent-to-the-new-terminal": true,
+        "repositories-untouched": true,
+        "external-calls-answered-from-seed": true
+      },
+      "wall_seconds": 66.14887337500113,
+      "cost_usd": 0.5294998000000001,
+      "rep": 1
+    },
+    {
+      "case": "T113",
+      "variant": "b-orca",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "delegated-through-a-new-terminal": true,
+        "every-start-names-model-and-effort": false,
+        "no-fable-or-astra-start": true,
+        "handoff-sent-to-the-new-terminal": true,
+        "repositories-untouched": true,
+        "external-calls-answered-from-seed": true
+      },
+      "wall_seconds": 505.5692619580077,
+      "cost_usd": 0.1628572,
+      "rep": 1
+    },
+    {
+      "case": "T113",
+      "variant": "b-orca",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "delegated-through-a-new-terminal": true,
+        "every-start-names-model-and-effort": false,
+        "no-fable-or-astra-start": true,
+        "handoff-sent-to-the-new-terminal": true,
+        "repositories-untouched": true,
+        "external-calls-answered-from-seed": true
+      },
+      "wall_seconds": 53.23467024997808,
+      "cost_usd": 0.422556,
+      "rep": 1
+    },
+    {
+      "case": "T21",
+      "variant": "a-orca",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:worker": {
+          "model": "gpt-6-luna",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "tests-pass": true,
+        "case4-pushed-child-removed": true,
+        "case5-unpushed-child-kept": true,
+        "case5-named-in-report": true,
+        "case6-ticket-worktree-removed-and-folder-completed": true,
+        "case7-other-repository-untouched": true,
+        "main-clones-and-remote-kept": true
+      },
+      "wall_seconds": 193.30391141600558,
+      "cost_usd": 0.34781152000000004,
+      "rep": 1
+    },
+    {
+      "case": "T21",
+      "variant": "a-orca",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "tests-pass": true,
+        "case4-pushed-child-removed": true,
+        "case5-unpushed-child-kept": true,
+        "case5-named-in-report": true,
+        "case6-ticket-worktree-removed-and-folder-completed": true,
+        "case7-other-repository-untouched": true,
+        "main-clones-and-remote-kept": true
+      },
+      "wall_seconds": 272.3314734160085,
+      "cost_usd": 0.7501086,
+      "rep": 1
+    },
+    {
+      "case": "T21",
+      "variant": "b-orca",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "tests-pass": true,
+        "case4-pushed-child-removed": false,
+        "case5-unpushed-child-kept": true,
+        "case5-named-in-report": true,
+        "case6-ticket-worktree-removed-and-folder-completed": false,
+        "case7-other-repository-untouched": true,
+        "main-clones-and-remote-kept": true
+      },
+      "wall_seconds": 187.33504829197773,
+      "cost_usd": 0.3047436,
+      "rep": 1
+    },
+    {
+      "case": "T21",
+      "variant": "b-orca",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "tests-pass": true,
+        "case4-pushed-child-removed": true,
+        "case5-unpushed-child-kept": true,
+        "case5-named-in-report": true,
+        "case6-ticket-worktree-removed-and-folder-completed": true,
+        "case7-other-repository-untouched": true,
+        "main-clones-and-remote-kept": true
+      },
+      "wall_seconds": 174.63575083299656,
+      "cost_usd": 0.5826781999999999,
+      "rep": 1
+    }
+  ],
+  "verdicts": [
+    {
+      "case": "T113",
+      "verdict": "pass",
+      "step": "every required check passes after on both hosts",
+      "measure": "quality"
+    },
+    {
+      "case": "T113",
+      "verdict": "investigate",
+      "step": "first before gap above 2",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T113",
+      "verdict": "investigate",
+      "step": "first before gap above 2",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T113",
+      "verdict": "pass",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T21",
+      "verdict": "pass",
+      "step": "every required check passes after on both hosts",
+      "measure": "quality"
+    },
+    {
+      "case": "T21",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T21",
+      "verdict": "repeat",
+      "step": "gap grew on the first run; run four more per variant and host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T21",
+      "verdict": "repeat",
+      "step": "quality and every measure of the case"
+    }
+  ]
+}
