@@ -1654,7 +1654,9 @@ class RegistrationTest(LanguageGuardCase):
         """hooks.json의 명령 문자열을 셸로 실행하면 Stop 입력에 재작성 요청 출력을 낸다."""
         # Given
         self.use_korean_setting()
-        handler = HOOKS["Stop"][0]["hooks"][0]
+        handler = next(
+            hook for entry in HOOKS["Stop"] for hook in entry["hooks"] if "language_guard.py" in hook["command"]
+        )
         env = self.environment(CLAUDE_PLUGIN_ROOT=str(REPO_ROOT), PATH=f"{self.bin}{os.pathsep}{os.defpath}")
 
         # When
