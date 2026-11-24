@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import plugin_toggles
 from role_runner_agents import accepts_add_dir, runner_for
 from role_runner_config import (
     AGENT_TARGET, CAPABILITIES, REVIEWER_MODELS, ROLES, VALIDATION_ROLE, WORKER_AGENTS, WORKER_MODELS, UsageError,
@@ -61,12 +60,6 @@ def validate_request(args: argparse.Namespace, target: str) -> None:
         raise UsageError("--user-requested needs the --model or --effort the user named")
     if args.model is None:
         return
-    if target == "worker" and not args.user_requested:
-        fixed = plugin_toggles.fixed_worker_model(plugin_toggles.worker_setting()[0])
-        if fixed is not None and args.model != fixed:
-            raise UsageError(f"--model {args.model} conflicts with the codex_worker_model setting {fixed}: pass no --model")
-        if fixed is not None:
-            return
     if is_worker_choice(args, target):
         return
     if target != "reviewer" and not args.user_requested:

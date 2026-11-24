@@ -370,28 +370,6 @@ class FakeCodexRunTest(unittest.TestCase):
         self.assertEqual(run["status"], "complete")
         self.assertEqual(run["host"], "codex")
 
-    def test_질문_도구가_필요하다고_밝힌_과제만_Codex_질문_도구_기능을_켠다(self):
-        """needs_question_tool 과제의 exec 명령에는 `-c features.default_mode_request_user_input=true`가 있고, 밝히지 않은 과제에는 없다.
-        잡는 회귀: 기능을 켜지 않아 Codex 가 request_user_input 을 받지 못하고 평문으로 묻는 T76 T77 Codex 실행."""
-        # given
-        flag = ["-c", "features.default_mode_request_user_input=true"]
-        self.task = {**self.task, "needs_question_tool": True}
-
-        # when
-        self.execute()
-        needs = self.calls()[-1]["argv"]
-        self.log.unlink()
-        shutil.rmtree(self.spec.result_dir)
-        self.task = {key: value for key, value in self.task.items() if key != "needs_question_tool"}
-        self.execute()
-        plain = self.calls()[-1]["argv"]
-
-        # then
-        self.assertEqual(needs[needs.index(flag[1]) - 1:needs.index(flag[1]) + 1], flag)
-        self.assertNotIn(flag[1], plain)
-        at = needs.index(flag[1])
-        self.assertEqual(needs[:at - 1] + needs[at + 1:], plain)
-
     def test_Codex_실행의_에이전트_환경은_승인_가드를_두_변수_모두_false로_끈다(self):
         """Codex에는 ask를 대신 답하는 승인 도구가 없으므로 측정 실행은 변형이 정하지 않아도 가드를 끈 환경으로 시작한다."""
         # given / when

@@ -131,9 +131,7 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
   `hei5enbug-agent-setup:worker`를 띄우고 그 모델을 호출의 `model`로 넘긴다. `codex`이면 Codex worker(아래 "Codex worker" 참조),
   `sol`이면 Sol worker(아래 "Sol worker" 참조)를 쓴다. `auto`이면 `worker`를 띄우되 `model`은
   [난이도별 worker 모델](model-routing.ko.md#난이도별-worker-모델)이 정한 값을 쓴다.
-  Claude 경로가 실패하거나 사용량 한도로 중단되면 `auto`는 Sol worker를 쓴다. `claude`는 `auto`처럼 모델을 고르되, 그 위임을
-  멈추고 원인을 보고한다. GPT worker나 Sol worker를 실행하지 않고 다른 모델로 바꾸지도 않는다. Codex나 Sol worker가 실패하거나
-  사용량 한도로 중단되면 부분 diff를 점검하고 남은 작업을 `sonnet`의 `worker`로 이어 간다. 사용자가 한 경로를 요청하면 그 요청에만 적용한다.
+  Claude 경로가 실패하거나 사용량 한도로 중단되면 Sol worker를 쓴다. 사용자가 한 경로를 요청하면 그 요청에만 적용한다.
   UI 코드, 시각 디자인, 다이어그램 작업은 여전히 `hei5enbug-agent-setup:designer`가 맡는다. 다만 Claude Code 세션 파일이
   메인 세션에 맡긴 종류는 예외다. 그 밖의 에이전트는 쓰지 않는다.
 - `worker` 에이전트는 세션 줄 "Worker agent effort"에 적힌 사고 강도(기본값 `high`)로, 호출이 넘긴 모델로 실행하며 호출이
@@ -182,5 +180,5 @@ python3 <Source directory>/scripts/role_runner.py agent --name <name> --fallback
 
 ## Codex worker
 
-- 일반 할당 항목을 담은 할당을 파일로 쓰고 역할 실행기의 `worker` 역할을 실행하며, `--model`은 [난이도별 worker 모델](model-routing.ko.md#난이도별-gpt-worker-모델)로 정한다. `codex_worker_model` 설정이 GPT 모델 하나를 지정하면 실행기가 그 모델을 쓰고 다른 `--model`을 거부하므로 `--model`을 넘기지 않는다.
+- 일반 할당 항목을 담은 할당을 파일로 쓰고 역할 실행기의 `worker` 역할을 실행하며, `--model`은 [난이도별 worker 모델](model-routing.ko.md#난이도별-gpt-worker-모델)로 정한다.
 - 작업이 써야 하는 세션 폴더 밖 디렉터리에만 `--add-dir <dir>`을 붙인다. 플러그인 Mod는 세션당 한 번 묻는다.

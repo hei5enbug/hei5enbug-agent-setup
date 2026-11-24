@@ -47,16 +47,6 @@
         ]
       },
       {
-        "matcher": "^(AskUserQuestion|request_user_input)$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_python.sh\" question_guard.py",
-            "timeout": 5
-          }
-        ]
-      },
-      {
         "matcher": "^Bash$",
         "hooks": [
           {

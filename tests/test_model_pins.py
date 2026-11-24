@@ -503,7 +503,7 @@ class ModelPinTest(unittest.TestCase):
         efforts = set(REGISTRY["efforts"])
         models = set(PINS.values())
         aliases = {key.split("-", 1)[1] for key in PINS if key.startswith("claude-")}
-        routes = {"auto", "claude", "codex", "sol"}
+        routes = {"auto", "codex", "sol"}
 
         # When
         outside_models = [value for value in options["codex_worker_model"]["options"] if value not in models | {"auto"}]

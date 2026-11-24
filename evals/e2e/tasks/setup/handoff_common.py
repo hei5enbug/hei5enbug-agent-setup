@@ -1,4 +1,4 @@
-"""Shared seeding for T31 to T34: a fake Orca with two repositories, child worktrees, and agent and shell terminals.
+"""Shared seeding for T67: a fake Orca with two repositories, child worktrees, and agent and shell terminals.
 
 The notes-cli repository plays demo-a's main clone and `demo-b` is a second clone beside it, both with a bare origin.
 The state file, the call log, and the baseline live in `orca-state/` in the run's work folder, the parent of `repo`.

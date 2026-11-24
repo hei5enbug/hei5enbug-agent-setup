@@ -5,7 +5,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import time
 import shutil
 import subprocess
 import sys
@@ -33,6 +35,11 @@ IDENTIFIER_MAX_LENGTH = 80
 IDENTIFIER_LIST_MINIMUM = 3
 LABEL_MAX_LENGTH = 40
 AGENT_FACING_KINDS = ("issue-body",)
+STATE_DIR_ENV = "TEXT_REVIEW_STATE_DIR"
+STATE_DIR_NAME = "text-review-state"
+ROUNDS_FIRST_STOP = 4
+ROUNDS_STOP_EVERY = 3
+ROUNDS_IDLE_SECONDS = 6 * 3600
 
 UNCHANGED_PATTERNS = (
     r"\b(?:is|are|was|were|stays?|remains?)\s+(?:still\s+)?unchanged\b",
@@ -316,6 +323,41 @@ def flagged_section(advisories: list[dict]) -> list[str]:
     return [FLAGGED_HEADING, FLAGGED_EXPLANATION, f"{fenced(lines)}\n"]
 
 
+def rounds_file(kind: str, draft: str) -> Path | None:
+    """Where the count of runs that returned findings for this draft file is kept; a draft read from standard input has none."""
+    if draft == "-":
+        return None
+    folder = Path(os.environ.get(STATE_DIR_ENV) or Path(tempfile.gettempdir()) / STATE_DIR_NAME)
+    return folder / ("rounds-" + hashlib.sha256(f"{kind}\0{Path(draft).resolve()}".encode("utf-8")).hexdigest() + ".json")
+
+
+def count_round(path: Path | None, now: float) -> int:
+    """Count one more run that returned findings for the draft; a count idle for hours starts over."""
+    if path is None:
+        return 1
+    try:
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        rounds = saved["rounds"] if now - saved["at"] < ROUNDS_IDLE_SECONDS and isinstance(saved["rounds"], int) else 0
+    except (OSError, ValueError, KeyError, TypeError):
+        rounds = 0
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"rounds": rounds + 1, "at": now}), encoding="utf-8")
+    except OSError:
+        pass
+    return rounds + 1
+
+
+def clear_rounds(path: Path | None) -> None:
+    if path is not None:
+        path.unlink(missing_ok=True)
+
+
+def round_stop(rounds: int) -> bool:
+    """The fourth run that returned findings stops the loop, and so does every third run after it."""
+    return rounds >= ROUNDS_FIRST_STOP and (rounds - ROUNDS_FIRST_STOP) % ROUNDS_STOP_EVERY == 0
+
+
 def build_assignment(kind: str, draft: str, rules: list, sources: list, notes: list[str], budget: int | None,
                      advisories: list[dict]) -> str:
     parts = [REVIEWER_INSTRUCTIONS]
@@ -485,9 +527,14 @@ def command_review(args: argparse.Namespace) -> int:
     errors = [outcome["error"] for outcome in outcomes if "error" in outcome]
     limited = bool(errors) and all(outcome.get("reason") == USAGE_LIMIT_REASON for outcome in outcomes if "error" in outcome)
     status = {"runner": runners[0], "runners": runners}
+    rounds_path = rounds_file(args.kind, args.draft)
     if findings:
+        rounds = count_round(rounds_path, time.time())
+        status = {**status, "round": rounds, **({"stop": True} if round_stop(rounds) else {})}
         emit({**base, "findings": findings, "over_budget_facts": facts, **status, **({"errors": errors} if errors else {})})
         return EXIT_FINDINGS
+    if not errors:
+        clear_rounds(rounds_path)
     if limited:
         emit({**base, "reason": USAGE_LIMIT_REASON, "error": "; ".join(errors), **status})
         return EXIT_USAGE_LIMIT

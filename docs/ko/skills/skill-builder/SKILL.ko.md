@@ -325,8 +325,8 @@ Execute this task.
 
 ### 5단계: 채점과 집계
 
-1. `agents/grader.md`를 읽고 `references/execution-methods.md`의 "Evaluation model adapters"에 있는 검토 경로로 각 실행을 채점한다.
-   그 경로와 대체 경로가 모두 실패했거나 호스트에 검토 경로가 없을 때만 대화 안에서 채점하고, 보고에 그 사실을 밝힌다. `grading.json`을 저장한다.
+1. `agents/grader.md`를 읽고 각 실행을 채점한다. 가능하면 독립 작업자를 쓰고, 아니면 대화 안에서 채점한다.
+   `grading.json`을 저장한다.
    기대 객체는 `text`, `passed`, `evidence`를 사용해야 한다.
 2. 결정적 스크립트는 "자동화 경계"를 만족하는 assertion에만 사용한다.
    결정적으로 실행된다고 해서 proxy나 heuristic assertion이 유효해지지는 않는다.
@@ -403,10 +403,10 @@ python <skill-builder-path>/eval-viewer/generate_review.py \
 ## 심화: blind 비교
 
 엄밀한 A/B 비교에는 `agents/comparator.md`와 `agents/analyzer.md`를 읽는다. 어느 설정이 만든 출력인지 밝히지
-않고 같은 검토 경로로 독립 심사자에게 출력을 준다.
+않고 독립 심사자에게 출력을 준다.
 비교자는 `TIE`를 반환할 수 있다. 분석기는 `A`, `B`, `TIE`를 모두 받고, TIE에서는 승자를 지어내지 않고 두
 스킬을 함께 분석한다.
-실행할 수 있는 검토 경로가 없으면 blind 비교를 건너뛰고 그 한계를 밝힌다.
+독립 작업자가 없으면 blind 비교를 건너뛰고 그 한계를 밝힌다.
 
 ## 설명 최적화
 

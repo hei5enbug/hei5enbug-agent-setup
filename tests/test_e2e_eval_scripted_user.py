@@ -334,14 +334,14 @@ class ToolAnswerTest(unittest.TestCase):
 
     def test_도구_설정은_과제가_시트를_가질_때만_승인자_환경에_시트_경로를_넣는다(self):
         # given
-        with_sheet = {"user": {"sheet": "answers/T49.json"}}
+        with_sheet = {"user": {"sheet": "answers/example.json"}}
 
         # when
         env = command.user_env(with_sheet, Path("/tasks"), Path("/results/r1"))
         config = command.mcp_config(Path("/a.jsonl"), None, None, user=env)
 
         # then
-        self.assertEqual(env["EVAL_ANSWER_SHEET"], "/tasks/answers/T49.json")
+        self.assertEqual(env["EVAL_ANSWER_SHEET"], "/tasks/answers/example.json")
         self.assertEqual(config["mcpServers"]["eval_approver"]["env"]["EVAL_USER_LOG"], "/results/r1/user-log.jsonl")
         self.assertEqual(command.user_env({}, Path("/tasks"), Path("/results/r1")), {})
 
@@ -355,25 +355,7 @@ class SheetFileTest(unittest.TestCase):
                 with self.assertRaises(su.SheetError):
                     su.parse_sheet(data)
 
-    def test_세_과제의_시트는_모두_읽히고_답과_문장이_에이전트의_폴더에_없다(self):
-        """T49에서 T51까지 시트가 유효하고, 시트의 답과 문장은 픽스처 저장소 어디에도 없으며 내보낸 플러그인에서도 빠진다."""
-        directory = tempfile.TemporaryDirectory()
-        self.addCleanup(directory.cleanup)
-        for task_id in ("T49", "T50", "T51"):
-            with self.subTest(task_id):
-                # given
-                task = json.loads((TASKS / f"{task_id}.json").read_text(encoding="utf-8"))
-                sheet = su.load_sheet(TASKS / task["user"]["sheet"])
-                repo = Path(directory.name) / task_id
-
-                # when
-                graders.materialize_fixture(task, E2E_ROOT / "fixtures", TASKS, repo)
-                prompt = (TASKS / task["prompt_file"]).read_text(encoding="utf-8")
-
-                # then
-                self.assertEqual(su.agent_folder_leaks(repo, sheet), [])
-                for decision in sheet.decisions:
-                    self.assertNotIn(decision.answer, prompt)
+    def test_내보낸_플러그인은_평가_폴더를_빼고_내보내지_않는다(self):
         from harness import plugin_export
         self.assertIn("evals", plugin_export.EXCLUDED_PATHS)
 

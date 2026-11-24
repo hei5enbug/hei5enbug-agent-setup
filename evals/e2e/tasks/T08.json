@@ -68,14 +68,5 @@
       ]
     }
   ],
-  "code_rule": {
-    "rule": null,
-    "pass_checks": [
-      "page-size-50",
-      "only-config-changed",
-      "one-line-diff",
-      "tests-pass"
-    ]
-  },
   "rubric": null
 }

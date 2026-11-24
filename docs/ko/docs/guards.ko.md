@@ -58,25 +58,6 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 
 파서가 없으면 PostgreSQL은 더 엄격한 텍스트 검사로 대체합니다. 이 검사는 승인을 더 자주 요청할 수 있지만, 승인 없이 쓰기가 실행되는 일은 여전히 없습니다.
 
-## 질문 대화상자 가드
-
-`hooks/hooks.json`에 `^(AskUserQuestion|request_user_input)$` matcher로 한 번 등록된 `PreToolUse` 훅
-`scripts/question_guard.py`가 질문 대화상자가 열리기 전에 검사합니다. 선택지 이름에서 "(Recommended)" 같은 뒤쪽
-괄호 설명과 뒤쪽 문장 부호를 뺀 값이 "Other", "Custom", "Type your own", "Type your own answer",
-"Write your own", "Enter your own", "직접 입력", "직접 작성", "기타", "자유 입력" 중 하나와 대소문자 구분 없이 같으면
-호출을 거부합니다. 거부 이유는 호스트가 이미 자유 입력 줄을 더한다고 알리고 그 선택지를 지우라고 안내합니다.
-"Other files"처럼 그런 낱말을 포함만 한 이름과, 그 밖의 모든 이벤트, 도구, 입력 모양은 통과합니다.
-
-Claude Code는 `AskUserQuestion`에 `PreToolUse`를 일으키고 JSON 거부 결정을 받아들입니다. Codex의 훅 문서에는 질문 도구가
-나열되어 있지 않습니다. `evals/e2e`의 `probe-question-hook` 명령이 2026-11-23에 Codex 0.171.0과
-`features.default_mode_request_user_input=true`로 이를 가렸습니다. Codex `PreToolUse` 훅은 `tool_input.questions`가 든
-`request_user_input`을 받고, 거부 결정은 호출을 멈추고 그 이유를 모델에 돌려줍니다. 그래서 이 가드는 두 호스트 모두에서 질문
-대화상자를 검사합니다. 프로브는 모델 호출이 한 번 들었고 소유자가 시작해서 돌았습니다.
-
-질문이 바뀌는 대상을 쉬운 말로 밝히는지처럼 훅이 판단할 수 없는 것은 `instructions/asking-the-user.md`의 문장 규칙으로
-남습니다. 2026-11-13 세션에서 에이전트가 입력 칸이 없는 자기만의 "직접 입력" 선택지를 더했고, 그 선택은 이름만 돌려주었기
-때문에 이 가드가 있습니다.
-
 ## 공개 경계 검사
 
 두 호스트 모두 `approval_guard` 옵션의 활성화 여부와 관계없이 모든 프로젝트에서 `Bash`의 `PreToolUse` 훅이
@@ -209,27 +190,9 @@ Codex에서는 `/hooks`에서 이 훅을 신뢰해야 합니다.
 
 훅 스크립트 하나인 `scripts/orca_status_hook.py`가 세션의 탭 제목을 유지하고, 이름이나 탭 제목이 없으면 세션에 알립니다.
 Orca에 보드 상태, worktree 설명, 읽지 않음 플래그는 쓰지 않습니다. 오래된 값이 되기 때문이며, 상태는
-사용자가 정하고 세션이 질문하면 Orca가 스스로 사용자에게 알립니다. Orca에 쓰는 것은 쓴 적 없는 셸 터미널을 닫는 것과 세션이 만든 끝난 자식 worktree를 삭제하는 것뿐이며, 아래에서 설명합니다. 이 훅은 `ORCA_TERMINAL_HANDLE`이 설정된 경우에만
+사용자가 정하고 세션이 질문하면 Orca가 스스로 사용자에게 알립니다. Orca에 쓰는 것은 세션이 만든 끝난 자식 worktree를 삭제하는 것뿐이며, 아래에서 설명합니다. 이 훅은 `ORCA_TERMINAL_HANDLE`이 설정된 경우에만
 실행되고, 서브에이전트나 지정된 작업자에서는 실행되지 않으며, Orca, Git, 기록을 읽지 못하면 그 이벤트를 통과시킵니다.
 Codex는 도구 호출을 스크립트 텍스트로 기록하므로 Claude Code 기록만 읽습니다.
-
-훅은 세션의 첫 `UserPromptSubmit`에서 세션당 한 번, 모델 턴 없이, 세션 자신의 터미널이 있는 worktree의 터미널을
-나열해 그 터미널을 제외한 쓴 적 없는 셸 터미널을 모두 닫습니다(`scripts/orca_terminal_cleanup.py`). 터미널은 에이전트를
-실행하지 않고, 화면 읽기에 입력줄이 빈 셸 프롬프트 한 줄만 보이고, 출력 읽기에 프롬프트뿐이고, 초안이 보고되지 않을
-때만 대상이 됩니다. 프로세스가 실행 중이거나, 입력해 둔 글이 있거나, 이전 명령이 보이는 터미널은 그대로 두며, 세션
-자신의 터미널이 목록에 없거나 읽기가 실패하면 모든 터미널을 그대로 둡니다. 훅은 어떤 터미널에도 입력을 보내지 않습니다.
-두 호스트 모두 `UserPromptSubmit`이 프롬프트가 모델에 도달하기 전에 실행된다고 문서화하므로, 첫 응답 전에 터미널이
-사라집니다.
-
-훅은 세션의 탭 제목을 기억합니다. 이 터미널을 `"$ORCA_TERMINAL_HANDLE"`이나 그 값으로 가리키고 `--title` 또는
-`--title=`이 `$`나 백틱 없는 글자 그대로의 값인 `orca terminal rename`을 Bash로 실행한 `PostToolUse` 뒤에 그 제목을 상태
-파일에 저장하고, 이후의 이름 변경이 그것을 교체합니다. 다른 터미널의 이름 변경이나 훅이 글자 그대로 읽을 수 없는 제목은
-무시하고 이전 제목을 유지합니다. 기억한 제목이 있는 세션의 모든 `UserPromptSubmit`에서 훅은
-`Current Orca tab title: <title>. If this prompt asks about or for work the title does not name, such as another
-ticket, pull request, repository, document, or goal, retitle the tab before starting it. A follow-up, fix, review,
-merge, or question on the titled work keeps the title, as does one the user set.` 한 줄(약 300자)을 컨텍스트에 더하며,
-기억한 제목이 없는 세션에는 아무것도 더하지 않습니다. 제목은 도구 입력에서 얻으므로 Codex에서도 동작합니다. 상태는
-`$XDG_STATE_HOME/hei5enbug-agent-setup/orca-status/<session id>.json`에 둡니다.
 
 훅은 세션이 만든 자식 worktree를, 거기서 일한 에이전트 세션이 끝난 뒤에 모델 턴 없이 코드로 삭제합니다. Bash 명령의
 `PostToolUse`마다 도구 입력에서만(명령의 출력은 절대 읽지 않습니다) `orca worktree create`와
@@ -364,7 +327,7 @@ worktree에는 `orca worktree set --display-name`을 알립니다. `orca worktre
 시간 초과 결과를 바로 돌려줍니다. 시간이 다 된 훅은 하던 일을 멈추고, 출력하려던 내용을 버리고, 스스로 답합니다.
 
 - 출력이 호출이나 권한 요청을 거부할 수 있는 훅은 거부합니다. 대상은 `PreToolUse`와 `PermissionRequest`의 승인 가드, Orca 배치 훅,
-  에이전트 가드, 질문 가드, DataGrip 가드이며, 이유에 플러그인과 훅의 이름을 밝히고, 기기가 바빠서 끝내지 못했다고 말하고, 부하가 내려간 뒤 다시 시도하거나
+  에이전트 가드, DataGrip 가드이며, 이유에 플러그인과 훅의 이름을 밝히고, 기기가 바빠서 끝내지 못했다고 말하고, 부하가 내려간 뒤 다시 시도하거나
   어느 세션이 기기를 쓰는지 확인하라고 안내하는 결정을 냅니다. 공개 경계 훅은 종료 코드 2와 같은 문장을 stderr에 내어 막습니다.
 - 그 밖의 모든 훅은, 그렇지 않았다면 턴을 이어 가게 했을 `Stop` 훅도 포함해, 종료 코드 0과 출력 없음으로 끝나므로 에이전트의 작업이 이어집니다.
 

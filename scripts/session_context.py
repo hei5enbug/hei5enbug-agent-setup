@@ -158,7 +158,6 @@ def render_claude_settings(effort: str | None = None, notice: str | None = None)
     option = plugin_toggles.option_value("implementation_worker")
     route = {
         "auto": "Auto (`auto`)",
-        "claude": "Claude (`claude`)",
         "codex": "Codex (`codex`)",
         "haiku": "Haiku (`haiku`)",
         "sol": "Sol (`sol`)",

@@ -1,4 +1,4 @@
-"""Run the fake `orca` of T31 to T34 the way the agent, or the plugin's hook, would."""
+"""Run the fake `orca` of T67 the way the agent, or the plugin's hook, would."""
 
 from __future__ import annotations
 

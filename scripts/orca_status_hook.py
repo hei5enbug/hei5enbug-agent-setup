@@ -1,11 +1,9 @@
 """Hook that keeps the session's tab title in step with its work and reminds it of a missing name or tab title.
 
-It runs only in an Orca terminal, for the main session. It reads Orca, Git, and the transcript. It writes to Orca in two
-ways only, both in code with no model turn: it closes never-used shell terminals as the first item below says, and a
-detached run removes a finished child worktree that the session created (`orca_cleanup_run.py`).
+It runs only in an Orca terminal, for the main session. It reads Orca, Git, and the transcript. It writes to Orca in one
+way only, in code with no model turn: a detached run removes a finished child worktree that the session created
+(`orca_cleanup_run.py`).
 
-- At the session's first prompt (UserPromptSubmit), it closes each never-used shell terminal of the session's worktree
-  other than the session's own, through `orca_terminal_cleanup.py`.
 - After a session's Bash command that creates a worktree (`orca worktree create`, `orca orchestration worker-start`) or
   starts an agent in one (`orca terminal create`, `orca orchestration worker-start`), the command is recorded from the
   tool input (PostToolUse). At a prompt and at the end of a turn (UserPromptSubmit, Stop), when a recorded worktree is
@@ -49,7 +47,6 @@ import hook_runtime  # noqa: E402
 import language_guard  # noqa: E402
 import orca_cleanup_state  # noqa: E402
 from orca_cleanup_state import has_option, option_values  # noqa: E402
-import orca_terminal_cleanup  # noqa: E402
 from orca_placement_hook import orca_arguments  # noqa: E402
 from required_checks_hook import git_subcommand, segments_of  # noqa: E402
 
@@ -57,7 +54,6 @@ EDIT_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit", "apply_pat
 NOT_A_PROMPT = ("<task-notification", "<local-command-", "<system-reminder")
 READ_TIMEOUT_SECONDS = 3
 STATE_SUBDIRECTORY = "orca-status"
-UNUSED_TERMINALS = "unused-terminals"
 PATCH_PATH = re.compile(r"^\*\*\* (?:Update|Add) File: (.+)$", re.MULTILINE)
 ASSISTANT_ENTRY = re.compile(rb'"type": ?"assistant"')
 USER_ENTRY = re.compile(rb'"type": ?"user"')
@@ -376,15 +372,6 @@ def record_own_rename(event: dict, state: State) -> None:
         record_title(command, state, response_text(event))
 
 
-def close_unused_terminals(state: State) -> None:
-    """At the session's first prompt, close the never-used shell terminals of its worktree, in code, once."""
-    if state.path is None or UNUSED_TERMINALS in state.fired or not state.mark(UNUSED_TERMINALS):
-        return
-    handle = os.environ.get("ORCA_TERMINAL_HANDLE")
-    if handle:
-        orca_terminal_cleanup.close_unused(orca_run, handle)
-
-
 def record_creations(event: dict, state: State) -> None:
     """Remember the worktrees and agent sessions a Bash command of this session creates, from its tool input."""
     tool_input = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
@@ -481,7 +468,6 @@ def handle(event: object) -> dict | None:
         record_creations(event, state)
         output = None
     else:
-        close_unused_terminals(state)
         output = title_context(state)
     user, context = cleanup_step(name, event, state)
     return with_notices(output, name, user, context)

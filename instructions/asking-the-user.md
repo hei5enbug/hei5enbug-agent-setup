@@ -9,13 +9,8 @@ instructions decides when to ask.
   that the approval rules gate still asks first.
 - Use a tool only if host rules permit required, blocking questions; otherwise ask in the final response and end
   the turn. Never use async questions for required decisions.
-- List options in recommended order. Under the condition that the host's question tool adds its own free-form row,
-  as Claude Code `AskUserQuestion` and Codex `request_user_input` do, rely on that row and never add an option whose
-  label asks the user to type, such as "Other", "Custom", or "직접 입력", because it shows no text box. Under the
-  condition that the host's tool cannot take a free-form answer, ask in the reply that ends the turn instead.
-- Add an ASCII diagram only when it clarifies the choice. Under the condition that a diagram helps and the host's
-  question tool has a preview field, such as Claude Code `preview`, put it there; under the condition that the tool
-  has none, as on Codex, put it in the question text below the question sentence.
+- List options in recommended order, allow a free-form answer, and add an ASCII diagram only when it clarifies the
+  choice.
 - Word the question, its header, and each option's label and description by the reply rules in the common session
   instructions, for a reader who sees only that dialog. That reader must be able to tell what the decision is about,
   from one line that names the thing it changes; each item the choice affects, quoted or described in plain words,

@@ -1,1 +1,0 @@
-config/settings.toml 에서 page_size 기본값이 얼마인지만 알려줘. 파일은 바꾸지 마.

@@ -28,7 +28,6 @@ EXPECTED_HOOKS = [
     ("SubagentStart", None, "session_context.py", 10, False),
     ("PreToolUse", "^(Bash|Read|Edit|Write|MultiEdit|NotebookEdit|apply_patch|mcp__.*)$", "approval_guard.py", 10, False),
     ("PreToolUse", "^mcp__datagrip__execute_sql_query$", "datagrip_guard.py", 10, False),
-    ("PreToolUse", "^(AskUserQuestion|request_user_input)$", "question_guard.py", 5, False),
     ("PreToolUse", "^Bash$", "bash_pretool_checks.py", 40, False),
     ("PreToolUse", "^EnterWorktree$", "orca_placement_hook.py", 5, False),
     ("PreToolUse", "Agent|Task", "request_budget_hook.py", 10, False),

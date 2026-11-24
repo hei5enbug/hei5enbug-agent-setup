@@ -1,6 +1,0 @@
-tally-desk에 두 가지를 추가해줘.
-
-1. `tally busiest DATE`: 그날 시간이 가장 많은 팀 하나를 `<팀> <시간>` 형식(소수 첫째 자리)으로 출력해. 시간이 같으면 팀 이름이 앞서는 팀을 골라. 그날 기록이 없으면 `no entries`를 출력하고 종료 코드 0으로 끝내.
-2. `tally archive OUT_DIR`: 입력 파일(entries)을 `entries-YYYYMMDD-HHMM.json`이라는 이름으로 OUT_DIR에 복사하고(날짜와 시각은 `tally.clock.now()`에서 가져와), 복사한 파일 경로를 출력해. OUT_DIR가 없으면 만들어.
-
-테스트와 README도 같이 해줘.

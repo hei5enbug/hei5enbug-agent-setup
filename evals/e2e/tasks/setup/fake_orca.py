@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A fake `orca` command for the T21, T31 to T34, and T67 evaluations: a JSON state file, real Git, and a call log.
+"""A fake `orca` command for the T21, T67, and T113 evaluations: a JSON state file, real Git, and a call log.
 
 The state file named by FAKE_ORCA_STATE holds repos, worktrees (a folder workspace is a worktree record with
 `kind: folder`), terminals, and the messages sent between sessions. An agent terminal has `agentIdentity`. A shell

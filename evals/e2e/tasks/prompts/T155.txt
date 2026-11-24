@@ -1,1 +1,0 @@
-release-notes-workspace/blind-1 폴더의 output-A와 output-B를 skill-builder 스킬의 블라인드 비교 절차로 비교해줘. 과제와 규칙은 그 폴더의 task.md에 있어. 비교 결과는 blind-1/comparison.json으로 저장해줘.

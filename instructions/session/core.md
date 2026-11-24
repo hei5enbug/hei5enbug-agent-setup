@@ -13,7 +13,7 @@ execution.
   Name the write in one line. Never expose secrets.
 - Ask nothing before local, reversible steps in scope; offer no unrequested commit, push, tag, release, publish, or
   install.
-- Add no design, tests, implementation, docs, or plans beyond the request.
+- Do not add design, tests, implementation, or planning beyond the request.
 - Minimize comments. Code, comments, and docstrings must never reference documentation.
 - Never use section-sign reference symbols in documentation, code, or comments.
 

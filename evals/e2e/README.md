@@ -162,9 +162,6 @@ only what the plugin's own role runner calls, never the host:
   in the agent environment of every run. A variant sets either variable in its `env` to override the default. The
   plugin's other hooks still run.
 - Codex has no spend flag, so only the wall-time limit of the task is enforced.
-- A task that grades a question dialog declares `"needs_question_tool": true` (T76, T77). Its Codex command then adds
-  `-c features.default_mode_request_user_input=true`, the setting the question hook probe needed before `codex exec`
-  offered `request_user_input`. No other task gets it, so the tools of every other Codex run stay as they were.
 - The harness reads the `exec` commands, `apply_patch` calls, and native `spawn_agent` calls of the rollouts as tool
   calls. A `spawn_agent` call counts as a subagent launch of the `agent_type` it names, or of `general-purpose` when it
   names none, and the order of a delegation and the order of the final answer count the same calls. A `spawn_agent`
@@ -213,31 +210,6 @@ the input fingerprint, and a record marks each run that used it with `review_sta
 option off they keep the script's default. The reviewer is then Claude,
 not independent of a Claude author, so compare only runs that used the same setting.
 
-### Codex question hook probe
-
-`probe-question-hook` settles whether a Codex `PreToolUse` hook receives a `request_user_input` call. The official Codex
-hooks page lists the tools that event covers (shell commands, `apply_patch`, MCP and other function tools) and does not
-name `request_user_input`, so the question guard of #104 cannot be registered on Codex without this check. The probe
-builds an isolated `CODEX_HOME` like a Codex run (credential symlink, `.zprofile` ZDOTDIR) but installs no plugin. Its
-`hooks.json` holds two hooks. The guard hook has the plugin's matcher `^(AskUserQuestion|request_user_input)$`, logs the
-event it receives, and denies the call with a sentinel reason. The control hook matches every tool and only logs, so a
-silent guard hook can be told apart from hooks that do not run at all. One `codex exec` session at `low` effort then
-asks the model to call `request_user_input` once. It makes one model call and runs only when the user starts it.
-
-`--dry-run` prints the files and commands and starts nothing. A real run writes `hook-log.jsonl`, `stream.jsonl`, and
-`evidence.json` into the trial folder (`<run-root>/probes/question-hook-<UTC time>` unless `--dir` names a new one):
-
-| Verdict | Meaning | Exit |
-|---|---|---|
-| `delivered-and-denied` | The guard hook received `request_user_input`, and the rollout shows the sentinel in the tool output. Register the check on Codex. | 0 |
-| `delivered` | The guard hook received it, but the rollout does not show the denial. Read the rollout before registering. | 0 |
-| `not-delivered` | The model called the tool, and only the control hook, or no hook, logged other tools. Codex gets no automatic check. | 0 |
-| `hooks-inactive` | The model called the tool, and no hook logged anything. Inconclusive; check hook trust and rerun. | 3 |
-| `not-called` | The model never called `request_user_input`. Inconclusive; rerun or check the tool is offered. | 3 |
-
-The evidence also lists the keys of the event and of `tool_input` that the hook received, and the rollout events whose
-type names a hook.
-
 ## Commands
 
 Run every command from the repository root. The default run root is
@@ -261,7 +233,6 @@ Run every command from the repository root. The default run root is
 | Judge the loop-shape candidates and write their record | `python3 evals/e2e/harness/cli.py loop-record --campaign <name> --issue <n> --baseline <variant> --candidate a=<variant> [--candidate b=<variant>] [--combined <variant>] [--tasks T13,T14]` |
 | Build the combined revision of adopted loop-shape candidates and print its SHA | `python3 evals/e2e/harness/cli.py build-combined --base <baseline branch> --candidate <branch> --candidate <branch> [--worktree <folder>] [--dry-run]` |
 | Judge a change and write its record | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd [--claim-cases T36]] [--tasks T08]` |
-| Probe whether a Codex hook receives `request_user_input`; `--dry-run` starts nothing | `python3 evals/e2e/harness/cli.py probe-question-hook [--dry-run] [--dir <folder>] [--effort low]` |
 
 `--parallel` sets the number of runs at once (default 3). With several variants the order alternates per task and
 repetition (ABAB, then BABA), so time-of-day effects spread evenly.
@@ -460,14 +431,10 @@ solution in `tasks/reference/` passes.
 
 ## Golden tasks
 
-Prompts are in Korean, as the real user writes them; the T31 and T32 prompts are English briefs, as one agent session
-writes them to another. The fixtures are fictional repositories with the conventions a
+Prompts are in Korean, as the real user writes them. The fixtures are fictional repositories with the conventions a
 real one has: a README, an `AGENTS.md` with a Korean mirror rule, tests, and Korean mirrors. T21 runs with
 `ORCA_TERMINAL_HANDLE` set and a fake `orca` first on `PATH`, built by `tasks/setup/fake_orca.py`; it keeps its state
-in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval_orca_cleanup.py`. T31 to T34 use the
-same fake with agent and shell terminals and the messages sent between sessions, seeded by
-`tasks/setup/handoff_common.py`; their graders read the fake's ordered call log, which records each call's caller, and
-their tests are in `tests/test_e2e_eval_handoff.py`.
+in `orca-state/` beside the repository and its tests are in `tests/test_e2e_eval_orca_cleanup.py`.
 
 T113 uses the same fake `orca`, which also starts terminals, shows and edits a started agent terminal's input line, and accepts waits and sends, and a fake `gh` that answers only from seeded repositories and refuses and logs anything else, so the trial reaches no real service; its checks read the call log for the model and effort each session start names, and its tests are in `tests/test_e2e_eval_session_model.py`.
 
@@ -495,11 +462,8 @@ ships, first on `PATH` and seeded by `tasks/setup/gh_stub_common.py`; its log an
 `gh-state/` beside the repository, and their tests are in `tests/test_e2e_eval_skill_issue_cases.py`. Because the
 harness cannot answer a question, T180 passes when the undecided choice is asked and the tracker is not written. T110 and T111 give the
 answers in the prompt so the run reaches the write and the read-back; their informational check `check-filed-ran-after-write`
-shows whether the run read the filed issue back with `check_filed.py`. T160 puts a fake `aside` first on `PATH`
-(`tasks/setup/fake_aside.py`; its call log is `aside.log`, and `FAKE_ASIDE_MODE=fail` makes `aside exec` fail), and its
-informational checks show whether the lookup went to the `browser-reader` agent. T161 reviews a Korean design document, and its
-informational checks show which translationese reference the review read and whether it ran `check_format.py`; their tests are
-`tests/test_e2e_eval_skill_issue_filing.py`, `tests/test_e2e_eval_aside_lookup.py`, and `tests/test_e2e_eval_design_review.py`.
+shows whether the run read the filed issue back with `check_filed.py`. Their tests are
+`tests/test_e2e_eval_skill_issue_filing.py`.
 
 | Task | Fixture | Path it exercises | Request |
 |---|---|---|---|
@@ -527,13 +491,7 @@ informational checks show which translationese reference the review read and whe
 | T81 | notes-cli | Orca plugin refresh | Apply the installed plugin version to running sessions, one of which waits only on a background task, with fake `orca`, `claude`, and `codex` |
 | T35 | inventory-service | Delegated route that fails every time | A `--forecast` report option that the prompt hands to a role runner worker, with a seeded `claude` and `codex` that fail every child run with a different error; the launches must stop at the retry cap |
 | T36 | inventory-service | Eight independent read-only questions | One question each about money, pricing, validators, importer, audit, clock, serialization, and formatting; wall time is the claimed measure |
-| T31 | notes-cli | Handoff terminal that belongs to the handoff | A brief for one result: clean up a finished child worktree, report, then close the session's own terminal |
-| T32 | notes-cli | Handoff brief to a terminal that already ran an agent | The same brief without the closing sentence, with a child worktree that holds an uncommitted change: close nothing, name the kept worktree |
-| T33 | notes-cli | Agent start in a never-used shell terminal | Hand one result to a workspace whose only terminal is a never-used shell: send the host command there and create no terminal |
-| T34 | notes-cli | First-prompt terminal cleanup | Read one setting while the plugin's hook closes the never-used shell terminal and leaves the one with typed input |
 | T67 | notes-cli | Hook removal of a finished worker's worktree | A setting change, a worktree of demo-b created without an agent, and a worker started there; the turn ends with a question, and the worktree and its local branch must be removed by the hook's detached run, not by the session |
-| T76 | notes-cli | Question dialog wording | Ask whether to delete two lines of an issue draft's five-line done-checklist that repeat other lines, for a user who asked to see it as a picture |
-| T77 | notes-cli | Question dialog wording | Ask whether to drop two unused columns of `demo.orders`, for a user who asked to see the table as a picture |
 | T22 | review-rounds | Ticket comment, first draft | Comment whose work item requires each step's time before and after and whose proposal the result replaced |
 | T23 | review-rounds | Ticket comment, second draft | Revise a draft after a finding that it dropped the work item's exception for a first run without a cache |
 | T24 | review-rounds | Ticket comment, second draft | Revise a draft after a finding that "the check deletes a loose cache" can mean before or after the cache runs |
@@ -553,30 +511,11 @@ informational checks show which translationese reference the review read and whe
 | T101 | notes-cli | Built-in agent request is refused | One request for a `general-purpose` agent; the plugin must refuse it, no such agent may do any work, and nothing is changed |
 | T112 | demo-app | UI routing, new screen | A new invoices screen of three rows built from scratch, fitting at 1280 and 375 px; routes to the designer at its pinned `xhigh` |
 | T113 | notes-cli | Orca session start model | A skill issue for another plugin's repository, which the delegation rules hand to a new session there; a fake `orca` and a seeded plugin repository, and the run passes only when every session start names a model and effort and none names Fable or Astra |
-| T37 | notes-cli | Worker delegation with a failure condition and a compatibility decision | `memo import FILE` that exits with code 3 and prints nothing on a missing file, and a new file format that keeps reading the old one |
-| T38 | parcel-desk | Existing assertions beside a new behavior | Zone C billed in 250 g steps, where changing the shared step constant breaks the existing assertions about the other zones; edits in three or more files |
-| T39 | parcel-desk | A stated behavior change that one assertion follows | `round_cents` changes from rounding down to rounding half up, and one existing test asserts rounding down |
-| T40 | parcel-desk | Boundary and failure-path tests | A 40-parcel limit on `pickup_fee_cents` with a named error; the agent's own tests must pass on a reference and fail on four seeded faulty copies |
-| T41 | shop-desk | Fewest new parts | A per-customer discount limit that the prompt confines to three named code files and one setting key; edits in three or more files |
-| T42 | shop-desk | Reuse of an existing value | A `statement` command whose tax must follow the rate that `sales` uses, changed through `SHOP_TAX_PERCENT`; edits in three or more files |
-| T43 | shop-desk | Explicit failure | An `export-orders` command that calls `StorageClient.upload`; the hidden test makes the client fail; edits in three or more files |
-| T44 | shop-desk | Callers and consumers | `lookup_customer` returns a `Customer` instead of a dict; a second caller in another module and a file stored by the previous version must keep working; edits in three or more files |
-| T45 | shop-desk | Evidence before assumption | A `top-customers` command built on `customers_by_spend`, whose docstring promises sorted output that the code does not give; the final report must name the function; edits in three or more files |
-| T46 | shop-desk | Root cause of a reported defect | `shop place 1 ab-100:2` fails on a lowercase SKU; the broken rule lives in `catalog.price_cents`, which the `price` command and `place_order` also use |
-| T47 | shop-desk | Repeat safety | An `import-orders` command that is rerun after a failure; a hidden test holds a first run after its read until a second run has finished, and starts four runs together; edits in three or more files |
-| T48 | shop-desk | Real environment | Week labels that count from Sunday, which the README says the reporting database (SQLite) also computes, with `scripts/engine_check.py` as the local engine check |
 | T62 | notes-cli | Worker delegation: named skill | A `memo count` command, with a changelog line that only the repository skill `changelog-entry` describes |
-| T49 | tally-desk | Requirements agreement | `weekly DATE` and `archive OUT_DIR` with two open decisions; the sheet's week start, Sunday, contradicts the likely Monday |
-| T50 | tally-desk | No agreement | `busiest DATE` and `archive OUT_DIR` with every decision stated in the prompt; no question may be asked |
-| T51 | tally-desk | One question | A new rate cache that repeats `rate_for`'s `ttl_cached` cache; exactly one question, which names it |
-| T140 | notes-cli | Stored question input | Summarize a resumed session whose earlier question input shows as `\uXXXX` escapes in the conversation while the stored transcript holds the kana |
-| T141 | notes-cli | Stored question input | The same, with escape text in the stored transcript itself, then ask the question again |
 | T180 | skill-gap-plugin | Issue filing, questions first | A gap note with one undecided Proposal choice, filed through `skill-issue-creator` |
 | T181 | skill-gap-plugin | Issue filing, duplicate search | A gap note that an open issue of the same account already covers |
 | T110 | skill-gap-plugin | Issue filing, answers given up front | T180 with both undecided choices answered in the prompt, so the run files the issue and reads it back |
 | T111 | skill-gap-plugin | Issue filing, covered gap with the answer given | T181 with the answer given in the prompt, so the run merges it into the open issue and reads it back |
-| T160 | notes-cli | Aside lookup, read only | A ticket status looked up through a stub `aside` that prints tool-trace noise; the answer must carry the status and the source only |
-| T161 | design-review-demo | Design review, Korean | A review of a Korean design document seeded with a long line, a fourth-level heading, a trailing space, and one translationese phrase |
 | T120 | tally-demo | Repository guidance, repeated correction | Wrap-up after the same naming correction came twice; a check candidate for that one class is shown, proven on a seeded earlier commit, and not written |
 | T121 | tally-demo | Repository guidance, investigation decision | Decide between two queue libraries after a three-step investigation; an ADR draft of at most 30 lines and its entry line are shown, not written |
 | T122 | tally-demo | Repository guidance, no trigger | One first-time unstated correction with no investigation; no recording recommendation and no `mistake-enforcer` run |
@@ -584,8 +523,6 @@ informational checks show which translationese reference the review read and whe
 | T151 | scout-demo | Scout result contract, missing path | A question on `demo-lib/docs/missing.md`, which does not exist; the report starts with `blocked`, names the path, and states no conclusion about its content |
 | T152 | scout-demo | Scout result contract, partial evidence | Delimiters and a maximum line length across two files where the length is absent; the report starts with `issues`, labels the length unknown, and proposes no fix |
 | T153 | inventory-service | Worker model on hard work, forced delegation | Cross-process locking of one data file across the app and the CLI (concurrency, a public contract, several components), handed to the implementation worker by the request; the worker's model comes from the variant's `implementation_worker` route |
-| T154 | skill-review-demo | Skill review role, grader | A `release-notes` run that misses one of three expectations, graded through Skill Builder; the grading marks exactly that expectation failed with a quote of the output, and a review-route run exists |
-| T155 | skill-review-demo | Skill review role, comparator | Two release-notes outputs where one breaks the stated limit of five bullets, compared blind through Skill Builder; the comparison prefers the other output, names the limit, and a review-route run exists |
 | T130 | ops-notes | Repeated review, no convergence | Fix `docs/guide.md` until a scripted `tools/review.py` reports nothing; it returns 5, 4, 6, and more new low findings |
 | T131 | ops-notes | Repeated review, convergence | The same request; the scripted review returns 2, 3, then 0 findings |
 | T132 | ops-notes | Repeated review, fix must spread | Three documents state a retry limit of 5 that `docs/decisions.md` sets to 3; the first run flags only one |
@@ -597,32 +534,10 @@ implementation, when the main session did; `changelog-entry` passes only for a l
 cannot guess; the informational check `result-lists-skill` reads whether a worker result names the skill.
 `scripts/skill_load_check.py` applies the same load rule to a host record, and `tests/test_worker_named_skill.py` seeds it.
 
-T37 to T48 carry a marking that names what each case measures, and no harness code reads it: `handoff` on T37 and the
-`field` of its constraints (an assignment field), `rule_test` on T38 to T40 and T07 (a testing rule item), and
-`code_rule` on T41 to T48 and T02 and T08 (an implementation rule), and `agreement` on T49 to T51 (the requirements
-agreement). Each lists the required checks that decide the case.
-
 The ids T89 to T91 belong to the comparison of Claude reviewer models in
 [`evals/model-roles`](../model-roles/README.md); its opponent ids T92 and T93 ended with the removal of their skill.
 Those cases run through the role runners instead of this harness, so
 they have no task file here.
-
-T76 and T77 grade the last question dialog a run showed, from `AskUserQuestion` on Claude Code and `request_user_input`
-on Codex; a call that the plugin's question guard denied for a self-made free-form option is not counted. Both fail a
-dialog that holds a free-form option such as "Other" or "직접 입력". T76 also requires the key words of both flagged
-lines and none of "acceptance criteria", "regression", "criterion", "reviewer", or their Korean equivalents; a delete
-option and a keep option whose descriptions each name both flagged lines by key word or by a label that the dialog
-gave them; and a diagram with all five lines, in an option's `preview` on Claude Code and below the first line of the
-question text on Codex. T77 requires both column names in the dialog, in every option description, and in a drawn line
-of the diagram. The only text the setup scripts seed is fictional, and `files-untouched` records, without failing the
-run, whether the agent edited a file.
-
-T140 and T141 give the stored transcript path and grade what the run read and said. T140 requires that the run read the
-transcript and that no line says the model wrote escapes or broke the raw-character rule, drafts a defect report, or
-notes to write raw characters next time; a line that denies it does not count. T141 requires that the run read the
-transcript, say the stored input holds escape text, and ask the next question with the raw kana and no `\uXXXX`
-sequence, in the dialog or, on a host without one, in the final answer. Both use the fictional file
-`session/demo-session.jsonl`.
 
 ## Comparing a change on both hosts
 

@@ -1,7 +1,0 @@
-shop-desk에 고객별 할인 한도를 추가해줘.
-
-- 한 고객이 저장된 모든 주문에서 받은 할인의 합(`discount_cents`의 합)은 한도를 넘을 수 없어. 새 주문의 등급 할인이 남은 한도보다 크면 남은 한도만큼만 할인하고, 한도를 다 썼으면 할인은 0이야. 고객마다 따로 세.
-- 한도는 설정 `discount_limit_cents`로 정해. 기본값은 10000이고, 다른 설정처럼 환경 변수 `SHOP_DISCOUNT_LIMIT_CENTS`로 덮어쓸 수 있어.
-- 코드는 shop/discounts.py, shop/orders.py, shop/settings.py에서 고치고, 테스트는 tests/test_discounts.py에 추가해줘.
-
-README에도 반영해줘.

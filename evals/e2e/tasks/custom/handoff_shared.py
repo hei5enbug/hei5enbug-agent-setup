@@ -1,4 +1,4 @@
-"""Shared reads of the fake Orca record for T31 to T34: its state, its ordered call log, and the seeded baseline.
+"""Shared reads of the fake Orca record for T67: its state, its ordered call log, and the seeded baseline.
 
 A call is a dict with `index` (its position among all calls), `argv`, `ok`, `cwd`, and `handle`, the terminal that made
 it. The graders read only what the fake recorded, never the agent's own account of what it did.

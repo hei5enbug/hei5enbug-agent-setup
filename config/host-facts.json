@@ -684,52 +684,6 @@
           "contains": "On Codex, `onFailure` has no effect"
         }
       ]
-    },
-    {
-      "id": "claude-pretooluse-askuserquestion",
-      "host": "claude",
-      "kind": "host-fact",
-      "statement": "Claude Code fires `PreToolUse` for `AskUserQuestion`, whose `tool_input` holds `questions`, each with `question`, `header`, `options` of `label` and `description`, and `multiSelect`.",
-      "doc_url": "https://code.claude.com/docs/en/hooks",
-      "quote": "Matches on tool names other than `EndConversation`: built-in tools such as `Bash`, ... `AskUserQuestion`, and `ExitPlanMode` ... Asks the user one to four multiple-choice questions. `questions` | array | [{\"question\": \"Which framework?\", \"header\": \"Framework\", \"options\": [{\"label\": \"React\", \"description\": \"Component library\"}, ...], \"multiSelect\": false}]",
-      "verified_on": "2026-11-23",
-      "lines": [
-        {
-          "file": "docs/guards.md",
-          "contains": "Claude Code fires `PreToolUse` for `AskUserQuestion`"
-        }
-      ]
-    },
-    {
-      "id": "codex-hooks-no-question-tool",
-      "host": "codex",
-      "kind": "host-fact",
-      "statement": "The Codex hooks page lists no question tool among the tools `PreToolUse` covers, and does not name `request_user_input`.",
-      "doc_url": "https://learn.chatgpt.com/docs/hooks.md",
-      "quote": "PreToolUse and PostToolUse can observe more than shell and MCP calls. ... Shell commands and unified exec (`exec_command`) ... `apply_patch` file edits ... MCP tools ... Other local function tools, matched by function name, such as `update_plan`. The page never names `request_user_input`.",
-      "verified_on": "2026-11-23",
-      "lines": [
-        {
-          "file": "docs/guards.md",
-          "contains": "The Codex hooks page lists"
-        }
-      ]
-    },
-    {
-      "id": "codex-pretooluse-request-user-input",
-      "host": "codex",
-      "kind": "host-fact",
-      "statement": "A Codex `PreToolUse` hook receives a `request_user_input` call with `tool_input.questions` and can deny it, so the question dialog guard works on Codex.",
-      "doc_url": "local evidence: probe-question-hook run on 2026-11-23 with codex-cli 0.171.0 (`<run-root>/probes/question-hook-20261123T041628Z/evidence.json`)",
-      "quote": "verdict delivered-and-denied; question_calls 1; denial_in_rollout true; guard_tool_names [request_user_input]; received_tool_input_keys [questions]; the model answered that the request_user_input tool call was refused. The run used `-c features.default_mode_request_user_input=true`.",
-      "min_version": "0.171.0",
-      "verified_on": "2026-11-23",
-      "lines": [
-        {
-          "file": "docs/guards.md",
-          "contains": "a Codex `PreToolUse` hook receives `request_user_input`"
-        }
-      ]
     }
   ]
 }

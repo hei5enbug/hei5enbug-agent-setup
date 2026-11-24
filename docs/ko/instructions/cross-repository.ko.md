@@ -69,11 +69,10 @@
    `git -C <clone> worktree list --porcelain`에서 선택한 브랜치의 worktree를 찾은 뒤, 아래에서 처음 맞는 경우를 따른다.
    - 그 worktree가 Orca 목록에 자기 항목을 가지고 있다: `orca terminal list --worktree id:<worktree id> --json`으로
      확인한다. 그곳에 에이전트 터미널이 열려 있으면 사용자에게 그 터미널로 작업 요약을 보낼지 묻는다. 없으면
-     "터미널에서 에이전트 시작"에 따라 `--worktree id:<worktree id>`로 에이전트를 시작하고 5단계로 진행한다.
+     `orca terminal create --worktree id:<worktree id> --command "<host command>" --json`으로 에이전트를 시작하고 5단계로 진행한다.
    - 그 worktree가 자기 항목이 없다: workspace 안에 있는 worktree이고, Orca는 workspace의 터미널 중 어느 것이
      그 안에서 실행 중인지 구분하지 못한다. 사용자에게 workspace의 터미널 제목을 보여 주고, 그중 하나로 작업 요약을
-     보낼지, 그곳의 쓴 적 없는 셸 터미널에 "터미널에서 에이전트 시작"에 따라 `cd '<worktree path>' && <host command>`를
-     보내 사용할지, 아니면 새 터미널을 `orca terminal create --worktree id:<workspace id>
+     보낼지, 아니면 새 터미널을 `orca terminal create --worktree id:<workspace id>
      --title <branch> --command "cd '<worktree path>' && <host command>" --json`으로 시작할지 묻고, 이후 5단계로 진행한다.
    - 해당 브랜치의 worktree가 없다: "세션 위치"에서 정한 부모를 사용해
      `orca worktree create --repo id:<repoId> --name <branch> --base-branch <base>
@@ -90,35 +89,9 @@
    `wait.satisfied`가 true이고 "다른 세션에 메시지 보내기"가 허용할 때만 보낸다. 더 긴 시간 제한으로 한 번 더
    기다리고, 여전히 false이면 인수인계가 시작되지 않았다고 보고한다.
 6. `orca terminal send --terminal <handle> --text "<brief>" --enter --json`으로 작업 요약을 보낸다.
-   요약에는 목표, 파일 경로를 포함해 지금까지 찾은 근거, 브랜치와 기준 브랜치, 수용 검사를 명시하고, 결과 하나를
-   요청할 때는 보고할 이 세션의 터미널 핸들도 적고 "결과 하나를 위한 인수인계"대로 끝맺는다.
+   요약에는 목표, 파일 경로를 포함해 지금까지 찾은 근거, 브랜치와 기준 브랜치, 수용 검사를 명시한다.
+
    전송 결과가 `accepted: true`이면 인수인계가 끝난 것이다. 작업 완료를 기다리지 않는다.
-
-## 터미널에서 에이전트 시작
-
-쓴 적 없는 셸 터미널은 에이전트가 실행되지 않고, `orca terminal read --terminal <handle> --screen`이 입력줄이 빈
-셸 프롬프트만 보여 주며, `--screen` 없이 읽은 출력에 명령이 없는 터미널이다. 이 읽기 결과로 판단하고, 글자를 보내서
-확인하지 않는다. worktree나 workspace에 그런 터미널이 있으면 새 터미널을 만들지 않고
-`orca terminal send --terminal <handle> --text "<host command>" --enter --json`으로 호스트 명령을 그 터미널에 보내고
-5단계에서 그 핸들을 사용한다. 없으면 `orca terminal create --worktree id:<id> --command "<host command>" --json`을
-실행한다. 셸 외의
-프로세스가 실행 중이거나, 입력해 둔 글이 있거나, 이전 명령이 보이는 터미널에는 명령을 보내거나 터미널을 닫지 않는다.
-훅이 세션의 첫 프롬프트에서 그 옆의 쓴 적 없는 셸 터미널을 닫는다.
-
-## 결과 하나를 위한 인수인계
-
-결과 하나와 보고를 요청하는 인수인계는 작업 요약에 그렇게 적는다. 인수인계가 그 세션의 터미널을 만들었거나 쓴 적 없는
-셸 터미널에서 에이전트를 시작했다면 작업 요약은 "This terminal belongs to the handoff; close it after your report."로
-끝난다. 이미 에이전트를 실행한 적 있는 터미널로 보낸 작업 요약에는 이 문장이 없고, 그 터미널은 닫지 않는다.
-
-작업 요약이 그 문장으로 끝나는 세션은 자기 저장소에 대해 [Orca worktree 상태](orca-worktree-status.md)의 "작업이
-끝날 때 정리"를 실행한 뒤, 정리가 남긴 각 worktree와 남긴 검사를 적은 보고를 보내고, 마지막 동작으로
-`orca terminal close --terminal "$ORCA_TERMINAL_HANDLE" --json`으로 자기 터미널을 닫는다. 열린 질문이나 승인 프롬프트가
-없고 백그라운드 작업이 모두 끝났을 때만 닫으며, 아니면 터미널을 열어 두고 보고에 그렇게 적는다.
-
-인수인계가 그 세션을 자식 worktree에서 시작했다면, 인수인계를 보낸 세션이 위임받은 세션의 터미널이 닫힌 뒤 그
-정리 절차대로 그 worktree를 제거하며, 그 세션이 worktree를 만들었다면 "인수인계 뒤"의 Orca 상태 훅이 제거한다.
-위임받은 세션은 자신이 실행 중인 worktree를 제거하지 않는다.
 
 ## 다른 세션에 메시지 보내기
 
@@ -145,8 +118,7 @@ Orca CLI나 런타임을 사용할 수 없으면 일반 Git worktree를 사용�
 ## 인수인계 후
 
 - 현재 요청에 대해 작업 저장소에서 할 일이 남지 않으면, 대상 worktree의 세션에서 계속하고 이 세션은
-  종료하라고 사용자에게 한 줄로 권한다. 세션을 직접 종료하지 않는다. 다만 위임받은 세션은 "결과 하나를 위한
-  인수인계"에 따라 자기 터미널을 닫는다.
+  종료하라고 사용자에게 한 줄로 권한다. 세션을 직접 종료하지 않는다.
 - 할 일이 남았으면 계속 진행하고, 대상의 결과가 필요할 때만 `orca terminal read --terminal <handle> --json`으로
   읽는다.
 - 작업이 끝나면 이 저장소와 작업 티켓의 완료된 자식 worktree를, 어느 세션이 시작했든,

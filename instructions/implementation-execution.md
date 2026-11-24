@@ -12,12 +12,6 @@ implementation, including UI or design work, to a worker or designer, also read
 
 ## Task preparation
 
-Before the first implementation change, read [implementation rules](implementation-rules.md).
-
-Before the first change of a request that has at least two deliverables that can be verified separately and an
-unresolved decision whose options lead to materially different accepted results, or when the user asks for a
-requirements agreement or interview by name, read [requirements agreement](requirements-agreement.md).
-
 Before the first implementation change, have an executable task assignment for every change.
 For substantial work, apply [work efficiency](work-efficiency.md) to required results, optional follow-ups,
 stop conditions, and check-evidence reuse. Keep these fields with the existing assignment.
@@ -38,16 +32,6 @@ answers. When the user explicitly narrows the scope, ask nothing and record each
 
 This preparation is not a requested implementation plan. It runs no planning or design skill, no six-stage
 planning workflow, and no independent validation.
-
-When a request is clear, make the change it asks for and only these follow-on edits: existing text that the change
-made false, and text that a repository rule requires for something the change adds, such as a new command or option.
-Add no other design, tests, implementation, documentation, or planning that the request did not ask for.
-
-When a request does not start the agreement and the evidence shows that the requested method cannot reach the stated
-goal, or that an existing mechanism of the repository or a supported feature of its tools reaches it with less
-change, state that evidence and ask which to use before the first change. When a decision changes requirements,
-policy, recurring cost, or compatibility, ask it; decide every other implementation choice and state it with its
-basis.
 
 Prepare the fewest tasks that give clear ownership. One cohesive task uses one owner. The limit the plugin
 reports is an upper bound, not a target; never split work or batch unrelated reads merely to fill slots.

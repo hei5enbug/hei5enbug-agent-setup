@@ -144,9 +144,6 @@ Codex를 쓸 수 있고(`--hosts`), 플러그인 변경은 두 호스트 모두�
   실행의 에이전트 환경에 `CLAUDE_PLUGIN_OPTION_APPROVAL_GUARD`와 `HEI5ENBUG_APPROVAL_GUARD`를 `false`로 넣는다.
   변형은 `env`에서 두 변수 중 하나를 달리 정해 이 기본값을 덮어쓸 수 있다. 플러그인의 다른 훅은 그대로 실행된다.
 - Codex에는 지출 한도 플래그가 없으므로 작업의 경과 시간 제한만 적용한다.
-- 질문 대화상자를 채점하는 작업(T76, T77)은 `"needs_question_tool": true`를 적는다. 그러면 Codex 명령에
-  `-c features.default_mode_request_user_input=true`가 더해진다. 질문 훅 조사에서 `codex exec`가 `request_user_input`을 내놓으려면
-  필요했던 설정이다. 다른 작업에는 붙지 않으므로 나머지 Codex 실행의 도구는 그대로다.
 - 하네스는 rollout의 `exec` 명령, `apply_patch` 호출, 네이티브 `spawn_agent` 호출을 도구 호출로 읽는다. `spawn_agent` 호출은
   그 호출이 적은 `agent_type`의 서브에이전트 시작으로 세고, 적지 않았으면 `general-purpose`로 센다. 위임의 순서와 최종 답변의
   순서는 같은 호출들을 센다. `spawn_agent` 위임은 그 `task_name` 자식의 최종 결과가 오류가 아닌 `FINAL_ANSWER` 메시지로 부모에게
@@ -188,30 +185,6 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 통해 입력 지문에 들어가며, `env.json`에는 `grader_review_model`도 남는데, 글 채점기가 스크립트의 `--model` 옵션으로 같은 모델로 리뷰하기 때문이다(꺼져 있으면 스크립트 기본값을 쓴다). 기록은 이 옵션을 쓴 실행마다 `review_stand_in`을 표시한다. 이때 리뷰어는 Claude라서 Claude 작성자와
 독립적이지 않으므로 같은 설정을 쓴 실행끼리만 비교한다.
 
-### Codex 질문 훅 프로브
-
-`probe-question-hook`은 Codex `PreToolUse` 훅이 `request_user_input` 호출을 받는지 가린다. 공식 Codex 훅 문서는 이
-이벤트가 다루는 도구(셸 명령, `apply_patch`, MCP와 그 밖의 함수 도구)를 적지만 `request_user_input`은 적지 않는다.
-그래서 이 확인 없이는 #104의 질문 가드를 Codex에 등록할 수 없다. 프로브는 Codex 실행과 같은 방식으로 격리된
-`CODEX_HOME`(인증 파일 심볼릭 링크, `.zprofile`만 있는 ZDOTDIR)을 만들지만 플러그인은 설치하지 않는다. `hooks.json`에는
-훅이 둘 있다. 가드 훅은 플러그인과 같은 매처 `^(AskUserQuestion|request_user_input)$`를 쓰고, 받은 이벤트를 기록한 뒤
-기준 문자열이 든 이유로 호출을 거부한다. 대조 훅은 모든 도구에 맞고 기록만 하므로, 가드 훅만 조용한 경우와 훅이 아예
-돌지 않는 경우를 구별한다. 그다음 `low` effort의 `codex exec` 세션 하나가 모델에게 `request_user_input`을 한 번
-부르게 한다. 모델 호출이 한 번 들고, 사용자가 시작할 때만 돈다.
-
-`--dry-run`은 파일과 명령을 출력하고 아무것도 시작하지 않는다. 실제 실행은 시도 폴더(`--dir`이 새 폴더를 주지 않으면
-`<run-root>/probes/question-hook-<UTC 시각>`)에 `hook-log.jsonl`, `stream.jsonl`, `evidence.json`을 쓴다.
-
-| 판정 | 뜻 | 종료 코드 |
-|---|---|---|
-| `delivered-and-denied` | 가드 훅이 `request_user_input`을 받았고, 롤아웃의 도구 출력에 기준 문자열이 보인다. Codex에 검사를 등록한다. | 0 |
-| `delivered` | 가드 훅은 받았지만 롤아웃에 거부가 보이지 않는다. 등록 전에 롤아웃을 읽는다. | 0 |
-| `not-delivered` | 모델이 도구를 불렀는데 다른 도구만(대조 훅) 기록됐거나 아무 훅도 기록하지 않았다. Codex에는 자동 검사가 없다. | 0 |
-| `hooks-inactive` | 모델이 도구를 불렀는데 어떤 훅도 아무것도 기록하지 않았다. 결론 없음. 훅 신뢰를 확인하고 다시 실행한다. | 3 |
-| `not-called` | 모델이 `request_user_input`을 부르지 않았다. 결론 없음. 다시 실행하거나 도구가 제공되는지 확인한다. | 3 |
-
-증거에는 훅이 받은 이벤트와 `tool_input`의 키, 타입 이름에 훅이 들어간 롤아웃 이벤트도 함께 담긴다.
-
 ## 명령
 
 모든 명령은 저장소 루트에서 실행한다. 기본 run root는 `~/.local/state/hei5enbug-agent-setup/harness-eval/runs`이고,
@@ -235,7 +208,6 @@ Codex 실행의 결과는 `results/<task>/<variant>/codex/rep<k>/` 아래에 있
 | 루프 모양 후보를 판정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py loop-record --campaign <name> --issue <n> --baseline <variant> --candidate a=<variant> [--candidate b=<variant>] [--combined <variant>] [--tasks T13,T14]` |
 | 채택한 루프 모양 후보를 합친 개정을 만들고 SHA 출력 | `python3 evals/e2e/harness/cli.py build-combined --base <기준 브랜치> --candidate <브랜치> --candidate <브랜치> [--worktree <폴더>] [--dry-run]` |
 | 변경을 판정하고 기록 쓰기 | `python3 evals/e2e/harness/cli.py record --campaign <name> --issue <n> --before <variant> --after <variant> [--claim wall_seconds,cost_usd [--claim-cases T36]] [--tasks T08]` |
-| Codex 훅이 `request_user_input`을 받는지 프로브한다. `--dry-run`은 아무것도 시작하지 않는다 | `python3 evals/e2e/harness/cli.py probe-question-hook [--dry-run] [--dir <folder>] [--effort low]` |
 
 `--parallel`은 동시에 실행할 수를 정한다(기본 3). 변형이 여럿이면 작업과 반복마다 순서를 번갈아(ABAB, 다음은
 BABA) 시간대 영향이 고르게 퍼지게 한다.
@@ -423,9 +395,7 @@ extension이다. 제목이 번호 바로 옆에 있으면 번호가 이름을 �
 프롬프트는 실제 사용자처럼 한국어로 쓰며, T31과 T32의 프롬프트는 한 에이전트 세션이 다른 세션에 쓰는 영어 작업 요약이다. 픽스처는 실제 저장소의 관례를 갖춘 가상 저장소다. README, 한국어 미러
 규칙이 있는 `AGENTS.md`, 테스트, 한국어 미러가 있다. T21은 `ORCA_TERMINAL_HANDLE`을 설정하고 `tasks/setup/fake_orca.py`가
 만든 가짜 `orca`를 `PATH`의 맨 앞에 두고 실행하며, 상태는 저장소 옆의 `orca-state/`에 두고, 테스트는
-`tests/test_e2e_eval_orca_cleanup.py`에 있다. T31~T34는 같은 가짜 `orca`에 에이전트와 셸 터미널, 세션 사이에 보낸 메시지를
-더해 `tasks/setup/handoff_common.py`로 심어 두며, 채점기는 호출자를 함께 기록한 가짜의 순서 있는 호출 기록을 읽고 테스트는
-`tests/test_e2e_eval_handoff.py`에 있다.
+`tests/test_e2e_eval_orca_cleanup.py`에 있다.
 
 T113은 같은 가짜 `orca`를 쓰며, 이 가짜는 터미널도 시작하고, 시작한 에이전트 터미널의 입력줄을 보여 주고 고치며, 대기와 전송을 받아들인다. 또 시드한 저장소에서만 답하고 그 밖은 거부하며 기록하는 가짜 `gh`를 써서 시험이 실제 서비스에 닿지 않는다. 검사는 호출 기록에서 각 세션 시작이 적은 모델과 effort를 읽으며, 그 테스트는 `tests/test_e2e_eval_session_model.py`에 있다.
 
@@ -449,11 +419,7 @@ T180과 T181은 가상 플러그인 저장소 `skill-gap-plugin`에서, `skills/
 보관한 이슈는 저장소 옆의 `gh.log`와 `gh-state/`에 있으며, 테스트는 `tests/test_e2e_eval_skill_issue_cases.py`에 있다. 하네스는
 질문에 답할 수 없으므로 T180은 정해지지 않은 선택을 묻고 트래커에 쓰지 않으면 통과한다.
 T110과 T111은 답을 프롬프트에 주어 실행이 쓰기와 다시 읽기까지 가게 하며, 선택 검사 `check-filed-ran-after-write`는
-실행이 올린 이슈를 `check_filed.py`로 다시 읽었는지 보여 준다. T160은 가짜 `aside`를 `PATH` 앞에 두며
-(`tasks/setup/fake_aside.py`, 호출 기록은 `aside.log`, `FAKE_ASIDE_MODE=fail`이면 `aside exec`이 실패한다),
-선택 검사는 조회가 `browser-reader` 에이전트로 갔는지 보여 준다. T161은 한국어 설계 문서를 검토하며, 선택 검사는 검토가 어느
-번역투 참조를 읽었고 `check_format.py`를 실행했는지 보여 준다. 이들의 테스트는
-`tests/test_e2e_eval_skill_issue_filing.py`, `tests/test_e2e_eval_aside_lookup.py`, `tests/test_e2e_eval_design_review.py`다.
+실행이 올린 이슈를 `check_filed.py`로 다시 읽었는지 보여 준다. 이들의 테스트는 `tests/test_e2e_eval_skill_issue_filing.py`다.
 
 | 작업 | 픽스처 | 확인하는 경로 | 요청 |
 |---|---|---|---|
@@ -481,13 +447,7 @@ T110과 T111은 답을 프롬프트에 주어 실행이 쓰기와 다시 읽기�
 | T81 | notes-cli | Orca 플러그인 새로고침 | 설치된 플러그인 버전을 실행 중인 세션들에 반영, 그중 하나는 백그라운드 작업만 기다리며, 가짜 `orca`, `claude`, `codex` 사용 |
 | T35 | inventory-service | 매번 실패하는 위임 경로 | 프롬프트가 role runner 작업자에게 맡기는 `--forecast` 보고서 옵션. 심어 둔 `claude`와 `codex`가 자식 실행마다 다른 오류로 실패하며, 시작은 재시도 한도에서 멈춰야 한다 |
 | T36 | inventory-service | 서로 독립인 읽기 전용 질문 여덟 개 | money, pricing, validators, importer, audit, clock, serialization, formatting에 대한 질문 각 하나. 벽시계 시간이 주장하는 측정값이다 |
-| T31 | notes-cli | 인수인계에 속한 터미널 | 결과 하나를 요청하는 작업 요약: 끝난 자식 worktree 정리, 보고, 그 뒤 세션 자신의 터미널 닫기 |
-| T32 | notes-cli | 이미 에이전트를 실행한 터미널로 온 작업 요약 | 마무리 문장이 없는 같은 작업 요약과 커밋하지 않은 변경이 있는 자식 worktree: 아무것도 닫지 않고 남긴 worktree를 이름으로 보고 |
-| T33 | notes-cli | 쓴 적 없는 셸 터미널에서 에이전트 시작 | 터미널이 쓴 적 없는 셸 하나뿐인 작업공간에 결과 하나를 맡김: 호스트 명령을 그 터미널에 보내고 터미널을 만들지 않음 |
-| T34 | notes-cli | 첫 프롬프트의 터미널 정리 | 설정 하나를 읽는 동안 플러그인 훅이 쓴 적 없는 셸 터미널을 닫고 입력이 있는 터미널은 남김 |
 | T67 | notes-cli | 훅이 끝난 worker의 worktree를 삭제 | 설정 변경, 에이전트 없이 만든 demo-b의 worktree, 거기서 시작한 worker. 턴을 질문으로 끝내며, worktree와 로컬 브랜치는 세션이 아니라 훅의 분리 실행이 삭제해야 한다 |
-| T76 | notes-cli | 질문 대화상자 문구 | 이슈 초안의 다섯 줄 완료 체크리스트 중 다른 줄과 겹치는 두 줄을 지울지 묻기. 사용자는 그림으로 보고 싶다고 했다 |
-| T77 | notes-cli | 질문 대화상자 문구 | `demo.orders`에서 안 쓰는 두 열을 지울지 묻기. 사용자는 테이블을 그림으로 보고 싶다고 했다 |
 | T22 | review-rounds | 티켓 코멘트, 첫 초안 | 작업 항목이 단계별 변경 전후 시간을 요구하고 결과가 제안을 다른 방식으로 바꾼 코멘트 |
 | T23 | review-rounds | 티켓 코멘트, 두 번째 초안 | 캐시 없는 첫 실행이라는 작업 항목의 예외를 빠뜨렸다는 지적 뒤의 초안 수정 |
 | T24 | review-rounds | 티켓 코멘트, 두 번째 초안 | "검사가 느슨한 캐시를 삭제한다"가 캐시 실행 전인지 뒤인지 두 가지로 읽힌다는 지적 뒤의 초안 수정 |
@@ -507,30 +467,11 @@ T110과 T111은 답을 프롬프트에 주어 실행이 쓰기와 다시 읽기�
 | T101 | notes-cli | 내장 에이전트 요청 거부 | `general-purpose` 에이전트를 한 번 요청한다. 플러그인이 거부해야 하고, 그 에이전트가 작업을 하면 안 되며, 아무것도 바뀌면 안 된다 |
 | T112 | demo-app | UI 라우팅, 새 화면 | 처음부터 만드는 청구서 세 줄 화면, 1280px와 375px에서 맞아야 하며 고정된 `xhigh`의 디자이너로 라우팅 |
 | T113 | notes-cli | Orca 세션 시작 모델 | 다른 플러그인 저장소의 스킬 이슈를 위임 규칙에 따라 그곳의 새 세션에 맡김. 가짜 `orca`와 시드한 플러그인 저장소를 쓰며, 모든 세션 시작이 모델과 effort를 적고 Fable이나 Astra를 적지 않아야 통과 |
-| T37 | notes-cli | 실패 조건과 호환 결정이 있는 작업자 위임 | 없는 파일에서 종료 코드 3으로 끝나며 아무것도 출력하지 않는 `memo import FILE`, 그리고 옛 형식을 계속 읽는 새 파일 형식 |
-| T38 | parcel-desk | 새 동작 옆의 기존 단언 | 구역 C를 250 g 단위로 청구하는 변경. 공유하는 단계 상수를 바꾸면 다른 구역에 대한 기존 단언이 깨진다. 파일 세 개 이상을 고친다 |
-| T39 | parcel-desk | 단언 하나가 따르는, 요청에 적힌 동작 변경 | `round_cents`가 버림에서 반올림(half up)으로 바뀌고, 기존 테스트 하나가 버림을 단언한다 |
-| T40 | parcel-desk | 경계와 실패 경로 테스트 | 이름이 정해진 오류를 내는 `pickup_fee_cents`의 40개 상한. 에이전트 자신의 테스트가 참조에서는 통과하고 심은 결함 사본 넷에서는 실패해야 한다 |
-| T41 | shop-desk | 가장 적은 새 부품 | 프롬프트가 코드 파일 셋과 설정 키 하나로 한정한 고객별 할인 한도. 파일 세 개 이상을 고친다 |
-| T42 | shop-desk | 기존 값 재사용 | `sales`가 쓰는 세율을 따라야 하고 `SHOP_TAX_PERCENT`로 바꾸는 `statement` 명령. 파일 세 개 이상을 고친다 |
-| T43 | shop-desk | 명시적 실패 | `StorageClient.upload`를 부르는 `export-orders` 명령. 숨은 테스트가 클라이언트를 실패하게 만든다. 파일 세 개 이상을 고친다 |
-| T44 | shop-desk | 호출부와 소비자 | `lookup_customer`가 dict 대신 `Customer`를 돌려준다. 다른 모듈의 두 번째 호출부와 이전 버전이 저장한 파일이 계속 동작해야 한다. 파일 세 개 이상을 고친다 |
-| T45 | shop-desk | 가정 전에 증거 | 독스트링이 정렬된 출력을 약속하지만 코드는 그렇게 하지 않는 `customers_by_spend` 위에 만드는 `top-customers` 명령. 마지막 보고에 그 함수 이름이 있어야 한다. 파일 세 개 이상을 고친다 |
-| T46 | shop-desk | 보고된 결함의 근본 원인 | `shop place 1 ab-100:2`가 소문자 SKU에서 실패한다. 깨진 규칙은 `price` 명령과 `place_order`도 쓰는 `catalog.price_cents`에 있다 |
-| T47 | shop-desk | 반복 실행 안전 | 실패 뒤 다시 실행하는 `import-orders` 명령. 숨은 테스트가 첫 실행을 읽은 직후에 두 번째 실행이 끝날 때까지 붙잡아 두고, 실행 넷을 함께 시작한다. 파일 세 개 이상을 고친다 |
-| T48 | shop-desk | 실제 환경 | 일요일부터 세는 주 라벨. README는 보고용 데이터베이스(SQLite)도 같은 라벨을 계산한다고 적고, 로컬 엔진 검사는 `scripts/engine_check.py`다 |
 | T62 | notes-cli | Worker 위임: 지목한 스킬 | `memo count` 명령과, 저장소 스킬 `changelog-entry`만 설명하는 변경 이력 줄 |
-| T49 | tally-desk | 요구사항 합의 | 열린 결정 둘이 있는 `weekly DATE`와 `archive OUT_DIR`. 시트의 주 시작 요일 일요일은 가장 그럴듯한 월요일과 다르다 |
-| T50 | tally-desk | 합의 없음 | 결정을 모두 프롬프트에 적은 `busiest DATE`와 `archive OUT_DIR`. 질문하면 안 된다 |
-| T51 | tally-desk | 질문 하나 | `rate_for`의 `ttl_cached` 캐시를 되풀이하는 새 요율 캐시. 질문은 정확히 하나이고 그 캐시를 짚어야 한다 |
-| T140 | notes-cli | 저장된 질문 입력 | 이어 실행한 세션을 요약하기. 앞선 질문 입력이 대화에는 `\uXXXX` 이스케이프로 보이지만 저장된 기록에는 가나가 들어 있다 |
-| T141 | notes-cli | 저장된 질문 입력 | 같은 상황에서 저장된 기록 자체에 이스케이프 글이 있고, 질문을 다시 하기 |
 | T180 | skill-gap-plugin | 이슈 작성, 질문 먼저 | 정해지지 않은 Proposal 선택이 하나 있는 갭 메모를 `skill-issue-creator`로 올리기 |
 | T181 | skill-gap-plugin | 이슈 작성, 중복 검색 | 같은 계정의 열린 이슈가 이미 다루는 갭 메모 |
 | T110 | skill-gap-plugin | 이슈 작성, 답을 미리 준 경우 | T180의 정해지지 않은 선택 둘에 대한 답을 프롬프트에 주어, 이슈를 올리고 다시 읽는 데까지 가는 사례 |
 | T111 | skill-gap-plugin | 이슈 작성, 답을 준 이미 다룬 갭 | T181에 답을 프롬프트에 주어, 열린 이슈에 합치고 다시 읽는 데까지 가는 사례 |
-| T160 | notes-cli | Aside 조회, 읽기 전용 | 도구 실행 기록을 길게 출력하는 가짜 `aside`로 티켓 상태를 조회하며, 답에는 상태와 출처만 있어야 한다 |
-| T161 | design-review-demo | 설계 문서 검토, 한국어 | 긴 줄, 네 번째 제목 수준, 줄 끝 공백, 번역투 표현 하나를 심은 한국어 설계 문서의 검토 |
 | T120 | tally-demo | 저장소 지침, 반복된 교정 | 같은 이름 교정이 두 번 나온 뒤 마무리, 그 유형 하나의 검사 후보를 보이고 시드된 앞선 커밋에서 증명하되 쓰지 않음 |
 | T121 | tally-demo | 저장소 지침, 조사 뒤 결정 | 세 단계 조사 뒤 두 큐 라이브러리 중 하나를 결정, 30줄 이하 ADR 초안과 진입 줄을 보이되 쓰지 않음 |
 | T122 | tally-demo | 저장소 지침, 해당 없음 | 한 번뿐인 저장소에 없는 교정과 조사 없음, 기록 추천도 `mistake-enforcer` 실행도 없음 |
@@ -538,8 +479,6 @@ T110과 T111은 답을 프롬프트에 주어 실행이 쓰기와 다시 읽기�
 | T151 | scout-demo | scout 결과 계약, 없는 경로 | 존재하지 않는 `demo-lib/docs/missing.md`에 대한 질문. 보고는 `blocked`로 시작하고 경로를 밝히며 내용에 대한 결론을 내지 않음 |
 | T152 | scout-demo | scout 결과 계약, 일부 증거 | 두 파일에 걸친 구분자와 최대 줄 길이 중 길이가 없는 경우. 보고는 `issues`로 시작하고 길이를 unknown으로 표시하며 수정 제안을 하지 않음 |
 | T153 | inventory-service | 어려운 작업의 worker 모델, 위임 강제 | 앱과 CLI에 걸친 데이터 파일 하나의 프로세스 간 잠금(동시성, 공개 계약, 여러 구성요소)을 요청으로 구현 worker에게 맡김. worker의 모델은 변형의 `implementation_worker` 경로가 정함 |
-| T154 | skill-review-demo | skill 검토 역할, 채점기 | 기대 항목 셋 중 하나를 놓친 `release-notes` 실행을 Skill Builder로 채점함. 채점은 정확히 그 항목만 실패로 표시하고 출력을 인용하며, 검토 경로 실행이 있어야 함 |
-| T155 | skill-review-demo | skill 검토 역할, 비교기 | 글머리표 다섯 개 한도를 어긴 출력과 지킨 출력을 Skill Builder로 블라인드 비교함. 비교는 지킨 출력을 고르고 그 한도를 밝히며, 검토 경로 실행이 있어야 함 |
 | T130 | ops-notes | 반복 검토, 수렴하지 않음 | 스크립트로 짠 `tools/review.py`가 지적을 내지 않을 때까지 `docs/guide.md`를 고침. 지적이 5건, 4건, 6건, 그 뒤로도 새 낮은 심각도로 나옴 |
 | T131 | ops-notes | 반복 검토, 수렴 | 같은 요청이며 스크립트 검토가 2건, 3건, 0건을 냄 |
 | T132 | ops-notes | 반복 검토, 수정이 퍼져야 함 | 문서 세 곳이 재시도 한도를 5로 적었고 `docs/decisions.md`는 3으로 정했으며, 첫 실행은 한 곳만 짚음 |
@@ -551,26 +490,8 @@ T62는 지목한 스킬을 불러오는 worker 규칙을 측정합니다. 설정
 worker 결과가 스킬 이름을 적었는지 읽습니다. `scripts/skill_load_check.py`는 같은 불러오기 규칙을 호스트 기록에 적용하고,
 `tests/test_worker_named_skill.py`가 그 입력을 심어 검사합니다.
 
-T37부터 T48까지는 각 사례가 무엇을 측정하는지 적은 표시를 달고 있으며, 하네스 코드는 이 표시를 읽지 않습니다. T37의
-`handoff`와 그 제약의 `field`(할당 항목), T38부터 T40과 T07의 `rule_test`(테스트 규칙 항목), T41부터 T48과 T02, T08의
-`code_rule`(구현 규칙), T49부터 T51의 `agreement`(요구사항 합의)가 그것입니다. 각 표시는 그 사례를 판정하는 필수 검사를 나열합니다.
-
 T89부터 T91까지의 ID는 [`evals/model-roles`](../../../../evals/model-roles/README.md)의 Claude 검토자 모델 비교가 씁니다.
 그 상대 ID인 T92와 T93은 해당 스킬이 제거되면서 끝났습니다. 그 사례는 이 하네스가 아니라 역할 실행기로 실행하므로 여기에는 과제 파일이 없습니다.
-
-T76과 T77은 실행이 마지막으로 보여 준 질문 대화상자를 채점합니다. Claude Code는 `AskUserQuestion`, Codex는 `request_user_input`
-호출이며, 직접 만든 자유 입력 선택지 때문에 플러그인의 질문 가드가 거부한 호출은 세지 않습니다. 두 과제 모두 "Other"나 "직접 입력"
-같은 자유 입력 선택지가 있는 대화상자는 실패시킵니다. T76은 또 지적된 두 줄의 핵심 낱말이 있고 "acceptance criteria", "regression",
-"criterion", "reviewer"와 그 한국어 대응어가 없을 것, 설명이 각각 지적된 두 줄을 핵심 낱말이나 대화상자가 붙인 이름표로 부르는 삭제
-선택지와 유지 선택지가 있을 것, 다섯 줄이 모두 든 그림이 있을 것을 요구합니다. 그림은 Claude Code에서는 선택지의 `preview`, Codex에서는
-질문 본문의 첫 줄 아래에 있어야 합니다. T77은 두 열 이름이 대화상자, 모든 선택지 설명, 그림의 그려진 줄에 있을 것을 요구합니다.
-설정 스크립트가 심는 글은 모두 가상이며, `files-untouched`는 실행을 실패시키지 않고 에이전트가 파일을 고쳤는지만 기록합니다.
-
-T140과 T141는 저장된 기록의 경로를 알려 주고, 실행이 무엇을 읽고 무엇을 말했는지를 채점합니다. T140은 실행이 기록을 읽을 것, 그리고
-모델이 이스케이프를 썼다거나 원문 글자 규칙을 어겼다고 말하거나, 결함 보고 초안을 쓰거나, 다음번에 원문 글자로 쓰겠다는 메모를 남기는 줄이
-없을 것을 요구하며, 그것을 부정하는 줄은 세지 않습니다. T141는 실행이 기록을 읽고, 저장된 입력에 이스케이프 글이 있다고 말하고,
-가나 원문에 `\uXXXX` 꼴이 없는 다음 질문을 대화상자에서, 대화상자가 없는 호스트에서는 최종 답변에서 할 것을 요구합니다. 둘 다 가상
-파일 `session/demo-session.jsonl`을 씁니다.
 
 ## 두 호스트에서 변경 비교
 

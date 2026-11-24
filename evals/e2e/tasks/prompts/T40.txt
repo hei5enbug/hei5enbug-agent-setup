@@ -1,7 +1,0 @@
-parcel-desk의 pickup_fee_cents(parcel_count: int, zone: str) -> int 에 상한을 넣어줘.
-
-- 한 번의 방문 수거는 소포를 40개까지만 받아. 40개는 되고, 41개부터는 PickupLimitError를 발생시켜.
-- PickupLimitError는 parcel/errors.py에 새로 만들고 ParcelError의 하위 클래스로 해.
-- 오류 메시지는 "pickup limit is 40 parcels, got 41" 형식이야. 마지막 숫자는 받은 소포 수야.
-
-테스트도 추가해줘.

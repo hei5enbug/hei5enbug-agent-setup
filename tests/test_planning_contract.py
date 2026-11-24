@@ -132,9 +132,7 @@ class PlanningContractTest(unittest.TestCase):
 
         # When
         routes_requested_plans = "Before creating or revising an implementation plan the user requested, read" in common
-        excludes_preparation = (
-            "Task preparation and [requirements agreement](../requirements-agreement.md) are not such requests." in common
-        )
+        excludes_preparation = "Task preparation under the implementation execution rules is not such a request." in common
 
         # Then
         self.assertTrue(routes_requested_plans)

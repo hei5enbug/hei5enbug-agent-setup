@@ -41,29 +41,6 @@ class CommonRulesTest(unittest.TestCase):
         # When / Then
         self.assert_in_every_context(*phrases)
 
-    def test_명확한_요청은_요청만_하고_문서_규칙과_작업_준비_규칙이_후속_수정을_둘로_한정한다(self):
-        """코어는 대체한 문장을 두 호스트 문맥에서 빼고 더 짧게 쓰며, 후속 수정 규칙은 문서 지침과 작업 준비에 있다."""
-        # Given
-        replaced = "Do not add design, tests, implementation, or planning beyond the request."
-        sentence = "Add no design, tests, implementation, docs, or plans beyond the request."
-        documentation = " ".join((REPO_ROOT / "instructions/documentation.md").read_text(encoding="utf-8").split())
-        execution = (REPO_ROOT / "instructions/implementation-execution.md").read_text(encoding="utf-8")
-        preparation = " ".join(execution.split("## Task preparation", 1)[1].split("## Assignment fields", 1)[0].split())
-
-        # When
-        measured = (len(sentence.encode("utf-8")), len(replaced.encode("utf-8")))
-
-        # Then
-        self.assert_in_every_context(sentence)
-        for host, context in contexts().items():
-            with self.subTest(host=host):
-                self.assertNotIn(replaced, context)
-        self.assertLessEqual(*measured)
-        self.assertIn("existing text that the change made false needs correcting", documentation)
-        self.assertIn("a repository rule requires text for something the change adds", documentation)
-        self.assertIn("existing text that the change made false, and text that a repository rule requires", preparation)
-        self.assertIn("add no text about it", documentation)
-
     def test_일정이나_다음_실행을_기다리기_전에_지금_안전하게_확인할_방법을_먼저_찾는다(self):
         """세션 문맥은 기다리기 전에 직접 확인하고 묻기 참조를 읽게 하며, 참조는 지금 확인할 방법과 기다릴 때 밝힐 내용을 정한다."""
         # Given
@@ -119,29 +96,6 @@ class CommonRulesTest(unittest.TestCase):
             "Keep the question to one sentence and put details in the option descriptions or the diagram.",
             "Leave out how you reached the question, such as a reviewer's findings or earlier attempts, unless it "
             "changes which option is right.",
-        )
-
-        # Then
-        for rule in rules:
-            with self.subTest(rule=rule):
-                self.assertIn(rule, asking)
-
-    def test_질문_도구가_자유_입력_줄을_더하는_호스트에서는_직접_입력_선택지를_만들지_않고_그림은_미리보기나_질문_본문에_둔다(self):
-        """호스트가 자유 입력 줄을 더하면 그 줄에 맡기고 직접 입력 선택지를 더하지 않으며, 그림은 미리보기 칸이 있으면 거기에 없으면 질문 문장 아래에 둔다."""
-        # Given
-        asking = " ".join((REPO_ROOT / "instructions/asking-the-user.md").read_text(encoding="utf-8").split())
-
-        # When
-        rules = (
-            "Under the condition that the host's question tool adds its own free-form row, as Claude Code "
-            "`AskUserQuestion` and Codex `request_user_input` do, rely on that row and never add an option whose label "
-            'asks the user to type, such as "Other", "Custom", or "직접 입력",',
-            "Under the condition that the host's tool cannot take a free-form answer, ask in the reply that ends the "
-            "turn instead.",
-            "Add an ASCII diagram only when it clarifies the choice.",
-            "Under the condition that a diagram helps and the host's question tool has a preview field, such as Claude "
-            "Code `preview`, put it there; under the condition that the tool has none, as on Codex, put it in the "
-            "question text below the question sentence.",
         )
 
         # Then

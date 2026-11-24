@@ -315,8 +315,7 @@ Separate recurring execution from development and grading overhead as defined in
 
 ### Step 5: Grade and aggregate
 
-1. Read `agents/grader.md` and grade each run through the review route in "Evaluation model adapters" of `references/execution-methods.md`.
-   Grade inline only when that route and its fallback both failed or the host has none, and say so in the report. Save `grading.json`.
+1. Read `agents/grader.md` and grade each run, using an independent worker when possible or grading inline otherwise. Save `grading.json`.
    Its expectation objects must use `text`, `passed`, and `evidence`.
 2. Use a deterministic script only for assertions that satisfy "Automation boundary".
    Deterministic execution alone does not make a proxy or heuristic assertion valid.
@@ -386,9 +385,9 @@ Repeat only for unresolved findings within the trial budget; report inconclusive
 
 ## Advanced: blind comparison
 
-For rigorous A/B comparison, read `agents/comparator.md` and `agents/analyzer.md`. Give outputs, through the same review route, to an independent judge without revealing which configuration produced them.
+For rigorous A/B comparison, read `agents/comparator.md` and `agents/analyzer.md`. Give outputs to an independent judge without revealing which configuration produced them.
 The comparator may return `TIE`; the analyzer accepts `A`, `B`, or `TIE` and, on a tie, analyzes both skills without inventing a winner.
-If no review route can run, skip blind comparison and disclose that limitation.
+If no independent worker exists, skip blind comparison and disclose that limitation.
 
 ## Description optimization
 

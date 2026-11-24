@@ -1,4 +1,4 @@
-"""Close the never-used shell terminals that sit beside a session's own terminal in its Orca worktree.
+"""Tell a never-used shell terminal from a used one, for the worktree cleanup run.
 
 A never-used shell terminal runs no agent, shows only a shell prompt with an empty input line, and holds no command in
 its output. The caller passes in `run`, a function that runs `orca <arguments> --json` and returns the parsed payload or
@@ -7,12 +7,10 @@ None, so this module starts no process of its own and never sends input to a ter
 
 from __future__ import annotations
 
-import time
 from collections.abc import Callable
 
 PROMPT_ENDINGS = ("%", "$", "#", ">", "❯")
 BANNER = "Last login"
-BUDGET_SECONDS = 4.0
 
 Run = Callable[..., "dict | None"]
 
@@ -64,34 +62,3 @@ def never_used(run: Run, handle: str) -> bool:
     screen = read_terminal(run, handle, screen=True)
     return screen is not None and only_prompts(screen.get("tail")) and len(
         [line for line in lines_of(screen["tail"]) if line.strip()]) == 1
-
-
-def sibling_terminals(run: Run, own_handle: str) -> list[dict]:
-    """Return the terminals of the worktree that holds `own_handle`, or none when that terminal is not listed."""
-    payload = run("terminal", "list")
-    try:
-        terminals = payload["result"]["terminals"]
-    except (KeyError, TypeError):
-        return []
-    if not isinstance(terminals, list):
-        return []
-    terminals = [item for item in terminals if isinstance(item, dict) and isinstance(item.get("handle"), str)]
-    own = next((item for item in terminals if item["handle"] == own_handle), None)
-    if own is None or not isinstance(own.get("worktreeId"), str):
-        return []
-    return [item for item in terminals if item.get("worktreeId") == own["worktreeId"]]
-
-
-def close_unused(run: Run, own_handle: str, budget: float = BUDGET_SECONDS) -> list[str]:
-    """Close each never-used shell terminal of the own worktree except the own one; return the closed handles."""
-    deadline = time.monotonic() + budget
-    closed: list[str] = []
-    for terminal in sibling_terminals(run, own_handle):
-        if time.monotonic() > deadline:
-            break
-        handle = terminal["handle"]
-        if handle == own_handle or terminal.get("agentIdentity"):
-            continue
-        if never_used(run, handle) and run("terminal", "close", "--terminal", handle) is not None:
-            closed.append(handle)
-    return closed

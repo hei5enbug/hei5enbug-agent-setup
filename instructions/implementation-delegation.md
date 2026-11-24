@@ -106,5 +106,4 @@ An assigned worker executes its task directly and never acts as a coordinator.
 - When the assignment names a skill, load it first with the host's skill mechanism, follow it instead of doing its
   work by hand, and list each skill you loaded in the result. When it cannot be loaded, stop, make no edit that
   the skill covers, and report the missing skill to the coordinator as a blocker.
-- Before your first edit, read [implementation rules](implementation-rules.md).
 - Return the changed paths, check results, and remaining blockers.

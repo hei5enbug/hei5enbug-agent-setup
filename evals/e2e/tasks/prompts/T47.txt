@@ -1,8 +1,0 @@
-shop-desk에 `import-orders FILE` 명령을 추가해줘.
-
-- FILE은 헤더가 `ref,customer_id,sku,quantity,placed_on`인 CSV고, 한 행이 주문 하나야. 라인은 그 행의 `sku`와 `quantity` 하나뿐이야.
-- 행마다 `shop.orders.place_order`로 저장하고(`ref`와 `placed_on`을 넘겨), 끝나면 새로 저장한 주문 수를 `imported N`으로 출력해.
-- 운영에서는 이 명령을 실패하면 같은 파일로 다시 실행해. `ref`가 같으면 같은 주문이야.
-- 테스트는 tests/test_cli.py에 추가해줘.
-
-README에도 반영해줘.

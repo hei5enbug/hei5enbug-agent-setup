@@ -1,1 +1,0 @@
-"""Shipping quotes for parcels."""

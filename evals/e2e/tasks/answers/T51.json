@@ -1,7 +1,0 @@
-{
-  "decisions": [
-    {"id": "reuse-cache", "terms": ["cache", "캐시", "ttl_cached", "rate_for", "reuse", "재사용", "기존"],
-     "answer": "Reuse the existing ttl_cached cache through rate_for and add no second cache. 기존 캐시를 재사용하고 새 캐시는 만들지 않습니다."}
-  ],
-  "required": []
-}

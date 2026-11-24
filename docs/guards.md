@@ -60,26 +60,6 @@ uv pip install --python "${XDG_STATE_HOME:-$HOME/.local/state}/hei5enbug-agent-s
 Without it, PostgreSQL falls back to a stricter text check that may ask more often but still never lets a write run
 without approval.
 
-## Question dialog guard
-
-A `PreToolUse` hook, `scripts/question_guard.py`, registered once in `hooks/hooks.json` with the matcher
-`^(AskUserQuestion|request_user_input)$`, checks a question dialog before it opens. It denies the call when any
-option's label, after trailing parenthesized notes such as "(Recommended)" and trailing punctuation are removed,
-equals one of "Other", "Custom", "Type your own", "Type your own answer", "Write your own", "Enter your own",
-"직접 입력", "직접 작성", "기타", or "자유 입력", compared without case. The reason says that the host already adds a
-free-form row and tells the agent to remove that option. A label that only contains such a word, such as "Other
-files", passes, and so does every other event, tool, or input shape.
-
-Claude Code fires `PreToolUse` for `AskUserQuestion` and accepts the JSON deny decision. The Codex hooks page lists
-no question tool. The `probe-question-hook` command of `evals/e2e` settled it on 2026-11-23 with Codex 0.171.0 and
-`features.default_mode_request_user_input=true`: a Codex `PreToolUse` hook receives `request_user_input` with its
-`tool_input.questions`, and a deny decision stops the call and returns the reason to the model. The guard therefore
-checks a question dialog on both hosts. The probe cost one model call and ran because the owner started it.
-
-What the hook cannot decide, such as whether the question names what it changes in plain words, stays a written rule in
-`instructions/asking-the-user.md`. It exists because, in a 2026-11-13 session, an agent added its own "직접 입력"
-option, which has no text box and returned only its label.
-
 ## Public boundary check
 
 A `PreToolUse` hook on `Bash` calls `scripts/public_boundary_hook.py` in every project on both hosts, with the
@@ -220,18 +200,10 @@ here-document body checks only such substitutions. On Codex, trust the hook in `
 
 One hook script, `scripts/orca_status_hook.py`, keeps the session's tab title and reminds it of a missing name or tab
 title. It writes no board status, no worktree comment, and no unread flag to Orca, because those went stale; the user
-sets statuses, and Orca itself notifies the user when a session asks a question. Its writes to Orca are the closing of
-never-used shell terminals and the removal of a finished child worktree the session created, both described below. It
+sets statuses, and Orca itself notifies the user when a session asks a question. Its one write to Orca is the removal of a
+finished child worktree the session created, described below. It
 runs only when `ORCA_TERMINAL_HANDLE` is set, never in a subagent or an assigned worker, and any failed read of Orca, Git, or the
 transcript lets the event pass. It reads Claude Code transcripts only, because Codex records tool calls as script text.
-
-At a session's first `UserPromptSubmit`, once per session and with no model turn, the hook also lists the terminals of
-the worktree that holds the session's own terminal and closes each never-used shell terminal other than that one
-(`scripts/orca_terminal_cleanup.py`). A terminal qualifies only when it runs no agent, its screen read shows a single
-shell prompt with an empty input line, its output read holds nothing but prompts, and it reports no draft. A terminal
-that runs a process, holds typed input, or shows an earlier command is left alone, and so is every terminal when the
-session's own terminal is not listed or a read fails. The hook sends no input to any terminal. Both hosts document
-`UserPromptSubmit` as running before the prompt reaches the model, so the terminal is gone before the first reply.
 
 The hook keeps the session's tab title. After a `PostToolUse` of a Bash command whose `orca terminal rename` names this
 terminal, as `"$ORCA_TERMINAL_HANDLE"` or its value, and whose `--title` or `--title=` is a literal with no `$` or
@@ -259,7 +231,7 @@ terminal's own session would not survive. A session that created no worktree, on
 process it started, after `HEI5ENBUG_CLEANUP_RUN_SECONDS` (120 seconds), also when `git fetch` or the Orca CLI hangs. Both hosts run these three events for plugin hooks, as checked in the Claude Code and Codex hook references, so
 no host keeps only the written rule.
 
-The run decides a never-used shell terminal by the same rule as the first-prompt close above. It takes one worktree at a time. It keeps the worktree when it is a main clone, the worktree the session works in,
+The run decides a never-used shell terminal from its reads (`scripts/orca_terminal_cleanup.py`): the terminal runs no agent, its screen read shows a single shell prompt with an empty input line, its output read holds nothing but prompts, and it reports no draft. A terminal that runs a process, holds typed input, or shows an earlier command is not one, and every terminal stays when the session's own terminal is not listed or a read fails. It takes one worktree at a time. It keeps the worktree when it is a main clone, the worktree the session works in,
 a worktree with a child worktree, or one on a branch whose worktree the run removed earlier in the session; when a worker
 Dispatch that `orca orchestration worker-list` shows for it did not succeed or cannot be read; when `git status
 --porcelain` is not empty; when, after `git fetch`, the branch has no upstream or a commit missing there; when an ignored
@@ -393,7 +365,7 @@ no work and returns the timeout result at once. A hook that runs out of time sto
 and answers on its own:
 
 - A hook whose output can deny a call or a permission request denies it: the approval guard on `PreToolUse` and
-  `PermissionRequest`, the Orca placement hook, the agent guard, the question guard, and the DataGrip guard with a decision whose reason
+  `PermissionRequest`, the Orca placement hook, the agent guard, and the DataGrip guard with a decision whose reason
   names the plugin and the hook, says it could not finish because the machine is busy, and tells the agent to retry
   after the load drops or to check which sessions are using the machine; the public boundary hooks block with exit
   status 2 and the same text on stderr.
