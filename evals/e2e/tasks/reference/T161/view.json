@@ -1,0 +1,12 @@
+{
+  "final_answer": "11행의 분량이 한도를 넘습니다. 내용을 두 줄로 나눕니다.\n\n19행의 시계 기준을 상위 제목으로 올립니다.\n\n17행의 줄 끝 공백을 지웁니다.\n\n13행의 수동 표현을 ‘만료 시간은 항목 종류마다 다릅니다’로 고칩니다.",
+  "assistant_texts": [],
+  "tool_calls": [
+    {"id": "s1", "name": "Skill", "input": {"skill": "hei5enbug-agent-setup:technical-design-writer"}, "result_text": "", "is_error": false, "parent": null, "source": "main"},
+    {"id": "r1", "name": "Read", "input": {"file_path": "skills/docs-rewrite/references/translationese.md"}, "result_text": "", "is_error": false, "parent": null, "source": "main"},
+    {"id": "b1", "name": "Bash", "input": {"command": "python3 scripts/check_format.py docs/design/cache-expiry.ko.md"}, "result_text": "", "is_error": false, "parent": null, "source": "main"}
+  ],
+  "delegations": [],
+  "approvals": [],
+  "permission_denials": []
+}

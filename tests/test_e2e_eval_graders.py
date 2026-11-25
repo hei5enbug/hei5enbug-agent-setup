@@ -2231,6 +2231,75 @@ class GoldenTaskTest(TempCase):
         # then
         self.assertTrue(passed)
 
+    def test_T19_checks_paraphrased_facts(self):
+        """재시작을 풀어 써도 인정하고 플래그를 읽지 않는다는 뜻이 남으면 찾아낸다."""
+        # given
+        task, repo, base = self.referenced("T19")
+        (repo / "out" / "wiki-page.txt").write_text(
+            "플래그를 저장한 뒤 다시 기동할 대상은 demo-api입니다.\n"
+            "demo-api는 플래그를 직접 참조하지 않습니다.\n", encoding="utf-8"
+        )
+
+        # when
+        result = self.grade_task(task, repo, base, make_view())
+
+        # then
+        checks = {check["id"]: check["passed"] for check in result["checks"]}
+        self.assertTrue(checks["restart-fact-kept"])
+        self.assertFalse(checks["unneeded-sentence-removed"])
+
+    def test_T161_translationese_location_quote_or_rewrite(self):
+        """번역투가 있는 행, 인용, 수정안은 인정하고 같은 행의 설계 지적만 있으면 실패한다."""
+        task, repo, base = self.materialize("T161")
+        cases = (
+            ("13행의 문장이 어색합니다.", True),
+            ("‘항목 종류에 의해’라는 표현을 다듬습니다.", True),
+            ("유효 기간은 항목 유형별로 달라집니다.", True),
+            ("13행의 만료 시간을 언제부터 계산하는지 명시해야 합니다.", False),
+            ("21행의 수동형을 고칩니다.", False),
+        )
+        for answer, expected in cases:
+            with self.subTest(answer=answer):
+                # given
+                view = make_view(answer)
+
+                # when
+                passed, _ = self.outcome(task, repo, base, view, "translationese-reported")
+
+                # then
+                self.assertEqual(expected, passed)
+
+    def test_T161_reference_passes_with_paraphrased_format_findings(self):
+        """참조 검토는 줄 길이와 제목 깊이를 다른 표현으로 지적해도 통과한다."""
+        # given
+        task, repo, base = self.referenced("T161")
+        view = json.loads((TASKS_ROOT / "reference" / "T161" / "view.json").read_text(encoding="utf-8"))
+
+        # when
+        result = self.grade_task(task, repo, base, view)
+
+        # then
+        self.assertEqual([], [check["id"] for check in result["checks"] if not check["passed"]])
+        self.assertTrue(result["success"])
+
+    def test_T161_counts_shell_reference_reads(self):
+        """셸에서 읽은 참조를 집계하고 답변에 지적이 없으면 형식 검토는 실패한다."""
+        # given
+        task, repo, base = self.materialize("T161")
+        view = make_view(commands=(
+            "cat skills/docs-rewrite/references/translationese.md",
+            "sed -n '1,40p' skills/docs-rewrite/references/patterns.md",
+        ))
+
+        # when
+        result = self.grade_task(task, repo, base, view)
+
+        # then
+        checks = {check["id"]: check["passed"] for check in result["checks"]}
+        self.assertTrue(checks["read-translationese"])
+        self.assertFalse(checks["patterns-not-read"])
+        self.assertFalse(checks["long-line-and-heading-level-reported"])
+
     def test_T17은_커밋이_없으면_메시지를_검토하지_않고_실패한다(self):
         """커밋 없이 설정만 바꾸면 message-check와 text-review-clean이 예외 없이 실패한다."""
         # given

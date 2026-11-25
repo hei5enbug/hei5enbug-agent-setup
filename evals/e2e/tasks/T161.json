@@ -1,0 +1,73 @@
+{
+  "id": "T161",
+  "title": "Review of a Korean design document",
+  "category": "skill",
+  "path": "technical-design-writer review mode: translationese reference",
+  "fixture": "design-review-demo",
+  "prompt_file": "prompts/T161.txt",
+  "limits": {
+    "wall_seconds": 900,
+    "max_budget_usd": 6
+  },
+  "checks": [
+    {
+      "id": "skill-invoked",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "skill_invoked"
+    },
+    {
+      "id": "long-line-and-heading-level-reported",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "format_findings_reported"
+    },
+    {
+      "id": "translationese-reported",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "translationese_reported"
+    },
+    {
+      "id": "repo-unchanged",
+      "kind": "no_changes",
+      "required": true,
+      "weight": 1
+    },
+    {
+      "id": "trailing-space-reported",
+      "kind": "answer_contains",
+      "required": false,
+      "weight": 1,
+      "patterns": [
+        "(?i)(후행 공백|줄 끝 공백|끝 공백|trailing)"
+      ]
+    },
+    {
+      "id": "read-translationese",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "read_translationese"
+    },
+    {
+      "id": "patterns-not-read",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "patterns_not_read"
+    },
+    {
+      "id": "format-script-ran",
+      "kind": "custom",
+      "required": false,
+      "weight": 1,
+      "function": "format_script_ran"
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

@@ -16,24 +16,39 @@ def shared(ctx):
 
 OUT = "out/wiki-page.txt"
 BUDGET = 1500
-RESTART_FACT = re.compile(r"demo-api[^\n.]{0,30}재시작|(?i:\brestart[ \t]+demo-api\b)")
-UNNEEDED = re.compile(r"demo-api는 demo-flag[^\n.]{0,20}읽지")
+API = re.compile(r"(?<![A-Za-z0-9_-])demo-api(?![A-Za-z0-9_-])")
+RESTART = re.compile(r"재\s*(?:시작|기동|구동)|다시\s*(?:시작|기동|구동|실행|켜|띄우)|\bre[- ]?(?:start|launch)\b", re.I)
+FLAG = re.compile(r"demo-flag|플래그|\bflag\b", re.I)
+DOES_NOT_READ = re.compile(
+    r"(?:읽|참조|조회|확인|보|받)(?:하)?지\s*(?:않|못)|(?:안|못)\s*(?:읽|참조|조회|확인|보|받)|"
+    r"(?:does not|doesn.t|never)\s*(?:directly\s+)?(?:read|consult|check|use)|"
+    r"(?:외면|무시)|\bignor(?:e|es|ing)\b",
+    re.I,
+)
+STARTUP_CONFIG_ONLY = re.compile(
+    r"(?:설정\s*파일|config(?:uration)?\s*file).{0,24}(?:만|only)|"
+    r"(?:만|only).{0,24}(?:설정\s*파일|config(?:uration)?\s*file)",
+    re.I,
+)
 
 
 def restart_fact_kept(ctx):
     text = shared(ctx).text_of(ctx, OUT)
     if text is None:
         return False, f"{OUT} is missing", {}
-    hit = RESTART_FACT.search(text)
-    return bool(hit), "restart fact kept" if hit else "the demo-api restart fact is missing", {}
+    kept = any(API.search(sentence) and RESTART.search(sentence) for sentence in re.split(r"[\n.!?]", text))
+    return kept, "restart fact kept" if kept else "the demo-api restart fact is missing", {}
 
 
 def unneeded_sentence_removed(ctx):
     text = shared(ctx).text_of(ctx, OUT)
     if text is None:
         return False, f"{OUT} is missing", {}
-    hit = UNNEEDED.search(text)
-    return not hit, "the does-not-read sentence is still there" if hit else "the sentence is gone", {}
+    kept = any(
+        API.search(line) and ((FLAG.search(line) and DOES_NOT_READ.search(line)) or STARTUP_CONFIG_ONLY.search(line))
+        for line in text.splitlines()
+    )
+    return not kept, "the does-not-read sentence is still there" if kept else "the sentence is gone", {}
 
 
 def within_budget(ctx):
