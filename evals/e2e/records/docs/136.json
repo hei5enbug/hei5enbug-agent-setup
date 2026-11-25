@@ -1,0 +1,659 @@
+{
+  "issue": 136,
+  "cases": [
+    "T188",
+    "T189",
+    "T190",
+    "T191",
+    "T192"
+  ],
+  "variants": {
+    "c137": {
+      "revision": "9cc10a977259"
+    },
+    "c136c": {
+      "revision": "2266c2bfac47"
+    }
+  },
+  "runs": [
+    {
+      "case": "T188",
+      "variant": "c136c",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "direct-skill-started": true,
+        "timeout-evidence": true,
+        "sources-unchanged": true
+      },
+      "wall_seconds": 286.3849012919818,
+      "cost_usd": 0.32289760000000006,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 4,
+        "main_turns": 22,
+        "main_tokens": {
+          "input": 43334,
+          "output": 6037,
+          "cache_read": 1005056,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 6101,
+          "output": 3776,
+          "cache_read": 931712,
+          "cache_write": 0
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T188",
+      "variant": "c137",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "direct-skill-started": false,
+        "timeout-evidence": true,
+        "sources-unchanged": true
+      },
+      "wall_seconds": 170.84351366595365,
+      "cost_usd": 0.2359652,
+      "rep": 1,
+      "passed": false,
+      "loop": {
+        "reviewer_runs": 3,
+        "main_turns": 11,
+        "main_tokens": {
+          "input": 23822,
+          "output": 5551,
+          "cache_read": 511872,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 3676,
+          "output": 2987,
+          "cache_read": 403072,
+          "cache_write": 0
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T189",
+      "variant": "c136c",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "skill-started-after-consent": true,
+        "timeout-evidence": true,
+        "sources-unchanged": true
+      },
+      "wall_seconds": 237.65226050000638,
+      "cost_usd": 0.3454108000000001,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 1,
+        "main_turns": 14,
+        "main_tokens": {
+          "input": 34930,
+          "output": 6506,
+          "cache_read": 837888,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 5209,
+          "output": 3497,
+          "cache_read": 657792,
+          "cache_write": 0
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T189",
+      "variant": "c137",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "skill-started-after-consent": false,
+        "timeout-evidence": true,
+        "sources-unchanged": true
+      },
+      "wall_seconds": 214.6383681249572,
+      "cost_usd": 0.3310083999999999,
+      "rep": 1,
+      "passed": false,
+      "loop": {
+        "reviewer_runs": 4,
+        "main_turns": 18,
+        "main_tokens": {
+          "input": 52483,
+          "output": 5462,
+          "cache_read": 761344,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 19376,
+          "output": 4141,
+          "cache_read": 659968,
+          "cache_write": 0
+        },
+        "check_stops": 1
+      }
+    },
+    {
+      "case": "T190",
+      "variant": "c136c",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "skill-not-suggested": true,
+        "sources-unchanged": true
+      },
+      "wall_seconds": 185.35532937501557,
+      "cost_usd": 0.35475320000000005,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 0,
+        "main_turns": 17,
+        "main_tokens": {
+          "input": 65227,
+          "output": 4921,
+          "cache_read": 705152,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 18769,
+          "output": 3277,
+          "cache_read": 620928,
+          "cache_write": 0
+        },
+        "check_stops": 4
+      }
+    },
+    {
+      "case": "T190",
+      "variant": "c137",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "skill-not-suggested": true,
+        "sources-unchanged": true
+      },
+      "wall_seconds": 229.36938791698776,
+      "cost_usd": 0.305568,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 4,
+        "main_turns": 14,
+        "main_tokens": {
+          "input": 22957,
+          "output": 5591,
+          "cache_read": 546560,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 8554,
+          "output": 4461,
+          "cache_read": 490624,
+          "cache_write": 0
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T191",
+      "variant": "c136c",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "options-share-table": true,
+        "unverified-option-omitted": true,
+        "longest-case-illustrated": true,
+        "sources-unchanged": true
+      },
+      "wall_seconds": 263.0826801250223,
+      "cost_usd": 0.3975548,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 3,
+        "main_turns": 19,
+        "main_tokens": {
+          "input": 29651,
+          "output": 6243,
+          "cache_read": 890368,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 6808,
+          "output": 4099,
+          "cache_read": 771328,
+          "cache_write": 0
+        },
+        "check_stops": 1
+      }
+    },
+    {
+      "case": "T191",
+      "variant": "c137",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "options-share-table": true,
+        "unverified-option-omitted": false,
+        "longest-case-illustrated": false,
+        "sources-unchanged": true
+      },
+      "wall_seconds": 170.43940108298557,
+      "cost_usd": 0.22114760000000003,
+      "rep": 1,
+      "passed": false,
+      "loop": {
+        "reviewer_runs": 2,
+        "main_turns": 12,
+        "main_tokens": {
+          "input": 45239,
+          "output": 4366,
+          "cache_read": 471936,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 13171,
+          "output": 3489,
+          "cache_read": 403712,
+          "cache_write": 0
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T192",
+      "variant": "c136c",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "options-share-table": true,
+        "requested-option-marked": true,
+        "longest-case-illustrated": true,
+        "sources-unchanged": true
+      },
+      "wall_seconds": 341.10594583302736,
+      "cost_usd": 0.34897919999999993,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 1,
+        "main_turns": 17,
+        "main_tokens": {
+          "input": 27725,
+          "output": 7082,
+          "cache_read": 792832,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 5260,
+          "output": 4434,
+          "cache_read": 679296,
+          "cache_write": 0
+        },
+        "check_stops": 1
+      }
+    },
+    {
+      "case": "T192",
+      "variant": "c137",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "output-exists": true,
+        "options-share-table": true,
+        "requested-option-marked": false,
+        "longest-case-illustrated": false,
+        "sources-unchanged": true
+      },
+      "wall_seconds": 171.05146462499397,
+      "cost_usd": 0.272274,
+      "rep": 1,
+      "passed": false,
+      "loop": {
+        "reviewer_runs": 0,
+        "main_turns": 12,
+        "main_tokens": {
+          "input": 38553,
+          "output": 4794,
+          "cache_read": 554240,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 3786,
+          "output": 2719,
+          "cache_read": 456064,
+          "cache_write": 0
+        },
+        "check_stops": 3
+      }
+    }
+  ],
+  "verdicts": [
+    {
+      "case": "T188",
+      "verdict": "not measured",
+      "step": "no after run on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "T188",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T188",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T188",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T189",
+      "verdict": "not measured",
+      "step": "no after run on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "T189",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T189",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T189",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T190",
+      "verdict": "not measured",
+      "step": "no after run on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "T190",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T190",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T190",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T191",
+      "verdict": "not measured",
+      "step": "no after run on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "T191",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T191",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T191",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T192",
+      "verdict": "not measured",
+      "step": "no after run on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "T192",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T192",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T192",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    }
+  ]
+}

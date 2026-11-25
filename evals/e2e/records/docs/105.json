@@ -1,0 +1,679 @@
+{
+  "issue": 105,
+  "cases": [
+    "T02",
+    "T08"
+  ],
+  "variants": {
+    "base": {
+      "revision": "f734554fa72e"
+    },
+    "c105": {
+      "revision": "2ab1f4e7bc46"
+    }
+  },
+  "runs": [
+    {
+      "case": "T02",
+      "variant": "base",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "role_runner:reviewer": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "codex_child:worker": {
+          "model": "gpt-6.2-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#5": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#6": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#7": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "new-tests": true,
+        "agent-tests": true,
+        "readme-shipping": true,
+        "mirror-updated": true,
+        "files-changed": true
+      },
+      "wall_seconds": 862.8874239170109,
+      "cost_usd": 1.4323448000000003,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 3,
+        "main_turns": 57,
+        "main_tokens": {
+          "input": 82777,
+          "output": 18878,
+          "cache_read": 4824576,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 37766,
+          "output": 16468,
+          "cache_read": 4574208,
+          "cache_write": 0
+        },
+        "check_stops": 5
+      }
+    },
+    {
+      "case": "T02",
+      "variant": "c105",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:worker": {
+          "model": "gpt-6.2-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#3": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#4": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "hidden-tests": true,
+        "regressions": true,
+        "new-tests": true,
+        "agent-tests": true,
+        "readme-shipping": true,
+        "mirror-updated": true,
+        "files-changed": true
+      },
+      "wall_seconds": 617.9979287079768,
+      "cost_usd": 1.0263148,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 3,
+        "main_turns": 19,
+        "main_tokens": {
+          "input": 65992,
+          "output": 10520,
+          "cache_read": 2585472,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 9755,
+          "output": 5682,
+          "cache_read": 1335680,
+          "cache_write": 0
+        },
+        "check_stops": 1
+      }
+    },
+    {
+      "case": "T08",
+      "variant": "base",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:worker": {
+          "model": "gpt-6.2-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown#2": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "only-config-changed": false,
+        "one-line-diff": false,
+        "tests-pass": true
+      },
+      "wall_seconds": 115.38425945799099,
+      "cost_usd": 0.40643960000000007,
+      "rep": 1,
+      "passed": false,
+      "loop": {
+        "reviewer_runs": 0,
+        "main_turns": 9,
+        "main_tokens": {
+          "input": 76415,
+          "output": 3220,
+          "cache_read": 439552,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 6455,
+          "output": 1514,
+          "cache_read": 328704,
+          "cache_write": 0
+        },
+        "check_stops": 3
+      }
+    },
+    {
+      "case": "T08",
+      "variant": "base",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "only-config-changed": true,
+        "one-line-diff": true,
+        "tests-pass": true
+      },
+      "wall_seconds": 18.504376625001896,
+      "cost_usd": 0.17322200000000001,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 0,
+        "main_turns": 0,
+        "main_tokens": {
+          "input": 8,
+          "output": 1234,
+          "cache_read": 96190,
+          "cache_write": 16159
+        },
+        "main_tokens_loop": {
+          "input": 0,
+          "output": 0,
+          "cache_read": 0,
+          "cache_write": 0
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T08",
+      "variant": "base",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "only-config-changed": true,
+        "one-line-diff": true,
+        "tests-pass": true
+      },
+      "wall_seconds": 461.4649342079647,
+      "cost_usd": 0.4675872000000001,
+      "rep": 2,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 0,
+        "main_turns": 10,
+        "main_tokens": {
+          "input": 30,
+          "output": 3953,
+          "cache_read": 470436,
+          "cache_write": 26769
+        },
+        "main_tokens_loop": {
+          "input": 22,
+          "output": 2641,
+          "cache_read": 373212,
+          "cache_write": 11868
+        },
+        "check_stops": 2
+      }
+    },
+    {
+      "case": "T08",
+      "variant": "base",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "only-config-changed": true,
+        "one-line-diff": true,
+        "tests-pass": true
+      },
+      "wall_seconds": 113.09957137500169,
+      "cost_usd": 0.3745072,
+      "rep": 3,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 2,
+        "main_turns": 4,
+        "main_tokens": {
+          "input": 18,
+          "output": 3374,
+          "cache_read": 233936,
+          "cache_write": 22113
+        },
+        "main_tokens_loop": {
+          "input": 10,
+          "output": 2000,
+          "cache_read": 135849,
+          "cache_write": 6687
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T08",
+      "variant": "base",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "only-config-changed": true,
+        "one-line-diff": true,
+        "tests-pass": true
+      },
+      "wall_seconds": 113.17973066598643,
+      "cost_usd": 0.41695139999999997,
+      "rep": 4,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 2,
+        "main_turns": 6,
+        "main_tokens": {
+          "input": 24,
+          "output": 4288,
+          "cache_read": 337117,
+          "cache_write": 23021
+        },
+        "main_tokens_loop": {
+          "input": 14,
+          "output": 2699,
+          "cache_read": 209253,
+          "cache_write": 7553
+        },
+        "check_stops": 2
+      }
+    },
+    {
+      "case": "T08",
+      "variant": "base",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        },
+        "subagent:hei5enbug-agent-setup:worker": {
+          "model": "claude-haiku-5-5",
+          "effort": "not measured"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "only-config-changed": false,
+        "one-line-diff": false,
+        "tests-pass": true
+      },
+      "wall_seconds": 213.54102904198226,
+      "cost_usd": 0.687714135,
+      "rep": 5,
+      "passed": false,
+      "loop": {
+        "reviewer_runs": 0,
+        "main_turns": 5,
+        "main_tokens": {
+          "input": 28,
+          "output": 6761,
+          "cache_read": 498153,
+          "cache_write": 37012
+        },
+        "main_tokens_loop": {
+          "input": 12,
+          "output": 2604,
+          "cache_read": 240748,
+          "cache_write": 6188
+        },
+        "check_stops": 1
+      }
+    },
+    {
+      "case": "T08",
+      "variant": "c105",
+      "host": "codex",
+      "models": {
+        "main": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        },
+        "codex_child:unknown": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "only-config-changed": true,
+        "one-line-diff": true,
+        "tests-pass": true
+      },
+      "wall_seconds": 53.63008091703523,
+      "cost_usd": 0.1405972,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 1,
+        "main_turns": 4,
+        "main_tokens": {
+          "input": 49163,
+          "output": 1263,
+          "cache_read": 191872,
+          "cache_write": 0
+        },
+        "main_tokens_loop": {
+          "input": 29801,
+          "output": 517,
+          "cache_read": 88320,
+          "cache_write": 0
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T08",
+      "variant": "c105",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "only-config-changed": true,
+        "one-line-diff": true,
+        "tests-pass": true
+      },
+      "wall_seconds": 534.4509794170153,
+      "cost_usd": 0.5778958000000001,
+      "rep": 1,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 1,
+        "main_turns": 9,
+        "main_tokens": {
+          "input": 30,
+          "output": 6225,
+          "cache_read": 497029,
+          "cache_write": 32140
+        },
+        "main_tokens_loop": {
+          "input": 20,
+          "output": 3969,
+          "cache_read": 368209,
+          "cache_write": 13440
+        },
+        "check_stops": 1
+      }
+    },
+    {
+      "case": "T08",
+      "variant": "c105",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "only-config-changed": true,
+        "one-line-diff": true,
+        "tests-pass": true
+      },
+      "wall_seconds": 22.993228167004418,
+      "cost_usd": 0.16313940000000002,
+      "rep": 2,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 0,
+        "main_turns": 0,
+        "main_tokens": {
+          "input": 8,
+          "output": 1173,
+          "cache_read": 98077,
+          "cache_write": 15004
+        },
+        "main_tokens_loop": {
+          "input": 0,
+          "output": 0,
+          "cache_read": 0,
+          "cache_write": 0
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T08",
+      "variant": "c105",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "only-config-changed": true,
+        "one-line-diff": true,
+        "tests-pass": true
+      },
+      "wall_seconds": 23.306316040980164,
+      "cost_usd": 0.1727766,
+      "rep": 3,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 0,
+        "main_turns": 0,
+        "main_tokens": {
+          "input": 8,
+          "output": 1516,
+          "cache_read": 98163,
+          "cache_write": 15349
+        },
+        "main_tokens_loop": {
+          "input": 0,
+          "output": 0,
+          "cache_read": 0,
+          "cache_write": 0
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T08",
+      "variant": "c105",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "only-config-changed": true,
+        "one-line-diff": true,
+        "tests-pass": true
+      },
+      "wall_seconds": 20.15361787501024,
+      "cost_usd": 0.1681552,
+      "rep": 4,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 0,
+        "main_turns": 0,
+        "main_tokens": {
+          "input": 10,
+          "output": 1063,
+          "cache_read": 127636,
+          "cache_write": 15166
+        },
+        "main_tokens_loop": {
+          "input": 0,
+          "output": 0,
+          "cache_read": 0,
+          "cache_write": 0
+        },
+        "check_stops": 0
+      }
+    },
+    {
+      "case": "T08",
+      "variant": "c105",
+      "host": "claude",
+      "models": {
+        "main": {
+          "model": "claude-opus-5-5",
+          "effort": "high"
+        }
+      },
+      "checks": {
+        "page-size-50": true,
+        "only-config-changed": true,
+        "one-line-diff": true,
+        "tests-pass": true
+      },
+      "wall_seconds": 28.851453625014983,
+      "cost_usd": 0.17129979999999997,
+      "rep": 5,
+      "passed": true,
+      "loop": {
+        "reviewer_runs": 0,
+        "main_turns": 0,
+        "main_tokens": {
+          "input": 8,
+          "output": 1434,
+          "cache_read": 98619,
+          "cache_write": 15358
+        },
+        "main_tokens_loop": {
+          "input": 0,
+          "output": 0,
+          "cache_read": 0,
+          "cache_write": 0
+        },
+        "check_stops": 0
+      }
+    }
+  ],
+  "verdicts": [
+    {
+      "case": "T02",
+      "verdict": "not measured",
+      "step": "no after run on claude",
+      "measure": "quality"
+    },
+    {
+      "case": "T02",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T02",
+      "verdict": "not measured",
+      "step": "no after run on a host",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T02",
+      "verdict": "not measured",
+      "step": "quality and every measure of the case"
+    },
+    {
+      "case": "T08",
+      "verdict": "pass",
+      "step": "every required check passes after on both hosts",
+      "measure": "quality"
+    },
+    {
+      "case": "T08",
+      "verdict": "investigate",
+      "step": "first before gap above 2",
+      "measure": "wall_seconds"
+    },
+    {
+      "case": "T08",
+      "verdict": "investigate",
+      "step": "first before gap above 2",
+      "measure": "cost_usd"
+    },
+    {
+      "case": "T08",
+      "verdict": "pass",
+      "step": "quality and every measure of the case"
+    }
+  ]
+}
