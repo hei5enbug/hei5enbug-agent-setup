@@ -8,7 +8,8 @@ phrases, and follow that skill's research-document reference for ambiguous refer
 1. Use the prose to state the result or pattern the reader can infer from a table or figure. Leave its values
    in the table or figure. For example, after a response-time table, state that only demo-b exceeded its target.
    For these documents, this rule replaces the figure-and-table bullet in
-   [Readable shared text](shared-text.md#readable-shared-text).
+   [Readable shared text](shared-text.md#readable-shared-text), and the cut pass keeps such a sentence instead of
+   deleting it as a restatement of the table or figure.
 2. Delete a phrase that only signals importance and state the confirmed fact directly. For example, write
    "TTL이 1분이다" in place of "핵심은 TTL이 1분이라는 점이다".
 3. Include an estimate, proposal, or assumption only if it uses confirmed facts and has been verified.

@@ -90,7 +90,7 @@ python3 <Source directory>/scripts/text_review.py review --kind <kind> --draft <
   keeping a flagged sentence with `--note`. When you change the text, repeat both passes over the whole text as
   [the update rule](shared-text.md#cut-and-completeness-passes) says, then check that each sentence you added or
   changed matches the sources, has one meaning, and restates no source.
-  After either action, run the review again without asking. Post only after a run returns no findings.
+  Whether you changed the text or passed a note, then run the review again without asking. Post only after a run returns no findings.
 - Compare each finding with the findings of the earlier runs of the same draft. It repeats when an earlier run raised
   the same problem in the same sentence or point, whether you applied that finding or answered it with `--note`; a
   different problem in a sentence that an earlier finding changed or a note kept is new. When a finding repeats, stop,
