@@ -1,0 +1,9 @@
+{
+  "date": "2026-11-25",
+  "method": "owner blind A/B of rendered Markdown, one pair per comparison, order randomized, key kept apart",
+  "pairs": [
+    {"id": "P1", "issues": [124], "task": "T161 (Codex)", "before": "f734554f", "after": "c947fd2b", "verdict": "after better"},
+    {"id": "P2", "issues": [81, 88, 137, 136], "task": "T193 (Codex)", "before": "f734554f", "after": "2266c2bf", "verdict": "after better",
+     "note": "the before run timed out before saving, so its last draft was compared"}
+  ]
+}
