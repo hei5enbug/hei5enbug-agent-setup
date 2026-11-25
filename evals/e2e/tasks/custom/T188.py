@@ -81,13 +81,25 @@ def timeout_evidence(ctx):
     return value(values, "both settings and observed error values are reported", "a seeded setting or error value is missing")
 
 
+LISTING_SEGMENT = re.compile(r"^(?:pwd|ls(?:\s.*)?|rg\s+--files(?:\s.*)?|find\s.*|fd(?:\s.*)?|head(?:\s+-n?\s*\d+)?|sort|wc\s+-l)$")
+
+
+def lists_names_only(command):
+    """True when every part of a shell command only lists file names, without reading any file's content."""
+    segments = [part.strip() for part in re.split(r"&&|\|\||[;|]", command) if part.strip()]
+    return bool(segments) and all(LISTING_SEGMENT.match(part) for part in segments)
+
+
 def inputs_are_work(name, inputs):
     if name in {"Write", "Edit", "MultiEdit", "ApplyPatch", "apply_patch"}:
         return True
     if name == "Skill" and str(inputs.get("skill", "")).rsplit(":", 1)[-1] == SKILL:
         return True
-    if name == "Bash" and SHELL_WRITE.search(str(inputs.get("command") or "")):
+    command = str(inputs.get("command") or "")
+    if name == "Bash" and SHELL_WRITE.search(command):
         return True
+    if name == "Bash" and lists_names_only(command):
+        return False
     return name not in QUESTION_TOOLS and bool(WORK.search(json.dumps(inputs, ensure_ascii=False)))
 
 

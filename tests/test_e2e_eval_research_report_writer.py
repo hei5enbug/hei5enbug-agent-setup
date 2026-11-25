@@ -3,6 +3,7 @@
 import importlib.util
 import json
 import os
+import runpy
 import subprocess
 import sys
 from pathlib import Path
@@ -245,3 +246,25 @@ def test_새_스킬은_배포용_메타데이터_검증을_통과한다():
 
     # then
     assert valid, message
+
+
+@pytest.mark.parametrize(
+    ("command", "work"),
+    [
+        ("pwd && rg --files -g 'AGENTS.md' -g 'logs/**' | head -80", False),
+        ("ls logs", False),
+        ("cat logs/timeout.csv", True),
+        ("wc -lc logs/timeout.csv", True),
+        ("rg error logs/", True),
+    ],
+)
+def test_파일_이름만_나열한_명령은_동의_전_분석으로_세지_않는다(command, work):
+    """동의 전 순서 검사는 logs 아래 파일 이름 나열을 분석으로 세지 않고, 내용을 읽는 명령은 분석으로 센다."""
+    # given
+    grader = runpy.run_path(str(ROOT / "evals/e2e/tasks/custom/T188.py"))
+
+    # when
+    result = grader["inputs_are_work"]("Bash", {"command": command})
+
+    # then
+    assert result is work
