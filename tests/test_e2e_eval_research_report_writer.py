@@ -142,6 +142,25 @@ def test_직접_요청에서는_동의_질문이나_스킬_파일_경로만_나�
     assert outcomes == [False, False, True]
 
 
+@pytest.mark.parametrize(("exit_code", "passed"), [(0, True), (1, False)])
+def test_조합한_스킬_경로는_코덱스의_완료_이벤트로_확인한다(tmp_path, exit_code, passed):
+    """정규화된 도구 기록에 경로가 잘려도 완료 이벤트에서 본문을 읽었는지 판정한다."""
+    # given
+    task, repo, base = task_workspace(tmp_path, "T188")
+    apply_reference("T188", repo)
+    body = "# Research Report Writer\n"
+    (tmp_path / "stream.jsonl").write_text(json.dumps({"type": "item.completed", "item": {
+        "type": "command_execution", "command": "cat /tmp/work/skills/research-report-writer/SKILL.md",
+        "aggregated_output": body, "exit_code": exit_code,
+    }}) + "\n", encoding="utf-8")
+
+    # when
+    checks = grade(tmp_path, task, repo, base, calls=[tool("Bash", {"command": "cat '"}, body)])
+
+    # then
+    assert checks["direct-skill-started"] is passed
+
+
 def test_검증하지_않은_선택지와_잘못_고른_최장_사례를_잡는다(tmp_path):
     """검증에 실패한 D를 표에 넣거나 더 짧은 사례를 최장이라고 부르면 통과하지 못한다."""
     # given
@@ -158,6 +177,40 @@ def test_검증하지_않은_선택지와_잘못_고른_최장_사례를_잡는�
     assert checks["options-share-table"]
     assert not checks["unverified-option-omitted"]
     assert not checks["longest-case-illustrated"]
+
+
+@pytest.mark.parametrize(("task_id", "inline", "selection", "missing_figure", "passed"), [
+    ("T191", False, "사례 기록에 있는 요청을 빠짐없이 실었다.", False, True),
+    ("T192", True, "The table includes every request in the log.", False, True),
+    ("T191", False, "그림은 같은 실험의 개별 요청을 보여 준다.", False, False),
+    ("T192", True, "The table includes every request in the log.", True, False),
+])
+def test_표와_그림에_나뉜_사례도_선정_근거와_그림을_모두_확인한다(
+    tmp_path, task_id, inline, selection, missing_figure, passed,
+):
+    """선정 기준이 공통이고 그림이 표 안이나 뒤에 있어도 각 사례의 근거와 그림을 확인한다."""
+    # given
+    task, repo, base = task_workspace(tmp_path, task_id)
+    apply_reference(task_id, repo)
+    report = repo / "out/report.md"
+    intro, _, _ = report.read_text(encoding="utf-8").partition("## 가장 오래 걸린 요청")
+    rows = ["| 사례 | 소요 시간 | 추적 |", "| --- | ---: | --- |"]
+    gallery = []
+    for case, duration in [("case-17", "450"), ("case-38", "915 (최장 소요 시간)"), ("case-52", "720")]:
+        figure = f"![{case} 추적](../figures/{case}.svg)"
+        if missing_figure and case == "case-52":
+            figure = f"[{case} 추적](../figures/{case}.svg)"
+        rows.append(f"| {case} | {duration} | {figure if inline else ''} |")
+        if not inline:
+            gallery.extend([f"### {case} 추적", "", figure, ""])
+    case_section = "\n".join(["## 개별 요청", "", selection, "", *rows, "", *gallery])
+    report.write_text(intro + case_section, encoding="utf-8")
+
+    # when
+    checks = grade(tmp_path, task, repo, base)
+
+    # then
+    assert checks["longest-case-illustrated"] is passed
 
 
 def test_명시적으로_요청한_D도_검증된_표에는_넣지_않는다(tmp_path):

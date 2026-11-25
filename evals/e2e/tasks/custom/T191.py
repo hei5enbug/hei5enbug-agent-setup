@@ -5,8 +5,15 @@ import re
 from pathlib import Path
 
 IMAGE = re.compile(r"!\[[^\]]*\]\(\s*<?([^>\s)]+)>?(?:\s+[^)]*)?\s*\)|<img\b[^>]*\bsrc=['\"]([^'\"]+)", re.I)
-LONGEST = re.compile(r"가장\s*(?:긴|길|오래|큰)|최장|최대|제일\s*(?:긴|길|오래)|longest|max(?:imum)?", re.I)
-CRITERION = re.compile(r"기준|선정|가장|최장|최대|대표|선택|큰|긴|짧|높|낮|criterion|longest|highest|lowest", re.I)
+LONGEST = re.compile(r"(?:가장|제일)\s*(?:긴|길|오래|큰)|최장|최대|\b(?:longest|slowest|largest|max(?:imum)?)\b", re.I)
+CRITERION = re.compile(r"기준|선정|가장|최장|최대|대표|선택|큰|긴|짧|높|낮|criteri(?:on|a)|highest|lowest", re.I)
+ALL_RECORDED_CASES = re.compile(
+    r"(?=.*(?:모두|전부|전체|빠짐없이|\ball\b|\bevery\b))(?=.*(?:기록|자료|제공|\brecord|\blog|\bsource|\.csv))"
+    r"(?=.*(?:사례|요청|\bcase|\brequest))", re.I,
+)
+CASE_BLOCK_BOUNDARY = re.compile(
+    r"\n[ \t]*\n|\n(?=[ \t]*(?:\||!\[|<img\b|<svg\b))", re.I,
+)
 UNVERIFIED = re.compile(r"미검증|검증[^.\n]{0,20}(?:실패|않|못|미완료)|확인되지|unverified|not\s+verified|incomplete", re.I)
 NEXT_CANDIDATE = re.compile(r"다음\s*후보|후속\s*(?:후보|작업)|추가\s*검토\s*후보|future\s*work|next\s*candidate", re.I)
 
@@ -91,28 +98,62 @@ def case_has_figure(ctx, fragment):
     return "<svg" in fragment and "</svg>" in fragment
 
 
+def case_evidence(ctx, text, labels):
+    identifier = re.compile(rf"(?<![A-Za-z0-9_-])(?:{'|'.join(map(re.escape, labels))})(?![A-Za-z0-9_-])")
+    shown, criteria, figures, longest_claims = set(), set(), set(), set()
+    coverage_scopes, coverage_groups = [], []
+    for section in re.split(r"(?m)(?=^#{1,6}[ \t])", text):
+        heading, content = "", section
+        if section.startswith("#"):
+            heading, _, content = section.partition("\n")
+        level = len(heading) - len(heading.lstrip("#"))
+        blocks = CASE_BLOCK_BOUNDARY.split(content)
+        section_cases = set(identifier.findall(section))
+        shown.update(section_cases)
+
+        coverage_scopes = [(depth, cases) for depth, cases in coverage_scopes if depth < level]
+        if any(ALL_RECORDED_CASES.search(block.replace("\n", " ")) for block in blocks):
+            coverage = set()
+            coverage_groups.append(coverage)
+            coverage_scopes.append((level, coverage))
+        for _, coverage in coverage_scopes:
+            coverage.update(section_cases)
+
+        if len(section_cases) == 1:
+            case = next(iter(section_cases))
+        else:
+            case = None
+        for block in [heading, *blocks]:
+            named = set(identifier.findall(block))
+            if named:
+                case = next(iter(named)) if len(named) == 1 else None
+            if case is None:
+                continue
+            if case_has_figure(ctx, block):
+                figures.add(case)
+            if named or (block == heading and len(section_cases) == 1):
+                if LONGEST.search(block):
+                    longest_claims.add(case)
+                    criteria.add(case)
+                elif CRITERION.search(block):
+                    criteria.add(case)
+
+    if any(labels <= coverage for coverage in coverage_groups):
+        criteria.update(labels)
+    return shown, criteria, figures, longest_claims
+
+
 def longest_case_illustrated(ctx):
     text = report(ctx)
     cases = seed(ctx, "notes/cases.csv")
     longest = max(cases, key=lambda case: int(case["duration_ms"]))["case_id"]
-    positions = []
-    for case in cases:
-        label = case["case_id"]
-        match = token(text, label)
-        if match:
-            positions.append((text.rfind("\n", 0, match.start()) + 1, label))
-    positions.sort()
-    correct_longest = False
-    for index, (start, label) in enumerate(positions):
-        end = positions[index + 1][0] if index + 1 < len(positions) else len(text)
-        fragment = text[start:end]
-        heading = text[max(0, text.rfind("\n\n", 0, start - 1)):start]
-        context = heading + fragment
-        if not CRITERION.search(context) or not case_has_figure(ctx, fragment):
-            return False, f"{label} has no criterion or embedded figure", {}
-        if LONGEST.search(context):
-            if label != longest:
-                return False, f"{label} is not the longest seeded case", {}
-            correct_longest = True
-    return value(correct_longest, "the longest seeded case has its criterion and a figure",
+    shown, criteria, figures, longest_claims = case_evidence(ctx, text, {case["case_id"] for case in cases})
+    for label in sorted(shown):
+        if label not in criteria:
+            return False, f"{label} has no selection criterion", {}
+        if label not in figures:
+            return False, f"{label} has no embedded figure", {}
+    for label in sorted(longest_claims - {longest}):
+        return False, f"{label} is not the longest seeded case", {}
+    return value(longest in longest_claims, "the longest seeded case has its criterion and a figure",
                  "the longest seeded case or its selection criterion is missing")

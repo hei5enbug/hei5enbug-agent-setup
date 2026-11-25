@@ -34,6 +34,31 @@ def skill_loaded(call):
     return name == "Bash" and "SKILL.md" in command and bool(READ.search(command)) and has_body
 
 
+def stream_events(ctx):
+    stream = ctx.work.parents[1] / "stream.jsonl"
+    if not stream.is_file():
+        return
+    with stream.open(encoding="utf-8") as events:
+        for line in events:
+            try:
+                yield json.loads(line)
+            except ValueError:
+                continue
+
+
+def run_loaded_skill(ctx):
+    if any(skill_loaded(call) for call in ctx.view.get("tool_calls", [])):
+        return True
+    for event in stream_events(ctx):
+        item = event.get("item") or {}
+        if event.get("type") == "item.completed" and item.get("type") == "command_execution":
+            call = {"name": "Bash", "input": {"command": item.get("command")},
+                    "result_text": item.get("aggregated_output"), "is_error": item.get("exit_code") != 0}
+            if skill_loaded(call):
+                return True
+    return False
+
+
 def asks_about_skill(view):
     messages = [*view.get("assistant_texts", []), view.get("final_answer", "")]
     messages.extend(json.dumps(call.get("input") or {}, ensure_ascii=False)
@@ -42,8 +67,7 @@ def asks_about_skill(view):
 
 
 def direct_skill_started(ctx):
-    view = ctx.view
-    ok = any(skill_loaded(call) for call in view.get("tool_calls", [])) and not asks_about_skill(view)
+    ok = run_loaded_skill(ctx) and not asks_about_skill(ctx.view)
     return value(ok, "skill started without an opt-in question", "skill was not loaded or asked for opt-in")
 
 
@@ -77,33 +101,25 @@ def consent_before_tool_work(ctx, tool_use_id):
 
 
 def consent_before_text_work(ctx, question):
-    stream = ctx.work.parents[1] / "stream.jsonl"
-    if not stream.is_file():
-        return False
     last_message = ""
-    with stream.open(encoding="utf-8") as events:
-        for line in events:
-            try:
-                event = json.loads(line)
-            except ValueError:
-                continue
-            kind = event.get("type")
-            if kind == "result" and str(event.get("result", "")).strip() == question:
-                return True
-            if kind == "assistant":
-                for block in (event.get("message") or {}).get("content", []):
-                    if block.get("type") == "tool_use" and inputs_are_work(block.get("name"), block.get("input") or {}):
-                        return False
-            item = event.get("item") or {}
-            if kind == "item.completed" and item.get("type") == "agent_message":
-                last_message = str(item.get("text", "")).strip()
-            if kind in {"item.started", "item.completed"} and item.get("type") == "command_execution":
-                if inputs_are_work("Bash", {"command": item.get("command")}):
+    for event in stream_events(ctx):
+        kind = event.get("type")
+        if kind == "result" and str(event.get("result", "")).strip() == question:
+            return True
+        if kind == "assistant":
+            for block in (event.get("message") or {}).get("content", []):
+                if block.get("type") == "tool_use" and inputs_are_work(block.get("name"), block.get("input") or {}):
                     return False
-            if kind in {"item.started", "item.completed"} and item.get("type") == "file_change":
+        item = event.get("item") or {}
+        if kind == "item.completed" and item.get("type") == "agent_message":
+            last_message = str(item.get("text", "")).strip()
+        if kind in {"item.started", "item.completed"} and item.get("type") == "command_execution":
+            if inputs_are_work("Bash", {"command": item.get("command")}):
                 return False
-            if kind == "turn.completed" and last_message == question:
-                return True
+        if kind in {"item.started", "item.completed"} and item.get("type") == "file_change":
+            return False
+        if kind == "turn.completed" and last_message == question:
+            return True
     return False
 
 
@@ -129,5 +145,5 @@ def skill_not_suggested(ctx):
                 for call in view.get("tool_calls", []) if call.get("name") in QUESTION_TOOLS)
     recommended = any(REFERENCE.search(text) and ADVICE.search(text) and not NEGATION.search(text)
                       for message in seen for text in message.splitlines())
-    ok = not any(skill_loaded(call) for call in view.get("tool_calls", [])) and not recommended and not asks_about_skill(view)
+    ok = not run_loaded_skill(ctx) and not recommended and not asks_about_skill(view)
     return value(ok, "README task did not use or recommend the skill", "the research skill was loaded or suggested")
