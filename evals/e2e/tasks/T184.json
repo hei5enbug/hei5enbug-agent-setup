@@ -1,0 +1,46 @@
+{
+  "id": "T184",
+  "title": "Ordinary pull request description outside research scope",
+  "category": "writing",
+  "path": "pull request description",
+  "fixture": "research-documents",
+  "prompt_file": "prompts/T184.txt",
+  "limits": {
+    "wall_seconds": 600,
+    "max_budget_usd": 4
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/pr.txt"
+    },
+    {
+      "id": "research-rules-not-read",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "research_rules_not_read"
+    },
+    {
+      "id": "implementation-reported",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "implementation_reported"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

@@ -29,6 +29,8 @@ from harness import coverage_tool, graders  # noqa: E402
 from harness.process import GradingInterrupted  # noqa: E402
 
 TASK_IDS = [f"T{number:02d}" for number in range(1, 21)] + ["T22", "T23", "T24", "T25", "T26", "T27", "T28", "T29", "T30", "T62", "T65", "T66"]
+RESEARCH_TASK_IDS = [f"T{number}" for number in range(182, 188)]
+TASK_IDS += RESEARCH_TASK_IDS
 SECRET = "demo-4f8k2q-local-only-7731"
 GIT_ENV = {
     **os.environ, "GIT_AUTHOR_NAME": "Demo Dev", "GIT_AUTHOR_EMAIL": "dev@example.com",
@@ -975,6 +977,14 @@ EXPECTED_FAILURES = {
     "T30": {"output-exists", "first-review-cuts-file-list", "file-list-cut"},
     "T65": {"output-exists", "stages-named-in-order", "no-stage-by-number-alone", "limits-kept"},
     "T66": {"output-exists", "division-named", "item-keeps-title-and-number", "no-number-alone"},
+    "T182": {"output-exists", "research-rules-read", "observed-table-kept", "limitation-with-conclusion"},
+    "T183": {"output-exists", "wording-fixed", "regional-table-kept", "asks-about-table"},
+    "T184": {"output-exists", "implementation-reported"},
+    "T185": {"implementation-reported"},
+    "T186": {"output-exists", "rewrite-reference-read", "wording-and-scope-preserved",
+             "unresolved-reference-reported", "heading-retained-and-suggestion-reported"},
+    "T187": {"output-exists", "rewrite-reference-read", "wording-and-scope-preserved",
+             "unresolved-reference-reported", "heading-changed"},
 }
 #: required checks that must already pass on the unmodified fixture (they guard against collateral damage)
 EXPECTED_PASSES = {
@@ -992,6 +1002,7 @@ EXPECTED_PASSES = {
     "T27": {"regressions", "tree-clean", "only-config-changed"}, "T28": {"sources-unchanged"},
     "T29": {"sources-unchanged"}, "T30": {"sources-unchanged"},
     "T65": {"sources-unchanged"}, "T66": {"sources-unchanged"},
+    **dict.fromkeys(RESEARCH_TASK_IDS, {"sources-unchanged"}),
 }
 CLEAN_REVIEW = json.dumps({"review": {"output": '{"findings": []}', "exit_code": 0},
                            "check": {"output": '{"findings": []}', "exit_code": 0}})
@@ -1024,6 +1035,28 @@ class GoldenTaskTest(TempCase):
         return graders.grade_run(task, repo, base, view, TASKS_ROOT, self.root / f"work-{task['id']}")
 
     def good_view(self, task_id: str) -> dict[str, Any]:
+        if task_id in RESEARCH_TASK_IDS:
+            notes = "다음 회의에서 다룰 해당 결과가 어느 측정인지 확인이 필요합니다."
+            if task_id == "T186":
+                notes += " 제목은 '서비스 응답 시간 비교'로 바꾸는 것을 제안합니다."
+            answers = {
+                "T183": "지역별 응답 시간 표를 뺄까요?",
+                "T185": "설정에서 끌 수 있는 홈 화면 안내 띠 demo-banner를 추가했습니다.",
+                "T186": notes,
+                "T187": notes,
+            }
+            paths = {
+                "T182": "instructions/research-documents.md",
+                "T186": "skills/docs-rewrite/references/research-documents.md",
+                "T187": "skills/docs-rewrite/references/research-documents.md",
+            }
+            view = make_view(answers.get(task_id, "완료했습니다."))
+            if task_id in paths:
+                command = f"cat {paths[task_id]}"
+                call = make_view(commands=(command,))["tool_calls"][0]
+                call["result_text"] = (REPO_ROOT / paths[task_id]).read_text(encoding="utf-8")
+                view["tool_calls"].append(call)
+            return view
         if task_id == "T10":
             return make_view(ANSWER_T10)
         if task_id == "T12":
@@ -1937,16 +1970,25 @@ class GoldenTaskTest(TempCase):
         # given
         titled = "Run 0 Check and build first, then 3 Compare, 4 Enable reads, 5 Enable writes, 6 Watch, 7 Remove old path, and 8 Confirm in order. "
         kept = titled + "Keep nesting at a depth of at most 2 levels and list at most 3 items."
+        translated = (
+            "0단계 점검 및 빌드, 3단계 비교, 4단계 읽기 전환, 5단계 쓰기 전환, "
+            "6단계 모니터링, 7단계 기존 경로 삭제, 8단계 최종 확인 순으로 진행합니다. "
+            "중첩 깊이는 2단계 이내이고, 항목은 최대 3개입니다."
+        )
         removed = titled + "Keep nesting shallow and the lists short."
         changed = titled + "Keep nesting at a depth of at most 3 levels and list at most 2 items."
 
         # when
         results = [self.stage_outcomes("T65", text, ("limits-kept", "no-stage-by-number-alone"))
                    for text in (kept, removed, changed)]
+        translated_results = self.stage_outcomes(
+            "T65", translated, ("stages-named-in-order", "limits-kept", "no-stage-by-number-alone")
+        )
 
         # then
         self.assertEqual(results[0], {"limits-kept": True, "no-stage-by-number-alone": True})
         self.assertEqual([result["limits-kept"] for result in results[1:]], [False, False])
+        self.assertTrue(all(translated_results.values()))
 
     def test_T66은_번호만으로_부른_구간과_제목_없는_항목과_한_번호가_두_대상을_가리키는_글을_잡는다(self):
         """"Phase 1"만 쓰거나, 항목 1이 제목이나 번호를 잃거나, 번호만 남은 항목이 있으면 해당 검사가 실패하고, 구간 제목과 항목 제목 옆 번호를 쓴 글은 통과한다."""
@@ -1969,6 +2011,41 @@ class GoldenTaskTest(TempCase):
         self.assertEqual([outcomes["by_number"][name] for name in checks], [False, False, False])
         self.assertEqual(outcomes["no_number"]["item-keeps-title-and-number"], False)
         self.assertEqual([outcomes["phase_alone"][name] for name in checks], [False, True, False])
+
+    def test_T182는_원본_초안을_그대로_쓴_경우_불필요한_내용과_떨어진_한계를_잡는다(self):
+        """표의 값은 유지하되 본문의 반복과 근거 없는 내용을 빼고 결론에 표본 한계를 붙여야 한다."""
+        # given
+        task, repo, base = self.materialize("T182")
+        seed = (repo / "notes" / "writing.md").read_text(encoding="utf-8")
+        self.write_out(repo, "report.md", seed)
+
+        # when
+        result = self.grade_task(task, repo, base, self.good_view("T182"))
+
+        # then
+        checks = {check["id"]: check["passed"] for check in result["checks"]}
+        self.assertTrue(checks["observed-table-kept"])
+        self.assertFalse(checks["seeded-noise-removed"])
+        self.assertFalse(checks["table-interpreted"])
+        self.assertFalse(checks["limitation-with-conclusion"])
+
+    def test_연구_규칙_범위_검사는_실패한_읽기와_성공한_읽기를_구분한다(self):
+        """일반 변경 보고에서는 연구 지침을 실제로 읽은 경우에만 범위 검사가 실패한다."""
+        # given
+        task, repo, base = self.materialize("T185")
+        view = self.good_view("T185")
+        failed_read = make_view(commands=("cat instructions/research-documents.md",))["tool_calls"][0]
+        failed_read["result_text"] = "cat: instructions/research-documents.md: No such file or directory"
+        successful_read = dict(failed_read, result_text="# Research and verification documents")
+
+        # when
+        outcomes = [
+            self.outcome(task, repo, base, dict(view, tool_calls=[call]), "research-rules-not-read")[0]
+            for call in (failed_read, successful_read)
+        ]
+
+        # then
+        self.assertEqual(outcomes, [True, False])
 
     def test_T20은_최종_보고가_검토_모델이나_강도를_적으면_reviewer_not_named가_실패한다(self):
         """모델 ID나 강도를 적은 보고는 실패하고, 검토 결과 한 줄만 적은 보고는 통과한다."""

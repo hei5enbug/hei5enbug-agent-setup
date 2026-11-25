@@ -741,6 +741,48 @@ class ToolMarkRulesTest(unittest.TestCase):
         self.assertIn("the link or path of its review result", cut_pass)
         self.assertIn("each finding left unresolved", cut_pass)
 
+    def test_공유_글은_초안_전에_필수_보고_항목과_달라진_결과를_나열한다(self):
+        """필수 보고 항목과 원본에서 달라진 결과는 초안 전에 나열하고 첫 검토 전까지 빠짐없이 반영한다."""
+        # given
+        text = self.read("instructions/shared-text.md")
+
+        # when
+        completeness = text.split("2. Completeness pass:")[1].split("3. When")[0]
+
+        # then
+        self.assertIn("a source requires the text itself to report", completeness)
+        self.assertIn("the result departs from what a source proposed or decided", completeness)
+        self.assertIn("item and each departure before drafting", completeness)
+        self.assertIn("the draft carries each one before its first review run", completeness)
+
+    def test_공유_글은_검토를_다시_실행하기_전에_고친_문장을_확인한다(self):
+        """검토 지적을 반영한 문장은 원본과 일치하고 뜻이 하나이며 원본을 반복하지 않아야 한다."""
+        # given
+        text = self.read("instructions/shared-text.md")
+
+        # when
+        retry = text.split("Exit 1:")[1].split("Post only")[0]
+
+        # then
+        self.assertIn("each sentence you added or changed", retry)
+        self.assertIn("matches the sources, has one meaning, and restates no source", retry)
+        self.assertIn("then run the review again", retry)
+
+    def test_공유_글은_절차의_단계와_구분을_제목으로_부른다(self):
+        """단계 번호는 제목과 함께 쓰고 수량은 보존하며 구분과 항목에 같은 번호를 붙이지 않는다."""
+        # given
+        text = self.read("instructions/shared-text.md")
+
+        # when
+        completeness = text.split("2. Completeness pass:")[1].split("3. When")[0]
+
+        # then
+        self.assertIn("name it by its title", completeness)
+        self.assertIn("stand beside the title but never alone", completeness)
+        self.assertIn("Keep a number that states a quantity or a value", completeness)
+        self.assertIn("give each item its title with its number", completeness)
+        self.assertIn("name the division by its title so that no number names two things", completeness)
+
 
 if __name__ == "__main__":
     unittest.main()

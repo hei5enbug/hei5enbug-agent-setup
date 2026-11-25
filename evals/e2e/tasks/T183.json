@@ -1,0 +1,53 @@
+{
+  "id": "T183",
+  "title": "Research document with a clear wording fix and a scope-changing finding",
+  "category": "writing",
+  "path": "research document review",
+  "fixture": "research-documents",
+  "prompt_file": "prompts/T183.txt",
+  "limits": {
+    "wall_seconds": 600,
+    "max_budget_usd": 4
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/report.md"
+    },
+    {
+      "id": "wording-fixed",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "wording_fixed"
+    },
+    {
+      "id": "regional-table-kept",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "regional_table_kept"
+    },
+    {
+      "id": "asks-about-table",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "asks_about_table"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

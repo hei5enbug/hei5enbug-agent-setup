@@ -31,7 +31,7 @@
       "eval_task": "T18"
     },
     "shared-document": {
-      "rules": ["instructions/shared-text.md", "instructions/documentation.md"],
+      "rules": ["instructions/shared-text.md", "instructions/documentation.md", "instructions/research-documents.md"],
       "writers": [
         "instructions/documentation.md",
         "skills/docs-rewrite/SKILL.md",

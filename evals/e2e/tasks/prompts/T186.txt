@@ -1,0 +1,1 @@
+docs-rewrite로 notes/rewrite.md를 자연스럽게 다듬어 out/rewrite.md에 저장해줘. 원문은 그대로 두고 새 결과 파일의 저장은 승인할게. 확인이 필요한 부분과 제안이 있으면 답변으로 알려줘.

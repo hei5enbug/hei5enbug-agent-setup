@@ -3,6 +3,8 @@
 Read this before writing or rewriting text that people read to grasp the work, and before writing Markdown whose
 newlines are shown as line breaks. Each section names when it applies.
 
+Before writing or revising a research or verification document, read [research documents](research-documents.md).
+
 ## Cut and completeness passes
 
 Apply this section to every text a person reads to grasp the work: a reply or final report to the user, a repository
@@ -132,7 +134,7 @@ body that `skill-issue-creator` writes, follows its own rules instead.
 
 - In Korean, write what an English term from the agent's instructions means in context instead of its literal
   translation, such as 규칙, 응답 형식, or 정해 둔 동작 for "contract" instead of 계약. Keep the English term only as a
-  literal identifier.
+  literal identifier, except where the research-document rules apply.
 - Leave out a number that does not change how the reader understands a decision or rule. Show a needed number in a
   table that compares it with its counterpart or breaks down a total, never in a list of numbers inside a sentence.
   Rule constants such as thresholds, and values an example needs, stay in prose. For a check, state what it verified,

@@ -1,0 +1,60 @@
+{
+  "id": "T187",
+  "title": "Research rewrite with explicit heading changes",
+  "category": "writing",
+  "path": "docs-rewrite research heading",
+  "fixture": "research-documents",
+  "prompt_file": "prompts/T187.txt",
+  "limits": {
+    "wall_seconds": 600,
+    "max_budget_usd": 4
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/rewrite.md"
+    },
+    {
+      "id": "rewrite-reference-read",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "rewrite_reference_read"
+    },
+    {
+      "id": "wording-and-scope-preserved",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "wording_and_scope_preserved"
+    },
+    {
+      "id": "unresolved-reference-reported",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "unresolved_reference_reported"
+    },
+    {
+      "id": "heading-changed",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "heading_changed"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

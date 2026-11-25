@@ -1,0 +1,67 @@
+{
+  "id": "T182",
+  "title": "Research document from mixed notes",
+  "category": "writing",
+  "path": "research document writing",
+  "fixture": "research-documents",
+  "prompt_file": "prompts/T182.txt",
+  "limits": {
+    "wall_seconds": 600,
+    "max_budget_usd": 4
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/report.md"
+    },
+    {
+      "id": "research-rules-read",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "research_rules_read"
+    },
+    {
+      "id": "observed-table-kept",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "observed_table_kept"
+    },
+    {
+      "id": "seeded-noise-removed",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "seeded_noise_removed"
+    },
+    {
+      "id": "table-interpreted",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "table_interpreted"
+    },
+    {
+      "id": "limitation-with-conclusion",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "limitation_with_conclusion"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

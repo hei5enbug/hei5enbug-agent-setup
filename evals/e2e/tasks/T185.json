@@ -1,0 +1,39 @@
+{
+  "id": "T185",
+  "title": "Ordinary final report outside research scope",
+  "category": "writing",
+  "path": "final report",
+  "fixture": "research-documents",
+  "prompt_file": "prompts/T185.txt",
+  "limits": {
+    "wall_seconds": 600,
+    "max_budget_usd": 4
+  },
+  "checks": [
+    {
+      "id": "research-rules-not-read",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "research_rules_not_read"
+    },
+    {
+      "id": "implementation-reported",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "implementation_reported"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}
