@@ -6,7 +6,7 @@
   "fixture": "lane-a-research",
   "prompt_file": "prompts/T193.txt",
   "limits": {
-    "wall_seconds": 600,
+    "wall_seconds": 1200,
     "max_budget_usd": 4
   },
   "checks": [

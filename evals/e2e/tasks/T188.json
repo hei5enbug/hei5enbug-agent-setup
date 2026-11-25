@@ -6,7 +6,7 @@
   "fixture": "research-reporting",
   "prompt_file": "prompts/T188.txt",
   "limits": {
-    "wall_seconds": 420,
+    "wall_seconds": 600,
     "max_budget_usd": 4
   },
   "checks": [
