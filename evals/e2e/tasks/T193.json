@@ -1,0 +1,75 @@
+{
+  "id": "T193",
+  "title": "Lane A blind comparison of a Korean verification report",
+  "category": "writing",
+  "path": "research writing with stage evidence, same-workload comparisons, and a selected case",
+  "fixture": "lane-a-research",
+  "prompt_file": "prompts/T193.txt",
+  "limits": {
+    "wall_seconds": 600,
+    "max_budget_usd": 4
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/report.md"
+    },
+    {
+      "id": "options-and-measures-present",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "options_and_measures_present"
+    },
+    {
+      "id": "stage-titles-and-timings-present",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "stage_titles_and_timings_present"
+    },
+    {
+      "id": "departure-present",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "departure_present"
+    },
+    {
+      "id": "case-and-figure-present",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "case_and_figure_present"
+    },
+    {
+      "id": "seeded-exclusions-absent",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "seeded_exclusions_absent"
+    },
+    {
+      "id": "weekday-scope-present",
+      "kind": "custom",
+      "required": true,
+      "weight": 2,
+      "function": "weekday_scope_present"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "notes/**",
+        "figures/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

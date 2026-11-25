@@ -1,0 +1,5 @@
+Question: Which batching methods met the target on the observed workload?
+Target: p95 latency at most 200 ms and at least 98 successful jobs per 100.
+Acceptance criterion: The report lists the before and after wall time for each stage, with the stage title.
+The proposal called for checking SHA-256 before the benchmark. The implementation writes demo-complete.marker when all records have been counted instead. The run log confirms that it wrote the marker.
+The report covers the measured options and a representative case.

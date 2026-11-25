@@ -1,0 +1,5 @@
+method,operation,success_count,total,p95_ms,verification
+demo-direct,send immediately,94,100,296,complete
+demo-window,wait for the fixed batch window,98,100,192,complete
+demo-adaptive,size the window by queue depth,99,100,158,complete
+demo-shadow,duplicate each submission,100,100,102,failed

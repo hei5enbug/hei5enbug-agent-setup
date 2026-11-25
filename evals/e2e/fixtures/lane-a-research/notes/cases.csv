@@ -1,0 +1,4 @@
+case_id,duration_ms,method,figure
+case-17,450,demo-window,figures/case-17.svg
+case-38,915,demo-direct,figures/case-38.svg
+case-52,720,demo-adaptive,figures/case-52.svg

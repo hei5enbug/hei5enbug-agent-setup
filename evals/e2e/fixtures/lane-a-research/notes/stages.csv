@@ -1,0 +1,4 @@
+stage,title,before_s,after_s
+0,Capture inputs,42,18
+1,Aggregate samples,55,31
+2,Reconcile totals,27,12
