@@ -1,0 +1,4 @@
+Question: how do the batching options compare for successful jobs and tail latency?
+The benchmark ran on the same workload for each option. The verification check covered the recorded workload and both measures for A, B, and C.
+D did not clear the duplicate-output check. Its numbers come from the incomplete check and are unverified.
+The case log and its trace figures cover individual requests in this benchmark.

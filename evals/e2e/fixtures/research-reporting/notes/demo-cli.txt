@@ -1,0 +1,3 @@
+Command: demo-cli
+Purpose: count completed demo jobs from a CSV supplied on standard input.
+Option: --format json emits an object with the completed job count.

@@ -1,0 +1,16 @@
+{
+  "decisions": [
+    {
+      "id": "use-research-skill",
+      "terms": [
+        "research-report-writer|스킬|skill|조사 보고서 작성|연구 보고서 작성"
+      ],
+      "answer": "네, research-report-writer를 사용해 주세요. demo-service의 제한 시간을 5초에서 10초로 늘렸을 때 오류율이 낮아졌는지를 확인해 주세요."
+    }
+  ],
+  "approval_terms": [
+    "approve the specification|명세 승인"
+  ],
+  "fallback_reply": "질문은 demo-service의 제한 시간과 오류율 관계입니다.",
+  "max_exchanges": 3
+}

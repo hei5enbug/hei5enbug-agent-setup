@@ -1,0 +1,5 @@
+option,method,success_pct,p95_ms,verification
+A,send immediately,91,290,complete
+B,batch with a fixed interval,96,220,complete
+C,adapt the interval to load,99,175,complete
+D,duplicate the submission,100,105,failed

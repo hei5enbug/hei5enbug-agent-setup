@@ -36,6 +36,7 @@
         "instructions/documentation.md",
         "skills/docs-rewrite/SKILL.md",
         "skills/document-to-confluence/SKILL.md",
+        "skills/research-report-writer/SKILL.md",
         "skills/technical-design-writer/SKILL.md"
       ],
       "eval_task": "T19"

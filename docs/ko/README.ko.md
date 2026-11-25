@@ -82,6 +82,7 @@ Claude Code의 `/config`에서 옵션을 고르거나 Codex를 시작하기 전�
 | [`flowchart-design`](../../skills/flowchart-design/SKILL.md) | 공통 디자인 기준으로 플로우차트를 만들고 고칩니다. [한국어](skills/flowchart-design/SKILL.ko.md) |
 | [`docs-rewrite`](../../skills/docs-rewrite/SKILL.md) | 의미를 보존하면서 어색한 한국어를 포함한 기존 글을 자연스럽게 고칩니다. [한국어](skills/docs-rewrite/SKILL.ko.md) |
 | [`document-to-confluence`](../../skills/document-to-confluence/SKILL.md) | 문서를 Confluence에 게시하고 웹 편집과 댓글을 보존하면서 원본 변경을 반영합니다. [한국어](skills/document-to-confluence/SKILL.ko.md) |
+| [`research-report-writer`](../../skills/research-report-writer/SKILL.md) | 데이터를 분석해 질문에 답하거나 주장을 검증하는 보고서를 씁니다. [한국어](skills/research-report-writer/SKILL.ko.md) |
 | [`local-data-cleanup`](../../skills/local-data-cleanup/SKILL.md) | 에이전트 데이터를 검사하고 크기별로 보고한 뒤 선택한 항목만 삭제합니다. [한국어](skills/local-data-cleanup/SKILL.ko.md) |
 | [`mistake-enforcer`](../../skills/mistake-enforcer/SKILL.md) | 요청하면 반복되는 저장소 실수를 과거 사례로 검증한 검사로 바꿉니다. [한국어](skills/mistake-enforcer/SKILL.ko.md) |
 | [`skill-issue-creator`](../../skills/skill-issue-creator/SKILL.md) | 공개 초안에 비공개 이름이 있는지 먼저 확인한 뒤 스킬이나 지침의 빈틈을 선언된 트래커에 등록합니다. [한국어](skills/skill-issue-creator/SKILL.ko.md) |

@@ -1,0 +1,55 @@
+{
+  "skill_name": "research-report-writer",
+  "evals": [
+    {
+      "id": 188,
+      "prompt": "logs/의 기록을 바탕으로 demo-service의 제한 시간을 5초에서 10초로 늘리면 오류율이 낮아지는지 검증하는 보고서를 작성해 out/report.md에 저장해줘.",
+      "expected_output": "Starts the skill immediately and reports the timeout evidence.",
+      "files": [
+        "../../evals/e2e/fixtures/research-reporting/logs/timeout.csv"
+      ]
+    },
+    {
+      "id": 189,
+      "prompt": "logs/를 조사한 결과를 문서로 정리해 out/report.md에 저장해줘.",
+      "expected_output": "Asks once before accessing the logs and starts the skill after consent.",
+      "files": [
+        "../../evals/e2e/fixtures/research-reporting/logs/timeout.csv"
+      ]
+    },
+    {
+      "id": 190,
+      "prompt": "notes/demo-cli.txt에 설명된 demo-cli의 README를 작성해줘.",
+      "expected_output": "Produces a README without starting or recommending the skill.",
+      "files": [
+        "../../evals/e2e/fixtures/research-reporting/notes/demo-cli.txt"
+      ]
+    },
+    {
+      "id": 191,
+      "prompt": "notes/options.csv, notes/cases.csv, notes/verification.txt를 바탕으로 처리 방식의 성공률과 지연 시간을 비교하는 검증 보고서를 out/report.md에 써줘. 개별 사례도 함께 보여줘.",
+      "expected_output": "Compares the verified options on both measures, omits D, and illustrates each selected case.",
+      "files": [
+        "../../evals/e2e/fixtures/research-reporting/notes/options.csv",
+        "../../evals/e2e/fixtures/research-reporting/notes/cases.csv",
+        "../../evals/e2e/fixtures/research-reporting/notes/verification.txt",
+        "../../evals/e2e/fixtures/research-reporting/figures/case-17.svg",
+        "../../evals/e2e/fixtures/research-reporting/figures/case-38.svg",
+        "../../evals/e2e/fixtures/research-reporting/figures/case-52.svg"
+      ]
+    },
+    {
+      "id": 192,
+      "prompt": "notes/options.csv, notes/cases.csv, notes/verification.txt를 바탕으로 처리 방식의 성공률과 지연 시간을 비교하는 검증 보고서를 out/report.md에 써줘. 개별 사례도 함께 보여줘. 선택지 D도 포함해줘.",
+      "expected_output": "Keeps D outside the verified comparison and marks it as unverified.",
+      "files": [
+        "../../evals/e2e/fixtures/research-reporting/notes/options.csv",
+        "../../evals/e2e/fixtures/research-reporting/notes/cases.csv",
+        "../../evals/e2e/fixtures/research-reporting/notes/verification.txt",
+        "../../evals/e2e/fixtures/research-reporting/figures/case-17.svg",
+        "../../evals/e2e/fixtures/research-reporting/figures/case-38.svg",
+        "../../evals/e2e/fixtures/research-reporting/figures/case-52.svg"
+      ]
+    }
+  ]
+}

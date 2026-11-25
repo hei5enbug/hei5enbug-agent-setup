@@ -1,0 +1,48 @@
+{
+  "id": "T188",
+  "title": "Direct verification request starts the skill",
+  "category": "writing",
+  "path": "direct verification trigger",
+  "fixture": "research-reporting",
+  "prompt_file": "prompts/T188.txt",
+  "limits": {
+    "wall_seconds": 420,
+    "max_budget_usd": 4
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/report.md"
+    },
+    {
+      "id": "direct-skill-started",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "direct_skill_started"
+    },
+    {
+      "id": "timeout-evidence",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "timeout_evidence"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "logs/**",
+        "notes/**",
+        "figures/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

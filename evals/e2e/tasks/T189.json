@@ -1,0 +1,51 @@
+{
+  "id": "T189",
+  "title": "Ambiguous investigation request asks once before starting the skill",
+  "category": "writing",
+  "path": "consent before analysis",
+  "fixture": "research-reporting",
+  "prompt_file": "prompts/T189.txt",
+  "limits": {
+    "wall_seconds": 600,
+    "max_budget_usd": 4
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/report.md"
+    },
+    {
+      "id": "skill-started-after-consent",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "skill_started_after_consent"
+    },
+    {
+      "id": "timeout-evidence",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "timeout_evidence"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "logs/**",
+        "notes/**",
+        "figures/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null,
+  "user": {
+    "sheet": "answers/T189.json"
+  }
+}

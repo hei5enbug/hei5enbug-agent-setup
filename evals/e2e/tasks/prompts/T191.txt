@@ -1,0 +1,1 @@
+notes/options.csv, notes/cases.csv, notes/verification.txt를 바탕으로 처리 방식의 성공률과 지연 시간을 비교하는 검증 보고서를 out/report.md에 써줘. 개별 사례도 함께 보여줘.

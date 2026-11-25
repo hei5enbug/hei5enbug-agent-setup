@@ -81,6 +81,7 @@ See [configuration](docs/configuration.md) for defaults and [updates](docs/updat
 | [`flowchart-design`](skills/flowchart-design/SKILL.md) | Create and repair flow diagrams with a shared design standard. [한국어](docs/ko/skills/flowchart-design/SKILL.ko.md) |
 | [`docs-rewrite`](skills/docs-rewrite/SKILL.md) | Make existing prose natural while preserving its meaning, including awkward Korean. [한국어](docs/ko/skills/docs-rewrite/SKILL.ko.md) |
 | [`document-to-confluence`](skills/document-to-confluence/SKILL.md) | Publish documents to Confluence and synchronize revisions while preserving web edits and comments. [한국어](docs/ko/skills/document-to-confluence/SKILL.ko.md) |
+| [`research-report-writer`](skills/research-report-writer/SKILL.md) | Analyze data and write a report that answers a question or verifies a claim. [한국어](docs/ko/skills/research-report-writer/SKILL.ko.md) |
 | [`local-data-cleanup`](skills/local-data-cleanup/SKILL.md) | Check agent data, report it by size, and delete only the items you select. [한국어](docs/ko/skills/local-data-cleanup/SKILL.ko.md) |
 | [`mistake-enforcer`](skills/mistake-enforcer/SKILL.md) | Turn recurring repository mistakes into checks proven on past cases, when requested. [한국어](docs/ko/skills/mistake-enforcer/SKILL.ko.md) |
 | [`skill-issue-creator`](skills/skill-issue-creator/SKILL.md) | File a skill or instruction gap at its declared tracker, checking a public draft for private names first. [한국어](docs/ko/skills/skill-issue-creator/SKILL.ko.md) |

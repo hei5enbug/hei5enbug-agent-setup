@@ -1,0 +1,41 @@
+{
+  "id": "T190",
+  "title": "README request stays outside the skill",
+  "category": "writing",
+  "path": "negative trigger",
+  "fixture": "research-reporting",
+  "prompt_file": "prompts/T190.txt",
+  "limits": {
+    "wall_seconds": 420,
+    "max_budget_usd": 4
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "README.md"
+    },
+    {
+      "id": "skill-not-suggested",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "skill_not_suggested"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "logs/**",
+        "notes/**",
+        "figures/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}

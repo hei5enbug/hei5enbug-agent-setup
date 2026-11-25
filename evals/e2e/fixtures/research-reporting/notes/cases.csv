@@ -1,0 +1,4 @@
+case_id,duration_ms,figure,description
+case-17,450,figures/case-17.svg,steady load
+case-38,915,figures/case-38.svg,largest batch wait
+case-52,720,figures/case-52.svg,second burst

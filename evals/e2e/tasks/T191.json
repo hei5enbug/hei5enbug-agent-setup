@@ -1,0 +1,55 @@
+{
+  "id": "T191",
+  "title": "Verified options share one table and cases explain how they were chosen",
+  "category": "writing",
+  "path": "verified options and figures",
+  "fixture": "research-reporting",
+  "prompt_file": "prompts/T191.txt",
+  "limits": {
+    "wall_seconds": 420,
+    "max_budget_usd": 4
+  },
+  "checks": [
+    {
+      "id": "output-exists",
+      "kind": "file_exists",
+      "required": true,
+      "weight": 2,
+      "path": "out/report.md"
+    },
+    {
+      "id": "options-share-table",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "options_share_table"
+    },
+    {
+      "id": "unverified-option-omitted",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "unverified_option_omitted"
+    },
+    {
+      "id": "longest-case-illustrated",
+      "kind": "custom",
+      "required": true,
+      "weight": 3,
+      "function": "longest_case_illustrated"
+    },
+    {
+      "id": "sources-unchanged",
+      "kind": "unchanged",
+      "required": true,
+      "weight": 1,
+      "paths": [
+        "logs/**",
+        "notes/**",
+        "figures/**"
+      ]
+    }
+  ],
+  "constraints": [],
+  "rubric": null
+}
