@@ -33,6 +33,10 @@ answers. When the user explicitly narrows the scope, ask nothing and record each
 This preparation is not a requested implementation plan. It runs no planning or design skill, no six-stage
 planning workflow, and no independent validation.
 
+When a request is clear, make the change it asks for and only these follow-on edits: existing text that the change
+made false, and text that a repository rule requires for something the change adds, such as a new command or option.
+Add no other design, tests, implementation, documentation, or planning that the request did not ask for.
+
 Prepare the fewest tasks that give clear ownership. One cohesive task uses one owner. The limit the plugin
 reports is an upper bound, not a target; never split work or batch unrelated reads merely to fill slots.
 
