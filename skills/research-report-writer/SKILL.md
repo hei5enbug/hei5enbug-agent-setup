@@ -1,10 +1,10 @@
 ---
 name: research-report-writer
 description: >-
-  Start immediately when named or explicitly asked for a document that answers a question or verifies a claim
-  with data. If a request may be for such a document, such as an investigation or data analysis write-up, ask
-  once about using this skill. Wait for the answer before reading sources or writing. Load only if the user
-  agrees. For other requests, neither use nor recommend it.
+  For a request to write up an investigation or data analysis as a document, first ask once whether to use
+  this skill. Wait for the answer before reading sources or writing. Load it only if the user agrees. Start
+  immediately when named or explicitly asked for a document that answers a question or verifies a claim with
+  data. For other requests, neither use nor recommend it.
 ---
 
 # Research Report Writer
