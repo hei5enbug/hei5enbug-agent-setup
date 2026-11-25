@@ -7,7 +7,8 @@ from pathlib import Path
 
 OUT = "out/comment-draft.txt"
 STEP_TIMES = (("42", "18"), ("55", "31"), ("27", "12"))
-MARKER = re.compile(r"표식|마커|marker", re.IGNORECASE)
+MARKER = re.compile(r"표식|마커|표시\s*파일|marker|sentinel", re.IGNORECASE)
+MODE = re.compile(r"모드|권한|퍼미션|\bmode\b|\bpermissions?\b", re.IGNORECASE)
 
 
 def read(ctx):
@@ -20,7 +21,7 @@ def sentences(text):
 
 
 def has_seconds(text, value):
-    return re.search(rf"(?<![\d.]){value}\s*초", text) is not None
+    return re.search(rf"(?<![\d.]){value}\s*(?:초|seconds?\b|secs?\.?\b|s\b)", text, re.I) is not None
 
 
 def step_times_listed(ctx):
@@ -37,5 +38,5 @@ def marker_replaced_mode_check(ctx):
         return False, f"{OUT} is missing", {}
     parts = sentences(text)
     pairs = [" ".join(parts[index:index + 2]) for index in range(len(parts))]
-    hit = [pair for pair in pairs if "모드" in pair and MARKER.search(pair)]
+    hit = [pair for pair in pairs if MODE.search(pair) and MARKER.search(pair)]
     return bool(hit), "marker file replacing the mode check is stated" if hit else "no sentence or adjacent pair names both the mode check and the marker file", {}
