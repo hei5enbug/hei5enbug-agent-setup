@@ -43,6 +43,11 @@ item's body and its whole comment or reply history.
    every other text of the same run still leaves tool marks out.
 2. Completeness pass: compare the text with the request and its sources. Restore every decision, condition,
    prerequisite, order, and completion criterion the reader needs, and rewrite every sentence with two readings.
+   When the text refers to a stage, phase, or division of a procedure or plan, name it by its title; a number may
+   stand beside the title but never alone, so write "0 Check and build", not "step 0". Keep a number that states a
+   quantity or a value, such as a depth limit, a count, or a version. When a numbered list orders the stages of a
+   procedure, give each item its title with its number, and when a division and one of its items would share a
+   number, name the division by its title so that no number names two things.
    When a source requires the text itself to report something, such as a measurement or a list that an acceptance
    criterion says the report includes, or the result departs from what a source proposed or decided, list each such
    item and each departure before drafting, and confirm that the draft carries each one before its first review run.

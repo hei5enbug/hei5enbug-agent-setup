@@ -1,6 +1,7 @@
 Rollout procedure for the demo-orders table split
 
-The stages run in this order. Each stage starts when the one before it is done.
+The stages normally run in this order. The preparation work can complete stages 1 and 2 separately.
+When they are already complete, run stage 0 and start stage 3 as soon as stage 0 is done.
 
 0 Check and build: confirm the backup and build the migration package.
 1 Add columns: add the new columns next to the old ones.

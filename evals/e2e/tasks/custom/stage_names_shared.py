@@ -9,10 +9,10 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-NUMBER = re.compile(r"(?<![\w.])\d+(?!\w)")
-AFTER_GAP = r"[\s:：.)\-–—(\[`\"']*"
+NUMBER = re.compile(r"(?<![\w.])\d+(?=\s*(?:단계|개|수준)|[^\w]|$)")
+AFTER_GAP = r"[\s:：.)\-–—(\[`\"']*(?:단계[\s:：.)\-–—(\[`\"']*)?"
 BEFORE_GAP = r"[\s,:(\[]*(?:steps?|stages?|phases?|items?|no\.?|#)?\s*$"
-QUANTITY_UNIT = re.compile(r"\s+(?:levels?|items?)\b", re.IGNORECASE)
+QUANTITY_UNIT = re.compile(r"\s*(?:(?:levels?|items?)\b|개|수준)", re.IGNORECASE)
 
 
 def read(ctx, relative):
@@ -21,6 +21,8 @@ def read(ctx, relative):
 
 
 def title_pattern(title):
+    if isinstance(title, re.Pattern):
+        return title.pattern
     return rf"(?<![A-Za-z]){re.escape(title)}(?![A-Za-z])"
 
 

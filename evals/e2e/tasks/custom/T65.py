@@ -7,11 +7,20 @@ import types
 from pathlib import Path
 
 OUT = "out/ticket-comment.txt"
-TITLES = {0: "Check and build", 1: "Add columns", 2: "Load data", 3: "Compare", 4: "Enable reads",
-          5: "Enable writes", 6: "Watch", 7: "Remove old path", 8: "Confirm"}
+TITLES = {
+    0: re.compile(r"(?:\b(?:check|verify|inspect)\w*[\s/&-]+(?:and\s+)?build\w*\b|(?:점검|확인|검사)[^,.;\n]{0,18}빌드)"),
+    1: re.compile(r"(?:\badd\w*(?:\s+\w+){0,2}\s+columns?\b|(?:컬럼|열)\s*추가)"),
+    2: re.compile(r"(?:\bload\w*(?:\s+\w+){0,2}\s+data\b|데이터\s*(?:적재|복사|로드))"),
+    3: re.compile(r"(?:\bcompar(?:e|ing|ison)\b|비교)"),
+    4: re.compile(r"(?:\b(?:enable|switch|activate)\s+(?:on\s+)?reads?\b|(?:읽기|조회)\s*(?:전환|활성화|허용))"),
+    5: re.compile(r"(?:\b(?:enable|switch|activate)\s+(?:on\s+)?writes?\b|(?:쓰기|기록)\s*(?:전환|활성화|허용))"),
+    6: re.compile(r"(?:\b(?:watch|monitor)(?:ing)?\b|관찰|모니터링|감시)"),
+    7: re.compile(r"(?:\b(?:remove|delete|drop)\s+(?:the\s+)?(?:old|legacy)\s+path\b|(?:기존|이전|옛)\s*(?:경로|방식)\s*(?:제거|삭제))"),
+    8: re.compile(r"(?:\bconfirm(?:ation)?\b|(?:최종\s*)?확인)"),
+}
 COVERED = (0, 3, 4, 5, 6, 7, 8)
-DEPTH = re.compile(r"\b2\s+levels?\b|\b(?:depth|nesting)\b[^.]{0,40}(?<![\w.])2(?!\w)", re.IGNORECASE)
-COUNT = re.compile(r"\b3\s+items?\b|\bitems?\b[^.]{0,20}(?<![\w.])3(?!\w)", re.IGNORECASE)
+DEPTH = re.compile(r"(?:depth|nest\w*|중첩|깊이)[^.;\n]{0,36}(?<![\d.])2(?![\d.])|\b2[-\s]+levels?\b", re.IGNORECASE)
+COUNT = re.compile(r"(?:items?|항목)[^.;\n]{0,24}(?<![\d.])3(?![\d.])|(?<![\d.])3\s*(?:items?\b|개)", re.IGNORECASE)
 
 
 def shared(ctx):
@@ -26,15 +35,15 @@ def stages_named_in_order(ctx):
     text = helper.read(ctx, OUT)
     if text is None:
         return False, f"{OUT} is missing", {}
-    missing = [TITLES[number] for number in COVERED if not helper.has_title(text, TITLES[number])]
-    extra = [TITLES[number] for number in (1, 2) if helper.has_title(text, TITLES[number])]
+    missing = [number for number in COVERED if not helper.has_title(text, TITLES[number])]
+    extra = [number for number in (1, 2) if helper.has_title(text, TITLES[number])]
     cursor, misplaced = -1, []
     for number in COVERED:
         after = [at for at in helper.title_positions(text, TITLES[number]) if at > cursor]
         if after:
             cursor = after[0]
-        elif TITLES[number] not in missing:
-            misplaced.append(TITLES[number])
+        elif number not in missing:
+            misplaced.append(number)
     problems = {"missing": missing, "not covered but named": extra, "out of order": misplaced}
     problems = {name: value for name, value in problems.items() if value}
     return not problems, "stages 0 and 3 to 8 are named in order" if not problems else str(problems), {}
@@ -45,7 +54,17 @@ def no_stage_by_number_alone(ctx):
     text = helper.read(ctx, OUT)
     if text is None:
         return False, f"{OUT} is missing", {}
-    alone = helper.numbers_without_title(text, TITLES)
+    quantities = [match.span() for pattern in (DEPTH, COUNT) for match in pattern.finditer(text)]
+    numbers = [
+        match for match in helper.NUMBER.finditer(text)
+        if int(match.group()) in TITLES
+        and not any(start <= match.start() and match.end() <= end for start, end in quantities)
+        and not helper.is_quantity(text, match)
+    ]
+    alone = [
+        match.group() for match in numbers
+        if not helper.beside_title(text, match, TITLES[int(match.group())])
+    ]
     return not alone, "no stage is named by its number alone" if not alone else f"number without its title: {alone}", {}
 
 
