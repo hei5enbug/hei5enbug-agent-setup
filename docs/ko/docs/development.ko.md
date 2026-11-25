@@ -97,6 +97,7 @@ hei5enbug-agent-setup/
     ├── local-data-cleanup/
     ├── mistake-enforcer/
     ├── orca-plugin-refresh/
+    ├── research-report-writer/
     ├── session-retro/
     ├── session-triage/
     ├── skill-builder/

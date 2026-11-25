@@ -61,7 +61,7 @@ class CommonRulesTest(unittest.TestCase):
         self.assertLessEqual(*measured)
         self.assertIn("existing text that the change made false needs correcting", documentation)
         self.assertIn("a repository rule requires text for something the change adds", documentation)
-        self.assertIn("existing text that the change made false, and text that a repository rule requires", preparation)
+        self.assertIn("existing text or tests that the change made false, and text that a repository rule requires", preparation)
         self.assertIn("add no text about it", documentation)
 
     def test_일정이나_다음_실행을_기다리기_전에_지금_안전하게_확인할_방법을_먼저_찾는다(self):

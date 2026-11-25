@@ -7,6 +7,8 @@ phrases, and follow that skill's research-document reference for ambiguous refer
 
 1. Use the prose to state the result or pattern the reader can infer from a table or figure. Leave its values
    in the table or figure. For example, after a response-time table, state that only demo-b exceeded its target.
+   For these documents, this rule replaces the figure-and-table bullet in
+   [Readable shared text](shared-text.md#readable-shared-text).
 2. Delete a phrase that only signals importance and state the confirmed fact directly. For example, write
    "TTL이 1분이다" in place of "핵심은 TTL이 1분이라는 점이다".
 3. Include an estimate, proposal, or assumption only if it uses confirmed facts and has been verified.
@@ -28,7 +30,10 @@ phrases, and follow that skill's research-document reference for ambiguous refer
 As the last step, run the Independent text review in [Shared text](shared-text.md#independent-text-review) with
 `--kind shared-document` and this file passed with `--rules`. Have the independent reviewer check logic and
 expression.
+You may save a local report at the user's requested path before the review if you run the review and apply its
+fixes to that file before handing it over.
 
-Handle Exit 1 as follows for these documents. Apply a finding without asking when it has one clear fix that adds,
-removes, or moves no fact, number, claim, section, or conclusion. Ask before applying a finding when more than one
-reasonable fix exists or the fix would add, remove, or move any of those items beyond the user's request.
+For Exit 1, use these rules to decide when to ask and follow the other Exit 1 steps in Shared text. Apply a finding
+without asking when it has one clear fix that adds, removes, or moves no fact, number, claim, section, or conclusion.
+Ask before applying a finding when more than one reasonable fix exists or the fix would add, remove, or move any
+of those items beyond the user's request.
