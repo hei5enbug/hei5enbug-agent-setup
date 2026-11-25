@@ -201,7 +201,9 @@ class QuestionLineTest(unittest.TestCase):
         """질문 뒤에 근거 문장이 이어지는 Codex 답은 질문으로 읽고, 코드 블록 안의 물음표와 문장 중간의 물음표는 질문으로 세지 않는다."""
         for text, expected in (("한 주는 월요일부터로 할까요?\n\n저장소에 기준이 없어 확인이 필요합니다.", True),
                                ("Which one?\n\nDetails follow.", True), ("어느 쪽이 좋을까요？\n설명", True),
+                               ("`logs/` 조사에 [스킬](/tmp/work/SKILL.md)을 사용할까요? 권장하며, 원하지 않으면 일반 방식으로 진행하겠습니다.", True),
                                ("All good.", False), ("", False), ("Done. Should I also? Details follow.", False),
+                               ("See [the page](https://example.com/a?b=1) for details.", False),
                                ("Run:\n```\nls | grep a?\n```\nDone.", False)):
             with self.subTest(text):
                 self.assertEqual(su.has_question_line(text), expected)

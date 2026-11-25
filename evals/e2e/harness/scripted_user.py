@@ -221,13 +221,18 @@ def ends_with_question(final_text: str) -> bool:
     return bool(lines) and lines[-1].rstrip(TRAILING_MARKUP).endswith(QUESTION_ENDINGS)
 
 
+FIRST_SENTENCE_QUESTION = re.compile(r"^(?:(?![.!。](?:\s|$)).)*?[?？][*_`\"')\]>]*(?:\s|$)")
+
+
 def has_question_line(final_text: str) -> bool:
-    """True when any line of a turn's final text outside a code block ends with a question mark, ignoring closing markup."""
+    """True when any line of a turn's final text outside a code block ends with a question mark, ignoring closing markup,
+    or opens with a question sentence that reasons follow on the same line."""
     fenced = False
     for line in final_text.splitlines():
         if line.strip().startswith(FENCE):
             fenced = not fenced
-        elif not fenced and line.strip() and line.rstrip(TRAILING_MARKUP).endswith(QUESTION_ENDINGS):
+        elif not fenced and line.strip() and (line.rstrip(TRAILING_MARKUP).endswith(QUESTION_ENDINGS)
+                                              or FIRST_SENTENCE_QUESTION.match(line.strip())):
             return True
     return False
 
