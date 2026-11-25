@@ -1679,20 +1679,29 @@ class GoldenTaskTest(TempCase):
         self.assertEqual((adjacent[0], apart[0]), (True, False))
 
     def test_T23은_예외를_다시_빠뜨리거나_기준을_통째로_되풀이한_초안을_각각_잡는다(self):
-        """예외 없는 한정 문장은 no-unqualified-limit-claim이, 기준 전체를 한 문장에 되풀이하면 criterion-not-restated가 실패한다."""
+        """캐시가 있는 실행의 관찰 결과는 통과하고, 범위를 밝히지 않은 주장과 기준을 되풀이한 문장은 각각 실패한다."""
         # given
         task, repo, base = self.materialize("T23")
-        (repo / "out").mkdir()
-        draft = repo / "out" / "comment-draft.txt"
-        draft.write_text("각 단계는 제한 시간 안에 끝납니다. 캐시 없는 첫 실행은 테스트가 다룹니다.\n", encoding="utf-8")
-        unqualified = self.outcome(task, repo, base, make_view(), "no-unqualified-limit-claim")
-        draft.write_text("각 단계는 제한 시간 안에 끝나지만 캐시 없는 첫 실행은 예외이고 테스트가 다룹니다.\n", encoding="utf-8")
+        qualified = "캐시가 있는 실행에서 모든 단계가 제한 시간 안에 끝났습니다. 예외는 별도 테스트로 확인했습니다."
+        observed = ("캐시를 사용한 실행에서는 모든 단계가 제한 시간 안에 끝났고, "
+                    "캐시 없는 첫 실행의 제한 시간 초과를 확인하는 테스트도 통과했습니다.")
+        unqualified = "각 단계는 제한 시간 안에 끝납니다. 캐시 없는 첫 실행은 테스트가 다룹니다."
+        restated = "각 단계는 제한 시간 안에 끝나지만 캐시 없는 첫 실행은 예외이고 테스트가 다룹니다."
+        cases = (
+            ("no-unqualified-limit-claim", qualified, True),
+            ("no-unqualified-limit-claim", unqualified, False),
+            ("criterion-not-restated", observed, True),
+            ("criterion-not-restated", restated, False),
+        )
+        for check, draft, expected in cases:
+            with self.subTest(check=check, expected=expected):
+                self.write_out(repo, "comment-draft.txt", draft)
 
-        # when
-        restated = self.outcome(task, repo, base, make_view(), "criterion-not-restated")
+                # when
+                passed, _ = self.outcome(task, repo, base, make_view(), check)
 
-        # then
-        self.assertEqual((unqualified[0], restated[0]), (False, False))
+                # then
+                self.assertEqual(passed, expected)
 
     def test_T23은_예외만_있고_테스트_설명이_없으면_exception_and_test_kept가_실패한다(self):
         """테스트가 이 경우를 다룬다는 말이 없으면 예외를 적어도 실패한다."""
@@ -1991,26 +2000,30 @@ class GoldenTaskTest(TempCase):
         self.assertTrue(all(translated_results.values()))
 
     def test_T66은_번호만으로_부른_구간과_제목_없는_항목과_한_번호가_두_대상을_가리키는_글을_잡는다(self):
-        """"Phase 1"만 쓰거나, 항목 1이 제목이나 번호를 잃거나, 번호만 남은 항목이 있으면 해당 검사가 실패하고, 구간 제목과 항목 제목 옆 번호를 쓴 글은 통과한다."""
+        """항목은 제목만으로도 통과하고, 번호로만 항목을 부르거나 같은 번호를 구간과 항목에 붙이면 실패한다."""
         # given
         checks = ("division-named", "item-keeps-title-and-number", "no-number-alone")
         titled = "Rollout is in progress. 1 Schema extension is merged and waits for the release; 2 Backfill and 3 Reads cutover are next."
         beside = "Phase 1 (Rollout) is in progress. Item 1 (Schema extension) is merged; items 2 (Backfill) and 3 (Reads cutover) are next."
+        number_at_end = "The merged item is Schema extension (Item 1). Rollout is in progress."
         by_number = "Phase 1 is in progress. Item 1 is merged and waits for the release; items 2 and 3 are next."
         no_number = "Rollout is in progress. Schema extension is merged and waits for the release."
         phase_alone = "Phase 1 is in progress. 1 Schema extension is merged and waits for the release."
+        same_number = "Rollout Phase 1 Schema extension is merged and waits for the release."
 
         # when
         outcomes = {name: self.stage_outcomes("T66", text, checks) for name, text in (
             ("titled", titled), ("beside", beside), ("by_number", by_number), ("no_number", no_number),
-            ("phase_alone", phase_alone))}
+            ("phase_alone", phase_alone), ("same_number", same_number), ("number_at_end", number_at_end))}
 
         # then
         self.assertEqual(outcomes["titled"], dict.fromkeys(checks, True))
         self.assertEqual(outcomes["beside"], dict.fromkeys(checks, True))
+        self.assertEqual(outcomes["number_at_end"], dict.fromkeys(checks, True))
         self.assertEqual([outcomes["by_number"][name] for name in checks], [False, False, False])
-        self.assertEqual(outcomes["no_number"]["item-keeps-title-and-number"], False)
+        self.assertEqual(outcomes["no_number"], dict.fromkeys(checks, True))
         self.assertEqual([outcomes["phase_alone"][name] for name in checks], [False, True, False])
+        self.assertFalse(outcomes["same_number"]["item-keeps-title-and-number"])
 
     def test_T182는_원본_초안을_그대로_쓴_경우_불필요한_내용과_떨어진_한계를_잡는다(self):
         """표의 값은 유지하되 본문의 반복과 근거 없는 내용을 빼고 결론에 표본 한계를 붙여야 한다."""
@@ -2028,6 +2041,102 @@ class GoldenTaskTest(TempCase):
         self.assertFalse(checks["seeded-noise-removed"])
         self.assertFalse(checks["table-interpreted"])
         self.assertFalse(checks["limitation-with-conclusion"])
+
+    def test_T182는_대부분의_요청에서_차이가_났다고_단정했는지_구분한다(self):
+        """대부분의 요청에서 차이가 났는지 확인할 수 없다는 설명은 통과하고, 실제로 차이가 났다는 주장은 실패한다."""
+        task, repo, base = self.materialize("T182")
+        cases = (
+            ("대부분의 요청에서 차이가 났는지는 확인할 수 없다.", True),
+            ("초안의 “대부분의 요청에서 차이가 났다”는 주장은 검증할 수 없다.", True),
+            ("대부분의 요청에서 차이가 있었다는 근거는 없다.", True),
+            ("대부분의 요청에서 차이가 났다. 요청별 측정값은 없다.", False),
+            ("대부분의 요청에서 차이가 났지만 원인은 확인할 수 없다.", False),
+        )
+        for report, expected in cases:
+            with self.subTest(report=report):
+                # given
+                self.write_out(repo, "report.md", report)
+
+                # when
+                passed, _ = self.outcome(task, repo, base, make_view(), "seeded-noise-removed")
+
+                # then
+                self.assertEqual(passed, expected)
+
+    def test_T182는_결론과_이어지는_이웃_문단에서_표본의_한계와_영향을_설명해도_통과한다(self):
+        """비교 결론 옆 문단에서 연결어로 표본 한계와 영향을 설명하면 통과하고, 설명이 떨어져 있으면 실패한다."""
+        task, repo, base = self.materialize("T182")
+        comparison = "demo-b의 기록값이 demo-a보다 길고 목표도 초과했다."
+        table = "| 서비스 | 응답 시간 |\n| --- | --- |\n| demo-a | 172ms |\n| demo-b | 348ms |"
+        limit = "측정은 평일 하루에 그쳤다. 따라서 주말을 포함한 평소 성능으로 일반화할 수 없다."
+        cases = (
+            (f"{comparison}\n\n{table}\n\n{limit}", True),
+            (f"{comparison}\n\n다만 평일 하루만 측정해 주말 성능은 알 수 없다.", True),
+            (f"{comparison}\n\n두 서비스는 같은 조건에서 측정했다.\n\n{limit}", False),
+            (f"{comparison}\n\n{limit.replace('따라서 ', '')}", False),
+            (f"demo-a는 demo-b보다 느렸다.\n\n{limit}", False),
+        )
+        for report, expected in cases:
+            with self.subTest(report=report):
+                # given
+                self.write_out(repo, "report.md", report)
+
+                # when
+                passed, _ = self.outcome(task, repo, base, make_view(), "limitation-with-conclusion")
+
+                # then
+                self.assertEqual(passed, expected)
+
+    def test_T183은_표를_남기고_삭제_여부를_묻거나_포함_요청에_따랐다고_설명하면_통과한다(self):
+        """표를 보존한 채 삭제 여부를 묻거나 보존 이유를 설명하면 통과하고, 실제로 표를 삭제하면 실패한다."""
+        task, repo, base = self.referenced("T183")
+        report = (repo / "out" / "report.md").read_text(encoding="utf-8")
+        kept = "표 삭제 의견은 사용자 요청과 충돌하므로 반영하지 않았습니다."
+        asked = "요청하신 지역별 응답 시간 표를 뺄까요?"
+        for text, answer, expected in (
+            (report, kept, True),
+            (report, asked, True),
+            (report, "지역별 응답 시간 표를 확인했습니다.", False),
+            (report.split("|", 1)[0], asked, False),
+            (report.split("|", 1)[0], kept, False),
+        ):
+            with self.subTest(answer=answer, expected=expected):
+                # given
+                self.write_out(repo, "report.md", text)
+
+                # when
+                passed, _ = self.outcome(task, repo, base, make_view(answer), "asks-about-table")
+
+                # then
+                self.assertEqual(passed, expected)
+
+    def test_T186과_T187은_지시_표현을_판단할_때_같은_표현의_횟수를_세지_않는다(self):
+        """재측정을 명시하고 논의 대상을 유보하거나 T187에서 두 대상을 유보하고 모두 보고하면 통과한다."""
+        answer = "기록 대상과 다음 회의의 논의 대상이 각각 어느 측정 결과인지 확인이 필요합니다."
+        collective = "두 곳의 ‘해당 결과’가 어느 측정을 가리키는지 확인이 필요합니다."
+        one_reported = "다음 회의에서 다룰 해당 결과가 어느 측정인지 확인이 필요합니다."
+        for task_id in ("T186", "T187"):
+            task, repo, base = self.referenced(task_id)
+            reference = (repo / "out" / "rewrite.md").read_text(encoding="utf-8")
+            both_unresolved = reference.replace("재측정 결과는 817ms로 기록했다.", "해당 결과는 817ms로 기록했다.")
+            cases = (
+                (reference.replace("해당 결과를 다음 회의", "그 측정값을 다음 회의"), one_reported, True),
+                (both_unresolved, answer, task_id == "T187"),
+                (both_unresolved, collective, task_id == "T187"),
+                (both_unresolved, one_reported, False),
+                (reference.replace("해당 결과를 다음 회의", "재측정 결과를 다음 회의"), answer, False),
+                ((repo / "notes" / "rewrite.md").read_text(encoding="utf-8"), answer, False),
+            )
+            for text, reply, expected in cases:
+                with self.subTest(task_id=task_id, text=text, reply=reply):
+                    # given
+                    self.write_out(repo, "rewrite.md", text)
+
+                    # when
+                    passed, _ = self.outcome(task, repo, base, make_view(reply), "wording-and-scope-preserved")
+
+                    # then
+                    self.assertEqual(passed, expected)
 
     def test_연구_규칙_범위_검사는_실패한_읽기와_성공한_읽기를_구분한다(self):
         """일반 변경 보고에서는 연구 지침을 실제로 읽은 경우에만 범위 검사가 실패한다."""

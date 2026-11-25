@@ -9,6 +9,17 @@ BAD_HEADING = "demo-b는 demo-a보다 느리다"
 READER = re.compile(r"(?:^|[\s;&|(])(?:cat|sed|rg|grep|head|tail|nl|awk|bat)\s")
 ASKS = re.compile(r"[?？]|할까요|할지|해도\s*될|주시겠|would you|should (?:I|we)", re.I)
 RULE_TITLES = {RULE: "# Research and verification documents", REFERENCE: "# Rewriting research and verification documents"}
+MAJORITY = re.compile(r"대부분|대다수|거의\s*모든")
+UNCONFIRMED = re.compile(
+    r"(?:확인|판단|검증|단정|입증)\w*\s*(?:할\s*수\s*없|하지\s*못|하기\s*어렵|되지\s*않|되지\s*못|불가)"
+    r"|근거\w*\s*없|(?:cannot|could not)\s+(?:confirm|verify|determine)", re.I
+)
+LIMITATION_LINK = re.compile(
+    r"따라서|그러므로|그러나|다만|하지만|때문에|이에 따라|이로 인해|그 결과|\b(?:therefore|however|thus|because|so)\b", re.I
+)
+SLOWER_OBSERVATION = re.compile(
+    r"demo-b(?!\s*보다)[^.!?]*?(?:느[리린렸려]|길[었다어고게]|긴|오래|높[았은]|slower|longer|higher|more time)", re.I
+)
 
 
 def read(ctx, path):
@@ -79,7 +90,9 @@ def seeded_noise_removed(ctx):
         "핵심은", "이것은", "demo-clock-old", "demo-ttl-v2", "TTL", "demo-weekend-boost", BAD_HEADING,
     )
     unwanted = [item for item in excluded if item in blocks]
-    unwanted.extend(re.findall(r"대부분|대다수|거의\s*모든", blocks))
+    sentences = re.split(r"(?<=[.!?])\s+|\n\s*\n|지만\s+|[,，;]\s*(?:그러나|다만|하지만)\s+", blocks)
+    unwanted.extend(match.group() for sentence in sentences for match in MAJORITY.finditer(sentence)
+                    if not UNCONFIRMED.search(sentence, match.end()))
     unwanted.extend(re.findall(r"(?<!\d)(?:172|348)\s*(?:ms|밀리초)", blocks, re.I))
     return result(text and not unwanted, "seeded noise and repeated values are absent", f"unwanted items: {unwanted}")
 
@@ -97,12 +110,23 @@ def table_interpreted(ctx):
 
 def limitation_with_conclusion(ctx):
     text = read(ctx, "out/report.md")
-    for block in related_blocks(text):
-        slower = re.search(r"느리|느린|길[었다어]|긴|오래|높[았은]|slower|longer|higher", block, re.I)
+    prose = "\n".join(line for line in text.splitlines() if line.count("|") < 2)
+    blocks = re.split(r"\n\s*\n|\n(?=\s*[-*]\s)", prose)
+
+    def gives_limitation(block):
         weekday = re.search(r"평일|2026-10-07|weekday", block, re.I)
         one_day = re.search(r"하루|한\s*(?:날|날짜|번)|(?<!\d)1\s*일|2026-10-07|single|one.day", block, re.I)
         weekend = re.search(r"주말|weekend", block, re.I)
         coverage = re.search(r"않|못|제외|빠[졌진]|없|어렵|불가|except|not|outside|lack|omit|unmeasured", block, re.I)
-        if slower and weekday and one_day and weekend and coverage:
+        return weekday and one_day and weekend and coverage
+
+    for index, block in enumerate(blocks):
+        if not related_blocks(block) or not SLOWER_OBSERVATION.search(block):
+            continue
+        if gives_limitation(block) or any(
+            (LIMITATION_LINK.search(adjacent) or LIMITATION_LINK.search(block)) and gives_limitation(adjacent)
+            and not re.search(r"^\s*#", adjacent, re.M)
+            for adjacent in blocks[max(0, index - 1):index] + blocks[index + 1:index + 2]
+        ):
             return True, "sample limitation and its effect accompany the conclusion", {}
     return False, "no comparison block gives both the weekday sample and its effect on weekend coverage", {}

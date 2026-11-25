@@ -1,4 +1,4 @@
-"""Custom checks for T66: a chat message names the division by its title and keeps each item's title with its number."""
+"""Custom checks for T66: a chat message names the division and items by their titles."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ OUT = "out/chat-message.txt"
 DIVISION = "Rollout"
 ITEMS = {1: "Schema extension", 2: "Backfill", 3: "Reads cutover"}
 PHASE_BEFORE = re.compile(r"phases?\s*$", re.IGNORECASE)
+BREAK_AFTER_NUMBER = re.compile(r"""[ \t)\]"']*(?:[.!?]\s|\n)""")
 
 
 def shared(ctx):
@@ -42,10 +43,21 @@ def item_keeps_title_and_number(ctx):
     text = helper.read(ctx, OUT)
     if text is None:
         return False, f"{OUT} is missing", {}
-    found = [match for match in helper.NUMBER.finditer(text)
-             if int(match.group(0)) == 1 and not PHASE_BEFORE.search(text[:match.start()])
-             and helper.beside_title(text, match, ITEMS[1])]
-    return bool(found), "the item keeps its title with its number" if found else f"{ITEMS[1]} has no number 1 beside it", {}
+    title = ITEMS[1]
+    if not helper.has_title(text, title):
+        return False, f"the item is not named {title}", {}
+    for match in helper.NUMBER.finditer(text):
+        if int(match.group(0)) != 1:
+            continue
+        prefix = text[:match.start()]
+        beside_item = helper.beside_title(text, match, title)
+        beside_division = helper.beside_title(text, match, DIVISION)
+        if (beside_item and beside_division and not BREAK_AFTER_NUMBER.match(text, match.end())
+                and not prefix.rstrip(" \t").endswith("\n")):
+            return False, "one number labels both the division and the item", {}
+        if not (beside_item or beside_division or PHASE_BEFORE.search(prefix) or helper.is_quantity(text, match)):
+            return False, "the item is named by its number alone", {}
+    return True, f"the item is named {title}", {}
 
 
 def no_number_alone(ctx):
