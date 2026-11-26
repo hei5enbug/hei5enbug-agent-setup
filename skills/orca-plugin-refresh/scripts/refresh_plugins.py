@@ -94,7 +94,7 @@ def folder_version(entry: dict, name: str) -> str | None:
 def describe_plugin(host: str, plugin_id: str, context: dict) -> dict | None:
     """The plugin's listing on `host` as {version, root, local, note?}, or None unless it is installed and enabled exactly once."""
     name, _, marketplace = plugin_id.partition("@")
-    payload = run_json([core.executable(host), "plugin", "list", "--json"])
+    payload = run_json([core.executable(host), "plugin", "list", "--json"], timeout=core.HOST_COMMAND_TIMEOUT)
     merged = False
     if host == "claude":
         records = [item for item in payload if isinstance(item, dict) and item.get("id") == plugin_id] if isinstance(payload, list) else []

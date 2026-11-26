@@ -77,7 +77,7 @@ def effective_claude_record(records: list[dict]) -> tuple[dict | None, bool]:
 
 def installed(host: str) -> dict:
     if host == "claude":
-        payload = run_json([core.executable("claude"), "plugin", "list", "--json"])
+        payload = run_json([core.executable("claude"), "plugin", "list", "--json"], timeout=core.HOST_COMMAND_TIMEOUT)
         records = [item for item in payload if isinstance(item, dict) and item.get("id") == PLUGIN_ID] if isinstance(payload, list) else []
         record, merged = effective_claude_record(records)
         if record is None or record.get("enabled") is not True:
@@ -86,7 +86,7 @@ def installed(host: str) -> dict:
         root = Path(str(record.get("installPath") or ""))
     else:
         merged = False
-        payload = run_json([core.executable("codex"), "plugin", "list", "--json"])
+        payload = run_json([core.executable("codex"), "plugin", "list", "--json"], timeout=core.HOST_COMMAND_TIMEOUT)
         items = payload.get("installed") if isinstance(payload, dict) else None
         matches = [item for item in items if isinstance(item, dict) and item.get("pluginId") == PLUGIN_ID] if isinstance(items, list) else []
         if len(matches) != 1 or matches[0].get("enabled") is not True:
@@ -355,13 +355,13 @@ def run_install(host: str, plugin_id: str, context: dict) -> RefreshError | None
             return context["blocked"]
         marketplaces[marketplace] = None
         try:
-            core.run([cli, "plugin", "marketplace", "update" if host == "claude" else "upgrade", marketplace], timeout=180)
+            core.run([cli, "plugin", "marketplace", "update" if host == "claude" else "upgrade", marketplace], timeout=core.HOST_COMMAND_TIMEOUT)
         except RefreshError as error:
             marketplaces[marketplace] = error
             raise
     if blocked():
         return context["blocked"]
-    core.run([cli, "plugin", "update" if host == "claude" else "add", plugin_id], timeout=180)
+    core.run([cli, "plugin", "update" if host == "claude" else "add", plugin_id], timeout=core.HOST_COMMAND_TIMEOUT)
     return None
 
 

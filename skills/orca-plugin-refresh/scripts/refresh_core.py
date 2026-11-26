@@ -23,6 +23,8 @@ HOSTS = ("claude", "codex")
 RUN_ID = re.compile(r"^[0-9a-f]{32}$")
 HANDLE = re.compile(r"^[A-Za-z0-9._:-]{1,200}$")
 RUN_STATE_WAIT_SECONDS = 60.0
+HOST_COMMAND_TIMEOUT = 180.0
+SUBCOMMAND_WORDS = 3
 
 
 class RefreshError(Exception):
@@ -67,11 +69,21 @@ def executable(name: str) -> str:
     return path
 
 
+def command_name(argv: Sequence[str]) -> str:
+    """The executable name followed by its leading non-option words, such as `codex plugin list`."""
+    words = [Path(argv[0]).name]
+    for word in argv[1:]:
+        if word.startswith("-") or len(words) > SUBCOMMAND_WORDS:
+            break
+        words.append(word)
+    return " ".join(words)
+
+
 def run(argv: Sequence[str], *, timeout: float = 60.0, check: bool = True) -> subprocess.CompletedProcess[str]:
     try:
         result = subprocess.run(list(argv), stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout, check=False)
     except subprocess.TimeoutExpired as error:
-        raise RefreshError("command_timeout", f"{Path(argv[0]).name} did not finish in {int(timeout)} seconds.") from error
+        raise RefreshError("command_timeout", f"{command_name(argv)} did not finish in {int(timeout)} seconds.") from error
     except OSError as error:
         raise RefreshError("command_failed", f"{Path(argv[0]).name} could not start.") from error
     if check and result.returncode != 0:
