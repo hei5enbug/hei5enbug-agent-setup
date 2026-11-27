@@ -62,6 +62,7 @@ def on_launch(event: dict, who: tuple[str, str]) -> dict | None:
     run_id = str(event.get("tool_use_id") or uuid.uuid4())
     reason = request_budget.admit(
         who, agent_kind(tool_input), run_id, background=background, pid=parallel_limit.host_pid(),
+        cwd=event.get("cwd") or ".",
     )
     return deny(reason) if reason else None
 

@@ -1,3 +1,5 @@
 {
-  "max": 6
+  "max": 6,
+  "run_memory_mib": 512,
+  "jvm_run_memory_mib": 1536
 }

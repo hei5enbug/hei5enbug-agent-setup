@@ -205,6 +205,20 @@ def test_백그라운드_시작은_하위_에이전트가_멈출_때까지_자�
     assert freed is None
 
 
+def test_시작_허용은_PreToolUse_이벤트의_작업_폴더로_병렬_한도를_구한다(monkeypatch):
+    """PreToolUse 이벤트의 cwd 가 한도 계산에 전달되고, cwd 가 없으면 현재 폴더를 쓴다."""
+    # given
+    seen = []
+    monkeypatch.setattr(hook.parallel_limit, "current_limit", lambda host, cwd=".": seen.append((host, cwd)) or 100)
+
+    # when
+    hook.handle(event("PreToolUse", tool_name="Agent", tool_use_id="t1", cwd="/tmp/work/app", tool_input={"subagent_type": WORKER}))
+    hook.handle(event("PreToolUse", tool_name="Agent", tool_use_id="t2", tool_input={"subagent_type": WORKER}))
+
+    # then
+    assert seen == [("claude", "/tmp/work/app"), ("claude", ".")]
+
+
 def test_프로세스는_표준_출력에_거부_결정을_JSON으로_낸다(tmp_path):
     """훅 프로세스는 허용된 첫 시작에는 출력이 없고, 한도 뒤의 둘째 시작에는 deny JSON 을 낸다."""
     # given

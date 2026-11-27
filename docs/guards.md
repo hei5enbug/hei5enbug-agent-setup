@@ -337,10 +337,15 @@ through `HEI5ENBUG_PARENT_SESSION`, all add to one count. A prompt, and the `Sto
   delegated run, at most 39 runs and 4 retries in one request, so the run cap is the smallest multiple of ten above 39 and
   the retry cap is 4 plus one. It holds counts only, no session content. `0`, `off`, `false`, or `no` turns a cap off. A
   record with no delegated run would ship both caps as `0`.
-- **Parallel limit.** The limit is the lowest of the logical CPU count minus one, one run per whole GiB of available
-  memory, and the host's own limit, and at least one. Claude Code's own limit is `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`
-  (20 by default); on Codex it is `agents.max_concurrent_threads_per_session` in `config.toml` when set, and unknown
-  otherwise. A load average of at least twice the CPU count, or less than 10 percent of memory available, makes it one.
+- **Parallel limit.** The limit is the lowest of the logical CPU count minus one, the available memory divided by one
+  run's estimated memory (rounded down), and the host's own limit, and at least one. The estimate comes from the
+  launch's working directory: 1536 MiB when a Gradle or Maven build file (`build.gradle`, `build.gradle.kts`,
+  `settings.gradle`, `settings.gradle.kts`, or `pom.xml`) exists in the folder itself or at its Git top level, and 512
+  MiB otherwise. `run_memory_mib` and `jvm_run_memory_mib` in `config/parallel-limit.json` set them; a missing, zero,
+  negative, or non-integer value uses the shipped one. On macOS, memory pressure level warning halves the limit (at
+  least one) and critical makes it one; an unreadable level changes nothing. Claude Code's own limit is
+  `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` (20 by default); on Codex it is `agents.max_concurrent_threads_per_session` in
+  `config.toml` when set, and unknown otherwise. A load average of at least twice the CPU count, or less than 10 percent of memory available, makes it one.
   A CPU count or available memory that cannot be read leaves out that term and caps the result at six. Runs of every
   session on this machine count, kept in `runs/running.json` under the plugin's state folder; a run counts from its launch
   to its end, an entry whose process is gone is dropped, and so is one older than 2,700 seconds. A launch that would pass

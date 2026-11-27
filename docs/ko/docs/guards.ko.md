@@ -305,8 +305,12 @@ worktree에는 `orca worktree set --display-name`을 알립니다. `orca worktre
   분포로, 요청 1,967개 중 304개가 위임 실행을 가졌고 한 요청의 최대는 실행 39, 재시도 4였다. 그래서 실행 한도는 39 위의 가장 작은 10의
   배수이고 재시도 한도는 4에 1을 더한 값이다. 이 기록은 개수만 담고 세션 내용은 담지 않는다. `0`, `off`, `false`, `no`는 한도를 끈다.
   위임 실행이 없는 기록이면 두 한도를 `0`으로 출하한다.
-- **병렬 한도.** 논리 CPU 수 빼기 1, 가용 메모리 1 GiB당 실행 하나, 호스트 자체 한도 중 가장 낮은 값이며 최소 1이다. Claude Code의
-  한도는 `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`(기본 20)이고, Codex는 `config.toml`에 `agents.max_concurrent_threads_per_session`이
+- **병렬 한도.** 논리 CPU 수 빼기 1, 가용 메모리를 실행 하나의 추정 메모리로 나눈 값(내림), 호스트 자체 한도 중 가장 낮은
+  값이며 최소 1이다. 추정값은 시작하는 실행의 작업 폴더로 정한다. 그 폴더 자체나 그 Git 최상위 폴더에 Gradle 또는 Maven 빌드 파일
+  (`build.gradle`, `build.gradle.kts`, `settings.gradle`, `settings.gradle.kts`, `pom.xml`)이 있으면 1536 MiB, 없으면 512
+  MiB다. `config/parallel-limit.json`의 `run_memory_mib`와 `jvm_run_memory_mib`가 이 값을 정하며, 값이 없거나 0, 음수, 정수가
+  아니면 출하값을 쓴다. macOS에서는 메모리 압력 수준이 warning이면 한도를 절반으로 줄이고(최소 1) critical이면 1로 하며, 수준을
+  읽을 수 없으면 아무것도 바꾸지 않는다. Claude Code의 한도는 `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`(기본 20)이고, Codex는 `config.toml`에 `agents.max_concurrent_threads_per_session`이
   있으면 그 값이며 없으면 알 수 없다. 부하 평균이 CPU 수의 두 배 이상이거나 가용 메모리가 10퍼센트 미만이면 1이다. CPU 수나 가용 메모리를
   읽을 수 없으면 그 항을 빼고 결과를 6으로 자른다. 이 기계의 모든 세션의 실행을 세며, 플러그인 상태 폴더의 `runs/running.json`에 둔다.
   실행은 시작부터 끝까지 세고, 프로세스가 사라진 항목과 2,700초보다 오래된 항목은 뺀다. 한도를 넘는 시작은 `Parallel limit reached`로

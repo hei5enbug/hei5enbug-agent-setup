@@ -96,7 +96,7 @@ def cap_denial(budget: dict, kind: str, run_cap: int, retry_cap: int) -> str | N
 
 def admit(
     who: tuple[str, str], kind: str, run_id: str, *, background: bool = False, pid: int | None = None,
-    limit: int | None = None, now: float | None = None, alive=parallel_limit.pid_alive,
+    limit: int | None = None, now: float | None = None, alive=parallel_limit.pid_alive, cwd: str = ".",
 ) -> str | None:
     """Count a launch and register it as running, or return the denial message and change nothing.
 
@@ -113,7 +113,7 @@ def admit(
             budget = data["request_budget"]
             reason = cap_denial(budget, kind, run_cap, retry_cap)
             if reason is None:
-                allowed = parallel_limit.current_limit(who[0]) if limit is None else limit
+                allowed = parallel_limit.current_limit(who[0], cwd) if limit is None else limit
                 if parallel_limit.over_limit(entries, label(who), allowed):
                     reason = LIMIT_MESSAGE.format(running=len(entries), limit=allowed)
             if reason is None:

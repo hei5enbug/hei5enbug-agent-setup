@@ -1,9 +1,12 @@
 """The parallel limit for agent runs on this machine and the machine-wide list of runs that count against it.
 
-The limit is the lowest of the logical CPU count minus one, one run per whole GiB of available memory, and the host's
-own limit, and at least one. A known load or memory shortage makes it one. A CPU count or available memory that cannot
-be read leaves its term out and caps the result at six. `HEI5ENBUG_PARALLEL_LIMIT_MAX` and the shipped
-`config/parallel-limit.json` set a further maximum.
+The limit is the lowest of the logical CPU count minus one, the available memory divided by one run's estimated
+memory, and the host's own limit, and at least one. The estimate is 1536 MiB when the launch's working directory is a
+JVM build workspace (a Gradle or Maven build file in its Git top level or in the folder itself) and 512 MiB otherwise;
+`run_memory_mib` and `jvm_run_memory_mib` in the shipped `config/parallel-limit.json` replace them. A known load or
+memory shortage makes it one. A CPU count or available memory that cannot be read leaves its term out and caps the
+result at six. On macOS, memory pressure warning halves the limit, and critical makes it one. `HEI5ENBUG_PARALLEL_LIMIT_MAX`
+and `max` in the shipped file set a further maximum.
 """
 
 from __future__ import annotations
@@ -25,7 +28,13 @@ ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config" / "parallel-limit.json"
 MAX_ENV = "HEI5ENBUG_PARALLEL_LIMIT_MAX"
 UNREADABLE_CAP = 6
-MEBIBYTES_PER_GIB = 1024
+RUN_MEMORY_MIB = 512
+JVM_RUN_MEMORY_MIB = 1536
+RUN_MEMORY_KEY = "run_memory_mib"
+JVM_RUN_MEMORY_KEY = "jvm_run_memory_mib"
+JVM_BUILD_FILES = ("build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts", "pom.xml")
+PRESSURE_WARNING = 2
+PRESSURE_CRITICAL = 4
 CLAUDE_SUBAGENT_LIMIT_ENV = "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"
 CLAUDE_SUBAGENT_LIMIT_DEFAULT = 20
 CODEX_LIMIT_KEYS = ("max_concurrent_threads_per_session", "max_threads")
@@ -41,8 +50,13 @@ def compute_limit(
     memory_fraction: float | None,
     host_limit: int | None,
     maximum: int | None = None,
+    run_memory_mib: int = RUN_MEMORY_MIB,
+    pressure: int | None = None,
 ) -> int:
-    """The number of agent runs that may run at once, from the counters of one moment."""
+    """The number of agent runs that may run at once, from the counters of one moment.
+
+    `pressure` is the macOS memory pressure level: 2 halves the limit and 4 makes it one.
+    """
     shortage = (
         (load_average is not None and cpus and load_average >= machine_load.LOAD_FACTOR * cpus)
         or (memory_fraction is not None and memory_fraction < machine_load.MEMORY_FRACTION)
@@ -53,14 +67,52 @@ def compute_limit(
     if cpus:
         terms.append(cpus - 1)
     if available_mb is not None:
-        terms.append(available_mb // MEBIBYTES_PER_GIB)
+        terms.append(available_mb // run_memory_mib)
     if host_limit is not None:
         terms.append(host_limit)
     if not cpus or available_mb is None:
         terms.append(UNREADABLE_CAP)
     if maximum is not None:
         terms.append(maximum)
-    return max(1, min(terms))
+    result = max(1, min(terms))
+    if pressure == PRESSURE_CRITICAL:
+        return 1
+    return max(1, result // 2) if pressure == PRESSURE_WARNING else result
+
+
+def git_top_level(start: Path) -> Path | None:
+    """The nearest folder, from `start` upward, that holds `.git` as a folder or a file."""
+    for folder in (start, *start.parents):
+        if (folder / ".git").exists():
+            return folder
+    return None
+
+
+def is_jvm_workspace(cwd: str) -> bool:
+    """Whether the folder itself or its Git top level holds a Gradle or Maven build file."""
+    try:
+        start = Path(cwd).resolve()
+    except (OSError, RuntimeError):
+        return False
+    top = git_top_level(start)
+    folders = (start,) if top is None or top == start else (start, top)
+    return any((folder / name).is_file() for folder in folders for name in JVM_BUILD_FILES)
+
+
+def configured_estimate(key: str, default: int) -> int:
+    """A per-run memory estimate in MiB from the shipped file; a missing, non-integer, or non-positive one gives `default`."""
+    try:
+        value = json.loads(CONFIG_PATH.read_text(encoding="utf-8")).get(key)
+    except (OSError, ValueError, AttributeError):
+        return default
+    return value if type(value) is int and value > 0 else default
+
+
+def run_memory_mib(cwd: str) -> int:
+    """One run's estimated memory in MiB, by the kind of workspace the launch starts in."""
+    if is_jvm_workspace(cwd):
+        return configured_estimate(JVM_RUN_MEMORY_KEY, JVM_RUN_MEMORY_MIB)
+    return configured_estimate(RUN_MEMORY_KEY, RUN_MEMORY_MIB)
 
 
 def configured_maximum() -> int | None:
@@ -95,18 +147,34 @@ def host_limit(host: str) -> int | None:
     return int(text) if text.isdigit() and int(text) > 0 else CLAUDE_SUBAGENT_LIMIT_DEFAULT
 
 
-def darwin_memory_bytes() -> int | None:
-    """Physical memory on macOS through sysctlbyname, without starting a process."""
+def darwin_sysctl(name: bytes, kind: type) -> int | None:
+    """One integer sysctl value on macOS through sysctlbyname, without starting a process."""
     try:
         import ctypes
 
-        value = ctypes.c_uint64(0)
+        value = kind(0)
         size = ctypes.c_size_t(ctypes.sizeof(value))
-        if ctypes.CDLL(None).sysctlbyname(b"hw.memsize", ctypes.byref(value), ctypes.byref(size), None, 0) == 0:
+        if ctypes.CDLL(None).sysctlbyname(name, ctypes.byref(value), ctypes.byref(size), None, 0) == 0:
             return value.value
     except (OSError, ValueError, AttributeError):
         return None
     return None
+
+
+def darwin_memory_bytes() -> int | None:
+    """Physical memory on macOS."""
+    import ctypes
+
+    return darwin_sysctl(b"hw.memsize", ctypes.c_uint64)
+
+
+def memory_pressure_level() -> int | None:
+    """The macOS memory pressure level (1 normal, 2 warning, 4 critical), or None elsewhere or when unreadable."""
+    if sys.platform != "darwin":
+        return None
+    import ctypes
+
+    return darwin_sysctl(b"kern.memorystatus_vm_pressure_level", ctypes.c_int32)
 
 
 def read_available_mb(fraction: float | None) -> int | None:
@@ -129,7 +197,7 @@ def current_limit(host: str, cwd: str = ".") -> int:
     return compute_limit(
         counters.cpu_count, read_available_mb(counters.memory_available_fraction), counters.load_average,
         counters.memory_available_fraction,
-        host_limit(host), configured_maximum(),
+        host_limit(host), configured_maximum(), run_memory_mib(cwd), memory_pressure_level(),
     )
 
 

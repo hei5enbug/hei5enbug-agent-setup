@@ -1,6 +1,9 @@
 """요청 예산 항목 3: 시드한 계수기로 구한 병렬 한도와 기계 전체의 실행 목록."""
+import json
 import sys
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
@@ -10,8 +13,8 @@ import parallel_limit as pl  # noqa: E402
 GIB = 1024
 
 
-def limit(cpus=12, memory_mb=20 * GIB, load=1.0, fraction=0.5, host=16, maximum=None):
-    return pl.compute_limit(cpus, memory_mb, load, fraction, host, maximum)
+def limit(cpus=12, memory_mb=20 * GIB, load=1.0, fraction=0.5, host=16, maximum=None, run_mib=512, pressure=None):
+    return pl.compute_limit(cpus, memory_mb, load, fraction, host, maximum, run_mib, pressure)
 
 
 def entry(run_id, session, started=1000.0, pid=1):
@@ -19,18 +22,18 @@ def entry(run_id, session, started=1000.0, pid=1):
 
 
 def test_CPU와_메모리와_호스트_한도_중_가장_낮은_값이_한도다():
-    """CPU 12개, 메모리 20GiB, 호스트 한도 16은 11이고 메모리 3GiB는 3, 호스트 한도 4는 4다."""
+    """CPU 12개, 메모리 20GiB, 호스트 한도 16은 11이고 메모리 1536MiB는 3, 호스트 한도 4는 4다."""
     # given / when
-    results = [limit(), limit(memory_mb=3 * GIB), limit(host=4)]
+    results = [limit(), limit(memory_mb=3 * GIB // 2), limit(host=4)]
 
     # then
     assert results == [11, 3, 4]
 
 
-def test_1GiB_미만이어도_한_실행은_허용한다():
-    """가용 메모리가 0.8GiB여도 한도는 1이다."""
+def test_실행_하나의_추정_메모리_미만이어도_한_실행은_허용한다():
+    """가용 메모리가 400MiB여도 한도는 1이다."""
     # given / when
-    result = limit(memory_mb=int(0.8 * GIB))
+    result = limit(memory_mb=400)
 
     # then
     assert result == 1
@@ -46,9 +49,9 @@ def test_부하_평균이_CPU_수의_두_배_이상이면_한도는_1이다():
 
 
 def test_읽을_수_없는_CPU_수는_그_항을_빼고_6으로_자른다():
-    """CPU 수를 읽지 못하면 3GiB는 3이고, 20GiB와 호스트 한도 16은 6이다."""
+    """CPU 수를 읽지 못하면 1536MiB는 3이고, 20GiB와 호스트 한도 16은 6이다."""
     # given / when
-    results = [limit(cpus=None, memory_mb=3 * GIB), limit(cpus=None, memory_mb=20 * GIB, host=16)]
+    results = [limit(cpus=None, memory_mb=3 * GIB // 2), limit(cpus=None, memory_mb=20 * GIB, host=16)]
 
     # then
     assert results == [3, 6]
@@ -75,7 +78,7 @@ def test_CPU_수를_못_읽어도_메모리_부족을_알면_한도는_1이다()
 def test_설정한_상한은_마지막에_적용된다():
     """상한 6은 11을 6으로 자르고, 이미 낮은 3은 그대로 둔다."""
     # given / when
-    results = [limit(maximum=6), limit(maximum=6, memory_mb=3 * GIB)]
+    results = [limit(maximum=6), limit(maximum=6, memory_mb=3 * GIB // 2)]
 
     # then
     assert results == [6, 3]
@@ -188,3 +191,187 @@ def test_가용_메모리는_프로세스를_띄우지_않고_테스트_값이�
     # then
     assert (fixed, invalid) == (2048, None)
     assert live is None or live > 0
+
+
+def make_workspace(tmp_path, build_file=None, in_folder=False):
+    """`.git` 이 있는 저장소 최상위에 빌드 파일을 두거나, 그 아래 하위 폴더에 둔다."""
+    top = tmp_path / "repo"
+    folder = top / "service" / "api"
+    folder.mkdir(parents=True)
+    (top / ".git").write_text("gitdir: /tmp/work/example\n", encoding="utf-8")
+    if build_file:
+        ((folder if in_folder else top) / build_file).write_text("", encoding="utf-8")
+    return folder
+
+
+@pytest.mark.parametrize("build_file", pl.JVM_BUILD_FILES)
+def test_Git_최상위에_JVM_빌드_파일이_있으면_실행_하나는_1536MiB로_센다(tmp_path, build_file):
+    """4096MiB 가용 메모리에서 하위 폴더의 Git 최상위에 빌드 파일이 있으면 메모리 항은 2다."""
+    # given
+    folder = make_workspace(tmp_path, build_file)
+
+    # when
+    estimate = pl.run_memory_mib(str(folder))
+
+    # then
+    assert (estimate, limit(memory_mb=4096, run_mib=estimate)) == (1536, 2)
+
+
+def test_폴더_자체에_pom이_있으면_Git_최상위가_아니어도_JVM_작업_공간이다(tmp_path):
+    """Git 저장소 밖 폴더든 저장소 안 하위 폴더든 pom.xml 이 폴더에 있으면 1536MiB, 메모리 항은 2다."""
+    # given
+    inside = make_workspace(tmp_path, "pom.xml", in_folder=True)
+    outside = tmp_path / "plain"
+    outside.mkdir()
+    (outside / "pom.xml").write_text("", encoding="utf-8")
+
+    # when
+    estimates = [pl.run_memory_mib(str(inside)), pl.run_memory_mib(str(outside))]
+
+    # then
+    assert estimates == [1536, 1536]
+    assert limit(memory_mb=4096, run_mib=estimates[0]) == 2
+
+
+def test_JVM_빌드_파일이_없으면_실행_하나는_512MiB로_세어_메모리_항이_8이다(tmp_path):
+    """4096MiB 가용 메모리에서 빌드 파일이 없는 폴더와 존재하지 않는 폴더는 모두 512MiB, 메모리 항은 8이다."""
+    # given
+    folder = make_workspace(tmp_path)
+
+    # when
+    estimates = [pl.run_memory_mib(str(folder)), pl.run_memory_mib(str(tmp_path / "missing"))]
+
+    # then
+    assert estimates == [512, 512]
+    assert limit(memory_mb=4096, run_mib=estimates[0]) == 8
+
+
+def write_config(tmp_path, monkeypatch, content):
+    path = tmp_path / "parallel-limit.json"
+    path.write_text(content if isinstance(content, str) else json.dumps(content), encoding="utf-8")
+    monkeypatch.setattr(pl, "CONFIG_PATH", path)
+
+
+def test_설정_파일의_추정값이_출하_값을_대신한다(tmp_path, monkeypatch):
+    """설정 파일의 run_memory_mib 700 과 jvm_run_memory_mib 2000 이 각각 일반 폴더와 JVM 폴더에 쓰인다."""
+    # given
+    write_config(tmp_path, monkeypatch, {"run_memory_mib": 700, "jvm_run_memory_mib": 2000})
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    jvm = make_workspace(tmp_path, "build.gradle")
+
+    # when
+    estimates = [pl.run_memory_mib(str(plain)), pl.run_memory_mib(str(jvm))]
+
+    # then
+    assert estimates == [700, 2000]
+
+
+@pytest.mark.parametrize("content", [
+    {}, {"run_memory_mib": 0, "jvm_run_memory_mib": 0}, {"run_memory_mib": -5, "jvm_run_memory_mib": -5},
+    {"run_memory_mib": "700", "jvm_run_memory_mib": 2000.5}, {"run_memory_mib": True, "jvm_run_memory_mib": None},
+    "not json", [],
+])
+def test_없거나_0이거나_음수이거나_정수가_아닌_추정값은_출하_값을_쓴다(tmp_path, monkeypatch, content):
+    """누락, 0, 음수, 문자열, 실수, 불리언, 깨진 파일은 각각 512 와 1536 이다."""
+    # given
+    write_config(tmp_path, monkeypatch, content)
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    jvm = make_workspace(tmp_path, "build.gradle")
+
+    # when
+    estimates = [pl.run_memory_mib(str(plain)), pl.run_memory_mib(str(jvm))]
+
+    # then
+    assert estimates == [512, 1536]
+
+
+def test_설정_파일이_없으면_출하_추정값을_쓴다(tmp_path, monkeypatch):
+    """설정 파일을 읽을 수 없으면 일반 폴더는 512, JVM 폴더는 1536 이다."""
+    # given
+    monkeypatch.setattr(pl, "CONFIG_PATH", tmp_path / "absent.json")
+    jvm = make_workspace(tmp_path, "settings.gradle.kts")
+
+    # when
+    estimates = [pl.run_memory_mib(str(tmp_path)), pl.run_memory_mib(str(jvm))]
+
+    # then
+    assert estimates == [512, 1536]
+
+
+def test_출하_설정_파일은_두_추정값과_상한을_함께_담는다():
+    """출하 config/parallel-limit.json 은 max 6 과 두 추정값 512, 1536 을 담는다."""
+    # given / when
+    shipped = json.loads(pl.CONFIG_PATH.read_text(encoding="utf-8"))
+
+    # then
+    assert (shipped["max"], shipped["run_memory_mib"], shipped["jvm_run_memory_mib"]) == (6, 512, 1536)
+
+
+def test_메모리_압력_경고는_한도를_절반으로_줄이되_1_밑으로_내리지_않는다():
+    """압력 2 에서 한도 5 는 2, 1 은 1 이다."""
+    # given / when
+    results = [limit(maximum=5, pressure=2), limit(maximum=1, pressure=2)]
+
+    # then
+    assert results == [2, 1]
+
+
+def test_메모리_압력_위험은_한도를_1로_만든다():
+    """압력 4 에서 한도 11 은 1 이다."""
+    # given / when
+    result = limit(pressure=4)
+
+    # then
+    assert result == 1
+
+
+@pytest.mark.parametrize("pressure", [None, 1, 0, 3, 8])
+def test_메모리_압력이_정상이거나_읽을_수_없으면_한도는_그대로다(pressure):
+    """압력 1, 읽지 못함, 정의되지 않은 값은 한도 11 을 바꾸지 않는다."""
+    # given / when
+    result = limit(pressure=pressure)
+
+    # then
+    assert result == 11
+
+
+def test_메모리_압력은_macOS_에서만_읽는다(monkeypatch):
+    """macOS 가 아니면 sysctl 을 부르지 않고 None 을 주며, macOS 에서는 읽은 값이나 None 이다."""
+    # given
+    monkeypatch.setattr(pl.sys, "platform", "linux")
+    monkeypatch.setattr(pl, "darwin_sysctl", lambda name, kind: pytest.fail("sysctl must not be called"))
+
+    # when
+    other = pl.memory_pressure_level()
+    monkeypatch.setattr(pl.sys, "platform", "darwin")
+    monkeypatch.setattr(pl, "darwin_sysctl", lambda name, kind: 2 if name == b"kern.memorystatus_vm_pressure_level" else None)
+    read = pl.memory_pressure_level()
+    monkeypatch.setattr(pl, "darwin_sysctl", lambda name, kind: None)
+    unreadable = pl.memory_pressure_level()
+
+    # then
+    assert (other, read, unreadable) == (None, 2, None)
+
+
+def test_현재_한도는_작업_폴더의_추정값과_메모리_압력을_함께_쓴다(tmp_path, monkeypatch):
+    """4096MiB 에서 일반 폴더는 8, JVM 폴더는 2 이고, 압력 2 에서는 각각 4 와 1 이다."""
+    # given
+    counters = pl.machine_load.Counters(1.0, 32, 0.5, 0.5)
+    monkeypatch.setattr(pl.machine_load, "system_counters", lambda cwd: counters)
+    monkeypatch.setattr(pl, "read_available_mb", lambda fraction: 4096)
+    monkeypatch.setattr(pl, "host_limit", lambda host: 20)
+    monkeypatch.setattr(pl, "configured_maximum", lambda: None)
+    monkeypatch.setattr(pl, "CONFIG_PATH", tmp_path / "absent.json")
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    jvm = make_workspace(tmp_path, "build.gradle.kts")
+    levels = iter([1, 1, 2, 2])
+    monkeypatch.setattr(pl, "memory_pressure_level", lambda: next(levels))
+
+    # when
+    results = [pl.current_limit("claude", str(folder)) for folder in (plain, jvm, plain, jvm)]
+
+    # then
+    assert results == [8, 2, 4, 1]
