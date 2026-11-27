@@ -46,8 +46,10 @@ PREFLIGHT_PROMPT = "Run the shell command `true` exactly once, then reply with O
 GUARD_COMMAND = re.compile(r'sh "[^"]*/scripts/hook_python\.sh" approval_guard\.py')
 SHELL_TOOL = "Bash"
 MCP_SERVER_NAME = re.compile(r"[A-Za-z0-9_-]+")
-CODEX_HOOKS_MESSAGE = "The approval guard hooks did not run in Codex; trust them in /hooks"
-CLAUDE_HOOKS_MESSAGE = "The approval guard hooks did not run in Claude Code"
+HOST_NAMES = {"codex": "Codex", "claude": "Claude Code"}
+CODEX_HOOKS_MESSAGE = "The approval guard hooks are not trusted or not enabled in Codex; trust and enable them in /hooks"
+GUARD_SWITCH_MESSAGE = "The approval guard is switched off in the environment of the {host} child by {variable}={value}"
+GUARD_UNKNOWN_MESSAGE = "The approval guard wrote no heartbeat in {host} and its cause is unknown; looked for {heartbeat}"
 NO_NETWORK_RULE = "use no network"
 MCP_NETWORK_RULE = "use MCP tools and network only for the external work the assignment names"
 CODEX_NETWORK_ON = "sandbox_workspace_write.network_access=true"

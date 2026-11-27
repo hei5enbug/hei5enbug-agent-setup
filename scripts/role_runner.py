@@ -8,6 +8,7 @@ import sys
 import tempfile
 import threading
 import uuid
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
@@ -17,11 +18,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import codex_hook_trust  # noqa: E402
 from plugin_toggles import service_tier_setting  # noqa: E402
 from role_runner_agents import agent_run, chosen_effort, default_host, runner_for  # noqa: E402
-from role_runner_child import child_environment, codex_mcp_off, kill_group, run_child  # noqa: E402
+from role_runner_child import child_environment, codex_mcp_off, guard_switch_off, kill_group, run_child  # noqa: E402
 from role_runner_command import claude_command, claude_tools, codex_command, sandbox_for  # noqa: E402
 from role_runner_config import (  # noqa: E402
-    AGENT_TARGET, CAPABILITIES, CLAUDE_HOOKS_MESSAGE, CODEX_HOOKS_MESSAGE, DEFAULT_REVIEW_MODEL, EXIT_EVIDENCE, EXIT_OK,
-    EXIT_CAP, EXIT_RUN, EXIT_USAGE, MCP_NETWORK_RULE, PREFLIGHT_PROMPT, REGISTRY, REVIEW_MODEL_ENV, REVIEW_MODELS, ROLE_DEFINITIONS,
+    AGENT_TARGET, CAPABILITIES, CODEX_HOOKS_MESSAGE, DEFAULT_REVIEW_MODEL, EXIT_EVIDENCE, EXIT_OK,
+    EXIT_CAP, EXIT_RUN, EXIT_USAGE, GUARD_SWITCH_MESSAGE, GUARD_UNKNOWN_MESSAGE, HOST_NAMES, MCP_NETWORK_RULE, PREFLIGHT_PROMPT,
+    REGISTRY, REVIEW_MODEL_ENV, REVIEW_MODELS, ROLE_DEFINITIONS,
     ROLE_ENTRY, ROLE_MODEL, ROLE_SENTENCES, ROLES, WRITING_CAPABILITIES, Run, RunnerError, UsageError, build_parser,
 )
 from role_runner_budget import Gate  # noqa: E402
@@ -76,23 +78,60 @@ def app_server_hooks(marker: str, mcp_off: list[str], cwd: str, timeout: int) ->
     return reply.get("result")
 
 
-def require_hooks_ready(marker: str, mcp_off: list[str], cwd: str, timeout: int) -> None:
-    """Require a ready guard PreToolUse hook for the folder, so no assignment runs unguarded."""
-    listed = hooks_for_cwd(app_server_hooks(marker, mcp_off, cwd, timeout), cwd)
-    if guard_ready(listed):
-        return
-    listed, reason = heal_hooks(marker, mcp_off, cwd, timeout, listed)
-    if guard_ready(listed):
-        return
-    found = [
+def guard_states(listed: list) -> list[dict]:
+    """Return the state of each guard PreToolUse hook in a hooks/list result."""
+    return [
         {
             "key": hook.get("key"), "enabled": hook.get("enabled"), "trust": hook.get("trustStatus"),
             "async": hook.get("async"), "matcher": hook.get("matcher"),
         }
         for hook in listed if is_guard_hook(hook)
     ]
-    evidence = {"hooks": found, **({"auto_trust": reason} if reason else {})}
-    raise RunnerError(EXIT_EVIDENCE, CODEX_HOOKS_MESSAGE, evidence)
+
+
+def hooks_message(found: list[dict]) -> str:
+    """The untrusted-hooks message with the state of each guard hook the app-server listed."""
+    states = "; ".join(
+        f"trust={hook['trust']}, enabled={hook['enabled']}, async={hook['async']}, matcher={hook['matcher']}" for hook in found
+    )
+    return f"{CODEX_HOOKS_MESSAGE} (guard hooks listed: {states or 'none'})"
+
+
+def explain_heartbeat(host: str, marker: str, listing: Callable[[], list] | None = None) -> Callable[[str], tuple[str, dict]]:
+    """Return the function that names why a required heartbeat is missing, from what the runner sees: the approval guard
+    switch in the environment the child got, then the guard hooks that listing returns, else an unknown cause."""
+
+    def explain(heartbeat: str) -> tuple[str, dict]:
+        name = HOST_NAMES[host]
+        off = guard_switch_off(host, child_environment(marker))
+        if off is not None:
+            return GUARD_SWITCH_MESSAGE.format(host=name, variable=off[0], value=off[1]), {"cause": "switch", "switch": off[0]}
+        extra: dict = {}
+        if listing is not None:
+            try:
+                listed = listing()
+            except RunnerError as error:
+                extra = {"hooks_error": str(error)}
+            else:
+                if not guard_ready(listed):
+                    found = guard_states(listed)
+                    return hooks_message(found), {"cause": "untrusted", "hooks": found}
+        return GUARD_UNKNOWN_MESSAGE.format(host=name, heartbeat=heartbeat), {"cause": "unknown", **extra}
+
+    return explain
+
+
+def require_hooks_ready(marker: str, mcp_off: list[str], cwd: str, timeout: int) -> list:
+    """Require a ready guard PreToolUse hook for the folder, so no assignment runs unguarded; return the hooks it listed."""
+    listed = hooks_for_cwd(app_server_hooks(marker, mcp_off, cwd, timeout), cwd)
+    if guard_ready(listed):
+        return listed
+    listed, reason = heal_hooks(marker, mcp_off, cwd, timeout, listed)
+    if guard_ready(listed):
+        return listed
+    found = guard_states(listed)
+    evidence = {"cause": "untrusted", "hooks": found, **({"auto_trust": reason} if reason else {})}
+    raise RunnerError(EXIT_EVIDENCE, hooks_message(found), evidence)
 
 
 def discard(path: Path) -> None:
@@ -112,7 +151,8 @@ def preflight_thread(run: Run, cwd: str, mcp_off: list[str], timeout: int) -> Ru
         if thread_id is None:
             raise RunnerError(EXIT_EVIDENCE, "No thread.started event with a thread_id in the Codex preflight output")
         run = replace(run, resume=thread_id)
-    require_heartbeat("codex", run.resume, CODEX_HOOKS_MESSAGE)
+    listing = lambda: hooks_for_cwd(app_server_hooks(run.target, mcp_off, cwd, timeout), cwd)  # noqa: E731
+    require_heartbeat("codex", run.resume, explain_heartbeat("codex", run.target, listing))
     return run
 
 
@@ -149,12 +189,13 @@ def execute_codex(args: argparse.Namespace, run: Run, prompt: str, cwd: str) -> 
     if run.writing:
         run = preflight_healing(run, cwd, mcp_off, args.timeout)
     else:
-        require_hooks_ready(run.target, mcp_off, cwd, args.timeout)
+        ready = require_hooks_ready(run.target, mcp_off, cwd, args.timeout)
+        explain = explain_heartbeat("codex", run.target, lambda: ready)
         if run.resume is not None:
-            require_heartbeat("codex", run.resume, CODEX_HOOKS_MESSAGE)
+            require_heartbeat("codex", run.resume, explain)
     evidence = run_codex(args, run, prompt, cwd, mcp_off)
     if not run.writing and evidence["tool_calls"]:
-        require_heartbeat("codex", evidence["session"], CODEX_HOOKS_MESSAGE)
+        require_heartbeat("codex", evidence["session"], explain)
     result_path = Path(args.result)
     if not result_path.is_file() or not result_path.read_text(encoding="utf-8").strip():
         raise RunnerError(EXIT_EVIDENCE, f"Codex wrote no answer at {result_path}")
@@ -185,7 +226,7 @@ def run_claude(args: argparse.Namespace, run: Run, prompt: str, cwd: str) -> tup
 
 def execute_claude(args: argparse.Namespace, run: Run, prompt: str, cwd: str) -> dict:
     result, evidence = run_claude(args, run, prompt, cwd)
-    require_heartbeat("claude", evidence["session"], CLAUDE_HOOKS_MESSAGE)
+    require_heartbeat("claude", evidence["session"], explain_heartbeat("claude", run.target))
     text = result.get("result")
     if not isinstance(text, str) or not text.strip():
         raise RunnerError(EXIT_EVIDENCE, "Claude returned no answer")

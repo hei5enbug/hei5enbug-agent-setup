@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 from role_runner_config import EXIT_EVIDENCE, SYNTHETIC_MODEL, VALIDATION_PACKAGE_HOSTS, RunnerError
@@ -12,14 +13,16 @@ def state_home() -> Path:
     return Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state").expanduser()
 
 
-def require_heartbeat(host: str, session_id: str, message: str) -> None:
-    """Require a Codex PreToolUse heartbeat, or a Claude prompt or legacy heartbeat."""
+def require_heartbeat(host: str, session_id: str, explain: Callable[[str], tuple[str, dict]]) -> None:
+    """Require a Codex PreToolUse heartbeat, or a Claude prompt or legacy heartbeat; when it is missing, explain(path) gives
+    the error message and the cause evidence for the heartbeat path looked for."""
     plain = state_home() / "hei5enbug-agent-setup" / "heartbeats" / f"{host}-{session_id}"
     event_name = "PreToolUse" if host == "codex" else "UserPromptSubmit"
     heartbeat = plain.with_name(plain.name + "." + event_name)
     present = heartbeat.is_file() or (host == "claude" and plain.is_file())
     if "/" in session_id or not present:
-        raise RunnerError(EXIT_EVIDENCE, message, {"heartbeat": heartbeat.as_posix(), "session": session_id})
+        message, cause = explain(heartbeat.as_posix())
+        raise RunnerError(EXIT_EVIDENCE, message, {"heartbeat": heartbeat.as_posix(), "session": session_id, **cause})
 
 
 def codex_home() -> Path:

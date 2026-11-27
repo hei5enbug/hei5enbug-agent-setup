@@ -18,6 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 sys.path.insert(0, str(REPO_ROOT / "tests"))
 import role_runner  # noqa: E402
+import role_runner_child  # noqa: E402
 import role_runner_config  # noqa: E402
 import session_context  # noqa: E402
 from test_model_pins import PINS, REGISTRY  # noqa: E402
@@ -65,6 +66,8 @@ with open(os.environ["FAKE_LOG"], "a") as log:
         "role": os.environ.get("HEI5ENBUG_ASSIGNED_ROLE"), "pid": os.getpid(),
         "parent": os.environ.get("HEI5ENBUG_PARENT_SESSION"), "started": time.time(),
         "env": {{name: os.environ.get(name) for name in ("TMPDIR", "TMPPREFIX", "UV_CACHE_DIR", "XDG_CACHE_HOME", "PYTHONPYCACHEPREFIX", "npm_config_cache", "PIP_CACHE_DIR")}},
+        "guard_env": {{name: os.environ.get(name) for name in ("HEI5ENBUG_APPROVAL_GUARD", "CLAUDE_PLUGIN_OPTION_APPROVAL_GUARD")}},
+        "passed": os.environ.get("DEMO_PASSTHROUGH"),
     }}) + "\\n")
 
 
@@ -2501,8 +2504,8 @@ class RoleRunnerTest(unittest.TestCase):
             self.assertEqual(execution[key], readiness[key])
         self.assertEqual(("scout", "claude:parent-9"), (readiness["role"], readiness["parent"]))
 
-    def test_도구를_쓴_실행에_PreToolUse_하트비트가_없으면_결과를_버리고_종료_코드_4이다(self):
-        """rollout에 도구 호출이 있는데 thread의 PreToolUse 하트비트가 없으면 결과를 남기지 않고 종료 코드 4이다."""
+    def test_도구를_쓴_실행에_PreToolUse_하트비트가_없고_원인이_보이지_않으면_원인_불명과_하트비트_경로를_내고_hooks를_말하지_않는다(self):
+        """신뢰된 훅과 스위치 없음인데 rollout의 도구 호출에 PreToolUse 하트비트가 없으면 결과 없이 종료 코드 4이고, 원인 불명과 찾은 경로만 알린다."""
         # Given
         config = {"no_heartbeat": True}
 
@@ -2511,11 +2514,78 @@ class RoleRunnerTest(unittest.TestCase):
 
         # Then
         self.assertEqual(4, completed.returncode)
-        self.assertIn("The approval guard hooks did not run in Codex; trust them in /hooks", completed.stderr)
+        evidence = self.status(completed)["evidence"]
+        self.assertIn("its cause is unknown", completed.stderr)
+        self.assertIn(evidence["heartbeat"], completed.stderr)
+        self.assertNotIn("/hooks", completed.stderr)
+        self.assertEqual("unknown", evidence["cause"])
         self.assertEqual(1, len(self.executions()))
         self.assertTrue(self.status(completed)["evidence"]["heartbeat"].endswith(".PreToolUse"))
         self.assertFalse(self.result.exists())
         self.assertFalse(self.status(completed)["verified"])
+
+    def test_승인_가드_스위치_변수는_Codex와_Claude_자식_환경에서_빠지고_나머지_변수는_그대로_전달된다(self):
+        """부모 환경의 두 가드 스위치 변수는 Codex(목록·점검·exec)와 Claude 자식 어디에도 전달되지 않고, 다른 변수는 값 그대로 전달된다."""
+        # Given
+        extra = {
+            "HEI5ENBUG_APPROVAL_GUARD": "false", "CLAUDE_PLUGIN_OPTION_APPROVAL_GUARD": "false", "DEMO_PASSTHROUGH": "kept-1",
+        }
+        cases = {"codex": ["scout"], "claude": ["reviewer", "--model", "claude-opus-5-5"]}
+        for label, arguments in cases.items():
+            with self.subTest(case=label):
+                self.log.unlink(missing_ok=True)
+
+                # When
+                completed = self.run_runner(*arguments, extra_env=extra)
+
+                # Then
+                self.assertEqual(0, completed.returncode, completed.stderr)
+                calls = self.calls()
+                self.assertEqual(3 if label == "codex" else 1, len(calls))
+                for call in calls:
+                    self.assertEqual({None}, set(call["guard_env"].values()))
+                    self.assertEqual("kept-1", call["passed"])
+
+    def test_훅이_신뢰되지_않아_하트비트가_없으면_untrusted를_밝히고_hooks_안내를_낸다(self):
+        """쓰기 실행의 preflight 하트비트가 없고 hooks/list의 가드 훅이 untrusted이면 종료 코드 4와 untrusted 원인, /hooks 안내를 낸다."""
+        # Given
+        config = {"no_heartbeat": True, "hooks_trust": "untrusted"}
+
+        # When
+        completed = self.run_runner("worker", "--add-dir", str(self.base), config=config)
+
+        # Then
+        self.assertEqual(4, completed.returncode)
+        self.assertIn("not trusted or not enabled", completed.stderr)
+        self.assertIn("trust=untrusted", completed.stderr)
+        self.assertIn("/hooks", completed.stderr)
+        evidence = self.status(completed)["evidence"]
+        self.assertEqual("untrusted", evidence["cause"])
+        self.assertEqual(["untrusted"], [hook["trust"] for hook in evidence["hooks"]])
+
+    def test_가드_스위치가_자식_환경에_남아_있으면_스위치를_원인으로_밝히고_hooks를_말하지_않는다(self):
+        """제거를 건너뛰어 스위치가 자식이 받은 환경에 남은 상태에서 하트비트가 없으면 종료 코드 4와 스위치 이름을 내고 /hooks는 말하지 않는다."""
+        # Given
+        environment = {
+            "PATH": str(self.bin), "HOME": str(self.base), "CODEX_HOME": str(self.codex_home),
+            "CLAUDE_CONFIG_DIR": str(self.claude_home), "XDG_STATE_HOME": str(self.state_home),
+            "FAKE_LOG": str(self.log), "FAKE_CONFIG": json.dumps({"no_heartbeat": True}),
+            "HEI5ENBUG_APPROVAL_GUARD": "false",
+        }
+        argv = ["scout", "--assignment", str(self.assignment), "--result", str(self.result)]
+        output, errors = io.StringIO(), io.StringIO()
+
+        # When
+        with mock.patch.dict(os.environ, environment, clear=True), mock.patch.object(role_runner_child, "GUARD_SWITCHES", ()):
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+                code = role_runner.main(argv)
+
+        # Then
+        self.assertEqual(4, code)
+        self.assertIn("switched off", errors.getvalue())
+        self.assertIn("HEI5ENBUG_APPROVAL_GUARD=false", errors.getvalue())
+        self.assertNotIn("/hooks", errors.getvalue())
+        self.assertEqual("switch", json.loads(output.getvalue().strip().splitlines()[-1])["evidence"]["cause"])
 
     def test_도구를_쓰지_않은_실행은_하트비트가_없어도_통과한다(self):
         """rollout에 도구 호출이 없으면 가드가 막을 호출이 없으므로 하트비트 없이 종료 코드 0이고 tool_calls는 0이다."""
@@ -2575,7 +2645,7 @@ class RoleRunnerTest(unittest.TestCase):
 
         # Then
         self.assertEqual(4, completed.returncode)
-        self.assertIn(role_runner.CODEX_HOOKS_MESSAGE, completed.stderr)
+        self.assertIn("its cause is unknown", completed.stderr)
         self.assertEqual(1, len(self.executions()))
         self.assertTrue(self.status(completed)["evidence"]["heartbeat"].endswith(".PreToolUse"))
         self.assertFalse(self.result.exists())
@@ -2604,7 +2674,7 @@ class RoleRunnerTest(unittest.TestCase):
 
         # Then
         self.assertEqual(4, completed.returncode)
-        self.assertIn(role_runner.CODEX_HOOKS_MESSAGE, completed.stderr)
+        self.assertIn("its cause is unknown", completed.stderr)
         self.assertEqual([], self.executions())
         self.assertFalse(self.result.exists())
 
@@ -2678,7 +2748,7 @@ class RoleRunnerTest(unittest.TestCase):
                 self.assertEqual(1 if label == "resumed worker" else 2, len(self.executions()))
 
     def test_쓰기_Codex_훅_하트비트가_없으면_할당을_보내지_않고_종료_코드_4이다(self):
-        """쓰기 실행에서 preflight thread의 하트비트가 없으면 할당 없이 종료 코드 4와 /hooks 안내를 낸다."""
+        """쓰기 실행에서 preflight thread의 하트비트가 없으면 훅이 신뢰된 상태라 원인 불명으로 할당 없이 종료 코드 4이다."""
         # Given
         config = {"no_heartbeat": True}
 
@@ -2687,7 +2757,7 @@ class RoleRunnerTest(unittest.TestCase):
 
         # Then
         self.assertEqual(4, completed.returncode)
-        self.assertIn("The approval guard hooks did not run in Codex; trust them in /hooks", completed.stderr)
+        self.assertIn("its cause is unknown", completed.stderr)
         self.assertEqual(["Run the shell command `true` exactly once, then reply with OK only."],
                          [call["stdin"] for call in self.executions()])
         self.assertFalse(self.result.exists())
@@ -2744,7 +2814,7 @@ class RoleRunnerTest(unittest.TestCase):
 
         # Then
         self.assertEqual(4, completed.returncode)
-        self.assertIn("trust them in /hooks", completed.stderr)
+        self.assertIn("its cause is unknown", completed.stderr)
         self.assertEqual([], self.executions())
         self.assertEqual(1, len(self.app_server_calls()))
 
@@ -2773,7 +2843,7 @@ class RoleRunnerTest(unittest.TestCase):
 
         # Then
         self.assertEqual(4, completed.returncode)
-        self.assertIn("The approval guard hooks did not run in Claude Code", completed.stderr)
+        self.assertIn("The approval guard wrote no heartbeat in Claude Code and its cause is unknown", completed.stderr)
         self.assertFalse(self.result.exists())
 
     def test_Claude_transcript의_synthetic_항목은_건너뛰고_나머지만_검증한다(self):

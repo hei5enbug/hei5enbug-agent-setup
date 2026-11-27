@@ -6,10 +6,12 @@ import signal
 import subprocess
 from pathlib import Path
 
+from plugin_toggles import OFF_VALUES, variable_name
 from role_runner_config import ASSIGNED_ROLE_ENV, EXIT_RUN, MCP_SERVER_NAME, PARENT_SESSION_ENV, RunnerError
 from role_runner_scratch import scratch_environment
 
 STDOUT_TAIL_LIMIT = 500
+GUARD_SWITCHES = tuple(variable_name("approval_guard", host) for host in ("codex", "claude"))
 
 
 def parent_session(environ) -> str | None:
@@ -26,8 +28,17 @@ def parent_session(environ) -> str | None:
     return None
 
 
+def guard_switch_off(host: str, environment) -> tuple[str, str] | None:
+    """Return the host's approval guard switch and its value when the environment turns the guard off, else None."""
+    variable = variable_name("approval_guard", host)
+    value = environment.get(variable, "")
+    return (variable, value) if value.strip().casefold() in OFF_VALUES else None
+
+
 def child_environment(marker: str, scratch: Path | None = None) -> dict:
-    environment = {**os.environ, **(scratch_environment(scratch) if scratch is not None else {})}
+    """Return the environment of a child: this one without the approval guard switches, so the guard runs in every child."""
+    inherited = {key: value for key, value in os.environ.items() if key not in GUARD_SWITCHES}
+    environment = {**inherited, **(scratch_environment(scratch) if scratch is not None else {})}
     environment[ASSIGNED_ROLE_ENV] = marker
     parent = parent_session(environment)
     if parent is not None:
