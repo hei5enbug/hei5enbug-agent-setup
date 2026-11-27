@@ -795,6 +795,21 @@
           "contains": "Setting `auto_update = false` on the marketplace entry does not stop the reinstalls on Codex 0.172.0"
         }
       ]
+    },
+    {
+      "id": "codex-subagents-inherit-sandbox",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "In a Codex CLI session, including a non-interactive one, subagents inherit the parent turn's sandbox and approval settings, and a custom agent file does not replace them, so a read-only reviewer session that splits its review across subagents keeps them read-only.",
+      "doc_url": "https://learn.chatgpt.com/docs/agent-configuration/subagents.md",
+      "quote": "Subagents inherit the parent turn's current sandbox and approval settings, including changes made with `/permissions` or `--yolo`. A custom agent file can't replace those settings. ... In non-interactive flows, or whenever a run can't surface a fresh approval, an action that needs new approval fails and Codex surfaces the error back to the parent workflow.",
+      "verified_on": "2026-11-27",
+      "lines": [
+        {
+          "file": "scripts/role_runner_config.py",
+          "contains": "read-only subagents, give each the same limits"
+        }
+      ]
     }
   ]
 }

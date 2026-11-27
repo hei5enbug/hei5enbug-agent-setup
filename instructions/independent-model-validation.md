@@ -6,8 +6,9 @@ technical design documents, RFCs, issue bodies, and completed implementation cha
 ## When to review
 
 Run independent validation automatically, without a question, exactly once per request: in its final stage, when
-no other work remains, over the combined result of every worker and the main session. For a requested plan, design,
-or RFC, that is the complete draft. For a request that files or rewrites one or more issues whose proposals change
+no other work remains, over the combined result of every worker and the main session, also when parallel
+subagents did the work. For a requested plan, design, or RFC, that is the complete draft. For a request that files
+or rewrites one or more issues whose proposals change
 behavior, a public contract, or several components, it is the bodies of all those issues as one complete draft,
 reviewed before the first write to the tracker with the owning files as evidence. For implementation, it is the final
 change with its passing checks when behavior, public contracts, security, concurrency, migrations, or several
@@ -31,13 +32,15 @@ decision.
 
 | Authoring model family | Reviewer | Reasoning effort |
 |---|---|---|
-| Claude | `gpt-6.1-terra` or `gpt-6.2-astra` | `high` or `xhigh` |
+| Claude | `gpt-6.1-terra` by default, or `gpt-6.2-astra` | `high` by default, or `xhigh` |
 | GPT | `claude-fable-5-2` | `high` |
 
-The coordinating session picks one reviewer and effort from the row. For a Claude-authored result it picks by scope
-and risk: the lighter model `gpt-6.1-terra` at `high` for one bounded component, and the stronger model `gpt-6.2-astra` or
-`xhigh` for several components, a public contract, security, concurrency, or a hook or guard. A GPT-authored result
-always goes to `claude-fable-5-2` at `high`.
+The coordinating session picks one reviewer and effort from the row. For a Claude-authored result the default is
+`gpt-6.1-terra` at `high`. When the work was difficult or the result needs a wider and deeper review, such as several
+components, a public contract, security, concurrency, or a hook or guard, the main session may choose `gpt-6.2-astra`
+at `xhigh` instead, by itself without asking the user, optionally taking a worker's or reviewer's recommendation into
+account. It states that choice and its reason in one line of the final report. That reviewer may split the review by
+area across several read-only subagents. A GPT-authored result always goes to `claude-fable-5-2` at `high`.
 
 Select the actual authoring model family, not the execution host. Code that a delegated worker wrote belongs to
 that worker's model family. GPT authoring in Claude Code follows the GPT row. If both families materially
@@ -118,5 +121,6 @@ once, and reject unsupported scope expansion. Do not run another model review af
 
 Report the result in the reply, never in the deliverable. When the review ran, give one line with the link or path
 of the review result, such as the reviewer's result file or the comment that holds the findings, and state each
-finding left unresolved; give no reviewer model, effort, pass count, finding categories, or safety proof. When
-validation could not run or the user declined it, state that, and why, in one line.
+finding left unresolved; give no reviewer model, effort, pass count, finding categories, or safety proof, apart from
+the one line that states the `gpt-6.2-astra` choice and its reason. When validation could not run or the user
+declined it, state that, and why, in one line.

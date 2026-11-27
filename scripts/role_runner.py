@@ -23,7 +23,7 @@ from role_runner_command import claude_command, claude_tools, codex_command, san
 from role_runner_config import (  # noqa: E402
     AGENT_TARGET, CAPABILITIES, CODEX_HOOKS_MESSAGE, DEFAULT_REVIEW_MODEL, EXIT_EVIDENCE, EXIT_OK,
     EXIT_CAP, EXIT_RUN, EXIT_USAGE, GUARD_SWITCH_MESSAGE, GUARD_UNKNOWN_MESSAGE, HOST_NAMES, MCP_NETWORK_RULE, PREFLIGHT_PROMPT,
-    REGISTRY, REVIEW_MODEL_ENV, REVIEW_MODELS, ROLE_DEFINITIONS,
+    REGISTRY, REVIEW_MODEL_ENV, REVIEW_MODELS, ROLE_DEFINITIONS, VALIDATION_SENTENCE, validation_sentence,
     ROLE_ENTRY, ROLE_MODEL, ROLE_SENTENCES, ROLES, WRITING_CAPABILITIES, Run, RunnerError, UsageError, build_parser,
 )
 from role_runner_budget import Gate  # noqa: E402
@@ -239,6 +239,8 @@ def execute(args: argparse.Namespace, run: Run, root: Path, cwd: str) -> dict:
     result_path = Path(args.result)
     try:
         prompt = compose(run, args, root, cwd)
+        if run.validation and run.agent is None and run.capability is None:
+            prompt = prompt.replace(VALIDATION_SENTENCE, validation_sentence(run.model, run.effort), 1)
     except (OSError, ValueError) as error:
         raise RunnerError(EXIT_RUN, f"Cannot compose the prompt: {error}") from error
     discard(result_path)

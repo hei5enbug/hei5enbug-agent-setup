@@ -86,13 +86,15 @@ Run one read-only final review of the combined final diff, sized to the change a
 | Change | Final review |
 |---|---|
 | Trivial: a typo, wording, version, or metadata edit, a translation, or a mechanical edit its checks fully cover | None |
-| Claude-authored, not trivial | `role_runner.py reviewer` with `--model gpt-6.1-terra` or `gpt-6.2-astra` and `--effort high` or `xhigh`, chosen per change by its scope and risk as the plugin's independent model validation describes |
+| Claude-authored, not trivial | `role_runner.py reviewer --model gpt-6.1-terra --effort high` by default; `--model gpt-6.2-astra --effort xhigh` when the main session chooses it for difficult or wide work, as the plugin's independent model validation describes |
 | GPT-authored, including work drafted on `gpt-6.1-sol` | `role_runner.py reviewer --model claude-fable-5-2 --effort high` |
 
 - It runs automatically once, after all work for the request is done and its checks pass, over the combined final
-  diff; any earlier review needs the user's approval.
+  diff, also when parallel subagents did the work; any earlier review needs the user's approval.
 - Give the reviewer the final diff, requirements, and check evidence.
-- When the chosen reviewer is unavailable on a Claude-authored change, use the other of the two models.
+- The `gpt-6.2-astra` reviewer may split the review by area across several read-only subagents.
+- When the chosen reviewer is unavailable on a Claude-authored change, use the other of the two models at its table effort,
+  `gpt-6.1-terra` with `high` or `gpt-6.2-astra` with `xhigh`.
 - The main session verifies findings and decides acceptance; do not start a second review round.
 
 ## Evidence

@@ -174,10 +174,10 @@ acceptance checks. It never silently substitutes a worker model.
 
 In its final stage, when no other work remains for the request, the main session runs one independent review of the
 combined result under [independent model validation](../instructions/independent-model-validation.md), automatically and
-without a question. A Claude-authored result goes to `gpt-6.1-terra` or `gpt-6.2-astra`, and a GPT-authored result goes to
-`claude-fable-5-2` at `high`. For a Claude-authored result the main session picks the lighter model at `high` for one
-bounded component, and the stronger model or `xhigh` for several components, a public contract, security, concurrency,
-or a hook or guard.
+without a question. A Claude-authored result goes to `gpt-6.1-terra` at `high` by default, and the main session may
+choose `gpt-6.2-astra` at `xhigh` by itself for difficult or wide work, such as several components, a public contract,
+security, concurrency, or a hook or guard, and a GPT-authored result goes to
+`claude-fable-5-2` at `high`.
 Any earlier review, such as one of a single worker's change, needs the user's approval for that deliverable, and a
 decline is not asked again. An assigned worker and a skill run inside a larger request never run their own final review.
 An unavailable reviewer, or a role runner exit code 3 or 4, means independent validation was not performed; no other

@@ -36,7 +36,7 @@ class PlanningContractTest(unittest.TestCase):
         validation = VALIDATION.read_text()
         mapping = (
             re.compile(r"\| GPT \| `claude-fable-[\d-]+` \| `high` \|"),
-            re.compile(r"\| Claude \| `gpt-[\d.]+-(?:sol|terra)` or `gpt-[\d.]+-astra` \| `high` or `xhigh` \|"),
+            re.compile(r"\| Claude \| `gpt-[\d.]+-(?:sol|terra)` by default, or `gpt-[\d.]+-astra` \| `high` by default, or `xhigh` \|"),
         )
         for row in mapping:
             self.assertRegex(validation, row)

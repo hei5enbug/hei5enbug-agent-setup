@@ -3540,6 +3540,42 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertEqual(self.codex_argv(model="gpt-6.2-astra", validation=True), call["argv"])
         self.assertTrue(self.status(completed)["validation"])
 
+    def test_astra_xhigh_validation_reviewer는_영역별_읽기_전용_하위_에이전트_분할을_허용한다(self):
+        """--validation으로 gpt-6.2-astra를 xhigh로 실행하면 프롬프트가 영역별 읽기 전용 하위 에이전트 분할과 결과 병합을 허용하고 'start no agents'는 없다."""
+        # When
+        completed = self.run_runner(
+            "reviewer", "--validation", "--model", "gpt-6.2-astra", "--effort", "xhigh",
+            config={"turns": [{"model": "gpt-6.2-astra", "effort": "xhigh"}]},
+        )
+
+        # Then
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        prompt = " ".join(self.executions()[-1]["stdin"].split())
+        self.assertIn("split the review by area across several read-only subagents", prompt)
+        self.assertIn("merge their results into one findings list", prompt)
+        self.assertIn("make no commit or push", prompt)
+        self.assertNotIn("start no agents", prompt)
+
+    def test_astra_xhigh_validation이_아닌_reviewer와_다른_역할은_에이전트를_시작하지_않는다(self):
+        """terra나 astra high의 validation reviewer, validation 없는 astra xhigh reviewer, scout는 프롬프트가 계속 '하위 에이전트 없음'을 말한다."""
+        cases = [
+            ("reviewer", "--validation", "--model", "gpt-6.1-terra", "--effort", "high"),
+            ("reviewer", "--validation", "--model", "gpt-6.2-astra", "--effort", "high"),
+            ("reviewer", "--model", "gpt-6.2-astra", "--effort", "xhigh"),
+            ("scout", "--effort", "xhigh"),
+        ]
+        for arguments in cases:
+            with self.subTest(arguments=arguments):
+                # When
+                model = arguments[arguments.index("--model") + 1] if "--model" in arguments else "gpt-6-luna"
+                completed = self.run_runner(*arguments, config={"turns": [{"model": model, "effort": arguments[arguments.index("--effort") + 1]}]})
+
+                # Then
+                self.assertEqual(0, completed.returncode, completed.stderr)
+                prompt = " ".join(self.executions()[-1]["stdin"].split())
+                self.assertIn("start no agents", prompt)
+                self.assertNotIn("subagents", prompt)
+
     def test_읽기_전용_Claude_실행은_scratch_폴더에서_시작하고_샌드박스_설정으로_쓰기를_가둔다(self):
         """reviewer를 Claude로 실행하면 작업 폴더가 scratch이고, 명령이 scratch만 쓰는 샌드박스 설정을 싣고, 환경 변수가 그 안을 가리킨다."""
         # Given

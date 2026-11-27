@@ -90,6 +90,19 @@ VALIDATION_SENTENCE = (
     'You are an assigned reviewer under the "Assigned workers" rules: start no agents, make no commit or push, '
     "change no external state, and return findings only under the role's output contract."
 )
+SPLIT_REVIEW_MODEL = "gpt-6.2-astra"
+SPLIT_REVIEW_EFFORT = "xhigh"
+VALIDATION_SPLIT_SENTENCE = (
+    'You are an assigned reviewer under the "Assigned workers" rules: you may split the review by area across several '
+    "read-only subagents, give each the same limits, and merge their results into one findings list, start no other "
+    "agent, make no commit or push, change no external state, and return findings only under the role's output contract."
+)
+
+
+def validation_sentence(model: str, effort: str) -> str:
+    """The reviewer sentence of a validation run: only the stronger model at its highest effort may split the review."""
+    split = (model, effort) == (SPLIT_REVIEW_MODEL, SPLIT_REVIEW_EFFORT)
+    return VALIDATION_SPLIT_SENTENCE if split else VALIDATION_SENTENCE
 
 
 def worker_sentence(network: str) -> str:

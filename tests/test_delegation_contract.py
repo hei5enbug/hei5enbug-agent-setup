@@ -210,7 +210,7 @@ def test_중요_변경의_독립_검토는_개별_승인과_실제_설정_확인
     assert "completed implementation changes" in text
     assert "runs only when the user approves it for that deliverable" in text
     assert "exactly one reviewer that the mapping below selects" in text
-    assert "| Claude | `gpt-6.1-terra` or `gpt-6.2-astra` | `high` or `xhigh` |" in text
+    assert "| Claude | `gpt-6.1-terra` by default, or `gpt-6.2-astra` | `high` by default, or `xhigh` |" in text
     assert "| GPT | `claude-fable-5-2` | `high` |" in text
     assert "the `review_model` setting" not in text
     assert "Code that a delegated worker wrote belongs to that worker's model family." in text
@@ -222,3 +222,23 @@ def test_중요_변경의_독립_검토는_개별_승인과_실제_설정_확인
     assert "Include necessary untracked files" in text
     assert "Do not enable extra billing or change authentication" in text
     assert "Routine author inspection and required tests still run" in text
+
+
+def test_기본_검토자는_terra_high이고_astra_xhigh는_메인_세션이_어려운_작업에_스스로_고르며_나누어_검토할_수_있다():
+    """검토자 선택 문장이 terra/high 기본값, astra/xhigh 선택 조건과 이유 한 줄 보고, 영역별 분할 허용을 잃으면 비용 규칙이 깨지므로 모두 적혀 있어야 한다."""
+    # Given
+    text = " ".join((REPO / "instructions/independent-model-validation.md").read_text().split())
+
+    # When
+    selection = text.split("## Reviewer selection")[1].split("Select the actual authoring model family")[0]
+
+    # Then
+    assert "the default is `gpt-6.1-terra` at `high`" in selection
+    assert "the main session may choose `gpt-6.2-astra` at `xhigh` instead, by itself without asking the user" in selection
+    for condition in ("difficult", "several components", "a public contract", "security", "concurrency", "a hook or guard"):
+        assert condition in selection
+    assert "states that choice and its reason in one line of the final report" in selection
+    assert "may split the review by area across several read-only subagents" in selection
+    assert "by scope and risk" not in text
+    assert "one bounded component" not in text
+    assert "also when parallel subagents did the work" in text

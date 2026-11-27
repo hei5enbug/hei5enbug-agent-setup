@@ -310,10 +310,8 @@ def real_reader(path: str) -> str:
 BASELINE_REVIEWER_TEXT = {
     "instructions/independent-model-validation.md": (
         ("| GPT | `claude-fable-5-2` | `high` |", "| GPT | `claude-opus-5-5` or `claude-fable-5-2` | `high` or `xhigh` |"),
-        ("`xhigh` for several components, a public contract, security, concurrency, or a hook or guard. A GPT-authored result\n"
-         "always goes to `claude-fable-5-2` at `high`.",
-         "`xhigh` for several components, a public contract, security, concurrency, or a hook or guard. The GPT row offers\n"
-         "`claude-opus-5-5` or `claude-fable-5-2`."),
+        ("A GPT-authored result always goes to `claude-fable-5-2` at `high`.",
+         "The GPT row offers `claude-opus-5-5` or `claude-fable-5-2`."),
     ),
     "docs/instructions-and-delegation.md": (
         ("a GPT-authored result goes to\n`claude-fable-5-2` at `high`.", "a GPT-authored result goes to\n`claude-opus-5-5` or `claude-fable-5-2`."),

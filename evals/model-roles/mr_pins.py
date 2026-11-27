@@ -22,7 +22,7 @@ SITES = {
         ("instructions/independent-model-validation.md", r"^\| GPT \|"),
         ("instructions/independent-model-validation.md", r"^The coordinating session picks one reviewer"),
         ("docs/ko/instructions/independent-model-validation.ko.md", r"^\| GPT \|"),
-        ("docs/ko/instructions/independent-model-validation.ko.md", r"^조율 세션이 범위와 위험에 따라"),
+        ("docs/ko/instructions/independent-model-validation.ko.md", r"^조율 세션이 해당 행에서 검토자와 강도를"),
         ("docs/instructions-and-delegation.md", r"a GPT-authored result goes to"),
         ("docs/ko/docs/instructions-and-delegation.ko.md", r"GPT가 작성한 결과는"),
         ("docs/dev-rules/delegation.md", r"^\s*\| GPT-authored"),
